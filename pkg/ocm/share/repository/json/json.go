@@ -219,6 +219,12 @@ func genID() string {
 	return uuid.New().String()
 }
 
+// GenerateID generates a unique ID for a share that is yet to be stored,
+// so that the share can be referenced before being persisted with StoreShare.
+func (m *mgr) GenerateID(ctx context.Context) (*ocm.ShareId, error) {
+	return &ocm.ShareId{OpaqueId: genID()}, nil
+}
+
 func (m *mgr) StoreShare(ctx context.Context, ocmshare *ocm.Share) (*ocm.Share, error) {
 	m.Lock()
 	defer m.Unlock()
@@ -235,7 +241,6 @@ func (m *mgr) StoreShare(ctx context.Context, ocmshare *ocm.Share) (*ocm.Share, 
 		return nil, share.ErrShareAlreadyExisting
 	}
 
-	ocmshare.Id = &ocm.ShareId{OpaqueId: genID()}
 	m.model.Shares[ocmshare.Id.OpaqueId] = cloneShare(ocmshare)
 
 	if err := m.save(); err != nil {

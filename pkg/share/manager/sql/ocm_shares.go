@@ -81,12 +81,22 @@ func formatUserID(u *userpb.UserId) string {
 	return fmt.Sprintf("%s@%s", u.OpaqueId, u.Idp)
 }
 
-func (m *mgr) StoreShare(ctx context.Context, s *ocm.Share) (*ocm.Share, error) {
-
+// GenerateID reserves a unique ID for a share that is yet to be stored,
+// so that the share can be referenced before being persisted with StoreShare.
+func (m *mgr) GenerateID(ctx context.Context) (*ocm.ShareId, error) {
 	id, err := createID(m.db)
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to create id for OCM share")
 	}
+	return &ocm.ShareId{OpaqueId: strconv.FormatUint(uint64(id), 10)}, nil
+}
+
+func (m *mgr) StoreShare(ctx context.Context, s *ocm.Share) (*ocm.Share, error) {
+	parsed, err := strconv.ParseUint(s.Id.OpaqueId, 10, 64)
+	if err != nil {
+		return nil, errtypes.BadRequest("invalid share ID")
+	}
+	id := uint(parsed)
 	err = m.db.Transaction(func(tx *gorm.DB) error {
 
 		share := &model.OcmShare{
@@ -129,7 +139,6 @@ func (m *mgr) StoreShare(ctx context.Context, s *ocm.Share) (*ocm.Share, error) 
 	if err != nil {
 		return nil, err
 	}
-	s.Id = &ocm.ShareId{OpaqueId: strconv.FormatInt(int64(id), 10)}
 	return s, nil
 }
 

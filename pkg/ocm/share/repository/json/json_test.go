@@ -91,6 +91,7 @@ func testShare(token string, methods []*ocm.AccessMethod) *ocm.Share {
 	u := testUser()
 	now := uint64(time.Now().Unix())
 	return &ocm.Share{
+		Id:            &ocm.ShareId{OpaqueId: genID()},
 		ResourceId:    testResourceID(),
 		Name:          "test",
 		Token:         token,
