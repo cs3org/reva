@@ -19,25 +19,26 @@
 package basic
 
 import (
-	"context"
 	"crypto/sha512"
 	"encoding/hex"
 	"fmt"
 	"net/http"
 	"net/url"
+	"slices"
 	"strings"
 	"time"
 
 	user "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	rpcv1beta1 "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
+	"github.com/mitchellh/mapstructure"
+	"github.com/pkg/errors"
+	"golang.org/x/crypto/pbkdf2"
+
 	"github.com/cs3org/reva/v3/internal/http/interceptors/auth/signed_url/registry"
 	"github.com/cs3org/reva/v3/pkg/appctx"
 	"github.com/cs3org/reva/v3/pkg/auth"
 	"github.com/cs3org/reva/v3/pkg/auth/signing"
 	"github.com/cs3org/reva/v3/pkg/service"
-	"github.com/mitchellh/mapstructure"
-	"github.com/pkg/errors"
-	"golang.org/x/crypto/pbkdf2"
 )
 
 func init() {
@@ -54,7 +55,6 @@ type Config struct {
 }
 
 type SignedURLAuthenticator struct {
-	service.Base
 	config *Config
 }
 
@@ -241,7 +241,7 @@ func signedRawQuery(rawQuery string) string {
 	}
 
 	signParameters := make([]string, 0)
-	for _, p := range strings.Split(rawQuery, "&") {
+	for p := range strings.SplitSeq(rawQuery, "&") {
 		rawName, _, _ := strings.Cut(p, "=")
 		if parameterIsSigned(rawName) {
 			signParameters = append(signParameters, p)
@@ -263,17 +263,10 @@ func parameterIsSigned(rawName string) bool {
 }
 
 func parameterNameIsSigned(name string) bool {
-	for _, p := range _requiredParamsToSign {
-		if name == p {
-			return true
-		}
+	if slices.Contains(_requiredParamsToSign, name) {
+		return true
 	}
-	for _, p := range _optionalParamsToSign {
-		if name == p {
-			return true
-		}
-	}
-	return false
+	return slices.Contains(_optionalParamsToSign, name)
 }
 
 func (m SignedURLAuthenticator) createSignature(url string, signingKey []byte) string {
@@ -286,20 +279,12 @@ func (m SignedURLAuthenticator) createSignature(url string, signingKey []byte) s
 	return hex.EncodeToString(hash)
 }
 
-func (m *SignedURLAuthenticator) userProviderClient(ctx context.Context) (user.UserAPIClient, error) {
-	c := m.Clients()
-	if c == nil {
-		return nil, errors.New("signed_url: no registry resolver available")
-	}
-	return c.UserProvider(ctx)
-}
-
 // Authenticate implements the authenticator interface to authenticate requests via signed URL auth.
 func (m *SignedURLAuthenticator) Authenticate(r *http.Request) (*http.Request, bool) {
 	ctx := r.Context()
 	sublog := appctx.GetLogger(ctx).With().Str("authenticator", "signed_url").Str("path", r.URL.Path).Logger()
 
-	client, err := m.userProviderClient(ctx)
+	client, err := service.UserProvider(ctx)
 	if err != nil {
 		return nil, false
 	}

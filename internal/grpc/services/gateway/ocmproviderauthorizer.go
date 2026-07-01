@@ -22,12 +22,14 @@ import (
 	"context"
 
 	ocmprovider "github.com/cs3org/go-cs3apis/cs3/ocm/provider/v1beta1"
-	"github.com/cs3org/reva/v3/pkg/rgrpc/status"
 	"github.com/pkg/errors"
+
+	"github.com/cs3org/reva/v3/pkg/rgrpc/status"
+	"github.com/cs3org/reva/v3/pkg/service"
 )
 
 func (s *svc) IsProviderAllowed(ctx context.Context, req *ocmprovider.IsProviderAllowedRequest) (*ocmprovider.IsProviderAllowedResponse, error) {
-	c, err := s.Clients().OCMProviderAuthorizer(ctx)
+	c, err := service.OCMProviderAuthorizer(ctx)
 	if err != nil {
 		return &ocmprovider.IsProviderAllowedResponse{
 			Status: status.NewInternal(ctx, err, "error getting ocm authorizer provider client"),
@@ -43,7 +45,7 @@ func (s *svc) IsProviderAllowed(ctx context.Context, req *ocmprovider.IsProvider
 }
 
 func (s *svc) GetInfoByDomain(ctx context.Context, req *ocmprovider.GetInfoByDomainRequest) (*ocmprovider.GetInfoByDomainResponse, error) {
-	c, err := s.Clients().OCMProviderAuthorizer(ctx)
+	c, err := service.OCMProviderAuthorizer(ctx)
 	if err != nil {
 		return &ocmprovider.GetInfoByDomainResponse{
 			Status: status.NewInternal(ctx, err, "error getting ocm authorizer provider client"),
@@ -59,7 +61,7 @@ func (s *svc) GetInfoByDomain(ctx context.Context, req *ocmprovider.GetInfoByDom
 }
 
 func (s *svc) ListAllProviders(ctx context.Context, req *ocmprovider.ListAllProvidersRequest) (*ocmprovider.ListAllProvidersResponse, error) {
-	c, err := s.Clients().OCMProviderAuthorizer(ctx)
+	c, err := service.OCMProviderAuthorizer(ctx)
 	if err != nil {
 		return &ocmprovider.ListAllProvidersResponse{
 			Status: status.NewInternal(ctx, err, "error getting ocm authorizer provider client"),

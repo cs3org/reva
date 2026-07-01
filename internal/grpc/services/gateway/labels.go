@@ -25,9 +25,11 @@ import (
 	labels "github.com/cs3org/go-cs3apis/cs3/labels/v1beta1"
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
+	"github.com/pkg/errors"
+
 	"github.com/cs3org/reva/v3/pkg/appctx"
 	"github.com/cs3org/reva/v3/pkg/rgrpc/status"
-	"github.com/pkg/errors"
+	"github.com/cs3org/reva/v3/pkg/service"
 )
 
 // resolveRef ensures the reference has a ResourceId by statting it if necessary.
@@ -87,7 +89,7 @@ func (s *svc) AddLabel(ctx context.Context, req *labels.AddLabelRequest) (*label
 	}
 
 	// Store the label in the labels database.
-	c, err := s.Clients().Labels(ctx)
+	c, err := service.Labels(ctx)
 	if err != nil {
 		err = errors.Wrap(err, "gateway: error calling GetLabelsClient")
 		return &labels.AddLabelResponse{
@@ -132,7 +134,7 @@ func (s *svc) RemoveLabel(ctx context.Context, req *labels.RemoveLabelRequest) (
 	}
 
 	// Remove the label from the labels database.
-	c, err := s.Clients().Labels(ctx)
+	c, err := service.Labels(ctx)
 	if err != nil {
 		err = errors.Wrap(err, "gateway: error calling GetLabelsClient")
 		return &labels.RemoveLabelResponse{
@@ -149,7 +151,7 @@ func (s *svc) RemoveLabel(ctx context.Context, req *labels.RemoveLabelRequest) (
 }
 
 func (s *svc) ListLabels(ctx context.Context, req *labels.ListLabelsRequest) (*labels.ListLabelsResponse, error) {
-	c, err := s.Clients().Labels(ctx)
+	c, err := service.Labels(ctx)
 	if err != nil {
 		err = errors.Wrap(err, "gateway: error calling GetLabelsClient")
 		return &labels.ListLabelsResponse{
@@ -166,7 +168,7 @@ func (s *svc) ListLabels(ctx context.Context, req *labels.ListLabelsRequest) (*l
 }
 
 func (s *svc) ListResourcesForLabel(ctx context.Context, req *labels.ListResourcesForLabelRequest) (*labels.ListResourcesForLabelResponse, error) {
-	c, err := s.Clients().Labels(ctx)
+	c, err := service.Labels(ctx)
 	if err != nil {
 		err = errors.Wrap(err, "gateway: error calling GetLabelsClient")
 		return &labels.ListResourcesForLabelResponse{

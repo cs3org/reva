@@ -22,12 +22,14 @@ import (
 	"context"
 
 	group "github.com/cs3org/go-cs3apis/cs3/identity/group/v1beta1"
-	"github.com/cs3org/reva/v3/pkg/rgrpc/status"
 	"github.com/pkg/errors"
+
+	"github.com/cs3org/reva/v3/pkg/rgrpc/status"
+	"github.com/cs3org/reva/v3/pkg/service"
 )
 
 func (s *svc) GetGroup(ctx context.Context, req *group.GetGroupRequest) (*group.GetGroupResponse, error) {
-	c, err := s.Clients().GroupProvider(ctx)
+	c, err := service.GroupProvider(ctx)
 	if err != nil {
 		return &group.GetGroupResponse{
 			Status: status.NewInternal(ctx, err, "error getting auth client"),
@@ -43,7 +45,7 @@ func (s *svc) GetGroup(ctx context.Context, req *group.GetGroupRequest) (*group.
 }
 
 func (s *svc) GetGroupByClaim(ctx context.Context, req *group.GetGroupByClaimRequest) (*group.GetGroupByClaimResponse, error) {
-	c, err := s.Clients().GroupProvider(ctx)
+	c, err := service.GroupProvider(ctx)
 	if err != nil {
 		return &group.GetGroupByClaimResponse{
 			Status: status.NewInternal(ctx, err, "error getting auth client"),
@@ -59,7 +61,7 @@ func (s *svc) GetGroupByClaim(ctx context.Context, req *group.GetGroupByClaimReq
 }
 
 func (s *svc) FindGroups(ctx context.Context, req *group.FindGroupsRequest) (*group.FindGroupsResponse, error) {
-	c, err := s.Clients().GroupProvider(ctx)
+	c, err := service.GroupProvider(ctx)
 	if err != nil {
 		return &group.FindGroupsResponse{
 			Status: status.NewInternal(ctx, err, "error getting auth client"),
@@ -75,7 +77,7 @@ func (s *svc) FindGroups(ctx context.Context, req *group.FindGroupsRequest) (*gr
 }
 
 func (s *svc) GetMembers(ctx context.Context, req *group.GetMembersRequest) (*group.GetMembersResponse, error) {
-	c, err := s.Clients().GroupProvider(ctx)
+	c, err := service.GroupProvider(ctx)
 	if err != nil {
 		return &group.GetMembersResponse{
 			Status: status.NewInternal(ctx, err, "error getting auth client"),
@@ -91,7 +93,7 @@ func (s *svc) GetMembers(ctx context.Context, req *group.GetMembersRequest) (*gr
 }
 
 func (s *svc) HasMember(ctx context.Context, req *group.HasMemberRequest) (*group.HasMemberResponse, error) {
-	c, err := s.Clients().GroupProvider(ctx)
+	c, err := service.GroupProvider(ctx)
 	if err != nil {
 		return &group.HasMemberResponse{
 			Status: status.NewInternal(ctx, err, "error getting auth client"),

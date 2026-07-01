@@ -23,13 +23,15 @@ import (
 
 	ocmcore "github.com/cs3org/go-cs3apis/cs3/ocm/core/v1beta1"
 	ocmincoming "github.com/cs3org/go-cs3apis/cs3/ocm/incoming/v1beta1"
+	"github.com/pkg/errors"
+
 	"github.com/cs3org/reva/v3/pkg/errtypes"
 	"github.com/cs3org/reva/v3/pkg/rgrpc/status"
-	"github.com/pkg/errors"
+	"github.com/cs3org/reva/v3/pkg/service"
 )
 
 func (s *svc) CreateOCMIncomingShare(ctx context.Context, req *ocmincoming.CreateOCMIncomingShareRequest) (*ocmincoming.CreateOCMIncomingShareResponse, error) {
-	c, err := s.Clients().OCMIncoming(ctx)
+	c, err := service.OCMIncoming(ctx)
 	if err != nil {
 		return &ocmincoming.CreateOCMIncomingShareResponse{
 			Status: status.NewInternal(ctx, err, "error getting ocm incoming client"),
@@ -50,7 +52,7 @@ func (s *svc) CreateOCMCoreShare(ctx context.Context, req *ocmcore.CreateOCMCore
 }
 
 func (s *svc) UpdateOCMIncomingShare(ctx context.Context, req *ocmincoming.UpdateOCMIncomingShareRequest) (*ocmincoming.UpdateOCMIncomingShareResponse, error) {
-	c, err := s.Clients().OCMIncoming(ctx)
+	c, err := service.OCMIncoming(ctx)
 	if err != nil {
 		return &ocmincoming.UpdateOCMIncomingShareResponse{
 			Status: status.NewInternal(ctx, err, "error getting ocm incoming client"),
@@ -71,7 +73,7 @@ func (s *svc) UpdateOCMCoreShare(ctx context.Context, req *ocmcore.UpdateOCMCore
 }
 
 func (s *svc) DeleteOCMIncomingShare(ctx context.Context, req *ocmincoming.DeleteOCMIncomingShareRequest) (*ocmincoming.DeleteOCMIncomingShareResponse, error) {
-	c, err := s.Clients().OCMIncoming(ctx)
+	c, err := service.OCMIncoming(ctx)
 	if err != nil {
 		return &ocmincoming.DeleteOCMIncomingShareResponse{
 			Status: status.NewInternal(ctx, err, "error getting ocm incoming client"),

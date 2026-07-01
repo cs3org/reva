@@ -26,11 +26,13 @@ import (
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	link "github.com/cs3org/go-cs3apis/cs3/sharing/link/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
+	"github.com/pkg/errors"
+
 	"github.com/cs3org/reva/v3/pkg/appctx"
 	"github.com/cs3org/reva/v3/pkg/errtypes"
 	"github.com/cs3org/reva/v3/pkg/rgrpc/status"
+	"github.com/cs3org/reva/v3/pkg/service"
 	"github.com/cs3org/reva/v3/pkg/utils/resourceid"
-	"github.com/pkg/errors"
 )
 
 func (s *svc) CreatePublicShare(ctx context.Context, req *link.CreatePublicShareRequest) (*link.CreatePublicShareResponse, error) {
@@ -41,7 +43,7 @@ func (s *svc) CreatePublicShare(ctx context.Context, req *link.CreatePublicShare
 	log := appctx.GetLogger(ctx)
 	log.Info().Msg("create public share")
 
-	c, err := s.Clients().PublicShareProvider(ctx)
+	c, err := service.PublicShareProvider(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -58,7 +60,7 @@ func (s *svc) RemovePublicShare(ctx context.Context, req *link.RemovePublicShare
 	log := appctx.GetLogger(ctx)
 	log.Info().Msg("remove public share")
 
-	driver, err := s.Clients().PublicShareProvider(ctx)
+	driver, err := service.PublicShareProvider(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -73,7 +75,7 @@ func (s *svc) GetPublicShareByToken(ctx context.Context, req *link.GetPublicShar
 	log := appctx.GetLogger(ctx)
 	log.Info().Msg("get public share by token")
 
-	driver, err := s.Clients().PublicShareProvider(ctx)
+	driver, err := service.PublicShareProvider(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -90,7 +92,7 @@ func (s *svc) GetPublicShare(ctx context.Context, req *link.GetPublicShareReques
 	log := appctx.GetLogger(ctx)
 	log.Info().Msg("get public share")
 
-	pClient, err := s.Clients().PublicShareProvider(ctx)
+	pClient, err := service.PublicShareProvider(ctx)
 	if err != nil {
 		log.Err(err).Msg("error connecting to a public share provider")
 		return &link.GetPublicShareResponse{
@@ -107,7 +109,7 @@ func (s *svc) ListPublicShares(ctx context.Context, req *link.ListPublicSharesRe
 	log := appctx.GetLogger(ctx)
 	log.Info().Msg("listing public shares")
 
-	pClient, err := s.Clients().PublicShareProvider(ctx)
+	pClient, err := service.PublicShareProvider(ctx)
 	if err != nil {
 		log.Err(err).Msg("error connecting to a public share provider")
 		return &link.ListPublicSharesResponse{
@@ -193,7 +195,7 @@ func (s *svc) UpdatePublicShare(ctx context.Context, req *link.UpdatePublicShare
 	log := appctx.GetLogger(ctx)
 	log.Info().Msg("update public share")
 
-	pClient, err := s.Clients().PublicShareProvider(ctx)
+	pClient, err := service.PublicShareProvider(ctx)
 	if err != nil {
 		log.Err(err).Msg("error connecting to a public share provider")
 		return &link.UpdatePublicShareResponse{

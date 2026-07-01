@@ -27,6 +27,9 @@ import (
 	invitepb "github.com/cs3org/go-cs3apis/cs3/ocm/invite/v1beta1"
 	ocmprovider "github.com/cs3org/go-cs3apis/cs3/ocm/provider/v1beta1"
 	rpcv1beta1 "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
+	"github.com/pkg/errors"
+	"google.golang.org/grpc"
+
 	"github.com/cs3org/reva/v3/internal/http/services/opencloudmesh/ocmd"
 	"github.com/cs3org/reva/v3/pkg/appctx"
 	"github.com/cs3org/reva/v3/pkg/errtypes"
@@ -39,8 +42,6 @@ import (
 	"github.com/cs3org/reva/v3/pkg/sharedconf"
 	"github.com/cs3org/reva/v3/pkg/utils"
 	"github.com/cs3org/reva/v3/pkg/utils/cfg"
-	"github.com/pkg/errors"
-	"google.golang.org/grpc"
 )
 
 func init() {
@@ -65,7 +66,6 @@ type config struct {
 }
 
 type service struct {
-	revaservice.Base
 	conf      *config
 	repo      invite.Repository
 	ocmClient *ocmd.OCMClient
@@ -279,7 +279,7 @@ func (s *service) AcceptInvite(ctx context.Context, req *invitepb.AcceptInviteRe
 }
 
 func (s *service) getUserInfo(ctx context.Context, id *userpb.UserId) (*userpb.User, error) {
-	gw, err := s.Clients().Gateway(ctx)
+	gw, err := revaservice.Gateway(ctx)
 	if err != nil {
 		return nil, err
 	}

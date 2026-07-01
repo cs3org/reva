@@ -34,7 +34,12 @@ import (
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
+
 	cachereg "github.com/cs3org/reva/v3/pkg/share/cache/registry"
+
+	"github.com/google/uuid"
+	"github.com/pkg/errors"
+	"google.golang.org/grpc"
 
 	"github.com/cs3org/reva/v3/pkg/appctx"
 	"github.com/cs3org/reva/v3/pkg/errtypes"
@@ -51,9 +56,6 @@ import (
 	"github.com/cs3org/reva/v3/pkg/storage/fs/registry"
 	"github.com/cs3org/reva/v3/pkg/utils"
 	"github.com/cs3org/reva/v3/pkg/utils/cfg"
-	"github.com/google/uuid"
-	"github.com/pkg/errors"
-	"google.golang.org/grpc"
 )
 
 func init() {
@@ -111,7 +113,6 @@ type FSWithListRegexSuport interface {
 }
 
 type service struct {
-	svc.Base
 	conf               *config
 	storage            storage.FS
 	mountPath, mountID string
@@ -121,7 +122,7 @@ type service struct {
 // dataServerURL resolves this storage's data provider from the registry (by
 // matching mount_id) and returns its base URL.
 func (s *service) dataServerURL(ctx context.Context) (*url.URL, error) {
-	ep, err := s.Clients().HTTPEndpoint(ctx,
+	ep, err := svc.HTTPEndpoint(ctx,
 		svc.ByName("dataprovider"),
 		svc.ByMetadata("mount_id", s.mountID),
 	)
@@ -1849,4 +1850,3 @@ func (s *service) fetchSpace(ctx context.Context, spaceID string) (*provider.Sto
 	space := spacesResp.StorageSpaces[0]
 	return space, nil
 }
-

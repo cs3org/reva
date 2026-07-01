@@ -31,18 +31,20 @@ import (
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	registry "github.com/cs3org/go-cs3apis/cs3/storage/registry/v1beta1"
 	types "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
-	"github.com/cs3org/reva/v3/pkg/appctx"
 	"github.com/golang-jwt/jwt/v5"
+
+	"github.com/cs3org/reva/v3/pkg/appctx"
+
+	"github.com/google/uuid"
+	"github.com/pkg/errors"
+	"google.golang.org/grpc/codes"
+	gstatus "google.golang.org/grpc/status"
 
 	"github.com/cs3org/reva/v3/pkg/errtypes"
 	"github.com/cs3org/reva/v3/pkg/rgrpc/status"
 	"github.com/cs3org/reva/v3/pkg/service"
 	"github.com/cs3org/reva/v3/pkg/storage/utils/templates"
 	"github.com/cs3org/reva/v3/pkg/utils"
-	"github.com/google/uuid"
-	"github.com/pkg/errors"
-	"google.golang.org/grpc/codes"
-	gstatus "google.golang.org/grpc/status"
 )
 
 // transferClaims are custom claims for a JWT token to be used between the metadata and data gateways.
@@ -862,7 +864,7 @@ func (s *svc) find(ctx context.Context, ref *provider.Reference) (provider.Provi
 // dataGatewayURL resolves a ready data gateway from the registry and returns its
 // client-facing URL.
 func (s *svc) dataGatewayURL(ctx context.Context) (string, error) {
-	ep, err := s.Clients().HTTPEndpoint(ctx, service.ByName("datagateway"))
+	ep, err := service.HTTPEndpoint(ctx, service.ByName("datagateway"))
 	if err != nil {
 		return "", err
 	}
@@ -880,7 +882,7 @@ func (s *svc) getStorageProviderClient(_ context.Context, p *registry.ProviderIn
 }
 
 func (s *svc) findProviders(ctx context.Context, ref *provider.Reference) ([]*registry.ProviderInfo, error) {
-	c, err := s.Clients().StorageRegistry(ctx)
+	c, err := service.StorageRegistry(ctx)
 	if err != nil {
 		return nil, errors.Wrap(err, "gateway: error getting storage registry client")
 	}

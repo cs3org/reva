@@ -22,12 +22,14 @@ import (
 	"context"
 
 	invitepb "github.com/cs3org/go-cs3apis/cs3/ocm/invite/v1beta1"
-	"github.com/cs3org/reva/v3/pkg/rgrpc/status"
 	"github.com/pkg/errors"
+
+	"github.com/cs3org/reva/v3/pkg/rgrpc/status"
+	"github.com/cs3org/reva/v3/pkg/service"
 )
 
 func (s *svc) GenerateInviteToken(ctx context.Context, req *invitepb.GenerateInviteTokenRequest) (*invitepb.GenerateInviteTokenResponse, error) {
-	c, err := s.Clients().OCMInviteManager(ctx)
+	c, err := service.OCMInviteManager(ctx)
 	if err != nil {
 		return &invitepb.GenerateInviteTokenResponse{
 			Status: status.NewInternal(ctx, err, "error getting user invite provider client"),
@@ -43,7 +45,7 @@ func (s *svc) GenerateInviteToken(ctx context.Context, req *invitepb.GenerateInv
 }
 
 func (s *svc) ListInviteTokens(ctx context.Context, req *invitepb.ListInviteTokensRequest) (*invitepb.ListInviteTokensResponse, error) {
-	c, err := s.Clients().OCMInviteManager(ctx)
+	c, err := service.OCMInviteManager(ctx)
 	if err != nil {
 		return &invitepb.ListInviteTokensResponse{
 			Status: status.NewInternal(ctx, err, "error getting user invite provider client"),
@@ -59,7 +61,7 @@ func (s *svc) ListInviteTokens(ctx context.Context, req *invitepb.ListInviteToke
 }
 
 func (s *svc) ForwardInvite(ctx context.Context, req *invitepb.ForwardInviteRequest) (*invitepb.ForwardInviteResponse, error) {
-	c, err := s.Clients().OCMInviteManager(ctx)
+	c, err := service.OCMInviteManager(ctx)
 	if err != nil {
 		return &invitepb.ForwardInviteResponse{
 			Status: status.NewInternal(ctx, err, "error getting user invite provider client"),
@@ -75,7 +77,7 @@ func (s *svc) ForwardInvite(ctx context.Context, req *invitepb.ForwardInviteRequ
 }
 
 func (s *svc) AcceptInvite(ctx context.Context, req *invitepb.AcceptInviteRequest) (*invitepb.AcceptInviteResponse, error) {
-	c, err := s.Clients().OCMInviteManager(ctx)
+	c, err := service.OCMInviteManager(ctx)
 	if err != nil {
 		return &invitepb.AcceptInviteResponse{
 			Status: status.NewInternal(ctx, err, "error getting user invite provider client"),
@@ -91,7 +93,7 @@ func (s *svc) AcceptInvite(ctx context.Context, req *invitepb.AcceptInviteReques
 }
 
 func (s *svc) GetAcceptedUser(ctx context.Context, req *invitepb.GetAcceptedUserRequest) (*invitepb.GetAcceptedUserResponse, error) {
-	c, err := s.Clients().OCMInviteManager(ctx)
+	c, err := service.OCMInviteManager(ctx)
 	if err != nil {
 		return &invitepb.GetAcceptedUserResponse{
 			Status: status.NewInternal(ctx, err, "error getting user invite provider client"),
@@ -107,7 +109,7 @@ func (s *svc) GetAcceptedUser(ctx context.Context, req *invitepb.GetAcceptedUser
 }
 
 func (s *svc) FindAcceptedUsers(ctx context.Context, req *invitepb.FindAcceptedUsersRequest) (*invitepb.FindAcceptedUsersResponse, error) {
-	c, err := s.Clients().OCMInviteManager(ctx)
+	c, err := service.OCMInviteManager(ctx)
 	if err != nil {
 		return &invitepb.FindAcceptedUsersResponse{
 			Status: status.NewInternal(ctx, err, "error getting user invite provider client"),
@@ -123,7 +125,7 @@ func (s *svc) FindAcceptedUsers(ctx context.Context, req *invitepb.FindAcceptedU
 }
 
 func (s *svc) DeleteAcceptedUser(ctx context.Context, req *invitepb.DeleteAcceptedUserRequest) (*invitepb.DeleteAcceptedUserResponse, error) {
-	c, err := s.Clients().OCMInviteManager(ctx)
+	c, err := service.OCMInviteManager(ctx)
 	if err != nil {
 		return &invitepb.DeleteAcceptedUserResponse{
 			Status: status.NewInternal(ctx, err, "error getting user invite provider client"),

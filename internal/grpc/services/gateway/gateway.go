@@ -26,16 +26,16 @@ import (
 
 	"github.com/ReneKroon/ttlcache/v2"
 	gateway "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
+	"google.golang.org/grpc"
+
 	"github.com/cs3org/reva/v3/pkg/errtypes"
 	"github.com/cs3org/reva/v3/pkg/rgrpc"
-	"github.com/cs3org/reva/v3/pkg/service"
 	"github.com/cs3org/reva/v3/pkg/share/cache"
 	cachereg "github.com/cs3org/reva/v3/pkg/share/cache/registry"
 	"github.com/cs3org/reva/v3/pkg/sharedconf"
 	"github.com/cs3org/reva/v3/pkg/token"
 	"github.com/cs3org/reva/v3/pkg/token/manager/registry"
 	"github.com/cs3org/reva/v3/pkg/utils/cfg"
-	"google.golang.org/grpc"
 )
 
 func init() {
@@ -92,7 +92,6 @@ func (c *config) ApplyDefaults() {
 }
 
 type svc struct {
-	service.Base
 	c                    *config
 	tokenmgr             token.Manager
 	etagCache            *ttlcache.Cache `mapstructure:"etag_cache"`

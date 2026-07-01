@@ -18,12 +18,6 @@
 
 package service
 
-// Base is embedded by services for convenience; Clients() returns the
-// process-wide resolver installed by the runtime (see global.go).
-type Base struct{}
-
-func (Base) Clients() Clients { return Global() }
-
 // MetadataProvider is implemented by a service that wants to advertise extra
 // metadata (e.g. mount_id, public_url) on its registry node. The runtime merges
 // RegistryMetadata() over the framework-derived keys at registration.

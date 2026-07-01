@@ -22,12 +22,14 @@ import (
 	"context"
 
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
-	"github.com/cs3org/reva/v3/pkg/rgrpc/status"
 	"github.com/pkg/errors"
+
+	"github.com/cs3org/reva/v3/pkg/rgrpc/status"
+	"github.com/cs3org/reva/v3/pkg/service"
 )
 
 func (s *svc) CreateStorageSpace(ctx context.Context, req *provider.CreateStorageSpaceRequest) (*provider.CreateStorageSpaceResponse, error) {
-	c, err := s.Clients().Spaces(ctx)
+	c, err := service.Spaces(ctx)
 	if err != nil {
 		return &provider.CreateStorageSpaceResponse{
 			Status: status.NewInternal(ctx, err, "error getting spaces client"),
@@ -43,7 +45,7 @@ func (s *svc) CreateStorageSpace(ctx context.Context, req *provider.CreateStorag
 }
 
 func (s *svc) ListStorageSpaces(ctx context.Context, req *provider.ListStorageSpacesRequest) (*provider.ListStorageSpacesResponse, error) {
-	c, err := s.Clients().Spaces(ctx)
+	c, err := service.Spaces(ctx)
 	if err != nil {
 		return &provider.ListStorageSpacesResponse{
 			Status: status.NewInternal(ctx, err, "error getting spaces client"),
@@ -59,7 +61,7 @@ func (s *svc) ListStorageSpaces(ctx context.Context, req *provider.ListStorageSp
 }
 
 func (s *svc) UpdateStorageSpace(ctx context.Context, req *provider.UpdateStorageSpaceRequest) (*provider.UpdateStorageSpaceResponse, error) {
-	c, err := s.Clients().Spaces(ctx)
+	c, err := service.Spaces(ctx)
 	if err != nil {
 		return &provider.UpdateStorageSpaceResponse{
 			Status: status.NewInternal(ctx, err, "error getting spaces client"),
@@ -75,7 +77,7 @@ func (s *svc) UpdateStorageSpace(ctx context.Context, req *provider.UpdateStorag
 }
 
 func (s *svc) DeleteStorageSpace(ctx context.Context, req *provider.DeleteStorageSpaceRequest) (*provider.DeleteStorageSpaceResponse, error) {
-	c, err := s.Clients().Spaces(ctx)
+	c, err := service.Spaces(ctx)
 	if err != nil {
 		return &provider.DeleteStorageSpaceResponse{
 			Status: status.NewInternal(ctx, err, "error getting spaces client"),
