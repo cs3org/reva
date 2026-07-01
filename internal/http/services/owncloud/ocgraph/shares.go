@@ -113,11 +113,10 @@ func (s *svc) getSharedWithMe(w http.ResponseWriter, r *http.Request) {
 			},
 		})
 		if err != nil {
-			log.Fatal().Err(err).Msg("ListReceivedOCMShares returned error - user will not be able to see their OCM shares")
-			handleError(ctx, err, w)
+			log.Error().Err(err).Msg("ListReceivedOCMShares returned error - user will not be able to see their OCM shares")
 		} else if ocmShareResp != nil {
 			if ocmShareResp.Status == nil || ocmShareResp.Status.Code != rpc.Code_CODE_OK {
-				handleRpcStatus(ctx, ocmShareResp.Status, "ocgraph: failed to perform ListReceivedOCMShares ", w)
+				log.Error().Any("status", ocmShareResp.Status).Msg("ListReceivedOCMShares unsuccessful - user will not be able to see their OCM shares")
 			}
 
 			for _, share := range ocmShareResp.Shares {
