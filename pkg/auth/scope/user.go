@@ -29,6 +29,13 @@ import (
 )
 
 func userScope(_ context.Context, scope *authpb.Scope, resource any, _ *zerolog.Logger) (bool, error) {
+	// The Admin API is reachable only through the admin scope; a normal user
+	// token must never satisfy an admin request. Since this verifier is
+	// otherwise unconditionally true, it has to explicitly decline admin
+	// messages to keep the two planes isolated (see adminScope in admin.go).
+	if isAdminResource(resource) {
+		return false, nil
+	}
 	// Always return true. Registered users can access all paths.
 	// TODO(ishank011): Add checks for read/write permissions.
 	return true, nil
