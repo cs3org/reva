@@ -74,6 +74,10 @@ func initGRPCInterceptors(conf map[string]map[string]any, unprotected []string, 
 	if err != nil {
 		return nil, nil, errors.Wrap(err, "error creating unary auth interceptor")
 	}
+	authStream, err := auth.NewStream(conf["auth"], unprotected)
+	if err != nil {
+		return nil, nil, errors.Wrap(err, "error creating stream auth interceptor")
+	}
 
 	unaryInterceptors := []grpc.UnaryServerInterceptor{}
 	for _, t := range unaryTriples {
@@ -113,11 +117,6 @@ func initGRPCInterceptors(conf map[string]map[string]any, unprotected []string, 
 	sort.SliceStable(streamTriples, func(i, j int) bool {
 		return streamTriples[i].Priority < streamTriples[j].Priority
 	})
-
-	authStream, err := auth.NewStream(conf["auth"], unprotected)
-	if err != nil {
-		return nil, nil, errors.Wrap(err, "error creating stream auth interceptor")
-	}
 
 	streamInterceptors := []grpc.StreamServerInterceptor{authStream}
 	for _, t := range streamTriples {

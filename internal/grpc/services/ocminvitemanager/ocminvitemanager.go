@@ -27,6 +27,9 @@ import (
 	invitepb "github.com/cs3org/go-cs3apis/cs3/ocm/invite/v1beta1"
 	ocmprovider "github.com/cs3org/go-cs3apis/cs3/ocm/provider/v1beta1"
 	rpcv1beta1 "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
+	"github.com/pkg/errors"
+	"google.golang.org/grpc"
+
 	"github.com/cs3org/reva/v3/internal/http/services/opencloudmesh/ocmd"
 	"github.com/cs3org/reva/v3/pkg/appctx"
 	"github.com/cs3org/reva/v3/pkg/errtypes"
@@ -35,12 +38,10 @@ import (
 	"github.com/cs3org/reva/v3/pkg/plugin"
 	"github.com/cs3org/reva/v3/pkg/rgrpc"
 	"github.com/cs3org/reva/v3/pkg/rgrpc/status"
-	"github.com/cs3org/reva/v3/pkg/rgrpc/todo/pool"
+	revaservice "github.com/cs3org/reva/v3/pkg/service"
 	"github.com/cs3org/reva/v3/pkg/sharedconf"
 	"github.com/cs3org/reva/v3/pkg/utils"
 	"github.com/cs3org/reva/v3/pkg/utils/cfg"
-	"github.com/pkg/errors"
-	"google.golang.org/grpc"
 )
 
 func init() {
@@ -278,7 +279,7 @@ func (s *service) AcceptInvite(ctx context.Context, req *invitepb.AcceptInviteRe
 }
 
 func (s *service) getUserInfo(ctx context.Context, id *userpb.UserId) (*userpb.User, error) {
-	gw, err := pool.GetGatewayServiceClient(pool.Endpoint(s.conf.GatewaySVC))
+	gw, err := revaservice.Gateway(ctx)
 	if err != nil {
 		return nil, err
 	}

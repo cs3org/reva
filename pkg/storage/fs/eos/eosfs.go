@@ -34,8 +34,11 @@ import (
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	types "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
+
 	"github.com/cs3org/reva/v3/pkg/appctx"
 	"github.com/cs3org/reva/v3/pkg/permissions"
+
+	"github.com/pkg/errors"
 
 	"github.com/cs3org/reva/v3/pkg/errtypes"
 	"github.com/cs3org/reva/v3/pkg/mime"
@@ -48,7 +51,6 @@ import (
 	"github.com/cs3org/reva/v3/pkg/storage/utils/chunking"
 	"github.com/cs3org/reva/v3/pkg/storage/utils/grants"
 	"github.com/cs3org/reva/v3/pkg/utils"
-	"github.com/pkg/errors"
 )
 
 const (

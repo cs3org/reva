@@ -77,6 +77,7 @@ func initHTTPMiddlewares(conf map[string]map[string]any, unprotected []string, l
 	for _, triple := range triples {
 		middlewares = append(middlewares, triple.Middleware)
 	}
+
 	return middlewares, nil
 }
 

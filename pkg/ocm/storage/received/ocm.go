@@ -33,7 +33,6 @@ import (
 	"time"
 
 	"github.com/ReneKroon/ttlcache/v2"
-	gateway "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	ocmpb "github.com/cs3org/go-cs3apis/cs3/sharing/ocm/v1beta1"
@@ -44,8 +43,8 @@ import (
 	"github.com/cs3org/reva/v3/pkg/appctx"
 	"github.com/cs3org/reva/v3/pkg/errtypes"
 	"github.com/cs3org/reva/v3/pkg/mime"
-	"github.com/cs3org/reva/v3/pkg/rgrpc/todo/pool"
 	"github.com/cs3org/reva/v3/pkg/rhttp/router"
+	"github.com/cs3org/reva/v3/pkg/service"
 	"github.com/cs3org/reva/v3/pkg/sharedconf"
 	"github.com/cs3org/reva/v3/pkg/storage"
 	"github.com/cs3org/reva/v3/pkg/storage/fs/registry"
@@ -66,7 +65,6 @@ type cachedClient struct {
 
 type driver struct {
 	c              *config
-	gateway        gateway.GatewayAPIClient
 	ccache         *ttlcache.Cache
 	discoveryCache *ttlcache.Cache
 	ocmClient      *ocmd.OCMClient
@@ -93,17 +91,11 @@ func New(ctx context.Context, m map[string]any) (storage.FS, error) {
 		return nil, err
 	}
 
-	gateway, err := pool.GetGatewayServiceClient(pool.Endpoint(c.GatewaySVC))
-	if err != nil {
-		return nil, err
-	}
-
 	disco := ttlcache.NewCache()
 	_ = disco.SetTTL(5 * time.Minute)
 
 	d := &driver{
 		c:              &c,
-		gateway:        gateway,
 		ccache:         ttlcache.NewCache(),
 		discoveryCache: disco,
 		ocmClient:      ocmd.NewClient(time.Duration(c.OCMClientTimeout)*time.Second, c.OCMClientInsecure),
@@ -134,7 +126,11 @@ func shareInfoFromReference(ref *provider.Reference) (*ocmpb.ShareId, string) {
 }
 
 func (d *driver) getWebDAVFromShare(ctx context.Context, shareID *ocmpb.ShareId) (*ocmpb.ReceivedShare, string, string, error) {
-	res, err := d.gateway.GetReceivedOCMShare(ctx, &ocmpb.GetReceivedOCMShareRequest{
+	gw, err := service.Gateway(ctx)
+	if err != nil {
+		return nil, "", "", err
+	}
+	res, err := gw.GetReceivedOCMShare(ctx, &ocmpb.GetReceivedOCMShareRequest{
 		Ref: &ocmpb.ShareReference{
 			Spec: &ocmpb.ShareReference_Id{
 				Id: shareID,
@@ -231,11 +227,16 @@ func receiverClientIDWithLookup(ctx context.Context, share *ocmpb.ReceivedShare,
 }
 
 func (d *driver) lookupReceiverUserIDP(ctx context.Context, userID *userpb.UserId) string {
-	if d == nil || d.gateway == nil || userID == nil || userID.GetOpaqueId() == "" {
+	if d == nil || userID == nil || userID.GetOpaqueId() == "" {
 		return ""
 	}
 
-	res, err := d.gateway.GetUser(ctx, &userpb.GetUserRequest{
+	gw, err := service.Gateway(ctx)
+	if err != nil {
+		return ""
+	}
+
+	res, err := gw.GetUser(ctx, &userpb.GetUserRequest{
 		UserId:                 userID,
 		SkipFetchingUserGroups: true,
 	})

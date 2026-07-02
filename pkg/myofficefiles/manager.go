@@ -7,14 +7,13 @@ import (
 	"slices"
 	"strconv"
 
-	gatewayv1beta1 "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	typesv1beta1 "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
 	"github.com/cs3org/reva/v3/pkg/appctx"
 	"github.com/cs3org/reva/v3/pkg/errtypes"
-	"github.com/cs3org/reva/v3/pkg/rgrpc/todo/pool"
+	"github.com/cs3org/reva/v3/pkg/service"
 	"github.com/cs3org/reva/v3/pkg/storage/utils/templates"
 )
 
@@ -46,18 +45,11 @@ var officeFilesRegex = map[OfficeFileType]string{
 }
 
 type svc struct {
-	gateway      gatewayv1beta1.GatewayAPIClient
 	projectsList []string
 }
 
 func New(ctx context.Context, gatewayEndpoint string, allowedProjectsList []string) (Manager, error) {
-	gateway, err := pool.GetGatewayServiceClient(pool.Endpoint(gatewayEndpoint))
-	if err != nil {
-		return nil, err
-	}
-
 	return &svc{
-		gateway:      gateway,
 		projectsList: allowedProjectsList,
 	}, nil
 }
@@ -104,9 +96,14 @@ func (s *svc) ListMyOfficeFiles(ctx context.Context, user *userpb.User, filetype
 		storages = []string{home}
 	}
 
+	gateway, err := service.Gateway(ctx)
+	if err != nil {
+		return nil, err
+	}
+
 	for _, path := range storages {
 		log.Info().Str("path", path).Msg("ListMyOfficeFiles")
-		res, err := s.gateway.ListContainer(ctx, &provider.ListContainerRequest{
+		res, err := gateway.ListContainer(ctx, &provider.ListContainerRequest{
 			Opaque: &typesv1beta1.Opaque{
 				Map: map[string]*typesv1beta1.OpaqueEntry{
 					"regex": {

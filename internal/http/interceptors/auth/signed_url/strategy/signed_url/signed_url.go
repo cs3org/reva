@@ -30,14 +30,15 @@ import (
 
 	user "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	rpcv1beta1 "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
+	"github.com/mitchellh/mapstructure"
+	"github.com/pkg/errors"
+	"golang.org/x/crypto/pbkdf2"
+
 	"github.com/cs3org/reva/v3/internal/http/interceptors/auth/signed_url/registry"
 	"github.com/cs3org/reva/v3/pkg/appctx"
 	"github.com/cs3org/reva/v3/pkg/auth"
 	"github.com/cs3org/reva/v3/pkg/auth/signing"
-	"github.com/cs3org/reva/v3/pkg/rgrpc/todo/pool"
-	"github.com/mitchellh/mapstructure"
-	"github.com/pkg/errors"
-	"golang.org/x/crypto/pbkdf2"
+	"github.com/cs3org/reva/v3/pkg/service"
 )
 
 func init() {
@@ -46,10 +47,9 @@ func init() {
 
 type Config struct {
 	// PreSignedURL is the config for the pre-signed url interceptor
-	AllowedHTTPMethods   []string `mapstructure:"allowed_http_methods"`
-	Enabled              bool     `mapstructure:"enabled"`
-	SigningKeySecret     string   `mapstructure:"signing_key_secret"`
-	UserProviderEndpoint string   `mapstructure:"userprovidersvc"`
+	AllowedHTTPMethods []string `mapstructure:"allowed_http_methods"`
+	Enabled            bool     `mapstructure:"enabled"`
+	SigningKeySecret   string   `mapstructure:"signing_key_secret"`
 	// Default: one day
 	MaxExpirySeconds int `mapstructure:"max_expiry_seconds" docs:"nil; Default: one day"`
 }
@@ -280,11 +280,11 @@ func (m SignedURLAuthenticator) createSignature(url string, signingKey []byte) s
 }
 
 // Authenticate implements the authenticator interface to authenticate requests via signed URL auth.
-func (m SignedURLAuthenticator) Authenticate(r *http.Request) (*http.Request, bool) {
+func (m *SignedURLAuthenticator) Authenticate(r *http.Request) (*http.Request, bool) {
 	ctx := r.Context()
 	sublog := appctx.GetLogger(ctx).With().Str("authenticator", "signed_url").Str("path", r.URL.Path).Logger()
 
-	client, err := pool.GetUserProviderServiceClient(pool.Endpoint(m.config.UserProviderEndpoint))
+	client, err := service.UserProvider(ctx)
 	if err != nil {
 		return nil, false
 	}

@@ -48,6 +48,7 @@ import (
 	_ "github.com/cs3org/reva/v3/pkg/projects/manager/loader"
 	_ "github.com/cs3org/reva/v3/pkg/prom/loader"
 	_ "github.com/cs3org/reva/v3/pkg/publicshare/manager/loader"
+	_ "github.com/cs3org/reva/v3/pkg/registry/loader"
 	_ "github.com/cs3org/reva/v3/pkg/rhttp/datatx/manager/loader"
 	_ "github.com/cs3org/reva/v3/pkg/share/cache/loader"
 	_ "github.com/cs3org/reva/v3/pkg/share/cache/warmup/loader"

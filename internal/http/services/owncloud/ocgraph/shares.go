@@ -42,20 +42,22 @@ import (
 	collaboration "github.com/cs3org/go-cs3apis/cs3/sharing/collaboration/v1beta1"
 	link "github.com/cs3org/go-cs3apis/cs3/sharing/link/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
+	libregraph "github.com/owncloud/libre-graph-api-go"
+
 	"github.com/cs3org/reva/v3/internal/http/services/opencloudmesh/ocmd"
 	"github.com/cs3org/reva/v3/pkg/appctx"
 	"github.com/cs3org/reva/v3/pkg/ocm/share"
 	"github.com/cs3org/reva/v3/pkg/permissions"
+	"github.com/cs3org/reva/v3/pkg/service"
 	"github.com/cs3org/reva/v3/pkg/spaces"
 	"github.com/cs3org/reva/v3/pkg/utils"
-	libregraph "github.com/owncloud/libre-graph-api-go"
 )
 
 func (s *svc) getSharedWithMe(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	log := appctx.GetLogger(ctx)
 
-	gw, err := s.getClient()
+	gw, err := service.Gateway(ctx)
 	if err != nil {
 		log.Error().Err(err).Msg("error getting grpc client")
 		handleError(ctx, err, w)
@@ -213,7 +215,7 @@ func (s *svc) share(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	log := appctx.GetLogger(ctx)
 	// First we get the gateway client
-	gw, err := s.getClient()
+	gw, err := service.Gateway(ctx)
 	if err != nil {
 		log.Error().Err(err).Msg("error getting gateway client")
 		handleError(ctx, err, w)
@@ -362,7 +364,7 @@ func (s *svc) createLink(w http.ResponseWriter, r *http.Request) {
 	log := appctx.GetLogger(ctx)
 
 	// First we get the gateway client
-	gw, err := s.getClient()
+	gw, err := service.Gateway(ctx)
 	if err != nil {
 		log.Error().Err(err).Msg("error getting gateway client")
 		handleError(ctx, err, w)
@@ -472,7 +474,7 @@ func encodeSpaceIDForShareJail(res *provider.ResourceInfo) string {
 }
 
 func (s *svc) getUserByID(ctx context.Context, u *userpb.UserId) (*userpb.User, error) {
-	client, err := s.getClient()
+	client, err := service.Gateway(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -499,7 +501,7 @@ func (s *svc) getGroupByID(ctx context.Context, g *grouppb.GroupId) (*grouppb.Gr
 		return nil, fmt.Errorf("must pass a non-nil group id to getGroupByID")
 	}
 
-	client, err := s.getClient()
+	client, err := service.Gateway(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -564,7 +566,7 @@ func (s *svc) getSharedByMe(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	log := appctx.GetLogger(ctx)
 
-	gw, err := s.getClient()
+	gw, err := service.Gateway(ctx)
 	if err != nil {
 		handleError(ctx, err, w)
 		return
@@ -671,7 +673,7 @@ func (s *svc) updateReceivedShare(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	log := appctx.GetLogger(ctx)
 
-	gw, err := s.getClient()
+	gw, err := service.Gateway(ctx)
 	if err != nil {
 		handleError(ctx, err, w)
 		return

@@ -91,9 +91,9 @@ func testShare(id, token string) *ocm.Share {
 
 func TestAuthenticateValidCode(t *testing.T) {
 	s := testShare("share-abc", "code123")
+	stampGateway(&mockGW{share: s, shareErr: rpc.Code_CODE_OK, remoteErr: rpc.Code_CODE_OK})
 	mgr := &manager{
-		c:  &config{},
-		gw: &mockGW{share: s, shareErr: rpc.Code_CODE_OK, remoteErr: rpc.Code_CODE_OK},
+		c: &config{},
 	}
 
 	user, scopes, err := mgr.Authenticate(context.Background(), "nextcloud1.docker", "code123")
@@ -122,9 +122,9 @@ func TestAuthenticateValidCode(t *testing.T) {
 
 func TestAuthenticateClientIDDoesNotNeedShareIDMatch(t *testing.T) {
 	s := testShare("share-abc", "code123")
+	stampGateway(&mockGW{share: s, shareErr: rpc.Code_CODE_OK, remoteErr: rpc.Code_CODE_OK})
 	mgr := &manager{
-		c:  &config{},
-		gw: &mockGW{share: s, shareErr: rpc.Code_CODE_OK, remoteErr: rpc.Code_CODE_OK},
+		c: &config{},
 	}
 
 	user, _, err := mgr.Authenticate(context.Background(), "nextcloud1.docker", "code123")
@@ -138,9 +138,9 @@ func TestAuthenticateClientIDDoesNotNeedShareIDMatch(t *testing.T) {
 
 func TestAuthenticateEmptyShareIDAccepts(t *testing.T) {
 	s := testShare("share-abc", "code123")
+	stampGateway(&mockGW{share: s, shareErr: rpc.Code_CODE_OK, remoteErr: rpc.Code_CODE_OK})
 	mgr := &manager{
-		c:  &config{},
-		gw: &mockGW{share: s, shareErr: rpc.Code_CODE_OK, remoteErr: rpc.Code_CODE_OK},
+		c: &config{},
 	}
 
 	user, _, err := mgr.Authenticate(context.Background(), "", "code123")
@@ -153,9 +153,9 @@ func TestAuthenticateEmptyShareIDAccepts(t *testing.T) {
 }
 
 func TestAuthenticateShareNotFound(t *testing.T) {
+	stampGateway(&mockGW{shareErr: rpc.Code_CODE_NOT_FOUND, shareMsg: "not found"})
 	mgr := &manager{
-		c:  &config{},
-		gw: &mockGW{shareErr: rpc.Code_CODE_NOT_FOUND, shareMsg: "not found"},
+		c: &config{},
 	}
 
 	_, _, err := mgr.Authenticate(context.Background(), "share-abc", "bad-code")
@@ -168,9 +168,9 @@ func TestAuthenticateShareNotFound(t *testing.T) {
 }
 
 func TestAuthenticatePermissionDenied(t *testing.T) {
+	stampGateway(&mockGW{shareErr: rpc.Code_CODE_PERMISSION_DENIED, shareMsg: "denied"})
 	mgr := &manager{
-		c:  &config{},
-		gw: &mockGW{shareErr: rpc.Code_CODE_PERMISSION_DENIED, shareMsg: "denied"},
+		c: &config{},
 	}
 
 	_, _, err := mgr.Authenticate(context.Background(), "share-abc", "bad-code")

@@ -16,13 +16,15 @@ import (
 	ocm "github.com/cs3org/go-cs3apis/cs3/sharing/ocm/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	types "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
+	libregraph "github.com/owncloud/libre-graph-api-go"
+	"github.com/pkg/errors"
+
 	"github.com/cs3org/reva/v3/pkg/appctx"
 	ocmconversions "github.com/cs3org/reva/v3/pkg/ocm/conversions"
 	"github.com/cs3org/reva/v3/pkg/permissions"
+	"github.com/cs3org/reva/v3/pkg/service"
 	"github.com/cs3org/reva/v3/pkg/spaces"
 	"github.com/cs3org/reva/v3/pkg/utils"
-	libregraph "github.com/owncloud/libre-graph-api-go"
-	"github.com/pkg/errors"
 )
 
 func (s *svc) shareToLibregraphPerm(ctx context.Context, share *GenericShare) (*libregraph.Permission, error) {
@@ -162,7 +164,7 @@ func (s *svc) buildGrantedToForRegularShare(ctx context.Context, grantee *provid
 }
 
 func (s *svc) buildGrantedToForOCMShare(ctx context.Context, grantee *provider.Grantee) (*libregraph.SharePointIdentitySet, error) {
-	gw, err := s.getClient()
+	gw, err := service.Gateway(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -291,7 +293,7 @@ func (s *svc) cs3GranteeToSharePointIdentitySet(ctx context.Context, grantee *pr
 }
 
 func (s *svc) ocmGranteeToSharePointIdentitySet(ctx context.Context, grantee *provider.Grantee) (*libregraph.SharePointIdentitySet, error) {
-	gw, err := s.getClient()
+	gw, err := service.Gateway(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -450,7 +452,7 @@ func (s *svc) cs3ShareToDriveItem(ctx context.Context, info *provider.ResourceIn
 }
 
 func (s *svc) OCMReceivedShareToDriveItem(ctx context.Context, receivedOCMShare *ocm.ReceivedShare) (*libregraph.DriveItem, error) {
-	gw, err := s.getClient()
+	gw, err := service.Gateway(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -589,7 +591,7 @@ func (s *svc) cs3sharesToPermissions(ctx context.Context, shares []*GenericShare
 }
 
 func (s *svc) toGrantee(ctx context.Context, recipientType string, id string) (*provider.Grantee, error) {
-	gw, err := s.getClient()
+	gw, err := service.Gateway(ctx)
 	if err != nil {
 		return nil, err
 	}

@@ -16,111 +16,57 @@
 // granted to it by virtue of its status as an Intergovernmental Organization
 // or submit itself to any jurisdiction.
 
-package memory
+package memory_test
 
 import (
-	"fmt"
-	"os"
 	"testing"
 
+	"github.com/cs3org/reva/v3/pkg/registry"
+	"github.com/cs3org/reva/v3/pkg/registry/memory"
 	"github.com/google/uuid"
 	"gotest.tools/assert"
 )
 
-var (
-	in    = make(map[string]any)
-	reg   = New(in)
-	node1 = node{
-		id:      uuid.New().String(),
-		address: "0.0.0.0:42069",
-		metadata: map[string]string{
-			"type": "auth-bearer",
-		},
-	}
-
-	node2 = node{
-		id:      uuid.New().String(),
-		address: "0.0.0.0:7777",
-		metadata: map[string]string{
-			"type": "auth-basic",
-		},
-	}
-
-	node3 = node{id: uuid.NewString(), address: "0.0.0.0:8888"}
-	node4 = node{id: uuid.NewString(), address: "0.0.0.0:9999"}
-)
-
-var scenarios = []struct {
-	name          string // scenario name
-	in            string // used to query the Registry by service name
-	services      []service
-	expectedNodes []node // expected set of nodes
-}{
-	{
-		name: "single service with 2 nodes",
-		in:   "auth-provider",
-		services: []service{
-			{name: "auth-provider", nodes: []node{node1, node2}},
-		},
-		expectedNodes: []node{node1, node2},
-	},
-	{
-		name: "single service with 2 nodes scaled x2",
-		in:   "auth-provider",
-		services: []service{
-			{name: "auth-provider", nodes: []node{node1, node2}},
-			{name: "auth-provider", nodes: []node{node3, node4}},
-		},
-		expectedNodes: []node{node1, node2, node3, node4},
-	},
+func node(addr string) registry.Node {
+	return registry.NewNode(uuid.NewString(), addr, nil)
 }
 
-func TestAdd(t *testing.T) {
-	reg = New(in)
-	s1 := scenarios[1].services[0]
-	s2 := scenarios[1].services[1]
-	_ = reg.Add(s1)
-	_ = reg.Add(s2)
-
-	_ = reg.Add(service{
-		name: "test",
-		nodes: []node{
-			{
-				id:       "1234",
-				address:  "localhost:8899",
-				metadata: nil,
-			},
-		},
-	})
-
-	expectedNumberOfNodes := len(s1.nodes) + len(s2.nodes)
-	if s, err := reg.GetService(s1.name); err != nil {
-		t.Error(err)
-		collectedNumberOfNodes := len(s.Nodes())
-
-		if expectedNumberOfNodes == collectedNumberOfNodes {
-			t.Error(fmt.Errorf("expected %v nodes, got: %v", expectedNumberOfNodes, collectedNumberOfNodes))
-		}
+func TestAddAndGet(t *testing.T) {
+	reg := memory.New(nil)
+	n1, n2 := node("0.0.0.0:42069"), node("0.0.0.0:7777")
+	if err := reg.Add(registry.NewService("auth-provider", []registry.Node{n1, n2})); err != nil {
+		t.Fatal(err)
 	}
+
+	svc, err := reg.GetService("auth-provider")
+	if err != nil {
+		t.Fatal(err)
+	}
+	assert.Equal(t, 2, len(svc.Nodes()))
 }
 
-func TestGetService(t *testing.T) {
-	for _, scenario := range scenarios {
-		reg = New(in)
-		for _, service := range scenario.services {
-			if err := reg.Add(&service); err != nil {
-				os.Exit(1)
-			}
-		}
+func TestAddMergesNodes(t *testing.T) {
+	reg := memory.New(nil)
+	_ = reg.Add(registry.NewService("auth-provider", []registry.Node{node("0.0.0.0:1"), node("0.0.0.0:2")}))
+	_ = reg.Add(registry.NewService("auth-provider", []registry.Node{node("0.0.0.0:3"), node("0.0.0.0:4")}))
 
-		t.Run(scenario.name, func(t *testing.T) {
-			svc, err := reg.GetService(scenario.in)
-			if err != nil {
-				t.Error(err)
-			}
+	svc, err := reg.GetService("auth-provider")
+	if err != nil {
+		t.Fatal(err)
+	}
+	assert.Equal(t, 4, len(svc.Nodes()))
+}
 
-			totalNodes := len(svc.Nodes())
-			assert.Equal(t, len(scenario.expectedNodes), totalNodes)
-		})
+func TestRemoveAndListServices(t *testing.T) {
+	reg := memory.New(nil)
+	n := node("0.0.0.0:9000")
+	_ = reg.Add(registry.NewService("gateway", []registry.Node{n}))
+
+	svcs, _ := reg.ListServices()
+	assert.Equal(t, 1, len(svcs))
+
+	_ = reg.Remove(registry.NewService("gateway", []registry.Node{n}))
+	if _, err := reg.GetService("gateway"); err == nil {
+		t.Fatal("expected gateway to be removed")
 	}
 }

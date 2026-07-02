@@ -28,6 +28,7 @@ import (
 	"strconv"
 	"strings"
 	"syscall"
+	"time"
 
 	"github.com/BurntSushi/toml"
 	"github.com/pkg/errors"
@@ -35,8 +36,10 @@ import (
 	"github.com/cs3org/reva/v3/cmd/revad/pkg/config"
 	"github.com/cs3org/reva/v3/cmd/revad/pkg/grace"
 	"github.com/cs3org/reva/v3/pkg/appctx"
+	"github.com/cs3org/reva/v3/pkg/registry"
 	"github.com/cs3org/reva/v3/pkg/rgrpc"
 	"github.com/cs3org/reva/v3/pkg/rhttp"
+	"github.com/cs3org/reva/v3/pkg/service"
 	"github.com/cs3org/reva/v3/pkg/trace"
 
 	"github.com/cs3org/reva/v3/pkg/rhttp/global"
@@ -59,6 +62,10 @@ type Reva struct {
 	watcher    *grace.Watcher
 	lns        map[string]net.Listener
 
+	// registry is this instance's service registry.
+	registry          registry.Registry
+	heartbeatInterval time.Duration
+
 	pidfile       string
 	log           *zerolog.Logger
 	traceShutdown func(context.Context) error
@@ -68,6 +75,11 @@ type Reva struct {
 type Server struct {
 	server   grace.Server
 	listener net.Listener
+
+	// transport is "grpc" or "http"; advertised in registry node metadata.
+	transport string
+	// scheme is "http" or "https" for HTTP servers (empty for grpc).
+	scheme string
 
 	services map[string]any
 }
@@ -123,6 +135,16 @@ func New(config *config.Config, opt ...Option) (*Reva, error) {
 		return nil, errors.Wrap(err, "error initializing tracing provider")
 	}
 
+	reg, err := buildRegistry(config, opts.Registry, log)
+	if err != nil {
+		watcher.Clean()
+		return nil, err
+	}
+
+	// Install the process-wide resolver before constructing services, so any
+	// service that resolves a peer at construction time finds it (first wins).
+	service.SetGlobal(service.NewClients(reg))
+
 	grpc := groupGRPCByAddress(config)
 	http := groupHTTPByAddress(config)
 	servers, err := newServers(ctx, grpc, http, listeners, log)
@@ -138,18 +160,36 @@ func New(config *config.Config, opt ...Option) (*Reva, error) {
 	}
 
 	r := &Reva{
-		ctx:           ctx,
-		config:        config,
-		servers:       servers,
-		serverless:    serverless,
-		watcher:       watcher,
-		lns:           listeners,
-		pidfile:       opts.PidFile,
-		log:           log,
-		traceShutdown: traceShutdown,
+		ctx:               ctx,
+		config:            config,
+		servers:           servers,
+		serverless:        serverless,
+		watcher:           watcher,
+		lns:               listeners,
+		registry:          reg,
+		heartbeatInterval: parseDurationOr(config.Shared.Registry.HeartbeatInterval, 5*time.Second),
+		pidfile:           opts.PidFile,
+		log:               log,
+		traceShutdown:     traceShutdown,
 	}
+
+	// Self-register every loaded service after listeners have bound.
+	r.register()
+
 	r.initConfigDumper()
 	return r, nil
+}
+
+// parseDurationOr parses a Go duration string, returning def on empty/invalid.
+func parseDurationOr(s string, def time.Duration) time.Duration {
+	if s == "" {
+		return def
+	}
+	d, err := time.ParseDuration(s)
+	if err != nil {
+		return def
+	}
+	return d
 }
 
 func (r *Reva) initConfigDumper() {
@@ -307,6 +347,10 @@ func groupHTTPByAddress(cfg *config.Config) []*config.HTTP {
 func (r *Reva) Start() error {
 	defer r.traceShutdown(r.ctx)
 	defer r.watcher.Clean()
+	// Drain this instance's registry entries on graceful shutdown.
+	defer r.deregister()
+	// Keep registered nodes live while we serve.
+	r.startHeartbeat()
 	r.watcher.SetServers(list.Map(r.servers, func(s *Server) grace.Server { return s.server }))
 	r.watcher.SetServerless(r.serverless)
 
@@ -435,9 +479,10 @@ func newServers(ctx context.Context, grpc []*config.GRPC, http []*config.HTTP, l
 		}
 		ln := listenerFromAddress(lns, cfg.Network, cfg.Address)
 		server := &Server{
-			server:   s,
-			listener: ln,
-			services: maps.MapValues(services, func(s rgrpc.Service) any { return s }),
+			server:    s,
+			listener:  ln,
+			transport: "grpc",
+			services:  maps.MapValues(services, func(s rgrpc.Service) any { return s }),
 		}
 		log.Debug().
 			Interface("services", maps.Keys(cfg.Services)).
@@ -465,10 +510,16 @@ func newServers(ctx context.Context, grpc []*config.GRPC, http []*config.HTTP, l
 			return nil, err
 		}
 		ln := listenerFromAddress(lns, cfg.Network, cfg.Address)
+		scheme := "http"
+		if cfg.CertFile != "" && cfg.KeyFile != "" {
+			scheme = "https"
+		}
 		server := &Server{
-			server:   s,
-			listener: ln,
-			services: maps.MapValues(services, func(s global.Service) any { return s }),
+			server:    s,
+			listener:  ln,
+			transport: "http",
+			scheme:    scheme,
+			services:  maps.MapValues(services, func(s global.Service) any { return s }),
 		}
 		log.Debug().
 			Interface("services", maps.Keys(cfg.Services)).

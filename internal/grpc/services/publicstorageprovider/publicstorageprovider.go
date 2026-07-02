@@ -24,7 +24,6 @@ import (
 	"path"
 	"strings"
 
-	gateway "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	link "github.com/cs3org/go-cs3apis/cs3/sharing/link/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
@@ -33,7 +32,7 @@ import (
 	"github.com/cs3org/reva/v3/pkg/errtypes"
 	"github.com/cs3org/reva/v3/pkg/rgrpc"
 	"github.com/cs3org/reva/v3/pkg/rgrpc/status"
-	"github.com/cs3org/reva/v3/pkg/rgrpc/todo/pool"
+	revaservice "github.com/cs3org/reva/v3/pkg/service"
 	"github.com/cs3org/reva/v3/pkg/sharedconf"
 	"github.com/cs3org/reva/v3/pkg/utils"
 	"github.com/cs3org/reva/v3/pkg/utils/cfg"
@@ -65,7 +64,6 @@ type service struct {
 	conf      *config
 	mountPath string
 	mountID   string
-	gateway   gateway.GatewayAPIClient
 }
 
 func (s *service) Close() error {
@@ -90,16 +88,10 @@ func New(ctx context.Context, m map[string]any) (rgrpc.Service, error) {
 	mountPath := c.MountPath
 	mountID := c.MountID
 
-	gateway, err := pool.GetGatewayServiceClient(pool.Endpoint(c.GatewayAddr))
-	if err != nil {
-		return nil, err
-	}
-
 	service := &service{
 		conf:      &c,
 		mountPath: mountPath,
 		mountID:   mountID,
-		gateway:   gateway,
 	}
 
 	return service, nil
@@ -115,7 +107,11 @@ func (s *service) SetArbitraryMetadata(ctx context.Context, req *provider.SetArb
 			Status: st,
 		}, nil
 	}
-	return s.gateway.SetArbitraryMetadata(ctx, &provider.SetArbitraryMetadataRequest{Opaque: req.Opaque, Ref: ref, ArbitraryMetadata: req.ArbitraryMetadata})
+	gw, err := revaservice.Gateway(ctx)
+	if err != nil {
+		return nil, err
+	}
+	return gw.SetArbitraryMetadata(ctx, &provider.SetArbitraryMetadataRequest{Opaque: req.Opaque, Ref: ref, ArbitraryMetadata: req.ArbitraryMetadata})
 }
 
 func (s *service) UnsetArbitraryMetadata(ctx context.Context, req *provider.UnsetArbitraryMetadataRequest) (*provider.UnsetArbitraryMetadataResponse, error) {
@@ -223,7 +219,14 @@ func (s *service) initiateFileDownload(ctx context.Context, req *provider.Initia
 		Ref: cs3Ref,
 	}
 
-	dRes, err := s.gateway.InitiateFileDownload(ctx, dReq)
+	gw, err := revaservice.Gateway(ctx)
+	if err != nil {
+		return &provider.InitiateFileDownloadResponse{
+			Status: status.NewInternal(ctx, err, "gateway: error getting gateway client"),
+		}, nil
+	}
+
+	dRes, err := gw.InitiateFileDownload(ctx, dReq)
 	if err != nil {
 		return &provider.InitiateFileDownloadResponse{
 			Status: status.NewInternal(ctx, err, "gateway: error calling InitiateFileDownload"),
@@ -276,7 +279,14 @@ func (s *service) InitiateFileUpload(ctx context.Context, req *provider.Initiate
 		Opaque: req.Opaque,
 	}
 
-	uRes, err := s.gateway.InitiateFileUpload(ctx, uReq)
+	gw, err := revaservice.Gateway(ctx)
+	if err != nil {
+		return &provider.InitiateFileUploadResponse{
+			Status: status.NewInternal(ctx, err, "gateway: error getting gateway client"),
+		}, nil
+	}
+
+	uRes, err := gw.InitiateFileUpload(ctx, uReq)
 	if err != nil {
 		return &provider.InitiateFileUploadResponse{
 			Status: status.NewInternal(ctx, err, "gateway: error calling InitiateFileUpload"),
@@ -356,9 +366,16 @@ func (s *service) CreateContainer(ctx context.Context, req *provider.CreateConta
 		}, nil
 	}
 
+	gw, err := revaservice.Gateway(ctx)
+	if err != nil {
+		return &provider.CreateContainerResponse{
+			Status: status.NewInternal(ctx, err, "gateway: error getting gateway client"),
+		}, nil
+	}
+
 	var res *provider.CreateContainerResponse
 	// the call has to be made to the gateway instead of the storage.
-	res, err = s.gateway.CreateContainer(ctx, &provider.CreateContainerRequest{
+	res, err = gw.CreateContainer(ctx, &provider.CreateContainerRequest{
 		Ref: cs3Ref,
 	})
 	if err != nil {
@@ -383,7 +400,11 @@ func (s *service) TouchFile(ctx context.Context, req *provider.TouchFileRequest)
 			Status: st,
 		}, nil
 	}
-	return s.gateway.TouchFile(ctx, &provider.TouchFileRequest{Opaque: req.Opaque, Ref: ref})
+	gw, err := revaservice.Gateway(ctx)
+	if err != nil {
+		return nil, err
+	}
+	return gw.TouchFile(ctx, &provider.TouchFileRequest{Opaque: req.Opaque, Ref: ref})
 }
 
 func (s *service) Delete(ctx context.Context, req *provider.DeleteRequest) (*provider.DeleteResponse, error) {
@@ -401,9 +422,16 @@ func (s *service) Delete(ctx context.Context, req *provider.DeleteRequest) (*pro
 		}, nil
 	}
 
+	gw, err := revaservice.Gateway(ctx)
+	if err != nil {
+		return &provider.DeleteResponse{
+			Status: status.NewInternal(ctx, err, "gateway: error getting gateway client"),
+		}, nil
+	}
+
 	var res *provider.DeleteResponse
 	// the call has to be made to the gateway instead of the storage.
-	res, err = s.gateway.Delete(ctx, &provider.DeleteRequest{
+	res, err = gw.Delete(ctx, &provider.DeleteRequest{
 		Ref: cs3Ref,
 	})
 	if err != nil {
@@ -449,9 +477,16 @@ func (s *service) Move(ctx context.Context, req *provider.MoveRequest) (*provide
 		}, nil
 	}
 
+	gw, err := revaservice.Gateway(ctx)
+	if err != nil {
+		return &provider.MoveResponse{
+			Status: status.NewInternal(ctx, err, "gateway: error getting gateway client"),
+		}, nil
+	}
+
 	var res *provider.MoveResponse
 	// the call has to be made to the gateway instead of the storage.
-	res, err = s.gateway.Move(ctx, &provider.MoveRequest{
+	res, err = gw.Move(ctx, &provider.MoveRequest{
 		Source:      cs3RefSource,
 		Destination: cs3RefDestination,
 	})
@@ -529,7 +564,14 @@ func (s *service) Stat(ctx context.Context, req *provider.StatRequest) (*provide
 		ref = &provider.Reference{Path: p}
 	}
 
-	statResponse, err := s.gateway.Stat(ctx, &provider.StatRequest{Ref: ref})
+	gw, err := revaservice.Gateway(ctx)
+	if err != nil {
+		return &provider.StatResponse{
+			Status: status.NewInternal(ctx, err, "gateway: error getting gateway client"),
+		}, nil
+	}
+
+	statResponse, err := gw.Stat(ctx, &provider.StatRequest{Ref: ref})
 	if err != nil {
 		return &provider.StatResponse{
 			Status: status.NewInternal(ctx, err, "gateway: error calling Stat for ref:"+req.Ref.String()),
@@ -608,7 +650,14 @@ func (s *service) ListContainer(ctx context.Context, req *provider.ListContainer
 		}, nil
 	}
 
-	listContainerR, err := s.gateway.ListContainer(
+	gw, err := revaservice.Gateway(ctx)
+	if err != nil {
+		return &provider.ListContainerResponse{
+			Status: status.NewInternal(ctx, err, "gateway: error getting gateway client"),
+		}, nil
+	}
+
+	listContainerR, err := gw.ListContainer(
 		ctx,
 		&provider.ListContainerRequest{Ref: &provider.Reference{Path: path.Join("/", shareInfo.Path, relativePath)}},
 	)
@@ -742,7 +791,6 @@ func (s *service) GetQuota(ctx context.Context, req *provider.GetQuotaRequest) (
 	return nil, gstatus.Errorf(codes.Unimplemented, "method not implemented")
 }
 
-
 func (s *service) trimMountPrefix(fn string) (string, error) {
 	if after, ok := strings.CutPrefix(fn, s.mountPath); ok {
 		return path.Join("/", after), nil
@@ -752,7 +800,7 @@ func (s *service) trimMountPrefix(fn string) (string, error) {
 
 // resolveToken returns the path and share for the publicly shared resource.
 func (s *service) resolveToken(ctx context.Context, token string) (*link.PublicShare, *provider.ResourceInfo, *rpc.Status, error) {
-	driver, err := pool.GetGatewayServiceClient(pool.Endpoint(s.conf.GatewayAddr))
+	driver, err := revaservice.Gateway(ctx)
 	if err != nil {
 		return nil, nil, nil, err
 	}
@@ -775,7 +823,7 @@ func (s *service) resolveToken(ctx context.Context, token string) (*link.PublicS
 		return nil, nil, publicShareResponse.Status, nil
 	}
 
-	sRes, err := s.gateway.Stat(ctx, &provider.StatRequest{
+	sRes, err := driver.Stat(ctx, &provider.StatRequest{
 		Ref: &provider.Reference{
 			ResourceId: publicShareResponse.GetShare().GetResourceId(),
 		},

@@ -27,25 +27,24 @@ import (
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
+	"github.com/go-chi/chi/v5"
+	"github.com/juliangruber/go-intersect"
+
 	"github.com/cs3org/reva/v3/internal/http/services/owncloud/ocdav"
 	"github.com/cs3org/reva/v3/internal/http/services/owncloud/ocs/config"
 	"github.com/cs3org/reva/v3/internal/http/services/owncloud/ocs/conversions"
 	"github.com/cs3org/reva/v3/internal/http/services/owncloud/ocs/response"
 	"github.com/cs3org/reva/v3/pkg/appctx"
-	"github.com/cs3org/reva/v3/pkg/rgrpc/todo/pool"
-	"github.com/go-chi/chi/v5"
-	"github.com/juliangruber/go-intersect"
+	"github.com/cs3org/reva/v3/pkg/service"
 )
 
 // Handler renders user data for the user id given in the url path.
 type Handler struct {
-	gatewayAddr            string
 	capabilitiesGroupBased map[string][]string
 }
 
 // Init initializes this and any contained handlers.
 func (h *Handler) Init(c *config.Config) {
-	h.gatewayAddr = c.GatewaySvc
 	h.capabilitiesGroupBased = c.GroupBasedCapabilities
 }
 
@@ -104,7 +103,7 @@ func (h *Handler) GetUsers(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	gc, err := pool.GetGatewayServiceClient(pool.Endpoint(h.gatewayAddr))
+	gc, err := service.Gateway(ctx)
 	if err != nil {
 		sublog.Error().Err(err).Msg("error getting gateway client")
 		w.WriteHeader(http.StatusInternalServerError)
@@ -142,7 +141,7 @@ func (h *Handler) GetUsers(w http.ResponseWriter, r *http.Request) {
 		relative = float32(float64(used)/float64(total)) * 100
 	}
 
-	gw, err := pool.GetGatewayServiceClient(pool.Endpoint(h.gatewayAddr))
+	gw, err := service.Gateway(ctx)
 	if err != nil {
 		response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "error getting gateway client", fmt.Errorf("error getting gateway client"))
 		return

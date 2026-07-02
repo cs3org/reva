@@ -31,18 +31,20 @@ import (
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	registry "github.com/cs3org/go-cs3apis/cs3/storage/registry/v1beta1"
 	types "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
-	"github.com/cs3org/reva/v3/pkg/appctx"
 	"github.com/golang-jwt/jwt/v5"
 
-	"github.com/cs3org/reva/v3/pkg/errtypes"
-	"github.com/cs3org/reva/v3/pkg/rgrpc/status"
-	"github.com/cs3org/reva/v3/pkg/rgrpc/todo/pool"
-	"github.com/cs3org/reva/v3/pkg/storage/utils/templates"
-	"github.com/cs3org/reva/v3/pkg/utils"
+	"github.com/cs3org/reva/v3/pkg/appctx"
+
 	"github.com/google/uuid"
 	"github.com/pkg/errors"
 	"google.golang.org/grpc/codes"
 	gstatus "google.golang.org/grpc/status"
+
+	"github.com/cs3org/reva/v3/pkg/errtypes"
+	"github.com/cs3org/reva/v3/pkg/rgrpc/status"
+	"github.com/cs3org/reva/v3/pkg/service"
+	"github.com/cs3org/reva/v3/pkg/storage/utils/templates"
+	"github.com/cs3org/reva/v3/pkg/utils"
 )
 
 // transferClaims are custom claims for a JWT token to be used between the metadata and data gateways.
@@ -151,7 +153,13 @@ func (s *svc) InitiateFileDownload(ctx context.Context, req *provider.InitiateFi
 				}, nil
 			}
 
-			protocols[p].DownloadEndpoint = s.c.DataGatewayEndpoint
+			dgw, err := s.dataGatewayURL(ctx)
+			if err != nil {
+				return &gateway.InitiateFileDownloadResponse{
+					Status: status.NewInternal(ctx, err, "error resolving data gateway"),
+				}, nil
+			}
+			protocols[p].DownloadEndpoint = dgw
 			protocols[p].Token = token
 		}
 	}
@@ -223,7 +231,13 @@ func (s *svc) InitiateFileUpload(ctx context.Context, req *provider.InitiateFile
 				}, nil
 			}
 
-			protocols[p].UploadEndpoint = s.c.DataGatewayEndpoint
+			dgw, err := s.dataGatewayURL(ctx)
+			if err != nil {
+				return &gateway.InitiateFileUploadResponse{
+					Status: status.NewInternal(ctx, err, "error resolving data gateway"),
+				}, nil
+			}
+			protocols[p].UploadEndpoint = dgw
 			protocols[p].Token = token
 		}
 	}
@@ -726,7 +740,6 @@ func (s *svc) splitPath(_ context.Context, p string) []string {
 	return strings.SplitN(p, "/", 4) // ["home", "MyShares", "photos", "Ibiza/beach.png"]
 }
 
-
 func (s *svc) CreateSymlink(ctx context.Context, req *provider.CreateSymlinkRequest) (*provider.CreateSymlinkResponse, error) {
 	return &provider.CreateSymlinkResponse{
 		Status: status.NewUnimplemented(ctx, errtypes.NotSupported("CreateSymlink not implemented"), "CreateSymlink not implemented"),
@@ -848,8 +861,18 @@ func (s *svc) find(ctx context.Context, ref *provider.Reference) (provider.Provi
 	return s.getStorageProviderClient(ctx, p[0])
 }
 
+// dataGatewayURL resolves a ready data gateway from the registry and returns its
+// client-facing URL.
+func (s *svc) dataGatewayURL(ctx context.Context) (string, error) {
+	ep, err := service.HTTPEndpoint(ctx, service.ByName("datagateway"))
+	if err != nil {
+		return "", err
+	}
+	return ep.URL(), nil
+}
+
 func (s *svc) getStorageProviderClient(_ context.Context, p *registry.ProviderInfo) (provider.ProviderAPIClient, error) {
-	c, err := pool.GetStorageProviderServiceClient(pool.Endpoint(p.Address))
+	c, err := service.StorageProviderAt(p.Address)
 	if err != nil {
 		err = errors.Wrap(err, "gateway: error getting a storage provider client")
 		return nil, err
@@ -859,7 +882,7 @@ func (s *svc) getStorageProviderClient(_ context.Context, p *registry.ProviderIn
 }
 
 func (s *svc) findProviders(ctx context.Context, ref *provider.Reference) ([]*registry.ProviderInfo, error) {
-	c, err := pool.GetStorageRegistryClient(pool.Endpoint(s.c.StorageRegistryEndpoint))
+	c, err := service.StorageRegistry(ctx)
 	if err != nil {
 		return nil, errors.Wrap(err, "gateway: error getting storage registry client")
 	}

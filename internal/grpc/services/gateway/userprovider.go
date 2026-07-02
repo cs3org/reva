@@ -26,14 +26,15 @@ import (
 	user "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	invitepb "github.com/cs3org/go-cs3apis/cs3/ocm/invite/v1beta1"
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
+	"github.com/pkg/errors"
+
 	"github.com/cs3org/reva/v3/pkg/errtypes"
 	"github.com/cs3org/reva/v3/pkg/rgrpc/status"
-	"github.com/cs3org/reva/v3/pkg/rgrpc/todo/pool"
-	"github.com/pkg/errors"
+	"github.com/cs3org/reva/v3/pkg/service"
 )
 
 func (s *svc) GetUser(ctx context.Context, req *user.GetUserRequest) (*user.GetUserResponse, error) {
-	c, err := pool.GetUserProviderServiceClient(pool.Endpoint(s.c.UserProviderEndpoint))
+	c, err := service.UserProvider(ctx)
 	if err != nil {
 		return &user.GetUserResponse{
 			Status: status.NewInternal(ctx, err, "error getting auth client"),
@@ -49,7 +50,7 @@ func (s *svc) GetUser(ctx context.Context, req *user.GetUserRequest) (*user.GetU
 }
 
 func (s *svc) GetUserByClaim(ctx context.Context, req *user.GetUserByClaimRequest) (*user.GetUserByClaimResponse, error) {
-	c, err := pool.GetUserProviderServiceClient(pool.Endpoint(s.c.UserProviderEndpoint))
+	c, err := service.UserProvider(ctx)
 	if err != nil {
 		return &user.GetUserByClaimResponse{
 			Status: status.NewInternal(ctx, err, "error getting auth client"),
@@ -65,7 +66,7 @@ func (s *svc) GetUserByClaim(ctx context.Context, req *user.GetUserByClaimReques
 }
 
 func (s *svc) FindUsers(ctx context.Context, req *user.FindUsersRequest) (*user.FindUsersResponse, error) {
-	c, err := pool.GetUserProviderServiceClient(pool.Endpoint(s.c.UserProviderEndpoint))
+	c, err := service.UserProvider(ctx)
 	if err != nil {
 		return &user.FindUsersResponse{
 			Status: status.NewInternal(ctx, err, "error getting auth client"),
@@ -78,7 +79,7 @@ func (s *svc) FindUsers(ctx context.Context, req *user.FindUsersRequest) (*user.
 	}
 
 	if s.c.OCMEnabled {
-		c, err := pool.GetOCMInviteManagerClient(pool.Endpoint(s.c.OCMInviteManagerEndpoint))
+		c, err := service.OCMInviteManager(ctx)
 		if err != nil {
 			return &user.FindUsersResponse{
 				Status: status.NewInternal(ctx, err, "error getting auth client"),
@@ -108,7 +109,7 @@ func (s *svc) FindUsers(ctx context.Context, req *user.FindUsersRequest) (*user.
 }
 
 func (s *svc) GetUserGroups(ctx context.Context, req *user.GetUserGroupsRequest) (*user.GetUserGroupsResponse, error) {
-	c, err := pool.GetUserProviderServiceClient(pool.Endpoint(s.c.UserProviderEndpoint))
+	c, err := service.UserProvider(ctx)
 	if err != nil {
 		return &user.GetUserGroupsResponse{
 			Status: status.NewInternal(ctx, err, "error getting auth client"),

@@ -24,6 +24,7 @@ import (
 	"net/http"
 
 	"github.com/cs3org/reva/v3/pkg/appctx"
+	svcregistry "github.com/cs3org/reva/v3/pkg/registry"
 	datatxregistry "github.com/cs3org/reva/v3/pkg/rhttp/datatx/manager/registry"
 	"github.com/cs3org/reva/v3/pkg/rhttp/global"
 	"github.com/cs3org/reva/v3/pkg/rhttp/router"
@@ -43,6 +44,12 @@ type config struct {
 	DataTXs  map[string]map[string]any `docs:"url:pkg/rhttp/datatx/manager/simple/simple.go;The configuration for the data tx protocols" mapstructure:"data_txs"`
 	Timeout  int64                     `mapstructure:"timeout"`
 	Insecure bool                      `docs:"false;Whether to skip certificate checks when sending requests."                           mapstructure:"insecure"`
+	// MountID ties this data provider to the storage provider serving the same
+	// storage, so the storage provider can discover it through the registry.
+	MountID string `docs:"-;The mount id of the storage this data provider serves." mapstructure:"mount_id"`
+	// PublicURL is the externally reachable base URL, advertised in the registry.
+	// If empty, consumers reconstruct it from scheme+address+prefix.
+	PublicURL string `mapstructure:"public_url"`
 }
 
 func (c *config) ApplyDefaults() {
@@ -86,6 +93,19 @@ func New(ctx context.Context, m map[string]any) (global.Service, error) {
 
 	err = s.setHandler()
 	return s, err
+}
+
+// RegistryMetadata advertises the mount affinity and the externally reachable
+// URL so a storage provider can discover this data provider through the registry.
+func (s *svc) RegistryMetadata() map[string]string {
+	m := map[string]string{}
+	if s.conf.MountID != "" {
+		m[svcregistry.MetaMountID] = s.conf.MountID
+	}
+	if s.conf.PublicURL != "" {
+		m[svcregistry.MetaPublicURL] = s.conf.PublicURL
+	}
+	return m
 }
 
 func getFS(ctx context.Context, c *config) (storage.FS, error) {

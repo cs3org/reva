@@ -29,7 +29,6 @@ import (
 	"slices"
 	"time"
 
-	gateway "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	ocm "github.com/cs3org/go-cs3apis/cs3/sharing/ocm/v1beta1"
@@ -46,7 +45,7 @@ import (
 	"github.com/cs3org/reva/v3/pkg/plugin"
 	"github.com/cs3org/reva/v3/pkg/rgrpc"
 	"github.com/cs3org/reva/v3/pkg/rgrpc/status"
-	"github.com/cs3org/reva/v3/pkg/rgrpc/todo/pool"
+	revaservice "github.com/cs3org/reva/v3/pkg/service"
 	"github.com/cs3org/reva/v3/pkg/sharedconf"
 	"github.com/cs3org/reva/v3/pkg/storage/utils/walker"
 	"github.com/cs3org/reva/v3/pkg/utils"
@@ -86,8 +85,6 @@ type service struct {
 	conf        *config
 	repo        share.Repository
 	client      *ocmd.OCMClient
-	gateway     gateway.GatewayAPIClient
-	walker      walker.Walker
 	transferrer embedded.Transferrer
 }
 
@@ -140,20 +137,11 @@ func New(ctx context.Context, m map[string]any) (rgrpc.Service, error) {
 		return nil, err
 	}
 
-	gateway, err := pool.GetGatewayServiceClient(pool.Endpoint(c.GatewaySVC))
-	if err != nil {
-		return nil, err
-	}
-
-	walker := walker.NewWalker(gateway)
-
 	ocmcl := ocmd.NewClient(time.Duration(c.ClientTimeout)*time.Second, c.ClientInsecure)
 	service := &service{
 		conf:        &c,
 		repo:        repo,
 		client:      ocmcl,
-		gateway:     gateway,
-		walker:      walker,
 		transferrer: transferrer,
 	}
 
@@ -250,6 +238,15 @@ func (s *service) getWebappProtocol(ocmShare *ocm.Share, m *ocm.AccessMethod_Web
 	}
 }
 
+// walk traverses the path recursively to discover all resources in the tree.
+func (s *service) walk(ctx context.Context, path string, fn walker.WalkFunc) error {
+	gw, err := revaservice.Gateway(ctx)
+	if err != nil {
+		return err
+	}
+	return walker.NewWalker(gw).Walk(ctx, path, fn)
+}
+
 // return the protocols that can be used by remote users to access a local OCM share.
 func (s *service) getProtocols(ctx context.Context, share *ocm.Share, include_webapp bool) ocmd.Protocols {
 	var p ocmd.Protocols
@@ -268,7 +265,13 @@ func (s *service) getProtocols(ctx context.Context, share *ocm.Share, include_we
 
 func (s *service) CreateOCMShare(ctx context.Context, req *ocm.CreateOCMShareRequest) (*ocm.CreateOCMShareResponse, error) {
 	log := appctx.GetLogger(ctx)
-	statRes, err := s.gateway.Stat(ctx, &providerpb.StatRequest{
+	gw, err := revaservice.Gateway(ctx)
+	if err != nil {
+		return &ocm.CreateOCMShareResponse{
+			Status: status.NewInternal(ctx, err, err.Error()),
+		}, err
+	}
+	statRes, err := gw.Stat(ctx, &providerpb.StatRequest{
 		Ref: &providerpb.Reference{
 			ResourceId: req.ResourceId,
 		},

@@ -30,15 +30,14 @@ import (
 	"time"
 
 	authpb "github.com/cs3org/go-cs3apis/cs3/auth/provider/v1beta1"
-	gateway "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	storagepb "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/cs3org/reva/v3/internal/http/services/reqres"
 	"github.com/cs3org/reva/v3/pkg/appctx"
 
 	"github.com/cs3org/reva/v3/pkg/auth/scope"
-	"github.com/cs3org/reva/v3/pkg/rgrpc/todo/pool"
 	"github.com/cs3org/reva/v3/pkg/rhttp/global"
+	"github.com/cs3org/reva/v3/pkg/service"
 	"github.com/cs3org/reva/v3/pkg/sharedconf"
 	"github.com/cs3org/reva/v3/pkg/token/manager/jwt"
 	"github.com/cs3org/reva/v3/pkg/utils/cfg"
@@ -47,9 +46,8 @@ import (
 )
 
 type svc struct {
-	conf      *config
-	gtwClient gateway.GatewayAPIClient
-	router    *chi.Mux
+	conf   *config
+	router *chi.Mux
 }
 
 type config struct {
@@ -72,17 +70,11 @@ func New(ctx context.Context, m map[string]any) (global.Service, error) {
 		return nil, err
 	}
 
-	gtw, err := pool.GetGatewayServiceClient(pool.Endpoint(conf.GatewaySvc))
-	if err != nil {
-		return nil, err
-	}
-
 	r := chi.NewRouter()
 
 	s := &svc{
-		conf:      &conf,
-		gtwClient: gtw,
-		router:    r,
+		conf:   &conf,
+		router: r,
 	}
 
 	if err := s.routerInit(); err != nil {
@@ -137,7 +129,13 @@ func (s *svc) handleExport(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	statRes, err := s.gtwClient.Stat(ctx, &storagepb.StatRequest{Ref: exportRequest.ResourceRef})
+	gtw, err := service.Gateway(ctx)
+	if err != nil {
+		reqres.WriteError(w, r, reqres.APIErrorServerError, "Internal error accessing the resource, please try again later", err)
+		return
+	}
+
+	statRes, err := gtw.Stat(ctx, &storagepb.StatRequest{Ref: exportRequest.ResourceRef})
 	if err != nil {
 		reqres.WriteError(w, r, reqres.APIErrorServerError, "Internal error accessing the resource, please try again later", err)
 		return
@@ -256,7 +254,7 @@ func (s *svc) handleExport(w http.ResponseWriter, r *http.Request) {
 		},
 	}
 
-	res, err := s.gtwClient.SetArbitraryMetadata(ctx, req)
+	res, err := gtw.SetArbitraryMetadata(ctx, req)
 
 	if err != nil {
 		reqres.WriteError(w, r, reqres.APIErrorServerError, "overleaf: error setting arbitrary metadata", nil)

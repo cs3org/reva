@@ -32,10 +32,11 @@ import (
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	preferences "github.com/cs3org/go-cs3apis/cs3/preferences/v1beta1"
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
-	"github.com/cs3org/reva/v3/pkg/appctx"
-	"github.com/cs3org/reva/v3/pkg/rgrpc/todo/pool"
 	libregraph "github.com/owncloud/libre-graph-api-go"
 	"github.com/pkg/errors"
+
+	"github.com/cs3org/reva/v3/pkg/appctx"
+	"github.com/cs3org/reva/v3/pkg/service"
 )
 
 type UserSelectableProperty string
@@ -78,7 +79,7 @@ func (s *svc) getMe(w http.ResponseWriter, r *http.Request) {
 		Id:                       &user.Id.OpaqueId,
 	}
 
-	gw, err := s.getClient()
+	gw, err := service.Gateway(ctx)
 	if err == nil {
 		lang, err := gw.GetKey(r.Context(), &preferences.GetKeyRequest{
 			Key: &preferences.PreferenceKey{
@@ -128,7 +129,7 @@ func (s *svc) patchMe(w http.ResponseWriter, r *http.Request) {
 		PreferredLanguage:        update.PreferredLanguage,
 	}
 
-	gw, err := s.getClient()
+	gw, err := service.Gateway(ctx)
 	if err != nil {
 		handleError(ctx, err, w)
 		return
@@ -158,7 +159,7 @@ func (s *svc) listUsers(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	log := appctx.GetLogger(ctx)
 
-	gw, err := s.getClient()
+	gw, err := service.Gateway(ctx)
 	if err != nil {
 		log.Error().Err(err).Msg("error getting gateway client")
 		handleError(ctx, err, w)
@@ -230,7 +231,7 @@ func (s *svc) listUsers(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *svc) getUserInfo(ctx context.Context, id *userpb.UserId) (*userpb.User, error) {
-	gw, err := pool.GetGatewayServiceClient(pool.Endpoint(s.c.GatewaySvc))
+	gw, err := service.Gateway(ctx)
 	if err != nil {
 		return nil, err
 	}
