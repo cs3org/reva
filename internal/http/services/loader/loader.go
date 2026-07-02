@@ -26,6 +26,7 @@ import (
 	_ "github.com/cs3org/reva/v3/internal/http/services/dataprovider"
 	_ "github.com/cs3org/reva/v3/internal/http/services/experimental/overleaf"
 	_ "github.com/cs3org/reva/v3/internal/http/services/helloworld"
+	_ "github.com/cs3org/reva/v3/internal/http/services/loginflow"
 	_ "github.com/cs3org/reva/v3/internal/http/services/metrics"
 	_ "github.com/cs3org/reva/v3/internal/http/services/opencloudmesh/ocmd"
 	_ "github.com/cs3org/reva/v3/internal/http/services/owncloud/ocapi"
