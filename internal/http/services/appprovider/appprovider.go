@@ -41,8 +41,8 @@ import (
 	"github.com/cs3org/reva/v3/pkg/appctx"
 	"github.com/cs3org/reva/v3/pkg/httpclient"
 	"github.com/cs3org/reva/v3/pkg/rgrpc/status"
-	"github.com/cs3org/reva/v3/pkg/rgrpc/todo/pool"
 	"github.com/cs3org/reva/v3/pkg/rhttp/global"
+	"github.com/cs3org/reva/v3/pkg/service"
 	"github.com/cs3org/reva/v3/pkg/sharedconf"
 	"github.com/cs3org/reva/v3/pkg/spaces"
 	"github.com/cs3org/reva/v3/pkg/utils"
@@ -132,7 +132,7 @@ func (s *svc) handleNew(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	log := appctx.GetLogger(ctx)
 
-	client, err := pool.GetGatewayServiceClient(pool.Endpoint(s.conf.GatewaySvc))
+	client, err := service.Gateway(ctx)
 	if err != nil {
 		writeError(w, r, appErrorServerError, "error getting grpc gateway client", err)
 		return
@@ -328,7 +328,7 @@ func (s *svc) extractReference(ctx context.Context, id string) (*provider.Resour
 	if !ok {
 		return nil, errors.New("failed to decode ID")
 	}
-	client, err := pool.GetGatewayServiceClient(pool.Endpoint(s.conf.GatewaySvc))
+	client, err := service.Gateway(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -351,7 +351,7 @@ func (s *svc) extractReference(ctx context.Context, id string) (*provider.Resour
 
 func (s *svc) handleList(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
-	client, err := pool.GetGatewayServiceClient(pool.Endpoint(s.conf.GatewaySvc))
+	client, err := service.Gateway(ctx)
 	if err != nil {
 		writeError(w, r, appErrorServerError, "error getting grpc gateway client", err)
 		return
@@ -385,7 +385,7 @@ func (s *svc) handleOpen(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	log := appctx.GetLogger(ctx)
 
-	client, err := pool.GetGatewayServiceClient(pool.Endpoint(s.conf.GatewaySvc))
+	client, err := service.Gateway(ctx)
 	if err != nil {
 		writeError(w, r, appErrorServerError, "Internal error with the gateway, please try again later", err)
 		return

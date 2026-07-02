@@ -35,7 +35,6 @@ import (
 	"github.com/cs3org/reva/v3/pkg/appctx"
 	"github.com/cs3org/reva/v3/pkg/notifications"
 	"github.com/cs3org/reva/v3/pkg/notifications/model"
-	"github.com/cs3org/reva/v3/pkg/rgrpc/todo/pool"
 	"github.com/cs3org/reva/v3/pkg/sharedconf"
 	"github.com/cs3org/reva/v3/pkg/spaces"
 	"google.golang.org/grpc"
@@ -263,7 +262,7 @@ func TestHandleMentionsAcceptsResolvedMentions(t *testing.T) {
 			},
 		},
 	}
-	pool.RegisterGatewayServiceClient(gw, endpoint)
+	stampGateway(gw)
 
 	s := &svc{
 		conf: &Config{GatewaySvc: endpoint},

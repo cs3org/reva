@@ -28,19 +28,20 @@ import (
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	registry "github.com/cs3org/go-cs3apis/cs3/storage/registry/v1beta1"
-	"github.com/cs3org/reva/v3/pkg/permissions"
+	"github.com/pkg/errors"
+
 	"github.com/cs3org/reva/v3/internal/http/services/owncloud/ocs/response"
 	"github.com/cs3org/reva/v3/pkg/appctx"
 	"github.com/cs3org/reva/v3/pkg/errtypes"
+	"github.com/cs3org/reva/v3/pkg/permissions"
 	"github.com/cs3org/reva/v3/pkg/rgrpc/status"
-	"github.com/cs3org/reva/v3/pkg/rgrpc/todo/pool"
+	"github.com/cs3org/reva/v3/pkg/service"
 	"github.com/cs3org/reva/v3/pkg/utils"
-	"github.com/pkg/errors"
 )
 
 func (h *Handler) getGrantee(ctx context.Context, name string) (provider.Grantee, error) {
 	log := appctx.GetLogger(ctx)
-	client, err := pool.GetGatewayServiceClient(pool.Endpoint(h.gatewayAddr))
+	client, err := service.Gateway(ctx)
 	if err != nil {
 		return provider.Grantee{}, err
 	}
@@ -167,7 +168,7 @@ func (h *Handler) removeSpaceMember(w http.ResponseWriter, r *http.Request, spac
 }
 
 func (h *Handler) getStorageProviderClient(p *registry.ProviderInfo) (provider.ProviderAPIClient, error) {
-	c, err := pool.GetStorageProviderServiceClient(pool.Endpoint(p.Address))
+	c, err := service.StorageProviderAt(p.Address)
 	if err != nil {
 		err = errors.Wrap(err, "gateway: error getting a storage provider client")
 		return nil, err
@@ -177,7 +178,7 @@ func (h *Handler) getStorageProviderClient(p *registry.ProviderInfo) (provider.P
 }
 
 func (h *Handler) findProviders(ctx context.Context, ref *provider.Reference) ([]*registry.ProviderInfo, error) {
-	c, err := pool.GetStorageRegistryClient(pool.Endpoint(h.storageRegistryAddr))
+	c, err := service.StorageRegistry(ctx)
 	if err != nil {
 		return nil, errors.Wrap(err, "gateway: error getting storage registry client")
 	}

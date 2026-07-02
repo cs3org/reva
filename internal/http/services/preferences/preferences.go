@@ -26,8 +26,8 @@ import (
 	preferences "github.com/cs3org/go-cs3apis/cs3/preferences/v1beta1"
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	"github.com/cs3org/reva/v3/pkg/appctx"
-	"github.com/cs3org/reva/v3/pkg/rgrpc/todo/pool"
 	"github.com/cs3org/reva/v3/pkg/rhttp/global"
+	"github.com/cs3org/reva/v3/pkg/service"
 	"github.com/cs3org/reva/v3/pkg/sharedconf"
 	"github.com/cs3org/reva/v3/pkg/utils/cfg"
 	"github.com/go-chi/chi/v5"
@@ -116,7 +116,7 @@ func (s *svc) handleGet(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	client, err := pool.GetGatewayServiceClient(pool.Endpoint(s.conf.GatewaySvc))
+	client, err := service.Gateway(ctx)
 	if err != nil {
 		log.Error().Err(err).Msg("error getting grpc gateway client")
 		w.WriteHeader(http.StatusInternalServerError)
@@ -180,7 +180,7 @@ func (s *svc) handlePost(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	client, err := pool.GetGatewayServiceClient(pool.Endpoint(s.conf.GatewaySvc))
+	client, err := service.Gateway(ctx)
 	if err != nil {
 		log.Error().Err(err).Msg("error getting grpc gateway client")
 		w.WriteHeader(http.StatusInternalServerError)

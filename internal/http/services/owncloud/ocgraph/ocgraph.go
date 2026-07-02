@@ -25,12 +25,11 @@ import (
 	"net/http"
 	"net/url"
 
-	gateway "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
-	"github.com/cs3org/reva/v3/pkg/rgrpc/todo/pool"
+	"github.com/go-chi/chi/v5"
+
 	"github.com/cs3org/reva/v3/pkg/rhttp/global"
 	"github.com/cs3org/reva/v3/pkg/sharedconf"
 	"github.com/cs3org/reva/v3/pkg/utils/cfg"
-	"github.com/go-chi/chi/v5"
 )
 
 func init() {
@@ -136,10 +135,6 @@ func (s *svc) initRouter() {
 			})
 		})
 	})
-}
-
-func (s *svc) getClient() (gateway.GatewayAPIClient, error) {
-	return pool.GetGatewayServiceClient(pool.Endpoint(s.c.GatewaySvc))
 }
 
 func (s *svc) Handler() http.Handler { return s.router }

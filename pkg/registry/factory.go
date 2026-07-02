@@ -16,44 +16,34 @@
 // granted to it by virtue of its status as an Intergovernmental Organization
 // or submit itself to any jurisdiction.
 
-package pool
+package registry
 
-const (
-	defaultMaxCallRecvMsgSize = 10240000
-)
+import "fmt"
 
-// Option defines a single option function.
-type Option func(o *Options)
+var drivers = map[string]DriverConstructor{}
 
-// Options defines the available options for this package.
-type Options struct {
-	Endpoint           string
-	MaxCallRecvMsgSize int
+// Register makes a backend available under the given driver name; called from a
+// backend package's init().
+func Register(name string, c DriverConstructor) {
+	drivers[name] = c
 }
 
-// newOptions initializes the available default options.
-func newOptions(opts ...Option) Options {
-	opt := Options{
-		MaxCallRecvMsgSize: defaultMaxCallRecvMsgSize,
+// New builds the selected driver and wraps it in a BaseRegistry. An empty
+// driver defaults to "memory".
+func New(driver string, cfg map[string]any, thresholds Thresholds) (Registry, error) {
+	if driver == "" {
+		driver = "memory"
 	}
-
-	for _, o := range opts {
-		o(&opt)
+	c, ok := drivers[driver]
+	if !ok {
+		return nil, fmt.Errorf("registry: unknown driver %q", driver)
 	}
-
-	return opt
-}
-
-// Endpoint provides a function to set the endpoint option.
-func Endpoint(val string) Option {
-	return func(o *Options) {
-		o.Endpoint = val
+	if cfg == nil {
+		cfg = map[string]any{}
 	}
-}
-
-// MaxCallRecvMsgSize provides a function to set the MaxCallRecvMsgSize option.
-func MaxCallRecvMsgSize(size int) Option {
-	return func(o *Options) {
-		o.MaxCallRecvMsgSize = size
+	d, err := c(cfg)
+	if err != nil {
+		return nil, err
 	}
+	return NewBase(d, thresholds), nil
 }

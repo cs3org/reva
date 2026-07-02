@@ -1,0 +1,32 @@
+[log]
+level = "error"
+
+[shared.registry]
+driver = "memory"
+
+# A storage provider (gRPC) and its paired data provider (HTTP) run in the same
+# revad, so they share one in-process registry. The storage provider discovers
+# the data provider through the registry by mount_id; there is no data_server_url
+# configured anywhere.
+
+[grpc]
+address = "{{grpc_address}}"
+
+[grpc.services.storageprovider]
+driver = "localhome"
+mount_id = "discovery-mount-id"
+expose_data_server = true
+
+[grpc.services.storageprovider.drivers.localhome]
+root = "{{root}}/storage"
+
+[http]
+address = "{{http_address}}"
+
+[http.services.dataprovider]
+driver = "localhome"
+mount_id = "discovery-mount-id"
+public_url = "http://{{http_address}}/data"
+
+[http.services.dataprovider.drivers.localhome]
+root = "{{root}}/storage"

@@ -31,15 +31,17 @@ import (
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	link "github.com/cs3org/go-cs3apis/cs3/sharing/link/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
+	"github.com/pkg/errors"
+	"github.com/rs/zerolog"
+	"google.golang.org/grpc/metadata"
+
 	"github.com/cs3org/reva/v3/internal/http/services/archiver/manager"
 	"github.com/cs3org/reva/v3/pkg/appctx"
 	"github.com/cs3org/reva/v3/pkg/errtypes"
 	"github.com/cs3org/reva/v3/pkg/httpclient"
+	"github.com/cs3org/reva/v3/pkg/service"
 	"github.com/cs3org/reva/v3/pkg/storage/utils/downloader"
 	"github.com/cs3org/reva/v3/pkg/storage/utils/walker"
-	"github.com/pkg/errors"
-	"github.com/rs/zerolog"
-	"google.golang.org/grpc/metadata"
 )
 
 func (s *svc) handleLegacyPublicLinkDownload(w http.ResponseWriter, r *http.Request) {
@@ -65,7 +67,7 @@ func getFilesFromRequest(r *http.Request) []string {
 
 func (s *svc) authenticate(ctx context.Context, token string) (context.Context, error) {
 	// TODO (gdelmont): support password protected public links
-	c, err := s.getClient()
+	c, err := service.Gateway(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -148,7 +150,7 @@ func (s *svc) resourceIsFileInPublicLink(ctx context.Context, token, file string
 }
 
 func (s *svc) getResourceFromPublicLinkToken(ctx context.Context, token, file string) (*provider.ResourceInfo, error) {
-	c, err := s.getClient()
+	c, err := service.Gateway(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -184,7 +186,7 @@ func (s *svc) getResourceFromPublicLinkToken(ctx context.Context, token, file st
 
 func (s *svc) downloadFile(ctx context.Context, w http.ResponseWriter, res *provider.ResourceInfo) {
 	log := appctx.GetLogger(ctx)
-	c, err := s.getClient()
+	c, err := service.Gateway(ctx)
 	if err != nil {
 		s.handleHTTPError(w, err, log)
 		return
@@ -225,7 +227,7 @@ func (s *svc) downloadArchive(ctx context.Context, w http.ResponseWriter, token 
 	log := appctx.GetLogger(ctx)
 	resources := getPublicLinkResources(s.c.PublicLinkDownload.PublicFolder, token, files)
 
-	gtw, err := s.getClient()
+	gtw, err := service.Gateway(ctx)
 	if err != nil {
 		s.handleHTTPError(w, err, log)
 		return

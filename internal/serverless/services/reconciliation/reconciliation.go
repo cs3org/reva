@@ -32,7 +32,6 @@ import (
 	"github.com/cs3org/reva/v3/pkg/auth/scope"
 	publicshareregistry "github.com/cs3org/reva/v3/pkg/publicshare/manager/registry"
 	"github.com/cs3org/reva/v3/pkg/reconciliation"
-	"github.com/cs3org/reva/v3/pkg/rgrpc/todo/pool"
 	"github.com/cs3org/reva/v3/pkg/rjobs"
 	"github.com/cs3org/reva/v3/pkg/rserverless"
 	shareregistry "github.com/cs3org/reva/v3/pkg/share/manager/registry"
@@ -58,9 +57,6 @@ type config struct {
 	// section, so enabling a job means listing it here and giving it a
 	// schedule.
 	Jobs []string `mapstructure:"jobs"`
-	// GatewaySVC is the gateway the jobs resolve resources and recipients
-	// through. Falls back to [shared].
-	GatewaySVC string `mapstructure:"gatewaysvc"`
 	// JWTSecret signs the token the jobs authenticate their own calls with.
 	// Falls back to [shared].
 	JWTSecret string `mapstructure:"jwt_secret"`
@@ -85,7 +81,6 @@ type config struct {
 }
 
 func (c *config) ApplyDefaults() {
-	c.GatewaySVC = sharedconf.GetGatewaySVC(c.GatewaySVC)
 	c.JWTSecret = sharedconf.GetJWTSecret(c.JWTSecret)
 	// sql is the only driver that has an orphan flag to set, so it is the
 	// default here rather than json, the default of the grpc services.
@@ -128,11 +123,6 @@ func New(ctx context.Context, m map[string]any) (_ rserverless.Service, err erro
 	if err != nil {
 		return nil, err
 	}
-	gw, err := pool.GetGatewayServiceClient(pool.Endpoint(c.GatewaySVC))
-	if err != nil {
-		return nil, errors.Wrap(err, "reconciliation: getting the gateway client")
-	}
-
 	tokens, err := jwt.New(map[string]any{"secret": c.JWTSecret})
 	if err != nil {
 		return nil, errors.Wrap(err, "reconciliation: building the token manager")
@@ -190,10 +180,12 @@ func New(ctx context.Context, m map[string]any) (_ rserverless.Service, err erro
 		var periodic rjobs.Periodic
 		switch name {
 		case jobOrphan:
+			// Gateway is left nil on purpose: the job resolves it through the
+			// service registry per run, since a gateway need not be registered
+			// yet at the time the jobs are wired.
 			job := &reconciliation.OrphanJob{
 				Shares:     shares,
 				Links:      links,
-				Gateway:    gw,
 				Auth:       identity.authenticate,
 				Log:        jobLog,
 				DryRun:     jc.DryRun,

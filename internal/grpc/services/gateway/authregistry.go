@@ -24,13 +24,14 @@ import (
 	registry "github.com/cs3org/go-cs3apis/cs3/auth/registry/v1beta1"
 	gateway "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
-	"github.com/cs3org/reva/v3/pkg/rgrpc/status"
-	"github.com/cs3org/reva/v3/pkg/rgrpc/todo/pool"
 	"github.com/pkg/errors"
+
+	"github.com/cs3org/reva/v3/pkg/rgrpc/status"
+	"github.com/cs3org/reva/v3/pkg/service"
 )
 
 func (s *svc) ListAuthProviders(ctx context.Context, req *registry.ListAuthProvidersRequest) (*gateway.ListAuthProvidersResponse, error) {
-	c, err := pool.GetAuthRegistryServiceClient(pool.Endpoint(s.c.AuthRegistryEndpoint))
+	c, err := service.AuthRegistry(ctx)
 	if err != nil {
 		err = errors.Wrap(err, "gateway: error getting auth registry client")
 		return &gateway.ListAuthProvidersResponse{

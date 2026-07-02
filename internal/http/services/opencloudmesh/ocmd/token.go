@@ -27,23 +27,16 @@ import (
 	gateway "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	"github.com/cs3org/reva/v3/pkg/appctx"
-	"github.com/cs3org/reva/v3/pkg/rgrpc/todo/pool"
+	"github.com/cs3org/reva/v3/pkg/service"
 	"github.com/cs3org/reva/v3/pkg/token"
 	tokenregistry "github.com/cs3org/reva/v3/pkg/token/manager/registry"
 )
 
 type tokenHandler struct {
-	gw       gateway.GatewayAPIClient
 	tokenmgr token.Manager
 }
 
 func (h *tokenHandler) init(c *config) error {
-	gw, err := pool.GetGatewayServiceClient(pool.Endpoint(c.GatewaySvc))
-	if err != nil {
-		return err
-	}
-	h.gw = gw
-
 	tokenmgr, err := getTokenManager(c.TokenManager, c.TokenManagers)
 	if err != nil {
 		return err
@@ -89,10 +82,17 @@ func (h *tokenHandler) ExchangeToken(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	gw, err := service.Gateway(ctx)
+	if err != nil {
+		log.Error().Err(err).Msg("token exchange: error getting gateway client")
+		writeTokenError(w, http.StatusInternalServerError, "server_error")
+		return
+	}
+
 	// client_id identifies the receiving server, but the exchanged code remains
 	// the lookup key for the accepted share. Do not reinterpret client_id as a
 	// share identifier.
-	authRes, err := h.gw.Authenticate(ctx, &gateway.AuthenticateRequest{
+	authRes, err := gw.Authenticate(ctx, &gateway.AuthenticateRequest{
 		Type:         "ocmsharecode",
 		ClientId:     clientID,
 		ClientSecret: code,

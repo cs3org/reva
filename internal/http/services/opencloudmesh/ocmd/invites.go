@@ -25,28 +25,21 @@ import (
 	"mime"
 	"net/http"
 
-	gateway "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	invitepb "github.com/cs3org/go-cs3apis/cs3/ocm/invite/v1beta1"
 	ocmprovider "github.com/cs3org/go-cs3apis/cs3/ocm/provider/v1beta1"
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	"github.com/cs3org/reva/v3/internal/http/services/reqres"
 	"github.com/cs3org/reva/v3/pkg/appctx"
-	"github.com/cs3org/reva/v3/pkg/rgrpc/todo/pool"
+	"github.com/cs3org/reva/v3/pkg/service"
 	"github.com/cs3org/reva/v3/pkg/utils"
 )
 
 type invitesHandler struct {
-	gatewayClient     gateway.GatewayAPIClient
 	trustForwardedFor bool
 }
 
 func (h *invitesHandler) init(c *config) error {
-	var err error
-	h.gatewayClient, err = pool.GetGatewayServiceClient(pool.Endpoint(c.GatewaySvc))
-	if err != nil {
-		return err
-	}
 	h.trustForwardedFor = c.TrustForwardedFor
 	return nil
 }
@@ -88,7 +81,13 @@ func (h *invitesHandler) AcceptInvite(w http.ResponseWriter, r *http.Request) {
 			},
 		},
 	}
-	providerAllowedResp, err := h.gatewayClient.IsProviderAllowed(ctx, &ocmprovider.IsProviderAllowedRequest{
+	gatewayClient, err := service.Gateway(ctx)
+	if err != nil {
+		reqres.WriteError(w, r, reqres.APIErrorServerError, "error getting gateway client", err)
+		return
+	}
+
+	providerAllowedResp, err := gatewayClient.IsProviderAllowed(ctx, &ocmprovider.IsProviderAllowedRequest{
 		Provider: &providerInfo,
 	})
 	if err != nil {
@@ -119,7 +118,7 @@ func (h *invitesHandler) AcceptInvite(w http.ResponseWriter, r *http.Request) {
 		},
 		RemoteUser: userObj,
 	}
-	acceptInviteResponse, err := h.gatewayClient.AcceptInvite(ctx, acceptInviteRequest)
+	acceptInviteResponse, err := gatewayClient.AcceptInvite(ctx, acceptInviteRequest)
 	if err != nil {
 		reqres.WriteError(w, r, reqres.APIErrorServerError, "error sending a grpc accept invite request", err)
 		return

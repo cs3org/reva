@@ -23,23 +23,22 @@ import (
 
 	grouppb "github.com/cs3org/go-cs3apis/cs3/identity/group/v1beta1"
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
+
 	"github.com/cs3org/reva/v3/internal/http/services/owncloud/ocs/config"
 	"github.com/cs3org/reva/v3/internal/http/services/owncloud/ocs/conversions"
 	"github.com/cs3org/reva/v3/internal/http/services/owncloud/ocs/response"
 	"github.com/cs3org/reva/v3/pkg/appctx"
-	"github.com/cs3org/reva/v3/pkg/rgrpc/todo/pool"
+	"github.com/cs3org/reva/v3/pkg/service"
 	"github.com/cs3org/reva/v3/pkg/storage/utils/templates"
 )
 
 // Handler implements the ownCloud sharing API.
 type Handler struct {
-	gatewayAddr             string
 	additionalInfoAttribute string
 }
 
 // Init initializes this and any contained handlers.
 func (h *Handler) Init(c *config.Config) {
-	h.gatewayAddr = c.GatewaySvc
 	h.additionalInfoAttribute = c.AdditionalInfoAttribute
 }
 
@@ -53,7 +52,7 @@ func (h *Handler) FindSharees(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	gwc, err := pool.GetGatewayServiceClient(pool.Endpoint(h.gatewayAddr))
+	gwc, err := service.Gateway(r.Context())
 	if err != nil {
 		response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "error getting gateway grpc client", err)
 		return

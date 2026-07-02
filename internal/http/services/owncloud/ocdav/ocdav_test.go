@@ -37,7 +37,6 @@ import (
 	mockgateway "github.com/cs3org/go-cs3apis/mocks/github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
 	"github.com/cs3org/reva/v3/pkg/appctx"
 	"github.com/cs3org/reva/v3/pkg/errtypes"
-	"github.com/cs3org/reva/v3/pkg/rgrpc/todo/pool"
 	"github.com/cs3org/reva/v3/pkg/storage"
 	"github.com/cs3org/reva/v3/pkg/storage/utils/localfs"
 	"github.com/cs3org/reva/v3/pkg/utils/resourceid"
@@ -178,7 +177,7 @@ func newLocalFSOCDavService(t *testing.T, endpoint string) *svc {
 	}
 
 	gatewayClient := newLocalFSGatewayClient(t, fs)
-	pool.RegisterGatewayServiceClient(gatewayClient, endpoint)
+	stampGateway(gatewayClient)
 
 	handler := &DavHandler{}
 	if err := handler.init(&Config{
