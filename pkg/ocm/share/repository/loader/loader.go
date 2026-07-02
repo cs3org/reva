@@ -21,7 +21,6 @@ package loader
 import (
 	// Load core share repository drivers.
 	_ "github.com/cs3org/reva/v3/pkg/ocm/share/repository/json"
-	_ "github.com/cs3org/reva/v3/pkg/ocm/share/repository/nextcloud"
 	_ "github.com/cs3org/reva/v3/pkg/share/manager/sql"
 	// Add your own here.
 )
