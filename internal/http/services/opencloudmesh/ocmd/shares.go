@@ -27,6 +27,7 @@ import (
 	"net/http"
 	"net/url"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"time"
 
@@ -35,6 +36,7 @@ import (
 	"github.com/pkg/errors"
 
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
+	invitepb "github.com/cs3org/go-cs3apis/cs3/ocm/invite/v1beta1"
 	ocmincoming "github.com/cs3org/go-cs3apis/cs3/ocm/incoming/v1beta1"
 	ocmprovider "github.com/cs3org/go-cs3apis/cs3/ocm/provider/v1beta1"
 	ocm "github.com/cs3org/go-cs3apis/cs3/sharing/ocm/v1beta1"
@@ -47,6 +49,7 @@ import (
 	"github.com/cs3org/reva/v3/pkg/utils"
 	"github.com/go-playground/validator/v10"
 	"github.com/studio-b12/gowebdav"
+	"google.golang.org/grpc/metadata"
 )
 
 var validate = validator.New()
@@ -54,6 +57,8 @@ var validate = validator.New()
 type sharesHandler struct {
 	gatewayClient              gateway.GatewayAPIClient
 	exposeRecipientDisplayName bool
+	machineSecret              string
+	autoAcceptProviders        []*regexp.Regexp
 }
 
 func (h *sharesHandler) init(c *config) error {
@@ -63,7 +68,46 @@ func (h *sharesHandler) init(c *config) error {
 		return err
 	}
 	h.exposeRecipientDisplayName = c.ExposeRecipientDisplayName
+	h.machineSecret = c.MachineSecret
+	for _, p := range c.AutoAcceptProviders {
+		re, err := regexp.Compile(p)
+		if err != nil {
+			return errors.Wrapf(err, "invalid auto_accept_providers regex %q", p)
+		}
+		h.autoAcceptProviders = append(h.autoAcceptProviders, re)
+	}
 	return nil
+}
+
+// matchesAutoAccept reports whether the given sender provider domain matches any
+// of the configured auto-accept provider regexes.
+func (h *sharesHandler) matchesAutoAccept(domain string) bool {
+	for _, re := range h.autoAcceptProviders {
+		if re.MatchString(domain) {
+			return true
+		}
+	}
+	return false
+}
+
+// isAcceptedUser reports whether remoteUser is already an accepted user of the
+// recipient, i.e. they know each other through a prior invitation flow.
+func (h *sharesHandler) isAcceptedUser(ctx context.Context, recipient *userpb.User, remoteUser *userpb.UserId) bool {
+	log := appctx.GetLogger(ctx)
+	filter, err := utils.MarshalProtoV1ToJSON(recipient.Id)
+	if err != nil {
+		log.Error().Err(err).Msg("auto-accept: error marshalling recipient id")
+		return false
+	}
+	res, err := h.gatewayClient.GetAcceptedUser(ctx, &invitepb.GetAcceptedUserRequest{
+		RemoteUserId: remoteUser,
+		Opaque: &types.Opaque{
+			Map: map[string]*types.OpaqueEntry{
+				"user-filter": {Decoder: "json", Value: filter},
+			},
+		},
+	})
+	return err == nil && res.Status.Code == rpc.Code_CODE_OK
 }
 
 // CreateShare implements the OCM /shares call and stores an incoming share
@@ -138,6 +182,16 @@ func (h *sharesHandler) CreateShare(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// When an auto-accept whitelist is configured it acts as a mandatory allowlist:
+	// shares from a provider that does not match are rejected outright and never stored.
+	// An empty whitelist disables this gate, preserving the default "accept all" behavior.
+	// A sender that is already an accepted user of the recipient is let through
+	// regardless of the whitelist (they went through a prior invitation flow).
+	if len(h.autoAcceptProviders) > 0 && !h.matchesAutoAccept(sender.Idp) && !h.isAcceptedUser(ctx, userRes.User, sender) {
+		reqres.WriteError(w, r, reqres.APIErrorUnauthenticated, "sender provider not in the auto-accept whitelist", nil)
+		return
+	}
+
 	protocols, legacy, err := getAndResolveProtocols(ctx, req.Protocols, req.ResourceType, sender.Idp)
 	if err != nil || len(protocols) == 0 {
 		reqres.WriteError(w, r, reqres.APIErrorInvalidParameter, "error with protocols payload", err)
@@ -188,12 +242,110 @@ func (h *sharesHandler) CreateShare(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Shares from a whitelisted provider arrive without a prior invitation flow, so
+	// their remote sender/owner are not yet known as accepted users and a later
+	// resolution of them would fail. Register them locally now, while the payload still
+	// carries their display names. This is auxiliary: any failure is logged but does
+	// not fail the share creation.
+	if h.matchesAutoAccept(sender.Idp) {
+		h.autoRegisterRemoteUsers(ctx, userRes.User, sender, req.SenderDisplayName, owner, req.OwnerDisplayName)
+	}
+
 	response := map[string]any{}
 	if h.exposeRecipientDisplayName {
 		response["recipientDisplayName"] = userRes.User.DisplayName
 	}
 	w.WriteHeader(http.StatusCreated)
 	_ = json.NewEncoder(w).Encode(response)
+}
+
+// autoRegisterRemoteUsers registers the share's remote sender and owner as accepted
+// users of the recipient, so they can be resolved later without a prior invitation
+// flow. The owner is skipped when it is the same as the sender.
+func (h *sharesHandler) autoRegisterRemoteUsers(ctx context.Context, recipient *userpb.User, sender *userpb.UserId, senderDisplayName string, owner *userpb.UserId, ownerDisplayName string) {
+	log := appctx.GetLogger(ctx)
+
+	h.registerAcceptedUser(ctx, recipient, &userpb.User{
+		Id:          sender,
+		DisplayName: senderDisplayName,
+	})
+
+	if owner.OpaqueId == sender.OpaqueId && owner.Idp == sender.Idp {
+		return
+	}
+	if owner.OpaqueId == "" {
+		log.Debug().Msg("auto-register: skipping empty owner")
+		return
+	}
+	h.registerAcceptedUser(ctx, recipient, &userpb.User{
+		Id:          owner,
+		DisplayName: ownerDisplayName,
+	})
+}
+
+// registerAcceptedUser adds remoteUser to the recipient's accepted users, unless it is
+// already known. It reuses the existing invite API: a local invite token is minted on
+// behalf of the recipient (via machine-auth impersonation) and immediately accepted,
+// which inserts the (recipient, remoteUser) relation. The token is never sent remotely
+// and simply expires. All failures are logged and swallowed.
+func (h *sharesHandler) registerAcceptedUser(ctx context.Context, recipient *userpb.User, remoteUser *userpb.User) {
+	log := appctx.GetLogger(ctx)
+
+	// skip if the remote user is already an accepted user of the recipient
+	if h.isAcceptedUser(ctx, recipient, remoteUser.Id) {
+		log.Debug().Str("remote_user", remoteUser.Id.OpaqueId).Msg("auto-register: remote user already accepted, skipping")
+		return
+	}
+
+	// impersonate the recipient so the minted invite token is owned by them
+	recipientCtx, err := h.impersonate(ctx, recipient)
+	if err != nil {
+		log.Error().Err(err).Str("recipient", recipient.Id.OpaqueId).Msg("auto-register: error impersonating recipient")
+		return
+	}
+
+	tokenRes, err := h.gatewayClient.GenerateInviteToken(recipientCtx, &invitepb.GenerateInviteTokenRequest{
+		Description: "auto-accept for received OCM share",
+	})
+	if err != nil || tokenRes.Status.Code != rpc.Code_CODE_OK {
+		log.Error().Err(err).Interface("status", tokenRes.GetStatus()).Msg("auto-register: error generating invite token")
+		return
+	}
+
+	acceptRes, err := h.gatewayClient.AcceptInvite(ctx, &invitepb.AcceptInviteRequest{
+		InviteToken: tokenRes.InviteToken,
+		RemoteUser:  remoteUser,
+	})
+	if err != nil {
+		log.Error().Err(err).Msg("auto-register: error accepting invite")
+		return
+	}
+	if acceptRes.Status.Code != rpc.Code_CODE_OK && acceptRes.Status.Code != rpc.Code_CODE_ALREADY_EXISTS {
+		log.Error().Interface("status", acceptRes.Status).Msg("auto-register: error accepting invite")
+		return
+	}
+	log.Info().Str("recipient", recipient.Id.OpaqueId).Str("remote_user", remoteUser.Id.OpaqueId).Msg("auto-registered remote user as accepted user")
+}
+
+// impersonate returns a context authenticated as the given user via machine auth,
+// for invoking protected calls (e.g. GenerateInviteToken) on their behalf.
+func (h *sharesHandler) impersonate(ctx context.Context, user *userpb.User) (context.Context, error) {
+	authRes, err := h.gatewayClient.Authenticate(ctx, &gateway.AuthenticateRequest{
+		Type:         "machine",
+		ClientId:     user.Username,
+		ClientSecret: h.machineSecret,
+	})
+	if err != nil {
+		return nil, err
+	}
+	if authRes.Status.Code != rpc.Code_CODE_OK {
+		return nil, errors.New("error impersonating user: " + authRes.Status.Message)
+	}
+
+	userCtx := appctx.ContextSetToken(ctx, authRes.Token)
+	userCtx = appctx.ContextSetUser(userCtx, authRes.User)
+	userCtx = metadata.AppendToOutgoingContext(userCtx, appctx.TokenHeader, authRes.Token)
+	return userCtx, nil
 }
 
 func getCreateShareRequest(r *http.Request) (*NewShareRequest, error) {

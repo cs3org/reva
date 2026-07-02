@@ -39,6 +39,13 @@ type config struct {
 	ExposeRecipientDisplayName bool                      `mapstructure:"expose_recipient_display_name"`
 	TokenManager               string                    `mapstructure:"token_manager"`
 	TokenManagers              map[string]map[string]any `mapstructure:"token_managers"`
+	// MachineSecret is the shared secret used to impersonate the recipient of an
+	// incoming OCM share when auto-registering its remote sender/owner as accepted users.
+	MachineSecret string `mapstructure:"machine_secret"`
+	// AutoAcceptProviders is a list of regular expressions matched against the sender's
+	// provider domain. A match activates auto-registration of the share's remote users
+	// for all OCM share types (embedded shares are always auto-registered).
+	AutoAcceptProviders []string `mapstructure:"auto_accept_providers"`
 }
 
 func (c *config) ApplyDefaults() {
