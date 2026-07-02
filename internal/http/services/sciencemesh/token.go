@@ -79,15 +79,53 @@ type token struct {
 	InviteLink  string `json:"invite_link"`
 }
 
+type generateInviteRequest struct {
+	Description string `json:"description"`
+	Recipient   string `json:"recipient"`
+}
+
+// getGenerateInviteRequest extracts the description and (optional) recipient
+// from the request. The values may be provided either as URL query parameters
+// or in the request body (JSON or form-encoded), mirroring how AcceptInvite
+// accepts its input.
+func getGenerateInviteRequest(r *http.Request) *generateInviteRequest {
+	req := &generateInviteRequest{
+		Description: r.URL.Query().Get("description"),
+		Recipient:   r.URL.Query().Get("recipient"),
+	}
+
+	contentType, _, err := mime.ParseMediaType(r.Header.Get("Content-Type"))
+	if err == nil && contentType == "application/json" {
+		var body generateInviteRequest
+		if err := json.NewDecoder(r.Body).Decode(&body); err == nil {
+			if body.Description != "" {
+				req.Description = body.Description
+			}
+			if body.Recipient != "" {
+				req.Recipient = body.Recipient
+			}
+		}
+	} else {
+		if v := r.FormValue("description"); v != "" {
+			req.Description = v
+		}
+		if v := r.FormValue("recipient"); v != "" {
+			req.Recipient = v
+		}
+	}
+
+	return req
+}
+
 // Generate generates an invitation token and if a recipient is specified,
 // will send an email containing the link the user will use to accept the
 // invitation.
 func (h *tokenHandler) Generate(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
-	query := r.URL.Query()
+	genReq := getGenerateInviteRequest(r)
 	token, err := h.gatewayClient.GenerateInviteToken(ctx, &invitepb.GenerateInviteTokenRequest{
-		Description: query.Get("description"),
+		Description: genReq.Description,
 	})
 	if err != nil {
 		reqres.WriteError(w, r, reqres.APIErrorServerError, "error generating token", err)
@@ -95,7 +133,7 @@ func (h *tokenHandler) Generate(w http.ResponseWriter, r *http.Request) {
 	}
 
 	user := appctx.ContextMustGetUser(ctx)
-	recipient := query.Get("recipient")
+	recipient := genReq.Recipient
 	if recipient != "" && h.smtpCredentials != nil {
 		templObj := &emailParams{
 			User:             user,
