@@ -39,6 +39,7 @@ var supportedScopes = map[string]Verifier{
 	"lightweight":   lightweightAccountScope,
 	"ocmshare":      ocmShareScope,
 	"machine":       machineScope,
+	"admin":         adminScope,
 }
 
 // VerifyScope is the function to be called when dismantling tokens to check if
