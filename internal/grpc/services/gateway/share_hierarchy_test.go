@@ -36,7 +36,7 @@ import (
 	types "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
 	"github.com/cs3org/reva/v3/pkg/errtypes"
 	"github.com/cs3org/reva/v3/pkg/permissions"
-	"github.com/cs3org/reva/v3/pkg/rgrpc/todo/pool"
+	revaservice "github.com/cs3org/reva/v3/pkg/service"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/grpc"
@@ -64,23 +64,22 @@ type shareHierarchyGatewayHarness struct {
 func newShareHierarchyGatewayHarness(t *testing.T) *shareHierarchyGatewayHarness {
 	t.Helper()
 
+	// The gateway reaches a storage provider by the address the storage
+	// registry hands back, so the fake provider is pinned to that address
+	// instead of being dialed.
 	storage := newFakeStorageProviderServer()
 	storageEndpoint := t.Name() + "/storage"
-	pool.RegisterStorageProviderServiceClient(storage, storageEndpoint)
+	revaservice.SetClientAt(storageEndpoint, storage)
+	t.Cleanup(func() { revaservice.SetClientAt(storageEndpoint, nil) })
 
-	registryServer := &fakeStorageRegistryServer{storageEndpoint: storageEndpoint}
-	registryEndpoint := t.Name() + "/registry"
-	pool.RegisterStorageRegistryClient(registryServer, registryEndpoint)
-
+	// The storage registry and the share provider are resolved by name, so they
+	// come from the test resolver instead.
 	shares := newFakeCollaborationServer()
-	shareEndpoint := t.Name() + "/shares"
-	pool.RegisterUserShareProviderClient(shares, shareEndpoint)
+	stampGatewayPeers(&fakeStorageRegistryServer{storageEndpoint: storageEndpoint}, shares)
 
 	return &shareHierarchyGatewayHarness{
 		svc: &svc{
 			c: &config{
-				UserShareProviderEndpoint: shareEndpoint,
-				StorageRegistryEndpoint:   registryEndpoint,
 				CommitShareToStorageGrant: true,
 			},
 		},

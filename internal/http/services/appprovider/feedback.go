@@ -30,7 +30,7 @@ import (
 	"github.com/cs3org/reva/v3/pkg/auth/scope"
 	"github.com/cs3org/reva/v3/pkg/notifications"
 	"github.com/cs3org/reva/v3/pkg/notifications/model"
-	"github.com/cs3org/reva/v3/pkg/rgrpc/todo/pool"
+	"github.com/cs3org/reva/v3/pkg/service"
 )
 
 const (
@@ -74,7 +74,7 @@ func (s *svc) handleFeedback(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	client, err := pool.GetGatewayServiceClient(pool.Endpoint(s.conf.GatewaySvc))
+	client, err := service.Gateway(ctx)
 	if err != nil {
 		writeError(w, r, appErrorServerError, "error getting grpc gateway client", err)
 		return

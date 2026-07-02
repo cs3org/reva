@@ -25,7 +25,6 @@ import (
 	"context"
 
 	authpb "github.com/cs3org/go-cs3apis/cs3/auth/provider/v1beta1"
-	gateway "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	ocminvite "github.com/cs3org/go-cs3apis/cs3/ocm/invite/v1beta1"
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
@@ -37,7 +36,7 @@ import (
 	"github.com/cs3org/reva/v3/pkg/auth/scope"
 	"github.com/cs3org/reva/v3/pkg/errtypes"
 	ocmshareutil "github.com/cs3org/reva/v3/pkg/ocm/share"
-	"github.com/cs3org/reva/v3/pkg/rgrpc/todo/pool"
+	"github.com/cs3org/reva/v3/pkg/service"
 	"github.com/cs3org/reva/v3/pkg/sharedconf"
 	"github.com/cs3org/reva/v3/pkg/utils"
 	"github.com/cs3org/reva/v3/pkg/utils/cfg"
@@ -49,8 +48,7 @@ func init() {
 }
 
 type manager struct {
-	c  *config
-	gw gateway.GatewayAPIClient
+	c *config
 }
 
 type config struct {
@@ -67,11 +65,6 @@ func New(ctx context.Context, m map[string]any) (auth.Manager, error) {
 	if err := mgr.Configure(m); err != nil {
 		return nil, err
 	}
-	gw, err := pool.GetGatewayServiceClient(pool.Endpoint(mgr.c.GatewayAddr))
-	if err != nil {
-		return nil, err
-	}
-	mgr.gw = gw
 	return &mgr, nil
 }
 
@@ -93,7 +86,12 @@ func (m *manager) Configure(ml map[string]any) error {
 func (m *manager) Authenticate(ctx context.Context, clientID, code string) (*userpb.User, map[string]*authpb.Scope, error) {
 	log := appctx.GetLogger(ctx).With().Str("client_id", clientID).Logger()
 
-	shareRes, err := m.gw.GetOCMShareByToken(ctx, &ocm.GetOCMShareByTokenRequest{
+	gw, err := service.Gateway(ctx)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	shareRes, err := gw.GetOCMShareByToken(ctx, &ocm.GetOCMShareByTokenRequest{
 		Token: code,
 	})
 
@@ -125,7 +123,7 @@ func (m *manager) Authenticate(ctx context.Context, clientID, code string) (*use
 		},
 	}
 
-	userRes, err := m.gw.GetAcceptedUser(ctx, &ocminvite.GetAcceptedUserRequest{
+	userRes, err := gw.GetAcceptedUser(ctx, &ocminvite.GetAcceptedUserRequest{
 		RemoteUserId: u,
 		Opaque:       o,
 	})

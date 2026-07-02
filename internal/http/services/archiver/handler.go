@@ -29,15 +29,14 @@ import (
 	"strings"
 	"time"
 
-	gateway "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/cs3org/reva/v3/internal/http/services/archiver/manager"
 	"github.com/cs3org/reva/v3/pkg/appctx"
 	"github.com/cs3org/reva/v3/pkg/errtypes"
 	"github.com/cs3org/reva/v3/pkg/httpclient"
-	"github.com/cs3org/reva/v3/pkg/rgrpc/todo/pool"
 	"github.com/cs3org/reva/v3/pkg/rhttp/global"
+	"github.com/cs3org/reva/v3/pkg/service"
 	"github.com/cs3org/reva/v3/pkg/sharedconf"
 	"github.com/cs3org/reva/v3/pkg/spaces"
 	"github.com/cs3org/reva/v3/pkg/storage/utils/downloader"
@@ -48,9 +47,7 @@ import (
 
 type svc struct {
 	config     *Config
-	gtwClient  gateway.GatewayAPIClient
-	walker     walker.Walker
-	downloader downloader.Downloader
+	httpClient *httpclient.Client
 
 	allowedFolders []*regexp.Regexp
 }
@@ -78,11 +75,6 @@ func New(ctx context.Context, conf map[string]any) (global.Service, error) {
 		return nil, err
 	}
 
-	gtw, err := pool.GetGatewayServiceClient(pool.Endpoint(c.GatewaySvc))
-	if err != nil {
-		return nil, err
-	}
-
 	// compile all the regex for filtering folders
 	allowedFolderRegex := make([]*regexp.Regexp, 0, len(c.AllowedFolders))
 	for _, s := range c.AllowedFolders {
@@ -98,9 +90,7 @@ func New(ctx context.Context, conf map[string]any) (global.Service, error) {
 
 	return &svc{
 		config:         &c,
-		gtwClient:      gtw,
-		downloader:     downloader.NewDownloader(gtw, hc),
-		walker:         walker.NewWalker(gtw),
+		httpClient:     hc,
 		allowedFolders: allowedFolderRegex,
 	}, nil
 }
@@ -122,6 +112,11 @@ func (s *svc) getFiles(ctx context.Context, files, ids []string) ([]string, erro
 		return nil, errtypes.BadRequest("file and id lists are both empty")
 	}
 
+	gtw, err := service.Gateway(ctx)
+	if err != nil {
+		return nil, err
+	}
+
 	f := make([]string, 0, len(files)+len(ids))
 
 	for _, id := range ids {
@@ -137,7 +132,7 @@ func (s *svc) getFiles(ctx context.Context, files, ids []string) ([]string, erro
 			}
 		}
 
-		resp, err := s.gtwClient.Stat(ctx, &provider.StatRequest{
+		resp, err := gtw.Stat(ctx, &provider.StatRequest{
 			Ref: &provider.Reference{
 				ResourceId: ref,
 			},
@@ -160,7 +155,7 @@ func (s *svc) getFiles(ctx context.Context, files, ids []string) ([]string, erro
 	f = append(f, files...)
 
 	// check if all the folders are allowed to be archived
-	err := s.allAllowed(f)
+	err = s.allAllowed(f)
 	if err != nil {
 		return nil, err
 	}
@@ -233,7 +228,13 @@ func (s *svc) Handler() http.Handler {
 			return
 		}
 
-		arch, err := manager.NewArchiver(files, s.walker, s.downloader, manager.Config{
+		gtw, err := service.Gateway(ctx)
+		if err != nil {
+			s.writeHTTPError(ctx, rw, err)
+			return
+		}
+
+		arch, err := manager.NewArchiver(files, walker.NewWalker(gtw), downloader.NewDownloader(gtw, s.httpClient), manager.Config{
 			MaxNumFiles: s.config.MaxNumFiles,
 			MaxSize:     s.config.MaxSize,
 		})

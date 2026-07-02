@@ -37,7 +37,7 @@ import (
 	"github.com/cs3org/reva/v3/pkg/appctx"
 	"github.com/cs3org/reva/v3/pkg/ocm/share"
 	"github.com/cs3org/reva/v3/pkg/permissions"
-	"github.com/cs3org/reva/v3/pkg/rgrpc/todo/pool"
+	"github.com/cs3org/reva/v3/pkg/service"
 	"github.com/cs3org/reva/v3/pkg/utils"
 	"github.com/go-chi/chi/v5"
 	"github.com/pkg/errors"
@@ -46,7 +46,7 @@ import (
 func (h *Handler) createFederatedCloudShare(w http.ResponseWriter, r *http.Request, resource *provider.ResourceInfo, role *permissions.Role, roleVal []byte) {
 	ctx := r.Context()
 
-	c, err := pool.GetGatewayServiceClient(pool.Endpoint(h.gatewayAddr))
+	c, err := service.Gateway(ctx)
 	if err != nil {
 		response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "error getting grpc gateway client", err)
 		return
@@ -161,7 +161,7 @@ func (h *Handler) GetFederatedShare(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
 	shareID := chi.URLParam(r, "shareid")
-	gatewayClient, err := pool.GetGatewayServiceClient(pool.Endpoint(h.gatewayAddr))
+	gatewayClient, err := service.Gateway(ctx)
 	if err != nil {
 		response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "error getting grpc gateway client", err)
 		return

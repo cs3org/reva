@@ -28,15 +28,16 @@ import (
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	providerv1beta1 "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
+	"github.com/pkg/errors"
+
 	"github.com/cs3org/reva/v3/pkg/appctx"
 	"github.com/cs3org/reva/v3/pkg/errtypes"
 	"github.com/cs3org/reva/v3/pkg/permissions"
 	"github.com/cs3org/reva/v3/pkg/rgrpc/status"
-	"github.com/cs3org/reva/v3/pkg/rgrpc/todo/pool"
+	"github.com/cs3org/reva/v3/pkg/service"
 	eosclient "github.com/cs3org/reva/v3/pkg/storage/fs/eos/client"
 	"github.com/cs3org/reva/v3/pkg/storage/utils/acl"
 	"github.com/cs3org/reva/v3/pkg/utils"
-	"github.com/pkg/errors"
 )
 
 func extractUIDAndGID(u *userpb.User) (eosclient.Authorization, error) {
@@ -56,7 +57,7 @@ func (fs *Eosfs) getUIDGateway(ctx context.Context, u *userpb.UserId) (eosclient
 		return extractUIDAndGID(userIDInterface.(*userpb.User))
 	}
 
-	client, err := pool.GetGatewayServiceClient(pool.Endpoint(fs.conf.GatewaySvc))
+	client, err := service.Gateway(ctx)
 	if err != nil {
 		return eosclient.Authorization{}, errors.Wrap(err, "eosfs: error getting gateway grpc client")
 	}
@@ -90,7 +91,7 @@ func (fs *Eosfs) getUserIDGateway(ctx context.Context, uid string) (*userpb.User
 	}
 
 	log.Debug().Msg("eosfs: retrieving user from gateway for uid " + uid)
-	client, err := pool.GetGatewayServiceClient(pool.Endpoint(fs.conf.GatewaySvc))
+	client, err := service.Gateway(ctx)
 	if err != nil {
 		return nil, errors.Wrap(err, "eosfs: error getting gateway grpc client")
 	}

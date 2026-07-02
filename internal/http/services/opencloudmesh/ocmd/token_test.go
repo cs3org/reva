@@ -88,8 +88,8 @@ func setupTokenHandler(t *testing.T, statusCode rpc.Code, gwErr error) (*tokenHa
 		err:    gwErr,
 	}
 
+	stampGateway(mockGW)
 	return &tokenHandler{
-		gw:       mockGW,
 		tokenmgr: tokenmgr,
 	}, mockGW
 }

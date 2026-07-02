@@ -238,6 +238,13 @@ nats_token = "secret-token-example"`
 		JWTSecret:    "secret",
 		DataGateway:  "http://0.0.0.0:19001/datagateway",
 		BlockedUsers: []string{},
+		Registry: Registry{
+			Driver:            "memory",
+			HeartbeatInterval: "5s",
+			DegradedAfter:     "15s",
+			OfflineAfter:      "30s",
+			ReapAfter:         "5m",
+		},
 	}, c2.Shared)
 
 	assert.Equal(t, &Log{
@@ -489,6 +496,14 @@ func TestDump(t *testing.T) {
 			"datagateway":               "",
 			"skip_user_groups_in_token": false,
 			"blocked_users":             []any{},
+			"registry": map[string]any{
+				"driver":             "",
+				"drivers":            map[string]any{},
+				"heartbeat_interval": "",
+				"degraded_after":     "",
+				"offline_after":      "",
+				"reap_after":         "",
+			},
 			"Database": map[string]any{
 				"DBHost":     "",
 				"DBName":     "",

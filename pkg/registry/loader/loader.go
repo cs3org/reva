@@ -16,29 +16,10 @@
 // granted to it by virtue of its status as an Intergovernmental Organization
 // or submit itself to any jurisdiction.
 
-package memory
+package loader
 
-import "fmt"
-
-// node implements the registry.Node interface.
-type node struct {
-	id       string
-	address  string
-	metadata map[string]string
-}
-
-func (n node) Address() string {
-	return n.address
-}
-
-func (n node) Metadata() map[string]string {
-	return n.metadata
-}
-
-func (n node) String() string {
-	return fmt.Sprintf("%v-%v", n.id, n.address)
-}
-
-func (n node) ID() string {
-	return n.id
-}
+import (
+	// Load the registry backends so they register with the driver factory.
+	_ "github.com/cs3org/reva/v3/pkg/registry/memory"
+	_ "github.com/cs3org/reva/v3/pkg/registry/nats"
+)
