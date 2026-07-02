@@ -67,6 +67,7 @@ const (
 	MetaPrefix    = "prefix"     // HTTP URL path prefix
 	MetaPublicURL = "public_url" // explicit external URL override
 	MetaMountID   = "mount_id"   // storage affinity key (data provider)
+	MetaControl   = "control"    // host:port of the process's control channel
 
 	StateReady    = "ready"
 	StateDegraded = "degraded"
