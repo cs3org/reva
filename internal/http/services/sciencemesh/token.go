@@ -79,15 +79,27 @@ type token struct {
 	InviteLink  string `json:"invite_link"`
 }
 
+type generateInviteRequest struct {
+	Description string `json:"description"`
+	Recipient   string `json:"recipient"`
+}
+
 // Generate generates an invitation token and if a recipient is specified,
 // will send an email containing the link the user will use to accept the
 // invitation.
 func (h *tokenHandler) Generate(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
-	query := r.URL.Query()
+	// The web frontend posts the parameters as a JSON body.
+	var genReq generateInviteRequest
+	if r.Body != nil {
+		// Ignore decoding errors: the body is optional (e.g. a token can be
+		// generated without a description).
+		_ = json.NewDecoder(r.Body).Decode(&genReq)
+	}
+
 	token, err := h.gatewayClient.GenerateInviteToken(ctx, &invitepb.GenerateInviteTokenRequest{
-		Description: query.Get("description"),
+		Description: genReq.Description,
 	})
 	if err != nil {
 		reqres.WriteError(w, r, reqres.APIErrorServerError, "error generating token", err)
@@ -95,7 +107,7 @@ func (h *tokenHandler) Generate(w http.ResponseWriter, r *http.Request) {
 	}
 
 	user := appctx.ContextMustGetUser(ctx)
-	recipient := query.Get("recipient")
+	recipient := genReq.Recipient
 	if recipient != "" && h.smtpCredentials != nil {
 		templObj := &emailParams{
 			User:             user,
