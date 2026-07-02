@@ -73,6 +73,20 @@ revad-ceph:
 reva:
 	go build -ldflags "-extldflags=-static $(BUILD_FLAGS)" -o ./cmd/reva/reva ./cmd/reva
 
+# Regenerate the reva-owned Admin API (pkg/admin/adminpb) and control channel
+# (pkg/control/controlpb) stubs from their protos. Needs protoc plus protoc-gen-go and
+# protoc-gen-go-grpc on PATH.
+.PHONY: protobuf
+protobuf:
+	protoc --proto_path=pkg/admin/proto \
+		--go_out=. --go_opt=module=github.com/cs3org/reva/v3 \
+		--go-grpc_out=. --go-grpc_opt=module=github.com/cs3org/reva/v3 \
+		pkg/admin/proto/admin.proto
+	protoc --proto_path=pkg/control/proto \
+		--go_out=. --go_opt=module=github.com/cs3org/reva/v3 \
+		--go-grpc_out=. --go-grpc_opt=module=github.com/cs3org/reva/v3 \
+		pkg/control/proto/control.proto
+
 .PHONY: docker-reva
 docker-reva:
 	docker build -f docker/Dockerfile.reva -t reva --build-arg VERSION=$(VERSION) --build-arg GIT_COMMIT=$(GIT_COMMIT) .

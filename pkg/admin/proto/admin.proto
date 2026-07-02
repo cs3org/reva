@@ -1,0 +1,182 @@
+// Copyright 2018-2026 CERN
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+//
+// In applying this license, CERN does not waive the privileges and immunities
+// granted to it by virtue of its status as an Intergovernmental Organization
+// or submit itself to any jurisdiction.
+
+syntax = "proto3";
+
+// Package reva.admin.v1beta1 is reva's operator surface. It is defined inside
+// reva (not the CS3 APIs) because it is reva-specific tooling; its Go stubs are
+// exported from pkg/admin/adminpb.
+package reva.admin.v1beta1;
+
+option go_package = "github.com/cs3org/reva/v3/pkg/admin/adminpb";
+
+// AdminAPI is the client-facing operator surface. Every method requires the
+// admin scope except RequestAdmin, the elevation door.
+service AdminAPI {
+  // Access / step-up.
+  rpc RequestAdmin(RequestAdminRequest) returns (RequestAdminResponse);
+  rpc Impersonate(ImpersonateRequest) returns (ImpersonateResponse);
+
+  // Introspection (read-only).
+  rpc GetServerInfo(GetServerInfoRequest) returns (GetServerInfoResponse);
+  rpc GetHealth(GetHealthRequest) returns (GetHealthResponse);
+  rpc ListServices(ListServicesRequest) returns (ListServicesResponse);
+  rpc GetServiceConfig(GetServiceConfigRequest) returns (GetServiceConfigResponse);
+
+  // Invocations (reads and writes via the Invokable channel).
+  rpc ListInvocations(ListInvocationsRequest) returns (ListInvocationsResponse);
+  rpc Invoke(InvokeRequest) returns (InvokeResponse);
+}
+
+// ----- Access / step-up -----
+
+message RequestAdminRequest {}
+
+message RequestAdminResponse {
+  // token is a short-TTL, admin-only token (scope map {admin}, no user key).
+  string token = 1;
+  // expires_at is the token expiry, in seconds since the Unix epoch.
+  int64 expires_at = 2;
+}
+
+message ImpersonateRequest {
+  // user is a target selector: either a bare username or "claim:value" (claim
+  // in mail|uid|username|gid|userid), matching the machine auth manager.
+  string user = 1;
+  // reason is recorded in the audit log.
+  string reason = 2;
+}
+
+message ImpersonateResponse {
+  // token is an ordinary user-scoped token for the target user (never
+  // admin+user).
+  string token = 1;
+}
+
+// ----- Introspection -----
+
+message GetServerInfoRequest {}
+
+message ServerInfo {
+  string version = 1;
+  string build = 2;
+  string go_version = 3;
+  int64 uptime_seconds = 4;
+  string host = 5;
+  int32 pid = 6;
+}
+
+message GetServerInfoResponse {
+  ServerInfo info = 1;
+}
+
+message GetHealthRequest {}
+
+message ServiceHealth {
+  string service = 1;
+  // state is the roll-up across the service's nodes.
+  string state = 2;
+  int32 ready = 3;
+  int32 total = 4;
+}
+
+message GetHealthResponse {
+  repeated ServiceHealth services = 1;
+}
+
+message ListServicesRequest {
+  // service optionally filters to a single service name.
+  string service = 1;
+}
+
+message Node {
+  string id = 1;
+  string address = 2;
+  // state is one of ready|degraded|offline|draining.
+  string state = 3;
+  map<string, string> metadata = 4;
+}
+
+message Service {
+  string name = 1;
+  repeated Node nodes = 2;
+}
+
+message ListServicesResponse {
+  repeated Service services = 1;
+}
+
+message GetServiceConfigRequest {
+  // service is a selector: a service name (every instance) or a node id
+  // "host:port/service" (one instance).
+  string service = 1;
+}
+
+message GetServiceConfigResponse {
+  // results carries one entry per resolved instance.
+  repeated NodeResult results = 1;
+}
+
+// ----- Invocations -----
+
+message ArgSpec {
+  string name = 1;
+  string description = 2;
+  bool required = 3;
+}
+
+message InvocationSpec {
+  string name = 1;
+  string description = 2;
+  repeated ArgSpec args = 3;
+  // kind is readonly|mutating|dangerous, used for audit and gating.
+  string kind = 4;
+}
+
+message ListInvocationsRequest {
+  string service = 1;
+}
+
+message ListInvocationsResponse {
+  repeated InvocationSpec invocations = 1;
+}
+
+message InvokeRequest {
+  // service is a selector: a service name (every instance) or a node id
+  // "host:port/service" (one instance).
+  string service = 1;
+  string invocation = 2;
+  map<string, string> args = 3;
+}
+
+message NodeResult {
+  // node is the id of the node that produced this result.
+  string node = 1;
+  // result_json is the invocation's redacted, serializable result as JSON.
+  string result_json = 2;
+  // error is set (per node) when the invocation failed on that node.
+  string error = 3;
+}
+
+message InvokeResponse {
+  repeated NodeResult results = 1;
+}
+
+// The generated Go stubs are exported from pkg/admin/adminpb. Regenerate from the repo
+// root with `make protobuf`, or directly with:
+// protoc --proto_path=pkg/admin/proto --go_out=. --go_opt=module=github.com/cs3org/reva/v3 --go-grpc_out=. --go-grpc_opt=module=github.com/cs3org/reva/v3 pkg/admin/proto/admin.proto

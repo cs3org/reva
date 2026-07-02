@@ -1,0 +1,74 @@
+// Copyright 2018-2026 CERN
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+//
+// In applying this license, CERN does not waive the privileges and immunities
+// granted to it by virtue of its status as an Intergovernmental Organization
+// or submit itself to any jurisdiction.
+
+syntax = "proto3";
+
+// Package reva.control.v1beta1 is the per-process control channel: a small gRPC
+// service, hosted on its own port by every reva process, that runs a named
+// service's Invokable operations locally. It is deliberately independent of the
+// Admin API — any client (the Admin API is just one) resolves a process's
+// control address from the service registry and dials it directly.
+package reva.control.v1beta1;
+
+option go_package = "github.com/cs3org/reva/v3/pkg/control/controlpb";
+
+// Control exposes a process's Invokable operations. The target is a request
+// field — a registry node id "host:port/service" for a service instance, or a
+// process-wide name — so one server fronts every invocation in the process; the
+// hosting process routes internally to the addressed instance by id.
+service Control {
+  rpc ListInvocations(ListInvocationsRequest) returns (ListInvocationsResponse);
+  rpc Invoke(InvokeRequest) returns (InvokeResponse);
+}
+
+message ArgSpec {
+  string name = 1;
+  string description = 2;
+  bool required = 3;
+}
+
+message InvocationSpec {
+  string name = 1;
+  string description = 2;
+  repeated ArgSpec args = 3;
+  // kind is readonly|mutating|dangerous, used for audit and gating.
+  string kind = 4;
+}
+
+message ListInvocationsRequest {
+  // target is the node id "host:port/service" of a service instance.
+  string target = 1;
+}
+message ListInvocationsResponse {
+  repeated InvocationSpec invocations = 1;
+}
+
+message InvokeRequest {
+  // target is the node id "host:port/service" of a service instance.
+  string target = 1;
+  string invocation = 2;
+  map<string, string> args = 3;
+}
+message InvokeResponse {
+  string result_json = 1;
+  string error = 2;
+}
+
+// The generated Go stubs are exported from pkg/control/controlpb. Regenerate from the
+// repo root with `make protobuf`, or directly with:
+// protoc --proto_path=pkg/control/proto --go_out=. --go_opt=module=github.com/cs3org/reva/v3 --go-grpc_out=. --go-grpc_opt=module=github.com/cs3org/reva/v3 pkg/control/proto/control.proto
