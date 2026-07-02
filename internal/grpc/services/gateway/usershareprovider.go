@@ -83,9 +83,9 @@ func (s *svc) CreateShare(ctx context.Context, req *collaboration.CreateShareReq
 		if stat, statErr := s.Stat(ctx, &provider.StatRequest{Ref: &provider.Reference{ResourceId: req.ResourceInfo.Id}}); statErr == nil && stat.Status.Code == rpc.Code_CODE_OK && stat.Info.Id.SpaceId != "" {
 			spaceId = stat.Info.Id.SpaceId
 			req.ResourceInfo.Id.SpaceId = spaceId
-			log.Debug().Str("keyword", "sharehierarchy").Str("spaceId", spaceId).Msg("sharehierarchy: populated missing spaceId via stat")
+			log.Debug().Str("spaceId", spaceId).Msg("sharehierarchy: populated missing spaceId via stat")
 		} else {
-			log.Error().Str("keyword", "sharehierarchy").Msg("sharehierarchy: spaceId missing and stat could not resolve it")
+			log.Error().Msg("sharehierarchy: spaceId missing and stat could not resolve it")
 			return nil, errors.New("SpaceID missing when creating share")
 		}
 	}
@@ -182,9 +182,9 @@ func (s *svc) RemoveShare(ctx context.Context, req *collaboration.RemoveShareReq
 	if share.ResourceId.SpaceId == "" {
 		if stat, statErr := s.Stat(ctx, &provider.StatRequest{Ref: &provider.Reference{ResourceId: share.ResourceId}}); statErr == nil && stat.Status.Code == rpc.Code_CODE_OK && stat.Info.Id.SpaceId != "" {
 			share.ResourceId.SpaceId = stat.Info.Id.SpaceId
-			log.Debug().Str("keyword", "sharehierarchy").Str("spaceId", share.ResourceId.SpaceId).Msg("sharehierarchy: populated missing spaceId for DeleteShare via stat")
+			log.Debug().Str("spaceId", share.ResourceId.SpaceId).Msg("sharehierarchy: populated missing spaceId for DeleteShare via stat")
 		} else {
-			log.Warn().Str("keyword", "sharehierarchy").Msg("sharehierarchy: spaceId missing on DeleteShare and stat could not resolve it")
+			log.Warn().Msg("sharehierarchy: spaceId missing on DeleteShare and stat could not resolve it")
 		}
 	}
 
@@ -367,9 +367,9 @@ func (s *svc) UpdateShare(ctx context.Context, req *collaboration.UpdateShareReq
 	if isPermUpdate && currentShare.ResourceId.SpaceId == "" {
 		if stat, statErr := s.Stat(ctx, &provider.StatRequest{Ref: &provider.Reference{ResourceId: currentShare.ResourceId}}); statErr == nil && stat.Status.Code == rpc.Code_CODE_OK && stat.Info.Id.SpaceId != "" {
 			currentShare.ResourceId.SpaceId = stat.Info.Id.SpaceId
-			appctx.GetLogger(ctx).Debug().Str("keyword", "sharehierarchy").Str("spaceId", currentShare.ResourceId.SpaceId).Msg("sharehierarchy: populated missing spaceId for UpdateShare via stat")
+			appctx.GetLogger(ctx).Debug().Str("spaceId", currentShare.ResourceId.SpaceId).Msg("sharehierarchy: populated missing spaceId for UpdateShare via stat")
 		} else {
-			appctx.GetLogger(ctx).Warn().Str("keyword", "sharehierarchy").Msg("sharehierarchy: spaceId missing on UpdateShare and stat could not resolve it")
+			appctx.GetLogger(ctx).Warn().Msg("sharehierarchy: spaceId missing on UpdateShare and stat could not resolve it")
 		}
 	}
 
@@ -636,7 +636,7 @@ func (s *svc) getPathForResourceId(ctx context.Context, id *provider.ResourceId)
 // listSharesForGranteeInSpace returns all active shares for the given grantee in the given space.
 func (s *svc) listSharesForGranteeInSpace(ctx context.Context, c collaboration.CollaborationAPIClient, spaceId string, grantee *provider.Grantee) ([]*collaboration.Share, error) {
 	if spaceId == "" {
-		appctx.GetLogger(ctx).Warn().Str("keyword", "sharehierarchy").Msg("sharehierarchy: spaceId is empty, skipping hierarchy check")
+		appctx.GetLogger(ctx).Warn().Msg("sharehierarchy: spaceId is empty, skipping hierarchy check")
 		return nil, nil
 	}
 
