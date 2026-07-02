@@ -59,6 +59,7 @@ import (
 	"github.com/cs3org/reva/v3/pkg/share/cache"
 	cachereg "github.com/cs3org/reva/v3/pkg/share/cache/registry"
 	warmupreg "github.com/cs3org/reva/v3/pkg/share/cache/warmup/registry"
+	"github.com/cs3org/reva/v3/pkg/sharehierarchy"
 	"github.com/cs3org/reva/v3/pkg/utils"
 	"github.com/cs3org/reva/v3/pkg/utils/resourceid"
 	"github.com/go-chi/chi/v5"
@@ -1436,7 +1437,12 @@ func (h *Handler) createCs3Share(ctx context.Context, r *http.Request, client ga
 		if createShareResponse.Status.Code == rpc.Code_CODE_NOT_FOUND {
 			return nil, nil
 		}
-		return nil, err
+		if createShareResponse.Status.Code == rpc.Code_CODE_ABORTED {
+			if conflictErr := sharehierarchy.UnmarshalHierarchyConflictError(createShareResponse.Status.Message); conflictErr != nil {
+				return nil, conflictErr
+			}
+		}
+		return nil, errors.New(createShareResponse.Status.Message)
 	}
 	s, err := conversions.CS3Share2ShareData(ctx, createShareResponse.Share)
 	if err != nil {

@@ -46,6 +46,7 @@ import (
 	"github.com/cs3org/reva/v3/pkg/appctx"
 	"github.com/cs3org/reva/v3/pkg/ocm/share"
 	"github.com/cs3org/reva/v3/pkg/permissions"
+	"github.com/cs3org/reva/v3/pkg/sharehierarchy"
 	"github.com/cs3org/reva/v3/pkg/spaces"
 	"github.com/cs3org/reva/v3/pkg/utils"
 	libregraph "github.com/owncloud/libre-graph-api-go"
@@ -142,13 +143,23 @@ func (s *svc) getSharedWithMe(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func (s *svc) createLocalShare(ctx context.Context, gw gateway.GatewayAPIClient, ri *provider.ResourceId, path string, owner *userpb.UserId, resourceType provider.ResourceType, recipientType string, recipientID string, exp *types.Timestamp, requestedPerms *provider.ResourcePermissions) (*collaboration.CreateShareResponse, error) {
+func (s *svc) createLocalShare(ctx context.Context, gw gateway.GatewayAPIClient, ri *provider.ResourceId, path string, owner *userpb.UserId, resourceType provider.ResourceType, recipientType string, recipientID string, exp *types.Timestamp, requestedPerms *provider.ResourcePermissions, force bool) (*collaboration.CreateShareResponse, error) {
 	grantee, err := s.toGrantee(ctx, recipientType, recipientID)
 	if err != nil {
 		return nil, err
 	}
 
+	var opaque *types.Opaque
+	if force {
+		opaque = &types.Opaque{
+			Map: map[string]*types.OpaqueEntry{
+				"force": {Decoder: "plain", Value: []byte("true")},
+			},
+		}
+	}
+
 	createShareRequest := &collaboration.CreateShareRequest{
+		Opaque: opaque,
 		ResourceInfo: &provider.ResourceInfo{
 			Id:    ri,
 			Path:  path,
@@ -169,6 +180,11 @@ func (s *svc) createLocalShare(ctx context.Context, gw gateway.GatewayAPIClient,
 		return nil, err
 	}
 	if resp.Status.Code != rpc.Code_CODE_OK {
+		if resp.Status.Code == rpc.Code_CODE_ABORTED {
+			if conflictErr := sharehierarchy.UnmarshalHierarchyConflictError(resp.Status.Message); conflictErr != nil {
+				return nil, conflictErr
+			}
+		}
 		return nil, errors.New("failed to create share: " + resp.Status.Message)
 	}
 
@@ -288,6 +304,8 @@ func (s *svc) share(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	force := r.Header.Get("Force") == "true"
+
 	// And we keep a list of share responses
 	response := make([]*libregraph.Permission, 0, len(invite.Recipients))
 
@@ -300,8 +318,14 @@ func (s *svc) share(w http.ResponseWriter, r *http.Request) {
 		// If the recipient is a user or a group, we create a local share
 		switch *recipient.LibreGraphRecipientType {
 		case "user", "group":
-			resp, err := s.createLocalShare(ctx, gw, statRes.Info.Id, path, owner, statRes.Info.Type, *recipient.LibreGraphRecipientType, *recipient.ObjectId, exp, requestedPerms)
+			resp, err := s.createLocalShare(ctx, gw, statRes.Info.Id, path, owner, statRes.Info.Type, *recipient.LibreGraphRecipientType, *recipient.ObjectId, exp, requestedPerms, force)
 			if err != nil {
+				if conflictErr, ok := err.(*sharehierarchy.HierarchyConflictError); ok {
+					w.Header().Set("Content-Type", "application/json")
+					w.WriteHeader(http.StatusConflict)
+					json.NewEncoder(w).Encode(conflictErr)
+					return
+				}
 				log.Error().Err(err).Msg("")
 				handleError(ctx, err, w)
 				return
