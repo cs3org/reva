@@ -25,11 +25,13 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"regexp"
 	"testing"
 
 	gateway "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	ocmincoming "github.com/cs3org/go-cs3apis/cs3/ocm/incoming/v1beta1"
+	invitepb "github.com/cs3org/go-cs3apis/cs3/ocm/invite/v1beta1"
 	ocmprovider "github.com/cs3org/go-cs3apis/cs3/ocm/provider/v1beta1"
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	"github.com/cs3org/reva/v3/internal/http/services/wellknown"
@@ -91,6 +93,12 @@ func (m *sharesMockGW) CreateOCMIncomingShare(context.Context, *ocmincoming.Crea
 	return m.createResp, nil
 }
 
+func (m *sharesMockGW) GetAcceptedUser(context.Context, *invitepb.GetAcceptedUserRequest, ...grpc.CallOption) (*invitepb.GetAcceptedUserResponse, error) {
+	return &invitepb.GetAcceptedUserResponse{
+		Status: &rpc.Status{Code: rpc.Code_CODE_OK},
+	}, nil
+}
+
 // --- tests ---
 
 func TestCreateShareReturnsServerErrorForNonOKCreateStatus(t *testing.T) {
@@ -139,5 +147,34 @@ func TestCreateShareReturnsServerErrorForNonOKCreateStatus(t *testing.T) {
 
 	if rr.Code != http.StatusInternalServerError {
 		t.Fatalf("CreateShare() status = %d, want %d", rr.Code, http.StatusInternalServerError)
+	}
+}
+
+func TestMatchesAutoAccept(t *testing.T) {
+	h := &sharesHandler{
+		autoAcceptProviders: []*regexp.Regexp{
+			regexp.MustCompile(`^trusted\.example\.org$`),
+			regexp.MustCompile(`\.cern\.ch$`),
+		},
+	}
+
+	cases := map[string]bool{
+		"trusted.example.org":      true,
+		"data.cern.ch":             true,
+		"sub.data.cern.ch":         true,
+		"untrusted.example.org":    false,
+		"trusted.example.org.evil": false,
+		"cern.ch.evil":             false,
+	}
+	for domain, want := range cases {
+		if got := h.matchesAutoAccept(domain); got != want {
+			t.Errorf("matchesAutoAccept(%q) = %v, want %v", domain, got, want)
+		}
+	}
+
+	// no configured providers -> never matches
+	empty := &sharesHandler{}
+	if empty.matchesAutoAccept("trusted.example.org") {
+		t.Errorf("matchesAutoAccept with no providers should return false")
 	}
 }
