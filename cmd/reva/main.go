@@ -95,6 +95,7 @@ var (
 		setlockCommand(),
 		getlockCommand(),
 		unlockCommand(),
+		adminCommand(),
 		helpCommand(),
 		testCommand(),
 	}
@@ -123,7 +124,13 @@ func init() {
 
 func main() {
 	if host != "" {
-		conf = &config{host}
+		// Preserve any existing admin_host when the gateway host is set.
+		if existing, err := readConfig(); err == nil && existing != nil {
+			conf = existing
+		} else {
+			conf = &config{}
+		}
+		conf.Host = host
 		if err := writeConfig(conf); err != nil {
 			fmt.Println("error writing to config file")
 			os.Exit(1)

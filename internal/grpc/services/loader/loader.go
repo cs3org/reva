@@ -20,6 +20,7 @@ package loader
 
 import (
 	// Load core gRPC services.
+	_ "github.com/cs3org/reva/v3/internal/grpc/services/admin"
 	_ "github.com/cs3org/reva/v3/internal/grpc/services/applicationauth"
 	_ "github.com/cs3org/reva/v3/internal/grpc/services/appprovider"
 	_ "github.com/cs3org/reva/v3/internal/grpc/services/appregistry"
