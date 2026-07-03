@@ -56,7 +56,7 @@ func (c *config) ApplyDefaults() {
 type service struct {
 	authmgr      auth.Manager
 	conf         *config
-	blockedUsers user.BlockedUsers
+	blockedUsers *user.BlockedUsers
 }
 
 func getAuthManager(ctx context.Context, manager string, m map[string]map[string]any) (auth.Manager, error) {
@@ -82,10 +82,15 @@ func New(ctx context.Context, m map[string]any) (rgrpc.Service, error) {
 		return nil, err
 	}
 
+	// Share the process-wide blocked set (seeded from config, blocked_users) with
+	// the auth interceptor so both gates enforce the same list.
+	blockedUsers := user.SharedBlockedUsers()
+	blockedUsers.Add(c.blockedUsers...)
+
 	svc := &service{
 		conf:         &c,
 		authmgr:      authManager,
-		blockedUsers: user.NewBlockedUsersSet(c.blockedUsers),
+		blockedUsers: blockedUsers,
 	}
 
 	return svc, nil

@@ -23,9 +23,11 @@ import (
 	"maps"
 	"net"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/cs3org/reva/v3/cmd/revad/pkg/config"
+	"github.com/cs3org/reva/v3/pkg/invoke"
 	"github.com/cs3org/reva/v3/pkg/registry"
 	"github.com/cs3org/reva/v3/pkg/rhttp/global"
 	"github.com/cs3org/reva/v3/pkg/service"
@@ -81,15 +83,21 @@ func (r *Reva) addNodes(msg string) {
 	hostname, _ := os.Hostname()
 	pid := os.Getpid()
 	for _, srv := range r.servers {
+		// The control channel is not a service of its own.
+		if srv.internal {
+			continue
+		}
 		// Advertise a reachable "host:port": the listener's bind host (e.g.
 		// "[::]" or "0.0.0.0") is not routable, so replace it with the hostname.
 		addr := hostPort(hostname, srv.listener.Addr().String())
 		for name, impl := range srv.services {
-			node := registry.NewNode(
-				nodeID(addr, pid, name),
-				addr,
-				nodeMetadata(srv, hostname, pid, impl),
-			)
+			id := nodeID(addr, name)
+			meta := nodeMetadata(srv, id, hostname, pid, impl)
+			// Advertise the process's control channel on every node.
+			if r.controlAddr != "" {
+				meta[registry.MetaControl] = r.controlAddr
+			}
+			node := registry.NewNode(id, addr, meta)
 			if err := r.registry.Add(registry.NewService(name, []registry.Node{node})); err != nil {
 				r.log.Error().Err(err).Str("service", name).Msg("failed to register service")
 				continue
@@ -124,9 +132,9 @@ func isWildcard(host string) bool {
 	return false
 }
 
-// nodeMetadata builds a node's metadata: framework-derived keys plus, for HTTP
-// services, scheme/prefix, plus any service-owned keys from MetadataProvider.
-func nodeMetadata(srv *Server, hostname string, pid int, impl any) map[string]string {
+// nodeMetadata builds a node's metadata: framework keys, HTTP scheme/prefix,
+// the instance's invocation names, and any service-owned keys.
+func nodeMetadata(srv *Server, id, hostname string, pid int, impl any) map[string]string {
 	meta := map[string]string{
 		"transport":           srv.transport,
 		"host":                hostname,
@@ -140,16 +148,23 @@ func nodeMetadata(srv *Server, hostname string, pid int, impl any) map[string]st
 			meta[registry.MetaPrefix] = hs.Prefix()
 		}
 	}
+	if names := invoke.InvocationNames(id); len(names) > 0 {
+		meta[invoke.MetaInvocations] = strings.Join(names, ",")
+	}
 	if mp, ok := impl.(service.MetadataProvider); ok {
 		maps.Copy(meta, mp.RegistryMetadata())
 	}
 	return meta
 }
 
-// nodeID is a stable per-process identity for a service node, of the form
-// "<host:port>#<pid>/<service>".
-func nodeID(addr string, pid int, service string) string {
-	return fmt.Sprintf("%s#%d/%s", addr, pid, service)
+// nodeID is a node's stable identity: its bind address and service name. It
+// deliberately excludes the pid — a service restart on the same address then
+// overwrites its existing entry in place, instead of minting a new id and
+// leaving the old one as a ghost (advertised offline) until the liveness sweep
+// reaps it. Two live nodes cannot share an address+service, so this stays
+// unique; the pid is still carried in metadata for co-location.
+func nodeID(addr, service string) string {
+	return fmt.Sprintf("%s/%s", addr, service)
 }
 
 // startHeartbeat re-registers this process's nodes on an interval to keep them
@@ -178,12 +193,14 @@ func (r *Reva) deregister() {
 		return
 	}
 	hostname, _ := os.Hostname()
-	pid := os.Getpid()
 	for _, srv := range r.servers {
+		if srv.internal {
+			continue
+		}
 		addr := hostPort(hostname, srv.listener.Addr().String())
 		for name := range srv.services {
 			node := registry.NewNode(
-				nodeID(addr, pid, name),
+				nodeID(addr, name),
 				addr,
 				map[string]string{registry.MetaState: registry.StateDraining},
 			)
