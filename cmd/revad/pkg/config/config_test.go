@@ -535,6 +535,7 @@ func TestDump(t *testing.T) {
 			"network":           "",
 			"shutdown_deadline": 10,
 			"enable_reflection": true,
+			"control_address":   "",
 			"interceptors":      map[string]any{},
 			"services": map[string]any{
 				"gateway": []any{

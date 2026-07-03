@@ -69,7 +69,7 @@ func parseConfig(m map[string]any) (*config, error) {
 type interceptor struct {
 	conf         *config
 	tokenManager token.Manager
-	blockedUsers user.BlockedUsers
+	blockedUsers *user.BlockedUsers
 }
 
 func newInterceptor(m map[string]any) (*interceptor, error) {
@@ -95,10 +95,14 @@ func newInterceptor(m map[string]any) (*interceptor, error) {
 		return nil, errors.Wrap(err, "auth: error creating token manager")
 	}
 
+	// Use the process-wide blocked set, seeded from config (blocked_users).
+	blockedUsers := user.SharedBlockedUsers()
+	blockedUsers.Add(conf.blockedUsers...)
+
 	return &interceptor{
 		conf:         conf,
 		tokenManager: tokenManager,
-		blockedUsers: user.NewBlockedUsersSet(conf.blockedUsers),
+		blockedUsers: blockedUsers,
 	}, nil
 }
 
