@@ -35,7 +35,9 @@ import (
 
 	"github.com/cs3org/reva/v3/cmd/revad/pkg/config"
 	"github.com/cs3org/reva/v3/cmd/revad/pkg/grace"
+	"github.com/cs3org/reva/v3/internal/grpc/control"
 	"github.com/cs3org/reva/v3/pkg/appctx"
+	"github.com/cs3org/reva/v3/pkg/invoke"
 	"github.com/cs3org/reva/v3/pkg/registry"
 	"github.com/cs3org/reva/v3/pkg/rgrpc"
 	"github.com/cs3org/reva/v3/pkg/rhttp"
@@ -65,6 +67,9 @@ type Reva struct {
 	// registry is this instance's service registry.
 	registry          registry.Registry
 	heartbeatInterval time.Duration
+	// controlAddr is the advertised address of this process's control channel
+	// (empty if the process hosts nothing invokable).
+	controlAddr string
 
 	pidfile       string
 	log           *zerolog.Logger
@@ -80,6 +85,9 @@ type Server struct {
 	transport string
 	// scheme is "http" or "https" for HTTP servers (empty for grpc).
 	scheme string
+	// internal marks a server not advertised as a registry service (the
+	// per-process control channel).
+	internal bool
 
 	services map[string]any
 }
@@ -144,6 +152,8 @@ func New(config *config.Config, opt ...Option) (*Reva, error) {
 	// Install the process-wide resolver before constructing services, so any
 	// service that resolves a peer at construction time finds it (first wins).
 	service.SetGlobal(service.NewClients(reg))
+	// Expose the registry to the Admin API for fleet introspection.
+	service.SetGlobalRegistry(reg)
 
 	grpc := groupGRPCByAddress(config)
 	http := groupHTTPByAddress(config)
@@ -159,6 +169,17 @@ func New(config *config.Config, opt ...Option) (*Reva, error) {
 		return nil, err
 	}
 
+	// Stand up this process's control channel on its own port, once every
+	// service (and thus every Invokable) has been constructed.
+	controlSrv, controlAddr, err := newControlServer(config, log)
+	if err != nil {
+		watcher.Clean()
+		return nil, err
+	}
+	if controlSrv != nil {
+		servers = append(servers, controlSrv)
+	}
+
 	r := &Reva{
 		ctx:               ctx,
 		config:            config,
@@ -168,6 +189,7 @@ func New(config *config.Config, opt ...Option) (*Reva, error) {
 		lns:               listeners,
 		registry:          reg,
 		heartbeatInterval: parseDurationOr(config.Shared.Registry.HeartbeatInterval, 5*time.Second),
+		controlAddr:       controlAddr,
 		pidfile:           opts.PidFile,
 		log:               log,
 		traceShutdown:     traceShutdown,
@@ -453,7 +475,25 @@ func listenerFromAddress(lns map[string]net.Listener, network string, address co
 	panic(fmt.Sprintf("listener not found for address %s:%s", network, address))
 }
 
+// captureInstances registers each loaded service as an invocation instance
+// under its node id, so the control channel can route to the exact instance
+// even when a process hosts several of the same service.
+func captureInstances[T any](services map[string]T, cfgServices map[string]config.ServicesConfig, addr string) {
+	for name, impl := range services {
+		var conf map[string]any
+		if sc := cfgServices[name]; len(sc) > 0 {
+			conf = sc[0].Config
+		}
+		var inv invoke.Invokable
+		if i, ok := any(impl).(invoke.Invokable); ok {
+			inv = i
+		}
+		invoke.RegisterInstance(nodeID(addr, name), name, conf, inv)
+	}
+}
+
 func newServers(ctx context.Context, grpc []*config.GRPC, http []*config.HTTP, lns map[string]net.Listener, log *zerolog.Logger) ([]*Server, error) {
+	hostname, _ := os.Hostname()
 	servers := make([]*Server, 0, len(grpc)+len(http))
 	for _, cfg := range grpc {
 		logger := log.With().Str("pkg", "grpc").Logger()
@@ -462,6 +502,8 @@ func newServers(ctx context.Context, grpc []*config.GRPC, http []*config.HTTP, l
 		if err != nil {
 			return nil, err
 		}
+		ln := listenerFromAddress(lns, cfg.Network, cfg.Address)
+		captureInstances(services, cfg.Services, hostPort(hostname, ln.Addr().String()))
 		unaryChain, streamChain, err := initGRPCInterceptors(cfg.Interceptors, grpcUnprotected(cfg.EnableReflection, services), log)
 		if err != nil {
 			return nil, err
@@ -477,7 +519,6 @@ func newServers(ctx context.Context, grpc []*config.GRPC, http []*config.HTTP, l
 		if err != nil {
 			return nil, err
 		}
-		ln := listenerFromAddress(lns, cfg.Network, cfg.Address)
 		server := &Server{
 			server:    s,
 			listener:  ln,
@@ -496,6 +537,8 @@ func newServers(ctx context.Context, grpc []*config.GRPC, http []*config.HTTP, l
 		if err != nil {
 			return nil, err
 		}
+		ln := listenerFromAddress(lns, cfg.Network, cfg.Address)
+		captureInstances(services, cfg.Services, hostPort(hostname, ln.Addr().String()))
 		middlewares, err := initHTTPMiddlewares(cfg.Middlewares, httpUnprotected(services), &logger)
 		if err != nil {
 			return nil, err
@@ -509,7 +552,6 @@ func newServers(ctx context.Context, grpc []*config.GRPC, http []*config.HTTP, l
 		if err != nil {
 			return nil, err
 		}
-		ln := listenerFromAddress(lns, cfg.Network, cfg.Address)
 		scheme := "http"
 		if cfg.CertFile != "" && cfg.KeyFile != "" {
 			scheme = "https"
@@ -527,4 +569,57 @@ func newServers(ctx context.Context, grpc []*config.GRPC, http []*config.HTTP, l
 		servers = append(servers, server)
 	}
 	return servers, nil
+}
+
+// newControlServer builds this process's control channel: a dedicated gRPC
+// server hosting only reva.control.v1beta1, so every invocation a service exposes
+// — the shared defaults (e.g. config) and any it defines via Invokable — is
+// reachable on a single extra port. It is created whenever the process hosts
+// anything invokable (any configured service, since each gets the shared
+// defaults) and is independent of whether the Admin API service is loaded. Its
+// methods require the admin scope, enforced by the standard auth interceptor
+// chain, so the channel is as protected as the Admin API itself. It returns the
+// server and the address to advertise, or (nil, "", nil) when none is needed.
+func newControlServer(cfg *config.Config, log *zerolog.Logger) (*Server, string, error) {
+	if !invoke.HasInvocations() {
+		return nil, "", nil
+	}
+	bind := cfg.GRPC.ControlAddress
+	if bind == "" {
+		// A random port on every interface; the auth interceptor, not the bind
+		// host, is what protects it.
+		bind = "0.0.0.0:0"
+	}
+	ln, err := net.Listen("tcp", bind)
+	if err != nil {
+		return nil, "", fmt.Errorf("runtime: binding control channel on %q: %w", bind, err)
+	}
+	logger := log.With().Str("pkg", "grpc").Str("server", "control").Logger()
+	unaryChain, streamChain, err := initGRPCInterceptors(nil, nil, &logger)
+	if err != nil {
+		_ = ln.Close()
+		return nil, "", err
+	}
+	services := map[string]rgrpc.Service{service.NameControl: control.New()}
+	s, err := rgrpc.NewServer(
+		rgrpc.WithLogger(logger),
+		rgrpc.WithServices(services),
+		rgrpc.WithUnaryServerInterceptors(unaryChain),
+		rgrpc.WithStreamServerInterceptors(streamChain),
+	)
+	if err != nil {
+		_ = ln.Close()
+		return nil, "", err
+	}
+	hostname, _ := os.Hostname()
+	addr := hostPort(hostname, ln.Addr().String())
+	server := &Server{
+		server:    s,
+		listener:  ln,
+		transport: "grpc",
+		internal:  true,
+		services:  maps.MapValues(services, func(s rgrpc.Service) any { return s }),
+	}
+	log.Info().Str("address", addr).Msg("spawned per-process control channel")
+	return server, addr, nil
 }
