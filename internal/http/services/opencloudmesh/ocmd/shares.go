@@ -187,7 +187,8 @@ func (h *sharesHandler) CreateShare(w http.ResponseWriter, r *http.Request) {
 	// flow).  Configuring a non-empty auto-accept whitelist (that may include `.*`)
 	// allows any sender whose provider is on the whitelist to be accepted.
 	// Shares matching neither are rejected outright.
-	if !h.matchesAutoAccept(sender.Idp) && !h.isAcceptedUser(ctx, userRes.User, sender) {
+	wasAccepted := h.isAcceptedUser(ctx, userRes.User, sender)
+	if !h.matchesAutoAccept(sender.Idp) && !wasAccepted {
 		reqres.WriteError(w, r, reqres.APIErrorUnauthenticated, "sender provider not in the auto-accept whitelist", nil)
 		return
 	}
@@ -247,7 +248,7 @@ func (h *sharesHandler) CreateShare(w http.ResponseWriter, r *http.Request) {
 	// resolution of them would fail. Register them locally now, while the payload still
 	// carries their display names. This is auxiliary: any failure is logged but does
 	// not fail the share creation.
-	if h.matchesAutoAccept(sender.Idp) {
+	if !wasAccepted {
 		// We leave the email blank since it's not available in the ocm share payload.
 		h.registerAcceptedUser(ctx, userRes.User, &userpb.User{
 			Id:          sender,
@@ -270,12 +271,6 @@ func (h *sharesHandler) CreateShare(w http.ResponseWriter, r *http.Request) {
 // and simply expires. All failures are logged and swallowed.
 func (h *sharesHandler) registerAcceptedUser(ctx context.Context, recipient *userpb.User, remoteUser *userpb.User) {
 	log := appctx.GetLogger(ctx)
-
-	// skip if the remote user is already an accepted user of the recipient
-	if h.isAcceptedUser(ctx, recipient, remoteUser.Id) {
-		log.Debug().Str("remote_user", remoteUser.Id.OpaqueId).Msg("auto-register: remote user already accepted, skipping")
-		return
-	}
 
 	// impersonate the recipient so the minted invite token is owned by them
 	recipientCtx, err := h.impersonate(ctx, recipient)
