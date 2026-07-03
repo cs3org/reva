@@ -77,21 +77,37 @@ func initJSONData(variables map[string]string, tokens []*invitepb.InviteToken, a
 }
 
 func initTables(db *sql.DB) error {
+	// Schema matches the gorm models in
+	// pkg/ocm/invite/repository/sql/sql.go (gorm.Model adds id, created_at,
+	// updated_at and the soft-delete deleted_at column).
 	table1 := `
 CREATE TABLE IF NOT EXISTS ocm_tokens (
-    token VARCHAR(255) NOT NULL PRIMARY KEY,
+    id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+    created_at DATETIME(3) NULL,
+    updated_at DATETIME(3) NULL,
+    deleted_at DATETIME(3) NULL,
+    token VARCHAR(255) NOT NULL,
     initiator VARCHAR(255) NOT NULL,
     expiration DATETIME NOT NULL,
-    description VARCHAR(255) DEFAULT NULL
+    description VARCHAR(255) DEFAULT NULL,
+    UNIQUE INDEX i_ocmtoken_token (token),
+    INDEX i_ocmtoken_initiator (initiator),
+    INDEX idx_ocm_tokens_deleted_at (deleted_at)
 )`
 	table2 := `
 CREATE TABLE IF NOT EXISTS ocm_remote_users (
+    id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+    created_at DATETIME(3) NULL,
+    updated_at DATETIME(3) NULL,
+    deleted_at DATETIME(3) NULL,
     initiator VARCHAR(255) NOT NULL,
     opaque_user_id VARCHAR(255) NOT NULL,
     idp VARCHAR(255) NOT NULL,
     email VARCHAR(255) NOT NULL,
     display_name VARCHAR(255) NOT NULL,
-    PRIMARY KEY (initiator, opaque_user_id, idp)
+    UNIQUE INDEX i_ocmremoteuser_unique (initiator, opaque_user_id, idp),
+    INDEX i_ocmremoteuser_initiator (initiator),
+    INDEX idx_ocm_remote_users_deleted_at (deleted_at)
 )`
 	if _, err := db.Exec(table1); err != nil {
 		return err
