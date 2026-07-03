@@ -80,6 +80,11 @@ func (c *Completer) argumentCompleter(args ...string) []prompt.Suggest {
 	}
 
 	switch args[0] {
+	case "admin":
+		if len(args) == 2 {
+			return prompt.FilterHasPrefix(convertCmdToSuggests(adminCommands), args[1], true)
+		}
+
 	case "login":
 		if len(args) == 2 {
 			return prompt.FilterHasPrefix(c.loginArgumentCompleter(), args[1], true)

@@ -1,0 +1,809 @@
+// Copyright 2018-2026 CERN
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+//
+// In applying this license, CERN does not waive the privileges and immunities
+// granted to it by virtue of its status as an Intergovernmental Organization
+// or submit itself to any jurisdiction.
+
+package main
+
+import (
+	"bufio"
+	"bytes"
+	"context"
+	"crypto/tls"
+	"encoding/json"
+	"errors"
+	"fmt"
+	"io"
+	"os"
+	"sort"
+	"strings"
+	"time"
+
+	"github.com/BurntSushi/toml"
+	"github.com/cs3org/reva/v3/pkg/admin/adminpb"
+	"github.com/cs3org/reva/v3/pkg/appctx"
+	"github.com/jedib0t/go-pretty/table"
+	"github.com/jedib0t/go-pretty/text"
+	"golang.org/x/term"
+	"google.golang.org/grpc"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/credentials"
+	ins "google.golang.org/grpc/credentials/insecure"
+	"google.golang.org/grpc/metadata"
+	"google.golang.org/grpc/status"
+)
+
+// adminCommands is the sub-table dispatched by the single `admin` entry in the
+// top-level commands table.
+var adminCommands = []*command{
+	adminElevateCommand(),
+	adminServicesCommand(),
+	adminConfigCommand(),
+	adminInvocationsCommand(),
+	adminInvokeCommand(),
+	adminImpersonateCommand(),
+}
+
+// adminCommand routes its first positional argument through the sub-table,
+// handing the rest to the subcommand.
+func adminCommand() *command {
+	cmd := newCommand("admin")
+	cmd.Description = func() string { return "administer the reva fleet (run `admin` for subcommands)" }
+	cmd.Action = func(w ...io.Writer) error {
+		args := cmd.Args()
+		if len(args) == 0 {
+			printAdminUsage()
+			return nil
+		}
+		name := args[0]
+		for _, sub := range adminCommands {
+			if sub.Name == name {
+				if err := sub.Parse(args[1:]); err != nil {
+					return err
+				}
+				defer sub.ResetFlags()
+				return sub.Action(w...)
+			}
+		}
+		return fmt.Errorf("unknown admin subcommand %q; run `admin` to list them", name)
+	}
+	return cmd
+}
+
+func printAdminUsage() {
+	fmt.Println("Usage: admin <subcommand> [flags] [args]")
+	fmt.Println("Subcommands:")
+	n := 0
+	for _, sub := range adminCommands {
+		if len(sub.Name) > n {
+			n = len(sub.Name)
+		}
+	}
+	for _, sub := range adminCommands {
+		fmt.Printf("  %s%s%s\n", sub.Name, strings.Repeat(" ", 2+(n-len(sub.Name))), sub.Description())
+	}
+}
+
+// ----- shared helpers -----
+
+// resolveAdminHost returns the admin endpoint, persisting a -admin-host flag to
+// the config when given so it need not be repeated.
+func resolveAdminHost(flagVal string) (string, error) {
+	if flagVal != "" {
+		persistAdminHost(flagVal)
+		return flagVal, nil
+	}
+	if conf != nil && conf.AdminHost != "" {
+		return conf.AdminHost, nil
+	}
+	return "", errors.New("admin host not set: pass -admin-host <host:port> once (it is persisted for next time)")
+}
+
+func persistAdminHost(hostVal string) {
+	c, err := readConfig()
+	if err != nil || c == nil {
+		c = &config{}
+		if conf != nil {
+			c.Host = conf.Host
+		}
+	}
+	c.AdminHost = hostVal
+	_ = writeConfig(c)
+	if conf != nil {
+		conf.AdminHost = hostVal
+	} else {
+		conf = c
+	}
+}
+
+func adminConn(host string) (*grpc.ClientConn, error) {
+	if insecure {
+		return grpc.NewClient(host, grpc.WithTransportCredentials(ins.NewCredentials()))
+	}
+	tlsconf := &tls.Config{InsecureSkipVerify: skipverify}
+	return grpc.NewClient(host, grpc.WithTransportCredentials(credentials.NewTLS(tlsconf)))
+}
+
+func adminClientAt(host string) (adminpb.AdminAPIClient, error) {
+	conn, err := adminConn(host)
+	if err != nil {
+		return nil, err
+	}
+	return adminpb.NewAdminAPIClient(conn), nil
+}
+
+// adminAuthContext attaches the stored short-TTL admin token. Every subcommand
+// except `elevate` uses it.
+func adminAuthContext() (context.Context, error) {
+	t, err := readAdminToken()
+	if err != nil || t == "" {
+		return nil, errors.New("no admin token found: run `admin elevate` first")
+	}
+	ctx := appctx.ContextSetToken(context.Background(), t)
+	ctx = metadata.AppendToOutgoingContext(ctx, appctx.TokenHeader, t)
+	return ctx, nil
+}
+
+// adminDial resolves the host, builds a client and an admin-token context in one
+// step for the common subcommand path.
+func adminDial(adminHostFlag string) (adminpb.AdminAPIClient, context.Context, error) {
+	host, err := resolveAdminHost(adminHostFlag)
+	if err != nil {
+		return nil, nil, err
+	}
+	client, err := adminClientAt(host)
+	if err != nil {
+		return nil, nil, err
+	}
+	ctx, err := adminAuthContext()
+	if err != nil {
+		return nil, nil, err
+	}
+	return client, ctx, nil
+}
+
+// adminErr annotates authn/authz failures with the sudo-timeout hint.
+func adminErr(err error) error {
+	if err == nil {
+		return nil
+	}
+	switch status.Code(err) {
+	case codes.Unauthenticated, codes.PermissionDenied:
+		return fmt.Errorf("%w (admin token may be expired or missing; re-run `admin elevate`)", err)
+	default:
+		return err
+	}
+}
+
+func confirm(prompt string) bool {
+	fmt.Printf("%s [y/N]: ", prompt)
+	line, _ := bufio.NewReader(os.Stdin).ReadString('\n')
+	line = strings.ToLower(strings.TrimSpace(line))
+	return line == "y" || line == "yes"
+}
+
+// nodeRow is one row of the services/nodes table.
+type nodeRow struct {
+	service, id, address, state, transport, pid, host, lastSeen, lastSeenRaw string
+	meta                                                                     map[string]string
+}
+
+func nodeRowFrom(service string, n *adminpb.Node) nodeRow {
+	m := n.Metadata
+	return nodeRow{
+		service:     service,
+		id:          n.Id,
+		address:     n.Address,
+		state:       n.State,
+		transport:   m["transport"],
+		pid:         m["pid"],
+		host:        m["host"],
+		lastSeen:    humanizeSince(m["last_seen"]),
+		lastSeenRaw: m["last_seen"],
+		meta:        m,
+	}
+}
+
+// frameworkMeta are the metadata keys already surfaced as their own columns;
+// the META column shows the rest.
+var frameworkMeta = map[string]bool{
+	"transport": true, "host": true, "state": true, "last_seen": true, "pid": true,
+}
+
+// extraMeta renders a node's service-specific metadata as "k=v k=v", or "-".
+func extraMeta(m map[string]string) string {
+	keys := make([]string, 0, len(m))
+	for k := range m {
+		if !frameworkMeta[k] {
+			keys = append(keys, k)
+		}
+	}
+	if len(keys) == 0 {
+		return "-"
+	}
+	sort.Strings(keys)
+	parts := make([]string, 0, len(keys))
+	for _, k := range keys {
+		parts = append(parts, k+"="+m[k])
+	}
+	return strings.Join(parts, " ")
+}
+
+func sortNodeRows(rows []nodeRow) {
+	sort.Slice(rows, func(i, j int) bool {
+		if rows[i].service != rows[j].service {
+			return rows[i].service < rows[j].service
+		}
+		return rows[i].address < rows[j].address
+	})
+}
+
+// renderNodeTable prints the nodes grouped by service; wide adds HOST and the
+// full node id.
+func renderNodeTable(rows []nodeRow, wide bool) {
+	sortNodeRows(rows)
+
+	t := table.NewWriter()
+	t.SetOutputMirror(os.Stdout)
+	if wide {
+		t.AppendHeader(table.Row{"SERVICE", "ADDRESS", "STATE", "TRANSPORT", "HOST", "LAST SEEN", "NODE ID", "META"})
+	} else {
+		t.AppendHeader(table.Row{"SERVICE", "ADDRESS", "STATE", "TRANSPORT", "LAST SEEN"})
+	}
+
+	colorize := stdoutIsTTY()
+	for _, r := range rows {
+		state := stateCell(r.state, colorize)
+		if wide {
+			t.AppendRow(table.Row{r.service, r.address, state, r.transport, r.host, r.lastSeen, r.id, extraMeta(r.meta)})
+		} else {
+			t.AppendRow(table.Row{r.service, r.address, state, r.transport, r.lastSeen})
+		}
+	}
+	t.Render()
+	printFleetSummary(rows)
+}
+
+// renderJSON emits the node list as JSON, for scripting.
+func renderJSON(rows []nodeRow) error {
+	sortNodeRows(rows)
+	type out struct {
+		Service   string            `json:"service"`
+		ID        string            `json:"id"`
+		Address   string            `json:"address"`
+		State     string            `json:"state"`
+		Transport string            `json:"transport"`
+		PID       string            `json:"pid"`
+		Host      string            `json:"host"`
+		LastSeen  string            `json:"last_seen"`
+		Metadata  map[string]string `json:"metadata"`
+	}
+	list := make([]out, 0, len(rows))
+	for _, r := range rows {
+		list = append(list, out{r.service, r.id, r.address, r.state, r.transport, r.pid, r.host, r.lastSeenRaw, r.meta})
+	}
+	b, err := json.MarshalIndent(list, "", "  ")
+	if err != nil {
+		return err
+	}
+	fmt.Println(string(b))
+	return nil
+}
+
+// renderServiceSummary prints one row per service with its node counts by
+// state; wide adds the hosts.
+func renderServiceSummary(rows []nodeRow, wide bool) {
+	type agg struct {
+		nodes, ready, degraded, offline, draining int
+		hosts                                     map[string]bool
+	}
+	byName := map[string]*agg{}
+	var names []string
+	for _, r := range rows {
+		a := byName[r.service]
+		if a == nil {
+			a = &agg{hosts: map[string]bool{}}
+			byName[r.service] = a
+			names = append(names, r.service)
+		}
+		a.nodes++
+		if r.host != "" {
+			a.hosts[r.host] = true
+		}
+		switch r.state {
+		case "ready":
+			a.ready++
+		case "degraded":
+			a.degraded++
+		case "offline":
+			a.offline++
+		case "draining":
+			a.draining++
+		}
+	}
+	sort.Strings(names)
+
+	t := table.NewWriter()
+	t.SetOutputMirror(os.Stdout)
+	header := table.Row{"SERVICE", "NODES", "READY", "DEGRADED", "OFFLINE", "DRAINING"}
+	if wide {
+		header = append(header, "HOSTS")
+	}
+	t.AppendHeader(header)
+	colorize := stdoutIsTTY()
+	for _, name := range names {
+		a := byName[name]
+		row := table.Row{name, a.nodes, a.ready,
+			countCell(a.degraded, stateColors["degraded"], colorize),
+			countCell(a.offline, stateColors["offline"], colorize),
+			countCell(a.draining, stateColors["draining"], colorize)}
+		if wide {
+			hosts := make([]string, 0, len(a.hosts))
+			for h := range a.hosts {
+				hosts = append(hosts, h)
+			}
+			sort.Strings(hosts)
+			row = append(row, strings.Join(hosts, ","))
+		}
+		t.AppendRow(row)
+	}
+	t.Render()
+	printFleetSummary(rows)
+}
+
+// stdoutIsTTY reports whether stdout is an interactive terminal, so coloring
+// never reaches pipes or files.
+func stdoutIsTTY() bool {
+	return term.IsTerminal(int(os.Stdout.Fd()))
+}
+
+// stateColors maps a non-ready state to its highlight color.
+var stateColors = map[string]text.Colors{
+	"degraded": {text.FgYellow},
+	"offline":  {text.FgRed},
+	"draining": {text.FgCyan},
+}
+
+// stateCell renders a node's state, highlighting non-ready ones.
+func stateCell(state string, colorize bool) string {
+	if state == "ready" {
+		return state
+	}
+	label := strings.ToUpper(state)
+	if colorize {
+		if c, ok := stateColors[state]; ok {
+			return c.Sprint(label)
+		}
+	}
+	return label
+}
+
+// countCell renders a per-state count: 0 as "-", non-zero optionally colored.
+func countCell(n int, c text.Colors, colorize bool) string {
+	if n == 0 {
+		return "-"
+	}
+	s := fmt.Sprintf("%d", n)
+	if colorize {
+		return c.Sprint(s)
+	}
+	return s
+}
+
+// filterByState keeps rows whose state is in the comma-separated filter.
+func filterByState(rows []nodeRow, filter string) []nodeRow {
+	if strings.TrimSpace(filter) == "" {
+		return rows
+	}
+	want := map[string]bool{}
+	for s := range strings.SplitSeq(filter, ",") {
+		if s = strings.TrimSpace(s); s != "" {
+			want[s] = true
+		}
+	}
+	out := make([]nodeRow, 0, len(rows))
+	for _, r := range rows {
+		if want[r.state] {
+			out = append(out, r)
+		}
+	}
+	return out
+}
+
+// printFleetSummary prints the "N services · M nodes · ready:X …" footer.
+func printFleetSummary(rows []nodeRow) {
+	states := map[string]int{}
+	seen := map[string]bool{}
+	svcCount := 0
+	for _, r := range rows {
+		states[r.state]++
+		if !seen[r.service] {
+			seen[r.service] = true
+			svcCount++
+		}
+	}
+	parts := []string{fmt.Sprintf("%d services", svcCount), fmt.Sprintf("%d nodes", len(rows))}
+	for _, st := range []string{"ready", "degraded", "offline", "draining"} {
+		if states[st] > 0 {
+			parts = append(parts, fmt.Sprintf("%s:%d", st, states[st]))
+			delete(states, st)
+		}
+	}
+	for st, n := range states { // any unexpected states
+		parts = append(parts, fmt.Sprintf("%s:%d", st, n))
+	}
+	fmt.Println(strings.Join(parts, " · "))
+}
+
+// humanizeSince renders an RFC3339 timestamp as a compact age (e.g. "3s ago").
+func humanizeSince(ts string) string {
+	if ts == "" {
+		return "-"
+	}
+	t, err := time.Parse(time.RFC3339, ts)
+	if err != nil {
+		return ts
+	}
+	d := max(time.Since(t), 0)
+	d = d.Round(time.Second)
+	switch {
+	case d < time.Minute:
+		return fmt.Sprintf("%ds ago", int(d.Seconds()))
+	case d < time.Hour:
+		return fmt.Sprintf("%dm%ds ago", int(d.Minutes()), int(d.Seconds())%60)
+	default:
+		return fmt.Sprintf("%dh%dm ago", int(d.Hours()), int(d.Minutes())%60)
+	}
+}
+
+// printNodeResults renders the per-node results of a fan-out operation.
+func printNodeResults(results []*adminpb.NodeResult) {
+	for _, r := range results {
+		if r.Error != "" {
+			fmt.Printf("  %s: ERROR %s\n", r.Node, r.Error)
+			continue
+		}
+		if r.ResultJson != "" {
+			fmt.Printf("  %s: %s\n", r.Node, r.ResultJson)
+		} else {
+			fmt.Printf("  %s: ok\n", r.Node)
+		}
+	}
+}
+
+// ----- subcommands -----
+
+func adminElevateCommand() *command {
+	cmd := newCommand("elevate")
+	cmd.Description = func() string { return "step up: exchange the login token for a short-TTL admin token" }
+	adminHost := cmd.String("admin-host", "", "address of the admin gRPC endpoint (persisted)")
+	cmd.ResetFlags = func() { *adminHost = "" }
+	cmd.Action = func(w ...io.Writer) error {
+		host, err := resolveAdminHost(*adminHost)
+		if err != nil {
+			return err
+		}
+		client, err := adminClientAt(host)
+		if err != nil {
+			return err
+		}
+		userTok, err := readToken()
+		if err != nil {
+			return errors.New("no login token: run `login` first")
+		}
+		ctx := appctx.ContextSetToken(context.Background(), userTok)
+		ctx = metadata.AppendToOutgoingContext(ctx, appctx.TokenHeader, userTok)
+
+		res, err := client.RequestAdmin(ctx, &adminpb.RequestAdminRequest{})
+		if err != nil {
+			return err
+		}
+		writeAdminToken(res.Token)
+		fmt.Printf("elevated; admin token valid until %s\n", time.Unix(res.ExpiresAt, 0).Format(time.RFC3339))
+		return nil
+	}
+	return cmd
+}
+
+func adminServicesCommand() *command {
+	cmd := newCommand("services")
+	cmd.Description = func() string {
+		return "list the fleet's services (optionally one <service>; -v for every node)"
+	}
+	cmd.Usage = func() string { return "Usage: admin services [-v] [-o wide|json] [-state ...] [service]" }
+	adminHost := cmd.String("admin-host", "", "address of the admin gRPC endpoint (persisted)")
+	verbose := cmd.Bool("v", false, "show every node instead of a per-service summary")
+	output := cmd.String("o", "", "output format: wide | json")
+	stateFilter := cmd.String("state", "", "only show nodes in these states (comma-separated, e.g. degraded,offline)")
+	cmd.ResetFlags = func() { *adminHost, *verbose, *output, *stateFilter = "", false, "", "" }
+	cmd.Action = func(w ...io.Writer) error {
+		if err := validateOutput(*output); err != nil {
+			return err
+		}
+		client, ctx, err := adminDial(*adminHost)
+		if err != nil {
+			return err
+		}
+		var svcFilter string
+		if cmd.NArg() > 0 {
+			svcFilter = cmd.Args()[0]
+		}
+		res, err := client.ListServices(ctx, &adminpb.ListServicesRequest{Service: svcFilter})
+		if err != nil {
+			return adminErr(err)
+		}
+		var rows []nodeRow
+		for _, sv := range res.Services {
+			for _, n := range sv.Nodes {
+				rows = append(rows, nodeRowFrom(sv.Name, n))
+			}
+		}
+		rows = filterByState(rows, *stateFilter)
+		switch {
+		case *output == "json":
+			return renderJSON(rows)
+		case *verbose:
+			renderNodeTable(rows, *output == "wide")
+		default:
+			renderServiceSummary(rows, *output == "wide")
+		}
+		return nil
+	}
+	return cmd
+}
+
+// validateOutput rejects an unknown -o value.
+func validateOutput(o string) error {
+	switch o {
+	case "", "wide", "json":
+		return nil
+	default:
+		return fmt.Errorf("unknown -o %q (use wide or json)", o)
+	}
+}
+
+func adminConfigCommand() *command {
+	cmd := newCommand("config")
+	cmd.Description = func() string { return "show a service's effective (redacted) config (TOML by default)" }
+	cmd.Usage = func() string { return "Usage: admin config [-admin-host h] [-o toml|json] <service|node-id>" }
+	adminHost := cmd.String("admin-host", "", "address of the admin gRPC endpoint (persisted)")
+	output := cmd.String("o", "toml", "output format: toml | json")
+	cmd.ResetFlags = func() { *adminHost, *output = "", "toml" }
+	cmd.Action = func(w ...io.Writer) error {
+		if cmd.NArg() < 1 {
+			return errors.New(cmd.Usage())
+		}
+		client, ctx, err := adminDial(*adminHost)
+		if err != nil {
+			return err
+		}
+		res, err := client.GetServiceConfig(ctx, &adminpb.GetServiceConfigRequest{Service: cmd.Args()[0]})
+		if err != nil {
+			return adminErr(err)
+		}
+		if len(res.Results) == 0 {
+			fmt.Println("(no instances)")
+			return nil
+		}
+		// Header each instance only when there is more than one.
+		for i, r := range res.Results {
+			if len(res.Results) > 1 {
+				if i > 0 {
+					fmt.Println()
+				}
+				fmt.Printf("# %s\n", r.Node)
+			}
+			if r.Error != "" {
+				fmt.Printf("# error: %s\n", r.Error)
+				continue
+			}
+			if err := renderConfig(r.ResultJson, *output); err != nil {
+				return err
+			}
+		}
+		return nil
+	}
+	return cmd
+}
+
+// renderConfig prints one instance's config JSON as TOML (default) or indented
+// JSON.
+func renderConfig(configJSON, output string) error {
+	switch output {
+	case "json":
+		var buf bytes.Buffer
+		if json.Indent(&buf, []byte(configJSON), "", "  ") == nil {
+			fmt.Println(buf.String())
+		} else {
+			fmt.Println(configJSON)
+		}
+	case "toml", "":
+		out, err := configToTOML(configJSON)
+		if err != nil {
+			return err
+		}
+		fmt.Print(out)
+	default:
+		return fmt.Errorf("unknown -o %q (use toml or json)", output)
+	}
+	return nil
+}
+
+// configToTOML renders a JSON config object as TOML — the format reva admins
+// read — keeping integers as integers (not 15.0).
+func configToTOML(jsonStr string) (string, error) {
+	dec := json.NewDecoder(strings.NewReader(jsonStr))
+	dec.UseNumber()
+	var m map[string]any
+	if err := dec.Decode(&m); err != nil {
+		return "", fmt.Errorf("decoding config: %w", err)
+	}
+	normalizeNumbers(m)
+	var buf bytes.Buffer
+	if err := toml.NewEncoder(&buf).Encode(m); err != nil {
+		return "", fmt.Errorf("encoding toml: %w", err)
+	}
+	return buf.String(), nil
+}
+
+// normalizeNumbers turns json.Number into int64 (when integral) or float64 so
+// TOML shows 15 rather than 15.0; it mutates maps/slices in place.
+func normalizeNumbers(v any) any {
+	switch t := v.(type) {
+	case map[string]any:
+		for k, val := range t {
+			t[k] = normalizeNumbers(val)
+		}
+	case []any:
+		for i, e := range t {
+			t[i] = normalizeNumbers(e)
+		}
+	case json.Number:
+		if i, err := t.Int64(); err == nil {
+			return i
+		}
+		if f, err := t.Float64(); err == nil {
+			return f
+		}
+		return t.String()
+	}
+	return v
+}
+
+func adminInvocationsCommand() *command {
+	cmd := newCommand("invocations")
+	cmd.Description = func() string { return "list the invocations a service exposes" }
+	cmd.Usage = func() string { return "Usage: admin invocations [-admin-host h] <service>" }
+	adminHost := cmd.String("admin-host", "", "address of the admin gRPC endpoint (persisted)")
+	cmd.ResetFlags = func() { *adminHost = "" }
+	cmd.Action = func(w ...io.Writer) error {
+		if cmd.NArg() < 1 {
+			return errors.New(cmd.Usage())
+		}
+		client, ctx, err := adminDial(*adminHost)
+		if err != nil {
+			return err
+		}
+		res, err := client.ListInvocations(ctx, &adminpb.ListInvocationsRequest{Service: cmd.Args()[0]})
+		if err != nil {
+			return adminErr(err)
+		}
+		for _, inv := range res.Invocations {
+			kind := inv.Kind
+			if kind == "" {
+				kind = "?"
+			}
+			fmt.Printf("%-20s [%s] %s\n", inv.Name, kind, inv.Description)
+		}
+		return nil
+	}
+	return cmd
+}
+
+func adminInvokeCommand() *command {
+	cmd := newCommand("invoke")
+	cmd.Description = func() string { return "run a service invocation on one or all instances" }
+	cmd.Usage = func() string {
+		return "Usage: admin invoke [-admin-host h] [-y] <service|node-id> <invocation> [key=val ...]"
+	}
+	adminHost := cmd.String("admin-host", "", "address of the admin gRPC endpoint (persisted)")
+	yes := cmd.Bool("y", false, "skip the confirmation prompt for dangerous invocations")
+	cmd.ResetFlags = func() { *adminHost, *yes = "", false }
+	cmd.Action = func(w ...io.Writer) error {
+		if cmd.NArg() < 2 {
+			return errors.New(cmd.Usage())
+		}
+		// selector is a service name (every instance) or a node id (one instance).
+		selector, invocation := cmd.Args()[0], cmd.Args()[1]
+		args := parseKeyVals(cmd.Args()[2:])
+
+		client, ctx, err := adminDial(*adminHost)
+		if err != nil {
+			return err
+		}
+
+		// Confirm dangerous invocations unless -y. The kind comes from the
+		// service's own catalog.
+		if !*yes && invocationKind(ctx, client, selector, invocation) == "dangerous" {
+			if !confirm(fmt.Sprintf("invocation %q on %q is DANGEROUS; proceed?", invocation, selector)) {
+				return errors.New("aborted")
+			}
+		}
+
+		res, err := client.Invoke(ctx, &adminpb.InvokeRequest{
+			Service:    selector,
+			Invocation: invocation,
+			Args:       args,
+		})
+		if err != nil {
+			return adminErr(err)
+		}
+		printNodeResults(res.Results)
+		return nil
+	}
+	return cmd
+}
+
+// invocationKind best-effort resolves an invocation's kind for the confirmation
+// gate; on any error it returns "" (no prompt).
+func invocationKind(ctx context.Context, client adminpb.AdminAPIClient, svcName, invocation string) string {
+	res, err := client.ListInvocations(ctx, &adminpb.ListInvocationsRequest{Service: svcName})
+	if err != nil {
+		return ""
+	}
+	for _, inv := range res.Invocations {
+		if inv.Name == invocation {
+			return inv.Kind
+		}
+	}
+	return ""
+}
+
+func adminImpersonateCommand() *command {
+	cmd := newCommand("impersonate")
+	cmd.Description = func() string { return "mint a user-scoped token for a target user" }
+	cmd.Usage = func() string { return "Usage: admin impersonate [-admin-host h] [-reason r] <user>" }
+	adminHost := cmd.String("admin-host", "", "address of the admin gRPC endpoint (persisted)")
+	reason := cmd.String("reason", "", "reason recorded in the audit log")
+	cmd.ResetFlags = func() { *adminHost, *reason = "", "" }
+	cmd.Action = func(w ...io.Writer) error {
+		if cmd.NArg() < 1 {
+			return errors.New(cmd.Usage())
+		}
+		client, ctx, err := adminDial(*adminHost)
+		if err != nil {
+			return err
+		}
+		res, err := client.Impersonate(ctx, &adminpb.ImpersonateRequest{User: cmd.Args()[0], Reason: *reason})
+		if err != nil {
+			return adminErr(err)
+		}
+		fmt.Println(res.Token)
+		return nil
+	}
+	return cmd
+}
+
+// parseKeyVals turns ["k=v", "a=b"] into a map for invocation arguments.
+func parseKeyVals(pairs []string) map[string]string {
+	out := make(map[string]string, len(pairs))
+	for _, p := range pairs {
+		if k, v, ok := strings.Cut(p, "="); ok {
+			out[k] = v
+		}
+	}
+	return out
+}
