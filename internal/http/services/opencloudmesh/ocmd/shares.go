@@ -182,12 +182,12 @@ func (h *sharesHandler) CreateShare(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// By default all incoming shares are accepted. Configuring a non-empty
-	// auto-accept whitelist restricts this: a share is then stored only if the
-	// sender's provider is on the whitelist, or if the sender is already an
+	// By default all incoming shares are accepted only if the sender is already an
 	// accepted user of the recipient (i.e. they went through a prior invitation
-	// flow). Shares matching neither are rejected outright.
-	if len(h.autoAcceptProviders) > 0 && !h.matchesAutoAccept(sender.Idp) && !h.isAcceptedUser(ctx, userRes.User, sender) {
+	// flow).  Configuring a non-empty auto-accept whitelist (that may include `.*`)
+	// allows any sender whose provider is on the whitelist to be accepted.
+	// Shares matching neither are rejected outright.
+	if !h.matchesAutoAccept(sender.Idp) && !h.isAcceptedUser(ctx, userRes.User, sender) {
 		reqres.WriteError(w, r, reqres.APIErrorUnauthenticated, "sender provider not in the auto-accept whitelist", nil)
 		return
 	}
