@@ -424,3 +424,50 @@ func GetUserIdFromOCMAddress(user string) (*userpb.UserId, error) {
 		Type: userpb.UserType_USER_TYPE_FEDERATED,
 	}, nil
 }
+
+// TrimOCMScheme removes a leading http(s):// scheme from an OCM host string.
+// OCM Addresses are not URIs and MUST NOT carry a scheme, but some servers
+// (Nextcloud, oCIS, OpenCloud) include one; we strip it defensively.
+func TrimOCMScheme(host string) string {
+	host = strings.TrimPrefix(host, "https://")
+	host = strings.TrimPrefix(host, "http://")
+	return host
+}
+
+// NormalizeRemoteUserID returns the bare OCM identifier for a remote user.
+//
+// Per the OCM spec the invite `userID` MUST be the bare identifier of the user
+// at their OCM Server, and the host travels separately in `recipientProvider`.
+// Some non-conformant servers append the host to `userID` anyway (oCIS sends
+// "id@host", OpenCloud sends "id@https://host"). If stored verbatim, CERNBox
+// keeps that qualified string as the OpaqueId and later re-appends the provider
+// domain when building `shareWith`, producing "id@host@host" (or with a scheme),
+// which the receiver cannot resolve to a local user.
+//
+// We strip a trailing "@<provider>" suffix ONLY when it matches the already-known
+// provider domain, repeating to collapse accidental double-qualification. A
+// spec-conformant identifier that legitimately contains '@' (e.g. an email local
+// part such as "a@b.org" belonging to a different provider) is left untouched.
+func NormalizeRemoteUserID(userID, providerDomain string) string {
+	host := TrimOCMScheme(providerDomain)
+	if host == "" {
+		return userID
+	}
+	for {
+		uid, err := GetUserIdFromOCMAddress(userID)
+		if err != nil || !strings.EqualFold(TrimOCMScheme(uid.Idp), host) {
+			return userID
+		}
+		userID = uid.OpaqueId
+	}
+}
+
+// FormatOCMUser renders a CS3 user id as an OCM Address "<opaque-id>@<host>".
+// It strips any scheme from the host and collapses a redundant, self-referential
+// provider suffix already present in the opaque id, so it never emits the
+// malformed "id@host@host" form even if a non-conformant peer polluted storage.
+func FormatOCMUser(u *userpb.UserId) string {
+	host := TrimOCMScheme(u.Idp)
+	opaque := NormalizeRemoteUserID(u.OpaqueId, host)
+	return fmt.Sprintf("%s@%s", opaque, host)
+}

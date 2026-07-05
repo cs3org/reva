@@ -23,7 +23,6 @@ package ocmshareprovider
 
 import (
 	"context"
-	"fmt"
 	"net/url"
 	"path/filepath"
 	"slices"
@@ -169,7 +168,11 @@ func (s *service) UnprotectedEndpoints() []string {
 }
 
 func formatOCMUser(u *userpb.UserId) string {
-	return fmt.Sprintf("%s@%s", u.OpaqueId, u.Idp)
+	// Delegate to the shared OCM Address formatter so recipient, owner and
+	// sender ids are always spec-conformant "<opaque-id>@<host>" strings and
+	// never the malformed "id@host@host" form produced when a non-conformant
+	// peer's qualified userID was stored verbatim.
+	return ocmd.FormatOCMUser(u)
 }
 
 func getResourceType(info *providerpb.ResourceInfo) string {

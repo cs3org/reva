@@ -98,10 +98,14 @@ func (h *invitesHandler) AcceptInvite(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Some peers (oCIS, OpenCloud) send a fully-qualified userID such as
+	// "id@host" or "id@https://host" instead of the bare identifier the OCM
+	// spec mandates. Normalize it against the known provider domain so we do
+	// not later double-qualify it into "id@host@host" when building shareWith.
 	userObj := &userpb.User{
 		Id: &userpb.UserId{
-			OpaqueId: req.UserID,
-			Idp:      req.RecipientProvider,
+			OpaqueId: NormalizeRemoteUserID(req.UserID, req.RecipientProvider),
+			Idp:      TrimOCMScheme(req.RecipientProvider),
 			Type:     userpb.UserType_USER_TYPE_FEDERATED,
 		},
 		Mail:        req.Email,

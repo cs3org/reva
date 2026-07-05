@@ -196,10 +196,14 @@ func (s *service) ForwardInvite(ctx context.Context, req *invitepb.ForwardInvite
 	// and the remote one (the initiator), so at the end of the invitation workflow they
 	// know each other
 
+	// Normalize the remote user id against the origin provider domain: some
+	// peers return a fully-qualified userID ("id@host" or "id@https://host")
+	// which would otherwise be re-qualified into "id@host@host" downstream.
+	providerDomain := req.GetOriginSystemProvider().Domain
 	remoteUserID := &userpb.UserId{
 		Type:     userpb.UserType_USER_TYPE_FEDERATED,
-		Idp:      req.GetOriginSystemProvider().Domain,
-		OpaqueId: remoteUser.UserID,
+		Idp:      ocmd.TrimOCMScheme(providerDomain),
+		OpaqueId: ocmd.NormalizeRemoteUserID(remoteUser.UserID, providerDomain),
 	}
 
 	if err := s.repo.AddRemoteUser(ctx, user.Id, &userpb.User{
