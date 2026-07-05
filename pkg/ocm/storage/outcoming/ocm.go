@@ -255,14 +255,34 @@ func (d *driver) shareAndRelativePathFromRef(ctx context.Context, ref *provider.
 	return share, relPath, nil
 }
 
+// resolveOCMSharePath maps a relative path sent by a remote OCM receiver onto the
+// shared resource. A folder share nests the child beneath the shared container. A
+// single-file share has exactly one resource, so the receiver-supplied name carries no
+// routing information: both the share root and any single-segment child resolve to the
+// file itself. This avoids building "<file>/<file>" (which fails to stat and surfaces as
+// HTTP 500 to the receiver) and tolerates receivers whose appended name differs from the
+// storage path base. Nested paths under a file share are rejected as malformed.
+func resolveOCMSharePath(resourcePath string, isContainer bool, rel string) (string, bool) {
+	if isContainer {
+		return filepath.Join(resourcePath, rel), true
+	}
+	child := strings.TrimPrefix(filepath.Clean("/"+rel), "/")
+	if child == "" || !strings.Contains(child, "/") {
+		return resourcePath, true
+	}
+	return "", false
+}
+
 func (d *driver) translateOCMShareResourceToCS3Ref(ctx context.Context, resID *provider.ResourceId, rel string) (*provider.Reference, error) {
 	info, err := d.stat(ctx, &provider.Reference{ResourceId: resID})
 	if err != nil {
 		return nil, err
 	}
-	return &provider.Reference{
-		Path: filepath.Join(info.Path, rel),
-	}, nil
+	p, ok := resolveOCMSharePath(info.Path, info.Type == provider.ResourceType_RESOURCE_TYPE_CONTAINER, rel)
+	if !ok {
+		return nil, errtypes.NotFound(rel)
+	}
+	return &provider.Reference{Path: p}, nil
 }
 
 func (d *driver) CreateDir(ctx context.Context, ref *provider.Reference) error {
