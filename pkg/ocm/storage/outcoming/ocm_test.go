@@ -472,3 +472,48 @@ func TestShareAndRelativePathFromRefRootMountedCodeFlow(t *testing.T) {
 		t.Fatalf("shareAndRelativePathFromRef returned rel %q, want \"./\"", rel)
 	}
 }
+
+func TestResolveOCMSharePath(t *testing.T) {
+	const file = "/home/einstein/report.txt"
+	const dir = "/home/einstein/project"
+
+	tests := []struct {
+		name        string
+		resource    string
+		isContainer bool
+		rel         string
+		wantPath    string
+		wantOK      bool
+	}{
+		// Single-file share: the share root resolves to the file. This is the
+		// receiver's expected path and must not regress.
+		{"file root empty", file, false, "", file, true},
+		{"file root dot", file, false, ".", file, true},
+		{"file root slash", file, false, "/", file, true},
+		{"file root dot slash", file, false, "./", file, true},
+		// Single-file share: receivers append the file name; it must
+		// resolve to the file, not to "<file>/<file>".
+		{"file by name", file, false, "./report.txt", file, true},
+		{"file by name abs", file, false, "/report.txt", file, true},
+		// Single-file share: any single segment resolves to the one file, so a
+		// receiver name that differs from the storage path base is tolerated.
+		{"file by other single segment", file, false, "./whatever", file, true},
+		// Single-file share: a nested path is malformed for a file.
+		{"file nested rejected", file, false, "./a/b.txt", "", false},
+		// Folder share: children nest under the container.
+		{"dir root", dir, true, "", dir, true},
+		{"dir child", dir, true, "./notes.txt", dir + "/notes.txt", true},
+		{"dir nested child", dir, true, "./sub/notes.txt", dir + "/sub/notes.txt", true},
+	}
+
+	for _, tc := range tests {
+		got, ok := resolveOCMSharePath(tc.resource, tc.isContainer, tc.rel)
+		if ok != tc.wantOK {
+			t.Errorf("%s: ok = %v, want %v (path=%q)", tc.name, ok, tc.wantOK, got)
+			continue
+		}
+		if ok && got != tc.wantPath {
+			t.Errorf("%s: path = %q, want %q", tc.name, got, tc.wantPath)
+		}
+	}
+}
