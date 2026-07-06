@@ -178,3 +178,69 @@ func TestMatchesAutoAccept(t *testing.T) {
 		t.Errorf("matchesAutoAccept with no providers should return false")
 	}
 }
+
+func TestParseOCMUser(t *testing.T) {
+	tests := []struct {
+		name       string
+		addr       string
+		wantOpaque string
+		wantIdp    string
+		wantErr    bool
+	}{
+		{
+			name:       "spec-conformant bare id",
+			addr:       "marie@cernbox2.docker",
+			wantOpaque: "marie",
+			wantIdp:    "cernbox2.docker",
+		},
+		{
+			name:       "oCIS doubled recipient host collapses (shareWith)",
+			addr:       "cbcbcbcb-2222@cernbox2.docker@cernbox2.docker",
+			wantOpaque: "cbcbcbcb-2222",
+			wantIdp:    "cernbox2.docker",
+		},
+		{
+			name:       "oCIS doubled remote host collapses (sender/owner)",
+			addr:       "4c510ada-1234@ocis1.docker@ocis1.docker",
+			wantOpaque: "4c510ada-1234",
+			wantIdp:    "ocis1.docker",
+		},
+		{
+			name:       "OpenCloud doubled remote host with scheme collapses (sender/owner)",
+			addr:       "b1f74ec4-5678@https://opencloud1.docker@opencloud1.docker",
+			wantOpaque: "b1f74ec4-5678",
+			wantIdp:    "opencloud1.docker",
+		},
+		{
+			name:       "single scheme-qualified host is stripped to bare id",
+			addr:       "b1f74ec4-5678@https://opencloud1.docker",
+			wantOpaque: "b1f74ec4-5678",
+			wantIdp:    "opencloud1.docker",
+		},
+		{
+			name:    "address without provider is rejected",
+			addr:    "no-at-sign",
+			wantErr: true,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := parseOCMUser(tt.addr)
+			if tt.wantErr {
+				if err == nil {
+					t.Fatalf("parseOCMUser(%q) expected error, got nil", tt.addr)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("parseOCMUser(%q) unexpected error: %v", tt.addr, err)
+			}
+			if got.OpaqueId != tt.wantOpaque {
+				t.Errorf("parseOCMUser(%q) OpaqueId = %q, want %q", tt.addr, got.OpaqueId, tt.wantOpaque)
+			}
+			if got.Idp != tt.wantIdp {
+				t.Errorf("parseOCMUser(%q) Idp = %q, want %q", tt.addr, got.Idp, tt.wantIdp)
+			}
+		})
+	}
+}
