@@ -80,7 +80,9 @@ type params struct {
 	Username       string `mapstructure:"username" validate:"required"`
 }
 
-// Run downloads all files in the userspace and uploads them to a public share for takeout
+// Run walks the user's home space, downloads its content as the user,
+// archives it, uploads the archives to the takeout space as the takeout
+// admin, and returns a public link to the folder containing the archives
 func (j *job) Run(ctx context.Context, p rjobs.Params) (rjobs.Params, error) {
 	// Decode run parameters
 	pp := params{
@@ -196,8 +198,8 @@ func (j *job) createZipArchives(userCtx, adminCtx context.Context, root_path, ar
 	var (
 		pw        *io.PipeWriter
 		done      chan error
+		cw        *countingWriter
 		w         *zip.Writer
-		archSize  int64
 		archIndex = 0
 	)
 
@@ -212,7 +214,8 @@ func (j *job) createZipArchives(userCtx, adminCtx context.Context, root_path, ar
 			pr.CloseWithError(err)
 			done <- err
 		}(archIndex)
-		w = zip.NewWriter(pw)
+		cw = &countingWriter{w: pw}
+		w = zip.NewWriter(cw)
 	}
 
 	// Finalize the current archive and wait for its upload to complete
@@ -240,22 +243,21 @@ func (j *job) createZipArchives(userCtx, adminCtx context.Context, root_path, ar
 			return err
 		}
 
-		// Check current archive size
-		if archSize > maxArchiveSize {
-			if err := flush(); err != nil {
-				return err
-			}
-			archSize = 0
-			archIndex++
-			startPart()
-		}
-
 		isDir := info.Type == provider.ResourceType_RESOURCE_TYPE_CONTAINER
 
 		// Get relative path of the current file
 		fileName, err := filepath.Rel(filepath.Dir(root_path), current_path)
 		if err != nil {
 			return err
+		}
+
+		// Cut the archive if adding the current file could exceed maxArchiveSize
+		if !isDir && cw.n > 0 && cw.n+int64(info.Size) > maxArchiveSize {
+			if err := flush(); err != nil {
+				return err
+			}
+			archIndex++
+			startPart()
 		}
 
 		// Create zip header of the current file
@@ -288,8 +290,6 @@ func (j *job) createZipArchives(userCtx, adminCtx context.Context, root_path, ar
 			return err
 		}
 
-		// Update archive size metadata
-		archSize += int64(info.Size)
 		return nil
 	})
 	if err != nil {
@@ -415,4 +415,16 @@ func getUploadProtocol(protocols []*gateway.FileUploadProtocol, prot string) (*g
 		}
 	}
 	return nil, errtypes.InternalError(fmt.Sprintf("protocol %s not supported for uploading", prot))
+}
+
+// countingWriter counts the bytes written through it to measure the actual archive size
+type countingWriter struct {
+	w io.Writer
+	n int64
+}
+
+func (cw *countingWriter) Write(p []byte) (int, error) {
+	n, err := cw.w.Write(p)
+	cw.n += int64(n)
+	return n, err
 }
