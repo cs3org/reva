@@ -126,12 +126,12 @@ func (h *sharesHandler) CreateShare(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	sender, err := GetUserIdFromOCMAddress(req.Sender)
+	sender, err := parseOCMUser(req.Sender)
 	if err != nil {
 		reqres.WriteError(w, r, reqres.APIErrorInvalidParameter, "error with remote sender", err)
 		return
 	}
-	owner, err := GetUserIdFromOCMAddress(req.Owner)
+	owner, err := parseOCMUser(req.Owner)
 	if err != nil {
 		reqres.WriteError(w, r, reqres.APIErrorInvalidParameter, "error with remote owner", err)
 		return
@@ -164,7 +164,7 @@ func (h *sharesHandler) CreateShare(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	shareWith, err := GetUserIdFromOCMAddress(req.ShareWith)
+	shareWith, err := parseOCMUser(req.ShareWith)
 	if err != nil {
 		reqres.WriteError(w, r, reqres.APIErrorInvalidParameter, "error with shareWith user", err)
 		return
@@ -321,6 +321,32 @@ func (h *sharesHandler) impersonate(ctx context.Context, user *userpb.User) (con
 	userCtx = appctx.ContextSetUser(userCtx, authRes.User)
 	userCtx = metadata.AppendToOutgoingContext(userCtx, appctx.TokenHeader, authRes.Token)
 	return userCtx, nil
+}
+
+// parseOCMUser parses an OCM address "<id>@<provider>" from an incoming share
+// request and cleans up the opaque id before we try to resolve it.
+//
+// We are the receiving side here. The remote server sends us three addresses:
+// shareWith is the recipient on our side, while sender and owner are the person
+// on the remote side who is sharing. The spec says the id part should be the bare
+// user id, with the host kept separate. Some peers do not follow that: oCIS tacks
+// the host onto the id ("id@host") and OpenCloud tacks on the host with a scheme
+// ("id@https://host"), and by the time it reaches us it is doubled up as
+// "id@host@host".
+//
+// GetUserIdFromOCMAddress only peels off the final "@host", so the id we get back
+// still has a leftover host glued to it. That leftover then makes the lookup miss:
+// for shareWith we cannot find the local recipient, and for sender/owner we cannot
+// match the remote user we already stored when the invitation was accepted (we
+// store that one bare). NormalizeRemoteUserID trims the leftover host, but only
+// when it matches the provider we just parsed, so a well-formed id is left alone.
+func parseOCMUser(addr string) (*userpb.UserId, error) {
+	u, err := GetUserIdFromOCMAddress(addr)
+	if err != nil {
+		return nil, err
+	}
+	u.OpaqueId = NormalizeRemoteUserID(u.OpaqueId, u.Idp)
+	return u, nil
 }
 
 func getCreateShareRequest(r *http.Request) (*NewShareRequest, error) {
