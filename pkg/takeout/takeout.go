@@ -1,7 +1,9 @@
 package takeout
 
 import (
+	"archive/tar"
 	"archive/zip"
+	"compress/gzip"
 	"context"
 	"crypto/tls"
 	"fmt"
@@ -76,7 +78,7 @@ type job struct {
 // The per-run takeout parameters
 type params struct {
 	MaxArchiveSize int64  `mapstructure:"maxArchiveSize"` // < 10GB
-	ArchiveFormat  string `mapstructure:"archiveFormat"`  // One of ["zip", "tar"]
+	ArchiveFormat  string `mapstructure:"archiveFormat"`  // One of ["zip", "tgz"]
 	Username       string `mapstructure:"username" validate:"required"`
 }
 
@@ -137,10 +139,10 @@ func (j *job) Run(ctx context.Context, p rjobs.Params) (rjobs.Params, error) {
 		if err != nil {
 			return nil, errors.Wrap(err, "takeout: zip archive could not be created")
 		}
-	case "tar":
-		err = j.createTarArchives(userCtx, adminCtx, root, archPath, wk, dl, pp.MaxArchiveSize)
+	case "tgz":
+		err = j.createTgzArchives(userCtx, adminCtx, root, archPath, wk, dl, gtw, upHC, pp.MaxArchiveSize)
 		if err != nil {
-			return nil, errors.Wrap(err, "takeout: tar archive could not be created")
+			return nil, errors.Wrap(err, "takeout: tgz archive could not be created")
 		}
 	default:
 		return nil, errors.Errorf("takeout: %s is not a supported archive format", pp.ArchiveFormat)
@@ -178,8 +180,159 @@ func (j *job) authenticate(ctx context.Context, gtw gateway.GatewayAPIClient, cl
 	return ctx, nil
 }
 
-func (j *job) createTarArchives(userCtx, adminCtx context.Context, root_path, arch_path string, wk walker.Walker, dl downloader.Downloader, maxArchiveSize int64) error {
-	panic("unimplemented")
+func (j *job) createTgzArchives(userCtx, adminCtx context.Context, rootPath, archPath string, wk walker.Walker, dl downloader.Downloader, gtw gateway.GatewayAPIClient, hc *httpclient.Client, maxArchiveSize int64) error {
+	// Ensure the destination directory exists before any upload starts
+	mkRes, err := gtw.CreateContainer(adminCtx, &provider.CreateContainerRequest{
+		Ref: &provider.Reference{Path: archPath},
+	})
+	switch {
+	case err != nil:
+		return err
+	case mkRes.Status.Code != rpc.Code_CODE_OK && mkRes.Status.Code != rpc.Code_CODE_ALREADY_EXISTS:
+		return errtypes.InternalError(mkRes.Status.Message)
+	}
+
+	// Setup tgz archive streaming state
+	var (
+		pw        *io.PipeWriter
+		done      chan error
+		cw        *countingWriter
+		gw        *gzip.Writer
+		tw        *tar.Writer
+		archIndex = 0
+	)
+
+	// Start a fresh archive by initiating its upload and streaming the tgz into it
+	startPart := func() {
+		pr, npw := io.Pipe()
+		pw = npw
+		done = make(chan error, 1)
+
+		go func(idx int) {
+			err := j.uploadArchive(adminCtx, gtw, hc, archPath, idx, "tgz", pr)
+			// Unblock the producer if the upload fails mid-stream
+			pr.CloseWithError(err)
+			done <- err
+		}(archIndex)
+
+		cw = &countingWriter{w: pw}
+		gw = gzip.NewWriter(cw)
+		tw = tar.NewWriter(gw)
+	}
+
+	// Finalize the current archive and wait for its upload to complete
+	flush := func() error {
+		tarErr := tw.Close()
+
+		var gzipOrPipeErr error
+		if tarErr != nil {
+			_ = pw.CloseWithError(tarErr)
+		} else {
+			gzipOrPipeErr = gw.Close()
+			if gzipOrPipeErr != nil {
+				_ = pw.CloseWithError(gzipOrPipeErr)
+			} else {
+				gzipOrPipeErr = pw.Close()
+			}
+		}
+
+		upErr := <-done
+		pw = nil
+
+		if tarErr != nil {
+			return tarErr
+		}
+		if gzipOrPipeErr != nil {
+			return gzipOrPipeErr
+		}
+		return upErr
+	}
+
+	// Start the first archive
+	startPart()
+
+	// Create the archives by walking the specified directory
+	err = wk.Walk(userCtx, rootPath, func(currentPath string, info *provider.ResourceInfo, err error) error {
+		if err != nil {
+			return err
+		}
+
+		isDir := info.Type == provider.ResourceType_RESOURCE_TYPE_CONTAINER
+
+		// Get relative path of the current file
+		fileName, err := filepath.Rel(filepath.Dir(rootPath), currentPath)
+		if err != nil {
+			return err
+		}
+		fileName = filepath.ToSlash(fileName)
+
+		// Cut the archive if adding the current file could exceed maxArchiveSize
+		if !isDir && cw.n > 0 && cw.n+int64(info.Size) > maxArchiveSize {
+			if err := flush(); err != nil {
+				return err
+			}
+			archIndex++
+			startPart()
+		}
+
+		// Create tar header of the current file
+		header := tar.Header{
+			Name:    fileName,
+			ModTime: time.Unix(int64(info.Mtime.Seconds), 0),
+		}
+
+		if isDir {
+			header.Mode = 0755
+			header.Typeflag = tar.TypeDir
+		} else {
+			header.Mode = 0644
+			header.Typeflag = tar.TypeReg
+			header.Size = int64(info.Size)
+		}
+
+		if err := tw.WriteHeader(&header); err != nil {
+			return err
+		}
+
+		if isDir {
+			return gw.Flush()
+		}
+
+		// Download file content
+		dlFile, err := dl.Download(userCtx, currentPath, "")
+		if err != nil {
+			return err
+		}
+
+		// Copy downloaded file to tgz archive
+		_, copyErr := io.Copy(tw, dlFile)
+		closeErr := dlFile.Close()
+
+		if copyErr != nil {
+			return copyErr
+		}
+		if closeErr != nil {
+			return closeErr
+		}
+
+		return gw.Flush()
+	})
+	if err != nil {
+		// Abort the in-flight upload, if any
+		if pw != nil {
+			_ = pw.CloseWithError(err)
+			<-done
+		}
+		return err
+	}
+
+	// Finalize last archive
+	if err := flush(); err != nil {
+		j.log.Err(err).Msg("takeout: archive upload failed")
+		return err
+	}
+
+	return nil
 }
 
 func (j *job) createZipArchives(userCtx, adminCtx context.Context, root_path, arch_path string, wk walker.Walker, dl downloader.Downloader, gtw gateway.GatewayAPIClient, hc *httpclient.Client, maxArchiveSize int64) error {
@@ -209,7 +362,7 @@ func (j *job) createZipArchives(userCtx, adminCtx context.Context, root_path, ar
 		pw = npw
 		done = make(chan error, 1)
 		go func(idx int) {
-			err := j.uploadArchive(adminCtx, gtw, hc, arch_path, idx, pr)
+			err := j.uploadArchive(adminCtx, gtw, hc, arch_path, idx, "zip", pr)
 			// Unblock the producer if the upload fails mid-stream
 			pr.CloseWithError(err)
 			done <- err
@@ -310,10 +463,10 @@ func (j *job) createZipArchives(userCtx, adminCtx context.Context, root_path, ar
 	return nil
 }
 
-func (j *job) uploadArchive(ctx context.Context, gtw gateway.GatewayAPIClient, hc *httpclient.Client, archPath string, archIndex int, arch io.Reader) error {
+func (j *job) uploadArchive(ctx context.Context, gtw gateway.GatewayAPIClient, hc *httpclient.Client, archPath string, archIndex int, ext string, arch io.Reader) error {
 	// Setup archive name
 	var (
-		archName = fmt.Sprintf("takeout-%03d.zip", archIndex)
+		archName = fmt.Sprintf("takeout-%03d.%s", archIndex, ext)
 		archFile = archPath + archName
 	)
 
