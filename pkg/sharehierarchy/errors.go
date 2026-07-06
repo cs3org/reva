@@ -59,7 +59,7 @@ func NewChildConflictError(msg string, shares []ResolvedShare) *HierarchyConflic
 			ID:             s.Id.OpaqueId,
 			ResourceID:     s.ResourceId.StorageId + "!" + s.ResourceId.OpaqueId,
 			Sharee:         sharee,
-			PermissionType: PermLevelFromCS3(s.Permissions.GetPermissions()).String(),
+			PermissionType: PermLevelFromCS3(s.Permissions.GetPermissions()).RoleID(),
 			Path:           resolved.Path,
 		})
 	}

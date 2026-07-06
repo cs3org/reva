@@ -87,8 +87,9 @@ func TestCheckForAdd_ParentR_NodeR_Conflict(t *testing.T) {
 	_, err := checker.CheckGrantConsistency(context.Background(), "/a/b", readPerms, []*collaboration.Share{parent})
 	require.Error(t, err)
 	conflictErr, ok := err.(*sharehierarchy.HierarchyConflictError)
-	_ = conflictErr
-	assert.True(t, ok, "expected HierarchyConflictError, got %T: %v", err, err)
+	require.True(t, ok, "expected HierarchyConflictError, got %T: %v", err, err)
+	require.Len(t, conflictErr.ConflictingShares, 1)
+	assert.Equal(t, sharehierarchy.PermRead.RoleID(), conflictErr.ConflictingShares[0].PermissionType)
 }
 
 func TestCheckForAdd_ParentRW_NodeR_Conflict(t *testing.T) {
@@ -99,8 +100,9 @@ func TestCheckForAdd_ParentRW_NodeR_Conflict(t *testing.T) {
 	_, err := checker.CheckGrantConsistency(context.Background(), "/a/b", readPerms, []*collaboration.Share{parent})
 	require.Error(t, err)
 	conflictErr, ok := err.(*sharehierarchy.HierarchyConflictError)
-	_ = conflictErr
-	assert.True(t, ok)
+	require.True(t, ok)
+	require.Len(t, conflictErr.ConflictingShares, 1)
+	assert.Equal(t, sharehierarchy.PermRW.RoleID(), conflictErr.ConflictingShares[0].PermissionType)
 }
 
 func TestCheckForAdd_ParentRW_NodeRW_Conflict(t *testing.T) {
@@ -150,6 +152,7 @@ func TestNewChildConflictError_IncludesResolvedChildPath(t *testing.T) {
 	conflictErr := sharehierarchy.NewChildConflictError(sharehierarchy.ChildConflictMessage(result.ToDelete), result.ToDelete)
 	require.Len(t, conflictErr.ConflictingShares, 1)
 	assert.Equal(t, "/a/b", conflictErr.ConflictingShares[0].Path)
+	assert.Equal(t, sharehierarchy.PermRead.RoleID(), conflictErr.ConflictingShares[0].PermissionType)
 }
 
 func TestCheckForAdd_ChildRW_NodeRW_ToDelete(t *testing.T) {
@@ -229,8 +232,9 @@ func TestCheckForAdd_DenyParent_Conflict(t *testing.T) {
 	_, err := checker.CheckGrantConsistency(context.Background(), "/a/b", readPerms, []*collaboration.Share{parent})
 	require.Error(t, err)
 	conflictErr, ok := err.(*sharehierarchy.HierarchyConflictError)
-	_ = conflictErr
-	assert.True(t, ok)
+	require.True(t, ok)
+	require.Len(t, conflictErr.ConflictingShares, 1)
+	assert.Equal(t, sharehierarchy.PermDeny.RoleID(), conflictErr.ConflictingShares[0].PermissionType)
 }
 
 func TestCheckForAdd_ParentRW_NodeDeny_OK(t *testing.T) {

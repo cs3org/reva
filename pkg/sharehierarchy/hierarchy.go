@@ -121,7 +121,7 @@ func (c *Checker) CheckGrantConsistency(ctx context.Context, nodePath string, no
 					{
 						ID:             s.Id.OpaqueId,
 						Path:           path,
-						PermissionType: sharePerms.String(),
+						PermissionType: sharePerms.RoleID(),
 						Sharee:         sharee,
 					},
 				},

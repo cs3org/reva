@@ -20,6 +20,7 @@ package sharehierarchy
 
 import (
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
+	"github.com/cs3org/reva/v3/pkg/permissions"
 )
 
 // PermLevel represents a permission level in the hierarchy ordering.
@@ -50,6 +51,19 @@ func (p PermLevel) String() string {
 		return "D"
 	default:
 		return "unknown"
+	}
+}
+
+func (p PermLevel) RoleID() string {
+	switch p {
+	case PermRead:
+		return permissions.UnifiedRoleViewerID
+	case PermRW:
+		return permissions.UnifiedRoleEditorID
+	case PermDeny:
+		return permissions.UnifiedRoleDenyAccessID
+	default:
+		return ""
 	}
 }
 

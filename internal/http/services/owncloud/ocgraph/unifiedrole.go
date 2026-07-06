@@ -34,27 +34,6 @@ import (
 )
 
 const (
-	// UnifiedRoleViewerID Unified role viewer id.
-	UnifiedRoleViewerID = "b1e2218d-eef8-4d4c-b82d-0f1a1b48f3b5"
-	// UnifiedRoleSpaceViewerID Unified role space viewer id.
-	UnifiedRoleSpaceViewerID = "a8d5fe5e-96e3-418d-825b-534dbdf22b99"
-	// UnifiedRoleEditorID Unified role editor id.
-	UnifiedRoleEditorID = "fb6c3e19-e378-47e5-b277-9732f9de6e21"
-	// UnifiedRoleSpaceEditorID Unified role space editor id.
-	UnifiedRoleSpaceEditorID = "58c63c02-1d89-4572-916a-870abc5a1b7d"
-	// UnifiedRoleFileEditorID Unified role file editor id.
-	UnifiedRoleFileEditorID = "2d00ce52-1fc2-4dbc-8b95-a73b73395f5a"
-	// UnifiedRoleEditorLiteID Unified role editor-lite id.
-	UnifiedRoleEditorLiteID = "1c996275-f1c9-4e71-abdf-a42f6495e960"
-	// UnifiedRoleManagerID Unified role manager id.
-	UnifiedRoleManagerID = "312c0871-5ef7-4b3a-85b6-0e4074c64049"
-	// UnifiedRoleSecureViewerID Unified role secure viewer id.
-	UnifiedRoleSecureViewerID = "aa97fe03-7980-45ac-9e50-b325749fd7e6"
-	// UnifiedRoleUploaderID Unified role uploader id.
-	UnifiedRoleUploaderID = "bf483fbf-5998-4afd-b593-e0f5ab823695"
-	// UnifiedRoleDenyAccessID Unified role deny access id.
-	UnifiedRoleDenyAccessID = "5d3754fa-a6a6-4985-b0af-dd1359e5d616"
-
 	// UnifiedRoleConditionDrive defines constraint that matches a Driveroot/Spaceroot
 	UnifiedRoleConditionDrive = "exists @Resource.Root"
 	// UnifiedRoleConditionFolder defines constraints that matches a DriveItem representing a Folder
@@ -84,22 +63,22 @@ const (
 )
 
 var legacyNames map[string]string = map[string]string{
-	UnifiedRoleViewerID: permissions.RoleViewer,
+	permissions.UnifiedRoleViewerID: permissions.RoleViewer,
 	// in the V1 api the "spaceviewer" role was call "viewer" and the "spaceeditor" was "editor",
 	// we need to stay compatible with that
-	UnifiedRoleSpaceViewerID: "viewer",
-	UnifiedRoleSpaceEditorID: "editor",
-	UnifiedRoleEditorID:      permissions.RoleEditor,
-	UnifiedRoleFileEditorID:  permissions.RoleFileEditor,
-	// UnifiedRoleEditorLiteID:   permissions.RoleEditorLite,
-	UnifiedRoleManagerID: permissions.RoleManager,
+	permissions.UnifiedRoleSpaceViewerID: "viewer",
+	permissions.UnifiedRoleSpaceEditorID: "editor",
+	permissions.UnifiedRoleEditorID:      permissions.RoleEditor,
+	permissions.UnifiedRoleFileEditorID:  permissions.RoleFileEditor,
+	// permissions.UnifiedRoleEditorLiteID:   permissions.RoleEditorLite,
+	permissions.UnifiedRoleManagerID: permissions.RoleManager,
 }
 
 // NewViewerUnifiedRole creates a viewer role.
 func NewViewerUnifiedRole() *libregraph.UnifiedRoleDefinition {
 	r := permissions.NewViewerRole()
 	return &libregraph.UnifiedRoleDefinition{
-		Id:          proto.String(UnifiedRoleViewerID),
+		Id:          proto.String(permissions.UnifiedRoleViewerID),
 		Description: proto.String("View and download."),
 		DisplayName: displayName(r),
 		RolePermissions: []libregraph.UnifiedRolePermission{
@@ -120,7 +99,7 @@ func NewViewerUnifiedRole() *libregraph.UnifiedRoleDefinition {
 func NewSpaceViewerUnifiedRole() *libregraph.UnifiedRoleDefinition {
 	r := permissions.NewViewerRole()
 	return &libregraph.UnifiedRoleDefinition{
-		Id:          proto.String(UnifiedRoleSpaceViewerID),
+		Id:          proto.String(permissions.UnifiedRoleSpaceViewerID),
 		Description: proto.String("View and download."),
 		DisplayName: displayName(r),
 		RolePermissions: []libregraph.UnifiedRolePermission{
@@ -137,7 +116,7 @@ func NewSpaceViewerUnifiedRole() *libregraph.UnifiedRoleDefinition {
 func NewEditorUnifiedRole() *libregraph.UnifiedRoleDefinition {
 	r := permissions.NewEditorRole()
 	return &libregraph.UnifiedRoleDefinition{
-		Id:          proto.String(UnifiedRoleEditorID),
+		Id:          proto.String(permissions.UnifiedRoleEditorID),
 		Description: proto.String("View, download, upload, edit, add and delete."),
 		DisplayName: displayName(r),
 		RolePermissions: []libregraph.UnifiedRolePermission{
@@ -154,7 +133,7 @@ func NewEditorUnifiedRole() *libregraph.UnifiedRoleDefinition {
 func NewSpaceEditorUnifiedRole() *libregraph.UnifiedRoleDefinition {
 	r := permissions.NewEditorRole()
 	return &libregraph.UnifiedRoleDefinition{
-		Id:          proto.String(UnifiedRoleSpaceEditorID),
+		Id:          proto.String(permissions.UnifiedRoleSpaceEditorID),
 		Description: proto.String("View, download, upload, edit, add and delete."),
 		DisplayName: displayName(r),
 		RolePermissions: []libregraph.UnifiedRolePermission{
@@ -171,7 +150,7 @@ func NewSpaceEditorUnifiedRole() *libregraph.UnifiedRoleDefinition {
 func NewFileEditorUnifiedRole() *libregraph.UnifiedRoleDefinition {
 	r := permissions.NewFileEditorRole()
 	return &libregraph.UnifiedRoleDefinition{
-		Id:          proto.String(UnifiedRoleFileEditorID),
+		Id:          proto.String(permissions.UnifiedRoleFileEditorID),
 		Description: proto.String("View, download and edit."),
 		DisplayName: displayName(r),
 		RolePermissions: []libregraph.UnifiedRolePermission{
@@ -188,7 +167,7 @@ func NewFileEditorUnifiedRole() *libregraph.UnifiedRoleDefinition {
 func NewManagerUnifiedRole() *libregraph.UnifiedRoleDefinition {
 	r := permissions.NewManagerRole()
 	return &libregraph.UnifiedRoleDefinition{
-		Id:          proto.String(UnifiedRoleManagerID),
+		Id:          proto.String(permissions.UnifiedRoleManagerID),
 		Description: proto.String("View, download, upload, edit, add, delete and manage members."),
 		DisplayName: displayName(r),
 		RolePermissions: []libregraph.UnifiedRolePermission{
@@ -205,7 +184,7 @@ func NewManagerUnifiedRole() *libregraph.UnifiedRoleDefinition {
 func NewUploaderUnifiedRole() *libregraph.UnifiedRoleDefinition {
 	r := permissions.NewUploaderRole()
 	return &libregraph.UnifiedRoleDefinition{
-		Id:          proto.String(UnifiedRoleUploaderID),
+		Id:          proto.String(permissions.UnifiedRoleUploaderID),
 		Description: proto.String("Upload only."),
 		DisplayName: displayName(r),
 		RolePermissions: []libregraph.UnifiedRolePermission{
@@ -221,7 +200,7 @@ func NewUploaderUnifiedRole() *libregraph.UnifiedRoleDefinition {
 func NewAccessDeniedUnifiedRole() *libregraph.UnifiedRoleDefinition {
 	r := permissions.NewDeniedRole()
 	return &libregraph.UnifiedRoleDefinition{
-		Id:          proto.String(UnifiedRoleDenyAccessID),
+		Id:          proto.String(permissions.UnifiedRoleDenyAccessID),
 		Description: proto.String("Remove all permissions."),
 		DisplayName: displayName(r),
 		RolePermissions: []libregraph.UnifiedRolePermission{
@@ -508,23 +487,23 @@ var ocsRoleUnifiedRole = map[string]*libregraph.UnifiedRoleDefinition{
 
 func UnifiedRoleIDToDefinition(unifiedRoleID string) (*libregraph.UnifiedRoleDefinition, bool) {
 	switch unifiedRoleID {
-	case UnifiedRoleViewerID:
+	case permissions.UnifiedRoleViewerID:
 		return NewViewerUnifiedRole(), true
-	case UnifiedRoleSpaceViewerID:
+	case permissions.UnifiedRoleSpaceViewerID:
 		return NewViewerUnifiedRole(), true
-	case UnifiedRoleEditorID:
+	case permissions.UnifiedRoleEditorID:
 		return NewEditorUnifiedRole(), true
-	case UnifiedRoleSpaceEditorID:
+	case permissions.UnifiedRoleSpaceEditorID:
 		return NewEditorUnifiedRole(), true
-	case UnifiedRoleFileEditorID:
+	case permissions.UnifiedRoleFileEditorID:
 		return NewEditorUnifiedRole(), true
-	case UnifiedRoleEditorLiteID:
+	case permissions.UnifiedRoleEditorLiteID:
 		return NewEditorUnifiedRole(), true
-	case UnifiedRoleManagerID:
+	case permissions.UnifiedRoleManagerID:
 		return NewManagerUnifiedRole(), true
-	case UnifiedRoleSecureViewerID:
+	case permissions.UnifiedRoleSecureViewerID:
 		return NewViewerUnifiedRole(), true
-	case UnifiedRoleDenyAccessID:
+	case permissions.UnifiedRoleDenyAccessID:
 		return NewAccessDeniedUnifiedRole(), true
 	default:
 		return nil, false
