@@ -9,7 +9,7 @@ description: >
 # _struct: Config_
 
 {{% dir name="max_expiry_seconds" type="int" default=nil %}}
- Default: one day [[Ref]](https://github.com/cs3org/reva/tree/master/internal/http/interceptors/auth/signed_url/strategy/signed_url/signed_url.go#L53)
+ Default: one day [[Ref]](https://github.com/cs3org/reva/tree/master/internal/http/interceptors/auth/signed_url/strategy/signed_url/signed_url.go#L54)
 {{< highlight toml >}}
 [http.interceptors.auth.signed_url.strategy.signed_url]
 max_expiry_seconds = nil
