@@ -89,6 +89,27 @@ func ResourceIDFilter(id *provider.ResourceId) *collaboration.Filter {
 	}
 }
 
+// SpaceIDFilter is an abstraction for creating a filter by space ID.
+func SpaceIDFilter(spaceID string) *collaboration.Filter {
+	return &collaboration.Filter{
+		Type: collaboration.Filter_TYPE_SPACE_ID,
+		Term: &collaboration.Filter_SpaceId{
+			SpaceId: spaceID,
+		},
+	}
+}
+
+// GranteeFilter is an abstraction for creating a filter by grantee (ADR-0005-P01).
+// Requires Filter_TYPE_GRANTEE support in go-cs3apis (cs3org/cs3apis#262).
+func GranteeFilter(grantee *provider.Grantee) *collaboration.Filter {
+	return &collaboration.Filter{
+		Type: collaboration.Filter_TYPE_GRANTEE,
+		Term: &collaboration.Filter_Grantee{
+			Grantee: grantee,
+		},
+	}
+}
+
 // IsCreatedByUser checks if the user is the owner or creator of the share.
 func IsCreatedByUser(share *collaboration.Share, user *userv1beta1.User) bool {
 	return utils.UserEqual(user.Id, share.Owner) || utils.UserEqual(user.Id, share.Creator)
