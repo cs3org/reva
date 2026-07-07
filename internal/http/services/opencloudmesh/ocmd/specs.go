@@ -415,7 +415,7 @@ func GetUserIdFromOCMAddress(user string) (*userpb.UserId, error) {
 	if idp == "" {
 		return nil, errors.New("provider cannot be empty")
 	}
-	idp = strings.TrimPrefix(idp, "https://") // strip off leading scheme if present (despite being not OCM compliant). This is the case in Nextcloud and oCIS
+	idp = TrimOCMScheme(idp)
 
 	return &userpb.UserId{
 		OpaqueId: id,
@@ -460,6 +460,15 @@ func NormalizeRemoteUserID(userID, providerDomain string) string {
 		}
 		userID = uid.OpaqueId
 	}
+}
+
+// CanonicalizeRemoteUserID normalizes a federated remote user id in place.
+func CanonicalizeRemoteUserID(id *userpb.UserId) {
+	if id == nil {
+		return
+	}
+	id.Idp = TrimOCMScheme(id.Idp)
+	id.OpaqueId = NormalizeRemoteUserID(id.OpaqueId, id.Idp)
 }
 
 // FormatOCMUser renders a CS3 user id as an OCM Address "<opaque-id>@<host>".

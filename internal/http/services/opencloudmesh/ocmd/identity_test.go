@@ -97,6 +97,39 @@ func TestNormalizeRemoteUserID(t *testing.T) {
 	}
 }
 
+func TestGetUserIdFromOCMAddress(t *testing.T) {
+	uid, err := GetUserIdFromOCMAddress("id@http://host.docker")
+	if err != nil {
+		t.Fatalf("GetUserIdFromOCMAddress returned error: %v", err)
+	}
+	if uid.Idp != "host.docker" {
+		t.Errorf("Idp = %q, want %q", uid.Idp, "host.docker")
+	}
+	if uid.OpaqueId != "id" {
+		t.Errorf("OpaqueId = %q, want %q", uid.OpaqueId, "id")
+	}
+}
+
+func TestCanonicalizeRemoteUserID(t *testing.T) {
+	t.Run("nil input does not panic", func(t *testing.T) {
+		CanonicalizeRemoteUserID(nil)
+	})
+
+	t.Run("strips scheme from Idp and matching qualified opaque id", func(t *testing.T) {
+		id := &userpb.UserId{
+			OpaqueId: "id@host.docker",
+			Idp:      "https://host.docker",
+		}
+		CanonicalizeRemoteUserID(id)
+		if id.Idp != "host.docker" {
+			t.Errorf("Idp = %q, want %q", id.Idp, "host.docker")
+		}
+		if id.OpaqueId != "id" {
+			t.Errorf("OpaqueId = %q, want %q", id.OpaqueId, "id")
+		}
+	})
+}
+
 func TestFormatOCMUser(t *testing.T) {
 	tests := []struct {
 		name string

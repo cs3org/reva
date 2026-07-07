@@ -262,7 +262,10 @@ func (s *service) AcceptInvite(ctx context.Context, req *invitepb.AcceptInviteRe
 		}, nil
 	}
 
-	if err := s.repo.AddRemoteUser(ctx, token.GetUserId(), req.GetRemoteUser()); err != nil {
+	remoteUser := req.GetRemoteUser()
+	ocmd.CanonicalizeRemoteUserID(remoteUser.GetId())
+
+	if err := s.repo.AddRemoteUser(ctx, token.GetUserId(), remoteUser); err != nil {
 		if errors.Is(err, invite.ErrUserAlreadyAccepted) {
 			return &invitepb.AcceptInviteResponse{
 				Status: status.NewAlreadyExists(ctx, err, err.Error()),
