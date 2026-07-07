@@ -20,6 +20,13 @@ package sharehierarchy
 
 import (
 	"encoding/json"
+
+	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
+)
+
+const (
+	ShareeTypeUser  = "user"
+	ShareeTypeGroup = "group"
 )
 
 // ConflictingShare identifies a share involved in a hierarchy conflict.
@@ -29,6 +36,7 @@ type ConflictingShare struct {
 	Path           string `json:"path,omitempty"`
 	PermissionType string `json:"permission_type,omitempty"`
 	Sharee         string `json:"sharee,omitempty"`
+	ShareeType     string `json:"sharee_type,omitempty"`
 }
 
 // HierarchyConflictError is the structured payload returned when a share operation is
@@ -50,20 +58,31 @@ func NewChildConflictError(msg string, shares []ResolvedShare) *HierarchyConflic
 	cs := make([]ConflictingShare, 0, len(shares))
 	for _, resolved := range shares {
 		s := resolved.Share
-		var sharee string
-		if s.Grantee != nil && s.Grantee.GetUserId() != nil {
-			sharee = s.Grantee.GetUserId().OpaqueId
-		}
+		sharee, shareeType := shareeInfo(s.Grantee)
 
 		cs = append(cs, ConflictingShare{
 			ID:             s.Id.OpaqueId,
 			ResourceID:     s.ResourceId.StorageId + "!" + s.ResourceId.OpaqueId,
 			Sharee:         sharee,
+			ShareeType:     shareeType,
 			PermissionType: PermLevelFromCS3(s.Permissions.GetPermissions()).RoleID(),
 			Path:           resolved.Path,
 		})
 	}
 	return &HierarchyConflictError{ErrorType: "child_conflict", CanForce: true, Message: msg, ConflictingShares: cs}
+}
+
+func shareeInfo(grantee *provider.Grantee) (string, string) {
+	if grantee == nil {
+		return "", ""
+	}
+	if userID := grantee.GetUserId(); userID != nil {
+		return userID.OpaqueId, ShareeTypeUser
+	}
+	if groupID := grantee.GetGroupId(); groupID != nil {
+		return groupID.OpaqueId, ShareeTypeGroup
+	}
+	return "", ""
 }
 
 // MarshalToJSON serialises the error to a JSON string suitable for embedding in a gRPC Status message.

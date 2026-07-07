@@ -106,10 +106,7 @@ func (c *Checker) CheckGrantConsistency(ctx context.Context, nodePath string, no
 				continue
 			}
 			log.Debug().Str("shareId", s.Id.OpaqueId).Str("parentPath", path).Str("parentPerms", sharePerms.String()).Str("nodePath", nodePath).Str("nodePerms", nodePermLevel.String()).Msg("sharehierarchy: parent conflict detected")
-			var sharee string
-			if s.Grantee != nil && s.Grantee.GetUserId() != nil {
-				sharee = s.Grantee.GetUserId().OpaqueId
-			}
+			sharee, shareeType := shareeInfo(s.Grantee)
 			return nil, &HierarchyConflictError{
 				ErrorType: "parent_conflict",
 				CanForce:  false,
@@ -123,6 +120,7 @@ func (c *Checker) CheckGrantConsistency(ctx context.Context, nodePath string, no
 						Path:           path,
 						PermissionType: sharePerms.RoleID(),
 						Sharee:         sharee,
+						ShareeType:     shareeType,
 					},
 				},
 			}

@@ -23,9 +23,12 @@ import (
 	"strconv"
 	"testing"
 
+	grouppb "github.com/cs3org/go-cs3apis/cs3/identity/group/v1beta1"
+	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	collaboration "github.com/cs3org/go-cs3apis/cs3/sharing/collaboration/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/cs3org/reva/v3/pkg/errtypes"
+	"github.com/cs3org/reva/v3/pkg/permissions"
 	"github.com/cs3org/reva/v3/pkg/sharehierarchy"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -52,6 +55,28 @@ func makeShare(id int, opaqueId string, perms *provider.ResourcePermissions) *co
 		},
 		Permissions: &collaboration.SharePermissions{Permissions: perms},
 	}
+}
+
+func makeUserShare(id int, opaqueId string, perms *provider.ResourcePermissions, userID string) *collaboration.Share {
+	share := makeShare(id, opaqueId, perms)
+	share.Grantee = &provider.Grantee{
+		Type: provider.GranteeType_GRANTEE_TYPE_USER,
+		Id: &provider.Grantee_UserId{
+			UserId: &userpb.UserId{OpaqueId: userID},
+		},
+	}
+	return share
+}
+
+func makeGroupShare(id int, opaqueId string, perms *provider.ResourcePermissions, groupID string) *collaboration.Share {
+	share := makeShare(id, opaqueId, perms)
+	share.Grantee = &provider.Grantee{
+		Type: provider.GranteeType_GRANTEE_TYPE_GROUP,
+		Id: &provider.Grantee_GroupId{
+			GroupId: &grouppb.GroupId{OpaqueId: groupID},
+		},
+	}
+	return share
 }
 
 var (
@@ -81,7 +106,7 @@ func TestCheckForAdd_ParentR_NodeRW_OK(t *testing.T) {
 
 func TestCheckForAdd_ParentR_NodeR_Conflict(t *testing.T) {
 	// P=R, N=R → ShareParentConflict (already covered by parent)
-	parent := makeShare(1, "inode-a", readPerms)
+	parent := makeUserShare(1, "inode-a", readPerms, "user1")
 	checker := &sharehierarchy.Checker{GetPath: pathMap(map[string]string{"inode-a": "/a"})}
 
 	_, err := checker.CheckGrantConsistency(context.Background(), "/a/b", readPerms, []*collaboration.Share{parent})
@@ -89,7 +114,9 @@ func TestCheckForAdd_ParentR_NodeR_Conflict(t *testing.T) {
 	conflictErr, ok := err.(*sharehierarchy.HierarchyConflictError)
 	require.True(t, ok, "expected HierarchyConflictError, got %T: %v", err, err)
 	require.Len(t, conflictErr.ConflictingShares, 1)
-	assert.Equal(t, sharehierarchy.PermRead.RoleID(), conflictErr.ConflictingShares[0].PermissionType)
+	assert.Equal(t, permissions.UnifiedRoleViewerID, conflictErr.ConflictingShares[0].PermissionType)
+	assert.Equal(t, "user1", conflictErr.ConflictingShares[0].Sharee)
+	assert.Equal(t, sharehierarchy.ShareeTypeUser, conflictErr.ConflictingShares[0].ShareeType)
 }
 
 func TestCheckForAdd_ParentRW_NodeR_Conflict(t *testing.T) {
@@ -102,7 +129,22 @@ func TestCheckForAdd_ParentRW_NodeR_Conflict(t *testing.T) {
 	conflictErr, ok := err.(*sharehierarchy.HierarchyConflictError)
 	require.True(t, ok)
 	require.Len(t, conflictErr.ConflictingShares, 1)
-	assert.Equal(t, sharehierarchy.PermRW.RoleID(), conflictErr.ConflictingShares[0].PermissionType)
+	assert.Equal(t, permissions.UnifiedRoleEditorID, conflictErr.ConflictingShares[0].PermissionType)
+}
+
+func TestCheckForAdd_GroupParentConflictIncludesShareeType(t *testing.T) {
+	parent := makeGroupShare(1, "inode-a", readPerms, "group1")
+	checker := &sharehierarchy.Checker{GetPath: pathMap(map[string]string{"inode-a": "/a"})}
+
+	_, err := checker.CheckGrantConsistency(context.Background(), "/a/b", readPerms, []*collaboration.Share{parent})
+	require.Error(t, err)
+	conflictErr, ok := err.(*sharehierarchy.HierarchyConflictError)
+	require.True(t, ok)
+	require.Len(t, conflictErr.ConflictingShares, 1)
+	assert.Equal(t, "group1", conflictErr.ConflictingShares[0].Sharee)
+	assert.Equal(t, sharehierarchy.ShareeTypeGroup, conflictErr.ConflictingShares[0].ShareeType)
+	assert.Contains(t, conflictErr.MarshalToJSON(), `"sharee":"group1"`)
+	assert.Contains(t, conflictErr.MarshalToJSON(), `"sharee_type":"group"`)
 }
 
 func TestCheckForAdd_ParentRW_NodeRW_Conflict(t *testing.T) {
@@ -152,7 +194,25 @@ func TestNewChildConflictError_IncludesResolvedChildPath(t *testing.T) {
 	conflictErr := sharehierarchy.NewChildConflictError(sharehierarchy.ChildConflictMessage(result.ToDelete), result.ToDelete)
 	require.Len(t, conflictErr.ConflictingShares, 1)
 	assert.Equal(t, "/a/b", conflictErr.ConflictingShares[0].Path)
-	assert.Equal(t, sharehierarchy.PermRead.RoleID(), conflictErr.ConflictingShares[0].PermissionType)
+	assert.Equal(t, permissions.UnifiedRoleViewerID, conflictErr.ConflictingShares[0].PermissionType)
+	assert.Contains(t, conflictErr.MarshalToJSON(), `"permission_type":"`+permissions.UnifiedRoleViewerID+`"`)
+	assert.NotContains(t, conflictErr.MarshalToJSON(), `"permission_type":"R"`)
+}
+
+func TestNewChildConflictError_GroupShareIncludesShareeType(t *testing.T) {
+	child := makeGroupShare(2, "inode-ab", readPerms, "group1")
+	checker := &sharehierarchy.Checker{GetPath: pathMap(map[string]string{"inode-ab": "/a/b"})}
+
+	result, err := checker.CheckGrantConsistency(context.Background(), "/a", readPerms, []*collaboration.Share{child})
+	require.NoError(t, err)
+	require.Len(t, result.ToDelete, 1)
+
+	conflictErr := sharehierarchy.NewChildConflictError(sharehierarchy.ChildConflictMessage(result.ToDelete), result.ToDelete)
+	require.Len(t, conflictErr.ConflictingShares, 1)
+	assert.Equal(t, "group1", conflictErr.ConflictingShares[0].Sharee)
+	assert.Equal(t, sharehierarchy.ShareeTypeGroup, conflictErr.ConflictingShares[0].ShareeType)
+	assert.Contains(t, conflictErr.MarshalToJSON(), `"sharee":"group1"`)
+	assert.Contains(t, conflictErr.MarshalToJSON(), `"sharee_type":"group"`)
 }
 
 func TestCheckForAdd_ChildRW_NodeRW_ToDelete(t *testing.T) {
@@ -234,7 +294,7 @@ func TestCheckForAdd_DenyParent_Conflict(t *testing.T) {
 	conflictErr, ok := err.(*sharehierarchy.HierarchyConflictError)
 	require.True(t, ok)
 	require.Len(t, conflictErr.ConflictingShares, 1)
-	assert.Equal(t, sharehierarchy.PermDeny.RoleID(), conflictErr.ConflictingShares[0].PermissionType)
+	assert.Equal(t, permissions.UnifiedRoleDenyAccessID, conflictErr.ConflictingShares[0].PermissionType)
 }
 
 func TestCheckForAdd_ParentRW_NodeDeny_OK(t *testing.T) {
