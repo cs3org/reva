@@ -108,6 +108,37 @@ Invocations are classified `readonly | mutating | dangerous`; the CLI prompts
 before a `dangerous` one. Every invocation and action emits an audit event via
 [`pkg/admin`](../../../../pkg/admin) (`audit=true` on the context logger).
 
+### Local root
+
+The step-up above answers "who are you?" with a token, which is right for remote
+access. For an operator working **on the box**, the Admin API can also be served
+on a **Unix socket** where the transport itself is the authentication — like
+`sudo`, `docker.sock`, or PostgreSQL `peer`. There is no token and no login: a
+permitted local user runs `reva admin …` and it just works.
+
+On each connection the socket reads the peer's OS credentials via `SO_PEERCRED`
+(the kernel reports the connecting process's uid/gid, so it cannot be forged). If
+the uid is permitted, the interceptor mints an admin token internally and injects
+it, so the request runs exactly like a remotely-elevated one — fan-out to other
+processes' control channels included. Two gates apply:
+
+- **the socket file's permissions** — who can even connect; and
+- **an optional `socket_group`** — with it set, the peer's uid must belong to
+  that Unix group (checked against the OS group database, supplementary groups
+  included); without it, anyone who can open the socket is admin.
+
+reva sets the socket ownership/mode to match: `0660` owned by `socket_group` (so
+reva must be root or a member of it), else `0600` (only the process owner and
+root). Every local-root request is audited with the OS user and uid.
+
+It is **on by default** (Linux): the server binds a well-known path —
+`/run/reva/admin.sock`, or `$XDG_RUNTIME_DIR/reva/admin.sock` when the former is
+not writable (rootless) — and the CLI probes the same list, so `reva admin …`
+just works locally with no flag and no login. Because the default is `0600`, that
+means only the reva process owner and root until a `socket_group` opens it.
+Binding the default is best-effort (a missing runtime dir simply disables it);
+set `socket = "off"` to turn it off, or an explicit path to override.
+
 ## Configuration
 
 The Admin API is enabled by loading the `admin` service with an `admin_group`.
@@ -126,6 +157,11 @@ admin_ttl  = "15m"               # lifetime of a minted admin token (default 15m
 
 # Optional: enables Impersonate.
 machine_auth_apikey = "..."
+
+# Local root over a Unix socket (Linux, ON BY DEFAULT). Omit to use the default
+# path; "off" disables it; an explicit path overrides the default.
+socket       = "off"             # e.g. "/run/reva/admin.sock"
+socket_group = "reva-admin"      # optional: restrict to this group (else 0600, owner-only)
 ```
 
 A process that hosts an invokable service but not the `admin` service still
@@ -142,6 +178,10 @@ reva admin config   <service|node-id> [-o toml|json]
 reva admin invocations <service|node-id>
 reva admin invoke   <service|node-id> <invocation> [key=val ...]
 reva admin impersonate <user>
+
+# Local root: on the box, no login/elevate/flag — the CLI finds the socket. Only
+# if it is absent (or denies you) does it need the network host + elevate above.
+reva admin services
 ```
 
 ## Adding an invocation to a service (for developers)

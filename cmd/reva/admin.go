@@ -28,6 +28,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"path/filepath"
 	"sort"
 	"strings"
 	"time"
@@ -129,12 +130,24 @@ func persistAdminHost(hostVal string) {
 	}
 }
 
+// isSocketHost reports whether the admin host is a local Unix socket
+// ("unix:///..."), dialed without TLS and without a token.
+func isSocketHost(host string) bool { return strings.HasPrefix(host, "unix:") }
+
+// adminMaxRecvMsgSize lifts the 4 MiB default so a fleet-wide unary fan-out
+// (many instances' results in one response) has headroom. Large per-instance
+// results (e.g. stack dumps) should stream instead — see `admin stack`.
+const adminMaxRecvMsgSize = 64 << 20
+
 func adminConn(host string) (*grpc.ClientConn, error) {
-	if insecure {
-		return grpc.NewClient(host, grpc.WithTransportCredentials(ins.NewCredentials()))
+	opts := []grpc.DialOption{grpc.WithDefaultCallOptions(grpc.MaxCallRecvMsgSize(adminMaxRecvMsgSize))}
+	if insecure || isSocketHost(host) {
+		opts = append(opts, grpc.WithTransportCredentials(ins.NewCredentials()))
+	} else {
+		tlsconf := &tls.Config{InsecureSkipVerify: skipverify}
+		opts = append(opts, grpc.WithTransportCredentials(credentials.NewTLS(tlsconf)))
 	}
-	tlsconf := &tls.Config{InsecureSkipVerify: skipverify}
-	return grpc.NewClient(host, grpc.WithTransportCredentials(credentials.NewTLS(tlsconf)))
+	return grpc.NewClient(host, opts...)
 }
 
 func adminClientAt(host string) (adminpb.AdminAPIClient, error) {
@@ -157,22 +170,79 @@ func adminAuthContext() (context.Context, error) {
 	return ctx, nil
 }
 
-// adminDial resolves the host, builds a client and an admin-token context in one
-// step for the common subcommand path.
+// adminDial builds a client and its auth context. With no -admin-host it
+// prefers a working local-root socket, then falls back to the stored network
+// host + admin token. An explicit -admin-host always wins.
 func adminDial(adminHostFlag string) (adminpb.AdminAPIClient, context.Context, error) {
-	host, err := resolveAdminHost(adminHostFlag)
+	if adminHostFlag != "" {
+		host, err := resolveAdminHost(adminHostFlag)
+		if err != nil {
+			return nil, nil, err
+		}
+		return adminDialHost(host)
+	}
+
+	// No flag: try the local-root socket(s) first.
+	for _, p := range defaultSocketPaths() {
+		if !isSocketFile(p) {
+			continue
+		}
+		client, err := adminClientAt("unix://" + p)
+		if err != nil {
+			continue
+		}
+		if adminSocketWorks(client) {
+			return client, context.Background(), nil
+		}
+	}
+
+	// Fall back to the stored network admin host + token.
+	host, err := resolveAdminHost("")
 	if err != nil {
 		return nil, nil, err
 	}
+	return adminDialHost(host)
+}
+
+// adminDialHost dials one resolved host: a socket needs no token, a network
+// host uses the stored one.
+func adminDialHost(host string) (adminpb.AdminAPIClient, context.Context, error) {
 	client, err := adminClientAt(host)
 	if err != nil {
 		return nil, nil, err
+	}
+	if isSocketHost(host) {
+		return client, context.Background(), nil
 	}
 	ctx, err := adminAuthContext()
 	if err != nil {
 		return nil, nil, err
 	}
 	return client, ctx, nil
+}
+
+// defaultSocketPaths mirrors the server's well-known socket locations (the CLI
+// cannot import the service package).
+func defaultSocketPaths() []string {
+	paths := []string{"/run/reva/admin.sock"}
+	if xdg := os.Getenv("XDG_RUNTIME_DIR"); xdg != "" {
+		paths = append(paths, filepath.Join(xdg, "reva", "admin.sock"))
+	}
+	return paths
+}
+
+func isSocketFile(p string) bool {
+	fi, err := os.Stat(p)
+	return err == nil && fi.Mode()&os.ModeSocket != 0
+}
+
+// adminSocketWorks probes the socket with a cheap call; a denied or stale
+// socket returns false so the caller falls back.
+func adminSocketWorks(client adminpb.AdminAPIClient) bool {
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+	_, err := client.GetServerInfo(ctx, &adminpb.GetServerInfoRequest{})
+	return err == nil
 }
 
 // adminErr annotates authn/authz failures with the sudo-timeout hint.
