@@ -43,6 +43,7 @@ import (
 	tokenregistry "github.com/cs3org/reva/v3/pkg/token/manager/registry"
 	"github.com/cs3org/reva/v3/pkg/utils/cfg"
 	"github.com/pkg/errors"
+	"github.com/rs/zerolog"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -68,6 +69,14 @@ type config struct {
 	// manager uses to mint a user-scoped token for a target user. Unset
 	// disables impersonation.
 	MachineAuthAPIKey string `mapstructure:"machine_auth_apikey"`
+
+	// Socket is the Unix socket path serving local root: callers authenticated
+	// by OS credentials (SO_PEERCRED) instead of a token. Empty uses the
+	// well-known default path; "off" disables it.
+	Socket string `mapstructure:"socket"`
+	// SocketGroup restricts local root to members of this Unix group; unset
+	// leaves the socket's file permissions as the only gate.
+	SocketGroup string `mapstructure:"socket_group"`
 }
 
 func (c *config) ApplyDefaults() {
@@ -89,10 +98,19 @@ type svc struct {
 	machineAuth   auth.Manager
 	machineAPIKey string
 	startTime     time.Time
+
+	// socket is the configured value; socketPath the path actually bound.
+	socket       string
+	socketPath   string
+	socketGroup  string
+	socketServer *grpc.Server
+	// logger is carried onto socket requests, which bypass the interceptor
+	// chain that would normally provide one.
+	logger *zerolog.Logger
 }
 
-// New returns the Admin API service. It refuses to start unless admin_group is
-// set: no group means no Admin API (fail closed).
+// New returns the Admin API service. It refuses to start without admin_group
+// (fail closed).
 func New(ctx context.Context, m map[string]any) (rgrpc.Service, error) {
 	var c config
 	if err := cfg.Decode(m, &c); err != nil {
@@ -120,7 +138,7 @@ func New(ctx context.Context, m map[string]any) (rgrpc.Service, error) {
 		}
 	}
 
-	return &svc{
+	s := &svc{
 		conf:          &c,
 		adminGroup:    c.AdminGroup,
 		adminTTL:      ttl,
@@ -128,14 +146,20 @@ func New(ctx context.Context, m map[string]any) (rgrpc.Service, error) {
 		machineAuth:   machineAuth,
 		machineAPIKey: c.MachineAuthAPIKey,
 		startTime:     time.Now(),
-	}, nil
+		socket:        c.Socket,
+		socketGroup:   c.SocketGroup,
+		logger:        appctx.GetLogger(ctx),
+	}
+	// Fail closed: a configured socket that cannot be opened is an error.
+	if err := s.startSocket(); err != nil {
+		return nil, err
+	}
+	return s, nil
 }
 
-// newTokenManager builds the token manager used to dismantle the caller's user
-// token and to mint short-TTL admin tokens. The admin-token lifetime is
-// injected as the manager's expiry so admin tokens are transient by default;
-// the signing secret defaults to reva's shared JWT secret so the auth
-// interceptor can verify what we mint.
+// newTokenManager builds the manager minting short-TTL admin tokens. The
+// signing secret defaults to the shared JWT secret so the auth interceptor can
+// verify what we mint.
 func newTokenManager(c config, ttl time.Duration) (token.Manager, error) {
 	h, ok := tokenregistry.NewFuncs[c.TokenManager]
 	if !ok {
@@ -154,6 +178,7 @@ func newTokenManager(c config, ttl time.Duration) (token.Manager, error) {
 }
 
 func (s *svc) Close() error {
+	s.stopSocket()
 	return nil
 }
 
