@@ -82,9 +82,7 @@ type params struct {
 	Username       string `mapstructure:"username" validate:"required"`
 }
 
-// Run walks the user's home space, downloads its content as the user,
-// archives it, uploads the archives to the takeout space as the takeout
-// admin, and returns a public link to the folder containing the archives
+// Run walks the user's archives the userspace
 func (j *job) Run(ctx context.Context, p rjobs.Params) (rjobs.Params, error) {
 	// Decode run parameters
 	pp := params{
@@ -121,8 +119,7 @@ func (j *job) Run(ctx context.Context, p rjobs.Params) (rjobs.Params, error) {
 	hc := httpclient.New(httpclient.RoundTripper(tr), httpclient.Timeout(time.Duration(10*time.Minute)))
 	dl := downloader.NewDownloader(gtw, hc)
 
-	// Setup upload client: no timeout, as an archive upload stays open for
-	// the whole duration of its part's creation
+	// Setup upload client
 	upHC := httpclient.New(httpclient.RoundTripper(tr), httpclient.Timeout(0))
 
 	// Setup walker
@@ -336,14 +333,25 @@ func (j *job) createTgzArchives(userCtx, adminCtx context.Context, rootPath, arc
 }
 
 func (j *job) createZipArchives(userCtx, adminCtx context.Context, root_path, arch_path string, wk walker.Walker, dl downloader.Downloader, gtw gateway.GatewayAPIClient, hc *httpclient.Client, maxArchiveSize int64) error {
-	// Ensure the destination directory exists before any upload starts
+	// Deletes the destination directory if it already exists, any public shares will be automatically removed
+	delRes, err := gtw.Delete(adminCtx, &provider.DeleteRequest{
+		Ref: &provider.Reference{Path: arch_path},
+	})
+	switch {
+	case err != nil:
+		return err
+	case delRes.Status.Code != rpc.Code_CODE_OK && delRes.Status.Code != rpc.Code_CODE_NOT_FOUND:
+		return errtypes.InternalError(delRes.Status.Message)
+	}
+
+	// Creates the empty destination directory
 	mkRes, err := gtw.CreateContainer(adminCtx, &provider.CreateContainerRequest{
 		Ref: &provider.Reference{Path: arch_path},
 	})
 	switch {
 	case err != nil:
 		return err
-	case mkRes.Status.Code != rpc.Code_CODE_OK && mkRes.Status.Code != rpc.Code_CODE_ALREADY_EXISTS:
+	case mkRes.Status.Code != rpc.Code_CODE_OK:
 		return errtypes.InternalError(mkRes.Status.Message)
 	}
 
