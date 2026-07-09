@@ -112,6 +112,27 @@ func RegisterGatewayServiceClient(client gateway.GatewayAPIClient, endpoint stri
 	gatewayProviders.conn[endpoint] = client
 }
 
+func RegisterStorageProviderServiceClient(client storageprovider.ProviderAPIClient, endpoint string) {
+	storageProviders.m.Lock()
+	defer storageProviders.m.Unlock()
+
+	storageProviders.conn[endpoint] = client
+}
+
+func RegisterStorageRegistryClient(client storageregistry.RegistryAPIClient, endpoint string) {
+	storageRegistries.m.Lock()
+	defer storageRegistries.m.Unlock()
+
+	storageRegistries.conn[endpoint] = client
+}
+
+func RegisterUserShareProviderClient(client collaboration.CollaborationAPIClient, endpoint string) {
+	userShareProviders.m.Lock()
+	defer userShareProviders.m.Unlock()
+
+	userShareProviders.conn[endpoint] = client
+}
+
 // GetGatewayServiceClient returns a GatewayServiceClient.
 func GetGatewayServiceClient(opts ...Option) (gateway.GatewayAPIClient, error) {
 	gatewayProviders.m.Lock()

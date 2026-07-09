@@ -128,7 +128,12 @@ func (s *svc) CreateShare(ctx context.Context, req *collaboration.CreateShareReq
 		}
 		// Re-apply grants for children that retain higher permissions (N=R, C=RW).
 		// ToReapply is already sorted shallowest-first by CheckGrantConsistency.
-		s.reapplyChildGrants(ctx, toReapply)
+		if grantStatus, err := s.reapplyChildGrants(ctx, toReapply); err != nil || grantStatus.Code != rpc.Code_CODE_OK {
+			if err != nil {
+				return nil, errors.Wrap(err, "gateway: error re-applying child grants")
+			}
+			return &collaboration.CreateShareResponse{Status: grantStatus}, nil
+		}
 	}
 
 	// Finally, we write to the db
@@ -415,7 +420,12 @@ func (s *svc) UpdateShare(ctx context.Context, req *collaboration.UpdateShareReq
 
 		// Re-apply grants for children that retain higher permissions.
 		// toReapply is already sorted shallowest-first by CheckGrantConsistency.
-		s.reapplyChildGrants(ctx, toReapply)
+		if grantStatus, err := s.reapplyChildGrants(ctx, toReapply); err != nil || grantStatus.Code != rpc.Code_CODE_OK {
+			if err != nil {
+				return nil, errors.Wrap(err, "gateway: error re-applying child grants")
+			}
+			return &collaboration.UpdateShareResponse{Status: grantStatus}, nil
+		}
 	}
 
 	res, err := c.UpdateShare(ctx, req)
@@ -649,16 +659,23 @@ func (s *svc) applyGrant(ctx context.Context, id *provider.ResourceId, grantee *
 	return s.addGrant(ctx, id, grantee, perms)
 }
 
-// reapplyChildGrants re-applies the storage grants for the given child shares on a
-// best-effort basis. Children must be pre-sorted shallowest-first so that deeper,
-// more specific grants are not overridden. Failures are logged but do not abort the caller.
-func (s *svc) reapplyChildGrants(ctx context.Context, children []*collaboration.Share) {
-	log := appctx.GetLogger(ctx)
+// reapplyChildGrants re-applies the storage grants for the given child shares.
+// Children must be pre-sorted shallowest-first so that deeper, more specific
+// grants are not overridden.
+func (s *svc) reapplyChildGrants(ctx context.Context, children []*collaboration.Share) (*rpc.Status, error) {
 	for _, child := range children {
-		if _, err := s.addGrant(ctx, child.ResourceId, child.Grantee, child.Permissions.Permissions); err != nil {
-			log.Error().Err(err).Str("shareId", child.Id.OpaqueId).Msg("error re-applying child grant")
+		grantStatus, err := s.addGrant(ctx, child.ResourceId, child.Grantee, child.Permissions.Permissions)
+		if err != nil {
+			return grantStatus, err
+		}
+		if grantStatus == nil {
+			return status.NewInternal(ctx, errors.New("gateway: nil status re-applying child grant"), "error re-applying child grant"), nil
+		}
+		if grantStatus.Code != rpc.Code_CODE_OK {
+			return grantStatus, nil
 		}
 	}
+	return status.NewOK(ctx), nil
 }
 
 // removeChildShareRecords deletes the share DB records for the given child shares
