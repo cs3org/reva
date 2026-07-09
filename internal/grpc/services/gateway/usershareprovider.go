@@ -116,7 +116,7 @@ func (s *svc) CreateShare(ctx context.Context, req *collaboration.CreateShareReq
 		}, nil
 	}
 
-	// If we commit to the storage, first we apply to the new resource, then we clean up
+	// If we commit to the storage, apply the parent grant before reapplying any child-specific grants.
 	toDelete := sharehierarchy.Shares(result.ToDelete)
 	toReapply := sharehierarchy.Shares(result.ToReapply)
 	if s.c.CommitShareToStorageGrant {
@@ -125,13 +125,6 @@ func (s *svc) CreateShare(ctx context.Context, req *collaboration.CreateShareReq
 				return nil, errors.Wrap(err, "gateway: error applying grant to storage")
 			}
 			return &collaboration.CreateShareResponse{Status: grantStatus}, nil
-		}
-		// Remove grants for child shares made redundant by the new share.
-		if st, err := s.removeChildGrants(ctx, toDelete); err != nil || st.Code != rpc.Code_CODE_OK {
-			if err != nil {
-				return nil, err
-			}
-			return &collaboration.CreateShareResponse{Status: st}, nil
 		}
 		// Re-apply grants for children that retain higher permissions (N=R, C=RW).
 		// ToReapply is already sorted shallowest-first by CheckGrantConsistency.
@@ -420,14 +413,6 @@ func (s *svc) UpdateShare(ctx context.Context, req *collaboration.UpdateShareReq
 			return &collaboration.UpdateShareResponse{Status: grantStatus}, nil
 		}
 
-		// Remove grants for child shares made redundant by the updated permissions.
-		if st, err := s.removeChildGrants(ctx, toDelete); err != nil || st.Code != rpc.Code_CODE_OK {
-			if err != nil {
-				return nil, err
-			}
-			return &collaboration.UpdateShareResponse{Status: st}, nil
-		}
-
 		// Re-apply grants for children that retain higher permissions.
 		// toReapply is already sorted shallowest-first by CheckGrantConsistency.
 		s.reapplyChildGrants(ctx, toReapply)
@@ -662,23 +647,6 @@ func (s *svc) applyGrant(ctx context.Context, id *provider.ResourceId, grantee *
 		return s.denyGrant(ctx, id, grantee)
 	}
 	return s.addGrant(ctx, id, grantee, perms)
-}
-
-// removeChildGrants removes the storage grants for the given child shares.
-// It aborts on the first failure, returning a non-OK status (when the storage
-// rejected the call) or an error (when the call itself failed), mirroring the
-// caller's expectation that a redundant child must be cleaned up before we proceed.
-func (s *svc) removeChildGrants(ctx context.Context, children []*collaboration.Share) (*rpc.Status, error) {
-	for _, child := range children {
-		st, err := s.removeGrant(ctx, child.ResourceId, child.Grantee, child.Permissions.Permissions)
-		if err != nil {
-			return nil, errors.Wrap(err, "gateway: error removing child grant")
-		}
-		if st.Code != rpc.Code_CODE_OK {
-			return st, nil
-		}
-	}
-	return status.NewOK(ctx), nil
 }
 
 // reapplyChildGrants re-applies the storage grants for the given child shares on a
