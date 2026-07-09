@@ -65,7 +65,6 @@ type Runner struct {
 	store          Store
 	status         StatusStore
 	log            zerolog.Logger
-	periodic       []Periodic
 	onDemandConfig map[string]map[string]any
 
 	cancel context.CancelFunc
@@ -116,7 +115,6 @@ func NewRunner(ctx context.Context, opts Options) (*Runner, error) {
 		store:          opts.Store,
 		status:         opts.Status,
 		log:            *appctx.GetLogger(ctx),
-		periodic:       registeredPeriodic(),
 		onDemandConfig: opts.OnDemandConfig,
 		running:        make(map[string]bool),
 		cancels:        make(map[RunID]*runHandle),
@@ -124,7 +122,7 @@ func NewRunner(ctx context.Context, opts Options) (*Runner, error) {
 
 	// leader-scoped and on-demand work both need a store.
 	if r.store == nil {
-		for _, p := range r.periodic {
+		for _, p := range registeredPeriodic() {
 			if p.Scope == ScopeLeader {
 				return nil, errors.Errorf("rjobs: periodic job %q is leader-scoped but no store is configured", p.Name)
 			}
@@ -146,15 +144,17 @@ func (r *Runner) Start() {
 	ctx, cancel := context.WithCancel(appctx.WithLogger(context.Background(), &r.log))
 	r.cancel = cancel
 
+	periodic := registeredPeriodic()
+
 	// all-nodes periodic jobs run as local tickers, regardless of the store.
-	for _, p := range r.periodic {
+	for _, p := range periodic {
 		if p.Scope == ScopeAllNodes {
 			r.wg.Go(func() { r.runLocalTicker(ctx, p) })
 		}
 	}
 
 	if r.store == nil {
-		r.log.Info().Int("local_jobs", len(r.periodic)).Msg("rjobs: started without a store, only all-nodes jobs run")
+		r.log.Info().Int("local_jobs", len(periodic)).Msg("rjobs: started without a store, only all-nodes jobs run")
 		return
 	}
 
@@ -168,7 +168,7 @@ func (r *Runner) Start() {
 	}
 
 	// register leader-scoped schedules so the scheduler can track them.
-	for _, p := range r.periodic {
+	for _, p := range periodic {
 		if p.Scope != ScopeLeader {
 			continue
 		}
@@ -637,7 +637,7 @@ func (r *Runner) execRun(ctx context.Context, run Run) {
 // not status-tracked, so this is always false for them; their cancellation is
 // driven separately through the schedule store.
 func (r *Runner) cancelRequested(ctx context.Context, run Run) bool {
-	if _, ok := r.lookupPeriodic(run.Job); ok {
+	if _, ok := lookupPeriodic(run.Job); ok {
 		// Periodic runs are not status-tracked; their cancel intent lives in the
 		// schedule store, keyed by job name.
 		req, err := r.store.ScheduledCancelRequested(ctx, run.Job)
@@ -710,7 +710,7 @@ func (r *Runner) recordStatus(ctx context.Context, run Run, state State, result 
 	if r.status == nil {
 		return
 	}
-	if _, ok := r.lookupPeriodic(run.Job); ok {
+	if _, ok := lookupPeriodic(run.Job); ok {
 		return
 	}
 
@@ -746,7 +746,7 @@ func (r *Runner) recordStatus(ctx context.Context, run Run, state State, result 
 func (r *Runner) invoke(ctx context.Context, run Run, log zerolog.Logger) (Params, error) {
 	jobCtx := appctx.WithLogger(ctx, &log)
 
-	if p, ok := r.lookupPeriodic(run.Job); ok {
+	if p, ok := lookupPeriodic(run.Job); ok {
 		return nil, r.guard(p, func() error { return p.Run(jobCtx) })
 	}
 
@@ -800,20 +800,11 @@ func (r *Runner) guard(p Periodic, fn func() error) error {
 	return fn()
 }
 
-func (r *Runner) lookupPeriodic(name string) (Periodic, bool) {
-	for _, p := range r.periodic {
-		if p.Name == name {
-			return p, true
-		}
-	}
-	return Periodic{}, false
-}
-
 // isLeaderJob reports whether name is currently registered as a leader-scoped
 // periodic job. The scheduler uses it to ignore stale schedule entries left by
 // a job that changed scope or was removed.
 func (r *Runner) isLeaderJob(name string) bool {
-	p, ok := r.lookupPeriodic(name)
+	p, ok := lookupPeriodic(name)
 	return ok && p.Scope == ScopeLeader
 }
 

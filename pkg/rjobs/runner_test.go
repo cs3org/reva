@@ -146,12 +146,17 @@ func TestGuardSkipsOverlap(t *testing.T) {
 }
 
 func TestIsLeaderJob(t *testing.T) {
-	r := &Runner{
-		periodic: []Periodic{
-			{Name: "cleanup", Scope: ScopeLeader},
-			{Name: "warm", Scope: ScopeAllNodes},
-		},
+	resetRegistry()
+
+	for name, scope := range map[string]Scope{"cleanup": ScopeLeader, "warm": ScopeAllNodes} {
+		if err := RegisterPeriodic(Periodic{
+			Name: name, Schedule: "@every 1h", Scope: scope,
+			Run: func(context.Context) error { return nil },
+		}); err != nil {
+			t.Fatal(err)
+		}
 	}
+	r := &Runner{}
 
 	if !r.isLeaderJob("cleanup") {
 		t.Error("a registered leader job should be reported as such")

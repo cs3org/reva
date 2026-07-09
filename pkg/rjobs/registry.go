@@ -101,8 +101,9 @@ func validatePeriodic(p Periodic) error {
 	return nil
 }
 
-// registeredPeriodic returns a copy of the registered periodic jobs. Used by
-// the runner at startup.
+// registeredPeriodic returns a copy of the currently registered periodic
+// jobs. The runner reads it whenever it needs the current job set, so it
+// always observes the latest registrations.
 func registeredPeriodic() []Periodic {
 	reg.mu.Lock()
 	defer reg.mu.Unlock()
@@ -111,6 +112,14 @@ func registeredPeriodic() []Periodic {
 		out = append(out, p)
 	}
 	return out
+}
+
+// lookupPeriodic returns the periodic job registered under name, if any.
+func lookupPeriodic(name string) (Periodic, bool) {
+	reg.mu.Lock()
+	defer reg.mu.Unlock()
+	p, ok := reg.periodic[name]
+	return p, ok
 }
 
 // lookupOnDemand returns the constructor registered for name, if any.
