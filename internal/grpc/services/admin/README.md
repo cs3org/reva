@@ -60,6 +60,12 @@ service's redacted config and its optional `Invokable`. Routing by id (not by
 service name) means a process can run several instances of the same service and
 each is still addressed precisely.
 
+A **serverless** service has no listen address, so its node id uses the
+process's control address instead (`control-addr/service`) and its registry node
+advertises an empty address. Everything else is identical — the `control`
+metadata, the heartbeat, and the invocation routing — so the admin sees and
+reaches it like any other instance.
+
 ### Selectors
 
 The `Invoke` and `GetServiceConfig` RPCs take a **selector**, resolved

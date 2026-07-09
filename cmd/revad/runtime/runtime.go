@@ -59,10 +59,11 @@ type Reva struct {
 	ctx    context.Context
 	config *config.Config
 
-	servers    []*Server
-	serverless *rserverless.Serverless
-	watcher    *grace.Watcher
-	lns        map[string]net.Listener
+	servers             []*Server
+	serverless          *rserverless.Serverless
+	serverlessInstances []serverlessInstance
+	watcher             *grace.Watcher
+	lns                 map[string]net.Listener
 
 	// registry is this instance's service registry.
 	registry          registry.Registry
@@ -163,15 +164,15 @@ func New(config *config.Config, opt ...Option) (*Reva, error) {
 		return nil, err
 	}
 
-	serverless, err := newServerless(ctx, config, log)
+	serverless, slInstances, err := newServerless(ctx, config, log)
 	if err != nil {
 		watcher.Clean()
 		return nil, err
 	}
 
-	// Stand up this process's control channel on its own port, once every
-	// service (and thus every Invokable) has been constructed.
-	controlSrv, controlAddr, err := newControlServer(config, log)
+	// Stand up the control channel once every service has been constructed;
+	// a serverless-only process needs one too.
+	controlSrv, controlAddr, err := newControlServer(config, len(slInstances) > 0, log)
 	if err != nil {
 		watcher.Clean()
 		return nil, err
@@ -179,20 +180,23 @@ func New(config *config.Config, opt ...Option) (*Reva, error) {
 	if controlSrv != nil {
 		servers = append(servers, controlSrv)
 	}
+	// Serverless instances are keyed by the control address, known only now.
+	captureServerlessInstances(slInstances, controlAddr)
 
 	r := &Reva{
-		ctx:               ctx,
-		config:            config,
-		servers:           servers,
-		serverless:        serverless,
-		watcher:           watcher,
-		lns:               listeners,
-		registry:          reg,
-		heartbeatInterval: parseDurationOr(config.Shared.Registry.HeartbeatInterval, 5*time.Second),
-		controlAddr:       controlAddr,
-		pidfile:           opts.PidFile,
-		log:               log,
-		traceShutdown:     traceShutdown,
+		ctx:                 ctx,
+		config:              config,
+		servers:             servers,
+		serverless:          serverless,
+		serverlessInstances: slInstances,
+		watcher:             watcher,
+		lns:                 listeners,
+		registry:            reg,
+		heartbeatInterval:   parseDurationOr(config.Shared.Registry.HeartbeatInterval, 5*time.Second),
+		controlAddr:         controlAddr,
+		pidfile:             opts.PidFile,
+		log:                 log,
+		traceShutdown:       traceShutdown,
 	}
 
 	// Self-register every loaded service after listeners have bound.
@@ -256,8 +260,17 @@ func servicesAddresses(cfg *config.Config) map[string]grace.Addressable {
 	return a
 }
 
-func newServerless(ctx context.Context, config *config.Config, log *zerolog.Logger) (*rserverless.Serverless, error) {
+// serverlessInstance is a loaded serverless service kept for control-channel
+// registration.
+type serverlessInstance struct {
+	name   string
+	impl   rserverless.Service
+	config map[string]any
+}
+
+func newServerless(ctx context.Context, config *config.Config, log *zerolog.Logger) (*rserverless.Serverless, []serverlessInstance, error) {
 	sl := make(map[string]rserverless.Service)
+	var instances []serverlessInstance
 	logger := log.With().Str("pkg", "serverless").Logger()
 	if err := config.Serverless.ForEach(func(name string, config map[string]any) error {
 		new, ok := rserverless.Services[name]
@@ -271,9 +284,10 @@ func newServerless(ctx context.Context, config *config.Config, log *zerolog.Logg
 			return errors.Wrapf(err, "serverless service %s could not be initialized", name)
 		}
 		sl[name] = svc
+		instances = append(instances, serverlessInstance{name: name, impl: svc, config: config})
 		return nil
 	}); err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	ss, err := rserverless.New(
@@ -281,9 +295,25 @@ func newServerless(ctx context.Context, config *config.Config, log *zerolog.Logg
 		rserverless.WithServices(sl),
 	)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
-	return ss, nil
+	return ss, instances, nil
+}
+
+// captureServerlessInstances registers each serverless service as an
+// invocation instance. With no listen address, its node id is the control
+// address plus the service name — the same id it registers under.
+func captureServerlessInstances(instances []serverlessInstance, controlAddr string) {
+	if controlAddr == "" {
+		return
+	}
+	for _, si := range instances {
+		var inv invoke.Invokable
+		if i, ok := any(si.impl).(invoke.Invokable); ok {
+			inv = i
+		}
+		invoke.RegisterInstance(nodeID(controlAddr, si.name), si.name, si.config, inv)
+	}
 }
 
 func setRandomAddresses(c *config.Config, lns map[string]net.Listener, log *zerolog.Logger) {
@@ -572,16 +602,11 @@ func newServers(ctx context.Context, grpc []*config.GRPC, http []*config.HTTP, l
 }
 
 // newControlServer builds this process's control channel: a dedicated gRPC
-// server hosting only reva.control.v1beta1, so every invocation a service exposes
-// — the shared defaults (e.g. config) and any it defines via Invokable — is
-// reachable on a single extra port. It is created whenever the process hosts
-// anything invokable (any configured service, since each gets the shared
-// defaults) and is independent of whether the Admin API service is loaded. Its
-// methods require the admin scope, enforced by the standard auth interceptor
-// chain, so the channel is as protected as the Admin API itself. It returns the
-// server and the address to advertise, or (nil, "", nil) when none is needed.
-func newControlServer(cfg *config.Config, log *zerolog.Logger) (*Server, string, error) {
-	if !invoke.HasInvocations() {
+// server hosting reva.control.v1beta1 on one extra port, gated by the standard
+// auth interceptors (admin scope). It returns the server and the address to
+// advertise, or (nil, "", nil) when nothing is invokable.
+func newControlServer(cfg *config.Config, hasServerless bool, log *zerolog.Logger) (*Server, string, error) {
+	if !invoke.HasInvocations() && !hasServerless {
 		return nil, "", nil
 	}
 	bind := cfg.GRPC.ControlAddress
