@@ -40,10 +40,17 @@ const defaultRetryAfter = 30 * time.Second
 // schedulerTick is how often the scheduler loop checks for due periodic jobs.
 const schedulerTick = 10 * time.Second
 
+// localSchedulerTick is how often the local scheduler rescans the registry
+// for due all-nodes jobs. A variable so tests can shorten it.
+var localSchedulerTick = schedulerTick
+
 // Options configures a Runner.
 type Options struct {
 	// Workers is the number of concurrent workers draining the durable queue.
 	Workers int
+	// LocalWorkers is the size of the pool executing all-nodes periodic jobs
+	// on this replica.
+	LocalWorkers int
 	// Store is the durable backend. It may be nil, in which case only
 	// all-nodes periodic jobs run (no leader-scoped or on-demand work).
 	Store Store
@@ -62,10 +69,17 @@ type Options struct {
 // Default for in-process Enqueue.
 type Runner struct {
 	workers        int
+	localWorkers   int
 	store          Store
 	status         StatusStore
 	log            zerolog.Logger
 	onDemandConfig map[string]map[string]any
+
+	// dueCh hands due all-nodes jobs from the local scheduler to the local
+	// worker pool. It is unbuffered on purpose: a hand-off succeeds only when
+	// a worker is free, so the scheduler can tell a saturated pool apart and
+	// keep the job due instead of queueing runs behind it.
+	dueCh chan Periodic
 
 	cancel context.CancelFunc
 	wg     sync.WaitGroup
@@ -109,13 +123,18 @@ func NewRunner(ctx context.Context, opts Options) (*Runner, error) {
 	if opts.Workers <= 0 {
 		opts.Workers = 4
 	}
+	if opts.LocalWorkers <= 0 {
+		opts.LocalWorkers = 4
+	}
 
 	r := &Runner{
 		workers:        opts.Workers,
+		localWorkers:   opts.LocalWorkers,
 		store:          opts.Store,
 		status:         opts.Status,
 		log:            *appctx.GetLogger(ctx),
 		onDemandConfig: opts.OnDemandConfig,
+		dueCh:          make(chan Periodic),
 		running:        make(map[string]bool),
 		cancels:        make(map[RunID]*runHandle),
 	}
@@ -144,17 +163,16 @@ func (r *Runner) Start() {
 	ctx, cancel := context.WithCancel(appctx.WithLogger(context.Background(), &r.log))
 	r.cancel = cancel
 
-	periodic := registeredPeriodic()
-
-	// all-nodes periodic jobs run as local tickers, regardless of the store.
-	for _, p := range periodic {
-		if p.Scope == ScopeAllNodes {
-			r.wg.Go(func() { r.runLocalTicker(ctx, p) })
-		}
+	// the local scheduler decides when periodic jobs are due; the local pool
+	// executes the all-nodes ones. Both read the registry live, so a job
+	// registered after Start is picked up on the next pass.
+	r.wg.Go(func() { r.runLocalScheduler(ctx) })
+	for i := 0; i < r.localWorkers; i++ {
+		r.wg.Go(func() { r.runLocalWorker(ctx) })
 	}
 
 	if r.store == nil {
-		r.log.Info().Int("local_jobs", len(periodic)).Msg("rjobs: started without a store, only all-nodes jobs run")
+		r.log.Info().Msg("rjobs: started without a store, only all-nodes jobs run")
 		return
 	}
 
@@ -164,21 +182,6 @@ func (r *Runner) Start() {
 	if bus, ok := r.store.(ControlBus); ok {
 		if err := bus.SubscribeCancel(ctx, r.tripLocal); err != nil {
 			r.log.Error().Err(err).Msg("rjobs: subscribing to cancel broadcasts failed, cancels fall back to the backstop poll")
-		}
-	}
-
-	// register leader-scoped schedules so the scheduler can track them.
-	for _, p := range periodic {
-		if p.Scope != ScopeLeader {
-			continue
-		}
-		sched, _ := ParseSchedule(p.Schedule) // validated at registration
-		next := time.Now().Add(sched.Interval())
-		if p.RunOnStart {
-			next = time.Now()
-		}
-		if err := r.store.RegisterScheduled(ctx, p.Name, sched, next); err != nil {
-			r.log.Error().Err(err).Str("job", p.Name).Msg("rjobs: registering schedule failed")
 		}
 	}
 
@@ -474,22 +477,101 @@ func (r *Runner) broadcastCancel(ctx context.Context, sig CancelSignal) {
 	}
 }
 
-// runLocalTicker drives an all-nodes periodic job on this replica. It never
-// touches the store.
-func (r *Runner) runLocalTicker(ctx context.Context, p Periodic) {
-	sched, _ := ParseSchedule(p.Schedule)
-	log := r.log.With().Str("job", p.Name).Str("scope", p.Scope.String()).Logger()
+// runLocalScheduler decides when periodic jobs are due. It rescans the
+// registry on every pass, so jobs can be registered at any time, not only
+// before Start. Due all-nodes jobs are handed to the local worker pool; for
+// leader-scoped jobs only the schedule is pushed to the store, the durable
+// scheduler takes it from there. It owns all the timing state, so no locking
+// is needed.
+func (r *Runner) runLocalScheduler(ctx context.Context) {
+	next := make(map[string]time.Time)
+	leaderDone := make(map[string]bool)
 
-	if p.RunOnStart {
-		r.execPeriodic(ctx, p, log)
-	}
+	ticker := time.NewTicker(localSchedulerTick)
+	defer ticker.Stop()
 
 	for {
-		wait := sched.Interval() + jitter(p.Jitter)
+		r.localPass(ctx, next, leaderDone)
 		select {
 		case <-ctx.Done():
 			return
-		case <-time.After(wait):
+		case <-ticker.C:
+		}
+	}
+}
+
+// localPass walks the registered periodic jobs once, handing due all-nodes
+// jobs to the pool and registering the schedules of leader jobs it has not
+// dealt with yet.
+func (r *Runner) localPass(ctx context.Context, next map[string]time.Time, leaderDone map[string]bool) {
+	now := time.Now()
+	for _, p := range registeredPeriodic() {
+		if p.Scope == ScopeLeader {
+			r.registerLeaderSchedule(ctx, p, leaderDone)
+			continue
+		}
+
+		sched, _ := ParseSchedule(p.Schedule) // validated at registration
+		due, seen := next[p.Name]
+		if !seen {
+			// first sighting. For a job registered after Start, RunOnStart
+			// means run on registration.
+			due = now.Add(sched.Interval() + jitter(p.Jitter))
+			if p.RunOnStart {
+				due = now
+			}
+			next[p.Name] = due
+		}
+		if now.Before(due) {
+			continue
+		}
+
+		select {
+		case r.dueCh <- p:
+			next[p.Name] = now.Add(sched.Interval() + jitter(p.Jitter))
+		default:
+			// every local worker is busy. Leave the job due and retry on the
+			// next pass: the run is delayed, never queued up behind the pool.
+		}
+	}
+}
+
+// registerLeaderSchedule pushes a leader job's schedule to the store, once. A
+// failed attempt is retried on the next pass.
+func (r *Runner) registerLeaderSchedule(ctx context.Context, p Periodic, done map[string]bool) {
+	if done[p.Name] {
+		return
+	}
+	if r.store == nil {
+		// NewRunner rejects this for jobs registered before it ran, so this
+		// can only be a late registration. Warn once; it will not fix itself.
+		r.log.Error().Str("job", p.Name).Msg("rjobs: job is leader-scoped but no store is configured, it will not run")
+		done[p.Name] = true
+		return
+	}
+
+	sched, _ := ParseSchedule(p.Schedule) // validated at registration
+	nextFire := time.Now().Add(sched.Interval())
+	if p.RunOnStart {
+		nextFire = time.Now()
+	}
+	if err := r.store.RegisterScheduled(ctx, p.Name, sched, nextFire); err != nil {
+		r.log.Error().Err(err).Str("job", p.Name).Msg("rjobs: registering schedule failed")
+		return
+	}
+	done[p.Name] = true
+}
+
+// runLocalWorker executes due all-nodes jobs handed over by the local
+// scheduler. The pool bounds how many periodic jobs run concurrently on this
+// replica.
+func (r *Runner) runLocalWorker(ctx context.Context) {
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case p := <-r.dueCh:
+			log := r.log.With().Str("job", p.Name).Str("scope", p.Scope.String()).Logger()
 			r.execPeriodic(ctx, p, log)
 		}
 	}

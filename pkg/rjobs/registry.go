@@ -40,10 +40,12 @@ var reg = &registry{
 	onDemand: make(map[string]NewJob),
 }
 
-// RegisterPeriodic registers a periodic job. It can be called at init time for
-// self-contained jobs, or at the owning component's construction time with a
-// closure capturing live dependencies. It validates the job and returns an
-// error if the name is already taken or the spec is invalid.
+// RegisterPeriodic registers a periodic job. It can be called at any time:
+// at init for self-contained jobs, at the owning component's construction
+// time with a closure capturing live dependencies, or even after the runner
+// has started, in which case the job is picked up on the scheduler's next
+// pass. It validates the job and returns an error if the name is already
+// taken or the spec is invalid.
 func RegisterPeriodic(p Periodic) error {
 	if err := validatePeriodic(p); err != nil {
 		return err

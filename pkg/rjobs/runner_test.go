@@ -63,6 +63,46 @@ func TestAllNodesRunOnStart(t *testing.T) {
 	}
 }
 
+func TestRegisterAfterStartRuns(t *testing.T) {
+	resetRegistry()
+	old := localSchedulerTick
+	localSchedulerTick = 20 * time.Millisecond
+	defer func() { localSchedulerTick = old }()
+
+	r, err := NewRunner(context.Background(), Options{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	r.Start()
+	defer r.Stop(context.Background())
+
+	// the runner is already up: the registration must still be picked up on
+	// one of the next scheduler passes.
+	var runs int32
+	done := make(chan struct{}, 1)
+	err = RegisterPeriodic(Periodic{
+		Name:       "test.late",
+		Schedule:   "@every 1h",
+		Scope:      ScopeAllNodes,
+		RunOnStart: true,
+		Run: func(ctx context.Context) error {
+			if atomic.AddInt32(&runs, 1) == 1 {
+				done <- struct{}{}
+			}
+			return nil
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	select {
+	case <-done:
+	case <-time.After(2 * time.Second):
+		t.Fatal("job registered after Start did not run")
+	}
+}
+
 func TestLeaderJobNeedsStore(t *testing.T) {
 	resetRegistry()
 
