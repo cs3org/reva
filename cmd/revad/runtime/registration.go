@@ -71,11 +71,44 @@ func driverOrDefault(d string) string {
 // register records one node per loaded service after the listeners have bound.
 func (r *Reva) register() {
 	r.addNodes("registered service")
+	r.addServerlessNodes("registered serverless service")
 }
 
 // heartbeat re-adds this process's nodes to refresh their liveness.
 func (r *Reva) heartbeat() {
 	r.addNodes("service heartbeat")
+	r.addServerlessNodes("serverless heartbeat")
+}
+
+// addServerlessNodes advertises this process's serverless services in the
+// registry. A node's id is the control address plus the service name; the
+// address field stays empty.
+func (r *Reva) addServerlessNodes(msg string) {
+	if r.controlAddr == "" || len(r.serverlessInstances) == 0 {
+		return
+	}
+	hostname, _ := os.Hostname()
+	pid := os.Getpid()
+	for _, si := range r.serverlessInstances {
+		id := nodeID(r.controlAddr, si.name)
+		meta := map[string]string{
+			"transport":           "serverless",
+			"host":                hostname,
+			"pid":                 fmt.Sprintf("%d", pid),
+			registry.MetaState:    registry.StateReady,
+			registry.MetaLastSeen: time.Now().UTC().Format(time.RFC3339),
+			registry.MetaControl:  r.controlAddr,
+		}
+		if names := invoke.InvocationNames(id); len(names) > 0 {
+			meta[invoke.MetaInvocations] = strings.Join(names, ",")
+		}
+		node := registry.NewNode(id, "", meta) // no listen address for serverless
+		if err := r.registry.Add(registry.NewService(si.name, []registry.Node{node})); err != nil {
+			r.log.Error().Err(err).Str("service", si.name).Msg("failed to register serverless service")
+			continue
+		}
+		r.log.Trace().Str("service", si.name).Str("id", id).Msg(msg)
+	}
 }
 
 // addNodes adds one node per loaded service, logging each with the given msg.
@@ -206,6 +239,17 @@ func (r *Reva) deregister() {
 			)
 			if err := r.registry.Remove(registry.NewService(name, []registry.Node{node})); err != nil {
 				r.log.Error().Err(err).Str("service", name).Msg("failed to deregister service")
+			}
+		}
+	}
+	if r.controlAddr != "" {
+		for _, si := range r.serverlessInstances {
+			node := registry.NewNode(
+				nodeID(r.controlAddr, si.name), "",
+				map[string]string{registry.MetaState: registry.StateDraining},
+			)
+			if err := r.registry.Remove(registry.NewService(si.name, []registry.Node{node})); err != nil {
+				r.log.Error().Err(err).Str("service", si.name).Msg("failed to deregister serverless service")
 			}
 		}
 	}
