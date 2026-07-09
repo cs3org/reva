@@ -146,6 +146,7 @@ var _ = Describe("PublicShareProvider", func() {
 			"allowed_paths_for_shares":           []string{"/NewFolder"},
 			"writeable_share_must_have_password": false,
 			"public_share_must_have_password":    true,
+			"enable_public_sharing":              true,
 			"password_policy": map[string]interface{}{
 				"min_digits":               1,
 				"min_characters":           8,

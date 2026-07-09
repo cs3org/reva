@@ -55,6 +55,7 @@ allow_depth_infinity = true
 
 [http.services.ocs]
 machine_auth_apikey = "change-me-please"
+enable_user_sharing = true
 
 [http.services.ocs.capabilities.capabilities.core.status]
 version = "10.0.11.5"

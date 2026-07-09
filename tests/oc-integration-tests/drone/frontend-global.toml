@@ -54,6 +54,7 @@ webdav_namespace = "/"
 machine_auth_apikey = "change-me-please"
 
 [http.services.ocs]
+enable_user_sharing = true
 
 [http.services.ocs.capabilities.capabilities.core.status]
 version = "10.0.11.5"

@@ -115,7 +115,7 @@ var _ = Describe("user share provider service", func() {
 		}
 		manager.On("GetShare", mock.Anything, mock.Anything).Return(getShareResponse, nil)
 
-		rgrpcService := usershareprovider.New(gatewaySelector, manager, []*regexp.Regexp{})
+		rgrpcService := usershareprovider.New(gatewaySelector, manager, []*regexp.Regexp{}, true)
 
 		provider = rgrpcService.(collaborationpb.CollaborationAPIServer)
 		Expect(provider).ToNot(BeNil())
@@ -367,7 +367,7 @@ var _ = Describe("user share provider service", func() {
 		)
 		Context("resharing is not allowed", func() {
 			JustBeforeEach(func() {
-				rgrpcService := usershareprovider.New(gatewaySelector, manager, []*regexp.Regexp{})
+				rgrpcService := usershareprovider.New(gatewaySelector, manager, []*regexp.Regexp{}, true)
 
 				provider = rgrpcService.(collaborationpb.CollaborationAPIServer)
 				Expect(provider).ToNot(BeNil())

@@ -9,12 +9,16 @@ address = "0.0.0.0:17000"
 
 [grpc.services.usershareprovider]
 driver = "memory"
+enable_user_sharing = true
 
 [grpc.services.authprovider]
 auth_manager = "publicshares"
 
 [grpc.services.authprovider.auth_managers.publicshares]
 gateway_addr = "localhost:19000"
+
+[grpc.services.publicshareprovider]
+enable_public_sharing = true
 
 [grpc.services.publicshareprovider.drivers.json]
 file = "/drone/src/tmp/reva/publicshares.json"
