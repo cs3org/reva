@@ -63,7 +63,6 @@ type Options struct {
 type store struct {
 	nc      *nats.Conn
 	js      nats.JetStreamContext
-	subs    []*nats.Subscription
 	kv      nats.KeyValue
 	prefix  string
 	ackWait time.Duration
@@ -72,10 +71,17 @@ type store struct {
 	// ctrlSub is the core-NATS subscription for cancel broadcasts, if subscribed.
 	ctrlSub *nats.Subscription
 
+	// mu guards inflight and the subscription set: RegisterScheduled can grow
+	// subs at any time while the claim loops iterate it.
+	mu sync.Mutex
 	// inflight tracks the NATS message backing each claimed run, so that
 	// Complete and Fail can ack or nak the right message.
-	mu       sync.Mutex
 	inflight map[rjobs.RunID]*nats.Msg
+	// subs are the per-job pull subscriptions this process claims runs from,
+	// and subJobs the job names behind them, so a repeated subscribe is a
+	// no-op.
+	subs    []*nats.Subscription
+	subJobs map[string]bool
 }
 
 // scheduleState is what we keep per leader-scoped periodic job in the KV
@@ -129,9 +135,10 @@ func New(ctx context.Context, opts Options) (rjobs.Store, error) {
 		ackWait:  opts.AckWait,
 		log:      log,
 		inflight: make(map[rjobs.RunID]*nats.Msg),
+		subJobs:  make(map[string]bool),
 	}
 
-	if err := s.setup(opts.AckWait, opts.Jobs); err != nil {
+	if err := s.setup(opts.Jobs); err != nil {
 		nc.Close()
 		return nil, err
 	}
@@ -161,7 +168,7 @@ func (s *store) consumerFor(job string) string {
 	return s.prefix + "-worker-" + subjectToken(job)
 }
 
-func (s *store) setup(ackWait time.Duration, jobs []string) error {
+func (s *store) setup(jobs []string) error {
 	// One work-queue stream captures every per-job subject. WorkQueuePolicy
 	// deletes a message once it is acked, so each run is delivered once.
 	if _, err := s.js.AddStream(&nats.StreamConfig{
@@ -175,21 +182,12 @@ func (s *store) setup(ackWait time.Duration, jobs []string) error {
 	// Subscribe only to the jobs this process has registered: one durable,
 	// subject-filtered consumer per job. A run for a job not in this set is
 	// never delivered here; it waits in the stream for a process that has it.
+	// Leader jobs registered later are added when their schedule is
+	// registered.
 	for _, job := range jobs {
-		if _, err := s.js.AddConsumer(s.streamName(), &nats.ConsumerConfig{
-			Durable:       s.consumerFor(job),
-			FilterSubject: s.subjectFor(job),
-			AckPolicy:     nats.AckExplicitPolicy,
-			AckWait:       ackWait,
-			MaxAckPending: -1,
-		}); err != nil {
-			return errors.Wrapf(err, "rjobs: consumer creation failed for job %q", job)
+		if err := s.subscribeJob(job); err != nil {
+			return err
 		}
-		sub, err := s.js.PullSubscribe(s.subjectFor(job), s.consumerFor(job), nats.Bind(s.streamName(), s.consumerFor(job)))
-		if err != nil {
-			return errors.Wrapf(err, "rjobs: pull subscription failed for job %q", job)
-		}
-		s.subs = append(s.subs, sub)
 	}
 
 	kv, err := s.js.CreateKeyValue(&nats.KeyValueConfig{Bucket: s.bucketName()})
@@ -199,6 +197,43 @@ func (s *store) setup(ackWait time.Duration, jobs []string) error {
 	s.kv = kv
 
 	return nil
+}
+
+// subscribeJob adds the durable consumer and pull subscription for a job, so
+// this process can claim its runs. Subscribing to an already subscribed job
+// is a no-op.
+func (s *store) subscribeJob(job string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	if s.subJobs[job] {
+		return nil
+	}
+
+	if _, err := s.js.AddConsumer(s.streamName(), &nats.ConsumerConfig{
+		Durable:       s.consumerFor(job),
+		FilterSubject: s.subjectFor(job),
+		AckPolicy:     nats.AckExplicitPolicy,
+		AckWait:       s.ackWait,
+		MaxAckPending: -1,
+	}); err != nil {
+		return errors.Wrapf(err, "rjobs: consumer creation failed for job %q", job)
+	}
+	sub, err := s.js.PullSubscribe(s.subjectFor(job), s.consumerFor(job), nats.Bind(s.streamName(), s.consumerFor(job)))
+	if err != nil {
+		return errors.Wrapf(err, "rjobs: pull subscription failed for job %q", job)
+	}
+	s.subs = append(s.subs, sub)
+	s.subJobs[job] = true
+	return nil
+}
+
+// snapshotSubs returns the current subscription set. Claim iterates a
+// snapshot so subscribeJob can grow the set concurrently.
+func (s *store) snapshotSubs() []*nats.Subscription {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return append([]*nats.Subscription(nil), s.subs...)
 }
 
 // subjectToken encodes a job name into a single NATS subject token. Job names
@@ -257,23 +292,30 @@ func (s *store) Enqueue(ctx context.Context, run rjobs.Run) (rjobs.RunID, error)
 }
 
 func (s *store) Claim(ctx context.Context) (rjobs.Run, error) {
-	if len(s.subs) == 0 {
-		// no registered jobs: nothing to claim, block until shutdown.
-		<-ctx.Done()
-		return rjobs.Run{}, ctx.Err()
-	}
-
-	// Poll each per-job subscription in turn. The per-subscription fetch wait
-	// is spread so a full no-work cycle takes about fetchWait regardless of how
-	// many jobs are registered.
-	perSubWait := max(fetchWait/time.Duration(len(s.subs)), 100*time.Millisecond)
-
 	for {
 		if err := ctx.Err(); err != nil {
 			return rjobs.Run{}, err
 		}
 
-		for _, sub := range s.subs {
+		// Take a fresh snapshot each cycle: registering a schedule may
+		// subscribe a job at any time, and a process that started with no
+		// queue jobs must begin claiming once its first one is subscribed.
+		subs := s.snapshotSubs()
+		if len(subs) == 0 {
+			select {
+			case <-ctx.Done():
+				return rjobs.Run{}, ctx.Err()
+			case <-time.After(fetchWait):
+			}
+			continue
+		}
+
+		// Poll each per-job subscription in turn. The per-subscription fetch
+		// wait is spread so a full no-work cycle takes about fetchWait
+		// regardless of how many jobs are registered.
+		perSubWait := max(fetchWait/time.Duration(len(subs)), 100*time.Millisecond)
+
+		for _, sub := range subs {
 			if err := ctx.Err(); err != nil {
 				return rjobs.Run{}, err
 			}
@@ -355,6 +397,15 @@ func (s *store) HeartbeatInterval() time.Duration {
 }
 
 func (s *store) RegisterScheduled(ctx context.Context, job string, schedule rjobs.Schedule, next time.Time) error {
+	// registering a schedule is what marks this process as a participant in
+	// the job, so it is also the point where it becomes eligible to claim the
+	// job's runs. For jobs registered after the store was built (the initial
+	// subscriptions cover only the names known then) this is what creates the
+	// queue consumer.
+	if err := s.subscribeJob(job); err != nil {
+		return err
+	}
+
 	entry, err := s.kv.Get(job)
 	switch {
 	case err == nil:
@@ -615,7 +666,7 @@ func (s *store) Close(ctx context.Context) error {
 	if s.ctrlSub != nil {
 		_ = s.ctrlSub.Drain()
 	}
-	for _, sub := range s.subs {
+	for _, sub := range s.snapshotSubs() {
 		_ = sub.Drain()
 	}
 	return s.nc.Drain()

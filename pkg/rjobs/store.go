@@ -92,10 +92,12 @@ type Store interface {
 	// in-flight run, chosen so the lease never lapses between beats.
 	HeartbeatInterval() time.Duration
 	// RegisterScheduled records a leader-scoped periodic job's schedule so
-	// DueScheduled can track its next-fire across restarts. An existing
-	// next-fire is preserved across restarts, except when the configured
-	// interval changed, in which case the new interval and the given next-fire
-	// are adopted.
+	// DueScheduled can track its next-fire across restarts. It also makes
+	// this process eligible to claim the job's runs, so registering the
+	// schedule is all it takes to participate in a job, including one
+	// registered after the store was built. An existing next-fire is
+	// preserved across restarts, except when the configured interval changed,
+	// in which case the new interval and the given next-fire are adopted.
 	RegisterScheduled(ctx context.Context, job string, schedule Schedule, next time.Time) error
 	// DueScheduled returns the periodic jobs whose next-fire is at or before
 	// now, atomically advancing each one's stored next-fire by its interval. A
