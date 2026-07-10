@@ -23,13 +23,16 @@ import (
 	"errors"
 	"testing"
 	"time"
+
+	"github.com/cs3org/reva/v3/pkg/notifications/handlers"
+	"github.com/cs3org/reva/v3/pkg/notifications/model"
 )
 
 type recordingBackend struct {
-	envelopes []Envelope
+	envelopes []model.Envelope
 }
 
-func (b *recordingBackend) Publish(_ context.Context, envelope Envelope) error {
+func (b *recordingBackend) Publish(_ context.Context, envelope model.Envelope) error {
 	b.envelopes = append(b.envelopes, envelope)
 	return nil
 }
@@ -39,11 +42,11 @@ func TestSendNotificationRateLimitsPerSubmittingUser(t *testing.T) {
 	limiter := NewFixedWindowRateLimiter(1, time.Minute)
 	svc := NewSendService(backend, limiter)
 
-	req := SendRequest{
-		Type:           TypeDirect,
+	req := model.SendRequest{
+		Type:           model.TypeDirect,
 		SubmittingUser: "alice",
 		Recipients:     []string{"bob@example.org"},
-		Handlers:       []string{EmailHandlerName},
+		Handlers:       []string{handlers.EmailHandlerName},
 	}
 
 	if _, err := svc.SendNotification(context.Background(), req); err != nil {
@@ -65,12 +68,12 @@ func TestSendNotificationRateLimitsPerSubmittingUser(t *testing.T) {
 func TestSendNotificationRequiresDedupKeyForAccumulated(t *testing.T) {
 	svc := NewSendService(&recordingBackend{}, NoopRateLimiter{})
 
-	_, err := svc.SendNotification(context.Background(), SendRequest{
-		Type:           TypeAccumulated,
+	_, err := svc.SendNotification(context.Background(), model.SendRequest{
+		Type:           model.TypeAccumulated,
 		SubmittingUser: "alice",
 		Recipients:     []string{"bob@example.org"},
-		Handlers:       []string{EmailHandlerName},
-		Accumulation: AccumulationPolicy{
+		Handlers:       []string{handlers.EmailHandlerName},
+		Accumulation: model.AccumulationPolicy{
 			WindowSeconds: 60,
 		},
 	})

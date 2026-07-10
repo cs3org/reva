@@ -1,4 +1,4 @@
-// Copyright 2018-2024 CERN
+// Copyright 2018-2026 CERN
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -16,25 +16,15 @@
 // granted to it by virtue of its status as an Intergovernmental Organization
 // or submit itself to any jurisdiction.
 
-package registry
+package backends
 
 import (
 	"context"
 
-	"github.com/cs3org/reva/v3/pkg/notification"
+	"github.com/cs3org/reva/v3/pkg/notifications/model"
 )
 
-// import "github.com/cs3org/reva/v3/pkg/share"
-
-// NewFunc is the function that notification managers
-// should register at init time.
-type NewFunc func(context.Context, map[string]any) (notification.Manager, error)
-
-// NewFuncs is a map containing all the registered notification managers.
-var NewFuncs = map[string]NewFunc{}
-
-// Register registers a new notification manager new function.
-// Not safe for concurrent use. Safe for use from package init.
-func Register(name string, f NewFunc) {
-	NewFuncs[name] = f
+// Backend publishes accepted notifications to the delivery backend.
+type Backend interface {
+	Publish(ctx context.Context, envelope model.Envelope) error
 }

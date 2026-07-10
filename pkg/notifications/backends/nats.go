@@ -16,14 +16,15 @@
 // granted to it by virtue of its status as an Intergovernmental Organization
 // or submit itself to any jurisdiction.
 
-package notifications
+package backends
 
 import (
 	"context"
 	"encoding/json"
 	"fmt"
 
-	"github.com/cs3org/reva/v3/pkg/notification/utils"
+	"github.com/cs3org/reva/v3/pkg/notifications/model"
+	"github.com/cs3org/reva/v3/pkg/utils"
 	"github.com/nats-io/nats.go"
 	"github.com/rs/zerolog"
 )
@@ -32,12 +33,12 @@ const defaultNotificationSubject = "reva-notifications.send"
 
 // NATSConfig configures the NATS notification backend and listener.
 type NATSConfig struct {
-	Address string
-	Token   string
-	Stream  string
-	Subject string
-	Durable string
-	Queue   string
+	Address string `mapstructure:"address"`
+	Token   string `mapstructure:"token"`
+	Stream  string `mapstructure:"stream"`
+	Subject string `mapstructure:"subject"`
+	Durable string `mapstructure:"durable"`
+	Queue   string `mapstructure:"queue"`
 }
 
 func (c NATSConfig) subject() string {
@@ -101,7 +102,7 @@ func NewNATSBackend(conf NATSConfig, log zerolog.Logger) (*NATSBackend, error) {
 }
 
 // Publish implements Backend.
-func (b *NATSBackend) Publish(_ context.Context, envelope Envelope) error {
+func (b *NATSBackend) Publish(_ context.Context, envelope model.Envelope) error {
 	data, err := json.Marshal(envelope)
 	if err != nil {
 		return err
@@ -154,7 +155,7 @@ func NewNATSListener(conf NATSConfig, log zerolog.Logger) (*NATSListener, error)
 
 // Start subscribes to the notification stream. Messages are acked only when the
 // handler returns nil.
-func (l *NATSListener) Start(ctx context.Context, handler func(context.Context, Envelope) error) error {
+func (l *NATSListener) Start(ctx context.Context, handler func(context.Context, model.Envelope) error) error {
 	if l == nil || l.js == nil {
 		return fmt.Errorf("nats listener is not configured")
 	}
@@ -163,7 +164,7 @@ func (l *NATSListener) Start(ctx context.Context, handler func(context.Context, 
 		l.conf.subject(),
 		l.conf.queue(),
 		func(msg *nats.Msg) {
-			var envelope Envelope
+			var envelope model.Envelope
 			if err := json.Unmarshal(msg.Data, &envelope); err != nil {
 				_ = msg.Term()
 				return

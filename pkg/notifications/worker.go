@@ -24,25 +24,28 @@ import (
 	"fmt"
 	"sync"
 	"time"
+
+	"github.com/cs3org/reva/v3/pkg/notifications/handlers"
+	"github.com/cs3org/reva/v3/pkg/notifications/model"
 )
 
 const defaultMaxRenderedItems = 10
 
 // AccumulationStore persists accumulated notifications and coordinates leases.
 type AccumulationStore interface {
-	Add(ctx context.Context, envelope Envelope, now time.Time) (*Bucket, error)
+	Add(ctx context.Context, envelope model.Envelope, now time.Time) (*model.Bucket, error)
 	AcquireLease(ctx context.Context, dedupKey, owner string, leaseUntil, now time.Time) (bool, error)
 	LockDueForFlush(ctx context.Context, dedupKey, owner string, now time.Time) (bool, error)
-	PendingItems(ctx context.Context, dedupKey string) ([]Envelope, []string, error)
+	PendingItems(ctx context.Context, dedupKey string) ([]model.Envelope, []string, error)
 	MarkFlushed(ctx context.Context, dedupKey string, itemIDs []string) error
 	ReleaseLease(ctx context.Context, dedupKey, owner string) error
-	ListCandidates(ctx context.Context, now time.Time, limit int) ([]*Bucket, error)
+	ListCandidates(ctx context.Context, now time.Time, limit int) ([]*model.Bucket, error)
 }
 
 // Worker handles notification envelopes consumed from NATS.
 type Worker struct {
 	store      AccumulationStore
-	dispatcher *Dispatcher
+	dispatcher *handlers.Dispatcher
 	ownerID    string
 
 	leaseDuration    time.Duration
@@ -61,7 +64,7 @@ type WorkerConfig struct {
 }
 
 // NewWorker creates a notification worker.
-func NewWorker(store AccumulationStore, dispatcher *Dispatcher, conf WorkerConfig) (*Worker, error) {
+func NewWorker(store AccumulationStore, dispatcher *handlers.Dispatcher, conf WorkerConfig) (*Worker, error) {
 	if dispatcher == nil {
 		return nil, errors.New("notification dispatcher is required")
 	}
@@ -87,11 +90,11 @@ func NewWorker(store AccumulationStore, dispatcher *Dispatcher, conf WorkerConfi
 }
 
 // Handle handles one notification envelope.
-func (w *Worker) Handle(ctx context.Context, envelope Envelope) error {
+func (w *Worker) Handle(ctx context.Context, envelope model.Envelope) error {
 	switch envelope.Type {
-	case TypeDirect:
+	case model.TypeDirect:
 		return w.dispatcher.Dispatch(ctx, envelope)
-	case TypeAccumulated:
+	case model.TypeAccumulated:
 		if w.store == nil {
 			return errors.New("accumulation store is required for accumulated notifications")
 		}
@@ -106,7 +109,7 @@ func (w *Worker) Handle(ctx context.Context, envelope Envelope) error {
 	}
 }
 
-func (w *Worker) resumeBucket(ctx context.Context, bucket *Bucket) error {
+func (w *Worker) resumeBucket(ctx context.Context, bucket *model.Bucket) error {
 	now := w.now()
 	leaseUntil := bucket.FlushAfter.Add(w.leaseDuration)
 	if leaseUntil.Before(now.Add(w.leaseDuration)) {
@@ -153,7 +156,7 @@ func (w *Worker) Flush(ctx context.Context, dedupKey string) error {
 	return w.store.MarkFlushed(ctx, dedupKey, itemIDs)
 }
 
-func (w *Worker) accumulate(items []Envelope) Envelope {
+func (w *Worker) accumulate(items []model.Envelope) model.Envelope {
 	envelope := items[0]
 	moreCount := max(len(items)-w.maxRenderedItems, 0)
 	renderedItems := make([]map[string]any, 0, min(len(items), w.maxRenderedItems))

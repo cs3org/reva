@@ -24,23 +24,21 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-)
 
-// Backend publishes accepted notifications to the delivery backend.
-type Backend interface {
-	Publish(ctx context.Context, envelope Envelope) error
-}
+	"github.com/cs3org/reva/v3/pkg/notifications/backends"
+	"github.com/cs3org/reva/v3/pkg/notifications/model"
+)
 
 // SendService implements the gateway-side SendNotification logic.
 type SendService struct {
-	backend Backend
+	backend backends.Backend
 	limiter RateLimiter
 	now     func() time.Time
 	newID   func() string
 }
 
 // NewSendService creates a gateway-side notification sender.
-func NewSendService(backend Backend, limiter RateLimiter) *SendService {
+func NewSendService(backend backends.Backend, limiter RateLimiter) *SendService {
 	if limiter == nil {
 		limiter = NoopRateLimiter{}
 	}
@@ -54,7 +52,7 @@ func NewSendService(backend Backend, limiter RateLimiter) *SendService {
 }
 
 // SendNotification validates, rate-limits and publishes a notification.
-func (s *SendService) SendNotification(ctx context.Context, req SendRequest) (*Envelope, error) {
+func (s *SendService) SendNotification(ctx context.Context, req model.SendRequest) (*model.Envelope, error) {
 	if s == nil || s.backend == nil {
 		return nil, errors.New("notification backend is not configured")
 	}
@@ -65,7 +63,7 @@ func (s *SendService) SendNotification(ctx context.Context, req SendRequest) (*E
 		return nil, err
 	}
 
-	env := Envelope{
+	env := model.Envelope{
 		ID:             s.newID(),
 		Type:           req.Type,
 		DedupKey:       req.DedupKey,
@@ -85,10 +83,10 @@ func (s *SendService) SendNotification(ctx context.Context, req SendRequest) (*E
 	return &env, nil
 }
 
-func validateSendRequest(req SendRequest) error {
+func validateSendRequest(req model.SendRequest) error {
 	switch req.Type {
-	case TypeDirect:
-	case TypeAccumulated:
+	case model.TypeDirect:
+	case model.TypeAccumulated:
 		if req.DedupKey == "" {
 			return errors.New("accumulated notifications require a dedup key")
 		}

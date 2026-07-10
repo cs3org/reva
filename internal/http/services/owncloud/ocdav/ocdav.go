@@ -39,7 +39,6 @@ import (
 	"github.com/cs3org/reva/v3/pkg/utils"
 
 	"github.com/cs3org/reva/v3/pkg/httpclient"
-	"github.com/cs3org/reva/v3/pkg/notification/notificationhelper"
 	"github.com/cs3org/reva/v3/pkg/rgrpc/todo/pool"
 	"github.com/cs3org/reva/v3/pkg/rhttp/global"
 	"github.com/cs3org/reva/v3/pkg/rhttp/router"
@@ -124,7 +123,6 @@ type Config struct {
 	PublicURL                    string                    `mapstructure:"public_url"`
 	PublicLinkDownload           *ConfigPublicLinkDownload `mapstructure:"publiclink_download"`
 	DisabledOpenInAppPaths       []string                  `mapstructure:"disabled_open_in_app_paths"`
-	Notifications                map[string]any            `docs:"nil; settings for the notification helper" mapstructure:"notifications"`
 	MyOfficeFilesAllowedProjects []string                  `mapstructure:"my_office_files_projects"`
 }
 
@@ -147,8 +145,6 @@ type svc struct {
 	davHandler           *DavHandler
 	myOfficeFilesManager myofficefiles.Manager
 	client               *httpclient.Client
-	// Can be nil if notifications are not set up
-	notificationHelper *notificationhelper.NotificationHelper
 }
 
 // New returns a new ocdav.
@@ -163,7 +159,6 @@ func New(ctx context.Context, m map[string]any) (global.Service, error) {
 		return nil, err
 	}
 
-	log := appctx.GetLogger(ctx)
 	tr := &http.Transport{TLSClientConfig: &tls.Config{InsecureSkipVerify: c.Insecure}}
 
 	s := &svc{
@@ -176,14 +171,6 @@ func New(ctx context.Context, m map[string]any) (global.Service, error) {
 		),
 		myOfficeFilesManager: myOfficeFilesManager,
 	}
-	if c.Notifications != nil {
-		nh, err := notificationhelper.New("ocdav", c.Notifications, log)
-		if err != nil {
-			return nil, err
-		}
-		s.notificationHelper = nh
-	}
-
 	// initialize handlers and set default cigs
 	if err := s.webDavHandler.init(c.WebdavNamespace, true); err != nil {
 		return nil, err
@@ -199,9 +186,6 @@ func (s *svc) Prefix() string {
 }
 
 func (s *svc) Close() error {
-	if s.notificationHelper != nil {
-		s.notificationHelper.Stop()
-	}
 	return nil
 }
 

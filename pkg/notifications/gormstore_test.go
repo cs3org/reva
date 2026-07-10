@@ -24,6 +24,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/cs3org/reva/v3/pkg/notifications/model"
 	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
 )
@@ -47,11 +48,11 @@ func TestGORMStoreAddIsIdempotentPerEnvelopeID(t *testing.T) {
 	ctx := context.Background()
 	store := newTestGORMStore(t)
 	now := time.Now()
-	envelope := Envelope{
+	envelope := model.Envelope{
 		ID:       "not-1",
-		Type:     TypeAccumulated,
+		Type:     model.TypeAccumulated,
 		DedupKey: "share-1",
-		Accumulation: AccumulationPolicy{
+		Accumulation: model.AccumulationPolicy{
 			WindowSeconds: 60,
 			MaxItems:      100,
 		},
@@ -78,11 +79,11 @@ func TestGORMStoreListsExpiredLeaseCandidate(t *testing.T) {
 	ctx := context.Background()
 	store := newTestGORMStore(t)
 	now := time.Now()
-	envelope := Envelope{
+	envelope := model.Envelope{
 		ID:       "not-1",
-		Type:     TypeAccumulated,
+		Type:     model.TypeAccumulated,
 		DedupKey: "share-1",
-		Accumulation: AccumulationPolicy{
+		Accumulation: model.AccumulationPolicy{
 			WindowSeconds: 60,
 			MaxItems:      100,
 		},

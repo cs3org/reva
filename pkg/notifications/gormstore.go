@@ -23,6 +23,7 @@ import (
 	"encoding/json"
 	"time"
 
+	"github.com/cs3org/reva/v3/pkg/notifications/model"
 	"github.com/pkg/errors"
 	"gorm.io/datatypes"
 	"gorm.io/gorm"
@@ -88,7 +89,7 @@ func NewGORMStore(db *gorm.DB) (*GORMStore, error) {
 }
 
 // Add persists one accumulated notification item and updates its bucket.
-func (s *GORMStore) Add(ctx context.Context, envelope Envelope, now time.Time) (*Bucket, error) {
+func (s *GORMStore) Add(ctx context.Context, envelope model.Envelope, now time.Time) (*model.Bucket, error) {
 	windowSeconds := envelope.Accumulation.WindowSeconds
 	maxItems := envelope.Accumulation.MaxItems
 	if maxItems <= 0 {
@@ -174,7 +175,7 @@ func (s *GORMStore) LockDueForFlush(ctx context.Context, dedupKey, owner string,
 }
 
 // PendingItems returns pending envelopes for a dedup key in receive order.
-func (s *GORMStore) PendingItems(ctx context.Context, dedupKey string) ([]Envelope, []string, error) {
+func (s *GORMStore) PendingItems(ctx context.Context, dedupKey string) ([]model.Envelope, []string, error) {
 	var rows []accumulationItem
 	if err := s.db.WithContext(ctx).
 		Where("dedup_key = ? AND status = ?", dedupKey, itemStatusPending).
@@ -183,10 +184,10 @@ func (s *GORMStore) PendingItems(ctx context.Context, dedupKey string) ([]Envelo
 		return nil, nil, errors.Wrap(err, "notifications: listing pending accumulator items failed")
 	}
 
-	envelopes := make([]Envelope, 0, len(rows))
+	envelopes := make([]model.Envelope, 0, len(rows))
 	itemIDs := make([]string, 0, len(rows))
 	for _, row := range rows {
-		var envelope Envelope
+		var envelope model.Envelope
 		if err := json.Unmarshal(row.Envelope, &envelope); err != nil {
 			return nil, nil, err
 		}
@@ -261,7 +262,7 @@ func (s *GORMStore) ReleaseLease(ctx context.Context, dedupKey, owner string) er
 }
 
 // ListCandidates lists buckets that might need a worker to own or recover them.
-func (s *GORMStore) ListCandidates(ctx context.Context, now time.Time, limit int) ([]*Bucket, error) {
+func (s *GORMStore) ListCandidates(ctx context.Context, now time.Time, limit int) ([]*model.Bucket, error) {
 	if limit <= 0 {
 		limit = 100
 	}
@@ -275,15 +276,15 @@ func (s *GORMStore) ListCandidates(ctx context.Context, now time.Time, limit int
 		return nil, errors.Wrap(err, "notifications: listing accumulator candidates failed")
 	}
 
-	buckets := make([]*Bucket, 0, len(rows))
+	buckets := make([]*model.Bucket, 0, len(rows))
 	for _, row := range rows {
 		buckets = append(buckets, bucketFromModel(row))
 	}
 	return buckets, nil
 }
 
-func bucketFromModel(row accumulationBucket) *Bucket {
-	bucket := &Bucket{
+func bucketFromModel(row accumulationBucket) *model.Bucket {
+	bucket := &model.Bucket{
 		DedupKey:      row.DedupKey,
 		FirstSeen:     row.FirstSeen,
 		LatestSeen:    row.LatestSeen,

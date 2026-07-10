@@ -16,18 +16,20 @@
 // granted to it by virtue of its status as an Intergovernmental Organization
 // or submit itself to any jurisdiction.
 
-package notifications
+package handlers
 
 import (
 	"context"
 	"errors"
 	"fmt"
+
+	"github.com/cs3org/reva/v3/pkg/notifications/model"
 )
 
 // Handler executes one delivery action for a notification envelope.
 type Handler interface {
 	Name() string
-	Send(ctx context.Context, envelope Envelope) error
+	Send(ctx context.Context, envelope model.Envelope) error
 }
 
 // Dispatcher resolves and invokes the handlers requested by an envelope.
@@ -60,7 +62,7 @@ func (d *Dispatcher) Register(handler Handler) {
 }
 
 // Dispatch sends an envelope to each requested handler.
-func (d *Dispatcher) Dispatch(ctx context.Context, envelope Envelope) error {
+func (d *Dispatcher) Dispatch(ctx context.Context, envelope model.Envelope) error {
 	if d == nil {
 		return errors.New("notification dispatcher is not configured")
 	}

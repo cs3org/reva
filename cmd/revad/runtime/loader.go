@@ -38,8 +38,6 @@ import (
 	_ "github.com/cs3org/reva/v3/pkg/group/manager/loader"
 	_ "github.com/cs3org/reva/v3/pkg/labels/loader"
 	_ "github.com/cs3org/reva/v3/pkg/metrics/driver/loader"
-	_ "github.com/cs3org/reva/v3/pkg/notification/handler/loader"
-	_ "github.com/cs3org/reva/v3/pkg/notification/manager/loader"
 	_ "github.com/cs3org/reva/v3/pkg/ocm/invite/repository/loader"
 	_ "github.com/cs3org/reva/v3/pkg/ocm/provider/authorizer/loader"
 	_ "github.com/cs3org/reva/v3/pkg/ocm/share/repository/loader"

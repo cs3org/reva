@@ -30,8 +30,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/cs3org/reva/v3/pkg/notification/utils"
 	"github.com/cs3org/reva/v3/pkg/rjobs"
+	"github.com/cs3org/reva/v3/pkg/utils"
 	"github.com/nats-io/nats.go"
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog"
