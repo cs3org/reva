@@ -44,6 +44,11 @@ const schedulerTick = 10 * time.Second
 // for due all-nodes jobs. A variable so tests can shorten it.
 var localSchedulerTick = schedulerTick
 
+// localRetryWait is how soon the local scheduler retries after a due job
+// could not be handed to the pool, so a delayed run does not also wait out a
+// full tick.
+const localRetryWait = 100 * time.Millisecond
+
 // Options configures a Runner.
 type Options struct {
 	// Workers is the number of concurrent workers draining the durable queue.
@@ -487,23 +492,28 @@ func (r *Runner) runLocalScheduler(ctx context.Context) {
 	next := make(map[string]time.Time)
 	leaderDone := make(map[string]bool)
 
-	ticker := time.NewTicker(localSchedulerTick)
-	defer ticker.Stop()
-
 	for {
-		r.localPass(ctx, next, leaderDone)
+		wait := localSchedulerTick
+		if r.localPass(ctx, next, leaderDone) {
+			// a due job could not be handed off (the pool is busy, or the
+			// workers are not receiving yet right after Start): retry soon
+			// instead of a full tick later.
+			wait = localRetryWait
+		}
 		select {
 		case <-ctx.Done():
 			return
-		case <-ticker.C:
+		case <-time.After(wait):
 		}
 	}
 }
 
 // localPass walks the registered periodic jobs once, handing due all-nodes
 // jobs to the pool and registering the schedules of leader jobs it has not
-// dealt with yet.
-func (r *Runner) localPass(ctx context.Context, next map[string]time.Time, leaderDone map[string]bool) {
+// dealt with yet. It reports whether a due job is still waiting for a free
+// worker.
+func (r *Runner) localPass(ctx context.Context, next map[string]time.Time, leaderDone map[string]bool) bool {
+	blocked := false
 	now := time.Now()
 	for _, p := range registeredPeriodic() {
 		if p.Scope == ScopeLeader {
@@ -532,8 +542,10 @@ func (r *Runner) localPass(ctx context.Context, next map[string]time.Time, leade
 		default:
 			// every local worker is busy. Leave the job due and retry on the
 			// next pass: the run is delayed, never queued up behind the pool.
+			blocked = true
 		}
 	}
+	return blocked
 }
 
 // registerLeaderSchedule pushes a leader job's schedule to the store, once. A
