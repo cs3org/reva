@@ -24,6 +24,7 @@ import (
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	typesv1beta1 "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
+	"github.com/owncloud/reva/v2/pkg/conversions"
 )
 
 func userGrantee(id string) *provider.Grantee {
@@ -102,5 +103,32 @@ func TestIsSpaceManagerRemaining(t *testing.T) {
 				t.Errorf("isSpaceManagerRemaining() = %v, want %v", got, tt.want)
 			}
 		})
+	}
+}
+
+// spaceRootGrantRejected mirrors the guard used in both addSpaceShare and updateSpaceShare.
+func spaceRootGrantRejected(perms *provider.ResourcePermissions) bool {
+	return hasGrantManagementBits(perms) && !conversions.SufficientCS3Permissions(perms, managerPerms)
+}
+
+func TestSpaceShareRejectsPartialGrantManagement(t *testing.T) {
+	// a single grant-management bit must be rejected
+	if !spaceRootGrantRejected(&provider.ResourcePermissions{RemoveGrant: true}) {
+		t.Error("single-bit RemoveGrant grant should be rejected on a space root")
+	}
+	// read bits plus a grant-management bit (the update-path stealth-manager payload) must be rejected
+	if !spaceRootGrantRejected(&provider.ResourcePermissions{Stat: true, GetPath: true, ListGrants: true, RemoveGrant: true}) {
+		t.Error("read+RemoveGrant grant should be rejected on a space root")
+	}
+	// a full manager grant must be accepted
+	if spaceRootGrantRejected(conversions.NewManagerRole().CS3ResourcePermissions()) {
+		t.Error("full manager grant should be accepted on a space root")
+	}
+	// viewer/editor grants carry no grant-management bits and must be accepted
+	if spaceRootGrantRejected(conversions.NewSpaceViewerRole().CS3ResourcePermissions()) {
+		t.Error("space viewer grant should be accepted on a space root")
+	}
+	if spaceRootGrantRejected(conversions.NewSpaceEditorRole().CS3ResourcePermissions()) {
+		t.Error("space editor grant should be accepted on a space root")
 	}
 }
