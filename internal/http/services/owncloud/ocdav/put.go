@@ -20,7 +20,6 @@ package ocdav
 
 import (
 	"context"
-	"encoding/json"
 	"net/http"
 	"path"
 	"path/filepath"
@@ -29,13 +28,11 @@ import (
 	"time"
 
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
-	linkv1beta1 "github.com/cs3org/go-cs3apis/cs3/sharing/link/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	typespb "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
 	"github.com/cs3org/reva/v3/internal/http/services/datagateway"
 	"github.com/cs3org/reva/v3/pkg/appctx"
 	"github.com/cs3org/reva/v3/pkg/errtypes"
-	"github.com/cs3org/reva/v3/pkg/notification/trigger"
 	"github.com/cs3org/reva/v3/pkg/spaces"
 	"github.com/cs3org/reva/v3/pkg/storage/utils/chunking"
 	"github.com/cs3org/reva/v3/pkg/user"
@@ -383,55 +380,6 @@ func (s *svc) handlePut(ctx context.Context, w http.ResponseWriter, r *http.Requ
 	t := utils.TSToTime(newInfo.Mtime).UTC()
 	lastModifiedString := t.Format(time.RFC1123Z)
 	w.Header().Set(HeaderLastModified, lastModifiedString)
-
-	var m map[string]*typespb.OpaqueEntry
-	if sRes.Info.GetOpaque() != nil {
-		m = sRes.Info.GetOpaque().Map
-	}
-
-	if ls, ok := m["link-share"]; ok {
-		l := &linkv1beta1.PublicShare{}
-		switch ls.Decoder {
-		case "json":
-			_ = json.Unmarshal(ls.Value, l)
-		default:
-			log.Error().Msgf("opaque entry decoder %s not recognized", ls.Decoder)
-		}
-
-		path := ""
-		folder := ""
-		_, shareFileName := filepath.Split(ref.Path)
-
-		if f, ok := m["eos"]; ok {
-			eosOpaque := make(map[string]any)
-			switch f.Decoder {
-			case "json":
-				_ = json.Unmarshal(f.Value, &eosOpaque)
-			default:
-				log.Error().Msgf("opaque entry decoder %s not recognized", f.Decoder)
-			}
-
-			if p, ok := eosOpaque["file"]; ok {
-				path, _ = filepath.Split(p.(string))
-			}
-		}
-
-		if path != "" {
-			folder = filepath.Base(path)
-		}
-
-		trg := &trigger.Trigger{
-			Ref: l.Id.OpaqueId,
-			TemplateData: map[string]any{
-				"path":     path,
-				"folder":   folder,
-				"fileName": shareFileName,
-			},
-		}
-		if s.notificationHelper != nil {
-			s.notificationHelper.TriggerNotification(trg)
-		}
-	}
 
 	// file was new
 	if info == nil {

@@ -26,7 +26,6 @@ import (
 	"mime"
 	"net/http"
 	"path"
-	"path/filepath"
 	"strconv"
 	"strings"
 	"sync"
@@ -50,9 +49,6 @@ import (
 	"github.com/cs3org/reva/v3/pkg/permissions"
 	"github.com/cs3org/reva/v3/pkg/spaces"
 
-	"github.com/cs3org/reva/v3/pkg/notification"
-	"github.com/cs3org/reva/v3/pkg/notification/notificationhelper"
-	"github.com/cs3org/reva/v3/pkg/notification/trigger"
 	"github.com/cs3org/reva/v3/pkg/publicshare"
 	"github.com/cs3org/reva/v3/pkg/rgrpc/todo/pool"
 	"github.com/cs3org/reva/v3/pkg/share"
@@ -64,7 +60,6 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog"
-	"github.com/rs/zerolog/log"
 )
 
 const (
@@ -73,19 +68,17 @@ const (
 
 // Handler implements the shares part of the ownCloud sharing API.
 type Handler struct {
-	gatewayAddr            string
-	storageRegistryAddr    string
-	publicURL              string
-	sharePrefix            string
-	homeNamespace          string
-	ocmMountPoint          string
-	additionalInfoTemplate *template.Template
-	userIdentifierCache    *ttlcache.Cache
-	resourceInfoCache      cache.ResourceInfoCache
-	resourceInfoCacheTTL   time.Duration
-	listOCMShares          bool
-	// May be nil if OCS runs without notifications
-	notificationHelper         *notificationhelper.NotificationHelper
+	gatewayAddr                string
+	storageRegistryAddr        string
+	publicURL                  string
+	sharePrefix                string
+	homeNamespace              string
+	ocmMountPoint              string
+	additionalInfoTemplate     *template.Template
+	userIdentifierCache        *ttlcache.Cache
+	resourceInfoCache          cache.ResourceInfoCache
+	resourceInfoCacheTTL       time.Duration
+	listOCMShares              bool
 	Log                        *zerolog.Logger
 	EnableSpaces               bool
 	pubRWLinkMaxExpiration     time.Duration
@@ -129,16 +122,6 @@ func (h *Handler) Init(c *config.Config, l *zerolog.Logger) {
 	h.resourceInfoCacheTTL = time.Second * time.Duration(c.ResourceInfoCacheTTL)
 	h.pubRWLinkMaxExpiration = time.Second * time.Duration(c.PubRWLinkMaxExpiration)
 	h.pubRWLinkDefaultExpiration = time.Second * time.Duration(c.PubRWLinkDefaultExpiration)
-	if c.Notifications != nil {
-		nh, err := notificationhelper.New("ocs", c.Notifications, l)
-		// no return value :(
-		if err != nil {
-			log.Fatal().Msg("Failed to initialize notification handler in OCS - no emails will be sent on share creation!")
-		} else {
-			h.notificationHelper = nh
-		}
-	}
-
 	h.userIdentifierCache = ttlcache.NewCache()
 	_ = h.userIdentifierCache.SetTTL(time.Second * time.Duration(c.UserIdentifierCacheTTL))
 
@@ -364,42 +347,15 @@ func (h *Handler) NotifyShare(w http.ResponseWriter, r *http.Request) {
 
 // SendShareNotification sends a notification with information from a Share.
 func (h *Handler) SendShareNotification(opaqueID string, granter *userpb.User, grantee any, statInfo *provider.ResourceInfo) string {
-	if h.notificationHelper == nil {
-		return ""
-	}
-	var granteeDisplayName, granteeName, recipient string
-	isGranteeGroup := false
+	var recipient string
 
 	if u, ok := grantee.(*userpb.User); ok {
-		granteeDisplayName = u.DisplayName
-		granteeName = u.Username
 		recipient = u.Mail
 	} else if g, ok := grantee.(*grouppb.Group); ok {
-		granteeDisplayName = g.DisplayName
-		granteeName = g.GroupName
 		recipient = g.Mail
-		isGranteeGroup = true
 	}
 
-	h.notificationHelper.TriggerNotification(&trigger.Trigger{
-		Notification: &notification.Notification{
-			TemplateName: "share-create-mail",
-			Ref:          opaqueID,
-			Recipients:   []string{recipient},
-		},
-		Ref: opaqueID,
-		TemplateData: map[string]any{
-			"granteeDisplayName": granteeDisplayName,
-			"granteeUserName":    granteeName,
-			"granterDisplayName": granter.DisplayName,
-			"granterUserName":    granter.Username,
-			"path":               statInfo.Path,
-			"isFolder":           statInfo.Type == provider.ResourceType_RESOURCE_TYPE_CONTAINER,
-			"isGranteeGroup":     isGranteeGroup,
-			"base":               filepath.Base(statInfo.Path),
-		},
-	})
-	h.Log.Debug().Msgf("notification trigger %s created", opaqueID)
+	h.Log.Debug().Msgf("notification trigger %s skipped until gateway SendNotification is available", opaqueID)
 
 	return recipient
 }

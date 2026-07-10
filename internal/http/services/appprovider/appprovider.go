@@ -39,7 +39,6 @@ import (
 	"github.com/cs3org/reva/v3/internal/http/services/owncloud/ocdav"
 	"github.com/cs3org/reva/v3/pkg/appctx"
 	"github.com/cs3org/reva/v3/pkg/httpclient"
-	"github.com/cs3org/reva/v3/pkg/notification/notificationhelper"
 	"github.com/cs3org/reva/v3/pkg/rgrpc/status"
 	"github.com/cs3org/reva/v3/pkg/rgrpc/todo/pool"
 	"github.com/cs3org/reva/v3/pkg/rhttp/global"
@@ -59,10 +58,9 @@ func init() {
 
 // Config holds the config options for the HTTP appprovider service.
 type Config struct {
-	Prefix        string         `mapstructure:"prefix"`
-	GatewaySvc    string         `mapstructure:"gatewaysvc"                                              validate:"required"`
-	Insecure      bool           `docs:"false;Whether to skip certificate checks when sending requests." mapstructure:"insecure"`
-	Notifications map[string]any `docs:"nil; settings for the notification helper"                      mapstructure:"notifications"`
+	Prefix     string `mapstructure:"prefix"`
+	GatewaySvc string `mapstructure:"gatewaysvc"                                              validate:"required"`
+	Insecure   bool   `docs:"false;Whether to skip certificate checks when sending requests." mapstructure:"insecure"`
 }
 
 func (c *Config) ApplyDefaults() {
@@ -73,9 +71,8 @@ func (c *Config) ApplyDefaults() {
 }
 
 type svc struct {
-	conf               *Config
-	router             *chi.Mux
-	notificationHelper notificationTriggerer
+	conf   *Config
+	router *chi.Mux
 }
 
 // New returns a new ocmd object.
@@ -89,14 +86,6 @@ func New(ctx context.Context, m map[string]any) (global.Service, error) {
 	s := &svc{
 		conf:   &c,
 		router: r,
-	}
-
-	if c.Notifications != nil {
-		nh, err := notificationhelper.New("appprovider", c.Notifications, appctx.GetLogger(ctx))
-		if err != nil {
-			return nil, err
-		}
-		s.notificationHelper = nh
 	}
 
 	if err := s.routerInit(); err != nil {
@@ -117,9 +106,6 @@ func (s *svc) routerInit() error {
 
 // Close performs cleanup.
 func (s *svc) Close() error {
-	if s.notificationHelper != nil {
-		s.notificationHelper.Stop()
-	}
 	return nil
 }
 

@@ -1,4 +1,4 @@
-// Copyright 2018-2024 CERN
+// Copyright 2018-2026 CERN
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -16,390 +16,214 @@
 // granted to it by virtue of its status as an Intergovernmental Organization
 // or submit itself to any jurisdiction.
 
+// Package notifications hosts the notification worker. It consumes accepted
+// notification envelopes from NATS, coordinates accumulation through SQL, and
+// dispatches each envelope to the configured delivery handlers.
 package notifications
 
 import (
 	"context"
-	"encoding/json"
+	"errors"
 	"fmt"
+	"os"
 	"time"
 
-	"github.com/pkg/errors"
-
+	revadcfg "github.com/cs3org/reva/v3/cmd/revad/pkg/config"
 	"github.com/cs3org/reva/v3/pkg/appctx"
-	"github.com/cs3org/reva/v3/pkg/errtypes"
-	"github.com/cs3org/reva/v3/pkg/notification"
-	"github.com/cs3org/reva/v3/pkg/notification/handler"
-	handlerRegistry "github.com/cs3org/reva/v3/pkg/notification/handler/registry"
-	notificationManagerRegistry "github.com/cs3org/reva/v3/pkg/notification/manager/registry"
-	"github.com/cs3org/reva/v3/pkg/notification/template"
-	templateRegistry "github.com/cs3org/reva/v3/pkg/notification/template/registry"
-	"github.com/cs3org/reva/v3/pkg/notification/trigger"
-	"github.com/cs3org/reva/v3/pkg/notification/utils"
+	notificationspkg "github.com/cs3org/reva/v3/pkg/notifications"
+	"github.com/cs3org/reva/v3/pkg/notifications/backends"
+	"github.com/cs3org/reva/v3/pkg/notifications/handlers"
+	"github.com/cs3org/reva/v3/pkg/notifications/model"
 	"github.com/cs3org/reva/v3/pkg/rserverless"
-	"github.com/cs3org/reva/v3/pkg/utils/accumulator"
-	"github.com/mitchellh/mapstructure"
-	"github.com/nats-io/nats.go"
+	"github.com/cs3org/reva/v3/pkg/sharedconf"
+	"github.com/cs3org/reva/v3/pkg/utils/cfg"
 	"github.com/rs/zerolog"
+	"gorm.io/driver/mysql"
+	"gorm.io/driver/sqlite"
+	"gorm.io/gorm"
 )
-
-type config struct {
-	NatsAddress      string                    `docs:";The NATS server address."                                  mapstructure:"nats_address"`
-	NatsToken        string                    `docs:";The token to authenticate against the NATS server"         mapstructure:"nats_token"`
-	NatsPrefix       string                    `docs:"reva-notifications;The notifications NATS stream."          mapstructure:"nats_prefix"`
-	HandlerConf      map[string]map[string]any `docs:"nil;Settings for the different notification handlers."      mapstructure:"handlers"`
-	GroupingInterval int                       `docs:"60;Time in seconds to group incoming notification triggers" mapstructure:"grouping_interval"`
-	GroupingMaxSize  int                       `docs:"100;Maximum number of notifications to group"               mapstructure:"grouping_max_size"`
-	StorageDriver    string                    `docs:"mysql;The driver used to store notifications"               mapstructure:"storage_driver"`
-	StorageDrivers   map[string]map[string]any `mapstructure:"storage_drivers"`
-}
-
-func defaultConfig() *config {
-	return &config{
-		NatsPrefix:       "reva-notifications",
-		GroupingInterval: 60,
-		GroupingMaxSize:  100,
-		StorageDriver:    "sql",
-	}
-}
-
-type svc struct {
-	ctx          context.Context
-	nc           *nats.Conn
-	js           nats.JetStreamContext
-	kv           nats.KeyValue
-	conf         *config
-	log          *zerolog.Logger
-	handlers     map[string]handler.Handler
-	templates    templateRegistry.Registry
-	nm           notification.Manager
-	accumulators map[string]*accumulator.Accumulator[trigger.Trigger]
-}
 
 func init() {
 	rserverless.Register("notifications", New)
 }
 
-func getNotificationManager(ctx context.Context, c *config) (notification.Manager, error) {
-	if f, ok := notificationManagerRegistry.NewFuncs[c.StorageDriver]; ok {
-		return f(ctx, c.StorageDrivers[c.StorageDriver])
-	}
-	return nil, errtypes.NotFound(fmt.Sprintf("storage driver %s not found", c.StorageDriver))
+type config struct {
+	NATS backends.NATSConfig `mapstructure:"nats"`
+
+	// Keep the flat NATS keys accepted by existing configs while the backend
+	// config is being moved under [serverless.services.notifications.nats].
+	NATSAddress string `mapstructure:"nats_address"`
+	NATSToken   string `mapstructure:"nats_token"`
+
+	Database revadcfg.Database `mapstructure:",squash"`
+
+	Handlers map[string]map[string]any `mapstructure:"handlers"`
+
+	WorkerID              string `mapstructure:"worker_id"`
+	LeaseDurationSeconds  int    `mapstructure:"lease_duration_seconds"`
+	ReaperIntervalSeconds int    `mapstructure:"reaper_interval_seconds"`
+	ReaperLimit           int    `mapstructure:"reaper_limit"`
+	MaxRenderedItems      int    `mapstructure:"max_rendered_items"`
 }
 
-// New returns a new Notifications service.
+func (c *config) ApplyDefaults() {
+	c.Database = sharedconf.GetDBInfo(c.Database)
+
+	if c.NATS.Address == "" {
+		c.NATS.Address = c.NATSAddress
+	}
+	if c.NATS.Token == "" {
+		c.NATS.Token = c.NATSToken
+	}
+	if c.WorkerID == "" {
+		hostname, _ := os.Hostname()
+		c.WorkerID = fmt.Sprintf("%s-%d", hostname, os.Getpid())
+	}
+	if c.LeaseDurationSeconds == 0 {
+		c.LeaseDurationSeconds = 300
+	}
+	if c.ReaperIntervalSeconds == 0 {
+		c.ReaperIntervalSeconds = 900
+	}
+	if c.ReaperLimit == 0 {
+		c.ReaperLimit = 100
+	}
+}
+
+type svc struct {
+	conf     *config
+	ctx      context.Context
+	log      *zerolog.Logger
+	db       *gorm.DB
+	listener *backends.NATSListener
+	worker   *notificationspkg.Worker
+}
+
+// New returns a new notifications service.
 func New(ctx context.Context, m map[string]any) (rserverless.Service, error) {
-	conf := defaultConfig()
-
-	if err := mapstructure.Decode(m, conf); err != nil {
+	var c config
+	if err := cfg.Decode(m, &c); err != nil {
 		return nil, err
 	}
+	c.ApplyDefaults()
 
-	log := appctx.GetLogger(ctx)
-	nm, err := getNotificationManager(ctx, conf)
+	db, err := openDB(c.Database)
 	if err != nil {
+		return nil, fmt.Errorf("notifications: opening accumulator database failed: %w", err)
+	}
+
+	store, err := notificationspkg.NewGORMStore(db)
+	if err != nil {
+		closeDB(db)
 		return nil, err
 	}
-	log.Info().Msgf("notification storage %s initialized", conf.StorageDriver)
 
-	s := &svc{
-		ctx:  ctx,
-		conf: conf,
-		log:  log,
-		nm:   nm,
+	dispatcher, err := newDispatcher(ctx, c.Handlers)
+	if err != nil {
+		closeDB(db)
+		return nil, err
 	}
 
-	return s, nil
+	worker, err := notificationspkg.NewWorker(store, dispatcher, notificationspkg.WorkerConfig{
+		OwnerID:          c.WorkerID,
+		LeaseDuration:    time.Duration(c.LeaseDurationSeconds) * time.Second,
+		MaxRenderedItems: c.MaxRenderedItems,
+	})
+	if err != nil {
+		closeDB(db)
+		return nil, err
+	}
+
+	reaper := notificationspkg.NewReaper(worker, notificationspkg.ReaperConfig{
+		Interval: time.Duration(c.ReaperIntervalSeconds) * time.Second,
+		Limit:    c.ReaperLimit,
+	})
+	if err := notificationspkg.RegisterReaperJob(reaper); err != nil {
+		closeDB(db)
+		return nil, err
+	}
+
+	return &svc{
+		conf:   &c,
+		ctx:    ctx,
+		log:    appctx.GetLogger(ctx),
+		db:     db,
+		worker: worker,
+	}, nil
 }
 
-// Start starts the Notifications service.
-func (s *svc) Start() {
-	s.templates = *templateRegistry.New()
-	s.handlers = handlerRegistry.InitHandlers(s.ctx, s.conf.HandlerConf)
-	s.accumulators = make(map[string]*accumulator.Accumulator[trigger.Trigger])
+func newDispatcher(ctx context.Context, conf map[string]map[string]any) (*handlers.Dispatcher, error) {
+	dispatcher := handlers.NewDispatcher()
 
-	s.log.Debug().Msgf("connecting to nats server at %s", s.conf.NatsAddress)
-	err := s.connect()
-	if err != nil {
-		s.log.Error().Err(err).Msg("connecting to nats failed")
+	for name, handlerConf := range conf {
+		switch name {
+		case handlers.EmailHandlerName:
+			handler, err := handlers.NewEmailHandler(ctx, handlerConf)
+			if err != nil {
+				return nil, err
+			}
+			dispatcher.Register(handler)
+		default:
+			return nil, fmt.Errorf("notifications: unsupported handler %q", name)
+		}
 	}
+
+	return dispatcher, nil
+}
+
+// Start starts consuming notification envelopes from NATS.
+func (s *svc) Start() {
+	if s.conf.NATS.Address == "" {
+		s.log.Error().Msg("notifications: nats address is required")
+		return
+	}
+
+	listener, err := backends.NewNATSListener(s.conf.NATS, *s.log)
+	if err != nil {
+		s.log.Error().Err(err).Msg("notifications: connecting to nats failed")
+		return
+	}
+
+	if err := listener.Start(s.ctx, func(ctx context.Context, envelope model.Envelope) error {
+		return s.worker.Handle(ctx, envelope)
+	}); err != nil {
+		s.log.Error().Err(err).Msg("notifications: subscribing to nats failed")
+		_ = listener.Close()
+		return
+	}
+
+	s.listener = listener
 	s.log.Info().Msg("notifications service ready")
 }
 
-// Close performs cleanup.
+// Close stops the notification listener and closes the accumulator database.
 func (s *svc) Close(ctx context.Context) error {
-	return s.nc.Drain()
+	var errs []error
+	if s.listener != nil {
+		errs = append(errs, s.listener.Close())
+	}
+	errs = append(errs, closeDB(s.db))
+	return errors.Join(errs...)
 }
 
-func (s *svc) connect() error {
-	nc, err := utils.ConnectToNats(s.conf.NatsAddress, s.conf.NatsToken, *s.log)
+func openDB(c revadcfg.Database) (*gorm.DB, error) {
+	gormCfg := &gorm.Config{}
+	switch c.Engine {
+	case "sqlite":
+		return gorm.Open(sqlite.Open(c.DBName), gormCfg)
+	default:
+		dsn := fmt.Sprintf("%s:%s@tcp(%s:%d)/%s?parseTime=true", c.DBUsername, c.DBPassword, c.DBHost, c.DBPort, c.DBName)
+		return gorm.Open(mysql.Open(dsn), gormCfg)
+	}
+}
+
+func closeDB(db *gorm.DB) error {
+	if db == nil {
+		return nil
+	}
+	sqlDB, err := db.DB()
 	if err != nil {
 		return err
 	}
-	s.nc = nc
-
-	js, err := nc.JetStream(nats.PublishAsyncMaxPending(256))
-	if err != nil {
-		return errors.Wrap(err, "jetstream initialization failed")
-	}
-
-	s.js = js
-
-	if err := s.initNatsKV("template", s.handleMsgTemplate); err != nil {
-		return err
-	}
-	if err := s.initNatsStream("notification-register", s.handleMsgRegisterNotification); err != nil {
-		return err
-	}
-	if err := s.initNatsStream("notification-unregister", s.handleMsgUnregisterNotification); err != nil {
-		return err
-	}
-	return s.initNatsStream("trigger", s.handleMsgTrigger)
-}
-
-func (s *svc) initNatsKV(name string, handler func(msg []byte)) error {
-	bucketName := fmt.Sprintf("%s-%s", s.conf.NatsPrefix, name)
-	kv, err := s.js.CreateKeyValue(&nats.KeyValueConfig{
-		Bucket: bucketName,
-	})
-	if err != nil {
-		return errors.Wrap(err, "template store creation failed, probably because nats server is unreachable")
-	}
-
-	s.kv = kv
-
-	w, _ := kv.WatchAll()
-
-	go func() {
-		for {
-			msg := <-w.Updates()
-
-			if msg != nil {
-				handler(msg.Value())
-			}
-		}
-	}()
-
-	return nil
-}
-
-func (s *svc) initNatsStream(name string, handler func(msg *nats.Msg)) error {
-	streamName := fmt.Sprintf("%s-%s", s.conf.NatsPrefix, name)
-	consumerName := fmt.Sprintf("%s-consumer-%s", s.conf.NatsPrefix, name)
-	subjectName := fmt.Sprintf("%s.%s", s.conf.NatsPrefix, name)
-	deliverySubjectName := fmt.Sprintf("%s-delivery.%s", s.conf.NatsPrefix, name)
-
-	// Creates a NATS stream with given name if it does not exist already
-	if _, err := s.js.AddStream(&nats.StreamConfig{
-		Name:     streamName,
-		Subjects: []string{subjectName},
-	}); err != nil {
-		return errors.Wrapf(err, "nats %s stream creation failed", name)
-	}
-
-	// Adds a consumer with the given name to the JetStream context
-	if _, err := s.js.AddConsumer(streamName, &nats.ConsumerConfig{
-		Durable:        consumerName,
-		DeliverSubject: deliverySubjectName,
-	}); err != nil {
-		return errors.Wrapf(err, "nats %s consumer creation failed", name)
-	}
-
-	// Subscribes the JetStream context to the consumer we just created
-	_, err := s.js.Subscribe("", func(msg *nats.Msg) { handler(msg) }, nats.Bind(streamName, consumerName))
-	if err != nil {
-		return errors.Wrapf(err, "nats subscription to consumer %s failed", consumerName)
-	}
-
-	return nil
-}
-
-func (s *svc) handleMsgTemplate(msg []byte) {
-	if len(msg) == 0 {
-		return
-	}
-
-	name, err := s.templates.Put(msg, s.handlers)
-	if err != nil {
-		s.log.Error().Err(err).Msg("template registration failed")
-
-		// If a template file was not found, delete that template from the registry altogether,
-		// this way we ensure templates that are deleted from the config are deleted from the
-		// store too.
-		var e *template.FileNotFoundError
-		if errors.As(err, &e) && name != "" {
-			err := s.kv.Purge(name)
-			if err != nil {
-				s.log.Error().Err(err).Msgf("deletion of template %s from store failed", name)
-			}
-			s.log.Info().Msgf("template %s unregistered", name)
-		}
-	} else {
-		s.log.Info().Msgf("template %s registered", name)
-	}
-}
-
-func (s *svc) handleMsgRegisterNotification(msg *nats.Msg) {
-	var data map[string]any
-	err := json.Unmarshal(msg.Data, &data)
-	if err != nil {
-		s.log.Error().Err(err).Msg("notification registration unmarshall failed")
-		return
-	}
-
-	n := &notification.Notification{}
-	if err := mapstructure.Decode(data, n); err != nil {
-		s.log.Error().Err(err).Msg("notification registration decoding failed")
-		return
-	}
-
-	templ, err := s.templates.Get(n.TemplateName)
-	if err != nil {
-		s.log.Error().Err(err).Msg("notification template get failed")
-		return
-	}
-
-	n.Template = *templ
-	err = s.nm.UpsertNotification(*n)
-	if err != nil {
-		s.log.Error().Err(err).Msgf("registering notification %s failed", n.Ref)
-	} else {
-		s.log.Info().Msgf("notification %s registered", n.Ref)
-	}
-}
-
-func (s *svc) handleMsgUnregisterNotification(msg *nats.Msg) {
-	ref := string(msg.Data)
-
-	err := s.nm.DeleteNotification(ref)
-	if err != nil {
-		var e *notification.NotFoundError
-		if errors.As(err, &e) {
-			s.log.Debug().Msgf("a notification with ref %s does not exist", ref)
-		} else {
-			s.log.Error().Err(err).Msgf("notification unregister failed")
-		}
-	} else {
-		s.log.Debug().Msgf("notification %s unregistered", ref)
-	}
-}
-
-func (s *svc) getAccumulatorForTrigger(tr trigger.Trigger) *accumulator.Accumulator[trigger.Trigger] {
-	a, ok := s.accumulators[tr.Ref]
-
-	if !ok || a == nil {
-		timeout := time.Duration(s.conf.GroupingInterval) * time.Second
-		maxSize := s.conf.GroupingMaxSize
-
-		a = accumulator.New[trigger.Trigger](timeout, maxSize, s.log)
-		_ = a.Start(s.notificationSendCallback)
-		s.accumulators[tr.Ref] = a
-
-		s.log.Debug().Msgf("created new accumulator for trigger %s", tr.Ref)
-	}
-
-	return a
-}
-
-func (s *svc) handleMsgTrigger(msg *nats.Msg) {
-	var data map[string]any
-	err := json.Unmarshal(msg.Data, &data)
-	if err != nil {
-		s.log.Error().Err(err).Msg("notification trigger unmarshall failed")
-		return
-	}
-
-	tr := &trigger.Trigger{}
-	if err := mapstructure.Decode(data, tr); err != nil {
-		s.log.Error().Err(err).Msg("trigger creation failed")
-		return
-	}
-
-	s.log.Info().Msgf("notification trigger %s received", tr.Ref)
-
-	notif := tr.Notification
-	if notif == nil {
-		notif, err = s.nm.GetNotification(tr.Ref)
-		if err != nil {
-			var e *notification.NotFoundError
-			if errors.As(err, &e) {
-				s.log.Debug().Msgf("trigger %s does not have a notification attached", tr.Ref)
-				return
-			}
-			s.log.Error().Err(err).Msgf("notification retrieval from store failed")
-			return
-		}
-	}
-
-	templ, err := s.templates.Get(notif.TemplateName)
-	if err != nil {
-		s.log.Error().Err(err).Msgf("template %s for trigger %s not found", notif.TemplateName, tr.Ref)
-		return
-	}
-
-	notif.Template = *templ
-	tr.Notification = notif
-	a := s.getAccumulatorForTrigger(*tr)
-	a.Input <- *tr
-}
-
-func (s *svc) notificationSendCallback(ts []trigger.Trigger) {
-	const maxItemCount = 10
-	var tr trigger.Trigger
-
-	moreCount := max(len(ts)-maxItemCount, 0)
-
-	// create a new trigger
-	tr = trigger.Trigger{
-		Ref:          ts[0].Ref,
-		Sender:       ts[0].Sender,
-		Notification: ts[0].Notification,
-		TemplateData: map[string]any{
-			"_count":     len(ts),
-			"_items":     []map[string]any{},
-			"_moreCount": moreCount,
-		},
-	}
-
-	// add template data of the first `maxItemCount` elements, ignore the rest
-	l := maxItemCount
-	templateData := []map[string]any{}
-	if l > len(ts) {
-		l = len(ts)
-	}
-	for _, t := range ts[:l] {
-		templateData = append(templateData, t.TemplateData)
-	}
-	tr.TemplateData["_items"] = templateData
-
-	// initialize the new trigger
-	var notif *notification.Notification
-	if tr.Notification == nil {
-		var err error
-		notif, err = s.nm.GetNotification(tr.Ref)
-		if err != nil {
-			s.log.Error().Msgf("notification retrieval from store failed")
-			return
-		}
-	} else {
-		notif = tr.Notification
-	}
-
-	templ, err := s.templates.Get(notif.TemplateName)
-	if err != nil {
-		s.log.Error().Err(err).Msgf("template %s for trigger %s not found", notif.TemplateName, tr.Ref)
-		return
-	}
-
-	notif.Template = *templ
-	tr.Notification = notif
-
-	s.log.Info().Msgf("sending notification for %d triggers %s", tr.TemplateData["_count"], tr.Ref)
-
-	// destroy old accumulator
-	s.accumulators[tr.Ref] = nil
-
-	if err := tr.Send(); err != nil {
-		s.log.Error().Err(err).Msgf("notification send failed")
-	}
+	return sqlDB.Close()
 }

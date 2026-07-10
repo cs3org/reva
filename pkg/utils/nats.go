@@ -1,4 +1,4 @@
-// Copyright 2018-2024 CERN
+// Copyright 2018-2026 CERN
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -16,7 +16,6 @@
 // granted to it by virtue of its status as an Intergovernmental Organization
 // or submit itself to any jurisdiction.
 
-// Package utils contains utilities related to the notifications service and helper.
 package utils
 
 import (
@@ -35,18 +34,18 @@ func ConnectToNats(natsAddress, natsToken string, log zerolog.Logger) (*nats.Con
 		nats.MaxReconnects(-1),
 		nats.Token(natsToken),
 		nats.ErrorHandler(func(c *nats.Conn, s *nats.Subscription, err error) {
-			log.Error().Err(err).Msgf("nats error")
+			log.Error().Err(err).Msg("nats error")
 		}),
 		nats.ClosedHandler(func(c *nats.Conn) {
 			if c.LastError() != nil {
-				log.Error().Err(c.LastError()).Msgf("connection to nats server closed")
+				log.Error().Err(c.LastError()).Msg("connection to nats server closed")
 			} else {
-				log.Debug().Msgf("connection to nats server closed")
+				log.Debug().Msg("connection to nats server closed")
 			}
 		}),
 		nats.DisconnectErrHandler(func(_ *nats.Conn, err error) {
 			if err != nil {
-				log.Error().Err(err).Msgf("connection to nats server disconnected")
+				log.Error().Err(err).Msg("connection to nats server disconnected")
 			}
 		}),
 		nats.CustomReconnectDelay(func(attempts int) time.Duration {
@@ -58,7 +57,7 @@ func ConnectToNats(natsAddress, natsToken string, log zerolog.Logger) (*nats.Con
 			return 2 * time.Second
 		}),
 		nats.ReconnectHandler(func(_ *nats.Conn) {
-			log.Info().Msgf("connection to nats server reconnected")
+			log.Info().Msg("connection to nats server reconnected")
 		}),
 	)
 	if err != nil {
