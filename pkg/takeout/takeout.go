@@ -50,6 +50,7 @@ func init() {
 type config struct {
 	MachineSecret        string `mapstructure:"machine_secret" validate:"required"`
 	TakeoutAdminUsername string `mapstructure:"takeout_admin_username" validate:"required"`
+	TakeoutPath          string `mapstructure:"takeout_path" validate:"required"`
 	PublicURL            string `mapstructure:"public_url" validate:"required"`
 }
 
@@ -127,7 +128,7 @@ func (j *job) Run(ctx context.Context, p rjobs.Params) (rjobs.Params, error) {
 
 	// Set the source & destination directories
 	root := "/eos/user/" + pp.Username[0:1] + "/" + pp.Username
-	archPath := fmt.Sprintf("/eos/project/t/takeout/%s_%s/", pp.Username, time.Now().Format("2006-01-02"))
+	archPath := fmt.Sprintf("%s/%s_%s/", j.conf.TakeoutPath, pp.Username, time.Now().Format("2006-01-02"))
 
 	// Create archives depending on requested archive format
 	switch pp.ArchiveFormat {
@@ -178,15 +179,10 @@ func (j *job) authenticate(ctx context.Context, gtw gateway.GatewayAPIClient, cl
 }
 
 func (j *job) createTgzArchives(userCtx, adminCtx context.Context, rootPath, archPath string, wk walker.Walker, dl downloader.Downloader, gtw gateway.GatewayAPIClient, hc *httpclient.Client, maxArchiveSize int64) error {
-	// Ensure the destination directory exists before any upload starts
-	mkRes, err := gtw.CreateContainer(adminCtx, &provider.CreateContainerRequest{
-		Ref: &provider.Reference{Path: archPath},
-	})
-	switch {
-	case err != nil:
+	// Create the destination directory
+	err := j.createTakeoutContainer(adminCtx, gtw, archPath)
+	if err != nil {
 		return err
-	case mkRes.Status.Code != rpc.Code_CODE_OK && mkRes.Status.Code != rpc.Code_CODE_ALREADY_EXISTS:
-		return errtypes.InternalError(mkRes.Status.Message)
 	}
 
 	// Setup tgz archive streaming state
@@ -332,27 +328,11 @@ func (j *job) createTgzArchives(userCtx, adminCtx context.Context, rootPath, arc
 	return nil
 }
 
-func (j *job) createZipArchives(userCtx, adminCtx context.Context, root_path, arch_path string, wk walker.Walker, dl downloader.Downloader, gtw gateway.GatewayAPIClient, hc *httpclient.Client, maxArchiveSize int64) error {
-	// Deletes the destination directory if it already exists, any public shares will be automatically removed
-	delRes, err := gtw.Delete(adminCtx, &provider.DeleteRequest{
-		Ref: &provider.Reference{Path: arch_path},
-	})
-	switch {
-	case err != nil:
+func (j *job) createZipArchives(userCtx, adminCtx context.Context, rootPath, archPath string, wk walker.Walker, dl downloader.Downloader, gtw gateway.GatewayAPIClient, hc *httpclient.Client, maxArchiveSize int64) error {
+	// Create the destination directory
+	err := j.createTakeoutContainer(adminCtx, gtw, archPath)
+	if err != nil {
 		return err
-	case delRes.Status.Code != rpc.Code_CODE_OK && delRes.Status.Code != rpc.Code_CODE_NOT_FOUND:
-		return errtypes.InternalError(delRes.Status.Message)
-	}
-
-	// Creates the empty destination directory
-	mkRes, err := gtw.CreateContainer(adminCtx, &provider.CreateContainerRequest{
-		Ref: &provider.Reference{Path: arch_path},
-	})
-	switch {
-	case err != nil:
-		return err
-	case mkRes.Status.Code != rpc.Code_CODE_OK:
-		return errtypes.InternalError(mkRes.Status.Message)
 	}
 
 	// Setup zip archive streaming state
@@ -370,7 +350,7 @@ func (j *job) createZipArchives(userCtx, adminCtx context.Context, root_path, ar
 		pw = npw
 		done = make(chan error, 1)
 		go func(idx int) {
-			err := j.uploadArchive(adminCtx, gtw, hc, arch_path, idx, "zip", pr)
+			err := j.uploadArchive(adminCtx, gtw, hc, archPath, idx, "zip", pr)
 			// Unblock the producer if the upload fails mid-stream
 			pr.CloseWithError(err)
 			done <- err
@@ -399,7 +379,7 @@ func (j *job) createZipArchives(userCtx, adminCtx context.Context, root_path, ar
 	startPart()
 
 	// Create the archives by walking the specified directory
-	err = wk.Walk(userCtx, root_path, func(current_path string, info *provider.ResourceInfo, err error) error {
+	err = wk.Walk(userCtx, rootPath, func(current_path string, info *provider.ResourceInfo, err error) error {
 		if err != nil {
 			return err
 		}
@@ -407,7 +387,7 @@ func (j *job) createZipArchives(userCtx, adminCtx context.Context, root_path, ar
 		isDir := info.Type == provider.ResourceType_RESOURCE_TYPE_CONTAINER
 
 		// Get relative path of the current file
-		fileName, err := filepath.Rel(filepath.Dir(root_path), current_path)
+		fileName, err := filepath.Rel(filepath.Dir(rootPath), current_path)
 		if err != nil {
 			return err
 		}
@@ -468,6 +448,30 @@ func (j *job) createZipArchives(userCtx, adminCtx context.Context, root_path, ar
 		return err
 	}
 
+	return nil
+}
+
+func (*job) createTakeoutContainer(adminCtx context.Context, gtw gateway.GatewayAPIClient, arch_path string) error {
+	delRes, err := gtw.Delete(adminCtx, &provider.DeleteRequest{
+		Ref: &provider.Reference{Path: arch_path},
+	})
+	switch {
+	case err != nil:
+		return err
+	case delRes.Status.Code != rpc.Code_CODE_OK && delRes.Status.Code != rpc.Code_CODE_NOT_FOUND:
+		return errtypes.InternalError(delRes.Status.Message)
+	}
+
+	// Creates the empty destination directory
+	mkRes, err := gtw.CreateContainer(adminCtx, &provider.CreateContainerRequest{
+		Ref: &provider.Reference{Path: arch_path},
+	})
+	switch {
+	case err != nil:
+		return err
+	case mkRes.Status.Code != rpc.Code_CODE_OK:
+		return errtypes.InternalError(mkRes.Status.Message)
+	}
 	return nil
 }
 
