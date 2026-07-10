@@ -40,10 +40,13 @@ func init() {
 }
 
 type config struct {
-	WorkerPoolSize int    `mapstructure:"worker_pool_size"`
-	NatsAddress    string `mapstructure:"nats_address"`
-	NatsToken      string `mapstructure:"nats_token"`
-	NatsPrefix     string `mapstructure:"nats_prefix"`
+	WorkerPoolSize int `mapstructure:"worker_pool_size"`
+	// LocalPoolSize is the number of workers executing all-nodes periodic
+	// jobs on this replica.
+	LocalPoolSize int    `mapstructure:"local_pool_size"`
+	NatsAddress   string `mapstructure:"nats_address"`
+	NatsToken     string `mapstructure:"nats_token"`
+	NatsPrefix    string `mapstructure:"nats_prefix"`
 	// AckWaitSeconds is the visibility timeout: how long a claimed run may go
 	// without a heartbeat before it is redelivered. The runner heartbeats well
 	// within this window, so it bounds detection of a dead worker, not the
@@ -61,6 +64,9 @@ type config struct {
 func (c *config) ApplyDefaults() {
 	if c.WorkerPoolSize == 0 {
 		c.WorkerPoolSize = 4
+	}
+	if c.LocalPoolSize == 0 {
+		c.LocalPoolSize = 4
 	}
 	if c.NatsPrefix == "" {
 		c.NatsPrefix = "reva-jobs"
@@ -97,6 +103,7 @@ func New(ctx context.Context, m map[string]any) (rserverless.Service, error) {
 func (s *svc) Start() {
 	opts := rjobs.Options{
 		Workers:        s.conf.WorkerPoolSize,
+		LocalWorkers:   s.conf.LocalPoolSize,
 		OnDemandConfig: s.conf.OnDemand,
 	}
 
