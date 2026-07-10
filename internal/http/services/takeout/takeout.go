@@ -25,15 +25,15 @@ func init() {
 
 /* Service's configuration setup */
 
-// The takeout service config
-type config struct {
+// The takeout service Config
+type Config struct {
 	Prefix string `mapstructure:"prefix"`
 }
 
 // New sets the potential custom service config
 func New(ctx context.Context, m map[string]any) (global.Service, error) {
 	// Decode config
-	var c config
+	var c Config
 	if err := cfg.Decode(m, &c); err != nil {
 		return nil, err
 	}
@@ -45,7 +45,7 @@ func New(ctx context.Context, m map[string]any) (global.Service, error) {
 }
 
 // ApplyDefaults sets the default service config
-func (c *config) ApplyDefaults() {
+func (c *Config) ApplyDefaults() {
 	if c.Prefix == "" {
 		c.Prefix = "takeout"
 	}
@@ -67,7 +67,7 @@ type statusReply struct {
 
 // The takeout service structure
 type svc struct {
-	conf *config
+	conf *Config
 	log  *zerolog.Logger
 }
 
@@ -89,16 +89,24 @@ func (s *svc) Unprotected() []string {
 // Handler propagates the request dependanding on the suffix
 func (s *svc) Handler() http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		action := strings.TrimPrefix(r.URL.Path, s.conf.Prefix)
-		s.log.Info().Msgf("action: %s", action)
-		switch action {
-		case "/post":
+		// The only accepted suffix should be the conf one
+		url := strings.TrimSuffix(r.URL.Path, "/")
+		if url != "" {
+			s.log.Warn().Msgf("takeout: %s is not a supported suffix", url)
+			w.WriteHeader(http.StatusNotFound)
+			return
+		}
+
+		// Dispatch depending on request method
+		s.log.Info().Msgf("takeout: handling method %s", r.Method)
+		switch r.Method {
+		case http.MethodPost:
 			s.handlePost(w, r)
-		case "/get":
+		case http.MethodGet:
 			s.handleGet(w, r)
 
 		default:
-			s.log.Debug().Msgf("takeout: %s is not a supported endpoint", action)
+			s.log.Warn().Msgf("takeout: %s is not a supported method", r.Method)
 			w.WriteHeader(http.StatusBadRequest)
 		}
 	})
