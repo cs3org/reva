@@ -22,6 +22,7 @@ import (
 	"testing"
 
 	collaboration "github.com/cs3org/go-cs3apis/cs3/sharing/collaboration/v1beta1"
+	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 )
 
 func TestGetStateFilter(t *testing.T) {
@@ -69,5 +70,18 @@ func TestMapState(t *testing.T) {
 		if state != tt.expected {
 			t.Errorf("mapState(%d) returned %d instead of expected %d", tt.input, state, tt.expected)
 		}
+	}
+}
+
+func TestCanSendShareReminderRequiresAddGrant(t *testing.T) {
+	if !canSendShareReminder(&provider.ResourceInfo{
+		PermissionSet: &provider.ResourcePermissions{AddGrant: true},
+	}) {
+		t.Fatal("AddGrant permission should be allowed to send a reminder")
+	}
+	if canSendShareReminder(&provider.ResourceInfo{
+		PermissionSet: &provider.ResourcePermissions{InitiateFileUpload: true, CreateContainer: true},
+	}) {
+		t.Fatal("write permissions without AddGrant should not be allowed to send a reminder")
 	}
 }

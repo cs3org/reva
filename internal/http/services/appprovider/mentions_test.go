@@ -32,24 +32,10 @@ import (
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/cs3org/reva/v3/pkg/appctx"
-	"github.com/cs3org/reva/v3/pkg/notification/trigger"
 	"github.com/cs3org/reva/v3/pkg/rgrpc/todo/pool"
 	"github.com/cs3org/reva/v3/pkg/spaces"
 	"google.golang.org/grpc"
 )
-
-type fakeNotificationTriggerer struct {
-	triggers []*trigger.Trigger
-	stopped  bool
-}
-
-func (f *fakeNotificationTriggerer) TriggerNotification(t *trigger.Trigger) {
-	f.triggers = append(f.triggers, t)
-}
-
-func (f *fakeNotificationTriggerer) Stop() {
-	f.stopped = true
-}
 
 type mentionGateway struct {
 	gateway.GatewayAPIClient
@@ -229,7 +215,7 @@ func TestResolveMentionRecipientsExpandsGroupsDeduplicatesAndSkipsSelf(t *testin
 	}
 }
 
-func TestHandleMentionsPublishesTriggers(t *testing.T) {
+func TestHandleMentionsAcceptsResolvedMentions(t *testing.T) {
 	endpoint := "mentions-" + t.Name()
 	author := mentionUser("author", "author@cern.ch")
 	alice := mentionUser("alice", "alice@cern.ch")
@@ -261,10 +247,8 @@ func TestHandleMentionsPublishesTriggers(t *testing.T) {
 		},
 	}, endpoint)
 
-	notifier := &fakeNotificationTriggerer{}
 	s := &svc{
-		conf:               &Config{GatewaySvc: endpoint},
-		notificationHelper: notifier,
+		conf: &Config{GatewaySvc: endpoint},
 	}
 
 	body := `{
@@ -288,32 +272,6 @@ func TestHandleMentionsPublishesTriggers(t *testing.T) {
 	if rec.Code != http.StatusAccepted {
 		t.Fatalf("status = %d, want %d; body: %s", rec.Code, http.StatusAccepted, rec.Body.String())
 	}
-	if len(notifier.triggers) != 2 {
-		t.Fatalf("triggers = %d, want 2", len(notifier.triggers))
-	}
-
-	first := notifier.triggers[0]
-	if first.Notification.TemplateName != mentionTemplateName {
-		t.Fatalf("template = %q, want %q", first.Notification.TemplateName, mentionTemplateName)
-	}
-	if first.Notification.Recipients[0] != "alice@cern.ch" {
-		t.Fatalf("first recipient = %q, want alice@cern.ch", first.Notification.Recipients[0])
-	}
-	if first.Sender != "author@cern.ch" {
-		t.Fatalf("sender = %q, want author@cern.ch", first.Sender)
-	}
-	if first.TemplateData["commentText"] != "Can you check this?" {
-		t.Fatalf("commentText = %v", first.TemplateData["commentText"])
-	}
-	if first.TemplateData["anchorText"] != "Total cost" {
-		t.Fatalf("anchorText = %v", first.TemplateData["anchorText"])
-	}
-
-	second := notifier.triggers[1]
-	if second.Notification.Recipients[0] != "bob@cern.ch" {
-		t.Fatalf("second recipient = %q, want bob@cern.ch", second.Notification.Recipients[0])
-	}
-
 	var response mentionResponse
 	if err := json.Unmarshal(rec.Body.Bytes(), &response); err != nil {
 		t.Fatalf("response json: %v", err)
@@ -323,18 +281,6 @@ func TestHandleMentionsPublishesTriggers(t *testing.T) {
 	}
 	if len(response.Rejected) != 0 {
 		t.Fatalf("rejected = %d, want 0", len(response.Rejected))
-	}
-}
-
-func TestHandleMentionsRequiresNotificationHelper(t *testing.T) {
-	s := &svc{conf: &Config{}}
-	req := httptest.NewRequest(http.MethodPost, "/app/mentions", strings.NewReader(`{"path":"/doc.docx","mentions":[{"username":"alice"}]}`))
-	rec := httptest.NewRecorder()
-
-	s.handleMentions(rec, req)
-
-	if rec.Code != http.StatusServiceUnavailable {
-		t.Fatalf("status = %d, want %d", rec.Code, http.StatusServiceUnavailable)
 	}
 }
 

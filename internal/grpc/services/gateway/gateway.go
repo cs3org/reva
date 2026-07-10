@@ -28,6 +28,7 @@ import (
 	"github.com/ReneKroon/ttlcache/v2"
 	gateway "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
 	"github.com/cs3org/reva/v3/pkg/errtypes"
+	"github.com/cs3org/reva/v3/pkg/notifications"
 	"github.com/cs3org/reva/v3/pkg/rgrpc"
 	"github.com/cs3org/reva/v3/pkg/share/cache"
 	cachereg "github.com/cs3org/reva/v3/pkg/share/cache/registry"
@@ -78,6 +79,7 @@ type config struct {
 	ResourceInfoCacheDrivers map[string]map[string]any `mapstructure:"resource_info_caches"`
 	HomeLayout               string                    `mapstructure:"home_layout"`
 	OCMEnabled               bool                      `mapstructure:"ocm_enabled"`
+	Notifications            map[string]any            `mapstructure:"notifications"`
 }
 
 // sets defaults.
@@ -135,6 +137,9 @@ type svc struct {
 	createHomeCache      *ttlcache.Cache `mapstructure:"create_home_cache"`
 	resourceInfoCache    cache.ResourceInfoCache
 	resourceInfoCacheTTL time.Duration
+	notificationSender   *notifications.SendService
+	// Drains the NATS connection on service close
+	closeNotifications func() error
 }
 
 // New creates a new gateway svc that acts as a proxy for any grpc operation.
@@ -165,12 +170,19 @@ func New(ctx context.Context, m map[string]any) (rgrpc.Service, error) {
 	_ = createHomeCache.SetTTL(time.Duration(c.CreateHomeCacheTTL) * time.Second)
 	createHomeCache.SkipTTLExtensionOnHit(true)
 
+	notificationSender, closeNotifications, err := notifications.NewSender(ctx, c.Notifications)
+	if err != nil {
+		return nil, err
+	}
+
 	s := &svc{
-		c:               &c,
-		dataGatewayURL:  *u,
-		tokenmgr:        tokenManager,
-		etagCache:       etagCache,
-		createHomeCache: createHomeCache,
+		c:                  &c,
+		dataGatewayURL:     *u,
+		tokenmgr:           tokenManager,
+		etagCache:          etagCache,
+		createHomeCache:    createHomeCache,
+		notificationSender: notificationSender,
+		closeNotifications: closeNotifications,
 	}
 
 	ricache, err := getCacheManager(&c)
@@ -188,6 +200,9 @@ func (s *svc) Register(ss *grpc.Server) {
 
 func (s *svc) Close() error {
 	s.etagCache.Close()
+	if s.closeNotifications != nil {
+		return s.closeNotifications()
+	}
 	return nil
 }
 

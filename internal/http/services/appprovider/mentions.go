@@ -24,7 +24,6 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
-	"path/filepath"
 	"strings"
 
 	gateway "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
@@ -33,24 +32,16 @@ import (
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/cs3org/reva/v3/pkg/appctx"
-	"github.com/cs3org/reva/v3/pkg/notification"
-	"github.com/cs3org/reva/v3/pkg/notification/trigger"
 	"github.com/cs3org/reva/v3/pkg/rgrpc/todo/pool"
 	"github.com/cs3org/reva/v3/pkg/spaces"
 	"github.com/cs3org/reva/v3/pkg/utils/resourceid"
 )
 
 const (
-	mentionTemplateName = "office-mention-mail"
 	maxMentionBodyBytes = 1 << 20
 	maxMentionTargets   = 100
 	maxMentionTextLen   = 2000
 )
-
-type notificationTriggerer interface {
-	TriggerNotification(*trigger.Trigger)
-	Stop()
-}
 
 type mentionRequest struct {
 	FileID      string          `json:"file_id"`
@@ -92,19 +83,13 @@ func (s *svc) handleMentions(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if s.notificationHelper == nil {
-		writeError(w, r, appErrorUnavailable, "notifications are not configured", nil)
-		return
-	}
-
 	author, ok := appctx.ContextGetUser(ctx)
 	if !ok || author == nil {
 		writeError(w, r, appErrorUnauthenticated, "missing authenticated user", nil)
 		return
 	}
 
-	documentURL, err := validateDocumentURL(req.DocumentURL)
-	if err != nil {
+	if _, err := validateDocumentURL(req.DocumentURL); err != nil {
 		writeError(w, r, appErrorInvalidParameter, err.Error(), nil)
 		return
 	}
@@ -149,30 +134,6 @@ func (s *svc) handleMentions(w http.ResponseWriter, r *http.Request) {
 
 	documentID := documentIDForNotification(statRes.Info, &fileRef)
 	for _, recipient := range resolved.users {
-		ref := mentionNotificationRef(documentID, recipient.Username)
-		s.notificationHelper.TriggerNotification(&trigger.Trigger{
-			Notification: &notification.Notification{
-				TemplateName: mentionTemplateName,
-				Ref:          ref,
-				Recipients:   []string{recipient.Mail},
-			},
-			Ref:    ref,
-			Sender: author.Mail,
-			TemplateData: map[string]any{
-				"recipientDisplayName": recipient.DisplayName,
-				"recipientUserName":    recipient.Username,
-				"mentionerDisplayName": author.DisplayName,
-				"mentionerUserName":    author.Username,
-				"fileName":             filepath.Base(statRes.Info.Path),
-				"path":                 statRes.Info.Path,
-				"fileID":               documentID,
-				"appName":              req.AppName,
-				"commentText":          req.CommentText,
-				"anchorText":           req.AnchorText,
-				"documentURL":          documentURL,
-				"eventID":              req.EventID,
-			},
-		})
 		resolved.accepted = append(resolved.accepted, mentionResult{Type: "user", Username: recipient.Username})
 	}
 
@@ -409,8 +370,4 @@ func documentIDForNotification(info *provider.ResourceInfo, ref *provider.Refere
 		return ref.Path
 	}
 	return ""
-}
-
-func mentionNotificationRef(documentID, username string) string {
-	return fmt.Sprintf("office-mention:%s:%s", documentID, username)
 }

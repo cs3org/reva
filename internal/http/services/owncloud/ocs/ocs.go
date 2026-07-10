@@ -119,7 +119,7 @@ func (s *svc) routerInit(l *zerolog.Logger) error {
 				})
 				r.Get("/{shareid}", sharesHandler.GetShare)
 				r.Put("/{shareid}", sharesHandler.UpdateShare)
-				r.Get("/{shareid}/notify", sharesHandler.NotifyShare)
+				r.Post("/{shareid}/notify", sharesHandler.NotifyShare)
 				r.Delete("/{shareid}", sharesHandler.RemoveShare)
 			})
 			r.Get("/sharees", shareesHandler.FindSharees)
