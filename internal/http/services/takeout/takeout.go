@@ -12,6 +12,7 @@ import (
 	"github.com/cs3org/reva/v3/pkg/rhttp/global"
 	"github.com/cs3org/reva/v3/pkg/rjobs"
 	"github.com/cs3org/reva/v3/pkg/takeout"
+	"github.com/cs3org/reva/v3/pkg/takeout/cleanup"
 	"github.com/cs3org/reva/v3/pkg/utils/cfg"
 	"github.com/rs/zerolog"
 )
@@ -27,7 +28,12 @@ func init() {
 
 // The takeout service Config
 type Config struct {
-	Prefix string `mapstructure:"prefix"`
+	Prefix               string `mapstructure:"prefix"`
+	MachineSecret        string `mapstructure:"machine_secret" validate:"required"`
+	TakeoutAdminUsername string `mapstructure:"takeout_admin_username" validate:"required"`
+	TakeoutPath          string `mapstructure:"takeout_path" validate:"required"`
+	CleanupSchedule      string `mapstructure:"cleanup_schedule"`
+	CleanupDelay         int64  `mapstructure:"cleanup_delay"` // In hours
 }
 
 // New sets the potential custom service config
@@ -41,6 +47,16 @@ func New(ctx context.Context, m map[string]any) (global.Service, error) {
 	// Declare logger
 	l := appctx.GetLogger(ctx)
 
+	// Register periodic cleanup job
+	cleanupConfig := &cleanup.Config{
+		MachineSecret:        c.MachineSecret,
+		TakeoutAdminUsername: c.TakeoutAdminUsername,
+		TakeoutPath:          c.TakeoutPath,
+		CleanupSchedule:      c.CleanupSchedule,
+		CleanupDelay:         c.CleanupDelay,
+	}
+	cleanup.RegisterCleanup(ctx, cleanupConfig, l)
+
 	return &svc{conf: &c, log: l}, nil
 }
 
@@ -48,6 +64,12 @@ func New(ctx context.Context, m map[string]any) (global.Service, error) {
 func (c *Config) ApplyDefaults() {
 	if c.Prefix == "" {
 		c.Prefix = "takeout"
+	}
+	if c.CleanupSchedule == "" {
+		c.CleanupSchedule = "@daily"
+	}
+	if c.CleanupDelay == 0 {
+		c.CleanupDelay = 168 // One week
 	}
 }
 
