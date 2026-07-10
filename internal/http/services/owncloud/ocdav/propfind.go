@@ -510,7 +510,11 @@ func (s *svc) mdToPropResponse(ctx context.Context, pf *propfindXML, md *provide
 	sublog := appctx.GetLogger(ctx).With().Str("ns", ns).Logger()
 
 	var href string
-	if parent != nil {
+	if basePathHref, ok, err := hrefFromRelativeBasePath(ctx, md); err != nil {
+		return nil, err
+	} else if ok {
+		href = basePathHref
+	} else if parent != nil {
 		relativePath, err := filepath.Rel(encodePath(parent.Path), encodePath(md.Path))
 		if err != nil {
 			return nil, errors.Wrapf(err, "failed to calculate path relative to parent: %v", md.Path)
@@ -1060,6 +1064,37 @@ func (s *svc) mdToPropResponse(ctx context.Context, pf *propfindXML, md *provide
 	}
 
 	return &response, nil
+}
+
+func hrefFromRelativeBasePath(ctx context.Context, md *provider.ResourceInfo) (string, bool, error) {
+	basePath, ok := ctx.Value(ctxRelativeBasePath).(string)
+	if !ok || basePath == "" {
+		return "", false, nil
+	}
+
+	spaceID, ok := ctx.Value(ctxSpaceID).(string)
+	if !ok || spaceID == "" {
+		return "", false, nil
+	}
+
+	baseURI, ok := ctx.Value(ctxKeyBaseURI).(string)
+	if !ok || baseURI == "" {
+		return "", false, nil
+	}
+
+	relativePath, err := filepath.Rel(encodePath(basePath), encodePath(md.Path))
+	if err != nil {
+		return "", false, errors.Wrapf(err, "failed to calculate path relative to base path: %v. %v", basePath, md.Path)
+	}
+	if relativePath == ".." || strings.HasPrefix(relativePath, "../") {
+		return "", false, nil
+	}
+
+	href, err := url.JoinPath(encodePath(baseURI), spaceID, relativePath)
+	if err != nil {
+		return "", false, errors.Wrapf(err, "failed to join relative path with base path: %v", md.Path)
+	}
+	return href, true, nil
 }
 
 // be defensive about wrong encoded etags.

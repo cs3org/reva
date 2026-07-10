@@ -58,6 +58,7 @@ const (
 	ctxPublicLink
 	ctxStorageId
 	ctxResourceOpaqueId
+	ctxRelativeBasePath
 )
 
 var (
@@ -229,6 +230,9 @@ func (s *svc) Handler() http.Handler {
 
 		// We store the actual incoming URL
 		ctx = context.WithValue(ctx, ctxKeyIncomingURL, r.URL.Path)
+		if basePath, ok := relativeBasePathFromHeader(r); ok {
+			ctx = context.WithValue(ctx, ctxRelativeBasePath, basePath)
+		}
 		r = r.WithContext(ctx)
 
 		var head string
@@ -296,6 +300,17 @@ func (s *svc) Handler() http.Handler {
 		log.Warn().Msg("resource not found")
 		w.WriteHeader(http.StatusNotFound)
 	})
+}
+
+func relativeBasePathFromHeader(r *http.Request) (string, bool) {
+	basePath := strings.TrimSpace(r.Header.Get(HeaderRevaBasePath))
+	if basePath == "" {
+		return "", false
+	}
+	if !strings.HasPrefix(basePath, "/") {
+		basePath = "/" + basePath
+	}
+	return path.Clean(basePath), true
 }
 
 func (s *svc) getClient() (gateway.GatewayAPIClient, error) {
