@@ -103,6 +103,81 @@ func TestRegisterAfterStartRuns(t *testing.T) {
 	}
 }
 
+// lateLeaderStore exercises a leader job registered after the runner started.
+// Claim only ever delivers a run the store produced itself, and a run is
+// produced when the job's schedule is registered — mimicking the real store,
+// where registering a schedule is also what makes the job's runs claimable by
+// this process.
+type lateLeaderStore struct {
+	stubStore
+	mu        sync.Mutex
+	scheduled map[string]bool
+	runs      chan Run
+}
+
+func (s *lateLeaderStore) RegisterScheduled(_ context.Context, job string, _ Schedule, _ time.Time) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if !s.scheduled[job] {
+		s.scheduled[job] = true
+		// fire the first tick right away so the test does not wait a schedule
+		// interval.
+		s.runs <- Run{ID: "run-late", Job: job, Attempt: 1}
+	}
+	return nil
+}
+
+func (s *lateLeaderStore) Claim(ctx context.Context) (Run, error) {
+	select {
+	case run := <-s.runs:
+		return run, nil
+	case <-ctx.Done():
+		return Run{}, ctx.Err()
+	}
+}
+
+func TestLateLeaderJobRuns(t *testing.T) {
+	resetRegistry()
+	old := localSchedulerTick
+	localSchedulerTick = 20 * time.Millisecond
+	defer func() { localSchedulerTick = old }()
+
+	store := &lateLeaderStore{
+		scheduled: make(map[string]bool),
+		runs:      make(chan Run, 1),
+	}
+	r, err := NewRunner(context.Background(), Options{Workers: 1, Store: store, Status: newFakeStatus()})
+	if err != nil {
+		t.Fatal(err)
+	}
+	r.Start()
+	defer r.Stop(context.Background())
+
+	// register the leader job only after the runner is up: it must get
+	// scheduled and its run claimed and executed.
+	var runs int32
+	done := make(chan struct{}, 1)
+	if err := RegisterPeriodic(Periodic{
+		Name:     "test.latecleanup",
+		Schedule: "@every 1h",
+		Scope:    ScopeLeader,
+		Run: func(ctx context.Context) error {
+			if atomic.AddInt32(&runs, 1) == 1 {
+				done <- struct{}{}
+			}
+			return nil
+		},
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	select {
+	case <-done:
+	case <-time.After(2 * time.Second):
+		t.Fatal("leader job registered after Start did not run")
+	}
+}
+
 func TestLeaderJobNeedsStore(t *testing.T) {
 	resetRegistry()
 
