@@ -152,6 +152,7 @@ func (i *interceptor) unary(unprotected []string) grpc.UnaryServerInterceptor {
 
 		ctx = appctx.ContextSetUser(ctx, u)
 		ctx = appctx.ContextSetScopes(ctx, scopes)
+		ctx = withUserLogger(ctx, u.Username)
 		return handler(ctx, req)
 	}
 }
@@ -184,9 +185,17 @@ func (i *interceptor) stream(unprotected []string) grpc.StreamServerInterceptor 
 		// store user and core access token in context.
 		ctx = appctx.ContextSetUser(ctx, u)
 		ctx = appctx.ContextSetScopes(ctx, scopes)
+		ctx = withUserLogger(ctx, u.Username)
 		wrapped := newWrappedServerStream(ctx, ss)
 		return handler(srv, wrapped)
 	}
+}
+
+// withUserLogger stamps the authenticated user onto the request logger, so a
+// request's logs are searchable by user (reva admin trace -user).
+func withUserLogger(ctx context.Context, username string) context.Context {
+	l := appctx.GetLogger(ctx).With().Str("user", username).Logger()
+	return appctx.WithLogger(ctx, &l)
 }
 
 func newWrappedServerStream(ctx context.Context, ss grpc.ServerStream) *wrappedServerStream {
