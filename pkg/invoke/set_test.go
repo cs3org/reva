@@ -62,3 +62,52 @@ func TestSet(t *testing.T) {
 		t.Fatal("expected error for unknown method")
 	}
 }
+
+// TestSetStreaming exercises a streaming invocation: the catalog flags it, the
+// handler emits several results, required args are enforced, and a unary Invoke
+// of a stream-only method is rejected (and vice versa).
+func TestSetStreaming(t *testing.T) {
+	set := NewSet()
+	set.Add("tail", "stream N ticks").
+		Arg("n", "how many").
+		Stream().
+		HandleStream(func(_ context.Context, a Args, emit StreamEmit) error {
+			for i := 0; i < a.Int("n"); i++ {
+				if err := emit(Result{"i": i}); err != nil {
+					return err
+				}
+			}
+			return nil
+		})
+
+	specs := set.Invocations()
+	if len(specs) != 1 || !specs[0].Streaming {
+		t.Fatalf("expected a streaming spec, got %+v", specs)
+	}
+
+	var got []int
+	err := set.InvokeStream(context.Background(), "tail", map[string]any{"n": "3"},
+		func(r Result) error { got = append(got, r["i"].(int)); return nil })
+	if err != nil {
+		t.Fatalf("InvokeStream: %v", err)
+	}
+	if len(got) != 3 || got[0] != 0 || got[2] != 2 {
+		t.Fatalf("unexpected stream: %+v", got)
+	}
+
+	// Missing required arg is rejected before the handler runs.
+	if err := set.InvokeStream(context.Background(), "tail", nil, func(Result) error { return nil }); err == nil {
+		t.Fatal("expected error for missing required arg")
+	}
+
+	// A stream-only method cannot be invoked unary.
+	if _, err := set.Invoke(context.Background(), "tail", map[string]any{"n": "1"}); err == nil {
+		t.Fatal("expected error invoking a stream-only method unary")
+	}
+
+	// A unary-only method cannot be invoked as a stream.
+	set.Add("ping", "unary").Handle(func(context.Context, Args) (Result, error) { return Result{}, nil })
+	if err := set.InvokeStream(context.Background(), "ping", nil, func(Result) error { return nil }); err == nil {
+		t.Fatal("expected error stream-invoking a unary-only method")
+	}
+}

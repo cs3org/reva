@@ -18,22 +18,21 @@
 
 syntax = "proto3";
 
-// Package reva.control.v1beta1 is the per-process control channel: a small gRPC
-// service, hosted on its own port by every reva process, that runs a named
-// service's Invokable operations locally. It is deliberately independent of the
-// Admin API — any client (the Admin API is just one) resolves a process's
-// control address from the service registry and dials it directly.
+// Package reva.control.v1beta1 is the per-process control channel: a small
+// gRPC service, hosted on its own port by every reva process, that runs
+// invocations locally. It is independent of the Admin API.
 package reva.control.v1beta1;
 
 option go_package = "github.com/cs3org/reva/v3/pkg/control/controlpb";
 
-// Control exposes a process's Invokable operations. The target is a request
-// field — a registry node id "host:port/service" for a service instance, or a
-// process-wide name — so one server fronts every invocation in the process; the
-// hosting process routes internally to the addressed instance by id.
+// Control exposes a process's invocations. One server fronts the whole
+// process; the target field routes to the addressed instance.
 service Control {
   rpc ListInvocations(ListInvocationsRequest) returns (ListInvocationsResponse);
   rpc Invoke(InvokeRequest) returns (InvokeResponse);
+  // InvokeStream is the streaming twin of Invoke, for invocations that emit a
+  // stream of results.
+  rpc InvokeStream(InvokeRequest) returns (stream InvokeResponse);
 }
 
 message ArgSpec {
@@ -48,6 +47,9 @@ message InvocationSpec {
   repeated ArgSpec args = 3;
   // kind is readonly|mutating|dangerous, used for audit and gating.
   string kind = 4;
+  // streaming reports the invocation emits a stream of results (via
+  // InvokeStream) rather than a single one (Invoke).
+  bool streaming = 5;
 }
 
 message ListInvocationsRequest {

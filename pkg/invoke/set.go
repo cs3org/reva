@@ -69,23 +69,25 @@ func (a Args) Int(key string) int {
 // Has reports whether an argument was supplied.
 func (a Args) Has(key string) bool { _, ok := a[key]; return ok }
 
-// Handler runs one invocation.
+// Handler runs one unary invocation.
 type Handler func(ctx context.Context, args Args) (Result, error)
 
-// Set is a service's collection of named invocations. It implements Invokable,
-// so a service exposes its operations by building a Set (embedding *Set, or
-// returning it from a method) instead of hand-writing Invocations plus an Invoke
-// switch: the Set does the name→handler routing, builds the catalog, and
-// validates required arguments. Build it once at construction; it is read-only
-// afterward.
+// StreamHandlerFunc runs one streaming invocation.
+type StreamHandlerFunc func(ctx context.Context, args Args, emit StreamEmit) error
+
+// Set is a service's collection of named invocations. It implements Invokable:
+// a service embeds a *Set and declares its methods instead of hand-writing the
+// catalog, routing and required-arg checks. Build it once at construction; it
+// is read-only afterward.
 type Set struct {
 	order   []string
 	methods map[string]*registered
 }
 
 type registered struct {
-	spec InvocationSpec
-	fn   Handler
+	spec   InvocationSpec
+	fn     Handler
+	stream StreamHandlerFunc
 }
 
 // NewSet returns an empty Set.
@@ -120,12 +122,22 @@ func (b *Builder) OptArg(name, description string) *Builder {
 // Mutating marks the invocation as changing state.
 func (b *Builder) Mutating() *Builder { b.m.spec.Kind = KindMutating; return b }
 
-// Dangerous marks the invocation as changing state in a way that warrants a
-// confirmation prompt.
+// Dangerous marks the invocation as warranting a confirmation prompt.
 func (b *Builder) Dangerous() *Builder { b.m.spec.Kind = KindDangerous; return b }
 
-// Handle sets the implementation, completing the registration.
+// Stream marks the invocation as producing a stream of results (implied by
+// HandleStream).
+func (b *Builder) Stream() *Builder { b.m.spec.Streaming = true; return b }
+
+// Handle sets the unary implementation.
 func (b *Builder) Handle(fn Handler) { b.m.fn = fn }
+
+// HandleStream sets the streaming implementation and marks the invocation
+// streaming. An invocation may have both a Handle and a HandleStream.
+func (b *Builder) HandleStream(fn StreamHandlerFunc) {
+	b.m.stream = fn
+	b.m.spec.Streaming = true
+}
 
 // Invocations implements Invokable: the catalog, in registration order.
 func (s *Set) Invocations() []InvocationSpec {
@@ -142,12 +154,32 @@ func (s *Set) Invoke(ctx context.Context, name string, args map[string]any) (Res
 	if !ok || m.fn == nil {
 		return nil, fmt.Errorf("invoke: no method %q", name)
 	}
+	if err := requireArgs(m, name, args); err != nil {
+		return nil, err
+	}
+	return m.fn(ctx, Args(args))
+}
+
+// InvokeStream implements StreamInvokable.
+func (s *Set) InvokeStream(ctx context.Context, name string, args map[string]any, emit StreamEmit) error {
+	m, ok := s.methods[name]
+	if !ok || m.stream == nil {
+		return fmt.Errorf("invoke: no streaming method %q", name)
+	}
+	if err := requireArgs(m, name, args); err != nil {
+		return err
+	}
+	return m.stream(ctx, Args(args), emit)
+}
+
+// requireArgs checks the declared required arguments are present.
+func requireArgs(m *registered, name string, args map[string]any) error {
 	for _, a := range m.spec.Args {
 		if a.Required {
 			if _, ok := args[a.Name]; !ok {
-				return nil, fmt.Errorf("invoke: %q requires argument %q", name, a.Name)
+				return fmt.Errorf("invoke: %q requires argument %q", name, a.Name)
 			}
 		}
 	}
-	return m.fn(ctx, Args(args))
+	return nil
 }

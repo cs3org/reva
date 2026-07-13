@@ -73,6 +73,27 @@ func (s *server) Invoke(ctx context.Context, req *controlpb.InvokeRequest) (*con
 	return &controlpb.InvokeResponse{ResultJson: string(b)}, nil
 }
 
+// InvokeStream is the streaming twin of Invoke: it forwards each result to the
+// client until the invocation completes or the client disconnects.
+func (s *server) InvokeStream(req *controlpb.InvokeRequest, stream controlpb.Control_InvokeStreamServer) error {
+	if _, ok := invoke.Invocations(req.Target); !ok {
+		return status.Errorf(codes.NotFound, "control: %q is not invokable on this node", req.Target)
+	}
+	emit := func(r invoke.Result) error {
+		b, err := json.Marshal(r)
+		if err != nil {
+			return status.Errorf(codes.Internal, "control: marshaling result: %v", err)
+		}
+		return stream.Send(&controlpb.InvokeResponse{ResultJson: string(b)})
+	}
+	if err := invoke.InvokeStream(stream.Context(), req.Target, req.Invocation, ArgsToAny(req.Args), emit); err != nil {
+		// Report as a final soft message, like unary Invoke. Best-effort: the
+		// send fails if the client is gone.
+		_ = stream.Send(&controlpb.InvokeResponse{Error: err.Error()})
+	}
+	return nil
+}
+
 func toPBSpec(spec invoke.InvocationSpec) *controlpb.InvocationSpec {
 	args := make([]*controlpb.ArgSpec, 0, len(spec.Args))
 	for _, a := range spec.Args {
@@ -83,6 +104,7 @@ func toPBSpec(spec invoke.InvocationSpec) *controlpb.InvocationSpec {
 		Description: spec.Description,
 		Args:        args,
 		Kind:        string(spec.Kind),
+		Streaming:   spec.Streaming,
 	}
 }
 
