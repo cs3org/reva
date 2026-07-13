@@ -31,7 +31,7 @@ import (
 func NewUnary(log zerolog.Logger) grpc.UnaryServerInterceptor {
 	interceptor := func(ctx context.Context, req any, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (any, error) {
 		traceID := trace.Get(ctx)
-		log := log.With().Str("traceid", traceID).Logger()
+		log := requestLogger(log, traceID, info.FullMethod)
 		ctx = appctx.WithLogger(ctx, &log)
 		res, err := handler(ctx, req)
 		return res, err
@@ -45,7 +45,7 @@ func NewStream(log zerolog.Logger) grpc.StreamServerInterceptor {
 	interceptor := func(srv any, ss grpc.ServerStream, info *grpc.StreamServerInfo, handler grpc.StreamHandler) error {
 		ctx := ss.Context()
 		traceID := trace.Get(ctx)
-		log := log.With().Str("traceid", traceID).Logger()
+		log := requestLogger(log, traceID, info.FullMethod)
 		ctx = appctx.WithLogger(ctx, &log)
 
 		wrapped := newWrappedServerStream(ctx, ss)
@@ -53,6 +53,16 @@ func NewStream(log zerolog.Logger) grpc.StreamServerInterceptor {
 		return err
 	}
 	return interceptor
+}
+
+// requestLogger builds the per-request logger: the trace id plus, when known,
+// the reva service handling the method — so request logs are attributable.
+func requestLogger(log zerolog.Logger, traceID, fullMethod string) zerolog.Logger {
+	c := log.With().Str("traceid", traceID)
+	if svc, ok := appctx.GRPCServiceForMethod(fullMethod); ok {
+		c = c.Str("service", svc)
+	}
+	return c.Logger()
 }
 
 func newWrappedServerStream(ctx context.Context, ss grpc.ServerStream) *wrappedServerStream {

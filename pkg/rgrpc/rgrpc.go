@@ -140,8 +140,17 @@ func (s *Server) initServices() error {
 	opts := s.getInterceptors()
 	grpcServer := grpc.NewServer(opts...)
 
-	for _, svc := range s.services {
+	// Record which proto services each reva service registers (the diff around
+	// its Register call), so request loggers can be stamped with the owner.
+	known := map[string]bool{}
+	for name, svc := range s.services {
 		svc.Register(grpcServer)
+		for proto := range grpcServer.GetServiceInfo() {
+			if !known[proto] {
+				known[proto] = true
+				appctx.MapGRPCService(proto, name)
+			}
+		}
 	}
 
 	if s.EnableReflection {
