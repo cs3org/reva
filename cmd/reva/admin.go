@@ -28,8 +28,10 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"os/signal"
 	"path/filepath"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 
@@ -55,6 +57,7 @@ var adminCommands = []*command{
 	adminConfigCommand(),
 	adminInvocationsCommand(),
 	adminInvokeCommand(),
+	adminLogsCommand(),
 	adminImpersonateCommand(),
 }
 
@@ -776,6 +779,9 @@ func adminInvocationsCommand() *command {
 			if kind == "" {
 				kind = "?"
 			}
+			if inv.Streaming {
+				kind += ",stream"
+			}
 			fmt.Printf("%-20s [%s] %s\n", inv.Name, kind, inv.Description)
 		}
 		return nil
@@ -787,11 +793,12 @@ func adminInvokeCommand() *command {
 	cmd := newCommand("invoke")
 	cmd.Description = func() string { return "run a service invocation on one or all instances" }
 	cmd.Usage = func() string {
-		return "Usage: admin invoke [-admin-host h] [-y] <service|node-id> <invocation> [key=val ...]"
+		return "Usage: admin invoke [-admin-host h] [-y] [-stream] <selector> <invocation> [key=val ...]"
 	}
 	adminHost := cmd.String("admin-host", "", "address of the admin gRPC endpoint (persisted)")
 	yes := cmd.Bool("y", false, "skip the confirmation prompt for dangerous invocations")
-	cmd.ResetFlags = func() { *adminHost, *yes = "", false }
+	stream := cmd.Bool("stream", false, "run a streaming invocation, printing results as they arrive (Ctrl-C stops)")
+	cmd.ResetFlags = func() { *adminHost, *yes, *stream = "", false, false }
 	cmd.Action = func(w ...io.Writer) error {
 		if cmd.NArg() < 2 {
 			return errors.New(cmd.Usage())
@@ -813,6 +820,10 @@ func adminInvokeCommand() *command {
 			}
 		}
 
+		if *stream {
+			return runInvokeStream(ctx, client, selector, invocation, args)
+		}
+
 		res, err := client.Invoke(ctx, &adminpb.InvokeRequest{
 			Service:    selector,
 			Invocation: invocation,
@@ -825,6 +836,34 @@ func adminInvokeCommand() *command {
 		return nil
 	}
 	return cmd
+}
+
+// runInvokeStream drives a streaming invocation, printing node-labelled results
+// as they arrive until every instance's stream ends or the user interrupts.
+func runInvokeStream(ctx context.Context, client adminpb.AdminAPIClient, selector, invocation string, args map[string]string) error {
+	ctx, stop := signal.NotifyContext(ctx, os.Interrupt)
+	defer stop()
+	stream, err := client.InvokeStream(ctx, &adminpb.InvokeRequest{Service: selector, Invocation: invocation, Args: args})
+	if err != nil {
+		return adminErr(err)
+	}
+	for {
+		msg, err := stream.Recv()
+		if err == io.EOF {
+			return nil
+		}
+		if err != nil {
+			if ctx.Err() != nil { // interrupted: a clean stop
+				return nil
+			}
+			return adminErr(err)
+		}
+		if msg.Error != "" {
+			fmt.Printf("  %s: ERROR %s\n", msg.Node, msg.Error)
+			continue
+		}
+		fmt.Printf("  %s: %s\n", msg.Node, msg.ResultJson)
+	}
 }
 
 // invocationKind best-effort resolves an invocation's kind for the confirmation
@@ -840,6 +879,287 @@ func invocationKind(ctx context.Context, client adminpb.AdminAPIClient, svcName,
 		}
 	}
 	return ""
+}
+
+func adminLogsCommand() *command {
+	cmd := newCommand("logs")
+	cmd.Description = func() string { return "read (or follow) a service's recent logs across the fleet" }
+	cmd.Usage = func() string {
+		return "Usage: admin logs [-admin-host h] [-f] [-n N] [-level L] [-since D] [-grep P] [-o text|json] <service|node-id|host[:port]>"
+	}
+	adminHost := cmd.String("admin-host", "", "address of the admin gRPC endpoint (persisted)")
+	follow := cmd.Bool("f", false, "follow: stream new lines until interrupted")
+	tail := cmd.Int("n", 200, "number of recent lines (snapshot), or backlog before -f")
+	level := cmd.String("level", "", "minimum level: trace|debug|info|warn|error")
+	since := cmd.String("since", "", "only lines newer than a duration (e.g. 5m) or an RFC3339 time")
+	grep := cmd.String("grep", "", "keep only lines containing this substring")
+	output := cmd.String("o", "text", "output format: text | json")
+	cmd.ResetFlags = func() {
+		*adminHost, *follow, *tail, *level, *since, *grep, *output = "", false, 200, "", "", "", "text"
+	}
+	cmd.Action = func(w ...io.Writer) error {
+		if cmd.NArg() < 1 {
+			return errors.New(cmd.Usage())
+		}
+		if *output != "text" && *output != "json" {
+			return fmt.Errorf("unknown -o %q (use text or json)", *output)
+		}
+		selector := cmd.Args()[0]
+		args := map[string]string{"limit": strconv.Itoa(*tail)}
+		if *level != "" {
+			args["level"] = *level
+		}
+		if *since != "" {
+			args["since"] = *since
+		}
+		if *grep != "" {
+			args["grep"] = *grep
+		}
+
+		client, ctx, err := adminDial(*adminHost)
+		if err != nil {
+			return err
+		}
+		// A node id addresses one instance; a plain service name may span several,
+		// so label lines with their node in that case.
+		multi := !strings.Contains(selector, "/")
+		if *follow {
+			return followLogs(ctx, client, selector, args, *output, multi)
+		}
+		return snapshotLogs(ctx, client, selector, args, *output, multi)
+	}
+	return cmd
+}
+
+// logLine is one streamed/returned log entry from the `logs` invocation.
+type logLine struct {
+	Time    string `json:"time"`
+	Level   string `json:"level"`
+	Service string `json:"service"`
+	Message string `json:"message"`
+	Raw     string `json:"raw"`
+}
+
+// logSnapshot is the unary `logs` result: recent lines plus a truncation flag.
+type logSnapshot struct {
+	Entries   []logLine `json:"entries"`
+	Truncated bool      `json:"truncated"`
+}
+
+// snapshotLogs runs the unary logs invocation and prints the merged lines in
+// chronological order.
+func snapshotLogs(ctx context.Context, client adminpb.AdminAPIClient, selector string, args map[string]string, output string, multi bool) error {
+	res, err := client.Invoke(ctx, &adminpb.InvokeRequest{Service: selector, Invocation: "logs", Args: args})
+	if err != nil {
+		return adminErr(err)
+	}
+	type entry struct {
+		node string
+		line logLine
+		t    time.Time
+	}
+	var merged []entry
+	anyTruncated := false
+	for _, r := range res.Results {
+		if r.Error != "" {
+			fmt.Printf("# %s: error: %s\n", r.Node, r.Error)
+			continue
+		}
+		var snap logSnapshot
+		if err := json.Unmarshal([]byte(r.ResultJson), &snap); err != nil {
+			continue
+		}
+		anyTruncated = anyTruncated || snap.Truncated
+		for _, l := range snap.Entries {
+			merged = append(merged, entry{node: r.Node, line: l, t: parseLogTime(l.Time)})
+		}
+	}
+	// The buffer returns newest-first; sort ascending so it reads like a log file.
+	sort.SliceStable(merged, func(i, j int) bool { return merged[i].t.Before(merged[j].t) })
+	nodeWidth := 0
+	for _, e := range merged {
+		nodeWidth = max(nodeWidth, len(e.node))
+	}
+	color := stdoutIsTTY()
+	for _, e := range merged {
+		fmt.Println(formatLogLine(e.node, nodeWidth, e.line, multi, color, output))
+	}
+	if anyTruncated && output == "text" {
+		fmt.Printf("# more lines matched than shown; raise -n to see more\n")
+	}
+	return nil
+}
+
+// followLogs streams the logs invocation until interrupted.
+func followLogs(ctx context.Context, client adminpb.AdminAPIClient, selector string, args map[string]string, output string, multi bool) error {
+	ctx, stop := signal.NotifyContext(ctx, os.Interrupt)
+	defer stop()
+	stream, err := client.InvokeStream(ctx, &adminpb.InvokeRequest{Service: selector, Invocation: "logs", Args: args})
+	if err != nil {
+		return adminErr(err)
+	}
+	color := stdoutIsTTY()
+	nodeWidth := 0
+	for {
+		msg, err := stream.Recv()
+		if err == io.EOF {
+			return nil
+		}
+		if err != nil {
+			if ctx.Err() != nil { // interrupted: a clean stop
+				return nil
+			}
+			return adminErr(err)
+		}
+		if msg.Error != "" {
+			fmt.Printf("# %s: error: %s\n", msg.Node, msg.Error)
+			continue
+		}
+		var l logLine
+		if err := json.Unmarshal([]byte(msg.ResultJson), &l); err != nil {
+			continue
+		}
+		nodeWidth = max(nodeWidth, len(msg.Node))
+		fmt.Println(formatLogLine(msg.Node, nodeWidth, l, multi, color, output))
+	}
+}
+
+// formatLogLine renders one entry: the raw JSON for -o json, else a console
+// line in the familiar zerolog format, node-prefixed (padded to nodeWidth so
+// the columns align) when the result spans instances and colored with
+// zerolog's palette when stdout is a TTY.
+func formatLogLine(node string, nodeWidth int, l logLine, multi, color bool, output string) string {
+	if output == "json" {
+		if l.Raw != "" {
+			return l.Raw
+		}
+		b, _ := json.Marshal(l)
+		return string(b)
+	}
+	ts := l.Time
+	if t := parseLogTime(l.Time); !t.IsZero() {
+		ts = t.Format("2006-01-02 15:04:05.000")
+	}
+	lvl := strings.ToUpper(l.Level)
+	if len(lvl) > 3 {
+		lvl = lvl[:3]
+	}
+	caller, fields := logLineDetails(l.Raw)
+
+	var b strings.Builder
+	if multi {
+		fmt.Fprintf(&b, "%-*s  ", nodeWidth, node)
+	}
+	b.WriteString(logColor(ts, "90", color)) // dark gray, like zerolog's console time
+	b.WriteString(" " + logColor(fmt.Sprintf("%-3s", lvl), levelColor(l.Level), color) + " ")
+	if caller != "" {
+		b.WriteString(logColor(caller, "1", color) + logColor(" >", "36", color) + " ")
+	}
+	if l.Message != "" || len(fields) > 0 || caller != "" {
+		b.WriteString(l.Message)
+	} else {
+		// A line the buffer could not parse: show it verbatim over losing it.
+		b.WriteString(l.Raw)
+	}
+	for _, f := range fields {
+		if f[0] == "err" || f[0] == "error" {
+			b.WriteString(" " + logColor(f[0]+"=", "31", color) + logColor(f[1], "1;31", color))
+		} else {
+			b.WriteString(" " + logColor(f[0]+"=", "36", color) + f[1])
+		}
+	}
+	return b.String()
+}
+
+// logColor wraps s in an ANSI SGR sequence when enabled.
+func logColor(s, code string, enabled bool) string {
+	if !enabled || s == "" {
+		return s
+	}
+	return "\x1b[" + code + "m" + s + "\x1b[0m"
+}
+
+// levelColor is zerolog's console level palette.
+func levelColor(level string) string {
+	switch strings.ToLower(level) {
+	case "trace":
+		return "35" // magenta
+	case "debug":
+		return "33" // yellow
+	case "info":
+		return "32" // green
+	case "warn":
+		return "31" // red
+	case "error", "fatal", "panic":
+		return "1;31" // bold red
+	default:
+		return "1" // bold
+	}
+}
+
+// logLineDetails parses a raw zerolog JSON line into its caller and [key,
+// value] fields in writer order; time/level/message are rendered separately.
+func logLineDetails(raw string) (caller string, fields [][2]string) {
+	dec := json.NewDecoder(strings.NewReader(raw))
+	dec.UseNumber()
+	t, err := dec.Token()
+	if err != nil || t != json.Delim('{') {
+		return "", nil
+	}
+	for dec.More() {
+		kt, err := dec.Token()
+		if err != nil {
+			return caller, fields
+		}
+		key, ok := kt.(string)
+		if !ok {
+			return caller, fields
+		}
+		var v any
+		if err := dec.Decode(&v); err != nil {
+			return caller, fields
+		}
+		switch key {
+		case "time", "level", "message":
+		case "caller":
+			caller = logFieldValue(v)
+		default:
+			fields = append(fields, [2]string{key, logFieldValue(v)})
+		}
+	}
+	return caller, fields
+}
+
+// logFieldValue renders one field value console-style: strings bare (quoted
+// when they contain whitespace), nested values as compact JSON.
+func logFieldValue(v any) string {
+	switch t := v.(type) {
+	case string:
+		if strings.ContainsAny(t, " \t\n") {
+			return strconv.Quote(t)
+		}
+		return t
+	case json.Number:
+		return t.String()
+	case bool:
+		if t {
+			return "true"
+		}
+		return "false"
+	case nil:
+		return "null"
+	default:
+		b, _ := json.Marshal(v)
+		return string(b)
+	}
+}
+
+func parseLogTime(s string) time.Time {
+	t, err := time.Parse(time.RFC3339Nano, s)
+	if err != nil {
+		return time.Time{}
+	}
+	return t
 }
 
 func adminImpersonateCommand() *command {

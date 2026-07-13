@@ -49,7 +49,8 @@ Two planes:
 
 Every reva process that hosts anything invokable stands up **one** control gRPC
 server (`reva.control.v1beta1`), on its own port, independent of whether the
-Admin API service is loaded. It hosts only `Invoke` and `ListInvocations`. It is
+Admin API service is loaded. It hosts `Invoke`, its streaming twin
+`InvokeStream`, and `ListInvocations`. It is
 *not* registered as a service of its own — instead every real service node
 advertises the channel's address in its `control` registry metadata, and the
 address is shared by all services in the process.
@@ -82,8 +83,42 @@ selects a peer:
 
 The admin resolves the selector to a set of `(node id, control address)`
 endpoints, dials each process's control channel, and passes the node id as the
-routing target. Invocations are **synchronous**: every addressed instance runs
-and reports before the call returns.
+routing target. A unary `Invoke` is **synchronous**: every addressed instance
+runs and reports before the call returns.
+
+### Streaming invocations
+
+Some operations produce a *stream* of results over time rather than a single one
+(following logs is the built-in example). These ride `InvokeStream`, the
+streaming twin of `Invoke`: same selector, same routing, but the admin
+multiplexes each instance's stream into one, labelling every item with its node,
+until the client disconnects. A developer declares one by giving an invocation a
+streaming handler (`Set.Add(...).Stream().HandleStream(fn)`); the catalog flags
+it `streaming` so the CLI knows to open a stream. Multi-instance follows
+interleave as items arrive (like `kubectl logs -f`).
+
+## Reading logs
+
+Every reva process keeps its most recent log lines in a bounded in-memory ring
+([`pkg/logtail`](../../../../pkg/logtail)) that the logger tees into — the real
+sink (stdout, a file) is unchanged. That buffer is exposed as a built-in `logs`
+invocation on every service (like `config`), so it needs no per-service code and
+rides the same selector + control fan-out as any invocation. `reva admin logs`
+drives it:
+
+```
+reva admin logs userprovider              # recent lines from every userprovider, merged
+reva admin logs 10.0.0.4:19003/userprovider   # one instance's process
+reva admin logs userprovider -f           # follow (InvokeStream) until Ctrl-C
+reva admin logs userprovider -level warn -since 5m -grep timeout -n 500
+reva admin logs 10.0.0.4:19003/userprovider -all   # the whole process, not just that service
+```
+
+Because the buffer is process-wide, lines are attributed to a service by the
+`service` field the gRPC loader stamps on each service's logger. Per-request
+access-logs carry `uri` (a CS3 proto path) instead, so they are not attributed to
+a registry name; `-all` on a node id gives the reliable full-process view. The
+window is bounded (`[log] tail`, default 2000 lines); there is no deeper history.
 
 ## Security and scope
 
@@ -174,6 +209,14 @@ A process that hosts an invokable service but not the `admin` service still
 stands up its control channel (so a remote admin can reach it); it just reads the
 same `[grpc] control_address` key.
 
+The in-memory log buffer that backs `reva admin logs` is sized in the `[log]`
+section:
+
+```toml
+[log]
+tail = 2000   # recent lines kept in memory for `admin logs` (0 disables it)
+```
+
 ### Using the CLI
 
 ```
@@ -182,7 +225,8 @@ reva admin elevate -admin-host <admin:port>     # step up, stores a short-TTL ad
 reva admin services [-v] [-o wide|json] [service]
 reva admin config   <service|node-id> [-o toml|json]
 reva admin invocations <service|node-id>
-reva admin invoke   <service|node-id> <invocation> [key=val ...]
+reva admin invoke   [-stream] <selector> <invocation> [key=val ...]
+reva admin logs     <selector> [-f] [-n N] [-level L] [-since D] [-grep P] [-o text|json]
 reva admin impersonate <user>
 
 # Local root: on the box, no login/elevate/flag — the CLI finds the socket. Only
@@ -256,3 +300,8 @@ Notes:
 - **Result**: return an `invoke.Result` (a `map[string]any`); the framework
   redacts nothing for you, so do not put secrets in it. Return an error to
   surface a per-instance failure.
+- **Streaming**: for an operation that emits results over time, use
+  `.Stream().HandleStream(fn)` with a handler
+  `func(ctx, invoke.Args, emit invoke.StreamEmit) error` that calls `emit` per
+  result until `ctx` is done or `emit` reports the client gone. It is reached via
+  `InvokeStream`; the built-in `logs` invocation is an example.

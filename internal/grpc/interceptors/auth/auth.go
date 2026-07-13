@@ -173,8 +173,9 @@ func (i *interceptor) stream(unprotected []string) grpc.StreamServerInterceptor 
 			return status.Errorf(codes.Unauthenticated, "auth: core access token not found")
 		}
 
-		// validate the token and ensure access to the resource is allowed
-		u, scopes, err := i.dismantleToken(ctx, tkn, ss, false)
+		// A server stream has no request message yet, so scope checks identify
+		// the call by method.
+		u, scopes, err := i.dismantleToken(ctx, tkn, scope.MethodResource(info.FullMethod), false)
 		if err != nil {
 			log.Warn().Err(err).Msg("access token is invalid")
 			return status.Errorf(codes.PermissionDenied, "auth: core access token is invalid")

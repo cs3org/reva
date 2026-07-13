@@ -33,6 +33,9 @@ type AdminAPIClient interface {
 	// Invocations (reads and writes via the Invokable channel).
 	ListInvocations(ctx context.Context, in *ListInvocationsRequest, opts ...grpc.CallOption) (*ListInvocationsResponse, error)
 	Invoke(ctx context.Context, in *InvokeRequest, opts ...grpc.CallOption) (*InvokeResponse, error)
+	// InvokeStream is the streaming twin of Invoke: it multiplexes the resolved
+	// instances' result streams, each item labelled with its node.
+	InvokeStream(ctx context.Context, in *InvokeRequest, opts ...grpc.CallOption) (AdminAPI_InvokeStreamClient, error)
 }
 
 type adminAPIClient struct {
@@ -115,6 +118,38 @@ func (c *adminAPIClient) Invoke(ctx context.Context, in *InvokeRequest, opts ...
 	return out, nil
 }
 
+func (c *adminAPIClient) InvokeStream(ctx context.Context, in *InvokeRequest, opts ...grpc.CallOption) (AdminAPI_InvokeStreamClient, error) {
+	stream, err := c.cc.NewStream(ctx, &AdminAPI_ServiceDesc.Streams[0], "/reva.admin.v1beta1.AdminAPI/InvokeStream", opts...)
+	if err != nil {
+		return nil, err
+	}
+	x := &adminAPIInvokeStreamClient{stream}
+	if err := x.ClientStream.SendMsg(in); err != nil {
+		return nil, err
+	}
+	if err := x.ClientStream.CloseSend(); err != nil {
+		return nil, err
+	}
+	return x, nil
+}
+
+type AdminAPI_InvokeStreamClient interface {
+	Recv() (*InvokeStreamResponse, error)
+	grpc.ClientStream
+}
+
+type adminAPIInvokeStreamClient struct {
+	grpc.ClientStream
+}
+
+func (x *adminAPIInvokeStreamClient) Recv() (*InvokeStreamResponse, error) {
+	m := new(InvokeStreamResponse)
+	if err := x.ClientStream.RecvMsg(m); err != nil {
+		return nil, err
+	}
+	return m, nil
+}
+
 // AdminAPIServer is the server API for AdminAPI service.
 // All implementations must embed UnimplementedAdminAPIServer
 // for forward compatibility
@@ -130,6 +165,9 @@ type AdminAPIServer interface {
 	// Invocations (reads and writes via the Invokable channel).
 	ListInvocations(context.Context, *ListInvocationsRequest) (*ListInvocationsResponse, error)
 	Invoke(context.Context, *InvokeRequest) (*InvokeResponse, error)
+	// InvokeStream is the streaming twin of Invoke: it multiplexes the resolved
+	// instances' result streams, each item labelled with its node.
+	InvokeStream(*InvokeRequest, AdminAPI_InvokeStreamServer) error
 	mustEmbedUnimplementedAdminAPIServer()
 }
 
@@ -160,6 +198,9 @@ func (UnimplementedAdminAPIServer) ListInvocations(context.Context, *ListInvocat
 }
 func (UnimplementedAdminAPIServer) Invoke(context.Context, *InvokeRequest) (*InvokeResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method Invoke not implemented")
+}
+func (UnimplementedAdminAPIServer) InvokeStream(*InvokeRequest, AdminAPI_InvokeStreamServer) error {
+	return status.Errorf(codes.Unimplemented, "method InvokeStream not implemented")
 }
 func (UnimplementedAdminAPIServer) mustEmbedUnimplementedAdminAPIServer() {}
 
@@ -318,6 +359,27 @@ func _AdminAPI_Invoke_Handler(srv interface{}, ctx context.Context, dec func(int
 	return interceptor(ctx, in, info, handler)
 }
 
+func _AdminAPI_InvokeStream_Handler(srv interface{}, stream grpc.ServerStream) error {
+	m := new(InvokeRequest)
+	if err := stream.RecvMsg(m); err != nil {
+		return err
+	}
+	return srv.(AdminAPIServer).InvokeStream(m, &adminAPIInvokeStreamServer{stream})
+}
+
+type AdminAPI_InvokeStreamServer interface {
+	Send(*InvokeStreamResponse) error
+	grpc.ServerStream
+}
+
+type adminAPIInvokeStreamServer struct {
+	grpc.ServerStream
+}
+
+func (x *adminAPIInvokeStreamServer) Send(m *InvokeStreamResponse) error {
+	return x.ServerStream.SendMsg(m)
+}
+
 // AdminAPI_ServiceDesc is the grpc.ServiceDesc for AdminAPI service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -358,6 +420,12 @@ var AdminAPI_ServiceDesc = grpc.ServiceDesc{
 			Handler:    _AdminAPI_Invoke_Handler,
 		},
 	},
-	Streams:  []grpc.StreamDesc{},
+	Streams: []grpc.StreamDesc{
+		{
+			StreamName:    "InvokeStream",
+			Handler:       _AdminAPI_InvokeStream_Handler,
+			ServerStreams: true,
+		},
+	},
 	Metadata: "admin.proto",
 }
