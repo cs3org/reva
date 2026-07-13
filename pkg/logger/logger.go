@@ -64,12 +64,22 @@ func WithLevel(lvl string) Option {
 
 // WithWriter is an option to configure the logging output.
 func WithWriter(w io.Writer, m Mode) Option {
+	return WithWriterTee(w, nil, m)
+}
+
+// WithWriterTee is WithWriter with the event's raw JSON also teed to tap (when
+// non-nil), regardless of the primary sink's format.
+func WithWriterTee(w io.Writer, tap io.Writer, m Mode) Option {
 	return func(l *zerolog.Logger) {
+		var primary io.Writer = w
 		if m == ConsoleMode {
-			*l = l.Output(zerolog.ConsoleWriter{Out: w, TimeFormat: "2006-01-02 15:04:05.999"})
-		} else {
-			*l = l.Output(w)
+			primary = zerolog.ConsoleWriter{Out: w, TimeFormat: "2006-01-02 15:04:05.999"}
 		}
+		if tap == nil {
+			*l = l.Output(primary)
+			return
+		}
+		*l = l.Output(zerolog.MultiLevelWriter(primary, tap))
 	}
 }
 
