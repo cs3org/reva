@@ -108,17 +108,22 @@ drives it:
 
 ```
 reva admin logs userprovider              # recent lines from every userprovider, merged
-reva admin logs 10.0.0.4:19003/userprovider   # one instance's process
+reva admin logs 10.0.0.4:19003/userprovider   # one instance
+reva admin logs 10.0.0.4:19003            # every service at that address
+reva admin logs 10.0.0.4                  # every service on that machine
 reva admin logs userprovider -f           # follow (InvokeStream) until Ctrl-C
 reva admin logs userprovider -level warn -since 5m -grep timeout -n 500
-reva admin logs 10.0.0.4:19003/userprovider -all   # the whole process, not just that service
 ```
 
-Because the buffer is process-wide, lines are attributed to a service by the
-`service` field the gRPC loader stamps on each service's logger. Per-request
-access-logs carry `uri` (a CS3 proto path) instead, so they are not attributed to
-a registry name; `-all` on a node id gives the reliable full-process view. The
-window is bounded (`[log] tail`, default 2000 lines); there is no deeper history.
+Because the buffer is process-wide, lines are attributed to a service by their
+`service` log field. It is stamped in two places: construction-time loggers get
+it from the service loader, and **per-request** loggers get it from the appctx
+interceptor — the gRPC server records which proto services each reva service
+registers, so a request's full method resolves to its owning service (the HTTP
+router does the same by routed prefix). Process-level lines that belong to no
+service (startup, registry) match no service filter; the raw stream, them
+included, is reachable with `admin invoke <node-id> logs all=true`. The window
+is bounded (`[log] tail`, default 2000 lines); there is no deeper history.
 
 ## Security and scope
 
