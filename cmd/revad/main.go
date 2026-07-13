@@ -41,6 +41,7 @@ import (
 	"github.com/cs3org/reva/v3/cmd/revad/pkg/grace"
 	"github.com/cs3org/reva/v3/cmd/revad/runtime"
 	"github.com/cs3org/reva/v3/pkg/logger"
+	"github.com/cs3org/reva/v3/pkg/logtail"
 	"github.com/cs3org/reva/v3/pkg/plugin"
 	"github.com/cs3org/reva/v3/pkg/utils/maps"
 	"github.com/google/uuid"
@@ -372,7 +373,14 @@ func newLogger(conf *config.Log) (*zerolog.Logger, error) {
 		return nil, err
 	}
 
-	opts = append(opts, logger.WithWriter(w, logger.Mode(conf.Mode)))
+	// Tee recent events into the in-memory ring `reva admin logs` reads.
+	buf := logtail.New(conf.Tail)
+	logtail.SetDefault(buf)
+	var tap io.Writer
+	if buf.Enabled() {
+		tap = buf
+	}
+	opts = append(opts, logger.WithWriterTee(w, tap, logger.Mode(conf.Mode)))
 
 	l := logger.New(opts...)
 	sub := l.With().Int("pid", os.Getpid()).Logger()
