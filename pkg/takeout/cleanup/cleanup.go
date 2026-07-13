@@ -83,7 +83,7 @@ func (cj *CleanupJob) Run(ctx context.Context) error {
 		return errors.Wrap(err, "takeout: authentication failed")
 	}
 	if authRes.Status.Code != rpc.Code_CODE_OK {
-		return errors.Wrap(errors.New(authRes.Status.String()), "takeout: auth res status code not OK")
+		return errors.Wrap(errors.New(authRes.Status.Message), "takeout: authentication failed")
 	}
 
 	// Update authenticated context
@@ -91,29 +91,42 @@ func (cj *CleanupJob) Run(ctx context.Context) error {
 	ctx = appctx.ContextSetUser(ctx, authRes.User)
 	ctx = metadata.AppendToOutgoingContext(ctx, appctx.TokenHeader, authRes.Token)
 
-	// Get archive list
-	listRes, err := gtw.ListContainer(ctx, &provider.ListContainerRequest{
+	// Get container list
+	containerRes, err := gtw.ListContainer(ctx, &provider.ListContainerRequest{
 		Ref: &provider.Reference{
 			Path: cj.conf.TakeoutPath,
 		},
 	})
 	if err != nil {
-		return err
+		return errors.Wrap(err, "cleanup: could not get takeout containers")
 	}
-
-	appctx.GetLogger(ctx).Debug().Msgf("cleanup: found %d takeouts", len(listRes.Infos))
+	if containerRes.Status.Code != rpc.Code_CODE_OK {
+		return errors.Wrap(errors.New(containerRes.Status.Message), "cleanup: could not get takeout containers")
+	}
+	appctx.GetLogger(ctx).Debug().Msgf("cleanup: found %d takeout containers", len(containerRes.Infos))
 
 	// Compute time threshold
 	threshold := time.Duration(cj.conf.CleanupDelay) * time.Hour
-	for _, info := range listRes.Infos {
+
+	for _, info := range containerRes.Infos {
 		// Compute time since takeout
 		timeSinceTakeout := time.Since(time.Unix(int64(info.Mtime.Seconds), 0))
 
 		if timeSinceTakeout > threshold {
-			appctx.GetLogger(ctx).Debug().Msgf("cleanup: removing %s [%.1f]", info.Path, timeSinceTakeout.Hours())
+			appctx.GetLogger(ctx).Debug().Msgf("cleanup: removing %s [%.1fh]", info.Path, timeSinceTakeout.Hours())
 
-		} else {
-			appctx.GetLogger(ctx).Debug().Msgf("cleanup: keeping %s [%.1f]", info.Path, timeSinceTakeout.Hours())
+			// Delete container and content recursively
+			delRes, err := gtw.Delete(ctx, &provider.DeleteRequest{
+				Ref: &provider.Reference{
+					ResourceId: info.Id,
+				},
+			})
+			if err != nil {
+				return errors.Wrap(err, "cleanup: could not delete container")
+			}
+			if delRes.Status.Code != rpc.Code_CODE_OK {
+				return errors.Wrap(errors.New(delRes.Status.Message), "cleanup: could not delete container")
+			}
 		}
 	}
 
