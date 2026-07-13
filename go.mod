@@ -48,7 +48,7 @@ require (
 	github.com/rs/zerolog v1.35.1
 	github.com/sethvargo/go-password v0.3.1
 	github.com/stretchr/testify v1.11.1
-	github.com/studio-b12/gowebdav v0.12.0
+	github.com/studio-b12/gowebdav v0.13.0
 	github.com/thanhpk/randstr v1.0.6
 	github.com/tus/tusd v1.13.0
 	github.com/wk8/go-ordered-map v1.0.0
