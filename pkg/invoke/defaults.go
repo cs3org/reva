@@ -25,7 +25,8 @@ import "context"
 // invocation of the same name.
 type defaultInvocation struct {
 	spec   InvocationSpec
-	fn   func(ctx context.Context, inst instance, args Args) (Result, error)
+	fn     func(ctx context.Context, inst instance, args Args) (Result, error)
+	stream func(ctx context.Context, inst instance, args Args, emit StreamEmit) error
 }
 
 // defaults are the built-in invocations, in registration order. Each registers

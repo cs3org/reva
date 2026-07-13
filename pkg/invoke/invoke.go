@@ -42,28 +42,35 @@ type ArgSpec struct {
 	Required    bool
 }
 
-// InvocationSpec is a service's self-description of one invocation: its name,
-// arguments and kind. It is what ListInvocations exposes.
+// InvocationSpec describes one invocation: its name, arguments and kind.
 type InvocationSpec struct {
 	Name        string
 	Description string
 	Args        []ArgSpec
 	Kind        InvocationKind
+	// Streaming marks an invocation that emits a stream of results (via
+	// InvokeStream) rather than a single one (Invoke).
+	Streaming bool
 }
 
 // Result is an invocation's serializable, already-redacted return value.
 type Result map[string]any
 
-// Invokable is the single capability a service implements to expose operations
-// to the Admin API — both read-only inspection (dump a cache, the lock table,
-// the registry node table) and mutations. There is no separate inspection
-// interface: a read is simply an invocation with Kind == KindReadonly. The
-// invocation runs inside the service, which owns the state; the Admin API is
-// only the entry point and orchestrator. It is opt-in — a service that is not
-// Invokable exposes nothing, with zero coupling and no reflection into private
-// fields.
+// StreamEmit delivers one result of a streaming invocation; it returns an
+// error when the consumer is gone.
+type StreamEmit func(Result) error
+
+// StreamInvokable is the optional streaming counterpart of Invokable.
+type StreamInvokable interface {
+	// InvokeStream runs the named streaming invocation, emitting each result
+	// until it completes, ctx is done, or emit reports the consumer gone.
+	InvokeStream(ctx context.Context, name string, args map[string]any, emit StreamEmit) error
+}
+
+// Invokable is the capability a service implements to expose operations to the
+// Admin API. It is opt-in; a read is simply an invocation with KindReadonly.
 type Invokable interface {
-	// Invocations self-describes the operations the service exposes.
+	// Invocations lists the operations the service exposes.
 	Invocations() []InvocationSpec
 	// Invoke runs the named invocation with the given arguments.
 	Invoke(ctx context.Context, name string, args map[string]any) (Result, error)
