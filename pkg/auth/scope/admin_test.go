@@ -60,6 +60,12 @@ func TestAdminScopeIsolation(t *testing.T) {
 		// admin token must not.
 		{"user token, RequestAdmin", userToken, &adminpb.RequestAdminRequest{}, true},
 		{"admin token, RequestAdmin", adminToken, &adminpb.RequestAdminRequest{}, false},
+		// Streaming admin/control RPCs are identified by method (the request
+		// message is not available yet): the same isolation must hold.
+		{"admin token, admin stream method", adminToken, MethodResource("/reva.admin.v1beta1.AdminAPI/InvokeStream"), true},
+		{"admin token, control stream method", adminToken, MethodResource("/reva.control.v1beta1.Control/InvokeStream"), true},
+		{"user token, admin stream method", userToken, MethodResource("/reva.admin.v1beta1.AdminAPI/InvokeStream"), false},
+		{"user token, non-admin stream method", userToken, MethodResource("/cs3.storage.provider.v1beta1.ProviderAPI/Restore"), true},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -87,5 +93,14 @@ func TestIsAdminResource(t *testing.T) {
 	}
 	if isAdminResource(&adminpb.RequestAdminRequest{}) {
 		t.Fatal("RequestAdmin must not require the admin scope (it is the step-up door)")
+	}
+	if !isAdminResource(MethodResource("/reva.control.v1beta1.Control/InvokeStream")) {
+		t.Fatal("expected a control stream method to be recognized as an admin resource")
+	}
+	if !isAdminResource(MethodResource("/reva.admin.v1beta1.AdminAPI/InvokeStream")) {
+		t.Fatal("expected an admin stream method to be recognized as an admin resource")
+	}
+	if isAdminResource(MethodResource("/cs3.storage.provider.v1beta1.ProviderAPI/Restore")) {
+		t.Fatal("expected a non-admin stream method to not be an admin resource")
 	}
 }

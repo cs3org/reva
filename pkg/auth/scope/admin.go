@@ -20,6 +20,7 @@ package scope
 
 import (
 	"context"
+	"strings"
 
 	authpb "github.com/cs3org/go-cs3apis/cs3/auth/provider/v1beta1"
 	types "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
@@ -28,23 +29,23 @@ import (
 	"github.com/rs/zerolog"
 )
 
-// adminScope authorizes only the Admin API's own request types. This gives
-// mutual isolation with every other scope, with no new code path: an admin
-// token can never satisfy a storage/share request (those verifiers do not
-// recognize admin messages), and a user/share token can never satisfy an admin
-// request (the always-true user scope is guarded by isAdminResource, and the
-// other verifiers type-switch on their own messages and fall through).
+// MethodResource identifies a gRPC call by its full method name. The auth
+// interceptor passes it for a server-streaming call, whose request message is
+// not yet available to type-switch on.
+type MethodResource string
+
+// adminScope authorizes only the Admin API's own request types, giving mutual
+// isolation with every other scope: an admin token satisfies nothing else, and
+// the always-true user scope declines admin requests via isAdminResource.
 func adminScope(_ context.Context, _ *authpb.Scope, resource any, _ *zerolog.Logger) (bool, error) {
 	return isAdminResource(resource), nil
 }
 
-// isAdminResource reports whether resource is an Admin API (adminpb) request, or
-// a control channel (controlpb) request, that requires the admin scope.
-// RequestAdminRequest is deliberately excluded: it is the step-up door,
-// reachable with an ordinary user-scoped token, so the user scope (not the admin
-// scope) must satisfy it.
+// isAdminResource reports whether resource is an Admin API or control channel
+// request requiring the admin scope. RequestAdminRequest is excluded: it is the
+// step-up door, reachable with a user token.
 func isAdminResource(resource any) bool {
-	switch resource.(type) {
+	switch r := resource.(type) {
 	case *adminpb.ImpersonateRequest,
 		*adminpb.GetServerInfoRequest,
 		*adminpb.GetHealthRequest,
@@ -55,15 +56,24 @@ func isAdminResource(resource any) bool {
 		*controlpb.ListInvocationsRequest,
 		*controlpb.InvokeRequest:
 		return true
+	case MethodResource:
+		// Streaming methods, identified by name: no request message is
+		// available on the stream yet.
+		return isAdminMethod(string(r))
 	}
 	return false
 }
 
-// AddAdminScope adds the admin scope: a short-lived, admin-only privilege that
-// satisfies Admin API requests and nothing else. It is minted only after the
-// group check in RequestAdmin, exactly like AddOwnerScope mints the owner
-// token. The scope map carries key "admin" and no "user" key, so the token
-// cannot act on any user's data — that stays behind explicit impersonation.
+// isAdminMethod reports whether a full gRPC method belongs to the Admin API or
+// the control channel.
+func isAdminMethod(method string) bool {
+	return strings.HasPrefix(method, "/reva.admin.v1beta1.AdminAPI/") ||
+		strings.HasPrefix(method, "/reva.control.v1beta1.Control/")
+}
+
+// AddAdminScope adds the admin scope: a short-lived privilege satisfying Admin
+// API requests and nothing else. The scope map carries "admin" and no "user"
+// key, so the token cannot act on any user's data.
 func AddAdminScope(scopes map[string]*authpb.Scope) (map[string]*authpb.Scope, error) {
 	if scopes == nil {
 		scopes = make(map[string]*authpb.Scope)

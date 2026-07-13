@@ -124,6 +124,7 @@ func (s *svc) startSocket() error {
 		srv := grpc.NewServer(
 			grpc.Creds(peerCredentials()),
 			grpc.UnaryInterceptor(s.localRootUnary),
+			grpc.StreamInterceptor(s.localRootStream),
 		)
 		adminpb.RegisterAdminAPIServer(srv, s)
 		s.socketServer = srv
@@ -163,13 +164,32 @@ func (s *svc) stopSocket() {
 	}
 }
 
-// localRootUnary authenticates a socket caller by its OS credentials and, if
-// permitted, auto-elevates it to admin: it mints a short-TTL admin token and
-// injects it (into the context and the outgoing metadata) so the request runs
-// exactly like a remotely-elevated one, fan-out included.
+// localRootUnary authorizes a socket caller and runs the handler with the
+// elevated context.
 func (s *svc) localRootUnary(ctx context.Context, req any, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (any, error) {
-	// Socket requests bypass the standard interceptor chain, so carry the process
-	// logger onto the context for audit and downstream logging.
+	ctx, err := s.authorizeLocalRoot(ctx, info.FullMethod)
+	if err != nil {
+		return nil, err
+	}
+	return handler(ctx, req)
+}
+
+// localRootStream is the streaming counterpart of localRootUnary, so streaming
+// admin RPCs work over the socket too.
+func (s *svc) localRootStream(srv any, ss grpc.ServerStream, info *grpc.StreamServerInfo, handler grpc.StreamHandler) error {
+	ctx, err := s.authorizeLocalRoot(ss.Context(), info.FullMethod)
+	if err != nil {
+		return err
+	}
+	return handler(srv, &wrappedServerStream{ServerStream: ss, ctx: ctx})
+}
+
+// authorizeLocalRoot authenticates a socket caller by its OS credentials and,
+// if permitted, auto-elevates it: it mints a short-TTL admin token and injects
+// it into the context and outgoing metadata, so the request runs exactly like
+// a remotely-elevated one, fan-out included.
+func (s *svc) authorizeLocalRoot(ctx context.Context, method string) (context.Context, error) {
+	// Socket requests bypass the interceptor chain, so carry the logger.
 	if s.logger != nil {
 		ctx = appctx.WithLogger(ctx, s.logger)
 	}
@@ -203,14 +223,21 @@ func (s *svc) localRootUnary(ctx context.Context, req any, info *grpc.UnaryServe
 	ctx = metadata.AppendToOutgoingContext(ctx, appctx.TokenHeader, tkn)
 
 	admin.Audit(ctx, admin.AuditEvent{Action: "local_root", Actor: who, Granted: true,
-		Fields: map[string]string{"method": info.FullMethod, "uid": strconv.Itoa(int(cred.uid))}})
-	return handler(ctx, req)
+		Fields: map[string]string{"method": method, "uid": strconv.Itoa(int(cred.uid))}})
+	return ctx, nil
 }
 
-// socketAllowed reports whether a peer may take local root. With no group
-// configured, the socket's file permissions are the sole gate, so any peer that
-// managed to connect is allowed. With a group, the peer's uid must belong to it
-// (root always may — it can open any socket and join any group anyway).
+// wrappedServerStream overrides a server stream's context.
+type wrappedServerStream struct {
+	grpc.ServerStream
+	ctx context.Context
+}
+
+func (w *wrappedServerStream) Context() context.Context { return w.ctx }
+
+// socketAllowed reports whether a peer may take local root: with no group
+// configured the socket's file permissions are the sole gate; with one, the
+// peer's uid must belong to it (root always may).
 func (s *svc) socketAllowed(cred peerCred) bool {
 	if s.socketGroup == "" {
 		return true

@@ -41,6 +41,9 @@ service AdminAPI {
   // Invocations (reads and writes via the Invokable channel).
   rpc ListInvocations(ListInvocationsRequest) returns (ListInvocationsResponse);
   rpc Invoke(InvokeRequest) returns (InvokeResponse);
+  // InvokeStream is the streaming twin of Invoke: it multiplexes the resolved
+  // instances' result streams, each item labelled with its node.
+  rpc InvokeStream(InvokeRequest) returns (stream InvokeStreamResponse);
 }
 
 // ----- Access / step-up -----
@@ -146,6 +149,9 @@ message InvocationSpec {
   repeated ArgSpec args = 3;
   // kind is readonly|mutating|dangerous, used for audit and gating.
   string kind = 4;
+  // streaming reports the invocation emits a stream of results (via
+  // InvokeStream) rather than a single one (Invoke).
+  bool streaming = 5;
 }
 
 message ListInvocationsRequest {
@@ -175,6 +181,13 @@ message NodeResult {
 
 message InvokeResponse {
   repeated NodeResult results = 1;
+}
+
+// InvokeStreamResponse is one streamed item from one instance.
+message InvokeStreamResponse {
+  string node = 1;
+  string result_json = 2;
+  string error = 3;
 }
 
 // The generated Go stubs are exported from pkg/admin/adminpb. Regenerate from the repo
