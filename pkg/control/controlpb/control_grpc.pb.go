@@ -24,6 +24,9 @@ const _ = grpc.SupportPackageIsVersion7
 type ControlClient interface {
 	ListInvocations(ctx context.Context, in *ListInvocationsRequest, opts ...grpc.CallOption) (*ListInvocationsResponse, error)
 	Invoke(ctx context.Context, in *InvokeRequest, opts ...grpc.CallOption) (*InvokeResponse, error)
+	// InvokeStream is the streaming twin of Invoke, for invocations that emit a
+	// stream of results.
+	InvokeStream(ctx context.Context, in *InvokeRequest, opts ...grpc.CallOption) (Control_InvokeStreamClient, error)
 }
 
 type controlClient struct {
@@ -52,12 +55,47 @@ func (c *controlClient) Invoke(ctx context.Context, in *InvokeRequest, opts ...g
 	return out, nil
 }
 
+func (c *controlClient) InvokeStream(ctx context.Context, in *InvokeRequest, opts ...grpc.CallOption) (Control_InvokeStreamClient, error) {
+	stream, err := c.cc.NewStream(ctx, &Control_ServiceDesc.Streams[0], "/reva.control.v1beta1.Control/InvokeStream", opts...)
+	if err != nil {
+		return nil, err
+	}
+	x := &controlInvokeStreamClient{stream}
+	if err := x.ClientStream.SendMsg(in); err != nil {
+		return nil, err
+	}
+	if err := x.ClientStream.CloseSend(); err != nil {
+		return nil, err
+	}
+	return x, nil
+}
+
+type Control_InvokeStreamClient interface {
+	Recv() (*InvokeResponse, error)
+	grpc.ClientStream
+}
+
+type controlInvokeStreamClient struct {
+	grpc.ClientStream
+}
+
+func (x *controlInvokeStreamClient) Recv() (*InvokeResponse, error) {
+	m := new(InvokeResponse)
+	if err := x.ClientStream.RecvMsg(m); err != nil {
+		return nil, err
+	}
+	return m, nil
+}
+
 // ControlServer is the server API for Control service.
 // All implementations must embed UnimplementedControlServer
 // for forward compatibility
 type ControlServer interface {
 	ListInvocations(context.Context, *ListInvocationsRequest) (*ListInvocationsResponse, error)
 	Invoke(context.Context, *InvokeRequest) (*InvokeResponse, error)
+	// InvokeStream is the streaming twin of Invoke, for invocations that emit a
+	// stream of results.
+	InvokeStream(*InvokeRequest, Control_InvokeStreamServer) error
 	mustEmbedUnimplementedControlServer()
 }
 
@@ -70,6 +108,9 @@ func (UnimplementedControlServer) ListInvocations(context.Context, *ListInvocati
 }
 func (UnimplementedControlServer) Invoke(context.Context, *InvokeRequest) (*InvokeResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method Invoke not implemented")
+}
+func (UnimplementedControlServer) InvokeStream(*InvokeRequest, Control_InvokeStreamServer) error {
+	return status.Errorf(codes.Unimplemented, "method InvokeStream not implemented")
 }
 func (UnimplementedControlServer) mustEmbedUnimplementedControlServer() {}
 
@@ -120,6 +161,27 @@ func _Control_Invoke_Handler(srv interface{}, ctx context.Context, dec func(inte
 	return interceptor(ctx, in, info, handler)
 }
 
+func _Control_InvokeStream_Handler(srv interface{}, stream grpc.ServerStream) error {
+	m := new(InvokeRequest)
+	if err := stream.RecvMsg(m); err != nil {
+		return err
+	}
+	return srv.(ControlServer).InvokeStream(m, &controlInvokeStreamServer{stream})
+}
+
+type Control_InvokeStreamServer interface {
+	Send(*InvokeResponse) error
+	grpc.ServerStream
+}
+
+type controlInvokeStreamServer struct {
+	grpc.ServerStream
+}
+
+func (x *controlInvokeStreamServer) Send(m *InvokeResponse) error {
+	return x.ServerStream.SendMsg(m)
+}
+
 // Control_ServiceDesc is the grpc.ServiceDesc for Control service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -136,6 +198,12 @@ var Control_ServiceDesc = grpc.ServiceDesc{
 			Handler:    _Control_Invoke_Handler,
 		},
 	},
-	Streams:  []grpc.StreamDesc{},
+	Streams: []grpc.StreamDesc{
+		{
+			StreamName:    "InvokeStream",
+			Handler:       _Control_InvokeStream_Handler,
+			ServerStreams: true,
+		},
+	},
 	Metadata: "control.proto",
 }

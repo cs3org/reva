@@ -56,6 +56,48 @@ func Invoke(ctx context.Context, target, name string, args map[string]any) (Resu
 	return inst.inv.Invoke(ctx, name, args)
 }
 
+// InvokeStream is the streaming counterpart of Invoke: built-in defaults are
+// handled by the framework, anything else needs the target's StreamInvokable.
+func InvokeStream(ctx context.Context, target, name string, args map[string]any, emit StreamEmit) error {
+	// A non-streaming invocation still works over InvokeStream: run it once and
+	// emit its single result. This lets a fan-out stream per-node results (one
+	// bounded message each) instead of aggregating them into a single response
+	// that may exceed the transport's message limit — for any invocation.
+	if !IsStreaming(target, name) {
+		res, err := Invoke(ctx, target, name, args)
+		if err != nil {
+			return err
+		}
+		return emit(res)
+	}
+	inst, ok := lookup(target)
+	if !ok {
+		return fmt.Errorf("invoke: unknown target %q on this node", target)
+	}
+	if d, ok := lookupDefault(name); ok {
+		return d.stream(ctx, inst, Args(args), emit)
+	}
+	sv, ok := inst.inv.(StreamInvokable)
+	if !ok {
+		return fmt.Errorf("invoke: %q advertises streaming but has no stream handler", name)
+	}
+	return sv.InvokeStream(ctx, name, args, emit)
+}
+
+// IsStreaming reports whether the named invocation on a target is streaming.
+func IsStreaming(target, name string) bool {
+	specs, ok := Invocations(target)
+	if !ok {
+		return false
+	}
+	for _, s := range specs {
+		if s.Name == name {
+			return s.Streaming
+		}
+	}
+	return false
+}
+
 // InvocationNames returns just the names a target exposes, for the
 // MetaInvocations registry metadata.
 func InvocationNames(target string) []string {
