@@ -228,7 +228,7 @@ tail = 2000   # recent lines kept in memory for `admin logs` (0 disables it)
 reva -insecure -host <gateway> login -username <u> -password <p> basic
 reva admin elevate -admin-host <admin:port>     # step up, stores a short-TTL admin token
 reva admin services [-v] [-o wide|json] [service]
-reva admin config   <service|node-id> [-o toml|json]
+reva admin config   <service|node-id> [-o toml|json] [-diff]
 reva admin invocations <service|node-id>
 reva admin invoke   [-stream] <selector> <invocation> [key=val ...]
 reva admin logs     <selector> [-f] [-n N] [-level L] [-since D] [-grep P] [-o text|json]
