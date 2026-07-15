@@ -101,31 +101,6 @@ func writeToken(token string) {
 	}
 }
 
-// The short-TTL admin token is stored separately from the login token, so the
-// two coexist (the sudo model): `admin elevate` writes it, every other admin
-// subcommand reads it.
-func getAdminTokenFile() string {
-	user, err := gouser.Current()
-	if err != nil {
-		panic(err)
-	}
-	return path.Join(user.HomeDir, ".reva-admin-token")
-}
-
-func readAdminToken() (string, error) {
-	data, err := os.ReadFile(getAdminTokenFile())
-	if err != nil {
-		return "", err
-	}
-	return string(data), nil
-}
-
-func writeAdminToken(token string) {
-	if err := os.WriteFile(getAdminTokenFile(), []byte(token), 0600); err != nil {
-		panic(err)
-	}
-}
-
 func read(r *bufio.Reader) (string, error) {
 	text, err := r.ReadString('\n')
 	if err != nil {
