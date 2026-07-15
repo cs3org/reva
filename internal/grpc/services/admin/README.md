@@ -232,6 +232,7 @@ reva admin config   <service|node-id> [-o toml|json]
 reva admin invocations <service|node-id>
 reva admin invoke   [-stream] <selector> <invocation> [key=val ...]
 reva admin logs     <selector> [-f] [-n N] [-level L] [-since D] [-grep P] [-o text|json]
+reva admin trace    <traceid> | -user <username>   # one request/user across the fleet
 reva admin impersonate <user>
 
 # Local root: on the box, no login/elevate/flag — the CLI finds the socket. Only

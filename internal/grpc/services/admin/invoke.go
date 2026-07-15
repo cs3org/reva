@@ -144,10 +144,19 @@ func invokeOne(ctx context.Context, ep endpoint, invocation string, args map[str
 }
 
 // resolveSelector maps a selector to its control endpoints: a node id
-// "host:port/service" targets one instance, a service name every live one, and
-// a partial id ("host:port" or a bare host) every instance at that address or
-// on that machine.
+// "host:port/service" targets one instance, a service name every live one, a
+// partial id ("host:port" or a bare host) every instance at that address or on
+// that machine, and "*" every live instance in the fleet.
 func resolveSelector(reg registry.Registry, selector string) (string, []endpoint, error) {
+	// "*": every live instance in the fleet.
+	if selector == "*" {
+		eps := endpointsMatching(reg, func(registry.Node) bool { return true })
+		if len(eps) == 0 {
+			return "", nil, fmt.Errorf("no live instances in the fleet")
+		}
+		return selector, eps, nil
+	}
+
 	// Node id "host:port/service": one exact instance.
 	if i := strings.LastIndex(selector, "/"); i >= 0 {
 		svcName := selector[i+1:]
@@ -194,22 +203,29 @@ func resolveSelector(reg registry.Registry, selector string) (string, []endpoint
 // live instances bound to that address, a bare host those on that machine (by
 // the id's host part or the node's host metadata).
 func endpointsMatchingAddress(reg registry.Registry, selector string) []endpoint {
+	byAddress := strings.Contains(selector, ":")
+	return endpointsMatching(reg, func(n registry.Node) bool {
+		if byAddress {
+			return strings.HasPrefix(n.ID(), selector+"/")
+		}
+		return onHost(n, selector)
+	})
+}
+
+// endpointsMatching gathers the live instances accepted by match, sorted by
+// node id.
+func endpointsMatching(reg registry.Registry, match func(registry.Node) bool) []endpoint {
 	svcs, err := reg.ListServices()
 	if err != nil {
 		return nil
 	}
-	byAddress := strings.Contains(selector, ":")
 	var eps []endpoint
 	for _, sv := range svcs {
 		for _, n := range sv.Nodes() {
 			if st := nodeState(n); st == registry.StateOffline || st == registry.StateDraining {
 				continue
 			}
-			if byAddress {
-				if !strings.HasPrefix(n.ID(), selector+"/") {
-					continue
-				}
-			} else if !onHost(n, selector) {
+			if !match(n) {
 				continue
 			}
 			eps = append(eps, controlEndpointFor(n))
