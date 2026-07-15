@@ -37,16 +37,20 @@ func init() {
 			Description: "Report or set the process's log level at runtime (reverts on restart).",
 			Kind:        KindMutating,
 			Args: []ArgSpec{
-				{Name: "level", Description: "new level: trace|debug|info|warn|error (omit to report the current one)"},
+				{Name: "level", Description: "new level: trace|debug|info|warn|error, or 'reset' to restore the configured level (omit to report the current one)"},
 			},
 		},
 		fn: func(_ context.Context, _ instance, a Args) (Result, error) {
 			previous := logger.Level()
 			level := previous
-			if l := a.String("level"); l != "" {
+			switch l := a.String("level"); l {
+			case "":
+			case "reset", "default":
+				level = logger.ResetLevel()
+			default:
 				level = logger.SetLevel(l)
 			}
-			return Result{"previous": previous, "level": level}, nil
+			return Result{"previous": previous, "level": level, "configured": logger.ConfiguredLevel()}, nil
 		},
 	})
 }

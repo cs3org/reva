@@ -39,7 +39,7 @@ func adminLogsCommand() *command {
 	cmd.Description = func() string { return "read (or follow) a service's recent logs across the fleet" }
 	cmd.Usage = func() string {
 		return "Usage: admin logs [-admin-host h] [-f] [-n N] [-level L] [-since D] [-grep P] [-o text|json] <selector>\n" +
-			"       admin logs level [-admin-host h] <selector> [trace|debug|info|warn|error]"
+			"       admin logs level [-admin-host h] <selector> [trace|debug|info|warn|error|reset]"
 	}
 	adminHost := cmd.String("admin-host", "", "address of the admin gRPC endpoint (persisted)")
 	follow := cmd.Bool("f", false, "follow: stream new lines until interrupted")
@@ -94,7 +94,7 @@ func adminLogsCommand() *command {
 // it changes them (in-memory; a restart reverts to the configured level).
 func adminLogsLevel(adminHost string, args []string) error {
 	if len(args) < 1 {
-		return errors.New("Usage: admin logs level [-admin-host h] <selector> [trace|debug|info|warn|error]")
+		return errors.New("Usage: admin logs level [-admin-host h] <selector> [trace|debug|info|warn|error|reset]")
 	}
 	invArgs := map[string]string{}
 	if len(args) >= 2 {
@@ -113,14 +113,18 @@ func adminLogsLevel(adminHost string, args []string) error {
 			fmt.Printf("  %s: error: %s\n", r.Node, r.Error)
 			continue
 		}
-		var d struct{ Previous, Level string }
+		var d struct{ Previous, Level, Configured string }
 		if err := json.Unmarshal([]byte(r.ResultJson), &d); err != nil {
 			fmt.Printf("  %s: %s\n", r.Node, r.ResultJson)
 			continue
 		}
-		if invArgs["level"] != "" && d.Previous != d.Level {
+		switch {
+		case invArgs["level"] != "" && d.Previous != d.Level:
 			fmt.Printf("  %s: %s -> %s\n", r.Node, d.Previous, d.Level)
-		} else {
+		case d.Configured != "" && d.Configured != d.Level:
+			// Report mode, and the running level has been overridden at runtime.
+			fmt.Printf("  %s: %s (configured: %s)\n", r.Node, d.Level, d.Configured)
+		default:
 			fmt.Printf("  %s: %s\n", r.Node, d.Level)
 		}
 	}
