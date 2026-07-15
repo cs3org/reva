@@ -246,7 +246,7 @@ A service exposes admin operations by building an [`invoke.Set`](../../../../pkg
 — you declare each method once and the framework does the name→handler routing,
 builds the catalog, and validates required arguments. There is no `Invoke`
 switch to maintain. Every service also gets the built-in invocations (`config`,
-`logs`) for free, so what you add is *on top of* those. (Built-ins live in
+`logs`, `version`) for free, so what you add is *on top of* those. (Built-ins live in
 `pkg/invoke`, one self-registering file each — see `config.go`.)
 
 Two steps: embed the `*invoke.Set` (that makes the service `Invokable`, which the
