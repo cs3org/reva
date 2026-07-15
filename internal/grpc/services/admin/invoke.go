@@ -179,7 +179,10 @@ func resolveSelector(reg registry.Registry, selector string) (string, []endpoint
 	if sv, err := reg.GetService(selector); err == nil && len(sv.Nodes()) > 0 {
 		var eps []endpoint
 		for _, n := range sv.Nodes() {
-			if st := nodeState(n); st == registry.StateOffline || st == registry.StateDraining {
+			// A drained node is out of service rotation but still alive and
+			// control-reachable — keep it so it can be enabled again (and so
+			// logs/stack/config still work against it). Only offline is skipped.
+			if nodeState(n) == registry.StateOffline {
 				continue
 			}
 			eps = append(eps, controlEndpointFor(n))
@@ -222,7 +225,9 @@ func endpointsMatching(reg registry.Registry, match func(registry.Node) bool) []
 	var eps []endpoint
 	for _, sv := range svcs {
 		for _, n := range sv.Nodes() {
-			if st := nodeState(n); st == registry.StateOffline || st == registry.StateDraining {
+			// Drained nodes stay reachable for control (see resolveSelector);
+			// only offline is skipped.
+			if nodeState(n) == registry.StateOffline {
 				continue
 			}
 			if !match(n) {

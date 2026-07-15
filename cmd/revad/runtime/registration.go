@@ -95,7 +95,7 @@ func (r *Reva) addServerlessNodes(msg string) {
 			"transport":           "serverless",
 			"host":                hostname,
 			"pid":                 fmt.Sprintf("%d", pid),
-			registry.MetaState:    registry.StateReady,
+			registry.MetaState:    rotationState(id),
 			registry.MetaLastSeen: time.Now().UTC().Format(time.RFC3339),
 			registry.MetaControl:  r.controlAddr,
 		}
@@ -172,7 +172,7 @@ func nodeMetadata(srv *Server, id, hostname string, pid int, impl any) map[strin
 		"transport":           srv.transport,
 		"host":                hostname,
 		"pid":                 fmt.Sprintf("%d", pid),
-		registry.MetaState:    registry.StateReady,
+		registry.MetaState:    rotationState(id),
 		registry.MetaLastSeen: time.Now().UTC().Format(time.RFC3339),
 	}
 	if srv.transport == "http" {
@@ -188,6 +188,16 @@ func nodeMetadata(srv *Server, id, hostname string, pid int, impl any) map[strin
 		maps.Copy(meta, mp.RegistryMetadata())
 	}
 	return meta
+}
+
+// rotationState is the registry state a node advertises: draining if an
+// operator has taken it out of rotation at runtime (admin `services drain`),
+// otherwise ready.
+func rotationState(id string) string {
+	if invoke.IsDrained(id) {
+		return registry.StateDraining
+	}
+	return registry.StateReady
 }
 
 // nodeID is a node's stable identity: its bind address and service name. It

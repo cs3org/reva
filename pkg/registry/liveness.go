@@ -68,14 +68,20 @@ func (b *BaseRegistry) sweep(now time.Time) {
 	for _, svc := range services {
 		for _, n := range svc.Nodes() {
 			state := n.Metadata()[MetaState]
-			if state == StateDraining {
-				continue
-			}
 			seen, ok := lastSeen(n.Metadata())
 			if !ok {
 				continue
 			}
 			quiet := now.Sub(seen)
+			if state == StateDraining {
+				// A drained node stays draining (no degraded/offline
+				// transitions), but a dead one is still reaped so it doesn't
+				// linger as a ghost after the process it named is gone.
+				if t.ReapAfter > 0 && quiet > t.OfflineAfter+t.ReapAfter {
+					_ = b.Remove(NewService(svc.Name(), []Node{n}))
+				}
+				continue
+			}
 			switch {
 			case t.ReapAfter > 0 && quiet > t.OfflineAfter+t.ReapAfter:
 				_ = b.Remove(NewService(svc.Name(), []Node{n}))

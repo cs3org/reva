@@ -27,6 +27,7 @@ const MetaInvocations = "invocations"
 // instance is one service instance in this process, addressed by its registry
 // node id. inv holds the service's own operations, or is nil.
 type instance struct {
+	id      string
 	service string
 	config  map[string]any // redacted
 	inv     Invokable
@@ -43,7 +44,7 @@ var (
 func RegisterInstance(id, service string, config map[string]any, inv Invokable) {
 	mu.Lock()
 	defer mu.Unlock()
-	instances[id] = instance{service: service, config: Redact(config), inv: inv}
+	instances[id] = instance{id: id, service: service, config: Redact(config), inv: inv}
 }
 
 // HasInvocations reports whether this process exposes anything invokable; the
