@@ -653,10 +653,13 @@ func validateOutput(o string) error {
 func adminConfigCommand() *command {
 	cmd := newCommand("config")
 	cmd.Description = func() string { return "show a service's effective (redacted) config (TOML by default)" }
-	cmd.Usage = func() string { return "Usage: admin config [-admin-host h] [-o toml|json] <service|node-id>" }
+	cmd.Usage = func() string {
+		return "Usage: admin config [-admin-host h] [-o toml|json] [-diff] <service|node-id>"
+	}
 	adminHost := cmd.String("admin-host", "", "address of the admin gRPC endpoint (persisted)")
 	output := cmd.String("o", "toml", "output format: toml | json")
-	cmd.ResetFlags = func() { *adminHost, *output = "", "toml" }
+	diff := cmd.Bool("diff", false, "show only the config keys that differ across a service's instances")
+	cmd.ResetFlags = func() { *adminHost, *output, *diff = "", "toml", false }
 	cmd.Action = func(w ...io.Writer) error {
 		if cmd.NArg() < 1 {
 			return errors.New(cmd.Usage())
@@ -672,6 +675,9 @@ func adminConfigCommand() *command {
 		if len(res.Results) == 0 {
 			fmt.Println("(no instances)")
 			return nil
+		}
+		if *diff {
+			return diffConfigs(res.Results)
 		}
 		// Header each instance only when there is more than one.
 		for i, r := range res.Results {
@@ -692,6 +698,113 @@ func adminConfigCommand() *command {
 		return nil
 	}
 	return cmd
+}
+
+// diffConfigs reports the config keys that differ across a service's instances:
+// for each flattened key whose value is not unanimous, it groups the distinct
+// values by the nodes that hold them, so the odd instance stands out. An absent
+// key is shown as "(absent)".
+func diffConfigs(results []*adminpb.NodeResult) error {
+	type inst struct {
+		node string
+		flat map[string]string
+	}
+	var insts []inst
+	for _, r := range results {
+		if r.Error != "" {
+			fmt.Printf("# %s: error: %s\n", r.Node, r.Error)
+			continue
+		}
+		var m map[string]any
+		dec := json.NewDecoder(strings.NewReader(r.ResultJson))
+		dec.UseNumber()
+		if err := dec.Decode(&m); err != nil {
+			fmt.Printf("# %s: unparseable config\n", r.Node)
+			continue
+		}
+		flat := map[string]string{}
+		flattenConfig("", m, flat)
+		insts = append(insts, inst{node: r.Node, flat: flat})
+	}
+	if len(insts) < 2 {
+		fmt.Println("# need at least two instances to diff (a service name selects them all)")
+		return nil
+	}
+
+	// Union of all keys.
+	keys := map[string]bool{}
+	for _, in := range insts {
+		for k := range in.flat {
+			keys[k] = true
+		}
+	}
+	sorted := make([]string, 0, len(keys))
+	for k := range keys {
+		sorted = append(sorted, k)
+	}
+	sort.Strings(sorted)
+
+	// address and network are per-instance by nature (each binds its own), so
+	// they always differ and only add noise to a drift comparison.
+	perInstance := map[string]bool{"address": true, "network": true}
+
+	const absent = "(absent)"
+	differing := 0
+	for _, k := range sorted {
+		if perInstance[k] {
+			continue
+		}
+		byValue := map[string][]string{}
+		for _, in := range insts {
+			v, ok := in.flat[k]
+			if !ok {
+				v = absent
+			}
+			byValue[v] = append(byValue[v], in.node)
+		}
+		if len(byValue) == 1 {
+			continue // unanimous
+		}
+		differing++
+		fmt.Printf("%s:\n", k)
+		vals := make([]string, 0, len(byValue))
+		for v := range byValue {
+			vals = append(vals, v)
+		}
+		sort.Slice(vals, func(i, j int) bool { return len(byValue[vals[i]]) > len(byValue[vals[j]]) })
+		for _, v := range vals {
+			nodes := byValue[v]
+			sort.Strings(nodes)
+			fmt.Printf("  %s  (%s)\n", v, strings.Join(nodes, ", "))
+		}
+	}
+	if differing == 0 {
+		fmt.Printf("# %d instances, config identical\n", len(insts))
+	} else {
+		fmt.Printf("# %d key(s) differ across %d instances\n", differing, len(insts))
+	}
+	return nil
+}
+
+// flattenConfig flattens a nested config into dot-separated key paths, each with
+// a compact-JSON leaf value. Nested maps recurse; anything else (scalar, array)
+// is a leaf.
+func flattenConfig(prefix string, v any, out map[string]string) {
+	if m, ok := v.(map[string]any); ok && len(m) > 0 {
+		for k, val := range m {
+			key := k
+			if prefix != "" {
+				key = prefix + "." + k
+			}
+			flattenConfig(key, val, out)
+		}
+		return
+	}
+	b, err := json.Marshal(normalizeNumbers(v))
+	if err != nil {
+		b = fmt.Append(nil, v)
+	}
+	out[prefix] = string(b)
 }
 
 // renderConfig prints one instance's config JSON as TOML (default) or indented
