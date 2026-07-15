@@ -62,6 +62,29 @@ func WithLevel(lvl string) Option {
 	}
 }
 
+// WithRuntimeLevel configures the effective level through zerolog's atomic
+// global level, so it can be changed at runtime (see SetLevel) — the Admin API's
+// `logs level` uses this. The logger itself is built at trace, leaving the
+// global level as the only filter. The change is process-wide and in-memory:
+// a restart rebuilds the logger from config and reverts.
+func WithRuntimeLevel(lvl string) Option {
+	return func(l *zerolog.Logger) {
+		*l = l.Level(zerolog.TraceLevel)
+		zerolog.SetGlobalLevel(parseLevel(lvl))
+	}
+}
+
+// SetLevel sets the process-wide effective log level by name, atomically, and
+// returns the canonical level name. Unknown names fall back to info.
+func SetLevel(name string) string {
+	lvl := parseLevel(name)
+	zerolog.SetGlobalLevel(lvl)
+	return lvl.String()
+}
+
+// Level returns the current process-wide effective log level name.
+func Level() string { return zerolog.GlobalLevel().String() }
+
 // WithWriter is an option to configure the logging output.
 func WithWriter(w io.Writer, m Mode) Option {
 	return WithWriterTee(w, nil, m)
