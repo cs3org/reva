@@ -232,6 +232,7 @@ reva admin config   <service|node-id> [-o toml|json]
 reva admin invocations <service|node-id>
 reva admin invoke   [-stream] <selector> <invocation> [key=val ...]
 reva admin logs     <selector> [-f] [-n N] [-level L] [-since D] [-grep P] [-o text|json]
+reva admin logs level <selector> [trace|debug|info|warn|error]   # report/set runtime level
 reva admin trace    <traceid> | -user <username>   # one request/user across the fleet
 reva admin stack    <selector> [-grep P]           # goroutine dumps, e.g. of a hung process
 reva admin impersonate <user>
@@ -247,7 +248,8 @@ A service exposes admin operations by building an [`invoke.Set`](../../../../pkg
 — you declare each method once and the framework does the name→handler routing,
 builds the catalog, and validates required arguments. There is no `Invoke`
 switch to maintain. Every service also gets the built-in invocations (`config`,
-`logs`, `stack`, `version`) for free, so what you add is *on top of* those. (Built-ins live in
+`logs`, `loglevel`, `stack`, `version`) for free, so what you add is *on top of*
+those. (Built-ins live in
 `pkg/invoke`, one self-registering file each — see `config.go`.)
 
 Two steps: embed the `*invoke.Set` (that makes the service `Invokable`, which the

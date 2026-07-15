@@ -366,7 +366,7 @@ func newLogger(conf *config.Log) (*zerolog.Logger, error) {
 	}
 
 	var opts []logger.Option
-	opts = append(opts, logger.WithLevel(conf.Level))
+	opts = append(opts, logger.WithRuntimeLevel(conf.Level))
 
 	w, err := getWriter(conf.Output)
 	if err != nil {

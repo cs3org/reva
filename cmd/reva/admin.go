@@ -887,7 +887,8 @@ func adminLogsCommand() *command {
 	cmd := newCommand("logs")
 	cmd.Description = func() string { return "read (or follow) a service's recent logs across the fleet" }
 	cmd.Usage = func() string {
-		return "Usage: admin logs [-admin-host h] [-f] [-n N] [-level L] [-since D] [-grep P] [-o text|json] <service|node-id|host[:port]>"
+		return "Usage: admin logs [-admin-host h] [-f] [-n N] [-level L] [-since D] [-grep P] [-o text|json] <selector>\n" +
+			"       admin logs level [-admin-host h] <selector> [trace|debug|info|warn|error]"
 	}
 	adminHost := cmd.String("admin-host", "", "address of the admin gRPC endpoint (persisted)")
 	follow := cmd.Bool("f", false, "follow: stream new lines until interrupted")
@@ -902,6 +903,10 @@ func adminLogsCommand() *command {
 	cmd.Action = func(w ...io.Writer) error {
 		if cmd.NArg() < 1 {
 			return errors.New(cmd.Usage())
+		}
+		// `logs level <selector> [newlevel]` reports or sets the runtime log level.
+		if cmd.Args()[0] == "level" {
+			return adminLogsLevel(*adminHost, cmd.Args()[1:])
 		}
 		if *output != "text" && *output != "json" {
 			return fmt.Errorf("unknown -o %q (use text or json)", *output)
@@ -931,6 +936,44 @@ func adminLogsCommand() *command {
 		return snapshotLogs(ctx, client, selector, args, *output, multi)
 	}
 	return cmd
+}
+
+// adminLogsLevel reports or sets the runtime log level of the selected
+// instances: with no level it prints each instance's current one, with a level
+// it changes them (in-memory; a restart reverts to the configured level).
+func adminLogsLevel(adminHost string, args []string) error {
+	if len(args) < 1 {
+		return errors.New("Usage: admin logs level [-admin-host h] <selector> [trace|debug|info|warn|error]")
+	}
+	invArgs := map[string]string{}
+	if len(args) >= 2 {
+		invArgs["level"] = args[1]
+	}
+	client, ctx, err := adminDial(adminHost)
+	if err != nil {
+		return err
+	}
+	res, err := client.Invoke(ctx, &adminpb.InvokeRequest{Service: args[0], Invocation: "loglevel", Args: invArgs})
+	if err != nil {
+		return adminErr(err)
+	}
+	for _, r := range res.Results {
+		if r.Error != "" {
+			fmt.Printf("  %s: error: %s\n", r.Node, r.Error)
+			continue
+		}
+		var d struct{ Previous, Level string }
+		if err := json.Unmarshal([]byte(r.ResultJson), &d); err != nil {
+			fmt.Printf("  %s: %s\n", r.Node, r.ResultJson)
+			continue
+		}
+		if invArgs["level"] != "" && d.Previous != d.Level {
+			fmt.Printf("  %s: %s -> %s\n", r.Node, d.Previous, d.Level)
+		} else {
+			fmt.Printf("  %s: %s\n", r.Node, d.Level)
+		}
+	}
+	return nil
 }
 
 // logLine is one streamed/returned log entry from the `logs` invocation.
