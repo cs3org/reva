@@ -21,6 +21,7 @@ package invoke
 import (
 	"context"
 	"fmt"
+	"strings"
 	"testing"
 	"time"
 
@@ -117,8 +118,17 @@ func TestDefaultsRegistry(t *testing.T) {
 	RegisterInstance(id, "svc-y", nil, nil)
 
 	specs, ok := Invocations(id)
-	if !ok || len(specs) < 3 || specs[0].Name != ConfigInvocation || specs[1].Name != LogsInvocation || specs[2].Name != VersionInvocation {
-		t.Fatalf("expected [config, logs, version] leading the catalog, got %+v", specs)
+	if !ok || len(specs) < 4 || specs[0].Name != ConfigInvocation || specs[1].Name != LogsInvocation ||
+		specs[2].Name != StackInvocation || specs[3].Name != VersionInvocation {
+		t.Fatalf("expected [config, logs, stack, version] leading the catalog, got %+v", specs)
+	}
+
+	stack, err := Invoke(context.Background(), id, StackInvocation, nil)
+	if err != nil {
+		t.Fatalf("Invoke(stack): %v", err)
+	}
+	if stack["goroutines"].(int) < 1 || !strings.Contains(stack["stacks"].(string), "goroutine ") {
+		t.Fatalf("stack result incomplete: goroutines=%v", stack["goroutines"])
 	}
 
 	res, err := Invoke(context.Background(), id, VersionInvocation, nil)
