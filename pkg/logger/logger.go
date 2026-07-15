@@ -62,6 +62,11 @@ func WithLevel(lvl string) Option {
 	}
 }
 
+// configuredLevel is the level the process was started with (see
+// WithRuntimeLevel); ResetLevel restores it after a runtime override. It is
+// written once at startup, before any server serves, and only read thereafter.
+var configuredLevel = zerolog.InfoLevel
+
 // WithRuntimeLevel configures the effective level through zerolog's atomic
 // global level, so it can be changed at runtime (see SetLevel) — the Admin API's
 // `logs level` uses this. The logger itself is built at trace, leaving the
@@ -69,8 +74,9 @@ func WithLevel(lvl string) Option {
 // a restart rebuilds the logger from config and reverts.
 func WithRuntimeLevel(lvl string) Option {
 	return func(l *zerolog.Logger) {
+		configuredLevel = parseLevel(lvl)
 		*l = l.Level(zerolog.TraceLevel)
-		zerolog.SetGlobalLevel(parseLevel(lvl))
+		zerolog.SetGlobalLevel(configuredLevel)
 	}
 }
 
@@ -82,8 +88,18 @@ func SetLevel(name string) string {
 	return lvl.String()
 }
 
+// ResetLevel restores the process-wide effective level to the one configured at
+// startup, undoing any runtime SetLevel, and returns that level's name.
+func ResetLevel() string {
+	zerolog.SetGlobalLevel(configuredLevel)
+	return configuredLevel.String()
+}
+
 // Level returns the current process-wide effective log level name.
 func Level() string { return zerolog.GlobalLevel().String() }
+
+// ConfiguredLevel returns the level the process was configured with at startup.
+func ConfiguredLevel() string { return configuredLevel.String() }
 
 // WithWriter is an option to configure the logging output.
 func WithWriter(w io.Writer, m Mode) Option {
