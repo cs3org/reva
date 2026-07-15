@@ -25,6 +25,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/cs3org/reva/v3/pkg/logger"
 	"github.com/cs3org/reva/v3/pkg/logtail"
 )
 
@@ -118,9 +119,9 @@ func TestDefaultsRegistry(t *testing.T) {
 	RegisterInstance(id, "svc-y", nil, nil)
 
 	specs, ok := Invocations(id)
-	if !ok || len(specs) < 4 || specs[0].Name != ConfigInvocation || specs[1].Name != LogsInvocation ||
-		specs[2].Name != StackInvocation || specs[3].Name != VersionInvocation {
-		t.Fatalf("expected [config, logs, stack, version] leading the catalog, got %+v", specs)
+	if !ok || len(specs) < 5 || specs[0].Name != ConfigInvocation || specs[1].Name != LogsInvocation ||
+		specs[2].Name != LogLevelInvocation || specs[3].Name != StackInvocation || specs[4].Name != VersionInvocation {
+		t.Fatalf("expected [config, logs, loglevel, stack, version] leading the catalog, got %+v", specs)
 	}
 
 	stack, err := Invoke(context.Background(), id, StackInvocation, nil)
@@ -143,6 +144,31 @@ func TestDefaultsRegistry(t *testing.T) {
 	got := 0
 	if serr := InvokeStream(context.Background(), id, ConfigInvocation, nil, func(Result) error { got++; return nil }); serr != nil || got != 1 {
 		t.Fatalf("stream-invoking config: err=%v results=%d, want one result", serr, got)
+	}
+}
+
+// TestLogLevelInvocation checks the built-in loglevel default reports and sets
+// the runtime level.
+func TestLogLevelInvocation(t *testing.T) {
+	restore := logger.Level()
+	defer logger.SetLevel(restore)
+	logger.SetLevel("info")
+
+	id := "127.0.0.1:9810/svc-z"
+	RegisterInstance(id, "svc-z", nil, nil)
+
+	// Report only.
+	res, err := Invoke(context.Background(), id, LogLevelInvocation, nil)
+	if err != nil || res["level"] != "info" {
+		t.Fatalf("report: err=%v level=%v", err, res["level"])
+	}
+	// Set.
+	res, err = Invoke(context.Background(), id, LogLevelInvocation, map[string]any{"level": "debug"})
+	if err != nil || res["previous"] != "info" || res["level"] != "debug" {
+		t.Fatalf("set: err=%v previous=%v level=%v", err, res["previous"], res["level"])
+	}
+	if logger.Level() != "debug" {
+		t.Fatalf("global level not applied: %s", logger.Level())
 	}
 }
 
