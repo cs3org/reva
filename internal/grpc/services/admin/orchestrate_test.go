@@ -150,6 +150,18 @@ func TestResolveSelectorUnknownID(t *testing.T) {
 	}
 }
 
+// TestResolveSelectorFleet checks that "*" resolves every live instance.
+func TestResolveSelectorFleet(t *testing.T) {
+	reg := testRegistry(t)
+	_, eps, err := resolveSelector(reg, "*")
+	if err != nil {
+		t.Fatalf("resolveSelector: %v", err)
+	}
+	if len(eps) != 3 {
+		t.Fatalf("expected all 3 instances, got %+v", eps)
+	}
+}
+
 // TestResolveSelectorNoMatch checks that a selector matching nothing fails
 // cleanly.
 func TestResolveSelectorNoMatch(t *testing.T) {
