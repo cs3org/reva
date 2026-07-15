@@ -117,8 +117,16 @@ func TestDefaultsRegistry(t *testing.T) {
 	RegisterInstance(id, "svc-y", nil, nil)
 
 	specs, ok := Invocations(id)
-	if !ok || len(specs) < 2 || specs[0].Name != ConfigInvocation || specs[1].Name != LogsInvocation {
-		t.Fatalf("expected [config, logs] leading the catalog, got %+v", specs)
+	if !ok || len(specs) < 3 || specs[0].Name != ConfigInvocation || specs[1].Name != LogsInvocation || specs[2].Name != VersionInvocation {
+		t.Fatalf("expected [config, logs, version] leading the catalog, got %+v", specs)
+	}
+
+	res, err := Invoke(context.Background(), id, VersionInvocation, nil)
+	if err != nil {
+		t.Fatalf("Invoke(version): %v", err)
+	}
+	if res["go"] == "" || res["uptime"] == "" {
+		t.Fatalf("version result incomplete: %+v", res)
 	}
 
 	// A non-streaming default streams a single result.
