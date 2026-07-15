@@ -125,6 +125,25 @@ service (startup, registry) match no service filter; the raw stream, them
 included, is reachable with `admin invoke <node-id> logs all=true`. The window
 is bounded (`[log] tail`, default 2000 lines); there is no deeper history.
 
+## Draining instances
+
+`reva admin services drain <selector>` takes the matched instances **out of
+rotation**: the process starts advertising them as `draining` in the registry,
+and the shared [service selector](../../../../pkg/service/selector.go) already
+excludes draining nodes from every `Pick`, so no new traffic is routed to them.
+Established in-flight calls finish on their own — the selector has no per-request
+handle to sever — so a drain is graceful by construction. `enable` returns them
+to `ready`. Both ride the same selector fan-out, so `drain 10.0.0.4:19003`
+drains a whole process and `drain userprovider` drains every instance of a
+service.
+
+This is a built-in `rotation` invocation flipping an in-memory per-node flag the
+heartbeat reads (like `logs level`): it is **not persisted** — a restart or
+config reload re-registers the node `ready`. A drained node stays alive and
+control-reachable, so `logs`, `stack`, `config` and `enable` still work against
+it; only offline nodes are hidden from the admin fan-out. The current state is
+visible in `admin services` (the STATE column).
+
 ## Security and scope
 
 The security model is sudo-style step-up, built on an `admin` auth scope that is
@@ -228,6 +247,8 @@ tail = 2000   # recent lines kept in memory for `admin logs` (0 disables it)
 reva -insecure -host <gateway> login -username <u> -password <p> basic
 reva admin elevate -admin-host <admin:port>     # step up, stores a short-TTL admin token
 reva admin services [-v] [-o wide|json] [service]
+reva admin services drain  <selector> [-y]   # take instances out of rotation
+reva admin services enable <selector>        # return them to rotation
 reva admin config   <service|node-id> [-o toml|json] [-diff]
 reva admin invocations <service|node-id>
 reva admin invoke   [-stream] <selector> <invocation> [key=val ...]

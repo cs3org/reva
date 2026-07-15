@@ -19,6 +19,8 @@
 package admin
 
 import (
+	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 
@@ -28,15 +30,29 @@ import (
 func adminServicesCommand() *command {
 	cmd := newCommand("services")
 	cmd.Description = func() string {
-		return "list the fleet's services (optionally one <service>; -v for every node)"
+		return "list services, or drain/enable instances (optionally one <service>; -v for every node)"
 	}
-	cmd.Usage = func() string { return "Usage: admin services [-v] [-o wide|json] [-state ...] [service]" }
+	cmd.Usage = func() string {
+		return "Usage: admin services [-v] [-o wide|json] [-state ...] [service]\n" +
+			"       admin services drain|enable [-admin-host h] [-y] <selector>"
+	}
 	adminHost := cmd.String("admin-host", "", "address of the admin gRPC endpoint (persisted)")
 	verbose := cmd.Bool("v", false, "show every node instead of a per-service summary")
 	output := cmd.String("o", "", "output format: wide | json")
 	stateFilter := cmd.String("state", "", "only show nodes in these states (comma-separated, e.g. degraded,offline)")
-	cmd.ResetFlags = func() { *adminHost, *verbose, *output, *stateFilter = "", false, "", "" }
+	yes := cmd.Bool("y", false, "skip the confirmation prompt when draining")
+	cmd.ResetFlags = func() { *adminHost, *verbose, *output, *stateFilter, *yes = "", false, "", "", false }
 	cmd.Action = func(w ...io.Writer) error {
+		// `services drain|enable <selector>` takes instances out of / into
+		// rotation; no reva service is named "drain" or "enable".
+		if cmd.NArg() > 0 {
+			switch cmd.Args()[0] {
+			case "drain":
+				return adminServicesRotation(*adminHost, cmd.Args()[1:], true, *yes)
+			case "enable":
+				return adminServicesRotation(*adminHost, cmd.Args()[1:], false, *yes)
+			}
+		}
 		if err := validateOutput(*output); err != nil {
 			return err
 		}
@@ -70,6 +86,52 @@ func adminServicesCommand() *command {
 		return nil
 	}
 	return cmd
+}
+
+// adminServicesRotation drains (out of rotation) or enables (back into
+// rotation) the selected instances by running the `rotation` invocation. Drain
+// confirms first unless yes, since it stops new traffic to the matched nodes.
+func adminServicesRotation(adminHost string, args []string, drain, yes bool) error {
+	if len(args) < 1 {
+		return errors.New("Usage: admin services drain|enable [-admin-host h] [-y] <selector>")
+	}
+	selector := args[0]
+	state := "ready"
+	if drain {
+		state = "drain"
+		if !yes && !confirm(fmt.Sprintf("take %q out of rotation? new traffic to it will stop", selector)) {
+			return errors.New("aborted")
+		}
+	}
+	client, ctx, err := adminDial(adminHost)
+	if err != nil {
+		return err
+	}
+	res, err := client.Invoke(ctx, &adminpb.InvokeRequest{
+		Service:    selector,
+		Invocation: "rotation",
+		Args:       map[string]string{"state": state},
+	})
+	if err != nil {
+		return adminErr(err)
+	}
+	for _, r := range res.Results {
+		if r.Error != "" {
+			fmt.Printf("  %s: error: %s\n", r.Node, r.Error)
+			continue
+		}
+		var d struct{ Node, Previous, State string }
+		if err := json.Unmarshal([]byte(r.ResultJson), &d); err != nil {
+			fmt.Printf("  %s: %s\n", r.Node, r.ResultJson)
+			continue
+		}
+		if d.Previous != d.State {
+			fmt.Printf("  %s: %s -> %s\n", r.Node, d.Previous, d.State)
+		} else {
+			fmt.Printf("  %s: %s\n", r.Node, d.State)
+		}
+	}
+	return nil
 }
 
 // validateOutput rejects an unknown -o value.
