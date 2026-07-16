@@ -27,6 +27,7 @@ import (
 
 	revadcfg "github.com/cs3org/reva/v3/cmd/revad/pkg/config"
 	"github.com/cs3org/reva/v3/pkg/appctx"
+	"github.com/cs3org/reva/v3/pkg/invoke"
 	"github.com/cs3org/reva/v3/pkg/rjobs"
 	natsstore "github.com/cs3org/reva/v3/pkg/rjobs/store/nats"
 	sqlstatus "github.com/cs3org/reva/v3/pkg/rjobs/store/sql"
@@ -75,6 +76,7 @@ type svc struct {
 	ctx    context.Context
 	log    *zerolog.Logger
 	runner *rjobs.Runner
+	set    *invoke.Set
 }
 
 // New returns a new jobs service.
@@ -84,11 +86,16 @@ func New(ctx context.Context, m map[string]any) (rserverless.Service, error) {
 		return nil, err
 	}
 
-	return &svc{
+	s := &svc{
 		conf: &c,
 		ctx:  ctx,
 		log:  appctx.GetLogger(ctx),
-	}, nil
+	}
+	// Build the admin-facing invocation set now (its handlers read s.runner
+	// lazily, once Start has built it), so the control channel advertises the
+	// jobs operations from the first heartbeat.
+	s.set = s.buildInvokeSet()
+	return s, nil
 }
 
 // Start builds the runner and starts it. A missing NATS address is not an

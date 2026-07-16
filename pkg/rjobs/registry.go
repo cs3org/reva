@@ -113,6 +113,18 @@ func registeredPeriodic() []Periodic {
 	return out
 }
 
+// registeredOnDemandNames returns the names of the registered on-demand jobs.
+// Used by Runner.Inspect to report the registry.
+func registeredOnDemandNames() []string {
+	reg.mu.Lock()
+	defer reg.mu.Unlock()
+	out := make([]string, 0, len(reg.onDemand))
+	for name := range reg.onDemand {
+		out = append(out, name)
+	}
+	return out
+}
+
 // lookupOnDemand returns the constructor registered for name, if any.
 func lookupOnDemand(name string) (NewJob, bool) {
 	reg.mu.Lock()

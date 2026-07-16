@@ -53,6 +53,13 @@ func isAdminResource(resource any) bool {
 		*adminpb.GetServiceConfigRequest,
 		*adminpb.ListInvocationsRequest,
 		*adminpb.InvokeRequest,
+		*adminpb.InspectJobsRequest,
+		*adminpb.ListJobRunsRequest,
+		*adminpb.GetJobRunRequest,
+		*adminpb.EnqueueJobRequest,
+		*adminpb.TriggerJobRequest,
+		*adminpb.CancelJobRunRequest,
+		*adminpb.CancelPeriodicJobRequest,
 		*controlpb.ListInvocationsRequest,
 		*controlpb.InvokeRequest:
 		return true

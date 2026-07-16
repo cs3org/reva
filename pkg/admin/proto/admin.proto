@@ -41,9 +41,16 @@ service AdminAPI {
   // Invocations (reads and writes via the Invokable channel).
   rpc ListInvocations(ListInvocationsRequest) returns (ListInvocationsResponse);
   rpc Invoke(InvokeRequest) returns (InvokeResponse);
-  // InvokeStream is the streaming twin of Invoke: it multiplexes the resolved
-  // instances' result streams, each item labelled with its node.
   rpc InvokeStream(InvokeRequest) returns (stream InvokeStreamResponse);
+
+  // Jobs: methods for interacting with the background job framework.
+  rpc InspectJobs(InspectJobsRequest) returns (InspectJobsResponse);
+  rpc ListJobRuns(ListJobRunsRequest) returns (ListJobRunsResponse);
+  rpc GetJobRun(GetJobRunRequest) returns (JobRun);
+  rpc EnqueueJob(EnqueueJobRequest) returns (EnqueueJobResponse);
+  rpc TriggerJob(TriggerJobRequest) returns (TriggerJobResponse);
+  rpc CancelJobRun(CancelJobRunRequest) returns (JobRun);
+  rpc CancelPeriodicJob(CancelPeriodicJobRequest) returns (CancelPeriodicJobResponse);
 }
 
 // ----- Access / step-up -----
@@ -189,6 +196,102 @@ message InvokeStreamResponse {
   string result_json = 2;
   string error = 3;
 }
+
+// ----- Jobs -----
+
+// JobDefinition is a registered job.
+message JobDefinition {
+  string name = 1;
+  string kind = 2;     // "periodic" | "on-demand"
+  string schedule = 3; // periodic only
+  string scope = 4;    // periodic only: "leader" | "all-nodes"
+  string overlap = 5;  // periodic only: "skip" | "allow"
+}
+
+// ActiveJobRun is one run executing on a runner right now.
+message ActiveJobRun {
+  string run_id = 1;
+  string job = 2;
+  string started = 3; // RFC3339
+}
+
+// JobRunnerInfo is one runner's live self-report; error is set instead of the
+// payload when the runner could not be reached.
+message JobRunnerInfo {
+  string node = 1;
+  string error = 2;
+  int32 workers = 3;
+  int32 busy = 4;
+  bool store_wired = 5;
+  repeated JobDefinition jobs = 6;
+  repeated string in_flight_periodic = 7;
+  repeated ActiveJobRun active = 8;
+}
+
+// JobRun is one run's persisted status from the durable ledger.
+message JobRun {
+  string run_id = 1;
+  string job = 2;
+  string state = 3; // queued|running|succeeded|failed|cancelling|cancelled
+  int32 attempt = 4;
+  string owner = 5; // empty for internal runs
+  string enqueued_at = 6; // RFC3339
+  string started_at = 7;  // RFC3339, empty while queued
+  string finished_at = 8; // RFC3339, empty while queued/running
+  string last_error = 9;
+  bool cancel_requested = 10;
+  string result_json = 11; // the job's result payload as JSON
+}
+
+message InspectJobsRequest {}
+
+message InspectJobsResponse {
+  // runners carries one entry per live jobs runner in the fleet.
+  repeated JobRunnerInfo runners = 1;
+}
+
+message ListJobRunsRequest {
+  string job = 1;
+  string owner = 2;
+  repeated string states = 3;
+  bool internal = 4;
+  int32 limit = 5;
+  int32 offset = 6;
+}
+
+message ListJobRunsResponse {
+  repeated JobRun runs = 1;
+}
+
+message GetJobRunRequest {
+  string run_id = 1;
+}
+
+message EnqueueJobRequest {
+  string job = 1;
+  map<string, string> params = 2;
+  string owner = 3; // optional: attribute the run to a user
+}
+
+message EnqueueJobResponse {
+  string run_id = 1;
+}
+
+message TriggerJobRequest {
+  string job = 1;
+}
+
+message TriggerJobResponse {}
+
+message CancelJobRunRequest {
+  string run_id = 1;
+}
+
+message CancelPeriodicJobRequest {
+  string job = 1;
+}
+
+message CancelPeriodicJobResponse {}
 
 // The generated Go stubs are exported from pkg/admin/adminpb. Regenerate from the repo
 // root with `make protobuf`, or directly with:

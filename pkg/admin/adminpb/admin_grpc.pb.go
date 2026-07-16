@@ -33,9 +33,15 @@ type AdminAPIClient interface {
 	// Invocations (reads and writes via the Invokable channel).
 	ListInvocations(ctx context.Context, in *ListInvocationsRequest, opts ...grpc.CallOption) (*ListInvocationsResponse, error)
 	Invoke(ctx context.Context, in *InvokeRequest, opts ...grpc.CallOption) (*InvokeResponse, error)
-	// InvokeStream is the streaming twin of Invoke: it multiplexes the resolved
-	// instances' result streams, each item labelled with its node.
 	InvokeStream(ctx context.Context, in *InvokeRequest, opts ...grpc.CallOption) (AdminAPI_InvokeStreamClient, error)
+	// Jobs: methods for interacting with the background job framework.
+	InspectJobs(ctx context.Context, in *InspectJobsRequest, opts ...grpc.CallOption) (*InspectJobsResponse, error)
+	ListJobRuns(ctx context.Context, in *ListJobRunsRequest, opts ...grpc.CallOption) (*ListJobRunsResponse, error)
+	GetJobRun(ctx context.Context, in *GetJobRunRequest, opts ...grpc.CallOption) (*JobRun, error)
+	EnqueueJob(ctx context.Context, in *EnqueueJobRequest, opts ...grpc.CallOption) (*EnqueueJobResponse, error)
+	TriggerJob(ctx context.Context, in *TriggerJobRequest, opts ...grpc.CallOption) (*TriggerJobResponse, error)
+	CancelJobRun(ctx context.Context, in *CancelJobRunRequest, opts ...grpc.CallOption) (*JobRun, error)
+	CancelPeriodicJob(ctx context.Context, in *CancelPeriodicJobRequest, opts ...grpc.CallOption) (*CancelPeriodicJobResponse, error)
 }
 
 type adminAPIClient struct {
@@ -150,6 +156,69 @@ func (x *adminAPIInvokeStreamClient) Recv() (*InvokeStreamResponse, error) {
 	return m, nil
 }
 
+func (c *adminAPIClient) InspectJobs(ctx context.Context, in *InspectJobsRequest, opts ...grpc.CallOption) (*InspectJobsResponse, error) {
+	out := new(InspectJobsResponse)
+	err := c.cc.Invoke(ctx, "/reva.admin.v1beta1.AdminAPI/InspectJobs", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *adminAPIClient) ListJobRuns(ctx context.Context, in *ListJobRunsRequest, opts ...grpc.CallOption) (*ListJobRunsResponse, error) {
+	out := new(ListJobRunsResponse)
+	err := c.cc.Invoke(ctx, "/reva.admin.v1beta1.AdminAPI/ListJobRuns", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *adminAPIClient) GetJobRun(ctx context.Context, in *GetJobRunRequest, opts ...grpc.CallOption) (*JobRun, error) {
+	out := new(JobRun)
+	err := c.cc.Invoke(ctx, "/reva.admin.v1beta1.AdminAPI/GetJobRun", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *adminAPIClient) EnqueueJob(ctx context.Context, in *EnqueueJobRequest, opts ...grpc.CallOption) (*EnqueueJobResponse, error) {
+	out := new(EnqueueJobResponse)
+	err := c.cc.Invoke(ctx, "/reva.admin.v1beta1.AdminAPI/EnqueueJob", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *adminAPIClient) TriggerJob(ctx context.Context, in *TriggerJobRequest, opts ...grpc.CallOption) (*TriggerJobResponse, error) {
+	out := new(TriggerJobResponse)
+	err := c.cc.Invoke(ctx, "/reva.admin.v1beta1.AdminAPI/TriggerJob", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *adminAPIClient) CancelJobRun(ctx context.Context, in *CancelJobRunRequest, opts ...grpc.CallOption) (*JobRun, error) {
+	out := new(JobRun)
+	err := c.cc.Invoke(ctx, "/reva.admin.v1beta1.AdminAPI/CancelJobRun", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *adminAPIClient) CancelPeriodicJob(ctx context.Context, in *CancelPeriodicJobRequest, opts ...grpc.CallOption) (*CancelPeriodicJobResponse, error) {
+	out := new(CancelPeriodicJobResponse)
+	err := c.cc.Invoke(ctx, "/reva.admin.v1beta1.AdminAPI/CancelPeriodicJob", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // AdminAPIServer is the server API for AdminAPI service.
 // All implementations must embed UnimplementedAdminAPIServer
 // for forward compatibility
@@ -165,9 +234,15 @@ type AdminAPIServer interface {
 	// Invocations (reads and writes via the Invokable channel).
 	ListInvocations(context.Context, *ListInvocationsRequest) (*ListInvocationsResponse, error)
 	Invoke(context.Context, *InvokeRequest) (*InvokeResponse, error)
-	// InvokeStream is the streaming twin of Invoke: it multiplexes the resolved
-	// instances' result streams, each item labelled with its node.
 	InvokeStream(*InvokeRequest, AdminAPI_InvokeStreamServer) error
+	// Jobs: methods for interacting with the background job framework.
+	InspectJobs(context.Context, *InspectJobsRequest) (*InspectJobsResponse, error)
+	ListJobRuns(context.Context, *ListJobRunsRequest) (*ListJobRunsResponse, error)
+	GetJobRun(context.Context, *GetJobRunRequest) (*JobRun, error)
+	EnqueueJob(context.Context, *EnqueueJobRequest) (*EnqueueJobResponse, error)
+	TriggerJob(context.Context, *TriggerJobRequest) (*TriggerJobResponse, error)
+	CancelJobRun(context.Context, *CancelJobRunRequest) (*JobRun, error)
+	CancelPeriodicJob(context.Context, *CancelPeriodicJobRequest) (*CancelPeriodicJobResponse, error)
 	mustEmbedUnimplementedAdminAPIServer()
 }
 
@@ -201,6 +276,27 @@ func (UnimplementedAdminAPIServer) Invoke(context.Context, *InvokeRequest) (*Inv
 }
 func (UnimplementedAdminAPIServer) InvokeStream(*InvokeRequest, AdminAPI_InvokeStreamServer) error {
 	return status.Errorf(codes.Unimplemented, "method InvokeStream not implemented")
+}
+func (UnimplementedAdminAPIServer) InspectJobs(context.Context, *InspectJobsRequest) (*InspectJobsResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method InspectJobs not implemented")
+}
+func (UnimplementedAdminAPIServer) ListJobRuns(context.Context, *ListJobRunsRequest) (*ListJobRunsResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method ListJobRuns not implemented")
+}
+func (UnimplementedAdminAPIServer) GetJobRun(context.Context, *GetJobRunRequest) (*JobRun, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method GetJobRun not implemented")
+}
+func (UnimplementedAdminAPIServer) EnqueueJob(context.Context, *EnqueueJobRequest) (*EnqueueJobResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method EnqueueJob not implemented")
+}
+func (UnimplementedAdminAPIServer) TriggerJob(context.Context, *TriggerJobRequest) (*TriggerJobResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method TriggerJob not implemented")
+}
+func (UnimplementedAdminAPIServer) CancelJobRun(context.Context, *CancelJobRunRequest) (*JobRun, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method CancelJobRun not implemented")
+}
+func (UnimplementedAdminAPIServer) CancelPeriodicJob(context.Context, *CancelPeriodicJobRequest) (*CancelPeriodicJobResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method CancelPeriodicJob not implemented")
 }
 func (UnimplementedAdminAPIServer) mustEmbedUnimplementedAdminAPIServer() {}
 
@@ -380,6 +476,132 @@ func (x *adminAPIInvokeStreamServer) Send(m *InvokeStreamResponse) error {
 	return x.ServerStream.SendMsg(m)
 }
 
+func _AdminAPI_InspectJobs_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(InspectJobsRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(AdminAPIServer).InspectJobs(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/reva.admin.v1beta1.AdminAPI/InspectJobs",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(AdminAPIServer).InspectJobs(ctx, req.(*InspectJobsRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _AdminAPI_ListJobRuns_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ListJobRunsRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(AdminAPIServer).ListJobRuns(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/reva.admin.v1beta1.AdminAPI/ListJobRuns",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(AdminAPIServer).ListJobRuns(ctx, req.(*ListJobRunsRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _AdminAPI_GetJobRun_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetJobRunRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(AdminAPIServer).GetJobRun(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/reva.admin.v1beta1.AdminAPI/GetJobRun",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(AdminAPIServer).GetJobRun(ctx, req.(*GetJobRunRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _AdminAPI_EnqueueJob_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(EnqueueJobRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(AdminAPIServer).EnqueueJob(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/reva.admin.v1beta1.AdminAPI/EnqueueJob",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(AdminAPIServer).EnqueueJob(ctx, req.(*EnqueueJobRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _AdminAPI_TriggerJob_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(TriggerJobRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(AdminAPIServer).TriggerJob(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/reva.admin.v1beta1.AdminAPI/TriggerJob",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(AdminAPIServer).TriggerJob(ctx, req.(*TriggerJobRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _AdminAPI_CancelJobRun_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(CancelJobRunRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(AdminAPIServer).CancelJobRun(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/reva.admin.v1beta1.AdminAPI/CancelJobRun",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(AdminAPIServer).CancelJobRun(ctx, req.(*CancelJobRunRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _AdminAPI_CancelPeriodicJob_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(CancelPeriodicJobRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(AdminAPIServer).CancelPeriodicJob(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/reva.admin.v1beta1.AdminAPI/CancelPeriodicJob",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(AdminAPIServer).CancelPeriodicJob(ctx, req.(*CancelPeriodicJobRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // AdminAPI_ServiceDesc is the grpc.ServiceDesc for AdminAPI service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -418,6 +640,34 @@ var AdminAPI_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "Invoke",
 			Handler:    _AdminAPI_Invoke_Handler,
+		},
+		{
+			MethodName: "InspectJobs",
+			Handler:    _AdminAPI_InspectJobs_Handler,
+		},
+		{
+			MethodName: "ListJobRuns",
+			Handler:    _AdminAPI_ListJobRuns_Handler,
+		},
+		{
+			MethodName: "GetJobRun",
+			Handler:    _AdminAPI_GetJobRun_Handler,
+		},
+		{
+			MethodName: "EnqueueJob",
+			Handler:    _AdminAPI_EnqueueJob_Handler,
+		},
+		{
+			MethodName: "TriggerJob",
+			Handler:    _AdminAPI_TriggerJob_Handler,
+		},
+		{
+			MethodName: "CancelJobRun",
+			Handler:    _AdminAPI_CancelJobRun_Handler,
+		},
+		{
+			MethodName: "CancelPeriodicJob",
+			Handler:    _AdminAPI_CancelPeriodicJob_Handler,
 		},
 	},
 	Streams: []grpc.StreamDesc{
