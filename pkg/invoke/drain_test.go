@@ -29,7 +29,7 @@ import (
 // drain flag and the reported state track it.
 func TestRotationInvocation(t *testing.T) {
 	id := "127.0.0.1:9810/svc-rot"
-	RegisterInstance(id, "svc-rot", nil, nil)
+	RegisterInstance(id, "svc-rot", nil, nil, nil)
 	t.Cleanup(func() { SetDrained(id, false) })
 
 	if IsDrained(id) {

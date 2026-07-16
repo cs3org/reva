@@ -28,6 +28,7 @@ import (
 	"time"
 
 	"github.com/cs3org/reva/v3/cmd/revad/pkg/config"
+	"github.com/cs3org/reva/v3/pkg/activity"
 	"github.com/cs3org/reva/v3/pkg/appctx"
 	"github.com/cs3org/reva/v3/pkg/rhttp/global"
 	"github.com/pkg/errors"
@@ -58,6 +59,15 @@ func WithCertAndKeyFiles(cert, key string) Config {
 func WithLogger(log zerolog.Logger) Config {
 	return func(s *Server) {
 		s.log = log
+	}
+}
+
+// WithActivityCounters sets this server's per-service request counters (keyed by
+// service name), shared with the services' invoke instances so `admin services
+// activity` reports live numbers.
+func WithActivityCounters(counters map[string]*activity.Counter) Config {
+	return func(s *Server) {
+		s.counters = counters
 	}
 }
 
@@ -114,6 +124,7 @@ type Server struct {
 	unprotected []string
 	handlers    map[string]http.Handler
 	middlewares []global.Middleware
+	counters    map[string]*activity.Counter // per-service request counters, keyed by service name
 	log         zerolog.Logger
 }
 
@@ -263,6 +274,9 @@ func (s *Server) getHandler() (http.Handler, error) {
 			s.log.Debug().Str("url", r.URL.Path).Msg("routing via handler")
 			prefix := r.URL.Path
 			r.URL.Path = "/"
+			if done := s.enterActivity(prefix); done != nil {
+				defer done()
+			}
 			h.ServeHTTP(w, s.withServiceLogger(r, prefix))
 			return
 		}
@@ -274,6 +288,9 @@ func (s *Server) getHandler() (http.Handler, error) {
 			// go chi internally uses the RawPath for the routing
 			// so this has to be adapted accordingly
 			r.URL.RawPath = getSubURL(r.URL.RawPath, url)
+			if done := s.enterActivity(url); done != nil {
+				defer done()
+			}
 			h.ServeHTTP(w, s.withServiceLogger(r, url))
 			return
 		}
@@ -300,6 +317,17 @@ func (s *Server) withServiceLogger(r *http.Request, prefix string) *http.Request
 	ctx := r.Context()
 	log := appctx.GetLogger(ctx).With().Str("service", name).Logger()
 	return r.WithContext(appctx.WithLogger(ctx, &log))
+}
+
+// enterActivity records an in-flight request against the service owning the
+// routed prefix, returning the completion func to run when it finishes (nil if
+// the prefix maps to no known service). Feeds `admin services activity`.
+func (s *Server) enterActivity(prefix string) func() {
+	if name, ok := s.svcNames[prefix]; ok {
+		// HTTP has no per-method breakdown yet: count toward the aggregate only.
+		return s.counters[name].Enter("")
+	}
+	return nil
 }
 
 // prometheusMiddleware implements mux.MiddlewareFunc.

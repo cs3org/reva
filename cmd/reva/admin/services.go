@@ -23,6 +23,9 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"sort"
+	"strings"
+	"time"
 
 	"github.com/cs3org/reva/v3/pkg/admin/adminpb"
 )
@@ -30,27 +33,37 @@ import (
 func adminServicesCommand() *command {
 	cmd := newCommand("services")
 	cmd.Description = func() string {
-		return "list services, or drain/enable instances (optionally one <service>; -v for every node)"
+		return "list services, drain/enable instances, or report request activity (one <service>; -v for every node)"
 	}
 	cmd.Usage = func() string {
 		return "Usage: admin services [-v] [-o wide|json] [-state ...] [service]\n" +
-			"       admin services drain|enable [-admin-host h] [-y] <selector>"
+			"       admin services drain|enable [-admin-host h] [-y] <selector>\n" +
+			"       admin services [-methods] [-wait [-timeout D] [-idle D]] activity <selector>"
 	}
 	adminHost := cmd.String("admin-host", "", "address of the admin gRPC endpoint (persisted)")
 	verbose := cmd.Bool("v", false, "show every node instead of a per-service summary")
 	output := cmd.String("o", "", "output format: wide | json")
 	stateFilter := cmd.String("state", "", "only show nodes in these states (comma-separated, e.g. degraded,offline)")
 	yes := cmd.Bool("y", false, "skip the confirmation prompt when draining")
-	cmd.ResetFlags = func() { *adminHost, *verbose, *output, *stateFilter, *yes = "", false, "", "", false }
+	wait := cmd.Bool("wait", false, "activity: block until every matched instance is quiescent")
+	timeout := cmd.Duration("timeout", 2*time.Minute, "activity -wait: give up after this long")
+	idle := cmd.Duration("idle", 5*time.Second, "activity -wait: require this much idle time on top of zero in-flight")
+	methods := cmd.Bool("methods", false, "activity: break the counts down per RPC method")
+	cmd.ResetFlags = func() {
+		*adminHost, *verbose, *output, *stateFilter, *yes = "", false, "", "", false
+		*wait, *timeout, *idle, *methods = false, 2*time.Minute, 5*time.Second, false
+	}
 	cmd.Action = func(w ...io.Writer) error {
-		// `services drain|enable <selector>` takes instances out of / into
-		// rotation; no reva service is named "drain" or "enable".
+		// `services drain|enable|activity <selector>` are subcommands; no reva
+		// service is named "drain", "enable" or "activity".
 		if cmd.NArg() > 0 {
 			switch cmd.Args()[0] {
 			case "drain":
 				return adminServicesRotation(*adminHost, cmd.Args()[1:], true, *yes)
 			case "enable":
 				return adminServicesRotation(*adminHost, cmd.Args()[1:], false, *yes)
+			case "activity":
+				return adminServicesActivity(*adminHost, cmd.Args()[1:], *wait, *timeout, *idle, *methods)
 			}
 		}
 		if err := validateOutput(*output); err != nil {
@@ -132,6 +145,132 @@ func adminServicesRotation(adminHost string, args []string, drain, yes bool) err
 		}
 	}
 	return nil
+}
+
+// activityStat mirrors the `activity` invocation's per-instance result.
+type activityStat struct {
+	InFlight    int64            `json:"in_flight"`
+	Total       int64            `json:"total"`
+	IdleSeconds float64          `json:"idle_seconds"` // <0 means no request ever served
+	LastRequest string           `json:"last_request"`
+	Methods     []activityMethod `json:"methods"`
+}
+
+// activityMethod is one RPC method's slice of an instance's activity.
+type activityMethod struct {
+	Method      string  `json:"method"`
+	InFlight    int64   `json:"in_flight"`
+	Total       int64   `json:"total"`
+	IdleSeconds float64 `json:"idle_seconds"`
+}
+
+// adminServicesActivity reports each matched instance's request activity. With
+// -wait it polls until every instance is quiescent — zero in-flight and idle for
+// at least idle — or timeout elapses, so a drain can be followed by a scripted
+// "wait until safe to restart". With methods it also prints the per-RPC-method
+// breakdown.
+func adminServicesActivity(adminHost string, args []string, wait bool, timeout, idle time.Duration, methods bool) error {
+	if len(args) < 1 {
+		return errors.New("Usage: admin services activity [-admin-host h] [-methods] [-wait [-timeout D] [-idle D]] <selector>")
+	}
+	selector := args[0]
+	client, ctx, err := adminDial(adminHost)
+	if err != nil {
+		return err
+	}
+	poll := func() ([]*adminpb.NodeResult, error) {
+		res, err := client.Invoke(ctx, &adminpb.InvokeRequest{Service: selector, Invocation: "activity"})
+		if err != nil {
+			return nil, adminErr(err)
+		}
+		return res.Results, nil
+	}
+
+	if !wait {
+		results, err := poll()
+		if err != nil {
+			return err
+		}
+		printActivity(results, methods)
+		return nil
+	}
+
+	deadline := time.Now().Add(timeout)
+	for {
+		results, err := poll()
+		if err != nil {
+			return err
+		}
+		if busy := busyNodes(results, idle); len(busy) == 0 {
+			printActivity(results, methods)
+			fmt.Println("all matched instances are quiescent")
+			return nil
+		} else if time.Now().After(deadline) {
+			printActivity(results, methods)
+			return fmt.Errorf("timed out after %s; still active: %s", timeout, strings.Join(busy, ", "))
+		}
+		time.Sleep(time.Second)
+	}
+}
+
+// busyNodes returns the nodes that are not yet quiescent: still serving a
+// request, not idle long enough, or unreachable (an error we cannot clear).
+func busyNodes(results []*adminpb.NodeResult, idle time.Duration) []string {
+	var busy []string
+	for _, r := range results {
+		if r.Error != "" {
+			busy = append(busy, r.Node)
+			continue
+		}
+		var s activityStat
+		if err := json.Unmarshal([]byte(r.ResultJson), &s); err != nil {
+			busy = append(busy, r.Node)
+			continue
+		}
+		quiescent := s.InFlight == 0 && (s.IdleSeconds < 0 || s.IdleSeconds >= idle.Seconds())
+		if !quiescent {
+			busy = append(busy, r.Node)
+		}
+	}
+	return busy
+}
+
+// printActivity renders one row per instance: in-flight, total served, idle.
+// With methods, each instance's per-RPC-method breakdown follows, busiest first.
+func printActivity(results []*adminpb.NodeResult, methods bool) {
+	for _, r := range results {
+		if r.Error != "" {
+			fmt.Printf("  %s: error: %s\n", r.Node, r.Error)
+			continue
+		}
+		var s activityStat
+		if err := json.Unmarshal([]byte(r.ResultJson), &s); err != nil {
+			fmt.Printf("  %s: %s\n", r.Node, r.ResultJson)
+			continue
+		}
+		fmt.Printf("  %s: in-flight=%d total=%d idle=%s\n", r.Node, s.InFlight, s.Total, idleLabel(s.IdleSeconds))
+		if !methods {
+			continue
+		}
+		sort.Slice(s.Methods, func(i, j int) bool {
+			if s.Methods[i].Total != s.Methods[j].Total {
+				return s.Methods[i].Total > s.Methods[j].Total
+			}
+			return s.Methods[i].Method < s.Methods[j].Method
+		})
+		for _, m := range s.Methods {
+			fmt.Printf("      %-28s in-flight=%d total=%d idle=%s\n", m.Method, m.InFlight, m.Total, idleLabel(m.IdleSeconds))
+		}
+	}
+}
+
+// idleLabel renders idle seconds as a short duration, or "-" when the instance
+// has served no request at all.
+func idleLabel(sec float64) string {
+	if sec < 0 {
+		return "-"
+	}
+	return time.Duration(sec * float64(time.Second)).Round(time.Second).String()
 }
 
 // validateOutput rejects an unknown -o value.

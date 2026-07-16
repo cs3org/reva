@@ -51,7 +51,7 @@ func hasSpec(specs []InvocationSpec, name string) bool {
 // Invokable, returning its (redacted) config.
 func TestInstanceExposesConfigByID(t *testing.T) {
 	id := "127.0.0.1:9001/svc-a"
-	RegisterInstance(id, "svc-a", map[string]any{"addr": "x", "secret": "s"}, nil)
+	RegisterInstance(id, "svc-a", map[string]any{"addr": "x", "secret": "s"}, nil, nil)
 
 	specs, ok := Invocations(id)
 	if !ok {
@@ -77,8 +77,8 @@ func TestInstanceExposesConfigByID(t *testing.T) {
 // in a process are addressed distinctly by their ids — the case name routing
 // cannot disambiguate.
 func TestTwoInstancesSameServiceRouteByID(t *testing.T) {
-	RegisterInstance("127.0.0.1:9101/dup", "dup", map[string]any{"which": "one"}, nil)
-	RegisterInstance("127.0.0.1:9102/dup", "dup", map[string]any{"which": "two"}, nil)
+	RegisterInstance("127.0.0.1:9101/dup", "dup", map[string]any{"which": "one"}, nil, nil)
+	RegisterInstance("127.0.0.1:9102/dup", "dup", map[string]any{"which": "two"}, nil, nil)
 
 	one, err := Invoke(context.Background(), "127.0.0.1:9101/dup", ConfigInvocation, nil)
 	if err != nil {
@@ -97,7 +97,7 @@ func TestTwoInstancesSameServiceRouteByID(t *testing.T) {
 // Invokable exposes the shared default plus its own invocations.
 func TestInstanceExtendsDefaults(t *testing.T) {
 	id := "127.0.0.1:9002/svc-b"
-	RegisterInstance(id, "svc-b", map[string]any{"a": 1}, extraInvokable{})
+	RegisterInstance(id, "svc-b", map[string]any{"a": 1}, extraInvokable{}, nil)
 
 	specs, ok := Invocations(id)
 	if !ok {
@@ -114,7 +114,7 @@ func TestInstanceExtendsDefaults(t *testing.T) {
 // TestServiceNameFallback checks the async/local path: a bare service name
 // resolves to a local instance.
 func TestServiceNameFallback(t *testing.T) {
-	RegisterInstance("127.0.0.1:9003/svc-c", "svc-c", map[string]any{"k": "v"}, nil)
+	RegisterInstance("127.0.0.1:9003/svc-c", "svc-c", map[string]any{"k": "v"}, nil, nil)
 	res, err := Invoke(context.Background(), "svc-c", ConfigInvocation, nil)
 	if err != nil {
 		t.Fatalf("Invoke by name: %v", err)
