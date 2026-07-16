@@ -71,6 +71,16 @@ func isAdminMethod(method string) bool {
 		strings.HasPrefix(method, "/reva.control.v1beta1.Control/")
 }
 
+// HasAdminScope reports whether a token's scopes include the admin scope. Such a
+// token authorizes admin/control resources by capability alone (isAdminResource)
+// and never by the caller's group membership — so its bearer, which may be a
+// synthetic local-root identity unknown to any user provider, must not be
+// subjected to a user-group lookup during token validation.
+func HasAdminScope(scopes map[string]*authpb.Scope) bool {
+	_, ok := scopes["admin"]
+	return ok
+}
+
 // AddAdminScope adds the admin scope: a short-lived privilege satisfying Admin
 // API requests and nothing else. The scope map carries "admin" and no "user"
 // key, so the token cannot act on any user's data.
