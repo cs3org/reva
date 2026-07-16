@@ -37,7 +37,7 @@ type command struct {
 
 func newCommand(name string) *command {
 	fs := flag.NewFlagSet(name, flag.ExitOnError)
-	return &command{
+	c := &command{
 		Name:        name,
 		Usage:       func() string { return fmt.Sprintf("Usage: %s", name) },
 		Action:      func(w ...io.Writer) error { return nil },
@@ -45,4 +45,13 @@ func newCommand(name string) *command {
 		FlagSet:     fs,
 		ResetFlags:  func() {},
 	}
+	// Make `-h` print the command's own synopsis (not Go's bare "Usage of
+	// <name>:") followed by its flags. A command with subcommands can replace
+	// this with a richer guide via cmd.FlagSet.Usage.
+	fs.Usage = func() {
+		fmt.Fprintln(fs.Output(), c.Usage())
+		fmt.Fprintln(fs.Output(), "\nFlags:")
+		fs.PrintDefaults()
+	}
+	return c
 }
