@@ -164,7 +164,11 @@ Getting an admin token is a deliberate step-up:
 - Every other method (including `Invoke`, and the control channel itself)
   requires that admin token. The control server runs the standard auth
   interceptor, so it is exactly as protected as the Admin API — an
-  unauthenticated call to the control port is rejected.
+  unauthenticated call to the control port is rejected. An admin token is
+  authorized purely by its scope, so validating it never triggers a user-group
+  lookup — its bearer may be a synthetic local-root identity (see below) that no
+  user provider knows, and on a `skip_user_groups_in_token` fleet that lookup
+  would otherwise reject a valid admin token on every fan-out hop.
 - `Impersonate` mints an ordinary **user-scoped** token for a target user (never
   admin+user), so downstream services apply their normal user checks. It is
   audited and needs the machine-auth api key configured.
