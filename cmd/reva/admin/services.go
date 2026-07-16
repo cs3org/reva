@@ -30,6 +30,40 @@ import (
 	"github.com/cs3org/reva/v3/pkg/admin/adminpb"
 )
 
+// servicesHelp is the `admin services -h` guide: the subcommands, then the flags
+// grouped by the subcommand each applies to. Flags must precede the subcommand
+// token and the selector (Go's flag parser stops at the first positional).
+const servicesHelp = `admin services — inspect and operate the fleet's services
+
+Subcommands (a bare "services" lists them):
+  services [service]        list services with their nodes, state and health
+  services drain  <sel>     take matching instances out of rotation (no new traffic)
+  services enable <sel>     return matching instances to rotation
+  services activity <sel>   report in-flight / idle request activity
+
+  <sel> is a service name, a node id (host:port/svc), a host:port, a host, or *.
+
+Flags (place them before the subcommand and selector):
+  -admin-host <addr>   admin gRPC endpoint, persisted   (all subcommands)
+
+  list:      -v                 show every node, not a per-service summary
+             -o wide|json       output format
+             -state <s,...>      only nodes in these states (e.g. degraded,offline)
+
+  drain:     -y                 skip the confirmation prompt
+
+  activity:  -methods           break the counts down per RPC method
+             -wait              block until every matched instance is quiescent
+             -idle <dur>        with -wait: required idle time on top of 0 in-flight (default 5s)
+             -timeout <dur>     with -wait: give up after this long (default 2m)
+
+Examples:
+  admin services -v userprovider
+  admin services -y drain host1:9158
+  admin services -methods activity gateway
+  admin services -wait -idle 5s activity host1:9158    # then it is safe to restart
+`
+
 func adminServicesCommand() *command {
 	cmd := newCommand("services")
 	cmd.Description = func() string {
@@ -40,6 +74,10 @@ func adminServicesCommand() *command {
 			"       admin services drain|enable [-admin-host h] [-y] <selector>\n" +
 			"       admin services [-methods] [-wait [-timeout D] [-idle D]] activity <selector>"
 	}
+	// `services` multiplexes several subcommands over one flag set, so `-h`
+	// needs a hand-written guide grouping the flags under the subcommand each
+	// belongs to (Go's default flag dump can't).
+	cmd.FlagSet.Usage = func() { fmt.Fprint(cmd.Output(), servicesHelp) }
 	adminHost := cmd.String("admin-host", "", "address of the admin gRPC endpoint (persisted)")
 	verbose := cmd.Bool("v", false, "show every node instead of a per-service summary")
 	output := cmd.String("o", "", "output format: wide | json")
