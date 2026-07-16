@@ -49,7 +49,7 @@ func (fakeInvokable) Invoke(_ context.Context, name string, args map[string]any)
 // errors as soft per-node errors.
 func TestControlRouting(t *testing.T) {
 	const id = "127.0.0.1:9001/fake"
-	invoke.RegisterInstance(id, "fake", nil, fakeInvokable{})
+	invoke.RegisterInstance(id, "fake", nil, fakeInvokable{}, nil)
 	ctrl := NewServer()
 	ctx := context.Background()
 

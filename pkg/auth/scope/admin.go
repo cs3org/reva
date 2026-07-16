@@ -59,14 +59,15 @@ func isAdminResource(resource any) bool {
 	case MethodResource:
 		// Streaming methods, identified by name: no request message is
 		// available on the stream yet.
-		return isAdminMethod(string(r))
+		return IsAdminMethod(string(r))
 	}
 	return false
 }
 
-// isAdminMethod reports whether a full gRPC method belongs to the Admin API or
-// the control channel.
-func isAdminMethod(method string) bool {
+// IsAdminMethod reports whether a full gRPC method belongs to the Admin API or
+// the control channel. Callers that must exclude these operational RPCs from
+// per-request accounting (e.g. request-activity tracking) use it too.
+func IsAdminMethod(method string) bool {
 	return strings.HasPrefix(method, "/reva.admin.v1beta1.AdminAPI/") ||
 		strings.HasPrefix(method, "/reva.control.v1beta1.Control/")
 }

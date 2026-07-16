@@ -144,6 +144,56 @@ control-reachable, so `logs`, `stack`, `config` and `enable` still work against
 it; only offline nodes are hidden from the admin fan-out. The current state is
 visible in `admin services` (the STATE column).
 
+## Request activity (is it safe to restart?)
+
+`reva admin services activity <selector>` reports, per instance, how many
+requests it is **currently serving** (`in-flight`), how many it has served
+(`total`), and how long it has been **idle**. This is the companion to `drain`:
+drain stops new traffic, and activity tells you when the in-flight traffic has
+finished, so you know when a node has quiesced and is safe to restart.
+
+```
+admin services drain 10.0.0.4:19003            # out of rotation
+admin services -wait -idle 5s activity 10.0.0.4:19003   # block until quiesced
+# ... restart the process ...
+admin services enable 10.0.0.4:19003
+```
+
+`-wait` polls until **every** matched instance has zero in-flight requests and
+has been idle for at least `-idle` (default 5s), or `-timeout` (default 2m)
+elapses — in which case it lists the still-active instances and exits non-zero,
+so it drops into a shell procedure. (As with the other subcommands, flags come
+before the `activity` token: `services -wait … activity <selector>`.)
+
+`-methods` adds the per-RPC-method breakdown for gRPC services (busiest first),
+so you can see *what* an instance is serving, not just how much:
+
+```
+10.0.0.4:19003/userprovider: in-flight=2 total=1841 idle=0s
+    GetUser          in-flight=1 total=1203 idle=0s
+    GetUserByClaim   in-flight=1 total= 512 idle=0s
+    GetUserGroups    in-flight=0 total= 126 idle=3s
+```
+
+The method set is bounded, so this is cardinality-safe. The breakdown lives in
+the same per-instance counter (a lazily-built per-method map alongside the
+lock-free aggregate, so `-wait`'s quiescence check never pays for it). HTTP
+requests count toward the aggregate only.
+
+The count is kept always-on in a small counter (`pkg/activity`) created **per
+service per server** in the runtime and shared by reference between the request
+choke points that feed it — the same ones that stamp the `service` log field,
+the gRPC appctx interceptor and the HTTP router — and the `activity` invocation
+that reports it. There is no process-global state: because a server is one
+listener, the counter is `1:1` with a node id, so the numbers are **per
+instance** — unlike the shared `logs`/`stack` process buffers, two co-located
+same-name instances (on different listeners) count separately. Admin API and
+control-channel RPCs are excluded, so the activity query itself and long-lived
+admin streams (e.g. `logs -f`) never register as traffic. It counts
+registry-routed *and* directly addressed requests alike — a request reaching a
+drained node through a pinned connection still shows up (correctly: it *is*
+being served). Counters reset on restart (a fresh process starts idle).
+
 ## Security and scope
 
 The security model is sudo-style step-up, built on an `admin` auth scope that is
@@ -253,6 +303,7 @@ reva admin elevate -admin-host <admin:port>     # step up, stores a short-TTL ad
 reva admin services [-v] [-o wide|json] [service]
 reva admin services drain  <selector> [-y]   # take instances out of rotation
 reva admin services enable <selector>        # return them to rotation
+reva admin services [-wait [-idle D] [-timeout D]] activity <selector>  # in-flight/idle
 reva admin config   <service|node-id> [-o toml|json] [-diff]
 reva admin invocations <service|node-id>
 reva admin invoke   [-stream] <selector> <invocation> [key=val ...]

@@ -45,7 +45,7 @@ func TestLogsInvocationSnapshot(t *testing.T) {
 	writeLogLine(buf, "groupprovider", "hello from gp")
 
 	id := "127.0.0.1:9500/userprovider"
-	RegisterInstance(id, "userprovider", nil, nil)
+	RegisterInstance(id, "userprovider", nil, nil, nil)
 
 	// The catalog advertises logs as a streaming-capable default.
 	specs, _ := Invocations(id)
@@ -83,7 +83,7 @@ func TestLogsInvocationStream(t *testing.T) {
 	writeLogLine(buf, "authprovider", "backlog-1")
 
 	id := "127.0.0.1:9600/authprovider"
-	RegisterInstance(id, "authprovider", nil, nil)
+	RegisterInstance(id, "authprovider", nil, nil, nil)
 
 	ctx, cancel := context.WithCancel(context.Background())
 	got := make(chan string, 8)
@@ -116,13 +116,14 @@ func TestLogsInvocationStream(t *testing.T) {
 // InvokeStream (run once, one result).
 func TestDefaultsRegistry(t *testing.T) {
 	id := "127.0.0.1:9800/svc-y"
-	RegisterInstance(id, "svc-y", nil, nil)
+	RegisterInstance(id, "svc-y", nil, nil, nil)
 
 	specs, ok := Invocations(id)
-	if !ok || len(specs) < 6 || specs[0].Name != ConfigInvocation || specs[1].Name != LogsInvocation ||
-		specs[2].Name != LogLevelInvocation || specs[3].Name != RotationInvocation ||
-		specs[4].Name != StackInvocation || specs[5].Name != VersionInvocation {
-		t.Fatalf("expected [config, logs, loglevel, rotation, stack, version] leading the catalog, got %+v", specs)
+	if !ok || len(specs) < 7 || specs[0].Name != ActivityInvocation || specs[1].Name != ConfigInvocation ||
+		specs[2].Name != LogsInvocation || specs[3].Name != LogLevelInvocation ||
+		specs[4].Name != RotationInvocation || specs[5].Name != StackInvocation ||
+		specs[6].Name != VersionInvocation {
+		t.Fatalf("expected [activity, config, logs, loglevel, rotation, stack, version] leading the catalog, got %+v", specs)
 	}
 
 	stack, err := Invoke(context.Background(), id, StackInvocation, nil)
@@ -156,7 +157,7 @@ func TestLogLevelInvocation(t *testing.T) {
 	logger.SetLevel("info")
 
 	id := "127.0.0.1:9810/svc-z"
-	RegisterInstance(id, "svc-z", nil, nil)
+	RegisterInstance(id, "svc-z", nil, nil, nil)
 
 	// Report only.
 	res, err := Invoke(context.Background(), id, LogLevelInvocation, nil)
@@ -177,7 +178,7 @@ func TestLogLevelInvocation(t *testing.T) {
 func TestLogsDisabledBuffer(t *testing.T) {
 	logtail.SetDefault(logtail.New(0))
 	id := "127.0.0.1:9700/svc-x"
-	RegisterInstance(id, "svc-x", nil, nil)
+	RegisterInstance(id, "svc-x", nil, nil, nil)
 	if _, err := Invoke(context.Background(), id, LogsInvocation, nil); err == nil {
 		t.Fatal("expected an error when the log buffer is disabled")
 	}
