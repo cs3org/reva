@@ -104,3 +104,26 @@ func TestIsAdminResource(t *testing.T) {
 		t.Fatal("expected a non-admin stream method to not be an admin resource")
 	}
 }
+
+// TestHasAdminScope covers the predicate the auth interceptor uses to skip the
+// user-group re-fetch for admin tokens (whose bearer may be a synthetic
+// local-root identity no user provider knows).
+func TestHasAdminScope(t *testing.T) {
+	adminToken, err := AddAdminScope(nil)
+	if err != nil {
+		t.Fatalf("AddAdminScope: %v", err)
+	}
+	userToken, err := AddOwnerScope(nil)
+	if err != nil {
+		t.Fatalf("AddOwnerScope: %v", err)
+	}
+	if !HasAdminScope(adminToken) {
+		t.Fatal("expected an admin token to carry the admin scope")
+	}
+	if HasAdminScope(userToken) {
+		t.Fatal("expected a user token to not carry the admin scope")
+	}
+	if HasAdminScope(nil) {
+		t.Fatal("expected an empty scope set to not carry the admin scope")
+	}
+}

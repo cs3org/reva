@@ -222,7 +222,11 @@ func (i *interceptor) dismantleToken(ctx context.Context, tkn string, req any, u
 		return u, nil, nil
 	}
 
-	if sharedconf.SkipUserGroupsInToken() {
+	// An admin-scoped token is authorized by capability, not group membership,
+	// and its bearer may be a synthetic local-root identity no user provider
+	// knows — so skip the group re-fetch, which would otherwise reject a valid
+	// admin token whenever the lookup errors (e.g. unknown or unreachable user).
+	if sharedconf.SkipUserGroupsInToken() && !scope.HasAdminScope(tokenScope) {
 		client, err := service.Gateway(ctx)
 		if err != nil {
 			return nil, nil, err
