@@ -91,6 +91,7 @@ type Runner struct {
 // broadcast, the backstop poll).
 type runHandle struct {
 	job       string
+	started   time.Time
 	cancel    context.CancelFunc
 	cancelled atomic.Bool
 	once      sync.Once
@@ -580,7 +581,7 @@ func (r *Runner) execRun(ctx context.Context, run Run) {
 	// this specific run. It derives from ctx, so a shutdown still cancels it too;
 	// the runHandle.cancelled flag is what tells the two apart below.
 	runCtx, cancel := context.WithCancel(ctx)
-	h := &runHandle{job: run.Job, cancel: cancel}
+	h := &runHandle{job: run.Job, started: time.Now(), cancel: cancel}
 	r.registerRun(run.ID, h)
 	defer r.deregisterRun(run.ID)
 	defer cancel()

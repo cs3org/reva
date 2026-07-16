@@ -311,12 +311,57 @@ reva admin logs     <selector> [-f] [-n N] [-level L] [-since D] [-grep P] [-o t
 reva admin logs level <selector> [trace|debug|info|warn|error]   # report/set runtime level
 reva admin trace    <traceid> | -user <username>   # one request/user across the fleet
 reva admin stack    <selector> [-grep P]           # goroutine dumps, e.g. of a hung process
+reva admin jobs     list | active | runs | status <id> | run <job> [k=v] | trigger <job> | cancel <id> | stop <job>
 reva admin impersonate <user>
 
 # Local root: on the box, no login/elevate/flag — the CLI finds the socket. Only
 # if it is absent (or denies you) does it need the network host + elevate above.
 reva admin services
 ```
+
+## Jobs
+
+`reva admin jobs` drives the background jobs runner ([`pkg/rjobs`](../../../../pkg/rjobs)),
+and shows the general shape for adding **typed Admin API methods to interact with
+a service**: the surface is typed RPCs on the `AdminAPI`, and each method's body
+reuses the **invoke** channel to reach the service — fanning out or targeting one
+runner by where the state lives. The admin keeps **no store or business
+dependency**; it reaches the runner the same way it reaches any service.
+
+Two sources of truth, two access patterns:
+
+- **The driver's live internal state** — registered jobs and what each is doing
+  right now (running/idle, scope, worker pool), held in per-process memory and
+  largely absent from any database. `InspectJobs` **fans out** to every runner
+  and merges. `jobs list` is the job-centric view, `jobs active` the run-centric
+  one:
+
+  ```
+  jobs list                 # NAME, KIND, SCHEDULE, SCOPE, STATUS (running-where)
+  jobs active               # per node: the runs executing now + worker pool
+  ```
+
+- **The durable run ledger** — the persisted history of runs, in the shared store
+  (nats queue + SQL status). `ListJobRuns`/`GetJobRun` **target one** runner (any;
+  the store is shared). The mutations `EnqueueJob`/`TriggerJob`/`CancelJobRun`/
+  `CancelPeriodicJob` also target one — **ingress ≠ execution**: an enqueued run
+  is later claimed by whatever worker is free (possibly a different runner), and
+  cancels broadcast cluster-wide. They are audited.
+
+  ```
+  jobs runs [-job X] [-owner Y] [-state s,...] [-internal] [-n N]
+  jobs status <run-id>
+  jobs run <job> [k=v ...] [-owner U]   # enqueue on-demand → run id
+  jobs trigger <job>                    # fire a periodic job now
+  jobs cancel <run-id>   |   jobs stop <job>
+  ```
+
+Under the hood the runner exposes an `invoke.Set` (`inspect`/`runs`/`status`/
+`enqueue`/`trigger`/`cancel`/`stop`) that the admin calls over the control
+channel — the admin↔runner transport, never a user-facing surface. Caveats:
+`all-nodes` periodic jobs never touch the store so they have no `runs` history
+but *do* show in `list`/`active`; and `failed` is not terminal — the framework
+retries.
 
 ## Adding an invocation to a service (for developers)
 
