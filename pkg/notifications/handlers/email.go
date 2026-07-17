@@ -135,27 +135,44 @@ func (h *EmailHandler) Name() string {
 
 // Send implements Handler.
 func (h *EmailHandler) Send(_ context.Context, envelope model.Envelope) error {
+	log := h.log.With().
+		Str("notification_id", envelope.ID).
+		Str("event_type", envelope.EventType).
+		Str("template_name", envelope.TemplateName).
+		Int("recipients", len(envelope.Recipients)).
+		Logger()
+
 	if envelope.TemplateName == "" {
-		return errors.New("email notification requires a template name")
+		err := errors.New("email notification requires a template name")
+		log.Error().Err(err).Msg("notifications: email handler failed")
+		return err
 	}
 	t, ok := h.templates[envelope.TemplateName]
 	if !ok {
-		return fmt.Errorf("email template %s not found", envelope.TemplateName)
+		err := fmt.Errorf("email template %s not found", envelope.TemplateName)
+		log.Error().Err(err).Msg("notifications: email handler failed")
+		return err
 	}
 
 	subject, err := t.renderSubject(envelope.TemplateData)
 	if err != nil {
+		log.Error().Err(err).Msg("notifications: email handler failed to render subject")
 		return err
 	}
 	body, err := t.renderBody(envelope.TemplateData)
 	if err != nil {
+		log.Error().Err(err).Msg("notifications: email handler failed to render body")
 		return err
 	}
 
 	for _, recipient := range envelope.Recipients {
+		recipientLog := log.With().Str("recipient", recipient).Logger()
+		recipientLog.Info().Msg("notifications: email handler sending email")
 		if err := h.sendEmail(envelope.Sender, recipient, subject, body); err != nil {
+			recipientLog.Error().Err(err).Msg("notifications: email handler failed to send email")
 			return err
 		}
+		recipientLog.Info().Msg("notifications: email handler sent email")
 	}
 	return nil
 }

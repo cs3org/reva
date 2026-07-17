@@ -19,10 +19,15 @@
 package notifications
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
+	"hash/fnv"
+	"slices"
+	"strings"
 	"sync"
+	"text/template"
 	"time"
 
 	"github.com/cs3org/reva/v3/pkg/notifications/handlers"
@@ -42,10 +47,25 @@ type AccumulationStore interface {
 	ListCandidates(ctx context.Context, now time.Time, limit int) ([]*model.Bucket, error)
 }
 
+// PreferenceResolver narrows the configured handler set for a recipient set.
+type PreferenceResolver interface {
+	ResolveHandlers(ctx context.Context, envelope model.Envelope, handlers []string) ([]string, error)
+}
+
+// NoopPreferenceResolver applies no recipient preference changes.
+type NoopPreferenceResolver struct{}
+
+// ResolveHandlers implements PreferenceResolver.
+func (NoopPreferenceResolver) ResolveHandlers(_ context.Context, _ model.Envelope, handlers []string) ([]string, error) {
+	return append([]string(nil), handlers...), nil
+}
+
 // Worker handles notification envelopes consumed from NATS.
 type Worker struct {
 	store      AccumulationStore
 	dispatcher *handlers.Dispatcher
+	rules      map[string]model.EventRule
+	prefs      PreferenceResolver
 	ownerID    string
 
 	leaseDuration    time.Duration
@@ -59,6 +79,8 @@ type Worker struct {
 // WorkerConfig configures a notification worker.
 type WorkerConfig struct {
 	OwnerID          string
+	EventRules       map[string]model.EventRule
+	Preferences      PreferenceResolver
 	LeaseDuration    time.Duration
 	MaxRenderedItems int
 }
@@ -71,6 +93,9 @@ func NewWorker(store AccumulationStore, dispatcher *handlers.Dispatcher, conf Wo
 	if conf.OwnerID == "" {
 		return nil, errors.New("worker owner id is required")
 	}
+	if conf.Preferences == nil {
+		conf.Preferences = NoopPreferenceResolver{}
+	}
 	if conf.LeaseDuration <= 0 {
 		conf.LeaseDuration = 5 * time.Minute
 	}
@@ -81,6 +106,8 @@ func NewWorker(store AccumulationStore, dispatcher *handlers.Dispatcher, conf Wo
 	return &Worker{
 		store:            store,
 		dispatcher:       dispatcher,
+		rules:            cloneEventRules(conf.EventRules),
+		prefs:            conf.Preferences,
 		ownerID:          conf.OwnerID,
 		leaseDuration:    conf.LeaseDuration,
 		maxRenderedItems: conf.MaxRenderedItems,
@@ -91,21 +118,79 @@ func NewWorker(store AccumulationStore, dispatcher *handlers.Dispatcher, conf Wo
 
 // Handle handles one notification envelope.
 func (w *Worker) Handle(ctx context.Context, envelope model.Envelope) error {
-	switch envelope.Type {
+	resolved, err := w.resolve(ctx, envelope)
+	if err != nil {
+		return err
+	}
+	if len(resolved.Handlers) == 0 {
+		return nil
+	}
+
+	switch resolved.Type {
 	case model.TypeDirect:
-		return w.dispatcher.Dispatch(ctx, envelope)
+		return w.dispatcher.Dispatch(ctx, resolved)
 	case model.TypeAccumulated:
 		if w.store == nil {
 			return errors.New("accumulation store is required for accumulated notifications")
 		}
 
-		bucket, err := w.store.Add(ctx, envelope, w.now())
+		recipientEnvelopes, err := perRecipientAccumulationEnvelopes(resolved)
 		if err != nil {
 			return err
 		}
-		return w.resumeBucket(ctx, bucket)
+
+		for _, recipientEnvelope := range recipientEnvelopes {
+			bucket, err := w.store.Add(ctx, recipientEnvelope, w.now())
+			if err != nil {
+				return err
+			}
+			if err := w.resumeBucket(ctx, bucket); err != nil {
+				return err
+			}
+		}
+		return nil
 	default:
 		return fmt.Errorf("unsupported notification type %q", envelope.Type)
+	}
+}
+
+func (w *Worker) resolve(ctx context.Context, envelope model.Envelope) (model.Envelope, error) {
+	rule, ok := w.rules[envelope.EventType]
+	if !ok {
+		return model.Envelope{}, fmt.Errorf("notification event type %q is not configured", envelope.EventType)
+	}
+
+	resolved := envelope
+	resolved.Type = rule.Type
+	resolved.Accumulation = rule.Accumulation
+	resolved.TemplateData = cloneMap(envelope.TemplateData)
+
+	handlersToRun := handlerNames(rule.Handlers)
+	filteredHandlers, err := w.prefs.ResolveHandlers(ctx, resolved, handlersToRun)
+	if err != nil {
+		return model.Envelope{}, err
+	}
+	resolved.Handlers = filteredHandlers
+
+	if emailRule, ok := rule.Handlers[handlers.EmailHandlerName]; ok {
+		resolved.TemplateName = emailRule.TemplateName
+	}
+
+	switch resolved.Type {
+	case model.TypeDirect:
+		return resolved, nil
+	case model.TypeAccumulated:
+		if resolved.Accumulation.WindowSeconds <= 0 {
+			return model.Envelope{}, errors.New("accumulated notification rule requires a positive accumulation window")
+		}
+		dedupKey, err := renderDedupKey(rule.DedupKeyTemplate, resolved)
+		if err != nil {
+			return model.Envelope{}, err
+		}
+		resolved.DedupKey = dedupKey
+		return resolved, nil
+	default:
+		return model.Envelope{}, fmt.Errorf("unsupported notification delivery type %q", resolved.Type)
 	}
 }
 
@@ -188,4 +273,98 @@ func (w *Worker) scheduleFlush(ctx context.Context, dedupKey string, delay time.
 	w.timers[dedupKey] = time.AfterFunc(delay, func() {
 		_ = w.Flush(ctx, dedupKey)
 	})
+}
+
+func cloneEventRules(in map[string]model.EventRule) map[string]model.EventRule {
+	out := make(map[string]model.EventRule, len(in))
+	for eventType, rule := range in {
+		rule.Handlers = cloneHandlerRules(rule.Handlers)
+		out[eventType] = rule
+	}
+	return out
+}
+
+func cloneHandlerRules(in map[string]model.HandlerRule) map[string]model.HandlerRule {
+	out := make(map[string]model.HandlerRule, len(in))
+	for name, rule := range in {
+		out[name] = rule
+	}
+	return out
+}
+
+func handlerNames(rules map[string]model.HandlerRule) []string {
+	names := make([]string, 0, len(rules))
+	for name := range rules {
+		names = append(names, name)
+	}
+	slices.Sort(names)
+	return names
+}
+
+func renderDedupKey(templateString string, envelope model.Envelope) (string, error) {
+	if templateString == "" {
+		return "", errors.New("accumulated notification rule requires a dedup key template")
+	}
+
+	tmpl, err := template.New("dedup_key").Option("missingkey=error").Parse(templateString)
+	if err != nil {
+		return "", err
+	}
+
+	var buf bytes.Buffer
+	if err := tmpl.Execute(&buf, envelope); err != nil {
+		return "", err
+	}
+
+	key := strings.TrimSpace(buf.String())
+	if key == "" {
+		return "", errors.New("accumulated notification rule rendered an empty dedup key")
+	}
+	return key, nil
+}
+
+func perRecipientAccumulationEnvelopes(envelope model.Envelope) ([]model.Envelope, error) {
+	envelopes := make([]model.Envelope, 0, len(envelope.Recipients))
+	for _, recipient := range envelope.Recipients {
+		recipient = strings.TrimSpace(recipient)
+		if recipient == "" {
+			continue
+		}
+
+		recipientEnvelope := envelope
+		recipientEnvelope.ID = perRecipientItemID(envelope.ID, recipient)
+		recipientEnvelope.Recipients = []string{recipient}
+		recipientEnvelope.DedupKey = perRecipientDedupKey(recipient, envelope.DedupKey)
+		envelopes = append(envelopes, recipientEnvelope)
+	}
+	if len(envelopes) == 0 {
+		return nil, errors.New("accumulated notification requires at least one non-empty recipient")
+	}
+	return envelopes, nil
+}
+
+func perRecipientDedupKey(recipient, dedupKey string) string {
+	return fmt.Sprintf("%d:%s:%s", len(recipient), recipient, dedupKey)
+}
+
+func perRecipientItemID(id, recipient string) string {
+	return fmt.Sprintf("%s:%x", id, fnvHash(recipient))
+}
+
+func fnvHash(value string) uint64 {
+	h := fnv.New64a()
+	_, _ = h.Write([]byte(value))
+	return h.Sum64()
+}
+
+func cloneMap(in map[string]any) map[string]any {
+	if in == nil {
+		return nil
+	}
+
+	out := make(map[string]any, len(in))
+	for k, v := range in {
+		out[k] = v
+	}
+	return out
 }

@@ -74,6 +74,7 @@ type NATSBackend struct {
 	nc   *nats.Conn
 	js   nats.JetStreamContext
 	conf NATSConfig
+	log  zerolog.Logger
 }
 
 // NewNATSBackend connects to NATS and ensures the notification stream exists.
@@ -98,6 +99,7 @@ func NewNATSBackend(conf NATSConfig, log zerolog.Logger) (*NATSBackend, error) {
 		nc:   nc,
 		js:   js,
 		conf: conf,
+		log:  log,
 	}, nil
 }
 
@@ -108,8 +110,30 @@ func (b *NATSBackend) Publish(_ context.Context, envelope model.Envelope) error 
 		return err
 	}
 
-	_, err = b.js.Publish(b.conf.subject(), data)
-	return err
+	ack, err := b.js.Publish(b.conf.subject(), data)
+	if err != nil {
+		b.log.Error().
+			Err(err).
+			Str("notification_id", envelope.ID).
+			Str("event_type", envelope.EventType).
+			Int("recipients", len(envelope.Recipients)).
+			Str("stream", b.conf.stream()).
+			Str("subject", b.conf.subject()).
+			Msg("notifications: failed to publish event to nats")
+		return err
+	}
+
+	event := b.log.Info().
+		Str("notification_id", envelope.ID).
+		Str("event_type", envelope.EventType).
+		Int("recipients", len(envelope.Recipients)).
+		Str("stream", b.conf.stream()).
+		Str("subject", b.conf.subject())
+	if ack != nil {
+		event = event.Str("ack_stream", ack.Stream).Uint64("ack_sequence", ack.Sequence)
+	}
+	event.Msg("notifications: published event to nats")
+	return nil
 }
 
 // Close drains the NATS connection.
@@ -126,6 +150,7 @@ type NATSListener struct {
 	js   nats.JetStreamContext
 	conf NATSConfig
 	sub  *nats.Subscription
+	log  zerolog.Logger
 }
 
 // NewNATSListener connects to NATS and ensures the notification stream exists.
@@ -150,6 +175,7 @@ func NewNATSListener(conf NATSConfig, log zerolog.Logger) (*NATSListener, error)
 		nc:   nc,
 		js:   js,
 		conf: conf,
+		log:  log,
 	}, nil
 }
 
@@ -166,16 +192,51 @@ func (l *NATSListener) Start(ctx context.Context, handler func(context.Context, 
 		func(msg *nats.Msg) {
 			var envelope model.Envelope
 			if err := json.Unmarshal(msg.Data, &envelope); err != nil {
-				_ = msg.Term()
+				l.log.Error().
+					Err(err).
+					Str("stream", l.conf.stream()).
+					Str("subject", l.conf.subject()).
+					Msg("notifications: failed to decode nats message")
+				if termErr := msg.Term(); termErr != nil {
+					l.log.Error().Err(termErr).Msg("notifications: failed to terminate undecodable nats message")
+				}
 				return
 			}
+
+			l.log.Info().
+				Str("notification_id", envelope.ID).
+				Str("event_type", envelope.EventType).
+				Int("recipients", len(envelope.Recipients)).
+				Str("stream", l.conf.stream()).
+				Str("subject", l.conf.subject()).
+				Msg("notifications: received event from nats")
 
 			if err := handler(ctx, envelope); err != nil {
-				_ = msg.Nak()
+				l.log.Error().
+					Err(err).
+					Str("notification_id", envelope.ID).
+					Str("event_type", envelope.EventType).
+					Int("recipients", len(envelope.Recipients)).
+					Str("stream", l.conf.stream()).
+					Str("subject", l.conf.subject()).
+					Msg("notifications: failed to handle nats event")
+				if nakErr := msg.Nak(); nakErr != nil {
+					l.log.Error().
+						Err(nakErr).
+						Str("notification_id", envelope.ID).
+						Str("event_type", envelope.EventType).
+						Msg("notifications: failed to nak nats event")
+				}
 				return
 			}
 
-			_ = msg.Ack()
+			if ackErr := msg.Ack(); ackErr != nil {
+				l.log.Error().
+					Err(ackErr).
+					Str("notification_id", envelope.ID).
+					Str("event_type", envelope.EventType).
+					Msg("notifications: failed to ack nats event")
+			}
 		},
 		nats.Durable(l.conf.durable()),
 		nats.ManualAck(),

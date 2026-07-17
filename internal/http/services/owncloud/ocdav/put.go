@@ -371,6 +371,7 @@ func (s *svc) handlePut(ctx context.Context, w http.ResponseWriter, r *http.Requ
 	}
 
 	newInfo := sRes.Info
+	s.sendUploadNotification(ctx, client, newInfo, log)
 
 	w.Header().Add(HeaderContentType, newInfo.MimeType)
 	w.Header().Set(HeaderETag, newInfo.Etag)

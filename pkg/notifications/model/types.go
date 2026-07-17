@@ -27,38 +27,52 @@ const (
 
 // AccumulationPolicy controls how accumulated notifications are grouped.
 type AccumulationPolicy struct {
-	WindowSeconds int `json:"window_seconds"`
-	MaxItems      int `json:"max_items"`
+	WindowSeconds int `json:"window_seconds" mapstructure:"window_seconds"`
+	MaxItems      int `json:"max_items" mapstructure:"max_items"`
 }
 
 // SendRequest is the internal request shape used by the gateway SendNotification
 // implementation before the request is published to a backend.
 type SendRequest struct {
-	Type           string             `json:"type"`
-	DedupKey       string             `json:"dedup_key,omitempty"`
-	SubmittingUser string             `json:"submitting_user"`
-	Sender         string             `json:"sender,omitempty"`
-	Recipients     []string           `json:"recipients"`
-	Handlers       []string           `json:"handlers"`
-	TemplateName   string             `json:"template_name,omitempty"`
-	TemplateData   map[string]any     `json:"template_data,omitempty"`
-	Accumulation   AccumulationPolicy `json:"accumulation,omitempty"`
+	EventType      string         `json:"event_type"`
+	SubmittingUser string         `json:"submitting_user"`
+	Sender         string         `json:"sender,omitempty"`
+	Recipients     []string       `json:"recipients"`
+	TemplateData   map[string]any `json:"template_data,omitempty"`
 }
 
 // Envelope is the durable notification message sent through NATS and stored in
 // SQL for accumulated notifications.
 type Envelope struct {
-	ID             string             `json:"id"`
-	Type           string             `json:"type"`
-	DedupKey       string             `json:"dedup_key,omitempty"`
-	SubmittingUser string             `json:"submitting_user"`
-	Sender         string             `json:"sender,omitempty"`
-	Recipients     []string           `json:"recipients"`
-	Handlers       []string           `json:"handlers"`
-	TemplateName   string             `json:"template_name,omitempty"`
-	TemplateData   map[string]any     `json:"template_data,omitempty"`
-	Accumulation   AccumulationPolicy `json:"accumulation,omitempty"`
-	SubmittedAt    time.Time          `json:"submitted_at"`
+	ID             string         `json:"id"`
+	EventType      string         `json:"event_type"`
+	SubmittingUser string         `json:"submitting_user"`
+	Sender         string         `json:"sender,omitempty"`
+	Recipients     []string       `json:"recipients"`
+	TemplateData   map[string]any `json:"template_data,omitempty"`
+	SubmittedAt    time.Time      `json:"submitted_at"`
+
+	// The following fields are resolved by the notification worker from event
+	// rules before dispatch or accumulation. They are not accepted from
+	// producers.
+	Type         string             `json:"type,omitempty"`
+	DedupKey     string             `json:"dedup_key,omitempty"`
+	Handlers     []string           `json:"handlers,omitempty"`
+	TemplateName string             `json:"template_name,omitempty"`
+	Accumulation AccumulationPolicy `json:"accumulation,omitempty"`
+}
+
+// HandlerRule configures one handler for a notification event.
+type HandlerRule struct {
+	TemplateName string `json:"template_name,omitempty" mapstructure:"template_name"`
+}
+
+// EventRule configures how one notification event type is delivered.
+type EventRule struct {
+	Type             string                 `json:"type" mapstructure:"type"`
+	DedupKeyTemplate string                 `json:"dedup_key_template,omitempty" mapstructure:"dedup_key_template"`
+	Handlers         map[string]HandlerRule `json:"handlers" mapstructure:"handlers"`
+	Accumulation     AccumulationPolicy     `json:"accumulation,omitempty" mapstructure:"accumulation"`
 }
 
 // Bucket describes the current SQL-backed accumulation state for a dedup key.

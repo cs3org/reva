@@ -57,7 +57,8 @@ type config struct {
 
 	Database revadcfg.Database `mapstructure:",squash"`
 
-	Handlers map[string]map[string]any `mapstructure:"handlers"`
+	Handlers map[string]map[string]any  `mapstructure:"handlers"`
+	Events   map[string]model.EventRule `mapstructure:"events"`
 
 	WorkerID              string `mapstructure:"worker_id"`
 	LeaseDurationSeconds  int    `mapstructure:"lease_duration_seconds"`
@@ -126,6 +127,7 @@ func New(ctx context.Context, m map[string]any) (rserverless.Service, error) {
 
 	worker, err := notificationspkg.NewWorker(store, dispatcher, notificationspkg.WorkerConfig{
 		OwnerID:          c.WorkerID,
+		EventRules:       c.Events,
 		LeaseDuration:    time.Duration(c.LeaseDurationSeconds) * time.Second,
 		MaxRenderedItems: c.MaxRenderedItems,
 	})

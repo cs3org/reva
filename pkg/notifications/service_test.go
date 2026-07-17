@@ -24,7 +24,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/cs3org/reva/v3/pkg/notifications/handlers"
 	"github.com/cs3org/reva/v3/pkg/notifications/model"
 )
 
@@ -43,10 +42,9 @@ func TestSendNotificationRateLimitsPerSubmittingUser(t *testing.T) {
 	svc := NewSendService(backend, limiter)
 
 	req := model.SendRequest{
-		Type:           model.TypeDirect,
+		EventType:      "share.created",
 		SubmittingUser: "alice",
 		Recipients:     []string{"bob@example.org"},
-		Handlers:       []string{handlers.EmailHandlerName},
 	}
 
 	if _, err := svc.SendNotification(context.Background(), req); err != nil {
@@ -65,19 +63,28 @@ func TestSendNotificationRateLimitsPerSubmittingUser(t *testing.T) {
 	}
 }
 
-func TestSendNotificationRequiresDedupKeyForAccumulated(t *testing.T) {
-	svc := NewSendService(&recordingBackend{}, NoopRateLimiter{})
+func TestSendNotificationPublishesEventOnly(t *testing.T) {
+	backend := &recordingBackend{}
+	svc := NewSendService(backend, NoopRateLimiter{})
 
 	_, err := svc.SendNotification(context.Background(), model.SendRequest{
-		Type:           model.TypeAccumulated,
+		EventType:      "office.mention",
 		SubmittingUser: "alice",
 		Recipients:     []string{"bob@example.org"},
-		Handlers:       []string{handlers.EmailHandlerName},
-		Accumulation: model.AccumulationPolicy{
-			WindowSeconds: 60,
-		},
+		TemplateData:   map[string]any{"document_id": "doc-1"},
 	})
-	if err == nil {
-		t.Fatal("expected missing dedup key to fail")
+	if err != nil {
+		t.Fatalf("send failed: %v", err)
+	}
+
+	if len(backend.envelopes) != 1 {
+		t.Fatalf("published envelopes = %d, want 1", len(backend.envelopes))
+	}
+	envelope := backend.envelopes[0]
+	if envelope.EventType != "office.mention" {
+		t.Fatalf("event type = %q, want office.mention", envelope.EventType)
+	}
+	if envelope.Type != "" || envelope.DedupKey != "" || len(envelope.Handlers) != 0 {
+		t.Fatalf("envelope contains resolved delivery policy: %+v", envelope)
 	}
 }

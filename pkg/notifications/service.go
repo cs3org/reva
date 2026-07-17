@@ -65,15 +65,11 @@ func (s *SendService) SendNotification(ctx context.Context, req model.SendReques
 
 	env := model.Envelope{
 		ID:             s.newID(),
-		Type:           req.Type,
-		DedupKey:       req.DedupKey,
+		EventType:      req.EventType,
 		SubmittingUser: req.SubmittingUser,
 		Sender:         req.Sender,
 		Recipients:     append([]string(nil), req.Recipients...),
-		Handlers:       append([]string(nil), req.Handlers...),
-		TemplateName:   req.TemplateName,
 		TemplateData:   cloneMap(req.TemplateData),
-		Accumulation:   req.Accumulation,
 		SubmittedAt:    s.now(),
 	}
 
@@ -84,39 +80,14 @@ func (s *SendService) SendNotification(ctx context.Context, req model.SendReques
 }
 
 func validateSendRequest(req model.SendRequest) error {
-	switch req.Type {
-	case model.TypeDirect:
-	case model.TypeAccumulated:
-		if req.DedupKey == "" {
-			return errors.New("accumulated notifications require a dedup key")
-		}
-		if req.Accumulation.WindowSeconds <= 0 {
-			return errors.New("accumulated notifications require a positive accumulation window")
-		}
-	default:
-		return errors.New("unsupported notification type")
+	if req.EventType == "" {
+		return errors.New("event type is required")
 	}
-
 	if req.SubmittingUser == "" {
 		return errors.New("submitting user is required")
 	}
 	if len(req.Recipients) == 0 {
 		return errors.New("at least one recipient is required")
 	}
-	if len(req.Handlers) == 0 {
-		return errors.New("at least one handler is required")
-	}
 	return nil
-}
-
-func cloneMap(in map[string]any) map[string]any {
-	if in == nil {
-		return nil
-	}
-
-	out := make(map[string]any, len(in))
-	for k, v := range in {
-		out[k] = v
-	}
-	return out
 }
