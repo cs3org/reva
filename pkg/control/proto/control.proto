@@ -71,6 +71,9 @@ message InvokeResponse {
   string error = 2;
 }
 
-// The generated Go stubs are exported from pkg/control/controlpb. Regenerate from the
-// repo root with `make protobuf`, or directly with:
-// protoc --proto_path=pkg/control/proto --go_out=. --go_opt=module=github.com/cs3org/reva/v3 --go-grpc_out=. --go-grpc_opt=module=github.com/cs3org/reva/v3 pkg/control/proto/control.proto
+// The generated Go stubs are exported from pkg/control/controlpb. Regenerate
+// from the repo root with `make protobuf`, or directly with:
+// protoc --proto_path=pkg/control/proto \
+//   --go_out=. --go_opt=module=github.com/cs3org/reva/v3 \
+//   --go-grpc_out=. --go-grpc_opt=module=github.com/cs3org/reva/v3 \
+//   pkg/control/proto/control.proto

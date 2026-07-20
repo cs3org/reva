@@ -84,14 +84,14 @@ func (s *svc) InspectJobs(ctx context.Context, _ *adminpb.InspectJobsRequest) (*
 			continue
 		}
 		ri.Workers, ri.Busy, ri.StoreWired = int32(info.Workers), int32(info.Busy), info.StoreWired
-		ri.InFlightPeriodic = info.InFlightPeriodic
+		ri.InFlightPeriodics = info.InFlightPeriodic
 		for _, j := range info.Jobs {
 			ri.Jobs = append(ri.Jobs, &adminpb.JobDefinition{
 				Name: j.Name, Kind: j.Kind, Schedule: j.Schedule, Scope: j.Scope, Overlap: j.Overlap,
 			})
 		}
 		for _, a := range info.Active {
-			ri.Active = append(ri.Active, &adminpb.ActiveJobRun{RunId: a.RunID, Job: a.Job, Started: a.Started})
+			ri.ActiveRuns = append(ri.ActiveRuns, &adminpb.ActiveJobRun{RunId: a.RunID, Job: a.Job, Started: a.Started})
 		}
 		resp.Runners = append(resp.Runners, ri)
 	}
