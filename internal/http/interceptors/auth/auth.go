@@ -383,6 +383,10 @@ func ctxWithUserInfo(ctx context.Context, r *http.Request, user *userpb.User, to
 	ctx = appctx.ContextSetScopes(ctx, scopes)
 	ctx = metadata.AppendToOutgoingContext(ctx, appctx.TokenHeader, token)
 	ctx = metadata.AppendToOutgoingContext(ctx, appctx.UserAgentHeader, r.UserAgent())
+	// Stamp the user onto the request logger, so a request's logs are
+	// searchable by user (reva admin trace -user).
+	l := appctx.GetLogger(ctx).With().Str("user", user.Username).Logger()
+	ctx = appctx.WithLogger(ctx, &l)
 
 	return ctx
 }

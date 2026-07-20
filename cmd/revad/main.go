@@ -41,7 +41,9 @@ import (
 	"github.com/cs3org/reva/v3/cmd/revad/pkg/grace"
 	"github.com/cs3org/reva/v3/cmd/revad/runtime"
 	"github.com/cs3org/reva/v3/pkg/logger"
+	"github.com/cs3org/reva/v3/pkg/logtail"
 	"github.com/cs3org/reva/v3/pkg/plugin"
+	"github.com/cs3org/reva/v3/pkg/rversion"
 	"github.com/cs3org/reva/v3/pkg/utils/maps"
 	"github.com/google/uuid"
 	"github.com/pkg/errors"
@@ -60,6 +62,15 @@ var (
 	// Compile time variables initialized with gcc flags.
 	gitCommit, buildDate, version, goVersion string
 )
+
+// Mirror the link-time version metadata into pkg/rversion, so packages that
+// cannot import cmd/revad (e.g. the `version` invocation) can still report it.
+func init() {
+	rversion.Version = version
+	rversion.GitCommit = gitCommit
+	rversion.BuildDate = buildDate
+	rversion.GoVersion = goVersion
+}
 
 var (
 	revaProcs []*runtime.Reva
@@ -365,14 +376,21 @@ func newLogger(conf *config.Log) (*zerolog.Logger, error) {
 	}
 
 	var opts []logger.Option
-	opts = append(opts, logger.WithLevel(conf.Level))
+	opts = append(opts, logger.WithRuntimeLevel(conf.Level))
 
 	w, err := getWriter(conf.Output)
 	if err != nil {
 		return nil, err
 	}
 
-	opts = append(opts, logger.WithWriter(w, logger.Mode(conf.Mode)))
+	// Tee recent events into the in-memory ring `reva admin logs` reads.
+	buf := logtail.New(conf.Tail)
+	logtail.SetDefault(buf)
+	var tap io.Writer
+	if buf.Enabled() {
+		tap = buf
+	}
+	opts = append(opts, logger.WithWriterTee(w, tap, logger.Mode(conf.Mode)))
 
 	l := logger.New(opts...)
 	sub := l.With().Int("pid", os.Getpid()).Logger()

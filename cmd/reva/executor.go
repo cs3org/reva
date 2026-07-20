@@ -46,9 +46,10 @@ func (e *Executor) Execute(s string) {
 	args := strings.Split(s, " ")
 
 	// Verify that the configuration is set, either in memory or in a file.
+	// `admin` is exempt: it targets its own host and needs no gateway.
 	if conf == nil || conf.Host == "" {
 		c, err := readConfig()
-		if err != nil && args[0] != "configure" {
+		if err != nil && args[0] != "configure" && args[0] != "admin" {
 			fmt.Println("reva is not configured, please pass the -host flag or run the configure command")
 			return
 		} else if args[0] != "configure" {

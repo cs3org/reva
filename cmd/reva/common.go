@@ -38,6 +38,9 @@ const (
 
 type config struct {
 	Host string `json:"host"`
+	// AdminHost is the address of the admin gRPC endpoint (its own port,
+	// separate from the gateway). Used by the `admin` subcommands.
+	AdminHost string `json:"admin_host,omitempty"`
 }
 
 func getConfigFile() string {

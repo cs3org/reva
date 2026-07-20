@@ -167,10 +167,23 @@ func TestLivenessLeavesDraining(t *testing.T) {
 	now := time.Now()
 	b := NewBase(newRecordingDriver(), livenessThresholds())
 	defer b.Close()
-	_ = b.Add(NewService("gateway", []Node{NewNode("n1", "a:1", meta(StateDraining, rfc(now.Add(-1*time.Hour))))}))
+	// Quiet past offline but before reap: draining must not be auto-transitioned.
+	_ = b.Add(NewService("gateway", []Node{NewNode("n1", "a:1", meta(StateDraining, rfc(now.Add(-1*time.Minute))))}))
 	b.sweep(now)
 	if got := stateOf(t, b); got != StateDraining {
 		t.Fatalf("draining must never be auto-derived, got %q", got)
+	}
+}
+
+func TestLivenessReapsDeadDraining(t *testing.T) {
+	now := time.Now()
+	b := NewBase(newRecordingDriver(), livenessThresholds())
+	defer b.Close()
+	// A drained node long past the reap window is removed, not left as a ghost.
+	_ = b.Add(NewService("gateway", []Node{NewNode("n1", "a:1", meta(StateDraining, rfc(now.Add(-1*time.Hour))))}))
+	b.sweep(now)
+	if _, err := b.GetService("gateway"); err == nil {
+		t.Fatalf("dead draining node should have been reaped")
 	}
 }
 

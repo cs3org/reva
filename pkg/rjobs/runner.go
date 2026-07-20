@@ -91,6 +91,7 @@ type Runner struct {
 // broadcast, the backstop poll).
 type runHandle struct {
 	job       string
+	started   time.Time
 	cancel    context.CancelFunc
 	cancelled atomic.Bool
 	once      sync.Once
@@ -580,7 +581,7 @@ func (r *Runner) execRun(ctx context.Context, run Run) {
 	// this specific run. It derives from ctx, so a shutdown still cancels it too;
 	// the runHandle.cancelled flag is what tells the two apart below.
 	runCtx, cancel := context.WithCancel(ctx)
-	h := &runHandle{job: run.Job, cancel: cancel}
+	h := &runHandle{job: run.Job, started: time.Now(), cancel: cancel}
 	r.registerRun(run.ID, h)
 	defer r.deregisterRun(run.ID)
 	defer cancel()
@@ -590,14 +591,14 @@ func (r *Runner) execRun(ctx context.Context, run Run) {
 	// instead of executing it.
 	if r.cancelRequested(ctx, run) {
 		log.Info().Msg("rjobs: run cancelled before it started")
-		r.finishCancelled(ctx, run, log)
+		r.finishCancelled(ctx, run, time.Time{}, log)
 		return
 	}
 
 	stopBeat := r.startHeartbeat(ctx, run, h, log)
 	defer stopBeat()
 
-	r.recordStatus(ctx, run, StateRunning, nil, nil, log)
+	r.recordStatus(ctx, run, StateRunning, nil, nil, h.started, log)
 
 	result, err := r.invoke(runCtx, run, log)
 
@@ -607,20 +608,20 @@ func (r *Runner) execRun(ctx context.Context, run Run) {
 	// after a restart.
 	if h.cancelled.Load() {
 		log.Info().Msg("rjobs: run cancelled")
-		r.finishCancelled(ctx, run, log)
+		r.finishCancelled(ctx, run, h.started, log)
 		return
 	}
 
 	if err != nil {
 		log.Error().Err(err).Msg("rjobs: run failed")
-		r.recordStatus(ctx, run, StateFailed, nil, err, log)
+		r.recordStatus(ctx, run, StateFailed, nil, err, h.started, log)
 		if ferr := r.store.Fail(ctx, run.ID, defaultRetryAfter); ferr != nil {
 			log.Error().Err(ferr).Msg("rjobs: marking run failed errored")
 		}
 		return
 	}
 
-	r.recordStatus(ctx, run, StateSucceeded, result, nil, log)
+	r.recordStatus(ctx, run, StateSucceeded, result, nil, h.started, log)
 	if run.DedupKey != "" && r.status != nil {
 		// the run is done; free its Unique key so a new run can take it.
 		if err := r.status.Release(ctx, run.ID); err != nil {
@@ -657,8 +658,8 @@ func (r *Runner) cancelRequested(ctx context.Context, run Run) bool {
 
 // finishCancelled records a run as cancelled and acks it so it is not
 // redelivered. Cancellation is terminal, unlike a failure.
-func (r *Runner) finishCancelled(ctx context.Context, run Run, log zerolog.Logger) {
-	r.recordStatus(ctx, run, StateCancelled, nil, nil, log)
+func (r *Runner) finishCancelled(ctx context.Context, run Run, started time.Time, log zerolog.Logger) {
+	r.recordStatus(ctx, run, StateCancelled, nil, nil, started, log)
 	if err := r.store.Complete(ctx, run.ID); err != nil {
 		log.Error().Err(err).Msg("rjobs: completing cancelled run errored")
 	}
@@ -706,7 +707,7 @@ func (r *Runner) startHeartbeat(ctx context.Context, run Run, h *runHandle, log 
 // recordStatus upserts a run's status. Periodic runs (those matching a
 // registered periodic job) are not tracked: their observability comes from the
 // scheduler, not the per-run status store.
-func (r *Runner) recordStatus(ctx context.Context, run Run, state State, result Params, runErr error, log zerolog.Logger) {
+func (r *Runner) recordStatus(ctx context.Context, run Run, state State, result Params, runErr error, started time.Time, log zerolog.Logger) {
 	if r.status == nil {
 		return
 	}
@@ -724,9 +725,14 @@ func (r *Runner) recordStatus(ctx context.Context, run Run, state State, result 
 		Result:     result,
 		Owner:      run.Owner,
 	}
+	// StartedAt travels with every write once the run has begun: recordStatus
+	// upserts the whole row, so a terminal write that omitted it would blank the
+	// start time recorded at StateRunning.
+	if !started.IsZero() {
+		s := started
+		st.StartedAt = &s
+	}
 	switch state {
-	case StateRunning:
-		st.StartedAt = &now
 	case StateSucceeded, StateFailed, StateCancelled:
 		st.FinishedAt = &now
 	}

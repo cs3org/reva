@@ -1,0 +1,309 @@
+// Copyright 2018-2026 CERN
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+//
+// In applying this license, CERN does not waive the privileges and immunities
+// granted to it by virtue of its status as an Intergovernmental Organization
+// or submit itself to any jurisdiction.
+
+syntax = "proto3";
+
+// Package reva.admin.v1beta1 is reva's operator surface. It is defined inside
+// reva (not the CS3 APIs) because it is reva-specific tooling; its Go stubs are
+// exported from pkg/admin/adminpb.
+package reva.admin.v1beta1;
+
+option go_package = "github.com/cs3org/reva/v3/pkg/admin/adminpb";
+
+// AdminAPI is the client-facing operator surface. Every method requires the
+// admin scope except RequestAdmin, the elevation door.
+service AdminAPI {
+  // Access / step-up.
+  rpc RequestAdmin(RequestAdminRequest) returns (RequestAdminResponse);
+  rpc Impersonate(ImpersonateRequest) returns (ImpersonateResponse);
+
+  // Introspection (read-only).
+  rpc GetServerInfo(GetServerInfoRequest) returns (GetServerInfoResponse);
+  rpc GetHealth(GetHealthRequest) returns (GetHealthResponse);
+  rpc ListServices(ListServicesRequest) returns (ListServicesResponse);
+  rpc GetServiceConfig(GetServiceConfigRequest)
+      returns (GetServiceConfigResponse);
+
+  // Invocations (reads and writes via the Invokable channel).
+  rpc ListInvocations(ListInvocationsRequest) returns (ListInvocationsResponse);
+  rpc Invoke(InvokeRequest) returns (InvokeResponse);
+  rpc InvokeStream(InvokeRequest) returns (stream InvokeStreamResponse);
+
+  // Jobs: methods for interacting with the background job framework.
+  rpc InspectJobs(InspectJobsRequest) returns (InspectJobsResponse);
+  rpc ListJobRuns(ListJobRunsRequest) returns (ListJobRunsResponse);
+  rpc GetJobRun(GetJobRunRequest) returns (JobRun);
+  rpc EnqueueJob(EnqueueJobRequest) returns (EnqueueJobResponse);
+  rpc TriggerJob(TriggerJobRequest) returns (TriggerJobResponse);
+  rpc CancelJobRun(CancelJobRunRequest) returns (JobRun);
+  rpc CancelPeriodicJob(CancelPeriodicJobRequest)
+      returns (CancelPeriodicJobResponse);
+}
+
+// ----- Access / step-up -----
+
+message RequestAdminRequest {
+}
+
+message RequestAdminResponse {
+  // token is a short-TTL, admin-only token (scope map {admin}, no user key).
+  string token = 1;
+  // expires_at is the token expiry, in seconds since the Unix epoch.
+  int64 expires_at = 2;
+}
+
+message ImpersonateRequest {
+  // user is a target selector: either a bare username or "claim:value" (claim
+  // in mail|uid|username|gid|userid), matching the machine auth manager.
+  string user = 1;
+  // reason is recorded in the audit log.
+  string reason = 2;
+}
+
+message ImpersonateResponse {
+  // token is an ordinary user-scoped token for the target user (never
+  // admin+user).
+  string token = 1;
+}
+
+// ----- Introspection -----
+
+message GetServerInfoRequest {
+}
+
+message ServerInfo {
+  string version = 1;
+  string build = 2;
+  string go_version = 3;
+  int64 uptime_seconds = 4;
+  string host = 5;
+  int32 pid = 6;
+}
+
+message GetServerInfoResponse {
+  ServerInfo info = 1;
+}
+
+message GetHealthRequest {
+}
+
+message ServiceHealth {
+  string service = 1;
+  // state is the roll-up across the service's nodes.
+  string state = 2;
+  int32 ready = 3;
+  int32 total = 4;
+}
+
+message GetHealthResponse {
+  repeated ServiceHealth services = 1;
+}
+
+message ListServicesRequest {
+  // service optionally filters to a single service name.
+  string service = 1;
+}
+
+message Node {
+  string id = 1;
+  string address = 2;
+  // state is one of ready|degraded|offline|draining.
+  string state = 3;
+  map<string, string> metadata = 4;
+}
+
+message Service {
+  string name = 1;
+  repeated Node nodes = 2;
+}
+
+message ListServicesResponse {
+  repeated Service services = 1;
+}
+
+message GetServiceConfigRequest {
+  // service is a selector: a service name (every instance) or a node id
+  // "host:port/service" (one instance).
+  string service = 1;
+}
+
+message GetServiceConfigResponse {
+  // results carries one entry per resolved instance.
+  repeated NodeResult results = 1;
+}
+
+// ----- Invocations -----
+
+message ArgSpec {
+  string name = 1;
+  string description = 2;
+  bool required = 3;
+}
+
+message InvocationSpec {
+  string name = 1;
+  string description = 2;
+  repeated ArgSpec args = 3;
+  // kind is readonly|mutating|dangerous, used for audit and gating.
+  string kind = 4;
+  // streaming reports the invocation emits a stream of results (via
+  // InvokeStream) rather than a single one (Invoke).
+  bool streaming = 5;
+}
+
+message ListInvocationsRequest {
+  string service = 1;
+}
+
+message ListInvocationsResponse {
+  repeated InvocationSpec invocations = 1;
+}
+
+message InvokeRequest {
+  // service is a selector: a service name (every instance) or a node id
+  // "host:port/service" (one instance).
+  string service = 1;
+  string invocation = 2;
+  map<string, string> args = 3;
+}
+
+message NodeResult {
+  // node is the id of the node that produced this result.
+  string node = 1;
+  // result_json is the invocation's redacted, serializable result as JSON.
+  string result_json = 2;
+  // error is set (per node) when the invocation failed on that node.
+  string error = 3;
+}
+
+message InvokeResponse {
+  repeated NodeResult results = 1;
+}
+
+// InvokeStreamResponse is one streamed item from one instance.
+message InvokeStreamResponse {
+  string node = 1;
+  string result_json = 2;
+  string error = 3;
+}
+
+// ----- Jobs -----
+
+// JobDefinition is a registered job.
+message JobDefinition {
+  string name = 1;
+  string kind = 2;     // "periodic" | "on-demand"
+  string schedule = 3; // periodic only
+  string scope = 4;    // periodic only: "leader" | "all-nodes"
+  string overlap = 5;  // periodic only: "skip" | "allow"
+}
+
+// ActiveJobRun is one run executing on a runner right now.
+message ActiveJobRun {
+  string run_id = 1;
+  string job = 2;
+  string started = 3; // RFC3339
+}
+
+// JobRunnerInfo is one runner's live self-report; error is set instead of the
+// payload when the runner could not be reached.
+message JobRunnerInfo {
+  string node = 1;
+  string error = 2;
+  int32 workers = 3;
+  int32 busy = 4;
+  bool store_wired = 5;
+  repeated JobDefinition jobs = 6;
+  repeated string in_flight_periodics = 7;
+  repeated ActiveJobRun active_runs = 8;
+}
+
+// JobRun is one run's persisted status from the durable ledger.
+message JobRun {
+  string run_id = 1;
+  string job = 2;
+  string state = 3; // queued|running|succeeded|failed|cancelling|cancelled
+  int32 attempt = 4;
+  string owner = 5; // empty for internal runs
+  string enqueued_at = 6; // RFC3339
+  string started_at = 7;  // RFC3339, empty while queued
+  string finished_at = 8; // RFC3339, empty while queued/running
+  string last_error = 9;
+  bool cancel_requested = 10;
+  string result_json = 11; // the job's result payload as JSON
+}
+
+message InspectJobsRequest {
+}
+
+message InspectJobsResponse {
+  // runners carries one entry per live jobs runner in the fleet.
+  repeated JobRunnerInfo runners = 1;
+}
+
+message ListJobRunsRequest {
+  string job = 1;
+  string owner = 2;
+  repeated string states = 3;
+  bool internal = 4;
+  int32 limit = 5;
+  int32 offset = 6;
+}
+
+message ListJobRunsResponse {
+  repeated JobRun runs = 1;
+}
+
+message GetJobRunRequest {
+  string run_id = 1;
+}
+
+message EnqueueJobRequest {
+  string job = 1;
+  map<string, string> params = 2;
+  string owner = 3; // optional: attribute the run to a user
+}
+
+message EnqueueJobResponse {
+  string run_id = 1;
+}
+
+message TriggerJobRequest {
+  string job = 1;
+}
+
+message TriggerJobResponse {
+}
+
+message CancelJobRunRequest {
+  string run_id = 1;
+}
+
+message CancelPeriodicJobRequest {
+  string job = 1;
+}
+
+message CancelPeriodicJobResponse {
+}
+
+// The generated Go stubs are exported from pkg/admin/adminpb. Regenerate from
+// the repo root with `make protobuf`, or directly with:
+// protoc --proto_path=pkg/admin/proto \
+//   --go_out=. --go_opt=module=github.com/cs3org/reva/v3 \
+//   --go-grpc_out=. --go-grpc_opt=module=github.com/cs3org/reva/v3 \
+//   pkg/admin/proto/admin.proto
