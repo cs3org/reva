@@ -27,7 +27,6 @@ import (
 	"strings"
 
 	gatewayv1beta1 "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
-	userv1beta1 "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	ocmv1beta1 "github.com/cs3org/go-cs3apis/cs3/sharing/ocm/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
@@ -78,7 +77,7 @@ func (h *DavHandler) init(c *Config) error {
 		return err
 	}
 	h.FilesHomeHandler = new(WebDavHandler)
-	if err := h.FilesHomeHandler.init(c.WebdavNamespace, true); err != nil {
+	if err := h.FilesHomeHandler.init("", false); err != nil {
 		return err
 	}
 	h.MetaHandler = new(MetaHandler)
@@ -108,10 +107,6 @@ func (h *DavHandler) init(c *Config) error {
 	}
 
 	return h.TrashbinHandler.init(c)
-}
-
-func isOwner(userIDorName string, user *userv1beta1.User) bool {
-	return userIDorName != "" && (userIDorName == user.Id.OpaqueId || strings.EqualFold(userIDorName, user.Username))
 }
 
 // Handler handles requests.
@@ -158,29 +153,38 @@ func (h *DavHandler) Handler(s *svc) http.Handler {
 			h.AvatarsHandler.Handler(s).ServeHTTP(w, r)
 
 		case "files":
-			var requestUserID string
-			oldPath := r.URL.Path
+			requestUserID, tail := router.ShiftPath(r.URL.Path)
+			r.URL.Path = tail
 
-			// detect and check current user in URL
-			requestUserID, r.URL.Path = router.ShiftPath(r.URL.Path)
+			base := path.Join(ctx.Value(ctxKeyBaseURI).(string), "files", requestUserID)
+			ctx := context.WithValue(ctx, ctxKeyBaseURI, base)
+			r = r.WithContext(ctx)
 
-			// note: some requests like OPTIONS don't forward the user
-			contextUser, ok := appctx.ContextGetUser(ctx)
-			if ok && isOwner(requestUserID, contextUser) {
-				// use home storage handler when user was detected
-				base := path.Join(ctx.Value(ctxKeyBaseURI).(string), "files", requestUserID)
-				ctx := context.WithValue(ctx, ctxKeyBaseURI, base)
-				r = r.WithContext(ctx)
-
-				h.FilesHomeHandler.Handler(s).ServeHTTP(w, r)
-			} else {
-				r.URL.Path = oldPath
-				base := path.Join(ctx.Value(ctxKeyBaseURI).(string), "files")
-				ctx := context.WithValue(ctx, ctxKeyBaseURI, base)
-				r = r.WithContext(ctx)
-
+			if r.URL.Path != "/" {
 				h.FilesHandler.Handler(s).ServeHTTP(w, r)
+				return
 			}
+
+			client, err := s.getClient()
+			if err != nil {
+				log.Error().Err(err).Msg("error getting gateway client")
+				w.WriteHeader(http.StatusInternalServerError)
+				return
+			}
+
+			res, err := client.GetHome(r.Context(), &provider.GetHomeRequest{})
+			if err != nil {
+				log.Error().Err(err).Msg("error getting user home")
+				w.WriteHeader(http.StatusInternalServerError)
+				return
+			}
+			if res.Status.Code != rpc.Code_CODE_OK {
+				HandleErrorStatus(log, w, res.Status)
+				return
+			}
+
+			r.URL.Path = path.Join(res.Path, r.URL.Path)
+			h.FilesHomeHandler.Handler(s).ServeHTTP(w, r)
 
 		case "meta":
 			base := path.Join(ctx.Value(ctxKeyBaseURI).(string), "meta")
