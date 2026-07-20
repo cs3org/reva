@@ -19,18 +19,30 @@
 package ocdav
 
 import (
+	"bytes"
 	"context"
+	"encoding/xml"
 	"errors"
 	"net/http"
 	"net/http/httptest"
+	"slices"
 	"testing"
 
 	gatewayv1beta1 "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
+	userv1beta1 "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
+	collaborationv1beta1 "github.com/cs3org/go-cs3apis/cs3/sharing/collaboration/v1beta1"
+	linkv1beta1 "github.com/cs3org/go-cs3apis/cs3/sharing/link/v1beta1"
 	providerv1beta1 "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	mockgateway "github.com/cs3org/go-cs3apis/mocks/github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
+	"github.com/cs3org/reva/v3/pkg/appctx"
+	"github.com/cs3org/reva/v3/pkg/errtypes"
+	"github.com/cs3org/reva/v3/pkg/rgrpc/todo/pool"
+	"github.com/cs3org/reva/v3/pkg/storage"
+	"github.com/cs3org/reva/v3/pkg/storage/utils/localfs"
 	"github.com/cs3org/reva/v3/pkg/utils/resourceid"
 	"github.com/stretchr/testify/mock"
+	"google.golang.org/grpc"
 )
 
 /*
@@ -53,6 +65,213 @@ func TestWrapResourceID(t *testing.T) {
 	if wrapped != expected {
 		t.Errorf("wrapped id doesn't have the expected format: got %s expected %s", wrapped, expected)
 	}
+}
+
+func TestDavFilesPropfindResolvesHomeAndPaths(t *testing.T) {
+	endpoint := t.Name()
+	service := newLocalFSOCDavService(t, endpoint)
+
+	tests := []struct {
+		name      string
+		target    string
+		depth     string
+		wantHrefs []string
+	}{
+		{
+			name:   "home without trailing slash",
+			target: "/remote.php/dav/files/user",
+			depth:  "1",
+			wantHrefs: []string{
+				"/remote.php/dav/files/user/",
+				"/remote.php/dav/files/user/Documents/",
+				"/remote.php/dav/files/user/MyShares/",
+				"/remote.php/dav/files/user/root.txt",
+			},
+		},
+		{
+			name:   "home with trailing slash",
+			target: "/remote.php/dav/files/user/",
+			depth:  "1",
+			wantHrefs: []string{
+				"/remote.php/dav/files/user/",
+				"/remote.php/dav/files/user/Documents/",
+				"/remote.php/dav/files/user/MyShares/",
+				"/remote.php/dav/files/user/root.txt",
+			},
+		},
+		{
+			name:   "nested path depth zero",
+			target: "/remote.php/dav/files/user/Documents",
+			depth:  "0",
+			wantHrefs: []string{
+				"/remote.php/dav/files/user/Documents/",
+			},
+		},
+		{
+			name:   "nested path depth one",
+			target: "/remote.php/dav/files/user/Documents",
+			depth:  "1",
+			wantHrefs: []string{
+				"/remote.php/dav/files/user/Documents/",
+				"/remote.php/dav/files/user/Documents/report.txt",
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			request := newDavPropfindRequest(tt.target, tt.depth)
+			response := httptest.NewRecorder()
+
+			service.Handler().ServeHTTP(response, request)
+
+			if response.Code != http.StatusMultiStatus {
+				t.Fatalf("expected status %d, got %d: %s", http.StatusMultiStatus, response.Code, response.Body.String())
+			}
+			assertHrefs(t, response.Body.Bytes(), tt.wantHrefs)
+		})
+	}
+}
+
+func newDavPropfindRequest(target, depth string) *http.Request {
+	body := bytes.NewBufferString(`<d:propfind xmlns:d="DAV:" xmlns:oc="http://owncloud.org/ns"><d:prop><oc:fileid /></d:prop></d:propfind>`)
+	request := httptest.NewRequest(MethodPropfind, target, body)
+	request.Header.Set(HeaderDepth, depth)
+	ctx := context.WithValue(request.Context(), ctxKeyBaseURI, "/remote.php/dav")
+	ctx = appctx.ContextSetUser(ctx, &userv1beta1.User{
+		Id:       &userv1beta1.UserId{OpaqueId: "user", Idp: "test"},
+		Username: "user",
+	})
+	return request.WithContext(ctx)
+}
+
+func newLocalFSOCDavService(t *testing.T, endpoint string) *svc {
+	t.Helper()
+
+	ctx := appctx.ContextSetUser(context.Background(), testDavUser())
+	fs, err := localfs.NewLocalFS(&localfs.Config{Root: t.TempDir()})
+	if err != nil {
+		t.Fatalf("failed to create localfs: %v", err)
+	}
+	t.Cleanup(func() {
+		if err := fs.Shutdown(context.Background()); err != nil {
+			t.Fatalf("failed to shut down localfs: %v", err)
+		}
+	})
+
+	if err := fs.CreateHome(ctx); err != nil {
+		t.Fatalf("failed to create localfs home: %v", err)
+	}
+	if err := fs.CreateDir(ctx, &providerv1beta1.Reference{Path: "/Documents"}); err != nil {
+		t.Fatalf("failed to create fixture folder: %v", err)
+	}
+	if err := fs.TouchFile(ctx, &providerv1beta1.Reference{Path: "/Documents/report.txt"}); err != nil {
+		t.Fatalf("failed to create fixture nested file: %v", err)
+	}
+	if err := fs.TouchFile(ctx, &providerv1beta1.Reference{Path: "/root.txt"}); err != nil {
+		t.Fatalf("failed to create fixture root file: %v", err)
+	}
+
+	gatewayClient := newLocalFSGatewayClient(t, fs)
+	pool.RegisterGatewayServiceClient(gatewayClient, endpoint)
+
+	handler := &DavHandler{}
+	if err := handler.init(&Config{
+		GatewaySvc: endpoint,
+	}); err != nil {
+		t.Fatalf("failed to init DAV handler: %v", err)
+	}
+	return &svc{
+		c:          &Config{GatewaySvc: endpoint},
+		davHandler: handler,
+	}
+}
+
+func testDavUser() *userv1beta1.User {
+	return &userv1beta1.User{
+		Id:       &userv1beta1.UserId{OpaqueId: "user", Idp: "test"},
+		Username: "user",
+	}
+}
+
+func newLocalFSGatewayClient(t *testing.T, fs storage.FS) *mockgateway.MockGatewayAPIClient {
+	t.Helper()
+
+	gatewayClient := mockgateway.NewMockGatewayAPIClient(t)
+	gatewayClient.EXPECT().GetHome(mock.Anything, mock.Anything).RunAndReturn(
+		func(context.Context, *providerv1beta1.GetHomeRequest, ...grpc.CallOption) (*providerv1beta1.GetHomeResponse, error) {
+			return &providerv1beta1.GetHomeResponse{
+				Status: &rpc.Status{Code: rpc.Code_CODE_OK},
+				Path:   "/",
+			}, nil
+		})
+	gatewayClient.EXPECT().Stat(mock.Anything, mock.Anything).RunAndReturn(
+		func(ctx context.Context, req *providerv1beta1.StatRequest, _ ...grpc.CallOption) (*providerv1beta1.StatResponse, error) {
+			info, err := fs.GetMD(ctx, req.GetRef(), req.ArbitraryMetadataKeys)
+			if err != nil {
+				return &providerv1beta1.StatResponse{Status: statusFromLocalFSError(err)}, nil
+			}
+			return &providerv1beta1.StatResponse{
+				Status: &rpc.Status{Code: rpc.Code_CODE_OK},
+				Info:   info,
+			}, nil
+		})
+	gatewayClient.EXPECT().ListContainer(mock.Anything, mock.Anything).RunAndReturn(
+		func(ctx context.Context, req *providerv1beta1.ListContainerRequest, _ ...grpc.CallOption) (*providerv1beta1.ListContainerResponse, error) {
+			infos, err := fs.ListFolder(ctx, req.GetRef(), req.ArbitraryMetadataKeys)
+			if err != nil {
+				return &providerv1beta1.ListContainerResponse{Status: statusFromLocalFSError(err)}, nil
+			}
+			return &providerv1beta1.ListContainerResponse{
+				Status: &rpc.Status{Code: rpc.Code_CODE_OK},
+				Infos:  infos,
+			}, nil
+		})
+	mockEmptyShareLookups(gatewayClient)
+	return gatewayClient
+}
+
+func statusFromLocalFSError(err error) *rpc.Status {
+	switch err.(type) {
+	case errtypes.IsNotFound:
+		return &rpc.Status{Code: rpc.Code_CODE_NOT_FOUND, Message: err.Error()}
+	case errtypes.PermissionDenied:
+		return &rpc.Status{Code: rpc.Code_CODE_PERMISSION_DENIED, Message: err.Error()}
+	default:
+		return &rpc.Status{Code: rpc.Code_CODE_INTERNAL, Message: err.Error()}
+	}
+}
+
+func assertHrefs(t *testing.T, body []byte, want []string) {
+	t.Helper()
+
+	var multistatus struct {
+		Responses []struct {
+			Href string `xml:"DAV: href"`
+		} `xml:"DAV: response"`
+	}
+	if err := xml.Unmarshal(body, &multistatus); err != nil {
+		t.Fatalf("failed to parse PROPFIND response: %v\n%s", err, body)
+	}
+
+	got := make([]string, 0, len(multistatus.Responses))
+	for _, response := range multistatus.Responses {
+		got = append(got, response.Href)
+	}
+	slices.Sort(got)
+	slices.Sort(want)
+	if !slices.Equal(got, want) {
+		t.Fatalf("unexpected hrefs\nwant: %v\n got: %v\nbody: %s", want, got, body)
+	}
+}
+
+func mockEmptyShareLookups(gatewayClient *mockgateway.MockGatewayAPIClient) {
+	gatewayClient.On("ListPublicShares", mock.Anything, mock.Anything).Return(&linkv1beta1.ListPublicSharesResponse{
+		Status: &rpc.Status{Code: rpc.Code_CODE_OK},
+	}, nil)
+	gatewayClient.On("ListShares", mock.Anything, mock.Anything).Return(&collaborationv1beta1.ListSharesResponse{
+		Status: &rpc.Status{Code: rpc.Code_CODE_OK},
+	}, nil)
 }
 
 func TestPublicFilesSignatureAuthTakesPrecedenceOverBasicAuth(t *testing.T) {
