@@ -113,8 +113,12 @@ func (h *appsHandler) OpenInApp(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	appUrl, err := url.JoinPath(webapp.Uri, rel)
+	if err != nil {
+		appUrl = webapp.Uri
+	}
 	writeAppsJSON(w, r, openInAppLaunch{
-		AppURL:      resolveTemplate(webapp.Uri, rel),
+		AppURL:      appUrl,
 		AccessToken: accessToken,
 	})
 }
@@ -255,11 +259,6 @@ func getWebDAVProtocol(protocols []*ocmpb.Protocol) (*ocmpb.WebDAVProtocol, bool
 		}
 	}
 	return nil, false
-}
-
-func resolveTemplate(template string, rel string) string {
-	// the template is of type "https://open-cloud-mesh.org/s/share-hash/{relative-path-to-shared-resource}"
-	return strings.Replace(template, "{relative-path-to-shared-resource}", rel, 1)
 }
 
 func writeAppsJSON(w http.ResponseWriter, r *http.Request, payload any) {

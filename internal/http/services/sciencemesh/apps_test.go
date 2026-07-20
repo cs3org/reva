@@ -26,17 +26,6 @@ import (
 	"github.com/cs3org/reva/v3/pkg/errtypes"
 )
 
-func TestResolveTemplate(t *testing.T) {
-	t.Parallel()
-
-	template := "https://sender.example/s/hash/{relative-path-to-shared-resource}"
-	got := resolveTemplate(template, "notes/demo.ipynb")
-	want := "https://sender.example/s/hash/notes/demo.ipynb"
-	if got != want {
-		t.Fatalf("resolveTemplate() = %q, want %q", got, want)
-	}
-}
-
 func TestSenderOriginFromProtocolsPrefersWebDAV(t *testing.T) {
 	t.Parallel()
 
@@ -45,7 +34,7 @@ func TestSenderOriginFromProtocolsPrefersWebDAV(t *testing.T) {
 			Uri: "https://dav.sender.example/remote.php/dav/ocm/shares/abc",
 		}}},
 		{Term: &ocmpb.Protocol_WebappOptions{WebappOptions: &ocmpb.WebappProtocol{
-			Uri: "https://app.sender.example/s/abc/{relative-path-to-shared-resource}",
+			Uri: "https://app.sender.example/s/abc",
 		}}},
 	}
 
@@ -63,7 +52,7 @@ func TestSenderOriginFromProtocolsWebappFallback(t *testing.T) {
 
 	protocols := []*ocmpb.Protocol{
 		{Term: &ocmpb.Protocol_WebappOptions{WebappOptions: &ocmpb.WebappProtocol{
-			Uri: "https://app.sender.example/s/abc/{relative-path-to-shared-resource}",
+			Uri: "https://app.sender.example/s/abc",
 		}}},
 	}
 
