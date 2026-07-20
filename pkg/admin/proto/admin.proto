@@ -36,7 +36,8 @@ service AdminAPI {
   rpc GetServerInfo(GetServerInfoRequest) returns (GetServerInfoResponse);
   rpc GetHealth(GetHealthRequest) returns (GetHealthResponse);
   rpc ListServices(ListServicesRequest) returns (ListServicesResponse);
-  rpc GetServiceConfig(GetServiceConfigRequest) returns (GetServiceConfigResponse);
+  rpc GetServiceConfig(GetServiceConfigRequest)
+      returns (GetServiceConfigResponse);
 
   // Invocations (reads and writes via the Invokable channel).
   rpc ListInvocations(ListInvocationsRequest) returns (ListInvocationsResponse);
@@ -50,12 +51,14 @@ service AdminAPI {
   rpc EnqueueJob(EnqueueJobRequest) returns (EnqueueJobResponse);
   rpc TriggerJob(TriggerJobRequest) returns (TriggerJobResponse);
   rpc CancelJobRun(CancelJobRunRequest) returns (JobRun);
-  rpc CancelPeriodicJob(CancelPeriodicJobRequest) returns (CancelPeriodicJobResponse);
+  rpc CancelPeriodicJob(CancelPeriodicJobRequest)
+      returns (CancelPeriodicJobResponse);
 }
 
 // ----- Access / step-up -----
 
-message RequestAdminRequest {}
+message RequestAdminRequest {
+}
 
 message RequestAdminResponse {
   // token is a short-TTL, admin-only token (scope map {admin}, no user key).
@@ -80,7 +83,8 @@ message ImpersonateResponse {
 
 // ----- Introspection -----
 
-message GetServerInfoRequest {}
+message GetServerInfoRequest {
+}
 
 message ServerInfo {
   string version = 1;
@@ -95,7 +99,8 @@ message GetServerInfoResponse {
   ServerInfo info = 1;
 }
 
-message GetHealthRequest {}
+message GetHealthRequest {
+}
 
 message ServiceHealth {
   string service = 1;
@@ -224,8 +229,8 @@ message JobRunnerInfo {
   int32 busy = 4;
   bool store_wired = 5;
   repeated JobDefinition jobs = 6;
-  repeated string in_flight_periodic = 7;
-  repeated ActiveJobRun active = 8;
+  repeated string in_flight_periodics = 7;
+  repeated ActiveJobRun active_runs = 8;
 }
 
 // JobRun is one run's persisted status from the durable ledger.
@@ -243,7 +248,8 @@ message JobRun {
   string result_json = 11; // the job's result payload as JSON
 }
 
-message InspectJobsRequest {}
+message InspectJobsRequest {
+}
 
 message InspectJobsResponse {
   // runners carries one entry per live jobs runner in the fleet.
@@ -281,7 +287,8 @@ message TriggerJobRequest {
   string job = 1;
 }
 
-message TriggerJobResponse {}
+message TriggerJobResponse {
+}
 
 message CancelJobRunRequest {
   string run_id = 1;
@@ -291,8 +298,12 @@ message CancelPeriodicJobRequest {
   string job = 1;
 }
 
-message CancelPeriodicJobResponse {}
+message CancelPeriodicJobResponse {
+}
 
-// The generated Go stubs are exported from pkg/admin/adminpb. Regenerate from the repo
-// root with `make protobuf`, or directly with:
-// protoc --proto_path=pkg/admin/proto --go_out=. --go_opt=module=github.com/cs3org/reva/v3 --go-grpc_out=. --go-grpc_opt=module=github.com/cs3org/reva/v3 pkg/admin/proto/admin.proto
+// The generated Go stubs are exported from pkg/admin/adminpb. Regenerate from
+// the repo root with `make protobuf`, or directly with:
+// protoc --proto_path=pkg/admin/proto \
+//   --go_out=. --go_opt=module=github.com/cs3org/reva/v3 \
+//   --go-grpc_out=. --go-grpc_opt=module=github.com/cs3org/reva/v3 \
+//   pkg/admin/proto/admin.proto

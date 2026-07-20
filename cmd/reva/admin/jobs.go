@@ -124,12 +124,12 @@ func jobsList(ctx context.Context, client adminpb.AdminAPIClient) error {
 				order = append(order, d.Name)
 			}
 		}
-		for _, a := range r.Active {
+		for _, a := range r.ActiveRuns {
 			if j := jobs[a.Job]; j != nil {
 				j.running = append(j.running, shortNode(r.Node))
 			}
 		}
-		for _, name := range r.InFlightPeriodic {
+		for _, name := range r.InFlightPeriodics {
 			if j := jobs[name]; j != nil {
 				j.running = append(j.running, shortNode(r.Node))
 			}
@@ -164,11 +164,11 @@ func jobsActive(ctx context.Context, client adminpb.AdminAPIClient) error {
 		}
 		store := boolLabel(r.StoreWired, "yes", "no")
 		workers := fmt.Sprintf("%d/%d", r.Busy, r.Workers)
-		if len(r.Active) == 0 {
+		if len(r.ActiveRuns) == 0 {
 			fmt.Fprintf(tw, "%s\t-\t-\t-\t%s\t%s\n", r.Node, workers, store)
 			continue
 		}
-		for _, a := range r.Active {
+		for _, a := range r.ActiveRuns {
 			fmt.Fprintf(tw, "%s\t%s\t%s\t%s\t%s\t%s\n", r.Node, a.RunId, a.Job, since(a.Started), workers, store)
 		}
 	}
