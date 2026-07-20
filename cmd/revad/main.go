@@ -43,6 +43,7 @@ import (
 	"github.com/cs3org/reva/v3/pkg/logger"
 	"github.com/cs3org/reva/v3/pkg/logtail"
 	"github.com/cs3org/reva/v3/pkg/plugin"
+	"github.com/cs3org/reva/v3/pkg/rversion"
 	"github.com/cs3org/reva/v3/pkg/utils/maps"
 	"github.com/google/uuid"
 	"github.com/pkg/errors"
@@ -61,6 +62,15 @@ var (
 	// Compile time variables initialized with gcc flags.
 	gitCommit, buildDate, version, goVersion string
 )
+
+// Mirror the link-time version metadata into pkg/rversion, so packages that
+// cannot import cmd/revad (e.g. the `version` invocation) can still report it.
+func init() {
+	rversion.Version = version
+	rversion.GitCommit = gitCommit
+	rversion.BuildDate = buildDate
+	rversion.GoVersion = goVersion
+}
 
 var (
 	revaProcs []*runtime.Reva

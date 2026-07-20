@@ -24,6 +24,8 @@ import (
 	"runtime"
 	"runtime/debug"
 	"time"
+
+	"github.com/cs3org/reva/v3/pkg/rversion"
 )
 
 // VersionInvocation is a built-in invocation every service instance exposes:
@@ -47,9 +49,9 @@ func init() {
 	})
 }
 
-// versionResult reads the embedded build info: the module version, the vcs
-// revision (with a -dirty suffix for a modified tree) and its commit time.
-// Binaries built without vcs stamping (-buildvcs=false) report what they have.
+// versionResult reports the reva version (from the link-time metadata in
+// pkg/rversion, populated by cmd/revad), falling back to the embedded build info
+// for the commit/date when the binary was built without those ldflags.
 func versionResult() Result {
 	res := Result{
 		"go":     runtime.Version(),
@@ -57,12 +59,20 @@ func versionResult() Result {
 		"pid":    os.Getpid(),
 		"uptime": time.Since(processStart).Round(time.Second).String(),
 	}
+	// The reva release and build metadata, when the binary was stamped with them.
+	if rversion.Version != "" {
+		res["reva"] = rversion.Version
+	}
+	if rversion.GitCommit != "" {
+		res["commit"] = shortCommit(rversion.GitCommit)
+	}
+	if rversion.BuildDate != "" {
+		res["build_date"] = rversion.BuildDate
+	}
+
 	bi, ok := debug.ReadBuildInfo()
 	if !ok {
 		return res
-	}
-	if bi.Main.Version != "" {
-		res["version"] = bi.Main.Version
 	}
 	var revision, modified, vcstime string
 	for _, kv := range bi.Settings {
@@ -75,17 +85,24 @@ func versionResult() Result {
 			vcstime = kv.Value
 		}
 	}
-	if revision != "" {
-		if len(revision) > 12 {
-			revision = revision[:12]
-		}
+	// Fall back to the vcs stamp only for what the ldflags did not provide.
+	if _, ok := res["commit"]; !ok && revision != "" {
+		commit := shortCommit(revision)
 		if modified == "true" {
-			revision += "-dirty"
+			commit += "-dirty"
 		}
-		res["commit"] = revision
+		res["commit"] = commit
 	}
-	if vcstime != "" {
-		res["commit_time"] = vcstime
+	if _, ok := res["build_date"]; !ok && vcstime != "" {
+		res["build_date"] = vcstime
 	}
 	return res
+}
+
+// shortCommit trims a git revision to its short form.
+func shortCommit(rev string) string {
+	if len(rev) > 12 {
+		return rev[:12]
+	}
+	return rev
 }
