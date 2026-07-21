@@ -230,11 +230,22 @@ they cover. Level 1 shares none of this; it only reads and marks the DB.
 ```
 [[path_prefix]]
   prefix     = "/eos/user"
-  space_type = "personal"           # personal | project | global
+  space_type = "personal"                # personal | project | global
   [[path_prefix.default_acl]]
-    entry      = "cbackeosro"        # or an egroup / owner template
-    enforcement = "may"             # "may" (allowed anywhere) | "must" (required everywhere)
+    type        = "u"                    # u | egroup | lw (see package acl)
+    qualifier   = "{owner}"              # may contain {owner} / {project}
+    permissions = "rwx"
+    enforcement = "must"                 # "may" (allowed anywhere) | "must" (required everywhere)
+  [[path_prefix.default_acl]]
+    type        = "egroup"
+    qualifier   = "cbackeosro"
+    permissions = "rx"
+    enforcement = "may"
 ```
+
+The default ACL entry is given as explicit `type` / `qualifier` / `permissions` rather than a
+single opaque token, so it is unambiguous and validatable at config load. `defaults.go`
+resolves the `{owner}` / `{project}` templates in the qualifier per space.
 
 Semantics, matching the spec:
 * Global defaults (`cbackeosro`, `cboxexternal`): `enforcement = "may"`. Present is fine,
@@ -286,14 +297,16 @@ is meant to be one reviewable PR / commit. Steps 1 to 6 are pure and need no liv
 they land fast and de-risk the engine before any job or EOS code. Steps 7 to 11 wire real
 dependencies. Nothing after a step depends on a later step.
 
-**Step 1: core types and config.**
+Progress is tracked with a `[x]` (done) or `[ ]` (todo) marker on each step heading.
+
+**Step 1: core types and config.** `[x]` done.
 `reconcile.go` (`Space`, `Recipient`, `ExpectedACL`, `Plan`, `Action`, `Outcome`) and
 `config.go` (`Config` + `ApplyDefaults`, the `path_prefix` -> default-ACL rules with
 `may`/`must` enforcement). No logic beyond decoding and validation.
 Tests: config decode/defaults, rule validation (bad enforcement, missing prefix).
 Depends on: nothing.
 
-**Step 2: default-ACL computation.**
+**Step 2: default-ACL computation.** `[ ]`
 `defaults.go`: given a `Space` and the configured rules, produce the default ACL entries,
 resolving `{owner}`/`{project}` templates. Encodes the personal-owner and project-egroup
 rules and the global `may` entries.
@@ -301,7 +314,7 @@ Tests: personal owner `must`, project readers/writers/admins `must`, global `may
 resolution, wrong space type.
 Depends on: 1.
 
-**Step 3: permission model bridge.**
+**Step 3: permission model bridge.** `[ ]`
 Map the DB `permissions` (OCS uint8) and grantee fields to CS3 `ResourcePermissions` /
 `Grantee`, and to `sharehierarchy.PermLevel`. Small file (`permmap.go`) plus recipient
 classification stubs (user / group / lightweight) that do not yet call the gateway.
@@ -309,21 +322,21 @@ Tests: every recipient type maps to the right `Grantee`; permissions=0 is `PermD
 absent; OCS round-trips match `model.Share.AsCS3Share`.
 Depends on: 1.
 
-**Step 4: expected-ACL reconstruction.**
+**Step 4: expected-ACL reconstruction.** `[ ]`
 `expected_acls.go`: given a space's shares plus its default ACLs, compute the expected ACL
 set per path, wrapping `sharehierarchy` for the nearest-ancestor / reapply ordering. Pure.
 Tests: all ordered `{R, RW, Deny}` parent/child pairs on nested paths, reapply and delete
 cases, defaults merged in, space isolation (never crosses `space_id`).
 Depends on: 2, 3.
 
-**Step 5: planner.**
+**Step 5: planner.** `[ ]`
 `planner.go`: diff expected vs observed ACLs into an ordered `Plan` of add/remove/update.
 Port and adapt cernboxcop's `set_operations.go` / `acl_change_set.go` diff. Pure.
 Tests: pure add, pure remove, update (same grantee different perms), `may` present left
 untouched, `must` wrong-perms updated, ordering (shallowest first).
 Depends on: 4.
 
-**Step 6: applier with dry_run.**
+**Step 6: applier with dry_run.** `[ ]`
 `applier.go`: execute a `Plan` through the CS3 grant API (`AddGrant`/`RemoveGrant`/
 `UpdateGrant`/`DenyGrant`), honouring `dry_run`. Define a small gateway-client interface so
 tests use a fake.
@@ -331,14 +344,14 @@ Tests: each action issues the right grant call; dry_run issues none and records 
 recorded actions in dry_run equal those applied live (run planner once, apply both ways).
 Depends on: 5.
 
-**Step 7: identity resolution against the gateway.**
+**Step 7: identity resolution against the gateway.** `[ ]`
 `identity.go`: resolve and validate recipients and resources through the gateway (exists /
 not-found / recycled), replacing the step-3 stubs. This is the first step that talks to a
 live service, still behind an interface with a fake in tests.
 Tests: user/group/lightweight resolution, missing recipient, resource not-found vs recycled.
 Depends on: 3.
 
-**Step 8: NamespaceScanner interface + EOS binary scanner.**
+**Step 8: NamespaceScanner interface + EOS binary scanner.** `[ ]`
 `scanner.go` (interface + `Register`/registry) in `pkg/reconciliation`; `nsscan_binary.go` +
 `nsscan_loader.go` in `pkg/storage/fs/eos`, porting `ns_inspect.go` (command builder, JSON
 parser, `prefetchedData` path) and registering under `eos-nsinspect-binary`.
@@ -346,7 +359,7 @@ Tests: parse captured JSON from `testdata/nsinspect` (personal + project, files 
 sys entries, lightweight xattrs); `prefetchedData` prefix/depth filtering.
 Depends on: 1 (interface types only); independent of 4 to 7, so can proceed in parallel.
 
-**Step 9: level 1 orphan job.**
+**Step 9: level 1 orphan job.** `[ ]`
 `orphans.go` + `jobs/orphans_job.go`: per-space DB scan via `ListModelShares`, gateway-based
 validity checks, `MarkAsOrphaned`; register as on-demand + `ScopeLeader` periodic. Public
 links via `PublicShareMgr`.
@@ -354,7 +367,7 @@ Tests: deleted / recycled resource, missing recipient, missing space; on-demand 
 one space; idempotent re-run.
 Depends on: 7.
 
-**Step 10: level 2 space-ACL job.**
+**Step 10: level 2 space-ACL job.** `[ ]`
 `space_acls.go` + `jobs/spaceacls_job.go`: gather a space's non-orphan shares, build expected
 ACLs, gateway-Stat the shared paths for observed grants, plan, apply. Register on-demand +
 periodic.
@@ -362,7 +375,7 @@ Tests: end-to-end per recipient type and ACL combo with fakes producing a `Plan`
 space scoping.
 Depends on: 4, 6, 7.
 
-**Step 11: level 3 namespace job.**
+**Step 11: level 3 namespace job.** `[ ]`
 `namespace.go` + `jobs/namespace_job.go`: list spaces, run the scanner over each space tree,
 compute expected ACLs per node (defaults + inherited shares), plan, apply. Register on-demand
 + periodic (`@daily`/`@weekly`, jitter, `Skip`). Support `prefetched_scan` for offline dry
@@ -371,7 +384,7 @@ Tests: feed `testdata/nsinspect` output through the engine and assert the produc
 default-ACL `may`/`must` on untouched paths; dry_run against a snapshot.
 Depends on: 4, 6, 8.
 
-**Step 12: config wiring and docs.**
+**Step 12: config wiring and docs.** `[ ]`
 Register the three jobs' config sections under the jobs serverless service, add an example
 config block, and document the `path_prefix` rules, scanner selection, and `dry_run`. No new
 logic.

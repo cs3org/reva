@@ -16,67 +16,136 @@
 // granted to it by virtue of its status as an Intergovernmental Organization
 // or submit itself to any jurisdiction.
 
-// Package reconciliation reconciles the share database against the state of the
-// storage. For now it holds a single job, orphan detection, which marks shares
-// and public links whose resource or recipient no longer exists. It is
-// storage-driver agnostic: it reads from the database and resolves resources
-// and identities through the gateway (CS3).
-//
-// Every line a job logs carries an "event" naming what happened, so a run can
-// be replayed or reverted by filtering on it rather than by parsing free-form
-// messages. An event is the job's own name followed by the step: every job has
-// start, skip, fail and end, plus one event for the change it makes. Each line
-// also carries "job" and "run", the uuid of the run it belongs to, so jobs stay
-// apart even when they log to the same file.
 package reconciliation
 
 import (
-	"os"
-
+	"github.com/cs3org/reva/v3/pkg/storage/utils/acl"
 	"github.com/pkg/errors"
-	"github.com/rs/zerolog"
 )
 
-// Config configures one reconciliation job. Every job takes the same knobs and
-// each is decoded from its own configuration section, so one can be scheduled,
-// dry-run and logged without touching the others.
+// Enforcement decides how the reconciler treats a default ACL entry that
+// diverges from what is on the storage.
+type Enforcement string
+
+const (
+	// EnforcementMay means the entry is allowed to be present but is not
+	// required. The reconciler never adds it and never removes it: a "may"
+	// entry on disk is left untouched. Used for the global defaults
+	// (cbackeosro, cboxexternal) that may live anywhere.
+	EnforcementMay Enforcement = "may"
+	// EnforcementMust means the entry has to be present everywhere in scope.
+	// The reconciler adds it when missing and corrects it when its permissions
+	// differ, and never removes it. Used for the personal-space owner and the
+	// project reader/writer/admin egroups.
+	EnforcementMust Enforcement = "must"
+)
+
+// DefaultScanner is the default NamespaceScanner used for the full-namespace
+// sweep. It shells out to the eos-ns-inspect binary.
+const DefaultScanner = "eos-nsinspect-binary"
+
+// Config configures the reconciliation engine. It is decoded from the job's own
+// configuration section.
 type Config struct {
-	// Schedule is the interval the job runs on, e.g. "@daily".
-	Schedule string `mapstructure:"schedule"`
-	// DryRun, when set, makes the job log and report what it would do without
-	// touching the share database.
+	// DryRun, when set, makes every job compute and report the ACL changes it
+	// would make without applying any of them.
 	DryRun bool `mapstructure:"dry_run"`
-	// RunOnStart fires the job once as soon as the runner starts, instead of
-	// waiting a full interval for the first run.
-	RunOnStart bool `mapstructure:"run_on_start"`
-	// LogFile is the path the job writes its own log to. It takes "stdout" or
-	// "stderr" to write to the standard streams instead.
-	LogFile string `mapstructure:"log_file"`
+	// Scanner selects the registered NamespaceScanner used by the
+	// full-namespace sweep (level 3). Defaults to DefaultScanner.
+	Scanner string `mapstructure:"scanner"`
+	// PathPrefixes maps filesystem path prefixes to the default ACL entries
+	// that apply under them. Rules are evaluated in order; a space is governed
+	// by the first rule whose prefix matches its root and whose space_type
+	// matches (or is "global").
+	PathPrefixes []PathPrefixRule `mapstructure:"path_prefix"`
 }
 
-// OpenLog opens a job's own log. A job keeps its own log rather than writing to
-// revad's because the log is the record of what a run changed: it is always
-// JSON, whatever [log] mode the rest of the process runs in, and it is not
-// interleaved with unrelated output.
-//
-// The returned file is nil when the log goes to a standard stream, and is the
-// caller's to close otherwise.
-func OpenLog(path string) (*zerolog.Logger, *os.File, error) {
-	switch path {
-	case "stdout":
-		log := zerolog.New(os.Stdout).With().Timestamp().Logger()
-		return &log, nil, nil
-	case "stderr":
-		log := zerolog.New(os.Stderr).With().Timestamp().Logger()
-		return &log, nil, nil
-	}
+// PathPrefixRule associates a path prefix and space type with a set of default
+// ACL entries.
+type PathPrefixRule struct {
+	// Prefix is the filesystem path prefix the rule applies to, e.g.
+	// "/eos/user" or "/eos/project".
+	Prefix string `mapstructure:"prefix"`
+	// SpaceType restricts the rule to a space kind: "personal", "project", or
+	// "global" to apply regardless of kind.
+	SpaceType SpaceType `mapstructure:"space_type"`
+	// DefaultACLs are the default entries that apply under Prefix.
+	DefaultACLs []DefaultACLRule `mapstructure:"default_acl"`
+}
 
-	// the log is opened at startup so that a bad path is a startup error
-	// rather than a run that silently keeps no record.
-	f, err := os.OpenFile(path, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
-	if err != nil {
-		return nil, nil, errors.Wrapf(err, "reconciliation: opening the log at %s", path)
+// DefaultACLRule is a single default ACL entry and how strictly it is enforced.
+// The qualifier may contain the templates "{owner}" and "{project}", resolved
+// per space when the defaults are computed.
+type DefaultACLRule struct {
+	// Type is the ACL entry type: "u" (user), "egroup" (group) or "lw"
+	// (lightweight). See package acl.
+	Type string `mapstructure:"type"`
+	// Qualifier identifies the grantee. May contain "{owner}" or "{project}".
+	Qualifier string `mapstructure:"qualifier"`
+	// Permissions is the EOS permission string, e.g. "rx", "rwx" or "rwx+d".
+	Permissions string `mapstructure:"permissions"`
+	// Enforcement is "must" or "may".
+	Enforcement Enforcement `mapstructure:"enforcement"`
+}
+
+// ApplyDefaults implements cfg.Setter.
+func (c *Config) ApplyDefaults() {
+	if c.Scanner == "" {
+		c.Scanner = DefaultScanner
 	}
-	log := zerolog.New(f).With().Timestamp().Logger()
-	return &log, f, nil
+}
+
+// Validate checks that the configuration is internally consistent. It is
+// separate from ApplyDefaults so a caller can decode, default and validate in
+// that order and surface a precise error.
+func (c *Config) Validate() error {
+	for i := range c.PathPrefixes {
+		if err := c.PathPrefixes[i].validate(); err != nil {
+			return errors.Wrapf(err, "reconciliation: path_prefix[%d]", i)
+		}
+	}
+	return nil
+}
+
+func (r *PathPrefixRule) validate() error {
+	if r.Prefix == "" {
+		return errors.New("prefix must not be empty")
+	}
+	switch r.SpaceType {
+	case SpaceTypePersonal, SpaceTypeProject, SpaceTypeAny:
+	case "":
+		return errors.New("space_type must not be empty")
+	default:
+		return errors.Errorf("invalid space_type %q", r.SpaceType)
+	}
+	for j := range r.DefaultACLs {
+		if err := r.DefaultACLs[j].validate(); err != nil {
+			return errors.Wrapf(err, "default_acl[%d]", j)
+		}
+	}
+	return nil
+}
+
+func (d *DefaultACLRule) validate() error {
+	switch d.Type {
+	case acl.TypeUser, acl.TypeGroup, acl.TypeLightweight:
+	case "":
+		return errors.New("type must not be empty")
+	default:
+		return errors.Errorf("invalid type %q", d.Type)
+	}
+	if d.Qualifier == "" {
+		return errors.New("qualifier must not be empty")
+	}
+	if d.Permissions == "" {
+		return errors.New("permissions must not be empty")
+	}
+	switch d.Enforcement {
+	case EnforcementMay, EnforcementMust:
+	case "":
+		return errors.New("enforcement must not be empty")
+	default:
+		return errors.Errorf("invalid enforcement %q", d.Enforcement)
+	}
+	return nil
 }
