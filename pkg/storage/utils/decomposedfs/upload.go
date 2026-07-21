@@ -377,9 +377,6 @@ func (fs *Decomposedfs) MarkProcessing(ctx context.Context, ref *provider.Refere
 		return n.RemoveXattr(ctx, prefixes.StatusPrefix, false)
 	}
 
-	if n.IsProcessing(ctx) {
-		return errtypes.ResourceProcessing(ref.String())
-	}
 	return n.SetXattrsWithContext(ctx, node.Attributes{
 		prefixes.StatusPrefix: []byte(node.ProcessingStatus + sessionID),
 	}, false) // acquireLock=false, because outer lock already held

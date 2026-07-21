@@ -79,7 +79,8 @@ var _ = Describe("MarkProcessing", func() {
 			Expect(isProcessing()).To(BeFalse())
 		})
 
-		It("allows only one concurrent mark", func() {
+		It("allows concurrent marks from different sessions (last writer wins)", func() {
+			sessions := []string{"session-a", "session-b"}
 			results := make([]error, 2)
 			ready := make(chan struct{})
 			var wg sync.WaitGroup
@@ -89,22 +90,20 @@ var _ = Describe("MarkProcessing", func() {
 				go func() {
 					defer wg.Done()
 					<-ready
-					results[i] = env.Fs.MarkProcessing(env.Ctx, ref, true, "test-session")
+					results[i] = env.Fs.MarkProcessing(env.Ctx, ref, true, sessions[i])
 				}()
 			}
 			close(ready)
 			wg.Wait()
 
-			nils := 0
-			for _, err := range results {
-				if err == nil {
-					nils++
-				} else {
-					_, ok := err.(errtypes.IsResourceProcessing)
-					Expect(ok).To(BeTrue(), "expected ResourceProcessing, got %T: %v", err, err)
-				}
-			}
-			Expect(nils).To(Equal(1))
+			Expect(results[0]).ToNot(HaveOccurred())
+			Expect(results[1]).ToNot(HaveOccurred())
+
+			n, err := env.Lookup.NodeFromResource(env.Ctx, ref)
+			Expect(err).ToNot(HaveOccurred())
+			id, err := n.ProcessingID(env.Ctx)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(id).To(BeElementOf(sessions))
 		})
 	})
 
@@ -113,12 +112,15 @@ var _ = Describe("MarkProcessing", func() {
 			Expect(env.Fs.MarkProcessing(env.Ctx, ref, true, "test-session")).To(Succeed())
 		})
 
-		It("rejects a second mark with ResourceProcessing", func() {
-			err := env.Fs.MarkProcessing(env.Ctx, ref, true, "test-session")
+		It("overwrites the processing flag with the new session ID", func() {
+			err := env.Fs.MarkProcessing(env.Ctx, ref, true, "session-b")
 
-			Expect(err).To(HaveOccurred())
-			_, ok := err.(errtypes.IsResourceProcessing)
-			Expect(ok).To(BeTrue(), "expected errtypes.ResourceProcessing, got %T: %v", err, err)
+			Expect(err).ToNot(HaveOccurred())
+			n, nerr := env.Lookup.NodeFromResource(env.Ctx, ref)
+			Expect(nerr).ToNot(HaveOccurred())
+			id, nerr := n.ProcessingID(env.Ctx)
+			Expect(nerr).ToNot(HaveOccurred())
+			Expect(id).To(Equal("session-b"))
 		})
 
 		It("clears the processing flag", func() {
