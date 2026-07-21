@@ -229,8 +229,7 @@ they cover. Level 1 shares none of this; it only reads and marks the DB.
 
 ```
 [[path_prefix]]
-  prefix     = "/eos/user"
-  space_type = "personal"                # personal | project | global
+  prefix = "/eos/user"
   [[path_prefix.default_acl]]
     type        = "u"                    # u | egroup | lw (see package acl)
     qualifier   = "{owner}"              # may contain {owner} / {project}
@@ -243,9 +242,12 @@ they cover. Level 1 shares none of this; it only reads and marks the DB.
     enforcement = "may"
 ```
 
-The default ACL entry is given as explicit `type` / `qualifier` / `permissions` rather than a
-single opaque token, so it is unambiguous and validatable at config load. `defaults.go`
-resolves the `{owner}` / `{project}` templates in the qualifier per space.
+A space is governed by the single rule whose prefix is a path prefix of its root. Prefixes may
+not overlap (e.g. `/eos/user` vs `/eos/project`), so at most one rule matches and there is no
+space_type or priority to reason about. The default ACL entry is given as explicit `type` /
+`qualifier` / `permissions` rather than a single opaque token, so it is unambiguous and
+validatable at config load. `defaults.go` resolves the `{owner}` / `{project}` templates in
+the qualifier per space.
 
 Semantics, matching the spec:
 * Global defaults (`cbackeosro`, `cboxexternal`): `enforcement = "may"`. Present is fine,
@@ -306,7 +308,7 @@ Progress is tracked with a `[x]` (done) or `[ ]` (todo) marker on each step head
 Tests: config decode/defaults, rule validation (bad enforcement, missing prefix).
 Depends on: nothing.
 
-**Step 2: default-ACL computation.** `[ ]`
+**Step 2: default-ACL computation.** `[x]` done.
 `defaults.go`: given a `Space` and the configured rules, produce the default ACL entries,
 resolving `{owner}`/`{project}` templates. Encodes the personal-owner and project-egroup
 rules and the global `may` entries.
