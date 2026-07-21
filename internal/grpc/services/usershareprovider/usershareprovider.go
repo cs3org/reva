@@ -28,12 +28,17 @@ import (
 	"github.com/cs3org/reva/v3/pkg/appctx"
 	"github.com/cs3org/reva/v3/pkg/errtypes"
 	"github.com/cs3org/reva/v3/pkg/plugin"
+	"github.com/cs3org/reva/v3/pkg/reconciliation"
 	"github.com/cs3org/reva/v3/pkg/rgrpc"
 	"github.com/cs3org/reva/v3/pkg/rgrpc/status"
+	"github.com/cs3org/reva/v3/pkg/rgrpc/todo/pool"
+	"github.com/cs3org/reva/v3/pkg/rjobs"
 	"github.com/cs3org/reva/v3/pkg/share"
 	"github.com/cs3org/reva/v3/pkg/share/manager/registry"
+	"github.com/cs3org/reva/v3/pkg/sharedconf"
 	"github.com/cs3org/reva/v3/pkg/utils"
 	"github.com/cs3org/reva/v3/pkg/utils/cfg"
+	"github.com/pkg/errors"
 	"google.golang.org/grpc"
 )
 
@@ -50,6 +55,15 @@ type config struct {
 	Driver                string                    `mapstructure:"driver"`
 	Drivers               map[string]map[string]any `mapstructure:"drivers"`
 	AllowedPathsForShares []string                  `mapstructure:"allowed_paths_for_shares"`
+	Reconciliation        reconciliationConfig      `mapstructure:"reconciliation"`
+}
+
+// reconciliationConfig configures the share reconciliation jobs owned by this
+// service. An empty Schedule leaves them unregistered.
+type reconciliationConfig struct {
+	reconciliation.Config `mapstructure:",squash"`
+	// Schedule is the interval the orphan job runs on, e.g. "@daily".
+	Schedule string `mapstructure:"schedule"`
 }
 
 func (c *config) ApplyDefaults() {
@@ -69,6 +83,31 @@ func getShareManager(ctx context.Context, c *config) (share.Manager, error) {
 		return f(ctx, c.Drivers[c.Driver])
 	}
 	return nil, errtypes.NotFound("driver not found: " + c.Driver)
+}
+
+// registerOrphanJob schedules the reconciliation orphan job, which marks shares
+// whose resource or recipient is gone. It runs here because this is where the
+// share manager lives. Not every driver can list and mark shares, so a schedule
+// on a driver that does not implement reconciliation.ShareStore is a
+// configuration error rather than a silent no-op.
+func registerOrphanJob(c *config, sm share.Manager) error {
+	if c.Reconciliation.Schedule == "" {
+		return nil
+	}
+	store, ok := sm.(reconciliation.ShareStore)
+	if !ok {
+		return errors.Errorf("usershareprovider: share driver %q does not support reconciliation", c.Driver)
+	}
+	gw, err := pool.GetGatewayServiceClient(pool.Endpoint(sharedconf.GetGatewaySVC("")))
+	if err != nil {
+		return errors.Wrap(err, "usershareprovider: getting the gateway client for share reconciliation")
+	}
+	job := &reconciliation.OrphanJob{
+		Shares:  store,
+		Gateway: gw,
+		DryRun:  c.Reconciliation.DryRun,
+	}
+	return rjobs.RegisterPeriodic(job.Periodic(c.Reconciliation.Schedule))
 }
 
 // TODO(labkode): add ctx to Close.
@@ -93,6 +132,10 @@ func New(ctx context.Context, m map[string]any) (rgrpc.Service, error) {
 
 	sm, err := getShareManager(ctx, &c)
 	if err != nil {
+		return nil, err
+	}
+
+	if err := registerOrphanJob(&c, sm); err != nil {
 		return nil, err
 	}
 
