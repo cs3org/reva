@@ -54,21 +54,17 @@ type Config struct {
 	// full-namespace sweep (level 3). Defaults to DefaultScanner.
 	Scanner string `mapstructure:"scanner"`
 	// PathPrefixes maps filesystem path prefixes to the default ACL entries
-	// that apply under them. Rules are evaluated in order; a space is governed
-	// by the first rule whose prefix matches its root and whose space_type
-	// matches (or is "global").
+	// that apply under them. A space is governed by the single rule whose prefix
+	// is a path prefix of its root. Prefixes may not overlap, so at most one rule
+	// matches a space. See Config.DefaultACLs.
 	PathPrefixes []PathPrefixRule `mapstructure:"path_prefix"`
 }
 
-// PathPrefixRule associates a path prefix and space type with a set of default
-// ACL entries.
+// PathPrefixRule associates a path prefix with a set of default ACL entries.
 type PathPrefixRule struct {
 	// Prefix is the filesystem path prefix the rule applies to, e.g.
 	// "/eos/user" or "/eos/project".
 	Prefix string `mapstructure:"prefix"`
-	// SpaceType restricts the rule to a space kind: "personal", "project", or
-	// "global" to apply regardless of kind.
-	SpaceType SpaceType `mapstructure:"space_type"`
 	// DefaultACLs are the default entries that apply under Prefix.
 	DefaultACLs []DefaultACLRule `mapstructure:"default_acl"`
 }
@@ -110,13 +106,6 @@ func (c *Config) Validate() error {
 func (r *PathPrefixRule) validate() error {
 	if r.Prefix == "" {
 		return errors.New("prefix must not be empty")
-	}
-	switch r.SpaceType {
-	case SpaceTypePersonal, SpaceTypeProject, SpaceTypeAny:
-	case "":
-		return errors.New("space_type must not be empty")
-	default:
-		return errors.Errorf("invalid space_type %q", r.SpaceType)
 	}
 	for j := range r.DefaultACLs {
 		if err := r.DefaultACLs[j].validate(); err != nil {

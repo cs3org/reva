@@ -29,8 +29,7 @@ func TestConfigDecodeAndDefaults(t *testing.T) {
 		"dry_run": true,
 		"path_prefix": []map[string]any{
 			{
-				"prefix":     "/eos/user",
-				"space_type": "personal",
+				"prefix": "/eos/user",
 				"default_acl": []map[string]any{
 					{"type": "u", "qualifier": "{owner}", "permissions": "rwx", "enforcement": "must"},
 					{"type": "egroup", "qualifier": "cbackeosro", "permissions": "rx", "enforcement": "may"},
@@ -54,8 +53,8 @@ func TestConfigDecodeAndDefaults(t *testing.T) {
 		t.Fatalf("PathPrefixes = %d, want 1", len(c.PathPrefixes))
 	}
 	rule := c.PathPrefixes[0]
-	if rule.Prefix != "/eos/user" || rule.SpaceType != SpaceTypePersonal {
-		t.Errorf("rule = %+v, unexpected prefix/space_type", rule)
+	if rule.Prefix != "/eos/user" {
+		t.Errorf("rule = %+v, unexpected prefix", rule)
 	}
 	if len(rule.DefaultACLs) != 2 {
 		t.Fatalf("DefaultACLs = %d, want 2", len(rule.DefaultACLs))
@@ -89,34 +88,18 @@ func TestConfigValidate(t *testing.T) {
 		{
 			name: "ok",
 			cfg: Config{PathPrefixes: []PathPrefixRule{
-				{Prefix: "/eos/user", SpaceType: SpaceTypePersonal, DefaultACLs: []DefaultACLRule{valid}},
-			}},
-		},
-		{
-			name: "global space type ok",
-			cfg: Config{PathPrefixes: []PathPrefixRule{
-				{Prefix: "/eos", SpaceType: SpaceTypeAny, DefaultACLs: []DefaultACLRule{valid}},
+				{Prefix: "/eos/user", DefaultACLs: []DefaultACLRule{valid}},
 			}},
 		},
 		{
 			name:    "missing prefix",
-			cfg:     Config{PathPrefixes: []PathPrefixRule{{SpaceType: SpaceTypePersonal}}},
-			wantErr: true,
-		},
-		{
-			name:    "empty space type",
-			cfg:     Config{PathPrefixes: []PathPrefixRule{{Prefix: "/eos/user"}}},
-			wantErr: true,
-		},
-		{
-			name:    "invalid space type",
-			cfg:     Config{PathPrefixes: []PathPrefixRule{{Prefix: "/eos/user", SpaceType: "bogus"}}},
+			cfg:     Config{PathPrefixes: []PathPrefixRule{{DefaultACLs: []DefaultACLRule{valid}}}},
 			wantErr: true,
 		},
 		{
 			name: "invalid acl type",
 			cfg: Config{PathPrefixes: []PathPrefixRule{
-				{Prefix: "/eos/user", SpaceType: SpaceTypePersonal, DefaultACLs: []DefaultACLRule{
+				{Prefix: "/eos/user", DefaultACLs: []DefaultACLRule{
 					{Type: "x", Qualifier: "q", Permissions: "rx", Enforcement: EnforcementMay},
 				}},
 			}},
@@ -125,7 +108,7 @@ func TestConfigValidate(t *testing.T) {
 		{
 			name: "missing qualifier",
 			cfg: Config{PathPrefixes: []PathPrefixRule{
-				{Prefix: "/eos/user", SpaceType: SpaceTypePersonal, DefaultACLs: []DefaultACLRule{
+				{Prefix: "/eos/user", DefaultACLs: []DefaultACLRule{
 					{Type: "u", Permissions: "rx", Enforcement: EnforcementMay},
 				}},
 			}},
@@ -134,7 +117,7 @@ func TestConfigValidate(t *testing.T) {
 		{
 			name: "missing permissions",
 			cfg: Config{PathPrefixes: []PathPrefixRule{
-				{Prefix: "/eos/user", SpaceType: SpaceTypePersonal, DefaultACLs: []DefaultACLRule{
+				{Prefix: "/eos/user", DefaultACLs: []DefaultACLRule{
 					{Type: "u", Qualifier: "q", Enforcement: EnforcementMay},
 				}},
 			}},
@@ -143,7 +126,7 @@ func TestConfigValidate(t *testing.T) {
 		{
 			name: "invalid enforcement",
 			cfg: Config{PathPrefixes: []PathPrefixRule{
-				{Prefix: "/eos/user", SpaceType: SpaceTypePersonal, DefaultACLs: []DefaultACLRule{
+				{Prefix: "/eos/user", DefaultACLs: []DefaultACLRule{
 					{Type: "u", Qualifier: "q", Permissions: "rx", Enforcement: "sometimes"},
 				}},
 			}},

@@ -37,9 +37,6 @@ const (
 	SpaceTypePersonal SpaceType = "personal"
 	// SpaceTypeProject is a project space, shared for collaborative work.
 	SpaceTypeProject SpaceType = "project"
-	// SpaceTypeAny matches any space type. It is valid only in configuration
-	// rules (see PathPrefixRule), never as the type of an actual Space.
-	SpaceTypeAny SpaceType = "global"
 )
 
 // Space is a storage space to reconcile. Spaces are disjoint: reconciliation
