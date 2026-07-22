@@ -242,8 +242,12 @@ func signedRawQuery(rawQuery string) string {
 
 	signParameters := make([]string, 0)
 	for p := range strings.SplitSeq(rawQuery, "&") {
-		rawName, _, _ := strings.Cut(p, "=")
+		rawName, rawValue, hasValue := strings.Cut(p, "=")
 		if parameterIsSigned(rawName) {
+			if hasValue {
+				// these values should be case insensitive (e.g. for different URL encodings)
+				p = rawName + "=" + strings.ToLower(rawValue)
+			}
 			signParameters = append(signParameters, p)
 		}
 	}
