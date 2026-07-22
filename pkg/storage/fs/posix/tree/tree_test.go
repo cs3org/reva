@@ -5,6 +5,7 @@ import (
 	"log"
 	"os"
 	"os/exec"
+	"runtime"
 	"strings"
 	"time"
 
@@ -40,6 +41,10 @@ var (
 )
 
 var _ = SynchronizedBeforeSuite(func() {
+	if runtime.GOOS != "linux" {
+		Skip("posix/tree tests require inotifywait (Linux only)")
+	}
+
 	var err error
 	env, err = helpers.NewTestEnv(nil)
 	Expect(err).ToNot(HaveOccurred())

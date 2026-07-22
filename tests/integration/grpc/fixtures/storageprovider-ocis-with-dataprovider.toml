@@ -1,0 +1,32 @@
+[shared]
+jwt_secret = "changemeplease"
+
+[grpc]
+address = "{{grpc_address}}"
+
+[grpc.services.storageprovider]
+driver = "ocis"
+data_server_url = "http://{{grpc_address+1}}/data"
+expose_data_server = true
+
+[grpc.services.storageprovider.drivers.ocis]
+root = "{{root}}/storage"
+treetime_accounting = true
+treesize_accounting = true
+permissionssvc = "{{permissions_address}}"
+
+[grpc.services.storageprovider.drivers.ocis.filemetadatacache]
+cache_store = "noop"
+
+[http]
+address = "{{grpc_address+1}}"
+
+[http.services.dataprovider]
+driver = "ocis"
+
+[http.services.dataprovider.drivers.ocis]
+root = "{{root}}/storage"
+permissionssvc = "{{permissions_address}}"
+
+[http.services.dataprovider.drivers.ocis.filemetadatacache]
+cache_store = "noop"

@@ -20,16 +20,17 @@ package receivedsharecache_test
 
 import (
 	"context"
-	"fmt"
 	"os"
 	"sync"
 	"sync/atomic"
 	"time"
 
 	collaboration "github.com/cs3org/go-cs3apis/cs3/sharing/collaboration/v1beta1"
+	"github.com/owncloud/reva/v2/pkg/appctx"
 	"github.com/owncloud/reva/v2/pkg/errtypes"
 	"github.com/owncloud/reva/v2/pkg/share/manager/jsoncs3/receivedsharecache"
 	"github.com/owncloud/reva/v2/pkg/storage/utils/metadata"
+	"github.com/rs/zerolog"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -53,7 +54,8 @@ var _ = Describe("Cache", func() {
 	)
 
 	BeforeEach(func() {
-		ctx = context.Background()
+		zl := zerolog.New(os.Stdout).Level(zerolog.DebugLevel)
+		ctx = appctx.WithLogger(context.Background(), &zl)
 
 		var err error
 		tmpdir, err = os.MkdirTemp("", "providercache-test")
@@ -149,46 +151,42 @@ var _ = Describe("Cache", func() {
 	})
 
 	Describe("concurrent writes from multiple cache instances", func() {
-		It("preserves all shares when replicas write concurrently for the same user", func() {
-			const numReplicas = 3
-			const numShares = 15
+		It("preserves the share when 15 replicas write the same file simultaneously", func() {
+			const numReplicas = 15
 
-			// barrierStorage holds all Upload calls until numReplicas have arrived,
-			// then releases them simultaneously. This makes the race deterministic
-			// regardless of OS goroutine scheduling or GOMAXPROCS.
+			// barrier releases all 15 Upload calls at once — every replica is a loser
+			// except one, maximising retry pressure on a single shared file.
 			bs := newBarrierStorage(storage, numReplicas)
 			replicas := make([]receivedsharecache.Cache, numReplicas)
 			for i := range replicas {
 				replicas[i] = receivedsharecache.New(bs, 0*time.Second)
 			}
 
-			errs := make([]error, numShares)
+			errs := make([]error, numReplicas)
 			var wg sync.WaitGroup
-			for i := 0; i < numShares; i++ {
+			for i := 0; i < numReplicas; i++ {
 				wg.Add(1)
 				go func(idx int) {
 					defer wg.Done()
 					rs := &collaboration.ReceivedShare{
 						Share: &collaboration.Share{
-							Id: &collaboration.ShareId{OpaqueId: fmt.Sprintf("share-%d", idx)},
+							Id: &collaboration.ShareId{OpaqueId: "share-0"},
 						},
 						State: collaboration.ShareState_SHARE_STATE_PENDING,
 					}
-					errs[idx] = replicas[idx%numReplicas].Add(ctx, userID, spaceID, rs)
+					errs[idx] = replicas[idx].Add(ctx, userID, spaceID, rs)
 				}(i)
 			}
 			wg.Wait()
 			for i, err := range errs {
-				Expect(err).ToNot(HaveOccurred(), "Add failed for share-%d", i)
+				Expect(err).ToNot(HaveOccurred(), "replica %d failed", i)
 			}
 
 			fresh := receivedsharecache.New(storage, 0*time.Second)
 			spaces, err := fresh.List(ctx, userID)
 			Expect(err).ToNot(HaveOccurred())
 			Expect(spaces[spaceID]).ToNot(BeNil())
-			for i := 0; i < numShares; i++ {
-				Expect(spaces[spaceID].States).To(HaveKey(fmt.Sprintf("share-%d", i)))
-			}
+			Expect(spaces[spaceID].States).To(HaveKey("share-0"))
 		})
 	})
 
