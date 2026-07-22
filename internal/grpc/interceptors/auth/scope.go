@@ -73,15 +73,15 @@ func expandAndVerifyScope(ctx context.Context, req any, tokenScope map[string]*a
 		for k := range tokenScope {
 			switch {
 			case strings.HasPrefix(k, "publicshare"):
-				if err = resolvePublicShare(ctx, ref, tokenScope[k], client, mgr); err == nil {
+				if err = resolvePublicShare(ctx, ref, tokenScope[k], user, client, mgr); err == nil {
 					return nil
 				}
 			case strings.HasPrefix(k, "share"):
-				if err = resolveUserShare(ctx, ref, tokenScope[k], client, mgr); err == nil {
+				if err = resolveUserShare(ctx, ref, tokenScope[k], user, client, mgr); err == nil {
 					return nil
 				}
 			case strings.HasPrefix(k, "ocmshare"):
-				if err = resolveOCMShare(ctx, ref, tokenScope[k], client, mgr); err == nil {
+				if err = resolveOCMShare(ctx, ref, tokenScope[k], user, client, mgr); err == nil {
 					return nil
 				}
 			}
@@ -250,43 +250,43 @@ func hasPermissions(ctx context.Context, client gateway.GatewayAPIClient, ref *p
 	return utils.HasPermissions(info.PermissionSet, permissionSet)
 }
 
-func resolvePublicShare(ctx context.Context, ref *provider.Reference, scope *authpb.Scope, client gateway.GatewayAPIClient, mgr token.Manager) error {
+func resolvePublicShare(ctx context.Context, ref *provider.Reference, scope *authpb.Scope, user *userpb.User, client gateway.GatewayAPIClient, mgr token.Manager) error {
 	var share link.PublicShare
 	err := utils.UnmarshalJSONToProtoV1(scope.Resource.Value, &share)
 	if err != nil {
 		return err
 	}
 
-	return checkCacheForNestedResource(ctx, ref, share.ResourceId, client, mgr)
+	return checkCacheForNestedResource(ctx, ref, share.ResourceId, user, client, mgr)
 }
 
-func resolveOCMShare(ctx context.Context, ref *provider.Reference, scope *authpb.Scope, client gateway.GatewayAPIClient, mgr token.Manager) error {
+func resolveOCMShare(ctx context.Context, ref *provider.Reference, scope *authpb.Scope, user *userpb.User, client gateway.GatewayAPIClient, mgr token.Manager) error {
 	var share ocmv1beta1.Share
 	if err := utils.UnmarshalJSONToProtoV1(scope.Resource.Value, &share); err != nil {
 		return err
 	}
 
-	return checkCacheForNestedResource(ctx, ref, share.ResourceId, client, mgr)
+	return checkCacheForNestedResource(ctx, ref, share.ResourceId, user, client, mgr)
 }
 
-func resolveUserShare(ctx context.Context, ref *provider.Reference, scope *authpb.Scope, client gateway.GatewayAPIClient, mgr token.Manager) error {
+func resolveUserShare(ctx context.Context, ref *provider.Reference, scope *authpb.Scope, user *userpb.User, client gateway.GatewayAPIClient, mgr token.Manager) error {
 	var share collaboration.Share
 	err := utils.UnmarshalJSONToProtoV1(scope.Resource.Value, &share)
 	if err != nil {
 		return err
 	}
 
-	return checkCacheForNestedResource(ctx, ref, share.ResourceId, client, mgr)
+	return checkCacheForNestedResource(ctx, ref, share.ResourceId, user, client, mgr)
 }
 
-func checkCacheForNestedResource(ctx context.Context, ref *provider.Reference, resource *provider.ResourceId, client gateway.GatewayAPIClient, mgr token.Manager) error {
+func checkCacheForNestedResource(ctx context.Context, ref *provider.Reference, resource *provider.ResourceId, user *userpb.User, client gateway.GatewayAPIClient, mgr token.Manager) error {
 	// Check if this ref is cached
 	key := resourceid.OwnCloudResourceIDWrap(resource) + scopeDelimiter + getRefKey(ref)
 	if _, err := scopeExpansionCache.Get(key); err == nil {
 		return nil
 	}
 
-	if ok, err := checkIfNestedResource(ctx, ref, resource, client, mgr); err == nil && ok {
+	if ok, err := checkIfNestedResource(ctx, ref, resource, user, client, mgr); err == nil && ok {
 		_ = scopeExpansionCache.SetWithExpire(key, nil, scopeCacheExpiration*time.Second)
 		return nil
 	}
@@ -301,7 +301,7 @@ func isRelativePathOrEmpty(path string) bool {
 	return path[0] != '/'
 }
 
-func checkIfNestedResource(ctx context.Context, ref *provider.Reference, parent *provider.ResourceId, client gateway.GatewayAPIClient, mgr token.Manager) (bool, error) {
+func checkIfNestedResource(ctx context.Context, ref *provider.Reference, parent *provider.ResourceId, user *userpb.User, client gateway.GatewayAPIClient, mgr token.Manager) (bool, error) {
 	// Since the resource ID is obtained from the scope, the current token
 	// has access to it.
 	statResponse, err := client.Stat(ctx, &provider.StatRequest{Ref: &provider.Reference{ResourceId: parent}})
@@ -315,19 +315,24 @@ func checkIfNestedResource(ctx context.Context, ref *provider.Reference, parent 
 
 	childPath := ref.GetPath()
 	if isRelativePathOrEmpty(childPath) {
-		// We mint a token as the owner of the public share and try to stat the reference
-		// TODO(ishank011): We need to find a better alternative to this
-
-		userResp, err := client.GetUser(ctx, &userpb.GetUserRequest{UserId: statResponse.Info.Owner, SkipFetchingUserGroups: true})
-		if err != nil || userResp.Status.Code != rpc.Code_CODE_OK {
-			return false, err
+		// The reference points at the resource by ID (or by a share-relative
+		// path), so we have to stat it to learn its path and compare it with
+		// the parent's. We cannot reuse the incoming token, since statting the
+		// child would recurse back into this very check. We also must not rely
+		// on the shared resource's owner: it may be owned by root (project
+		// public folders) or by a user who has since left, neither of which we
+		// can mint a token for. Instead we re-mint a token for the current user
+		// scoped to exactly this resource, which is enough to stat it without
+		// triggering another round of scope expansion.
+		if user == nil {
+			return false, errtypes.PermissionDenied("no user in context to resolve nested resource")
 		}
 
-		scope, err := scope.AddOwnerScope(map[string]*authpb.Scope{})
+		childScope, err := scope.AddResourceInfoScope(&provider.ResourceInfo{Id: ref.GetResourceId(), Path: ref.GetPath()}, authpb.Role_ROLE_VIEWER, nil)
 		if err != nil {
 			return false, err
 		}
-		token, err := mgr.MintToken(ctx, userResp.User, scope)
+		token, err := mgr.MintToken(ctx, user, childScope)
 		if err != nil {
 			return false, err
 		}
@@ -340,7 +345,7 @@ func checkIfNestedResource(ctx context.Context, ref *provider.Reference, parent 
 		if childStat.Status.Code != rpc.Code_CODE_OK {
 			return false, statuspkg.NewErrorFromCode(childStat.Status.Code, "auth interceptor")
 		}
-		childPath = statResponse.Info.Path
+		childPath = childStat.Info.Path
 	}
 
 	return strings.HasPrefix(childPath, parentPath), nil
