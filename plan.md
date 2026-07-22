@@ -114,7 +114,7 @@ Proposed layout. Two files carry the naming that needs explaining up front:
 pkg/reconciliation/
   reconcile.go          // shared types: Space, Recipient, ExpectedACL, Plan, Action, Outcome
   config.go             // Config + ApplyDefaults, path_prefix -> default-ACL rules (can/should)
-  defaults.go           // default-ACL computation per space type (owner, project egroups, globals)
+  default_acls.go           // default-ACL computation per space type (owner, project egroups, globals)
   expected_acls.go      // pure: (shares for a space) + defaults -> expected ACL set per path
                         //   (shared by levels 2 and 3; wraps sharehierarchy)
   planner.go            // pure: expected ACLs vs observed ACLs -> Plan of add/remove/update
@@ -246,7 +246,7 @@ A space is governed by the single rule whose prefix is a path prefix of its root
 not overlap (e.g. `/eos/user` vs `/eos/project`), so at most one rule matches and there is no
 space_type or priority to reason about. The default ACL entry is given as explicit `type` /
 `qualifier` / `permissions` rather than a single opaque token, so it is unambiguous and
-validatable at config load. `defaults.go` resolves the `{owner}` / `{project}` templates in
+validatable at config load. `default_acls.go` resolves the `{owner}` / `{project}` templates in
 the qualifier per space.
 
 Semantics, matching the spec:
@@ -257,7 +257,7 @@ Semantics, matching the spec:
 * Project spaces: the readers/writers/admins egroups are three `must` entries, templated
   from the project name.
 
-`defaults.go` resolves templates (`{owner}`, `{project}`) against the space. The planner
+`default_acls.go` resolves templates (`{owner}`, `{project}`) against the space. The planner
 treats `must` entries as always-expected and `may` entries as never-diffed (neither added
 nor flagged), so a `may` entry present on disk is left untouched.
 
@@ -292,103 +292,45 @@ the spec, driven by table tests:
 * dry_run: assert no mutation is issued and the recorded actions match what a live run would
   have applied (run planner once, apply in both modes, compare).
 
+
 ## Work breakdown
 
-Ordered by dependency. Each step is a self-contained unit: it builds, has its own tests, and
-is meant to be one reviewable PR / commit. Steps 1 to 6 are pure and need no live services, so
-they land fast and de-risk the engine before any job or EOS code. Steps 7 to 11 wire real
-dependencies. Nothing after a step depends on a later step.
+We build the simplest thing that works first, then deepen. The strategy above describes the
+eventual full system; the phases below are the build order. Each phase is a self-contained,
+reviewable unit that compiles and has its own tests, and each is useful on its own. A later
+phase never blocks an earlier one.
 
-Progress is tracked with a `[x]` (done) or `[ ]` (todo) marker on each step heading.
+Progress marker: `[x]` done, `[ ]` todo.
 
-**Step 1: core types and config.** `[x]` done.
-`reconcile.go` (`Space`, `Recipient`, `ExpectedACL`, `Plan`, `Action`, `Outcome`) and
-`config.go` (`Config` + `ApplyDefaults`, the `path_prefix` -> default-ACL rules with
-`may`/`must` enforcement). No logic beyond decoding and validation.
-Tests: config decode/defaults, rule validation (bad enforcement, missing prefix).
-Depends on: nothing.
+**Phase 1: orphan job.** `[x]` done.
+`orphan.go`: a periodic job that scans the share DB and marks a share orphaned
+when its resource or its recipient no longer exists. It lists non-orphan shares via
+`ListModelShares(nil, nil, hideOrphans=true)`; for each it checks the resource
+(`gateway.Stat` on `{Instance, Inode}`) and the recipient (`GetUserByClaim` for users,
+`GetGroupByClaim` for groups), then marks via `MarkAsOrphaned`. A lookup error is never
+treated as absence: the share is skipped, never orphaned on uncertainty. `dry_run` reports
+what would be marked without mutating. Runs `ScopeLeader` because it mutates shared DB state.
+Consumer-defined `ShareStore` and `ExistenceChecker` interfaces keep the logic unit-testable:
+`*sql.ShareMgr` satisfies the first; the concrete CS3 gateway-backed `ExistenceChecker` is
+built at service-startup wiring time (with the gateway address from config), not in this
+package, so phase 1 carries no dead wiring.
+Missing-space is folded into the resource check for now (if the space is gone the resource
+Stat fails); a dedicated space check can come later.
+Tests: resource missing, user recipient missing, group recipient missing, all present,
+dry_run marks nothing, lookup error skips (no false orphan), already-orphan shares excluded,
+mixed batch, share-reference by id.
 
-**Step 2: default-ACL computation.** `[x]` done.
-`defaults.go`: given a `Space` and the configured rules, produce the default ACL entries,
-resolving `{owner}`/`{project}` templates. Encodes the personal-owner and project-egroup
-rules and the global `may` entries.
-Tests: personal owner `must`, project readers/writers/admins `must`, global `may`, template
-resolution, wrong space type.
-Depends on: 1.
+**Phase 2: shallow check (DB only).** `[ ]`
+Reconcile the ACLs implied by the share DB against what is actually set on each shared path,
+without a full-namespace scan. For each non-orphan share, resolve its path and read the
+current grants on that single node through the gateway, then add or fix the missing/wrong
+grant. Reuses the default-ACL config (`config.go` / `default_acls.go`) and the permission ordering
+from `sharehierarchy`. `dry_run`. Targeted and per-share, so cost scales with the number of
+shares, not the size of the namespace.
 
-**Step 3: permission model bridge.** `[ ]`
-Map the DB `permissions` (OCS uint8) and grantee fields to CS3 `ResourcePermissions` /
-`Grantee`, and to `sharehierarchy.PermLevel`. Small file (`permmap.go`) plus recipient
-classification stubs (user / group / lightweight) that do not yet call the gateway.
-Tests: every recipient type maps to the right `Grantee`; permissions=0 is `PermDeny`, not
-absent; OCS round-trips match `model.Share.AsCS3Share`.
-Depends on: 1.
-
-**Step 4: expected-ACL reconstruction.** `[ ]`
-`expected_acls.go`: given a space's shares plus its default ACLs, compute the expected ACL
-set per path, wrapping `sharehierarchy` for the nearest-ancestor / reapply ordering. Pure.
-Tests: all ordered `{R, RW, Deny}` parent/child pairs on nested paths, reapply and delete
-cases, defaults merged in, space isolation (never crosses `space_id`).
-Depends on: 2, 3.
-
-**Step 5: planner.** `[ ]`
-`planner.go`: diff expected vs observed ACLs into an ordered `Plan` of add/remove/update.
-Port and adapt cernboxcop's `set_operations.go` / `acl_change_set.go` diff. Pure.
-Tests: pure add, pure remove, update (same grantee different perms), `may` present left
-untouched, `must` wrong-perms updated, ordering (shallowest first).
-Depends on: 4.
-
-**Step 6: applier with dry_run.** `[ ]`
-`applier.go`: execute a `Plan` through the CS3 grant API (`AddGrant`/`RemoveGrant`/
-`UpdateGrant`/`DenyGrant`), honouring `dry_run`. Define a small gateway-client interface so
-tests use a fake.
-Tests: each action issues the right grant call; dry_run issues none and records the actions;
-recorded actions in dry_run equal those applied live (run planner once, apply both ways).
-Depends on: 5.
-
-**Step 7: identity resolution against the gateway.** `[ ]`
-`identity.go`: resolve and validate recipients and resources through the gateway (exists /
-not-found / recycled), replacing the step-3 stubs. This is the first step that talks to a
-live service, still behind an interface with a fake in tests.
-Tests: user/group/lightweight resolution, missing recipient, resource not-found vs recycled.
-Depends on: 3.
-
-**Step 8: NamespaceScanner interface + EOS binary scanner.** `[ ]`
-`scanner.go` (interface + `Register`/registry) in `pkg/reconciliation`; `nsscan_binary.go` +
-`nsscan_loader.go` in `pkg/storage/fs/eos`, porting `ns_inspect.go` (command builder, JSON
-parser, `prefetchedData` path) and registering under `eos-nsinspect-binary`.
-Tests: parse captured JSON from `testdata/nsinspect` (personal + project, files + folders,
-sys entries, lightweight xattrs); `prefetchedData` prefix/depth filtering.
-Depends on: 1 (interface types only); independent of 4 to 7, so can proceed in parallel.
-
-**Step 9: level 1 orphan job.** `[ ]`
-`orphans.go` + `jobs/orphans_job.go`: per-space DB scan via `ListModelShares`, gateway-based
-validity checks, `MarkAsOrphaned`; register as on-demand + `ScopeLeader` periodic. Public
-links via `PublicShareMgr`.
-Tests: deleted / recycled resource, missing recipient, missing space; on-demand run scoped to
-one space; idempotent re-run.
-Depends on: 7.
-
-**Step 10: level 2 space-ACL job.** `[ ]`
-`space_acls.go` + `jobs/spaceacls_job.go`: gather a space's non-orphan shares, build expected
-ACLs, gateway-Stat the shared paths for observed grants, plan, apply. Register on-demand +
-periodic.
-Tests: end-to-end per recipient type and ACL combo with fakes producing a `Plan`; dry_run;
-space scoping.
-Depends on: 4, 6, 7.
-
-**Step 11: level 3 namespace job.** `[ ]`
-`namespace.go` + `jobs/namespace_job.go`: list spaces, run the scanner over each space tree,
-compute expected ACLs per node (defaults + inherited shares), plan, apply. Register on-demand
-+ periodic (`@daily`/`@weekly`, jitter, `Skip`). Support `prefetched_scan` for offline dry
-runs.
-Tests: feed `testdata/nsinspect` output through the engine and assert the produced `Plan`;
-default-ACL `may`/`must` on untouched paths; dry_run against a snapshot.
-Depends on: 4, 6, 8.
-
-**Step 12: config wiring and docs.** `[ ]`
-Register the three jobs' config sections under the jobs serverless service, add an example
-config block, and document the `path_prefix` rules, scanner selection, and `dry_run`. No new
-logic.
-Tests: config decodes end to end; example config validates.
-Depends on: 9, 10, 11.
+**Phase 3: deep FS check (eos-ns-inspect).** `[ ]`
+The whole-namespace sweep. Enumerate every node of a space directly from QuarkDB via
+`eos-ns-inspect` (which reads the namespace, not the MGM), compare each node's actual
+`sys.acl` against what the DB says it should be, and correct drift, including stray entries
+that no share justifies. Behind a `NamespaceScanner` interface with the EOS binary scanner as
+the first implementation; a native QDB reader could come later. `dry_run`.
