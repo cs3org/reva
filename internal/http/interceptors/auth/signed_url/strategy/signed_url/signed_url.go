@@ -24,6 +24,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
+	"regexp"
 	"slices"
 	"strings"
 	"time"
@@ -227,12 +228,25 @@ func (m SignedURLAuthenticator) signatureIsValid(req *http.Request) (err error) 
 
 func (m SignedURLAuthenticator) buildUrlToSign(req *http.Request) string {
 	urlToSign := *req.URL
+	// The signer signs the percent-encoded path (e.g. %24 for $), so keep it
+	// encoded, but normalize the encoding hex to uppercase: the signer emits
+	// uppercase (%24, %3D) while a proxy may deliver it lowercased (%3d), and
+	// percent-encoding is case insensitive.
+	urlToSign.RawPath = upperPercentHex(req.URL.EscapedPath())
 	urlToSign.RawQuery = signedRawQuery(req.URL.RawQuery)
 	u := urlToSign.String()
 	if !urlToSign.IsAbs() {
 		u = "https://" + req.Host + u
 	}
 	return u
+}
+
+var _percentHex = regexp.MustCompile(`%[0-9a-fA-F]{2}`)
+
+// upperPercentHex uppercases the hex digits of every percent-encoded octet
+// (e.g. %3d -> %3D), leaving everything else untouched.
+func upperPercentHex(s string) string {
+	return _percentHex.ReplaceAllStringFunc(s, strings.ToUpper)
 }
 
 func signedRawQuery(rawQuery string) string {
@@ -242,8 +256,17 @@ func signedRawQuery(rawQuery string) string {
 
 	signParameters := make([]string, 0)
 	for p := range strings.SplitSeq(rawQuery, "&") {
-		rawName, _, _ := strings.Cut(p, "=")
+		rawName, rawValue, hasValue := strings.Cut(p, "=")
 		if parameterIsSigned(rawName) {
+			// Re-encode the value to a canonical form (decode, then encode) so
+			// that different but equivalent URL encodings of the same value
+			// (e.g. lowercase %3a vs uppercase %3A) produce the same signature.
+			if hasValue {
+				if decoded, err := url.QueryUnescape(rawValue); err == nil {
+					rawValue = url.QueryEscape(decoded)
+				}
+				p = rawName + "=" + rawValue
+			}
 			signParameters = append(signParameters, p)
 		}
 	}
