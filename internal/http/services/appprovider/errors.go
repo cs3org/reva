@@ -34,6 +34,7 @@ const (
 	appErrorUnauthenticated  appErrorCode = "UNAUTHENTICATED"
 	appErrorUnimplemented    appErrorCode = "NOT_IMPLEMENTED"
 	appErrorInvalidParameter appErrorCode = "INVALID_PARAMETER"
+	appErrorUnavailable      appErrorCode = "SERVICE_UNAVAILABLE"
 	appErrorServerError      appErrorCode = "SERVER_ERROR"
 )
 
@@ -44,6 +45,7 @@ var appErrorCodeMapping = map[appErrorCode]int{
 	appErrorUnauthenticated:  http.StatusUnauthorized,
 	appErrorUnimplemented:    http.StatusNotImplemented,
 	appErrorInvalidParameter: http.StatusBadRequest,
+	appErrorUnavailable:      http.StatusServiceUnavailable,
 	appErrorServerError:      http.StatusInternalServerError,
 }
 
