@@ -176,7 +176,13 @@ func (s *svc) listUsers(w http.ResponseWriter, r *http.Request) {
 		log.Debug().Err(err).Interface("query", r.URL.Query()).Msg("must pass a search string of at least length 3 to list users")
 	}
 	queryVal := strings.Trim(req.Query.Search.RawValue, "\"")
+	queryVal = strings.ReplaceAll(queryVal, "*", "")
 	log.Debug().Str("Query", queryVal).Str("orderBy", req.Query.OrderBy.RawValue).Any("select", getUserSelectionFromRequest(req.Query.Select)).Msg("Listing users in libregraph API")
+
+	if len(queryVal) < 3 {
+		w.WriteHeader(http.StatusBadRequest)
+		w.Write([]byte("Search query must contain at least three valid characters"))
+	}
 
 	filters, err := generateUserFilters(req)
 	if err != nil {
