@@ -271,8 +271,8 @@ func (d *Driver) MarkProcessing(_ context.Context, _ *provider.Reference, _ bool
 	return errtypes.NotSupported("kiteworks: read-only driver")
 }
 
-func (d *Driver) CommitUpload(_ context.Context, _ *provider.Reference, _ storage.UploadSource) (*provider.ResourceInfo, error) {
-	return nil, errtypes.NotSupported("kiteworks: read-only driver")
+func (d *Driver) CommitUpload(_ context.Context, _ *provider.Reference, _ string, _ storage.UploadSource) error {
+	return errtypes.NotSupported("kiteworks: read-only driver")
 }
 
 func (d *Driver) RestoreRevision(_ context.Context, _ *provider.Reference, _ string) (*storage.RestoreRevisionResult, error) {

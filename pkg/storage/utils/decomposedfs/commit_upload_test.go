@@ -20,9 +20,7 @@ package decomposedfs_test
 
 import (
 	"bytes"
-	"crypto/md5"
-	"crypto/sha1"
-	"hash/adler32"
+	"errors"
 	"io"
 
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
@@ -30,6 +28,7 @@ import (
 	. "github.com/onsi/gomega"
 	"github.com/owncloud/reva/v2/pkg/errtypes"
 	"github.com/owncloud/reva/v2/pkg/storage"
+	"github.com/owncloud/reva/v2/pkg/storage/utils/decomposedfs/node"
 	helpers "github.com/owncloud/reva/v2/pkg/storage/utils/decomposedfs/testhelpers"
 	"github.com/stretchr/testify/mock"
 )
@@ -50,9 +49,6 @@ var _ = Describe("CommitUpload", func() {
 			Path:       "/dir1/new-file.txt",
 		}
 
-		// Blobstore.UploadFromReader is invoked for every successful commit.
-		env.Blobstore.On("UploadFromReader", mock.AnythingOfType("*node.Node"), mock.Anything, mock.AnythingOfType("int64")).Return(nil)
-
 		// TouchFile-first protocol: node must exist before CommitUpload is called.
 		env.Permissions.On("AssemblePermissions", mock.Anything, mock.Anything, mock.Anything).
 			Return(&provider.ResourcePermissions{InitiateFileUpload: true, Stat: true}, nil).Times(1)
@@ -66,24 +62,21 @@ var _ = Describe("CommitUpload", func() {
 		}
 	})
 
-	makeSource := func(content []byte, metadata map[string]string) storage.UploadSource {
-		sha1h := sha1.New()
-		md5h := md5.New()
-		adler32h := adler32.New()
-		r1 := io.TeeReader(bytes.NewReader(content), sha1h)
-		r2 := io.TeeReader(r1, md5h)
-		io.Copy(adler32h, r2) //nolint:errcheck
+	makeSource := func(content []byte) storage.UploadSource {
 		return storage.UploadSource{
-			Body:     io.NopCloser(bytes.NewReader(content)),
-			Length:   int64(len(content)),
-			Metadata: metadata,
-			Checksums: storage.UploadChecksums{
-				SHA1:    sha1h.Sum(nil),
-				MD5:     md5h.Sum(nil),
-				Adler32: adler32h.Sum(nil),
-			},
+			Body:   io.NopCloser(bytes.NewReader(content)),
+			Length: int64(len(content)),
 		}
 	}
+
+	Context("when sessionID is empty", func() {
+		It("fails with BadRequest", func() {
+			err := env.Fs.CommitUpload(env.Ctx, ref, "", makeSource([]byte("x")))
+			Expect(err).To(HaveOccurred())
+			_, ok := err.(errtypes.IsBadRequest)
+			Expect(ok).To(BeTrue(), "expected errtypes.BadRequest, got %T: %v", err, err)
+		})
+	})
 
 	Context("when node does not exist", func() {
 		It("fails with NotFound", func() {
@@ -91,126 +84,80 @@ var _ = Describe("CommitUpload", func() {
 				ResourceId: env.SpaceRootRes,
 				Path:       "/dir1/never-created.txt",
 			}
-			_, err := env.Fs.CommitUpload(env.Ctx, missingRef, makeSource([]byte("x"), nil))
+			err := env.Fs.CommitUpload(env.Ctx, missingRef, "session-1", makeSource([]byte("x")))
 			Expect(err).To(HaveOccurred())
 			_, ok := err.(errtypes.IsNotFound)
 			Expect(ok).To(BeTrue(), "expected errtypes.NotFound, got %T: %v", err, err)
 		})
 	})
 
-	Context("when checksums are missing", func() {
-		It("fails with BadRequest", func() {
-			_, err := env.Fs.CommitUpload(env.Ctx, ref, storage.UploadSource{
-				Body:   io.NopCloser(bytes.NewReader([]byte("x"))),
-				Length: 1,
-			})
-			Expect(err).To(HaveOccurred())
-			_, ok := err.(errtypes.IsBadRequest)
-			Expect(ok).To(BeTrue(), "expected errtypes.BadRequest, got %T: %v", err, err)
-		})
-	})
-
 	Context("on a new file", func() {
-		It("commits the bytes and returns ResourceInfo", func() {
-			content := []byte("hello reva")
+		It("writes bytes to the blobstore", func() {
+			env.Blobstore.On("UploadFromReader", mock.AnythingOfType("*node.Node"), mock.Anything, mock.AnythingOfType("int64")).Return(nil)
 
-			ri, err := env.Fs.CommitUpload(env.Ctx, ref, makeSource(content, map[string]string{
-				"providerID": "test-provider",
-			}))
+			err := env.Fs.CommitUpload(env.Ctx, ref, "session-1", makeSource([]byte("hello reva")))
 
 			Expect(err).ToNot(HaveOccurred())
-			Expect(ri).ToNot(BeNil())
-			Expect(ri.Id).ToNot(BeNil())
-			Expect(ri.Id.OpaqueId).ToNot(BeEmpty())
-			Expect(ri.Id.SpaceId).To(Equal(env.SpaceRootRes.SpaceId))
-			Expect(ri.Id.StorageId).To(Equal("test-provider"))
-			Expect(ri.Etag).ToNot(BeEmpty())
-			Expect(ri.Mtime).ToNot(BeNil())
-
-			// blobstore was called once
 			env.Blobstore.AssertCalled(GinkgoT(), "UploadFromReader", mock.AnythingOfType("*node.Node"), mock.Anything, mock.AnythingOfType("int64"))
 		})
 	})
 
 	Context("on overwrite", func() {
-		It("commits the new bytes and preserves node identity", func() {
-			// first commit: create the file
-			ri1, err := env.Fs.CommitUpload(env.Ctx, ref, makeSource([]byte("original content"), map[string]string{
-				"mtime":      "1700000000",
-				"providerID": "test-provider",
-			}))
+		It("writes to a different blob slot on each commit", func() {
+			var capturedNodes []*node.Node
+			env.Blobstore.On("UploadFromReader", mock.AnythingOfType("*node.Node"), mock.Anything, mock.AnythingOfType("int64")).
+				Run(func(args mock.Arguments) {
+					n := args.Get(0).(*node.Node)
+					capturedNodes = append(capturedNodes, n)
+				}).Return(nil)
+
+			err := env.Fs.CommitUpload(env.Ctx, ref, "session-1", makeSource([]byte("original content")))
 			Expect(err).ToNot(HaveOccurred())
 
-			// second commit: overwrite with different bytes and mtime
-			ri2, err := env.Fs.CommitUpload(env.Ctx, ref, makeSource([]byte("brand new content"), map[string]string{
-				"mtime":      "1750000000",
-				"providerID": "test-provider",
-			}))
+			err = env.Fs.CommitUpload(env.Ctx, ref, "session-2", makeSource([]byte("brand new content")))
 			Expect(err).ToNot(HaveOccurred())
 
-			// node identity is preserved across the overwrite
-			Expect(ri2.Id.OpaqueId).To(Equal(ri1.Id.OpaqueId))
-			// etag changed because mtime changed
-			Expect(ri2.Etag).ToNot(Equal(ri1.Etag))
-			// blobstore was called twice (once per commit)
 			env.Blobstore.AssertNumberOfCalls(GinkgoT(), "UploadFromReader", 2)
+			Expect(capturedNodes).To(HaveLen(2))
+			Expect(capturedNodes[0].BlobID).To(Equal("session-1"))
+			Expect(capturedNodes[1].BlobID).To(Equal("session-2"))
 		})
 	})
 
-	Context("checksum verification", func() {
-		content := []byte("hello reva")
+	Context("after a successful commit", func() {
+		It("propagates etag change to the parent directory", func() {
+			env.Blobstore.On("UploadFromReader", mock.AnythingOfType("*node.Node"), mock.Anything, mock.AnythingOfType("int64")).Return(nil)
 
-		It("commits when no client checksum is supplied", func() {
-			ri, err := env.Fs.CommitUpload(env.Ctx, ref, makeSource(content, nil))
-
+			parentRef := &provider.Reference{
+				ResourceId: env.SpaceRootRes,
+				Path:       "/dir1",
+			}
+			parentNode, err := env.Lookup.NodeFromResource(env.Ctx, parentRef)
 			Expect(err).ToNot(HaveOccurred())
-			Expect(ri).ToNot(BeNil())
+			tmBefore, _ := parentNode.GetTMTime(env.Ctx)
+
+			err = env.Fs.CommitUpload(env.Ctx, ref, "session-1", makeSource([]byte("hello")))
+			Expect(err).ToNot(HaveOccurred())
+
+			parentNode, err = env.Lookup.NodeFromResource(env.Ctx, parentRef)
+			Expect(err).ToNot(HaveOccurred())
+			tmAfter, err := parentNode.GetTMTime(env.Ctx)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(tmAfter).To(BeTemporally(">=", tmBefore))
 		})
 	})
 
-	Context("mtime handling", func() {
-		It("uses the supplied mtime", func() {
-			ri, err := env.Fs.CommitUpload(env.Ctx, ref, makeSource([]byte("hello"), map[string]string{
-				"mtime": "1750000000",
-			}))
+	Context("when WriteBlob fails", func() {
+		It("cleans up the orphaned blob and returns an error", func() {
+			writeErr := errors.New("blobstore unavailable")
+			env.Blobstore.On("UploadFromReader", mock.AnythingOfType("*node.Node"), mock.Anything, mock.AnythingOfType("int64")).Return(writeErr)
+			env.Blobstore.On("Delete", mock.AnythingOfType("*node.Node")).Return(nil)
 
-			Expect(err).ToNot(HaveOccurred())
-			Expect(ri).ToNot(BeNil())
-			Expect(ri.Mtime).ToNot(BeNil())
-			Expect(ri.Mtime.Seconds).To(Equal(uint64(1750000000)))
-			Expect(ri.Mtime.Nanos).To(Equal(uint32(0)))
-		})
-
-		It("rejects malformed mtime", func() {
-			_, err := env.Fs.CommitUpload(env.Ctx, ref, makeSource([]byte("hello"), map[string]string{
-				"mtime": "not-a-date",
-			}))
+			err := env.Fs.CommitUpload(env.Ctx, ref, "session-1", makeSource([]byte("hello")))
 
 			Expect(err).To(HaveOccurred())
-			_, ok := err.(errtypes.IsBadRequest)
-			Expect(ok).To(BeTrue(), "expected errtypes.BadRequest, got %T: %v", err, err)
+			Expect(err.Error()).To(ContainSubstring("blobstore unavailable"))
+			env.Blobstore.AssertCalled(GinkgoT(), "Delete", mock.AnythingOfType("*node.Node"))
 		})
 	})
-
-	Context("idempotency", func() {
-		It("two clean runs with same ref+source produce equal final state", func() {
-			content := []byte("idempotent payload")
-			metadata := map[string]string{
-				"mtime":      "1750000000",
-				"providerID": "test-provider",
-			}
-
-			ri1, err := env.Fs.CommitUpload(env.Ctx, ref, makeSource(content, metadata))
-			Expect(err).ToNot(HaveOccurred())
-
-			ri2, err := env.Fs.CommitUpload(env.Ctx, ref, makeSource(content, metadata))
-			Expect(err).ToNot(HaveOccurred())
-
-			Expect(ri2.Id.OpaqueId).To(Equal(ri1.Id.OpaqueId))
-			Expect(ri2.Etag).To(Equal(ri1.Etag))
-			Expect(ri2.Mtime.Seconds).To(Equal(ri1.Mtime.Seconds))
-			Expect(ri2.Mtime.Nanos).To(Equal(ri1.Mtime.Nanos))
-		})
-	})
-
 })
