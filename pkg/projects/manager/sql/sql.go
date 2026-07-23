@@ -82,6 +82,8 @@ type Project struct {
 	Writers string
 	// Admins e-group ID
 	Admins string
+	// Resource admins e-group ID
+	ResourceAdmins string
 	// Called description in libregraph API
 	// Called subtitle in front-end
 	Description string
