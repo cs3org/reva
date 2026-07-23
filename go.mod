@@ -46,7 +46,7 @@ require (
 	github.com/prometheus/client_golang v1.23.2
 	github.com/rs/cors v1.11.1
 	github.com/rs/zerolog v1.35.1
-	github.com/sethvargo/go-password v0.3.1
+	github.com/sethvargo/go-password v0.4.0
 	github.com/stretchr/testify v1.11.1
 	github.com/studio-b12/gowebdav v0.13.0
 	github.com/thanhpk/randstr v1.0.6
