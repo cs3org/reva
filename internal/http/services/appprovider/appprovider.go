@@ -503,10 +503,9 @@ func (s *svc) handleOpen(w http.ResponseWriter, r *http.Request) {
 	}
 	theme := r.Form.Get("ui_theme")
 	if theme == "light" || theme == "dark" {
-		if openRes.AppUrl.FormParameters == nil {
-			openRes.AppUrl.FormParameters = map[string]string{}
+		if openRes.AppUrl.FormParameters != nil {
+			openRes.AppUrl.FormParameters["ui_defaults"] = "UITheme=" + theme
 		}
-		openRes.AppUrl.FormParameters["ui_defaults"] = "UITheme=" + theme
 	}
 
 	// recreate the structure to be able to marshal the AppUrl.Target as a string and to add the optional forced viewmode reason
