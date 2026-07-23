@@ -333,7 +333,6 @@ func (s *svc) extractReference(ctx context.Context, id string) (*provider.Resour
 			Path: spaceRoot,
 		},
 	})
-
 	if err != nil {
 		return nil, err
 	}
@@ -478,6 +477,31 @@ func (s *svc) handleOpen(w http.ResponseWriter, r *http.Request) {
 	// the actual message is to be rendered by the web frontend (potentially localized).
 	if m := regexp.MustCompile(`\b([A-Za-z0-9._+-]+)\s+to edit instead$`).FindStringSubmatch(openRes.ForcedViewModeReason); m != nil {
 		appForEditing = m[1]
+	}
+
+	// UI-related parameters
+	// TODO(lopresti) this overrides pkg/app/provider/wopi/wopi.go,
+	// we need to drop that one and the corresponding config entry
+	lang := r.Form.Get("lang")
+	if lang != "" {
+		appFullURL, err := url.Parse(openRes.AppUrl.AppUrl)
+		if err != nil {
+			writeError(w, r, appErrorServerError, "error parsing the app URL", err)
+			return
+		}
+		q := appFullURL.Query()
+		q.Set("ui", lang)   // EuroOffice + Office365
+		q.Set("lang", lang) // Collabora
+		q.Set("rs", lang)   // Office365, https://learn.microsoft.com/en-us/microsoft-365/cloud-storage-partner-program/online/discovery#dc_llcc
+		appFullURL.RawQuery = q.Encode()
+		openRes.AppUrl.AppUrl = appFullURL.String()
+	}
+	theme := r.Form.Get("ui_theme")
+	if theme == "light" || theme == "dark" {
+		if openRes.AppUrl.FormParameters == nil {
+			openRes.AppUrl.FormParameters = map[string]string{}
+		}
+		openRes.AppUrl.FormParameters["ui_defaults"] = "UITheme=" + theme
 	}
 
 	// recreate the structure to be able to marshal the AppUrl.Target as a string and to add the optional forced viewmode reason
