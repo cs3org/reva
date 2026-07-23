@@ -65,7 +65,8 @@ func (r *Role) OCSPermissions() OcsPermissions {
 	return r.ocsPermissions
 }
 
-// WebDAVPermissions returns the webdav permissions used in propfinds, eg. "WCKDNVR"
+// WebDAVPermissions returns the webdav permissions used in propfinds, eg. "GWCKDNVR"
+// G = read
 // D = delete
 // NV = update (renameable moveable)
 // W = update (files only)
@@ -85,6 +86,9 @@ func (r *Role) WebDAVPermissions(isDir, isShared, isMountpoint, isPublic, isOpen
 	}
 	if !isPublic && isMountpoint {
 		fmt.Fprintf(&b, "M")
+	}
+	if r.ocsPermissions.Contain(PermissionRead) {
+		fmt.Fprintf(&b, "G")
 	}
 	if r.ocsPermissions.Contain(PermissionDelete) {
 		fmt.Fprintf(&b, "D") // TODO oc10 shows received shares as deletable

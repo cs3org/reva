@@ -154,3 +154,58 @@ func TestPermissions2Role(t *testing.T) {
 		checkRole(role, actual)
 	}
 }
+
+func TestWebDAVPermissionsIncludeReadGrant(t *testing.T) {
+	tests := []struct {
+		name     string
+		role     *Role
+		isDir    bool
+		expected string
+	}{
+		{
+			name:     "viewer",
+			role:     NewViewerRole(),
+			isDir:    false,
+			expected: "G",
+		},
+		{
+			name:     "file editor",
+			role:     NewFileEditorRole(),
+			isDir:    false,
+			expected: "GNVW",
+		},
+		{
+			name:     "folder editor",
+			role:     NewEditorRole(),
+			isDir:    true,
+			expected: "GDNVCK",
+		},
+		{
+			name:     "manager",
+			role:     NewManagerRole(),
+			isDir:    true,
+			expected: "RGDNVCKZ",
+		},
+		{
+			name:     "uploader",
+			role:     NewUploaderRole(),
+			isDir:    true,
+			expected: "CK",
+		},
+		{
+			name:     "denied",
+			role:     NewDeniedRole(),
+			isDir:    false,
+			expected: "",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			actual := tt.role.WebDAVPermissions(tt.isDir, false, false, false, false)
+			if actual != tt.expected {
+				t.Fatalf("expected WebDAV permissions %q, got %q", tt.expected, actual)
+			}
+		})
+	}
+}

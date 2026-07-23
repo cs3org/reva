@@ -20,6 +20,7 @@ package loader
 
 import (
 	// Load core authentication strategies.
+	_ "github.com/cs3org/reva/v3/internal/http/interceptors/auth/credential/strategy/appauth"
 	_ "github.com/cs3org/reva/v3/internal/http/interceptors/auth/credential/strategy/basic"
 	_ "github.com/cs3org/reva/v3/internal/http/interceptors/auth/credential/strategy/bearer"
 	_ "github.com/cs3org/reva/v3/internal/http/interceptors/auth/credential/strategy/ocmshares"
