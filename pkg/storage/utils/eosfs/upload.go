@@ -106,3 +106,7 @@ func (fs *eosfs) MarkProcessing(ctx context.Context, ref *provider.Reference, pr
 func (fs *eosfs) CommitUpload(_ context.Context, _ *provider.Reference, _ string, _ storage.UploadSource) error {
 	return errtypes.NotSupported("op not supported")
 }
+
+func (fs *eosfs) PrepareUpload(_ context.Context, _ *provider.Reference, _ string, info storage.UploadInfo) (*storage.PrepareUploadResult, error) {
+	return &storage.PrepareUploadResult{VersionCreated: info.NodeExisted}, nil
+}

@@ -81,3 +81,7 @@ func (fs *s3FS) MarkProcessing(ctx context.Context, ref *provider.Reference, pro
 func (fs *s3FS) CommitUpload(_ context.Context, _ *provider.Reference, _ string, _ storage.UploadSource) error {
 	return errtypes.NotSupported("op not supported")
 }
+
+func (fs *s3FS) PrepareUpload(_ context.Context, _ *provider.Reference, _ string, info storage.UploadInfo) (*storage.PrepareUploadResult, error) {
+	return &storage.PrepareUploadResult{VersionCreated: info.NodeExisted}, nil
+}
