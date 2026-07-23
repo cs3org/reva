@@ -45,7 +45,6 @@ type Config struct {
 	AllowedLanguages         []string                  `mapstructure:"allowed_languages"`
 	OCMMountPoint            string                    `mapstructure:"ocm_mount_point"`
 	ListOCMShares            bool                      `mapstructure:"list_ocm_shares"`
-	Notifications            map[string]any            `mapstructure:"notifications"`
 	EnableSpaces             bool                      `mapstructure:"enable_spaces"`
 	// Secret used for the generation of per-user signing keys for signed URLs
 	SigningKeySecret           string `mapstructure:"signing_key_secret"`

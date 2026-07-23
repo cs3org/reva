@@ -28,14 +28,14 @@ import (
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	link "github.com/cs3org/go-cs3apis/cs3/sharing/link/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
-	"github.com/cs3org/reva/v3/pkg/appctx"
+	"github.com/cs3org/reva/v3/pkg/notifications/cs3api"
 	"github.com/cs3org/reva/v3/pkg/notifications/model"
 	"github.com/cs3org/reva/v3/pkg/spaces"
 	"github.com/rs/zerolog"
 )
 
 func (s *svc) sendUploadNotification(ctx context.Context, client gateway.GatewayAPIClient, info *provider.ResourceInfo, log zerolog.Logger) {
-	if s.notificationSender == nil || info == nil {
+	if info == nil {
 		return
 	}
 
@@ -47,14 +47,6 @@ func (s *svc) sendUploadNotification(ctx context.Context, client gateway.Gateway
 	recipients = uniqueNonEmptyStrings(recipients)
 	if len(recipients) == 0 {
 		return
-	}
-
-	submitter, sender := notificationSenderIdentity(ctx)
-	if submitter == "" && publicShare != nil {
-		submitter = userIDString(publicShare.GetOwner())
-	}
-	if submitter == "" {
-		submitter = "anonymous"
 	}
 
 	templateData := map[string]any{
@@ -70,13 +62,7 @@ func (s *svc) sendUploadNotification(ctx context.Context, client gateway.Gateway
 		templateData["share_token"] = publicShare.GetToken()
 	}
 
-	if _, err := s.notificationSender.SendNotification(ctx, model.SendRequest{
-		EventType:      model.EventUpload,
-		SubmittingUser: submitter,
-		Sender:         sender,
-		Recipients:     recipients,
-		TemplateData:   templateData,
-	}); err != nil {
+	if _, err := cs3api.PublishEvent(ctx, client, model.EventUpload, recipients, templateData); err != nil {
 		log.Error().Err(err).Msg("failed to send upload notification event")
 	}
 }
@@ -128,21 +114,6 @@ func publicShareFromResourceInfo(info *provider.ResourceInfo) *link.PublicShare 
 		return nil
 	}
 	return &publicShare
-}
-
-func notificationSenderIdentity(ctx context.Context) (string, string) {
-	u, ok := appctx.ContextGetUser(ctx)
-	if !ok || u == nil {
-		return "", ""
-	}
-	return userIDString(u.GetId()), u.GetMail()
-}
-
-func userIDString(id *userpb.UserId) string {
-	if id == nil {
-		return ""
-	}
-	return strings.Join([]string{id.GetIdp(), id.GetOpaqueId(), id.GetType().String(), id.GetTenantId()}, ":")
 }
 
 func splitRecipients(value string) []string {

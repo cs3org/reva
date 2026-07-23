@@ -31,7 +31,7 @@ type AccumulationPolicy struct {
 	MaxItems      int `json:"max_items" mapstructure:"max_items"`
 }
 
-// SendRequest is the internal request shape used by the gateway SendNotification
+// SendRequest is the internal request shape used by the gateway PublishEvent
 // implementation before the request is published to a backend.
 type SendRequest struct {
 	EventType      string         `json:"event_type"`

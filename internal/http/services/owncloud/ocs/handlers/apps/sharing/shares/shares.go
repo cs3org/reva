@@ -46,7 +46,7 @@ import (
 	"github.com/cs3org/reva/v3/internal/http/services/owncloud/ocs/conversions"
 	"github.com/cs3org/reva/v3/internal/http/services/owncloud/ocs/response"
 	"github.com/cs3org/reva/v3/pkg/appctx"
-	"github.com/cs3org/reva/v3/pkg/notifications"
+	"github.com/cs3org/reva/v3/pkg/notifications/cs3api"
 	"github.com/cs3org/reva/v3/pkg/notifications/model"
 	"github.com/cs3org/reva/v3/pkg/permissions"
 	"github.com/cs3org/reva/v3/pkg/spaces"
@@ -83,7 +83,6 @@ type Handler struct {
 	listOCMShares              bool
 	Log                        *zerolog.Logger
 	EnableSpaces               bool
-	notificationSender         *notifications.SendService
 	pubRWLinkMaxExpiration     time.Duration
 	pubRWLinkDefaultExpiration time.Duration
 }
@@ -139,12 +138,6 @@ func (h *Handler) Init(c *config.Config, l *zerolog.Logger) {
 			go h.startCacheWarmup(cwm)
 		}
 	}
-}
-
-// SetNotificationSender configures the event sender used by share notification
-// endpoints. A nil sender disables notification emission.
-func (h *Handler) SetNotificationSender(sender *notifications.SendService) {
-	h.notificationSender = sender
 }
 
 func (h *Handler) startCacheWarmup(c cache.WarmupResourceInfo) {
@@ -341,7 +334,7 @@ func (h *Handler) NotifyShare(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		recipient = h.SendShareNotification(ctx, model.EventShareReminder, opaqueID, granter, granteeRes.User, statInfo)
+		recipient = h.SendShareNotification(ctx, c, model.EventShareReminder, opaqueID, granter, granteeRes.User, statInfo)
 	} else if granteeType == provider.GranteeType_GRANTEE_TYPE_GROUP {
 		granteeID := shareRes.Share.Grantee.GetGroupId().OpaqueId
 		granteeRes, err := c.GetGroupByClaim(ctx, &grouppb.GetGroupByClaimRequest{
@@ -354,7 +347,7 @@ func (h *Handler) NotifyShare(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		recipient = h.SendShareNotification(ctx, model.EventShareReminder, opaqueID, granter, granteeRes.Group, statInfo)
+		recipient = h.SendShareNotification(ctx, c, model.EventShareReminder, opaqueID, granter, granteeRes.Group, statInfo)
 	}
 
 	w.WriteHeader(http.StatusOK)
@@ -367,7 +360,7 @@ func (h *Handler) NotifyShare(w http.ResponseWriter, r *http.Request) {
 }
 
 // SendShareNotification sends a notification with information from a Share.
-func (h *Handler) SendShareNotification(ctx context.Context, eventType, opaqueID string, granter *userpb.User, grantee any, statInfo *provider.ResourceInfo) string {
+func (h *Handler) SendShareNotification(ctx context.Context, client gateway.GatewayAPIClient, eventType, opaqueID string, granter *userpb.User, grantee any, statInfo *provider.ResourceInfo) string {
 	var recipient string
 	var recipientName string
 
@@ -385,33 +378,25 @@ func (h *Handler) SendShareNotification(ctx context.Context, eventType, opaqueID
 		}
 	}
 
-	if h.notificationSender == nil {
-		h.Log.Debug().Msgf("notification trigger %s skipped because notifications are not configured", opaqueID)
-		return recipient
-	}
 	if strings.TrimSpace(recipient) == "" {
 		h.Log.Debug().Msgf("notification trigger %s skipped because recipient is empty", opaqueID)
 		return recipient
 	}
 
-	if _, err := h.notificationSender.SendNotification(ctx, model.SendRequest{
-		EventType:      eventType,
-		SubmittingUser: userIDString(granter.GetId()),
-		Sender:         granter.Mail,
-		Recipients:     []string{recipient},
-		TemplateData: map[string]any{
-			"share_id":               opaqueID,
-			"recipient":              recipient,
-			"recipient_display_name": recipientName,
-			"sender_display_name":    granter.GetDisplayName(),
-			"sender_username":        granter.GetUsername(),
-			"sender_mail":            granter.GetMail(),
-			"resource_id":            resourceIDString(statInfo.GetId()),
-			"resource_name":          statInfo.GetName(),
-			"resource_path":          statInfo.GetPath(),
-			"resource_type":          statInfo.GetType().String(),
-		},
-	}); err != nil {
+	templateData := map[string]any{
+		"share_id":               opaqueID,
+		"recipient":              recipient,
+		"recipient_display_name": recipientName,
+		"sender_display_name":    granter.GetDisplayName(),
+		"sender_username":        granter.GetUsername(),
+		"sender_mail":            granter.GetMail(),
+		"resource_id":            resourceIDString(statInfo.GetId()),
+		"resource_name":          statInfo.GetName(),
+		"resource_path":          statInfo.GetPath(),
+		"resource_type":          statInfo.GetType().String(),
+	}
+
+	if _, err := cs3api.PublishEvent(ctx, client, eventType, []string{recipient}, templateData); err != nil {
 		h.Log.Error().Err(err).Str("event_type", eventType).Str("share_id", opaqueID).Msg("failed to send share notification event")
 	}
 
@@ -426,13 +411,6 @@ func sameUserID(a, b *userpb.UserId) bool {
 		a.GetOpaqueId() == b.GetOpaqueId() &&
 		a.GetType() == b.GetType() &&
 		a.GetTenantId() == b.GetTenantId()
-}
-
-func userIDString(id *userpb.UserId) string {
-	if id == nil {
-		return ""
-	}
-	return strings.Join([]string{id.GetIdp(), id.GetOpaqueId(), id.GetType().String(), id.GetTenantId()}, ":")
 }
 
 func resourceIDString(id *provider.ResourceId) string {

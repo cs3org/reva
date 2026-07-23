@@ -26,8 +26,8 @@ import (
 	"github.com/cs3org/reva/v3/pkg/utils/cfg"
 )
 
-// SenderConfig configures notification submission from services that cannot yet
-// call the generated gateway SendNotification RPC.
+// SenderConfig configures the backend the gateway publishes accepted
+// notification events to.
 type SenderConfig struct {
 	NATS backends.NATSConfig `mapstructure:"nats"`
 
@@ -47,7 +47,7 @@ func (c *SenderConfig) ApplyDefaults() {
 }
 
 // NewSender creates a SendService and close function from service config. A nil
-// sender means notifications are not configured for that service.
+// sender means notifications are not configured, and PublishEvent is rejected.
 func NewSender(ctx context.Context, m map[string]any) (*SendService, func() error, error) {
 	if len(m) == 0 {
 		return nil, nil, nil

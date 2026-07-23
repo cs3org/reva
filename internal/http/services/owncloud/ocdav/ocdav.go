@@ -35,7 +35,6 @@ import (
 	storageProvider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/cs3org/reva/v3/pkg/appctx"
 	"github.com/cs3org/reva/v3/pkg/myofficefiles"
-	"github.com/cs3org/reva/v3/pkg/notifications"
 	"github.com/cs3org/reva/v3/pkg/spaces"
 	"github.com/cs3org/reva/v3/pkg/utils"
 
@@ -125,7 +124,6 @@ type Config struct {
 	PublicLinkDownload           *ConfigPublicLinkDownload `mapstructure:"publiclink_download"`
 	DisabledOpenInAppPaths       []string                  `mapstructure:"disabled_open_in_app_paths"`
 	MyOfficeFilesAllowedProjects []string                  `mapstructure:"my_office_files_projects"`
-	Notifications                map[string]any            `mapstructure:"notifications"`
 }
 
 func (c *Config) ApplyDefaults() {
@@ -147,9 +145,6 @@ type svc struct {
 	davHandler           *DavHandler
 	myOfficeFilesManager myofficefiles.Manager
 	client               *httpclient.Client
-	notificationSender   *notifications.SendService
-	// Drains NATS connection on service close
-	closeNotifications func() error
 }
 
 // New returns a new ocdav.
@@ -164,19 +159,12 @@ func New(ctx context.Context, m map[string]any) (global.Service, error) {
 		return nil, err
 	}
 
-	notificationSender, closeNotifications, err := notifications.NewSender(ctx, c.Notifications)
-	if err != nil {
-		return nil, err
-	}
-
 	tr := &http.Transport{TLSClientConfig: &tls.Config{InsecureSkipVerify: c.Insecure}}
 
 	s := &svc{
-		c:                  &c,
-		webDavHandler:      new(WebDavHandler),
-		davHandler:         new(DavHandler),
-		notificationSender: notificationSender,
-		closeNotifications: closeNotifications,
+		c:             &c,
+		webDavHandler: new(WebDavHandler),
+		davHandler:    new(DavHandler),
 		client: httpclient.New(
 			httpclient.Timeout(time.Duration(c.Timeout*int64(time.Second))),
 			httpclient.RoundTripper(tr),
@@ -185,15 +173,9 @@ func New(ctx context.Context, m map[string]any) (global.Service, error) {
 	}
 	// initialize handlers and set default cigs
 	if err := s.webDavHandler.init(c.WebdavNamespace, true); err != nil {
-		if s.closeNotifications != nil {
-			_ = s.closeNotifications()
-		}
 		return nil, err
 	}
 	if err := s.davHandler.init(&c); err != nil {
-		if s.closeNotifications != nil {
-			_ = s.closeNotifications()
-		}
 		return nil, err
 	}
 	return s, nil
@@ -204,9 +186,6 @@ func (s *svc) Prefix() string {
 }
 
 func (s *svc) Close() error {
-	if s.closeNotifications != nil {
-		return s.closeNotifications()
-	}
 	return nil
 }
 

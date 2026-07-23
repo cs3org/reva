@@ -356,6 +356,44 @@ func (s *svc) Move(ctx context.Context, req *provider.MoveRequest) (*provider.Mo
 	return c.Move(ctx, req)
 }
 
+func (s *svc) SetImmutable(ctx context.Context, req *provider.SetImmutableRequest) (*provider.SetImmutableResponse, error) {
+	c, err := s.find(ctx, req.Ref)
+	if err != nil {
+		return &provider.SetImmutableResponse{
+			Status: status.NewStatusFromErrType(ctx, "SetImmutable ref="+req.Ref.String(), err),
+		}, nil
+	}
+
+	res, err := c.SetImmutable(ctx, req)
+	if err != nil {
+		if gstatus.Code(err) == codes.PermissionDenied {
+			return &provider.SetImmutableResponse{Status: &rpc.Status{Code: rpc.Code_CODE_PERMISSION_DENIED}}, nil
+		}
+		return nil, errors.Wrap(err, "gateway: error calling SetImmutable")
+	}
+
+	return res, nil
+}
+
+func (s *svc) UnsetImmutable(ctx context.Context, req *provider.UnsetImmutableRequest) (*provider.UnsetImmutableResponse, error) {
+	c, err := s.find(ctx, req.Ref)
+	if err != nil {
+		return &provider.UnsetImmutableResponse{
+			Status: status.NewStatusFromErrType(ctx, "UnsetImmutable ref="+req.Ref.String(), err),
+		}, nil
+	}
+
+	res, err := c.UnsetImmutable(ctx, req)
+	if err != nil {
+		if gstatus.Code(err) == codes.PermissionDenied {
+			return &provider.UnsetImmutableResponse{Status: &rpc.Status{Code: rpc.Code_CODE_PERMISSION_DENIED}}, nil
+		}
+		return nil, errors.Wrap(err, "gateway: error calling UnsetImmutable")
+	}
+
+	return res, nil
+}
+
 func (s *svc) SetArbitraryMetadata(ctx context.Context, req *provider.SetArbitraryMetadataRequest) (*provider.SetArbitraryMetadataResponse, error) {
 	// TODO(ishank011): enable for references spread across storage providers, eg. /eos
 	c, err := s.find(ctx, req.Ref)

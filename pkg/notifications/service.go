@@ -21,6 +21,7 @@ package notifications
 import (
 	"context"
 	"errors"
+	"fmt"
 	"time"
 
 	"github.com/google/uuid"
@@ -29,7 +30,7 @@ import (
 	"github.com/cs3org/reva/v3/pkg/notifications/model"
 )
 
-// SendService implements the gateway-side SendNotification logic.
+// SendService implements the gateway-side PublishEvent logic.
 type SendService struct {
 	backend backends.Backend
 	limiter RateLimiter
@@ -79,15 +80,19 @@ func (s *SendService) SendNotification(ctx context.Context, req model.SendReques
 	return &env, nil
 }
 
+// ErrInvalidRequest marks a notification that was rejected because the request
+// itself is malformed, as opposed to a backend failure.
+var ErrInvalidRequest = errors.New("invalid notification request")
+
 func validateSendRequest(req model.SendRequest) error {
 	if req.EventType == "" {
-		return errors.New("event type is required")
+		return fmt.Errorf("%w: event type is required", ErrInvalidRequest)
 	}
 	if req.SubmittingUser == "" {
-		return errors.New("submitting user is required")
+		return fmt.Errorf("%w: submitting user is required", ErrInvalidRequest)
 	}
 	if len(req.Recipients) == 0 {
-		return errors.New("at least one recipient is required")
+		return fmt.Errorf("%w: at least one recipient is required", ErrInvalidRequest)
 	}
 	return nil
 }

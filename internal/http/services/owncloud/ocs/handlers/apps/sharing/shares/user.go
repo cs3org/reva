@@ -104,7 +104,7 @@ func (h *Handler) createUserShare(w http.ResponseWriter, r *http.Request, statIn
 			if notify && newShare != nil {
 				granter, ok := appctx.ContextGetUser(ctx)
 				if ok {
-					h.SendShareNotification(ctx, model.EventShareCreation, newShare.ID, granter, userRes.User, statInfo)
+					h.SendShareNotification(ctx, c, model.EventShareCreation, newShare.ID, granter, userRes.User, statInfo)
 				}
 			}
 		} else {

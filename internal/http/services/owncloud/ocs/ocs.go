@@ -33,7 +33,6 @@ import (
 	configHandler "github.com/cs3org/reva/v3/internal/http/services/owncloud/ocs/handlers/config"
 	"github.com/cs3org/reva/v3/internal/http/services/owncloud/ocs/response"
 	"github.com/cs3org/reva/v3/pkg/appctx"
-	"github.com/cs3org/reva/v3/pkg/notifications"
 	"github.com/cs3org/reva/v3/pkg/rhttp/global"
 	"github.com/cs3org/reva/v3/pkg/utils/cfg"
 	"github.com/go-chi/chi/v5"
@@ -48,8 +47,6 @@ type svc struct {
 	c                  *config.Config
 	router             *chi.Mux
 	warmupCacheTracker *ttlcache.Cache
-	notificationSender *notifications.SendService
-	closeNotifications func() error
 }
 
 func New(ctx context.Context, m map[string]any) (global.Service, error) {
@@ -65,17 +62,7 @@ func New(ctx context.Context, m map[string]any) (global.Service, error) {
 	}
 
 	log := appctx.GetLogger(ctx)
-	sender, closeNotifications, err := notifications.NewSender(ctx, c.Notifications)
-	if err != nil {
-		return nil, err
-	}
-	s.notificationSender = sender
-	s.closeNotifications = closeNotifications
-
 	if err := s.routerInit(log); err != nil {
-		if s.closeNotifications != nil {
-			_ = s.closeNotifications()
-		}
 		return nil, err
 	}
 
@@ -92,9 +79,6 @@ func (s *svc) Prefix() string {
 }
 
 func (s *svc) Close() error {
-	if s.closeNotifications != nil {
-		return s.closeNotifications()
-	}
 	return nil
 }
 
@@ -114,7 +98,6 @@ func (s *svc) routerInit(l *zerolog.Logger) error {
 	userHandler.Init(s.c)
 	configHandler.Init(s.c)
 	sharesHandler.Init(s.c, l)
-	sharesHandler.SetNotificationSender(s.notificationSender)
 	shareesHandler.Init(s.c)
 
 	s.router.Route("/v{version:(1|2)}.php", func(r chi.Router) {

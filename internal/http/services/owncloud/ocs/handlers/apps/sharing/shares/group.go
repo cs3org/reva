@@ -99,7 +99,7 @@ func (h *Handler) createGroupShare(w http.ResponseWriter, r *http.Request, statI
 			if notify && newShare != nil {
 				granter, ok := appctx.ContextGetUser(ctx)
 				if ok {
-					h.SendShareNotification(ctx, model.EventShareCreation, newShare.ID, granter, groupRes.Group, statInfo)
+					h.SendShareNotification(ctx, c, model.EventShareCreation, newShare.ID, granter, groupRes.Group, statInfo)
 				}
 			}
 		} else {
