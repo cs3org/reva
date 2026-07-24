@@ -306,16 +306,25 @@ func (h *Handler) NotifyShare(w http.ResponseWriter, r *http.Request) {
 		response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "error getting granter data", err)
 		return
 	}
-	if !sameUserID(granter.GetId(), shareRes.Share.GetOwner()) {
-		response.WriteOCSError(w, r, http.StatusForbidden, "only the share owner can send a reminder", nil)
-		return
-	}
 
 	resourceID := shareRes.Share.ResourceId
 	statInfo, status, err := h.getResourceInfoByID(ctx, c, resourceID)
-	if err != nil || status.Code != rpc.Code_CODE_OK {
+	if err != nil {
 		h.Log.Error().Err(err).Msg("error mapping share data")
 		response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "error mapping share data", err)
+		return
+	}
+	if status.Code != rpc.Code_CODE_OK {
+		if status.Code == rpc.Code_CODE_PERMISSION_DENIED {
+			response.WriteOCSErrorWithHTTPStatus(w, r, http.StatusForbidden, http.StatusForbidden, "AddGrant permission is required to send a reminder", nil)
+			return
+		}
+		h.Log.Error().Str("code", status.Code.String()).Str("message", status.Message).Msg("error mapping share data")
+		response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "error mapping share data", nil)
+		return
+	}
+	if !canSendShareReminder(statInfo) {
+		response.WriteOCSErrorWithHTTPStatus(w, r, http.StatusForbidden, http.StatusForbidden, "AddGrant permission is required to send a reminder", nil)
 		return
 	}
 
@@ -411,6 +420,13 @@ func sameUserID(a, b *userpb.UserId) bool {
 		a.GetOpaqueId() == b.GetOpaqueId() &&
 		a.GetType() == b.GetType() &&
 		a.GetTenantId() == b.GetTenantId()
+}
+
+func canSendShareReminder(info *provider.ResourceInfo) bool {
+	if info == nil || info.PermissionSet == nil {
+		return false
+	}
+	return info.PermissionSet.AddGrant
 }
 
 func resourceIDString(id *provider.ResourceId) string {

@@ -135,6 +135,16 @@ func WriteOCSError(w http.ResponseWriter, r *http.Request, c int, m string, err 
 	WriteOCSData(w, r, Meta{Status: "error", StatusCode: c, Message: m}, nil, err)
 }
 
+// WriteOCSErrorWithHTTPStatus handles writing error ocs responses with an
+// explicit HTTP status code.
+func WriteOCSErrorWithHTTPStatus(w http.ResponseWriter, r *http.Request, httpStatus, c int, m string, err error) {
+	WriteOCSResponseWithHTTPStatus(w, r, Response{
+		OCS: &Payload{
+			Meta: Meta{Status: "error", StatusCode: c, Message: m},
+		},
+	}, err, httpStatus)
+}
+
 // WriteOCSData handles writing ocs data in json and xml.
 func WriteOCSData(w http.ResponseWriter, r *http.Request, m Meta, d any, err error) {
 	WriteOCSResponse(w, r, Response{
@@ -147,6 +157,16 @@ func WriteOCSData(w http.ResponseWriter, r *http.Request, m Meta, d any, err err
 
 // WriteOCSResponse handles writing ocs responses in json and xml.
 func WriteOCSResponse(w http.ResponseWriter, r *http.Request, res Response, err error) {
+	writeOCSResponse(w, r, res, err, 0, false)
+}
+
+// WriteOCSResponseWithHTTPStatus handles writing ocs responses in json and xml
+// with an explicit HTTP status code.
+func WriteOCSResponseWithHTTPStatus(w http.ResponseWriter, r *http.Request, res Response, err error, httpStatus int) {
+	writeOCSResponse(w, r, res, err, httpStatus, true)
+}
+
+func writeOCSResponse(w http.ResponseWriter, r *http.Request, res Response, err error, httpStatus int, forceHTTPStatus bool) {
 	if err != nil {
 		appctx.GetLogger(r.Context()).Error().Err(err).Msg(res.OCS.Meta.Message)
 	}
@@ -154,6 +174,9 @@ func WriteOCSResponse(w http.ResponseWriter, r *http.Request, res Response, err 
 	version := APIVersion(r.Context())
 	m := statusCodeMapper(version)
 	statusCode := m(res.OCS.Meta)
+	if forceHTTPStatus {
+		statusCode = httpStatus
+	}
 	if version == "2" && statusCode == http.StatusOK {
 		res.OCS.Meta.StatusCode = statusCode
 	}
