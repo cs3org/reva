@@ -62,7 +62,27 @@ func (s *svc) sendUploadNotification(ctx context.Context, client gateway.Gateway
 		templateData["share_token"] = publicShare.GetToken()
 	}
 
-	if _, err := cs3api.PublishEvent(ctx, client, model.EventUpload, recipients, templateData); err != nil {
+	// Public link uploads carry a publicshares token whose scope does not cover
+	// PublishEvent. Authenticate as the share owner via machine auth so the gateway
+	// can verify the caller is a reva daemon and use the owner as the rate-limit
+	// identity. Fall back to the request context for regular (non-public) uploads.
+	publishCtx := ctx
+	if publicShare != nil {
+		ownerID := publicShare.GetOwner()
+		if ownerID == nil {
+			ownerID = publicShare.GetCreator()
+		}
+		if ownerID != nil && s.c.MachineSecret != "" {
+			machineCtx, err := cs3api.MachineCtx(ctx, client, ownerID.GetOpaqueId(), s.c.MachineSecret)
+			if err != nil {
+				log.Debug().Err(err).Msg("upload notification skipped: machine auth failed")
+				return
+			}
+			publishCtx = machineCtx
+		}
+	}
+
+	if _, err := cs3api.PublishEvent(publishCtx, client, model.EventUpload, recipients, templateData); err != nil {
 		log.Error().Err(err).Msg("failed to send upload notification event")
 	}
 }

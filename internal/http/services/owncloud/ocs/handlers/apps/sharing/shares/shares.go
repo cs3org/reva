@@ -71,6 +71,7 @@ const (
 // Handler implements the shares part of the ownCloud sharing API.
 type Handler struct {
 	gatewayAddr                string
+	machineSecret              string
 	storageRegistryAddr        string
 	publicURL                  string
 	sharePrefix                string
@@ -112,6 +113,7 @@ func getCacheManager(c *config.Config) (cache.ResourceInfoCache, error) {
 // Init initializes this and any contained handlers.
 func (h *Handler) Init(c *config.Config, l *zerolog.Logger) {
 	h.gatewayAddr = c.GatewaySvc
+	h.machineSecret = c.MachineSecret
 	h.storageRegistryAddr = c.StorageregistrySvc
 	h.publicURL = c.Config.Host
 	h.sharePrefix = c.SharePrefix
@@ -405,7 +407,19 @@ func (h *Handler) SendShareNotification(ctx context.Context, client gateway.Gate
 		"resource_type":          statInfo.GetType().String(),
 	}
 
-	if _, err := cs3api.PublishEvent(ctx, client, eventType, []string{recipient}, templateData); err != nil {
+	// Use machine auth as the granter so the gateway can verify the caller is a
+	// reva daemon and use the granter as the rate-limit identity.
+	publishCtx := ctx
+	if h.machineSecret != "" {
+		machineCtx, err := cs3api.MachineCtx(ctx, client, granter.GetUsername(), h.machineSecret)
+		if err != nil {
+			h.Log.Error().Err(err).Str("share_id", opaqueID).Msg("failed to get machine auth context for share notification")
+			return recipient
+		}
+		publishCtx = machineCtx
+	}
+
+	if _, err := cs3api.PublishEvent(publishCtx, client, eventType, []string{recipient}, templateData); err != nil {
 		h.Log.Error().Err(err).Str("event_type", eventType).Str("share_id", opaqueID).Msg("failed to send share notification event")
 	}
 

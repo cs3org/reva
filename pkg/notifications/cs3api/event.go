@@ -31,7 +31,9 @@ import (
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	types "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
+	"github.com/cs3org/reva/v3/pkg/appctx"
 	"github.com/cs3org/reva/v3/pkg/notifications/model"
+	"google.golang.org/grpc/metadata"
 )
 
 const (
@@ -106,6 +108,31 @@ func SendRequestFromEvent(event *gateway.Event, submittingUser, sender string) (
 		Recipients:     recipients,
 		TemplateData:   templateData,
 	}, nil
+}
+
+// MachineCtx returns a background context authenticated as username via machine
+// auth. Callers should use this before calling PublishEvent so the gateway can
+// authenticate the request as a reva daemon and derive the rate-limit identity
+// from the machine-auth user rather than from a potentially unprivileged token.
+func MachineCtx(ctx context.Context, client gateway.GatewayAPIClient, username, machineSecret string) (context.Context, error) {
+	authRes, err := client.Authenticate(ctx, &gateway.AuthenticateRequest{
+		Type:         "machine",
+		ClientId:     username,
+		ClientSecret: machineSecret,
+	})
+	if err != nil {
+		return nil, err
+	}
+	if authRes.Status.Code != rpc.Code_CODE_OK {
+		return nil, fmt.Errorf("machine auth failed for %s: %s", username, authRes.Status.Message)
+	}
+
+	token := authRes.Token
+	machineCtx := context.Background()
+	machineCtx = appctx.ContextSetToken(machineCtx, token)
+	machineCtx = metadata.AppendToOutgoingContext(machineCtx, appctx.TokenHeader, token)
+	machineCtx = appctx.ContextSetUser(machineCtx, authRes.User)
+	return machineCtx, nil
 }
 
 // UserIDString renders a user id as the stable identifier used to attribute

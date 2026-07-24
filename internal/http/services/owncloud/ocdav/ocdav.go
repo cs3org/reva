@@ -124,6 +124,7 @@ type Config struct {
 	PublicLinkDownload           *ConfigPublicLinkDownload `mapstructure:"publiclink_download"`
 	DisabledOpenInAppPaths       []string                  `mapstructure:"disabled_open_in_app_paths"`
 	MyOfficeFilesAllowedProjects []string                  `mapstructure:"my_office_files_projects"`
+	MachineSecret                string                    `mapstructure:"machine_secret"`
 }
 
 func (c *Config) ApplyDefaults() {
