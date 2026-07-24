@@ -22,17 +22,9 @@ const CleanupJobName = "takeout.cleanup"
 
 // RegisterCleanup registers the periodic cleanup job
 func RegisterCleanup(ctx context.Context, c *Config, l *zerolog.Logger) {
-	l.Info().Msg("cleanup: registered periodic job")
-
 	cj := &CleanupJob{
-		conf: &Config{
-			MachineSecret:        c.MachineSecret,
-			TakeoutAdminUsername: c.TakeoutAdminUsername,
-			TakeoutPath:          c.TakeoutPath,
-			CleanupSchedule:      c.CleanupSchedule,
-			CleanupDelay:         c.CleanupDelay,
-		},
-		log: l,
+		conf: c,
+		log:  l,
 	}
 
 	if err := rjobs.RegisterPeriodic(rjobs.Periodic{
@@ -56,6 +48,7 @@ type CleanupJob struct {
 
 type Config struct {
 	MachineSecret        string
+	GatewaySvc           string
 	TakeoutAdminUsername string
 	TakeoutPath          string
 	// The frequency at which the cleanup job is run
@@ -65,10 +58,10 @@ type Config struct {
 }
 
 func (cj *CleanupJob) Run(ctx context.Context) error {
-	appctx.GetLogger(ctx).Info().Msg("running cleanup job")
+	cj.log.Info().Msg("running cleanup job")
 
 	// Setup gateway
-	gtw, err := pool.GetGatewayServiceClient(pool.Endpoint("localhost:9142"))
+	gtw, err := pool.GetGatewayServiceClient(pool.Endpoint(cj.conf.GatewaySvc))
 	if err != nil {
 		return err
 	}
@@ -103,7 +96,7 @@ func (cj *CleanupJob) Run(ctx context.Context) error {
 	if containerRes.Status.Code != rpc.Code_CODE_OK {
 		return errors.Wrap(errors.New(containerRes.Status.Message), "cleanup: could not get takeout containers")
 	}
-	appctx.GetLogger(ctx).Debug().Msgf("cleanup: found %d takeout containers", len(containerRes.Infos))
+	cj.log.Debug().Msgf("cleanup: found %d takeout containers", len(containerRes.Infos))
 
 	// Compute time threshold
 	threshold := time.Duration(cj.conf.CleanupDelay) * time.Hour
@@ -113,7 +106,7 @@ func (cj *CleanupJob) Run(ctx context.Context) error {
 		timeSinceTakeout := time.Since(time.Unix(int64(info.Mtime.Seconds), 0))
 
 		if timeSinceTakeout > threshold {
-			appctx.GetLogger(ctx).Debug().Msgf("cleanup: removing %s [%.1fh]", info.Path, timeSinceTakeout.Hours())
+			cj.log.Debug().Msgf("cleanup: removing %s [%.1fh]", info.Path, timeSinceTakeout.Hours())
 
 			// Delete container and content recursively
 			delRes, err := gtw.Delete(ctx, &provider.DeleteRequest{

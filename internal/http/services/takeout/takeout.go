@@ -8,7 +8,10 @@ import (
 	"strings"
 	"time"
 
+	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
+	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/cs3org/reva/v3/pkg/appctx"
+	"github.com/cs3org/reva/v3/pkg/rgrpc/todo/pool"
 	"github.com/cs3org/reva/v3/pkg/rhttp/global"
 	"github.com/cs3org/reva/v3/pkg/rjobs"
 	"github.com/cs3org/reva/v3/pkg/takeout"
@@ -30,6 +33,7 @@ func init() {
 type Config struct {
 	Prefix               string `mapstructure:"prefix"`
 	MachineSecret        string `mapstructure:"machine_secret" validate:"required"`
+	GatewaySvc           string `mapstructure:"gatewaysvc" validate:"required"`
 	TakeoutAdminUsername string `mapstructure:"takeout_admin_username" validate:"required"`
 	TakeoutPath          string `mapstructure:"takeout_path" validate:"required"`
 	CleanupSchedule      string `mapstructure:"cleanup_schedule"`
@@ -50,6 +54,7 @@ func New(ctx context.Context, m map[string]any) (global.Service, error) {
 	// Register periodic cleanup job
 	cleanupConfig := &cleanup.Config{
 		MachineSecret:        c.MachineSecret,
+		GatewaySvc:           c.GatewaySvc,
 		TakeoutAdminUsername: c.TakeoutAdminUsername,
 		TakeoutPath:          c.TakeoutPath,
 		CleanupSchedule:      c.CleanupSchedule,
@@ -108,7 +113,7 @@ func (s *svc) Unprotected() []string {
 	return nil
 }
 
-// Handler propagates the request dependanding on the suffix
+// Handler propagates the request depending on the suffix
 func (s *svc) Handler() http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		// The only accepted suffix should be the conf one
@@ -137,10 +142,10 @@ func (s *svc) Handler() http.Handler {
 func (s *svc) handlePost(w http.ResponseWriter, r *http.Request) {
 	// Parse parameters from the request body
 	req := struct {
-		ArchiveFormat  string `json:"archiveFormat"`
-		MaxArchiveSize int64  `json:"maxArchiveSize"`
+		ArchiveFormat  string `json:"archive_format"`
+		MaxArchiveSize int64  `json:"max_archive_size"`
 	}{
-		// Default values in case they're not provided
+		// Default values
 		ArchiveFormat:  "zip",
 		MaxArchiveSize: 2 << 30, // 2 GiB
 	}
@@ -154,18 +159,35 @@ func (s *svc) handlePost(w http.ResponseWriter, r *http.Request) {
 	runner := rjobs.Default()
 	if runner == nil {
 		s.log.Error().Msg("takeout: could not find runner")
-		w.WriteHeader(http.StatusFailedDependency)
+		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
 
 	// Get current authenticated user
 	user := appctx.ContextMustGetUser(r.Context())
 
+	// Get root path
+	gtw, err := pool.GetGatewayServiceClient(pool.Endpoint(s.conf.GatewaySvc))
+	if err != nil {
+		s.log.Error().Msg("takeout: could not get gateway")
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+	homeRes, err := gtw.GetHome(r.Context(), &provider.GetHomeRequest{})
+	if err != nil {
+		s.log.Err(err).Msg("takeout: could not find home directory")
+	}
+	if homeRes.Status.Code != rpc.Code_CODE_OK {
+		s.log.Error().Msgf("takeout: could not find home directory: %s", homeRes.Status.Message)
+	}
+	rootPath := homeRes.Path
+
 	// Enqueue job
 	runId, err := runner.Enqueue(r.Context(), takeout.JobName, rjobs.Params{
-		"archiveFormat":  req.ArchiveFormat,
-		"maxArchiveSize": req.MaxArchiveSize,
-		"username":       user.Username,
+		"archive_format":   req.ArchiveFormat,
+		"max_archive_size": req.MaxArchiveSize,
+		"username":         user.Username,
+		"root_path":        rootPath,
 	}, rjobs.WithOwner(user.Username), rjobs.Unique("takeout:"+user.Username))
 	if err != nil {
 		s.log.Err(err).Msg("takeout: could not enqueue job")
@@ -196,8 +218,8 @@ func (s *svc) handleGet(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if len(jobs) == 0 {
-		s.log.Debug().Msgf("takeout: user %s has no takeout job listed", user.Username)
-		w.WriteHeader(http.StatusBadRequest)
+		s.log.Debug().Msgf("takeout: user %s has no takeout job attached", user.Username)
+		w.WriteHeader(http.StatusNotFound)
 		return
 	}
 
