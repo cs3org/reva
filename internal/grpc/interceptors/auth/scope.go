@@ -123,6 +123,20 @@ func checkLightweightScope(ctx context.Context, req any, tokenScope map[string]*
 		return true
 	case *provider.StatRequest:
 		return true
+	// Quota is read when decorating a project space for listing, so a
+	// lightweight member would otherwise have the space silently filtered out.
+	// Quota is always requested for a space root, so requiring ListContainer
+	// keeps this to containers the account may actually browse: it is not
+	// gated on GetQuota because the project storage grants that to admins
+	// only, and readers and writers must see the space too.
+	case *gateway.GetQuotaRequest:
+		return hasPermissions(ctx, client, r.GetRef(), &provider.ResourcePermissions{
+			ListContainer: true,
+		})
+	case *provider.GetQuotaRequest:
+		return hasPermissions(ctx, client, r.GetRef(), &provider.ResourcePermissions{
+			ListContainer: true,
+		})
 	case *appregistry.GetAppProvidersRequest:
 		return true
 	case *provider.ListContainerRequest:
