@@ -16,7 +16,7 @@
 // granted to it by virtue of its status as an Intergovernmental Organization
 // or submit itself to any jurisdiction.
 
-package notifications
+package ratelimiters
 
 import (
 	"context"
@@ -24,37 +24,13 @@ import (
 	"time"
 )
 
-// RateLimiter limits notification submissions per submitting user.
-type RateLimiter interface {
-	Allow(ctx context.Context, submittingUser string) error
-}
-
-// NoopRateLimiter accepts all submissions.
-type NoopRateLimiter struct{}
-
-// Allow implements RateLimiter.
-func (NoopRateLimiter) Allow(context.Context, string) error {
-	return nil
-}
-
-// RateLimitError is returned when a submitting user exceeds the configured rate.
-type RateLimitError struct {
-	SubmittingUser string
-	RetryAfter     time.Duration
-}
-
-// Error implements error.
-func (e *RateLimitError) Error() string {
-	return "notification rate limit exceeded"
-}
-
 type fixedWindowState struct {
 	windowStart time.Time
 	count       int
 }
 
-// FixedWindowRateLimiter is a simple in-memory per-user fixed-window limiter.
-type FixedWindowRateLimiter struct {
+// FixedWindow is a simple in-memory per-user fixed-window limiter.
+type FixedWindow struct {
 	limit  int
 	window time.Duration
 	now    func() time.Time
@@ -63,9 +39,9 @@ type FixedWindowRateLimiter struct {
 	states map[string]fixedWindowState
 }
 
-// NewFixedWindowRateLimiter creates a per-user fixed-window limiter.
-func NewFixedWindowRateLimiter(limit int, window time.Duration) *FixedWindowRateLimiter {
-	return &FixedWindowRateLimiter{
+// NewFixedWindow creates a per-user fixed-window limiter.
+func NewFixedWindow(limit int, window time.Duration) *FixedWindow {
+	return &FixedWindow{
 		limit:  limit,
 		window: window,
 		now:    time.Now,
@@ -73,8 +49,8 @@ func NewFixedWindowRateLimiter(limit int, window time.Duration) *FixedWindowRate
 	}
 }
 
-// Allow implements RateLimiter.
-func (l *FixedWindowRateLimiter) Allow(_ context.Context, submittingUser string) error {
+// Allow implements Limiter.
+func (l *FixedWindow) Allow(_ context.Context, submittingUser string) error {
 	if l == nil || l.limit <= 0 || l.window <= 0 {
 		return nil
 	}
@@ -94,7 +70,7 @@ func (l *FixedWindowRateLimiter) Allow(_ context.Context, submittingUser string)
 	}
 
 	if state.count >= l.limit {
-		return &RateLimitError{
+		return &LimitError{
 			SubmittingUser: submittingUser,
 			RetryAfter:     l.window - now.Sub(state.windowStart),
 		}

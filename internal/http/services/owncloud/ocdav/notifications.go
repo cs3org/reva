@@ -28,7 +28,8 @@ import (
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	link "github.com/cs3org/go-cs3apis/cs3/sharing/link/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
-	"github.com/cs3org/reva/v3/pkg/notifications/cs3api"
+	"github.com/cs3org/reva/v3/pkg/auth/scope"
+	"github.com/cs3org/reva/v3/pkg/notifications"
 	"github.com/cs3org/reva/v3/pkg/notifications/model"
 	"github.com/cs3org/reva/v3/pkg/spaces"
 	"github.com/rs/zerolog"
@@ -62,8 +63,23 @@ func (s *svc) sendUploadNotification(ctx context.Context, client gateway.Gateway
 		templateData["share_token"] = publicShare.GetToken()
 	}
 
-	if _, err := cs3api.PublishEvent(ctx, client, model.EventUpload, recipients, templateData); err != nil {
+	// PublishEvent is restricted to reva daemons. Re-sign this request's token with
+	// the machine scope, keeping the acting user (for public link uploads the
+	// public user publiclink:<id>) unchanged.
+	publishCtx, err := scope.ContextWithMachineScope(ctx)
+	if err != nil {
+		log.Error().Err(err).Msg("failed to elevate context for upload notification")
+		return
+	}
+
+	event := notifications.EncodeEvent(model.EventUpload, recipients, templateData)
+	res, err := client.PublishEvent(publishCtx, &gateway.PublishEventRequest{Event: event})
+	if err != nil {
 		log.Error().Err(err).Msg("failed to send upload notification event")
+		return
+	}
+	if code := res.GetStatus().GetCode(); code != rpc.Code_CODE_OK {
+		log.Error().Str("code", code.String()).Str("message", res.GetStatus().GetMessage()).Msg("gateway rejected upload notification event")
 	}
 }
 

@@ -46,7 +46,8 @@ import (
 	"github.com/cs3org/reva/v3/internal/http/services/owncloud/ocs/conversions"
 	"github.com/cs3org/reva/v3/internal/http/services/owncloud/ocs/response"
 	"github.com/cs3org/reva/v3/pkg/appctx"
-	"github.com/cs3org/reva/v3/pkg/notifications/cs3api"
+	"github.com/cs3org/reva/v3/pkg/auth/scope"
+	"github.com/cs3org/reva/v3/pkg/notifications"
 	"github.com/cs3org/reva/v3/pkg/notifications/model"
 	"github.com/cs3org/reva/v3/pkg/permissions"
 	"github.com/cs3org/reva/v3/pkg/spaces"
@@ -406,8 +407,22 @@ func (h *Handler) SendShareNotification(ctx context.Context, client gateway.Gate
 		"resource_type":          statInfo.GetType().String(),
 	}
 
-	if _, err := cs3api.PublishEvent(ctx, client, eventType, []string{recipient}, templateData); err != nil {
+	// PublishEvent is restricted to reva daemons. Re-sign this request's token with
+	// the machine scope, keeping the acting user (the granter) unchanged.
+	publishCtx, err := scope.ContextWithMachineScope(ctx)
+	if err != nil {
+		h.Log.Error().Err(err).Str("share_id", opaqueID).Msg("failed to elevate context for share notification")
+		return recipient
+	}
+
+	event := notifications.EncodeEvent(eventType, []string{recipient}, templateData)
+	res, err := client.PublishEvent(publishCtx, &gateway.PublishEventRequest{Event: event})
+	if err != nil {
 		h.Log.Error().Err(err).Str("event_type", eventType).Str("share_id", opaqueID).Msg("failed to send share notification event")
+		return recipient
+	}
+	if code := res.GetStatus().GetCode(); code != rpc.Code_CODE_OK {
+		h.Log.Error().Str("event_type", eventType).Str("share_id", opaqueID).Str("code", code.String()).Str("message", res.GetStatus().GetMessage()).Msg("gateway rejected share notification event")
 	}
 
 	return recipient

@@ -31,16 +31,6 @@ type AccumulationPolicy struct {
 	MaxItems      int `json:"max_items" mapstructure:"max_items"`
 }
 
-// SendRequest is the internal request shape used by the gateway PublishEvent
-// implementation before the request is published to a backend.
-type SendRequest struct {
-	EventType      string         `json:"event_type"`
-	SubmittingUser string         `json:"submitting_user"`
-	Sender         string         `json:"sender,omitempty"`
-	Recipients     []string       `json:"recipients"`
-	TemplateData   map[string]any `json:"template_data,omitempty"`
-}
-
 // Envelope is the durable notification message sent through NATS and stored in
 // SQL for accumulated notifications.
 type Envelope struct {

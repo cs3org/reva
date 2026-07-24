@@ -28,7 +28,6 @@ import (
 	"github.com/ReneKroon/ttlcache/v2"
 	gateway "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
 	"github.com/cs3org/reva/v3/pkg/errtypes"
-	"github.com/cs3org/reva/v3/pkg/notifications"
 	"github.com/cs3org/reva/v3/pkg/rgrpc"
 	"github.com/cs3org/reva/v3/pkg/share/cache"
 	cachereg "github.com/cs3org/reva/v3/pkg/share/cache/registry"
@@ -137,7 +136,7 @@ type svc struct {
 	createHomeCache      *ttlcache.Cache `mapstructure:"create_home_cache"`
 	resourceInfoCache    cache.ResourceInfoCache
 	resourceInfoCacheTTL time.Duration
-	notificationSender   *notifications.SendService
+	notificationSender   *notificationPublisher
 	// Drains the NATS connection on service close
 	closeNotifications func() error
 }
@@ -170,7 +169,7 @@ func New(ctx context.Context, m map[string]any) (rgrpc.Service, error) {
 	_ = createHomeCache.SetTTL(time.Duration(c.CreateHomeCacheTTL) * time.Second)
 	createHomeCache.SkipTTLExtensionOnHit(true)
 
-	notificationSender, closeNotifications, err := notifications.NewSender(ctx, c.Notifications)
+	notificationSender, closeNotifications, err := newSender(ctx, c.Notifications)
 	if err != nil {
 		return nil, err
 	}
