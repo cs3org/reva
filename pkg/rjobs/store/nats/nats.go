@@ -30,8 +30,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/cs3org/reva/v3/pkg/messagequeue"
 	"github.com/cs3org/reva/v3/pkg/rjobs"
-	"github.com/cs3org/reva/v3/pkg/utils"
 	"github.com/nats-io/nats.go"
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog"
@@ -111,7 +111,7 @@ func New(ctx context.Context, opts Options) (rjobs.Store, error) {
 
 	log := *zerolog.Ctx(ctx)
 
-	nc, err := utils.ConnectToNats(opts.Address, opts.Token, log)
+	nc, err := messagequeue.ConnectToNats(opts.Address, opts.Token, log)
 	if err != nil {
 		return nil, err
 	}

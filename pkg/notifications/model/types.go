@@ -64,17 +64,3 @@ type EventRule struct {
 	Handlers         map[string]HandlerRule `json:"handlers" mapstructure:"handlers"`
 	Accumulation     AccumulationPolicy     `json:"accumulation,omitempty" mapstructure:"accumulation"`
 }
-
-// Bucket describes the current SQL-backed accumulation state for a dedup key.
-type Bucket struct {
-	DedupKey      string
-	FirstSeen     time.Time
-	LatestSeen    time.Time
-	FlushAfter    time.Time
-	WindowSeconds int
-	MaxItems      int
-	ItemCount     int
-	Status        string
-	LeaseOwner    string
-	LeaseUntil    time.Time
-}

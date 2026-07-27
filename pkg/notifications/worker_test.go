@@ -20,11 +20,29 @@ package notifications
 
 import (
 	"context"
+	"path/filepath"
 	"testing"
 
+	"github.com/cs3org/reva/v3/pkg/notifications/accumulation"
 	"github.com/cs3org/reva/v3/pkg/notifications/handlers"
 	"github.com/cs3org/reva/v3/pkg/notifications/model"
+	"gorm.io/driver/sqlite"
+	"gorm.io/gorm"
 )
+
+func newTestStore(t *testing.T) accumulation.Store {
+	t.Helper()
+
+	db, err := gorm.Open(sqlite.Open(filepath.Join(t.TempDir(), "accumulation.db")), &gorm.Config{})
+	if err != nil {
+		t.Fatalf("open sqlite db: %v", err)
+	}
+	store, err := accumulation.NewSQLStore(db)
+	if err != nil {
+		t.Fatalf("new store: %v", err)
+	}
+	return store
+}
 
 type recordingHandler struct {
 	name      string
@@ -102,7 +120,7 @@ func TestWorkerRejectsUnknownEventType(t *testing.T) {
 
 func TestWorkerAccumulatesUsingRuleDedupKey(t *testing.T) {
 	ctx := context.Background()
-	store := newTestGORMStore(t)
+	store := newTestStore(t)
 	handler := &recordingHandler{name: handlers.EmailHandlerName}
 	worker, err := NewWorker(store, handlers.NewDispatcher(handler), WorkerConfig{
 		OwnerID: "box-1",
@@ -159,7 +177,7 @@ func TestWorkerAccumulatesUsingRuleDedupKey(t *testing.T) {
 
 func TestWorkerAccumulatesMultiRecipientEventsSeparately(t *testing.T) {
 	ctx := context.Background()
-	store := newTestGORMStore(t)
+	store := newTestStore(t)
 	handler := &recordingHandler{name: handlers.EmailHandlerName}
 	worker, err := NewWorker(store, handlers.NewDispatcher(handler), WorkerConfig{
 		OwnerID: "box-1",

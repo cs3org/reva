@@ -16,7 +16,7 @@
 // granted to it by virtue of its status as an Intergovernmental Organization
 // or submit itself to any jurisdiction.
 
-package notifications
+package accumulation
 
 import (
 	"context"
@@ -29,24 +29,24 @@ import (
 	"gorm.io/gorm"
 )
 
-func newTestGORMStore(t *testing.T) *GORMStore {
+func newTestStore(t *testing.T) *SQLStore {
 	t.Helper()
 
-	db, err := gorm.Open(sqlite.Open(filepath.Join(t.TempDir(), "notifications.db")), &gorm.Config{})
+	db, err := gorm.Open(sqlite.Open(filepath.Join(t.TempDir(), "accumulation.db")), &gorm.Config{})
 	if err != nil {
 		t.Fatalf("open sqlite db: %v", err)
 	}
 
-	store, err := NewGORMStore(db)
+	store, err := NewSQLStore(db)
 	if err != nil {
 		t.Fatalf("new store: %v", err)
 	}
 	return store
 }
 
-func TestGORMStoreAddIsIdempotentPerEnvelopeID(t *testing.T) {
+func TestSQLStoreAddIsIdempotentPerEnvelopeID(t *testing.T) {
 	ctx := context.Background()
-	store := newTestGORMStore(t)
+	store := newTestStore(t)
 	now := time.Now()
 	envelope := model.Envelope{
 		ID:       "not-1",
@@ -58,26 +58,63 @@ func TestGORMStoreAddIsIdempotentPerEnvelopeID(t *testing.T) {
 		},
 	}
 
-	bucket, err := store.Add(ctx, envelope, now)
+	group, err := store.Add(ctx, envelope, now)
 	if err != nil {
 		t.Fatalf("first add: %v", err)
 	}
-	if bucket.ItemCount != 1 {
-		t.Fatalf("first item count = %d, want 1", bucket.ItemCount)
+	if group.ItemCount != 1 {
+		t.Fatalf("first item count = %d, want 1", group.ItemCount)
 	}
 
-	bucket, err = store.Add(ctx, envelope, now.Add(time.Second))
+	group, err = store.Add(ctx, envelope, now.Add(time.Second))
 	if err != nil {
 		t.Fatalf("duplicate add: %v", err)
 	}
-	if bucket.ItemCount != 1 {
-		t.Fatalf("duplicate item count = %d, want 1", bucket.ItemCount)
+	if group.ItemCount != 1 {
+		t.Fatalf("duplicate item count = %d, want 1", group.ItemCount)
 	}
 }
 
-func TestGORMStoreListsExpiredLeaseCandidate(t *testing.T) {
+func TestSQLStoreAddAccumulatesDistinctEvents(t *testing.T) {
 	ctx := context.Background()
-	store := newTestGORMStore(t)
+	store := newTestStore(t)
+	now := time.Now()
+	base := model.Envelope{
+		Type:     model.TypeAccumulated,
+		DedupKey: "share-1",
+		Accumulation: model.AccumulationPolicy{
+			WindowSeconds: 60,
+			MaxItems:      100,
+		},
+	}
+
+	first := base
+	first.ID = "not-1"
+	if _, err := store.Add(ctx, first, now); err != nil {
+		t.Fatalf("first add: %v", err)
+	}
+	second := base
+	second.ID = "not-2"
+	group, err := store.Add(ctx, second, now.Add(time.Second))
+	if err != nil {
+		t.Fatalf("second add: %v", err)
+	}
+	if group.ItemCount != 2 {
+		t.Fatalf("item count = %d, want 2", group.ItemCount)
+	}
+
+	events, ids, err := store.PendingItems(ctx, base.DedupKey)
+	if err != nil {
+		t.Fatalf("pending items: %v", err)
+	}
+	if len(events) != 2 || len(ids) != 2 {
+		t.Fatalf("pending = %d events / %d ids, want 2 each", len(events), len(ids))
+	}
+}
+
+func TestSQLStoreListsExpiredLeaseCandidate(t *testing.T) {
+	ctx := context.Background()
+	store := newTestStore(t)
 	now := time.Now()
 	envelope := model.Envelope{
 		ID:       "not-1",
@@ -105,6 +142,6 @@ func TestGORMStoreListsExpiredLeaseCandidate(t *testing.T) {
 		t.Fatalf("list candidates: %v", err)
 	}
 	if len(candidates) != 1 || candidates[0].DedupKey != envelope.DedupKey {
-		t.Fatalf("candidates = %+v, want expired bucket", candidates)
+		t.Fatalf("candidates = %+v, want the expired group", candidates)
 	}
 }

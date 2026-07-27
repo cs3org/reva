@@ -16,7 +16,10 @@
 // granted to it by virtue of its status as an Intergovernmental Organization
 // or submit itself to any jurisdiction.
 
-package utils
+// Package messagequeue holds the shared message-queue infrastructure used
+// across Reva, such as the resilient NATS connection used by the notifications
+// subsystem and the jobs framework.
+package messagequeue
 
 import (
 	"time"

@@ -34,18 +34,17 @@ import (
 	"github.com/cs3org/reva/v3/pkg/notifications/backends"
 	"github.com/cs3org/reva/v3/pkg/notifications/model"
 	"github.com/cs3org/reva/v3/pkg/rgrpc/status"
-	"github.com/cs3org/reva/v3/pkg/utils/cfg"
 	"github.com/google/uuid"
 )
 
 // PublishEvent accepts an event from a trusted daemon and publishes it to the
-// notification backend. It is restricted to callers authenticated via machine
-// auth (verified through the machine scope). The submitting user and the sender
-// are taken from that authenticated context, never from the request.
+// event backend. It is restricted to callers carrying the machine scope (reva
+// daemons); the submitting user and the sender are taken from the authenticated
+// context, never from the request.
 func (s *svc) PublishEvent(ctx context.Context, req *gateway.PublishEventRequest) (*gateway.PublishEventResponse, error) {
-	if s.notificationSender == nil {
+	if s.eventBackend == nil {
 		return &gateway.PublishEventResponse{
-			Status: status.NewUnimplemented(ctx, errtypes.NotSupported("notifications"), "gateway: notifications are not configured"),
+			Status: status.NewUnimplemented(ctx, errtypes.NotSupported("events"), "gateway: event backend is not configured"),
 		}, nil
 	}
 
@@ -69,19 +68,45 @@ func (s *svc) PublishEvent(ctx context.Context, req *gateway.PublishEventRequest
 			Status: status.NewInvalid(ctx, err.Error()),
 		}, nil
 	}
+	if req.GetEvent().GetType() == "" {
+		return &gateway.PublishEventResponse{
+			Status: status.NewInvalid(ctx, "gateway: event type is required"),
+		}, nil
+	}
+	if len(recipients) == 0 {
+		return &gateway.PublishEventResponse{
+			Status: status.NewInvalid(ctx, "gateway: at least one recipient is required"),
+		}, nil
+	}
 
-	sendReq := notifications.SendRequest{
+	env := model.Envelope{
+		ID:             uuid.NewString(),
 		EventType:      req.GetEvent().GetType(),
 		SubmittingUser: notifications.UserIDString(u.GetId()),
 		Sender:         u.GetMail(),
 		Recipients:     recipients,
 		TemplateData:   templateData,
+		SubmittedAt:    time.Now().UTC(),
 	}
 
-	env, err := s.notificationSender.publish(ctx, sendReq)
-	if err != nil {
+	if err := s.eventLimiter.Allow(ctx, env.SubmittingUser); err != nil {
+		var limitErr *ratelimiters.LimitError
+		if errors.As(err, &limitErr) {
+			return &gateway.PublishEventResponse{
+				Status: &rpc.Status{
+					Code:    rpc.Code_CODE_RESOURCE_EXHAUSTED,
+					Message: fmt.Sprintf("gateway: event rate limit exceeded, retry after %s", limitErr.RetryAfter),
+				},
+			}, nil
+		}
 		return &gateway.PublishEventResponse{
-			Status: publishEventStatus(ctx, err),
+			Status: status.NewInternal(ctx, err, "gateway: error rate-limiting event"),
+		}, nil
+	}
+
+	if err := s.eventBackend.Publish(ctx, env); err != nil {
+		return &gateway.PublishEventResponse{
+			Status: status.NewInternal(ctx, err, "gateway: error publishing event"),
 		}, nil
 	}
 
@@ -91,120 +116,16 @@ func (s *svc) PublishEvent(ctx context.Context, req *gateway.PublishEventRequest
 	}, nil
 }
 
-func publishEventStatus(ctx context.Context, err error) *rpc.Status {
-	var rateLimitErr *ratelimiters.LimitError
-	switch {
-	case errors.Is(err, errInvalidRequest):
-		return status.NewInvalid(ctx, err.Error())
-	case errors.As(err, &rateLimitErr):
-		return &rpc.Status{
-			Code:    rpc.Code_CODE_RESOURCE_EXHAUSTED,
-			Message: fmt.Sprintf("gateway: notification rate limit exceeded, retry after %s", rateLimitErr.RetryAfter),
-		}
-	default:
-		return status.NewInternal(ctx, err, "gateway: error publishing event")
-	}
-}
-
-// notificationPublisher validates, rate-limits and publishes accepted events to
-// the notification backend.
-type notificationPublisher struct {
-	backend backends.Backend
-	limiter ratelimiters.Limiter
-	now     func() time.Time
-	newID   func() string
-}
-
-func newNotificationPublisher(backend backends.Backend, limiter ratelimiters.Limiter) *notificationPublisher {
-	if limiter == nil {
-		limiter = ratelimiters.Noop{}
-	}
-
-	return &notificationPublisher{
-		backend: backend,
-		limiter: limiter,
-		now:     time.Now,
-		newID:   func() string { return uuid.NewString() },
-	}
-}
-
-// errInvalidRequest marks a notification that was rejected because the request
-// itself is malformed, as opposed to a backend failure.
-var errInvalidRequest = errors.New("invalid notification request")
-
-func (p *notificationPublisher) publish(ctx context.Context, req notifications.SendRequest) (*model.Envelope, error) {
-	if p == nil || p.backend == nil {
-		return nil, errors.New("notification backend is not configured")
-	}
-	if err := validateSendRequest(req); err != nil {
-		return nil, err
-	}
-	if err := p.limiter.Allow(ctx, req.SubmittingUser); err != nil {
-		return nil, err
-	}
-
-	env := model.Envelope{
-		ID:             p.newID(),
-		EventType:      req.EventType,
-		SubmittingUser: req.SubmittingUser,
-		Sender:         req.Sender,
-		Recipients:     append([]string(nil), req.Recipients...),
-		TemplateData:   cloneMap(req.TemplateData),
-		SubmittedAt:    p.now(),
-	}
-
-	if err := p.backend.Publish(ctx, env); err != nil {
-		return nil, err
-	}
-	return &env, nil
-}
-
-func validateSendRequest(req notifications.SendRequest) error {
-	if req.EventType == "" {
-		return fmt.Errorf("%w: event type is required", errInvalidRequest)
-	}
-	if req.SubmittingUser == "" {
-		return fmt.Errorf("%w: submitting user is required", errInvalidRequest)
-	}
-	if len(req.Recipients) == 0 {
-		return fmt.Errorf("%w: at least one recipient is required", errInvalidRequest)
-	}
-	return nil
-}
-
-// senderConfig configures the backend the gateway publishes accepted
-// notification events to.
-type senderConfig struct {
+// eventBackendConfig configures the NATS backend the gateway publishes accepted
+// events to.
+type eventBackendConfig struct {
 	NATS backends.NATSConfig `mapstructure:"nats"`
-
-	// Keep the flat NATS keys accepted by existing configs while the backend
-	// config is being moved under a nested notifications.nats section.
-	NATSAddress string `mapstructure:"nats_address"`
-	NATSToken   string `mapstructure:"nats_token"`
 }
 
-func (c *senderConfig) ApplyDefaults() {
-	if c.NATS.Address == "" {
-		c.NATS.Address = c.NATSAddress
-	}
-	if c.NATS.Token == "" {
-		c.NATS.Token = c.NATSToken
-	}
-}
-
-// newSender creates a notificationPublisher and close function from service
-// config. A nil publisher means notifications are not configured, and
-// PublishEvent is rejected.
-func newSender(ctx context.Context, m map[string]any) (*notificationPublisher, func() error, error) {
-	if len(m) == 0 {
-		return nil, nil, nil
-	}
-
-	var c senderConfig
-	if err := cfg.Decode(m, &c); err != nil {
-		return nil, nil, err
-	}
-	c.ApplyDefaults()
+// newEventBackend builds the NATS backend the gateway publishes events to. An
+// empty NATS address means the backend is not configured, so a nil backend is
+// returned and PublishEvent is rejected.
+func newEventBackend(ctx context.Context, c eventBackendConfig) (backends.Backend, func() error, error) {
 	if c.NATS.Address == "" {
 		return nil, nil, nil
 	}
@@ -214,17 +135,5 @@ func newSender(ctx context.Context, m map[string]any) (*notificationPublisher, f
 		return nil, nil, err
 	}
 
-	return newNotificationPublisher(backend, ratelimiters.Noop{}), backend.Close, nil
-}
-
-func cloneMap(in map[string]any) map[string]any {
-	if in == nil {
-		return nil
-	}
-
-	out := make(map[string]any, len(in))
-	for k, v := range in {
-		out[k] = v
-	}
-	return out
+	return backend, backend.Close, nil
 }

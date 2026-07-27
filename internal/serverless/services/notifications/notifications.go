@@ -31,6 +31,7 @@ import (
 	revadcfg "github.com/cs3org/reva/v3/cmd/revad/pkg/config"
 	"github.com/cs3org/reva/v3/pkg/appctx"
 	notificationspkg "github.com/cs3org/reva/v3/pkg/notifications"
+	"github.com/cs3org/reva/v3/pkg/notifications/accumulation"
 	"github.com/cs3org/reva/v3/pkg/notifications/backends"
 	"github.com/cs3org/reva/v3/pkg/notifications/handlers"
 	"github.com/cs3org/reva/v3/pkg/notifications/model"
@@ -113,7 +114,7 @@ func New(ctx context.Context, m map[string]any) (rserverless.Service, error) {
 		return nil, fmt.Errorf("notifications: opening accumulator database failed: %w", err)
 	}
 
-	store, err := notificationspkg.NewGORMStore(db)
+	store, err := accumulation.NewSQLStore(db)
 	if err != nil {
 		closeDB(db)
 		return nil, err

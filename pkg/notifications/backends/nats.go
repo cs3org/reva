@@ -23,8 +23,8 @@ import (
 	"encoding/json"
 	"fmt"
 
+	"github.com/cs3org/reva/v3/pkg/messagequeue"
 	"github.com/cs3org/reva/v3/pkg/notifications/model"
-	"github.com/cs3org/reva/v3/pkg/utils"
 	"github.com/nats-io/nats.go"
 	"github.com/rs/zerolog"
 )
@@ -79,7 +79,7 @@ type NATSBackend struct {
 
 // NewNATSBackend connects to NATS and ensures the notification stream exists.
 func NewNATSBackend(conf NATSConfig, log zerolog.Logger) (*NATSBackend, error) {
-	nc, err := utils.ConnectToNats(conf.Address, conf.Token, log)
+	nc, err := messagequeue.ConnectToNats(conf.Address, conf.Token, log)
 	if err != nil {
 		return nil, err
 	}
@@ -155,7 +155,7 @@ type NATSListener struct {
 
 // NewNATSListener connects to NATS and ensures the notification stream exists.
 func NewNATSListener(conf NATSConfig, log zerolog.Logger) (*NATSListener, error) {
-	nc, err := utils.ConnectToNats(conf.Address, conf.Token, log)
+	nc, err := messagequeue.ConnectToNats(conf.Address, conf.Token, log)
 	if err != nil {
 		return nil, err
 	}

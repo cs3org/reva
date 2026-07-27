@@ -30,22 +30,12 @@ import (
 	"text/template"
 	"time"
 
+	"github.com/cs3org/reva/v3/pkg/notifications/accumulation"
 	"github.com/cs3org/reva/v3/pkg/notifications/handlers"
 	"github.com/cs3org/reva/v3/pkg/notifications/model"
 )
 
 const defaultMaxRenderedItems = 10
-
-// AccumulationStore persists accumulated notifications and coordinates leases.
-type AccumulationStore interface {
-	Add(ctx context.Context, envelope model.Envelope, now time.Time) (*model.Bucket, error)
-	AcquireLease(ctx context.Context, dedupKey, owner string, leaseUntil, now time.Time) (bool, error)
-	LockDueForFlush(ctx context.Context, dedupKey, owner string, now time.Time) (bool, error)
-	PendingItems(ctx context.Context, dedupKey string) ([]model.Envelope, []string, error)
-	MarkFlushed(ctx context.Context, dedupKey string, itemIDs []string) error
-	ReleaseLease(ctx context.Context, dedupKey, owner string) error
-	ListCandidates(ctx context.Context, now time.Time, limit int) ([]*model.Bucket, error)
-}
 
 // PreferenceResolver narrows the configured handler set for a recipient set.
 type PreferenceResolver interface {
@@ -62,7 +52,7 @@ func (NoopPreferenceResolver) ResolveHandlers(_ context.Context, _ model.Envelop
 
 // Worker handles notification envelopes consumed from NATS.
 type Worker struct {
-	store      AccumulationStore
+	store      accumulation.Store
 	dispatcher *handlers.Dispatcher
 	rules      map[string]model.EventRule
 	prefs      PreferenceResolver
@@ -86,7 +76,7 @@ type WorkerConfig struct {
 }
 
 // NewWorker creates a notification worker.
-func NewWorker(store AccumulationStore, dispatcher *handlers.Dispatcher, conf WorkerConfig) (*Worker, error) {
+func NewWorker(store accumulation.Store, dispatcher *handlers.Dispatcher, conf WorkerConfig) (*Worker, error) {
 	if dispatcher == nil {
 		return nil, errors.New("notification dispatcher is required")
 	}
@@ -106,7 +96,7 @@ func NewWorker(store AccumulationStore, dispatcher *handlers.Dispatcher, conf Wo
 	return &Worker{
 		store:            store,
 		dispatcher:       dispatcher,
-		rules:            cloneEventRules(conf.EventRules),
+		rules:            conf.EventRules,
 		prefs:            conf.Preferences,
 		ownerID:          conf.OwnerID,
 		leaseDuration:    conf.LeaseDuration,
@@ -140,11 +130,11 @@ func (w *Worker) Handle(ctx context.Context, envelope model.Envelope) error {
 		}
 
 		for _, recipientEnvelope := range recipientEnvelopes {
-			bucket, err := w.store.Add(ctx, recipientEnvelope, w.now())
+			group, err := w.store.Add(ctx, recipientEnvelope, w.now())
 			if err != nil {
 				return err
 			}
-			if err := w.resumeBucket(ctx, bucket); err != nil {
+			if err := w.resume(ctx, group); err != nil {
 				return err
 			}
 		}
@@ -194,23 +184,26 @@ func (w *Worker) resolve(ctx context.Context, envelope model.Envelope) (model.En
 	}
 }
 
-func (w *Worker) resumeBucket(ctx context.Context, bucket *model.Bucket) error {
+// resume takes over an accumulation: it leases it and then either flushes now
+// (its window elapsed or it hit its item cap) or schedules a flush for when the
+// window elapses.
+func (w *Worker) resume(ctx context.Context, acc *accumulation.Group) error {
 	now := w.now()
-	leaseUntil := bucket.FlushAfter.Add(w.leaseDuration)
+	leaseUntil := acc.FlushAfter.Add(w.leaseDuration)
 	if leaseUntil.Before(now.Add(w.leaseDuration)) {
 		leaseUntil = now.Add(w.leaseDuration)
 	}
 
-	acquired, err := w.store.AcquireLease(ctx, bucket.DedupKey, w.ownerID, leaseUntil, now)
+	acquired, err := w.store.AcquireLease(ctx, acc.DedupKey, w.ownerID, leaseUntil, now)
 	if err != nil || !acquired {
 		return err
 	}
 
-	if bucket.ItemCount >= bucket.MaxItems || !bucket.FlushAfter.After(now) {
-		return w.Flush(ctx, bucket.DedupKey)
+	if acc.ItemCount >= acc.MaxItems || !acc.FlushAfter.After(now) {
+		return w.Flush(ctx, acc.DedupKey)
 	}
 
-	w.scheduleFlush(ctx, bucket.DedupKey, time.Until(bucket.FlushAfter))
+	w.scheduleFlush(ctx, acc.DedupKey, time.Until(acc.FlushAfter))
 	return nil
 }
 
@@ -273,23 +266,6 @@ func (w *Worker) scheduleFlush(ctx context.Context, dedupKey string, delay time.
 	w.timers[dedupKey] = time.AfterFunc(delay, func() {
 		_ = w.Flush(ctx, dedupKey)
 	})
-}
-
-func cloneEventRules(in map[string]model.EventRule) map[string]model.EventRule {
-	out := make(map[string]model.EventRule, len(in))
-	for eventType, rule := range in {
-		rule.Handlers = cloneHandlerRules(rule.Handlers)
-		out[eventType] = rule
-	}
-	return out
-}
-
-func cloneHandlerRules(in map[string]model.HandlerRule) map[string]model.HandlerRule {
-	out := make(map[string]model.HandlerRule, len(in))
-	for name, rule := range in {
-		out[name] = rule
-	}
-	return out
 }
 
 func handlerNames(rules map[string]model.HandlerRule) []string {

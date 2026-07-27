@@ -318,15 +318,15 @@ func (h *Handler) NotifyShare(w http.ResponseWriter, r *http.Request) {
 	}
 	if status.Code != rpc.Code_CODE_OK {
 		if status.Code == rpc.Code_CODE_PERMISSION_DENIED {
-			response.WriteOCSErrorWithHTTPStatus(w, r, http.StatusForbidden, http.StatusForbidden, "AddGrant permission is required to send a reminder", nil)
+			response.WriteOCSError(w, r, http.StatusForbidden, "AddGrant permission is required to send a reminder", nil)
 			return
 		}
 		h.Log.Error().Str("code", status.Code.String()).Str("message", status.Message).Msg("error mapping share data")
 		response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "error mapping share data", nil)
 		return
 	}
-	if !canSendShareReminder(statInfo) {
-		response.WriteOCSErrorWithHTTPStatus(w, r, http.StatusForbidden, http.StatusForbidden, "AddGrant permission is required to send a reminder", nil)
+	if !statInfo.GetPermissionSet().GetAddGrant() {
+		response.WriteOCSError(w, r, http.StatusForbidden, "AddGrant permission is required to send a reminder", nil)
 		return
 	}
 
@@ -345,7 +345,7 @@ func (h *Handler) NotifyShare(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		recipient = h.SendShareNotification(ctx, c, model.EventShareReminder, opaqueID, granter, granteeRes.User, statInfo)
+		recipient = h.SendShareNotification(ctx, c, model.EventShareCreation, opaqueID, granter, granteeRes.User, statInfo)
 	} else if granteeType == provider.GranteeType_GRANTEE_TYPE_GROUP {
 		granteeID := shareRes.Share.Grantee.GetGroupId().OpaqueId
 		granteeRes, err := c.GetGroupByClaim(ctx, &grouppb.GetGroupByClaimRequest{
@@ -358,7 +358,7 @@ func (h *Handler) NotifyShare(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		recipient = h.SendShareNotification(ctx, c, model.EventShareReminder, opaqueID, granter, granteeRes.Group, statInfo)
+		recipient = h.SendShareNotification(ctx, c, model.EventShareCreation, opaqueID, granter, granteeRes.Group, statInfo)
 	}
 
 	w.WriteHeader(http.StatusOK)
@@ -401,7 +401,7 @@ func (h *Handler) SendShareNotification(ctx context.Context, client gateway.Gate
 		"sender_display_name":    granter.GetDisplayName(),
 		"sender_username":        granter.GetUsername(),
 		"sender_mail":            granter.GetMail(),
-		"resource_id":            resourceIDString(statInfo.GetId()),
+		"resource_id":            spaces.EncodeToStringifiedResourceID(statInfo.GetId()),
 		"resource_name":          statInfo.GetName(),
 		"resource_path":          statInfo.GetPath(),
 		"resource_type":          statInfo.GetType().String(),
@@ -426,30 +426,6 @@ func (h *Handler) SendShareNotification(ctx context.Context, client gateway.Gate
 	}
 
 	return recipient
-}
-
-func sameUserID(a, b *userpb.UserId) bool {
-	if a == nil || b == nil {
-		return false
-	}
-	return a.GetIdp() == b.GetIdp() &&
-		a.GetOpaqueId() == b.GetOpaqueId() &&
-		a.GetType() == b.GetType() &&
-		a.GetTenantId() == b.GetTenantId()
-}
-
-func canSendShareReminder(info *provider.ResourceInfo) bool {
-	if info == nil || info.PermissionSet == nil {
-		return false
-	}
-	return info.PermissionSet.AddGrant
-}
-
-func resourceIDString(id *provider.ResourceId) string {
-	if id == nil {
-		return ""
-	}
-	return strings.Join([]string{id.GetStorageId(), id.GetOpaqueId(), id.GetSpaceId()}, ":")
 }
 
 func (h *Handler) extractPermissions(w http.ResponseWriter, r *http.Request, ri *provider.ResourceInfo, defaultPermissions *permissions.Role) (*permissions.Role, []byte, error) {
@@ -1314,7 +1290,7 @@ func (h *Handler) mustGetIdentifiers(ctx context.Context, client gateway.Gateway
 		return idIf.(*userIdentifiers)
 	}
 
-	log.Debug().Msg("cache miss")
+	log.Trace().Msg("cache miss")
 	var ui *userIdentifiers
 
 	if isGroup {
@@ -1379,7 +1355,7 @@ func (h *Handler) mustGetIdentifiers(ctx context.Context, client gateway.Gateway
 		}
 	}
 	_ = h.userIdentifierCache.Set(id, ui)
-	log.Debug().Str("id", id).Msg("cache update")
+	log.Trace().Str("id", id).Msg("cache update")
 	return ui
 }
 

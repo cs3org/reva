@@ -20,6 +20,5 @@ package model
 
 const (
 	EventShareCreation = "share-creation"
-	EventShareReminder = "share-reminder"
 	EventUpload        = "upload"
 )

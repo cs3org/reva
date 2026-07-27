@@ -30,24 +30,13 @@ import (
 
 // A notification event's payload rides in the CS3 Event's Data opaque: the
 // event type is a plain field, everything event-specific (recipients, template
-// data) is packed here under these keys. EncodeEvent and SendRequestFromEvent
-// are the two halves of that contract and must stay in sync.
+// data) is packed here under these keys. EncodeEvent and DecodeEvent are the two
+// halves of that contract and must stay in sync.
 const (
 	recipientsKey   = "recipients"
 	templateDataKey = "template_data"
 	jsonDecoder     = "json"
 )
-
-// SendRequest is the decoded form of a notification event, with the identities
-// the gateway resolved from the request context. It is what the gateway
-// publishes to the notification backend.
-type SendRequest struct {
-	EventType      string
-	SubmittingUser string
-	Sender         string
-	Recipients     []string
-	TemplateData   map[string]any
-}
 
 // EncodeEvent packs a notification into a CS3 gateway event. The sender and the
 // submitting user are intentionally absent: the gateway derives them from the

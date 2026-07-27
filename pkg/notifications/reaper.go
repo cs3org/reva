@@ -33,7 +33,7 @@ const defaultReaperInterval = 15 * time.Minute
 // ReaperJobName is the rjobs periodic job name for accumulator recovery.
 const ReaperJobName = "notifications.reaper"
 
-// Reaper periodically recovers accumulator buckets that are due, unleased, or
+// Reaper periodically recovers accumulated event groups that are unleased or
 // have an expired lease.
 type Reaper struct {
 	worker   *Worker
@@ -123,14 +123,14 @@ func (r *Reaper) RunOnce(ctx context.Context) error {
 		return nil
 	}
 
-	buckets, err := r.worker.store.ListCandidates(ctx, r.worker.now(), r.limit)
+	groups, err := r.worker.store.ListCandidates(ctx, r.worker.now(), r.limit)
 	if err != nil {
 		return err
 	}
 
 	errs := make([]error, 0)
-	for _, bucket := range buckets {
-		if err := r.worker.resumeBucket(ctx, bucket); err != nil {
+	for _, group := range groups {
+		if err := r.worker.resume(ctx, group); err != nil {
 			errs = append(errs, err)
 		}
 	}

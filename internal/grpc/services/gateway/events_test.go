@@ -20,7 +20,6 @@ package gateway
 
 import (
 	"context"
-	"errors"
 	"testing"
 	"time"
 
@@ -44,42 +43,20 @@ func (b *recordingBackend) Publish(_ context.Context, envelope model.Envelope) e
 	return nil
 }
 
-func TestPublishEventRateLimitsPerSubmittingUser(t *testing.T) {
-	backend := &recordingBackend{}
-	limiter := ratelimiters.NewFixedWindow(1, time.Minute)
-	publisher := newNotificationPublisher(backend, limiter)
-
-	req := notifications.SendRequest{
-		EventType:      "share.created",
-		SubmittingUser: "alice",
-		Recipients:     []string{"bob@example.org"},
-	}
-
-	if _, err := publisher.publish(context.Background(), req); err != nil {
-		t.Fatalf("first send failed: %v", err)
-	}
-
-	_, err := publisher.publish(context.Background(), req)
-	var rateLimitErr *ratelimiters.LimitError
-	if !errors.As(err, &rateLimitErr) {
-		t.Fatalf("second send error = %v, want LimitError", err)
-	}
-
-	req.SubmittingUser = "carol"
-	if _, err := publisher.publish(context.Background(), req); err != nil {
-		t.Fatalf("different submitting user should not be limited: %v", err)
-	}
+// daemonCtx builds a context authenticated as user and carrying the machine
+// scope, as a re-signed daemon token would.
+func daemonCtx(user *userpb.User) context.Context {
+	ctx := appctx.ContextSetUser(context.Background(), user)
+	return appctx.ContextSetScopes(ctx, map[string]*authpb.Scope{scope.MachineScope: {}})
 }
 
 func TestPublishEventRequiresMachineScope(t *testing.T) {
-	s := &svc{notificationSender: newNotificationPublisher(&recordingBackend{}, ratelimiters.Noop{})}
+	s := &svc{eventBackend: &recordingBackend{}, eventLimiter: ratelimiters.Noop{}}
 	event := notifications.EncodeEvent("share.created", []string{"bob@example.org"}, nil)
+	user := &userpb.User{Id: &userpb.UserId{OpaqueId: "alice"}, Mail: "alice@example.org"}
 
 	// A normal user token (no machine scope) is rejected.
-	ctx := appctx.ContextSetUser(context.Background(), &userpb.User{
-		Id:   &userpb.UserId{OpaqueId: "alice"},
-		Mail: "alice@example.org",
-	})
+	ctx := appctx.ContextSetUser(context.Background(), user)
 	res, err := s.PublishEvent(ctx, &gateway.PublishEventRequest{Event: event})
 	if err != nil {
 		t.Fatalf("PublishEvent returned error: %v", err)
@@ -89,8 +66,7 @@ func TestPublishEventRequiresMachineScope(t *testing.T) {
 	}
 
 	// The same context re-signed with the machine scope is accepted.
-	ctx = appctx.ContextSetScopes(ctx, map[string]*authpb.Scope{scope.MachineScope: {}})
-	res, err = s.PublishEvent(ctx, &gateway.PublishEventRequest{Event: event})
+	res, err = s.PublishEvent(daemonCtx(user), &gateway.PublishEventRequest{Event: event})
 	if err != nil {
 		t.Fatalf("PublishEvent returned error: %v", err)
 	}
@@ -99,18 +75,43 @@ func TestPublishEventRequiresMachineScope(t *testing.T) {
 	}
 }
 
+func TestPublishEventRateLimitsPerSubmittingUser(t *testing.T) {
+	s := &svc{eventBackend: &recordingBackend{}, eventLimiter: ratelimiters.NewFixedWindow(1, time.Minute)}
+	event := notifications.EncodeEvent("share.created", []string{"bob@example.org"}, nil)
+
+	alice := daemonCtx(&userpb.User{Id: &userpb.UserId{OpaqueId: "alice"}})
+	res, err := s.PublishEvent(alice, &gateway.PublishEventRequest{Event: event})
+	if err != nil {
+		t.Fatalf("PublishEvent returned error: %v", err)
+	}
+	if code := res.GetStatus().GetCode(); code != rpc.Code_CODE_OK {
+		t.Fatalf("first send: code = %v, want OK", code)
+	}
+	res, _ = s.PublishEvent(alice, &gateway.PublishEventRequest{Event: event})
+	if code := res.GetStatus().GetCode(); code != rpc.Code_CODE_RESOURCE_EXHAUSTED {
+		t.Fatalf("second send for same user: code = %v, want RESOURCE_EXHAUSTED", code)
+	}
+
+	// A different submitting user is not limited.
+	carol := daemonCtx(&userpb.User{Id: &userpb.UserId{OpaqueId: "carol"}})
+	res, _ = s.PublishEvent(carol, &gateway.PublishEventRequest{Event: event})
+	if code := res.GetStatus().GetCode(); code != rpc.Code_CODE_OK {
+		t.Fatalf("different submitting user: code = %v, want OK", code)
+	}
+}
+
 func TestPublishEventPublishesEventOnly(t *testing.T) {
 	backend := &recordingBackend{}
-	publisher := newNotificationPublisher(backend, ratelimiters.Noop{})
+	s := &svc{eventBackend: backend, eventLimiter: ratelimiters.Noop{}}
+	event := notifications.EncodeEvent("office.mention", []string{"bob@example.org"}, map[string]any{"document_id": "doc-1"})
 
-	_, err := publisher.publish(context.Background(), notifications.SendRequest{
-		EventType:      "office.mention",
-		SubmittingUser: "alice",
-		Recipients:     []string{"bob@example.org"},
-		TemplateData:   map[string]any{"document_id": "doc-1"},
-	})
+	ctx := daemonCtx(&userpb.User{Id: &userpb.UserId{OpaqueId: "alice"}, Mail: "alice@example.org"})
+	res, err := s.PublishEvent(ctx, &gateway.PublishEventRequest{Event: event})
 	if err != nil {
-		t.Fatalf("send failed: %v", err)
+		t.Fatalf("PublishEvent returned error: %v", err)
+	}
+	if code := res.GetStatus().GetCode(); code != rpc.Code_CODE_OK {
+		t.Fatalf("code = %v, msg = %q, want OK", code, res.GetStatus().GetMessage())
 	}
 
 	if len(backend.envelopes) != 1 {
@@ -119,6 +120,9 @@ func TestPublishEventPublishesEventOnly(t *testing.T) {
 	envelope := backend.envelopes[0]
 	if envelope.EventType != "office.mention" {
 		t.Fatalf("event type = %q, want office.mention", envelope.EventType)
+	}
+	if envelope.SubmittingUser == "" {
+		t.Fatal("submitting user is empty, want the context user")
 	}
 	if envelope.Type != "" || envelope.DedupKey != "" || len(envelope.Handlers) != 0 {
 		t.Fatalf("envelope contains resolved delivery policy: %+v", envelope)
