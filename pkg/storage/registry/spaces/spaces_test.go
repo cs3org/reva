@@ -26,6 +26,7 @@ import (
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	rpcv1beta1 "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
+	registrypb "github.com/cs3org/go-cs3apis/cs3/storage/registry/v1beta1"
 	ctxpkg "github.com/owncloud/reva/v2/pkg/ctx"
 	"github.com/owncloud/reva/v2/pkg/storage"
 	"github.com/owncloud/reva/v2/pkg/storage/registry/spaces"
@@ -471,6 +472,127 @@ var _ = Describe("Spaces", func() {
 				Expect(err).ToNot(HaveOccurred())
 				Expect(len(providers)).To(Equal(1))
 				Expect(providers[0].Address).To(Equal("com.owncloud.api.storage-users-vault"))
+			})
+		})
+	})
+
+	Context("with a shares provider serving vault and non-vault mountpoints", func() {
+		var sharesClient *mocks.StorageProviderClient
+
+		const (
+			regularStorageID = "provider-regular-id"
+			vaultStorageID   = "provider-vault-id"
+			sharesStorageID  = "provider-shares-id"
+		)
+
+		BeforeEach(func() {
+			utils.VaultStorageProviderID = vaultStorageID
+			utils.ShareStorageProviderID = sharesStorageID
+
+			sharesClient = &mocks.StorageProviderClient{}
+			sharesClient.On("ListStorageSpaces", mock.Anything, mock.Anything).Return(
+				func(_ context.Context, _ *provider.ListStorageSpacesRequest, _ ...grpc.CallOption) *provider.ListStorageSpacesResponse {
+					jailRoot := &provider.ResourceId{StorageId: sharesStorageID, SpaceId: sharesStorageID, OpaqueId: sharesStorageID}
+					virtualSpace := &provider.StorageSpace{
+						Id:        &provider.StorageSpaceId{OpaqueId: storagespace.FormatResourceID(jailRoot)},
+						Root:      jailRoot,
+						Name:      "Shares",
+						SpaceType: "virtual",
+					}
+					vaultMountpoint := &provider.StorageSpace{
+						Id:        &provider.StorageSpaceId{OpaqueId: sharesStorageID + "$" + sharesStorageID + "!vault-share"},
+						Root:      &provider.ResourceId{StorageId: sharesStorageID, SpaceId: sharesStorageID, OpaqueId: "vault-share"},
+						Name:      "Vault share",
+						SpaceType: "mountpoint",
+						Owner:     alice,
+						Opaque:    utils.AppendPlainToOpaque(nil, "grantStorageID", vaultStorageID),
+					}
+					regularMountpoint := &provider.StorageSpace{
+						Id:        &provider.StorageSpaceId{OpaqueId: sharesStorageID + "$" + sharesStorageID + "!regular-share"},
+						Root:      &provider.ResourceId{StorageId: sharesStorageID, SpaceId: sharesStorageID, OpaqueId: "regular-share"},
+						Name:      "Regular share",
+						SpaceType: "mountpoint",
+						Owner:     alice,
+						Opaque:    utils.AppendPlainToOpaque(nil, "grantStorageID", regularStorageID),
+					}
+					return &provider.ListStorageSpacesResponse{
+						Status:        &rpcv1beta1.Status{Code: rpcv1beta1.Code_CODE_OK},
+						StorageSpaces: []*provider.StorageSpace{virtualSpace, vaultMountpoint, regularMountpoint},
+					}
+				}, nil)
+
+			rules = map[string]interface{}{
+				"providers": map[string]interface{}{
+					"com.owncloud.api.storage-shares": map[string]interface{}{
+						"providerid": sharesStorageID,
+						"spaces": map[string]interface{}{
+							"virtual": map[string]interface{}{
+								"mount_point": "/users/{{.CurrentUser.Id.OpaqueId}}/Shares",
+							},
+							"grant": map[string]interface{}{
+								"mount_point": ".",
+							},
+							"mountpoint": map[string]interface{}{
+								"mount_point":   "/users/{{.CurrentUser.Id.OpaqueId}}/Shares",
+								"path_template": "/users/{{.CurrentUser.Id.OpaqueId}}/Shares/{{.Space.Name}}",
+							},
+						},
+					},
+					"com.owncloud.api.storage-users-vault": map[string]interface{}{
+						"providerid": vaultStorageID,
+						"spaces": map[string]interface{}{
+							"personal": map[string]interface{}{
+								"mount_point":   "/vault/users",
+								"path_template": "/vault/users/{{.Space.Owner.Id.OpaqueId}}",
+							},
+						},
+					},
+				},
+			}
+
+			getClientFunc = func(addr string) (spaces.StorageProviderClient, error) {
+				switch addr {
+				case "com.owncloud.api.storage-shares":
+					return sharesClient, nil
+				case "com.owncloud.api.storage-users-vault":
+					return fooClient, nil
+				}
+				return nil, fmt.Errorf("unexpected address %q", addr)
+			}
+		})
+
+		mountpointNames := func(providers []*registrypb.ProviderInfo) []string {
+			names := []string{}
+			for _, p := range providers {
+				if p.Opaque == nil || p.Opaque.Map["spaces"] == nil {
+					continue
+				}
+				sp := []*provider.StorageSpace{}
+				Expect(json.Unmarshal(p.Opaque.Map["spaces"].Value, &sp)).To(Succeed())
+				for _, s := range sp {
+					if s.SpaceType == "mountpoint" {
+						names = append(names, s.Name)
+					}
+				}
+			}
+			return names
+		}
+
+		Describe("ListProviders", func() {
+			It("excludes vault-shared mountpoints from the regular drive list", func() {
+				filters := map[string]string{"user_id": "alice"}
+
+				providers, err := handler.ListProviders(ctxAlice, filters)
+				Expect(err).ToNot(HaveOccurred())
+				Expect(mountpointNames(providers)).To(ConsistOf("Regular share"))
+			})
+
+			It("includes vault-shared mountpoints when the vault storage_id is requested", func() {
+				filters := map[string]string{"user_id": "alice", "storage_id": vaultStorageID}
+
+				providers, err := handler.ListProviders(ctxAlice, filters)
+				Expect(err).ToNot(HaveOccurred())
+				Expect(mountpointNames(providers)).To(ConsistOf("Vault share"))
 			})
 		})
 	})
