@@ -65,7 +65,6 @@ type config struct {
 	GatewaySvc          string                    `mapstructure:"gatewaysvc"`
 	MimeTypes           []string                  `docs:"nil;A list of mime types supported by this app."                                                              mapstructure:"mime_types"`
 	CustomMimeTypesJSON string                    `docs:"nil;An optional mapping file with the list of supported custom file extensions and corresponding mime types." mapstructure:"custom_mime_types_json"`
-	Language            string                    `mapstructure:"language"`
 }
 
 func (c *config) ApplyDefaults() {
@@ -193,7 +192,7 @@ func getProvider(ctx context.Context, c *config) (app.Provider, error) {
 }
 
 func (s *service) OpenInApp(ctx context.Context, req *providerpb.OpenInAppRequest) (*providerpb.OpenInAppResponse, error) {
-	appURL, forcedvm, err := s.provider.GetAppURL(ctx, req.ResourceInfo, req.ViewMode, req.AccessToken, s.conf.Language)
+	appURL, forcedvm, appforedit, err := s.provider.GetAppURL(ctx, req.ResourceInfo, req.ViewMode, req.AccessToken)
 	if err != nil {
 		res := &providerpb.OpenInAppResponse{
 			Status: status.NewStatusFromErrType(ctx, "appprovider: error calling GetAppURL", err),
@@ -204,6 +203,7 @@ func (s *service) OpenInApp(ctx context.Context, req *providerpb.OpenInAppReques
 		Status:               status.NewOK(ctx),
 		AppUrl:               appURL,
 		ForcedViewModeReason: forcedvm,
+		AppForEdit:           appforedit,
 	}
 	return res, nil
 }
