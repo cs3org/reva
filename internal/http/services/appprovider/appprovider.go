@@ -473,16 +473,7 @@ func (s *svc) handleOpen(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var appForEditing string
-	// TODO(lopresti) this is a shortcut for now to avoid changing the protocol. In the future we want to only pass a coded "reason",
-	// the actual message is to be rendered by the web frontend (potentially localized).
-	if m := regexp.MustCompile(`\b([A-Za-z0-9._+-]+)\s+to edit instead$`).FindStringSubmatch(openRes.ForcedViewModeReason); m != nil {
-		appForEditing = m[1]
-	}
-
 	// UI-related parameters
-	// TODO(lopresti) this overrides pkg/app/provider/wopi/wopi.go,
-	// we need to drop that one and the corresponding config entry
 	lang := r.Form.Get("lang")
 	if lang != "" {
 		appFullURL, err := url.Parse(openRes.AppUrl.AppUrl)
@@ -510,7 +501,7 @@ func (s *svc) handleOpen(w http.ResponseWriter, r *http.Request) {
 		"headers":                openRes.AppUrl.Headers,
 		"target":                 appTargetToString(openRes.AppUrl.Target),
 		"forced_viewmode_reason": openRes.ForcedViewModeReason,
-		"app_for_editing":        appForEditing,
+		"app_for_editing":        openRes.AppForEdit,
 	}
 
 	js, err := json.Marshal(resPayload)
