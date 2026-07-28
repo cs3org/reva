@@ -77,8 +77,13 @@ func (s *svc) listGroups(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if req.Query.Search == nil || req.Query.Search.RawValue == "" || len(req.Query.Search.RawValue) < 3 {
-		log.Debug().Err(err).Interface("query", r.URL.Query()).Msg("must pass a search string of at least length 3 to list groups")
+	if req.Query.Search == nil || len(req.Query.Search.RawValue) < 3 {
+		handleBadRequest(ctx, errors.New("must pass a search string of at least length 3 to list groups"), w)
+		return
+	}
+	if req.Query.OrderBy == nil {
+		handleBadRequest(ctx, errors.New("missing orderby parameter"), w)
+		return
 	}
 	queryVal := strings.Trim(req.Query.Search.RawValue, "\"")
 
