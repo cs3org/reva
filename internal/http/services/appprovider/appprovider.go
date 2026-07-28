@@ -62,6 +62,9 @@ type Config struct {
 	Prefix     string `mapstructure:"prefix"`
 	GatewaySvc string `mapstructure:"gatewaysvc"                                              validate:"required"`
 	Insecure   bool   `docs:"false;Whether to skip certificate checks when sending requests." mapstructure:"insecure"`
+	// FeedbackRecipient is the email address user feedback submitted through the
+	// /feedback endpoint is sent to. Empty disables the endpoint.
+	FeedbackRecipient string `mapstructure:"feedback_recipient"`
 }
 
 func (c *Config) ApplyDefaults() {
@@ -102,6 +105,7 @@ func (s *svc) routerInit() error {
 	s.router.Post("/open", s.handleOpen)
 	s.router.Post("/notify", s.handleNotify)
 	s.router.Post("/mentions", s.handleMentions)
+	s.router.Post("/feedback", s.handleFeedback)
 	return nil
 }
 
