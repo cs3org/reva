@@ -172,8 +172,13 @@ func (s *svc) listUsers(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if req.Query.Search == nil || req.Query.Search.RawValue == "" || len(req.Query.Search.RawValue) < 3 {
-		log.Debug().Err(err).Interface("query", r.URL.Query()).Msg("must pass a search string of at least length 3 to list users")
+	if req.Query.Search == nil || len(req.Query.Search.RawValue) < 3 {
+		handleBadRequest(ctx, errors.New("must pass a search string of at least length 3 to list users"), w)
+		return
+	}
+	if req.Query.OrderBy == nil {
+		handleBadRequest(ctx, errors.New("missing orderby parameter"), w)
+		return
 	}
 	queryVal := strings.Trim(req.Query.Search.RawValue, "\"")
 	log.Debug().Str("Query", queryVal).Str("orderBy", req.Query.OrderBy.RawValue).Any("select", getUserSelectionFromRequest(req.Query.Select)).Msg("Listing users in libregraph API")
