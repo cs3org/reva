@@ -139,6 +139,7 @@ func (h *EmailHandler) Send(_ context.Context, envelope model.Envelope) error {
 		Str("notification_id", envelope.ID).
 		Str("event_type", envelope.EventType).
 		Str("template_name", envelope.TemplateName).
+		Str("dedup_key", envelope.DedupKey).
 		Int("recipients", len(envelope.Recipients)).
 		Logger()
 

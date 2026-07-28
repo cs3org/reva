@@ -29,8 +29,6 @@ import (
 	"github.com/rs/zerolog"
 )
 
-const defaultNotificationSubject = "reva-notifications.send"
-
 // NATSConfig configures the NATS notification backend and listener.
 type NATSConfig struct {
 	Address string `mapstructure:"address"`
@@ -39,34 +37,49 @@ type NATSConfig struct {
 	Subject string `mapstructure:"subject"`
 	Durable string `mapstructure:"durable"`
 	Queue   string `mapstructure:"queue"`
+	// Namespace scopes the stream, subject, durable and queue names so
+	// environments sharing one NATS server (for example QA, test and dev on the
+	// same host) each get their own isolated stream and queue group instead of
+	// consuming each other's events. Publisher and consumer must set the same
+	// value. Ignored for any name given explicitly above.
+	Namespace string `mapstructure:"namespace"`
+}
+
+// scoped appends the namespace to a default name so each environment gets its
+// own stream/subject/queue on a shared NATS server.
+func (c NATSConfig) scoped(base string) string {
+	if c.Namespace == "" {
+		return base
+	}
+	return base + "-" + c.Namespace
 }
 
 func (c NATSConfig) subject() string {
 	if c.Subject != "" {
 		return c.Subject
 	}
-	return defaultNotificationSubject
+	return c.scoped("reva-notifications") + ".send"
 }
 
 func (c NATSConfig) stream() string {
 	if c.Stream != "" {
 		return c.Stream
 	}
-	return "reva-notifications"
+	return c.scoped("reva-notifications")
 }
 
 func (c NATSConfig) durable() string {
 	if c.Durable != "" {
 		return c.Durable
 	}
-	return "reva-notifications-handler"
+	return c.scoped("reva-notifications-handler")
 }
 
 func (c NATSConfig) queue() string {
 	if c.Queue != "" {
 		return c.Queue
 	}
-	return "reva-notifications-workers"
+	return c.scoped("reva-notifications-workers")
 }
 
 // NATSBackend publishes accepted notifications to JetStream.
@@ -152,6 +165,15 @@ type NATSListener struct {
 	sub  *nats.Subscription
 	log  zerolog.Logger
 }
+
+// Stream returns the JetStream stream the listener consumes from.
+func (l *NATSListener) Stream() string { return l.conf.stream() }
+
+// Subject returns the subject the listener is subscribed to.
+func (l *NATSListener) Subject() string { return l.conf.subject() }
+
+// Queue returns the queue group the listener joins.
+func (l *NATSListener) Queue() string { return l.conf.queue() }
 
 // NewNATSListener connects to NATS and ensures the notification stream exists.
 func NewNATSListener(conf NATSConfig, log zerolog.Logger) (*NATSListener, error) {

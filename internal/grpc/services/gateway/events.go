@@ -39,8 +39,9 @@ import (
 
 // PublishEvent accepts an event from a trusted daemon and publishes it to the
 // event backend. It is restricted to callers carrying the machine scope (reva
-// daemons); the submitting user and the sender are taken from the authenticated
-// context, never from the request.
+// daemons); the submitting user is taken from the authenticated context, never
+// from the request. Notifications are never sent on a user's behalf: the sender
+// is left unset so the email handler uses its configured default_sender.
 func (s *svc) PublishEvent(ctx context.Context, req *gateway.PublishEventRequest) (*gateway.PublishEventResponse, error) {
 	if s.eventBackend == nil {
 		return &gateway.PublishEventResponse{
@@ -83,7 +84,6 @@ func (s *svc) PublishEvent(ctx context.Context, req *gateway.PublishEventRequest
 		ID:             uuid.NewString(),
 		EventType:      req.GetEvent().GetType(),
 		SubmittingUser: notifications.UserIDString(u.GetId()),
-		Sender:         u.GetMail(),
 		Recipients:     recipients,
 		TemplateData:   templateData,
 		SubmittedAt:    time.Now().UTC(),

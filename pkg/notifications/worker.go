@@ -30,6 +30,7 @@ import (
 	"text/template"
 	"time"
 
+	"github.com/cs3org/reva/v3/pkg/appctx"
 	"github.com/cs3org/reva/v3/pkg/notifications/accumulation"
 	"github.com/cs3org/reva/v3/pkg/notifications/handlers"
 	"github.com/cs3org/reva/v3/pkg/notifications/model"
@@ -129,10 +130,22 @@ func (w *Worker) Handle(ctx context.Context, envelope model.Envelope) error {
 			return err
 		}
 
+		log := appctx.GetLogger(ctx)
 		for _, recipientEnvelope := range recipientEnvelopes {
 			group, err := w.store.Add(ctx, recipientEnvelope, w.now())
 			if err != nil {
 				return err
+			}
+			ev := log.Info().
+				Str("worker", w.ownerID).
+				Str("dedup_key", group.DedupKey).
+				Str("event_type", recipientEnvelope.EventType).
+				Int("item_count", group.ItemCount).
+				Time("flush_after", group.FlushAfter)
+			if group.ItemCount == 1 {
+				ev.Msg("notifications: opened accumulator")
+			} else {
+				ev.Msg("notifications: added event to accumulator")
 			}
 			if err := w.resume(ctx, group); err != nil {
 				return err
@@ -195,9 +208,16 @@ func (w *Worker) resume(ctx context.Context, acc *accumulation.Group) error {
 	}
 
 	acquired, err := w.store.AcquireLease(ctx, acc.DedupKey, w.ownerID, leaseUntil, now)
-	if err != nil || !acquired {
+	if err != nil {
 		return err
 	}
+
+	log := appctx.GetLogger(ctx)
+	if !acquired {
+		log.Info().Str("worker", w.ownerID).Str("dedup_key", acc.DedupKey).Msg("notifications: accumulator lease held by another worker, not flushing here")
+		return nil
+	}
+	log.Info().Str("worker", w.ownerID).Str("dedup_key", acc.DedupKey).Msg("notifications: holding accumulator lease")
 
 	if acc.ItemCount >= acc.MaxItems || !acc.FlushAfter.After(now) {
 		return w.Flush(ctx, acc.DedupKey)
@@ -224,6 +244,12 @@ func (w *Worker) Flush(ctx context.Context, dedupKey string) error {
 	if len(items) == 0 {
 		return w.store.MarkFlushed(ctx, dedupKey, nil)
 	}
+
+	appctx.GetLogger(ctx).Info().
+		Str("worker", w.ownerID).
+		Str("dedup_key", dedupKey).
+		Int("item_count", len(items)).
+		Msg("notifications: flushing accumulator")
 
 	envelope := w.accumulate(items)
 	if err := w.dispatcher.Dispatch(ctx, envelope); err != nil {
@@ -320,7 +346,7 @@ func perRecipientAccumulationEnvelopes(envelope model.Envelope) ([]model.Envelop
 }
 
 func perRecipientDedupKey(recipient, dedupKey string) string {
-	return fmt.Sprintf("%d:%s:%s", len(recipient), recipient, dedupKey)
+	return recipient + ":" + dedupKey
 }
 
 func perRecipientItemID(id, recipient string) string {

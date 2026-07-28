@@ -21,7 +21,6 @@ package ocdav
 import (
 	"context"
 	"encoding/json"
-	"path"
 	"strings"
 
 	gateway "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
@@ -62,13 +61,6 @@ func (s *svc) sendUploadNotification(ctx context.Context, client gateway.Gateway
 	if publicShare != nil {
 		templateData["share_id"] = publicShareIDString(publicShare)
 		templateData["share_token"] = publicShare.GetToken()
-		// The email identifies the destination by the public link's folder, not by
-		// the first uploaded file. Resolve the folder the link points to so the
-		// template can render its name and path.
-		if sharePath := s.publicShareResourcePath(ctx, client, publicShare, log); sharePath != "" {
-			templateData["share_path"] = sharePath
-			templateData["share_name"] = path.Base(sharePath)
-		}
 	}
 
 	// PublishEvent is restricted to reva daemons. Re-sign this request's token with
@@ -78,6 +70,20 @@ func (s *svc) sendUploadNotification(ctx context.Context, client gateway.Gateway
 	if err != nil {
 		log.Error().Err(err).Msg("failed to elevate context for upload notification")
 		return
+	}
+
+	if publicShare != nil {
+		// Name the shared folder the upload landed in. The machine scope lets us
+		// stat the link's target directly, so we read the folder's real name and
+		// path rather than the public-link path or the uploaded file.
+		if res, err := client.Stat(publishCtx, &provider.StatRequest{
+			Ref: &provider.Reference{ResourceId: publicShare.GetResourceId()},
+		}); err == nil && res.GetStatus().GetCode() == rpc.Code_CODE_OK {
+			templateData["share_path"] = res.GetInfo().GetPath()
+			templateData["share_name"] = res.GetInfo().GetName()
+		} else {
+			log.Error().Err(err).Msg("failed to resolve shared folder for upload notification")
+		}
 	}
 
 	event := notifications.EncodeEvent(model.EventUpload, recipients, templateData)
@@ -118,25 +124,6 @@ func (s *svc) publicShareOwnerMail(ctx context.Context, client gateway.GatewayAP
 		return ""
 	}
 	return res.GetUser().GetMail()
-}
-
-// publicShareResourcePath resolves the path of the folder a public link points
-// to. It stats the link's resource in the current (public link user) context,
-// which has read access to that folder. Returns an empty string on failure.
-func (s *svc) publicShareResourcePath(ctx context.Context, client gateway.GatewayAPIClient, publicShare *link.PublicShare, log zerolog.Logger) string {
-	resourceID := publicShare.GetResourceId()
-	if resourceID == nil || client == nil {
-		return ""
-	}
-
-	res, err := client.Stat(ctx, &provider.StatRequest{
-		Ref: &provider.Reference{ResourceId: resourceID},
-	})
-	if err != nil || res.GetStatus().GetCode() != rpc.Code_CODE_OK || res.GetInfo() == nil {
-		log.Debug().Err(err).Msg("failed to resolve public share path for upload notification")
-		return ""
-	}
-	return res.GetInfo().GetPath()
 }
 
 func publicShareIDString(publicShare *link.PublicShare) string {

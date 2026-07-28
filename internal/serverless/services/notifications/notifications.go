@@ -196,7 +196,11 @@ func (s *svc) Start() {
 	}
 
 	s.listener = listener
-	s.log.Info().Msg("notifications service ready")
+	s.log.Info().
+		Str("stream", listener.Stream()).
+		Str("subject", listener.Subject()).
+		Str("queue", listener.Queue()).
+		Msg("notifications service ready")
 }
 
 // Close stops the notification listener and closes the accumulator database.
