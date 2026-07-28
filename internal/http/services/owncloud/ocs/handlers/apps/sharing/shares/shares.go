@@ -345,7 +345,11 @@ func (h *Handler) NotifyShare(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		recipient = h.SendShareNotification(ctx, c, model.EventShareCreation, opaqueID, granter, granteeRes.User, statInfo)
+		recipient, err = h.SendShareNotification(ctx, c, model.EventShareCreation, opaqueID, granter, granteeRes.User, statInfo)
+		if err != nil {
+			response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "error sending share notification", err)
+			return
+		}
 	} else if granteeType == provider.GranteeType_GRANTEE_TYPE_GROUP {
 		granteeID := shareRes.Share.Grantee.GetGroupId().OpaqueId
 		granteeRes, err := c.GetGroupByClaim(ctx, &grouppb.GetGroupByClaimRequest{
@@ -358,7 +362,11 @@ func (h *Handler) NotifyShare(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		recipient = h.SendShareNotification(ctx, c, model.EventShareCreation, opaqueID, granter, granteeRes.Group, statInfo)
+		recipient, err = h.SendShareNotification(ctx, c, model.EventShareCreation, opaqueID, granter, granteeRes.Group, statInfo)
+		if err != nil {
+			response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "error sending share notification", err)
+			return
+		}
 	}
 
 	w.WriteHeader(http.StatusOK)
@@ -370,8 +378,10 @@ func (h *Handler) NotifyShare(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// SendShareNotification sends a notification with information from a Share.
-func (h *Handler) SendShareNotification(ctx context.Context, client gateway.GatewayAPIClient, eventType, opaqueID string, granter *userpb.User, grantee any, statInfo *provider.ResourceInfo) string {
+// SendShareNotification sends a notification with information from a Share. It
+// returns the resolved recipient and an error when publishing the event fails,
+// so the caller can surface it rather than silently returning success.
+func (h *Handler) SendShareNotification(ctx context.Context, client gateway.GatewayAPIClient, eventType, opaqueID string, granter *userpb.User, grantee any, statInfo *provider.ResourceInfo) (string, error) {
 	var recipient string
 	var recipientName string
 
@@ -391,7 +401,7 @@ func (h *Handler) SendShareNotification(ctx context.Context, client gateway.Gate
 
 	if strings.TrimSpace(recipient) == "" {
 		h.Log.Debug().Msgf("notification trigger %s skipped because recipient is empty", opaqueID)
-		return recipient
+		return recipient, nil
 	}
 
 	templateData := map[string]any{
@@ -411,21 +421,19 @@ func (h *Handler) SendShareNotification(ctx context.Context, client gateway.Gate
 	// the machine scope, keeping the acting user (the granter) unchanged.
 	publishCtx, err := scope.ContextWithMachineScope(ctx)
 	if err != nil {
-		h.Log.Error().Err(err).Str("share_id", opaqueID).Msg("failed to elevate context for share notification")
-		return recipient
+		return recipient, fmt.Errorf("failed to elevate context for share notification: %w", err)
 	}
 
 	event := notifications.EncodeEvent(eventType, []string{recipient}, templateData)
 	res, err := client.PublishEvent(publishCtx, &gateway.PublishEventRequest{Event: event})
 	if err != nil {
-		h.Log.Error().Err(err).Str("event_type", eventType).Str("share_id", opaqueID).Msg("failed to send share notification event")
-		return recipient
+		return recipient, fmt.Errorf("failed to send share notification event: %w", err)
 	}
 	if code := res.GetStatus().GetCode(); code != rpc.Code_CODE_OK {
-		h.Log.Error().Str("event_type", eventType).Str("share_id", opaqueID).Str("code", code.String()).Str("message", res.GetStatus().GetMessage()).Msg("gateway rejected share notification event")
+		return recipient, fmt.Errorf("gateway rejected share notification event %q for share %s: %s (%s)", eventType, opaqueID, code.String(), res.GetStatus().GetMessage())
 	}
 
-	return recipient
+	return recipient, nil
 }
 
 func (h *Handler) extractPermissions(w http.ResponseWriter, r *http.Request, ri *provider.ResourceInfo, defaultPermissions *permissions.Role) (*permissions.Role, []byte, error) {

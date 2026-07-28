@@ -100,7 +100,10 @@ func (h *Handler) createGroupShare(w http.ResponseWriter, r *http.Request, statI
 			if notify && newShare != nil {
 				granter, ok := appctx.ContextGetUser(ctx)
 				if ok {
-					h.SendShareNotification(ctx, c, model.EventShareCreation, newShare.ID, granter, groupRes.Group, statInfo)
+					if _, err := h.SendShareNotification(ctx, c, model.EventShareCreation, newShare.ID, granter, groupRes.Group, statInfo); err != nil {
+						response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "error sending share notification", err)
+						return
+					}
 				}
 			}
 		} else {
