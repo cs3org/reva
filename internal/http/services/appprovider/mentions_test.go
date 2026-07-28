@@ -31,19 +31,31 @@ import (
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
+	revaconfig "github.com/cs3org/reva/v3/cmd/revad/pkg/config"
 	"github.com/cs3org/reva/v3/pkg/appctx"
+	"github.com/cs3org/reva/v3/pkg/notifications"
+	"github.com/cs3org/reva/v3/pkg/notifications/model"
 	"github.com/cs3org/reva/v3/pkg/rgrpc/todo/pool"
+	"github.com/cs3org/reva/v3/pkg/sharedconf"
 	"github.com/cs3org/reva/v3/pkg/spaces"
 	"google.golang.org/grpc"
 )
 
+const mentionsTestJWTSecret = "mentions-test-secret"
+
 type mentionGateway struct {
 	gateway.GatewayAPIClient
-	statResp    *provider.StatResponse
-	statErr     error
-	usersByName map[string]*userpb.User
-	usersByID   map[string]*userpb.User
-	groups      map[string]*grouppb.Group
+	statResp     *provider.StatResponse
+	statErr      error
+	usersByName  map[string]*userpb.User
+	usersByID    map[string]*userpb.User
+	groups       map[string]*grouppb.Group
+	publishedEvs []*gateway.Event
+}
+
+func (m *mentionGateway) PublishEvent(_ context.Context, req *gateway.PublishEventRequest, _ ...grpc.CallOption) (*gateway.PublishEventResponse, error) {
+	m.publishedEvs = append(m.publishedEvs, req.GetEvent())
+	return &gateway.PublishEventResponse{Status: &rpc.Status{Code: rpc.Code_CODE_OK}}, nil
 }
 
 func (m *mentionGateway) Stat(_ context.Context, _ *provider.StatRequest, _ ...grpc.CallOption) (*provider.StatResponse, error) {
@@ -216,13 +228,18 @@ func TestResolveMentionRecipientsExpandsGroupsDeduplicatesAndSkipsSelf(t *testin
 }
 
 func TestHandleMentionsAcceptsResolvedMentions(t *testing.T) {
+	sharedconf.Init(&revaconfig.Shared{JWTSecret: mentionsTestJWTSecret})
+	if sharedconf.GetJWTSecret("") == "" {
+		t.Skip("shared jwt secret is not initialised, cannot elevate to machine scope")
+	}
+
 	endpoint := "mentions-" + t.Name()
 	author := mentionUser("author", "author@cern.ch")
 	alice := mentionUser("alice", "alice@cern.ch")
 	bob := mentionUser("bob", "bob@cern.ch")
 	resourceID := &provider.ResourceId{StorageId: "storage", SpaceId: "space", OpaqueId: "file"}
 
-	pool.RegisterGatewayServiceClient(&mentionGateway{
+	gw := &mentionGateway{
 		statResp: &provider.StatResponse{
 			Status: &rpc.Status{Code: rpc.Code_CODE_OK},
 			Info: &provider.ResourceInfo{
@@ -245,7 +262,8 @@ func TestHandleMentionsAcceptsResolvedMentions(t *testing.T) {
 				Members:   []*userpb.UserId{alice.Id, bob.Id, author.Id},
 			},
 		},
-	}, endpoint)
+	}
+	pool.RegisterGatewayServiceClient(gw, endpoint)
 
 	s := &svc{
 		conf: &Config{GatewaySvc: endpoint},
@@ -281,6 +299,53 @@ func TestHandleMentionsAcceptsResolvedMentions(t *testing.T) {
 	}
 	if len(response.Rejected) != 0 {
 		t.Fatalf("rejected = %d, want 0", len(response.Rejected))
+	}
+
+	if len(gw.publishedEvs) != 1 {
+		t.Fatalf("published events = %d, want 1", len(gw.publishedEvs))
+	}
+	event := gw.publishedEvs[0]
+	if event.GetType() != model.EventOfficeMention {
+		t.Fatalf("event type = %q, want %q", event.GetType(), model.EventOfficeMention)
+	}
+
+	recipients, templateData, err := notifications.DecodeEvent(event)
+	if err != nil {
+		t.Fatalf("DecodeEvent() returned error: %v", err)
+	}
+	// One event carries every recipient; the notifications worker fans it out.
+	wantRecipients := map[string]bool{"alice@cern.ch": true, "bob@cern.ch": true}
+	if len(recipients) != len(wantRecipients) {
+		t.Fatalf("recipients = %v, want %v", recipients, wantRecipients)
+	}
+	for _, recipient := range recipients {
+		if !wantRecipients[recipient] {
+			t.Fatalf("unexpected recipient %q, want one of %v", recipient, wantRecipients)
+		}
+	}
+
+	// The dedup key template in the notifications config reads resource_id, so an
+	// absent or empty one silently drops the accumulation.
+	wantData := map[string]string{
+		"resource_id":            spaces.EncodeToStringifiedResourceID(resourceID),
+		"resource_name":          "report.docx",
+		"resource_path":          "/spaces/project/report.docx",
+		"mentioner_display_name": "author display",
+		"mentioner_username":     "author",
+		"comment_text":           "Can you check this?",
+		"anchor_text":            "Total cost",
+		"document_url":           "https://cernbox.example/report.docx",
+		"app_name":               "office",
+		"event_id":               "event-1",
+	}
+	for key, want := range wantData {
+		got, ok := templateData[key].(string)
+		if !ok {
+			t.Fatalf("template data %q = %v, want string %q", key, templateData[key], want)
+		}
+		if got != want {
+			t.Fatalf("template data %q = %q, want %q", key, got, want)
+		}
 	}
 }
 

@@ -21,4 +21,6 @@ package model
 const (
 	EventShareCreation = "share-creation"
 	EventUpload        = "upload"
+	EventFeedback      = "feedback"
+	EventOfficeMention = "office-mention"
 )

@@ -24,6 +24,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
+	"path/filepath"
 	"strings"
 
 	gateway "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
@@ -32,6 +33,9 @@ import (
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/cs3org/reva/v3/pkg/appctx"
+	"github.com/cs3org/reva/v3/pkg/auth/scope"
+	"github.com/cs3org/reva/v3/pkg/notifications"
+	"github.com/cs3org/reva/v3/pkg/notifications/model"
 	"github.com/cs3org/reva/v3/pkg/rgrpc/todo/pool"
 	"github.com/cs3org/reva/v3/pkg/spaces"
 	"github.com/cs3org/reva/v3/pkg/utils/resourceid"
@@ -89,7 +93,8 @@ func (s *svc) handleMentions(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if _, err := validateDocumentURL(req.DocumentURL); err != nil {
+	documentURL, err := validateDocumentURL(req.DocumentURL)
+	if err != nil {
 		writeError(w, r, appErrorInvalidParameter, err.Error(), nil)
 		return
 	}
@@ -132,9 +137,62 @@ func (s *svc) handleMentions(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// The document id keys the accumulation of repeated mentions in the same
+	// document, so an empty one would make the notifications service reject the
+	// event on an unrenderable dedup key.
 	documentID := documentIDForNotification(statRes.Info, &fileRef)
+	if documentID == "" {
+		writeError(w, r, appErrorServerError, "could not determine the document id of the mentioned file", nil)
+		return
+	}
+
+	recipients := make([]string, 0, len(resolved.users))
 	for _, recipient := range resolved.users {
+		recipients = append(recipients, recipient.Mail)
 		resolved.accepted = append(resolved.accepted, mentionResult{Type: "user", Username: recipient.Username})
+	}
+
+	mentionerName := author.GetDisplayName()
+	if mentionerName == "" {
+		mentionerName = author.GetUsername()
+	}
+	resourceName := statRes.Info.GetName()
+	if resourceName == "" {
+		resourceName = filepath.Base(statRes.Info.GetPath())
+	}
+
+	templateData := map[string]any{
+		"resource_id":            documentID,
+		"resource_name":          resourceName,
+		"resource_path":          statRes.Info.GetPath(),
+		"mentioner_display_name": mentionerName,
+		"mentioner_username":     author.GetUsername(),
+		"comment_text":           req.CommentText,
+		"anchor_text":            req.AnchorText,
+		"document_url":           documentURL,
+		"app_name":               req.AppName,
+		"event_id":               req.EventID,
+	}
+
+	// PublishEvent is restricted to reva daemons. Re-sign this request's token with
+	// the machine scope, keeping the acting user (the mention author) unchanged.
+	publishCtx, err := scope.ContextWithMachineScope(ctx)
+	if err != nil {
+		writeError(w, r, appErrorServerError, "failed to elevate context for mention notification", err)
+		return
+	}
+
+	// One event for all recipients: the notifications worker fans it out per
+	// recipient and namespaces the dedup key with each recipient itself.
+	event := notifications.EncodeEvent(model.EventOfficeMention, recipients, templateData)
+	res, err := client.PublishEvent(publishCtx, &gateway.PublishEventRequest{Event: event})
+	if err != nil {
+		writeError(w, r, appErrorServerError, "failed to send mention notification", err)
+		return
+	}
+	if code := res.GetStatus().GetCode(); code != rpc.Code_CODE_OK {
+		writeError(w, r, appErrorServerError, fmt.Sprintf("gateway rejected mention notification: %s (%s)", code, res.GetStatus().GetMessage()), nil)
+		return
 	}
 
 	log.Info().
