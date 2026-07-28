@@ -31,6 +31,7 @@ const (
 	ProjectStatusActive    ProjectStatus = "active"
 	ProjectStatusArchiving ProjectStatus = "archiving"
 	ProjectStatusArchived  ProjectStatus = "archived"
+	ProjectStatusDeleted   ProjectStatus = "deleted"
 )
 
 func (ps ProjectStatus) AsString() string { return string(ps) }
