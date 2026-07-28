@@ -183,27 +183,33 @@ func (s *svc) listUsers(w http.ResponseWriter, r *http.Request) {
 	queryVal := strings.Trim(req.Query.Search.RawValue, "\"")
 	log.Debug().Str("Query", queryVal).Str("orderBy", req.Query.OrderBy.RawValue).Any("select", getUserSelectionFromRequest(req.Query.Select)).Msg("Listing users in libregraph API")
 
-	filters, err := generateUserFilters(req)
-	if err != nil {
-		handleBadRequest(ctx, err, w)
-		return
+	// No $filter defaults to primary accounts, preserving historical behaviour.
+	userTypes := []userpb.UserType{userpb.UserType_USER_TYPE_PRIMARY}
+	var allTypes bool
+	if req.Query.Filter != nil && req.Query.Filter.Tree != nil {
+		if userTypes, allTypes, err = collectUserTypes(req.Query.Filter.Tree); err != nil {
+			handleBadRequest(ctx, err, w)
+			return
+		}
 	}
-	// If no filter on type is specified, we default to
-	// searching only primary accounts
-	if len(filters) == 0 {
+
+	filters := []*userpb.Filter{
+		{
+			Type: userpb.Filter_TYPE_QUERY,
+			Term: &userpb.Filter_Query{Query: queryVal},
+		},
+	}
+	// Backend filters are AND-combined and every user has exactly one type, so a
+	// usertype filter can only be pushed down when a single type is requested. For
+	// a set of several types we fetch all matches and filter them below; for "all"
+	// we impose no type restriction at all.
+	if !allTypes && len(userTypes) == 1 {
 		filters = append(filters, &userpb.Filter{
 			Type: userpb.Filter_TYPE_USERTYPE,
-			Term: &userpb.Filter_Usertype{
-				Usertype: userpb.UserType_USER_TYPE_PRIMARY,
-			},
+			Term: &userpb.Filter_Usertype{Usertype: userTypes[0]},
 		})
 	}
-	filters = append(filters, &userpb.Filter{
-		Type: userpb.Filter_TYPE_QUERY,
-		Term: &userpb.Filter_Query{
-			Query: queryVal,
-		},
-	})
+
 	request := &userpb.FindUsersRequest{
 		SkipFetchingUserGroups: true,
 		Filters:                filters,
@@ -219,7 +225,16 @@ func (s *svc) listUsers(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	lgUsers := mapToLibregraphUsers(users.GetUsers(), getUserSelectionFromRequest(req.Query.Select), maxUserResponseLength)
+	// Several types can only be filtered here, since the backend AND-combines
+	// filters and can push down at most one type.
+	matched := users.GetUsers()
+	if !allTypes && len(userTypes) > 1 {
+		matched = slices.DeleteFunc(matched, func(u *userpb.User) bool {
+			return !slices.Contains(userTypes, u.GetId().GetType())
+		})
+	}
+
+	lgUsers := mapToLibregraphUsers(matched, getUserSelectionFromRequest(req.Query.Select), maxUserResponseLength)
 
 	if req.Query.OrderBy.RawValue != "" {
 		lgUsers, err = sortUsers(ctx, lgUsers, req.Query.OrderBy.RawValue)
@@ -350,33 +365,41 @@ func sortUsers(ctx context.Context, users []libregraph.User, sortKey string) ([]
 	return users, nil
 }
 
-func generateUserFilters(request *godata.GoDataRequest) ([]*userpb.Filter, error) {
-	var filters []*userpb.Filter
-	if request.Query.Filter != nil {
-		if request.Query.Filter.Tree.Token.Value == "eq" {
-			switch strings.ToLower(request.Query.Filter.Tree.Children[0].Token.Value) {
-			case "usertype":
-				ut := strings.Trim(request.Query.Filter.Tree.Children[1].Token.Value, "'")
-				userType := UserType(ut)
-				if userType == nil {
-					return nil, errors.Errorf("unknown usertype: %s", ut)
-				}
-
-				filter := &userpb.Filter{
-					Type: userpb.Filter_TYPE_USERTYPE,
-					Term: &userpb.Filter_Usertype{
-						Usertype: *userType,
-					},
-				}
-				filters = append(filters, filter)
-
+// collectUserTypes walks an OData filter (sub)tree, unioning the user types of
+// every `userType eq 'x'` leaf. `or` nodes are the only supported combinator; the
+// special value `userType eq 'all'` sets the returned `all` flag (no restriction).
+// Any other operator or filtered field is rejected.
+func collectUserTypes(node *godata.ParseNode) (types []userpb.UserType, all bool, err error) {
+	switch strings.ToLower(node.Token.Value) {
+	case "or":
+		for _, child := range node.Children {
+			childTypes, childAll, err := collectUserTypes(child)
+			if err != nil {
+				return nil, false, err
 			}
-		} else {
-			err := errors.Errorf("unsupported filter operand: %s", request.Query.Filter.Tree.Token.Value)
-			return nil, err
+			all = all || childAll
+			types = append(types, childTypes...)
 		}
+		return types, all, nil
+	case "eq":
+		if len(node.Children) != 2 {
+			return nil, false, errors.New("malformed filter expression")
+		}
+		if field := strings.ToLower(node.Children[0].Token.Value); field != "usertype" {
+			return nil, false, errors.Errorf("unsupported filter field: %s", node.Children[0].Token.Value)
+		}
+		value := strings.Trim(node.Children[1].Token.Value, "'")
+		if strings.EqualFold(value, "all") {
+			return nil, true, nil
+		}
+		userType := UserType(value)
+		if userType == nil {
+			return nil, false, errors.Errorf("unknown usertype: %s", value)
+		}
+		return []userpb.UserType{*userType}, false, nil
+	default:
+		return nil, false, errors.Errorf("unsupported filter operand: %s", node.Token.Value)
 	}
-	return filters, nil
 }
 
 func UserType(userType string) *userpb.UserType {
