@@ -498,6 +498,9 @@ func (s *svc) handleOpen(w http.ResponseWriter, r *http.Request) {
 	}
 	theme := r.Form.Get("ui_theme")
 	if theme == "light" || theme == "dark" {
+		if openRes.AppUrl.FormParameters == nil {
+			openRes.AppUrl.FormParameters = map[string]string{}
+		}
 		openRes.AppUrl.FormParameters["ui_defaults"] = "UITheme=" + theme
 	}
 
