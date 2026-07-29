@@ -420,60 +420,63 @@ func (fs *Eosfs) permissionSet(ctx context.Context, eosFileInfo *eosclient.FileI
 		return permissions.NewManagerRole().CS3ResourcePermissions()
 	}
 
-	if eosFileInfo.SysACL == nil {
-		return &provider.ResourcePermissions{
-			// no permissions
-		}
-	}
 	var perm provider.ResourcePermissions
 
-	// as the lightweight acl are stored as normal attrs,
-	// we need to add them in the sysacl entries
-
-	for k, v := range eosFileInfo.Attrs {
-		if e, ok := attrForLightweightACL(k, v); ok {
-			eosFileInfo.SysACL.Entries = append(eosFileInfo.SysACL.Entries, e)
-		}
+	// A world-readable resource can be read by any authenticated user,
+	// independently of the sys.acl. We deliberately only look at the world
+	// read bit: owner access is handled above, group access is expressed
+	// through the sys.acl rather than the unix group bits, and write access
+	// is never granted through the mode bits.
+	if eosFileInfo.Mode&worldRead != 0 {
+		mergePermissions(&perm, permissions.NewViewerRole().CS3ResourcePermissions())
 	}
 
-	userGroupsSet := makeSet(u.Groups)
+	if eosFileInfo.SysACL != nil {
+		// as the lightweight acl are stored as normal attrs,
+		// we need to add them in the sysacl entries
 
-	if utils.IsExternalUser(u) {
-		for _, e := range eosFileInfo.SysACL.Entries {
-			userInGroup := e.Type == acl.TypeGroup && userGroupsSet.in(strings.ToLower(e.Qualifier))
-			if (e.Type == acl.TypeLightweight && e.Qualifier == u.Id.OpaqueId) || userInGroup {
-				mergePermissions(&perm, grants.GetGrantPermissionSet(e.Permissions))
+		for k, v := range eosFileInfo.Attrs {
+			if e, ok := attrForLightweightACL(k, v); ok {
+				eosFileInfo.SysACL.Entries = append(eosFileInfo.SysACL.Entries, e)
 			}
 		}
 
-		// for normal files, we need to inherit also the lw acls
-		// from the parent folder, as these, when creating a new
-		// file are not inherited
-		if !eosFileInfo.IsDir {
-			if parentPath, err := fs.unwrap(ctx, filepath.Dir(eosFileInfo.File)); err == nil {
-				if parent, err := fs.GetMD(ctx, &provider.Reference{Path: parentPath}, nil); err == nil {
-					mergePermissions(&perm, parent.PermissionSet)
+		userGroupsSet := makeSet(u.Groups)
+
+		if utils.IsExternalUser(u) {
+			for _, e := range eosFileInfo.SysACL.Entries {
+				userInGroup := e.Type == acl.TypeGroup && userGroupsSet.in(strings.ToLower(e.Qualifier))
+				if (e.Type == acl.TypeLightweight && e.Qualifier == u.Id.OpaqueId) || userInGroup {
+					mergePermissions(&perm, grants.GetGrantPermissionSet(e.Permissions))
 				}
 			}
-		}
-	} else {
-		auth, err := extractUIDAndGID(u)
-		if err != nil {
-			return &provider.ResourcePermissions{
-				// no permissions
-			}
-		}
-		for _, e := range eosFileInfo.SysACL.Entries {
-			userInGroup := e.Type == acl.TypeGroup && userGroupsSet.in(strings.ToLower(e.Qualifier))
 
-			if (e.Type == acl.TypeUser && e.Qualifier == auth.Role.UID) || userInGroup {
-				mergePermissions(&perm, grants.GetGrantPermissionSet(e.Permissions))
+			// for normal files, we need to inherit also the lw acls
+			// from the parent folder, as these, when creating a new
+			// file are not inherited
+			if !eosFileInfo.IsDir {
+				if parentPath, err := fs.unwrap(ctx, filepath.Dir(eosFileInfo.File)); err == nil {
+					if parent, err := fs.GetMD(ctx, &provider.Reference{Path: parentPath}, nil); err == nil {
+						mergePermissions(&perm, parent.PermissionSet)
+					}
+				}
+			}
+		} else if auth, err := extractUIDAndGID(u); err == nil {
+			for _, e := range eosFileInfo.SysACL.Entries {
+				userInGroup := e.Type == acl.TypeGroup && userGroupsSet.in(strings.ToLower(e.Qualifier))
+
+				if (e.Type == acl.TypeUser && e.Qualifier == auth.Role.UID) || userInGroup {
+					mergePermissions(&perm, grants.GetGrantPermissionSet(e.Permissions))
+				}
 			}
 		}
 	}
 
 	return &perm
 }
+
+// worldRead is the world (other) read bit of a unix mode.
+const worldRead = 0o004
 
 func attrForLightweightACL(k, v string) (*acl.Entry, bool) {
 	ok := strings.HasPrefix(k, "sys."+lwShareAttrKey)
