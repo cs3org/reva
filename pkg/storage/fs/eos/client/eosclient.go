@@ -82,6 +82,7 @@ type FileInfo struct {
 	FID        uint64            `json:"fid"`
 	UID        uint64            `json:"uid"`
 	GID        uint64            `json:"gid"`
+	Mode       uint64            `json:"mode"`
 	TreeSize   uint64            `json:"tree_size"`
 	MTimeSec   uint64            `json:"mtime_sec"`
 	MTimeNanos uint32            `json:"mtime_nanos"`

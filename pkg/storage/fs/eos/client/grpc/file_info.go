@@ -171,6 +171,7 @@ func (c *Client) grpcMDResponseToFileInfo(ctx context.Context, st *erpc.MDRespon
 		fi.FID = st.Cmd.ParentId
 		fi.UID = st.Cmd.Uid
 		fi.GID = st.Cmd.Gid
+		fi.Mode = uint64(st.Cmd.Mode)
 		fi.MTimeSec = st.Cmd.Mtime.Sec
 		// For directories, we prefer stime over mtime
 		if st.Cmd.Stime != nil {
@@ -198,6 +199,8 @@ func (c *Client) grpcMDResponseToFileInfo(ctx context.Context, st *erpc.MDRespon
 		fi.FID = st.Fmd.ContId
 		fi.UID = st.Fmd.Uid
 		fi.GID = st.Fmd.Gid
+		// EOS stores the file mode bits in the FileMd flags field.
+		fi.Mode = uint64(st.Fmd.Flags)
 		fi.MTimeSec = st.Fmd.Mtime.Sec
 		fi.ETag = st.Fmd.Etag
 		fi.File = path.Clean(string(st.Fmd.Path))

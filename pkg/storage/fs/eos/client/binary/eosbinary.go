@@ -1194,6 +1194,12 @@ func (c *Client) mapToFileInfo(ctx context.Context, kv, attrs map[string]string)
 		return nil, err
 	}
 
+	// eos reports the mode bits in octal, e.g. mode:42555
+	var mode uint64
+	if val, ok := kv["mode"]; ok && val != "" {
+		mode, _ = strconv.ParseUint(val, 8, 64)
+	}
+
 	var treeSize uint64
 	// treeSize is only for containers, so we check
 	if val, ok := kv["treesize"]; ok {
@@ -1286,6 +1292,7 @@ func (c *Client) mapToFileInfo(ctx context.Context, kv, attrs map[string]string)
 		FID:        fid,
 		UID:        uid,
 		GID:        gid,
+		Mode:       mode,
 		ETag:       kv["etag"],
 		Size:       size,
 		TreeSize:   treeSize,
