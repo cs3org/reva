@@ -110,3 +110,7 @@ func (fs *eosfs) CommitUpload(_ context.Context, _ *provider.Reference, _ string
 func (fs *eosfs) PrepareUpload(_ context.Context, _ *provider.Reference, _ string, info storage.UploadInfo) (*storage.PrepareUploadResult, error) {
 	return &storage.PrepareUploadResult{VersionCreated: info.NodeExisted}, nil
 }
+
+func (fs *eosfs) RollbackUpload(_ context.Context, _ *provider.Reference, _ string, _ bool, _ int64) error {
+	return nil
+}

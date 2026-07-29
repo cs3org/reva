@@ -98,6 +98,10 @@ func (fs *hellofs) PrepareUpload(_ context.Context, _ *provider.Reference, _ str
 	return &storage.PrepareUploadResult{VersionCreated: info.NodeExisted}, nil
 }
 
+func (fs *hellofs) RollbackUpload(_ context.Context, _ *provider.Reference, _ string, _ bool, _ int64) error {
+	return nil
+}
+
 // grants
 
 // DenyGrant marks a resource as denied for a recipient

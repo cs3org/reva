@@ -163,6 +163,10 @@ func (fs *localfs) PrepareUpload(_ context.Context, _ *provider.Reference, _ str
 	return &storage.PrepareUploadResult{VersionCreated: info.NodeExisted}, nil
 }
 
+func (fs *localfs) RollbackUpload(_ context.Context, _ *provider.Reference, _ string, _ bool, _ int64) error {
+	return nil
+}
+
 // UseIn tells the tus upload middleware which extensions it supports.
 func (fs *localfs) UseIn(composer *tusd.StoreComposer) {
 	composer.UseCore(fs)

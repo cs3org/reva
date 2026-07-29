@@ -279,6 +279,10 @@ func (d *Driver) PrepareUpload(_ context.Context, _ *provider.Reference, _ strin
 	return &storage.PrepareUploadResult{VersionCreated: info.NodeExisted}, nil
 }
 
+func (d *Driver) RollbackUpload(_ context.Context, _ *provider.Reference, _ string, _ bool, _ int64) error {
+	return nil
+}
+
 func (d *Driver) RestoreRevision(_ context.Context, _ *provider.Reference, _ string) (*storage.RestoreRevisionResult, error) {
 	return nil, errtypes.NotSupported("kiteworks: read-only driver")
 }

@@ -621,7 +621,45 @@ func (fs *Decomposedfs) PrepareUpload(ctx context.Context, ref *provider.Referen
 	}
 	committed = true
 
-	return &storage.PrepareUploadResult{VersionCreated: versionCreated}, nil
+	return &storage.PrepareUploadResult{VersionCreated: versionCreated, SizeDiff: sizeDiff}, nil
+}
+
+// RollbackUpload reverts the node state written by PrepareUpload after a failed or aborted
+// postprocessing run. It restores the previous revision (or purges the node if versioning is
+// disabled and no prior version exists) and reverts the optimistic size propagation.
+func (fs *Decomposedfs) RollbackUpload(ctx context.Context, ref *provider.Reference, sessionID string, nodeExisted bool, sizeDiff int64) error {
+	n, err := fs.lu.NodeFromResource(ctx, ref)
+	if err != nil {
+		return fmt.Errorf("RollbackUpload: node lookup failed: %w", err)
+	}
+	if !n.Exists {
+		return nil // new node; coordinator calls Delete separately
+	}
+	n.SpaceRoot, err = node.ReadNode(ctx, fs.lu, n.SpaceID, n.SpaceID, false, nil, false)
+	if err != nil {
+		return err
+	}
+
+	curProcessingID, err := n.ProcessingID(ctx)
+	if err != nil {
+		return fmt.Errorf("RollbackUpload: could not read processing ID: %w", err)
+	}
+	if curProcessingID != sessionID {
+		return nil
+	}
+
+	if nodeExisted {
+		if err := n.RevertCurrentRevision(ctx, false); err != nil {
+			return err
+		}
+		if sizeDiff != 0 {
+			if err := fs.tp.Propagate(ctx, n, -sizeDiff); err != nil {
+				appctx.GetLogger(ctx).Error().Err(err).Msg("RollbackUpload: could not revert propagate")
+			}
+		}
+	}
+
+	return nil
 }
 
 func validateChecksums(ctx context.Context, lu node.PathLookup, n *node.Node, versionPath string) error {

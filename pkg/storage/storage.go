@@ -87,6 +87,7 @@ type UploadInfo struct {
 
 type PrepareUploadResult struct {
 	VersionCreated bool
+	SizeDiff       int64
 }
 
 // FS is the interface to implement access to the storage.
@@ -144,6 +145,13 @@ type FS interface {
 	// Implementations may lock the target node, snapshot the previous version, write new metadata,
 	// and propagate size changes. Drivers that do not require any of these steps may return immediately.
 	PrepareUpload(ctx context.Context, ref *provider.Reference, sessionID string, info UploadInfo) (*PrepareUploadResult, error)
+	// RollbackUpload reverts node state after a failed or aborted postprocessing run.
+	// It is the inverse of PrepareUpload: restores previous metadata and reverts the optimistic
+	// size propagation. The caller (coordinator) is responsible for unmarking the processing flag
+	// and deleting the upload session files. Drivers that performed no work in PrepareUpload may return nil.
+	// nodeExisted indicates whether the target node had a prior version; drivers that have nothing
+	// to undo for new nodes may no-op when nodeExisted is false.
+	RollbackUpload(ctx context.Context, ref *provider.Reference, sessionID string, nodeExisted bool, sizeDiff int64) error
 
 	// Revisions
 

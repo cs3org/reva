@@ -159,6 +159,10 @@ func (fs *cephfs) PrepareUpload(_ context.Context, _ *provider.Reference, _ stri
 	return &storage.PrepareUploadResult{VersionCreated: info.NodeExisted}, nil
 }
 
+func (fs *cephfs) RollbackUpload(_ context.Context, _ *provider.Reference, _ string, _ bool, _ int64) error {
+	return nil
+}
+
 // UseIn tells the tus upload middleware which extensions it supports.
 func (fs *cephfs) UseIn(composer *tusd.StoreComposer) {
 	composer.UseCore(fs)

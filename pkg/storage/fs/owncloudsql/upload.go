@@ -181,6 +181,10 @@ func (fs *owncloudsqlfs) PrepareUpload(_ context.Context, _ *provider.Reference,
 	return &storage.PrepareUploadResult{VersionCreated: info.NodeExisted}, nil
 }
 
+func (fs *owncloudsqlfs) RollbackUpload(_ context.Context, _ *provider.Reference, _ string, _ bool, _ int64) error {
+	return nil
+}
+
 // UseIn tells the tus upload middleware which extensions it supports.
 func (fs *owncloudsqlfs) UseIn(composer *tusd.StoreComposer) {
 	composer.UseCore(fs)
