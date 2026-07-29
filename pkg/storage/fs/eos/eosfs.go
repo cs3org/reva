@@ -40,6 +40,7 @@ import (
 	"github.com/cs3org/reva/v3/pkg/errtypes"
 	"github.com/cs3org/reva/v3/pkg/mime"
 	"github.com/cs3org/reva/v3/pkg/sharedconf"
+	"github.com/cs3org/reva/v3/pkg/spaces"
 	"github.com/cs3org/reva/v3/pkg/storage"
 	eosclient "github.com/cs3org/reva/v3/pkg/storage/fs/eos/client"
 	eosbinary "github.com/cs3org/reva/v3/pkg/storage/fs/eos/client/binary"
@@ -221,12 +222,13 @@ func NewEOSFS(ctx context.Context, c *Config) (storage.FS, error) {
 
 	if c.EnableQuotaCache {
 		eosfs.quotaCache = newQuotaCache(time.Duration(c.QuotaCacheTTL) * time.Second)
-		appctx.GetLogger(ctx).Info().Int("ttl_seconds", c.QuotaCacheTTL).Msg("quota cache enabled")
-		if strings.Contains(c.Namespace, "user") || strings.Contains(c.Namespace, "home") {
-			log := appctx.GetLogger(ctx)
+		log := appctx.GetLogger(ctx)
+		log.Info().Int("ttl_seconds", c.QuotaCacheTTL).Str("space_type", c.ProvidesSpaceType).Msg("quota cache enabled")
+		switch spaces.SpaceType(c.ProvidesSpaceType) {
+		case spaces.SpaceTypeHome, spaces.SpaceTypeProject:
 			go eosfs.warmupQuotaCache(log)
-		} else {
-			appctx.GetLogger(ctx).Info().Msg("quota cache disabled")
+		default:
+			log.Info().Str("space_type", c.ProvidesSpaceType).Msg("quota cache warmup skipped: not a home or project instance")
 		}
 	}
 
