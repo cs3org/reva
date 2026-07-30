@@ -35,6 +35,7 @@ import (
 	"github.com/cs3org/reva/v3/internal/http/services/owncloud/ocs/conversions"
 	"github.com/cs3org/reva/v3/internal/http/services/owncloud/ocs/response"
 	"github.com/cs3org/reva/v3/pkg/appctx"
+	"github.com/cs3org/reva/v3/pkg/notifications/model"
 	"github.com/cs3org/reva/v3/pkg/permissions"
 	"github.com/cs3org/reva/v3/pkg/sharehierarchy"
 	"github.com/cs3org/reva/v3/pkg/rgrpc/todo/pool"
@@ -100,10 +101,13 @@ func (h *Handler) createUserShare(w http.ResponseWriter, r *http.Request, statIn
 				shares = append(shares, newShare)
 			}
 			notify, _ := strconv.ParseBool(r.FormValue("notify"))
-			if notify {
+			if notify && newShare != nil {
 				granter, ok := appctx.ContextGetUser(ctx)
 				if ok {
-					h.SendShareNotification(newShare.ID, granter, userRes.User, statInfo)
+					if _, err := h.SendShareNotification(ctx, c, model.EventShareCreation, newShare.ID, granter, userRes.User, statInfo); err != nil {
+						response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "error sending share notification", err)
+						return
+					}
 				}
 			}
 		} else {

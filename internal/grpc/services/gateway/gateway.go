@@ -27,7 +27,9 @@ import (
 
 	"github.com/ReneKroon/ttlcache/v2"
 	gateway "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
+	"github.com/cs3org/reva/v3/internal/grpc/services/gateway/ratelimiters"
 	"github.com/cs3org/reva/v3/pkg/errtypes"
+	"github.com/cs3org/reva/v3/pkg/notifications/backends"
 	"github.com/cs3org/reva/v3/pkg/rgrpc"
 	"github.com/cs3org/reva/v3/pkg/share/cache"
 	cachereg "github.com/cs3org/reva/v3/pkg/share/cache/registry"
@@ -78,6 +80,7 @@ type config struct {
 	ResourceInfoCacheDrivers map[string]map[string]any `mapstructure:"resource_info_caches"`
 	HomeLayout               string                    `mapstructure:"home_layout"`
 	OCMEnabled               bool                      `mapstructure:"ocm_enabled"`
+	Events                   eventBackendConfig        `mapstructure:"events"`
 }
 
 // sets defaults.
@@ -135,6 +138,10 @@ type svc struct {
 	createHomeCache      *ttlcache.Cache `mapstructure:"create_home_cache"`
 	resourceInfoCache    cache.ResourceInfoCache
 	resourceInfoCacheTTL time.Duration
+	eventBackend         backends.Backend
+	eventLimiter         ratelimiters.Limiter
+	// Drains the NATS connection on service close
+	closeEventBackend func() error
 }
 
 // New creates a new gateway svc that acts as a proxy for any grpc operation.
@@ -165,12 +172,20 @@ func New(ctx context.Context, m map[string]any) (rgrpc.Service, error) {
 	_ = createHomeCache.SetTTL(time.Duration(c.CreateHomeCacheTTL) * time.Second)
 	createHomeCache.SkipTTLExtensionOnHit(true)
 
+	eventBackend, closeEventBackend, err := newEventBackend(ctx, c.Events)
+	if err != nil {
+		return nil, err
+	}
+
 	s := &svc{
-		c:               &c,
-		dataGatewayURL:  *u,
-		tokenmgr:        tokenManager,
-		etagCache:       etagCache,
-		createHomeCache: createHomeCache,
+		c:                 &c,
+		dataGatewayURL:    *u,
+		tokenmgr:          tokenManager,
+		etagCache:         etagCache,
+		createHomeCache:   createHomeCache,
+		eventBackend:      eventBackend,
+		eventLimiter:      ratelimiters.Noop{},
+		closeEventBackend: closeEventBackend,
 	}
 
 	ricache, err := getCacheManager(&c)
@@ -188,6 +203,9 @@ func (s *svc) Register(ss *grpc.Server) {
 
 func (s *svc) Close() error {
 	s.etagCache.Close()
+	if s.closeEventBackend != nil {
+		return s.closeEventBackend()
+	}
 	return nil
 }
 

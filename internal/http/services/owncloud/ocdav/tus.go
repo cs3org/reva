@@ -31,8 +31,8 @@ import (
 	link "github.com/cs3org/go-cs3apis/cs3/sharing/link/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	typespb "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
-	"github.com/cs3org/reva/v3/pkg/permissions"
 	"github.com/cs3org/reva/v3/pkg/appctx"
+	"github.com/cs3org/reva/v3/pkg/permissions"
 	"github.com/cs3org/reva/v3/pkg/utils"
 	"github.com/cs3org/reva/v3/pkg/utils/resourceid"
 	"github.com/rs/zerolog"
@@ -286,6 +286,7 @@ func (s *svc) handleTusPost(ctx context.Context, w http.ResponseWriter, r *http.
 				// set the "accepted" value if returned in the upload response headers
 				w.Header().Set(HeaderOCMtime, httpRes.Header.Get(HeaderOCMtime))
 			}
+			s.sendUploadNotification(ctx, client, info, log)
 
 			// get WebDav permissions for file
 			isPublic := false

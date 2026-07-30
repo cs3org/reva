@@ -29,9 +29,11 @@ import (
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	types "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
 	"github.com/cs3org/reva/v3/internal/http/services/owncloud/ocs/conversions"
-	"github.com/cs3org/reva/v3/pkg/permissions"
 	"github.com/cs3org/reva/v3/internal/http/services/owncloud/ocs/response"
 	"github.com/cs3org/reva/v3/pkg/appctx"
+	"github.com/cs3org/reva/v3/pkg/notifications/model"
+	"github.com/cs3org/reva/v3/pkg/permissions"
+
 	"github.com/cs3org/reva/v3/pkg/rgrpc/todo/pool"
 	"github.com/cs3org/reva/v3/pkg/sharehierarchy"
 )
@@ -95,10 +97,13 @@ func (h *Handler) createGroupShare(w http.ResponseWriter, r *http.Request, statI
 				shares = append(shares, newShare)
 			}
 			notify, _ := strconv.ParseBool(r.FormValue("notify"))
-			if notify {
+			if notify && newShare != nil {
 				granter, ok := appctx.ContextGetUser(ctx)
 				if ok {
-					h.SendShareNotification(newShare.ID, granter, groupRes.Group, statInfo)
+					if _, err := h.SendShareNotification(ctx, c, model.EventShareCreation, newShare.ID, granter, groupRes.Group, statInfo); err != nil {
+						response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "error sending share notification", err)
+						return
+					}
 				}
 			}
 		} else {

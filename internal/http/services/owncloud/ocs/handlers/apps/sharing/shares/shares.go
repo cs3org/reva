@@ -26,7 +26,6 @@ import (
 	"mime"
 	"net/http"
 	"path"
-	"path/filepath"
 	"strconv"
 	"strings"
 	"sync"
@@ -47,12 +46,12 @@ import (
 	"github.com/cs3org/reva/v3/internal/http/services/owncloud/ocs/conversions"
 	"github.com/cs3org/reva/v3/internal/http/services/owncloud/ocs/response"
 	"github.com/cs3org/reva/v3/pkg/appctx"
+	"github.com/cs3org/reva/v3/pkg/auth/scope"
+	"github.com/cs3org/reva/v3/pkg/notifications"
+	"github.com/cs3org/reva/v3/pkg/notifications/model"
 	"github.com/cs3org/reva/v3/pkg/permissions"
 	"github.com/cs3org/reva/v3/pkg/spaces"
 
-	"github.com/cs3org/reva/v3/pkg/notification"
-	"github.com/cs3org/reva/v3/pkg/notification/notificationhelper"
-	"github.com/cs3org/reva/v3/pkg/notification/trigger"
 	"github.com/cs3org/reva/v3/pkg/publicshare"
 	"github.com/cs3org/reva/v3/pkg/rgrpc/todo/pool"
 	"github.com/cs3org/reva/v3/pkg/share"
@@ -65,7 +64,6 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog"
-	"github.com/rs/zerolog/log"
 )
 
 const (
@@ -74,19 +72,17 @@ const (
 
 // Handler implements the shares part of the ownCloud sharing API.
 type Handler struct {
-	gatewayAddr            string
-	storageRegistryAddr    string
-	publicURL              string
-	sharePrefix            string
-	homeNamespace          string
-	ocmMountPoint          string
-	additionalInfoTemplate *template.Template
-	userIdentifierCache    *ttlcache.Cache
-	resourceInfoCache      cache.ResourceInfoCache
-	resourceInfoCacheTTL   time.Duration
-	listOCMShares          bool
-	// May be nil if OCS runs without notifications
-	notificationHelper         *notificationhelper.NotificationHelper
+	gatewayAddr                string
+	storageRegistryAddr        string
+	publicURL                  string
+	sharePrefix                string
+	homeNamespace              string
+	ocmMountPoint              string
+	additionalInfoTemplate     *template.Template
+	userIdentifierCache        *ttlcache.Cache
+	resourceInfoCache          cache.ResourceInfoCache
+	resourceInfoCacheTTL       time.Duration
+	listOCMShares              bool
 	Log                        *zerolog.Logger
 	EnableSpaces               bool
 	pubRWLinkMaxExpiration     time.Duration
@@ -130,16 +126,6 @@ func (h *Handler) Init(c *config.Config, l *zerolog.Logger) {
 	h.resourceInfoCacheTTL = time.Second * time.Duration(c.ResourceInfoCacheTTL)
 	h.pubRWLinkMaxExpiration = time.Second * time.Duration(c.PubRWLinkMaxExpiration)
 	h.pubRWLinkDefaultExpiration = time.Second * time.Duration(c.PubRWLinkDefaultExpiration)
-	if c.Notifications != nil {
-		nh, err := notificationhelper.New("ocs", c.Notifications, l)
-		// no return value :(
-		if err != nil {
-			log.Fatal().Msg("Failed to initialize notification handler in OCS - no emails will be sent on share creation!")
-		} else {
-			h.notificationHelper = nh
-		}
-	}
-
 	h.userIdentifierCache = ttlcache.NewCache()
 	_ = h.userIdentifierCache.SetTTL(time.Second * time.Duration(c.UserIdentifierCacheTTL))
 
@@ -283,10 +269,17 @@ func (h *Handler) CreateShare(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// NotifyShare handles GET requests on /apps/files_sharing/api/v1/shares/(shareid)/notify.
+// NotifyShare handles POST requests on /apps/files_sharing/api/v1/shares/(shareid)/notify.
 func (h *Handler) NotifyShare(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
-	opaqueID := chi.URLParam(r, "shareid")
+	opaqueID := strings.TrimSpace(chi.URLParam(r, "shareid"))
+	if opaqueID == "" {
+		opaqueID = strings.TrimSpace(r.FormValue("share_id"))
+	}
+	if opaqueID == "" {
+		response.WriteOCSError(w, r, response.MetaBadRequest.StatusCode, "missing share id", nil)
+		return
+	}
 
 	c, err := pool.GetGatewayServiceClient(pool.Endpoint(h.gatewayAddr))
 	if err != nil {
@@ -310,16 +303,30 @@ func (h *Handler) NotifyShare(w http.ResponseWriter, r *http.Request) {
 	}
 
 	granter, ok := appctx.ContextGetUser(ctx)
-	if !ok {
+	if !ok || granter == nil {
 		h.Log.Error().Err(err).Msgf("error getting granter data")
 		response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "error getting granter data", err)
+		return
 	}
 
 	resourceID := shareRes.Share.ResourceId
 	statInfo, status, err := h.getResourceInfoByID(ctx, c, resourceID)
-	if err != nil || status.Code != rpc.Code_CODE_OK {
+	if err != nil {
 		h.Log.Error().Err(err).Msg("error mapping share data")
 		response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "error mapping share data", err)
+		return
+	}
+	if status.Code != rpc.Code_CODE_OK {
+		if status.Code == rpc.Code_CODE_PERMISSION_DENIED {
+			response.WriteOCSError(w, r, http.StatusForbidden, "AddGrant permission is required to send a reminder", nil)
+			return
+		}
+		h.Log.Error().Str("code", status.Code.String()).Str("message", status.Message).Msg("error mapping share data")
+		response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "error mapping share data", nil)
+		return
+	}
+	if !statInfo.GetPermissionSet().GetAddGrant() {
+		response.WriteOCSError(w, r, http.StatusForbidden, "AddGrant permission is required to send a reminder", nil)
 		return
 	}
 
@@ -338,7 +345,11 @@ func (h *Handler) NotifyShare(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		recipient = h.SendShareNotification(opaqueID, granter, granteeRes.User, statInfo)
+		recipient, err = h.SendShareNotification(ctx, c, model.EventShareCreation, opaqueID, granter, granteeRes.User, statInfo)
+		if err != nil {
+			response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "error sending share notification", err)
+			return
+		}
 	} else if granteeType == provider.GranteeType_GRANTEE_TYPE_GROUP {
 		granteeID := shareRes.Share.Grantee.GetGroupId().OpaqueId
 		granteeRes, err := c.GetGroupByClaim(ctx, &grouppb.GetGroupByClaimRequest{
@@ -351,7 +362,11 @@ func (h *Handler) NotifyShare(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		recipient = h.SendShareNotification(opaqueID, granter, granteeRes.Group, statInfo)
+		recipient, err = h.SendShareNotification(ctx, c, model.EventShareCreation, opaqueID, granter, granteeRes.Group, statInfo)
+		if err != nil {
+			response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "error sending share notification", err)
+			return
+		}
 	}
 
 	w.WriteHeader(http.StatusOK)
@@ -363,46 +378,62 @@ func (h *Handler) NotifyShare(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// SendShareNotification sends a notification with information from a Share.
-func (h *Handler) SendShareNotification(opaqueID string, granter *userpb.User, grantee any, statInfo *provider.ResourceInfo) string {
-	if h.notificationHelper == nil {
-		return ""
-	}
-	var granteeDisplayName, granteeName, recipient string
-	isGranteeGroup := false
+// SendShareNotification sends a notification with information from a Share. It
+// returns the resolved recipient and an error when publishing the event fails,
+// so the caller can surface it rather than silently returning success.
+func (h *Handler) SendShareNotification(ctx context.Context, client gateway.GatewayAPIClient, eventType, opaqueID string, granter *userpb.User, grantee any, statInfo *provider.ResourceInfo) (string, error) {
+	var recipient string
+	var recipientName string
 
 	if u, ok := grantee.(*userpb.User); ok {
-		granteeDisplayName = u.DisplayName
-		granteeName = u.Username
 		recipient = u.Mail
+		recipientName = u.GetDisplayName()
+		if recipientName == "" {
+			recipientName = u.GetUsername()
+		}
 	} else if g, ok := grantee.(*grouppb.Group); ok {
-		granteeDisplayName = g.DisplayName
-		granteeName = g.GroupName
 		recipient = g.Mail
-		isGranteeGroup = true
+		recipientName = g.GetDisplayName()
+		if recipientName == "" {
+			recipientName = g.GetGroupName()
+		}
 	}
 
-	h.notificationHelper.TriggerNotification(&trigger.Trigger{
-		Notification: &notification.Notification{
-			TemplateName: "share-create-mail",
-			Ref:          opaqueID,
-			Recipients:   []string{recipient},
-		},
-		Ref: opaqueID,
-		TemplateData: map[string]any{
-			"granteeDisplayName": granteeDisplayName,
-			"granteeUserName":    granteeName,
-			"granterDisplayName": granter.DisplayName,
-			"granterUserName":    granter.Username,
-			"path":               statInfo.Path,
-			"isFolder":           statInfo.Type == provider.ResourceType_RESOURCE_TYPE_CONTAINER,
-			"isGranteeGroup":     isGranteeGroup,
-			"base":               filepath.Base(statInfo.Path),
-		},
-	})
-	h.Log.Debug().Msgf("notification trigger %s created", opaqueID)
+	if strings.TrimSpace(recipient) == "" {
+		h.Log.Debug().Msgf("notification trigger %s skipped because recipient is empty", opaqueID)
+		return recipient, nil
+	}
 
-	return recipient
+	templateData := map[string]any{
+		"share_id":               opaqueID,
+		"recipient":              recipient,
+		"recipient_display_name": recipientName,
+		"sender_display_name":    granter.GetDisplayName(),
+		"sender_username":        granter.GetUsername(),
+		"sender_mail":            granter.GetMail(),
+		"resource_id":            spaces.EncodeToStringifiedResourceID(statInfo.GetId()),
+		"resource_name":          statInfo.GetName(),
+		"resource_path":          statInfo.GetPath(),
+		"resource_type":          statInfo.GetType().String(),
+	}
+
+	// PublishEvent is restricted to reva daemons. Re-sign this request's token with
+	// the machine scope, keeping the acting user (the granter) unchanged.
+	publishCtx, err := scope.ContextWithMachineScope(ctx)
+	if err != nil {
+		return recipient, fmt.Errorf("failed to elevate context for share notification: %w", err)
+	}
+
+	event := notifications.EncodeEvent(eventType, []string{recipient}, templateData)
+	res, err := client.PublishEvent(publishCtx, &gateway.PublishEventRequest{Event: event})
+	if err != nil {
+		return recipient, fmt.Errorf("failed to send share notification event: %w", err)
+	}
+	if code := res.GetStatus().GetCode(); code != rpc.Code_CODE_OK {
+		return recipient, fmt.Errorf("gateway rejected share notification event %q for share %s: %s (%s)", eventType, opaqueID, code.String(), res.GetStatus().GetMessage())
+	}
+
+	return recipient, nil
 }
 
 func (h *Handler) extractPermissions(w http.ResponseWriter, r *http.Request, ri *provider.ResourceInfo, defaultPermissions *permissions.Role) (*permissions.Role, []byte, error) {
@@ -1267,7 +1298,7 @@ func (h *Handler) mustGetIdentifiers(ctx context.Context, client gateway.Gateway
 		return idIf.(*userIdentifiers)
 	}
 
-	log.Debug().Msg("cache miss")
+	log.Trace().Msg("cache miss")
 	var ui *userIdentifiers
 
 	if isGroup {
@@ -1332,7 +1363,7 @@ func (h *Handler) mustGetIdentifiers(ctx context.Context, client gateway.Gateway
 		}
 	}
 	_ = h.userIdentifierCache.Set(id, ui)
-	log.Debug().Str("id", id).Msg("cache update")
+	log.Trace().Str("id", id).Msg("cache update")
 	return ui
 }
 
