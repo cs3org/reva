@@ -20,6 +20,7 @@ package ocdav
 
 import (
 	"context"
+	"encoding/json"
 	"net/http"
 	"path"
 	"path/filepath"
@@ -235,7 +236,11 @@ func (s *svc) handlePut(ctx context.Context, w http.ResponseWriter, r *http.Requ
 		Opaque: &typespb.Opaque{Map: opaqueMap},
 	}
 
-	if userInCtxHasUploaderRole(ctx) {
+	// Clients that may only upload (e.g. through an upload-only public link) never
+	// overwrite existing content: we store their upload under a shouldRandomizePath name,
+	// which we report back to them once the upload succeeded.
+	shouldRandomizePath := userInCtxHasUploaderRole(ctx)
+	if shouldRandomizePath {
 		p := ref.Path
 		ref.Path, err = randomizePath(p)
 		if err != nil {
@@ -373,7 +378,6 @@ func (s *svc) handlePut(ctx context.Context, w http.ResponseWriter, r *http.Requ
 	newInfo := sRes.Info
 	s.sendUploadNotification(ctx, client, newInfo, log)
 
-	w.Header().Add(HeaderContentType, newInfo.MimeType)
 	w.Header().Set(HeaderETag, newInfo.Etag)
 	w.Header().Set(HeaderOCFileID, spaces.EncodeToStringifiedResourceID(newInfo.Id))
 
@@ -381,6 +385,15 @@ func (s *svc) handlePut(ctx context.Context, w http.ResponseWriter, r *http.Requ
 	t := utils.TSToTime(newInfo.Mtime).UTC()
 	lastModifiedString := t.Format(time.RFC1123Z)
 	w.Header().Set(HeaderLastModified, lastModifiedString)
+
+	// The client has no way of knowing under which name we stored its upload, so we
+	// report the name we picked
+	if shouldRandomizePath {
+		sendCreatedResponse(w, path.Base(ref.Path), log)
+		return
+	}
+
+	w.Header().Add(HeaderContentType, newInfo.MimeType)
 
 	// file was new
 	if info == nil {
@@ -390,6 +403,28 @@ func (s *svc) handlePut(ctx context.Context, w http.ResponseWriter, r *http.Requ
 
 	// overwrite
 	w.WriteHeader(http.StatusNoContent)
+}
+
+// putResponse is returned for uploads that were stored under a name chosen by
+// the server instead of the one the client requested.
+type putResponse struct {
+	Filename string `json:"filename"`
+}
+
+func sendCreatedResponse(w http.ResponseWriter, filename string, log zerolog.Logger) {
+	body, err := json.Marshal(&putResponse{Filename: filename})
+	if err != nil {
+		log.Error().Err(err).Msg("error marshaling put response")
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set(HeaderContentType, "application/json")
+	w.Header().Set(HeaderContentLength, strconv.Itoa(len(body)))
+	w.WriteHeader(http.StatusCreated)
+	if _, err := w.Write(body); err != nil {
+		log.Err(err).Msg("error writing response")
+	}
 }
 
 func userInCtxHasUploaderRole(ctx context.Context) bool {
