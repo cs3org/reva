@@ -384,19 +384,24 @@ func (h *Handler) NotifyShare(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) SendShareNotification(ctx context.Context, client gateway.GatewayAPIClient, eventType, opaqueID string, granter *userpb.User, grantee any, statInfo *provider.ResourceInfo) (string, error) {
 	var recipient string
 	var recipientName string
+	var recipientUsername string
+	recipientIsGroup := false
 
 	if u, ok := grantee.(*userpb.User); ok {
 		recipient = u.Mail
+		recipientUsername = u.GetUsername()
 		recipientName = u.GetDisplayName()
 		if recipientName == "" {
-			recipientName = u.GetUsername()
+			recipientName = recipientUsername
 		}
 	} else if g, ok := grantee.(*grouppb.Group); ok {
 		recipient = g.Mail
+		recipientUsername = g.GetGroupName()
 		recipientName = g.GetDisplayName()
 		if recipientName == "" {
-			recipientName = g.GetGroupName()
+			recipientName = recipientUsername
 		}
+		recipientIsGroup = true
 	}
 
 	if strings.TrimSpace(recipient) == "" {
@@ -408,6 +413,8 @@ func (h *Handler) SendShareNotification(ctx context.Context, client gateway.Gate
 		"share_id":               opaqueID,
 		"recipient":              recipient,
 		"recipient_display_name": recipientName,
+		"recipient_username":     recipientUsername,
+		"recipient_is_group":     recipientIsGroup,
 		"sender_display_name":    granter.GetDisplayName(),
 		"sender_username":        granter.GetUsername(),
 		"sender_mail":            granter.GetMail(),
