@@ -487,11 +487,24 @@ func (s *svc) handleOpen(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var appForEditing string
-	// TODO(lopresti) this is a shortcut for now to avoid changing the protocol. In the future we want to only pass a coded "reason",
-	// the actual message is to be rendered by the web frontend (potentially localized).
-	if m := regexp.MustCompile(`\b([A-Za-z0-9._+-]+)\s+to edit instead$`).FindStringSubmatch(openRes.ForcedViewModeReason); m != nil {
-		appForEditing = m[1]
+	// UI-related parameters
+	lang := r.Form.Get("lang")
+	if lang != "" {
+		appFullURL, err := url.Parse(openRes.AppUrl.AppUrl)
+		if err != nil {
+			writeError(w, r, appErrorServerError, "error parsing the app URL", err)
+			return
+		}
+		q := appFullURL.Query()
+		q.Set("ui", lang)   // EuroOffice + Office365
+		q.Set("lang", lang) // Collabora
+		q.Set("rs", lang)   // Office365, https://learn.microsoft.com/en-us/microsoft-365/cloud-storage-partner-program/online/discovery#dc_llcc
+		appFullURL.RawQuery = q.Encode()
+		openRes.AppUrl.AppUrl = appFullURL.String()
+	}
+	theme := r.Form.Get("ui_theme")
+	if theme == "light" || theme == "dark" {
+		openRes.AppUrl.FormParameters["UITheme"] = theme
 	}
 
 	// UI-related parameters
@@ -527,7 +540,7 @@ func (s *svc) handleOpen(w http.ResponseWriter, r *http.Request) {
 		"headers":                openRes.AppUrl.Headers,
 		"target":                 appTargetToString(openRes.AppUrl.Target),
 		"forced_viewmode_reason": openRes.ForcedViewModeReason,
-		"app_for_editing":        appForEditing,
+		"app_for_editing":        openRes.AppForEdit,
 	}
 
 	js, err := json.Marshal(resPayload)
