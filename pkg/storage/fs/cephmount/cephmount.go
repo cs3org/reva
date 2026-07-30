@@ -55,6 +55,9 @@ import (
 const (
 	xattrUserNs = "user."
 	xattrLock   = xattrUserNs + "reva.lockpayload"
+	// xattrLwShare + <account> holds the rwx permissions granted to an external
+	// account, which has no local uid to put in a POSIX ACL.
+	xattrLwShare = xattrUserNs + "reva.lwshare."
 	// recursive size in bytes of a directory subtree, maintained by the MDS
 	xattrCephRbytes = "ceph.dir.rbytes"
 )
@@ -375,6 +378,10 @@ func (fs *cephmountfs) readArbitraryMetadata(path string, mdKeys []string) map[s
 	}
 	for _, name := range names {
 		if !strings.HasPrefix(name, xattrUserNs) {
+			continue
+		}
+		if strings.HasPrefix(name, xattrLwShare) {
+			// Grants to external accounts are exposed through ListGrants, not as metadata.
 			continue
 		}
 		key := strings.TrimPrefix(name, xattrUserNs)
@@ -937,6 +944,16 @@ func (fs *cephmountfs) AddGrant(ctx context.Context, ref *provider.Reference, g 
 
 	fs.logOperation(ctx, "AddGrant", path)
 
+	// External accounts have no local uid, so they go to an xattr, not the ACL.
+	if qualifier, ok := externalAccountQualifier(g.Grantee); ok {
+		if err := fs.addExternalAccountGrant(ctx, path, qualifier, g.Permissions); err != nil {
+			wrappedErr := errors.Wrap(err, "cephmount: failed to add grant for external account")
+			fs.logOperationError(ctx, "AddGrant", path, wrappedErr)
+			return wrappedErr
+		}
+		return nil
+	}
+
 	// Use setfacl system command to set permissions
 	err = fs.addGrantViaSetfacl(ctx, path, g)
 	if err != nil {
@@ -957,6 +974,15 @@ func (fs *cephmountfs) RemoveGrant(ctx context.Context, ref *provider.Reference,
 	}
 
 	fs.logOperation(ctx, "RemoveGrant", path)
+
+	if qualifier, ok := externalAccountQualifier(g.Grantee); ok {
+		if err := fs.removeExternalAccountGrant(ctx, path, qualifier); err != nil {
+			wrappedErr := errors.Wrap(err, "cephmount: failed to remove grant for external account")
+			fs.logOperationError(ctx, "RemoveGrant", path, wrappedErr)
+			return wrappedErr
+		}
+		return nil
+	}
 
 	// Use setfacl system command to remove permissions
 	err = fs.removeGrantViaSetfacl(ctx, path, g)
@@ -995,15 +1021,18 @@ func (fs *cephmountfs) ListGrants(ctx context.Context, ref *provider.Reference) 
 
 	fullPath := filepath.Join(fs.chrootDir, path)
 
+	log := appctx.GetLogger(ctx)
+
+	// Grants to external accounts live in xattrs, not in the POSIX ACL.
+	glist = append(glist, fs.listExternalAccountGrants(ctx, fullPath)...)
+
 	// Use getfacl to read ACLs
 	cmd := exec.CommandContext(ctx, "getfacl", "--omit-header", "--numeric", fullPath)
 	output, err := cmd.CombinedOutput()
 	if err != nil {
-		// No ACLs or error - return empty list
-		return []*provider.Grant{}, nil
+		// No ACLs or error - return what we have so far
+		return glist, nil
 	}
-
-	log := appctx.GetLogger(ctx)
 
 	// Parse getfacl output
 	lines := strings.SplitSeq(string(output), "\n")
@@ -1231,6 +1260,12 @@ func (fs *cephmountfs) SetArbitraryMetadata(ctx context.Context, ref *provider.R
 		if !strings.HasPrefix(k, xattrUserNs) {
 			k = xattrUserNs + k
 		}
+		if strings.HasPrefix(k, xattrLwShare) {
+			// These hold grants to external accounts and are owned by AddGrant/RemoveGrant.
+			wrappedErr := errtypes.BadRequest(fmt.Sprintf("cephmount: key %s is reserved", k))
+			fs.logOperationError(ctx, "SetArbitraryMetadata", path, wrappedErr)
+			return wrappedErr
+		}
 		if err := xattr.Set(fullPath, k, []byte(v)); err != nil {
 			wrappedErr := errors.Wrap(err, "cephmount: failed to set xattr")
 			fs.logOperationError(ctx, "SetArbitraryMetadata", path, wrappedErr)
@@ -1255,6 +1290,12 @@ func (fs *cephmountfs) UnsetArbitraryMetadata(ctx context.Context, ref *provider
 	for _, key := range keys {
 		if !strings.HasPrefix(key, xattrUserNs) {
 			key = xattrUserNs + key
+		}
+		if strings.HasPrefix(key, xattrLwShare) {
+			// These hold grants to external accounts and are owned by AddGrant/RemoveGrant.
+			wrappedErr := errtypes.BadRequest(fmt.Sprintf("cephmount: key %s is reserved", key))
+			fs.logOperationError(ctx, "UnsetArbitraryMetadata", path, wrappedErr)
+			return wrappedErr
 		}
 		if err := xattr.Remove(fullPath, key); err != nil {
 			// Ignore if the attribute doesn't exist
@@ -1513,6 +1554,100 @@ func (fs *cephmountfs) Unlock(ctx context.Context, ref *provider.Reference, lock
 	}
 	log.Debug().Str("path", path).Str("lockId", lock.LockId).Msg("cephmount: Unlock: lock removed")
 	return nil
+}
+
+// externalAccountQualifier returns the xattr qualifier for a lightweight or
+// federated grantee. Those accounts only exist inside reva, so they have no
+// /etc/passwd entry and must never be resolved as local users.
+func externalAccountQualifier(g *provider.Grantee) (string, bool) {
+	if g == nil || g.Type != provider.GranteeType_GRANTEE_TYPE_USER {
+		return "", false
+	}
+	id := g.GetUserId()
+	if id == nil {
+		return "", false
+	}
+	switch id.Type {
+	case userv1beta1.UserType_USER_TYPE_LIGHTWEIGHT, userv1beta1.UserType_USER_TYPE_FEDERATED:
+		return id.OpaqueId, true
+	default:
+		return "", false
+	}
+}
+
+// addExternalAccountGrant stores a grant to an external account as an xattr.
+// Unlike the setfacl path this is not recursive: the attribute is only read back
+// by reva, on the shared resource itself.
+func (fs *cephmountfs) addExternalAccountGrant(ctx context.Context, path, qualifier string, perms *provider.ResourcePermissions) error {
+	fullPath := filepath.Join(fs.chrootDir, path)
+	key := xattrLwShare + qualifier
+	value := fs.permissionsToACLString(perms)
+
+	if err := xattr.Set(fullPath, key, []byte(value)); err != nil {
+		return errors.Wrapf(err, "cephmount: failed to set xattr %s", key)
+	}
+
+	appctx.GetLogger(ctx).Debug().
+		Str("path", fullPath).
+		Str("xattr", key).
+		Str("permissions", value).
+		Msg("cephmount: stored grant for external account")
+
+	return nil
+}
+
+// removeExternalAccountGrant drops the xattr holding the grant.
+func (fs *cephmountfs) removeExternalAccountGrant(ctx context.Context, path, qualifier string) error {
+	fullPath := filepath.Join(fs.chrootDir, path)
+	key := xattrLwShare + qualifier
+
+	if err := xattr.Remove(fullPath, key); err != nil && !errors.Is(err, xattr.ENOATTR) {
+		return errors.Wrapf(err, "cephmount: failed to remove xattr %s", key)
+	}
+
+	appctx.GetLogger(ctx).Debug().
+		Str("path", fullPath).
+		Str("xattr", key).
+		Msg("cephmount: removed grant for external account")
+
+	return nil
+}
+
+// listExternalAccountGrants returns the grants stored in the xattrs of fullPath.
+// Reads are best-effort: unreadable attributes are skipped.
+func (fs *cephmountfs) listExternalAccountGrants(ctx context.Context, fullPath string) []*provider.Grant {
+	log := appctx.GetLogger(ctx)
+
+	names, err := xattr.List(fullPath)
+	if err != nil {
+		log.Debug().Err(err).Str("path", fullPath).Msg("cephmount: cannot list xattrs for external account grants")
+		return nil
+	}
+
+	var glist []*provider.Grant
+	for _, name := range names {
+		if !strings.HasPrefix(name, xattrLwShare) {
+			continue
+		}
+		buf, err := xattr.Get(fullPath, name)
+		if err != nil {
+			log.Debug().Err(err).Str("xattr", name).Msg("cephmount: skipping unreadable external account grant")
+			continue
+		}
+		glist = append(glist, &provider.Grant{
+			Grantee: &provider.Grantee{
+				Type: provider.GranteeType_GRANTEE_TYPE_USER,
+				Id: &provider.Grantee_UserId{UserId: &userv1beta1.UserId{
+					// Only the account name is stored, so the idp is left empty and
+					// federated accounts are reported as lightweight ones.
+					Type:     userv1beta1.UserType_USER_TYPE_LIGHTWEIGHT,
+					OpaqueId: strings.TrimPrefix(name, xattrLwShare),
+				}},
+			},
+			Permissions: fs.aclStringToPermissions(string(buf)),
+		})
+	}
+	return glist
 }
 
 // resolveGranteeIdentifier resolves a grantee (user or group) to their system identifier (UID or GID)
