@@ -65,4 +65,11 @@ func TestUserManager(t *testing.T) {
 	if err != nil {
 		t.Fatal(err.Error())
 	}
+
+	// New must not dial anything eagerly, so pool_enabled must also succeed without a
+	// reachable LDAP server.
+	_, err = New(map[string]interface{}{"pool_enabled": true})
+	if err != nil {
+		t.Fatal(err.Error())
+	}
 }
