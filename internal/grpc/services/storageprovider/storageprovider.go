@@ -1709,12 +1709,16 @@ func getFS(ctx context.Context, c *config) (storage.FS, error) {
 	if !ok {
 		return nil, errtypes.NotFound("driver not found: " + c.Driver)
 	}
-	// Pass down the space type declared by this storage provider, so that drivers
-	// can adapt their behaviour to the kind of spaces they serve. We copy the
-	// driver config to avoid mutating the parsed configuration.
-	conf := make(map[string]any, len(c.Drivers[c.Driver])+1)
+	// Pass down the space type and layout declared by this storage provider, so
+	// that drivers can adapt to the kind of spaces they serve without redefining
+	// what it already knows. The depth is rebased on the driver's own paths:
+	// space_depth counts from this namespace root, and the mount path is trimmed
+	// off before a driver is ever called. We copy the driver config to avoid
+	// mutating the parsed configuration.
+	conf := make(map[string]any, len(c.Drivers[c.Driver])+2)
 	maps.Copy(conf, c.Drivers[c.Driver])
 	conf["provides_space_type"] = c.ProvidesSpaceType
+	conf["space_depth"] = c.SpaceDepth - pathLevels(c.MountPath)
 	return f(ctx, conf)
 }
 

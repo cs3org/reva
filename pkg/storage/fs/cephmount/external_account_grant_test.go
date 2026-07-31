@@ -25,6 +25,7 @@ import (
 
 	userv1beta1 "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
+	"github.com/cs3org/reva/v3/pkg/errtypes"
 	"github.com/pkg/xattr"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -129,7 +130,7 @@ func TestExternalAccountGrantRoundTrip(t *testing.T) {
 			// account has no entry in /etc/passwd to resolve.
 			require.NoError(t, fs.AddGrant(ctx, ref, grant))
 
-			value, err := xattr.Get(fullPath, xattrLwShare+"guest@example.org")
+			value, err := xattr.Get(fullPath, xattrExtShare+"guest@example.org")
 			require.NoError(t, err, "grant should be stored as an xattr")
 			assert.Equal(t, "r-x", string(value))
 
@@ -148,12 +149,12 @@ func TestExternalAccountGrantRoundTrip(t *testing.T) {
 			// UpdateGrant overwrites the stored permissions.
 			grant.Permissions.InitiateFileUpload = true
 			require.NoError(t, fs.UpdateGrant(ctx, ref, grant))
-			value, err = xattr.Get(fullPath, xattrLwShare+"guest@example.org")
+			value, err = xattr.Get(fullPath, xattrExtShare+"guest@example.org")
 			require.NoError(t, err)
 			assert.Equal(t, "rwx", string(value))
 
 			require.NoError(t, fs.RemoveGrant(ctx, ref, grant))
-			_, err = xattr.Get(fullPath, xattrLwShare+"guest@example.org")
+			_, err = xattr.Get(fullPath, xattrExtShare+"guest@example.org")
 			assert.ErrorIs(t, err, xattr.ENOATTR, "grant xattr should be gone")
 
 			glist, err = fs.ListGrants(ctx, ref)
@@ -176,6 +177,27 @@ func TestRemoveExternalAccountGrantIsIdempotent(t *testing.T) {
 	require.NoError(t, fs.RemoveGrant(ctx, &provider.Reference{Path: "/shared.txt"}, grant))
 }
 
+// A failure to read the grants must not be reported as a resource without any:
+// the caller cannot tell the two apart, and an empty list reads as "not shared".
+func TestListGrantsFailsInsteadOfReportingNoGrants(t *testing.T) {
+	fs := newGrantTestFS(t)
+	ctx := ContextWithTestLogger(t)
+	ref := &provider.Reference{Path: "/shared.txt"}
+
+	require.NoError(t, fs.AddGrant(ctx, ref, &provider.Grant{
+		Grantee:     externalGrantee("guest@example.org", userv1beta1.UserType_USER_TYPE_LIGHTWEIGHT),
+		Permissions: &provider.ResourcePermissions{Stat: true},
+	}))
+
+	// The resource disappears under the listing.
+	require.NoError(t, os.Remove(filepath.Join(fs.chrootDir, fs.toChroot("/shared.txt"))))
+
+	glist, err := fs.ListGrants(ctx, ref)
+	require.Error(t, err, "reading the grants of a resource that is gone must fail")
+	assert.Empty(t, glist)
+	assert.Implements(t, (*errtypes.IsNotFound)(nil), err, "a resource that is gone is a NotFound, not an internal error")
+}
+
 func TestExternalAccountGrantsAreNotArbitraryMetadata(t *testing.T) {
 	fs := newGrantTestFS(t)
 	ctx := ContextWithTestLogger(t)
@@ -192,19 +214,19 @@ func TestExternalAccountGrantsAreNotArbitraryMetadata(t *testing.T) {
 
 	md := fs.readArbitraryMetadata(chrootPath, nil)
 	assert.Equal(t, "blue", md["colour"])
-	assert.NotContains(t, md, "reva.lwshare.guest@example.org", "grants must not leak into arbitrary metadata")
+	assert.NotContains(t, md, "reva.extshare.guest@example.org", "grants must not leak into arbitrary metadata")
 
 	// The reserved keys cannot be written or cleared through the metadata API,
 	// which would otherwise silently revoke or forge a share.
 	err := fs.SetArbitraryMetadata(ctx, ref, &provider.ArbitraryMetadata{
-		Metadata: map[string]string{"reva.lwshare.guest@example.org": "rwx"},
+		Metadata: map[string]string{"reva.extshare.guest@example.org": "rwx"},
 	})
 	assert.Error(t, err)
 
-	err = fs.UnsetArbitraryMetadata(ctx, ref, []string{"reva.lwshare.guest@example.org"})
+	err = fs.UnsetArbitraryMetadata(ctx, ref, []string{"reva.extshare.guest@example.org"})
 	assert.Error(t, err)
 
-	value, err := xattr.Get(filepath.Join(fs.chrootDir, chrootPath), xattrLwShare+"guest@example.org")
+	value, err := xattr.Get(filepath.Join(fs.chrootDir, chrootPath), xattrExtShare+"guest@example.org")
 	require.NoError(t, err)
 	assert.Equal(t, "r--", string(value), "the stored grant must be untouched")
 }

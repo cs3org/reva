@@ -34,6 +34,7 @@ import (
 
 	userv1beta1 "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	"github.com/cs3org/reva/v3/pkg/appctx"
+	"github.com/cs3org/reva/v3/pkg/utils"
 )
 
 // PrivilegeVerificationResult contains the results of privilege verification
@@ -215,6 +216,8 @@ type UserThreadPool struct {
 	cleanupTimer *time.Timer
 	nobodyUID    int // UID for nobody user (fallback)
 	nobodyGID    int // GID for nobody group (fallback)
+	externalUID  int // UID of the service account used for external accounts
+	externalGID  int // GID of the service account used for external accounts
 }
 
 // UserThread represents a dedicated thread for a user with persistent UID
@@ -251,6 +254,8 @@ type UserThreadPoolConfig struct {
 	CleanupPeriod time.Duration // How often to check for expired threads
 	NobodyUID     int           // UID for nobody user (fallback)
 	NobodyGID     int           // GID for nobody group (fallback)
+	ExternalUID   int           // UID of the service account used for external accounts
+	ExternalGID   int           // GID of the service account used for external accounts
 }
 
 // NewUserThreadPool creates a new thread pool for managing per-user threads
@@ -272,10 +277,12 @@ func NewUserThreadPool(config UserThreadPoolConfig) (*UserThreadPool, *Privilege
 	privResult := VerifyPrivileges(config.NobodyUID, config.NobodyGID)
 
 	pool := &UserThreadPool{
-		threads:   make(map[int]*UserThread),
-		threadTTL: config.ThreadTTL,
-		nobodyUID: config.NobodyUID,
-		nobodyGID: config.NobodyGID,
+		threads:     make(map[int]*UserThread),
+		threadTTL:   config.ThreadTTL,
+		nobodyUID:   config.NobodyUID,
+		nobodyGID:   config.NobodyGID,
+		externalUID: config.ExternalUID,
+		externalGID: config.ExternalGID,
 	}
 
 	// Start cleanup routine
@@ -336,6 +343,13 @@ func (p *UserThreadPool) mapUserToUIDGID(user *userv1beta1.User) (int, int) {
 	// Handle nobody user specially
 	if user.Id != nil && user.Id.OpaqueId == "nobody" {
 		return p.nobodyUID, p.nobodyGID
+	}
+
+	// External accounts are unknown to the system and have no uid of their own,
+	// so they act through the dedicated service account. Their access is decided
+	// by the caller from the stored grants, not by this uid.
+	if user.Id != nil && utils.IsExternalUser(user) {
+		return p.externalUID, p.externalGID
 	}
 
 	// Handle root user specially - check by username for explicit root
