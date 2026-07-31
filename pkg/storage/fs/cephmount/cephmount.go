@@ -437,14 +437,20 @@ func (fs *cephmountfs) fileAsResourceInfo(path string, info os.FileInfo, mdKeys 
 
 	owner, _ := user.LookupId(fmt.Sprint(stat.Uid))
 
+	externalPath := fs.fromChroot(path)
+
 	ri := &provider.ResourceInfo{
 		Type:     resourceType,
 		Id:       resourceId,
 		Checksum: &provider.ResourceChecksum{},
 		Size:     size,
 		Mtime:    &typepb.Timestamp{Seconds: uint64(info.ModTime().Unix())},
-		Path:     fs.fromChroot(path), // Convert chroot path back to external path
-		Owner:    &userv1beta1.UserId{OpaqueId: owner.Username},
+		Path:     externalPath,
+		// Clients list a received share by its name and etag, so both must be set
+		// even though the resource itself is addressed by path or id.
+		Name:  filepath.Base(externalPath),
+		Etag:  calcEtag(info, stat),
+		Owner: &userv1beta1.UserId{OpaqueId: owner.Username},
 		PermissionSet: &provider.ResourcePermissions{
 			GetPath:              true,
 			GetQuota:             true,
@@ -489,6 +495,14 @@ func (fs *cephmountfs) fileAsResourceInfo(path string, info os.FileInfo, mdKeys 
 	ri.ArbitraryMetadata.Metadata["device"] = strconv.FormatUint(uint64(stat.Dev), 10)
 
 	return ri, nil
+}
+
+// calcEtag derives an etag from the inode and the mtime, so it changes whenever
+// the resource is modified. Note that the mtime of a directory only changes when
+// its direct children do, so changes deeper in the tree do not propagate.
+func calcEtag(info os.FileInfo, stat *syscall.Stat_t) string {
+	mtime := info.ModTime()
+	return fmt.Sprintf("\"%d:%d.%d\"", stat.Ino, mtime.Unix(), mtime.Nanosecond())
 }
 
 // toChroot converts an external path to a chroot-relative path
