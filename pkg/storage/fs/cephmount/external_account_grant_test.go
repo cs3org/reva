@@ -25,6 +25,7 @@ import (
 
 	userv1beta1 "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
+	"github.com/cs3org/reva/v3/pkg/errtypes"
 	"github.com/pkg/xattr"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -174,6 +175,27 @@ func TestRemoveExternalAccountGrantIsIdempotent(t *testing.T) {
 
 	// Removing a grant that was never added must not fail.
 	require.NoError(t, fs.RemoveGrant(ctx, &provider.Reference{Path: "/shared.txt"}, grant))
+}
+
+// A failure to read the grants must not be reported as a resource without any:
+// the caller cannot tell the two apart, and an empty list reads as "not shared".
+func TestListGrantsFailsInsteadOfReportingNoGrants(t *testing.T) {
+	fs := newGrantTestFS(t)
+	ctx := ContextWithTestLogger(t)
+	ref := &provider.Reference{Path: "/shared.txt"}
+
+	require.NoError(t, fs.AddGrant(ctx, ref, &provider.Grant{
+		Grantee:     externalGrantee("guest@example.org", userv1beta1.UserType_USER_TYPE_LIGHTWEIGHT),
+		Permissions: &provider.ResourcePermissions{Stat: true},
+	}))
+
+	// The resource disappears under the listing.
+	require.NoError(t, os.Remove(filepath.Join(fs.chrootDir, fs.toChroot("/shared.txt"))))
+
+	glist, err := fs.ListGrants(ctx, ref)
+	require.Error(t, err, "reading the grants of a resource that is gone must fail")
+	assert.Empty(t, glist)
+	assert.Implements(t, (*errtypes.IsNotFound)(nil), err, "a resource that is gone is a NotFound, not an internal error")
 }
 
 func TestExternalAccountGrantsAreNotArbitraryMetadata(t *testing.T) {

@@ -29,6 +29,25 @@ type Options struct {
 	NobodyUID int `mapstructure:"nobody_uid"`
 	NobodyGID int `mapstructure:"nobody_gid"`
 
+	// External (lightweight, federated, guest) accounts have no uid of their own,
+	// so operations on their behalf run as this local service account instead.
+	// What they are allowed to do is decided by reva from the stored grants, not
+	// by the permissions of this account.
+	ExternalAccountsUserName string `mapstructure:"external_accounts_user_name"`
+	ExternalAccountsUserUID  int    `mapstructure:"external_accounts_user_uid"`
+	ExternalAccountsUserGID  int    `mapstructure:"external_accounts_user_gid"`
+
+	// SpaceDepth defines how many levels below the chroot the space (project)
+	// roots sit: with roots at /winspaces/c/<project>, served by a provider
+	// mounted at /winspaces, it is 2. The service account is granted rwx on the
+	// space root when something inside it is shared with an external account.
+	//
+	// It is injected by the storage provider, which rebases its own space_depth
+	// on the paths it hands to the driver: its mount path is trimmed off first,
+	// so the number here is smaller than the one in its configuration. It should
+	// not be set in the driver configuration.
+	SpaceDepth int `mapstructure:"space_depth"`
+
 	// Simplified Ceph configuration - just paste the fstab entry
 	FstabEntry string `mapstructure:"fstabentry"` // Complete fstab line for Ceph mount
 	RootDir    string `mapstructure:"root_dir"`   // Root directory for the Ceph mount
@@ -53,6 +72,17 @@ func (c *Options) ApplyDefaults() {
 	if c.NobodyGID == 0 {
 		c.NobodyGID = 65534
 	}
+
+	// Same service account the eos driver uses for external accounts.
+	if c.ExternalAccountsUserName == "" || c.ExternalAccountsUserUID == 0 || c.ExternalAccountsUserGID == 0 {
+		c.ExternalAccountsUserName = "cboxexternal"
+		c.ExternalAccountsUserUID = 193339
+		c.ExternalAccountsUserGID = 2766
+	}
+
+	// SpaceDepth is deliberately left alone: it comes from the storage provider,
+	// and guessing a layout here would place the service account ACL on the wrong
+	// directory. New warns when it is missing.
 
 	// No Ceph defaults needed - everything is extracted from the fstab entry
 	// Chroot directory defaults will be set from fstab parsing (local mount point)

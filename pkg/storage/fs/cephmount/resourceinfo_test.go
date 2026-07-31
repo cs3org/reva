@@ -21,6 +21,7 @@ package cephmount
 import (
 	"os"
 	"path/filepath"
+	"syscall"
 	"testing"
 	"time"
 
@@ -86,4 +87,73 @@ func TestEtagChangesWhenFileIsModified(t *testing.T) {
 	after, err := fs.GetMD(ctx, ref, nil)
 	require.NoError(t, err)
 	assert.NotEqual(t, before.Etag, after.Etag, "etag must change when the file is modified")
+}
+
+// Without a ceph mount there is no rctime, and the etag still has to be valid,
+// stable, and move when a direct entry changes.
+func TestDirectoryEtagWithoutRecursiveCtime(t *testing.T) {
+	tempDir, cleanup := GetTestDir(t, "etag-directory")
+	t.Cleanup(cleanup)
+
+	dir := filepath.Join(tempDir, "folder")
+	require.NoError(t, os.MkdirAll(dir, 0755))
+
+	ctx := ContextWithTestLogger(t)
+	fs := CreateCephMountFSForTesting(t, ctx, map[string]any{"testing_allow_local_mode": true}, "/volumes/_nogroup/test", tempDir)
+	ref := &provider.Reference{Path: "/folder"}
+
+	before, err := fs.GetMD(ctx, ref, nil)
+	require.NoError(t, err)
+	assert.Equal(t, `"`, string(before.Etag[0]), "etag should be quoted")
+
+	again, err := fs.GetMD(ctx, ref, nil)
+	require.NoError(t, err)
+	assert.Equal(t, before.Etag, again.Etag, "etag must be stable while the directory is untouched")
+
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "child.txt"), []byte("x"), 0644))
+	require.NoError(t, os.Chtimes(dir, time.Now().Add(time.Second), time.Now().Add(time.Second)))
+
+	after, err := fs.GetMD(ctx, ref, nil)
+	require.NoError(t, err)
+	assert.NotEqual(t, before.Etag, after.Etag, "etag must change when a direct child changes")
+}
+
+// A change below a directory reaches its etag, which is what makes a sync
+// client descend into it.
+func TestCalcEtagIncludesRecursiveCtime(t *testing.T) {
+	tempDir, cleanup := GetTestDir(t, "etag-rctime")
+	t.Cleanup(cleanup)
+
+	info, err := os.Stat(tempDir)
+	require.NoError(t, err)
+	stat := info.Sys().(*syscall.Stat_t)
+
+	without := calcEtag(info, stat, "")
+	with := calcEtag(info, stat, "1690000000.000000000")
+	later := calcEtag(info, stat, "1690000001.000000000")
+
+	assert.Equal(t, `"`, string(with[0]), "etag should be quoted")
+	assert.NotEqual(t, without, with, "a subtree change must change the etag")
+	assert.NotEqual(t, with, later, "a later subtree change must change the etag again")
+	assert.Equal(t, without, calcEtag(info, stat, ""), "the fallback must be stable")
+}
+
+func TestRctimeSeconds(t *testing.T) {
+	tests := []struct {
+		rctime  string
+		seconds uint64
+		ok      bool
+	}{
+		{rctime: "1690000000.000000000", seconds: 1690000000, ok: true},
+		{rctime: "1690000000.09123456789", seconds: 1690000000, ok: true},
+		{rctime: "1690000000", seconds: 1690000000, ok: true},
+		{rctime: "", ok: false},
+		{rctime: "not-a-time", ok: false},
+	}
+
+	for _, tt := range tests {
+		seconds, ok := rctimeSeconds(tt.rctime)
+		assert.Equal(t, tt.ok, ok, tt.rctime)
+		assert.Equal(t, tt.seconds, seconds, tt.rctime)
+	}
 }
