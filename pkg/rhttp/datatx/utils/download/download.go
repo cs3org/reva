@@ -87,7 +87,9 @@ func GetOrHeadFile(w http.ResponseWriter, r *http.Request, fs storage.FS, spaceI
 
 	var ranges []storage.Range
 
-	if r.Header.Get("Range") != "" {
+	// No byte range is satisfiable on an empty file, not even "bytes=0-". RFC 9110 section 14.2
+	// lets a server ignore the Range header, which is friendlier to clients than a 416.
+	if r.Header.Get("Range") != "" && size > 0 {
 		ranges, err = ParseRange(r.Header.Get("Range"), size)
 		if err != nil {
 			if err == ErrNoOverlap {
