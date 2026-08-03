@@ -29,7 +29,9 @@ import (
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	collaboration "github.com/cs3org/go-cs3apis/cs3/sharing/collaboration/v1beta1"
+	link "github.com/cs3org/go-cs3apis/cs3/sharing/link/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
+	"github.com/cs3org/reva/v3/pkg/share/manager/sql"
 	"github.com/cs3org/reva/v3/pkg/share/manager/sql/model"
 	"google.golang.org/grpc"
 )
@@ -59,6 +61,39 @@ func (f *fakeStore) ListModelShares(u *userpb.User, filters []*collaboration.Fil
 }
 
 func (f *fakeStore) MarkAsOrphaned(ctx context.Context, ref *collaboration.ShareReference) error {
+	if f.markErr != nil {
+		return f.markErr
+	}
+	f.marked = append(f.marked, ref.GetId().GetOpaqueId())
+	return nil
+}
+
+// fakeLinkStore is an in-memory PublicLinkStore recording which links were
+// marked.
+type fakeLinkStore struct {
+	links   []model.PublicLink
+	marked  []string
+	listErr error
+	markErr error
+}
+
+func (f *fakeLinkStore) ListPublicLinks(u *userpb.User, filters []*link.ListPublicSharesRequest_Filter, expiry *sql.ExpiryRange, hideOrphans bool) ([]model.PublicLink, error) {
+	if f.listErr != nil {
+		return nil, f.listErr
+	}
+	if !hideOrphans {
+		return f.links, nil
+	}
+	var out []model.PublicLink
+	for _, l := range f.links {
+		if !l.Orphan {
+			out = append(out, l)
+		}
+	}
+	return out, nil
+}
+
+func (f *fakeLinkStore) MarkAsOrphaned(ctx context.Context, ref *link.PublicShareReference) error {
 	if f.markErr != nil {
 		return f.markErr
 	}
@@ -118,6 +153,16 @@ func share(id uint, instance, inode, shareWith string, isGroup, orphan bool) mod
 	s.ShareWith = shareWith
 	s.SharedWithIsGroup = isGroup
 	return s
+}
+
+// publicLink builds a model.PublicLink with the fields the orphan job reads.
+func publicLink(id uint, instance, inode string, orphan bool) model.PublicLink {
+	var l model.PublicLink
+	l.Id = id
+	l.Orphan = orphan
+	l.Instance = instance
+	l.Inode = inode
+	return l
 }
 
 func sortedMarked(f *fakeStore) []string {
@@ -234,7 +279,7 @@ func TestOrphanDryRunMarksNothing(t *testing.T) {
 	if !report.DryRun || len(report.Orphaned) != 1 {
 		t.Fatalf("report = %+v, want dry-run with 1 would-orphan", report)
 	}
-	if got := report.Orphaned[0]; got.ShareID != "6" || got.Reason != ReasonResourceMissing {
+	if got := report.Orphaned[0]; got.ID != "6" || got.Reason != ReasonResourceMissing {
 		t.Errorf("would-orphan = %+v, want share 6 resource-missing", got)
 	}
 	if len(store.marked) != 0 {
@@ -273,7 +318,7 @@ func TestOrphanDryRunMatchesLiveRun(t *testing.T) {
 		t.Fatalf("dry run reported %d orphans, live run %d", len(dry.Orphaned), len(live.Orphaned))
 	}
 	for i := range dry.Orphaned {
-		if dry.Orphaned[i].ShareID != live.Orphaned[i].ShareID || dry.Orphaned[i].Reason != live.Orphaned[i].Reason {
+		if dry.Orphaned[i].ID != live.Orphaned[i].ID || dry.Orphaned[i].Reason != live.Orphaned[i].Reason {
 			t.Errorf("orphan[%d]: dry = %+v, live = %+v", i, dry.Orphaned[i], live.Orphaned[i])
 		}
 	}
@@ -358,9 +403,155 @@ func TestOrphanListErrorFails(t *testing.T) {
 	}
 }
 
-func TestShareRefByID(t *testing.T) {
-	ref := shareRefByID(42)
-	if got := ref.GetId().GetOpaqueId(); got != "42" {
-		t.Errorf("opaque id = %q, want %q", got, "42")
+// TestMarkAddressesTheRightStore asserts that an entry is marked in the store it
+// came from, by the numeric id rendered as the CS3 opaque id.
+func TestMarkAddressesTheRightStore(t *testing.T) {
+	shares, links := &fakeStore{}, &fakeLinkStore{}
+	job := &OrphanJob{Shares: shares, Links: links, Gateway: &fakeGateway{}}
+
+	if err := job.mark(context.Background(), entry{kind: KindShare, id: "42"}); err != nil {
+		t.Fatalf("mark share: %v", err)
+	}
+	if err := job.mark(context.Background(), entry{kind: KindPublicLink, id: "43"}); err != nil {
+		t.Fatalf("mark link: %v", err)
+	}
+
+	if len(shares.marked) != 1 || shares.marked[0] != "42" {
+		t.Errorf("share store marked %v, want [42]", shares.marked)
+	}
+	if len(links.marked) != 1 || links.marked[0] != "43" {
+		t.Errorf("link store marked %v, want [43]", links.marked)
+	}
+}
+
+func TestOrphanPublicLinkResourceMissing(t *testing.T) {
+	links := &fakeLinkStore{links: []model.PublicLink{
+		publicLink(30, "eosuser", "inode-30", false),
+	}}
+	gw := &fakeGateway{resources: map[string]bool{}} // resource gone
+	job := &OrphanJob{Links: links, Gateway: gw}
+
+	report, err := job.Run(context.Background())
+	if err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	if len(report.Orphaned) != 1 {
+		t.Fatalf("report = %+v, want 1 orphaned", report)
+	}
+	if got := report.Orphaned[0]; got.Kind != KindPublicLink || got.ID != "30" || got.Reason != ReasonResourceMissing {
+		t.Errorf("orphaned = %+v, want publiclink 30 resource-missing", got)
+	}
+	if len(links.marked) != 1 || links.marked[0] != "30" {
+		t.Errorf("marked = %v, want [30]", links.marked)
+	}
+}
+
+// TestOrphanPublicLinkNeedsNoRecipient asserts that a link whose resource exists
+// survives even though it has no grantee to resolve. Were the recipient check
+// applied to links, the empty ShareWith would look like a missing user and
+// orphan every link in the database.
+func TestOrphanPublicLinkNeedsNoRecipient(t *testing.T) {
+	links := &fakeLinkStore{links: []model.PublicLink{
+		publicLink(31, "eosuser", "inode-31", false),
+	}}
+	gw := &fakeGateway{
+		resources: map[string]bool{"eosuser/inode-31": true},
+		users:     map[string]bool{}, // no user resolves, and none must be looked up
+	}
+	job := &OrphanJob{Links: links, Gateway: gw}
+
+	report, err := job.Run(context.Background())
+	if err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	if report.Checked != 1 || len(report.Orphaned) != 0 {
+		t.Fatalf("report = %+v, want 1 checked / 0 orphaned", report)
+	}
+	if len(links.marked) != 0 {
+		t.Errorf("marked = %v, want none", links.marked)
+	}
+}
+
+func TestOrphanAlreadyOrphanLinkExcluded(t *testing.T) {
+	links := &fakeLinkStore{links: []model.PublicLink{
+		publicLink(32, "eosuser", "inode-32", true), // already orphan, resource also gone
+	}}
+	job := &OrphanJob{Links: links, Gateway: &fakeGateway{resources: map[string]bool{}}}
+
+	report, err := job.Run(context.Background())
+	if err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	if report.Checked != 0 || len(report.Orphaned) != 0 {
+		t.Fatalf("report = %+v, want 0 checked (already-orphan filtered out)", report)
+	}
+}
+
+// TestOrphanScansBothKinds asserts that one run covers both stores and reports
+// each item under its own kind.
+func TestOrphanScansBothKinds(t *testing.T) {
+	shares := &fakeStore{shares: []model.Share{
+		share(40, "eosuser", "inode-40", "jdoe", false, false),   // valid
+		share(41, "eosuser", "inode-gone", "jdoe", false, false), // resource gone
+	}}
+	links := &fakeLinkStore{links: []model.PublicLink{
+		publicLink(50, "eosuser", "inode-50", false),   // valid
+		publicLink(51, "eosuser", "inode-gone", false), // resource gone
+	}}
+	gw := &fakeGateway{
+		resources: map[string]bool{"eosuser/inode-40": true, "eosuser/inode-50": true},
+		users:     map[string]bool{"jdoe": true},
+	}
+	job := &OrphanJob{Shares: shares, Links: links, Gateway: gw}
+
+	report, err := job.Run(context.Background())
+	if err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	if report.Checked != 4 || len(report.Orphaned) != 2 {
+		t.Fatalf("report = %+v, want 4 checked / 2 orphaned", report)
+	}
+	byKind := map[Kind]string{}
+	for _, o := range report.Orphaned {
+		byKind[o.Kind] = o.ID
+	}
+	if byKind[KindShare] != "41" || byKind[KindPublicLink] != "51" {
+		t.Errorf("orphaned = %+v, want share 41 and publiclink 51", report.Orphaned)
+	}
+	if len(shares.marked) != 1 || shares.marked[0] != "41" {
+		t.Errorf("share store marked %v, want [41]", shares.marked)
+	}
+	if len(links.marked) != 1 || links.marked[0] != "51" {
+		t.Errorf("link store marked %v, want [51]", links.marked)
+	}
+}
+
+func TestOrphanLinkListErrorFails(t *testing.T) {
+	job := &OrphanJob{
+		Links:   &fakeLinkStore{listErr: errors.New("db down")},
+		Gateway: &fakeGateway{},
+	}
+
+	if _, err := job.Run(context.Background()); err == nil {
+		t.Fatal("Run must fail when public links cannot be listed")
+	}
+}
+
+// TestOrphanMarkErrorIsNotReportedAsOrphaned asserts that a failed write is
+// counted as a failure and kept out of the orphaned list, so the log and the
+// report never claim a change that did not happen.
+func TestOrphanMarkErrorIsNotReportedAsOrphaned(t *testing.T) {
+	store := &fakeStore{
+		shares:  []model.Share{share(60, "eosuser", "inode-gone", "jdoe", false, false)},
+		markErr: errors.New("db write failed"),
+	}
+	job := &OrphanJob{Shares: store, Gateway: &fakeGateway{resources: map[string]bool{}}}
+
+	report, err := job.Run(context.Background())
+	if err != nil {
+		t.Fatalf("Run must not fail on a per-item write error: %v", err)
+	}
+	if report.Failed != 1 || len(report.Orphaned) != 0 {
+		t.Fatalf("report = %+v, want 1 failed / 0 orphaned", report)
 	}
 }
