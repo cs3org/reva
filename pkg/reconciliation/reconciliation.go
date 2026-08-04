@@ -17,10 +17,11 @@
 // or submit itself to any jurisdiction.
 
 // Package reconciliation reconciles the share database against the state of the
-// storage. For now it holds a single job, orphan detection, which marks shares
-// and public links whose resource or recipient no longer exists. It is
-// storage-driver agnostic: it reads from the database and resolves resources
-// and identities through the gateway (CS3).
+// storage. It holds two jobs: orphan detection, which marks the shares and
+// public links whose resource or recipient is gone, and the shallow check,
+// which repairs the ACLs on the paths that carry a share. The engine is
+// storage-driver agnostic: it reads shares from the database and resolves
+// resources, identities and providers through the gateway (CS3).
 //
 // Every line a job logs carries an "event" naming what happened, so a run can
 // be replayed or reverted by filtering on it rather than by parsing free-form
