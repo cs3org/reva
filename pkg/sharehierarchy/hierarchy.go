@@ -97,7 +97,7 @@ func (c *Checker) CheckGrantConsistency(ctx context.Context, nodePath string, no
 		sharePerms := PermLevelFromCS3(s.Permissions.GetPermissions())
 
 		switch {
-		case isStrictAncestor(path, nodePath):
+		case IsStrictAncestor(path, nodePath):
 			// Step 1: existing share S is a parent of the new node N.
 			// Allowed only when N strictly escalates beyond P in the permission ordering.
 			// Any other combination means N is redundant or conflicts with P.
@@ -106,7 +106,7 @@ func (c *Checker) CheckGrantConsistency(ctx context.Context, nodePath string, no
 				continue
 			}
 			log.Debug().Str("shareId", s.Id.OpaqueId).Str("parentPath", path).Str("parentPerms", sharePerms.String()).Str("nodePath", nodePath).Str("nodePerms", nodePermLevel.String()).Msg("sharehierarchy: parent conflict detected")
-			sharee, shareeType := shareeInfo(s.Grantee)
+			sharee, shareeType := ShareeInfo(s.Grantee)
 			return nil, &HierarchyConflictError{
 				ErrorType: "parent_conflict",
 				CanForce:  false,
@@ -125,7 +125,7 @@ func (c *Checker) CheckGrantConsistency(ctx context.Context, nodePath string, no
 				},
 			}
 
-		case isStrictAncestor(nodePath, path):
+		case IsStrictAncestor(nodePath, path):
 			// Step 2: existing share S is a child of the new node N.
 			// When the child has strictly higher permissions than N, its explicit ACL
 			// must be re-applied after adding N so it is not shadowed.
@@ -141,7 +141,7 @@ func (c *Checker) CheckGrantConsistency(ctx context.Context, nodePath string, no
 	}
 
 	// Sort ToReapply shallowest-first so the caller can apply ACLs in the correct order.
-	sortResolvedSharesByPathDepthAsc(result.ToReapply)
+	SortDepthFirst(result.ToReapply)
 	log.Debug().Str("nodePath", nodePath).Int("toDelete", len(result.ToDelete)).Int("toReapply", len(result.ToReapply)).Msg("sharehierarchy: CheckGrantConsistency done")
 	return result, nil
 }
@@ -207,7 +207,7 @@ func (c *Checker) GrantsToReapplyAfterRemove(ctx context.Context, removedID stri
 func filterAncestors(shares []*collaboration.Share, paths map[string]string, targetPath string) []*collaboration.Share {
 	var result []*collaboration.Share
 	for _, s := range shares {
-		if p, ok := paths[s.Id.OpaqueId]; ok && isStrictAncestor(p, targetPath) {
+		if p, ok := paths[s.Id.OpaqueId]; ok && IsStrictAncestor(p, targetPath) {
 			result = append(result, s)
 		}
 	}
@@ -219,7 +219,7 @@ func filterAncestors(shares []*collaboration.Share, paths map[string]string, tar
 func filterDescendants(shares []*collaboration.Share, paths map[string]string, targetPath string) []*collaboration.Share {
 	var result []*collaboration.Share
 	for _, s := range shares {
-		if p, ok := paths[s.Id.OpaqueId]; ok && isStrictAncestor(targetPath, p) {
+		if p, ok := paths[s.Id.OpaqueId]; ok && IsStrictAncestor(targetPath, p) {
 			result = append(result, s)
 		}
 	}
@@ -252,10 +252,17 @@ func sortByPathDepthAsc(shares []*collaboration.Share, paths map[string]string) 
 	})
 }
 
-// sortResolvedSharesByPathDepthAsc sorts resolved shares by ascending path depth.
-func sortResolvedSharesByPathDepthAsc(shares []ResolvedShare) {
+// SortDepthFirst sorts resolved shares into depth-first order: every share
+// comes after the ones above it, which is the order ACLs have to be applied in,
+// and immediately before the ones under it, so a caller walking the result can
+// keep the shares above the current one on a stack instead of comparing every
+// pair.
+//
+// The trailing separator is what makes it a component-wise order: without it
+// "/a/b.txt" would sort between "/a/b" and "/a/b/c" and split that subtree.
+func SortDepthFirst(shares []ResolvedShare) {
 	sort.Slice(shares, func(i, j int) bool {
-		return strings.Count(shares[i].Path, string(os.PathSeparator)) < strings.Count(shares[j].Path, string(os.PathSeparator))
+		return shares[i].Path+"/" < shares[j].Path+"/"
 	})
 }
 
@@ -268,10 +275,10 @@ func Shares(resolved []ResolvedShare) []*collaboration.Share {
 	return shares
 }
 
-// isStrictAncestor returns true if ancestorPath is a proper prefix of childPath,
+// IsStrictAncestor returns true if ancestorPath is a proper prefix of childPath,
 // i.e. every component of ancestorPath is a parent of childPath.
 // "/a" is a strict ancestor of "/a/b" but not of "/a" itself or "/ab/c".
-func isStrictAncestor(ancestorPath, childPath string) bool {
+func IsStrictAncestor(ancestorPath, childPath string) bool {
 	rel, err := filepath.Rel(ancestorPath, childPath)
 	if err != nil {
 		return false
