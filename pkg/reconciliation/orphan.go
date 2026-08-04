@@ -189,7 +189,7 @@ func (j *OrphanJob) Run(ctx context.Context) (OrphanReport, error) {
 		base = appctx.GetLogger(ctx)
 	}
 	// every line of a run carries the same "run" field, so one run can be
-	// picked out of a log holding many, and the "job" field, since jobs can
+	// picked out of a log holding many, and the "job" field, since the jobs
 	// share a log file.
 	runID := uuid.New().String()
 	l := base.With().Str("job", OrphanJobName).Str("run", runID).Logger()

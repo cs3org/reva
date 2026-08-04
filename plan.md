@@ -320,13 +320,27 @@ Tests: resource missing, user recipient missing, group recipient missing, all pr
 dry_run marks nothing, lookup error skips (no false orphan), already-orphan shares excluded,
 mixed batch, share-reference by id.
 
-**Phase 2: shallow check (DB only).** `[ ]`
-Reconcile the ACLs implied by the share DB against what is actually set on each shared path,
-without a full-namespace scan. For each non-orphan share, resolve its path and read the
-current grants on that single node through the gateway, then add or fix the missing/wrong
-grant. Reuses the default-ACL config (`config.go` / `default_acls.go`) and the permission ordering
-from `sharehierarchy`. `dry_run`. Targeted and per-share, so cost scales with the number of
-shares, not the size of the namespace.
+**Phase 2: shallow check (DB only).** `[x]` done, except for the default ACLs.
+`shallow.go`: reconcile the ACLs implied by the share DB against what is actually set on
+each shared path, without a full-namespace scan. For each non-orphan share it resolves the
+path (`gateway.GetPath`) and the recipient (`GetUserByClaim`, so the grantee carries the user
+type the storage keys the lightweight xattr off), collapses the shares of one recipient in
+one space and runs `sharehierarchy.CheckGrantConsistency` over each of them, the same check
+that runs at share creation, so an entry is only written where it escalates beyond every share
+above it. It then reads the grants on the node and adds or corrects the entry through the
+storage provider grant API. Those calls are deliberately not on the gateway API, since a client
+that wants to change access goes through CreateShare; the job asks the gateway which provider
+hosts the storage and calls that provider directly, the way the gateway does internally.
+It never removes an entry: telling a stray entry from a default ACL needs the whole namespace.
+It never writes an entry weaker than one above it either, so a nested share can never lose
+access to this job; a share that contradicts the hierarchy is reported, not enforced.
+A lookup failure skips the share rather than writing an entry built on a guess. `dry_run`.
+Targeted and per-share, so cost scales with the number of shares, not the size of the
+namespace.
+Still to do: the default ACLs are not applied to the visited paths. Computing them needs the
+`Space` (root, type, owner, project) a share belongs to, and nothing enumerates spaces yet.
+That enumeration is shared with phase 3 and lands with it, so the default-ACL config and the
+per-space computation land with it too.
 
 **Phase 3: deep FS check (eos-ns-inspect).** `[ ]`
 The whole-namespace sweep. Enumerate every node of a space directly from QuarkDB via
