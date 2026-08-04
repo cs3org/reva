@@ -45,11 +45,14 @@ and neither is `jwt_secret`.
 
 ## Identity
 
-The jobs runner hands a run a bare context, but we need a valid auth
-so we can do stat's etc. Therefore, each run mints itself a token for
-`service_user_name` and sends it with every call. The three `service_user_*`
-keys are thus required and it needs to have the proper permissions on EOS
-(for CERNBox, `cbox` does the trick).
+The jobs runner hands a run a bare context, but we need a valid auth so we can do
+stat's etc. Therefore, each run mints itself a token for `service_user_name` and
+sends it with every call. The three `service_user_*` keys are required and the
+account has to be a real one: EOS reads the ACLs of a node as the caller before
+handing them out, and its driver refuses a caller whose uid or gid is zero, so
+`root` does not work (for CERNBox, `cbox` does the trick). If
+`skip_user_groups_in_token` is set, the account also has to resolve in the user
+provider, since the auth interceptor looks its groups up.
 
 ## Jobs
 

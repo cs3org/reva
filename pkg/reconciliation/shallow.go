@@ -291,6 +291,8 @@ func (j *ShallowJob) run(ctx context.Context, spaceID string) (ShallowReport, er
 		}
 	}
 
+	// after Auth, so the resolved client is used with a context carrying the
+	// job's token.
 	gw, err := j.gateway(ctx)
 	if err != nil {
 		return ShallowReport{}, err
