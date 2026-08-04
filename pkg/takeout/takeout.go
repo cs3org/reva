@@ -1,15 +1,12 @@
 package takeout
 
 import (
-	"archive/tar"
 	"archive/zip"
-	"compress/gzip"
 	"context"
 	"crypto/tls"
 	"fmt"
 	"io"
 	"net/http"
-	"path/filepath"
 	"time"
 
 	gateway "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
@@ -22,6 +19,7 @@ import (
 
 	"github.com/cs3org/reva/v3/internal/http/services/datagateway"
 	"github.com/cs3org/reva/v3/pkg/appctx"
+	"github.com/cs3org/reva/v3/pkg/bundler"
 	"github.com/cs3org/reva/v3/pkg/errtypes"
 	"github.com/cs3org/reva/v3/pkg/httpclient"
 	"github.com/cs3org/reva/v3/pkg/rgrpc/todo/pool"
@@ -57,10 +55,21 @@ type config struct {
 	TakeoutPath          string `mapstructure:"takeout_path" validate:"required"`
 	PublicURL            string `mapstructure:"public_url" validate:"required"`
 	ArchiveSizeCeiling   uint64 `mapstructure:"archive_size_ceiling" validate:"required"`
-	PasswordStrengh      int    `mapstructure:"password_strength" validate:"required"`
+	PasswordStrength     int    `mapstructure:"password_strength" validate:"required"`
 }
 
-// New sets the potential custom job config
+/* Job setup */
+
+// The takeout job structure
+type job struct {
+	conf    *config
+	log     *zerolog.Logger
+	gtw     gateway.GatewayAPIClient
+	hc      *httpclient.Client
+	bundler *bundler.Bundler
+}
+
+// New sets the potential custom job config and builds the job's deps
 func New(ctx context.Context, m map[string]any) (rjobs.Job, error) {
 	// Decode config
 	var c config
@@ -71,15 +80,20 @@ func New(ctx context.Context, m map[string]any) (rjobs.Job, error) {
 	// Declare logger
 	l := appctx.GetLogger(ctx)
 
-	return &job{conf: &c, log: l}, nil
-}
+	// Setup gateway
+	gtw, err := pool.GetGatewayServiceClient(pool.Endpoint(c.GatewaySvc))
+	if err != nil {
+		return nil, errors.Wrap(err, "takeout: gateway client setup failed")
+	}
 
-/* Job setup */
+	// Setup the http client for downloads and uploads
+	tr := &http.Transport{TLSClientConfig: &tls.Config{InsecureSkipVerify: c.Insecure}}
+	hc := httpclient.New(httpclient.RoundTripper(tr))
 
-// The takeout job structure
-type job struct {
-	conf *config
-	log  *zerolog.Logger
+	// Setup the bundler with a walker and a downloader
+	b := bundler.New(walker.NewWalker(gtw), downloader.NewDownloader(gtw, hc))
+
+	return &job{conf: &c, log: l, gtw: gtw, hc: hc, bundler: b}, nil
 }
 
 // The per-run takeout parameters
@@ -91,68 +105,47 @@ type params struct {
 	RootPath string `mapstructure:"root_path" validate:"required"`
 }
 
-// Run walks the user's archives the userspace
+// Run archives the user's userspace and shares it through a public link
 func (j *job) Run(ctx context.Context, p rjobs.Params) (rjobs.Params, error) {
 	// Decode run parameters
 	var pp params
 	if err := mapstructure.Decode(map[string]any(p), &pp); err != nil {
 		return nil, errors.Wrap(err, "takeout: decoding params failed")
 	}
-	err := j.validateParams(pp)
-	if err != nil {
+	if err := j.validateParams(pp); err != nil {
 		j.log.Err(err).Msg("takeout: invalid parameters")
 		return nil, err
 	}
 	j.log.Info().Msgf("takeout: using parameters %+v", pp)
 
-	// Setup gateway
-	gtw, err := pool.GetGatewayServiceClient(pool.Endpoint(j.conf.GatewaySvc))
-	if err != nil {
-		return nil, err
-	}
-
 	// Setup authentification: user context to walk and download, admin context to upload
-	userCtx, err := j.authenticate(ctx, gtw, pp.Username)
+	userCtx, err := j.authenticate(ctx, pp.Username)
 	if err != nil {
 		return nil, errors.Wrap(err, "takeout: user authentication failed")
 	}
-	adminCtx, err := j.authenticate(ctx, gtw, j.conf.TakeoutAdminUsername)
+	adminCtx, err := j.authenticate(ctx, j.conf.TakeoutAdminUsername)
 	if err != nil {
 		return nil, errors.Wrap(err, "takeout: admin authentication failed")
 	}
 
-	// Setup downloader
-	tr := &http.Transport{TLSClientConfig: &tls.Config{InsecureSkipVerify: j.conf.Insecure}}
-	hc := httpclient.New(httpclient.RoundTripper(tr), httpclient.Timeout(0))
-	dl := downloader.NewDownloader(gtw, hc)
-
-	// Setup upload client
-	upHC := httpclient.New(httpclient.RoundTripper(tr), httpclient.Timeout(0))
-
-	// Setup walker
-	wk := walker.NewWalker(gtw)
-
-	// Set the destination directory
+	// Set the destination directory and create it
 	archPath := fmt.Sprintf("%s/%s_%s/", j.conf.TakeoutPath, pp.Username, time.Now().Format("2006-01-02"))
+	if err := j.createTakeoutContainer(adminCtx, archPath); err != nil {
+		return nil, errors.Wrap(err, "takeout: destination directory could not be created")
+	}
 
-	// Create archives depending on requested archive format
-	switch pp.ArchiveFormat {
-	case "zip":
-		err = j.createZipArchives(userCtx, adminCtx, pp.RootPath, archPath, wk, dl, gtw, upHC, pp.MaxArchiveSize)
-		if err != nil {
-			return nil, errors.Wrap(err, "takeout: zip archive could not be created")
-		}
-	case "tgz":
-		err = j.createTgzArchives(userCtx, adminCtx, pp.RootPath, archPath, wk, dl, gtw, upHC, pp.MaxArchiveSize)
-		if err != nil {
-			return nil, errors.Wrap(err, "takeout: tgz archive could not be created")
-		}
-	default:
-		return nil, errors.Errorf("takeout: %s is not a supported archive format", pp.ArchiveFormat)
+	// Create the archives
+	opts, err := j.bundleOpts(pp)
+	if err != nil {
+		return nil, err
+	}
+	err = j.bundler.Create(userCtx, opts, j.newPartFunc(adminCtx, archPath, pp.ArchiveFormat))
+	if err != nil {
+		return nil, errors.Wrapf(err, "takeout: %s archive could not be created", pp.ArchiveFormat)
 	}
 
 	// Share the folder containing the archives through a public link
-	token, pwd, err := j.createPublicShare(adminCtx, gtw, archPath)
+	token, pwd, err := j.createPublicShare(adminCtx, archPath)
 	if err != nil {
 		return nil, errors.Wrap(err, "takeout: public share could not be created")
 	}
@@ -162,279 +155,7 @@ func (j *job) Run(ctx context.Context, p rjobs.Params) (rjobs.Params, error) {
 	return rjobs.Params{"archives_url": url, "archives_pwd": pwd, "archives_path": archPath}, nil
 }
 
-func (j *job) createTgzArchives(userCtx, adminCtx context.Context, rootPath, archPath string, wk walker.Walker, dl downloader.Downloader, gtw gateway.GatewayAPIClient, hc *httpclient.Client, maxArchiveSize uint64) error {
-	// Create the destination directory
-	err := j.createTakeoutContainer(adminCtx, gtw, archPath)
-	if err != nil {
-		return err
-	}
-
-	// Setup tgz archive streaming state
-	var (
-		pw        *io.PipeWriter
-		done      chan error
-		cw        *countingWriter
-		gw        *gzip.Writer
-		tw        *tar.Writer
-		archIndex = 0
-	)
-
-	// Start a fresh archive by initiating its upload and streaming the tgz into it
-	startPart := func() {
-		pr, npw := io.Pipe()
-		pw = npw
-		done = make(chan error, 1)
-
-		go func(idx int) {
-			err := j.uploadArchive(adminCtx, gtw, hc, archPath, idx, "tgz", pr)
-			// Unblock the producer if the upload fails mid-stream
-			pr.CloseWithError(err)
-			done <- err
-		}(archIndex)
-
-		cw = &countingWriter{w: pw}
-		gw = gzip.NewWriter(cw)
-		tw = tar.NewWriter(gw)
-	}
-
-	// Finalize the current archive and wait for its upload to complete
-	flush := func() error {
-		tarErr := tw.Close()
-
-		var gzipOrPipeErr error
-		if tarErr != nil {
-			_ = pw.CloseWithError(tarErr)
-		} else {
-			gzipOrPipeErr = gw.Close()
-			if gzipOrPipeErr != nil {
-				_ = pw.CloseWithError(gzipOrPipeErr)
-			} else {
-				gzipOrPipeErr = pw.Close()
-			}
-		}
-
-		upErr := <-done
-		pw = nil
-
-		if tarErr != nil {
-			return tarErr
-		}
-		if gzipOrPipeErr != nil {
-			return gzipOrPipeErr
-		}
-		return upErr
-	}
-
-	// Start the first archive
-	startPart()
-
-	// Create the archives by walking the specified directory
-	err = wk.Walk(userCtx, rootPath, func(currentPath string, info *provider.ResourceInfo, err error) error {
-		if err != nil {
-			return err
-		}
-
-		isDir := info.Type == provider.ResourceType_RESOURCE_TYPE_CONTAINER
-
-		// Get relative path of the current file
-		fileName, err := filepath.Rel(filepath.Dir(rootPath), currentPath)
-		if err != nil {
-			return err
-		}
-		fileName = filepath.ToSlash(fileName)
-
-		// Cut the archive if adding the current file could exceed maxArchiveSize
-		if !isDir && cw.n > 0 && cw.n+info.Size > maxArchiveSize {
-			if err := flush(); err != nil {
-				return err
-			}
-			archIndex++
-			startPart()
-		}
-
-		// Create tar header of the current file
-		header := tar.Header{
-			Name:    fileName,
-			ModTime: time.Unix(int64(info.Mtime.Seconds), 0),
-		}
-
-		if isDir {
-			header.Mode = 0755
-			header.Typeflag = tar.TypeDir
-		} else {
-			header.Mode = 0644
-			header.Typeflag = tar.TypeReg
-			header.Size = int64(info.Size)
-		}
-
-		if err := tw.WriteHeader(&header); err != nil {
-			return err
-		}
-
-		if isDir {
-			return gw.Flush()
-		}
-
-		// Download file content
-		dlFile, err := dl.Download(userCtx, currentPath, "")
-		if err != nil {
-			return err
-		}
-
-		// Copy downloaded file to tgz archive
-		_, copyErr := io.Copy(tw, dlFile)
-		closeErr := dlFile.Close()
-
-		if copyErr != nil {
-			return copyErr
-		}
-		if closeErr != nil {
-			return closeErr
-		}
-
-		return gw.Flush()
-	})
-	if err != nil {
-		// Abort the in-flight upload, if any
-		if pw != nil {
-			_ = pw.CloseWithError(err)
-			<-done
-		}
-		return err
-	}
-
-	// Finalize last archive
-	if err := flush(); err != nil {
-		j.log.Err(err).Msg("takeout: archive upload failed")
-		return err
-	}
-
-	return nil
-}
-
-func (j *job) createZipArchives(userCtx, adminCtx context.Context, rootPath, archPath string, wk walker.Walker, dl downloader.Downloader, gtw gateway.GatewayAPIClient, hc *httpclient.Client, maxArchiveSize uint64) error {
-	// Create the destination directory
-	err := j.createTakeoutContainer(adminCtx, gtw, archPath)
-	if err != nil {
-		return err
-	}
-
-	// Setup zip archive streaming state
-	var (
-		pw        *io.PipeWriter
-		done      chan error
-		cw        *countingWriter
-		w         *zip.Writer
-		archIndex = 0
-	)
-
-	// Start a fresh archive by initiating its upload and streaming the zip into it
-	startPart := func() {
-		pr, npw := io.Pipe()
-		pw = npw
-		done = make(chan error, 1)
-		go func(idx int) {
-			err := j.uploadArchive(adminCtx, gtw, hc, archPath, idx, "zip", pr)
-			// Unblock the producer if the upload fails mid-stream
-			pr.CloseWithError(err)
-			done <- err
-		}(archIndex)
-		cw = &countingWriter{w: pw}
-		w = zip.NewWriter(cw)
-	}
-
-	// Finalize the current archive and wait for its upload to complete
-	flush := func() error {
-		zipErr := w.Close()
-		if zipErr != nil {
-			pw.CloseWithError(zipErr)
-		} else {
-			zipErr = pw.Close()
-		}
-		upErr := <-done
-		pw = nil
-		if zipErr != nil {
-			return zipErr
-		}
-		return upErr
-	}
-
-	// Start the first archive
-	startPart()
-
-	// Create the archives by walking the specified directory
-	err = wk.Walk(userCtx, rootPath, func(current_path string, info *provider.ResourceInfo, err error) error {
-		if err != nil {
-			return err
-		}
-
-		isDir := info.Type == provider.ResourceType_RESOURCE_TYPE_CONTAINER
-
-		// Get relative path of the current file
-		fileName, err := filepath.Rel(filepath.Dir(rootPath), current_path)
-		if err != nil {
-			return err
-		}
-
-		// Cut the archive if adding the current file could exceed maxArchiveSize
-		if !isDir && cw.n > 0 && cw.n+info.Size > maxArchiveSize {
-			if err := flush(); err != nil {
-				return err
-			}
-			archIndex++
-			startPart()
-		}
-
-		// Create zip header of the current file
-		header := zip.FileHeader{
-			Name:     fileName,
-			Modified: time.Unix(int64(info.Mtime.Seconds), 0),
-			Method:   zip.Deflate,
-		}
-		if isDir {
-			header.Name += "/"
-		}
-		zip_file, err := w.CreateHeader(&header)
-		if err != nil {
-			return err
-		}
-
-		if isDir {
-			return nil
-		}
-
-		// Download file content
-		dl_file, err := dl.Download(userCtx, current_path, "")
-		if err != nil {
-			return err
-		}
-		defer dl_file.Close()
-
-		// Copies downloaded file to zip archive
-		if _, err := io.Copy(zip_file, dl_file); err != nil {
-			return err
-		}
-
-		return nil
-	})
-	if err != nil {
-		// Abort the in-flight upload, if any
-		if pw != nil {
-			pw.CloseWithError(err)
-			<-done
-		}
-		return err
-	}
-
-	// Finalize last archive
-	if err := flush(); err != nil {
-		j.log.Err(err).Msg("takeout: archive upload failed")
-		return err
-	}
-
-	return nil
-}
-
+// validateParams ensures the run parameters are valid
 func (j *job) validateParams(pp params) error {
 	if pp.MaxArchiveSize == 0 {
 		return errors.Errorf("MaxArchiveSize cannot be null")
@@ -454,9 +175,65 @@ func (j *job) validateParams(pp params) error {
 	return nil
 }
 
+// bundleOpts maps the run parameters to the bundler options
+func (j *job) bundleOpts(pp params) (bundler.Options, error) {
+	opts := bundler.Options{
+		Roots:        []string{pp.RootPath},
+		MaxNumFiles:  bundler.Unlimited,
+		MaxTotalSize: bundler.Unlimited,
+		MaxPartSize:  pp.MaxArchiveSize,
+		Errors:       bundler.ErrorFailFast,
+	}
+	switch pp.ArchiveFormat {
+	case "zip":
+		opts.Format = bundler.FormatZip
+		opts.ZipMethod = zip.Deflate
+	case "tgz":
+		opts.Format = bundler.FormatTgz
+	default:
+		return bundler.Options{}, errors.Errorf("takeout: %s is not a supported archive format", pp.ArchiveFormat)
+	}
+	return opts, nil
+}
+
+// uploadPart streams one archive part into an upload running concurrently
+type uploadPart struct {
+	pw   *io.PipeWriter
+	done chan error
+}
+
+func (u *uploadPart) Write(p []byte) (int, error) {
+	return u.pw.Write(p)
+}
+
+func (u *uploadPart) Close() error {
+	_ = u.pw.Close()
+	return <-u.done
+}
+
+func (u *uploadPart) Abort(err error) error {
+	_ = u.pw.CloseWithError(err)
+	return <-u.done
+}
+
+// newPartFunc returns the part factory used by the bundler
+func (j *job) newPartFunc(adminCtx context.Context, archPath, ext string) bundler.PartFunc {
+	return func(index int) (bundler.Part, error) {
+		pr, pw := io.Pipe()
+		done := make(chan error, 1)
+		go func() {
+			err := j.uploadArchive(adminCtx, archPath, index, ext, pr)
+			// Unblock the producer if the upload fails mid-stream
+			pr.CloseWithError(err)
+			done <- err
+		}()
+		return &uploadPart{pw: pw, done: done}, nil
+	}
+}
+
 // authenticate performs a machine authentication as the given user and returns an appropriate context
-func (j *job) authenticate(ctx context.Context, gtw gateway.GatewayAPIClient, clientID string) (context.Context, error) {
-	authRes, err := gtw.Authenticate(ctx, &gateway.AuthenticateRequest{
+func (j *job) authenticate(ctx context.Context, clientID string) (context.Context, error) {
+	authRes, err := j.gtw.Authenticate(ctx, &gateway.AuthenticateRequest{
 		Type:         "machine",
 		ClientId:     clientID,
 		ClientSecret: j.conf.MachineSecret,
@@ -475,10 +252,10 @@ func (j *job) authenticate(ctx context.Context, gtw gateway.GatewayAPIClient, cl
 	return ctx, nil
 }
 
-func (*job) createTakeoutContainer(adminCtx context.Context, gtw gateway.GatewayAPIClient, arch_path string) error {
+func (j *job) createTakeoutContainer(adminCtx context.Context, archPath string) error {
 	// Delete any pre-existing takeout for this user on that day to avoid conflicts
-	delRes, err := gtw.Delete(adminCtx, &provider.DeleteRequest{
-		Ref: &provider.Reference{Path: arch_path},
+	delRes, err := j.gtw.Delete(adminCtx, &provider.DeleteRequest{
+		Ref: &provider.Reference{Path: archPath},
 	})
 	switch {
 	case err != nil:
@@ -488,8 +265,8 @@ func (*job) createTakeoutContainer(adminCtx context.Context, gtw gateway.Gateway
 	}
 
 	// Creates the empty destination directory
-	mkRes, err := gtw.CreateContainer(adminCtx, &provider.CreateContainerRequest{
-		Ref: &provider.Reference{Path: arch_path},
+	mkRes, err := j.gtw.CreateContainer(adminCtx, &provider.CreateContainerRequest{
+		Ref: &provider.Reference{Path: archPath},
 	})
 	switch {
 	case err != nil:
@@ -500,7 +277,7 @@ func (*job) createTakeoutContainer(adminCtx context.Context, gtw gateway.Gateway
 	return nil
 }
 
-func (j *job) uploadArchive(ctx context.Context, gtw gateway.GatewayAPIClient, hc *httpclient.Client, archPath string, archIndex int, ext string, arch io.Reader) error {
+func (j *job) uploadArchive(adminCtx context.Context, archPath string, archIndex int, ext string, arch io.Reader) error {
 	// Setup archive name
 	var (
 		archName = fmt.Sprintf("takeout-%03d.%s", archIndex, ext)
@@ -508,7 +285,7 @@ func (j *job) uploadArchive(ctx context.Context, gtw gateway.GatewayAPIClient, h
 	)
 
 	// Initiate the file upload request
-	upRes, err := gtw.InitiateFileUpload(ctx, &provider.InitiateFileUploadRequest{
+	upRes, err := j.gtw.InitiateFileUpload(adminCtx, &provider.InitiateFileUploadRequest{
 		Ref: &provider.Reference{Path: archFile},
 	})
 	switch {
@@ -525,14 +302,14 @@ func (j *job) uploadArchive(ctx context.Context, gtw gateway.GatewayAPIClient, h
 	}
 
 	// Create the upload request
-	httpReq, err := http.NewRequestWithContext(ctx, http.MethodPut, p.UploadEndpoint, arch)
+	httpReq, err := http.NewRequestWithContext(adminCtx, http.MethodPut, p.UploadEndpoint, arch)
 	if err != nil {
 		return err
 	}
 	httpReq.Header.Set(datagateway.TokenTransportHeader, p.Token)
 	httpReq.Header.Set("Upload-Length", "-1")
 
-	httpRes, err := hc.Do(httpReq)
+	httpRes, err := j.hc.Do(httpReq)
 	if err != nil {
 		return err
 	}
@@ -552,9 +329,9 @@ func (j *job) uploadArchive(ctx context.Context, gtw gateway.GatewayAPIClient, h
 }
 
 // createPublicShare creates a read-only public link to the given path
-func (j *job) createPublicShare(ctx context.Context, gtw gateway.GatewayAPIClient, path string) (string, string, error) {
+func (j *job) createPublicShare(adminCtx context.Context, path string) (string, string, error) {
 	// Get the resource info of the folder to share
-	statRes, err := gtw.Stat(ctx, &provider.StatRequest{
+	statRes, err := j.gtw.Stat(adminCtx, &provider.StatRequest{
 		Ref: &provider.Reference{Path: path},
 	})
 	switch {
@@ -565,13 +342,14 @@ func (j *job) createPublicShare(ctx context.Context, gtw gateway.GatewayAPIClien
 	}
 
 	// Generate password
-	pwd, err := password.Generate(j.conf.PasswordStrengh, j.conf.PasswordStrengh/2, 0, false, false)
+	pwd, err := password.Generate(j.conf.PasswordStrength, j.conf.PasswordStrength/2, 0, false, false)
 	if err != nil {
 		return "", "", errors.Wrap(err, "takeout: could not generate password")
 	}
+	j.log.Debug().Msgf("takeout: password %s", pwd)
 
 	// Create the read-only public link
-	shareRes, err := gtw.CreatePublicShare(ctx, &link.CreatePublicShareRequest{
+	shareRes, err := j.gtw.CreatePublicShare(adminCtx, &link.CreatePublicShareRequest{
 		ResourceInfo: statRes.Info,
 		Grant: &link.Grant{
 			Permissions: &link.PublicSharePermissions{
@@ -604,16 +382,4 @@ func getUploadProtocol(protocols []*gateway.FileUploadProtocol, prot string) (*g
 		}
 	}
 	return nil, errtypes.InternalError(fmt.Sprintf("takeout: protocol %s not supported for uploading", prot))
-}
-
-// countingWriter counts the bytes written through it to measure the actual archive size
-type countingWriter struct {
-	w io.Writer
-	n uint64
-}
-
-func (cw *countingWriter) Write(p []byte) (int, error) {
-	n, err := cw.w.Write(p)
-	cw.n += uint64(n)
-	return n, err
 }
