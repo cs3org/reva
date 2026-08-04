@@ -25,15 +25,20 @@ package reconciliation
 import (
 	"context"
 	"os"
+	"sync"
 
 	authpb "github.com/cs3org/go-cs3apis/cs3/auth/provider/v1beta1"
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
+	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
+	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
+	registry "github.com/cs3org/go-cs3apis/cs3/storage/registry/v1beta1"
 	"github.com/cs3org/reva/v3/pkg/appctx"
 	"github.com/cs3org/reva/v3/pkg/auth/scope"
 	publicshareregistry "github.com/cs3org/reva/v3/pkg/publicshare/manager/registry"
 	"github.com/cs3org/reva/v3/pkg/reconciliation"
 	"github.com/cs3org/reva/v3/pkg/rjobs"
 	"github.com/cs3org/reva/v3/pkg/rserverless"
+	"github.com/cs3org/reva/v3/pkg/service"
 	shareregistry "github.com/cs3org/reva/v3/pkg/share/manager/registry"
 	"github.com/cs3org/reva/v3/pkg/sharedconf"
 	"github.com/cs3org/reva/v3/pkg/token"
@@ -49,7 +54,8 @@ func init() {
 
 // The names a job is enabled and configured under.
 const (
-	jobOrphan = "orphan"
+	jobOrphan  = "orphan"
+	jobShallow = "shallow"
 )
 
 type config struct {
@@ -78,6 +84,8 @@ type config struct {
 	PublicShareDrivers map[string]map[string]any `mapstructure:"publicshare_drivers"`
 	// Orphan configures the orphan job.
 	Orphan reconciliation.Config `mapstructure:"orphan"`
+	// Shallow configures the shallow job.
+	Shallow reconciliation.Config `mapstructure:"shallow"`
 }
 
 func (c *config) ApplyDefaults() {
@@ -94,6 +102,9 @@ func (c *config) ApplyDefaults() {
 	// another and either can be pointed somewhere else on its own.
 	if c.Orphan.LogFile == "" {
 		c.Orphan.LogFile = "/var/log/revad/reconciliation-orphan.log"
+	}
+	if c.Shallow.LogFile == "" {
+		c.Shallow.LogFile = "/var/log/revad/reconciliation-shallow.log"
 	}
 }
 
@@ -112,7 +123,7 @@ func New(ctx context.Context, m map[string]any) (_ rserverless.Service, err erro
 		return nil, err
 	}
 	if len(c.Jobs) == 0 {
-		return nil, errors.Errorf("reconciliation: no jobs enabled, set jobs to %q", jobOrphan)
+		return nil, errors.Errorf("reconciliation: no jobs enabled, set jobs to any of %q, %q", jobOrphan, jobShallow)
 	}
 
 	shares, err := getShareStore(ctx, &c)
@@ -162,8 +173,10 @@ func New(ctx context.Context, m map[string]any) (_ rserverless.Service, err erro
 		switch name {
 		case jobOrphan:
 			jc = c.Orphan
+		case jobShallow:
+			jc = c.Shallow
 		default:
-			return nil, errors.Errorf("reconciliation: unknown job %q, want %q", name, jobOrphan)
+			return nil, errors.Errorf("reconciliation: unknown job %q, want %q or %q", name, jobOrphan, jobShallow)
 		}
 		if jc.Schedule == "" {
 			return nil, errors.Errorf("reconciliation: job %q has no schedule", name)
@@ -187,6 +200,20 @@ func New(ctx context.Context, m map[string]any) (_ rserverless.Service, err erro
 				Shares:     shares,
 				Links:      links,
 				Auth:       identity.authenticate,
+				Log:        jobLog,
+				DryRun:     jc.DryRun,
+				RunOnStart: jc.RunOnStart,
+			}
+			periodic = job.Periodic(jc.Schedule)
+		case jobShallow:
+			// Gateway is left nil for the same reason as the orphan job's, and
+			// the storage providers are resolved per run for that reason too.
+			job := &reconciliation.ShallowJob{
+				Shares: shares,
+				Auth:   identity.authenticate,
+				Grants: (&storageProviders{
+					clients: map[string]reconciliation.GrantStore{},
+				}).grants,
 				Log:        jobLog,
 				DryRun:     jc.DryRun,
 				RunOnStart: jc.RunOnStart,
@@ -245,7 +272,7 @@ func getPublicLinkStore(ctx context.Context, c *config) (reconciliation.PublicLi
 	return store, nil
 }
 
-// serviceUser is the identity the job acts as. The jobs runner hands a run a
+// serviceUser is the identity the jobs act as. The jobs runner hands a run a
 // bare context, and every gateway and storage provider call goes through the
 // auth interceptor, which rejects a call without a token.
 type serviceUser struct {
@@ -255,7 +282,7 @@ type serviceUser struct {
 }
 
 // authenticate returns ctx carrying a token for the service user. It is minted
-// per run rather than at startup because a token expires and this job is
+// per run rather than at startup because a token expires and these jobs are
 // scheduled days apart.
 func (s *serviceUser) authenticate(ctx context.Context) (context.Context, error) {
 	tkn, err := s.tokens.MintToken(ctx, s.user, s.scope)
@@ -263,6 +290,54 @@ func (s *serviceUser) authenticate(ctx context.Context) (context.Context, error)
 		return nil, errors.Wrap(err, "reconciliation: minting the service token")
 	}
 	return metadata.AppendToOutgoingContext(ctx, appctx.TokenHeader, tkn), nil
+}
+
+// storageProviders hands out the grant API of the storage provider hosting a
+// given storage. The grant calls are not part of the gateway API, and
+// deliberately so: a client that wants to change who can reach a resource goes
+// through CreateShare and friends. The shallow job is the exception, it repairs
+// the ACLs those calls left behind, so it does what the gateway does internally
+// and addresses the provider itself.
+type storageProviders struct {
+	mu sync.Mutex
+	// clients holds the provider client of each storage seen so far. A provider
+	// address only changes when the registry is reconfigured, which needs a
+	// restart anyway, and a run would otherwise look the same storage up twice
+	// per share.
+	clients map[string]reconciliation.GrantStore
+}
+
+// grants returns the grant API of the provider hosting storageID.
+func (p *storageProviders) grants(ctx context.Context, storageID string) (reconciliation.GrantStore, error) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	if c, ok := p.clients[storageID]; ok {
+		return c, nil
+	}
+
+	reg, err := service.StorageRegistry(ctx)
+	if err != nil {
+		return nil, errors.Wrap(err, "reconciliation: getting the storage registry client")
+	}
+	res, err := reg.GetStorageProviders(ctx, &registry.GetStorageProvidersRequest{
+		Ref: &provider.Reference{ResourceId: &provider.ResourceId{StorageId: storageID}},
+	})
+	if err != nil {
+		return nil, errors.Wrap(err, "reconciliation: looking up the storage provider")
+	}
+	if code := res.GetStatus().GetCode(); code != rpc.Code_CODE_OK {
+		return nil, errors.Errorf("reconciliation: looking up the storage provider: %s: %s", code, res.GetStatus().GetMessage())
+	}
+	if len(res.GetProviders()) == 0 {
+		return nil, errors.Errorf("reconciliation: no storage provider for %q", storageID)
+	}
+
+	c, err := service.StorageProviderAt(res.GetProviders()[0].GetAddress())
+	if err != nil {
+		return nil, errors.Wrap(err, "reconciliation: getting the storage provider client")
+	}
+	p.clients[storageID] = c
+	return c, nil
 }
 
 // Start is a no-op: the jobs service owns the runner that fires the jobs.
