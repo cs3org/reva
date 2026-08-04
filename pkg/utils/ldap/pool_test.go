@@ -19,6 +19,7 @@
 package ldap
 
 import (
+	"context"
 	"errors"
 	"sync"
 	"sync/atomic"
@@ -28,21 +29,27 @@ import (
 	"github.com/go-ldap/ldap/v3"
 )
 
-// fakeConn is a minimal ldap.Client double used to test pool bookkeeping without a real LDAP
-// server. It embeds a nil ldap.Client so it satisfies the interface; only Close is overridden by
-// default (the only method the pool itself calls on connections it manages), with
-// passwordModifyFunc/modifyWithResultFunc as optional overrides for tests exercising those methods.
+// fakeConn is a minimal ldap.Client double for pool bookkeeping tests. It embeds a nil ldap.Client
+// to satisfy the interface; Close and the *Func fields override the methods tests exercise.
 type fakeConn struct {
 	ldap.Client
 	closed bool
 
 	passwordModifyFunc   func(*ldap.PasswordModifyRequest) (*ldap.PasswordModifyResult, error)
 	modifyWithResultFunc func(*ldap.ModifyRequest) (*ldap.ModifyResult, error)
+	addFunc              func(*ldap.AddRequest) error
 }
 
 func (f *fakeConn) Close() error {
 	f.closed = true
 	return nil
+}
+
+func (f *fakeConn) Add(req *ldap.AddRequest) error {
+	if f.addFunc == nil {
+		return errors.New("fakeConn: addFunc not set")
+	}
+	return f.addFunc(req)
 }
 
 func (f *fakeConn) PasswordModify(req *ldap.PasswordModifyRequest) (*ldap.PasswordModifyResult, error) {
@@ -125,7 +132,7 @@ func TestConnPoolDoRetriesOnceOnNetworkError(t *testing.T) {
 	p, dialCount := newTestPool(2, time.Second)
 
 	var calls int
-	err := p.do(func(conn ldap.Client) error {
+	err := p.do(p.read, func(conn ldap.Client) error {
 		calls++
 		if calls == 1 {
 			return ldap.NewError(ldap.ErrorNetwork, errors.New("boom"))
@@ -148,14 +155,16 @@ func TestConnPoolDoGivesUpAfterMaxRetries(t *testing.T) {
 
 	networkErr := ldap.NewError(ldap.ErrorNetwork, errors.New("boom"))
 	var calls int
-	err := p.do(func(conn ldap.Client) error {
+	err := p.do(p.read, func(conn ldap.Client) error {
 		calls++
 		return networkErr
 	})
-	if err == nil || !ldap.IsErrorWithCode(err, ldap.ErrorNetwork) {
-		t.Fatalf("expected a network error after exhausting retries, got %v", err)
+	// On exhaustion do returns the last real error, not a synthetic sentinel.
+	if !errors.Is(err, networkErr) {
+		t.Fatalf("expected the last real error to be surfaced after exhausting retries, got %v", err)
 	}
-	if want := defaultRetries + 1; calls != want {
+	// newTestPool uses Config{} → RetryMaxCount 0, clamped to 1 → 1 initial + 1 retry.
+	if want := 2; calls != want {
 		t.Fatalf("expected fn to be called %d times, got %d", want, calls)
 	}
 }
@@ -165,7 +174,7 @@ func TestConnPoolDoDoesNotRetryNonNetworkError(t *testing.T) {
 
 	nonNetworkErr := errors.New("ldap: invalid credentials")
 	var calls int
-	err := p.do(func(conn ldap.Client) error {
+	err := p.do(p.read, func(conn ldap.Client) error {
 		calls++
 		return nonNetworkErr
 	})
@@ -177,6 +186,32 @@ func TestConnPoolDoDoesNotRetryNonNetworkError(t *testing.T) {
 	}
 	if got := atomic.LoadInt32(dialCount); got != 1 {
 		t.Fatalf("expected exactly 1 dial (connection reused, no eviction), got %d", got)
+	}
+}
+
+// TestFinding6_PoolAddNotRetriedOnErrorNetwork asserts a pool write that fails with a post-send
+// ErrorNetwork is attempted exactly once and surfaced, not retried (double-apply hazard).
+func TestFinding6_PoolAddNotRetriedOnErrorNetwork(t *testing.T) {
+	p, dialCount := newTestPool(2, time.Second)
+
+	var calls int32
+	p.dial = func(Config) (ldap.Client, error) {
+		atomic.AddInt32(dialCount, 1)
+		return &fakeConn{
+			addFunc: func(*ldap.AddRequest) error {
+				atomic.AddInt32(&calls, 1)
+				return ldap.NewError(ldap.ErrorNetwork, errors.New("connection reset during response read"))
+			},
+		}, nil
+	}
+
+	err := p.Add(ldap.NewAddRequest("uid=test,dc=example,dc=org", nil))
+	if err == nil || !ldap.IsErrorWithCode(err, ldap.ErrorNetwork) {
+		t.Fatalf("expected the network error to be surfaced, got %v", err)
+	}
+	if got := atomic.LoadInt32(&calls); got != 1 {
+		t.Fatalf("Finding 6 fix: pool must not retry writes on ErrorNetwork (double-apply). "+
+			"expected 1 call, got %d.", got)
 	}
 }
 
@@ -279,7 +314,9 @@ func TestConnPoolModifyWithResult(t *testing.T) {
 	}
 }
 
-func TestConnPoolPasswordModifyRetriesOnceOnNetworkError(t *testing.T) {
+// TestConnPoolPasswordModifyNotRetriedOnNetworkError asserts PasswordModify (a write) is not retried
+// on a post-send ErrorNetwork, but surfaced after a single attempt.
+func TestConnPoolPasswordModifyNotRetriedOnNetworkError(t *testing.T) {
 	p, dialCount := newTestPool(2, time.Second)
 
 	var calls int
@@ -288,31 +325,24 @@ func TestConnPoolPasswordModifyRetriesOnceOnNetworkError(t *testing.T) {
 		return &fakeConn{
 			passwordModifyFunc: func(req *ldap.PasswordModifyRequest) (*ldap.PasswordModifyResult, error) {
 				calls++
-				if calls == 1 {
-					return nil, ldap.NewError(ldap.ErrorNetwork, errors.New("boom"))
-				}
-				return &ldap.PasswordModifyResult{GeneratedPassword: "generated"}, nil
+				return nil, ldap.NewError(ldap.ErrorNetwork, errors.New("boom"))
 			},
 		}, nil
 	}
 
 	req := ldap.NewPasswordModifyRequest("uid=test", "old", "new")
-	res, err := p.PasswordModify(req)
-	if err != nil {
-		t.Fatalf("expected PasswordModify to succeed after one retry, got %v", err)
+	_, err := p.PasswordModify(req)
+	if err == nil || !ldap.IsErrorWithCode(err, ldap.ErrorNetwork) {
+		t.Fatalf("expected the network error to be surfaced, got %v", err)
 	}
-	if res.GeneratedPassword != "generated" {
-		t.Fatalf("expected the result to be forwarded from the retried connection, got %q", res.GeneratedPassword)
-	}
-	if calls != 2 {
-		t.Fatalf("expected passwordModifyFunc to be called twice (initial + 1 retry), got %d", calls)
-	}
-	if got := atomic.LoadInt32(dialCount); got != 2 {
-		t.Fatalf("expected a redial for the retry attempt, got %d dials", got)
+	if calls != 1 {
+		t.Fatalf("expected passwordModifyFunc to be called once (writes are not retried), got %d", calls)
 	}
 }
 
-func TestConnPoolModifyWithResultRetriesOnceOnNetworkError(t *testing.T) {
+// TestConnPoolModifyWithResultNotRetriedOnNetworkError — ModifyWithResult is a
+// write; same no-retry-on-ErrorNetwork contract as PasswordModify above.
+func TestConnPoolModifyWithResultNotRetriedOnNetworkError(t *testing.T) {
 	p, dialCount := newTestPool(2, time.Second)
 
 	var calls int
@@ -321,24 +351,172 @@ func TestConnPoolModifyWithResultRetriesOnceOnNetworkError(t *testing.T) {
 		return &fakeConn{
 			modifyWithResultFunc: func(req *ldap.ModifyRequest) (*ldap.ModifyResult, error) {
 				calls++
-				if calls == 1 {
-					return nil, ldap.NewError(ldap.ErrorNetwork, errors.New("boom"))
-				}
-				return &ldap.ModifyResult{}, nil
+				return nil, ldap.NewError(ldap.ErrorNetwork, errors.New("boom"))
 			},
 		}, nil
 	}
 
 	req := ldap.NewModifyRequest("uid=test", nil)
 	_, err := p.ModifyWithResult(req)
-	if err != nil {
-		t.Fatalf("expected ModifyWithResult to succeed after one retry, got %v", err)
+	if err == nil || !ldap.IsErrorWithCode(err, ldap.ErrorNetwork) {
+		t.Fatalf("expected the network error to be surfaced, got %v", err)
 	}
-	if calls != 2 {
-		t.Fatalf("expected modifyWithResultFunc to be called twice (initial + 1 retry), got %d", calls)
+	if calls != 1 {
+		t.Fatalf("expected modifyWithResultFunc to be called once (writes are not retried), got %d", calls)
 	}
-	if got := atomic.LoadInt32(dialCount); got != 2 {
-		t.Fatalf("expected a redial for the retry attempt, got %d dials", got)
+}
+
+// TestConnPoolHonorsRetryMaxCount: the pool retries a read up to RetryMaxCount times
+// (RetryMaxCount+1 total attempts), not the old hardcoded single retry.
+func TestConnPoolHonorsRetryMaxCount(t *testing.T) {
+	var dialCount int32
+	p := NewLDAPPool(Config{PoolSize: 5, PoolCheckoutTimeout: time.Second, RetryMaxCount: 3}, nil)
+	p.dial = func(Config) (ldap.Client, error) {
+		atomic.AddInt32(&dialCount, 1)
+		return &fakeConn{}, nil
+	}
+
+	var calls int
+	err := p.do(p.read, func(conn ldap.Client) error {
+		calls++
+		return ldap.NewError(ldap.ErrorNetwork, errors.New("boom"))
+	})
+	if err == nil {
+		t.Fatalf("expected an error after exhausting retries")
+	}
+	if want := 4; calls != want { // 1 initial + 3 retries
+		t.Fatalf("expected fn to be called %d times, got %d", want, calls)
+	}
+}
+
+// TestConnPoolAppliesBackoff: with a BaseDelay set, the pool sleeps between retries with a
+// growing backoff, via the injectable sleepFn.
+func TestConnPoolAppliesBackoff(t *testing.T) {
+	p := NewLDAPPool(Config{
+		PoolSize:            5,
+		PoolCheckoutTimeout: time.Second,
+		RetryMaxCount:       2,
+		RetryBaseDelay:      10 * time.Millisecond,
+		RetryMaxDelay:       200 * time.Millisecond,
+	}, nil)
+	p.dial = func(Config) (ldap.Client, error) { return &fakeConn{}, nil }
+	var slept []time.Duration
+	p.sleepFn = func(d time.Duration) { slept = append(slept, d) }
+
+	_ = p.do(p.read, func(conn ldap.Client) error {
+		return ldap.NewError(ldap.ErrorNetwork, errors.New("boom"))
+	})
+
+	if len(slept) != 2 { // 2 retries → 2 sleeps
+		t.Fatalf("expected 2 backoff sleeps, got %d", len(slept))
+	}
+	for _, d := range slept {
+		if d <= 0 || d > 200*time.Millisecond {
+			t.Fatalf("sleep %v out of expected (0, MaxDelay] range", d)
+		}
+	}
+}
+
+// TestConnPoolWriteRetriesPreSendNetworkError: a pooled write that fails with a pre-send
+// ErrorNetwork (stale idle connection) is retried on a fresh connection.
+func TestConnPoolWriteRetriesPreSendNetworkError(t *testing.T) {
+	var dialCount int32
+	p := NewLDAPPool(Config{PoolSize: 5, PoolCheckoutTimeout: time.Second}, nil)
+	var calls int32
+	p.dial = func(Config) (ldap.Client, error) {
+		atomic.AddInt32(&dialCount, 1)
+		return &fakeConn{
+			addFunc: func(*ldap.AddRequest) error {
+				if atomic.AddInt32(&calls, 1) == 1 {
+					return ldap.NewError(ldap.ErrorNetwork, errors.New("ldap: connection closed"))
+				}
+				return nil
+			},
+		}, nil
+	}
+
+	if err := p.Add(ldap.NewAddRequest("uid=test,dc=example,dc=org", nil)); err != nil {
+		t.Fatalf("expected Add to succeed after retry, got %v", err)
+	}
+	if got := atomic.LoadInt32(&calls); got != 2 {
+		t.Fatalf("expected Add to be retried once (pre-send ErrorNetwork), got %d calls", got)
+	}
+	if got := atomic.LoadInt32(&dialCount); got != 2 {
+		t.Fatalf("expected a redial for the retry, got %d dials", got)
+	}
+}
+
+// TestConnPoolWriteDoesNotRetryPostSendNetworkError: a pooled write that fails with a post-send
+// ErrorNetwork must not be retried — the mutation may already have applied.
+func TestConnPoolWriteDoesNotRetryPostSendNetworkError(t *testing.T) {
+	p, dialCount := newTestPool(5, time.Second)
+	var calls int32
+	p.dial = func(Config) (ldap.Client, error) {
+		atomic.AddInt32(dialCount, 1)
+		return &fakeConn{
+			addFunc: func(*ldap.AddRequest) error {
+				atomic.AddInt32(&calls, 1)
+				return ldap.NewError(ldap.ErrorNetwork, errors.New("ldap: response channel closed"))
+			},
+		}, nil
+	}
+
+	err := p.Add(ldap.NewAddRequest("uid=test,dc=example,dc=org", nil))
+	if err == nil || !ldap.IsErrorWithCode(err, ldap.ErrorNetwork) {
+		t.Fatalf("expected the network error to be surfaced, got %v", err)
+	}
+	if got := atomic.LoadInt32(&calls); got != 1 {
+		t.Fatalf("expected Add not to be retried on a post-send ErrorNetwork, got %d calls", got)
+	}
+}
+
+// TestConnPoolWriteRetriesSendFailedError asserts a pooled write failing with a codeless failed
+// conn.Write is retried on a fresh connection (matched by isSendFailedErr, not by result code).
+func TestConnPoolWriteRetriesSendFailedError(t *testing.T) {
+	var dialCount int32
+	p := NewLDAPPool(Config{PoolSize: 5, PoolCheckoutTimeout: time.Second}, nil)
+	var calls int32
+	p.dial = func(Config) (ldap.Client, error) {
+		atomic.AddInt32(&dialCount, 1)
+		return &fakeConn{
+			addFunc: func(*ldap.AddRequest) error {
+				if atomic.AddInt32(&calls, 1) == 1 {
+					return errors.New("unable to send request: write tcp 127.0.0.1:1->127.0.0.1:2: write: broken pipe")
+				}
+				return nil
+			},
+		}, nil
+	}
+
+	if err := p.Add(ldap.NewAddRequest("uid=test,dc=example,dc=org", nil)); err != nil {
+		t.Fatalf("expected Add to succeed after retry, got %v", err)
+	}
+	if got := atomic.LoadInt32(&calls); got != 2 {
+		t.Fatalf("expected Add to be retried once (failed conn.Write), got %d calls", got)
+	}
+	if got := atomic.LoadInt32(&dialCount); got != 2 {
+		t.Fatalf("expected a redial for the retry, got %d dials", got)
+	}
+}
+
+// TestConnPoolReleaseEvictsOnSendFailedError asserts a connection whose conn.Write failed is closed
+// and discarded, not returned to the idle pool (the codeless error needs isSendFailedErr to evict).
+func TestConnPoolReleaseEvictsOnSendFailedError(t *testing.T) {
+	p, _ := newTestPool(2, time.Second)
+
+	conn := &fakeConn{}
+	if err := p.sem.Acquire(context.Background(), 1); err != nil {
+		t.Fatalf("failed to reserve a pool slot: %v", err)
+	}
+	p.release(conn, errors.New("unable to send request: write tcp 127.0.0.1:1->127.0.0.1:2: write: broken pipe"))
+
+	if !conn.closed {
+		t.Fatal("expected the connection to be closed and discarded after a failed conn.Write")
+	}
+	select {
+	case c := <-p.idle:
+		t.Fatalf("expected no connection returned to the idle pool, got %v", c)
+	default:
 	}
 }
 
