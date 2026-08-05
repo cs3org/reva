@@ -135,9 +135,12 @@ type ShallowJob struct {
 	// so the provider hosting the resource has to be looked up first, which is
 	// wiring this package stays out of.
 	Grants func(ctx context.Context, storageID string) (GrantStore, error)
-	// Not the regular logger, but logs to the journal instead
-	Log        *zerolog.Logger
-	DryRun     bool
+	// Log is the job's own log, see OpenLog. When nil the job falls back to the
+	// logger in the run context.
+	Log *zerolog.Logger
+	// DryRun, when set, reports the grants it would write without writing any.
+	DryRun bool
+	// RunOnStart, when set, fires the job once as soon as the runner starts.
 	RunOnStart bool
 }
 
