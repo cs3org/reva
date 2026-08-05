@@ -600,6 +600,7 @@ var _ = Describe("helpers", func() {
 				})
 
 			statCallCount := 0
+			newShareInVault := args.withResourceId.GetStorageId() == utils.VaultStorageProviderID
 
 			for _, s := range args.listReceivedSharesResponse.GetShares() {
 				if s.GetState() != collaborationpb.ShareState_SHARE_STATE_ACCEPTED {
@@ -609,6 +610,12 @@ var _ = Describe("helpers", func() {
 				// add one for every accepted share where the resource id matches
 				if utils.ResourceIDEqual(s.GetShare().GetResourceId(), args.withResourceId) {
 					statCallCount++
+				}
+
+				// mountpoints are only compared within the same vault/non-vault segregation group
+				existingShareInVault := s.GetShare().GetResourceId().GetStorageId() == utils.VaultStorageProviderID
+				if existingShareInVault != newShareInVault {
+					continue
 				}
 
 				// add one for every accepted share where the mountpoint patch matches
@@ -707,6 +714,36 @@ var _ = Describe("helpers", func() {
 					},
 				},
 				expectedName: "some name (1)",
+			},
+		),
+		Entry(
+			"does not enumerate the name if a same-named mounted share only collides across the vault/non-vault boundary",
+			GetMountpointAndUnmountedSharesArgs{
+				withName: "some name",
+				withResourceId: &providerpb.ResourceId{
+					StorageId: "1",
+					OpaqueId:  "2",
+					SpaceId:   "3",
+				},
+				listReceivedSharesResponse: &collaborationpb.ListReceivedSharesResponse{
+					Status: status.NewOK(context.Background()),
+					Shares: []*collaborationpb.ReceivedShare{
+						{
+							State: collaborationpb.ShareState_SHARE_STATE_ACCEPTED,
+							MountPoint: &providerpb.Reference{
+								Path: "some name",
+							},
+							Share: &collaborationpb.Share{
+								ResourceId: &providerpb.ResourceId{
+									StorageId: utils.VaultStorageProviderID,
+									OpaqueId:  "20",
+									SpaceId:   "30",
+								},
+							},
+						},
+					},
+				},
+				expectedName: "some name",
 			},
 		),
 	)
