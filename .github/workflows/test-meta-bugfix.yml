@@ -1,0 +1,39 @@
+name: Test Meta Bugfix
+
+on:
+  push:
+    branches: [ master, main ]
+  workflow_dispatch: # ボタンを押して手動で実行できるようにする設定
+
+jobs:
+  integration-test:
+    runs-on: ubuntu-latest # 高速なGitHub標準Linux（x86_64）
+
+    steps:
+    - name: コードの取得
+      uses: actions/checkout@v4
+
+    - name: Go言語の準備
+      uses: actions/setup-go@v5
+      with:
+        go-version: '1.23' # Revaの要求バージョンに合わせる
+
+    - name: Revaのビルド（通常ビルド）
+      run: |
+        # クロスコンパイルせず、この環境向けに普通にビルドします
+        go build -o my-revad ./cmd/revad
+
+    - name: テスト用サーバーの起動
+      run: |
+        # 修正したコードが含まれるサーバーをバックグラウンドで起動します
+        # ※設定ファイル（versions-recycle.yaml等）が必要な場合は、パスを指定してください
+        ./my-revad -c tests/config/versions-recycle.yaml & 
+        
+        # サーバーが立ち上がるまで数秒待つ
+        sleep 5
+
+    - name: 問題のcurlコマンドを実行してデバッグ
+      run: |
+        # 実際にエラーが起きていたURLでリクエストを送り、レスポンスを表示させます
+        # %2F が維持されていれば、404ではなく正常なコードが返ってきます
+        curl -v -X PROPFIND -u testuser:testpass 'http://localhost:38001/remote.php/dav/meta/localfs%24F5WG6Y3BNRTHG%3D%3D%3D%21fileid-%2Ftest.txt/v'
