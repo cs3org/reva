@@ -20,7 +20,6 @@ package ocdav
 
 import (
 	"net/http"
-	"strings" // 👈 パス文字列の分解のために追加
 
 	"github.com/cs3org/reva/v3/pkg/appctx"
 	"github.com/cs3org/reva/v3/pkg/rhttp/router"
@@ -43,41 +42,31 @@ func (h *MetaHandler) Handler(s *svc) http.Handler {
 		ctx := r.Context()
 		log := appctx.GetLogger(ctx)
 
-		// 🛠️ ルーターが壊す前の「生のURLパス」を取得する
-		// 例: /remote.php/dav/meta/localfs%24F5WG...%21fileid-%2Ftest.txt/v
-		fullPath := r.URL.RawPath
-		if fullPath == "" {
-			fullPath = r.URL.Path
+		// 👈 ここから書き換える
+		// エンコードが維持された生のパス（/remote.php/dav/meta/...）を取得
+		rawPath := r.URL.RawPath
+		if rawPath == "" {
+			rawPath = r.URL.Path
 		}
 
-		// ベースとなるパス（/remote.php/dav/meta/）より後ろの部分を抜き出す
-		// これにより、%2Fが維持されたままのIDを取得できます
-		basePath := "/remote.php/dav/meta/"
-		subPath := strings.TrimPrefix(fullPath, basePath)
+		// ルーターの手前までの不要なプレフィックス（/remote.php/dav/meta/）を削る
+		// ※もしうまく動かない場合は、ここの削り方を調整します
+		var id string
+		id, rawPath = router.ShiftPath(rawPath) 
 
-		// 最初の一塊（ID部分）と、それ以降（/v など）に分割する
-		parts := strings.SplitN(subPath, "/", 2)
-		id := parts[0]
-
-		if id == "" {
+		// パーセントエンコード（%2Fなど）を本来の文字（/など）にデコードする
+		decodedID, err := url.PathUnescape(id)
+		if err != nil {
 			http.Error(w, "400 Bad Request", http.StatusBadRequest)
 			return
 		}
+		// 👈 ここまで書き換える
 
-		// 残りのパス（"v" など）をルーター用に再設定する
-		remaining := ""
-		if len(parts) > 1 {
-			remaining = parts[1]
-		}
-		r.URL.Path = "/" + remaining
-		r.URL.RawPath = "/" + remaining
-
-		// 以降は元のRevaの処理のまま、idを使って解析します
-		rid, ok := spaces.ParseResourceID(id)
+		// 以前の「id」を「decodedID」に差し替える
+		rid, ok := spaces.ParseResourceID(decodedID)
 		if !ok {
-			// If this fails, client might be non-spaces
 			var err error
-			rid, err = spaces.ResourceIdFromString(id)
+			rid, err = spaces.ResourceIdFromString(decodedID)
 			if err != nil {
 				http.Error(w, "400 Bad Request", http.StatusBadRequest)
 				return
@@ -89,6 +78,10 @@ func (h *MetaHandler) Handler(s *svc) http.Handler {
 			Str("space_id", rid.SpaceId).
 			Str("opaque_id", rid.OpaqueId).
 			Msg("meta: parsed resource ID")
+
+		// 残りのパスを書き戻して次の処理へ回す
+		r.URL.Path = rawPath
+		r.URL.RawPath = rawPath
 
 		var head string
 		head, r.URL.Path = router.ShiftPath(r.URL.Path)
