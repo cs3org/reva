@@ -100,7 +100,10 @@ func (fs *Eosfs) GetMD(ctx context.Context, ref *provider.Reference, mdKeys []st
 
 	fn, err := fs.resolve(ctx, ref)
 	if err != nil {
-		// Propagated as-is, so we don't lose the error type
+		// Propagated as-is: resolving a by-id reference stats the inode, so
+		// this is where a deleted resource shows up. Replacing it with a
+		// BadRequest hid both that and every transport failure behind the same
+		// code.
 		return nil, err
 	}
 
@@ -153,7 +156,10 @@ func (fs *Eosfs) getPath(ctx context.Context, id *provider.ResourceId) (string, 
 
 	eosFileInfo, err := fs.c.GetFileInfoByInode(ctx, auth, fid)
 	if err != nil {
-		// Propagated as-is, so we don't lose the error type
+		// Returned unwrapped on purpose. The storage provider decides the CS3
+		// status code with a type switch on the concrete error, so wrapping a
+		// not-found here turns "this resource is gone" into CODE_INTERNAL for
+		// every caller above.
 		return "", err
 	}
 

@@ -31,6 +31,7 @@ import (
 	"github.com/cs3org/reva/v3/pkg/appctx"
 	"github.com/cs3org/reva/v3/pkg/rjobs"
 	"github.com/cs3org/reva/v3/pkg/service"
+	"github.com/cs3org/reva/v3/pkg/trace"
 	"github.com/google/uuid"
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog"
@@ -202,13 +203,22 @@ func (j *OrphanJob) Run(ctx context.Context) (OrphanReport, error) {
 	for _, e := range entries {
 		report.Checked++
 
-		reason, orphaned, err := j.classify(ctx, gw, e)
+		// Each item gets its own trace id, propagated into every gateway and
+		// storage provider call it makes by the client interceptor the service
+		// package dials with. It is logged on each per-item line so a skip here
+		// can be joined against the revad logs that explain it: grep the same
+		// traceid there.
+		traceID := trace.Generate()
+		itemCtx := trace.Set(ctx, traceID)
+
+		reason, orphaned, err := j.classify(itemCtx, gw, e)
 		if err != nil {
 			report.Skipped++
 			log.Error().Err(err).
 				Str("event", EventOrphanSkip).
 				Str("kind", string(e.kind)).
 				Str("id", e.id).
+				Str("traceid", traceID).
 				Msg("reconciliation: existence check failed, item left untouched")
 			continue
 		}
@@ -216,17 +226,19 @@ func (j *OrphanJob) Run(ctx context.Context) (OrphanReport, error) {
 			log.Debug().
 				Str("kind", string(e.kind)).
 				Str("id", e.id).
+				Str("traceid", traceID).
 				Msg("reconciliation: item is valid")
 			continue
 		}
 
 		if !j.DryRun {
-			if err := j.mark(ctx, e); err != nil {
+			if err := j.mark(itemCtx, e); err != nil {
 				report.Failed++
 				log.Error().Err(err).
 					Str("event", EventOrphanFail).
 					Str("kind", string(e.kind)).
 					Str("id", e.id).
+					Str("traceid", traceID).
 					Msg("reconciliation: marking item orphaned failed")
 				continue
 			}
@@ -249,6 +261,7 @@ func (j *OrphanJob) Run(ctx context.Context) (OrphanReport, error) {
 			Str("owner", e.owner).
 			Str("share_with", e.shareWith).
 			Bool("dry_run", j.DryRun).
+			Str("traceid", traceID).
 			Msg("reconciliation: item marked orphaned")
 	}
 
