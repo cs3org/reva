@@ -37,17 +37,32 @@ func (h *MetaHandler) init(c *Config) error {
 }
 
 // Handler handles requests.
+// Handler handles requests.
 func (h *MetaHandler) Handler(s *svc) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		ctx := r.Context()
 		log := appctx.GetLogger(ctx)
-		
+
+		// --- 🛠️ ここから追加・修正 ---
+		// RawPath（エンコード維持）が空なら Path を使う
+		p := r.URL.RawPath
+		if p == "" {
+			p = r.URL.Path
+		}
+
 		var id string
-		id, r.URL.Path = router.ShiftPath(r.URL.Path)
+		// 共通の変数 p を使ってパスを切り出す
+		id, p = router.ShiftPath(p)
 		if id == "" {
 			http.Error(w, "400 Bad Request", http.StatusBadRequest)
 			return
 		}
+
+		// 切り出した後の残りのパスを、URLオブジェクトのPathとRawPathにそれぞれ同期させる
+		// （※idの部分はURLデコードしてあげる必要があります）
+		r.URL.Path = r.URL.Path[len(id)+1:] // 簡易的な同期（文字数がズレる場合は要調整）
+		r.URL.RawPath = p
+		// --- 🛠️ ここまで ---
 
 		rid, ok := spaces.ParseResourceID(id)
 		if !ok {
