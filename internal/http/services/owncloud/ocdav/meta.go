@@ -20,6 +20,7 @@ package ocdav
 
 import (
 	"net/http"
+	"strings" // 👈 パス文字列の分解のために追加
 
 	"github.com/cs3org/reva/v3/pkg/appctx"
 	"github.com/cs3org/reva/v3/pkg/rhttp/router"
@@ -37,33 +38,41 @@ func (h *MetaHandler) init(c *Config) error {
 }
 
 // Handler handles requests.
-// Handler handles requests.
 func (h *MetaHandler) Handler(s *svc) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		ctx := r.Context()
 		log := appctx.GetLogger(ctx)
 
-		// --- 🛠️ ここから追加・修正 ---
-		// RawPath（エンコード維持）が空なら Path を使う
-		p := r.URL.RawPath
-		if p == "" {
-			p = r.URL.Path
+		// 🛠️ ルーターが壊す前の「生のURLパス」を取得する
+		// 例: /remote.php/dav/meta/localfs%24F5WG...%21fileid-%2Ftest.txt/v
+		fullPath := r.URL.RawPath
+		if fullPath == "" {
+			fullPath = r.URL.Path
 		}
 
-		var id string
-		// 共通の変数 p を使ってパスを切り出す
-		id, p = router.ShiftPath(p)
+		// ベースとなるパス（/remote.php/dav/meta/）より後ろの部分を抜き出す
+		// これにより、%2Fが維持されたままのIDを取得できます
+		basePath := "/remote.php/dav/meta/"
+		subPath := strings.TrimPrefix(fullPath, basePath)
+
+		// 最初の一塊（ID部分）と、それ以降（/v など）に分割する
+		parts := strings.SplitN(subPath, "/", 2)
+		id := parts[0]
+
 		if id == "" {
 			http.Error(w, "400 Bad Request", http.StatusBadRequest)
 			return
 		}
 
-		// 切り出した後の残りのパスを、URLオブジェクトのPathとRawPathにそれぞれ同期させる
-		// （※idの部分はURLデコードしてあげる必要があります）
-		r.URL.Path = r.URL.Path[len(id)+1:] // 簡易的な同期（文字数がズレる場合は要調整）
-		r.URL.RawPath = p
-		// --- 🛠️ ここまで ---
+		// 残りのパス（"v" など）をルーター用に再設定する
+		remaining := ""
+		if len(parts) > 1 {
+			remaining = parts[1]
+		}
+		r.URL.Path = "/" + remaining
+		r.URL.RawPath = "/" + remaining
 
+		// 以降は元のRevaの処理のまま、idを使って解析します
 		rid, ok := spaces.ParseResourceID(id)
 		if !ok {
 			// If this fails, client might be non-spaces
