@@ -20,7 +20,8 @@ package ocdav
 
 import (
 	"net/http"
-
+	"net/url" // 追記
+	
 	"github.com/cs3org/reva/v3/pkg/appctx"
 	"github.com/cs3org/reva/v3/pkg/rhttp/router"
 	"github.com/cs3org/reva/v3/pkg/spaces"
