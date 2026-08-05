@@ -9,6 +9,7 @@ import (
 	. "github.com/onsi/gomega"
 	"github.com/owncloud/reva/v2/pkg/errtypes"
 	"github.com/owncloud/reva/v2/pkg/storage"
+	"github.com/owncloud/reva/v2/pkg/storage/utils/decomposedfs/aspects"
 	"github.com/owncloud/reva/v2/pkg/storage/utils/decomposedfs/metadata/prefixes"
 	"github.com/owncloud/reva/v2/pkg/storage/utils/decomposedfs/node"
 	helpers "github.com/owncloud/reva/v2/pkg/storage/utils/decomposedfs/testhelpers"
@@ -149,6 +150,53 @@ var _ = Describe("PrepareUpload", func() {
 			Expect(err).ToNot(HaveOccurred())
 
 			// Overwrite.
+			info2 := storage.UploadInfo{NodeExisted: true, Size: 20}
+			result, err := env.Fs.PrepareUpload(env.Ctx, ref, "session-2", info2)
+
+			Expect(err).ToNot(HaveOccurred())
+			Expect(result).ToNot(BeNil())
+			Expect(result.VersionCreated).To(BeFalse())
+
+			revisions, err := env.Fs.ListRevisions(env.Ctx, &provider.Reference{
+				ResourceId: env.SpaceRootRes,
+				Path:       ref.Path,
+			})
+			Expect(err).ToNot(HaveOccurred())
+			Expect(revisions).To(BeEmpty())
+		})
+	})
+
+	// The posix driver builds its own aspects and disables versioning only there,
+	// never in the config. Reading just the config sent it down the versioning path
+	// it is built to skip, which failed the upload outright.
+	Context("overwrite with versioning disabled through the aspects", func() {
+		JustBeforeEach(func() {
+			var err error
+			env, err = helpers.NewTestEnv(nil, func(a *aspects.Aspects) {
+				a.DisableVersioning = true
+			})
+			Expect(err).ToNot(HaveOccurred())
+
+			ref = &provider.Reference{
+				ResourceId: env.SpaceRootRes,
+				Path:       "/dir1/upload-target.txt",
+			}
+
+			env.Permissions.On("AssemblePermissions", mock.Anything, mock.Anything, mock.Anything).
+				Return(&provider.ResourcePermissions{
+					InitiateFileUpload: true,
+					Stat:               true,
+					ListFileVersions:   true,
+				}, nil)
+			_, err = env.Fs.TouchFile(env.Ctx, ref, false, "")
+			Expect(err).ToNot(HaveOccurred())
+		})
+
+		It("does not create a version file and returns VersionCreated=false", func() {
+			info1 := storage.UploadInfo{NodeExisted: false, Size: 10}
+			_, err := env.Fs.PrepareUpload(env.Ctx, ref, "session-1", info1)
+			Expect(err).ToNot(HaveOccurred())
+
 			info2 := storage.UploadInfo{NodeExisted: true, Size: 20}
 			result, err := env.Fs.PrepareUpload(env.Ctx, ref, "session-2", info2)
 
