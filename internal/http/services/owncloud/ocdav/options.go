@@ -34,6 +34,7 @@ func (s *svc) handleOptions(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Allow", allow)
 	w.Header().Set("DAV", "1, 2")
 	w.Header().Set("MS-Author-Via", "DAV")
+	w.Header().Add(HeaderAccessControlAllowHeaders, HeaderRevaBasePath)
 	if !isPublic {
 		w.Header().Add(HeaderAccessControlAllowHeaders, HeaderTusResumable)
 		w.Header().Add(HeaderAccessControlExposeHeaders, strings.Join([]string{HeaderTusResumable, HeaderTusVersion, HeaderTusExtension}, ","))

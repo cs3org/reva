@@ -38,6 +38,7 @@ import (
 	"github.com/cs3org/reva/v3/pkg/appctx"
 	"github.com/cs3org/reva/v3/pkg/errtypes"
 	"github.com/cs3org/reva/v3/pkg/rgrpc/todo/pool"
+	"github.com/cs3org/reva/v3/pkg/spaces"
 	"github.com/cs3org/reva/v3/pkg/storage"
 	"github.com/cs3org/reva/v3/pkg/storage/utils/localfs"
 	"github.com/cs3org/reva/v3/pkg/utils/resourceid"
@@ -55,6 +56,47 @@ then this method alone will cost a huge amount of time.
 func BenchmarkEncodePath(b *testing.B) {
 	for b.Loop() {
 		_ = encodePath("/some/path/Folder %^*(#1)")
+	}
+}
+
+func TestRelativeBasePathFromHeader(t *testing.T) {
+	request := httptest.NewRequest(MethodPropfind, "https://example.org/remote.php/dav/spaces/eos-space/project", nil)
+	request.Header.Set(HeaderRevaBasePath, "eos/")
+
+	basePath, ok := relativeBasePathFromHeader(request)
+	if !ok {
+		t.Fatal("expected base path header to be detected")
+	}
+	if basePath != "/eos" {
+		t.Fatalf("base path = %q, want %q", basePath, "/eos")
+	}
+}
+
+func TestMDToPropResponseUsesRelativeBasePath(t *testing.T) {
+	service := svc{c: &Config{}}
+	fakeEOSSpaceID := "fake-eos-space-id"
+
+	ctx := context.Background()
+	ctx = context.WithValue(ctx, ctxKeyBaseURI, "/remote.php/dav/spaces")
+	ctx = context.WithValue(ctx, ctxSpaceID, fakeEOSSpaceID)
+	ctx = context.WithValue(ctx, ctxRelativeBasePath, "/eos")
+
+	res, err := service.mdToPropResponse(ctx, &propfindXML{Allprop: new(struct{})}, &providerv1beta1.ResourceInfo{
+		Path: "/eos/project/a/name/public",
+		Type: providerv1beta1.ResourceType_RESOURCE_TYPE_CONTAINER,
+		Id: &providerv1beta1.ResourceId{
+			StorageId: "eos-storage-id",
+			SpaceId:   spaces.EncodeSpaceID("/eos/project/a/name"),
+			OpaqueId:  "node-id",
+		},
+	}, nil, "", "/remote.php/dav/spaces", nil, nil)
+	if err != nil {
+		t.Fatalf("expected no error, got %v", err)
+	}
+
+	expected := "/remote.php/dav/spaces/fake-eos-space-id/project/a/name/public/"
+	if res.Href != expected {
+		t.Fatalf("href = %q, want %q", res.Href, expected)
 	}
 }
 
