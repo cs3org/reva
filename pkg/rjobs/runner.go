@@ -177,7 +177,7 @@ func (r *Runner) Start() {
 		if p.RunOnStart {
 			next = time.Now()
 		}
-		if err := r.store.RegisterScheduled(ctx, p.Name, sched, next); err != nil {
+		if err := r.store.RegisterScheduled(ctx, p.Name, sched, next, p.RunOnStart); err != nil {
 			r.log.Error().Err(err).Str("job", p.Name).Msg("rjobs: registering schedule failed")
 		}
 	}

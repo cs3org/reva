@@ -31,6 +31,7 @@ import (
 	natsstore "github.com/cs3org/reva/v3/pkg/rjobs/store/nats"
 	sqlstatus "github.com/cs3org/reva/v3/pkg/rjobs/store/sql"
 	"github.com/cs3org/reva/v3/pkg/rserverless"
+	"github.com/cs3org/reva/v3/pkg/sharedconf"
 	"github.com/cs3org/reva/v3/pkg/utils/cfg"
 	"github.com/rs/zerolog"
 )
@@ -68,6 +69,7 @@ func (c *config) ApplyDefaults() {
 	if c.AckWaitSeconds == 0 {
 		c.AckWaitSeconds = 60
 	}
+	c.StatusDB = sharedconf.GetDBInfo(c.StatusDB)
 }
 
 type svc struct {
