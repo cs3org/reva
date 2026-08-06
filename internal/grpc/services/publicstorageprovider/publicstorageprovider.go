@@ -34,6 +34,7 @@ import (
 	"github.com/cs3org/reva/v3/pkg/rgrpc/status"
 	revaservice "github.com/cs3org/reva/v3/pkg/service"
 	"github.com/cs3org/reva/v3/pkg/sharedconf"
+	"github.com/cs3org/reva/v3/pkg/spaces"
 	"github.com/cs3org/reva/v3/pkg/utils"
 	"github.com/cs3org/reva/v3/pkg/utils/cfg"
 	"github.com/pkg/errors"
@@ -352,7 +353,7 @@ func (s *service) DeleteStorageSpace(ctx context.Context, req *provider.DeleteSt
 }
 
 func (s *service) CreateContainer(ctx context.Context, req *provider.CreateContainerRequest) (*provider.CreateContainerResponse, error) {
-	cs3Ref, _, ls, st, err := s.translatePublicRefToCS3Ref(ctx, req.Ref)
+	cs3Ref, tkn, ls, st, err := s.translatePublicRefToCS3Ref(ctx, req.Ref)
 	switch {
 	case err != nil:
 		return nil, err
@@ -385,6 +386,19 @@ func (s *service) CreateContainer(ctx context.Context, req *provider.CreateConta
 	}
 	if res.Status.Code == rpc.Code_CODE_INTERNAL {
 		return res, nil
+	}
+
+	// the fileid in the opaque points at the real resource,
+	// translate it to the public namespace like Stat does
+	if res.Opaque != nil {
+		if e, ok := res.Opaque.Map["fileid"]; ok {
+			if id, ok := spaces.ParseResourceID(string(e.Value)); ok {
+				s.setPublicStorageID(&provider.ResourceInfo{Id: id}, tkn)
+				e.Value = []byte(spaces.EncodeToStringifiedResourceID(id))
+			} else {
+				delete(res.Opaque.Map, "fileid")
+			}
+		}
 	}
 
 	return res, nil
