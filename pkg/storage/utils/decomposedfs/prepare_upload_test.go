@@ -236,6 +236,36 @@ var _ = Describe("PrepareUpload", func() {
 		})
 	})
 
+	Context("quota exceeded on a new file", func() {
+		JustBeforeEach(touchTarget)
+
+		It("returns an error and reports the upload as an addition", func() {
+			var (
+				called       bool
+				gotOverwrite bool
+				gotOldSize   uint64
+			)
+			original := node.CheckQuota
+			node.CheckQuota = func(_ context.Context, _ *node.Node, overwrite bool, oldSize, _ uint64) (bool, error) {
+				called, gotOverwrite, gotOldSize = true, overwrite, oldSize
+				return false, errtypes.InsufficientStorage("quota exceeded")
+			}
+			defer func() { node.CheckQuota = original }()
+
+			info := storage.UploadInfo{NodeExisted: false, Size: 20}
+			_, err := env.Fs.PrepareUpload(env.Ctx, ref, "session-new", info)
+
+			Expect(called).To(BeTrue(), "quota was not checked for a new file")
+			Expect(err).To(HaveOccurred())
+			_, ok := err.(errtypes.IsInsufficientStorage)
+			Expect(ok).To(BeTrue(), "expected errtypes.InsufficientStorage, got %T: %v", err, err)
+
+			// there are no bytes to replace, so the size must count as pure growth
+			Expect(gotOverwrite).To(BeFalse())
+			Expect(gotOldSize).To(BeZero())
+		})
+	})
+
 	Context("precondition checks on overwrite", func() {
 		var (
 			oldEtag string
