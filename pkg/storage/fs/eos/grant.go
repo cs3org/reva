@@ -313,8 +313,12 @@ func (fs *Eosfs) convertACLsToGrants(ctx context.Context, acls *acl.ACLs) ([]*pr
 	return res, nil
 }
 
+// isSysACLs reports whether the attribute is the EOS ACL, sys.acl. The type is
+// held separately from the key, so the key here is "acl" and not "sys.acl":
+// matching on "sys" never did, which left every entry EOS holds out of the
+// grants ListGrants hands back.
 func isSysACLs(a *eosclient.Attribute) bool {
-	return a.Type == SystemAttr && a.Key == "sys"
+	return a.Type == SystemAttr && a.Key == "acl"
 }
 
 func isLightweightACL(a *eosclient.Attribute) bool {
