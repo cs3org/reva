@@ -132,11 +132,11 @@ func (fs *cephfs) CreateHome(ctx context.Context) (err error) {
 	return nil
 }
 
-func (fs *cephfs) CreateDir(ctx context.Context, ref *provider.Reference) error {
+func (fs *cephfs) CreateDir(ctx context.Context, ref *provider.Reference) (*provider.ResourceInfo, error) {
 	user := fs.makeUser(ctx)
 	path, err := user.resolveRef(ref)
 	if err != nil {
-		return getRevaError(ctx, err)
+		return nil, getRevaError(ctx, err)
 	}
 
 	log := appctx.GetLogger(ctx)
@@ -146,8 +146,16 @@ func (fs *cephfs) CreateDir(ctx context.Context, ref *provider.Reference) error 
 			return
 		}
 	})
+	if err != nil {
+		return nil, getRevaError(ctx, err)
+	}
 
-	return getRevaError(ctx, err)
+	// stat the new dir to return its info, best effort
+	md, err := fs.GetMD(ctx, ref, nil)
+	if err != nil {
+		return nil, nil
+	}
+	return md, nil
 }
 
 func (fs *cephfs) Delete(ctx context.Context, ref *provider.Reference) (err error) {

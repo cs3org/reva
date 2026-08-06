@@ -762,7 +762,7 @@ func benchmarkUploadDirectories(b *testing.B, depth int) {
 		dirPath.WriteString(fmt.Sprintf("/level_%d", i))
 		// Create directory through filesystem
 		dirRef := &provider.Reference{Path: dirPath.String()}
-		err := fs.CreateDir(ctx, dirRef)
+		_, err := fs.CreateDir(ctx, dirRef)
 		if err != nil {
 			// Directory might already exist, which is fine
 		}
