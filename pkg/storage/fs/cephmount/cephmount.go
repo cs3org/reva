@@ -55,6 +55,12 @@ import (
 const (
 	xattrUserNs = "user."
 	xattrLock   = xattrUserNs + "reva.lockpayload"
+	// xattrLwShare + <account> holds the rwx permissions granted to an external
+	// account, which has no local uid to put in a POSIX ACL.
+	xattrLwShare = xattrUserNs + "reva.lwshare."
+	// xattrCephRctime is the recursive ctime ceph maintains on a directory: the
+	// most recent change anywhere in its subtree, propagated up by the MDS.
+	xattrCephRctime = "ceph.dir.rctime"
 )
 
 // cephmountfs is a local filesystem implementation that provides a ceph-like interface
@@ -96,6 +102,15 @@ func New(ctx context.Context, m map[string]any) (storage.FS, error) {
 	}
 
 	log := appctx.GetLogger(ctx)
+
+	if o.SpaceDepth <= 0 {
+		// Without it the space root a shared resource lives under is unknown, so
+		// the service account cannot be granted the traversal it needs to reach
+		// anything shared with an external account.
+		log.Warn().Int("space_depth", o.SpaceDepth).
+			Msg("cephmount: the storage provider declares no space roots below its mount path, shares with external accounts will not work")
+	}
+
 	var discoveredCephVolumePath string
 	var discoveredLocalMountPoint string
 
@@ -195,6 +210,8 @@ func New(ctx context.Context, m map[string]any) (storage.FS, error) {
 		CleanupPeriod: 1 * time.Minute, // Check for expired threads every minute
 		NobodyUID:     o.NobodyUID,     // Use configured nobody UID
 		NobodyGID:     o.NobodyGID,     // Use configured nobody GID
+		ExternalUID:   o.ExternalAccountsUserUID,
+		ExternalGID:   o.ExternalAccountsUserGID,
 	})
 	if err != nil {
 		return nil, errors.Wrap(err, "cephmount: failed to initialize user thread pool")
@@ -375,6 +392,10 @@ func (fs *cephmountfs) readArbitraryMetadata(path string, mdKeys []string) map[s
 		if !strings.HasPrefix(name, xattrUserNs) {
 			continue
 		}
+		if strings.HasPrefix(name, xattrLwShare) {
+			// Grants to external accounts are exposed through ListGrants, not as metadata.
+			continue
+		}
 		key := strings.TrimPrefix(name, xattrUserNs)
 		if !wantAll && !want[key] {
 			continue
@@ -388,27 +409,27 @@ func (fs *cephmountfs) readArbitraryMetadata(path string, mdKeys []string) map[s
 	return md
 }
 
-// fileAsResourceInfo converts file info to ResourceInfo without user context
-func (fs *cephmountfs) fileAsResourceInfo(path string, info os.FileInfo, mdKeys []string) (*provider.ResourceInfo, error) {
+// fileAsResourceInfo converts file info to ResourceInfo
+func (fs *cephmountfs) fileAsResourceInfo(ctx context.Context, path string, info os.FileInfo, mdKeys []string) (*provider.ResourceInfo, error) {
 	var (
 		resourceType provider.ResourceType
 		target       string
 		size         uint64
 	)
 
+	// The absolute filesystem path, needed to read the link of a symlink and the
+	// extended attributes of a directory.
+	fullPath := fs.chrootDir
+	if path != "." {
+		fullPath = filepath.Join(fs.chrootDir, path)
+	}
+
 	// Determine resource type
 	if info.IsDir() {
 		resourceType = provider.ResourceType_RESOURCE_TYPE_CONTAINER
 	} else if info.Mode()&os.ModeSymlink != 0 {
 		resourceType = provider.ResourceType_RESOURCE_TYPE_SYMLINK
-		// For symlinks, we need to get the absolute filesystem path to read the link
-		var absPath string
-		if path == "." {
-			absPath = fs.chrootDir
-		} else {
-			absPath = filepath.Join(fs.chrootDir, path)
-		}
-		if linkTarget, err := os.Readlink(absPath); err == nil {
+		if linkTarget, err := os.Readlink(fullPath); err == nil {
 			target = linkTarget
 		}
 	} else {
@@ -426,14 +447,32 @@ func (fs *cephmountfs) fileAsResourceInfo(path string, info os.FileInfo, mdKeys 
 
 	owner, _ := user.LookupId(fmt.Sprint(stat.Uid))
 
+	externalPath := fs.fromChroot(path)
+
+	// The mtime of a directory only moves when its direct entries change, so the
+	// subtree is what a client should see as the time of last change. The later
+	// of the two wins: rctime propagates lazily and can lag a direct change.
+	mtime := uint64(info.ModTime().Unix())
+	var rctime string
+	if info.IsDir() {
+		rctime = fs.recursiveCtime(ctx, fullPath)
+		if sec, ok := rctimeSeconds(rctime); ok && sec > mtime {
+			mtime = sec
+		}
+	}
+
 	ri := &provider.ResourceInfo{
 		Type:     resourceType,
 		Id:       resourceId,
 		Checksum: &provider.ResourceChecksum{},
 		Size:     size,
-		Mtime:    &typepb.Timestamp{Seconds: uint64(info.ModTime().Unix())},
-		Path:     fs.fromChroot(path), // Convert chroot path back to external path
-		Owner:    &userv1beta1.UserId{OpaqueId: owner.Username},
+		Mtime:    &typepb.Timestamp{Seconds: mtime},
+		Path:     externalPath,
+		// Clients list a received share by its name and etag, so both must be set
+		// even though the resource itself is addressed by path or id.
+		Name:  filepath.Base(externalPath),
+		Etag:  calcEtag(info, stat, rctime),
+		Owner: &userv1beta1.UserId{OpaqueId: owner.Username},
 		PermissionSet: &provider.ResourcePermissions{
 			GetPath:              true,
 			GetQuota:             true,
@@ -459,6 +498,16 @@ func (fs *cephmountfs) fileAsResourceInfo(path string, info os.FileInfo, mdKeys 
 		ArbitraryMetadata: &provider.ArbitraryMetadata{Metadata: map[string]string{}},
 	}
 
+	// An external account only ever sees what it was granted, since the uid the
+	// operation runs under is a service account and says nothing about them.
+	if u, ok := externalUser(ctx); ok {
+		perms, found := fs.externalAccountGrant(u.Id.OpaqueId, path)
+		if !found {
+			perms = &provider.ResourcePermissions{}
+		}
+		ri.PermissionSet = perms
+	}
+
 	// Set target for symlinks
 	if target != "" {
 		ri.Target = target
@@ -478,6 +527,47 @@ func (fs *cephmountfs) fileAsResourceInfo(path string, info os.FileInfo, mdKeys 
 	ri.ArbitraryMetadata.Metadata["device"] = strconv.FormatUint(uint64(stat.Dev), 10)
 
 	return ri, nil
+}
+
+// calcEtag derives an etag from the inode and the mtime, so it changes whenever
+// the resource is modified. A directory also folds in the rctime of its subtree,
+// as an opaque token, so that deeper changes reach it too; without one the etag
+// reflects direct entries only.
+func calcEtag(info os.FileInfo, stat *syscall.Stat_t, rctime string) string {
+	mtime := info.ModTime()
+	etag := fmt.Sprintf("%d:%d.%d", stat.Ino, mtime.Unix(), mtime.Nanosecond())
+	if rctime != "" {
+		etag += ":" + rctime
+	}
+	return `"` + etag + `"`
+}
+
+// recursiveCtime returns the rctime of a directory, or an empty string when
+// there is none: a non-ceph mount, or local mode in tests. Read once per entry
+// of a listing, so a miss is logged at debug level to keep large listings quiet.
+func (fs *cephmountfs) recursiveCtime(ctx context.Context, fullPath string) string {
+	rctime, err := xattr.Get(fullPath, xattrCephRctime)
+	if err != nil {
+		appctx.GetLogger(ctx).Debug().Str("path", fullPath).Err(err).
+			Msg("cephmount: no recursive ctime, this directory will not reflect changes below its direct entries")
+		return ""
+	}
+	return string(rctime)
+}
+
+// rctimeSeconds pulls the whole seconds out of an rctime, which ceph reports as
+// <seconds>.<fraction>. The fraction is dropped: clients have formatted it
+// differently, and a CS3 timestamp only carries seconds here anyway.
+func rctimeSeconds(rctime string) (uint64, bool) {
+	if rctime == "" {
+		return 0, false
+	}
+	seconds, _, _ := strings.Cut(rctime, ".")
+	parsed, err := strconv.ParseUint(seconds, 10, 64)
+	if err != nil {
+		return 0, false
+	}
+	return parsed, true
 }
 
 // toChroot converts an external path to a chroot-relative path
@@ -529,6 +619,11 @@ func (fs *cephmountfs) CreateDir(ctx context.Context, ref *provider.Reference) e
 
 	fs.logOperationWithPaths(ctx, "CreateDir", receivedPath, path)
 
+	if err := fs.authorizeExternal(ctx, path, "CreateDir", canCreate); err != nil {
+		fs.logOperationError(ctx, "CreateDir", path, err)
+		return err
+	}
+
 	// Execute directory creation on user's thread with correct UID
 	err = fs.createDirectoryAsUser(ctx, path, os.FileMode(fs.conf.DirPerms))
 	if err != nil {
@@ -555,6 +650,11 @@ func (fs *cephmountfs) Delete(ctx context.Context, ref *provider.Reference) (err
 	}
 
 	fs.logOperationWithPaths(ctx, "Delete", receivedPath, path)
+
+	if err := fs.authorizeExternal(ctx, path, "Delete", canDelete); err != nil {
+		fs.logOperationError(ctx, "Delete", path, err)
+		return err
+	}
 
 	// Execute stat and delete operations on user's thread with correct UID
 	info, err := fs.statAsUser(ctx, path)
@@ -611,6 +711,15 @@ func (fs *cephmountfs) Move(ctx context.Context, oldRef, newRef *provider.Refere
 
 	fs.logOperationWithPaths(ctx, "Move", fmt.Sprintf("%s -> %s", oldReceivedPath, newReceivedPath), fmt.Sprintf("%s -> %s", oldPath, newPath))
 
+	// Both ends have to be covered by a grant: a share can be moved within itself,
+	// not out of one share and into another the account may not write to.
+	for _, p := range []string{oldPath, newPath} {
+		if err := fs.authorizeExternal(ctx, p, "Move", canMove); err != nil {
+			fs.logOperationError(ctx, "Move", p, err)
+			return err
+		}
+	}
+
 	// oldPath and newPath are already chroot-relative from resolveRef
 	// Create parent directory if needed and execute move on user's thread with correct UID
 	parentPath := path.Dir(newPath)
@@ -658,6 +767,11 @@ func (fs *cephmountfs) GetMD(ctx context.Context, ref *provider.Reference, mdKey
 
 	fs.logOperationWithPaths(ctx, "GetMD", receivedPath, path)
 
+	if err := fs.authorizeExternal(ctx, path, "GetMD", canStat); err != nil {
+		fs.logOperationError(ctx, "GetMD", path, err)
+		return nil, err
+	}
+
 	// path is already chroot-relative from resolveRef
 	// Execute stat operation on user's thread with correct UID
 	info, err := fs.statAsUser(ctx, path)
@@ -672,7 +786,7 @@ func (fs *cephmountfs) GetMD(ctx context.Context, ref *provider.Reference, mdKey
 		return nil, wrappedErr
 	}
 
-	ri, err = fs.fileAsResourceInfo(path, info, mdKeys)
+	ri, err = fs.fileAsResourceInfo(ctx, path, info, mdKeys)
 	if err != nil {
 		log.Debug().Any("resourceInfo", ri).Err(err).Msg("fileAsResourceInfo returned error")
 		wrappedErr := errors.Wrap(err, "cephmount: failed to convert file to resource info")
@@ -708,6 +822,11 @@ func (fs *cephmountfs) ListFolder(ctx context.Context, ref *provider.Reference, 
 	}
 
 	fs.logOperationWithPaths(ctx, "ListFolder", receivedPath, path)
+
+	if err := fs.authorizeExternal(ctx, path, "ListFolder", canList); err != nil {
+		fs.logOperationError(ctx, "ListFolder", path, err)
+		return nil, err
+	}
 
 	// INFO: About to call readDirectoryAsUser
 	log.Debug().
@@ -768,7 +887,7 @@ func (fs *cephmountfs) ListFolder(ctx context.Context, ref *provider.Reference, 
 			continue
 		}
 
-		ri, err := fs.fileAsResourceInfo(filepath.Join(path, entry.Name()), entry, mdKeys)
+		ri, err := fs.fileAsResourceInfo(ctx, filepath.Join(path, entry.Name()), entry, mdKeys)
 		if ri == nil || err != nil {
 			if err != nil {
 				log.Debug().
@@ -838,6 +957,11 @@ func (fs *cephmountfs) Download(ctx context.Context, ref *provider.Reference, ra
 
 	fs.logOperationWithPaths(ctx, "Download", receivedPath, path)
 
+	if err := fs.authorizeExternal(ctx, path, "Download", canDownload); err != nil {
+		fs.logOperationError(ctx, "Download", path, err)
+		return nil, err
+	}
+
 	// Execute file open on user's thread with correct UID
 	file, err := fs.openFileAsUser(ctx, path)
 	if err != nil {
@@ -867,6 +991,11 @@ func (fs *cephmountfs) Upload(ctx context.Context, ref *provider.Reference, r io
 	}
 
 	fs.logOperationWithPaths(ctx, "Upload", receivedPath, path)
+
+	if err := fs.authorizeExternal(ctx, path, "Upload", canUpload); err != nil {
+		fs.logOperationError(ctx, "Upload", path, err)
+		return err
+	}
 
 	// Create parent directory if needed and execute upload on user's thread with correct UID
 	parentDir := filepath.Dir(path)
@@ -898,6 +1027,11 @@ func (fs *cephmountfs) InitiateUpload(ctx context.Context, ref *provider.Referen
 	}
 
 	fs.logOperation(ctx, "InitiateUpload", fmt.Sprintf("%s (length: %d)", path, uploadLength))
+
+	if err := fs.authorizeExternal(ctx, path, "InitiateUpload", canUpload); err != nil {
+		fs.logOperationError(ctx, "InitiateUpload", path, err)
+		return nil, err
+	}
 
 	return map[string]string{
 		"simple": path,
@@ -933,6 +1067,21 @@ func (fs *cephmountfs) AddGrant(ctx context.Context, ref *provider.Reference, g 
 
 	fs.logOperation(ctx, "AddGrant", path)
 
+	if err := fs.authorizeExternal(ctx, path, "AddGrant", canAddGrant); err != nil {
+		fs.logOperationError(ctx, "AddGrant", path, err)
+		return err
+	}
+
+	// External accounts have no local uid, so they go to an xattr, not the ACL.
+	if qualifier, ok := externalAccountQualifier(g.Grantee); ok {
+		if err := fs.addExternalAccountGrant(ctx, path, qualifier, g.Permissions); err != nil {
+			wrappedErr := errors.Wrap(err, "cephmount: failed to add grant for external account")
+			fs.logOperationError(ctx, "AddGrant", path, wrappedErr)
+			return wrappedErr
+		}
+		return nil
+	}
+
 	// Use setfacl system command to set permissions
 	err = fs.addGrantViaSetfacl(ctx, path, g)
 	if err != nil {
@@ -953,6 +1102,20 @@ func (fs *cephmountfs) RemoveGrant(ctx context.Context, ref *provider.Reference,
 	}
 
 	fs.logOperation(ctx, "RemoveGrant", path)
+
+	if err := fs.authorizeExternal(ctx, path, "RemoveGrant", canRemoveGrant); err != nil {
+		fs.logOperationError(ctx, "RemoveGrant", path, err)
+		return err
+	}
+
+	if qualifier, ok := externalAccountQualifier(g.Grantee); ok {
+		if err := fs.removeExternalAccountGrant(ctx, path, qualifier); err != nil {
+			wrappedErr := errors.Wrap(err, "cephmount: failed to remove grant for external account")
+			fs.logOperationError(ctx, "RemoveGrant", path, wrappedErr)
+			return wrappedErr
+		}
+		return nil
+	}
 
 	// Use setfacl system command to remove permissions
 	err = fs.removeGrantViaSetfacl(ctx, path, g)
@@ -989,17 +1152,33 @@ func (fs *cephmountfs) ListGrants(ctx context.Context, ref *provider.Reference) 
 
 	fs.logOperation(ctx, "ListGrants", path)
 
+	if err := fs.authorizeExternal(ctx, path, "ListGrants", canListGrants); err != nil {
+		fs.logOperationError(ctx, "ListGrants", path, err)
+		return nil, err
+	}
+
 	fullPath := filepath.Join(fs.chrootDir, path)
 
-	// Use getfacl to read ACLs
+	log := appctx.GetLogger(ctx)
+
+	// Grants to external accounts live in xattrs, not in the POSIX ACL.
+	external, err := fs.listExternalAccountGrants(ctx, fullPath)
+	if err != nil {
+		return nil, fs.grantsReadError(ctx, path, fullPath, err)
+	}
+	glist = append(glist, external...)
+
+	// Use getfacl to read ACLs. A resource without any extended ACL is not an
+	// error: getfacl succeeds and prints the base entries, which the loop below
+	// skips. Anything failing here is a genuine read failure, and reporting it as
+	// an empty grant list would be indistinguishable from an unshared resource.
 	cmd := exec.CommandContext(ctx, "getfacl", "--omit-header", "--numeric", fullPath)
 	output, err := cmd.CombinedOutput()
 	if err != nil {
-		// No ACLs or error - return empty list
-		return []*provider.Grant{}, nil
+		// CombinedOutput folds in the stderr of getfacl, which says why.
+		return nil, fs.grantsReadError(ctx, path, fullPath,
+			errors.Wrapf(err, "cephmount: getfacl failed: %s", strings.TrimSpace(string(output))))
 	}
-
-	log := appctx.GetLogger(ctx)
 
 	// Parse getfacl output
 	lines := strings.SplitSeq(string(output), "\n")
@@ -1108,6 +1287,11 @@ func (fs *cephmountfs) GetQuota(ctx context.Context, ref *provider.Reference) (t
 
 	fs.logOperationWithPaths(ctx, "GetQuota", receivedPath, path)
 
+	if err := fs.authorizeExternal(ctx, path, "GetQuota", canGetQuota); err != nil {
+		fs.logOperationError(ctx, "GetQuota", path, err)
+		return 0, 0, err
+	}
+
 	// build absolute path for xattr operations
 	fullPath := filepath.Join(fs.chrootDir, path)
 
@@ -1198,10 +1382,21 @@ func (fs *cephmountfs) SetArbitraryMetadata(ctx context.Context, ref *provider.R
 
 	fs.logOperation(ctx, "SetArbitraryMetadata", path)
 
+	if err := fs.authorizeExternal(ctx, path, "SetArbitraryMetadata", canUpload); err != nil {
+		fs.logOperationError(ctx, "SetArbitraryMetadata", path, err)
+		return err
+	}
+
 	fullPath := filepath.Join(fs.chrootDir, path)
 	for k, v := range md.Metadata {
 		if !strings.HasPrefix(k, xattrUserNs) {
 			k = xattrUserNs + k
+		}
+		if strings.HasPrefix(k, xattrLwShare) {
+			// These hold grants to external accounts and are owned by AddGrant/RemoveGrant.
+			wrappedErr := errtypes.BadRequest(fmt.Sprintf("cephmount: key %s is reserved", k))
+			fs.logOperationError(ctx, "SetArbitraryMetadata", path, wrappedErr)
+			return wrappedErr
 		}
 		if err := xattr.Set(fullPath, k, []byte(v)); err != nil {
 			wrappedErr := errors.Wrap(err, "cephmount: failed to set xattr")
@@ -1223,10 +1418,21 @@ func (fs *cephmountfs) UnsetArbitraryMetadata(ctx context.Context, ref *provider
 
 	fs.logOperation(ctx, "UnsetArbitraryMetadata", path)
 
+	if err := fs.authorizeExternal(ctx, path, "UnsetArbitraryMetadata", canUpload); err != nil {
+		fs.logOperationError(ctx, "UnsetArbitraryMetadata", path, err)
+		return err
+	}
+
 	fullPath := filepath.Join(fs.chrootDir, path)
 	for _, key := range keys {
 		if !strings.HasPrefix(key, xattrUserNs) {
 			key = xattrUserNs + key
+		}
+		if strings.HasPrefix(key, xattrLwShare) {
+			// These hold grants to external accounts and are owned by AddGrant/RemoveGrant.
+			wrappedErr := errtypes.BadRequest(fmt.Sprintf("cephmount: key %s is reserved", key))
+			fs.logOperationError(ctx, "UnsetArbitraryMetadata", path, wrappedErr)
+			return wrappedErr
 		}
 		if err := xattr.Remove(fullPath, key); err != nil {
 			// Ignore if the attribute doesn't exist
@@ -1248,6 +1454,11 @@ func (fs *cephmountfs) TouchFile(ctx context.Context, ref *provider.Reference) e
 	}
 
 	fs.logOperation(ctx, "TouchFile", path)
+
+	if err := fs.authorizeExternal(ctx, path, "TouchFile", canUpload); err != nil {
+		fs.logOperationError(ctx, "TouchFile", path, err)
+		return err
+	}
 
 	// Create parent directory if needed using chrooted operations
 	parentDir := filepath.Dir(path)
@@ -1323,6 +1534,12 @@ func (fs *cephmountfs) SetLock(ctx context.Context, ref *provider.Reference, loc
 	}
 
 	fs.logOperation(ctx, "SetLock", path)
+
+	if err := fs.authorizeExternal(ctx, path, "SetLock", canUpload); err != nil {
+		fs.logOperationError(ctx, "SetLock", path, err)
+		return err
+	}
+
 	log := appctx.GetLogger(ctx)
 	log.Debug().Str("path", path).Str("lockId", lock.LockId).Str("appName", lock.AppName).
 		Int32("type", int32(lock.Type)).Msg("cephmount: SetLock: requested")
@@ -1368,6 +1585,12 @@ func (fs *cephmountfs) GetLock(ctx context.Context, ref *provider.Reference) (*p
 	}
 
 	fs.logOperation(ctx, "GetLock", path)
+
+	if err := fs.authorizeExternal(ctx, path, "GetLock", canStat); err != nil {
+		fs.logOperationError(ctx, "GetLock", path, err)
+		return nil, err
+	}
+
 	log := appctx.GetLogger(ctx)
 
 	// Try to read lock metadata
@@ -1390,15 +1613,12 @@ func (fs *cephmountfs) GetLock(ctx context.Context, ref *provider.Reference) (*p
 		return nil, errors.Wrap(err, "cephmount: malformed lock payload")
 	}
 
-	// Check if lock has expired
+	// Check if lock has expired. The stale xattr is left where it is: reading a
+	// lock must not write, and SetLock overwrites it without looking anyway.
 	ttl := time.Until(time.Unix(int64(lock.Expiration.Seconds), 0))
 	if ttl < 0 {
-		// the lock expired
 		log.Debug().Str("path", path).Str("lockId", lock.LockId).Str("appName", lock.AppName).
-			Dur("expired_ago", -ttl).Msg("cephmount: GetLock: lock expired, dropping and returning NotFound")
-		if err := fs.UnsetArbitraryMetadata(ctx, ref, []string{xattrLock}); err != nil {
-			return nil, err
-		}
+			Dur("expired_ago", -ttl).Msg("cephmount: GetLock: lock expired, returning NotFound")
 		return nil, errtypes.NotFound("lock not found for ref")
 	}
 
@@ -1437,6 +1657,12 @@ func (fs *cephmountfs) Unlock(ctx context.Context, ref *provider.Reference, lock
 	}
 
 	fs.logOperation(ctx, "Unlock", path)
+
+	if err := fs.authorizeExternal(ctx, path, "Unlock", canUpload); err != nil {
+		fs.logOperationError(ctx, "Unlock", path, err)
+		return err
+	}
+
 	log := appctx.GetLogger(ctx)
 	log.Debug().Str("path", path).Str("lockId", lock.LockId).Str("appName", lock.AppName).Msg("cephmount: Unlock: requested")
 
@@ -1485,6 +1711,135 @@ func (fs *cephmountfs) Unlock(ctx context.Context, ref *provider.Reference, lock
 	}
 	log.Debug().Str("path", path).Str("lockId", lock.LockId).Msg("cephmount: Unlock: lock removed")
 	return nil
+}
+
+// externalAccountQualifier returns the xattr qualifier for a lightweight or
+// federated grantee. Those accounts only exist inside reva and must never be
+// resolved as local users.
+func externalAccountQualifier(g *provider.Grantee) (string, bool) {
+	if g == nil || g.Type != provider.GranteeType_GRANTEE_TYPE_USER {
+		return "", false
+	}
+	id := g.GetUserId()
+	if id == nil {
+		return "", false
+	}
+	switch id.Type {
+	case userv1beta1.UserType_USER_TYPE_LIGHTWEIGHT, userv1beta1.UserType_USER_TYPE_FEDERATED:
+		return id.OpaqueId, true
+	default:
+		return "", false
+	}
+}
+
+// addExternalAccountGrant stores a grant to an external account as an xattr.
+// Unlike the setfacl path this is not recursive: the attribute is only read back
+// by reva, on the shared resource itself.
+func (fs *cephmountfs) addExternalAccountGrant(ctx context.Context, path, qualifier string, perms *provider.ResourcePermissions) error {
+	fullPath := filepath.Join(fs.chrootDir, path)
+	key := xattrLwShare + qualifier
+	value := fs.permissionsToACLString(perms)
+
+	if err := xattr.Set(fullPath, key, []byte(value)); err != nil {
+		return errors.Wrapf(err, "cephmount: failed to set xattr %s", key)
+	}
+
+	// The grant is only meaningful to reva. The service account acting for the
+	// sharee still needs the kernel to let it through.
+	if err := fs.ensureServiceAccountAccess(ctx, path, perms); err != nil {
+		return err
+	}
+
+	appctx.GetLogger(ctx).Debug().
+		Str("path", fullPath).
+		Str("xattr", key).
+		Str("permissions", value).
+		Msg("cephmount: stored grant for external account")
+
+	return nil
+}
+
+// removeExternalAccountGrant drops the xattr holding the grant.
+func (fs *cephmountfs) removeExternalAccountGrant(ctx context.Context, path, qualifier string) error {
+	fullPath := filepath.Join(fs.chrootDir, path)
+	key := xattrLwShare + qualifier
+
+	if err := xattr.Remove(fullPath, key); err != nil && !errors.Is(err, xattr.ENOATTR) {
+		return errors.Wrapf(err, "cephmount: failed to remove xattr %s", key)
+	}
+
+	// Once the last external account loses its grant, the service account has no
+	// reason to keep reaching the resource. Revoking it is recursive, so it may
+	// only happen when the remaining grants are known: a failed read here would
+	// otherwise cut off every other account sharing this tree.
+	remaining, err := fs.hasExternalAccountGrants(fullPath)
+	if err != nil {
+		return errors.Wrap(err, "cephmount: failed to check the remaining grants for external accounts")
+	}
+	if !remaining {
+		if err := fs.removeServiceAccountAccess(ctx, path); err != nil {
+			return err
+		}
+	}
+
+	appctx.GetLogger(ctx).Debug().
+		Str("path", fullPath).
+		Str("xattr", key).
+		Msg("cephmount: removed grant for external account")
+
+	return nil
+}
+
+// grantsReadError reports a failure to read the grants of a resource. A resource
+// that is gone is a NotFound rather than an internal error, which is what the
+// caller of ListGrants needs to tell the two apart.
+func (fs *cephmountfs) grantsReadError(ctx context.Context, path, fullPath string, err error) error {
+	if _, statErr := os.Stat(fullPath); os.IsNotExist(statErr) {
+		err = errtypes.NotFound(path)
+	}
+	fs.logOperationError(ctx, "ListGrants", path, err)
+	return err
+}
+
+// listExternalAccountGrants returns the grants stored in the xattrs of fullPath.
+// A resource without any is not an error, but a failure to read them is: an
+// empty list must never stand for grants that could not be read.
+func (fs *cephmountfs) listExternalAccountGrants(ctx context.Context, fullPath string) ([]*provider.Grant, error) {
+	log := appctx.GetLogger(ctx)
+
+	names, err := xattr.List(fullPath)
+	if err != nil {
+		return nil, errors.Wrapf(err, "cephmount: failed to list the xattrs of %s", fullPath)
+	}
+
+	var glist []*provider.Grant
+	for _, name := range names {
+		if !strings.HasPrefix(name, xattrLwShare) {
+			continue
+		}
+		buf, err := xattr.Get(fullPath, name)
+		if err != nil {
+			if errors.Is(err, xattr.ENOATTR) {
+				// The grant was removed between the listing and the read.
+				log.Debug().Str("xattr", name).Msg("cephmount: external account grant vanished while listing")
+				continue
+			}
+			return nil, errors.Wrapf(err, "cephmount: failed to read the xattr %s", name)
+		}
+		glist = append(glist, &provider.Grant{
+			Grantee: &provider.Grantee{
+				Type: provider.GranteeType_GRANTEE_TYPE_USER,
+				Id: &provider.Grantee_UserId{UserId: &userv1beta1.UserId{
+					// Only the account name is stored, so the idp is left empty and
+					// federated accounts are reported as lightweight ones.
+					Type:     userv1beta1.UserType_USER_TYPE_LIGHTWEIGHT,
+					OpaqueId: strings.TrimPrefix(name, xattrLwShare),
+				}},
+			},
+			Permissions: fs.aclStringToPermissions(string(buf)),
+		})
+	}
+	return glist, nil
 }
 
 // resolveGranteeIdentifier resolves a grantee (user or group) to their system identifier (UID or GID)

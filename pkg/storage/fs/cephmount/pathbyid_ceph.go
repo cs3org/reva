@@ -226,6 +226,13 @@ func (fs *cephmountfs) GetPathByID(ctx context.Context, id *provider.ResourceId)
 		return "", err
 	}
 
+	// An external account may only learn the path of something shared with it,
+	// otherwise any inode could be turned into a path by guessing.
+	if err := fs.authorizeExternal(ctx, fs.toChroot(userRelativePath), "GetPathByID", canGetPath); err != nil {
+		fs.logOperationError(ctx, "GetPathByID", userRelativePath, err)
+		return "", err
+	}
+
 	log.Info().
 		Str("ceph_volume_path", cephVolumePath).
 		Str("user_relative_path", userRelativePath).
