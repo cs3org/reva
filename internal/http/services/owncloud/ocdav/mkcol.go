@@ -28,7 +28,6 @@ import (
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/cs3org/reva/v3/pkg/appctx"
-	"github.com/cs3org/reva/v3/pkg/spaces"
 	"github.com/rs/zerolog"
 )
 
@@ -154,14 +153,15 @@ func (s *svc) handleMkcol(ctx context.Context, w http.ResponseWriter, r *http.Re
 	}
 	switch res.Status.Code {
 	case rpc.Code_CODE_OK:
-		// CreateContainer does not return the resource info, stat the new collection to expose its fileid and etag
-		createdStatRes, err := client.Stat(ctx, &provider.StatRequest{Ref: childRef})
-		if err == nil && createdStatRes.Status.Code == rpc.Code_CODE_OK {
-			w.Header().Set(HeaderOCFileID, spaces.EncodeToStringifiedResourceID(createdStatRes.Info.Id))
-			w.Header().Set(HeaderOCETag, createdStatRes.Info.Etag)
-		} else {
-			// the collection was created, return 201 with the headers missing
-			log.Warn().Err(err).Str("path", childRef.Path).Interface("status", createdStatRes.GetStatus()).Msg("error statting created collection")
+		// the fileid and etag of the new collection come in the response
+		// opaque, if the storage was able to report them
+		if res.Opaque != nil {
+			if e, ok := res.Opaque.Map["fileid"]; ok && len(e.Value) > 0 {
+				w.Header().Set(HeaderOCFileID, string(e.Value))
+			}
+			if e, ok := res.Opaque.Map["etag"]; ok && len(e.Value) > 0 {
+				w.Header().Set(HeaderOCETag, string(e.Value))
+			}
 		}
 		w.WriteHeader(http.StatusCreated)
 	case rpc.Code_CODE_NOT_FOUND:
