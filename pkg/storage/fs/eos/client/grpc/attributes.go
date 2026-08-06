@@ -143,11 +143,7 @@ func (c *Client) GetAttr(ctx context.Context, auth eosclient.Authorization, key,
 
 	for k, v := range info.Attrs {
 		if k == key {
-			attr, err := getAttribute(k, v)
-			if err != nil {
-				return nil, errors.Wrap(err, fmt.Sprintf("eosgrpc: cannot parse attribute key=%s value=%s", k, v))
-			}
-			return attr, nil
+			return getAttribute(k, v), nil
 		}
 	}
 	return nil, errtypes.NotFound(fmt.Sprintf("key %s not found", key))
@@ -162,32 +158,29 @@ func (c *Client) GetAttrs(ctx context.Context, auth eosclient.Authorization, pat
 
 	attrs := make([]*eosclient.Attribute, 0, len(info.Attrs))
 	for k, v := range info.Attrs {
-		attr, err := getAttribute(k, v)
-		if err != nil {
-			return nil, errors.Wrap(err, fmt.Sprintf("eosgrpc: cannot parse attribute key=%s value=%s", k, v))
-		}
-		attrs = append(attrs, attr)
+		attrs = append(attrs, getAttribute(k, v))
 	}
 
 	return attrs, nil
 }
 
-func getAttribute(key, val string) (*eosclient.Attribute, error) {
-	// key is in the form sys.forced.checksum
-	type2key := strings.SplitN(key, ".", 2) // type2key = ["sys", "forced.checksum"]
-	if len(type2key) != 2 {
-		return nil, errtypes.InternalError("wrong attr format to deserialize")
+// getAttribute splits a key of the attribute map a FileInfo carries into the
+// type and the key an Attribute is made of.
+//
+// That map is not keyed the way EOS keys its xattrs: grpcMDResponseToFileInfo
+// keeps the "sys." prefix but strips "user.", so a user attribute arrives here
+// under its bare name, dots and all - "reva.lockpayload", say, which names no
+// type and whose key is the whole thing. Only a key that starts with a type EOS
+// knows is split; everything else is a user attribute. Reading "reva" as the
+// type used to fail the lookup, and with it every call that reads the
+// attributes of a resource that has ever been locked.
+func getAttribute(key, val string) *eosclient.Attribute {
+	if t, k, found := strings.Cut(key, "."); found {
+		if at, err := eosclient.AttrStringToType(t); err == nil {
+			return &eosclient.Attribute{Type: at, Key: k, Val: val}
+		}
 	}
-	t, err := eosclient.AttrStringToType(type2key[0])
-	if err != nil {
-		return nil, err
-	}
-	attr := &eosclient.Attribute{
-		Type: t,
-		Key:  type2key[1],
-		Val:  val,
-	}
-	return attr, nil
+	return &eosclient.Attribute{Type: eosclient.UserAttr, Key: key, Val: val}
 }
 
 func isValidAttribute(a *eosclient.Attribute) bool {
