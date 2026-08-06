@@ -1267,6 +1267,10 @@ func (fs *localfs) ListRevisions(ctx context.Context, ref *provider.Reference) (
 	}
 
 	versionsDir := fs.wrapVersions(ctx, np)
+	
+	log := appctx.GetLogger(ctx)  
+	log.Debug().Str("np", np).Str("versionsDir", versionsDir).Msg("localfs: ListRevisions debug")  
+  	
 	revisions := []*provider.FileVersion{}
 	entries, err := os.ReadDir(versionsDir)
 	if err != nil {
