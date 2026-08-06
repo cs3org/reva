@@ -713,7 +713,7 @@ func (s *service) CreateContainer(ctx context.Context, req *provider.CreateConta
 			Status: status.NewInternal(ctx, err, "error unwrapping path"),
 		}, nil
 	}
-	if err := s.storage.CreateDir(ctx, newRef); err != nil {
+	if _, err := s.storage.CreateDir(ctx, newRef); err != nil {
 		var st *rpc.Status
 		switch err.(type) {
 		case errtypes.IsNotFound:

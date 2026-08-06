@@ -22,8 +22,8 @@ func (noopFS) GetHome(ctx context.Context) (string, error) {
 	return "", errtypes.NotSupported("noop")
 }
 func (noopFS) CreateHome(ctx context.Context) error { return errtypes.NotSupported("noop") }
-func (noopFS) CreateDir(ctx context.Context, ref *provider.Reference) error {
-	return errtypes.NotSupported("noop")
+func (noopFS) CreateDir(ctx context.Context, ref *provider.Reference) (*provider.ResourceInfo, error) {
+	return nil, errtypes.NotSupported("noop")
 }
 func (noopFS) TouchFile(ctx context.Context, ref *provider.Reference) error {
 	return errtypes.NotSupported("noop")

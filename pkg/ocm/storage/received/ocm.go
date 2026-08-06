@@ -346,8 +346,8 @@ func (d *driver) withExchangeRetry(ctx context.Context, ref *provider.Reference,
 	return nil
 }
 
-func (d *driver) CreateDir(ctx context.Context, ref *provider.Reference) error {
-	return d.withExchangeRetry(ctx, ref, func(c *gowebdav.Client, rel string) error {
+func (d *driver) CreateDir(ctx context.Context, ref *provider.Reference) (*provider.ResourceInfo, error) {
+	return nil, d.withExchangeRetry(ctx, ref, func(c *gowebdav.Client, rel string) error {
 		return c.MkdirAll(rel, 0)
 	})
 }
