@@ -22,6 +22,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"maps"
 	"net/url"
 	"os"
 	"path"
@@ -1704,10 +1705,17 @@ func (s *service) GetQuota(ctx context.Context, req *provider.GetQuotaRequest) (
 }
 
 func getFS(ctx context.Context, c *config) (storage.FS, error) {
-	if f, ok := registry.NewFuncs[c.Driver]; ok {
-		return f(ctx, c.Drivers[c.Driver])
+	f, ok := registry.NewFuncs[c.Driver]
+	if !ok {
+		return nil, errtypes.NotFound("driver not found: " + c.Driver)
 	}
-	return nil, errtypes.NotFound("driver not found: " + c.Driver)
+	// Pass down the space type declared by this storage provider, so that drivers
+	// can adapt their behaviour to the kind of spaces they serve. We copy the
+	// driver config to avoid mutating the parsed configuration.
+	conf := make(map[string]any, len(c.Drivers[c.Driver])+1)
+	maps.Copy(conf, c.Drivers[c.Driver])
+	conf["provides_space_type"] = c.ProvidesSpaceType
+	return f(ctx, conf)
 }
 
 func (s *service) unwrap(ctx context.Context, ref *provider.Reference) (*provider.Reference, error) {

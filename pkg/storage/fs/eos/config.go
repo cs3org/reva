@@ -173,6 +173,13 @@ type Config struct {
 	// After this period, the cached value is still returned but a background refresh is triggered.
 	// Default is 600.
 	QuotaCacheTTL int `mapstructure:"quota_cache_ttl"`
+
+	// ProvidesSpaceType is the type of spaces served by the storage provider this
+	// driver is instantiated by (e.g. personal, project). It is injected by the
+	// storage provider from its own provides_space_type setting, and should not be
+	// set in the driver configuration.
+	ProvidesSpaceType string `mapstructure:"provides_space_type"`
+
 	// The ExternalAccountsUser is a user on whose behalf accesses to EOS are done when requests are made by an external user (such as lightweight or federated users).
 	// Since these users are unknown to EOS, access is done on behalf of this user. Note that this user will be added to the ACLs when such a request is made.
 	ExternalAccountsUserName string `mapstructure:"external_accounts_user_name" docs:"nil;Username of a user known to EOS on whose behalf accesses are done for external (lw, federated) users."  `
