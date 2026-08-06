@@ -162,7 +162,7 @@ func newLocalFSOCDavService(t *testing.T, endpoint string) *svc {
 	if err := fs.CreateHome(ctx); err != nil {
 		t.Fatalf("failed to create localfs home: %v", err)
 	}
-	if err := fs.CreateDir(ctx, &providerv1beta1.Reference{Path: "/Documents"}); err != nil {
+	if _, err := fs.CreateDir(ctx, &providerv1beta1.Reference{Path: "/Documents"}); err != nil {
 		t.Fatalf("failed to create fixture folder: %v", err)
 	}
 	if err := fs.TouchFile(ctx, &providerv1beta1.Reference{Path: "/Documents/report.txt"}); err != nil {
