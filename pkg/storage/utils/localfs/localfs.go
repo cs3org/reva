@@ -1267,10 +1267,7 @@ func (fs *localfs) ListRevisions(ctx context.Context, ref *provider.Reference) (
 	}
 
 	versionsDir := fs.wrapVersions(ctx, np)
-	
-	log := appctx.GetLogger(ctx)  
-	log.Debug().Str("np", np).Str("versionsDir", versionsDir).Msg("localfs: ListRevisions debug")  
-  	
+	 	
 	revisions := []*provider.FileVersion{}
 	entries, err := os.ReadDir(versionsDir)
 	if err != nil {
@@ -1288,6 +1285,15 @@ func (fs *localfs) ListRevisions(ctx context.Context, ref *provider.Reference) (
 		}
 		mds = append(mds, info)
 	}
+
+	
+	// ここに追加  
+	log := appctx.GetLogger(ctx)  
+	names := make([]string, 0, len(mds))  
+	for _, m := range mds {  
+		names = append(names, m.Name())  
+	}  
+	log.Debug().Int("count", len(mds)).Strs("entries", names).Msg("localfs: ListRevisions entries")  
 
 	for i := range mds {
 		// versions resemble v12345678
