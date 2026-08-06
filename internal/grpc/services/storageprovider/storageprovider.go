@@ -36,6 +36,7 @@ import (
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
+	typespb "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
 	cachereg "github.com/cs3org/reva/v3/pkg/share/cache/registry"
 
 	"github.com/cs3org/reva/v3/pkg/appctx"
@@ -714,7 +715,8 @@ func (s *service) CreateContainer(ctx context.Context, req *provider.CreateConta
 			Status: status.NewInternal(ctx, err, "error unwrapping path"),
 		}, nil
 	}
-	if _, err := s.storage.CreateDir(ctx, newRef); err != nil {
+	md, err := s.storage.CreateDir(ctx, newRef)
+	if err != nil {
 		var st *rpc.Status
 		switch err.(type) {
 		case errtypes.IsNotFound:
@@ -733,6 +735,19 @@ func (s *service) CreateContainer(ctx context.Context, req *provider.CreateConta
 
 	res := &provider.CreateContainerResponse{
 		Status: status.NewOK(ctx),
+	}
+	// if the driver told us about the new dir, hand its fileid and etag
+	// to the client to spare it a stat
+	if md != nil && md.Id != nil {
+		if err := s.wrap(ctx, md, true); err == nil {
+			s.addSpaceInfo(ctx, md)
+			res.Opaque = &typespb.Opaque{
+				Map: map[string]*typespb.OpaqueEntry{
+					"fileid": {Decoder: "plain", Value: []byte(spaces.EncodeToStringifiedResourceID(md.Id))},
+					"etag":   {Decoder: "plain", Value: []byte(md.Etag)},
+				},
+			}
+		}
 	}
 	return res, nil
 }
