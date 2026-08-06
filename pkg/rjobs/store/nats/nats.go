@@ -354,19 +354,20 @@ func (s *store) HeartbeatInterval() time.Duration {
 	return s.ackWait / 2
 }
 
-func (s *store) RegisterScheduled(ctx context.Context, job string, schedule rjobs.Schedule, next time.Time) error {
+func (s *store) RegisterScheduled(ctx context.Context, job string, schedule rjobs.Schedule, next time.Time, force bool) error {
 	entry, err := s.kv.Get(job)
 	switch {
 	case err == nil:
 		// An entry exists. Keep it as-is on a restart so the cadence is not
-		// reset, UNLESS the configured interval changed: then adopt the new
-		// interval and the recomputed next-fire so a schedule change in config
+		// reset, UNLESS the configured interval changed or the caller forces
+		// the next-fire: then adopt the new interval and the given next-fire so
+		// a schedule change in config, or a job asking to run at every start,
 		// takes effect.
 		var cur scheduleState
 		if uerr := json.Unmarshal(entry.Value(), &cur); uerr != nil {
 			return errors.Wrap(uerr, "rjobs: reading schedule state failed")
 		}
-		if cur.Interval == schedule.Interval() {
+		if cur.Interval == schedule.Interval() && !force {
 			return nil
 		}
 		st := scheduleState{Interval: schedule.Interval(), Next: next}

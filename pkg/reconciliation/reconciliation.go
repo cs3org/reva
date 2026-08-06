@@ -31,6 +31,9 @@ type Config struct {
 	// DryRun, when set, makes the job log and report what it would do without
 	// touching the share database.
 	DryRun bool `mapstructure:"dry_run"`
+	// RunOnStart fires the job once as soon as the runner starts, instead of
+	// waiting a full interval for the first run.
+	RunOnStart bool `mapstructure:"run_on_start"`
 	// LogFile is the path the job writes its own log to. It takes "stdout" or
 	// "stderr" to write to the standard streams instead.
 	LogFile string `mapstructure:"log_file"`

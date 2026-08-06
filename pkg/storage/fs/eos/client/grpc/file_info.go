@@ -4,16 +4,52 @@ import (
 	"context"
 	"encoding/hex"
 	"fmt"
+	"io"
 	"path"
 	"strconv"
 	"strings"
+	"syscall"
 
 	erpc "github.com/cern-eos/go-eosgrpc"
 	"github.com/cs3org/reva/v3/pkg/appctx"
 	"github.com/cs3org/reva/v3/pkg/errtypes"
 	eosclient "github.com/cs3org/reva/v3/pkg/storage/fs/eos/client"
 	"github.com/pkg/errors"
+	"google.golang.org/grpc/codes"
+	grpcstatus "google.golang.org/grpc/status"
 )
+
+// mdRecvError classifies the error a streaming MD Recv returned. An MDResponse
+// carries no error of its own, so the outcome of a lookup is only readable from
+// the stream, and EOS reports a missing entry in two different ways depending on
+// what was asked of it (GrpcNsInterface::GetMD):
+//
+//   - a file looked up by id ends the stream without sending anything, which
+//     surfaces here as io.EOF;
+//   - a container looked up by id, and anything looked up by path with
+//     TYPE_STAT, comes back as a status error instead.
+//
+// Those status errors do not always carry a grpc code: EOS casts the errno of
+// the namespace exception straight into the code, so a missing entry arrives as
+// ENOENT, the number grpc reads back as UNKNOWN. Both that and a real
+// codes.NotFound are taken as an absence. Every other value is a real failure -
+// an unreachable MGM, a timeout, a rejected caller - and is returned unchanged
+// so it stays distinguishable. The callers above depend on the difference: the
+// storage provider turns a not-found into CODE_NOT_FOUND and anything else into
+// CODE_INTERNAL, which is what tells a caller "this resource no longer exists"
+// apart from "we could not find out".
+func mdRecvError(err error, target string) error {
+	if errors.Is(err, io.EOF) {
+		return errtypes.NotFound(target)
+	}
+	if st, ok := grpcstatus.FromError(err); ok {
+		switch st.Code() {
+		case codes.NotFound, codes.Code(syscall.ENOENT):
+			return errtypes.NotFound(target)
+		}
+	}
+	return err
+}
 
 // GetFileInfoByInode returns the FileInfo by the given inode.
 func (c *Client) GetFileInfoByInode(ctx context.Context, auth eosclient.Authorization, inode uint64) (*eosclient.FileInfo, error) {
@@ -48,7 +84,7 @@ func (c *Client) GetFileInfoByInode(ctx context.Context, auth eosclient.Authoriz
 	rsp, err := resp.Recv()
 	if err != nil {
 		log.Error().Err(err).Uint64("inode", inode).Str("err", err.Error()).Send()
-		return nil, err
+		return nil, mdRecvError(err, fmt.Sprintf("inode: '%d'", inode))
 	}
 
 	if rsp == nil {
@@ -100,12 +136,7 @@ func (c *Client) GetFileInfoByPath(ctx context.Context, auth eosclient.Authoriza
 	if err != nil {
 		log.Error().Str("func", "GetFileInfoByPath").Err(err).Str("path", path).Str("err", err.Error()).Msg("")
 
-		// FIXME: this is very bad and poisonous for the project!!!!!!!
-		// Apparently here we have to assume that an error in Recv() means "file not found"
-		// - "File not found is not an error", it's a legitimate result of a legitimate check
-		// - Assuming that any error means file not found is doubly poisonous
-		return nil, errtypes.NotFound(err.Error())
-		// return nil, nil
+		return nil, mdRecvError(err, fmt.Sprintf("path: %s", path))
 	}
 
 	if rsp == nil {

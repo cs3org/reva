@@ -96,7 +96,11 @@ type Store interface {
 	// next-fire is preserved across restarts, except when the configured
 	// interval changed, in which case the new interval and the given next-fire
 	// are adopted.
-	RegisterScheduled(ctx context.Context, job string, schedule Schedule, next time.Time) error
+	//
+	// force adopts the given next-fire even when an entry already exists on the
+	// same interval. It carries Periodic.RunOnStart, which asks for a run at
+	// every start and so has to override the preserved cadence.
+	RegisterScheduled(ctx context.Context, job string, schedule Schedule, next time.Time, force bool) error
 	// DueScheduled returns the periodic jobs whose next-fire is at or before
 	// now, atomically advancing each one's stored next-fire by its interval. A
 	// job whose previous run is still in flight (see MarkScheduledRunning) is
