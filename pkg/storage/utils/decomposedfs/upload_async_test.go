@@ -71,7 +71,7 @@ var _ = Describe("Async file uploads", Ordered, func() {
 
 		ctx context.Context
 
-		pub chan interface{}
+		pub      chan interface{}
 		con      chan interface{}
 		uploadID string
 
@@ -295,6 +295,45 @@ var _ = Describe("Async file uploads", Ordered, func() {
 			// bytes gone
 			_, err = os.Stat(filepath.Join(o.Root, "uploads", uploadID))
 			Expect(err).ToNot(BeNil())
+		})
+
+		It("releases the quota and removes the node when the node metadata is unreadable", func() {
+			// node is created and the optimistic size has been propagated
+			resources, err := fs.ListFolder(ctx, rootRef, []string{}, []string{})
+			Expect(err).ToNot(HaveOccurred())
+			Expect(len(resources)).To(Equal(1))
+			Expect(parentSize()).To(Equal(len(firstContent)))
+
+			// simulate an orphaned node: the node file is still there but its
+			// metadata is gone, e.g. because an ancestor was trashed while the
+			// upload was in flight. Reading the node now fails. Purge instead of
+			// removing the file directly, so the cached attributes go as well.
+			nodePath := lu.InternalPath(ref.GetResourceId().GetSpaceId(), resources[0].GetId().GetOpaqueId())
+			Expect(lu.MetadataBackend().Purge(ctx, nodePath)).To(Succeed())
+			_, err = node.ReadNode(ctx, lu, ref.GetResourceId().GetSpaceId(), resources[0].GetId().GetOpaqueId(), false, nil, true)
+			Expect(err).To(HaveOccurred(), "node should be unreadable after purging its metadata")
+
+			// No UploadReady event is published for an orphaned session: there is
+			// no node left to report on. Wait for the bytes to be cleaned up
+			// instead of for an event that will never arrive.
+			con <- events.PostprocessingFinished{
+				UploadID: uploadID,
+				Outcome:  events.PPOutcomeContinue,
+			}
+			Eventually(func() bool {
+				_, err := os.Stat(filepath.Join(o.Root, "uploads", uploadID))
+				return err != nil
+			}).Should(BeTrue(), "the upload bytes should be cleaned up")
+
+			// the blob was never written
+			bs.AssertNumberOfCalls(GinkgoT(), "Upload", 0)
+
+			// the orphaned node is gone ...
+			_, err = os.Stat(nodePath)
+			Expect(err).ToNot(BeNil())
+
+			// ... and most importantly the quota has been released
+			Eventually(parentSize).Should(Equal(0))
 		})
 
 		It("deletes node and keeps the bytes when instructed", func() {
