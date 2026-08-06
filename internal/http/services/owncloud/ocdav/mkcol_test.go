@@ -20,16 +20,14 @@ package ocdav
 
 import (
 	"context"
-	"errors"
-	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"testing"
 
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
+	typespb "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
 	mockgateway "github.com/cs3org/go-cs3apis/mocks/github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
-	"github.com/cs3org/reva/v3/pkg/rgrpc/todo/pool"
 	"github.com/rs/zerolog"
 	"github.com/stretchr/testify/mock"
 )
@@ -37,31 +35,41 @@ import (
 func TestMkcol(t *testing.T) {
 	tests := []struct {
 		name       string
-		statRes    *provider.StatResponse
-		statErr    error
+		createRes  *provider.CreateContainerResponse
 		wantFileID string
 		wantEtag   string
 	}{
 		{
 			name: "returns fileid and etag of the created collection",
-			statRes: &provider.StatResponse{
+			createRes: &provider.CreateContainerResponse{
 				Status: &rpc.Status{Code: rpc.Code_CODE_OK},
-				Info: &provider.ResourceInfo{
-					Type: provider.ResourceType_RESOURCE_TYPE_CONTAINER,
-					Id:   &provider.ResourceId{StorageId: "storage-id", SpaceId: "space-id", OpaqueId: "opaque-id"},
-					Etag: `"deadbeef"`,
+				Opaque: &typespb.Opaque{
+					Map: map[string]*typespb.OpaqueEntry{
+						"fileid": {Decoder: "plain", Value: []byte("storage-id$space-id!opaque-id")},
+						"etag":   {Decoder: "plain", Value: []byte(`"deadbeef"`)},
+					},
 				},
 			},
 			wantFileID: "storage-id$space-id!opaque-id",
 			wantEtag:   `"deadbeef"`,
 		},
 		{
-			name:    "returns 201 without headers when the stat status is not ok",
-			statRes: &provider.StatResponse{Status: &rpc.Status{Code: rpc.Code_CODE_INTERNAL}},
+			name: "returns 201 without headers when the provider returns no opaque",
+			createRes: &provider.CreateContainerResponse{
+				Status: &rpc.Status{Code: rpc.Code_CODE_OK},
+			},
 		},
 		{
-			name:    "returns 201 without headers when the stat call fails",
-			statErr: errors.New("transport error"),
+			name: "returns 201 without headers when the opaque entries are empty",
+			createRes: &provider.CreateContainerResponse{
+				Status: &rpc.Status{Code: rpc.Code_CODE_OK},
+				Opaque: &typespb.Opaque{
+					Map: map[string]*typespb.OpaqueEntry{
+						"fileid": {Decoder: "plain", Value: []byte("")},
+						"etag":   {Decoder: "plain", Value: []byte("")},
+					},
+				},
+			},
 		},
 	}
 
@@ -71,7 +79,7 @@ func TestMkcol(t *testing.T) {
 		return mock.MatchedBy(func(req *provider.StatRequest) bool { return req.Ref.Path == ref.Path })
 	}
 
-	for i, tt := range tests {
+	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			gw := mockgateway.NewMockGatewayAPIClient(t)
 			gw.On("Stat", mock.Anything, statOf(parentRef)).Return(&provider.StatResponse{
@@ -81,14 +89,10 @@ func TestMkcol(t *testing.T) {
 			gw.On("Stat", mock.Anything, statOf(childRef)).Return(&provider.StatResponse{
 				Status: &rpc.Status{Code: rpc.Code_CODE_NOT_FOUND},
 			}, nil).Once()
-			gw.On("CreateContainer", mock.Anything, mock.Anything).Return(&provider.CreateContainerResponse{
-				Status: &rpc.Status{Code: rpc.Code_CODE_OK},
-			}, nil).Once()
-			gw.On("Stat", mock.Anything, statOf(childRef)).Return(tt.statRes, tt.statErr).Once()
+			gw.On("CreateContainer", mock.Anything, mock.Anything).Return(tt.createRes, nil).Once()
 
-			endpoint := fmt.Sprintf("mkcol-gw-%d", i)
-			pool.RegisterGatewayServiceClient(gw, endpoint)
-			s := svc{c: &Config{GatewaySvc: endpoint}}
+			stampGateway(gw)
+			s := svc{c: &Config{}}
 
 			w := httptest.NewRecorder()
 			r := httptest.NewRequest("MKCOL", "http://localhost/home/newdir", nil)
