@@ -643,7 +643,7 @@ func benchmarkUploadDirectoriesCeph(b *testing.B, depth int) {
 		dirPath += fmt.Sprintf("/level_%d", i)
 		// Create directory through filesystem
 		dirRef := &provider.Reference{Path: dirPath}
-		err := fs.CreateDir(ctx, dirRef)
+		_, err := fs.CreateDir(ctx, dirRef)
 		if err != nil {
 			// Directory might already exist, which is fine
 		}
@@ -866,7 +866,7 @@ func benchmarkMultiUserConcurrentReadsCeph(b *testing.B, userCount, readsPerUser
 		// First ensure the directory exists using cephmount
 		dirPath := fmt.Sprintf("/benchmark-tests/%s", testDirName)
 		dirRef := &provider.Reference{Path: dirPath}
-		_ = fs.CreateDir(userContexts[userID], dirRef) // Ignore error if it already exists
+		_, _ = fs.CreateDir(userContexts[userID], dirRef) // Ignore error if it already exists
 
 		reader := bytes.NewReader(testData)
 		err := fs.Upload(userContexts[userID], fileRefs[userID], io.NopCloser(reader), nil)
@@ -1049,7 +1049,7 @@ func setupCephBenchmark(b *testing.B, prefix string) (*cephmountfs, string, func
 	}
 
 	// Verify the directory is accessible via cephmount (optional - don't fail if this doesn't work)
-	if err := fs.CreateDir(ctx, testDirRef); err != nil {
+	if _, err := fs.CreateDir(ctx, testDirRef); err != nil {
 		if !strings.Contains(err.Error(), "file exists") && !strings.Contains(err.Error(), "already exists") {
 			b.Logf("Note: Directory creation via cephmount interface failed (using direct filesystem access): %v", err)
 		}
