@@ -1301,7 +1301,8 @@ func (fs *localfs) ListRevisions(ctx context.Context, ref *provider.Reference) (
 
 		mtime, err := strconv.Atoi(version)
 		if err != nil {
-			continue
+		log.Debug().Str("name", mds[i].Name()).Err(err).Msg("localfs: ListRevisions atoi failed")  
+		continue  
 		}
 		revisions = append(revisions, &provider.FileVersion{
 			Key:   version,
