@@ -31,6 +31,7 @@ import (
 	"github.com/cs3org/reva/v3/pkg/service"
 	"github.com/cs3org/reva/v3/pkg/sharehierarchy"
 	"github.com/cs3org/reva/v3/pkg/spaces"
+	"github.com/cs3org/reva/v3/pkg/trace"
 	"github.com/google/uuid"
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog"
@@ -222,13 +223,24 @@ func (j *ShallowJob) Run(ctx context.Context) (ShallowReport, error) {
 	groups := map[string][]sharehierarchy.ResolvedShare{}
 	var order []string
 	paths := map[string]string{}
+	// Each share gets its own trace id, propagated into every gateway and
+	// storage provider call made for it by the pool's client interceptor. It is
+	// logged on each per-share line, and the same share keeps it across both
+	// passes, so a skip here can be joined against the revad logs that explain
+	// it: grep the same traceid there.
+	traces := map[string]string{}
 	for _, s := range shares {
-		rs, err := j.resolve(ctx, gw, s)
+		id := s.GetId().GetOpaqueId()
+		traceID := trace.Generate()
+		traces[id] = traceID
+
+		rs, err := j.resolve(trace.Set(ctx, traceID), gw, s)
 		if err != nil {
 			report.Skipped++
 			log.Error().Err(err).
 				Str("event", EventShallowSkip).
-				Str("share", s.GetId().GetOpaqueId()).
+				Str("share", id).
+				Str("traceid", traceID).
 				Msg("reconciliation: share could not be resolved, left untouched")
 			continue
 		}
@@ -285,7 +297,7 @@ func (j *ShallowJob) Run(ctx context.Context) (ShallowReport, error) {
 			// weaker and take away access that ancestor grants.
 			_, err := checker.CheckGrantConsistency(ctx, rs.Path, rs.Share.GetPermissions().GetPermissions(), nearest)
 			if err != nil {
-				j.reportShadowed(log, &report, rs, err)
+				j.reportShadowed(log, &report, rs, traces[rs.Share.GetId().GetOpaqueId()], err)
 				continue
 			}
 			required = append(required, rs)
@@ -297,14 +309,17 @@ func (j *ShallowJob) Run(ctx context.Context) (ShallowReport, error) {
 		id := rs.Share.GetResourceId()
 		sharee, granteeType := sharehierarchy.ShareeInfo(rs.Share.GetGrantee())
 		expected := sharehierarchy.PermLevelFromCS3(rs.Share.GetPermissions().GetPermissions())
+		traceID := traces[rs.Share.GetId().GetOpaqueId()]
+		shareCtx := trace.Set(ctx, traceID)
 
-		level, present, err := j.observed(ctx, rs)
+		level, present, err := j.observed(shareCtx, rs)
 		if err != nil {
 			report.Skipped++
 			log.Error().Err(err).
 				Str("event", EventShallowSkip).
 				Str("share", rs.Share.GetId().GetOpaqueId()).
 				Str("path", rs.Path).
+				Str("traceid", traceID).
 				Msg("reconciliation: grants could not be read, path left untouched")
 			continue
 		}
@@ -322,12 +337,13 @@ func (j *ShallowJob) Run(ctx context.Context) (ShallowReport, error) {
 				Str("path", rs.Path).
 				Str("grantee", sharee).
 				Str("grantee_type", granteeType).
+				Str("traceid", traceID).
 				Msg("reconciliation: grant is correct")
 			continue
 		}
 
 		if !j.DryRun {
-			if err := j.write(ctx, rs, action); err != nil {
+			if err := j.write(shareCtx, rs, action); err != nil {
 				report.Failed++
 				log.Error().Err(err).
 					Str("event", EventShallowFail).
@@ -335,6 +351,7 @@ func (j *ShallowJob) Run(ctx context.Context) (ShallowReport, error) {
 					Str("path", rs.Path).
 					Str("grantee", sharee).
 					Str("grantee_type", granteeType).
+					Str("traceid", traceID).
 					Msg("reconciliation: writing the grant failed")
 				continue
 			}
@@ -362,6 +379,7 @@ func (j *ShallowJob) Run(ctx context.Context) (ShallowReport, error) {
 			Str("observed", observed).
 			Str("expected", expected.String()).
 			Bool("dry_run", j.DryRun).
+			Str("traceid", traceID).
 			Msg("reconciliation: grant written")
 	}
 
@@ -383,7 +401,7 @@ func (j *ShallowJob) Run(ctx context.Context) (ShallowReport, error) {
 // a share above it shadows it. Shadowed means the share above grants the same
 // recipient the same permissions, so the entry is inherited; anything else
 // means the database holds a share the hierarchy check would have rejected.
-func (j *ShallowJob) reportShadowed(log *zerolog.Logger, report *ShallowReport, rs sharehierarchy.ResolvedShare, err error) {
+func (j *ShallowJob) reportShadowed(log *zerolog.Logger, report *ShallowReport, rs sharehierarchy.ResolvedShare, traceID string, err error) {
 	level := sharehierarchy.PermLevelFromCS3(rs.Share.GetPermissions().GetPermissions())
 	sharee, granteeType := sharehierarchy.ShareeInfo(rs.Share.GetGrantee())
 
@@ -394,6 +412,7 @@ func (j *ShallowJob) reportShadowed(log *zerolog.Logger, report *ShallowReport, 
 			Str("event", EventShallowSkip).
 			Str("share", rs.Share.GetId().GetOpaqueId()).
 			Str("path", rs.Path).
+			Str("traceid", traceID).
 			Msg("reconciliation: hierarchy check failed, share left untouched")
 		return
 	}
@@ -407,6 +426,7 @@ func (j *ShallowJob) reportShadowed(log *zerolog.Logger, report *ShallowReport, 
 			Str("grantee", sharee).
 			Str("grantee_type", granteeType).
 			Str("ancestor", ancestor.ID).
+			Str("traceid", traceID).
 			Msg("reconciliation: entry is inherited from an ancestor share")
 		return
 	}
@@ -423,6 +443,7 @@ func (j *ShallowJob) reportShadowed(log *zerolog.Logger, report *ShallowReport, 
 		Str("ancestor", ancestor.ID).
 		Str("ancestor_path", ancestor.Path).
 		Str("ancestor_role", ancestor.PermissionType).
+		Str("traceid", traceID).
 		Msg("reconciliation: " + conflict.Message)
 }
 
