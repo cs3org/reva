@@ -121,11 +121,17 @@ type OrphanJob struct {
 	Links PublicLinkStore
 	// Gateway resolves resource and recipient existence.
 	Gateway gateway.GatewayAPIClient
+	// Auth puts the identity the job acts as on the run context. The jobs
+	// runner hands a run a bare context and the gateway rejects a call without
+	// a token, so every run needs one. A nil Auth leaves the context alone.
+	Auth func(ctx context.Context) (context.Context, error)
 	// Log is the job's own log, see OpenLog. When nil the job falls back to the
 	// logger in the run context.
 	Log *zerolog.Logger
 	// DryRun, when set, reports what would be orphaned without mutating.
 	DryRun bool
+	// RunOnStart, when set, fires the job once as soon as the runner starts.
+	RunOnStart bool
 }
 
 // entry is one share-like row to check. Shares and public links are flattened
@@ -194,6 +200,13 @@ func (j *OrphanJob) Run(ctx context.Context) (OrphanReport, error) {
 	runID := uuid.New().String()
 	l := base.With().Str("run", runID).Logger()
 	log := &l
+
+	if j.Auth != nil {
+		var err error
+		if ctx, err = j.Auth(ctx); err != nil {
+			return OrphanReport{}, err
+		}
+	}
 
 	entries, err := j.entries()
 	if err != nil {
@@ -398,10 +411,11 @@ func existsFromStatus(s *rpc.Status) (bool, error) {
 // going.
 func (j *OrphanJob) Periodic(schedule string) rjobs.Periodic {
 	return rjobs.Periodic{
-		Name:     OrphanJobName,
-		Schedule: schedule,
-		Scope:    rjobs.ScopeLeader,
-		Overlap:  rjobs.Skip,
+		Name:       OrphanJobName,
+		Schedule:   schedule,
+		Scope:      rjobs.ScopeLeader,
+		Overlap:    rjobs.Skip,
+		RunOnStart: j.RunOnStart,
 		Run: func(ctx context.Context) error {
 			_, err := j.Run(ctx)
 			return err

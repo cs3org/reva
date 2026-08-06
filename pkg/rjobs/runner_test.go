@@ -100,7 +100,7 @@ func (stubStore) HeartbeatInterval() time.Duration                 { return 0 }
 func (stubStore) DueScheduled(context.Context, time.Time) ([]ScheduledRun, error) {
 	return nil, nil
 }
-func (stubStore) RegisterScheduled(context.Context, string, Schedule, time.Time) error {
+func (stubStore) RegisterScheduled(context.Context, string, Schedule, time.Time, bool) error {
 	return nil
 }
 func (stubStore) MarkScheduledRunning(context.Context, string) error  { return nil }
@@ -316,7 +316,7 @@ func (s *oneRunStore) HeartbeatInterval() time.Duration       { return 20 * time
 func (s *oneRunStore) DueScheduled(context.Context, time.Time) ([]ScheduledRun, error) {
 	return nil, nil
 }
-func (s *oneRunStore) RegisterScheduled(context.Context, string, Schedule, time.Time) error {
+func (s *oneRunStore) RegisterScheduled(context.Context, string, Schedule, time.Time, bool) error {
 	return nil
 }
 func (s *oneRunStore) MarkScheduledRunning(context.Context, string) error  { return nil }
@@ -557,7 +557,7 @@ func (s *periodicStore) HeartbeatInterval() time.Duration                 { retu
 func (s *periodicStore) DueScheduled(context.Context, time.Time) ([]ScheduledRun, error) {
 	return nil, nil
 }
-func (s *periodicStore) RegisterScheduled(context.Context, string, Schedule, time.Time) error {
+func (s *periodicStore) RegisterScheduled(context.Context, string, Schedule, time.Time, bool) error {
 	return nil
 }
 func (s *periodicStore) MarkScheduledRunning(context.Context, string) error { return nil }

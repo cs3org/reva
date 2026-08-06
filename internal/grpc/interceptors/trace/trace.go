@@ -29,20 +29,28 @@ import (
 
 // getContext returns a context filled with a trace ID.
 // If a trace ID is already set, this context is returned as-is.
+// Otherwise, we check for `revad-grpc-trace-id` in the context metadata.
 // Otherwise, if a span is set, the trace id of this span is set.
-// Finally, we check for `revad-grpc-trace-id` in the context metadtata.
 // If none of these are set, a new trace ID is generated and set.
+//
+// The header is read before the span on purpose. A caller that sends it has
+// already logged that id, and the two only ever differ when the caller had no
+// span of its own to take it from: an incoming request that carries a
+// traceparent has the same trace id in both, since the span here is a child of
+// the caller's. Preferring the span would drop the id of every caller that
+// traces without OTel, such as the reconciliation jobs, and leave nothing to
+// join their logs against ours by.
 func getContext(ctx context.Context) context.Context {
 	if id := revatrace.Get(ctx); id != "" {
 		return ctx
-	}
-	if span := oteltrace.SpanFromContext(ctx); span.SpanContext().IsValid() {
-		return revatrace.Set(ctx, span.SpanContext().TraceID().String())
 	}
 	if md, ok := metadata.FromIncomingContext(ctx); ok {
 		if val := md["revad-grpc-trace-id"]; len(val) > 0 && val[0] != "" {
 			return revatrace.Set(ctx, val[0])
 		}
+	}
+	if span := oteltrace.SpanFromContext(ctx); span.SpanContext().IsValid() {
+		return revatrace.Set(ctx, span.SpanContext().TraceID().String())
 	}
 	return revatrace.Set(ctx, revatrace.Generate())
 }

@@ -26,16 +26,22 @@ import (
 	"context"
 	"os"
 
+	authpb "github.com/cs3org/go-cs3apis/cs3/auth/provider/v1beta1"
+	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	"github.com/cs3org/reva/v3/pkg/appctx"
+	"github.com/cs3org/reva/v3/pkg/auth/scope"
 	"github.com/cs3org/reva/v3/pkg/reconciliation"
 	"github.com/cs3org/reva/v3/pkg/rgrpc/todo/pool"
 	"github.com/cs3org/reva/v3/pkg/rjobs"
 	"github.com/cs3org/reva/v3/pkg/rserverless"
 	"github.com/cs3org/reva/v3/pkg/share/manager/sql"
 	"github.com/cs3org/reva/v3/pkg/sharedconf"
+	"github.com/cs3org/reva/v3/pkg/token"
+	"github.com/cs3org/reva/v3/pkg/token/manager/jwt"
 	"github.com/cs3org/reva/v3/pkg/utils/cfg"
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog"
+	"google.golang.org/grpc/metadata"
 )
 
 func init() {
@@ -46,6 +52,17 @@ type config struct {
 	reconciliation.Config `mapstructure:",squash"`
 	// Schedule is the interval the orphan job runs on, e.g. "@daily".
 	Schedule string `mapstructure:"schedule" validate:"required"`
+	// JWTSecret signs the token the job authenticates its own calls with.
+	// Falls back to [shared].
+	JWTSecret string `mapstructure:"jwt_secret"`
+	// ServiceUserName is the account the job acts as. It has to be known to the
+	// storage: the EOS driver reads the ACLs of a node as the caller before it
+	// hands them out.
+	ServiceUserName string `mapstructure:"service_user_name" validate:"required"`
+	// ServiceUserUID and ServiceUserGID are that account's ids. The EOS driver
+	// refuses a caller without them, so neither may be zero.
+	ServiceUserUID int64 `mapstructure:"service_user_uid" validate:"required"`
+	ServiceUserGID int64 `mapstructure:"service_user_gid" validate:"required"`
 	// DB is the share database, the same block the sql share driver takes.
 	// Unset fields fall back to [shared].
 	DB map[string]any `mapstructure:"db"`
@@ -55,6 +72,7 @@ type config struct {
 // only does for the struct it is given.
 func (c *config) ApplyDefaults() {
 	c.Config.ApplyDefaults()
+	c.JWTSecret = sharedconf.GetJWTSecret(c.JWTSecret)
 }
 
 type svc struct {
@@ -89,6 +107,30 @@ func New(ctx context.Context, m map[string]any) (rserverless.Service, error) {
 		return nil, errors.Wrap(err, "reconciliation: getting the gateway client")
 	}
 
+	tokens, err := jwt.New(map[string]any{"secret": c.JWTSecret})
+	if err != nil {
+		return nil, errors.Wrap(err, "reconciliation: building the token manager")
+	}
+	// the jobs read and write across the whole namespace, so the token carries
+	// the owner scope, the same one an interactive session gets.
+	scopes, err := scope.AddOwnerScope(nil)
+	if err != nil {
+		return nil, errors.Wrap(err, "reconciliation: building the token scope")
+	}
+	identity := &serviceUser{
+		tokens: tokens,
+		scope:  scopes,
+		user: &userpb.User{
+			Id: &userpb.UserId{
+				OpaqueId: c.ServiceUserName,
+				Type:     userpb.UserType_USER_TYPE_PRIMARY,
+			},
+			Username:  c.ServiceUserName,
+			UidNumber: c.ServiceUserUID,
+			GidNumber: c.ServiceUserGID,
+		},
+	}
+
 	shares, ok := sm.(reconciliation.ShareStore)
 	if !ok {
 		return nil, errors.Errorf("reconciliation: share manager %T cannot be reconciled", sm)
@@ -104,11 +146,13 @@ func New(ctx context.Context, m map[string]any) (rserverless.Service, error) {
 	}
 
 	job := &reconciliation.OrphanJob{
-		Shares:  shares,
-		Links:   links,
-		Gateway: gw,
-		Log:     jobLog,
-		DryRun:  c.DryRun,
+		Shares:     shares,
+		Links:      links,
+		Gateway:    gw,
+		Auth:       identity.authenticate,
+		Log:        jobLog,
+		DryRun:     c.DryRun,
+		RunOnStart: c.RunOnStart,
 	}
 	if err := rjobs.RegisterPeriodic(job.Periodic(c.Schedule)); err != nil {
 		if logFile != nil {
@@ -122,9 +166,30 @@ func New(ctx context.Context, m map[string]any) (rserverless.Service, error) {
 		Str("schedule", c.Schedule).
 		Str("log_file", c.LogFile).
 		Bool("dry_run", c.DryRun).
+		Bool("run_on_start", c.RunOnStart).
 		Msg("reconciliation: orphan job registered")
 
 	return &svc{log: log, jobLog: logFile}, nil
+}
+
+// serviceUser is the identity the job acts as. The jobs runner hands a run a
+// bare context, and every gateway and storage provider call goes through the
+// auth interceptor, which rejects a call without a token.
+type serviceUser struct {
+	tokens token.Manager
+	user   *userpb.User
+	scope  map[string]*authpb.Scope
+}
+
+// authenticate returns ctx carrying a token for the service user. It is minted
+// per run rather than at startup because a token expires and this job is
+// scheduled days apart.
+func (s *serviceUser) authenticate(ctx context.Context) (context.Context, error) {
+	tkn, err := s.tokens.MintToken(ctx, s.user, s.scope)
+	if err != nil {
+		return nil, errors.Wrap(err, "reconciliation: minting the service token")
+	}
+	return metadata.AppendToOutgoingContext(ctx, appctx.TokenHeader, tkn), nil
 }
 
 // Start is a no-op: the jobs service owns the runner that fires the job.
