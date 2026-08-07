@@ -16,11 +16,6 @@
 // granted to it by virtue of its status as an Intergovernmental Organization
 // or submit itself to any jurisdiction.
 
-// Package reconciliation reconciles the share database against the state of the
-// storage. For now it holds a single job, orphan detection, which marks shares
-// and public links whose resource or recipient no longer exists. It is
-// storage-driver agnostic: it reads from the database and resolves resources
-// and identities through the gateway (CS3).
 package reconciliation
 
 import (
@@ -46,22 +41,20 @@ import (
 // OrphanJobName is the stable identity of the orphan job.
 const OrphanJobName = "reconciliation.orphans"
 
-// Log event names. Every line the job emits carries one of these under the
-// "event" key, so a run can be replayed or reverted by filtering the logs on it
-// rather than by parsing free-form messages.
+// The events the orphan job logs, see the package comment.
 const (
-	// EventStart opens a run.
-	EventStart = "reconciliation.start"
-	// EventOrphan reports one item marked orphaned, or, in dry-run, one that
-	// would have been. It carries every field needed to undo the change.
-	EventOrphan = "reconciliation.orphan"
-	// EventSkip reports one item left untouched because a lookup failed.
-	EventSkip = "reconciliation.skip"
-	// EventFail reports one item that was classified as orphaned but could not
-	// be marked.
-	EventFail = "reconciliation.fail"
-	// EventEnd closes a run with its totals.
-	EventEnd = "reconciliation.end"
+	// EventOrphanStart opens a run.
+	EventOrphanStart = OrphanJobName + ".start"
+	// EventOrphanMark reports one item marked orphaned, or, in dry-run, one
+	// that would have been. It carries every field needed to undo the change.
+	EventOrphanMark = OrphanJobName + ".mark"
+	// EventOrphanSkip reports one item left untouched because a lookup failed.
+	EventOrphanSkip = OrphanJobName + ".skip"
+	// EventOrphanFail reports one item that was classified as orphaned but
+	// could not be marked.
+	EventOrphanFail = OrphanJobName + ".fail"
+	// EventOrphanEnd closes a run with its totals.
+	EventOrphanEnd = OrphanJobName + ".end"
 )
 
 // Kind is the type of share-like object an entry refers to.
@@ -196,9 +189,10 @@ func (j *OrphanJob) Run(ctx context.Context) (OrphanReport, error) {
 		base = appctx.GetLogger(ctx)
 	}
 	// every line of a run carries the same "run" field, so one run can be
-	// picked out of a log holding many.
+	// picked out of a log holding many, and the "job" field, since jobs can
+	// share a log file.
 	runID := uuid.New().String()
-	l := base.With().Str("run", runID).Logger()
+	l := base.With().Str("job", OrphanJobName).Str("run", runID).Logger()
 	log := &l
 
 	if j.Auth != nil {
@@ -214,7 +208,7 @@ func (j *OrphanJob) Run(ctx context.Context) (OrphanReport, error) {
 	}
 
 	log.Info().
-		Str("event", EventStart).
+		Str("event", EventOrphanStart).
 		Bool("dry_run", j.DryRun).
 		Int("candidates", len(entries)).
 		Msg("reconciliation: run started")
@@ -227,7 +221,7 @@ func (j *OrphanJob) Run(ctx context.Context) (OrphanReport, error) {
 		if err != nil {
 			report.Skipped++
 			log.Error().Err(err).
-				Str("event", EventSkip).
+				Str("event", EventOrphanSkip).
 				Str("kind", string(e.kind)).
 				Str("id", e.id).
 				Msg("reconciliation: existence check failed, item left untouched")
@@ -245,7 +239,7 @@ func (j *OrphanJob) Run(ctx context.Context) (OrphanReport, error) {
 			if err := j.mark(ctx, e); err != nil {
 				report.Failed++
 				log.Error().Err(err).
-					Str("event", EventFail).
+					Str("event", EventOrphanFail).
 					Str("kind", string(e.kind)).
 					Str("id", e.id).
 					Msg("reconciliation: marking item orphaned failed")
@@ -261,7 +255,7 @@ func (j *OrphanJob) Run(ctx context.Context) (OrphanReport, error) {
 			ShareWith:  e.shareWith,
 		})
 		log.Info().
-			Str("event", EventOrphan).
+			Str("event", EventOrphanMark).
 			Str("kind", string(e.kind)).
 			Str("id", e.id).
 			Str("reason", string(reason)).
@@ -274,7 +268,7 @@ func (j *OrphanJob) Run(ctx context.Context) (OrphanReport, error) {
 	}
 
 	log.Info().
-		Str("event", EventEnd).
+		Str("event", EventOrphanEnd).
 		Bool("dry_run", j.DryRun).
 		Int("checked", report.Checked).
 		Int("orphaned", len(report.Orphaned)).

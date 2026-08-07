@@ -30,16 +30,15 @@ import (
 // getContext returns a context filled with a trace ID.
 // If a trace ID is already set, this context is returned as-is.
 // Otherwise, we check for `revad-grpc-trace-id` in the context metadata.
-// Otherwise, if a span is set, the trace id of this span is set.
+// IF this is not there but a span is set, the trace id of this span is set.
 // If none of these are set, a new trace ID is generated and set.
 //
-// The header is read before the span on purpose. A caller that sends it has
-// already logged that id, and the two only ever differ when the caller had no
+// Note that the header is read before the span on purpose. A caller that sends
+// it has already logged that id, and the two only ever differ when the caller had no
 // span of its own to take it from: an incoming request that carries a
 // traceparent has the same trace id in both, since the span here is a child of
 // the caller's. Preferring the span would drop the id of every caller that
-// traces without OTel, such as the reconciliation jobs, and leave nothing to
-// join their logs against ours by.
+// traces without OTel.
 func getContext(ctx context.Context) context.Context {
 	if id := revatrace.Get(ctx); id != "" {
 		return ctx
