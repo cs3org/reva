@@ -48,12 +48,15 @@ type storedLink struct {
 	orphan bool
 }
 
-// fakeStore is an in-memory ShareStore recording which shares were marked.
+// fakeStore is an in-memory ShareStore recording which shares were marked and
+// which were removed.
 type fakeStore struct {
-	shares  []storedShare
-	marked  []string
-	listErr error
-	markErr error
+	shares     []storedShare
+	marked     []string
+	unshared   []string
+	listErr    error
+	markErr    error
+	unshareErr error
 }
 
 func (f *fakeStore) ListShares(ctx context.Context, filters []*collaboration.Filter) ([]*collaboration.Share, error) {
@@ -74,6 +77,14 @@ func (f *fakeStore) MarkAsOrphaned(ctx context.Context, ref *collaboration.Share
 		return f.markErr
 	}
 	f.marked = append(f.marked, ref.GetId().GetOpaqueId())
+	return nil
+}
+
+func (f *fakeStore) Unshare(ctx context.Context, ref *collaboration.ShareReference) error {
+	if f.unshareErr != nil {
+		return f.unshareErr
+	}
+	f.unshared = append(f.unshared, ref.GetId().GetOpaqueId())
 	return nil
 }
 
