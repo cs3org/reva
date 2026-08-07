@@ -1,51 +1,65 @@
-# Deploying the orphan job
+# Deploying the reconciliation jobs
 
-The job spans the share and the public link tables, so it is wired as its own
-serverless service rather than by one of the grpc share services. It reads and
-writes those tables directly through gorm, so it always uses the `sql` driver.
+The jobs span the share and the public link tables, so they are wired as their
+own serverless service rather than by one of the grpc share services. They read
+and write those tables directly through gorm, so they always use the `sql`
+driver.
+
+Each job is enabled and configured on its own, so one can be left in dry-run, or
+rescheduled, or pointed at another log, without touching the others. For now
+there is only the orphan job.
 
 ```toml
 [serverless.services.reconciliation]
+jobs = ["orphan"]
 service_user_name = "cboxreco"
 service_user_uid  = 12345
 service_user_gid  = 2766
+
+[serverless.services.reconciliation.orphan]
 schedule = "@daily"      # "@every <dur>" | "@hourly" | "@daily" | "@weekly"
 dry_run  = false
-log_file = "/var/log/revad/reconciliation.log"
+log_file = "/var/log/revad/reconciliation-orphan.log"
 ```
 
-`schedule` is required. `jwt_secret` and the
-`[serverless.services.reconciliation.db]` section, which takes the same keys as
-the `sql` share driver, both fall back to `[shared]`, so they can normally be
-omitted.
+A job runs only if it is listed in `jobs`, and every listed job needs a
+`schedule`. `log_file` defaults to the path shown above. `gatewaysvc`,
+`jwt_secret` and the `[serverless.services.reconciliation.db]` section, which
+takes the same keys as the `sql` share driver, all fall back to `[shared]`, so
+they can normally be omitted.
 
 ## Identity
 
-The jobs runner hands a run a bare context, so each run mints itself a token for
+The jobs runner hands a run a bare context, but we need a valid auth
+so we can do stat's etc. Therefore, each run mints itself a token for
 `service_user_name` and sends it with every call. The three `service_user_*`
-keys are required and the account has to be a real one: EOS reads the ACLs of a
-node as the caller before handing them out, and its driver refuses a caller
-whose uid or gid is zero, so `root` does not work. If `skip_user_groups_in_token`
-is set, the account also has to resolve in the user provider, since the auth
-interceptor looks its groups up.
+keys are thus required and it needs to have the proper permissions on EOS
+(for CERNBox, `cbox` does the trick).
+
+## Jobs
+
+`reconciliation.orphans` marks the shares and public links whose resource or
+recipient no longer exists.
 
 ## Logs
 
-The job writes its own log, separate from revad's, always JSON, one line per
-action. `log_file` defaults to `/var/log/revad/reconciliation.log` and also
-takes `stdout` or `stderr`. It is opened at startup and appended to, so an
-unwritable path fails startup.
+Each job writes its own log (well, in fact, more like a journal), separate from revad's.
+This is always written in JSON so that it is easy to parse by any tool in case we need
+to revert certain actions.
 
-| event                   | meaning                                     |
-| ----------------------- | ------------------------------------------- |
-| `reconciliation.start`  | run started                                 |
-| `reconciliation.orphan` | item marked orphaned (or would be, dry-run) |
-| `reconciliation.skip`   | item left untouched, lookup failed          |
-| `reconciliation.fail`   | item classified orphaned but write failed   |
-| `reconciliation.end`    | run totals                                  |
+An `event` is the job's own name followed by the step, so one job's lines never
+have to be told apart from another's by hand.
 
-Every line carries `run`, a uuid identifying the run it belongs to.
+| event                           | meaning                                     |
+| ------------------------------- | ------------------------------------------- |
+| `reconciliation.orphans.start`  | run started                                 |
+| `reconciliation.orphans.mark`   | item marked orphaned (or would be, dry-run) |
+| `reconciliation.orphans.skip`   | item left untouched, lookup failed          |
+| `reconciliation.orphans.fail`   | item classified orphaned but write failed   |
+| `reconciliation.orphans.end`    | run totals                                  |
 
-`reconciliation.orphan` carries `kind` (`share` or `publiclink`), `id`,
-`reason`, `storage_id`, `opaque_id`, `owner`, `share_with`, `dry_run`. Revert
-with `kind` and `id`.
+Every line also carries `job` and `run`, a uuid identifying the run it belongs
+to, so the logs stay readable if several jobs are pointed at the same file.
+
+`reconciliation.orphans.mark` carries `kind` (`share` or `publiclink`), `id`,
+`reason`, `storage_id`, `opaque_id`, `owner`, `share_with`, `dry_run`.
