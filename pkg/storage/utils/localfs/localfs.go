@@ -91,6 +91,11 @@ func (c *Config) ApplyDefaults() {
 	c.References = path.Join(c.Shadow, "references")
 	c.RecycleBin = path.Join(c.Shadow, "recycle_bin")
 	c.Versions = path.Join(c.Shadow, "versions")
+
+	// デバッグ用  
+	cwd, _ := os.Getwd()  
+	fmt.Printf("localfs: ApplyDefaults cwd=%s Root=%s DataDirectory=%s\n", cwd, c.Root, c.DataDirectory)  
+	
 }
 
 type localfs struct {
