@@ -100,7 +100,8 @@ func (fs *Eosfs) GetMD(ctx context.Context, ref *provider.Reference, mdKeys []st
 
 	fn, err := fs.resolve(ctx, ref)
 	if err != nil {
-		return nil, errtypes.BadRequest("No ref was given to GetMD")
+		// Propagated as-is, so we don't lose the error type
+		return nil, err
 	}
 
 	if ref.ResourceId != nil {
@@ -152,7 +153,8 @@ func (fs *Eosfs) getPath(ctx context.Context, id *provider.ResourceId) (string, 
 
 	eosFileInfo, err := fs.c.GetFileInfoByInode(ctx, auth, fid)
 	if err != nil {
-		return "", errors.Wrap(err, "eosfs: error getting file info by inode")
+		// Propagated as-is, so we don't lose the error type
+		return "", err
 	}
 
 	return fs.unwrap(ctx, eosFileInfo.File)

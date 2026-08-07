@@ -4,16 +4,37 @@ import (
 	"context"
 	"encoding/hex"
 	"fmt"
+	"io"
 	"path"
 	"strconv"
 	"strings"
+	"syscall"
 
 	erpc "github.com/cern-eos/go-eosgrpc"
 	"github.com/cs3org/reva/v3/pkg/appctx"
 	"github.com/cs3org/reva/v3/pkg/errtypes"
 	eosclient "github.com/cs3org/reva/v3/pkg/storage/fs/eos/client"
 	"github.com/pkg/errors"
+	"google.golang.org/grpc/codes"
+	grpcstatus "google.golang.org/grpc/status"
 )
+
+// If the passed error matches any of the valid errors
+// we get for NotFound (io.EOF, NotFound, ENOENT), then
+// it is mapped to errtypes.NotFound. Otherwise, we return
+// the input error again as-is.
+func possiblyCastToNotFound(err error, target string) error {
+	if errors.Is(err, io.EOF) {
+		return errtypes.NotFound(target)
+	}
+	if st, ok := grpcstatus.FromError(err); ok {
+		switch st.Code() {
+		case codes.NotFound, codes.Code(syscall.ENOENT):
+			return errtypes.NotFound(target)
+		}
+	}
+	return err
+}
 
 // GetFileInfoByInode returns the FileInfo by the given inode.
 func (c *Client) GetFileInfoByInode(ctx context.Context, auth eosclient.Authorization, inode uint64) (*eosclient.FileInfo, error) {
@@ -48,7 +69,7 @@ func (c *Client) GetFileInfoByInode(ctx context.Context, auth eosclient.Authoriz
 	rsp, err := resp.Recv()
 	if err != nil {
 		log.Error().Err(err).Uint64("inode", inode).Str("err", err.Error()).Send()
-		return nil, err
+		return nil, possiblyCastToNotFound(err, fmt.Sprintf("inode: '%d'", inode))
 	}
 
 	if rsp == nil {
@@ -100,12 +121,7 @@ func (c *Client) GetFileInfoByPath(ctx context.Context, auth eosclient.Authoriza
 	if err != nil {
 		log.Error().Str("func", "GetFileInfoByPath").Err(err).Str("path", path).Str("err", err.Error()).Msg("")
 
-		// FIXME: this is very bad and poisonous for the project!!!!!!!
-		// Apparently here we have to assume that an error in Recv() means "file not found"
-		// - "File not found is not an error", it's a legitimate result of a legitimate check
-		// - Assuming that any error means file not found is doubly poisonous
-		return nil, errtypes.NotFound(err.Error())
-		// return nil, nil
+		return nil, possiblyCastToNotFound(err, fmt.Sprintf("path: %s", path))
 	}
 
 	if rsp == nil {
