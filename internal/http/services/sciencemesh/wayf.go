@@ -35,8 +35,7 @@ import (
 type wayfHandler struct {
 	directoryServices []ocmd.DirectoryService
 	ocmClient         *ocmd.OCMClient
-	// for /discover, where the host to contact comes from the request body rather
-	// than from our own config
+	// for /discover, where the host comes from the request body, not from config
 	untrustedClient *ocmd.OCMClient
 }
 
@@ -220,7 +219,6 @@ func (h *wayfHandler) DiscoverProvider(w http.ResponseWriter, r *http.Request) {
 	}
 
 	log.Debug().Str("domain", domain).Msg("Attempting OCM discovery")
-	// this endpoint needs no authentication, so keep the fetch on the public internet
 	disco, err := h.untrustedClient.Discover(ctx, domain)
 	if err != nil {
 		log.Info().Err(err).Str("domain", domain).Msg("Discovery failed")

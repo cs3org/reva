@@ -82,8 +82,8 @@ func Skip(source string, prefixes []string) bool {
 }
 
 // GetClientIP retrieves the client IP from incoming requests. X-Forwarded-For is
-// only read when trustForwardedFor is set, since the caller can forge it; the last
-// hop is the one a trusted proxy appended, the rest can be made up.
+// read only when trustForwardedFor is set: a peer can forge it, and only the last
+// hop was appended by our own proxy.
 func GetClientIP(r *http.Request, trustForwardedFor bool) (string, error) {
 	if trustForwardedFor {
 		if forwarded := r.Header.Get("X-Forwarded-For"); forwarded != "" {
