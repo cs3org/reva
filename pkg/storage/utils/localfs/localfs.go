@@ -1394,7 +1394,7 @@ func (fs *localfs) convertToRecycleItem(ctx context.Context, rp string, md os.Fi
 	}
 
 	trashtime := suffix[2:]
-	ttime, err := strconv.Atoi(trashtime)
+	ttime, err := strconv.ParseInt(trashtime, 10, 64)
 	if err != nil {
 		return nil
 	}
