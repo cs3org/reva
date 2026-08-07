@@ -21,6 +21,7 @@ package ocmd
 import (
 	"context"
 	"encoding/json"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -256,5 +257,102 @@ func TestNewClientUsesOCMTransport(t *testing.T) {
 	}
 	if tr.Proxy == nil {
 		t.Fatal("client transport Proxy must not be nil")
+	}
+}
+
+func TestIsPublicIP(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name string
+		ip   string
+		want bool
+	}{
+		{name: "public v4", ip: "93.184.216.34", want: true},
+		{name: "public v6", ip: "2606:2800:220:1:248:1893:25c8:1946", want: true},
+		{name: "loopback", ip: "127.0.0.1", want: false},
+		{name: "loopback v6", ip: "::1", want: false},
+		{name: "private 10/8", ip: "10.1.2.3", want: false},
+		{name: "private 172.16/12", ip: "172.16.5.4", want: false},
+		{name: "private 192.168/16", ip: "192.168.1.1", want: false},
+		{name: "cloud metadata service", ip: "169.254.169.254", want: false},
+		{name: "unspecified", ip: "0.0.0.0", want: false},
+		{name: "multicast", ip: "224.0.0.1", want: false},
+		{name: "unique local v6", ip: "fd00::1", want: false},
+		{name: "link local v6", ip: "fe80::1", want: false},
+		{name: "carrier-grade nat", ip: "100.64.0.1", want: false},
+		{name: "just outside carrier-grade nat", ip: "100.128.0.1", want: true},
+		{name: "ipv4-mapped metadata service", ip: "::ffff:169.254.169.254", want: false},
+		{name: "ipv4-mapped loopback", ip: "::ffff:127.0.0.1", want: false},
+		{name: "nat64 metadata service", ip: "64:ff9b::a9fe:a9fe", want: false},
+		{name: "nat64 loopback", ip: "64:ff9b::7f00:1", want: false},
+		{name: "nat64 public address", ip: "64:ff9b::5db8:d822", want: true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ip := net.ParseIP(tt.ip)
+			if ip == nil {
+				t.Fatalf("could not parse %q", tt.ip)
+			}
+			if got := isPublicIP(ip); got != tt.want {
+				t.Errorf("isPublicIP(%s) = %v, want %v", tt.ip, got, tt.want)
+			}
+		})
+	}
+}
+
+func TestRefuseNonPublicAddr(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name    string
+		address string
+		wantErr bool
+	}{
+		{name: "public host", address: "93.184.216.34:443"},
+		{name: "loopback", address: "127.0.0.1:8080", wantErr: true},
+		{name: "metadata service", address: "169.254.169.254:80", wantErr: true},
+		{name: "private range", address: "10.0.0.5:9000", wantErr: true},
+		{name: "ipv6 loopback", address: "[::1]:8080", wantErr: true},
+		{name: "no port", address: "93.184.216.34", wantErr: true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := refuseNonPublicAddr("tcp", tt.address, nil)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("refuseNonPublicAddr(%q) error = %v, wantErr %v", tt.address, err, tt.wantErr)
+			}
+		})
+	}
+}
+
+// only the public-only client refuses internal targets; the plain one still reaches them.
+func TestPublicOnlyClientRefusesInternalHosts(t *testing.T) {
+	t.Parallel()
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`{"enabled":true,"apiVersion":"1.1"}`))
+	}))
+	defer srv.Close()
+
+	tests := []struct {
+		name    string
+		client  *OCMClient
+		wantErr bool
+	}{
+		{name: "public-only client refuses the loopback target", client: NewPublicOnlyClient(5*time.Second, true), wantErr: true},
+		{name: "plain client still reaches it", client: NewClient(5*time.Second, true), wantErr: false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			_, err := tt.client.Discover(context.Background(), srv.URL)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("Discover() error = %v, wantErr %v", err, tt.wantErr)
+			}
+		})
 	}
 }
