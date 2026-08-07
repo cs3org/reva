@@ -16,6 +16,18 @@
 // granted to it by virtue of its status as an Intergovernmental Organization
 // or submit itself to any jurisdiction.
 
+// Package reconciliation reconciles the share database against the state of the
+// storage. For now it holds a single job, orphan detection, which marks shares
+// and public links whose resource or recipient no longer exists. It is
+// storage-driver agnostic: it reads from the database and resolves resources
+// and identities through the gateway (CS3).
+//
+// Every line a job logs carries an "event" naming what happened, so a run can
+// be replayed or reverted by filtering on it rather than by parsing free-form
+// messages. An event is the job's own name followed by the step: every job has
+// start, skip, fail and end, plus one event for the change it makes. Each line
+// also carries "job" and "run", the uuid of the run it belongs to, so jobs stay
+// apart even when they log to the same file.
 package reconciliation
 
 import (
@@ -25,9 +37,12 @@ import (
 	"github.com/rs/zerolog"
 )
 
-// Config configures the reconciliation jobs. It is decoded from the job's own
-// configuration section and its values are set on the job at wiring time.
+// Config configures one reconciliation job. Every job takes the same knobs and
+// each is decoded from its own configuration section, so one can be scheduled,
+// dry-run and logged without touching the others.
 type Config struct {
+	// Schedule is the interval the job runs on, e.g. "@daily".
+	Schedule string `mapstructure:"schedule"`
 	// DryRun, when set, makes the job log and report what it would do without
 	// touching the share database.
 	DryRun bool `mapstructure:"dry_run"`
@@ -39,18 +54,10 @@ type Config struct {
 	LogFile string `mapstructure:"log_file"`
 }
 
-// ApplyDefaults fills in the unset fields. It is not called automatically when
-// the struct is embedded, so an embedding config has to call it.
-func (c *Config) ApplyDefaults() {
-	if c.LogFile == "" {
-		c.LogFile = "/var/log/revad/reconciliation.log"
-	}
-}
-
-// OpenLog opens the job's own log. The job keeps its own log rather than
-// writing to revad's because the log is the record of what a run changed: it is
-// always JSON, whatever [log] mode the rest of the process runs in, and it is
-// not interleaved with unrelated output.
+// OpenLog opens a job's own log. A job keeps its own log rather than writing to
+// revad's because the log is the record of what a run changed: it is always
+// JSON, whatever [log] mode the rest of the process runs in, and it is not
+// interleaved with unrelated output.
 //
 // The returned file is nil when the log goes to a standard stream, and is the
 // caller's to close otherwise.
