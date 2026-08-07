@@ -37,7 +37,8 @@ import (
 )
 
 type invitesHandler struct {
-	gatewayClient gateway.GatewayAPIClient
+	gatewayClient     gateway.GatewayAPIClient
+	trustForwardedFor bool
 }
 
 func (h *invitesHandler) init(c *config) error {
@@ -46,6 +47,7 @@ func (h *invitesHandler) init(c *config) error {
 	if err != nil {
 		return err
 	}
+	h.trustForwardedFor = c.TrustForwardedFor
 	return nil
 }
 
@@ -72,7 +74,7 @@ func (h *invitesHandler) AcceptInvite(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	clientIP, err := utils.GetClientIP(r)
+	clientIP, err := utils.GetClientIP(r, h.trustForwardedFor)
 	if err != nil {
 		reqres.WriteError(w, r, reqres.APIErrorServerError, fmt.Sprintf("error retrieving client IP from request: %s", r.RemoteAddr), err)
 		return

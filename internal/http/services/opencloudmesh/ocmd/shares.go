@@ -59,6 +59,7 @@ type sharesHandler struct {
 	exposeRecipientDisplayName bool
 	machineSecret              string
 	autoAcceptProviders        []*regexp.Regexp
+	trustForwardedFor          bool
 }
 
 func (h *sharesHandler) init(c *config) error {
@@ -69,6 +70,7 @@ func (h *sharesHandler) init(c *config) error {
 	}
 	h.exposeRecipientDisplayName = c.ExposeRecipientDisplayName
 	h.machineSecret = c.MachineSecret
+	h.trustForwardedFor = c.TrustForwardedFor
 	for _, p := range c.AutoAcceptProviders {
 		re, err := regexp.Compile(p)
 		if err != nil {
@@ -139,7 +141,7 @@ func (h *sharesHandler) CreateShare(w http.ResponseWriter, r *http.Request) {
 
 	// extract the client IP (or the proxied one) from the request and validate it against the allowed providers
 	// TODO(lopresti) this should rather be replaced with signed requests as per more recent OCM specifications
-	senderIP, err := utils.GetClientIP(r)
+	senderIP, err := utils.GetClientIP(r, h.trustForwardedFor)
 	if err != nil {
 		reqres.WriteError(w, r, reqres.APIErrorServerError, fmt.Sprintf("error retrieving client IP from request: %s", r.RemoteAddr), err)
 		return
