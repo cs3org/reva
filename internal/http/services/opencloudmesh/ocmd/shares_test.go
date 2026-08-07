@@ -244,3 +244,44 @@ func TestParseOCMUser(t *testing.T) {
 		})
 	}
 }
+
+// tlsOcmDiscoveryServer serves discovery over TLS with a self-signed cert.
+func tlsOcmDiscoveryServer(t *testing.T) *httptest.Server {
+	t.Helper()
+	mux := http.NewServeMux()
+	mux.HandleFunc("/.well-known/ocm", func(w http.ResponseWriter, r *http.Request) {
+		disco := wellknown.OcmDiscoveryData{
+			Endpoint: "https://" + r.Host,
+			ResourceTypes: []wellknown.ResourceTypes{
+				{Name: "file", Protocols: map[string]any{"webdav": "/remote.php/dav/ocm"}},
+			},
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(disco)
+	})
+	return httptest.NewTLSServer(mux)
+}
+
+// discovery must verify certs by default, and skip only when asked.
+func TestDiscoverVerifiesTLSUnlessInsecure(t *testing.T) {
+	srv := tlsOcmDiscoveryServer(t) // self-signed, https://127.0.0.1:port
+	defer srv.Close()
+
+	tests := []struct {
+		name    string
+		handler *sharesHandler
+		wantErr bool
+	}{
+		{name: "verifies by default", handler: &sharesHandler{}, wantErr: true},
+		{name: "skips when opted out", handler: &sharesHandler{ocmClientInsecure: true}, wantErr: false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			_, _, err := tt.handler.discoverOcmResourceTypes(context.Background(), srv.URL)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("discoverOcmResourceTypes() error = %v, wantErr %v", err, tt.wantErr)
+			}
+		})
+	}
+}

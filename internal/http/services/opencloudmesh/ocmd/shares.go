@@ -60,6 +60,7 @@ type sharesHandler struct {
 	machineSecret              string
 	autoAcceptProviders        []*regexp.Regexp
 	trustForwardedFor          bool
+	ocmClientInsecure          bool
 }
 
 func (h *sharesHandler) init(c *config) error {
@@ -71,6 +72,7 @@ func (h *sharesHandler) init(c *config) error {
 	h.exposeRecipientDisplayName = c.ExposeRecipientDisplayName
 	h.machineSecret = c.MachineSecret
 	h.trustForwardedFor = c.TrustForwardedFor
+	h.ocmClientInsecure = c.OCMClientInsecure
 	for _, p := range c.AutoAcceptProviders {
 		re, err := regexp.Compile(p)
 		if err != nil {
@@ -195,7 +197,7 @@ func (h *sharesHandler) CreateShare(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	protocols, legacy, err := getAndResolveProtocols(ctx, req.Protocols, req.ResourceType, sender.Idp)
+	protocols, legacy, err := h.getAndResolveProtocols(ctx, req.Protocols, req.ResourceType, sender.Idp)
 	if err != nil || len(protocols) == 0 {
 		reqres.WriteError(w, r, reqres.APIErrorInvalidParameter, "error with protocols payload", err)
 		return
@@ -402,12 +404,12 @@ func getOCMShareType(st string) ocm.RecipientType {
 	}
 }
 
-func getAndResolveProtocols(ctx context.Context, p Protocols, resType string, ownerServer string) (protos []*ocm.Protocol, legacy bool, err error) {
+func (h *sharesHandler) getAndResolveProtocols(ctx context.Context, p Protocols, resType string, ownerServer string) (protos []*ocm.Protocol, legacy bool, err error) {
 	protos = make([]*ocm.Protocol, 0, len(p))
 	legacy = false
 
 	// discover remote resource types
-	ocmRTs, ocmEndpoint, err := discoverOcmResourceTypes(ctx, ownerServer)
+	ocmRTs, ocmEndpoint, err := h.discoverOcmResourceTypes(ctx, ownerServer)
 	if err != nil {
 		return nil, false, errors.Wrap(err, "error discovering remote OCM resource types")
 	}
@@ -489,8 +491,8 @@ func getAndResolveProtocols(ctx context.Context, p Protocols, resType string, ow
 	return protos, legacy, nil
 }
 
-func discoverOcmResourceTypes(ctx context.Context, ownerServer string) ([]wellknown.ResourceTypes, string, error) {
-	ocmClient := NewClient(time.Duration(10)*time.Second, true)
+func (h *sharesHandler) discoverOcmResourceTypes(ctx context.Context, ownerServer string) ([]wellknown.ResourceTypes, string, error) {
+	ocmClient := NewClient(time.Duration(10)*time.Second, h.ocmClientInsecure)
 	ocmCaps, err := ocmClient.Discover(ctx, ownerServer)
 	if err != nil {
 		return nil, "", err

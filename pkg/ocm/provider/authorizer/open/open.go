@@ -44,13 +44,16 @@ func New(ctx context.Context, m map[string]any) (provider.Authorizer, error) {
 		return nil, err
 	}
 
-	a := &authorizer{}
+	a := &authorizer{insecure: c.Insecure}
 	return a, nil
 }
 
 type config struct {
 	// Users holds a path to a file containing json conforming the Users struct
 	Providers string `mapstructure:"providers"`
+	// Insecure skips TLS verification when discovering an unknown provider. Off by
+	// default; turning it on exposes discovery to MITM.
+	Insecure bool `mapstructure:"insecure"`
 }
 
 func (c *config) ApplyDefaults() {
@@ -58,6 +61,7 @@ func (c *config) ApplyDefaults() {
 
 type authorizer struct {
 	providers []*ocmprovider.ProviderInfo
+	insecure  bool
 }
 
 func (a *authorizer) GetInfoByDomain(ctx context.Context, domain string) (*ocmprovider.ProviderInfo, error) {
@@ -75,7 +79,7 @@ func (a *authorizer) GetInfoByDomain(ctx context.Context, domain string) (*ocmpr
 	}
 
 	// not yet known: try to discover the remote OCM endpoint
-	ocmClient := client.NewClient(time.Duration(10)*time.Second, true)
+	ocmClient := client.NewClient(time.Duration(10)*time.Second, a.insecure)
 	ocmCaps, err := ocmClient.Discover(ctx, endpoint)
 	if err != nil {
 		return nil, errors.Wrap(err, "error probing OCM services at remote server")
