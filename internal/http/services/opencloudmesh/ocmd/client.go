@@ -90,6 +90,8 @@ func NewClient(timeout time.Duration, insecure bool) *OCMClient {
 // it also covers redirects and DNS rebinding.
 func NewPublicOnlyClient(timeout time.Duration, insecure bool) *OCMClient {
 	tr := newOCMTransport(insecure)
+	// with a proxy the dial goes to the proxy, so Control never sees the target
+	tr.Proxy = nil
 	tr.DialContext = (&net.Dialer{
 		Timeout:   timeout,
 		KeepAlive: 30 * time.Second,
@@ -116,7 +118,7 @@ func refuseNonPublicAddr(_, address string, _ syscall.RawConn) error {
 }
 
 // 64:ff9b::/96 embeds an IPv4 address in its low 32 bits (RFC 6052), so on a
-// NAT64 network it can still reach internal hosts. Check the embedded address.
+// NAT64 network it can still reach internal hosts.
 var nat64WellKnownPrefix = net.IPNet{IP: net.ParseIP("64:ff9b::"), Mask: net.CIDRMask(96, 128)}
 
 func isPublicIP(ip net.IP) bool {

@@ -196,8 +196,8 @@ type roundTripperFunc func(*http.Request) (*http.Response, error)
 
 func (f roundTripperFunc) RoundTrip(r *http.Request) (*http.Response, error) { return f(r) }
 
-// TestNewOCMTransportUsesProxyFromEnvironment is the core regression guard: the
-// outbound transport must be wired to http.ProxyFromEnvironment, not left nil.
+// The trusted transport must keep http.ProxyFromEnvironment: some deployments
+// only reach their peers through a corporate proxy.
 func TestNewOCMTransportUsesProxyFromEnvironment(t *testing.T) {
 	tr := newOCMTransport(false)
 	if tr.Proxy == nil {
@@ -207,6 +207,19 @@ func TestNewOCMTransportUsesProxyFromEnvironment(t *testing.T) {
 	want := reflect.ValueOf(http.ProxyFromEnvironment).Pointer()
 	if got != want {
 		t.Error("transport Proxy must be http.ProxyFromEnvironment")
+	}
+}
+
+// The public-only transport must not proxy, or the dial Control would see the
+// proxy address instead of the target.
+func TestNewPublicOnlyClientTransportProxyNil(t *testing.T) {
+	c := NewPublicOnlyClient(5*time.Second, true)
+	tr, ok := c.client.Transport.(*http.Transport)
+	if !ok {
+		t.Fatal("public-only client must use an *http.Transport")
+	}
+	if tr.Proxy != nil {
+		t.Error("public-only client must not use a proxy")
 	}
 }
 
