@@ -23,6 +23,7 @@ import (
 	"fmt"
 	"regexp"
 
+	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	link "github.com/cs3org/go-cs3apis/cs3/sharing/link/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/cs3org/reva/v3/pkg/appctx"
@@ -163,12 +164,44 @@ func (s *service) CreatePublicShare(ctx context.Context, req *link.CreatePublicS
 	}
 }
 
+// isManager reports whether the user created the link or owns the resource
+// behind it. The sql driver stores creator and owner without an idp, so an
+// empty idp on either side is not counted as a mismatch.
+func isManager(u *userpb.User, share *link.PublicShare) bool {
+	if u.GetId().GetOpaqueId() == "" || share == nil {
+		return false
+	}
+	sameUser := func(other *userpb.UserId) bool {
+		if other.GetOpaqueId() == "" || other.GetOpaqueId() != u.GetId().GetOpaqueId() {
+			return false
+		}
+		return other.GetIdp() == "" || u.GetId().GetIdp() == "" || other.GetIdp() == u.GetId().GetIdp()
+	}
+	return sameUser(share.GetCreator()) || sameUser(share.GetOwner())
+}
+
 func (s *service) RemovePublicShare(ctx context.Context, req *link.RemovePublicShareRequest) (*link.RemovePublicShareResponse, error) {
 	log := appctx.GetLogger(ctx)
 	log.Info().Str("publicshareprovider", "remove").Msg("remove public share")
 
-	user := appctx.ContextMustGetUser(ctx)
-	err := s.sm.RevokePublicShare(ctx, user, req.Ref)
+	user, ok := appctx.ContextGetUser(ctx)
+	if !ok {
+		return &link.RemovePublicShareResponse{
+			Status: status.NewNotFound(ctx, "share not found"),
+		}, nil
+	}
+
+	// a ref proves nothing on its own, fetch the link to see whose it is
+	share, err := s.sm.GetPublicShare(ctx, user, req.Ref, false)
+	if err != nil || !isManager(user, share) {
+		log.Warn().Err(err).Interface("ref", req.Ref).Str("user", user.GetId().GetOpaqueId()).
+			Msg("denied removal of a public share the user does not manage")
+		return &link.RemovePublicShareResponse{
+			Status: status.NewNotFound(ctx, "share not found"),
+		}, nil
+	}
+
+	err = s.sm.RevokePublicShare(ctx, user, req.Ref)
 
 	switch err.(type) {
 	case nil:
@@ -219,12 +252,23 @@ func (s *service) GetPublicShare(ctx context.Context, req *link.GetPublicShareRe
 
 	u, ok := appctx.ContextGetUser(ctx)
 	if !ok {
-		log.Error().Msg("error getting user from context")
+		return &link.GetPublicShareResponse{
+			Status: status.NewNotFound(ctx, "share not found"),
+		}, nil
 	}
 
 	found, err := s.sm.GetPublicShare(ctx, u, req.Ref, req.GetSign())
 	switch err.(type) {
 	case nil:
+		// by id this is a management call, by token it is a visitor resolving the
+		// link they were handed and the token itself is the credential
+		if req.GetRef().GetId() != nil && !isManager(u, found) {
+			log.Warn().Interface("ref", req.Ref).Str("user", u.GetId().GetOpaqueId()).
+				Msg("denied read of a public share the user does not manage")
+			return &link.GetPublicShareResponse{
+				Status: status.NewNotFound(ctx, "share not found"),
+			}, nil
+		}
 		return &link.GetPublicShareResponse{
 			Status: status.NewOK(ctx),
 			Share:  found,
@@ -272,11 +316,16 @@ func (s *service) UpdatePublicShare(ctx context.Context, req *link.UpdatePublicS
 
 	u, ok := appctx.ContextGetUser(ctx)
 	if !ok {
-		log.Error().Msg("error getting user from context")
+		return &link.UpdatePublicShareResponse{
+			Status: status.NewNotFound(ctx, "share not found"),
+		}, nil
 	}
 
-	_, err := s.sm.GetPublicShare(ctx, u, req.Ref, false)
-	if err != nil {
+	// knowing the id or the token is not permission to change password or perms
+	share, err := s.sm.GetPublicShare(ctx, u, req.Ref, false)
+	if err != nil || !isManager(u, share) {
+		log.Warn().Err(err).Interface("ref", req.Ref).Str("user", u.GetId().GetOpaqueId()).
+			Msg("denied update of a public share the user does not manage")
 		return &link.UpdatePublicShareResponse{
 			Status: status.NewNotFound(ctx, "share not found"),
 		}, nil
