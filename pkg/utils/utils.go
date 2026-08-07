@@ -81,25 +81,26 @@ func Skip(source string, prefixes []string) bool {
 	return false
 }
 
-// GetClientIP retrieves the client IP from incoming requests.
-func GetClientIP(r *http.Request) (string, error) {
-	var clientIP string
-	forwarded := r.Header.Get("X-FORWARDED-FOR")
-
-	if forwarded != "" {
-		clientIP = forwarded
-	} else {
-		if ip, _, err := net.SplitHostPort(r.RemoteAddr); err != nil {
-			ipObj := net.ParseIP(r.RemoteAddr)
-			if ipObj == nil {
-				return "", err
+// GetClientIP retrieves the client IP from incoming requests. X-Forwarded-For is
+// only read when trustForwardedFor is set, since the caller can forge it; the last
+// hop is the one a trusted proxy appended, the rest can be made up.
+func GetClientIP(r *http.Request, trustForwardedFor bool) (string, error) {
+	if trustForwardedFor {
+		if forwarded := r.Header.Get("X-Forwarded-For"); forwarded != "" {
+			hops := strings.Split(forwarded, ",")
+			if peer := strings.TrimSpace(hops[len(hops)-1]); peer != "" {
+				return peer, nil
 			}
-			clientIP = ipObj.String()
-		} else {
-			clientIP = ip
 		}
 	}
-	return clientIP, nil
+
+	if ip, _, err := net.SplitHostPort(r.RemoteAddr); err == nil {
+		return ip, nil
+	}
+	if ipObj := net.ParseIP(r.RemoteAddr); ipObj != nil {
+		return ipObj.String(), nil
+	}
+	return "", errors.New("could not determine the client IP of " + r.RemoteAddr)
 }
 
 // ToSnakeCase converts a CamelCase string to a snake_case string.
