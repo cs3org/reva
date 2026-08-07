@@ -36,12 +36,15 @@ import (
 	"google.golang.org/grpc"
 )
 
-// fakeStore is an in-memory ShareStore recording which shares were marked.
+// fakeStore is an in-memory ShareStore recording which shares were marked and
+// which were removed.
 type fakeStore struct {
-	shares  []model.Share
-	marked  []string
-	listErr error
-	markErr error
+	shares     []model.Share
+	marked     []string
+	unshared   []string
+	listErr    error
+	markErr    error
+	unshareErr error
 }
 
 func (f *fakeStore) ListModelShares(u *userpb.User, filters []*collaboration.Filter, hideOrphans bool) ([]model.Share, error) {
@@ -65,6 +68,14 @@ func (f *fakeStore) MarkAsOrphaned(ctx context.Context, ref *collaboration.Share
 		return f.markErr
 	}
 	f.marked = append(f.marked, ref.GetId().GetOpaqueId())
+	return nil
+}
+
+func (f *fakeStore) Unshare(ctx context.Context, ref *collaboration.ShareReference) error {
+	if f.unshareErr != nil {
+		return f.unshareErr
+	}
+	f.unshared = append(f.unshared, ref.GetId().GetOpaqueId())
 	return nil
 }
 

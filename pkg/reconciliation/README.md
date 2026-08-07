@@ -55,8 +55,15 @@ it escalates beyond every share above it, per recipient and per space. A share
 that grants exactly what an ancestor grants is inherited and counted `covered`.
 One that grants anything else is a share the check would not have created, and
 writing its entry would take away access the ancestor grants, so it is counted
-`conflicting` and logged as `reconciliation.shallow.skip` with
-`reason=shadowed-by-ancestor` and the ancestor's id, path and role.
+`conflicting`.
+
+Neither of them gets an entry, and neither is worth keeping: creating the
+ancestor share is what deletes such a share on the share API, so the job removes
+them too, logged as `reconciliation.shallow.remove` with `reason` (`inherited`
+or `shadowed-by-ancestor`) and the ancestor's id, path and role. The row is soft
+deleted, so a removal can be undone in the database. Removals are done after the
+grants are written, so a recipient never loses the row before the entry it is
+covered by is on the storage.
 
 ## Logs
 
@@ -76,8 +83,9 @@ have to be told apart from the other's by hand.
 | `reconciliation.orphans.end`      | run totals                                     |
 | `reconciliation.shallow.start`    | run started                                    |
 | `reconciliation.shallow.grant`    | grant written to a path (or would be, dry-run) |
-| `reconciliation.shallow.skip`     | share left untouched, see `reason`             |
-| `reconciliation.shallow.fail`     | grant was needed but the write failed          |
+| `reconciliation.shallow.remove`   | redundant share removed (or would be, dry-run) |
+| `reconciliation.shallow.skip`     | share left untouched, a lookup failed          |
+| `reconciliation.shallow.fail`     | a grant or a removal was needed but failed     |
 | `reconciliation.shallow.end`      | run totals                                     |
 
 Every line also carries `job` and `run`, a uuid identifying the run, so the two
@@ -91,3 +99,8 @@ with `kind` and `id`.
 `path`, `storage_id`, `opaque_id`, `grantee`, `grantee_type`, `observed`,
 `expected`, `dry_run`. Revert with `grantee` and `observed`; an empty `observed`
 means the entry was added and has to be removed.
+
+`reconciliation.shallow.remove` carries `share`, `path`, `storage_id`,
+`opaque_id`, `grantee`, `grantee_type`, `level`, `reason`, `ancestor`,
+`ancestor_path`, `ancestor_role`, `dry_run`. Revert by clearing `deleted_at` on
+the row with id `share`.

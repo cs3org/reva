@@ -343,7 +343,7 @@ func TestShallowEscalatingChildIsWritten(t *testing.T) {
 }
 
 // TestShallowWeakerChildIsNotWritten asserts that a share granting less than a
-// share on a path above it is left alone. Its entry would override the one
+// share on a path above it gets no entry. Its entry would override the one
 // inherited from the parent and take away access the parent share grants, so
 // enforcing it would break the parent share.
 func TestShallowWeakerChildIsNotWritten(t *testing.T) {
@@ -373,8 +373,8 @@ func TestShallowWeakerChildIsNotWritten(t *testing.T) {
 }
 
 // TestShallowChildUnderDenyIsNotWritten asserts that a share below a denying
-// share is left alone. Writing its entry would hand back the access the deny
-// takes away.
+// share gets no entry. Writing it would hand back the access the deny takes
+// away.
 func TestShallowChildUnderDenyIsNotWritten(t *testing.T) {
 	store := &fakeStore{shares: []model.Share{
 		shared(40, "space-a", "inode-parent", "jdoe", false, ocsDeny),
@@ -398,6 +398,175 @@ func TestShallowChildUnderDenyIsNotWritten(t *testing.T) {
 	}
 	if len(grants.writes) != 1 || grants.writes[0].node != "eosuser/inode-parent" {
 		t.Errorf("writes = %+v, want only the deny on the parent", grants.writes)
+	}
+}
+
+// TestShallowRemovesInheritedChildShare asserts that a share granting exactly
+// what a share above it already grants the same recipient is removed: creating
+// the share above would have deleted it, so keeping it around only makes the
+// database disagree with the storage.
+func TestShallowRemovesInheritedChildShare(t *testing.T) {
+	store := &fakeStore{shares: []model.Share{
+		shared(60, "space-a", "inode-parent", "jdoe", false, ocsRead),
+		shared(61, "space-a", "inode-child", "jdoe", false, ocsRead),
+	}}
+	gw := &fakeGateway{
+		users: map[string]bool{"jdoe": true},
+		paths: map[string]string{
+			"eosuser/inode-parent": "/eos/user/a/alice/dir",
+			"eosuser/inode-child":  "/eos/user/a/alice/dir/sub",
+		},
+	}
+	grants := &fakeGrants{}
+
+	report, err := shallowJob(store, gw, grants).Run(context.Background())
+	if err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	if len(report.Removed) != 1 {
+		t.Fatalf("removed = %+v, want the child share", report.Removed)
+	}
+	got := report.Removed[0]
+	if got.ShareID != "61" || got.Reason != ReasonInherited || got.AncestorID != "60" {
+		t.Errorf("removed = %+v, want share 61 inherited from 60", got)
+	}
+	if len(store.unshared) != 1 || store.unshared[0] != "61" {
+		t.Errorf("unshared = %v, want [61]", store.unshared)
+	}
+}
+
+// TestShallowRemovesWeakerChildShare asserts that a share granting less than a
+// share above it is removed too. Its entry is never written, since writing it
+// would take away access the ancestor grants, so the row is a share the
+// hierarchy check would never have allowed to exist.
+func TestShallowRemovesWeakerChildShare(t *testing.T) {
+	store := &fakeStore{shares: []model.Share{
+		shared(62, "space-a", "inode-parent", "jdoe", false, ocsWrite),
+		shared(63, "space-a", "inode-child", "jdoe", false, ocsRead),
+	}}
+	gw := &fakeGateway{
+		users: map[string]bool{"jdoe": true},
+		paths: map[string]string{
+			"eosuser/inode-parent": "/eos/user/a/alice/dir",
+			"eosuser/inode-child":  "/eos/user/a/alice/dir/sub",
+		},
+	}
+	grants := &fakeGrants{}
+
+	report, err := shallowJob(store, gw, grants).Run(context.Background())
+	if err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	if len(report.Removed) != 1 || report.Removed[0].ShareID != "63" ||
+		report.Removed[0].Reason != ReasonShadowedByAncestor {
+		t.Fatalf("removed = %+v, want share 63 shadowed by an ancestor", report.Removed)
+	}
+	if len(store.unshared) != 1 || store.unshared[0] != "63" {
+		t.Errorf("unshared = %v, want [63]", store.unshared)
+	}
+}
+
+// TestShallowKeepsEscalatingChildShare asserts that a share granting more than
+// the one above it is kept: it is the only thing giving its recipient that
+// access, so removing it would silently downgrade them.
+func TestShallowKeepsEscalatingChildShare(t *testing.T) {
+	store := &fakeStore{shares: []model.Share{
+		shared(64, "space-a", "inode-parent", "jdoe", false, ocsRead),
+		shared(65, "space-a", "inode-child", "jdoe", false, ocsWrite),
+	}}
+	gw := &fakeGateway{
+		users: map[string]bool{"jdoe": true},
+		paths: map[string]string{
+			"eosuser/inode-parent": "/eos/user/a/alice/dir",
+			"eosuser/inode-child":  "/eos/user/a/alice/dir/sub",
+		},
+	}
+	grants := &fakeGrants{}
+
+	report, err := shallowJob(store, gw, grants).Run(context.Background())
+	if err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	if len(report.Removed) != 0 || len(store.unshared) != 0 {
+		t.Fatalf("removed = %+v / unshared = %v, want neither", report.Removed, store.unshared)
+	}
+}
+
+// TestShallowUnresolvedShareIsNotRemoved asserts that a share whose path cannot
+// be resolved is never removed: it takes a named ancestor to make a share
+// redundant, and a share nothing could be compared against is not one.
+func TestShallowUnresolvedShareIsNotRemoved(t *testing.T) {
+	store := &fakeStore{shares: []model.Share{
+		shared(66, "space-a", "inode-66", "jdoe", false, ocsRead),
+	}}
+	gw := &fakeGateway{users: map[string]bool{"jdoe": true}} // no path resolves
+	grants := &fakeGrants{}
+
+	report, err := shallowJob(store, gw, grants).Run(context.Background())
+	if err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	if report.Skipped != 1 || len(report.Removed) != 0 || len(store.unshared) != 0 {
+		t.Fatalf("report = %+v / unshared = %v, want 1 skipped and nothing removed", report, store.unshared)
+	}
+}
+
+// TestShallowDryRunDoesNotRemove asserts that a dry run reports the removals it
+// would make without touching the database.
+func TestShallowDryRunDoesNotRemove(t *testing.T) {
+	store := &fakeStore{shares: []model.Share{
+		shared(67, "space-a", "inode-parent", "jdoe", false, ocsRead),
+		shared(68, "space-a", "inode-child", "jdoe", false, ocsRead),
+	}}
+	gw := &fakeGateway{
+		users: map[string]bool{"jdoe": true},
+		paths: map[string]string{
+			"eosuser/inode-parent": "/eos/user/a/alice/dir",
+			"eosuser/inode-child":  "/eos/user/a/alice/dir/sub",
+		},
+	}
+	grants := &fakeGrants{}
+
+	job := shallowJob(store, gw, grants)
+	job.DryRun = true
+	report, err := job.Run(context.Background())
+	if err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	if len(report.Removed) != 1 || report.Removed[0].ShareID != "68" {
+		t.Fatalf("removed = %+v, want the child share reported", report.Removed)
+	}
+	if len(store.unshared) != 0 {
+		t.Errorf("dry_run removed %v, want nothing", store.unshared)
+	}
+}
+
+// TestShallowRemoveErrorIsNotReportedAsRemoved asserts that a share whose
+// removal fails is counted failed and left out of the report, so the log never
+// claims a row is gone that is still there.
+func TestShallowRemoveErrorIsNotReportedAsRemoved(t *testing.T) {
+	store := &fakeStore{
+		shares: []model.Share{
+			shared(69, "space-a", "inode-parent", "jdoe", false, ocsRead),
+			shared(70, "space-a", "inode-child", "jdoe", false, ocsRead),
+		},
+		unshareErr: errors.New("database is down"),
+	}
+	gw := &fakeGateway{
+		users: map[string]bool{"jdoe": true},
+		paths: map[string]string{
+			"eosuser/inode-parent": "/eos/user/a/alice/dir",
+			"eosuser/inode-child":  "/eos/user/a/alice/dir/sub",
+		},
+	}
+	grants := &fakeGrants{}
+
+	report, err := shallowJob(store, gw, grants).Run(context.Background())
+	if err != nil {
+		t.Fatalf("Run must not fail on a per-share removal error: %v", err)
+	}
+	if report.Failed != 1 || len(report.Removed) != 0 {
+		t.Fatalf("report = %+v, want 1 failed and nothing removed", report)
 	}
 }
 
