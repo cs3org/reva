@@ -50,11 +50,15 @@ const (
 	// dry-run, one that would have been. It carries the permissions found and
 	// the ones written, so the change can be undone.
 	EventShallowGrant = ShallowJobName + ".grant"
-	// EventShallowSkip reports one share left untouched, either because a
-	// lookup failed or because an ancestor share shadows it.
+	// EventShallowRemove reports one redundant share removed from the database,
+	// or, in dry-run, one that would have been. It carries the share and the
+	// ancestor that made it redundant, so the removal can be undone.
+	EventShallowRemove = ShallowJobName + ".remove"
+	// EventShallowSkip reports one share left untouched because a lookup
+	// failed.
 	EventShallowSkip = ShallowJobName + ".skip"
-	// EventShallowFail reports one grant that had to be written but could not
-	// be.
+	// EventShallowFail reports one change, a grant or a removal, that had to be
+	// made but could not be.
 	EventShallowFail = ShallowJobName + ".fail"
 	// EventShallowEnd closes a run with its totals.
 	EventShallowEnd = ShallowJobName + ".end"
@@ -64,6 +68,9 @@ const (
 // needs. The grant calls are not part of the gateway API, so the job addresses
 // the provider that hosts the resource directly, the way the gateway does
 // internally; provider.ProviderAPIClient satisfies it.
+//
+// RemoveGrant is deliberately not on it: the job has no way to remove an ACL
+// entry, whatever it finds.
 type GrantStore interface {
 	ListGrants(ctx context.Context, in *provider.ListGrantsRequest, opts ...grpc.CallOption) (*provider.ListGrantsResponse, error)
 	AddGrant(ctx context.Context, in *provider.AddGrantRequest, opts ...grpc.CallOption) (*provider.AddGrantResponse, error)
@@ -77,10 +84,16 @@ type GrantStore interface {
 // sweep.
 //
 // It only ever adds a missing grant or corrects a wrong one. It never removes
-// anything: an entry no share accounts for may still be a default ACL or an
+// an entry: an entry no share accounts for may still be a default ACL or an
 // entry set outside CERNBox, and telling those apart needs the whole namespace.
 // Which entries have to exist at all is decided by sharehierarchy, so nesting
 // is handled by the same code that handles it when a share is created.
+//
+// A share the check finds no entry for because a share above it already grants
+// its recipient at least as much is removed from the database, which is what
+// creating that share above would have done to it. What goes is the share, and
+// only the share: the ACLs on its path are left exactly as they are found. The
+// row is soft deleted, so the removal can be undone.
 type ShallowJob struct {
 	// Shares is the share store to reconcile.
 	Shares ShareStore
@@ -154,6 +167,45 @@ type WrittenGrant struct {
 	Expected string
 }
 
+// RedundantReason says why a share needed no entry of its own, and so why it
+// was removed.
+type RedundantReason string
+
+const (
+	// ReasonInherited means an ancestor share grants the same recipient exactly
+	// the same access, so the share adds nothing to what is inherited.
+	ReasonInherited RedundantReason = "inherited"
+	// ReasonShadowedByAncestor means an ancestor share grants the same
+	// recipient more, so the share cannot take effect: its entry would take
+	// away access the ancestor grants.
+	ReasonShadowedByAncestor RedundantReason = "shadowed-by-ancestor"
+)
+
+// RemovedShare records one redundant share the job removed, or, in dry-run,
+// would have.
+type RemovedShare struct {
+	// ShareID is the CS3 opaque id of the removed share.
+	ShareID string
+	// Path is the path it was on.
+	Path string
+	// ResourceID is the node it was on.
+	ResourceID *provider.ResourceId
+	// Grantee is the recipient: a username, a group name or an external id.
+	Grantee string
+	// GranteeType is what the recipient is, "user" or "group".
+	GranteeType string
+	// Level is the permission level the removed share granted.
+	Level string
+	// Reason is why the share was redundant.
+	Reason RedundantReason
+	// AncestorID is the share above it that made it redundant.
+	AncestorID string
+	// AncestorPath is the path that share is on.
+	AncestorPath string
+	// AncestorRole is the role that share grants.
+	AncestorRole string
+}
+
 // ShallowReport summarises a run.
 type ShallowReport struct {
 	// RunID identifies the run. Every log line it wrote carries it under "run".
@@ -164,15 +216,20 @@ type ShallowReport struct {
 	// an ancestor share already grants the same access.
 	Covered int
 	// Conflicting is the number of shares that grant less than a share on a
-	// path above them. The hierarchy check refuses to create those, so they are
-	// left alone rather than enforced.
+	// path above them. The hierarchy check refuses to create those, so their
+	// entry is never enforced.
 	Conflicting int
 	// Skipped is the number of shares left alone because a lookup failed.
 	Skipped int
-	// Failed is the number of grants that had to be written but could not be.
+	// Failed is the number of changes, a grant or a removal, that had to be
+	// made but could not be.
 	Failed int
 	// Written lists the grants written (or, in dry-run, that would be written).
 	Written []WrittenGrant
+	// Removed lists the redundant shares removed (or, in dry-run, that would be
+	// removed). Every share counted covered or conflicting is on it, unless its
+	// removal failed.
+	Removed []RemovedShare
 	// DryRun reports whether the run was a simulation.
 	DryRun bool
 }
@@ -271,6 +328,7 @@ func (j *ShallowJob) Run(ctx context.Context) (ShallowReport, error) {
 	// required comes out with parents before children: the storage is never
 	// left granting more below a path than on it.
 	var required []sharehierarchy.ResolvedShare
+	var redundant []RemovedShare
 	for _, key := range order {
 		group := groups[key]
 		sharehierarchy.SortDepthFirst(group)
@@ -297,7 +355,9 @@ func (j *ShallowJob) Run(ctx context.Context) (ShallowReport, error) {
 			// weaker and take away access that ancestor grants.
 			_, err := checker.CheckGrantConsistency(ctx, rs.Path, rs.Share.GetPermissions().GetPermissions(), nearest)
 			if err != nil {
-				j.reportShadowed(log, &report, rs, traces[rs.Share.GetId().GetOpaqueId()], err)
+				if r, ok := j.shadowed(log, &report, rs, traces[rs.Share.GetId().GetOpaqueId()], err); ok {
+					redundant = append(redundant, r)
+				}
 				continue
 			}
 			required = append(required, rs)
@@ -383,6 +443,48 @@ func (j *ShallowJob) Run(ctx context.Context) (ShallowReport, error) {
 			Msg("reconciliation: grant written")
 	}
 
+	// the removals go last, so the entry a share is removed in favour of is on
+	// the storage before its row is gone, the order the share API removes a
+	// redundant share in.
+	for _, r := range redundant {
+		traceID := traces[r.ShareID]
+		if !j.DryRun {
+			ref := &collaboration.ShareReference{
+				Spec: &collaboration.ShareReference_Id{Id: &collaboration.ShareId{OpaqueId: r.ShareID}},
+			}
+			if err := j.Shares.Unshare(trace.Set(ctx, traceID), ref); err != nil {
+				report.Failed++
+				log.Error().Err(err).
+					Str("event", EventShallowFail).
+					Str("share", r.ShareID).
+					Str("path", r.Path).
+					Str("grantee", r.Grantee).
+					Str("grantee_type", r.GranteeType).
+					Str("traceid", traceID).
+					Msg("reconciliation: removing the redundant share failed")
+				continue
+			}
+		}
+
+		report.Removed = append(report.Removed, r)
+		log.Info().
+			Str("event", EventShallowRemove).
+			Str("share", r.ShareID).
+			Str("path", r.Path).
+			Str("storage_id", r.ResourceID.GetStorageId()).
+			Str("opaque_id", r.ResourceID.GetOpaqueId()).
+			Str("grantee", r.Grantee).
+			Str("grantee_type", r.GranteeType).
+			Str("level", r.Level).
+			Str("reason", string(r.Reason)).
+			Str("ancestor", r.AncestorID).
+			Str("ancestor_path", r.AncestorPath).
+			Str("ancestor_role", r.AncestorRole).
+			Bool("dry_run", j.DryRun).
+			Str("traceid", traceID).
+			Msg("reconciliation: redundant share removed")
+	}
+
 	log.Info().
 		Str("event", EventShallowEnd).
 		Bool("dry_run", j.DryRun).
@@ -390,6 +492,7 @@ func (j *ShallowJob) Run(ctx context.Context) (ShallowReport, error) {
 		Int("covered", report.Covered).
 		Int("conflicting", report.Conflicting).
 		Int("written", len(report.Written)).
+		Int("removed", len(report.Removed)).
 		Int("skipped", report.Skipped).
 		Int("failed", report.Failed).
 		Msg("reconciliation: run finished")
@@ -397,11 +500,17 @@ func (j *ShallowJob) Run(ctx context.Context) (ShallowReport, error) {
 	return report, nil
 }
 
-// reportShadowed counts and logs a share that gets no entry of its own because
-// a share above it shadows it. Shadowed means the share above grants the same
-// recipient the same permissions, so the entry is inherited; anything else
-// means the database holds a share the hierarchy check would have rejected.
-func (j *ShallowJob) reportShadowed(log *zerolog.Logger, report *ShallowReport, rs sharehierarchy.ResolvedShare, traceID string, err error) {
+// shadowed counts a share that gets no entry of its own because a share above
+// it shadows it, and returns the removal that calls for. Inherited means the
+// share above grants the same recipient the same permissions, so the entry is
+// already there; anything else means the database holds a share the hierarchy
+// check would have rejected. Either way the share is one that creating the
+// share above it would have deleted, so it is removed rather than carried
+// along.
+//
+// The second result is false when the check failed for any other reason, which
+// leaves the share alone: only a named ancestor makes a share redundant.
+func (j *ShallowJob) shadowed(log *zerolog.Logger, report *ShallowReport, rs sharehierarchy.ResolvedShare, traceID string, err error) (RemovedShare, bool) {
 	level := sharehierarchy.PermLevelFromCS3(rs.Share.GetPermissions().GetPermissions())
 	sharee, granteeType := sharehierarchy.ShareeInfo(rs.Share.GetGrantee())
 
@@ -414,37 +523,30 @@ func (j *ShallowJob) reportShadowed(log *zerolog.Logger, report *ShallowReport, 
 			Str("path", rs.Path).
 			Str("traceid", traceID).
 			Msg("reconciliation: hierarchy check failed, share left untouched")
-		return
+		return RemovedShare{}, false
 	}
 
 	ancestor := conflict.ConflictingShares[0]
+	reason := ReasonShadowedByAncestor
 	if ancestor.PermissionType == level.RoleID() {
+		reason = ReasonInherited
 		report.Covered++
-		log.Debug().
-			Str("share", rs.Share.GetId().GetOpaqueId()).
-			Str("path", rs.Path).
-			Str("grantee", sharee).
-			Str("grantee_type", granteeType).
-			Str("ancestor", ancestor.ID).
-			Str("traceid", traceID).
-			Msg("reconciliation: entry is inherited from an ancestor share")
-		return
+	} else {
+		report.Conflicting++
 	}
 
-	report.Conflicting++
-	log.Warn().
-		Str("event", EventShallowSkip).
-		Str("reason", "shadowed-by-ancestor").
-		Str("share", rs.Share.GetId().GetOpaqueId()).
-		Str("path", rs.Path).
-		Str("grantee", sharee).
-		Str("grantee_type", granteeType).
-		Str("level", level.String()).
-		Str("ancestor", ancestor.ID).
-		Str("ancestor_path", ancestor.Path).
-		Str("ancestor_role", ancestor.PermissionType).
-		Str("traceid", traceID).
-		Msg("reconciliation: " + conflict.Message)
+	return RemovedShare{
+		ShareID:      rs.Share.GetId().GetOpaqueId(),
+		Path:         rs.Path,
+		ResourceID:   rs.Share.GetResourceId(),
+		Grantee:      sharee,
+		GranteeType:  granteeType,
+		Level:        level.String(),
+		Reason:       reason,
+		AncestorID:   ancestor.ID,
+		AncestorPath: ancestor.Path,
+		AncestorRole: ancestor.PermissionType,
+	}, true
 }
 
 // gateway returns the client the run resolves paths and recipients with: the

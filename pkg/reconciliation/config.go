@@ -17,18 +17,17 @@
 // or submit itself to any jurisdiction.
 
 // Package reconciliation reconciles the share database against the state of the
-// storage. It holds two jobs: orphan detection, which marks the shares and
-// public links whose resource or recipient is gone, and the shallow check,
-// which repairs the ACLs on the paths that carry a share. The engine is
-// storage-driver agnostic: it reads shares from the database and resolves
-// resources, identities and providers through the gateway (CS3).
+// storage. For now it holds a single job, orphan detection, which marks shares
+// and public links whose resource or recipient no longer exists. It is
+// storage-driver agnostic: it reads from the database and resolves resources
+// and identities through the gateway (CS3).
 //
 // Every line a job logs carries an "event" naming what happened, so a run can
 // be replayed or reverted by filtering on it rather than by parsing free-form
 // messages. An event is the job's own name followed by the step: every job has
 // start, skip, fail and end, plus one event for the change it makes. Each line
-// also carries "job" and "run", the uuid of the run it belongs to, so the two
-// jobs stay apart even when they log to the same file.
+// also carries "job" and "run", the uuid of the run it belongs to, so jobs stay
+// apart even when they log to the same file.
 package reconciliation
 
 import (
@@ -38,14 +37,14 @@ import (
 	"github.com/rs/zerolog"
 )
 
-// Config configures one reconciliation job. Both jobs take the same knobs and
+// Config configures one reconciliation job. Every job takes the same knobs and
 // each is decoded from its own configuration section, so one can be scheduled,
-// dry-run and logged without touching the other.
+// dry-run and logged without touching the others.
 type Config struct {
 	// Schedule is the interval the job runs on, e.g. "@daily".
 	Schedule string `mapstructure:"schedule"`
-	// DryRun, when set, makes the job compute and report what it would change
-	// without applying any of it.
+	// DryRun, when set, makes the job log and report what it would do without
+	// touching the share database.
 	DryRun bool `mapstructure:"dry_run"`
 	// RunOnStart fires the job once as soon as the runner starts, instead of
 	// waiting a full interval for the first run.
