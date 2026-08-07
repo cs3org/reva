@@ -253,7 +253,7 @@ func (d *driver) CreateDir(ctx context.Context, ref *provider.Reference) (*stora
 }
 
 func (d *driver) Delete(ctx context.Context, ref *provider.Reference) (*storage.DeleteResult, error) {
-	client, _, rel, err := d.webdavClient(ctx, nil, ref)
+	client, _, rel, err := d.serviceWebdavClient(ctx, ref)
 	if err != nil {
 		return nil, err
 	}
@@ -264,14 +264,24 @@ func (d *driver) Delete(ctx context.Context, ref *provider.Reference) (*storage.
 }
 
 func (d *driver) TouchFile(ctx context.Context, ref *provider.Reference, markprocessing bool, mtime string) (*storage.TouchFileResult, error) {
-	client, _, rel, err := d.webdavClient(ctx, nil, ref)
+	client, _, rel, err := d.serviceWebdavClient(ctx, ref)
 	if err != nil {
 		return nil, err
 	}
 	if err := client.Write(rel, []byte{}, 0); err != nil {
 		return nil, err
 	}
-	return &storage.TouchFileResult{}, nil
+	// callers address the touched file by the ids returned here, so encode them the
+	// same way a stat does (convertStatToResourceInfo)
+	shareID, _ := shareInfoFromReference(ref)
+	return &storage.TouchFileResult{
+		SpaceID: shareID.GetOpaqueId(),
+		ResourceID: &provider.ResourceId{
+			StorageId: utils.OCMStorageProviderID,
+			SpaceId:   shareID.GetOpaqueId(),
+			OpaqueId:  base64.StdEncoding.EncodeToString([]byte(filepath.Join("/", rel))),
+		},
+	}, nil
 }
 
 func (d *driver) Move(ctx context.Context, oldRef, newRef *provider.Reference) (*storage.MoveResult, error) {
