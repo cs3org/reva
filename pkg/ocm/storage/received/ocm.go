@@ -357,6 +357,36 @@ func convertStatToResourceInfo(ref *provider.Reference, f fs.FileInfo, share *oc
 	return &ri, nil
 }
 
+// extractLock returns the active lock, or nil if there is none. Props.GetString
+// renders a missing key as "<nil>", so require a parseable activelock with a token.
+func extractLock(props gowebdav.Props) *provider.Lock {
+	raw := props.GetString(xml.Name{Space: "DAV:", Local: "lockdiscovery"})
+
+	// local names only: raw is innerxml, so the d: prefix is unbound and
+	// namespaced tags ("DAV: lockscope") would match nothing.
+	var al struct {
+		LockScope struct {
+			Exclusive *struct{} `xml:"exclusive"`
+			Shared    *struct{} `xml:"shared"`
+		} `xml:"lockscope"`
+		LockToken struct {
+			Href string `xml:"href"`
+		} `xml:"locktoken"`
+	}
+	if err := xml.Unmarshal([]byte(raw), &al); err != nil {
+		return nil
+	}
+	if al.LockToken.Href == "" {
+		return nil
+	}
+
+	lockType := provider.LockType_LOCK_TYPE_EXCL
+	if al.LockScope.Shared != nil && al.LockScope.Exclusive == nil {
+		lockType = provider.LockType_LOCK_TYPE_SHARED
+	}
+	return &provider.Lock{LockId: al.LockToken.Href, Type: lockType}
+}
+
 func extractChecksum(props gowebdav.Props) *provider.ResourceChecksum {
 	checksums := props.GetString(xml.Name{Space: "http://owncloud.org/ns", Local: "checksums"})
 	if checksums == "" {
@@ -544,12 +574,24 @@ func (d *driver) GetLock(ctx context.Context, ref *provider.Reference) (*provide
 		return nil, err
 	}
 
-	token, err := client.GetLock(rel)
+	// gowebdav's GetLock stats with a fixed property set that omits lockdiscovery.
+	// getetag keeps the 200 propstat non-empty — unlocked resources report
+	// lockdiscovery in a 404 propstat, which gowebdav discards.
+	info, err := client.StatWithProps(rel, []string{"lockdiscovery", "getetag"})
 	if err != nil {
 		return nil, err
 	}
 
-	return &provider.Lock{LockId: token, Type: provider.LockType_LOCK_TYPE_EXCL}, nil
+	props, ok := info.Sys().(gowebdav.Props)
+	if !ok {
+		return nil, errtypes.InternalError("ocm: unexpected stat result for " + ref.GetPath())
+	}
+
+	lock := extractLock(props)
+	if lock == nil {
+		return nil, errtypes.NotFound("no lock found")
+	}
+	return lock, nil
 }
 
 func (d *driver) RefreshLock(ctx context.Context, ref *provider.Reference, lock *provider.Lock, existingLockID string) error {
