@@ -80,7 +80,7 @@ const (
 	ReasonRecipientMissing OrphanReason = "recipient-missing"
 )
 
-// ShareStore is the subset of the share manager the orphan job needs.
+// ShareStore is the subset of the share manager the jobs need.
 // *sql.ShareMgr satisfies it.
 type ShareStore interface {
 	// ListModelShares returns the shares matching the filters. Pass a nil user
@@ -89,6 +89,9 @@ type ShareStore interface {
 	ListModelShares(u *userpb.User, filters []*collaboration.Filter, hideOrphans bool) ([]model.Share, error)
 	// MarkAsOrphaned flags the referenced share as orphaned.
 	MarkAsOrphaned(ctx context.Context, ref *collaboration.ShareReference) error
+	// Unshare removes the referenced share. The row is soft deleted, so a
+	// removal can be undone in the database.
+	Unshare(ctx context.Context, ref *collaboration.ShareReference) error
 }
 
 // PublicLinkStore is the subset of the public share manager the orphan job

@@ -21,7 +21,9 @@ import (
 
 // If the passed error matches any of the valid errors
 // we get for NotFound (io.EOF, NotFound, ENOENT), then
-// it is mapped to errtypes.NotFound. Otherwise, we return
+// it is mapped to errtypes.NotFound. A PERMISSION_DENIED is
+// a refusal rather than an absence, so it is mapped to
+// errtypes.PermissionDenied. Otherwise, we return
 // the input error again as-is.
 func possiblyCastToNotFound(err error, target string) error {
 	if errors.Is(err, io.EOF) {
@@ -31,6 +33,8 @@ func possiblyCastToNotFound(err error, target string) error {
 		switch st.Code() {
 		case codes.NotFound, codes.Code(syscall.ENOENT):
 			return errtypes.NotFound(target)
+		case codes.PermissionDenied:
+			return errtypes.PermissionDenied(target)
 		}
 	}
 	return err
