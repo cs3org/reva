@@ -46,6 +46,12 @@ type config struct {
 	// provider domain. A match activates auto-registration of the share's remote users
 	// for all OCM share types (embedded shares are always auto-registered).
 	AutoAcceptProviders []string `mapstructure:"auto_accept_providers"`
+	// TrustForwardedFor reads the sender IP from X-Forwarded-For. Enable it only
+	// behind a reverse proxy that sets the header, else peers can spoof it.
+	TrustForwardedFor bool `mapstructure:"trust_forwarded_for"`
+	// OCMClientInsecure skips TLS verification when probing a remote provider's
+	// discovery endpoint. Off by default; turning it on exposes discovery to MITM.
+	OCMClientInsecure bool `mapstructure:"ocm_client_insecure"`
 }
 
 func (c *config) ApplyDefaults() {

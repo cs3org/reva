@@ -25,9 +25,11 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"net/url"
 	"strings"
+	"syscall"
 	"time"
 
 	"github.com/cs3org/reva/v3/internal/http/services/wellknown"
@@ -81,6 +83,57 @@ func NewClient(timeout time.Duration, insecure bool) *OCMClient {
 			Timeout:   timeout,
 		},
 	}
+}
+
+// NewPublicOnlyClient returns an OCMClient that only dials public addresses, for
+// discovery of hosts named by an untrusted caller. The check is in the dialer so
+// it also covers redirects and DNS rebinding.
+func NewPublicOnlyClient(timeout time.Duration, insecure bool) *OCMClient {
+	tr := newOCMTransport(insecure)
+	tr.DialContext = (&net.Dialer{
+		Timeout:   timeout,
+		KeepAlive: 30 * time.Second,
+		Control:   refuseNonPublicAddr,
+	}).DialContext
+	return &OCMClient{
+		client: &http.Client{
+			Transport: tr,
+			Timeout:   timeout,
+		},
+	}
+}
+
+func refuseNonPublicAddr(_, address string, _ syscall.RawConn) error {
+	host, _, err := net.SplitHostPort(address)
+	if err != nil {
+		return err
+	}
+	ip := net.ParseIP(host)
+	if ip == nil || !isPublicIP(ip) {
+		return errtypes.BadRequest("refusing to connect to non-public address " + address)
+	}
+	return nil
+}
+
+// 64:ff9b::/96 embeds an IPv4 address in its low 32 bits (RFC 6052), so on a
+// NAT64 network it can still reach internal hosts. Check the embedded address.
+var nat64WellKnownPrefix = net.IPNet{IP: net.ParseIP("64:ff9b::"), Mask: net.CIDRMask(96, 128)}
+
+func isPublicIP(ip net.IP) bool {
+	if nat64WellKnownPrefix.Contains(ip) {
+		v6 := ip.To16()
+		return isPublicIP(net.IPv4(v6[12], v6[13], v6[14], v6[15]))
+	}
+	if ip.IsLoopback() || ip.IsPrivate() || ip.IsUnspecified() ||
+		ip.IsLinkLocalUnicast() || ip.IsLinkLocalMulticast() ||
+		ip.IsMulticast() || ip.IsInterfaceLocalMulticast() {
+		return false
+	}
+	// 100.64.0.0/10 is carrier-grade NAT, which net.IP.IsPrivate does not cover
+	if ip4 := ip.To4(); ip4 != nil && ip4[0] == 100 && ip4[1]&0xc0 == 64 {
+		return false
+	}
+	return true
 }
 
 // Discover returns a number of properties used to discover the capabilities offered by a remote cloud storage.
