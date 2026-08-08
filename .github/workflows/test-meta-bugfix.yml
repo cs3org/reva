@@ -1,0 +1,53 @@
+name: test-reva-cli
+on:
+  pull_request:
+    paths-ignore:
+      - "docs/**"
+      - "*.md"
+  push:
+    branches:
+      - "*"
+  workflow_dispatch:
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Setup Go environment
+        uses: actions/setup-go@v4
+        with:
+          go-version-file: go.mod
+          cache: false
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "18"
+      - name: Install judo
+        run: npm install -g @intuit/judo
+      - name: Build reva
+        run: make reva
+      - name: Build revad
+        run: make revad
+      - name: Create storage directory
+        run: mkdir -p tmp/revalocalstorage/data tmp/revalocalstorage/shares
+      - name: Create users.json
+        run: cp tests/integration/reva-cli/config/users.json tmp/users.json
+      - name: Create groups.json
+        run: cp tests/integration/reva-cli/config/groups.json tmp/groups.json
+      - name: Start revad
+        run: |
+          ./cmd/revad/revad -c tests/integration/reva-cli/config/revad-localfs.toml &
+          echo $! > revad.pid
+          sleep 2
+      - name: Run reva CLI tests
+        run: make test-reva-cli
+      - name: Stop revad
+        run: |
+          if [ -f revad.pid ]; then
+            kill $(cat revad.pid) || true
+            rm revad.pid
+          fi
+        if: always()

@@ -1,0 +1,25 @@
+name: Test ARMv7  
+  
+on:  
+  push:  
+    branches: [ "master" ]  
+  pull_request:  
+    branches: [ "master" ]  
+  workflow_dispatch:  
+  
+jobs:  
+  test:  
+    runs-on: ubuntu-latest  
+    steps:  
+      - name: Checkout  
+        uses: actions/checkout@v4  
+        
+      - name: Set up QEMU  
+        uses: docker/setup-qemu-action@v2  
+        
+      - name: Set up Docker Buildx  
+        uses: docker/setup-buildx-action@v2  
+        
+      - name: Build and test in ARMv7 container  
+        run: |  
+          docker run --rm --platform linux/arm/v7 -v $(pwd):/workspace golang:1.25.8-bookworm sh -c "cd /workspace && apt update && apt install -y musl-tools nodejs npm && npm install -g @intuit/judo && export PATH=\$(npm root -g)/bin:\$PATH && CGO_ENABLED=1 CC=musl-gcc go build -tags 'sqlite_omit_load_extension' -buildvcs=false -ldflags '-extldflags -static' -o ./cmd/revad/revad ./cmd/revad/main && CGO_ENABLED=1 CC=musl-gcc go build -tags 'sqlite_omit_load_extension' -buildvcs=false -ldflags '-extldflags -static' -o ./cmd/reva/reva ./cmd/reva && mkdir -p tmp/revalocalstorage/data tmp/revalocalstorage/shares && cp tests/integration/reva-cli/config/users.json tmp/users.json && cp tests/integration/reva-cli/config/groups.json tmp/groups.json && ./cmd/revad/revad -c tests/integration/reva-cli/config/revad-localfs.toml & echo \$! > revad.pid && sleep 2 && judo tests/integration/reva-cli/file-operations.yaml && judo tests/integration/reva-cli/versions-recycle.yaml && judo tests/integration/reva-cli/grants.yaml && if [ -f revad.pid ]; then kill \$(cat revad.pid) || true && rm revad.pid; fi"

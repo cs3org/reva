@@ -44,6 +44,11 @@ revad-static-musl:
 	@command -v musl-gcc >/dev/null 2>&1 || { echo "Error: musl-gcc not found. Install with: sudo apt install musl-tools"; exit 1; }
 	CGO_ENABLED=1 CC=musl-gcc go build -tags "sqlite_omit_load_extension" -ldflags "-extldflags '-static' $(BUILD_FLAGS)" -o ./cmd/revad/revad ./cmd/revad/main
 
+.PHONY: reva-static-musl  
+reva-static-musl:  
+	@command -v musl-gcc >/dev/null 2>&1 || { echo "Error: musl-gcc not found. Install with: sudo apt install musl-tools"; exit 1; }  
+	CGO_ENABLED=1 CC=musl-gcc go build -tags "sqlite_omit_load_extension" -ldflags "-extldflags '-static' $(BUILD_FLAGS)" -o ./cmd/reva/reva ./cmd/reva
+
 .PHONY: gaia
 gaia:
 	go install github.com/cs3org/gaia@latest
