@@ -29,12 +29,19 @@ import (
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
+	types "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
 	"github.com/cs3org/reva/v3/pkg/appctx"
 	"github.com/cs3org/reva/v3/pkg/errtypes"
 	"github.com/cs3org/reva/v3/pkg/rgrpc/todo/pool"
 	eosclient "github.com/cs3org/reva/v3/pkg/storage/fs/eos/client"
 	"github.com/cs3org/reva/v3/pkg/utils"
 	"github.com/pkg/errors"
+)
+
+// the two attributes a lock is stored in, both system attrs on the file itself
+var (
+	eosLockAttr     = eosclient.Attribute{Type: SystemAttr, Key: eosLockKey}
+	lockPayloadAttr = eosclient.Attribute{Type: SystemAttr, Key: lockPayloadKey}
 )
 
 // GetLock returns an existing lock on the given reference.
@@ -140,6 +147,9 @@ func (fs *Eosfs) RefreshLock(ctx context.Context, ref *provider.Reference, newLo
 		return errtypes.BadRequest("mismatched existing lockId: " + existingLockID)
 	}
 
+	// a refresh extends the existing lock, so keep the time it was originally taken
+	newLock.CreationTime = oldLock.GetCreationTime()
+
 	path, err := fs.resolve(ctx, ref)
 	if err != nil {
 		return errors.Wrap(err, "eosfs: error resolving reference")
@@ -215,12 +225,12 @@ func (fs *Eosfs) getLockPayloads(ctx context.Context, path string) (string, stri
 	// sys attributes want root auth, buddy
 	sysAuth := getSystemAuth()
 
-	data, err := fs.c.GetAttr(ctx, sysAuth, "sys."+lockPayloadKey, path)
+	data, err := fs.c.GetAttr(ctx, sysAuth, lockPayloadAttr.GetKey(), path)
 	if err != nil {
 		return "", "", err
 	}
 
-	eoslock, err := fs.c.GetAttr(ctx, sysAuth, "sys."+eosLockKey, path)
+	eoslock, err := fs.c.GetAttr(ctx, sysAuth, eosLockAttr.GetKey(), path)
 	if err != nil {
 		return "", "", err
 	}
@@ -287,6 +297,12 @@ func (fs *Eosfs) getLock(ctx context.Context, user *userpb.User, path string, re
 
 func (fs *Eosfs) setLock(ctx context.Context, lock *provider.Lock, path string) error {
 	sysAuth := getSystemAuth()
+
+	// the eos lock only records the expiration, so the creation time has to survive
+	// in the payload for clients to know since when the resource has been locked
+	if lock.CreationTime == nil {
+		lock.CreationTime = &types.Timestamp{Seconds: uint64(time.Now().Unix())}
+	}
 
 	encodedLock, eosLock, err := fs.encodeLock(lock)
 	if err != nil {

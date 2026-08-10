@@ -692,6 +692,10 @@ func (s *svc) mdToPropResponse(ctx context.Context, pf *propfindXML, md *provide
 				}
 			}
 		}
+
+		if activelock := s.activeLock(md.Lock, href); activelock != "" {
+			propstatOK.Prop = append(propstatOK.Prop, s.newPropRaw("d:lockdiscovery", activelock))
+		}
 		// TODO return other properties ... but how do we put them in a namespace?
 	} else {
 		// otherwise return only the requested properties
@@ -1012,6 +1016,13 @@ func (s *svc) mdToPropResponse(ctx context.Context, pf *propfindXML, md *provide
 					} else {
 						propstatNotFound.Prop = append(propstatNotFound.Prop, s.newProp("d:quota-available-bytes", ""))
 					}
+				case "lockdiscovery": // RFC 4918
+					if activelock := s.activeLock(md.Lock, href); activelock != "" {
+						propstatOK.Prop = append(propstatOK.Prop, s.newPropRaw("d:lockdiscovery", activelock))
+					} else {
+						// an unlocked resource has an empty lockdiscovery, it is not a missing property
+						propstatOK.Prop = append(propstatOK.Prop, s.newProp("d:lockdiscovery", ""))
+					}
 				default:
 					propstatNotFound.Prop = append(propstatNotFound.Prop, s.newProp("d:"+pf.Prop[i].Local, ""))
 				}
@@ -1060,6 +1071,82 @@ func (s *svc) mdToPropResponse(ctx context.Context, pf *propfindXML, md *provide
 	}
 
 	return &response, nil
+}
+
+// activeLock renders a CS3 lock as the content of a d:lockdiscovery property, see
+// https://www.rfc-editor.org/rfc/rfc4918#section-14.1 and
+// https://www.rfc-editor.org/rfc/rfc4918#section-15.8
+// href is the lockroot, i.e. the resource the lock was taken on.
+// It returns an empty string when the resource holds no (enforced) lock.
+//
+// Next to the elements defined by the RFC, oc:locktime carries the RFC3339 time the lock
+// was taken (so we can render it in the front-end).
+func (s *svc) activeLock(lock *provider.Lock, href string) string {
+	if lock == nil || lock.Type == provider.LockType_LOCK_TYPE_INVALID {
+		return ""
+	}
+
+	timeout := "Infinite"
+	if lock.Expiration != nil {
+		now := uint64(time.Now().Unix())
+		if lock.Expiration.Seconds <= now {
+			// storages only drop expired locks lazily, but they are no longer
+			// enforced, so don't report them
+			return ""
+		}
+		timeout = "Second-" + strconv.FormatUint(lock.Expiration.Seconds-now, 10)
+	}
+
+	// encoding/xml cannot render empty tags such as <d:write/>, see https://github.com/golang/go/issues/21399
+	var b strings.Builder
+	b.WriteString("<d:activelock>")
+
+	if lock.Type == provider.LockType_LOCK_TYPE_SHARED {
+		b.WriteString("<d:lockscope><d:shared/></d:lockscope>")
+	} else {
+		b.WriteString("<d:lockscope><d:exclusive/></d:lockscope>")
+	}
+	// write is the only lock type defined by the RFC
+	b.WriteString("<d:locktype><d:write/></d:locktype>")
+	// locks are never inherited by the members of a collection
+	b.WriteString("<d:depth>0</d:depth>")
+
+	if lock.User != nil || lock.AppName != "" {
+		b.WriteString("<d:owner>")
+		if lock.User != nil {
+			b.Write(s.xmlEscaped(lock.User.OpaqueId))
+		}
+		if lock.AppName != "" {
+			if lock.User != nil {
+				b.WriteString(" via ")
+			}
+			b.Write(s.xmlEscaped(lock.AppName))
+		}
+		b.WriteString("</d:owner>")
+	}
+
+	b.WriteString("<d:timeout>")
+	b.WriteString(timeout)
+	b.WriteString("</d:timeout>")
+
+	if lock.LockId != "" {
+		b.WriteString("<d:locktoken><d:href>")
+		b.Write(s.xmlEscaped(lock.LockId))
+		b.WriteString("</d:href></d:locktoken>")
+	}
+
+	b.WriteString("<d:lockroot><d:href>")
+	b.Write(s.xmlEscaped(href))
+	b.WriteString("</d:href></d:lockroot>")
+
+	if lock.CreationTime != nil {
+		b.WriteString("<oc:locktime>")
+		b.WriteString(utils.TSToTime(lock.CreationTime).UTC().Format(time.RFC3339))
+		b.WriteString("</oc:locktime>")
+	}
+
+	b.WriteString("</d:activelock>")
+	return b.String()
 }
 
 // be defensive about wrong encoded etags.

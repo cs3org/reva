@@ -605,9 +605,10 @@ func (fs *Eosfs) convert(ctx context.Context, eosFileInfo *eosclient.FileInfo) (
 			},
 		},
 	}
-	if eosFileInfo.Attrs[eosLockKey] != "" {
+	// Attrs is keyed by the full xattr name, as only the "user." prefix is stripped
+	if eosFileInfo.Attrs[eosLockAttr.GetKey()] != "" {
 		// populate the lock if decodable, log failure (but move on) if not
-		l, err := decodeLock(eosFileInfo.Attrs[lockPayloadKey], eosFileInfo.Attrs[eosLockKey])
+		l, err := decodeLock(eosFileInfo.Attrs[lockPayloadAttr.GetKey()], eosFileInfo.Attrs[eosLockAttr.GetKey()])
 		if err != nil {
 			sublog := appctx.GetLogger(ctx).With().Logger()
 			sublog.Warn().Interface("xattrs", eosFileInfo.Attrs).Msg("could not decode lock, leaving empty")
