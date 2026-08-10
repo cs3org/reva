@@ -55,6 +55,8 @@ import (
 const (
 	xattrUserNs = "user."
 	xattrLock   = xattrUserNs + "reva.lockpayload"
+	// recursive size in bytes of a directory subtree, maintained by the MDS
+	xattrCephRbytes = "ceph.dir.rbytes"
 )
 
 // cephmountfs is a local filesystem implementation that provides a ceph-like interface
@@ -399,6 +401,8 @@ func (fs *cephmountfs) fileAsResourceInfo(path string, info os.FileInfo, mdKeys 
 	// Determine resource type
 	if info.IsDir() {
 		resourceType = provider.ResourceType_RESOURCE_TYPE_CONTAINER
+		// info.Size() is the size of the directory entry itself, not of its contents
+		size = fs.directorySize(path)
 	} else if info.Mode()&os.ModeSymlink != 0 {
 		resourceType = provider.ResourceType_RESOURCE_TYPE_SYMLINK
 		// For symlinks, we need to get the absolute filesystem path to read the link
@@ -1142,7 +1146,7 @@ func (fs *cephmountfs) GetQuota(ctx context.Context, ref *provider.Reference) (t
 
 	// rbytes exists at every level and is not inherited like max_bytes
 	// so we only check the path where the quota was found.
-	usedQuotaData, err := xattr.Get(currentPath, "ceph.dir.rbytes")
+	usedQuotaData, err := xattr.Get(currentPath, xattrCephRbytes)
 	if err == nil {
 		// Found the attribute
 		used, _ = strconv.ParseUint(string(usedQuotaData), 10, 64)
@@ -1151,6 +1155,30 @@ func (fs *cephmountfs) GetQuota(ctx context.Context, ref *provider.Reference) (t
 	}
 
 	return total, used, nil
+}
+
+// directorySize returns the recursive size in bytes of the subtree rooted at the
+// given chroot-relative directory, or 0 if it cannot be measured.
+func (fs *cephmountfs) directorySize(path string) uint64 {
+	fullPath := filepath.Join(fs.chrootDir, path)
+
+	if rbytes, err := xattr.Get(fullPath, xattrCephRbytes); err == nil {
+		size, err := strconv.ParseUint(string(rbytes), 10, 64)
+		if err == nil {
+			return size
+		}
+	}
+
+	// Only walk without Ceph: a listing would otherwise walk once per subdirectory.
+	if !fs.conf.TestingAllowLocalMode {
+		return 0
+	}
+
+	size, err := fs.calculateDirectorySize(fullPath)
+	if err != nil {
+		return 0
+	}
+	return size
 }
 
 func (fs *cephmountfs) calculateDirectorySize(root string) (uint64, error) {
