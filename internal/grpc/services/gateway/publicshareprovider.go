@@ -47,6 +47,18 @@ func (s *svc) CreatePublicShare(ctx context.Context, req *link.CreatePublicShare
 		return nil, err
 	}
 
+	// The resource info comes from the caller, so we stat the resource ourselves
+	// to check the permissions of the user on it.
+	perms, st := s.permissionsOnResource(ctx, req.GetResourceInfo().GetId())
+	if st != nil {
+		return &link.CreatePublicShareResponse{Status: st}, nil
+	}
+	if !perms.GetAddGrant() {
+		return &link.CreatePublicShareResponse{
+			Status: status.NewPermissionDenied(ctx, nil, "no permission to create public links on this resource"),
+		}, nil
+	}
+
 	res, err := c.CreatePublicShare(ctx, req)
 	if err != nil {
 		return nil, err
@@ -63,6 +75,25 @@ func (s *svc) RemovePublicShare(ctx context.Context, req *link.RemovePublicShare
 	if err != nil {
 		return nil, err
 	}
+
+	getRes, err := driver.GetPublicShare(ctx, &link.GetPublicShareRequest{Ref: req.Ref})
+	if err != nil {
+		return nil, errors.Wrap(err, "gateway: error getting public share to be removed")
+	}
+	if getRes.Status.Code != rpc.Code_CODE_OK {
+		return &link.RemovePublicShareResponse{Status: getRes.Status}, nil
+	}
+
+	perms, st := s.permissionsOnResource(ctx, getRes.GetShare().GetResourceId())
+	if st != nil {
+		return &link.RemovePublicShareResponse{Status: st}, nil
+	}
+	if !perms.GetRemoveGrant() {
+		return &link.RemovePublicShareResponse{
+			Status: status.NewPermissionDenied(ctx, nil, "no permission to remove public links on this resource"),
+		}, nil
+	}
+
 	res, err := driver.RemovePublicShare(ctx, req)
 	if err != nil {
 		return nil, err
@@ -204,9 +235,50 @@ func (s *svc) UpdatePublicShare(ctx context.Context, req *link.UpdatePublicShare
 		}, nil
 	}
 
+	getRes, err := pClient.GetPublicShare(ctx, &link.GetPublicShareRequest{Ref: req.Ref})
+	if err != nil {
+		return nil, errors.Wrap(err, "gateway: error getting public share to be updated")
+	}
+	if getRes.Status.Code != rpc.Code_CODE_OK {
+		return &link.UpdatePublicShareResponse{Status: getRes.Status}, nil
+	}
+
+	perms, st := s.permissionsOnResource(ctx, getRes.GetShare().GetResourceId())
+	if st != nil {
+		return &link.UpdatePublicShareResponse{Status: st}, nil
+	}
+	if !perms.GetUpdateGrant() {
+		return &link.UpdatePublicShareResponse{
+			Status: status.NewPermissionDenied(ctx, nil, "no permission to update public links on this resource"),
+		}, nil
+	}
+
 	res, err := pClient.UpdatePublicShare(ctx, req)
 	if err != nil {
 		return nil, errors.Wrap(err, "error updating share")
 	}
 	return res, nil
+}
+
+// permissionsOnResource stats the resource a share points to and returns the
+// permissions that the user in the context has on it. It returns a non-nil status if
+// the resource could not be statted, in which case the permissions are nil.
+func (s *svc) permissionsOnResource(ctx context.Context, id *provider.ResourceId) (*provider.ResourcePermissions, *rpc.Status) {
+	if id == nil {
+		return nil, status.NewInvalidArg(ctx, "gateway: no resource id to check permissions on")
+	}
+
+	statRes, err := s.Stat(ctx, &provider.StatRequest{
+		Ref: &provider.Reference{
+			ResourceId: id,
+		},
+	})
+	if err != nil {
+		return nil, status.NewInternal(ctx, err, "gateway: error statting resource of share")
+	}
+	if statRes.Status.Code != rpc.Code_CODE_OK {
+		return nil, statRes.Status
+	}
+
+	return statRes.GetInfo().GetPermissionSet(), nil
 }

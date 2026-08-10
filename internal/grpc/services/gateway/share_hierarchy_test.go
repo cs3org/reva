@@ -476,6 +476,12 @@ func (s *fakeStorageProviderServer) resourceInfo(p string) *provider.ResourceInf
 		},
 		Path: p,
 		Type: provider.ResourceType_RESOURCE_TYPE_CONTAINER,
+		// The sharer owns the hierarchy, so it may manage grants on it
+		PermissionSet: &provider.ResourcePermissions{
+			AddGrant:    true,
+			UpdateGrant: true,
+			RemoveGrant: true,
+		},
 	}
 }
 

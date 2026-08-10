@@ -287,8 +287,7 @@ func (s *svc) updateLinkPermissions(ctx context.Context, w http.ResponseWriter, 
 			return
 		}
 		if uRes.Status.Code != rpcv1beta1.Code_CODE_OK {
-			log.Error().Interface("response", uRes).Msg("error updating public share")
-			w.WriteHeader(http.StatusInternalServerError)
+			handleRpcStatus(ctx, uRes.Status, "ocgraph: failed to update public share", w)
 			return
 		}
 		lgPerm, err = s.shareToLibregraphPerm(ctx, &GenericShare{
@@ -481,9 +480,13 @@ func (s *svc) updateLinkPassword(w http.ResponseWriter, r *http.Request) {
 		},
 	})
 
-	if err != nil || res.Status.Code != rpcv1beta1.Code_CODE_OK {
-		log.Error().Err(err).Interface("response", res).Msg("error updating public share password")
+	if err != nil {
+		log.Error().Err(err).Msg("error updating public share password")
 		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+	if res.Status.Code != rpcv1beta1.Code_CODE_OK {
+		handleRpcStatus(ctx, res.Status, "ocgraph: failed to update public share password", w)
 		return
 	}
 	lgPerm, err := s.shareToLibregraphPerm(ctx, &GenericShare{
@@ -522,8 +525,7 @@ func (s *svc) deleteLinkPermissions(ctx context.Context, w http.ResponseWriter, 
 	}
 
 	if res.Status.Code != rpcv1beta1.Code_CODE_OK {
-		log.Error().Interface("response", res).Msg("error removing public share")
-		w.WriteHeader(http.StatusInternalServerError)
+		handleRpcStatus(ctx, res.Status, "ocgraph: failed to remove public share", w)
 		return
 	}
 	w.WriteHeader(http.StatusOK)
