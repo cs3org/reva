@@ -165,6 +165,27 @@ var _ = Describe("Nextcloud", func() {
 		})
 	})
 
+	// TouchFile(ctx context.Context, ref *provider.Reference, markprocessing bool, mtime string) (*storage.TouchFileResult, error)
+	Describe("TouchFile", func() {
+		It("calls the TouchFile endpoint and reads the new id back", func() {
+			nc, called, teardown := setUpNextcloudServer()
+			defer teardown()
+			ref := &provider.Reference{
+				ResourceId: &provider.ResourceId{
+					StorageId: "storage-id",
+					OpaqueId:  "opaque-id",
+				},
+				Path: "some/file/path.txt",
+			}
+			res, err := nc.TouchFile(ctx, ref, false, "1234567890")
+			Expect(err).ToNot(HaveOccurred())
+			Expect(res.ResourceID.GetOpaqueId()).To(Equal("fileid-/some/path"))
+			Expect(len(*called)).To(Equal(2))
+			Expect((*called)[0]).To(Equal(`POST /apps/sciencemesh/~tester/api/storage/TouchFile {"ref":{"resource_id":{"storage_id":"storage-id","opaque_id":"opaque-id"},"path":"some/file/path.txt"},"markprocessing":false,"mtime":"1234567890"}`))
+			Expect((*called)[1]).To(Equal(`POST /apps/sciencemesh/~tester/api/storage/GetMD {"ref":{"resource_id":{"storage_id":"storage-id","opaque_id":"opaque-id"},"path":"some/file/path.txt"},"mdKeys":[]}`))
+		})
+	})
+
 	// Delete(ctx context.Context, ref *provider.Reference) error
 	Describe("Delete", func() {
 		It("calls the Delete endpoint", func() {
@@ -406,6 +427,59 @@ var _ = Describe("Nextcloud", func() {
 			Expect((*called)[1]).To(Equal(`POST /apps/sciencemesh/~tester/api/storage/GetMD {"ref":{"resource_id":{"storage_id":"storage-id","opaque_id":"opaque-id"},"path":"some/file/path.txt"},"mdKeys":[]}`))
 		})
 	})
+
+	// MarkProcessing(ctx context.Context, ref *provider.Reference, processing bool, sessionID string) error
+	Describe("MarkProcessing", func() {
+		It("succeeds without calling the remote", func() {
+			nc, called, teardown := setUpNextcloudServer()
+			defer teardown()
+			ref := &provider.Reference{
+				ResourceId: &provider.ResourceId{
+					StorageId: "storage-id",
+					OpaqueId:  "opaque-id",
+				},
+				Path: "some/file/path.txt",
+			}
+			Expect(nc.MarkProcessing(ctx, ref, true, "session-id")).To(Succeed())
+			Expect(len(*called)).To(Equal(0))
+		})
+	})
+
+	// CommitUpload(ctx context.Context, ref *provider.Reference, sessionID string, source storage.UploadSource) error
+	Describe("CommitUpload", func() {
+		It("calls the Upload endpoint with the staged bytes", func() {
+			nc, called, teardown := setUpNextcloudServer()
+			defer teardown()
+			ref := &provider.Reference{
+				ResourceId: &provider.ResourceId{
+					StorageId: "storage-id",
+					OpaqueId:  "opaque-id",
+				},
+				Path: "some/file/path.txt",
+			}
+			stringReader := strings.NewReader("shiny!")
+			source := storage.UploadSource{Body: io.NopCloser(stringReader), Length: stringReader.Size()}
+			err := nc.CommitUpload(ctx, ref, "session-id", source)
+			Expect(err).ToNot(HaveOccurred())
+			checkCalled(called, `PUT /apps/sciencemesh/~tester/api/storage/Upload/some/file/path.txt shiny!`)
+		})
+
+		It("refuses a nil body instead of truncating the file", func() {
+			nc, called, teardown := setUpNextcloudServer()
+			defer teardown()
+			ref := &provider.Reference{
+				ResourceId: &provider.ResourceId{
+					StorageId: "storage-id",
+					OpaqueId:  "opaque-id",
+				},
+				Path: "some/file/path.txt",
+			}
+			err := nc.CommitUpload(ctx, ref, "session-id", storage.UploadSource{})
+			Expect(err).To(HaveOccurred())
+			Expect(len(*called)).To(Equal(0))
+		})
+	})
+
 	// Download(ctx context.Context, ref *provider.Reference, openReaderfunc func(*provider.ResourceInfo) bool) (*provider.ResourceInfo, io.ReadCloser, error)
 	Describe("Download", func() {
 		It("calls the Download endpoint with GET", func() {
