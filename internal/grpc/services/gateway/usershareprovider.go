@@ -56,6 +56,18 @@ func (s *svc) CreateShare(ctx context.Context, req *collaboration.CreateShareReq
 		}, nil
 	}
 
+	// The resource info comes from the caller, so we stat the resource ourselves
+	// to check the permissions of the user on it.
+	perms, st := s.permissionsOnResource(ctx, req.GetResourceInfo().GetId())
+	if st != nil {
+		return &collaboration.CreateShareResponse{Status: st}, nil
+	}
+	if !perms.GetAddGrant() {
+		return &collaboration.CreateShareResponse{
+			Status: status.NewPermissionDenied(ctx, nil, "no permission to create shares on this resource"),
+		}, nil
+	}
+
 	// First we ping the db
 	// --------------------
 	// See ADR-REVA-003
@@ -174,6 +186,16 @@ func (s *svc) RemoveShare(ctx context.Context, req *collaboration.RemoveShareReq
 		}, nil
 	}
 	share := getShareRes.Share
+
+	perms, st := s.permissionsOnResource(ctx, share.GetResourceId())
+	if st != nil {
+		return &collaboration.RemoveShareResponse{Status: st}, nil
+	}
+	if !perms.GetRemoveGrant() {
+		return &collaboration.RemoveShareResponse{
+			Status: status.NewPermissionDenied(ctx, nil, "no permission to remove shares on this resource"),
+		}, nil
+	}
 
 	checker := &sharehierarchy.Checker{GetPath: s.getPathForResourceId}
 
@@ -358,6 +380,16 @@ func (s *svc) UpdateShare(ctx context.Context, req *collaboration.UpdateShareReq
 		}, nil
 	}
 	currentShare := getRes.Share
+
+	perms, st := s.permissionsOnResource(ctx, currentShare.GetResourceId())
+	if st != nil {
+		return &collaboration.UpdateShareResponse{Status: st}, nil
+	}
+	if !perms.GetUpdateGrant() {
+		return &collaboration.UpdateShareResponse{
+			Status: status.NewPermissionDenied(ctx, nil, "no permission to update shares on this resource"),
+		}, nil
+	}
 
 	_, isPermUpdate := req.Field.GetField().(*collaboration.UpdateShareRequest_UpdateField_Permissions)
 	newPerms := req.Field.GetPermissions().GetPermissions()
