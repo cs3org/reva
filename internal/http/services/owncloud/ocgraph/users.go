@@ -255,7 +255,8 @@ func (s *svc) getUserInfo(ctx context.Context, id *userpb.UserId) (*userpb.User,
 		return nil, err
 	}
 	res, err := gw.GetUser(ctx, &userpb.GetUserRequest{
-		UserId: id,
+		UserId:                 id,
+		SkipFetchingUserGroups: true,
 	})
 	if err != nil {
 		return nil, err

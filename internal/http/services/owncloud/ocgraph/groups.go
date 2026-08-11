@@ -130,7 +130,8 @@ func (s *svc) getGroupInfo(ctx context.Context, id *groupv1beta1.GroupId) (*grou
 		return nil, err
 	}
 	res, err := gw.GetGroup(ctx, &groupv1beta1.GetGroupRequest{
-		GroupId: id,
+		GroupId:             id,
+		SkipFetchingMembers: true,
 	})
 	if err != nil {
 		return nil, err
