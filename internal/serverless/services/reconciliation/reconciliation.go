@@ -30,11 +30,12 @@ import (
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	"github.com/cs3org/reva/v3/pkg/appctx"
 	"github.com/cs3org/reva/v3/pkg/auth/scope"
+	publicshareregistry "github.com/cs3org/reva/v3/pkg/publicshare/manager/registry"
 	"github.com/cs3org/reva/v3/pkg/reconciliation"
 	"github.com/cs3org/reva/v3/pkg/rgrpc/todo/pool"
 	"github.com/cs3org/reva/v3/pkg/rjobs"
 	"github.com/cs3org/reva/v3/pkg/rserverless"
-	"github.com/cs3org/reva/v3/pkg/share/manager/sql"
+	shareregistry "github.com/cs3org/reva/v3/pkg/share/manager/registry"
 	"github.com/cs3org/reva/v3/pkg/sharedconf"
 	"github.com/cs3org/reva/v3/pkg/token"
 	"github.com/cs3org/reva/v3/pkg/token/manager/jwt"
@@ -71,9 +72,14 @@ type config struct {
 	// refuses a caller without them, so neither may be zero.
 	ServiceUserUID int64 `mapstructure:"service_user_uid" validate:"required"`
 	ServiceUserGID int64 `mapstructure:"service_user_gid" validate:"required"`
-	// DB is the share database, the same block the sql share driver takes.
-	// Unset fields fall back to [shared].
-	DB map[string]any `mapstructure:"db"`
+	// ShareDriver and PublicShareDriver name the managers the jobs reconcile,
+	// the same drivers the usershareprovider and the publicshareprovider run
+	// on. Their configuration falls back to [shared], so it normally does not
+	// have to be repeated here.
+	ShareDriver        string                    `mapstructure:"share_driver"`
+	ShareDrivers       map[string]map[string]any `mapstructure:"share_drivers"`
+	PublicShareDriver  string                    `mapstructure:"publicshare_driver"`
+	PublicShareDrivers map[string]map[string]any `mapstructure:"publicshare_drivers"`
 	// Orphan configures the orphan job.
 	Orphan reconciliation.Config `mapstructure:"orphan"`
 }
@@ -81,6 +87,14 @@ type config struct {
 func (c *config) ApplyDefaults() {
 	c.GatewaySVC = sharedconf.GetGatewaySVC(c.GatewaySVC)
 	c.JWTSecret = sharedconf.GetJWTSecret(c.JWTSecret)
+	// sql is the only driver that has an orphan flag to set, so it is the
+	// default here rather than json, the default of the grpc services.
+	if c.ShareDriver == "" {
+		c.ShareDriver = "sql"
+	}
+	if c.PublicShareDriver == "" {
+		c.PublicShareDriver = "sql"
+	}
 	// a file per job, so a run of one is never interleaved with a run of
 	// another and either can be pointed somewhere else on its own.
 	if c.Orphan.LogFile == "" {
@@ -97,10 +111,6 @@ type svc struct {
 // New builds the reconciliation service. It registers the jobs right away
 // rather than in Start, because every serverless service is constructed before
 // any is started and the jobs runner reads the registered jobs when it starts.
-//
-// The stores are the gorm-backed sql managers: the jobs read and write the
-// share tables directly, so unlike the grpc services this one has no driver
-// indirection to offer.
 func New(ctx context.Context, m map[string]any) (_ rserverless.Service, err error) {
 	var c config
 	if err := cfg.Decode(m, &c); err != nil {
@@ -110,13 +120,13 @@ func New(ctx context.Context, m map[string]any) (_ rserverless.Service, err erro
 		return nil, errors.Errorf("reconciliation: no jobs enabled, set jobs to %q", jobOrphan)
 	}
 
-	sm, err := sql.NewShareManager(ctx, c.DB)
+	shares, err := getShareStore(ctx, &c)
 	if err != nil {
-		return nil, errors.Wrap(err, "reconciliation: opening the share store")
+		return nil, err
 	}
-	pm, err := sql.NewPublicShareManager(ctx, c.DB)
+	links, err := getPublicLinkStore(ctx, &c)
 	if err != nil {
-		return nil, errors.Wrap(err, "reconciliation: opening the public link store")
+		return nil, err
 	}
 	gw, err := pool.GetGatewayServiceClient(pool.Endpoint(c.GatewaySVC))
 	if err != nil {
@@ -145,15 +155,6 @@ func New(ctx context.Context, m map[string]any) (_ rserverless.Service, err erro
 			UidNumber: c.ServiceUserUID,
 			GidNumber: c.ServiceUserGID,
 		},
-	}
-
-	shares, ok := sm.(reconciliation.ShareStore)
-	if !ok {
-		return nil, errors.Errorf("reconciliation: share manager %T cannot be reconciled", sm)
-	}
-	links, ok := pm.(reconciliation.PublicLinkStore)
-	if !ok {
-		return nil, errors.Errorf("reconciliation: public link manager %T cannot be reconciled", pm)
 	}
 
 	log := appctx.GetLogger(ctx)
@@ -214,6 +215,42 @@ func New(ctx context.Context, m map[string]any) (_ rserverless.Service, err erro
 	}
 
 	return s, nil
+}
+
+// getShareStore builds the configured share manager and takes the part of it
+// the jobs need. Marking an item orphaned is not part of the CS3 share API, so
+// a driver that does not implement it is a configuration error.
+func getShareStore(ctx context.Context, c *config) (reconciliation.ShareStore, error) {
+	f, ok := shareregistry.NewFuncs[c.ShareDriver]
+	if !ok {
+		return nil, errors.Errorf("reconciliation: share driver not found: %s", c.ShareDriver)
+	}
+	sm, err := f(ctx, c.ShareDrivers[c.ShareDriver])
+	if err != nil {
+		return nil, errors.Wrapf(err, "reconciliation: opening share driver %s", c.ShareDriver)
+	}
+	store, ok := sm.(reconciliation.ShareStore)
+	if !ok {
+		return nil, errors.Errorf("reconciliation: share driver %s cannot be reconciled, it cannot mark a share orphaned", c.ShareDriver)
+	}
+	return store, nil
+}
+
+// getPublicLinkStore is getShareStore for the public link manager.
+func getPublicLinkStore(ctx context.Context, c *config) (reconciliation.PublicLinkStore, error) {
+	f, ok := publicshareregistry.NewFuncs[c.PublicShareDriver]
+	if !ok {
+		return nil, errors.Errorf("reconciliation: public share driver not found: %s", c.PublicShareDriver)
+	}
+	pm, err := f(ctx, c.PublicShareDrivers[c.PublicShareDriver])
+	if err != nil {
+		return nil, errors.Wrapf(err, "reconciliation: opening public share driver %s", c.PublicShareDriver)
+	}
+	store, ok := pm.(reconciliation.PublicLinkStore)
+	if !ok {
+		return nil, errors.Errorf("reconciliation: public share driver %s cannot be reconciled, it cannot mark a link orphaned", c.PublicShareDriver)
+	}
+	return store, nil
 }
 
 // serviceUser is the identity the job acts as. The jobs runner hands a run a

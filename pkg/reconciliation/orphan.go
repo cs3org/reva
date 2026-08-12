@@ -20,7 +20,6 @@ package reconciliation
 
 import (
 	"context"
-	"strconv"
 
 	gateway "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
 	grouppb "github.com/cs3org/go-cs3apis/cs3/identity/group/v1beta1"
@@ -31,8 +30,6 @@ import (
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/cs3org/reva/v3/pkg/appctx"
 	"github.com/cs3org/reva/v3/pkg/rjobs"
-	"github.com/cs3org/reva/v3/pkg/share/manager/sql"
-	"github.com/cs3org/reva/v3/pkg/share/manager/sql/model"
 	"github.com/google/uuid"
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog"
@@ -71,34 +68,29 @@ const (
 type OrphanReason string
 
 const (
-	// ReasonResourceMissing means the shared resource no longer exists. Its
-	// storage space being gone shows up here too, since the resource Stat then
-	// fails.
+	// ReasonResourceMissing means the shared resource no longer exists.
+	//
+	// A resource in the recycle bin does not count as missing and is never
+	// orphaned: a delete has to stay reversible, so a restored resource must
+	// find its shares intact.
 	ReasonResourceMissing OrphanReason = "resource-missing"
 	// ReasonRecipientMissing means the user or group the share is for no longer
 	// exists.
 	ReasonRecipientMissing OrphanReason = "recipient-missing"
 )
 
-// ShareStore is the subset of the share manager the orphan job needs.
-// *sql.ShareMgr satisfies it.
+// ShareStore is what the orphan job needs from a share manager: the CS3 listing
+// every manager implements, plus marking, which the CS3 API has no call for. A
+// manager that cannot mark cannot be reconciled. The listing is expected to
+// cover every owner and to leave out the already-orphaned.
 type ShareStore interface {
-	// ListModelShares returns the shares matching the filters. Pass a nil user
-	// to list across all owners and hideOrphans=true to skip already-orphaned
-	// shares.
-	ListModelShares(u *userpb.User, filters []*collaboration.Filter, hideOrphans bool) ([]model.Share, error)
-	// MarkAsOrphaned flags the referenced share as orphaned.
+	ListShares(ctx context.Context, filters []*collaboration.Filter) ([]*collaboration.Share, error)
 	MarkAsOrphaned(ctx context.Context, ref *collaboration.ShareReference) error
 }
 
-// PublicLinkStore is the subset of the public share manager the orphan job
-// needs. *sql.PublicShareMgr satisfies it.
+// PublicLinkStore is the same for a public share manager.
 type PublicLinkStore interface {
-	// ListPublicLinks returns the links matching the filters. Pass a nil user
-	// to list across all owners, a nil expiry range to not filter on
-	// expiration, and hideOrphans=true to skip already-orphaned links.
-	ListPublicLinks(u *userpb.User, filters []*link.ListPublicSharesRequest_Filter, expiry *sql.ExpiryRange, hideOrphans bool) ([]model.PublicLink, error)
-	// MarkAsOrphaned flags the referenced link as orphaned.
+	ListPublicShares(ctx context.Context, u *userpb.User, filters []*link.ListPublicSharesRequest_Filter, md *provider.ResourceInfo, sign bool) ([]*link.PublicShare, error)
 	MarkAsOrphaned(ctx context.Context, ref *link.PublicShareReference) error
 }
 
@@ -127,13 +119,12 @@ type OrphanJob struct {
 	RunOnStart bool
 }
 
-// entry is one share-like row to check. Shares and public links are flattened
-// into it so both go through the same classification: the model types embed
-// ProtoShare but declare Inode and Instance separately, so there is no common
-// type to range over.
+// entry is one share-like item to check. Shares and public links are flattened
+// into it so both go through the same classification: a share and a public
+// share are unrelated CS3 types, so there is no common type to range over.
 type entry struct {
 	kind Kind
-	// id is the database id rendered as the CS3 opaque id.
+	// id is the CS3 opaque id of the share or link.
 	id         string
 	resourceID *provider.ResourceId
 	owner      string
@@ -202,7 +193,7 @@ func (j *OrphanJob) Run(ctx context.Context) (OrphanReport, error) {
 		}
 	}
 
-	entries, err := j.entries()
+	entries, err := j.entries(ctx)
 	if err != nil {
 		return OrphanReport{}, err
 	}
@@ -281,37 +272,42 @@ func (j *OrphanJob) Run(ctx context.Context) (OrphanReport, error) {
 
 // entries lists the configured stores and flattens them into a single list to
 // check.
-func (j *OrphanJob) entries() ([]entry, error) {
+func (j *OrphanJob) entries(ctx context.Context) ([]entry, error) {
 	var entries []entry
 
 	if j.Shares != nil {
-		shares, err := j.Shares.ListModelShares(nil, nil, true)
+		shares, err := j.Shares.ListShares(ctx, nil)
 		if err != nil {
 			return nil, errors.Wrap(err, "reconciliation: listing shares")
 		}
 		for _, s := range shares {
-			entries = append(entries, entry{
+			e := entry{
 				kind:       KindShare,
-				id:         strconv.FormatUint(uint64(s.Id), 10),
-				resourceID: &provider.ResourceId{StorageId: s.Instance, OpaqueId: s.Inode},
-				owner:      s.UIDOwner,
-				shareWith:  s.ShareWith,
-				isGroup:    s.SharedWithIsGroup,
-			})
+				id:         s.GetId().GetOpaqueId(),
+				resourceID: s.GetResourceId(),
+				owner:      s.GetOwner().GetOpaqueId(),
+			}
+			if g := s.GetGrantee(); g.GetType() == provider.GranteeType_GRANTEE_TYPE_GROUP {
+				e.isGroup = true
+				e.shareWith = g.GetGroupId().GetOpaqueId()
+			} else {
+				e.shareWith = g.GetUserId().GetOpaqueId()
+			}
+			entries = append(entries, e)
 		}
 	}
 
 	if j.Links != nil {
-		links, err := j.Links.ListPublicLinks(nil, nil, nil, true)
+		links, err := j.Links.ListPublicShares(ctx, nil, nil, nil, false)
 		if err != nil {
 			return nil, errors.Wrap(err, "reconciliation: listing public links")
 		}
 		for _, l := range links {
 			entries = append(entries, entry{
 				kind:       KindPublicLink,
-				id:         strconv.FormatUint(uint64(l.Id), 10),
-				resourceID: &provider.ResourceId{StorageId: l.Instance, OpaqueId: l.Inode},
-				owner:      l.UIDOwner,
+				id:         l.GetId().GetOpaqueId(),
+				resourceID: l.GetResourceId(),
+				owner:      l.GetOwner().GetOpaqueId(),
 			})
 		}
 	}

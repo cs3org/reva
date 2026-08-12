@@ -22,6 +22,7 @@ import (
 	"context"
 	"errors"
 	"sort"
+	"strconv"
 	"testing"
 
 	gateway "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
@@ -31,30 +32,38 @@ import (
 	collaboration "github.com/cs3org/go-cs3apis/cs3/sharing/collaboration/v1beta1"
 	link "github.com/cs3org/go-cs3apis/cs3/sharing/link/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
-	"github.com/cs3org/reva/v3/pkg/share/manager/sql"
-	"github.com/cs3org/reva/v3/pkg/share/manager/sql/model"
 	"google.golang.org/grpc"
 )
 
+// storedShare is a row of fakeStore: a CS3 share plus the orphan flag the store
+// filters on, which the CS3 type cannot carry.
+type storedShare struct {
+	share  *collaboration.Share
+	orphan bool
+}
+
+// storedLink is the same for fakeLinkStore.
+type storedLink struct {
+	link   *link.PublicShare
+	orphan bool
+}
+
 // fakeStore is an in-memory ShareStore recording which shares were marked.
 type fakeStore struct {
-	shares  []model.Share
+	shares  []storedShare
 	marked  []string
 	listErr error
 	markErr error
 }
 
-func (f *fakeStore) ListModelShares(u *userpb.User, filters []*collaboration.Filter, hideOrphans bool) ([]model.Share, error) {
+func (f *fakeStore) ListShares(ctx context.Context, filters []*collaboration.Filter) ([]*collaboration.Share, error) {
 	if f.listErr != nil {
 		return nil, f.listErr
 	}
-	if !hideOrphans {
-		return f.shares, nil
-	}
-	var out []model.Share
+	var out []*collaboration.Share
 	for _, s := range f.shares {
-		if !s.Orphan {
-			out = append(out, s)
+		if !s.orphan {
+			out = append(out, s.share)
 		}
 	}
 	return out, nil
@@ -71,23 +80,20 @@ func (f *fakeStore) MarkAsOrphaned(ctx context.Context, ref *collaboration.Share
 // fakeLinkStore is an in-memory PublicLinkStore recording which links were
 // marked.
 type fakeLinkStore struct {
-	links   []model.PublicLink
+	links   []storedLink
 	marked  []string
 	listErr error
 	markErr error
 }
 
-func (f *fakeLinkStore) ListPublicLinks(u *userpb.User, filters []*link.ListPublicSharesRequest_Filter, expiry *sql.ExpiryRange, hideOrphans bool) ([]model.PublicLink, error) {
+func (f *fakeLinkStore) ListPublicShares(ctx context.Context, u *userpb.User, filters []*link.ListPublicSharesRequest_Filter, md *provider.ResourceInfo, sign bool) ([]*link.PublicShare, error) {
 	if f.listErr != nil {
 		return nil, f.listErr
 	}
-	if !hideOrphans {
-		return f.links, nil
-	}
-	var out []model.PublicLink
+	var out []*link.PublicShare
 	for _, l := range f.links {
-		if !l.Orphan {
-			out = append(out, l)
+		if !l.orphan {
+			out = append(out, l.link)
 		}
 	}
 	return out, nil
@@ -143,26 +149,35 @@ func (f *fakeGateway) GetGroupByClaim(ctx context.Context, in *grouppb.GetGroupB
 	return &grouppb.GetGroupByClaimResponse{Status: status(f.groups[in.GetValue()])}, nil
 }
 
-// share builds a model.Share with the fields the orphan job reads.
-func share(id uint, instance, inode, shareWith string, isGroup, orphan bool) model.Share {
-	var s model.Share
-	s.Id = id
-	s.Orphan = orphan
-	s.Instance = instance
-	s.Inode = inode
-	s.ShareWith = shareWith
-	s.SharedWithIsGroup = isGroup
-	return s
+// share builds a share with the fields the orphan job reads.
+func share(id uint, instance, inode, shareWith string, isGroup, orphan bool) storedShare {
+	s := &collaboration.Share{
+		Id:         &collaboration.ShareId{OpaqueId: strconv.FormatUint(uint64(id), 10)},
+		ResourceId: &provider.ResourceId{StorageId: instance, OpaqueId: inode},
+	}
+	if isGroup {
+		s.Grantee = &provider.Grantee{
+			Type: provider.GranteeType_GRANTEE_TYPE_GROUP,
+			Id:   &provider.Grantee_GroupId{GroupId: &grouppb.GroupId{OpaqueId: shareWith}},
+		}
+	} else {
+		s.Grantee = &provider.Grantee{
+			Type: provider.GranteeType_GRANTEE_TYPE_USER,
+			Id:   &provider.Grantee_UserId{UserId: &userpb.UserId{OpaqueId: shareWith}},
+		}
+	}
+	return storedShare{share: s, orphan: orphan}
 }
 
-// publicLink builds a model.PublicLink with the fields the orphan job reads.
-func publicLink(id uint, instance, inode string, orphan bool) model.PublicLink {
-	var l model.PublicLink
-	l.Id = id
-	l.Orphan = orphan
-	l.Instance = instance
-	l.Inode = inode
-	return l
+// publicLink builds a public link with the fields the orphan job reads.
+func publicLink(id uint, instance, inode string, orphan bool) storedLink {
+	return storedLink{
+		link: &link.PublicShare{
+			Id:         &link.PublicShareId{OpaqueId: strconv.FormatUint(uint64(id), 10)},
+			ResourceId: &provider.ResourceId{StorageId: instance, OpaqueId: inode},
+		},
+		orphan: orphan,
+	}
 }
 
 func sortedMarked(f *fakeStore) []string {
@@ -172,7 +187,7 @@ func sortedMarked(f *fakeStore) []string {
 }
 
 func TestOrphanResourceMissing(t *testing.T) {
-	store := &fakeStore{shares: []model.Share{
+	store := &fakeStore{shares: []storedShare{
 		share(1, "eosuser", "inode-1", "jdoe", false, false),
 	}}
 	gw := &fakeGateway{
@@ -197,7 +212,7 @@ func TestOrphanResourceMissing(t *testing.T) {
 }
 
 func TestOrphanUserRecipientMissing(t *testing.T) {
-	store := &fakeStore{shares: []model.Share{
+	store := &fakeStore{shares: []storedShare{
 		share(2, "eosuser", "inode-2", "ghost", false, false),
 	}}
 	gw := &fakeGateway{
@@ -219,7 +234,7 @@ func TestOrphanUserRecipientMissing(t *testing.T) {
 }
 
 func TestOrphanGroupRecipientMissing(t *testing.T) {
-	store := &fakeStore{shares: []model.Share{
+	store := &fakeStore{shares: []storedShare{
 		share(3, "eosproject", "inode-3", "defunct-group", true, false),
 	}}
 	gw := &fakeGateway{
@@ -242,7 +257,7 @@ func TestOrphanGroupRecipientMissing(t *testing.T) {
 }
 
 func TestOrphanAllPresentMarksNothing(t *testing.T) {
-	store := &fakeStore{shares: []model.Share{
+	store := &fakeStore{shares: []storedShare{
 		share(4, "eosuser", "inode-4", "jdoe", false, false),
 		share(5, "eosproject", "inode-5", "cern-users", true, false),
 	}}
@@ -266,7 +281,7 @@ func TestOrphanAllPresentMarksNothing(t *testing.T) {
 }
 
 func TestOrphanDryRunMarksNothing(t *testing.T) {
-	store := &fakeStore{shares: []model.Share{
+	store := &fakeStore{shares: []storedShare{
 		share(6, "eosuser", "inode-6", "jdoe", false, false),
 	}}
 	gw := &fakeGateway{resources: map[string]bool{}, users: map[string]bool{"jdoe": true}}
@@ -290,7 +305,7 @@ func TestOrphanDryRunMarksNothing(t *testing.T) {
 // TestOrphanDryRunMatchesLiveRun asserts that dry_run reports exactly the shares
 // a live run marks, so a dry run can be trusted as a preview.
 func TestOrphanDryRunMatchesLiveRun(t *testing.T) {
-	shares := []model.Share{
+	shares := []storedShare{
 		share(20, "eosuser", "inode-20", "jdoe", false, false),            // valid
 		share(21, "eosuser", "inode-gone", "jdoe", false, false),          // resource gone
 		share(22, "eosproject", "inode-22", "defunct-group", true, false), // recipient gone
@@ -303,12 +318,12 @@ func TestOrphanDryRunMatchesLiveRun(t *testing.T) {
 		}
 	}
 
-	dryStore := &fakeStore{shares: append([]model.Share(nil), shares...)}
+	dryStore := &fakeStore{shares: append([]storedShare(nil), shares...)}
 	dry, err := (&OrphanJob{Shares: dryStore, Gateway: newGateway(), DryRun: true}).Run(context.Background())
 	if err != nil {
 		t.Fatalf("dry run: %v", err)
 	}
-	liveStore := &fakeStore{shares: append([]model.Share(nil), shares...)}
+	liveStore := &fakeStore{shares: append([]storedShare(nil), shares...)}
 	live, err := (&OrphanJob{Shares: liveStore, Gateway: newGateway()}).Run(context.Background())
 	if err != nil {
 		t.Fatalf("live run: %v", err)
@@ -331,7 +346,7 @@ func TestOrphanDryRunMatchesLiveRun(t *testing.T) {
 }
 
 func TestOrphanLookupErrorSkips(t *testing.T) {
-	store := &fakeStore{shares: []model.Share{
+	store := &fakeStore{shares: []storedShare{
 		share(7, "eosuser", "inode-7", "jdoe", false, false),
 	}}
 	gw := &fakeGateway{statErr: errors.New("gateway down")}
@@ -350,7 +365,7 @@ func TestOrphanLookupErrorSkips(t *testing.T) {
 }
 
 func TestOrphanAlreadyOrphanExcluded(t *testing.T) {
-	store := &fakeStore{shares: []model.Share{
+	store := &fakeStore{shares: []storedShare{
 		share(8, "eosuser", "inode-8", "jdoe", false, true), // already orphan, resource also gone
 	}}
 	gw := &fakeGateway{resources: map[string]bool{}, users: map[string]bool{}}
@@ -369,7 +384,7 @@ func TestOrphanAlreadyOrphanExcluded(t *testing.T) {
 }
 
 func TestOrphanMixedBatch(t *testing.T) {
-	store := &fakeStore{shares: []model.Share{
+	store := &fakeStore{shares: []storedShare{
 		share(10, "eosuser", "inode-10", "jdoe", false, false),           // valid
 		share(11, "eosuser", "inode-11", "ghost", false, false),          // recipient gone
 		share(12, "eosproject", "inode-gone", "cern-users", true, false), // resource gone
@@ -425,7 +440,7 @@ func TestMarkAddressesTheRightStore(t *testing.T) {
 }
 
 func TestOrphanPublicLinkResourceMissing(t *testing.T) {
-	links := &fakeLinkStore{links: []model.PublicLink{
+	links := &fakeLinkStore{links: []storedLink{
 		publicLink(30, "eosuser", "inode-30", false),
 	}}
 	gw := &fakeGateway{resources: map[string]bool{}} // resource gone
@@ -451,7 +466,7 @@ func TestOrphanPublicLinkResourceMissing(t *testing.T) {
 // applied to links, the empty ShareWith would look like a missing user and
 // orphan every link in the database.
 func TestOrphanPublicLinkNeedsNoRecipient(t *testing.T) {
-	links := &fakeLinkStore{links: []model.PublicLink{
+	links := &fakeLinkStore{links: []storedLink{
 		publicLink(31, "eosuser", "inode-31", false),
 	}}
 	gw := &fakeGateway{
@@ -473,7 +488,7 @@ func TestOrphanPublicLinkNeedsNoRecipient(t *testing.T) {
 }
 
 func TestOrphanAlreadyOrphanLinkExcluded(t *testing.T) {
-	links := &fakeLinkStore{links: []model.PublicLink{
+	links := &fakeLinkStore{links: []storedLink{
 		publicLink(32, "eosuser", "inode-32", true), // already orphan, resource also gone
 	}}
 	job := &OrphanJob{Links: links, Gateway: &fakeGateway{resources: map[string]bool{}}}
@@ -490,11 +505,11 @@ func TestOrphanAlreadyOrphanLinkExcluded(t *testing.T) {
 // TestOrphanScansBothKinds asserts that one run covers both stores and reports
 // each item under its own kind.
 func TestOrphanScansBothKinds(t *testing.T) {
-	shares := &fakeStore{shares: []model.Share{
+	shares := &fakeStore{shares: []storedShare{
 		share(40, "eosuser", "inode-40", "jdoe", false, false),   // valid
 		share(41, "eosuser", "inode-gone", "jdoe", false, false), // resource gone
 	}}
-	links := &fakeLinkStore{links: []model.PublicLink{
+	links := &fakeLinkStore{links: []storedLink{
 		publicLink(50, "eosuser", "inode-50", false),   // valid
 		publicLink(51, "eosuser", "inode-gone", false), // resource gone
 	}}
@@ -542,7 +557,7 @@ func TestOrphanLinkListErrorFails(t *testing.T) {
 // report never claim a change that did not happen.
 func TestOrphanMarkErrorIsNotReportedAsOrphaned(t *testing.T) {
 	store := &fakeStore{
-		shares:  []model.Share{share(60, "eosuser", "inode-gone", "jdoe", false, false)},
+		shares:  []storedShare{share(60, "eosuser", "inode-gone", "jdoe", false, false)},
 		markErr: errors.New("db write failed"),
 	}
 	job := &OrphanJob{Shares: store, Gateway: &fakeGateway{resources: map[string]bool{}}}
