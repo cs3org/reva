@@ -94,6 +94,7 @@ func New(m map[string]any) (global.Middleware, int, error) {
 			"Overwrite",
 			"X-Request-Id",
 			"X-Requested-With",
+			"X-Reva-Base-Path",
 			"Tus-Resumable",
 			"Tus-Checksum-Algorithm",
 			"Upload-Concat",

@@ -80,6 +80,7 @@ const (
 	HeaderLockID               = "X-Lock-Id"
 	HeaderLockHolder           = "X-Lock-Holder"
 	HeaderDisableVersioning    = "X-Disable-Versioning"
+	HeaderRevaBasePath         = "X-Reva-Base-Path"
 )
 
 // WebDavHandler implements a dav endpoint.
