@@ -245,6 +245,25 @@ func (s *svc) handleMove(ctx context.Context, w http.ResponseWriter, r *http.Req
 		return
 	}
 
+	if dstStatRes.Status.Code == rpc.Code_CODE_OK && srcStatRes.GetInfo().GetId() != nil &&
+		utils.ResourceIDEqual(srcStatRes.GetInfo().GetId(), dstStatRes.GetInfo().GetId()) {
+		// a user without move permission must not be told the rename succeeded
+		if !srcStatRes.GetInfo().GetPermissionSet().GetMove() {
+			w.WriteHeader(http.StatusForbidden)
+			b, err := errors.Marshal(http.StatusForbidden, "permission denied", "", "")
+			errors.HandleWebdavError(&log, w, b, err)
+			return
+		}
+		log.Debug().Msg("move: source and destination are the same resource, nothing to do")
+		info := dstStatRes.GetInfo()
+		w.Header().Set(net.HeaderContentType, info.GetMimeType())
+		w.Header().Set(net.HeaderETag, info.GetEtag())
+		w.Header().Set(net.HeaderOCFileID, storagespace.FormatResourceID(info.GetId()))
+		w.Header().Set(net.HeaderOCETag, info.GetEtag())
+		w.WriteHeader(http.StatusNoContent)
+		return
+	}
+
 	successCode := http.StatusCreated // 201 if new resource was created, see https://tools.ietf.org/html/rfc4918#section-9.9.4
 	if dstStatRes.Status.Code == rpc.Code_CODE_OK {
 		successCode = http.StatusNoContent // 204 if target already existed, see https://tools.ietf.org/html/rfc4918#section-9.9.4

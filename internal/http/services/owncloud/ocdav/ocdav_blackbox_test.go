@@ -645,7 +645,7 @@ var _ = Describe("ocdav", func() {
 				It("the source and the destination exist", func() {
 
 					mockPathStat(mReq.Source.Path, status.NewOK(ctx), &cs3storageprovider.ResourceInfo{Id: mReq.Source.ResourceId})
-					mockPathStat(mReq.Destination.Path, status.NewOK(ctx), &cs3storageprovider.ResourceInfo{Id: mReq.Destination.ResourceId})
+					mockPathStat(mReq.Destination.Path, status.NewOK(ctx), &cs3storageprovider.ResourceInfo{Id: &cs3storageprovider.ResourceId{StorageId: "provider-1", SpaceId: "userspace", OpaqueId: "newfile"}})
 
 					client.On("Delete", mock.Anything, mock.MatchedBy(func(req *cs3storageprovider.DeleteRequest) bool {
 						return utils.ResourceEqual(req.Ref, mReq.Destination)
@@ -661,6 +661,51 @@ var _ = Describe("ocdav", func() {
 
 					handler.Handler().ServeHTTP(rr, req)
 					Expect(rr).To(HaveHTTPStatus(http.StatusNoContent))
+				})
+			})
+
+			When("renaming a resource to its current name", func() {
+				// see https://github.com/owncloud/ocis/issues/1976: source and destination
+				// stat to the same resource id, the move must be a silent no-op.
+				sameID := &cs3storageprovider.ResourceId{StorageId: "provider-1", SpaceId: "userspace", OpaqueId: "sameid"}
+
+				It("succeeds as a no-op with move permission and does not move or delete", func() {
+					mockPathStat(mReq.Source.Path, status.NewOK(ctx), &cs3storageprovider.ResourceInfo{
+						Id:            sameID,
+						PermissionSet: &cs3storageprovider.ResourcePermissions{Move: true},
+					})
+					mockPathStat(mReq.Destination.Path, status.NewOK(ctx), &cs3storageprovider.ResourceInfo{
+						Id:       sameID,
+						MimeType: "text/plain",
+						Etag:     `"deadbeef"`,
+					})
+
+					handler.Handler().ServeHTTP(rr, req)
+
+					Expect(rr).To(HaveHTTPStatus(http.StatusNoContent))
+					// the resource must not be touched
+					client.AssertNotCalled(GinkgoT(), "Move", mock.Anything, mock.Anything)
+					client.AssertNotCalled(GinkgoT(), "Delete", mock.Anything, mock.Anything)
+					// the response headers describe the untouched destination resource
+					Expect(rr.Header().Get(net.HeaderETag)).To(Equal(`"deadbeef"`))
+					Expect(rr.Header().Get(net.HeaderOCETag)).To(Equal(`"deadbeef"`))
+					Expect(rr.Header().Get(net.HeaderOCFileID)).ToNot(BeEmpty())
+				})
+
+				It("returns forbidden without move permission and does not move or delete", func() {
+					mockPathStat(mReq.Source.Path, status.NewOK(ctx), &cs3storageprovider.ResourceInfo{
+						Id:            sameID,
+						PermissionSet: &cs3storageprovider.ResourcePermissions{Move: false},
+					})
+					mockPathStat(mReq.Destination.Path, status.NewOK(ctx), &cs3storageprovider.ResourceInfo{
+						Id: sameID,
+					})
+
+					handler.Handler().ServeHTTP(rr, req)
+
+					Expect(rr).To(HaveHTTPStatus(http.StatusForbidden))
+					client.AssertNotCalled(GinkgoT(), "Move", mock.Anything, mock.Anything)
+					client.AssertNotCalled(GinkgoT(), "Delete", mock.Anything, mock.Anything)
 				})
 			})
 
@@ -709,7 +754,7 @@ var _ = Describe("ocdav", func() {
 				It("error when deleting an existing tree", func() {
 
 					mockPathStat(mReq.Source.Path, status.NewOK(ctx), &cs3storageprovider.ResourceInfo{Id: mReq.Source.ResourceId, Path: "./file"})
-					mockPathStat(mReq.Destination.Path, status.NewOK(ctx), &cs3storageprovider.ResourceInfo{Id: mReq.Destination.ResourceId, Path: "./newfile"})
+					mockPathStat(mReq.Destination.Path, status.NewOK(ctx), &cs3storageprovider.ResourceInfo{Id: &cs3storageprovider.ResourceId{StorageId: "provider-1", SpaceId: "userspace", OpaqueId: "newfile"}, Path: "./newfile"})
 
 					client.On("Delete", mock.Anything, mock.MatchedBy(func(req *cs3storageprovider.DeleteRequest) bool {
 						return utils.ResourceEqual(req.Ref, mReq.Destination)
@@ -731,7 +776,7 @@ var _ = Describe("ocdav", func() {
 				It("error when Delete returns unexpected code", func() {
 
 					mockPathStat(mReq.Source.Path, status.NewOK(ctx), &cs3storageprovider.ResourceInfo{Id: mReq.Source.ResourceId, Path: "./file"})
-					mockPathStat(mReq.Destination.Path, status.NewOK(ctx), &cs3storageprovider.ResourceInfo{Id: mReq.Destination.ResourceId, Path: "./newfile"})
+					mockPathStat(mReq.Destination.Path, status.NewOK(ctx), &cs3storageprovider.ResourceInfo{Id: &cs3storageprovider.ResourceId{StorageId: "provider-1", SpaceId: "userspace", OpaqueId: "newfile"}, Path: "./newfile"})
 
 					client.On("Delete", mock.Anything, mock.MatchedBy(func(req *cs3storageprovider.DeleteRequest) bool {
 						return utils.ResourceEqual(req.Ref, mReq.Destination)
@@ -890,7 +935,7 @@ var _ = Describe("ocdav", func() {
 
 			When("the gateway returns error when moving file", func() {
 				It("error when the source is a file and the destination is a folder", func() {
-					mockPathStat(mReq.Source.Path, status.NewOK(ctx), &cs3storageprovider.ResourceInfo{Id: mReq.Source.ResourceId})
+					mockPathStat(mReq.Source.Path, status.NewOK(ctx), &cs3storageprovider.ResourceInfo{Id: &cs3storageprovider.ResourceId{StorageId: "provider-1", SpaceId: "userspace", OpaqueId: "srcfile"}})
 
 					mockStat(mockReference("userspace", ""), status.NewOK(ctx), &cs3storageprovider.ResourceInfo{
 						Id: mReq.Destination.ResourceId, Path: mReq.Destination.Path,
@@ -990,7 +1035,7 @@ var _ = Describe("ocdav", func() {
 				})).Return(&cs3storageprovider.StatResponse{
 					Status: status.NewOK(ctx),
 					Info: &cs3storageprovider.ResourceInfo{
-						Id:       mReq.Source.ResourceId,
+						Id:       &cs3storageprovider.ResourceId{StorageId: "provider-1", OpaqueId: "dstStat", SpaceId: "userspace"},
 						ParentId: &cs3storageprovider.ResourceId{StorageId: "provider-1", OpaqueId: "dstId", SpaceId: "userspace"},
 						Name:     dstFileName,
 					},
