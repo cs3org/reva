@@ -21,11 +21,13 @@ package ocmd
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"net"
 	"net/http"
 	"net/http/httptest"
 	"os"
 	"reflect"
+	"strings"
 	"testing"
 	"time"
 
@@ -367,5 +369,179 @@ func TestPublicOnlyClientRefusesInternalHosts(t *testing.T) {
 				t.Errorf("Discover() error = %v, wantErr %v", err, tt.wantErr)
 			}
 		})
+	}
+}
+
+// 2 MiB is above the 1 MiB OCM response cap; using a fixed oversize keeps the
+// tests valid before the named constant exists and after it is added.
+const testOversizedOCMBody = 2 << 20
+
+func oversizedJSON(t *testing.T, extra map[string]any, largeField string) []byte {
+	t.Helper()
+	payload := map[string]any{}
+	for k, v := range extra {
+		payload[k] = v
+	}
+	payload[largeField] = strings.Repeat("a", testOversizedOCMBody)
+	body, err := json.Marshal(payload)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return body
+}
+
+func testNewShareRequest() *NewShareRequest {
+	return &NewShareRequest{
+		ShareWith:    "einstein@remote.example",
+		Name:         "notes.txt",
+		ProviderID:   "id-1",
+		Owner:        "marie@local.example",
+		Sender:       "marie@local.example",
+		ShareType:    "user",
+		ResourceType: "file",
+		Protocols: Protocols{
+			&WebDAV{
+				SharedSecret: "secret",
+				Permissions:  []string{"read"},
+				URI:          "https://local.example/dav/notes.txt",
+			},
+		},
+	}
+}
+
+func assertOCMResponseTooLarge(t *testing.T, err error) {
+	t.Helper()
+	if err == nil {
+		t.Fatal("expected oversized OCM response to be rejected")
+	}
+	if !errors.Is(err, errOCMResponseTooLarge) {
+		t.Fatalf("got error %q, want errOCMResponseTooLarge", err)
+	}
+}
+
+func TestDiscoverNormalSizedBody(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"enabled":    true,
+			"apiVersion": "1.1",
+			"provider":   "reva",
+		})
+	}))
+	defer srv.Close()
+
+	c := NewClient(10*time.Second, true)
+	disco, err := c.Discover(context.Background(), srv.URL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if disco == nil || !disco.Enabled || disco.APIVersion != "1.1" {
+		t.Fatalf("unexpected discovery payload: %+v", disco)
+	}
+}
+
+func TestDiscoverOversizedBody(t *testing.T) {
+	body := oversizedJSON(t, map[string]any{
+		"enabled":    true,
+		"apiVersion": "1.1",
+	}, "provider")
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write(body)
+	}))
+	defer srv.Close()
+
+	c := NewClient(10*time.Second, true)
+	disco, err := c.Discover(context.Background(), srv.URL)
+	assertOCMResponseTooLarge(t, err)
+	if disco != nil {
+		t.Fatalf("oversized discovery body must not be decoded, got %+v", disco)
+	}
+}
+
+func TestNewShareNormalSizedBody(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusCreated)
+		_ = json.NewEncoder(w).Encode(map[string]string{
+			"recipientDisplayName": "Alice",
+		})
+	}))
+	defer srv.Close()
+
+	c := NewClient(10*time.Second, true)
+	resp, err := c.NewShare(context.Background(), srv.URL, testNewShareRequest())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if resp == nil || resp.RecipientDisplayName != "Alice" {
+		t.Fatalf("unexpected share response: %+v", resp)
+	}
+}
+
+func TestNewShareOversizedBody(t *testing.T) {
+	body := oversizedJSON(t, nil, "recipientDisplayName")
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusCreated)
+		_, _ = w.Write(body)
+	}))
+	defer srv.Close()
+
+	c := NewClient(10*time.Second, true)
+	resp, err := c.NewShare(context.Background(), srv.URL, testNewShareRequest())
+	assertOCMResponseTooLarge(t, err)
+	if resp != nil {
+		t.Fatalf("oversized share body must not be decoded, got %+v", resp)
+	}
+}
+
+func TestNewShareOversizedTrailingBody(t *testing.T) {
+	body := []byte(`{"recipientDisplayName":"Alice"}` + strings.Repeat(" ", testOversizedOCMBody))
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusCreated)
+		_, _ = w.Write(body)
+	}))
+	defer srv.Close()
+
+	c := NewClient(10*time.Second, true)
+	resp, err := c.NewShare(context.Background(), srv.URL, testNewShareRequest())
+	assertOCMResponseTooLarge(t, err)
+	if resp != nil {
+		t.Fatalf("oversized trailing body must not return a decoded share, got %+v", resp)
+	}
+}
+
+func TestExchangeTokenOversizedBody(t *testing.T) {
+	body := oversizedJSON(t, map[string]any{"expires_in": 3600}, "access_token")
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write(body)
+	}))
+	defer srv.Close()
+
+	c := NewClient(10*time.Second, true)
+	tok, exp, err := c.ExchangeToken(context.Background(), srv.URL, "code123", "client1")
+	assertOCMResponseTooLarge(t, err)
+	if tok != "" || exp != 0 {
+		t.Fatalf("oversized token body must not be decoded, got token %q expires_in %d", tok, exp)
+	}
+}
+
+func TestExchangeTokenHTTP400OversizedBody(t *testing.T) {
+	body := oversizedJSON(t, map[string]any{"error": "invalid_grant"}, "error_description")
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusBadRequest)
+		_, _ = w.Write(body)
+	}))
+	defer srv.Close()
+
+	c := NewClient(10*time.Second, true)
+	tok, exp, err := c.ExchangeToken(context.Background(), srv.URL, "code123", "client1")
+	assertOCMResponseTooLarge(t, err)
+	if tok != "" || exp != 0 {
+		t.Fatalf("oversized HTTP 400 token body must not be decoded, got token %q expires_in %d", tok, exp)
 	}
 }

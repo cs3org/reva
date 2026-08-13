@@ -23,6 +23,7 @@ import (
 	"context"
 	"crypto/tls"
 	"encoding/json"
+	stderrors "errors"
 	"fmt"
 	"io"
 	"net"
@@ -53,6 +54,11 @@ var ErrUserAlreadyAccepted = errors.New("invitation already accepted")
 // ErrInvalidParameters is the error returned by the shares endpoint
 // when the request does not contain required properties.
 var ErrInvalidParameters = errors.New("invalid parameters")
+
+// maxOCMResponseBytes caps attacker-influenced OCM HTTP response bodies.
+const maxOCMResponseBytes = 1 << 20 // 1 MiB
+
+var errOCMResponseTooLarge = errors.New("ocm response body exceeds size limit")
 
 // OCMClient is the client for an OCM provider.
 type OCMClient struct {
@@ -153,10 +159,16 @@ func (c *OCMClient) Discover(ctx context.Context, endpoint string) (*wellknown.O
 	}
 	remoteurl, _ := url.JoinPath(endpoint, "/.well-known/ocm")
 	body, err := c.httpget(ctx, remoteurl)
+	if stderrors.Is(err, errOCMResponseTooLarge) {
+		return nil, err
+	}
 	if err != nil || len(body) == 0 {
 		log.Debug().Err(err).Any("remote", remoteurl).Str("response", string(body)).Msg("invalid or empty response, falling back to legacy discovery")
 		remoteurl, _ := url.JoinPath(endpoint, "/ocm-provider") // legacy discovery endpoint
 		body, err = c.httpget(ctx, remoteurl)
+		if stderrors.Is(err, errOCMResponseTooLarge) {
+			return nil, err
+		}
 		if err != nil || len(body) == 0 {
 			log.Warn().Err(err).Any("remote", remoteurl).Str("response", string(body)).Msg("invalid or empty response")
 			return nil, errtypes.InternalError("Invalid response on OCM discovery")
@@ -197,9 +209,35 @@ func (c *OCMClient) httpget(ctx context.Context, url string) ([]byte, error) {
 		return nil, errtypes.InternalError("Remote does not offer a valid OCM discovery endpoint")
 	}
 
-	body, err := io.ReadAll(resp.Body)
+	body, err := readOCMBody(resp.Body)
 	if err != nil {
 		return nil, errors.Wrap(err, "malformed remote OCM discovery")
+	}
+	return body, nil
+}
+
+func decodeOCMJSON(r io.Reader, v any) error {
+	limited := io.LimitReader(r, maxOCMResponseBytes+1)
+	err := json.NewDecoder(limited).Decode(v)
+	// Drain leftover limited bytes. Decode can stop after a valid JSON value
+	// while the body still exceeds the cap.
+	_, drainErr := io.Copy(io.Discard, limited)
+	if limited.(*io.LimitedReader).N == 0 {
+		return errOCMResponseTooLarge
+	}
+	if err != nil {
+		return err
+	}
+	return drainErr
+}
+
+func readOCMBody(r io.Reader) ([]byte, error) {
+	body, err := io.ReadAll(io.LimitReader(r, maxOCMResponseBytes+1))
+	if err != nil {
+		return nil, err
+	}
+	if int64(len(body)) > maxOCMResponseBytes {
+		return nil, errOCMResponseTooLarge
 	}
 	return body, nil
 }
@@ -243,15 +281,17 @@ func (c *OCMClient) parseNewShareResponse(r *http.Response) (*NewShareResponse, 
 	switch r.StatusCode {
 	case http.StatusOK, http.StatusCreated:
 		var res NewShareResponse
-		err := json.NewDecoder(r.Body).Decode(&res)
-		return &res, err
+		if err := decodeOCMJSON(r.Body, &res); err != nil {
+			return nil, errors.Wrap(err, "error decoding response body")
+		}
+		return &res, nil
 	case http.StatusBadRequest:
 		return nil, ErrInvalidParameters
 	case http.StatusUnauthorized, http.StatusForbidden:
 		return nil, ErrServiceNotTrusted
 	}
 
-	body, err := io.ReadAll(r.Body)
+	body, err := readOCMBody(r.Body)
 	if err != nil {
 		return nil, errors.Wrap(err, "error decoding response body")
 	}
@@ -351,7 +391,13 @@ func (c *OCMClient) ExchangeToken(ctx context.Context, tokenEndpoint, code, clie
 		var errBody struct {
 			Error string `json:"error"`
 		}
-		if err := json.NewDecoder(resp.Body).Decode(&errBody); err == nil && errBody.Error == "invalid_grant" {
+		if err := decodeOCMJSON(resp.Body, &errBody); err != nil {
+			if stderrors.Is(err, errOCMResponseTooLarge) {
+				return "", 0, errors.Wrap(err, "error decoding token exchange response")
+			}
+			return "", 0, errtypes.InternalError("token exchange returned HTTP 400 (sender contract error)")
+		}
+		if errBody.Error == "invalid_grant" {
 			return "", 0, errtypes.InvalidCredentials("token exchange: invalid_grant")
 		}
 		return "", 0, errtypes.InternalError("token exchange returned HTTP 400 (sender contract error)")
@@ -365,7 +411,7 @@ func (c *OCMClient) ExchangeToken(ctx context.Context, tokenEndpoint, code, clie
 		AccessToken string `json:"access_token"`
 		ExpiresIn   int64  `json:"expires_in"`
 	}
-	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+	if err := decodeOCMJSON(resp.Body, &result); err != nil {
 		return "", 0, errors.Wrap(err, "error decoding token exchange response")
 	}
 	if result.AccessToken == "" {
