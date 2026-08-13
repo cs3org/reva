@@ -216,7 +216,10 @@ func (m *PublicShareMgr) MarkAsOrphaned(ctx context.Context, ref *link.PublicSha
 	if err != nil {
 		return err
 	}
-	res := m.db.Model(&publicLink).Where("id = ?", publicLink.Id).Update("orphan", true)
+	res := m.db.Model(&publicLink).Where("id = ?", publicLink.Id).Updates(map[string]any{
+		"orphan":      true,
+		"orphaned_at": time.Now(),
+	})
 	return res.Error
 }
 
@@ -258,7 +261,7 @@ func (m *PublicShareMgr) ListPublicShares(ctx context.Context, u *user.User, fil
 	var cs3links []*link.PublicShare
 
 	for _, l := range links {
-		if !l.Orphan {
+		if !l.IsOrphan() {
 			cs3links = append(cs3links, l.AsCS3PublicShare())
 		}
 	}
@@ -310,7 +313,7 @@ func (m *PublicShareMgr) ListPublicLinks(u *user.User, filters []*link.ListPubli
 	query := m.db.Model(&model.PublicLink{})
 
 	if remove_orphan {
-		query = query.Where("orphan = ?", false)
+		query = query.Where("orphan = ?", false).Where("orphaned_at IS NULL")
 	}
 
 	if u != nil {
@@ -418,7 +421,7 @@ func (m *PublicShareMgr) getLinkByID(ctx context.Context, id *link.PublicShareId
 		return nil, errtypes.NotFound(id.OpaqueId)
 	}
 
-	if filter && (link.Orphan || isExpired(link)) {
+	if filter && (link.IsOrphan() || isExpired(link)) {
 		return nil, errtypes.NotFound(id.OpaqueId)
 	}
 
@@ -440,7 +443,7 @@ func (m *PublicShareMgr) getLinkByToken(ctx context.Context, token string, filte
 		return nil, errtypes.NotFound(token)
 	}
 
-	if filter && (link.Orphan || isExpired(link)) {
+	if filter && (link.IsOrphan() || isExpired(link)) {
 		return nil, errtypes.NotFound(token)
 	}
 

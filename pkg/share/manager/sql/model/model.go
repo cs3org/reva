@@ -120,10 +120,12 @@ type ShareID struct {
 type ProtoShare struct {
 	// Id has to be called Id and not ID, otherwise the foreign key will not work
 	// ID is a special field in GORM, which it uses as the default Primary Key
-	Id        uint    `gorm:"primaryKey;not null;autoIncrement:false"`
-	ShareId   ShareID `gorm:"foreignKey:Id;references:ID;constraint:OnDelete:CASCADE"` //;references:ID
-	CreatedAt time.Time
-	UpdatedAt time.Time
+	Id         uint    `gorm:"primaryKey;not null;autoIncrement:false"`
+	ShareId    ShareID `gorm:"foreignKey:Id;references:ID;constraint:OnDelete:CASCADE"` //;references:ID
+	CreatedAt  time.Time
+	UpdatedAt  time.Time
+	OrphanedAt datatypes.NullTime `gorm:"index"`
+
 	//DeletedAt  gorm.DeletedAt `gorm:"index"`
 	//Inode      string `gorm:"size:32;index"`
 	//Instance   string `gorm:"size:32;index"`
@@ -132,9 +134,17 @@ type ProtoShare struct {
 	ItemType     ItemType `gorm:"size:16;index"` // file | folder | reference | symlink
 	InitialPath  string
 	Permissions  uint8
+	// Orphan is being replaced by OrphanedAt: while the migration is ongoing, both
+	// are written when orphaning a share and both have to be checked when reading.
 	Orphan       bool               `gorm:"index"`
 	Expiration   datatypes.NullTime `gorm:"index"`
 	SpaceID      string             `gorm:"index"`
+}
+
+// IsOrphan reports whether the share was orphaned, according to either the
+// legacy boolean or the timestamp that is replacing it.
+func (p *ProtoShare) IsOrphan() bool {
+	return p.Orphan || p.OrphanedAt.Valid
 }
 
 // Share is a regular share between users or groups. The unique index ensures that there
