@@ -244,6 +244,7 @@ func (m *ShareMgr) ListReceivedShares(ctx context.Context, filters []*collaborat
 		Select("share_states.*, shares.*").
 		Joins("RIGHT OUTER JOIN shares ON shares.id = share_states.share_id and share_states.user = ?", user.Username).
 		Where("shares.orphan = ?", false).
+		Where("shares.orphaned_at IS NULL").
 		Where("shares.deleted_at IS NULL").
 		Where(m.db.Where("shares.expiration IS NULL").Or("shares.expiration > ?", time.Now()))
 
@@ -345,7 +346,7 @@ func (m *ShareMgr) UpdateReceivedShare(ctx context.Context, recvShare *collabora
 func (m *ShareMgr) ListModelShares(u *user.User, filters []*collaboration.Filter, hideOrphans bool) ([]model.Share, error) {
 	query := m.db.Model(&model.Share{})
 	if hideOrphans {
-		query = query.Where("orphan = ?", false)
+		query = query.Where("orphan = ?", false).Where("orphaned_at IS NULL")
 	}
 
 	if u != nil {
@@ -376,6 +377,7 @@ func (m *ShareMgr) GetShareUnfiltered(ctx context.Context, ref *collaboration.Sh
 func (m *ShareMgr) GetSharesByShareWith(ctx context.Context, shareWith string) ([]model.Share, error) {
 	query := m.db.Model(&model.Share{}).
 		Where("orphan = ?", false).
+		Where("orphaned_at IS NULL").
 		Where("share_with = ?", shareWith)
 
 	var shares []model.Share
@@ -411,7 +413,10 @@ func (m *ShareMgr) MarkAsOrphaned(ctx context.Context, ref *collaboration.ShareR
 		return err
 	}
 
-	res := m.db.Model(&share).Where("id = ?", share.Id).Update("orphan", true)
+	res := m.db.Model(&share).Where("id = ?", share.Id).Updates(map[string]any{
+		"orphan":      true,
+		"orphaned_at": time.Now(),
+	})
 	return res.Error
 }
 
@@ -510,7 +515,7 @@ func (m *ShareMgr) getShareByID(_ context.Context, id *collaboration.ShareId, fi
 		return nil, errtypes.NotFound(id.OpaqueId)
 	}
 
-	if filter && share.Orphan {
+	if filter && share.IsOrphan() {
 		return nil, errtypes.NotFound(id.OpaqueId)
 	}
 
@@ -543,7 +548,7 @@ func (m *ShareMgr) getShareByKey(ctx context.Context, key *collaboration.ShareKe
 		return nil, errtypes.NotFound(key.String())
 	}
 
-	if filter && share.Orphan {
+	if filter && share.IsOrphan() {
 		return nil, errtypes.NotFound(key.String())
 	}
 
