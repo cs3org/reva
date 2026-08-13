@@ -371,20 +371,30 @@ func (s *service) CreateContainer(ctx context.Context, req *provider.CreateConta
 		return res, nil
 	}
 
-	// the fileid in the opaque points at the real resource,
-	// translate it to the public namespace like Stat does
-	if res.Opaque != nil {
-		if e, ok := res.Opaque.Map["fileid"]; ok {
-			if id, ok := spaces.ParseResourceID(string(e.Value)); ok {
-				s.setPublicStorageID(&provider.ResourceInfo{Id: id}, tkn)
-				e.Value = []byte(spaces.EncodeToStringifiedResourceID(id))
-			} else {
-				delete(res.Opaque.Map, "fileid")
-			}
-		}
-	}
+	s.translateOpaqueFileID(res.Opaque, tkn)
 
 	return res, nil
+}
+
+// the fileid a storage reports points at the real resource, so rewrite it into
+// the public namespace the same way Stat does
+func (s *service) translateOpaqueFileID(o *typesv1beta1.Opaque, shareToken string) {
+	if o == nil {
+		return
+	}
+	e, ok := o.Map["fileid"]
+	if !ok {
+		return
+	}
+	id, ok := spaces.ParseResourceID(string(e.Value))
+	if !ok {
+		// an id we cannot read is worse than no id, the etag next to it is still good
+		delete(o.Map, "fileid")
+		return
+	}
+	// setPublicStorageID writes through the id we pass in
+	s.setPublicStorageID(&provider.ResourceInfo{Id: id}, shareToken)
+	e.Value = []byte(spaces.EncodeToStringifiedResourceID(id))
 }
 
 func (s *service) TouchFile(ctx context.Context, req *provider.TouchFileRequest) (*provider.TouchFileResponse, error) {
