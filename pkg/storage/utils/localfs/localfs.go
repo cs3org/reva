@@ -909,9 +909,10 @@ func (fs *localfs) CreateDir(ctx context.Context, ref *provider.Reference) (*pro
 		return nil, err
 	}
 
-	// don't fail the creation if we cannot stat the new dir
+	// the dir is there, we only miss its metadata
 	md, err := fs.GetMD(ctx, ref, nil)
 	if err != nil {
+		appctx.GetLogger(ctx).Warn().Str("fn", fn).Err(err).Msg("localfs: error statting created directory")
 		return nil, nil
 	}
 	return md, nil
