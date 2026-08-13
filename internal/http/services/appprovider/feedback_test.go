@@ -88,7 +88,7 @@ func TestHandleFeedbackPublishesEvent(t *testing.T) {
 	if err != nil {
 		t.Fatalf("decode event: %v", err)
 	}
-	if len(recipients) != 1 || recipients[0] != "cernbox-admins@cern.ch" {
+	if len(recipients) != 1 || recipients[0].GetMail() != "cernbox-admins@cern.ch" {
 		t.Fatalf("recipients = %+v, want [cernbox-admins@cern.ch]", recipients)
 	}
 	if templateData["submitter_display_name"] != "einstein display" {

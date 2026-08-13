@@ -18,7 +18,11 @@
 
 package model
 
-import "time"
+import (
+	"time"
+
+	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
+)
 
 const (
 	TypeDirect      = "direct"
@@ -34,13 +38,13 @@ type AccumulationPolicy struct {
 // Envelope is the durable notification message sent through NATS and stored in
 // SQL for accumulated notifications.
 type Envelope struct {
-	ID             string         `json:"id"`
-	EventType      string         `json:"event_type"`
-	SubmittingUser string         `json:"submitting_user"`
-	Sender         string         `json:"sender,omitempty"`
-	Recipients     []string       `json:"recipients"`
-	TemplateData   map[string]any `json:"template_data,omitempty"`
-	SubmittedAt    time.Time      `json:"submitted_at"`
+	ID             string `json:"id"`
+	EventType      string `json:"event_type"`
+	SubmittingUser string `json:"submitting_user"`
+	//Sender         string         `json:"sender,omitempty"`
+	Recipients   []*userpb.User `json:"recipients"`
+	TemplateData map[string]any `json:"template_data,omitempty"`
+	SubmittedAt  time.Time      `json:"submitted_at"`
 
 	// The following fields are resolved by the notification worker from event
 	// rules before dispatch or accumulation. They are not accepted from

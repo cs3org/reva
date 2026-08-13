@@ -87,6 +87,7 @@ type EmailHandler struct {
 	cidRelPaths []string
 	cidFolder   string
 	templates   map[string]*emailTemplate
+	dialer      *mail.Dialer
 }
 
 // NewEmailHandler creates an email handler from SMTP settings and template registrations.
@@ -97,8 +98,22 @@ func NewEmailHandler(ctx context.Context, m map[string]any) (*EmailHandler, erro
 	}
 	conf.ApplyDefaults()
 
-	if len(strings.Split(conf.SMTPAddress, ":")) != 2 {
-		return nil, fmt.Errorf("invalid SMTP address %q, must be in the format host:port", conf.SMTPAddress)
+	host, portStr, ok := strings.Cut(conf.SMTPAddress, ":")
+	if !ok {
+		return nil, fmt.Errorf("invalid SMTP address format %q: expected host:port", conf.SMTPAddress)
+	}
+	port, err := strconv.Atoi(portStr)
+	if err != nil {
+		return nil, fmt.Errorf("invalid SMTP port %s: %w", portStr, err)
+	}
+
+	dialer := &mail.Dialer{
+		Host: host,
+		Port: port,
+	}
+	if !conf.DisableAuth {
+		dialer.Username = conf.SenderLogin
+		dialer.Password = conf.SenderPassword
 	}
 
 	log := appctx.GetLogger(ctx)
@@ -107,6 +122,7 @@ func NewEmailHandler(ctx context.Context, m map[string]any) (*EmailHandler, erro
 		log:       log,
 		cidFolder: conf.CIDFolder,
 		templates: make(map[string]*emailTemplate, len(conf.Templates)),
+		dialer:    dialer,
 	}
 
 	files, err := listFilenames(conf.CIDFolder)
@@ -167,9 +183,12 @@ func (h *EmailHandler) Send(_ context.Context, envelope model.Envelope) error {
 	}
 
 	for _, recipient := range envelope.Recipients {
-		recipientLog := log.With().Str("recipient", recipient).Logger()
+		recipientLog := log.With().
+			Str("recipient", recipient.GetMail()).
+			Str("recipient_username", recipient.GetUsername()).
+			Logger()
 		recipientLog.Info().Msg("notifications: email handler sending email")
-		if err := h.sendEmail(envelope.Sender, recipient, subject, body); err != nil {
+		if err := h.sendEmail(recipient.GetMail(), subject, body); err != nil {
 			recipientLog.Error().Err(err).Msg("notifications: email handler failed to send email")
 			return err
 		}
@@ -215,17 +234,14 @@ func (t *emailTemplate) renderBody(arguments map[string]any) (string, error) {
 	return buf.String(), err
 }
 
-func (h *EmailHandler) sendEmail(sender, recipient, subject, body string) error {
-	if strings.TrimSpace(sender) == "" {
-		sender = h.conf.DefaultSender
-	}
+// sendEmail sends one rendered notification. Notifications are never sent on a
+// user's behalf, so they always come from the configured sender.
+func (h *EmailHandler) sendEmail(recipient, subject, body string) error {
+	sender := h.conf.DefaultSender
 	if strings.TrimSpace(recipient) == "" {
 		return errors.New("recipient address cannot be empty")
 	}
 
-	if _, err := stdmail.ParseAddress(sender); err != nil {
-		sender = h.conf.DefaultSender
-	}
 	if _, err := stdmail.ParseAddress(recipient); err != nil {
 		return fmt.Errorf("invalid recipient address format %s: %w", recipient, err)
 	}
@@ -243,25 +259,7 @@ func (h *EmailHandler) sendEmail(sender, recipient, subject, body string) error 
 
 	message.SetBody("text/html", body)
 
-	host, portStr, ok := strings.Cut(h.conf.SMTPAddress, ":")
-	if !ok {
-		return errors.New("invalid SMTP address format: expected host:port")
-	}
-	port, err := strconv.Atoi(portStr)
-	if err != nil {
-		return fmt.Errorf("invalid SMTP port %s: %w", portStr, err)
-	}
-
-	dialer := &mail.Dialer{
-		Host: host,
-		Port: port,
-	}
-	if !h.conf.DisableAuth {
-		dialer.Username = h.conf.SenderLogin
-		dialer.Password = h.conf.SenderPassword
-	}
-
-	return dialer.DialAndSend(message)
+	return h.dialer.DialAndSend(message)
 }
 
 func listFilenames(dir string) ([]string, error) {

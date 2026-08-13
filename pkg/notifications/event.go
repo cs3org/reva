@@ -42,7 +42,7 @@ const (
 // submitting user are intentionally absent: the gateway derives them from the
 // authenticated request context, and the CS3 API forbids callers from supplying
 // them.
-func EncodeEvent(eventType string, recipients []string, templateData map[string]any) *gateway.Event {
+func EncodeEvent(eventType string, recipients []*userpb.User, templateData map[string]any) *gateway.Event {
 	data := &types.Opaque{Map: map[string]*types.OpaqueEntry{}}
 
 	setJSON(data, recipientsKey, recipients)
@@ -60,7 +60,7 @@ func EncodeEvent(eventType string, recipients []string, templateData map[string]
 // the event with EncodeEvent. It is the inverse of EncodeEvent; the event type
 // is read directly from the event and the identities are resolved by the
 // gateway from the request context.
-func DecodeEvent(event *gateway.Event) (recipients []string, templateData map[string]any, err error) {
+func DecodeEvent(event *gateway.Event) (recipients []*userpb.User, templateData map[string]any, err error) {
 	if err = getJSON(event.GetData(), recipientsKey, &recipients); err != nil {
 		return nil, nil, err
 	}

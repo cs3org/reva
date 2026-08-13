@@ -40,12 +40,14 @@ func (s *svc) sendUploadNotification(ctx context.Context, client gateway.Gateway
 		return
 	}
 
-	var recipients []string
 	publicShare := publicShareFromResourceInfo(info)
-	if publicShare != nil {
-		recipients = append(recipients, s.notificationRecipientsFromPublicShare(ctx, client, publicShare, log)...)
+	if publicShare == nil {
+		return
 	}
-	recipients = uniqueNonEmptyStrings(recipients)
+
+	var recipients []*userpb.User
+	recipients = append(recipients, s.notificationRecipientsFromPublicShare(ctx, client, publicShare, log)...)
+	recipients = uniqueRecipients(recipients)
 	if len(recipients) == 0 {
 		return
 	}
@@ -57,10 +59,8 @@ func (s *svc) sendUploadNotification(ctx context.Context, client gateway.Gateway
 		"resource_type": info.GetType().String(),
 		"mime_type":     info.GetMimeType(),
 		"size":          info.GetSize(),
-	}
-	if publicShare != nil {
-		templateData["share_id"] = publicShareIDString(publicShare)
-		templateData["share_token"] = publicShare.GetToken()
+		"share_id":      publicShareIDString(publicShare),
+		"share_token":   publicShare.GetToken(),
 	}
 
 	// PublishEvent is restricted to reva daemons. Re-sign this request's token with
@@ -72,18 +72,16 @@ func (s *svc) sendUploadNotification(ctx context.Context, client gateway.Gateway
 		return
 	}
 
-	if publicShare != nil {
-		// Name the shared folder the upload landed in. The machine scope lets us
-		// stat the link's target directly, so we read the folder's real name and
-		// path rather than the public-link path or the uploaded file.
-		if res, err := client.Stat(publishCtx, &provider.StatRequest{
-			Ref: &provider.Reference{ResourceId: publicShare.GetResourceId()},
-		}); err == nil && res.GetStatus().GetCode() == rpc.Code_CODE_OK {
-			templateData["share_path"] = res.GetInfo().GetPath()
-			templateData["share_name"] = res.GetInfo().GetName()
-		} else {
-			log.Error().Err(err).Msg("failed to resolve shared folder for upload notification")
-		}
+	// Name the shared folder the upload landed in. The machine scope lets us
+	// stat the link's target directly, so we read the folder's real name and
+	// path rather than the public-link path or the uploaded file.
+	if res, err := client.Stat(publishCtx, &provider.StatRequest{
+		Ref: &provider.Reference{ResourceId: publicShare.GetResourceId()},
+	}); err == nil && res.GetStatus().GetCode() == rpc.Code_CODE_OK {
+		templateData["share_path"] = res.GetInfo().GetPath()
+		templateData["share_name"] = res.GetInfo().GetName()
+	} else {
+		log.Error().Err(err).Msg("failed to resolve shared folder for upload notification")
 	}
 
 	event := notifications.EncodeEvent(model.EventUpload, recipients, templateData)
@@ -97,22 +95,28 @@ func (s *svc) sendUploadNotification(ctx context.Context, client gateway.Gateway
 	}
 }
 
-func (s *svc) notificationRecipientsFromPublicShare(ctx context.Context, client gateway.GatewayAPIClient, publicShare *link.PublicShare, log zerolog.Logger) []string {
-	recipients := splitRecipients(publicShare.GetNotifyUploadsExtraRecipients())
+func (s *svc) notificationRecipientsFromPublicShare(ctx context.Context, client gateway.GatewayAPIClient, publicShare *link.PublicShare, log zerolog.Logger) []*userpb.User {
+	var recipients []*userpb.User
+	for _, address := range splitRecipients(publicShare.GetNotifyUploadsExtraRecipients()) {
+		// The extra recipients of a link are addresses typed by its creator,
+		// they need not belong to an account here.
+		recipients = append(recipients, &userpb.User{Mail: address})
+	}
 	if publicShare.GetNotifyUploads() {
-		ownerMail := s.publicShareOwnerMail(ctx, client, publicShare, log)
-		recipients = append(recipients, ownerMail)
+		if owner := s.publicShareOwner(ctx, client, publicShare, log); owner != nil {
+			recipients = append(recipients, owner)
+		}
 	}
 	return recipients
 }
 
-func (s *svc) publicShareOwnerMail(ctx context.Context, client gateway.GatewayAPIClient, publicShare *link.PublicShare, log zerolog.Logger) string {
+func (s *svc) publicShareOwner(ctx context.Context, client gateway.GatewayAPIClient, publicShare *link.PublicShare, log zerolog.Logger) *userpb.User {
 	owner := publicShare.GetOwner()
 	if owner == nil {
 		owner = publicShare.GetCreator()
 	}
 	if owner == nil || client == nil {
-		return ""
+		return nil
 	}
 
 	res, err := client.GetUser(ctx, &userpb.GetUserRequest{
@@ -121,9 +125,9 @@ func (s *svc) publicShareOwnerMail(ctx context.Context, client gateway.GatewayAP
 	})
 	if err != nil || res.GetStatus().GetCode() != rpc.Code_CODE_OK || res.GetUser() == nil {
 		log.Debug().Err(err).Msg("failed to resolve public share owner for upload notification")
-		return ""
+		return nil
 	}
-	return res.GetUser().GetMail()
+	return res.GetUser()
 }
 
 func publicShareIDString(publicShare *link.PublicShare) string {
@@ -161,20 +165,22 @@ func splitRecipients(value string) []string {
 	return recipients
 }
 
-func uniqueNonEmptyStrings(values []string) []string {
-	out := make([]string, 0, len(values))
-	seen := make(map[string]struct{}, len(values))
-	for _, value := range values {
-		value = strings.TrimSpace(value)
-		if value == "" {
+// uniqueRecipients drops the recipients without an address and collapses the
+// ones sharing one, as the link owner may also be listed as an extra recipient.
+func uniqueRecipients(users []*userpb.User) []*userpb.User {
+	out := make([]*userpb.User, 0, len(users))
+	seen := make(map[string]struct{}, len(users))
+	for _, user := range users {
+		mail := strings.TrimSpace(user.GetMail())
+		if mail == "" {
 			continue
 		}
-		key := strings.ToLower(value)
+		key := strings.ToLower(mail)
 		if _, ok := seen[key]; ok {
 			continue
 		}
 		seen[key] = struct{}{}
-		out = append(out, value)
+		out = append(out, user)
 	}
 	return out
 }

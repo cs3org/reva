@@ -25,6 +25,7 @@ import (
 	"strings"
 
 	gateway "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
+	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	"github.com/cs3org/reva/v3/pkg/appctx"
 	"github.com/cs3org/reva/v3/pkg/auth/scope"
@@ -99,7 +100,10 @@ func (s *svc) handleFeedback(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	event := notifications.EncodeEvent(model.EventFeedback, []string{s.conf.FeedbackRecipient}, templateData)
+	// The feedback mailbox is a configured address, not an account, so it is
+	// only known by its mail.
+	recipients := []*userpb.User{{Mail: s.conf.FeedbackRecipient}}
+	event := notifications.EncodeEvent(model.EventFeedback, recipients, templateData)
 	res, err := client.PublishEvent(publishCtx, &gateway.PublishEventRequest{Event: event})
 	if err != nil {
 		writeError(w, r, appErrorServerError, "failed to send feedback notification", err)
