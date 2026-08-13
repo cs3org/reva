@@ -59,7 +59,7 @@ func daemonCtx(user *userpb.User) context.Context {
 
 func TestPublishEventRequiresMachineScope(t *testing.T) {
 	s := &svc{eventBackend: &recordingBackend{}, eventLimiter: ratelimiters.Noop{}}
-	event := notifications.EncodeEvent("share.created", []string{"bob@example.org"}, nil)
+	event := notifications.EncodeEvent("share.created", []*userpb.User{{Mail: "bob@example.org"}}, nil)
 	user := &userpb.User{Id: &userpb.UserId{OpaqueId: "alice"}, Mail: "alice@example.org"}
 
 	// A normal user token (no machine scope) is rejected.
@@ -84,7 +84,7 @@ func TestPublishEventRequiresMachineScope(t *testing.T) {
 
 func TestPublishEventRateLimitsPerSubmittingUser(t *testing.T) {
 	s := &svc{eventBackend: &recordingBackend{}, eventLimiter: ratelimiters.NewFixedWindow(1, time.Minute)}
-	event := notifications.EncodeEvent("share.created", []string{"bob@example.org"}, nil)
+	event := notifications.EncodeEvent("share.created", []*userpb.User{{Mail: "bob@example.org"}}, nil)
 
 	alice := daemonCtx(&userpb.User{Id: &userpb.UserId{OpaqueId: "alice"}})
 	res, err := s.PublishEvent(alice, &gateway.PublishEventRequest{Event: event})
@@ -110,7 +110,7 @@ func TestPublishEventRateLimitsPerSubmittingUser(t *testing.T) {
 func TestPublishEventPublishesEventOnly(t *testing.T) {
 	backend := &recordingBackend{}
 	s := &svc{eventBackend: backend, eventLimiter: ratelimiters.Noop{}}
-	event := notifications.EncodeEvent("office.mention", []string{"bob@example.org"}, map[string]any{"document_id": "doc-1"})
+	event := notifications.EncodeEvent("office.mention", []*userpb.User{{Mail: "bob@example.org"}}, map[string]any{"document_id": "doc-1"})
 
 	ctx := daemonCtx(&userpb.User{Id: &userpb.UserId{OpaqueId: "alice"}, Mail: "alice@example.org"})
 	res, err := s.PublishEvent(ctx, &gateway.PublishEventRequest{Event: event})
@@ -204,7 +204,7 @@ func callPublishEvent(t *testing.T, s *svc, tkn string, req *gateway.PublishEven
 
 func uploadEventRequest() *gateway.PublishEventRequest {
 	return &gateway.PublishEventRequest{
-		Event: notifications.EncodeEvent(model.EventUpload, []string{"owner@example.org"}, map[string]any{
+		Event: notifications.EncodeEvent(model.EventUpload, []*userpb.User{{Mail: "owner@example.org"}}, map[string]any{
 			"resource_name": "report.pdf",
 		}),
 	}

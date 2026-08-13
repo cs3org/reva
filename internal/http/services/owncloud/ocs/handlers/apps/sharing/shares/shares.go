@@ -382,36 +382,43 @@ func (h *Handler) NotifyShare(w http.ResponseWriter, r *http.Request) {
 // returns the resolved recipient and an error when publishing the event fails,
 // so the caller can surface it rather than silently returning success.
 func (h *Handler) SendShareNotification(ctx context.Context, client gateway.GatewayAPIClient, eventType, opaqueID string, granter *userpb.User, grantee any, statInfo *provider.ResourceInfo) (string, error) {
-	var recipient string
+	var recipient *userpb.User
 	var recipientName string
 	var recipientUsername string
 	recipientIsGroup := false
 
 	if u, ok := grantee.(*userpb.User); ok {
-		recipient = u.Mail
+		recipient = u
 		recipientUsername = u.GetUsername()
 		recipientName = u.GetDisplayName()
 		if recipientName == "" {
 			recipientName = recipientUsername
 		}
 	} else if g, ok := grantee.(*grouppb.Group); ok {
-		recipient = g.Mail
 		recipientUsername = g.GetGroupName()
 		recipientName = g.GetDisplayName()
 		if recipientName == "" {
 			recipientName = recipientUsername
 		}
+		// A group has no account of its own, the notification goes to its
+		// mailing list address.
+		recipient = &userpb.User{
+			Username:    recipientUsername,
+			DisplayName: recipientName,
+			Mail:        g.GetMail(),
+		}
 		recipientIsGroup = true
 	}
 
-	if strings.TrimSpace(recipient) == "" {
+	recipientMail := strings.TrimSpace(recipient.GetMail())
+	if recipientMail == "" {
 		h.Log.Debug().Msgf("notification trigger %s skipped because recipient is empty", opaqueID)
-		return recipient, nil
+		return recipientMail, nil
 	}
 
 	templateData := map[string]any{
 		"share_id":               opaqueID,
-		"recipient":              recipient,
+		"recipient":              recipientMail,
 		"recipient_display_name": recipientName,
 		"recipient_username":     recipientUsername,
 		"recipient_is_group":     recipientIsGroup,
@@ -428,19 +435,19 @@ func (h *Handler) SendShareNotification(ctx context.Context, client gateway.Gate
 	// the machine scope, keeping the acting user (the granter) unchanged.
 	publishCtx, err := scope.ContextWithMachineScope(ctx)
 	if err != nil {
-		return recipient, fmt.Errorf("failed to elevate context for share notification: %w", err)
+		return recipientMail, fmt.Errorf("failed to elevate context for share notification: %w", err)
 	}
 
-	event := notifications.EncodeEvent(eventType, []string{recipient}, templateData)
+	event := notifications.EncodeEvent(eventType, []*userpb.User{recipient}, templateData)
 	res, err := client.PublishEvent(publishCtx, &gateway.PublishEventRequest{Event: event})
 	if err != nil {
-		return recipient, fmt.Errorf("failed to send share notification event: %w", err)
+		return recipientMail, fmt.Errorf("failed to send share notification event: %w", err)
 	}
 	if code := res.GetStatus().GetCode(); code != rpc.Code_CODE_OK {
-		return recipient, fmt.Errorf("gateway rejected share notification event %q for share %s: %s (%s)", eventType, opaqueID, code.String(), res.GetStatus().GetMessage())
+		return recipientMail, fmt.Errorf("gateway rejected share notification event %q for share %s: %s (%s)", eventType, opaqueID, code.String(), res.GetStatus().GetMessage())
 	}
 
-	return recipient, nil
+	return recipientMail, nil
 }
 
 func (h *Handler) extractPermissions(w http.ResponseWriter, r *http.Request, ri *provider.ResourceInfo, defaultPermissions *permissions.Role) (*permissions.Role, []byte, error) {
