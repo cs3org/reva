@@ -150,9 +150,10 @@ func (fs *cephfs) CreateDir(ctx context.Context, ref *provider.Reference) (*prov
 		return nil, getRevaError(ctx, err)
 	}
 
-	// stat the new dir to return its info, best effort
+	// the dir is there, we only miss its metadata
 	md, err := fs.GetMD(ctx, ref, nil)
 	if err != nil {
+		log.Warn().Str("path", path).Err(err).Msg("cephfs: error statting created directory")
 		return nil, nil
 	}
 	return md, nil

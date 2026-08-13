@@ -34,8 +34,10 @@ import (
 type FS interface {
 	GetHome(ctx context.Context) (string, error)
 	CreateHome(ctx context.Context) error
-	// CreateDir creates a directory. It returns the ResourceInfo of the new
-	// directory when the driver can provide it without extra cost, nil otherwise.
+	// CreateDir creates a directory and describes it, so that callers do not
+	// have to stat it themselves. Drivers usually pay a stat for this. It is
+	// best effort: the directory is created even when the info comes back nil,
+	// so callers have to handle that.
 	CreateDir(ctx context.Context, ref *provider.Reference) (*provider.ResourceInfo, error)
 	TouchFile(ctx context.Context, ref *provider.Reference) error
 	Delete(ctx context.Context, ref *provider.Reference) error

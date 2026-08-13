@@ -635,9 +635,10 @@ func (fs *cephmountfs) CreateDir(ctx context.Context, ref *provider.Reference) (
 		return nil, wrappedErr
 	}
 
-	// creation succeeded, so a failing stat only costs us the response info
+	// the dir is there, we only miss its metadata
 	md, err := fs.GetMD(ctx, ref, nil)
 	if err != nil {
+		appctx.GetLogger(ctx).Warn().Str("path", path).Err(err).Msg("cephmount: error statting created directory")
 		return nil, nil
 	}
 	return md, nil
