@@ -1111,6 +1111,74 @@ var _ = Describe("ocdav", func() {
 			})
 		})
 
+		Describe("MOVE a resource to the name it already has", func() {
+			// see https://github.com/owncloud/ocis/issues/1976. The id based dav route
+			// addresses the source by its own id and the destination relative to the
+			// parent, so the two references carry different resource ids even though they
+			// resolve to the same path. The recursion detection sees a path that is a
+			// prefix of itself, so the same name check has to run before it.
+			sameID := &cs3storageprovider.ResourceId{StorageId: "provider-1", SpaceId: "userspace", OpaqueId: "fileId"}
+
+			var srcRef, dstRef *cs3storageprovider.Reference
+
+			BeforeEach(func() {
+				srcRef = mockReference("fileId", ".")
+				// the space id form of the destination carries no opaque id
+				dstRef = mockReference("", "./textfile.txt")
+
+				rr = httptest.NewRecorder()
+				req, err = http.NewRequest("MOVE", basePath+"/provider-1$userspace!fileId", strings.NewReader(""))
+				Expect(err).ToNot(HaveOccurred())
+				req = req.WithContext(ctx)
+				req.Header.Set(net.HeaderDestination, basePath+"/provider-1$userspace/textfile.txt")
+				req.Header.Set("Overwrite", "T")
+
+				// both references resolve to the same path
+				client.On("GetPath", mock.Anything, mock.Anything).Return(func(ctx context.Context, req *cs3storageprovider.GetPathRequest, _ ...grpc.CallOption) (*cs3storageprovider.GetPathResponse, error) {
+					switch req.ResourceId.OpaqueId {
+					case "fileId":
+						return &cs3storageprovider.GetPathResponse{Status: status.NewOK(ctx), Path: "/textfile.txt"}, nil
+					default:
+						return &cs3storageprovider.GetPathResponse{Status: status.NewOK(ctx), Path: "/"}, nil
+					}
+				})
+			})
+
+			It("succeeds as a no-op with move permission and does not move or delete", func() {
+				mockStatOK(srcRef, &cs3storageprovider.ResourceInfo{
+					Id:            sameID,
+					PermissionSet: &cs3storageprovider.ResourcePermissions{Move: true},
+				})
+				mockStatOK(dstRef, &cs3storageprovider.ResourceInfo{
+					Id:       sameID,
+					MimeType: "text/plain",
+					Etag:     `"deadbeef"`,
+				})
+
+				handler.Handler().ServeHTTP(rr, req)
+
+				Expect(rr).To(HaveHTTPStatus(http.StatusNoContent))
+				client.AssertNotCalled(GinkgoT(), "Move", mock.Anything, mock.Anything)
+				client.AssertNotCalled(GinkgoT(), "Delete", mock.Anything, mock.Anything)
+				Expect(rr.Header().Get(net.HeaderETag)).To(Equal(`"deadbeef"`))
+				Expect(rr.Header().Get(net.HeaderOCETag)).To(Equal(`"deadbeef"`))
+			})
+
+			It("returns forbidden without move permission and does not move or delete", func() {
+				mockStatOK(srcRef, &cs3storageprovider.ResourceInfo{
+					Id:            sameID,
+					PermissionSet: &cs3storageprovider.ResourcePermissions{Move: false},
+				})
+				mockStatOK(dstRef, &cs3storageprovider.ResourceInfo{Id: sameID})
+
+				handler.Handler().ServeHTTP(rr, req)
+
+				Expect(rr).To(HaveHTTPStatus(http.StatusForbidden))
+				client.AssertNotCalled(GinkgoT(), "Move", mock.Anything, mock.Anything)
+				client.AssertNotCalled(GinkgoT(), "Delete", mock.Anything, mock.Anything)
+			})
+		})
+
 	})
 	Context("at the /dav/public-files endpoint", func() {
 

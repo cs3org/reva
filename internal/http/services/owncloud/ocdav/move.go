@@ -148,59 +148,6 @@ func (s *svc) handleMove(ctx context.Context, w http.ResponseWriter, r *http.Req
 		errors.HandleWebdavError(&log, w, b, err)
 		return
 	}
-	isChild, err := s.referenceIsChildOf(ctx, s.gatewaySelector, dst, src)
-	if err != nil {
-		switch err.(type) {
-		case errtypes.IsNotFound:
-			w.WriteHeader(http.StatusNotFound)
-		case errtypes.IsNotSupported:
-			log.Error().Err(err).Msg("can not detect recursive move operation. missing machine auth configuration?")
-			w.WriteHeader(http.StatusForbidden)
-		default:
-			log.Error().Err(err).Msg("error while trying to detect recursive move operation")
-			w.WriteHeader(http.StatusInternalServerError)
-		}
-		return
-	}
-	if isChild {
-		w.WriteHeader(http.StatusConflict)
-		b, err := errors.Marshal(http.StatusBadRequest, "can not move a folder into one of its children", "", "")
-		errors.HandleWebdavError(&log, w, b, err)
-		return
-	}
-
-	isParent, err := s.referenceIsChildOf(ctx, s.gatewaySelector, src, dst)
-	if err != nil {
-		switch err.(type) {
-		case errtypes.IsNotFound:
-			isParent = false
-		case errtypes.IsNotSupported:
-			log.Error().Err(err).Msg("can not detect recursive move operation. missing machine auth configuration?")
-			w.WriteHeader(http.StatusForbidden)
-			return
-		default:
-			log.Error().Err(err).Msg("error while trying to detect recursive move operation")
-			w.WriteHeader(http.StatusInternalServerError)
-			return
-		}
-	}
-	if isParent {
-		w.WriteHeader(http.StatusConflict)
-		b, err := errors.Marshal(http.StatusBadRequest, "can not move a folder into its parent", "", "")
-		errors.HandleWebdavError(&log, w, b, err)
-		return
-
-	}
-
-	oh := r.Header.Get(net.HeaderOverwrite)
-	log.Debug().Str("overwrite", oh).Msg("move")
-
-	overwrite, err := net.ParseOverwrite(oh)
-	if err != nil {
-		w.WriteHeader(http.StatusBadRequest)
-		return
-	}
-
 	client, err := s.gatewaySelector.Next()
 	if err != nil {
 		log.Error().Err(err).Msg("error selecting next client")
@@ -261,6 +208,59 @@ func (s *svc) handleMove(ctx context.Context, w http.ResponseWriter, r *http.Req
 		w.Header().Set(net.HeaderOCFileID, storagespace.FormatResourceID(info.GetId()))
 		w.Header().Set(net.HeaderOCETag, info.GetEtag())
 		w.WriteHeader(http.StatusNoContent)
+		return
+	}
+
+	isChild, err := s.referenceIsChildOf(ctx, s.gatewaySelector, dst, src)
+	if err != nil {
+		switch err.(type) {
+		case errtypes.IsNotFound:
+			w.WriteHeader(http.StatusNotFound)
+		case errtypes.IsNotSupported:
+			log.Error().Err(err).Msg("can not detect recursive move operation. missing machine auth configuration?")
+			w.WriteHeader(http.StatusForbidden)
+		default:
+			log.Error().Err(err).Msg("error while trying to detect recursive move operation")
+			w.WriteHeader(http.StatusInternalServerError)
+		}
+		return
+	}
+	if isChild {
+		w.WriteHeader(http.StatusConflict)
+		b, err := errors.Marshal(http.StatusBadRequest, "can not move a folder into one of its children", "", "")
+		errors.HandleWebdavError(&log, w, b, err)
+		return
+	}
+
+	isParent, err := s.referenceIsChildOf(ctx, s.gatewaySelector, src, dst)
+	if err != nil {
+		switch err.(type) {
+		case errtypes.IsNotFound:
+			isParent = false
+		case errtypes.IsNotSupported:
+			log.Error().Err(err).Msg("can not detect recursive move operation. missing machine auth configuration?")
+			w.WriteHeader(http.StatusForbidden)
+			return
+		default:
+			log.Error().Err(err).Msg("error while trying to detect recursive move operation")
+			w.WriteHeader(http.StatusInternalServerError)
+			return
+		}
+	}
+	if isParent {
+		w.WriteHeader(http.StatusConflict)
+		b, err := errors.Marshal(http.StatusBadRequest, "can not move a folder into its parent", "", "")
+		errors.HandleWebdavError(&log, w, b, err)
+		return
+
+	}
+
+	oh := r.Header.Get(net.HeaderOverwrite)
+	log.Debug().Str("overwrite", oh).Msg("move")
+
+	overwrite, err := net.ParseOverwrite(oh)
+	if err != nil {
+		w.WriteHeader(http.StatusBadRequest)
 		return
 	}
 
