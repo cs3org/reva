@@ -624,7 +624,7 @@ func (fs *cephmountfs) CreateDir(ctx context.Context, ref *provider.Reference) (
 
 	if err := fs.authorizeExternal(ctx, path, "CreateDir", canCreate); err != nil {
 		fs.logOperationError(ctx, "CreateDir", path, err)
-		return err
+		return nil, err
 	}
 
 	// Execute directory creation on user's thread with correct UID
