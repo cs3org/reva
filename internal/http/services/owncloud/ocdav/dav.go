@@ -27,6 +27,7 @@ import (
 	"strings"
 
 	gatewayv1beta1 "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
+	userv1beta1 "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	ocmv1beta1 "github.com/cs3org/go-cs3apis/cs3/sharing/ocm/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
@@ -44,7 +45,6 @@ type tokenStatInfoKey struct{}
 type DavHandler struct {
 	AvatarsHandler      *AvatarsHandler
 	FilesHandler        *WebDavHandler
-	FilesHomeHandler    *WebDavHandler
 	MetaHandler         *MetaHandler
 	TrashbinHandler     *TrashbinHandler
 	SpacesHandler       *WebDavHandler
@@ -76,10 +76,6 @@ func (h *DavHandler) init(c *Config) error {
 	if err := h.FilesHandler.init(c.FilesNamespace, false); err != nil {
 		return err
 	}
-	h.FilesHomeHandler = new(WebDavHandler)
-	if err := h.FilesHomeHandler.init("", false); err != nil {
-		return err
-	}
 	h.MetaHandler = new(MetaHandler)
 	if err := h.MetaHandler.init(c); err != nil {
 		return err
@@ -107,6 +103,10 @@ func (h *DavHandler) init(c *Config) error {
 	}
 
 	return h.TrashbinHandler.init(c)
+}
+
+func isOwner(userIDorName string, user *userv1beta1.User) bool {
+	return userIDorName != "" && (userIDorName == user.Id.OpaqueId || strings.EqualFold(userIDorName, user.Username))
 }
 
 // Handler handles requests.
@@ -154,13 +154,13 @@ func (h *DavHandler) Handler(s *svc) http.Handler {
 
 		case "files":
 			requestUserID, tail := router.ShiftPath(r.URL.Path)
-			r.URL.Path = tail
 
-			base := path.Join(ctx.Value(ctxKeyBaseURI).(string), "files", requestUserID)
-			ctx := context.WithValue(ctx, ctxKeyBaseURI, base)
-			r = r.WithContext(ctx)
-
-			if r.URL.Path != "/" {
+			// note: some requests like OPTIONS don't forward the user
+			contextUser, ok := appctx.ContextGetUser(ctx)
+			if !ok || !isOwner(requestUserID, contextUser) {
+				// the files namespace expects the username as first path segment
+				base := path.Join(ctx.Value(ctxKeyBaseURI).(string), "files")
+				r = r.WithContext(context.WithValue(ctx, ctxKeyBaseURI, base))
 				h.FilesHandler.Handler(s).ServeHTTP(w, r)
 				return
 			}
@@ -183,8 +183,14 @@ func (h *DavHandler) Handler(s *svc) http.Handler {
 				return
 			}
 
-			r.URL.Path = path.Join(res.Path, r.URL.Path)
-			h.FilesHomeHandler.Handler(s).ServeHTTP(w, r)
+			r.URL.Path = tail
+			base := path.Join(ctx.Value(ctxKeyBaseURI).(string), "files", requestUserID)
+			r = r.WithContext(context.WithValue(ctx, ctxKeyBaseURI, base))
+
+			// the home goes in the namespace and not in the path, MOVE and COPY
+			// resolve their destination through the namespace
+			home := WebDavHandler{namespace: path.Join("/", res.Path)}
+			home.Handler(s).ServeHTTP(w, r)
 
 		case "meta":
 			base := path.Join(ctx.Value(ctxKeyBaseURI).(string), "meta")
