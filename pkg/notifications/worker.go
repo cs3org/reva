@@ -30,6 +30,7 @@ import (
 	"text/template"
 	"time"
 
+	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	"github.com/cs3org/reva/v3/pkg/appctx"
 	"github.com/cs3org/reva/v3/pkg/notifications/accumulation"
 	"github.com/cs3org/reva/v3/pkg/notifications/handlers"
@@ -328,21 +329,32 @@ func renderDedupKey(templateString string, envelope model.Envelope) (string, err
 func perRecipientAccumulationEnvelopes(envelope model.Envelope) ([]model.Envelope, error) {
 	envelopes := make([]model.Envelope, 0, len(envelope.Recipients))
 	for _, recipient := range envelope.Recipients {
-		recipient = strings.TrimSpace(recipient)
-		if recipient == "" {
+		key := recipientKey(recipient)
+		if key == "" {
 			continue
 		}
 
 		recipientEnvelope := envelope
-		recipientEnvelope.ID = perRecipientItemID(envelope.ID, recipient)
-		recipientEnvelope.Recipients = []string{recipient}
-		recipientEnvelope.DedupKey = perRecipientDedupKey(recipient, envelope.DedupKey)
+		recipientEnvelope.ID = perRecipientItemID(envelope.ID, key)
+		recipientEnvelope.Recipients = []*userpb.User{recipient}
+		recipientEnvelope.DedupKey = perRecipientDedupKey(key, envelope.DedupKey)
 		envelopes = append(envelopes, recipientEnvelope)
 	}
 	if len(envelopes) == 0 {
 		return nil, errors.New("accumulated notification requires at least one non-empty recipient")
 	}
 	return envelopes, nil
+}
+
+// recipientKey renders the identity that namespaces a recipient's accumulation.
+// Recipients resolved from an account carry a user id; the ones configured as a
+// bare address, such as a public link's extra upload recipients, only carry a
+// mail.
+func recipientKey(u *userpb.User) string {
+	if u.GetId() != nil {
+		return UserIDString(u.GetId())
+	}
+	return strings.TrimSpace(u.GetMail())
 }
 
 func perRecipientDedupKey(recipient, dedupKey string) string {

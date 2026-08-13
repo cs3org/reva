@@ -23,6 +23,8 @@ import (
 	"path/filepath"
 	"testing"
 
+	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
+
 	"github.com/cs3org/reva/v3/pkg/notifications/accumulation"
 	"github.com/cs3org/reva/v3/pkg/notifications/handlers"
 	"github.com/cs3org/reva/v3/pkg/notifications/model"
@@ -79,8 +81,8 @@ func TestWorkerResolvesDirectEventRule(t *testing.T) {
 	err = worker.Handle(ctx, model.Envelope{
 		ID:        "not-1",
 		EventType: "office.mention",
-		Recipients: []string{
-			"bob@example.org",
+		Recipients: []*userpb.User{
+			{Id: &userpb.UserId{Idp: "cernbox.cern.ch", OpaqueId: "bob"}, Mail: "bob@example.org"},
 		},
 		TemplateData: map[string]any{
 			"document_id": "doc-1",
@@ -145,8 +147,8 @@ func TestWorkerAccumulatesUsingRuleDedupKey(t *testing.T) {
 	err = worker.Handle(ctx, model.Envelope{
 		ID:        "not-1",
 		EventType: "share.created",
-		Recipients: []string{
-			"bob@example.org",
+		Recipients: []*userpb.User{
+			{Mail: "bob@example.org"},
 		},
 		TemplateData: map[string]any{
 			"share_id": "share-1",
@@ -167,7 +169,7 @@ func TestWorkerAccumulatesUsingRuleDedupKey(t *testing.T) {
 	if envelope.DedupKey != perRecipientDedupKey("bob@example.org", "share-1") {
 		t.Fatalf("dedup key = %q, want recipient-scoped share key", envelope.DedupKey)
 	}
-	if len(envelope.Recipients) != 1 || envelope.Recipients[0] != "bob@example.org" {
+	if len(envelope.Recipients) != 1 || envelope.Recipients[0].GetMail() != "bob@example.org" {
 		t.Fatalf("recipients = %+v, want only bob@example.org", envelope.Recipients)
 	}
 	if envelope.TemplateData["_count"] != 1 {
@@ -202,9 +204,9 @@ func TestWorkerAccumulatesMultiRecipientEventsSeparately(t *testing.T) {
 	err = worker.Handle(ctx, model.Envelope{
 		ID:        "not-1",
 		EventType: "EmailReminder",
-		Recipients: []string{
-			"bob@example.org",
-			"carol@example.org",
+		Recipients: []*userpb.User{
+			{Id: &userpb.UserId{Idp: "cernbox.cern.ch", OpaqueId: "bob"}, Mail: "bob@example.org"},
+			{Id: &userpb.UserId{Idp: "cernbox.cern.ch", OpaqueId: "carol"}, Mail: "carol@example.org"},
 		},
 		TemplateData: map[string]any{
 			"share_id": "share-1",
@@ -224,7 +226,9 @@ func TestWorkerAccumulatesMultiRecipientEventsSeparately(t *testing.T) {
 			t.Fatalf("recipients = %+v, want per-recipient envelope", envelope.Recipients)
 		}
 		recipient := envelope.Recipients[0]
-		wantDedupKey := perRecipientDedupKey(recipient, "share-1")
+		// Recipients holding an account are namespaced by their user id, not by
+		// the address the email happens to go to.
+		wantDedupKey := perRecipientDedupKey(UserIDString(recipient.GetId()), "share-1")
 		if envelope.DedupKey != wantDedupKey {
 			t.Fatalf("dedup key = %q, want %q", envelope.DedupKey, wantDedupKey)
 		}

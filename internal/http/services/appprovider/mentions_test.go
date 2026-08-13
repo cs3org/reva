@@ -319,8 +319,11 @@ func TestHandleMentionsAcceptsResolvedMentions(t *testing.T) {
 		t.Fatalf("recipients = %v, want %v", recipients, wantRecipients)
 	}
 	for _, recipient := range recipients {
-		if !wantRecipients[recipient] {
-			t.Fatalf("unexpected recipient %q, want one of %v", recipient, wantRecipients)
+		if !wantRecipients[recipient.GetMail()] {
+			t.Fatalf("unexpected recipient %q, want one of %v", recipient.GetMail(), wantRecipients)
+		}
+		if recipient.GetId().GetOpaqueId() == "" {
+			t.Fatalf("recipient %q carries no user id", recipient.GetMail())
 		}
 	}
 

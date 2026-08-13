@@ -21,10 +21,16 @@ package notifications
 import (
 	"reflect"
 	"testing"
+
+	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
+	"google.golang.org/protobuf/proto"
 )
 
 func TestEventRoundTripKeepsNotificationPayload(t *testing.T) {
-	recipients := []string{"bob@example.org", "carol@example.org"}
+	recipients := []*userpb.User{
+		{Id: &userpb.UserId{Idp: "cernbox.cern.ch", OpaqueId: "bob"}, Username: "bob", Mail: "bob@example.org"},
+		{Mail: "carol@example.org"},
+	}
 	templateData := map[string]any{"share_id": "share-1", "resource_name": "beach.png"}
 
 	event := EncodeEvent("share-creation", recipients, templateData)
@@ -37,8 +43,13 @@ func TestEventRoundTripKeepsNotificationPayload(t *testing.T) {
 	if err != nil {
 		t.Fatalf("DecodeEvent failed: %v", err)
 	}
-	if !reflect.DeepEqual(gotRecipients, recipients) {
+	if len(gotRecipients) != len(recipients) {
 		t.Fatalf("recipients = %v, want %v", gotRecipients, recipients)
+	}
+	for i, want := range recipients {
+		if !proto.Equal(gotRecipients[i], want) {
+			t.Fatalf("recipient %d = %v, want %v", i, gotRecipients[i], want)
+		}
 	}
 	if !reflect.DeepEqual(gotTemplateData, templateData) {
 		t.Fatalf("template data = %v, want %v", gotTemplateData, templateData)
@@ -46,7 +57,7 @@ func TestEventRoundTripKeepsNotificationPayload(t *testing.T) {
 }
 
 func TestEventCarriesOnlyPayload(t *testing.T) {
-	event := EncodeEvent("upload", []string{"bob@example.org"}, nil)
+	event := EncodeEvent("upload", []*userpb.User{{Mail: "bob@example.org"}}, nil)
 
 	for key := range event.GetData().GetMap() {
 		if key != recipientsKey && key != templateDataKey {

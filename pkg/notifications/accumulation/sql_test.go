@@ -24,7 +24,9 @@ import (
 	"testing"
 	"time"
 
+	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	"github.com/cs3org/reva/v3/pkg/notifications/model"
+	"google.golang.org/protobuf/proto"
 	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
 )
@@ -109,6 +111,53 @@ func TestSQLStoreAddAccumulatesDistinctEvents(t *testing.T) {
 	}
 	if len(events) != 2 || len(ids) != 2 {
 		t.Fatalf("pending = %d events / %d ids, want 2 each", len(events), len(ids))
+	}
+}
+
+func TestSQLStoreKeepsRecipientsAcrossStorage(t *testing.T) {
+	ctx := context.Background()
+	store := newTestStore(t)
+	now := time.Now()
+	envelope := model.Envelope{
+		ID:       "not-1",
+		Type:     model.TypeAccumulated,
+		DedupKey: "share-1",
+		Recipients: []*userpb.User{
+			{
+				Id:       &userpb.UserId{Idp: "cernbox.cern.ch", OpaqueId: "bob", Type: userpb.UserType_USER_TYPE_PRIMARY},
+				Username: "bob",
+				Mail:     "bob@example.org",
+			},
+			{Mail: "extra@example.org"},
+		},
+		Accumulation: model.AccumulationPolicy{
+			WindowSeconds: 60,
+			MaxItems:      100,
+		},
+	}
+
+	if _, err := store.Add(ctx, envelope, now); err != nil {
+		t.Fatalf("add: %v", err)
+	}
+
+	events, _, err := store.PendingItems(ctx, envelope.DedupKey)
+	if err != nil {
+		t.Fatalf("pending items: %v", err)
+	}
+	if len(events) != 1 {
+		t.Fatalf("pending events = %d, want 1", len(events))
+	}
+
+	// The email handler reads the address off the recipient when the
+	// accumulation flushes, so the recipients have to survive storage.
+	got := events[0].Recipients
+	if len(got) != len(envelope.Recipients) {
+		t.Fatalf("recipients = %v, want %v", got, envelope.Recipients)
+	}
+	for i, want := range envelope.Recipients {
+		if !proto.Equal(got[i], want) {
+			t.Fatalf("recipient %d = %v, want %v", i, got[i], want)
+		}
 	}
 }
 

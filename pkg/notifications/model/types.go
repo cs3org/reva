@@ -18,7 +18,11 @@
 
 package model
 
-import "time"
+import (
+	"time"
+
+	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
+)
 
 const (
 	TypeDirect      = "direct"
@@ -37,8 +41,7 @@ type Envelope struct {
 	ID             string         `json:"id"`
 	EventType      string         `json:"event_type"`
 	SubmittingUser string         `json:"submitting_user"`
-	Sender         string         `json:"sender,omitempty"`
-	Recipients     []string       `json:"recipients"`
+	Recipients     []*userpb.User `json:"recipients"`
 	TemplateData   map[string]any `json:"template_data,omitempty"`
 	SubmittedAt    time.Time      `json:"submitted_at"`
 

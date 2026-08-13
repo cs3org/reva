@@ -146,9 +146,9 @@ func (s *svc) handleMentions(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	recipients := make([]string, 0, len(resolved.users))
+	recipients := make([]*userpb.User, 0, len(resolved.users))
 	for _, recipient := range resolved.users {
-		recipients = append(recipients, recipient.Mail)
+		recipients = append(recipients, recipient)
 		resolved.accepted = append(resolved.accepted, mentionResult{Type: "user", Username: recipient.Username})
 	}
 
