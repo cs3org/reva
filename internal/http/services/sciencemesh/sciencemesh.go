@@ -61,17 +61,18 @@ func (s *svc) Close() error {
 }
 
 type config struct {
-	Prefix               string                      `mapstructure:"prefix"`
-	SMTPCredentials      *smtpclient.SMTPCredentials `mapstructure:"smtp_credentials"`
-	GatewaySvc           string                      `mapstructure:"gatewaysvc"         validate:"required"`
-	MeshDirectoryURL     string                      `mapstructure:"mesh_directory_url" validate:"required"`
-	ProviderDomain       string                      `mapstructure:"provider_domain"    validate:"required"`
-	SubjectTemplate      string                      `mapstructure:"subject_template"`
-	BodyTemplatePath     string                      `mapstructure:"body_template_path"`
-	OCMMountPoint        string                      `mapstructure:"ocm_mount_point"`
-	DirectoryServiceURLs string                      `mapstructure:"directory_service_urls"`
-	OCMClientTimeout     int                         `mapstructure:"ocm_client_timeout"`
-	OCMClientInsecure    bool                        `mapstructure:"ocm_client_insecure"`
+	Prefix                 string                      `mapstructure:"prefix"`
+	SMTPCredentials        *smtpclient.SMTPCredentials `mapstructure:"smtp_credentials"`
+	GatewaySvc             string                      `mapstructure:"gatewaysvc"         validate:"required"`
+	MeshDirectoryURL       string                      `mapstructure:"mesh_directory_url" validate:"required"`
+	ProviderDomain         string                      `mapstructure:"provider_domain"    validate:"required"`
+	SubjectTemplate        string                      `mapstructure:"subject_template"`
+	BodyTemplatePath       string                      `mapstructure:"body_template_path"`
+	OCMMountPoint          string                      `mapstructure:"ocm_mount_point"`
+	DirectoryServiceURLs   string                      `mapstructure:"directory_service_urls"`
+	OCMClientTimeout       int                         `mapstructure:"ocm_client_timeout"`
+	OCMClientInsecure      bool                        `mapstructure:"ocm_client_insecure"`
+	OCMClientResponseLimit int                         `mapstructure:"ocm_client_response_limit"`
 }
 
 func (c *config) ApplyDefaults() {
@@ -83,6 +84,9 @@ func (c *config) ApplyDefaults() {
 	}
 	if c.OCMClientTimeout == 0 {
 		c.OCMClientTimeout = 10
+	}
+	if c.OCMClientResponseLimit == 0 {
+		c.OCMClientResponseLimit = 1 << 20
 	}
 
 	c.GatewaySvc = sharedconf.GetGatewaySVC(c.GatewaySvc)
