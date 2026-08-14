@@ -22,11 +22,15 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"regexp"
+	"strings"
 	"testing"
+	"time"
 
 	gateway "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
@@ -283,5 +287,138 @@ func TestDiscoverVerifiesTLSUnlessInsecure(t *testing.T) {
 				t.Errorf("discoverOcmResourceTypes() error = %v, wantErr %v", err, tt.wantErr)
 			}
 		})
+	}
+}
+
+const ingestWebDAVPropfindXML = `<?xml version="1.0" encoding="utf-8"?>
+<d:multistatus xmlns:d="DAV:">
+  <d:response>
+    <d:href>/</d:href>
+    <d:propstat>
+      <d:prop>
+        <d:displayname>legacy-share</d:displayname>
+        <d:getcontentlength>4</d:getcontentlength>
+        <d:getcontenttype>text/plain</d:getcontenttype>
+        <d:getetag>"abc"</d:getetag>
+        <d:getlastmodified>Mon, 02 Jan 2006 15:04:05 GMT</d:getlastmodified>
+      </d:prop>
+      <d:status>HTTP/1.1 200 OK</d:status>
+    </d:propstat>
+  </d:response>
+</d:multistatus>`
+
+func ingestWebDAVHandler(t *testing.T, contacted *bool) http.Handler {
+	t.Helper()
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		*contacted = true
+		if r.Method != "PROPFIND" {
+			t.Errorf("unexpected method %s", r.Method)
+			w.WriteHeader(http.StatusMethodNotAllowed)
+			return
+		}
+		w.Header().Set("Content-Type", "application/xml")
+		w.WriteHeader(207)
+		_, _ = w.Write([]byte(ingestWebDAVPropfindXML))
+	})
+}
+
+func firstPublicIPv4() (string, bool) {
+	addrs, err := net.InterfaceAddrs()
+	if err != nil {
+		return "", false
+	}
+	for _, a := range addrs {
+		n, ok := a.(*net.IPNet)
+		if !ok || n.IP == nil {
+			continue
+		}
+		ip := n.IP.To4()
+		if ip == nil || !isPublicIP(ip) {
+			continue
+		}
+		return ip.String(), true
+	}
+	return "", false
+}
+
+func startPublicTLSServer(t *testing.T, h http.Handler) *httptest.Server {
+	t.Helper()
+	ip, ok := firstPublicIPv4()
+	if !ok {
+		t.Skip("no public IPv4 address available for public-only httptest")
+	}
+	ln, err := net.Listen("tcp", net.JoinHostPort(ip, "0"))
+	if err != nil {
+		t.Skipf("cannot listen on public IP %s: %v", ip, err)
+	}
+	srv := httptest.NewUnstartedServer(h)
+	if srv.Listener != nil {
+		_ = srv.Listener.Close()
+	}
+	srv.Listener = ln
+	srv.StartTLS()
+	t.Cleanup(srv.Close)
+	return srv
+}
+
+func TestIngestWebDAVStatPublicHTTPSHostSucceeds(t *testing.T) {
+	contacted := false
+	srv := startPublicTLSServer(t, ingestWebDAVHandler(t, &contacted))
+
+	info, err := statIngestWebDAV(srv.URL, "secret", 5*time.Second, true)
+	if err != nil {
+		t.Fatalf("ingest stat to a public HTTPS WebDAV host: %v", err)
+	}
+	if info == nil {
+		t.Fatal("expected WebDAV stat info for a public HTTPS host")
+	}
+	if !contacted {
+		t.Fatal("expected ingest stat to reach the public HTTPS WebDAV host")
+	}
+}
+
+func TestIngestWebDAVStatRefusesPrivateHost(t *testing.T) {
+	t.Run("metadata host is refused at dial", func(t *testing.T) {
+		_, err := statIngestWebDAV("https://169.254.169.254/remote.php/dav/ocm", "secret", 5*time.Second, true)
+		if err == nil {
+			t.Fatal("expected ingest stat to refuse the metadata host at dial")
+		}
+		if !strings.Contains(err.Error(), "non-public") {
+			t.Fatalf("got %v, want the existing non-public dial error", err)
+		}
+	})
+
+	t.Run("reachable private host is not contacted", func(t *testing.T) {
+		contacted := false
+		srv := httptest.NewTLSServer(ingestWebDAVHandler(t, &contacted))
+		defer srv.Close()
+
+		_, err := statIngestWebDAV(srv.URL, "secret", 5*time.Second, true)
+		if contacted {
+			t.Fatal("ingest stat contacted a private WebDAV host; the untrusted transport must refuse it at dial")
+		}
+		if err == nil {
+			t.Fatal("expected ingest stat to a private host to fail")
+		}
+		if !strings.Contains(err.Error(), "non-public") {
+			t.Fatalf("got %v, want the existing non-public dial error", err)
+		}
+	})
+}
+
+func TestIngestWebDAVStatRefusesHTTP(t *testing.T) {
+	contacted := false
+	srv := httptest.NewServer(ingestWebDAVHandler(t, &contacted))
+	defer srv.Close()
+
+	_, err := statIngestWebDAV(srv.URL, "secret", 5*time.Second, true)
+	if contacted {
+		t.Fatal("ingest stat contacted an http WebDAV host; the untrusted transport must refuse it")
+	}
+	if err == nil {
+		t.Fatal("expected ingest stat to refuse a non-https URL")
+	}
+	if !errors.Is(err, errPublicOnlyNonHTTPS) {
+		t.Fatalf("got %v, want errPublicOnlyNonHTTPS", err)
 	}
 }

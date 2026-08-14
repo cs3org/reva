@@ -26,6 +26,7 @@ import (
 	"mime"
 	"net/http"
 	"net/url"
+	"os"
 	"path/filepath"
 	"regexp"
 	"strings"
@@ -112,6 +113,15 @@ func (h *sharesHandler) isAcceptedUser(ctx context.Context, recipient *userpb.Us
 		},
 	})
 	return err == nil && res.Status.Code == rpc.Code_CODE_OK
+}
+
+// statIngestWebDAV PROPFINDs a peer-supplied WebDAV source URL before ingest.
+// The URL is attacker-influenced, so the client uses UntrustedHTTPTransport.
+func statIngestWebDAV(uri, sharedSecret string, timeout time.Duration, insecure bool) (os.FileInfo, error) {
+	c := gowebdav.NewClient(uri, "", "")
+	c.SetTransport(UntrustedHTTPTransport(timeout, insecure))
+	c.SetHeader("Authorization", "Basic "+base64.StdEncoding.EncodeToString([]byte(sharedSecret+":")))
+	return c.Stat("")
 }
 
 // CreateShare implements the OCM /shares call and stores an incoming share
@@ -206,9 +216,14 @@ func (h *sharesHandler) CreateShare(w http.ResponseWriter, r *http.Request) {
 	if legacy && req.ResourceType == "file" {
 		// in case of legacy OCM v1.0 shares, we have to PROPFIND the remote resource to check the type,
 		// because remote systems such as Nextcloud may send "file" even if the resource is a folder.
-		c := gowebdav.NewClient(protocols[0].GetWebdavOptions().Uri, "", "")
-		c.SetHeader("Authorization", "Basic "+base64.StdEncoding.EncodeToString([]byte(protocols[0].GetWebdavOptions().SharedSecret+":")))
-		target, err := c.Stat("")
+		// The WebDAV URI is peer-supplied, so the gowebdav client must use the
+		// public-only transport (https + public dial only).
+		target, err := statIngestWebDAV(
+			protocols[0].GetWebdavOptions().Uri,
+			protocols[0].GetWebdavOptions().SharedSecret,
+			10*time.Second,
+			h.ocmClientInsecure,
+		)
 		if err != nil {
 			log.Info().Err(err).Str("endpoint", protocols[0].GetWebdavOptions().Uri).Msg("error stating remote resource, assuming file")
 		} else if target.IsDir() {
