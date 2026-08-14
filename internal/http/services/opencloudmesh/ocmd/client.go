@@ -85,7 +85,10 @@ func newOCMTransport(insecure bool) *http.Transport {
 			Proxy: http.ProxyFromEnvironment,
 		}
 	}
-	tr.TLSClientConfig = &tls.Config{InsecureSkipVerify: insecure}
+	tr.TLSClientConfig = &tls.Config{
+		InsecureSkipVerify: insecure,
+		MinVersion:         tls.VersionTLS12,
+	}
 	return tr
 }
 

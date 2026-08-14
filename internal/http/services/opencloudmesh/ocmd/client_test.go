@@ -20,6 +20,7 @@ package ocmd
 
 import (
 	"context"
+	"crypto/tls"
 	"encoding/json"
 	"errors"
 	"net"
@@ -269,6 +270,29 @@ func TestNewClientUsesOCMTransport(t *testing.T) {
 	}
 	if tr.Proxy == nil {
 		t.Fatal("client transport Proxy must not be nil")
+	}
+}
+
+// Both constructors must set a TLS 1.2 floor on the outbound transport.
+func TestOCMClientTransportsRequireTLS12(t *testing.T) {
+	tests := []struct {
+		name   string
+		client *OCMClient
+	}{
+		{name: "NewClient", client: NewClient(5*time.Second, false)},
+		{name: "NewPublicOnlyClient", client: NewPublicOnlyClient(5*time.Second, false)},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			tr := publicOnlyHTTPTransport(t, tt.client)
+			if tr.TLSClientConfig == nil {
+				t.Fatal("TLSClientConfig is nil")
+			}
+			if tr.TLSClientConfig.MinVersion < tls.VersionTLS12 {
+				t.Errorf("MinVersion = %#x, want at least TLS 1.2 (%#x)", tr.TLSClientConfig.MinVersion, tls.VersionTLS12)
+			}
+		})
 	}
 }
 
