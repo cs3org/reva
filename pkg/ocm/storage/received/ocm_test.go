@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"io/fs"
 	"net"
 	"net/http"
@@ -305,6 +306,10 @@ func newTestReceivedDriver() *driver {
 	disco := ttlcache.NewCache()
 	_ = disco.SetTTL(5 * time.Minute)
 	return &driver{
+		c: &config{
+			OCMClientTimeout:  10,
+			OCMClientInsecure: true,
+		},
 		ccache:         ttlcache.NewCache(),
 		discoveryCache: disco,
 		ocmClient:      ocmd.NewClient(10*time.Second, true),
@@ -1020,5 +1025,171 @@ func TestGetTokenEndpointRefusesRedirectToLinkLocal(t *testing.T) {
 	assertNoEstablishedHost(t, tr, "169.254.169.254")
 	if err == nil {
 		t.Fatal("expected received Discover to refuse a redirect to a link-local metadata address")
+	}
+}
+
+const receivedWebDAVPropfindXML = `<?xml version="1.0" encoding="utf-8"?>
+<d:multistatus xmlns:d="DAV:">
+  <d:response>
+    <d:href>/</d:href>
+    <d:propstat>
+      <d:prop>
+        <d:displayname>shared-doc.txt</d:displayname>
+        <d:getcontentlength>4</d:getcontentlength>
+        <d:getcontenttype>text/plain</d:getcontenttype>
+        <d:getetag>"abc"</d:getetag>
+        <d:getlastmodified>Mon, 02 Jan 2006 15:04:05 GMT</d:getlastmodified>
+      </d:prop>
+      <d:status>HTTP/1.1 200 OK</d:status>
+    </d:propstat>
+  </d:response>
+</d:multistatus>`
+
+func receivedWebDAVHandler(t *testing.T, contacted *bool) http.Handler {
+	t.Helper()
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		*contacted = true
+		if r.Method != "PROPFIND" && r.Method != http.MethodPut {
+			t.Errorf("unexpected method %s", r.Method)
+			w.WriteHeader(http.StatusMethodNotAllowed)
+			return
+		}
+		if r.Method == http.MethodPut {
+			w.WriteHeader(http.StatusCreated)
+			return
+		}
+		w.Header().Set("Content-Type", "application/xml")
+		w.WriteHeader(207)
+		_, _ = w.Write([]byte(receivedWebDAVPropfindXML))
+	})
+}
+
+func receivedShareWithWebDAVURI(senderAddr, id, uri string) *ocmpb.ReceivedShare {
+	share := testReceivedShare(senderAddr, id, true)
+	share.Protocols[0].GetWebdavOptions().Uri = uri
+	return share
+}
+
+func TestReceivedShareWebDAVAccessPublicHTTPSHostSucceeds(t *testing.T) {
+	contacted := false
+	srv := startPublicTLSServer(t, receivedWebDAVHandler(t, &contacted))
+
+	d := newProductionReceivedDriver(t)
+	share := receivedShareWithWebDAVURI(
+		srv.Listener.Addr().String(),
+		"share-abc",
+		srv.URL+"/remote.php/dav/ocm/share-abc",
+	)
+	d.gateway = &mockReceivedGateway{shares: []*ocmpb.ReceivedShare{share}}
+
+	info, err := d.GetMD(context.Background(), &provider.Reference{Path: "/share-abc"}, nil)
+	if err != nil {
+		t.Fatalf("received-share WebDAV access to a public HTTPS host: %v", err)
+	}
+	if info == nil {
+		t.Fatal("expected resource info for a public HTTPS WebDAV host")
+	}
+	if !contacted {
+		t.Fatal("expected received-share WebDAV access to reach the public HTTPS host")
+	}
+}
+
+func TestReceivedShareWebDAVAccessRefusesPrivateHost(t *testing.T) {
+	t.Run("metadata host is refused at dial", func(t *testing.T) {
+		d := newProductionReceivedDriver(t)
+		share := receivedShareWithWebDAVURI(
+			"169.254.169.254",
+			"share-abc",
+			"https://169.254.169.254/remote.php/dav/ocm/share-abc",
+		)
+		d.gateway = &mockReceivedGateway{shares: []*ocmpb.ReceivedShare{share}}
+
+		_, err := d.GetMD(context.Background(), &provider.Reference{Path: "/share-abc"}, nil)
+		if err == nil {
+			t.Fatal("expected received-share WebDAV access to refuse the metadata host at dial")
+		}
+		if !strings.Contains(err.Error(), "non-public") {
+			t.Fatalf("got %v, want the existing non-public dial error", err)
+		}
+	})
+
+	t.Run("reachable private host is not contacted", func(t *testing.T) {
+		contacted := false
+		srv := httptest.NewTLSServer(receivedWebDAVHandler(t, &contacted))
+		defer srv.Close()
+
+		d := newProductionReceivedDriver(t)
+		share := receivedShareWithWebDAVURI(
+			srv.Listener.Addr().String(),
+			"share-abc",
+			srv.URL+"/remote.php/dav/ocm/share-abc",
+		)
+		d.gateway = &mockReceivedGateway{shares: []*ocmpb.ReceivedShare{share}}
+
+		_, err := d.GetMD(context.Background(), &provider.Reference{Path: "/share-abc"}, nil)
+		if contacted {
+			t.Fatal("received-share WebDAV access contacted a private host; the untrusted transport must refuse it at dial")
+		}
+		if err == nil {
+			t.Fatal("expected received-share WebDAV access to a private host to fail")
+		}
+		if !strings.Contains(err.Error(), "non-public") {
+			t.Fatalf("got %v, want the existing non-public dial error", err)
+		}
+	})
+}
+
+func TestReceivedShareWebDAVAccessRefusesHTTP(t *testing.T) {
+	contacted := false
+	srv := httptest.NewServer(receivedWebDAVHandler(t, &contacted))
+	defer srv.Close()
+
+	d := newProductionReceivedDriver(t)
+	share := receivedShareWithWebDAVURI(
+		srv.Listener.Addr().String(),
+		"share-abc",
+		srv.URL+"/remote.php/dav/ocm/share-abc",
+	)
+	d.gateway = &mockReceivedGateway{shares: []*ocmpb.ReceivedShare{share}}
+
+	_, err := d.GetMD(context.Background(), &provider.Reference{Path: "/share-abc"}, nil)
+	if contacted {
+		t.Fatal("received-share WebDAV access contacted an http host; the untrusted transport must refuse it")
+	}
+	if err == nil {
+		t.Fatal("expected received-share WebDAV access to refuse a non-https URL")
+	}
+	if !strings.Contains(err.Error(), "non-https") {
+		t.Fatalf("got %v, want a non-https refusal", err)
+	}
+}
+
+func TestReceivedShareWebDAVUploadRefusesPrivateHost(t *testing.T) {
+	contacted := false
+	srv := httptest.NewTLSServer(receivedWebDAVHandler(t, &contacted))
+	defer srv.Close()
+
+	d := newProductionReceivedDriver(t)
+	share := receivedShareWithWebDAVURI(
+		srv.Listener.Addr().String(),
+		"share-abc",
+		srv.URL+"/remote.php/dav/ocm/share-abc",
+	)
+	d.gateway = &mockReceivedGateway{shares: []*ocmpb.ReceivedShare{share}}
+
+	err := d.Upload(
+		context.Background(),
+		&provider.Reference{Path: "/share-abc/file.txt"},
+		io.NopCloser(strings.NewReader("hi")),
+		nil,
+	)
+	if contacted {
+		t.Fatal("received-share WebDAV upload contacted a private host; the untrusted transport must refuse it at dial")
+	}
+	if err == nil {
+		t.Fatal("expected received-share WebDAV upload to a private host to fail")
+	}
+	if !strings.Contains(err.Error(), "non-public") {
+		t.Fatalf("got %v, want the existing non-public dial error", err)
 	}
 }

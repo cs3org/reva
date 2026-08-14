@@ -254,6 +254,23 @@ func (d *driver) exchangeAccessToken(ctx context.Context, share *ocmpb.ReceivedS
 	return accessToken, nil
 }
 
+// newReceivedWebDAVClient builds a gowebdav client for a peer-supplied
+// received-share WebDAV URL. The URL is attacker-influenced, so the client
+// uses UntrustedHTTPTransport.
+func (d *driver) newReceivedWebDAVClient(endpoint string) *gowebdav.Client {
+	timeout := 10 * time.Second
+	insecure := false
+	if d != nil && d.c != nil {
+		if d.c.OCMClientTimeout > 0 {
+			timeout = time.Duration(d.c.OCMClientTimeout) * time.Second
+		}
+		insecure = d.c.OCMClientInsecure
+	}
+	c := gowebdav.NewClient(endpoint, "", "")
+	c.SetTransport(ocmd.UntrustedHTTPTransport(timeout, insecure))
+	return c
+}
+
 func (d *driver) webdavClient(ctx context.Context, ref *provider.Reference) (*gowebdav.Client, *ocmpb.ReceivedShare, string, error) {
 	log := appctx.GetLogger(ctx)
 	id, rel := shareInfoFromReference(ref)
@@ -279,12 +296,12 @@ func (d *driver) webdavClient(ctx context.Context, ref *provider.Reference) (*go
 		var c *gowebdav.Client
 		var authHdr string
 		bearerHdr := "Bearer " + secret
-		c = gowebdav.NewClient(endpoint, "", "")
+		c = d.newReceivedWebDAVClient(endpoint)
 		c.SetHeader("Authorization", bearerHdr)
 		_, err = c.Stat("")
 		if err != nil {
 			basicHdr := "Basic " + base64.StdEncoding.EncodeToString([]byte(secret+":"))
-			c = gowebdav.NewClient(endpoint, "", "")
+			c = d.newReceivedWebDAVClient(endpoint)
 			c.SetHeader("Authorization", basicHdr)
 			_, err2 := c.Stat("")
 			if err2 != nil {
@@ -311,7 +328,7 @@ func (d *driver) webdavClient(ctx context.Context, ref *provider.Reference) (*go
 	if err != nil {
 		return nil, nil, "", errors.Wrap(err, "token exchange failed")
 	}
-	c := gowebdav.NewClient(endpoint, "", "")
+	c := d.newReceivedWebDAVClient(endpoint)
 	c.SetHeader("Authorization", "Bearer "+accessToken)
 	return c, share, rel, nil
 }
@@ -545,8 +562,8 @@ func (d *driver) InitiateUpload(ctx context.Context, ref *provider.Reference, _ 
 
 // uploadOnFreshClient creates a one-off DAV client for the upload so that
 // Upload-Length: -1 does not leak onto a cached client used by later operations.
-func uploadOnFreshClient(endpoint, authHeader, rel string, body io.Reader) error {
-	c := gowebdav.NewClient(endpoint, "", "")
+func (d *driver) uploadOnFreshClient(endpoint, authHeader, rel string, body io.Reader) error {
+	c := d.newReceivedWebDAVClient(endpoint)
 	c.SetHeader("Authorization", authHeader)
 	c.SetHeader(ocdav.HeaderUploadLength, "-1")
 	return c.WriteStream(rel, body, 0)
@@ -575,7 +592,7 @@ func (d *driver) Upload(ctx context.Context, ref *provider.Reference, r io.ReadC
 		return err
 	}
 
-	err = uploadOnFreshClient(endpoint, authHeader, rel, bytes.NewReader(buf))
+	err = d.uploadOnFreshClient(endpoint, authHeader, rel, bytes.NewReader(buf))
 	if err == nil {
 		return nil
 	}
@@ -597,7 +614,7 @@ func (d *driver) Upload(ctx context.Context, ref *provider.Reference, r io.ReadC
 	if err != nil {
 		return err
 	}
-	if err = uploadOnFreshClient(endpoint, authHeader, rel, bytes.NewReader(buf)); err != nil {
+	if err = d.uploadOnFreshClient(endpoint, authHeader, rel, bytes.NewReader(buf)); err != nil {
 		if isWebDAV401(err) {
 			return errtypes.InvalidCredentials("remote OCM upload denied after token re-exchange")
 		}
