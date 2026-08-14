@@ -33,6 +33,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/cs3org/reva/v3/internal/http/services/opencloudmesh/ocmd"
 	"github.com/cs3org/reva/v3/pkg/appctx"
 	"github.com/cs3org/reva/v3/pkg/utils/cfg"
 	"github.com/pkg/errors"
@@ -146,12 +147,22 @@ func (d *driver) Process(ctx context.Context, payload, destination string, onCom
 	return nil
 }
 
+// newEmbeddedSrcClient builds the HTTP client used to fetch a peer-supplied
+// embedded srcURL. The URL is attacker-influenced, so the client uses the
+// public-only untrusted transport (https-only, public dial, TLS 1.2, redirect cap).
+func newEmbeddedSrcClient(timeout time.Duration, insecure bool) *http.Client {
+	return &http.Client{
+		Transport:     ocmd.UntrustedHTTPTransport(timeout, insecure),
+		CheckRedirect: ocmd.PublicOnlyCheckRedirect,
+	}
+}
+
 // transferEntries streams each entry to the WebDAV destination. A file that keeps
 // failing is skipped so one bad file doesn't abort the whole dataset. It returns
 // an error only when the transfer cannot proceed at all (e.g. the destination is
 // unreachable); per-file failures are best-effort and do not produce an error.
 func (d *driver) transferEntries(log *zerolog.Logger, token, destination string, entries []transferEntry, timeout time.Duration) error {
-	httpClient := &http.Client{}
+	httpClient := newEmbeddedSrcClient(timeout, false)
 	// Preemptive auth, not gowebdav's default auto-auth: auto-auth buffers each
 	// upload body in memory to replay on an auth challenge, blowing up RAM on
 	// multi-GB files. We pass the bearer token via the interceptor below.
