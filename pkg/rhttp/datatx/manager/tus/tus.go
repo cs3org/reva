@@ -40,6 +40,7 @@ import (
 	"github.com/owncloud/reva/v2/pkg/rhttp/datatx/metrics"
 	"github.com/owncloud/reva/v2/pkg/storage"
 	"github.com/owncloud/reva/v2/pkg/storagespace"
+	"github.com/owncloud/reva/v2/pkg/upload"
 )
 
 func init() {
@@ -87,8 +88,8 @@ func New(m map[string]interface{}, publisher events.Publisher, log *zerolog.Logg
 	}, nil
 }
 
-func (m *manager) Handler(fs storage.FS) (http.Handler, error) {
-	composable, ok := fs.(storage.ComposableFS)
+func (m *manager) Handler(_ upload.Coordinator, driver storage.FS) (http.Handler, error) {
+	composable, ok := driver.(storage.ComposableFS)
 	if !ok {
 		return nil, errtypes.NotSupported("file system does not support the tus protocol")
 	}
@@ -130,7 +131,7 @@ func (m *manager) Handler(fs storage.FS) (http.Handler, error) {
 		return nil, err
 	}
 
-	if usl, ok := fs.(storage.UploadSessionLister); ok {
+	if usl, ok := driver.(storage.UploadSessionLister); ok {
 		// We can currently only send updates if the fs is decomposedfs as we read very specific keys from the storage map of the tus info
 		go func() {
 			for {
@@ -174,7 +175,7 @@ func (m *manager) Handler(fs storage.FS) (http.Handler, error) {
 				metrics.UploadsActive.Sub(1)
 			}()
 			// set etag, mtime and file id
-			setHeaders(fs, w, r)
+			setHeaders(driver, w, r)
 			handler.PostFile(w, r)
 		case "HEAD":
 			handler.HeadFile(w, r)
@@ -184,7 +185,7 @@ func (m *manager) Handler(fs storage.FS) (http.Handler, error) {
 				metrics.UploadsActive.Sub(1)
 			}()
 			// set etag, mtime and file id
-			setHeaders(fs, w, r)
+			setHeaders(driver, w, r)
 			handler.PatchFile(w, r)
 		case "DELETE":
 			handler.DelFile(w, r)
