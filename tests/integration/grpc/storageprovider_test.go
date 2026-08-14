@@ -35,6 +35,7 @@ import (
 	"github.com/owncloud/reva/v2/pkg/storage/fs/ocis"
 	"github.com/owncloud/reva/v2/pkg/storage/fs/registry"
 	jwt "github.com/owncloud/reva/v2/pkg/token/manager/jwt"
+	"github.com/owncloud/reva/v2/pkg/utils"
 	"github.com/owncloud/reva/v2/tests/helpers"
 
 	. "github.com/onsi/ginkgo/v2"
@@ -367,7 +368,12 @@ var _ = Describe("storage providers", func() {
 	assertUploads := func(provider string) {
 		It("returns upload URLs for simple and tus", func() {
 			fileRef := ref(provider, filePath)
-			res, err := providerClient.InitiateFileUpload(ctx, &storagep.InitiateFileUploadRequest{Ref: fileRef})
+			// a fixed mtime, so the nextcloud mock's exact-body matching can match the
+			// TouchFile the coordinator makes
+			res, err := providerClient.InitiateFileUpload(ctx, &storagep.InitiateFileUploadRequest{
+				Ref:    fileRef,
+				Opaque: utils.AppendPlainToOpaque(nil, "X-OC-Mtime", "1234567890"),
+			})
 			Expect(err).ToNot(HaveOccurred())
 			Expect(res.Status.Code).To(Equal(rpcv1beta1.Code_CODE_OK))
 			Expect(len(res.Protocols)).To(Equal(2))

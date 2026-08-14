@@ -3,6 +3,8 @@ address = "{{grpc_address}}"
 
 [grpc.services.storageprovider]
 driver = "nextcloud"
+# the nextcloud driver has no local root, so name the upload directory here
+upload_directory = "{{root}}/uploads"
 
 [grpc.services.storageprovider.drivers.nextcloud]
 endpoint = "http://localhost:8080/apps/sciencemesh/"
