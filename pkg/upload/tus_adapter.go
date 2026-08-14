@@ -55,6 +55,8 @@ func (u *tusAdapter) FinishUpload(ctx context.Context) error {
 		return tusd.NewError("ERR_BAD_REQUEST", err.Error(), http.StatusBadRequest)
 	case errtypes.ChecksumMismatch:
 		return tusd.NewError("ERR_CHECKSUM_MISMATCH", err.Error(), errtypes.StatusChecksumMismatch)
+	case errtypes.IsPermissionDenied:
+		return tusd.NewError("ERR_PERMISSION_DENIED", err.Error(), http.StatusForbidden)
 	default:
 		return err
 	}

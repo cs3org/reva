@@ -126,6 +126,7 @@ var _ = Describe("tusAdapter", func() {
 			Entry("locked", errtypes.Locked("lock-1"), "ERR_LOCKED", http.StatusLocked),
 			Entry("bad request", errtypes.BadRequest("invalid mtime"), "ERR_BAD_REQUEST", http.StatusBadRequest),
 			Entry("checksum mismatch", errtypes.ChecksumMismatch("sha1"), "ERR_CHECKSUM_MISMATCH", errtypes.StatusChecksumMismatch),
+			Entry("permission denied", errtypes.PermissionDenied("share was revoked"), "ERR_PERMISSION_DENIED", http.StatusForbidden),
 		)
 
 		It("passes an unmapped error through for tusd to answer with a 500", func() {
