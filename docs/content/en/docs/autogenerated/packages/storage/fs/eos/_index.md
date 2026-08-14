@@ -9,7 +9,7 @@ description: >
 # _struct: Config_
 
 {{% dir name="external_accounts_user_name" type="string" default="nil" %}}
-Username of a user known to EOS on whose behalf accesses are done for external (lw, federated) users. [[Ref]](https://github.com/cs3org/reva/tree/master/pkg/storage/fs/eos/config.go#L178)
+Username of a user known to EOS on whose behalf accesses are done for external (lw, federated) users. [[Ref]](https://github.com/cs3org/reva/tree/master/pkg/storage/fs/eos/config.go#L185)
 {{< highlight toml >}}
 [storage.fs.eos]
 external_accounts_user_name = "nil"
@@ -17,7 +17,7 @@ external_accounts_user_name = "nil"
 {{% /dir %}}
 
 {{% dir name="external_accounts_user_uid" type="string" default="nil" %}}
-UID of a user known to EOS on whose behalf accesses are done for external (lw, federated) users. [[Ref]](https://github.com/cs3org/reva/tree/master/pkg/storage/fs/eos/config.go#L179)
+UID of a user known to EOS on whose behalf accesses are done for external (lw, federated) users. [[Ref]](https://github.com/cs3org/reva/tree/master/pkg/storage/fs/eos/config.go#L186)
 {{< highlight toml >}}
 [storage.fs.eos]
 external_accounts_user_uid = "nil"
@@ -25,7 +25,7 @@ external_accounts_user_uid = "nil"
 {{% /dir %}}
 
 {{% dir name="external_accounts_user_gid" type="string" default="nil" %}}
-GID of a user known to EOS on whose behalf accesses are done for external (lw, federated) users. [[Ref]](https://github.com/cs3org/reva/tree/master/pkg/storage/fs/eos/config.go#L180)
+GID of a user known to EOS on whose behalf accesses are done for external (lw, federated) users. [[Ref]](https://github.com/cs3org/reva/tree/master/pkg/storage/fs/eos/config.go#L187)
 {{< highlight toml >}}
 [storage.fs.eos]
 external_accounts_user_gid = "nil"
