@@ -58,7 +58,15 @@ var ErrInvalidParameters = errors.New("invalid parameters")
 // maxOCMResponseBytes caps attacker-influenced OCM HTTP response bodies.
 const maxOCMResponseBytes = 1 << 20 // 1 MiB
 
+// maxPublicOnlyRedirects caps hops on the untrusted public-only client.
+// Do not rely on Go's default of 10.
+const maxPublicOnlyRedirects = 3
+
 var errOCMResponseTooLarge = errors.New("ocm response body exceeds size limit")
+
+var errPublicOnlyNonHTTPS = errors.New("public-only OCM client requires https")
+
+var errPublicOnlyTooManyRedirects = fmt.Errorf("public-only OCM client stopped after %d redirects", maxPublicOnlyRedirects)
 
 // OCMClient is the client for an OCM provider.
 type OCMClient struct {
@@ -93,7 +101,8 @@ func NewClient(timeout time.Duration, insecure bool) *OCMClient {
 
 // NewPublicOnlyClient returns an OCMClient that only dials public addresses, for
 // discovery of hosts named by an untrusted caller. The check is in the dialer so
-// it also covers redirects and DNS rebinding.
+// it also covers redirects and DNS rebinding. Redirects are capped and both the
+// initial URL and every hop must use https.
 func NewPublicOnlyClient(timeout time.Duration, insecure bool) *OCMClient {
 	tr := newOCMTransport(insecure)
 	// with a proxy the dial goes to the proxy, so Control never sees the target
@@ -105,10 +114,42 @@ func NewPublicOnlyClient(timeout time.Duration, insecure bool) *OCMClient {
 	}).DialContext
 	return &OCMClient{
 		client: &http.Client{
-			Transport: tr,
-			Timeout:   timeout,
+			Transport:     &publicOnlyTransport{Transport: tr},
+			Timeout:       timeout,
+			CheckRedirect: publicOnlyCheckRedirect,
 		},
 	}
+}
+
+// publicOnlyTransport refuses non-https URLs on the initial request and on
+// every redirect hop, before the inner dialer runs.
+type publicOnlyTransport struct {
+	*http.Transport
+}
+
+func (t *publicOnlyTransport) RoundTrip(req *http.Request) (*http.Response, error) {
+	if err := requirePublicOnlyHTTPS(req.URL); err != nil {
+		return nil, err
+	}
+	return t.Transport.RoundTrip(req)
+}
+
+func requirePublicOnlyHTTPS(u *url.URL) error {
+	if u != nil && u.Scheme == "https" {
+		return nil
+	}
+	scheme := ""
+	if u != nil {
+		scheme = u.Scheme
+	}
+	return fmt.Errorf("public-only OCM client refuses non-https scheme %q: %w", scheme, errPublicOnlyNonHTTPS)
+}
+
+func publicOnlyCheckRedirect(req *http.Request, via []*http.Request) error {
+	if len(via) > maxPublicOnlyRedirects {
+		return errPublicOnlyTooManyRedirects
+	}
+	return requirePublicOnlyHTTPS(req.URL)
 }
 
 func refuseNonPublicAddr(_, address string, _ syscall.RawConn) error {

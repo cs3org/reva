@@ -216,10 +216,7 @@ func TestNewOCMTransportUsesProxyFromEnvironment(t *testing.T) {
 // proxy address instead of the target.
 func TestNewPublicOnlyClientTransportProxyNil(t *testing.T) {
 	c := NewPublicOnlyClient(5*time.Second, true)
-	tr, ok := c.client.Transport.(*http.Transport)
-	if !ok {
-		t.Fatal("public-only client must use an *http.Transport")
-	}
+	tr := publicOnlyHTTPTransport(t, c)
 	if tr.Proxy != nil {
 		t.Error("public-only client must not use a proxy")
 	}
@@ -543,5 +540,199 @@ func TestExchangeTokenHTTP400OversizedBody(t *testing.T) {
 	assertOCMResponseTooLarge(t, err)
 	if tok != "" || exp != 0 {
 		t.Fatalf("oversized HTTP 400 token body must not be decoded, got token %q expires_in %d", tok, exp)
+	}
+}
+
+// httptest servers bind loopback, which the public-only dial guard refuses.
+// Redirect and scheme tests keep the constructor's CheckRedirect, https gate,
+// and Proxy=nil, and only drop Control so the TLS server is reachable.
+func allowPublicOnlyLoopback(t *testing.T, c *OCMClient) {
+	t.Helper()
+	tr := publicOnlyHTTPTransport(t, c)
+	tr.DialContext = (&net.Dialer{Timeout: 5 * time.Second}).DialContext
+}
+
+func publicOnlyHTTPTransport(t *testing.T, c *OCMClient) *http.Transport {
+	t.Helper()
+	switch tr := c.client.Transport.(type) {
+	case *http.Transport:
+		return tr
+	case *publicOnlyTransport:
+		if tr.Transport == nil {
+			t.Fatal("public-only client is missing an inner *http.Transport")
+		}
+		return tr.Transport
+	default:
+		t.Fatalf("public-only client transport: got %T, want *http.Transport or *publicOnlyTransport", c.client.Transport)
+		return nil
+	}
+}
+
+func closeResponse(resp *http.Response) {
+	if resp != nil {
+		resp.Body.Close()
+	}
+}
+
+func TestPublicOnlyClientRedirectCapAndHTTPSScheme(t *testing.T) {
+	t.Run("https redirecting more than 3 times is refused", func(t *testing.T) {
+		hops := 0
+		srv := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			hops++
+			if hops <= 4 {
+				http.Redirect(w, r, "/hop", http.StatusFound)
+				return
+			}
+			w.WriteHeader(http.StatusOK)
+		}))
+		defer srv.Close()
+
+		c := NewPublicOnlyClient(5*time.Second, true)
+		allowPublicOnlyLoopback(t, c)
+		req, err := http.NewRequestWithContext(context.Background(), http.MethodGet, srv.URL, nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		resp, err := c.client.Do(req)
+		closeResponse(resp)
+		if err == nil {
+			t.Fatal("expected public-only client to refuse more than 3 redirects")
+		}
+		if !errors.Is(err, errPublicOnlyTooManyRedirects) {
+			t.Fatalf("got %v, want errPublicOnlyTooManyRedirects", err)
+		}
+	})
+
+	t.Run("http non-https initial URL is refused", func(t *testing.T) {
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			t.Error("public-only client must not fetch a non-https URL")
+			w.WriteHeader(http.StatusOK)
+		}))
+		defer srv.Close()
+
+		c := NewPublicOnlyClient(5*time.Second, true)
+		req, err := http.NewRequestWithContext(context.Background(), http.MethodGet, srv.URL, nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		resp, err := c.client.Do(req)
+		closeResponse(resp)
+		if err == nil {
+			t.Fatal("expected public-only client to refuse a non-https URL")
+		}
+		if !errors.Is(err, errPublicOnlyNonHTTPS) {
+			t.Fatalf("got %v, want errPublicOnlyNonHTTPS", err)
+		}
+	})
+
+	t.Run("redirect to http is refused at the hop", func(t *testing.T) {
+		httpFetched := false
+		httpSrv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			httpFetched = true
+			w.WriteHeader(http.StatusOK)
+		}))
+		defer httpSrv.Close()
+
+		tlsSrv := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			http.Redirect(w, r, httpSrv.URL, http.StatusFound)
+		}))
+		defer tlsSrv.Close()
+
+		c := NewPublicOnlyClient(5*time.Second, true)
+		allowPublicOnlyLoopback(t, c)
+		req, err := http.NewRequestWithContext(context.Background(), http.MethodGet, tlsSrv.URL, nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		resp, err := c.client.Do(req)
+		closeResponse(resp)
+		if httpFetched {
+			t.Error("public-only client followed a redirect to http")
+		}
+		if err == nil {
+			t.Fatal("expected public-only client to refuse an http redirect hop")
+		}
+		if !errors.Is(err, errPublicOnlyNonHTTPS) {
+			t.Fatalf("got %v, want errPublicOnlyNonHTTPS", err)
+		}
+	})
+
+	t.Run("https with at most 3 redirects succeeds", func(t *testing.T) {
+		hops := 0
+		srv := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			hops++
+			if hops <= 3 {
+				http.Redirect(w, r, "/hop", http.StatusFound)
+				return
+			}
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write([]byte("ok"))
+		}))
+		defer srv.Close()
+
+		c := NewPublicOnlyClient(5*time.Second, true)
+		allowPublicOnlyLoopback(t, c)
+		req, err := http.NewRequestWithContext(context.Background(), http.MethodGet, srv.URL, nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		resp, err := c.client.Do(req)
+		if err != nil {
+			t.Fatalf("expected public-only client to follow <=3 https redirects: %v", err)
+		}
+		defer resp.Body.Close()
+		if resp.StatusCode != http.StatusOK {
+			t.Fatalf("status = %d, want 200", resp.StatusCode)
+		}
+	})
+}
+
+func TestNewClientAllowsHTTPAndFollowsMoreThanThreeRedirects(t *testing.T) {
+	hops := 0
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		hops++
+		if hops <= 4 {
+			http.Redirect(w, r, "/hop", http.StatusFound)
+			return
+		}
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte("ok"))
+	}))
+	defer srv.Close()
+
+	c := NewClient(5*time.Second, true)
+	req, err := http.NewRequestWithContext(context.Background(), http.MethodGet, srv.URL, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	resp, err := c.client.Do(req)
+	if err != nil {
+		t.Fatalf("trusted client must still allow http and more than 3 redirects: %v", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("status = %d, want 200", resp.StatusCode)
+	}
+}
+
+func TestPublicOnlyClientStillRefusesHTTPSLoopback(t *testing.T) {
+	srv := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		t.Error("public-only dial guard must not connect to loopback")
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer srv.Close()
+
+	c := NewPublicOnlyClient(5*time.Second, true)
+	req, err := http.NewRequestWithContext(context.Background(), http.MethodGet, srv.URL, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	resp, err := c.client.Do(req)
+	closeResponse(resp)
+	if err == nil {
+		t.Fatal("expected public-only dial guard to refuse https loopback")
+	}
+	if !strings.Contains(err.Error(), "non-public") {
+		t.Fatalf("got %v, want the existing non-public dial error", err)
 	}
 }
