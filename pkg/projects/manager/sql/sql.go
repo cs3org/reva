@@ -106,8 +106,8 @@ type Project struct {
 	Comments string
 	// Reference to the ticket that requested the project
 	SnowTicket string
-	// ID of the Backup Job
-	BackupJobId string
+	// Name used to identify the project in the backup system (project name plus a salt)
+	BackupName string `gorm:"size:255"`
 	// Initially requested capacity
 	InitialCapacityBytes uint64
 }
