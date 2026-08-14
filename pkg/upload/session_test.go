@@ -27,9 +27,7 @@ var _ = Describe("FileSession", func() {
 		sess *FileSession
 	)
 
-	// newTestStore returns a store rooted in a fresh temp dir. Setup() is not
-	// called: Persist creates the uploads dir on demand, and the specs that need
-	// the store to be readable call it themselves.
+	// newTestStore returns a store rooted in a fresh temp dir, Setup() left to the specs.
 	newTestStore := func(opts TokenOptions) *FileStore {
 		log := zerolog.Nop()
 		return NewFileStore(GinkgoT().TempDir(), opts, &log)
@@ -50,6 +48,22 @@ var _ = Describe("FileSession", func() {
 		It("stores storage values readable through the typed getter", func() {
 			sess.SetStorageValue("SpaceRoot", "space-abc")
 			Expect(sess.SpaceID()).To(Equal("space-abc"))
+		})
+
+		// posix chowns the blob it writes to the space group.
+		It("stores the space gid", func() {
+			Expect(sess.SpaceGid()).To(BeEmpty())
+
+			sess.SetStorageValue("SpaceGid", "1000")
+			Expect(sess.SpaceGid()).To(Equal("1000"))
+		})
+
+		// The sync clients use it to recognise their own changes.
+		It("stores the initiator id", func() {
+			Expect(sess.InitiatorID()).To(BeEmpty())
+
+			sess.SetMetadata("initiatorid", "client-1")
+			Expect(sess.InitiatorID()).To(Equal("client-1"))
 		})
 
 		It("stores the declared size", func() {
@@ -225,6 +239,16 @@ var _ = Describe("FileSession", func() {
 			_, err := os.Stat(s.infoPath())
 			Expect(err).ToNot(HaveOccurred())
 		})
+
+		// The coordinator undoes the upload on this failure, so it cannot just be logged.
+		It("reports an upload directory it cannot create", func() {
+			blocked := filepath.Join(GinkgoT().TempDir(), "file")
+			Expect(os.WriteFile(blocked, nil, 0600)).To(Succeed())
+			log := zerolog.Nop()
+			s := NewFileStore(filepath.Join(blocked, "uploads"), TokenOptions{}, &log).New(ctx).(*FileSession)
+
+			Expect(s.Persist(ctx)).ToNot(Succeed())
+		})
 	})
 
 	Describe("WriteChunk", func() {
@@ -301,6 +325,48 @@ var _ = Describe("FileSession", func() {
 		It("tolerates files that are already gone", func() {
 			fresh := fs.New(ctx).(*FileSession)
 			Expect(func() { fresh.Cleanup(ctx, true, true) }).ToNot(Panic())
+		})
+
+		// The caller is already tearing the upload down, so this is only worth logging.
+		It("reports nothing when a file cannot be removed", func() {
+			// A non-empty directory in place of each file fails removal.
+			for _, path := range []string{staged.binPath(), staged.infoPath()} {
+				Expect(os.Remove(path)).To(Succeed())
+				Expect(os.MkdirAll(filepath.Join(path, "in-the-way"), 0700)).To(Succeed())
+			}
+
+			Expect(func() { staged.Cleanup(ctx, true, true) }).ToNot(Panic())
+
+			_, err := os.Stat(staged.binPath())
+			Expect(err).ToNot(HaveOccurred())
+		})
+	})
+
+	Describe("Purge", func() {
+		It("removes both files", func() {
+			Expect(sess.TouchBin()).To(Succeed())
+			Expect(sess.Persist(ctx)).To(Succeed())
+
+			sess.Purge(ctx)
+
+			_, err := os.Stat(sess.binPath())
+			Expect(os.IsNotExist(err)).To(BeTrue(), "bin should be removed")
+			_, err = os.Stat(sess.infoPath())
+			Expect(os.IsNotExist(err)).To(BeTrue(), "info should be removed")
+		})
+	})
+
+	// tusd answers a HEAD from the raw FileInfo, not from the getters.
+	Describe("ToFileInfo", func() {
+		It("hands out the info the session holds", func() {
+			sess.SetSize(512)
+			sess.SetMetadata("providerID", "prov-1")
+
+			info := sess.ToFileInfo()
+
+			Expect(info.ID).To(Equal(sess.ID()))
+			Expect(info.Size).To(Equal(int64(512)))
+			Expect(info.MetaData["providerID"]).To(Equal("prov-1"))
 		})
 	})
 
@@ -384,6 +450,12 @@ var _ = Describe("calculateChecksums", func() {
 
 	It("errors on a missing file", func() {
 		_, _, _, err := calculateChecksums(context.Background(), "/nonexistent/path/file.bin")
+		Expect(err).To(HaveOccurred())
+	})
+
+	// A file that opens but cannot be read to the end, such as a vanished mount.
+	It("errors when the file cannot be read through", func() {
+		_, _, _, err := calculateChecksums(context.Background(), GinkgoT().TempDir())
 		Expect(err).To(HaveOccurred())
 	})
 })

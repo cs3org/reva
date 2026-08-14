@@ -44,6 +44,13 @@ var _ = Describe("FileStore", func() {
 		})
 	})
 
+	// The drivers stage their own files alongside ours in this directory.
+	Describe("UploadDir", func() {
+		It("is the directory sessions are staged in", func() {
+			Expect(fs.UploadDir()).To(Equal(uploadDir))
+		})
+	})
+
 	Describe("New", func() {
 		BeforeEach(func() {
 			Expect(fs.Setup()).To(Succeed())
@@ -60,8 +67,7 @@ var _ = Describe("FileStore", func() {
 		It("stamps the storage type", func() {
 			info, err := fs.New(ctx).GetInfo(ctx)
 			Expect(err).ToNot(HaveOccurred())
-			// Deliberately OcisStore's value: sessions written by either store must stay
-			// readable across a rolling deploy.
+			// Deliberately OcisStore's value, for a rolling deploy to stay readable.
 			Expect(info.Storage["Type"]).To(Equal("OCISStore"))
 		})
 
@@ -130,6 +136,27 @@ var _ = Describe("FileStore", func() {
 			_, err := fs.Get(ctx, s.ID())
 			Expect(err).To(MatchError(tusd.ErrNotFound))
 		})
+
+		// Not found makes tusd answer 404, which restarts the client's upload.
+		It("reports an unreadable info file as an error, not as not found", func() {
+			s := fs.New(ctx).(*FileSession)
+			Expect(os.MkdirAll(s.infoPath(), 0700)).To(Succeed())
+
+			_, err := fs.Get(ctx, s.ID())
+			Expect(err).To(HaveOccurred())
+			Expect(err).ToNot(MatchError(tusd.ErrNotFound))
+		})
+
+		It("reports an unreadable staged binary as an error, not as not found", func() {
+			s := fs.New(ctx).(*FileSession)
+			Expect(s.Persist(ctx)).To(Succeed())
+			// A symlink to itself resolves to neither a file nor a missing one.
+			Expect(os.Symlink(s.binPath(), s.binPath())).To(Succeed())
+
+			_, err := fs.Get(ctx, s.ID())
+			Expect(err).To(HaveOccurred())
+			Expect(err).ToNot(MatchError(tusd.ErrNotFound))
+		})
 	})
 
 	Describe("List", func() {
@@ -162,6 +189,15 @@ var _ = Describe("FileStore", func() {
 			Expect(ids).To(ConsistOf(s1.ID(), s2.ID()))
 		})
 
+		// A bracket in the directory makes the glob pattern malformed.
+		It("reports an upload directory it cannot match against", func() {
+			bracketed := NewFileStore(filepath.Join(GinkgoT().TempDir(), "up[loads"), TokenOptions{}, nopLog())
+
+			_, err := bracketed.List(ctx)
+
+			Expect(err).To(MatchError(filepath.ErrBadPattern))
+		})
+
 		It("skips a session whose staged binary is gone", func() {
 			good := fs.New(ctx).(*FileSession)
 			Expect(good.TouchBin()).To(Succeed())
@@ -185,8 +221,7 @@ var _ = Describe("FileStoreFromDriverConf", func() {
 		Expect(FileStoreFromDriverConf(nil, nopLog())).To(BeNil())
 	})
 
-	// root is a storage root, so uploads are staged in a subdirectory of it. This
-	// is the layout OcisStore uses (decomposedfs.go:258 joins o.Root itself).
+	// The layout OcisStore uses (decomposedfs.go:258 joins o.Root itself).
 	It("stages uploads below the root key", func() {
 		root := GinkgoT().TempDir()
 		fs := FileStoreFromDriverConf(map[string]interface{}{"root": root}, nopLog())
@@ -195,8 +230,7 @@ var _ = Describe("FileStoreFromDriverConf", func() {
 		Expect(fs.uploadDir).To(Equal(filepath.Join(root, "uploads")))
 	})
 
-	// storage_root is the ocm driver's spelling of root, same layout
-	// (ocm/storage/received/upload.go:212).
+	// The ocm driver's spelling of root (ocm/storage/received/upload.go:212).
 	It("stages uploads below the storage_root key", func() {
 		root := GinkgoT().TempDir()
 		fs := FileStoreFromDriverConf(map[string]interface{}{"storage_root": root}, nopLog())
@@ -205,8 +239,7 @@ var _ = Describe("FileStoreFromDriverConf", func() {
 		Expect(fs.uploadDir).To(Equal(filepath.Join(root, "uploads")))
 	})
 
-	// upload_directory already names the upload directory, the way decomposedfs
-	// reads it (options.go:172, posix tree.go:168), so it must not be joined again.
+	// Read this way by decomposedfs (options.go:172, posix tree.go:168).
 	It("takes upload_directory as the upload directory itself", func() {
 		dir := GinkgoT().TempDir()
 		fs := FileStoreFromDriverConf(map[string]interface{}{"upload_directory": dir}, nopLog())
@@ -233,8 +266,7 @@ var _ = Describe("FileStoreFromDriverConf", func() {
 })
 
 var _ = Describe("NewFileStoreFromConfig", func() {
-	// The service-level value already names the upload directory, so it is used
-	// verbatim rather than joined.
+	// The service-level value already names the upload directory.
 	It("uses the service-level upload dir when set", func() {
 		uploadDir := GinkgoT().TempDir()
 		fs := NewFileStoreFromConfig(uploadDir, map[string]interface{}{"root": "/ignored"}, nopLog())
@@ -255,8 +287,7 @@ var _ = Describe("NewFileStoreFromConfig", func() {
 		Expect(NewFileStoreFromConfig("", nil, nopLog())).To(BeNil())
 	})
 
-	// A service-level upload directory must not drop the driver's tokens: they sign
-	// the transfer URL postprocessing downloads the staged bytes from.
+	// The tokens sign the transfer URL postprocessing downloads the bytes from.
 	It("keeps the driver tokens when the upload dir comes from the service", func() {
 		uploadDir := GinkgoT().TempDir()
 		fs := NewFileStoreFromConfig(uploadDir, map[string]interface{}{
