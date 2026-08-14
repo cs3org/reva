@@ -102,11 +102,27 @@ func NewClient(timeout time.Duration, insecure bool) *OCMClient {
 	}
 }
 
-// NewPublicOnlyClient returns an OCMClient that only dials public addresses, for
-// discovery of hosts named by an untrusted caller. The check is in the dialer so
-// it also covers redirects and DNS rebinding. Redirects are capped and both the
-// initial URL and every hop must use https.
-func NewPublicOnlyClient(timeout time.Duration, insecure bool) *OCMClient {
+// UntrustedHTTPTransport returns a RoundTripper with the same public-only
+// hardening as NewPublicOnlyClient. Use it with gowebdav.Client.SetTransport
+// (or any http.Client.Transport) when the URL is untrusted or peer-supplied.
+//
+// Transport-layer guarantees:
+//   - dials only public addresses (refuseNonPublicAddr / isPublicIP), including
+//     redirect hops and DNS-rebinding races
+//   - Proxy is nil (no ProxyFromEnvironment)
+//   - TLS 1.2 minimum; InsecureSkipVerify only when insecure is true
+//   - https-only scheme on every RoundTrip
+//
+// Redirect limiting is an http.Client CheckRedirect concern, not a property of
+// http.Transport. gowebdav.Client keeps its own CheckRedirect (10 hops).
+// Callers that own the http.Client should set CheckRedirect to
+// PublicOnlyCheckRedirect to apply the 3-redirect cap used by
+// NewPublicOnlyClient.
+//
+// The timeout option applies only to dialing, specifically net.Dialer.Timeout
+// on the Control path. Request-level deadlines require http.Client.Timeout or
+// gowebdav SetTimeout.
+func UntrustedHTTPTransport(timeout time.Duration, insecure bool) http.RoundTripper {
 	tr := newOCMTransport(insecure)
 	// with a proxy the dial goes to the proxy, so Control never sees the target
 	tr.Proxy = nil
@@ -115,11 +131,19 @@ func NewPublicOnlyClient(timeout time.Duration, insecure bool) *OCMClient {
 		KeepAlive: 30 * time.Second,
 		Control:   refuseNonPublicAddr,
 	}).DialContext
+	return &publicOnlyTransport{Transport: tr}
+}
+
+// NewPublicOnlyClient returns an OCMClient that only dials public addresses, for
+// discovery of hosts named by an untrusted caller. The check is in the dialer so
+// it also covers redirects and DNS rebinding. Redirects are capped and both the
+// initial URL and every hop must use https.
+func NewPublicOnlyClient(timeout time.Duration, insecure bool) *OCMClient {
 	return &OCMClient{
 		client: &http.Client{
-			Transport:     &publicOnlyTransport{Transport: tr},
+			Transport:     UntrustedHTTPTransport(timeout, insecure),
 			Timeout:       timeout,
-			CheckRedirect: publicOnlyCheckRedirect,
+			CheckRedirect: PublicOnlyCheckRedirect,
 		},
 	}
 }
@@ -148,7 +172,10 @@ func requirePublicOnlyHTTPS(u *url.URL) error {
 	return fmt.Errorf("public-only OCM client refuses non-https scheme %q: %w", scheme, errPublicOnlyNonHTTPS)
 }
 
-func publicOnlyCheckRedirect(req *http.Request, via []*http.Request) error {
+// PublicOnlyCheckRedirect is the 3-redirect, https-only CheckRedirect used by
+// NewPublicOnlyClient. Assign it on an http.Client that uses
+// UntrustedHTTPTransport when the caller owns that client.
+func PublicOnlyCheckRedirect(req *http.Request, via []*http.Request) error {
 	if len(via) > maxPublicOnlyRedirects {
 		return errPublicOnlyTooManyRedirects
 	}

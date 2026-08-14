@@ -572,24 +572,12 @@ func TestExchangeTokenHTTP400OversizedBody(t *testing.T) {
 // and Proxy=nil, and only drop Control so the TLS server is reachable.
 func allowPublicOnlyLoopback(t *testing.T, c *OCMClient) {
 	t.Helper()
-	tr := publicOnlyHTTPTransport(t, c)
-	tr.DialContext = (&net.Dialer{Timeout: 5 * time.Second}).DialContext
+	allowUntrustedLoopback(t, c.client.Transport)
 }
 
 func publicOnlyHTTPTransport(t *testing.T, c *OCMClient) *http.Transport {
 	t.Helper()
-	switch tr := c.client.Transport.(type) {
-	case *http.Transport:
-		return tr
-	case *publicOnlyTransport:
-		if tr.Transport == nil {
-			t.Fatal("public-only client is missing an inner *http.Transport")
-		}
-		return tr.Transport
-	default:
-		t.Fatalf("public-only client transport: got %T, want *http.Transport or *publicOnlyTransport", c.client.Transport)
-		return nil
-	}
+	return innerUntrustedTransport(t, c.client.Transport)
 }
 
 func closeResponse(resp *http.Response) {
@@ -880,5 +868,212 @@ func TestPublicOnlyClientStillRefusesHTTPSLoopback(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "non-public") {
 		t.Fatalf("got %v, want the existing non-public dial error", err)
+	}
+}
+
+func doUntrustedRequest(t *testing.T, rt http.RoundTripper, rawURL string) (*http.Response, error) {
+	t.Helper()
+	req, err := http.NewRequestWithContext(context.Background(), http.MethodGet, rawURL, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return (&http.Client{Transport: rt}).Do(req)
+}
+
+func innerUntrustedTransport(t *testing.T, rt http.RoundTripper) *http.Transport {
+	t.Helper()
+	switch tr := rt.(type) {
+	case *http.Transport:
+		return tr
+	case *publicOnlyTransport:
+		if tr.Transport == nil {
+			t.Fatal("untrusted transport is missing an inner *http.Transport")
+		}
+		return tr.Transport
+	default:
+		t.Fatalf("untrusted transport: got %T, want *http.Transport or *publicOnlyTransport", rt)
+		return nil
+	}
+}
+
+func allowUntrustedLoopback(t *testing.T, rt http.RoundTripper) {
+	t.Helper()
+	tr := innerUntrustedTransport(t, rt)
+	tr.DialContext = (&net.Dialer{Timeout: 5 * time.Second}).DialContext
+}
+
+func TestUntrustedHTTPTransportRefusesNonPublicHosts(t *testing.T) {
+	t.Parallel()
+
+	t.Run("https loopback is refused at dial", func(t *testing.T) {
+		srv := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			t.Error("untrusted transport must not connect to loopback")
+			w.WriteHeader(http.StatusOK)
+		}))
+		defer srv.Close()
+
+		resp, err := doUntrustedRequest(t, UntrustedHTTPTransport(5*time.Second, true), srv.URL)
+		closeResponse(resp)
+		if err == nil {
+			t.Fatal("expected untrusted transport to refuse https loopback at dial")
+		}
+		if !strings.Contains(err.Error(), "non-public") {
+			t.Fatalf("got %v, want the existing non-public dial error", err)
+		}
+	})
+
+	t.Run("cloud metadata host is refused at dial", func(t *testing.T) {
+		resp, err := doUntrustedRequest(t, UntrustedHTTPTransport(5*time.Second, true), "https://169.254.169.254/")
+		closeResponse(resp)
+		if err == nil {
+			t.Fatal("expected untrusted transport to refuse the metadata host at dial")
+		}
+		if !strings.Contains(err.Error(), "non-public") {
+			t.Fatalf("got %v, want the existing non-public dial error", err)
+		}
+	})
+}
+
+func TestUntrustedHTTPTransportRefusesHTTP(t *testing.T) {
+	t.Parallel()
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		t.Error("untrusted transport must not fetch a non-https URL")
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer srv.Close()
+
+	resp, err := doUntrustedRequest(t, UntrustedHTTPTransport(5*time.Second, true), srv.URL)
+	closeResponse(resp)
+	if err == nil {
+		t.Fatal("expected untrusted transport to refuse a non-https URL")
+	}
+	if !errors.Is(err, errPublicOnlyNonHTTPS) {
+		t.Fatalf("got %v, want errPublicOnlyNonHTTPS", err)
+	}
+}
+
+func TestUntrustedHTTPTransportRequiresTLS12(t *testing.T) {
+	rt := UntrustedHTTPTransport(5*time.Second, false)
+	tr := innerUntrustedTransport(t, rt)
+	if tr.TLSClientConfig == nil {
+		t.Fatal("TLSClientConfig is nil")
+	}
+	if tr.TLSClientConfig.MinVersion < tls.VersionTLS12 {
+		t.Errorf("MinVersion = %#x, want at least TLS 1.2 (%#x)", tr.TLSClientConfig.MinVersion, tls.VersionTLS12)
+	}
+	if tr.TLSClientConfig.InsecureSkipVerify {
+		t.Error("insecure=false must not set InsecureSkipVerify")
+	}
+
+	srv := httptest.NewUnstartedServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		t.Error("TLS 1.1 handshake must not succeed")
+		w.WriteHeader(http.StatusOK)
+	}))
+	srv.TLS = &tls.Config{
+		MinVersion: tls.VersionTLS11,
+		MaxVersion: tls.VersionTLS11,
+	}
+	srv.StartTLS()
+	defer srv.Close()
+
+	insecureRT := UntrustedHTTPTransport(5*time.Second, true)
+	allowUntrustedLoopback(t, insecureRT)
+	resp, err := doUntrustedRequest(t, insecureRT, srv.URL)
+	closeResponse(resp)
+	if err == nil {
+		t.Fatal("expected untrusted transport to refuse a TLS 1.1 handshake")
+	}
+	errMsg := strings.ToLower(err.Error())
+	mentionsTLS := strings.Contains(errMsg, "tls")
+	mentionsProtocol := strings.Contains(errMsg, "protocol")
+	mentionsHandshake := strings.Contains(errMsg, "handshake")
+	if !mentionsTLS && !mentionsProtocol && !mentionsHandshake {
+		t.Fatalf("got %v, want a TLS-version or handshake failure", err)
+	}
+}
+
+func TestUntrustedHTTPTransportMirrorsInsecureFlag(t *testing.T) {
+	for _, insecure := range []bool{false, true} {
+		tr := innerUntrustedTransport(t, UntrustedHTTPTransport(5*time.Second, insecure))
+		if tr.TLSClientConfig == nil {
+			t.Fatalf("insecure=%v: TLSClientConfig is nil", insecure)
+		}
+		if tr.TLSClientConfig.InsecureSkipVerify != insecure {
+			t.Errorf("insecure=%v: InsecureSkipVerify = %v, want %v", insecure, tr.TLSClientConfig.InsecureSkipVerify, insecure)
+		}
+		if tr.Proxy != nil {
+			t.Errorf("insecure=%v: untrusted transport must not use a proxy", insecure)
+		}
+	}
+}
+
+func TestUntrustedHTTPTransportFitsGowebdavSetTransport(t *testing.T) {
+	var rt http.RoundTripper = UntrustedHTTPTransport(5*time.Second, false)
+	if rt == nil {
+		t.Fatal("UntrustedHTTPTransport returned nil")
+	}
+}
+
+func TestPublicOnlyCheckRedirectCapsAtThree(t *testing.T) {
+	hops := 0
+	srv := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		hops++
+		if hops <= 4 {
+			http.Redirect(w, r, "/hop", http.StatusFound)
+			return
+		}
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer srv.Close()
+
+	rt := UntrustedHTTPTransport(5*time.Second, true)
+	allowUntrustedLoopback(t, rt)
+	req, err := http.NewRequestWithContext(context.Background(), http.MethodGet, srv.URL, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	resp, err := (&http.Client{
+		Transport:     rt,
+		CheckRedirect: PublicOnlyCheckRedirect,
+	}).Do(req)
+	closeResponse(resp)
+	if err == nil {
+		t.Fatal("expected PublicOnlyCheckRedirect to refuse more than 3 redirects")
+	}
+	if !errors.Is(err, errPublicOnlyTooManyRedirects) {
+		t.Fatalf("got %v, want errPublicOnlyTooManyRedirects", err)
+	}
+}
+
+func TestNewPublicOnlyClientKeepsPublicOnlyPolicy(t *testing.T) {
+	c := NewPublicOnlyClient(5*time.Second, true)
+	if c.client.Timeout != 5*time.Second {
+		t.Errorf("client timeout: got %v, want %v", c.client.Timeout, 5*time.Second)
+	}
+	if _, ok := c.client.Transport.(*publicOnlyTransport); !ok {
+		t.Fatalf("transport: got %T, want *publicOnlyTransport", c.client.Transport)
+	}
+	if c.client.CheckRedirect == nil {
+		t.Fatal("NewPublicOnlyClient must keep CheckRedirect")
+	}
+	got := reflect.ValueOf(c.client.CheckRedirect).Pointer()
+	want := reflect.ValueOf(PublicOnlyCheckRedirect).Pointer()
+	if got != want {
+		t.Error("NewPublicOnlyClient CheckRedirect must stay PublicOnlyCheckRedirect")
+	}
+
+	tr := publicOnlyHTTPTransport(t, c)
+	if tr.Proxy != nil {
+		t.Error("public-only client must not use a proxy")
+	}
+	if tr.TLSClientConfig == nil {
+		t.Fatal("TLSClientConfig is nil")
+	}
+	if tr.TLSClientConfig.MinVersion < tls.VersionTLS12 {
+		t.Errorf("MinVersion = %#x, want at least TLS 1.2 (%#x)", tr.TLSClientConfig.MinVersion, tls.VersionTLS12)
+	}
+	if !tr.TLSClientConfig.InsecureSkipVerify {
+		t.Error("insecure=true must set InsecureSkipVerify")
 	}
 }
