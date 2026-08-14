@@ -739,6 +739,128 @@ func TestNewClientAllowsHTTPAndFollowsMoreThanThreeRedirects(t *testing.T) {
 	}
 }
 
+// allowPublicOnlyTestServer keeps the public-only HTTPS gate, redirect cap, and
+// non-public dial refusal, and only permits the httptest listener so the first
+// hop is reachable. Redirects to other addresses still hit refuseNonPublicAddr.
+func allowPublicOnlyTestServer(t *testing.T, c *OCMClient, allowed string) {
+	t.Helper()
+	allowedHost, allowedPort, err := net.SplitHostPort(allowed)
+	if err != nil {
+		t.Fatal(err)
+	}
+	tr := publicOnlyHTTPTransport(t, c)
+	tr.DialContext = func(ctx context.Context, network, address string) (net.Conn, error) {
+		host, port, err := net.SplitHostPort(address)
+		if err != nil {
+			return nil, err
+		}
+		if host == allowedHost && port == allowedPort {
+			return (&net.Dialer{Timeout: 5 * time.Second}).DialContext(ctx, network, address)
+		}
+		if err := refuseNonPublicAddr(network, address, nil); err != nil {
+			return nil, err
+		}
+		return (&net.Dialer{Timeout: 5 * time.Second}).DialContext(ctx, network, address)
+	}
+}
+
+func TestPublicOnlyDiscoverSucceedsOnAllowedHTTPSHost(t *testing.T) {
+	var srv *httptest.Server
+	srv = httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/.well-known/ocm" {
+			http.NotFound(w, r)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"enabled":       true,
+			"apiVersion":    "1.2.0",
+			"endPoint":      srv.URL + "/ocm",
+			"provider":      "reva",
+			"resourceTypes": []any{},
+			"tokenEndPoint": srv.URL + "/ocm/token",
+		})
+	}))
+	defer srv.Close()
+
+	c := NewPublicOnlyClient(5*time.Second, true)
+	allowPublicOnlyTestServer(t, c, srv.Listener.Addr().String())
+	disco, err := c.Discover(context.Background(), srv.URL)
+	if err != nil {
+		t.Fatalf("Discover() on an allowed HTTPS host: %v", err)
+	}
+	if disco == nil || disco.TokenEndPoint != srv.URL+"/ocm/token" {
+		t.Fatalf("unexpected discovery payload: %+v", disco)
+	}
+}
+
+func TestPublicOnlyDiscoverRefusesRedirectToLinkLocal(t *testing.T) {
+	var dialed []string
+	srv := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		http.Redirect(w, r, "https://169.254.169.254/.well-known/ocm", http.StatusFound)
+	}))
+	defer srv.Close()
+
+	c := NewPublicOnlyClient(5*time.Second, true)
+	allowed := srv.Listener.Addr().String()
+	allowedHost, allowedPort, err := net.SplitHostPort(allowed)
+	if err != nil {
+		t.Fatal(err)
+	}
+	tr := publicOnlyHTTPTransport(t, c)
+	tr.DialContext = func(ctx context.Context, network, address string) (net.Conn, error) {
+		dialed = append(dialed, address)
+		host, port, err := net.SplitHostPort(address)
+		if err != nil {
+			return nil, err
+		}
+		if host == allowedHost && port == allowedPort {
+			return (&net.Dialer{Timeout: 5 * time.Second}).DialContext(ctx, network, address)
+		}
+		if err := refuseNonPublicAddr(network, address, nil); err != nil {
+			return nil, err
+		}
+		return (&net.Dialer{Timeout: 5 * time.Second}).DialContext(ctx, network, address)
+	}
+
+	_, err = c.Discover(context.Background(), srv.URL)
+	if err == nil {
+		t.Fatal("expected Discover to refuse a redirect to a link-local address")
+	}
+	sawLinkLocal := false
+	for _, address := range dialed {
+		if strings.HasPrefix(address, "169.254.169.254:") {
+			sawLinkLocal = true
+			break
+		}
+	}
+	if !sawLinkLocal {
+		t.Fatalf("expected a redirect-hop dial to 169.254.169.254, dialed %v", dialed)
+	}
+}
+
+func TestPublicOnlyExchangeTokenSucceedsOnAllowedHTTPSHost(t *testing.T) {
+	srv := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"access_token": "jwt-tok",
+			"token_type":   "Bearer",
+			"expires_in":   3600,
+		})
+	}))
+	defer srv.Close()
+
+	c := NewPublicOnlyClient(5*time.Second, true)
+	allowPublicOnlyTestServer(t, c, srv.Listener.Addr().String())
+	tok, exp, err := c.ExchangeToken(context.Background(), srv.URL, "code123", "client1")
+	if err != nil {
+		t.Fatalf("ExchangeToken() on an allowed HTTPS host: %v", err)
+	}
+	if tok != "jwt-tok" || exp != 3600 {
+		t.Fatalf("got token %q expires_in %d, want jwt-tok / 3600", tok, exp)
+	}
+}
+
 func TestPublicOnlyClientStillRefusesHTTPSLoopback(t *testing.T) {
 	srv := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		t.Error("public-only dial guard must not connect to loopback")

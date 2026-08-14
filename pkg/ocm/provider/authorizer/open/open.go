@@ -44,7 +44,9 @@ func New(ctx context.Context, m map[string]any) (provider.Authorizer, error) {
 		return nil, err
 	}
 
-	a := &authorizer{insecure: c.Insecure}
+	a := &authorizer{
+		publicOCMClient: client.NewPublicOnlyClient(10*time.Second, c.Insecure),
+	}
 	return a, nil
 }
 
@@ -60,8 +62,8 @@ func (c *config) ApplyDefaults() {
 }
 
 type authorizer struct {
-	providers []*ocmprovider.ProviderInfo
-	insecure  bool
+	providers       []*ocmprovider.ProviderInfo
+	publicOCMClient *client.OCMClient
 }
 
 func (a *authorizer) GetInfoByDomain(ctx context.Context, domain string) (*ocmprovider.ProviderInfo, error) {
@@ -79,8 +81,7 @@ func (a *authorizer) GetInfoByDomain(ctx context.Context, domain string) (*ocmpr
 	}
 
 	// not yet known: try to discover the remote OCM endpoint
-	ocmClient := client.NewClient(time.Duration(10)*time.Second, a.insecure)
-	ocmCaps, err := ocmClient.Discover(ctx, endpoint)
+	ocmCaps, err := a.publicOCMClient.Discover(ctx, endpoint)
 	if err != nil {
 		return nil, errors.Wrap(err, "error probing OCM services at remote server")
 	}

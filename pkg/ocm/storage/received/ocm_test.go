@@ -5,9 +5,13 @@ import (
 	"encoding/json"
 	"fmt"
 	"io/fs"
+	"net"
 	"net/http"
 	"net/http/httptest"
+	"net/http/httptrace"
 	"os"
+	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -755,5 +759,266 @@ func TestIsWebDAV401_OsPathError(t *testing.T) {
 	err := &os.PathError{Op: "GET", Path: "/test", Err: fmt.Errorf("not a StatusError")}
 	if isWebDAV401(err) {
 		t.Error("expected isWebDAV401=false for PathError with non-StatusError inner")
+	}
+}
+
+func assertRefusedNonPublic(t *testing.T, err error) {
+	t.Helper()
+	if err == nil {
+		t.Fatal("expected body-supplied discovery to refuse a non-public address")
+	}
+	if !strings.Contains(err.Error(), "non-public") {
+		t.Fatalf("got %v, want a non-public dial refusal", err)
+	}
+}
+
+func newProductionReceivedDriver(t *testing.T) *driver {
+	t.Helper()
+	fs, err := New(context.Background(), map[string]any{
+		"gatewaysvc":   "public-only-received-test.invalid:1",
+		"ocm_timeout":  5,
+		"ocm_insecure": true,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	d, ok := fs.(*driver)
+	if !ok {
+		t.Fatalf("got %T, want *driver", fs)
+	}
+	return d
+}
+
+func firstPublicIPv4() (string, bool) {
+	addrs, err := net.InterfaceAddrs()
+	if err != nil {
+		return "", false
+	}
+	for _, a := range addrs {
+		n, ok := a.(*net.IPNet)
+		if !ok || n.IP == nil {
+			continue
+		}
+		ip := n.IP.To4()
+		if ip == nil || ip.IsLoopback() || ip.IsPrivate() || ip.IsUnspecified() ||
+			ip.IsLinkLocalUnicast() || ip.IsMulticast() {
+			continue
+		}
+		if ip[0] == 100 && ip[1]&0xc0 == 64 {
+			continue
+		}
+		return ip.String(), true
+	}
+	return "", false
+}
+
+func startPublicTLSServer(t *testing.T, h http.Handler) *httptest.Server {
+	t.Helper()
+	ip, ok := firstPublicIPv4()
+	if !ok {
+		t.Skip("no public IPv4 address available for public-only httptest")
+	}
+	ln, err := net.Listen("tcp", net.JoinHostPort(ip, "0"))
+	if err != nil {
+		t.Skipf("cannot listen on public IP %s: %v", ip, err)
+	}
+	srv := httptest.NewUnstartedServer(h)
+	if srv.Listener != nil {
+		_ = srv.Listener.Close()
+	}
+	srv.Listener = ln
+	srv.StartTLS()
+	t.Cleanup(srv.Close)
+	return srv
+}
+
+// hostDialTrace records hosts the HTTP client actually connected to.
+type hostDialTrace struct {
+	mu          sync.Mutex
+	established []string
+}
+
+func contextWithHostDialTrace(ctx context.Context) (context.Context, *hostDialTrace) {
+	tr := &hostDialTrace{established: []string{}}
+	ctx = httptrace.WithClientTrace(ctx, &httptrace.ClientTrace{
+		ConnectDone: func(_, addr string, err error) {
+			if err != nil {
+				return
+			}
+			tr.mu.Lock()
+			tr.established = append(tr.established, addr)
+			tr.mu.Unlock()
+		},
+		GotConn: func(info httptrace.GotConnInfo) {
+			if info.Conn == nil {
+				return
+			}
+			tr.mu.Lock()
+			tr.established = append(tr.established, info.Conn.RemoteAddr().String())
+			tr.mu.Unlock()
+		},
+	})
+	return ctx, tr
+}
+
+func hostOf(addr string) string {
+	host, _, err := net.SplitHostPort(addr)
+	if err != nil {
+		host = addr
+	}
+	if ip := net.ParseIP(host); ip != nil {
+		if ip4 := ip.To4(); ip4 != nil {
+			return ip4.String()
+		}
+		return ip.String()
+	}
+	return host
+}
+
+func (tr *hostDialTrace) establishedHost(host string) bool {
+	tr.mu.Lock()
+	defer tr.mu.Unlock()
+	for _, addr := range tr.established {
+		if hostOf(addr) == host {
+			return true
+		}
+	}
+	return false
+}
+
+func assertNoEstablishedHost(t *testing.T, tr *hostDialTrace, host string) {
+	t.Helper()
+	if tr.establishedHost(host) {
+		t.Fatalf("public-only client established a connection to %s", host)
+	}
+}
+
+func TestGetTokenEndpointUsesPublicOnlyClient(t *testing.T) {
+	var srv *httptest.Server
+	fetched := false
+	srv = httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		fetched = true
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"enabled":       true,
+			"apiVersion":    "1.2.0",
+			"endPoint":      srv.URL + "/ocm",
+			"provider":      "reva",
+			"resourceTypes": []any{},
+			"tokenEndPoint": srv.URL + "/ocm/token",
+		})
+	}))
+	defer srv.Close()
+
+	d := newProductionReceivedDriver(t)
+	share := testCodeFlowReceivedShare(srv.Listener.Addr().String(), srv.URL)
+
+	_, err := d.getTokenEndpoint(context.Background(), share)
+	if fetched {
+		t.Fatal("getTokenEndpoint fetched a loopback discovery host; the public-only client must refuse it at dial")
+	}
+	if err == nil {
+		t.Fatal("getTokenEndpoint must refuse body-supplied discovery to a private loopback host")
+	}
+}
+
+func TestGetTokenEndpointRefusesPrivateDiscoveryHost(t *testing.T) {
+	d := newProductionReceivedDriver(t)
+
+	t.Run("metadata host", func(t *testing.T) {
+		share := testCodeFlowReceivedShare("169.254.169.254", "https://169.254.169.254")
+		ctx, tr := contextWithHostDialTrace(context.Background())
+		_, err := d.getTokenEndpoint(ctx, share)
+		assertNoEstablishedHost(t, tr, "169.254.169.254")
+		if err == nil {
+			t.Fatal("expected body-supplied discovery to a metadata host to fail")
+		}
+	})
+
+	t.Run("reachable private host is not contacted", func(t *testing.T) {
+		fetched := false
+		srv := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			fetched = true
+			w.WriteHeader(http.StatusOK)
+		}))
+		defer srv.Close()
+
+		loopHost, _, err := net.SplitHostPort(srv.Listener.Addr().String())
+		if err != nil {
+			t.Fatal(err)
+		}
+		share := testCodeFlowReceivedShare(srv.Listener.Addr().String(), srv.URL)
+		ctx, tr := contextWithHostDialTrace(context.Background())
+		_, err = d.getTokenEndpoint(ctx, share)
+		if fetched {
+			t.Fatal("getTokenEndpoint fetched a private discovery host; the public-only client must refuse it at dial")
+		}
+		assertNoEstablishedHost(t, tr, loopHost)
+		if err == nil {
+			t.Fatal("expected body-supplied discovery to a private host to fail")
+		}
+	})
+}
+
+func TestExchangeAccessTokenRefusesPrivateTokenEndpoint(t *testing.T) {
+	d := newProductionReceivedDriver(t)
+	share := testCodeFlowReceivedShare("169.254.169.254", "https://169.254.169.254")
+
+	_, err := d.exchangeAccessToken(context.Background(), share, "https://169.254.169.254/ocm/token", "secret")
+	assertRefusedNonPublic(t, err)
+}
+
+func TestGetTokenEndpointPublicHTTPSHostSucceeds(t *testing.T) {
+	var srv *httptest.Server
+	srv = startPublicTLSServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/.well-known/ocm" {
+			http.NotFound(w, r)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"enabled":       true,
+			"apiVersion":    "1.2.0",
+			"endPoint":      srv.URL + "/ocm",
+			"provider":      "reva",
+			"resourceTypes": []any{},
+			"tokenEndPoint": srv.URL + "/ocm/token",
+		})
+	}))
+
+	d := newProductionReceivedDriver(t)
+	share := testCodeFlowReceivedShare(srv.Listener.Addr().String(), srv.URL)
+
+	got, err := d.getTokenEndpoint(context.Background(), share)
+	if err != nil {
+		t.Fatalf("getTokenEndpoint() on a public HTTPS host: %v", err)
+	}
+	want := srv.URL + "/ocm/token"
+	if got != want {
+		t.Fatalf("getTokenEndpoint() = %q, want %q", got, want)
+	}
+}
+
+func TestGetTokenEndpointRefusesRedirectToLinkLocal(t *testing.T) {
+	srv := startPublicTLSServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		http.Redirect(w, r, "https://169.254.169.254"+r.URL.Path, http.StatusFound)
+	}))
+
+	publicHost, _, err := net.SplitHostPort(srv.Listener.Addr().String())
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	d := newProductionReceivedDriver(t)
+	share := testCodeFlowReceivedShare(srv.Listener.Addr().String(), srv.URL)
+
+	ctx, tr := contextWithHostDialTrace(context.Background())
+	_, err = d.getTokenEndpoint(ctx, share)
+	if !tr.establishedHost(publicHost) {
+		t.Fatalf("expected Discover to reach the public first hop %s", publicHost)
+	}
+	assertNoEstablishedHost(t, tr, "169.254.169.254")
+	if err == nil {
+		t.Fatal("expected received Discover to refuse a redirect to a link-local metadata address")
 	}
 }

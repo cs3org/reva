@@ -106,7 +106,7 @@ func New(ctx context.Context, m map[string]any) (storage.FS, error) {
 		gateway:        gateway,
 		ccache:         ttlcache.NewCache(),
 		discoveryCache: disco,
-		ocmClient:      ocmd.NewClient(time.Duration(c.OCMClientTimeout)*time.Second, c.OCMClientInsecure),
+		ocmClient:      ocmd.NewPublicOnlyClient(time.Duration(c.OCMClientTimeout)*time.Second, c.OCMClientInsecure),
 	}
 	return d, nil
 }
