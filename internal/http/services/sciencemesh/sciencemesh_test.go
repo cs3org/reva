@@ -142,7 +142,7 @@ func TestNewWiresTLSMinVersionToDiscoverTransport(t *testing.T) {
 	if s.wayf == nil || s.wayf.untrustedClient == nil {
 		t.Fatal("untrusted discover client is nil")
 	}
-	tr := innerUntrustedHTTPTransport(t, s.wayf.untrustedClient.Transport)
+	tr := innerUntrustedHTTPTransport(t, s.wayf.untrustedClient.HTTPTransport())
 	if tr.TLSClientConfig == nil || tr.TLSClientConfig.MinVersion != tls.VersionTLS13 {
 		t.Fatalf("discover transport MinVersion = %v, want TLS 1.3", tr.TLSClientConfig)
 	}

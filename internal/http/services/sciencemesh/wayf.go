@@ -36,8 +36,7 @@ type wayfHandler struct {
 	directoryServices []ocmd.DirectoryService
 	ocmClient         *ocmd.OCMClient
 	// for /discover, where the host comes from the request body, not from config
-	untrustedClient *http.Client
-	responseLimit   int
+	untrustedClient *ocmd.OCMClient
 }
 
 type DiscoverRequest struct {
@@ -76,14 +75,16 @@ func (h *wayfHandler) init(c *config) error {
 		dialTimeout = 10 * time.Second
 	}
 	h.ocmClient = ocmd.NewClient(requestTimeout, c.OCMClientInsecure, int64(c.OCMClientResponseLimit))
-	h.untrustedClient = newUntrustedDiscoverClient(
-		dialTimeout,
+	h.untrustedClient = ocmd.NewPublicOnlyClient(
 		requestTimeout,
 		c.OCMClientInsecure,
 		c.UntrustedClientSecurity,
+		int64(c.OCMClientResponseLimit),
 		c.ocmClientTLSMin,
 	)
-	h.responseLimit = c.OCMClientResponseLimit
+	if dialTimeout > 0 && dialTimeout != requestTimeout {
+		overridePublicOnlyDialTimeout(h.untrustedClient, dialTimeout)
+	}
 	log.Debug().
 		Int("timeout_seconds", c.OCMClientTimeout).
 		Int("dial_timeout_seconds", c.OCMClientDialTimeout).
@@ -236,12 +237,7 @@ func (h *wayfHandler) DiscoverProvider(w http.ResponseWriter, r *http.Request) {
 	}
 
 	log.Debug().Str("domain", domain).Msg("Attempting OCM discovery")
-	disco, err := discoverUntrusted(
-		ctx,
-		h.untrustedClient,
-		domain,
-		int64(h.responseLimit),
-	)
+	disco, err := h.untrustedClient.Discover(ctx, domain)
 	if err != nil {
 		log.Info().Err(err).Str("domain", domain).Msg("Discovery failed")
 		reqres.WriteError(w, r, reqres.APIErrorNotFound,

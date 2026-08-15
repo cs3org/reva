@@ -24,11 +24,12 @@ import (
 	"crypto/tls"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net"
 	"net/http"
 	"net/http/httptest"
-	"net/url"
 	"reflect"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -38,23 +39,11 @@ import (
 
 func innerUntrustedHTTPTransport(t *testing.T, rt http.RoundTripper) *http.Transport {
 	t.Helper()
-	if tr, ok := rt.(*http.Transport); ok {
-		return tr
+	tr := untrustedInnerTransport(rt)
+	if tr == nil {
+		t.Fatalf("untrusted transport: got %T, want an *http.Transport wrapper", rt)
 	}
-	v := reflect.ValueOf(rt)
-	if v.Kind() == reflect.Pointer {
-		v = v.Elem()
-	}
-	if v.IsValid() && v.Kind() == reflect.Struct {
-		f := v.FieldByName("Transport")
-		if f.IsValid() && f.CanInterface() {
-			if tr, ok := f.Interface().(*http.Transport); ok && tr != nil {
-				return tr
-			}
-		}
-	}
-	t.Fatalf("untrusted transport: got %T, want an *http.Transport wrapper", rt)
-	return nil
+	return tr
 }
 
 func newDiscoverHandler(t *testing.T, limit int) *wayfHandler {
@@ -88,17 +77,32 @@ func postDiscover(t *testing.T, h *wayfHandler, domain string) *httptest.Respons
 // only drop Control so the TLS fixture is reachable.
 func allowUntrustedLoopback(t *testing.T, h *wayfHandler) {
 	t.Helper()
-	tr := innerUntrustedHTTPTransport(t, h.untrustedClient.Transport)
+	tr := innerUntrustedHTTPTransport(t, h.untrustedClient.HTTPTransport())
 	tr.DialContext = (&net.Dialer{Timeout: 5 * time.Second}).DialContext
+}
+
+// refuseNonPublicTestAddr is the test-only public-address check used when a
+// public URL is redirected onto the httptest listener.
+func refuseNonPublicTestAddr(_, address string) error {
+	host, _, err := net.SplitHostPort(address)
+	if err != nil {
+		return err
+	}
+	ip := net.ParseIP(host)
+	if ip == nil || ip.IsLoopback() || ip.IsPrivate() || ip.IsUnspecified() ||
+		ip.IsLinkLocalUnicast() {
+		return fmt.Errorf("refusing non-public address %s", address)
+	}
+	return nil
 }
 
 // dialPublicHostToListener keeps the public-address dial check, then connects
 // to the httptest listener so a public URL can exercise HTTPS redirects.
 func dialPublicHostToListener(t *testing.T, h *wayfHandler, listenerAddr string) {
 	t.Helper()
-	tr := innerUntrustedHTTPTransport(t, h.untrustedClient.Transport)
+	tr := innerUntrustedHTTPTransport(t, h.untrustedClient.HTTPTransport())
 	tr.DialContext = func(ctx context.Context, network, address string) (net.Conn, error) {
-		if err := refuseNonPublicAddr(network, address, nil); err != nil {
+		if err := refuseNonPublicTestAddr(network, address); err != nil {
 			return nil, err
 		}
 		return (&net.Dialer{Timeout: 5 * time.Second}).DialContext(ctx, network, listenerAddr)
@@ -200,12 +204,16 @@ func TestDiscoverProviderUntrustedClient(t *testing.T) {
 	// guard. The https check runs in RoundTrip before Dial.
 	t.Run("http public host is refused by https guard", func(t *testing.T) {
 		h := newDiscoverHandler(t, 1<<20)
-		_, err := discoverUntrusted(
+		req, err := http.NewRequestWithContext(
 			context.Background(),
-			h.untrustedClient,
-			"http://1.1.1.1",
-			1<<20,
+			http.MethodGet,
+			"http://1.1.1.1/",
+			nil,
 		)
+		if err != nil {
+			t.Fatal(err)
+		}
+		_, err = h.untrustedClient.HTTPTransport().RoundTrip(req)
 		if err == nil {
 			t.Fatal("expected https refusal for a public http URL")
 		}
@@ -228,16 +236,32 @@ func TestDiscoverProviderUntrustedClient(t *testing.T) {
 			t.Fatal(err)
 		}
 		// TEST-NET-3 is a public documentation address; the dial helper
-		// still runs refuseNonPublicAddr on it, then connects to httptest.
+		// still runs refuseNonPublicTestAddr on it, then connects to httptest.
 		publicURL := "https://203.0.113.1:" + port
-		_, err = discoverUntrusted(
-			context.Background(),
-			h.untrustedClient,
-			publicURL,
-			1<<20,
-		)
+		_, err = h.untrustedClient.Discover(context.Background(), publicURL)
 		if err == nil {
 			t.Fatal("expected redirect-cap refusal")
+		}
+
+		req, err := http.NewRequestWithContext(
+			context.Background(),
+			http.MethodGet,
+			publicURL+"/.well-known/ocm",
+			nil,
+		)
+		if err != nil {
+			t.Fatal(err)
+		}
+		resp, err := (&http.Client{
+			Transport:     h.untrustedClient.HTTPTransport(),
+			Timeout:       h.untrustedClient.RequestTimeout(),
+			CheckRedirect: ocmd.PublicOnlyCheckRedirect,
+		}).Do(req)
+		if resp != nil {
+			_ = resp.Body.Close()
+		}
+		if err == nil {
+			t.Fatal("expected redirect-cap refusal from the shared transport")
 		}
 		if !errors.Is(err, ocmd.ErrTooManyRedirects) {
 			t.Fatalf("err = %v, want ocmd.ErrTooManyRedirects", err)
@@ -282,11 +306,20 @@ func TestUntrustedDiscoverClientHardening(t *testing.T) {
 	if h.untrustedClient == nil {
 		t.Fatal("untrustedClient is nil")
 	}
-	if h.untrustedClient.Timeout != 5*time.Second {
-		t.Errorf("untrusted timeout = %v, want 5s", h.untrustedClient.Timeout)
+	if h.untrustedClient.RequestTimeout() != 5*time.Second {
+		t.Errorf("untrusted timeout = %v, want 5s", h.untrustedClient.RequestTimeout())
+	}
+	if _, ok := h.untrustedClient.HTTPTransport().(*http.Transport); ok {
+		t.Fatal("untrusted discover client must use the shared public-only transport")
+	}
+	if h.ocmClient == nil {
+		t.Fatal("trusted ocmClient is nil")
+	}
+	if _, ok := h.ocmClient.HTTPTransport().(*http.Transport); !ok {
+		t.Fatalf("trusted WAYF client transport = %T, want *http.Transport", h.ocmClient.HTTPTransport())
 	}
 
-	tr := innerUntrustedHTTPTransport(t, h.untrustedClient.Transport)
+	tr := innerUntrustedHTTPTransport(t, h.untrustedClient.HTTPTransport())
 	if tr.Proxy != nil {
 		t.Error("untrusted client must not use a proxy")
 	}
@@ -295,9 +328,6 @@ func TestUntrustedDiscoverClientHardening(t *testing.T) {
 	}
 	if tr.TLSClientConfig.MinVersion < tls.VersionTLS12 {
 		t.Errorf("MinVersion = %#x, want at least TLS 1.2", tr.TLSClientConfig.MinVersion)
-	}
-	if h.untrustedClient.CheckRedirect == nil {
-		t.Error("CheckRedirect is nil")
 	}
 
 	// newDiscoverHandler sets OCMClientInsecure so the TLS fixture works.
@@ -313,10 +343,7 @@ func TestUntrustedDiscoverClientHardening(t *testing.T) {
 	if secure.untrustedClient == nil {
 		t.Fatal("secure untrustedClient is nil")
 	}
-	if secure.untrustedClient.CheckRedirect == nil {
-		t.Error("secure CheckRedirect is nil")
-	}
-	secureTr := innerUntrustedHTTPTransport(t, secure.untrustedClient.Transport)
+	secureTr := innerUntrustedHTTPTransport(t, secure.untrustedClient.HTTPTransport())
 	if secureTr.TLSClientConfig == nil {
 		t.Fatal("secure TLSClientConfig is nil")
 	}
@@ -340,33 +367,16 @@ func TestWayfUntrustedTLSMinVersion(t *testing.T) {
 	if h.ocmClient == nil {
 		t.Fatal("trusted ocmClient is nil")
 	}
-	tr := innerUntrustedHTTPTransport(t, h.untrustedClient.Transport)
+	tr := innerUntrustedHTTPTransport(t, h.untrustedClient.HTTPTransport())
 	if tr.TLSClientConfig == nil || tr.TLSClientConfig.MinVersion != tls.VersionTLS13 {
 		t.Fatalf("untrusted MinVersion = %v, want TLS 1.3", tr.TLSClientConfig)
 	}
-}
-
-func TestUntrustedCheckRedirectUsesSharedSentinel(t *testing.T) {
-	t.Parallel()
-
-	httpsURL, err := url.Parse("https://example.com/next")
-	if err != nil {
-		t.Fatal(err)
+	trustedTr, ok := h.ocmClient.HTTPTransport().(*http.Transport)
+	if !ok {
+		t.Fatalf("trusted WAYF client transport = %T, want *http.Transport", h.ocmClient.HTTPTransport())
 	}
-	req := &http.Request{URL: httpsURL}
-	err = untrustedCheckRedirect(req, []*http.Request{{}, {}, {}})
-	if err != nil {
-		t.Fatalf("len(via)=3 must be allowed with default cap 3: %v", err)
-	}
-	err = untrustedCheckRedirect(req, []*http.Request{{}, {}, {}, {}})
-	if err == nil {
-		t.Fatal("expected leftover CheckRedirect to refuse more than 3 hops")
-	}
-	if !errors.Is(err, ocmd.ErrTooManyRedirects) {
-		t.Fatalf("got %v, want ocmd.ErrTooManyRedirects", err)
-	}
-	if !errors.Is(err, errUntrustedTooManyRedirects) {
-		t.Fatalf("got %v, want errUntrustedTooManyRedirects", err)
+	if trustedTr.TLSClientConfig == nil || trustedTr.TLSClientConfig.MinVersion != tls.VersionTLS12 {
+		t.Fatalf("trusted MinVersion = %v, want TLS 1.2", trustedTr.TLSClientConfig)
 	}
 }
 
@@ -383,25 +393,33 @@ func TestUntrustedDiscoverClientSplitsDialAndRequestTimeout(t *testing.T) {
 	if h.untrustedClient == nil {
 		t.Fatal("untrustedClient is nil")
 	}
-	if h.untrustedClient.Timeout != 3*time.Second {
-		t.Errorf("untrusted request timeout = %v, want 3s", h.untrustedClient.Timeout)
+	if h.untrustedClient.RequestTimeout() != 3*time.Second {
+		t.Errorf("untrusted request timeout = %v, want 3s", h.untrustedClient.RequestTimeout())
 	}
 	if h.ocmClient == nil || h.ocmClient.RequestTimeout() != 3*time.Second {
 		t.Errorf("trusted directory client timeout = %v, want 3s", h.ocmClient.RequestTimeout())
 	}
 
+	tr := innerUntrustedHTTPTransport(t, h.untrustedClient.HTTPTransport())
+	if tr.DialContext == nil {
+		t.Fatal("untrusted DialContext is nil; dial-timeout override did not install")
+	}
+	wrapper := runtime.FuncForPC(reflect.ValueOf(tr.DialContext).Pointer()).Name()
+	if !strings.Contains(wrapper, "overridePublicOnlyDialTimeout") {
+		t.Fatalf("DialContext = %s, want overridePublicOnlyDialTimeout wrapper", wrapper)
+	}
+
 	start := time.Now()
-	_, err := discoverUntrusted(
-		context.Background(),
-		h.untrustedClient,
-		"https://240.0.0.1",
-		1<<20,
-	)
+	_, err := h.untrustedClient.Discover(context.Background(), "https://240.0.0.1")
 	elapsed := time.Since(start)
 	if err == nil {
 		t.Fatal("expected discover to a non-responsive public address to fail")
 	}
-	if elapsed > 5*time.Second {
-		t.Fatalf("dial timeout was not applied to the untrusted transport; elapsed %v", elapsed)
+	// Discover falls back to a second path. Each dial is capped at 1s, so a
+	// working override finishes before the 3s request deadline. A silent
+	// no-op keeps the 3s NewPublicOnlyClient dial/request timeout and cannot
+	// pass this bound.
+	if elapsed >= 3*time.Second {
+		t.Fatalf("dial timeout was not applied to the untrusted transport; elapsed %v, want < 3s request deadline", elapsed)
 	}
 }
