@@ -52,6 +52,9 @@ type config struct {
 	// OCMClientInsecure skips TLS verification when probing a remote provider's
 	// discovery endpoint. Off by default; turning it on exposes discovery to MITM.
 	OCMClientInsecure bool `mapstructure:"ocm_client_insecure"`
+	// OCMClientResponseLimit caps outbound OCM JSON response bodies in bytes.
+	// Zero means 1 MiB.
+	OCMClientResponseLimit int64 `mapstructure:"ocm_client_response_limit"`
 	// UntrustedClientSecurity is the shared hatch and redirect policy for
 	// untrusted outbound clients used by this service (TOML block
 	// ocm_client_security). Non-received consumers must keep the hatch closed
@@ -66,6 +69,9 @@ func (c *config) ApplyDefaults() {
 	}
 	if c.TokenManager == "" {
 		c.TokenManager = "jwt"
+	}
+	if c.OCMClientResponseLimit == 0 {
+		c.OCMClientResponseLimit = 1 << 20
 	}
 }
 

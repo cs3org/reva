@@ -30,6 +30,7 @@ import (
 	"testing"
 
 	"github.com/cs3org/reva/v3/internal/http/services/opencloudmesh/ocmd"
+	"github.com/cs3org/reva/v3/pkg/utils/cfg"
 )
 
 func TestNewRejectsHatch(t *testing.T) {
@@ -64,6 +65,44 @@ func TestNewRejectsHatch(t *testing.T) {
 			t.Fatalf("got %v, want ocmd.ErrHatchAllowedCIDRs", err)
 		}
 	})
+}
+
+func TestConfigOCMResponseLimit(t *testing.T) {
+	tests := []struct {
+		name      string
+		extra     map[string]any
+		wantLimit int64
+	}{
+		{
+			name:      "defaults when unset",
+			extra:     map[string]any{},
+			wantLimit: 1 << 20,
+		},
+		{
+			name: "parses configured limit",
+			extra: map[string]any{
+				"ocm_response_limit": 2097152,
+			},
+			wantLimit: 2097152,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			input := map[string]any{"insecure": true}
+			for k, v := range tt.extra {
+				input[k] = v
+			}
+
+			var c config
+			if err := cfg.Decode(input, &c); err != nil {
+				t.Fatalf("cfg.Decode: %v", err)
+			}
+			if c.OCMResponseLimit != tt.wantLimit {
+				t.Errorf("OCMResponseLimit = %d, want %d", c.OCMResponseLimit, tt.wantLimit)
+			}
+		})
+	}
 }
 
 func newOpenAuthorizer(t *testing.T) *authorizer {

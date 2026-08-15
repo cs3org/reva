@@ -61,7 +61,15 @@ var errOCMResponseTooLarge = errors.New("ocm response body exceeds size limit")
 
 // OCMClient is the client for an OCM provider.
 type OCMClient struct {
-	client *http.Client
+	client        *http.Client
+	responseLimit int64
+}
+
+func resolveOCMResponseLimit(limit int64) int64 {
+	if limit <= 0 {
+		return maxOCMResponseBytes
+	}
+	return limit
 }
 
 // newOCMTransport returns the HTTP transport used for outbound OCM requests.
@@ -84,12 +92,14 @@ func newOCMTransport(insecure bool) *http.Transport {
 }
 
 // NewClient returns a new OCMClient.
-func NewClient(timeout time.Duration, insecure bool) *OCMClient {
+// responseLimit caps OCM response bodies in bytes; values <= 0 select the 1 MiB default.
+func NewClient(timeout time.Duration, insecure bool, responseLimit int64) *OCMClient {
 	return &OCMClient{
 		client: &http.Client{
 			Transport: newOCMTransport(insecure),
 			Timeout:   timeout,
 		},
+		responseLimit: resolveOCMResponseLimit(responseLimit),
 	}
 }
 
@@ -127,13 +137,20 @@ func UntrustedHTTPTransport(timeout time.Duration, insecure bool, sec UntrustedC
 // by sec, for discovery of hosts named by an untrusted caller. The check is in
 // the dialer so it also covers redirects and DNS rebinding. Redirects are
 // capped and both the initial URL and every hop must satisfy requireScheme.
-func NewPublicOnlyClient(timeout time.Duration, insecure bool, sec UntrustedClientSecurity) *OCMClient {
+// responseLimit caps OCM response bodies in bytes; values <= 0 select the 1 MiB default.
+func NewPublicOnlyClient(
+	timeout time.Duration,
+	insecure bool,
+	sec UntrustedClientSecurity,
+	responseLimit int64,
+) *OCMClient {
 	return &OCMClient{
 		client: &http.Client{
 			Transport:     UntrustedHTTPTransport(timeout, insecure, sec),
 			Timeout:       timeout,
 			CheckRedirect: sec.CheckRedirect,
 		},
+		responseLimit: resolveOCMResponseLimit(responseLimit),
 	}
 }
 
@@ -236,15 +253,15 @@ func (c *OCMClient) httpget(ctx context.Context, url string) ([]byte, error) {
 		return nil, errtypes.InternalError("Remote does not offer a valid OCM discovery endpoint")
 	}
 
-	body, err := readOCMBody(resp.Body)
+	body, err := c.readOCMBody(resp.Body)
 	if err != nil {
 		return nil, errors.Wrap(err, "malformed remote OCM discovery")
 	}
 	return body, nil
 }
 
-func decodeOCMJSON(r io.Reader, v any) error {
-	limited := io.LimitReader(r, maxOCMResponseBytes+1)
+func (c *OCMClient) decodeOCMJSON(r io.Reader, v any) error {
+	limited := io.LimitReader(r, c.responseLimit+1)
 	err := json.NewDecoder(limited).Decode(v)
 	// Drain leftover limited bytes. Decode can stop after a valid JSON value
 	// while the body still exceeds the cap.
@@ -258,12 +275,12 @@ func decodeOCMJSON(r io.Reader, v any) error {
 	return drainErr
 }
 
-func readOCMBody(r io.Reader) ([]byte, error) {
-	body, err := io.ReadAll(io.LimitReader(r, maxOCMResponseBytes+1))
+func (c *OCMClient) readOCMBody(r io.Reader) ([]byte, error) {
+	body, err := io.ReadAll(io.LimitReader(r, c.responseLimit+1))
 	if err != nil {
 		return nil, err
 	}
-	if int64(len(body)) > maxOCMResponseBytes {
+	if int64(len(body)) > c.responseLimit {
 		return nil, errOCMResponseTooLarge
 	}
 	return body, nil
@@ -308,7 +325,7 @@ func (c *OCMClient) parseNewShareResponse(r *http.Response) (*NewShareResponse, 
 	switch r.StatusCode {
 	case http.StatusOK, http.StatusCreated:
 		var res NewShareResponse
-		if err := decodeOCMJSON(r.Body, &res); err != nil {
+		if err := c.decodeOCMJSON(r.Body, &res); err != nil {
 			return nil, errors.Wrap(err, "error decoding response body")
 		}
 		return &res, nil
@@ -318,7 +335,7 @@ func (c *OCMClient) parseNewShareResponse(r *http.Response) (*NewShareResponse, 
 		return nil, ErrServiceNotTrusted
 	}
 
-	body, err := readOCMBody(r.Body)
+	body, err := c.readOCMBody(r.Body)
 	if err != nil {
 		return nil, errors.Wrap(err, "error decoding response body")
 	}
@@ -364,7 +381,7 @@ func (c *OCMClient) parseInviteAcceptedResponse(r *http.Response) (*RemoteUser, 
 	switch r.StatusCode {
 	case http.StatusOK:
 		var u RemoteUser
-		if err := json.NewDecoder(r.Body).Decode(&u); err != nil {
+		if err := c.decodeOCMJSON(r.Body, &u); err != nil {
 			return nil, errors.Wrap(err, "error decoding response body")
 		}
 		return &u, nil
@@ -376,7 +393,7 @@ func (c *OCMClient) parseInviteAcceptedResponse(r *http.Response) (*RemoteUser, 
 		return nil, ErrServiceNotTrusted
 	}
 
-	body, err := io.ReadAll(r.Body)
+	body, err := c.readOCMBody(r.Body)
 	if err != nil {
 		return nil, errors.Wrap(err, "error decoding response body")
 	}
@@ -418,7 +435,7 @@ func (c *OCMClient) ExchangeToken(ctx context.Context, tokenEndpoint, code, clie
 		var errBody struct {
 			Error string `json:"error"`
 		}
-		if err := decodeOCMJSON(resp.Body, &errBody); err != nil {
+		if err := c.decodeOCMJSON(resp.Body, &errBody); err != nil {
 			if stderrors.Is(err, errOCMResponseTooLarge) {
 				return "", 0, errors.Wrap(err, "error decoding token exchange response")
 			}
@@ -438,7 +455,7 @@ func (c *OCMClient) ExchangeToken(ctx context.Context, tokenEndpoint, code, clie
 		AccessToken string `json:"access_token"`
 		ExpiresIn   int64  `json:"expires_in"`
 	}
-	if err := decodeOCMJSON(resp.Body, &result); err != nil {
+	if err := c.decodeOCMJSON(resp.Body, &result); err != nil {
 		return "", 0, errors.Wrap(err, "error decoding token exchange response")
 	}
 	if result.AccessToken == "" {

@@ -68,7 +68,7 @@ func (h *wayfHandler) init(c *config) error {
 	log := appctx.GetLogger(context.Background())
 
 	timeout := time.Duration(c.OCMClientTimeout) * time.Second
-	h.ocmClient = ocmd.NewClient(timeout, c.OCMClientInsecure)
+	h.ocmClient = ocmd.NewClient(timeout, c.OCMClientInsecure, int64(c.OCMClientResponseLimit))
 	h.untrustedClient = newUntrustedDiscoverClient(timeout, c.OCMClientInsecure, c.UntrustedClientSecurity)
 	h.responseLimit = c.OCMClientResponseLimit
 	log.Debug().

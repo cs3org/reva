@@ -62,6 +62,7 @@ type sharesHandler struct {
 	autoAcceptProviders        []*regexp.Regexp
 	trustForwardedFor          bool
 	ocmClientInsecure          bool
+	ocmClientResponseLimit     int64
 	untrustedSec               UntrustedClientSecurity
 }
 
@@ -75,6 +76,7 @@ func (h *sharesHandler) init(c *config) error {
 	h.machineSecret = c.MachineSecret
 	h.trustForwardedFor = c.TrustForwardedFor
 	h.ocmClientInsecure = c.OCMClientInsecure
+	h.ocmClientResponseLimit = c.OCMClientResponseLimit
 	h.untrustedSec = c.UntrustedClientSecurity
 	for _, p := range c.AutoAcceptProviders {
 		re, err := regexp.Compile(p)
@@ -510,7 +512,7 @@ func (h *sharesHandler) getAndResolveProtocols(ctx context.Context, p Protocols,
 }
 
 func (h *sharesHandler) discoverOcmResourceTypes(ctx context.Context, ownerServer string) ([]wellknown.ResourceTypes, string, error) {
-	ocmClient := NewClient(time.Duration(10)*time.Second, h.ocmClientInsecure)
+	ocmClient := NewClient(time.Duration(10)*time.Second, h.ocmClientInsecure, h.ocmClientResponseLimit)
 	ocmCaps, err := ocmClient.Discover(ctx, ownerServer)
 	if err != nil {
 		return nil, "", err

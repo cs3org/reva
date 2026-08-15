@@ -52,7 +52,12 @@ func New(ctx context.Context, m map[string]any) (provider.Authorizer, error) {
 	}
 
 	a := &authorizer{
-		publicOCMClient: client.NewPublicOnlyClient(10*time.Second, c.Insecure, c.UntrustedClientSecurity),
+		publicOCMClient: client.NewPublicOnlyClient(
+			10*time.Second,
+			c.Insecure,
+			c.UntrustedClientSecurity,
+			c.OCMResponseLimit,
+		),
 	}
 	return a, nil
 }
@@ -63,6 +68,9 @@ type config struct {
 	// Insecure skips TLS verification when discovering an unknown provider. Off by
 	// default; turning it on exposes discovery to MITM.
 	Insecure bool `mapstructure:"insecure"`
+	// OCMResponseLimit caps outbound OCM JSON response bodies in bytes.
+	// Zero means 1 MiB.
+	OCMResponseLimit int64 `mapstructure:"ocm_response_limit"`
 	// UntrustedClientSecurity configures MaxRedirects for discovery of unknown
 	// providers (TOML block ocm_client_security). The hatch (allow_http /
 	// allowed_cidrs) must stay closed.
@@ -70,6 +78,9 @@ type config struct {
 }
 
 func (c *config) ApplyDefaults() {
+	if c.OCMResponseLimit == 0 {
+		c.OCMResponseLimit = 1 << 20
+	}
 }
 
 type authorizer struct {

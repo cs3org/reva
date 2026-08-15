@@ -313,7 +313,7 @@ func newTestReceivedDriver() *driver {
 		},
 		ccache:         ttlcache.NewCache(),
 		discoveryCache: disco,
-		ocmClient:      ocmd.NewClient(10*time.Second, true),
+		ocmClient:      ocmd.NewClient(10*time.Second, true, 0),
 	}
 }
 
@@ -775,6 +775,51 @@ func assertRefusedNonPublic(t *testing.T, err error) {
 	}
 	if !errors.Is(err, ocmd.ErrNonPublicAddr) {
 		t.Fatalf("got %v, want ocmd.ErrNonPublicAddr", err)
+	}
+}
+
+func TestConfigOCMResponseLimit(t *testing.T) {
+	tests := []struct {
+		name      string
+		extra     map[string]any
+		wantLimit int64
+	}{
+		{
+			name:      "defaults when unset",
+			extra:     map[string]any{},
+			wantLimit: 1 << 20,
+		},
+		{
+			name: "parses configured limit",
+			extra: map[string]any{
+				"ocm_response_limit": 2097152,
+			},
+			wantLimit: 2097152,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			m := map[string]any{
+				"gatewaysvc":   "public-only-received-test.invalid:1",
+				"ocm_timeout":  5,
+				"ocm_insecure": true,
+			}
+			for k, v := range tt.extra {
+				m[k] = v
+			}
+			fs, err := New(context.Background(), m)
+			if err != nil {
+				t.Fatal(err)
+			}
+			d, ok := fs.(*driver)
+			if !ok {
+				t.Fatalf("got %T, want *driver", fs)
+			}
+			if d.c.OCMResponseLimit != tt.wantLimit {
+				t.Errorf("OCMResponseLimit = %d, want %d", d.c.OCMResponseLimit, tt.wantLimit)
+			}
+		})
 	}
 }
 

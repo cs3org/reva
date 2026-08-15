@@ -77,12 +77,18 @@ type config struct {
 	GatewaySVC        string `mapstructure:"gatewaysvc"`
 	OCMClientTimeout  int    `mapstructure:"ocm_timeout"`
 	OCMClientInsecure bool   `mapstructure:"ocm_insecure"`
+	// OCMResponseLimit caps outbound OCM JSON response bodies in bytes.
+	// Zero means 1 MiB. WebDAV file streams are not capped.
+	OCMResponseLimit int64 `mapstructure:"ocm_response_limit"`
 }
 
 func (c *config) ApplyDefaults() {
 	c.GatewaySVC = sharedconf.GetGatewaySVC(c.GatewaySVC)
 	if c.OCMClientTimeout == 0 {
 		c.OCMClientTimeout = 10
+	}
+	if c.OCMResponseLimit == 0 {
+		c.OCMResponseLimit = 1 << 20
 	}
 }
 
@@ -118,6 +124,7 @@ func New(ctx context.Context, m map[string]any) (storage.FS, error) {
 			time.Duration(c.OCMClientTimeout)*time.Second,
 			c.OCMClientInsecure,
 			sec,
+			c.OCMResponseLimit,
 		),
 		sec: sec,
 	}

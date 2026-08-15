@@ -23,6 +23,7 @@ import (
 	"crypto/tls"
 	"encoding/json"
 	"errors"
+	"io"
 	"net"
 	"net/http"
 	"net/http/httptest"
@@ -62,7 +63,7 @@ func TestExchangeTokenSuccess(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	c := NewClient(10*time.Second, true)
+	c := NewClient(10*time.Second, true, 0)
 	tok, exp, err := c.ExchangeToken(context.Background(), srv.URL, "code123", "client1")
 	if err != nil {
 		t.Fatal(err)
@@ -83,7 +84,7 @@ func TestExchangeTokenInvalidGrant(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	c := NewClient(10*time.Second, true)
+	c := NewClient(10*time.Second, true, 0)
 	_, _, err := c.ExchangeToken(context.Background(), srv.URL, "bad-code", "")
 	if err == nil {
 		t.Fatal("expected error for invalid_grant")
@@ -101,7 +102,7 @@ func TestExchangeTokenUnsupportedGrantType(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	c := NewClient(10*time.Second, true)
+	c := NewClient(10*time.Second, true, 0)
 	_, _, err := c.ExchangeToken(context.Background(), srv.URL, "code", "")
 	if err == nil {
 		t.Fatal("expected error for unsupported_grant_type")
@@ -117,7 +118,7 @@ func TestExchangeTokenForbidden(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	c := NewClient(10*time.Second, true)
+	c := NewClient(10*time.Second, true, 0)
 	_, _, err := c.ExchangeToken(context.Background(), srv.URL, "code", "")
 	if err == nil {
 		t.Fatal("expected error for 403")
@@ -133,7 +134,7 @@ func TestExchangeTokenUnauthorized(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	c := NewClient(10*time.Second, true)
+	c := NewClient(10*time.Second, true, 0)
 	_, _, err := c.ExchangeToken(context.Background(), srv.URL, "code", "")
 	if err == nil {
 		t.Fatal("expected error for 401")
@@ -149,7 +150,7 @@ func TestExchangeTokenServerError(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	c := NewClient(10*time.Second, true)
+	c := NewClient(10*time.Second, true, 0)
 	_, _, err := c.ExchangeToken(context.Background(), srv.URL, "code", "")
 	if err == nil {
 		t.Fatal("expected error for 500")
@@ -169,7 +170,7 @@ func TestExchangeTokenMissingAccessToken(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	c := NewClient(10*time.Second, true)
+	c := NewClient(10*time.Second, true, 0)
 	_, _, err := c.ExchangeToken(context.Background(), srv.URL, "code", "")
 	if err == nil {
 		t.Fatal("expected error for missing access_token")
@@ -186,7 +187,7 @@ func TestExchangeTokenMalformedJSON(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	c := NewClient(10*time.Second, true)
+	c := NewClient(10*time.Second, true, 0)
 	_, _, err := c.ExchangeToken(context.Background(), srv.URL, "code", "")
 	if err == nil {
 		t.Fatal("expected error for malformed JSON response")
@@ -216,7 +217,12 @@ func TestNewOCMTransportUsesProxyFromEnvironment(t *testing.T) {
 // The untrusted transport must not proxy, or the dial Control would see the
 // proxy address instead of the target.
 func TestNewPublicOnlyClientTransportProxyNil(t *testing.T) {
-	c := NewPublicOnlyClient(5*time.Second, true, testSec())
+	c := NewPublicOnlyClient(
+		5*time.Second,
+		true,
+		testSec(),
+		0,
+	)
 	tr := publicOnlyHTTPTransport(t, c)
 	if tr.Proxy != nil {
 		t.Error("untrusted client must not use a proxy")
@@ -260,7 +266,7 @@ func TestNewOCMTransportFallback(t *testing.T) {
 // TestNewClientUsesOCMTransport confirms the public constructor wires the
 // proxy-aware transport and request timeout into the HTTP client.
 func TestNewClientUsesOCMTransport(t *testing.T) {
-	c := NewClient(7*time.Second, true)
+	c := NewClient(7*time.Second, true, 0)
 	if c.client.Timeout != 7*time.Second {
 		t.Errorf("client timeout: got %v, want %v", c.client.Timeout, 7*time.Second)
 	}
@@ -279,8 +285,13 @@ func TestOCMClientTransportsRequireTLS12(t *testing.T) {
 		name   string
 		client *OCMClient
 	}{
-		{name: "NewClient", client: NewClient(5*time.Second, false)},
-		{name: "NewPublicOnlyClient", client: NewPublicOnlyClient(5*time.Second, false, testSec())},
+		{name: "NewClient", client: NewClient(5*time.Second, false, 0)},
+		{name: "NewPublicOnlyClient", client: NewPublicOnlyClient(
+			5*time.Second,
+			false,
+			testSec(),
+			0,
+		)},
 	}
 
 	for _, tt := range tests {
@@ -379,8 +390,13 @@ func TestPublicOnlyClientRefusesInternalHosts(t *testing.T) {
 		client  *OCMClient
 		wantErr bool
 	}{
-		{name: "public-only client refuses the loopback target", client: NewPublicOnlyClient(5*time.Second, true, testSec()), wantErr: true},
-		{name: "plain client still reaches it", client: NewClient(5*time.Second, true), wantErr: false},
+		{name: "public-only client refuses the loopback target", client: NewPublicOnlyClient(
+			5*time.Second,
+			true,
+			testSec(),
+			0,
+		), wantErr: true},
+		{name: "plain client still reaches it", client: NewClient(5*time.Second, true, 0), wantErr: false},
 	}
 
 	for _, tt := range tests {
@@ -451,7 +467,7 @@ func TestDiscoverNormalSizedBody(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	c := NewClient(10*time.Second, true)
+	c := NewClient(10*time.Second, true, 0)
 	disco, err := c.Discover(context.Background(), srv.URL)
 	if err != nil {
 		t.Fatal(err)
@@ -472,7 +488,7 @@ func TestDiscoverOversizedBody(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	c := NewClient(10*time.Second, true)
+	c := NewClient(10*time.Second, true, 0)
 	disco, err := c.Discover(context.Background(), srv.URL)
 	assertOCMResponseTooLarge(t, err)
 	if disco != nil {
@@ -490,7 +506,7 @@ func TestNewShareNormalSizedBody(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	c := NewClient(10*time.Second, true)
+	c := NewClient(10*time.Second, true, 0)
 	resp, err := c.NewShare(context.Background(), srv.URL, testNewShareRequest())
 	if err != nil {
 		t.Fatal(err)
@@ -509,7 +525,7 @@ func TestNewShareOversizedBody(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	c := NewClient(10*time.Second, true)
+	c := NewClient(10*time.Second, true, 0)
 	resp, err := c.NewShare(context.Background(), srv.URL, testNewShareRequest())
 	assertOCMResponseTooLarge(t, err)
 	if resp != nil {
@@ -526,7 +542,7 @@ func TestNewShareOversizedTrailingBody(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	c := NewClient(10*time.Second, true)
+	c := NewClient(10*time.Second, true, 0)
 	resp, err := c.NewShare(context.Background(), srv.URL, testNewShareRequest())
 	assertOCMResponseTooLarge(t, err)
 	if resp != nil {
@@ -542,7 +558,7 @@ func TestExchangeTokenOversizedBody(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	c := NewClient(10*time.Second, true)
+	c := NewClient(10*time.Second, true, 0)
 	tok, exp, err := c.ExchangeToken(context.Background(), srv.URL, "code123", "client1")
 	assertOCMResponseTooLarge(t, err)
 	if tok != "" || exp != 0 {
@@ -559,11 +575,112 @@ func TestExchangeTokenHTTP400OversizedBody(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	c := NewClient(10*time.Second, true)
+	c := NewClient(10*time.Second, true, 0)
 	tok, exp, err := c.ExchangeToken(context.Background(), srv.URL, "code123", "client1")
 	assertOCMResponseTooLarge(t, err)
 	if tok != "" || exp != 0 {
 		t.Fatalf("oversized HTTP 400 token body must not be decoded, got token %q expires_in %d", tok, exp)
+	}
+}
+
+func TestOCMClientResolvesResponseLimit(t *testing.T) {
+	tests := []struct {
+		name  string
+		limit int64
+		want  int64
+	}{
+		{name: "zero uses default", limit: 0, want: maxOCMResponseBytes},
+		{name: "negative uses default", limit: -1, want: maxOCMResponseBytes},
+		{name: "positive is stored", limit: 64, want: 64},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			c := NewClient(time.Second, true, tt.limit)
+			if c.responseLimit != tt.want {
+				t.Errorf("NewClient responseLimit = %d, want %d", c.responseLimit, tt.want)
+			}
+			p := NewPublicOnlyClient(
+				time.Second,
+				true,
+				testSec(),
+				tt.limit,
+			)
+			if p.responseLimit != tt.want {
+				t.Errorf("NewPublicOnlyClient responseLimit = %d, want %d", p.responseLimit, tt.want)
+			}
+		})
+	}
+}
+
+func TestConfiguredResponseLimitRejectsLargeBody(t *testing.T) {
+	payload := map[string]any{
+		"enabled":    true,
+		"apiVersion": "1.1",
+		"provider":   strings.Repeat("a", 80),
+	}
+	body, err := json.Marshal(payload)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(body) <= 64 {
+		t.Fatalf("fixture body is %d bytes, want more than 64", len(body))
+	}
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write(body)
+	}))
+	defer srv.Close()
+
+	c := NewClient(10*time.Second, true, 64)
+	disco, err := c.Discover(context.Background(), srv.URL)
+	assertOCMResponseTooLarge(t, err)
+	if disco != nil {
+		t.Fatalf("body over the configured limit must not be decoded, got %+v", disco)
+	}
+}
+
+func TestInviteAcceptedOversizedBody(t *testing.T) {
+	body := oversizedJSON(t, map[string]any{"email": "a@b.c"}, "name")
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write(body)
+	}))
+	defer srv.Close()
+
+	c := NewClient(10*time.Second, true, 0)
+	u, err := c.InviteAccepted(context.Background(), srv.URL, &InviteAcceptedRequest{
+		UserID: "alice",
+		Token:  "tok",
+	})
+	assertOCMResponseTooLarge(t, err)
+	if u != nil {
+		t.Fatalf("oversized invite-accepted body must not be decoded, got %+v", u)
+	}
+}
+
+func TestParseInviteAcceptedResponseOversizedBody(t *testing.T) {
+	c := NewClient(10*time.Second, true, 64)
+	resp := &http.Response{
+		StatusCode: http.StatusOK,
+		Body:       io.NopCloser(strings.NewReader(`{"userID":"` + strings.Repeat("a", 80) + `"}`)),
+	}
+	u, err := c.parseInviteAcceptedResponse(resp)
+	assertOCMResponseTooLarge(t, err)
+	if u != nil {
+		t.Fatalf("oversized invite-accepted JSON must not be decoded, got %+v", u)
+	}
+}
+
+func TestParseInviteAcceptedResponseOversizedErrorBody(t *testing.T) {
+	c := NewClient(10*time.Second, true, 64)
+	resp := &http.Response{
+		StatusCode: http.StatusInternalServerError,
+		Body:       io.NopCloser(strings.NewReader(strings.Repeat("x", 80))),
+	}
+	u, err := c.parseInviteAcceptedResponse(resp)
+	assertOCMResponseTooLarge(t, err)
+	if u != nil {
+		t.Fatalf("oversized invite-accepted error body must not be returned, got %+v", u)
 	}
 }
 
@@ -600,7 +717,12 @@ func TestPublicOnlyClientRedirectCapAndHTTPSScheme(t *testing.T) {
 		}))
 		defer srv.Close()
 
-		c := NewPublicOnlyClient(5*time.Second, true, testSec())
+		c := NewPublicOnlyClient(
+			5*time.Second,
+			true,
+			testSec(),
+			0,
+		)
 		allowPublicOnlyLoopback(t, c)
 		req, err := http.NewRequestWithContext(context.Background(), http.MethodGet, srv.URL, nil)
 		if err != nil {
@@ -623,7 +745,12 @@ func TestPublicOnlyClientRedirectCapAndHTTPSScheme(t *testing.T) {
 		}))
 		defer srv.Close()
 
-		c := NewPublicOnlyClient(5*time.Second, true, testSec())
+		c := NewPublicOnlyClient(
+			5*time.Second,
+			true,
+			testSec(),
+			0,
+		)
 		req, err := http.NewRequestWithContext(context.Background(), http.MethodGet, srv.URL, nil)
 		if err != nil {
 			t.Fatal(err)
@@ -651,7 +778,12 @@ func TestPublicOnlyClientRedirectCapAndHTTPSScheme(t *testing.T) {
 		}))
 		defer tlsSrv.Close()
 
-		c := NewPublicOnlyClient(5*time.Second, true, testSec())
+		c := NewPublicOnlyClient(
+			5*time.Second,
+			true,
+			testSec(),
+			0,
+		)
 		allowPublicOnlyLoopback(t, c)
 		req, err := http.NewRequestWithContext(context.Background(), http.MethodGet, tlsSrv.URL, nil)
 		if err != nil {
@@ -683,7 +815,12 @@ func TestPublicOnlyClientRedirectCapAndHTTPSScheme(t *testing.T) {
 		}))
 		defer srv.Close()
 
-		c := NewPublicOnlyClient(5*time.Second, true, testSec())
+		c := NewPublicOnlyClient(
+			5*time.Second,
+			true,
+			testSec(),
+			0,
+		)
 		allowPublicOnlyLoopback(t, c)
 		req, err := http.NewRequestWithContext(context.Background(), http.MethodGet, srv.URL, nil)
 		if err != nil {
@@ -713,7 +850,7 @@ func TestNewClientAllowsHTTPAndFollowsMoreThanThreeRedirects(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	c := NewClient(5*time.Second, true)
+	c := NewClient(5*time.Second, true, 0)
 	req, err := http.NewRequestWithContext(context.Background(), http.MethodGet, srv.URL, nil)
 	if err != nil {
 		t.Fatal(err)
@@ -772,7 +909,12 @@ func TestPublicOnlyDiscoverSucceedsOnAllowedHTTPSHost(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	c := NewPublicOnlyClient(5*time.Second, true, testSec())
+	c := NewPublicOnlyClient(
+		5*time.Second,
+		true,
+		testSec(),
+		0,
+	)
 	allowPublicOnlyTestServer(t, c, srv.Listener.Addr().String())
 	disco, err := c.Discover(context.Background(), srv.URL)
 	if err != nil {
@@ -790,7 +932,12 @@ func TestPublicOnlyDiscoverRefusesRedirectToLinkLocal(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	c := NewPublicOnlyClient(5*time.Second, true, testSec())
+	c := NewPublicOnlyClient(
+		5*time.Second,
+		true,
+		testSec(),
+		0,
+	)
 	allowed := srv.Listener.Addr().String()
 	allowedHost, allowedPort, err := net.SplitHostPort(allowed)
 	if err != nil {
@@ -839,7 +986,12 @@ func TestPublicOnlyExchangeTokenSucceedsOnAllowedHTTPSHost(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	c := NewPublicOnlyClient(5*time.Second, true, testSec())
+	c := NewPublicOnlyClient(
+		5*time.Second,
+		true,
+		testSec(),
+		0,
+	)
 	allowPublicOnlyTestServer(t, c, srv.Listener.Addr().String())
 	tok, exp, err := c.ExchangeToken(context.Background(), srv.URL, "code123", "client1")
 	if err != nil {
@@ -857,7 +1009,12 @@ func TestPublicOnlyClientStillRefusesHTTPSLoopback(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	c := NewPublicOnlyClient(5*time.Second, true, testSec())
+	c := NewPublicOnlyClient(
+		5*time.Second,
+		true,
+		testSec(),
+		0,
+	)
 	req, err := http.NewRequestWithContext(context.Background(), http.MethodGet, srv.URL, nil)
 	if err != nil {
 		t.Fatal(err)
@@ -1150,7 +1307,12 @@ func TestPublicOnlyCheckRedirectCapsAtThree(t *testing.T) {
 }
 
 func TestNewPublicOnlyClientKeepsPublicOnlyPolicy(t *testing.T) {
-	c := NewPublicOnlyClient(5*time.Second, true, testSec())
+	c := NewPublicOnlyClient(
+		5*time.Second,
+		true,
+		testSec(),
+		0,
+	)
 	if c.client.Timeout != 5*time.Second {
 		t.Errorf("client timeout: got %v, want %v", c.client.Timeout, 5*time.Second)
 	}

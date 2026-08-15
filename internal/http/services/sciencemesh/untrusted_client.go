@@ -38,8 +38,8 @@ import (
 )
 
 // ocmd.NewPublicOnlyClient is the shared constructor, but OCMClient.client is
-// unexported and Discover hard-codes a 1 MiB cap. /discover composes
-// ocmd.UntrustedHTTPTransport so OCMClientResponseLimit can bound the body.
+// unexported. Discover uses c.readOCMBody with the configurable responseLimit.
+// /discover composes ocmd.UntrustedHTTPTransport so OCMClientResponseLimit can bound the body.
 
 const maxUntrustedRedirects = 3
 

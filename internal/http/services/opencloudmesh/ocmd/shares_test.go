@@ -265,6 +265,22 @@ func tlsOcmDiscoveryServer(t *testing.T) *httptest.Server {
 	return httptest.NewTLSServer(mux)
 }
 
+func TestDiscoverOcmResourceTypesHonorsResponseLimit(t *testing.T) {
+	body := oversizedJSON(t, map[string]any{
+		"enabled":    true,
+		"apiVersion": "1.1",
+	}, "provider")
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write(body)
+	}))
+	defer srv.Close()
+
+	h := &sharesHandler{ocmClientInsecure: true, ocmClientResponseLimit: 64}
+	_, _, err := h.discoverOcmResourceTypes(context.Background(), srv.URL)
+	assertOCMResponseTooLarge(t, err)
+}
+
 // discovery must verify certs by default, and skip only when asked.
 func TestDiscoverVerifiesTLSUnlessInsecure(t *testing.T) {
 	srv := tlsOcmDiscoveryServer(t) // self-signed, https://127.0.0.1:port
