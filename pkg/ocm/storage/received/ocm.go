@@ -71,6 +71,7 @@ type driver struct {
 	discoveryCache *ttlcache.Cache
 	ocmClient      *ocmd.OCMClient
 	sec            ocmd.UntrustedClientSecurity
+	tlsMinVersion  uint16
 }
 
 type config struct {
@@ -80,6 +81,9 @@ type config struct {
 	// OCMResponseLimit caps outbound OCM JSON response bodies in bytes.
 	// Zero means 1 MiB. WebDAV file streams are not capped.
 	OCMResponseLimit int64 `mapstructure:"ocm_response_limit"`
+	// OCMTLSMinVersion is the untrusted-client TLS minimum enum string.
+	// Empty means TLS 1.2. Accepted values are "1.2" and "1.3".
+	OCMTLSMinVersion string `mapstructure:"ocm_tls_min_version"`
 }
 
 func (c *config) ApplyDefaults() {
@@ -97,6 +101,10 @@ func (c *config) ApplyDefaults() {
 func New(ctx context.Context, m map[string]any) (storage.FS, error) {
 	var c config
 	if err := cfg.Decode(m, &c); err != nil {
+		return nil, err
+	}
+	minVersion, err := ocmd.ParseTLSMinVersion(c.OCMTLSMinVersion)
+	if err != nil {
 		return nil, err
 	}
 
@@ -125,8 +133,10 @@ func New(ctx context.Context, m map[string]any) (storage.FS, error) {
 			c.OCMClientInsecure,
 			sec,
 			c.OCMResponseLimit,
+			minVersion,
 		),
-		sec: sec,
+		sec:           sec,
+		tlsMinVersion: minVersion,
 	}
 	return d, nil
 }
@@ -303,7 +313,12 @@ func (d *driver) newReceivedWebDAVClient(endpoint string) *gowebdav.Client {
 		insecure = d.c.OCMClientInsecure
 	}
 	c := gowebdav.NewClient(endpoint, "", "")
-	c.SetTransport(ocmd.UntrustedHTTPTransport(timeout, insecure, d.sec))
+	c.SetTransport(ocmd.UntrustedHTTPTransport(
+		timeout,
+		insecure,
+		d.sec,
+		d.tlsMinVersion,
+	))
 	return c
 }
 

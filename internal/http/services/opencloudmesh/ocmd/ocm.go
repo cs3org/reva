@@ -55,11 +55,15 @@ type config struct {
 	// OCMClientResponseLimit caps outbound OCM JSON response bodies in bytes.
 	// Zero means 1 MiB.
 	OCMClientResponseLimit int64 `mapstructure:"ocm_client_response_limit"`
+	// OCMClientTLSMinVersion is the untrusted-client TLS minimum enum string.
+	// Empty means TLS 1.2. Accepted values are "1.2" and "1.3".
+	OCMClientTLSMinVersion string `mapstructure:"ocm_client_tls_min_version"`
 	// UntrustedClientSecurity is the shared hatch and redirect policy for
 	// untrusted outbound clients used by this service (TOML block
 	// ocm_client_security). Non-received consumers must keep the hatch closed
 	// (no allow_http / allowed_cidrs).
 	UntrustedClientSecurity UntrustedClientSecurity `mapstructure:"ocm_client_security"`
+	ocmClientTLSMin         uint16
 }
 
 func (c *config) ApplyDefaults() {
@@ -78,6 +82,7 @@ func (c *config) ApplyDefaults() {
 type svc struct {
 	Conf   *config
 	router chi.Router
+	shares *sharesHandler
 }
 
 // New returns a new ocmd object, that implements
@@ -94,6 +99,11 @@ func New(ctx context.Context, m map[string]any) (global.Service, error) {
 	if err := c.UntrustedClientSecurity.RejectHatch(); err != nil {
 		return nil, err
 	}
+	minVersion, err := ParseTLSMinVersion(c.OCMClientTLSMinVersion)
+	if err != nil {
+		return nil, err
+	}
+	c.ocmClientTLSMin = minVersion
 
 	r := chi.NewRouter()
 	s := &svc{
@@ -116,6 +126,7 @@ func (s *svc) routerInit() error {
 	if err := sharesHandler.init(s.Conf); err != nil {
 		return err
 	}
+	s.shares = sharesHandler
 	if err := invitesHandler.init(s.Conf); err != nil {
 		return err
 	}

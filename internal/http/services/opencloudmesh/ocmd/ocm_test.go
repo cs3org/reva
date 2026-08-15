@@ -19,6 +19,9 @@
 package ocmd
 
 import (
+	"context"
+	"crypto/tls"
+	"errors"
 	"testing"
 
 	"github.com/cs3org/reva/v3/pkg/utils/cfg"
@@ -57,6 +60,109 @@ func TestConfigOCMClientResponseLimit(t *testing.T) {
 			}
 			if c.OCMClientResponseLimit != tt.wantLimit {
 				t.Errorf("OCMClientResponseLimit = %d, want %d", c.OCMClientResponseLimit, tt.wantLimit)
+			}
+		})
+	}
+}
+
+func TestNewWiresTLSMinVersionToSharesTransport(t *testing.T) {
+	t.Parallel()
+
+	got, err := New(context.Background(), map[string]any{
+		"gatewaysvc":                 "gateway:9142",
+		"ocm_client_tls_min_version": "1.3",
+		"token_managers": map[string]any{
+			"jwt": map[string]any{
+				"secret": "test-secret-for-ocm-new",
+			},
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	s, ok := got.(*svc)
+	if !ok {
+		t.Fatalf("got %T, want *svc", got)
+	}
+	if s.shares == nil || s.shares.untrustedTransport == nil {
+		t.Fatal("shares untrusted transport is nil")
+	}
+	tr := innerUntrustedTransport(t, s.shares.untrustedTransport)
+	if tr.TLSClientConfig == nil || tr.TLSClientConfig.MinVersion != tls.VersionTLS13 {
+		t.Fatalf("shares handler transport MinVersion = %v, want TLS 1.3", tr.TLSClientConfig)
+	}
+}
+
+func TestNewRejectsInvalidTLSMinVersion(t *testing.T) {
+	t.Parallel()
+
+	_, err := New(context.Background(), map[string]any{
+		"gatewaysvc":                 "gateway:9142",
+		"ocm_client_tls_min_version": "1.1",
+	})
+	if err == nil {
+		t.Fatal("expected ocmd.New to reject TLS min version 1.1")
+	}
+	if !errors.Is(err, ErrInvalidTLSMinVersion) {
+		t.Fatalf("got %v, want ErrInvalidTLSMinVersion", err)
+	}
+}
+
+func TestConfigOCMClientTLSMinVersion(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name    string
+		extra   map[string]any
+		want    uint16
+		wantErr bool
+	}{
+		{name: "empty defaults to TLS 1.2", extra: map[string]any{}, want: tls.VersionTLS12},
+		{
+			name:  "configured 1.3",
+			extra: map[string]any{"ocm_client_tls_min_version": "1.3"},
+			want:  tls.VersionTLS13,
+		},
+		{
+			name:    "bogus rejected",
+			extra:   map[string]any{"ocm_client_tls_min_version": "bogus"},
+			wantErr: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			input := map[string]any{"gatewaysvc": "gateway:9142"}
+			for k, v := range tt.extra {
+				input[k] = v
+			}
+
+			var c config
+			if err := cfg.Decode(input, &c); err != nil {
+				t.Fatalf("cfg.Decode: %v", err)
+			}
+			got, err := ParseTLSMinVersion(c.OCMClientTLSMinVersion)
+			if tt.wantErr {
+				if err == nil {
+					t.Fatal("expected invalid TLS min version to fail")
+				}
+				return
+			}
+			if err != nil {
+				t.Fatal(err)
+			}
+			if got != tt.want {
+				t.Fatalf("ParseTLSMinVersion(%q) = %#x, want %#x", c.OCMClientTLSMinVersion, got, tt.want)
+			}
+			tr := innerUntrustedTransport(t, UntrustedHTTPTransport(
+				0,
+				false,
+				testSec(),
+				got,
+			))
+			if tr.TLSClientConfig.MinVersion != tt.want {
+				t.Fatalf("transport MinVersion = %#x, want %#x", tr.TLSClientConfig.MinVersion, tt.want)
 			}
 		})
 	}

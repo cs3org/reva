@@ -50,6 +50,10 @@ func New(ctx context.Context, m map[string]any) (provider.Authorizer, error) {
 	if err := c.UntrustedClientSecurity.RejectHatch(); err != nil {
 		return nil, err
 	}
+	minVersion, err := client.ParseTLSMinVersion(c.OCMTLSMinVersion)
+	if err != nil {
+		return nil, err
+	}
 
 	a := &authorizer{
 		publicOCMClient: client.NewPublicOnlyClient(
@@ -57,6 +61,7 @@ func New(ctx context.Context, m map[string]any) (provider.Authorizer, error) {
 			c.Insecure,
 			c.UntrustedClientSecurity,
 			c.OCMResponseLimit,
+			minVersion,
 		),
 	}
 	return a, nil
@@ -71,6 +76,9 @@ type config struct {
 	// OCMResponseLimit caps outbound OCM JSON response bodies in bytes.
 	// Zero means 1 MiB.
 	OCMResponseLimit int64 `mapstructure:"ocm_response_limit"`
+	// OCMTLSMinVersion is the untrusted-client TLS minimum enum string.
+	// Empty means TLS 1.2. Accepted values are "1.2" and "1.3".
+	OCMTLSMinVersion string `mapstructure:"ocm_tls_min_version"`
 	// UntrustedClientSecurity configures MaxRedirects for discovery of unknown
 	// providers (TOML block ocm_client_security). The hatch (allow_http /
 	// allowed_cidrs) must stay closed.

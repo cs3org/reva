@@ -53,9 +53,19 @@ var errUntrustedTooManyRedirects = ocmd.ErrTooManyRedirects
 
 var errDiscoverResponseTooLarge = stderrors.New("discovery response body exceeds size limit")
 
-func newUntrustedDiscoverClient(timeout time.Duration, insecure bool, sec ocmd.UntrustedClientSecurity) *http.Client {
+func newUntrustedDiscoverClient(
+	timeout time.Duration,
+	insecure bool,
+	sec ocmd.UntrustedClientSecurity,
+	minVersion uint16,
+) *http.Client {
 	return &http.Client{
-		Transport:     ocmd.UntrustedHTTPTransport(timeout, insecure, sec),
+		Transport: ocmd.UntrustedHTTPTransport(
+			timeout,
+			insecure,
+			sec,
+			minVersion,
+		),
 		Timeout:       timeout,
 		CheckRedirect: sec.CheckRedirect,
 	}

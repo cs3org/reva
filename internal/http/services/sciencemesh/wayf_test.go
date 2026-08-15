@@ -325,6 +325,27 @@ func TestUntrustedDiscoverClientHardening(t *testing.T) {
 	}
 }
 
+func TestWayfUntrustedTLSMinVersion(t *testing.T) {
+	t.Parallel()
+
+	h := new(wayfHandler)
+	if err := h.init(&config{
+		OCMClientTimeout:       5,
+		OCMClientInsecure:      true,
+		OCMClientResponseLimit: 1 << 20,
+		ocmClientTLSMin:        tls.VersionTLS13,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if h.ocmClient == nil {
+		t.Fatal("trusted ocmClient is nil")
+	}
+	tr := innerUntrustedHTTPTransport(t, h.untrustedClient.Transport)
+	if tr.TLSClientConfig == nil || tr.TLSClientConfig.MinVersion != tls.VersionTLS13 {
+		t.Fatalf("untrusted MinVersion = %v, want TLS 1.3", tr.TLSClientConfig)
+	}
+}
+
 func TestUntrustedCheckRedirectUsesSharedSentinel(t *testing.T) {
 	t.Parallel()
 

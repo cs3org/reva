@@ -63,7 +63,9 @@ type sharesHandler struct {
 	trustForwardedFor          bool
 	ocmClientInsecure          bool
 	ocmClientResponseLimit     int64
+	ocmClientTLSMin            uint16
 	untrustedSec               UntrustedClientSecurity
+	untrustedTransport         http.RoundTripper
 }
 
 func (h *sharesHandler) init(c *config) error {
@@ -77,7 +79,14 @@ func (h *sharesHandler) init(c *config) error {
 	h.trustForwardedFor = c.TrustForwardedFor
 	h.ocmClientInsecure = c.OCMClientInsecure
 	h.ocmClientResponseLimit = c.OCMClientResponseLimit
+	h.ocmClientTLSMin = c.ocmClientTLSMin
 	h.untrustedSec = c.UntrustedClientSecurity
+	h.untrustedTransport = UntrustedHTTPTransport(
+		10*time.Second,
+		h.ocmClientInsecure,
+		h.untrustedSec,
+		h.ocmClientTLSMin,
+	)
 	for _, p := range c.AutoAcceptProviders {
 		re, err := regexp.Compile(p)
 		if err != nil {
@@ -120,10 +129,14 @@ func (h *sharesHandler) isAcceptedUser(ctx context.Context, recipient *userpb.Us
 }
 
 // statIngestWebDAV PROPFINDs a peer-supplied WebDAV source URL before ingest.
-// The URL is attacker-influenced, so the client uses UntrustedHTTPTransport.
-func statIngestWebDAV(uri, sharedSecret string, timeout time.Duration, insecure bool, sec UntrustedClientSecurity) (os.FileInfo, error) {
+// The URL is attacker-influenced, so the caller must pass the handler-owned
+// untrusted transport (or an equivalent test transport).
+func statIngestWebDAV(
+	uri, sharedSecret string,
+	rt http.RoundTripper,
+) (os.FileInfo, error) {
 	c := gowebdav.NewClient(uri, "", "")
-	c.SetTransport(UntrustedHTTPTransport(timeout, insecure, sec))
+	c.SetTransport(rt)
 	c.SetHeader("Authorization", "Basic "+base64.StdEncoding.EncodeToString([]byte(sharedSecret+":")))
 	return c.Stat("")
 }
@@ -225,9 +238,7 @@ func (h *sharesHandler) CreateShare(w http.ResponseWriter, r *http.Request) {
 		target, err := statIngestWebDAV(
 			protocols[0].GetWebdavOptions().Uri,
 			protocols[0].GetWebdavOptions().SharedSecret,
-			10*time.Second,
-			h.ocmClientInsecure,
-			h.untrustedSec,
+			h.untrustedTransport,
 		)
 		if err != nil {
 			log.Info().Err(err).Str("endpoint", protocols[0].GetWebdavOptions().Uri).Msg("error stating remote resource, assuming file")

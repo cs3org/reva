@@ -49,6 +49,11 @@ func New(ctx context.Context, m map[string]any) (global.Service, error) {
 	if err := c.UntrustedClientSecurity.RejectHatch(); err != nil {
 		return nil, err
 	}
+	minVersion, err := ocmd.ParseTLSMinVersion(c.OCMClientTLSMinVersion)
+	if err != nil {
+		return nil, err
+	}
+	c.ocmClientTLSMin = minVersion
 
 	r := chi.NewRouter()
 	s := &svc{
@@ -81,10 +86,14 @@ type config struct {
 	OCMClientTimeout       int                         `mapstructure:"ocm_client_timeout"`
 	OCMClientInsecure      bool                        `mapstructure:"ocm_client_insecure"`
 	OCMClientResponseLimit int                         `mapstructure:"ocm_client_response_limit"`
+	// OCMClientTLSMinVersion is the untrusted-client TLS minimum enum string.
+	// Empty means TLS 1.2. Accepted values are "1.2" and "1.3".
+	OCMClientTLSMinVersion string `mapstructure:"ocm_client_tls_min_version"`
 	// UntrustedClientSecurity configures MaxRedirects for /discover
 	// (TOML block ocm_client_security). The hatch (allow_http / allowed_cidrs)
 	// must stay closed.
 	UntrustedClientSecurity ocmd.UntrustedClientSecurity `mapstructure:"ocm_client_security"`
+	ocmClientTLSMin         uint16
 }
 
 func (c *config) ApplyDefaults() {
@@ -107,6 +116,7 @@ func (c *config) ApplyDefaults() {
 type svc struct {
 	conf   *config
 	router chi.Router
+	wayf   *wayfHandler
 }
 
 func (s *svc) routerInit() error {
@@ -128,6 +138,7 @@ func (s *svc) routerInit() error {
 	if err := wayfHandler.init(s.conf); err != nil {
 		return err
 	}
+	s.wayf = wayfHandler
 	embeddedHandler := new(embeddedHandler)
 	if err := embeddedHandler.init(s.conf); err != nil {
 		return err

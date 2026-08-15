@@ -20,6 +20,7 @@ package embedded
 
 import (
 	"context"
+	"crypto/tls"
 	"encoding/json"
 	"errors"
 	"io"
@@ -129,6 +130,70 @@ func TestNewRejectsHatch(t *testing.T) {
 		}
 		if !errors.Is(err, ocmd.ErrHatchAllowedCIDRs) {
 			t.Fatalf("got %v, want ocmd.ErrHatchAllowedCIDRs", err)
+		}
+	})
+}
+
+func innerUntrustedTransport(t *testing.T, rt http.RoundTripper) *http.Transport {
+	t.Helper()
+	if tr, ok := rt.(*http.Transport); ok {
+		return tr
+	}
+	v := reflect.ValueOf(rt)
+	if v.Kind() == reflect.Pointer {
+		v = v.Elem()
+	}
+	if v.IsValid() && v.Kind() == reflect.Struct {
+		f := v.FieldByName("Transport")
+		if f.IsValid() && f.CanInterface() {
+			if tr, ok := f.Interface().(*http.Transport); ok && tr != nil {
+				return tr
+			}
+		}
+	}
+	t.Fatalf("untrusted transport: got %T, want an *http.Transport wrapper", rt)
+	return nil
+}
+
+func TestNewTLSMinVersion(t *testing.T) {
+	t.Parallel()
+
+	t.Run("configured 1.3 reaches the transport", func(t *testing.T) {
+		t.Parallel()
+		tr, err := New(context.Background(), map[string]any{
+			"webdav_url":                   "https://dav.example.org/",
+			"embedded_src_tls_min_version": "1.3",
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		d := tr.(*driver)
+		if d.tlsMinVersion != tls.VersionTLS13 {
+			t.Fatalf("tlsMinVersion = %#x, want TLS 1.3", d.tlsMinVersion)
+		}
+		client := newEmbeddedSrcClient(
+			5*time.Second,
+			false,
+			d.sec,
+			d.tlsMinVersion,
+		)
+		got := innerUntrustedTransport(t, client.Transport)
+		if got.TLSClientConfig == nil || got.TLSClientConfig.MinVersion != tls.VersionTLS13 {
+			t.Fatalf("src client MinVersion = %v, want TLS 1.3", got.TLSClientConfig)
+		}
+	})
+
+	t.Run("invalid value fails service start", func(t *testing.T) {
+		t.Parallel()
+		_, err := New(context.Background(), map[string]any{
+			"webdav_url":                   "https://dav.example.org/",
+			"embedded_src_tls_min_version": "1.0",
+		})
+		if err == nil {
+			t.Fatal("expected embedded.New to reject TLS min version 1.0")
+		}
+		if !errors.Is(err, ocmd.ErrInvalidTLSMinVersion) {
+			t.Fatalf("got %v, want ocmd.ErrInvalidTLSMinVersion", err)
 		}
 	})
 }
@@ -556,7 +621,7 @@ func TestEmbeddedSrcURLFetchPublicHTTPSHostSucceeds(t *testing.T) {
 	err := uploadURLToWebDAV(
 		ctx,
 		testLogger(),
-		newEmbeddedSrcClient(5*time.Second, true, testEmbeddedSec()),
+		newEmbeddedSrcClient(5*time.Second, true, testEmbeddedSec(), 0),
 		dav,
 		src.URL+"/file.txt",
 		"/dest/file.txt",
@@ -580,7 +645,7 @@ func TestEmbeddedSrcURLFetchRefusesPrivateHost(t *testing.T) {
 		err := uploadURLToWebDAV(
 			ctx,
 			testLogger(),
-			newEmbeddedSrcClient(5*time.Second, true, testEmbeddedSec()),
+			newEmbeddedSrcClient(5*time.Second, true, testEmbeddedSec(), 0),
 			dummyDAV(),
 			"https://169.254.169.254/file.txt",
 			"/dest/file.txt",
@@ -614,7 +679,7 @@ func TestEmbeddedSrcURLFetchRefusesPrivateHost(t *testing.T) {
 		err := uploadURLToWebDAV(
 			ctx,
 			testLogger(),
-			newEmbeddedSrcClient(5*time.Second, true, testEmbeddedSec()),
+			newEmbeddedSrcClient(5*time.Second, true, testEmbeddedSec(), 0),
 			dummyDAV(),
 			src.URL+"/file.txt",
 			"/dest/file.txt",

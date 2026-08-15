@@ -75,7 +75,9 @@ func resolveOCMResponseLimit(limit int64) int64 {
 // newOCMTransport returns the HTTP transport used for outbound OCM requests.
 // It honors the standard HTTP_PROXY, HTTPS_PROXY, and NO_PROXY environment
 // variables and optionally skips TLS certificate verification.
-func newOCMTransport(insecure bool) *http.Transport {
+// minVersion is the TLS minimum; 0 means TLS 1.2. Values below TLS 1.2 are
+// rejected. The per-service knob defaults to TLS 1.2 and may raise to 1.3.
+func newOCMTransport(insecure bool, minVersion uint16) *http.Transport {
 	var tr *http.Transport
 	if dt, ok := http.DefaultTransport.(*http.Transport); ok {
 		tr = dt.Clone()
@@ -86,7 +88,7 @@ func newOCMTransport(insecure bool) *http.Transport {
 	}
 	tr.TLSClientConfig = &tls.Config{
 		InsecureSkipVerify: insecure,
-		MinVersion:         tls.VersionTLS12,
+		MinVersion:         resolveTLSMinVersion(minVersion),
 	}
 	return tr
 }
@@ -96,7 +98,7 @@ func newOCMTransport(insecure bool) *http.Transport {
 func NewClient(timeout time.Duration, insecure bool, responseLimit int64) *OCMClient {
 	return &OCMClient{
 		client: &http.Client{
-			Transport: newOCMTransport(insecure),
+			Transport: newOCMTransport(insecure, 0),
 			Timeout:   timeout,
 		},
 		responseLimit: resolveOCMResponseLimit(responseLimit),
@@ -110,7 +112,8 @@ func NewClient(timeout time.Duration, insecure bool, responseLimit int64) *OCMCl
 // Transport-layer guarantees:
 //   - dials only addresses allowed by sec (PIN or public-only)
 //   - Proxy is nil (no ProxyFromEnvironment)
-//   - TLS 1.2 minimum; InsecureSkipVerify only when insecure is true
+//   - TLS minimum is configurable and defaults to 1.2 via the service knob;
+//     InsecureSkipVerify only when insecure is true
 //   - requireScheme on every RoundTrip
 //   - redirect-cap walker via req.Response so SetTransport-only clients
 //     (gowebdav) still enforce sec.maxRedirects()
@@ -120,9 +123,14 @@ func NewClient(timeout time.Duration, insecure bool, responseLimit int64) *OCMCl
 // The timeout option applies only to dialing, specifically net.Dialer.Timeout
 // on the Control path. Request-level deadlines require http.Client.Timeout or
 // gowebdav SetTimeout. sec must already be compiled; this constructor
-// returns no error.
-func UntrustedHTTPTransport(timeout time.Duration, insecure bool, sec UntrustedClientSecurity) http.RoundTripper {
-	tr := newOCMTransport(insecure)
+// returns no error. minVersion 0 means TLS 1.2; the knob may raise to 1.3.
+func UntrustedHTTPTransport(
+	timeout time.Duration,
+	insecure bool,
+	sec UntrustedClientSecurity,
+	minVersion uint16,
+) http.RoundTripper {
+	tr := newOCMTransport(insecure, minVersion)
 	// with a proxy the dial goes to the proxy, so Control never sees the target
 	tr.Proxy = nil
 	tr.DialContext = (&net.Dialer{
@@ -143,15 +151,29 @@ func NewPublicOnlyClient(
 	insecure bool,
 	sec UntrustedClientSecurity,
 	responseLimit int64,
+	minVersion uint16,
 ) *OCMClient {
 	return &OCMClient{
 		client: &http.Client{
-			Transport:     UntrustedHTTPTransport(timeout, insecure, sec),
+			Transport: UntrustedHTTPTransport(
+				timeout,
+				insecure,
+				sec,
+				minVersion,
+			),
 			Timeout:       timeout,
 			CheckRedirect: sec.CheckRedirect,
 		},
 		responseLimit: resolveOCMResponseLimit(responseLimit),
 	}
+}
+
+// HTTPTransport returns the live outbound RoundTripper.
+func (c *OCMClient) HTTPTransport() http.RoundTripper {
+	if c == nil || c.client == nil {
+		return nil
+	}
+	return c.client.Transport
 }
 
 // publicOnlyTransport refuses disallowed schemes and excess redirect hops

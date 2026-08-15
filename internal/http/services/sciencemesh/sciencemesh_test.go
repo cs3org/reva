@@ -20,6 +20,7 @@ package sciencemesh
 
 import (
 	"context"
+	"crypto/tls"
 	"errors"
 	"testing"
 
@@ -105,5 +106,59 @@ func TestConfigOCMClientLimits(t *testing.T) {
 				t.Errorf("OCMClientTimeout = %d, want %d", c.OCMClientTimeout, tt.wantTimeout)
 			}
 		})
+	}
+}
+
+func TestNewWiresTLSMinVersionToDiscoverTransport(t *testing.T) {
+	t.Parallel()
+
+	m := requiredScienceMeshConfig()
+	m["ocm_client_tls_min_version"] = "1.3"
+	got, err := New(context.Background(), m)
+	if err != nil {
+		t.Fatal(err)
+	}
+	s, ok := got.(*svc)
+	if !ok {
+		t.Fatalf("got %T, want *svc", got)
+	}
+	if s.wayf == nil || s.wayf.untrustedClient == nil {
+		t.Fatal("untrusted discover client is nil")
+	}
+	tr := innerUntrustedHTTPTransport(t, s.wayf.untrustedClient.Transport)
+	if tr.TLSClientConfig == nil || tr.TLSClientConfig.MinVersion != tls.VersionTLS13 {
+		t.Fatalf("discover transport MinVersion = %v, want TLS 1.3", tr.TLSClientConfig)
+	}
+}
+
+func TestNewRejectsInvalidTLSMinVersion(t *testing.T) {
+	t.Parallel()
+
+	m := requiredScienceMeshConfig()
+	m["ocm_client_tls_min_version"] = "1.1"
+	_, err := New(context.Background(), m)
+	if err == nil {
+		t.Fatal("expected sciencemesh.New to reject TLS min version 1.1")
+	}
+	if !errors.Is(err, ocmd.ErrInvalidTLSMinVersion) {
+		t.Fatalf("got %v, want ocmd.ErrInvalidTLSMinVersion", err)
+	}
+}
+
+func TestConfigOCMClientTLSMinVersion(t *testing.T) {
+	t.Parallel()
+
+	input := requiredScienceMeshConfig()
+	input["ocm_client_tls_min_version"] = "1.3"
+	var c config
+	if err := cfg.Decode(input, &c); err != nil {
+		t.Fatalf("cfg.Decode: %v", err)
+	}
+	got, err := ocmd.ParseTLSMinVersion(c.OCMClientTLSMinVersion)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got != tls.VersionTLS13 {
+		t.Fatalf("ParseTLSMinVersion(%q) = %#x, want TLS 1.3", c.OCMClientTLSMinVersion, got)
 	}
 }

@@ -2,6 +2,7 @@ package ocm
 
 import (
 	"context"
+	"crypto/tls"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -12,6 +13,7 @@ import (
 	"net/http/httptest"
 	"net/http/httptrace"
 	"os"
+	"reflect"
 	"strings"
 	"sync"
 	"testing"
@@ -821,6 +823,75 @@ func TestConfigOCMResponseLimit(t *testing.T) {
 			}
 		})
 	}
+}
+
+func innerUntrustedTransport(t *testing.T, rt http.RoundTripper) *http.Transport {
+	t.Helper()
+	if tr, ok := rt.(*http.Transport); ok {
+		return tr
+	}
+	v := reflect.ValueOf(rt)
+	if v.Kind() == reflect.Pointer {
+		v = v.Elem()
+	}
+	if v.IsValid() && v.Kind() == reflect.Struct {
+		f := v.FieldByName("Transport")
+		if f.IsValid() && f.CanInterface() {
+			if tr, ok := f.Interface().(*http.Transport); ok && tr != nil {
+				return tr
+			}
+		}
+	}
+	t.Fatalf("untrusted transport: got %T, want an *http.Transport wrapper", rt)
+	return nil
+}
+
+func TestNewTLSMinVersion(t *testing.T) {
+	t.Parallel()
+
+	t.Run("configured 1.3 reaches the transport", func(t *testing.T) {
+		t.Parallel()
+		fs, err := New(context.Background(), map[string]any{
+			"gatewaysvc":          "public-only-received-test.invalid:1",
+			"ocm_timeout":         5,
+			"ocm_insecure":        true,
+			"ocm_tls_min_version": "1.3",
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		d, ok := fs.(*driver)
+		if !ok {
+			t.Fatalf("got %T, want *driver", fs)
+		}
+		if d.tlsMinVersion != tls.VersionTLS13 {
+			t.Fatalf("tlsMinVersion = %#x, want TLS 1.3", d.tlsMinVersion)
+		}
+		rt := ocmd.UntrustedHTTPTransport(
+			5*time.Second,
+			true,
+			d.sec,
+			d.tlsMinVersion,
+		)
+		inner := innerUntrustedTransport(t, rt)
+		if inner.TLSClientConfig == nil || inner.TLSClientConfig.MinVersion != tls.VersionTLS13 {
+			t.Fatalf("constructed transport MinVersion = %v, want TLS 1.3", inner.TLSClientConfig)
+		}
+	})
+
+	t.Run("invalid value fails service start", func(t *testing.T) {
+		t.Parallel()
+		_, err := New(context.Background(), map[string]any{
+			"gatewaysvc":          "public-only-received-test.invalid:1",
+			"ocm_tls_min_version": "1.1",
+		})
+		if err == nil {
+			t.Fatal("expected received.New to reject TLS min version 1.1")
+		}
+		if !errors.Is(err, ocmd.ErrInvalidTLSMinVersion) {
+			t.Fatalf("got %v, want ocmd.ErrInvalidTLSMinVersion", err)
+		}
+	})
 }
 
 func newProductionReceivedDriver(t *testing.T) *driver {

@@ -55,6 +55,9 @@ type Config struct {
 	// (TOML block ocm_client_security). The hatch (allow_http / allowed_cidrs)
 	// must stay closed.
 	UntrustedClientSecurity ocmd.UntrustedClientSecurity `mapstructure:"ocm_client_security"`
+	// EmbeddedSrcTLSMinVersion is the untrusted src-client TLS minimum enum
+	// string. Empty means TLS 1.2. Accepted values are "1.2" and "1.3".
+	EmbeddedSrcTLSMinVersion string `mapstructure:"embedded_src_tls_min_version"`
 }
 
 // ApplyDefaults fills in sensible defaults for any unset setting.
@@ -100,8 +103,9 @@ func init() {
 // driver is the built-in Transferrer: it downloads each file over HTTP and
 // streams it to the configured WebDAV endpoint.
 type driver struct {
-	c   Config
-	sec ocmd.UntrustedClientSecurity
+	c             Config
+	sec           ocmd.UntrustedClientSecurity
+	tlsMinVersion uint16
 }
 
 // New builds the built-in WebDAV embedded-transfer driver.
@@ -117,7 +121,15 @@ func New(ctx context.Context, m map[string]any) (Transferrer, error) {
 	if err := c.UntrustedClientSecurity.RejectHatch(); err != nil {
 		return nil, err
 	}
-	return &driver{c: c, sec: c.UntrustedClientSecurity}, nil
+	minVersion, err := ocmd.ParseTLSMinVersion(c.EmbeddedSrcTLSMinVersion)
+	if err != nil {
+		return nil, err
+	}
+	return &driver{
+		c:             c,
+		sec:           c.UntrustedClientSecurity,
+		tlsMinVersion: minVersion,
+	}, nil
 }
 
 // embeddedRetryBaseBackoff is the base per-file retry delay; it grows exponentially.
@@ -161,10 +173,21 @@ func (d *driver) Process(ctx context.Context, payload, destination string, onCom
 
 // newEmbeddedSrcClient builds the HTTP client used to fetch a peer-supplied
 // embedded srcURL. The URL is attacker-influenced, so the client uses the
-// untrusted transport (scheme policy, PIN-when-set dial, TLS 1.2, redirect cap).
-func newEmbeddedSrcClient(timeout time.Duration, insecure bool, sec ocmd.UntrustedClientSecurity) *http.Client {
+// untrusted transport: scheme policy, PIN-when-set dial, redirect cap, and a
+// minimum TLS version (default 1.2, configurable via tls_min_version).
+func newEmbeddedSrcClient(
+	timeout time.Duration,
+	insecure bool,
+	sec ocmd.UntrustedClientSecurity,
+	minVersion uint16,
+) *http.Client {
 	return &http.Client{
-		Transport:     ocmd.UntrustedHTTPTransport(timeout, insecure, sec),
+		Transport: ocmd.UntrustedHTTPTransport(
+			timeout,
+			insecure,
+			sec,
+			minVersion,
+		),
 		CheckRedirect: sec.CheckRedirect,
 	}
 }
@@ -174,7 +197,12 @@ func newEmbeddedSrcClient(timeout time.Duration, insecure bool, sec ocmd.Untrust
 // an error only when the transfer cannot proceed at all (e.g. the destination is
 // unreachable); per-file failures are best-effort and do not produce an error.
 func (d *driver) transferEntries(log *zerolog.Logger, token, destination string, entries []transferEntry, timeout time.Duration) error {
-	httpClient := newEmbeddedSrcClient(timeout, false, d.sec)
+	httpClient := newEmbeddedSrcClient(
+		timeout,
+		false,
+		d.sec,
+		d.tlsMinVersion,
+	)
 	// Preemptive auth, not gowebdav's default auto-auth: auto-auth buffers each
 	// upload body in memory to replay on an auth challenge, blowing up RAM on
 	// multi-GB files. We pass the bearer token via the interceptor below.

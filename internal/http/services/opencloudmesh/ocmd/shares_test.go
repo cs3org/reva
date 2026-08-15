@@ -383,9 +383,7 @@ func TestIngestWebDAVStatPublicHTTPSHostSucceeds(t *testing.T) {
 	info, err := statIngestWebDAV(
 		srv.URL,
 		"secret",
-		5*time.Second,
-		true,
-		testSec(),
+		UntrustedHTTPTransport(5*time.Second, true, testSec(), 0),
 	)
 	if err != nil {
 		t.Fatalf("ingest stat to a public HTTPS WebDAV host: %v", err)
@@ -403,9 +401,7 @@ func TestIngestWebDAVStatRefusesPrivateHost(t *testing.T) {
 		_, err := statIngestWebDAV(
 			"https://169.254.169.254/remote.php/dav/ocm",
 			"secret",
-			5*time.Second,
-			true,
-			testSec(),
+			UntrustedHTTPTransport(5*time.Second, true, testSec(), 0),
 		)
 		if err == nil {
 			t.Fatal("expected ingest stat to refuse the metadata host at dial")
@@ -423,9 +419,7 @@ func TestIngestWebDAVStatRefusesPrivateHost(t *testing.T) {
 		_, err := statIngestWebDAV(
 			srv.URL,
 			"secret",
-			5*time.Second,
-			true,
-			testSec(),
+			UntrustedHTTPTransport(5*time.Second, true, testSec(), 0),
 		)
 		if contacted {
 			t.Fatal("ingest stat contacted a private WebDAV host; the untrusted transport must refuse it at dial")
@@ -447,9 +441,7 @@ func TestIngestWebDAVStatRefusesHTTP(t *testing.T) {
 	_, err := statIngestWebDAV(
 		srv.URL,
 		"secret",
-		5*time.Second,
-		true,
-		testSec(),
+		UntrustedHTTPTransport(5*time.Second, true, testSec(), 0),
 	)
 	if contacted {
 		t.Fatal("ingest stat contacted an http WebDAV host; the untrusted transport must refuse it")
