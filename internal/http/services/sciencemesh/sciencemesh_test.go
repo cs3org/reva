@@ -19,8 +19,11 @@
 package sciencemesh
 
 import (
+	"context"
+	"errors"
 	"testing"
 
+	"github.com/cs3org/reva/v3/internal/http/services/opencloudmesh/ocmd"
 	"github.com/cs3org/reva/v3/pkg/utils/cfg"
 )
 
@@ -30,6 +33,34 @@ func requiredScienceMeshConfig() map[string]any {
 		"mesh_directory_url": "https://mesh.example",
 		"provider_domain":    "example.org",
 	}
+}
+
+func TestNewRejectsHatch(t *testing.T) {
+	t.Parallel()
+
+	t.Run("allow_http", func(t *testing.T) {
+		m := requiredScienceMeshConfig()
+		m["ocm_client_security"] = map[string]any{"allow_http": true}
+		_, err := New(context.Background(), m)
+		if err == nil {
+			t.Fatal("expected sciencemesh.New to reject allow_http")
+		}
+		if !errors.Is(err, ocmd.ErrHatchAllowHTTP) {
+			t.Fatalf("got %v, want ocmd.ErrHatchAllowHTTP", err)
+		}
+	})
+
+	t.Run("allowed_cidrs", func(t *testing.T) {
+		m := requiredScienceMeshConfig()
+		m["ocm_client_security"] = map[string]any{"allowed_cidrs": []string{"10.0.0.0/8"}}
+		_, err := New(context.Background(), m)
+		if err == nil {
+			t.Fatal("expected sciencemesh.New to reject allowed_cidrs")
+		}
+		if !errors.Is(err, ocmd.ErrHatchAllowedCIDRs) {
+			t.Fatalf("got %v, want ocmd.ErrHatchAllowedCIDRs", err)
+		}
+	})
 }
 
 func TestConfigOCMClientLimits(t *testing.T) {

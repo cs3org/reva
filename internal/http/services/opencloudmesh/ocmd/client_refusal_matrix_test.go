@@ -89,10 +89,10 @@ func doPublicOnlyURL(t *testing.T, surface, rawURL string) (bool, error) {
 	var resp *http.Response
 	switch surface {
 	case "NewPublicOnlyClient":
-		resp, err = NewPublicOnlyClient(2*time.Second, true).client.Do(req)
+		resp, err = NewPublicOnlyClient(2*time.Second, true, testSec()).client.Do(req)
 	case "UntrustedHTTPTransport":
 		resp, err = (&http.Client{
-			Transport: UntrustedHTTPTransport(2*time.Second, true),
+			Transport: UntrustedHTTPTransport(2*time.Second, true, testSec()),
 		}).Do(req)
 	default:
 		t.Fatalf("unknown public-only surface %q", surface)
