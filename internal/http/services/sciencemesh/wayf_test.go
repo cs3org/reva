@@ -369,3 +369,39 @@ func TestUntrustedCheckRedirectUsesSharedSentinel(t *testing.T) {
 		t.Fatalf("got %v, want errUntrustedTooManyRedirects", err)
 	}
 }
+
+func TestUntrustedDiscoverClientSplitsDialAndRequestTimeout(t *testing.T) {
+	h := new(wayfHandler)
+	if err := h.init(&config{
+		OCMClientTimeout:       3,
+		OCMClientDialTimeout:   1,
+		OCMClientInsecure:      true,
+		OCMClientResponseLimit: 1 << 20,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if h.untrustedClient == nil {
+		t.Fatal("untrustedClient is nil")
+	}
+	if h.untrustedClient.Timeout != 3*time.Second {
+		t.Errorf("untrusted request timeout = %v, want 3s", h.untrustedClient.Timeout)
+	}
+	if h.ocmClient == nil || h.ocmClient.RequestTimeout() != 3*time.Second {
+		t.Errorf("trusted directory client timeout = %v, want 3s", h.ocmClient.RequestTimeout())
+	}
+
+	start := time.Now()
+	_, err := discoverUntrusted(
+		context.Background(),
+		h.untrustedClient,
+		"https://240.0.0.1",
+		1<<20,
+	)
+	elapsed := time.Since(start)
+	if err == nil {
+		t.Fatal("expected discover to a non-responsive public address to fail")
+	}
+	if elapsed > 5*time.Second {
+		t.Fatalf("dial timeout was not applied to the untrusted transport; elapsed %v", elapsed)
+	}
+}

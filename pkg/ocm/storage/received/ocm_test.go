@@ -1,6 +1,7 @@
 package ocm
 
 import (
+	"bytes"
 	"context"
 	"crypto/tls"
 	"encoding/json"
@@ -29,6 +30,7 @@ import (
 	"github.com/cs3org/reva/v3/internal/http/services/wellknown"
 	"github.com/cs3org/reva/v3/pkg/appctx"
 	"github.com/cs3org/reva/v3/pkg/errtypes"
+	"github.com/rs/zerolog"
 	"github.com/studio-b12/gowebdav"
 	"google.golang.org/grpc"
 )
@@ -312,6 +314,8 @@ func newTestReceivedDriver() *driver {
 		c: &config{
 			OCMClientTimeout:  10,
 			OCMClientInsecure: true,
+			WebDAVDialTimeout: 10,
+			WebDAVTimeout:     30,
 		},
 		ccache:         ttlcache.NewCache(),
 		discoveryCache: disco,
@@ -1308,5 +1312,313 @@ func TestReceivedShareWebDAVUploadRefusesPrivateHost(t *testing.T) {
 	}
 	if !errors.Is(err, ocmd.ErrNonPublicAddr) {
 		t.Fatalf("got %v, want ocmd.ErrNonPublicAddr", err)
+	}
+}
+
+func TestConfigWebDAVTimeouts(t *testing.T) {
+	tests := []struct {
+		name         string
+		extra        map[string]any
+		wantOCM      int
+		wantDial     int
+		wantMeta     int
+		wantTransfer int
+	}{
+		{
+			name:         "defaults when unset",
+			extra:        map[string]any{},
+			wantOCM:      10,
+			wantDial:     10,
+			wantMeta:     30,
+			wantTransfer: 0,
+		},
+		{
+			name: "parses configured timeouts",
+			extra: map[string]any{
+				"ocm_timeout":             15,
+				"webdav_dial_timeout":     2,
+				"webdav_timeout":          4,
+				"webdav_transfer_timeout": 90,
+			},
+			wantOCM:      15,
+			wantDial:     2,
+			wantMeta:     4,
+			wantTransfer: 90,
+		},
+		{
+			name: "negative timeouts use defaults",
+			extra: map[string]any{
+				"ocm_timeout":         -1,
+				"webdav_dial_timeout": -5,
+				"webdav_timeout":      -2,
+			},
+			wantOCM:      10,
+			wantDial:     10,
+			wantMeta:     30,
+			wantTransfer: 0,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			m := map[string]any{
+				"gatewaysvc":   "public-only-received-test.invalid:1",
+				"ocm_insecure": true,
+			}
+			for k, v := range tt.extra {
+				m[k] = v
+			}
+			fs, err := New(context.Background(), m)
+			if err != nil {
+				t.Fatal(err)
+			}
+			d, ok := fs.(*driver)
+			if !ok {
+				t.Fatalf("got %T, want *driver", fs)
+			}
+			if d.c.OCMClientTimeout != tt.wantOCM {
+				t.Errorf("OCMClientTimeout = %d, want %d", d.c.OCMClientTimeout, tt.wantOCM)
+			}
+			if d.c.WebDAVDialTimeout != tt.wantDial {
+				t.Errorf("WebDAVDialTimeout = %d, want %d", d.c.WebDAVDialTimeout, tt.wantDial)
+			}
+			if d.c.WebDAVTimeout != tt.wantMeta {
+				t.Errorf("WebDAVTimeout = %d, want %d", d.c.WebDAVTimeout, tt.wantMeta)
+			}
+			if d.c.WebDAVTransferTimeout != tt.wantTransfer {
+				t.Errorf("WebDAVTransferTimeout = %d, want %d", d.c.WebDAVTransferTimeout, tt.wantTransfer)
+			}
+			if d.ocmClient.RequestTimeout() != time.Duration(tt.wantOCM)*time.Second {
+				t.Errorf("OCM RequestTimeout = %v, want %ds", d.ocmClient.RequestTimeout(), tt.wantOCM)
+			}
+		})
+	}
+}
+
+func TestConfigWebDAVTransferTimeoutWarnsWhenNonzero(t *testing.T) {
+	var buf bytes.Buffer
+	log := zerolog.New(&buf)
+	ctx := appctx.WithLogger(context.Background(), &log)
+
+	fs, err := New(ctx, map[string]any{
+		"gatewaysvc":              "public-only-received-test.invalid:1",
+		"ocm_insecure":            true,
+		"webdav_transfer_timeout": 90,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := buf.String()
+	if !strings.Contains(got, "webdav_transfer_timeout") || !strings.Contains(got, "idle-stall") {
+		t.Fatalf("expected reserved-timeout warning, got %q", got)
+	}
+	d, ok := fs.(*driver)
+	if !ok {
+		t.Fatalf("got %T, want *driver", fs)
+	}
+	if d.c.WebDAVTransferTimeout != 90 {
+		t.Fatalf("WebDAVTransferTimeout = %d, want parsed 90", d.c.WebDAVTransferTimeout)
+	}
+
+	buf.Reset()
+	_, err = New(ctx, map[string]any{
+		"gatewaysvc":   "public-only-received-test.invalid:1",
+		"ocm_insecure": true,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(buf.String(), "webdav_transfer_timeout") {
+		t.Fatalf("default 0 must not warn; got %q", buf.String())
+	}
+}
+
+func receivedShareDAVHandler(t *testing.T, onPropfind, onGet http.HandlerFunc) http.Handler {
+	t.Helper()
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.Method {
+		case "PROPFIND":
+			if onPropfind != nil {
+				onPropfind(w, r)
+				return
+			}
+			w.Header().Set("Content-Type", "application/xml")
+			w.WriteHeader(207)
+			_, _ = w.Write([]byte(receivedWebDAVPropfindXML))
+		case http.MethodGet:
+			if onGet != nil {
+				onGet(w, r)
+				return
+			}
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write([]byte("ok"))
+		case http.MethodPut:
+			if r.Body != nil {
+				_, _ = io.Copy(io.Discard, r.Body)
+			}
+			w.WriteHeader(http.StatusCreated)
+		default:
+			t.Errorf("unexpected method %s", r.Method)
+			w.WriteHeader(http.StatusMethodNotAllowed)
+		}
+	})
+}
+
+func newReceivedDriverWithTimeouts(t *testing.T, dialSec, metaSec, transferSec int) *driver {
+	t.Helper()
+	fs, err := New(context.Background(), map[string]any{
+		"gatewaysvc":              "public-only-received-test.invalid:1",
+		"ocm_timeout":             5,
+		"ocm_insecure":            true,
+		"webdav_dial_timeout":     dialSec,
+		"webdav_timeout":          metaSec,
+		"webdav_transfer_timeout": transferSec,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	d, ok := fs.(*driver)
+	if !ok {
+		t.Fatalf("got %T, want *driver", fs)
+	}
+	return d
+}
+
+func TestReceivedMetadataTimeoutBoundsSlowStat(t *testing.T) {
+	var startOnce sync.Once
+	started := make(chan struct{})
+	srv := startPublicTLSServer(t, receivedShareDAVHandler(t, func(w http.ResponseWriter, r *http.Request) {
+		startOnce.Do(func() { close(started) })
+		time.Sleep(2 * time.Second)
+		w.Header().Set("Content-Type", "application/xml")
+		w.WriteHeader(207)
+		_, _ = w.Write([]byte(receivedWebDAVPropfindXML))
+	}, nil))
+
+	d := newReceivedDriverWithTimeouts(t, 5, 1, 0)
+	share := receivedShareWithWebDAVURI(
+		srv.Listener.Addr().String(),
+		"share-abc",
+		srv.URL+"/remote.php/dav/ocm/share-abc",
+	)
+	d.gateway = &mockReceivedGateway{shares: []*ocmpb.ReceivedShare{share}}
+
+	start := time.Now()
+	_, err := d.GetMD(context.Background(), &provider.Reference{Path: "/share-abc"}, nil)
+	elapsed := time.Since(start)
+	if err == nil {
+		t.Fatal("expected slow Stat to be bounded by webdav_timeout")
+	}
+	// Legacy resolve probes Bearer then Basic. Each Stat is bounded by
+	// webdav_timeout (1s), so two attempts can approach 2s plus slack.
+	if elapsed > 3*time.Second {
+		t.Fatalf("metadata SetTimeout was not honored; elapsed %v", elapsed)
+	}
+	select {
+	case <-started:
+	default:
+		t.Fatal("expected the slow metadata peer to accept the connection")
+	}
+}
+
+func TestReceivedStreamClientHasNoTotalTimeout(t *testing.T) {
+	const dripCount = 8
+	const dripGap = 250 * time.Millisecond
+	body := bytes.Repeat([]byte("x"), 256*1024)
+
+	t.Run("large ReadStream completes", func(t *testing.T) {
+		srv := startPublicTLSServer(t, receivedShareDAVHandler(t, nil, func(w http.ResponseWriter, r *http.Request) {
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write(body)
+		}))
+
+		d := newReceivedDriverWithTimeouts(t, 5, 1, 0)
+		share := receivedShareWithWebDAVURI(
+			srv.Listener.Addr().String(),
+			"share-abc",
+			srv.URL+"/remote.php/dav/ocm/share-abc",
+		)
+		d.gateway = &mockReceivedGateway{shares: []*ocmpb.ReceivedShare{share}}
+
+		rc, err := d.Download(context.Background(), &provider.Reference{Path: "/share-abc"}, nil)
+		if err != nil {
+			t.Fatalf("Download: %v", err)
+		}
+		defer rc.Close()
+		got, err := io.ReadAll(rc)
+		if err != nil {
+			t.Fatalf("ReadAll: %v", err)
+		}
+		if !bytes.Equal(got, body) {
+			t.Fatalf("ReadStream truncated: got %d bytes, want %d", len(got), len(body))
+		}
+	})
+
+	t.Run("slow-drip stream is not truncated", func(t *testing.T) {
+		srv := startPublicTLSServer(t, receivedShareDAVHandler(t, nil, func(w http.ResponseWriter, r *http.Request) {
+			w.WriteHeader(http.StatusOK)
+			flusher, _ := w.(http.Flusher)
+			for i := 0; i < dripCount; i++ {
+				_, _ = w.Write([]byte("x"))
+				if flusher != nil {
+					flusher.Flush()
+				}
+				time.Sleep(dripGap)
+			}
+		}))
+
+		d := newReceivedDriverWithTimeouts(t, 5, 1, 0)
+		share := receivedShareWithWebDAVURI(
+			srv.Listener.Addr().String(),
+			"share-slow",
+			srv.URL+"/remote.php/dav/ocm/share-slow",
+		)
+		d.gateway = &mockReceivedGateway{shares: []*ocmpb.ReceivedShare{share}}
+
+		start := time.Now()
+		rc, err := d.Download(context.Background(), &provider.Reference{Path: "/share-slow"}, nil)
+		if err != nil {
+			t.Fatalf("Download: %v", err)
+		}
+		defer rc.Close()
+		got, err := io.ReadAll(rc)
+		elapsed := time.Since(start)
+		if err != nil {
+			t.Fatalf("ReadAll: %v", err)
+		}
+		if string(got) != strings.Repeat("x", dripCount) {
+			t.Fatalf("slow-drip stream truncated: got %q", got)
+		}
+		if elapsed < time.Duration(dripCount-1)*dripGap {
+			t.Fatalf("expected the drip to take more than webdav_timeout; elapsed %v", elapsed)
+		}
+	})
+}
+
+func TestReceivedMetadataAndStreamClientsAreDistinct(t *testing.T) {
+	d := newReceivedDriverWithTimeouts(t, 5, 1, 0)
+	meta := d.newReceivedWebDAVClient("https://192.0.2.1/dav")
+	stream := d.newReceivedWebDAVStreamClient("https://192.0.2.1/dav")
+	if meta == stream {
+		t.Fatal("metadata and stream builders returned the same instance")
+	}
+
+	srv := startPublicTLSServer(t, receivedShareDAVHandler(t, nil, nil))
+	share := receivedShareWithWebDAVURI(
+		srv.Listener.Addr().String(),
+		"share-abc",
+		srv.URL+"/remote.php/dav/ocm/share-abc",
+	)
+	d.gateway = &mockReceivedGateway{shares: []*ocmpb.ReceivedShare{share}}
+
+	cc, _, err := d.resolveReceivedWebDAV(context.Background(), &provider.Reference{Path: "/share-abc"})
+	if err != nil {
+		t.Fatalf("resolveReceivedWebDAV: %v", err)
+	}
+	if cc.metadata == nil || cc.stream == nil {
+		t.Fatal("expected both cached clients to be set")
+	}
+	if cc.metadata == cc.stream {
+		t.Fatal("cached metadata and stream clients must be distinct instances")
 	}
 }

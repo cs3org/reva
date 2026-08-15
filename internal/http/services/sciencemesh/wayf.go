@@ -67,10 +67,18 @@ func makeAbsoluteURL(baseURL, dialogURL string) (string, error) {
 func (h *wayfHandler) init(c *config) error {
 	log := appctx.GetLogger(context.Background())
 
-	timeout := time.Duration(c.OCMClientTimeout) * time.Second
-	h.ocmClient = ocmd.NewClient(timeout, c.OCMClientInsecure, int64(c.OCMClientResponseLimit))
+	requestTimeout := time.Duration(c.OCMClientTimeout) * time.Second
+	if requestTimeout <= 0 {
+		requestTimeout = 10 * time.Second
+	}
+	dialTimeout := time.Duration(c.OCMClientDialTimeout) * time.Second
+	if dialTimeout <= 0 {
+		dialTimeout = 10 * time.Second
+	}
+	h.ocmClient = ocmd.NewClient(requestTimeout, c.OCMClientInsecure, int64(c.OCMClientResponseLimit))
 	h.untrustedClient = newUntrustedDiscoverClient(
-		timeout,
+		dialTimeout,
+		requestTimeout,
 		c.OCMClientInsecure,
 		c.UntrustedClientSecurity,
 		c.ocmClientTLSMin,
@@ -78,6 +86,7 @@ func (h *wayfHandler) init(c *config) error {
 	h.responseLimit = c.OCMClientResponseLimit
 	log.Debug().
 		Int("timeout_seconds", c.OCMClientTimeout).
+		Int("dial_timeout_seconds", c.OCMClientDialTimeout).
 		Int("response_limit", c.OCMClientResponseLimit).
 		Bool("insecure", c.OCMClientInsecure).
 		Msg("Created OCM client for discovery")

@@ -63,7 +63,15 @@ type config struct {
 	// ocm_client_security). Non-received consumers must keep the hatch closed
 	// (no allow_http / allowed_cidrs).
 	UntrustedClientSecurity UntrustedClientSecurity `mapstructure:"ocm_client_security"`
-	ocmClientTLSMin         uint16
+	// OCMClientDialTimeout is the untrusted-transport net.Dialer timeout
+	// in seconds for peer-supplied WebDAV ingest URLs. Zero or negative
+	// means 10s.
+	OCMClientDialTimeout int `mapstructure:"ocm_client_dial_timeout"`
+	// OCMClientTimeout is the outbound OCM JSON/metadata request timeout
+	// in seconds (Discover, ingest PROPFIND SetTimeout). Zero or negative
+	// means 10s.
+	OCMClientTimeout int `mapstructure:"ocm_client_timeout"`
+	ocmClientTLSMin  uint16
 }
 
 func (c *config) ApplyDefaults() {
@@ -76,6 +84,12 @@ func (c *config) ApplyDefaults() {
 	}
 	if c.OCMClientResponseLimit == 0 {
 		c.OCMClientResponseLimit = 1 << 20
+	}
+	if c.OCMClientDialTimeout <= 0 {
+		c.OCMClientDialTimeout = 10
+	}
+	if c.OCMClientTimeout <= 0 {
+		c.OCMClientTimeout = 10
 	}
 }
 

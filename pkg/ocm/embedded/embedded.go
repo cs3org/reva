@@ -58,6 +58,10 @@ type Config struct {
 	// EmbeddedSrcTLSMinVersion is the untrusted src-client TLS minimum enum
 	// string. Empty means TLS 1.2. Accepted values are "1.2" and "1.3".
 	EmbeddedSrcTLSMinVersion string `mapstructure:"embedded_src_tls_min_version"`
+	// SrcDialTimeout is the source untrusted-transport net.Dialer timeout
+	// in seconds. Zero or negative means 10s. It is not the per-file
+	// transfer ceiling.
+	SrcDialTimeout int `mapstructure:"embedded_src_dial_timeout"`
 }
 
 // ApplyDefaults fills in sensible defaults for any unset setting.
@@ -70,6 +74,9 @@ func (c *Config) ApplyDefaults() {
 	}
 	if c.Retries <= 0 {
 		c.Retries = 3
+	}
+	if c.SrcDialTimeout <= 0 {
+		c.SrcDialTimeout = 10
 	}
 }
 
@@ -175,15 +182,17 @@ func (d *driver) Process(ctx context.Context, payload, destination string, onCom
 // embedded srcURL. The URL is attacker-influenced, so the client uses the
 // untrusted transport: scheme policy, PIN-when-set dial, redirect cap, and a
 // minimum TLS version (default 1.2, configurable via tls_min_version).
+// dialTimeout is the net.Dialer timeout only; this client has no total
+// http.Client.Timeout so long transfers stay uncapped at the request layer.
 func newEmbeddedSrcClient(
-	timeout time.Duration,
+	dialTimeout time.Duration,
 	insecure bool,
 	sec ocmd.UntrustedClientSecurity,
 	minVersion uint16,
 ) *http.Client {
 	return &http.Client{
 		Transport: ocmd.UntrustedHTTPTransport(
-			timeout,
+			dialTimeout,
 			insecure,
 			sec,
 			minVersion,
@@ -192,13 +201,20 @@ func newEmbeddedSrcClient(
 	}
 }
 
+func (d *driver) srcDialTimeout() time.Duration {
+	if d.c.SrcDialTimeout > 0 {
+		return time.Duration(d.c.SrcDialTimeout) * time.Second
+	}
+	return 10 * time.Second
+}
+
 // transferEntries streams each entry to the WebDAV destination. A file that keeps
 // failing is skipped so one bad file doesn't abort the whole dataset. It returns
 // an error only when the transfer cannot proceed at all (e.g. the destination is
 // unreachable); per-file failures are best-effort and do not produce an error.
 func (d *driver) transferEntries(log *zerolog.Logger, token, destination string, entries []transferEntry, timeout time.Duration) error {
 	httpClient := newEmbeddedSrcClient(
-		timeout,
+		d.srcDialTimeout(),
 		false,
 		d.sec,
 		d.tlsMinVersion,

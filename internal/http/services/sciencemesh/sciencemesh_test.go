@@ -66,25 +66,39 @@ func TestNewRejectsHatch(t *testing.T) {
 
 func TestConfigOCMClientLimits(t *testing.T) {
 	tests := []struct {
-		name        string
-		extra       map[string]any
-		wantLimit   int
-		wantTimeout int
+		name            string
+		extra           map[string]any
+		wantLimit       int
+		wantTimeout     int
+		wantDialTimeout int
 	}{
 		{
 			name: "parses flat keys",
 			extra: map[string]any{
 				"ocm_client_response_limit": 2097152,
 				"ocm_client_timeout":        45,
+				"ocm_client_dial_timeout":   2,
 			},
-			wantLimit:   2097152,
-			wantTimeout: 45,
+			wantLimit:       2097152,
+			wantTimeout:     45,
+			wantDialTimeout: 2,
 		},
 		{
-			name:        "defaults when unset",
-			extra:       map[string]any{},
-			wantLimit:   1 << 20,
-			wantTimeout: 10,
+			name:            "defaults when unset",
+			extra:           map[string]any{},
+			wantLimit:       1 << 20,
+			wantTimeout:     10,
+			wantDialTimeout: 10,
+		},
+		{
+			name: "negative timeouts use defaults",
+			extra: map[string]any{
+				"ocm_client_timeout":      -1,
+				"ocm_client_dial_timeout": -3,
+			},
+			wantLimit:       1 << 20,
+			wantTimeout:     10,
+			wantDialTimeout: 10,
 		},
 	}
 
@@ -104,6 +118,9 @@ func TestConfigOCMClientLimits(t *testing.T) {
 			}
 			if c.OCMClientTimeout != tt.wantTimeout {
 				t.Errorf("OCMClientTimeout = %d, want %d", c.OCMClientTimeout, tt.wantTimeout)
+			}
+			if c.OCMClientDialTimeout != tt.wantDialTimeout {
+				t.Errorf("OCMClientDialTimeout = %d, want %d", c.OCMClientDialTimeout, tt.wantDialTimeout)
 			}
 		})
 	}

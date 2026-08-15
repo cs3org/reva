@@ -57,7 +57,7 @@ func New(ctx context.Context, m map[string]any) (provider.Authorizer, error) {
 
 	a := &authorizer{
 		publicOCMClient: client.NewPublicOnlyClient(
-			10*time.Second,
+			time.Duration(c.Timeout)*time.Second,
 			c.Insecure,
 			c.UntrustedClientSecurity,
 			c.OCMResponseLimit,
@@ -83,11 +83,17 @@ type config struct {
 	// providers (TOML block ocm_client_security). The hatch (allow_http /
 	// allowed_cidrs) must stay closed.
 	UntrustedClientSecurity client.UntrustedClientSecurity `mapstructure:"ocm_client_security"`
+	// Timeout is the outbound OCM discovery request timeout in seconds.
+	// Zero or negative means 10s.
+	Timeout int `mapstructure:"timeout"`
 }
 
 func (c *config) ApplyDefaults() {
 	if c.OCMResponseLimit == 0 {
 		c.OCMResponseLimit = 1 << 20
+	}
+	if c.Timeout <= 0 {
+		c.Timeout = 10
 	}
 }
 

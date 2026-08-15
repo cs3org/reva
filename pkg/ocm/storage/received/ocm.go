@@ -59,7 +59,8 @@ func init() {
 }
 
 type cachedClient struct {
-	client     *gowebdav.Client
+	metadata   *gowebdav.Client
+	stream     *gowebdav.Client
 	share      *ocmpb.ReceivedShare
 	authHeader string
 }
@@ -84,15 +85,32 @@ type config struct {
 	// OCMTLSMinVersion is the untrusted-client TLS minimum enum string.
 	// Empty means TLS 1.2. Accepted values are "1.2" and "1.3".
 	OCMTLSMinVersion string `mapstructure:"ocm_tls_min_version"`
+	// WebDAVDialTimeout is the untrusted-transport net.Dialer timeout
+	// in seconds for peer-supplied WebDAV URLs. Zero or negative means 10s.
+	WebDAVDialTimeout int `mapstructure:"webdav_dial_timeout"`
+	// WebDAVTimeout is the gowebdav SetTimeout for metadata requests
+	// (Stat, ReadDir, unary ops) in seconds. Zero or negative means 30s.
+	WebDAVTimeout int `mapstructure:"webdav_timeout"`
+	// WebDAVTransferTimeout is accepted for operators but reserved for the
+	// idle-stall monitor follow-up. Zero (the default) means no stream cap
+	// and emits no warning. A nonzero value is ignored so stream clients
+	// stay uncapped; it is not applied as Client.Timeout or SetTimeout.
+	WebDAVTransferTimeout int `mapstructure:"webdav_transfer_timeout"`
 }
 
 func (c *config) ApplyDefaults() {
 	c.GatewaySVC = sharedconf.GetGatewaySVC(c.GatewaySVC)
-	if c.OCMClientTimeout == 0 {
+	if c.OCMClientTimeout <= 0 {
 		c.OCMClientTimeout = 10
 	}
 	if c.OCMResponseLimit == 0 {
 		c.OCMResponseLimit = 1 << 20
+	}
+	if c.WebDAVDialTimeout <= 0 {
+		c.WebDAVDialTimeout = 10
+	}
+	if c.WebDAVTimeout <= 0 {
+		c.WebDAVTimeout = 30
 	}
 }
 
@@ -102,6 +120,12 @@ func New(ctx context.Context, m map[string]any) (storage.FS, error) {
 	var c config
 	if err := cfg.Decode(m, &c); err != nil {
 		return nil, err
+	}
+	if c.WebDAVTransferTimeout != 0 {
+		appctx.GetLogger(ctx).Warn().
+			Int("webdav_transfer_timeout", c.WebDAVTransferTimeout).
+			Msg("webdav_transfer_timeout is reserved for the idle-stall monitor (follow-up); " +
+				"streams remain uncapped for now")
 	}
 	minVersion, err := ocmd.ParseTLSMinVersion(c.OCMTLSMinVersion)
 	if err != nil {
@@ -300,64 +324,105 @@ func (e invalidCredsCause) Error() string {
 
 func (e invalidCredsCause) Unwrap() error { return e.cause }
 
-// newReceivedWebDAVClient builds a gowebdav client for a peer-supplied
-// received-share WebDAV URL. The URL is attacker-influenced, so the client
-// uses UntrustedHTTPTransport.
-func (d *driver) newReceivedWebDAVClient(endpoint string) *gowebdav.Client {
-	timeout := 10 * time.Second
-	insecure := false
+func (d *driver) ocmInsecure() bool {
 	if d.c != nil {
-		if d.c.OCMClientTimeout > 0 {
-			timeout = time.Duration(d.c.OCMClientTimeout) * time.Second
-		}
-		insecure = d.c.OCMClientInsecure
+		return d.c.OCMClientInsecure
 	}
+	return false
+}
+
+func (d *driver) webdavDialTimeout() time.Duration {
+	if d.c != nil && d.c.WebDAVDialTimeout > 0 {
+		return time.Duration(d.c.WebDAVDialTimeout) * time.Second
+	}
+	return 10 * time.Second
+}
+
+func (d *driver) webdavRequestTimeout() time.Duration {
+	if d.c != nil && d.c.WebDAVTimeout > 0 {
+		return time.Duration(d.c.WebDAVTimeout) * time.Second
+	}
+	return 30 * time.Second
+}
+
+func (d *driver) applyReceivedAuth(c *gowebdav.Client, authHdr string) {
+	c.SetHeader("Authorization", authHdr)
+}
+
+func (d *driver) pairReceivedWebDAVClients(endpoint, authHdr string) (*gowebdav.Client, *gowebdav.Client) {
+	meta := d.newReceivedWebDAVClient(endpoint)
+	d.applyReceivedAuth(meta, authHdr)
+	stream := d.newReceivedWebDAVStreamClient(endpoint)
+	d.applyReceivedAuth(stream, authHdr)
+	return meta, stream
+}
+
+// newReceivedWebDAVClient builds a metadata gowebdav client for a
+// peer-supplied received-share WebDAV URL. The URL is attacker-influenced,
+// so the client uses UntrustedHTTPTransport plus SetTimeout.
+func (d *driver) newReceivedWebDAVClient(endpoint string) *gowebdav.Client {
 	c := gowebdav.NewClient(endpoint, "", "")
 	c.SetTransport(ocmd.UntrustedHTTPTransport(
-		timeout,
-		insecure,
+		d.webdavDialTimeout(),
+		d.ocmInsecure(),
+		d.sec,
+		d.tlsMinVersion,
+	))
+	c.SetTimeout(d.webdavRequestTimeout())
+	return c
+}
+
+// newReceivedWebDAVStreamClient builds a stream gowebdav client for
+// ReadStream/WriteStream. It uses the untrusted transport for dial/scheme
+// policy and does not call SetTimeout or set http.Client.Timeout.
+// webdav_transfer_timeout is accepted but reserved for the idle-stall
+// monitor follow-up; a nonzero value is ignored here so streams stay
+// uncapped. received has no idle-stall monitor unlike embedded, so a
+// slow-drip peer can still hang mid-body until that follow-up lands.
+func (d *driver) newReceivedWebDAVStreamClient(endpoint string) *gowebdav.Client {
+	c := gowebdav.NewClient(endpoint, "", "")
+	c.SetTransport(ocmd.UntrustedHTTPTransport(
+		d.webdavDialTimeout(),
+		d.ocmInsecure(),
 		d.sec,
 		d.tlsMinVersion,
 	))
 	return c
 }
 
-func (d *driver) webdavClient(ctx context.Context, ref *provider.Reference) (*gowebdav.Client, *ocmpb.ReceivedShare, string, error) {
+func (d *driver) resolveReceivedWebDAV(ctx context.Context, ref *provider.Reference) (*cachedClient, string, error) {
 	log := appctx.GetLogger(ctx)
 	id, rel := shareInfoFromReference(ref)
 
 	share, endpoint, secret, err := d.getWebDAVFromShare(ctx, id)
 	if err != nil {
-		return nil, nil, "", err
+		return nil, "", err
 	}
 	endpoint, err = url.PathUnescape(endpoint)
 	if err != nil {
-		return nil, nil, "", err
+		return nil, "", err
 	}
 
 	if !requiresExchange(share.Protocols) {
-		// legacy path: check cache first
 		if entry, err := d.ccache.Get(id.OpaqueId); err == nil {
 			cc := entry.(*cachedClient)
 			log.Info().Str("shareId", cc.share.GetId().GetOpaqueId()).Str("rel", rel).Msg("accessing OCM share via cached client")
-			return cc.client, cc.share, rel, nil
+			return cc, rel, nil
 		}
 
-		// build legacy client: try bearer (OCM v1.1+), then basic (OCM v1.0)
-		var c *gowebdav.Client
-		var authHdr string
 		bearerHdr := "Bearer " + secret
-		c = d.newReceivedWebDAVClient(endpoint)
-		c.SetHeader("Authorization", bearerHdr)
-		_, err = c.Stat("")
+		meta := d.newReceivedWebDAVClient(endpoint)
+		d.applyReceivedAuth(meta, bearerHdr)
+		_, err = meta.Stat("")
+		var authHdr string
 		if err != nil {
 			basicHdr := "Basic " + base64.StdEncoding.EncodeToString([]byte(secret+":"))
-			c = d.newReceivedWebDAVClient(endpoint)
-			c.SetHeader("Authorization", basicHdr)
-			_, err2 := c.Stat("")
+			meta = d.newReceivedWebDAVClient(endpoint)
+			d.applyReceivedAuth(meta, basicHdr)
+			_, err2 := meta.Stat("")
 			if err2 != nil {
 				log.Info().Any("former_error", err).Err(err2).Str("endpoint", endpoint).Str("shareId", share.GetId().GetOpaqueId()).Msg("failed accessing OCM share")
-				return nil, nil, "", invalidCredsCause{
+				return nil, "", invalidCredsCause{
 					InvalidCredentials: "error accessing OCM share",
 					cause:              err2,
 				}
@@ -369,22 +434,50 @@ func (d *driver) webdavClient(ctx context.Context, ref *provider.Reference) (*go
 			log.Info().Str("endpoint", endpoint).Str("shareId", share.GetId().GetOpaqueId()).Str("mode", "bearer").Msg("access to remote OCM share succeeded")
 		}
 
-		d.ccache.SetWithTTL(id.OpaqueId, &cachedClient{client: c, share: share, authHeader: authHdr}, time.Hour)
-		return c, share, rel, nil
+		stream := d.newReceivedWebDAVStreamClient(endpoint)
+		d.applyReceivedAuth(stream, authHdr)
+		cc := &cachedClient{
+			metadata:   meta,
+			stream:     stream,
+			share:      share,
+			authHeader: authHdr,
+		}
+		d.ccache.SetWithTTL(id.OpaqueId, cc, time.Hour)
+		return cc, rel, nil
 	}
 
-	// code-flow path: exchange token every time, no cache
 	tokenEndpoint, err := d.getTokenEndpoint(ctx, share)
 	if err != nil {
-		return nil, nil, "", errors.Wrap(err, "could not discover token endpoint for code-flow share")
+		return nil, "", errors.Wrap(err, "could not discover token endpoint for code-flow share")
 	}
 	accessToken, err := d.exchangeAccessToken(ctx, share, tokenEndpoint, secret)
 	if err != nil {
-		return nil, nil, "", errors.Wrap(err, "token exchange failed")
+		return nil, "", errors.Wrap(err, "token exchange failed")
 	}
-	c := d.newReceivedWebDAVClient(endpoint)
-	c.SetHeader("Authorization", "Bearer "+accessToken)
-	return c, share, rel, nil
+	authHdr := "Bearer " + accessToken
+	meta, stream := d.pairReceivedWebDAVClients(endpoint, authHdr)
+	return &cachedClient{
+		metadata:   meta,
+		stream:     stream,
+		share:      share,
+		authHeader: authHdr,
+	}, rel, nil
+}
+
+func (d *driver) webdavClient(ctx context.Context, ref *provider.Reference) (*gowebdav.Client, *ocmpb.ReceivedShare, string, error) {
+	cc, rel, err := d.resolveReceivedWebDAV(ctx, ref)
+	if err != nil {
+		return nil, nil, "", err
+	}
+	return cc.metadata, cc.share, rel, nil
+}
+
+func (d *driver) webdavStreamClient(ctx context.Context, ref *provider.Reference) (*gowebdav.Client, *ocmpb.ReceivedShare, string, error) {
+	cc, rel, err := d.resolveReceivedWebDAV(ctx, ref)
+	if err != nil {
+		return nil, nil, "", err
+	}
+	return cc.stream, cc.share, rel, nil
 }
 
 // withExchangeRetry wraps a unary DAV operation (CreateDir, Delete, TouchFile).
@@ -617,7 +710,7 @@ func (d *driver) InitiateUpload(ctx context.Context, ref *provider.Reference, _ 
 // uploadOnFreshClient creates a one-off DAV client for the upload so that
 // Upload-Length: -1 does not leak onto a cached client used by later operations.
 func (d *driver) uploadOnFreshClient(endpoint, authHeader, rel string, body io.Reader) error {
-	c := d.newReceivedWebDAVClient(endpoint)
+	c := d.newReceivedWebDAVStreamClient(endpoint)
 	c.SetHeader("Authorization", authHeader)
 	c.SetHeader(ocdav.HeaderUploadLength, "-1")
 	return c.WriteStream(rel, body, 0)
@@ -703,7 +796,7 @@ func (d *driver) uploadAuth(ctx context.Context, share *ocmpb.ReceivedShare, end
 // withExchangeDownloadOpenRetry wraps ReadStream open with a single 401 retry.
 // Once a stream is returned, no mid-stream recovery is attempted.
 func (d *driver) withExchangeDownloadOpenRetry(ctx context.Context, ref *provider.Reference, fn func(*gowebdav.Client, string) (io.ReadCloser, error)) (io.ReadCloser, error) {
-	client, _, rel, err := d.webdavClient(ctx, ref)
+	client, _, rel, err := d.webdavStreamClient(ctx, ref)
 	if err != nil {
 		return nil, err
 	}
@@ -716,7 +809,7 @@ func (d *driver) withExchangeDownloadOpenRetry(ctx context.Context, ref *provide
 	}
 	id, _ := shareInfoFromReference(ref)
 	d.ccache.Remove(id.OpaqueId)
-	client, _, rel, err = d.webdavClient(ctx, ref)
+	client, _, rel, err = d.webdavStreamClient(ctx, ref)
 	if err != nil {
 		return nil, err
 	}

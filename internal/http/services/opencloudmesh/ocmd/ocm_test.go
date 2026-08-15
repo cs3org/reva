@@ -23,6 +23,7 @@ import (
 	"crypto/tls"
 	"errors"
 	"testing"
+	"time"
 
 	"github.com/cs3org/reva/v3/pkg/utils/cfg"
 )
@@ -62,6 +63,122 @@ func TestConfigOCMClientResponseLimit(t *testing.T) {
 				t.Errorf("OCMClientResponseLimit = %d, want %d", c.OCMClientResponseLimit, tt.wantLimit)
 			}
 		})
+	}
+}
+
+func TestConfigOCMClientTimeouts(t *testing.T) {
+	tests := []struct {
+		name        string
+		extra       map[string]any
+		wantDial    int
+		wantRequest int
+	}{
+		{
+			name:        "defaults when unset",
+			extra:       map[string]any{},
+			wantDial:    10,
+			wantRequest: 10,
+		},
+		{
+			name: "parses configured timeouts",
+			extra: map[string]any{
+				"ocm_client_dial_timeout": 2,
+				"ocm_client_timeout":      7,
+			},
+			wantDial:    2,
+			wantRequest: 7,
+		},
+		{
+			name: "negative timeouts use defaults",
+			extra: map[string]any{
+				"ocm_client_dial_timeout": -1,
+				"ocm_client_timeout":      -5,
+			},
+			wantDial:    10,
+			wantRequest: 10,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			input := map[string]any{"gatewaysvc": "gateway:9142"}
+			for k, v := range tt.extra {
+				input[k] = v
+			}
+
+			var c config
+			if err := cfg.Decode(input, &c); err != nil {
+				t.Fatalf("cfg.Decode: %v", err)
+			}
+			if c.OCMClientDialTimeout != tt.wantDial {
+				t.Errorf("OCMClientDialTimeout = %d, want %d", c.OCMClientDialTimeout, tt.wantDial)
+			}
+			if c.OCMClientTimeout != tt.wantRequest {
+				t.Errorf("OCMClientTimeout = %d, want %d", c.OCMClientTimeout, tt.wantRequest)
+			}
+		})
+	}
+}
+
+func TestNewWiresClientTimeoutsToSharesHandler(t *testing.T) {
+	t.Parallel()
+
+	got, err := New(context.Background(), map[string]any{
+		"gatewaysvc":              "gateway:9142",
+		"ocm_client_dial_timeout": 2,
+		"ocm_client_timeout":      7,
+		"token_managers": map[string]any{
+			"jwt": map[string]any{
+				"secret": "test-secret-for-ocm-timeouts",
+			},
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	s, ok := got.(*svc)
+	if !ok {
+		t.Fatalf("got %T, want *svc", got)
+	}
+	if s.shares == nil {
+		t.Fatal("shares handler is nil")
+	}
+	if s.shares.ocmClientDialTimeout != 2*time.Second {
+		t.Fatalf("dial timeout = %v, want 2s", s.shares.ocmClientDialTimeout)
+	}
+	if s.shares.ocmClientTimeout != 7*time.Second {
+		t.Fatalf("request timeout = %v, want 7s", s.shares.ocmClientTimeout)
+	}
+}
+
+func TestNewNormalizesNegativeClientTimeouts(t *testing.T) {
+	t.Parallel()
+
+	got, err := New(context.Background(), map[string]any{
+		"gatewaysvc":              "gateway:9142",
+		"ocm_client_dial_timeout": -1,
+		"ocm_client_timeout":      -5,
+		"token_managers": map[string]any{
+			"jwt": map[string]any{
+				"secret": "test-secret-for-ocm-timeouts",
+			},
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	s, ok := got.(*svc)
+	if !ok {
+		t.Fatalf("got %T, want *svc", got)
+	}
+	if s.shares == nil {
+		t.Fatal("shares handler is nil")
+	}
+	if s.shares.ocmClientDialTimeout != 10*time.Second {
+		t.Fatalf("dial timeout = %v, want 10s", s.shares.ocmClientDialTimeout)
+	}
+	if s.shares.ocmClientTimeout != 10*time.Second {
+		t.Fatalf("request timeout = %v, want 10s", s.shares.ocmClientTimeout)
 	}
 }
 

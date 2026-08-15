@@ -176,6 +176,14 @@ func (c *OCMClient) HTTPTransport() http.RoundTripper {
 	return c.client.Transport
 }
 
+// RequestTimeout returns the outbound HTTP client timeout.
+func (c *OCMClient) RequestTimeout() time.Duration {
+	if c == nil || c.client == nil {
+		return 0
+	}
+	return c.client.Timeout
+}
+
 // publicOnlyTransport refuses disallowed schemes and excess redirect hops
 // before the inner dialer runs. Proxy stays nil on the inner transport.
 type publicOnlyTransport struct {

@@ -75,12 +75,23 @@ func TestConfigApplyDefaults(t *testing.T) {
 		if c.Retries != 3 {
 			t.Errorf("Retries = %d, want 3", c.Retries)
 		}
+		if c.SrcDialTimeout != 10 {
+			t.Errorf("SrcDialTimeout = %d, want 10", c.SrcDialTimeout)
+		}
+	})
+
+	t.Run("negative src dial timeout uses default", func(t *testing.T) {
+		c := Config{SrcDialTimeout: -1}
+		c.ApplyDefaults()
+		if c.SrcDialTimeout != 10 {
+			t.Errorf("SrcDialTimeout = %d, want 10", c.SrcDialTimeout)
+		}
 	})
 
 	t.Run("explicit values preserved", func(t *testing.T) {
-		c := Config{WebDAVURL: "https://dav.example.org/", Timeout: 10, IdleTimeout: 5, Retries: 1}
+		c := Config{WebDAVURL: "https://dav.example.org/", Timeout: 10, IdleTimeout: 5, Retries: 1, SrcDialTimeout: 2}
 		c.ApplyDefaults()
-		if c.Timeout != 10 || c.IdleTimeout != 5 || c.Retries != 1 {
+		if c.Timeout != 10 || c.IdleTimeout != 5 || c.Retries != 1 || c.SrcDialTimeout != 2 {
 			t.Errorf("explicit values were overwritten: %+v", c)
 		}
 		if c.WebDAVURL != "https://dav.example.org/" {
@@ -95,8 +106,65 @@ func TestNewAppliesDefaults(t *testing.T) {
 		t.Fatalf("New: unexpected error %v", err)
 	}
 	d := tr.(*driver)
-	if d.c.Timeout != 3600 || d.c.IdleTimeout != 120 || d.c.Retries != 3 {
+	if d.c.Timeout != 3600 || d.c.IdleTimeout != 120 || d.c.Retries != 3 || d.c.SrcDialTimeout != 10 {
 		t.Errorf("New did not apply defaults: %+v", d.c)
+	}
+}
+
+func TestConfigSrcDialTimeoutIndependentOfTransferTimeout(t *testing.T) {
+	tr, err := New(context.Background(), map[string]any{
+		"webdav_url":                "https://dav.example.org/",
+		"embedded_transfer_timeout": 1800,
+		"embedded_src_dial_timeout": 2,
+	})
+	if err != nil {
+		t.Fatalf("New: unexpected error %v", err)
+	}
+	d := tr.(*driver)
+	if d.c.Timeout != 1800 {
+		t.Errorf("Timeout = %d, want 1800 transfer ceiling", d.c.Timeout)
+	}
+	if d.c.SrcDialTimeout != 2 {
+		t.Errorf("SrcDialTimeout = %d, want 2", d.c.SrcDialTimeout)
+	}
+	if d.srcDialTimeout() != 2*time.Second {
+		t.Errorf("srcDialTimeout() = %v, want 2s", d.srcDialTimeout())
+	}
+}
+
+func TestEmbeddedSrcClientHasNoRequestTimeout(t *testing.T) {
+	client := newEmbeddedSrcClient(2*time.Second, false, testEmbeddedSec(), 0)
+	if client.Timeout != 0 {
+		t.Fatalf("source http.Client.Timeout = %v, want 0", client.Timeout)
+	}
+}
+
+func TestEmbeddedSrcDialTimeoutBoundsNonResponsiveDial(t *testing.T) {
+	dest := startDestWebDAV(t)
+	d := &driver{
+		c: Config{
+			WebDAVURL:      dest.URL,
+			Timeout:        3600,
+			IdleTimeout:    2,
+			Retries:        1,
+			SrcDialTimeout: 1,
+		},
+		sec: testEmbeddedSec(),
+	}
+	start := time.Now()
+	err := d.transferEntries(
+		testLogger(),
+		"tok",
+		"/dest",
+		[]transferEntry{{srcURL: "https://240.0.0.1/file.txt", name: "file.txt", sizeHint: -1}},
+		3600*time.Second,
+	)
+	elapsed := time.Since(start)
+	if err != nil {
+		t.Fatalf("transferEntries returned %v, want nil (per-file failures are skipped)", err)
+	}
+	if elapsed > 5*time.Second {
+		t.Fatalf("source dial used the transfer ceiling; elapsed %v", elapsed)
 	}
 }
 

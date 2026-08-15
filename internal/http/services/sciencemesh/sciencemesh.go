@@ -84,6 +84,7 @@ type config struct {
 	OCMMountPoint          string                      `mapstructure:"ocm_mount_point"`
 	DirectoryServiceURLs   string                      `mapstructure:"directory_service_urls"`
 	OCMClientTimeout       int                         `mapstructure:"ocm_client_timeout"`
+	OCMClientDialTimeout   int                         `mapstructure:"ocm_client_dial_timeout"`
 	OCMClientInsecure      bool                        `mapstructure:"ocm_client_insecure"`
 	OCMClientResponseLimit int                         `mapstructure:"ocm_client_response_limit"`
 	// OCMClientTLSMinVersion is the untrusted-client TLS minimum enum string.
@@ -103,8 +104,11 @@ func (c *config) ApplyDefaults() {
 	if c.OCMMountPoint == "" {
 		c.OCMMountPoint = "/ocm"
 	}
-	if c.OCMClientTimeout == 0 {
+	if c.OCMClientTimeout <= 0 {
 		c.OCMClientTimeout = 10
+	}
+	if c.OCMClientDialTimeout <= 0 {
+		c.OCMClientDialTimeout = 10
 	}
 	if c.OCMClientResponseLimit == 0 {
 		c.OCMClientResponseLimit = 1 << 20

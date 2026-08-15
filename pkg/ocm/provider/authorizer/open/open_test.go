@@ -30,6 +30,7 @@ import (
 	"reflect"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/cs3org/reva/v3/internal/http/services/opencloudmesh/ocmd"
 	"github.com/cs3org/reva/v3/pkg/utils/cfg"
@@ -403,5 +404,120 @@ func TestGetInfoByDomainPublicHTTPSHostSucceeds(t *testing.T) {
 	}
 	if info == nil || info.FullName != "public-host" {
 		t.Fatalf("unexpected provider info: %+v", info)
+	}
+}
+
+func TestConfigTimeout(t *testing.T) {
+	tests := []struct {
+		name        string
+		extra       map[string]any
+		wantTimeout int
+	}{
+		{name: "defaults when unset", extra: map[string]any{}, wantTimeout: 10},
+		{
+			name:        "parses configured timeout",
+			extra:       map[string]any{"timeout": 3},
+			wantTimeout: 3,
+		},
+		{
+			name:        "negative uses default",
+			extra:       map[string]any{"timeout": -1},
+			wantTimeout: 10,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			input := map[string]any{"insecure": true}
+			for k, v := range tt.extra {
+				input[k] = v
+			}
+
+			var c config
+			if err := cfg.Decode(input, &c); err != nil {
+				t.Fatalf("cfg.Decode: %v", err)
+			}
+			if c.Timeout != tt.wantTimeout {
+				t.Errorf("Timeout = %d, want %d", c.Timeout, tt.wantTimeout)
+			}
+		})
+	}
+}
+
+func TestNewWiresTimeoutToAuthorizerClient(t *testing.T) {
+	t.Parallel()
+
+	got, err := New(context.Background(), map[string]any{
+		"insecure": true,
+		"timeout":  3,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	a, ok := got.(*authorizer)
+	if !ok {
+		t.Fatalf("got %T, want *authorizer", got)
+	}
+	if a.publicOCMClient.RequestTimeout() != 3*time.Second {
+		t.Fatalf("RequestTimeout = %v, want 3s", a.publicOCMClient.RequestTimeout())
+	}
+}
+
+func TestNewNormalizesNegativeTimeout(t *testing.T) {
+	t.Parallel()
+
+	got, err := New(context.Background(), map[string]any{
+		"insecure": true,
+		"timeout":  -1,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	a, ok := got.(*authorizer)
+	if !ok {
+		t.Fatalf("got %T, want *authorizer", got)
+	}
+	if a.publicOCMClient.RequestTimeout() != 10*time.Second {
+		t.Fatalf("RequestTimeout = %v, want 10s", a.publicOCMClient.RequestTimeout())
+	}
+}
+
+func TestGetInfoByDomainHonorsConfiguredTimeout(t *testing.T) {
+	var startOnce sync.Once
+	started := make(chan struct{})
+	srv := startPublicTLSServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		startOnce.Do(func() { close(started) })
+		time.Sleep(2 * time.Second)
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"enabled":    true,
+			"apiVersion": "1.2.0",
+			"endPoint":   "https://example.invalid/ocm",
+			"provider":   "slow-host",
+		})
+	}))
+
+	got, err := New(context.Background(), map[string]any{
+		"insecure": true,
+		"timeout":  1,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	a := got.(*authorizer)
+
+	start := time.Now()
+	_, err = a.GetInfoByDomain(context.Background(), srv.URL)
+	elapsed := time.Since(start)
+	if err == nil {
+		t.Fatal("expected configured timeout to bound a slow discovery peer")
+	}
+	if elapsed > 3*time.Second {
+		t.Fatalf("authorizer timeout was not applied; elapsed %v", elapsed)
+	}
+	select {
+	case <-started:
+	default:
+		t.Fatal("expected the slow discovery peer to accept the connection")
 	}
 }
