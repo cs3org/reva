@@ -22,6 +22,7 @@ import (
 	"context"
 	"net/http"
 
+	"github.com/cs3org/reva/v3/internal/http/services/opencloudmesh/ocmd"
 	"github.com/cs3org/reva/v3/pkg/appctx"
 	"github.com/cs3org/reva/v3/pkg/rhttp/global"
 	"github.com/cs3org/reva/v3/pkg/sharedconf"
@@ -39,6 +40,13 @@ func init() {
 func New(ctx context.Context, m map[string]any) (global.Service, error) {
 	var c config
 	if err := cfg.Decode(m, &c); err != nil {
+		return nil, err
+	}
+	c.UntrustedClientSecurity.ApplyDefaults()
+	if err := c.UntrustedClientSecurity.Compile(); err != nil {
+		return nil, err
+	}
+	if err := c.UntrustedClientSecurity.RejectHatch(); err != nil {
 		return nil, err
 	}
 
@@ -73,6 +81,10 @@ type config struct {
 	OCMClientTimeout       int                         `mapstructure:"ocm_client_timeout"`
 	OCMClientInsecure      bool                        `mapstructure:"ocm_client_insecure"`
 	OCMClientResponseLimit int                         `mapstructure:"ocm_client_response_limit"`
+	// UntrustedClientSecurity configures MaxRedirects for /discover
+	// (TOML block ocm_client_security). The hatch (allow_http / allowed_cidrs)
+	// must stay closed.
+	UntrustedClientSecurity ocmd.UntrustedClientSecurity `mapstructure:"ocm_client_security"`
 }
 
 func (c *config) ApplyDefaults() {

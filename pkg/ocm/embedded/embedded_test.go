@@ -21,6 +21,7 @@ package embedded
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"io"
 	"net"
 	"net/http"
@@ -32,9 +33,19 @@ import (
 	"testing"
 	"time"
 
+	"github.com/cs3org/reva/v3/internal/http/services/opencloudmesh/ocmd"
 	"github.com/rs/zerolog"
 	"github.com/studio-b12/gowebdav"
 )
+
+func testEmbeddedSec() ocmd.UntrustedClientSecurity {
+	var s ocmd.UntrustedClientSecurity
+	s.ApplyDefaults()
+	if err := s.Compile(); err != nil {
+		panic(err)
+	}
+	return s
+}
 
 func testLogger() *zerolog.Logger {
 	l := zerolog.Nop()
@@ -86,6 +97,40 @@ func TestNewAppliesDefaults(t *testing.T) {
 	if d.c.Timeout != 3600 || d.c.IdleTimeout != 120 || d.c.Retries != 3 {
 		t.Errorf("New did not apply defaults: %+v", d.c)
 	}
+}
+
+func TestNewRejectsHatch(t *testing.T) {
+	t.Parallel()
+
+	t.Run("allow_http", func(t *testing.T) {
+		_, err := New(context.Background(), map[string]any{
+			"webdav_url": "https://dav.example.org/",
+			"ocm_client_security": map[string]any{
+				"allow_http": true,
+			},
+		})
+		if err == nil {
+			t.Fatal("expected embedded.New to reject allow_http")
+		}
+		if !errors.Is(err, ocmd.ErrHatchAllowHTTP) {
+			t.Fatalf("got %v, want ocmd.ErrHatchAllowHTTP", err)
+		}
+	})
+
+	t.Run("allowed_cidrs", func(t *testing.T) {
+		_, err := New(context.Background(), map[string]any{
+			"webdav_url": "https://dav.example.org/",
+			"ocm_client_security": map[string]any{
+				"allowed_cidrs": []string{"10.0.0.0/8"},
+			},
+		})
+		if err == nil {
+			t.Fatal("expected embedded.New to reject allowed_cidrs")
+		}
+		if !errors.Is(err, ocmd.ErrHatchAllowedCIDRs) {
+			t.Fatalf("got %v, want ocmd.ErrHatchAllowedCIDRs", err)
+		}
+	})
 }
 
 func TestParseRetryAfter(t *testing.T) {
@@ -511,7 +556,7 @@ func TestEmbeddedSrcURLFetchPublicHTTPSHostSucceeds(t *testing.T) {
 	err := uploadURLToWebDAV(
 		ctx,
 		testLogger(),
-		newEmbeddedSrcClient(5*time.Second, true),
+		newEmbeddedSrcClient(5*time.Second, true, testEmbeddedSec()),
 		dav,
 		src.URL+"/file.txt",
 		"/dest/file.txt",
@@ -535,7 +580,7 @@ func TestEmbeddedSrcURLFetchRefusesPrivateHost(t *testing.T) {
 		err := uploadURLToWebDAV(
 			ctx,
 			testLogger(),
-			newEmbeddedSrcClient(5*time.Second, true),
+			newEmbeddedSrcClient(5*time.Second, true, testEmbeddedSec()),
 			dummyDAV(),
 			"https://169.254.169.254/file.txt",
 			"/dest/file.txt",
@@ -546,8 +591,8 @@ func TestEmbeddedSrcURLFetchRefusesPrivateHost(t *testing.T) {
 		if err == nil {
 			t.Fatal("expected embedded srcURL fetch to refuse the metadata host at dial")
 		}
-		if !strings.Contains(err.Error(), "non-public") {
-			t.Fatalf("got %v, want the existing non-public dial error", err)
+		if !errors.Is(err, ocmd.ErrNonPublicAddr) {
+			t.Fatalf("got %v, want ocmd.ErrNonPublicAddr", err)
 		}
 	})
 
@@ -560,7 +605,7 @@ func TestEmbeddedSrcURLFetchRefusesPrivateHost(t *testing.T) {
 		}))
 		defer src.Close()
 
-		// insecure=true so TLS cannot short-circuit before the public-only dial
+		// insecure=true so TLS cannot short-circuit before the untrusted dial
 		// guard. The old default client would then reach this loopback server.
 		ctx, tr := contextWithHostDialTrace(context.Background())
 		ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
@@ -569,7 +614,7 @@ func TestEmbeddedSrcURLFetchRefusesPrivateHost(t *testing.T) {
 		err := uploadURLToWebDAV(
 			ctx,
 			testLogger(),
-			newEmbeddedSrcClient(5*time.Second, true),
+			newEmbeddedSrcClient(5*time.Second, true, testEmbeddedSec()),
 			dummyDAV(),
 			src.URL+"/file.txt",
 			"/dest/file.txt",
@@ -583,8 +628,8 @@ func TestEmbeddedSrcURLFetchRefusesPrivateHost(t *testing.T) {
 		if err == nil {
 			t.Fatal("expected embedded srcURL fetch to refuse the private host at dial")
 		}
-		if !strings.Contains(err.Error(), "non-public") {
-			t.Fatalf("got %v, want the existing non-public dial error", err)
+		if !errors.Is(err, ocmd.ErrNonPublicAddr) {
+			t.Fatalf("got %v, want ocmd.ErrNonPublicAddr", err)
 		}
 	})
 }

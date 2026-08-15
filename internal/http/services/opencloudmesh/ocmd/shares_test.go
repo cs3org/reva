@@ -28,7 +28,6 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"regexp"
-	"strings"
 	"testing"
 	"time"
 
@@ -365,7 +364,13 @@ func TestIngestWebDAVStatPublicHTTPSHostSucceeds(t *testing.T) {
 	contacted := false
 	srv := startPublicTLSServer(t, ingestWebDAVHandler(t, &contacted))
 
-	info, err := statIngestWebDAV(srv.URL, "secret", 5*time.Second, true)
+	info, err := statIngestWebDAV(
+		srv.URL,
+		"secret",
+		5*time.Second,
+		true,
+		testSec(),
+	)
 	if err != nil {
 		t.Fatalf("ingest stat to a public HTTPS WebDAV host: %v", err)
 	}
@@ -379,12 +384,18 @@ func TestIngestWebDAVStatPublicHTTPSHostSucceeds(t *testing.T) {
 
 func TestIngestWebDAVStatRefusesPrivateHost(t *testing.T) {
 	t.Run("metadata host is refused at dial", func(t *testing.T) {
-		_, err := statIngestWebDAV("https://169.254.169.254/remote.php/dav/ocm", "secret", 5*time.Second, true)
+		_, err := statIngestWebDAV(
+			"https://169.254.169.254/remote.php/dav/ocm",
+			"secret",
+			5*time.Second,
+			true,
+			testSec(),
+		)
 		if err == nil {
 			t.Fatal("expected ingest stat to refuse the metadata host at dial")
 		}
-		if !strings.Contains(err.Error(), "non-public") {
-			t.Fatalf("got %v, want the existing non-public dial error", err)
+		if !errors.Is(err, ErrNonPublicAddr) {
+			t.Fatalf("got %v, want ErrNonPublicAddr", err)
 		}
 	})
 
@@ -393,15 +404,21 @@ func TestIngestWebDAVStatRefusesPrivateHost(t *testing.T) {
 		srv := httptest.NewTLSServer(ingestWebDAVHandler(t, &contacted))
 		defer srv.Close()
 
-		_, err := statIngestWebDAV(srv.URL, "secret", 5*time.Second, true)
+		_, err := statIngestWebDAV(
+			srv.URL,
+			"secret",
+			5*time.Second,
+			true,
+			testSec(),
+		)
 		if contacted {
 			t.Fatal("ingest stat contacted a private WebDAV host; the untrusted transport must refuse it at dial")
 		}
 		if err == nil {
 			t.Fatal("expected ingest stat to a private host to fail")
 		}
-		if !strings.Contains(err.Error(), "non-public") {
-			t.Fatalf("got %v, want the existing non-public dial error", err)
+		if !errors.Is(err, ErrNonPublicAddr) {
+			t.Fatalf("got %v, want ErrNonPublicAddr", err)
 		}
 	})
 }
@@ -411,14 +428,20 @@ func TestIngestWebDAVStatRefusesHTTP(t *testing.T) {
 	srv := httptest.NewServer(ingestWebDAVHandler(t, &contacted))
 	defer srv.Close()
 
-	_, err := statIngestWebDAV(srv.URL, "secret", 5*time.Second, true)
+	_, err := statIngestWebDAV(
+		srv.URL,
+		"secret",
+		5*time.Second,
+		true,
+		testSec(),
+	)
 	if contacted {
 		t.Fatal("ingest stat contacted an http WebDAV host; the untrusted transport must refuse it")
 	}
 	if err == nil {
 		t.Fatal("expected ingest stat to refuse a non-https URL")
 	}
-	if !errors.Is(err, errPublicOnlyNonHTTPS) {
-		t.Fatalf("got %v, want errPublicOnlyNonHTTPS", err)
+	if !errors.Is(err, ErrNonHTTPS) {
+		t.Fatalf("got %v, want ErrNonHTTPS", err)
 	}
 }

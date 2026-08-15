@@ -213,13 +213,13 @@ func TestNewOCMTransportUsesProxyFromEnvironment(t *testing.T) {
 	}
 }
 
-// The public-only transport must not proxy, or the dial Control would see the
+// The untrusted transport must not proxy, or the dial Control would see the
 // proxy address instead of the target.
 func TestNewPublicOnlyClientTransportProxyNil(t *testing.T) {
-	c := NewPublicOnlyClient(5*time.Second, true)
+	c := NewPublicOnlyClient(5*time.Second, true, testSec())
 	tr := publicOnlyHTTPTransport(t, c)
 	if tr.Proxy != nil {
-		t.Error("public-only client must not use a proxy")
+		t.Error("untrusted client must not use a proxy")
 	}
 }
 
@@ -280,7 +280,7 @@ func TestOCMClientTransportsRequireTLS12(t *testing.T) {
 		client *OCMClient
 	}{
 		{name: "NewClient", client: NewClient(5*time.Second, false)},
-		{name: "NewPublicOnlyClient", client: NewPublicOnlyClient(5*time.Second, false)},
+		{name: "NewPublicOnlyClient", client: NewPublicOnlyClient(5*time.Second, false, testSec())},
 	}
 
 	for _, tt := range tests {
@@ -379,7 +379,7 @@ func TestPublicOnlyClientRefusesInternalHosts(t *testing.T) {
 		client  *OCMClient
 		wantErr bool
 	}{
-		{name: "public-only client refuses the loopback target", client: NewPublicOnlyClient(5*time.Second, true), wantErr: true},
+		{name: "public-only client refuses the loopback target", client: NewPublicOnlyClient(5*time.Second, true, testSec()), wantErr: true},
 		{name: "plain client still reaches it", client: NewClient(5*time.Second, true), wantErr: false},
 	}
 
@@ -567,9 +567,10 @@ func TestExchangeTokenHTTP400OversizedBody(t *testing.T) {
 	}
 }
 
-// httptest servers bind loopback, which the public-only dial guard refuses.
-// Redirect and scheme tests keep the constructor's CheckRedirect, https gate,
-// and Proxy=nil, and only drop Control so the TLS server is reachable.
+// httptest servers bind loopback, which the untrusted dial guard refuses
+// when the hatch is empty. Redirect and scheme tests keep the constructor's
+// CheckRedirect, https gate, and Proxy=nil, and only drop Control so the
+// TLS server is reachable.
 func allowPublicOnlyLoopback(t *testing.T, c *OCMClient) {
 	t.Helper()
 	allowUntrustedLoopback(t, c.client.Transport)
@@ -599,7 +600,7 @@ func TestPublicOnlyClientRedirectCapAndHTTPSScheme(t *testing.T) {
 		}))
 		defer srv.Close()
 
-		c := NewPublicOnlyClient(5*time.Second, true)
+		c := NewPublicOnlyClient(5*time.Second, true, testSec())
 		allowPublicOnlyLoopback(t, c)
 		req, err := http.NewRequestWithContext(context.Background(), http.MethodGet, srv.URL, nil)
 		if err != nil {
@@ -610,8 +611,8 @@ func TestPublicOnlyClientRedirectCapAndHTTPSScheme(t *testing.T) {
 		if err == nil {
 			t.Fatal("expected public-only client to refuse more than 3 redirects")
 		}
-		if !errors.Is(err, errPublicOnlyTooManyRedirects) {
-			t.Fatalf("got %v, want errPublicOnlyTooManyRedirects", err)
+		if !errors.Is(err, ErrTooManyRedirects) {
+			t.Fatalf("got %v, want ErrTooManyRedirects", err)
 		}
 	})
 
@@ -622,7 +623,7 @@ func TestPublicOnlyClientRedirectCapAndHTTPSScheme(t *testing.T) {
 		}))
 		defer srv.Close()
 
-		c := NewPublicOnlyClient(5*time.Second, true)
+		c := NewPublicOnlyClient(5*time.Second, true, testSec())
 		req, err := http.NewRequestWithContext(context.Background(), http.MethodGet, srv.URL, nil)
 		if err != nil {
 			t.Fatal(err)
@@ -632,8 +633,8 @@ func TestPublicOnlyClientRedirectCapAndHTTPSScheme(t *testing.T) {
 		if err == nil {
 			t.Fatal("expected public-only client to refuse a non-https URL")
 		}
-		if !errors.Is(err, errPublicOnlyNonHTTPS) {
-			t.Fatalf("got %v, want errPublicOnlyNonHTTPS", err)
+		if !errors.Is(err, ErrNonHTTPS) {
+			t.Fatalf("got %v, want ErrNonHTTPS", err)
 		}
 	})
 
@@ -650,7 +651,7 @@ func TestPublicOnlyClientRedirectCapAndHTTPSScheme(t *testing.T) {
 		}))
 		defer tlsSrv.Close()
 
-		c := NewPublicOnlyClient(5*time.Second, true)
+		c := NewPublicOnlyClient(5*time.Second, true, testSec())
 		allowPublicOnlyLoopback(t, c)
 		req, err := http.NewRequestWithContext(context.Background(), http.MethodGet, tlsSrv.URL, nil)
 		if err != nil {
@@ -664,8 +665,8 @@ func TestPublicOnlyClientRedirectCapAndHTTPSScheme(t *testing.T) {
 		if err == nil {
 			t.Fatal("expected public-only client to refuse an http redirect hop")
 		}
-		if !errors.Is(err, errPublicOnlyNonHTTPS) {
-			t.Fatalf("got %v, want errPublicOnlyNonHTTPS", err)
+		if !errors.Is(err, ErrNonHTTPS) {
+			t.Fatalf("got %v, want ErrNonHTTPS", err)
 		}
 	})
 
@@ -682,7 +683,7 @@ func TestPublicOnlyClientRedirectCapAndHTTPSScheme(t *testing.T) {
 		}))
 		defer srv.Close()
 
-		c := NewPublicOnlyClient(5*time.Second, true)
+		c := NewPublicOnlyClient(5*time.Second, true, testSec())
 		allowPublicOnlyLoopback(t, c)
 		req, err := http.NewRequestWithContext(context.Background(), http.MethodGet, srv.URL, nil)
 		if err != nil {
@@ -727,9 +728,9 @@ func TestNewClientAllowsHTTPAndFollowsMoreThanThreeRedirects(t *testing.T) {
 	}
 }
 
-// allowPublicOnlyTestServer keeps the public-only HTTPS gate, redirect cap, and
-// non-public dial refusal, and only permits the httptest listener so the first
-// hop is reachable. Redirects to other addresses still hit refuseNonPublicAddr.
+// allowPublicOnlyTestServer keeps the configured HTTPS gate, redirect cap, and
+// dial policy, and only permits the httptest listener so the first hop is
+// reachable. Redirects to other addresses still hit refuseNonPublicAddr.
 func allowPublicOnlyTestServer(t *testing.T, c *OCMClient, allowed string) {
 	t.Helper()
 	allowedHost, allowedPort, err := net.SplitHostPort(allowed)
@@ -771,7 +772,7 @@ func TestPublicOnlyDiscoverSucceedsOnAllowedHTTPSHost(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	c := NewPublicOnlyClient(5*time.Second, true)
+	c := NewPublicOnlyClient(5*time.Second, true, testSec())
 	allowPublicOnlyTestServer(t, c, srv.Listener.Addr().String())
 	disco, err := c.Discover(context.Background(), srv.URL)
 	if err != nil {
@@ -789,7 +790,7 @@ func TestPublicOnlyDiscoverRefusesRedirectToLinkLocal(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	c := NewPublicOnlyClient(5*time.Second, true)
+	c := NewPublicOnlyClient(5*time.Second, true, testSec())
 	allowed := srv.Listener.Addr().String()
 	allowedHost, allowedPort, err := net.SplitHostPort(allowed)
 	if err != nil {
@@ -838,7 +839,7 @@ func TestPublicOnlyExchangeTokenSucceedsOnAllowedHTTPSHost(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	c := NewPublicOnlyClient(5*time.Second, true)
+	c := NewPublicOnlyClient(5*time.Second, true, testSec())
 	allowPublicOnlyTestServer(t, c, srv.Listener.Addr().String())
 	tok, exp, err := c.ExchangeToken(context.Background(), srv.URL, "code123", "client1")
 	if err != nil {
@@ -856,7 +857,7 @@ func TestPublicOnlyClientStillRefusesHTTPSLoopback(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	c := NewPublicOnlyClient(5*time.Second, true)
+	c := NewPublicOnlyClient(5*time.Second, true, testSec())
 	req, err := http.NewRequestWithContext(context.Background(), http.MethodGet, srv.URL, nil)
 	if err != nil {
 		t.Fatal(err)
@@ -866,8 +867,8 @@ func TestPublicOnlyClientStillRefusesHTTPSLoopback(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected public-only dial guard to refuse https loopback")
 	}
-	if !strings.Contains(err.Error(), "non-public") {
-		t.Fatalf("got %v, want the existing non-public dial error", err)
+	if !errors.Is(err, ErrNonPublicAddr) {
+		t.Fatalf("got %v, want ErrNonPublicAddr", err)
 	}
 }
 
@@ -912,24 +913,24 @@ func TestUntrustedHTTPTransportRefusesNonPublicHosts(t *testing.T) {
 		}))
 		defer srv.Close()
 
-		resp, err := doUntrustedRequest(t, UntrustedHTTPTransport(5*time.Second, true), srv.URL)
+		resp, err := doUntrustedRequest(t, UntrustedHTTPTransport(5*time.Second, true, testSec()), srv.URL)
 		closeResponse(resp)
 		if err == nil {
 			t.Fatal("expected untrusted transport to refuse https loopback at dial")
 		}
-		if !strings.Contains(err.Error(), "non-public") {
-			t.Fatalf("got %v, want the existing non-public dial error", err)
+		if !errors.Is(err, ErrNonPublicAddr) {
+			t.Fatalf("got %v, want ErrNonPublicAddr", err)
 		}
 	})
 
 	t.Run("cloud metadata host is refused at dial", func(t *testing.T) {
-		resp, err := doUntrustedRequest(t, UntrustedHTTPTransport(5*time.Second, true), "https://169.254.169.254/")
+		resp, err := doUntrustedRequest(t, UntrustedHTTPTransport(5*time.Second, true, testSec()), "https://169.254.169.254/")
 		closeResponse(resp)
 		if err == nil {
 			t.Fatal("expected untrusted transport to refuse the metadata host at dial")
 		}
-		if !strings.Contains(err.Error(), "non-public") {
-			t.Fatalf("got %v, want the existing non-public dial error", err)
+		if !errors.Is(err, ErrNonPublicAddr) {
+			t.Fatalf("got %v, want ErrNonPublicAddr", err)
 		}
 	})
 }
@@ -943,18 +944,18 @@ func TestUntrustedHTTPTransportRefusesHTTP(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	resp, err := doUntrustedRequest(t, UntrustedHTTPTransport(5*time.Second, true), srv.URL)
+	resp, err := doUntrustedRequest(t, UntrustedHTTPTransport(5*time.Second, true, testSec()), srv.URL)
 	closeResponse(resp)
 	if err == nil {
 		t.Fatal("expected untrusted transport to refuse a non-https URL")
 	}
-	if !errors.Is(err, errPublicOnlyNonHTTPS) {
-		t.Fatalf("got %v, want errPublicOnlyNonHTTPS", err)
+	if !errors.Is(err, ErrNonHTTPS) {
+		t.Fatalf("got %v, want ErrNonHTTPS", err)
 	}
 }
 
 func TestUntrustedHTTPTransportRequiresTLS12(t *testing.T) {
-	rt := UntrustedHTTPTransport(5*time.Second, false)
+	rt := UntrustedHTTPTransport(5*time.Second, false, testSec())
 	tr := innerUntrustedTransport(t, rt)
 	if tr.TLSClientConfig == nil {
 		t.Fatal("TLSClientConfig is nil")
@@ -977,7 +978,7 @@ func TestUntrustedHTTPTransportRequiresTLS12(t *testing.T) {
 	srv.StartTLS()
 	defer srv.Close()
 
-	insecureRT := UntrustedHTTPTransport(5*time.Second, true)
+	insecureRT := UntrustedHTTPTransport(5*time.Second, true, testSec())
 	allowUntrustedLoopback(t, insecureRT)
 	resp, err := doUntrustedRequest(t, insecureRT, srv.URL)
 	closeResponse(resp)
@@ -995,7 +996,7 @@ func TestUntrustedHTTPTransportRequiresTLS12(t *testing.T) {
 
 func TestUntrustedHTTPTransportMirrorsInsecureFlag(t *testing.T) {
 	for _, insecure := range []bool{false, true} {
-		tr := innerUntrustedTransport(t, UntrustedHTTPTransport(5*time.Second, insecure))
+		tr := innerUntrustedTransport(t, UntrustedHTTPTransport(5*time.Second, insecure, testSec()))
 		if tr.TLSClientConfig == nil {
 			t.Fatalf("insecure=%v: TLSClientConfig is nil", insecure)
 		}
@@ -1009,10 +1010,112 @@ func TestUntrustedHTTPTransportMirrorsInsecureFlag(t *testing.T) {
 }
 
 func TestUntrustedHTTPTransportFitsGowebdavSetTransport(t *testing.T) {
-	var rt http.RoundTripper = UntrustedHTTPTransport(5*time.Second, false)
+	var rt http.RoundTripper = UntrustedHTTPTransport(5*time.Second, false, testSec())
 	if rt == nil {
 		t.Fatal("UntrustedHTTPTransport returned nil")
 	}
+}
+
+func receivedLoopbackHTTPSec(t *testing.T, maxRedirects int, listener net.Addr) UntrustedClientSecurity {
+	t.Helper()
+	host, _, err := net.SplitHostPort(listener.String())
+	if err != nil {
+		t.Fatal(err)
+	}
+	ip := net.ParseIP(host)
+	if ip == nil {
+		t.Fatalf("listener host is not an IP: %q", host)
+	}
+	cidr := host + "/32"
+	if ip.To4() == nil {
+		cidr = host + "/128"
+	}
+	s := UntrustedClientSecurity{
+		MaxRedirects: maxRedirects,
+		AllowHTTP:    true,
+		AllowedCIDRs: []string{cidr},
+	}
+	s.ApplyDefaults()
+	if err := s.Compile(); err != nil {
+		t.Fatal(err)
+	}
+	return s
+}
+
+func TestPublicOnlyTransportRedirectWalkerHonorsConfiguredCap(t *testing.T) {
+	const redirectCap = 2
+
+	t.Run("refuses above configured cap", func(t *testing.T) {
+		hops := 0
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			hops++
+			if hops <= redirectCap+2 {
+				http.Redirect(w, r, "/hop", http.StatusFound)
+				return
+			}
+			w.WriteHeader(http.StatusOK)
+		}))
+		defer srv.Close()
+
+		sec := receivedLoopbackHTTPSec(t, redirectCap, srv.Listener.Addr())
+		rt := UntrustedHTTPTransport(5*time.Second, true, sec)
+		pot, ok := rt.(*publicOnlyTransport)
+		if !ok {
+			t.Fatalf("transport: got %T, want *publicOnlyTransport", rt)
+		}
+
+		req, err := http.NewRequestWithContext(context.Background(), http.MethodGet, srv.URL, nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		resp, err := (&http.Client{
+			Transport: pot,
+			CheckRedirect: func(*http.Request, []*http.Request) error {
+				return nil
+			},
+		}).Do(req)
+		closeResponse(resp)
+		if err == nil {
+			t.Fatal("expected transport walker to refuse after the configured cap")
+		}
+		if !errors.Is(err, ErrTooManyRedirects) {
+			t.Fatalf("got %v, want ErrTooManyRedirects", err)
+		}
+	})
+
+	t.Run("allows exactly the configured cap", func(t *testing.T) {
+		hops := 0
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			hops++
+			if hops <= redirectCap {
+				http.Redirect(w, r, "/hop", http.StatusFound)
+				return
+			}
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write([]byte("ok"))
+		}))
+		defer srv.Close()
+
+		sec := receivedLoopbackHTTPSec(t, redirectCap, srv.Listener.Addr())
+		rt := UntrustedHTTPTransport(5*time.Second, true, sec)
+		req, err := http.NewRequestWithContext(context.Background(), http.MethodGet, srv.URL, nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		resp, err := (&http.Client{
+			Transport: rt,
+			CheckRedirect: func(*http.Request, []*http.Request) error {
+				return nil
+			},
+		}).Do(req)
+		if err != nil {
+			t.Fatalf("expected transport walker to allow %d redirects: %v", redirectCap, err)
+		}
+		defer resp.Body.Close()
+		if resp.StatusCode != http.StatusOK {
+			t.Fatalf("status = %d, want 200", resp.StatusCode)
+		}
+	})
 }
 
 func TestPublicOnlyCheckRedirectCapsAtThree(t *testing.T) {
@@ -1027,7 +1130,7 @@ func TestPublicOnlyCheckRedirectCapsAtThree(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	rt := UntrustedHTTPTransport(5*time.Second, true)
+	rt := UntrustedHTTPTransport(5*time.Second, true, testSec())
 	allowUntrustedLoopback(t, rt)
 	req, err := http.NewRequestWithContext(context.Background(), http.MethodGet, srv.URL, nil)
 	if err != nil {
@@ -1041,13 +1144,13 @@ func TestPublicOnlyCheckRedirectCapsAtThree(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected PublicOnlyCheckRedirect to refuse more than 3 redirects")
 	}
-	if !errors.Is(err, errPublicOnlyTooManyRedirects) {
-		t.Fatalf("got %v, want errPublicOnlyTooManyRedirects", err)
+	if !errors.Is(err, ErrTooManyRedirects) {
+		t.Fatalf("got %v, want ErrTooManyRedirects", err)
 	}
 }
 
 func TestNewPublicOnlyClientKeepsPublicOnlyPolicy(t *testing.T) {
-	c := NewPublicOnlyClient(5*time.Second, true)
+	c := NewPublicOnlyClient(5*time.Second, true, testSec())
 	if c.client.Timeout != 5*time.Second {
 		t.Errorf("client timeout: got %v, want %v", c.client.Timeout, 5*time.Second)
 	}
@@ -1057,15 +1160,15 @@ func TestNewPublicOnlyClientKeepsPublicOnlyPolicy(t *testing.T) {
 	if c.client.CheckRedirect == nil {
 		t.Fatal("NewPublicOnlyClient must keep CheckRedirect")
 	}
-	got := reflect.ValueOf(c.client.CheckRedirect).Pointer()
-	want := reflect.ValueOf(PublicOnlyCheckRedirect).Pointer()
-	if got != want {
-		t.Error("NewPublicOnlyClient CheckRedirect must stay PublicOnlyCheckRedirect")
+	if err := c.client.CheckRedirect(&http.Request{}, []*http.Request{{}, {}, {}, {}}); err == nil {
+		t.Error("NewPublicOnlyClient CheckRedirect must refuse more than 3 hops")
+	} else if !errors.Is(err, ErrTooManyRedirects) {
+		t.Errorf("got %v, want ErrTooManyRedirects", err)
 	}
 
 	tr := publicOnlyHTTPTransport(t, c)
 	if tr.Proxy != nil {
-		t.Error("public-only client must not use a proxy")
+		t.Error("untrusted client must not use a proxy")
 	}
 	if tr.TLSClientConfig == nil {
 		t.Fatal("TLSClientConfig is nil")

@@ -51,6 +51,10 @@ type Config struct {
 	IdleTimeout int `mapstructure:"embedded_transfer_idle_timeout"`
 	// Retries is the number of attempts per file (1 = no retry).
 	Retries int `mapstructure:"embedded_transfer_retries"`
+	// UntrustedClientSecurity configures MaxRedirects for peer-supplied src URLs
+	// (TOML block ocm_client_security). The hatch (allow_http / allowed_cidrs)
+	// must stay closed.
+	UntrustedClientSecurity ocmd.UntrustedClientSecurity `mapstructure:"ocm_client_security"`
 }
 
 // ApplyDefaults fills in sensible defaults for any unset setting.
@@ -96,7 +100,8 @@ func init() {
 // driver is the built-in Transferrer: it downloads each file over HTTP and
 // streams it to the configured WebDAV endpoint.
 type driver struct {
-	c Config
+	c   Config
+	sec ocmd.UntrustedClientSecurity
 }
 
 // New builds the built-in WebDAV embedded-transfer driver.
@@ -105,7 +110,14 @@ func New(ctx context.Context, m map[string]any) (Transferrer, error) {
 	if err := cfg.Decode(m, &c); err != nil {
 		return nil, err
 	}
-	return &driver{c: c}, nil
+	c.UntrustedClientSecurity.ApplyDefaults()
+	if err := c.UntrustedClientSecurity.Compile(); err != nil {
+		return nil, err
+	}
+	if err := c.UntrustedClientSecurity.RejectHatch(); err != nil {
+		return nil, err
+	}
+	return &driver{c: c, sec: c.UntrustedClientSecurity}, nil
 }
 
 // embeddedRetryBaseBackoff is the base per-file retry delay; it grows exponentially.
@@ -149,11 +161,11 @@ func (d *driver) Process(ctx context.Context, payload, destination string, onCom
 
 // newEmbeddedSrcClient builds the HTTP client used to fetch a peer-supplied
 // embedded srcURL. The URL is attacker-influenced, so the client uses the
-// public-only untrusted transport (https-only, public dial, TLS 1.2, redirect cap).
-func newEmbeddedSrcClient(timeout time.Duration, insecure bool) *http.Client {
+// untrusted transport (scheme policy, PIN-when-set dial, TLS 1.2, redirect cap).
+func newEmbeddedSrcClient(timeout time.Duration, insecure bool, sec ocmd.UntrustedClientSecurity) *http.Client {
 	return &http.Client{
-		Transport:     ocmd.UntrustedHTTPTransport(timeout, insecure),
-		CheckRedirect: ocmd.PublicOnlyCheckRedirect,
+		Transport:     ocmd.UntrustedHTTPTransport(timeout, insecure, sec),
+		CheckRedirect: sec.CheckRedirect,
 	}
 }
 
@@ -162,7 +174,7 @@ func newEmbeddedSrcClient(timeout time.Duration, insecure bool) *http.Client {
 // an error only when the transfer cannot proceed at all (e.g. the destination is
 // unreachable); per-file failures are best-effort and do not produce an error.
 func (d *driver) transferEntries(log *zerolog.Logger, token, destination string, entries []transferEntry, timeout time.Duration) error {
-	httpClient := newEmbeddedSrcClient(timeout, false)
+	httpClient := newEmbeddedSrcClient(timeout, false, d.sec)
 	// Preemptive auth, not gowebdav's default auto-auth: auto-auth buffers each
 	// upload body in memory to replay on an auth challenge, blowing up RAM on
 	// multi-GB files. We pass the bearer token via the interceptor below.

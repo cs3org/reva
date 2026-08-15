@@ -43,9 +43,16 @@ func New(ctx context.Context, m map[string]any) (provider.Authorizer, error) {
 	if err := cfg.Decode(m, &c); err != nil {
 		return nil, err
 	}
+	c.UntrustedClientSecurity.ApplyDefaults()
+	if err := c.UntrustedClientSecurity.Compile(); err != nil {
+		return nil, err
+	}
+	if err := c.UntrustedClientSecurity.RejectHatch(); err != nil {
+		return nil, err
+	}
 
 	a := &authorizer{
-		publicOCMClient: client.NewPublicOnlyClient(10*time.Second, c.Insecure),
+		publicOCMClient: client.NewPublicOnlyClient(10*time.Second, c.Insecure, c.UntrustedClientSecurity),
 	}
 	return a, nil
 }
@@ -56,6 +63,10 @@ type config struct {
 	// Insecure skips TLS verification when discovering an unknown provider. Off by
 	// default; turning it on exposes discovery to MITM.
 	Insecure bool `mapstructure:"insecure"`
+	// UntrustedClientSecurity configures MaxRedirects for discovery of unknown
+	// providers (TOML block ocm_client_security). The hatch (allow_http /
+	// allowed_cidrs) must stay closed.
+	UntrustedClientSecurity client.UntrustedClientSecurity `mapstructure:"ocm_client_security"`
 }
 
 func (c *config) ApplyDefaults() {

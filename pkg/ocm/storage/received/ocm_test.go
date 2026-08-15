@@ -3,6 +3,7 @@ package ocm
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"io/fs"
@@ -772,8 +773,8 @@ func assertRefusedNonPublic(t *testing.T, err error) {
 	if err == nil {
 		t.Fatal("expected body-supplied discovery to refuse a non-public address")
 	}
-	if !strings.Contains(err.Error(), "non-public") {
-		t.Fatalf("got %v, want a non-public dial refusal", err)
+	if !errors.Is(err, ocmd.ErrNonPublicAddr) {
+		t.Fatalf("got %v, want ocmd.ErrNonPublicAddr", err)
 	}
 }
 
@@ -1108,8 +1109,8 @@ func TestReceivedShareWebDAVAccessRefusesPrivateHost(t *testing.T) {
 		if err == nil {
 			t.Fatal("expected received-share WebDAV access to refuse the metadata host at dial")
 		}
-		if !strings.Contains(err.Error(), "non-public") {
-			t.Fatalf("got %v, want the existing non-public dial error", err)
+		if !errors.Is(err, ocmd.ErrNonPublicAddr) {
+			t.Fatalf("got %v, want ocmd.ErrNonPublicAddr", err)
 		}
 	})
 
@@ -1133,8 +1134,8 @@ func TestReceivedShareWebDAVAccessRefusesPrivateHost(t *testing.T) {
 		if err == nil {
 			t.Fatal("expected received-share WebDAV access to a private host to fail")
 		}
-		if !strings.Contains(err.Error(), "non-public") {
-			t.Fatalf("got %v, want the existing non-public dial error", err)
+		if !errors.Is(err, ocmd.ErrNonPublicAddr) {
+			t.Fatalf("got %v, want ocmd.ErrNonPublicAddr", err)
 		}
 	})
 }
@@ -1159,8 +1160,8 @@ func TestReceivedShareWebDAVAccessRefusesHTTP(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected received-share WebDAV access to refuse a non-https URL")
 	}
-	if !strings.Contains(err.Error(), "non-https") {
-		t.Fatalf("got %v, want a non-https refusal", err)
+	if !errors.Is(err, ocmd.ErrNonHTTPS) {
+		t.Fatalf("got %v, want ocmd.ErrNonHTTPS", err)
 	}
 }
 
@@ -1189,7 +1190,7 @@ func TestReceivedShareWebDAVUploadRefusesPrivateHost(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected received-share WebDAV upload to a private host to fail")
 	}
-	if !strings.Contains(err.Error(), "non-public") {
-		t.Fatalf("got %v, want the existing non-public dial error", err)
+	if !errors.Is(err, ocmd.ErrNonPublicAddr) {
+		t.Fatalf("got %v, want ocmd.ErrNonPublicAddr", err)
 	}
 }

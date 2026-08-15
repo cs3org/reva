@@ -21,13 +21,50 @@ package open
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"net"
 	"net/http"
 	"net/http/httptest"
 	"net/http/httptrace"
 	"sync"
 	"testing"
+
+	"github.com/cs3org/reva/v3/internal/http/services/opencloudmesh/ocmd"
 )
+
+func TestNewRejectsHatch(t *testing.T) {
+	t.Parallel()
+
+	t.Run("allow_http", func(t *testing.T) {
+		_, err := New(context.Background(), map[string]any{
+			"insecure": true,
+			"ocm_client_security": map[string]any{
+				"allow_http": true,
+			},
+		})
+		if err == nil {
+			t.Fatal("expected open.New to reject allow_http")
+		}
+		if !errors.Is(err, ocmd.ErrHatchAllowHTTP) {
+			t.Fatalf("got %v, want ocmd.ErrHatchAllowHTTP", err)
+		}
+	})
+
+	t.Run("allowed_cidrs", func(t *testing.T) {
+		_, err := New(context.Background(), map[string]any{
+			"insecure": true,
+			"ocm_client_security": map[string]any{
+				"allowed_cidrs": []string{"10.0.0.0/8"},
+			},
+		})
+		if err == nil {
+			t.Fatal("expected open.New to reject allowed_cidrs")
+		}
+		if !errors.Is(err, ocmd.ErrHatchAllowedCIDRs) {
+			t.Fatalf("got %v, want ocmd.ErrHatchAllowedCIDRs", err)
+		}
+	})
+}
 
 func newOpenAuthorizer(t *testing.T) *authorizer {
 	t.Helper()

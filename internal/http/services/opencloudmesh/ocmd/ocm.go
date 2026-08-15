@@ -52,6 +52,11 @@ type config struct {
 	// OCMClientInsecure skips TLS verification when probing a remote provider's
 	// discovery endpoint. Off by default; turning it on exposes discovery to MITM.
 	OCMClientInsecure bool `mapstructure:"ocm_client_insecure"`
+	// UntrustedClientSecurity is the shared hatch and redirect policy for
+	// untrusted outbound clients used by this service (TOML block
+	// ocm_client_security). Non-received consumers must keep the hatch closed
+	// (no allow_http / allowed_cidrs).
+	UntrustedClientSecurity UntrustedClientSecurity `mapstructure:"ocm_client_security"`
 }
 
 func (c *config) ApplyDefaults() {
@@ -74,6 +79,13 @@ type svc struct {
 func New(ctx context.Context, m map[string]any) (global.Service, error) {
 	var c config
 	if err := cfg.Decode(m, &c); err != nil {
+		return nil, err
+	}
+	c.UntrustedClientSecurity.ApplyDefaults()
+	if err := c.UntrustedClientSecurity.Compile(); err != nil {
+		return nil, err
+	}
+	if err := c.UntrustedClientSecurity.RejectHatch(); err != nil {
 		return nil, err
 	}
 

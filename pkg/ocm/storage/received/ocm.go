@@ -70,6 +70,7 @@ type driver struct {
 	ccache         *ttlcache.Cache
 	discoveryCache *ttlcache.Cache
 	ocmClient      *ocmd.OCMClient
+	sec            ocmd.UntrustedClientSecurity
 }
 
 type config struct {
@@ -101,12 +102,24 @@ func New(ctx context.Context, m map[string]any) (storage.FS, error) {
 	disco := ttlcache.NewCache()
 	_ = disco.SetTTL(5 * time.Minute)
 
+	// Empty hatch for T1. Received hatch config lands in a later task.
+	var sec ocmd.UntrustedClientSecurity
+	sec.ApplyDefaults()
+	if err := sec.Compile(); err != nil {
+		return nil, err
+	}
+
 	d := &driver{
 		c:              &c,
 		gateway:        gateway,
 		ccache:         ttlcache.NewCache(),
 		discoveryCache: disco,
-		ocmClient:      ocmd.NewPublicOnlyClient(time.Duration(c.OCMClientTimeout)*time.Second, c.OCMClientInsecure),
+		ocmClient: ocmd.NewPublicOnlyClient(
+			time.Duration(c.OCMClientTimeout)*time.Second,
+			c.OCMClientInsecure,
+			sec,
+		),
+		sec: sec,
 	}
 	return d, nil
 }
@@ -254,20 +267,36 @@ func (d *driver) exchangeAccessToken(ctx context.Context, share *ocmpb.ReceivedS
 	return accessToken, nil
 }
 
+// invalidCredsCause keeps the InvalidCredentials type-switch used by
+// gRPC status mapping while still unwrapping to the dial/scheme sentinel.
+type invalidCredsCause struct {
+	errtypes.InvalidCredentials
+	cause error
+}
+
+func (e invalidCredsCause) Error() string {
+	if e.cause == nil {
+		return e.InvalidCredentials.Error()
+	}
+	return e.InvalidCredentials.Error() + ": " + e.cause.Error()
+}
+
+func (e invalidCredsCause) Unwrap() error { return e.cause }
+
 // newReceivedWebDAVClient builds a gowebdav client for a peer-supplied
 // received-share WebDAV URL. The URL is attacker-influenced, so the client
 // uses UntrustedHTTPTransport.
 func (d *driver) newReceivedWebDAVClient(endpoint string) *gowebdav.Client {
 	timeout := 10 * time.Second
 	insecure := false
-	if d != nil && d.c != nil {
+	if d.c != nil {
 		if d.c.OCMClientTimeout > 0 {
 			timeout = time.Duration(d.c.OCMClientTimeout) * time.Second
 		}
 		insecure = d.c.OCMClientInsecure
 	}
 	c := gowebdav.NewClient(endpoint, "", "")
-	c.SetTransport(ocmd.UntrustedHTTPTransport(timeout, insecure))
+	c.SetTransport(ocmd.UntrustedHTTPTransport(timeout, insecure, d.sec))
 	return c
 }
 
@@ -306,7 +335,10 @@ func (d *driver) webdavClient(ctx context.Context, ref *provider.Reference) (*go
 			_, err2 := c.Stat("")
 			if err2 != nil {
 				log.Info().Any("former_error", err).Err(err2).Str("endpoint", endpoint).Str("shareId", share.GetId().GetOpaqueId()).Msg("failed accessing OCM share")
-				return nil, nil, "", errtypes.InvalidCredentials("error accessing OCM share: " + err2.Error())
+				return nil, nil, "", invalidCredsCause{
+					InvalidCredentials: "error accessing OCM share",
+					cause:              err2,
+				}
 			}
 			authHdr = basicHdr
 			log.Info().Str("endpoint", endpoint).Str("shareId", share.GetId().GetOpaqueId()).Str("mode", "legacy").Msg("access to remote OCM share succeeded")

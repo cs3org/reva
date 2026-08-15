@@ -30,7 +30,6 @@ import (
 	"net/http"
 	"net/url"
 	"strings"
-	"syscall"
 	"time"
 
 	"github.com/cs3org/reva/v3/internal/http/services/wellknown"
@@ -58,15 +57,7 @@ var ErrInvalidParameters = errors.New("invalid parameters")
 // maxOCMResponseBytes caps attacker-influenced OCM HTTP response bodies.
 const maxOCMResponseBytes = 1 << 20 // 1 MiB
 
-// maxPublicOnlyRedirects caps hops on the untrusted public-only client.
-// Do not rely on Go's default of 10.
-const maxPublicOnlyRedirects = 3
-
 var errOCMResponseTooLarge = errors.New("ocm response body exceeds size limit")
-
-var errPublicOnlyNonHTTPS = errors.New("public-only OCM client requires https")
-
-var errPublicOnlyTooManyRedirects = fmt.Errorf("public-only OCM client stopped after %d redirects", maxPublicOnlyRedirects)
 
 // OCMClient is the client for an OCM provider.
 type OCMClient struct {
@@ -102,117 +93,82 @@ func NewClient(timeout time.Duration, insecure bool) *OCMClient {
 	}
 }
 
-// UntrustedHTTPTransport returns a RoundTripper with the same public-only
+// UntrustedHTTPTransport returns a RoundTripper with the same untrusted-client
 // hardening as NewPublicOnlyClient. Use it with gowebdav.Client.SetTransport
 // (or any http.Client.Transport) when the URL is untrusted or peer-supplied.
 //
 // Transport-layer guarantees:
-//   - dials only public addresses (refuseNonPublicAddr / isPublicIP), including
-//     redirect hops and DNS-rebinding races
+//   - dials only addresses allowed by sec (PIN or public-only)
 //   - Proxy is nil (no ProxyFromEnvironment)
 //   - TLS 1.2 minimum; InsecureSkipVerify only when insecure is true
-//   - https-only scheme on every RoundTrip
+//   - requireScheme on every RoundTrip
+//   - redirect-cap walker via req.Response so SetTransport-only clients
+//     (gowebdav) still enforce sec.maxRedirects()
 //
-// Redirect limiting is an http.Client CheckRedirect concern, not a property of
-// http.Transport. gowebdav.Client keeps its own CheckRedirect (10 hops).
-// Callers that own the http.Client should set CheckRedirect to
-// PublicOnlyCheckRedirect to apply the 3-redirect cap used by
-// NewPublicOnlyClient.
+// Owned http.Client callers should also set CheckRedirect to sec.CheckRedirect.
 //
 // The timeout option applies only to dialing, specifically net.Dialer.Timeout
 // on the Control path. Request-level deadlines require http.Client.Timeout or
-// gowebdav SetTimeout.
-func UntrustedHTTPTransport(timeout time.Duration, insecure bool) http.RoundTripper {
+// gowebdav SetTimeout. sec must already be compiled; this constructor
+// returns no error.
+func UntrustedHTTPTransport(timeout time.Duration, insecure bool, sec UntrustedClientSecurity) http.RoundTripper {
 	tr := newOCMTransport(insecure)
 	// with a proxy the dial goes to the proxy, so Control never sees the target
 	tr.Proxy = nil
 	tr.DialContext = (&net.Dialer{
 		Timeout:   timeout,
 		KeepAlive: 30 * time.Second,
-		Control:   refuseNonPublicAddr,
+		Control:   sec.dialControl,
 	}).DialContext
-	return &publicOnlyTransport{Transport: tr}
+	return &publicOnlyTransport{Transport: tr, sec: sec}
 }
 
-// NewPublicOnlyClient returns an OCMClient that only dials public addresses, for
-// discovery of hosts named by an untrusted caller. The check is in the dialer so
-// it also covers redirects and DNS rebinding. Redirects are capped and both the
-// initial URL and every hop must use https.
-func NewPublicOnlyClient(timeout time.Duration, insecure bool) *OCMClient {
+// NewPublicOnlyClient returns an OCMClient that only dials addresses allowed
+// by sec, for discovery of hosts named by an untrusted caller. The check is in
+// the dialer so it also covers redirects and DNS rebinding. Redirects are
+// capped and both the initial URL and every hop must satisfy requireScheme.
+func NewPublicOnlyClient(timeout time.Duration, insecure bool, sec UntrustedClientSecurity) *OCMClient {
 	return &OCMClient{
 		client: &http.Client{
-			Transport:     UntrustedHTTPTransport(timeout, insecure),
+			Transport:     UntrustedHTTPTransport(timeout, insecure, sec),
 			Timeout:       timeout,
-			CheckRedirect: PublicOnlyCheckRedirect,
+			CheckRedirect: sec.CheckRedirect,
 		},
 	}
 }
 
-// publicOnlyTransport refuses non-https URLs on the initial request and on
-// every redirect hop, before the inner dialer runs.
+// publicOnlyTransport refuses disallowed schemes and excess redirect hops
+// before the inner dialer runs. Proxy stays nil on the inner transport.
 type publicOnlyTransport struct {
 	*http.Transport
+	sec UntrustedClientSecurity
 }
 
 func (t *publicOnlyTransport) RoundTrip(req *http.Request) (*http.Response, error) {
-	if err := requirePublicOnlyHTTPS(req.URL); err != nil {
+	var u *url.URL
+	if req != nil {
+		u = req.URL
+	}
+	if err := t.sec.requireScheme(u); err != nil {
 		return nil, err
+	}
+	if redirectHopCount(req) > t.sec.maxRedirects() {
+		return nil, t.sec.tooManyRedirectsError()
 	}
 	return t.Transport.RoundTrip(req)
 }
 
-func requirePublicOnlyHTTPS(u *url.URL) error {
-	if u != nil && u.Scheme == "https" {
-		return nil
+func redirectHopCount(req *http.Request) int {
+	n := 0
+	for req != nil && req.Response != nil {
+		n++
+		next := req.Response.Request
+		if next == req {
+			break
+		}
+		req = next
 	}
-	scheme := ""
-	if u != nil {
-		scheme = u.Scheme
-	}
-	return fmt.Errorf("public-only OCM client refuses non-https scheme %q: %w", scheme, errPublicOnlyNonHTTPS)
-}
-
-// PublicOnlyCheckRedirect is the 3-redirect, https-only CheckRedirect used by
-// NewPublicOnlyClient. Assign it on an http.Client that uses
-// UntrustedHTTPTransport when the caller owns that client.
-func PublicOnlyCheckRedirect(req *http.Request, via []*http.Request) error {
-	if len(via) > maxPublicOnlyRedirects {
-		return errPublicOnlyTooManyRedirects
-	}
-	return requirePublicOnlyHTTPS(req.URL)
-}
-
-func refuseNonPublicAddr(_, address string, _ syscall.RawConn) error {
-	host, _, err := net.SplitHostPort(address)
-	if err != nil {
-		return err
-	}
-	ip := net.ParseIP(host)
-	if ip == nil || !isPublicIP(ip) {
-		return errtypes.BadRequest("refusing to connect to non-public address " + address)
-	}
-	return nil
-}
-
-// 64:ff9b::/96 embeds an IPv4 address in its low 32 bits (RFC 6052), so on a
-// NAT64 network it can still reach internal hosts.
-var nat64WellKnownPrefix = net.IPNet{IP: net.ParseIP("64:ff9b::"), Mask: net.CIDRMask(96, 128)}
-
-func isPublicIP(ip net.IP) bool {
-	if nat64WellKnownPrefix.Contains(ip) {
-		v6 := ip.To16()
-		return isPublicIP(net.IPv4(v6[12], v6[13], v6[14], v6[15]))
-	}
-	if ip.IsLoopback() || ip.IsPrivate() || ip.IsUnspecified() ||
-		ip.IsLinkLocalUnicast() || ip.IsLinkLocalMulticast() ||
-		ip.IsMulticast() || ip.IsInterfaceLocalMulticast() {
-		return false
-	}
-	// 100.64.0.0/10 is carrier-grade NAT, which net.IP.IsPrivate does not cover
-	if ip4 := ip.To4(); ip4 != nil && ip4[0] == 100 && ip4[1]&0xc0 == 64 {
-		return false
-	}
-	return true
+	return n
 }
 
 // Discover returns a number of properties used to discover the capabilities offered by a remote cloud storage.

@@ -20,7 +20,6 @@ package sciencemesh
 
 import (
 	"context"
-	"crypto/tls"
 	"encoding/json"
 	stderrors "errors"
 	"fmt"
@@ -32,14 +31,15 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/cs3org/reva/v3/internal/http/services/opencloudmesh/ocmd"
 	"github.com/cs3org/reva/v3/internal/http/services/wellknown"
 	"github.com/cs3org/reva/v3/pkg/errtypes"
 	"github.com/pkg/errors"
 )
 
 // ocmd.NewPublicOnlyClient is the shared constructor, but OCMClient.client is
-// unexported and Discover hard-codes a 1 MiB cap. /discover rebuilds the same
-// public-only transport here so OCMClientResponseLimit can bound the body.
+// unexported and Discover hard-codes a 1 MiB cap. /discover composes
+// ocmd.UntrustedHTTPTransport so OCMClientResponseLimit can bound the body.
 
 const maxUntrustedRedirects = 3
 
@@ -47,37 +47,22 @@ const defaultDiscoverResponseLimit = 1 << 20
 
 var errUntrustedNonHTTPS = stderrors.New("untrusted discover client requires https")
 
-var errUntrustedTooManyRedirects = fmt.Errorf(
-	"untrusted discover client stopped after %d redirects",
-	maxUntrustedRedirects,
-)
+// errUntrustedTooManyRedirects aliases the shared sentinel so leftover
+// helpers stay on errors.Is(err, ocmd.ErrTooManyRedirects).
+var errUntrustedTooManyRedirects = ocmd.ErrTooManyRedirects
 
 var errDiscoverResponseTooLarge = stderrors.New("discovery response body exceeds size limit")
 
-func newUntrustedDiscoverClient(timeout time.Duration, insecure bool) *http.Client {
-	var tr *http.Transport
-	if dt, ok := http.DefaultTransport.(*http.Transport); ok {
-		tr = dt.Clone()
-	} else {
-		tr = &http.Transport{}
-	}
-	tr.Proxy = nil
-	tr.TLSClientConfig = &tls.Config{
-		InsecureSkipVerify: insecure,
-		MinVersion:         tls.VersionTLS12,
-	}
-	tr.DialContext = (&net.Dialer{
-		Timeout:   timeout,
-		KeepAlive: 30 * time.Second,
-		Control:   refuseNonPublicAddr,
-	}).DialContext
+func newUntrustedDiscoverClient(timeout time.Duration, insecure bool, sec ocmd.UntrustedClientSecurity) *http.Client {
 	return &http.Client{
-		Transport:     &publicOnlyTransport{Transport: tr},
+		Transport:     ocmd.UntrustedHTTPTransport(timeout, insecure, sec),
 		Timeout:       timeout,
-		CheckRedirect: untrustedCheckRedirect,
+		CheckRedirect: sec.CheckRedirect,
 	}
 }
 
+// publicOnlyTransport is a leftover default-hatch RoundTripper. The live
+// /discover client uses ocmd.UntrustedHTTPTransport.
 type publicOnlyTransport struct {
 	*http.Transport
 }
@@ -100,11 +85,15 @@ func requireUntrustedHTTPS(u *url.URL) error {
 	return fmt.Errorf("untrusted discover client refuses non-https scheme %q: %w", scheme, errUntrustedNonHTTPS)
 }
 
+// untrustedCheckRedirect is the leftover default-hatch CheckRedirect.
+// The live /discover client uses sec.CheckRedirect on the configured
+// UntrustedClientSecurity. This helper keeps the net/http CheckRedirect
+// signature, so it cannot see service config; it applies the default cap
+// through UntrustedClientSecurity.maxRedirects().
 func untrustedCheckRedirect(req *http.Request, via []*http.Request) error {
-	if len(via) > maxUntrustedRedirects {
-		return errUntrustedTooManyRedirects
-	}
-	return requireUntrustedHTTPS(req.URL)
+	sec := ocmd.UntrustedClientSecurity{MaxRedirects: maxUntrustedRedirects}
+	sec.ApplyDefaults()
+	return sec.CheckRedirect(req, via)
 }
 
 func refuseNonPublicAddr(_, address string, _ syscall.RawConn) error {
