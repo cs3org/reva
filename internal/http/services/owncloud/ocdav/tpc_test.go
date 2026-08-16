@@ -133,3 +133,38 @@ func TestPerformHTTPPushPropagatesUploadFailure(t *testing.T) {
 		})
 	}
 }
+
+// A push must reject a source it cannot stat rather than panic on a nil Info.
+func TestHandleTPCPushRejectsUnreadableSource(t *testing.T) {
+	tests := []struct {
+		name       string
+		statusCode rpc.Code
+		wantStatus int
+	}{
+		{name: "source not found", statusCode: rpc.Code_CODE_NOT_FOUND, wantStatus: http.StatusNotFound},
+		{name: "permission denied", statusCode: rpc.Code_CODE_PERMISSION_DENIED, wantStatus: http.StatusForbidden},
+	}
+
+	for i, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			gw := mockgateway.NewMockGatewayAPIClient(t)
+			gw.On("Stat", mock.Anything, mock.Anything).Return(&provider.StatResponse{
+				Status: &rpc.Status{Code: tt.statusCode},
+			}, nil)
+
+			endpoint := "tpc-push-badsrc-" + string(rune('a'+i))
+			pool.RegisterGatewayServiceClient(gw, endpoint)
+			s := svc{c: &Config{GatewaySvc: endpoint, EnableHTTPTpc: true}, client: httpclient.New()}
+
+			r := httptest.NewRequest("COPY", "http://localhost/src.txt", nil)
+			r.Header.Set("Destination", "http://remote/dst.txt")
+			w := httptest.NewRecorder()
+
+			s.handleTPCPush(context.Background(), w, r, "/ns")
+
+			if w.Code != tt.wantStatus {
+				t.Fatalf("handleTPCPush() status = %d, want %d", w.Code, tt.wantStatus)
+			}
+		})
+	}
+}

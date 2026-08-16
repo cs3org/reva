@@ -312,7 +312,7 @@ func (s *svc) handleTPCPush(ctx context.Context, w http.ResponseWriter, r *http.
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
-	if srcStatRes.Status.Code != rpc.Code_CODE_OK && srcStatRes.Status.Code != rpc.Code_CODE_NOT_FOUND {
+	if srcStatRes.Status.Code != rpc.Code_CODE_OK {
 		HandleErrorStatus(&sublog, w, srcStatRes.Status)
 		return
 	}
