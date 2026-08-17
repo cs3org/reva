@@ -251,9 +251,9 @@ func Test_GetAppProviders(t *testing.T) {
 			search: &providerv1beta1.ResourceInfo{MimeType: "doesnot/exist"},
 			want: &registrypb.GetAppProvidersResponse{
 				Status: &rpcv1beta1.Status{
-					Code:    15,
+					Code:    6,
 					Trace:   "",
-					Message: "error looking for the app provider",
+					Message: "error looking for the app provider: error: not found: application provider not found for mime type doesnot/exist",
 				},
 				Providers: nil,
 			},
@@ -263,9 +263,9 @@ func Test_GetAppProviders(t *testing.T) {
 			search: &providerv1beta1.ResourceInfo{MimeType: ""},
 			want: &registrypb.GetAppProvidersResponse{
 				Status: &rpcv1beta1.Status{
-					Code:    15,
+					Code:    6,
 					Trace:   "",
-					Message: "error looking for the app provider",
+					Message: "error looking for the app provider: error: not found: application provider not found for mime type ",
 				},
 				Providers: nil,
 			},
@@ -275,9 +275,9 @@ func Test_GetAppProviders(t *testing.T) {
 			search: &providerv1beta1.ResourceInfo{},
 			want: &registrypb.GetAppProvidersResponse{
 				Status: &rpcv1beta1.Status{
-					Code:    15,
+					Code:    6,
 					Trace:   "",
-					Message: "error looking for the app provider",
+					Message: "error looking for the app provider: error: not found: application provider not found for mime type ",
 				},
 				Providers: nil,
 			},
@@ -287,9 +287,9 @@ func Test_GetAppProviders(t *testing.T) {
 			search: &providerv1beta1.ResourceInfo{MimeType: "this/type\\IS.not?VALID@all"},
 			want: &registrypb.GetAppProvidersResponse{
 				Status: &rpcv1beta1.Status{
-					Code:    15,
+					Code:    6,
 					Trace:   "",
-					Message: "error looking for the app provider",
+					Message: "error looking for the app provider: error: not found: application provider not found for mime type this/type\\IS.not?VALID@all",
 				},
 				Providers: nil,
 			},

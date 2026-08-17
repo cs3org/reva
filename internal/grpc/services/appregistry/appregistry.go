@@ -99,7 +99,7 @@ func (s *svc) GetAppProviders(ctx context.Context, req *registrypb.GetAppProvide
 	p, err := s.reg.FindProviders(ctx, req.ResourceInfo.MimeType)
 	if err != nil {
 		return &registrypb.GetAppProvidersResponse{
-			Status: status.NewInternal(ctx, err, "error looking for the app provider"),
+			Status: status.NewStatusFromErrType(ctx, "error looking for the app provider", err),
 		}, nil
 	}
 
@@ -114,7 +114,7 @@ func (s *svc) AddAppProvider(ctx context.Context, req *registrypb.AddAppProvider
 	err := s.reg.AddProvider(ctx, req.Provider)
 	if err != nil {
 		return &registrypb.AddAppProviderResponse{
-			Status: status.NewInternal(ctx, err, "error adding the app provider"),
+			Status: status.NewStatusFromErrType(ctx, "error adding the app provider", err),
 		}, nil
 	}
 
@@ -128,7 +128,7 @@ func (s *svc) ListAppProviders(ctx context.Context, req *registrypb.ListAppProvi
 	providers, err := s.reg.ListProviders(ctx)
 	if err != nil {
 		return &registrypb.ListAppProvidersResponse{
-			Status: status.NewInternal(ctx, err, "error listing the app providers"),
+			Status: status.NewStatusFromErrType(ctx, "error listing the app providers", err),
 		}, nil
 	}
 
@@ -143,7 +143,7 @@ func (s *svc) ListSupportedMimeTypes(ctx context.Context, req *registrypb.ListSu
 	mimeTypes, err := s.reg.ListSupportedMimeTypes(ctx)
 	if err != nil {
 		return &registrypb.ListSupportedMimeTypesResponse{
-			Status: status.NewInternal(ctx, err, "error listing the supported mime types"),
+			Status: status.NewStatusFromErrType(ctx, "error listing the supported mime types", err),
 		}, nil
 	}
 
@@ -165,7 +165,7 @@ func (s *svc) GetDefaultAppProviderForMimeType(ctx context.Context, req *registr
 	provider, err := s.reg.GetDefaultProviderForMimeType(ctx, req.MimeType)
 	if err != nil {
 		return &registrypb.GetDefaultAppProviderForMimeTypeResponse{
-			Status: status.NewInternal(ctx, err, "error getting the default app provider for the mimetype"),
+			Status: status.NewStatusFromErrType(ctx, "error getting the default app provider for the mimetype", err),
 		}, nil
 	}
 
@@ -180,7 +180,7 @@ func (s *svc) SetDefaultAppProviderForMimeType(ctx context.Context, req *registr
 	err := s.reg.SetDefaultProviderForMimeType(ctx, req.MimeType, req.Provider)
 	if err != nil {
 		return &registrypb.SetDefaultAppProviderForMimeTypeResponse{
-			Status: status.NewInternal(ctx, err, "error setting the default app provider for the mimetype"),
+			Status: status.NewStatusFromErrType(ctx, "error setting the default app provider for the mimetype", err),
 		}, nil
 	}
 
