@@ -25,15 +25,16 @@ dry_run  = false
 log_file = "/var/log/revad/reconciliation-orphan.log"
 
 [serverless.services.reconciliation.shallow]
-schedule = "@weekly"
+schedule = "never"       # or a cadence, on-demand runs work either way
 dry_run  = true
 log_file = "/var/log/revad/reconciliation-shallow.log"
 ```
 
-A job runs only if it is listed in `jobs`, and every listed job needs a
-`schedule`. `log_file` defaults to the path shown above for each, and both
-drivers default to `sql`, so all four keys above the service user can be
-omitted.
+A job runs only if it is listed in `jobs`. `orphan` needs a `schedule`; on
+`shallow` it is optional and also takes `never`, since that job can be triggered
+on demand whether or not it has a cadence. `log_file` defaults to the path shown
+above for each, and both drivers default to `sql`, so all four keys above the
+service user can be omitted.
 
 The drivers take their configuration from
 `[serverless.services.reconciliation.share_drivers.<name>]` and
@@ -55,25 +56,24 @@ keys are thus required and it needs to have the proper permissions on EOS
 `reconciliation.orphans` marks the shares and public links whose resource or
 recipient no longer exists.
 
-`reconciliation.shallow` writes the ACL entry each non-orphan share implies onto
-its path when the storage has none or has the wrong permissions. It visits only
-shared paths, and only ever adds or corrects an entry, never removes one.
+`reconciliation.shallow` writes the ACL entry each share implies onto its path,
+when the storage has no entry or the wrong permissions. It only adds and corrects
+entries. It never removes an ACL entry.
 
-Which entries have to exist is decided by `sharehierarchy.CheckGrantConsistency`,
-the same check that runs when a share is created: an entry is only written where
-it escalates beyond every share above it, per recipient and per space. A share
-that grants exactly what an ancestor grants is inherited and counted `covered`.
-One that grants anything else is a share the check would not have created, and
-writing its entry would take away access the ancestor grants, so it is counted
-`conflicting`.
+Start a run with `reva admin jobs run reconciliation.shallow [space=<space-id>]`.
+Leave the space out to cover every space. This needs the admin API enabled. The
+command prints a run id: `reva admin jobs status <run-id>` shows the state and
+the totals, `reva admin jobs cancel <run-id>` stops the run.
 
-Neither of them gets an entry, and neither is worth keeping: creating the
-ancestor share is what deletes such a share on the share API, so the job removes
-them too, logged as `reconciliation.shallow.remove` with `reason` (`inherited`
-or `shadowed-by-ancestor`) and the ancestor's id, path and role. The row is soft
-deleted, so a removal can be undone in the database. Removals are done after the
-grants are written, so a recipient never loses the row before the entry it is
-covered by is on the storage.
+With a `schedule`, the job also runs on a cadence over every space. That run has
+its own name, so `reva admin jobs trigger reconciliation.shallow.scheduled`
+starts it before its next fire.
+
+A share below another share of the same recipient is redundant when it grants the
+same access (`covered` in the totals) or less (`conflicting`). The job deletes
+the row of such a share, which is what the share API does when the higher share
+is created. The delete is soft, so you can undo it in the database. The ACL entry
+on the path stays.
 
 ## Logs
 

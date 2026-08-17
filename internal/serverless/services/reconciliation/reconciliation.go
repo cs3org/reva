@@ -58,6 +58,9 @@ const (
 	jobShallow = "shallow"
 )
 
+// scheduleNever is the schedule of a job that only runs when it is asked for.
+const scheduleNever = "never"
+
 type config struct {
 	// Jobs are the jobs to run, by name. Each one is configured in its own
 	// section, so enabling a job means listing it here and giving it a
@@ -173,13 +176,16 @@ func New(ctx context.Context, m map[string]any) (_ rserverless.Service, err erro
 		switch name {
 		case jobOrphan:
 			jc = c.Orphan
+			if jc.Schedule == "" {
+				return nil, errors.Errorf("reconciliation: job %q has no schedule", name)
+			}
 		case jobShallow:
 			jc = c.Shallow
+			if jc.Schedule == scheduleNever {
+				jc.Schedule = ""
+			}
 		default:
 			return nil, errors.Errorf("reconciliation: unknown job %q, want %q or %q", name, jobOrphan, jobShallow)
-		}
-		if jc.Schedule == "" {
-			return nil, errors.Errorf("reconciliation: job %q has no schedule", name)
 		}
 
 		jobLog, logFile, err := reconciliation.OpenLog(jc.LogFile)
@@ -190,7 +196,7 @@ func New(ctx context.Context, m map[string]any) (_ rserverless.Service, err erro
 			s.logs = append(s.logs, logFile)
 		}
 
-		var periodic rjobs.Periodic
+		var jobName string
 		switch name {
 		case jobOrphan:
 			// Gateway is left nil on purpose: the job resolves it through the
@@ -204,13 +210,17 @@ func New(ctx context.Context, m map[string]any) (_ rserverless.Service, err erro
 				DryRun:     jc.DryRun,
 				RunOnStart: jc.RunOnStart,
 			}
-			periodic = job.Periodic(jc.Schedule)
+			periodic := job.Periodic(jc.Schedule)
+			jobName = periodic.Name
+			if err := rjobs.RegisterPeriodic(periodic); err != nil {
+				return nil, errors.Wrapf(err, "reconciliation: registering %s", periodic.Name)
+			}
 		case jobShallow:
 			// Gateway is left nil for the same reason as the orphan job's, and
 			// the storage providers are resolved per run for that reason too.
 			job := &reconciliation.ShallowJob{
-				Shares: shares,
-				Auth:   identity.authenticate,
+				ShareStore: shares,
+				Auth:       identity.authenticate,
 				Grants: (&storageProviders{
 					clients: map[string]reconciliation.GrantStore{},
 				}).grants,
@@ -218,19 +228,30 @@ func New(ctx context.Context, m map[string]any) (_ rserverless.Service, err erro
 				DryRun:     jc.DryRun,
 				RunOnStart: jc.RunOnStart,
 			}
-			periodic = job.Periodic(jc.Schedule)
+			jobName = reconciliation.ShallowJobName
+			if err := rjobs.RegisterOnDemand(jobName, job.OnDemand); err != nil {
+				return nil, errors.Wrapf(err, "reconciliation: registering %s", jobName)
+			}
+			// the schedule needs a second name: a name in the registry is either
+			// periodic or on demand, never both.
+			if jc.Schedule != "" {
+				periodic := job.Periodic(jc.Schedule)
+				if err := rjobs.RegisterPeriodic(periodic); err != nil {
+					return nil, errors.Wrapf(err, "reconciliation: registering %s", periodic.Name)
+				}
+			}
 		}
 
-		if err := rjobs.RegisterPeriodic(periodic); err != nil {
-			return nil, errors.Wrapf(err, "reconciliation: registering %s", periodic.Name)
-		}
-		log.Info().
-			Str("job", periodic.Name).
+		entry := log.Info().
+			Str("job", jobName).
 			Str("schedule", jc.Schedule).
 			Str("log_file", jc.LogFile).
 			Bool("dry_run", jc.DryRun).
-			Bool("run_on_start", jc.RunOnStart).
-			Msg("reconciliation: job registered")
+			Bool("run_on_start", jc.RunOnStart)
+		if name == jobShallow {
+			entry = entry.Bool("on_demand", true)
+		}
+		entry.Msg("reconciliation: job registered")
 	}
 
 	return s, nil

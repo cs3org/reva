@@ -63,11 +63,24 @@ func (f *fakeStore) ListShares(ctx context.Context, filters []*collaboration.Fil
 	if f.listErr != nil {
 		return nil, f.listErr
 	}
+	// only the space filter is honoured, the one the shallow job narrows a run
+	// with.
+	var space string
+	for _, filter := range filters {
+		if filter.GetType() == collaboration.Filter_TYPE_SPACE_ID {
+			space = filter.GetSpaceId()
+		}
+	}
+
 	var out []*collaboration.Share
 	for _, s := range f.shares {
-		if !s.orphan {
-			out = append(out, s.share)
+		if s.orphan {
+			continue
 		}
+		if space != "" && s.share.GetResourceId().GetSpaceId() != space {
+			continue
+		}
+		out = append(out, s.share)
 	}
 	return out, nil
 }
@@ -130,11 +143,14 @@ type fakeGateway struct {
 	userTypes map[string]userpb.UserType
 	groups    map[string]bool
 	// paths maps "<storage>/<inode>" to the path of the resource.
-	paths    map[string]string
-	statErr  error
-	userErr  error
-	groupErr error
-	pathErr  error
+	paths map[string]string
+	// userLookups counts the GetUserByClaim calls, one per name the caller did
+	// not already have.
+	userLookups int
+	statErr     error
+	userErr     error
+	groupErr    error
+	pathErr     error
 }
 
 func status(present bool) *rpc.Status {
@@ -153,6 +169,7 @@ func (f *fakeGateway) Stat(ctx context.Context, in *provider.StatRequest, _ ...g
 }
 
 func (f *fakeGateway) GetUserByClaim(ctx context.Context, in *userpb.GetUserByClaimRequest, _ ...grpc.CallOption) (*userpb.GetUserByClaimResponse, error) {
+	f.userLookups++
 	if f.userErr != nil {
 		return nil, f.userErr
 	}

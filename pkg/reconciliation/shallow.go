@@ -29,18 +29,25 @@ import (
 	"github.com/cs3org/reva/v3/pkg/appctx"
 	"github.com/cs3org/reva/v3/pkg/rjobs"
 	"github.com/cs3org/reva/v3/pkg/service"
+	revashare "github.com/cs3org/reva/v3/pkg/share"
 	"github.com/cs3org/reva/v3/pkg/sharehierarchy"
 	"github.com/cs3org/reva/v3/pkg/spaces"
 	"github.com/cs3org/reva/v3/pkg/trace"
 	"github.com/google/uuid"
+	"github.com/mitchellh/mapstructure"
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog"
 	"google.golang.org/grpc"
 	"google.golang.org/protobuf/proto"
 )
 
-// ShallowJobName is the stable identity of the shallow job.
+// ShallowJobName is the stable identity of the shallow job, and the name a run
+// is asked for by.
 const ShallowJobName = "reconciliation.shallow"
+
+// ShallowScheduleName is the name the scheduled full run is registered under.
+// The jobs registry gives a name either a schedule or a trigger, not both.
+const ShallowScheduleName = ShallowJobName + ".scheduled"
 
 // The events the shallow job logs, see the package comment.
 const (
@@ -94,9 +101,12 @@ type GrantStore interface {
 // creating that share above would have done to it. What goes is the share, and
 // only the share: the ACLs on its path are left exactly as they are found. The
 // row is soft deleted, so the removal can be undone.
+//
+// It is triggered on demand, over every space or a single one. A single space
+// is a valid unit of work because spaces are disjoint: no share outside a space
+// can shadow one inside it. A schedule is optional on top of that.
 type ShallowJob struct {
-	// Shares is the share store to reconcile.
-	Shares ShareStore
+	ShareStore ShareStore
 	// Gateway resolves the path of a shared resource and the identity of its
 	// recipient. When nil the job resolves the gateway through the service
 	// registry at the start of every run, which is what the serverless service
@@ -113,12 +123,9 @@ type ShallowJob struct {
 	// so the provider hosting the resource has to be looked up first, which is
 	// wiring this package stays out of.
 	Grants func(ctx context.Context, storageID string) (GrantStore, error)
-	// Log is the job's own log, see OpenLog. When nil the job falls back to the
-	// logger in the run context.
-	Log *zerolog.Logger
-	// DryRun, when set, reports the grants it would write without writing any.
-	DryRun bool
-	// RunOnStart, when set, fires the job once as soon as the runner starts.
+	// Not the regular logger, but logs to the journal instead
+	Log        *zerolog.Logger
+	DryRun     bool
 	RunOnStart bool
 }
 
@@ -147,19 +154,13 @@ func (k ActionKind) String() string {
 
 // WrittenGrant records one grant the job wrote, or, in dry-run, would have.
 type WrittenGrant struct {
-	// ShareID is the CS3 opaque id of the share that implies the grant.
 	ShareID string
 	// Path is the path the grant applies to.
-	Path string
-	// ResourceID is the node the grant applies to.
-	ResourceID *provider.ResourceId
-	// Grantee is the recipient: a username, a group name or an external id.
-	Grantee string
-	// GranteeType is what the recipient is, "user" or "group".
+	Path        string
+	ResourceID  *provider.ResourceId
+	Grantee     string
 	GranteeType string
-	// Action is ActionAdd when there was no entry at all and ActionUpdate when
-	// there was one with the wrong permissions.
-	Action ActionKind
+	Action      ActionKind
 	// Observed is the permission level found on the storage, empty when there
 	// was no entry.
 	Observed string
@@ -184,25 +185,19 @@ const (
 // RemovedShare records one redundant share the job removed, or, in dry-run,
 // would have.
 type RemovedShare struct {
-	// ShareID is the CS3 opaque id of the removed share.
-	ShareID string
-	// Path is the path it was on.
-	Path string
-	// ResourceID is the node it was on.
-	ResourceID *provider.ResourceId
-	// Grantee is the recipient: a username, a group name or an external id.
-	Grantee string
-	// GranteeType is what the recipient is, "user" or "group".
+	ShareID     string
+	Path        string
+	ResourceID  *provider.ResourceId
+	Grantee     string
 	GranteeType string
 	// Level is the permission level the removed share granted.
-	Level string
-	// Reason is why the share was redundant.
+	Level  string
 	Reason RedundantReason
-	// AncestorID is the share above it that made it redundant.
+	// AncestorID is the ID of the share above it that made it redundant.
 	AncestorID string
-	// AncestorPath is the path that share is on.
+	// AncestorPath is the path of the share above it that made it redundant.
 	AncestorPath string
-	// AncestorRole is the role that share grants.
+	// AncestorRole is the role of the share above it that made it redundant.
 	AncestorRole string
 }
 
@@ -210,6 +205,8 @@ type RemovedShare struct {
 type ShallowReport struct {
 	// RunID identifies the run. Every log line it wrote carries it under "run".
 	RunID string
+	// SpaceID is the space the run was limited to, empty for a full run.
+	SpaceID string
 	// Checked is the number of shares whose implied entry was resolved.
 	Checked int
 	// Covered is the number of shares that needed no entry of their own because
@@ -242,12 +239,29 @@ type ShallowReport struct {
 // Every write is logged with the permissions found and the permissions written,
 // so a run can be undone from its log alone.
 func (j *ShallowJob) Run(ctx context.Context) (ShallowReport, error) {
+	return j.run(ctx, "")
+}
+
+// RunSpace is Run over the shares of a single space.
+func (j *ShallowJob) RunSpace(ctx context.Context, spaceID string) (ShallowReport, error) {
+	if spaceID == "" {
+		return ShallowReport{}, errors.New("reconciliation: no space given")
+	}
+	return j.run(ctx, spaceID)
+}
+
+// run does the work of both, over every space when spaceID is empty.
+func (j *ShallowJob) run(ctx context.Context, spaceID string) (ShallowReport, error) {
 	base := j.Log
 	if base == nil {
 		base = appctx.GetLogger(ctx)
 	}
 	runID := uuid.New().String()
-	l := base.With().Str("job", ShallowJobName).Str("run", runID).Logger()
+	fields := base.With().Str("job", ShallowJobName).Str("run", runID)
+	if spaceID != "" {
+		fields = fields.Str("space", spaceID)
+	}
+	l := fields.Logger()
 	log := &l
 
 	if j.Auth != nil {
@@ -262,7 +276,11 @@ func (j *ShallowJob) Run(ctx context.Context) (ShallowReport, error) {
 		return ShallowReport{}, err
 	}
 
-	shares, err := j.Shares.ListShares(ctx, nil)
+	var filters []*collaboration.Filter
+	if spaceID != "" {
+		filters = append(filters, revashare.SpaceIDFilter(spaceID))
+	}
+	shares, err := j.ShareStore.ListShares(ctx, filters)
 	if err != nil {
 		return ShallowReport{}, errors.Wrap(err, "reconciliation: listing shares")
 	}
@@ -273,25 +291,28 @@ func (j *ShallowJob) Run(ctx context.Context) (ShallowReport, error) {
 		Int("candidates", len(shares)).
 		Msg("reconciliation: run started")
 
-	report := ShallowReport{RunID: runID, DryRun: j.DryRun}
+	report := ShallowReport{RunID: runID, SpaceID: spaceID, DryRun: j.DryRun}
 	// the shares are grouped the way the hierarchy check expects them: all the
-	// live shares of one recipient in one space. Spaces are disjoint, so a share
-	// in another space never shadows one here.
+	// live shares of one recipient in one space. The key is the space id, the
+	// grantee type and the sharee, joined by a NUL byte, which no name contains.
+	// Spaces are disjoint, so a share in another space never shadows one here.
 	groups := map[string][]sharehierarchy.ResolvedShare{}
-	var order []string
-	paths := map[string]string{}
+	paths := make(map[string]string, len(shares))
 	// Each share gets its own trace id, propagated into every gateway and
 	// storage provider call made for it by the pool's client interceptor. It is
 	// logged on each per-share line, and the same share keeps it across both
 	// passes, so a skip here can be joined against the revad logs that explain
 	// it: grep the same traceid there.
 	traces := map[string]string{}
+	// one gateway lookup per recipient instead of one per share: a recipient
+	// holds many shares, so the same names come back over and over.
+	grantees := map[string]*provider.Grantee{}
 	for _, s := range shares {
 		id := s.GetId().GetOpaqueId()
 		traceID := trace.Generate()
 		traces[id] = traceID
 
-		rs, err := j.resolve(trace.Set(ctx, traceID), gw, s)
+		rs, err := j.resolve(trace.Set(ctx, traceID), gw, grantees, s)
 		if err != nil {
 			report.Skipped++
 			log.Error().Err(err).
@@ -305,9 +326,6 @@ func (j *ShallowJob) Run(ctx context.Context) (ShallowReport, error) {
 		paths[spaces.ResourceIdToString(rs.Share.GetResourceId())] = rs.Path
 		sharee, granteeType := sharehierarchy.ShareeInfo(rs.Share.GetGrantee())
 		key := s.GetResourceId().GetSpaceId() + "\x00" + granteeType + "\x00" + sharee
-		if _, ok := groups[key]; !ok {
-			order = append(order, key)
-		}
 		groups[key] = append(groups[key], rs)
 	}
 
@@ -327,10 +345,9 @@ func (j *ShallowJob) Run(ctx context.Context) (ShallowReport, error) {
 	// depth-first, so a share is always preceded by the shares above it and
 	// required comes out with parents before children: the storage is never
 	// left granting more below a path than on it.
-	var required []sharehierarchy.ResolvedShare
+	required := make([]sharehierarchy.ResolvedShare, 0, len(shares))
 	var redundant []RemovedShare
-	for _, key := range order {
-		group := groups[key]
+	for _, group := range groups {
 		sharehierarchy.SortDepthFirst(group)
 
 		// above holds the entries this recipient gets on the path down to the
@@ -341,6 +358,7 @@ func (j *ShallowJob) Run(ctx context.Context) (ShallowReport, error) {
 		// therefore settles it, without walking every pair.
 		var above []sharehierarchy.ResolvedShare
 		for _, rs := range group {
+			// drop the shares this one is not under: their subtree is done.
 			for len(above) > 0 && !sharehierarchy.IsStrictAncestor(above[len(above)-1].Path, rs.Path) {
 				above = above[:len(above)-1]
 			}
@@ -392,7 +410,7 @@ func (j *ShallowJob) Run(ctx context.Context) (ShallowReport, error) {
 		case level != expected:
 			observed, action = level.String(), ActionUpdate
 		default:
-			log.Debug().
+			log.Trace().
 				Str("share", rs.Share.GetId().GetOpaqueId()).
 				Str("path", rs.Path).
 				Str("grantee", sharee).
@@ -452,7 +470,7 @@ func (j *ShallowJob) Run(ctx context.Context) (ShallowReport, error) {
 			ref := &collaboration.ShareReference{
 				Spec: &collaboration.ShareReference_Id{Id: &collaboration.ShareId{OpaqueId: r.ShareID}},
 			}
-			if err := j.Shares.Unshare(trace.Set(ctx, traceID), ref); err != nil {
+			if err := j.ShareStore.Unshare(trace.Set(ctx, traceID), ref); err != nil {
 				report.Failed++
 				log.Error().Err(err).
 					Str("event", EventShallowFail).
@@ -562,7 +580,7 @@ func (j *ShallowJob) gateway(ctx context.Context) (gateway.GatewayAPIClient, err
 // resolve pairs a share with the current path of its resource and the verified
 // identity of its recipient. It fails when either cannot be resolved, which
 // leaves the share alone rather than writing an entry built on a guess.
-func (j *ShallowJob) resolve(ctx context.Context, gw gateway.GatewayAPIClient, s *collaboration.Share) (sharehierarchy.ResolvedShare, error) {
+func (j *ShallowJob) resolve(ctx context.Context, gw gateway.GatewayAPIClient, grantees map[string]*provider.Grantee, s *collaboration.Share) (sharehierarchy.ResolvedShare, error) {
 	res, err := gw.GetPath(ctx, &provider.GetPathRequest{ResourceId: s.GetResourceId()})
 	if err != nil {
 		return sharehierarchy.ResolvedShare{}, errors.Wrap(err, "reconciliation: get path")
@@ -571,7 +589,7 @@ func (j *ShallowJob) resolve(ctx context.Context, gw gateway.GatewayAPIClient, s
 		return sharehierarchy.ResolvedShare{}, errors.Errorf("reconciliation: get path: %s: %s", code, res.GetStatus().GetMessage())
 	}
 
-	grantee, err := j.grantee(ctx, gw, s.GetGrantee())
+	grantee, err := j.grantee(ctx, gw, grantees, s.GetGrantee())
 	if err != nil {
 		return sharehierarchy.ResolvedShare{}, err
 	}
@@ -587,12 +605,18 @@ func (j *ShallowJob) resolve(ctx context.Context, gw gateway.GatewayAPIClient, s
 // written to the native ACLs. The share manager falls back to a primary account
 // when that lookup fails, which here is an error instead: guessing the type
 // would write an external account into the native ACLs.
-func (j *ShallowJob) grantee(ctx context.Context, gw gateway.GatewayAPIClient, g *provider.Grantee) (*provider.Grantee, error) {
+// A name that resolves is kept in grantees for the rest of the run. A name that
+// does not is not kept, so the next share for it is looked up again.
+func (j *ShallowJob) grantee(ctx context.Context, gw gateway.GatewayAPIClient, grantees map[string]*provider.Grantee, g *provider.Grantee) (*provider.Grantee, error) {
 	if g.GetType() == provider.GranteeType_GRANTEE_TYPE_GROUP {
 		return g, nil
 	}
 
 	username := g.GetUserId().GetOpaqueId()
+	if verified, ok := grantees[username]; ok {
+		return verified, nil
+	}
+
 	res, err := gw.GetUserByClaim(ctx, &userpb.GetUserByClaimRequest{
 		Claim: "username", Value: username, SkipFetchingUserGroups: true,
 	})
@@ -602,10 +626,13 @@ func (j *ShallowJob) grantee(ctx context.Context, gw gateway.GatewayAPIClient, g
 	if code := res.GetStatus().GetCode(); code != rpc.Code_CODE_OK {
 		return nil, errors.Errorf("reconciliation: get user %q: %s: %s", username, code, res.GetStatus().GetMessage())
 	}
-	return &provider.Grantee{
+
+	verified := &provider.Grantee{
 		Type: provider.GranteeType_GRANTEE_TYPE_USER,
 		Id:   &provider.Grantee_UserId{UserId: res.GetUser().GetId()},
-	}, nil
+	}
+	grantees[username] = verified
+	return verified, nil
 }
 
 // observed reads the access the storage currently grants the entry's recipient
@@ -676,11 +703,11 @@ func (j *ShallowJob) write(ctx context.Context, rs sharehierarchy.ResolvedShare,
 	return nil
 }
 
-// Periodic wraps the job as an rjobs.Periodic. It runs on the leader because it
-// mutates the storage, and skips a fire if the previous run is still going.
+// Periodic wraps a full run as an rjobs.Periodic. It runs on the leader because
+// it mutates the storage, and skips a fire if the previous run is still going.
 func (j *ShallowJob) Periodic(schedule string) rjobs.Periodic {
 	return rjobs.Periodic{
-		Name:       ShallowJobName,
+		Name:       ShallowScheduleName,
 		Schedule:   schedule,
 		Scope:      rjobs.ScopeLeader,
 		Overlap:    rjobs.Skip,
@@ -690,4 +717,55 @@ func (j *ShallowJob) Periodic(schedule string) rjobs.Periodic {
 			return err
 		},
 	}
+}
+
+// ShallowParams are the parameters of one on-demand run.
+type ShallowParams struct {
+	// SpaceID limits the run to one space. Empty covers every space.
+	SpaceID string `mapstructure:"space"`
+}
+
+// OnDemand has the shape of rjobs.NewJob, so it is what gets registered with
+// rjobs.RegisterOnDemand. The job is already built, so the configuration
+// section the runner passes is not read.
+func (j *ShallowJob) OnDemand(context.Context, map[string]any) (rjobs.Job, error) {
+	return &shallowRun{job: j}, nil
+}
+
+type shallowRun struct {
+	job *ShallowJob
+}
+
+// Run performs one run and returns its totals as the run's result.
+func (r *shallowRun) Run(ctx context.Context, p rjobs.Params) (rjobs.Params, error) {
+	var params ShallowParams
+	// a parameter that is not read is an error: a mistyped "space" would
+	// otherwise silently widen the run from one space to every space.
+	dec, err := mapstructure.NewDecoder(&mapstructure.DecoderConfig{
+		Result:      &params,
+		ErrorUnused: true,
+	})
+	if err != nil {
+		return nil, errors.Wrap(err, "reconciliation: building the parameter decoder")
+	}
+	if err := dec.Decode(map[string]any(p)); err != nil {
+		return nil, errors.Wrap(err, "reconciliation: decoding the shallow parameters")
+	}
+
+	report, err := r.job.run(ctx, params.SpaceID)
+	if err != nil {
+		return nil, err
+	}
+	return rjobs.Params{
+		"run":         report.RunID,
+		"space":       report.SpaceID,
+		"dry_run":     report.DryRun,
+		"checked":     report.Checked,
+		"covered":     report.Covered,
+		"conflicting": report.Conflicting,
+		"written":     len(report.Written),
+		"removed":     len(report.Removed),
+		"skipped":     report.Skipped,
+		"failed":      report.Failed,
+	}, nil
 }
