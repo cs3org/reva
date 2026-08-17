@@ -132,7 +132,7 @@ func (s *service) GenerateInviteToken(ctx context.Context, req *invitepb.Generat
 
 	if err := s.repo.AddToken(ctx, token); err != nil {
 		return &invitepb.GenerateInviteTokenResponse{
-			Status: status.NewInternal(ctx, err, "error generating invite token"),
+			Status: status.NewStatusFromErrType(ctx, "error generating invite token", err),
 		}, nil
 	}
 
@@ -147,7 +147,7 @@ func (s *service) ListInviteTokens(ctx context.Context, req *invitepb.ListInvite
 	tokens, err := s.repo.ListTokens(ctx, user.Id)
 	if err != nil {
 		return &invitepb.ListInviteTokensResponse{
-			Status: status.NewInternal(ctx, err, "error listing tokens"),
+			Status: status.NewStatusFromErrType(ctx, "error listing tokens", err),
 		}, nil
 	}
 	return &invitepb.ListInviteTokensResponse{
@@ -187,7 +187,7 @@ func (s *service) ForwardInvite(ctx context.Context, req *invitepb.ForwardInvite
 			}, nil
 		default:
 			return &invitepb.ForwardInviteResponse{
-				Status: status.NewInternal(ctx, err, err.Error()),
+				Status: status.NewStatusFromErrType(ctx, "error forwarding invite", err),
 			}, nil
 		}
 	}
@@ -214,7 +214,7 @@ func (s *service) ForwardInvite(ctx context.Context, req *invitepb.ForwardInvite
 		if !errors.Is(err, invite.ErrUserAlreadyAccepted) {
 			// skip error if user was already accepted
 			return &invitepb.ForwardInviteResponse{
-				Status: status.NewInternal(ctx, err, err.Error()),
+				Status: status.NewStatusFromErrType(ctx, "error adding remote user", err),
 			}, nil
 		}
 	}
@@ -245,7 +245,7 @@ func (s *service) AcceptInvite(ctx context.Context, req *invitepb.AcceptInviteRe
 			}, nil
 		}
 		return &invitepb.AcceptInviteResponse{
-			Status: status.NewInternal(ctx, err, err.Error()),
+			Status: status.NewStatusFromErrType(ctx, "error accepting invite", err),
 		}, nil
 	}
 
@@ -258,7 +258,7 @@ func (s *service) AcceptInvite(ctx context.Context, req *invitepb.AcceptInviteRe
 	initiator, err := s.getUserInfo(ctx, token.UserId)
 	if err != nil {
 		return &invitepb.AcceptInviteResponse{
-			Status: status.NewInternal(ctx, err, err.Error()),
+			Status: status.NewStatusFromErrType(ctx, "error getting invite initiator", err),
 		}, nil
 	}
 
@@ -272,7 +272,7 @@ func (s *service) AcceptInvite(ctx context.Context, req *invitepb.AcceptInviteRe
 			}, nil
 		}
 		return &invitepb.AcceptInviteResponse{
-			Status: status.NewInternal(ctx, err, err.Error()),
+			Status: status.NewStatusFromErrType(ctx, "error adding remote user", err),
 		}, nil
 	}
 
@@ -296,7 +296,7 @@ func (s *service) getUserInfo(ctx context.Context, id *userpb.UserId) (*userpb.U
 		return nil, err
 	}
 	if res.Status.Code != rpcv1beta1.Code_CODE_OK {
-		return nil, errors.New(res.Status.Message)
+		return nil, status.NewErrtypeFromStatus(res.Status)
 	}
 
 	return res.User, nil
@@ -358,7 +358,7 @@ func (s *service) FindAcceptedUsers(ctx context.Context, req *invitepb.FindAccep
 	acceptedUsers, err := s.repo.FindRemoteUsers(ctx, user.GetId(), req.GetFilter())
 	if err != nil {
 		return &invitepb.FindAcceptedUsersResponse{
-			Status: status.NewInternal(ctx, err, "error finding remote users: "+err.Error()),
+			Status: status.NewStatusFromErrType(ctx, "error finding remote users", err),
 		}, nil
 	}
 
@@ -372,7 +372,7 @@ func (s *service) DeleteAcceptedUser(ctx context.Context, req *invitepb.DeleteAc
 	user := appctx.ContextMustGetUser(ctx)
 	if err := s.repo.DeleteRemoteUser(ctx, user.Id, req.RemoteUserId); err != nil {
 		return &invitepb.DeleteAcceptedUserResponse{
-			Status: status.NewInternal(ctx, err, "error deleting remote users: "+err.Error()),
+			Status: status.NewStatusFromErrType(ctx, "error deleting remote users", err),
 		}, nil
 	}
 

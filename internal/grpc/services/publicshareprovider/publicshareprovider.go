@@ -158,7 +158,7 @@ func (s *service) CreatePublicShare(ctx context.Context, req *link.CreatePublicS
 		}, nil
 	default:
 		return &link.CreatePublicShareResponse{
-			Status: status.NewInternal(ctx, err, "unknown error"),
+			Status: status.NewStatusFromErrType(ctx, "error creating public share", err),
 		}, nil
 	}
 }
@@ -181,7 +181,7 @@ func (s *service) RemovePublicShare(ctx context.Context, req *link.RemovePublicS
 		}, nil
 	default:
 		return &link.RemovePublicShareResponse{
-			Status: status.NewInternal(ctx, err, "error deleting public share"),
+			Status: status.NewStatusFromErrType(ctx, "error deleting public share", err),
 		}, nil
 	}
 }
@@ -235,7 +235,7 @@ func (s *service) GetPublicShare(ctx context.Context, req *link.GetPublicShareRe
 		}, nil
 	default:
 		return &link.GetPublicShareResponse{
-			Status: status.NewInternal(ctx, err, "unknown error"),
+			Status: status.NewStatusFromErrType(ctx, "error getting public share", err),
 		}, nil
 	}
 }
@@ -255,7 +255,7 @@ func (s *service) ListPublicShares(ctx context.Context, req *link.ListPublicShar
 	if err != nil {
 		log.Err(err).Msg("error listing shares")
 		return &link.ListPublicSharesResponse{
-			Status: status.NewInternal(ctx, err, "error listing public shares"),
+			Status: status.NewStatusFromErrType(ctx, "error listing public shares", err),
 		}, nil
 	}
 
@@ -295,7 +295,7 @@ func (s *service) UpdatePublicShare(ctx context.Context, req *link.UpdatePublicS
 		}, nil
 	default:
 		return &link.UpdatePublicShareResponse{
-			Status: status.NewInternal(ctx, err, "unknown error"),
+			Status: status.NewStatusFromErrType(ctx, "error updating public share", err),
 		}, nil
 	}
 }
