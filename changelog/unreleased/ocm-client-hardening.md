@@ -1,22 +1,19 @@
-Security: harden OCM outbound HTTP clients after public-only client
+Security: extend OCM untrusted HTTP client hardening
 
-Following the public-only client work merged in #5752, outbound OCM HTTP
-calls now share tighter limits and one untrusted transport path. Discovery,
-share, and ExchangeToken response bodies are capped at 1 MiB with
-io.LimitReader. NewPublicOnlyClient enforces HTTPS-only URLs, limits
-redirects to three hops, and sets TLS 1.2 as the minimum on OCM client
-transports.
-
-ScienceMesh gained flat ocm_client_response_limit and ocm_client_timeout
-config fields. The unauthenticated /discover (WAYF) flow uses the untrusted
-public-only client. Body-supplied discovery in the open authorizer and on
-received Discover/ExchangeToken requests is routed through NewPublicOnlyClient,
-closing a redirect-to-link-local SSRF on received Discover.
-
-An exported UntrustedHTTPTransport helper lets gowebdav callers use the same
-dial rules. That transport is installed on WebDAV ingest-stat, received-share
-WebDAV access, and embedded srcURL fetch. A cohesive public-only dial-refusal
-test matrix covers the refusal cases.
+Outbound OCM HTTP clients for peer-supplied URLs now share the additive
+UntrustedClientSecurity type and a public-only transport. net.Dialer.Control
+refuses non-public dial targets against SSRF, DNS rebinding, and cloud
+metadata access; URLs must be HTTPS; redirect chains default to three hops;
+OCM JSON response bodies default to 1 MiB; and TLS defaults to 1.2.
+The ocm_client_security block and ocm_client_response_limit,
+ocm_client_tls_min_version, ocm_client_dial_timeout, and ocm_client_timeout
+knobs remain configurable. Received storage split WebDAV metadata clients from
+WebDAV streaming clients, with webdav_dial_timeout for dial deadlines and
+webdav_timeout for metadata request deadlines (streams stay uncapped);
+webdav_transfer_timeout is reserved for a follow-up idle stall monitor and
+does not cap streams. ocm_allow_loopback_federation adds
+an off-by-default, WebDAV-only loopback hatch. ScienceMesh reuses the ocmd
+public-only client, regression tests cover the hardening paths, and unused
+gateway WebDAV storage provider code was removed.
 
 https://github.com/cs3org/reva/pull/5389
-https://github.com/cs3org/reva/pull/5752
