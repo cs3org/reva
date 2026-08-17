@@ -156,9 +156,8 @@ func (s *service) InitiateFileDownload(ctx context.Context, req *provider.Initia
 				Status: status.NewNotFound(ctx, "gateway: file not found"),
 			}, nil
 		}
-		err := status.NewErrorFromCode(statRes.Status.Code, "gateway")
 		return &provider.InitiateFileDownloadResponse{
-			Status: status.NewInternal(ctx, err, "gateway: error stating ref"),
+			Status: statRes.Status,
 		}, nil
 	}
 
