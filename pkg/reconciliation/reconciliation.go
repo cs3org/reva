@@ -31,11 +31,34 @@
 package reconciliation
 
 import (
+	"context"
 	"os"
 
+	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
+	collaboration "github.com/cs3org/go-cs3apis/cs3/sharing/collaboration/v1beta1"
+	link "github.com/cs3org/go-cs3apis/cs3/sharing/link/v1beta1"
+	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog"
 )
+
+// ShareStore is what the jobs need from a share manager: the CS3 listing every
+// manager implements, plus marking, which the CS3 API has no call for. A
+// manager that cannot mark cannot be reconciled. The listing is expected to
+// cover every owner and to leave out the already-orphaned.
+type ShareStore interface {
+	ListShares(ctx context.Context, filters []*collaboration.Filter) ([]*collaboration.Share, error)
+	MarkAsOrphaned(ctx context.Context, ref *collaboration.ShareReference) error
+	// Unshare removes the referenced share. The row is soft deleted, so a
+	// removal can be undone in the database.
+	Unshare(ctx context.Context, ref *collaboration.ShareReference) error
+}
+
+// PublicLinkStore is the same for a public share manager.
+type PublicLinkStore interface {
+	ListPublicShares(ctx context.Context, u *userpb.User, filters []*link.ListPublicSharesRequest_Filter, md *provider.ResourceInfo, sign bool) ([]*link.PublicShare, error)
+	MarkAsOrphaned(ctx context.Context, ref *link.PublicShareReference) error
+}
 
 // Config configures one reconciliation job. Every job takes the same knobs and
 // each is decoded from its own configuration section, so one can be scheduled,

@@ -167,13 +167,11 @@ func (c *Client) GetAttrs(ctx context.Context, auth eosclient.Authorization, pat
 // getAttribute splits a key of the attribute map a FileInfo carries into the
 // type and the key an Attribute is made of.
 //
-// That map is not keyed the way EOS keys its xattrs: grpcMDResponseToFileInfo
-// keeps the "sys." prefix but strips "user.", so a user attribute arrives here
-// under its bare name, dots and all - "reva.lockpayload", say, which names no
-// type and whose key is the whole thing. Only a key that starts with a type EOS
-// knows is split; everything else is a user attribute. Reading "reva" as the
-// type used to fail the lookup, and with it every call that reads the
-// attributes of a resource that has ever been locked.
+// The map is not keyed like EOS keys its xattrs: grpcMDResponseToFileInfo keeps
+// the "sys." prefix but strips "user.", so a user attribute arrives under its
+// bare name, dots and all ("reva.lockpayload"). Only a key starting with a type
+// EOS knows is split, the rest are user attributes: reading "reva" as the type
+// broke every read of a resource that had ever been locked.
 func getAttribute(key, val string) *eosclient.Attribute {
 	if t, k, found := strings.Cut(key, "."); found {
 		if at, err := eosclient.AttrStringToType(t); err == nil {

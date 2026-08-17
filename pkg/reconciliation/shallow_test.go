@@ -20,6 +20,7 @@ package reconciliation
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"testing"
 
@@ -29,6 +30,7 @@ import (
 	collaboration "github.com/cs3org/go-cs3apis/cs3/sharing/collaboration/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/cs3org/reva/v3/pkg/permissions"
+	"github.com/cs3org/reva/v3/pkg/rjobs"
 	"github.com/cs3org/reva/v3/pkg/sharehierarchy"
 	"google.golang.org/grpc"
 )
@@ -123,7 +125,7 @@ func shared(id uint, space, inode, shareWith string, isGroup bool, perms uint8) 
 
 // shallowJob wires a job over the three fakes.
 func shallowJob(store *fakeStore, gw *fakeGateway, grants *fakeGrants) *ShallowJob {
-	return &ShallowJob{Shares: store, Gateway: gw, Grants: grantsFrom(grants)}
+	return &ShallowJob{ShareStore: store, Gateway: gw, Grants: grantsFrom(grants)}
 }
 
 func TestShallowAddsMissingGrant(t *testing.T) {
@@ -734,11 +736,21 @@ func TestShallowDryRunMatchesLiveRun(t *testing.T) {
 	if len(dry.Written) != len(live.Written) {
 		t.Fatalf("dry run reported %d grants, live run %d", len(dry.Written), len(live.Written))
 	}
-	for i := range dry.Written {
-		d, l := dry.Written[i], live.Written[i]
-		if d.ShareID != l.ShareID || d.Grantee != l.Grantee || d.Action != l.Action ||
+	// by share, not by position: the runs group per recipient and per space, and
+	// the groups are independent, so their order is not part of the result.
+	byShare := map[string]WrittenGrant{}
+	for _, l := range live.Written {
+		byShare[l.ShareID] = l
+	}
+	for _, d := range dry.Written {
+		l, ok := byShare[d.ShareID]
+		if !ok {
+			t.Errorf("dry run reported share %s, live run did not", d.ShareID)
+			continue
+		}
+		if d.Grantee != l.Grantee || d.Action != l.Action ||
 			d.Observed != l.Observed || d.Expected != l.Expected {
-			t.Errorf("written[%d]: dry = %+v, live = %+v", i, d, l)
+			t.Errorf("share %s: dry = %+v, live = %+v", d.ShareID, d, l)
 		}
 	}
 	if len(dryGrants.writes) != 0 {
@@ -839,5 +851,219 @@ func TestShallowWriteErrorIsNotReportedAsWritten(t *testing.T) {
 	}
 	if report.Failed != 1 || len(report.Written) != 0 {
 		t.Fatalf("report = %+v, want 1 failed / 0 written", report)
+	}
+}
+
+// twoSpaces builds a job over one share in each of two spaces, both missing
+// their entry.
+func twoSpaces() (*fakeStore, *fakeGrants, *ShallowJob) {
+	store := &fakeStore{shares: []storedShare{
+		shared(80, "space-a", "inode-a", "jdoe", false, ocsRead),
+		shared(81, "space-b", "inode-b", "jdoe", false, ocsRead),
+	}}
+	gw := &fakeGateway{
+		users: map[string]bool{"jdoe": true},
+		paths: map[string]string{
+			"eosuser/inode-a": "/eos/project/a/one",
+			"eosuser/inode-b": "/eos/project/b/one",
+		},
+	}
+	grants := &fakeGrants{}
+	return store, grants, shallowJob(store, gw, grants)
+}
+
+// TestShallowRunSpaceVisitsOnlyThatSpace asserts that a scoped run leaves the
+// shares of every other space untouched.
+func TestShallowRunSpaceVisitsOnlyThatSpace(t *testing.T) {
+	_, grants, job := twoSpaces()
+
+	report, err := job.RunSpace(context.Background(), "space-a")
+	if err != nil {
+		t.Fatalf("RunSpace: %v", err)
+	}
+	if report.SpaceID != "space-a" || report.Checked != 1 || len(report.Written) != 1 {
+		t.Fatalf("report = %+v, want space-a / 1 checked / 1 written", report)
+	}
+	if len(grants.writes) != 1 || grants.writes[0].node != "eosuser/inode-a" {
+		t.Errorf("writes = %+v, want only the share in space-a", grants.writes)
+	}
+}
+
+// TestShallowRunSpaceNeedsASpace asserts that an empty space is refused rather
+// than taken as a full run.
+func TestShallowRunSpaceNeedsASpace(t *testing.T) {
+	_, grants, job := twoSpaces()
+
+	if _, err := job.RunSpace(context.Background(), ""); err == nil {
+		t.Fatal("RunSpace must fail without a space")
+	}
+	if len(grants.writes) != 0 {
+		t.Errorf("wrote %+v, want nothing", grants.writes)
+	}
+}
+
+// TestShallowOnDemandRunsTheGivenSpace asserts that the space parameter scopes
+// the run, and that its totals come back as the result.
+func TestShallowOnDemandRunsTheGivenSpace(t *testing.T) {
+	_, grants, job := twoSpaces()
+
+	run, err := job.OnDemand(context.Background(), nil)
+	if err != nil {
+		t.Fatalf("OnDemand: %v", err)
+	}
+	result, err := run.Run(context.Background(), rjobs.Params{"space": "space-b"})
+	if err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+
+	if result["space"] != "space-b" || result["checked"] != 1 || result["written"] != 1 {
+		t.Fatalf("result = %+v, want space-b / 1 checked / 1 written", result)
+	}
+	if len(grants.writes) != 1 || grants.writes[0].node != "eosuser/inode-b" {
+		t.Errorf("writes = %+v, want only the share in space-b", grants.writes)
+	}
+}
+
+// TestShallowOnDemandWithoutASpaceRunsAll asserts that a run triggered without a
+// space covers every space.
+func TestShallowOnDemandWithoutASpaceRunsAll(t *testing.T) {
+	_, grants, job := twoSpaces()
+
+	run, err := job.OnDemand(context.Background(), nil)
+	if err != nil {
+		t.Fatalf("OnDemand: %v", err)
+	}
+	result, err := run.Run(context.Background(), nil)
+	if err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+
+	if result["space"] != "" || result["written"] != 2 {
+		t.Fatalf("result = %+v, want no space / 2 written", result)
+	}
+	if len(grants.writes) != 2 {
+		t.Errorf("writes = %+v, want both shares", grants.writes)
+	}
+}
+
+// TestShallowOnDemandRejectsBadParams asserts that a run whose parameters cannot
+// be read fails instead of falling back to a full run.
+func TestShallowOnDemandRejectsBadParams(t *testing.T) {
+	_, grants, job := twoSpaces()
+
+	run, err := job.OnDemand(context.Background(), nil)
+	if err != nil {
+		t.Fatalf("OnDemand: %v", err)
+	}
+	if _, err := run.Run(context.Background(), rjobs.Params{"space": 42}); err == nil {
+		t.Fatal("Run must fail on a space that is not a string")
+	}
+	if len(grants.writes) != 0 {
+		t.Errorf("wrote %+v, want nothing", grants.writes)
+	}
+}
+
+// TestShallowOnDemandRejectsUnknownParams asserts that a mistyped parameter
+// fails the run rather than being ignored, which would turn a run meant for one
+// space into a run over every space.
+func TestShallowOnDemandRejectsUnknownParams(t *testing.T) {
+	_, grants, job := twoSpaces()
+
+	run, err := job.OnDemand(context.Background(), nil)
+	if err != nil {
+		t.Fatalf("OnDemand: %v", err)
+	}
+	if _, err := run.Run(context.Background(), rjobs.Params{"spaces": "space-a"}); err == nil {
+		t.Fatal("Run must fail on a parameter it does not read")
+	}
+	if len(grants.writes) != 0 {
+		t.Errorf("wrote %+v, want nothing", grants.writes)
+	}
+}
+
+// TestShallowOnDemandTakesAdminParams asserts that the parameters survive the
+// trip the admin API puts them through, where every value arrives as a string.
+func TestShallowOnDemandTakesAdminParams(t *testing.T) {
+	_, grants, job := twoSpaces()
+
+	// what "reva admin jobs run reconciliation.shallow space=space-b" sends: a
+	// string map, marshalled and unmarshalled on the way to the runner.
+	raw, err := json.Marshal(map[string]string{"space": "space-b"})
+	if err != nil {
+		t.Fatalf("marshal: %v", err)
+	}
+	var params rjobs.Params
+	if err := json.Unmarshal(raw, &params); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+
+	run, err := job.OnDemand(context.Background(), nil)
+	if err != nil {
+		t.Fatalf("OnDemand: %v", err)
+	}
+	result, err := run.Run(context.Background(), params)
+	if err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	if result["space"] != "space-b" || len(grants.writes) != 1 {
+		t.Fatalf("result = %+v / writes = %+v, want the run limited to space-b", result, grants.writes)
+	}
+}
+
+// TestShallowLooksUpEachRecipientOnce asserts that a run resolves a recipient
+// once, however many shares that recipient holds.
+func TestShallowLooksUpEachRecipientOnce(t *testing.T) {
+	store := &fakeStore{shares: []storedShare{
+		shared(90, "space-a", "inode-90", "jdoe", false, ocsRead),
+		shared(91, "space-a", "inode-91", "jdoe", false, ocsRead),
+		shared(92, "space-a", "inode-92", "jdoe", false, ocsRead),
+		shared(93, "space-a", "inode-93", "asmith", false, ocsRead),
+	}}
+	gw := &fakeGateway{
+		users: map[string]bool{"jdoe": true, "asmith": true},
+		paths: map[string]string{
+			"eosuser/inode-90": "/eos/user/a/alice/one",
+			"eosuser/inode-91": "/eos/user/a/alice/two",
+			"eosuser/inode-92": "/eos/user/a/alice/three",
+			"eosuser/inode-93": "/eos/user/a/alice/four",
+		},
+	}
+	grants := &fakeGrants{}
+
+	report, err := shallowJob(store, gw, grants).Run(context.Background())
+	if err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	if report.Checked != 4 || len(report.Written) != 4 {
+		t.Fatalf("report = %+v, want 4 checked / 4 written", report)
+	}
+	if gw.userLookups != 2 {
+		t.Errorf("looked up %d users, want 2", gw.userLookups)
+	}
+}
+
+// TestShallowRetriesAnUnresolvedRecipient asserts that a name which does not
+// resolve is not remembered, so every share of that name is judged on its own
+// lookup.
+func TestShallowRetriesAnUnresolvedRecipient(t *testing.T) {
+	store := &fakeStore{shares: []storedShare{
+		shared(94, "space-a", "inode-94", "ghost", false, ocsRead),
+		shared(95, "space-a", "inode-95", "ghost", false, ocsRead),
+	}}
+	gw := &fakeGateway{
+		users: map[string]bool{},
+		paths: map[string]string{
+			"eosuser/inode-94": "/eos/user/a/alice/one",
+			"eosuser/inode-95": "/eos/user/a/alice/two",
+		},
+	}
+	grants := &fakeGrants{}
+
+	report, err := shallowJob(store, gw, grants).Run(context.Background())
+	if err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	if report.Skipped != 2 || gw.userLookups != 2 {
+		t.Fatalf("report = %+v / %d lookups, want 2 skipped and 2 lookups", report, gw.userLookups)
 	}
 }
