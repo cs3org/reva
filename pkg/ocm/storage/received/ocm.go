@@ -80,17 +80,19 @@ type config struct {
 	GatewaySVC        string `mapstructure:"gatewaysvc"`
 	OCMClientTimeout  int    `mapstructure:"ocm_timeout"`
 	OCMClientInsecure bool   `mapstructure:"ocm_insecure"`
-	// OCMResponseLimit caps outbound OCM JSON response bodies in bytes.
-	// Zero means 1 MiB. WebDAV file streams are not capped.
+	// OCMResponseLimit caps outbound OCM JSON response bodies. Zero selects
+	// the package default. WebDAV file streams are not capped.
 	OCMResponseLimit int64 `mapstructure:"ocm_response_limit"`
-	// OCMTLSMinVersion is the untrusted-client TLS minimum enum string.
-	// Empty means TLS 1.2. Accepted values are "1.2" and "1.3".
+	// OCMTLSMinVersion is the untrusted-client TLS-minimum knob. Empty
+	// selects ParseTLSMinVersion's default.
 	OCMTLSMinVersion string `mapstructure:"ocm_tls_min_version"`
 	// WebDAVDialTimeout is the untrusted-transport net.Dialer timeout
-	// in seconds for peer-supplied WebDAV URLs. Zero or negative means 10s.
+	// in seconds for peer-supplied WebDAV URLs. Zero or negative selects
+	// the dial-timeout default.
 	WebDAVDialTimeout int `mapstructure:"webdav_dial_timeout"`
 	// WebDAVTimeout is the gowebdav SetTimeout for metadata requests
-	// (Stat, ReadDir, unary ops) in seconds. Zero or negative means 30s.
+	// (Stat, ReadDir, unary ops) in seconds. Zero or negative selects
+	// the metadata-request default. Stream clients do not use this knob.
 	WebDAVTimeout int `mapstructure:"webdav_timeout"`
 	// WebDAVTransferTimeout is accepted for operators but reserved for the
 	// idle-stall monitor follow-up. Zero (the default) means no stream cap
@@ -99,11 +101,11 @@ type config struct {
 	WebDAVTransferTimeout int `mapstructure:"webdav_transfer_timeout"`
 	// OCMAllowLoopbackFederation, when true, opts received WebDAV into
 	// an additive dial hatch: public federation peers remain allowed, and
-	// loopback (127.0.0.0/8 and ::1) is also accepted. Discovery and
-	// token exchange stay public-only. Non-loopback private and reserved
-	// ranges stay refused. It is off by default. Enabling it weakens
-	// SSRF protection for received WebDAV only; it does not allow HTTP,
-	// private ranges, or disable other untrusted-client guards.
+	// loopback is also accepted. Discovery and token exchange stay
+	// public-only. Non-loopback private and reserved ranges stay refused.
+	// Enabling it weakens SSRF protection for received WebDAV only; it
+	// does not allow HTTP, private ranges, or disable other untrusted-client
+	// guards.
 	OCMAllowLoopbackFederation bool `mapstructure:"ocm_allow_loopback_federation"`
 }
 
@@ -149,14 +151,8 @@ func New(ctx context.Context, m map[string]any) (storage.FS, error) {
 	disco := ttlcache.NewCache()
 	_ = disco.SetTTL(5 * time.Minute)
 
-	// ocm_allow_loopback_federation is ADDITIVE and WebDAV-only:
-	// public peers stay allowed (public + loopback) on received
-	// WebDAV metadata and stream clients. Discovery and token
-	// exchange stay public-only. Only non-loopback private peers
-	// are refused. It is for local development and specific
-	// federation scenarios, off by default, and weakens SSRF
-	// protection for received WebDAV only. HTTPS and the other
-	// untrusted-client guards stay in force on both clients.
+	// Additive WebDAV-only hatch: public peers stay allowed; loopback is
+	// also accepted. Discovery and token exchange stay public-only.
 	var webdavSec ocmd.UntrustedClientSecurity
 	if c.OCMAllowLoopbackFederation {
 		appctx.GetLogger(ctx).Warn().
@@ -393,7 +389,8 @@ func (d *driver) pairReceivedWebDAVClients(endpoint, authHdr string) (*gowebdav.
 
 // newReceivedWebDAVClient builds a metadata gowebdav client for a
 // peer-supplied received-share WebDAV URL. The URL is attacker-influenced,
-// so the client uses UntrustedHTTPTransport plus SetTimeout.
+// so the client uses UntrustedHTTPTransport. SetTimeout applies the
+// metadata-request knob so Stat/ReadDir cannot hang the worker.
 func (d *driver) newReceivedWebDAVClient(endpoint string) *gowebdav.Client {
 	c := gowebdav.NewClient(endpoint, "", "")
 	c.SetTransport(ocmd.UntrustedHTTPTransport(
@@ -408,11 +405,11 @@ func (d *driver) newReceivedWebDAVClient(endpoint string) *gowebdav.Client {
 
 // newReceivedWebDAVStreamClient builds a stream gowebdav client for
 // ReadStream/WriteStream. It uses the untrusted transport for dial/scheme
-// policy and does not call SetTimeout or set http.Client.Timeout.
-// webdav_transfer_timeout is accepted but reserved for the idle-stall
-// monitor follow-up; a nonzero value is ignored here so streams stay
-// uncapped. received has no idle-stall monitor unlike embedded, so a
-// slow-drip peer can still hang mid-body until that follow-up lands.
+// policy and does not set Client.Timeout or call SetTimeout, so a large
+// transfer is not truncated. webdav_transfer_timeout is reserved for the
+// idle-stall monitor follow-up and is ignored here. Unlike embedded,
+// received streams have no idle-stall monitor, so a slow-drip peer can
+// hang mid-body until that follow-up lands.
 func (d *driver) newReceivedWebDAVStreamClient(endpoint string) *gowebdav.Client {
 	c := gowebdav.NewClient(endpoint, "", "")
 	c.SetTransport(ocmd.UntrustedHTTPTransport(

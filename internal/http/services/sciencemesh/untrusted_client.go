@@ -28,11 +28,10 @@ import (
 	"github.com/cs3org/reva/v3/internal/http/services/opencloudmesh/ocmd"
 )
 
-// overridePublicOnlyDialTimeout keeps sciencemesh's split timeouts after
-// ocmd.NewPublicOnlyClient, which applies one duration to both the request
-// and the dialer. The shared DialContext (public-only Control, scheme, and
-// redirect policy) is left in place; only the dial deadline is tightened or
-// replaced via context.
+// overridePublicOnlyDialTimeout keeps sciencemesh's split dial vs request
+// timeouts after ocmd.NewPublicOnlyClient, which applies one duration to
+// both. The shared security wrapper (Control, scheme, redirect) stays in
+// place; only the dial deadline is replaced via context.
 func overridePublicOnlyDialTimeout(c *ocmd.OCMClient, dialTimeout time.Duration) {
 	if c == nil || dialTimeout <= 0 {
 		return
@@ -49,6 +48,10 @@ func overridePublicOnlyDialTimeout(c *ocmd.OCMClient, dialTimeout time.Duration)
 	}
 }
 
+// untrustedInnerTransport reaches the inner *http.Transport through the
+// unexported publicOnlyTransport wrapper. Reflection is an intentional
+// N-1 compatibility adapter, not an exported unwrap API; update this if
+// the private wrapper shape changes.
 func untrustedInnerTransport(rt http.RoundTripper) *http.Transport {
 	if tr, ok := rt.(*http.Transport); ok {
 		return tr

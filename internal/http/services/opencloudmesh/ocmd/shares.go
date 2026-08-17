@@ -148,8 +148,11 @@ func (h *sharesHandler) requestTimeout() time.Duration {
 
 // statIngestWebDAV PROPFINDs a peer-supplied WebDAV source URL before ingest.
 // The URL is attacker-influenced, so the caller must pass the handler-owned
-// untrusted transport (or an equivalent test transport). requestTimeout is
-// applied via gowebdav SetTimeout so a connected peer cannot hang the worker.
+// untrusted transport (or an equivalent test double): that transport applies
+// scheme and dial policy. gowebdav only accepts SetTransport, not
+// CheckRedirect, so the transport-level redirect walker is the hop backstop.
+// requestTimeout, when set, is applied via SetTimeout so a connected peer
+// cannot hang the worker.
 func statIngestWebDAV(
 	uri, sharedSecret string,
 	rt http.RoundTripper,
@@ -256,8 +259,6 @@ func (h *sharesHandler) CreateShare(w http.ResponseWriter, r *http.Request) {
 	if legacy && req.ResourceType == "file" {
 		// in case of legacy OCM v1.0 shares, we have to PROPFIND the remote resource to check the type,
 		// because remote systems such as Nextcloud may send "file" even if the resource is a folder.
-		// The WebDAV URI is peer-supplied, so the gowebdav client must use the
-		// untrusted transport (scheme and dial policy from sec).
 		target, err := statIngestWebDAV(
 			protocols[0].GetWebdavOptions().Uri,
 			protocols[0].GetWebdavOptions().SharedSecret,

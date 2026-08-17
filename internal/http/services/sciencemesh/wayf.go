@@ -32,10 +32,12 @@ import (
 	"github.com/cs3org/reva/v3/pkg/appctx"
 )
 
+// wayfHandler: ocmClient is trusted NewClient for operator-configured
+// directory URLs; untrustedClient discovers a host from the /discover body.
 type wayfHandler struct {
 	directoryServices []ocmd.DirectoryService
 	ocmClient         *ocmd.OCMClient
-	// for /discover, where the host comes from the request body, not from config
+	// body-supplied host; not the trusted directory client
 	untrustedClient *ocmd.OCMClient
 }
 
@@ -47,9 +49,7 @@ type DiscoverResponse struct {
 	InviteAcceptDialog string `json:"inviteAcceptDialog"`
 }
 
-// makeAbsoluteURL takes a base URL and a path/URL and returns an absolute URL.
-// If dialogURL is already absolute (has scheme and host), it returns it as-is.
-// Otherwise, it joins the dialogURL with the baseURL to create an absolute URL.
+// makeAbsoluteURL joins dialogURL onto baseURL unless dialogURL is already absolute.
 func makeAbsoluteURL(baseURL, dialogURL string) (string, error) {
 	if dialogURL == "" {
 		return "", nil
@@ -133,7 +133,6 @@ func (h *wayfHandler) init(c *config) error {
 
 			log.Debug().Str("federation", directoryService.Federation).Str("server", srv.DisplayName).Str("url", srv.URL).Msg("Discovering server")
 
-			// Discover inviteAcceptDialog from OCM endpoint
 			disco, err := h.ocmClient.Discover(ctx, srv.URL)
 			if err != nil {
 				log.Debug().Err(err).

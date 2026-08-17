@@ -37,7 +37,9 @@ func init() {
 	registry.Register("open", New)
 }
 
-// New returns a new authorizer object.
+// New returns an open authorizer that discovers unknown providers with the
+// untrusted public-only client. Discovery hosts are caller-supplied, so
+// scheme, dial, and redirect policy must stay enforced.
 func New(ctx context.Context, m map[string]any) (provider.Authorizer, error) {
 	var c config
 	if err := cfg.Decode(m, &c); err != nil {
@@ -68,23 +70,22 @@ func New(ctx context.Context, m map[string]any) (provider.Authorizer, error) {
 }
 
 type config struct {
-	// Users holds a path to a file containing json conforming the Users struct
 	Providers string `mapstructure:"providers"`
 	// Insecure skips TLS verification when discovering an unknown provider. Off by
 	// default; turning it on exposes discovery to MITM.
 	Insecure bool `mapstructure:"insecure"`
-	// OCMResponseLimit caps outbound OCM JSON response bodies in bytes.
-	// Zero means 1 MiB.
+	// OCMResponseLimit caps outbound OCM JSON response bodies. Zero selects
+	// the package default.
 	OCMResponseLimit int64 `mapstructure:"ocm_response_limit"`
-	// OCMTLSMinVersion is the untrusted-client TLS minimum enum string.
-	// Empty means TLS 1.2. Accepted values are "1.2" and "1.3".
+	// OCMTLSMinVersion is the untrusted-client TLS-minimum knob. Empty
+	// selects ParseTLSMinVersion's default.
 	OCMTLSMinVersion string `mapstructure:"ocm_tls_min_version"`
-	// UntrustedClientSecurity configures MaxRedirects for discovery of unknown
-	// providers (TOML block ocm_client_security). The hatch (allow_http /
-	// allowed_cidrs) must stay closed.
+	// UntrustedClientSecurity configures redirect policy for discovery of
+	// unknown providers (TOML block ocm_client_security). The hatch
+	// (allow_http, allowed_cidrs, allow_loopback) must stay closed.
 	UntrustedClientSecurity client.UntrustedClientSecurity `mapstructure:"ocm_client_security"`
 	// Timeout is the outbound OCM discovery request timeout in seconds.
-	// Zero or negative means 10s.
+	// Zero or negative selects the request-timeout default.
 	Timeout int `mapstructure:"timeout"`
 }
 
@@ -132,7 +133,6 @@ func (a *authorizer) GetInfoByDomain(ctx context.Context, domain string) (*ocmpr
 	}
 	host, _ := url.Parse(ocmCaps.Endpoint)
 
-	// return a provider info record for this domain, including the OCM service
 	return &ocmprovider.ProviderInfo{
 		Name:         "ocm_" + domain,
 		FullName:     ocmCaps.Provider,

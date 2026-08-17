@@ -39,7 +39,7 @@ const (
 // UntrustedClientSecurity is the shared hatch and redirect policy for
 // untrusted outbound OCM HTTP clients.
 type UntrustedClientSecurity struct {
-	MaxRedirects  int      `mapstructure:"max_redirects"`  // 0 => 3, ceiling 10
+	MaxRedirects  int      `mapstructure:"max_redirects"`  // 0 selects the default; values above the ceiling are clamped
 	AllowHTTP     bool     `mapstructure:"allow_http"`     // ocmreceived only
 	AllowedCIDRs  []string `mapstructure:"allowed_cidrs"`  // ocmreceived only; exclusive PIN
 	AllowLoopback bool     `mapstructure:"allow_loopback"` // ocmreceived only; additive public+loopback
@@ -81,7 +81,8 @@ var errUnrestrictedCIDR = errors.New("unrestricted CIDR is not allowed")
 
 var errNAT64Overlap = errors.New("CIDR overlaps NAT64 64:ff9b::/96")
 
-// ApplyDefaults sets MaxRedirects 0 to 3 and clamps values above 10 to 10.
+// ApplyDefaults fills MaxRedirects: 0 selects the default, and values above
+// the ceiling are clamped.
 func (s *UntrustedClientSecurity) ApplyDefaults() {
 	if s.MaxRedirects == 0 {
 		s.MaxRedirects = defaultMaxRedirects
@@ -122,8 +123,8 @@ func (s *UntrustedClientSecurity) Compile() error {
 	return nil
 }
 
-// RejectHatch errors if AllowHTTP is true, AllowedCIDRs is non-empty, or
-// AllowLoopback is true. Non-received consumers call this in their New/start path.
+// RejectHatch errors if a non-received consumer opens the ocmreceived-only
+// hatch (allow_http, allowed_cidrs, or allow_loopback).
 func (s UntrustedClientSecurity) RejectHatch() error {
 	if s.AllowHTTP {
 		return ErrHatchAllowHTTP
@@ -197,6 +198,20 @@ func (s UntrustedClientSecurity) refuseNonPublicAddr(network, addr string) error
 	return nil
 }
 
+// dialControl is the net.Dialer.Control hook: post-resolution, pre-dial. It
+// sees the resolved IP before the kernel connects and refuses addresses not
+// allowed by the current policy. Default is public-only. AllowLoopback is
+// the additive public + loopback exception. PIN mode via AllowedCIDRs is an
+// exclusive allowlist: only listed CIDRs are allowed and everything else is
+// refused. The post-resolution, pre-dial hook defeats SSRF, DNS rebinding,
+// and metadata attacks.
+//
+// The check belongs here rather than only in DialContext or request logic so
+// every actual dial is covered. Control inspects the resolved peer address
+// on direct dials and redirect targets. The public-only transport disables
+// proxying, so there is no proxy CONNECT path to guard. After Control sees
+// the fixed address there is no rebind window on that dial; reused idle
+// connections stay sticky to the already-validated peer.
 func (s UntrustedClientSecurity) dialControl(network, address string, _ syscall.RawConn) error {
 	return s.refuseNonPublicAddr(network, address)
 }
@@ -332,8 +347,8 @@ func refuseNonPublicAddr(network, address string, c syscall.RawConn) error {
 	return defaultUntrustedSecurity().dialControl(network, address, c)
 }
 
-// PublicOnlyCheckRedirect is the default-hatch CheckRedirect (3 hops, https).
-// Owned clients should prefer UntrustedClientSecurity.CheckRedirect.
+// PublicOnlyCheckRedirect is the default-hatch CheckRedirect (https, default
+// hop cap). Owned clients should prefer UntrustedClientSecurity.CheckRedirect.
 func PublicOnlyCheckRedirect(req *http.Request, via []*http.Request) error {
 	return defaultUntrustedSecurity().CheckRedirect(req, via)
 }

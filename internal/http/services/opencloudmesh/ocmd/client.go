@@ -72,11 +72,10 @@ func resolveOCMResponseLimit(limit int64) int64 {
 	return limit
 }
 
-// newOCMTransport returns the HTTP transport used for outbound OCM requests.
-// It honors the standard HTTP_PROXY, HTTPS_PROXY, and NO_PROXY environment
-// variables and optionally skips TLS certificate verification.
-// minVersion is the TLS minimum; 0 means TLS 1.2. Values below TLS 1.2 are
-// rejected. The per-service knob defaults to TLS 1.2 and may raise to 1.3.
+// newOCMTransport builds the outbound OCM transport. It honors HTTP_PROXY,
+// HTTPS_PROXY, and NO_PROXY. minVersion is the TLS floor from the service
+// knob; 0 selects that knob's default. Values below the enforced floor are
+// rejected.
 func newOCMTransport(insecure bool, minVersion uint16) *http.Transport {
 	var tr *http.Transport
 	if dt, ok := http.DefaultTransport.(*http.Transport); ok {
@@ -93,8 +92,9 @@ func newOCMTransport(insecure bool, minVersion uint16) *http.Transport {
 	return tr
 }
 
-// NewClient returns a new OCMClient.
-// responseLimit caps OCM response bodies in bytes; values <= 0 select the 1 MiB default.
+// NewClient returns an OCM client for trusted, operator-configured endpoints.
+// It does not apply public-only dial or redirect policy. responseLimit caps
+// OCM response bodies; values <= 0 select the package default.
 func NewClient(timeout time.Duration, insecure bool, responseLimit int64) *OCMClient {
 	return &OCMClient{
 		client: &http.Client{
@@ -107,23 +107,20 @@ func NewClient(timeout time.Duration, insecure bool, responseLimit int64) *OCMCl
 
 // UntrustedHTTPTransport returns a RoundTripper with the same untrusted-client
 // hardening as NewPublicOnlyClient. Use it with gowebdav.Client.SetTransport
-// (or any http.Client.Transport) when the URL is untrusted or peer-supplied.
-//
-// Transport-layer guarantees:
-//   - dials only addresses allowed by sec (PIN or public-only)
-//   - Proxy is nil (no ProxyFromEnvironment)
-//   - TLS minimum is configurable and defaults to 1.2 via the service knob;
-//     InsecureSkipVerify only when insecure is true
-//   - requireScheme on every RoundTrip
-//   - redirect-cap walker via req.Response so SetTransport-only clients
-//     (gowebdav) still enforce sec.maxRedirects()
-//
+// when the URL is peer-supplied: gowebdav cannot install CheckRedirect, so
+// the RoundTripper walks req.Response and enforces the redirect cap itself.
 // Owned http.Client callers should also set CheckRedirect to sec.CheckRedirect.
 //
-// The timeout option applies only to dialing, specifically net.Dialer.Timeout
-// on the Control path. Request-level deadlines require http.Client.Timeout or
-// gowebdav SetTimeout. sec must already be compiled; this constructor
-// returns no error. minVersion 0 means TLS 1.2; the knob may raise to 1.3.
+// Proxy is forced to nil. An environment proxy would make the dialer inspect
+// the proxy address rather than the peer target, so the public-only Control
+// guard could not enforce the target-IP policy.
+//
+// timeout is net.Dialer.Timeout: it bounds the TCP dial (DNS resolution +
+// TCP connect). Control is the post-resolution, pre-dial policy gate that
+// runs within that TCP dial. TLS is bounded separately by the transport's
+// TLS handshake timeout. Request-level deadlines need http.Client.Timeout
+// or gowebdav SetTimeout. minVersion 0 selects the TLS-knob default. sec
+// must already be compiled.
 func UntrustedHTTPTransport(
 	timeout time.Duration,
 	insecure bool,
@@ -131,7 +128,7 @@ func UntrustedHTTPTransport(
 	minVersion uint16,
 ) http.RoundTripper {
 	tr := newOCMTransport(insecure, minVersion)
-	// with a proxy the dial goes to the proxy, so Control never sees the target
+	// An env proxy would make Control inspect the proxy, not the peer target.
 	tr.Proxy = nil
 	tr.DialContext = (&net.Dialer{
 		Timeout:   timeout,
@@ -141,11 +138,11 @@ func UntrustedHTTPTransport(
 	return &publicOnlyTransport{Transport: tr, sec: sec}
 }
 
-// NewPublicOnlyClient returns an OCMClient that only dials addresses allowed
-// by sec, for discovery of hosts named by an untrusted caller. The check is in
-// the dialer so it also covers redirects and DNS rebinding. Redirects are
-// capped and both the initial URL and every hop must satisfy requireScheme.
-// responseLimit caps OCM response bodies in bytes; values <= 0 select the 1 MiB default.
+// NewPublicOnlyClient returns an OCMClient for hosts named by an untrusted
+// caller. Dial Control enforces sec's address policy on every hop, including
+// redirects, so DNS rebinding cannot sneak a private target past the first
+// lookup. The initial URL and each redirect must satisfy requireScheme.
+// responseLimit caps OCM response bodies; values <= 0 select the package default.
 func NewPublicOnlyClient(
 	timeout time.Duration,
 	insecure bool,
@@ -184,8 +181,9 @@ func (c *OCMClient) RequestTimeout() time.Duration {
 	return c.client.Timeout
 }
 
-// publicOnlyTransport refuses disallowed schemes and excess redirect hops
-// before the inner dialer runs. Proxy stays nil on the inner transport.
+// publicOnlyTransport enforces scheme and redirect-cap before the inner
+// dialer. SetTransport-only clients (gowebdav) cannot install CheckRedirect,
+// so RoundTrip walks req.Response as the redirect backstop.
 type publicOnlyTransport struct {
 	*http.Transport
 	sec UntrustedClientSecurity
@@ -460,7 +458,6 @@ func (c *OCMClient) ExchangeToken(ctx context.Context, tokenEndpoint, code, clie
 
 	switch resp.StatusCode {
 	case http.StatusOK:
-		// success, decode below
 	case http.StatusBadRequest:
 		var errBody struct {
 			Error string `json:"error"`
@@ -510,7 +507,6 @@ func (c *OCMClient) GetDirectoryService(ctx context.Context, directoryURL string
 		return nil, errors.Wrap(err, "invalid directory service payload")
 	}
 
-	// Validate required fields
 	if dirService.Federation == "" {
 		return nil, errtypes.InternalError("directory service missing required 'federation' field")
 	}

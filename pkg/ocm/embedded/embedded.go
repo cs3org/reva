@@ -51,16 +51,16 @@ type Config struct {
 	IdleTimeout int `mapstructure:"embedded_transfer_idle_timeout"`
 	// Retries is the number of attempts per file (1 = no retry).
 	Retries int `mapstructure:"embedded_transfer_retries"`
-	// UntrustedClientSecurity configures MaxRedirects for peer-supplied src URLs
-	// (TOML block ocm_client_security). The hatch (allow_http / allowed_cidrs)
-	// must stay closed.
+	// UntrustedClientSecurity configures redirect policy for peer-supplied src
+	// URLs (TOML block ocm_client_security). The hatch (allow_http,
+	// allowed_cidrs, allow_loopback) must stay closed.
 	UntrustedClientSecurity ocmd.UntrustedClientSecurity `mapstructure:"ocm_client_security"`
-	// EmbeddedSrcTLSMinVersion is the untrusted src-client TLS minimum enum
-	// string. Empty means TLS 1.2. Accepted values are "1.2" and "1.3".
+	// EmbeddedSrcTLSMinVersion is the untrusted src-client TLS-minimum knob.
+	// Empty selects ParseTLSMinVersion's default.
 	EmbeddedSrcTLSMinVersion string `mapstructure:"embedded_src_tls_min_version"`
 	// SrcDialTimeout is the source untrusted-transport net.Dialer timeout
-	// in seconds. Zero or negative means 10s. It is not the per-file
-	// transfer ceiling.
+	// in seconds. Zero or negative selects the dial-timeout default. It is
+	// not the per-file transfer ceiling.
 	SrcDialTimeout int `mapstructure:"embedded_src_dial_timeout"`
 }
 
@@ -178,12 +178,13 @@ func (d *driver) Process(ctx context.Context, payload, destination string, onCom
 	return nil
 }
 
-// newEmbeddedSrcClient builds the HTTP client used to fetch a peer-supplied
-// embedded srcURL. The URL is attacker-influenced, so the client uses the
-// untrusted transport: scheme policy, PIN-when-set dial, redirect cap, and a
-// minimum TLS version (default 1.2, configurable via tls_min_version).
-// dialTimeout is the net.Dialer timeout only; this client has no total
-// http.Client.Timeout so long transfers stay uncapped at the request layer.
+// newEmbeddedSrcClient builds the HTTP client for a peer-supplied src URL.
+// This is not trusted NewClient: the URL is attacker-influenced, so the
+// client must enforce untrusted scheme, dial, and redirect policy.
+// There is no http.Client.Timeout. Destination SetTimeout and the
+// per-file context both derive from the same transfer timeout
+// (default 3600s). SetTimeout bounds each individual WebDAV request;
+// the per-file context bounds the total copy.
 func newEmbeddedSrcClient(
 	dialTimeout time.Duration,
 	insecure bool,
@@ -384,8 +385,10 @@ func (pr *progressReader) Read(p []byte) (int, error) {
 	return n, err
 }
 
-// monitorTransfer periodically logs transfer progress and aborts the transfer
-// (via cancel) if no data has flowed for idleTimeout. It exits when stop closes.
+// monitorTransfer aborts a file attempt when no bytes flow for idleTimeout.
+// It is a liveness guard against a peer that stops sending: it bounds
+// idle/stalled transfers with no progress within the idle window. It does
+// not guarantee protection against arbitrary slow-drip throughput.
 func monitorTransfer(log *zerolog.Logger, pr *progressReader, remotePath string, idleTimeout time.Duration, cancel context.CancelFunc, stop <-chan struct{}) {
 	const interval = 15 * time.Second
 	ticker := time.NewTicker(interval)
