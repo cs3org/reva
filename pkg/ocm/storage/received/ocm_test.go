@@ -13,6 +13,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/http/httptrace"
+	"net/url"
 	"os"
 	"reflect"
 	"strings"
@@ -1621,4 +1622,645 @@ func TestReceivedMetadataAndStreamClientsAreDistinct(t *testing.T) {
 	if cc.metadata == cc.stream {
 		t.Fatal("cached metadata and stream clients must be distinct instances")
 	}
+}
+
+func newLoopbackHatchReceivedDriver(t *testing.T) *driver {
+	t.Helper()
+	fs, err := New(context.Background(), map[string]any{
+		"gatewaysvc":                    "public-only-received-test.invalid:1",
+		"ocm_timeout":                   5,
+		"ocm_insecure":                  true,
+		"ocm_allow_loopback_federation": true,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	d, ok := fs.(*driver)
+	if !ok {
+		t.Fatalf("got %T, want *driver", fs)
+	}
+	return d
+}
+
+func roundTripReceivedOCM(t *testing.T, d *driver, rawURL string) error {
+	t.Helper()
+	req, err := http.NewRequest(http.MethodGet, rawURL, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	rt := d.ocmClient.HTTPTransport()
+	if rt == nil {
+		t.Fatal("received ocm client has no transport")
+	}
+	resp, err := rt.RoundTrip(req)
+	if resp != nil && resp.Body != nil {
+		_ = resp.Body.Close()
+	}
+	return err
+}
+
+func roundTripReceivedWebDAV(t *testing.T, d *driver, rawURL string) error {
+	t.Helper()
+	req, err := http.NewRequest(http.MethodGet, rawURL, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	rt := ocmd.UntrustedHTTPTransport(
+		d.webdavDialTimeout(),
+		d.ocmInsecure(),
+		d.sec,
+		d.tlsMinVersion,
+	)
+	resp, err := rt.RoundTrip(req)
+	if resp != nil && resp.Body != nil {
+		_ = resp.Body.Close()
+	}
+	return err
+}
+
+func dialAddrFromReceivedURL(t *testing.T, rawURL string) string {
+	t.Helper()
+	u, err := url.Parse(rawURL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if u.Host == "" {
+		t.Fatalf("url %q has no host", rawURL)
+	}
+	if _, _, err := net.SplitHostPort(u.Host); err == nil {
+		return u.Host
+	}
+	port := "443"
+	if u.Scheme == "http" {
+		port = "80"
+	}
+	return net.JoinHostPort(u.Hostname(), port)
+}
+
+func receivedPeerDialPolicy(t *testing.T, d *driver, rawURL string) error {
+	t.Helper()
+	if d.ocmClient == nil || d.ocmClient.HTTPTransport() == nil {
+		t.Fatal("received ocm client has no transport")
+	}
+	if ocmd.UntrustedHTTPTransport(
+		d.webdavDialTimeout(),
+		d.ocmInsecure(),
+		d.sec,
+		d.tlsMinVersion,
+	) == nil {
+		t.Fatal("received webdav transport is nil")
+	}
+	return d.sec.CheckDialAddr(dialAddrFromReceivedURL(t, rawURL))
+}
+
+func receivedDiscoveryDialPolicy(t *testing.T, d *driver, rawURL string) error {
+	t.Helper()
+	if d.ocmClient == nil || d.ocmClient.HTTPTransport() == nil {
+		t.Fatal("received ocm client has no transport")
+	}
+	// Exercise the live discovery client, not d.discoverySec. A wiring
+	// bug that gives ocmClient the WebDAV hatch would pass a mirror-field
+	// check and still allow loopback discovery.
+	return roundTripReceivedOCM(t, d, rawURL)
+}
+
+func assertReceivedDialAllowed(t *testing.T, err error) {
+	t.Helper()
+	if err == nil {
+		return
+	}
+	if errors.Is(err, ocmd.ErrNonPublicAddr) {
+		t.Fatalf("public or loopback peer must stay allowed (additive, not exclusive), got %v", err)
+	}
+	t.Fatalf("dial policy must allow this address, got %v", err)
+}
+
+func TestConfigOCMAllowLoopbackFederation(t *testing.T) {
+	tests := []struct {
+		name      string
+		extra     map[string]any
+		wantHatch bool
+	}{
+		{
+			name:      "defaults off when unset",
+			extra:     map[string]any{},
+			wantHatch: false,
+		},
+		{
+			name: "explicit false stays off",
+			extra: map[string]any{
+				"ocm_allow_loopback_federation": false,
+			},
+			wantHatch: false,
+		},
+		{
+			name: "explicit true enables loopback hatch",
+			extra: map[string]any{
+				"ocm_allow_loopback_federation": true,
+			},
+			wantHatch: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			m := map[string]any{
+				"gatewaysvc":   "public-only-received-test.invalid:1",
+				"ocm_timeout":  5,
+				"ocm_insecure": true,
+			}
+			for k, v := range tt.extra {
+				m[k] = v
+			}
+			fs, err := New(context.Background(), m)
+			if err != nil {
+				t.Fatal(err)
+			}
+			d, ok := fs.(*driver)
+			if !ok {
+				t.Fatalf("got %T, want *driver", fs)
+			}
+			if d.c.OCMAllowLoopbackFederation != tt.wantHatch {
+				t.Errorf("OCMAllowLoopbackFederation = %v, want %v", d.c.OCMAllowLoopbackFederation, tt.wantHatch)
+			}
+			if d.sec.AllowLoopback != tt.wantHatch {
+				t.Errorf("sec.AllowLoopback = %v, want %v", d.sec.AllowLoopback, tt.wantHatch)
+			}
+			if d.discoverySec.AllowLoopback {
+				t.Fatal("discoverySec.AllowLoopback must stay false")
+			}
+			if d.sec.AllowHTTP || d.discoverySec.AllowHTTP {
+				t.Fatal("loopback hatch must not set AllowHTTP")
+			}
+			if len(d.sec.AllowedCIDRs) != 0 || len(d.discoverySec.AllowedCIDRs) != 0 {
+				t.Errorf("AllowedCIDRs webdav=%#v discovery=%#v, want empty (PIN must stay unused)",
+					d.sec.AllowedCIDRs, d.discoverySec.AllowedCIDRs)
+			}
+		})
+	}
+}
+
+func TestConfigOCMAllowLoopbackFederationWarnsWhenEnabled(t *testing.T) {
+	var buf bytes.Buffer
+	log := zerolog.New(&buf)
+	ctx := appctx.WithLogger(context.Background(), &log)
+
+	fs, err := New(ctx, map[string]any{
+		"gatewaysvc":                    "public-only-received-test.invalid:1",
+		"ocm_insecure":                  true,
+		"ocm_allow_loopback_federation": true,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := buf.String()
+	if !strings.Contains(got, "ocm_allow_loopback_federation") ||
+		!strings.Contains(got, "SSRF") ||
+		!strings.Contains(got, "additive") ||
+		!strings.Contains(got, "public") ||
+		!strings.Contains(got, "only non-loopback private") ||
+		!strings.Contains(got, "local development") ||
+		!strings.Contains(got, "specific federation") ||
+		!strings.Contains(got, "off by default") ||
+		!strings.Contains(got, "received surface") ||
+		!strings.Contains(got, "WebDAV-only") ||
+		!strings.Contains(got, "public-only") {
+		t.Fatalf("expected additive WebDAV-only loopback-hatch warning, got %q", got)
+	}
+	on, ok := fs.(*driver)
+	if !ok {
+		t.Fatalf("got %T, want *driver", fs)
+	}
+	if !on.sec.AllowLoopback {
+		t.Fatal("enabled hatch must set WebDAV AllowLoopback")
+	}
+	if on.discoverySec.AllowLoopback {
+		t.Fatal("enabled hatch must not set discovery AllowLoopback")
+	}
+	assertReceivedDialAllowed(t, receivedPeerDialPolicy(t, on, "https://8.8.8.8:1/"))
+	assertReceivedDialAllowed(t, receivedPeerDialPolicy(t, on, "https://192.0.2.1:1/"))
+	assertReceivedDialAllowed(t, receivedPeerDialPolicy(t, on, "https://127.0.0.1:1/"))
+	assertReceivedDialRefused(t, receivedPeerDialPolicy(t, on, "https://10.1.2.3:443/"))
+	t.Run("discovery allows public", func(t *testing.T) {
+		srv := startPublicTLSServer(t, http.HandlerFunc(func(http.ResponseWriter, *http.Request) {}))
+		assertReceivedDialAllowed(t, receivedDiscoveryDialPolicy(t, on, srv.URL+"/"))
+	})
+	assertReceivedDialRefused(t, receivedDiscoveryDialPolicy(t, on, "https://127.0.0.1:1/"))
+	assertReceivedDialRefused(t, receivedDiscoveryDialPolicy(t, on, "https://10.1.2.3:443/"))
+
+	buf.Reset()
+	fs, err = New(ctx, map[string]any{
+		"gatewaysvc":   "public-only-received-test.invalid:1",
+		"ocm_insecure": true,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(buf.String(), "ocm_allow_loopback_federation") {
+		t.Fatalf("default off must not warn; got %q", buf.String())
+	}
+	off, ok := fs.(*driver)
+	if !ok {
+		t.Fatalf("got %T, want *driver", fs)
+	}
+	if off.c.OCMAllowLoopbackFederation || off.sec.AllowLoopback || off.discoverySec.AllowLoopback {
+		t.Fatal("hatch must default off")
+	}
+	assertReceivedDialAllowed(t, receivedPeerDialPolicy(t, off, "https://8.8.8.8:1/"))
+	assertReceivedDialRefused(t, receivedPeerDialPolicy(t, off, "https://127.0.0.1:1/"))
+	assertReceivedDialRefused(t, receivedDiscoveryDialPolicy(t, off, "https://127.0.0.1:1/"))
+}
+
+func assertReceivedDialRefused(t *testing.T, err error) {
+	t.Helper()
+	if !errors.Is(err, ocmd.ErrNonPublicAddr) {
+		t.Fatalf("got %v, want ocmd.ErrNonPublicAddr", err)
+	}
+}
+
+func TestReceivedLoopbackHatchOffDialPolicy(t *testing.T) {
+	d := newProductionReceivedDriver(t)
+	if d.c.OCMAllowLoopbackFederation || d.sec.AllowLoopback || d.discoverySec.AllowLoopback {
+		t.Fatal("missing knob must default to false")
+	}
+
+	t.Run("refuses loopback", func(t *testing.T) {
+		for _, rawURL := range []string{
+			"https://127.0.0.1/",
+			"https://[::1]/",
+		} {
+			t.Run(rawURL, func(t *testing.T) {
+				assertReceivedDialRefused(t, receivedPeerDialPolicy(t, d, rawURL))
+				assertReceivedDialRefused(t, receivedDiscoveryDialPolicy(t, d, rawURL))
+			})
+		}
+	})
+
+	t.Run("allows public", func(t *testing.T) {
+		for _, rawURL := range []string{
+			"https://8.8.8.8:1/",
+			"https://192.0.2.1:1/",
+		} {
+			t.Run(rawURL, func(t *testing.T) {
+				assertReceivedDialAllowed(t, receivedPeerDialPolicy(t, d, rawURL))
+			})
+		}
+	})
+
+	t.Run("refuses non-loopback private", func(t *testing.T) {
+		for _, rawURL := range []string{
+			"https://10.1.2.3/",
+			"https://192.168.1.1/",
+			"https://172.16.0.1/",
+			"https://172.31.255.1/",
+			"https://100.64.0.1/",
+		} {
+			t.Run(rawURL, func(t *testing.T) {
+				assertReceivedDialRefused(t, receivedPeerDialPolicy(t, d, rawURL))
+			})
+		}
+	})
+}
+
+func TestReceivedLoopbackHatchOnDialPolicy(t *testing.T) {
+	d := newLoopbackHatchReceivedDriver(t)
+	if !d.sec.AllowLoopback {
+		t.Fatal("WebDAV hatch must set AllowLoopback")
+	}
+	if d.discoverySec.AllowLoopback {
+		t.Fatal("discovery must stay public-only with hatch on")
+	}
+
+	t.Run("webdav allows loopback", func(t *testing.T) {
+		for _, rawURL := range []string{
+			"https://127.0.0.1:1/",
+			"https://127.1.2.3:1/",
+			"https://[::1]:1/",
+		} {
+			t.Run(rawURL, func(t *testing.T) {
+				assertReceivedDialAllowed(t, receivedPeerDialPolicy(t, d, rawURL))
+			})
+		}
+	})
+
+	t.Run("discovery refuses loopback", func(t *testing.T) {
+		for _, rawURL := range []string{
+			"https://127.0.0.1:1/",
+			"https://127.1.2.3:1/",
+			"https://[::1]:1/",
+		} {
+			t.Run(rawURL, func(t *testing.T) {
+				assertReceivedDialRefused(t, receivedDiscoveryDialPolicy(t, d, rawURL))
+			})
+		}
+	})
+
+	t.Run("allows public peer", func(t *testing.T) {
+		for _, rawURL := range []string{
+			"https://8.8.8.8:1/",
+			"https://192.0.2.1:1/",
+		} {
+			t.Run(rawURL, func(t *testing.T) {
+				assertReceivedDialAllowed(t, receivedPeerDialPolicy(t, d, rawURL))
+			})
+		}
+		t.Run("discovery", func(t *testing.T) {
+			srv := startPublicTLSServer(t, http.HandlerFunc(func(http.ResponseWriter, *http.Request) {}))
+			assertReceivedDialAllowed(t, receivedDiscoveryDialPolicy(t, d, srv.URL+"/"))
+		})
+	})
+
+	t.Run("refuses non-loopback private", func(t *testing.T) {
+		for _, rawURL := range []string{
+			"https://10.1.2.3/",
+			"https://192.168.1.1/",
+			"https://172.16.0.1/",
+			"https://172.31.255.1/",
+			"https://100.64.0.1/",
+		} {
+			t.Run(rawURL, func(t *testing.T) {
+				assertReceivedDialRefused(t, receivedPeerDialPolicy(t, d, rawURL))
+				assertReceivedDialRefused(t, receivedDiscoveryDialPolicy(t, d, rawURL))
+			})
+		}
+	})
+}
+
+func TestReceivedLoopbackHatchOnStillRefusesHTTP(t *testing.T) {
+	d := newLoopbackHatchReceivedDriver(t)
+
+	for _, rawURL := range []string{
+		"http://127.0.0.1/",
+		"http://[::1]/",
+	} {
+		t.Run(rawURL, func(t *testing.T) {
+			ocmErr := roundTripReceivedOCM(t, d, rawURL)
+			if !errors.Is(ocmErr, ocmd.ErrNonHTTPS) {
+				t.Fatalf("ocm transport: got %v, want ocmd.ErrNonHTTPS", ocmErr)
+			}
+			davErr := roundTripReceivedWebDAV(t, d, rawURL)
+			if !errors.Is(davErr, ocmd.ErrNonHTTPS) {
+				t.Fatalf("webdav transport: got %v, want ocmd.ErrNonHTTPS", davErr)
+			}
+		})
+	}
+
+	contacted := false
+	srv := httptest.NewServer(receivedWebDAVHandler(t, &contacted))
+	defer srv.Close()
+
+	share := receivedShareWithWebDAVURI(
+		srv.Listener.Addr().String(),
+		"share-abc",
+		srv.URL+"/remote.php/dav/ocm/share-abc",
+	)
+	d.gateway = &mockReceivedGateway{shares: []*ocmpb.ReceivedShare{share}}
+
+	_, err := d.GetMD(context.Background(), &provider.Reference{Path: "/share-abc"}, nil)
+	if contacted {
+		t.Fatal("hatch on must still refuse http before contacting the peer")
+	}
+	if !errors.Is(err, ocmd.ErrNonHTTPS) {
+		t.Fatalf("GetMD: got %v, want ocmd.ErrNonHTTPS", err)
+	}
+}
+
+func TestReceivedLoopbackHatchOnKeepsOtherGuards(t *testing.T) {
+	fs, err := New(context.Background(), map[string]any{
+		"gatewaysvc":                    "public-only-received-test.invalid:1",
+		"ocm_timeout":                   5,
+		"ocm_insecure":                  true,
+		"ocm_allow_loopback_federation": true,
+		"ocm_tls_min_version":           "1.3",
+		"ocm_response_limit":            4096,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	d, ok := fs.(*driver)
+	if !ok {
+		t.Fatalf("got %T, want *driver", fs)
+	}
+	if !d.sec.AllowLoopback {
+		t.Fatal("expected WebDAV AllowLoopback")
+	}
+	if d.discoverySec.AllowLoopback {
+		t.Fatal("discovery must stay public-only with hatch on")
+	}
+	if d.c.OCMResponseLimit != 4096 {
+		t.Fatalf("OCMResponseLimit = %d, want 4096 with hatch on", d.c.OCMResponseLimit)
+	}
+	if d.tlsMinVersion != tls.VersionTLS13 {
+		t.Fatalf("tlsMinVersion = %#x, want TLS 1.3 with hatch on", d.tlsMinVersion)
+	}
+
+	webdavRT := ocmd.UntrustedHTTPTransport(
+		5*time.Second,
+		true,
+		d.sec,
+		d.tlsMinVersion,
+	)
+	webdavInner := innerUntrustedTransport(t, webdavRT)
+	if webdavInner.TLSClientConfig == nil || webdavInner.TLSClientConfig.MinVersion != tls.VersionTLS13 {
+		t.Fatalf("hatch-on WebDAV transport MinVersion = %v, want TLS 1.3", webdavInner.TLSClientConfig)
+	}
+	discoInner := innerUntrustedTransport(t, d.ocmClient.HTTPTransport())
+	if discoInner.TLSClientConfig == nil || discoInner.TLSClientConfig.MinVersion != tls.VersionTLS13 {
+		t.Fatalf("hatch-on discovery transport MinVersion = %v, want TLS 1.3", discoInner.TLSClientConfig)
+	}
+
+	httpsURL, err := http.NewRequest(http.MethodGet, "https://127.0.0.1/", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, sec := range []ocmd.UntrustedClientSecurity{d.sec, d.discoverySec} {
+		if err := sec.CheckRedirect(httpsURL, []*http.Request{{}, {}, {}}); err != nil {
+			t.Fatalf("len(via)=3 must still be allowed with hatch on: %v", err)
+		}
+		if err := sec.CheckRedirect(httpsURL, []*http.Request{{}, {}, {}, {}}); err == nil {
+			t.Fatal("hatch on must still refuse a fourth redirect")
+		} else if !errors.Is(err, ocmd.ErrTooManyRedirects) {
+			t.Fatalf("got %v, want ocmd.ErrTooManyRedirects", err)
+		}
+	}
+}
+
+func TestReceivedLoopbackHatchOnRejectsOversizedDiscovery(t *testing.T) {
+	fs, err := New(context.Background(), map[string]any{
+		"gatewaysvc":                    "public-only-received-test.invalid:1",
+		"ocm_timeout":                   5,
+		"ocm_insecure":                  true,
+		"ocm_allow_loopback_federation": true,
+		"ocm_response_limit":            64,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	d, ok := fs.(*driver)
+	if !ok {
+		t.Fatalf("got %T, want *driver", fs)
+	}
+
+	payload := map[string]any{
+		"enabled":       true,
+		"apiVersion":    "1.2.0",
+		"provider":      strings.Repeat("a", 80),
+		"resourceTypes": []any{},
+		"tokenEndPoint": "https://example.invalid/ocm/token",
+	}
+	body, err := json.Marshal(payload)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(body) <= 64 {
+		t.Fatalf("fixture body is %d bytes, want more than 64", len(body))
+	}
+
+	contacted := false
+	srv := startPublicTLSServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		contacted = true
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write(body)
+	}))
+
+	got, err := d.getTokenEndpoint(
+		context.Background(),
+		testCodeFlowReceivedShare(srv.Listener.Addr().String(), srv.URL),
+	)
+	if !contacted {
+		t.Fatal("hatch on must still reach the public peer before applying the response limit")
+	}
+	if err == nil {
+		t.Fatal("expected oversized discovery body to be rejected with hatch on")
+	}
+	if !strings.Contains(err.Error(), "ocm response body exceeds size limit") {
+		t.Fatalf("got %v, want ocm response size-limit error", err)
+	}
+	if got != "" {
+		t.Fatalf("oversized discovery must not return a token endpoint, got %q", got)
+	}
+}
+
+func TestReceivedLoopbackHatchOnAllowsPublicHTTPS(t *testing.T) {
+	d := newLoopbackHatchReceivedDriver(t)
+
+	var discoSrv *httptest.Server
+	discoSrv = startPublicTLSServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/.well-known/ocm" {
+			http.NotFound(w, r)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"enabled":       true,
+			"apiVersion":    "1.2.0",
+			"endPoint":      discoSrv.URL + "/ocm",
+			"provider":      "reva",
+			"resourceTypes": []any{},
+			"tokenEndPoint": discoSrv.URL + "/ocm/token",
+		})
+	}))
+
+	got, err := d.getTokenEndpoint(context.Background(), testCodeFlowReceivedShare(discoSrv.Listener.Addr().String(), discoSrv.URL))
+	if err != nil {
+		t.Fatalf("getTokenEndpoint on public HTTPS with hatch on: %v", err)
+	}
+	want := discoSrv.URL + "/ocm/token"
+	if got != want {
+		t.Fatalf("getTokenEndpoint() = %q, want %q", got, want)
+	}
+
+	contacted := false
+	davSrv := startPublicTLSServer(t, receivedWebDAVHandler(t, &contacted))
+	share := receivedShareWithWebDAVURI(
+		davSrv.Listener.Addr().String(),
+		"share-abc",
+		davSrv.URL+"/remote.php/dav/ocm/share-abc",
+	)
+	d.gateway = &mockReceivedGateway{shares: []*ocmpb.ReceivedShare{share}}
+
+	info, err := d.GetMD(context.Background(), &provider.Reference{Path: "/share-abc"}, nil)
+	if err != nil {
+		t.Fatalf("GetMD on public HTTPS with hatch on: %v", err)
+	}
+	if info == nil {
+		t.Fatal("expected resource info for public HTTPS WebDAV with hatch on")
+	}
+	if !contacted {
+		t.Fatal("expected received-share WebDAV access to reach the public HTTPS host with hatch on")
+	}
+}
+
+func TestReceivedLoopbackHatchOnAllowsLoopbackHTTPS(t *testing.T) {
+	d := newLoopbackHatchReceivedDriver(t)
+
+	contacted := false
+	davSrv := httptest.NewTLSServer(receivedWebDAVHandler(t, &contacted))
+	defer davSrv.Close()
+
+	davShare := receivedShareWithWebDAVURI(
+		davSrv.Listener.Addr().String(),
+		"share-abc",
+		davSrv.URL+"/remote.php/dav/ocm/share-abc",
+	)
+	d.gateway = &mockReceivedGateway{shares: []*ocmpb.ReceivedShare{davShare}}
+
+	info, err := d.GetMD(context.Background(), &provider.Reference{Path: "/share-abc"}, nil)
+	if err != nil {
+		t.Fatalf("GetMD on loopback HTTPS with hatch on: %v", err)
+	}
+	if info == nil {
+		t.Fatal("expected resource info for loopback HTTPS WebDAV with hatch on")
+	}
+	if !contacted {
+		t.Fatal("expected received-share WebDAV access to reach the loopback HTTPS host")
+	}
+}
+
+func TestReceivedLoopbackHatchOnRejectsLoopbackDiscovery(t *testing.T) {
+	d := newLoopbackHatchReceivedDriver(t)
+
+	fetched := false
+	var discoSrv *httptest.Server
+	discoSrv = httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		fetched = true
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"enabled":       true,
+			"apiVersion":    "1.2.0",
+			"endPoint":      discoSrv.URL + "/ocm",
+			"provider":      "reva",
+			"resourceTypes": []any{},
+			"tokenEndPoint": discoSrv.URL + "/ocm/token",
+		})
+	}))
+	defer discoSrv.Close()
+
+	loopHost, _, err := net.SplitHostPort(discoSrv.Listener.Addr().String())
+	if err != nil {
+		t.Fatal(err)
+	}
+	share := testCodeFlowReceivedShare(discoSrv.Listener.Addr().String(), discoSrv.URL)
+	ctx, tr := contextWithHostDialTrace(context.Background())
+	got, err := d.getTokenEndpoint(ctx, share)
+	if fetched {
+		t.Fatal("hatch on must still refuse loopback discovery before contacting the peer")
+	}
+	assertNoEstablishedHost(t, tr, loopHost)
+	if err == nil {
+		t.Fatal("expected loopback discovery to be rejected with ocm_allow_loopback_federation=true")
+	}
+	if got != "" {
+		t.Fatalf("loopback discovery must not return a token endpoint, got %q", got)
+	}
+	discoErr := roundTripReceivedOCM(t, d, discoSrv.URL+"/.well-known/ocm")
+	if !errors.Is(discoErr, ocmd.ErrNonPublicAddr) {
+		t.Fatalf("discovery transport: got %v, want ocmd.ErrNonPublicAddr", discoErr)
+	}
+
+	_, exchErr := d.exchangeAccessToken(context.Background(), share, discoSrv.URL+"/ocm/token", "secret")
+	if fetched {
+		t.Fatal("hatch on must still refuse loopback token exchange before contacting the peer")
+	}
+	assertRefusedNonPublic(t, exchErr)
 }

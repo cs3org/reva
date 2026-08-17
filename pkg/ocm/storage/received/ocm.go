@@ -72,6 +72,7 @@ type driver struct {
 	discoveryCache *ttlcache.Cache
 	ocmClient      *ocmd.OCMClient
 	sec            ocmd.UntrustedClientSecurity
+	discoverySec   ocmd.UntrustedClientSecurity
 	tlsMinVersion  uint16
 }
 
@@ -96,6 +97,14 @@ type config struct {
 	// and emits no warning. A nonzero value is ignored so stream clients
 	// stay uncapped; it is not applied as Client.Timeout or SetTimeout.
 	WebDAVTransferTimeout int `mapstructure:"webdav_transfer_timeout"`
+	// OCMAllowLoopbackFederation, when true, opts received WebDAV into
+	// an additive dial hatch: public federation peers remain allowed, and
+	// loopback (127.0.0.0/8 and ::1) is also accepted. Discovery and
+	// token exchange stay public-only. Non-loopback private and reserved
+	// ranges stay refused. It is off by default. Enabling it weakens
+	// SSRF protection for received WebDAV only; it does not allow HTTP,
+	// private ranges, or disable other untrusted-client guards.
+	OCMAllowLoopbackFederation bool `mapstructure:"ocm_allow_loopback_federation"`
 }
 
 func (c *config) ApplyDefaults() {
@@ -140,10 +149,34 @@ func New(ctx context.Context, m map[string]any) (storage.FS, error) {
 	disco := ttlcache.NewCache()
 	_ = disco.SetTTL(5 * time.Minute)
 
-	// Empty hatch for T1. Received hatch config lands in a later task.
-	var sec ocmd.UntrustedClientSecurity
-	sec.ApplyDefaults()
-	if err := sec.Compile(); err != nil {
+	// ocm_allow_loopback_federation is ADDITIVE and WebDAV-only:
+	// public peers stay allowed (public + loopback) on received
+	// WebDAV metadata and stream clients. Discovery and token
+	// exchange stay public-only. Only non-loopback private peers
+	// are refused. It is for local development and specific
+	// federation scenarios, off by default, and weakens SSRF
+	// protection for received WebDAV only. HTTPS and the other
+	// untrusted-client guards stay in force on both clients.
+	var webdavSec ocmd.UntrustedClientSecurity
+	if c.OCMAllowLoopbackFederation {
+		appctx.GetLogger(ctx).Warn().
+			Bool("ocm_allow_loopback_federation", true).
+			Msg("ocm_allow_loopback_federation is enabled; " +
+				"additive public+loopback hatch (public peers stay allowed; " +
+				"only non-loopback private is refused); " +
+				"WebDAV-only weakening; discovery and token exchange stay public-only; " +
+				"for local development / specific federation; off by default; " +
+				"SSRF protection is weakened for this received surface only")
+		webdavSec.AllowLoopback = true
+	}
+	webdavSec.ApplyDefaults()
+	if err := webdavSec.Compile(); err != nil {
+		return nil, err
+	}
+
+	var discoverySec ocmd.UntrustedClientSecurity
+	discoverySec.ApplyDefaults()
+	if err := discoverySec.Compile(); err != nil {
 		return nil, err
 	}
 
@@ -155,11 +188,12 @@ func New(ctx context.Context, m map[string]any) (storage.FS, error) {
 		ocmClient: ocmd.NewPublicOnlyClient(
 			time.Duration(c.OCMClientTimeout)*time.Second,
 			c.OCMClientInsecure,
-			sec,
+			discoverySec,
 			c.OCMResponseLimit,
 			minVersion,
 		),
-		sec:           sec,
+		sec:           webdavSec,
+		discoverySec:  discoverySec,
 		tlsMinVersion: minVersion,
 	}
 	return d, nil

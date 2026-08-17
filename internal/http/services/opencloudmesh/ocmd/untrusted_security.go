@@ -39,10 +39,11 @@ const (
 // UntrustedClientSecurity is the shared hatch and redirect policy for
 // untrusted outbound OCM HTTP clients.
 type UntrustedClientSecurity struct {
-	MaxRedirects int      `mapstructure:"max_redirects"` // 0 => 3, ceiling 10
-	AllowHTTP    bool     `mapstructure:"allow_http"`    // ocmreceived only
-	AllowedCIDRs []string `mapstructure:"allowed_cidrs"` // ocmreceived only
-	allowedNets  []*net.IPNet
+	MaxRedirects  int      `mapstructure:"max_redirects"`  // 0 => 3, ceiling 10
+	AllowHTTP     bool     `mapstructure:"allow_http"`     // ocmreceived only
+	AllowedCIDRs  []string `mapstructure:"allowed_cidrs"`  // ocmreceived only; exclusive PIN
+	AllowLoopback bool     `mapstructure:"allow_loopback"` // ocmreceived only; additive public+loopback
+	allowedNets   []*net.IPNet
 }
 
 // 64:ff9b::/96 embeds an IPv4 address in its low 32 bits (RFC 6052), so on a
@@ -60,6 +61,9 @@ var ErrTooManyRedirects = errors.New("untrusted OCM client: too many redirects")
 
 // ErrNonPublicAddr is returned when dial Control refuses an address that
 // is not allowed by the current policy (public-only, or PIN-when-set).
+// When AllowLoopback is enabled, loopback addresses are also accepted
+// in addition to public ones; non-loopback private addresses remain
+// refused.
 var ErrNonPublicAddr = errors.New("refusing to connect to non-public address")
 
 // ErrHatchAllowHTTP is returned when a non-received consumer sets allow_http.
@@ -67,6 +71,9 @@ var ErrHatchAllowHTTP = errors.New("untrusted client security: allow_http is onl
 
 // ErrHatchAllowedCIDRs is returned when a non-received consumer sets allowed_cidrs.
 var ErrHatchAllowedCIDRs = errors.New("untrusted client security: allowed_cidrs is only valid for ocmreceived")
+
+// ErrHatchAllowLoopback is returned when a non-received consumer sets allow_loopback.
+var ErrHatchAllowLoopback = errors.New("untrusted client security: allow_loopback is only valid for ocmreceived")
 
 var errInvalidCIDR = errors.New("invalid CIDR")
 
@@ -115,14 +122,17 @@ func (s *UntrustedClientSecurity) Compile() error {
 	return nil
 }
 
-// RejectHatch errors if AllowHTTP is true or AllowedCIDRs is non-empty.
-// Non-received consumers call this in their New/start path.
+// RejectHatch errors if AllowHTTP is true, AllowedCIDRs is non-empty, or
+// AllowLoopback is true. Non-received consumers call this in their New/start path.
 func (s UntrustedClientSecurity) RejectHatch() error {
 	if s.AllowHTTP {
 		return ErrHatchAllowHTTP
 	}
 	if len(s.AllowedCIDRs) > 0 {
 		return ErrHatchAllowedCIDRs
+	}
+	if s.AllowLoopback {
+		return ErrHatchAllowLoopback
 	}
 	return nil
 }
@@ -168,6 +178,13 @@ func (s UntrustedClientSecurity) CheckRedirect(req *http.Request, via []*http.Re
 	return s.requireScheme(req.URL)
 }
 
+// CheckDialAddr applies the same address policy as Dialer.Control without
+// opening a network connection. addr must be host:port as Control receives
+// it after default ports are applied.
+func (s UntrustedClientSecurity) CheckDialAddr(addr string) error {
+	return s.refuseNonPublicAddr("tcp", addr)
+}
+
 func (s UntrustedClientSecurity) refuseNonPublicAddr(network, addr string) error {
 	host, _, err := net.SplitHostPort(addr)
 	if err != nil {
@@ -195,7 +212,10 @@ func (s UntrustedClientSecurity) allowsDial(ip net.IP) bool {
 	if len(s.allowedNets) > 0 {
 		return ipInAny(unwrapped, s.allowedNets) || ipInAny(ip, s.allowedNets)
 	}
-	return isPublicIP(unwrapped)
+	publicOK := isPublicIP(unwrapped)
+	// Check the original address so NAT64-wrapped loopback stays refused.
+	loopbackOK := s.AllowLoopback && isLoopbackHatchIP(ip)
+	return publicOK || loopbackOK
 }
 
 func defaultUntrustedSecurity() UntrustedClientSecurity {
@@ -284,6 +304,10 @@ func hasExactHostAllow(ip net.IP, nets []*net.IPNet) bool {
 		}
 	}
 	return false
+}
+
+func isLoopbackHatchIP(ip net.IP) bool {
+	return ip != nil && ip.IsLoopback()
 }
 
 func isPublicIP(ip net.IP) bool {

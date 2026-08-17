@@ -133,6 +133,74 @@ func TestUntrustedClientSecurityAllowsDialPIN(t *testing.T) {
 		if s.allowsDial(net.ParseIP("10.1.2.3")) {
 			t.Fatal("empty hatch must refuse a private IP")
 		}
+		if s.allowsDial(net.ParseIP("127.0.0.1")) {
+			t.Fatal("empty hatch must refuse loopback")
+		}
+	})
+
+	t.Run("AllowLoopback is additive public plus loopback", func(t *testing.T) {
+		s := UntrustedClientSecurity{AllowLoopback: true}
+		if err := s.Compile(); err != nil {
+			t.Fatal(err)
+		}
+		if !s.allowsDial(net.ParseIP("8.8.8.8")) {
+			t.Fatal("AllowLoopback must still allow a public IP")
+		}
+		if !s.allowsDial(net.ParseIP("127.0.0.1")) {
+			t.Fatal("AllowLoopback must allow 127.0.0.1")
+		}
+		if !s.allowsDial(net.ParseIP("127.1.2.3")) {
+			t.Fatal("AllowLoopback must allow 127.0.0.0/8")
+		}
+		if !s.allowsDial(net.ParseIP("::1")) {
+			t.Fatal("AllowLoopback must allow ::1")
+		}
+		if s.allowsDial(net.ParseIP("10.1.2.3")) {
+			t.Fatal("AllowLoopback must refuse 10.x")
+		}
+		if s.allowsDial(net.ParseIP("192.168.1.1")) {
+			t.Fatal("AllowLoopback must refuse 192.168.x")
+		}
+		if s.allowsDial(net.ParseIP("172.16.0.1")) {
+			t.Fatal("AllowLoopback must refuse 172.16/12")
+		}
+		if s.allowsDial(net.ParseIP("100.64.0.1")) {
+			t.Fatal("AllowLoopback must refuse CGNAT 100.64/10")
+		}
+		if s.allowsDial(net.ParseIP("169.254.1.1")) {
+			t.Fatal("AllowLoopback must refuse link-local")
+		}
+		if s.allowsDial(net.ParseIP("64:ff9b::7f00:1")) {
+			t.Fatal("AllowLoopback must refuse NAT64-wrapped loopback")
+		}
+		if err := s.CheckDialAddr("8.8.8.8:443"); err != nil {
+			t.Fatalf("CheckDialAddr public: %v", err)
+		}
+		if err := s.CheckDialAddr("127.0.0.1:443"); err != nil {
+			t.Fatalf("CheckDialAddr loopback: %v", err)
+		}
+		if err := s.CheckDialAddr("10.1.2.3:443"); !errors.Is(err, ErrNonPublicAddr) {
+			t.Fatalf("CheckDialAddr private: got %v, want ErrNonPublicAddr", err)
+		}
+	})
+
+	t.Run("PIN stays exclusive when AllowLoopback is also set", func(t *testing.T) {
+		s := UntrustedClientSecurity{
+			AllowedCIDRs:  []string{"10.0.0.0/8"},
+			AllowLoopback: true,
+		}
+		if err := s.Compile(); err != nil {
+			t.Fatal(err)
+		}
+		if !s.allowsDial(net.ParseIP("10.1.2.3")) {
+			t.Fatal("PIN must still allow a listed address")
+		}
+		if s.allowsDial(net.ParseIP("8.8.8.8")) {
+			t.Fatal("PIN must stay exclusive and refuse an unlisted public IP")
+		}
+		if s.allowsDial(net.ParseIP("127.0.0.1")) {
+			t.Fatal("PIN must stay exclusive and ignore AllowLoopback")
+		}
 	})
 
 	t.Run("non-empty PIN allows listed only", func(t *testing.T) {
@@ -282,6 +350,11 @@ func TestUntrustedClientSecurityRejectHatch(t *testing.T) {
 	} else if !errors.Is(err, ErrHatchAllowedCIDRs) {
 		t.Fatalf("got %v, want ErrHatchAllowedCIDRs", err)
 	}
+	if err := (UntrustedClientSecurity{AllowLoopback: true}).RejectHatch(); err == nil {
+		t.Fatal("AllowLoopback must be rejected for non-received consumers")
+	} else if !errors.Is(err, ErrHatchAllowLoopback) {
+		t.Fatalf("got %v, want ErrHatchAllowLoopback", err)
+	}
 }
 
 func TestOCMDNewRejectsHatch(t *testing.T) {
@@ -314,6 +387,21 @@ func TestOCMDNewRejectsHatch(t *testing.T) {
 		}
 		if !errors.Is(err, ErrHatchAllowedCIDRs) {
 			t.Fatalf("got %v, want ErrHatchAllowedCIDRs", err)
+		}
+	})
+
+	t.Run("allow_loopback", func(t *testing.T) {
+		_, err := New(context.Background(), map[string]any{
+			"gatewaysvc": "gateway:9142",
+			"ocm_client_security": map[string]any{
+				"allow_loopback": true,
+			},
+		})
+		if err == nil {
+			t.Fatal("expected ocmd.New to reject allow_loopback")
+		}
+		if !errors.Is(err, ErrHatchAllowLoopback) {
+			t.Fatalf("got %v, want ErrHatchAllowLoopback", err)
 		}
 	})
 }
