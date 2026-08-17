@@ -47,9 +47,8 @@ func (s *svc) ListAuthProviders(ctx context.Context, req *registry.ListAuthProvi
 	}
 
 	if res.Status.Code != rpc.Code_CODE_OK {
-		err := status.NewErrorFromCode(res.Status.Code, "gateway")
 		return &gateway.ListAuthProvidersResponse{
-			Status: status.NewInternal(ctx, err, "gateway"),
+			Status: res.Status,
 		}, nil
 	}
 

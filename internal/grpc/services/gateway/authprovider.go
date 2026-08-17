@@ -72,9 +72,8 @@ func (s *svc) Authenticate(ctx context.Context, req *gateway.AuthenticateRequest
 			Status: res.Status,
 		}, nil
 	case res.Status.Code != rpc.Code_CODE_OK:
-		err := status.NewErrorFromCode(res.Status.Code, "gateway")
 		return &gateway.AuthenticateResponse{
-			Status: status.NewInternal(ctx, err, fmt.Sprintf("error authenticating credentials to auth provider for type: %s", req.Type)),
+			Status: res.Status,
 		}, nil
 	}
 
@@ -174,10 +173,9 @@ func (s *svc) Authenticate(ctx context.Context, req *gateway.AuthenticateRequest
 			}
 
 			if createHomeRes.Status.Code != rpc.Code_CODE_OK {
-				err := status.NewErrorFromCode(createHomeRes.Status.Code, "gateway")
-				log.Err(err).Any("response", createHomeRes).Msg("return from CreateHome")
+				log.Err(status.NewErrorFromCode(createHomeRes.Status.Code, "gateway")).Any("response", createHomeRes).Msg("return from CreateHome")
 				return &gateway.AuthenticateResponse{
-					Status: status.NewInternal(ctx, err, "error creating user home"),
+					Status: createHomeRes.Status,
 				}, nil
 			}
 			if s.c.CreateHomeCacheTTL > 0 {

@@ -158,7 +158,7 @@ func (s *svc) ListExistingOCMShares(ctx context.Context, req *ocm.ListOCMSharesR
 					return err
 				}
 				if stat.Status.Code != rpc.Code_CODE_OK {
-					return errors.New("An error occurred: " + stat.Status.Message)
+					return status.NewErrtypeFromStatus(stat.Status)
 				}
 				resourceInfo = stat.Info
 				if s.resourceInfoCacheTTL > 0 {

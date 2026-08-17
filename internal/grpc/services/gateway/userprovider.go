@@ -98,7 +98,7 @@ func (s *svc) FindUsers(ctx context.Context, req *user.FindUsersRequest) (*user.
 
 		if res.Status.Code != rpc.Code_CODE_OK {
 			return &user.FindUsersResponse{
-				Status: status.NewInternal(ctx, errors.New(res.Status.Message), res.Status.Message),
+				Status: res.Status,
 			}, nil
 		}
 		res.Users = append(res.Users, ocm_res.AcceptedUsers...)
