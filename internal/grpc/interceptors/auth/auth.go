@@ -26,20 +26,21 @@ import (
 	authpb "github.com/cs3org/go-cs3apis/cs3/auth/provider/v1beta1"
 	gatewayv1beta1 "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
-	"github.com/cs3org/reva/v3/pkg/appctx"
-	"github.com/cs3org/reva/v3/pkg/auth/scope"
-	"github.com/cs3org/reva/v3/pkg/errtypes"
-	"github.com/cs3org/reva/v3/pkg/rgrpc/todo/pool"
-	"github.com/cs3org/reva/v3/pkg/sharedconf"
-	"github.com/cs3org/reva/v3/pkg/token"
-	tokenmgr "github.com/cs3org/reva/v3/pkg/token/manager/registry"
-	"github.com/cs3org/reva/v3/pkg/user"
-	"github.com/cs3org/reva/v3/pkg/utils"
 	"github.com/mitchellh/mapstructure"
 	"github.com/pkg/errors"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
+
+	"github.com/cs3org/reva/v3/pkg/appctx"
+	"github.com/cs3org/reva/v3/pkg/auth/scope"
+	"github.com/cs3org/reva/v3/pkg/errtypes"
+	"github.com/cs3org/reva/v3/pkg/service"
+	"github.com/cs3org/reva/v3/pkg/sharedconf"
+	"github.com/cs3org/reva/v3/pkg/token"
+	tokenmgr "github.com/cs3org/reva/v3/pkg/token/manager/registry"
+	"github.com/cs3org/reva/v3/pkg/user"
+	"github.com/cs3org/reva/v3/pkg/utils"
 )
 
 var userGroupsCache gcache.Cache
@@ -64,16 +65,18 @@ func parseConfig(m map[string]any) (*config, error) {
 	return c, nil
 }
 
-// NewUnary returns a new unary interceptor that adds
-// trace information for the request.
-func NewUnary(m map[string]any, unprotected []string) (grpc.UnaryServerInterceptor, error) {
+// interceptor is the shared state of the unary and stream auth interceptors.
+type interceptor struct {
+	conf         *config
+	tokenManager token.Manager
+	blockedUsers user.BlockedUsers
+}
+
+func newInterceptor(m map[string]any) (*interceptor, error) {
 	conf, err := parseConfig(m)
 	if err != nil {
-		err = errors.Wrap(err, "auth: error parsing config")
-		return nil, err
+		return nil, errors.Wrap(err, "auth: error parsing config")
 	}
-
-	blockedUsers := user.NewBlockedUsersSet(conf.blockedUsers)
 
 	if conf.TokenManager == "" {
 		conf.TokenManager = "jwt"
@@ -87,13 +90,36 @@ func NewUnary(m map[string]any, unprotected []string) (grpc.UnaryServerIntercept
 	if !ok {
 		return nil, errtypes.NotFound("auth: token manager does not exist: " + conf.TokenManager)
 	}
-
 	tokenManager, err := h(conf.TokenManagers[conf.TokenManager])
 	if err != nil {
 		return nil, errors.Wrap(err, "auth: error creating token manager")
 	}
 
-	interceptor := func(ctx context.Context, req any, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (any, error) {
+	return &interceptor{
+		conf:         conf,
+		tokenManager: tokenManager,
+		blockedUsers: user.NewBlockedUsersSet(conf.blockedUsers),
+	}, nil
+}
+
+func NewUnary(m map[string]any, unprotected []string) (grpc.UnaryServerInterceptor, error) {
+	i, err := newInterceptor(m)
+	if err != nil {
+		return nil, err
+	}
+	return i.unary(unprotected), nil
+}
+
+func NewStream(m map[string]any, unprotected []string) (grpc.StreamServerInterceptor, error) {
+	i, err := newInterceptor(m)
+	if err != nil {
+		return nil, err
+	}
+	return i.stream(unprotected), nil
+}
+
+func (i *interceptor) unary(unprotected []string) grpc.UnaryServerInterceptor {
+	return func(ctx context.Context, req any, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (any, error) {
 		log := appctx.GetLogger(ctx)
 
 		if utils.Skip(info.FullMethod, unprotected) {
@@ -110,13 +136,13 @@ func NewUnary(m map[string]any, unprotected []string) (grpc.UnaryServerIntercept
 		}
 
 		// scopes, validate the token and ensure access to the resource is allowed
-		u, scopes, err := dismantleToken(ctx, tkn, req, tokenManager, conf.GatewayAddr, false)
+		u, scopes, err := i.dismantleToken(ctx, tkn, req, false)
 		if err != nil {
 			log.Warn().Err(err).Msg("access token is invalid")
 			return nil, status.Errorf(codes.PermissionDenied, "auth: core access token is invalid")
 		}
 
-		if blockedUsers.IsBlocked(u.Username) {
+		if i.blockedUsers.IsBlocked(u.Username) {
 			return nil, status.Errorf(codes.PermissionDenied, "user %s blocked", u.Username)
 		}
 
@@ -124,36 +150,10 @@ func NewUnary(m map[string]any, unprotected []string) (grpc.UnaryServerIntercept
 		ctx = appctx.ContextSetScopes(ctx, scopes)
 		return handler(ctx, req)
 	}
-
-	return interceptor, nil
 }
 
-// NewStream returns a new server stream interceptor
-// that adds trace information to the request.
-func NewStream(m map[string]any, unprotected []string) (grpc.StreamServerInterceptor, error) {
-	conf, err := parseConfig(m)
-	if err != nil {
-		return nil, err
-	}
-
-	if conf.TokenManager == "" {
-		conf.TokenManager = "jwt"
-	}
-
-	userGroupsCache = gcache.New(1000000).LFU().Build()
-	scopeExpansionCache = gcache.New(1000000).LFU().Build()
-
-	h, ok := tokenmgr.NewFuncs[conf.TokenManager]
-	if !ok {
-		return nil, errtypes.NotFound("auth: token manager not found: " + conf.TokenManager)
-	}
-
-	tokenManager, err := h(conf.TokenManagers[conf.TokenManager])
-	if err != nil {
-		return nil, errtypes.NotFound("auth: token manager not found: " + conf.TokenManager)
-	}
-
-	interceptor := func(srv any, ss grpc.ServerStream, info *grpc.StreamServerInfo, handler grpc.StreamHandler) error {
+func (i *interceptor) stream(unprotected []string) grpc.StreamServerInterceptor {
+	return func(srv any, ss grpc.ServerStream, info *grpc.StreamServerInfo, handler grpc.StreamHandler) error {
 		ctx := ss.Context()
 		log := appctx.GetLogger(ctx)
 
@@ -170,7 +170,7 @@ func NewStream(m map[string]any, unprotected []string) (grpc.StreamServerInterce
 		}
 
 		// validate the token and ensure access to the resource is allowed
-		u, scopes, err := dismantleToken(ctx, tkn, ss, tokenManager, conf.GatewayAddr, false)
+		u, scopes, err := i.dismantleToken(ctx, tkn, ss, false)
 		if err != nil {
 			log.Warn().Err(err).Msg("access token is invalid")
 			return status.Errorf(codes.PermissionDenied, "auth: core access token is invalid")
@@ -182,7 +182,6 @@ func NewStream(m map[string]any, unprotected []string) (grpc.StreamServerInterce
 		wrapped := newWrappedServerStream(ctx, ss)
 		return handler(srv, wrapped)
 	}
-	return interceptor, nil
 }
 
 func newWrappedServerStream(ctx context.Context, ss grpc.ServerStream) *wrappedServerStream {
@@ -198,7 +197,8 @@ func (ss *wrappedServerStream) Context() context.Context {
 	return ss.newCtx
 }
 
-func dismantleToken(ctx context.Context, tkn string, req any, mgr token.Manager, gatewayAddr string, unprotected bool) (*userpb.User, map[string]*authpb.Scope, error) {
+func (i *interceptor) dismantleToken(ctx context.Context, tkn string, req any, unprotected bool) (*userpb.User, map[string]*authpb.Scope, error) {
+	mgr := i.tokenManager
 	u, tokenScope, err := mgr.DismantleToken(ctx, tkn)
 	if err != nil {
 		return nil, nil, err
@@ -209,7 +209,7 @@ func dismantleToken(ctx context.Context, tkn string, req any, mgr token.Manager,
 	}
 
 	if sharedconf.SkipUserGroupsInToken() {
-		client, err := pool.GetGatewayServiceClient(pool.Endpoint(gatewayAddr))
+		client, err := service.Gateway(ctx)
 		if err != nil {
 			return nil, nil, err
 		}
@@ -229,7 +229,7 @@ func dismantleToken(ctx context.Context, tkn string, req any, mgr token.Manager,
 		return u, tokenScope, nil
 	}
 
-	if err = expandAndVerifyScope(ctx, req, tokenScope, u, gatewayAddr, mgr); err != nil {
+	if err = i.expandAndVerifyScope(ctx, req, tokenScope, u, mgr); err != nil {
 		return nil, nil, err
 	}
 

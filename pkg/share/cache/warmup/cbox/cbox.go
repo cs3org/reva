@@ -29,7 +29,7 @@ import (
 
 	"github.com/cs3org/reva/v3/pkg/appctx"
 	"github.com/cs3org/reva/v3/pkg/auth/scope"
-	"github.com/cs3org/reva/v3/pkg/rgrpc/todo/pool"
+	"github.com/cs3org/reva/v3/pkg/service"
 	"github.com/cs3org/reva/v3/pkg/share/cache"
 	"github.com/cs3org/reva/v3/pkg/share/cache/warmup/registry"
 	"github.com/cs3org/reva/v3/pkg/token/manager/jwt"
@@ -120,7 +120,7 @@ func (m *manager) GetInfos() ([]*provider.ResourceInfo, error) {
 	}
 	ctx := metadata.AppendToOutgoingContext(context.Background(), appctx.TokenHeader, tkn)
 
-	client, err := pool.GetGatewayServiceClient(pool.Endpoint(m.conf.GatewaySvc))
+	client, err := service.Gateway(ctx)
 	if err != nil {
 		return nil, err
 	}

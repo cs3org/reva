@@ -25,26 +25,19 @@ import (
 	"net/http"
 	"strings"
 
-	gateway "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
 	rpcv1beta1 "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	ocmpb "github.com/cs3org/go-cs3apis/cs3/sharing/ocm/v1beta1"
 	"github.com/cs3org/reva/v3/internal/http/services/reqres"
 	"github.com/cs3org/reva/v3/pkg/errtypes"
-	"github.com/cs3org/reva/v3/pkg/rgrpc/todo/pool"
 	"github.com/cs3org/reva/v3/pkg/rhttp/router"
+	"github.com/cs3org/reva/v3/pkg/service"
 )
 
 type appsHandler struct {
-	gatewayClient gateway.GatewayAPIClient
 	ocmMountPoint string
 }
 
 func (h *appsHandler) init(c *config) error {
-	var err error
-	h.gatewayClient, err = pool.GetGatewayServiceClient(pool.Endpoint(c.GatewaySvc))
-	if err != nil {
-		return err
-	}
 	h.ocmMountPoint = c.OCMMountPoint
 
 	return nil
@@ -99,7 +92,11 @@ func (h *appsHandler) OpenInApp(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *appsHandler) webappTemplate(ctx context.Context, id *ocmpb.ShareId) (string, error) {
-	res, err := h.gatewayClient.GetReceivedOCMShare(ctx, &ocmpb.GetReceivedOCMShareRequest{
+	gatewayClient, err := service.Gateway(ctx)
+	if err != nil {
+		return "", err
+	}
+	res, err := gatewayClient.GetReceivedOCMShare(ctx, &ocmpb.GetReceivedOCMShareRequest{
 		Ref: &ocmpb.ShareReference{
 			Spec: &ocmpb.ShareReference_Id{
 				Id: id,

@@ -3,6 +3,23 @@
 [shared]
 gatewaysvc = "{{grpc_address}}"
 
+# The cernbox gateway process. It is co-resident with every service that calls
+# back into the gateway: the cernbox HTTP services (ocm, sciencemesh, wellknown,
+# ocdav, datagateway), the ocmshareprovider/ocminvitemanager (authoritative OCM
+# state), the ocmshares auth provider and the ocmoutcoming storage/data
+# providers. Discovery is registry-based (no gateway address fallback) and the
+# registry is per-process (memory driver), so all of these share this process's
+# in-process registry with the gateway.
+#
+# Services that do NOT call the gateway (and cannot be a second driver of a
+# service already hosted here) live in their own processes and are discovered
+# through the static registries: einstein's localhome storage and the json
+# (basic/bearer) auth provider live in cernboxhome; the machine auth provider
+# lives in cernboxmachineauth.
+
+[shared.registry]
+driver = "memory"
+
 [grpc]
 address = "{{grpc_address}}"
 
@@ -19,29 +36,38 @@ datagateway = "http://127.0.0.1:12345/datagateway"
 [grpc.services.storageregistry.drivers.static]
 home_provider = "/home"
 [grpc.services.storageregistry.drivers.static.rules]
-"/home" = {"address" = "{{grpc_address}}"}
-"123e4567-e89b-12d3-a456-426655440000" = {"address" = "{{grpc_address}}"}
-"/ocm" = {"address" = "{{cernboxoutcomingocm_address}}"}
-"ocm" = {"address" = "{{cernboxoutcomingocm_address}}"}
+"/home" = {"address" = "{{cernboxhome_address}}"}
+"123e4567-e89b-12d3-a456-426655440000" = {"address" = "{{cernboxhome_address}}"}
+"/ocm" = {"address" = "{{grpc_address}}"}
+"ocm" = {"address" = "{{grpc_address}}"}
 
+# ocmoutcoming storage is co-resident with the gateway: it resolves the gateway
+# (machine auth, byte proxying) through the in-process registry.
 [grpc.services.storageprovider]
-driver = "localhome"
-mount_path = "/home"
+driver = "ocmoutcoming"
+mount_path = "/ocm"
 space_depth = 2
-mount_id = "123e4567-e89b-12d3-a456-426655440000"
-data_server_url = "http://127.0.0.1:12345/data"
+mount_id = "ocm"
 
-[grpc.services.storageprovider.drivers.localhome]
-root = "{{localhome_root}}"
+[grpc.services.storageprovider.drivers.ocmoutcoming]
+machine_secret = "secret"
 
 [grpc.services.authregistry]
 driver = "static"
 
 [grpc.services.authregistry.drivers.static.rules]
-basic = "{{grpc_address}}"
-bearer = "{{grpc_address}}"
-ocmshares = "{{cernboxoutcomingocm_address}}"
+basic = "{{cernboxhome_address}}"
+bearer = "{{cernboxhome_address}}"
+ocmshares = "{{grpc_address}}"
 machine = "{{cernboxmachineauth_address}}"
+
+# ocmshares auth is co-resident with the gateway: it calls GetOCMShareByToken /
+# GetAcceptedUser, which the local gateway answers from the authoritative
+# ocmshareprovider / ocminvitemanager in this same process.
+[grpc.services.authprovider]
+auth_manager = "ocmshares"
+
+[grpc.services.authprovider.auth_managers.ocmshares]
 
 [grpc.services.ocminvitemanager]
 driver = "json"
@@ -71,14 +97,55 @@ driver = "json"
 [grpc.services.ocmincoming.drivers.json]
 file = "{{ocm_share_cernbox_file}}"
 
-[grpc.services.authprovider]
-auth_manager = "json"
-
-[grpc.services.authprovider.auth_managers.json]
-users = "fixtures/ocm-users.demo.json"
-
 [grpc.services.userprovider]
 driver = "json"
 
 [grpc.services.userprovider.drivers.json]
 users = "fixtures/ocm-users.demo.json"
+
+# All cernbox HTTP services run in this same process so they discover the
+# co-resident gateway through the in-process registry.
+[http]
+address = "127.0.0.1:12345"
+
+[http.services.ocm]
+
+[http.services.sciencemesh]
+provider_domain = "127.0.0.1:12345"
+mesh_directory_url = "http://meshdir"
+smtp_credentials = {}
+
+[http.middlewares.auth]
+credential_chain = ["publicshares", "basic", "bearer"]
+token_strategy_chain = ["bearer", "header"]
+
+[http.middlewares.cors]
+
+[http.middlewares.providerauthorizer]
+driver = "json"
+
+[http.middlewares.providerauthorizer.drivers.json]
+providers = "fixtures/ocm-providers.demo.json"
+
+[http.services.datagateway]
+public_url = "http://127.0.0.1:12345/datagateway"
+
+# Data provider for the ocmoutcoming mount, co-resident with its storage provider
+# so they discover each other through the in-process registry by mount_id.
+[http.services.dataprovider]
+driver = "ocmoutcoming"
+mount_id = "ocm"
+public_url = "http://127.0.0.1:12345/data"
+
+[http.services.dataprovider.drivers.ocmoutcoming]
+machine_secret = "secret"
+
+[http.services.ocdav]
+spaces_enabled = true
+
+[http.services.wellknown]
+[http.services.wellknown.ocmprovider]
+ocm_prefix = "ocm"
+provider = "Reva for CERNBox"
+endpoint = "http://127.0.0.1:12345"
+enable_webapp = true

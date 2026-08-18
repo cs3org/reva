@@ -39,18 +39,21 @@ import (
 	link "github.com/cs3org/go-cs3apis/cs3/sharing/link/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	types "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
+
 	"github.com/cs3org/reva/v3/internal/grpc/services/storageprovider"
 	"github.com/cs3org/reva/v3/pkg/appctx"
 	"github.com/cs3org/reva/v3/pkg/permissions"
+	"github.com/cs3org/reva/v3/pkg/service"
 	"github.com/cs3org/reva/v3/pkg/spaces"
 
 	"github.com/pkg/errors"
+
+	"github.com/rs/zerolog"
 
 	"github.com/cs3org/reva/v3/pkg/publicshare"
 	"github.com/cs3org/reva/v3/pkg/share"
 	"github.com/cs3org/reva/v3/pkg/utils"
 	"github.com/cs3org/reva/v3/pkg/utils/resourceid"
-	"github.com/rs/zerolog"
 )
 
 const (
@@ -125,7 +128,7 @@ func (s *svc) propfindResponse(ctx context.Context, w http.ResponseWriter, r *ht
 		},
 	})
 
-	client, err := s.getClient()
+	client, err := service.Gateway(ctx)
 	if err != nil {
 		log.Error().Err(err).Msg("error getting grpc client")
 		w.WriteHeader(http.StatusInternalServerError)
@@ -215,7 +218,7 @@ func (s *svc) getResourceInfos(ctx context.Context, w http.ResponseWriter, r *ht
 		return nil, nil, "", false
 	}
 
-	client, err := s.getClient()
+	client, err := service.Gateway(ctx)
 	if err != nil {
 		log.Error().Err(err).Msg("error getting grpc client")
 		w.WriteHeader(http.StatusInternalServerError)

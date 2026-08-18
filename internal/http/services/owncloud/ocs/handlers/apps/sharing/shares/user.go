@@ -37,13 +37,13 @@ import (
 	"github.com/cs3org/reva/v3/pkg/appctx"
 	"github.com/cs3org/reva/v3/pkg/notifications/model"
 	"github.com/cs3org/reva/v3/pkg/permissions"
+	"github.com/cs3org/reva/v3/pkg/service"
 	"github.com/cs3org/reva/v3/pkg/sharehierarchy"
-	"github.com/cs3org/reva/v3/pkg/rgrpc/todo/pool"
 )
 
 func (h *Handler) createUserShare(w http.ResponseWriter, r *http.Request, statInfo *provider.ResourceInfo, role *permissions.Role, roleVal []byte) {
 	ctx := r.Context()
-	c, err := pool.GetGatewayServiceClient(pool.Endpoint(h.gatewayAddr))
+	c, err := service.Gateway(ctx)
 	if err != nil {
 		response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "error getting grpc gateway client", err)
 		return
@@ -123,7 +123,7 @@ func (h *Handler) createUserShare(w http.ResponseWriter, r *http.Request, statIn
 
 func (h *Handler) isUserShare(r *http.Request, oid string) bool {
 	logger := appctx.GetLogger(r.Context())
-	client, err := pool.GetGatewayServiceClient(pool.Endpoint(h.gatewayAddr))
+	client, err := service.Gateway(r.Context())
 	if err != nil {
 		logger.Err(err).Send()
 	}
@@ -148,7 +148,7 @@ func (h *Handler) isUserShare(r *http.Request, oid string) bool {
 func (h *Handler) removeUserShare(w http.ResponseWriter, r *http.Request, shareID string) {
 	ctx := r.Context()
 
-	uClient, err := pool.GetGatewayServiceClient(pool.Endpoint(h.gatewayAddr))
+	uClient, err := service.Gateway(ctx)
 	if err != nil {
 		response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "error getting grpc gateway client", err)
 		return
@@ -203,7 +203,7 @@ func (h *Handler) removeUserShare(w http.ResponseWriter, r *http.Request, shareI
 
 func (h *Handler) isFederatedShare(r *http.Request, shareID string) bool {
 	log := appctx.GetLogger(r.Context())
-	client, err := pool.GetGatewayServiceClient(pool.Endpoint(h.gatewayAddr))
+	client, err := service.Gateway(r.Context())
 	if err != nil {
 		log.Err(err).Send()
 		return false
@@ -228,7 +228,7 @@ func (h *Handler) isFederatedShare(r *http.Request, shareID string) bool {
 
 func (h *Handler) isFederatedReceivedShare(r *http.Request, shareID string) bool {
 	log := appctx.GetLogger(r.Context())
-	client, err := pool.GetGatewayServiceClient(pool.Endpoint(h.gatewayAddr))
+	client, err := service.Gateway(r.Context())
 	if err != nil {
 		log.Err(err).Send()
 		return false
@@ -254,7 +254,7 @@ func (h *Handler) isFederatedReceivedShare(r *http.Request, shareID string) bool
 func (h *Handler) removeFederatedShare(w http.ResponseWriter, r *http.Request, shareID string) {
 	ctx := r.Context()
 
-	client, err := pool.GetGatewayServiceClient(pool.Endpoint(h.gatewayAddr))
+	client, err := service.Gateway(ctx)
 	if err != nil {
 		response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "error getting grpc gateway client", err)
 		return
@@ -315,7 +315,7 @@ func (h *Handler) listUserShares(r *http.Request, filters []*collaboration.Filte
 	}
 
 	ocsDataPayload := make([]*conversions.ShareData, 0)
-	client, err := pool.GetGatewayServiceClient(pool.Endpoint(h.gatewayAddr))
+	client, err := service.Gateway(ctx)
 	if err != nil {
 		return ocsDataPayload, nil, err
 	}

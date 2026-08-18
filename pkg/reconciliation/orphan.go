@@ -30,6 +30,7 @@ import (
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/cs3org/reva/v3/pkg/appctx"
 	"github.com/cs3org/reva/v3/pkg/rjobs"
+	"github.com/cs3org/reva/v3/pkg/service"
 	"github.com/google/uuid"
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog"
@@ -104,7 +105,10 @@ type OrphanJob struct {
 	// Links is the public link store to scan and mutate. A nil store leaves
 	// public links unscanned.
 	Links PublicLinkStore
-	// Gateway resolves resource and recipient existence.
+	// Gateway resolves resource and recipient existence. When nil the job
+	// resolves the gateway through the service registry at the start of every
+	// run, which is what the serverless service relies on: the registry may not
+	// hold a gateway yet when the job is registered at startup.
 	Gateway gateway.GatewayAPIClient
 	// Auth puts the identity the job acts as on the run context. The jobs
 	// runner hands a run a bare context and the gateway rejects a call without
@@ -193,6 +197,11 @@ func (j *OrphanJob) Run(ctx context.Context) (OrphanReport, error) {
 		}
 	}
 
+	gw, err := j.gateway(ctx)
+	if err != nil {
+		return OrphanReport{}, err
+	}
+
 	entries, err := j.entries(ctx)
 	if err != nil {
 		return OrphanReport{}, err
@@ -208,7 +217,7 @@ func (j *OrphanJob) Run(ctx context.Context) (OrphanReport, error) {
 	for _, e := range entries {
 		report.Checked++
 
-		reason, orphaned, err := j.classify(ctx, e)
+		reason, orphaned, err := j.classify(ctx, gw, e)
 		if err != nil {
 			report.Skipped++
 			log.Error().Err(err).
@@ -315,11 +324,20 @@ func (j *OrphanJob) entries(ctx context.Context) ([]entry, error) {
 	return entries, nil
 }
 
+// gateway returns the client the run checks existence with: the injected one
+// when set, otherwise the one the service registry resolves right now.
+func (j *OrphanJob) gateway(ctx context.Context) (gateway.GatewayAPIClient, error) {
+	if j.Gateway != nil {
+		return j.Gateway, nil
+	}
+	return service.Gateway(ctx)
+}
+
 // classify decides whether an entry is orphaned and why, using gateway lookups.
 // It returns an error only on a lookup failure, which the caller treats as
 // "undecided", not as absence.
-func (j *OrphanJob) classify(ctx context.Context, e entry) (OrphanReason, bool, error) {
-	statRes, err := j.Gateway.Stat(ctx, &provider.StatRequest{
+func (j *OrphanJob) classify(ctx context.Context, gw gateway.GatewayAPIClient, e entry) (OrphanReason, bool, error) {
+	statRes, err := gw.Stat(ctx, &provider.StatRequest{
 		Ref: &provider.Reference{ResourceId: e.resourceID},
 	})
 	if err != nil {
@@ -338,7 +356,7 @@ func (j *OrphanJob) classify(ctx context.Context, e entry) (OrphanReason, bool, 
 
 	var st *rpc.Status
 	if e.isGroup {
-		res, err := j.Gateway.GetGroupByClaim(ctx, &grouppb.GetGroupByClaimRequest{
+		res, err := gw.GetGroupByClaim(ctx, &grouppb.GetGroupByClaimRequest{
 			Claim: "group_name", Value: e.shareWith, SkipFetchingMembers: true,
 		})
 		if err != nil {
@@ -346,7 +364,7 @@ func (j *OrphanJob) classify(ctx context.Context, e entry) (OrphanReason, bool, 
 		}
 		st = res.GetStatus()
 	} else {
-		res, err := j.Gateway.GetUserByClaim(ctx, &userpb.GetUserByClaimRequest{
+		res, err := gw.GetUserByClaim(ctx, &userpb.GetUserByClaimRequest{
 			Claim: "username", Value: e.shareWith, SkipFetchingUserGroups: true,
 		})
 		if err != nil {

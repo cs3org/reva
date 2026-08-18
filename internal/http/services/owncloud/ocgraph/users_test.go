@@ -31,7 +31,6 @@ import (
 	gateway "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
-	"github.com/cs3org/reva/v3/pkg/rgrpc/todo/pool"
 	libregraph "github.com/owncloud/libre-graph-api-go"
 	"google.golang.org/grpc"
 )
@@ -118,7 +117,7 @@ func TestListUsersRejectsMissingQueryParameters(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			endpoint := "ocgraph-users-" + t.Name()
 			gw := &usersGateway{}
-			pool.RegisterGatewayServiceClient(gw, endpoint)
+			stampGateway(gw)
 			s := &svc{c: &config{GatewaySvc: endpoint}}
 
 			req := httptest.NewRequest(http.MethodGet, "/users?"+tt.rawQuery, nil)
@@ -163,7 +162,7 @@ func TestListUsersFilterByType(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			endpoint := "ocgraph-users-type-" + t.Name()
 			gw := &usersGateway{users: users}
-			pool.RegisterGatewayServiceClient(gw, endpoint)
+			stampGateway(gw)
 			s := &svc{c: &config{GatewaySvc: endpoint}}
 
 			req := httptest.NewRequest(http.MethodGet, listUsersURL(tt.filter), nil)
@@ -199,7 +198,7 @@ func TestListUsersFilterErrors(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			endpoint := "ocgraph-users-err-" + t.Name()
 			gw := &usersGateway{users: []*userpb.User{mkUser("alice", userpb.UserType_USER_TYPE_PRIMARY)}}
-			pool.RegisterGatewayServiceClient(gw, endpoint)
+			stampGateway(gw)
 			s := &svc{c: &config{GatewaySvc: endpoint}}
 
 			req := httptest.NewRequest(http.MethodGet, listUsersURL(tt.filter), nil)

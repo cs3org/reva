@@ -31,10 +31,10 @@ import (
 	"strings"
 	"time"
 
-	gateway "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
 	types "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
 	"github.com/pkg/errors"
 
+	gateway "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	ocmincoming "github.com/cs3org/go-cs3apis/cs3/ocm/incoming/v1beta1"
 	invitepb "github.com/cs3org/go-cs3apis/cs3/ocm/invite/v1beta1"
@@ -45,7 +45,7 @@ import (
 	"github.com/cs3org/reva/v3/internal/http/services/reqres"
 	"github.com/cs3org/reva/v3/internal/http/services/wellknown"
 	"github.com/cs3org/reva/v3/pkg/appctx"
-	"github.com/cs3org/reva/v3/pkg/rgrpc/todo/pool"
+	"github.com/cs3org/reva/v3/pkg/service"
 	"github.com/cs3org/reva/v3/pkg/utils"
 	"github.com/go-playground/validator/v10"
 	"github.com/studio-b12/gowebdav"
@@ -55,7 +55,6 @@ import (
 var validate = validator.New()
 
 type sharesHandler struct {
-	gatewayClient              gateway.GatewayAPIClient
 	exposeRecipientDisplayName bool
 	machineSecret              string
 	autoAcceptProviders        []*regexp.Regexp
@@ -64,11 +63,6 @@ type sharesHandler struct {
 }
 
 func (h *sharesHandler) init(c *config) error {
-	var err error
-	h.gatewayClient, err = pool.GetGatewayServiceClient(pool.Endpoint(c.GatewaySvc))
-	if err != nil {
-		return err
-	}
 	h.exposeRecipientDisplayName = c.ExposeRecipientDisplayName
 	h.machineSecret = c.MachineSecret
 	h.trustForwardedFor = c.TrustForwardedFor
@@ -103,7 +97,12 @@ func (h *sharesHandler) isAcceptedUser(ctx context.Context, recipient *userpb.Us
 		log.Error().Err(err).Msg("auto-accept: error marshalling recipient id")
 		return false
 	}
-	res, err := h.gatewayClient.GetAcceptedUser(ctx, &invitepb.GetAcceptedUserRequest{
+	gatewayClient, err := service.Gateway(ctx)
+	if err != nil {
+		log.Error().Err(err).Msg("auto-accept: error getting gateway client")
+		return false
+	}
+	res, err := gatewayClient.GetAcceptedUser(ctx, &invitepb.GetAcceptedUserRequest{
 		RemoteUserId: remoteUser,
 		Opaque: &types.Opaque{
 			Map: map[string]*types.OpaqueEntry{
@@ -156,7 +155,13 @@ func (h *sharesHandler) CreateShare(w http.ResponseWriter, r *http.Request) {
 			},
 		},
 	}
-	providerAllowedResp, err := h.gatewayClient.IsProviderAllowed(ctx, &ocmprovider.IsProviderAllowedRequest{
+	gatewayClient, err := service.Gateway(ctx)
+	if err != nil {
+		reqres.WriteError(w, r, reqres.APIErrorServerError, "error getting gateway client", err)
+		return
+	}
+
+	providerAllowedResp, err := gatewayClient.IsProviderAllowed(ctx, &ocmprovider.IsProviderAllowedRequest{
 		Provider: &providerInfo,
 	})
 	if err != nil {
@@ -174,7 +179,7 @@ func (h *sharesHandler) CreateShare(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	userRes, err := h.gatewayClient.GetUser(ctx, &userpb.GetUserRequest{
+	userRes, err := gatewayClient.GetUser(ctx, &userpb.GetUserRequest{
 		UserId: &userpb.UserId{OpaqueId: shareWith.OpaqueId}, SkipFetchingUserGroups: true,
 	})
 	if err != nil {
@@ -235,7 +240,7 @@ func (h *sharesHandler) CreateShare(w http.ResponseWriter, r *http.Request) {
 	}
 
 	log.Info().Str("resource_id", req.ProviderID).Str("sender", req.Sender).Str("resource_type", req.ResourceType).Msg("CreateOCMIncomingShare payload")
-	createShareResp, err := h.gatewayClient.CreateOCMIncomingShare(ctx, createShareReq)
+	createShareResp, err := gatewayClient.CreateOCMIncomingShare(ctx, createShareReq)
 	if err != nil {
 		reqres.WriteError(w, r, reqres.APIErrorServerError, "error creating ocm share", err)
 		return
@@ -276,6 +281,12 @@ func (h *sharesHandler) CreateShare(w http.ResponseWriter, r *http.Request) {
 func (h *sharesHandler) registerAcceptedUser(ctx context.Context, recipient *userpb.User, remoteUser *userpb.User) {
 	log := appctx.GetLogger(ctx)
 
+	gatewayClient, err := service.Gateway(ctx)
+	if err != nil {
+		log.Error().Err(err).Msg("auto-register: error getting gateway client")
+		return
+	}
+
 	// impersonate the recipient so the minted invite token is owned by them
 	recipientCtx, err := h.impersonate(ctx, recipient)
 	if err != nil {
@@ -283,7 +294,7 @@ func (h *sharesHandler) registerAcceptedUser(ctx context.Context, recipient *use
 		return
 	}
 
-	tokenRes, err := h.gatewayClient.GenerateInviteToken(recipientCtx, &invitepb.GenerateInviteTokenRequest{
+	tokenRes, err := gatewayClient.GenerateInviteToken(recipientCtx, &invitepb.GenerateInviteTokenRequest{
 		Description: "auto-accept for received OCM share",
 	})
 	if err != nil || tokenRes.Status.Code != rpc.Code_CODE_OK {
@@ -291,7 +302,7 @@ func (h *sharesHandler) registerAcceptedUser(ctx context.Context, recipient *use
 		return
 	}
 
-	acceptRes, err := h.gatewayClient.AcceptInvite(ctx, &invitepb.AcceptInviteRequest{
+	acceptRes, err := gatewayClient.AcceptInvite(ctx, &invitepb.AcceptInviteRequest{
 		InviteToken: tokenRes.InviteToken,
 		RemoteUser:  remoteUser,
 	})
@@ -309,7 +320,11 @@ func (h *sharesHandler) registerAcceptedUser(ctx context.Context, recipient *use
 // impersonate returns a context authenticated as the given user via machine auth,
 // for invoking protected calls (e.g. GenerateInviteToken) on their behalf.
 func (h *sharesHandler) impersonate(ctx context.Context, user *userpb.User) (context.Context, error) {
-	authRes, err := h.gatewayClient.Authenticate(ctx, &gateway.AuthenticateRequest{
+	gatewayClient, err := service.Gateway(ctx)
+	if err != nil {
+		return nil, err
+	}
+	authRes, err := gatewayClient.Authenticate(ctx, &gateway.AuthenticateRequest{
 		Type:         "machine",
 		ClientId:     user.Username,
 		ClientSecret: h.machineSecret,
