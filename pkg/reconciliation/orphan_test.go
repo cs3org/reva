@@ -57,12 +57,16 @@ type fakeStore struct {
 	listErr    error
 	markErr    error
 	unshareErr error
+	// listHook, when set, runs before every listing with the space it is
+	// narrowed to and the number of listings already done. It lets a test change
+	// the shares under a run, the way a user sharing during a run does.
+	listHook func(f *fakeStore, space string, done int)
+	// lists counts the listings, so a test can assert which spaces a run looked
+	// at again.
+	lists int
 }
 
 func (f *fakeStore) ListShares(ctx context.Context, filters []*collaboration.Filter) ([]*collaboration.Share, error) {
-	if f.listErr != nil {
-		return nil, f.listErr
-	}
 	// only the space filter is honoured, the one the shallow job narrows a run
 	// with.
 	var space string
@@ -70,6 +74,14 @@ func (f *fakeStore) ListShares(ctx context.Context, filters []*collaboration.Fil
 		if filter.GetType() == collaboration.Filter_TYPE_SPACE_ID {
 			space = filter.GetSpaceId()
 		}
+	}
+
+	if f.listHook != nil {
+		f.listHook(f, space, f.lists)
+	}
+	f.lists++
+	if f.listErr != nil {
+		return nil, f.listErr
 	}
 
 	var out []*collaboration.Share
