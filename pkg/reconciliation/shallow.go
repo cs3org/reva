@@ -20,6 +20,7 @@ package reconciliation
 
 import (
 	"context"
+	"sort"
 
 	gateway "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
@@ -64,6 +65,10 @@ const (
 	// EventShallowSkip reports one share left untouched because a lookup
 	// failed.
 	EventShallowSkip = ShallowJobName + ".skip"
+	// EventShallowSkipSpace reports one space left untouched because a share was
+	// created in it while the run was checking, which makes what the run decided
+	// stale. It carries the share that appeared.
+	EventShallowSkipSpace = ShallowJobName + ".skipspace"
 	// EventShallowFail reports one change, a grant or a removal, that had to be
 	// made but could not be.
 	EventShallowFail = ShallowJobName + ".fail"
@@ -105,6 +110,13 @@ type GrantStore interface {
 // It is triggered on demand, over every space or a single one. A single space
 // is a valid unit of work because spaces are disjoint: no share outside a space
 // can shadow one inside it. A schedule is optional on top of that.
+//
+// A space is also the unit the changes are applied in. A run decides everything
+// before it writes anything, and a user can share in the meantime, so the shares
+// of a space are listed again just before its changes go out. A space that
+// gained one since is left for the next run, whole: the new share is not in what
+// the run compared, and it may well be what makes a share the run wants to
+// remove no longer redundant.
 type ShallowJob struct {
 	ShareStore ShareStore
 	// Gateway resolves the path of a shared resource and the identity of its
@@ -225,8 +237,13 @@ type ShallowReport struct {
 	Written []WrittenGrant
 	// Removed lists the redundant shares removed (or, in dry-run, that would be
 	// removed). Every share counted covered or conflicting is on it, unless its
-	// removal failed.
+	// removal failed or its space was skipped.
 	Removed []RemovedShare
+	// SkippedSpaces lists the spaces nothing was applied to because a share
+	// appeared in them while the run was checking. Their shares are counted
+	// checked, covered and conflicting all the same, since the check did run on
+	// them, but nothing they called for was written or removed.
+	SkippedSpaces []string
 	// DryRun reports whether the run was a simulation.
 	DryRun bool
 }
@@ -235,6 +252,9 @@ type ShallowReport struct {
 // failure is logged and the share is skipped, never guessed at, so a flaky
 // gateway can never cause a wrong ACL to be written. The run itself only fails
 // if the shares cannot be listed at all.
+//
+// A space whose shares changed while the run was checking is skipped whole, and
+// left to the next run.
 //
 // Every write is logged with the permissions found and the permissions written,
 // so a run can be undone from its log alone.
@@ -307,8 +327,19 @@ func (j *ShallowJob) run(ctx context.Context, spaceID string) (ShallowReport, er
 	// one gateway lookup per recipient instead of one per share: a recipient
 	// holds many shares, so the same names come back over and over.
 	grantees := map[string]*provider.Grantee{}
+	// the shares each space held when the check ran, by space, so a share that
+	// appears under the run can be told from one the run has seen. A share that
+	// does not resolve is on it too: it exists, it is only the run that cannot
+	// judge it.
+	seen := map[string]map[string]struct{}{}
 	for _, s := range shares {
 		id := s.GetId().GetOpaqueId()
+		space := s.GetResourceId().GetSpaceId()
+		if seen[space] == nil {
+			seen[space] = map[string]struct{}{}
+		}
+		seen[space][id] = struct{}{}
+
 		traceID := trace.Generate()
 		traces[id] = traceID
 
@@ -325,7 +356,7 @@ func (j *ShallowJob) run(ctx context.Context, spaceID string) (ShallowReport, er
 		report.Checked++
 		paths[spaces.ResourceIdToString(rs.Share.GetResourceId())] = rs.Path
 		sharee, granteeType := sharehierarchy.ShareeInfo(rs.Share.GetGrantee())
-		key := s.GetResourceId().GetSpaceId() + "\x00" + granteeType + "\x00" + sharee
+		key := space + "\x00" + granteeType + "\x00" + sharee
 		groups[key] = append(groups[key], rs)
 	}
 
@@ -383,14 +414,107 @@ func (j *ShallowJob) run(ctx context.Context, spaceID string) (ShallowReport, er
 		}
 	}
 
+	// what to write is decided against the storage before anything goes out, so
+	// that the changes of a space can be checked against the database as a whole
+	// and then applied in one go.
+	planned := j.plan(ctx, log, &report, required, traces)
+
+	// the changes are grouped per space, the unit a run applies or holds back.
+	grants := map[string][]plannedGrant{}
+	for _, p := range planned {
+		space := p.share.Share.GetResourceId().GetSpaceId()
+		grants[space] = append(grants[space], p)
+	}
+	removals := map[string][]RemovedShare{}
+	for _, r := range redundant {
+		space := r.ResourceID.GetSpaceId()
+		removals[space] = append(removals[space], r)
+	}
+	// only the spaces something is held back for are visited, so a space the run
+	// changes nothing in is never listed again: there is nothing a share created
+	// in it can spoil. The order is fixed, so two runs over the same state read
+	// the same way.
+	pending := make([]string, 0, len(grants))
+	for space := range grants {
+		pending = append(pending, space)
+	}
+	for space := range removals {
+		if _, ok := grants[space]; !ok {
+			pending = append(pending, space)
+		}
+	}
+	sort.Strings(pending)
+
+	for _, space := range pending {
+		fresh, err := j.appeared(ctx, space, seen[space])
+		if err != nil {
+			report.SkippedSpaces = append(report.SkippedSpaces, space)
+			log.Error().Err(err).
+				Str("event", EventShallowSkipSpace).
+				Str("skipped_space", space).
+				Int("grants", len(grants[space])).
+				Int("removals", len(removals[space])).
+				Bool("dry_run", j.DryRun).
+				Msg("reconciliation: shares could not be listed again, space left untouched")
+			continue
+		}
+		if fresh != "" {
+			report.SkippedSpaces = append(report.SkippedSpaces, space)
+			log.Warn().
+				Str("event", EventShallowSkipSpace).
+				Str("skipped_space", space).
+				Str("new_share", fresh).
+				Int("grants", len(grants[space])).
+				Int("removals", len(removals[space])).
+				Bool("dry_run", j.DryRun).
+				Msg("reconciliation: a share was created while the run was checking, space left untouched")
+			continue
+		}
+
+		j.applyGrants(ctx, log, &report, grants[space], traces)
+		// the removals go last, so the entry a share is removed in favour of is
+		// on the storage before its row is gone, the order the share API removes
+		// a redundant share in. The two are always in the same space: a share is
+		// only ever made redundant by one above it, and no share above it lives
+		// anywhere else.
+		j.applyRemovals(ctx, log, &report, removals[space], traces)
+	}
+
+	log.Info().
+		Str("event", EventShallowEnd).
+		Bool("dry_run", j.DryRun).
+		Int("checked", report.Checked).
+		Int("covered", report.Covered).
+		Int("conflicting", report.Conflicting).
+		Int("written", len(report.Written)).
+		Int("removed", len(report.Removed)).
+		Int("skipped", report.Skipped).
+		Int("skipped_spaces", len(report.SkippedSpaces)).
+		Int("failed", report.Failed).
+		Msg("reconciliation: run finished")
+
+	return report, nil
+}
+
+// plannedGrant is one grant a run decided on, held until the space it belongs
+// to has been checked for shares created under the run.
+type plannedGrant struct {
+	share sharehierarchy.ResolvedShare
+	entry WrittenGrant
+}
+
+// plan works out the grant each share needs from what the storage has now.
+// Nothing is written here. A share whose grants cannot be read is skipped, the
+// same as one that does not resolve.
+func (j *ShallowJob) plan(ctx context.Context, log *zerolog.Logger, report *ShallowReport, required []sharehierarchy.ResolvedShare, traces map[string]string) []plannedGrant {
+	planned := make([]plannedGrant, 0, len(required))
 	for _, rs := range required {
 		id := rs.Share.GetResourceId()
 		sharee, granteeType := sharehierarchy.ShareeInfo(rs.Share.GetGrantee())
 		expected := sharehierarchy.PermLevelFromCS3(rs.Share.GetPermissions().GetPermissions())
 		traceID := traces[rs.Share.GetId().GetOpaqueId()]
-		shareCtx := trace.Set(ctx, traceID)
 
-		level, present, err := j.observed(shareCtx, rs)
+		level, present, err := j.observed(trace.Set(ctx, traceID), rs)
 		if err != nil {
 			report.Skipped++
 			log.Error().Err(err).
@@ -420,22 +544,7 @@ func (j *ShallowJob) run(ctx context.Context, spaceID string) (ShallowReport, er
 			continue
 		}
 
-		if !j.DryRun {
-			if err := j.write(shareCtx, rs, action); err != nil {
-				report.Failed++
-				log.Error().Err(err).
-					Str("event", EventShallowFail).
-					Str("share", rs.Share.GetId().GetOpaqueId()).
-					Str("path", rs.Path).
-					Str("grantee", sharee).
-					Str("grantee_type", granteeType).
-					Str("traceid", traceID).
-					Msg("reconciliation: writing the grant failed")
-				continue
-			}
-		}
-
-		report.Written = append(report.Written, WrittenGrant{
+		planned = append(planned, plannedGrant{share: rs, entry: WrittenGrant{
 			ShareID:     rs.Share.GetId().GetOpaqueId(),
 			Path:        rs.Path,
 			ResourceID:  id,
@@ -444,26 +553,54 @@ func (j *ShallowJob) run(ctx context.Context, spaceID string) (ShallowReport, er
 			Action:      action,
 			Observed:    observed,
 			Expected:    expected.String(),
-		})
+		}})
+	}
+	return planned
+}
+
+// applyGrants writes the grants of one space. They come in the order the check
+// put them in, parents before children, so the storage is never left granting
+// more below a path than on it.
+func (j *ShallowJob) applyGrants(ctx context.Context, log *zerolog.Logger, report *ShallowReport, planned []plannedGrant, traces map[string]string) {
+	for _, p := range planned {
+		w := p.entry
+		traceID := traces[w.ShareID]
+
+		if !j.DryRun {
+			if err := j.write(trace.Set(ctx, traceID), p.share, w.Action); err != nil {
+				report.Failed++
+				log.Error().Err(err).
+					Str("event", EventShallowFail).
+					Str("share", w.ShareID).
+					Str("path", w.Path).
+					Str("grantee", w.Grantee).
+					Str("grantee_type", w.GranteeType).
+					Str("traceid", traceID).
+					Msg("reconciliation: writing the grant failed")
+				continue
+			}
+		}
+
+		report.Written = append(report.Written, w)
 		log.Info().
 			Str("event", EventShallowGrant).
-			Str("share", rs.Share.GetId().GetOpaqueId()).
-			Str("action", action.String()).
-			Str("path", rs.Path).
-			Str("storage_id", id.GetStorageId()).
-			Str("opaque_id", id.GetOpaqueId()).
-			Str("grantee", sharee).
-			Str("grantee_type", granteeType).
-			Str("observed", observed).
-			Str("expected", expected.String()).
+			Str("share", w.ShareID).
+			Str("action", w.Action.String()).
+			Str("path", w.Path).
+			Str("storage_id", w.ResourceID.GetStorageId()).
+			Str("opaque_id", w.ResourceID.GetOpaqueId()).
+			Str("grantee", w.Grantee).
+			Str("grantee_type", w.GranteeType).
+			Str("observed", w.Observed).
+			Str("expected", w.Expected).
 			Bool("dry_run", j.DryRun).
 			Str("traceid", traceID).
 			Msg("reconciliation: grant written")
 	}
+}
 
-	// the removals go last, so the entry a share is removed in favour of is on
-	// the storage before its row is gone, the order the share API removes a
-	// redundant share in.
+// applyRemovals removes the redundant shares of one space.
+func (j *ShallowJob) applyRemovals(ctx context.Context, log *zerolog.Logger, report *ShallowReport, redundant []RemovedShare, traces map[string]string) {
 	for _, r := range redundant {
 		traceID := traces[r.ShareID]
 		if !j.DryRun {
@@ -502,20 +639,25 @@ func (j *ShallowJob) run(ctx context.Context, spaceID string) (ShallowReport, er
 			Str("traceid", traceID).
 			Msg("reconciliation: redundant share removed")
 	}
+}
 
-	log.Info().
-		Str("event", EventShallowEnd).
-		Bool("dry_run", j.DryRun).
-		Int("checked", report.Checked).
-		Int("covered", report.Covered).
-		Int("conflicting", report.Conflicting).
-		Int("written", len(report.Written)).
-		Int("removed", len(report.Removed)).
-		Int("skipped", report.Skipped).
-		Int("failed", report.Failed).
-		Msg("reconciliation: run finished")
-
-	return report, nil
+// appeared lists the shares of a space again and returns the id of the first one
+// the run has not seen, empty when there is none. A share created while the run
+// was checking is not in what the check compared, and it may be exactly what an
+// ancestor of it needs, or what stops a share the run wants to remove from being
+// redundant, so the caller leaves the whole space to the next run.
+func (j *ShallowJob) appeared(ctx context.Context, spaceID string, seen map[string]struct{}) (string, error) {
+	shares, err := j.ShareStore.ListShares(ctx, []*collaboration.Filter{revashare.SpaceIDFilter(spaceID)})
+	if err != nil {
+		return "", errors.Wrapf(err, "reconciliation: listing the shares of space %q again", spaceID)
+	}
+	for _, s := range shares {
+		id := s.GetId().GetOpaqueId()
+		if _, ok := seen[id]; !ok {
+			return id, nil
+		}
+	}
+	return "", nil
 }
 
 // shadowed counts a share that gets no entry of its own because a share above
@@ -766,6 +908,9 @@ func (r *shallowRun) Run(ctx context.Context, p rjobs.Params) (rjobs.Params, err
 		"written":     len(report.Written),
 		"removed":     len(report.Removed),
 		"skipped":     report.Skipped,
-		"failed":      report.Failed,
+		// the spaces left for the next run, named so that a run can be retried on
+		// exactly the ones it held back.
+		"skipped_spaces": report.SkippedSpaces,
+		"failed":         report.Failed,
 	}, nil
 }

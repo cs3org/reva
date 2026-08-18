@@ -69,6 +69,15 @@ With a `schedule`, the job also runs on a cadence over every space. That run has
 its own name, so `reva admin jobs trigger reconciliation.shallow.scheduled`
 starts it before its next fire.
 
+A run works out every change before it writes anything, and a user can share in
+the meantime. So the shares of a space are listed again right before its changes
+go out. A space that gained a share since the run listed it is left untouched,
+whole, and picked up by the next run: the new share is not in what the run
+compared, and it can be what makes a share the run wants to remove no longer
+redundant. Only the spaces the run has something to change in are looked at
+again. Their ids come back in the run's totals under `skipped_spaces`, so a
+retry can be scoped to exactly the spaces that were held back.
+
 A share below another share of the same recipient is redundant when it grants the
 same access (`covered` in the totals) or less (`conflicting`). The job deletes
 the row of such a share, which is what the share API does when the higher share
@@ -95,6 +104,7 @@ have to be told apart from the other's by hand.
 | `reconciliation.shallow.grant`    | grant written to a path (or would be, dry-run) |
 | `reconciliation.shallow.remove`   | redundant share removed (or would be, dry-run) |
 | `reconciliation.shallow.skip`     | share left untouched, a lookup failed          |
+| `reconciliation.shallow.skipspace`| space left untouched, its shares changed       |
 | `reconciliation.shallow.fail`     | a grant or a removal was needed but failed     |
 | `reconciliation.shallow.end`      | run totals                                     |
 
@@ -114,3 +124,8 @@ means the entry was added and has to be removed.
 `opaque_id`, `grantee`, `grantee_type`, `level`, `reason`, `ancestor`,
 `ancestor_path`, `ancestor_role`, `dry_run`. Revert by clearing `deleted_at` on
 the row with id `share`.
+
+`reconciliation.shallow.skipspace` carries `skipped_space`, `new_share` (the
+share that appeared, absent when the listing itself failed), `grants` and
+`removals`, the number of changes held back, and `dry_run`. Nothing was applied,
+so there is nothing to revert. Run the job on that space again to apply them.

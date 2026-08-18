@@ -1010,6 +1010,210 @@ func TestShallowOnDemandTakesAdminParams(t *testing.T) {
 	}
 }
 
+// TestShallowSkipsSpaceWithANewShare asserts that a space a user shared in
+// while the run was checking is left untouched. The run compared the shares as
+// they were, so writing what it decided could contradict the new share.
+func TestShallowSkipsSpaceWithANewShare(t *testing.T) {
+	store := &fakeStore{shares: []storedShare{
+		shared(100, "space-a", "inode-100", "jdoe", false, ocsRead),
+	}}
+	// the share a user creates between the check and the writes.
+	store.listHook = func(f *fakeStore, space string, done int) {
+		if done == 1 {
+			f.shares = append(f.shares, shared(101, "space-a", "inode-101", "asmith", false, ocsRead))
+		}
+	}
+	gw := &fakeGateway{
+		users: map[string]bool{"jdoe": true, "asmith": true},
+		paths: map[string]string{"eosuser/inode-100": "/eos/user/a/alice/dir"},
+	}
+	grants := &fakeGrants{}
+
+	report, err := shallowJob(store, gw, grants).Run(context.Background())
+	if err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	if len(report.SkippedSpaces) != 1 || report.SkippedSpaces[0] != "space-a" {
+		t.Fatalf("skipped spaces = %v, want [space-a]", report.SkippedSpaces)
+	}
+	if len(report.Written) != 0 || len(grants.writes) != 0 {
+		t.Errorf("report = %+v / writes = %+v, want nothing written", report, grants.writes)
+	}
+}
+
+// TestShallowSkipsOnlyTheChangedSpace asserts that one space changing under the
+// run does not hold up the others: spaces are disjoint, so each stands alone.
+func TestShallowSkipsOnlyTheChangedSpace(t *testing.T) {
+	store := &fakeStore{shares: []storedShare{
+		shared(102, "space-a", "inode-102", "jdoe", false, ocsRead),
+		shared(103, "space-b", "inode-103", "jdoe", false, ocsRead),
+	}}
+	store.listHook = func(f *fakeStore, space string, done int) {
+		if space == "space-a" {
+			f.shares = append(f.shares, shared(104, "space-a", "inode-104", "asmith", false, ocsRead))
+		}
+	}
+	gw := &fakeGateway{
+		users: map[string]bool{"jdoe": true, "asmith": true},
+		paths: map[string]string{
+			"eosuser/inode-102": "/eos/project/a/one",
+			"eosuser/inode-103": "/eos/project/b/one",
+		},
+	}
+	grants := &fakeGrants{}
+
+	report, err := shallowJob(store, gw, grants).Run(context.Background())
+	if err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	if len(report.SkippedSpaces) != 1 || report.SkippedSpaces[0] != "space-a" {
+		t.Fatalf("skipped spaces = %v, want [space-a]", report.SkippedSpaces)
+	}
+	if len(grants.writes) != 1 || grants.writes[0].node != "eosuser/inode-103" {
+		t.Errorf("writes = %+v, want only the share in space-b", grants.writes)
+	}
+}
+
+// TestShallowHoldsBackRemovalsOfAChangedSpace asserts that a skipped space keeps
+// its redundant shares too. A share created under the run can be the very thing
+// that makes one of them needed again.
+func TestShallowHoldsBackRemovalsOfAChangedSpace(t *testing.T) {
+	store := &fakeStore{shares: []storedShare{
+		shared(105, "space-a", "inode-parent", "jdoe", false, ocsRead),
+		shared(106, "space-a", "inode-child", "jdoe", false, ocsRead),
+	}}
+	store.listHook = func(f *fakeStore, space string, done int) {
+		if done == 1 {
+			f.shares = append(f.shares, shared(107, "space-a", "inode-107", "asmith", false, ocsRead))
+		}
+	}
+	gw := &fakeGateway{
+		users: map[string]bool{"jdoe": true, "asmith": true},
+		paths: map[string]string{
+			"eosuser/inode-parent": "/eos/user/a/alice/dir",
+			"eosuser/inode-child":  "/eos/user/a/alice/dir/sub",
+		},
+	}
+	grants := &fakeGrants{}
+
+	report, err := shallowJob(store, gw, grants).Run(context.Background())
+	if err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	if len(report.SkippedSpaces) != 1 || len(report.Removed) != 0 || len(store.unshared) != 0 {
+		t.Fatalf("report = %+v / unshared = %v, want the space skipped and nothing removed", report, store.unshared)
+	}
+}
+
+// TestShallowSkipsSpaceWhenTheCheckCannotRun asserts that a space whose shares
+// cannot be listed again is left untouched. Without the second listing there is
+// no telling whether the run is still working from what is in the database.
+func TestShallowSkipsSpaceWhenTheCheckCannotRun(t *testing.T) {
+	store := &fakeStore{shares: []storedShare{
+		shared(108, "space-a", "inode-108", "jdoe", false, ocsRead),
+	}}
+	store.listHook = func(f *fakeStore, space string, done int) {
+		if done == 1 {
+			f.listErr = errors.New("db down")
+		}
+	}
+	gw := &fakeGateway{
+		users: map[string]bool{"jdoe": true},
+		paths: map[string]string{"eosuser/inode-108": "/eos/user/a/alice/dir"},
+	}
+	grants := &fakeGrants{}
+
+	report, err := shallowJob(store, gw, grants).Run(context.Background())
+	if err != nil {
+		t.Fatalf("Run must not fail when one space cannot be listed again: %v", err)
+	}
+	if len(report.SkippedSpaces) != 1 || len(grants.writes) != 0 {
+		t.Fatalf("report = %+v / writes = %+v, want the space skipped and nothing written", report, grants.writes)
+	}
+}
+
+// TestShallowDoesNotRelistAnUnchangedSpace asserts that a space the run changes
+// nothing in is not listed again: there is nothing to hold back, so a share
+// created in it spoils nothing.
+func TestShallowDoesNotRelistAnUnchangedSpace(t *testing.T) {
+	store := &fakeStore{shares: []storedShare{
+		shared(109, "space-a", "inode-109", "jdoe", false, ocsRead),
+	}}
+	gw := &fakeGateway{
+		users: map[string]bool{"jdoe": true},
+		paths: map[string]string{"eosuser/inode-109": "/eos/user/a/alice/dir"},
+	}
+	grants := &fakeGrants{grants: map[string][]*provider.Grant{
+		"eosuser/inode-109": {grant(provider.GranteeType_GRANTEE_TYPE_USER, "jdoe", ocsRead)},
+	}}
+
+	report, err := shallowJob(store, gw, grants).Run(context.Background())
+	if err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	if len(report.Written) != 0 || len(report.SkippedSpaces) != 0 {
+		t.Fatalf("report = %+v, want nothing written and no space skipped", report)
+	}
+	if store.lists != 1 {
+		t.Errorf("listed the shares %d times, want 1", store.lists)
+	}
+}
+
+// TestShallowDryRunSkipsAChangedSpace asserts that a dry run holds back a
+// changed space as well, so its report says what a live run would do.
+func TestShallowDryRunSkipsAChangedSpace(t *testing.T) {
+	store := &fakeStore{shares: []storedShare{
+		shared(110, "space-a", "inode-110", "jdoe", false, ocsRead),
+	}}
+	store.listHook = func(f *fakeStore, space string, done int) {
+		if done == 1 {
+			f.shares = append(f.shares, shared(111, "space-a", "inode-111", "asmith", false, ocsRead))
+		}
+	}
+	gw := &fakeGateway{
+		users: map[string]bool{"jdoe": true, "asmith": true},
+		paths: map[string]string{"eosuser/inode-110": "/eos/user/a/alice/dir"},
+	}
+	grants := &fakeGrants{}
+
+	job := shallowJob(store, gw, grants)
+	job.DryRun = true
+	report, err := job.Run(context.Background())
+	if err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	if len(report.SkippedSpaces) != 1 || len(report.Written) != 0 {
+		t.Fatalf("report = %+v, want the space skipped and nothing reported written", report)
+	}
+}
+
+// TestShallowRunSpaceChecksItsOwnSpace asserts that a run scoped to one space
+// checks that space too, and reports it skipped rather than writing against a
+// view that moved.
+func TestShallowRunSpaceChecksItsOwnSpace(t *testing.T) {
+	store := &fakeStore{shares: []storedShare{
+		shared(112, "space-a", "inode-112", "jdoe", false, ocsRead),
+	}}
+	store.listHook = func(f *fakeStore, space string, done int) {
+		if done == 1 {
+			f.shares = append(f.shares, shared(113, "space-a", "inode-113", "asmith", false, ocsRead))
+		}
+	}
+	gw := &fakeGateway{
+		users: map[string]bool{"jdoe": true, "asmith": true},
+		paths: map[string]string{"eosuser/inode-112": "/eos/user/a/alice/dir"},
+	}
+	grants := &fakeGrants{}
+
+	report, err := shallowJob(store, gw, grants).RunSpace(context.Background(), "space-a")
+	if err != nil {
+		t.Fatalf("RunSpace: %v", err)
+	}
+	if len(report.SkippedSpaces) != 1 || len(grants.writes) != 0 {
+		t.Fatalf("report = %+v / writes = %+v, want the space skipped", report, grants.writes)
+	}
+}
+
 // TestShallowLooksUpEachRecipientOnce asserts that a run resolves a recipient
 // once, however many shares that recipient holds.
 func TestShallowLooksUpEachRecipientOnce(t *testing.T) {
