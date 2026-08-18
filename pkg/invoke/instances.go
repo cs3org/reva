@@ -1,0 +1,79 @@
+// Copyright 2018-2026 CERN
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+//
+// In applying this license, CERN does not waive the privileges and immunities
+// granted to it by virtue of its status as an Intergovernmental Organization
+// or submit itself to any jurisdiction.
+
+package invoke
+
+import (
+	"sync"
+
+	"github.com/cs3org/reva/v3/pkg/activity"
+)
+
+// MetaInvocations is the registry metadata key holding a node's invocation
+// names (comma-separated), so catalogs can be answered without dialing.
+const MetaInvocations = "invocations"
+
+// instance is one service instance in this process, addressed by its registry
+// node id. inv holds the service's own operations, or is nil; activity is the
+// instance's request counter, shared with the server's interceptor (nil if none
+// is wired, e.g. serverless).
+type instance struct {
+	id       string
+	service  string
+	config   map[string]any // redacted
+	inv      Invokable
+	activity *activity.Counter
+}
+
+var (
+	mu sync.RWMutex
+	// instances maps a node id (host:port/service) to its instance.
+	instances = map[string]instance{}
+)
+
+// RegisterInstance records a service instance under its node id, with its
+// config (redacted here), optional Invokable, and optional request counter.
+func RegisterInstance(id, service string, config map[string]any, inv Invokable, counter *activity.Counter) {
+	mu.Lock()
+	defer mu.Unlock()
+	instances[id] = instance{id: id, service: service, config: Redact(config), inv: inv, activity: counter}
+}
+
+// HasInvocations reports whether this process exposes anything invokable; the
+// runtime gates the control channel on it.
+func HasInvocations() bool {
+	mu.RLock()
+	defer mu.RUnlock()
+	return len(instances) > 0
+}
+
+// lookup resolves a target: a node id, or (as a local fallback) a service name
+// matching a local instance.
+func lookup(target string) (instance, bool) {
+	mu.RLock()
+	defer mu.RUnlock()
+	if inst, ok := instances[target]; ok {
+		return inst, true
+	}
+	for _, inst := range instances {
+		if inst.service == target {
+			return inst, true
+		}
+	}
+	return instance{}, false
+}

@@ -35,7 +35,10 @@ import (
 
 	"github.com/cs3org/reva/v3/cmd/revad/pkg/config"
 	"github.com/cs3org/reva/v3/cmd/revad/pkg/grace"
+	"github.com/cs3org/reva/v3/internal/grpc/control"
+	"github.com/cs3org/reva/v3/pkg/activity"
 	"github.com/cs3org/reva/v3/pkg/appctx"
+	"github.com/cs3org/reva/v3/pkg/invoke"
 	"github.com/cs3org/reva/v3/pkg/registry"
 	"github.com/cs3org/reva/v3/pkg/rgrpc"
 	"github.com/cs3org/reva/v3/pkg/rhttp"
@@ -57,14 +60,18 @@ type Reva struct {
 	ctx    context.Context
 	config *config.Config
 
-	servers    []*Server
-	serverless *rserverless.Serverless
-	watcher    *grace.Watcher
-	lns        map[string]net.Listener
+	servers             []*Server
+	serverless          *rserverless.Serverless
+	serverlessInstances []serverlessInstance
+	watcher             *grace.Watcher
+	lns                 map[string]net.Listener
 
 	// registry is this instance's service registry.
 	registry          registry.Registry
 	heartbeatInterval time.Duration
+	// controlAddr is the advertised address of this process's control channel
+	// (empty if the process hosts nothing invokable).
+	controlAddr string
 
 	pidfile       string
 	log           *zerolog.Logger
@@ -80,6 +87,9 @@ type Server struct {
 	transport string
 	// scheme is "http" or "https" for HTTP servers (empty for grpc).
 	scheme string
+	// internal marks a server not advertised as a registry service (the
+	// per-process control channel).
+	internal bool
 
 	services map[string]any
 }
@@ -144,6 +154,8 @@ func New(config *config.Config, opt ...Option) (*Reva, error) {
 	// Install the process-wide resolver before constructing services, so any
 	// service that resolves a peer at construction time finds it (first wins).
 	service.SetGlobal(service.NewClients(reg))
+	// Expose the registry to the Admin API for fleet introspection.
+	service.SetGlobalRegistry(reg)
 
 	grpc := groupGRPCByAddress(config)
 	http := groupHTTPByAddress(config)
@@ -153,24 +165,39 @@ func New(config *config.Config, opt ...Option) (*Reva, error) {
 		return nil, err
 	}
 
-	serverless, err := newServerless(ctx, config, log)
+	serverless, slInstances, err := newServerless(ctx, config, log)
 	if err != nil {
 		watcher.Clean()
 		return nil, err
 	}
 
+	// Stand up the control channel once every service has been constructed;
+	// a serverless-only process needs one too.
+	controlSrv, controlAddr, err := newControlServer(config, len(slInstances) > 0, log)
+	if err != nil {
+		watcher.Clean()
+		return nil, err
+	}
+	if controlSrv != nil {
+		servers = append(servers, controlSrv)
+	}
+	// Serverless instances are keyed by the control address, known only now.
+	captureServerlessInstances(slInstances, controlAddr)
+
 	r := &Reva{
-		ctx:               ctx,
-		config:            config,
-		servers:           servers,
-		serverless:        serverless,
-		watcher:           watcher,
-		lns:               listeners,
-		registry:          reg,
-		heartbeatInterval: parseDurationOr(config.Shared.Registry.HeartbeatInterval, 5*time.Second),
-		pidfile:           opts.PidFile,
-		log:               log,
-		traceShutdown:     traceShutdown,
+		ctx:                 ctx,
+		config:              config,
+		servers:             servers,
+		serverless:          serverless,
+		serverlessInstances: slInstances,
+		watcher:             watcher,
+		lns:                 listeners,
+		registry:            reg,
+		heartbeatInterval:   parseDurationOr(config.Shared.Registry.HeartbeatInterval, 5*time.Second),
+		controlAddr:         controlAddr,
+		pidfile:             opts.PidFile,
+		log:                 log,
+		traceShutdown:       traceShutdown,
 	}
 
 	// Self-register every loaded service after listeners have bound.
@@ -234,8 +261,17 @@ func servicesAddresses(cfg *config.Config) map[string]grace.Addressable {
 	return a
 }
 
-func newServerless(ctx context.Context, config *config.Config, log *zerolog.Logger) (*rserverless.Serverless, error) {
+// serverlessInstance is a loaded serverless service kept for control-channel
+// registration.
+type serverlessInstance struct {
+	name   string
+	impl   rserverless.Service
+	config map[string]any
+}
+
+func newServerless(ctx context.Context, config *config.Config, log *zerolog.Logger) (*rserverless.Serverless, []serverlessInstance, error) {
 	sl := make(map[string]rserverless.Service)
+	var instances []serverlessInstance
 	logger := log.With().Str("pkg", "serverless").Logger()
 	if err := config.Serverless.ForEach(func(name string, config map[string]any) error {
 		new, ok := rserverless.Services[name]
@@ -249,9 +285,10 @@ func newServerless(ctx context.Context, config *config.Config, log *zerolog.Logg
 			return errors.Wrapf(err, "serverless service %s could not be initialized", name)
 		}
 		sl[name] = svc
+		instances = append(instances, serverlessInstance{name: name, impl: svc, config: config})
 		return nil
 	}); err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	ss, err := rserverless.New(
@@ -259,9 +296,38 @@ func newServerless(ctx context.Context, config *config.Config, log *zerolog.Logg
 		rserverless.WithServices(sl),
 	)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
-	return ss, nil
+	return ss, instances, nil
+}
+
+// captureServerlessInstances registers each serverless service as an
+// invocation instance. With no listen address, its node id is the control
+// address plus the service name — the same id it registers under.
+func captureServerlessInstances(instances []serverlessInstance, controlAddr string) {
+	if controlAddr == "" {
+		return
+	}
+	for _, si := range instances {
+		var inv invoke.Invokable
+		if i, ok := any(si.impl).(invoke.Invokable); ok {
+			inv = i
+		}
+		// Serverless services have no request interceptor to feed a counter, so
+		// they carry none; their `activity` invocation reports zero.
+		invoke.RegisterInstance(nodeID(controlAddr, si.name), si.name, si.config, inv, nil)
+	}
+}
+
+// newActivityCounters builds one request counter per loaded service, keyed by
+// service name — shared by reference between the server's interceptor (which
+// increments it) and the service's invoke instance (which reports it).
+func newActivityCounters[T any](services map[string]T) map[string]*activity.Counter {
+	counters := make(map[string]*activity.Counter, len(services))
+	for name := range services {
+		counters[name] = activity.New()
+	}
+	return counters
 }
 
 func setRandomAddresses(c *config.Config, lns map[string]net.Listener, log *zerolog.Logger) {
@@ -453,7 +519,28 @@ func listenerFromAddress(lns map[string]net.Listener, network string, address co
 	panic(fmt.Sprintf("listener not found for address %s:%s", network, address))
 }
 
+// captureInstances registers each loaded service as an invocation instance
+// under its node id, so the control channel can route to the exact instance
+// even when a process hosts several of the same service. Each instance is given
+// its request counter (from counters, keyed by service name) — the same object
+// the server's interceptor feeds — so the `activity` invocation reads live
+// numbers.
+func captureInstances[T any](services map[string]T, cfgServices map[string]config.ServicesConfig, addr string, counters map[string]*activity.Counter) {
+	for name, impl := range services {
+		var conf map[string]any
+		if sc := cfgServices[name]; len(sc) > 0 {
+			conf = sc[0].Config
+		}
+		var inv invoke.Invokable
+		if i, ok := any(impl).(invoke.Invokable); ok {
+			inv = i
+		}
+		invoke.RegisterInstance(nodeID(addr, name), name, conf, inv, counters[name])
+	}
+}
+
 func newServers(ctx context.Context, grpc []*config.GRPC, http []*config.HTTP, lns map[string]net.Listener, log *zerolog.Logger) ([]*Server, error) {
+	hostname, _ := os.Hostname()
 	servers := make([]*Server, 0, len(grpc)+len(http))
 	for _, cfg := range grpc {
 		logger := log.With().Str("pkg", "grpc").Logger()
@@ -462,7 +549,10 @@ func newServers(ctx context.Context, grpc []*config.GRPC, http []*config.HTTP, l
 		if err != nil {
 			return nil, err
 		}
-		unaryChain, streamChain, err := initGRPCInterceptors(cfg.Interceptors, grpcUnprotected(cfg.EnableReflection, services), log)
+		ln := listenerFromAddress(lns, cfg.Network, cfg.Address)
+		counters := newActivityCounters(services)
+		captureInstances(services, cfg.Services, hostPort(hostname, ln.Addr().String()), counters)
+		unaryChain, streamChain, err := initGRPCInterceptors(cfg.Interceptors, grpcUnprotected(cfg.EnableReflection, services), counters, log)
 		if err != nil {
 			return nil, err
 		}
@@ -477,7 +567,6 @@ func newServers(ctx context.Context, grpc []*config.GRPC, http []*config.HTTP, l
 		if err != nil {
 			return nil, err
 		}
-		ln := listenerFromAddress(lns, cfg.Network, cfg.Address)
 		server := &Server{
 			server:    s,
 			listener:  ln,
@@ -496,6 +585,9 @@ func newServers(ctx context.Context, grpc []*config.GRPC, http []*config.HTTP, l
 		if err != nil {
 			return nil, err
 		}
+		ln := listenerFromAddress(lns, cfg.Network, cfg.Address)
+		counters := newActivityCounters(services)
+		captureInstances(services, cfg.Services, hostPort(hostname, ln.Addr().String()), counters)
 		middlewares, err := initHTTPMiddlewares(cfg.Middlewares, httpUnprotected(services), &logger)
 		if err != nil {
 			return nil, err
@@ -505,11 +597,11 @@ func newServers(ctx context.Context, grpc []*config.GRPC, http []*config.HTTP, l
 			rhttp.WithLogger(logger),
 			rhttp.WithCertAndKeyFiles(cfg.CertFile, cfg.KeyFile),
 			rhttp.WithMiddlewares(middlewares),
+			rhttp.WithActivityCounters(counters),
 		)
 		if err != nil {
 			return nil, err
 		}
-		ln := listenerFromAddress(lns, cfg.Network, cfg.Address)
 		scheme := "http"
 		if cfg.CertFile != "" && cfg.KeyFile != "" {
 			scheme = "https"
@@ -527,4 +619,52 @@ func newServers(ctx context.Context, grpc []*config.GRPC, http []*config.HTTP, l
 		servers = append(servers, server)
 	}
 	return servers, nil
+}
+
+// newControlServer builds this process's control channel: a dedicated gRPC
+// server hosting reva.control.v1beta1 on one extra port, gated by the standard
+// auth interceptors (admin scope). It returns the server and the address to
+// advertise, or (nil, "", nil) when nothing is invokable.
+func newControlServer(cfg *config.Config, hasServerless bool, log *zerolog.Logger) (*Server, string, error) {
+	if !invoke.HasInvocations() && !hasServerless {
+		return nil, "", nil
+	}
+	bind := cfg.GRPC.ControlAddress
+	if bind == "" {
+		// A random port on every interface; the auth interceptor, not the bind
+		// host, is what protects it.
+		bind = "0.0.0.0:0"
+	}
+	ln, err := net.Listen("tcp", bind)
+	if err != nil {
+		return nil, "", fmt.Errorf("runtime: binding control channel on %q: %w", bind, err)
+	}
+	logger := log.With().Str("pkg", "grpc").Str("server", "control").Logger()
+	unaryChain, streamChain, err := initGRPCInterceptors(nil, nil, nil, &logger)
+	if err != nil {
+		_ = ln.Close()
+		return nil, "", err
+	}
+	services := map[string]rgrpc.Service{service.NameControl: control.New()}
+	s, err := rgrpc.NewServer(
+		rgrpc.WithLogger(logger),
+		rgrpc.WithServices(services),
+		rgrpc.WithUnaryServerInterceptors(unaryChain),
+		rgrpc.WithStreamServerInterceptors(streamChain),
+	)
+	if err != nil {
+		_ = ln.Close()
+		return nil, "", err
+	}
+	hostname, _ := os.Hostname()
+	addr := hostPort(hostname, ln.Addr().String())
+	server := &Server{
+		server:    s,
+		listener:  ln,
+		transport: "grpc",
+		internal:  true,
+		services:  maps.MapValues(services, func(s rgrpc.Service) any { return s }),
+	}
+	log.Info().Str("address", addr).Msg("spawned per-process control channel")
+	return server, addr, nil
 }

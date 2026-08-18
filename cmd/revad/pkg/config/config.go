@@ -47,6 +47,9 @@ type Log struct {
 	Output string `default:"stdout"  key:"output" mapstructure:"output"`
 	Mode   string `default:"console" key:"mode"   mapstructure:"mode"`
 	Level  string `default:"trace"   key:"level"  mapstructure:"level"`
+	// Tail is how many recent log lines to keep in memory for `reva admin
+	// logs`; 0 disables the buffer.
+	Tail int `default:"2000" key:"tail" mapstructure:"tail"`
 }
 
 // Shared holds the shared configuration.

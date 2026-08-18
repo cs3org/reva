@@ -29,6 +29,7 @@ import (
 	"github.com/cs3org/reva/v3/internal/grpc/interceptors/token"
 	"github.com/cs3org/reva/v3/internal/grpc/interceptors/trace"
 	"github.com/cs3org/reva/v3/internal/grpc/interceptors/useragent"
+	"github.com/cs3org/reva/v3/pkg/activity"
 	"github.com/cs3org/reva/v3/pkg/rgrpc"
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog"
@@ -47,7 +48,7 @@ type streamInterceptorTriple struct {
 	Interceptor grpc.StreamServerInterceptor
 }
 
-func initGRPCInterceptors(conf map[string]map[string]any, unprotected []string, logger *zerolog.Logger) ([]grpc.UnaryServerInterceptor, []grpc.StreamServerInterceptor, error) {
+func initGRPCInterceptors(conf map[string]map[string]any, unprotected []string, counters map[string]*activity.Counter, logger *zerolog.Logger) ([]grpc.UnaryServerInterceptor, []grpc.StreamServerInterceptor, error) {
 	unaryTriples := []*unaryInterceptorTriple{}
 	for name, c := range conf {
 		new, ok := rgrpc.UnaryInterceptors[name]
@@ -88,7 +89,7 @@ func initGRPCInterceptors(conf map[string]map[string]any, unprotected []string, 
 	unaryInterceptors = append([]grpc.UnaryServerInterceptor{
 		trace.NewUnary(),
 		metrics.NewUnary(),
-		appctx.NewUnary(*logger),
+		appctx.NewUnary(*logger, counters),
 		token.NewUnary(),
 		useragent.NewUnary(),
 		log.NewUnary(),
@@ -127,7 +128,7 @@ func initGRPCInterceptors(conf map[string]map[string]any, unprotected []string, 
 	streamInterceptors = append([]grpc.StreamServerInterceptor{
 		trace.NewStream(),
 		metrics.NewStream(),
-		appctx.NewStream(*logger),
+		appctx.NewStream(*logger, counters),
 		token.NewStream(),
 		useragent.NewStream(),
 		log.NewStream(),

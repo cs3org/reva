@@ -80,6 +80,10 @@ const (
 	NameSpaces          = "spacesregistry"
 	NameDataTx          = "datatx"
 	NameLabels          = "labels"
+	NameAdmin           = "admin"
+	// NameControl labels the per-process control channel on its internal
+	// server; it is discovered via node metadata, not registered as a service.
+	NameControl = "control"
 )
 
 // Clients resolves a peer by kind and returns a typed CS3 client; resolution,
