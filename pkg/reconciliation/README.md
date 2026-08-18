@@ -57,8 +57,10 @@ keys are thus required and it needs to have the proper permissions on EOS
 recipient no longer exists.
 
 `reconciliation.shallow` writes the ACL entry each share implies onto its path,
-when the storage has no entry or the wrong permissions. It only adds and corrects
-entries. It never removes an ACL entry.
+when the storage has no entry or the wrong permissions. On the storage it only
+adds and corrects entries. It never removes an ACL entry. In the share database
+it does remove rows: a share that a higher share of the same recipient makes
+redundant is deleted (soft). See below for the details.
 
 Start a run with `reva admin jobs run reconciliation.shallow [space=<space-id>]`.
 Leave the space out to cover every space. This needs the admin API enabled. The
