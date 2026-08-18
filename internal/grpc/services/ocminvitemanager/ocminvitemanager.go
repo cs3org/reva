@@ -113,7 +113,7 @@ func New(ctx context.Context, m map[string]any) (rgrpc.Service, error) {
 	service := &service{
 		conf:      &c,
 		repo:      repo,
-		ocmClient: ocmd.NewClient(time.Duration(c.OCMClientTimeout)*time.Second, c.OCMClientInsecure),
+		ocmClient: ocmd.NewClient(time.Duration(c.OCMClientTimeout)*time.Second, c.OCMClientInsecure, 0),
 	}
 	return service, nil
 }

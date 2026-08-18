@@ -37,31 +37,70 @@ func init() {
 	registry.Register("open", New)
 }
 
-// New returns a new authorizer object.
+// New returns an open authorizer that discovers unknown providers with the
+// untrusted public-only client. Discovery hosts are caller-supplied, so
+// scheme, dial, and redirect policy must stay enforced.
 func New(ctx context.Context, m map[string]any) (provider.Authorizer, error) {
 	var c config
 	if err := cfg.Decode(m, &c); err != nil {
 		return nil, err
 	}
+	c.UntrustedClientSecurity.ApplyDefaults()
+	if err := c.UntrustedClientSecurity.Compile(); err != nil {
+		return nil, err
+	}
+	if err := c.UntrustedClientSecurity.RejectHatch(); err != nil {
+		return nil, err
+	}
+	minVersion, err := client.ParseTLSMinVersion(c.OCMTLSMinVersion)
+	if err != nil {
+		return nil, err
+	}
 
-	a := &authorizer{insecure: c.Insecure}
+	a := &authorizer{
+		publicOCMClient: client.NewPublicOnlyClient(
+			time.Duration(c.Timeout)*time.Second,
+			c.Insecure,
+			c.UntrustedClientSecurity,
+			c.OCMResponseLimit,
+			minVersion,
+		),
+	}
 	return a, nil
 }
 
 type config struct {
-	// Users holds a path to a file containing json conforming the Users struct
 	Providers string `mapstructure:"providers"`
 	// Insecure skips TLS verification when discovering an unknown provider. Off by
 	// default; turning it on exposes discovery to MITM.
 	Insecure bool `mapstructure:"insecure"`
+	// OCMResponseLimit caps outbound OCM JSON response bodies. Zero selects
+	// the package default.
+	OCMResponseLimit int64 `mapstructure:"ocm_response_limit"`
+	// OCMTLSMinVersion is the untrusted-client TLS-minimum knob. Empty
+	// selects ParseTLSMinVersion's default.
+	OCMTLSMinVersion string `mapstructure:"ocm_tls_min_version"`
+	// UntrustedClientSecurity configures redirect policy for discovery of
+	// unknown providers (TOML block ocm_client_security). The hatch
+	// (allow_http, allowed_cidrs, allow_loopback) must stay closed.
+	UntrustedClientSecurity client.UntrustedClientSecurity `mapstructure:"ocm_client_security"`
+	// Timeout is the outbound OCM discovery request timeout in seconds.
+	// Zero or negative selects the request-timeout default.
+	Timeout int `mapstructure:"timeout"`
 }
 
 func (c *config) ApplyDefaults() {
+	if c.OCMResponseLimit == 0 {
+		c.OCMResponseLimit = 1 << 20
+	}
+	if c.Timeout <= 0 {
+		c.Timeout = 10
+	}
 }
 
 type authorizer struct {
-	providers []*ocmprovider.ProviderInfo
-	insecure  bool
+	providers       []*ocmprovider.ProviderInfo
+	publicOCMClient *client.OCMClient
 }
 
 func (a *authorizer) GetInfoByDomain(ctx context.Context, domain string) (*ocmprovider.ProviderInfo, error) {
@@ -79,8 +118,7 @@ func (a *authorizer) GetInfoByDomain(ctx context.Context, domain string) (*ocmpr
 	}
 
 	// not yet known: try to discover the remote OCM endpoint
-	ocmClient := client.NewClient(time.Duration(10)*time.Second, a.insecure)
-	ocmCaps, err := ocmClient.Discover(ctx, endpoint)
+	ocmCaps, err := a.publicOCMClient.Discover(ctx, endpoint)
 	if err != nil {
 		return nil, errors.Wrap(err, "error probing OCM services at remote server")
 	}
@@ -95,7 +133,6 @@ func (a *authorizer) GetInfoByDomain(ctx context.Context, domain string) (*ocmpr
 	}
 	host, _ := url.Parse(ocmCaps.Endpoint)
 
-	// return a provider info record for this domain, including the OCM service
 	return &ocmprovider.ProviderInfo{
 		Name:         "ocm_" + domain,
 		FullName:     ocmCaps.Provider,

@@ -52,6 +52,26 @@ type config struct {
 	// OCMClientInsecure skips TLS verification when probing a remote provider's
 	// discovery endpoint. Off by default; turning it on exposes discovery to MITM.
 	OCMClientInsecure bool `mapstructure:"ocm_client_insecure"`
+	// OCMClientResponseLimit caps outbound OCM JSON response bodies in bytes.
+	// Zero means 1 MiB.
+	OCMClientResponseLimit int64 `mapstructure:"ocm_client_response_limit"`
+	// OCMClientTLSMinVersion is the untrusted-client TLS minimum enum string.
+	// Empty means TLS 1.2. Accepted values are "1.2" and "1.3".
+	OCMClientTLSMinVersion string `mapstructure:"ocm_client_tls_min_version"`
+	// UntrustedClientSecurity is the shared hatch and redirect policy for
+	// untrusted outbound clients used by this service (TOML block
+	// ocm_client_security). Non-received consumers must keep the hatch closed
+	// (no allow_http / allowed_cidrs).
+	UntrustedClientSecurity UntrustedClientSecurity `mapstructure:"ocm_client_security"`
+	// OCMClientDialTimeout is the untrusted-transport net.Dialer timeout
+	// in seconds for peer-supplied WebDAV ingest URLs. Zero or negative
+	// means 10s.
+	OCMClientDialTimeout int `mapstructure:"ocm_client_dial_timeout"`
+	// OCMClientTimeout is the outbound OCM JSON/metadata request timeout
+	// in seconds (Discover, ingest PROPFIND SetTimeout). Zero or negative
+	// means 10s.
+	OCMClientTimeout int `mapstructure:"ocm_client_timeout"`
+	ocmClientTLSMin  uint16
 }
 
 func (c *config) ApplyDefaults() {
@@ -62,11 +82,21 @@ func (c *config) ApplyDefaults() {
 	if c.TokenManager == "" {
 		c.TokenManager = "jwt"
 	}
+	if c.OCMClientResponseLimit == 0 {
+		c.OCMClientResponseLimit = 1 << 20
+	}
+	if c.OCMClientDialTimeout <= 0 {
+		c.OCMClientDialTimeout = 10
+	}
+	if c.OCMClientTimeout <= 0 {
+		c.OCMClientTimeout = 10
+	}
 }
 
 type svc struct {
 	Conf   *config
 	router chi.Router
+	shares *sharesHandler
 }
 
 // New returns a new ocmd object, that implements
@@ -76,6 +106,18 @@ func New(ctx context.Context, m map[string]any) (global.Service, error) {
 	if err := cfg.Decode(m, &c); err != nil {
 		return nil, err
 	}
+	c.UntrustedClientSecurity.ApplyDefaults()
+	if err := c.UntrustedClientSecurity.Compile(); err != nil {
+		return nil, err
+	}
+	if err := c.UntrustedClientSecurity.RejectHatch(); err != nil {
+		return nil, err
+	}
+	minVersion, err := ParseTLSMinVersion(c.OCMClientTLSMinVersion)
+	if err != nil {
+		return nil, err
+	}
+	c.ocmClientTLSMin = minVersion
 
 	r := chi.NewRouter()
 	s := &svc{
@@ -98,6 +140,7 @@ func (s *svc) routerInit() error {
 	if err := sharesHandler.init(s.Conf); err != nil {
 		return err
 	}
+	s.shares = sharesHandler
 	if err := invitesHandler.init(s.Conf); err != nil {
 		return err
 	}
