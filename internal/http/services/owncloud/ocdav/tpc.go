@@ -254,7 +254,7 @@ func (s *svc) performHTTPPull(ctx context.Context, client gateway.GatewayAPIClie
 	defer httpUploadRes.Body.Close()
 	if httpUploadRes.StatusCode != http.StatusOK {
 		w.WriteHeader(httpUploadRes.StatusCode)
-		return err
+		return fmt.Errorf("upload to the data server returned status code %d", httpUploadRes.StatusCode)
 	}
 	return nil
 }
@@ -312,7 +312,7 @@ func (s *svc) handleTPCPush(ctx context.Context, w http.ResponseWriter, r *http.
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
-	if srcStatRes.Status.Code != rpc.Code_CODE_OK && srcStatRes.Status.Code != rpc.Code_CODE_NOT_FOUND {
+	if srcStatRes.Status.Code != rpc.Code_CODE_OK {
 		HandleErrorStatus(&sublog, w, srcStatRes.Status)
 		return
 	}
@@ -376,7 +376,7 @@ func (s *svc) performHTTPPush(ctx context.Context, client gateway.GatewayAPIClie
 	defer httpDownloadRes.Body.Close()
 	if httpDownloadRes.StatusCode != http.StatusOK {
 		w.WriteHeader(httpDownloadRes.StatusCode)
-		return fmt.Errorf("remote PUT returned status code %d", httpDownloadRes.StatusCode)
+		return fmt.Errorf("download from the data server returned status code %d", httpDownloadRes.StatusCode)
 	}
 
 	// send performance markers periodically every PerfMarkerResponseTime (5 seconds unless configured)
@@ -426,7 +426,7 @@ func (s *svc) performHTTPPush(ctx context.Context, client gateway.GatewayAPIClie
 
 	if httpUploadRes.StatusCode != http.StatusOK {
 		w.WriteHeader(httpUploadRes.StatusCode)
-		return err
+		return fmt.Errorf("remote PUT returned status code %d", httpUploadRes.StatusCode)
 	}
 
 	return nil

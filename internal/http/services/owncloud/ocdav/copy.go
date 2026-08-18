@@ -272,7 +272,7 @@ func (s *svc) executePathCopy(ctx context.Context, client gateway.GatewayAPIClie
 		defer httpUploadRes.Body.Close()
 		if httpUploadRes.StatusCode != http.StatusOK {
 			log.Error().Any("status", httpUploadRes.StatusCode).Msg("executePathCopy: failed to do upload to data server")
-			return err
+			return fmt.Errorf("status code %d", httpUploadRes.StatusCode)
 		}
 	}
 	return nil
