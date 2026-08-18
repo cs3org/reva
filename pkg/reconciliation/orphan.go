@@ -80,21 +80,6 @@ const (
 	ReasonRecipientMissing OrphanReason = "recipient-missing"
 )
 
-// ShareStore is what the orphan job needs from a share manager: the CS3 listing
-// every manager implements, plus marking, which the CS3 API has no call for. A
-// manager that cannot mark cannot be reconciled. The listing is expected to
-// cover every owner and to leave out the already-orphaned.
-type ShareStore interface {
-	ListShares(ctx context.Context, filters []*collaboration.Filter) ([]*collaboration.Share, error)
-	MarkAsOrphaned(ctx context.Context, ref *collaboration.ShareReference) error
-}
-
-// PublicLinkStore is the same for a public share manager.
-type PublicLinkStore interface {
-	ListPublicShares(ctx context.Context, u *userpb.User, filters []*link.ListPublicSharesRequest_Filter, md *provider.ResourceInfo, sign bool) ([]*link.PublicShare, error)
-	MarkAsOrphaned(ctx context.Context, ref *link.PublicShareReference) error
-}
-
 // OrphanJob marks shares and public links whose resource or recipient is gone
 // as orphaned. It is idempotent: an item already orphaned is skipped by the
 // hideOrphans filter, and re-running never marks a valid one.

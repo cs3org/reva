@@ -313,8 +313,12 @@ func (fs *Eosfs) convertACLsToGrants(ctx context.Context, acls *acl.ACLs) ([]*pr
 	return res, nil
 }
 
+// isSysACLs reports whether the attribute is the EOS ACL, sys.acl. The type is
+// held separately from the key, so the key here is "acl" and not "sys.acl":
+// matching on "sys" never did, which left every entry EOS holds out of the
+// grants ListGrants hands back.
 func isSysACLs(a *eosclient.Attribute) bool {
-	return a.Type == SystemAttr && a.Key == "sys"
+	return a.Type == SystemAttr && a.Key == "acl"
 }
 
 func isLightweightACL(a *eosclient.Attribute) bool {
@@ -342,14 +346,16 @@ func (fs *Eosfs) ListGrants(ctx context.Context, ref *provider.Reference) ([]*pr
 		return nil, err
 	}
 
-	userAuth, err := fs.getUserAuth(ctx)
+	// Statted as daemon, the way every other read in this driver resolves a
+	// path. Statting as the caller instead denied any account whose rights come
+	// from a secondary group: the role reva sends EOS is a single uid/gid pair,
+	// and the identity EOS builds from it carries no other group.
+	daemonAuth, err := fs.getDaemonAuth(ctx)
 	if err != nil {
 		return nil, err
 	}
 
-	// This is invoked just to see if it fails: the user should
-	// have acces
-	_, err = fs.c.GetAttrs(ctx, userAuth, fn)
+	_, err = fs.c.GetAttrs(ctx, daemonAuth, fn)
 	if err != nil {
 		return nil, err
 	}

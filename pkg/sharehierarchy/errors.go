@@ -58,7 +58,7 @@ func NewChildConflictError(msg string, shares []ResolvedShare) *HierarchyConflic
 	cs := make([]ConflictingShare, 0, len(shares))
 	for _, resolved := range shares {
 		s := resolved.Share
-		sharee, shareeType := shareeInfo(s.Grantee)
+		sharee, shareeType := ShareeInfo(s.Grantee)
 
 		cs = append(cs, ConflictingShare{
 			ID:             s.Id.OpaqueId,
@@ -72,7 +72,9 @@ func NewChildConflictError(msg string, shares []ResolvedShare) *HierarchyConflic
 	return &HierarchyConflictError{ErrorType: "child_conflict", CanForce: true, Message: msg, ConflictingShares: cs}
 }
 
-func shareeInfo(grantee *provider.Grantee) (string, string) {
+// ShareeInfo returns the identifier of a grantee and its type, ShareeTypeUser
+// or ShareeTypeGroup. Both are empty for a grantee that is neither.
+func ShareeInfo(grantee *provider.Grantee) (string, string) {
 	if grantee == nil {
 		return "", ""
 	}

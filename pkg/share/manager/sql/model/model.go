@@ -276,6 +276,7 @@ func (s *Share) AsCS3Share(grantee *provider.Grantee) *collaboration.Share {
 		ResourceId: &provider.ResourceId{
 			StorageId: s.Instance,
 			OpaqueId:  s.Inode,
+			SpaceId:   s.SpaceID,
 		},
 		Permissions: &collaboration.SharePermissions{Permissions: permissions.OcsPermissions(s.Permissions).AsCS3Permissions()},
 		Grantee:     grantee,

@@ -48,23 +48,51 @@ type storedLink struct {
 	orphan bool
 }
 
-// fakeStore is an in-memory ShareStore recording which shares were marked.
+// fakeStore is an in-memory ShareStore recording which shares were marked and
+// which were removed.
 type fakeStore struct {
-	shares  []storedShare
-	marked  []string
-	listErr error
-	markErr error
+	shares     []storedShare
+	marked     []string
+	unshared   []string
+	listErr    error
+	markErr    error
+	unshareErr error
+	// listHook, when set, runs before every listing with the space it is
+	// narrowed to and the number of listings already done. It lets a test change
+	// the shares under a run, the way a user sharing during a run does.
+	listHook func(f *fakeStore, space string, done int)
+	// lists counts the listings, so a test can assert which spaces a run looked
+	// at again.
+	lists int
 }
 
 func (f *fakeStore) ListShares(ctx context.Context, filters []*collaboration.Filter) ([]*collaboration.Share, error) {
+	// only the space filter is honoured, the one the shallow job narrows a run
+	// with.
+	var space string
+	for _, filter := range filters {
+		if filter.GetType() == collaboration.Filter_TYPE_SPACE_ID {
+			space = filter.GetSpaceId()
+		}
+	}
+
+	if f.listHook != nil {
+		f.listHook(f, space, f.lists)
+	}
+	f.lists++
 	if f.listErr != nil {
 		return nil, f.listErr
 	}
+
 	var out []*collaboration.Share
 	for _, s := range f.shares {
-		if !s.orphan {
-			out = append(out, s.share)
+		if s.orphan {
+			continue
 		}
+		if space != "" && s.share.GetResourceId().GetSpaceId() != space {
+			continue
+		}
+		out = append(out, s.share)
 	}
 	return out, nil
 }
@@ -74,6 +102,14 @@ func (f *fakeStore) MarkAsOrphaned(ctx context.Context, ref *collaboration.Share
 		return f.markErr
 	}
 	f.marked = append(f.marked, ref.GetId().GetOpaqueId())
+	return nil
+}
+
+func (f *fakeStore) Unshare(ctx context.Context, ref *collaboration.ShareReference) error {
+	if f.unshareErr != nil {
+		return f.unshareErr
+	}
+	f.unshared = append(f.unshared, ref.GetId().GetOpaqueId())
 	return nil
 }
 
@@ -107,17 +143,26 @@ func (f *fakeLinkStore) MarkAsOrphaned(ctx context.Context, ref *link.PublicShar
 	return nil
 }
 
-// fakeGateway is a gateway client driven by presence sets. Only the three
-// methods the orphan job calls are implemented; the embedded interface makes any
-// other call panic, which keeps the fake honest.
+// fakeGateway is a gateway client driven by presence sets. Only the methods the
+// jobs call are implemented; the embedded interface makes any other call panic,
+// which keeps the fake honest.
 type fakeGateway struct {
 	gateway.GatewayAPIClient
 	resources map[string]bool
 	users     map[string]bool
+	// userTypes overrides the type of a resolved user. Unlisted users are
+	// primary accounts.
+	userTypes map[string]userpb.UserType
 	groups    map[string]bool
-	statErr   error
-	userErr   error
-	groupErr  error
+	// paths maps "<storage>/<inode>" to the path of the resource.
+	paths map[string]string
+	// userLookups counts the GetUserByClaim calls, one per name the caller did
+	// not already have.
+	userLookups int
+	statErr     error
+	userErr     error
+	groupErr    error
+	pathErr     error
 }
 
 func status(present bool) *rpc.Status {
@@ -136,10 +181,34 @@ func (f *fakeGateway) Stat(ctx context.Context, in *provider.StatRequest, _ ...g
 }
 
 func (f *fakeGateway) GetUserByClaim(ctx context.Context, in *userpb.GetUserByClaimRequest, _ ...grpc.CallOption) (*userpb.GetUserByClaimResponse, error) {
+	f.userLookups++
 	if f.userErr != nil {
 		return nil, f.userErr
 	}
-	return &userpb.GetUserByClaimResponse{Status: status(f.users[in.GetValue()])}, nil
+	name := in.GetValue()
+	if !f.users[name] {
+		return &userpb.GetUserByClaimResponse{Status: status(false)}, nil
+	}
+	t, ok := f.userTypes[name]
+	if !ok {
+		t = userpb.UserType_USER_TYPE_PRIMARY
+	}
+	return &userpb.GetUserByClaimResponse{
+		Status: status(true),
+		User:   &userpb.User{Id: &userpb.UserId{OpaqueId: name, Type: t}},
+	}, nil
+}
+
+func (f *fakeGateway) GetPath(ctx context.Context, in *provider.GetPathRequest, _ ...grpc.CallOption) (*provider.GetPathResponse, error) {
+	if f.pathErr != nil {
+		return nil, f.pathErr
+	}
+	id := in.GetResourceId()
+	p, ok := f.paths[id.GetStorageId()+"/"+id.GetOpaqueId()]
+	if !ok {
+		return &provider.GetPathResponse{Status: status(false)}, nil
+	}
+	return &provider.GetPathResponse{Status: status(true), Path: p}, nil
 }
 
 func (f *fakeGateway) GetGroupByClaim(ctx context.Context, in *grouppb.GetGroupByClaimRequest, _ ...grpc.CallOption) (*grouppb.GetGroupByClaimResponse, error) {
