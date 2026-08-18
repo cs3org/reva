@@ -35,6 +35,9 @@ type Coordinator interface {
 	ListUploadSessions(ctx context.Context, filter storage.UploadSessionFilter) ([]storage.UploadSession, error)
 	// Upload writes the whole body of a non-resumable (PUT) upload and finishes it.
 	Upload(ctx context.Context, req storage.UploadRequest, uff storage.UploadFinishedFunc) (*provider.ResourceInfo, error)
+	// StartPostprocessing subscribes to postprocessing results and enables async
+	// uploads. Call once, before serving requests.
+	StartPostprocessing(stream events.Consumer, group, mountID string, numConsumers int) error
 }
 
 // coordinator is the concrete implementation of Coordinator.
@@ -45,6 +48,9 @@ type coordinator struct {
 	pub          events.Publisher
 	// async defers the commit to postprocessing. Only StartPostprocessing sets it.
 	async bool
+	// mountID is the storage this coordinator serves, used to drop postprocessing
+	// events belonging to another one.
+	mountID string
 }
 
 // NewCoordinator constructs a coordinator backed by the given driver and store.
@@ -488,13 +494,35 @@ func verifyAndStoreChecksums(ctx context.Context, session Session) error {
 	return nil
 }
 
-// finishSync commits the staged bytes, then unmarks processing and cleans up.
+// finishSync commits the staged bytes for an inline upload, discarding the
+// session if the commit fails: the client is still waiting and will retry, so
+// keeping the bytes would only leak them.
 func (c *coordinator) finishSync(ctx context.Context, session Session) (*provider.ResourceInfo, error) {
+	ri, err := c.commit(ctx, session)
+	if err != nil {
+		c.rollbackPrepared(ctx, session, session.SizeDiff())
+		return nil, err
+	}
+	return ri, nil
+}
+
+// finishAsync commits the staged bytes for an upload postprocessing has cleared.
+// A failure here keeps the node marked and the session on disk, so an admin can
+// retry with RestartPostprocessing or discard it with CleanUpload. Nobody is
+// waiting on the response any more, so there is no retry but theirs.
+func (c *coordinator) finishAsync(ctx context.Context, session Session) error {
+	_, err := c.commit(ctx, session)
+	return err
+}
+
+// commit writes the staged bytes through the driver seam and, on success, unmarks
+// the node and retires the session. It leaves a failure untouched for the caller
+// to handle, the two finish paths wanting opposite things.
+func (c *coordinator) commit(ctx context.Context, session Session) (*provider.ResourceInfo, error) {
 	ref := session.Reference()
 
 	f, err := os.Open(session.BinPath())
 	if err != nil {
-		c.rollbackPrepared(ctx, session, session.SizeDiff())
 		return nil, err
 	}
 	// The verdict rides along with the bytes, so a committed blob always carries
@@ -510,10 +538,10 @@ func (c *coordinator) finishSync(ctx context.Context, session Session) (*provide
 	})
 	f.Close()
 	if err != nil {
-		c.rollbackPrepared(ctx, session, session.SizeDiff())
 		return nil, err
 	}
 
+	// Not unmarkProcessing: the commit succeeded, so a missing node is unexpected.
 	if err := c.fs.MarkProcessing(ctx, &ref, false, session.ID()); err != nil {
 		appctx.GetLogger(ctx).Error().Err(err).Str("uploadid", session.ID()).Msg("could not unmark processing")
 	}

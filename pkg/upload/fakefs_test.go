@@ -2,16 +2,20 @@ package upload
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
+	"reflect"
 
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
+	. "github.com/onsi/gomega"
 	tusd "github.com/tus/tusd/v2/pkg/handler"
 	eventsapi "go-micro.dev/v4/events"
 
 	"github.com/owncloud/reva/v2/pkg/errtypes"
+	"github.com/owncloud/reva/v2/pkg/events"
 	"github.com/owncloud/reva/v2/pkg/storage"
 )
 
@@ -165,6 +169,50 @@ func (p *fakePublisher) Publish(_ string, event interface{}, _ ...eventsapi.Publ
 	return nil
 }
 
+// channelPublisher hands each published event to the spec's goroutine, which is how
+// the consumer specs observe a background commit without racing on a slice.
+type channelPublisher struct {
+	published chan interface{}
+}
+
+func (p *channelPublisher) Publish(_ string, event interface{}, _ ...eventsapi.PublishOption) error {
+	p.published <- event
+	return nil
+}
+
+// fakeConsumer is an events.Consumer test double handing out a channel the specs
+// push raw stream events into.
+type fakeConsumer struct {
+	ch  chan eventsapi.Event
+	err error
+
+	// group is what events.Consume subscribed with.
+	group string
+}
+
+func (c *fakeConsumer) Consume(_ string, opts ...eventsapi.ConsumeOption) (<-chan eventsapi.Event, error) {
+	if c.err != nil {
+		return nil, c.err
+	}
+	o := &eventsapi.ConsumeOptions{}
+	for _, opt := range opts {
+		opt(o)
+	}
+	c.group = o.Group
+	return c.ch, nil
+}
+
+// pushEvent delivers an event the way the stream does: a JSON payload plus the type
+// metadata events.Consume dispatches on.
+func pushEvent(ch chan eventsapi.Event, ev interface{}) {
+	payload, err := json.Marshal(ev)
+	Expect(err).ToNot(HaveOccurred())
+	ch <- eventsapi.Event{
+		Metadata: map[string]string{events.MetadatakeyEventType: reflect.TypeOf(ev).String()},
+		Payload:  payload,
+	}
+}
+
 // brokenSession fails what a real FileSession cannot be made to fail from outside.
 type brokenSession struct {
 	Session
@@ -209,15 +257,31 @@ func (s *brokenSession) URL(ctx context.Context) (string, error) {
 	return s.Session.URL(ctx)
 }
 
-// brokenStore stands in for the store where the code creates its own session.
+// brokenStore stands in for the store where the code creates or loads its own
+// session.
 type brokenStore struct {
 	SessionStore
 	failPersist bool
 	listErr     error
+
+	// loadedURLErr fails URL() on the sessions Get hands back.
+	loadedURLErr error
 }
 
 func (s *brokenStore) New(ctx context.Context) Session {
 	return &brokenSession{Session: s.SessionStore.New(ctx), failPersist: s.failPersist}
+}
+
+func (s *brokenStore) Get(ctx context.Context, id string) (Session, error) {
+	session, err := s.SessionStore.Get(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+	return &brokenSession{
+		Session:     session,
+		failPersist: s.failPersist,
+		urlErr:      s.loadedURLErr,
+	}, nil
 }
 
 func (s *brokenStore) List(ctx context.Context) ([]Session, error) {
