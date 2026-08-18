@@ -35,6 +35,7 @@ import (
 	"github.com/cs3org/reva/v3/pkg/rgrpc/status"
 	"github.com/cs3org/reva/v3/pkg/rgrpc/todo/pool"
 	"github.com/cs3org/reva/v3/pkg/sharedconf"
+	"github.com/cs3org/reva/v3/pkg/spaces"
 	"github.com/cs3org/reva/v3/pkg/utils"
 	"github.com/cs3org/reva/v3/pkg/utils/cfg"
 	"github.com/pkg/errors"
@@ -342,7 +343,7 @@ func (s *service) DeleteStorageSpace(ctx context.Context, req *provider.DeleteSt
 }
 
 func (s *service) CreateContainer(ctx context.Context, req *provider.CreateContainerRequest) (*provider.CreateContainerResponse, error) {
-	cs3Ref, _, ls, st, err := s.translatePublicRefToCS3Ref(ctx, req.Ref)
+	cs3Ref, tkn, ls, st, err := s.translatePublicRefToCS3Ref(ctx, req.Ref)
 	switch {
 	case err != nil:
 		return nil, err
@@ -370,7 +371,30 @@ func (s *service) CreateContainer(ctx context.Context, req *provider.CreateConta
 		return res, nil
 	}
 
+	s.translateOpaqueFileID(res.Opaque, tkn)
+
 	return res, nil
+}
+
+// the fileid a storage reports points at the real resource, so rewrite it into
+// the public namespace the same way Stat does
+func (s *service) translateOpaqueFileID(o *typesv1beta1.Opaque, shareToken string) {
+	if o == nil {
+		return
+	}
+	e, ok := o.Map["fileid"]
+	if !ok {
+		return
+	}
+	id, ok := spaces.ParseResourceID(string(e.Value))
+	if !ok {
+		// an id we cannot read is worse than no id, the etag next to it is still good
+		delete(o.Map, "fileid")
+		return
+	}
+	// setPublicStorageID writes through the id we pass in
+	s.setPublicStorageID(&provider.ResourceInfo{Id: id}, shareToken)
+	e.Value = []byte(spaces.EncodeToStringifiedResourceID(id))
 }
 
 func (s *service) TouchFile(ctx context.Context, req *provider.TouchFileRequest) (*provider.TouchFileResponse, error) {

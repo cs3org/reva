@@ -153,6 +153,16 @@ func (s *svc) handleMkcol(ctx context.Context, w http.ResponseWriter, r *http.Re
 	}
 	switch res.Status.Code {
 	case rpc.Code_CODE_OK:
+		// the fileid and etag of the new collection come in the response
+		// opaque, if the storage was able to report them
+		if res.Opaque != nil {
+			if e, ok := res.Opaque.Map["fileid"]; ok && len(e.Value) > 0 {
+				w.Header().Set(HeaderOCFileID, string(e.Value))
+			}
+			if e, ok := res.Opaque.Map["etag"]; ok && len(e.Value) > 0 {
+				w.Header().Set(HeaderOCETag, string(e.Value))
+			}
+		}
 		w.WriteHeader(http.StatusCreated)
 	case rpc.Code_CODE_NOT_FOUND:
 		log.Debug().Str("path", childRef.Path).Interface("status", statRes.Status).Msg("conflict")
