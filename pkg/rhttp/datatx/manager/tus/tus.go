@@ -212,6 +212,10 @@ func setHeaders(coord upload.Coordinator, w http.ResponseWriter, r *http.Request
 	if expires != "" {
 		w.Header().Set(net.HeaderTusUploadExpires, expires)
 	}
+	// the node id is only valid once the upload commits; skip the header for new files
+	if info.Storage["NodeExists"] != "true" {
+		return
+	}
 	resourceid := &provider.ResourceId{
 		StorageId: info.MetaData["providerID"],
 		SpaceId:   info.Storage["SpaceRoot"],
