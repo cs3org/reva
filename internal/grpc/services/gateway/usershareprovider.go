@@ -110,7 +110,7 @@ func (s *svc) CreateShare(ctx context.Context, req *collaboration.CreateShareReq
 	existingShares, err := s.listSharesForGranteeInSpace(ctx, shareClient, spaceId, req.Grant.Grantee)
 	if err != nil {
 		return &collaboration.CreateShareResponse{
-			Status: status.NewInternal(ctx, err, "error listing shares for hierarchy check"),
+			Status: status.NewStatusFromErrType(ctx, "error listing shares for hierarchy check", err),
 		}, nil
 	}
 
@@ -213,7 +213,7 @@ func (s *svc) RemoveShare(ctx context.Context, req *collaboration.RemoveShareReq
 	existingShares, listErr := s.listSharesForGranteeInSpace(ctx, c, share.ResourceId.SpaceId, share.Grantee)
 	if listErr != nil {
 		return &collaboration.RemoveShareResponse{
-			Status: status.NewInternal(ctx, listErr, "error listing shares for hierarchy reapply"),
+			Status: status.NewStatusFromErrType(ctx, "error listing shares for hierarchy reapply", listErr),
 		}, nil
 	}
 	reapply := checker.GrantsToReapplyAfterRemove(ctx, share.Id.OpaqueId, share.ResourceId, existingShares)
@@ -414,7 +414,7 @@ func (s *svc) UpdateShare(ctx context.Context, req *collaboration.UpdateShareReq
 		existingShares, listErr := s.listSharesForGranteeInSpace(ctx, c, currentShare.ResourceId.SpaceId, currentShare.Grantee)
 		if listErr != nil {
 			return &collaboration.UpdateShareResponse{
-				Status: status.NewInternal(ctx, listErr, "error listing shares for hierarchy check"),
+				Status: status.NewStatusFromErrType(ctx, "error listing shares for hierarchy check", listErr),
 			}, nil
 		}
 		existingShares = filterOutShare(existingShares, currentShare.Id.OpaqueId)
@@ -422,7 +422,7 @@ func (s *svc) UpdateShare(ctx context.Context, req *collaboration.UpdateShareReq
 		currentPath, pathErr := s.getPathForResourceId(ctx, currentShare.ResourceId)
 		if pathErr != nil {
 			return &collaboration.UpdateShareResponse{
-				Status: status.NewInternal(ctx, pathErr, "error resolving share path for hierarchy check"),
+				Status: status.NewStatusFromErrType(ctx, "error resolving share path for hierarchy check", pathErr),
 			}, nil
 		}
 
@@ -743,10 +743,7 @@ func (s *svc) removeReference(ctx context.Context, resourceID *provider.Resource
 	idReference := &provider.Reference{ResourceId: resourceID}
 	storageProvider, err := s.find(ctx, idReference)
 	if err != nil {
-		if _, ok := err.(errtypes.IsNotFound); ok {
-			return status.NewNotFound(ctx, "storage provider not found")
-		}
-		return status.NewInternal(ctx, err, "error finding storage provider")
+		return status.NewStatusFromErrType(ctx, "error finding storage provider", err)
 	}
 
 	statRes, err := storageProvider.Stat(ctx, &provider.StatRequest{Ref: idReference})
@@ -770,10 +767,7 @@ func (s *svc) removeReference(ctx context.Context, resourceID *provider.Resource
 
 	homeProvider, err := s.find(ctx, &provider.Reference{Path: sharePath})
 	if err != nil {
-		if _, ok := err.(errtypes.IsNotFound); ok {
-			return status.NewNotFound(ctx, "storage provider not found")
-		}
-		return status.NewInternal(ctx, err, "error finding storage provider")
+		return status.NewStatusFromErrType(ctx, "error finding storage provider", err)
 	}
 
 	deleteReq := &provider.DeleteRequest{
@@ -815,10 +809,7 @@ func (s *svc) createReference(ctx context.Context, resourceID *provider.Resource
 	// get the metadata about the share
 	c, err := s.find(ctx, ref)
 	if err != nil {
-		if _, ok := err.(errtypes.IsNotFound); ok {
-			return status.NewNotFound(ctx, "storage provider not found")
-		}
-		return status.NewInternal(ctx, err, "error finding storage provider")
+		return status.NewStatusFromErrType(ctx, "error finding storage provider", err)
 	}
 
 	statReq := &provider.StatRequest{
@@ -862,10 +853,7 @@ func (s *svc) createReference(ctx context.Context, resourceID *provider.Resource
 
 	c, err = s.findByPath(ctx, refPath)
 	if err != nil {
-		if _, ok := err.(errtypes.IsNotFound); ok {
-			return status.NewNotFound(ctx, "storage provider not found")
-		}
-		return status.NewInternal(ctx, err, "error finding storage provider")
+		return status.NewStatusFromErrType(ctx, "error finding storage provider", err)
 	}
 
 	createRefRes, err := c.CreateReference(ctx, createRefReq)
@@ -895,10 +883,7 @@ func (s *svc) denyGrant(ctx context.Context, id *provider.ResourceId, g *provide
 
 	c, err := s.find(ctx, ref)
 	if err != nil {
-		if _, ok := err.(errtypes.IsNotFound); ok {
-			return status.NewNotFound(ctx, "storage provider not found"), nil
-		}
-		return status.NewInternal(ctx, err, "error finding storage provider"), nil
+		return status.NewStatusFromErrType(ctx, "error finding storage provider", err), nil
 	}
 
 	grantRes, err := c.DenyGrant(ctx, grantReq)
@@ -927,10 +912,7 @@ func (s *svc) addGrant(ctx context.Context, id *provider.ResourceId, g *provider
 
 	c, err := s.find(ctx, ref)
 	if err != nil {
-		if _, ok := err.(errtypes.IsNotFound); ok {
-			return status.NewNotFound(ctx, "storage provider not found"), nil
-		}
-		return status.NewInternal(ctx, err, "error finding storage provider"), nil
+		return status.NewStatusFromErrType(ctx, "error finding storage provider", err), nil
 	}
 
 	grantRes, err := c.AddGrant(ctx, grantReq)
@@ -959,10 +941,7 @@ func (s *svc) updateGrant(ctx context.Context, id *provider.ResourceId, g *provi
 
 	c, err := s.find(ctx, ref)
 	if err != nil {
-		if _, ok := err.(errtypes.IsNotFound); ok {
-			return status.NewNotFound(ctx, "storage provider not found"), nil
-		}
-		return status.NewInternal(ctx, err, "error finding storage provider"), nil
+		return status.NewStatusFromErrType(ctx, "error finding storage provider", err), nil
 	}
 
 	grantRes, err := c.UpdateGrant(ctx, grantReq)
@@ -991,10 +970,7 @@ func (s *svc) removeGrant(ctx context.Context, id *provider.ResourceId, g *provi
 
 	c, err := s.find(ctx, ref)
 	if err != nil {
-		if _, ok := err.(errtypes.IsNotFound); ok {
-			return status.NewNotFound(ctx, "storage provider not found"), nil
-		}
-		return status.NewInternal(ctx, err, "error finding storage provider"), nil
+		return status.NewStatusFromErrType(ctx, "error finding storage provider", err), nil
 	}
 
 	grantRes, err := c.RemoveGrant(ctx, grantReq)
