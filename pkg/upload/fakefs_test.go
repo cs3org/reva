@@ -55,6 +55,7 @@ type fakeFS struct {
 	// what the driver was handed, for the arguments the call list does not carry.
 	committed   storage.UploadSource
 	prepareInfo storage.UploadInfo
+	rolledBack  storage.RollbackInfo
 	touchRef    *provider.Reference
 	touchMtime  string
 
@@ -145,8 +146,9 @@ func (f *fakeFS) CommitUpload(_ context.Context, _ *provider.Reference, _ string
 	return f.commitErr
 }
 
-func (f *fakeFS) RollbackUpload(_ context.Context, _ *provider.Reference, _ string, nodeExisted bool, sizeDiff int64) error {
-	f.record("RollbackUpload(nodeExisted=%v,sizeDiff=%d)", nodeExisted, sizeDiff)
+func (f *fakeFS) RollbackUpload(_ context.Context, _ *provider.Reference, _ string, info storage.RollbackInfo) error {
+	f.record("RollbackUpload(nodeExisted=%v,sizeDiff=%d)", info.NodeExisted, info.SizeDiff)
+	f.rolledBack = info
 	return f.rollbackErr
 }
 

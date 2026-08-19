@@ -1,6 +1,8 @@
 package decomposedfs_test
 
 import (
+	"os"
+
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -68,7 +70,7 @@ var _ = Describe("RollbackUpload", func() {
 			Expect(revsBefore).To(HaveLen(1))
 
 			Expect(env.Fs.MarkProcessing(env.Ctx, ref, true, "session-overwrite")).To(Succeed())
-			Expect(env.Fs.RollbackUpload(env.Ctx, ref, "session-overwrite", true, result.SizeDiff)).To(Succeed())
+			Expect(env.Fs.RollbackUpload(env.Ctx, ref, "session-overwrite", storage.RollbackInfo{NodeExisted: true, SizeDiff: result.SizeDiff})).To(Succeed())
 
 			revsAfter, err := env.Fs.ListRevisions(env.Ctx, ref)
 			Expect(err).ToNot(HaveOccurred())
@@ -104,7 +106,7 @@ var _ = Describe("RollbackUpload", func() {
 			Expect(err).ToNot(HaveOccurred())
 
 			Expect(env.Fs.MarkProcessing(env.Ctx, ref, true, "session-b")).To(Succeed())
-			Expect(env.Fs.RollbackUpload(env.Ctx, ref, "session-a", true, 10)).To(Succeed())
+			Expect(env.Fs.RollbackUpload(env.Ctx, ref, "session-a", storage.RollbackInfo{NodeExisted: true, SizeDiff: 10})).To(Succeed())
 
 			n, err := env.Lookup.NodeFromResource(env.Ctx, ref)
 			Expect(err).ToNot(HaveOccurred())
@@ -120,7 +122,117 @@ var _ = Describe("RollbackUpload", func() {
 				ResourceId: env.SpaceRootRes,
 				Path:       "/dir1/does-not-exist.txt",
 			}
-			Expect(env.Fs.RollbackUpload(env.Ctx, missingRef, "any-session-id", false, 0)).To(Succeed())
+			Expect(env.Fs.RollbackUpload(env.Ctx, missingRef, "any-session-id", storage.RollbackInfo{})).To(Succeed())
+		})
+	})
+
+	// A node whose metadata is gone but whose file remains, e.g. because an
+	// ancestor was trashed while the upload was in flight. ReadNode fails on the
+	// missing parent id, so the rollback has only the session to go on.
+	Context("orphaned node: the metadata is unreadable", func() {
+		var (
+			idRef    *provider.Reference
+			nodePath string
+			dir1Ref  *provider.Reference
+			info     storage.RollbackInfo
+		)
+
+		// parentSize is the size dir1 accounts for, which the propagation moves.
+		parentSize := func() uint64 {
+			parentInfo, err := env.Fs.GetMD(env.Ctx, dir1Ref, []string{}, []string{})
+			Expect(err).ToNot(HaveOccurred())
+			return parentInfo.Size
+		}
+
+		// orphan prepares an upload, then purges the target's metadata. It returns
+		// the parent size from before the optimistic propagation.
+		orphan := func() uint64 {
+			dir1Ref = &provider.Reference{ResourceId: env.SpaceRootRes, Path: "/dir1"}
+			sizeBefore := parentSize()
+
+			_, err := env.Fs.TouchFile(env.Ctx, ref, false, "")
+			Expect(err).ToNot(HaveOccurred())
+
+			n, err := env.Lookup.NodeFromResource(env.Ctx, ref)
+			Expect(err).ToNot(HaveOccurred())
+			nodePath = n.InternalPath()
+			// Address the node by id: the path walk needs the parent metadata the
+			// purge below destroys.
+			idRef = &provider.Reference{ResourceId: &provider.ResourceId{
+				StorageId: env.SpaceRootRes.GetStorageId(),
+				SpaceId:   env.SpaceRootRes.GetSpaceId(),
+				OpaqueId:  n.ID,
+			}}
+
+			result, err := env.Fs.PrepareUpload(env.Ctx, ref, "session-orphan", storage.UploadInfo{
+				NodeExisted: false,
+				Size:        30,
+			})
+			Expect(err).ToNot(HaveOccurred())
+			Expect(env.Fs.MarkProcessing(env.Ctx, ref, true, "session-orphan")).To(Succeed())
+			Expect(parentSize()).To(Equal(sizeBefore+30), "the optimistic size should be propagated")
+
+			// Purge, not remove: the cached attributes have to go too.
+			Expect(env.Lookup.MetadataBackend().Purge(env.Ctx, nodePath)).To(Succeed())
+			_, err = env.Lookup.NodeFromResource(env.Ctx, idRef)
+			Expect(err).To(HaveOccurred(), "the node should be unreadable")
+
+			info = storage.RollbackInfo{
+				SizeDiff: result.SizeDiff,
+				NodeID:   idRef.GetResourceId().GetOpaqueId(),
+				ParentID: n.ParentID,
+				Filename: "rollback-target.txt",
+				Size:     30,
+			}
+			return sizeBefore
+		}
+
+		It("releases the quota and removes the unreachable node", func() {
+			sizeBefore := orphan()
+
+			Expect(env.Fs.RollbackUpload(env.Ctx, idRef, "session-orphan", info)).To(Succeed())
+
+			Expect(parentSize()).To(Equal(sizeBefore))
+
+			_, err := os.Stat(nodePath)
+			Expect(err).To(HaveOccurred(), "the orphaned node should be gone")
+		})
+
+		// Without them there is no way to reach the parent, so report the failure
+		// rather than pretending the upload was rolled back.
+		It("reports the lookup failure when the session carries no ids", func() {
+			orphan()
+
+			err := env.Fs.RollbackUpload(env.Ctx, idRef, "session-orphan", storage.RollbackInfo{SizeDiff: 30})
+
+			Expect(err).To(MatchError(ContainSubstring("node lookup failed")))
+			_, statErr := os.Stat(nodePath)
+			Expect(statErr).ToNot(HaveOccurred(), "the node should be left for a retry")
+		})
+
+		// The space is what the propagation walks up to, so there is nothing to
+		// walk without it.
+		It("reports the lookup failure when the reference names no space", func() {
+			orphan()
+
+			err := env.Fs.RollbackUpload(env.Ctx, &provider.Reference{Path: "/dir1/rollback-target.txt"}, "session-orphan", info)
+
+			Expect(err).To(MatchError(ContainSubstring("node lookup failed")))
+			_, statErr := os.Stat(nodePath)
+			Expect(statErr).ToNot(HaveOccurred(), "the node should be left for a retry")
+		})
+
+		// Removing the node first would destroy the parent id the retry needs.
+		It("keeps the node when the quota cannot be released", func() {
+			orphan()
+			// A parent id pointing nowhere fails the walk up the tree.
+			info.ParentID = "does-not-exist"
+
+			err := env.Fs.RollbackUpload(env.Ctx, idRef, "session-orphan", info)
+
+			Expect(err).To(MatchError(ContainSubstring("could not revert propagate")))
+			_, statErr := os.Stat(nodePath)
+			Expect(statErr).ToNot(HaveOccurred(), "the node should be left for a retry")
 		})
 	})
 })

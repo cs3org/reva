@@ -244,6 +244,46 @@ var _ = Describe("coordinator", func() {
 				}))
 			})
 		})
+
+		Context("when the rollback itself fails", func() {
+			// The session is the only remaining record of what to undo, so throwing
+			// it away would leave the quota consumed with nothing to reclaim it from.
+			It("keeps the session for a retry", func() {
+				session := newSession(true)
+				fs.prepared = &storage.PrepareUploadResult{SizeDiff: bodyLen}
+				fs.commitErr = errors.New("blobstore unavailable")
+				fs.rollbackErr = errors.New("no such node")
+
+				_, err := c.finishUpload(ctx, session)
+
+				Expect(err).To(MatchError("blobstore unavailable"))
+				_, getErr := store.Get(ctx, session.ID())
+				Expect(getErr).ToNot(HaveOccurred())
+				Expect(fs.calls).ToNot(ContainElement("MarkProcessing(false)"))
+			})
+		})
+
+		// A node whose own metadata is unreadable can only be reached through the
+		// ids the session recorded.
+		Context("the rollback description", func() {
+			It("carries the ids the driver needs to reach an orphaned node", func() {
+				session := newSession(true)
+				fs.prepared = &storage.PrepareUploadResult{SizeDiff: bodyLen}
+				fs.commitErr = errors.New("blobstore unavailable")
+
+				_, err := c.finishUpload(ctx, session)
+
+				Expect(err).To(HaveOccurred())
+				Expect(fs.rolledBack).To(Equal(storage.RollbackInfo{
+					NodeExisted: true,
+					SizeDiff:    bodyLen,
+					NodeID:      nodeID,
+					ParentID:    parentID,
+					Filename:    "report.docx",
+					Size:        bodyLen,
+				}))
+			})
+		})
 	})
 
 	Describe("Upload", func() {

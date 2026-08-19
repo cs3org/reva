@@ -384,13 +384,26 @@ func (c *coordinator) prepare(ctx context.Context, session Session) error {
 	return nil
 }
 
+// rollbackInfo describes the upload to undo. The ids come from the session, which
+// is the only place they survive a node whose own metadata has become unreadable.
+func rollbackInfo(session Session, sizeDiff int64) storage.RollbackInfo {
+	return storage.RollbackInfo{
+		NodeExisted: session.NodeExists(),
+		SizeDiff:    sizeDiff,
+		NodeID:      session.NodeID(),
+		ParentID:    session.NodeParentID(),
+		Filename:    session.Filename(),
+		Size:        session.Size(),
+	}
+}
+
 // rollbackMarked undoes a finish that failed before PrepareUpload ran, so there is
 // no revision to revert and nothing was propagated.
 func (c *coordinator) rollbackMarked(ctx context.Context, session Session) {
 	ref := session.Reference()
 	if !session.NodeExists() {
 		// Before unmarking: RollbackUpload keys off the processing id.
-		if err := c.fs.RollbackUpload(ctx, &ref, session.ID(), false, 0); err != nil {
+		if err := c.fs.RollbackUpload(ctx, &ref, session.ID(), rollbackInfo(session, 0)); err != nil {
 			appctx.GetLogger(ctx).Error().Err(err).Str("uploadid", session.ID()).Msg("could not roll back upload")
 		}
 	}
@@ -404,8 +417,11 @@ func (c *coordinator) rollbackPrepared(ctx context.Context, session Session, siz
 	ref := session.Reference()
 	// Before unmarking: RollbackUpload keys off the processing id to confirm the
 	// node is still this upload's.
-	if err := c.fs.RollbackUpload(ctx, &ref, session.ID(), session.NodeExists(), sizeDiff); err != nil {
-		appctx.GetLogger(ctx).Error().Err(err).Str("uploadid", session.ID()).Msg("could not roll back upload")
+	if err := c.fs.RollbackUpload(ctx, &ref, session.ID(), rollbackInfo(session, sizeDiff)); err != nil {
+		// The session is the last record of what to undo, so keep it for a retry
+		// rather than leaving the quota consumed with nothing to reclaim it from.
+		appctx.GetLogger(ctx).Error().Err(err).Str("uploadid", session.ID()).Msg("could not roll back upload, keeping session")
+		return
 	}
 	c.unmarkProcessing(ctx, session, &ref)
 	metrics.UploadProcessing.Dec()

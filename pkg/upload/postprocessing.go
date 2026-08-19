@@ -192,8 +192,9 @@ func (c *coordinator) onRestartPostprocessing(ctx context.Context, ev events.Res
 // bytes and the session, so postprocessing can be restarted.
 func (c *coordinator) rollbackNode(ctx context.Context, session Session) {
 	ref := session.Reference()
-	if err := c.fs.RollbackUpload(ctx, &ref, session.ID(), session.NodeExists(), session.SizeDiff()); err != nil {
-		appctx.GetLogger(ctx).Error().Err(err).Str("uploadid", session.ID()).Msg("could not roll back upload")
+	if err := c.fs.RollbackUpload(ctx, &ref, session.ID(), rollbackInfo(session, session.SizeDiff())); err != nil {
+		appctx.GetLogger(ctx).Error().Err(err).Str("uploadid", session.ID()).Msg("could not roll back upload, keeping session")
+		return
 	}
 	c.unmarkProcessing(ctx, session, &ref)
 }
