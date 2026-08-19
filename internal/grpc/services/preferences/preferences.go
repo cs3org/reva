@@ -99,7 +99,7 @@ func (s *service) SetKey(ctx context.Context, req *preferencespb.SetKeyRequest) 
 	err := s.pm.SetKey(ctx, req.Key.Key, req.Key.Namespace, req.Val)
 	if err != nil {
 		return &preferencespb.SetKeyResponse{
-			Status: status.NewInternal(ctx, err, "error setting key"),
+			Status: status.NewStatusFromErrType(ctx, "error setting key", err),
 		}, nil
 	}
 
@@ -111,7 +111,7 @@ func (s *service) SetKey(ctx context.Context, req *preferencespb.SetKeyRequest) 
 func (s *service) GetKey(ctx context.Context, req *preferencespb.GetKeyRequest) (*preferencespb.GetKeyResponse, error) {
 	val, err := s.pm.GetKey(ctx, req.Key.Key, req.Key.Namespace)
 	if err != nil {
-		st := status.NewInternal(ctx, err, "error retrieving key")
+		st := status.NewStatusFromErrType(ctx, "error retrieving key", err)
 		if _, ok := err.(errtypes.IsNotFound); ok {
 			st = status.NewNotFound(ctx, "key not found")
 		}

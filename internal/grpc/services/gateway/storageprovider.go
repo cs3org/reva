@@ -920,7 +920,7 @@ func (s *svc) findProviders(ctx context.Context, ref *provider.Reference) ([]*re
 		case rpc.Code_CODE_UNIMPLEMENTED:
 			return nil, errtypes.NotSupported("gateway: " + res.Status.Message + " for " + ref.String() + " with code " + res.Status.Code.String())
 		default:
-			return nil, status.NewErrorFromCode(res.Status.Code, "gateway")
+			return nil, status.NewErrtypeFromStatus(res.Status)
 		}
 	}
 

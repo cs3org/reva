@@ -108,7 +108,7 @@ func (s *svc) CreateShare(ctx context.Context, req *collaboration.CreateShareReq
 	existingShares, err := s.listSharesForGranteeInSpace(ctx, shareClient, spaceId, req.Grant.Grantee)
 	if err != nil {
 		return &collaboration.CreateShareResponse{
-			Status: status.NewInternal(ctx, err, "error listing shares for hierarchy check"),
+			Status: status.NewStatusFromErrType(ctx, "error listing shares for hierarchy check", err),
 		}, nil
 	}
 
@@ -155,7 +155,7 @@ func (s *svc) CreateShare(ctx context.Context, req *collaboration.CreateShareReq
 		return nil, errors.Wrap(err, "gateway: error calling CreateShare")
 	}
 	if res.Status.Code != rpc.Code_CODE_OK {
-		return nil, errors.New("ShareClient returned error: " + res.Status.Code.String() + ": " + res.Status.Message)
+		return nil, status.NewErrtypeFromStatus(res.Status)
 	}
 
 	// And we remove from the db the deleted shares made redundant by the new share.
@@ -181,8 +181,7 @@ func (s *svc) RemoveShare(ctx context.Context, req *collaboration.RemoveShareReq
 	}
 	if getShareRes.Status.Code != rpc.Code_CODE_OK {
 		return &collaboration.RemoveShareResponse{
-			Status: status.NewInternal(ctx, status.NewErrorFromCode(getShareRes.Status.Code, "gateway"),
-				"error getting share to be removed"),
+			Status: getShareRes.Status,
 		}, nil
 	}
 	share := getShareRes.Share
@@ -212,7 +211,7 @@ func (s *svc) RemoveShare(ctx context.Context, req *collaboration.RemoveShareReq
 	existingShares, listErr := s.listSharesForGranteeInSpace(ctx, c, share.ResourceId.SpaceId, share.Grantee)
 	if listErr != nil {
 		return &collaboration.RemoveShareResponse{
-			Status: status.NewInternal(ctx, listErr, "error listing shares for hierarchy reapply"),
+			Status: status.NewStatusFromErrType(ctx, "error listing shares for hierarchy reapply", listErr),
 		}, nil
 	}
 	reapply := checker.GrantsToReapplyAfterRemove(ctx, share.Id.OpaqueId, share.ResourceId, existingShares)
@@ -317,7 +316,7 @@ func (s *svc) ListExistingShares(ctx context.Context, req *collaboration.ListSha
 					return err
 				}
 				if stat.Status.Code != rpc.Code_CODE_OK {
-					return errors.New("An error occurred: " + stat.Status.Message)
+					return status.NewErrtypeFromStatus(stat.Status)
 				}
 				resourceInfo = stat.Info
 				if s.resourceInfoCacheTTL > 0 {
@@ -376,7 +375,7 @@ func (s *svc) UpdateShare(ctx context.Context, req *collaboration.UpdateShareReq
 	}
 	if getRes.Status.Code != rpc.Code_CODE_OK {
 		return &collaboration.UpdateShareResponse{
-			Status: status.NewInternal(ctx, status.NewErrorFromCode(getRes.Status.Code, "gateway"), "error getting share for update"),
+			Status: getRes.Status,
 		}, nil
 	}
 	currentShare := getRes.Share
@@ -413,7 +412,7 @@ func (s *svc) UpdateShare(ctx context.Context, req *collaboration.UpdateShareReq
 		existingShares, listErr := s.listSharesForGranteeInSpace(ctx, c, currentShare.ResourceId.SpaceId, currentShare.Grantee)
 		if listErr != nil {
 			return &collaboration.UpdateShareResponse{
-				Status: status.NewInternal(ctx, listErr, "error listing shares for hierarchy check"),
+				Status: status.NewStatusFromErrType(ctx, "error listing shares for hierarchy check", listErr),
 			}, nil
 		}
 		existingShares = filterOutShare(existingShares, currentShare.Id.OpaqueId)
@@ -421,7 +420,7 @@ func (s *svc) UpdateShare(ctx context.Context, req *collaboration.UpdateShareReq
 		currentPath, pathErr := s.getPathForResourceId(ctx, currentShare.ResourceId)
 		if pathErr != nil {
 			return &collaboration.UpdateShareResponse{
-				Status: status.NewInternal(ctx, pathErr, "error resolving share path for hierarchy check"),
+				Status: status.NewStatusFromErrType(ctx, "error resolving share path for hierarchy check", pathErr),
 			}, nil
 		}
 
@@ -529,7 +528,7 @@ func (s *svc) ListExistingReceivedShares(ctx context.Context, req *collaboration
 					return err
 				}
 				if stat.Status.Code != rpc.Code_CODE_OK {
-					return errors.New("An error occurred: " + stat.Status.Message)
+					return status.NewErrtypeFromStatus(stat.Status)
 				}
 				resourceInfo = stat.Info
 				if s.resourceInfoCacheTTL > 0 {
@@ -655,7 +654,7 @@ func (s *svc) getPathForResourceId(ctx context.Context, id *provider.ResourceId)
 		return "", errors.Wrap(err, "gateway: error calling GetPath")
 	}
 	if res.Status.Code != rpc.Code_CODE_OK {
-		return "", errors.New("gateway: GetPath failed: " + res.Status.Message)
+		return "", status.NewErrtypeFromStatus(res.Status)
 	}
 	return res.Path, nil
 }
@@ -677,7 +676,7 @@ func (s *svc) listSharesForGranteeInSpace(ctx context.Context, c collaboration.C
 		return nil, errors.Wrap(err, "gateway: error listing shares for grantee in space")
 	}
 	if res.Status.Code != rpc.Code_CODE_OK {
-		return nil, errors.New("gateway: ListShares for space returned: " + res.Status.Message)
+		return nil, status.NewErrtypeFromStatus(res.Status)
 	}
 	return res.Shares, nil
 }
@@ -742,10 +741,7 @@ func (s *svc) removeReference(ctx context.Context, resourceID *provider.Resource
 	idReference := &provider.Reference{ResourceId: resourceID}
 	storageProvider, err := s.find(ctx, idReference)
 	if err != nil {
-		if _, ok := err.(errtypes.IsNotFound); ok {
-			return status.NewNotFound(ctx, "storage provider not found")
-		}
-		return status.NewInternal(ctx, err, "error finding storage provider")
+		return status.NewStatusFromErrType(ctx, "error finding storage provider", err)
 	}
 
 	statRes, err := storageProvider.Stat(ctx, &provider.StatRequest{Ref: idReference})
@@ -755,8 +751,7 @@ func (s *svc) removeReference(ctx context.Context, resourceID *provider.Resource
 
 	// FIXME how can we delete a reference if the original resource was deleted?
 	if statRes.Status.Code != rpc.Code_CODE_OK {
-		err := status.NewErrorFromCode(statRes.Status.GetCode(), "gateway")
-		return status.NewInternal(ctx, err, "could not delete share reference")
+		return statRes.Status
 	}
 
 	homeRes, err := s.GetHome(ctx, &provider.GetHomeRequest{})
@@ -770,10 +765,7 @@ func (s *svc) removeReference(ctx context.Context, resourceID *provider.Resource
 
 	homeProvider, err := s.find(ctx, &provider.Reference{Path: sharePath})
 	if err != nil {
-		if _, ok := err.(errtypes.IsNotFound); ok {
-			return status.NewNotFound(ctx, "storage provider not found")
-		}
-		return status.NewInternal(ctx, err, "error finding storage provider")
+		return status.NewStatusFromErrType(ctx, "error finding storage provider", err)
 	}
 
 	deleteReq := &provider.DeleteRequest{
@@ -798,8 +790,7 @@ func (s *svc) removeReference(ctx context.Context, resourceID *provider.Resource
 		// This is fine, we wanted to delete it anyway
 		return status.NewOK(ctx)
 	default:
-		err := status.NewErrorFromCode(deleteResp.Status.GetCode(), "gateway")
-		return status.NewInternal(ctx, err, "could not delete share reference")
+		return deleteResp.Status
 	}
 
 	log.Debug().Str("share_path", sharePath).Msg("share reference successfully removed")
@@ -816,10 +807,7 @@ func (s *svc) createReference(ctx context.Context, resourceID *provider.Resource
 	// get the metadata about the share
 	c, err := s.find(ctx, ref)
 	if err != nil {
-		if _, ok := err.(errtypes.IsNotFound); ok {
-			return status.NewNotFound(ctx, "storage provider not found")
-		}
-		return status.NewInternal(ctx, err, "error finding storage provider")
+		return status.NewStatusFromErrType(ctx, "error finding storage provider", err)
 	}
 
 	statReq := &provider.StatRequest{
@@ -832,9 +820,8 @@ func (s *svc) createReference(ctx context.Context, resourceID *provider.Resource
 	}
 
 	if statRes.Status.Code != rpc.Code_CODE_OK {
-		err := status.NewErrorFromCode(statRes.Status.GetCode(), "gateway")
-		log.Err(err).Msg("gateway: Stat failed on the share resource id: " + resourceID.String())
-		return status.NewInternal(ctx, err, "error updating received share")
+		log.Err(status.NewErrorFromCode(statRes.Status.GetCode(), "gateway")).Msg("gateway: Stat failed on the share resource id: " + resourceID.String())
+		return statRes.Status
 	}
 
 	homeRes, err := s.GetHome(ctx, &provider.GetHomeRequest{})
@@ -864,10 +851,7 @@ func (s *svc) createReference(ctx context.Context, resourceID *provider.Resource
 
 	c, err = s.findByPath(ctx, refPath)
 	if err != nil {
-		if _, ok := err.(errtypes.IsNotFound); ok {
-			return status.NewNotFound(ctx, "storage provider not found")
-		}
-		return status.NewInternal(ctx, err, "error finding storage provider")
+		return status.NewStatusFromErrType(ctx, "error finding storage provider", err)
 	}
 
 	createRefRes, err := c.CreateReference(ctx, createRefReq)
@@ -879,8 +863,7 @@ func (s *svc) createReference(ctx context.Context, resourceID *provider.Resource
 	}
 
 	if createRefRes.Status.Code != rpc.Code_CODE_OK {
-		err := status.NewErrorFromCode(createRefRes.Status.GetCode(), "gateway")
-		return status.NewInternal(ctx, err, "error updating received share")
+		return createRefRes.Status
 	}
 
 	return status.NewOK(ctx)
@@ -898,10 +881,7 @@ func (s *svc) denyGrant(ctx context.Context, id *provider.ResourceId, g *provide
 
 	c, err := s.find(ctx, ref)
 	if err != nil {
-		if _, ok := err.(errtypes.IsNotFound); ok {
-			return status.NewNotFound(ctx, "storage provider not found"), nil
-		}
-		return status.NewInternal(ctx, err, "error finding storage provider"), nil
+		return status.NewStatusFromErrType(ctx, "error finding storage provider", err), nil
 	}
 
 	grantRes, err := c.DenyGrant(ctx, grantReq)
@@ -909,8 +889,7 @@ func (s *svc) denyGrant(ctx context.Context, id *provider.ResourceId, g *provide
 		return nil, errors.Wrap(err, "gateway: error calling DenyGrant")
 	}
 	if grantRes.Status.Code != rpc.Code_CODE_OK {
-		return status.NewInternal(ctx, status.NewErrorFromCode(grantRes.Status.Code, "gateway"),
-			"error committing share to storage grant"), nil
+		return grantRes.Status, nil
 	}
 
 	return status.NewOK(ctx), nil
@@ -931,10 +910,7 @@ func (s *svc) addGrant(ctx context.Context, id *provider.ResourceId, g *provider
 
 	c, err := s.find(ctx, ref)
 	if err != nil {
-		if _, ok := err.(errtypes.IsNotFound); ok {
-			return status.NewNotFound(ctx, "storage provider not found"), nil
-		}
-		return status.NewInternal(ctx, err, "error finding storage provider"), nil
+		return status.NewStatusFromErrType(ctx, "error finding storage provider", err), nil
 	}
 
 	grantRes, err := c.AddGrant(ctx, grantReq)
@@ -943,8 +919,7 @@ func (s *svc) addGrant(ctx context.Context, id *provider.ResourceId, g *provider
 		return status.NewInternal(ctx, err, "error committing share to storage grant"), err
 	}
 	if grantRes.Status.Code != rpc.Code_CODE_OK {
-		return status.NewInternal(ctx, status.NewErrorFromCode(grantRes.Status.Code, "gateway"),
-			"error committing share to storage grant"), nil
+		return grantRes.Status, nil
 	}
 
 	return status.NewOK(ctx), nil
@@ -964,10 +939,7 @@ func (s *svc) updateGrant(ctx context.Context, id *provider.ResourceId, g *provi
 
 	c, err := s.find(ctx, ref)
 	if err != nil {
-		if _, ok := err.(errtypes.IsNotFound); ok {
-			return status.NewNotFound(ctx, "storage provider not found"), nil
-		}
-		return status.NewInternal(ctx, err, "error finding storage provider"), nil
+		return status.NewStatusFromErrType(ctx, "error finding storage provider", err), nil
 	}
 
 	grantRes, err := c.UpdateGrant(ctx, grantReq)
@@ -975,8 +947,7 @@ func (s *svc) updateGrant(ctx context.Context, id *provider.ResourceId, g *provi
 		return nil, errors.Wrap(err, "gateway: error calling UpdateGrant")
 	}
 	if grantRes.Status.Code != rpc.Code_CODE_OK {
-		return status.NewInternal(ctx, status.NewErrorFromCode(grantRes.Status.Code, "gateway"),
-			"error committing share to storage grant"), nil
+		return grantRes.Status, nil
 	}
 
 	return status.NewOK(ctx), nil
@@ -997,10 +968,7 @@ func (s *svc) removeGrant(ctx context.Context, id *provider.ResourceId, g *provi
 
 	c, err := s.find(ctx, ref)
 	if err != nil {
-		if _, ok := err.(errtypes.IsNotFound); ok {
-			return status.NewNotFound(ctx, "storage provider not found"), nil
-		}
-		return status.NewInternal(ctx, err, "error finding storage provider"), nil
+		return status.NewStatusFromErrType(ctx, "error finding storage provider", err), nil
 	}
 
 	grantRes, err := c.RemoveGrant(ctx, grantReq)
@@ -1008,8 +976,7 @@ func (s *svc) removeGrant(ctx context.Context, id *provider.ResourceId, g *provi
 		return nil, errors.Wrap(err, "gateway: error calling RemoveGrant")
 	}
 	if grantRes.Status.Code != rpc.Code_CODE_OK {
-		return status.NewInternal(ctx, status.NewErrorFromCode(grantRes.Status.Code, "gateway"),
-			"error removing storage grant"), nil
+		return grantRes.Status, nil
 	}
 
 	return status.NewOK(ctx), nil

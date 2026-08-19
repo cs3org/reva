@@ -23,8 +23,8 @@ import (
 	"fmt"
 	"net/url"
 	"path"
-	"strings"
 	"slices"
+	"strings"
 
 	"github.com/alitto/pond/v2"
 	gateway "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
@@ -158,7 +158,7 @@ func (s *svc) ListExistingOCMShares(ctx context.Context, req *ocm.ListOCMSharesR
 					return err
 				}
 				if stat.Status.Code != rpc.Code_CODE_OK {
-					return errors.New("An error occurred: " + stat.Status.Message)
+					return status.NewErrtypeFromStatus(stat.Status)
 				}
 				resourceInfo = stat.Info
 				if s.resourceInfoCacheTTL > 0 {

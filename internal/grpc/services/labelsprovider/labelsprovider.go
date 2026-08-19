@@ -107,7 +107,7 @@ func (s *service) AddLabel(ctx context.Context, req *labelsv1beta1.AddLabelReque
 	err := s.mgr.SetLabel(ctx, req.GetLabel(), ref.GetResourceId())
 	if err != nil {
 		return &labelsv1beta1.AddLabelResponse{
-			Status: status.NewInternal(ctx, err, "error setting label"),
+			Status: status.NewStatusFromErrType(ctx, "error setting label", err),
 		}, nil
 	}
 
@@ -127,7 +127,7 @@ func (s *service) RemoveLabel(ctx context.Context, req *labelsv1beta1.RemoveLabe
 	err := s.mgr.UnsetLabel(ctx, req.GetLabel(), ref.GetResourceId())
 	if err != nil {
 		return &labelsv1beta1.RemoveLabelResponse{
-			Status: status.NewInternal(ctx, err, "error removing label"),
+			Status: status.NewStatusFromErrType(ctx, "error removing label", err),
 		}, nil
 	}
 
@@ -140,7 +140,7 @@ func (s *service) ListLabels(ctx context.Context, req *labelsv1beta1.ListLabelsR
 	lbls, err := s.mgr.ListLabels(ctx)
 	if err != nil {
 		return &labelsv1beta1.ListLabelsResponse{
-			Status: status.NewInternal(ctx, err, "error listing labels"),
+			Status: status.NewStatusFromErrType(ctx, "error listing labels", err),
 		}, nil
 	}
 
@@ -154,7 +154,7 @@ func (s *service) ListResourcesForLabel(ctx context.Context, req *labelsv1beta1.
 	resourceIds, err := s.mgr.ListResourcesForLabel(ctx, req.GetLabels())
 	if err != nil {
 		return &labelsv1beta1.ListResourcesForLabelResponse{
-			Status: status.NewInternal(ctx, err, "error listing resources for label"),
+			Status: status.NewStatusFromErrType(ctx, "error listing resources for label", err),
 		}, nil
 	}
 
