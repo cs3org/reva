@@ -594,7 +594,7 @@ func (s *service) GetPath(ctx context.Context, req *provider.GetPathRequest) (*p
 	fn, err := s.storage.GetPathByID(ctx, req.ResourceId)
 	if err != nil {
 		return &provider.GetPathResponse{
-			Status: status.NewInternal(ctx, err, "error getting path by id"),
+			Status: status.NewStatusFromErrType(ctx, "error getting path by id", err),
 		}, nil
 	}
 
@@ -620,7 +620,7 @@ func (s *service) GetHome(ctx context.Context, req *provider.GetHomeRequest) (*p
 func (s *service) CreateHome(ctx context.Context, req *provider.CreateHomeRequest) (*provider.CreateHomeResponse, error) {
 	log := appctx.GetLogger(ctx)
 	if err := s.storage.CreateHome(ctx); err != nil {
-		st := status.NewInternal(ctx, err, "error creating home")
+		st := status.NewStatusFromErrType(ctx, "error creating home", err)
 		log.Err(err).Msg("storageprovider: error calling CreateHome of storage driver")
 		return &provider.CreateHomeResponse{
 			Status: st,
@@ -799,13 +799,13 @@ func (s *service) Move(ctx context.Context, req *provider.MoveRequest) (*provide
 	sourceRef, err := s.unwrap(ctx, req.Source)
 	if err != nil {
 		return &provider.MoveResponse{
-			Status: status.NewInternal(ctx, err, "error unwrapping source path"),
+			Status: status.NewStatusFromErrType(ctx, "error unwrapping source path", err),
 		}, nil
 	}
 	targetRef, err := s.unwrap(ctx, req.Destination)
 	if err != nil {
 		return &provider.MoveResponse{
-			Status: status.NewInternal(ctx, err, "error unwrapping destination path"),
+			Status: status.NewStatusFromErrType(ctx, "error unwrapping destination path", err),
 		}, nil
 	}
 

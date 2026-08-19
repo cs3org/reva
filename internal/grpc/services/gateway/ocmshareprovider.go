@@ -23,8 +23,8 @@ import (
 	"fmt"
 	"net/url"
 	"path"
-	"strings"
 	"slices"
+	"strings"
 
 	"github.com/alitto/pond/v2"
 	gateway "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
