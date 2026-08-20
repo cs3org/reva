@@ -157,9 +157,9 @@ func checkChanges(t *testing.T, got, want ChangeSet) {
 func TestNamespaceDumpFixture(t *testing.T) {
 	dump := loadTestDump(t)
 
-	byPath := make(map[string]nsdump.NameSpaceEntry, len(dump.Entries))
-	for _, e := range dump.Entries {
-		byPath[e.Path] = e
+	byPath := make(map[string]*nsdump.NameSpaceEntry, len(dump.Entries))
+	for i := range dump.Entries {
+		byPath[dump.Entries[i].Path] = &dump.Entries[i]
 	}
 
 	for _, p := range []string{nsRoot, nsShared, nsNotes, nsTodo, nsExternal, nsInner,
@@ -172,10 +172,10 @@ func TestNamespaceDumpFixture(t *testing.T) {
 		t.Errorf("the dump holds %d entries, want 13", len(dump.Entries))
 	}
 
-	if got := byPath[nsShared].EntryType; got != nsdump.EntryTypeFolder {
+	if got := byPath[nsShared].EntryType(); got != nsdump.EntryTypeFolder {
 		t.Errorf("%q is a %q, want a folder", nsShared, got)
 	}
-	if got := byPath[nsNotes].EntryType; got != nsdump.EntryTypeFile {
+	if got := byPath[nsNotes].EntryType(); got != nsdump.EntryTypeFile {
 		t.Errorf("%q is a %q, want a file", nsNotes, got)
 	}
 	if got := byPath[nsShared].XattrSysAcl; got != "u:alice:rx" {
@@ -631,10 +631,9 @@ func buildBenchFixture(entries, shares int) *benchFixture {
 		}
 
 		f.dump.Entries = append(f.dump.Entries, nsdump.NameSpaceEntry{
-			ID:          strconv.Itoa(100000 + i),
+			CID:         strconv.Itoa(100000 + i),
 			Name:        path.Base(folder),
 			Path:        folder + "/",
-			EntryType:   nsdump.EntryTypeFolder,
 			XattrSysAcl: strings.Join(actual, acl.ShortTextForm),
 		})
 	}
@@ -652,10 +651,9 @@ func buildBenchFixture(entries, shares int) *benchFixture {
 		}
 
 		f.dump.Entries = append(f.dump.Entries, nsdump.NameSpaceEntry{
-			ID:          strconv.Itoa(900000 + i),
+			FID:         strconv.Itoa(900000 + i),
 			Name:        fmt.Sprintf("file%d.txt", i),
 			Path:        fmt.Sprintf("%s/file%d.txt", folder, i),
-			EntryType:   nsdump.EntryTypeFile,
 			XattrSysAcl: strings.Join(actual, acl.ShortTextForm),
 		})
 	}
