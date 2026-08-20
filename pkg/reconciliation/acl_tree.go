@@ -5,7 +5,7 @@ import (
 	"slices"
 
 	"github.com/cs3org/reva/v3/pkg/spaces"
-	"github.com/cs3org/reva/v3/pkg/storage/utils/acl"
+	"github.com/cs3org/reva/v3/pkg/storage/fs/eos/acl"
 )
 
 // TODO(jgeens):
@@ -30,8 +30,8 @@ type ACLTree struct {
 
 type ACLNode struct {
 	Path          string
-	MandatoryACLs []acl.Entry
-	AllowedACLs   []acl.Entry
+	MandatoryACLs []*acl.Entry
+	AllowedACLs   []*acl.Entry
 	Children      []*ACLNode
 }
 
@@ -120,13 +120,13 @@ func (n *ACLNode) MatchesExact(p string) bool {
 	return p == n.Path
 }
 
-func (n *ACLNode) Find(p string) (MandatoryACLs, AllowedACLs []acl.Entry, ok bool) {
+func (n *ACLNode) Find(p string) (MandatoryACLs, AllowedACLs []*acl.Entry, ok bool) {
 	return n.find(path.Clean(p))
 }
 
 // The internal-only find does not clean the path p, so we only need to do this once
 // and not for every visited node
-func (n *ACLNode) find(p string) (MandatoryACLs, AllowedACLs []acl.Entry, ok bool) {
+func (n *ACLNode) find(p string) (MandatoryACLs, AllowedACLs []*acl.Entry, ok bool) {
 	if !n.Matches(p) {
 		return nil, nil, false
 	}
@@ -141,7 +141,7 @@ func (n *ACLNode) find(p string) (MandatoryACLs, AllowedACLs []acl.Entry, ok boo
 	return n.MandatoryACLs, n.AllowedACLs, true
 }
 
-func (n *ACLNode) ApplyACLs(mandatory, optional []acl.Entry) {
+func (n *ACLNode) ApplyACLs(mandatory, optional []*acl.Entry) {
 	n.MandatoryACLs = mergeACLs(n.MandatoryACLs, mandatory)
 	n.AllowedACLs = mergeACLs(n.AllowedACLs, optional)
 	for _, c := range n.Children {
@@ -149,7 +149,7 @@ func (n *ACLNode) ApplyACLs(mandatory, optional []acl.Entry) {
 	}
 }
 
-func mergeACLs(a, b []acl.Entry) []acl.Entry {
+func mergeACLs(a, b []*acl.Entry) []*acl.Entry {
 	resultSet := slices.Clone(a)
 	for _, e := range b {
 
@@ -159,7 +159,12 @@ func mergeACLs(a, b []acl.Entry) []acl.Entry {
 		for i, c := range resultSet {
 			if e.Qualifier == c.Qualifier && e.Type == c.Type {
 				// ACL for the same user: highest permission wins
-				resultSet[i].Permissions = highestPermission(e.Permissions, c.Permissions)
+
+				// We don't want to override other references to this ACL, so we make a copy
+				merged := *c
+				merged.Permissions = highestPermission(e.Permissions, c.Permissions)
+				resultSet[i] = &merged
+
 				foundMatch = true
 				break
 			}
