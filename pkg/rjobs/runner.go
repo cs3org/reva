@@ -659,6 +659,11 @@ func (r *Runner) cancelRequested(ctx context.Context, run Run) bool {
 // redelivered. Cancellation is terminal, unlike a failure.
 func (r *Runner) finishCancelled(ctx context.Context, run Run, log zerolog.Logger) {
 	r.recordStatus(ctx, run, StateCancelled, nil, nil, log)
+	if run.DedupKey != "" && r.status != nil {
+		if err := r.status.Release(ctx, run.ID); err != nil {
+			log.Error().Err(err).Msg("rjobs: releasing dedup reservation errored")
+		}
+	}
 	if err := r.store.Complete(ctx, run.ID); err != nil {
 		log.Error().Err(err).Msg("rjobs: completing cancelled run errored")
 	}

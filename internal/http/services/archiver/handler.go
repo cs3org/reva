@@ -34,6 +34,7 @@ import (
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/cs3org/reva/v3/internal/http/services/archiver/manager"
 	"github.com/cs3org/reva/v3/pkg/appctx"
+	"github.com/cs3org/reva/v3/pkg/bundler"
 	"github.com/cs3org/reva/v3/pkg/errtypes"
 	"github.com/cs3org/reva/v3/pkg/httpclient"
 	"github.com/cs3org/reva/v3/pkg/rgrpc/todo/pool"
@@ -199,7 +200,7 @@ func (s *svc) writeHTTPError(ctx context.Context, w http.ResponseWriter, err err
 	switch err.(type) {
 	case errtypes.NotFound:
 		w.WriteHeader(http.StatusNotFound)
-	case manager.ErrMaxSize, manager.ErrMaxFileCount:
+	case bundler.ErrMaxSize, bundler.ErrMaxFileCount:
 		w.WriteHeader(http.StatusRequestEntityTooLarge)
 	case errtypes.BadRequest:
 		w.WriteHeader(http.StatusBadRequest)
