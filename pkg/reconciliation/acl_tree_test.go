@@ -25,13 +25,13 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/cs3org/reva/v3/pkg/storage/utils/acl"
+	"github.com/cs3org/reva/v3/pkg/storage/fs/eos/acl"
 )
 
 // sameEntries reports whether got and want hold the same ACL entries. The tree
 // gives no order guarantee, so both sides are sorted before the comparison.
-func sameEntries(got, want []acl.Entry) bool {
-	cmp := func(a, b acl.Entry) int {
+func sameEntries(got, want []*acl.Entry) bool {
+	cmp := func(a, b *acl.Entry) int {
 		if c := strings.Compare(a.Type, b.Type); c != 0 {
 			return c
 		}
@@ -43,31 +43,56 @@ func sameEntries(got, want []acl.Entry) bool {
 	g, w := slices.Clone(got), slices.Clone(want)
 	slices.SortFunc(g, cmp)
 	slices.SortFunc(w, cmp)
-	return slices.Equal(g, w)
+	// the entries hold pointers, so compare what they point to
+	return slices.EqualFunc(g, w, func(a, b *acl.Entry) bool { return *a == *b })
+}
+
+// formatEntries prints the entries themselves. A slice of pointers prints as a
+// list of addresses, which says nothing in a failure message.
+func formatEntries(entries []*acl.Entry) string {
+	out := make([]string, len(entries))
+	for i, e := range entries {
+		out[i] = fmt.Sprintf("%s:%s:%s", e.Type, e.Qualifier, e.Permissions)
+	}
+	return "[" + strings.Join(out, " ") + "]"
 }
 
 // checkFind looks up p and compares both ACL sets of the node that applies.
-func checkFind(t *testing.T, tree *ACLTree, p string, wantMandatory, wantAllowed []acl.Entry) {
+func checkFind(t *testing.T, tree *ACLTree, p string, wantMandatory, wantAllowed []*acl.Entry) {
 	t.Helper()
 	mandatory, allowed, ok := tree.Find(p)
 	if !ok {
 		t.Fatalf("Find(%q): ok = false, want true", p)
 	}
 	if !sameEntries(mandatory, wantMandatory) {
-		t.Errorf("Find(%q): mandatory = %v, want %v", p, mandatory, wantMandatory)
+		t.Errorf("Find(%q): mandatory = %v, want %v", p, formatEntries(mandatory), formatEntries(wantMandatory))
 	}
 	if !sameEntries(allowed, wantAllowed) {
-		t.Errorf("Find(%q): allowed = %v, want %v", p, allowed, wantAllowed)
+		t.Errorf("Find(%q): allowed = %v, want %v", p, formatEntries(allowed), formatEntries(wantAllowed))
 	}
 }
 
-var (
-	aliceRead  = acl.Entry{Type: acl.TypeUser, Qualifier: "alice", Permissions: "rx"}
-	aliceWrite = acl.Entry{Type: acl.TypeUser, Qualifier: "alice", Permissions: "rwx"}
-	bobRead    = acl.Entry{Type: acl.TypeUser, Qualifier: "bob", Permissions: "rx"}
-	groupRead  = acl.Entry{Type: acl.TypeGroup, Qualifier: "cernbox-admins", Permissions: "rx"}
-	external   = acl.Entry{Type: acl.TypeUser, Qualifier: "cboxexternal", Permissions: "rwx"}
-)
+// Every fixture gives a new entry. The tree holds pointers, and a merge writes
+// through them, so a shared entry would let one tree change another.
+func aliceRead() *acl.Entry {
+	return &acl.Entry{Type: acl.TypeUser, Qualifier: "alice", Permissions: "rx"}
+}
+
+func aliceWrite() *acl.Entry {
+	return &acl.Entry{Type: acl.TypeUser, Qualifier: "alice", Permissions: "rwx"}
+}
+
+func bobRead() *acl.Entry {
+	return &acl.Entry{Type: acl.TypeUser, Qualifier: "bob", Permissions: "rx"}
+}
+
+func groupRead() *acl.Entry {
+	return &acl.Entry{Type: acl.TypeGroup, Qualifier: "cernbox-admins", Permissions: "rx"}
+}
+
+func external() *acl.Entry {
+	return &acl.Entry{Type: acl.TypeUser, Qualifier: "cboxexternal", Permissions: "rwx"}
+}
 
 // An empty tree has no rule, so every path is found with no ACL at all.
 func TestFindOnEmptyTree(t *testing.T) {
@@ -81,11 +106,11 @@ func TestRuleAppliesRecursively(t *testing.T) {
 	tree := NewACLTree()
 	tree.Insert(&ACLNode{
 		Path:          "/eos/project/c/cernbox/shared",
-		MandatoryACLs: []acl.Entry{aliceRead},
+		MandatoryACLs: []*acl.Entry{aliceRead()},
 	})
 
-	checkFind(t, tree, "/eos/project/c/cernbox/shared", []acl.Entry{aliceRead}, nil)
-	checkFind(t, tree, "/eos/project/c/cernbox/shared/sub/deep", []acl.Entry{aliceRead}, nil)
+	checkFind(t, tree, "/eos/project/c/cernbox/shared", []*acl.Entry{aliceRead()}, nil)
+	checkFind(t, tree, "/eos/project/c/cernbox/shared/sub/deep", []*acl.Entry{aliceRead()}, nil)
 	checkFind(t, tree, "/eos/project/c/cernbox/other", nil, nil)
 	// a sibling with a common prefix but a different path segment
 	checkFind(t, tree, "/eos/project/c/cernbox/sharedother", nil, nil)
@@ -95,33 +120,46 @@ func TestRuleAppliesRecursively(t *testing.T) {
 // A deeper rule adds its entity to the ones inherited from above.
 func TestDeeperRuleAddsEntity(t *testing.T) {
 	tree := NewACLTree()
-	tree.Insert(&ACLNode{Path: "/eos/project/c/cernbox", MandatoryACLs: []acl.Entry{aliceRead}})
-	tree.Insert(&ACLNode{Path: "/eos/project/c/cernbox/sub", MandatoryACLs: []acl.Entry{bobRead}})
+	tree.Insert(&ACLNode{Path: "/eos/project/c/cernbox", MandatoryACLs: []*acl.Entry{aliceRead()}})
+	tree.Insert(&ACLNode{Path: "/eos/project/c/cernbox/sub", MandatoryACLs: []*acl.Entry{bobRead()}})
 
-	checkFind(t, tree, "/eos/project/c/cernbox", []acl.Entry{aliceRead}, nil)
-	checkFind(t, tree, "/eos/project/c/cernbox/sub", []acl.Entry{aliceRead, bobRead}, nil)
-	checkFind(t, tree, "/eos/project/c/cernbox/sub/deep", []acl.Entry{aliceRead, bobRead}, nil)
-	checkFind(t, tree, "/eos/project/c/cernbox/elsewhere", []acl.Entry{aliceRead}, nil)
+	checkFind(t, tree, "/eos/project/c/cernbox", []*acl.Entry{aliceRead()}, nil)
+	checkFind(t, tree, "/eos/project/c/cernbox/sub", []*acl.Entry{aliceRead(), bobRead()}, nil)
+	checkFind(t, tree, "/eos/project/c/cernbox/sub/deep", []*acl.Entry{aliceRead(), bobRead()}, nil)
+	checkFind(t, tree, "/eos/project/c/cernbox/elsewhere", []*acl.Entry{aliceRead()}, nil)
 }
 
 // A deeper rule raises the permission of an entity, and never lowers it.
 func TestDeeperRuleRaisesPermission(t *testing.T) {
 	t.Run("raise", func(t *testing.T) {
 		tree := NewACLTree()
-		tree.Insert(&ACLNode{Path: "/eos/project/c/cernbox", MandatoryACLs: []acl.Entry{aliceRead}})
-		tree.Insert(&ACLNode{Path: "/eos/project/c/cernbox/sub", MandatoryACLs: []acl.Entry{aliceWrite}})
+		tree.Insert(&ACLNode{Path: "/eos/project/c/cernbox", MandatoryACLs: []*acl.Entry{aliceRead()}})
+		tree.Insert(&ACLNode{Path: "/eos/project/c/cernbox/sub", MandatoryACLs: []*acl.Entry{aliceWrite()}})
 
-		checkFind(t, tree, "/eos/project/c/cernbox", []acl.Entry{aliceRead}, nil)
-		checkFind(t, tree, "/eos/project/c/cernbox/sub", []acl.Entry{aliceWrite}, nil)
+		checkFind(t, tree, "/eos/project/c/cernbox", []*acl.Entry{aliceRead()}, nil)
+		checkFind(t, tree, "/eos/project/c/cernbox/sub", []*acl.Entry{aliceWrite()}, nil)
 	})
 
 	t.Run("no lowering", func(t *testing.T) {
 		tree := NewACLTree()
-		tree.Insert(&ACLNode{Path: "/eos/project/c/cernbox", MandatoryACLs: []acl.Entry{aliceWrite}})
-		tree.Insert(&ACLNode{Path: "/eos/project/c/cernbox/sub", MandatoryACLs: []acl.Entry{aliceRead}})
+		tree.Insert(&ACLNode{Path: "/eos/project/c/cernbox", MandatoryACLs: []*acl.Entry{aliceWrite()}})
+		tree.Insert(&ACLNode{Path: "/eos/project/c/cernbox/sub", MandatoryACLs: []*acl.Entry{aliceRead()}})
 
-		checkFind(t, tree, "/eos/project/c/cernbox/sub", []acl.Entry{aliceWrite}, nil)
+		checkFind(t, tree, "/eos/project/c/cernbox/sub", []*acl.Entry{aliceWrite()}, nil)
 	})
+}
+
+// A rule that raises a permission deeper down must not raise it above. The
+// node inherited the entry from its parent, so the two must not end up as one
+// entry that both nodes write to.
+func TestDeeperRuleDoesNotChangeTheParent(t *testing.T) {
+	tree := NewACLTree()
+	tree.Insert(&ACLNode{Path: "/eos/project/c/cernbox", MandatoryACLs: []*acl.Entry{aliceRead()}})
+	tree.Insert(&ACLNode{Path: "/eos/project/c/cernbox/sub", MandatoryACLs: []*acl.Entry{bobRead()}})
+	tree.Insert(&ACLNode{Path: "/eos/project/c/cernbox/sub", MandatoryACLs: []*acl.Entry{aliceWrite()}})
+
+	checkFind(t, tree, "/eos/project/c/cernbox", []*acl.Entry{aliceRead()}, nil)
+	checkFind(t, tree, "/eos/project/c/cernbox/sub", []*acl.Entry{aliceWrite(), bobRead()}, nil)
 }
 
 // Rules do not arrive in tree order, so the result must not depend on the
@@ -130,9 +168,9 @@ func TestDeeperRuleRaisesPermission(t *testing.T) {
 func TestInsertOrderDoesNotMatter(t *testing.T) {
 	newNodes := func() []*ACLNode {
 		return []*ACLNode{
-			{Path: "/eos/project/c/cernbox", MandatoryACLs: []acl.Entry{aliceRead}},
-			{Path: "/eos/project/c/cernbox/a", MandatoryACLs: []acl.Entry{bobRead}},
-			{Path: "/eos/project/c/cernbox/a/b", MandatoryACLs: []acl.Entry{groupRead}},
+			{Path: "/eos/project/c/cernbox", MandatoryACLs: []*acl.Entry{aliceRead()}},
+			{Path: "/eos/project/c/cernbox/a", MandatoryACLs: []*acl.Entry{bobRead()}},
+			{Path: "/eos/project/c/cernbox/a/b", MandatoryACLs: []*acl.Entry{groupRead()}},
 		}
 	}
 
@@ -153,10 +191,10 @@ func TestInsertOrderDoesNotMatter(t *testing.T) {
 				tree.Insert(nodes[i])
 			}
 
-			checkFind(t, tree, "/eos/project/c/cernbox", []acl.Entry{aliceRead}, nil)
-			checkFind(t, tree, "/eos/project/c/cernbox/a", []acl.Entry{aliceRead, bobRead}, nil)
-			checkFind(t, tree, "/eos/project/c/cernbox/a/b", []acl.Entry{aliceRead, bobRead, groupRead}, nil)
-			checkFind(t, tree, "/eos/project/c/cernbox/a/b/c", []acl.Entry{aliceRead, bobRead, groupRead}, nil)
+			checkFind(t, tree, "/eos/project/c/cernbox", []*acl.Entry{aliceRead()}, nil)
+			checkFind(t, tree, "/eos/project/c/cernbox/a", []*acl.Entry{aliceRead(), bobRead()}, nil)
+			checkFind(t, tree, "/eos/project/c/cernbox/a/b", []*acl.Entry{aliceRead(), bobRead(), groupRead()}, nil)
+			checkFind(t, tree, "/eos/project/c/cernbox/a/b/c", []*acl.Entry{aliceRead(), bobRead(), groupRead()}, nil)
 		})
 	}
 }
@@ -166,56 +204,56 @@ func TestInsertOrderDoesNotMatter(t *testing.T) {
 func TestTwoRulesOnTheSamePath(t *testing.T) {
 	tree := NewACLTree()
 	p := "/eos/project/c/cernbox/shared"
-	tree.Insert(&ACLNode{Path: p, MandatoryACLs: []acl.Entry{aliceRead}})
-	tree.Insert(&ACLNode{Path: p, MandatoryACLs: []acl.Entry{bobRead}})
-	tree.Insert(&ACLNode{Path: p, MandatoryACLs: []acl.Entry{aliceWrite}})
+	tree.Insert(&ACLNode{Path: p, MandatoryACLs: []*acl.Entry{aliceRead()}})
+	tree.Insert(&ACLNode{Path: p, MandatoryACLs: []*acl.Entry{bobRead()}})
+	tree.Insert(&ACLNode{Path: p, MandatoryACLs: []*acl.Entry{aliceWrite()}})
 
-	checkFind(t, tree, p, []acl.Entry{aliceWrite, bobRead}, nil)
-	checkFind(t, tree, p+"/sub", []acl.Entry{aliceWrite, bobRead}, nil)
+	checkFind(t, tree, p, []*acl.Entry{aliceWrite(), bobRead()}, nil)
+	checkFind(t, tree, p+"/sub", []*acl.Entry{aliceWrite(), bobRead()}, nil)
 }
 
 // A second rule on a path that already has a subtree must reach that subtree
 // too.
 func TestSecondRuleOnAPathWithChildren(t *testing.T) {
 	tree := NewACLTree()
-	tree.Insert(&ACLNode{Path: "/eos/project/c/cernbox", MandatoryACLs: []acl.Entry{aliceRead}})
-	tree.Insert(&ACLNode{Path: "/eos/project/c/cernbox/sub", MandatoryACLs: []acl.Entry{bobRead}})
-	tree.Insert(&ACLNode{Path: "/eos/project/c/cernbox", MandatoryACLs: []acl.Entry{groupRead}})
+	tree.Insert(&ACLNode{Path: "/eos/project/c/cernbox", MandatoryACLs: []*acl.Entry{aliceRead()}})
+	tree.Insert(&ACLNode{Path: "/eos/project/c/cernbox/sub", MandatoryACLs: []*acl.Entry{bobRead()}})
+	tree.Insert(&ACLNode{Path: "/eos/project/c/cernbox", MandatoryACLs: []*acl.Entry{groupRead()}})
 
-	checkFind(t, tree, "/eos/project/c/cernbox", []acl.Entry{aliceRead, groupRead}, nil)
-	checkFind(t, tree, "/eos/project/c/cernbox/sub", []acl.Entry{aliceRead, bobRead, groupRead}, nil)
+	checkFind(t, tree, "/eos/project/c/cernbox", []*acl.Entry{aliceRead(), groupRead()}, nil)
+	checkFind(t, tree, "/eos/project/c/cernbox/sub", []*acl.Entry{aliceRead(), bobRead(), groupRead()}, nil)
 }
 
 // A rule can sit below a path that has no rule of its own.
 func TestGapBetweenRules(t *testing.T) {
 	tree := NewACLTree()
-	tree.Insert(&ACLNode{Path: "/eos/project/c/cernbox", MandatoryACLs: []acl.Entry{aliceRead}})
-	tree.Insert(&ACLNode{Path: "/eos/project/c/cernbox/a/b/c", MandatoryACLs: []acl.Entry{bobRead}})
+	tree.Insert(&ACLNode{Path: "/eos/project/c/cernbox", MandatoryACLs: []*acl.Entry{aliceRead()}})
+	tree.Insert(&ACLNode{Path: "/eos/project/c/cernbox/a/b/c", MandatoryACLs: []*acl.Entry{bobRead()}})
 
-	checkFind(t, tree, "/eos/project/c/cernbox/a", []acl.Entry{aliceRead}, nil)
-	checkFind(t, tree, "/eos/project/c/cernbox/a/b", []acl.Entry{aliceRead}, nil)
-	checkFind(t, tree, "/eos/project/c/cernbox/a/b/c", []acl.Entry{aliceRead, bobRead}, nil)
+	checkFind(t, tree, "/eos/project/c/cernbox/a", []*acl.Entry{aliceRead()}, nil)
+	checkFind(t, tree, "/eos/project/c/cernbox/a/b", []*acl.Entry{aliceRead()}, nil)
+	checkFind(t, tree, "/eos/project/c/cernbox/a/b/c", []*acl.Entry{aliceRead(), bobRead()}, nil)
 }
 
 // Find cleans the path it gets, so a caller can pass a path as it comes from
 // the namespace.
 func TestFindCleansThePath(t *testing.T) {
 	tree := NewACLTree()
-	tree.Insert(&ACLNode{Path: "/eos/project/c/cernbox", MandatoryACLs: []acl.Entry{aliceRead}})
+	tree.Insert(&ACLNode{Path: "/eos/project/c/cernbox", MandatoryACLs: []*acl.Entry{aliceRead()}})
 
-	checkFind(t, tree, "/eos/project/c/cernbox/", []acl.Entry{aliceRead}, nil)
-	checkFind(t, tree, "/eos/project/c/cernbox/sub/..", []acl.Entry{aliceRead}, nil)
-	checkFind(t, tree, "/eos/project/c/other/../cernbox/sub", []acl.Entry{aliceRead}, nil)
+	checkFind(t, tree, "/eos/project/c/cernbox/", []*acl.Entry{aliceRead()}, nil)
+	checkFind(t, tree, "/eos/project/c/cernbox/sub/..", []*acl.Entry{aliceRead()}, nil)
+	checkFind(t, tree, "/eos/project/c/other/../cernbox/sub", []*acl.Entry{aliceRead()}, nil)
 }
 
 // Sibling subtrees stay independent.
 func TestSiblingsAreIndependent(t *testing.T) {
 	tree := NewACLTree()
-	tree.Insert(&ACLNode{Path: "/eos/project/c/cernbox/a", MandatoryACLs: []acl.Entry{aliceRead}})
-	tree.Insert(&ACLNode{Path: "/eos/project/c/cernbox/b", MandatoryACLs: []acl.Entry{bobRead}})
+	tree.Insert(&ACLNode{Path: "/eos/project/c/cernbox/a", MandatoryACLs: []*acl.Entry{aliceRead()}})
+	tree.Insert(&ACLNode{Path: "/eos/project/c/cernbox/b", MandatoryACLs: []*acl.Entry{bobRead()}})
 
-	checkFind(t, tree, "/eos/project/c/cernbox/a/deep", []acl.Entry{aliceRead}, nil)
-	checkFind(t, tree, "/eos/project/c/cernbox/b/deep", []acl.Entry{bobRead}, nil)
+	checkFind(t, tree, "/eos/project/c/cernbox/a/deep", []*acl.Entry{aliceRead()}, nil)
+	checkFind(t, tree, "/eos/project/c/cernbox/b/deep", []*acl.Entry{bobRead()}, nil)
 	checkFind(t, tree, "/eos/project/c/cernbox", nil, nil)
 }
 
@@ -224,16 +262,16 @@ func TestMandatoryAndAllowedAreSeparate(t *testing.T) {
 	tree := NewACLTree()
 	tree.Insert(&ACLNode{
 		Path:          "/eos/project/c/cernbox",
-		MandatoryACLs: []acl.Entry{aliceRead},
-		AllowedACLs:   []acl.Entry{external},
+		MandatoryACLs: []*acl.Entry{aliceRead()},
+		AllowedACLs:   []*acl.Entry{external()},
 	})
 	tree.Insert(&ACLNode{
 		Path:          "/eos/project/c/cernbox/sub",
-		MandatoryACLs: []acl.Entry{bobRead},
+		MandatoryACLs: []*acl.Entry{bobRead()},
 	})
 
-	checkFind(t, tree, "/eos/project/c/cernbox", []acl.Entry{aliceRead}, []acl.Entry{external})
-	checkFind(t, tree, "/eos/project/c/cernbox/sub", []acl.Entry{aliceRead, bobRead}, []acl.Entry{external})
+	checkFind(t, tree, "/eos/project/c/cernbox", []*acl.Entry{aliceRead()}, []*acl.Entry{external()})
+	checkFind(t, tree, "/eos/project/c/cernbox/sub", []*acl.Entry{aliceRead(), bobRead()}, []*acl.Entry{external()})
 }
 
 // The deep job looks up every namespace entry, so it may want to do that with
@@ -241,9 +279,9 @@ func TestMandatoryAndAllowedAreSeparate(t *testing.T) {
 // is built. Run with -race.
 func TestFindIsSafeForConcurrentUse(t *testing.T) {
 	tree := NewACLTree()
-	tree.Insert(&ACLNode{Path: "/eos/project/c/cernbox", MandatoryACLs: []acl.Entry{aliceRead}})
-	tree.Insert(&ACLNode{Path: "/eos/project/c/cernbox/a", MandatoryACLs: []acl.Entry{bobRead}})
-	tree.Insert(&ACLNode{Path: "/eos/project/c/cernbox/b", MandatoryACLs: []acl.Entry{groupRead}})
+	tree.Insert(&ACLNode{Path: "/eos/project/c/cernbox", MandatoryACLs: []*acl.Entry{aliceRead()}})
+	tree.Insert(&ACLNode{Path: "/eos/project/c/cernbox/a", MandatoryACLs: []*acl.Entry{bobRead()}})
+	tree.Insert(&ACLNode{Path: "/eos/project/c/cernbox/b", MandatoryACLs: []*acl.Entry{groupRead()}})
 
 	paths := []string{
 		"/eos/project/c/cernbox",
@@ -267,8 +305,8 @@ func TestFindIsSafeForConcurrentUse(t *testing.T) {
 	wg.Wait()
 
 	// the lookups changed nothing
-	checkFind(t, tree, "/eos/project/c/cernbox/a/file.txt", []acl.Entry{aliceRead, bobRead}, nil)
-	checkFind(t, tree, "/eos/project/c/cernbox/b/sub/file.txt", []acl.Entry{aliceRead, groupRead}, nil)
+	checkFind(t, tree, "/eos/project/c/cernbox/a/file.txt", []*acl.Entry{aliceRead(), bobRead()}, nil)
+	checkFind(t, tree, "/eos/project/c/cernbox/b/sub/file.txt", []*acl.Entry{aliceRead(), groupRead()}, nil)
 }
 
 // Matches tells whether the node covers the path: the node itself or anything
@@ -347,52 +385,52 @@ func TestFastHasPrefix(t *testing.T) {
 func TestMergeACLs(t *testing.T) {
 	tests := []struct {
 		name string
-		a, b []acl.Entry
-		want []acl.Entry
+		a, b []*acl.Entry
+		want []*acl.Entry
 	}{
 		{
 			name: "different entities are kept both",
-			a:    []acl.Entry{aliceRead},
-			b:    []acl.Entry{bobRead},
-			want: []acl.Entry{aliceRead, bobRead},
+			a:    []*acl.Entry{aliceRead()},
+			b:    []*acl.Entry{bobRead()},
+			want: []*acl.Entry{aliceRead(), bobRead()},
 		},
 		{
 			name: "same entity keeps the highest permission",
-			a:    []acl.Entry{aliceRead},
-			b:    []acl.Entry{aliceWrite},
-			want: []acl.Entry{aliceWrite},
+			a:    []*acl.Entry{aliceRead()},
+			b:    []*acl.Entry{aliceWrite()},
+			want: []*acl.Entry{aliceWrite()},
 		},
 		{
 			name: "the highest permission wins in both directions",
-			a:    []acl.Entry{aliceWrite},
-			b:    []acl.Entry{aliceRead},
-			want: []acl.Entry{aliceWrite},
+			a:    []*acl.Entry{aliceWrite()},
+			b:    []*acl.Entry{aliceRead()},
+			want: []*acl.Entry{aliceWrite()},
 		},
 		{
 			name: "same qualifier with another type is another entry",
-			a:    []acl.Entry{{Type: acl.TypeUser, Qualifier: "x", Permissions: "rx"}},
-			b:    []acl.Entry{{Type: acl.TypeGroup, Qualifier: "x", Permissions: "rx"}},
-			want: []acl.Entry{
+			a:    []*acl.Entry{{Type: acl.TypeUser, Qualifier: "x", Permissions: "rx"}},
+			b:    []*acl.Entry{{Type: acl.TypeGroup, Qualifier: "x", Permissions: "rx"}},
+			want: []*acl.Entry{
 				{Type: acl.TypeUser, Qualifier: "x", Permissions: "rx"},
 				{Type: acl.TypeGroup, Qualifier: "x", Permissions: "rx"},
 			},
 		},
 		{
 			name: "empty second set",
-			a:    []acl.Entry{aliceRead},
-			want: []acl.Entry{aliceRead},
+			a:    []*acl.Entry{aliceRead()},
+			want: []*acl.Entry{aliceRead()},
 		},
 		{
 			name: "empty first set",
-			b:    []acl.Entry{aliceRead},
-			want: []acl.Entry{aliceRead},
+			b:    []*acl.Entry{aliceRead()},
+			want: []*acl.Entry{aliceRead()},
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			if got := mergeACLs(tt.a, tt.b); !sameEntries(got, tt.want) {
-				t.Errorf("mergeACLs(%v, %v) = %v, want %v", tt.a, tt.b, got, tt.want)
+				t.Errorf("mergeACLs(%v, %v) = %v, want %v", formatEntries(tt.a), formatEntries(tt.b), formatEntries(got), formatEntries(tt.want))
 			}
 		})
 	}
@@ -401,16 +439,16 @@ func TestMergeACLs(t *testing.T) {
 // The two input sets belong to other nodes of the tree, so a merge must not
 // change them.
 func TestMergeACLsDoesNotChangeItsInput(t *testing.T) {
-	a := []acl.Entry{aliceRead}
-	b := []acl.Entry{aliceWrite, bobRead}
+	a := []*acl.Entry{aliceRead()}
+	b := []*acl.Entry{aliceWrite(), bobRead()}
 
 	mergeACLs(a, b)
 
-	if !sameEntries(a, []acl.Entry{aliceRead}) {
-		t.Errorf("first set = %v, want %v", a, []acl.Entry{aliceRead})
+	if !sameEntries(a, []*acl.Entry{aliceRead()}) {
+		t.Errorf("first set = %v, want %v", formatEntries(a), formatEntries([]*acl.Entry{aliceRead()}))
 	}
-	if !sameEntries(b, []acl.Entry{aliceWrite, bobRead}) {
-		t.Errorf("second set = %v, want %v", b, []acl.Entry{aliceWrite, bobRead})
+	if !sameEntries(b, []*acl.Entry{aliceWrite(), bobRead()}) {
+		t.Errorf("second set = %v, want %v", formatEntries(b), formatEntries([]*acl.Entry{aliceWrite(), bobRead()}))
 	}
 }
 
@@ -462,8 +500,8 @@ func benchNodes(paths []string) []*ACLNode {
 	for i, p := range paths {
 		nodes[i] = &ACLNode{
 			Path:          p,
-			MandatoryACLs: []acl.Entry{{Type: acl.TypeUser, Qualifier: fmt.Sprintf("user%d", i), Permissions: "rx"}},
-			AllowedACLs:   []acl.Entry{external},
+			MandatoryACLs: []*acl.Entry{{Type: acl.TypeUser, Qualifier: fmt.Sprintf("user%d", i), Permissions: "rx"}},
+			AllowedACLs:   []*acl.Entry{external()},
 		}
 	}
 	return nodes
