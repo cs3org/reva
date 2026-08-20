@@ -13,7 +13,7 @@ import (
 //   we can just append them at the end
 // - for "wide" trees, we could sort the children and do a binary search
 //   over them instead of iterating over all children
-// - we should guard `Insert` agains concurrent Inserts
+// - we should guard `Insert` against concurrent Inserts
 
 // An ACL Tree represents the tree of ACLs in a space.
 // ACLTree's do not *require* in-order insertion, but note that pre-sorting the paths
