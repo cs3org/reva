@@ -13,7 +13,7 @@ type NamespaceDump struct {
 }
 
 type NSDumpClient interface {
-	Dump(rootPath string, maxDepth int) (NamespaceDump, error)
+	Dump(rootPath string, maxDepth int) (*NamespaceDump, error)
 	Setup(config map[string]any) error
 }
 
