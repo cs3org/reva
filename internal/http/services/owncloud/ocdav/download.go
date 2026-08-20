@@ -37,6 +37,7 @@ import (
 
 	"github.com/cs3org/reva/v3/internal/http/services/archiver/manager"
 	"github.com/cs3org/reva/v3/pkg/appctx"
+	"github.com/cs3org/reva/v3/pkg/bundler"
 	"github.com/cs3org/reva/v3/pkg/errtypes"
 	"github.com/cs3org/reva/v3/pkg/httpclient"
 	"github.com/cs3org/reva/v3/pkg/service"
@@ -100,7 +101,7 @@ func (s *svc) handleHTTPError(w http.ResponseWriter, err error, log *zerolog.Log
 		http.Error(w, "Resource not found", http.StatusNotFound)
 	case errtypes.PermissionDenied:
 		http.Error(w, "Permission denied", http.StatusForbidden)
-	case manager.ErrMaxSize, manager.ErrMaxFileCount:
+	case bundler.ErrMaxSize, bundler.ErrMaxFileCount:
 		http.Error(w, err.Error(), http.StatusRequestEntityTooLarge)
 	default:
 		http.Error(w, err.Error(), http.StatusInternalServerError)
