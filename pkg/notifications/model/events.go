@@ -23,4 +23,5 @@ const (
 	EventUpload        = "upload"
 	EventFeedback      = "feedback"
 	EventOfficeMention = "office-mention"
+	EventTakeout       = "takeout"
 )
