@@ -25,72 +25,47 @@ const (
 )
 
 type NameSpaceEntry struct {
-	Ctime       string    `json:"ctime"`
-	Flags       string    `json:"flags"`
-	Gid         string    `json:"gid"`
-	Mtime       string    `json:"mtime"`
-	Name        string    `json:"name"`
-	Path        string    `json:"path"`
-	Stime       string    `json:"stime"`
-	Uid         string    `json:"uid"`
-	XattrSysAcl string    `json:"xattr.sys.acl"`
-	EntryType   EntryType `json:"entryType"`
-	ID          string    `json:"id"`
+	Ctime       string `json:"ctime"`
+	Flags       string `json:"flags"`
+	Gid         string `json:"gid"`
+	Mtime       string `json:"mtime"`
+	Name        string `json:"name"`
+	Path        string `json:"path"`
+	Stime       string `json:"stime"`
+	Uid         string `json:"uid"`
+	XattrSysAcl string `json:"xattr.sys.acl"`
+	CID         string `json:"cid"`
+	FID         string `json:"fid"`
 }
 
-func (e *NameSpaceEntry) UnmarshalJSON(data []byte) error {
-	type n NameSpaceEntry // no methods, so no infinite recursion
-	var aux struct {
-		n
-		CID *string `json:"cid"`
-		FID *string `json:"fid"`
+func (e *NameSpaceEntry) EntryType() EntryType {
+	if e.CID != "" {
+		return EntryTypeFolder
 	}
-	if err := json.Unmarshal(data, &aux); err != nil {
-		return err
-	}
-
-	switch {
-	case aux.CID != nil && aux.FID != nil:
-		return errors.New("item: both cid and fid set")
-	case aux.CID != nil:
-		aux.ID, aux.EntryType = *aux.CID, EntryTypeFolder
-	case aux.FID != nil:
-		aux.ID, aux.EntryType = *aux.FID, EntryTypeFile
-	default:
-		return errors.New("item: neither cid nor fid set")
-	}
-
-	*e = NameSpaceEntry(aux.n)
-	return nil
+	return EntryTypeFile
 }
 
-func (d *NameSpaceEntry) IsSysFolder() bool {
-	return d.EntryType == EntryTypeFolder && strings.HasPrefix(d.Name, ".sys.")
+func (e *NameSpaceEntry) ID() string {
+	if e.CID != "" {
+		return e.CID
+	}
+	return e.FID
 }
 
-func (d *NameSpaceEntry) IsSysFile() bool {
-	return d.EntryType == EntryTypeFile && strings.HasPrefix(path.Base(path.Dir(d.Path)), ".sys.")
+func (e *NameSpaceEntry) IsSysFolder() bool {
+	return e.EntryType() == EntryTypeFolder && strings.HasPrefix(e.Name, ".sys.")
+}
+
+func (e *NameSpaceEntry) IsSysFile() bool {
+	return e.EntryType() == EntryTypeFile && strings.HasPrefix(path.Base(path.Dir(e.Path)), ".sys.")
 }
 
 func parseNSInspectOutput(data []byte) (*NamespaceDump, error) {
-	var raw []map[string]interface{}
-	if err := json.Unmarshal(data, &raw); err != nil {
+	var entries []NameSpaceEntry
+
+	if err := json.Unmarshal(data, &entries); err != nil {
 		return nil, errors.Wrap(err, "failed to unmarshal ns-inspect input")
 	}
 
-	var entries []NameSpaceEntry
-	for _, obj := range raw {
-		var e NameSpaceEntry
-		b, err := json.Marshal(obj)
-		if err != nil {
-			return nil, err
-		}
-		err = json.Unmarshal(b, &e)
-		if err != nil {
-			return nil, err
-		}
-		entries = append(entries, e)
-
-	}
 	return &NamespaceDump{Entries: entries}, nil
 }
