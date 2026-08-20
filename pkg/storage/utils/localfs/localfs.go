@@ -1315,7 +1315,7 @@ func (fs *localfs) DownloadRevision(ctx context.Context, ref *provider.Reference
 	}
 
 	versionsDir := fs.wrapVersions(ctx, np)
-	vp := path.Join(versionsDir, revisionKey)
+	vp := path.Join(versionsDir, "v"+revisionKey)
 
 	r, err := os.Open(vp)
 	if err != nil {
@@ -1339,7 +1339,7 @@ func (fs *localfs) RestoreRevision(ctx context.Context, ref *provider.Reference,
 	}
 
 	versionsDir := fs.wrapVersions(ctx, np)
-	vp := path.Join(versionsDir, revisionKey)
+	vp := path.Join(versionsDir, "v"+revisionKey)
 	np = fs.wrap(ctx, np)
 
 	// check revision exists
