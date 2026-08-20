@@ -21,26 +21,27 @@ package reconciliation
 import (
 	"cmp"
 	"context"
-	"fmt"
 	"slices"
 
 	collaborationv1beta1 "github.com/cs3org/go-cs3apis/cs3/sharing/collaboration/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
+	"github.com/cs3org/reva/v3/pkg/reconciliation/nsdump"
 	"github.com/cs3org/reva/v3/pkg/share/manager/sql"
 	"github.com/cs3org/reva/v3/pkg/spaces"
-	"github.com/cs3org/reva/v3/pkg/storage/utils/acl"
+	"github.com/cs3org/reva/v3/pkg/storage/fs/eos/acl"
 )
 
 const JobName = "reconciliation.deep"
 
-type RunResult struct {
-	Entries []EntryResult
+type EntryResult struct {
 }
 
-type EntryResult struct {
+type ChangeSet []*Change
+
+type Change struct {
 	Path   string
 	Action ActionKind
-	ACL    acl.Entry
+	ACL    *acl.Entry
 }
 
 type DeepJob struct {
@@ -60,7 +61,7 @@ type ShareWithPath struct {
 func (s *ShareWithPath) toTreeNode() *ACLNode {
 	return &ACLNode{
 		Path:          s.Path,
-		MandatoryACLs: []acl.Entry{shareToACL(s.Share)},
+		MandatoryACLs: []*acl.Entry{shareToACL(s.Share)},
 	}
 }
 
@@ -111,7 +112,10 @@ func (j *DeepJob) run(ctx context.Context, p RunParameters) error {
 	// We start by taking a dump of the namespace, and then we
 	// parse this entry-by-entry
 
-	namespaceDump, err := NewEOSMemoryNSInspect()
+	namespaceDumper := nsdump.EOSMemoryNSInspect{}
+	namespaceDumper.Setup(map[string]any{
+		// TODO(jgeens): set config for dump
+	})
 	if err != nil {
 		return err
 	}
@@ -121,11 +125,10 @@ func (j *DeepJob) run(ctx context.Context, p RunParameters) error {
 		return err
 	}
 
-	ns, err := namespaceDump.Dump(path, 0)
+	dump, err := namespaceDumper.Dump(path, 0)
 
-	for _, entry := range ns.entries {
-		fmt.Print(entry.Path)
-	}
+	// Now we do the diff and get the resulting ChangeSet
+	compare(tree, dump) // changeSet :=
 
 	return nil
 }
@@ -134,7 +137,62 @@ func (j *DeepJob) getPath(rid *provider.ResourceId) (string, bool) {
 	return "", true
 }
 
-func shareToACL(s *collaborationv1beta1.Share) acl.Entry {
+func compare(tree *ACLTree, ns *nsdump.NamespaceDump) ChangeSet {
+	changeSet := ChangeSet{}
+	for _, e := range ns.Entries {
+		changeSet = append(changeSet, compareEntry(tree, e)...)
+	}
+	return changeSet
+}
+
+func compareEntry(tree *ACLTree, entry nsdump.NameSpaceEntry) ChangeSet {
+	m, o, ok := tree.Find(entry.Path)
+	if !ok {
+		return nil
+	}
+
+	actualACLs := parseACLs(entry.XattrSysAcl)
+	return calculateChangeSet(m, o, actualACLs, entry.Path)
+
+}
+
+func parseACLs(sysattr string) []*acl.Entry {
+	acls, err := acl.Parse(sysattr, acl.ShortTextForm)
+	if err != nil {
+		return nil
+	}
+	return acls.Entries
+}
+
+func calculateChangeSet(mandatory, optional, actual []*acl.Entry, p string) ChangeSet {
+	changeSet := ChangeSet{}
+
+	// First calculate missing entries on `actual`
+	for _, e := range mandatory {
+		if !slices.Contains(actual, e) {
+			changeSet = append(changeSet, &Change{
+				Path:   p,
+				Action: ActionAdd,
+				ACL:    e,
+			})
+		}
+	}
+
+	// Then calculate which entries should not be there
+	for _, e := range actual {
+		if !slices.Contains(mandatory, e) && !slices.Contains(optional, e) {
+			changeSet = append(changeSet, &Change{
+				Path:   p,
+				Action: ActionDelete,
+				ACL:    e,
+			})
+		}
+	}
+
+	return changeSet
+}
+
+func shareToACL(s *collaborationv1beta1.Share) *acl.Entry {
 	var e acl.Entry
 	switch {
 	case s.Grantee.Type == provider.GranteeType_GRANTEE_TYPE_GROUP:
@@ -144,9 +202,9 @@ func shareToACL(s *collaborationv1beta1.Share) acl.Entry {
 		e.Type = "u"
 		e.Qualifier = s.Grantee.GetUserId().GetOpaqueId()
 	default:
-		return e
+		return &e
 	}
 
 	// TODO(jgeens): set permissions
-	return e
+	return &e
 }
