@@ -122,6 +122,7 @@ func checkLightweightPath(path string) bool {
 		"/remote.php/webdav",
 		"/remote.php/dav/files",
 		"/remote.php/dav/spaces",
+		"/webdav",
 		"/thumbnails",
 	}
 	for _, p := range paths {

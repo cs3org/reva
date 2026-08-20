@@ -71,6 +71,7 @@ type config struct {
 	GatewaySvc     string            `docs:";The endpoint at which the GRPC gateway is exposed."                                                                 mapstructure:"gatewaysvc"`
 	UsersMapping   string            `docs:"; The optional OIDC users mapping file path"                                                                         mapstructure:"users_mapping"`
 	GroupClaim     string            `docs:"; The group claim to be looked up to map the user (default to 'groups')."                                             mapstructure:"group_claim"`
+	Audience       string            `docs:";If set, the aud claim of the token must contain this value; when empty (default), the audience check is skipped."   mapstructure:"audience"`
 }
 
 type oidcUserMapping struct {
@@ -258,7 +259,9 @@ func (am *mgr) Authenticate(ctx context.Context, _, clientSecret string) (*user.
 	}
 
 	config := &oidc.Config{
-		SkipClientIDCheck: true,
+		// when no audience is configured, only signature and expiry are verified
+		SkipClientIDCheck: am.c.Audience == "",
+		ClientID:          am.c.Audience,
 	}
 
 	tkn, err := provider.Verifier(config).Verify(ctx, clientSecret)

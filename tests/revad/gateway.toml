@@ -43,6 +43,7 @@ driver = "static"
 [grpc.services.authregistry.drivers.static.rules]
 publicshares = "shares:17000" # started with the shares.toml
 basic = "users:18000" # started with the users.toml
+bearer = "frontend:20099" # OIDC access tokens, validated by the oidc auth manager in frontend.toml
 
 [grpc.services.storageregistry]
 driver = "static"

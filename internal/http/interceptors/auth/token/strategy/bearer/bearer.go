@@ -57,10 +57,15 @@ func (b) GetToken(r *http.Request) string {
 	return ""
 }
 
+// bearerPrefix is the authorization scheme; per RFC 7235 the scheme is case-insensitive.
+const bearerPrefix = "bearer "
+
 func getFromAuthorizationHeader(r *http.Request) (string, bool) {
-	auth := r.Header.Get("Authorization")
-	tkn := strings.TrimPrefix(auth, "Bearer ")
-	return tkn, tkn != ""
+	hdr := r.Header.Get("Authorization")
+	if len(hdr) > len(bearerPrefix) && strings.EqualFold(hdr[:len(bearerPrefix)], bearerPrefix) {
+		return hdr[len(bearerPrefix):], true
+	}
+	return "", false
 }
 
 func getFromBody(r *http.Request) (string, bool) {

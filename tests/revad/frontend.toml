@@ -16,6 +16,12 @@ address = "0.0.0.0:20099"
 [grpc.services.authprovider]
 auth_manager = "oidc"
 
+# This authprovider validates "Authorization: Bearer <OIDC access token>" logins
+# (routed here via the "bearer" rule in the gateway's authregistry, see gateway.toml).
+# Note that reva serves no OIDC discovery endpoint itself, so bearer auth only
+# works once the issuer below points at a real IdP (e.g. a Keycloak realm URL).
+# For Keycloak also set default_id_claim = "preferred_username", since its "sub"
+# claim is a UUID and the oidc auth manager resolves users by username.
 # If you want to use your own openid provider change this config
 [grpc.services.authprovider.auth_managers.oidc]
 issuer = "http://frontend:20080"

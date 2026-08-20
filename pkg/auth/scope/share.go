@@ -109,6 +109,7 @@ func checkSharePath(path string) bool {
 		"/ocs/v1.php/apps/files_sharing/api/v1/shares",
 		"/remote.php/webdav",
 		"/remote.php/dav/files",
+		"/webdav",
 	}
 	for _, p := range paths {
 		if strings.HasPrefix(path, p) {

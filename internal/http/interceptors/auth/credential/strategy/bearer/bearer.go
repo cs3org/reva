@@ -33,6 +33,9 @@ func init() {
 
 type strategy struct{}
 
+// bearerPrefix is the authorization scheme; per RFC 7235 the scheme is case-insensitive.
+const bearerPrefix = "bearer "
+
 // New returns a new auth strategy that checks "Bearer" OAuth Access Tokens
 // See https://tools.ietf.org/html/rfc6750#section-6.1
 func New(m map[string]any) (auth.CredentialStrategy, error) {
@@ -40,11 +43,10 @@ func New(m map[string]any) (auth.CredentialStrategy, error) {
 }
 
 func (s *strategy) GetCredentials(w http.ResponseWriter, r *http.Request) (*auth.Credentials, error) {
-	// 1. check Authorization header
+	// 1. check Authorization header, see https://tools.ietf.org/html/rfc6750#section-2.1
 	hdr := r.Header.Get("Authorization")
-	token := strings.TrimPrefix(hdr, "Bearer ")
-	if token != "" {
-		return &auth.Credentials{Type: "bearer", ClientSecret: token}, nil
+	if len(hdr) > len(bearerPrefix) && strings.EqualFold(hdr[:len(bearerPrefix)], bearerPrefix) {
+		return &auth.Credentials{Type: "bearer", ClientSecret: hdr[len(bearerPrefix):]}, nil
 	}
 	// TODO 2. check form encoded body parameter for POST requests, see https://tools.ietf.org/html/rfc6750#section-2.2
 
