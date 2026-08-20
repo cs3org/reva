@@ -23,13 +23,18 @@ import (
 	"context"
 	"slices"
 
+	gateway "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
+	rpcv1beta1 "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	collaborationv1beta1 "github.com/cs3org/go-cs3apis/cs3/sharing/collaboration/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
+	"github.com/cs3org/reva/v3/pkg/permissions"
 	"github.com/cs3org/reva/v3/pkg/reconciliation/nsdump"
-	"github.com/cs3org/reva/v3/pkg/share/manager/sql"
 	"github.com/cs3org/reva/v3/pkg/spaces"
 	"github.com/cs3org/reva/v3/pkg/storage/fs/eos/acl"
 )
+
+// TODO(jgeens):
+// - check what to do with version folders
 
 const JobName = "reconciliation.deep"
 
@@ -45,7 +50,8 @@ type Change struct {
 }
 
 type DeepJob struct {
-	shareMgr sql.ShareMgr
+	shareMgr ShareStore
+	gw       gateway.GatewayAPIClient
 }
 
 type RunParameters struct {
@@ -67,6 +73,20 @@ func (s *ShareWithPath) toTreeNode() *ACLNode {
 
 func (j *DeepJob) run(ctx context.Context, p RunParameters) error {
 
+	namespaceDumper := &nsdump.EOSMemoryNSInspect{}
+	err := namespaceDumper.Setup(map[string]any{
+		// TODO(jgeens): set config for dump
+	})
+	if err != nil {
+		return err
+	}
+
+	_, err = j.runAnalysis(ctx, p.SpaceID, namespaceDumper)
+	return err
+}
+
+func (j *DeepJob) runAnalysis(ctx context.Context, spaceid string, nsdumper nsdump.NSDumpClient) (ChangeSet, error) {
+
 	// First, construct a tree which contains the "ideal" state
 	// For this, we:
 	// 1. Get all the shares in the space
@@ -77,18 +97,18 @@ func (j *DeepJob) run(ctx context.Context, p RunParameters) error {
 		{
 			Type: collaborationv1beta1.Filter_TYPE_SPACE_ID,
 			Term: &collaborationv1beta1.Filter_SpaceId{
-				SpaceId: p.SpaceID,
+				SpaceId: spaceid,
 			},
 		},
 	})
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	// Resolve the paths
-	var sharesWithPaths = make([]*ShareWithPath, len(shares))
+	var sharesWithPaths = make([]*ShareWithPath, 0, len(shares))
 	for _, s := range shares {
-		if p, ok := j.getPath(s.ResourceId); ok {
+		if p, ok := j.getPath(ctx, s.ResourceId); ok {
 			sharesWithPaths = append(sharesWithPaths, &ShareWithPath{
 				Share: s,
 				Path:  p,
@@ -111,30 +131,33 @@ func (j *DeepJob) run(ctx context.Context, p RunParameters) error {
 	// actual state of the namespace into something parsable.
 	// We start by taking a dump of the namespace, and then we
 	// parse this entry-by-entry
-
-	namespaceDumper := nsdump.EOSMemoryNSInspect{}
-	namespaceDumper.Setup(map[string]any{
-		// TODO(jgeens): set config for dump
-	})
+	path, err := spaces.DecodeSpaceID(spaceid)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
-	path, err := spaces.DecodeSpaceID(p.SpaceID)
+	dump, err := nsdumper.Dump(path, 0)
 	if err != nil {
-		return err
+		return nil, err
 	}
-
-	dump, err := namespaceDumper.Dump(path, 0)
 
 	// Now we do the diff and get the resulting ChangeSet
-	compare(tree, dump) // changeSet :=
+	changeSet := compare(tree, dump)
 
-	return nil
+	return changeSet, nil
 }
 
-func (j *DeepJob) getPath(rid *provider.ResourceId) (string, bool) {
-	return "", true
+func (j *DeepJob) getPath(ctx context.Context, rid *provider.ResourceId) (string, bool) {
+	statRes, err := j.gw.Stat(ctx, &provider.StatRequest{
+		Ref: &provider.Reference{ResourceId: rid},
+	})
+	if err != nil {
+		return "", false
+	}
+	if statRes.Status == nil || statRes.Status.Code != rpcv1beta1.Code_CODE_OK {
+		return "", false
+	}
+	return statRes.Info.Path, true
 }
 
 func compare(tree *ACLTree, ns *nsdump.NamespaceDump) ChangeSet {
@@ -169,7 +192,7 @@ func calculateChangeSet(mandatory, optional, actual []*acl.Entry, p string) Chan
 
 	// First calculate missing entries on `actual`
 	for _, e := range mandatory {
-		if !slices.Contains(actual, e) {
+		if !aclSetContains(actual, e) {
 			changeSet = append(changeSet, &Change{
 				Path:   p,
 				Action: ActionAdd,
@@ -180,7 +203,7 @@ func calculateChangeSet(mandatory, optional, actual []*acl.Entry, p string) Chan
 
 	// Then calculate which entries should not be there
 	for _, e := range actual {
-		if !slices.Contains(mandatory, e) && !slices.Contains(optional, e) {
+		if !aclSetContains(mandatory, e) && !aclSetContains(optional, e) {
 			changeSet = append(changeSet, &Change{
 				Path:   p,
 				Action: ActionDelete,
@@ -190,6 +213,14 @@ func calculateChangeSet(mandatory, optional, actual []*acl.Entry, p string) Chan
 	}
 
 	return changeSet
+}
+
+// We cannot use slices.Contains, because we want to compare
+// the actual values, not the pointers
+func aclSetContains(set []*acl.Entry, entry *acl.Entry) bool {
+	return slices.ContainsFunc(set, func(c *acl.Entry) bool {
+		return *c == *entry
+	})
 }
 
 func shareToACL(s *collaborationv1beta1.Share) *acl.Entry {
@@ -205,6 +236,17 @@ func shareToACL(s *collaborationv1beta1.Share) *acl.Entry {
 		return &e
 	}
 
-	// TODO(jgeens): set permissions
+	// TODO(jgeens): we should define named constants for these int values
+	// TODO(jgeens): we should define named constants for the EOS perms
+	ocs := permissions.OCSFromCS3Permission(s.Permissions.Permissions)
+	switch ocs {
+	case 0:
+		e.Permissions = "!r!w!x"
+	case 1:
+		e.Permissions = "rx"
+	case 15:
+		e.Permissions = "rwx"
+	}
+
 	return &e
 }
