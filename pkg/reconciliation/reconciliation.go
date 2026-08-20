@@ -103,3 +103,29 @@ func OpenLog(path string) (*zerolog.Logger, *os.File, error) {
 	log := zerolog.New(f).With().Timestamp().Logger()
 	return &log, f, nil
 }
+
+// ActionKind is what the job did to an ACL entry. There is no remove: the job
+// only ever adds one that is missing or corrects one that is wrong.
+type ActionKind int
+
+const (
+	// ActionAdd adds an entry that is missing.
+	ActionAdd ActionKind = iota
+	// ActionUpdate changes the permissions of an entry that is present.
+	ActionUpdate
+	ActionDelete
+)
+
+// String returns a human readable name for the action kind.
+func (k ActionKind) String() string {
+	switch k {
+	case ActionAdd:
+		return "add"
+	case ActionUpdate:
+		return "update"
+	case ActionDelete:
+		return "delete"
+	default:
+		return "unknown"
+	}
+}
