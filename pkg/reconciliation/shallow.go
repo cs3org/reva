@@ -144,29 +144,6 @@ type ShallowJob struct {
 	RunOnStart bool
 }
 
-// ActionKind is what the job did to an ACL entry. There is no remove: the job
-// only ever adds one that is missing or corrects one that is wrong.
-type ActionKind int
-
-const (
-	// ActionAdd adds an entry that is missing.
-	ActionAdd ActionKind = iota
-	// ActionUpdate changes the permissions of an entry that is present.
-	ActionUpdate
-)
-
-// String returns a human readable name for the action kind.
-func (k ActionKind) String() string {
-	switch k {
-	case ActionAdd:
-		return "add"
-	case ActionUpdate:
-		return "update"
-	default:
-		return "unknown"
-	}
-}
-
 // WrittenGrant records one grant the job wrote, or, in dry-run, would have.
 type WrittenGrant struct {
 	ShareID string
