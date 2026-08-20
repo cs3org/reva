@@ -1,32 +1,20 @@
-package reconciliation
+package nsdump
 
 import (
-	"bytes"
 	"encoding/json"
-	"fmt"
-	"os/exec"
 	"path"
 	"strings"
 
 	"github.com/pkg/errors"
 )
 
-type NSDumpResponse struct {
-	entries []NameSpaceEntry
+type NamespaceDump struct {
+	Entries []NameSpaceEntry
 }
 
 type NSDumpClient interface {
-	Dump(rootPath string, maxDepth int) (NSDumpResponse, error)
-}
-
-type EOSMemoryNSInspect struct {
-	cfg EOSNSInspectConfig
-}
-
-type EOSNSInspectConfig struct {
-	maxDepth    int
-	ignoreFiles bool
-	instance    string
+	Dump(rootPath string, maxDepth int) (NamespaceDump, error)
+	Setup(config map[string]any) error
 }
 
 type EntryType string
@@ -84,46 +72,9 @@ func (d *NameSpaceEntry) IsSysFile() bool {
 	return d.EntryType == EntryTypeFile && strings.HasPrefix(path.Base(path.Dir(d.Path)), ".sys.")
 }
 
-func NewEOSMemoryNSInspect() (*EOSMemoryNSInspect, error) {
-	return &EOSMemoryNSInspect{}, nil
-}
-
-func (e *EOSMemoryNSInspect) Dump(rootPath string, maxDepth int) (*NSDumpResponse, error) {
-
-	noFilesFlag := ""
-	if e.cfg.ignoreFiles {
-		noFilesFlag = " --no-files"
-	}
-
-	maxDepthFlag := ""
-	if maxDepth > 0 {
-		maxDepthFlag = fmt.Sprintf(" --maxdepth %d", maxDepth)
-	}
-
-	args := fmt.Sprintf(
-		"scan --path %s %s --members %s-qdb:7777 --password-file /keytabs/%s_keytab --json%s",
-		rootPath,
-		maxDepthFlag,
-		e.cfg.instance,
-		e.cfg.instance,
-		noFilesFlag,
-	)
-
-	cmd := exec.Command("/usr/bin/eos-ns-inspect", strings.Split(args, " ")...)
-
-	var stdout bytes.Buffer
-	cmd.Stdout = &stdout
-	err := cmd.Run()
-	if err != nil {
-		return nil, err
-	}
-
-	return parseNSInspectOutput(&stdout)
-}
-
-func parseNSInspectOutput(data *bytes.Buffer) (*NSDumpResponse, error) {
+func parseNSInspectOutput(data []byte) (*NamespaceDump, error) {
 	var raw []map[string]interface{}
-	if err := json.Unmarshal(data.Bytes(), &raw); err != nil {
+	if err := json.Unmarshal(data, &raw); err != nil {
 		return nil, errors.Wrap(err, "failed to unmarshal ns-inspect input")
 	}
 
@@ -141,5 +92,5 @@ func parseNSInspectOutput(data *bytes.Buffer) (*NSDumpResponse, error) {
 		entries = append(entries, e)
 
 	}
-	return &NSDumpResponse{entries: entries}, nil
+	return &NamespaceDump{Entries: entries}, nil
 }
