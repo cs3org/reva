@@ -30,78 +30,11 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/cs3org/reva/v3/pkg/bundler"
 	downMock "github.com/cs3org/reva/v3/pkg/storage/utils/downloader/mock"
 	walkerMock "github.com/cs3org/reva/v3/pkg/storage/utils/walker/mock"
 	"github.com/cs3org/reva/v3/pkg/test"
 )
-
-func TestGetDeepestCommonDir(t *testing.T) {
-	tests := []struct {
-		name     string
-		paths    []string
-		expected string
-	}{
-		{
-			name:     "no paths",
-			paths:    []string{},
-			expected: "",
-		},
-		{
-			name:     "one path",
-			paths:    []string{"/aa/bb/cc"},
-			expected: "/aa/bb/cc",
-		},
-		{
-			name:     "root as common parent",
-			paths:    []string{"/aa/bb/bb", "/bb/cc"},
-			expected: "/",
-		},
-		{
-			name:     "common parent",
-			paths:    []string{"/aa/bb/cc", "/aa/bb/dd"},
-			expected: "/aa/bb",
-		},
-		{
-			name:     "common parent",
-			paths:    []string{"/aa/bb/cc", "/aa/bb/dd", "/aa/test"},
-			expected: "/aa",
-		},
-		{
-			name:     "common parent",
-			paths:    []string{"/aa/bb/cc/", "/aa/bb/dd/", "/aa/test/"},
-			expected: "/aa",
-		},
-		{
-			name:     "one is common parent",
-			paths:    []string{"/aa", "/aa/bb/dd", "/aa/test"},
-			expected: "/aa",
-		},
-		{
-			name:     "one is common parent",
-			paths:    []string{"/aa/", "/aa/bb/dd/", "/aa/test"},
-			expected: "/aa",
-		},
-		{
-			name:     "one is common parent",
-			paths:    []string{"/aa/bb/dd", "/aa/", "/aa/test"},
-			expected: "/aa",
-		},
-		{
-			name:     "one is common parent",
-			paths:    []string{"/reva/einstein/test", "/reva/einstein"},
-			expected: "/reva/einstein",
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			res := getDeepestCommonDir(tt.paths)
-			if res != tt.expected {
-				t.Fatalf("getDeepestCommondDir() failed: paths=%+v expected=%s got=%s", tt.paths, tt.expected, res)
-			}
-		})
-	}
-}
 
 func UnTar(dir string, r io.Reader) error {
 	tr := tar.NewReader(r)
@@ -203,7 +136,7 @@ func TestCreateTar(t *testing.T) {
 			},
 			files:    []string{"foo"},
 			expected: nil,
-			err:      ErrMaxFileCount{},
+			err:      bundler.ErrMaxFileCount{},
 		},
 		{
 			name: "one file - error max size reached",
@@ -218,7 +151,7 @@ func TestCreateTar(t *testing.T) {
 			},
 			files:    []string{"foo"},
 			expected: nil,
-			err:      ErrMaxSize{},
+			err:      bundler.ErrMaxSize{},
 		},
 		{
 			name: "one folder empty",
@@ -246,7 +179,7 @@ func TestCreateTar(t *testing.T) {
 			},
 			files:    []string{"foo"},
 			expected: nil,
-			err:      ErrMaxFileCount{},
+			err:      bundler.ErrMaxFileCount{},
 		},
 		{
 			name: "one folder - one file in",
@@ -644,7 +577,7 @@ func TestCreateZip(t *testing.T) {
 			},
 			files:    []string{"foo"},
 			expected: nil,
-			err:      ErrMaxFileCount{},
+			err:      bundler.ErrMaxFileCount{},
 		},
 		{
 			name: "one file - error max size reached",
@@ -659,7 +592,7 @@ func TestCreateZip(t *testing.T) {
 			},
 			files:    []string{"foo"},
 			expected: nil,
-			err:      ErrMaxSize{},
+			err:      bundler.ErrMaxSize{},
 		},
 		{
 			name: "one folder empty",
@@ -687,7 +620,7 @@ func TestCreateZip(t *testing.T) {
 			},
 			files:    []string{"foo"},
 			expected: nil,
-			err:      ErrMaxFileCount{},
+			err:      bundler.ErrMaxFileCount{},
 		},
 		{
 			name: "one folder - one file in",
