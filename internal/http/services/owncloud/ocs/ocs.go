@@ -133,6 +133,8 @@ func (s *svc) routerInit(l *zerolog.Logger) error {
 				r.Get("/", userHandler.GetSelf)
 				r.Patch("/", userHandler.UpdateSelf)
 				r.Get("/signing-key", userHandler.SigningKey)
+				r.Get("/clients", userHandler.ListClients)
+				r.Delete("/clients/{cid}", userHandler.DeleteClient)
 			})
 			r.Route("/users", func(r chi.Router) {
 				r.Get("/{userid}", usersHandler.GetUsers)
