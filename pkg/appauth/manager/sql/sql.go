@@ -18,8 +18,8 @@
 
 // Package sql is a GORM-backed appauth manager. App passwords are stored as
 // SHA-256 hashes and looked up directly, without a bcrypt loop, because the
-// tokens carry 256 bits of entropy (§2.3). last_seen (utime) writes are buffered
-// (§2.5) so every request does not touch the database.
+// tokens carry 256 bits of entropy. last_seen (utime) writes are buffered so
+// every request does not touch the database.
 package sql
 
 import (
@@ -206,7 +206,7 @@ func (m *mgr) GetAppPassword(ctx context.Context, userID *userpb.UserId, secret 
 	return pw, nil
 }
 
-// touch persists utime at most once per flush window per token (§2.5).
+// touch persists utime at most once per flush window per token.
 func (m *mgr) touch(ctx context.Context, hash []byte, now time.Time) {
 	key := hex.EncodeToString(hash)
 

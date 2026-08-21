@@ -25,7 +25,7 @@ import (
 )
 
 func TestParseDeviceName(t *testing.T) {
-	bell := "\\u0007"
+	bell := "\a"
 	cases := []struct {
 		name    string
 		body    string
@@ -39,6 +39,7 @@ func TestParseDeviceName(t *testing.T) {
 		{"64 runes ok", `{"name":"` + strings.Repeat("a", 64) + `"}`, strings.Repeat("a", 64), false},
 		{"65 runes rejected", `{"name":"` + strings.Repeat("a", 65) + `"}`, "", true},
 		{"control char rejected", `{"name":"bad` + bell + `name"}`, "", true},
+		{"pipe rejected", `{"name":"a|b"}`, "", true},
 		{"malformed json", `{"name":`, "", true},
 	}
 	for _, c := range cases {
@@ -61,37 +62,21 @@ func TestParseDeviceName(t *testing.T) {
 	}
 }
 
-func TestParseUserAgent(t *testing.T) {
+func TestParseLabel(t *testing.T) {
 	cases := []struct {
-		ua   string
-		want string
+		label           string
+		wantName        string
+		wantDescription string
+		wantCID         string
 	}{
-		{"Mozilla/5.0 (Linux) mirall/3.16.0 (Nextcloud)", "Nextcloud Desktop 3.16.0 on Linux"},
-		{"Nextcloud-Desktop/3.16.0 (Windows)", "Nextcloud Desktop 3.16.0 on Windows"},
-		{"", "Unknown client"},
-		{"curl/8.0", "curl/8.0"},
+		{"my laptop|Nextcloud Sync Client v3.16.0 (on Linux)|abc-123", "my laptop", "Nextcloud Sync Client v3.16.0 (on Linux)", "abc-123"},
+		{"|Nextcloud Sync Client v3.16.0|abc-123", "", "Nextcloud Sync Client v3.16.0", "abc-123"},
+		{"whole", "", "whole", ""},
 	}
 	for _, c := range cases {
-		if got := parseUserAgent(c.ua); got != c.want {
-			t.Errorf("parseUserAgent(%q) = %q, want %q", c.ua, got, c.want)
-		}
-	}
-}
-
-func TestSplitLabel(t *testing.T) {
-	cases := []struct {
-		label     string
-		wantLabel string
-		wantCID   string
-	}{
-		{"Nextcloud Desktop 3.16|abc-123", "Nextcloud Desktop 3.16", "abc-123"},
-		{"no-suffix", "no-suffix", ""},
-		{"a|b|c", "a|b", "c"},
-	}
-	for _, c := range cases {
-		l, cid := splitLabel(c.label)
-		if l != c.wantLabel || cid != c.wantCID {
-			t.Errorf("splitLabel(%q) = (%q,%q), want (%q,%q)", c.label, l, cid, c.wantLabel, c.wantCID)
+		name, description, cid := parseLabel(c.label)
+		if name != c.wantName || description != c.wantDescription || cid != c.wantCID {
+			t.Errorf("parseLabel(%q) = (%q,%q,%q), want (%q,%q,%q)", c.label, name, description, cid, c.wantName, c.wantDescription, c.wantCID)
 		}
 	}
 }

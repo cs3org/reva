@@ -44,7 +44,7 @@ import (
 // No CSRF Origin check is needed: the auth middleware authenticates these via
 // the Authorization/token headers, which browsers never auto-attach on
 // cross-origin requests, so a foreign page cannot forge an authenticated call
-// (§2.4, "Bearer-only auth").
+// (bearer-only auth).
 
 const maxDeviceNameLen = 64
 
@@ -79,7 +79,7 @@ func (h *Handler) LoginFlowInfo(w http.ResponseWriter, r *http.Request) {
 		status = "approved"
 	}
 	writeLoginFlowJSON(w, http.StatusOK, loginFlowInfo{
-		Client:     parseUserAgent(f.UserAgent),
+		Client:     loginflow.ClientDescription(f.UserAgent),
 		User:       user.GetUsername(),
 		CreatedAt:  f.CreatedAt.UTC().Format(time.RFC3339),
 		ServerTime: time.Now().UTC().Format(time.RFC3339),
@@ -89,7 +89,7 @@ func (h *Handler) LoginFlowInfo(w http.ResponseWriter, r *http.Request) {
 
 // LoginFlowGrant handles POST /cloud/user/login-flow/{lt}/grant. It records the
 // granting user and the device name; the app password is minted later, when the
-// sync client polls (§1).
+// sync client polls.
 func (h *Handler) LoginFlowGrant(w http.ResponseWriter, r *http.Request) {
 	log := appctx.GetLogger(r.Context())
 
@@ -107,10 +107,8 @@ func (h *Handler) LoginFlowGrant(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if name == "" {
-		name = parseUserAgent(f.UserAgent)
-	}
-
+	// name stays the user's chosen device name (may be empty). The human
+	// description of the client is derived from the User-Agent at mint time.
 	if err := h.loginFlowStore.Approve(r.Context(), f.LoginHash, user.GetId().GetOpaqueId(), user.GetUsername(), name); err != nil {
 		http.Error(w, "could not approve flow", loginFlowStatus(err))
 		return
@@ -180,6 +178,11 @@ func parseDeviceName(r *http.Request) (string, error) {
 			return "", fmt.Errorf("name contains control characters")
 		}
 	}
+	// "|" separates name, description and client_id inside the app password
+	// label, so it cannot appear in a user-chosen name.
+	if strings.ContainsRune(name, '|') {
+		return "", fmt.Errorf("name contains a reserved character")
+	}
 	return name, nil
 }
 
@@ -198,51 +201,4 @@ func writeLoginFlowJSON(w http.ResponseWriter, code int, v any) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(code)
 	_ = json.NewEncoder(w).Encode(v)
-}
-
-// parseUserAgent turns a raw User-Agent into a short human label for the
-// confirmation page and the app password. It recognises the NextCloud desktop
-// client (which sends a "mirall/<version>" token) and falls back to the raw
-// string for anything else.
-func parseUserAgent(ua string) string {
-	ua = strings.TrimSpace(ua)
-	if ua == "" {
-		return "Unknown client"
-	}
-
-	os := ""
-	if l := strings.Index(ua, "("); l >= 0 {
-		if r := strings.Index(ua[l+1:], ")"); r >= 0 {
-			os = strings.TrimSpace(ua[l+1 : l+1+r])
-		}
-	}
-
-	if v, ok := uaToken(ua, "mirall/"); ok {
-		label := "Nextcloud Desktop " + v
-		if os != "" {
-			label += " on " + os
-		}
-		return label
-	}
-	if v, ok := uaToken(ua, "Nextcloud-Desktop/"); ok {
-		label := "Nextcloud Desktop " + v
-		if os != "" {
-			label += " on " + os
-		}
-		return label
-	}
-
-	return ua
-}
-
-// uaToken returns the whitespace-delimited value that follows prefix in s.
-func uaToken(s, prefix string) (string, bool) {
-	_, rest, ok := strings.Cut(s, prefix)
-	if !ok {
-		return "", false
-	}
-	if f := strings.Fields(rest); len(f) > 0 {
-		return f[0], true
-	}
-	return "", false
 }

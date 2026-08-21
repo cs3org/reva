@@ -25,6 +25,7 @@ package loginflow
 import (
 	"context"
 	"crypto/sha256"
+	"strings"
 	"time"
 )
 
@@ -33,6 +34,54 @@ import (
 func HashToken(token string) []byte {
 	h := sha256.Sum256([]byte(token))
 	return h[:]
+}
+
+// ClientDescription turns a raw User-Agent into a short, human-readable label
+// for the confirmation page and the connected-clients list, e.g.
+// "Nextcloud Sync Client v3.13.0 (on Linux)". It recognises the Nextcloud
+// desktop sync client (which sends a "mirall/<version>" token) and falls back to
+// the raw string for anything it does not know.
+func ClientDescription(ua string) string {
+	ua = strings.TrimSpace(ua)
+	if ua == "" {
+		return "Unknown client"
+	}
+
+	os := ""
+	if l := strings.Index(ua, "("); l >= 0 {
+		if r := strings.Index(ua[l+1:], ")"); r >= 0 {
+			os = strings.TrimSpace(ua[l+1 : l+1+r])
+		}
+	}
+
+	version := ""
+	if v, ok := uaToken(ua, "mirall/"); ok {
+		version = v
+	} else if v, ok := uaToken(ua, "Nextcloud-Desktop/"); ok {
+		version = v
+	}
+
+	if version != "" {
+		label := "Nextcloud Sync Client v" + version
+		if os != "" {
+			label += " (on " + os + ")"
+		}
+		return label
+	}
+
+	return ua
+}
+
+// uaToken returns the whitespace-delimited value that follows prefix in s.
+func uaToken(s, prefix string) (string, bool) {
+	_, rest, ok := strings.Cut(s, prefix)
+	if !ok {
+		return "", false
+	}
+	if f := strings.Fields(rest); len(f) > 0 {
+		return f[0], true
+	}
+	return "", false
 }
 
 // Flow is one pending or approved enrolment attempt.

@@ -31,13 +31,17 @@ import (
 	"github.com/go-chi/chi/v5"
 )
 
-// Client is one connected sync client, backed by an app password. The client_id
-// is decoded from the app password label (§2.5) and used as the row id.
+// Client is one connected sync client, backed by an app password. The three
+// fields are decoded from the app password label "<name>|<description>|<id>":
+//   - Name is the device name the user chose when connecting (may be empty).
+//   - Description is the human-readable client parsed from its User-Agent.
+//   - ID is the client_id, used as the row id for revocation.
 type Client struct {
-	ID         string `json:"id"           xml:"id"`
-	Label      string `json:"label"        xml:"label"`
-	CreatedAt  string `json:"created_at"   xml:"created_at"`
-	LastSeenAt string `json:"last_seen_at" xml:"last_seen_at"`
+	ID          string `json:"id"           xml:"id"`
+	Name        string `json:"name"         xml:"name"`
+	Description string `json:"description"  xml:"description"`
+	CreatedAt   string `json:"created_at"   xml:"created_at"`
+	LastSeenAt  string `json:"last_seen_at" xml:"last_seen_at"`
 }
 
 // ListClients handles GET /cloud/user/clients.
@@ -62,12 +66,13 @@ func (h *Handler) ListClients(w http.ResponseWriter, r *http.Request) {
 
 	clients := make([]Client, 0, len(res.AppPasswords))
 	for _, pw := range res.AppPasswords {
-		label, cid := splitLabel(pw.Label)
+		name, description, cid := parseLabel(pw.Label)
 		clients = append(clients, Client{
-			ID:         cid,
-			Label:      label,
-			CreatedAt:  unixToRFC3339(pw.GetCtime().GetSeconds()),
-			LastSeenAt: unixToRFC3339(pw.GetUtime().GetSeconds()),
+			ID:          cid,
+			Name:        name,
+			Description: description,
+			CreatedAt:   unixToRFC3339(pw.GetCtime().GetSeconds()),
+			LastSeenAt:  unixToRFC3339(pw.GetUtime().GetSeconds()),
 		})
 	}
 
@@ -75,7 +80,7 @@ func (h *Handler) ListClients(w http.ResponseWriter, r *http.Request) {
 }
 
 // DeleteClient handles DELETE /cloud/user/clients/{cid}. It is idempotent: a
-// missing client returns 204, not 500 (§ UI #5).
+// missing client returns 204, not 500.
 func (h *Handler) DeleteClient(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	cid := chi.URLParam(r, "cid")
@@ -98,7 +103,7 @@ func (h *Handler) DeleteClient(w http.ResponseWriter, r *http.Request) {
 
 	var secret string
 	for _, pw := range res.AppPasswords {
-		if _, c := splitLabel(pw.Label); c == cid {
+		if _, _, c := parseLabel(pw.Label); c == cid {
 			secret = pw.Password
 			break
 		}
@@ -123,14 +128,18 @@ func (h *Handler) DeleteClient(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNoContent)
 }
 
-// splitLabel decodes the "<parsed-UA>|<client_id>" app password label (§2.5). It
-// returns the human label without the client_id suffix, and the client_id. A
-// label without a suffix returns the whole label and an empty client_id.
-func splitLabel(label string) (string, string) {
-	if i := strings.LastIndex(label, "|"); i >= 0 {
-		return label[:i], label[i+1:]
+// parseLabel decodes the "<name>|<description>|<client_id>" app password label.
+// name and client_id never contain "|" (the name is validated at grant, the
+// client_id is a UUID), so name is taken before the first "|" and client_id
+// after the last; whatever is between is the description. A label that does not
+// match this shape is returned whole as the description.
+func parseLabel(label string) (name, description, cid string) {
+	first := strings.IndexByte(label, '|')
+	last := strings.LastIndexByte(label, '|')
+	if first < 0 || first == last {
+		return "", label, ""
 	}
-	return label, ""
+	return label[:first], label[first+1 : last], label[last+1:]
 }
 
 func unixToRFC3339(sec uint64) string {

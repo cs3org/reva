@@ -78,7 +78,10 @@ func TestDavFilesPropfindResolvesHomeAndPaths(t *testing.T) {
 		wantHrefs []string
 	}{
 		{
-			name:   "home without trailing slash",
+			// The bare dav-files root lists the CS3 namespace root plus the
+			// injected "home" alias. In this fixture GetHome resolves to the
+			// same root, so "home" appears alongside the root entries.
+			name:   "root without trailing slash",
 			target: "/remote.php/dav/files/user",
 			depth:  "1",
 			wantHrefs: []string{
@@ -86,10 +89,11 @@ func TestDavFilesPropfindResolvesHomeAndPaths(t *testing.T) {
 				"/remote.php/dav/files/user/Documents/",
 				"/remote.php/dav/files/user/MyShares/",
 				"/remote.php/dav/files/user/root.txt",
+				"/remote.php/dav/files/user/home/",
 			},
 		},
 		{
-			name:   "home with trailing slash",
+			name:   "root with trailing slash",
 			target: "/remote.php/dav/files/user/",
 			depth:  "1",
 			wantHrefs: []string{
@@ -97,6 +101,7 @@ func TestDavFilesPropfindResolvesHomeAndPaths(t *testing.T) {
 				"/remote.php/dav/files/user/Documents/",
 				"/remote.php/dav/files/user/MyShares/",
 				"/remote.php/dav/files/user/root.txt",
+				"/remote.php/dav/files/user/home/",
 			},
 		},
 		{

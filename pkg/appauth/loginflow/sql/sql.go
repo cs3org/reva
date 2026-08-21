@@ -17,9 +17,8 @@
 // or submit itself to any jurisdiction.
 
 // Package sql is a GORM-backed store for login flow enrolments. It runs the
-// atomic state transitions defined in the implementation plan: approve and
-// consume are compare-and-set updates whose affected-row count decides the
-// winner of a race.
+// atomic state transitions approve and consume as compare-and-set updates whose
+// affected-row count decides the winner of a race.
 package sql
 
 import (

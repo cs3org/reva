@@ -280,7 +280,7 @@ func (s *svc) handlePoll(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Bind the poll to the original Init context (§2.8): the same client process
+	// Bind the poll to the original Init context: the same client process
 	// must present the same User-Agent.
 	if r.Header.Get("User-Agent") != f.UserAgent {
 		log.Warn().Str("client_id", f.ClientID).Msg("poll user-agent mismatch")
@@ -314,7 +314,7 @@ func (s *svc) handlePoll(w http.ResponseWriter, r *http.Request) {
 
 // mintAppPassword generates an owner-scoped, non-expiring app password for the
 // flow's user. The label carries the client_id so the management API can map a
-// row back to a flow (§2.5).
+// row back to a flow.
 func (s *svc) mintAppPassword(ctx context.Context, f *loginflow.Flow) (string, error) {
 	user := &userpb.User{
 		Id:       &userpb.UserId{OpaqueId: f.UserID},
@@ -327,7 +327,10 @@ func (s *svc) mintAppPassword(ctx context.Context, f *loginflow.Flow) (string, e
 		return "", err
 	}
 
-	label := f.DeviceName + "|" + f.ClientID
+	// Label carries the parsed, human-readable parts the management API returns:
+	// "<user-chosen name>|<client description>|<client_id>". Both the name and
+	// the description are clean strings; the raw User-Agent is not stored.
+	label := f.DeviceName + "|" + loginflow.ClientDescription(f.UserAgent) + "|" + f.ClientID
 	appPass, err := s.am.GenerateAppPassword(ctx, ownerScope, label, nil)
 	if err != nil {
 		return "", err
@@ -360,7 +363,7 @@ func (s *svc) waitForApproval(r *http.Request, pollHash []byte) *loginflow.Flow 
 }
 
 // lookupByLogin resolves a flow from a login token and maps the "gone" vs
-// "unknown" distinction the UI relies on (§3): 404 unknown, 410 expired. A zero
+// "unknown" distinction the UI relies on: 404 unknown, 410 expired. A zero
 // code means the flow is live.
 func (s *svc) lookupByLogin(r *http.Request, lt string) (*loginflow.Flow, int) {
 	if lt == "" {

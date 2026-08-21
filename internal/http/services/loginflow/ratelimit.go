@@ -24,7 +24,7 @@ import (
 )
 
 // limiter is a per-key token bucket. Keys are source IPs or token hashes. The
-// anonymous Init and poll endpoints use it (§2.7).
+// anonymous Init and poll endpoints use it.
 type limiter struct {
 	mu      sync.Mutex
 	buckets map[string]*bucket
