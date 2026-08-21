@@ -50,6 +50,10 @@ type Config struct {
 	SigningKeySecret           string `mapstructure:"signing_key_secret"`
 	PubRWLinkMaxExpiration     int64  `mapstructure:"pub_rw_link_max_expiration"`
 	PubRWLinkDefaultExpiration int64  `mapstructure:"pub_rw_link_default_expiration"`
+	// Login Flow V2: the store shared with the loginflow service, used by the
+	// authenticated grant/deny/info handlers.
+	LoginFlowStoreDriver  string                    `mapstructure:"loginflow_store_driver"`
+	LoginFlowStoreDrivers map[string]map[string]any `mapstructure:"loginflow_store_drivers"`
 }
 
 // Init sets sane defaults.
@@ -76,6 +80,10 @@ func (c *Config) ApplyDefaults() {
 
 	if c.UserIdentifierCacheTTL == 0 {
 		c.UserIdentifierCacheTTL = 60
+	}
+
+	if c.LoginFlowStoreDriver == "" {
+		c.LoginFlowStoreDriver = "sql"
 	}
 
 	c.GatewaySvc = sharedconf.GetGatewaySVC(c.GatewaySvc)
