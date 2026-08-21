@@ -16,7 +16,7 @@
 // granted to it by virtue of its status as an Intergovernmental Organization
 // or submit itself to any jurisdiction.
 
-package loginflow
+package user
 
 import (
 	"net/http/httptest"
@@ -25,6 +25,7 @@ import (
 )
 
 func TestParseDeviceName(t *testing.T) {
+	bell := "\\u0007"
 	cases := []struct {
 		name    string
 		body    string
@@ -37,18 +38,12 @@ func TestParseDeviceName(t *testing.T) {
 		{"trimmed", `{"name":"  pad  "}`, "pad", false},
 		{"64 runes ok", `{"name":"` + strings.Repeat("a", 64) + `"}`, strings.Repeat("a", 64), false},
 		{"65 runes rejected", `{"name":"` + strings.Repeat("a", 65) + `"}`, "", true},
-		{"control char rejected", `{"name":"bad\u0007name"}`, "", true},
+		{"control char rejected", `{"name":"bad` + bell + `name"}`, "", true},
 		{"malformed json", `{"name":`, "", true},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			var body *strings.Reader
-			if c.body == "" {
-				body = strings.NewReader("")
-			} else {
-				body = strings.NewReader(c.body)
-			}
-			r := httptest.NewRequest("POST", "/flow/x/grant", body)
+			r := httptest.NewRequest("POST", "/login-flow/x/grant", strings.NewReader(c.body))
 			got, err := parseDeviceName(r)
 			if c.wantErr {
 				if err == nil {
@@ -83,24 +78,20 @@ func TestParseUserAgent(t *testing.T) {
 	}
 }
 
-func TestSplitOrigin(t *testing.T) {
-	s := &svc{c: &config{WebUIURL: "https://cernbox.cern.ch"}}
+func TestSplitLabel(t *testing.T) {
 	cases := []struct {
-		origin string
-		want   bool
+		label     string
+		wantLabel string
+		wantCID   string
 	}{
-		{"https://cernbox.cern.ch", true},
-		{"https://cernbox.cern.ch/", true},
-		{"https://evil.example.com", false},
-		{"", false},
+		{"Nextcloud Desktop 3.16|abc-123", "Nextcloud Desktop 3.16", "abc-123"},
+		{"no-suffix", "no-suffix", ""},
+		{"a|b|c", "a|b", "c"},
 	}
 	for _, c := range cases {
-		r := httptest.NewRequest("POST", "/flow/x/grant", nil)
-		if c.origin != "" {
-			r.Header.Set("Origin", c.origin)
-		}
-		if got := s.originAllowed(r); got != c.want {
-			t.Errorf("originAllowed(%q) = %v, want %v", c.origin, got, c.want)
+		l, cid := splitLabel(c.label)
+		if l != c.wantLabel || cid != c.wantCID {
+			t.Errorf("splitLabel(%q) = (%q,%q), want (%q,%q)", c.label, l, cid, c.wantLabel, c.wantCID)
 		}
 	}
 }

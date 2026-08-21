@@ -135,6 +135,9 @@ func (s *svc) routerInit(l *zerolog.Logger) error {
 				r.Get("/signing-key", userHandler.SigningKey)
 				r.Get("/clients", userHandler.ListClients)
 				r.Delete("/clients/{cid}", userHandler.DeleteClient)
+				r.Get("/login-flow/{lt}", userHandler.LoginFlowInfo)
+				r.Post("/login-flow/{lt}/grant", userHandler.LoginFlowGrant)
+				r.Post("/login-flow/{lt}/deny", userHandler.LoginFlowDeny)
 			})
 			r.Route("/users", func(r chi.Router) {
 				r.Get("/{userid}", usersHandler.GetUsers)

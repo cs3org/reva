@@ -16,16 +16,24 @@
 // granted to it by virtue of its status as an Intergovernmental Organization
 // or submit itself to any jurisdiction.
 
-// Package loginflow holds the persistent state for the NextCloud Login Flow V2
-// protocol. It stores one row per pending enrolment and runs the atomic state
+// Package loginflow holds the persistent state for the login flow. It stores
+// one row per pending enrolment and runs the atomic state
 // transitions (approve, consume) that the flow needs. It does not authenticate
 // anyone; its only job is to track a flow until an appauth credential is minted.
 package loginflow
 
 import (
 	"context"
+	"crypto/sha256"
 	"time"
 )
+
+// HashToken returns SHA256(token). Flows are stored and looked up by this hash;
+// the raw login and poll tokens are never persisted.
+func HashToken(token string) []byte {
+	h := sha256.Sum256([]byte(token))
+	return h[:]
+}
 
 // Flow is one pending or approved enrolment attempt.
 type Flow struct {

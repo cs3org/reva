@@ -24,7 +24,7 @@ import (
 	"gorm.io/gorm"
 )
 
-// Flow is the persisted state of one Login Flow V2 enrolment. gorm.Model gives
+// Flow is the persisted state of one login flow enrolment. gorm.Model gives
 // ID, CreatedAt, UpdatedAt and DeletedAt; DeletedAt drives the soft-delete that
 // marks a flow consumed, denied or expired.
 type Flow struct {

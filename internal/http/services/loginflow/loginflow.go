@@ -16,26 +16,25 @@
 // granted to it by virtue of its status as an Intergovernmental Organization
 // or submit itself to any jurisdiction.
 
-// Package loginflow implements the NextCloud Login Flow V2 protocol for
-// enrolling the NextCloud Desktop sync client without a password.
+// Package loginflow implements the anonymous side of the login flow for
+// enrolling the Nextcloud Desktop sync client without a password. It lives under
+// /index.php/login/v2 because that is the path sync clients expect.
 //
-// The browser side (grant, deny, info) authenticates with a bearer token; the
-// client side (init, poll) is anonymous. The app password is minted once, at
-// the moment the client polls an approved flow, and is never stored.
+// This service holds only the endpoints the sync client and the browser hit
+// unauthenticated: init, poll, and the browser redirect. The authenticated user
+// actions (info, grant, deny) live in the OCS service, behind the auth
+// middleware, next to the connected-clients management API.
 package loginflow
 
 import (
 	"context"
 	"crypto/rand"
-	"crypto/sha256"
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"net/http"
 	"strings"
 	"time"
-	"unicode"
-	"unicode/utf8"
 
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	"github.com/cs3org/reva/v3/pkg/appauth"
@@ -48,8 +47,6 @@ import (
 	"github.com/cs3org/reva/v3/pkg/auth/scope"
 	"github.com/cs3org/reva/v3/pkg/errtypes"
 	"github.com/cs3org/reva/v3/pkg/rhttp/global"
-	"github.com/cs3org/reva/v3/pkg/token"
-	tokenmgr "github.com/cs3org/reva/v3/pkg/token/manager/jwt"
 	"github.com/cs3org/reva/v3/pkg/utils"
 	"github.com/cs3org/reva/v3/pkg/utils/cfg"
 	"github.com/go-chi/chi/v5"
@@ -59,8 +56,6 @@ import (
 func init() {
 	global.Register("loginflow", New)
 }
-
-const maxDeviceNameLen = 64
 
 type rateLimitConfig struct {
 	InitPerIPPerMin    int `mapstructure:"init_per_ip_per_min"`
@@ -74,7 +69,6 @@ type config struct {
 	ServerBaseURL  string                    `mapstructure:"server_base_url"`
 	WebUIURL       string                    `mapstructure:"webui_url"`
 	FlowTTLSeconds int                       `mapstructure:"flow_ttl_seconds"`
-	TokenSecret    string                    `mapstructure:"token_secret"`
 	AppAuthDriver  string                    `mapstructure:"appauth_driver"`
 	AppAuthDrivers map[string]map[string]any `mapstructure:"appauth_drivers"`
 	StoreDriver    string                    `mapstructure:"store_driver"`
@@ -111,7 +105,6 @@ type svc struct {
 	router  *chi.Mux
 	am      appauth.Manager
 	store   loginflow.Manager
-	tm      token.Manager
 	limiter *limiter
 }
 
@@ -140,25 +133,16 @@ func New(ctx context.Context, m map[string]any) (global.Service, error) {
 		return nil, fmt.Errorf("loginflow: initialising store driver: %w", err)
 	}
 
-	tm, err := tokenmgr.New(map[string]any{"secret": c.TokenSecret})
-	if err != nil {
-		return nil, fmt.Errorf("loginflow: initialising token manager: %w", err)
-	}
-
 	s := &svc{
 		c:       &c,
 		am:      am,
 		store:   store,
-		tm:      tm,
 		limiter: newLimiter(),
 	}
 
 	r := chi.NewRouter()
 	r.Post("/", s.handleInit)
 	r.Get("/flow/{lt}", s.handleBrowserFlow)
-	r.Get("/flow/{lt}/info", s.handleInfo)
-	r.Post("/flow/{lt}/grant", s.handleGrant)
-	r.Post("/flow/{lt}/deny", s.handleDeny)
 	r.Post("/poll", s.handlePoll)
 	s.router = r
 
@@ -190,22 +174,6 @@ type pollResponse struct {
 	AppPassword string `json:"appPassword"`
 }
 
-type infoResponse struct {
-	Client     string `json:"client"`
-	User       string `json:"user"`
-	CreatedAt  string `json:"created_at"`
-	ServerTime string `json:"server_time"`
-	Status     string `json:"status"`
-}
-
-type grantRequest struct {
-	Name string `json:"name"`
-}
-
-type statusResponse struct {
-	Status string `json:"status"`
-}
-
 // Token helpers -----------------------------------------------------------
 
 func generateToken() (string, error) {
@@ -214,11 +182,6 @@ func generateToken() (string, error) {
 		return "", err
 	}
 	return base64.RawURLEncoding.EncodeToString(b), nil
-}
-
-func tokenHash(tok string) []byte {
-	h := sha256.Sum256([]byte(tok))
-	return h[:]
 }
 
 // Handlers ----------------------------------------------------------------
@@ -248,8 +211,8 @@ func (s *svc) handleInit(w http.ResponseWriter, r *http.Request) {
 	}
 
 	f := &loginflow.Flow{
-		LoginHash: tokenHash(lt),
-		PollHash:  tokenHash(pt),
+		LoginHash: loginflow.HashToken(lt),
+		PollHash:  loginflow.HashToken(pt),
 		ClientID:  uuid.New().String(),
 		UserAgent: r.Header.Get("User-Agent"),
 		ExpiresAt: time.Now().Add(time.Duration(s.c.FlowTTLSeconds) * time.Second),
@@ -288,107 +251,6 @@ func (s *svc) handleBrowserFlow(w http.ResponseWriter, r *http.Request) {
 	http.Redirect(w, r, target, http.StatusFound)
 }
 
-// handleInfo implements GET /index.php/login/v2/flow/{lt}/info. The web UI calls
-// it to render the confirmation page. It requires any authenticated user but
-// runs no authorization check: a valid token is enough, its identity is not
-// restricted.
-func (s *svc) handleInfo(w http.ResponseWriter, r *http.Request) {
-	user, _, err := s.authUser(r)
-	if err != nil {
-		http.Error(w, "unauthorized", http.StatusUnauthorized)
-		return
-	}
-
-	f, code := s.lookupByLogin(r, chi.URLParam(r, "lt"))
-	if code != 0 {
-		http.Error(w, "flow not found or expired", code)
-		return
-	}
-
-	status := "pending"
-	if f.Approved() {
-		status = "approved"
-	}
-	writeJSON(w, http.StatusOK, infoResponse{
-		Client:     parseUserAgent(f.UserAgent),
-		User:       user.GetUsername(),
-		CreatedAt:  f.CreatedAt.UTC().Format(time.RFC3339),
-		ServerTime: time.Now().UTC().Format(time.RFC3339),
-		Status:     status,
-	})
-}
-
-// handleGrant implements POST /index.php/login/v2/flow/{lt}/grant. It records
-// the granting user; the app password is minted later, at poll time.
-func (s *svc) handleGrant(w http.ResponseWriter, r *http.Request) {
-	log := appctx.GetLogger(r.Context()).With().Str("service", "loginflow").Str("handler", "grant").Logger()
-
-	if !s.originAllowed(r) {
-		http.Error(w, "forbidden origin", http.StatusForbidden)
-		return
-	}
-
-	user, _, err := s.authUser(r)
-	if err != nil {
-		http.Error(w, "unauthorized", http.StatusUnauthorized)
-		return
-	}
-
-	name, err := parseDeviceName(r)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
-		return
-	}
-
-	f, code := s.lookupByLogin(r, chi.URLParam(r, "lt"))
-	if code != 0 {
-		http.Error(w, "flow not found or expired", code)
-		return
-	}
-
-	if name == "" {
-		name = parseUserAgent(f.UserAgent)
-	}
-
-	err = s.store.Approve(r.Context(), f.LoginHash, user.GetId().GetOpaqueId(), user.GetUsername(), name)
-	if err != nil {
-		http.Error(w, "could not approve flow", statusForError(err))
-		return
-	}
-
-	log.Info().Str("client_id", f.ClientID).Str("username", user.GetUsername()).Msg("flow approved")
-	writeJSON(w, http.StatusOK, statusResponse{Status: "ok"})
-}
-
-// handleDeny implements POST /index.php/login/v2/flow/{lt}/deny.
-func (s *svc) handleDeny(w http.ResponseWriter, r *http.Request) {
-	log := appctx.GetLogger(r.Context()).With().Str("service", "loginflow").Str("handler", "deny").Logger()
-
-	if !s.originAllowed(r) {
-		http.Error(w, "forbidden origin", http.StatusForbidden)
-		return
-	}
-
-	if _, _, err := s.authUser(r); err != nil {
-		http.Error(w, "unauthorized", http.StatusUnauthorized)
-		return
-	}
-
-	f, code := s.lookupByLogin(r, chi.URLParam(r, "lt"))
-	if code != 0 {
-		http.Error(w, "flow not found or expired", code)
-		return
-	}
-
-	if err := s.store.Deny(r.Context(), f.LoginHash); err != nil {
-		http.Error(w, "could not deny flow", statusForError(err))
-		return
-	}
-
-	log.Info().Str("client_id", f.ClientID).Msg("flow denied")
-	writeJSON(w, http.StatusOK, statusResponse{Status: "ok"})
-}
-
 // handlePoll implements POST /index.php/login/v2/poll. It waits briefly for an
 // approval, then consumes the flow and mints the app password exactly once.
 func (s *svc) handlePoll(w http.ResponseWriter, r *http.Request) {
@@ -404,7 +266,7 @@ func (s *svc) handlePoll(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	ph := tokenHash(pt)
+	ph := loginflow.HashToken(pt)
 	if !s.limiter.allow("poll-ip:"+clientIP(r), s.c.RateLimit.PollPerIPPerMin) ||
 		!s.limiter.allow("poll-tok:"+base64.RawURLEncoding.EncodeToString(ph), s.c.RateLimit.PollPerTokenPerMin) {
 		w.Header().Set("Retry-After", "1")
@@ -504,7 +366,7 @@ func (s *svc) lookupByLogin(r *http.Request, lt string) (*loginflow.Flow, int) {
 	if lt == "" {
 		return nil, http.StatusNotFound
 	}
-	f, err := s.store.GetByLogin(r.Context(), tokenHash(lt))
+	f, err := s.store.GetByLogin(r.Context(), loginflow.HashToken(lt))
 	if err != nil {
 		return nil, statusForError(err)
 	}
@@ -512,69 +374,6 @@ func (s *svc) lookupByLogin(r *http.Request, lt string) (*loginflow.Flow, int) {
 		return nil, http.StatusGone
 	}
 	return f, 0
-}
-
-// authUser validates the request token and returns its user. It reads the token
-// from the carriers Reva uses for HTTP: the x-access-token header, an
-// Authorization: Bearer header, or an access_token query parameter. It requires
-// a valid token but performs no authorization check. It never reads cookies, so
-// a cross-origin page cannot forge an authenticated request (§2.4).
-func (s *svc) authUser(r *http.Request) (*userpb.User, string, error) {
-	tok := tokenFromRequest(r)
-	if tok == "" {
-		return nil, "", errtypes.InvalidCredentials("missing token")
-	}
-	user, _, err := s.tm.DismantleToken(r.Context(), tok)
-	if err != nil {
-		return nil, "", err
-	}
-	return user, tok, nil
-}
-
-// tokenFromRequest extracts a Reva access token from the standard HTTP carriers.
-func tokenFromRequest(r *http.Request) string {
-	if h := r.Header.Get(appctx.TokenHeader); h != "" {
-		return h
-	}
-	if tok, ok := strings.CutPrefix(r.Header.Get("Authorization"), "Bearer "); ok && tok != "" {
-		return tok
-	}
-	return r.URL.Query().Get("access_token")
-}
-
-// originAllowed enforces the Origin check on state-changing browser POSTs (§2.4).
-func (s *svc) originAllowed(r *http.Request) bool {
-	origin := r.Header.Get("Origin")
-	if origin == "" {
-		return false
-	}
-	return strings.TrimRight(origin, "/") == strings.TrimRight(s.c.WebUIURL, "/")
-}
-
-// parseDeviceName reads the optional {"name": "..."} body and validates it: at
-// most 64 runes, no control characters (§ UI #1).
-func parseDeviceName(r *http.Request) (string, error) {
-	if r.Body == nil {
-		return "", nil
-	}
-	var req grantRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		// An empty body is allowed; a malformed one is not.
-		if err.Error() == "EOF" {
-			return "", nil
-		}
-		return "", fmt.Errorf("invalid request body")
-	}
-	name := strings.TrimSpace(req.Name)
-	if utf8.RuneCountInString(name) > maxDeviceNameLen {
-		return "", fmt.Errorf("name too long")
-	}
-	for _, c := range name {
-		if unicode.IsControl(c) {
-			return "", fmt.Errorf("name contains control characters")
-		}
-	}
-	return name, nil
 }
 
 func statusForError(err error) int {

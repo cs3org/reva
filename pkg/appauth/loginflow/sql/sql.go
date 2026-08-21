@@ -16,7 +16,7 @@
 // granted to it by virtue of its status as an Intergovernmental Organization
 // or submit itself to any jurisdiction.
 
-// Package sql is a GORM-backed store for Login Flow V2 flows. It runs the
+// Package sql is a GORM-backed store for login flow enrolments. It runs the
 // atomic state transitions defined in the implementation plan: approve and
 // consume are compare-and-set updates whose affected-row count decides the
 // winner of a race.
