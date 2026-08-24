@@ -17,9 +17,10 @@
 // or submit itself to any jurisdiction.
 
 // Package loginflow holds the persistent state for the login flow. It stores
-// one row per pending enrolment and runs the atomic state
+// one client authorization per pending enrolment and runs the atomic state
 // transitions (approve, consume) that the flow needs. It does not authenticate
-// anyone; its only job is to track a flow until an appauth credential is minted.
+// anyone; its only job is to track an authorization until an appauth credential
+// is minted.
 package loginflow
 
 import (
@@ -29,8 +30,8 @@ import (
 	"time"
 )
 
-// HashToken returns SHA256(token). Flows are stored and looked up by this hash;
-// the raw login and poll tokens are never persisted.
+// HashToken returns SHA256(token). Client authorizations are stored and looked
+// up by this hash; the raw login and poll tokens are never persisted.
 func HashToken(token string) []byte {
 	h := sha256.Sum256([]byte(token))
 	return h[:]
@@ -84,8 +85,8 @@ func uaToken(s, prefix string) (string, bool) {
 	return "", false
 }
 
-// Flow is one pending or approved enrolment attempt.
-type Flow struct {
+// ClientAuthorization is one pending or approved enrolment attempt by a client.
+type ClientAuthorization struct {
 	LoginHash  []byte     // SHA256(logintoken)
 	PollHash   []byte     // SHA256(polltoken)
 	ClientID   string     // UUIDv4, surfaced to audit / management API
@@ -98,30 +99,32 @@ type Flow struct {
 	DeviceName string     // set on approval, becomes the app password label
 }
 
-// Approved reports whether the flow has been granted.
-func (f *Flow) Approved() bool { return f.ApprovedAt != nil }
+// Approved reports whether the authorization has been granted.
+func (ca *ClientAuthorization) Approved() bool { return ca.ApprovedAt != nil }
 
-// Expired reports whether the flow has passed its PENDING lifetime.
-func (f *Flow) Expired() bool { return time.Now().After(f.ExpiresAt) }
+// Expired reports whether the authorization has passed its PENDING lifetime.
+func (ca *ClientAuthorization) Expired() bool { return time.Now().After(ca.ExpiresAt) }
 
-// Manager stores flows and runs their state transitions.
+// Manager stores client authorizations and runs their state transitions.
 type Manager interface {
-	// CreateFlow inserts a new PENDING flow.
-	CreateFlow(ctx context.Context, f *Flow) error
-	// GetByLogin returns the flow for a login hash, including expired ones so
-	// the caller can tell "gone" from "unknown". Returns errtypes.NotFound if
-	// no live (non-deleted) row exists.
-	GetByLogin(ctx context.Context, loginHash []byte) (*Flow, error)
+	// Create inserts a new PENDING authorization.
+	Create(ctx context.Context, ca *ClientAuthorization) error
+	// GetByLogin returns the authorization for a login hash, including expired
+	// ones so the caller can tell "gone" from "unknown". Returns
+	// errtypes.NotFound if no live (non-deleted) row exists.
+	GetByLogin(ctx context.Context, loginHash []byte) (*ClientAuthorization, error)
 	// GetByPoll is GetByLogin keyed by poll hash.
-	GetByPoll(ctx context.Context, pollHash []byte) (*Flow, error)
-	// Approve runs the PENDING -> APPROVED compare-and-set. It records the
-	// granting user and the device name. Returns errtypes.Conflict if the row
-	// was not in a PENDING, non-expired state (lost race).
+	GetByPoll(ctx context.Context, pollHash []byte) (*ClientAuthorization, error)
+	// Approve records the user's consent, once: who granted, and what they named
+	// the device. Returns errtypes.Conflict if the authorization was already
+	// granted, already denied, or has expired.
 	Approve(ctx context.Context, loginHash []byte, userID, username, deviceName string) error
-	// Consume runs the APPROVED -> soft-deleted compare-and-set and returns the
-	// consumed flow. Returns errtypes.NotFound if the row was not in an
-	// APPROVED, non-expired state (already consumed or lost race).
-	Consume(ctx context.Context, pollHash []byte) (*Flow, error)
-	// Deny soft-deletes a PENDING flow. It is a no-op if no PENDING row exists.
+	// Consume hands out an approved authorization once and only once, so two
+	// polls can never mint two app passwords from one approval. The winner gets
+	// the user to mint for. Returns errtypes.NotFound if the authorization was
+	// never approved, is already consumed, or has expired.
+	Consume(ctx context.Context, pollHash []byte) (*ClientAuthorization, error)
+	// Deny soft-deletes a PENDING authorization. It is a no-op if no PENDING row
+	// exists.
 	Deny(ctx context.Context, loginHash []byte) error
 }

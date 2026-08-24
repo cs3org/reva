@@ -24,10 +24,11 @@ import (
 	"gorm.io/gorm"
 )
 
-// Flow is the persisted state of one login flow enrolment. gorm.Model gives
-// ID, CreatedAt, UpdatedAt and DeletedAt; DeletedAt drives the soft-delete that
-// marks a flow consumed, denied or expired.
-type Flow struct {
+// ClientAuthorization is the persisted state of one client enrolment through
+// the login flow. gorm.Model gives ID, CreatedAt, UpdatedAt and DeletedAt;
+// DeletedAt drives the soft-delete that marks an authorization consumed, denied
+// or expired.
+type ClientAuthorization struct {
 	gorm.Model
 	LoginHash  []byte     `gorm:"uniqueIndex;size:32;not null"` // SHA256(logintoken)
 	PollHash   []byte     `gorm:"uniqueIndex;size:32;not null"` // SHA256(polltoken)

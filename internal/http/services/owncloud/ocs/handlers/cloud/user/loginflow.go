@@ -68,20 +68,20 @@ type statusResponse struct {
 func (h *Handler) LoginFlowInfo(w http.ResponseWriter, r *http.Request) {
 	user := appctx.ContextMustGetUser(r.Context())
 
-	f, code := h.lookupFlow(r)
+	ca, code := h.lookupAuthorization(r)
 	if code != 0 {
-		http.Error(w, "flow not found or expired", code)
+		http.Error(w, "client authorization not found or expired", code)
 		return
 	}
 
 	status := "pending"
-	if f.Approved() {
+	if ca.Approved() {
 		status = "approved"
 	}
 	writeLoginFlowJSON(w, http.StatusOK, loginFlowInfo{
-		Client:     loginflow.ClientDescription(f.UserAgent),
+		Client:     loginflow.ClientDescription(ca.UserAgent),
 		User:       user.GetUsername(),
-		CreatedAt:  f.CreatedAt.UTC().Format(time.RFC3339),
+		CreatedAt:  ca.CreatedAt.UTC().Format(time.RFC3339),
 		ServerTime: time.Now().UTC().Format(time.RFC3339),
 		Status:     status,
 	})
@@ -101,20 +101,20 @@ func (h *Handler) LoginFlowGrant(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	f, code := h.lookupFlow(r)
+	ca, code := h.lookupAuthorization(r)
 	if code != 0 {
-		http.Error(w, "flow not found or expired", code)
+		http.Error(w, "client authorization not found or expired", code)
 		return
 	}
 
 	// name stays the user's chosen device name (may be empty). The human
 	// description of the client is derived from the User-Agent at mint time.
-	if err := h.loginFlowStore.Approve(r.Context(), f.LoginHash, user.GetId().GetOpaqueId(), user.GetUsername(), name); err != nil {
-		http.Error(w, "could not approve flow", loginFlowStatus(err))
+	if err := h.loginFlowStore.Approve(r.Context(), ca.LoginHash, user.GetId().GetOpaqueId(), user.GetUsername(), name); err != nil {
+		http.Error(w, "could not approve client authorization", loginFlowStatus(err))
 		return
 	}
 
-	log.Info().Str("client_id", f.ClientID).Str("username", user.GetUsername()).Msg("login flow approved")
+	log.Info().Str("client_id", ca.ClientID).Str("username", user.GetUsername()).Msg("client authorization approved")
 	writeLoginFlowJSON(w, http.StatusOK, statusResponse{Status: "ok"})
 }
 
@@ -122,37 +122,37 @@ func (h *Handler) LoginFlowGrant(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) LoginFlowDeny(w http.ResponseWriter, r *http.Request) {
 	log := appctx.GetLogger(r.Context())
 
-	f, code := h.lookupFlow(r)
+	ca, code := h.lookupAuthorization(r)
 	if code != 0 {
-		http.Error(w, "flow not found or expired", code)
+		http.Error(w, "client authorization not found or expired", code)
 		return
 	}
 
-	if err := h.loginFlowStore.Deny(r.Context(), f.LoginHash); err != nil {
-		http.Error(w, "could not deny flow", loginFlowStatus(err))
+	if err := h.loginFlowStore.Deny(r.Context(), ca.LoginHash); err != nil {
+		http.Error(w, "could not deny client authorization", loginFlowStatus(err))
 		return
 	}
 
-	log.Info().Str("client_id", f.ClientID).Msg("login flow denied")
+	log.Info().Str("client_id", ca.ClientID).Msg("client authorization denied")
 	writeLoginFlowJSON(w, http.StatusOK, statusResponse{Status: "ok"})
 }
 
-// lookupFlow resolves the flow from the {lt} path parameter and maps the "gone"
-// vs "unknown" distinction the web UI relies on: 404 unknown, 410 expired. A
-// zero code means the flow is live.
-func (h *Handler) lookupFlow(r *http.Request) (*loginflow.Flow, int) {
+// lookupAuthorization resolves the client authorization from the {lt} path
+// parameter and maps the "gone" vs "unknown" distinction the web UI relies on:
+// 404 unknown, 410 expired. A zero code means the authorization is live.
+func (h *Handler) lookupAuthorization(r *http.Request) (*loginflow.ClientAuthorization, int) {
 	lt := chi.URLParam(r, "lt")
 	if lt == "" {
 		return nil, http.StatusNotFound
 	}
-	f, err := h.loginFlowStore.GetByLogin(r.Context(), loginflow.HashToken(lt))
+	ca, err := h.loginFlowStore.GetByLogin(r.Context(), loginflow.HashToken(lt))
 	if err != nil {
 		return nil, loginFlowStatus(err)
 	}
-	if f.Expired() {
+	if ca.Expired() {
 		return nil, http.StatusGone
 	}
-	return f, 0
+	return ca, 0
 }
 
 // parseDeviceName reads the optional {"name": "..."} body and validates it: at

@@ -41,8 +41,8 @@ func newTestManager(t *testing.T) loginflow.Manager {
 	return m
 }
 
-func pendingFlow() *loginflow.Flow {
-	return &loginflow.Flow{
+func pendingAuthorization() *loginflow.ClientAuthorization {
+	return &loginflow.ClientAuthorization{
 		LoginHash: []byte("login-hash-0000000000000000000000"),
 		PollHash:  []byte("poll-hash-00000000000000000000000"),
 		ClientID:  "client-1",
@@ -54,19 +54,19 @@ func pendingFlow() *loginflow.Flow {
 func TestCreateAndGet(t *testing.T) {
 	ctx := context.Background()
 	m := newTestManager(t)
-	f := pendingFlow()
-	if err := m.CreateFlow(ctx, f); err != nil {
+	ca := pendingAuthorization()
+	if err := m.Create(ctx, ca); err != nil {
 		t.Fatalf("create: %v", err)
 	}
 
-	got, err := m.GetByLogin(ctx, f.LoginHash)
+	got, err := m.GetByLogin(ctx, ca.LoginHash)
 	if err != nil {
 		t.Fatalf("get by login: %v", err)
 	}
-	if got.ClientID != f.ClientID || got.Approved() {
-		t.Fatalf("unexpected flow: %+v", got)
+	if got.ClientID != ca.ClientID || got.Approved() {
+		t.Fatalf("unexpected authorization: %+v", got)
 	}
-	if _, err := m.GetByPoll(ctx, f.PollHash); err != nil {
+	if _, err := m.GetByPoll(ctx, ca.PollHash); err != nil {
 		t.Fatalf("get by poll: %v", err)
 	}
 	if _, err := m.GetByLogin(ctx, []byte("nope")); !isNotFound(err) {
@@ -77,19 +77,19 @@ func TestCreateAndGet(t *testing.T) {
 func TestApproveIsSingleShot(t *testing.T) {
 	ctx := context.Background()
 	m := newTestManager(t)
-	f := pendingFlow()
-	if err := m.CreateFlow(ctx, f); err != nil {
+	ca := pendingAuthorization()
+	if err := m.Create(ctx, ca); err != nil {
 		t.Fatalf("create: %v", err)
 	}
 
-	if err := m.Approve(ctx, f.LoginHash, "uid", "jdoe", "laptop"); err != nil {
+	if err := m.Approve(ctx, ca.LoginHash, "uid", "jdoe", "laptop"); err != nil {
 		t.Fatalf("first approve: %v", err)
 	}
-	if err := m.Approve(ctx, f.LoginHash, "uid", "jdoe", "laptop"); !isConflict(err) {
+	if err := m.Approve(ctx, ca.LoginHash, "uid", "jdoe", "laptop"); !isConflict(err) {
 		t.Fatalf("second approve should conflict, got %v", err)
 	}
 
-	got, _ := m.GetByLogin(ctx, f.LoginHash)
+	got, _ := m.GetByLogin(ctx, ca.LoginHash)
 	if !got.Approved() || got.Username != "jdoe" || got.DeviceName != "laptop" {
 		t.Fatalf("approval not recorded: %+v", got)
 	}
@@ -98,8 +98,8 @@ func TestApproveIsSingleShot(t *testing.T) {
 func TestConcurrentApproveOneWinner(t *testing.T) {
 	ctx := context.Background()
 	m := newTestManager(t)
-	f := pendingFlow()
-	if err := m.CreateFlow(ctx, f); err != nil {
+	ca := pendingAuthorization()
+	if err := m.Create(ctx, ca); err != nil {
 		t.Fatalf("create: %v", err)
 	}
 
@@ -110,7 +110,7 @@ func TestConcurrentApproveOneWinner(t *testing.T) {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			wins <- m.Approve(ctx, f.LoginHash, "uid", "jdoe", "laptop") == nil
+			wins <- m.Approve(ctx, ca.LoginHash, "uid", "jdoe", "laptop") == nil
 		}()
 	}
 	wg.Wait()
@@ -130,43 +130,43 @@ func TestConcurrentApproveOneWinner(t *testing.T) {
 func TestConsumeRequiresApproval(t *testing.T) {
 	ctx := context.Background()
 	m := newTestManager(t)
-	f := pendingFlow()
-	if err := m.CreateFlow(ctx, f); err != nil {
+	ca := pendingAuthorization()
+	if err := m.Create(ctx, ca); err != nil {
 		t.Fatalf("create: %v", err)
 	}
 
-	if _, err := m.Consume(ctx, f.PollHash); !isNotFound(err) {
-		t.Fatalf("consume of pending flow should be not found, got %v", err)
+	if _, err := m.Consume(ctx, ca.PollHash); !isNotFound(err) {
+		t.Fatalf("consume of pending authorization should be not found, got %v", err)
 	}
 
-	if err := m.Approve(ctx, f.LoginHash, "uid", "jdoe", "laptop"); err != nil {
+	if err := m.Approve(ctx, ca.LoginHash, "uid", "jdoe", "laptop"); err != nil {
 		t.Fatalf("approve: %v", err)
 	}
-	got, err := m.Consume(ctx, f.PollHash)
+	got, err := m.Consume(ctx, ca.PollHash)
 	if err != nil {
 		t.Fatalf("consume: %v", err)
 	}
 	if got.Username != "jdoe" || got.DeviceName != "laptop" || got.UserID != "uid" {
-		t.Fatalf("consumed flow missing fields: %+v", got)
+		t.Fatalf("consumed authorization missing fields: %+v", got)
 	}
 
 	// Second consume finds nothing: the row is soft-deleted.
-	if _, err := m.Consume(ctx, f.PollHash); !isNotFound(err) {
+	if _, err := m.Consume(ctx, ca.PollHash); !isNotFound(err) {
 		t.Fatalf("second consume should be not found, got %v", err)
 	}
-	if _, err := m.GetByLogin(ctx, f.LoginHash); !isNotFound(err) {
-		t.Fatalf("consumed flow should not be live, got %v", err)
+	if _, err := m.GetByLogin(ctx, ca.LoginHash); !isNotFound(err) {
+		t.Fatalf("consumed authorization should not be live, got %v", err)
 	}
 }
 
 func TestConcurrentConsumeOneWinner(t *testing.T) {
 	ctx := context.Background()
 	m := newTestManager(t)
-	f := pendingFlow()
-	if err := m.CreateFlow(ctx, f); err != nil {
+	ca := pendingAuthorization()
+	if err := m.Create(ctx, ca); err != nil {
 		t.Fatalf("create: %v", err)
 	}
-	if err := m.Approve(ctx, f.LoginHash, "uid", "jdoe", "laptop"); err != nil {
+	if err := m.Approve(ctx, ca.LoginHash, "uid", "jdoe", "laptop"); err != nil {
 		t.Fatalf("approve: %v", err)
 	}
 
@@ -177,7 +177,7 @@ func TestConcurrentConsumeOneWinner(t *testing.T) {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			_, err := m.Consume(ctx, f.PollHash)
+			_, err := m.Consume(ctx, ca.PollHash)
 			wins <- err == nil
 		}()
 	}
@@ -198,36 +198,36 @@ func TestConcurrentConsumeOneWinner(t *testing.T) {
 func TestDenySoftDeletes(t *testing.T) {
 	ctx := context.Background()
 	m := newTestManager(t)
-	f := pendingFlow()
-	if err := m.CreateFlow(ctx, f); err != nil {
+	ca := pendingAuthorization()
+	if err := m.Create(ctx, ca); err != nil {
 		t.Fatalf("create: %v", err)
 	}
-	if err := m.Deny(ctx, f.LoginHash); err != nil {
+	if err := m.Deny(ctx, ca.LoginHash); err != nil {
 		t.Fatalf("deny: %v", err)
 	}
-	if _, err := m.GetByLogin(ctx, f.LoginHash); !isNotFound(err) {
-		t.Fatalf("denied flow should not be live, got %v", err)
+	if _, err := m.GetByLogin(ctx, ca.LoginHash); !isNotFound(err) {
+		t.Fatalf("denied authorization should not be live, got %v", err)
 	}
 }
 
-func TestExpiredFlowIsReturnedButNotApprovable(t *testing.T) {
+func TestExpiredAuthorizationIsReturnedButNotApprovable(t *testing.T) {
 	ctx := context.Background()
 	m := newTestManager(t)
-	f := pendingFlow()
-	f.ExpiresAt = time.Now().Add(-time.Minute)
-	if err := m.CreateFlow(ctx, f); err != nil {
+	ca := pendingAuthorization()
+	ca.ExpiresAt = time.Now().Add(-time.Minute)
+	if err := m.Create(ctx, ca); err != nil {
 		t.Fatalf("create: %v", err)
 	}
 
-	got, err := m.GetByLogin(ctx, f.LoginHash)
+	got, err := m.GetByLogin(ctx, ca.LoginHash)
 	if err != nil {
 		t.Fatalf("get expired: %v", err)
 	}
 	if !got.Expired() {
-		t.Fatalf("flow should report expired")
+		t.Fatalf("authorization should report expired")
 	}
-	if err := m.Approve(ctx, f.LoginHash, "uid", "jdoe", "laptop"); !isConflict(err) {
-		t.Fatalf("approve of expired flow should conflict, got %v", err)
+	if err := m.Approve(ctx, ca.LoginHash, "uid", "jdoe", "laptop"); !isConflict(err) {
+		t.Fatalf("approve of expired authorization should conflict, got %v", err)
 	}
 }
 

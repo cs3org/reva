@@ -31,6 +31,7 @@ import (
 	"crypto/rand"
 	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"strings"
@@ -89,9 +90,9 @@ func (c *config) ApplyDefaults() {
 	if c.FlowTTLSeconds == 0 {
 		c.FlowTTLSeconds = 1200
 	}
-	if c.ServerBaseURL == "" {
-		c.ServerBaseURL = "http://localhost:9998"
-	}
+	// server_base_url has no default. It is the externally reachable URL handed
+	// to the sync client in the init and poll responses, so only the deployment
+	// knows it. New rejects an empty value.
 	if c.WebUIURL == "" {
 		c.WebUIURL = c.ServerBaseURL
 	}
@@ -113,6 +114,10 @@ func New(ctx context.Context, m map[string]any) (global.Service, error) {
 	var c config
 	if err := cfg.Decode(m, &c); err != nil {
 		return nil, err
+	}
+
+	if c.ServerBaseURL == "" {
+		return nil, errors.New("loginflow: server_base_url is required")
 	}
 
 	af, ok := appauthregistry.NewFuncs[c.AppAuthDriver]
@@ -210,15 +215,15 @@ func (s *svc) handleInit(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	f := &loginflow.Flow{
+	ca := &loginflow.ClientAuthorization{
 		LoginHash: loginflow.HashToken(lt),
 		PollHash:  loginflow.HashToken(pt),
 		ClientID:  uuid.New().String(),
 		UserAgent: r.Header.Get("User-Agent"),
 		ExpiresAt: time.Now().Add(time.Duration(s.c.FlowTTLSeconds) * time.Second),
 	}
-	if err := s.store.CreateFlow(r.Context(), f); err != nil {
-		log.Error().Err(err).Msg("could not create flow")
+	if err := s.store.Create(r.Context(), ca); err != nil {
+		log.Error().Err(err).Msg("could not create client authorization")
 		http.Error(w, "internal error", http.StatusInternalServerError)
 		return
 	}
@@ -231,7 +236,7 @@ func (s *svc) handleInit(w http.ResponseWriter, r *http.Request) {
 		Login: s.c.ServerBaseURL + "/index.php/login/v2/flow/" + lt,
 	}
 
-	log.Info().Str("client_id", f.ClientID).Time("expires_at", f.ExpiresAt).Msg("flow created")
+	log.Info().Str("client_id", ca.ClientID).Time("expires_at", ca.ExpiresAt).Msg("client authorization created")
 	writeJSON(w, http.StatusOK, resp)
 }
 
@@ -240,19 +245,20 @@ func (s *svc) handleInit(w http.ResponseWriter, r *http.Request) {
 func (s *svc) handleBrowserFlow(w http.ResponseWriter, r *http.Request) {
 	log := appctx.GetLogger(r.Context()).With().Str("service", "loginflow").Str("handler", "browserflow").Logger()
 
-	f, code := s.lookupByLogin(r, chi.URLParam(r, "lt"))
+	ca, code := s.lookupByLogin(r, chi.URLParam(r, "lt"))
 	if code != 0 {
-		http.Error(w, "flow not found or expired", code)
+		http.Error(w, "client authorization not found or expired", code)
 		return
 	}
 
 	target := strings.TrimRight(s.c.WebUIURL, "/") + "/login-flow/" + chi.URLParam(r, "lt")
-	log.Info().Str("client_id", f.ClientID).Msg("redirecting browser to web UI")
+	log.Info().Str("client_id", ca.ClientID).Msg("redirecting browser to web UI")
 	http.Redirect(w, r, target, http.StatusFound)
 }
 
 // handlePoll implements POST /index.php/login/v2/poll. It waits briefly for an
-// approval, then consumes the flow and mints the app password exactly once.
+// approval, then consumes the authorization and mints the app password exactly
+// once.
 func (s *svc) handlePoll(w http.ResponseWriter, r *http.Request) {
 	log := appctx.GetLogger(r.Context()).With().Str("service", "loginflow").Str("handler", "poll").Logger()
 
@@ -274,16 +280,16 @@ func (s *svc) handlePoll(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	f := s.waitForApproval(r, ph)
-	if f == nil {
+	ca := s.waitForApproval(r, ph)
+	if ca == nil {
 		http.NotFound(w, r)
 		return
 	}
 
 	// Bind the poll to the original Init context: the same client process
 	// must present the same User-Agent.
-	if r.Header.Get("User-Agent") != f.UserAgent {
-		log.Warn().Str("client_id", f.ClientID).Msg("poll user-agent mismatch")
+	if r.Header.Get("User-Agent") != ca.UserAgent {
+		log.Warn().Str("client_id", ca.ClientID).Msg("poll user-agent mismatch")
 		http.NotFound(w, r)
 		return
 	}
@@ -313,12 +319,12 @@ func (s *svc) handlePoll(w http.ResponseWriter, r *http.Request) {
 // Helpers -----------------------------------------------------------------
 
 // mintAppPassword generates an owner-scoped, non-expiring app password for the
-// flow's user. The label carries the client_id so the management API can map a
-// row back to a flow.
-func (s *svc) mintAppPassword(ctx context.Context, f *loginflow.Flow) (string, error) {
+// authorization's user. The label carries the client_id so the management API
+// can map a row back to a client authorization.
+func (s *svc) mintAppPassword(ctx context.Context, ca *loginflow.ClientAuthorization) (string, error) {
 	user := &userpb.User{
-		Id:       &userpb.UserId{OpaqueId: f.UserID},
-		Username: f.Username,
+		Id:       &userpb.UserId{OpaqueId: ca.UserID},
+		Username: ca.Username,
 	}
 	ctx = appctx.ContextSetUser(ctx, user)
 
@@ -330,7 +336,7 @@ func (s *svc) mintAppPassword(ctx context.Context, f *loginflow.Flow) (string, e
 	// Label carries the parsed, human-readable parts the management API returns:
 	// "<user-chosen name>|<client description>|<client_id>". Both the name and
 	// the description are clean strings; the raw User-Agent is not stored.
-	label := f.DeviceName + "|" + loginflow.ClientDescription(f.UserAgent) + "|" + f.ClientID
+	label := ca.DeviceName + "|" + loginflow.ClientDescription(ca.UserAgent) + "|" + ca.ClientID
 	appPass, err := s.am.GenerateAppPassword(ctx, ownerScope, label, nil)
 	if err != nil {
 		return "", err
@@ -338,18 +344,18 @@ func (s *svc) mintAppPassword(ctx context.Context, f *loginflow.Flow) (string, e
 	return appPass.Password, nil
 }
 
-// waitForApproval polls the store for up to poll_wait_ms while the flow is
-// PENDING. It returns the flow once approved, or nil on timeout / not found /
-// expired.
-func (s *svc) waitForApproval(r *http.Request, pollHash []byte) *loginflow.Flow {
+// waitForApproval polls the store for up to poll_wait_ms while the authorization
+// is PENDING. It returns the authorization once approved, or nil on timeout /
+// not found / expired.
+func (s *svc) waitForApproval(r *http.Request, pollHash []byte) *loginflow.ClientAuthorization {
 	deadline := time.Now().Add(time.Duration(s.c.RateLimit.PollWaitMs) * time.Millisecond)
 	for {
-		f, err := s.store.GetByPoll(r.Context(), pollHash)
-		if err != nil || f.Expired() {
+		ca, err := s.store.GetByPoll(r.Context(), pollHash)
+		if err != nil || ca.Expired() {
 			return nil
 		}
-		if f.Approved() {
-			return f
+		if ca.Approved() {
+			return ca
 		}
 		if time.Now().After(deadline) {
 			return nil
@@ -362,21 +368,21 @@ func (s *svc) waitForApproval(r *http.Request, pollHash []byte) *loginflow.Flow 
 	}
 }
 
-// lookupByLogin resolves a flow from a login token and maps the "gone" vs
-// "unknown" distinction the UI relies on: 404 unknown, 410 expired. A zero
-// code means the flow is live.
-func (s *svc) lookupByLogin(r *http.Request, lt string) (*loginflow.Flow, int) {
+// lookupByLogin resolves a client authorization from a login token and maps the
+// "gone" vs "unknown" distinction the UI relies on: 404 unknown, 410 expired. A
+// zero code means the authorization is live.
+func (s *svc) lookupByLogin(r *http.Request, lt string) (*loginflow.ClientAuthorization, int) {
 	if lt == "" {
 		return nil, http.StatusNotFound
 	}
-	f, err := s.store.GetByLogin(r.Context(), loginflow.HashToken(lt))
+	ca, err := s.store.GetByLogin(r.Context(), loginflow.HashToken(lt))
 	if err != nil {
 		return nil, statusForError(err)
 	}
-	if f.Expired() {
+	if ca.Expired() {
 		return nil, http.StatusGone
 	}
-	return f, 0
+	return ca, 0
 }
 
 func statusForError(err error) int {
