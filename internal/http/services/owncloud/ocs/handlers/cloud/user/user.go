@@ -33,6 +33,9 @@ import (
 	"github.com/cs3org/reva/v3/internal/http/services/owncloud/ocs/conversions"
 	"github.com/cs3org/reva/v3/internal/http/services/owncloud/ocs/response"
 
+	"github.com/cs3org/reva/v3/pkg/appauth/loginflow"
+	loginflowregistry "github.com/cs3org/reva/v3/pkg/appauth/loginflow/registry"
+	_ "github.com/cs3org/reva/v3/pkg/appauth/loginflow/sql"
 	"github.com/cs3org/reva/v3/pkg/appctx"
 	"github.com/cs3org/reva/v3/pkg/auth/signing"
 	"github.com/cs3org/reva/v3/pkg/rgrpc/todo/pool"
@@ -43,6 +46,7 @@ type Handler struct {
 	gatewayAddr      string
 	allowedLanguages []string
 	signingKeySecret string
+	loginFlowStore   loginflow.Manager
 }
 
 // Init initializes this and any contained handlers.
@@ -56,6 +60,17 @@ func (h *Handler) Init(c *config.Config) error {
 	if len(h.allowedLanguages) == 0 {
 		h.allowedLanguages = []string{"cs", "de", "en", "es", "fr", "it", "gl"}
 	}
+
+	f, ok := loginflowregistry.NewFuncs[c.LoginFlowStoreDriver]
+	if !ok {
+		return fmt.Errorf("ocs: login flow store driver %q not registered", c.LoginFlowStoreDriver)
+	}
+	store, err := f(context.Background(), c.LoginFlowStoreDrivers[c.LoginFlowStoreDriver])
+	if err != nil {
+		return fmt.Errorf("ocs: initialising login flow store: %w", err)
+	}
+	h.loginFlowStore = store
+
 	return nil
 }
 

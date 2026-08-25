@@ -160,31 +160,39 @@ func (h *DavHandler) Handler(s *svc) http.Handler {
 			ctx := context.WithValue(ctx, ctxKeyBaseURI, base)
 			r = r.WithContext(ctx)
 
-			if r.URL.Path != "/" {
+			// The dav-files endpoint is a thin view over the CS3 namespace. The
+			// first URL segment after {user} names a top-level root. "home"
+			// resolves to the user's home, which is sharded per user and so
+			// cannot be a static registry mount. Any other segment is a literal
+			// CS3 path (e.g. "eos", "winspaces"). The bare root lists the
+			// syncable roots so the sync client can pick what to sync.
+			root, rest := router.ShiftPath(tail)
+
+			switch {
+			case tail == "/":
+				s.handleFilesRoot(w, r)
+			case root == "home":
+				client, err := s.getClient()
+				if err != nil {
+					log.Error().Err(err).Msg("error getting gateway client")
+					w.WriteHeader(http.StatusInternalServerError)
+					return
+				}
+				res, err := client.GetHome(r.Context(), &provider.GetHomeRequest{})
+				if err != nil {
+					log.Error().Err(err).Msg("error getting user home")
+					w.WriteHeader(http.StatusInternalServerError)
+					return
+				}
+				if res.Status.Code != rpc.Code_CODE_OK {
+					HandleErrorStatus(log, w, res.Status)
+					return
+				}
+				r.URL.Path = path.Join(res.Path, rest)
+				h.FilesHomeHandler.Handler(s).ServeHTTP(w, r)
+			default:
 				h.FilesHandler.Handler(s).ServeHTTP(w, r)
-				return
 			}
-
-			client, err := s.getClient()
-			if err != nil {
-				log.Error().Err(err).Msg("error getting gateway client")
-				w.WriteHeader(http.StatusInternalServerError)
-				return
-			}
-
-			res, err := client.GetHome(r.Context(), &provider.GetHomeRequest{})
-			if err != nil {
-				log.Error().Err(err).Msg("error getting user home")
-				w.WriteHeader(http.StatusInternalServerError)
-				return
-			}
-			if res.Status.Code != rpc.Code_CODE_OK {
-				HandleErrorStatus(log, w, res.Status)
-				return
-			}
-
-			r.URL.Path = path.Join(res.Path, r.URL.Path)
-			h.FilesHomeHandler.Handler(s).ServeHTTP(w, r)
 
 		case "meta":
 			base := path.Join(ctx.Value(ctxKeyBaseURI).(string), "meta")

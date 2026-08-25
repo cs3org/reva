@@ -1,4 +1,4 @@
-// Copyright 2018-2024 CERN
+// Copyright 2018-2026 CERN
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -16,11 +16,23 @@
 // granted to it by virtue of its status as an Intergovernmental Organization
 // or submit itself to any jurisdiction.
 
-package loader
+package registry
 
 import (
-	// Load core application auth manager drivers.
-	_ "github.com/cs3org/reva/v3/pkg/appauth/manager/json"
-	_ "github.com/cs3org/reva/v3/pkg/appauth/manager/sql"
-	// Add your own here.
+	"context"
+
+	"github.com/cs3org/reva/v3/pkg/appauth/loginflow"
 )
+
+// NewFunc is the function that login flow store implementations should register
+// at init time.
+type NewFunc func(context.Context, map[string]any) (loginflow.Manager, error)
+
+// NewFuncs is a map containing all the registered login flow stores.
+var NewFuncs = map[string]NewFunc{}
+
+// Register registers a new login flow store new function.
+// Not safe for concurrent use. Safe for use from package init.
+func Register(name string, f NewFunc) {
+	NewFuncs[name] = f
+}

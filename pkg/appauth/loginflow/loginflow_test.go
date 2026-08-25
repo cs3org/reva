@@ -1,4 +1,4 @@
-// Copyright 2018-2024 CERN
+// Copyright 2018-2026 CERN
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -16,11 +16,24 @@
 // granted to it by virtue of its status as an Intergovernmental Organization
 // or submit itself to any jurisdiction.
 
-package loader
+package loginflow
 
-import (
-	// Load core application auth manager drivers.
-	_ "github.com/cs3org/reva/v3/pkg/appauth/manager/json"
-	_ "github.com/cs3org/reva/v3/pkg/appauth/manager/sql"
-	// Add your own here.
-)
+import "testing"
+
+func TestClientDescription(t *testing.T) {
+	cases := []struct {
+		ua   string
+		want string
+	}{
+		{"Mozilla/5.0 (Linux) mirall/3.16.0 (Nextcloud)", "Nextcloud Sync Client v3.16.0 (on Linux)"},
+		{"Nextcloud-Desktop/3.16.0 (Windows)", "Nextcloud Sync Client v3.16.0 (on Windows)"},
+		{"mirall/3.16.0", "Nextcloud Sync Client v3.16.0"},
+		{"", "Unknown client"},
+		{"curl/8.0", "curl/8.0"},
+	}
+	for _, c := range cases {
+		if got := ClientDescription(c.ua); got != c.want {
+			t.Errorf("ClientDescription(%q) = %q, want %q", c.ua, got, c.want)
+		}
+	}
+}
