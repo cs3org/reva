@@ -9,7 +9,7 @@ require (
 	github.com/bluele/gcache v0.0.2
 	github.com/c-bata/go-prompt v0.2.6
 	github.com/ceph/go-ceph v0.41.0
-	github.com/cern-eos/go-eosgrpc v0.0.0-20251208134355-97fba509448d
+	github.com/cern-eos/go-eosgrpc v0.0.0-20260821094016-ff64eb55c71a
 	github.com/cheggaaa/pb v1.0.29
 	github.com/coreos/go-oidc/v3 v3.20.0
 	github.com/creasty/defaults v1.8.0
@@ -153,9 +153,9 @@ require (
 	go.mongodb.org/mongo-driver v1.17.7 // indirect
 	go.opentelemetry.io/otel v1.45.0
 	go.opentelemetry.io/otel/trace v1.45.0
-	golang.org/x/net v0.57.0 // indirect
+	golang.org/x/net v0.58.0 // indirect
 	golang.org/x/text v0.41.0 // indirect
-	google.golang.org/genproto/googleapis/rpc v0.0.0-20260803160001-6ac0973c030d // indirect
+	google.golang.org/genproto/googleapis/rpc v0.0.0-20260819154853-08b0e4226688 // indirect
 	gopkg.in/src-d/go-errors.v1 v1.0.0 // indirect
 	gopkg.in/tomb.v1 v1.0.0-20141024135613-dd632973f1e7 // indirect
 )

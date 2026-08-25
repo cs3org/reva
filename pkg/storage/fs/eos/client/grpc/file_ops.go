@@ -227,6 +227,7 @@ func (c *Client) rmdir(ctx context.Context, auth eosclient.Authorization, path s
 	msg.Id.Path = []byte(path)
 	msg.Recursive = true
 	msg.Norecycle = noRecycle
+	msg.Noglobbing = true
 
 	rq.Command = &erpc.NSRequest_Rm{Rm: msg}
 
