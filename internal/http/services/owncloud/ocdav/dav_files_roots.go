@@ -26,6 +26,7 @@ import (
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/cs3org/reva/v3/pkg/appctx"
+	"github.com/cs3org/reva/v3/pkg/service"
 )
 
 // handleFilesRoot serves the bare dav-files root
@@ -85,7 +86,7 @@ func (s *svc) handleFilesRoot(w http.ResponseWriter, r *http.Request) {
 // appear as "home" under the dav-files root, keeping the real id, etag and
 // permissions so the client can browse and sync it.
 func (s *svc) homeChild(ctx context.Context) *provider.ResourceInfo {
-	client, err := s.getClient()
+	client, err := service.Gateway(ctx)
 	if err != nil {
 		return nil
 	}

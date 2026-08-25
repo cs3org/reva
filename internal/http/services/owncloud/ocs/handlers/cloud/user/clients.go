@@ -27,7 +27,7 @@ import (
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	"github.com/cs3org/reva/v3/internal/http/services/owncloud/ocs/response"
 	"github.com/cs3org/reva/v3/pkg/appctx"
-	"github.com/cs3org/reva/v3/pkg/rgrpc/todo/pool"
+	"github.com/cs3org/reva/v3/pkg/service"
 	"github.com/go-chi/chi/v5"
 )
 
@@ -48,7 +48,7 @@ type Client struct {
 func (h *Handler) ListClients(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
-	gw, err := pool.GetGatewayServiceClient(pool.Endpoint(h.gatewayAddr))
+	gw, err := service.Gateway(ctx)
 	if err != nil {
 		response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "error getting gateway client", err)
 		return
@@ -85,7 +85,7 @@ func (h *Handler) DeleteClient(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	cid := chi.URLParam(r, "cid")
 
-	gw, err := pool.GetGatewayServiceClient(pool.Endpoint(h.gatewayAddr))
+	gw, err := service.Gateway(ctx)
 	if err != nil {
 		response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "error getting gateway client", err)
 		return
