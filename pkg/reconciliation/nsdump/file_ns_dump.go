@@ -1,26 +1,24 @@
 package nsdump
 
 import (
+	"fmt"
 	"os"
-
-	"github.com/pkg/errors"
 )
 
 type EOSFileNSInspect struct {
 	file string
 }
 
-func (e *EOSFileNSInspect) Setup(config map[string]any) error {
-	v, ok := config["file"]
-	if !ok {
-		return errors.New("file parameter must be present")
+type EOSFileNSInspectConfig struct {
+	File string
+}
+
+func (e *EOSFileNSInspect) Setup(config any) error {
+	if c, ok := config.(EOSFileNSInspectConfig); ok {
+		e.file = c.File
+		return nil
 	}
-	s, ok := v.(string)
-	if !ok {
-		return errors.New("file parameter must be a string representing a file path")
-	}
-	e.file = s
-	return nil
+	return fmt.Errorf("requires a config of type %t", EOSFileNSInspectConfig{})
 }
 
 func (e *EOSFileNSInspect) Dump(rootPath string, maxDepth int) (*NamespaceDump, error) {
