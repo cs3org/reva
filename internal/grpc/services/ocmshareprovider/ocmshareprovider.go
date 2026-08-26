@@ -146,7 +146,7 @@ func New(ctx context.Context, m map[string]any) (rgrpc.Service, error) {
 
 	walker := walker.NewWalker(gateway)
 
-	ocmcl := ocmd.NewClient(time.Duration(c.ClientTimeout)*time.Second, c.ClientInsecure)
+	ocmcl := ocmd.NewClient(time.Duration(c.ClientTimeout)*time.Second, c.ClientInsecure, 0)
 	service := &service{
 		conf:        &c,
 		repo:        repo,

@@ -22,6 +22,7 @@ import (
 	"context"
 	"net/http"
 
+	"github.com/cs3org/reva/v3/internal/http/services/opencloudmesh/ocmd"
 	"github.com/cs3org/reva/v3/pkg/appctx"
 	"github.com/cs3org/reva/v3/pkg/rhttp/global"
 	"github.com/cs3org/reva/v3/pkg/sharedconf"
@@ -41,6 +42,18 @@ func New(ctx context.Context, m map[string]any) (global.Service, error) {
 	if err := cfg.Decode(m, &c); err != nil {
 		return nil, err
 	}
+	c.UntrustedClientSecurity.ApplyDefaults()
+	if err := c.UntrustedClientSecurity.Compile(); err != nil {
+		return nil, err
+	}
+	if err := c.UntrustedClientSecurity.RejectHatch(); err != nil {
+		return nil, err
+	}
+	minVersion, err := ocmd.ParseTLSMinVersion(c.OCMClientTLSMinVersion)
+	if err != nil {
+		return nil, err
+	}
+	c.ocmClientTLSMin = minVersion
 
 	r := chi.NewRouter()
 	s := &svc{
@@ -61,17 +74,27 @@ func (s *svc) Close() error {
 }
 
 type config struct {
-	Prefix               string                      `mapstructure:"prefix"`
-	SMTPCredentials      *smtpclient.SMTPCredentials `mapstructure:"smtp_credentials"`
-	GatewaySvc           string                      `mapstructure:"gatewaysvc"         validate:"required"`
-	MeshDirectoryURL     string                      `mapstructure:"mesh_directory_url" validate:"required"`
-	ProviderDomain       string                      `mapstructure:"provider_domain"    validate:"required"`
-	SubjectTemplate      string                      `mapstructure:"subject_template"`
-	BodyTemplatePath     string                      `mapstructure:"body_template_path"`
-	OCMMountPoint        string                      `mapstructure:"ocm_mount_point"`
-	DirectoryServiceURLs string                      `mapstructure:"directory_service_urls"`
-	OCMClientTimeout     int                         `mapstructure:"ocm_client_timeout"`
-	OCMClientInsecure    bool                        `mapstructure:"ocm_client_insecure"`
+	Prefix                 string                      `mapstructure:"prefix"`
+	SMTPCredentials        *smtpclient.SMTPCredentials `mapstructure:"smtp_credentials"`
+	GatewaySvc             string                      `mapstructure:"gatewaysvc"         validate:"required"`
+	MeshDirectoryURL       string                      `mapstructure:"mesh_directory_url" validate:"required"`
+	ProviderDomain         string                      `mapstructure:"provider_domain"    validate:"required"`
+	SubjectTemplate        string                      `mapstructure:"subject_template"`
+	BodyTemplatePath       string                      `mapstructure:"body_template_path"`
+	OCMMountPoint          string                      `mapstructure:"ocm_mount_point"`
+	DirectoryServiceURLs   string                      `mapstructure:"directory_service_urls"`
+	OCMClientTimeout       int                         `mapstructure:"ocm_client_timeout"`
+	OCMClientDialTimeout   int                         `mapstructure:"ocm_client_dial_timeout"`
+	OCMClientInsecure      bool                        `mapstructure:"ocm_client_insecure"`
+	OCMClientResponseLimit int                         `mapstructure:"ocm_client_response_limit"`
+	// OCMClientTLSMinVersion is the untrusted-client TLS minimum enum string.
+	// Empty means TLS 1.2. Accepted values are "1.2" and "1.3".
+	OCMClientTLSMinVersion string `mapstructure:"ocm_client_tls_min_version"`
+	// UntrustedClientSecurity configures MaxRedirects for /discover
+	// (TOML block ocm_client_security). The hatch (allow_http / allowed_cidrs)
+	// must stay closed.
+	UntrustedClientSecurity ocmd.UntrustedClientSecurity `mapstructure:"ocm_client_security"`
+	ocmClientTLSMin         uint16
 }
 
 func (c *config) ApplyDefaults() {
@@ -81,8 +104,14 @@ func (c *config) ApplyDefaults() {
 	if c.OCMMountPoint == "" {
 		c.OCMMountPoint = "/ocm"
 	}
-	if c.OCMClientTimeout == 0 {
+	if c.OCMClientTimeout <= 0 {
 		c.OCMClientTimeout = 10
+	}
+	if c.OCMClientDialTimeout <= 0 {
+		c.OCMClientDialTimeout = 10
+	}
+	if c.OCMClientResponseLimit == 0 {
+		c.OCMClientResponseLimit = 1 << 20
 	}
 
 	c.GatewaySvc = sharedconf.GetGatewaySVC(c.GatewaySvc)
@@ -91,6 +120,7 @@ func (c *config) ApplyDefaults() {
 type svc struct {
 	conf   *config
 	router chi.Router
+	wayf   *wayfHandler
 }
 
 func (s *svc) routerInit() error {
@@ -112,6 +142,7 @@ func (s *svc) routerInit() error {
 	if err := wayfHandler.init(s.conf); err != nil {
 		return err
 	}
+	s.wayf = wayfHandler
 	embeddedHandler := new(embeddedHandler)
 	if err := embeddedHandler.init(s.conf); err != nil {
 		return err

@@ -20,15 +20,33 @@ package embedded
 
 import (
 	"context"
+	"crypto/tls"
 	"encoding/json"
+	"errors"
+	"io"
+	"net"
 	"net/http"
+	"net/http/httptest"
+	"net/http/httptrace"
 	"reflect"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
+	"github.com/cs3org/reva/v3/internal/http/services/opencloudmesh/ocmd"
 	"github.com/rs/zerolog"
+	"github.com/studio-b12/gowebdav"
 )
+
+func testEmbeddedSec() ocmd.UntrustedClientSecurity {
+	var s ocmd.UntrustedClientSecurity
+	s.ApplyDefaults()
+	if err := s.Compile(); err != nil {
+		panic(err)
+	}
+	return s
+}
 
 func testLogger() *zerolog.Logger {
 	l := zerolog.Nop()
@@ -57,12 +75,23 @@ func TestConfigApplyDefaults(t *testing.T) {
 		if c.Retries != 3 {
 			t.Errorf("Retries = %d, want 3", c.Retries)
 		}
+		if c.SrcDialTimeout != 10 {
+			t.Errorf("SrcDialTimeout = %d, want 10", c.SrcDialTimeout)
+		}
+	})
+
+	t.Run("negative src dial timeout uses default", func(t *testing.T) {
+		c := Config{SrcDialTimeout: -1}
+		c.ApplyDefaults()
+		if c.SrcDialTimeout != 10 {
+			t.Errorf("SrcDialTimeout = %d, want 10", c.SrcDialTimeout)
+		}
 	})
 
 	t.Run("explicit values preserved", func(t *testing.T) {
-		c := Config{WebDAVURL: "https://dav.example.org/", Timeout: 10, IdleTimeout: 5, Retries: 1}
+		c := Config{WebDAVURL: "https://dav.example.org/", Timeout: 10, IdleTimeout: 5, Retries: 1, SrcDialTimeout: 2}
 		c.ApplyDefaults()
-		if c.Timeout != 10 || c.IdleTimeout != 5 || c.Retries != 1 {
+		if c.Timeout != 10 || c.IdleTimeout != 5 || c.Retries != 1 || c.SrcDialTimeout != 2 {
 			t.Errorf("explicit values were overwritten: %+v", c)
 		}
 		if c.WebDAVURL != "https://dav.example.org/" {
@@ -77,9 +106,164 @@ func TestNewAppliesDefaults(t *testing.T) {
 		t.Fatalf("New: unexpected error %v", err)
 	}
 	d := tr.(*driver)
-	if d.c.Timeout != 3600 || d.c.IdleTimeout != 120 || d.c.Retries != 3 {
+	if d.c.Timeout != 3600 || d.c.IdleTimeout != 120 || d.c.Retries != 3 || d.c.SrcDialTimeout != 10 {
 		t.Errorf("New did not apply defaults: %+v", d.c)
 	}
+}
+
+func TestConfigSrcDialTimeoutIndependentOfTransferTimeout(t *testing.T) {
+	tr, err := New(context.Background(), map[string]any{
+		"webdav_url":                "https://dav.example.org/",
+		"embedded_transfer_timeout": 1800,
+		"embedded_src_dial_timeout": 2,
+	})
+	if err != nil {
+		t.Fatalf("New: unexpected error %v", err)
+	}
+	d := tr.(*driver)
+	if d.c.Timeout != 1800 {
+		t.Errorf("Timeout = %d, want 1800 transfer ceiling", d.c.Timeout)
+	}
+	if d.c.SrcDialTimeout != 2 {
+		t.Errorf("SrcDialTimeout = %d, want 2", d.c.SrcDialTimeout)
+	}
+	if d.srcDialTimeout() != 2*time.Second {
+		t.Errorf("srcDialTimeout() = %v, want 2s", d.srcDialTimeout())
+	}
+}
+
+func TestEmbeddedSrcClientHasNoRequestTimeout(t *testing.T) {
+	client := newEmbeddedSrcClient(2*time.Second, false, testEmbeddedSec(), 0)
+	if client.Timeout != 0 {
+		t.Fatalf("source http.Client.Timeout = %v, want 0", client.Timeout)
+	}
+}
+
+func TestEmbeddedSrcDialTimeoutBoundsNonResponsiveDial(t *testing.T) {
+	dest := startDestWebDAV(t)
+	d := &driver{
+		c: Config{
+			WebDAVURL:      dest.URL,
+			Timeout:        3600,
+			IdleTimeout:    2,
+			Retries:        1,
+			SrcDialTimeout: 1,
+		},
+		sec: testEmbeddedSec(),
+	}
+	start := time.Now()
+	err := d.transferEntries(
+		testLogger(),
+		"tok",
+		"/dest",
+		[]transferEntry{{srcURL: "https://240.0.0.1/file.txt", name: "file.txt", sizeHint: -1}},
+		3600*time.Second,
+	)
+	elapsed := time.Since(start)
+	if err != nil {
+		t.Fatalf("transferEntries returned %v, want nil (per-file failures are skipped)", err)
+	}
+	if elapsed > 5*time.Second {
+		t.Fatalf("source dial used the transfer ceiling; elapsed %v", elapsed)
+	}
+}
+
+func TestNewRejectsHatch(t *testing.T) {
+	t.Parallel()
+
+	t.Run("allow_http", func(t *testing.T) {
+		_, err := New(context.Background(), map[string]any{
+			"webdav_url": "https://dav.example.org/",
+			"ocm_client_security": map[string]any{
+				"allow_http": true,
+			},
+		})
+		if err == nil {
+			t.Fatal("expected embedded.New to reject allow_http")
+		}
+		if !errors.Is(err, ocmd.ErrHatchAllowHTTP) {
+			t.Fatalf("got %v, want ocmd.ErrHatchAllowHTTP", err)
+		}
+	})
+
+	t.Run("allowed_cidrs", func(t *testing.T) {
+		_, err := New(context.Background(), map[string]any{
+			"webdav_url": "https://dav.example.org/",
+			"ocm_client_security": map[string]any{
+				"allowed_cidrs": []string{"10.0.0.0/8"},
+			},
+		})
+		if err == nil {
+			t.Fatal("expected embedded.New to reject allowed_cidrs")
+		}
+		if !errors.Is(err, ocmd.ErrHatchAllowedCIDRs) {
+			t.Fatalf("got %v, want ocmd.ErrHatchAllowedCIDRs", err)
+		}
+	})
+}
+
+func innerUntrustedTransport(t *testing.T, rt http.RoundTripper) *http.Transport {
+	t.Helper()
+	if tr, ok := rt.(*http.Transport); ok {
+		return tr
+	}
+	v := reflect.ValueOf(rt)
+	if v.Kind() == reflect.Pointer {
+		v = v.Elem()
+	}
+	if v.IsValid() && v.Kind() == reflect.Struct {
+		f := v.FieldByName("Transport")
+		if f.IsValid() && f.CanInterface() {
+			if tr, ok := f.Interface().(*http.Transport); ok && tr != nil {
+				return tr
+			}
+		}
+	}
+	t.Fatalf("untrusted transport: got %T, want an *http.Transport wrapper", rt)
+	return nil
+}
+
+func TestNewTLSMinVersion(t *testing.T) {
+	t.Parallel()
+
+	t.Run("configured 1.3 reaches the transport", func(t *testing.T) {
+		t.Parallel()
+		tr, err := New(context.Background(), map[string]any{
+			"webdav_url":                   "https://dav.example.org/",
+			"embedded_src_tls_min_version": "1.3",
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		d := tr.(*driver)
+		if d.tlsMinVersion != tls.VersionTLS13 {
+			t.Fatalf("tlsMinVersion = %#x, want TLS 1.3", d.tlsMinVersion)
+		}
+		client := newEmbeddedSrcClient(
+			5*time.Second,
+			false,
+			d.sec,
+			d.tlsMinVersion,
+		)
+		got := innerUntrustedTransport(t, client.Transport)
+		if got.TLSClientConfig == nil || got.TLSClientConfig.MinVersion != tls.VersionTLS13 {
+			t.Fatalf("src client MinVersion = %v, want TLS 1.3", got.TLSClientConfig)
+		}
+	})
+
+	t.Run("invalid value fails service start", func(t *testing.T) {
+		t.Parallel()
+		_, err := New(context.Background(), map[string]any{
+			"webdav_url":                   "https://dav.example.org/",
+			"embedded_src_tls_min_version": "1.0",
+		})
+		if err == nil {
+			t.Fatal("expected embedded.New to reject TLS min version 1.0")
+		}
+		if !errors.Is(err, ocmd.ErrInvalidTLSMinVersion) {
+			t.Fatalf("got %v, want ocmd.ErrInvalidTLSMinVersion", err)
+		}
+	})
 }
 
 func TestParseRetryAfter(t *testing.T) {
@@ -357,5 +541,259 @@ func TestProcessNoTransferableEntries(t *testing.T) {
 	}
 	if gotErr != nil {
 		t.Errorf("Process with no transferable entries: onComplete error = %v, want nil", gotErr)
+	}
+}
+
+func firstPublicIPv4() (string, bool) {
+	addrs, err := net.InterfaceAddrs()
+	if err != nil {
+		return "", false
+	}
+	for _, a := range addrs {
+		n, ok := a.(*net.IPNet)
+		if !ok || n.IP == nil {
+			continue
+		}
+		ip := n.IP.To4()
+		if ip == nil || ip.IsLoopback() || ip.IsPrivate() || ip.IsUnspecified() ||
+			ip.IsLinkLocalUnicast() || ip.IsMulticast() {
+			continue
+		}
+		if ip[0] == 100 && ip[1]&0xc0 == 64 {
+			continue
+		}
+		return ip.String(), true
+	}
+	return "", false
+}
+
+func startPublicTLSServer(t *testing.T, h http.Handler) *httptest.Server {
+	t.Helper()
+	ip, ok := firstPublicIPv4()
+	if !ok {
+		t.Skip("no public IPv4 address available for public-only httptest")
+	}
+	ln, err := net.Listen("tcp", net.JoinHostPort(ip, "0"))
+	if err != nil {
+		t.Skipf("cannot listen on public IP %s: %v", ip, err)
+	}
+	srv := httptest.NewUnstartedServer(h)
+	if srv.Listener != nil {
+		_ = srv.Listener.Close()
+	}
+	srv.Listener = ln
+	srv.StartTLS()
+	t.Cleanup(srv.Close)
+	return srv
+}
+
+func startDestWebDAV(t *testing.T) *httptest.Server {
+	t.Helper()
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.Method {
+		case http.MethodPut, "MKCOL":
+			if r.Body != nil {
+				_, _ = io.Copy(io.Discard, r.Body)
+			}
+			w.WriteHeader(http.StatusCreated)
+		default:
+			w.WriteHeader(http.StatusOK)
+		}
+	}))
+	t.Cleanup(srv.Close)
+	return srv
+}
+
+func dummyDAV() *gowebdav.Client {
+	return gowebdav.NewClient("https://127.0.0.1:1", "", "")
+}
+
+type hostDialTrace struct {
+	mu          sync.Mutex
+	established []string
+}
+
+func contextWithHostDialTrace(ctx context.Context) (context.Context, *hostDialTrace) {
+	tr := &hostDialTrace{established: []string{}}
+	ctx = httptrace.WithClientTrace(ctx, &httptrace.ClientTrace{
+		ConnectDone: func(_, addr string, err error) {
+			if err != nil {
+				return
+			}
+			tr.mu.Lock()
+			tr.established = append(tr.established, addr)
+			tr.mu.Unlock()
+		},
+		GotConn: func(info httptrace.GotConnInfo) {
+			if info.Conn == nil {
+				return
+			}
+			tr.mu.Lock()
+			tr.established = append(tr.established, info.Conn.RemoteAddr().String())
+			tr.mu.Unlock()
+		},
+	})
+	return ctx, tr
+}
+
+func hostOf(addr string) string {
+	host, _, err := net.SplitHostPort(addr)
+	if err != nil {
+		host = addr
+	}
+	if ip := net.ParseIP(host); ip != nil {
+		if ip4 := ip.To4(); ip4 != nil {
+			return ip4.String()
+		}
+		return ip.String()
+	}
+	return host
+}
+
+func (tr *hostDialTrace) establishedHost(host string) bool {
+	tr.mu.Lock()
+	defer tr.mu.Unlock()
+	for _, addr := range tr.established {
+		if hostOf(addr) == host {
+			return true
+		}
+	}
+	return false
+}
+
+func assertNoEstablishedHost(t *testing.T, tr *hostDialTrace, host string) {
+	t.Helper()
+	if tr.establishedHost(host) {
+		t.Fatalf("embedded srcURL fetch established a connection to %s", host)
+	}
+}
+
+func TestEmbeddedSrcURLFetchPublicHTTPSHostSucceeds(t *testing.T) {
+	const body = "embedded-src"
+	contacted := false
+	src := startPublicTLSServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		contacted = true
+		if r.Method != http.MethodGet {
+			t.Errorf("unexpected method %s", r.Method)
+			w.WriteHeader(http.StatusMethodNotAllowed)
+			return
+		}
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(body))
+	}))
+	dest := startDestWebDAV(t)
+	dav := gowebdav.NewClient(dest.URL, "", "")
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	err := uploadURLToWebDAV(
+		ctx,
+		testLogger(),
+		newEmbeddedSrcClient(5*time.Second, true, testEmbeddedSec(), 0),
+		dav,
+		src.URL+"/file.txt",
+		"/dest/file.txt",
+		int64(len(body)),
+		5*time.Second,
+	)
+	if err != nil {
+		t.Fatalf("embedded srcURL fetch to a public HTTPS host: %v", err)
+	}
+	if !contacted {
+		t.Fatal("expected embedded srcURL fetch to reach the public HTTPS host")
+	}
+}
+
+func TestEmbeddedSrcURLFetchRefusesPrivateHost(t *testing.T) {
+	t.Run("metadata host is refused at dial", func(t *testing.T) {
+		ctx, tr := contextWithHostDialTrace(context.Background())
+		ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
+		defer cancel()
+
+		err := uploadURLToWebDAV(
+			ctx,
+			testLogger(),
+			newEmbeddedSrcClient(5*time.Second, true, testEmbeddedSec(), 0),
+			dummyDAV(),
+			"https://169.254.169.254/file.txt",
+			"/dest/file.txt",
+			-1,
+			5*time.Second,
+		)
+		assertNoEstablishedHost(t, tr, "169.254.169.254")
+		if err == nil {
+			t.Fatal("expected embedded srcURL fetch to refuse the metadata host at dial")
+		}
+		if !errors.Is(err, ocmd.ErrNonPublicAddr) {
+			t.Fatalf("got %v, want ocmd.ErrNonPublicAddr", err)
+		}
+	})
+
+	t.Run("reachable private host is not contacted", func(t *testing.T) {
+		contacted := false
+		src := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			contacted = true
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write([]byte("secret"))
+		}))
+		defer src.Close()
+
+		// insecure=true so TLS cannot short-circuit before the untrusted dial
+		// guard. The old default client would then reach this loopback server.
+		ctx, tr := contextWithHostDialTrace(context.Background())
+		ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
+		defer cancel()
+
+		err := uploadURLToWebDAV(
+			ctx,
+			testLogger(),
+			newEmbeddedSrcClient(5*time.Second, true, testEmbeddedSec(), 0),
+			dummyDAV(),
+			src.URL+"/file.txt",
+			"/dest/file.txt",
+			-1,
+			5*time.Second,
+		)
+		if contacted {
+			t.Fatal("embedded srcURL fetch contacted a private host; the untrusted transport must refuse it at dial")
+		}
+		assertNoEstablishedHost(t, tr, hostOf(src.Listener.Addr().String()))
+		if err == nil {
+			t.Fatal("expected embedded srcURL fetch to refuse the private host at dial")
+		}
+		if !errors.Is(err, ocmd.ErrNonPublicAddr) {
+			t.Fatalf("got %v, want ocmd.ErrNonPublicAddr", err)
+		}
+	})
+}
+
+func TestEmbeddedSrcURLFetchRefusesHTTP(t *testing.T) {
+	contacted := false
+	src := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		contacted = true
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte("secret"))
+	}))
+	defer src.Close()
+
+	dest := startDestWebDAV(t)
+	d := &driver{c: Config{
+		WebDAVURL:   dest.URL,
+		Timeout:     5,
+		IdleTimeout: 2,
+		Retries:     1,
+	}}
+	err := d.transferEntries(
+		testLogger(),
+		"tok",
+		"/dest",
+		[]transferEntry{{srcURL: src.URL + "/file.txt", name: "file.txt", sizeHint: -1}},
+		5*time.Second,
+	)
+	if contacted {
+		t.Fatal("embedded srcURL fetch contacted an http host; the untrusted transport must refuse it")
+	}
+	if err != nil {
+		t.Fatalf("transferEntries returned %v, want nil (per-file failures are skipped)", err)
 	}
 }

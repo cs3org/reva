@@ -32,10 +32,12 @@ import (
 	"github.com/cs3org/reva/v3/pkg/appctx"
 )
 
+// wayfHandler: ocmClient is trusted NewClient for operator-configured
+// directory URLs; untrustedClient discovers a host from the /discover body.
 type wayfHandler struct {
 	directoryServices []ocmd.DirectoryService
 	ocmClient         *ocmd.OCMClient
-	// for /discover, where the host comes from the request body, not from config
+	// body-supplied host; not the trusted directory client
 	untrustedClient *ocmd.OCMClient
 }
 
@@ -47,9 +49,7 @@ type DiscoverResponse struct {
 	InviteAcceptDialog string `json:"inviteAcceptDialog"`
 }
 
-// makeAbsoluteURL takes a base URL and a path/URL and returns an absolute URL.
-// If dialogURL is already absolute (has scheme and host), it returns it as-is.
-// Otherwise, it joins the dialogURL with the baseURL to create an absolute URL.
+// makeAbsoluteURL joins dialogURL onto baseURL unless dialogURL is already absolute.
 func makeAbsoluteURL(baseURL, dialogURL string) (string, error) {
 	if dialogURL == "" {
 		return "", nil
@@ -66,11 +66,29 @@ func makeAbsoluteURL(baseURL, dialogURL string) (string, error) {
 func (h *wayfHandler) init(c *config) error {
 	log := appctx.GetLogger(context.Background())
 
-	// Create OCM client for discovery from config
-	h.ocmClient = ocmd.NewClient(time.Duration(c.OCMClientTimeout)*time.Second, c.OCMClientInsecure)
-	h.untrustedClient = ocmd.NewPublicOnlyClient(time.Duration(c.OCMClientTimeout)*time.Second, c.OCMClientInsecure)
+	requestTimeout := time.Duration(c.OCMClientTimeout) * time.Second
+	if requestTimeout <= 0 {
+		requestTimeout = 10 * time.Second
+	}
+	dialTimeout := time.Duration(c.OCMClientDialTimeout) * time.Second
+	if dialTimeout <= 0 {
+		dialTimeout = 10 * time.Second
+	}
+	h.ocmClient = ocmd.NewClient(requestTimeout, c.OCMClientInsecure, int64(c.OCMClientResponseLimit))
+	h.untrustedClient = ocmd.NewPublicOnlyClient(
+		requestTimeout,
+		c.OCMClientInsecure,
+		c.UntrustedClientSecurity,
+		int64(c.OCMClientResponseLimit),
+		c.ocmClientTLSMin,
+	)
+	if dialTimeout > 0 && dialTimeout != requestTimeout {
+		overridePublicOnlyDialTimeout(h.untrustedClient, dialTimeout)
+	}
 	log.Debug().
 		Int("timeout_seconds", c.OCMClientTimeout).
+		Int("dial_timeout_seconds", c.OCMClientDialTimeout).
+		Int("response_limit", c.OCMClientResponseLimit).
 		Bool("insecure", c.OCMClientInsecure).
 		Msg("Created OCM client for discovery")
 
@@ -115,7 +133,6 @@ func (h *wayfHandler) init(c *config) error {
 
 			log.Debug().Str("federation", directoryService.Federation).Str("server", srv.DisplayName).Str("url", srv.URL).Msg("Discovering server")
 
-			// Discover inviteAcceptDialog from OCM endpoint
 			disco, err := h.ocmClient.Discover(ctx, srv.URL)
 			if err != nil {
 				log.Debug().Err(err).

@@ -22,11 +22,15 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"regexp"
+	"sync"
 	"testing"
+	"time"
 
 	gateway "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
@@ -262,6 +266,42 @@ func tlsOcmDiscoveryServer(t *testing.T) *httptest.Server {
 	return httptest.NewTLSServer(mux)
 }
 
+func TestDiscoverOcmResourceTypesHonorsRequestTimeout(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		time.Sleep(2 * time.Second)
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"enabled":true}`))
+	}))
+	defer srv.Close()
+
+	h := &sharesHandler{ocmClientInsecure: true, ocmClientTimeout: 400 * time.Millisecond}
+	start := time.Now()
+	_, _, err := h.discoverOcmResourceTypes(context.Background(), srv.URL)
+	elapsed := time.Since(start)
+	if err == nil {
+		t.Fatal("expected Discover to fail when the metadata peer is slow")
+	}
+	if elapsed > 1500*time.Millisecond {
+		t.Fatalf("Discover request timeout was not applied; elapsed %v", elapsed)
+	}
+}
+
+func TestDiscoverOcmResourceTypesHonorsResponseLimit(t *testing.T) {
+	body := oversizedJSON(t, map[string]any{
+		"enabled":    true,
+		"apiVersion": "1.1",
+	}, "provider")
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write(body)
+	}))
+	defer srv.Close()
+
+	h := &sharesHandler{ocmClientInsecure: true, ocmClientResponseLimit: 64}
+	_, _, err := h.discoverOcmResourceTypes(context.Background(), srv.URL)
+	assertOCMResponseTooLarge(t, err)
+}
+
 // discovery must verify certs by default, and skip only when asked.
 func TestDiscoverVerifiesTLSUnlessInsecure(t *testing.T) {
 	srv := tlsOcmDiscoveryServer(t) // self-signed, https://127.0.0.1:port
@@ -283,5 +323,228 @@ func TestDiscoverVerifiesTLSUnlessInsecure(t *testing.T) {
 				t.Errorf("discoverOcmResourceTypes() error = %v, wantErr %v", err, tt.wantErr)
 			}
 		})
+	}
+}
+
+const ingestWebDAVPropfindXML = `<?xml version="1.0" encoding="utf-8"?>
+<d:multistatus xmlns:d="DAV:">
+  <d:response>
+    <d:href>/</d:href>
+    <d:propstat>
+      <d:prop>
+        <d:displayname>legacy-share</d:displayname>
+        <d:getcontentlength>4</d:getcontentlength>
+        <d:getcontenttype>text/plain</d:getcontenttype>
+        <d:getetag>"abc"</d:getetag>
+        <d:getlastmodified>Mon, 02 Jan 2006 15:04:05 GMT</d:getlastmodified>
+      </d:prop>
+      <d:status>HTTP/1.1 200 OK</d:status>
+    </d:propstat>
+  </d:response>
+</d:multistatus>`
+
+func ingestWebDAVHandler(t *testing.T, contacted *bool) http.Handler {
+	t.Helper()
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		*contacted = true
+		if r.Method != "PROPFIND" {
+			t.Errorf("unexpected method %s", r.Method)
+			w.WriteHeader(http.StatusMethodNotAllowed)
+			return
+		}
+		w.Header().Set("Content-Type", "application/xml")
+		w.WriteHeader(207)
+		_, _ = w.Write([]byte(ingestWebDAVPropfindXML))
+	})
+}
+
+func firstPublicIPv4() (string, bool) {
+	addrs, err := net.InterfaceAddrs()
+	if err != nil {
+		return "", false
+	}
+	for _, a := range addrs {
+		n, ok := a.(*net.IPNet)
+		if !ok || n.IP == nil {
+			continue
+		}
+		ip := n.IP.To4()
+		if ip == nil || !isPublicIP(ip) {
+			continue
+		}
+		return ip.String(), true
+	}
+	return "", false
+}
+
+func startPublicTLSServer(t *testing.T, h http.Handler) *httptest.Server {
+	t.Helper()
+	ip, ok := firstPublicIPv4()
+	if !ok {
+		t.Skip("no public IPv4 address available for public-only httptest")
+	}
+	ln, err := net.Listen("tcp", net.JoinHostPort(ip, "0"))
+	if err != nil {
+		t.Skipf("cannot listen on public IP %s: %v", ip, err)
+	}
+	srv := httptest.NewUnstartedServer(h)
+	if srv.Listener != nil {
+		_ = srv.Listener.Close()
+	}
+	srv.Listener = ln
+	srv.StartTLS()
+	t.Cleanup(srv.Close)
+	return srv
+}
+
+func TestIngestWebDAVStatPublicHTTPSHostSucceeds(t *testing.T) {
+	contacted := false
+	srv := startPublicTLSServer(t, ingestWebDAVHandler(t, &contacted))
+
+	info, err := statIngestWebDAV(
+		srv.URL,
+		"secret",
+		UntrustedHTTPTransport(5*time.Second, true, testSec(), 0),
+		5*time.Second,
+	)
+	if err != nil {
+		t.Fatalf("ingest stat to a public HTTPS WebDAV host: %v", err)
+	}
+	if info == nil {
+		t.Fatal("expected WebDAV stat info for a public HTTPS host")
+	}
+	if !contacted {
+		t.Fatal("expected ingest stat to reach the public HTTPS WebDAV host")
+	}
+}
+
+func TestIngestWebDAVStatRefusesPrivateHost(t *testing.T) {
+	t.Run("metadata host is refused at dial", func(t *testing.T) {
+		_, err := statIngestWebDAV(
+			"https://169.254.169.254/remote.php/dav/ocm",
+			"secret",
+			UntrustedHTTPTransport(5*time.Second, true, testSec(), 0),
+			5*time.Second,
+		)
+		if err == nil {
+			t.Fatal("expected ingest stat to refuse the metadata host at dial")
+		}
+		if !errors.Is(err, ErrNonPublicAddr) {
+			t.Fatalf("got %v, want ErrNonPublicAddr", err)
+		}
+	})
+
+	t.Run("reachable private host is not contacted", func(t *testing.T) {
+		contacted := false
+		srv := httptest.NewTLSServer(ingestWebDAVHandler(t, &contacted))
+		defer srv.Close()
+
+		_, err := statIngestWebDAV(
+			srv.URL,
+			"secret",
+			UntrustedHTTPTransport(5*time.Second, true, testSec(), 0),
+			5*time.Second,
+		)
+		if contacted {
+			t.Fatal("ingest stat contacted a private WebDAV host; the untrusted transport must refuse it at dial")
+		}
+		if err == nil {
+			t.Fatal("expected ingest stat to a private host to fail")
+		}
+		if !errors.Is(err, ErrNonPublicAddr) {
+			t.Fatalf("got %v, want ErrNonPublicAddr", err)
+		}
+	})
+}
+
+func TestIngestWebDAVStatRefusesHTTP(t *testing.T) {
+	contacted := false
+	srv := httptest.NewServer(ingestWebDAVHandler(t, &contacted))
+	defer srv.Close()
+
+	_, err := statIngestWebDAV(
+		srv.URL,
+		"secret",
+		UntrustedHTTPTransport(5*time.Second, true, testSec(), 0),
+		5*time.Second,
+	)
+	if contacted {
+		t.Fatal("ingest stat contacted an http WebDAV host; the untrusted transport must refuse it")
+	}
+	if err == nil {
+		t.Fatal("expected ingest stat to refuse a non-https URL")
+	}
+	if !errors.Is(err, ErrNonHTTPS) {
+		t.Fatalf("got %v, want ErrNonHTTPS", err)
+	}
+}
+
+func TestIngestWebDAVStatHonorsRequestTimeout(t *testing.T) {
+	var startOnce sync.Once
+	started := make(chan struct{})
+	srv := startPublicTLSServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		startOnce.Do(func() { close(started) })
+		time.Sleep(2 * time.Second)
+		w.Header().Set("Content-Type", "application/xml")
+		w.WriteHeader(207)
+		_, _ = w.Write([]byte(ingestWebDAVPropfindXML))
+	}))
+
+	start := time.Now()
+	_, err := statIngestWebDAV(
+		srv.URL,
+		"secret",
+		UntrustedHTTPTransport(5*time.Second, true, testSec(), 0),
+		400*time.Millisecond,
+	)
+	elapsed := time.Since(start)
+	if err == nil {
+		t.Fatal("expected ingest Stat to fail when the metadata peer is slow")
+	}
+	if elapsed > 1500*time.Millisecond {
+		t.Fatalf("ingest SetTimeout was not honored; elapsed %v", elapsed)
+	}
+	select {
+	case <-started:
+	default:
+		t.Fatal("expected the slow metadata peer to accept the connection")
+	}
+}
+
+func TestIngestWebDAVDialTimeoutBoundsNonResponsiveDial(t *testing.T) {
+	got, err := New(context.Background(), map[string]any{
+		"gatewaysvc":              "gateway:9142",
+		"ocm_client_dial_timeout": 1,
+		"ocm_client_timeout":      30,
+		"token_managers": map[string]any{
+			"jwt": map[string]any{
+				"secret": "test-secret-for-ocm-dial-timeout",
+			},
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	s, ok := got.(*svc)
+	if !ok {
+		t.Fatalf("got %T, want *svc", got)
+	}
+	if s.shares == nil || s.shares.untrustedTransport == nil {
+		t.Fatal("shares untrusted transport is nil")
+	}
+
+	start := time.Now()
+	_, err = statIngestWebDAV(
+		"https://240.0.0.1/remote.php/dav/ocm",
+		"secret",
+		s.shares.untrustedTransport,
+		s.shares.requestTimeout(),
+	)
+	elapsed := time.Since(start)
+	if err == nil {
+		t.Fatal("expected ingest stat to a non-responsive public address to fail")
+	}
+	if elapsed > 5*time.Second {
+		t.Fatalf("dial timeout was not wired; elapsed %v", elapsed)
 	}
 }

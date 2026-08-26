@@ -26,6 +26,7 @@ import (
 	"mime"
 	"net/http"
 	"net/url"
+	"os"
 	"path/filepath"
 	"regexp"
 	"strings"
@@ -61,6 +62,12 @@ type sharesHandler struct {
 	autoAcceptProviders        []*regexp.Regexp
 	trustForwardedFor          bool
 	ocmClientInsecure          bool
+	ocmClientResponseLimit     int64
+	ocmClientTLSMin            uint16
+	ocmClientDialTimeout       time.Duration
+	ocmClientTimeout           time.Duration
+	untrustedSec               UntrustedClientSecurity
+	untrustedTransport         http.RoundTripper
 }
 
 func (h *sharesHandler) init(c *config) error {
@@ -73,6 +80,17 @@ func (h *sharesHandler) init(c *config) error {
 	h.machineSecret = c.MachineSecret
 	h.trustForwardedFor = c.TrustForwardedFor
 	h.ocmClientInsecure = c.OCMClientInsecure
+	h.ocmClientResponseLimit = c.OCMClientResponseLimit
+	h.ocmClientTLSMin = c.ocmClientTLSMin
+	h.ocmClientDialTimeout = time.Duration(c.OCMClientDialTimeout) * time.Second
+	h.ocmClientTimeout = time.Duration(c.OCMClientTimeout) * time.Second
+	h.untrustedSec = c.UntrustedClientSecurity
+	h.untrustedTransport = UntrustedHTTPTransport(
+		h.dialTimeout(),
+		h.ocmClientInsecure,
+		h.untrustedSec,
+		h.ocmClientTLSMin,
+	)
 	for _, p := range c.AutoAcceptProviders {
 		re, err := regexp.Compile(p)
 		if err != nil {
@@ -112,6 +130,41 @@ func (h *sharesHandler) isAcceptedUser(ctx context.Context, recipient *userpb.Us
 		},
 	})
 	return err == nil && res.Status.Code == rpc.Code_CODE_OK
+}
+
+func (h *sharesHandler) dialTimeout() time.Duration {
+	if h != nil && h.ocmClientDialTimeout > 0 {
+		return h.ocmClientDialTimeout
+	}
+	return 10 * time.Second
+}
+
+func (h *sharesHandler) requestTimeout() time.Duration {
+	if h != nil && h.ocmClientTimeout > 0 {
+		return h.ocmClientTimeout
+	}
+	return 10 * time.Second
+}
+
+// statIngestWebDAV PROPFINDs a peer-supplied WebDAV source URL before ingest.
+// The URL is attacker-influenced, so the caller must pass the handler-owned
+// untrusted transport (or an equivalent test double): that transport applies
+// scheme and dial policy. gowebdav only accepts SetTransport, not
+// CheckRedirect, so the transport-level redirect walker is the hop backstop.
+// requestTimeout, when set, is applied via SetTimeout so a connected peer
+// cannot hang the worker.
+func statIngestWebDAV(
+	uri, sharedSecret string,
+	rt http.RoundTripper,
+	requestTimeout time.Duration,
+) (os.FileInfo, error) {
+	c := gowebdav.NewClient(uri, "", "")
+	c.SetTransport(rt)
+	if requestTimeout > 0 {
+		c.SetTimeout(requestTimeout)
+	}
+	c.SetHeader("Authorization", "Basic "+base64.StdEncoding.EncodeToString([]byte(sharedSecret+":")))
+	return c.Stat("")
 }
 
 // CreateShare implements the OCM /shares call and stores an incoming share
@@ -206,9 +259,12 @@ func (h *sharesHandler) CreateShare(w http.ResponseWriter, r *http.Request) {
 	if legacy && req.ResourceType == "file" {
 		// in case of legacy OCM v1.0 shares, we have to PROPFIND the remote resource to check the type,
 		// because remote systems such as Nextcloud may send "file" even if the resource is a folder.
-		c := gowebdav.NewClient(protocols[0].GetWebdavOptions().Uri, "", "")
-		c.SetHeader("Authorization", "Basic "+base64.StdEncoding.EncodeToString([]byte(protocols[0].GetWebdavOptions().SharedSecret+":")))
-		target, err := c.Stat("")
+		target, err := statIngestWebDAV(
+			protocols[0].GetWebdavOptions().Uri,
+			protocols[0].GetWebdavOptions().SharedSecret,
+			h.untrustedTransport,
+			h.requestTimeout(),
+		)
 		if err != nil {
 			log.Info().Err(err).Str("endpoint", protocols[0].GetWebdavOptions().Uri).Msg("error stating remote resource, assuming file")
 		} else if target.IsDir() {
@@ -492,7 +548,7 @@ func (h *sharesHandler) getAndResolveProtocols(ctx context.Context, p Protocols,
 }
 
 func (h *sharesHandler) discoverOcmResourceTypes(ctx context.Context, ownerServer string) ([]wellknown.ResourceTypes, string, error) {
-	ocmClient := NewClient(time.Duration(10)*time.Second, h.ocmClientInsecure)
+	ocmClient := NewClient(h.requestTimeout(), h.ocmClientInsecure, h.ocmClientResponseLimit)
 	ocmCaps, err := ocmClient.Discover(ctx, ownerServer)
 	if err != nil {
 		return nil, "", err
