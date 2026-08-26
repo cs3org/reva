@@ -375,7 +375,7 @@ type failingDumper struct {
 	err error
 }
 
-func (d *failingDumper) Setup(config map[string]any) error { return nil }
+func (d *failingDumper) Setup(config any) error { return nil }
 
 func (d *failingDumper) Dump(rootPath string, maxDepth int) (*nsdump.NamespaceDump, error) {
 	return nil, d.err
@@ -548,7 +548,7 @@ type memoryDumper struct {
 	dump *nsdump.NamespaceDump
 }
 
-func (d *memoryDumper) Setup(config map[string]any) error { return nil }
+func (d *memoryDumper) Setup(config any) error { return nil }
 
 func (d *memoryDumper) Dump(rootPath string, maxDepth int) (*nsdump.NamespaceDump, error) {
 	return d.dump, nil
