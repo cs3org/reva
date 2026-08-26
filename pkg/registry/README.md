@@ -116,7 +116,7 @@ loaded service.
 
 The address it advertises is the listener's `host:port`, except that a wildcard
 bind host such as `::` or `0.0.0.0` is swapped for the hostname, since nobody
-can dial a wildcard. The node ID is `<host:port>#<pid>/<service>`, which stays
+can dial a wildcard. The node ID is `<host:port>/<service>`, which stays
 stable when the same process restarts on the same port. The metadata starts with
 what the framework knows — `transport` (`grpc` or `http`), `host`, `pid`,
 `state` and `last_seen`, plus `scheme` and `prefix` for HTTP services — and is
