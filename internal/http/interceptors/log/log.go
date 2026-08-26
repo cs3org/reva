@@ -24,6 +24,7 @@ import (
 	"net"
 	"net/http"
 	"net/url"
+	"strings"
 	"time"
 
 	"github.com/cs3org/reva/v3/pkg/appctx"
@@ -70,6 +71,32 @@ func makeLogger(w http.ResponseWriter) loggingResponseWriter {
 	return logger
 }
 
+// loginTokenPrefixes are the path segments that a login flow token follows. The
+// token names a pending client authorization, so anyone who reads it out of a
+// log can approve or poll that enrolment.
+var loginTokenPrefixes = []string{"/login/v2/flow/", "/cloud/user/login-flow/"}
+
+// redactLoginToken removes a login flow token from uri. Only the token segment
+// is replaced, so the route stays readable. Trace logging keeps the raw URI.
+func redactLoginToken(uri string) string {
+	for _, p := range loginTokenPrefixes {
+		i := strings.Index(uri, p)
+		if i < 0 {
+			continue
+		}
+		start := i + len(p)
+		rest := uri[start:]
+		if rest == "" {
+			return uri
+		}
+		if j := strings.IndexAny(rest, "/?#"); j >= 0 {
+			return uri[:start] + "<redacted>" + rest[j:]
+		}
+		return uri[:start] + "<redacted>"
+	}
+	return uri
+}
+
 func writeLog(log *zerolog.Logger, req *http.Request, url url.URL, ts time.Time, status, size int, resHeaders http.Header) {
 	end := time.Now()
 	host, _, err := net.SplitHostPort(req.RemoteAddr)
@@ -100,7 +127,7 @@ func writeLog(log *zerolog.Logger, req *http.Request, url url.URL, ts time.Time,
 		//nolint:zerologlint
 		event = log.Error()
 	}
-	event.Str("host", host).Str("method", req.Method).Str("uri", uri).Int("status", status).
+	event.Str("host", host).Str("method", req.Method).Str("uri", redactLoginToken(uri)).Int("status", status).
 		Msg("processed http request")
 
 	log.Trace().Str("host", host).Str("method", req.Method).
