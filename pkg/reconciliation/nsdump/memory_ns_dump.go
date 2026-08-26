@@ -8,24 +8,27 @@ import (
 )
 
 type EOSMemoryNSInspectConfig struct {
-	maxDepth    int    `mapstructure:"maxdepth"`
-	ignoreFiles bool   `mapstructure:"ignorefiles"`
-	instance    string `mapstructure:"instance"`
+	MaxDepth    int    `mapstructure:"maxdepth"`
+	IgnoreFiles bool   `mapstructure:"ignorefiles"`
+	Instance    string `mapstructure:"instance"`
 }
 
 type EOSMemoryNSInspect struct {
 	cfg EOSMemoryNSInspectConfig
 }
 
-func (e *EOSMemoryNSInspect) Setup(config map[string]any) error {
-	// TODO(jgeens): implement
-	return nil
+func (e *EOSMemoryNSInspect) Setup(config any) error {
+	if c, ok := config.(EOSMemoryNSInspectConfig); ok {
+		e.cfg = c
+		return nil
+	}
+	return fmt.Errorf("requires a config of type %t", EOSMemoryNSInspectConfig{})
 }
 
 func (e *EOSMemoryNSInspect) Dump(rootPath string, maxDepth int) (*NamespaceDump, error) {
 
 	noFilesFlag := ""
-	if e.cfg.ignoreFiles {
+	if e.cfg.IgnoreFiles {
 		noFilesFlag = " --no-files"
 	}
 
@@ -38,8 +41,8 @@ func (e *EOSMemoryNSInspect) Dump(rootPath string, maxDepth int) (*NamespaceDump
 		"scan --path %s %s --members %s-qdb:7777 --password-file /keytabs/%s_keytab --json%s",
 		rootPath,
 		maxDepthFlag,
-		e.cfg.instance,
-		e.cfg.instance,
+		e.cfg.Instance,
+		e.cfg.Instance,
 		noFilesFlag,
 	)
 
