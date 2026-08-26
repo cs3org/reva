@@ -40,8 +40,6 @@ import (
 	types "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
 	"github.com/cs3org/reva/v3/pkg/appctx"
 	"github.com/cs3org/reva/v3/pkg/errtypes"
-	"github.com/cs3org/reva/v3/pkg/registry"
-	"github.com/cs3org/reva/v3/pkg/registry/memory"
 	"github.com/pkg/errors"
 	"go.step.sm/crypto/randutil"
 
@@ -54,9 +52,6 @@ var (
 	matchFirstCap = regexp.MustCompile("(.)([A-Z][a-z]+)")
 	matchAllCap   = regexp.MustCompile("([a-z0-9])([A-Z])")
 	matchEmail    = regexp.MustCompile(`^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$`)
-	// GlobalRegistry configures a service registry globally accessible. It defaults to a memory registry. The usage of
-	// globals is not encouraged, and this is a workaround until the PR is out of a draft state.
-	GlobalRegistry registry.Registry = memory.New(map[string]any{})
 )
 
 func appendSlash(p string) string {

@@ -28,7 +28,7 @@ import (
 	"github.com/cs3org/reva/v3/internal/http/services/owncloud/ocs/conversions"
 	"github.com/cs3org/reva/v3/internal/http/services/owncloud/ocs/response"
 	"github.com/cs3org/reva/v3/pkg/appctx"
-	"github.com/cs3org/reva/v3/pkg/rgrpc/todo/pool"
+	"github.com/cs3org/reva/v3/pkg/service"
 	"github.com/go-chi/chi/v5"
 	"github.com/pkg/errors"
 	"google.golang.org/protobuf/types/known/fieldmaskpb"
@@ -58,7 +58,7 @@ func (h *Handler) updateReceivedShare(w http.ResponseWriter, r *http.Request, sh
 	ctx := r.Context()
 	logger := appctx.GetLogger(ctx)
 
-	client, err := pool.GetGatewayServiceClient(pool.Endpoint(h.gatewayAddr))
+	client, err := service.Gateway(ctx)
 	if err != nil {
 		response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "error getting grpc gateway client", err)
 		return
@@ -122,7 +122,7 @@ func (h *Handler) updateReceivedShare(w http.ResponseWriter, r *http.Request, sh
 func (h *Handler) updateReceivedFederatedShare(w http.ResponseWriter, r *http.Request, shareID string, rejectShare bool) {
 	ctx := r.Context()
 
-	client, err := pool.GetGatewayServiceClient(pool.Endpoint(h.gatewayAddr))
+	client, err := service.Gateway(ctx)
 	if err != nil {
 		response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "error getting grpc gateway client", err)
 		return

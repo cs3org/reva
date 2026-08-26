@@ -47,7 +47,7 @@ import (
 	"github.com/cs3org/reva/v3/pkg/errtypes"
 	"github.com/cs3org/reva/v3/pkg/httpclient"
 	"github.com/cs3org/reva/v3/pkg/mime"
-	"github.com/cs3org/reva/v3/pkg/rgrpc/todo/pool"
+	"github.com/cs3org/reva/v3/pkg/service"
 	"github.com/cs3org/reva/v3/pkg/sharedconf"
 	"github.com/cs3org/reva/v3/pkg/utils"
 	"github.com/cs3org/reva/v3/pkg/utils/cfg"
@@ -551,7 +551,7 @@ func getPathForExternalLink(ctx context.Context, scopes map[string]*authpb.Scope
 		return "", errors.New("Either one public xor OCM share is supported, lookups not implemented")
 	}
 
-	client, err := pool.GetGatewayServiceClient(pool.Endpoint(sharedconf.GetGatewaySVC("")))
+	client, err := service.Gateway(ctx)
 	if err != nil {
 		return "", err
 	}

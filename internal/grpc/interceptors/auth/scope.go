@@ -38,15 +38,16 @@ import (
 	ocmv1beta1 "github.com/cs3org/go-cs3apis/cs3/sharing/ocm/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	registry "github.com/cs3org/go-cs3apis/cs3/storage/registry/v1beta1"
+	"google.golang.org/grpc/metadata"
+
 	"github.com/cs3org/reva/v3/pkg/appctx"
 	"github.com/cs3org/reva/v3/pkg/auth/scope"
 	"github.com/cs3org/reva/v3/pkg/errtypes"
 	statuspkg "github.com/cs3org/reva/v3/pkg/rgrpc/status"
-	"github.com/cs3org/reva/v3/pkg/rgrpc/todo/pool"
+	"github.com/cs3org/reva/v3/pkg/service"
 	"github.com/cs3org/reva/v3/pkg/token"
 	"github.com/cs3org/reva/v3/pkg/utils"
 	"github.com/cs3org/reva/v3/pkg/utils/resourceid"
-	"google.golang.org/grpc/metadata"
 )
 
 const (
@@ -54,9 +55,9 @@ const (
 	scopeCacheExpiration = 3600
 )
 
-func expandAndVerifyScope(ctx context.Context, req any, tokenScope map[string]*authpb.Scope, user *userpb.User, gatewayAddr string, mgr token.Manager) error {
+func (i *interceptor) expandAndVerifyScope(ctx context.Context, req any, tokenScope map[string]*authpb.Scope, user *userpb.User, mgr token.Manager) error {
 	log := appctx.GetLogger(ctx)
-	client, err := pool.GetGatewayServiceClient(pool.Endpoint(gatewayAddr))
+	client, err := service.Gateway(ctx)
 	if err != nil {
 		return err
 	}

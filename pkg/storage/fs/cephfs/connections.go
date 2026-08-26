@@ -30,7 +30,7 @@ import (
 	grouppb "github.com/cs3org/go-cs3apis/cs3/identity/group/v1beta1"
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
-	"github.com/cs3org/reva/v3/pkg/rgrpc/todo/pool"
+	"github.com/cs3org/reva/v3/pkg/service"
 	"github.com/pkg/errors"
 
 	goceph "github.com/ceph/go-ceph/cephfs"
@@ -233,7 +233,7 @@ func (fs *cephfs) getUserByID(ctx context.Context, uid string) (*userpb.User, er
 		return entity.(*userpb.User), nil
 	}
 
-	client, err := pool.GetGatewayServiceClient(pool.Endpoint(fs.conf.GatewaySvc))
+	client, err := service.Gateway(ctx)
 	if err != nil {
 		return nil, errors.Wrap(err, "cephfs: error getting gateway grpc client")
 	}
@@ -258,7 +258,7 @@ func (fs *cephfs) getUserByOpaqueID(ctx context.Context, oid string) (*userpb.Us
 	if entity, found := fs.conn.userCache.Get(oid); found {
 		return entity.(*userpb.User), nil
 	}
-	client, err := pool.GetGatewayServiceClient(pool.Endpoint(fs.conf.GatewaySvc))
+	client, err := service.Gateway(ctx)
 	if err != nil {
 		return nil, errors.Wrap(err, "cephfs: error getting gateway grpc client")
 	}
@@ -285,7 +285,7 @@ func (fs *cephfs) getGroupByID(ctx context.Context, gid string) (*grouppb.Group,
 		return entity.(*grouppb.Group), nil
 	}
 
-	client, err := pool.GetGatewayServiceClient(pool.Endpoint(fs.conf.GatewaySvc))
+	client, err := service.Gateway(ctx)
 	if err != nil {
 		return nil, errors.Wrap(err, "cephfs: error getting gateway grpc client")
 	}
@@ -309,7 +309,7 @@ func (fs *cephfs) getGroupByOpaqueID(ctx context.Context, oid string) (*grouppb.
 	if entity, found := fs.conn.groupCache.Get(oid); found {
 		return entity.(*grouppb.Group), nil
 	}
-	client, err := pool.GetGatewayServiceClient(pool.Endpoint(fs.conf.GatewaySvc))
+	client, err := service.Gateway(ctx)
 	if err != nil {
 		return nil, errors.Wrap(err, "cephfs: error getting gateway grpc client")
 	}

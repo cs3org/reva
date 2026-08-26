@@ -41,7 +41,7 @@ import (
 	"github.com/cs3org/reva/v3/pkg/errtypes"
 	"github.com/cs3org/reva/v3/pkg/httpclient"
 	"github.com/cs3org/reva/v3/pkg/rgrpc/status"
-	"github.com/cs3org/reva/v3/pkg/rgrpc/todo/pool"
+	"github.com/cs3org/reva/v3/pkg/service"
 	"github.com/cs3org/reva/v3/pkg/sharedconf"
 	"github.com/cs3org/reva/v3/pkg/utils/cfg"
 	"github.com/golang-jwt/jwt/v5"
@@ -272,7 +272,7 @@ func (am *mgr) Authenticate(ctx context.Context, _, clientSecret string) (*user.
 	}
 	log.Debug().Str("sub", sub).Msg("mapped user from token")
 
-	client, err := pool.GetGatewayServiceClient(pool.Endpoint(am.c.GatewaySvc))
+	client, err := service.Gateway(ctx)
 	if err != nil {
 		return nil, nil, errors.Wrap(err, "error getting user provider grpc client")
 	}

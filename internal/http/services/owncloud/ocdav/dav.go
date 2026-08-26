@@ -33,8 +33,8 @@ import (
 	"github.com/cs3org/reva/v3/pkg/appctx"
 	"github.com/cs3org/reva/v3/pkg/spaces"
 
-	"github.com/cs3org/reva/v3/pkg/rgrpc/todo/pool"
 	"github.com/cs3org/reva/v3/pkg/rhttp/router"
+	"github.com/cs3org/reva/v3/pkg/service"
 	"google.golang.org/grpc/metadata"
 )
 
@@ -172,12 +172,13 @@ func (h *DavHandler) Handler(s *svc) http.Handler {
 			case tail == "/":
 				s.handleFilesRoot(w, r)
 			case root == "home":
-				client, err := s.getClient()
+				client, err := service.Gateway(ctx)
 				if err != nil {
 					log.Error().Err(err).Msg("error getting gateway client")
 					w.WriteHeader(http.StatusInternalServerError)
 					return
 				}
+
 				res, err := client.GetHome(r.Context(), &provider.GetHomeRequest{})
 				if err != nil {
 					log.Error().Err(err).Msg("error getting user home")
@@ -188,12 +189,12 @@ func (h *DavHandler) Handler(s *svc) http.Handler {
 					HandleErrorStatus(log, w, res.Status)
 					return
 				}
+
 				r.URL.Path = path.Join(res.Path, rest)
 				h.FilesHomeHandler.Handler(s).ServeHTTP(w, r)
 			default:
 				h.FilesHandler.Handler(s).ServeHTTP(w, r)
 			}
-
 		case "meta":
 			base := path.Join(ctx.Value(ctxKeyBaseURI).(string), "meta")
 			ctx = context.WithValue(ctx, ctxKeyBaseURI, base)
@@ -270,7 +271,7 @@ func (h *DavHandler) Handler(s *svc) http.Handler {
 			base := path.Join(ctx.Value(ctxKeyBaseURI).(string), "ocm")
 			ctx := context.WithValue(ctx, ctxKeyBaseURI, base)
 
-			c, err := pool.GetGatewayServiceClient(pool.Endpoint(s.c.GatewaySvc))
+			c, err := service.Gateway(ctx)
 			if err != nil {
 				log.Error().Err(err).Msg("error getting gateway during OCM authentication")
 				w.WriteHeader(http.StatusInternalServerError)
@@ -360,7 +361,7 @@ func (h *DavHandler) Handler(s *svc) http.Handler {
 		case "public-files":
 			base := path.Join(ctx.Value(ctxKeyBaseURI).(string), "public-files")
 			ctx = context.WithValue(ctx, ctxKeyBaseURI, base)
-			c, err := pool.GetGatewayServiceClient(pool.Endpoint(s.c.GatewaySvc))
+			c, err := service.Gateway(ctx)
 			if err != nil {
 				w.WriteHeader(http.StatusNotFound)
 			}

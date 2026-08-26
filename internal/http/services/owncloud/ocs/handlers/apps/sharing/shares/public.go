@@ -39,7 +39,7 @@ import (
 	"github.com/cs3org/reva/v3/pkg/appctx"
 
 	"github.com/cs3org/reva/v3/pkg/publicshare"
-	"github.com/cs3org/reva/v3/pkg/rgrpc/todo/pool"
+	"github.com/cs3org/reva/v3/pkg/service"
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog/log"
 )
@@ -48,7 +48,7 @@ func (h *Handler) createPublicLinkShare(w http.ResponseWriter, r *http.Request, 
 	ctx := r.Context()
 	log := appctx.GetLogger(ctx)
 
-	c, err := pool.GetGatewayServiceClient(pool.Endpoint(h.gatewayAddr))
+	c, err := service.Gateway(ctx)
 	if err != nil {
 		response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "error getting grpc gateway client", err)
 		return
@@ -200,7 +200,7 @@ func (h *Handler) listPublicShares(r *http.Request, filters []*link.ListPublicSh
 	log := appctx.GetLogger(ctx)
 
 	ocsDataPayload := make([]*conversions.ShareData, 0)
-	client, err := pool.GetGatewayServiceClient(pool.Endpoint(h.gatewayAddr))
+	client, err := service.Gateway(ctx)
 	if err != nil {
 		return ocsDataPayload, nil, err
 	}
@@ -266,7 +266,7 @@ func (h *Handler) listPublicShares(r *http.Request, filters []*link.ListPublicSh
 
 func (h *Handler) isPublicShare(r *http.Request, oid string) bool {
 	logger := appctx.GetLogger(r.Context())
-	client, err := pool.GetGatewayServiceClient(pool.Endpoint(h.gatewayAddr))
+	client, err := service.Gateway(r.Context())
 	if err != nil {
 		logger.Err(err).Send()
 	}
@@ -292,7 +292,7 @@ func (h *Handler) updatePublicShare(w http.ResponseWriter, r *http.Request, shar
 	updates := []*link.UpdatePublicShareRequest_Update{}
 	logger := appctx.GetLogger(r.Context())
 
-	gwC, err := pool.GetGatewayServiceClient(pool.Endpoint(h.gatewayAddr))
+	gwC, err := service.Gateway(r.Context())
 	if err != nil {
 		log.Err(err).Str("shareID", shareID).Msg("updatePublicShare")
 		response.WriteOCSError(w, r, response.MetaBadRequest.StatusCode, "error getting a connection to the gateway service", nil)
@@ -493,7 +493,7 @@ func (h *Handler) updatePublicShare(w http.ResponseWriter, r *http.Request, shar
 	// NotifyUploadsExtraRecipients
 	newNotifyUploadsExtraRecipients, ok := r.Form["notifyUploadsExtraRecipients"]
 
-	if ok && permissionsStayUploader(before, newPermissions){
+	if ok && permissionsStayUploader(before, newPermissions) {
 		notifyUploadsExtraRecipients := newNotifyUploadsExtraRecipients[0]
 		updatesFound = true
 		logger.Info().Str("shares", "update").Msgf("notify uploads extra recipients updated to '%v'", notifyUploadsExtraRecipients)
@@ -556,7 +556,7 @@ func (h *Handler) updatePublicShare(w http.ResponseWriter, r *http.Request, shar
 func (h *Handler) removePublicShare(w http.ResponseWriter, r *http.Request, shareID string) {
 	ctx := r.Context()
 
-	c, err := pool.GetGatewayServiceClient(pool.Endpoint(h.gatewayAddr))
+	c, err := service.Gateway(ctx)
 	if err != nil {
 		response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "error getting grpc gateway client", err)
 		return

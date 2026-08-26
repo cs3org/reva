@@ -64,16 +64,15 @@ func newInviteRequest() *http.Request {
 }
 
 func TestAcceptInviteSuccessSetsJSONHeaders(t *testing.T) {
-	h := &invitesHandler{
-		gatewayClient: &invitesMockGW{
-			acceptResp: &invitepb.AcceptInviteResponse{
-				Status:      &rpc.Status{Code: rpc.Code_CODE_OK},
-				UserId:      &userpb.UserId{OpaqueId: "local-user"},
-				Email:       "marie@example.org",
-				DisplayName: "Marie Curie",
-			},
+	stampGateway(&invitesMockGW{
+		acceptResp: &invitepb.AcceptInviteResponse{
+			Status:      &rpc.Status{Code: rpc.Code_CODE_OK},
+			UserId:      &userpb.UserId{OpaqueId: "local-user"},
+			Email:       "marie@example.org",
+			DisplayName: "Marie Curie",
 		},
-	}
+	})
+	h := &invitesHandler{}
 
 	rr := httptest.NewRecorder()
 	h.AcceptInvite(rr, newInviteRequest())
@@ -95,16 +94,15 @@ func TestAcceptInviteSuccessSetsJSONHeaders(t *testing.T) {
 }
 
 func TestAcceptInviteInvalidArgumentUsesBackendMessage(t *testing.T) {
-	h := &invitesHandler{
-		gatewayClient: &invitesMockGW{
-			acceptResp: &invitepb.AcceptInviteResponse{
-				Status: &rpc.Status{
-					Code:    rpc.Code_CODE_INVALID_ARGUMENT,
-					Message: "token invalid or not found",
-				},
+	stampGateway(&invitesMockGW{
+		acceptResp: &invitepb.AcceptInviteResponse{
+			Status: &rpc.Status{
+				Code:    rpc.Code_CODE_INVALID_ARGUMENT,
+				Message: "token invalid or not found",
 			},
 		},
-	}
+	})
+	h := &invitesHandler{}
 
 	rr := httptest.NewRecorder()
 	h.AcceptInvite(rr, newInviteRequest())

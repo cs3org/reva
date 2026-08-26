@@ -36,7 +36,7 @@ import (
 	"github.com/cs3org/reva/v3/pkg/plugin"
 	"github.com/cs3org/reva/v3/pkg/rgrpc"
 	"github.com/cs3org/reva/v3/pkg/rgrpc/status"
-	"github.com/cs3org/reva/v3/pkg/rgrpc/todo/pool"
+	revaservice "github.com/cs3org/reva/v3/pkg/service"
 	"github.com/cs3org/reva/v3/pkg/sharedconf"
 	"github.com/cs3org/reva/v3/pkg/utils"
 	"github.com/cs3org/reva/v3/pkg/utils/cfg"
@@ -146,7 +146,7 @@ func (s *service) registerProvider(ctx context.Context) {
 		log.Info().Str("appprovider", s.conf.AppProviderURL).Interface("mimetypes", mimeTypes).Msg("appprovider supported mimetypes")
 	}
 
-	client, err := pool.GetGatewayServiceClient(pool.Endpoint(s.conf.GatewaySvc))
+	client, err := revaservice.Gateway(ctx)
 	if err != nil {
 		log.Error().Err(err).Msgf("error registering app provider: could not get gateway client")
 		return

@@ -32,12 +32,13 @@ import (
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
+
 	"github.com/cs3org/reva/v3/internal/http/services/owncloud/ocs/conversions"
 	"github.com/cs3org/reva/v3/pkg/appctx"
 	"github.com/cs3org/reva/v3/pkg/spaces"
 
-	"github.com/cs3org/reva/v3/pkg/rgrpc/todo/pool"
 	"github.com/cs3org/reva/v3/pkg/rhttp/router"
+	"github.com/cs3org/reva/v3/pkg/service"
 	"github.com/cs3org/reva/v3/pkg/utils"
 	"github.com/cs3org/reva/v3/pkg/utils/resourceid"
 )
@@ -165,7 +166,7 @@ func (h *TrashbinHandler) Handler(s *svc) http.Handler {
 		// If not, we user the user home to route the request
 		basePath := r.URL.Query().Get("base_path")
 		if basePath == "" {
-			gc, err := pool.GetGatewayServiceClient(pool.Endpoint(s.c.GatewaySvc))
+			gc, err := service.Gateway(ctx)
 			if err != nil {
 				// TODO(jfd) how do we make the user aware that some storages are not available?
 				// opaque response property? Or a list of errors?
@@ -263,7 +264,7 @@ func (h *TrashbinHandler) listTrashbin(w http.ResponseWriter, r *http.Request, s
 		return
 	}
 
-	gc, err := pool.GetGatewayServiceClient(pool.Endpoint(s.c.GatewaySvc))
+	gc, err := service.Gateway(ctx)
 	if err != nil {
 		// TODO(jfd) how do we make the user aware that some storages are not available?
 		// opaque response property? Or a list of errors?
@@ -532,7 +533,7 @@ func (h *TrashbinHandler) restore(w http.ResponseWriter, r *http.Request, s *svc
 		return
 	}
 
-	client, err := s.getClient()
+	client, err := service.Gateway(ctx)
 	if err != nil {
 		sublog.Error().Err(err).Msg("error getting grpc client")
 		w.WriteHeader(http.StatusInternalServerError)
@@ -666,7 +667,7 @@ func (h *TrashbinHandler) delete(w http.ResponseWriter, r *http.Request, s *svc,
 	ctx := r.Context()
 	sublog := appctx.GetLogger(ctx).With().Str("key", key).Logger()
 
-	client, err := s.getClient()
+	client, err := service.Gateway(ctx)
 	if err != nil {
 		sublog.Error().Err(err).Msg("error getting grpc client")
 		w.WriteHeader(http.StatusInternalServerError)

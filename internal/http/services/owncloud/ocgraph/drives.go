@@ -36,13 +36,15 @@ import (
 	rpcv1beta1 "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	collaborationv1beta1 "github.com/cs3org/go-cs3apis/cs3/sharing/collaboration/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
-	"github.com/cs3org/reva/v3/pkg/appctx"
-	"github.com/cs3org/reva/v3/pkg/rhttp/router"
-	"github.com/cs3org/reva/v3/pkg/spaces"
-	"github.com/cs3org/reva/v3/pkg/utils/list"
 	gomime "github.com/glpatcern/go-mime"
 	"github.com/go-chi/chi/v5"
 	libregraph "github.com/owncloud/libre-graph-api-go"
+
+	"github.com/cs3org/reva/v3/pkg/appctx"
+	"github.com/cs3org/reva/v3/pkg/rhttp/router"
+	"github.com/cs3org/reva/v3/pkg/service"
+	"github.com/cs3org/reva/v3/pkg/spaces"
+	"github.com/cs3org/reva/v3/pkg/utils/list"
 
 	"github.com/pkg/errors"
 )
@@ -51,7 +53,7 @@ func (s *svc) listMySpaces(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	log := appctx.GetLogger(ctx)
 
-	gw, err := s.getClient()
+	gw, err := service.Gateway(ctx)
 	if err != nil {
 		log.Error().Err(err).Msg("error getting grpc client")
 		handleError(ctx, err, w)
@@ -181,7 +183,7 @@ func (s *svc) cs3StorageSpaceToDrive(ctx context.Context, user *userpb.User, spa
 	drive.Root = &libregraph.DriveItem{}
 
 	if space.ReadmeId != "" || space.ThumbnailId != "" {
-		gw, err := s.getClient()
+		gw, err := service.Gateway(ctx)
 		// If an error occurs, we just don't set the readme / thumbnail
 		if err == nil {
 			if space.ReadmeId != "" {
@@ -258,7 +260,7 @@ func (s *svc) getSpace(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	log := appctx.GetLogger(ctx)
 
-	gw, err := s.getClient()
+	gw, err := service.Gateway(ctx)
 	if err != nil {
 		log.Error().Err(err).Msg("error getting grpc client")
 		handleError(ctx, err, w)
@@ -363,7 +365,7 @@ func (s *svc) patchSpace(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	gw, err := s.getClient()
+	gw, err := service.Gateway(ctx)
 	if err != nil {
 		log.Error().Err(err).Msg("error getting grpc client")
 		handleError(ctx, err, w)

@@ -36,7 +36,6 @@ import (
 	mockgateway "github.com/cs3org/go-cs3apis/mocks/github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
 	"github.com/cs3org/reva/v3/pkg/appctx"
 	"github.com/cs3org/reva/v3/pkg/httpclient"
-	"github.com/cs3org/reva/v3/pkg/rgrpc/todo/pool"
 	"github.com/rs/zerolog"
 	"github.com/stretchr/testify/mock"
 )
@@ -78,7 +77,7 @@ func TestDisableVersioningHeaderPassedAlong(t *testing.T) {
 		Protocols: []*gateway.FileUploadProtocol{
 			{Protocol: "simple", UploadEndpoint: endpointPath, Token: "my-secret-token"},
 		}}, nil)
-	pool.RegisterGatewayServiceClient(gatewayClient, gatewayAPIEndpoint)
+	stampGateway(gatewayClient)
 
 	// Set up OCDAV Service
 	service := svc{
@@ -135,7 +134,7 @@ func TestUploaderRolePutReturnsFilename(t *testing.T) {
 		Protocols: []*gateway.FileUploadProtocol{
 			{Protocol: "simple", UploadEndpoint: mockServerUpload.URL, Token: "my-secret-token"},
 		}}, nil)
-	pool.RegisterGatewayServiceClient(gatewayClient, gatewayAPIEndpoint)
+	stampGateway(gatewayClient)
 
 	service := svc{
 		c: &Config{

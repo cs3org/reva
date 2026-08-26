@@ -1,0 +1,75 @@
+[log]
+
+[shared]
+gatewaysvc = "{{grpc_address}}"
+
+# einstein's home: the localhome storage/data providers and the json (basic /
+# bearer) auth provider. The HTTP data provider's auth middleware resolves the
+# gateway to validate tokens, so this process runs its own gateway co-resident
+# with the auth/user providers. The storage provider and its data provider share
+# this process's in-process registry and discover each other by mount_id.
+
+[shared.registry]
+driver = "memory"
+
+[grpc]
+address = "{{grpc_address}}"
+
+[grpc.services.gateway]
+authregistrysvc = "{{grpc_address}}"
+userprovidersvc = "{{grpc_address}}"
+storageregistrysvc = "{{grpc_address}}"
+datagateway = "http://{{http_address}}/datagateway"
+
+[grpc.services.storageregistry]
+[grpc.services.storageregistry.drivers.static]
+home_provider = "/home"
+[grpc.services.storageregistry.drivers.static.rules]
+"/home" = {"address" = "{{grpc_address}}"}
+"123e4567-e89b-12d3-a456-426655440000" = {"address" = "{{grpc_address}}"}
+
+[grpc.services.storageprovider]
+driver = "localhome"
+mount_path = "/home"
+space_depth = 2
+mount_id = "123e4567-e89b-12d3-a456-426655440000"
+data_server_url = "http://{{http_address}}/data"
+
+[grpc.services.storageprovider.drivers.localhome]
+root = "{{localhome_root}}"
+
+[grpc.services.authregistry]
+driver = "static"
+
+[grpc.services.authregistry.drivers.static.rules]
+basic = "{{grpc_address}}"
+bearer = "{{grpc_address}}"
+
+[grpc.services.authprovider]
+auth_manager = "json"
+
+[grpc.services.authprovider.auth_managers.json]
+users = "fixtures/ocm-users.demo.json"
+
+[grpc.services.userprovider]
+driver = "json"
+
+[grpc.services.userprovider.drivers.json]
+users = "fixtures/ocm-users.demo.json"
+
+[http]
+address = "{{http_address}}"
+
+[http.middlewares.auth]
+token_strategy = "bearer"
+
+[http.services.datagateway]
+public_url = "http://{{http_address}}/datagateway"
+
+[http.services.dataprovider]
+driver = "localhome"
+mount_id = "123e4567-e89b-12d3-a456-426655440000"
+public_url = "http://{{http_address}}/data"
+
+[http.services.dataprovider.drivers.localhome]
+root = "{{localhome_root}}"

@@ -40,7 +40,7 @@ import (
 	"github.com/cs3org/reva/v3/pkg/httpclient"
 	"github.com/cs3org/reva/v3/pkg/ocm/share"
 	"github.com/cs3org/reva/v3/pkg/permissions"
-	"github.com/cs3org/reva/v3/pkg/rgrpc/todo/pool"
+	"github.com/cs3org/reva/v3/pkg/service"
 	jwt "github.com/cs3org/reva/v3/pkg/token/manager/jwt"
 	"github.com/cs3org/reva/v3/tests/helpers"
 	. "github.com/onsi/ginkgo"
@@ -126,14 +126,10 @@ var _ = Describe("ocm share", func() {
 		ctxEinstein = ctxWithAuthToken(tokenManager, einstein)
 		ctxMarie = ctxWithAuthToken(tokenManager, marie)
 		revads, err = startRevads(map[string]string{
-			"cernboxgw":            "ocm-server-cernbox-grpc.toml",
-			"cernboxwebdav":        "cernbox-webdav-server.toml",
-			"cernboxhttp":          "ocm-server-cernbox-http.toml",
-			"cesnetgw":             "ocm-server-cesnet-grpc.toml",
-			"cesnethttp":           "ocm-server-cesnet-http.toml",
-			"cernboxoutcomingocm":  "ocm-cernbox-outcoming-shares.toml",
-			"cernboxocmdataserver": "ocm-cernbox-outcoming-dataserver.toml",
-			"cernboxmachineauth":   "cernbox-machine-authprovider.toml",
+			"cernboxgw":          "ocm-server-cernbox-grpc.toml",
+			"cernboxhome":        "cernbox-home-server.toml",
+			"cesnetgw":           "ocm-server-cesnet-grpc.toml",
+			"cernboxmachineauth": "cernbox-machine-authprovider.toml",
 		}, map[string]string{
 			"providers": "ocm-providers.demo.json",
 		}, map[string]Resource{
@@ -141,14 +137,11 @@ var _ = Describe("ocm share", func() {
 			"ocm_share_cesnet_file":  File{Content: "{}"},
 			"invite_token_file":      File{Content: "{}"},
 			"localhome_root":         Folder{},
-		}, variables, map[string]string{
-			"cernboxhttp": "127.0.0.1:12345",
-			"cesnethttp":  "127.0.0.1:54321",
-		})
+		}, variables)
 		Expect(err).ToNot(HaveOccurred())
-		cernboxgw, err = pool.GetGatewayServiceClient(pool.Endpoint(revads["cernboxgw"].GrpcAddress))
+		cernboxgw, err = service.GatewayAt(revads["cernboxgw"].GrpcAddress)
 		Expect(err).ToNot(HaveOccurred())
-		cesnetgw, err = pool.GetGatewayServiceClient(pool.Endpoint(revads["cesnetgw"].GrpcAddress))
+		cesnetgw, err = service.GatewayAt(revads["cesnetgw"].GrpcAddress)
 		Expect(err).ToNot(HaveOccurred())
 		cernbox.Services[0].Endpoint.Path = "http://127.0.0.1:12345/ocm"
 

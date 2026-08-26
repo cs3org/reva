@@ -23,7 +23,6 @@ import (
 	"encoding/json"
 	"net/http"
 
-	gateway "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
 	ocm "github.com/cs3org/go-cs3apis/cs3/sharing/ocm/v1beta1"
 	storageprovider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/cs3org/reva/v3/internal/http/services/owncloud/ocgraph"
@@ -34,21 +33,15 @@ import (
 	"google.golang.org/protobuf/types/known/fieldmaskpb"
 
 	ocmconversions "github.com/cs3org/reva/v3/pkg/ocm/conversions"
-	"github.com/cs3org/reva/v3/pkg/rgrpc/todo/pool"
+	"github.com/cs3org/reva/v3/pkg/service"
 	libregraph "github.com/owncloud/libre-graph-api-go"
 )
 
 type embeddedHandler struct {
-	gatewayClient gateway.GatewayAPIClient
-	config        *config
+	config *config
 }
 
 func (h *embeddedHandler) init(c *config) error {
-	var err error
-	h.gatewayClient, err = pool.GetGatewayServiceClient(pool.Endpoint(c.GatewaySvc))
-	if err != nil {
-		return err
-	}
 	h.config = c
 
 	return nil
@@ -87,7 +80,14 @@ func (h *embeddedHandler) ProcessEmbeddedShare(w http.ResponseWriter, r *http.Re
 		req.Share.State = ocm.ShareState_SHARE_STATE_PENDING
 	}
 
-	_, err := h.gatewayClient.UpdateReceivedOCMShare(ctx, &req)
+	gatewayClient, err := service.Gateway(ctx)
+	if err != nil {
+		log.Error().Err(err).Msg("error getting gateway client")
+		reqres.WriteError(w, r, reqres.APIErrorServerError, "error getting gateway client", err)
+		return
+	}
+
+	_, err = gatewayClient.UpdateReceivedOCMShare(ctx, &req)
 
 	if err != nil {
 		log.Error().Err(err).Msg("error accepting embedded share")
@@ -103,7 +103,14 @@ func (h *embeddedHandler) ListEmbeddedShares(w http.ResponseWriter, r *http.Requ
 	ctx := r.Context()
 	log := appctx.GetLogger(ctx)
 
-	ocm_shares, err := h.gatewayClient.ListReceivedOCMShares(ctx, &ocm.ListReceivedOCMSharesRequest{
+	gatewayClient, err := service.Gateway(ctx)
+	if err != nil {
+		log.Error().Err(err).Msg("error getting gateway client")
+		reqres.WriteError(w, r, reqres.APIErrorServerError, "error getting gateway client", err)
+		return
+	}
+
+	ocm_shares, err := gatewayClient.ListReceivedOCMShares(ctx, &ocm.ListReceivedOCMSharesRequest{
 		Filters: []*ocm.ListReceivedOCMSharesRequest_Filter{
 			{
 				Type: ocm.ListReceivedOCMSharesRequest_Filter_TYPE_SHARE_TYPE,
@@ -119,7 +126,7 @@ func (h *embeddedHandler) ListEmbeddedShares(w http.ResponseWriter, r *http.Requ
 		return
 	}
 	// Create the OCM converter
-	converter := ocmconversions.NewConverter(h.gatewayClient, &ocmconversions.Config{
+	converter := ocmconversions.NewConverter(gatewayClient, &ocmconversions.Config{
 		WebBase: "", // sciencemesh doesn't have a web base configured
 	})
 

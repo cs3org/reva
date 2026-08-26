@@ -41,6 +41,7 @@ import (
 	link "github.com/cs3org/go-cs3apis/cs3/sharing/link/v1beta1"
 	ocmv1beta1 "github.com/cs3org/go-cs3apis/cs3/sharing/ocm/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
+
 	"github.com/cs3org/reva/v3/internal/http/services/owncloud/ocdav"
 	"github.com/cs3org/reva/v3/internal/http/services/owncloud/ocs/config"
 	"github.com/cs3org/reva/v3/internal/http/services/owncloud/ocs/conversions"
@@ -53,7 +54,7 @@ import (
 	"github.com/cs3org/reva/v3/pkg/spaces"
 
 	"github.com/cs3org/reva/v3/pkg/publicshare"
-	"github.com/cs3org/reva/v3/pkg/rgrpc/todo/pool"
+	"github.com/cs3org/reva/v3/pkg/service"
 	"github.com/cs3org/reva/v3/pkg/share"
 	"github.com/cs3org/reva/v3/pkg/share/cache"
 	cachereg "github.com/cs3org/reva/v3/pkg/share/cache/registry"
@@ -72,8 +73,6 @@ const (
 
 // Handler implements the shares part of the ownCloud sharing API.
 type Handler struct {
-	gatewayAddr                string
-	storageRegistryAddr        string
 	publicURL                  string
 	sharePrefix                string
 	homeNamespace              string
@@ -113,8 +112,6 @@ func getCacheManager(c *config.Config) (cache.ResourceInfoCache, error) {
 
 // Init initializes this and any contained handlers.
 func (h *Handler) Init(c *config.Config, l *zerolog.Logger) {
-	h.gatewayAddr = c.GatewaySvc
-	h.storageRegistryAddr = c.StorageregistrySvc
 	h.publicURL = c.Config.Host
 	h.sharePrefix = c.SharePrefix
 	h.homeNamespace = c.HomeNamespace
@@ -197,7 +194,7 @@ func (h *Handler) CreateShare(w http.ResponseWriter, r *http.Request) {
 	}
 	// get user permissions on the shared file
 
-	client, err := pool.GetGatewayServiceClient(pool.Endpoint(h.gatewayAddr))
+	client, err := service.Gateway(ctx)
 	if err != nil {
 		response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "error getting grpc gateway client", err)
 		return
@@ -281,7 +278,7 @@ func (h *Handler) NotifyShare(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	c, err := pool.GetGatewayServiceClient(pool.Endpoint(h.gatewayAddr))
+	c, err := service.Gateway(ctx)
 	if err != nil {
 		response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "error getting grpc gateway client", err)
 		return
@@ -527,7 +524,7 @@ func (h *Handler) GetShare(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	log := appctx.GetLogger(r.Context())
 	log.Debug().Str("shareID", shareID).Msg("get share by id")
-	client, err := pool.GetGatewayServiceClient(pool.Endpoint(h.gatewayAddr))
+	client, err := service.Gateway(ctx)
 	if err != nil {
 		response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "error getting grpc gateway client", err)
 		return
@@ -671,7 +668,7 @@ func (h *Handler) updateShare(w http.ResponseWriter, r *http.Request, shareID st
 		return
 	}
 
-	client, err := pool.GetGatewayServiceClient(pool.Endpoint(h.gatewayAddr))
+	client, err := service.Gateway(ctx)
 	if err != nil {
 		response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "error getting grpc gateway client", err)
 		return
@@ -766,7 +763,7 @@ func (h *Handler) updateFederatedShare(w http.ResponseWriter, r *http.Request, s
 		return
 	}
 
-	client, err := pool.GetGatewayServiceClient(pool.Endpoint(h.gatewayAddr))
+	client, err := service.Gateway(ctx)
 	if err != nil {
 		response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "error getting grpc gateway client", err)
 		return
@@ -867,13 +864,12 @@ func (h *Handler) listSharesWithMe(w http.ResponseWriter, r *http.Request) {
 	stateFilter := getStateFilter(state)
 
 	log := appctx.GetLogger(r.Context())
-	client, err := pool.GetGatewayServiceClient(pool.Endpoint(h.gatewayAddr))
+	ctx := r.Context()
+	client, err := service.Gateway(ctx)
 	if err != nil {
 		response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "error getting grpc gateway client", err)
 		return
 	}
-
-	ctx := r.Context()
 
 	var pinfo *provider.ResourceInfo
 	p := r.URL.Query().Get("path")
@@ -1209,7 +1205,7 @@ func (h *Handler) addFilters(w http.ResponseWriter, r *http.Request, prefix stri
 	ctx := r.Context()
 
 	// first check if the file exists
-	client, err := pool.GetGatewayServiceClient(pool.Endpoint(h.gatewayAddr))
+	client, err := service.Gateway(ctx)
 	if err != nil {
 		response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "error getting grpc gateway client", err)
 		return nil, nil, err

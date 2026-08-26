@@ -31,7 +31,6 @@ import (
 	"github.com/cs3org/reva/v3/pkg/appctx"
 	"github.com/cs3org/reva/v3/pkg/notifications"
 	"github.com/cs3org/reva/v3/pkg/notifications/model"
-	"github.com/cs3org/reva/v3/pkg/rgrpc/todo/pool"
 	"github.com/cs3org/reva/v3/pkg/sharedconf"
 	"google.golang.org/grpc"
 )
@@ -63,7 +62,7 @@ func TestHandleFeedbackPublishesEvent(t *testing.T) {
 
 	endpoint := "feedback-" + t.Name()
 	gw := &feedbackGateway{}
-	pool.RegisterGatewayServiceClient(gw, endpoint)
+	stampGateway(gw)
 
 	s := &svc{conf: &Config{GatewaySvc: endpoint, FeedbackRecipient: "cernbox-admins@cern.ch"}}
 	submitter := mentionUser("einstein", "einstein@cern.ch")
@@ -119,7 +118,7 @@ func TestHandleFeedbackValidation(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			endpoint := "feedback-" + t.Name()
-			pool.RegisterGatewayServiceClient(&feedbackGateway{}, endpoint)
+			stampGateway(&feedbackGateway{})
 			s := &svc{conf: &Config{GatewaySvc: endpoint, FeedbackRecipient: tt.recipient}}
 
 			req := httptest.NewRequest(http.MethodPost, "/app/feedback", strings.NewReader(tt.body))

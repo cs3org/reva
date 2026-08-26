@@ -30,9 +30,11 @@ import (
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	typespb "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
+	"github.com/rs/zerolog"
+
 	"github.com/cs3org/reva/v3/internal/http/services/datagateway"
 	"github.com/cs3org/reva/v3/pkg/appctx"
-	"github.com/rs/zerolog"
+	"github.com/cs3org/reva/v3/pkg/service"
 )
 
 type copy struct {
@@ -102,7 +104,7 @@ func (s *svc) handlePathCopy(w http.ResponseWriter, r *http.Request, ns string) 
 		return
 	}
 
-	client, err := s.getClient()
+	client, err := service.Gateway(ctx)
 	if err != nil {
 		sublog.Error().Err(err).Msg("error getting grpc client")
 		w.WriteHeader(http.StatusInternalServerError)
@@ -304,7 +306,7 @@ func (s *svc) prepareCopy(ctx context.Context, w http.ResponseWriter, r *http.Re
 
 	log.Debug().Str("overwrite", overwrite).Str("depth", depth).Msg("copy")
 
-	client, err := s.getClient()
+	client, err := service.Gateway(ctx)
 	if err != nil {
 		log.Error().Err(err).Msg("error getting grpc client")
 		w.WriteHeader(http.StatusInternalServerError)

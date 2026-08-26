@@ -16,66 +16,36 @@
 // granted to it by virtue of its status as an Intergovernmental Organization
 // or submit itself to any jurisdiction.
 
+// Package memory is the default, in-process registry backend. It is a no-op
+// Driver: there is no shared store, so all logic lives in registry.BaseRegistry.
 package memory
 
-import (
-	"fmt"
-	"sync"
+import "github.com/cs3org/reva/v3/pkg/registry"
 
-	"github.com/cs3org/reva/v3/pkg/registry"
-)
-
-// Registry implements the Registry interface.
-type Registry struct {
-	// m protects async access to the services map.
-	sync.Mutex
-	// services map a service name with a set of nodes.
-	services map[string]registry.Service
+func init() {
+	registry.Register("memory", func(m map[string]any) (registry.Driver, error) {
+		return &driver{events: make(chan registry.Event)}, nil
+	})
 }
 
-// Add implements the Registry interface. If the service is already known in this registry it will only update the nodes.
-func (r *Registry) Add(svc registry.Service) error {
-	r.Lock()
-	defer r.Unlock()
+type driver struct {
+	events chan registry.Event // never written; closed on Close
+}
 
-	// append the nodes if the service is already registered.
-	if _, ok := r.services[svc.Name()]; ok {
-		s := service{
-			name:  svc.Name(),
-			nodes: make([]node, 0),
-		}
+func (d *driver) Add(string, registry.Node) error       { return nil }
+func (d *driver) Remove(string, string) error           { return nil }
+func (d *driver) Watch() (<-chan registry.Event, error) { return d.events, nil }
 
-		s.mergeNodes(svc.Nodes(), r.services[svc.Name()].Nodes())
-
-		r.services[svc.Name()] = s
-		return nil
+func (d *driver) Close() {
+	select {
+	case <-d.events:
+	default:
+		close(d.events)
 	}
-
-	r.services[svc.Name()] = svc
-	return nil
 }
 
-// GetService implements the Registry interface. There is currently no load balance being done, but it should not be
-// hard to add.
-func (r *Registry) GetService(name string) (registry.Service, error) {
-	r.Lock()
-	defer r.Unlock()
-
-	if service, ok := r.services[name]; ok {
-		return service, nil
-	}
-
-	return nil, fmt.Errorf("service %v not found", name)
-}
-
-// New returns an implementation of the Registry interface.
+// New returns an in-memory registry.Registry, for callers that build the
+// backend directly.
 func New(m map[string]any) registry.Registry {
-	// c, err := registry.ParseConfig(m)
-	// if err != nil {
-	//	return nil
-	// }
-
-	return &Registry{
-		services: map[string]registry.Service{},
-	}
+	return registry.NewBase(&driver{events: make(chan registry.Event)}, registry.Thresholds{})
 }
