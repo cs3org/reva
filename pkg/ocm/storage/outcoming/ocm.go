@@ -285,13 +285,13 @@ func (d *driver) translateOCMShareResourceToCS3Ref(ctx context.Context, resID *p
 	return &provider.Reference{Path: p}, nil
 }
 
-func (d *driver) CreateDir(ctx context.Context, ref *provider.Reference) error {
+func (d *driver) CreateDir(ctx context.Context, ref *provider.Reference) (*provider.ResourceInfo, error) {
 	share, rel, err := d.shareAndRelativePathFromRef(ctx, ref)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
-	return d.unwrappedOpFromShareCreator(ctx, share, rel, func(ctx context.Context, ref *provider.Reference) error {
+	return nil, d.unwrappedOpFromShareCreator(ctx, share, rel, func(ctx context.Context, ref *provider.Reference) error {
 		res, err := d.gateway.CreateContainer(ctx, &provider.CreateContainerRequest{Ref: ref})
 		switch {
 		case err != nil:
