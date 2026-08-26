@@ -8,8 +8,8 @@ import (
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/cs3org/reva/v3/pkg/appctx"
-	"github.com/cs3org/reva/v3/pkg/rgrpc/todo/pool"
 	"github.com/cs3org/reva/v3/pkg/rjobs"
+	"github.com/cs3org/reva/v3/pkg/service"
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog"
 	"google.golang.org/grpc/metadata"
@@ -45,7 +45,6 @@ type CleanupJob struct {
 
 type Config struct {
 	MachineSecret        string
-	GatewaySvc           string
 	TakeoutAdminUsername string
 	TakeoutPath          string
 	// The frequency at which the cleanup job is run
@@ -57,8 +56,8 @@ type Config struct {
 func (cj *CleanupJob) Run(ctx context.Context) error {
 	cj.log.Info().Msg("running cleanup job")
 
-	// Setup gateway
-	gtw, err := pool.GetGatewayServiceClient(pool.Endpoint(cj.conf.GatewaySvc))
+	// Resolve the gateway through the service registry
+	gtw, err := service.Gateway(ctx)
 	if err != nil {
 		return err
 	}

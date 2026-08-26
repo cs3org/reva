@@ -13,6 +13,7 @@ import (
 	"time"
 
 	gateway "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
+	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	link "github.com/cs3org/go-cs3apis/cs3/sharing/link/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
@@ -28,8 +29,8 @@ import (
 	"github.com/cs3org/reva/v3/pkg/httpclient"
 	"github.com/cs3org/reva/v3/pkg/notifications"
 	"github.com/cs3org/reva/v3/pkg/notifications/model"
-	"github.com/cs3org/reva/v3/pkg/rgrpc/todo/pool"
 	"github.com/cs3org/reva/v3/pkg/rjobs"
+	"github.com/cs3org/reva/v3/pkg/service"
 	"github.com/cs3org/reva/v3/pkg/storage/utils/downloader"
 	"github.com/cs3org/reva/v3/pkg/storage/utils/walker"
 	"github.com/cs3org/reva/v3/pkg/utils/cfg"
@@ -55,7 +56,6 @@ func init() {
 // The takeout job config
 type config struct {
 	MachineSecret        string `mapstructure:"machine_secret" validate:"required"`
-	GatewaySvc           string `mapstructure:"gatewaysvc" validate:"required"`
 	Insecure             bool   `mapstructure:"insecure"`
 	TakeoutAdminUsername string `mapstructure:"takeout_admin_username" validate:"required"`
 	TakeoutPath          string `mapstructure:"takeout_path" validate:"required"`
@@ -74,10 +74,17 @@ type config struct {
 
 // The takeout job structure
 type job struct {
-	conf    *config
-	log     *zerolog.Logger
+	conf *config
+	log  *zerolog.Logger
+	hc   *httpclient.Client
+}
+
+// The per-run state, the gateway is resolved through the service registry when the
+// run starts rather than when the job is built, so a gateway that is not up yet does
+// not turn into a startup failure
+type run struct {
+	*job
 	gtw     gateway.GatewayAPIClient
-	hc      *httpclient.Client
 	bundler *bundler.Bundler
 }
 
@@ -92,20 +99,24 @@ func New(ctx context.Context, m map[string]any) (rjobs.Job, error) {
 	// Declare logger
 	l := appctx.GetLogger(ctx)
 
-	// Setup gateway
-	gtw, err := pool.GetGatewayServiceClient(pool.Endpoint(c.GatewaySvc))
-	if err != nil {
-		return nil, errors.Wrap(err, "takeout: gateway client setup failed")
-	}
-
 	// Setup the http client for downloads and uploads
 	tr := &http.Transport{TLSClientConfig: &tls.Config{InsecureSkipVerify: c.Insecure}}
 	hc := httpclient.New(httpclient.RoundTripper(tr))
 
-	// Setup the bundler with a walker and a downloader
-	b := bundler.New(walker.NewWalker(gtw), downloader.NewDownloader(gtw, hc))
+	return &job{conf: &c, log: l, hc: hc}, nil
+}
 
-	return &job{conf: &c, log: l, gtw: gtw, hc: hc, bundler: b}, nil
+// newRun resolves the gateway and builds the deps needed for a single run
+func (j *job) newRun(ctx context.Context) (*run, error) {
+	gtw, err := service.Gateway(ctx)
+	if err != nil {
+		return nil, errors.Wrap(err, "takeout: gateway could not be resolved")
+	}
+
+	// Setup the bundler with a walker and a downloader
+	b := bundler.New(walker.NewWalker(gtw), downloader.NewDownloader(gtw, j.hc))
+
+	return &run{job: j, gtw: gtw, bundler: b}, nil
 }
 
 // The per-run takeout parameters
@@ -146,26 +157,32 @@ func (j *job) Run(ctx context.Context, p rjobs.Params) (res rjobs.Params, err er
 	}
 	j.log.Info().Msgf("takeout: using parameters %+v", pp)
 
+	// Resolve the gateway and build the per-run deps
+	r, err := j.newRun(ctx)
+	if err != nil {
+		return nil, err
+	}
+
 	// Setup authentication: user context to walk and download, admin context to upload
-	userCtx, err := j.authenticate(ctx, pp.Username)
+	userCtx, err := r.authenticate(ctx, pp.Username)
 	if err != nil {
 		return nil, errors.Wrap(err, "takeout: user authentication failed")
 	}
-	adminCtx, err := j.authenticate(ctx, j.conf.TakeoutAdminUsername)
+	adminCtx, err := r.authenticate(ctx, j.conf.TakeoutAdminUsername)
 	if err != nil {
 		return nil, errors.Wrap(err, "takeout: admin authentication failed")
 	}
 
 	// Set the destination directory and create it
 	archPath := fmt.Sprintf("%s/%s_%s/", j.conf.TakeoutPath, pp.Username, time.Now().Format("2006-01-02"))
-	if err := j.createTakeoutContainer(adminCtx, archPath); err != nil {
+	if err := r.createTakeoutContainer(adminCtx, archPath); err != nil {
 		return nil, errors.Wrap(err, "takeout: destination directory could not be created")
 	}
 
 	// Drop the destination directory when the run does not complete, on a failure as on a cancellation
 	defer func() {
 		if err != nil {
-			j.cleanupTakeoutContainer(adminCtx, archPath)
+			r.cleanupTakeoutContainer(adminCtx, archPath)
 		}
 	}()
 
@@ -177,31 +194,31 @@ func (j *job) Run(ctx context.Context, p rjobs.Params) (res rjobs.Params, err er
 		skipped = append(skipped, path)
 		return nil
 	}
-	err = j.bundler.Create(userCtx, opts, j.newPartFunc(adminCtx, archPath, string(pp.ArchiveFormat)))
+	err = r.bundler.Create(userCtx, opts, r.newPartFunc(adminCtx, archPath, string(pp.ArchiveFormat)))
 	if err != nil {
 		return nil, errors.Wrapf(err, "takeout: %s archive could not be created", pp.ArchiveFormat)
 	}
 
 	// Tell the user what is missing from their takeout
 	if len(skipped) > 0 {
-		j.uploadSkipped(adminCtx, archPath, skipped)
+		r.uploadSkipped(adminCtx, archPath, skipped)
 	}
 
 	// Share the folder containing the archives through a public link
 	expiration := time.Now().Add(time.Duration(j.conf.ExpirationDelay) * time.Hour)
-	token, err := j.createPublicShare(adminCtx, archPath, expiration)
+	token, err := r.createPublicShare(adminCtx, archPath, expiration)
 	if err != nil {
 		return nil, errors.Wrap(err, "takeout: public share could not be created")
 	}
 
 	// List the created archives with their download links
-	archives, err := j.listArchives(adminCtx, archPath, token)
+	archives, err := r.listArchives(adminCtx, archPath, token)
 	if err != nil {
 		return nil, errors.Wrap(err, "takeout: archives could not be listed")
 	}
 
 	// Notify the user that their takeout is ready
-	j.notifyCompletion(userCtx, archives, expiration)
+	r.notifyCompletion(userCtx, archives, expiration)
 
 	// Return the public link to the archives and their location
 	res = rjobs.Params{"archives_tok": token, "archives_path": archPath}
@@ -250,8 +267,8 @@ func (j *job) bundleOpts(pp params) bundler.Options {
 }
 
 // listArchives lists the created archives, a public link download of a single file serves it directly
-func (j *job) listArchives(adminCtx context.Context, archPath, token string) ([]archive, error) {
-	lsRes, err := j.gtw.ListContainer(adminCtx, &provider.ListContainerRequest{
+func (r *run) listArchives(adminCtx context.Context, archPath, token string) ([]archive, error) {
+	lsRes, err := r.gtw.ListContainer(adminCtx, &provider.ListContainerRequest{
 		Ref: &provider.Reference{Path: archPath},
 	})
 	switch {
@@ -271,25 +288,25 @@ func (j *job) listArchives(adminCtx context.Context, archPath, token string) ([]
 		archives[i] = archive{
 			Name: info.Name,
 			Size: humanize.Bytes(info.Size),
-			URL:  fmt.Sprintf("%s/remote.php/dav/public-files/%s/%s", j.conf.PublicURL, token, url.PathEscape(info.Name)),
+			URL:  fmt.Sprintf("%s/remote.php/dav/public-files/%s/%s", r.conf.PublicURL, token, url.PathEscape(info.Name)),
 		}
 	}
 	return archives, nil
 }
 
 // notifyCompletion emails the user the archives of their takeout
-func (j *job) notifyCompletion(userCtx context.Context, archives []archive, expiration time.Time) {
+func (r *run) notifyCompletion(userCtx context.Context, archives []archive, expiration time.Time) {
 	// Get the email from the authenticated user
 	user, ok := appctx.ContextGetUser(userCtx)
 	if !ok || user == nil || user.Mail == "" {
-		j.log.Error().Msg("takeout: no user email available for the completion notification")
+		r.log.Error().Msg("takeout: no user email available for the completion notification")
 		return
 	}
 
 	// PublishEvent is restricted to reva daemons
 	publishCtx, err := scope.ContextWithMachineScope(userCtx)
 	if err != nil {
-		j.log.Err(err).Msg("takeout: failed to elevate context for the completion notification")
+		r.log.Err(err).Msg("takeout: failed to elevate context for the completion notification")
 		return
 	}
 
@@ -302,16 +319,16 @@ func (j *job) notifyCompletion(userCtx context.Context, archives []archive, expi
 	}
 
 	// Publish the completion event
-	event := notifications.EncodeEvent(model.EventTakeout, []string{user.Mail}, templateData)
-	res, err := j.gtw.PublishEvent(publishCtx, &gateway.PublishEventRequest{Event: event})
+	event := notifications.EncodeEvent(model.EventTakeout, []*userpb.User{user}, templateData)
+	res, err := r.gtw.PublishEvent(publishCtx, &gateway.PublishEventRequest{Event: event})
 	if err != nil {
-		j.log.Err(err).Msg("takeout: failed to send the completion notification event")
+		r.log.Err(err).Msg("takeout: failed to send the completion notification event")
 		return
 	}
 	if res.GetStatus().GetCode() != rpc.Code_CODE_OK {
-		j.log.Error().Msg("takeout: gateway rejected the completion notification event")
+		r.log.Error().Msg("takeout: gateway rejected the completion notification event")
 	}
-	j.log.Debug().Msgf("takeout: sent completion notification to %s", user.Mail)
+	r.log.Debug().Msgf("takeout: sent completion notification to %s", user.Mail)
 }
 
 // uploadPart streams one archive part into an upload running concurrently
@@ -335,12 +352,12 @@ func (u *uploadPart) Abort(err error) error {
 }
 
 // newPartFunc returns the part factory used by the bundler
-func (j *job) newPartFunc(adminCtx context.Context, archPath, ext string) bundler.PartFunc {
+func (r *run) newPartFunc(adminCtx context.Context, archPath, ext string) bundler.PartFunc {
 	return func(index int) (bundler.Part, error) {
 		pr, pw := io.Pipe()
 		done := make(chan error, 1)
 		go func() {
-			err := j.uploadArchive(adminCtx, archPath, index, ext, pr)
+			err := r.uploadArchive(adminCtx, archPath, index, ext, pr)
 			// Unblock the producer if the upload fails mid-stream
 			pr.CloseWithError(err)
 			done <- err
@@ -350,11 +367,11 @@ func (j *job) newPartFunc(adminCtx context.Context, archPath, ext string) bundle
 }
 
 // authenticate performs a machine authentication as the given user and returns an appropriate context
-func (j *job) authenticate(ctx context.Context, clientID string) (context.Context, error) {
-	authRes, err := j.gtw.Authenticate(ctx, &gateway.AuthenticateRequest{
+func (r *run) authenticate(ctx context.Context, clientID string) (context.Context, error) {
+	authRes, err := r.gtw.Authenticate(ctx, &gateway.AuthenticateRequest{
 		Type:         "machine",
 		ClientId:     clientID,
-		ClientSecret: j.conf.MachineSecret,
+		ClientSecret: r.conf.MachineSecret,
 	})
 	if err != nil {
 		return nil, errors.Wrap(err, "takeout: authentication failed")
@@ -370,9 +387,9 @@ func (j *job) authenticate(ctx context.Context, clientID string) (context.Contex
 	return ctx, nil
 }
 
-func (j *job) createTakeoutContainer(adminCtx context.Context, archPath string) error {
+func (r *run) createTakeoutContainer(adminCtx context.Context, archPath string) error {
 	// Delete any pre-existing takeout for this user on that day to avoid conflicts
-	delRes, err := j.gtw.Delete(adminCtx, &provider.DeleteRequest{
+	delRes, err := r.gtw.Delete(adminCtx, &provider.DeleteRequest{
 		Ref: &provider.Reference{Path: archPath},
 	})
 	switch {
@@ -383,7 +400,7 @@ func (j *job) createTakeoutContainer(adminCtx context.Context, archPath string) 
 	}
 
 	// Creates the empty destination directory
-	mkRes, err := j.gtw.CreateContainer(adminCtx, &provider.CreateContainerRequest{
+	mkRes, err := r.gtw.CreateContainer(adminCtx, &provider.CreateContainerRequest{
 		Ref: &provider.Reference{Path: archPath},
 	})
 	switch {
@@ -396,52 +413,52 @@ func (j *job) createTakeoutContainer(adminCtx context.Context, archPath string) 
 }
 
 // cleanupTakeoutContainer removes a partial takeout container
-func (j *job) cleanupTakeoutContainer(adminCtx context.Context, archPath string) {
-	delRes, err := j.gtw.Delete(context.WithoutCancel(adminCtx), &provider.DeleteRequest{
+func (r *run) cleanupTakeoutContainer(adminCtx context.Context, archPath string) {
+	delRes, err := r.gtw.Delete(context.WithoutCancel(adminCtx), &provider.DeleteRequest{
 		Ref: &provider.Reference{Path: archPath},
 	})
 	switch {
 	case err != nil:
-		j.log.Err(err).Msgf("takeout: partial takeout %s could not be removed", archPath)
+		r.log.Err(err).Msgf("takeout: partial takeout %s could not be removed", archPath)
 	case delRes.Status.GetCode() != rpc.Code_CODE_OK && delRes.Status.GetCode() != rpc.Code_CODE_NOT_FOUND:
-		j.log.Error().Msgf("takeout: partial takeout %s could not be removed: %s", archPath, delRes.Status.Message)
+		r.log.Error().Msgf("takeout: partial takeout %s could not be removed: %s", archPath, delRes.Status.Message)
 	default:
-		j.log.Debug().Msgf("takeout: removed partial takeout %s", archPath)
+		r.log.Debug().Msgf("takeout: removed partial takeout %s", archPath)
 	}
 }
 
 // uploadArchive streams one archive part to its final destination
-func (j *job) uploadArchive(adminCtx context.Context, archPath string, archIndex int, ext string, arch io.Reader) error {
+func (r *run) uploadArchive(adminCtx context.Context, archPath string, archIndex int, ext string, arch io.Reader) error {
 	archName := fmt.Sprintf("takeout-%03d.%s", archIndex, ext)
-	if err := j.upload(adminCtx, archPath+archName, arch); err != nil {
+	if err := r.upload(adminCtx, archPath+archName, arch); err != nil {
 		return err
 	}
 
-	j.log.Debug().Msgf("takeout: uploaded archive %s to %s", archName, archPath)
+	r.log.Debug().Msgf("takeout: uploaded archive %s to %s", archName, archPath)
 	return nil
 }
 
 // uploadSkipped uploads the manifest of the entries left out of the archives, a takeout
 // missing a few files is still worth delivering so a failure here is only logged
-func (j *job) uploadSkipped(adminCtx context.Context, archPath string, skipped []string) {
+func (r *run) uploadSkipped(adminCtx context.Context, archPath string, skipped []string) {
 	var manifest strings.Builder
 	fmt.Fprintf(&manifest, "The following %d entries could not be read and are not included in the archives:\n\n", len(skipped))
 	for _, path := range skipped {
 		fmt.Fprintln(&manifest, path)
 	}
 
-	if err := j.upload(adminCtx, archPath+j.conf.SkippedFileName, strings.NewReader(manifest.String())); err != nil {
-		j.log.Err(err).Msgf("takeout: %s could not be uploaded to %s", j.conf.SkippedFileName, archPath)
+	if err := r.upload(adminCtx, archPath+r.conf.SkippedFileName, strings.NewReader(manifest.String())); err != nil {
+		r.log.Err(err).Msgf("takeout: %s could not be uploaded to %s", r.conf.SkippedFileName, archPath)
 		return
 	}
 
-	j.log.Debug().Msgf("takeout: uploaded %s listing %d entries to %s", j.conf.SkippedFileName, len(skipped), archPath)
+	r.log.Debug().Msgf("takeout: uploaded %s listing %d entries to %s", r.conf.SkippedFileName, len(skipped), archPath)
 }
 
 // upload streams the given content to the given destination path
-func (j *job) upload(adminCtx context.Context, dst string, content io.Reader) error {
+func (r *run) upload(adminCtx context.Context, dst string, content io.Reader) error {
 	// Initiate the file upload request
-	upRes, err := j.gtw.InitiateFileUpload(adminCtx, &provider.InitiateFileUploadRequest{
+	upRes, err := r.gtw.InitiateFileUpload(adminCtx, &provider.InitiateFileUploadRequest{
 		Ref: &provider.Reference{Path: dst},
 	})
 	switch {
@@ -465,7 +482,7 @@ func (j *job) upload(adminCtx context.Context, dst string, content io.Reader) er
 	httpReq.Header.Set(datagateway.TokenTransportHeader, p.Token)
 	httpReq.Header.Set("Upload-Length", "-1")
 
-	httpRes, err := j.hc.Do(httpReq)
+	httpRes, err := r.hc.Do(httpReq)
 	if err != nil {
 		return err
 	}
@@ -483,9 +500,9 @@ func (j *job) upload(adminCtx context.Context, dst string, content io.Reader) er
 }
 
 // createPublicShare creates a read-only public link to the given path
-func (j *job) createPublicShare(adminCtx context.Context, path string, expiration time.Time) (string, error) {
+func (r *run) createPublicShare(adminCtx context.Context, path string, expiration time.Time) (string, error) {
 	// Get the resource info of the folder to share
-	statRes, err := j.gtw.Stat(adminCtx, &provider.StatRequest{
+	statRes, err := r.gtw.Stat(adminCtx, &provider.StatRequest{
 		Ref: &provider.Reference{Path: path},
 	})
 	switch {
@@ -496,7 +513,7 @@ func (j *job) createPublicShare(adminCtx context.Context, path string, expiratio
 	}
 
 	// Create the read-only public link, without password as the download route only serves such links
-	shareRes, err := j.gtw.CreatePublicShare(adminCtx, &link.CreatePublicShareRequest{
+	shareRes, err := r.gtw.CreatePublicShare(adminCtx, &link.CreatePublicShareRequest{
 		ResourceInfo: statRes.Info,
 		Grant: &link.Grant{
 			Permissions: &link.PublicSharePermissions{
@@ -517,7 +534,7 @@ func (j *job) createPublicShare(adminCtx context.Context, path string, expiratio
 		return "", errtypes.InternalError(shareRes.Status.Message)
 	}
 
-	j.log.Debug().Msgf("takeout: created public share %s to %s", shareRes.Share.Token, path)
+	r.log.Debug().Msgf("takeout: created public share %s to %s", shareRes.Share.Token, path)
 	return shareRes.Share.Token, nil
 }
 
