@@ -31,6 +31,7 @@ import (
 	"github.com/cs3org/reva/v3/pkg/reconciliation/nsdump"
 	"github.com/cs3org/reva/v3/pkg/spaces"
 	"github.com/cs3org/reva/v3/pkg/storage/fs/eos/acl"
+	"github.com/pkg/errors"
 )
 
 // TODO(jgeens):
@@ -52,8 +53,10 @@ type Change struct {
 }
 
 type RunParameters struct {
-	SpaceID   string
-	SpaceType spaces.SpaceType
+	SpaceID       string
+	SpaceType     spaces.SpaceType
+	OptionalACLs  []*acl.Entry
+	MandatoryACLs []*acl.Entry
 }
 
 type ShareWithPath struct {
@@ -90,6 +93,20 @@ func (j *DeepJob) Run(ctx context.Context, p RunParameters) error {
 	})
 	if err != nil {
 		return err
+	}
+
+	// Now, we check things based on the type of space:
+	switch p.SpaceType {
+	case spaces.SpaceTypeHome:
+		p.MandatoryACLs = append(p.MandatoryACLs, &acl.Entry{
+			Type:        "user",
+			Qualifier:   statRes.Info.Owner.OpaqueId,
+			Permissions: "rwx",
+		})
+	case spaces.SpaceTypeProject:
+
+	case spaces.SpaceTypePublic:
+		return errors.New("deep reconciliation is not supported for public spaces")
 	}
 
 	_, err = j.runAnalysis(ctx, p.SpaceID, namespaceDumper)
