@@ -11,9 +11,9 @@ import (
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/cs3org/reva/v3/pkg/appctx"
-	"github.com/cs3org/reva/v3/pkg/rgrpc/todo/pool"
 	"github.com/cs3org/reva/v3/pkg/rhttp/global"
 	"github.com/cs3org/reva/v3/pkg/rjobs"
+	"github.com/cs3org/reva/v3/pkg/service"
 	"github.com/cs3org/reva/v3/pkg/takeout"
 	"github.com/cs3org/reva/v3/pkg/takeout/cleanup"
 	"github.com/cs3org/reva/v3/pkg/utils/cfg"
@@ -34,7 +34,6 @@ func init() {
 type Config struct {
 	Prefix               string `mapstructure:"prefix"`
 	MachineSecret        string `mapstructure:"machine_secret" validate:"required"`
-	GatewaySvc           string `mapstructure:"gatewaysvc" validate:"required"`
 	TakeoutAdminUsername string `mapstructure:"takeout_admin_username" validate:"required"`
 	TakeoutPath          string `mapstructure:"takeout_path" validate:"required"`
 	CleanupSchedule      string `mapstructure:"cleanup_schedule"`
@@ -55,7 +54,6 @@ func New(ctx context.Context, m map[string]any) (global.Service, error) {
 	// Register periodic cleanup job
 	cleanupConfig := &cleanup.Config{
 		MachineSecret:        c.MachineSecret,
-		GatewaySvc:           c.GatewaySvc,
 		TakeoutAdminUsername: c.TakeoutAdminUsername,
 		TakeoutPath:          c.TakeoutPath,
 		CleanupSchedule:      c.CleanupSchedule,
@@ -166,7 +164,7 @@ func (s *svc) handlePost(w http.ResponseWriter, r *http.Request) {
 	user := appctx.ContextMustGetUser(r.Context())
 
 	// Get root path
-	gtw, err := pool.GetGatewayServiceClient(pool.Endpoint(s.conf.GatewaySvc))
+	gtw, err := service.Gateway(r.Context())
 	if err != nil {
 		s.log.Err(err).Msg("takeout: could not get gateway")
 		w.WriteHeader(http.StatusInternalServerError)
