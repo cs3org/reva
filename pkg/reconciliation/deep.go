@@ -38,7 +38,9 @@ import (
 
 const JobName = "reconciliation.deep"
 
-type EntryResult struct {
+type DeepJob struct {
+	shareMgr ShareStore
+	gw       gateway.GatewayAPIClient
 }
 
 type ChangeSet []*Change
@@ -47,11 +49,6 @@ type Change struct {
 	Path   string
 	Action ActionKind
 	ACL    *acl.Entry
-}
-
-type DeepJob struct {
-	shareMgr ShareStore
-	gw       gateway.GatewayAPIClient
 }
 
 type RunParameters struct {
@@ -71,11 +68,25 @@ func (s *ShareWithPath) toTreeNode() *ACLNode {
 	}
 }
 
-func (j *DeepJob) run(ctx context.Context, p RunParameters) error {
+func (j *DeepJob) Run(ctx context.Context, p RunParameters) error {
+	path, err := spaces.DecodeSpaceID(p.SpaceID)
+	if err != nil {
+		return err
+	}
+
+	statRes, err := j.gw.Stat(ctx, &provider.StatRequest{Ref: &provider.Reference{
+		Path: path,
+	}})
+
+	if err != nil {
+		return err
+	}
+
+	// TODO(jgeens): check statRes status code
 
 	namespaceDumper := &nsdump.EOSMemoryNSInspect{}
-	err := namespaceDumper.Setup(map[string]any{
-		// TODO(jgeens): set config for dump
+	err = namespaceDumper.Setup(nsdump.EOSMemoryNSInspectConfig{
+		Instance: statRes.Info.Id.StorageId,
 	})
 	if err != nil {
 		return err
