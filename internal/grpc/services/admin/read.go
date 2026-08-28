@@ -27,6 +27,7 @@ import (
 
 	"github.com/cs3org/reva/v3/pkg/admin/adminpb"
 	"github.com/cs3org/reva/v3/pkg/invoke"
+	"github.com/cs3org/reva/v3/pkg/invoke/client"
 	"github.com/cs3org/reva/v3/pkg/registry"
 	"github.com/cs3org/reva/v3/pkg/service"
 	"google.golang.org/grpc/codes"
@@ -140,7 +141,7 @@ func (s *svc) GetServiceConfig(ctx context.Context, req *adminpb.GetServiceConfi
 	if err != nil {
 		return nil, err
 	}
-	_, eps, err := resolveSelector(reg, req.Service)
+	_, eps, err := client.Resolve(reg, req.Service)
 	if err != nil {
 		return nil, status.Errorf(codes.NotFound, "admin: %v", err)
 	}
