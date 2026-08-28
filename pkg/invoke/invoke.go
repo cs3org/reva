@@ -23,7 +23,7 @@ package invoke
 
 import "context"
 
-// InvocationKind classifies an invocation for audit and gating.
+// InvocationKind classifies an invocation for audit and CLI-level gating.
 type InvocationKind string
 
 const (
@@ -70,8 +70,10 @@ type StreamInvokable interface {
 // Invokable is the capability a service implements to expose operations to the
 // Admin API. It is opt-in; a read is simply an invocation with KindReadonly.
 type Invokable interface {
-	// Invocations lists the operations the service exposes.
+	// Invocations is the list of invokables exposed by the service, to help the CLI
+	// autocompletion. Actual Invoke() calls may be done with arbitrary `name` values.
 	Invocations() []InvocationSpec
-	// Invoke runs the named invocation with the given arguments.
+	// Invoke runs the named invocation with the given arguments. It is expected
+	// to be a router across all names returned by Invocations().
 	Invoke(ctx context.Context, name string, args map[string]any) (Result, error)
 }
