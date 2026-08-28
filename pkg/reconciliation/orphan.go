@@ -31,6 +31,7 @@ import (
 	"github.com/cs3org/reva/v3/pkg/appctx"
 	"github.com/cs3org/reva/v3/pkg/rjobs"
 	"github.com/cs3org/reva/v3/pkg/service"
+	"github.com/cs3org/reva/v3/pkg/trace"
 	"github.com/google/uuid"
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog"
@@ -79,21 +80,6 @@ const (
 	// exists.
 	ReasonRecipientMissing OrphanReason = "recipient-missing"
 )
-
-// ShareStore is what the orphan job needs from a share manager: the CS3 listing
-// every manager implements, plus marking, which the CS3 API has no call for. A
-// manager that cannot mark cannot be reconciled. The listing is expected to
-// cover every owner and to leave out the already-orphaned.
-type ShareStore interface {
-	ListShares(ctx context.Context, filters []*collaboration.Filter) ([]*collaboration.Share, error)
-	MarkAsOrphaned(ctx context.Context, ref *collaboration.ShareReference) error
-}
-
-// PublicLinkStore is the same for a public share manager.
-type PublicLinkStore interface {
-	ListPublicShares(ctx context.Context, u *userpb.User, filters []*link.ListPublicSharesRequest_Filter, md *provider.ResourceInfo, sign bool) ([]*link.PublicShare, error)
-	MarkAsOrphaned(ctx context.Context, ref *link.PublicShareReference) error
-}
 
 // OrphanJob marks shares and public links whose resource or recipient is gone
 // as orphaned. It is idempotent: an item already orphaned is skipped by the
@@ -217,13 +203,22 @@ func (j *OrphanJob) Run(ctx context.Context) (OrphanReport, error) {
 	for _, e := range entries {
 		report.Checked++
 
-		reason, orphaned, err := j.classify(ctx, gw, e)
+		// Each item gets its own trace id, propagated into every gateway and
+		// storage provider call it makes by the client interceptor the service
+		// package dials with. It is logged on each per-item line so a skip here
+		// can be joined against the revad logs that explain it: grep the same
+		// traceid there.
+		traceID := trace.Generate()
+		itemCtx := trace.Set(ctx, traceID)
+
+		reason, orphaned, err := j.classify(itemCtx, gw, e)
 		if err != nil {
 			report.Skipped++
 			log.Error().Err(err).
 				Str("event", EventOrphanSkip).
 				Str("kind", string(e.kind)).
 				Str("id", e.id).
+				Str("traceid", traceID).
 				Msg("reconciliation: existence check failed, item left untouched")
 			continue
 		}
@@ -231,17 +226,19 @@ func (j *OrphanJob) Run(ctx context.Context) (OrphanReport, error) {
 			log.Debug().
 				Str("kind", string(e.kind)).
 				Str("id", e.id).
+				Str("traceid", traceID).
 				Msg("reconciliation: item is valid")
 			continue
 		}
 
 		if !j.DryRun {
-			if err := j.mark(ctx, e); err != nil {
+			if err := j.mark(itemCtx, e); err != nil {
 				report.Failed++
 				log.Error().Err(err).
 					Str("event", EventOrphanFail).
 					Str("kind", string(e.kind)).
 					Str("id", e.id).
+					Str("traceid", traceID).
 					Msg("reconciliation: marking item orphaned failed")
 				continue
 			}
@@ -264,6 +261,7 @@ func (j *OrphanJob) Run(ctx context.Context) (OrphanReport, error) {
 			Str("owner", e.owner).
 			Str("share_with", e.shareWith).
 			Bool("dry_run", j.DryRun).
+			Str("traceid", traceID).
 			Msg("reconciliation: item marked orphaned")
 	}
 

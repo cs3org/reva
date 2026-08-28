@@ -8,12 +8,11 @@ driver that does not implement it is refused at startup; today only `sql` does,
 which is why it is the default for both.
 
 Each job is enabled and configured on its own, so one can be left in dry-run, or
-rescheduled, or pointed at another log, without touching the others. For now
-there is only the orphan job.
+rescheduled, or pointed at another log, without touching the other.
 
 ```toml
 [serverless.services.reconciliation]
-jobs = ["orphan"]
+jobs = ["orphan", "shallow"]
 share_driver       = "sql"
 publicshare_driver = "sql"
 service_user_name  = "cboxreco"
@@ -24,31 +23,71 @@ service_user_gid   = 2766
 schedule = "@daily"      # "@every <dur>" | "@hourly" | "@daily" | "@weekly"
 dry_run  = false
 log_file = "/var/log/revad/reconciliation-orphan.log"
+
+[serverless.services.reconciliation.shallow]
+schedule = "never"       # or a cadence, on-demand runs work either way
+dry_run  = true
+log_file = "/var/log/revad/reconciliation-shallow.log"
 ```
 
-A job runs only if it is listed in `jobs`, and every listed job needs a
-`schedule`. `log_file` defaults to the path shown above, and both drivers
-default to `sql`, so all four keys above the service user can be omitted.
+A job runs only if it is listed in `jobs`. `orphan` needs a `schedule`; on
+`shallow` it is optional and also takes `never`, since that job can be triggered
+on demand whether or not it has a cadence. `log_file` defaults to the path shown
+above for each, and both drivers default to `sql`, so all four keys above the
+service user can be omitted.
 
 The drivers take their configuration from
 `[serverless.services.reconciliation.share_drivers.<name>]` and
 `[serverless.services.reconciliation.publicshare_drivers.<name>]`, the same keys
 the usershareprovider and the publicshareprovider pass. The `sql` driver reads
 its database settings from `[shared]`, so neither section is normally needed,
-and neither are `gatewaysvc` and `jwt_secret`.
+and neither is `jwt_secret`.
 
 ## Identity
 
-The jobs runner hands a run a bare context, but we need a valid auth
-so we can do stat's etc. Therefore, each run mints itself a token for
-`service_user_name` and sends it with every call. The three `service_user_*`
-keys are thus required and it needs to have the proper permissions on EOS
-(for CERNBox, `cbox` does the trick).
+The jobs runner hands a run a bare context, but we need a valid auth so we can do
+stat's etc. Therefore, each run mints itself a token for `service_user_name` and
+sends it with every call. The three `service_user_*` keys are required and the
+account has to be a real one: EOS reads the ACLs of a node as the caller before
+handing them out, and its driver refuses a caller whose uid or gid is zero, so
+`root` does not work (for CERNBox, `cbox` does the trick). If
+`skip_user_groups_in_token` is set, the account also has to resolve in the user
+provider, since the auth interceptor looks its groups up.
 
 ## Jobs
 
 `reconciliation.orphans` marks the shares and public links whose resource or
 recipient no longer exists.
+
+`reconciliation.shallow` writes the ACL entry each share implies onto its path,
+when the storage has no entry or the wrong permissions. On the storage it only
+adds and corrects entries. It never removes an ACL entry. In the share database
+it does remove rows: a share that a higher share of the same recipient makes
+redundant is deleted (soft). See below for the details.
+
+Start a run with `reva admin jobs run reconciliation.shallow [space=<space-id>]`.
+Leave the space out to cover every space. This needs the admin API enabled. The
+command prints a run id: `reva admin jobs status <run-id>` shows the state and
+the totals, `reva admin jobs cancel <run-id>` stops the run.
+
+With a `schedule`, the job also runs on a cadence over every space. That run has
+its own name, so `reva admin jobs trigger reconciliation.shallow.scheduled`
+starts it before its next fire.
+
+A run works out every change before it writes anything, and a user can share in
+the meantime. So the shares of a space are listed again right before its changes
+go out. A space that gained a share since the run listed it is left untouched,
+whole, and picked up by the next run: the new share is not in what the run
+compared, and it can be what makes a share the run wants to remove no longer
+redundant. Only the spaces the run has something to change in are looked at
+again. Their ids come back in the run's totals under `skipped_spaces`, so a
+retry can be scoped to exactly the spaces that were held back.
+
+A share below another share of the same recipient is redundant when it grants the
+same access (`covered` in the totals) or less (`conflicting`). The job deletes
+the row of such a share, which is what the share API does when the higher share
+is created. The delete is soft, so you can undo it in the database. The ACL entry
+on the path stays.
 
 ## Logs
 
@@ -57,18 +96,41 @@ This is always written in JSON so that it is easy to parse by any tool in case w
 to revert certain actions.
 
 An `event` is the job's own name followed by the step, so one job's lines never
-have to be told apart from another's by hand.
+have to be told apart from the other's by hand.
 
-| event                           | meaning                                     |
-| ------------------------------- | ------------------------------------------- |
-| `reconciliation.orphans.start`  | run started                                 |
-| `reconciliation.orphans.mark`   | item marked orphaned (or would be, dry-run) |
-| `reconciliation.orphans.skip`   | item left untouched, lookup failed          |
-| `reconciliation.orphans.fail`   | item classified orphaned but write failed   |
-| `reconciliation.orphans.end`    | run totals                                  |
+| event                             | meaning                                        |
+| --------------------------------- | ---------------------------------------------- |
+| `reconciliation.orphans.start`    | run started                                    |
+| `reconciliation.orphans.mark`     | item marked orphaned (or would be, dry-run)    |
+| `reconciliation.orphans.skip`     | item left untouched, lookup failed             |
+| `reconciliation.orphans.fail`     | item was orphaned but the write failed         |
+| `reconciliation.orphans.end`      | run totals                                     |
+| `reconciliation.shallow.start`    | run started                                    |
+| `reconciliation.shallow.grant`    | grant written to a path (or would be, dry-run) |
+| `reconciliation.shallow.remove`   | redundant share removed (or would be, dry-run) |
+| `reconciliation.shallow.skip`     | share left untouched, a lookup failed          |
+| `reconciliation.shallow.skipspace`| space left untouched, its shares changed       |
+| `reconciliation.shallow.fail`     | a grant or a removal was needed but failed     |
+| `reconciliation.shallow.end`      | run totals                                     |
 
-Every line also carries `job` and `run`, a uuid identifying the run it belongs
-to, so the logs stay readable if several jobs are pointed at the same file.
+Every line also carries `job` and `run`, a uuid identifying the run, so the two
+logs stay readable if both jobs are pointed at the same file.
 
 `reconciliation.orphans.mark` carries `kind` (`share` or `publiclink`), `id`,
-`reason`, `storage_id`, `opaque_id`, `owner`, `share_with`, `dry_run`.
+`reason`, `storage_id`, `opaque_id`, `owner`, `share_with`, `dry_run`. Revert
+with `kind` and `id`.
+
+`reconciliation.shallow.grant` carries `share`, `action` (`add` or `update`),
+`path`, `storage_id`, `opaque_id`, `grantee`, `grantee_type`, `observed`,
+`expected`, `dry_run`. Revert with `grantee` and `observed`; an empty `observed`
+means the entry was added and has to be removed.
+
+`reconciliation.shallow.remove` carries `share`, `path`, `storage_id`,
+`opaque_id`, `grantee`, `grantee_type`, `level`, `reason`, `ancestor`,
+`ancestor_path`, `ancestor_role`, `dry_run`. Revert by clearing `deleted_at` on
+the row with id `share`.
+
+`reconciliation.shallow.skipspace` carries `skipped_space`, `new_share` (the
+share that appeared, absent when the listing itself failed), `grants` and
+`removals`, the number of changes held back, and `dry_run`. Nothing was applied,
+so there is nothing to revert. Run the job on that space again to apply them.
