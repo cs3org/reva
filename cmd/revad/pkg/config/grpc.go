@@ -29,6 +29,10 @@ type GRPC struct {
 	Network          string  `default:"tcp"           key:"network"                    mapstructure:"network"`
 	ShutdownDeadline int     `key:"shutdown_deadline" mapstructure:"shutdown_deadline"`
 	EnableReflection bool    `key:"enable_reflection" mapstructure:"enable_reflection"`
+	// ControlAddress is the bind address of this process's control channel (the
+	// per-process gRPC server hosting reva.control.v1beta1). Empty binds a random
+	// port on every interface; the advertised address is derived from it.
+	ControlAddress string `key:"control_address" mapstructure:"control_address"`
 
 	Services     map[string]ServicesConfig `key:"services"     mapstructure:"-"`
 	Interceptors map[string]map[string]any `key:"interceptors" mapstructure:"-"`

@@ -69,7 +69,7 @@ func parseConfig(m map[string]any) (*config, error) {
 type interceptor struct {
 	conf         *config
 	tokenManager token.Manager
-	blockedUsers user.BlockedUsers
+	blockedUsers *user.BlockedUsers
 }
 
 func newInterceptor(m map[string]any) (*interceptor, error) {
@@ -95,10 +95,14 @@ func newInterceptor(m map[string]any) (*interceptor, error) {
 		return nil, errors.Wrap(err, "auth: error creating token manager")
 	}
 
+	// Use the process-wide blocked set, seeded from config (blocked_users).
+	blockedUsers := user.SharedBlockedUsers()
+	blockedUsers.Add(conf.blockedUsers...)
+
 	return &interceptor{
 		conf:         conf,
 		tokenManager: tokenManager,
-		blockedUsers: user.NewBlockedUsersSet(conf.blockedUsers),
+		blockedUsers: blockedUsers,
 	}, nil
 }
 
@@ -148,6 +152,7 @@ func (i *interceptor) unary(unprotected []string) grpc.UnaryServerInterceptor {
 
 		ctx = appctx.ContextSetUser(ctx, u)
 		ctx = appctx.ContextSetScopes(ctx, scopes)
+		ctx = withUserLogger(ctx, u.Username)
 		return handler(ctx, req)
 	}
 }
@@ -169,8 +174,9 @@ func (i *interceptor) stream(unprotected []string) grpc.StreamServerInterceptor 
 			return status.Errorf(codes.Unauthenticated, "auth: core access token not found")
 		}
 
-		// validate the token and ensure access to the resource is allowed
-		u, scopes, err := i.dismantleToken(ctx, tkn, ss, false)
+		// A server stream has no request message yet, so scope checks identify
+		// the call by method.
+		u, scopes, err := i.dismantleToken(ctx, tkn, scope.MethodResource(info.FullMethod), false)
 		if err != nil {
 			log.Warn().Err(err).Msg("access token is invalid")
 			return status.Errorf(codes.PermissionDenied, "auth: core access token is invalid")
@@ -179,9 +185,17 @@ func (i *interceptor) stream(unprotected []string) grpc.StreamServerInterceptor 
 		// store user and core access token in context.
 		ctx = appctx.ContextSetUser(ctx, u)
 		ctx = appctx.ContextSetScopes(ctx, scopes)
+		ctx = withUserLogger(ctx, u.Username)
 		wrapped := newWrappedServerStream(ctx, ss)
 		return handler(srv, wrapped)
 	}
+}
+
+// withUserLogger stamps the authenticated user onto the request logger, so a
+// request's logs are searchable by user (reva admin trace -user).
+func withUserLogger(ctx context.Context, username string) context.Context {
+	l := appctx.GetLogger(ctx).With().Str("user", username).Logger()
+	return appctx.WithLogger(ctx, &l)
 }
 
 func newWrappedServerStream(ctx context.Context, ss grpc.ServerStream) *wrappedServerStream {
@@ -208,7 +222,11 @@ func (i *interceptor) dismantleToken(ctx context.Context, tkn string, req any, u
 		return u, nil, nil
 	}
 
-	if sharedconf.SkipUserGroupsInToken() {
+	// An admin-scoped token is authorized by capability, not group membership,
+	// and its bearer may be a synthetic local-root identity no user provider
+	// knows — so skip the group re-fetch, which would otherwise reject a valid
+	// admin token whenever the lookup errors (e.g. unknown or unreachable user).
+	if sharedconf.SkipUserGroupsInToken() && !scope.HasAdminScope(tokenScope) {
 		client, err := service.Gateway(ctx)
 		if err != nil {
 			return nil, nil, err

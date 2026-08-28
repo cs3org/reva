@@ -251,6 +251,7 @@ nats_token = "secret-token-example"`
 		Output: "/var/log/revad/revad-gateway.log",
 		Mode:   "json",
 		Level:  "trace",
+		Tail:   2000,
 	}, c2.Log)
 
 	assert.Equal(t, &Core{
@@ -393,6 +394,7 @@ func TestDump(t *testing.T) {
 			Output: "/var/log/revad/revad-gateway.log",
 			Mode:   "json",
 			Level:  "trace",
+			Tail:   2000,
 		},
 		Core: &Core{
 			MaxCPUs:        "1",
@@ -517,6 +519,7 @@ func TestDump(t *testing.T) {
 			"output": "/var/log/revad/revad-gateway.log",
 			"mode":   "json",
 			"level":  "trace",
+			"tail":   2000,
 		},
 		"core": map[string]any{
 			"max_cpus":             "1",
@@ -535,6 +538,7 @@ func TestDump(t *testing.T) {
 			"network":           "",
 			"shutdown_deadline": 10,
 			"enable_reflection": true,
+			"control_address":   "",
 			"interceptors":      map[string]any{},
 			"services": map[string]any{
 				"gateway": []any{

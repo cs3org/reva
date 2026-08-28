@@ -23,6 +23,7 @@ import (
 	"strings"
 
 	"github.com/c-bata/go-prompt"
+	"github.com/cs3org/reva/v3/cmd/reva/admin"
 )
 
 // Completer provides completion command handler.
@@ -80,6 +81,11 @@ func (c *Completer) argumentCompleter(args ...string) []prompt.Suggest {
 	}
 
 	switch args[0] {
+	case "admin":
+		if len(args) == 2 {
+			return prompt.FilterHasPrefix(adminSubcommandSuggests(), args[1], true)
+		}
+
 	case "login":
 		if len(args) == 2 {
 			return prompt.FilterHasPrefix(c.loginArgumentCompleter(), args[1], true)
@@ -233,6 +239,17 @@ func excludeOptions(args []string) ([]string, bool) {
 
 func (c *Completer) getAllSuggests() []prompt.Suggest {
 	return convertCmdToSuggests(commands)
+}
+
+// adminSubcommandSuggests builds suggestions from the admin package's own
+// subcommand list (it lives in its own package).
+func adminSubcommandSuggests() []prompt.Suggest {
+	subs := admin.Subcommands()
+	ss := make([]prompt.Suggest, 0, len(subs))
+	for _, c := range subs {
+		ss = append(ss, prompt.Suggest{Text: c[0], Description: c[1]})
+	}
+	return ss
 }
 
 func convertCmdToSuggests(cmds []*command) []prompt.Suggest {
