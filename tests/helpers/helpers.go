@@ -32,6 +32,7 @@ import (
 
 	"github.com/owncloud/ocis/v2/services/webdav/pkg/net"
 	"github.com/pkg/errors"
+	"github.com/rs/zerolog"
 	"github.com/studio-b12/gowebdav"
 
 	gatewayv1beta1 "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
@@ -42,6 +43,7 @@ import (
 	"github.com/owncloud/reva/v2/pkg/errtypes"
 	"github.com/owncloud/reva/v2/pkg/rhttp"
 	"github.com/owncloud/reva/v2/pkg/storage"
+	"github.com/owncloud/reva/v2/pkg/upload"
 	"github.com/owncloud/reva/v2/pkg/utils"
 )
 
@@ -96,10 +98,26 @@ func TempJSONFile(c any) (string, error) {
 	return TempFile(bytes.NewBuffer(data))
 }
 
-// Upload can be used to initiate an upload and do the upload to a storage.FS in one step
+// Upload can be used to initiate an upload and do the upload to a storage.FS in one step.
+// The upload coordinator drives the flow; the driver only sees the slim contract.
 func Upload(ctx context.Context, fs storage.FS, ref *provider.Reference, content []byte) error {
+	// The session files only live until CommitUpload has read the bytes back, so a
+	// throwaway directory is enough. No publisher and no chunk folder: without a
+	// postprocessing consumer the upload finishes synchronously and never chunks.
+	uploadDir, err := os.MkdirTemp("", "reva-test-uploads-*")
+	if err != nil {
+		return err
+	}
+	defer os.RemoveAll(uploadDir)
+
+	log := zerolog.Nop()
+	coord, err := upload.NewCoordinatorFromConfig(uploadDir, nil, fs, nil, &log, false)
+	if err != nil {
+		return err
+	}
+
 	length := int64(len(content))
-	uploadIds, err := fs.InitiateUpload(ctx, ref, length, map[string]string{})
+	uploadIds, err := coord.InitiateUpload(ctx, ref, length, map[string]string{})
 	if err != nil {
 		return err
 	}
@@ -109,7 +127,7 @@ func Upload(ctx context.Context, fs storage.FS, ref *provider.Reference, content
 			return errors.New("simple upload method not available")
 		}
 		uploadRef := &provider.Reference{Path: "/" + uploadID}
-		_, err = fs.Upload(ctx, storage.UploadRequest{
+		_, err = coord.Upload(ctx, upload.Request{
 			Ref:    uploadRef,
 			Body:   io.NopCloser(bytes.NewReader(content)),
 			Length: int64(len(content)),

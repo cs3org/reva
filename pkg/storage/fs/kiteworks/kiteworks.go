@@ -259,14 +259,6 @@ func (d *Driver) Move(_ context.Context, _, _ *provider.Reference) (*storage.Mov
 	return nil, errtypes.NotSupported("kiteworks: read-only driver")
 }
 
-func (d *Driver) InitiateUpload(_ context.Context, _ *provider.Reference, _ int64, _ map[string]string) (map[string]string, error) {
-	return nil, errtypes.NotSupported("kiteworks: read-only driver")
-}
-
-func (d *Driver) Upload(_ context.Context, _ storage.UploadRequest, _ storage.UploadFinishedFunc) (*provider.ResourceInfo, error) {
-	return nil, errtypes.NotSupported("kiteworks: read-only driver")
-}
-
 func (d *Driver) MarkProcessing(_ context.Context, _ *provider.Reference, _ bool, _ string) error {
 	return errtypes.NotSupported("kiteworks: read-only driver")
 }

@@ -234,9 +234,5 @@ var _ = Describe("kiteworks driver", func() {
 			err := d.AddGrant(fix.ctx, &provider.Reference{ResourceId: &provider.ResourceId{SpaceId: fix.spaceID}}, &provider.Grant{})
 			Expect(err).To(Satisfy(notSupported))
 		})
-		It("rejects InitiateUpload", func() {
-			_, err := d.InitiateUpload(fix.ctx, &provider.Reference{ResourceId: &provider.ResourceId{SpaceId: fix.spaceID}}, 0, nil)
-			Expect(err).To(Satisfy(notSupported))
-		})
 	})
 })

@@ -247,8 +247,8 @@ func (s *OcisSession) SetSizeIsDeferred(value bool) {
 //     postprocessing finished. I wonder why the UploadReady contains a finished
 //     flag ... maybe multiple distinct events would make more sense.
 //   - build the reference that is passed to the FileUploaded event in the
-//     UploadFinishedFunc callback passed to the Upload call used for simple
-//     datatx put requests
+//     upload.FinishedFunc callback passed to the coordinator's Upload call used
+//     for simple datatx put requests
 //
 // AFAICT only search and audit services consume the path.
 //   - search needs to index from the root anyway. And it only needs the most
