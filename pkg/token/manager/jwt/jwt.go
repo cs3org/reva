@@ -24,6 +24,7 @@ import (
 
 	auth "github.com/cs3org/go-cs3apis/cs3/auth/provider/v1beta1"
 	user "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
+	authcache "github.com/cs3org/reva/v3/pkg/auth/cache"
 	"github.com/cs3org/reva/v3/pkg/errtypes"
 	"github.com/cs3org/reva/v3/pkg/sharedconf"
 	"github.com/cs3org/reva/v3/pkg/token"
@@ -43,10 +44,14 @@ type config struct {
 	Secret             string `mapstructure:"secret"`
 	Expires            int64  `mapstructure:"expires"`
 	ExpiresNextWeekend bool   `mapstructure:"expires_next_weekend"`
+	authcache.Config   `mapstructure:",squash"`
 }
 
 type manager struct {
 	conf *config
+	// The cache is per manager, never shared, because an entry is only valid
+	// for the secret that verified it.
+	cache *authcache.Cache
 }
 
 // claims are custom claims for the JWT token.
@@ -75,7 +80,7 @@ func New(m map[string]any) (token.Manager, error) {
 		return nil, errors.New("jwt: secret for signing payloads is not defined in config")
 	}
 
-	mgr := &manager{conf: &c}
+	mgr := &manager{conf: &c, cache: authcache.New(c.Config)}
 	return mgr, nil
 }
 
@@ -118,19 +123,40 @@ func setTime(t time.Time, hour, min, sec int) time.Time {
 }
 
 func (m *manager) DismantleToken(ctx context.Context, tkn string) (*user.User, map[string]*auth.Scope, error) {
+	key := authcache.Key(tkn)
+	if id, cached, ok := m.cache.Get(key); ok {
+		if cached != nil {
+			return nil, nil, cached
+		}
+		return id.User, id.Scopes, nil
+	}
+
 	token, err := jwt.ParseWithClaims(tkn, &claims{}, func(token *jwt.Token) (any, error) {
 		return []byte(m.conf.Secret), nil
 	})
 
 	if err != nil {
-		return nil, nil, errors.Wrap(err, "error parsing token")
+		err = errors.Wrap(err, "error parsing token")
+		m.cache.Set(key, nil, err, time.Time{})
+		return nil, nil, err
 	}
 
-	if claims, ok := token.Claims.(*claims); ok && token.Valid {
-		return claims.User, claims.Scope, nil
+	c, ok := token.Claims.(*claims)
+	if !ok || !token.Valid {
+		err := errtypes.InvalidCredentials("invalid token")
+		m.cache.Set(key, nil, err, time.Time{})
+		return nil, nil, err
 	}
 
-	return nil, nil, errtypes.InvalidCredentials("invalid token")
+	// Bound the entry by the expiration of the token itself, so a cache hit can
+	// never resurrect a token that has run out.
+	var notAfter time.Time
+	if c.ExpiresAt != nil {
+		notAfter = c.ExpiresAt.Time
+	}
+	m.cache.Set(key, &authcache.Identity{User: c.User, Scopes: c.Scope}, nil, notAfter)
+
+	return c.User, c.Scope, nil
 }
 
 // ValidatedExpiresAt parses the token, validates it, and returns the expiration time.

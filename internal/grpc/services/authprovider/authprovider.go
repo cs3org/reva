@@ -21,10 +21,13 @@ package authprovider
 import (
 	"context"
 	"fmt"
+	"time"
 
 	provider "github.com/cs3org/go-cs3apis/cs3/auth/provider/v1beta1"
+	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	"github.com/cs3org/reva/v3/pkg/appctx"
 	"github.com/cs3org/reva/v3/pkg/auth"
+	authcache "github.com/cs3org/reva/v3/pkg/auth/cache"
 	"github.com/cs3org/reva/v3/pkg/auth/manager/registry"
 	"github.com/cs3org/reva/v3/pkg/errtypes"
 	"github.com/cs3org/reva/v3/pkg/rgrpc"
@@ -41,9 +44,10 @@ func init() {
 }
 
 type config struct {
-	AuthManager  string                    `mapstructure:"auth_manager"`
-	AuthManagers map[string]map[string]any `mapstructure:"auth_managers"`
-	blockedUsers []string
+	AuthManager      string                    `mapstructure:"auth_manager"`
+	AuthManagers     map[string]map[string]any `mapstructure:"auth_managers"`
+	authcache.Config `mapstructure:",squash"`
+	blockedUsers     []string
 }
 
 func (c *config) ApplyDefaults() {
@@ -57,6 +61,7 @@ type service struct {
 	authmgr      auth.Manager
 	conf         *config
 	blockedUsers *user.BlockedUsers
+	cache        *authcache.Cache
 }
 
 func getAuthManager(ctx context.Context, manager string, m map[string]map[string]any) (auth.Manager, error) {
@@ -91,6 +96,7 @@ func New(ctx context.Context, m map[string]any) (rgrpc.Service, error) {
 		conf:         &c,
 		authmgr:      authManager,
 		blockedUsers: blockedUsers,
+		cache:        authcache.New(c.Config),
 	}
 
 	return svc, nil
@@ -108,6 +114,27 @@ func (s *service) Register(ss *grpc.Server) {
 	provider.RegisterProviderAPIServer(ss, s)
 }
 
+// The blocked user check stays outside the cache, so blocking a user takes
+// effect at once.
+func (s *service) authenticate(ctx context.Context, username, password string) (*userpb.User, map[string]*provider.Scope, error) {
+	key := authcache.Key(username, password)
+	if id, rejected, ok := s.cache.Get(key); ok {
+		if rejected != nil {
+			return nil, nil, rejected
+		}
+		return id.User, id.Scopes, nil
+	}
+
+	u, scope, err := s.authmgr.Authenticate(ctx, username, password)
+	switch err.(type) {
+	case nil, errtypes.InvalidCredentials, errtypes.NotFound, errtypes.Conflict:
+		// A settled answer about the credential. Any other error means the store
+		// or the identity provider failed, which must be retried, not cached.
+		s.cache.Set(key, &authcache.Identity{User: u, Scopes: scope}, err, time.Time{})
+	}
+	return u, scope, err
+}
+
 func (s *service) Authenticate(ctx context.Context, req *provider.AuthenticateRequest) (*provider.AuthenticateResponse, error) {
 	log := appctx.GetLogger(ctx)
 	username := req.ClientId
@@ -119,7 +146,7 @@ func (s *service) Authenticate(ctx context.Context, req *provider.AuthenticateRe
 		}, nil
 	}
 
-	u, scope, err := s.authmgr.Authenticate(ctx, username, password)
+	u, scope, err := s.authenticate(ctx, username, password)
 	switch v := err.(type) {
 	case nil:
 		log.Info().Interface("userId", u.Id).Msg("user authenticated")
