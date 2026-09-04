@@ -26,6 +26,7 @@ import (
 	"time"
 
 	"github.com/ReneKroon/ttlcache/v2"
+	groupv1beta1 "github.com/cs3org/go-cs3apis/cs3/identity/group/v1beta1"
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	rpcv1beta1 "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
@@ -387,10 +388,49 @@ func projectToStorageSpace(p *Project, perms *provider.ResourcePermissions) *pro
 			Path:          p.Path,
 			PermissionSet: perms,
 		},
-		Description:   p.Description,
-		ThumbnailId:   p.ThumbnailPath,
-		ReadmeId:      p.ReadmePath,
-		PermissionSet: perms,
+		Description: p.Description,
+		ThumbnailId: p.ThumbnailPath,
+		ReadmeId:    p.ReadmePath,
+		Roles: []*provider.SpaceRole{{
+			RoleName:      "reader",
+			PermissionSet: permissions.NewViewerRole().CS3ResourcePermissions(),
+			Recipients: []*provider.Grantee{
+				{
+					Type: provider.GranteeType_GRANTEE_TYPE_GROUP,
+					Id: &provider.Grantee_GroupId{
+						GroupId: &groupv1beta1.GroupId{
+							OpaqueId: p.Readers,
+						},
+					},
+				},
+			},
+		}, {
+			RoleName:      "writer",
+			PermissionSet: permissions.NewEditorRole().CS3ResourcePermissions(),
+			Recipients: []*provider.Grantee{
+				{
+					Type: provider.GranteeType_GRANTEE_TYPE_GROUP,
+					Id: &provider.Grantee_GroupId{
+						GroupId: &groupv1beta1.GroupId{
+							OpaqueId: p.Writers,
+						},
+					},
+				},
+			},
+		}, {
+			RoleName:      "admin",
+			PermissionSet: permissions.NewManagerRole().CS3ResourcePermissions(),
+			Recipients: []*provider.Grantee{
+				{
+					Type: provider.GranteeType_GRANTEE_TYPE_GROUP,
+					Id: &provider.Grantee_GroupId{
+						GroupId: &groupv1beta1.GroupId{
+							OpaqueId: p.Admins,
+						},
+					},
+				},
+			},
+		}},
 	}
 }
 
