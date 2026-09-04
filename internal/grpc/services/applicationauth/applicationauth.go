@@ -100,7 +100,7 @@ func (s *service) GenerateAppPassword(ctx context.Context, req *appauthpb.Genera
 	pwd, err := s.am.GenerateAppPassword(ctx, req.TokenScope, req.Label, req.Expiration)
 	if err != nil {
 		return &appauthpb.GenerateAppPasswordResponse{
-			Status: status.NewInternal(ctx, err, "error generating app password"),
+			Status: status.NewStatusFromErrType(ctx, "error generating app password", err),
 		}, nil
 	}
 
@@ -114,7 +114,7 @@ func (s *service) ListAppPasswords(ctx context.Context, req *appauthpb.ListAppPa
 	pwds, err := s.am.ListAppPasswords(ctx)
 	if err != nil {
 		return &appauthpb.ListAppPasswordsResponse{
-			Status: status.NewInternal(ctx, err, "error listing app passwords"),
+			Status: status.NewStatusFromErrType(ctx, "error listing app passwords", err),
 		}, nil
 	}
 
@@ -128,7 +128,7 @@ func (s *service) InvalidateAppPassword(ctx context.Context, req *appauthpb.Inva
 	err := s.am.InvalidateAppPassword(ctx, req.Password)
 	if err != nil {
 		return &appauthpb.InvalidateAppPasswordResponse{
-			Status: status.NewInternal(ctx, err, "error invalidating app password"),
+			Status: status.NewStatusFromErrType(ctx, "error invalidating app password", err),
 		}, nil
 	}
 
@@ -141,7 +141,7 @@ func (s *service) GetAppPassword(ctx context.Context, req *appauthpb.GetAppPassw
 	pwd, err := s.am.GetAppPassword(ctx, req.User, req.Password)
 	if err != nil {
 		return &appauthpb.GetAppPasswordResponse{
-			Status: status.NewInternal(ctx, err, "error getting app password via username/password"),
+			Status: status.NewStatusFromErrType(ctx, "error getting app password via username/password", err),
 		}, nil
 	}
 

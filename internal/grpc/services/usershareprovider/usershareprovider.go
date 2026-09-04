@@ -143,7 +143,7 @@ func (s *service) CreateShare(ctx context.Context, req *collaboration.CreateShar
 	share, err := s.sm.Share(ctx, req.ResourceInfo, req.Grant)
 	if err != nil {
 		return &collaboration.CreateShareResponse{
-			Status: status.NewInternal(ctx, err, "error creating share: "+err.Error()),
+			Status: status.NewStatusFromErrType(ctx, "error creating share", err),
 		}, nil
 	}
 
@@ -158,7 +158,7 @@ func (s *service) RemoveShare(ctx context.Context, req *collaboration.RemoveShar
 	err := s.sm.Unshare(ctx, req.Ref)
 	if err != nil {
 		return &collaboration.RemoveShareResponse{
-			Status: status.NewInternal(ctx, err, "error removing share"),
+			Status: status.NewStatusFromErrType(ctx, "error removing share", err),
 		}, nil
 	}
 
@@ -171,7 +171,7 @@ func (s *service) GetShare(ctx context.Context, req *collaboration.GetShareReque
 	share, err := s.sm.GetShare(ctx, req.Ref)
 	if err != nil {
 		return &collaboration.GetShareResponse{
-			Status: status.NewInternal(ctx, err, "error getting share"),
+			Status: status.NewStatusFromErrType(ctx, "error getting share", err),
 		}, err
 	}
 
@@ -191,7 +191,7 @@ func (s *service) ListShares(ctx context.Context, req *collaboration.ListSharesR
 	shares, err := s.sm.ListShares(ctx, req.Filters) // TODO(labkode): add filter to share manager
 	if err != nil {
 		return &collaboration.ListSharesResponse{
-			Status: status.NewInternal(ctx, err, "error listing shares"),
+			Status: status.NewStatusFromErrType(ctx, "error listing shares", err),
 		}, nil
 	}
 
@@ -206,7 +206,7 @@ func (s *service) UpdateShare(ctx context.Context, req *collaboration.UpdateShar
 	share, err := s.sm.UpdateShare(ctx, req.Ref, req)
 	if err != nil {
 		return &collaboration.UpdateShareResponse{
-			Status: status.NewInternal(ctx, err, "error updating share"),
+			Status: status.NewStatusFromErrType(ctx, "error updating share", err),
 		}, nil
 	}
 
@@ -232,7 +232,7 @@ func (s *service) ListReceivedShares(ctx context.Context, req *collaboration.Lis
 	shares, err := s.sm.ListReceivedShares(ctx, req.Filters) // TODO(labkode): check what to update
 	if err != nil {
 		return &collaboration.ListReceivedSharesResponse{
-			Status: status.NewInternal(ctx, err, "error listing received shares"),
+			Status: status.NewStatusFromErrType(ctx, "error listing received shares", err),
 		}, nil
 	}
 
@@ -250,7 +250,7 @@ func (s *service) GetReceivedShare(ctx context.Context, req *collaboration.GetRe
 	if err != nil {
 		log.Err(err).Msg("error getting received share")
 		return &collaboration.GetReceivedShareResponse{
-			Status: status.NewInternal(ctx, err, "error getting received share"),
+			Status: status.NewStatusFromErrType(ctx, "error getting received share", err),
 		}, nil
 	}
 
@@ -265,7 +265,7 @@ func (s *service) UpdateReceivedShare(ctx context.Context, req *collaboration.Up
 	share, err := s.sm.UpdateReceivedShare(ctx, req.Share, req.UpdateMask) // TODO(labkode): check what to update
 	if err != nil {
 		return &collaboration.UpdateReceivedShareResponse{
-			Status: status.NewInternal(ctx, err, "error updating received share"),
+			Status: status.NewStatusFromErrType(ctx, "error updating received share", err),
 		}, nil
 	}
 
