@@ -30,6 +30,7 @@ import (
 	authscope "github.com/cs3org/reva/v3/pkg/auth/scope"
 	jwt "github.com/cs3org/reva/v3/pkg/token/manager/jwt"
 	"google.golang.org/grpc/metadata"
+	"google.golang.org/protobuf/proto"
 )
 
 func TestCtxWithUserInfoStoresScopes(t *testing.T) {
@@ -97,8 +98,15 @@ func TestIsTokenValidReturnsScopes(t *testing.T) {
 	if gotUser.GetId().GetOpaqueId() != "einstein" {
 		t.Fatalf("isTokenValid() user = %q, want einstein", gotUser.GetId().GetOpaqueId())
 	}
-	if !reflect.DeepEqual(gotScopes, scopes) {
+	// Protobuf messages carry internal state that reflect.DeepEqual sees, so
+	// they are compared with proto.Equal.
+	if len(gotScopes) != len(scopes) {
 		t.Fatalf("isTokenValid() scopes = %+v, want %+v", gotScopes, scopes)
+	}
+	for k, want := range scopes {
+		if got, ok := gotScopes[k]; !ok || !proto.Equal(got, want) {
+			t.Fatalf("isTokenValid() scopes[%q] = %+v, want %+v", k, got, want)
+		}
 	}
 }
 
