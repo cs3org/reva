@@ -42,6 +42,12 @@ import (
 // blocking on the server indefinitely.
 const fetchWait = 5 * time.Second
 
+// requestTimeout bounds a JetStream API request (used by the KV schedule
+// operations, which take no context of their own). It is comfortably above
+// transient NATS latency and below the default AckWait, so a slow schedule read
+// does not trip the default 5s wait yet cannot stall a run's lease.
+const requestTimeout = 15 * time.Second
+
 // Options configures the NATS-backed store.
 type Options struct {
 	// Address is the NATS server address.
@@ -76,6 +82,13 @@ type store struct {
 	// Complete and Fail can ack or nak the right message.
 	mu       sync.Mutex
 	inflight map[rjobs.RunID]*nats.Msg
+
+	// scheduled is the set of leader-scoped periodic job names this process has
+	// registered. DueScheduled iterates it and reads those keys directly, rather
+	// than scanning the whole KV bucket, so a slow or churning bucket cannot
+	// stall the scheduler.
+	schedMu   sync.Mutex
+	scheduled map[string]struct{}
 }
 
 // scheduleState is what we keep per leader-scoped periodic job in the KV
@@ -116,19 +129,20 @@ func New(ctx context.Context, opts Options) (rjobs.Store, error) {
 		return nil, err
 	}
 
-	js, err := nc.JetStream()
+	js, err := nc.JetStream(nats.MaxWait(requestTimeout))
 	if err != nil {
 		nc.Close()
 		return nil, errors.Wrap(err, "rjobs: jetstream initialization failed")
 	}
 
 	s := &store{
-		nc:       nc,
-		js:       js,
-		prefix:   opts.Prefix,
-		ackWait:  opts.AckWait,
-		log:      log,
-		inflight: make(map[rjobs.RunID]*nats.Msg),
+		nc:        nc,
+		js:        js,
+		prefix:    opts.Prefix,
+		ackWait:   opts.AckWait,
+		log:       log,
+		inflight:  make(map[rjobs.RunID]*nats.Msg),
+		scheduled: make(map[string]struct{}),
 	}
 
 	if err := s.setup(opts.AckWait, opts.Jobs); err != nil {
@@ -355,6 +369,12 @@ func (s *store) HeartbeatInterval() time.Duration {
 }
 
 func (s *store) RegisterScheduled(ctx context.Context, job string, schedule rjobs.Schedule, next time.Time, force bool) error {
+	// Record the name so DueScheduled reads only the jobs this process owns,
+	// instead of scanning the whole bucket.
+	s.schedMu.Lock()
+	s.scheduled[job] = struct{}{}
+	s.schedMu.Unlock()
+
 	entry, err := s.kv.Get(job)
 	switch {
 	case err == nil:
@@ -402,16 +422,15 @@ func (s *store) RegisterScheduled(ctx context.Context, job string, schedule rjob
 }
 
 func (s *store) DueScheduled(ctx context.Context, now time.Time) ([]rjobs.ScheduledRun, error) {
-	keys, err := s.kv.Keys()
-	if err != nil {
-		if errors.Is(err, nats.ErrNoKeysFound) {
-			return nil, nil
-		}
-		return nil, errors.Wrap(err, "rjobs: listing schedule state failed")
+	s.schedMu.Lock()
+	jobs := make([]string, 0, len(s.scheduled))
+	for job := range s.scheduled {
+		jobs = append(jobs, job)
 	}
+	s.schedMu.Unlock()
 
 	var due []rjobs.ScheduledRun
-	for _, job := range keys {
+	for _, job := range jobs {
 		entry, err := s.kv.Get(job)
 		if err != nil {
 			if errors.Is(err, nats.ErrKeyNotFound) {
