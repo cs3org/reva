@@ -21,6 +21,7 @@ package admin
 import (
 	"testing"
 
+	"github.com/cs3org/reva/v3/pkg/invoke/client"
 	"github.com/cs3org/reva/v3/pkg/registry"
 	_ "github.com/cs3org/reva/v3/pkg/registry/memory"
 )
@@ -59,26 +60,26 @@ func testRegistry(t *testing.T) registry.Registry {
 
 func TestResolveSelectorByAddress(t *testing.T) {
 	reg := testRegistry(t)
-	_, eps, err := resolveSelector(reg, "hostA:9001")
+	_, eps, err := client.Resolve(reg, "hostA:9001")
 	if err != nil {
-		t.Fatalf("resolveSelector: %v", err)
+		t.Fatalf("client.Resolve: %v", err)
 	}
-	if len(eps) != 1 || eps[0].node != "hostA:9001/storageprovider" {
+	if len(eps) != 1 || eps[0].Node != "hostA:9001/storageprovider" {
 		t.Fatalf("expected the hostA:9001 instance, got %+v", eps)
 	}
 }
 
 func TestResolveSelectorByHost(t *testing.T) {
 	reg := testRegistry(t)
-	_, eps, err := resolveSelector(reg, "hostA")
+	_, eps, err := client.Resolve(reg, "hostA")
 	if err != nil {
-		t.Fatalf("resolveSelector: %v", err)
+		t.Fatalf("client.Resolve: %v", err)
 	}
 	if len(eps) != 2 {
 		t.Fatalf("expected both hostA instances, got %+v", eps)
 	}
 	// Sorted by node id.
-	if eps[0].node != "hostA:9001/storageprovider" || eps[1].node != "hostA:9002/userprovider" {
+	if eps[0].Node != "hostA:9001/storageprovider" || eps[1].Node != "hostA:9002/userprovider" {
 		t.Fatalf("unexpected instances: %+v", eps)
 	}
 }
@@ -93,11 +94,11 @@ func TestResolveSelectorNameWinsOverHost(t *testing.T) {
 	})); err != nil {
 		t.Fatal(err)
 	}
-	_, eps, err := resolveSelector(reg, "hostA")
+	_, eps, err := client.Resolve(reg, "hostA")
 	if err != nil {
-		t.Fatalf("resolveSelector: %v", err)
+		t.Fatalf("client.Resolve: %v", err)
 	}
-	if len(eps) != 1 || eps[0].node != "hostB:9100/hostA" {
+	if len(eps) != 1 || eps[0].Node != "hostB:9100/hostA" {
 		t.Fatalf("expected the service to win over the host, got %+v", eps)
 	}
 }
@@ -106,9 +107,9 @@ func TestResolveSelectorNameWinsOverHost(t *testing.T) {
 // instance's control endpoint.
 func TestResolveSelectorByName(t *testing.T) {
 	reg := testRegistry(t)
-	svc, eps, err := resolveSelector(reg, "storageprovider")
+	svc, eps, err := client.Resolve(reg, "storageprovider")
 	if err != nil {
-		t.Fatalf("resolveSelector: %v", err)
+		t.Fatalf("client.Resolve: %v", err)
 	}
 	if svc != "storageprovider" {
 		t.Errorf("unexpected service: %s", svc)
@@ -116,7 +117,7 @@ func TestResolveSelectorByName(t *testing.T) {
 	if len(eps) != 2 {
 		t.Fatalf("expected 2 endpoints, got %d", len(eps))
 	}
-	got := map[string]bool{eps[0].addr: true, eps[1].addr: true}
+	got := map[string]bool{eps[0].Addr: true, eps[1].Addr: true}
 	if !got["hostA:9500"] || !got["hostB:9500"] {
 		t.Errorf("expected both control endpoints, got %+v", eps)
 	}
@@ -126,26 +127,26 @@ func TestResolveSelectorByName(t *testing.T) {
 // still resolves the service name to route with.
 func TestResolveSelectorByID(t *testing.T) {
 	reg := testRegistry(t)
-	svc, eps, err := resolveSelector(reg, "hostB:9001/storageprovider")
+	svc, eps, err := client.Resolve(reg, "hostB:9001/storageprovider")
 	if err != nil {
-		t.Fatalf("resolveSelector: %v", err)
+		t.Fatalf("client.Resolve: %v", err)
 	}
 	if svc != "storageprovider" {
 		t.Errorf("unexpected service: %s", svc)
 	}
-	if len(eps) != 1 || eps[0].node != "hostB:9001/storageprovider" || eps[0].addr != "hostB:9500" {
+	if len(eps) != 1 || eps[0].Node != "hostB:9001/storageprovider" || eps[0].Addr != "hostB:9500" {
 		t.Fatalf("expected the single hostB instance, got %+v", eps)
 	}
 	// The control channel routes on the node id, so the exact instance is reached.
-	if eps[0].target != "hostB:9001/storageprovider" {
-		t.Errorf("expected target to be the node id, got %q", eps[0].target)
+	if eps[0].Target != "hostB:9001/storageprovider" {
+		t.Errorf("expected target to be the node id, got %q", eps[0].Target)
 	}
 }
 
 // TestResolveSelectorUnknownID rejects a node id that is not registered.
 func TestResolveSelectorUnknownID(t *testing.T) {
 	reg := testRegistry(t)
-	if _, _, err := resolveSelector(reg, "hostZ:9999/storageprovider"); err == nil {
+	if _, _, err := client.Resolve(reg, "hostZ:9999/storageprovider"); err == nil {
 		t.Fatal("expected error for unknown instance id")
 	}
 }
@@ -153,9 +154,9 @@ func TestResolveSelectorUnknownID(t *testing.T) {
 // TestResolveSelectorFleet checks that "*" resolves every live instance.
 func TestResolveSelectorFleet(t *testing.T) {
 	reg := testRegistry(t)
-	_, eps, err := resolveSelector(reg, "*")
+	_, eps, err := client.Resolve(reg, "*")
 	if err != nil {
-		t.Fatalf("resolveSelector: %v", err)
+		t.Fatalf("client.Resolve: %v", err)
 	}
 	if len(eps) != 3 {
 		t.Fatalf("expected all 3 instances, got %+v", eps)
@@ -166,7 +167,7 @@ func TestResolveSelectorFleet(t *testing.T) {
 // cleanly.
 func TestResolveSelectorNoMatch(t *testing.T) {
 	reg := testRegistry(t)
-	if _, _, err := resolveSelector(reg, "nope"); err == nil {
+	if _, _, err := client.Resolve(reg, "nope"); err == nil {
 		t.Fatal("expected error for a selector matching nothing")
 	}
 }

@@ -26,6 +26,7 @@ import (
 
 	"github.com/cs3org/reva/v3/pkg/admin"
 	"github.com/cs3org/reva/v3/pkg/admin/adminpb"
+	"github.com/cs3org/reva/v3/pkg/invoke/client"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 )
@@ -39,12 +40,12 @@ const jobsService = "jobs"
 // (shared store), since the store — not the ingress runner — decides execution.
 
 // jobsEndpoints resolves every live jobs runner.
-func (s *svc) jobsEndpoints() ([]endpoint, error) {
+func (s *svc) jobsEndpoints() ([]client.Endpoint, error) {
 	reg, err := s.registryHandle()
 	if err != nil {
 		return nil, err
 	}
-	_, eps, err := resolveSelector(reg, jobsService)
+	_, eps, err := client.Resolve(reg, jobsService)
 	if err != nil || len(eps) == 0 {
 		return nil, status.Error(codes.NotFound, "admin: no jobs runner is live in the fleet")
 	}
@@ -57,11 +58,11 @@ func (s *svc) invokeJobsOne(ctx context.Context, invocation string, args map[str
 	if err != nil {
 		return nil, err
 	}
-	res := invokeOne(ctx, eps[0], invocation, args)
+	res := client.InvokeOne(ctx, eps[0], invocation, args)
 	if res.Error != "" {
 		return nil, status.Errorf(codes.Internal, "admin: jobs %s: %s", invocation, res.Error)
 	}
-	return res, nil
+	return &adminpb.NodeResult{Node: res.Node, ResultJson: res.ResultJSON, Error: res.Error}, nil
 }
 
 func (s *svc) InspectJobs(ctx context.Context, _ *adminpb.InspectJobsRequest) (*adminpb.InspectJobsResponse, error) {
