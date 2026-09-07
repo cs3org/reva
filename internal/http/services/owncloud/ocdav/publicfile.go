@@ -217,6 +217,8 @@ func (s *svc) getPublicFileInfos(onContainer, onlyRoot bool, i *provider.Resourc
 			Opaque: o,
 			Path:   path.Dir(i.Path),
 			Type:   provider.ResourceType_RESOURCE_TYPE_CONTAINER,
+			// the collection only holds the shared file
+			Size: i.Size,
 		})
 		if onlyRoot {
 			return infos
