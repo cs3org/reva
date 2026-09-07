@@ -27,6 +27,7 @@ import (
 	rpcv1beta1 "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	collaborationv1beta1 "github.com/cs3org/go-cs3apis/cs3/sharing/collaboration/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
+	"github.com/cs3org/reva/v3/pkg/errtypes"
 	"github.com/cs3org/reva/v3/pkg/permissions"
 	"github.com/cs3org/reva/v3/pkg/reconciliation/nsdump"
 	"github.com/cs3org/reva/v3/pkg/spaces"
@@ -104,7 +105,25 @@ func (j *DeepJob) Run(ctx context.Context, p RunParameters) error {
 			Permissions: "rwx",
 		})
 	case spaces.SpaceTypeProject:
-
+		// First we query the project from the db
+		filters := spaces.ListStorageSpaceFilter{}.ByID(&provider.StorageSpaceId{OpaqueId: p.SpaceID})
+		res, err := j.gw.ListStorageSpaces(ctx, &provider.ListStorageSpacesRequest{
+			Filters: filters.List(),
+		})
+		if err != nil {
+			return err
+		}
+		if res.Status.Code != rpcv1beta1.Code_CODE_OK {
+			return errors.Errorf("failed to list space %s: %s", p.SpaceID, res.Status.Message)
+		}
+		if len(res.StorageSpaces) != 1 {
+			return errtypes.NotFound(p.SpaceID)
+		}
+		space := res.StorageSpaces[0]
+		for _, role := range space.Roles {
+			acls := roleToAcls(role)
+			p.MandatoryACLs = append(p.MandatoryACLs, acls...)
+		}
 	case spaces.SpaceTypePublic:
 		return errors.New("deep reconciliation is not supported for public spaces")
 	}
@@ -188,6 +207,24 @@ func (j *DeepJob) getPath(ctx context.Context, rid *provider.ResourceId) (string
 	return statRes.Info.Path, true
 }
 
+func roleToAcls(role *provider.SpaceRole) []*acl.Entry {
+	entries := []*acl.Entry{}
+	for _, r := range role.Recipients {
+		e := &acl.Entry{}
+		e.Permissions = permissionsToACLPerms(role.PermissionSet)
+		switch r.Type {
+		case provider.GranteeType_GRANTEE_TYPE_GROUP:
+			e.Type = "egroup"
+			e.Qualifier = r.GetGroupId().OpaqueId
+		case provider.GranteeType_GRANTEE_TYPE_USER:
+			e.Type = "user"
+			e.Qualifier = r.GetUserId().OpaqueId
+		}
+		entries = append(entries, e)
+	}
+	return entries
+}
+
 func compare(tree *ACLTree, ns *nsdump.NamespaceDump) ChangeSet {
 	changeSet := ChangeSet{}
 	for _, e := range ns.Entries {
@@ -264,17 +301,22 @@ func shareToACL(s *collaborationv1beta1.Share) *acl.Entry {
 		return &e
 	}
 
+	e.Permissions = permissionsToACLPerms(s.Permissions.Permissions)
+	return &e
+}
+
+func permissionsToACLPerms(p *provider.ResourcePermissions) string {
 	// TODO(jgeens): we should define named constants for these int values
 	// TODO(jgeens): we should define named constants for the EOS perms
-	ocs := permissions.OCSFromCS3Permission(s.Permissions.Permissions)
+	// TODO(jgeens): we should have some better error handling here
+	ocs := permissions.OCSFromCS3Permission(p)
 	switch ocs {
 	case 0:
-		e.Permissions = "!r!w!x"
+		return "!r!w!x"
 	case 1:
-		e.Permissions = "rx"
+		return "rx"
 	case 15:
-		e.Permissions = "rwx"
+		return "rwx"
 	}
-
-	return &e
+	return ""
 }
