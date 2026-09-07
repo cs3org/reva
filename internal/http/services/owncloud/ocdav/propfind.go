@@ -627,9 +627,13 @@ func (s *svc) mdToPropResponse(ctx context.Context, pf *propfindXML, md *provide
 
 		// always return size, well nearly always ... public link shares are a little weird
 		if md.Type == provider.ResourceType_RESOURCE_TYPE_CONTAINER {
-			propstatOK.Prop = append(propstatOK.Prop, s.newPropRaw("d:resourcetype", "<d:collection/>"))
-			if ls == nil {
-				propstatOK.Prop = append(propstatOK.Prop, s.newProp("oc:size", size))
+			propstatOK.Prop = append(propstatOK.Prop,
+				s.newPropRaw("d:resourcetype", "<d:collection/>"),
+				s.newProp("oc:size", size),
+			)
+			if ls != nil {
+				// in a public link, clients also read the folder size from d:getcontentlength
+				propstatOK.Prop = append(propstatOK.Prop, s.newProp("d:getcontentlength", size))
 			}
 			// A <DAV:allprop> PROPFIND request SHOULD NOT return DAV:quota-available-bytes and DAV:quota-used-bytes
 			// from https://www.rfc-editor.org/rfc/rfc4331.html#section-2
@@ -791,12 +795,7 @@ func (s *svc) mdToPropResponse(ctx context.Context, pf *propfindXML, md *provide
 					// TODO we cannot find out if md.Size is set or not because ints in go default to 0
 					// TODO what is the difference to d:quota-used-bytes (which only exists for collections)?
 					// oc:size is available on files and folders and behaves like d:getcontentlength or d:quota-used-bytes respectively
-					if ls == nil {
-						propstatOK.Prop = append(propstatOK.Prop, s.newProp("oc:size", size))
-					} else {
-						// link share root collection has no size
-						propstatNotFound.Prop = append(propstatNotFound.Prop, s.newProp("oc:size", ""))
-					}
+					propstatOK.Prop = append(propstatOK.Prop, s.newProp("oc:size", size))
 				case "owner-id": // phoenix only
 					if md.Owner != nil {
 						if isCurrentUserOwner(ctx, md.Owner) {
@@ -975,7 +974,7 @@ func (s *svc) mdToPropResponse(ctx context.Context, pf *propfindXML, md *provide
 					// which only would make sense when eg. rendering a plain HTML filelisting when GETing a collection,
 					// which is not the case ... so we don't return it on collections. owncloud has oc:size for that
 					// TODO we cannot find out if md.Size is set or not because ints in go default to 0
-					if md.Type == provider.ResourceType_RESOURCE_TYPE_CONTAINER {
+					if md.Type == provider.ResourceType_RESOURCE_TYPE_CONTAINER && ls == nil {
 						propstatNotFound.Prop = append(propstatNotFound.Prop, s.newProp("d:getcontentlength", ""))
 					} else {
 						propstatOK.Prop = append(propstatOK.Prop, s.newProp("d:getcontentlength", size))
