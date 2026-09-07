@@ -24,7 +24,9 @@ package service
 import (
 	"context"
 	"fmt"
+	"os"
 	"sync"
+	"time"
 
 	appprovider "github.com/cs3org/go-cs3apis/cs3/app/provider/v1beta1"
 	appregistry "github.com/cs3org/go-cs3apis/cs3/app/registry/v1beta1"
@@ -48,6 +50,7 @@ import (
 	datatx "github.com/cs3org/go-cs3apis/cs3/tx/v1beta1"
 
 	revtrace "github.com/cs3org/reva/v3/internal/grpc/interceptors/trace"
+	"github.com/cs3org/reva/v3/pkg/appctx"
 	"github.com/cs3org/reva/v3/pkg/registry"
 	"go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc"
 	"google.golang.org/grpc"
@@ -56,6 +59,26 @@ import (
 
 // maxCallRecvMsgSize is the default maximum gRPC receive message size (in bytes).
 const maxCallRecvMsgSize = 10240000
+
+// A peer may be starting, restarting or waiting for its registration to
+// propagate, so a lookup retries before it fails the call. A peer that stays
+// unresolvable is different: this instance cannot route at all, so it exits
+// instead of serving errors indefinitely. Both thresholds must be crossed, so
+// neither a burst of requests during a peer restart nor a slow trickle of them
+// over a long quiet period takes the process down.
+const (
+	resolveAttempts   = 3
+	resolveRetryWait  = 250 * time.Millisecond
+	unresolvableCalls = 20
+	unresolvableFor   = time.Minute
+)
+
+// exit ends the process. It is a variable so tests can observe it instead of
+// dying.
+var exit = func(reason string) {
+	fmt.Fprintln(os.Stderr, reason)
+	os.Exit(1)
+}
 
 // Service names processes register under and the resolver looks up.
 const (
@@ -127,6 +150,15 @@ type clients struct {
 
 	mu    sync.Mutex
 	conns map[string]*grpc.ClientConn
+
+	failMu sync.Mutex
+	fails  map[string]*failure
+}
+
+// failure is a service's current run of failed lookups.
+type failure struct {
+	first time.Time
+	calls int
 }
 
 // NewClients builds a resolver over the registry, one per Reva instance.
@@ -135,6 +167,7 @@ func NewClients(r registry.Registry) Clients {
 		registry: r,
 		selector: FirstSelector{},
 		conns:    map[string]*grpc.ClientConn{},
+		fails:    map[string]*failure{},
 	}
 }
 
@@ -145,15 +178,23 @@ func (c *clients) WithSelector(s Selector) *clients {
 
 // resolve picks a gRPC node for name and returns a cached connection to it. A
 // name is unique per transport, so an HTTP service can carry the same one.
-func (c *clients) resolve(name string) (*grpc.ClientConn, string, error) {
-	svc, err := c.registry.GetService(name)
+func (c *clients) resolve(ctx context.Context, name string) (*grpc.ClientConn, string, error) {
+	var node registry.Node
+	err := c.lookup(ctx, name, func() error {
+		svc, err := c.registry.GetService(name)
+		if err != nil {
+			return fmt.Errorf("service registry: resolving %q: %w", name, err)
+		}
+		nodes := filterByMetadata(svc.Nodes(), map[string]string{registry.MetaTransport: registry.TransportGRPC})
+		picked, ok := c.selector.Pick(nodes)
+		if !ok {
+			return fmt.Errorf("service registry: no selectable grpc node for %q", name)
+		}
+		node = picked
+		return nil
+	})
 	if err != nil {
-		return nil, "", fmt.Errorf("service registry: resolving %q: %w", name, err)
-	}
-	nodes := filterByMetadata(svc.Nodes(), map[string]string{registry.MetaTransport: registry.TransportGRPC})
-	node, ok := c.selector.Pick(nodes)
-	if !ok {
-		return nil, "", fmt.Errorf("service registry: no selectable grpc node for %q", name)
+		return nil, "", err
 	}
 	addr := node.Address()
 	conn, err := c.connFor(addr)
@@ -161,6 +202,62 @@ func (c *clients) resolve(name string) (*grpc.ClientConn, string, error) {
 		return nil, "", err
 	}
 	return conn, addr, nil
+}
+
+// lookup runs try until it succeeds, retrying a peer that is not resolvable yet
+// and escalating one that never becomes resolvable.
+func (c *clients) lookup(ctx context.Context, name string, try func() error) error {
+	var err error
+	for attempt := 1; ; attempt++ {
+		if err = try(); err == nil {
+			c.resolved(name)
+			return nil
+		}
+		if attempt >= resolveAttempts {
+			break
+		}
+		select {
+		case <-ctx.Done():
+			return err
+		case <-time.After(resolveRetryWait):
+		}
+	}
+	c.unresolved(ctx, name, err)
+	return err
+}
+
+func (c *clients) resolved(name string) {
+	c.failMu.Lock()
+	delete(c.fails, name)
+	c.failMu.Unlock()
+}
+
+// unresolved records a failed lookup and ends the process once name has been
+// unresolvable for long enough: a reva instance that cannot reach a peer it
+// needs is malfunctioning, and dying is more visible than logging forever.
+func (c *clients) unresolved(ctx context.Context, name string, cause error) {
+	now := time.Now()
+	c.failMu.Lock()
+	f, ok := c.fails[name]
+	if !ok {
+		f = &failure{first: now}
+		c.fails[name] = f
+	}
+	f.calls++
+	calls, since := f.calls, now.Sub(f.first)
+	c.failMu.Unlock()
+
+	log := appctx.GetLogger(ctx)
+	if calls < unresolvableCalls || since < unresolvableFor {
+		log.Error().Err(cause).Str("service", name).Int("failed_lookups", calls).
+			Msg("cannot resolve peer, retrying")
+		return
+	}
+	reason := fmt.Sprintf("reva: %q has been unresolvable for %s over %d lookups, exiting: %v",
+		name, since.Truncate(time.Second), calls, cause)
+	log.Error().Err(cause).Str("service", name).Int("failed_lookups", calls).
+		Dur("unresolvable_for", since).Msg("peer is unresolvable, exiting")
+	exit(reason)
 }
 
 // connFor returns a cached connection to address, dialing on first use.

@@ -20,7 +20,9 @@ package service
 
 import (
 	"context"
+	"errors"
 	"testing"
+	"time"
 
 	"github.com/cs3org/reva/v3/pkg/registry"
 	"github.com/cs3org/reva/v3/pkg/registry/memory"
@@ -71,7 +73,7 @@ func TestSelectorNoSelectableNode(t *testing.T) {
 
 func TestResolveUnknownService(t *testing.T) {
 	c := NewClients(memory.New(nil)).(*clients)
-	if _, _, err := c.resolve("nope"); err == nil {
+	if _, _, err := c.resolve(context.Background(), "nope"); err == nil {
 		t.Fatal("expected error resolving unknown service")
 	}
 }
@@ -83,14 +85,14 @@ func TestResolveReturnsAddressAndCachesConn(t *testing.T) {
 	}))
 	c := NewClients(reg).(*clients)
 
-	conn1, addr, err := c.resolve(NameGateway)
+	conn1, addr, err := c.resolve(context.Background(), NameGateway)
 	if err != nil {
 		t.Fatalf("resolve failed: %v", err)
 	}
 	if addr != "127.0.0.1:19000" {
 		t.Fatalf("unexpected address %q", addr)
 	}
-	conn2, _, err := c.resolve(NameGateway)
+	conn2, _, err := c.resolve(context.Background(), NameGateway)
 	if err != nil {
 		t.Fatalf("resolve failed: %v", err)
 	}
@@ -108,7 +110,7 @@ func TestResolveSkipsSameNamedHTTPNode(t *testing.T) {
 	c := NewClients(reg).(*clients)
 
 	for range 20 {
-		_, addr, err := c.resolve(NamePreferences)
+		_, addr, err := c.resolve(context.Background(), NamePreferences)
 		if err != nil {
 			t.Fatalf("resolve failed: %v", err)
 		}
@@ -125,7 +127,7 @@ func TestResolveNoGRPCNode(t *testing.T) {
 	}))
 	c := NewClients(reg).(*clients)
 
-	if _, _, err := c.resolve(NamePreferences); err == nil {
+	if _, _, err := c.resolve(context.Background(), NamePreferences); err == nil {
 		t.Fatal("expected no selectable grpc node")
 	}
 }
@@ -146,6 +148,46 @@ func TestHTTPEndpointSkipsSameNamedGRPCNode(t *testing.T) {
 		if ep.Address() != "127.0.0.1:19143" {
 			t.Fatalf("resolved the grpc node %q", ep.Address())
 		}
+	}
+}
+
+func TestLookupRetriesUntilPeerResolves(t *testing.T) {
+	c := NewClients(memory.New(nil)).(*clients)
+	attempts := 0
+	err := c.lookup(context.Background(), NameGateway, func() error {
+		attempts++
+		if attempts < 2 {
+			return errors.New("not registered yet")
+		}
+		return nil
+	})
+	if err != nil {
+		t.Fatalf("expected the retry to succeed: %v", err)
+	}
+	if attempts != 2 {
+		t.Fatalf("expected 2 attempts, got %d", attempts)
+	}
+	if len(c.fails) != 0 {
+		t.Fatal("a resolved peer must clear its failure run")
+	}
+}
+
+func TestUnresolvedPeerExitsOnlyAfterBothThresholds(t *testing.T) {
+	restore := exit
+	var reason string
+	exit = func(r string) { reason = r }
+	defer func() { exit = restore }()
+
+	c := NewClients(memory.New(nil)).(*clients)
+	c.unresolved(context.Background(), NameGateway, errors.New("boom"))
+	if reason != "" {
+		t.Fatal("a single failed lookup must not end the process")
+	}
+
+	c.fails[NameGateway] = &failure{first: time.Now().Add(-2 * unresolvableFor), calls: unresolvableCalls}
+	c.unresolved(context.Background(), NameGateway, errors.New("boom"))
+	if reason == "" {
+		t.Fatal("a peer unresolvable past both thresholds must end the process")
 	}
 }
 

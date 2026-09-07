@@ -78,7 +78,9 @@ small JSON entry. When a process connects it watches the whole bucket, which
 replays the keys already there — that replay is how a freshly started process
 hydrates its cache — and then keeps streaming changes. An unreachable NATS
 server is not treated as a fatal condition: writes are queued in memory and
-flushed once the connection comes back. Entries carry a TTL as well, so a
+flushed once the connection comes back, and every write that did not land is
+returned to the caller so a process that has gone invisible to its peers says so
+in its log rather than carrying on quietly. Entries carry a TTL as well, so a
 process that dies without deregistering fades out of the shared view instead of
 lingering forever.
 
@@ -168,6 +170,13 @@ has started, and a `New()` that fails because the gateway is not up yet turns a
 condition that would have resolved itself in a second into a startup failure.
 Resolving inside the method that needs the peer costs a map lookup and avoids
 the whole class of problem.
+
+A lookup that finds nothing is retried a few times before the call fails, which
+covers a peer that is restarting or whose registration has not propagated yet.
+A peer that stays unresolvable is treated as a fault in this process rather than
+a transient one: after roughly a minute of failed lookups the process logs the
+peer it cannot reach and exits, so a broken registry view shows up as a dead
+instance instead of an endless stream of 500s.
 
 Sometimes a caller already has an address, typically one that a registry RPC
 handed back — a provider address from the storage registry, say. For those cases

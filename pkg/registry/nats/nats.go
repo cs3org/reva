@@ -39,6 +39,12 @@ import (
 const (
 	defaultBucket = "reva_registry"
 	defaultTTL    = 30 * time.Second
+	opTimeout     = 5 * time.Second
+	flushTimeout  = 10 * time.Second
+	reconnectWait = 2 * time.Second
+	// maxReconnects bounds nats.go's own retries. On the last one it closes the
+	// connection, which is what lets bound() dial a fresh one.
+	maxReconnects = 10
 )
 
 func init() {
@@ -67,12 +73,13 @@ type driver struct {
 	bucket string
 	ttl    time.Duration
 
-	mu        sync.Mutex
-	kv        jetstream.KeyValue
-	nc        *nats.Conn
-	connected bool
-	pending   map[string]entry
-	removed   map[string]struct{}
+	// dialMu serializes reconnects so concurrent callers share one connection.
+	dialMu  sync.Mutex
+	mu      sync.Mutex
+	kv      jetstream.KeyValue
+	nc      *nats.Conn
+	pending map[string]entry
+	removed map[string]struct{}
 	// keyIndex maps a KV key back to its service+id for delete events.
 	keyIndex map[string][2]string
 
@@ -112,33 +119,32 @@ func New(m map[string]any) (registry.Driver, error) {
 	return d, nil
 }
 
+// Add writes the node through to the bucket. A write that cannot be made is
+// queued for the next flush and reported, never swallowed: an unreported queued
+// write leaves the process healthy but invisible to its peers.
 func (d *driver) Add(service string, n registry.Node) error {
 	e := entry{Service: service, ID: n.ID(), Address: n.Address(), Metadata: n.Metadata()}
 	key := keyFor(service, n.ID())
-
-	d.mu.Lock()
-	d.keyIndex[key] = [2]string{service, n.ID()}
-	connected, kv := d.connected, d.kv
-	if !connected {
-		d.pending[key] = e
-		delete(d.removed, key)
-		d.mu.Unlock()
-		return nil
-	}
-	d.mu.Unlock()
-
 	b, err := json.Marshal(e)
 	if err != nil {
 		return err
 	}
-	ctx, cancel := context.WithTimeout(d.ctx, 5*time.Second)
+
+	d.mu.Lock()
+	d.keyIndex[key] = [2]string{service, n.ID()}
+	d.mu.Unlock()
+
+	kv, err := d.bound()
+	if err != nil {
+		d.queueAdd(key, e)
+		return err
+	}
+	ctx, cancel := context.WithTimeout(d.ctx, opTimeout)
 	_, err = kv.Put(ctx, key, b)
 	cancel()
 	if err != nil {
-		d.mu.Lock()
-		d.pending[key] = e
-		d.connected = false
-		d.mu.Unlock()
+		d.queueAdd(key, e)
+		return fmt.Errorf("nats registry: writing %q to bucket %s: %w", key, d.bucket, err)
 	}
 	return nil
 }
@@ -146,31 +152,42 @@ func (d *driver) Add(service string, n registry.Node) error {
 func (d *driver) Remove(service, nodeID string) error {
 	key := keyFor(service, nodeID)
 
-	d.mu.Lock()
-	connected, kv := d.connected, d.kv
-	if !connected {
-		d.removed[key] = struct{}{}
-		delete(d.pending, key)
-		d.mu.Unlock()
-		return nil
+	kv, err := d.bound()
+	if err != nil {
+		d.queueRemove(key)
+		return err
 	}
-	d.mu.Unlock()
-
-	ctx, cancel := context.WithTimeout(d.ctx, 5*time.Second)
-	_ = kv.Delete(ctx, key)
+	ctx, cancel := context.WithTimeout(d.ctx, opTimeout)
+	err = kv.Delete(ctx, key)
 	cancel()
+	if err != nil {
+		d.queueRemove(key)
+		return fmt.Errorf("nats registry: deleting %q from bucket %s: %w", key, d.bucket, err)
+	}
 	return nil
+}
+
+func (d *driver) queueAdd(key string, e entry) {
+	d.mu.Lock()
+	d.pending[key] = e
+	delete(d.removed, key)
+	d.mu.Unlock()
+}
+
+func (d *driver) queueRemove(key string) {
+	d.mu.Lock()
+	d.removed[key] = struct{}{}
+	delete(d.pending, key)
+	d.mu.Unlock()
 }
 
 // Watch (re)connects if needed and streams the bucket, replaying existing keys
 // first so the cache hydrates.
 func (d *driver) Watch() (<-chan registry.Event, error) {
-	if err := d.ensureConnected(); err != nil {
+	kv, err := d.bound()
+	if err != nil {
 		return nil, err
 	}
-	d.mu.Lock()
-	kv := d.kv
-	d.mu.Unlock()
 
 	w, err := kv.WatchAll(d.ctx)
 	if err != nil {
@@ -227,18 +244,50 @@ func (d *driver) forward(w jetstream.KeyWatcher, out chan<- registry.Event) {
 	}
 }
 
-func (d *driver) ensureConnected() error {
+// bound returns the bucket handle when the connection can carry a request. It
+// dials on first use and after a close, but leaves a connection that is merely
+// reconnecting alone, since nats.go is still retrying it. Connection state is
+// always read from the live connection, never from a cached flag that a failed
+// write could latch.
+func (d *driver) bound() (jetstream.KeyValue, error) {
 	d.mu.Lock()
-	if d.connected {
-		d.mu.Unlock()
-		return nil
-	}
+	nc, kv := d.nc, d.kv
 	d.mu.Unlock()
-	return d.connect()
+
+	switch {
+	case nc == nil || nc.IsClosed():
+		if err := d.connect(); err != nil {
+			return nil, fmt.Errorf("nats registry: connecting to %s: %w", d.cfg.Address, err)
+		}
+		d.mu.Lock()
+		kv = d.kv
+		d.mu.Unlock()
+		return kv, nil
+	case !nc.IsConnected():
+		return nil, fmt.Errorf("nats registry: reconnecting to %s", d.cfg.Address)
+	case kv == nil:
+		return nil, fmt.Errorf("nats registry: bucket %s is not bound", d.bucket)
+	}
+	return kv, nil
 }
 
 func (d *driver) connect() error {
-	opts := []nats.Option{nats.Name("reva-registry")}
+	d.dialMu.Lock()
+	defer d.dialMu.Unlock()
+
+	d.mu.Lock()
+	current := d.nc
+	d.mu.Unlock()
+	if current != nil && !current.IsClosed() {
+		return nil
+	}
+
+	opts := []nats.Option{
+		nats.Name("reva-registry"),
+		nats.MaxReconnects(maxReconnects),
+		nats.ReconnectWait(reconnectWait),
+		nats.ReconnectHandler(func(*nats.Conn) { d.flushPending() }),
+	}
 	if d.cfg.Token != "" {
 		opts = append(opts, nats.Token(d.cfg.Token))
 	}
@@ -267,31 +316,42 @@ func (d *driver) connect() error {
 	d.mu.Lock()
 	d.nc = nc
 	d.kv = kv
-	d.connected = true
 	d.mu.Unlock()
 
 	d.flushPending()
 	return nil
 }
 
+// flushPending drains the writes that queued while the bucket was unreachable.
+// A write that fails again is queued once more rather than dropped.
 func (d *driver) flushPending() {
 	d.mu.Lock()
+	kv := d.kv
+	if kv == nil || (len(d.pending) == 0 && len(d.removed) == 0) {
+		d.mu.Unlock()
+		return
+	}
 	pending := d.pending
 	removed := d.removed
 	d.pending = map[string]entry{}
 	d.removed = map[string]struct{}{}
-	kv := d.kv
 	d.mu.Unlock()
 
-	ctx, cancel := context.WithTimeout(d.ctx, 10*time.Second)
+	ctx, cancel := context.WithTimeout(d.ctx, flushTimeout)
 	defer cancel()
 	for key, e := range pending {
-		if b, err := json.Marshal(e); err == nil {
-			_, _ = kv.Put(ctx, key, b)
+		b, err := json.Marshal(e)
+		if err != nil {
+			continue
+		}
+		if _, err := kv.Put(ctx, key, b); err != nil {
+			d.queueAdd(key, e)
 		}
 	}
 	for key := range removed {
-		_ = kv.Delete(ctx, key)
+		if err := kv.Delete(ctx, key); err != nil {
+			d.queueRemove(key)
+		}
 	}
 }
 

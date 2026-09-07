@@ -89,6 +89,8 @@ func (r *Reva) addServerlessNodes(msg string) {
 	}
 	hostname, _ := os.Hostname()
 	pid := os.Getpid()
+	failed := 0
+	var lastErr error
 	for _, si := range r.serverlessInstances {
 		id := nodeID(r.controlAddr, si.name)
 		meta := map[string]string{
@@ -104,17 +106,20 @@ func (r *Reva) addServerlessNodes(msg string) {
 		}
 		node := registry.NewNode(id, "", meta) // no listen address for serverless
 		if err := r.registry.Add(registry.NewService(si.name, []registry.Node{node})); err != nil {
-			r.log.Error().Err(err).Str("service", si.name).Msg("failed to register serverless service")
+			failed, lastErr = failed+1, err
 			continue
 		}
 		r.log.Trace().Str("service", si.name).Str("id", id).Msg(msg)
 	}
+	r.reportPublishFailures(failed, lastErr)
 }
 
 // addNodes adds one node per loaded service, logging each with the given msg.
 func (r *Reva) addNodes(msg string) {
 	hostname, _ := os.Hostname()
 	pid := os.Getpid()
+	failed := 0
+	var lastErr error
 	for _, srv := range r.servers {
 		// The control channel is not a service of its own.
 		if srv.internal {
@@ -132,12 +137,25 @@ func (r *Reva) addNodes(msg string) {
 			}
 			node := registry.NewNode(id, addr, meta)
 			if err := r.registry.Add(registry.NewService(name, []registry.Node{node})); err != nil {
-				r.log.Error().Err(err).Str("service", name).Msg("failed to register service")
+				failed, lastErr = failed+1, err
 				continue
 			}
 			r.log.Trace().Str("service", name).Str("address", addr).Msg(msg)
 		}
 	}
+	r.reportPublishFailures(failed, lastErr)
+}
+
+// reportPublishFailures logs one line per registration pass instead of one per
+// service, since a registry that is unreachable fails every service at once.
+// The process stays up: its services still work, they are just undiscoverable
+// until the write succeeds, and the queued write is retried on every heartbeat.
+func (r *Reva) reportPublishFailures(failed int, err error) {
+	if failed == 0 {
+		return
+	}
+	r.log.Error().Err(err).Int("services", failed).
+		Msg("could not publish services to the registry, peers cannot discover them")
 }
 
 // hostPort returns "host:port" from a listener address. A wildcard bind host

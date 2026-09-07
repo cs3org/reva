@@ -41,7 +41,7 @@ func TestSanitizeKey(t *testing.T) {
 }
 
 // TestOfflineQueuesWriteThrough verifies that, with NATS unreachable, the
-// driver does not fail and queues the write to flush on connect.
+// driver queues the write to flush on connect and reports that it did not land.
 func TestOfflineQueuesWriteThrough(t *testing.T) {
 	drv, err := New(map[string]any{"address": "nats://127.0.0.1:14222"}) // nothing listening
 	if err != nil {
@@ -52,8 +52,8 @@ func TestOfflineQueuesWriteThrough(t *testing.T) {
 
 	if err := d.Add("gateway", registry.NewNode("n1", "10.0.0.1:19000", map[string]string{
 		registry.MetaState: registry.StateReady,
-	})); err != nil {
-		t.Fatalf("Add returned error while offline: %v", err)
+	})); err == nil {
+		t.Fatal("Add should report that the write did not reach the bucket")
 	}
 
 	d.mu.Lock()
