@@ -92,12 +92,12 @@ func (r *Reva) addServerlessNodes(msg string) {
 	for _, si := range r.serverlessInstances {
 		id := nodeID(r.controlAddr, si.name)
 		meta := map[string]string{
-			"transport":           "serverless",
-			"host":                hostname,
-			"pid":                 fmt.Sprintf("%d", pid),
-			registry.MetaState:    rotationState(id),
-			registry.MetaLastSeen: time.Now().UTC().Format(time.RFC3339),
-			registry.MetaControl:  r.controlAddr,
+			registry.MetaTransport: registry.TransportServerless,
+			"host":                 hostname,
+			"pid":                  fmt.Sprintf("%d", pid),
+			registry.MetaState:     rotationState(id),
+			registry.MetaLastSeen:  time.Now().UTC().Format(time.RFC3339),
+			registry.MetaControl:   r.controlAddr,
 		}
 		if names := invoke.InvocationNames(id); len(names) > 0 {
 			meta[invoke.MetaInvocations] = strings.Join(names, ",")
@@ -169,13 +169,13 @@ func isWildcard(host string) bool {
 // the instance's invocation names, and any service-owned keys.
 func nodeMetadata(srv *Server, id, hostname string, pid int, impl any) map[string]string {
 	meta := map[string]string{
-		"transport":           srv.transport,
-		"host":                hostname,
-		"pid":                 fmt.Sprintf("%d", pid),
-		registry.MetaState:    rotationState(id),
-		registry.MetaLastSeen: time.Now().UTC().Format(time.RFC3339),
+		registry.MetaTransport: srv.transport,
+		"host":                 hostname,
+		"pid":                  fmt.Sprintf("%d", pid),
+		registry.MetaState:     rotationState(id),
+		registry.MetaLastSeen:  time.Now().UTC().Format(time.RFC3339),
 	}
-	if srv.transport == "http" {
+	if srv.transport == registry.TransportHTTP {
 		meta[registry.MetaScheme] = srv.scheme
 		if hs, ok := impl.(global.Service); ok {
 			meta[registry.MetaPrefix] = hs.Prefix()

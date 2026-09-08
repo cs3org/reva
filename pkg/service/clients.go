@@ -143,15 +143,17 @@ func (c *clients) WithSelector(s Selector) *clients {
 	return c
 }
 
-// resolve picks a node for name and returns a cached connection to it.
+// resolve picks a gRPC node for name and returns a cached connection to it. A
+// name is unique per transport, so an HTTP service can carry the same one.
 func (c *clients) resolve(name string) (*grpc.ClientConn, string, error) {
 	svc, err := c.registry.GetService(name)
 	if err != nil {
 		return nil, "", fmt.Errorf("service registry: resolving %q: %w", name, err)
 	}
-	node, ok := c.selector.Pick(svc.Nodes())
+	nodes := filterByMetadata(svc.Nodes(), map[string]string{registry.MetaTransport: registry.TransportGRPC})
+	node, ok := c.selector.Pick(nodes)
 	if !ok {
-		return nil, "", fmt.Errorf("service registry: no selectable node for %q", name)
+		return nil, "", fmt.Errorf("service registry: no selectable grpc node for %q", name)
 	}
 	addr := node.Address()
 	conn, err := c.connFor(addr)
