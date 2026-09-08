@@ -568,9 +568,15 @@ func (r *Runner) execRun(ctx context.Context, run Run) {
 	log := r.log.With().Str("job", run.Job).Str("run", string(run.ID)).Int("attempt", run.Attempt).Logger()
 
 	// once this run finishes, a leader-scoped periodic job is no longer in
-	// flight, so the scheduler may schedule it again.
+	// flight, so the scheduler may schedule it again. A run dropped by the
+	// overlap guard is the exception: it never owned the schedule mark, so the
+	// still-running owner must clear it, not this run.
+	var skippedOverlap bool
 	if r.isLeaderJob(run.Job) {
 		defer func() {
+			if skippedOverlap {
+				return
+			}
 			if err := r.store.ClearScheduledRunning(ctx, run.Job); err != nil {
 				log.Error().Err(err).Msg("rjobs: clearing schedule running mark failed")
 			}
@@ -609,6 +615,19 @@ func (r *Runner) execRun(ctx context.Context, run Run) {
 	if h.cancelled.Load() {
 		log.Info().Msg("rjobs: run cancelled")
 		r.finishCancelled(ctx, run, h.started, log)
+		return
+	}
+
+	// An overlap-skip is an expected, benign outcome, not a failure: another run
+	// of this job is already in flight, so the overlap policy dropped this one.
+	// Ack it and drop it, without a retry, so a duplicate enqueue does not turn
+	// into an error and a 30s redelivery loop.
+	if errors.Is(err, errSkippedOverlap) {
+		skippedOverlap = true
+		log.Debug().Msg("rjobs: run skipped, previous run still in flight")
+		if cerr := r.store.Complete(ctx, run.ID); cerr != nil {
+			log.Error().Err(cerr).Msg("rjobs: completing skipped run errored")
+		}
 		return
 	}
 
