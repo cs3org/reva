@@ -27,6 +27,7 @@ import (
 	"github.com/cs3org/reva/v3/pkg/admin"
 	"github.com/cs3org/reva/v3/pkg/admin/adminpb"
 	"github.com/cs3org/reva/v3/pkg/control/controlpb"
+	"github.com/cs3org/reva/v3/pkg/invoke/client"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 )
@@ -44,7 +45,7 @@ func (s *svc) InvokeStream(req *adminpb.InvokeRequest, stream adminpb.AdminAPI_I
 	if err != nil {
 		return err
 	}
-	_, eps, err := resolveSelector(reg, req.Service)
+	_, eps, err := client.Resolve(reg, req.Service)
 	if err != nil {
 		return status.Errorf(codes.NotFound, "admin: resolving %q: %v", req.Service, err)
 	}
@@ -58,7 +59,7 @@ func (s *svc) InvokeStream(req *adminpb.InvokeRequest, stream adminpb.AdminAPI_I
 	var wg sync.WaitGroup
 	for _, ep := range eps {
 		wg.Add(1)
-		go func(ep endpoint) {
+		go func(ep client.Endpoint) {
 			defer wg.Done()
 			streamUpstream(ctx, ep, req.Invocation, req.Args, items)
 		}(ep)
@@ -83,7 +84,7 @@ func (s *svc) InvokeStream(req *adminpb.InvokeRequest, stream adminpb.AdminAPI_I
 // streamUpstream forwards one endpoint's stream, node-labelled, into items. An
 // unreachable endpoint yields a single per-node error item rather than failing
 // the whole fan-in.
-func streamUpstream(ctx context.Context, ep endpoint, invocation string, args map[string]string, items chan<- *adminpb.InvokeStreamResponse) {
+func streamUpstream(ctx context.Context, ep client.Endpoint, invocation string, args map[string]string, items chan<- *adminpb.InvokeStreamResponse) {
 	send := func(it *adminpb.InvokeStreamResponse) bool {
 		select {
 		case items <- it:
@@ -92,18 +93,18 @@ func streamUpstream(ctx context.Context, ep endpoint, invocation string, args ma
 			return false
 		}
 	}
-	if ep.err != "" {
-		send(&adminpb.InvokeStreamResponse{Node: ep.node, Error: ep.err})
+	if ep.Err != "" {
+		send(&adminpb.InvokeStreamResponse{Node: ep.Node, Error: ep.Err})
 		return
 	}
-	cli, err := controlClientAt(ep.addr)
+	cli, err := client.ControlClientAt(ep.Addr)
 	if err != nil {
-		send(&adminpb.InvokeStreamResponse{Node: ep.node, Error: err.Error()})
+		send(&adminpb.InvokeStreamResponse{Node: ep.Node, Error: err.Error()})
 		return
 	}
-	up, err := cli.InvokeStream(ctx, &controlpb.InvokeRequest{Target: ep.target, Invocation: invocation, Args: args})
+	up, err := cli.InvokeStream(ctx, &controlpb.InvokeRequest{Target: ep.Target, Invocation: invocation, Args: args})
 	if err != nil {
-		send(&adminpb.InvokeStreamResponse{Node: ep.node, Error: err.Error()})
+		send(&adminpb.InvokeStreamResponse{Node: ep.Node, Error: err.Error()})
 		return
 	}
 	for {
@@ -114,11 +115,11 @@ func streamUpstream(ctx context.Context, ep endpoint, invocation string, args ma
 		if err != nil {
 			// A cancelled client is a clean stop, not an error worth surfacing.
 			if ctx.Err() == nil {
-				send(&adminpb.InvokeStreamResponse{Node: ep.node, Error: err.Error()})
+				send(&adminpb.InvokeStreamResponse{Node: ep.Node, Error: err.Error()})
 			}
 			return
 		}
-		if !send(&adminpb.InvokeStreamResponse{Node: ep.node, ResultJson: msg.ResultJson, Error: msg.Error}) {
+		if !send(&adminpb.InvokeStreamResponse{Node: ep.Node, ResultJson: msg.ResultJson, Error: msg.Error}) {
 			return
 		}
 	}
