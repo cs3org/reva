@@ -125,7 +125,7 @@ func (h *tokenHandler) Generate(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusOK)
+	w.WriteHeader(http.StatusCreated)
 }
 
 func (h *tokenHandler) prepareGenerateTokenResponse(tkn *invitepb.InviteToken) *token {
