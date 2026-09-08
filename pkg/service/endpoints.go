@@ -21,6 +21,7 @@ package service
 import (
 	"context"
 	"fmt"
+	"maps"
 	"net"
 
 	"github.com/cs3org/reva/v3/pkg/registry"
@@ -110,6 +111,17 @@ func ByMetadata(key, value string) EndpointOption {
 	}
 }
 
+// httpFilters adds the http transport to the query filters, unless the caller
+// asked for a specific transport.
+func (q endpointQuery) httpFilters() map[string]string {
+	meta := make(map[string]string, len(q.meta)+1)
+	maps.Copy(meta, q.meta)
+	if _, ok := meta[registry.MetaTransport]; !ok {
+		meta[registry.MetaTransport] = registry.TransportHTTP
+	}
+	return meta
+}
+
 // HTTPEndpoints returns every ready node matching the filters.
 func (c *clients) HTTPEndpoints(_ context.Context, opts ...EndpointOption) ([]Endpoint, error) {
 	q := endpointQuery{}
@@ -123,7 +135,7 @@ func (c *clients) HTTPEndpoints(_ context.Context, opts ...EndpointOption) ([]En
 	if err != nil {
 		return nil, fmt.Errorf("service registry: resolving %q: %w", q.name, err)
 	}
-	nodes := filterByMetadata(svc.Nodes(), q.meta)
+	nodes := filterByMetadata(svc.Nodes(), q.httpFilters())
 	out := make([]Endpoint, 0, len(nodes))
 	for _, n := range nodes {
 		out = append(out, endpoint{name: q.name, node: n})
@@ -147,7 +159,7 @@ func (c *clients) HTTPEndpoint(ctx context.Context, opts ...EndpointOption) (End
 	if err != nil {
 		return nil, fmt.Errorf("service registry: resolving %q: %w", q.name, err)
 	}
-	node, ok := c.selector.Pick(filterByMetadata(svc.Nodes(), q.meta))
+	node, ok := c.selector.Pick(filterByMetadata(svc.Nodes(), q.httpFilters()))
 	if !ok {
 		return nil, fmt.Errorf("service registry: no selectable node for %q matching filters", q.name)
 	}

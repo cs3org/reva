@@ -19,6 +19,7 @@
 package service
 
 import (
+	"context"
 	"testing"
 
 	"github.com/cs3org/reva/v3/pkg/registry"
@@ -26,7 +27,14 @@ import (
 )
 
 func meta(state string) map[string]string {
-	return map[string]string{registry.MetaState: state}
+	return metaTransport(state, registry.TransportGRPC)
+}
+
+func metaTransport(state, transport string) map[string]string {
+	return map[string]string{
+		registry.MetaState:     state,
+		registry.MetaTransport: transport,
+	}
 }
 
 func TestSelectorPrefersReadyAndSkipsOfflineDraining(t *testing.T) {
@@ -88,6 +96,56 @@ func TestResolveReturnsAddressAndCachesConn(t *testing.T) {
 	}
 	if conn1 != conn2 {
 		t.Fatal("expected the conn cache to return the same connection")
+	}
+}
+
+func TestResolveSkipsSameNamedHTTPNode(t *testing.T) {
+	reg := memory.New(nil)
+	_ = reg.Add(registry.NewService(NamePreferences, []registry.Node{
+		registry.NewNode("http", "127.0.0.1:19143", metaTransport(registry.StateReady, registry.TransportHTTP)),
+		registry.NewNode("grpc", "127.0.0.1:19142", metaTransport(registry.StateReady, registry.TransportGRPC)),
+	}))
+	c := NewClients(reg).(*clients)
+
+	for range 20 {
+		_, addr, err := c.resolve(NamePreferences)
+		if err != nil {
+			t.Fatalf("resolve failed: %v", err)
+		}
+		if addr != "127.0.0.1:19142" {
+			t.Fatalf("resolved the http node %q", addr)
+		}
+	}
+}
+
+func TestResolveNoGRPCNode(t *testing.T) {
+	reg := memory.New(nil)
+	_ = reg.Add(registry.NewService(NamePreferences, []registry.Node{
+		registry.NewNode("http", "127.0.0.1:19143", metaTransport(registry.StateReady, registry.TransportHTTP)),
+	}))
+	c := NewClients(reg).(*clients)
+
+	if _, _, err := c.resolve(NamePreferences); err == nil {
+		t.Fatal("expected no selectable grpc node")
+	}
+}
+
+func TestHTTPEndpointSkipsSameNamedGRPCNode(t *testing.T) {
+	reg := memory.New(nil)
+	_ = reg.Add(registry.NewService(NamePreferences, []registry.Node{
+		registry.NewNode("grpc", "127.0.0.1:19142", metaTransport(registry.StateReady, registry.TransportGRPC)),
+		registry.NewNode("http", "127.0.0.1:19143", metaTransport(registry.StateReady, registry.TransportHTTP)),
+	}))
+	c := NewClients(reg)
+
+	for range 20 {
+		ep, err := c.HTTPEndpoint(context.Background(), ByName(NamePreferences))
+		if err != nil {
+			t.Fatalf("HTTPEndpoint failed: %v", err)
+		}
+		if ep.Address() != "127.0.0.1:19143" {
+			t.Fatalf("resolved the grpc node %q", ep.Address())
+		}
 	}
 }
 

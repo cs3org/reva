@@ -63,6 +63,7 @@ type Event struct {
 const (
 	MetaState     = "state"
 	MetaLastSeen  = "last_seen"
+	MetaTransport = "transport"  // "grpc" | "http" | "serverless"
 	MetaScheme    = "scheme"     // "http" | "https" for HTTP services
 	MetaPrefix    = "prefix"     // HTTP URL path prefix
 	MetaPublicURL = "public_url" // explicit external URL override
@@ -73,4 +74,11 @@ const (
 	StateDegraded = "degraded"
 	StateOffline  = "offline"
 	StateDraining = "draining"
+
+	// A service name is unique per transport, not globally: the same name can
+	// name a gRPC service and an HTTP one (e.g. "preferences"). Resolution
+	// must therefore filter on the transport it can speak.
+	TransportGRPC       = "grpc"
+	TransportHTTP       = "http"
+	TransportServerless = "serverless"
 )
