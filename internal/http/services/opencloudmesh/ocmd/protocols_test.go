@@ -20,6 +20,7 @@ package ocmd
 
 import (
 	"encoding/json"
+	"errors"
 	"reflect"
 	"testing"
 )
@@ -350,7 +351,7 @@ func TestMarshalProtocol(t *testing.T) {
 	}{
 		{
 			in:  []Protocol{},
-			err: "json: error calling MarshalJSON for type ocmd.Protocols: no protocol defined",
+			err: "no protocol defined",
 		},
 		{
 			in: []Protocol{
@@ -468,8 +469,11 @@ func TestMarshalProtocol(t *testing.T) {
 
 	for _, tt := range tests {
 		d, err := json.Marshal(tt.in)
-		if err != nil && err.Error() != tt.err {
-			t.Fatalf("unexpected error. Got=%+v expected=%+v", err, tt.err)
+		if err != nil {
+			var merr *json.MarshalerError
+			if !errors.As(err, &merr) || merr.Unwrap().Error() != tt.err {
+				t.Fatalf("unexpected error. Got=%+v expected=%+v", err, tt.err)
+			}
 		}
 		if err == nil {
 			var got map[string]any

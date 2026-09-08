@@ -9,7 +9,7 @@ description: >
 # _struct: config_
 
 {{% dir name="mount_path" type="string" default="/" %}}
-The path where the file system would be mounted. [[Ref]](https://github.com/cs3org/reva/tree/master/internal/grpc/services/storageprovider/storageprovider.go#L71)
+The path where the file system would be mounted. [[Ref]](https://github.com/cs3org/reva/tree/master/internal/grpc/services/storageprovider/storageprovider.go#L72)
 {{< highlight toml >}}
 [grpc.services.storageprovider]
 mount_path = "/"
@@ -17,7 +17,7 @@ mount_path = "/"
 {{% /dir %}}
 
 {{% dir name="mount_id" type="string" default="-" %}}
-The ID of the mounted file system. [[Ref]](https://github.com/cs3org/reva/tree/master/internal/grpc/services/storageprovider/storageprovider.go#L72)
+The ID of the mounted file system. [[Ref]](https://github.com/cs3org/reva/tree/master/internal/grpc/services/storageprovider/storageprovider.go#L73)
 {{< highlight toml >}}
 [grpc.services.storageprovider]
 mount_id = "-"
@@ -25,7 +25,7 @@ mount_id = "-"
 {{% /dir %}}
 
 {{% dir name="driver" type="string" default="localhome" %}}
-The storage driver to be used. [[Ref]](https://github.com/cs3org/reva/tree/master/internal/grpc/services/storageprovider/storageprovider.go#L73)
+The storage driver to be used. [[Ref]](https://github.com/cs3org/reva/tree/master/internal/grpc/services/storageprovider/storageprovider.go#L74)
 {{< highlight toml >}}
 [grpc.services.storageprovider]
 driver = "localhome"
@@ -33,7 +33,7 @@ driver = "localhome"
 {{% /dir %}}
 
 {{% dir name="drivers" type="map[string]map[string]any" default="localhome" %}}
- [[Ref]](https://github.com/cs3org/reva/tree/master/internal/grpc/services/storageprovider/storageprovider.go#L74)
+ [[Ref]](https://github.com/cs3org/reva/tree/master/internal/grpc/services/storageprovider/storageprovider.go#L75)
 {{< highlight toml >}}
 [grpc.services.storageprovider.drivers.localhome]
 root = "/var/tmp/reva/"
@@ -41,14 +41,6 @@ share_folder = "/MyShares"
 user_layout = "{{.Username}}"
 virtual_home_template = ""
 
-{{< /highlight >}}
-{{% /dir %}}
-
-{{% dir name="data_server_url" type="string" default="http://localhost/data" %}}
-The URL for the data server. [[Ref]](https://github.com/cs3org/reva/tree/master/internal/grpc/services/storageprovider/storageprovider.go#L75)
-{{< highlight toml >}}
-[grpc.services.storageprovider]
-data_server_url = "http://localhost/data"
 {{< /highlight >}}
 {{% /dir %}}
 
