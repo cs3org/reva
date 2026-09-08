@@ -25,6 +25,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"sort"
 	"sync"
 	"time"
 
@@ -51,6 +52,7 @@ import (
 
 	revtrace "github.com/cs3org/reva/v3/internal/grpc/interceptors/trace"
 	"github.com/cs3org/reva/v3/pkg/appctx"
+	"github.com/cs3org/reva/v3/pkg/logger"
 	"github.com/cs3org/reva/v3/pkg/registry"
 	"go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc"
 	"google.golang.org/grpc"
@@ -69,14 +71,16 @@ const maxCallRecvMsgSize = 10240000
 const (
 	resolveAttempts   = 3
 	resolveRetryWait  = 250 * time.Millisecond
-	unresolvableCalls = 20
+	unresolvableCalls = 5
 	unresolvableFor   = time.Minute
 )
 
-// exit ends the process. It is a variable so tests can observe it instead of
-// dying.
+// exit ends the process. It logs through zerolog (not raw stderr) so the line
+// is structured and lands in the same sink as every other log. It writes
+// synchronously so the record survives the immediate os.Exit. It is a variable
+// so tests can observe it instead of dying.
 var exit = func(reason string) {
-	fmt.Fprintln(os.Stderr, reason)
+	logger.New().Error().Msg(reason)
 	os.Exit(1)
 }
 
@@ -250,14 +254,43 @@ func (c *clients) unresolved(ctx context.Context, name string, cause error) {
 	log := appctx.GetLogger(ctx)
 	if calls < unresolvableCalls || since < unresolvableFor {
 		log.Error().Err(cause).Str("service", name).Int("failed_lookups", calls).
-			Msg("cannot resolve peer, retrying")
+			Str("registry", c.registrySnapshot(name)).Msg("cannot resolve peer, retrying")
 		return
 	}
 	reason := fmt.Sprintf("reva: %q has been unresolvable for %s over %d lookups, exiting: %v",
 		name, since.Truncate(time.Second), calls, cause)
 	log.Error().Err(cause).Str("service", name).Int("failed_lookups", calls).
-		Dur("unresolvable_for", since).Msg("peer is unresolvable, exiting")
+		Dur("unresolvable_for", since).Str("registry", c.registrySnapshot(name)).
+		Msg("peer is unresolvable, exiting")
 	exit(reason)
+}
+
+// registrySnapshot summarizes the cache on the error path: the services held
+// and the target's nodes with their transport and state, so a failed lookup
+// logs whether the peer is absent, unselectable, or the cache never hydrated.
+func (c *clients) registrySnapshot(name string) string {
+	svcs, err := c.registry.ListServices()
+	if err != nil {
+		return fmt.Sprintf("cannot list services: %v", err)
+	}
+	names := make([]string, 0, len(svcs))
+	var target registry.Service
+	for _, s := range svcs {
+		names = append(names, fmt.Sprintf("%s(%d)", s.Name(), len(s.Nodes())))
+		if s.Name() == name {
+			target = s
+		}
+	}
+	sort.Strings(names)
+	if target == nil {
+		return fmt.Sprintf("%d services cached %v; %q absent", len(svcs), names, name)
+	}
+	nodes := make([]string, 0, len(target.Nodes()))
+	for _, n := range target.Nodes() {
+		md := n.Metadata()
+		nodes = append(nodes, fmt.Sprintf("%s[%s/%s]", n.Address(), md[registry.MetaTransport], md[registry.MetaState]))
+	}
+	return fmt.Sprintf("%d services cached; %q nodes: %v", len(svcs), name, nodes)
 }
 
 // connFor returns a cached connection to address, dialing on first use.

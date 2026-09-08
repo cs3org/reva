@@ -30,10 +30,12 @@ import (
 	"sync"
 	"time"
 
+	"github.com/cs3org/reva/v3/pkg/logger"
 	"github.com/cs3org/reva/v3/pkg/registry"
 	"github.com/mitchellh/mapstructure"
 	"github.com/nats-io/nats.go"
 	"github.com/nats-io/nats.go/jetstream"
+	"github.com/rs/zerolog"
 )
 
 const (
@@ -72,6 +74,7 @@ type driver struct {
 	cfg    Config
 	bucket string
 	ttl    time.Duration
+	log    zerolog.Logger
 
 	// dialMu serializes reconnects so concurrent callers share one connection.
 	dialMu  sync.Mutex
@@ -110,6 +113,7 @@ func New(m map[string]any) (registry.Driver, error) {
 		cfg:      c,
 		bucket:   bucket,
 		ttl:      ttl,
+		log:      logger.New().With().Str("pkg", "registry").Str("driver", "nats").Logger(),
 		pending:  map[string]entry{},
 		removed:  map[string]struct{}{},
 		keyIndex: map[string][2]string{},
@@ -193,6 +197,7 @@ func (d *driver) Watch() (<-chan registry.Event, error) {
 	if err != nil {
 		return nil, err
 	}
+	d.log.Info().Str("bucket", d.bucket).Msg("registry watch established, replaying bucket")
 	out := make(chan registry.Event)
 	go d.forward(w, out)
 	return out, nil
@@ -201,6 +206,7 @@ func (d *driver) Watch() (<-chan registry.Event, error) {
 func (d *driver) forward(w jetstream.KeyWatcher, out chan<- registry.Event) {
 	defer close(out)
 	defer w.Stop()
+	defer d.log.Warn().Str("bucket", d.bucket).Msg("registry watch closed; cache is now stale until it re-establishes")
 	for {
 		select {
 		case <-d.ctx.Done():
@@ -234,6 +240,8 @@ func (d *driver) forward(w jetstream.KeyWatcher, out chan<- registry.Event) {
 				if !known {
 					continue
 				}
+				d.log.Debug().Str("service", ids[0]).Str("node", ids[1]).
+					Str("op", ke.Operation().String()).Msg("registry entry removed (explicit delete or ttl expiry)")
 				out <- registry.Event{
 					Type:    registry.EventRemove,
 					Service: ids[0],
@@ -286,7 +294,16 @@ func (d *driver) connect() error {
 		nats.Name("reva-registry"),
 		nats.MaxReconnects(maxReconnects),
 		nats.ReconnectWait(reconnectWait),
-		nats.ReconnectHandler(func(*nats.Conn) { d.flushPending() }),
+		nats.DisconnectErrHandler(func(_ *nats.Conn, err error) {
+			d.log.Warn().Err(err).Str("address", d.cfg.Address).Msg("registry nats disconnected; writes now queue in memory")
+		}),
+		nats.ReconnectHandler(func(*nats.Conn) {
+			d.log.Info().Str("address", d.cfg.Address).Msg("registry nats reconnected")
+			d.flushPending()
+		}),
+		nats.ClosedHandler(func(_ *nats.Conn) {
+			d.log.Error().Str("address", d.cfg.Address).Msg("registry nats connection closed; peers are invisible until it redials")
+		}),
 	}
 	if d.cfg.Token != "" {
 		opts = append(opts, nats.Token(d.cfg.Token))
@@ -337,6 +354,7 @@ func (d *driver) flushPending() {
 	d.removed = map[string]struct{}{}
 	d.mu.Unlock()
 
+	d.log.Info().Int("adds", len(pending)).Int("removes", len(removed)).Msg("flushing queued registry writes")
 	ctx, cancel := context.WithTimeout(d.ctx, flushTimeout)
 	defer cancel()
 	for key, e := range pending {
