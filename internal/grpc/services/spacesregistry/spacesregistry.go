@@ -433,7 +433,21 @@ func (s *service) userSpace(ctx context.Context, user *userpb.User) (*provider.S
 			QuotaMaxBytes:  quota.TotalBytes,
 			RemainingBytes: quota.TotalBytes - quota.UsedBytes,
 		},
-		PermissionSet: permissions.NewManagerRole().CS3ResourcePermissions(),
+		Roles: []*provider.SpaceRole{
+			{
+				RoleName:      "owner",
+				PermissionSet: permissions.NewManagerRole().CS3ResourcePermissions(),
+				Recipients: []*provider.Grantee{
+					{
+						Type: provider.GranteeType_GRANTEE_TYPE_USER,
+						Id: &provider.Grantee_UserId{
+							UserId: user.Id,
+						},
+					},
+				},
+			},
+		},
+		//PermissionSet: permissions.NewManagerRole().CS3ResourcePermissions(),
 	}, nil
 }
 
@@ -443,6 +457,11 @@ func (s *service) getAllPublicSpaces(ctx context.Context) ([]*provider.StorageSp
 	gw, err := revaservice.Gateway(ctx)
 	if err != nil {
 		return nil, err
+	}
+
+	user, ok := appctx.ContextGetUser(ctx)
+	if !ok {
+		return nil, errtypes.UserRequired("Must have a user to list public spaces")
 	}
 
 	publicSpaces := make([]*provider.StorageSpace, 0)
@@ -488,7 +507,20 @@ func (s *service) getAllPublicSpaces(ctx context.Context) ([]*provider.StorageSp
 				QuotaMaxBytes:  uint64(math.Pow10(18)),
 				RemainingBytes: uint64(math.Pow10(18)) - resourceInfo.Size,
 			},
-			PermissionSet: resourceInfo.PermissionSet,
+			Roles: []*provider.SpaceRole{
+				{
+					RoleName:      "user",
+					PermissionSet: resourceInfo.PermissionSet,
+					Recipients: []*provider.Grantee{
+						{
+							Type: provider.GranteeType_GRANTEE_TYPE_USER,
+							Id: &provider.Grantee_UserId{
+								UserId: user.Id,
+							},
+						},
+					},
+				},
+			},
 		}
 
 		if description, ok := content["description"]; ok {
