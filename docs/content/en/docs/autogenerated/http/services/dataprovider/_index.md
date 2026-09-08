@@ -9,7 +9,7 @@ description: >
 # _struct: config_
 
 {{% dir name="prefix" type="string" default="data" %}}
-The prefix to be used for this HTTP service [[Ref]](https://github.com/cs3org/reva/tree/master/internal/http/services/dataprovider/dataprovider.go#L40)
+The prefix to be used for this HTTP service [[Ref]](https://github.com/cs3org/reva/tree/master/internal/http/services/dataprovider/dataprovider.go#L41)
 {{< highlight toml >}}
 [http.services.dataprovider]
 prefix = "data"
@@ -17,7 +17,7 @@ prefix = "data"
 {{% /dir %}}
 
 {{% dir name="driver" type="string" default="localhome" %}}
-The storage driver to be used. [[Ref]](https://github.com/cs3org/reva/tree/master/internal/http/services/dataprovider/dataprovider.go#L41)
+The storage driver to be used. [[Ref]](https://github.com/cs3org/reva/tree/master/internal/http/services/dataprovider/dataprovider.go#L42)
 {{< highlight toml >}}
 [http.services.dataprovider]
 driver = "localhome"
@@ -25,7 +25,7 @@ driver = "localhome"
 {{% /dir %}}
 
 {{% dir name="drivers" type="map[string]map[string]any" default="localhome" %}}
-The configuration for the storage driver [[Ref]](https://github.com/cs3org/reva/tree/master/internal/http/services/dataprovider/dataprovider.go#L42)
+The configuration for the storage driver [[Ref]](https://github.com/cs3org/reva/tree/master/internal/http/services/dataprovider/dataprovider.go#L43)
 {{< highlight toml >}}
 [http.services.dataprovider.drivers.localhome]
 root = "/var/tmp/reva/"
@@ -37,7 +37,7 @@ virtual_home_template = ""
 {{% /dir %}}
 
 {{% dir name="data_txs" type="map[string]map[string]any" default="simple" %}}
-The configuration for the data tx protocols [[Ref]](https://github.com/cs3org/reva/tree/master/internal/http/services/dataprovider/dataprovider.go#L43)
+The configuration for the data tx protocols [[Ref]](https://github.com/cs3org/reva/tree/master/internal/http/services/dataprovider/dataprovider.go#L44)
 {{< highlight toml >}}
 [http.services.dataprovider.data_txs.simple]
 
@@ -45,10 +45,18 @@ The configuration for the data tx protocols [[Ref]](https://github.com/cs3org/re
 {{% /dir %}}
 
 {{% dir name="insecure" type="bool" default=false %}}
-Whether to skip certificate checks when sending requests. [[Ref]](https://github.com/cs3org/reva/tree/master/internal/http/services/dataprovider/dataprovider.go#L45)
+Whether to skip certificate checks when sending requests. [[Ref]](https://github.com/cs3org/reva/tree/master/internal/http/services/dataprovider/dataprovider.go#L46)
 {{< highlight toml >}}
 [http.services.dataprovider]
 insecure = false
+{{< /highlight >}}
+{{% /dir %}}
+
+{{% dir name="mount_id" type="string" default="-" %}}
+The mount id of the storage this data provider serves. [[Ref]](https://github.com/cs3org/reva/tree/master/internal/http/services/dataprovider/dataprovider.go#L49)
+{{< highlight toml >}}
+[http.services.dataprovider]
+mount_id = "-"
 {{< /highlight >}}
 {{% /dir %}}
 
