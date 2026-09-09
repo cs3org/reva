@@ -22,28 +22,19 @@ import (
 	"context"
 
 	registrypb "github.com/cs3org/go-cs3apis/cs3/app/registry/v1beta1"
-	"github.com/cs3org/reva/v3/pkg/app"
-	"github.com/cs3org/reva/v3/pkg/app/registry/registry"
 	"github.com/cs3org/reva/v3/pkg/errtypes"
-	"github.com/cs3org/reva/v3/pkg/plugin"
 	"github.com/cs3org/reva/v3/pkg/rgrpc"
 	"github.com/cs3org/reva/v3/pkg/rgrpc/status"
-	"github.com/cs3org/reva/v3/pkg/utils"
 	"github.com/cs3org/reva/v3/pkg/utils/cfg"
 	"google.golang.org/grpc"
 )
 
 func init() {
 	rgrpc.Register("appregistry", New)
-	plugin.RegisterNamespace("grpc.services.appregistry.drivers", func(name string, newFunc any) {
-		var f registry.NewFunc
-		utils.Cast(newFunc, &f)
-		registry.Register(name, f)
-	})
 }
 
 type svc struct {
-	reg app.Registry
+	reg *manager
 }
 
 func (s *svc) Close() error {
@@ -51,7 +42,7 @@ func (s *svc) Close() error {
 }
 
 func (s *svc) UnprotectedEndpoints() []string {
-	return []string{"/cs3.app.registry.v1beta1.RegistryAPI/AddAppProvider", "/cs3.app.registry.v1beta1.RegistryAPI/ListSupportedMimeTypes"}
+	return []string{"/cs3.app.registry.v1beta1.RegistryAPI/ListSupportedMimeTypes"}
 }
 
 func (s *svc) Register(ss *grpc.Server) {
@@ -59,40 +50,20 @@ func (s *svc) Register(ss *grpc.Server) {
 }
 
 type config struct {
-	Driver  string                    `mapstructure:"driver"`
-	Drivers map[string]map[string]any `mapstructure:"drivers"`
+	// MimeTypes is the catalogue: how each mime type is presented to the user
+	// and which app opens it by default. The apps themselves are discovered in
+	// the service registry, not configured.
+	MimeTypes []*mimeTypeConfig `mapstructure:"mime_types"`
 }
 
-func (c *config) ApplyDefaults() {
-	if c.Driver == "" {
-		c.Driver = "static"
-	}
-}
-
-// New creates a new StorageRegistryService.
+// New creates a new AppRegistryService.
 func New(ctx context.Context, m map[string]any) (rgrpc.Service, error) {
 	var c config
 	if err := cfg.Decode(m, &c); err != nil {
 		return nil, err
 	}
 
-	reg, err := getRegistry(ctx, &c)
-	if err != nil {
-		return nil, err
-	}
-
-	svc := &svc{
-		reg: reg,
-	}
-
-	return svc, nil
-}
-
-func getRegistry(ctx context.Context, c *config) (app.Registry, error) {
-	if f, ok := registry.NewFuncs[c.Driver]; ok {
-		return f(ctx, c.Drivers[c.Driver])
-	}
-	return nil, errtypes.NotFound("appregistrysvc: driver not found: " + c.Driver)
+	return &svc{reg: newRegistry(&c)}, nil
 }
 
 func (s *svc) GetAppProviders(ctx context.Context, req *registrypb.GetAppProvidersRequest) (*registrypb.GetAppProvidersResponse, error) {
@@ -110,18 +81,13 @@ func (s *svc) GetAppProviders(ctx context.Context, req *registrypb.GetAppProvide
 	return res, nil
 }
 
+// AddAppProvider is not implemented: app providers are discovered in the
+// service registry, which they join by running, so there is nothing to add.
 func (s *svc) AddAppProvider(ctx context.Context, req *registrypb.AddAppProviderRequest) (*registrypb.AddAppProviderResponse, error) {
-	err := s.reg.AddProvider(ctx, req.Provider)
-	if err != nil {
-		return &registrypb.AddAppProviderResponse{
-			Status: status.NewInternal(ctx, err, "error adding the app provider"),
-		}, nil
-	}
-
-	res := &registrypb.AddAppProviderResponse{
-		Status: status.NewOK(ctx),
-	}
-	return res, nil
+	err := errtypes.NotSupported("app providers are discovered through the service registry")
+	return &registrypb.AddAppProviderResponse{
+		Status: status.NewUnimplemented(ctx, err, "AddAppProvider is not implemented"),
+	}, nil
 }
 
 func (s *svc) ListAppProviders(ctx context.Context, req *registrypb.ListAppProvidersRequest) (*registrypb.ListAppProvidersResponse, error) {
