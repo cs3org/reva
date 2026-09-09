@@ -122,9 +122,14 @@ func checkLightweightPath(path string) bool {
 		"/sciencemesh/discover",
 		"/sciencemesh/embedded-shares",
 		"/sciencemesh/process-embedded-share",
+		// Legacy paths
 		"/remote.php/webdav",
 		"/remote.php/dav/files",
 		"/remote.php/dav/spaces",
+		// Modern paths
+		"/webdav",
+		"/dav/files",
+		"/dav/spaces",
 		"/thumbnails",
 	}
 	for _, p := range paths {
