@@ -69,6 +69,9 @@ const (
 	MetaPublicURL = "public_url" // explicit external URL override
 	MetaMountID   = "mount_id"   // storage affinity key (data provider)
 	MetaControl   = "control"    // host:port of the process's control channel
+	// MetaApp carries an app provider's CS3 ProviderInfo as protojson, minus
+	// its address, which the app registry fills in from the node itself.
+	MetaApp = "app"
 
 	StateReady    = "ready"
 	StateDegraded = "degraded"
