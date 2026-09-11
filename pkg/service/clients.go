@@ -79,7 +79,7 @@ const (
 	NameAppProvider     = "appprovider"
 	NameSpaces          = "spacesregistry"
 	NameDataTx          = "datatx"
-	NameLabels          = "labels"
+	NameLabels          = "labelsprovider"
 	NameAdmin           = "admin"
 	// NameControl labels the per-process control channel on its internal
 	// server; it is discovered via node metadata, not registered as a service.
