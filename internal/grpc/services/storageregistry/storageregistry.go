@@ -100,7 +100,7 @@ func (s *service) ListStorageProviders(ctx context.Context, req *registrypb.List
 	pinfos, err := s.reg.ListProviders(ctx)
 	if err != nil {
 		return &registrypb.ListStorageProvidersResponse{
-			Status: status.NewInternal(ctx, err, "error getting list of storage providers"),
+			Status: status.NewStatusFromErrType(ctx, "error getting list of storage providers", err),
 		}, nil
 	}
 
@@ -121,7 +121,7 @@ func (s *service) GetStorageProviders(ctx context.Context, req *registrypb.GetSt
 			}, nil
 		default:
 			return &registrypb.GetStorageProvidersResponse{
-				Status: status.NewInternal(ctx, err, "error finding storage provider"),
+				Status: status.NewStatusFromErrType(ctx, "error finding storage provider", err),
 			}, nil
 		}
 	}
@@ -139,7 +139,7 @@ func (s *service) GetHome(ctx context.Context, req *registrypb.GetHomeRequest) (
 	if err != nil {
 		log.Error().Err(err).Msg("error getting home")
 		res := &registrypb.GetHomeResponse{
-			Status: status.NewInternal(ctx, err, "error getting home"),
+			Status: status.NewStatusFromErrType(ctx, "error getting home", err),
 		}
 		return res, nil
 	}

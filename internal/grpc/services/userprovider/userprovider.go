@@ -34,7 +34,6 @@ import (
 	"github.com/cs3org/reva/v3/pkg/user/manager/registry"
 	"github.com/cs3org/reva/v3/pkg/utils"
 	"github.com/cs3org/reva/v3/pkg/utils/cfg"
-	"github.com/pkg/errors"
 	"google.golang.org/grpc"
 )
 
@@ -106,8 +105,7 @@ func (s *service) GetUser(ctx context.Context, req *userpb.GetUserRequest) (*use
 		if _, ok := err.(errtypes.NotFound); ok {
 			res.Status = status.NewNotFound(ctx, "user not found")
 		} else {
-			err = errors.Wrap(err, "userprovidersvc: error getting user")
-			res.Status = status.NewInternal(ctx, err, "error getting user")
+			res.Status = status.NewStatusFromErrType(ctx, "error getting user", err)
 		}
 		return res, nil
 	}
@@ -129,8 +127,7 @@ func (s *service) GetUserByClaim(ctx context.Context, req *userpb.GetUserByClaim
 		case errtypes.Conflict:
 			res.Status = status.NewConflict(ctx, err, fmt.Sprintf("conflict getting user %s by claim %s", req.Value, req.Claim))
 		default:
-			err = errors.Wrap(err, "userprovidersvc: error getting user by claim")
-			res.Status = status.NewInternal(ctx, err, fmt.Sprintf("error getting user %s by claim %s", req.Value, req.Claim))
+			res.Status = status.NewStatusFromErrType(ctx, fmt.Sprintf("error getting user %s by claim %s", req.Value, req.Claim), err)
 		}
 		return res, nil
 	}
@@ -153,9 +150,8 @@ func (s *service) FindUsers(ctx context.Context, req *userpb.FindUsersRequest) (
 	users, err := s.usermgr.FindUsers(ctx, query, req.Filters, req.SkipFetchingUserGroups)
 	if err != nil {
 		log.Error().Err(err).Str("query", query).Msg("Failed to find users")
-		err = errors.Wrap(err, "userprovidersvc: error finding users")
 		res := &userpb.FindUsersResponse{
-			Status: status.NewInternal(ctx, err, "error finding users"),
+			Status: status.NewStatusFromErrType(ctx, "error finding users", err),
 		}
 		return res, nil
 	}
@@ -175,9 +171,8 @@ func (s *service) FindUsers(ctx context.Context, req *userpb.FindUsersRequest) (
 func (s *service) GetUserGroups(ctx context.Context, req *userpb.GetUserGroupsRequest) (*userpb.GetUserGroupsResponse, error) {
 	groups, err := s.usermgr.GetUserGroups(ctx, req.UserId)
 	if err != nil {
-		err = errors.Wrap(err, "userprovidersvc: error getting user groups")
 		res := &userpb.GetUserGroupsResponse{
-			Status: status.NewInternal(ctx, err, "error getting user groups"),
+			Status: status.NewStatusFromErrType(ctx, "error getting user groups", err),
 		}
 		return res, nil
 	}

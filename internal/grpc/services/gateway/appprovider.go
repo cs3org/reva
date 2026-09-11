@@ -77,9 +77,8 @@ func (s *svc) OpenInApp(ctx context.Context, req *gateway.OpenInAppRequest) (*pr
 		}, nil
 	}
 	if statRes.Status.Code != rpc.Code_CODE_OK {
-		err := status.NewErrorFromCode(statRes.Status.GetCode(), "gateway")
 		return &providerpb.OpenInAppResponse{
-			Status: status.NewInternal(ctx, err, "Stat failed on the resource path for the app provider: "+req.Ref.GetPath()),
+			Status: statRes.Status,
 		}, nil
 	}
 
@@ -107,9 +106,8 @@ func (s *svc) OpenInApp(ctx context.Context, req *gateway.OpenInAppRequest) (*pr
 			}, nil
 		}
 		if res.Status.Code != rpc.Code_CODE_OK {
-			err := status.NewErrorFromCode(res.Status.GetCode(), "gateway")
 			return &providerpb.OpenInAppResponse{
-				Status: status.NewInternal(ctx, err, "Stat failed on the resource path for the app provider: "+req.Ref.GetPath()),
+				Status: res.Status,
 			}, nil
 		}
 		fileInfo = res.Info

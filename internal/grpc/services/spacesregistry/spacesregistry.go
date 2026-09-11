@@ -161,7 +161,7 @@ func (s *service) ListStorageSpaces(ctx context.Context, req *provider.ListStora
 		log.Debug().Bool("filterByID", byId).Str("id", id).Msg("ListStorageSpaces: going over all possible space types")
 		homes, err := s.listSpacesByType(ctx, req, user, spaces.SpaceTypeHome)
 		if err != nil {
-			return &provider.ListStorageSpacesResponse{Status: status.NewInternal(ctx, err, err.Error())}, nil
+			return &provider.ListStorageSpacesResponse{Status: status.NewStatusFromErrType(ctx, "error listing storage spaces", err)}, nil
 		}
 		sp = append(sp, homes...)
 		if byId && len(homes) == 1 {
@@ -173,7 +173,7 @@ func (s *service) ListStorageSpaces(ctx context.Context, req *provider.ListStora
 			sp = append(sp, projects...)
 		}
 		if err != nil {
-			return &provider.ListStorageSpacesResponse{Status: status.NewInternal(ctx, err, err.Error()), StorageSpaces: sp}, nil
+			return &provider.ListStorageSpacesResponse{Status: status.NewStatusFromErrType(ctx, "error listing storage spaces", err), StorageSpaces: sp}, nil
 		}
 		if byId && len(projects) == 1 {
 			return &provider.ListStorageSpacesResponse{Status: status.NewOK(ctx), StorageSpaces: sp}, nil
@@ -181,7 +181,7 @@ func (s *service) ListStorageSpaces(ctx context.Context, req *provider.ListStora
 
 		publicSpaces, err := s.listSpacesByType(ctx, req, user, spaces.SpaceTypePublic)
 		if err != nil {
-			return &provider.ListStorageSpacesResponse{Status: status.NewInternal(ctx, err, err.Error())}, nil
+			return &provider.ListStorageSpacesResponse{Status: status.NewStatusFromErrType(ctx, "error listing storage spaces", err)}, nil
 		}
 		sp = append(sp, publicSpaces...)
 	} else {
@@ -194,7 +194,7 @@ func (s *service) ListStorageSpaces(ctx context.Context, req *provider.ListStora
 				log.Debug().Bool("filterByID", byId).Str("id", id).Msgf("ListStorageSpaces: listing type %s", filter.Term.(*provider.ListStorageSpacesRequest_Filter_SpaceType).SpaceType)
 				spaces, err := s.listSpacesByType(ctx, req, user, spaces.SpaceType(filter.Term.(*provider.ListStorageSpacesRequest_Filter_SpaceType).SpaceType))
 				if err != nil {
-					return &provider.ListStorageSpacesResponse{Status: status.NewInternal(ctx, err, err.Error())}, nil
+					return &provider.ListStorageSpacesResponse{Status: status.NewStatusFromErrType(ctx, "error listing storage spaces", err)}, nil
 				}
 				sp = append(sp, spaces...)
 			}
@@ -336,7 +336,7 @@ func (s *service) decorateProject(ctx context.Context, proj *provider.StorageSpa
 			return err
 		}
 		if authRes.Status.Code != rpcv1beta1.Code_CODE_OK {
-			return errors.New(authRes.Status.Message)
+			return status.NewErrtypeFromStatus(authRes.Status)
 		}
 
 		token := authRes.Token
