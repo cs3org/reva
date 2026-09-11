@@ -19,9 +19,12 @@
 package nats
 
 import (
+	"context"
+	"errors"
 	"testing"
 
 	"github.com/cs3org/reva/v3/pkg/registry"
+	"github.com/nats-io/nats.go/jetstream"
 )
 
 func TestSanitizeKey(t *testing.T) {
@@ -61,5 +64,78 @@ func TestOfflineQueuesWriteThrough(t *testing.T) {
 	d.mu.Unlock()
 	if !queued {
 		t.Fatal("expected the write to be queued while disconnected")
+	}
+}
+
+// TestWriteReconnects is the regression test for a process that silently stopped
+// publishing: writes are the only scheduled work, so if they do not reconnect,
+// nothing does, and the process keeps queueing its own heartbeats forever while
+// its peers age its nodes out and can no longer resolve it.
+func TestWriteReconnects(t *testing.T) {
+	drv, err := New(map[string]any{"address": "nats://127.0.0.1:14222"}) // nothing listening
+	if err != nil {
+		t.Fatalf("New should not fail: %v", err)
+	}
+	d := drv.(*driver)
+	defer d.Close()
+
+	var attempts int
+	d.connectFn = func() error {
+		attempts++
+		return errors.New("still down")
+	}
+
+	node := registry.NewNode("n1", "10.0.0.1:19000", map[string]string{registry.MetaState: registry.StateReady})
+	if err := d.Add("gateway", node); err != nil {
+		t.Fatalf("Add returned error while offline: %v", err)
+	}
+	if err := d.Remove("gateway", "n1"); err != nil {
+		t.Fatalf("Remove returned error while offline: %v", err)
+	}
+	if attempts != 2 {
+		t.Fatalf("every write must try to reconnect, got %d attempts for 2 writes", attempts)
+	}
+}
+
+// failingKV fails every write. Only Put is ever called, so embedding the
+// interface is enough to satisfy it.
+type failingKV struct{ jetstream.KeyValue }
+
+func (failingKV) Put(context.Context, string, []byte) (uint64, error) {
+	return 0, errors.New("connection lost")
+}
+
+// TestFailedWriteDropsTheConnection checks the other half of the loop: a write
+// that fails has to leave the driver disconnected, so that the next heartbeat
+// reconnects and flushes what was queued.
+func TestFailedWriteDropsTheConnection(t *testing.T) {
+	drv, err := New(map[string]any{"address": "nats://127.0.0.1:14222"})
+	if err != nil {
+		t.Fatalf("New should not fail: %v", err)
+	}
+	d := drv.(*driver)
+	defer d.Close()
+
+	d.mu.Lock()
+	d.connected = true
+	d.kv = failingKV{}
+	d.mu.Unlock()
+	d.connectFn = func() error { return errors.New("still down") }
+
+	node := registry.NewNode("n1", "10.0.0.1:19000", map[string]string{registry.MetaState: registry.StateReady})
+	if err := d.Add("gateway", node); err != nil {
+		t.Fatalf("Add returned error: %v", err)
+	}
+
+	d.mu.Lock()
+	connected := d.connected
+	_, queued := d.pending[keyFor("gateway", "n1")]
+	d.mu.Unlock()
+
+	if connected {
+		t.Fatal("a failed write must drop the connection so the next one reconnects")
+	}
+	if !queued {
+		t.Fatal("a failed write must be queued for the next flush")
 	}
 }

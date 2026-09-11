@@ -76,6 +76,10 @@ type driver struct {
 	// keyIndex maps a KV key back to its service+id for delete events.
 	keyIndex map[string][2]string
 
+	// connectFn establishes the connection. It is a field so that tests can
+	// observe that the write path tries to reconnect.
+	connectFn func() error
+
 	ctx    context.Context
 	cancel context.CancelFunc
 }
@@ -109,6 +113,7 @@ func New(m map[string]any) (registry.Driver, error) {
 		ctx:      ctx,
 		cancel:   cancel,
 	}
+	d.connectFn = d.connect
 	return d, nil
 }
 
@@ -118,13 +123,20 @@ func (d *driver) Add(service string, n registry.Node) error {
 
 	d.mu.Lock()
 	d.keyIndex[key] = [2]string{service, n.ID()}
-	connected, kv := d.connected, d.kv
-	if !connected {
-		d.pending[key] = e
-		delete(d.removed, key)
-		d.mu.Unlock()
+	d.mu.Unlock()
+
+	// Reconnect here if a previous write dropped the connection. Writes are the
+	// only thing that happens on a schedule (the runtime re-adds every node on
+	// each heartbeat), so if this path does not reconnect, nothing does: the
+	// process goes on queueing its own heartbeats forever while its peers age
+	// its nodes out of their caches and stop being able to resolve it.
+	if err := d.ensureConnected(); err != nil {
+		d.queue(key, e)
 		return nil
 	}
+
+	d.mu.Lock()
+	kv := d.kv
 	d.mu.Unlock()
 
 	b, err := json.Marshal(e)
@@ -135,25 +147,37 @@ func (d *driver) Add(service string, n registry.Node) error {
 	_, err = kv.Put(ctx, key, b)
 	cancel()
 	if err != nil {
+		// Queue the write and drop the connection, so the next heartbeat
+		// reconnects and flushes it.
+		d.queue(key, e)
 		d.mu.Lock()
-		d.pending[key] = e
 		d.connected = false
 		d.mu.Unlock()
 	}
 	return nil
 }
 
+// queue records a write to be flushed once the connection is back.
+func (d *driver) queue(key string, e entry) {
+	d.mu.Lock()
+	d.pending[key] = e
+	delete(d.removed, key)
+	d.mu.Unlock()
+}
+
 func (d *driver) Remove(service, nodeID string) error {
 	key := keyFor(service, nodeID)
 
-	d.mu.Lock()
-	connected, kv := d.connected, d.kv
-	if !connected {
+	if err := d.ensureConnected(); err != nil {
+		d.mu.Lock()
 		d.removed[key] = struct{}{}
 		delete(d.pending, key)
 		d.mu.Unlock()
 		return nil
 	}
+
+	d.mu.Lock()
+	kv := d.kv
 	d.mu.Unlock()
 
 	ctx, cancel := context.WithTimeout(d.ctx, 5*time.Second)
@@ -229,12 +253,12 @@ func (d *driver) forward(w jetstream.KeyWatcher, out chan<- registry.Event) {
 
 func (d *driver) ensureConnected() error {
 	d.mu.Lock()
-	if d.connected {
-		d.mu.Unlock()
+	connected, connect := d.connected, d.connectFn
+	d.mu.Unlock()
+	if connected {
 		return nil
 	}
-	d.mu.Unlock()
-	return d.connect()
+	return connect()
 }
 
 func (d *driver) connect() error {
@@ -265,10 +289,16 @@ func (d *driver) connect() error {
 	}
 
 	d.mu.Lock()
+	// Reconnecting replaces the previous connection, which would otherwise be
+	// left open once per reconnect.
+	old := d.nc
 	d.nc = nc
 	d.kv = kv
 	d.connected = true
 	d.mu.Unlock()
+	if old != nil {
+		old.Close()
+	}
 
 	d.flushPending()
 	return nil
