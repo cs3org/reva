@@ -883,29 +883,39 @@ func (fs *localfs) createHomeInternal(ctx context.Context, fn string) error {
 	return nil
 }
 
-func (fs *localfs) CreateDir(ctx context.Context, ref *provider.Reference) error {
+func (fs *localfs) CreateDir(ctx context.Context, ref *provider.Reference) (*provider.ResourceInfo, error) {
 	fn, err := fs.resolve(ctx, ref)
 	if err != nil {
-		return nil
+		return nil, nil
 	}
 
 	if fs.isShareFolder(ctx, fn) {
-		return errtypes.PermissionDenied("localfs: cannot create folder under the share folder")
+		return nil, errtypes.PermissionDenied("localfs: cannot create folder under the share folder")
 	}
 
 	fn = fs.wrap(ctx, fn)
 	if _, err := os.Stat(fn); err == nil {
-		return errtypes.AlreadyExists(fn)
+		return nil, errtypes.AlreadyExists(fn)
 	}
 	err = os.Mkdir(fn, 0700)
 	if err != nil {
 		if os.IsNotExist(err) {
-			return errtypes.NotFound(fn)
+			return nil, errtypes.NotFound(fn)
 		}
-		return errors.Wrap(err, "localfs: error creating dir "+fn)
+		return nil, errors.Wrap(err, "localfs: error creating dir "+fn)
 	}
 
-	return fs.propagate(ctx, path.Dir(fn))
+	if err := fs.propagate(ctx, path.Dir(fn)); err != nil {
+		return nil, err
+	}
+
+	// the dir is there, we only miss its metadata
+	md, err := fs.GetMD(ctx, ref, nil)
+	if err != nil {
+		appctx.GetLogger(ctx).Warn().Str("fn", fn).Err(err).Msg("localfs: error statting created directory")
+		return nil, nil
+	}
+	return md, nil
 }
 
 // TouchFile as defined in the storage.FS interface.

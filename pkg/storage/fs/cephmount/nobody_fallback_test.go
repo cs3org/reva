@@ -232,7 +232,7 @@ func TestNobodyUserOperations(t *testing.T) {
 
 	// Test directory creation (should use nobody thread)
 	ref := &provider.Reference{Path: "test-nobody-dir"}
-	err = fs.CreateDir(ctx, ref)
+	_, err = fs.CreateDir(ctx, ref)
 	if err != nil {
 		t.Fatalf("Failed to create directory with nobody user: %v", err)
 	}
@@ -270,7 +270,7 @@ func TestNobodyUserOperations(t *testing.T) {
 
 	// This should use the regular user thread (UID 1000)
 	ref = &provider.Reference{Path: "test-user-dir"}
-	err = fs.CreateDir(ctxWithUser, ref)
+	_, err = fs.CreateDir(ctxWithUser, ref)
 	if err != nil {
 		t.Fatalf("Failed to create directory with regular user: %v", err)
 	}
