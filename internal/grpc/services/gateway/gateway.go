@@ -66,6 +66,14 @@ type config struct {
 	HomeLayout               string                    `mapstructure:"home_layout"`
 	OCMEnabled               bool                      `mapstructure:"ocm_enabled"`
 	Events                   eventBackendConfig        `mapstructure:"events"`
+
+	// LightweightHomeLayout is the path of the folder shared with a lightweight
+	// account as its home on login. Empty disables lightweight homes.
+	LightweightHomeLayout string `mapstructure:"lightweight_home_layout"`
+	// LightweightHomeOwner is the account that owns the lightweight homes and
+	// shares them, impersonated through machine auth with MachineSecret.
+	LightweightHomeOwner string `mapstructure:"lightweight_home_owner"`
+	MachineSecret        string `mapstructure:"machine_secret"`
 }
 
 // sets defaults.
@@ -114,6 +122,9 @@ func New(ctx context.Context, m map[string]any) (rgrpc.Service, error) {
 	var c config
 	if err := cfg.Decode(m, &c); err != nil {
 		return nil, err
+	}
+	if c.LightweightHomeLayout != "" && (c.LightweightHomeOwner == "" || c.MachineSecret == "") {
+		return nil, errtypes.BadRequest("gateway: lightweight_home_layout requires lightweight_home_owner and machine_secret")
 	}
 
 	tokenManager, err := getTokenManager(c.TokenManager, c.TokenManagers)

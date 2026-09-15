@@ -115,6 +115,7 @@ func (s *svc) Authenticate(ctx context.Context, req *gateway.AuthenticateRequest
 		return res, nil
 	}
 
+	loginCtx := ctx
 	ctx = appctx.ContextSetToken(ctx, token)
 	ctx = appctx.ContextSetUser(ctx, res.User)
 	ctx = metadata.AppendToOutgoingContext(ctx, appctx.TokenHeader, token)
@@ -138,6 +139,14 @@ func (s *svc) Authenticate(ctx context.Context, req *gateway.AuthenticateRequest
 			Status: status.NewUnauthenticated(ctx, err, "error creating access token"),
 		}
 		return res, nil
+	}
+
+	if res.User.Id.Type == userpb.UserType_USER_TYPE_LIGHTWEIGHT && s.c.LightweightHomeLayout != "" && !s.c.DisableHomeCreationOnLogin && req.Type != "machine" {
+		// Unlike a primary home, the account is usable without it: it still
+		// reaches what others shared with it. So log, and retry on next login.
+		if err := s.ensureLightweightHome(loginCtx, res.User, token); err != nil {
+			log.Err(err).Str("user", res.User.Username).Msg("error setting up lightweight home")
+		}
 	}
 
 	if scope, ok := res.TokenScope["user"]; s.c.DisableHomeCreationOnLogin || !ok || scope.Role != authpb.Role_ROLE_OWNER || res.User.Id.Type == userpb.UserType_USER_TYPE_FEDERATED {

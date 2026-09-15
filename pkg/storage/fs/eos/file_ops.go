@@ -224,6 +224,10 @@ func (fs *Eosfs) InitiateUpload(ctx context.Context, ref *provider.Reference, up
 }
 
 func (fs *Eosfs) CreateHome(ctx context.Context) error {
+	if u, ok := appctx.ContextGetUser(ctx); ok && u.Id.Type == userpb.UserType_USER_TYPE_LIGHTWEIGHT {
+		return fs.createLightweightHome(ctx, u)
+	}
+
 	if !fs.conf.EnableHomeCreation {
 		return errtypes.NotSupported("eosfs: create home not supported")
 	}
@@ -371,6 +375,27 @@ func (fs *Eosfs) createNominalHome(ctx context.Context) error {
 	} else {
 		log.Fatal().Msg("create_home_hook not configured")
 		return errtypes.NotFound("eosfs: create home hook not configured")
+	}
+
+	return nil
+}
+
+// createLightweightHome provisions the folder that the gateway then shares
+// with the lightweight account as its home. The hook must be idempotent, as
+// concurrent logins may run it twice.
+func (fs *Eosfs) createLightweightHome(ctx context.Context, u *userpb.User) error {
+	if fs.conf.CreateLightweightHomeHook == "" {
+		return errtypes.NotSupported("eosfs: create_lightweight_home_hook not configured")
+	}
+
+	log := appctx.GetLogger(ctx)
+	log.Info().Interface("user", u.Id).Msg("creating lightweight home")
+
+	hook := exec.Command(fs.conf.CreateLightweightHomeHook, u.Username, utils.UserTypeToString(u.Id.Type))
+	out, err := hook.CombinedOutput()
+	log.Info().Str("output", string(out)).Err(err).Msg("create_lightweight_home_hook output")
+	if err != nil {
+		return errors.Wrap(err, "eosfs: error running create lightweight home hook")
 	}
 
 	return nil

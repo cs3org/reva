@@ -56,6 +56,9 @@ func lightweightAccountScope(_ context.Context, scope *authpb.Scope, resource an
 		return true, nil
 	case *sp.ListStorageSpacesRequest:
 		return true, nil
+	// Provisions the folder shared with the account as its home.
+	case *sp.CreateHomeRequest:
+		return true, nil
 	case *grouppb.GetGroupRequest:
 		return true, nil
 	case *ocmprovider.GetInfoByDomainRequest:
