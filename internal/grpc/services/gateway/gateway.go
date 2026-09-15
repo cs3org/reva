@@ -66,6 +66,9 @@ type config struct {
 	HomeLayout               string                    `mapstructure:"home_layout"`
 	OCMEnabled               bool                      `mapstructure:"ocm_enabled"`
 	Events                   eventBackendConfig        `mapstructure:"events"`
+	// LightweightHomeLayout is the path of the folder shared with a lightweight
+	// account as its home on login. Empty disables lightweight homes.
+	LightweightHomeLayout string `mapstructure:"lightweight_home_layout"`
 }
 
 // sets defaults.
