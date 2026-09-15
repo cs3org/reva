@@ -54,6 +54,7 @@ import (
 	"github.com/cs3org/reva/v3/pkg/appctx"
 	"github.com/cs3org/reva/v3/pkg/logger"
 	"github.com/cs3org/reva/v3/pkg/registry"
+	"github.com/rs/zerolog"
 	"go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
@@ -261,7 +262,7 @@ func (c *clients) unresolved(ctx context.Context, name string, cause error) {
 	}
 	reason := fmt.Sprintf("reva: %q has been unresolvable for %s over %d lookups, exiting: %v",
 		name, since.Truncate(time.Second), calls, cause)
-	log.Error().Err(cause).Str("service", name).Int("failed_lookups", calls).
+	log.WithLevel(zerolog.FatalLevel).Err(cause).Str("service", name).Int("failed_lookups", calls).
 		Dur("unresolvable_for", since).Str("registry", c.registrySnapshot(name)).
 		Msg("peer is unresolvable, exiting")
 	exit(reason)
