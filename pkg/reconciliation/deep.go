@@ -27,12 +27,16 @@ import (
 	rpcv1beta1 "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	collaborationv1beta1 "github.com/cs3org/go-cs3apis/cs3/sharing/collaboration/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
+	"github.com/cs3org/reva/v3/pkg/appctx"
 	"github.com/cs3org/reva/v3/pkg/errtypes"
 	"github.com/cs3org/reva/v3/pkg/permissions"
 	"github.com/cs3org/reva/v3/pkg/reconciliation/nsdump"
 	"github.com/cs3org/reva/v3/pkg/spaces"
 	"github.com/cs3org/reva/v3/pkg/storage/fs/eos/acl"
+	eosclient "github.com/cs3org/reva/v3/pkg/storage/fs/eos/client"
+	"github.com/google/uuid"
 	"github.com/pkg/errors"
+	"github.com/rs/zerolog"
 )
 
 // TODO(jgeens):
@@ -40,9 +44,20 @@ import (
 
 const JobName = "reconciliation.deep"
 
+const (
+	EventDeepChange = JobName + ".change"
+	EventDeepFail   = JobName + ".fail"
+	EventDeepEnd    = JobName + ".end"
+)
+
 type DeepJob struct {
 	shareMgr ShareStore
 	gw       gateway.GatewayAPIClient
+	// The changes are calculated per node, and the grant calls of the storage
+	// provider always apply an ACL recursively, so we talk to EOS ourselves
+	eos    eosclient.EOSClient
+	log    *zerolog.Logger
+	dryRun bool
 }
 
 type ChangeSet []*Change
@@ -128,8 +143,18 @@ func (j *DeepJob) Run(ctx context.Context, p RunParameters) error {
 		return errors.New("deep reconciliation is not supported for public spaces")
 	}
 
-	_, err = j.runAnalysis(ctx, p.SpaceID, namespaceDumper)
-	return err
+	cs, err := j.runAnalysis(ctx, p.SpaceID, namespaceDumper)
+	if err != nil {
+		return err
+	}
+
+	// Analysis happened without errors, so we can apply the changes if needed and write to a journal
+	if !j.dryRun {
+		err = j.applyChangeSet(ctx, cs)
+
+	}
+	return j.writeJournal(ctx, cs, err)
+
 }
 
 func (j *DeepJob) runAnalysis(ctx context.Context, spaceid string, nsdumper nsdump.NSDumpClient) (ChangeSet, error) {
@@ -192,6 +217,71 @@ func (j *DeepJob) runAnalysis(ctx context.Context, spaceid string, nsdumper nsdu
 	changeSet := compare(tree, dump)
 
 	return changeSet, nil
+}
+
+func (j *DeepJob) applyChangeSet(ctx context.Context, cs ChangeSet) error {
+	// We are a sudo'er, so we don't set a role
+	auth := eosclient.Authorization{}
+
+	for _, c := range cs {
+		var err error
+		switch c.Action {
+		case ActionAdd, ActionUpdate:
+			err = j.eos.AddACL(ctx, auth, c.Path, eosclient.StartPosition, c.ACL, false)
+		case ActionDelete:
+			// RemoveACL clears the permissions of the entry it is given, so we pass a copy
+			e := *c.ACL
+			err = j.eos.RemoveACL(ctx, auth, c.Path, &e, false)
+		default:
+			return errors.Errorf("unknown action %s", c.Action)
+		}
+		if err != nil {
+			return errors.Wrapf(err, "failed to %s %s on %s", c.Action, c.ACL.CitrineSerialize(), c.Path)
+		}
+	}
+
+	return nil
+}
+
+func (j *DeepJob) writeJournal(ctx context.Context, cs ChangeSet, applyErr error) error {
+	journal := j.log
+	if journal == nil {
+		journal = appctx.GetLogger(ctx)
+	}
+	log := journal.With().Str("job", JobName).Str("run", uuid.New().String()).Logger()
+
+	counts := map[ActionKind]int{}
+	for _, c := range cs {
+		counts[c.Action]++
+		log.Info().
+			Str("event", EventDeepChange).
+			Str("action", c.Action.String()).
+			Str("path", c.Path).
+			Str("type", c.ACL.Type).
+			Str("qualifier", c.ACL.Qualifier).
+			Str("permissions", c.ACL.Permissions).
+			Bool("dry_run", j.dryRun).
+			Msg("reconciliation: acl change")
+	}
+
+	if applyErr != nil {
+		// We stop at the first failure, so the changes that come after the one
+		// named here are not on the storage
+		log.Error().Err(applyErr).
+			Str("event", EventDeepFail).
+			Msg("reconciliation: applying the change set failed")
+	}
+
+	log.Info().
+		Str("event", EventDeepEnd).
+		Int("added", counts[ActionAdd]).
+		Int("updated", counts[ActionUpdate]).
+		Int("deleted", counts[ActionDelete]).
+		Bool("dry_run", j.dryRun).
+		Bool("applied", !j.dryRun && applyErr == nil).
+		Msg("reconciliation: run finished")
+
+	return applyErr
 }
 
 func (j *DeepJob) getPath(ctx context.Context, rid *provider.ResourceId) (string, bool) {
