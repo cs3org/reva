@@ -18,7 +18,7 @@ func (e *EOSFileNSInspect) Setup(config any) error {
 		e.file = c.File
 		return nil
 	}
-	return fmt.Errorf("requires a config of type %t", EOSFileNSInspectConfig{})
+	return fmt.Errorf("requires a config of type %T", EOSFileNSInspectConfig{})
 }
 
 func (e *EOSFileNSInspect) Dump(rootPath string, maxDepth int) (*NamespaceDump, error) {
