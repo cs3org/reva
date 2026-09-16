@@ -50,6 +50,7 @@ import (
 	"github.com/cs3org/reva/v3/pkg/utils"
 	"github.com/cs3org/reva/v3/pkg/utils/cfg"
 	"github.com/pkg/errors"
+	"google.golang.org/genproto/protobuf/field_mask"
 	"google.golang.org/grpc"
 )
 
@@ -627,8 +628,8 @@ func (s *service) UpdateReceivedOCMShare(ctx context.Context, req *ocm.UpdateRec
 }
 
 // processEmbeddedShare marks the received share as TRANSFERRING, kicks off the
-// background transfer of the embedded content and arranges for the share to be
-// flipped to ACCEPTED once the transfer completes.
+// background transfer of the embedded content and arranges for the share to
+// become ACCEPTED once every file arrived, or REJECTED if the transfer failed.
 func (s *service) processEmbeddedShare(ctx context.Context, user *userpb.User, req *ocm.UpdateReceivedOCMShareRequest, payload string) (*ocm.UpdateReceivedOCMShareResponse, error) {
 	recvShare := req.Share
 	mask := req.UpdateMask
@@ -673,17 +674,27 @@ func (s *service) processEmbeddedShare(ctx context.Context, user *userpb.User, r
 	detached := context.WithoutCancel(ctx)
 	onComplete := func(transferErr error) {
 		log := appctx.GetLogger(detached)
+		defer func() {
+			if r := recover(); r != nil {
+				log.Error().Interface("panic", r).Msg("panic while ending an embedded transfer")
+			}
+		}()
+
+		state := ocm.ShareState_SHARE_STATE_ACCEPTED
 		if transferErr != nil {
-			log.Error().Err(transferErr).Msg("embedded transfer failed, leaving share in transferring state")
-			return
+			log.Error().Err(transferErr).Msg("embedded transfer failed, rejecting share")
+			state = ocm.ShareState_SHARE_STATE_REJECTED
 		}
-		recvShare.State = ocm.ShareState_SHARE_STATE_ACCEPTED
-		if _, err := s.repo.UpdateReceivedShare(detached, user, recvShare, mask); err != nil {
-			log.Error().Err(err).Msg("error marking received share as accepted after embedded transfer")
+		if err := s.endTransfer(detached, user, recvShare, mask, state); err != nil {
+			log.Error().Err(err).Msg("error updating received share after embedded transfer")
 		}
 	}
 
 	if err := s.transferrer.Process(ctx, payload, recvShare.Destination, onComplete); err != nil {
+		// The transfer never started, so don't leave the share behind as transferring.
+		if err := s.endTransfer(ctx, user, recvShare, mask, ocm.ShareState_SHARE_STATE_REJECTED); err != nil {
+			appctx.GetLogger(ctx).Error().Err(err).Msg("error rejecting received share")
+		}
 		return &ocm.UpdateReceivedOCMShareResponse{
 			Status: status.NewInternal(ctx, err, "error processing embedded share"),
 		}, nil
@@ -692,6 +703,28 @@ func (s *service) processEmbeddedShare(ctx context.Context, user *userpb.User, r
 	return &ocm.UpdateReceivedOCMShareResponse{
 		Status: status.NewOK(ctx),
 	}, nil
+}
+
+// endTransfer moves the share to state, unless it is no longer transferring:
+// the recipient may have reset it while the transfer was running, and that
+// takes precedence over a result arriving afterwards.
+func (s *service) endTransfer(ctx context.Context, user *userpb.User, recvShare *ocm.ReceivedShare, mask *field_mask.FieldMask, state ocm.ShareState) error {
+	current, err := s.repo.GetReceivedShare(ctx, user, &ocm.ShareReference{
+		Spec: &ocm.ShareReference_Id{Id: recvShare.Id},
+	})
+	if err != nil {
+		return err
+	}
+	if current.State != ocm.ShareState_SHARE_STATE_TRANSFERRING {
+		appctx.GetLogger(ctx).Info().
+			Str("state", current.State.String()).
+			Msg("share is no longer transferring, leaving its state untouched")
+		return nil
+	}
+
+	recvShare.State = state
+	_, err = s.repo.UpdateReceivedShare(ctx, user, recvShare, mask)
+	return err
 }
 
 func (s *service) GetReceivedOCMShare(ctx context.Context, req *ocm.GetReceivedOCMShareRequest) (*ocm.GetReceivedOCMShareResponse, error) {
