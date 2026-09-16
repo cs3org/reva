@@ -22,7 +22,7 @@ func (e *EOSMemoryNSInspect) Setup(config any) error {
 		e.cfg = c
 		return nil
 	}
-	return fmt.Errorf("requires a config of type %t", EOSMemoryNSInspectConfig{})
+	return fmt.Errorf("requires a config of type %T", EOSMemoryNSInspectConfig{})
 }
 
 func (e *EOSMemoryNSInspect) Dump(rootPath string, maxDepth int) (*NamespaceDump, error) {

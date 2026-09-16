@@ -80,7 +80,7 @@ func loadTestDump(t *testing.T) *nsdump.NamespaceDump {
 	t.Helper()
 
 	dumper := &nsdump.EOSFileNSInspect{}
-	if err := dumper.Setup(map[string]any{"file": "testdata/nsdump_cernbox.json"}); err != nil {
+	if err := dumper.Setup(nsdump.EOSFileNSInspectConfig{File: "testdata/nsdump_cernbox.json"}); err != nil {
 		t.Fatalf("setting up the file dumper: %v", err)
 	}
 
@@ -385,7 +385,7 @@ func (d *failingDumper) Dump(rootPath string, maxDepth int) (*nsdump.NamespaceDu
 func fileDumper(t *testing.T) nsdump.NSDumpClient {
 	t.Helper()
 	d := &nsdump.EOSFileNSInspect{}
-	if err := d.Setup(map[string]any{"file": "testdata/nsdump_cernbox.json"}); err != nil {
+	if err := d.Setup(nsdump.EOSFileNSInspectConfig{File: "testdata/nsdump_cernbox.json"}); err != nil {
 		t.Fatalf("setting up the file dumper: %v", err)
 	}
 	return d
