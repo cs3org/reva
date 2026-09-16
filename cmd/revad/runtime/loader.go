@@ -30,7 +30,6 @@ import (
 	_ "github.com/cs3org/reva/v3/internal/http/services/loader"
 	_ "github.com/cs3org/reva/v3/internal/serverless/services/loader"
 	_ "github.com/cs3org/reva/v3/pkg/app/provider/loader"
-	_ "github.com/cs3org/reva/v3/pkg/app/registry/loader"
 	_ "github.com/cs3org/reva/v3/pkg/appauth/manager/loader"
 	_ "github.com/cs3org/reva/v3/pkg/auth/manager/loader"
 	_ "github.com/cs3org/reva/v3/pkg/auth/registry/loader"

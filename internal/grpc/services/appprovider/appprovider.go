@@ -23,25 +23,25 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
-	"time"
 
 	providerpb "github.com/cs3org/go-cs3apis/cs3/app/provider/v1beta1"
 	registrypb "github.com/cs3org/go-cs3apis/cs3/app/registry/v1beta1"
-	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	"github.com/cs3org/reva/v3/pkg/app"
 	"github.com/cs3org/reva/v3/pkg/app/provider/registry"
 	"github.com/cs3org/reva/v3/pkg/appctx"
 	"github.com/cs3org/reva/v3/pkg/errtypes"
 	"github.com/cs3org/reva/v3/pkg/mime"
 	"github.com/cs3org/reva/v3/pkg/plugin"
+	svcregistry "github.com/cs3org/reva/v3/pkg/registry"
 	"github.com/cs3org/reva/v3/pkg/rgrpc"
 	"github.com/cs3org/reva/v3/pkg/rgrpc/status"
-	revaservice "github.com/cs3org/reva/v3/pkg/service"
-	"github.com/cs3org/reva/v3/pkg/sharedconf"
 	"github.com/cs3org/reva/v3/pkg/utils"
 	"github.com/cs3org/reva/v3/pkg/utils/cfg"
 	"github.com/juliangruber/go-intersect"
+	"github.com/pkg/errors"
 	"google.golang.org/grpc"
+	"google.golang.org/protobuf/encoding/protojson"
+	"google.golang.org/protobuf/proto"
 )
 
 func init() {
@@ -56,13 +56,15 @@ func init() {
 type service struct {
 	provider app.Provider
 	conf     *config
+	// meta advertises this app in the service registry, where the app registry
+	// discovers it. The runtime asks for it on every heartbeat, so it is built
+	// once here rather than on each call.
+	meta map[string]string
 }
 
 type config struct {
 	Driver              string                    `mapstructure:"driver"`
 	Drivers             map[string]map[string]any `mapstructure:"drivers"`
-	AppProviderURL      string                    `mapstructure:"app_provider_url"`
-	GatewaySvc          string                    `mapstructure:"gatewaysvc"`
 	MimeTypes           []string                  `docs:"nil;A list of mime types supported by this app."                                                              mapstructure:"mime_types"`
 	CustomMimeTypesJSON string                    `docs:"nil;An optional mapping file with the list of supported custom file extensions and corresponding mime types." mapstructure:"custom_mime_types_json"`
 	Language            string                    `mapstructure:"language"`
@@ -72,8 +74,6 @@ func (c *config) ApplyDefaults() {
 	if c.Driver == "" {
 		c.Driver = "demo"
 	}
-	c.AppProviderURL = sharedconf.GetGatewaySVC(c.AppProviderURL)
-	c.GatewaySvc = sharedconf.GetGatewaySVC(c.GatewaySvc)
 }
 
 // New creates a new AppProviderService.
@@ -93,13 +93,64 @@ func New(ctx context.Context, m map[string]any) (rgrpc.Service, error) {
 		return nil, err
 	}
 
-	service := &service{
-		conf:     &c,
-		provider: provider,
+	pInfo, err := providerInfo(ctx, provider, &c)
+	if err != nil {
+		return nil, err
+	}
+	meta, err := registryMetadata(pInfo)
+	if err != nil {
+		return nil, err
 	}
 
-	go service.registerProvider(ctx)
-	return service, nil
+	return &service{
+		conf:     &c,
+		provider: provider,
+		meta:     meta,
+	}, nil
+}
+
+// providerInfo describes the app this provider serves: what the driver reports,
+// narrowed down to the mime types the configuration allows.
+func providerInfo(ctx context.Context, provider app.Provider, c *config) (*registrypb.ProviderInfo, error) {
+	pInfo, err := provider.GetAppProviderInfo(ctx)
+	if err != nil {
+		return nil, errors.Wrap(err, "appprovider: error getting the app provider info")
+	}
+
+	if len(c.MimeTypes) != 0 {
+		mimeTypesIf := intersect.Simple(pInfo.MimeTypes, c.MimeTypes)
+		mimeTypes := make([]string, 0, len(mimeTypesIf))
+		for _, m := range mimeTypesIf {
+			mimeTypes = append(mimeTypes, m.(string))
+		}
+		pInfo.MimeTypes = mimeTypes
+		appctx.GetLogger(ctx).Info().Str("app", pInfo.Name).Interface("mimetypes", mimeTypes).
+			Msg("appprovider supported mimetypes")
+	}
+	return pInfo, nil
+}
+
+// registryMetadata encodes the app description this provider advertises on its
+// registry node. The address is left out: it belongs to the node, and the app
+// registry reads it from there.
+func registryMetadata(pInfo *registrypb.ProviderInfo) (map[string]string, error) {
+	info, ok := proto.Clone(pInfo).(*registrypb.ProviderInfo)
+	if !ok {
+		return nil, errtypes.InternalError("appprovider: error cloning the app provider info")
+	}
+	info.Address = ""
+
+	encoded, err := protojson.Marshal(info)
+	if err != nil {
+		return nil, errors.Wrap(err, "appprovider: error encoding the app provider info")
+	}
+	return map[string]string{svcregistry.MetaApp: string(encoded)}, nil
+}
+
+// RegistryMetadata implements service.MetadataProvider: it publishes this app's
+// description on the node, which is how the app registry discovers it.
+func (s *service) RegistryMetadata() map[string]string {
+	return s.meta
 }
 
 func registerMimeTypes(mappingFile string) error {
@@ -121,48 +172,6 @@ func registerMimeTypes(mappingFile string) error {
 		}
 	}
 	return nil
-}
-
-func (s *service) registerProvider(ctx context.Context) {
-	// Give the appregistry service time to come up
-	// TODO(lopresti) we should register the appproviders after all other microservices
-	time.Sleep(3 * time.Second)
-
-	log := appctx.GetLogger(ctx)
-	pInfo, err := s.provider.GetAppProviderInfo(ctx)
-	if err != nil {
-		log.Error().Err(err).Msgf("error registering app provider: could not get provider info")
-		return
-	}
-	pInfo.Address = s.conf.AppProviderURL
-
-	if len(s.conf.MimeTypes) != 0 {
-		mimeTypesIf := intersect.Simple(pInfo.MimeTypes, s.conf.MimeTypes)
-		var mimeTypes []string
-		for _, m := range mimeTypesIf {
-			mimeTypes = append(mimeTypes, m.(string))
-		}
-		pInfo.MimeTypes = mimeTypes
-		log.Info().Str("appprovider", s.conf.AppProviderURL).Interface("mimetypes", mimeTypes).Msg("appprovider supported mimetypes")
-	}
-
-	client, err := revaservice.Gateway(ctx)
-	if err != nil {
-		log.Error().Err(err).Msgf("error registering app provider: could not get gateway client")
-		return
-	}
-	req := &registrypb.AddAppProviderRequest{Provider: pInfo}
-
-	res, err := client.AddAppProvider(ctx, req)
-	if err != nil {
-		log.Error().Err(err).Msgf("error registering app provider: error calling add app provider")
-		return
-	}
-	if res.Status.Code != rpc.Code_CODE_OK {
-		err = status.NewErrorFromCode(res.Status.Code, "appprovider")
-		log.Error().Err(err).Msgf("error registering app provider: add app provider returned error")
-		return
-	}
 }
 
 func (s *service) Close() error {
