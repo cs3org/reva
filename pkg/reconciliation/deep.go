@@ -31,7 +31,9 @@ import (
 	"github.com/cs3org/reva/v3/pkg/errtypes"
 	"github.com/cs3org/reva/v3/pkg/permissions"
 	"github.com/cs3org/reva/v3/pkg/reconciliation/nsdump"
+	"github.com/cs3org/reva/v3/pkg/service"
 	"github.com/cs3org/reva/v3/pkg/spaces"
+	"github.com/cs3org/reva/v3/pkg/storage/fs/eos"
 	"github.com/cs3org/reva/v3/pkg/storage/fs/eos/acl"
 	eosclient "github.com/cs3org/reva/v3/pkg/storage/fs/eos/client"
 	"github.com/google/uuid"
@@ -85,6 +87,33 @@ func (s *ShareWithPath) toTreeNode() *ACLNode {
 		Path:          s.Path,
 		MandatoryACLs: []*acl.Entry{shareToACL(s.Share)},
 	}
+}
+
+// DeepConfig configures the deep job. The EOS keys are the ones of the eos
+// storage driver, of which we only need the client
+type DeepConfig struct {
+	Config `mapstructure:",squash"`
+	Eos    eos.Config `mapstructure:"eos"`
+}
+
+func NewDeepJob(ctx context.Context, c DeepConfig, shares ShareStore, log *zerolog.Logger) (*DeepJob, error) {
+	gw, err := service.Gateway(ctx)
+	if err != nil {
+		return nil, errors.Wrap(err, "reconciliation: getting the gateway client")
+	}
+
+	eosClient, err := eos.NewEOSClient(ctx, &c.Eos)
+	if err != nil {
+		return nil, errors.Wrap(err, "reconciliation: building the eos client")
+	}
+
+	return &DeepJob{
+		shareMgr: shares,
+		gw:       gw,
+		eos:      eosClient,
+		log:      log,
+		dryRun:   c.DryRun,
+	}, nil
 }
 
 func (j *DeepJob) Run(ctx context.Context, p RunParameters) error {
