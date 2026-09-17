@@ -154,7 +154,7 @@ func (d *driver) Process(ctx context.Context, payload, destination string, onCom
 func (d *driver) runTransfer(log *zerolog.Logger, token, destination string, entries []transferEntry, timeout time.Duration) (err error) {
 	defer func() {
 		if r := recover(); r != nil {
-			log.Error().Interface("panic", r).Bytes("stack", debug.Stack()).Msg("embedded transfer failed")
+			log.Error().Interface("error", r).Bytes("stack", debug.Stack()).Msg("embedded transfer failed")
 			err = fmt.Errorf("embedded transfer failed: %v", r)
 		}
 	}()
