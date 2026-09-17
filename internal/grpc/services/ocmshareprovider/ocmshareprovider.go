@@ -676,7 +676,7 @@ func (s *service) processEmbeddedShare(ctx context.Context, user *userpb.User, r
 		log := appctx.GetLogger(detached)
 		defer func() {
 			if r := recover(); r != nil {
-				log.Error().Interface("panic", r).Msg("panic while ending an embedded transfer")
+				log.Error().Interface("error", r).Msg("failure while ending an embedded transfer")
 			}
 		}()
 
