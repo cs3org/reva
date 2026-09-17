@@ -177,7 +177,13 @@ func (f *fakeGateway) Stat(ctx context.Context, in *provider.StatRequest, _ ...g
 		return nil, f.statErr
 	}
 	id := in.GetRef().GetResourceId()
-	return &provider.StatResponse{Status: status(f.resources[id.StorageId+"/"+id.OpaqueId])}, nil
+	key := id.StorageId + "/" + id.OpaqueId
+	// the path is what the deep job reads off a stat; the orphan job only
+	// looks at the status.
+	return &provider.StatResponse{
+		Status: status(f.resources[key]),
+		Info:   &provider.ResourceInfo{Id: id, Path: f.paths[key]},
+	}, nil
 }
 
 func (f *fakeGateway) GetUserByClaim(ctx context.Context, in *userpb.GetUserByClaimRequest, _ ...grpc.CallOption) (*userpb.GetUserByClaimResponse, error) {
