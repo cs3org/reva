@@ -28,6 +28,7 @@ import (
 	"io"
 	"net/http"
 	"path"
+	"runtime/debug"
 	"strconv"
 	"strings"
 	"sync/atomic"
@@ -132,12 +133,16 @@ func (d *driver) Process(ctx context.Context, payload, destination string, onCom
 		return nil
 	}
 
+	token, ok := appctx.ContextGetToken(ctx)
+	if !ok {
+		return errors.New("no token in context to authenticate the transfer with")
+	}
+
 	// Run detached so a large transfer doesn't block the accept request. The
 	// captured token may expire mid-transfer, failing later files (best-effort).
-	token := appctx.ContextMustGetToken(ctx)
 	timeout := time.Duration(d.c.Timeout) * time.Second
 	go func() {
-		err := d.transferEntries(log, token, destination, entries, timeout)
+		err := d.runTransfer(log, token, destination, entries, timeout)
 		if onComplete != nil {
 			onComplete(err)
 		}
@@ -146,10 +151,20 @@ func (d *driver) Process(ctx context.Context, payload, destination string, onCom
 	return nil
 }
 
+func (d *driver) runTransfer(log *zerolog.Logger, token, destination string, entries []transferEntry, timeout time.Duration) (err error) {
+	defer func() {
+		if r := recover(); r != nil {
+			log.Error().Interface("error", r).Bytes("stack", debug.Stack()).Msg("embedded transfer failed")
+			err = fmt.Errorf("embedded transfer failed: %v", r)
+		}
+	}()
+
+	return d.transferEntries(log, token, destination, entries, timeout)
+}
+
 // transferEntries streams each entry to the WebDAV destination. A file that keeps
-// failing is skipped so one bad file doesn't abort the whole dataset. It returns
-// an error only when the transfer cannot proceed at all (e.g. the destination is
-// unreachable); per-file failures are best-effort and do not produce an error.
+// failing does not abort the rest of the dataset, but the transfer as a whole
+// fails: it succeeds only once every file of the payload is at the destination.
 func (d *driver) transferEntries(log *zerolog.Logger, token, destination string, entries []transferEntry, timeout time.Duration) error {
 	httpClient := &http.Client{}
 	// Preemptive auth, not gowebdav's default auto-auth: auto-auth buffers each
@@ -209,6 +224,10 @@ func (d *driver) transferEntries(log *zerolog.Logger, token, destination string,
 		Int("failed", failed).
 		Int("total", len(entries)).
 		Msg("Finished embedded share transfer")
+
+	if failed > 0 {
+		return fmt.Errorf("%d of %d files failed to transfer to %s", failed, len(entries), destination)
+	}
 
 	return nil
 }
