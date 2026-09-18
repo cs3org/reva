@@ -157,7 +157,7 @@ func (s *svc) CreateShare(ctx context.Context, req *collaboration.CreateShareReq
 		return nil, errors.Wrap(err, "gateway: error calling CreateShare")
 	}
 	if res.Status.Code != rpc.Code_CODE_OK {
-		return nil, status.NewErrtypeFromStatus(res.Status)
+		return &collaboration.CreateShareResponse{Status: res.Status}, nil
 	}
 
 	// And we remove from the db the deleted shares made redundant by the new share.

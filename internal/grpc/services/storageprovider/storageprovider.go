@@ -1235,7 +1235,7 @@ func (s *service) ListFileVersions(ctx context.Context, req *provider.ListFileVe
 		case errtypes.PermissionDenied:
 			st = status.NewPermissionDenied(ctx, err, "permission denied")
 		default:
-			st = status.NewStatusFromErrType(ctx, "error listing file versions for "+req.Ref.String()+": "+err.Error(), err)
+			st = status.NewStatusFromErrType(ctx, "error listing file versions for "+req.Ref.String(), err)
 		}
 		return &provider.ListFileVersionsResponse{
 			Status: st,
