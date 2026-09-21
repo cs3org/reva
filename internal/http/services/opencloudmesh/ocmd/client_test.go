@@ -21,15 +21,14 @@ package ocmd
 import (
 	"context"
 	"encoding/json"
-	"net"
 	"net/http"
 	"net/http/httptest"
 	"os"
-	"reflect"
 	"testing"
 	"time"
 
 	"github.com/cs3org/reva/v3/pkg/errtypes"
+	"github.com/cs3org/reva/v3/pkg/ocm/client"
 )
 
 var proxyEnvKeys = []string{
@@ -190,154 +189,93 @@ func TestExchangeTokenMalformedJSON(t *testing.T) {
 	}
 }
 
-// roundTripperFunc adapts a plain function to http.RoundTripper, used to make
-// http.DefaultTransport a non-*http.Transport for the fallback test.
-type roundTripperFunc func(*http.Request) (*http.Response, error)
-
-func (f roundTripperFunc) RoundTrip(r *http.Request) (*http.Response, error) { return f(r) }
-
-// The trusted transport must keep http.ProxyFromEnvironment: some deployments
-// only reach their peers through a corporate proxy.
-func TestNewOCMTransportUsesProxyFromEnvironment(t *testing.T) {
-	tr := newOCMTransport(false)
-	if tr.Proxy == nil {
-		t.Fatal("transport Proxy must not be nil")
+func TestCompatibilityConstructorsTimeoutAndInsecure(t *testing.T) {
+	tests := []struct {
+		name     string
+		ocm      *OCMClient
+		timeout  time.Duration
+		insecure bool
+	}{
+		{
+			name:     "NewClient",
+			ocm:      NewClient(7*time.Second, true),
+			timeout:  7 * time.Second,
+			insecure: true,
+		},
+		{
+			name:     "NewClient zero timeout",
+			ocm:      NewClient(0, false),
+			timeout:  10 * time.Second,
+			insecure: false,
+		},
+		{
+			name:     "NewPublicOnlyClient",
+			ocm:      NewPublicOnlyClient(3*time.Second, true),
+			timeout:  3 * time.Second,
+			insecure: true,
+		},
+		{
+			name: "NewClientWithConfig",
+			ocm: NewClientWithConfig(client.TransportConfig{
+				Timeout:  4 * time.Second,
+				Insecure: true,
+			}),
+			timeout:  4 * time.Second,
+			insecure: true,
+		},
+		{
+			name: "NewPublicOnlyClientWithConfig",
+			ocm: NewPublicOnlyClientWithConfig(client.TransportConfig{
+				Timeout:  2 * time.Second,
+				Insecure: false,
+			}),
+			timeout:  2 * time.Second,
+			insecure: false,
+		},
 	}
-	got := reflect.ValueOf(tr.Proxy).Pointer()
-	want := reflect.ValueOf(http.ProxyFromEnvironment).Pointer()
-	if got != want {
-		t.Error("transport Proxy must be http.ProxyFromEnvironment")
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if tt.ocm.client.Timeout != tt.timeout {
+				t.Errorf("timeout = %v, want %v", tt.ocm.client.Timeout, tt.timeout)
+			}
+			tr, ok := tt.ocm.client.Transport.(*http.Transport)
+			if !ok {
+				t.Fatalf("transport: got %T, want *http.Transport", tt.ocm.client.Transport)
+			}
+			if tr.TLSClientConfig == nil {
+				t.Fatal("TLSClientConfig is nil")
+			}
+			if tr.TLSClientConfig.InsecureSkipVerify != tt.insecure {
+				t.Errorf("InsecureSkipVerify = %v, want %v", tr.TLSClientConfig.InsecureSkipVerify, tt.insecure)
+			}
+		})
 	}
 }
 
-// The public-only transport must not proxy, or the dial Control would see the
-// proxy address instead of the target.
-func TestNewPublicOnlyClientTransportProxyNil(t *testing.T) {
-	c := NewPublicOnlyClient(5*time.Second, true)
-	tr, ok := c.client.Transport.(*http.Transport)
-	if !ok {
-		t.Fatal("public-only client must use an *http.Transport")
-	}
-	if tr.Proxy != nil {
-		t.Error("public-only client must not use a proxy")
-	}
-}
-
-// TestNewOCMTransportInsecureSkipVerify checks the TLS contract is preserved.
-func TestNewOCMTransportInsecureSkipVerify(t *testing.T) {
-	for _, insecure := range []bool{false, true} {
-		tr := newOCMTransport(insecure)
-		if tr.TLSClientConfig == nil {
-			t.Fatalf("insecure=%v: TLSClientConfig is nil", insecure)
-		}
-		if tr.TLSClientConfig.InsecureSkipVerify != insecure {
-			t.Errorf("insecure=%v: InsecureSkipVerify = %v, want %v", insecure, tr.TLSClientConfig.InsecureSkipVerify, insecure)
-		}
-	}
-}
-
-// TestNewOCMTransportFallback covers the branch where http.DefaultTransport is
-// not a *http.Transport, so the helper builds the transport directly.
-func TestNewOCMTransportFallback(t *testing.T) {
-	orig := http.DefaultTransport
-	t.Cleanup(func() { http.DefaultTransport = orig })
-	http.DefaultTransport = roundTripperFunc(func(*http.Request) (*http.Response, error) {
-		return nil, nil
+func TestClientWithConfigPolicy(t *testing.T) {
+	trusted := NewClientWithConfig(client.TransportConfig{
+		Timeout:  5 * time.Second,
+		Insecure: true,
 	})
-
-	tr := newOCMTransport(true)
-	if tr.Proxy == nil {
-		t.Fatal("fallback transport Proxy must not be nil")
-	}
-	if got, want := reflect.ValueOf(tr.Proxy).Pointer(), reflect.ValueOf(http.ProxyFromEnvironment).Pointer(); got != want {
-		t.Error("fallback transport Proxy must be http.ProxyFromEnvironment")
-	}
-	if tr.TLSClientConfig == nil || !tr.TLSClientConfig.InsecureSkipVerify {
-		t.Error("fallback transport must set InsecureSkipVerify=true")
-	}
-}
-
-// TestNewClientUsesOCMTransport confirms the public constructor wires the
-// proxy-aware transport and request timeout into the HTTP client.
-func TestNewClientUsesOCMTransport(t *testing.T) {
-	c := NewClient(7*time.Second, true)
-	if c.client.Timeout != 7*time.Second {
-		t.Errorf("client timeout: got %v, want %v", c.client.Timeout, 7*time.Second)
-	}
-	tr, ok := c.client.Transport.(*http.Transport)
+	tr, ok := trusted.client.Transport.(*http.Transport)
 	if !ok {
-		t.Fatalf("client transport: got %T, want *http.Transport", c.client.Transport)
+		t.Fatalf("trusted transport: got %T, want *http.Transport", trusted.client.Transport)
 	}
 	if tr.Proxy == nil {
-		t.Fatal("client transport Proxy must not be nil")
-	}
-}
-
-func TestIsPublicIP(t *testing.T) {
-	t.Parallel()
-
-	tests := []struct {
-		name string
-		ip   string
-		want bool
-	}{
-		{name: "public v4", ip: "93.184.216.34", want: true},
-		{name: "public v6", ip: "2606:2800:220:1:248:1893:25c8:1946", want: true},
-		{name: "loopback", ip: "127.0.0.1", want: false},
-		{name: "loopback v6", ip: "::1", want: false},
-		{name: "private 10/8", ip: "10.1.2.3", want: false},
-		{name: "private 172.16/12", ip: "172.16.5.4", want: false},
-		{name: "private 192.168/16", ip: "192.168.1.1", want: false},
-		{name: "cloud metadata service", ip: "169.254.169.254", want: false},
-		{name: "unspecified", ip: "0.0.0.0", want: false},
-		{name: "multicast", ip: "224.0.0.1", want: false},
-		{name: "unique local v6", ip: "fd00::1", want: false},
-		{name: "link local v6", ip: "fe80::1", want: false},
-		{name: "carrier-grade nat", ip: "100.64.0.1", want: false},
-		{name: "just outside carrier-grade nat", ip: "100.128.0.1", want: true},
-		{name: "ipv4-mapped metadata service", ip: "::ffff:169.254.169.254", want: false},
-		{name: "ipv4-mapped loopback", ip: "::ffff:127.0.0.1", want: false},
-		{name: "nat64 metadata service", ip: "64:ff9b::a9fe:a9fe", want: false},
-		{name: "nat64 loopback", ip: "64:ff9b::7f00:1", want: false},
-		{name: "nat64 public address", ip: "64:ff9b::5db8:d822", want: true},
+		t.Fatal("NewClientWithConfig must remain trusted and keep a proxy callback")
 	}
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			ip := net.ParseIP(tt.ip)
-			if ip == nil {
-				t.Fatalf("could not parse %q", tt.ip)
-			}
-			if got := isPublicIP(ip); got != tt.want {
-				t.Errorf("isPublicIP(%s) = %v, want %v", tt.ip, got, tt.want)
-			}
-		})
+	pub := NewPublicOnlyClientWithConfig(client.TransportConfig{
+		Timeout:  5 * time.Second,
+		Insecure: true,
+	})
+	ptr, ok := pub.client.Transport.(*http.Transport)
+	if !ok {
+		t.Fatalf("public-only transport: got %T, want *http.Transport", pub.client.Transport)
 	}
-}
-
-func TestRefuseNonPublicAddr(t *testing.T) {
-	t.Parallel()
-
-	tests := []struct {
-		name    string
-		address string
-		wantErr bool
-	}{
-		{name: "public host", address: "93.184.216.34:443"},
-		{name: "loopback", address: "127.0.0.1:8080", wantErr: true},
-		{name: "metadata service", address: "169.254.169.254:80", wantErr: true},
-		{name: "private range", address: "10.0.0.5:9000", wantErr: true},
-		{name: "ipv6 loopback", address: "[::1]:8080", wantErr: true},
-		{name: "no port", address: "93.184.216.34", wantErr: true},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			err := refuseNonPublicAddr("tcp", tt.address, nil)
-			if (err != nil) != tt.wantErr {
-				t.Errorf("refuseNonPublicAddr(%q) error = %v, wantErr %v", tt.address, err, tt.wantErr)
-			}
-		})
+	if ptr.Proxy != nil {
+		t.Fatal("NewPublicOnlyClientWithConfig must be public-only and must not use a proxy")
 	}
 }
 
@@ -351,6 +289,7 @@ func TestPublicOnlyClientRefusesInternalHosts(t *testing.T) {
 	}))
 	defer srv.Close()
 
+	cfg := client.TransportConfig{Timeout: 5 * time.Second, Insecure: true}
 	tests := []struct {
 		name    string
 		client  *OCMClient
@@ -358,6 +297,8 @@ func TestPublicOnlyClientRefusesInternalHosts(t *testing.T) {
 	}{
 		{name: "public-only client refuses the loopback target", client: NewPublicOnlyClient(5*time.Second, true), wantErr: true},
 		{name: "plain client still reaches it", client: NewClient(5*time.Second, true), wantErr: false},
+		{name: "NewPublicOnlyClientWithConfig refuses the loopback target", client: NewPublicOnlyClientWithConfig(cfg), wantErr: true},
+		{name: "NewClientWithConfig still reaches it", client: NewClientWithConfig(cfg), wantErr: false},
 	}
 
 	for _, tt := range tests {
