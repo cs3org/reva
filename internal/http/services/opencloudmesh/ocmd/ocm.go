@@ -52,6 +52,12 @@ type config struct {
 	// OCMClientInsecure skips TLS verification when probing a remote provider's
 	// discovery endpoint. Off by default; turning it on exposes discovery to MITM.
 	OCMClientInsecure bool `mapstructure:"ocm_client_insecure"`
+	// OCMClientTimeout is the per-request timeout, in seconds, for probing a
+	// remote provider's discovery endpoint. Defaults to 10 when unset or zero.
+	OCMClientTimeout int `mapstructure:"ocm_client_timeout"`
+	// AllowLoopbackFederation lets inbound share discovery dial loopback. Off
+	// by default; only local two-provider integration topologies should enable it.
+	AllowLoopbackFederation bool `mapstructure:"allow_loopback_federation"`
 }
 
 func (c *config) ApplyDefaults() {
@@ -61,6 +67,9 @@ func (c *config) ApplyDefaults() {
 	}
 	if c.TokenManager == "" {
 		c.TokenManager = "jwt"
+	}
+	if c.OCMClientTimeout == 0 {
+		c.OCMClientTimeout = 10
 	}
 }
 
