@@ -811,9 +811,9 @@ func TestNewReceivedDriverPublicOnly(t *testing.T) {
 	if d.webdavTransport == nil {
 		t.Fatal("New() did not store a WebDAV round tripper")
 	}
-	tr, ok := d.webdavTransport.(*http.Transport)
-	if !ok {
-		t.Fatalf("webdav transport: got %T, want *http.Transport", d.webdavTransport)
+	tr := client.HTTPTransport(d.webdavTransport)
+	if tr == nil {
+		t.Fatalf("webdav transport: got %T, want *http.Transport or public-only wrapper", d.webdavTransport)
 	}
 	if tr.Proxy != nil {
 		t.Fatal("received WebDAV round tripper must be public-only and must not use a proxy")

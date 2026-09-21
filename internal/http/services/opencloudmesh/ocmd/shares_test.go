@@ -334,9 +334,9 @@ func TestSharesHandlerInitCreatesPublicOnlyClient(t *testing.T) {
 	if h.ocmClient.client.Timeout != wantDefaultTimeout {
 		t.Errorf("timeout = %v, want %v", h.ocmClient.client.Timeout, wantDefaultTimeout)
 	}
-	tr, ok := h.ocmClient.client.Transport.(*http.Transport)
-	if !ok {
-		t.Fatalf("transport: got %T, want *http.Transport", h.ocmClient.client.Transport)
+	tr := client.HTTPTransport(h.ocmClient.client.Transport)
+	if tr == nil {
+		t.Fatalf("transport: got %T, want *http.Transport or public-only wrapper", h.ocmClient.client.Transport)
 	}
 	if tr.Proxy != nil {
 		t.Fatal("default inbound discovery client must be public-only and must not use a proxy")
@@ -350,9 +350,9 @@ func TestSharesHandlerInitCreatesPublicOnlyClient(t *testing.T) {
 	if h.webdavTransport == nil {
 		t.Fatal("init() did not store a WebDAV round tripper")
 	}
-	wtr, ok := h.webdavTransport.(*http.Transport)
-	if !ok {
-		t.Fatalf("webdav transport: got %T, want *http.Transport", h.webdavTransport)
+	wtr := client.HTTPTransport(h.webdavTransport)
+	if wtr == nil {
+		t.Fatalf("transport: got %T, want *http.Transport or public-only wrapper", h.webdavTransport)
 	}
 	if wtr.Proxy != nil {
 		t.Fatal("default inbound WebDAV round tripper must be public-only and must not use a proxy")

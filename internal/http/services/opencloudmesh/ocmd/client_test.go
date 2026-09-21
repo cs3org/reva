@@ -244,9 +244,9 @@ func TestCompatibilityConstructorsTimeoutAndInsecure(t *testing.T) {
 			if tt.ocm.client.Timeout != tt.timeout {
 				t.Errorf("timeout = %v, want %v", tt.ocm.client.Timeout, tt.timeout)
 			}
-			tr, ok := tt.ocm.client.Transport.(*http.Transport)
-			if !ok {
-				t.Fatalf("transport: got %T, want *http.Transport", tt.ocm.client.Transport)
+			tr := client.HTTPTransport(tt.ocm.client.Transport)
+			if tr == nil {
+				t.Fatalf("transport: got %T, want *http.Transport or public-only wrapper", tt.ocm.client.Transport)
 			}
 			if tr.TLSClientConfig == nil {
 				t.Fatal("TLSClientConfig is nil")
@@ -275,9 +275,9 @@ func TestClientWithConfigPolicy(t *testing.T) {
 		Timeout:  5 * time.Second,
 		Insecure: true,
 	})
-	ptr, ok := pub.client.Transport.(*http.Transport)
-	if !ok {
-		t.Fatalf("public-only transport: got %T, want *http.Transport", pub.client.Transport)
+	ptr := client.HTTPTransport(pub.client.Transport)
+	if ptr == nil {
+		t.Fatalf("transport: got %T, want *http.Transport or public-only wrapper", pub.client.Transport)
 	}
 	if ptr.Proxy != nil {
 		t.Fatal("NewPublicOnlyClientWithConfig must be public-only and must not use a proxy")
