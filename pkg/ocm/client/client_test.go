@@ -102,37 +102,23 @@ func TestPublicOnlyClientHasNoProxy(t *testing.T) {
 	t.Parallel()
 
 	c := NewPublicOnlyHTTPClient(TransportConfig{Timeout: time.Second})
-	tr, ok := c.Transport.(*http.Transport)
-	if !ok {
-		t.Fatalf("public-only transport: got %T, want *http.Transport", c.Transport)
-	}
+	tr := requirePublicTransport(t, c.Transport)
 	if tr.Proxy != nil {
 		t.Error("public-only client must not use a proxy")
 	}
 
 	rt := NewPublicOnlyRoundTripper(TransportConfig{Timeout: time.Second})
-	rtr, ok := rt.(*http.Transport)
-	if !ok {
-		t.Fatalf("public-only round tripper: got %T, want *http.Transport", rt)
-	}
+	rtr := requirePublicTransport(t, rt)
 	if rtr.Proxy != nil {
 		t.Error("public-only round tripper must not use a proxy")
 	}
 
 	explicit := TransportConfig{Timeout: time.Second, UseEnvProxy: false}
-	explicitClient := NewPublicOnlyHTTPClient(explicit)
-	explicitTr, ok := explicitClient.Transport.(*http.Transport)
-	if !ok {
-		t.Fatalf("explicit false transport: got %T, want *http.Transport", explicitClient.Transport)
-	}
+	explicitTr := requirePublicTransport(t, NewPublicOnlyHTTPClient(explicit).Transport)
 	if explicitTr.Proxy != nil {
 		t.Error("UseEnvProxy false must leave the public-only client Proxy nil")
 	}
-	explicitRT := NewPublicOnlyRoundTripper(explicit)
-	explicitRTR, ok := explicitRT.(*http.Transport)
-	if !ok {
-		t.Fatalf("explicit false round tripper: got %T, want *http.Transport", explicitRT)
-	}
+	explicitRTR := requirePublicTransport(t, NewPublicOnlyRoundTripper(explicit))
 	if explicitRTR.Proxy != nil {
 		t.Error("UseEnvProxy false must leave the public-only round tripper Proxy nil")
 	}
@@ -145,10 +131,7 @@ func TestPublicOnlyUseEnvProxyInstallsProxyFromEnvironment(t *testing.T) {
 	want := reflect.ValueOf(http.ProxyFromEnvironment).Pointer()
 
 	c := NewPublicOnlyHTTPClient(cfg)
-	tr, ok := c.Transport.(*http.Transport)
-	if !ok {
-		t.Fatalf("public-only transport: got %T, want *http.Transport", c.Transport)
-	}
+	tr := requirePublicTransport(t, c.Transport)
 	if tr.Proxy == nil {
 		t.Fatal("UseEnvProxy true must install a proxy callback")
 	}
@@ -163,10 +146,7 @@ func TestPublicOnlyUseEnvProxyInstallsProxyFromEnvironment(t *testing.T) {
 	}
 
 	rt := NewPublicOnlyRoundTripper(cfg)
-	rtr, ok := rt.(*http.Transport)
-	if !ok {
-		t.Fatalf("public-only round tripper: got %T, want *http.Transport", rt)
-	}
+	rtr := requirePublicTransport(t, rt)
 	if rtr.Proxy == nil {
 		t.Fatal("UseEnvProxy true round tripper must install a proxy callback")
 	}
@@ -286,10 +266,7 @@ func TestPublicOnlyDirectModeDialsTarget(t *testing.T) {
 	}
 
 	direct := NewPublicOnlyHTTPClient(cfg)
-	tr, ok := direct.Transport.(*http.Transport)
-	if !ok {
-		t.Fatalf("public-only transport: got %T, want *http.Transport", direct.Transport)
-	}
+	tr := requirePublicTransport(t, direct.Transport)
 	if tr.Proxy != nil {
 		t.Fatal("direct mode must leave Proxy nil")
 	}
@@ -356,6 +333,51 @@ func TestPublicOnlyEnvProxySnapshots(t *testing.T) {
 	})
 }
 
+func TestTLSFloor(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name     string
+		insecure bool
+	}{
+		{name: "secure"},
+		{name: "insecure retains floor", insecure: true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			cfg := TransportConfig{Timeout: time.Second, Insecure: tt.insecure}
+
+			trusted := NewTrustedHTTPClient(cfg)
+			trustedTr, ok := trusted.Transport.(*http.Transport)
+			if !ok {
+				t.Fatalf("trusted transport: got %T, want *http.Transport", trusted.Transport)
+			}
+			assertTLSFloor(t, trustedTr, tt.insecure)
+
+			publicTr := requirePublicTransport(t, NewPublicOnlyHTTPClient(cfg).Transport)
+			assertTLSFloor(t, publicTr, tt.insecure)
+
+			rtTr := requirePublicTransport(t, NewPublicOnlyRoundTripper(cfg))
+			assertTLSFloor(t, rtTr, tt.insecure)
+		})
+	}
+}
+
+func assertTLSFloor(t *testing.T, tr *http.Transport, insecure bool) {
+	t.Helper()
+	if tr.TLSClientConfig == nil {
+		t.Fatal("TLSClientConfig is nil")
+	}
+	if tr.TLSClientConfig.MinVersion != tls.VersionTLS12 {
+		t.Errorf("MinVersion = %v, want tls.VersionTLS12", tr.TLSClientConfig.MinVersion)
+	}
+	if tr.TLSClientConfig.InsecureSkipVerify != insecure {
+		t.Errorf("InsecureSkipVerify = %v, want %v", tr.TLSClientConfig.InsecureSkipVerify, insecure)
+	}
+}
+
 func TestIsPublicIP(t *testing.T) {
 	t.Parallel()
 
@@ -373,16 +395,58 @@ func TestIsPublicIP(t *testing.T) {
 		{name: "private 192.168/16", ip: "192.168.1.1", want: false},
 		{name: "cloud metadata service", ip: "169.254.169.254", want: false},
 		{name: "unspecified", ip: "0.0.0.0", want: false},
+		{name: "this network /8 start", ip: "0.0.0.0", want: false},
+		{name: "this network /8 inside", ip: "0.0.0.1", want: false},
+		{name: "this network /8 last", ip: "0.255.255.255", want: false},
+		{name: "this network /8 outside", ip: "1.0.0.0", want: true},
 		{name: "multicast", ip: "224.0.0.1", want: false},
 		{name: "unique local v6", ip: "fd00::1", want: false},
 		{name: "link local v6", ip: "fe80::1", want: false},
 		{name: "carrier-grade nat", ip: "100.64.0.1", want: false},
 		{name: "just outside carrier-grade nat", ip: "100.128.0.1", want: true},
+		{name: "benchmark /15 start", ip: "198.18.0.0", want: false},
+		{name: "benchmark /15 last", ip: "198.19.255.255", want: false},
+		{name: "benchmark /15 outside", ip: "198.20.0.0", want: true},
+		{name: "ietf protocol /24 start", ip: "192.0.0.0", want: false},
+		{name: "ietf protocol neighbor 8", ip: "192.0.0.8", want: false},
+		{name: "pcp anycast exception", ip: "192.0.0.9", want: true},
+		{name: "turn anycast exception", ip: "192.0.0.10", want: true},
+		{name: "ietf protocol neighbor 11", ip: "192.0.0.11", want: false},
+		{name: "ietf protocol /24 last", ip: "192.0.0.255", want: false},
+		{name: "ietf protocol /24 outside", ip: "192.0.1.1", want: true},
+		{name: "test-net-1 start", ip: "192.0.2.0", want: false},
+		{name: "test-net-1 last", ip: "192.0.2.255", want: false},
+		{name: "test-net-1 outside", ip: "192.0.3.0", want: true},
+		{name: "test-net-2 start", ip: "198.51.100.0", want: false},
+		{name: "test-net-2 last", ip: "198.51.100.255", want: false},
+		{name: "test-net-2 outside", ip: "198.51.101.0", want: true},
+		{name: "test-net-3 start", ip: "203.0.113.0", want: false},
+		{name: "test-net-3 last", ip: "203.0.113.255", want: false},
+		{name: "test-net-3 outside", ip: "203.0.114.0", want: true},
+		{name: "reserved v4 /4 start", ip: "240.0.0.0", want: false},
+		{name: "reserved v4 /4 last", ip: "255.255.255.255", want: false},
+		{name: "reserved v4 /4 outside", ip: "223.255.255.255", want: true},
+		{name: "local-use nat64 start", ip: "64:ff9b:1::", want: false},
+		{name: "local-use nat64 last", ip: "64:ff9b:1:ffff:ffff:ffff:ffff:ffff", want: false},
+		{name: "local-use nat64 outside", ip: "64:ff9b:2::", want: true},
+		{name: "documentation v6 start", ip: "2001:db8::", want: false},
+		{name: "documentation v6 last", ip: "2001:db8:ffff:ffff:ffff:ffff:ffff:ffff", want: false},
+		{name: "documentation v6 outside", ip: "2001:db9::", want: true},
 		{name: "ipv4-mapped metadata service", ip: "::ffff:169.254.169.254", want: false},
 		{name: "ipv4-mapped loopback", ip: "::ffff:127.0.0.1", want: false},
+		{name: "ipv4-mapped public", ip: "::ffff:93.184.216.34", want: true},
+		{name: "ipv4-mapped pcp anycast", ip: "::ffff:192.0.0.9", want: true},
+		{name: "ipv4-mapped turn anycast", ip: "::ffff:192.0.0.10", want: true},
+		{name: "ipv4-mapped ietf neighbor", ip: "::ffff:192.0.0.8", want: false},
+		{name: "ipv4-mapped test-net-1", ip: "::ffff:192.0.2.1", want: false},
+		{name: "ipv4-mapped this network", ip: "::ffff:0.1.2.3", want: false},
 		{name: "nat64 metadata service", ip: "64:ff9b::a9fe:a9fe", want: false},
 		{name: "nat64 loopback", ip: "64:ff9b::7f00:1", want: false},
 		{name: "nat64 public address", ip: "64:ff9b::5db8:d822", want: true},
+		{name: "nat64 pcp anycast", ip: "64:ff9b::c000:9", want: true},
+		{name: "nat64 test-net-1", ip: "64:ff9b::c000:201", want: false},
+		{name: "local-use nat64 would-be public embed", ip: "64:ff9b:1::5db8:d822", want: false},
+		{name: "local-use nat64 would-be pcp embed", ip: "64:ff9b:1::c000:9", want: false},
 	}
 
 	for _, tt := range tests {
@@ -410,6 +474,8 @@ func TestWellKnownNAT64Unwrap(t *testing.T) {
 		{name: "nat64 metadata service", ip: "64:ff9b::a9fe:a9fe", want: false},
 		{name: "nat64 loopback", ip: "64:ff9b::7f00:1", want: false},
 		{name: "nat64 public address", ip: "64:ff9b::5db8:d822", want: true},
+		{name: "nat64 pcp anycast", ip: "64:ff9b::c000:9", want: true},
+		{name: "nat64 test-net-1", ip: "64:ff9b::c000:201", want: false},
 	}
 
 	for _, tt := range tests {
@@ -430,6 +496,22 @@ func TestWellKnownNAT64Unwrap(t *testing.T) {
 	}
 }
 
+func TestLocalUseNAT64IsNotUnwrapped(t *testing.T) {
+	t.Parallel()
+
+	ip, err := netip.ParseAddr("64:ff9b:1::5db8:d822")
+	if err != nil {
+		t.Fatalf("parse: %v", err)
+	}
+	if isPublicIP(ip) {
+		t.Fatal("local-use NAT64 must be denied wholesale")
+	}
+	got := effectiveAddr(ip)
+	if got.Is4() {
+		t.Fatalf("local-use NAT64 unwrap of %s = %s, want IPv6", ip, got)
+	}
+}
+
 func TestPublicOnlyDialAddressPolicy(t *testing.T) {
 	t.Parallel()
 
@@ -446,6 +528,15 @@ func TestPublicOnlyDialAddressPolicy(t *testing.T) {
 		{name: "link-local metadata", address: "169.254.169.254:80", wantErr: true},
 		{name: "link-local v6", address: "[fe80::1]:80", wantErr: true},
 		{name: "cgnat", address: "100.64.0.1:443", wantErr: true},
+		{name: "this network", address: "0.1.2.3:80", wantErr: true},
+		{name: "benchmark", address: "198.18.0.1:443", wantErr: true},
+		{name: "ietf protocol", address: "192.0.0.1:443", wantErr: true},
+		{name: "pcp anycast", address: "192.0.0.9:443"},
+		{name: "turn anycast", address: "192.0.0.10:443"},
+		{name: "test-net-1", address: "192.0.2.1:443", wantErr: true},
+		{name: "reserved v4", address: "240.0.0.1:443", wantErr: true},
+		{name: "documentation v6", address: "[2001:db8::1]:443", wantErr: true},
+		{name: "local-use nat64", address: "[64:ff9b:1::1]:443", wantErr: true},
 		{name: "ipv4-mapped private", address: "[::ffff:10.1.2.3]:443", wantErr: true},
 		{name: "ipv4-mapped loopback", address: "[::ffff:127.0.0.1]:8080", wantErr: true},
 		{name: "no port", address: "93.184.216.34", wantErr: true},
@@ -511,6 +602,12 @@ func TestBlockedDialsWrapErrPolicyViolation(t *testing.T) {
 		"169.254.169.254:80",
 		"100.64.0.1:443",
 		"[::ffff:192.168.1.1]:443",
+		"0.1.2.3:80",
+		"192.0.2.1:443",
+		"198.18.0.1:443",
+		"240.0.0.1:443",
+		"[2001:db8::1]:443",
+		"[64:ff9b:1::1]:443",
 	}
 
 	control := refuseNonPublicAddr(destinationPolicy{})
@@ -538,6 +635,8 @@ func TestPublicOnlyConstructorsEnforceSameAddressPolicy(t *testing.T) {
 		"169.254.1.1:9",
 		"100.64.0.1:9",
 		"[::ffff:192.168.0.1]:9",
+		"192.0.2.1:9",
+		"[2001:db8::1]:9",
 	}
 
 	for _, address := range blocked {
@@ -634,9 +733,9 @@ func TestTrustedClientIgnoresFederationCIDRs(t *testing.T) {
 		AllowLoopback:          false,
 		AllowedFederationCIDRs: cidrs,
 	})
-	publicTr, ok := public.Transport.(*http.Transport)
-	if !ok {
-		t.Fatalf("public-only transport: got %T, want *http.Transport", public.Transport)
+	publicTr := HTTPTransport(public.Transport)
+	if publicTr == nil {
+		t.Fatalf("public-only transport: got %T, want *http.Transport or public-only wrapper", public.Transport)
 	}
 	if err := dialThrough(t, publicTr, ln.Addr().String()); !errors.Is(err, ErrPolicyViolation) {
 		t.Fatalf("public-only dial %s = %v, want ErrPolicyViolation", ln.Addr().String(), err)
@@ -657,9 +756,9 @@ func TestPublicOnlyConstructorsKeepGuardedDefaultDeny(t *testing.T) {
 	}
 
 	for _, rt := range []http.RoundTripper{clientRT, tripperRT} {
-		tr, ok := rt.(*http.Transport)
-		if !ok {
-			t.Fatalf("transport: got %T, want *http.Transport", rt)
+		tr := HTTPTransport(rt)
+		if tr == nil {
+			t.Fatalf("transport: got %T, want *http.Transport or public-only wrapper", rt)
 		}
 		if tr.DialContext == nil {
 			t.Fatal("public constructor must install a guarded DialContext")
@@ -972,6 +1071,9 @@ func TestTrustedConstructionDoesNotMutateExistingTLSConfig(t *testing.T) {
 	if shared.InsecureSkipVerify {
 		t.Error("pre-existing TLS config InsecureSkipVerify was mutated")
 	}
+	if shared.MinVersion != 0 {
+		t.Error("pre-existing TLS config MinVersion was mutated")
+	}
 	if shared.ServerName != "ocm.example" {
 		t.Error("pre-existing TLS config ServerName was mutated")
 	}
@@ -981,17 +1083,329 @@ func TestTrustedConstructionDoesNotMutateExistingTLSConfig(t *testing.T) {
 	if !tr.TLSClientConfig.InsecureSkipVerify {
 		t.Error("constructed client must apply Insecure on its own TLS config")
 	}
+	if tr.TLSClientConfig.MinVersion != tls.VersionTLS12 {
+		t.Error("constructed client must set the TLS 1.2 floor on its own TLS config")
+	}
 	if tr.TLSClientConfig.ServerName != "ocm.example" {
 		t.Error("cloned TLS config should keep ServerName")
 	}
 }
 
+func TestPublicOnlySchemePolicy(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name          string
+		rawURL        string
+		allowLoopback bool
+		redirected    bool
+		wantAllowed   bool
+	}{
+		{name: "https allowed", rawURL: "https://example.com/", wantAllowed: true},
+		{name: "public http rejected", rawURL: "http://93.184.216.34/"},
+		{name: "literal loopback http without opt-in", rawURL: "http://127.0.0.1/"},
+		{name: "literal loopback http opt-in", rawURL: "http://127.0.0.1/", allowLoopback: true, wantAllowed: true},
+		{name: "literal loopback v6 http opt-in", rawURL: "http://[::1]/", allowLoopback: true, wantAllowed: true},
+		{name: "loopback opt-in does not allow public http", rawURL: "http://93.184.216.34/", allowLoopback: true, wantAllowed: false},
+		{name: "hostname localhost rejected", rawURL: "http://localhost/", allowLoopback: true},
+		{name: "hostname loopback.local rejected", rawURL: "http://loopback.local/", allowLoopback: true},
+		{name: "unknown scheme rejected", rawURL: "ftp://127.0.0.1/", allowLoopback: true},
+		{
+			name:          "https-to-http redirect rejected even to loopback",
+			rawURL:        "http://127.0.0.1/",
+			allowLoopback: true,
+			redirected:    true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			req := mustRequest(t, tt.rawURL)
+			if tt.redirected {
+				prior := mustRequest(t, "https://example.com/")
+				req.Response = &http.Response{StatusCode: http.StatusFound, Request: prior}
+			}
+			err := checkRequestScheme(req, tt.allowLoopback)
+			if tt.wantAllowed {
+				if err != nil {
+					t.Fatalf("checkRequestScheme() error = %v, want nil", err)
+				}
+				return
+			}
+			if !errors.Is(err, ErrPolicyViolation) {
+				t.Fatalf("checkRequestScheme() error = %v, want errors.Is ErrPolicyViolation", err)
+			}
+		})
+	}
+}
+
+func TestNewPublicOnlyRoundTripperSchemePolicy(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name          string
+		rawURL        string
+		allowLoopback bool
+		redirected    bool
+		wantPolicyErr bool
+		wantDial      bool
+	}{
+		{name: "https-only production", rawURL: "https://example.com/", wantDial: true},
+		{name: "production http rejected", rawURL: "http://example.com/", wantPolicyErr: true},
+		{name: "public http rejected", rawURL: "http://93.184.216.34/", wantPolicyErr: true},
+		{name: "loopback http opt-in initial", rawURL: "http://127.0.0.1/", allowLoopback: true, wantDial: true},
+		{
+			name:          "loopback http rejected when redirected",
+			rawURL:        "http://127.0.0.1/",
+			allowLoopback: true,
+			redirected:    true,
+			wantPolicyErr: true,
+		},
+		{name: "hostname localhost rejected", rawURL: "http://localhost/", allowLoopback: true, wantPolicyErr: true},
+		{name: "unknown scheme rejected before dial", rawURL: "ftp://127.0.0.1/", wantPolicyErr: true},
+		{name: "gopher scheme rejected before dial", rawURL: "gopher://127.0.0.1/", wantPolicyErr: true},
+		{name: "file scheme rejected before dial", rawURL: "file:///etc/hosts", wantPolicyErr: true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			rt := NewPublicOnlyRoundTripper(TransportConfig{
+				Timeout:       time.Second,
+				AllowLoopback: tt.allowLoopback,
+			})
+			tr := requirePublicTransport(t, rt)
+			probe := installFakeDial(tr)
+
+			req := mustRequest(t, tt.rawURL)
+			if tt.redirected {
+				prior := mustRequest(t, "https://example.com/")
+				req.Response = &http.Response{StatusCode: http.StatusFound, Request: prior}
+			}
+			_, err := rt.RoundTrip(req)
+			if err == nil {
+				t.Fatal("RoundTrip() error = nil, want dial or policy error")
+			}
+			if tt.wantPolicyErr != errors.Is(err, ErrPolicyViolation) {
+				t.Errorf("errors.Is(ErrPolicyViolation) = %v, want %v (err=%v)",
+					errors.Is(err, ErrPolicyViolation), tt.wantPolicyErr, err)
+			}
+			if tt.wantDial != (probe.n > 0) {
+				t.Errorf("dial attempts = %d, wantDial %v", probe.n, tt.wantDial)
+			}
+			if !tt.wantDial && probe.n != 0 {
+				t.Errorf("denied request still dialed (%d times)", probe.n)
+			}
+		})
+	}
+}
+
+func TestNewPublicOnlyHTTPClientSchemePolicy(t *testing.T) {
+	t.Parallel()
+
+	c := NewPublicOnlyHTTPClient(TransportConfig{Timeout: time.Second})
+	tr := requirePublicTransport(t, c.Transport)
+	probe := installFakeDial(tr)
+
+	req := mustRequest(t, "https://example.com/")
+	_, err := c.Transport.RoundTrip(req)
+	if errors.Is(err, ErrPolicyViolation) {
+		t.Fatalf("https RoundTrip() error = %v, must not be a scheme violation", err)
+	}
+	if probe.n == 0 {
+		t.Fatal("https must use the default transport path")
+	}
+
+	probe.n = 0
+	req = mustRequest(t, "http://93.184.216.34/")
+	_, err = c.Transport.RoundTrip(req)
+	if !errors.Is(err, ErrPolicyViolation) {
+		t.Fatalf("http RoundTrip() error = %v, want ErrPolicyViolation", err)
+	}
+	if probe.n != 0 {
+		t.Fatalf("rejected http still dialed (%d times)", probe.n)
+	}
+}
+
+func TestPublicOnlyCheckRedirect(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name          string
+		allowLoopback bool
+		rawURL        string
+		viaHops       int
+		wantErr       bool
+	}{
+		{name: "https hostname allowed", rawURL: "https://example.com/next", viaHops: 1},
+		{name: "http redirect rejected", rawURL: "http://127.0.0.1/next", viaHops: 1, wantErr: true},
+		{
+			name:          "http redirect to loopback rejected",
+			rawURL:        "http://127.0.0.1/next",
+			allowLoopback: true,
+			viaHops:       1,
+			wantErr:       true,
+		},
+		{name: "private https ip rejected", rawURL: "https://192.168.1.1/", viaHops: 1, wantErr: true},
+		{name: "loopback https ip rejected", rawURL: "https://127.0.0.1/", viaHops: 1, wantErr: true},
+		{name: "loopback https ip opt-in", rawURL: "https://127.0.0.1/", allowLoopback: true, viaHops: 1},
+		{name: "public https ip allowed", rawURL: "https://93.184.216.34/", viaHops: 1},
+		{name: "pcp anycast https allowed", rawURL: "https://192.0.0.9/", viaHops: 1},
+		{name: "test-net https rejected", rawURL: "https://192.0.2.1/", viaHops: 1, wantErr: true},
+		{name: "nine hops allowed", rawURL: "https://example.com/next", viaHops: 9},
+		{name: "ten hops rejected", rawURL: "https://example.com/next", viaHops: 10, wantErr: true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			c := NewPublicOnlyHTTPClient(TransportConfig{
+				Timeout:       time.Second,
+				AllowLoopback: tt.allowLoopback,
+			})
+			if c.CheckRedirect == nil {
+				t.Fatal("NewPublicOnlyHTTPClient must install CheckRedirect")
+			}
+			req := mustRequest(t, tt.rawURL)
+			via := make([]*http.Request, tt.viaHops)
+			for i := range via {
+				via[i] = mustRequest(t, "https://example.com/")
+			}
+			err := c.CheckRedirect(req, via)
+			if (err != nil) != tt.wantErr {
+				t.Fatalf("CheckRedirect() error = %v, wantErr %v", err, tt.wantErr)
+			}
+			if tt.wantErr && !errors.Is(err, ErrPolicyViolation) {
+				t.Errorf("CheckRedirect() error = %v, want errors.Is ErrPolicyViolation", err)
+			}
+		})
+	}
+}
+
+func TestPublicOnlyRedirectDowngradeViaClient(t *testing.T) {
+	t.Parallel()
+
+	stub := &redirectStub{status: http.StatusFound, location: "http://127.0.0.1/"}
+	c := NewPublicOnlyHTTPClient(TransportConfig{Timeout: time.Second, AllowLoopback: true})
+	c.Transport = stub
+
+	req := mustRequest(t, "https://example.com/")
+	_, err := c.Do(req)
+	if !errors.Is(err, ErrPolicyViolation) {
+		t.Fatalf("Do() error = %v, want errors.Is ErrPolicyViolation", err)
+	}
+	if stub.trips != 1 {
+		t.Errorf("trips = %d, want 1 (redirect must not be followed)", stub.trips)
+	}
+}
+
+func TestPublicOnlyRedirectLimitViaClient(t *testing.T) {
+	t.Parallel()
+
+	stub := &redirectStub{status: http.StatusFound, location: "https://example.com/next"}
+	c := NewPublicOnlyHTTPClient(TransportConfig{Timeout: time.Second})
+	c.Transport = stub
+
+	req := mustRequest(t, "https://example.com/")
+	_, err := c.Do(req)
+	if !errors.Is(err, ErrPolicyViolation) {
+		t.Fatalf("Do() error = %v, want errors.Is ErrPolicyViolation", err)
+	}
+	if stub.trips != 10 {
+		t.Errorf("trips = %d, want 10 (stop before the eleventh request)", stub.trips)
+	}
+}
+
+func TestPublicOnlyRedirectKeepsDefaultHeaderFiltering(t *testing.T) {
+	t.Parallel()
+
+	rec := &recordingTripper{
+		respond: func(_ *http.Request, n int) *http.Response {
+			if n == 0 {
+				h := make(http.Header)
+				h.Set("Location", "https://other.example/")
+				return &http.Response{
+					StatusCode: http.StatusFound,
+					Header:     h,
+					Body:       http.NoBody,
+				}
+			}
+			return &http.Response{StatusCode: http.StatusOK, Header: make(http.Header), Body: http.NoBody}
+		},
+	}
+	c := NewPublicOnlyHTTPClient(TransportConfig{Timeout: time.Second})
+	c.Transport = rec
+
+	req := mustRequest(t, "https://first.example/")
+	req.Header.Set("Authorization", "Bearer secret")
+	resp, err := c.Do(req)
+	if err != nil {
+		t.Fatalf("Do() error = %v", err)
+	}
+	_ = resp.Body.Close()
+	if len(rec.reqs) != 2 {
+		t.Fatalf("requests = %d, want 2", len(rec.reqs))
+	}
+	if rec.reqs[1].Header.Get("Authorization") != "" {
+		t.Fatal("redirected request must not copy Authorization across hosts")
+	}
+}
+
+func TestTrustedClientRetainsSchemeAndProxyBehavior(t *testing.T) {
+	t.Parallel()
+
+	c := NewTrustedHTTPClient(TransportConfig{Timeout: time.Second})
+	if _, ok := c.Transport.(*http.Transport); !ok {
+		t.Fatalf("trusted transport: got %T, want *http.Transport (unwrapped)", c.Transport)
+	}
+	if c.CheckRedirect != nil {
+		t.Fatal("trusted client must keep Go default redirect behavior")
+	}
+
+	stub := &stubRoundTripper{}
+	c.Transport = stub
+	req := mustRequest(t, "http://example.com/")
+	if _, err := c.Do(req); err != nil {
+		t.Fatalf("trusted client http Do() error = %v", err)
+	}
+	if stub.trips != 1 {
+		t.Errorf("trusted client inner trips = %d, want 1", stub.trips)
+	}
+
+	rec := &recordingTripper{
+		respond: func(_ *http.Request, n int) *http.Response {
+			if n == 0 {
+				h := make(http.Header)
+				h.Set("Location", "http://example.com/next")
+				return &http.Response{
+					StatusCode: http.StatusFound,
+					Header:     h,
+					Body:       http.NoBody,
+				}
+			}
+			return &http.Response{StatusCode: http.StatusOK, Header: make(http.Header), Body: http.NoBody}
+		},
+	}
+	c = NewTrustedHTTPClient(TransportConfig{Timeout: time.Second})
+	c.Transport = rec
+	req = mustRequest(t, "https://example.com/")
+	resp, err := c.Do(req)
+	if err != nil {
+		t.Fatalf("trusted client redirect Do() error = %v", err)
+	}
+	_ = resp.Body.Close()
+	if len(rec.reqs) != 2 {
+		t.Errorf("trusted client must follow http redirect, requests = %d", len(rec.reqs))
+	}
+	if rec.reqs[1].URL.Scheme != "http" {
+		t.Errorf("trusted follow-up scheme = %q, want http", rec.reqs[1].URL.Scheme)
+	}
+}
+
 func dialThrough(t *testing.T, rt http.RoundTripper, address string) error {
 	t.Helper()
-	tr, ok := rt.(*http.Transport)
-	if !ok {
-		t.Fatalf("got %T, want *http.Transport", rt)
-	}
+	tr := requirePublicTransport(t, rt)
 	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
 	defer cancel()
 	conn, err := tr.DialContext(ctx, "tcp", address)
@@ -999,6 +1413,92 @@ func dialThrough(t *testing.T, rt http.RoundTripper, address string) error {
 		_ = conn.Close()
 	}
 	return err
+}
+
+func requirePublicTransport(t *testing.T, rt http.RoundTripper) *http.Transport {
+	t.Helper()
+	tr := HTTPTransport(rt)
+	if tr == nil {
+		t.Fatalf("got %T, want *http.Transport or public-only wrapper", rt)
+	}
+	return tr
+}
+
+var errFakeDial = errors.New("fake dial")
+
+type dialProbe struct {
+	n int
+}
+
+func installFakeDial(tr *http.Transport) *dialProbe {
+	d := &dialProbe{}
+	tr.DialContext = func(context.Context, string, string) (net.Conn, error) {
+		d.n++
+		return nil, errFakeDial
+	}
+	return d
+}
+
+func mustRequest(t *testing.T, rawURL string) *http.Request {
+	t.Helper()
+	req, err := http.NewRequest(http.MethodGet, rawURL, nil)
+	if err != nil {
+		t.Fatalf("NewRequest(%q): %v", rawURL, err)
+	}
+	return req
+}
+
+type stubRoundTripper struct {
+	trips int
+}
+
+func (s *stubRoundTripper) RoundTrip(req *http.Request) (*http.Response, error) {
+	s.trips++
+	return &http.Response{
+		StatusCode: http.StatusOK,
+		Header:     make(http.Header),
+		Body:       http.NoBody,
+		Request:    req,
+	}, nil
+}
+
+type redirectStub struct {
+	status   int
+	location string
+	trips    int
+}
+
+func (r *redirectStub) RoundTrip(req *http.Request) (*http.Response, error) {
+	r.trips++
+	h := make(http.Header)
+	if r.location != "" {
+		h.Set("Location", r.location)
+	}
+	return &http.Response{
+		StatusCode: r.status,
+		Header:     h,
+		Body:       http.NoBody,
+		Request:    req,
+	}, nil
+}
+
+type recordingTripper struct {
+	reqs    []*http.Request
+	respond func(*http.Request, int) *http.Response
+}
+
+func (r *recordingTripper) RoundTrip(req *http.Request) (*http.Response, error) {
+	cloned := req.Clone(req.Context())
+	r.reqs = append(r.reqs, cloned)
+	resp := r.respond(req, len(r.reqs)-1)
+	resp.Request = req
+	if resp.Header == nil {
+		resp.Header = make(http.Header)
+	}
+	if resp.Body == nil {
+		resp.Body = http.NoBody
+	}
+	return resp, nil
 }
 
 const (
@@ -1024,10 +1524,7 @@ func doHTTPS(t *testing.T, c *http.Client, rawURL string) error {
 
 func setTestProxy(t *testing.T, rt http.RoundTripper, rawURL string) {
 	t.Helper()
-	tr, ok := rt.(*http.Transport)
-	if !ok {
-		t.Fatalf("got %T, want *http.Transport", rt)
-	}
+	tr := requirePublicTransport(t, rt)
 	u, err := url.Parse(rawURL)
 	if err != nil {
 		t.Fatal(err)
