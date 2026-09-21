@@ -9,4 +9,4 @@ topology; both local integration fixtures declare the exception. The
 discovery timeout is now configurable via `ocm_client_timeout` (seconds,
 default 10, preserving the existing inbound-discovery timeout).
 
-https://github.com/cs3org/reva/pull/5835
+https://github.com/cs3org/reva/pull/5836
