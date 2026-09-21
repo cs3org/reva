@@ -109,6 +109,7 @@ users = "fixtures/ocm-users.demo.json"
 address = "127.0.0.1:12345"
 
 [http.services.ocm]
+allow_loopback_federation = true
 
 [http.services.sciencemesh]
 provider_domain = "127.0.0.1:12345"

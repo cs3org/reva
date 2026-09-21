@@ -22,11 +22,14 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"regexp"
+	"strings"
 	"testing"
+	"time"
 
 	gateway "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
@@ -35,6 +38,8 @@ import (
 	ocmprovider "github.com/cs3org/go-cs3apis/cs3/ocm/provider/v1beta1"
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	"github.com/cs3org/reva/v3/internal/http/services/wellknown"
+	"github.com/cs3org/reva/v3/pkg/errtypes"
+	"github.com/cs3org/reva/v3/pkg/ocm/client"
 	"google.golang.org/grpc"
 )
 
@@ -71,7 +76,8 @@ func ocmDiscoveryServer(t *testing.T, proto, resType string) *httptest.Server {
 
 type sharesMockGW struct {
 	gateway.GatewayAPIClient
-	createResp *ocmincoming.CreateOCMIncomingShareResponse
+	createResp     *ocmincoming.CreateOCMIncomingShareResponse
+	rejectAccepted bool
 }
 
 func (m *sharesMockGW) IsProviderAllowed(context.Context, *ocmprovider.IsProviderAllowedRequest, ...grpc.CallOption) (*ocmprovider.IsProviderAllowedResponse, error) {
@@ -94,9 +100,26 @@ func (m *sharesMockGW) CreateOCMIncomingShare(context.Context, *ocmincoming.Crea
 }
 
 func (m *sharesMockGW) GetAcceptedUser(context.Context, *invitepb.GetAcceptedUserRequest, ...grpc.CallOption) (*invitepb.GetAcceptedUserResponse, error) {
+	code := rpc.Code_CODE_OK
+	if m.rejectAccepted {
+		code = rpc.Code_CODE_NOT_FOUND
+	}
 	return &invitepb.GetAcceptedUserResponse{
-		Status: &rpc.Status{Code: rpc.Code_CODE_OK},
+		Status: &rpc.Status{Code: code},
 	}, nil
+}
+
+func initSharesHandler(t *testing.T, c *config) *sharesHandler {
+	t.Helper()
+	if c == nil {
+		c = &config{}
+	}
+	c.ApplyDefaults()
+	h := &sharesHandler{}
+	if err := h.init(c); err != nil {
+		t.Fatal(err)
+	}
+	return h
 }
 
 // --- tests ---
@@ -118,7 +141,7 @@ func TestCreateShareReturnsServerErrorForNonOKCreateStatus(t *testing.T) {
 			},
 		},
 	})
-	h := &sharesHandler{}
+	h := initSharesHandler(t, &config{AllowLoopbackFederation: true})
 
 	body, _ := json.Marshal(map[string]any{
 		"shareWith":    "marie@local.example.org",
@@ -268,19 +291,195 @@ func TestDiscoverVerifiesTLSUnlessInsecure(t *testing.T) {
 
 	tests := []struct {
 		name    string
-		handler *sharesHandler
+		conf    config
 		wantErr bool
 	}{
-		{name: "verifies by default", handler: &sharesHandler{}, wantErr: true},
-		{name: "skips when opted out", handler: &sharesHandler{ocmClientInsecure: true}, wantErr: false},
+		{
+			name:    "verifies by default",
+			conf:    config{AllowLoopbackFederation: true},
+			wantErr: true,
+		},
+		{
+			name: "skips when opted out",
+			conf: config{
+				AllowLoopbackFederation: true,
+				OCMClientInsecure:       true,
+			},
+		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			_, _, err := tt.handler.discoverOcmResourceTypes(context.Background(), srv.URL)
+			h := initSharesHandler(t, &tt.conf)
+			_, _, err := h.discoverOcmResourceTypes(context.Background(), srv.URL)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("discoverOcmResourceTypes() error = %v, wantErr %v", err, tt.wantErr)
 			}
 		})
+	}
+}
+
+func TestSharesHandlerInitCreatesPublicOnlyClient(t *testing.T) {
+	h := initSharesHandler(t, &config{})
+	if h.ocmClient == nil {
+		t.Fatal("init() did not store a discovery client")
+	}
+	const wantDefaultTimeout = 10 * time.Second
+	if h.ocmClient.client.Timeout != wantDefaultTimeout {
+		t.Errorf("timeout = %v, want %v", h.ocmClient.client.Timeout, wantDefaultTimeout)
+	}
+	tr, ok := h.ocmClient.client.Transport.(*http.Transport)
+	if !ok {
+		t.Fatalf("transport: got %T, want *http.Transport", h.ocmClient.client.Transport)
+	}
+	if tr.Proxy != nil {
+		t.Fatal("default inbound discovery client must be public-only and must not use a proxy")
+	}
+	if tr.TLSClientConfig == nil {
+		t.Fatal("TLSClientConfig is nil")
+	}
+	if tr.TLSClientConfig.InsecureSkipVerify {
+		t.Fatal("default inbound discovery client must verify TLS")
+	}
+}
+
+func TestDiscoverOcmResourceTypesLoopbackPolicy(t *testing.T) {
+	disco := ocmDiscoveryServer(t, "webdav", "file")
+	defer disco.Close()
+
+	tests := []struct {
+		name    string
+		conf    config
+		wantErr bool
+	}{
+		{name: "fails by default", wantErr: true},
+		{
+			name: "succeeds with allow_loopback_federation",
+			conf: config{AllowLoopbackFederation: true},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			h := initSharesHandler(t, &tt.conf)
+			rts, endpoint, err := h.discoverOcmResourceTypes(context.Background(), disco.URL)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("discoverOcmResourceTypes() error = %v, wantErr %v", err, tt.wantErr)
+			}
+			if tt.wantErr {
+				if !errors.Is(err, client.ErrPolicyViolation) {
+					t.Errorf("discoverOcmResourceTypes() error = %v, want ErrPolicyViolation", err)
+				}
+				return
+			}
+			if err != nil {
+				return
+			}
+			if len(rts) == 0 {
+				t.Fatal("expected advertised resource types")
+			}
+			if endpoint == "" {
+				t.Fatal("expected discovery endpoint")
+			}
+		})
+	}
+}
+
+func TestDiscoverOcmResourceTypesMalformedReturnsDecodeError(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte("not json"))
+	}))
+	defer srv.Close()
+
+	h := initSharesHandler(t, &config{AllowLoopbackFederation: true})
+	_, _, err := h.discoverOcmResourceTypes(context.Background(), srv.URL)
+	if err == nil {
+		t.Fatal("expected discovery decode error")
+	}
+	if _, ok := err.(errtypes.InternalError); !ok {
+		t.Errorf("error type = %T, want errtypes.InternalError", err)
+	}
+	if !strings.Contains(err.Error(), "Invalid payload on OCM discovery") {
+		t.Errorf("error = %v, want Invalid payload on OCM discovery", err)
+	}
+}
+
+func TestCreateShareUnauthorizedSenderFailsBeforeDiscovery(t *testing.T) {
+	var hits int
+	mux := http.NewServeMux()
+	mux.HandleFunc("/.well-known/ocm", func(w http.ResponseWriter, r *http.Request) {
+		hits++
+		endpoint := fmt.Sprintf("http://%s", r.Host)
+		disco := wellknown.OcmDiscoveryData{
+			Endpoint: endpoint,
+			ResourceTypes: []wellknown.ResourceTypes{
+				{
+					Name: "file",
+					Protocols: map[string]any{
+						"webdav": "/remote.php/dav/ocm",
+					},
+				},
+			},
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(disco)
+	})
+	disco := httptest.NewServer(mux)
+	defer disco.Close()
+
+	senderAddr := disco.Listener.Addr().String()
+	stampGateway(&sharesMockGW{rejectAccepted: true})
+	h := initSharesHandler(t, &config{AllowLoopbackFederation: true})
+
+	body, _ := json.Marshal(map[string]any{
+		"shareWith":    "marie@local.example.org",
+		"name":         "test.txt",
+		"providerId":   "provider-id",
+		"owner":        fmt.Sprintf("einstein@%s", senderAddr),
+		"sender":       fmt.Sprintf("einstein@%s", senderAddr),
+		"shareType":    "user",
+		"resourceType": "file",
+		"protocol": map[string]any{
+			"webdav": map[string]any{
+				"sharedSecret": "secret",
+				"permissions":  []string{"read"},
+				"uri":          fmt.Sprintf("http://%s/remote.php/dav/files/einstein/test.txt", senderAddr),
+			},
+		},
+	})
+
+	req := httptest.NewRequest(http.MethodPost, "/ocm/shares", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	req.RemoteAddr = "192.0.2.15:12345"
+
+	rr := httptest.NewRecorder()
+	h.CreateShare(rr, req)
+
+	if rr.Code != http.StatusUnauthorized {
+		t.Fatalf("CreateShare() status = %d, want %d", rr.Code, http.StatusUnauthorized)
+	}
+	if hits != 0 {
+		t.Fatalf("discovery hits = %d, want 0 (acceptance gate must run first)", hits)
+	}
+}
+
+func TestSharesHandlerInitRespectsExplicitTimeout(t *testing.T) {
+	h := initSharesHandler(t, &config{OCMClientTimeout: 3})
+	if h.ocmClient.client.Timeout != 3*time.Second {
+		t.Errorf("timeout = %v, want %v", h.ocmClient.client.Timeout, 3*time.Second)
+	}
+}
+
+func TestConfigApplyDefaultsOCMClientTimeout(t *testing.T) {
+	var c config
+	c.ApplyDefaults()
+	if c.OCMClientTimeout != 10 {
+		t.Errorf("default timeout = %d, want 10", c.OCMClientTimeout)
+	}
+	c.OCMClientTimeout = 7
+	c.ApplyDefaults()
+	if c.OCMClientTimeout != 7 {
+		t.Errorf("explicit timeout = %d, want 7 (default must not overwrite)", c.OCMClientTimeout)
 	}
 }
