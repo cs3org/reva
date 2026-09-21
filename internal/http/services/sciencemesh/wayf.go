@@ -29,14 +29,20 @@ import (
 
 	"github.com/cs3org/reva/v3/internal/http/services/opencloudmesh/ocmd"
 	"github.com/cs3org/reva/v3/internal/http/services/reqres"
+	"github.com/cs3org/reva/v3/internal/http/services/wellknown"
 	"github.com/cs3org/reva/v3/pkg/appctx"
 )
 
+type ocmDiscoverer interface {
+	Discover(ctx context.Context, endpoint string) (*wellknown.OcmDiscoveryData, error)
+}
+
 type wayfHandler struct {
 	directoryServices []ocmd.DirectoryService
-	ocmClient         *ocmd.OCMClient
-	// for /discover, where the host comes from the request body, not from config
-	untrustedClient *ocmd.OCMClient
+	// operator-configured directory URLs are trusted
+	ocmClient *ocmd.OCMClient
+	// listed providers and request-supplied /discover domains are untrusted
+	untrustedClient ocmDiscoverer
 }
 
 type DiscoverRequest struct {
@@ -66,7 +72,8 @@ func makeAbsoluteURL(baseURL, dialogURL string) (string, error) {
 func (h *wayfHandler) init(c *config) error {
 	log := appctx.GetLogger(context.Background())
 
-	// Create OCM client for discovery from config
+	// Directory URL is operator-configured (trusted client). Listed and
+	// request-supplied hosts are untrusted (public-only client).
 	h.ocmClient = ocmd.NewClient(time.Duration(c.OCMClientTimeout)*time.Second, c.OCMClientInsecure)
 	h.untrustedClient = ocmd.NewPublicOnlyClient(time.Duration(c.OCMClientTimeout)*time.Second, c.OCMClientInsecure)
 	log.Debug().
@@ -85,6 +92,13 @@ func (h *wayfHandler) init(c *config) error {
 
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
 	defer cancel()
+
+	h.fetchInfo(ctx, urls)
+	return nil
+}
+
+func (h *wayfHandler) fetchInfo(ctx context.Context, urls []string) {
+	log := appctx.GetLogger(context.Background())
 
 	h.directoryServices = []ocmd.DirectoryService{}
 	discoveryErrors := 0
@@ -116,7 +130,7 @@ func (h *wayfHandler) init(c *config) error {
 			log.Debug().Str("federation", directoryService.Federation).Str("server", srv.DisplayName).Str("url", srv.URL).Msg("Discovering server")
 
 			// Discover inviteAcceptDialog from OCM endpoint
-			disco, err := h.ocmClient.Discover(ctx, srv.URL)
+			disco, err := h.untrustedClient.Discover(ctx, srv.URL)
 			if err != nil {
 				log.Debug().Err(err).
 					Str("federation", directoryService.Federation).
@@ -178,8 +192,6 @@ func (h *wayfHandler) init(c *config) error {
 		Int("fetch_errors", fetchErrors).
 		Int("discovery_errors", discoveryErrors).
 		Msg("WAYF handler initialization completed")
-
-	return nil
 }
 
 func (h *wayfHandler) GetFederations(w http.ResponseWriter, r *http.Request) {
