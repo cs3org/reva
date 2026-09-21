@@ -45,6 +45,7 @@ import (
 	"github.com/cs3org/reva/v3/internal/http/services/wellknown"
 	"github.com/cs3org/reva/v3/pkg/errtypes"
 	"github.com/cs3org/reva/v3/pkg/ocm/client"
+	"github.com/studio-b12/gowebdav"
 	"google.golang.org/grpc"
 )
 
@@ -345,6 +346,22 @@ func TestSharesHandlerInitCreatesPublicOnlyClient(t *testing.T) {
 	}
 	if tr.TLSClientConfig.InsecureSkipVerify {
 		t.Fatal("default inbound discovery client must verify TLS")
+	}
+	if h.webdavTransport == nil {
+		t.Fatal("init() did not store a WebDAV round tripper")
+	}
+	wtr, ok := h.webdavTransport.(*http.Transport)
+	if !ok {
+		t.Fatalf("webdav transport: got %T, want *http.Transport", h.webdavTransport)
+	}
+	if wtr.Proxy != nil {
+		t.Fatal("default inbound WebDAV round tripper must be public-only and must not use a proxy")
+	}
+	if wtr.TLSClientConfig == nil {
+		t.Fatal("WebDAV TLSClientConfig is nil")
+	}
+	if wtr.TLSClientConfig.InsecureSkipVerify {
+		t.Fatal("default inbound WebDAV round tripper must verify TLS")
 	}
 }
 
@@ -784,4 +801,199 @@ func TestSharesHandlerInitAllowedFederationCIDRsReachTransport(t *testing.T) {
 			t.Errorf("unrelated private dial %q = %v, want ErrPolicyViolation", addr, err)
 		}
 	}
+func webDAVPropfindXML(isDir bool) string {
+	resourceType := "<d:resourcetype/>"
+	if isDir {
+		resourceType = `<d:resourcetype><d:collection/></d:resourcetype>`
+	}
+	return `<?xml version="1.0" encoding="utf-8"?>
+<d:multistatus xmlns:d="DAV:">
+  <d:response>
+    <d:href>/</d:href>
+    <d:propstat>
+      <d:prop>
+        <d:displayname>item</d:displayname>
+        ` + resourceType + `
+        <d:getcontentlength>1</d:getcontentlength>
+        <d:getcontenttype>text/plain</d:getcontenttype>
+        <d:getetag>"e"</d:getetag>
+        <d:getlastmodified>Mon, 01 Jan 2024 00:00:00 GMT</d:getlastmodified>
+      </d:prop>
+      <d:status>HTTP/1.1 200 OK</d:status>
+    </d:propstat>
+  </d:response>
+</d:multistatus>`
+}
+
+func writeWebDAVPropfind(w http.ResponseWriter, isDir bool) {
+	w.Header().Set("Content-Type", "application/xml")
+	w.WriteHeader(http.StatusMultiStatus)
+	_, _ = w.Write([]byte(webDAVPropfindXML(isDir)))
+}
+
+func legacyCreateShareBody(senderAddr string) []byte {
+	body, _ := json.Marshal(map[string]any{
+		"shareWith":    "marie@local.example.org",
+		"name":         "test.txt",
+		"providerId":   "provider-id",
+		"owner":        fmt.Sprintf("einstein@%s", senderAddr),
+		"sender":       fmt.Sprintf("einstein@%s", senderAddr),
+		"shareType":    "user",
+		"resourceType": "file",
+		"protocol": map[string]any{
+			"name": "ocm10format",
+			"options": map[string]any{
+				"sharedSecret": "secret",
+			},
+		},
+	})
+	return body
+}
+
+func discoveryAndDAVServer(t *testing.T, discoHits, davHits *int, isDir bool) *httptest.Server {
+	t.Helper()
+	mux := http.NewServeMux()
+	mux.HandleFunc("/.well-known/ocm", func(w http.ResponseWriter, r *http.Request) {
+		if discoHits != nil {
+			*discoHits++
+		}
+		disco := wellknown.OcmDiscoveryData{
+			Endpoint: fmt.Sprintf("http://%s", r.Host),
+			ResourceTypes: []wellknown.ResourceTypes{
+				{Name: "file", Protocols: map[string]any{"webdav": "/remote.php/dav/ocm"}},
+			},
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(disco)
+	})
+	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != "PROPFIND" {
+			http.NotFound(w, r)
+			return
+		}
+		if davHits != nil {
+			*davHits++
+		}
+		writeWebDAVPropfind(w, isDir)
+	})
+	return httptest.NewServer(mux)
+}
+
+func TestLegacyWebDAVStatPublicOnlyPolicy(t *testing.T) {
+	t.Run("rejects loopback by default before the server receives a request", func(t *testing.T) {
+		var hits int
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			hits++
+			writeWebDAVPropfind(w, false)
+		}))
+		defer srv.Close()
+
+		h := initSharesHandler(t, &config{})
+		c := gowebdav.NewClient(srv.URL, "", "")
+		c.SetTransport(h.webdavTransport)
+		_, err := c.Stat("")
+		if err == nil {
+			t.Fatal("expected Stat to refuse loopback")
+		}
+		if !errors.Is(err, client.ErrPolicyViolation) {
+			t.Errorf("Stat() error = %v, want ErrPolicyViolation", err)
+		}
+		if hits != 0 {
+			t.Fatalf("server hits = %d, want 0", hits)
+		}
+	})
+
+	t.Run("succeeds with allow_loopback_federation", func(t *testing.T) {
+		var hits int
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			hits++
+			writeWebDAVPropfind(w, false)
+		}))
+		defer srv.Close()
+
+		h := initSharesHandler(t, &config{AllowLoopbackFederation: true})
+		c := gowebdav.NewClient(srv.URL, "", "")
+		c.SetTransport(h.webdavTransport)
+		info, err := c.Stat("")
+		if err != nil {
+			t.Fatalf("Stat() error = %v", err)
+		}
+		if info.IsDir() {
+			t.Fatal("expected a file resource")
+		}
+		if hits == 0 {
+			t.Fatal("expected the WebDAV server to receive Stat")
+		}
+	})
+
+	t.Run("allow_loopback_federation does not permit RFC1918", func(t *testing.T) {
+		h := initSharesHandler(t, &config{AllowLoopbackFederation: true})
+		c := gowebdav.NewClient("http://192.168.1.1:9/", "", "")
+		c.SetTransport(h.webdavTransport)
+		_, err := c.Stat("")
+		if err == nil {
+			t.Fatal("expected Stat to refuse RFC1918")
+		}
+		if !errors.Is(err, client.ErrPolicyViolation) {
+			t.Errorf("Stat() error = %v, want ErrPolicyViolation", err)
+		}
+	})
+}
+
+func TestCreateShareLegacyWebDAVStatUsesStoredTransport(t *testing.T) {
+	t.Run("default probe is blocked before the dav server receives a request", func(t *testing.T) {
+		var discoHits, davHits int
+		srv := discoveryAndDAVServer(t, &discoHits, &davHits, true)
+		defer srv.Close()
+
+		h := initSharesHandler(t, &config{})
+		h.ocmClient = NewPublicOnlyClientWithConfig(client.TransportConfig{
+			Timeout:       10 * time.Second,
+			AllowLoopback: true,
+		})
+		stampGateway(&sharesMockGW{
+			createResp: &ocmincoming.CreateOCMIncomingShareResponse{
+				Status: &rpc.Status{Code: rpc.Code_CODE_OK},
+			},
+		})
+
+		req := httptest.NewRequest(http.MethodPost, "/ocm/shares", bytes.NewReader(legacyCreateShareBody(srv.Listener.Addr().String())))
+		req.Header.Set("Content-Type", "application/json")
+		req.RemoteAddr = "192.0.2.15:12345"
+		rr := httptest.NewRecorder()
+		h.CreateShare(rr, req)
+
+		if discoHits == 0 {
+			t.Fatal("discovery must run so the Stat probe is reached")
+		}
+		if davHits != 0 {
+			t.Fatalf("dav hits = %d, want 0 (probe must refuse loopback)", davHits)
+		}
+	})
+
+	t.Run("allow_loopback_federation stats the remote resource", func(t *testing.T) {
+		var davHits int
+		srv := discoveryAndDAVServer(t, nil, &davHits, true)
+		defer srv.Close()
+
+		h := initSharesHandler(t, &config{AllowLoopbackFederation: true})
+		stampGateway(&sharesMockGW{
+			createResp: &ocmincoming.CreateOCMIncomingShareResponse{
+				Status: &rpc.Status{Code: rpc.Code_CODE_OK},
+			},
+		})
+
+		req := httptest.NewRequest(http.MethodPost, "/ocm/shares", bytes.NewReader(legacyCreateShareBody(srv.Listener.Addr().String())))
+		req.Header.Set("Content-Type", "application/json")
+		req.RemoteAddr = "192.0.2.15:12345"
+		rr := httptest.NewRecorder()
+		h.CreateShare(rr, req)
+
+		if rr.Code != http.StatusCreated {
+			t.Fatalf("CreateShare() status = %d, want %d", rr.Code, http.StatusCreated)
+		}
+		if davHits == 0 {
+			t.Fatal("expected the legacy WebDAV Stat probe to reach the server")
+		}
+	})
 }

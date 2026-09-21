@@ -1,26 +1,29 @@
 package ocm
 
 import (
+	"bytes"
 	"context"
+	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io/fs"
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"strings"
 	"testing"
 	"time"
 
-	"github.com/ReneKroon/ttlcache/v2"
 	gateway "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	ocmpb "github.com/cs3org/go-cs3apis/cs3/sharing/ocm/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
-	"github.com/cs3org/reva/v3/internal/http/services/opencloudmesh/ocmd"
 	"github.com/cs3org/reva/v3/internal/http/services/wellknown"
 	"github.com/cs3org/reva/v3/pkg/appctx"
 	"github.com/cs3org/reva/v3/pkg/errtypes"
+	"github.com/cs3org/reva/v3/pkg/ocm/client"
 	"github.com/studio-b12/gowebdav"
 	"google.golang.org/grpc"
 )
@@ -297,14 +300,25 @@ func testReceivedShare(senderAddr, id string, isFile bool) *ocmpb.ReceivedShare 
 	}
 }
 
-func newTestReceivedDriver() *driver {
-	disco := ttlcache.NewCache()
-	_ = disco.SetTTL(5 * time.Minute)
-	return &driver{
-		ccache:         ttlcache.NewCache(),
-		discoveryCache: disco,
-		ocmClient:      ocmd.NewClient(10*time.Second, true),
+func newReceivedDriver(t *testing.T, m map[string]any) *driver {
+	t.Helper()
+	fs, err := New(context.Background(), m)
+	if err != nil {
+		t.Fatal(err)
 	}
+	d, ok := fs.(*driver)
+	if !ok {
+		t.Fatalf("New() type = %T, want *driver", fs)
+	}
+	return d
+}
+
+func newTestReceivedDriver(t *testing.T) *driver {
+	t.Helper()
+	return newReceivedDriver(t, map[string]any{
+		"ocm_insecure":              true,
+		"allow_loopback_federation": true,
+	})
 }
 
 func testCodeFlowReceivedShare(senderAddr, baseURL string) *ocmpb.ReceivedShare {
@@ -410,7 +424,7 @@ func TestGetTokenEndpointCachesDiscovery(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	d := newTestReceivedDriver()
+	d := newTestReceivedDriver(t)
 	share := testCodeFlowReceivedShare(srv.Listener.Addr().String(), srv.URL)
 
 	got1, err := d.getTokenEndpoint(context.Background(), share)
@@ -449,7 +463,7 @@ func TestGetTokenEndpointRequiresDiscoveryTokenEndpoint(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	d := newTestReceivedDriver()
+	d := newTestReceivedDriver(t)
 	share := testCodeFlowReceivedShare(srv.Listener.Addr().String(), srv.URL)
 
 	_, err := d.getTokenEndpoint(context.Background(), share)
@@ -504,7 +518,7 @@ func TestUploadAuthCodeFlowExchangesBearerToken(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	d := newTestReceivedDriver()
+	d := newTestReceivedDriver(t)
 	share := testCodeFlowReceivedShare(srv.Listener.Addr().String(), srv.URL)
 
 	got, err := d.uploadAuth(context.Background(), share, share.Protocols[0].GetWebdavOptions().Uri, "exchange-secret", share.GetId())
@@ -534,7 +548,7 @@ func TestUploadAuthCodeFlowExchangesBearerToken(t *testing.T) {
 func TestUploadAuthLegacyUsesCachedHeader(t *testing.T) {
 	// Legacy path reads from ccache before any discovery; the senderAddr is
 	// unused by the code path under test, so a static placeholder is fine here.
-	d := newTestReceivedDriver()
+	d := newTestReceivedDriver(t)
 	share := testReceivedShare("sender.example.com", "share-abc", false)
 	_ = d.ccache.Set(share.GetId().GetOpaqueId(), &cachedClient{authHeader: "Basic cached-auth"})
 
@@ -585,7 +599,7 @@ func TestWithExchangeStatRetryRetriesAndReturnsFreshShare(t *testing.T) {
 	share2 := testCodeFlowReceivedShare(senderAddr, srv.URL)
 	share2.Name = "fresh-name"
 
-	d := newTestReceivedDriver()
+	d := newTestReceivedDriver(t)
 	stampGateway(&mockReceivedGateway{shares: []*ocmpb.ReceivedShare{share1, share2}})
 
 	ref := &provider.Reference{Path: "/share-abc/docs"}
@@ -654,7 +668,7 @@ func TestWithExchangeRetrySecond401ReturnsInvalidCredentials(t *testing.T) {
 
 	senderAddr := srv.Listener.Addr().String()
 	share := testCodeFlowReceivedShare(senderAddr, srv.URL)
-	d := newTestReceivedDriver()
+	d := newTestReceivedDriver(t)
 	stampGateway(&mockReceivedGateway{shares: []*ocmpb.ReceivedShare{share, share}})
 
 	ref := &provider.Reference{Path: "/share-abc/docs"}
@@ -755,5 +769,449 @@ func TestIsWebDAV401_OsPathError(t *testing.T) {
 	err := &os.PathError{Op: "GET", Path: "/test", Err: fmt.Errorf("not a StatusError")}
 	if isWebDAV401(err) {
 		t.Error("expected isWebDAV401=false for PathError with non-StatusError inner")
+	}
+}
+
+func writeReceivedWebDAVPropfind(w http.ResponseWriter, isDir bool) {
+	resourceType := "<d:resourcetype/>"
+	if isDir {
+		resourceType = `<d:resourcetype><d:collection/></d:resourcetype>`
+	}
+	body := `<?xml version="1.0" encoding="utf-8"?>
+<d:multistatus xmlns:d="DAV:">
+  <d:response>
+    <d:href>/</d:href>
+    <d:propstat>
+      <d:prop>
+        <d:displayname>item</d:displayname>
+        ` + resourceType + `
+        <d:getcontentlength>1</d:getcontentlength>
+        <d:getcontenttype>text/plain</d:getcontenttype>
+        <d:getetag>"e"</d:getetag>
+        <d:getlastmodified>Mon, 01 Jan 2024 00:00:00 GMT</d:getlastmodified>
+      </d:prop>
+      <d:status>HTTP/1.1 200 OK</d:status>
+    </d:propstat>
+  </d:response>
+</d:multistatus>`
+	w.Header().Set("Content-Type", "application/xml")
+	w.WriteHeader(http.StatusMultiStatus)
+	_, _ = w.Write([]byte(body))
+}
+
+func TestNewReceivedDriverPublicOnly(t *testing.T) {
+	d := newReceivedDriver(t, map[string]any{})
+	if d.ocmClient == nil {
+		t.Fatal("New() did not store an OCM client")
+	}
+	if d.webdavTransport == nil {
+		t.Fatal("New() did not store a WebDAV round tripper")
+	}
+	tr, ok := d.webdavTransport.(*http.Transport)
+	if !ok {
+		t.Fatalf("webdav transport: got %T, want *http.Transport", d.webdavTransport)
+	}
+	if tr.Proxy != nil {
+		t.Fatal("received WebDAV round tripper must be public-only and must not use a proxy")
+	}
+	if tr.TLSClientConfig != nil && tr.TLSClientConfig.InsecureSkipVerify {
+		t.Fatal("default received WebDAV round tripper must verify TLS")
+	}
+	if d.c.AllowLoopbackFederation {
+		t.Fatal("allow_loopback_federation must stay off by default")
+	}
+	if d.c.OCMClientTimeout != 10 {
+		t.Errorf("default ocm_timeout = %d, want 10", d.c.OCMClientTimeout)
+	}
+}
+
+func TestReceivedDiscoverRejectsLoopbackByDefault(t *testing.T) {
+	var hits int
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		hits++
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"enabled":       true,
+			"endPoint":      "http://" + r.Host + "/ocm",
+			"tokenEndPoint": "http://" + r.Host + "/ocm/token",
+		})
+	}))
+	defer srv.Close()
+
+	d := newReceivedDriver(t, map[string]any{})
+	share := testCodeFlowReceivedShare(srv.Listener.Addr().String(), srv.URL)
+	_, err := d.getTokenEndpoint(context.Background(), share)
+	if err == nil {
+		t.Fatal("expected discovery to refuse loopback")
+	}
+	if !errors.Is(err, client.ErrPolicyViolation) {
+		t.Errorf("getTokenEndpoint() error = %v, want ErrPolicyViolation", err)
+	}
+	if hits != 0 {
+		t.Fatalf("server hits = %d, want 0", hits)
+	}
+}
+
+func TestReceivedExchangeTokenRejectsPrivateEndpoint(t *testing.T) {
+	var tokenHits int
+	var srv *httptest.Server
+	srv = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/ocm/token" {
+			tokenHits++
+			http.Error(w, "token endpoint should not be reached", http.StatusInternalServerError)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"enabled":       true,
+			"apiVersion":    "1.2.0",
+			"endPoint":      srv.URL + "/ocm",
+			"tokenEndPoint": "http://192.168.1.1:9/ocm/token",
+		})
+	}))
+	defer srv.Close()
+
+	d := newTestReceivedDriver(t)
+	share := testCodeFlowReceivedShare(srv.Listener.Addr().String(), srv.URL)
+	endpoint, err := d.getTokenEndpoint(context.Background(), share)
+	if err != nil {
+		t.Fatalf("getTokenEndpoint returned error: %v", err)
+	}
+	_, err = d.exchangeAccessToken(context.Background(), share, endpoint, "secret")
+	if err == nil {
+		t.Fatal("expected token exchange to refuse RFC1918")
+	}
+	if !errors.Is(err, client.ErrPolicyViolation) {
+		t.Errorf("exchangeAccessToken() error = %v, want ErrPolicyViolation", err)
+	}
+	if tokenHits != 0 {
+		t.Fatalf("loopback token hits = %d, want 0", tokenHits)
+	}
+}
+
+func TestWebDAVClientRejectsLoopbackByDefault(t *testing.T) {
+	var hits int
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		hits++
+		writeReceivedWebDAVPropfind(w, false)
+	}))
+	defer srv.Close()
+
+	share := testReceivedShare(srv.Listener.Addr().String(), "share-abc", false)
+	d := newReceivedDriver(t, map[string]any{})
+	stampGateway(&mockReceivedGateway{shares: []*ocmpb.ReceivedShare{share}})
+
+	_, _, _, err := d.webdavClient(context.Background(), &provider.Reference{Path: "/share-abc"})
+	if err == nil {
+		t.Fatal("expected webdavClient to refuse loopback")
+	}
+	if !errors.Is(err, client.ErrPolicyViolation) {
+		t.Errorf("webdavClient() error = %v, want ErrPolicyViolation", err)
+	}
+	if hits != 0 {
+		t.Fatalf("server hits = %d, want 0", hits)
+	}
+}
+
+func TestWebDAVClientLegacyAuthProbes(t *testing.T) {
+	const secret = "secret"
+	basicHdr := "Basic " + base64.StdEncoding.EncodeToString([]byte(secret+":"))
+
+	t.Run("bearer succeeds", func(t *testing.T) {
+		var bearerHits, basicHits int
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			auth := r.Header.Get("Authorization")
+			switch {
+			case strings.HasPrefix(auth, "Bearer "):
+				bearerHits++
+				if auth == "Bearer "+secret {
+					writeReceivedWebDAVPropfind(w, false)
+					return
+				}
+			case strings.HasPrefix(auth, "Basic "):
+				basicHits++
+			}
+			w.WriteHeader(http.StatusUnauthorized)
+		}))
+		defer srv.Close()
+
+		share := testReceivedShare(srv.Listener.Addr().String(), "share-abc", false)
+		d := newTestReceivedDriver(t)
+		stampGateway(&mockReceivedGateway{shares: []*ocmpb.ReceivedShare{share}})
+
+		_, _, _, err := d.webdavClient(context.Background(), &provider.Reference{Path: "/share-abc"})
+		if err != nil {
+			t.Fatalf("webdavClient returned error: %v", err)
+		}
+		if bearerHits == 0 {
+			t.Fatal("expected a bearer Stat probe")
+		}
+		if basicHits != 0 {
+			t.Fatalf("basic hits = %d, want 0", basicHits)
+		}
+	})
+
+	t.Run("basic fallback after bearer 401", func(t *testing.T) {
+		var bearerHits, basicHits int
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			auth := r.Header.Get("Authorization")
+			switch {
+			case strings.HasPrefix(auth, "Bearer "):
+				bearerHits++
+				w.WriteHeader(http.StatusUnauthorized)
+				return
+			case auth == basicHdr:
+				basicHits++
+				writeReceivedWebDAVPropfind(w, false)
+				return
+			}
+			w.WriteHeader(http.StatusUnauthorized)
+		}))
+		defer srv.Close()
+
+		share := testReceivedShare(srv.Listener.Addr().String(), "share-abc", false)
+		d := newTestReceivedDriver(t)
+		stampGateway(&mockReceivedGateway{shares: []*ocmpb.ReceivedShare{share}})
+
+		_, _, _, err := d.webdavClient(context.Background(), &provider.Reference{Path: "/share-abc"})
+		if err != nil {
+			t.Fatalf("webdavClient returned error: %v", err)
+		}
+		if bearerHits == 0 {
+			t.Fatal("expected a bearer Stat probe before basic fallback")
+		}
+		if basicHits == 0 {
+			t.Fatal("expected a basic Stat probe after bearer 401")
+		}
+	})
+}
+
+func TestWebDAVClientCodeFlowUsesGuardedTransport(t *testing.T) {
+	var davHits, tokenHits int
+	var srv *httptest.Server
+	srv = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case r.URL.Path == "/.well-known/ocm":
+			w.Header().Set("Content-Type", "application/json")
+			_ = json.NewEncoder(w).Encode(map[string]any{
+				"enabled":       true,
+				"apiVersion":    "1.2.0",
+				"endPoint":      srv.URL + "/ocm",
+				"tokenEndPoint": srv.URL + "/ocm/token",
+			})
+		case r.URL.Path == "/ocm/token":
+			tokenHits++
+			w.Header().Set("Content-Type", "application/json")
+			_ = json.NewEncoder(w).Encode(map[string]any{
+				"access_token": "jwt-tok",
+				"token_type":   "Bearer",
+				"expires_in":   3600,
+			})
+		case r.Method == "PROPFIND":
+			davHits++
+			writeReceivedWebDAVPropfind(w, true)
+		default:
+			http.Error(w, "unexpected path", http.StatusInternalServerError)
+		}
+	}))
+	defer srv.Close()
+
+	share := testCodeFlowReceivedShare(srv.Listener.Addr().String(), srv.URL)
+	d := newTestReceivedDriver(t)
+	stampGateway(&mockReceivedGateway{shares: []*ocmpb.ReceivedShare{share}})
+
+	c, _, _, err := d.webdavClient(context.Background(), &provider.Reference{Path: "/share-abc"})
+	if err != nil {
+		t.Fatalf("webdavClient returned error: %v", err)
+	}
+	if tokenHits == 0 {
+		t.Fatal("expected a token exchange")
+	}
+	info, err := c.Stat("")
+	if err != nil {
+		t.Fatalf("guarded code-flow Stat() error = %v", err)
+	}
+	if !info.IsDir() {
+		t.Fatal("expected a collection")
+	}
+	if davHits == 0 {
+		t.Fatal("expected the code-flow WebDAV client to reach the server")
+	}
+}
+
+func TestWebDAVClientCachesGuardedLegacyClient(t *testing.T) {
+	var hits int
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		hits++
+		writeReceivedWebDAVPropfind(w, false)
+	}))
+	defer srv.Close()
+
+	share := testReceivedShare(srv.Listener.Addr().String(), "share-abc", false)
+	d := newTestReceivedDriver(t)
+	stampGateway(&mockReceivedGateway{shares: []*ocmpb.ReceivedShare{share}})
+
+	c1, _, _, err := d.webdavClient(context.Background(), &provider.Reference{Path: "/share-abc"})
+	if err != nil {
+		t.Fatalf("first webdavClient returned error: %v", err)
+	}
+	afterFirst := hits
+	if afterFirst == 0 {
+		t.Fatal("expected an initial Stat probe")
+	}
+	c2, _, _, err := d.webdavClient(context.Background(), &provider.Reference{Path: "/share-abc"})
+	if err != nil {
+		t.Fatalf("second webdavClient returned error: %v", err)
+	}
+	if hits != afterFirst {
+		t.Fatalf("cached client probed again: hits %d then %d", afterFirst, hits)
+	}
+	if c1 != c2 {
+		t.Fatal("expected the cached client pointer to be reused")
+	}
+}
+
+type countingRoundTripper struct {
+	rt   http.RoundTripper
+	hits int
+}
+
+func (c *countingRoundTripper) RoundTrip(req *http.Request) (*http.Response, error) {
+	c.hits++
+	return c.rt.RoundTrip(req)
+}
+
+func TestWebDAVRetryReconstructsGuardedClient(t *testing.T) {
+	var propfinds int
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == "PROPFIND" {
+			propfinds++
+			writeReceivedWebDAVPropfind(w, false)
+			return
+		}
+		http.NotFound(w, r)
+	}))
+	defer srv.Close()
+
+	share := testReceivedShare(srv.Listener.Addr().String(), "share-abc", false)
+	d := newTestReceivedDriver(t)
+	stampGateway(&mockReceivedGateway{shares: []*ocmpb.ReceivedShare{share, share}})
+	guarded := &countingRoundTripper{rt: d.webdavTransport}
+	d.webdavTransport = guarded
+
+	ref := &provider.Reference{Path: "/share-abc/docs"}
+	fnCalls := 0
+	var hitsBeforeRetry int
+	err := d.withExchangeRetry(context.Background(), ref, func(_ *gowebdav.Client, _ string) error {
+		fnCalls++
+		if fnCalls == 1 {
+			hitsBeforeRetry = guarded.hits
+			return gowebdav.NewPathError("MKCOL", "/docs", http.StatusUnauthorized)
+		}
+		return nil
+	})
+	if err != nil {
+		t.Fatalf("withExchangeRetry returned error: %v", err)
+	}
+	if fnCalls != 2 {
+		t.Fatalf("expected fn to be called twice, got %d", fnCalls)
+	}
+	if propfinds == 0 {
+		t.Fatal("retry reconstruction must Stat through the guarded client")
+	}
+	if guarded.hits <= hitsBeforeRetry {
+		t.Fatal("retry reconstruction must reuse the public-only transport, not a default client")
+	}
+}
+
+func TestUploadOnFreshClientUsesGuardedTransport(t *testing.T) {
+	t.Run("rejects loopback by default before the server receives a request", func(t *testing.T) {
+		var hits int
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			hits++
+			w.WriteHeader(http.StatusCreated)
+		}))
+		defer srv.Close()
+
+		d := newReceivedDriver(t, map[string]any{})
+		err := d.uploadOnFreshClient(srv.URL, "Bearer tok", "file.txt", bytes.NewReader([]byte("hi")))
+		if err == nil {
+			t.Fatal("expected upload to refuse loopback")
+		}
+		if !errors.Is(err, client.ErrPolicyViolation) {
+			t.Errorf("uploadOnFreshClient() error = %v, want ErrPolicyViolation", err)
+		}
+		if hits != 0 {
+			t.Fatalf("server hits = %d, want 0", hits)
+		}
+	})
+
+	t.Run("uploads with allow_loopback_federation", func(t *testing.T) {
+		var puts int
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			switch r.Method {
+			case http.MethodPut:
+				puts++
+				w.WriteHeader(http.StatusCreated)
+			case "PROPFIND":
+				writeReceivedWebDAVPropfind(w, true)
+			case "MKCOL":
+				w.WriteHeader(http.StatusCreated)
+			default:
+				w.WriteHeader(http.StatusCreated)
+			}
+		}))
+		defer srv.Close()
+
+		d := newTestReceivedDriver(t)
+		err := d.uploadOnFreshClient(srv.URL, "Bearer tok", "file.txt", bytes.NewReader([]byte("hi")))
+		if err != nil {
+			t.Fatalf("uploadOnFreshClient returned error: %v", err)
+		}
+		if puts == 0 {
+			t.Fatal("expected PUT to reach the server")
+		}
+	})
+}
+
+func TestReceivedExplicitLoopbackAllowsDiscoveryAndWebDAV(t *testing.T) {
+	var discoHits, davHits int
+	var srv *httptest.Server
+	srv = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case r.URL.Path == "/.well-known/ocm":
+			discoHits++
+			w.Header().Set("Content-Type", "application/json")
+			_ = json.NewEncoder(w).Encode(map[string]any{
+				"enabled":       true,
+				"endPoint":      srv.URL + "/ocm",
+				"tokenEndPoint": srv.URL + "/ocm/token",
+			})
+		case r.Method == "PROPFIND":
+			davHits++
+			writeReceivedWebDAVPropfind(w, false)
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer srv.Close()
+
+	d := newTestReceivedDriver(t)
+	share := testReceivedShare(srv.Listener.Addr().String(), "share-abc", false)
+	_, err := d.getTokenEndpoint(context.Background(), share)
+	if err != nil {
+		t.Fatalf("getTokenEndpoint returned error: %v", err)
+	}
+	if discoHits == 0 {
+		t.Fatal("expected discovery to reach loopback when opted in")
+	}
+
+	stampGateway(&mockReceivedGateway{shares: []*ocmpb.ReceivedShare{share}})
+	_, _, _, err = d.webdavClient(context.Background(), &provider.Reference{Path: "/share-abc"})
+	if err != nil {
+		t.Fatalf("webdavClient returned error: %v", err)
+	}
+	if davHits == 0 {
+		t.Fatal("expected WebDAV Stat to reach loopback when opted in")
 	}
 }

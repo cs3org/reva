@@ -86,6 +86,7 @@ mount_id = "984e7351-2729-4417-99b4-ab5e6d41fa97"
 data_server_url = "http://127.0.0.1:54321/data"
 
 [grpc.services.storageprovider.drivers.ocmreceived]
+allow_loopback_federation = true
 
 # All cesnet HTTP services run in this same process so they discover the
 # co-resident gateway through the in-process registry.
@@ -117,6 +118,7 @@ mount_id = "984e7351-2729-4417-99b4-ab5e6d41fa97"
 public_url = "http://127.0.0.1:54321/data"
 
 [http.services.dataprovider.drivers.ocmreceived]
+allow_loopback_federation = true
 
 [http.services.wellknown]
 [http.services.wellknown.ocmprovider]
