@@ -61,13 +61,13 @@ type sharesHandler struct {
 	autoAcceptProviders        []*regexp.Regexp
 	trustForwardedFor          bool
 	ocmClient                  *OCMClient
+	webdavTransport            http.RoundTripper
 }
 
 func (h *sharesHandler) init(c *config) error {
 	h.exposeRecipientDisplayName = c.ExposeRecipientDisplayName
 	h.machineSecret = c.MachineSecret
 	h.trustForwardedFor = c.TrustForwardedFor
-
 	// Parse the explicit private-network exception list before any client or
 	// network is constructed: an invalid element must fail init, not start a
 	// partially accepted policy or run discovery first. The typed value is
@@ -85,8 +85,11 @@ func (h *sharesHandler) init(c *config) error {
 		UseEnvProxy:   c.OCMClientUseEnvProxy,
 	}
 	tcfg.AllowedFederationCIDRs = allowedCIDRs
-	h.ocmClient = NewPublicOnlyClientWithConfig(tcfg)
 
+	// One public-only OCMClient so Discover and ExchangeToken share the same dial guard.
+	// A discovered token URL cannot skip policy by using a second, unguarded client.
+	h.ocmClient = NewPublicOnlyClientWithConfig(tcfg)
+	h.webdavTransport = client.NewPublicOnlyRoundTripper(tcfg)
 	for _, p := range c.AutoAcceptProviders {
 		re, err := regexp.Compile(p)
 		if err != nil {
@@ -233,6 +236,7 @@ func (h *sharesHandler) CreateShare(w http.ResponseWriter, r *http.Request) {
 		// because remote systems such as Nextcloud may send "file" even if the resource is a folder.
 		c := gowebdav.NewClient(protocols[0].GetWebdavOptions().Uri, "", "")
 		c.SetHeader("Authorization", "Basic "+base64.StdEncoding.EncodeToString([]byte(protocols[0].GetWebdavOptions().SharedSecret+":")))
+		c.SetTransport(h.webdavTransport)
 		target, err := c.Stat("")
 		if err != nil {
 			log.Info().Err(err).Str("endpoint", protocols[0].GetWebdavOptions().Uri).Msg("error stating remote resource, assuming file")
