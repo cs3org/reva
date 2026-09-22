@@ -1,6 +1,7 @@
 package ocm
 
 import (
+	"bufio"
 	"bytes"
 	"context"
 	"encoding/base64"
@@ -8,10 +9,13 @@ import (
 	"errors"
 	"fmt"
 	"io/fs"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"os/exec"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -825,6 +829,221 @@ func TestNewReceivedDriverPublicOnly(t *testing.T) {
 	}
 }
 
+const (
+	receivedProxyChildKey    = "OCM_RECEIVED_TEST_PROXY_CHILD"
+	receivedProxyAddrKey     = "OCM_RECEIVED_TEST_PROXY_ADDR"
+	receivedProxyTarget      = "https://ocm-target.example"
+	receivedProxyCONNECTHost = "ocm-target.example:443"
+	receivedDirectTarget     = "https://192.168.1.1:9"
+)
+
+// TestReceivedDriverUseEnvProxyWiring checks both received copy-ins by
+// observing CONNECT on a local 127.0.0.1:0 listener. Each case runs in a
+// child because ProxyFromEnvironment snapshots HTTPS_PROXY once per process.
+// Discover and Stat each get their own listener so Discover retries cannot
+// mask a missing WebDAV CONNECT. The proxy children target a non-loopback
+// hostname so Go will not bypass the proxy. The omitted-key child uses
+// RFC1918 so Control rejects before connect.
+func TestReceivedDriverUseEnvProxyWiring(t *testing.T) {
+	if scenario := os.Getenv(receivedProxyChildKey); scenario != "" {
+		runReceivedProxyChild(t, scenario)
+		return
+	}
+
+	t.Run("ocm_use_env_proxy true sends CONNECT for Discover and Stat", func(t *testing.T) {
+		want := "CONNECT " + receivedProxyCONNECTHost
+
+		discoSpy := startReceivedCONNECTListener(t)
+		runReceivedProxyChildProcess(t, "proxy-discover", discoSpy.addr())
+		if n := countReceivedCONNECT(discoSpy.seenRequests(), want); n < 1 {
+			t.Fatalf("Discover CONNECT requests = %q, want at least one %q", discoSpy.seenRequests(), want)
+		}
+
+		webdavSpy := startReceivedCONNECTListener(t)
+		runReceivedProxyChildProcess(t, "proxy-stat", webdavSpy.addr())
+		if n := countReceivedCONNECT(webdavSpy.seenRequests(), want); n < 1 {
+			t.Fatalf("Stat CONNECT requests = %q, want at least one %q", webdavSpy.seenRequests(), want)
+		}
+	})
+
+	t.Run("omitted key dials HTTPS RFC1918 direct", func(t *testing.T) {
+		spy := startReceivedCONNECTListener(t)
+		runReceivedProxyChildProcess(t, "direct", spy.addr())
+		if seen := spy.seenRequests(); len(seen) != 0 {
+			t.Fatalf("omitted key observed CONNECT: %q", seen)
+		}
+	})
+}
+
+type receivedCONNECTListener struct {
+	ln   net.Listener
+	mu   sync.Mutex
+	seen []string
+}
+
+func startReceivedCONNECTListener(t *testing.T) *receivedCONNECTListener {
+	t.Helper()
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	s := &receivedCONNECTListener{ln: ln}
+	t.Cleanup(func() { _ = ln.Close() })
+	go s.accept()
+	return s
+}
+
+func (s *receivedCONNECTListener) accept() {
+	for {
+		conn, err := s.ln.Accept()
+		if err != nil {
+			return
+		}
+		go s.handle(conn)
+	}
+}
+
+func (s *receivedCONNECTListener) handle(conn net.Conn) {
+	defer conn.Close()
+	_ = conn.SetDeadline(time.Now().Add(2 * time.Second))
+	req, err := http.ReadRequest(bufio.NewReader(conn))
+	if err != nil {
+		return
+	}
+	s.mu.Lock()
+	s.seen = append(s.seen, req.Method+" "+req.Host)
+	s.mu.Unlock()
+	_, _ = conn.Write([]byte("HTTP/1.1 403 Forbidden\r\nContent-Length: 0\r\n\r\n"))
+}
+
+func (s *receivedCONNECTListener) addr() string {
+	return s.ln.Addr().String()
+}
+
+func (s *receivedCONNECTListener) seenRequests() []string {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	out := make([]string, len(s.seen))
+	copy(out, s.seen)
+	return out
+}
+
+func countReceivedCONNECT(seen []string, want string) int {
+	n := 0
+	for _, got := range seen {
+		if got == want {
+			n++
+		}
+	}
+	return n
+}
+
+func receivedProxyChildEnv(scenario, proxyAddr string) []string {
+	env := make([]string, 0, len(os.Environ())+2)
+	for _, kv := range os.Environ() {
+		key, _, ok := strings.Cut(kv, "=")
+		if !ok {
+			continue
+		}
+		switch strings.ToLower(key) {
+		case "http_proxy", "https_proxy", "no_proxy", "cgi_no_proxy":
+			continue
+		}
+		if key == receivedProxyChildKey || key == receivedProxyAddrKey {
+			continue
+		}
+		env = append(env, kv)
+	}
+	return append(env,
+		receivedProxyChildKey+"="+scenario,
+		receivedProxyAddrKey+"="+proxyAddr,
+	)
+}
+
+func runReceivedProxyChildProcess(t *testing.T, scenario, proxyAddr string) {
+	t.Helper()
+	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	defer cancel()
+	cmd := exec.CommandContext(
+		ctx,
+		os.Args[0],
+		"-test.run=^TestReceivedDriverUseEnvProxyWiring$",
+		"-test.v=true",
+	)
+	cmd.Env = receivedProxyChildEnv(scenario, proxyAddr)
+	out, err := cmd.CombinedOutput()
+	if ctx.Err() != nil {
+		t.Fatalf("proxy child %s timed out: %v\n%s", scenario, err, out)
+	}
+	if err != nil {
+		t.Fatalf("proxy child %s failed: %v\n%s", scenario, err, out)
+	}
+}
+
+func runReceivedProxyChild(t *testing.T, scenario string) {
+	t.Helper()
+	proxyAddr := os.Getenv(receivedProxyAddrKey)
+	if proxyAddr == "" {
+		t.Fatal("child missing " + receivedProxyAddrKey)
+	}
+	t.Setenv("HTTPS_PROXY", "http://"+proxyAddr)
+
+	var d *driver
+	var target string
+	switch scenario {
+	case "direct":
+		// Omitted ocm_use_env_proxy keeps Proxy nil, so HTTPS_PROXY must not CONNECT.
+		d = newReceivedDriver(t, map[string]any{})
+		target = receivedDirectTarget
+	case "proxy-discover", "proxy-stat":
+		// allow_loopback_federation is required so Control accepts the
+		// 127.0.0.1 proxy hop; otherwise CONNECT never reaches the listener.
+		d = newReceivedDriver(t, map[string]any{
+			"ocm_use_env_proxy":         true,
+			"allow_loopback_federation": true,
+		})
+		target = receivedProxyTarget
+	default:
+		t.Fatalf("unknown child scenario %q", scenario)
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+	if scenario != "proxy-stat" {
+		_, discoErr := d.ocmClient.Discover(ctx, target)
+		if scenario == "direct" {
+			assertReceivedDirectPolicyError(t, "Discover", discoErr)
+		} else if errors.Is(discoErr, client.ErrPolicyViolation) {
+			t.Fatalf("true config denied the Discover proxy hop: %v", discoErr)
+		}
+	}
+	if scenario != "proxy-discover" {
+		_, statErr := d.newWebDAVClient(target, nil).Stat("")
+		if scenario == "direct" {
+			assertReceivedDirectPolicyError(t, "Stat", statErr)
+		} else if errors.Is(statErr, client.ErrPolicyViolation) {
+			t.Fatalf("true config denied the WebDAV proxy hop: %v", statErr)
+		}
+	}
+}
+
+func assertReceivedDirectPolicyError(t *testing.T, op string, err error) {
+	t.Helper()
+	if !errors.Is(err, client.ErrPolicyViolation) {
+		t.Fatalf("omitted key %s error = %v, want ErrPolicyViolation", op, err)
+	}
+	got := err.Error()
+	if !strings.Contains(got, "non-public address") {
+		t.Errorf("omitted key %s error = %q, want non-public address", op, got)
+	}
+	if !strings.Contains(got, "192.168.1.1:9") {
+		t.Errorf("omitted key %s error = %q, want 192.168.1.1:9", op, got)
+	}
+	if strings.Contains(got, "refusing scheme") {
+		t.Errorf("omitted key %s error = %q, must not contain refusing scheme", op, got)
+	}
+}
+
 func TestReceivedDiscoverRejectsLoopbackByDefault(t *testing.T) {
 	var hits int
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -853,20 +1072,14 @@ func TestReceivedDiscoverRejectsLoopbackByDefault(t *testing.T) {
 }
 
 func TestReceivedExchangeTokenRejectsPrivateEndpoint(t *testing.T) {
-	var tokenHits int
 	var srv *httptest.Server
 	srv = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path == "/ocm/token" {
-			tokenHits++
-			http.Error(w, "token endpoint should not be reached", http.StatusInternalServerError)
-			return
-		}
 		w.Header().Set("Content-Type", "application/json")
 		_ = json.NewEncoder(w).Encode(map[string]any{
 			"enabled":       true,
 			"apiVersion":    "1.2.0",
 			"endPoint":      srv.URL + "/ocm",
-			"tokenEndPoint": "http://192.168.1.1:9/ocm/token",
+			"tokenEndPoint": "https://192.168.1.1:9/ocm/token",
 		})
 	}))
 	defer srv.Close()
@@ -884,8 +1097,15 @@ func TestReceivedExchangeTokenRejectsPrivateEndpoint(t *testing.T) {
 	if !errors.Is(err, client.ErrPolicyViolation) {
 		t.Errorf("exchangeAccessToken() error = %v, want ErrPolicyViolation", err)
 	}
-	if tokenHits != 0 {
-		t.Fatalf("loopback token hits = %d, want 0", tokenHits)
+	got := err.Error()
+	if !strings.Contains(got, "non-public address") {
+		t.Errorf("exchangeAccessToken() error = %q, want non-public address", got)
+	}
+	if !strings.Contains(got, "192.168.1.1:9") {
+		t.Errorf("exchangeAccessToken() error = %q, want 192.168.1.1:9", got)
+	}
+	if strings.Contains(got, "refusing scheme") {
+		t.Errorf("exchangeAccessToken() error = %q, must not contain refusing scheme", got)
 	}
 }
 
