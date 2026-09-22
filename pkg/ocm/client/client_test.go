@@ -1228,6 +1228,68 @@ func TestNewPublicOnlyHTTPClientSchemePolicy(t *testing.T) {
 	}
 }
 
+func TestHTTPTransportContract(t *testing.T) {
+	t.Parallel()
+
+	cfg := TransportConfig{
+		Timeout:  time.Second,
+		Insecure: true,
+	}
+
+	t.Run("public-only client", func(t *testing.T) {
+		t.Parallel()
+		c := NewPublicOnlyHTTPClient(cfg)
+		pt, ok := c.Transport.(*publicOnlyTransport)
+		if !ok {
+			t.Fatalf("transport type = %T, want *publicOnlyTransport", c.Transport)
+		}
+		got := HTTPTransport(c.Transport)
+		if got != pt.base {
+			t.Fatalf("HTTPTransport() = %p, want guarded base %p", got, pt.base)
+		}
+	})
+
+	t.Run("public-only round tripper", func(t *testing.T) {
+		t.Parallel()
+		rt := NewPublicOnlyRoundTripper(cfg)
+		pt, ok := rt.(*publicOnlyTransport)
+		if !ok {
+			t.Fatalf("transport type = %T, want *publicOnlyTransport", rt)
+		}
+		got := HTTPTransport(rt)
+		if got != pt.base {
+			t.Fatalf("HTTPTransport() = %p, want guarded base %p", got, pt.base)
+		}
+	})
+
+	t.Run("trusted client", func(t *testing.T) {
+		t.Parallel()
+		c := NewTrustedHTTPClient(cfg)
+		tr, ok := c.Transport.(*http.Transport)
+		if !ok {
+			t.Fatalf("transport type = %T, want *http.Transport", c.Transport)
+		}
+		got := HTTPTransport(c.Transport)
+		if got != tr {
+			t.Fatalf("HTTPTransport() = %p, want the transport itself %p", got, tr)
+		}
+	})
+
+	t.Run("nil", func(t *testing.T) {
+		t.Parallel()
+		if got := HTTPTransport(nil); got != nil {
+			t.Fatalf("HTTPTransport(nil) = %v, want nil", got)
+		}
+	})
+
+	t.Run("stub round tripper", func(t *testing.T) {
+		t.Parallel()
+		if got := HTTPTransport(&stubRoundTripper{}); got != nil {
+			t.Fatalf("HTTPTransport(stub) = %v, want nil", got)
+		}
+	})
+}
+
 func TestPublicOnlyCheckRedirect(t *testing.T) {
 	t.Parallel()
 

@@ -930,16 +930,62 @@ func TestLegacyWebDAVStatPublicOnlyPolicy(t *testing.T) {
 
 	t.Run("allow_loopback_federation does not permit RFC1918", func(t *testing.T) {
 		h := initSharesHandler(t, &config{AllowLoopbackFederation: true})
-		c := gowebdav.NewClient("http://192.168.1.1:9/", "", "")
+		c := gowebdav.NewClient("https://192.168.1.1:9/", "", "")
 		c.SetTransport(h.webdavTransport)
 		_, err := c.Stat("")
 		if err == nil {
 			t.Fatal("expected Stat to refuse RFC1918")
 		}
 		if !errors.Is(err, client.ErrPolicyViolation) {
-			t.Errorf("Stat() error = %v, want ErrPolicyViolation", err)
+			t.Fatalf("Stat() error = %v, want ErrPolicyViolation", err)
+		}
+		got := err.Error()
+		if !strings.Contains(got, "non-public address") {
+			t.Errorf("Stat() error = %q, want non-public address", got)
+		}
+		if !strings.Contains(got, "192.168.1.1:9") {
+			t.Errorf("Stat() error = %q, want 192.168.1.1:9", got)
+		}
+		if strings.Contains(got, "refusing scheme") {
+			t.Errorf("Stat() error = %q, must not contain refusing scheme", got)
 		}
 	})
+}
+
+func TestGowebDAVPublicOnlyTransportRejectsHTTPSDowngrade(t *testing.T) {
+	var httpHits int
+	httpSrv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		httpHits++
+		writeWebDAVPropfind(w, false)
+	}))
+	defer httpSrv.Close()
+
+	var tlsHits int
+	tlsSrv := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		tlsHits++
+		http.Redirect(w, r, httpSrv.URL, http.StatusFound)
+	}))
+	defer tlsSrv.Close()
+
+	c := gowebdav.NewClient(tlsSrv.URL, "", "")
+	c.SetTransport(client.NewPublicOnlyRoundTripper(client.TransportConfig{
+		Timeout:       5 * time.Second,
+		Insecure:      true,
+		AllowLoopback: true,
+	}))
+	_, err := c.Stat("")
+	if !errors.Is(err, client.ErrPolicyViolation) {
+		t.Fatalf("Stat() error = %v, want ErrPolicyViolation", err)
+	}
+	if !strings.Contains(err.Error(), "refusing http redirect") {
+		t.Errorf("Stat() error = %q, want refusing http redirect", err)
+	}
+	if tlsHits < 1 {
+		t.Fatalf("tls requests = %d, want at least 1", tlsHits)
+	}
+	if httpHits != 0 {
+		t.Fatalf("http requests = %d, want 0", httpHits)
+	}
 }
 
 func TestCreateShareLegacyWebDAVStatUsesStoredTransport(t *testing.T) {
