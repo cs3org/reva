@@ -135,7 +135,21 @@ func checkResolvedAddr(address string, allowLoopback bool) error {
 		return err
 	}
 	ip, err := netip.ParseAddr(host)
-	if err != nil || !isAllowedIP(ip, allowLoopback) {
+	if err != nil {
+		return fmt.Errorf("%w: refusing to connect to non-public address %s", ErrPolicyViolation, address)
+	}
+	// Reject every parsed IP with a non-empty IPv6 zone before classification.
+	// netip.Prefix.Contains returns false for zoned addresses, so NAT64/denied-prefix
+	// checks would be bypassed; Unmap drops the zone, so a zoned IPv4-mapped or zoned public IPv6 cannot
+	// be safely normalized. Intentional and conservative for a public-only client; AllowLoopback must not permit zoned ::1.
+	if ip.Zone() != "" {
+		return fmt.Errorf(
+			"%w: refusing to connect to zoned address %s",
+			ErrPolicyViolation,
+			address,
+		)
+	}
+	if !isAllowedIP(ip, allowLoopback) {
 		return fmt.Errorf("%w: refusing to connect to non-public address %s", ErrPolicyViolation, address)
 	}
 	return nil
