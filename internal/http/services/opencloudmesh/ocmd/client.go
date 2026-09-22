@@ -22,6 +22,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	stderrors "errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -136,6 +137,9 @@ func (c *OCMClient) Discover(ctx context.Context, endpoint string) (*wellknown.O
 		body, err = c.httpget(ctx, remoteurl, DefaultResponseLimit)
 		if err != nil || len(body) == 0 {
 			log.Warn().Err(err).Any("remote", remoteurl).Str("response", string(body)).Msg("invalid or empty response")
+			if stderrors.Is(err, ErrResponseTooLarge) || stderrors.Is(err, client.ErrPolicyViolation) {
+				return nil, err
+			}
 			return nil, errtypes.InternalError("Invalid response on OCM discovery")
 		}
 	}
