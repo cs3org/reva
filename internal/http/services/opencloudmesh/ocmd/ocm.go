@@ -58,6 +58,10 @@ type config struct {
 	// AllowLoopbackFederation lets inbound share discovery dial loopback. Off
 	// by default; only local two-provider integration topologies should enable it.
 	AllowLoopbackFederation bool `mapstructure:"allow_loopback_federation"`
+	// OCMClientUseEnvProxy lets inbound share discovery honor HTTP_PROXY,
+	// HTTPS_PROXY, and NO_PROXY. Off by default; public-only discovery stays
+	// direct unless operators opt in.
+	OCMClientUseEnvProxy bool `mapstructure:"ocm_client_use_env_proxy"`
 }
 
 func (c *config) ApplyDefaults() {

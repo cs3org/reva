@@ -71,6 +71,7 @@ func (h *sharesHandler) init(c *config) error {
 		Timeout:       time.Duration(c.OCMClientTimeout) * time.Second,
 		Insecure:      c.OCMClientInsecure,
 		AllowLoopback: c.AllowLoopbackFederation,
+		UseEnvProxy:   c.OCMClientUseEnvProxy,
 	})
 	for _, p := range c.AutoAcceptProviders {
 		re, err := regexp.Compile(p)

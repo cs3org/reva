@@ -19,15 +19,20 @@
 package ocmd
 
 import (
+	"bufio"
 	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"net"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"os/exec"
 	"regexp"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -340,6 +345,177 @@ func TestSharesHandlerInitCreatesPublicOnlyClient(t *testing.T) {
 	}
 	if tr.TLSClientConfig.InsecureSkipVerify {
 		t.Fatal("default inbound discovery client must verify TLS")
+	}
+}
+
+const (
+	sharesProxyChildKey    = "OCMD_SHARES_TEST_PROXY_CHILD"
+	sharesProxyAddrKey     = "OCMD_SHARES_TEST_PROXY_ADDR"
+	sharesProxyTarget      = "https://192.168.1.1"
+	sharesProxyCONNECTHost = "192.168.1.1:443"
+)
+
+// TestSharesHandlerInitUseEnvProxyWiring checks inbound discovery proxy
+// wiring by observing CONNECT on a local 127.0.0.1:0 listener. The
+// target is HTTPS RFC1918 so Go will not bypass the proxy the way it
+// does for localhost. Direct discovery is rejected before a socket is
+// created; the proxy case tunnels CONNECT through the local listener.
+// Each case runs in a child because ProxyFromEnvironment snapshots
+// HTTPS_PROXY once per process.
+func TestSharesHandlerInitUseEnvProxyWiring(t *testing.T) {
+	if scenario := os.Getenv(sharesProxyChildKey); scenario != "" {
+		runSharesProxyChild(t, scenario)
+		return
+	}
+
+	t.Run("zero config dials HTTPS non-loopback direct", func(t *testing.T) {
+		spy := startCONNECTListener(t)
+		runSharesProxyChildProcess(t, "direct", spy.addr())
+		if seen := spy.seenRequests(); len(seen) != 0 {
+			t.Fatalf("zero config observed CONNECT: %q", seen)
+		}
+	})
+
+	t.Run("true config sends CONNECT through HTTPS_PROXY", func(t *testing.T) {
+		spy := startCONNECTListener(t)
+		runSharesProxyChildProcess(t, "proxy", spy.addr())
+		want := "CONNECT " + sharesProxyCONNECTHost
+		for _, got := range spy.seenRequests() {
+			if got == want {
+				return
+			}
+		}
+		t.Fatalf("true config CONNECT requests = %q, want %q", spy.seenRequests(), want)
+	})
+}
+
+type connectListener struct {
+	ln   net.Listener
+	mu   sync.Mutex
+	seen []string
+}
+
+func startCONNECTListener(t *testing.T) *connectListener {
+	t.Helper()
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	s := &connectListener{ln: ln}
+	t.Cleanup(func() { _ = ln.Close() })
+	go s.accept()
+	return s
+}
+
+func (s *connectListener) accept() {
+	for {
+		conn, err := s.ln.Accept()
+		if err != nil {
+			return
+		}
+		go s.handle(conn)
+	}
+}
+
+func (s *connectListener) handle(conn net.Conn) {
+	defer conn.Close()
+	_ = conn.SetDeadline(time.Now().Add(2 * time.Second))
+	req, err := http.ReadRequest(bufio.NewReader(conn))
+	if err != nil {
+		return
+	}
+	s.mu.Lock()
+	s.seen = append(s.seen, req.Method+" "+req.Host)
+	s.mu.Unlock()
+	_, _ = conn.Write([]byte("HTTP/1.1 403 Forbidden\r\nContent-Length: 0\r\n\r\n"))
+}
+
+func (s *connectListener) addr() string {
+	return s.ln.Addr().String()
+}
+
+func (s *connectListener) seenRequests() []string {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	out := make([]string, len(s.seen))
+	copy(out, s.seen)
+	return out
+}
+
+func sharesProxyChildEnv(scenario, proxyAddr string) []string {
+	env := make([]string, 0, len(os.Environ())+2)
+	for _, kv := range os.Environ() {
+		key, _, ok := strings.Cut(kv, "=")
+		if !ok {
+			continue
+		}
+		switch strings.ToLower(key) {
+		case "http_proxy", "https_proxy", "no_proxy", "cgi_no_proxy":
+			continue
+		}
+		if key == sharesProxyChildKey || key == sharesProxyAddrKey {
+			continue
+		}
+		env = append(env, kv)
+	}
+	return append(env,
+		sharesProxyChildKey+"="+scenario,
+		sharesProxyAddrKey+"="+proxyAddr,
+	)
+}
+
+func runSharesProxyChildProcess(t *testing.T, scenario, proxyAddr string) {
+	t.Helper()
+	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	defer cancel()
+	cmd := exec.CommandContext(
+		ctx,
+		os.Args[0],
+		"-test.run=^TestSharesHandlerInitUseEnvProxyWiring$",
+		"-test.v=true",
+	)
+	cmd.Env = sharesProxyChildEnv(scenario, proxyAddr)
+	out, err := cmd.CombinedOutput()
+	if ctx.Err() != nil {
+		t.Fatalf("proxy child %s timed out: %v\n%s", scenario, err, out)
+	}
+	if err != nil {
+		t.Fatalf("proxy child %s failed: %v\n%s", scenario, err, out)
+	}
+}
+
+func runSharesProxyChild(t *testing.T, scenario string) {
+	t.Helper()
+	proxyAddr := os.Getenv(sharesProxyAddrKey)
+	if proxyAddr == "" {
+		t.Fatal("child missing " + sharesProxyAddrKey)
+	}
+	t.Setenv("HTTPS_PROXY", "http://"+proxyAddr)
+
+	conf := &config{}
+	switch scenario {
+	case "direct":
+		// Zero config keeps Proxy nil, so HTTPS_PROXY must not CONNECT.
+	case "proxy":
+		// AllowLoopbackFederation is required so Control accepts the
+		// 127.0.0.1 proxy hop; otherwise CONNECT never reaches the listener.
+		conf = &config{
+			OCMClientUseEnvProxy:    true,
+			AllowLoopbackFederation: true,
+		}
+	default:
+		t.Fatalf("unknown child scenario %q", scenario)
+	}
+
+	h := initSharesHandler(t, conf)
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+	_, _, err := h.discoverOcmResourceTypes(ctx, sharesProxyTarget)
+	if scenario == "direct" && !errors.Is(err, client.ErrPolicyViolation) {
+		t.Fatalf("zero config error = %v, want ErrPolicyViolation", err)
+	}
+	if scenario == "proxy" && errors.Is(err, client.ErrPolicyViolation) {
+		t.Fatalf("true config denied the proxy hop: %v", err)
 	}
 }
 
