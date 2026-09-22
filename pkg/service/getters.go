@@ -44,10 +44,12 @@ import (
 )
 
 // Each getter bakes in its peer name and builds the CS3 client over the
-// resolved connection.
+// resolved connection. That connection resolves a node per call and fails over
+// to another one when the node it picked cannot be reached, so a caller holding
+// a client from here never has to think about which node is serving it.
 
 func (c *clients) Gateway(ctx context.Context) (gateway.GatewayAPIClient, error) {
-	conn, _, err := c.resolve(ctx, NameGateway)
+	conn, err := c.conn(ctx, NameGateway)
 	if err != nil {
 		return nil, err
 	}
@@ -55,7 +57,7 @@ func (c *clients) Gateway(ctx context.Context) (gateway.GatewayAPIClient, error)
 }
 
 func (c *clients) StorageProvider(ctx context.Context) (storageprovider.ProviderAPIClient, error) {
-	conn, _, err := c.resolve(ctx, NameStorageProvider)
+	conn, err := c.conn(ctx, NameStorageProvider)
 	if err != nil {
 		return nil, err
 	}
@@ -63,7 +65,7 @@ func (c *clients) StorageProvider(ctx context.Context) (storageprovider.Provider
 }
 
 func (c *clients) StorageRegistry(ctx context.Context) (storageregistry.RegistryAPIClient, error) {
-	conn, _, err := c.resolve(ctx, NameStorageRegistry)
+	conn, err := c.conn(ctx, NameStorageRegistry)
 	if err != nil {
 		return nil, err
 	}
@@ -71,7 +73,7 @@ func (c *clients) StorageRegistry(ctx context.Context) (storageregistry.Registry
 }
 
 func (c *clients) Spaces(ctx context.Context) (storageprovider.SpacesAPIClient, error) {
-	conn, _, err := c.resolve(ctx, NameSpaces)
+	conn, err := c.conn(ctx, NameSpaces)
 	if err != nil {
 		return nil, err
 	}
@@ -79,7 +81,7 @@ func (c *clients) Spaces(ctx context.Context) (storageprovider.SpacesAPIClient, 
 }
 
 func (c *clients) AuthProvider(ctx context.Context) (authprovider.ProviderAPIClient, error) {
-	conn, _, err := c.resolve(ctx, NameAuthProvider)
+	conn, err := c.conn(ctx, NameAuthProvider)
 	if err != nil {
 		return nil, err
 	}
@@ -87,7 +89,7 @@ func (c *clients) AuthProvider(ctx context.Context) (authprovider.ProviderAPICli
 }
 
 func (c *clients) AuthRegistry(ctx context.Context) (authregistry.RegistryAPIClient, error) {
-	conn, _, err := c.resolve(ctx, NameAuthRegistry)
+	conn, err := c.conn(ctx, NameAuthRegistry)
 	if err != nil {
 		return nil, err
 	}
@@ -95,7 +97,7 @@ func (c *clients) AuthRegistry(ctx context.Context) (authregistry.RegistryAPICli
 }
 
 func (c *clients) AppAuthProvider(ctx context.Context) (applicationauth.ApplicationsAPIClient, error) {
-	conn, _, err := c.resolve(ctx, NameAppAuthProvider)
+	conn, err := c.conn(ctx, NameAppAuthProvider)
 	if err != nil {
 		return nil, err
 	}
@@ -103,7 +105,7 @@ func (c *clients) AppAuthProvider(ctx context.Context) (applicationauth.Applicat
 }
 
 func (c *clients) UserProvider(ctx context.Context) (user.UserAPIClient, error) {
-	conn, _, err := c.resolve(ctx, NameUserProvider)
+	conn, err := c.conn(ctx, NameUserProvider)
 	if err != nil {
 		return nil, err
 	}
@@ -111,7 +113,7 @@ func (c *clients) UserProvider(ctx context.Context) (user.UserAPIClient, error) 
 }
 
 func (c *clients) GroupProvider(ctx context.Context) (group.GroupAPIClient, error) {
-	conn, _, err := c.resolve(ctx, NameGroupProvider)
+	conn, err := c.conn(ctx, NameGroupProvider)
 	if err != nil {
 		return nil, err
 	}
@@ -119,7 +121,7 @@ func (c *clients) GroupProvider(ctx context.Context) (group.GroupAPIClient, erro
 }
 
 func (c *clients) UserShareProvider(ctx context.Context) (collaboration.CollaborationAPIClient, error) {
-	conn, _, err := c.resolve(ctx, NameUserShare)
+	conn, err := c.conn(ctx, NameUserShare)
 	if err != nil {
 		return nil, err
 	}
@@ -127,7 +129,7 @@ func (c *clients) UserShareProvider(ctx context.Context) (collaboration.Collabor
 }
 
 func (c *clients) PublicShareProvider(ctx context.Context) (link.LinkAPIClient, error) {
-	conn, _, err := c.resolve(ctx, NamePublicShare)
+	conn, err := c.conn(ctx, NamePublicShare)
 	if err != nil {
 		return nil, err
 	}
@@ -135,7 +137,7 @@ func (c *clients) PublicShareProvider(ctx context.Context) (link.LinkAPIClient, 
 }
 
 func (c *clients) OCMShareProvider(ctx context.Context) (ocm.OcmAPIClient, error) {
-	conn, _, err := c.resolve(ctx, NameOCMShare)
+	conn, err := c.conn(ctx, NameOCMShare)
 	if err != nil {
 		return nil, err
 	}
@@ -143,7 +145,7 @@ func (c *clients) OCMShareProvider(ctx context.Context) (ocm.OcmAPIClient, error
 }
 
 func (c *clients) OCMInviteManager(ctx context.Context) (invitepb.InviteAPIClient, error) {
-	conn, _, err := c.resolve(ctx, NameOCMInvite)
+	conn, err := c.conn(ctx, NameOCMInvite)
 	if err != nil {
 		return nil, err
 	}
@@ -151,7 +153,7 @@ func (c *clients) OCMInviteManager(ctx context.Context) (invitepb.InviteAPIClien
 }
 
 func (c *clients) OCMProviderAuthorizer(ctx context.Context) (ocmprovider.ProviderAPIClient, error) {
-	conn, _, err := c.resolve(ctx, NameOCMProvider)
+	conn, err := c.conn(ctx, NameOCMProvider)
 	if err != nil {
 		return nil, err
 	}
@@ -159,7 +161,7 @@ func (c *clients) OCMProviderAuthorizer(ctx context.Context) (ocmprovider.Provid
 }
 
 func (c *clients) OCMIncoming(ctx context.Context) (ocmincoming.OcmIncomingAPIClient, error) {
-	conn, _, err := c.resolve(ctx, NameOCMIncoming)
+	conn, err := c.conn(ctx, NameOCMIncoming)
 	if err != nil {
 		return nil, err
 	}
@@ -167,7 +169,7 @@ func (c *clients) OCMIncoming(ctx context.Context) (ocmincoming.OcmIncomingAPICl
 }
 
 func (c *clients) Preferences(ctx context.Context) (preferences.PreferencesAPIClient, error) {
-	conn, _, err := c.resolve(ctx, NamePreferences)
+	conn, err := c.conn(ctx, NamePreferences)
 	if err != nil {
 		return nil, err
 	}
@@ -175,7 +177,7 @@ func (c *clients) Preferences(ctx context.Context) (preferences.PreferencesAPICl
 }
 
 func (c *clients) Permissions(ctx context.Context) (permissions.PermissionsAPIClient, error) {
-	conn, _, err := c.resolve(ctx, NamePermissions)
+	conn, err := c.conn(ctx, NamePermissions)
 	if err != nil {
 		return nil, err
 	}
@@ -183,7 +185,7 @@ func (c *clients) Permissions(ctx context.Context) (permissions.PermissionsAPICl
 }
 
 func (c *clients) AppRegistry(ctx context.Context) (appregistry.RegistryAPIClient, error) {
-	conn, _, err := c.resolve(ctx, NameAppRegistry)
+	conn, err := c.conn(ctx, NameAppRegistry)
 	if err != nil {
 		return nil, err
 	}
@@ -191,7 +193,7 @@ func (c *clients) AppRegistry(ctx context.Context) (appregistry.RegistryAPIClien
 }
 
 func (c *clients) AppProvider(ctx context.Context) (appprovider.ProviderAPIClient, error) {
-	conn, _, err := c.resolve(ctx, NameAppProvider)
+	conn, err := c.conn(ctx, NameAppProvider)
 	if err != nil {
 		return nil, err
 	}
@@ -199,7 +201,7 @@ func (c *clients) AppProvider(ctx context.Context) (appprovider.ProviderAPIClien
 }
 
 func (c *clients) DataTx(ctx context.Context) (datatx.TxAPIClient, error) {
-	conn, _, err := c.resolve(ctx, NameDataTx)
+	conn, err := c.conn(ctx, NameDataTx)
 	if err != nil {
 		return nil, err
 	}
@@ -207,7 +209,7 @@ func (c *clients) DataTx(ctx context.Context) (datatx.TxAPIClient, error) {
 }
 
 func (c *clients) Labels(ctx context.Context) (labels.LabelsAPIClient, error) {
-	conn, _, err := c.resolve(ctx, NameLabels)
+	conn, err := c.conn(ctx, NameLabels)
 	if err != nil {
 		return nil, err
 	}

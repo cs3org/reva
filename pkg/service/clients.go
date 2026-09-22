@@ -24,6 +24,7 @@ package service
 import (
 	"context"
 	"fmt"
+	"maps"
 	"os"
 	"sort"
 	"sync"
@@ -135,7 +136,8 @@ type Clients interface {
 	DataTx(ctx context.Context) (datatx.TxAPIClient, error)
 	Labels(ctx context.Context) (labels.LabelsAPIClient, error)
 
-	// Degrade marks the node at address degraded after a failed dial/RPC.
+	// Degrade marks the node at address degraded after a failed dial/RPC, and
+	// passes it over locally for a cooldown.
 	Degrade(service, address string)
 
 	// HTTPEndpoint resolves one ready node matching the filters; HTTPEndpoints
@@ -150,10 +152,17 @@ type clients struct {
 	selector Selector
 
 	mu    sync.Mutex
-	conns map[string]*grpc.ClientConn
+	conns map[string]peerConn
+	// open dials an address. It is a field so that a test can stand in for a
+	// peer that has no listener.
+	open func(address string) (peerConn, error)
 
 	failMu sync.Mutex
 	fails  map[string]*failure
+
+	// penalties holds the nodes this process could not reach; see failover.go.
+	penMu     sync.Mutex
+	penalties map[string]time.Time
 }
 
 // failure is a service's current run of failed lookups.
@@ -165,10 +174,12 @@ type failure struct {
 // NewClients builds a resolver over the registry, one per Reva instance.
 func NewClients(r registry.Registry) Clients {
 	return &clients{
-		registry: r,
-		selector: FirstSelector{},
-		conns:    map[string]*grpc.ClientConn{},
-		fails:    map[string]*failure{},
+		registry:  r,
+		selector:  FirstSelector{},
+		conns:     map[string]peerConn{},
+		open:      func(address string) (peerConn, error) { return dial(address) },
+		fails:     map[string]*failure{},
+		penalties: map[string]time.Time{},
 	}
 }
 
@@ -177,19 +188,26 @@ func (c *clients) WithSelector(s Selector) *clients {
 	return c
 }
 
-// resolve picks a gRPC node for name and returns a cached connection to it. A
-// name is unique per transport, so an HTTP service can carry the same one.
-func (c *clients) resolve(ctx context.Context, name string) (*grpc.ClientConn, string, error) {
+// conn returns the connection the CS3 clients are built on. The eager resolve
+// keeps this getter's contract -- it still reports a peer it cannot resolve --
+// while the connection handed back resolves again on every call, so a node that
+// dies between two calls is failed over instead of failing the caller.
+func (c *clients) conn(ctx context.Context, name string) (grpc.ClientConnInterface, error) {
+	if _, _, err := c.resolve(ctx, name); err != nil {
+		return nil, err
+	}
+	return &failoverConn{clients: c, service: name}, nil
+}
+
+// resolve picks a gRPC node for name and returns a cached connection to it,
+// retrying while the peer is unresolvable. A name is unique per transport, so an
+// HTTP service can carry the same one.
+func (c *clients) resolve(ctx context.Context, name string) (peerConn, string, error) {
 	var node registry.Node
 	err := c.lookup(ctx, name, func() error {
-		svc, err := c.registry.GetService(name)
+		picked, err := c.pick(name, nil)
 		if err != nil {
-			return fmt.Errorf("service registry: resolving %q: %w", name, err)
-		}
-		nodes := filterByMetadata(svc.Nodes(), map[string]string{registry.MetaTransport: registry.TransportGRPC})
-		picked, ok := c.selector.Pick(nodes)
-		if !ok {
-			return fmt.Errorf("service registry: no selectable grpc node for %q", name)
+			return err
 		}
 		node = picked
 		return nil
@@ -197,6 +215,36 @@ func (c *clients) resolve(ctx context.Context, name string) (*grpc.ClientConn, s
 	if err != nil {
 		return nil, "", err
 	}
+	return c.connTo(node)
+}
+
+// resolveOther picks a gRPC node for name that a call has not tried yet. Unlike
+// resolve it does not retry, and does not book a failure against the peer; see
+// failoverConn.next for why.
+func (c *clients) resolveOther(name string, tried []string) (peerConn, string, error) {
+	node, err := c.pick(name, tried)
+	if err != nil {
+		return nil, "", err
+	}
+	return c.connTo(node)
+}
+
+// pick selects one gRPC node of name, passing over the addresses this call has
+// already tried and those this process recently failed to reach.
+func (c *clients) pick(name string, tried []string) (registry.Node, error) {
+	svc, err := c.registry.GetService(name)
+	if err != nil {
+		return nil, fmt.Errorf("service registry: resolving %q: %w", name, err)
+	}
+	nodes := filterByMetadata(svc.Nodes(), map[string]string{registry.MetaTransport: registry.TransportGRPC})
+	node, ok := c.selector.Pick(c.unpenalized(name, without(nodes, tried)))
+	if !ok {
+		return nil, fmt.Errorf("service registry: no selectable grpc node for %q", name)
+	}
+	return node, nil
+}
+
+func (c *clients) connTo(node registry.Node) (peerConn, string, error) {
 	addr := node.Address()
 	conn, err := c.connFor(addr)
 	if err != nil {
@@ -295,13 +343,13 @@ func (c *clients) registrySnapshot(name string) string {
 }
 
 // connFor returns a cached connection to address, dialing on first use.
-func (c *clients) connFor(address string) (*grpc.ClientConn, error) {
+func (c *clients) connFor(address string) (peerConn, error) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	if conn, ok := c.conns[address]; ok {
 		return conn, nil
 	}
-	conn, err := dial(address)
+	conn, err := c.open(address)
 	if err != nil {
 		return nil, err
 	}
@@ -321,8 +369,20 @@ func dial(address string) (*grpc.ClientConn, error) {
 	)
 }
 
-// Degrade is a best-effort hint; it never errors.
+// Degrade passes the node at address over for the cooldown and marks it degraded
+// in the registry. The local part is what failover acts on; the registry write
+// is a best-effort hint for whoever reads it before the node's next heartbeat
+// resets it. Degrade never errors.
 func (c *clients) Degrade(service, address string) {
+	c.penalize(service, address)
+	c.markDegraded(service, address)
+}
+
+// markDegraded records the node's state in the registry. It is only a hint: the
+// node re-registers itself as ready on its next heartbeat, and the liveness loop
+// returns any node it still hears from to ready, so this cannot outlive one
+// heartbeat interval. What failover acts on is the local penalty.
+func (c *clients) markDegraded(service, address string) {
 	svc, err := c.registry.GetService(service)
 	if err != nil {
 		return
@@ -331,7 +391,9 @@ func (c *clients) Degrade(service, address string) {
 		if n.Address() != address {
 			continue
 		}
-		meta := n.Metadata()
+		// Copy: the map belongs to the node the registry handed us, and every
+		// failover now lands here.
+		meta := maps.Clone(n.Metadata())
 		meta[registry.MetaState] = registry.StateDegraded
 		_ = c.registry.Add(registry.NewService(service, []registry.Node{
 			registry.NewNode(n.ID(), n.Address(), meta),
