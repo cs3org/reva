@@ -309,8 +309,20 @@ func TestPublicOnlyClientRefusesInternalHosts(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			_, err := tt.client.Discover(context.Background(), srv.URL)
-			if (err != nil) != tt.wantErr {
-				t.Errorf("Discover() error = %v, wantErr %v", err, tt.wantErr)
+			if !tt.wantErr {
+				if err != nil {
+					t.Errorf("Discover() error = %v, want nil", err)
+				}
+				return
+			}
+			if err == nil {
+				t.Fatal("expected error")
+			}
+			if !errors.Is(err, client.ErrPolicyViolation) {
+				t.Fatalf("error = %v (%T), want ErrPolicyViolation", err, err)
+			}
+			if _, ok := err.(errtypes.InternalError); ok {
+				t.Fatalf("policy error was rewritten as InternalError: %v", err)
 			}
 		})
 	}
@@ -339,6 +351,23 @@ func (t *trackingRoundTripper) RoundTrip(req *http.Request) (*http.Response, err
 	t.tracker.mu.Unlock()
 	resp.Body = &trackedBody{ReadCloser: resp.Body, tracker: t.tracker}
 	return resp, nil
+}
+
+type discoverPathPolicyRT struct {
+	base      http.RoundTripper
+	wellKnown bool
+	legacy    bool
+}
+
+func (p *discoverPathPolicyRT) RoundTrip(req *http.Request) (*http.Response, error) {
+	switch {
+	case p.wellKnown && req.URL.Path == "/.well-known/ocm":
+		return nil, client.ErrPolicyViolation
+	case p.legacy && req.URL.Path == "/ocm-provider":
+		return nil, client.ErrPolicyViolation
+	default:
+		return p.base.RoundTrip(req)
+	}
 }
 
 type trackedBody struct {
@@ -624,34 +653,6 @@ func TestOCMClientAcceptsValidControlPlaneJSON(t *testing.T) {
 			},
 		},
 		{
-			name:   "NewShare success",
-			status: http.StatusOK,
-			body:   shareJSON,
-			check: func(t *testing.T, c *OCMClient, base string) {
-				res, err := c.NewShare(context.Background(), base, testShareRequest())
-				if err != nil {
-					t.Fatal(err)
-				}
-				if res.RecipientDisplayName != "Ada" {
-					t.Fatalf("recipient = %q", res.RecipientDisplayName)
-				}
-			},
-		},
-		{
-			name:   "InviteAccepted success",
-			status: http.StatusOK,
-			body:   inviteJSON,
-			check: func(t *testing.T, c *OCMClient, base string) {
-				u, err := c.InviteAccepted(context.Background(), base, testInviteRequest())
-				if err != nil {
-					t.Fatal(err)
-				}
-				if u.UserID != "ada" || u.Name != "Ada" {
-					t.Fatalf("remote user = %+v", u)
-				}
-			},
-		},
-		{
 			name:   "ExchangeToken success",
 			status: http.StatusOK,
 			body:   tokenJSON,
@@ -845,7 +846,7 @@ func TestOCMClientRejectsOversizedAndMalformedBodies(t *testing.T) {
 		{name: "NewShare limit plus one", method: "newshare", status: http.StatusOK, body: overShare, wantKind: "too-large"},
 		{name: "InviteAccepted limit plus one", method: "invite", status: http.StatusOK, body: overInvite, wantKind: "too-large"},
 		{name: "ExchangeToken limit plus one", method: "token", status: http.StatusOK, body: overToken, wantKind: "too-large"},
-		{name: "chunked oversized discovery is rejected after fallback", method: "discover", status: http.StatusOK, body: overJSON, chunked: true, wantKind: "internal"},
+		{name: "chunked oversized discovery is rejected after fallback", method: "discover", status: http.StatusOK, body: overJSON, chunked: true, wantKind: "too-large"},
 		{name: "chunked oversized NewShare", method: "newshare", status: http.StatusOK, body: overShare, chunked: true, wantKind: "too-large"},
 		{name: "chunked oversized directory", method: "directory", status: http.StatusOK, body: overDir, chunked: true, wantKind: "too-large"},
 		{name: "malformed discovery", method: "discover", status: http.StatusOK, body: []byte("not json"), wantKind: "internal"},
@@ -964,6 +965,148 @@ func TestDiscoverFallsBackToLegacyAfterOversizedWellKnown(t *testing.T) {
 	tracker.assertClosed(t)
 }
 
+func TestDiscoverPreservesFinalSizeAndPolicyErrors(t *testing.T) {
+	t.Parallel()
+
+	valid := []byte(`{"enabled":true,"apiVersion":"1.1"}`)
+	over := padJSON(t, []byte(`{"enabled":true,"apiVersion":"well-known"}`), int(DefaultResponseLimit)+1)
+	malformed := []byte("not json")
+	smallFail := []byte("missing")
+
+	tests := []struct {
+		name         string
+		wellKnown    string
+		legacy       string
+		policyWK     bool
+		policyLegacy bool
+		want         string
+		noLegacy     bool
+	}{
+		{name: "oversized well-known + successful legacy", wellKnown: "oversized", legacy: "success", want: "success"},
+		{name: "oversized well-known + small legacy failure", wellKnown: "oversized", legacy: "small-fail", want: "response"},
+		{name: "small well-known failure + oversized legacy", wellKnown: "small-fail", legacy: "oversized", want: "size"},
+		{name: "policy well-known + successful legacy", wellKnown: "success", legacy: "success", policyWK: true, want: "success"},
+		{name: "policy well-known + oversized legacy", wellKnown: "success", legacy: "oversized", policyWK: true, want: "size"},
+		{name: "oversized well-known + policy legacy", wellKnown: "oversized", legacy: "success", policyLegacy: true, want: "policy"},
+		{name: "policy well-known + small legacy failure", wellKnown: "success", legacy: "small-fail", policyWK: true, want: "response"},
+		{name: "empty well-known + successful legacy", wellKnown: "empty", legacy: "success", want: "success"},
+		{name: "empty final legacy", wellKnown: "empty", legacy: "empty", want: "response"},
+		{name: "malformed non-empty well-known", wellKnown: "malformed", legacy: "success", want: "payload", noLegacy: true},
+		{name: "malformed final legacy", wellKnown: "small-fail", legacy: "malformed", want: "payload"},
+	}
+
+	writeKind := func(w http.ResponseWriter, kind string) {
+		switch kind {
+		case "success":
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = w.Write(valid)
+		case "oversized":
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = w.Write(over)
+		case "empty":
+			w.WriteHeader(http.StatusOK)
+		case "malformed":
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = w.Write(malformed)
+		case "small-fail":
+			w.WriteHeader(http.StatusNotFound)
+			_, _ = w.Write(smallFail)
+		default:
+			w.WriteHeader(http.StatusNotFound)
+		}
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			var mu sync.Mutex
+			legacyHits := 0
+			mux := http.NewServeMux()
+			mux.HandleFunc("/.well-known/ocm", func(w http.ResponseWriter, r *http.Request) {
+				writeKind(w, tt.wellKnown)
+			})
+			mux.HandleFunc("/ocm-provider", func(w http.ResponseWriter, r *http.Request) {
+				mu.Lock()
+				legacyHits++
+				mu.Unlock()
+				writeKind(w, tt.legacy)
+			})
+			srv := httptest.NewServer(mux)
+			defer srv.Close()
+
+			c := NewClient(10*time.Second, true)
+			tracker := trackClientBodies(c)
+			if tt.policyWK || tt.policyLegacy {
+				c.client.Transport = &discoverPathPolicyRT{
+					base:      c.client.Transport,
+					wellKnown: tt.policyWK,
+					legacy:    tt.policyLegacy,
+				}
+			}
+
+			disco, err := c.Discover(context.Background(), srv.URL)
+			switch tt.want {
+			case "success":
+				if err != nil {
+					t.Fatal(err)
+				}
+				if disco == nil || !disco.Enabled || disco.APIVersion != "1.1" {
+					t.Fatalf("discovery = %+v", disco)
+				}
+			case "size":
+				if !errors.Is(err, ErrResponseTooLarge) {
+					t.Fatalf("error = %v (%T), want ErrResponseTooLarge", err, err)
+				}
+			case "policy":
+				if !errors.Is(err, client.ErrPolicyViolation) {
+					t.Fatalf("error = %v (%T), want ErrPolicyViolation", err, err)
+				}
+				if _, ok := err.(errtypes.InternalError); ok {
+					t.Fatalf("policy error was rewritten as InternalError: %v", err)
+				}
+			case "response":
+				ie, ok := err.(errtypes.InternalError)
+				if !ok {
+					t.Fatalf("error = %T %v, want InternalError", err, err)
+				}
+				if errors.Is(err, ErrResponseTooLarge) || errors.Is(err, client.ErrPolicyViolation) {
+					t.Fatalf("generic response error leaked a sentinel: %v", err)
+				}
+				if !strings.Contains(string(ie), "Invalid response") {
+					t.Fatalf("error = %v, want Invalid response", err)
+				}
+				if strings.Contains(string(ie), "Invalid payload") {
+					t.Fatalf("got payload error, want response error: %v", err)
+				}
+			case "payload":
+				ie, ok := err.(errtypes.InternalError)
+				if !ok {
+					t.Fatalf("error = %T %v, want InternalError", err, err)
+				}
+				if errors.Is(err, ErrResponseTooLarge) || errors.Is(err, client.ErrPolicyViolation) {
+					t.Fatalf("payload error leaked a sentinel: %v", err)
+				}
+				if !strings.Contains(string(ie), "Invalid payload") {
+					t.Fatalf("error = %v, want Invalid payload", err)
+				}
+			default:
+				t.Fatalf("unknown want %q", tt.want)
+			}
+
+			if tt.noLegacy {
+				mu.Lock()
+				hits := legacyHits
+				mu.Unlock()
+				if hits != 0 {
+					t.Fatalf("legacy fallback hits = %d, want 0", hits)
+				}
+			}
+			tracker.assertClosed(t)
+		})
+	}
+}
+
 func TestOCMClientClosesResponseBodiesOnMappedErrors(t *testing.T) {
 	t.Parallel()
 
@@ -1042,7 +1185,7 @@ func TestNewShareAndInviteAcceptedDecodeOnce(t *testing.T) {
 				if err != nil {
 					t.Fatal(err)
 				}
-				if u == nil || u.UserID != "ada" {
+				if u == nil || u.UserID != "ada" || u.Name != "Ada" {
 					t.Fatalf("invite response = %+v", u)
 				}
 			},
