@@ -60,6 +60,10 @@ type TransportConfig struct {
 	Timeout       time.Duration
 	Insecure      bool
 	AllowLoopback bool
+	// UseEnvProxy is the public-only environment-proxy opt-in. False is the
+	// safe default. True installs http.ProxyFromEnvironment. Trusted clients
+	// ignore this field and retain proxy support from #5674.
+	UseEnvProxy bool
 }
 
 // DefaultTransportConfig returns normalized runtime defaults.
@@ -76,7 +80,8 @@ func normalizeTransportConfig(cfg TransportConfig) TransportConfig {
 	return cfg
 }
 
-// NewTrustedHTTPClient returns an HTTP client that keeps environment proxy support.
+// NewTrustedHTTPClient returns an HTTP client that keeps environment proxy
+// support from #5674. It ignores UseEnvProxy.
 func NewTrustedHTTPClient(cfg TransportConfig) *http.Client {
 	cfg = normalizeTransportConfig(cfg)
 	return &http.Client{
@@ -85,7 +90,10 @@ func NewTrustedHTTPClient(cfg TransportConfig) *http.Client {
 	}
 }
 
-// NewPublicOnlyHTTPClient returns an HTTP client that only dials public addresses.
+// NewPublicOnlyHTTPClient returns an HTTP client that only dials public
+// addresses. Direct mode (UseEnvProxy false) is the safe default. True
+// installs http.ProxyFromEnvironment. A selected proxy hides the OCM target
+// from Control; the guarded dialer classifies the proxy hop.
 func NewPublicOnlyHTTPClient(cfg TransportConfig) *http.Client {
 	cfg = normalizeTransportConfig(cfg)
 	return &http.Client{
@@ -94,7 +102,8 @@ func NewPublicOnlyHTTPClient(cfg TransportConfig) *http.Client {
 	}
 }
 
-// NewPublicOnlyRoundTripper returns a public-only transport with the same address policy.
+// NewPublicOnlyRoundTripper returns a public-only transport with the same
+// address policy and proxy contract as NewPublicOnlyHTTPClient.
 func NewPublicOnlyRoundTripper(cfg TransportConfig) http.RoundTripper {
 	cfg = normalizeTransportConfig(cfg)
 	return newPublicOnlyTransport(cfg)
@@ -113,8 +122,17 @@ func cloneOCMTransport(cfg TransportConfig) *http.Transport {
 
 func newPublicOnlyTransport(cfg TransportConfig) *http.Transport {
 	tr := cloneOCMTransport(cfg)
-	// with a proxy the dial goes to the proxy, so Control never sees the target
-	tr.Proxy = nil
+	// False is the safe default and leaves Proxy nil. True installs
+	// http.ProxyFromEnvironment. Control sees the proxy hop when one is
+	// selected, so a selected proxy hides the OCM target from Control. Go
+	// reads HTTP_PROXY, HTTPS_PROXY, and NO_PROXY once per process on the
+	// first ProxyFromEnvironment call. Restart the process after changing
+	// those variables.
+	if cfg.UseEnvProxy {
+		tr.Proxy = http.ProxyFromEnvironment
+	} else {
+		tr.Proxy = nil
+	}
 	tr.DialContext = (&net.Dialer{
 		Timeout:   cfg.Timeout,
 		KeepAlive: 30 * time.Second,

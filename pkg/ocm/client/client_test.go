@@ -19,13 +19,21 @@
 package client
 
 import (
+	"bufio"
 	"context"
 	"crypto/tls"
 	"errors"
 	"net"
 	"net/http"
+	"net/http/httptest"
 	"net/netip"
+	"net/url"
+	"os"
+	"os/exec"
 	"reflect"
+	"strings"
+	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 )
@@ -65,6 +73,9 @@ func TestNonPositiveTimeoutNormalizesTo10Seconds(t *testing.T) {
 	}
 	if defaults.AllowLoopback {
 		t.Error("DefaultTransportConfig AllowLoopback must stay false")
+	}
+	if defaults.UseEnvProxy {
+		t.Error("DefaultTransportConfig UseEnvProxy must stay false")
 	}
 }
 
@@ -106,6 +117,242 @@ func TestPublicOnlyClientHasNoProxy(t *testing.T) {
 	if rtr.Proxy != nil {
 		t.Error("public-only round tripper must not use a proxy")
 	}
+
+	explicit := TransportConfig{Timeout: time.Second, UseEnvProxy: false}
+	explicitClient := NewPublicOnlyHTTPClient(explicit)
+	explicitTr, ok := explicitClient.Transport.(*http.Transport)
+	if !ok {
+		t.Fatalf("explicit false transport: got %T, want *http.Transport", explicitClient.Transport)
+	}
+	if explicitTr.Proxy != nil {
+		t.Error("UseEnvProxy false must leave the public-only client Proxy nil")
+	}
+	explicitRT := NewPublicOnlyRoundTripper(explicit)
+	explicitRTR, ok := explicitRT.(*http.Transport)
+	if !ok {
+		t.Fatalf("explicit false round tripper: got %T, want *http.Transport", explicitRT)
+	}
+	if explicitRTR.Proxy != nil {
+		t.Error("UseEnvProxy false must leave the public-only round tripper Proxy nil")
+	}
+}
+
+func TestPublicOnlyUseEnvProxyInstallsProxyFromEnvironment(t *testing.T) {
+	t.Parallel()
+
+	cfg := TransportConfig{Timeout: time.Second, UseEnvProxy: true}
+	want := reflect.ValueOf(http.ProxyFromEnvironment).Pointer()
+
+	c := NewPublicOnlyHTTPClient(cfg)
+	tr, ok := c.Transport.(*http.Transport)
+	if !ok {
+		t.Fatalf("public-only transport: got %T, want *http.Transport", c.Transport)
+	}
+	if tr.Proxy == nil {
+		t.Fatal("UseEnvProxy true must install a proxy callback")
+	}
+	if reflect.ValueOf(tr.Proxy).Pointer() != want {
+		t.Error("UseEnvProxy true Proxy must be http.ProxyFromEnvironment")
+	}
+	if tr.DialContext == nil {
+		t.Fatal("UseEnvProxy true must keep DialContext installed")
+	}
+	if err := dialThrough(t, tr, "127.0.0.1:9"); !errors.Is(err, ErrPolicyViolation) {
+		t.Errorf("UseEnvProxy true dial 127.0.0.1:9: %v, want ErrPolicyViolation", err)
+	}
+
+	rt := NewPublicOnlyRoundTripper(cfg)
+	rtr, ok := rt.(*http.Transport)
+	if !ok {
+		t.Fatalf("public-only round tripper: got %T, want *http.Transport", rt)
+	}
+	if rtr.Proxy == nil {
+		t.Fatal("UseEnvProxy true round tripper must install a proxy callback")
+	}
+	if reflect.ValueOf(rtr.Proxy).Pointer() != want {
+		t.Error("UseEnvProxy true round tripper Proxy must be http.ProxyFromEnvironment")
+	}
+	if rtr.DialContext == nil {
+		t.Fatal("UseEnvProxy true round tripper must keep DialContext installed")
+	}
+}
+
+func TestTrustedClientIgnoresUseEnvProxy(t *testing.T) {
+	t.Parallel()
+
+	want := reflect.ValueOf(http.ProxyFromEnvironment).Pointer()
+	tests := []struct {
+		name        string
+		useEnvProxy bool
+	}{
+		{name: "false", useEnvProxy: false},
+		{name: "true", useEnvProxy: true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			c := NewTrustedHTTPClient(TransportConfig{
+				Timeout:     time.Second,
+				UseEnvProxy: tt.useEnvProxy,
+			})
+			tr, ok := c.Transport.(*http.Transport)
+			if !ok {
+				t.Fatalf("trusted transport: got %T, want *http.Transport", c.Transport)
+			}
+			if tr.Proxy == nil {
+				t.Fatal("trusted client must retain a proxy callback")
+			}
+			if reflect.ValueOf(tr.Proxy).Pointer() != want {
+				t.Error("trusted client Proxy must be http.ProxyFromEnvironment")
+			}
+		})
+	}
+}
+
+func TestPublicOnlyProxyHopAddressPolicy(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name          string
+		allowLoopback bool
+		proxy         string
+	}{
+		{name: "loopback denied without AllowLoopback", allowLoopback: false, proxy: "http://127.0.0.1:9"},
+		{name: "rfc1918 denied with AllowLoopback", allowLoopback: true, proxy: "http://10.1.2.3:9"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			c := NewPublicOnlyHTTPClient(TransportConfig{
+				Timeout:       2 * time.Second,
+				AllowLoopback: tt.allowLoopback,
+				Insecure:      true,
+			})
+			setTestProxy(t, c.Transport, tt.proxy)
+			err := doHTTPS(t, c, envProxyTarget)
+			if !errors.Is(err, ErrPolicyViolation) {
+				t.Errorf("Do(%s via %s) = %v, want ErrPolicyViolation", envProxyTarget, tt.proxy, err)
+			}
+		})
+	}
+}
+
+func TestPublicOnlyLoopbackProxyReceivesCONNECT(t *testing.T) {
+	t.Parallel()
+
+	spy := startCONNECTSpy(t)
+	c := NewPublicOnlyHTTPClient(TransportConfig{
+		Timeout:       2 * time.Second,
+		AllowLoopback: true,
+		Insecure:      true,
+	})
+	setTestProxy(t, c.Transport, "http://"+spy.addr())
+	_ = doHTTPS(t, c, envProxyTarget)
+
+	want := "CONNECT " + envProxyHost + ":443"
+	for _, got := range spy.seenRequests() {
+		if got == want {
+			return
+		}
+	}
+	t.Fatalf("loopback proxy requests = %q, want %q", spy.seenRequests(), want)
+}
+
+func TestPublicOnlyDirectModeDialsTarget(t *testing.T) {
+	t.Parallel()
+
+	var hits atomic.Int32
+	srv := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		hits.Add(1)
+		w.WriteHeader(http.StatusNoContent)
+	}))
+	t.Cleanup(srv.Close)
+
+	target, err := url.Parse(srv.URL)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	spy := startCONNECTSpy(t)
+	proxyURL := "http://" + spy.addr()
+	cfg := TransportConfig{
+		Timeout:       2 * time.Second,
+		AllowLoopback: true,
+		Insecure:      true,
+		UseEnvProxy:   false,
+	}
+
+	direct := NewPublicOnlyHTTPClient(cfg)
+	tr, ok := direct.Transport.(*http.Transport)
+	if !ok {
+		t.Fatalf("public-only transport: got %T, want *http.Transport", direct.Transport)
+	}
+	if tr.Proxy != nil {
+		t.Fatal("direct mode must leave Proxy nil")
+	}
+
+	resp, err := direct.Get(srv.URL)
+	if err != nil {
+		t.Fatalf("direct Get(%s): %v", srv.URL, err)
+	}
+	_ = resp.Body.Close()
+	if hits.Load() != 1 {
+		t.Fatalf("direct mode target hits = %d, want 1", hits.Load())
+	}
+	if seen := spy.seenRequests(); len(seen) != 0 {
+		t.Fatalf("direct mode contacted the configured proxy: %q", seen)
+	}
+
+	proxied := NewPublicOnlyHTTPClient(cfg)
+	setTestProxy(t, proxied.Transport, proxyURL)
+	_ = doHTTPS(t, proxied, srv.URL)
+	if hits.Load() != 1 {
+		t.Fatalf("configured proxy reached the target: hits = %d, want 1", hits.Load())
+	}
+	want := "CONNECT " + target.Host
+	for _, got := range spy.seenRequests() {
+		if got == want {
+			return
+		}
+	}
+	t.Fatalf("configured proxy requests = %q, want %q", spy.seenRequests(), want)
+}
+
+// ProxyFromEnvironment reads HTTP_PROXY, HTTPS_PROXY, and NO_PROXY once per
+// process. Each snapshot runs in its own subprocess. The target is a
+// non-loopback hostname because Go bypasses proxies for localhost.
+func TestPublicOnlyEnvProxySnapshots(t *testing.T) {
+	if scenario := os.Getenv(envProxyChildKey); scenario != "" {
+		runPublicOnlyEnvProxyChild(t, scenario)
+		return
+	}
+
+	t.Run("HTTPS_PROXY", func(t *testing.T) {
+		spy := startCONNECTSpy(t)
+		runEnvProxyChild(t, "HTTPS_PROXY", map[string]string{
+			"HTTPS_PROXY": "http://" + spy.addr(),
+		})
+		want := "CONNECT " + envProxyHost + ":443"
+		for _, got := range spy.seenRequests() {
+			if got == want {
+				return
+			}
+		}
+		t.Fatalf("HTTPS_PROXY child requests = %q, want %q", spy.seenRequests(), want)
+	})
+
+	t.Run("NO_PROXY", func(t *testing.T) {
+		spy := startCONNECTSpy(t)
+		runEnvProxyChild(t, "NO_PROXY", map[string]string{
+			"HTTPS_PROXY": "http://" + spy.addr(),
+			"NO_PROXY":    envProxyHost,
+		})
+		if seen := spy.seenRequests(); len(seen) != 0 {
+			t.Fatalf("NO_PROXY child contacted the proxy: %q", seen)
+		}
+	})
 }
 
 func TestIsPublicIP(t *testing.T) {
@@ -376,4 +623,167 @@ func dialThrough(t *testing.T, rt http.RoundTripper, address string) error {
 		_ = conn.Close()
 	}
 	return err
+}
+
+const (
+	envProxyChildKey = "OCM_CLIENT_TEST_PROXY_CHILD"
+	envProxyTarget   = "https://ocm-target.example/"
+	envProxyHost     = "ocm-target.example"
+)
+
+func doHTTPS(t *testing.T, c *http.Client, rawURL string) error {
+	t.Helper()
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, rawURL, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	resp, err := c.Do(req)
+	if resp != nil {
+		_ = resp.Body.Close()
+	}
+	return err
+}
+
+func setTestProxy(t *testing.T, rt http.RoundTripper, rawURL string) {
+	t.Helper()
+	tr, ok := rt.(*http.Transport)
+	if !ok {
+		t.Fatalf("got %T, want *http.Transport", rt)
+	}
+	u, err := url.Parse(rawURL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	tr.Proxy = http.ProxyURL(u)
+}
+
+type connectSpy struct {
+	ln   net.Listener
+	mu   sync.Mutex
+	seen []string
+}
+
+func startCONNECTSpy(t *testing.T) *connectSpy {
+	t.Helper()
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	s := &connectSpy{ln: ln}
+	t.Cleanup(func() { _ = ln.Close() })
+	go s.accept()
+	return s
+}
+
+func (s *connectSpy) accept() {
+	for {
+		conn, err := s.ln.Accept()
+		if err != nil {
+			return
+		}
+		go s.handle(conn)
+	}
+}
+
+func (s *connectSpy) handle(conn net.Conn) {
+	defer conn.Close()
+	_ = conn.SetDeadline(time.Now().Add(2 * time.Second))
+	req, err := http.ReadRequest(bufio.NewReader(conn))
+	if err != nil {
+		return
+	}
+	s.mu.Lock()
+	s.seen = append(s.seen, req.Method+" "+req.Host)
+	s.mu.Unlock()
+	_, _ = conn.Write([]byte("HTTP/1.1 403 Forbidden\r\nContent-Length: 0\r\n\r\n"))
+}
+
+func (s *connectSpy) addr() string {
+	return s.ln.Addr().String()
+}
+
+func (s *connectSpy) seenRequests() []string {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	out := make([]string, len(s.seen))
+	copy(out, s.seen)
+	return out
+}
+
+func dropProxyEnvKey(key string) bool {
+	switch strings.ToLower(key) {
+	case "http_proxy", "https_proxy", "no_proxy", "cgi_no_proxy":
+		return true
+	default:
+		return key == envProxyChildKey
+	}
+}
+
+func childTestEnv(extra map[string]string) []string {
+	env := make([]string, 0, len(os.Environ())+len(extra))
+	for _, kv := range os.Environ() {
+		key, _, ok := strings.Cut(kv, "=")
+		if !ok {
+			continue
+		}
+		if dropProxyEnvKey(key) {
+			continue
+		}
+		if _, ok := extra[key]; ok {
+			continue
+		}
+		env = append(env, kv)
+	}
+	for k, v := range extra {
+		env = append(env, k+"="+v)
+	}
+	return env
+}
+
+func runEnvProxyChild(t *testing.T, scenario string, extra map[string]string) {
+	t.Helper()
+	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	defer cancel()
+	cmd := exec.CommandContext(
+		ctx,
+		os.Args[0],
+		"-test.run=^TestPublicOnlyEnvProxySnapshots$",
+		"-test.v=true",
+	)
+	env := map[string]string{envProxyChildKey: scenario}
+	for k, v := range extra {
+		env[k] = v
+	}
+	cmd.Env = childTestEnv(env)
+	out, err := cmd.CombinedOutput()
+	if ctx.Err() != nil {
+		t.Fatalf("child %s timed out: %v\n%s", scenario, err, out)
+	}
+	if err != nil {
+		t.Fatalf("child %s failed: %v\n%s", scenario, err, out)
+	}
+}
+
+func runPublicOnlyEnvProxyChild(t *testing.T, scenario string) {
+	t.Helper()
+	c := NewPublicOnlyHTTPClient(TransportConfig{
+		Timeout:       2 * time.Second,
+		AllowLoopback: true,
+		Insecure:      true,
+		UseEnvProxy:   true,
+	})
+	err := doHTTPS(t, c, envProxyTarget)
+	switch scenario {
+	case "HTTPS_PROXY":
+		if errors.Is(err, ErrPolicyViolation) {
+			t.Fatalf("HTTPS_PROXY child denied the proxy hop: %v", err)
+		}
+	case "NO_PROXY":
+		// Direct dial of a non-loopback hostname. The parent asserts that
+		// the spy received no CONNECT.
+	default:
+		t.Fatalf("unknown child scenario %q", scenario)
+	}
 }
