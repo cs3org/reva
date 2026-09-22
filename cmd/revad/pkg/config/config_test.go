@@ -171,6 +171,30 @@ something = "test"`
 	assert.Equal(t, exp, c.GRPC.Services)
 }
 
+// A process whose only grpc listener is the control channel declares [grpc]
+// with no services at all, and the same holds for [http].
+func TestLoadBlockWithoutServices(t *testing.T) {
+	config := `
+[grpc]
+control_address = "0.0.0.0:19101"
+
+[http]
+address = "0.0.0.0:9143"
+
+[serverless.services.notifications]
+nats_address = "nats-01.example.org:4222"`
+
+	c, err := Load(strings.NewReader(config))
+	if err != nil {
+		t.Fatalf("not expected error: %v", err)
+	}
+
+	assert.Equal(t, "0.0.0.0:19101", c.GRPC.ControlAddress)
+	assert.Empty(t, c.GRPC.Services)
+	assert.Equal(t, Address("0.0.0.0:9143"), c.HTTP.Address)
+	assert.Empty(t, c.HTTP.Services)
+}
+
 func TestLoadFullConfig(t *testing.T) {
 	config := `
 [shared]
