@@ -207,11 +207,11 @@ type publicOnlyTransport struct {
 	policy destinationPolicy
 }
 
-// HTTPTransport returns the underlying *http.Transport of a transport produced
-// by this package: the guarded base of a public-only wrapper, or the
-// transport itself when it is already a *http.Transport. It returns nil for
-// any other type. Intended for tests that inspect the dial and TLS
-// configuration of OCM clients after the public-only transport was wrapped.
+// HTTPTransport returns the guarded base *http.Transport for a public-only
+// wrapper. It returns the transport itself for a trusted client. It returns
+// nil for other round trippers. External package tests use it to inspect
+// proxy, dialer, and TLS settings. Production code must not use it to bypass
+// the scheme wrapper.
 func HTTPTransport(rt http.RoundTripper) *http.Transport {
 	if pt, ok := rt.(*publicOnlyTransport); ok {
 		return pt.base
