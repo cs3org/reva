@@ -86,6 +86,8 @@ func (h *sharesHandler) init(c *config) error {
 	}
 	tcfg.AllowedFederationCIDRs = allowedCIDRs
 
+	// Inbound discovery and legacy WebDAV probing share this TransportConfig,
+	// so both use the same address and transport policy.
 	// One public-only OCMClient so Discover and ExchangeToken share the same dial guard.
 	// A discovered token URL cannot skip policy by using a second, unguarded client.
 	h.ocmClient = NewPublicOnlyClientWithConfig(tcfg)

@@ -77,6 +77,7 @@ type config struct {
 	OCMClientTimeout        int    `mapstructure:"ocm_timeout"`
 	OCMClientInsecure       bool   `mapstructure:"ocm_insecure"`
 	AllowLoopbackFederation bool   `mapstructure:"allow_loopback_federation"`
+	UseEnvProxy             bool   `mapstructure:"ocm_use_env_proxy"`
 }
 
 func (c *config) ApplyDefaults() {
@@ -104,6 +105,7 @@ func New(ctx context.Context, m map[string]any) (storage.FS, error) {
 		Timeout:       timeout,
 		Insecure:      insecure,
 		AllowLoopback: allowLoopback,
+		UseEnvProxy:   c.UseEnvProxy,
 	}
 
 	// Loopback is opt-in for local federation tests; production stays public-only.
