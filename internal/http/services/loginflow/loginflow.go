@@ -48,11 +48,14 @@ import (
 	"github.com/cs3org/reva/v3/pkg/auth/scope"
 	"github.com/cs3org/reva/v3/pkg/errtypes"
 	"github.com/cs3org/reva/v3/pkg/rhttp/global"
+	"github.com/cs3org/reva/v3/pkg/rhttp/router"
 	"github.com/cs3org/reva/v3/pkg/utils"
 	"github.com/cs3org/reva/v3/pkg/utils/cfg"
-	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
 )
+
+// mount is where the login flow is served.
+const mount = "/index.php/login/v2"
 
 func init() {
 	global.Register("loginflow", New)
@@ -103,7 +106,6 @@ func (c *config) ApplyDefaults() {
 
 type svc struct {
 	c       *config
-	router  *chi.Mux
 	am      appauth.Manager
 	store   loginflow.Manager
 	limiter *limiter
@@ -145,21 +147,23 @@ func New(ctx context.Context, m map[string]any) (global.Service, error) {
 		limiter: newLimiter(),
 	}
 
-	r := chi.NewRouter()
-	r.Post("/", s.handleInit)
-	r.Get("/flow/{lt}", s.handleBrowserFlow)
-	r.Post("/poll", s.handlePoll)
-	s.router = r
-
 	appctx.GetLogger(ctx).Info().Str("service", "loginflow").Str("prefix", c.Prefix).Str("server_base_url", c.ServerBaseURL).Str("webui_url", c.WebUIURL).Str("appauth_driver", c.AppAuthDriver).Str("store_driver", c.StoreDriver).Int("flow_ttl_seconds", c.FlowTTLSeconds).Msg("loginflow service initialised")
 
 	return s, nil
 }
 
-func (s *svc) Prefix() string        { return s.c.Prefix }
-func (s *svc) Close() error          { return nil }
-func (s *svc) Unprotected() []string { return []string{"/"} }
-func (s *svc) Handler() http.Handler { return s.router }
+func (s *svc) Prefix() string { return mount }
+func (s *svc) Close() error   { return nil }
+
+// Routes declares the login flow endpoints. They are how a client without
+// credentials obtains them, so they run without the auth middleware.
+func (s *svc) Routes(r *router.Router) {
+	r.Group(mount, func(r *router.Router) {
+		r.Post("/", s.handleInit, router.Unprotected())
+		r.Get("/flow/{lt}", s.handleBrowserFlow, router.Unprotected())
+		r.Post("/poll", s.handlePoll, router.Unprotected())
+	})
+}
 
 // JSON wire types ---------------------------------------------------------
 
@@ -245,13 +249,13 @@ func (s *svc) handleInit(w http.ResponseWriter, r *http.Request) {
 func (s *svc) handleBrowserFlow(w http.ResponseWriter, r *http.Request) {
 	log := appctx.GetLogger(r.Context()).With().Str("service", "loginflow").Str("handler", "browserflow").Logger()
 
-	ca, code := s.lookupByLogin(r, chi.URLParam(r, "lt"))
+	ca, code := s.lookupByLogin(r, r.PathValue("lt"))
 	if code != 0 {
 		http.Error(w, "client authorization not found or expired", code)
 		return
 	}
 
-	target := strings.TrimRight(s.c.WebUIURL, "/") + "/login-flow/" + chi.URLParam(r, "lt")
+	target := strings.TrimRight(s.c.WebUIURL, "/") + "/login-flow/" + r.PathValue("lt")
 	log.Info().Str("client_id", ca.ClientID).Msg("redirecting browser to web UI")
 	http.Redirect(w, r, target, http.StatusFound)
 }

@@ -27,11 +27,14 @@ import (
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	"github.com/cs3org/reva/v3/pkg/appctx"
 	"github.com/cs3org/reva/v3/pkg/rhttp/global"
+	"github.com/cs3org/reva/v3/pkg/rhttp/router"
 	"github.com/cs3org/reva/v3/pkg/service"
 	"github.com/cs3org/reva/v3/pkg/sharedconf"
 	"github.com/cs3org/reva/v3/pkg/utils/cfg"
-	"github.com/go-chi/chi/v5"
 )
+
+// mount is where the service is served.
+const mount = "/preferences"
 
 func init() {
 	global.Register("preferences", New)
@@ -51,8 +54,7 @@ func (c *Config) ApplyDefaults() {
 }
 
 type svc struct {
-	conf   *Config
-	router *chi.Mux
+	conf *Config
 }
 
 // New returns a new ocmd object.
@@ -62,23 +64,7 @@ func New(ctx context.Context, m map[string]any) (global.Service, error) {
 		return nil, err
 	}
 
-	r := chi.NewRouter()
-	s := &svc{
-		conf:   &c,
-		router: r,
-	}
-
-	if err := s.routerInit(); err != nil {
-		return nil, err
-	}
-
-	return s, nil
-}
-
-func (s *svc) routerInit() error {
-	s.router.Get("/", s.handleGet)
-	s.router.Post("/", s.handlePost)
-	return nil
+	return &svc{conf: &c}, nil
 }
 
 // Close performs cleanup.
@@ -87,17 +73,12 @@ func (s *svc) Close() error {
 }
 
 func (s *svc) Prefix() string {
-	return s.conf.Prefix
+	return mount
 }
 
-func (s *svc) Unprotected() []string {
-	return []string{}
-}
-
-func (s *svc) Handler() http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		s.router.ServeHTTP(w, r)
-	})
+func (s *svc) Routes(r *router.Router) {
+	r.Get(mount, s.handleGet)
+	r.Post(mount, s.handlePost)
 }
 
 func (s *svc) handleGet(w http.ResponseWriter, r *http.Request) {

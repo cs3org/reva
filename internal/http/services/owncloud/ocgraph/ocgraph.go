@@ -22,15 +22,16 @@ package ocgraph
 
 import (
 	"context"
-	"net/http"
 	"net/url"
 
-	"github.com/go-chi/chi/v5"
-
 	"github.com/cs3org/reva/v3/pkg/rhttp/global"
+	"github.com/cs3org/reva/v3/pkg/rhttp/router"
 	"github.com/cs3org/reva/v3/pkg/sharedconf"
 	"github.com/cs3org/reva/v3/pkg/utils/cfg"
 )
+
+// mount is where the Graph API is served.
+const mount = "/graph"
 
 func init() {
 	global.Register("ocgraph", New)
@@ -64,8 +65,7 @@ type ListResponse struct {
 }
 
 type svc struct {
-	c      *config
-	router *chi.Mux
+	c *config
 }
 
 func New(ctx context.Context, m map[string]any) (global.Service, error) {
@@ -77,70 +77,39 @@ func New(ctx context.Context, m map[string]any) (global.Service, error) {
 	s := &svc{
 		c: &c,
 	}
-	s.initRouter()
-
 	return s, nil
 }
 
-func (s *svc) initRouter() {
-	s.router = chi.NewRouter()
-
-	s.router.NotFound(func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusNotFound)
-	})
-	s.router.MethodNotAllowed(func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusMethodNotAllowed)
-	})
-
-	s.router.Route("/v1.0", func(r chi.Router) {
-		r.Route("/me", func(r chi.Router) {
-			r.Get("/", s.getMe)
-			r.Patch("/", s.patchMe)
-		})
-		r.Route("/drives", func(r chi.Router) {
-			r.Get("/{space-id}", s.getSpace)
-			r.Patch("/{space-id}", s.patchSpace)
-		})
-		r.Route("/users", func(r chi.Router) {
-			r.Get("/", s.listUsers)
-		})
-		r.Route("/groups", func(r chi.Router) {
-			r.Get("/", s.listGroups)
-		})
+func (s *svc) Routes(r *router.Router) {
+	r.Group(mount+"/v1.0", func(r *router.Router) {
+		r.Get("/me", s.getMe)
+		r.Patch("/me", s.patchMe)
+		r.Get("/drives/{space-id}", s.getSpace)
+		r.Patch("/drives/{space-id}", s.patchSpace)
+		r.Get("/users", s.listUsers)
+		r.Get("/groups", s.listGroups)
 	})
 
-	s.router.Route("/v1beta1", func(r chi.Router) {
-		r.Route("/me", func(r chi.Router) {
-			r.Route("/drives", func(r chi.Router) {
-				r.Get("/", s.listMySpaces)
-			})
-		})
-		r.Route("/me/drive", func(r chi.Router) {
-			r.Get("/sharedWithMe", s.getSharedWithMe)
-			r.Get("/sharedByMe", s.getSharedByMe)
-		})
+	r.Group(mount+"/v1beta1", func(r *router.Router) {
+		r.Get("/me/drives", s.listMySpaces)
+		r.Get("/me/drive/sharedWithMe", s.getSharedWithMe)
+		r.Get("/me/drive/sharedByMe", s.getSharedByMe)
 		r.Get("/roleManagement/permissions/roleDefinitions", s.getRoleDefinitions)
-		r.Route("/drives/{space-id}", func(r chi.Router) {
+		r.Group("/drives/{space-id}", func(r *router.Router) {
 			r.Get("/root/permissions", s.getRootDrivePermissions)
-			r.Route("/items/{resource-id}", func(r chi.Router) {
+			r.Group("/items/{resource-id}", func(r *router.Router) {
 				r.Patch("/", s.updateReceivedShare)
 				r.Post("/invite", s.share)
 				r.Post("/createLink", s.createLink)
-				r.Route("/permissions", func(r chi.Router) {
-					r.Get("/", s.getDrivePermissions)
-					r.Patch("/{share-id}", s.updateDrivePermissions)
-					r.Delete("/{share-id}", s.deleteDrivePermissions)
-					r.Post("/{share-id}/setPassword", s.updateLinkPassword)
-				})
+				r.Get("/permissions", s.getDrivePermissions)
+				r.Patch("/permissions/{share-id}", s.updateDrivePermissions)
+				r.Delete("/permissions/{share-id}", s.deleteDrivePermissions)
+				r.Post("/permissions/{share-id}/setPassword", s.updateLinkPassword)
 			})
 		})
 	})
 }
 
-func (s *svc) Handler() http.Handler { return s.router }
-
-func (s *svc) Prefix() string { return "graph" }
+func (s *svc) Prefix() string { return mount }
 
 func (s *svc) Close() error { return nil }
-
-func (s *svc) Unprotected() []string { return nil }

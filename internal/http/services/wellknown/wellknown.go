@@ -20,21 +20,22 @@ package wellknown
 
 import (
 	"context"
-	"net/http"
 
-	"github.com/cs3org/reva/v3/pkg/appctx"
 	"github.com/cs3org/reva/v3/pkg/rhttp/global"
+	"github.com/cs3org/reva/v3/pkg/rhttp/router"
 	"github.com/cs3org/reva/v3/pkg/utils/cfg"
-	"github.com/go-chi/chi/v5"
 )
+
+// mount is where the discovery documents are served.
+const mount = "/.well-known"
 
 func init() {
 	global.Register("wellknown", New)
 }
 
 type svc struct {
-	router chi.Router
-	Conf   *config
+	Conf *config
+	ocm  *wkocmHandler
 }
 
 type config struct {
@@ -48,23 +49,11 @@ func New(ctx context.Context, m map[string]any) (global.Service, error) {
 		return nil, err
 	}
 
-	r := chi.NewRouter()
-	s := &svc{
-		router: r,
-		Conf:   &c,
-	}
-	if err := s.routerInit(); err != nil {
-		return nil, err
-	}
+	s := &svc{Conf: &c}
+	s.ocm = new(wkocmHandler)
+	s.ocm.init(&s.Conf.OCMProvider)
 
 	return s, nil
-}
-
-func (s *svc) routerInit() error {
-	wkocmHandler := new(wkocmHandler)
-	wkocmHandler.init(&s.Conf.OCMProvider)
-	s.router.Get("/ocm", wkocmHandler.Ocm)
-	return nil
 }
 
 func (s *svc) Close() error {
@@ -72,20 +61,11 @@ func (s *svc) Close() error {
 }
 
 func (s *svc) Prefix() string {
-	return "/.well-known"
+	return mount
 }
 
-func (s *svc) Unprotected() []string {
-	return []string{"/", "/ocm"}
-}
-
-func (s *svc) Handler() http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		log := appctx.GetLogger(r.Context())
-		log.Debug().Str("path", r.URL.Path).Msg(".well-known routing")
-
-		// unset raw path, otherwise chi uses it to route and then fails to match percent encoded path segments
-		r.URL.RawPath = ""
-		s.router.ServeHTTP(w, r)
-	})
+// Routes declares the discovery endpoints. They are public by definition:
+// peers read them before they have any credentials.
+func (s *svc) Routes(r *router.Router) {
+	r.Get(mount+"/ocm", s.ocm.Ocm, router.Unprotected())
 }

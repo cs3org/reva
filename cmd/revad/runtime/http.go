@@ -19,7 +19,6 @@
 package runtime
 
 import (
-	"path"
 	"sort"
 
 	"github.com/cs3org/reva/v3/internal/http/interceptors/appctx"
@@ -81,11 +80,3 @@ func initHTTPMiddlewares(conf map[string]map[string]any, unprotected []string, l
 	return middlewares, nil
 }
 
-func httpUnprotected(s map[string]global.Service) (unprotected []string) {
-	for _, svc := range s {
-		for _, url := range svc.Unprotected() {
-			unprotected = append(unprotected, path.Join("/", svc.Prefix(), url))
-		}
-	}
-	return
-}

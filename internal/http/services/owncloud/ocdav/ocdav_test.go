@@ -127,7 +127,7 @@ func TestDavFilesPropfindResolvesHomeAndPaths(t *testing.T) {
 			request := newDavPropfindRequest(tt.target, tt.depth)
 			response := httptest.NewRecorder()
 
-			service.Handler().ServeHTTP(response, request)
+			service.handler().ServeHTTP(response, request)
 
 			if response.Code != http.StatusMultiStatus {
 				t.Fatalf("expected status %d, got %d: %s", http.StatusMultiStatus, response.Code, response.Body.String())

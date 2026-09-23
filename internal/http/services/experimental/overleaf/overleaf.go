@@ -37,17 +37,16 @@ import (
 
 	"github.com/cs3org/reva/v3/pkg/auth/scope"
 	"github.com/cs3org/reva/v3/pkg/rhttp/global"
+	"github.com/cs3org/reva/v3/pkg/rhttp/router"
 	"github.com/cs3org/reva/v3/pkg/service"
 	"github.com/cs3org/reva/v3/pkg/sharedconf"
 	"github.com/cs3org/reva/v3/pkg/token/manager/jwt"
 	"github.com/cs3org/reva/v3/pkg/utils/cfg"
 	"github.com/cs3org/reva/v3/pkg/utils/resourceid"
-	"github.com/go-chi/chi/v5"
 )
 
 type svc struct {
-	conf   *config
-	router *chi.Mux
+	conf *config
 }
 
 type config struct {
@@ -60,6 +59,9 @@ type config struct {
 	JWTSecret   string `mapstructure:"jwt_secret"`
 }
 
+// mount is where the service is served.
+const mount = "/overleaf"
+
 func init() {
 	global.Register("overleaf", New)
 }
@@ -70,24 +72,7 @@ func New(ctx context.Context, m map[string]any) (global.Service, error) {
 		return nil, err
 	}
 
-	r := chi.NewRouter()
-
-	s := &svc{
-		conf:   &conf,
-		router: r,
-	}
-
-	if err := s.routerInit(); err != nil {
-		return nil, err
-	}
-
-	return s, nil
-}
-
-func (s *svc) routerInit() error {
-	s.router.Get("/import", s.handleImport)
-	s.router.Post("/export", s.handleExport)
-	return nil
+	return &svc{conf: &conf}, nil
 }
 
 func (c *config) ApplyDefaults() {
@@ -104,15 +89,14 @@ func (s *svc) Close() error {
 }
 
 func (s *svc) Prefix() string {
-	return s.conf.Prefix
+	return mount
 }
 
-func (s *svc) Unprotected() []string {
-	return nil
-}
-
-func (s *svc) Handler() http.Handler {
-	return s.router
+func (s *svc) Routes(r *router.Router) {
+	r.Group(mount, func(r *router.Router) {
+		r.Get("/import", s.handleImport)
+		r.Post("/export", s.handleExport)
+	})
 }
 
 func (s *svc) handleImport(w http.ResponseWriter, r *http.Request) {

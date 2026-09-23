@@ -18,7 +18,6 @@ import (
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	types "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
 
-	"github.com/go-chi/chi/v5"
 	libregraph "github.com/owncloud/libre-graph-api-go"
 	"github.com/pkg/errors"
 	"golang.org/x/sync/errgroup"
@@ -162,7 +161,7 @@ func (s *svc) updateDrivePermissions(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	shareID := chi.URLParam(r, "share-id")
+	shareID := r.PathValue("share-id")
 	shareID, _ = url.QueryUnescape(shareID)
 	if shareID == "" {
 		w.WriteHeader(http.StatusBadRequest)
@@ -199,7 +198,7 @@ func (s *svc) parseResourceID(r *http.Request) (*provider.ResourceId, error) {
 	ctx := r.Context()
 	log := appctx.GetLogger(ctx)
 
-	resourceID := chi.URLParam(r, "resource-id")
+	resourceID := r.PathValue("resource-id")
 	resourceID, _ = url.QueryUnescape(resourceID)
 	storageID, _, itemID, ok := spaces.DecodeToResourceID(resourceID)
 	if !ok {
@@ -221,7 +220,7 @@ func (s *svc) deleteDrivePermissions(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	shareID := chi.URLParam(r, "share-id")
+	shareID := r.PathValue("share-id")
 	shareID, _ = url.QueryUnescape(shareID)
 	if shareID == "" {
 		w.WriteHeader(http.StatusBadRequest)
@@ -435,7 +434,7 @@ func (s *svc) updateLinkPassword(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	shareID := chi.URLParam(r, "share-id")
+	shareID := r.PathValue("share-id")
 	shareID, _ = url.QueryUnescape(shareID)
 	if shareID == "" {
 		w.WriteHeader(http.StatusBadRequest)
@@ -590,7 +589,7 @@ func (s *svc) getRootDrivePermissions(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	log := appctx.GetLogger(ctx)
 
-	spaceID := chi.URLParam(r, "space-id")
+	spaceID := r.PathValue("space-id")
 	spaceID, _ = url.QueryUnescape(spaceID)
 	_, path, ok := spaces.DecodeStorageSpaceIDToPath(spaceID)
 	if !ok {
