@@ -79,4 +79,3 @@ func initHTTPMiddlewares(conf map[string]map[string]any, logger *zerolog.Logger)
 
 	return middlewares, nil
 }
-
