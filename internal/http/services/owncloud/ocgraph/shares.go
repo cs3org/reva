@@ -238,7 +238,7 @@ func (s *svc) share(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// We extract the inode and storage ID from the request
-	resourceID := r.PathValue("resource-id")
+	resourceID := r.PathValue("resourceID")
 	resourceID, _ = url.QueryUnescape(resourceID)
 	storageID, _, itemID, ok := spaces.DecodeToResourceID(resourceID)
 	if !ok {
@@ -395,7 +395,7 @@ func (s *svc) createLink(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// We extract the inode and storage ID from the request
-	resourceID := r.PathValue("resource-id")
+	resourceID := r.PathValue("resourceID")
 	resourceID, _ = url.QueryUnescape(resourceID)
 	storageID, _, itemID, ok := spaces.DecodeToResourceID(resourceID)
 	if !ok {
@@ -704,7 +704,7 @@ func (s *svc) updateReceivedShare(w http.ResponseWriter, r *http.Request) {
 
 	// We extract the ShareID from the request
 	// Which is wrapped in some ugly form with the ShareJail unfortunately ...
-	spaceID := r.PathValue("space-id")
+	spaceID := r.PathValue("spaceID")
 	spaceID, _ = url.QueryUnescape(spaceID)
 
 	if spaceID != fmt.Sprintf("%s$%s", shareJailID, shareJailID) {
@@ -712,7 +712,7 @@ func (s *svc) updateReceivedShare(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	resourceID := r.PathValue("resource-id")
+	resourceID := r.PathValue("resourceID")
 	resourceID, _ = url.QueryUnescape(resourceID)
 
 	// Now we decode the request body

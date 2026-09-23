@@ -84,8 +84,8 @@ func (s *svc) Routes(r *router.Router) {
 	r.Group(mount+"/v1.0", func(r *router.Router) {
 		r.Get("/me", s.getMe)
 		r.Patch("/me", s.patchMe)
-		r.Get("/drives/{space-id}", s.getSpace)
-		r.Patch("/drives/{space-id}", s.patchSpace)
+		r.Get("/drives/{spaceID}", s.getSpace)
+		r.Patch("/drives/{spaceID}", s.patchSpace)
 		r.Get("/users", s.listUsers)
 		r.Get("/groups", s.listGroups)
 	})
@@ -95,16 +95,16 @@ func (s *svc) Routes(r *router.Router) {
 		r.Get("/me/drive/sharedWithMe", s.getSharedWithMe)
 		r.Get("/me/drive/sharedByMe", s.getSharedByMe)
 		r.Get("/roleManagement/permissions/roleDefinitions", s.getRoleDefinitions)
-		r.Group("/drives/{space-id}", func(r *router.Router) {
+		r.Group("/drives/{spaceID}", func(r *router.Router) {
 			r.Get("/root/permissions", s.getRootDrivePermissions)
-			r.Group("/items/{resource-id}", func(r *router.Router) {
+			r.Group("/items/{resourceID}", func(r *router.Router) {
 				r.Patch("/", s.updateReceivedShare)
 				r.Post("/invite", s.share)
 				r.Post("/createLink", s.createLink)
 				r.Get("/permissions", s.getDrivePermissions)
-				r.Patch("/permissions/{share-id}", s.updateDrivePermissions)
-				r.Delete("/permissions/{share-id}", s.deleteDrivePermissions)
-				r.Post("/permissions/{share-id}/setPassword", s.updateLinkPassword)
+				r.Patch("/permissions/{shareID}", s.updateDrivePermissions)
+				r.Delete("/permissions/{shareID}", s.deleteDrivePermissions)
+				r.Post("/permissions/{shareID}/setPassword", s.updateLinkPassword)
 			})
 		})
 	})
