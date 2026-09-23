@@ -29,14 +29,13 @@ import (
 	"github.com/cs3org/reva/v3/internal/http/services/owncloud/ocs/response"
 	"github.com/cs3org/reva/v3/pkg/appctx"
 	"github.com/cs3org/reva/v3/pkg/service"
-	"github.com/go-chi/chi/v5"
 	"github.com/pkg/errors"
 	"google.golang.org/protobuf/types/known/fieldmaskpb"
 )
 
 // AcceptReceivedShare handles Post Requests on /apps/files_sharing/api/v1/shares/{shareid}.
 func (h *Handler) AcceptReceivedShare(w http.ResponseWriter, r *http.Request) {
-	shareID := chi.URLParam(r, "shareid")
+	shareID := r.PathValue("shareid")
 	if h.isFederatedReceivedShare(r, shareID) {
 		h.updateReceivedFederatedShare(w, r, shareID, false)
 	} else {
@@ -46,7 +45,7 @@ func (h *Handler) AcceptReceivedShare(w http.ResponseWriter, r *http.Request) {
 
 // RejectReceivedShare handles DELETE Requests on /apps/files_sharing/api/v1/shares/{shareid}.
 func (h *Handler) RejectReceivedShare(w http.ResponseWriter, r *http.Request) {
-	shareID := chi.URLParam(r, "shareid")
+	shareID := r.PathValue("shareid")
 	if h.isFederatedReceivedShare(r, shareID) {
 		h.updateReceivedFederatedShare(w, r, shareID, true)
 	} else {
