@@ -215,5 +215,18 @@ func (s *Server) getHandler() http.Handler {
 	for _, m := range s.middlewares {
 		handler = m(handler)
 	}
-	return handler
+	return s.withRoute(handler)
+}
+
+// withRoute resolves the route a request will reach and puts it in the
+// context, ahead of the middleware chain. It is what lets a middleware decide
+// on the route itself - whether it is unprotected, who owns it - instead of
+// matching the request path against a list kept somewhere else.
+func (s *Server) withRoute(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if rt, ok := s.router.Match(r); ok {
+			r = r.WithContext(router.WithRoute(r.Context(), rt))
+		}
+		next.ServeHTTP(w, r)
+	})
 }
