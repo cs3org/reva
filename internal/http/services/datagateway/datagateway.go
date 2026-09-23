@@ -61,7 +61,6 @@ type transferClaims struct {
 	VersionKey string `json:"version_key,omitempty"`
 }
 type config struct {
-	Prefix               string `mapstructure:"prefix"`
 	TransferSharedSecret string `mapstructure:"transfer_shared_secret"                                  validate:"required"`
 	Timeout              int64  `mapstructure:"timeout"`
 	Insecure             bool   `docs:"false;Whether to skip certificate checks when sending requests." mapstructure:"insecure"`
@@ -71,9 +70,6 @@ type config struct {
 }
 
 func (c *config) ApplyDefaults() {
-	if c.Prefix == "" {
-		c.Prefix = "datagateway"
-	}
 
 	c.TransferSharedSecret = sharedconf.GetJWTSecret(c.TransferSharedSecret)
 }
