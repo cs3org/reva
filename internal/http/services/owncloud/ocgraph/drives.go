@@ -371,7 +371,7 @@ func (s *svc) patchSpace(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	spaceId := r.PathValue("space-id")
+	spaceId := r.PathValue("spaceID")
 	updateRequest := &provider.UpdateStorageSpaceRequest{
 		StorageSpace: &provider.StorageSpace{
 			Id: &provider.StorageSpaceId{

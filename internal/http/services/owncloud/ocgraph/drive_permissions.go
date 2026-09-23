@@ -161,7 +161,7 @@ func (s *svc) updateDrivePermissions(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	shareID := r.PathValue("share-id")
+	shareID := r.PathValue("shareID")
 	shareID, _ = url.QueryUnescape(shareID)
 	if shareID == "" {
 		w.WriteHeader(http.StatusBadRequest)
@@ -198,7 +198,7 @@ func (s *svc) parseResourceID(r *http.Request) (*provider.ResourceId, error) {
 	ctx := r.Context()
 	log := appctx.GetLogger(ctx)
 
-	resourceID := r.PathValue("resource-id")
+	resourceID := r.PathValue("resourceID")
 	resourceID, _ = url.QueryUnescape(resourceID)
 	storageID, _, itemID, ok := spaces.DecodeToResourceID(resourceID)
 	if !ok {
@@ -220,7 +220,7 @@ func (s *svc) deleteDrivePermissions(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	shareID := r.PathValue("share-id")
+	shareID := r.PathValue("shareID")
 	shareID, _ = url.QueryUnescape(shareID)
 	if shareID == "" {
 		w.WriteHeader(http.StatusBadRequest)
@@ -434,7 +434,7 @@ func (s *svc) updateLinkPassword(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	shareID := r.PathValue("share-id")
+	shareID := r.PathValue("shareID")
 	shareID, _ = url.QueryUnescape(shareID)
 	if shareID == "" {
 		w.WriteHeader(http.StatusBadRequest)
@@ -589,7 +589,7 @@ func (s *svc) getRootDrivePermissions(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	log := appctx.GetLogger(ctx)
 
-	spaceID := r.PathValue("space-id")
+	spaceID := r.PathValue("spaceID")
 	spaceID, _ = url.QueryUnescape(spaceID)
 	_, path, ok := spaces.DecodeStorageSpaceIDToPath(spaceID)
 	if !ok {
