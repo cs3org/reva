@@ -31,19 +31,21 @@ import (
 	"strings"
 )
 
-// Route is a single URL declared by a service.
+// Route is a single URL declared by a service. It is serialisable because a
+// service advertises its routes in the registry, where a gateway reads them to
+// mirror what the service serves.
 type Route struct {
 	// Owner is the reva service name that declared the route.
-	Owner string
+	Owner string `json:"owner,omitempty"`
 	// Method the route matches. Empty matches any method.
-	Method string
+	Method string `json:"method,omitempty"`
 	// Pattern is the absolute path pattern, in ServeMux syntax.
-	Pattern string
+	Pattern string `json:"pattern"`
 	// Subtree is set for mounted handlers: every path under Pattern is served
 	// by the mount, which receives the request path untouched.
-	Subtree bool
+	Subtree bool `json:"subtree,omitempty"`
 	// Unprotected exempts the route from the authentication middleware.
-	Unprotected bool
+	Unprotected bool `json:"unprotected,omitempty"`
 }
 
 // Option customizes a route at declaration time.
