@@ -220,9 +220,9 @@ func (r *Router) Routes() []Route {
 	return out
 }
 
-// Unprotected returns the paths exempt from authentication, for the auth
-// middleware. Deriving it from the declared routes is what keeps it from
-// drifting away from what is actually served.
+// Unprotected returns the paths of the routes exempt from authentication. It
+// describes the server rather than driving it: authentication is decided per
+// matched route, through Match.
 func (r *Router) Unprotected() []string {
 	var out []string
 	for _, rt := range r.reg.routes {

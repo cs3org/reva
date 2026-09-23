@@ -49,11 +49,11 @@ import (
 	"github.com/cs3org/reva/v3/pkg/errtypes"
 	"github.com/cs3org/reva/v3/pkg/rgrpc/status"
 	"github.com/cs3org/reva/v3/pkg/rhttp/global"
+	"github.com/cs3org/reva/v3/pkg/rhttp/router"
 	"github.com/cs3org/reva/v3/pkg/service"
 	"github.com/cs3org/reva/v3/pkg/sharedconf"
 	"github.com/cs3org/reva/v3/pkg/token"
 	tokenmgr "github.com/cs3org/reva/v3/pkg/token/manager/registry"
-	"github.com/cs3org/reva/v3/pkg/utils"
 )
 
 var userGroupsCache gcache.Cache
@@ -88,7 +88,7 @@ func parseConfig(m map[string]any) (*config, error) {
 }
 
 // New returns a new auth middleware.
-func New(m map[string]any, unprotected []string) (global.Middleware, error) {
+func New(m map[string]any) (global.Middleware, error) {
 	conf, err := parseConfig(m)
 	if err != nil {
 		return nil, err
@@ -182,7 +182,6 @@ func New(m map[string]any, unprotected []string) (global.Middleware, error) {
 
 	mw := &middleware{
 		conf:               conf,
-		unprotected:        unprotected,
 		signedURLChain:     signedUrlChain,
 		tokenStrategyChain: tokenStrategyChain,
 		tokenManager:       tokenManager,
@@ -195,7 +194,6 @@ func New(m map[string]any, unprotected []string) (global.Middleware, error) {
 
 type middleware struct {
 	conf               *config
-	unprotected        []string
 	signedURLChain     []auth.SignedURLStrategy
 	tokenStrategyChain []auth.TokenStrategy
 	tokenManager       token.Manager
@@ -216,8 +214,12 @@ func (m *middleware) handler(h http.Handler) http.Handler {
 
 		log := appctx.GetLogger(r.Context())
 
-		if utils.Skip(r.URL.Path, m.unprotected) {
-			log.Info().Interface("unprotected", m.unprotected).Msg("skipping auth check for: " + r.URL.Path)
+		// The route the request resolved to says whether it authenticates
+		// itself. A request no route claimed is treated as protected: it is
+		// about to be refused anyway, and guessing the other way would hand
+		// out an exemption nobody declared.
+		if rt, ok := router.RouteFromContext(r.Context()); ok && rt.Unprotected {
+			log.Info().Str("route", rt.Pattern).Msg("skipping auth check for: " + r.URL.Path)
 		} else {
 			ctx, err := m.authenticateUser(w, r, false)
 			if err != nil {

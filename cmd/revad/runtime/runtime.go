@@ -589,7 +589,7 @@ func newServers(ctx context.Context, grpc []*config.GRPC, http []*config.HTTP, l
 		counters := newActivityCounters(services)
 		captureInstances(services, cfg.Services, hostPort(hostname, ln.Addr().String()), counters)
 		routes := rhttp.Routes(services, counters, &logger)
-		middlewares, err := initHTTPMiddlewares(cfg.Middlewares, routes.Unprotected(), &logger)
+		middlewares, err := initHTTPMiddlewares(cfg.Middlewares, &logger)
 		if err != nil {
 			return nil, err
 		}

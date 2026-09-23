@@ -38,7 +38,7 @@ type middlewareTriple struct {
 	Middleware global.Middleware
 }
 
-func initHTTPMiddlewares(conf map[string]map[string]any, unprotected []string, logger *zerolog.Logger) ([]global.Middleware, error) {
+func initHTTPMiddlewares(conf map[string]map[string]any, logger *zerolog.Logger) ([]global.Middleware, error) {
 	triples := []*middlewareTriple{}
 	for name, c := range conf {
 		new, ok := global.NewMiddlewares[name]
@@ -61,7 +61,7 @@ func initHTTPMiddlewares(conf map[string]map[string]any, unprotected []string, l
 		return triples[i].Priority > triples[j].Priority
 	})
 
-	authMiddle, err := auth.New(conf["auth"], unprotected)
+	authMiddle, err := auth.New(conf["auth"])
 	if err != nil {
 		return nil, errors.Wrap(err, "rhttp: error creating auth middleware")
 	}

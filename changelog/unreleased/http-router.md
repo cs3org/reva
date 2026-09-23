@@ -39,3 +39,15 @@ ignored, so a deployment that set one to something other than the default has
 to move its clients to the default path.
 
 https://github.com/cs3org/reva/pull/5831
+
+Change: Decide HTTP authentication from the matched route
+
+Whether a request needed authentication was decided by matching its path
+against a list of path prefixes, assembled at startup from each service. The
+list had no connection to the routing that followed, so a route added under an
+exempt prefix became unauthenticated without anyone saying so.
+
+The server now resolves the route a request will reach before the middleware
+chain runs, and the auth middleware reads the exemption off that route. A
+request that resolves to no route is treated as authenticated rather than
+exempt.
