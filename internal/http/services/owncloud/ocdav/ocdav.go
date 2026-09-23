@@ -210,7 +210,10 @@ func (s *svc) Routes(r *router.Router) {
 	r.Mount("/remote.php", s.handler())
 
 	r.Mount("/status.php", s.handler(), router.Unprotected())
-	r.Mount("/s", s.handler(), router.Unprotected())
+	// Only the download is served here: the public link page itself belongs to
+	// whatever serves the web UI, which is what the handler's 501 for the rest
+	// of /s was standing in for.
+	r.Any("/s/{token}/download", s.handler().ServeHTTP, router.Unprotected())
 	r.Mount("/apps/files", s.handler(), router.Unprotected())
 	r.Mount("/index.php/s", s.handler(), router.Unprotected())
 	r.Mount("/ocm-provider", s.handler(), router.Unprotected())
