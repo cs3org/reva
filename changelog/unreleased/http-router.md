@@ -1,78 +1,22 @@
-Change: Declare HTTP routes instead of handing the server one handler per service
+Change: Let HTTP services declare the routes they serve
 
-Every HTTP service used to expose a single handler mounted under a prefix, and
-route inside it however it liked: some with chi, some by splitting the path by
-hand, one with a `ServeMux` of its own. The server matched the longest prefix,
-stripped it, and passed the rest on, which is why four services had to undo
-that stripping with `r.URL.RawPath = ""` before their router would match a
-percent-encoded path.
+Every HTTP service used to hand the server a single handler mounted under a
+configurable prefix, and route inside it however it liked: some with chi, some
+by splitting the path by hand. Services now declare their routes on a router
+built on the standard library's ServeMux, and the server serves all of them
+from one table.
 
-Services now declare their routes on a `pkg/rhttp/router.Router`, built on the
-standard library's `ServeMux`, and the server serves all of them from one
-router. Patterns are absolute, so a request is matched once against the whole
-server rather than once per prefix and again inside a service; methods are part
-of the route, so a wrong method answers 405 instead of falling through; and a
-handler that owns its URL space and cannot be restated as patterns - tus,
-`pprof.Index`, WebDAV - is mounted, receiving the request path untouched.
+Patterns are absolute, so a request is matched once instead of once per prefix
+and again inside a service. Methods are part of the route, so a wrong method
+answers 405. The paths exempt from authentication are declared on the routes
+themselves and read off the matched route, rather than kept in a separate list
+that could drift from what is actually served.
 
-The paths exempt from authentication are no longer a list each service keeps
-next to, but separate from, its routing. A route declares itself unprotected,
-and the server derives the list from the declared routes, so the two can no
-longer drift apart.
-
-`ocdav` used to be mounted at the root and so answered every unmatched URL. It
-now declares the eight entry points it actually serves (`/dav`, `/webdav`,
-`/remote.php`, `/status.php`, `/s`, `/apps/files`, `/index.php/s` and
-`/ocm-provider`), and anything else gets an honest 404.
-
-Change: Remove the configurable prefix of HTTP services
-
-Each HTTP service took a `prefix` setting naming the path it was served under.
-It was never really free: clients and federated peers have to agree on these
-paths up front, and for most services the value is fixed by a specification -
-`/.well-known/ocm` by the OCM spec, `/ocs/v1.php` and `/remote.php/dav` by the
-ownCloud clients. `pprof` had already given up and overwrote whatever was
-configured with `/debug`.
-
-The prefix is now a constant per service. A `prefix` left in a config file is
-ignored, so a deployment that set one to something other than the default has
-to move its clients to the default path.
+Two consequences for existing configurations. The `prefix` setting of every
+HTTP service is gone: the path is now a constant, and a `prefix` left in a
+config file is ignored, so a deployment that set one to a non-default value has
+to move its clients. And `ocdav`, which was mounted at the root and therefore
+answered every unmatched URL, now declares the eight entry points it actually
+serves, so anything else gets a 404.
 
 https://github.com/cs3org/reva/pull/5831
-
-Change: Decide HTTP authentication from the matched route
-
-Whether a request needed authentication was decided by matching its path
-against a list of path prefixes, assembled at startup from each service. The
-list had no connection to the routing that followed, so a route added under an
-exempt prefix became unauthenticated without anyone saying so.
-
-The server now resolves the route a request will reach before the middleware
-chain runs, and the auth middleware reads the exemption off that route. A
-request that resolves to no route is treated as authenticated rather than
-exempt.
-
-Enhancement: Add an HTTP gateway
-
-A reva deployment spread over several processes needed something in front to
-decide which of them a request belongs to, and that something had to be told:
-a reverse proxy configured with one location per path prefix, written by hand
-and kept in step with the services by hand.
-
-The new `gateway` HTTP service is that entry point, and it is told nothing.
-Every HTTP service advertises the routes it declared in the service registry,
-and the gateway mirrors them into a router of the same kind the services use,
-so a request is matched at the gateway exactly as it would be at the service:
-same patterns, same precedence, the same 404 and 405. Adding an endpoint, or a
-whole service, changes nothing here.
-
-The node serving a matched route is resolved per request, so nodes appearing
-and going away are picked up without waiting for the mirror to refresh. The
-request is forwarded with its path exactly as it arrived - neither
-canonicalized nor decoded - which is what WebDAV clients require. The gateway
-does not authenticate: it forwards, and the service applies its own auth to the
-route that was matched.
-
-A service whose routes cannot be mirrored, because two patterns overlap without
-one being more specific, is dropped from the table on its own rather than
-taking the other services with it.
