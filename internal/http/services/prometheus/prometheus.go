@@ -25,7 +25,6 @@ import (
 	"github.com/cs3org/reva/v3/pkg/prom/registry"
 	"github.com/cs3org/reva/v3/pkg/rhttp/global"
 	"github.com/cs3org/reva/v3/pkg/rhttp/router"
-	"github.com/cs3org/reva/v3/pkg/utils/cfg"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 )
@@ -39,11 +38,6 @@ func init() {
 
 // New returns a new prometheus service.
 func New(ctx context.Context, m map[string]any) (global.Service, error) {
-	var c config
-	if err := cfg.Decode(m, &c); err != nil {
-		return nil, err
-	}
-
 	// instantiate and register all collectors
 	collectors := []prometheus.Collector{}
 	for _, f := range registry.NewFuncs {
@@ -66,16 +60,6 @@ func New(ctx context.Context, m map[string]any) (global.Service, error) {
 			EnableOpenMetrics: true,
 		})
 	return &svc{h: handler}, nil
-}
-
-type config struct {
-	Prefix string `mapstructure:"prefix"`
-}
-
-func (c *config) ApplyDefaults() {
-	if c.Prefix == "" {
-		c.Prefix = "metrics"
-	}
 }
 
 type svc struct {
