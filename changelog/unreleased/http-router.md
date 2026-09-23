@@ -51,3 +51,28 @@ The server now resolves the route a request will reach before the middleware
 chain runs, and the auth middleware reads the exemption off that route. A
 request that resolves to no route is treated as authenticated rather than
 exempt.
+
+Enhancement: Add an HTTP gateway
+
+A reva deployment spread over several processes needed something in front to
+decide which of them a request belongs to, and that something had to be told:
+a reverse proxy configured with one location per path prefix, written by hand
+and kept in step with the services by hand.
+
+The new `gateway` HTTP service is that entry point, and it is told nothing.
+Every HTTP service advertises the routes it declared in the service registry,
+and the gateway mirrors them into a router of the same kind the services use,
+so a request is matched at the gateway exactly as it would be at the service:
+same patterns, same precedence, the same 404 and 405. Adding an endpoint, or a
+whole service, changes nothing here.
+
+The node serving a matched route is resolved per request, so nodes appearing
+and going away are picked up without waiting for the mirror to refresh. The
+request is forwarded with its path exactly as it arrived - neither
+canonicalized nor decoded - which is what WebDAV clients require. The gateway
+does not authenticate: it forwards, and the service applies its own auth to the
+route that was matched.
+
+A service whose routes cannot be mirrored, because two patterns overlap without
+one being more specific, is dropped from the table on its own rather than
+taking the other services with it.
