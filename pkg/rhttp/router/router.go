@@ -1,4 +1,4 @@
-// Copyright 2018-2024 CERN
+// Copyright 2018-2026 CERN
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -16,39 +16,329 @@
 // granted to it by virtue of its status as an Intergovernmental Organization
 // or submit itself to any jurisdiction.
 
+// Package router is the HTTP routing API reva services use to declare the URLs
+// they serve. It wraps the standard library's ServeMux, so patterns use its
+// syntax ("/shares/{id}", "/dav/{path...}"), and records every declared route:
+// the recorded table is what lets the server derive the unprotected set and
+// advertise a service's URL space instead of having each service keep its own
+// router and its own copy of that knowledge.
 package router
 
 import (
+	"net/http"
 	"path"
+	"sort"
 	"strings"
 )
 
-// ShiftPath splits off the first component of p, which will be cleaned of
-// relative components before processing. head will never contain a slash and
-// tail will always be a rooted path without trailing slash.
-// see https://blog.merovius.de/2017/06/18/how-not-to-use-an-http-router.html
-// and https://gist.github.com/weatherglass/62bd8a704d4dfdc608fe5c5cb5a6980c#gistcomment-2161690 for the zero alloc code below.
-func ShiftPath(p string) (head, tail string) {
-	if p == "" {
-		return "", "/"
-	}
-	p = strings.TrimPrefix(path.Clean(p), "/")
-	i := strings.Index(p, "/")
-	if i < 0 {
-		return p, "/"
-	}
-	return p[:i], p[i:]
+// Route is a single URL declared by a service.
+type Route struct {
+	// Owner is the reva service name that declared the route.
+	Owner string
+	// Method the route matches. Empty matches any method.
+	Method string
+	// Pattern is the absolute path pattern, in ServeMux syntax.
+	Pattern string
+	// Subtree is set for mounted handlers: every path under Pattern is served
+	// by the mount, which receives the request path untouched.
+	Subtree bool
+	// Unprotected exempts the route from the authentication middleware.
+	Unprotected bool
 }
 
-// Returns the ID, last component, from a given path p.
-// The path is split by '/' and the last component is returned as the ID.
-// The other components are joined again and returned, starting with a leading slash.
-func GetIdFromPath(p string) (id, path string) {
-	if p == "" {
-		return "", "/"
+// Option customizes a route at declaration time.
+type Option func(*Route)
+
+// Unprotected exempts the route from the authentication middleware. Use it for
+// endpoints that authenticate at the protocol layer (OCM ingress, public
+// links) or that are public by definition (discovery documents).
+func Unprotected() Option {
+	return func(r *Route) { r.Unprotected = true }
+}
+
+// Middleware wraps a handler. Middlewares attached to a Group apply to every
+// route declared inside it.
+type Middleware func(http.Handler) http.Handler
+
+// Router records the routes a service declares and serves them. The zero value
+// is not usable; call New.
+//
+// A Router value is a view: Service and Group return cheap copies that carry a
+// different owner, prefix or middleware chain, all writing into the same
+// underlying registration table.
+type Router struct {
+	mux *http.ServeMux
+	reg *registrations
+
+	owner  string
+	prefix string
+	mw     []Middleware
+}
+
+type registrations struct {
+	routes    []Route
+	byPattern map[string]string // "METHOD PATTERN" -> owner, for conflict reporting
+	mounts    []mount
+}
+
+type mount struct {
+	prefix  string
+	handler http.Handler
+}
+
+// New returns an empty Router.
+func New() *Router {
+	return &Router{
+		mux: http.NewServeMux(),
+		reg: &registrations{byPattern: map[string]string{}},
 	}
-	s := strings.Split(p, "/")
-	i := s[len(s)-1]
-	r := strings.Join(s[:len(s)-1], "/")
-	return i, r
+}
+
+// Service returns a view of the router that records every route declared on it
+// as belonging to the named service.
+func (r *Router) Service(name string) *Router {
+	c := *r
+	c.owner = name
+	return &c
+}
+
+// Use returns a view of the router that wraps every route declared on it with
+// mw, on top of any middleware already in effect.
+func (r *Router) Use(mw ...Middleware) *Router {
+	c := *r
+	c.mw = append(append(make([]Middleware, 0, len(r.mw)+len(mw)), r.mw...), mw...)
+	return &c
+}
+
+// Group declares the routes in fn under prefix, with mw wrapping each of them.
+// Groups nest, accumulating both prefix and middlewares.
+func (r *Router) Group(prefix string, fn func(*Router), mw ...Middleware) {
+	c := *r
+	c.prefix = join(r.prefix, prefix)
+	if len(mw) > 0 {
+		c.mw = append(append(make([]Middleware, 0, len(r.mw)+len(mw)), r.mw...), mw...)
+	}
+	fn(&c)
+}
+
+// Handle declares a route for the given method, empty meaning any method.
+func (r *Router) Handle(method, pattern string, h http.Handler, opts ...Option) {
+	rt := Route{
+		Owner:   r.owner,
+		Method:  method,
+		Pattern: join(r.prefix, pattern),
+	}
+	for _, o := range opts {
+		o(&rt)
+	}
+
+	key := rt.Method + " " + rt.Pattern
+	if owner, dup := r.reg.byPattern[key]; dup {
+		panic("router: " + rt.Owner + " redeclares " + strings.TrimSpace(key) + ", already declared by " + owner)
+	}
+	r.reg.byPattern[key] = rt.Owner
+
+	r.mux.Handle(muxPattern(rt.Method, rt.Pattern), r.wrap(h))
+	r.reg.routes = append(r.reg.routes, rt)
+}
+
+// HandleFunc is Handle for a handler function.
+func (r *Router) HandleFunc(method, pattern string, h http.HandlerFunc, opts ...Option) {
+	r.Handle(method, pattern, h, opts...)
+}
+
+// Any declares a route matching every method.
+func (r *Router) Any(pattern string, h http.HandlerFunc, opts ...Option) {
+	r.Handle("", pattern, h, opts...)
+}
+
+// Get declares a GET route. ServeMux also matches it for HEAD.
+func (r *Router) Get(pattern string, h http.HandlerFunc, opts ...Option) {
+	r.Handle(http.MethodGet, pattern, h, opts...)
+}
+
+// Post declares a POST route.
+func (r *Router) Post(pattern string, h http.HandlerFunc, opts ...Option) {
+	r.Handle(http.MethodPost, pattern, h, opts...)
+}
+
+// Put declares a PUT route.
+func (r *Router) Put(pattern string, h http.HandlerFunc, opts ...Option) {
+	r.Handle(http.MethodPut, pattern, h, opts...)
+}
+
+// Patch declares a PATCH route.
+func (r *Router) Patch(pattern string, h http.HandlerFunc, opts ...Option) {
+	r.Handle(http.MethodPatch, pattern, h, opts...)
+}
+
+// Delete declares a DELETE route.
+func (r *Router) Delete(pattern string, h http.HandlerFunc, opts ...Option) {
+	r.Handle(http.MethodDelete, pattern, h, opts...)
+}
+
+// Head declares a HEAD route.
+func (r *Router) Head(pattern string, h http.HandlerFunc, opts ...Option) {
+	r.Handle(http.MethodHead, pattern, h, opts...)
+}
+
+// Options declares an OPTIONS route.
+func (r *Router) Options(pattern string, h http.HandlerFunc, opts ...Option) {
+	r.Handle(http.MethodOptions, pattern, h, opts...)
+}
+
+// Mount serves every path under prefix with h, which receives the request with
+// its URL untouched: no pattern matching, no path canonicalization, no
+// percent-decoding. It is for handlers that own their own URL space and cannot
+// be restated as patterns - foreign libraries such as tus, handlers that parse
+// the trailing path themselves such as pprof.Index, and WebDAV, whose clients
+// are sensitive to the redirects ServeMux issues on non-canonical paths.
+//
+// Mounts are matched before patterns, longest prefix first, so a service can
+// mount a subtree and still declare exact routes inside it.
+func (r *Router) Mount(prefix string, h http.Handler, opts ...Option) {
+	rt := Route{
+		Owner:   r.owner,
+		Pattern: join(r.prefix, prefix),
+		Subtree: true,
+	}
+	for _, o := range opts {
+		o(&rt)
+	}
+
+	r.reg.mounts = append(r.reg.mounts, mount{prefix: rt.Pattern, handler: r.wrap(h)})
+	sort.SliceStable(r.reg.mounts, func(i, j int) bool {
+		return len(r.reg.mounts[i].prefix) > len(r.reg.mounts[j].prefix)
+	})
+	r.reg.routes = append(r.reg.routes, rt)
+}
+
+// Routes returns every declared route, in declaration order.
+func (r *Router) Routes() []Route {
+	out := make([]Route, len(r.reg.routes))
+	copy(out, r.reg.routes)
+	return out
+}
+
+// Unprotected returns the paths exempt from authentication, for the auth
+// middleware. Deriving it from the declared routes is what keeps it from
+// drifting away from what is actually served.
+func (r *Router) Unprotected() []string {
+	var out []string
+	for _, rt := range r.reg.routes {
+		if rt.Unprotected {
+			out = append(out, rt.Pattern)
+		}
+	}
+	return out
+}
+
+// Match reports the route a request resolves to, without serving it. It
+// returns false when nothing matches, and for requests ServeMux answers itself
+// (the redirect it issues for non-canonical paths), so callers treat an
+// unmatched request as protected.
+func (r *Router) Match(req *http.Request) (Route, bool) {
+	if i := r.matchMount(req.URL.EscapedPath()); i >= 0 {
+		return r.routeForMount(r.reg.mounts[i].prefix), true
+	}
+	_, pattern := r.mux.Handler(req)
+	if pattern == "" {
+		return Route{}, false
+	}
+	method, p := splitMuxPattern(pattern)
+	// ServeMux reports the pattern a request would reach *after* it redirects,
+	// both for a non-canonical path and for a subtree pattern addressed
+	// without its trailing slash. Neither request reaches a handler, so
+	// neither has a route, and reporting one would hand the caller an
+	// Unprotected flag for a request nobody declared.
+	if !isCanonical(req.URL.Path) {
+		return Route{}, false
+	}
+	if strings.HasSuffix(p, "/") && req.URL.Path == strings.TrimSuffix(p, "/") {
+		return Route{}, false
+	}
+	for _, rt := range r.reg.routes {
+		if !rt.Subtree && rt.Method == method && rt.Pattern == p {
+			return rt, true
+		}
+	}
+	return Route{}, false
+}
+
+func (r *Router) ServeHTTP(w http.ResponseWriter, req *http.Request) {
+	if i := r.matchMount(req.URL.EscapedPath()); i >= 0 {
+		r.reg.mounts[i].handler.ServeHTTP(w, req)
+		return
+	}
+	r.mux.ServeHTTP(w, req)
+}
+
+// matchMount returns the index of the longest mount whose prefix covers path,
+// or -1. Mounts are kept sorted longest first, so the first hit wins.
+func (r *Router) matchMount(path string) int {
+	for i, m := range r.reg.mounts {
+		if m.prefix == "/" || path == m.prefix || strings.HasPrefix(path, strings.TrimSuffix(m.prefix, "/")+"/") {
+			return i
+		}
+	}
+	return -1
+}
+
+func (r *Router) routeForMount(prefix string) Route {
+	for _, rt := range r.reg.routes {
+		if rt.Subtree && rt.Pattern == prefix {
+			return rt
+		}
+	}
+	return Route{Pattern: prefix, Subtree: true}
+}
+
+func (r *Router) wrap(h http.Handler) http.Handler {
+	for i := len(r.mw) - 1; i >= 0; i-- {
+		h = r.mw[i](h)
+	}
+	return h
+}
+
+// join appends a pattern to a group prefix. A pattern of "/" addresses the
+// prefix itself, so that a group can declare a handler for its own root.
+func join(prefix, pattern string) string {
+	if prefix == "" {
+		if pattern == "" {
+			return "/"
+		}
+		return pattern
+	}
+	if pattern == "" || pattern == "/" {
+		return prefix
+	}
+	return strings.TrimSuffix(prefix, "/") + pattern
+}
+
+// isCanonical reports whether ServeMux serves the path as it arrived, rather
+// than redirecting to its cleaned form. It mirrors the standard library's own
+// path cleaning.
+func isCanonical(p string) bool {
+	if p == "" {
+		return false
+	}
+	cleaned := path.Clean(p)
+	if strings.HasSuffix(p, "/") && cleaned != "/" {
+		cleaned += "/"
+	}
+	return cleaned == p
+}
+
+func muxPattern(method, pattern string) string {
+	if method == "" {
+		return pattern
+	}
+	return method + " " + pattern
+}
+
+func splitMuxPattern(p string) (method, pattern string) {
+	if i := strings.IndexByte(p, ' '); i >= 0 {
+		return p[:i], strings.TrimLeft(p[i+1:], " ")
+	}
+	return "", p
 }
