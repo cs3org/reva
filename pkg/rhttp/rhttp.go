@@ -23,14 +23,13 @@ import (
 	"fmt"
 	"net"
 	"net/http"
-	"path"
-	"strings"
 	"time"
 
 	"github.com/cs3org/reva/v3/cmd/revad/pkg/config"
 	"github.com/cs3org/reva/v3/pkg/activity"
 	"github.com/cs3org/reva/v3/pkg/appctx"
 	"github.com/cs3org/reva/v3/pkg/rhttp/global"
+	"github.com/cs3org/reva/v3/pkg/rhttp/router"
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog"
 )
@@ -40,6 +39,14 @@ type Config func(*Server)
 func WithServices(services map[string]global.Service) Config {
 	return func(s *Server) {
 		s.Services = services
+	}
+}
+
+// WithRouter sets the router serving the server's services, as built by
+// Routes.
+func WithRouter(r *router.Router) Config {
+	return func(s *Server) {
+		s.router = r
 	}
 }
 
@@ -59,15 +66,6 @@ func WithCertAndKeyFiles(cert, key string) Config {
 func WithLogger(log zerolog.Logger) Config {
 	return func(s *Server) {
 		s.log = log
-	}
-}
-
-// WithActivityCounters sets this server's per-service request counters (keyed by
-// service name), shared with the services' invoke instances so `admin services
-// activity` reports live numbers.
-func WithActivityCounters(counters map[string]*activity.Counter) Config {
-	return func(s *Server) {
-		s.counters = counters
 	}
 }
 
@@ -92,22 +90,50 @@ func InitServices(ctx context.Context, services map[string]config.ServicesConfig
 	return s, nil
 }
 
+// Routes builds the router that serves the given services. Every service
+// declares absolute patterns on it, so a request is matched once, against the
+// whole server: there is no per-service prefix stripping, and two services
+// claiming the same URL is a startup panic rather than a silent shadowing.
+//
+// counters, keyed by service name, are fed by the routes of that service.
+func Routes(services map[string]global.Service, counters map[string]*activity.Counter, log *zerolog.Logger) *router.Router {
+	root := router.New()
+	for name, svc := range services {
+		svc.Routes(root.Service(name).Use(serviceContext(name, counters[name])))
+		log.Info().Msgf("http service enabled: %s@%s", name, svc.Prefix())
+	}
+	return root
+}
+
+// serviceContext stamps the owning service onto the request's context logger,
+// so its logs are attributable, and records the request against the service's
+// activity counter, feeding `admin services activity`.
+func serviceContext(name string, counter *activity.Counter) router.Middleware {
+	return func(h http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if counter != nil {
+				// HTTP has no per-method breakdown yet: count toward the
+				// aggregate only.
+				defer counter.Enter("")()
+			}
+			ctx := r.Context()
+			log := appctx.GetLogger(ctx).With().Str("service", name).Logger()
+			h.ServeHTTP(w, r.WithContext(appctx.WithLogger(ctx, &log)))
+		})
+	}
+}
+
 // New returns a new server.
 func New(c ...Config) (*Server, error) {
 	httpServer := &http.Server{}
 	s := &Server{
 		log:         zerolog.Nop(),
 		httpServer:  httpServer,
-		svcs:        map[string]global.Service{},
-		svcNames:    map[string]string{},
-		unprotected: []string{},
-		handlers:    map[string]http.Handler{},
 		middlewares: []global.Middleware{},
 	}
 	for _, cc := range c {
 		cc(s)
 	}
-	s.registerServices()
 	return s, nil
 }
 
@@ -119,32 +145,27 @@ type Server struct {
 
 	httpServer  *http.Server
 	listener    net.Listener
-	svcs        map[string]global.Service // map key is svc Prefix
-	svcNames    map[string]string         // map key is svc Prefix, value the reva service name
-	unprotected []string
-	handlers    map[string]http.Handler
+	router      *router.Router
 	middlewares []global.Middleware
-	counters    map[string]*activity.Counter // per-service request counters, keyed by service name
 	log         zerolog.Logger
 }
 
 // Start starts the server.
 func (s *Server) Start(ln net.Listener) error {
-	handler, err := s.getHandler()
-	if err != nil {
-		return errors.Wrap(err, "rhttp: error creating http handler")
-	}
-
-	s.httpServer.Handler = handler
+	s.httpServer.Handler = s.getHandler()
 	s.listener = ln
 
 	if (s.CertFile != "") && (s.KeyFile != "") {
 		s.log.Info().Msgf("https server listening at https://%s using cert file '%s' and key file '%s'", s.listener.Addr(), s.CertFile, s.KeyFile)
-		err = s.httpServer.ServeTLS(s.listener, s.CertFile, s.KeyFile)
-	} else {
-		s.log.Info().Msgf("http server listening at http://%s", s.listener.Addr())
-		err = s.httpServer.Serve(s.listener)
+		err := s.httpServer.ServeTLS(s.listener, s.CertFile, s.KeyFile)
+		if err == nil || err == http.ErrServerClosed {
+			return nil
+		}
+		return err
 	}
+
+	s.log.Info().Msgf("http server listening at http://%s", s.listener.Addr())
+	err := s.httpServer.Serve(s.listener)
 	if err == nil || err == http.ErrServerClosed {
 		return nil
 	}
@@ -164,11 +185,11 @@ func (s *Server) Stop() error {
 // What do we do in case a service cannot be properly closed? Now we just log the error.
 // TODO(labkode): the close should be given a deadline using context.Context.
 func (s *Server) closeServices() {
-	for _, svc := range s.svcs {
+	for name, svc := range s.Services {
 		if err := svc.Close(); err != nil {
-			s.log.Error().Err(err).Msgf("error closing service %q", svc.Prefix())
+			s.log.Error().Err(err).Msgf("error closing service %q", name)
 		} else {
-			s.log.Info().Msgf("service %q correctly closed", svc.Prefix())
+			s.log.Info().Msgf("service %q correctly closed", name)
 		}
 	}
 }
@@ -189,155 +210,10 @@ func (s *Server) GracefulStop() error {
 	return s.httpServer.Shutdown(context.Background())
 }
 
-func (s *Server) registerServices() {
-	for name, svc := range s.Services {
-		// instrument services with opencensus tracing.
-		s.handlers[svc.Prefix()] = svc.Handler()
-		s.svcs[svc.Prefix()] = svc
-		s.svcNames[svc.Prefix()] = name
-		s.unprotected = append(s.unprotected, getUnprotected(svc.Prefix(), svc.Unprotected())...)
-		s.log.Info().Msgf("http service enabled: %s@/%s", name, svc.Prefix())
-	}
-}
-
-// TODO(labkode): if the http server is exposed under a basename we need to prepend
-// to prefix.
-func getUnprotected(prefix string, unprotected []string) []string {
-	for i := range unprotected {
-		unprotected[i] = path.Join("/", prefix, unprotected[i])
-	}
-	return unprotected
-}
-
-// clean the url putting a slash (/) at the beginning if it does not have it
-// and removing the slashes at the end
-// if the url is "/", the output is "".
-func cleanURL(url string) string {
-	if len(url) > 0 {
-		if url[0] != '/' {
-			url = "/" + url
-		}
-		url = strings.TrimRight(url, "/")
-	}
-	return url
-}
-
-func urlHasPrefix(url, prefix string) bool {
-	url = cleanURL(url)
-	prefix = cleanURL(prefix)
-
-	partsURL := strings.Split(url, "/")
-	partsPrefix := strings.Split(prefix, "/")
-
-	if len(partsPrefix) > len(partsURL) {
-		return false
-	}
-
-	for i, p := range partsPrefix {
-		u := partsURL[i]
-		if p != u {
-			return false
-		}
-	}
-
-	return true
-}
-
-func (s *Server) getHandlerLongestCommonURL(url string) (http.Handler, string, bool) {
-	var match string
-
-	for k := range s.handlers {
-		if urlHasPrefix(url, k) && len(k) > len(match) {
-			match = k
-		}
-	}
-
-	h, ok := s.handlers[match]
-	return h, match, ok
-}
-
-func getSubURL(url, prefix string) string {
-	if url == "" {
-		return ""
-	}
-	// pre cond: prefix is a prefix for url
-	// example: url = "/api/v0/", prefix = "/api", res = "/v0"
-	url = cleanURL(url)
-	prefix = cleanURL(prefix)
-
-	return url[len(prefix):]
-}
-
-func (s *Server) getHandler() (http.Handler, error) {
-	h := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if h, ok := s.handlers[r.URL.Path]; ok {
-			s.log.Debug().Str("url", r.URL.Path).Msg("routing via handler")
-			prefix := r.URL.Path
-			r.URL.Path = "/"
-			if done := s.enterActivity(prefix); done != nil {
-				defer done()
-			}
-			h.ServeHTTP(w, s.withServiceLogger(r, prefix))
-			return
-		}
-
-		// find by longest common path
-		if h, url, ok := s.getHandlerLongestCommonURL(r.URL.Path); ok {
-			s.log.Debug().Str("url", url).Msg("routing via longest-matching URL")
-			r.URL.Path = getSubURL(r.URL.Path, url)
-			// go chi internally uses the RawPath for the routing
-			// so this has to be adapted accordingly
-			r.URL.RawPath = getSubURL(r.URL.RawPath, url)
-			if done := s.enterActivity(url); done != nil {
-				defer done()
-			}
-			h.ServeHTTP(w, s.withServiceLogger(r, url))
-			return
-		}
-
-		s.log.Error().Str("url", r.URL.Path).Msg("routing: missing route, check revad config")
-		w.WriteHeader(http.StatusNotFound)
-	})
-
-	handler := http.Handler(h)
+func (s *Server) getHandler() http.Handler {
+	handler := http.Handler(s.router)
 	for _, m := range s.middlewares {
 		handler = m(handler)
 	}
-
-	return handler, nil
+	return handler
 }
-
-// withServiceLogger stamps the service owning the routed prefix onto the
-// request's context logger, so its logs are attributable.
-func (s *Server) withServiceLogger(r *http.Request, prefix string) *http.Request {
-	name, ok := s.svcNames[prefix]
-	if !ok {
-		return r
-	}
-	ctx := r.Context()
-	log := appctx.GetLogger(ctx).With().Str("service", name).Logger()
-	return r.WithContext(appctx.WithLogger(ctx, &log))
-}
-
-// enterActivity records an in-flight request against the service owning the
-// routed prefix, returning the completion func to run when it finishes (nil if
-// the prefix maps to no known service). Feeds `admin services activity`.
-func (s *Server) enterActivity(prefix string) func() {
-	if name, ok := s.svcNames[prefix]; ok {
-		// HTTP has no per-method breakdown yet: count toward the aggregate only.
-		return s.counters[name].Enter("")
-	}
-	return nil
-}
-
-// prometheusMiddleware implements mux.MiddlewareFunc.
-/*
-func prometheusHandler(next http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		path := r.URL.Path
-		timer := prometheus.NewTimer(httpDuration.WithLabelValues(path))
-		next.ServeHTTP(w, r)
-		timer.ObserveDuration()
-	})
-}
-*/

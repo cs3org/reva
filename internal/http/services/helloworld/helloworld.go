@@ -24,8 +24,12 @@ import (
 
 	"github.com/cs3org/reva/v3/pkg/appctx"
 	"github.com/cs3org/reva/v3/pkg/rhttp/global"
+	"github.com/cs3org/reva/v3/pkg/rhttp/router"
 	"github.com/cs3org/reva/v3/pkg/utils/cfg"
 )
+
+// mount is where the service is served.
+const mount = "/helloworld"
 
 func init() {
 	global.Register("helloworld", New)
@@ -66,18 +70,16 @@ type svc struct {
 }
 
 func (s *svc) Prefix() string {
-	return s.conf.Prefix
+	return mount
 }
 
-func (s *svc) Unprotected() []string {
-	return []string{"/"}
+func (s *svc) Routes(r *router.Router) {
+	r.Any(mount, s.hello, router.Unprotected())
 }
 
-func (s *svc) Handler() http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		log := appctx.GetLogger(r.Context())
-		if _, err := w.Write([]byte(s.conf.HelloMessage)); err != nil {
-			log.Err(err).Msg("error writing response")
-		}
-	})
+func (s *svc) hello(w http.ResponseWriter, r *http.Request) {
+	log := appctx.GetLogger(r.Context())
+	if _, err := w.Write([]byte(s.conf.HelloMessage)); err != nil {
+		log.Err(err).Msg("error writing response")
+	}
 }
