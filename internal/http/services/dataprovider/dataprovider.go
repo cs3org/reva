@@ -23,7 +23,6 @@ import (
 	"fmt"
 	"net/http"
 
-	"github.com/cs3org/reva/v3/pkg/appctx"
 	svcregistry "github.com/cs3org/reva/v3/pkg/registry"
 	datatxregistry "github.com/cs3org/reva/v3/pkg/rhttp/datatx/manager/registry"
 	"github.com/cs3org/reva/v3/pkg/rhttp/global"
@@ -32,6 +31,9 @@ import (
 	"github.com/cs3org/reva/v3/pkg/storage/fs/registry"
 	"github.com/cs3org/reva/v3/pkg/utils/cfg"
 )
+
+// mount is where the data provider is served.
+const mount = "/data"
 
 func init() {
 	global.Register("dataprovider", New)
@@ -63,7 +65,6 @@ func (c *config) ApplyDefaults() {
 
 type svc struct {
 	conf    *config
-	handler http.Handler
 	storage storage.FS
 	dataTXs map[string]http.Handler
 }
@@ -91,8 +92,7 @@ func New(ctx context.Context, m map[string]any) (global.Service, error) {
 		dataTXs: dataTXs,
 	}
 
-	err = s.setHandler()
-	return s, err
+	return s, nil
 }
 
 // RegistryMetadata advertises the mount affinity and the externally reachable
@@ -142,42 +142,27 @@ func (s *svc) Close() error {
 	return nil
 }
 
-func (s *svc) Unprotected() []string {
-	return []string{
-		"/tus",
-	}
-}
-
 func (s *svc) Prefix() string {
-	return s.conf.Prefix
+	return mount
 }
 
-func (s *svc) Handler() http.Handler {
-	return s.handler
-}
-
-func (s *svc) setHandler() error {
-	s.handler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		log := appctx.GetLogger(r.Context())
-		log.Debug().Msgf("dataprovider routing: path=%s", r.URL.Path)
-
-		head, tail := router.ShiftPath(r.URL.Path)
-
-		if handler, ok := s.dataTXs[head]; ok {
-			r.URL.Path = tail
-			handler.ServeHTTP(w, r)
-			return
+// Routes mounts one subtree per data transfer protocol. They are mounts
+// because each protocol handler owns its URL space - tus in particular is an
+// unrouted handler from its own library - and each is given the path with its
+// own prefix stripped, as it expects. Anything not addressed to a protocol
+// goes through the direct HTTP one.
+func (s *svc) Routes(r *router.Router) {
+	for name, h := range s.dataTXs {
+		prefix := mount + "/" + name
+		var opts []router.Option
+		if name == "tus" {
+			// tus authenticates with the transfer token it was handed.
+			opts = append(opts, router.Unprotected())
 		}
+		r.Mount(prefix, http.StripPrefix(prefix, h), opts...)
+	}
 
-		// If we don't find a prefix match for any of the protocols, upload the resource
-		// through the direct HTTP protocol
-		if handler, ok := s.dataTXs["simple"]; ok {
-			handler.ServeHTTP(w, r)
-			return
-		}
-
-		w.WriteHeader(http.StatusInternalServerError)
-	})
-
-	return nil
+	if h, ok := s.dataTXs["simple"]; ok {
+		r.Mount(mount, http.StripPrefix(mount, h))
+	}
 }

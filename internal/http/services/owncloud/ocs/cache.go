@@ -23,6 +23,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 
+	"github.com/cs3org/reva/v3/internal/http/services/owncloud/ocs/response"
 	"github.com/cs3org/reva/v3/pkg/appctx"
 
 	"google.golang.org/grpc/metadata"
@@ -57,17 +58,20 @@ func (s *svc) cacheWarmup(w http.ResponseWriter, r *http.Request) {
 			p := httptest.NewRecorder()
 			_ = s.warmupCacheTracker.Set(id, true)
 
+			// The warmup calls the handler the v1 route resolves to, wrapped in
+			// the same api version context the route would have given it.
+			listShares := response.VersionCtx("1")(http.HandlerFunc(s.shares.ListShares))
+			req.URL.Path = mount + "/v1.php/apps/files_sharing/api/v1/shares"
+
 			log.Info().Msgf("cache warmup getting created shares for user %s", id)
-			req.URL.Path = "/v1.php/apps/files_sharing/api/v1/shares"
-			s.router.ServeHTTP(p, req)
+			listShares.ServeHTTP(p, req)
 
 			log.Info().Msgf("cache warmup getting received shares for user %s", id)
-			req.URL.Path = "/v1.php/apps/files_sharing/api/v1/shares"
 			q := req.URL.Query()
 			q.Set("shared_with_me", "true")
 			q.Set("state", "all")
 			req.URL.RawQuery = q.Encode()
-			s.router.ServeHTTP(p, req)
+			listShares.ServeHTTP(p, req)
 		}
 	}
 }

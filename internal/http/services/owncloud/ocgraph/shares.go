@@ -35,7 +35,6 @@ import (
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	ocm "github.com/cs3org/go-cs3apis/cs3/sharing/ocm/v1beta1"
 	types "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
-	"github.com/go-chi/chi/v5"
 	"github.com/pkg/errors"
 	"google.golang.org/protobuf/types/known/fieldmaskpb"
 
@@ -239,7 +238,7 @@ func (s *svc) share(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// We extract the inode and storage ID from the request
-	resourceID := chi.URLParam(r, "resource-id")
+	resourceID := r.PathValue("resource-id")
 	resourceID, _ = url.QueryUnescape(resourceID)
 	storageID, _, itemID, ok := spaces.DecodeToResourceID(resourceID)
 	if !ok {
@@ -396,7 +395,7 @@ func (s *svc) createLink(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// We extract the inode and storage ID from the request
-	resourceID := chi.URLParam(r, "resource-id")
+	resourceID := r.PathValue("resource-id")
 	resourceID, _ = url.QueryUnescape(resourceID)
 	storageID, _, itemID, ok := spaces.DecodeToResourceID(resourceID)
 	if !ok {
@@ -705,7 +704,7 @@ func (s *svc) updateReceivedShare(w http.ResponseWriter, r *http.Request) {
 
 	// We extract the ShareID from the request
 	// Which is wrapped in some ugly form with the ShareJail unfortunately ...
-	spaceID := chi.URLParam(r, "space-id")
+	spaceID := r.PathValue("space-id")
 	spaceID, _ = url.QueryUnescape(spaceID)
 
 	if spaceID != fmt.Sprintf("%s$%s", shareJailID, shareJailID) {
@@ -713,7 +712,7 @@ func (s *svc) updateReceivedShare(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	resourceID := chi.URLParam(r, "resource-id")
+	resourceID := r.PathValue("resource-id")
 	resourceID, _ = url.QueryUnescape(resourceID)
 
 	// Now we decode the request body

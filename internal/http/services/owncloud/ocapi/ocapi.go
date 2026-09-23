@@ -24,8 +24,11 @@ import (
 	"net/http"
 
 	"github.com/cs3org/reva/v3/pkg/rhttp/global"
-	"github.com/go-chi/chi/v5"
+	"github.com/cs3org/reva/v3/pkg/rhttp/router"
 )
+
+// mount is where the settings API is served.
+const mount = "/api"
 
 // This API exposes all supported roles/assignments/permissions/values by the system,
 // and as such it provides static content.
@@ -47,14 +50,7 @@ func init() {
 }
 
 func New(ctx context.Context, m map[string]any) (global.Service, error) {
-	r := chi.NewRouter()
-
-	r.Post("/v0/settings/roles-list", staticResponse(roles))
-	r.Post("/v0/settings/assignments-list", staticResponse(assignments))
-	r.Post("/v0/settings/permissions-list", staticResponse(permissions))
-	r.Post("/v0/settings/values-list", staticResponse(values))
-
-	return svc{r: r}, nil
+	return svc{}, nil
 }
 
 func staticResponse(content string) http.HandlerFunc {
@@ -63,16 +59,17 @@ func staticResponse(content string) http.HandlerFunc {
 	})
 }
 
-type svc struct {
-	r *chi.Mux
+type svc struct{}
+
+func (s svc) Routes(r *router.Router) {
+	r.Group(mount+"/v0/settings", func(r *router.Router) {
+		r.Post("/roles-list", staticResponse(roles), router.Unprotected())
+		r.Post("/assignments-list", staticResponse(assignments), router.Unprotected())
+		r.Post("/permissions-list", staticResponse(permissions), router.Unprotected())
+		r.Post("/values-list", staticResponse(values), router.Unprotected())
+	})
 }
 
-func (s svc) Handler() http.Handler {
-	return s.r
-}
-
-func (s svc) Prefix() string { return "api" }
+func (s svc) Prefix() string { return mount }
 
 func (s svc) Close() error { return nil }
-
-func (s svc) Unprotected() []string { return []string{"/"} }

@@ -87,6 +87,10 @@ func (r nameDoesNotContain) Test(name string) bool {
 	return !strings.ContainsAny(name, r.chars)
 }
 
+// mount is empty: the service claims several disjoint entry points rather than
+// one subtree, and declares each of them in Routes.
+const mount = ""
+
 func init() {
 	global.Register("ocdav", New)
 }
@@ -182,19 +186,39 @@ func New(ctx context.Context, m map[string]any) (global.Service, error) {
 	return s, nil
 }
 
+// Prefix is empty: ocdav does not live under one path, it serves a handful of
+// well-known ones declared in Routes.
 func (s *svc) Prefix() string {
-	return s.c.Prefix
+	return mount
 }
 
 func (s *svc) Close() error {
 	return nil
 }
 
-func (s *svc) Unprotected() []string {
-	return []string{"/status.php", "/remote.php/dav/public-files/", "/apps/files/", "/index.php/f/", "/index.php/s/", "/s/", "/remote.php/dav/ocm/", "/ocm-provider"}
+// Routes mounts the WebDAV entry points. They are mounts rather than declared
+// patterns because WebDAV addresses a resource by its whole path: the handler
+// needs it exactly as it arrived, without the canonicalization and decoding a
+// pattern match would apply, and its clients are sensitive to the redirects
+// that would follow.
+func (s *svc) Routes(r *router.Router) {
+	// The public link and OCM subtrees authenticate with the link token, and
+	// are matched ahead of /remote.php because a longer mount wins.
+	r.Mount("/remote.php/dav/public-files", s.handler(), router.Unprotected())
+	r.Mount("/remote.php/dav/ocm", s.handler(), router.Unprotected())
+
+	r.Mount("/dav", s.handler())
+	r.Mount("/webdav", s.handler())
+	r.Mount("/remote.php", s.handler())
+
+	r.Mount("/status.php", s.handler(), router.Unprotected())
+	r.Mount("/s", s.handler(), router.Unprotected())
+	r.Mount("/apps/files", s.handler(), router.Unprotected())
+	r.Mount("/index.php/s", s.handler(), router.Unprotected())
+	r.Mount("/ocm-provider", s.handler(), router.Unprotected())
 }
 
-func (s *svc) Handler() http.Handler {
+func (s *svc) handler() http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		ctx := r.Context()
 		log := appctx.GetLogger(ctx)
