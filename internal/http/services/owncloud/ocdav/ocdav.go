@@ -103,7 +103,6 @@ type ConfigPublicLinkDownload struct {
 
 // Config holds the config options that need to be passed down to all ocdav handlers.
 type Config struct {
-	Prefix string `mapstructure:"prefix"`
 	// FilesNamespace prefixes the namespace, optionally with user information.
 	// Example: if FilesNamespace is /users/{{substr 0 1 .Username}}/{{.Username}}
 	// and received path is /docs the internal path will be:
@@ -132,7 +131,6 @@ type Config struct {
 }
 
 func (c *Config) ApplyDefaults() {
-	// note: default c.Prefix is an empty string
 	c.GatewaySvc = sharedconf.GetGatewaySVC(c.GatewaySvc)
 
 	if c.OCMNamespace == "" {

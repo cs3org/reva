@@ -35,7 +35,6 @@ func init() {
 
 // The takeout service Config
 type Config struct {
-	Prefix               string `mapstructure:"prefix"`
 	MachineSecret        string `mapstructure:"machine_secret" validate:"required"`
 	TakeoutAdminUsername string `mapstructure:"takeout_admin_username" validate:"required"`
 	TakeoutPath          string `mapstructure:"takeout_path" validate:"required"`
@@ -71,9 +70,6 @@ func New(ctx context.Context, m map[string]any) (global.Service, error) {
 
 // ApplyDefaults sets the default service config
 func (c *Config) ApplyDefaults() {
-	if c.Prefix == "" {
-		c.Prefix = "takeout"
-	}
 	if c.CleanupSchedule == "" {
 		c.CleanupSchedule = "@daily"
 	}

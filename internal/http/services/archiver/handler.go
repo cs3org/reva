@@ -56,7 +56,6 @@ type svc struct {
 
 // Config holds the config options that need to be passed down to all ocdav handlers.
 type Config struct {
-	Prefix         string   `mapstructure:"prefix"`
 	GatewaySvc     string   `mapstructure:"gatewaysvc"                                              validate:"required"`
 	Timeout        int64    `mapstructure:"timeout"`
 	Insecure       bool     `docs:"false;Whether to skip certificate checks when sending requests." mapstructure:"insecure"`
@@ -101,9 +100,6 @@ func New(ctx context.Context, conf map[string]any) (global.Service, error) {
 }
 
 func (c *Config) ApplyDefaults() {
-	if c.Prefix == "" {
-		c.Prefix = "archiver"
-	}
 
 	if c.Name == "" {
 		c.Name = "download"

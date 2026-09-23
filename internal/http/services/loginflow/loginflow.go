@@ -69,7 +69,6 @@ type rateLimitConfig struct {
 }
 
 type config struct {
-	Prefix         string                    `mapstructure:"prefix"`
 	ServerBaseURL  string                    `mapstructure:"server_base_url"`
 	WebUIURL       string                    `mapstructure:"webui_url"`
 	FlowTTLSeconds int                       `mapstructure:"flow_ttl_seconds"`
@@ -81,9 +80,6 @@ type config struct {
 }
 
 func (c *config) ApplyDefaults() {
-	if c.Prefix == "" {
-		c.Prefix = "index.php/login/v2"
-	}
 	if c.AppAuthDriver == "" {
 		c.AppAuthDriver = "json"
 	}
@@ -147,7 +143,7 @@ func New(ctx context.Context, m map[string]any) (global.Service, error) {
 		limiter: newLimiter(),
 	}
 
-	appctx.GetLogger(ctx).Info().Str("service", "loginflow").Str("prefix", c.Prefix).Str("server_base_url", c.ServerBaseURL).Str("webui_url", c.WebUIURL).Str("appauth_driver", c.AppAuthDriver).Str("store_driver", c.StoreDriver).Int("flow_ttl_seconds", c.FlowTTLSeconds).Msg("loginflow service initialised")
+	appctx.GetLogger(ctx).Info().Str("service", "loginflow").Str("prefix", mount).Str("server_base_url", c.ServerBaseURL).Str("webui_url", c.WebUIURL).Str("appauth_driver", c.AppAuthDriver).Str("store_driver", c.StoreDriver).Int("flow_ttl_seconds", c.FlowTTLSeconds).Msg("loginflow service initialised")
 
 	return s, nil
 }
