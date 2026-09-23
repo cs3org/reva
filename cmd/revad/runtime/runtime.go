@@ -44,6 +44,7 @@ import (
 	"github.com/cs3org/reva/v3/pkg/rgrpc"
 	"github.com/cs3org/reva/v3/pkg/rgrpc/mtls"
 	"github.com/cs3org/reva/v3/pkg/rhttp"
+	"github.com/cs3org/reva/v3/pkg/rhttp/router"
 	"github.com/cs3org/reva/v3/pkg/service"
 	"github.com/cs3org/reva/v3/pkg/trace"
 
@@ -92,6 +93,10 @@ type Server struct {
 	// internal marks a server not advertised as a registry service (the
 	// per-process control channel).
 	internal bool
+
+	// routes are the routes declared on this server, empty for grpc. They are
+	// advertised per service, so a gateway can mirror what each one serves.
+	routes []router.Route
 
 	services map[string]any
 }
@@ -634,6 +639,7 @@ func newServers(ctx context.Context, certs config.MTLS, grpc []*config.GRPC, htt
 			listener:  ln,
 			transport: registry.TransportHTTP,
 			scheme:    scheme,
+			routes:    routes.Routes(),
 			services:  maps.MapValues(services, func(s global.Service) any { return s }),
 		}
 		log.Debug().
