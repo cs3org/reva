@@ -28,7 +28,6 @@ import (
 	"github.com/cs3org/reva/v3/internal/http/services/owncloud/ocs/response"
 	"github.com/cs3org/reva/v3/pkg/appctx"
 	"github.com/cs3org/reva/v3/pkg/service"
-	"github.com/go-chi/chi/v5"
 )
 
 // Client is one connected sync client, backed by an app password. The three
@@ -83,7 +82,7 @@ func (h *Handler) ListClients(w http.ResponseWriter, r *http.Request) {
 // missing client returns 204, not 500.
 func (h *Handler) DeleteClient(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
-	cid := chi.URLParam(r, "cid")
+	cid := r.PathValue("cid")
 
 	gw, err := service.Gateway(ctx)
 	if err != nil {
