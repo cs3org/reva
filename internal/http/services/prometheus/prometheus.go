@@ -24,10 +24,14 @@ import (
 
 	"github.com/cs3org/reva/v3/pkg/prom/registry"
 	"github.com/cs3org/reva/v3/pkg/rhttp/global"
+	"github.com/cs3org/reva/v3/pkg/rhttp/router"
 	"github.com/cs3org/reva/v3/pkg/utils/cfg"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 )
+
+// mount is where the scrape endpoint is served.
+const mount = "/metrics"
 
 func init() {
 	global.Register("prometheus", New)
@@ -61,7 +65,7 @@ func New(ctx context.Context, m map[string]any) (global.Service, error) {
 			Registry:          reg,
 			EnableOpenMetrics: true,
 		})
-	return &svc{prefix: c.Prefix, h: handler}, nil
+	return &svc{h: handler}, nil
 }
 
 type config struct {
@@ -75,23 +79,20 @@ func (c *config) ApplyDefaults() {
 }
 
 type svc struct {
-	prefix string
-	h      http.Handler
+	h http.Handler
 }
 
 func (s *svc) Prefix() string {
-	return s.prefix
+	return mount
 }
 
-func (s *svc) Handler() http.Handler {
-	return s.h
+// Routes mounts the prometheus handler, which serves the scrape endpoint
+// regardless of the path it is reached at.
+func (s *svc) Routes(r *router.Router) {
+	// TODO(labkode): all prometheus endpoints are public?
+	r.Mount(mount, s.h, router.Unprotected())
 }
 
 func (s *svc) Close() error {
 	return nil
-}
-
-func (s *svc) Unprotected() []string {
-	// TODO(labkode): all prometheus endpoints are public?
-	return []string{"/"}
 }

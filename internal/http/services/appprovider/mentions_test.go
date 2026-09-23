@@ -35,6 +35,7 @@ import (
 	"github.com/cs3org/reva/v3/pkg/appctx"
 	"github.com/cs3org/reva/v3/pkg/notifications"
 	"github.com/cs3org/reva/v3/pkg/notifications/model"
+	"github.com/cs3org/reva/v3/pkg/rhttp/router"
 	"github.com/cs3org/reva/v3/pkg/sharedconf"
 	"github.com/cs3org/reva/v3/pkg/spaces"
 	"google.golang.org/grpc"
@@ -353,8 +354,10 @@ func TestHandleMentionsAcceptsResolvedMentions(t *testing.T) {
 
 func TestMentionsEndpointIsProtected(t *testing.T) {
 	s := &svc{}
-	for _, path := range s.Unprotected() {
-		if path == "/mentions" {
+	r := router.New()
+	s.Routes(r)
+	for _, path := range r.Unprotected() {
+		if path == mount+"/mentions" {
 			t.Fatalf("/mentions must not be listed as unprotected")
 		}
 	}

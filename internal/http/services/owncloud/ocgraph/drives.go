@@ -37,7 +37,6 @@ import (
 	collaborationv1beta1 "github.com/cs3org/go-cs3apis/cs3/sharing/collaboration/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	gomime "github.com/glpatcern/go-mime"
-	"github.com/go-chi/chi/v5"
 	libregraph "github.com/owncloud/libre-graph-api-go"
 
 	"github.com/cs3org/reva/v3/pkg/appctx"
@@ -372,7 +371,7 @@ func (s *svc) patchSpace(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	spaceId := chi.URLParam(r, "space-id")
+	spaceId := r.PathValue("space-id")
 	updateRequest := &provider.UpdateStorageSpaceRequest{
 		StorageSpace: &provider.StorageSpace{
 			Id: &provider.StorageSpaceId{

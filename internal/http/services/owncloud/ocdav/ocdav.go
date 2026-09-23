@@ -26,7 +26,6 @@ import (
 	"net/url"
 	"path"
 	"regexp"
-	"slices"
 	"strings"
 	"time"
 
@@ -88,6 +87,10 @@ type nameDoesNotContain struct {
 func (r nameDoesNotContain) Test(name string) bool {
 	return !strings.ContainsAny(name, r.chars)
 }
+
+// mount is empty: the service claims several disjoint entry points rather than
+// one subtree, and declares each of them in Routes.
+const mount = ""
 
 func init() {
 	global.Register("ocdav", New)
@@ -211,8 +214,10 @@ func New(ctx context.Context, m map[string]any) (global.Service, error) {
 	return s, nil
 }
 
+// Prefix is empty: ocdav does not live under one path, it serves a handful of
+// well-known ones declared in Routes.
 func (s *svc) Prefix() string {
-	return s.c.Prefix
+	return mount
 }
 
 func (s *svc) Close() error {
@@ -220,31 +225,31 @@ func (s *svc) Close() error {
 	return nil
 }
 
-// Unprotected returns a fresh slice on every call: the HTTP server rewrites
-// the one it gets in place.
-func (s *svc) Unprotected() []string {
-	return []string{"/status.php", "/remote.php/dav/public-files/", "/apps/files/", "/index.php/f/", "/index.php/s/", "/s/", ocmWebDAVPath, "/ocm-provider"}
-}
+// Routes mounts the WebDAV entry points. They are mounts rather than declared
+// patterns because WebDAV addresses a resource by its whole path: the handler
+// needs it exactly as it arrived, without the canonicalization and decoding a
+// pattern match would apply, and its clients are sensitive to the redirects
+// that would follow.
+func (s *svc) Routes(r *router.Router) {
+	// The entry points nobody authenticates for are rate limited per client.
+	// The OCM one is left out: it authenticates at the protocol layer, and a
+	// whole remote site reaches it from one address.
+	limited := r.Use(s.limiter.Middleware)
 
-func (s *svc) Handler() http.Handler {
-	return s.limitUnprotected(s.handler())
-}
+	// The public link and OCM subtrees authenticate with the link token, and
+	// are matched ahead of /remote.php because a longer mount wins.
+	limited.Mount("/remote.php/dav/public-files", s.handler(), router.Unprotected())
+	r.Mount("/remote.php/dav/ocm", s.handler(), router.Unprotected())
 
-// limitUnprotected rate limits the requests to the unauthenticated routes
-// other than ocmWebDAVPath, leaving the authenticated ones alone.
-func (s *svc) limitUnprotected(next http.Handler) http.Handler {
-	if s.limiter == nil {
-		return next
-	}
-	unprotected := slices.DeleteFunc(s.Unprotected(), func(p string) bool { return p == ocmWebDAVPath })
-	limited := s.limiter.Middleware(next)
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if utils.Skip(r.URL.Path, unprotected) {
-			limited.ServeHTTP(w, r)
-			return
-		}
-		next.ServeHTTP(w, r)
-	})
+	r.Mount("/dav", s.handler())
+	r.Mount("/webdav", s.handler())
+	r.Mount("/remote.php", s.handler())
+
+	limited.Mount("/status.php", s.handler(), router.Unprotected())
+	limited.Mount("/s", s.handler(), router.Unprotected())
+	limited.Mount("/apps/files", s.handler(), router.Unprotected())
+	limited.Mount("/index.php/s", s.handler(), router.Unprotected())
+	limited.Mount("/ocm-provider", s.handler(), router.Unprotected())
 }
 
 func (s *svc) handler() http.Handler {

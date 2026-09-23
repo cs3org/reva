@@ -20,17 +20,19 @@ package sciencemesh
 
 import (
 	"context"
-	"net/http"
 
 	"github.com/cs3org/reva/v3/pkg/appctx"
 	"github.com/cs3org/reva/v3/pkg/rhttp/global"
 	"github.com/cs3org/reva/v3/pkg/rhttp/ratelimit"
+	"github.com/cs3org/reva/v3/pkg/rhttp/router"
 	"github.com/cs3org/reva/v3/pkg/sharedconf"
 	"github.com/cs3org/reva/v3/pkg/smtpclient"
 	"github.com/cs3org/reva/v3/pkg/utils/cfg"
-	"github.com/go-chi/chi/v5"
 	"github.com/rs/zerolog"
 )
+
+// mount is where the ScienceMesh API is served.
+const mount = "/sciencemesh"
 
 func init() {
 	global.Register("sciencemesh", New)
@@ -44,13 +46,9 @@ func New(ctx context.Context, m map[string]any) (global.Service, error) {
 		return nil, err
 	}
 
-	r := chi.NewRouter()
-	s := &svc{
-		conf:   &c,
-		router: r,
-	}
+	s := &svc{conf: &c}
 
-	if err := s.routerInit(appctx.GetLogger(ctx)); err != nil {
+	if err := s.handlersInit(appctx.GetLogger(ctx)); err != nil {
 		_ = s.Close()
 		return nil, err
 	}
@@ -102,11 +100,16 @@ func (c *config) ApplyDefaults() {
 
 type svc struct {
 	conf    *config
-	router  chi.Router
 	limiter *ratelimit.Limiter
+
+	token     *tokenHandler
+	providers *providersHandler
+	apps      *appsHandler
+	wayf      *wayfHandler
+	embedded  *embeddedHandler
 }
 
-func (s *svc) routerInit(log *zerolog.Logger) error {
+func (s *svc) handlersInit(log *zerolog.Logger) error {
 	// Build the limiter before any handler startup I/O, so that an invalid
 	// trusted_proxy_cidrs entry fails fast, like allowed_federation_cidrs.
 	limiter, err := s.conf.RateLimit.NewLimiter(log)
@@ -114,7 +117,6 @@ func (s *svc) routerInit(log *zerolog.Logger) error {
 		return err
 	}
 	s.limiter = limiter
-	unauth := limiter.Middleware
 
 	tokenHandler := new(tokenHandler)
 	if err := tokenHandler.init(s.conf); err != nil {
@@ -139,36 +141,34 @@ func (s *svc) routerInit(log *zerolog.Logger) error {
 		return err
 	}
 
-	s.router.Post("/generate-invite", tokenHandler.Generate)
-	s.router.Get("/list-invite", tokenHandler.ListInvite)
-	s.router.Post("/accept-invite", tokenHandler.AcceptInvite)
-	s.router.Get("/find-accepted-users", tokenHandler.FindAccepted)
-	s.router.Delete("/delete-accepted-user", tokenHandler.DeleteAccepted)
-	s.router.Get("/list-providers", providersHandler.ListProviders)
-	s.router.Post("/open-in-app", appsHandler.OpenInApp)
-	// Unauthenticated routes (keep in sync with Unprotected) are rate limited.
-	s.router.With(unauth).Get("/federations", wayfHandler.GetFederations)
-	s.router.With(unauth).Post("/discover", wayfHandler.DiscoverProvider)
-	s.router.Get("/embedded-shares", embeddedHandler.ListEmbeddedShares)
-	s.router.Post("/process-embedded-share", embeddedHandler.ProcessEmbeddedShare)
+	s.token = tokenHandler
+	s.providers = providersHandler
+	s.apps = appsHandler
+	s.wayf = wayfHandler
+	s.embedded = embeddedHandler
 	return nil
 }
 
 func (s *svc) Prefix() string {
-	return s.conf.Prefix
+	return mount
 }
 
-func (s *svc) Unprotected() []string {
-	return []string{"/federations", "/discover"}
-}
-
-func (s *svc) Handler() http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		log := appctx.GetLogger(r.Context())
-		log.Debug().Str("path", r.URL.Path).Msg("sciencemesh routing")
-
-		// unset raw path, otherwise chi uses it to route and then fails to match percent encoded path segments
-		r.URL.RawPath = ""
-		s.router.ServeHTTP(w, r)
+// Routes declares the ScienceMesh endpoints. Discovery is reachable without
+// credentials, everything else is behind the auth middleware.
+func (s *svc) Routes(r *router.Router) {
+	r.Group(mount, func(r *router.Router) {
+		r.Post("/generate-invite", s.token.Generate)
+		r.Get("/list-invite", s.token.ListInvite)
+		r.Post("/accept-invite", s.token.AcceptInvite)
+		r.Get("/find-accepted-users", s.token.FindAccepted)
+		r.Delete("/delete-accepted-user", s.token.DeleteAccepted)
+		r.Get("/list-providers", s.providers.ListProviders)
+		r.Post("/open-in-app", s.apps.OpenInApp)
+		// Reached without credentials, so rate limited per client.
+		unauth := r.Use(s.limiter.Middleware)
+		unauth.Get("/federations", s.wayf.GetFederations, router.Unprotected())
+		unauth.Post("/discover", s.wayf.DiscoverProvider, router.Unprotected())
+		r.Get("/embedded-shares", s.embedded.ListEmbeddedShares)
+		r.Post("/process-embedded-share", s.embedded.ProcessEmbeddedShare)
 	})
 }

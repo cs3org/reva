@@ -610,16 +610,17 @@ func newServers(ctx context.Context, certs config.MTLS, grpc []*config.GRPC, htt
 		ln := listenerFromAddress(lns, cfg.Network, cfg.Address)
 		counters := newActivityCounters(services)
 		captureInstances(services, cfg.Services, hostPort(hostname, ln.Addr().String()), counters)
-		middlewares, err := initHTTPMiddlewares(cfg.Middlewares, httpUnprotected(services), &logger)
+		routes := rhttp.Routes(services, counters, &logger)
+		middlewares, err := initHTTPMiddlewares(cfg.Middlewares, routes.Unprotected(), &logger)
 		if err != nil {
 			return nil, err
 		}
 		s, err := rhttp.New(
 			rhttp.WithServices(services),
+			rhttp.WithRouter(routes),
 			rhttp.WithLogger(logger),
 			rhttp.WithCertAndKeyFiles(cfg.CertFile, cfg.KeyFile),
 			rhttp.WithMiddlewares(middlewares),
-			rhttp.WithActivityCounters(counters),
 		)
 		if err != nil {
 			return nil, err
