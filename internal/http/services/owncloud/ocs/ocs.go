@@ -42,6 +42,9 @@ import (
 // mount is where the OCS API is served.
 const mount = "/ocs"
 
+// apiVersions are the OCS api versions served, each under its own path.
+var apiVersions = []string{"1", "2"}
+
 func init() {
 	global.Register("ocs", New)
 }
@@ -107,7 +110,7 @@ func (s *svc) handlersInit(l *zerolog.Logger) error {
 // Routes declares the OCS API. The version is part of the path, so the tree is
 // declared once per supported version rather than matched with a wildcard.
 func (s *svc) Routes(r *router.Router) {
-	for _, version := range []string{"1", "2"} {
+	for _, version := range apiVersions {
 		r.Group(mount+"/v"+version+".php", func(r *router.Router) {
 			s.routes(r)
 		}, response.VersionCtx(version), s.warmup)
@@ -123,9 +126,6 @@ func (s *svc) routes(r *router.Router) {
 			})
 			r.Post("/", s.shares.CreateShare)
 
-			r.Post("/pending/{shareid}", s.shares.AcceptReceivedShare)
-			r.Delete("/pending/{shareid}", s.shares.RejectReceivedShare)
-
 			r.Get("/remote_shares", s.shares.ListFederatedShares)
 			r.Get("/remote_shares/{shareid}", s.shares.GetFederatedShare)
 
@@ -133,11 +133,14 @@ func (s *svc) routes(r *router.Router) {
 			r.Put("/{shareid}", s.shares.UpdateShare)
 			r.Delete("/{shareid}", s.shares.RemoveShare)
 			r.Post("/{shareid}/notify", s.shares.NotifyShare)
-			// /shares/pending/{shareid} and /shares/{shareid}/notify both
-			// match /shares/pending/notify without either being the more
-			// specific one, so the overlap is declared explicitly. It resolves
-			// the way it always has: as a share id of "notify" being accepted.
-			r.Post("/pending/notify", s.shares.AcceptReceivedShare)
+
+			// /shares/pending/{shareid} and /shares/{shareid}/notify overlap on
+			// /shares/pending/notify, and neither is the more specific one, so
+			// ServeMux refuses to hold both. The pending subtree is therefore
+			// mounted: a mount is matched ahead of the patterns, which resolves
+			// the overlap the way it always resolved, with "pending" read as
+			// the literal it is.
+			r.Mount("/pending", s.pendingShares())
 		})
 		r.Get("/sharees", s.sharees.FindSharees)
 	})
@@ -161,6 +164,18 @@ func (s *svc) routes(r *router.Router) {
 			r.Get("/{userid}/groups", s.users.GetGroups)
 		})
 	})
+}
+
+// pendingShares serves the received share actions. Its patterns are absolute
+// because a mount hands the handler the request path as it arrived.
+func (s *svc) pendingShares() http.Handler {
+	m := http.NewServeMux()
+	for _, version := range apiVersions {
+		base := mount + "/v" + version + ".php/apps/files_sharing/api/v1/shares/pending/{shareid}"
+		m.HandleFunc(http.MethodPost+" "+base, s.shares.AcceptReceivedShare)
+		m.HandleFunc(http.MethodDelete+" "+base, s.shares.RejectReceivedShare)
+	}
+	return m
 }
 
 // warmup kicks off the share cache warmup for the user, which every OCS
