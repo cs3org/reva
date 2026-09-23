@@ -39,7 +39,6 @@ import (
 	"github.com/cs3org/reva/v3/pkg/permissions"
 	"github.com/cs3org/reva/v3/pkg/service"
 	"github.com/cs3org/reva/v3/pkg/utils"
-	"github.com/go-chi/chi/v5"
 	"github.com/pkg/errors"
 )
 
@@ -160,7 +159,7 @@ func (h *Handler) GetFederatedShare(w http.ResponseWriter, r *http.Request) {
 	// TODO: Implement response with HAL schemating
 	ctx := r.Context()
 
-	shareID := chi.URLParam(r, "shareid")
+	shareID := r.PathValue("shareid")
 	gatewayClient, err := service.Gateway(ctx)
 	if err != nil {
 		response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "error getting grpc gateway client", err)
