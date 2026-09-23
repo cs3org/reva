@@ -40,7 +40,6 @@ func init() {
 }
 
 type config struct {
-	Prefix   string                    `docs:"data;The prefix to be used for this HTTP service"                                          mapstructure:"prefix"`
 	Driver   string                    `docs:"localhome;The storage driver to be used."                                                  mapstructure:"driver"`
 	Drivers  map[string]map[string]any `docs:"url:pkg/storage/fs/localhome/localhome.go;The configuration for the storage driver"        mapstructure:"drivers"`
 	DataTXs  map[string]map[string]any `docs:"url:pkg/rhttp/datatx/manager/simple/simple.go;The configuration for the data tx protocols" mapstructure:"data_txs"`
@@ -55,9 +54,6 @@ type config struct {
 }
 
 func (c *config) ApplyDefaults() {
-	if c.Prefix == "" {
-		c.Prefix = "data"
-	}
 	if c.Driver == "" {
 		c.Driver = "localhome"
 	}

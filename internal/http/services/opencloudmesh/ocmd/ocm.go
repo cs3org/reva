@@ -35,7 +35,6 @@ func init() {
 }
 
 type config struct {
-	Prefix                     string                    `mapstructure:"prefix"`
 	GatewaySvc                 string                    `mapstructure:"gatewaysvc"                    validate:"required"`
 	ExposeRecipientDisplayName bool                      `mapstructure:"expose_recipient_display_name"`
 	TokenManager               string                    `mapstructure:"token_manager"`
@@ -57,9 +56,6 @@ type config struct {
 
 func (c *config) ApplyDefaults() {
 	c.GatewaySvc = sharedconf.GetGatewaySVC(c.GatewaySvc)
-	if c.Prefix == "" {
-		c.Prefix = "ocm"
-	}
 	if c.TokenManager == "" {
 		c.TokenManager = "jwt"
 	}

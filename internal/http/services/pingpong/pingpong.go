@@ -54,15 +54,10 @@ func (s *svc) Close() error {
 }
 
 type config struct {
-	Prefix   string `mapstructure:"prefix"`
 	Endpoint string `mapstructure:"endpoint"`
 }
 
 func (c *config) ApplyDefaults() {
-	if c.Prefix == "" {
-		c.Prefix = "pingpong"
-	}
-
 	if c.Endpoint == "" {
 		c.Endpoint = "localhost:8081"
 	}

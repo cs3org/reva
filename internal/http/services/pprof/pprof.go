@@ -25,7 +25,6 @@ import (
 
 	"github.com/cs3org/reva/v3/pkg/rhttp/global"
 	"github.com/cs3org/reva/v3/pkg/rhttp/router"
-	"github.com/cs3org/reva/v3/pkg/utils/cfg"
 )
 
 // mount is where the profiling endpoints are served.
@@ -37,14 +36,7 @@ func init() {
 
 // New returns a new pprof service.
 func New(ctx context.Context, m map[string]any) (global.Service, error) {
-	var c config
-	if err := cfg.Decode(m, &c); err != nil {
-		return nil, err
-	}
-
-	c.ApplyDefaults()
-
-	return &svc{conf: &c}, nil
+	return &svc{}, nil
 }
 
 // Close performs cleanup.
@@ -52,18 +44,7 @@ func (s *svc) Close() error {
 	return nil
 }
 
-type config struct {
-	Prefix string `mapstructure:"prefix"`
-}
-
-func (c *config) ApplyDefaults() {
-	// pprof is always exposed at /debug
-	c.Prefix = "debug"
-}
-
-type svc struct {
-	conf *config
-}
+type svc struct{}
 
 func (s *svc) Prefix() string {
 	return mount

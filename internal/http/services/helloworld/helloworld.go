@@ -51,17 +51,12 @@ func (s *svc) Close() error {
 }
 
 type config struct {
-	Prefix       string `mapstructure:"prefix"`
 	HelloMessage string `mapstructure:"message"`
 }
 
 func (c *config) ApplyDefaults() {
 	if c.HelloMessage == "" {
 		c.HelloMessage = "Hello World!"
-	}
-
-	if c.Prefix == "" {
-		c.Prefix = "helloworld"
 	}
 }
 

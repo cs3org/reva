@@ -62,7 +62,6 @@ func init() {
 
 // Config holds the config options for the HTTP appprovider service.
 type Config struct {
-	Prefix     string `mapstructure:"prefix"`
 	GatewaySvc string `mapstructure:"gatewaysvc"                                              validate:"required"`
 	Insecure   bool   `docs:"false;Whether to skip certificate checks when sending requests." mapstructure:"insecure"`
 	// FeedbackRecipient is the email address user feedback submitted through the
@@ -71,9 +70,6 @@ type Config struct {
 }
 
 func (c *Config) ApplyDefaults() {
-	if c.Prefix == "" {
-		c.Prefix = "app"
-	}
 	c.GatewaySvc = sharedconf.GetGatewaySVC(c.GatewaySvc)
 }
 

@@ -58,7 +58,6 @@ func (s *svc) Close() error {
 }
 
 type config struct {
-	Prefix               string                      `mapstructure:"prefix"`
 	SMTPCredentials      *smtpclient.SMTPCredentials `mapstructure:"smtp_credentials"`
 	GatewaySvc           string                      `mapstructure:"gatewaysvc"         validate:"required"`
 	MeshDirectoryURL     string                      `mapstructure:"mesh_directory_url" validate:"required"`
@@ -72,9 +71,6 @@ type config struct {
 }
 
 func (c *config) ApplyDefaults() {
-	if c.Prefix == "" {
-		c.Prefix = "sciencemesh"
-	}
 	if c.OCMMountPoint == "" {
 		c.OCMMountPoint = "/ocm"
 	}
