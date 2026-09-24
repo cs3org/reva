@@ -86,6 +86,8 @@ type sharesMockGW struct {
 	gateway.GatewayAPIClient
 	createResp     *ocmincoming.CreateOCMIncomingShareResponse
 	rejectAccepted bool
+	createCalls    int
+	created        *ocmincoming.CreateOCMIncomingShareRequest
 }
 
 func (m *sharesMockGW) IsProviderAllowed(context.Context, *ocmprovider.IsProviderAllowedRequest, ...grpc.CallOption) (*ocmprovider.IsProviderAllowedResponse, error) {
@@ -103,7 +105,9 @@ func (m *sharesMockGW) GetUser(context.Context, *userpb.GetUserRequest, ...grpc.
 	}, nil
 }
 
-func (m *sharesMockGW) CreateOCMIncomingShare(context.Context, *ocmincoming.CreateOCMIncomingShareRequest, ...grpc.CallOption) (*ocmincoming.CreateOCMIncomingShareResponse, error) {
+func (m *sharesMockGW) CreateOCMIncomingShare(_ context.Context, req *ocmincoming.CreateOCMIncomingShareRequest, _ ...grpc.CallOption) (*ocmincoming.CreateOCMIncomingShareResponse, error) {
+	m.createCalls++
+	m.created = req
 	return m.createResp, nil
 }
 
@@ -538,9 +542,9 @@ func runSharesProxyChild(t *testing.T, scenario string) {
 	}
 }
 
-func TestDiscoverOcmResourceTypesLoopbackPolicy(t *testing.T) {
-	disco := ocmDiscoveryServer(t, "webdav", "file")
-	defer disco.Close()
+func TestDiscoverOcmLoopbackPolicy(t *testing.T) {
+	srv := ocmDiscoveryServer(t, "webdav", "file")
+	defer srv.Close()
 
 	tests := []struct {
 		name    string
@@ -557,7 +561,7 @@ func TestDiscoverOcmResourceTypesLoopbackPolicy(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			h := initSharesHandler(t, &tt.conf)
-			d, err := h.ocmClient.Discover(context.Background(), disco.URL)
+			d, err := h.ocmClient.Discover(context.Background(), srv.URL)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("Discover() error = %v, wantErr %v", err, tt.wantErr)
 			}
@@ -580,7 +584,7 @@ func TestDiscoverOcmResourceTypesLoopbackPolicy(t *testing.T) {
 	}
 }
 
-func TestDiscoverOcmResourceTypesMalformedReturnsDecodeError(t *testing.T) {
+func TestDiscoverOcmMalformedReturnsDecodeError(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		_, _ = w.Write([]byte("not json"))
@@ -1313,4 +1317,279 @@ func TestCreateShareRejectsUnsignedFromSigningServer(t *testing.T) {
 	if rr.Code != http.StatusUnauthorized {
 		t.Fatalf("CreateShare() status = %d, want %d", rr.Code, http.StatusUnauthorized)
 	}
+}
+
+func webappReceiveHandler(t *testing.T, targets []string) *sharesHandler {
+	t.Helper()
+	h := initSharesHandler(t, &config{AllowLoopbackFederation: true})
+	copied := append([]string{}, targets...)
+	h.webappReceiveTargets = &copied
+	return h
+}
+
+func postShare(t *testing.T, h *sharesHandler, body map[string]any) *httptest.ResponseRecorder {
+	t.Helper()
+	raw, err := json.Marshal(body)
+	if err != nil {
+		t.Fatal(err)
+	}
+	req := httptest.NewRequest(http.MethodPost, "/ocm/shares", bytes.NewReader(raw))
+	req.Header.Set("Content-Type", "application/json")
+	req.RemoteAddr = "192.0.2.15:12345"
+	rr := httptest.NewRecorder()
+	h.CreateShare(rr, req)
+	return rr
+}
+
+func shareBody(sender, resourceType string, protocol map[string]any) map[string]any {
+	return map[string]any{
+		"shareWith":    "marie@local.example.org",
+		"name":         "test.txt",
+		"providerId":   "provider-id",
+		"owner":        "einstein@" + sender,
+		"sender":       "einstein@" + sender,
+		"shareType":    "user",
+		"resourceType": resourceType,
+		"protocol":     protocol,
+	}
+}
+
+func webappOffer(uri string, requirements, targets []string) map[string]any {
+	offer := map[string]any{
+		"uri":          uri,
+		"sharedSecret": "secret",
+		"permissions":  []string{"read"},
+		"requirements": requirements,
+		"targets":      targets,
+	}
+	return map[string]any{"webapp": offer}
+}
+
+func TestCreateShareWebappValidation(t *testing.T) {
+	disco := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_ = json.NewEncoder(w).Encode(wellknown.OcmDiscoveryData{
+			Endpoint: "http://" + r.Host + "/ocm",
+			ResourceTypes: []wellknown.ResourceTypes{{
+				Name: "file",
+				Protocols: map[string]any{
+					"webapp": "/apps/",
+					"webdav": "/remote.php/dav/ocm",
+				},
+			}},
+		})
+	}))
+	defer disco.Close()
+	sender := disco.Listener.Addr().String()
+
+	okCreate := &ocmincoming.CreateOCMIncomingShareResponse{
+		Status: &rpc.Status{Code: rpc.Code_CODE_OK},
+	}
+
+	t.Run("compatible target is stored", func(t *testing.T) {
+		gw := &sharesMockGW{createResp: okCreate}
+		stampGateway(gw)
+		rr := postShare(t, webappReceiveHandler(t, []string{"blank"}), shareBody(sender, "file", webappOffer(
+			"https://app.example/hub",
+			[]string{"must-exchange-token"},
+			[]string{"blank"},
+		)))
+		if rr.Code != http.StatusCreated {
+			t.Fatalf("status %d body %s", rr.Code, rr.Body.String())
+		}
+		if gw.createCalls != 1 {
+			t.Fatalf("create calls %d", gw.createCalls)
+		}
+	})
+
+	t.Run("relative uri resolves against advertised root", func(t *testing.T) {
+		gw := &sharesMockGW{createResp: okCreate}
+		stampGateway(gw)
+		rr := postShare(t, webappReceiveHandler(t, []string{"blank"}), shareBody(sender, "file", webappOffer(
+			"/hub",
+			[]string{"must-exchange-token"},
+			[]string{"blank"},
+		)))
+		if rr.Code != http.StatusCreated {
+			t.Fatalf("status %d body %s", rr.Code, rr.Body.String())
+		}
+		if gw.createCalls != 1 || gw.created == nil {
+			t.Fatalf("create calls %d", gw.createCalls)
+		}
+		opts := gw.created.Protocols[0].GetWebappOptions()
+		wantURI := "http://" + sender + "/hub"
+		if opts == nil || opts.Uri != wantURI {
+			t.Fatalf("resolved uri %#v, want %s", opts, wantURI)
+		}
+	})
+
+	cases := []struct {
+		name     string
+		protocol map[string]any
+		want     string
+	}{
+		{
+			name:     "empty targets",
+			protocol: webappOffer("https://app.example/hub", []string{"must-exchange-token"}, []string{}),
+			want:     "missing targets",
+		},
+		{
+			name:     "no intersection",
+			protocol: webappOffer("https://app.example/hub", []string{"must-exchange-token"}, []string{"iframe"}),
+			want:     "no compatible target",
+		},
+		{
+			name:     "missing uri",
+			protocol: webappOffer(" ", []string{"must-exchange-token"}, []string{"blank"}),
+			want:     "missing uri",
+		},
+		{
+			name: "missing secret",
+			protocol: map[string]any{"webapp": map[string]any{
+				"uri": "https://app.example/hub", "sharedSecret": "",
+				"permissions": []string{"read"}, "requirements": []string{"must-exchange-token"},
+				"targets": []string{"blank"},
+			}},
+			want: "sharedSecret",
+		},
+		{
+			name:     "malformed requirement",
+			protocol: webappOffer("https://app.example/hub", []string{" must-exchange-token"}, []string{"blank"}),
+			want:     "malformed requirement",
+		},
+		{
+			name:     "absent must-exchange-token",
+			protocol: webappOffer("https://app.example/hub", []string{"must-use-mfa"}, []string{"blank"}),
+			want:     "must-exchange-token",
+		},
+		{
+			name:     "malformed uri",
+			protocol: webappOffer("http://http://evil.example/hub", []string{"must-exchange-token"}, []string{"blank"}),
+			want:     "malformed",
+		},
+		{
+			name:     "unknown mandatory requirement",
+			protocol: webappOffer("https://app.example/hub", []string{"must-exchange-token", "must-sign"}, []string{"blank"}),
+			want:     "unsupported requirement",
+		},
+		{
+			name:     "must-use-mfa",
+			protocol: webappOffer("https://app.example/hub", []string{"must-exchange-token", "must-use-mfa"}, []string{"blank"}),
+			want:     "must-use-mfa",
+		},
+		{
+			name: "mixed webdav and bad webapp",
+			protocol: map[string]any{
+				"webdav": map[string]any{
+					"sharedSecret": "secret", "permissions": []string{"read"},
+					"uri": "https://dav.example/file",
+				},
+				"webapp": map[string]any{
+					"uri": "https://app.example/hub", "sharedSecret": "secret",
+					"permissions": []string{"read"}, "requirements": []string{"must-exchange-token"},
+					"targets": []string{"iframe"},
+				},
+			},
+			want: "no compatible target",
+		},
+	}
+	for _, tt := range cases {
+		t.Run(tt.name, func(t *testing.T) {
+			gw := &sharesMockGW{createResp: okCreate}
+			stampGateway(gw)
+			rr := postShare(t, webappReceiveHandler(t, []string{"blank"}), shareBody(sender, "file", tt.protocol))
+			if rr.Code == http.StatusCreated {
+				t.Fatalf("stored invalid share: %s", rr.Body.String())
+			}
+			if gw.createCalls != 0 {
+				t.Fatalf("create calls %d body %s", gw.createCalls, rr.Body.String())
+			}
+			if !strings.Contains(rr.Body.String(), tt.want) {
+				t.Fatalf("body %s", rr.Body.String())
+			}
+		})
+	}
+
+	t.Run("relative uri without receive base is not stored", func(t *testing.T) {
+		noRoot := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			_ = json.NewEncoder(w).Encode(wellknown.OcmDiscoveryData{
+				Endpoint: "http://" + r.Host + "/ocm",
+				ResourceTypes: []wellknown.ResourceTypes{{
+					Name:      "file",
+					Protocols: map[string]any{"webapp": map[string]any{"targets": []string{"blank"}}},
+				}},
+			})
+		}))
+		defer noRoot.Close()
+		gw := &sharesMockGW{createResp: okCreate}
+		stampGateway(gw)
+		rr := postShare(t, webappReceiveHandler(t, []string{"blank"}), shareBody(
+			noRoot.Listener.Addr().String(),
+			"file",
+			webappOffer("/hub", []string{"must-exchange-token"}, []string{"blank"}),
+		))
+		if rr.Code == http.StatusCreated || gw.createCalls != 0 {
+			t.Fatalf("status %d calls %d body %s", rr.Code, gw.createCalls, rr.Body.String())
+		}
+	})
+
+	t.Run("nil webapp does not panic", func(t *testing.T) {
+		gw := &sharesMockGW{createResp: okCreate}
+		stampGateway(gw)
+		rr := postShare(t, webappReceiveHandler(t, []string{"blank"}), shareBody(sender, "file", map[string]any{
+			"webapp": nil,
+		}))
+		if gw.createCalls != 0 {
+			t.Fatalf("create calls %d body %s", gw.createCalls, rr.Body.String())
+		}
+	})
+
+	t.Run("duplicate webapp does not persist", func(t *testing.T) {
+		gw := &sharesMockGW{createResp: okCreate}
+		stampGateway(gw)
+		h := webappReceiveHandler(t, []string{"blank"})
+		first := &Webapp{
+			URI: "https://app.example/hub", SharedSecret: "secret",
+			Permissions: []string{"read"}, Requirements: []string{"must-exchange-token"},
+			Targets: []string{"blank"},
+		}
+		second := &Webapp{
+			URI: "https://app.example/other", SharedSecret: "secret",
+			Permissions: []string{"read"}, Requirements: []string{"must-exchange-token"},
+			Targets: []string{"blank"},
+		}
+		// CreateShare persists only after getAndResolveProtocols returns protocols.
+		// Duplicate JSON object keys collapse before that boundary, so this
+		// passes two decoded webapp offers into the same builder.
+		protos, legacy, err := h.getAndResolveProtocols(Protocols{first, second}, "file", &wellknown.OcmDiscoveryData{})
+		if err == nil || !strings.Contains(err.Error(), "ambiguous") {
+			t.Fatalf("err %v", err)
+		}
+		if protos != nil || legacy {
+			t.Fatalf("protocols %#v legacy %v", protos, legacy)
+		}
+	})
+
+	t.Run("webdav only still persists", func(t *testing.T) {
+		gw := &sharesMockGW{createResp: okCreate}
+		stampGateway(gw)
+		rr := postShare(t, webappReceiveHandler(t, nil), shareBody(sender, "file", map[string]any{
+			"webdav": map[string]any{
+				"sharedSecret": "secret",
+				"permissions":  []string{"read"},
+				"uri":          "https://dav.example/file.txt",
+			},
+		}))
+		if rr.Code != http.StatusCreated {
+			t.Fatalf("status %d body %s", rr.Code, rr.Body.String())
+		}
+		if gw.createCalls != 1 {
+			t.Fatalf("create calls %d", gw.createCalls)
+		}
+		if gw.created == nil || gw.created.Protocols[0].GetWebdavOptions() == nil {
+			t.Fatal("expected webdav protocol to be stored")
+		}
+		if gw.created.Protocols[0].GetWebappOptions() != nil {
+			t.Fatal("webdav share stored a webapp protocol")
+		}
+	})
 }
