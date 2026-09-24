@@ -38,7 +38,8 @@ var ErrInvalidProtocolURI = errors.New("invalid protocol uri")
 var ErrWebappMFAUnproven = errors.New("protocol webapp requirement must-use-mfa cannot be satisfied by this receiver")
 
 // ValidateReceived checks a webapp offer against this receiver's targets.
-// Empty AppName is valid metadata. The offer is not mutated.
+// Empty AppName is valid metadata. Relative URIs are resolved later.
+// The offer is not mutated.
 func (w *Webapp) ValidateReceived(receiverTargets []string) error {
 	if w == nil {
 		return errors.New("nil webapp protocol")
@@ -63,7 +64,7 @@ func (w *Webapp) ValidateReceived(receiverTargets []string) error {
 	); err != nil {
 		return err
 	}
-	if _, err := ValidateAbsoluteWebappURI(w.URI); err != nil {
+	if err := validateReceivedWebappURI(w.URI); err != nil {
 		return err
 	}
 	return webappTargetCompatible(w.Targets, receiverTargets)
@@ -79,7 +80,11 @@ func ValidateWebappLaunch(uri, secret string, requirements, targets, receiverTar
 		Requirements: requirements,
 		Targets:      targets,
 	}
-	return offer.ValidateReceived(receiverTargets)
+	if err := offer.ValidateReceived(receiverTargets); err != nil {
+		return err
+	}
+	_, err := ValidateAbsoluteWebappURI(uri)
+	return err
 }
 
 func validateWebappRequirements(requirements []string) error {
@@ -113,6 +118,26 @@ func webappTargetCompatible(offered, advertised []string) error {
 		return nil
 	}
 	return errors.New("protocol webapp has no compatible target")
+}
+
+func validateReceivedWebappURI(raw string) error {
+	if strings.TrimSpace(raw) == "" {
+		return errors.New("protocol webapp missing uri")
+	}
+	if strings.TrimSpace(raw) != raw {
+		return fmt.Errorf("protocol webapp has malformed uri: %w", ErrInvalidProtocolURI)
+	}
+	parsed, err := url.Parse(raw)
+	if err != nil {
+		return fmt.Errorf("protocol webapp has malformed uri: %w", ErrInvalidProtocolURI)
+	}
+	if parsed.Scheme == "" && parsed.Host == "" {
+		return nil
+	}
+	if err := requireAbsoluteHTTPURL(parsed); err != nil {
+		return fmt.Errorf("protocol webapp has malformed uri: %w", ErrInvalidProtocolURI)
+	}
+	return nil
 }
 
 // ValidateAbsoluteWebappURI returns raw when it is a non-blank, unpadded,

@@ -20,6 +20,8 @@ package ocmd
 
 import (
 	"errors"
+	"net/url"
+	"reflect"
 	"strings"
 	"testing"
 )
@@ -189,4 +191,222 @@ func TestValidateProtocolURISentinel(t *testing.T) {
 	if err := validateProtocolURI("webdav", "https://dav.example/dav"); err != nil {
 		t.Fatal(err)
 	}
+}
+
+func validCodeFlowWebapp() *Webapp {
+	return &Webapp{
+		URI:          "https://app.example/hub",
+		SharedSecret: "secret",
+		Permissions:  []string{"read"},
+		Requirements: []string{"must-exchange-token"},
+		Targets:      []string{"blank"},
+		AppName:      "",
+		AppIconHint:  "https://app.example/icon.png",
+		MediaTypes:   []string{"text/plain"},
+	}
+}
+
+func TestValidateReceivedWebapp(t *testing.T) {
+	blank := []string{"blank"}
+	tests := []struct {
+		name      string
+		webapp    *Webapp
+		receiver  []string
+		wantError string
+	}{
+		{name: "compatible code flow", webapp: validCodeFlowWebapp(), receiver: blank},
+		{
+			name: "empty app name stays optional",
+			webapp: func() *Webapp {
+				w := validCodeFlowWebapp()
+				w.AppName = ""
+				return w
+			}(),
+			receiver: blank,
+		},
+		{
+			name:      "empty targets",
+			webapp:    func() *Webapp { w := validCodeFlowWebapp(); w.Targets = nil; return w }(),
+			receiver:  blank,
+			wantError: "missing targets",
+		},
+		{
+			name:      "no intersection",
+			webapp:    func() *Webapp { w := validCodeFlowWebapp(); w.Targets = []string{"blank"}; return w }(),
+			receiver:  nil,
+			wantError: "no compatible target",
+		},
+		{
+			name:      "unsupported target only",
+			webapp:    func() *Webapp { w := validCodeFlowWebapp(); w.Targets = []string{"iframe"}; return w }(),
+			receiver:  []string{"iframe"},
+			wantError: "no compatible target",
+		},
+		{
+			name: "mixed offered targets stay intact",
+			webapp: func() *Webapp {
+				w := validCodeFlowWebapp()
+				w.Targets = []string{"iframe", "blank"}
+				return w
+			}(),
+			receiver: blank,
+		},
+		{
+			name:      "blank uri",
+			webapp:    func() *Webapp { w := validCodeFlowWebapp(); w.URI = "  "; return w }(),
+			receiver:  blank,
+			wantError: "missing uri",
+		},
+		{
+			name:      "malformed uri",
+			webapp:    func() *Webapp { w := validCodeFlowWebapp(); w.URI = "http://http://evil.example/hub"; return w }(),
+			receiver:  blank,
+			wantError: "malformed",
+		},
+		{
+			name:      "blank secret",
+			webapp:    func() *Webapp { w := validCodeFlowWebapp(); w.SharedSecret = " "; return w }(),
+			receiver:  blank,
+			wantError: "sharedSecret",
+		},
+		{
+			name: "malformed requirement",
+			webapp: func() *Webapp {
+				w := validCodeFlowWebapp()
+				w.Requirements = []string{" must-exchange-token"}
+				return w
+			}(),
+			receiver:  blank,
+			wantError: "malformed requirement",
+		},
+		{
+			name:      "absent must-exchange-token",
+			webapp:    func() *Webapp { w := validCodeFlowWebapp(); w.Requirements = []string{"must-use-mfa"}; return w }(),
+			receiver:  blank,
+			wantError: "must-exchange-token",
+		},
+		{
+			name: "unknown must requirement",
+			webapp: func() *Webapp {
+				w := validCodeFlowWebapp()
+				w.Requirements = []string{"must-exchange-token", "must-sign"}
+				return w
+			}(),
+			receiver:  blank,
+			wantError: "unsupported requirement",
+		},
+		{
+			name: "must-use-mfa",
+			webapp: func() *Webapp {
+				w := validCodeFlowWebapp()
+				w.Requirements = []string{"must-exchange-token", "must-use-mfa"}
+				return w
+			}(),
+			receiver:  blank,
+			wantError: "must-use-mfa",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			before := cloneWebapp(tt.webapp)
+			err := tt.webapp.ValidateReceived(tt.receiver)
+			if !reflect.DeepEqual(tt.webapp, before) {
+				t.Fatalf("validation mutated the DTO: got %#v want %#v", tt.webapp, before)
+			}
+			if tt.wantError == "" {
+				if err != nil {
+					t.Fatal(err)
+				}
+				return
+			}
+			if err == nil || !strings.Contains(err.Error(), tt.wantError) {
+				t.Fatalf("err %v", err)
+			}
+		})
+	}
+}
+
+func TestResolveReceivedWebappURI(t *testing.T) {
+	base, err := url.Parse("http://sender.example/ocm")
+	if err != nil {
+		t.Fatal(err)
+	}
+	resolved, err := ResolveReceivedWebappURI("/hub", base)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if resolved != "http://sender.example/hub" {
+		t.Fatalf("resolved %q", resolved)
+	}
+	if _, err := ResolveReceivedWebappURI("/hub", nil); err == nil {
+		t.Fatal("expected unresolved relative uri error")
+	}
+	absolute := "https://app.example/hub"
+	got, err := ResolveReceivedWebappURI(absolute, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got != absolute {
+		t.Fatalf("absolute uri changed %q", got)
+	}
+}
+
+func TestScreenIncomingWebappsNilAndDuplicate(t *testing.T) {
+	offer := validCodeFlowWebapp()
+	if err := ScreenIncomingWebapps(Protocols{offer}, []string{"blank"}); err != nil {
+		t.Fatal(err)
+	}
+	if err := ScreenIncomingWebapps(Protocols{nil}, []string{"blank"}); err == nil {
+		t.Fatal("expected nil protocol error")
+	}
+	if err := ScreenIncomingWebapps(Protocols{(*Webapp)(nil)}, []string{"blank"}); err == nil {
+		t.Fatal("expected nil webapp error")
+	}
+	if err := ScreenIncomingWebapps(Protocols{offer, offer}, []string{"blank"}); err == nil {
+		t.Fatal("expected ambiguous webapp error")
+	}
+}
+
+func TestCloneWebappPreservesNilSlices(t *testing.T) {
+	nilWebapp := &Webapp{
+		URI:          "https://app.example/hub",
+		SharedSecret: "secret",
+	}
+	copiedNil := cloneWebapp(nilWebapp)
+	if copiedNil.Permissions != nil || copiedNil.Requirements != nil || copiedNil.Targets != nil || copiedNil.MediaTypes != nil {
+		t.Fatalf("nil slices became %#v", copiedNil)
+	}
+	copiedNil.Permissions = append(copiedNil.Permissions, "read")
+	if nilWebapp.Permissions != nil {
+		t.Fatal("nil permission copy aliased the original")
+	}
+
+	filled := validCodeFlowWebapp()
+	copied := cloneWebapp(filled)
+	copied.Permissions[0] = "write"
+	copied.Requirements[0] = "other"
+	copied.Targets[0] = "iframe"
+	copied.MediaTypes[0] = "text/html"
+	if filled.Permissions[0] != "read" || filled.Requirements[0] != "must-exchange-token" || filled.Targets[0] != "blank" || filled.MediaTypes[0] != "text/plain" {
+		t.Fatalf("non-nil slice copy aliased the original: %#v", filled)
+	}
+}
+
+func cloneWebapp(w *Webapp) *Webapp {
+	if w == nil {
+		return nil
+	}
+	cloned := *w
+	cloned.Permissions = cloneStrings(w.Permissions)
+	cloned.Requirements = cloneStrings(w.Requirements)
+	cloned.Targets = cloneStrings(w.Targets)
+	cloned.MediaTypes = cloneStrings(w.MediaTypes)
+	return &cloned
+}
+
+func cloneStrings(in []string) []string {
+	if in == nil {
+		return nil
+	}
+	return append([]string{}, in...)
 }

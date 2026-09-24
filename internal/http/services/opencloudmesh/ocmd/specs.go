@@ -214,6 +214,65 @@ func (w *Webapp) ToOCMProtocol() *ocm.Protocol {
 	return ocmshare.NewWebappProtocol(w.URI, w.SharedSecret, perms, w.Requirements, w.Targets, w.AppName, w.AppIconHint, w.MediaTypes)
 }
 
+// ResolveReceivedWebappURI resolves a webapp URI. Relative references resolve
+// only against a usable receive base. The input string is not rewritten in place.
+func ResolveReceivedWebappURI(raw string, base *url.URL) (string, error) {
+	trimmed := strings.TrimSpace(raw)
+	if trimmed == "" {
+		return "", errors.New("protocol webapp missing uri")
+	}
+	parsed, err := url.Parse(trimmed)
+	if err != nil {
+		return "", fmt.Errorf("protocol webapp has malformed uri %q: %w", trimmed, err)
+	}
+	if parsed.Scheme == "" && parsed.Host == "" {
+		if base == nil || base.Scheme == "" || base.Host == "" {
+			return "", errors.New("protocol webapp relative uri has no receive base")
+		}
+		resolved := base.ResolveReference(parsed)
+		if resolved.Scheme == "" || resolved.Host == "" {
+			return "", errors.New("protocol webapp relative uri has no receive base")
+		}
+		if err := validateProtocolURI("webapp", resolved.String()); err != nil {
+			return "", err
+		}
+		return resolved.String(), nil
+	}
+	if err := validateProtocolURI("webapp", trimmed); err != nil {
+		return "", err
+	}
+	if parsed.Host == "" || (parsed.Scheme != "http" && parsed.Scheme != "https") {
+		return "", fmt.Errorf("protocol webapp has malformed uri %q", trimmed)
+	}
+	return trimmed, nil
+}
+
+// ScreenIncomingWebapps rejects nil, duplicate, and unusable webapp offers
+// before they are converted or stored. Other protocols are left untouched.
+func ScreenIncomingWebapps(protocols Protocols, receiverTargets []string) error {
+	seen := 0
+	for _, protocol := range protocols {
+		if protocol == nil {
+			return errors.New("nil protocol")
+		}
+		webapp, ok := protocol.(*Webapp)
+		if !ok {
+			continue
+		}
+		if webapp == nil {
+			return errors.New("nil webapp protocol")
+		}
+		seen++
+		if seen > 1 {
+			return errors.New("ambiguous webapp protocol")
+		}
+		if err := webapp.ValidateReceived(receiverTargets); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 // Embedded contains the parameters for the Embedded protocol.
 type Embedded struct {
 	Payload json.RawMessage `json:"payload" validate:"required"`
@@ -321,6 +380,11 @@ func (p Protocols) Validate() error {
 				return err
 			}
 		case *Webapp:
+			for _, requirement := range data.Requirements {
+				if strings.TrimSpace(requirement) == "" || strings.TrimSpace(requirement) != requirement {
+					return errors.New("protocol webapp has malformed requirement")
+				}
+			}
 			if err := validateSharedProtocolFields("webapp", data.SharedSecret, data.Permissions, validWebappPermissions, data.Requirements, validWebappRequirements, data.URI); err != nil {
 				return err
 			}

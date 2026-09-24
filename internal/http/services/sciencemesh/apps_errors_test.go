@@ -412,3 +412,110 @@ func TestOpenInAppFailures(t *testing.T) {
 		})
 	}
 }
+
+func TestOpenInAppReceivedWebappRequirements(t *testing.T) {
+	secret := launchSecret
+	blank := []string{"blank"}
+	tests := []struct {
+		name         string
+		targets      []string
+		reqs         []string
+		receiver     []string
+		wantStatus   int
+		wantText     string
+		discoverZero bool
+	}{
+		{
+			name:       "compatible blank target",
+			targets:    blank,
+			reqs:       []string{"must-exchange-token"},
+			receiver:   blank,
+			wantStatus: http.StatusOK,
+		},
+		{
+			name:         "empty targets",
+			targets:      nil,
+			reqs:         []string{"must-exchange-token"},
+			receiver:     blank,
+			wantStatus:   http.StatusBadRequest,
+			wantText:     "missing targets",
+			discoverZero: true,
+		},
+		{
+			name:         "no intersection",
+			targets:      []string{"iframe"},
+			reqs:         []string{"must-exchange-token"},
+			receiver:     blank,
+			wantStatus:   http.StatusBadRequest,
+			wantText:     "no compatible target",
+			discoverZero: true,
+		},
+		{
+			name:         "unsupported target only",
+			targets:      []string{"iframe"},
+			reqs:         []string{"must-exchange-token"},
+			receiver:     []string{"iframe"},
+			wantStatus:   http.StatusBadRequest,
+			wantText:     "no compatible target",
+			discoverZero: true,
+		},
+		{
+			name:       "mixed targets keep blank",
+			targets:    []string{"iframe", "blank"},
+			reqs:       []string{"must-exchange-token"},
+			receiver:   blank,
+			wantStatus: http.StatusOK,
+		},
+		{
+			name:         "must-use-mfa fails closed",
+			targets:      blank,
+			reqs:         []string{"must-exchange-token", "must-use-mfa"},
+			receiver:     blank,
+			wantStatus:   http.StatusForbidden,
+			wantText:     "unsupported requirement",
+			discoverZero: true,
+		},
+		{
+			name:         "unknown must requirement",
+			targets:      blank,
+			reqs:         []string{"must-exchange-token", "must-sign"},
+			receiver:     blank,
+			wantStatus:   http.StatusBadRequest,
+			wantText:     "unsupported requirement",
+			discoverZero: true,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			obs := &observeClient{token: launchToken}
+			share := receivedWebappShare(
+				"https://dav.example/dav",
+				"https://app.example/hub",
+				secret,
+				tt.reqs,
+			)
+			share.Protocols[1].GetWebappOptions().Targets = tt.targets
+			h := newTestHandler(t, &fakeReceivedGateway{resp: okShareResponse(share)}, obs)
+			receiver := append([]string{}, tt.receiver...)
+			h.webappReceiveTargets = &receiver
+			req, _ := newLaunchRequest(t, "/ocm/share-1")
+			rec := httptest.NewRecorder()
+			h.OpenInApp(rec, req)
+			if rec.Code != tt.wantStatus {
+				t.Fatalf("status %d body %s", rec.Code, rec.Body.String())
+			}
+			if tt.wantText != "" && !strings.Contains(rec.Body.String(), tt.wantText) {
+				t.Fatalf("body %s", rec.Body.String())
+			}
+			if tt.discoverZero && (obs.discoverCalls != 0 || obs.exchangeCalls != 0) {
+				t.Fatalf("discover %d exchange %d", obs.discoverCalls, obs.exchangeCalls)
+			}
+			if tt.wantStatus != http.StatusOK && obs.exchangeCalls != 0 {
+				t.Fatalf("exchange calls %d", obs.exchangeCalls)
+			}
+			if tt.wantStatus == http.StatusOK && obs.exchangeCalls != 1 {
+				t.Fatalf("exchange calls %d", obs.exchangeCalls)
+			}
+		})
+	}
+}
