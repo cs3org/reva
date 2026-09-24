@@ -86,6 +86,7 @@ mount_id = "984e7351-2729-4417-99b4-ab5e6d41fa97"
 data_server_url = "http://127.0.0.1:54321/data"
 
 [grpc.services.storageprovider.drivers.ocmreceived]
+provider_domain = "cesnet.example.test"
 
 # All cesnet HTTP services run in this same process so they discover the
 # co-resident gateway through the in-process registry.
@@ -95,7 +96,7 @@ address = "127.0.0.1:54321"
 [http.services.ocm]
 
 [http.services.sciencemesh]
-provider_domain = "127.0.0.1:54321"
+provider_domain = "cesnet.example.test"
 mesh_directory_url = "http://meshdir"
 smtp_credentials = {}
 
@@ -116,6 +117,7 @@ mount_id = "984e7351-2729-4417-99b4-ab5e6d41fa97"
 public_url = "http://127.0.0.1:54321/data"
 
 [http.services.dataprovider.drivers.ocmreceived]
+provider_domain = "cesnet.example.test"
 
 [http.services.wellknown]
 [http.services.wellknown.ocmprovider]
