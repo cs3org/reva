@@ -20,7 +20,11 @@ package sciencemesh
 
 import (
 	"context"
+	"fmt"
+	"net"
 	"net/http"
+	"strings"
+	"unicode"
 
 	"github.com/cs3org/reva/v3/pkg/appctx"
 	"github.com/cs3org/reva/v3/pkg/rhttp/global"
@@ -86,6 +90,64 @@ func (c *config) ApplyDefaults() {
 	}
 
 	c.GatewaySvc = sharedconf.GetGatewaySVC(c.GatewaySvc)
+}
+
+// validateProviderDomain checks the receiving-server identity without a DNS
+// lookup. Callers keep the configured spelling, including its case.
+func validateProviderDomain(raw string) error {
+	if raw == "" {
+		return fmt.Errorf("provider_domain is required and must be a host-only DNS FQDN")
+	}
+	for _, r := range raw {
+		if unicode.IsSpace(r) {
+			return fmt.Errorf("provider_domain %q must not contain whitespace", raw)
+		}
+		if r > unicode.MaxASCII {
+			return fmt.Errorf("provider_domain %q must be an ASCII DNS name", raw)
+		}
+	}
+	if strings.Contains(raw, "://") || strings.ContainsAny(raw, "/?#@:[") {
+		return fmt.Errorf(
+			"provider_domain %q must be a host-only DNS FQDN without a scheme, "+
+				"port, path, query, fragment, userinfo, or IP literal",
+			raw,
+		)
+	}
+	if net.ParseIP(raw) != nil {
+		return fmt.Errorf("provider_domain %q must be a DNS name, not an IP address", raw)
+	}
+	if strings.HasPrefix(raw, ".") || strings.HasSuffix(raw, ".") || strings.Contains(raw, "..") {
+		return fmt.Errorf("provider_domain %q has an empty DNS label", raw)
+	}
+	if len(raw) > 253 {
+		return fmt.Errorf("provider_domain %q is longer than 253 characters", raw)
+	}
+	labels := strings.Split(raw, ".")
+	if len(labels) < 2 {
+		return fmt.Errorf("provider_domain %q is a single-label host", raw)
+	}
+	for _, label := range labels {
+		if err := validateDNSLabel(label); err != nil {
+			return fmt.Errorf("provider_domain %q: %w", raw, err)
+		}
+	}
+	return nil
+}
+
+func validateDNSLabel(label string) error {
+	if len(label) == 0 || len(label) > 63 {
+		return fmt.Errorf("invalid DNS label length")
+	}
+	for i := 0; i < len(label); i++ {
+		c := label[i]
+		switch {
+		case c >= 'a' && c <= 'z', c >= 'A' && c <= 'Z', c >= '0' && c <= '9':
+		case c == '-' && i > 0 && i < len(label)-1:
+		default:
+			return fmt.Errorf("invalid DNS label %q", label)
+		}
+	}
+	return nil
 }
 
 type svc struct {

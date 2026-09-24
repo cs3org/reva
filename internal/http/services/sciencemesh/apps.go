@@ -59,6 +59,9 @@ type openInAppResponse struct {
 }
 
 func (h *appsHandler) init(c *config) error {
+	if err := validateProviderDomain(c.ProviderDomain); err != nil {
+		return err
+	}
 	h.ocmMountPoint = c.OCMMountPoint
 	h.receiverDomain = c.ProviderDomain
 	h.clientTimeout = time.Duration(c.OCMClientTimeout) * time.Second
@@ -111,6 +114,9 @@ func (h *appsHandler) OpenInApp(w http.ResponseWriter, r *http.Request) {
 
 func (h *appsHandler) buildLaunch(ctx context.Context, shareID *ocmpb.ShareId, rel string) (openInAppResponse, error) {
 	var none openInAppResponse
+	if err := validateProviderDomain(h.receiverDomain); err != nil {
+		return none, redactLaunchError(errtypes.BadRequest(err.Error()), "", "")
+	}
 	share, webapp, err := h.receivedWebapp(ctx, shareID)
 	if err != nil {
 		return none, redactLaunchError(err, "", "")

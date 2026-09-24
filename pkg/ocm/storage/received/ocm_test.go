@@ -8,9 +8,13 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"path/filepath"
+	"runtime"
+	"strings"
 	"testing"
 	"time"
 
+	"github.com/BurntSushi/toml"
 	"github.com/ReneKroon/ttlcache/v2"
 	gateway "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
@@ -21,6 +25,7 @@ import (
 	"github.com/cs3org/reva/v3/internal/http/services/wellknown"
 	"github.com/cs3org/reva/v3/pkg/appctx"
 	"github.com/cs3org/reva/v3/pkg/errtypes"
+	"github.com/cs3org/reva/v3/pkg/utils/cfg"
 	"github.com/studio-b12/gowebdav"
 	"google.golang.org/grpc"
 )
@@ -297,10 +302,13 @@ func testReceivedShare(senderAddr, id string, isFile bool) *ocmpb.ReceivedShare 
 	}
 }
 
+const testReceiverFQDN = "receiver.example.test"
+
 func newTestReceivedDriver() *driver {
 	disco := ttlcache.NewCache()
 	_ = disco.SetTTL(5 * time.Minute)
 	return &driver{
+		providerDomain: testReceiverFQDN,
 		ccache:         ttlcache.NewCache(),
 		discoveryCache: disco,
 		ocmClient:      ocmd.NewClient(10*time.Second, true),
@@ -315,69 +323,161 @@ func testCodeFlowReceivedShare(senderAddr, baseURL string) *ocmpb.ReceivedShare 
 	return share
 }
 
-// --- receiver client ID tests ---
-// These tests don't trigger network calls; they use a static senderAddr since
-// the share fields are never passed to the OCM client here.
-
-func TestReceiverClientIDPrefersContextUserIDP(t *testing.T) {
-	share := testReceivedShare("sender.example.com", "share-abc", false)
-	ctx := appctx.ContextSetUser(context.Background(), &userpb.User{
-		Id: &userpb.UserId{OpaqueId: "local-user", Idp: "local-context.example"},
+func TestNewStoresConfiguredProviderDomain(t *testing.T) {
+	const want = "Receiver.Example.Test"
+	fs, err := New(context.Background(), map[string]any{
+		"provider_domain": want,
 	})
-
-	got := receiverClientID(ctx, share)
-	if got != "local-context.example" {
-		t.Errorf("got %q, want local-context.example", got)
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
+	d, ok := fs.(*driver)
+	if !ok {
+		t.Fatalf("New returned %T", fs)
+	}
+	if d.providerDomain != want {
+		t.Fatalf("providerDomain = %q, want %q", d.providerDomain, want)
 	}
 }
 
-func TestReceiverClientIDFallsBackToShareGranteeIDP(t *testing.T) {
-	share := testReceivedShare("sender.example.com", "share-abc", false)
-
-	got := receiverClientID(context.Background(), share)
-	if got != "nextcloud1.docker" {
-		t.Errorf("got %q, want nextcloud1.docker", got)
+func TestNewRejectsInvalidProviderDomain(t *testing.T) {
+	tests := []struct {
+		name   string
+		domain string
+		omit   bool
+	}{
+		{name: "missing", omit: true},
+		{name: "empty", domain: ""},
+		{name: "whitespace", domain: "  \t"},
+		{name: "url", domain: "https://receiver.example.test"},
+		{name: "port", domain: "receiver.example.test:443"},
+		{name: "ip", domain: "192.0.2.10"},
+		{name: "ip and port", domain: "127.0.0.1:54321"},
+		{name: "single label", domain: "receiver"},
+		{name: "path", domain: "receiver.example.test/ocm"},
+		{name: "query", domain: "receiver.example.test?x=1"},
+		{name: "userinfo", domain: "user@receiver.example.test"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			raw := map[string]any{}
+			if !tt.omit {
+				raw["provider_domain"] = tt.domain
+			}
+			fs, err := New(context.Background(), raw)
+			if err == nil {
+				t.Fatal("expected initialization error")
+			}
+			if fs != nil {
+				t.Fatal("expected no driver")
+			}
+		})
 	}
 }
 
-func TestReceiverClientIDReturnsEmptyWhenUnavailable(t *testing.T) {
-	share := testReceivedShare("sender.example.com", "share-abc", false)
-	share.Grantee = nil
-
-	got := receiverClientID(context.Background(), share)
-	if got != "" {
-		t.Errorf("got %q, want empty string", got)
+func TestCodeFlowClientIDUsesConfiguredDomain(t *testing.T) {
+	tests := []struct {
+		name         string
+		userIDP      string
+		granteeIDP   string
+		clearUser    bool
+		clearGrantee bool
+	}{
+		{
+			name:       "distinct user and grantee idps",
+			userIDP:    "user.idp.example",
+			granteeIDP: "grantee.idp.example",
+		},
+		{
+			name:         "absent user and grantee idp",
+			clearUser:    true,
+			clearGrantee: true,
+		},
+		{
+			name:       "configured domain equals user idp",
+			userIDP:    testReceiverFQDN,
+			granteeIDP: "grantee.idp.example",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			for _, via := range []string{"webdav", "upload"} {
+				t.Run(via, func(t *testing.T) {
+					got, tokenCalls := observedCodeFlowClientID(
+						t,
+						tt.userIDP,
+						tt.granteeIDP,
+						tt.clearUser,
+						tt.clearGrantee,
+						via,
+						testReceiverFQDN,
+					)
+					if tokenCalls != 1 {
+						t.Fatalf("token calls = %d, want 1", tokenCalls)
+					}
+					if got != testReceiverFQDN {
+						t.Fatalf("client_id = %q, want %q", got, testReceiverFQDN)
+					}
+				})
+			}
+		})
 	}
 }
 
-func TestReceiverClientIDWithLookupFallsBackToGatewayUserIDP(t *testing.T) {
-	share := testReceivedShare("sender.example.com", "share-abc", false)
-	share.Grantee.GetUserId().Idp = ""
-
-	got := receiverClientIDWithLookup(context.Background(), share, func(_ context.Context, userID *userpb.UserId) string {
-		if userID.GetOpaqueId() != "receiver" {
-			t.Fatalf("lookup user id: got %q, want receiver", userID.GetOpaqueId())
-		}
-		return "local-gateway.example"
-	})
-	if got != "local-gateway.example" {
-		t.Errorf("got %q, want local-gateway.example", got)
+func TestEmptyDriverDoesNotExchange(t *testing.T) {
+	tests := []struct {
+		name   string
+		domain string
+	}{
+		{name: "empty", domain: ""},
+		{name: "whitespace", domain: " \t"},
+		{name: "url", domain: "https://receiver.example.test"},
+		{name: "port", domain: "receiver.example.test:443"},
+		{name: "ip", domain: "192.0.2.10"},
+		{name: "single label", domain: "receiver"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			for _, via := range []string{"webdav", "upload"} {
+				t.Run(via, func(t *testing.T) {
+					_, tokenCalls := observedCodeFlowClientID(
+						t,
+						"user.idp.example",
+						"grantee.idp.example",
+						false,
+						false,
+						via,
+						tt.domain,
+					)
+					if tokenCalls != 0 {
+						t.Fatalf("token calls = %d, want 0", tokenCalls)
+					}
+				})
+			}
+		})
 	}
 }
 
-func TestReceiverClientIDWithLookupSkipsGatewayWhenShareAlreadyHasIDP(t *testing.T) {
-	share := testReceivedShare("sender.example.com", "share-abc", false)
-	lookupCalled := false
-
-	got := receiverClientIDWithLookup(context.Background(), share, func(_ context.Context, _ *userpb.UserId) string {
-		lookupCalled = true
-		return "unexpected.example"
-	})
-	if got != "nextcloud1.docker" {
-		t.Errorf("got %q, want nextcloud1.docker", got)
-	}
-	if lookupCalled {
-		t.Error("expected lookup not to be called when share grantee already has an idp")
+func TestCodeFlowClientIDPreservesSpelling(t *testing.T) {
+	const want = "Receiver.Example.Test"
+	for _, via := range []string{"webdav", "upload"} {
+		t.Run(via, func(t *testing.T) {
+			got, tokenCalls := observedCodeFlowClientID(
+				t,
+				"user.idp.example",
+				"grantee.idp.example",
+				false,
+				false,
+				via,
+				want,
+			)
+			if tokenCalls != 1 {
+				t.Fatalf("token calls = %d, want 1", tokenCalls)
+			}
+			if got != want {
+				t.Fatalf("client_id = %q, want %q", got, want)
+			}
+		})
 	}
 }
 
@@ -517,8 +617,8 @@ func TestUploadAuthCodeFlowExchangesBearerToken(t *testing.T) {
 	if gotCode != "exchange-secret" {
 		t.Fatalf("code: got %q, want %q", gotCode, "exchange-secret")
 	}
-	if gotClientID != "nextcloud1.docker" {
-		t.Fatalf("client_id: got %q, want %q", gotClientID, "nextcloud1.docker")
+	if gotClientID != testReceiverFQDN {
+		t.Fatalf("client_id: got %q, want %q", gotClientID, testReceiverFQDN)
 	}
 	if discoveryCalls != 1 || tokenCalls != 1 {
 		t.Fatalf("expected one discovery call and one token call, got discovery=%d token=%d", discoveryCalls, tokenCalls)
@@ -755,5 +855,228 @@ func TestIsWebDAV401_OsPathError(t *testing.T) {
 	err := &os.PathError{Op: "GET", Path: "/test", Err: fmt.Errorf("not a StatusError")}
 	if isWebDAV401(err) {
 		t.Error("expected isWebDAV401=false for PathError with non-StatusError inner")
+	}
+}
+
+type getUserGuard struct {
+	mockReceivedGateway
+	t *testing.T
+}
+
+func (g *getUserGuard) GetUser(
+	context.Context,
+	*userpb.GetUserRequest,
+	...grpc.CallOption,
+) (*userpb.GetUserResponse, error) {
+	g.t.Helper()
+	g.t.Fatal("GetUser must not supply the receiving client_id")
+	return nil, nil
+}
+
+func observedCodeFlowClientID(
+	t *testing.T,
+	userIDP, granteeIDP string,
+	clearUser, clearGrantee bool,
+	via, domain string,
+) (string, int) {
+	t.Helper()
+	var gotClientID string
+	tokenCalls := 0
+	var srv *httptest.Server
+	srv = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/.well-known/ocm":
+			w.Header().Set("Content-Type", "application/json")
+			_ = json.NewEncoder(w).Encode(map[string]any{
+				"enabled":       true,
+				"apiVersion":    "1.2.0",
+				"endPoint":      srv.URL + "/ocm",
+				"provider":      "reva",
+				"resourceTypes": []any{},
+				"capabilities":  []string{"exchange-token"},
+				"tokenEndPoint": srv.URL + "/ocm/token",
+			})
+		case "/ocm/token":
+			tokenCalls++
+			if err := r.ParseForm(); err != nil {
+				t.Errorf("ParseForm: %v", err)
+				http.Error(w, "bad form", http.StatusBadRequest)
+				return
+			}
+			gotClientID = r.FormValue("client_id")
+			if gotClientID == "" {
+				t.Error("token request omitted client_id")
+			}
+			w.Header().Set("Content-Type", "application/json")
+			_ = json.NewEncoder(w).Encode(map[string]any{
+				"access_token": "jwt-tok",
+				"token_type":   "Bearer",
+				"expires_in":   3600,
+			})
+		default:
+			http.Error(w, "unexpected path", http.StatusInternalServerError)
+		}
+	}))
+	t.Cleanup(srv.Close)
+
+	share := testCodeFlowReceivedShare(srv.Listener.Addr().String(), srv.URL)
+	if clearGrantee {
+		share.Grantee = nil
+	} else if share.GetGrantee().GetUserId() != nil {
+		share.Grantee.GetUserId().Idp = granteeIDP
+	}
+	stampGateway(&getUserGuard{
+		mockReceivedGateway: mockReceivedGateway{
+			shares: []*ocmpb.ReceivedShare{share},
+		},
+		t: t,
+	})
+
+	d := newTestReceivedDriver()
+	d.providerDomain = domain
+	ctx := context.Background()
+	if !clearUser {
+		ctx = appctx.ContextSetUser(ctx, &userpb.User{
+			Id: &userpb.UserId{OpaqueId: "local-user", Idp: userIDP},
+		})
+	}
+
+	var callErr error
+	switch via {
+	case "webdav":
+		_, _, _, callErr = d.webdavClient(ctx, &provider.Reference{Path: "/share-abc"})
+	case "upload":
+		_, callErr = d.uploadAuth(
+			ctx,
+			share,
+			share.Protocols[0].GetWebdavOptions().Uri,
+			"exchange-secret",
+			share.GetId(),
+		)
+	default:
+		t.Fatalf("unknown path %q", via)
+	}
+	if err := validateProviderDomain(domain); err != nil {
+		if callErr == nil {
+			t.Fatal("expected error before token exchange")
+		}
+		return gotClientID, tokenCalls
+	}
+	if callErr != nil {
+		t.Fatalf("%s: %v", via, callErr)
+	}
+	return gotClientID, tokenCalls
+}
+
+type ocmServerFixture struct {
+	GRPC struct {
+		Services struct {
+			StorageProvider struct {
+				Driver  string `toml:"driver"`
+				Drivers struct {
+					OCMReceived struct {
+						ProviderDomain string `toml:"provider_domain"`
+					} `toml:"ocmreceived"`
+				} `toml:"drivers"`
+			} `toml:"storageprovider"`
+		} `toml:"services"`
+	} `toml:"grpc"`
+	HTTP struct {
+		Services struct {
+			ScienceMesh struct {
+				ProviderDomain string `toml:"provider_domain"`
+			} `toml:"sciencemesh"`
+			DataProvider struct {
+				Driver  string `toml:"driver"`
+				Drivers struct {
+					OCMReceived struct {
+						ProviderDomain string `toml:"provider_domain"`
+					} `toml:"ocmreceived"`
+				} `toml:"drivers"`
+			} `toml:"dataprovider"`
+		} `toml:"services"`
+	} `toml:"http"`
+}
+
+func ocmFixturePath(t *testing.T, name string) string {
+	t.Helper()
+	_, file, _, ok := runtime.Caller(0)
+	if !ok {
+		t.Fatal("runtime.Caller failed")
+	}
+	return filepath.Join(
+		filepath.Dir(file),
+		"..", "..", "..", "..",
+		"tests", "integration", "grpc", "fixtures",
+		name,
+	)
+}
+
+func loadOCMFixture(t *testing.T, name string) ocmServerFixture {
+	t.Helper()
+	var fx ocmServerFixture
+	if _, err := toml.DecodeFile(ocmFixturePath(t, name), &fx); err != nil {
+		t.Fatal(err)
+	}
+	return fx
+}
+
+func TestCesnetFixtureProviderDomainReachesDriver(t *testing.T) {
+	fx := loadOCMFixture(t, "ocm-server-cesnet-grpc.toml")
+	got := fx.GRPC.Services.StorageProvider.Drivers.OCMReceived.ProviderDomain
+	httpGot := fx.HTTP.Services.DataProvider.Drivers.OCMReceived.ProviderDomain
+	const want = "cesnet.example.test"
+	mesh := fx.HTTP.Services.ScienceMesh.ProviderDomain
+	if got != want || httpGot != want || mesh != want {
+		t.Fatalf("grpc %q http %q sciencemesh %q, want %q", got, httpGot, mesh, want)
+	}
+	if err := validateProviderDomain(mesh); err != nil {
+		t.Fatalf("ScienceMesh provider_domain: %v", err)
+	}
+	if fx.GRPC.Services.StorageProvider.Driver != "ocmreceived" {
+		t.Fatalf("storage driver %q", fx.GRPC.Services.StorageProvider.Driver)
+	}
+
+	var c config
+	if err := cfg.Decode(map[string]any{"provider_domain": got}, &c); err != nil {
+		t.Fatal(err)
+	}
+	if c.ProviderDomain != want {
+		t.Fatalf("decoded provider_domain = %q", c.ProviderDomain)
+	}
+	fs, err := New(context.Background(), map[string]any{
+		"provider_domain": c.ProviderDomain,
+	})
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
+	d, ok := fs.(*driver)
+	if !ok {
+		t.Fatalf("New returned %T", fs)
+	}
+	if d.providerDomain != want {
+		t.Fatalf("providerDomain = %q, want %q", d.providerDomain, want)
+	}
+}
+
+func TestCERNBoxFixtureHasNoReceivedDriver(t *testing.T) {
+	path := ocmFixturePath(t, "ocm-server-cernbox-grpc.toml")
+	body, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	text := string(body)
+	if strings.Contains(text, "[grpc.services.storageprovider.drivers.ocmreceived]") {
+		t.Fatal("cernbox fixture grew an ocmreceived storage driver table")
+	}
+	if strings.Contains(text, "[http.services.dataprovider.drivers.ocmreceived]") {
+		t.Fatal("cernbox fixture grew an ocmreceived data provider table")
+	}
+	fx := loadOCMFixture(t, "ocm-server-cernbox-grpc.toml")
+	if fx.GRPC.Services.StorageProvider.Driver != "ocmoutcoming" {
+		t.Fatalf("storage driver %q", fx.GRPC.Services.StorageProvider.Driver)
+	}
+	if fx.HTTP.Services.DataProvider.Driver != "ocmoutcoming" {
+		t.Fatalf("data provider driver %q", fx.HTTP.Services.DataProvider.Driver)
 	}
 }
