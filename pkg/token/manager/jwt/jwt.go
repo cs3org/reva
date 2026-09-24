@@ -25,6 +25,7 @@ import (
 	auth "github.com/cs3org/go-cs3apis/cs3/auth/provider/v1beta1"
 	user "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	authcache "github.com/cs3org/reva/v3/pkg/auth/cache"
+	"github.com/cs3org/reva/v3/pkg/auth/scope/ocmshare"
 	"github.com/cs3org/reva/v3/pkg/errtypes"
 	"github.com/cs3org/reva/v3/pkg/sharedconf"
 	"github.com/cs3org/reva/v3/pkg/token"
@@ -57,8 +58,9 @@ type manager struct {
 // claims are custom claims for the JWT token.
 type claims struct {
 	jwt.RegisteredClaims
-	User  *user.User             `json:"user"`
-	Scope map[string]*auth.Scope `json:"scope"`
+	User     *user.User             `json:"user"`
+	Scope    map[string]*auth.Scope `json:"scope"`
+	ClientID string                 `json:"client_id,omitempty"`
 }
 
 func (c *config) ApplyDefaults() {
@@ -85,6 +87,13 @@ func New(m map[string]any) (token.Manager, error) {
 }
 
 func (m *manager) MintToken(ctx context.Context, u *user.User, scope map[string]*auth.Scope) (string, error) {
+	// client_id is set only for one unambiguous code-flow OCM share. Other
+	// scope kinds return an empty id, which omitempty leaves out of the token.
+	clientID, err := ocmshare.CodeFlowOCMShareClientID(scope)
+	if err != nil {
+		return "", err
+	}
+
 	claims := claims{
 		RegisteredClaims: jwt.RegisteredClaims{
 			ExpiresAt: jwt.NewNumericDate(getExpirationDate(m.conf.ExpiresNextWeekend, time.Duration(m.conf.Expires)*time.Second)),
@@ -92,8 +101,9 @@ func (m *manager) MintToken(ctx context.Context, u *user.User, scope map[string]
 			Audience:  jwt.ClaimStrings{"reva"},
 			IssuedAt:  jwt.NewNumericDate(time.Now()),
 		},
-		User:  u,
-		Scope: scope,
+		User:     u,
+		Scope:    scope,
+		ClientID: clientID,
 	}
 
 	t := jwt.NewWithClaims(jwt.GetSigningMethod("HS256"), claims)
