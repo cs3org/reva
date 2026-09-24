@@ -62,6 +62,8 @@ type sharesHandler struct {
 	trustForwardedFor          bool
 	ocmClient                  *OCMClient
 	webdavTransport            http.RoundTripper
+	// webappReceiveTargets overrides local discovery when non-nil.
+	webappReceiveTargets *[]string
 }
 
 func (h *sharesHandler) init(c *config) error {
@@ -100,6 +102,13 @@ func (h *sharesHandler) init(c *config) error {
 		h.autoAcceptProviders = append(h.autoAcceptProviders, re)
 	}
 	return nil
+}
+
+func (h *sharesHandler) receiverWebappTargets() []string {
+	if h == nil {
+		return wellknown.ResolveLocalWebappReceiveTargets(nil)
+	}
+	return wellknown.ResolveLocalWebappReceiveTargets(h.webappReceiveTargets)
 }
 
 // matchesAutoAccept reports whether the given sender provider domain matches any
@@ -142,7 +151,7 @@ func (h *sharesHandler) isAcceptedUser(ctx context.Context, recipient *userpb.Us
 func (h *sharesHandler) CreateShare(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	log := appctx.GetLogger(ctx)
-	req, err := getCreateShareRequest(r)
+	req, err := h.getCreateShareRequest(r)
 	// Log whitelist metadata only; incoming OCM share requests carry shared secrets in protocol options.
 	logEvent := log.Info().Str("remote", r.RemoteAddr).Err(err)
 	if req != nil {
@@ -394,7 +403,7 @@ func parseOCMUser(addr string) (*userpb.UserId, error) {
 	return u, nil
 }
 
-func getCreateShareRequest(r *http.Request) (*NewShareRequest, error) {
+func (h *sharesHandler) getCreateShareRequest(r *http.Request) (*NewShareRequest, error) {
 	var req NewShareRequest
 	contentType, _, err := mime.ParseMediaType(r.Header.Get("Content-Type"))
 	if err == nil && contentType == "application/json" {
@@ -411,6 +420,9 @@ func getCreateShareRequest(r *http.Request) (*NewShareRequest, error) {
 	// Protocols are interface-backed, so validate the decoded protocol payloads
 	// explicitly before we create or persist a received share.
 	if err := req.Protocols.Validate(); err != nil {
+		return nil, err
+	}
+	if err := ScreenIncomingWebapps(req.Protocols, h.receiverWebappTargets()); err != nil {
 		return nil, err
 	}
 	return &req, nil
@@ -449,16 +461,30 @@ func (h *sharesHandler) getAndResolveProtocols(ctx context.Context, p Protocols,
 	protos = make([]*ocm.Protocol, 0, len(p))
 	legacy = false
 
+	if err := ScreenIncomingWebapps(p, h.receiverWebappTargets()); err != nil {
+		return nil, false, err
+	}
+
 	// discover remote resource types
-	ocmRTs, ocmEndpoint, err := h.discoverOcmResourceTypes(ctx, ownerServer)
+	disco, err := h.discoverOcm(ctx, ownerServer)
 	if err != nil {
 		return nil, false, errors.Wrap(err, "error discovering remote OCM resource types")
 	}
+	if disco == nil {
+		return nil, false, errors.New("error discovering remote OCM resource types")
+	}
+	ocmRTs := disco.ResourceTypes
+	ocmEndpoint := disco.Endpoint
 
 	for _, data := range p {
 		var uri string
 		var protoInfo any
 		var ok bool
+		if webapp, isWebapp := data.(*Webapp); isWebapp {
+			if err := webapp.ValidateReceived(h.receiverWebappTargets(), false); err != nil {
+				return nil, false, err
+			}
+		}
 		ocmProto := data.ToOCMProtocol()
 		protocolName := GetProtocolName(data)
 		for _, rt := range ocmRTs {
@@ -476,7 +502,17 @@ func (h *sharesHandler) getAndResolveProtocols(ctx context.Context, p Protocols,
 		case "webdav":
 			uri = ocmProto.GetWebdavOptions().Uri
 		case "webapp":
-			uri = ocmProto.GetWebappOptions().Uri
+			opts := ocmProto.GetWebappOptions()
+			if opts == nil {
+				return nil, false, errors.New("protocol webapp missing options")
+			}
+			resolved, resolveErr := ResolveReceivedWebappURI(opts.Uri, webappReceiveBase(ocmEndpoint, protoInfo))
+			if resolveErr != nil {
+				return nil, false, resolveErr
+			}
+			opts.Uri = resolved
+			protos = append(protos, ocmProto)
+			continue
 		case "embedded":
 			protos = append(protos, ocmProto)
 			continue
@@ -532,11 +568,28 @@ func (h *sharesHandler) getAndResolveProtocols(ctx context.Context, p Protocols,
 	return protos, legacy, nil
 }
 
-func (h *sharesHandler) discoverOcmResourceTypes(ctx context.Context, ownerServer string) ([]wellknown.ResourceTypes, string, error) {
-	ocmCaps, err := h.ocmClient.Discover(ctx, ownerServer)
-	if err != nil {
-		return nil, "", err
+// webappReceiveBase is the sender endpoint plus a string protocol root.
+// Map-shaped webapp advertisements do not provide that base.
+func webappReceiveBase(ocmEndpoint string, protoInfo any) *url.URL {
+	root, ok := protoInfo.(string)
+	if !ok || root == "" {
+		return nil
 	}
+	u, err := url.Parse(ocmEndpoint)
+	if err != nil || u.Scheme == "" || u.Host == "" {
+		return nil
+	}
+	if strings.HasPrefix(root, "/") {
+		u.Path = root
+	} else {
+		u.Path = filepath.Join(u.Path, root)
+	}
+	return u
+}
 
-	return ocmCaps.ResourceTypes, ocmCaps.Endpoint, nil
+func (h *sharesHandler) discoverOcm(ctx context.Context, ownerServer string) (*wellknown.OcmDiscoveryData, error) {
+	if h == nil || h.ocmClient == nil {
+		return nil, errors.New("ocm client is not configured")
+	}
+	return h.ocmClient.Discover(ctx, ownerServer)
 }
