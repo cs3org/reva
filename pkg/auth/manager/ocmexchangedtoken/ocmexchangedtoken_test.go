@@ -109,16 +109,18 @@ func TestAuthenticateEmptyShareIDMultiScopeRejects(t *testing.T) {
 	s1 := &ocmv1beta1.Share{
 		Id:         &ocmv1beta1.ShareId{OpaqueId: "share-one"},
 		ResourceId: &provider.ResourceId{StorageId: "stor", OpaqueId: "res-1"},
+		Token:      "legacy-token-one",
 	}
 	s2 := &ocmv1beta1.Share{
 		Id:         &ocmv1beta1.ShareId{OpaqueId: "share-two"},
 		ResourceId: &provider.ResourceId{StorageId: "stor", OpaqueId: "res-2"},
+		Token:      "legacy-token-two",
 	}
-	scopes, err := scope.AddCodeFlowOCMShareScope(s1, authpb.Role_ROLE_VIEWER, nil)
+	scopes, err := scope.AddOCMShareScope(s1, authpb.Role_ROLE_VIEWER, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
-	scopes, err = scope.AddCodeFlowOCMShareScope(s2, authpb.Role_ROLE_VIEWER, scopes)
+	scopes, err = scope.AddOCMShareScope(s2, authpb.Role_ROLE_VIEWER, scopes)
 	if err != nil {
 		t.Fatal(err)
 	}
