@@ -38,7 +38,7 @@ import (
 )
 
 // DefaultResponseLimit is the maximum OCM control-plane response body size.
-const DefaultResponseLimit int64 = 64 << 10
+const DefaultResponseLimit int64 = 1 << 20
 
 // ErrTokenInvalid is the error returned by the invite-accepted
 // endpoint when the token is not valid or not existing.
