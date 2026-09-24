@@ -23,6 +23,7 @@ package ocmsharecode
 
 import (
 	"context"
+	"strings"
 
 	authpb "github.com/cs3org/go-cs3apis/cs3/auth/provider/v1beta1"
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
@@ -105,6 +106,12 @@ func (m *manager) Authenticate(ctx context.Context, clientID, code string) (*use
 		return nil, nil, errtypes.InvalidCredentials(shareRes.Status.Message)
 	case shareRes.Status.Code != rpc.Code_CODE_OK:
 		return nil, nil, errtypes.InternalError(shareRes.Status.Message)
+	}
+
+	// providerId is the resolved share's opaque id. A missing share, a missing
+	// id, or a blank opaque id cannot authenticate a code-flow token.
+	if strings.TrimSpace(shareRes.GetShare().GetId().GetOpaqueId()) == "" {
+		return nil, nil, errtypes.InvalidCredentials("ocm share is missing provider id")
 	}
 
 	// Resolve the accepted user (same pattern as ocmshares)
