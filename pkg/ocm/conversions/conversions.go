@@ -144,6 +144,30 @@ func (c *Converter) OCMReceivedShareToDriveItem(ctx context.Context, receivedOCM
 	return d, nil
 }
 
+// WebappMetadataForReceivedShare reads webapp protocols on a received share.
+// It returns nil when there is no single non-nil webapp protocol.
+func WebappMetadataForReceivedShare(received *ocm.ReceivedShare) *ReceivedWebappMetadata {
+	if received == nil {
+		return nil
+	}
+
+	var meta *ReceivedWebappMetadata
+	for _, p := range received.Protocols {
+		if p.GetWebappOptions() == nil {
+			continue
+		}
+		if meta != nil {
+			// Two or more stored webapp protocols are ambiguous.
+			return nil
+		}
+		meta = &ReceivedWebappMetadata{
+			Present: true,
+			AppName: p.GetWebappOptions().GetAppName(),
+		}
+	}
+	return meta
+}
+
 // CS3GranteeToSharePointIdentitySet converts a CS3 grantee to a SharePoint identity set for OCM users
 func (c *Converter) CS3GranteeToSharePointIdentitySet(ctx context.Context, grantee *provider.Grantee) (*libregraph.SharePointIdentitySet, error) {
 	p := &libregraph.SharePointIdentitySet{}

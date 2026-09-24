@@ -129,7 +129,7 @@ func (s *svc) getSharedWithMe(w http.ResponseWriter, r *http.Request) {
 				if err != nil {
 					log.Error().Err(err).Any("share", share).Msg("error parsing received share, ignoring")
 				} else {
-					shares = append(shares, newReceivedShareDriveItem(drive, nil))
+					shares = append(shares, newReceivedShareDriveItem(drive, receivedShareWebappMetadata(share)))
 				}
 				log.Debug().Any("share", share).Msg("processing received ocm share")
 			}
