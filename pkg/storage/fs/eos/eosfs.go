@@ -45,10 +45,10 @@ import (
 	"github.com/cs3org/reva/v3/pkg/sharedconf"
 	"github.com/cs3org/reva/v3/pkg/spaces"
 	"github.com/cs3org/reva/v3/pkg/storage"
+	"github.com/cs3org/reva/v3/pkg/storage/fs/eos/acl"
 	eosclient "github.com/cs3org/reva/v3/pkg/storage/fs/eos/client"
 	eosbinary "github.com/cs3org/reva/v3/pkg/storage/fs/eos/client/binary"
 	eosgrpc "github.com/cs3org/reva/v3/pkg/storage/fs/eos/client/grpc"
-	"github.com/cs3org/reva/v3/pkg/storage/utils/acl"
 	"github.com/cs3org/reva/v3/pkg/storage/utils/chunking"
 	"github.com/cs3org/reva/v3/pkg/storage/utils/grants"
 	"github.com/cs3org/reva/v3/pkg/utils"
@@ -149,8 +149,9 @@ type Eosfs struct {
 	quotaCache     *quotaCache
 }
 
-// NewEOSFS returns a storage.FS interface implementation that connects to an EOS instance.
-func NewEOSFS(ctx context.Context, c *Config) (storage.FS, error) {
+// NewEOSClient returns the client NewEOSFS talks to EOS with, for the callers
+// that need EOS itself and not a storage.FS
+func NewEOSClient(ctx context.Context, c *Config) (eosclient.EOSClient, error) {
 	c.ApplyDefaults()
 
 	// bail out if keytab is not found.
@@ -213,6 +214,18 @@ func NewEOSFS(ctx context.Context, c *Config) (storage.FS, error) {
 
 	if err != nil {
 		return nil, errors.Wrap(err, "error initializing eosclient")
+	}
+
+	return eosClient, nil
+}
+
+// NewEOSFS returns a storage.FS interface implementation that connects to an EOS instance.
+func NewEOSFS(ctx context.Context, c *Config) (storage.FS, error) {
+	c.ApplyDefaults()
+
+	eosClient, err := NewEOSClient(ctx, c)
+	if err != nil {
+		return nil, err
 	}
 
 	eosfs := &Eosfs{
