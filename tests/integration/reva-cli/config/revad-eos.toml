@@ -40,7 +40,7 @@ usershareprovidersvc = "localhost:9142"
 publicshareprovidersvc = "localhost:9142"
 spacessvc = "localhost:9142"
 
-datagateway = "http://localhost:38001/datagw"
+datagateway = "http://localhost:38001/datagateway"
 
 allowed_user_agents = { "/home" = ["grpc", "desktop"] }
 
@@ -153,7 +153,6 @@ address = "0.0.0.0:38001"
 transfer_shared_secret = "top_secret_transfer_shared_secret"
 timeout = 86400
 insecure = true
-prefix = "datagw"
 
 
 [http.services.dataprovider]

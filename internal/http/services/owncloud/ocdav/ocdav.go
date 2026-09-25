@@ -33,7 +33,6 @@ import (
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	storageProvider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 
-	"github.com/cs3org/reva/v3/pkg/appctx"
 	"github.com/cs3org/reva/v3/pkg/myofficefiles"
 	"github.com/cs3org/reva/v3/pkg/spaces"
 	"github.com/cs3org/reva/v3/pkg/utils"
@@ -87,6 +86,10 @@ func (r nameDoesNotContain) Test(name string) bool {
 	return !strings.ContainsAny(name, r.chars)
 }
 
+// mount is empty: the service claims several disjoint entry points rather than
+// one subtree, and declares each of them in Routes.
+const mount = ""
+
 func init() {
 	global.Register("ocdav", New)
 }
@@ -99,7 +102,6 @@ type ConfigPublicLinkDownload struct {
 
 // Config holds the config options that need to be passed down to all ocdav handlers.
 type Config struct {
-	Prefix string `mapstructure:"prefix"`
 	// FilesNamespace prefixes the namespace, optionally with user information.
 	// Example: if FilesNamespace is /users/{{substr 0 1 .Username}}/{{.Username}}
 	// and received path is /docs the internal path will be:
@@ -128,7 +130,6 @@ type Config struct {
 }
 
 func (c *Config) ApplyDefaults() {
-	// note: default c.Prefix is an empty string
 	c.GatewaySvc = sharedconf.GetGatewaySVC(c.GatewaySvc)
 
 	if c.OCMNamespace == "" {
@@ -182,23 +183,68 @@ func New(ctx context.Context, m map[string]any) (global.Service, error) {
 	return s, nil
 }
 
-func (s *svc) Prefix() string {
-	return s.c.Prefix
-}
-
 func (s *svc) Close() error {
 	return nil
 }
 
-func (s *svc) Unprotected() []string {
-	return []string{"/status.php", "/remote.php/dav/public-files/", "/apps/files/", "/index.php/f/", "/index.php/s/", "/s/", "/remote.php/dav/ocm/", "/ocm-provider"}
+// trashbinMethods are the methods a trash bin serves: it is listed, restored
+// from and purged, but not written to.
+var trashbinMethods = []string{
+	MethodPropfind, MethodMove,
+	http.MethodDelete, http.MethodOptions,
 }
 
-func (s *svc) Handler() http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		ctx := r.Context()
-		log := appctx.GetLogger(ctx)
+// Routes declares the URLs ocdav serves. The service answers a handful of
+// disjoint entry points rather than one subtree, and each of the WebDAV ones
+// is reachable both directly and under /remote.php, which older clients use.
+//
+// A route's static part is also the base URI the handler echoes back in href
+// properties, so declaring the routes fixes the bases too: they no longer have
+// to be accumulated segment by segment while the request is dispatched.
+func (s *svc) Routes(rt *router.Router) {
+	r := rt.Use(s.preamble)
 
+	r.Get("/status.php", s.doStatus, router.Unprotected())
+	r.Any("/s/{token}/download", s.handleLegacyPublicLinkDownload, router.Unprotected())
+	r.Any("/apps/files/{path...}", s.handleLegacyPath, router.Unprotected())
+	r.Get("/index.php/s/{token}", s.redirectPublicLink, router.Unprotected())
+	r.Get("/ocm-provider", s.redirectOCMDiscovery, router.Unprotected())
+
+	// The WebDAV subtrees are mounted rather than matched against patterns:
+	// below each of them the path is a resource path, which has to reach the
+	// handler exactly as the client sent it. A pattern match would canonicalize
+	// it - clients do send "." segments - and redirect instead of serving.
+	//
+	// Each mount takes the one parameter its URL carries out of the path
+	// itself, which is all that is left of what used to be a dispatch tree.
+	for _, prefix := range []string{"", "/remote.php"} {
+		webdav, dav := prefix+"/webdav", prefix+"/dav"
+
+		r.Subtree(webdav, s.davSubtree(s.webdav(webdav)))
+		r.Subtree(dav+"/files", s.davSubtree(s.files(dav+"/files")))
+
+		// Avatars and versions address ids and keys rather than resource
+		// paths, so they are declared as patterns: nothing below them has to
+		// survive canonicalization, and the parameters they carry are named.
+		r.Any(dav+"/avatars/{user}/{file}", s.avatar(dav))
+		r.Any(dav+"/meta/{id}/v", s.versions(dav+"/meta"))
+		r.Any(dav+"/meta/{id}/v/{key}", s.versions(dav+"/meta"))
+		r.Mount(dav+"/trash-bin", s.trashbin(dav+"/trash-bin"), router.Methods(trashbinMethods...))
+		// The spaces trash bin reports hrefs under /spaces, not under itself,
+		// and is matched ahead of /spaces because a longer mount wins.
+		r.Mount(dav+"/spaces/trash-bin", s.spacesTrashbin(dav+"/spaces"), router.Methods(trashbinMethods...))
+		r.Subtree(dav+"/spaces", s.davSubtree(s.spaces(dav+"/spaces")))
+
+		// OCM and public links carry their own credentials, in the path or in
+		// a header, so they are reachable without the auth middleware.
+		r.Subtree(dav+"/ocm", s.davSubtree(s.ocm(dav+"/ocm")), router.Unprotected())
+		r.Subtree(dav+"/public-files", s.davSubtree(s.publicFiles(dav+"/public-files")), router.Unprotected())
+	}
+}
+
+// preamble is the work every ocdav request needs before it reaches a handler.
+func (s *svc) preamble(h http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		addAccessHeaders(w, r)
 
 		// TODO(jfd): do we need this?
@@ -208,98 +254,42 @@ func (s *svc) Handler() http.Handler {
 			return
 		}
 
-		// to build correct href prop urls we need to keep track of the base path
-		// always starts with /
-		base := path.Join("/", s.Prefix())
-
-		// We store the actual incoming URL
-		ctx = context.WithValue(ctx, ctxKeyIncomingURL, r.URL.Path)
-		r = r.WithContext(ctx)
-
-		var head string
-		head, r.URL.Path = router.ShiftPath(r.URL.Path)
-		log.Debug().Str("head", head).Str("tail", r.URL.Path).Msg("http routing")
-		switch head {
-		case "s":
-			if before, ok := strings.CutSuffix(r.URL.Path, "/download"); ok {
-				r.URL.Path = before
-				s.handleLegacyPublicLinkDownload(w, r)
-				return
-			}
-			http.Error(w, "Not Yet Implemented", http.StatusNotImplemented)
-			return
-		case "status.php":
-			s.doStatus(w, r)
-			return
-		case "remote.php":
-			// skip optional "remote.php"
-			head, r.URL.Path = router.ShiftPath(r.URL.Path)
-
-			// yet, add it to baseURI
-			base = path.Join(base, "remote.php")
-		case "apps":
-			head, r.URL.Path = router.ShiftPath(r.URL.Path)
-			if head == "files" {
-				s.handleLegacyPath(w, r)
-				return
-			}
-		case "index.php":
-			head, r.URL.Path = router.ShiftPath(r.URL.Path)
-			if head == "s" {
-				token := r.URL.Path
-				rURL := s.c.PublicURL + path.Join(head, token)
-				r.URL.Path = "/" // reset old path for redirection
-				http.Redirect(w, r, rURL, http.StatusMovedPermanently)
-				return
-			}
-		case "ocm-provider":
-			// this is to support the current/legacy discovery endpoint for OCM
-			http.Redirect(w, r, "/.well-known/ocm", http.StatusMovedPermanently)
-			return
-		}
-		switch head {
-		// the old `/webdav` endpoint uses remote.php/webdav/$path
-		case "webdav":
-			// for oc we need to prepend /home as the path that will be passed to the home storage provider
-			// will not contain the username
-			base = path.Join(base, "webdav")
-			ctx := context.WithValue(ctx, ctxKeyBaseURI, base)
-			r = r.WithContext(ctx)
-			s.webDavHandler.Handler(s).ServeHTTP(w, r)
-			return
-		case "dav":
-			// cern uses /dav/files/$namespace -> /$namespace/...
-			// oc uses /dav/files/$user -> /$home/$user/...
-			// for oc we need to prepend the path to user homes
-			// or we take the path starting at /dav and allow rewriting it?
-			base = path.Join(base, "dav")
-			ctx := context.WithValue(ctx, ctxKeyBaseURI, base)
-			r = r.WithContext(ctx)
-			s.davHandler.Handler(s).ServeHTTP(w, r)
-			return
-		}
-		log.Warn().Msg("resource not found")
-		w.WriteHeader(http.StatusNotFound)
+		// Handlers echo the URL the client used back in href properties.
+		ctx := context.WithValue(r.Context(), ctxKeyIncomingURL, r.URL.Path)
+		h.ServeHTTP(w, r.WithContext(ctx))
 	})
+}
+
+// below returns the request path under prefix, rooted, as the WebDAV handlers
+// expect to receive it.
+func below(r *http.Request, prefix string) string {
+	p := strings.TrimPrefix(r.URL.Path, prefix)
+	if p == "" || p[0] != '/' {
+		return "/" + p
+	}
+	return p
+}
+
+// serveAt hands the request to h with its path reduced to what lies below
+// prefix, and with base recorded as the URI the request was reached under.
+func serveAt(w http.ResponseWriter, r *http.Request, base, prefix string, h http.Handler) {
+	r.URL.Path = below(r, prefix)
+	h.ServeHTTP(w, r.WithContext(context.WithValue(r.Context(), ctxKeyBaseURI, base)))
+}
+
+func (s *svc) redirectPublicLink(w http.ResponseWriter, r *http.Request) {
+	target := s.c.PublicURL + path.Join("s", r.PathValue("token"))
+	r.URL.Path = "/" // reset old path for redirection
+	http.Redirect(w, r, target, http.StatusMovedPermanently)
+}
+
+// redirectOCMDiscovery supports the legacy OCM discovery endpoint.
+func (s *svc) redirectOCMDiscovery(w http.ResponseWriter, r *http.Request) {
+	http.Redirect(w, r, "/.well-known/ocm", http.StatusMovedPermanently)
 }
 
 func applyLayout(ctx context.Context, ns string, useLoggedInUserNS bool, requestPath string) string {
 	return ns
-	// If useLoggedInUserNS is false, that implies that the request is coming from
-	// the FilesHandler method invoked by a /dav/files/fileOwner where fileOwner
-	// is not the same as the logged in user. In that case, we'll treat fileOwner
-	// as the username whose files are to be accessed and use that in the
-	// namespace template.
-	/*
-		u, ok := appctx.ContextGetUser(ctx)
-		if !ok || !useLoggedInUserNS {
-			requestUserID, _ := router.ShiftPath(requestPath)
-			u = &userpb.User{
-				Username: requestUserID,
-			}
-		}
-		return templates.WithUser(u, ns)
-	*/
 }
 
 func addAccessHeaders(w http.ResponseWriter, r *http.Request) {
@@ -342,7 +332,7 @@ func extractDestination(r *http.Request, ns string) (string, error) {
 	destination := strings.TrimPrefix(dstURL.Path, baseURI)
 
 	// If the destination is in a spaces format, we replace with the space path
-	dstSpaceID, dstRelPath := router.ShiftPath(destination)
+	dstSpaceID, dstRelPath := segment(destination)
 	_, spaceRoot, ok := spaces.DecodeStorageSpaceIDToPath(dstSpaceID)
 	if ok && ns != "/public" {
 		destination = path.Join(spaceRoot, dstRelPath)
