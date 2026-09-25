@@ -214,9 +214,14 @@ func (s *svc) Routes(rt *router.Router) {
 		webdav, dav := prefix+"/webdav", prefix+"/dav"
 
 		r.Mount(webdav, s.webdav(webdav))
-		r.Mount(dav+"/avatars", s.avatars(dav))
 		r.Mount(dav+"/files", s.files(dav+"/files"))
-		r.Mount(dav+"/meta", s.versions(dav+"/meta"))
+
+		// Avatars and versions address ids and keys rather than resource
+		// paths, so they are declared as patterns: nothing below them has to
+		// survive canonicalization, and the parameters they carry are named.
+		r.Any(dav+"/avatars/{user}/{file}", s.avatar(dav))
+		r.Any(dav+"/meta/{id}/v", s.versions(dav+"/meta"))
+		r.Any(dav+"/meta/{id}/v/{key}", s.versions(dav+"/meta"))
 		r.Mount(dav+"/trash-bin", s.trashbin(dav+"/trash-bin"))
 		// The spaces trash bin reports hrefs under /spaces, not under itself,
 		// and is matched ahead of /spaces because a longer mount wins.
