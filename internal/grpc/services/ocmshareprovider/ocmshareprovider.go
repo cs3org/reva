@@ -26,7 +26,6 @@ import (
 	"net/url"
 	"path/filepath"
 	"slices"
-	"strings"
 	"time"
 
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
@@ -53,7 +52,6 @@ import (
 	"github.com/pkg/errors"
 	"google.golang.org/genproto/protobuf/field_mask"
 	"google.golang.org/grpc"
-	"google.golang.org/protobuf/proto"
 )
 
 func init() {
@@ -79,10 +77,10 @@ type config struct {
 	ClientInsecure  bool                      `mapstructure:"client_insecure"`
 	GatewaySVC      string                    `mapstructure:"gatewaysvc"                                    validate:"required"`
 	ProviderDomain  string                    `docs:"The same domain registered in the provider authorizer" mapstructure:"provider_domain" validate:"required"`
-	WebDAVEndpoint  string                    `mapstructure:"webdav_endpoint"                               validate:"required"`
-	OfferWebapp     bool                      `mapstructure:"offer_webapp"`
-	WebappName      string                    `mapstructure:"webapp_name"                                   validate:"required_if=OfferWebapp true"`
-	WebAppEndpoint  string                    `mapstructure:"webapp_endpoint"                               validate:"required_if=OfferWebapp true"`
+	WebDAVEndpoint  string                    `mapstructure:"webdav_endpoint" validate:"required"`
+	OfferWebapp     bool                      `docs:"false;Offer the webapp protocol on outbound OCM shares." mapstructure:"offer_webapp"`
+	WebappName      string                    `docs:";Name advertised for the webapp protocol when offer_webapp is true." mapstructure:"webapp_name" validate:"required_if=OfferWebapp true"`
+	WebAppEndpoint  string                    `docs:";Absolute URL of the webapp opener when offer_webapp is true." mapstructure:"webapp_endpoint" validate:"required_if=OfferWebapp true"`
 }
 
 type service struct {
@@ -106,26 +104,6 @@ func (c *config) ApplyDefaults() {
 	c.GatewaySVC = sharedconf.GetGatewaySVC(c.GatewaySVC)
 }
 
-// validateWebappOffer checks the provider-local offer. Disabled mode permits
-// an omitted name and endpoint. Enabled mode keeps the configured name exactly
-// and requires an absolute opener URL.
-func (c *config) validateWebappOffer() error {
-	if !c.OfferWebapp {
-		return nil
-	}
-	if strings.TrimSpace(c.WebappName) == "" {
-		return errors.New("ocmshareprovider: webapp_name must be non-empty when offer_webapp is true")
-	}
-	parsed, err := url.Parse(c.WebAppEndpoint)
-	if err != nil || !parsed.IsAbs() || parsed.Host == "" {
-		return errors.Errorf(
-			"ocmshareprovider: webapp_endpoint must be an absolute URL with a non-empty host when offer_webapp is true, got %q",
-			c.WebAppEndpoint,
-		)
-	}
-	return nil
-}
-
 func (s *service) Register(ss *grpc.Server) {
 	ocm.RegisterOcmAPIServer(ss, s)
 }
@@ -147,11 +125,14 @@ func getEmbeddedTransferrer(ctx context.Context, c *config) (embedded.Transferre
 // New creates a new ocm share provider svc.
 func New(ctx context.Context, m map[string]any) (rgrpc.Service, error) {
 	var c config
-	if err := cfg.Decode(m, &c); err != nil {
-		return nil, err
-	}
+	decodeErr := cfg.Decode(m, &c)
+	// Enabled-offer failures are startup BadRequest, including when required_if
+	// already rejected the same config. Disabled mode does not reach that check.
 	if err := c.validateWebappOffer(); err != nil {
 		return nil, err
+	}
+	if decodeErr != nil {
+		return nil, decodeErr
 	}
 
 	repo, err := getShareRepository(ctx, &c)
@@ -225,47 +206,6 @@ func (s *service) getWebdavProtocol(share *ocm.Share, m *ocm.AccessMethod_Webdav
 	}
 }
 
-// webappURL returns the complete configured opener endpoint, such as
-// {public_url}/services/ocm/open. The share id is not appended and no /lab
-// suffix is added. The shared secret stays out of the URI and is carried
-// separately for must-exchange-token.
-func (s *service) webappURL() string {
-	return s.conf.WebAppEndpoint
-}
-
-func (s *service) getWebappProtocol(ocmShare *ocm.Share, m *ocm.AccessMethod_WebappOptions) *ocmd.Webapp {
-	var perms []string
-	if m.WebappOptions.GetPermissions().GetInitiateFileDownload() {
-		perms = append(perms, "read")
-	} else {
-		perms = append(perms, "view")
-	}
-	if m.WebappOptions.GetPermissions().GetInitiateFileUpload() {
-		perms = append(perms, "write")
-	}
-	if m.WebappOptions.GetPermissions().GetAddGrant() {
-		perms = append(perms, "share")
-	}
-
-	// requirements are required by the OCM specifications: fall back to the
-	// defaults for shares created before these were stored.
-	reqs := m.WebappOptions.Requirements
-	if len(reqs) == 0 {
-		reqs = share.DefaultWebappRequirements
-	}
-
-	targets := share.DefaultWebappTargets
-
-	return &ocmd.Webapp{
-		URI:          s.webappURL(),
-		SharedSecret: ocmShare.Token,
-		Permissions:  perms,
-		Requirements: reqs,
-		Targets:      targets,
-		AppName:      m.WebappOptions.AppName,
-	}
-}
-
 // walk traverses the path recursively to discover all resources in the tree.
 func (s *service) walk(ctx context.Context, path string, fn walker.WalkFunc) error {
 	gw, err := revaservice.Gateway(ctx)
@@ -276,80 +216,19 @@ func (s *service) walk(ctx context.Context, path string, fn walker.WalkFunc) err
 }
 
 // return the protocols that can be used by remote users to access a local OCM share.
-func (s *service) getProtocols(ctx context.Context, share *ocm.Share, include_webapp bool) ocmd.Protocols {
+// The access-method list is already normalized; webapp methods that failed the
+// offer gate are absent here and are not rebuilt from the original request.
+func (s *service) getProtocols(ctx context.Context, share *ocm.Share) ocmd.Protocols {
 	var p ocmd.Protocols
 	for _, m := range share.AccessMethods {
 		switch t := m.Term.(type) {
 		case *ocm.AccessMethod_WebdavOptions:
 			p = append(p, s.getWebdavProtocol(share, t))
 		case *ocm.AccessMethod_WebappOptions:
-			if include_webapp {
-				p = append(p, s.getWebappProtocol(share, t))
-			}
+			p = append(p, s.getWebappProtocol(share, t))
 		}
 	}
 	return p
-}
-
-// freshAccessMethods builds the share's access methods from the request.
-// Webapp methods are omitted unless the local offer, a requested candidate,
-// remote webapp-receive targets containing "blank", and exchange-token all
-// hold. Eligible methods are cloned before the configured name is stamped.
-func (s *service) freshAccessMethods(requested []*ocm.AccessMethod, webappSupported, tokenExchangeSupported bool) []*ocm.AccessMethod {
-	hasCandidate := false
-	for _, m := range requested {
-		if isWebappAccessMethod(m) {
-			hasCandidate = true
-			break
-		}
-	}
-	offer := s.conf.OfferWebapp && hasCandidate && webappSupported && tokenExchangeSupported
-
-	methods := make([]*ocm.AccessMethod, 0, len(requested))
-	for _, m := range requested {
-		if m == nil {
-			continue
-		}
-		if isWebappAccessMethod(m) {
-			if !offer {
-				continue
-			}
-			cloned := cloneAccessMethod(m)
-			opts := cloned.GetWebappOptions()
-			if opts == nil {
-				opts = &ocm.WebappAccessMethod{}
-				cloned.Term = &ocm.AccessMethod_WebappOptions{WebappOptions: opts}
-			}
-			opts.AppName = s.conf.WebappName
-			methods = append(methods, cloned)
-			continue
-		}
-		if offer {
-			methods = append(methods, cloneAccessMethod(m))
-			continue
-		}
-		methods = append(methods, m)
-	}
-	return methods
-}
-
-func isWebappAccessMethod(m *ocm.AccessMethod) bool {
-	if m == nil {
-		return false
-	}
-	_, ok := m.Term.(*ocm.AccessMethod_WebappOptions)
-	return ok
-}
-
-func cloneAccessMethod(m *ocm.AccessMethod) *ocm.AccessMethod {
-	if m == nil {
-		return nil
-	}
-	cloned, ok := proto.Clone(m).(*ocm.AccessMethod)
-	if !ok || cloned == nil {
-		return &ocm.AccessMethod{}
-	}
-	return cloned
 }
 
 func (s *service) CreateOCMShare(ctx context.Context, req *ocm.CreateOCMShareRequest) (*ocm.CreateOCMShareResponse, error) {
@@ -402,7 +281,6 @@ func (s *service) CreateOCMShare(ctx context.Context, req *ocm.CreateOCMShareReq
 		Ctime:         ts,
 		Mtime:         ts,
 		Expiration:    req.Expiration,
-		AccessMethods: req.AccessMethods,
 	}
 
 	// Since the share is persisted only after the remote server has accepted it,
@@ -488,11 +366,16 @@ func (s *service) CreateOCMShare(ctx context.Context, req *ocm.CreateOCMShareReq
 		}
 	}
 
-	// Replace the request alias with a fresh list. Webapp methods are kept
-	// only when the local offer, a requested candidate, and the remote
-	// receive/token capabilities all match; the configured name is stamped
-	// on clones so the caller's methods stay unchanged.
-	ocmshare.AccessMethods = s.freshAccessMethods(req.AccessMethods, webapp_supported, token_exchange_supported)
+	// Gate inputs are the booleans computed above. Normalization does not
+	// discover the remote again. Invalid methods fail before NewShare and
+	// before the local store.
+	methods, err := s.freshAccessMethods(ctx, req.AccessMethods, webapp_supported, token_exchange_supported)
+	if err != nil {
+		return &ocm.CreateOCMShareResponse{
+			Status: status.NewInvalidArg(ctx, invalidShareAccessMethodsText),
+		}, nil
+	}
+	ocmshare.AccessMethods = methods
 
 	// prepare the request to be sent to the remote OCM server
 	newShareReq := &ocmd.NewShareRequest{
@@ -510,7 +393,7 @@ func (s *service) CreateOCMShare(ctx context.Context, req *ocm.CreateOCMShareReq
 		SenderDisplayName: user.DisplayName,
 		ShareType:         "user",
 		ResourceType:      resType,
-		Protocols:         s.getProtocols(ctx, ocmshare, true),
+		Protocols:         s.getProtocols(ctx, ocmshare),
 	}
 
 	if req.Expiration != nil {

@@ -36,6 +36,7 @@ import (
 	"github.com/cs3org/reva/v3/pkg/appctx"
 	"github.com/cs3org/reva/v3/pkg/errtypes"
 	"github.com/pkg/errors"
+	"github.com/rs/zerolog"
 )
 
 // ErrTokenInvalid is the error returned by the invite-accepted
@@ -217,7 +218,7 @@ func (c *OCMClient) NewShare(ctx context.Context, endpoint string, r *NewShareRe
 	}
 
 	log := appctx.GetLogger(ctx)
-	log.Info().Str("url", url).Str("payload", string(body)).Msg("Sending OCM share")
+	logNewShareDiagnostic(log, r.ProviderID, "", "Sending OCM share")
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewReader(body))
 	if err != nil {
 		return nil, errors.Wrap(err, "error creating request")
@@ -232,11 +233,22 @@ func (c *OCMClient) NewShare(ctx context.Context, endpoint string, r *NewShareRe
 
 	sresp, err := c.parseNewShareResponse(resp)
 	if sresp != nil {
-		log.Info().Any("status", resp.Status).Any("shareResponse", sresp).Msg("remote OCM server responded")
+		logNewShareDiagnostic(log, r.ProviderID, resp.Status, "remote OCM server responded")
 	} else {
-		log.Info().Err(err).Str("status", resp.Status).Msg("error in remote OCM server response")
+		logNewShareDiagnostic(log, r.ProviderID, resp.Status, "error in remote OCM server response")
 	}
 	return sresp, err
+}
+
+// logNewShareDiagnostic records a fixed outcome and the provider id.
+// Callers pass values they already computed. This helper does not read the
+// share JSON and does not query discovery.
+func logNewShareDiagnostic(log *zerolog.Logger, providerID, httpStatus, outcome string) {
+	event := log.Info().Str("provider_id", providerID)
+	if httpStatus != "" {
+		event = event.Str("status", httpStatus)
+	}
+	event.Msg(outcome)
 }
 
 func (c *OCMClient) parseNewShareResponse(r *http.Response) (*NewShareResponse, error) {
