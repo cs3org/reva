@@ -22,6 +22,8 @@ import (
 	"bytes"
 	"encoding/json"
 	"testing"
+
+	"github.com/rs/zerolog"
 )
 
 func decodeSharedWithMeItem(t *testing.T, raw []byte) []byte {
@@ -157,6 +159,12 @@ func decodePermField(t *testing.T, raw []byte, index int, field string) json.Raw
 		t.Fatal(err)
 	}
 	return perms[index][field]
+}
+
+func captureLogger() (*bytes.Buffer, zerolog.Logger) {
+	var buf bytes.Buffer
+	logger := zerolog.New(&buf).With().Timestamp().Logger()
+	return &buf, logger
 }
 
 func mustJSON(t *testing.T, v any) []byte {
