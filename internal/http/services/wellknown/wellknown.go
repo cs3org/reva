@@ -60,10 +60,6 @@ func (s *svc) Close() error {
 	return nil
 }
 
-func (s *svc) Prefix() string {
-	return mount
-}
-
 // Routes declares the discovery endpoints. They are public by definition:
 // peers read them before they have any credentials.
 func (s *svc) Routes(r *router.Router) {

@@ -27,6 +27,7 @@ package router
 import (
 	"net/http"
 	"path"
+	"slices"
 	"sort"
 	"strings"
 )
@@ -296,8 +297,8 @@ func (r *Router) routeForMount(prefix string) Route {
 }
 
 func (r *Router) wrap(h http.Handler) http.Handler {
-	for i := len(r.mw) - 1; i >= 0; i-- {
-		h = r.mw[i](h)
+	for _, v := range slices.Backward(r.mw) {
+		h = v(h)
 	}
 	return h
 }
@@ -339,8 +340,8 @@ func muxPattern(method, pattern string) string {
 }
 
 func splitMuxPattern(p string) (method, pattern string) {
-	if i := strings.IndexByte(p, ' '); i >= 0 {
-		return p[:i], strings.TrimLeft(p[i+1:], " ")
+	if before, after, ok := strings.Cut(p, " "); ok {
+		return before, strings.TrimLeft(after, " ")
 	}
 	return "", p
 }

@@ -64,10 +64,6 @@ type svc struct {
 	conf *config
 }
 
-func (s *svc) Prefix() string {
-	return mount
-}
-
 func (s *svc) Routes(r *router.Router) {
 	r.Any(mount, s.hello, router.Unprotected())
 }

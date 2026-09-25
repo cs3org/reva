@@ -46,10 +46,6 @@ func (s *svc) Close() error {
 
 type svc struct{}
 
-func (s *svc) Prefix() string {
-	return mount
-}
-
 // Routes mounts the standard library's pprof endpoints rather than declaring
 // them one by one: pprof.Index derives the profile name from the request path,
 // and only recognizes it under /debug/pprof/, so it needs the path untouched.

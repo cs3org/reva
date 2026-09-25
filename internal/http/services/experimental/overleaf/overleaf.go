@@ -84,10 +84,6 @@ func (s *svc) Close() error {
 	return nil
 }
 
-func (s *svc) Prefix() string {
-	return mount
-}
-
 func (s *svc) Routes(r *router.Router) {
 	r.Group(mount, func(r *router.Router) {
 		r.Get("/import", s.handleImport)

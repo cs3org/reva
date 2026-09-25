@@ -34,6 +34,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httputil"
+	"slices"
 	"sort"
 	"sync/atomic"
 	"time"
@@ -125,8 +126,6 @@ func (s *svc) Close() error {
 	close(s.stop)
 	return nil
 }
-
-func (s *svc) Prefix() string { return mount }
 
 // Routes claims the whole URL space. The gateway does not authenticate: it
 // forwards the request as it arrived, and the service it forwards to applies
@@ -241,20 +240,13 @@ func (s *svc) wants(name string) bool {
 	if name == "gateway" {
 		return false
 	}
-	for _, e := range s.conf.Exclude {
-		if e == name {
-			return false
-		}
+	if slices.Contains(s.conf.Exclude, name) {
+		return false
 	}
 	if len(s.conf.Services) == 0 {
 		return true
 	}
-	for _, w := range s.conf.Services {
-		if w == name {
-			return true
-		}
-	}
-	return false
+	return slices.Contains(s.conf.Services, name)
 }
 
 // declare puts the service's routes on the mirror, each forwarding to that

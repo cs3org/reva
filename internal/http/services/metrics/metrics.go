@@ -51,11 +51,6 @@ func (s *svc) Close() error {
 	return nil
 }
 
-// Prefix returns the main endpoint of this service.
-func (s *svc) Prefix() string {
-	return mount
-}
-
 // Routes declares the single placeholder endpoint: the service exists to start
 // a background process, not to serve requests.
 func (s *svc) Routes(r *router.Router) {

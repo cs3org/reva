@@ -103,11 +103,6 @@ func (s *svc) Close() error {
 	return nil
 }
 
-// Prefix sets the prefix
-func (s *svc) Prefix() string {
-	return mount
-}
-
 // Routes declares the takeout endpoints.
 func (s *svc) Routes(r *router.Router) {
 	r.Post(mount, s.handlePost)

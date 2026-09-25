@@ -148,8 +148,7 @@ func New(ctx context.Context, m map[string]any) (global.Service, error) {
 	return s, nil
 }
 
-func (s *svc) Prefix() string { return mount }
-func (s *svc) Close() error   { return nil }
+func (s *svc) Close() error { return nil }
 
 // Routes declares the login flow endpoints. They are how a client without
 // credentials obtains them, so they run without the auth middleware.

@@ -100,21 +100,20 @@ func New(ctx context.Context, m map[string]any) (global.Service, error) {
 	return s, nil
 }
 
-// RegistryMetadata advertises the externally reachable URL, if configured.
+// RegistryMetadata advertises where to reach the service: the externally
+// reachable URL when one is configured, and in either case the path it is
+// served under, which is what a peer falls back to building a URL from.
 func (s *svc) RegistryMetadata() map[string]string {
-	if s.conf.PublicURL == "" {
-		return nil
+	m := map[string]string{registry.MetaPrefix: mount}
+	if s.conf.PublicURL != "" {
+		m[registry.MetaPublicURL] = s.conf.PublicURL
 	}
-	return map[string]string{registry.MetaPublicURL: s.conf.PublicURL}
+	return m
 }
 
 // Close performs cleanup.
 func (s *svc) Close() error {
 	return nil
-}
-
-func (s *svc) Prefix() string {
-	return mount
 }
 
 // Routes declares the byte transfer endpoints. The transfer token travels

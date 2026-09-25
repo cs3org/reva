@@ -123,10 +123,6 @@ func (s *svc) handlersInit() error {
 	return nil
 }
 
-func (s *svc) Prefix() string {
-	return mount
-}
-
 // Routes declares the ScienceMesh endpoints. Discovery is reachable without
 // credentials, everything else is behind the auth middleware.
 func (s *svc) Routes(r *router.Router) {

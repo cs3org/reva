@@ -119,10 +119,6 @@ func (s *svc) Close() error {
 	return nil
 }
 
-func (s *svc) Prefix() string {
-	return mount
-}
-
 // Routes declares the OCM ingress endpoints. They authenticate at the protocol
 // layer, so they stay reachable without the outer auth middleware.
 func (s *svc) Routes(r *router.Router) {

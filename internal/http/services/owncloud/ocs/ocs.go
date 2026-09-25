@@ -82,10 +82,6 @@ func New(ctx context.Context, m map[string]any) (global.Service, error) {
 	return s, nil
 }
 
-func (s *svc) Prefix() string {
-	return mount
-}
-
 func (s *svc) Close() error {
 	return nil
 }
