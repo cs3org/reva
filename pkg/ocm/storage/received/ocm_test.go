@@ -19,6 +19,7 @@ import (
 	"github.com/cs3org/reva/v3/pkg/appctx"
 	"github.com/cs3org/reva/v3/pkg/errtypes"
 	"github.com/cs3org/reva/v3/pkg/ocm/client"
+	"github.com/cs3org/reva/v3/pkg/ocm/providerdomain"
 	"github.com/cs3org/reva/v3/pkg/utils/cfg"
 	"github.com/studio-b12/gowebdav"
 	"google.golang.org/grpc"
@@ -1962,7 +1963,7 @@ func observedCodeFlowClientID(
 	default:
 		t.Fatalf("unknown path %q", via)
 	}
-	if err := validateProviderDomain(domain); err != nil {
+	if err := providerdomain.Validate(domain); err != nil {
 		if callErr == nil {
 			t.Fatal("expected error before token exchange")
 		}
@@ -2036,7 +2037,7 @@ func TestCesnetFixtureProviderDomainReachesDriver(t *testing.T) {
 	if got != want || httpGot != want || mesh != want {
 		t.Fatalf("grpc %q http %q sciencemesh %q, want %q", got, httpGot, mesh, want)
 	}
-	if err := validateProviderDomain(mesh); err != nil {
+	if err := providerdomain.Validate(mesh); err != nil {
 		t.Fatalf("ScienceMesh provider_domain: %v", err)
 	}
 	if fx.GRPC.Services.StorageProvider.Driver != "ocmreceived" {
