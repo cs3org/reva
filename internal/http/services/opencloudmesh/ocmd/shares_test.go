@@ -334,9 +334,9 @@ func TestSharesHandlerInitCreatesPublicOnlyClient(t *testing.T) {
 	if h.ocmClient.client.Timeout != wantDefaultTimeout {
 		t.Errorf("timeout = %v, want %v", h.ocmClient.client.Timeout, wantDefaultTimeout)
 	}
-	tr, ok := h.ocmClient.client.Transport.(*http.Transport)
-	if !ok {
-		t.Fatalf("transport: got %T, want *http.Transport", h.ocmClient.client.Transport)
+	tr := client.HTTPTransport(h.ocmClient.client.Transport)
+	if tr == nil {
+		t.Fatalf("transport: got %T, want *http.Transport or public-only wrapper", h.ocmClient.client.Transport)
 	}
 	if tr.Proxy != nil {
 		t.Fatal("default inbound discovery client must be public-only and must not use a proxy")
@@ -350,9 +350,9 @@ func TestSharesHandlerInitCreatesPublicOnlyClient(t *testing.T) {
 	if h.webdavTransport == nil {
 		t.Fatal("init() did not store a WebDAV round tripper")
 	}
-	wtr, ok := h.webdavTransport.(*http.Transport)
-	if !ok {
-		t.Fatalf("webdav transport: got %T, want *http.Transport", h.webdavTransport)
+	wtr := client.HTTPTransport(h.webdavTransport)
+	if wtr == nil {
+		t.Fatalf("transport: got %T, want *http.Transport or public-only wrapper", h.webdavTransport)
 	}
 	if wtr.Proxy != nil {
 		t.Fatal("default inbound WebDAV round tripper must be public-only and must not use a proxy")
@@ -683,9 +683,9 @@ func TestConfigApplyDefaultsOCMClientTimeout(t *testing.T) {
 // (timeout/refused/unreachable) for this unlikely destination.
 func dialOCMTransport(t *testing.T, h *sharesHandler, address string) error {
 	t.Helper()
-	tr, ok := h.ocmClient.client.Transport.(*http.Transport)
-	if !ok {
-		t.Fatalf("transport: got %T, want *http.Transport", h.ocmClient.client.Transport)
+	tr := client.HTTPTransport(h.ocmClient.client.Transport)
+	if tr == nil {
+		t.Fatalf("transport: got %T, want *http.Transport or public-only wrapper", h.ocmClient.client.Transport)
 	}
 	if tr.DialContext == nil {
 		t.Fatal("inbound discovery transport must install a guarded DialContext")
@@ -930,16 +930,62 @@ func TestLegacyWebDAVStatPublicOnlyPolicy(t *testing.T) {
 
 	t.Run("allow_loopback_federation does not permit RFC1918", func(t *testing.T) {
 		h := initSharesHandler(t, &config{AllowLoopbackFederation: true})
-		c := gowebdav.NewClient("http://192.168.1.1:9/", "", "")
+		c := gowebdav.NewClient("https://192.168.1.1:9/", "", "")
 		c.SetTransport(h.webdavTransport)
 		_, err := c.Stat("")
 		if err == nil {
 			t.Fatal("expected Stat to refuse RFC1918")
 		}
 		if !errors.Is(err, client.ErrPolicyViolation) {
-			t.Errorf("Stat() error = %v, want ErrPolicyViolation", err)
+			t.Fatalf("Stat() error = %v, want ErrPolicyViolation", err)
+		}
+		got := err.Error()
+		if !strings.Contains(got, "non-public address") {
+			t.Errorf("Stat() error = %q, want non-public address", got)
+		}
+		if !strings.Contains(got, "192.168.1.1:9") {
+			t.Errorf("Stat() error = %q, want 192.168.1.1:9", got)
+		}
+		if strings.Contains(got, "refusing scheme") {
+			t.Errorf("Stat() error = %q, must not contain refusing scheme", got)
 		}
 	})
+}
+
+func TestGowebDAVPublicOnlyTransportRejectsHTTPSDowngrade(t *testing.T) {
+	var httpHits int
+	httpSrv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		httpHits++
+		writeWebDAVPropfind(w, false)
+	}))
+	defer httpSrv.Close()
+
+	var tlsHits int
+	tlsSrv := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		tlsHits++
+		http.Redirect(w, r, httpSrv.URL, http.StatusFound)
+	}))
+	defer tlsSrv.Close()
+
+	c := gowebdav.NewClient(tlsSrv.URL, "", "")
+	c.SetTransport(client.NewPublicOnlyRoundTripper(client.TransportConfig{
+		Timeout:       5 * time.Second,
+		Insecure:      true,
+		AllowLoopback: true,
+	}))
+	_, err := c.Stat("")
+	if !errors.Is(err, client.ErrPolicyViolation) {
+		t.Fatalf("Stat() error = %v, want ErrPolicyViolation", err)
+	}
+	if !strings.Contains(err.Error(), "refusing http redirect") {
+		t.Errorf("Stat() error = %q, want refusing http redirect", err)
+	}
+	if tlsHits < 1 {
+		t.Fatalf("tls requests = %d, want at least 1", tlsHits)
+	}
+	if httpHits != 0 {
+		t.Fatalf("http requests = %d, want 0", httpHits)
+	}
 }
 
 func TestCreateShareLegacyWebDAVStatUsesStoredTransport(t *testing.T) {
@@ -1030,9 +1076,9 @@ func TestSharesHandlerOCMAndWebDAVShareParsedPolicy(t *testing.T) {
 
 func dialSharesRoundTripper(t *testing.T, rt http.RoundTripper, address string) error {
 	t.Helper()
-	tr, ok := rt.(*http.Transport)
-	if !ok {
-		t.Fatalf("transport: got %T, want *http.Transport", rt)
+	tr := client.HTTPTransport(rt)
+	if tr == nil {
+		t.Fatalf("transport: got %T, want *http.Transport or public-only wrapper", rt)
 	}
 	if tr.DialContext == nil {
 		t.Fatal("transport must install a guarded DialContext")
@@ -1044,4 +1090,152 @@ func dialSharesRoundTripper(t *testing.T, rt http.RoundTripper, address string) 
 		_ = conn.Close()
 	}
 	return err
+}
+
+// TestSharesHandlerOCMAndWebDAVSchemeAndRedirect checks that configured
+// ranges do not open an HTTP exception, and that OCM literal redirects use
+// the same admit and deny decisions as the legacy WebDAV dial guard.
+func TestSharesHandlerOCMAndWebDAVSchemeAndRedirect(t *testing.T) {
+	h := initSharesHandler(t, &config{
+		AllowedFederationCIDRs: []string{"10.50.0.0/16", "fd42:8c6d:7a10:23::/64"},
+	})
+	if h.ocmClient.client.CheckRedirect == nil {
+		t.Fatal("OCM client must install CheckRedirect")
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+	_, err := h.ocmClient.Discover(ctx, "http://10.50.1.1:9")
+	assertSharesPolicyText(t, "discovery http in range", err, "refusing scheme")
+	_, err = h.ocmClient.Discover(ctx, "http://127.0.0.1:9")
+	assertSharesPolicyText(t, "discovery http loopback", err, "refusing scheme")
+
+	dav := gowebdav.NewClient("http://10.50.1.1:9/", "", "")
+	dav.SetTransport(h.webdavTransport)
+	_, err = dav.Stat("")
+	assertSharesPolicyText(t, "webdav http in range", err, "refusing scheme")
+
+	ulaReq, err := http.NewRequest(http.MethodGet, "http://[fd42:8c6d:7a10:23::1]/", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = h.webdavTransport.RoundTrip(ulaReq)
+	assertSharesPolicyText(t, "webdav http ula", err, "refusing scheme")
+
+	allowed := []string{
+		"https://10.50.1.1/",
+		"https://[fd42:8c6d:7a10:23::1]/",
+		"https://[::ffff:10.50.1.1]/",
+		"https://[64:ff9b::a32:101]/",
+	}
+	denied := []string{
+		"https://192.168.1.1/",
+		"https://[fd00::1]/",
+		"https://[::ffff:192.168.1.1]/",
+		"http://10.50.1.1/next",
+		"https://[fd42:8c6d:7a10:23::1%25eth0]/",
+	}
+	for _, raw := range allowed {
+		assertSharesRedirect(t, h, raw, false)
+	}
+	for _, raw := range denied {
+		assertSharesRedirect(t, h, raw, true)
+	}
+
+	zoned := "[fd42:8c6d:7a10:23::1%eth0]:9"
+	if err = dialOCMTransport(t, h, zoned); !errors.Is(err, client.ErrPolicyViolation) {
+		t.Errorf("discovery dial %q = %v, want ErrPolicyViolation", zoned, err)
+	}
+	if err = dialSharesRoundTripper(t, h.webdavTransport, zoned); !errors.Is(err, client.ErrPolicyViolation) {
+		t.Errorf("webdav dial %q = %v, want ErrPolicyViolation", zoned, err)
+	}
+}
+
+func TestSharesHandlerOCMAndWebDAVLiveRedirect(t *testing.T) {
+	h := initSharesHandler(t, &config{
+		AllowedFederationCIDRs:  []string{"10.50.0.0/16"},
+		AllowLoopbackFederation: true,
+		OCMClientInsecure:       true,
+		OCMClientTimeout:        1,
+	})
+
+	t.Run("http inside CIDR", func(t *testing.T) {
+		var hits int
+		tlsSrv := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			hits++
+			http.Redirect(w, r, "http://10.50.1.1/ocm", http.StatusFound)
+		}))
+		defer tlsSrv.Close()
+
+		assertSharesLiveRedirect(t, h, tlsSrv.URL, "refusing")
+		if hits < 2 {
+			t.Fatalf("tls hits = %d, want at least 2", hits)
+		}
+	})
+
+	t.Run("https outside CIDR", func(t *testing.T) {
+		var hits int
+		tlsSrv := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			hits++
+			http.Redirect(w, r, "https://192.168.9.9:9/ocm", http.StatusFound)
+		}))
+		defer tlsSrv.Close()
+
+		assertSharesLiveRedirect(t, h, tlsSrv.URL, "192.168.9.9")
+		if hits < 2 {
+			t.Fatalf("tls hits = %d, want at least 2", hits)
+		}
+	})
+}
+
+func assertSharesPolicyText(t *testing.T, op string, err error, text string) {
+	t.Helper()
+	if !errors.Is(err, client.ErrPolicyViolation) {
+		t.Fatalf("%s = %v, want ErrPolicyViolation", op, err)
+	}
+	if !strings.Contains(err.Error(), text) {
+		t.Fatalf("%s = %q, want substring %q", op, err, text)
+	}
+}
+
+func assertSharesRedirect(t *testing.T, h *sharesHandler, rawURL string, wantErr bool) {
+	t.Helper()
+	req, err := http.NewRequest(http.MethodGet, rawURL, nil)
+	if err != nil {
+		t.Fatalf("NewRequest(%q): %v", rawURL, err)
+	}
+	via := []*http.Request{mustSharesRequest(t, "https://example.com/")}
+	err = h.ocmClient.client.CheckRedirect(req, via)
+	if (err != nil) != wantErr {
+		t.Fatalf("CheckRedirect(%q) error = %v, wantErr %v", rawURL, err, wantErr)
+	}
+	if wantErr && !errors.Is(err, client.ErrPolicyViolation) {
+		t.Fatalf("CheckRedirect(%q) error = %v, want ErrPolicyViolation", rawURL, err)
+	}
+}
+
+func assertSharesLiveRedirect(t *testing.T, h *sharesHandler, rawURL, text string) {
+	t.Helper()
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, rawURL+"/.well-known/ocm", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = h.ocmClient.client.Do(req)
+	assertSharesPolicyText(t, "ocm redirect", err, text)
+
+	dav := gowebdav.NewClient(rawURL, "", "")
+	dav.SetTransport(h.webdavTransport)
+	_, err = dav.Stat("")
+	assertSharesPolicyText(t, "webdav redirect", err, text)
+}
+
+func mustSharesRequest(t *testing.T, rawURL string) *http.Request {
+	t.Helper()
+	req, err := http.NewRequest(http.MethodGet, rawURL, nil)
+	if err != nil {
+		t.Fatalf("NewRequest(%q): %v", rawURL, err)
+	}
+	return req
 }
