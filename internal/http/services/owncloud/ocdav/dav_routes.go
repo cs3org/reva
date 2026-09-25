@@ -35,12 +35,47 @@ import (
 	"google.golang.org/grpc/metadata"
 )
 
+// enterFunc prepares a request for the operation its method names: it strips
+// the mount, resolves whatever the URL addresses - a user, a space, a share, a
+// link - and returns the namespace the operation runs against.
+//
+// Reporting false means the request is already answered, either because it was
+// refused or because what it addressed is served by something other than a
+// WebDAV operation.
+type enterFunc func(http.ResponseWriter, *http.Request) (*http.Request, string, bool)
+
+// davSubtree declares the WebDAV operations of a mounted subtree. The router
+// picks the operation from the method; enter decides what the URL names.
+func (s *svc) davSubtree(enter enterFunc) func(*router.Subtree) {
+	return func(sub *router.Subtree) {
+		for _, o := range davOps {
+			op := o.op
+			sub.HandleFunc(o.method, func(w http.ResponseWriter, r *http.Request) {
+				r, ns, ok := enter(w, r)
+				if !ok {
+					return
+				}
+				op(s, w, r, ns)
+			})
+		}
+	}
+}
+
 // segment splits the first path segment off a rooted path, cleaning it first.
 // It is how a mounted subtree reads the one parameter its URL carries, now
 // that the router rather than the handler decides which subtree a request
 // belongs to: what is left is reading a parameter, not deciding a route.
 func segment(p string) (head, rest string) {
 	return router.ShiftPath(p)
+}
+
+// webdav serves the old endpoint, which addresses the user's home directly.
+func (s *svc) webdav(prefix string) enterFunc {
+	return func(w http.ResponseWriter, r *http.Request) (*http.Request, string, bool) {
+		r.URL.Path = below(r, prefix)
+		r = r.WithContext(context.WithValue(r.Context(), ctxKeyBaseURI, prefix))
+		return r, s.webDavHandler.namespaceFor(r), true
+	}
 }
 
 // avatar serves the placeholder avatar. The user the route matches is unused:
@@ -109,7 +144,7 @@ func (s *svc) filesUserRoot(base, user string, w http.ResponseWriter, r *http.Re
 
 // filesHome serves the user's home. It is the one root that is not a literal
 // CS3 path: homes are sharded per user, so the home has to be resolved.
-func (s *svc) filesHome(base, user, rest string, w http.ResponseWriter, r *http.Request) {
+func (s *svc) filesHome(base, user, rest string, w http.ResponseWriter, r *http.Request) (*http.Request, string, bool) {
 	ctx := r.Context()
 	log := appctx.GetLogger(ctx)
 
@@ -117,48 +152,50 @@ func (s *svc) filesHome(base, user, rest string, w http.ResponseWriter, r *http.
 	if err != nil {
 		log.Error().Err(err).Msg("error getting gateway client")
 		w.WriteHeader(http.StatusInternalServerError)
-		return
+		return nil, "", false
 	}
 
 	res, err := client.GetHome(ctx, &provider.GetHomeRequest{})
 	if err != nil {
 		log.Error().Err(err).Msg("error getting user home")
 		w.WriteHeader(http.StatusInternalServerError)
-		return
+		return nil, "", false
 	}
 	if res.Status.Code != rpc.Code_CODE_OK {
 		HandleErrorStatus(log, w, res.Status)
-		return
+		return nil, "", false
 	}
 
 	r.URL.Path = path.Join(res.Path, rest)
 	ctx = context.WithValue(ctx, ctxKeyBaseURI, path.Join(base, user))
-	s.davHandler.FilesHomeHandler.Handler(s).ServeHTTP(w, r.WithContext(ctx))
+	r = r.WithContext(ctx)
+	return r, s.davHandler.FilesHomeHandler.namespaceFor(r), true
 }
 
 // files serves the dav-files endpoint, a thin view over the CS3 namespace. The
 // first segment names the user; the next names a top-level root, which is a
 // literal CS3 path except for "home", and nothing at all means the list of
 // roots a sync client can choose from.
-func (s *svc) files(base string) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
+func (s *svc) files(base string) enterFunc {
+	return func(w http.ResponseWriter, r *http.Request) (*http.Request, string, bool) {
 		p := below(r, base)
 		if p == "/" {
 			s.filesNoUser(base, w, r)
-			return
+			return nil, "", false
 		}
 
 		user, rest := segment(p)
-		root, below := segment(rest)
+		root, rem := segment(rest)
 		switch {
 		case rest == "/":
 			s.filesUserRoot(base, user, w, r)
+			return nil, "", false
 		case root == "home":
-			s.filesHome(base, user, below, w, r)
+			return s.filesHome(base, user, rem, w, r)
 		default:
 			r.URL.Path = rest
-			ctx := context.WithValue(r.Context(), ctxKeyBaseURI, path.Join(base, user))
-			s.davHandler.FilesHandler.Handler(s).ServeHTTP(w, r.WithContext(ctx))
+			r = r.WithContext(context.WithValue(r.Context(), ctxKeyBaseURI, path.Join(base, user)))
+			return r, s.davHandler.FilesHandler.namespaceFor(r), true
 		}
 	}
 }
@@ -203,8 +240,8 @@ func (s *svc) spacesTrashbin(base string) http.HandlerFunc {
 // spaces serves a resource addressed by a space id, or by a resource id for
 // the methods that accept one. Either way the id is resolved to a path, which
 // is what the WebDAV handlers below work on.
-func (s *svc) spaces(base string) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
+func (s *svc) spaces(base string) enterFunc {
+	return func(w http.ResponseWriter, r *http.Request) (*http.Request, string, bool) {
 		ctx := r.Context()
 		log := appctx.GetLogger(ctx)
 
@@ -222,7 +259,7 @@ func (s *svc) spaces(base string) http.HandlerFunc {
 			storageID, base, itemID, decoded := spaces.DecodeToResourceID(head)
 			if !decoded {
 				w.WriteHeader(http.StatusBadRequest)
-				return
+				return nil, "", false
 			}
 			spacePath = base
 			ctx = context.WithValue(ctx, ctxSpaceID, spaces.EncodeSpaceID(base))
@@ -235,20 +272,21 @@ func (s *svc) spaces(base string) http.HandlerFunc {
 			// COPY and MOVE act on the storage root.
 			log.Warn().Str("head", head).Str("method", r.Method).Msg("spaces: head is not a valid space or resource ID")
 			w.WriteHeader(http.StatusBadRequest)
-			return
+			return nil, "", false
 		}
 
 		ctx = context.WithValue(ctx, ctxSpacePath, spacePath)
 		ctx = context.WithValue(ctx, ctxKeyBaseURI, base)
-		s.davHandler.SpacesHandler.Handler(s).ServeHTTP(w, r.WithContext(ctx))
+		r = r.WithContext(ctx)
+		return r, s.davHandler.SpacesHandler.namespaceFor(r), true
 	}
 }
 
 // ocm serves a share received from another provider. The request carries its
 // own credentials, either an exchanged JWT or the legacy shared secret, so it
 // is authenticated here rather than by the auth middleware.
-func (s *svc) ocm(base string) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
+func (s *svc) ocm(base string) enterFunc {
+	return func(w http.ResponseWriter, r *http.Request) (*http.Request, string, bool) {
 		ctx := r.Context()
 		log := appctx.GetLogger(ctx)
 
@@ -256,7 +294,7 @@ func (s *svc) ocm(base string) http.HandlerFunc {
 		if err != nil {
 			log.Error().Err(err).Msg("error getting gateway during OCM authentication")
 			w.WriteHeader(http.StatusInternalServerError)
-			return
+			return nil, "", false
 		}
 
 		var token, ocmshare, authType, mode string
@@ -283,7 +321,7 @@ func (s *svc) ocm(base string) http.HandlerFunc {
 		} else {
 			log.Info().Any("url", r.URL.Path).Any("headers", r.Header).Msg("unauthenticated remote OCM access")
 			w.WriteHeader(http.StatusUnauthorized)
-			return
+			return nil, "", false
 		}
 
 		authRes, err := handleOCMAuth(ctx, c, ocmshare, token, authType)
@@ -291,23 +329,23 @@ func (s *svc) ocm(base string) http.HandlerFunc {
 		case err != nil:
 			log.Info().Err(err).Str("mode", mode).Msg("error authenticating remote OCM access")
 			w.WriteHeader(http.StatusInternalServerError)
-			return
+			return nil, "", false
 		case authRes.Status.Code == rpc.Code_CODE_PERMISSION_DENIED:
 			log.Info().Str("token", token).Str("mode", mode).Msg("permission denied in remote OCM access")
 			w.WriteHeader(http.StatusUnauthorized)
-			return
+			return nil, "", false
 		case authRes.Status.Code == rpc.Code_CODE_UNAUTHENTICATED:
 			log.Info().Str("token", token).Str("mode", mode).Msg("unauthorized token in remote OCM access")
 			w.WriteHeader(http.StatusUnauthorized)
-			return
+			return nil, "", false
 		case authRes.Status.Code == rpc.Code_CODE_NOT_FOUND:
 			log.Info().Str("token", token).Str("mode", mode).Msg("invalid token in remote OCM access")
 			w.WriteHeader(http.StatusUnauthorized)
-			return
+			return nil, "", false
 		case authRes.Status.Code != rpc.Code_CODE_OK:
 			log.Error().Str("token", token).Str("mode", mode).Interface("status", authRes.Status).Msg("grpc auth request failed in remote OCM access")
 			w.WriteHeader(http.StatusInternalServerError)
-			return
+			return nil, "", false
 		}
 
 		// Basic auth does not carry the shareId, so recover the canonical one
@@ -333,21 +371,22 @@ func (s *svc) ocm(base string) http.HandlerFunc {
 
 		log.Info().Str("token", token).Str("mode", mode).Str("ocmshare", ocmshare).Interface("user", authRes.User).Msg("remote OCM access authenticated")
 
-		s.davHandler.OCMSharesHandler.Handler(s).ServeHTTP(w, r.WithContext(ctx))
+		r = r.WithContext(ctx)
+		return r, s.davHandler.OCMSharesHandler.namespaceFor(r), true
 	}
 }
 
 // publicFiles serves a public link. The link token is the credential, so the
 // request authenticates itself here.
-func (s *svc) publicFiles(base string) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
+func (s *svc) publicFiles(base string) enterFunc {
+	return func(w http.ResponseWriter, r *http.Request) (*http.Request, string, bool) {
 		ctx := r.Context()
 		log := appctx.GetLogger(ctx)
 
 		c, err := service.Gateway(ctx)
 		if err != nil {
 			w.WriteHeader(http.StatusNotFound)
-			return
+			return nil, "", false
 		}
 
 		r.URL.Path = below(r, base)
@@ -358,18 +397,18 @@ func (s *svc) publicFiles(base string) http.HandlerFunc {
 		res, hasValidBasicAuthHeader, unauthorized, err := authenticatePublicFilesRequest(ctx, r, c, token)
 		if unauthorized {
 			w.WriteHeader(http.StatusUnauthorized)
-			return
+			return nil, "", false
 		}
 
 		switch {
 		case err != nil:
 			log.Error().Str("token", token).Err(err).Msg("Error while handling public-files DAV request")
 			w.WriteHeader(http.StatusInternalServerError)
-			return
+			return nil, "", false
 		case res.Status == nil:
 			log.Error().Msg("DAV public-files got a AuthenticateResponse without status!")
 			w.WriteHeader(http.StatusInternalServerError)
-			return
+			return nil, "", false
 		case res.Status.Code == rpc.Code_CODE_PERMISSION_DENIED, res.Status.Code == rpc.Code_CODE_UNAUTHENTICATED:
 			w.WriteHeader(http.StatusUnauthorized)
 			if hasValidBasicAuthHeader {
@@ -378,20 +417,20 @@ func (s *svc) publicFiles(base string) http.HandlerFunc {
 					message: "Username or password was incorrect",
 				}, ErrInvalidCredentials)
 				HandleWebdavError(log, w, b, err)
-				return
+				return nil, "", false
 			}
 			b, err := Marshal(exception{
 				code:    SabredavNotAuthenticated,
 				message: "No 'Authorization: Basic' header found",
 			}, ErrMissingBasicAuth)
 			HandleWebdavError(log, w, b, err)
-			return
+			return nil, "", false
 		case res.Status.Code == rpc.Code_CODE_NOT_FOUND:
 			w.WriteHeader(http.StatusNotFound)
-			return
+			return nil, "", false
 		case res.Status.Code != rpc.Code_CODE_OK:
 			w.WriteHeader(http.StatusInternalServerError)
-			return
+			return nil, "", false
 		}
 
 		ctx = appctx.ContextSetToken(ctx, res.Token)
@@ -406,27 +445,29 @@ func (s *svc) publicFiles(base string) http.HandlerFunc {
 		case err != nil:
 			log.Error().Err(err).Msg("error sending grpc stat request")
 			w.WriteHeader(http.StatusInternalServerError)
-			return
+			return nil, "", false
 		case sRes.Status.Code == rpc.Code_CODE_PERMISSION_DENIED, sRes.Status.Code == rpc.Code_CODE_NOT_FOUND:
 			log.Debug().Str("token", token).Interface("status", sRes.Status).Msg("resource not found")
 			w.WriteHeader(http.StatusNotFound)
-			return
+			return nil, "", false
 		case sRes.Status.Code == rpc.Code_CODE_UNAUTHENTICATED:
 			log.Debug().Str("token", token).Interface("status", sRes.Status).Msg("unauthorized")
 			w.WriteHeader(http.StatusUnauthorized)
-			return
+			return nil, "", false
 		case sRes.Status.Code != rpc.Code_CODE_OK:
 			log.Error().Str("token", token).Interface("status", sRes.Status).Msg("grpc stat request failed")
 			w.WriteHeader(http.StatusInternalServerError)
-			return
+			return nil, "", false
 		}
 		log.Debug().Interface("statInfo", sRes.Info).Msg("Stat info from public link token path")
 
+		// A public link to a single file is served by its own handler, which
+		// answers on the link itself rather than on a path below it.
 		if sRes.Info.Type != provider.ResourceType_RESOURCE_TYPE_CONTAINER {
 			r = r.WithContext(context.WithValue(r.Context(), tokenStatInfoKey{}, sRes.Info))
 			s.davHandler.PublicFileHandler.Handler(s).ServeHTTP(w, r)
-			return
+			return nil, "", false
 		}
-		s.davHandler.PublicFolderHandler.Handler(s).ServeHTTP(w, r)
+		return r, s.davHandler.PublicFolderHandler.namespaceFor(r), true
 	}
 }

@@ -104,6 +104,9 @@ type mount struct {
 	handler http.Handler
 	// methods the subtree serves, empty meaning all of them.
 	methods []string
+	// byMethod holds a handler per method, for a subtree that declared its
+	// methods one by one. When it is set, handler is unused.
+	byMethod map[string]http.Handler
 }
 
 func (m mount) serves(method string) bool {
@@ -111,6 +114,18 @@ func (m mount) serves(method string) bool {
 		return true
 	}
 	return slices.Contains(m.methods, method)
+}
+
+// handlerFor returns the handler serving the method, or nil when the subtree
+// does not serve it.
+func (m mount) handlerFor(method string) http.Handler {
+	if m.byMethod != nil {
+		return m.byMethod[method]
+	}
+	if !m.serves(method) {
+		return nil
+	}
+	return m.handler
 }
 
 // New returns an empty Router.
@@ -233,13 +248,84 @@ func (r *Router) Mount(prefix string, h http.Handler, opts ...Option) {
 		o(&rt)
 	}
 
-	r.reg.mounts = append(r.reg.mounts, mount{prefix: rt.Pattern, handler: r.wrap(h), methods: rt.Methods})
+	r.addMount(mount{prefix: rt.Pattern, handler: r.wrap(h), methods: rt.Methods}, rt)
+}
+
+// Subtree mounts a handler per method under prefix. As with Mount the path
+// below prefix reaches the handler untouched, which is what WebDAV needs and
+// what a pattern cannot give; unlike Mount, which handler runs is decided
+// here, so the subtree does not switch on the method itself and every method
+// it serves is in the route table.
+func (r *Router) Subtree(prefix string, fn func(*Subtree), opts ...Option) {
+	t := &Subtree{byMethod: map[string]http.Handler{}}
+	fn(t)
+	if len(t.order) == 0 {
+		panic("router: " + r.owner + " declares an empty subtree at " + join(r.prefix, prefix))
+	}
+
+	rt := Route{
+		Owner:   r.owner,
+		Pattern: join(r.prefix, prefix),
+		Subtree: true,
+		Methods: t.order,
+	}
+	for _, o := range opts {
+		o(&rt)
+	}
+
+	byMethod := make(map[string]http.Handler, len(t.byMethod))
+	for m, h := range t.byMethod {
+		byMethod[m] = r.wrap(h)
+	}
+	r.addMount(mount{prefix: rt.Pattern, methods: rt.Methods, byMethod: byMethod}, rt)
+}
+
+// Subtree collects the handlers a mounted subtree serves, one per method.
+type Subtree struct {
+	byMethod map[string]http.Handler
+	order    []string
+}
+
+// Handle declares the handler serving the method.
+func (t *Subtree) Handle(method string, h http.Handler) {
+	if _, dup := t.byMethod[method]; dup {
+		panic("router: subtree redeclares method " + method)
+	}
+	t.byMethod[method] = h
+	t.order = append(t.order, method)
+}
+
+// HandleFunc is Handle for a handler function.
+func (t *Subtree) HandleFunc(method string, h http.HandlerFunc) { t.Handle(method, h) }
+
+// Get declares the GET handler.
+func (t *Subtree) Get(h http.HandlerFunc) { t.Handle(http.MethodGet, h) }
+
+// Head declares the HEAD handler.
+func (t *Subtree) Head(h http.HandlerFunc) { t.Handle(http.MethodHead, h) }
+
+// Post declares the POST handler.
+func (t *Subtree) Post(h http.HandlerFunc) { t.Handle(http.MethodPost, h) }
+
+// Put declares the PUT handler.
+func (t *Subtree) Put(h http.HandlerFunc) { t.Handle(http.MethodPut, h) }
+
+// Delete declares the DELETE handler.
+func (t *Subtree) Delete(h http.HandlerFunc) { t.Handle(http.MethodDelete, h) }
+
+// Options declares the OPTIONS handler.
+func (t *Subtree) Options(h http.HandlerFunc) { t.Handle(http.MethodOptions, h) }
+
+// addMount records a mount, keeping the mounts sorted longest first so the
+// first match is the most specific. A subtree that named its methods is
+// recorded as one route per method, so the table lists what it serves rather
+// than only where it lives.
+func (r *Router) addMount(m mount, rt Route) {
+	r.reg.mounts = append(r.reg.mounts, m)
 	sort.SliceStable(r.reg.mounts, func(i, j int) bool {
 		return len(r.reg.mounts[i].prefix) > len(r.reg.mounts[j].prefix)
 	})
 
-	// A subtree that named its methods is recorded as one route per method, so
-	// that the table lists what it serves rather than just where it lives.
 	if len(rt.Methods) == 0 {
 		r.reg.routes = append(r.reg.routes, rt)
 		return
@@ -280,7 +366,7 @@ func (r *Router) Unprotected() []string {
 // unmatched request as protected.
 func (r *Router) Match(req *http.Request) (Route, bool) {
 	if i := r.matchMount(req.URL.EscapedPath()); i >= 0 {
-		if !r.reg.mounts[i].serves(req.Method) {
+		if r.reg.mounts[i].handlerFor(req.Method) == nil {
 			return Route{}, false
 		}
 		return r.routeForMount(r.reg.mounts[i].prefix, req.Method), true
@@ -312,12 +398,13 @@ func (r *Router) Match(req *http.Request) (Route, bool) {
 func (r *Router) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	if i := r.matchMount(req.URL.EscapedPath()); i >= 0 {
 		m := r.reg.mounts[i]
-		if !m.serves(req.Method) {
+		h := m.handlerFor(req.Method)
+		if h == nil {
 			w.Header().Set("Allow", strings.Join(m.methods, ", "))
 			w.WriteHeader(http.StatusMethodNotAllowed)
 			return
 		}
-		m.handler.ServeHTTP(w, req)
+		h.ServeHTTP(w, req)
 		return
 	}
 	r.mux.ServeHTTP(w, req)
