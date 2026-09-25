@@ -13,4 +13,8 @@ validation. Operators can opt the received public-only clients into honoring
 received-storage config (off by default; the public-only clients stay
 direct unless explicitly enabled).
 
+Both received transports, the OCM discovery and token-exchange client and
+the WebDAV round tripper, share the explicit private ranges from
+allowed_federation_cidrs on the received-storage config.
+
 https://github.com/cs3org/reva/pull/5837

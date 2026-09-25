@@ -801,6 +801,8 @@ func TestSharesHandlerInitAllowedFederationCIDRsReachTransport(t *testing.T) {
 			t.Errorf("unrelated private dial %q = %v, want ErrPolicyViolation", addr, err)
 		}
 	}
+}
+
 func webDAVPropfindXML(isDir bool) string {
 	resourceType := "<d:resourcetype/>"
 	if isDir {
@@ -996,4 +998,50 @@ func TestCreateShareLegacyWebDAVStatUsesStoredTransport(t *testing.T) {
 			t.Fatal("expected the legacy WebDAV Stat probe to reach the server")
 		}
 	})
+}
+
+// TestSharesHandlerOCMAndWebDAVShareParsedPolicy checks that inbound discovery
+// and the legacy WebDAV probe admit and deny the same private ranges.
+func TestSharesHandlerOCMAndWebDAVShareParsedPolicy(t *testing.T) {
+	h := initSharesHandler(t, &config{
+		AllowedFederationCIDRs: []string{"10.50.0.0/16", "fd42:8c6d:7a10:23::/64"},
+	})
+	admitted := []string{"10.50.1.1:9", "[fd42:8c6d:7a10:23::1]:9"}
+	denied := []string{"10.9.9.9:9", "192.168.1.1:9", "[fd00::1]:9"}
+	for _, addr := range admitted {
+		err := dialOCMTransport(t, h, addr)
+		if err == nil || errors.Is(err, client.ErrPolicyViolation) {
+			t.Fatalf("discovery dial %q = %v; want a non-policy network error", addr, err)
+		}
+		err = dialSharesRoundTripper(t, h.webdavTransport, addr)
+		if err == nil || errors.Is(err, client.ErrPolicyViolation) {
+			t.Fatalf("webdav dial %q = %v; want a non-policy network error", addr, err)
+		}
+	}
+	for _, addr := range denied {
+		if err := dialOCMTransport(t, h, addr); !errors.Is(err, client.ErrPolicyViolation) {
+			t.Errorf("discovery dial %q = %v, want ErrPolicyViolation", addr, err)
+		}
+		if err := dialSharesRoundTripper(t, h.webdavTransport, addr); !errors.Is(err, client.ErrPolicyViolation) {
+			t.Errorf("webdav dial %q = %v, want ErrPolicyViolation", addr, err)
+		}
+	}
+}
+
+func dialSharesRoundTripper(t *testing.T, rt http.RoundTripper, address string) error {
+	t.Helper()
+	tr, ok := rt.(*http.Transport)
+	if !ok {
+		t.Fatalf("transport: got %T, want *http.Transport", rt)
+	}
+	if tr.DialContext == nil {
+		t.Fatal("transport must install a guarded DialContext")
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
+	defer cancel()
+	conn, err := tr.DialContext(ctx, "tcp", address)
+	if conn != nil {
+		_ = conn.Close()
+	}
+	return err
 }
