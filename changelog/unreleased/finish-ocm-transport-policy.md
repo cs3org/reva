@@ -10,4 +10,9 @@ ranges (0.0.0.0/8, 198.18.0.0/15, 192.0.2.0/24, 198.51.100.0/24,
 the PCP and TURN anycast exceptions (RFC 7723/8155) and the well-known
 NAT64 unwrap.
 
+Explicit federation CIDR ranges do not relax that scheme policy, the
+TLS minimum, or redirect enforcement. A configured private address is
+still HTTPS-only, and a redirect is checked against the same address
+policy as the dial.
+
 https://github.com/cs3org/reva/pull/5839

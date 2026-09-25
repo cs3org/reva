@@ -22,7 +22,9 @@ import (
 	"bufio"
 	"context"
 	"crypto/tls"
+	"encoding/binary"
 	"errors"
+	"fmt"
 	"net"
 	"net/http"
 	"net/http/httptest"
@@ -1345,6 +1347,223 @@ func TestPublicOnlyCheckRedirect(t *testing.T) {
 	}
 }
 
+func TestPublicOnlyCIDRSchemeAndRedirect(t *testing.T) {
+	t.Parallel()
+
+	cidrs := mustFederationCIDRs(t, "10.50.0.0/16", "fd42:8c6d:7a10:23::/64")
+	for _, insecure := range []bool{false, true} {
+		t.Run(fmt.Sprintf("insecure=%t", insecure), func(t *testing.T) {
+			t.Parallel()
+			cfg := TransportConfig{
+				Timeout:                time.Second,
+				Insecure:               insecure,
+				AllowLoopback:          false,
+				AllowedFederationCIDRs: cidrs,
+			}
+			c := NewPublicOnlyHTTPClient(cfg)
+			rt := NewPublicOnlyRoundTripper(cfg)
+			assertTLSFloor(t, requirePublicTransport(t, c.Transport), insecure)
+			assertTLSFloor(t, requirePublicTransport(t, rt), insecure)
+
+			httpTargets := []string{
+				"http://10.50.1.1/",
+				"http://[fd42:8c6d:7a10:23::1]/",
+				"http://127.0.0.1/",
+				"http://93.184.216.34/",
+			}
+			for _, raw := range httpTargets {
+				assertRoundTripSchemeDenied(t, cfg, raw, false)
+				assertRoundTripSchemeDenied(t, cfg, raw, true)
+			}
+
+			loopCfg := cfg
+			loopCfg.AllowLoopback = true
+			assertRoundTripSchemeDenied(t, loopCfg, "http://10.50.1.1/", false)
+			assertRoundTripSchemeDenied(t, loopCfg, "http://127.0.0.1/", true)
+
+			allowed := []string{
+				"https://10.50.1.1/",
+				"https://10.50.0.0/",
+				"https://10.50.255.255/",
+				"https://[fd42:8c6d:7a10:23::1]/",
+				"https://[::ffff:10.50.1.1]/",
+				"https://[64:ff9b::a32:101]/",
+				"https://192.0.0.9/",
+				"https://192.0.0.10/",
+				"https://rebind.ocm.test/next",
+			}
+			denied := []string{
+				"http://10.50.1.1/next",
+				"https://10.51.1.1/",
+				"https://192.168.1.1/",
+				"https://[fd00::1]/",
+				"https://[::ffff:192.168.1.1]/",
+				"https://[64:ff9b::c0a8:101]/",
+				"https://[64:ff9b:1::1]/",
+				"https://127.0.0.1/",
+				"https://[fd42:8c6d:7a10:23::1%25eth0]/",
+				"https://[::ffff:10.50.1.1%25eth0]/",
+			}
+			for _, raw := range allowed {
+				assertClientRedirect(t, c, raw, 1, false)
+			}
+			for _, raw := range denied {
+				assertClientRedirect(t, c, raw, 1, true)
+			}
+			assertClientRedirect(t, c, "https://10.50.1.1/next", 10, true)
+			assertClientRedirect(t, c, "https://example.com/next", 9, false)
+
+			// Sentinel stops before connect. The same cfg builds the client dialer.
+			assertDialSentinel(t, newPublicOnlyDialer(cfg), "10.50.1.1:443", "10.51.1.1:443")
+			assertDialSentinel(t, newPublicOnlyDialer(cfg), "[fd42:8c6d:7a10:23::1]:443", "[fd00::1]:443")
+			assertDialSentinel(t, newPublicOnlyDialer(cfg), "[::ffff:10.50.1.1]:443", "[::ffff:192.168.1.1]:443")
+			assertDialSentinel(t, newPublicOnlyDialer(cfg), "[64:ff9b::a32:101]:443", "[64:ff9b:1::1]:443")
+			assertGuardDenied(t, c.Transport, "192.168.1.1:9")
+			assertGuardDenied(t, rt, "10.51.1.1:9")
+			assertGuardDenied(t, c.Transport, "[fd00::1]:9")
+			assertGuardDenied(t, rt, "[fd42:8c6d:7a10:23::1%eth0]:9")
+			assertGuardDenied(t, c.Transport, "127.0.0.1:9")
+			assertGuardDenied(t, rt, "[64:ff9b::c0a8:101]:9")
+
+			ctx, cancel := context.WithCancel(context.Background())
+			cancel()
+			tr := requirePublicTransport(t, c.Transport)
+			conn, err := tr.DialContext(ctx, "tcp", "10.50.1.1:443")
+			if conn != nil {
+				_ = conn.Close()
+				t.Fatal("cancelled dial returned a connection")
+			}
+			if !errors.Is(err, context.Canceled) {
+				t.Fatalf("cancelled dial = %v, want context.Canceled", err)
+			}
+		})
+	}
+}
+
+func TestCIDRLiteralRedirectAgreesWithDial(t *testing.T) {
+	t.Parallel()
+
+	cidrs := mustFederationCIDRs(t, "10.50.0.0/16", "fd42:8c6d:7a10:23::/64")
+	cfg := TransportConfig{
+		Timeout:                time.Second,
+		AllowLoopback:          false,
+		AllowedFederationCIDRs: cidrs,
+	}
+
+	t.Run("in-range literal is followed until the redirect limit", func(t *testing.T) {
+		t.Parallel()
+		stub := &redirectStub{status: http.StatusFound, location: "https://10.50.1.1/next"}
+		c := NewPublicOnlyHTTPClient(cfg)
+		c.Transport = stub
+		_, err := c.Do(mustRequest(t, "https://example.com/"))
+		if !errors.Is(err, ErrPolicyViolation) {
+			t.Fatalf("Do() error = %v, want ErrPolicyViolation", err)
+		}
+		if strings.Contains(err.Error(), "non-public address") {
+			t.Fatalf("in-range redirect error = %v, want the hop limit", err)
+		}
+		if stub.trips != 10 {
+			t.Errorf("trips = %d, want 10", stub.trips)
+		}
+	})
+
+	t.Run("out-of-range literal stops before a second request", func(t *testing.T) {
+		t.Parallel()
+		stub := &redirectStub{status: http.StatusFound, location: "https://192.168.1.1/next"}
+		c := NewPublicOnlyHTTPClient(cfg)
+		c.Transport = stub
+		_, err := c.Do(mustRequest(t, "https://example.com/"))
+		if !errors.Is(err, ErrPolicyViolation) {
+			t.Fatalf("Do() error = %v, want ErrPolicyViolation", err)
+		}
+		if !strings.Contains(err.Error(), "non-public address") {
+			t.Fatalf("out-of-range redirect error = %q, want non-public address", err)
+		}
+		if stub.trips != 1 {
+			t.Errorf("trips = %d, want 1", stub.trips)
+		}
+	})
+
+	t.Run("http redirect inside a CIDR stops", func(t *testing.T) {
+		t.Parallel()
+		stub := &redirectStub{status: http.StatusFound, location: "http://10.50.1.1/next"}
+		c := NewPublicOnlyHTTPClient(cfg)
+		c.Transport = stub
+		_, err := c.Do(mustRequest(t, "https://example.com/"))
+		if !errors.Is(err, ErrPolicyViolation) {
+			t.Fatalf("Do() error = %v, want ErrPolicyViolation", err)
+		}
+		if !strings.Contains(err.Error(), "refusing non-https redirect") {
+			t.Fatalf("http redirect error = %q, want refusing non-https redirect", err)
+		}
+		if stub.trips != 1 {
+			t.Errorf("trips = %d, want 1", stub.trips)
+		}
+	})
+
+	t.Run("captured policy ignores later config mutation", func(t *testing.T) {
+		t.Parallel()
+		local := mustFederationCIDRs(t, "10.50.0.0/16")
+		localCfg := TransportConfig{
+			Timeout:                time.Second,
+			AllowedFederationCIDRs: local,
+		}
+		c := NewPublicOnlyHTTPClient(localCfg)
+		dialer := newPublicOnlyDialer(localCfg)
+		localCfg.AllowedFederationCIDRs = mustFederationCIDRs(t, "192.168.0.0/16")
+		local.prefixes[0] = netip.MustParsePrefix("11.0.0.0/8")
+
+		assertClientRedirect(t, c, "https://10.50.1.1/", 1, false)
+		assertClientRedirect(t, c, "https://192.168.1.1/", 1, true)
+		assertDialSentinel(t, dialer, "10.50.1.1:443", "192.168.1.1:443")
+		assertGuardDenied(t, c.Transport, "192.168.1.1:9")
+	})
+}
+
+func TestPublicOnlyHostnameDialUsesNumericAddress(t *testing.T) {
+	t.Parallel()
+
+	cidrs := mustFederationCIDRs(t, "10.50.0.0/16", "fd42:8c6d:7a10:23::/64")
+	dns := startFlipDNS(t, netip.MustParseAddr("10.50.1.1"))
+	dialer := newPublicOnlyDialer(TransportConfig{
+		Timeout:                time.Second,
+		AllowLoopback:          false,
+		AllowedFederationCIDRs: cidrs,
+	})
+	dialer.Resolver = &net.Resolver{
+		PreferGo: true,
+		Dial:     dns.dialContext,
+	}
+	sentinel := errors.New("hostname numeric dial sentinel")
+	var mu sync.Mutex
+	seen := []string{}
+	orig := dialer.Control
+	if orig == nil {
+		t.Fatal("production dialer must install Control")
+	}
+	dialer.Control = func(network, address string, c syscall.RawConn) error {
+		mu.Lock()
+		seen = append(seen, address)
+		mu.Unlock()
+		if err := orig(network, address, c); err != nil {
+			return err
+		}
+		return sentinel
+	}
+
+	const host = "rebind.ocm.test:443"
+	assertHostnameDial(t, dialer, host, netip.MustParseAddr("10.50.1.1"), sentinel, &mu, &seen)
+
+	dns.set(netip.MustParseAddr("192.168.9.9"))
+	assertHostnameDial(t, dialer, host, netip.MustParseAddr("192.168.9.9"), nil, &mu, &seen)
+
+	dns.set(netip.MustParseAddr("fd42:8c6d:7a10:23::5"))
+	assertHostnameDial(t, dialer, host, netip.MustParseAddr("fd42:8c6d:7a10:23::5"), sentinel, &mu, &seen)
+
+	dns.set(netip.MustParseAddr("fd00::9"))
+	assertHostnameDial(t, dialer, host, netip.MustParseAddr("fd00::9"), nil, &mu, &seen)
+}
+
 func TestPublicOnlyRedirectDowngradeViaClient(t *testing.T) {
 	t.Parallel()
 
@@ -1721,4 +1940,237 @@ func runPublicOnlyEnvProxyChild(t *testing.T, scenario string) {
 	default:
 		t.Fatalf("unknown child scenario %q", scenario)
 	}
+}
+
+func assertRoundTripSchemeDenied(t *testing.T, cfg TransportConfig, rawURL string, redirected bool) {
+	t.Helper()
+	roundTrippers := []http.RoundTripper{
+		NewPublicOnlyHTTPClient(cfg).Transport,
+		NewPublicOnlyRoundTripper(cfg),
+	}
+	for _, rt := range roundTrippers {
+		tr := requirePublicTransport(t, rt)
+		probe := installFakeDial(tr)
+		req := mustRequest(t, rawURL)
+		if redirected {
+			prior := mustRequest(t, "https://example.com/")
+			req.Response = &http.Response{StatusCode: http.StatusFound, Request: prior}
+		}
+		_, err := rt.RoundTrip(req)
+		if !errors.Is(err, ErrPolicyViolation) {
+			t.Fatalf("RoundTrip(%q redirected=%t) = %v, want ErrPolicyViolation", rawURL, redirected, err)
+		}
+		if probe.n != 0 {
+			t.Fatalf("RoundTrip(%q redirected=%t) dialed %d times", rawURL, redirected, probe.n)
+		}
+	}
+}
+
+func assertClientRedirect(t *testing.T, c *http.Client, rawURL string, viaHops int, wantErr bool) {
+	t.Helper()
+	if c.CheckRedirect == nil {
+		t.Fatal("client must install CheckRedirect")
+	}
+	req := mustRequest(t, rawURL)
+	via := make([]*http.Request, viaHops)
+	for i := range via {
+		via[i] = mustRequest(t, "https://example.com/")
+	}
+	err := c.CheckRedirect(req, via)
+	if (err != nil) != wantErr {
+		t.Fatalf("CheckRedirect(%q) error = %v, wantErr %v", rawURL, err, wantErr)
+	}
+	if wantErr && !errors.Is(err, ErrPolicyViolation) {
+		t.Fatalf("CheckRedirect(%q) error = %v, want ErrPolicyViolation", rawURL, err)
+	}
+}
+
+func assertGuardDenied(t *testing.T, rt http.RoundTripper, address string) {
+	t.Helper()
+	err := dialThrough(t, rt, address)
+	if !errors.Is(err, ErrPolicyViolation) {
+		t.Fatalf("dial %q = %v, want ErrPolicyViolation", address, err)
+	}
+}
+
+func assertHostnameDial(
+	t *testing.T,
+	dialer *net.Dialer,
+	host string,
+	want netip.Addr,
+	sentinel error,
+	mu *sync.Mutex,
+	seen *[]string,
+) {
+	t.Helper()
+	mu.Lock()
+	*seen = []string{}
+	mu.Unlock()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+	conn, err := dialer.DialContext(ctx, "tcp", host)
+	if conn != nil {
+		_ = conn.Close()
+		t.Fatalf("dial %q returned a connection", host)
+	}
+	mu.Lock()
+	got := append([]string{}, *seen...)
+	mu.Unlock()
+	if len(got) == 0 {
+		t.Fatalf("dial %q recorded no connect address (err=%v)", host, err)
+	}
+	for _, address := range got {
+		ipHost, _, splitErr := net.SplitHostPort(address)
+		if splitErr != nil {
+			t.Fatalf("connect address %q: %v", address, splitErr)
+		}
+		ip, parseErr := netip.ParseAddr(ipHost)
+		if parseErr != nil {
+			t.Fatalf("connect address %q: %v", address, parseErr)
+		}
+		if ip.Compare(want) != 0 {
+			t.Fatalf("connect address %q, want %s", address, want)
+		}
+	}
+	if sentinel != nil {
+		if !errors.Is(err, sentinel) {
+			t.Fatalf("in-range hostname dial = %v, want sentinel", err)
+		}
+		if errors.Is(err, ErrPolicyViolation) {
+			t.Fatalf("in-range hostname dial = %v, want no policy violation", err)
+		}
+		return
+	}
+	if !errors.Is(err, ErrPolicyViolation) {
+		t.Fatalf("out-of-range hostname dial = %v, want ErrPolicyViolation", err)
+	}
+}
+
+type flipDNS struct {
+	pc net.PacketConn
+	mu sync.Mutex
+	ip netip.Addr
+}
+
+func startFlipDNS(t *testing.T, initial netip.Addr) *flipDNS {
+	t.Helper()
+	pc, err := net.ListenPacket("udp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	s := &flipDNS{pc: pc, ip: initial}
+	t.Cleanup(func() { _ = pc.Close() })
+	go s.serve()
+	return s
+}
+
+func (s *flipDNS) set(ip netip.Addr) {
+	s.mu.Lock()
+	s.ip = ip
+	s.mu.Unlock()
+}
+
+func (s *flipDNS) current() netip.Addr {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.ip
+}
+
+func (s *flipDNS) dialContext(ctx context.Context, network, _ string) (net.Conn, error) {
+	var d net.Dialer
+	switch network {
+	case "tcp", "tcp4", "tcp6":
+		return nil, errors.New("test dns is udp only")
+	default:
+		return d.DialContext(ctx, "udp", s.pc.LocalAddr().String())
+	}
+}
+
+func (s *flipDNS) serve() {
+	buf := make([]byte, 1500)
+	for {
+		n, addr, err := s.pc.ReadFrom(buf)
+		if err != nil {
+			return
+		}
+		resp := dnsAnswer(buf[:n], s.current())
+		if resp == nil {
+			continue
+		}
+		_, _ = s.pc.WriteTo(resp, addr)
+	}
+}
+
+func dnsAnswer(query []byte, ip netip.Addr) []byte {
+	if len(query) < 12 {
+		return nil
+	}
+	qEnd, qtype, ok := dnsQuestion(query)
+	if !ok {
+		return nil
+	}
+	resp := make([]byte, qEnd)
+	copy(resp, query[:qEnd])
+	flags := binary.BigEndian.Uint16(resp[2:4])
+	flags |= 0x8000 | 0x0400
+	flags &^= 0x0200
+	flags &^= 0x000F
+	binary.BigEndian.PutUint16(resp[2:4], flags)
+	binary.BigEndian.PutUint16(resp[4:6], 1)
+	binary.BigEndian.PutUint16(resp[6:8], 0)
+	binary.BigEndian.PutUint16(resp[8:10], 0)
+	binary.BigEndian.PutUint16(resp[10:12], 0)
+
+	var rdata []byte
+	var typ uint16
+	switch {
+	case qtype == 1 && ip.Is4():
+		typ = 1
+		b := ip.As4()
+		rdata = b[:]
+	case qtype == 28 && ip.Is6():
+		typ = 28
+		b := ip.As16()
+		rdata = b[:]
+	default:
+		return resp
+	}
+	binary.BigEndian.PutUint16(resp[6:8], 1)
+	ans := make([]byte, 12+len(rdata))
+	ans[0], ans[1] = 0xC0, 0x0C
+	binary.BigEndian.PutUint16(ans[2:4], typ)
+	binary.BigEndian.PutUint16(ans[4:6], 1)
+	binary.BigEndian.PutUint16(ans[10:12], uint16(len(rdata)))
+	copy(ans[12:], rdata)
+	return append(resp, ans...)
+}
+
+func dnsQuestion(query []byte) (int, uint16, bool) {
+	off, ok := skipDNSName(query, 12)
+	if !ok || off+4 > len(query) {
+		return 0, 0, false
+	}
+	qtype := binary.BigEndian.Uint16(query[off : off+2])
+	return off + 4, qtype, true
+}
+
+func skipDNSName(msg []byte, off int) (int, bool) {
+	for off < len(msg) {
+		n := int(msg[off])
+		if n == 0 {
+			return off + 1, true
+		}
+		if n&0xC0 == 0xC0 {
+			if off+1 >= len(msg) {
+				return 0, false
+			}
+			return off + 2, true
+		}
+		if n&0xC0 != 0 {
+			return 0, false
+		}
+		off += 1 + n
+	}
+	return 0, false
 }

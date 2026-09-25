@@ -134,15 +134,14 @@ func NewTrustedHTTPClient(cfg TransportConfig) *http.Client {
 // the safe default. True installs http.ProxyFromEnvironment. A selected proxy
 // hides the OCM target from Control; the guarded dialer classifies the proxy hop.
 // Policy is HTTPS-only; initial plain HTTP is allowed only for literal loopback
-// when AllowLoopback is true. Non-HTTPS redirects are rejected (10-redirect limit).
+// when AllowLoopback is true. AllowedFederationCIDRs does not permit plain HTTP.
+// Non-HTTPS redirects are rejected (10-redirect limit). Literal HTTPS redirects
+// use the same destination policy as dial Control.
 func NewPublicOnlyHTTPClient(cfg TransportConfig) *http.Client {
 	cfg = normalizeTransportConfig(cfg)
-	policy := newDestinationPolicy(cfg)
+	pt, policy := newPublicOnlyParts(cfg)
 	return &http.Client{
-		Transport: &publicOnlyTransport{
-			base:   newPublicOnlyTransport(cfg),
-			policy: policy,
-		},
+		Transport:     pt,
 		Timeout:       cfg.Timeout,
 		CheckRedirect: newPublicOnlyCheckRedirect(policy),
 	}
@@ -151,14 +150,22 @@ func NewPublicOnlyHTTPClient(cfg TransportConfig) *http.Client {
 // NewPublicOnlyRoundTripper returns a public-only transport with the same
 // address policy, proxy contract, and scheme policy as NewPublicOnlyHTTPClient:
 // HTTPS-only, with initial plain HTTP only for literal loopback when
-// AllowLoopback is true.
+// AllowLoopback is true. Callers that follow redirects themselves still hit
+// the req.Response scheme check; dial Control applies the same address policy.
 func NewPublicOnlyRoundTripper(cfg TransportConfig) http.RoundTripper {
 	cfg = normalizeTransportConfig(cfg)
+	pt, _ := newPublicOnlyParts(cfg)
+	return pt
+}
+
+// newPublicOnlyParts captures one immutable destination policy and installs it
+// on both the scheme wrapper and the dial Control.
+func newPublicOnlyParts(cfg TransportConfig) (*publicOnlyTransport, destinationPolicy) {
 	policy := newDestinationPolicy(cfg)
 	return &publicOnlyTransport{
-		base:   newPublicOnlyTransport(cfg),
+		base:   newPublicOnlyTransport(cfg, policy),
 		policy: policy,
-	}
+	}, policy
 }
 
 func cloneOCMTransport(cfg TransportConfig) *http.Transport {
@@ -173,7 +180,7 @@ func cloneOCMTransport(cfg TransportConfig) *http.Transport {
 	return tr
 }
 
-func newPublicOnlyTransport(cfg TransportConfig) *http.Transport {
+func newPublicOnlyTransport(cfg TransportConfig, policy destinationPolicy) *http.Transport {
 	tr := cloneOCMTransport(cfg)
 	// False is the safe default and leaves Proxy nil. True installs
 	// http.ProxyFromEnvironment. Control sees the proxy hop when one is
@@ -186,12 +193,15 @@ func newPublicOnlyTransport(cfg TransportConfig) *http.Transport {
 	} else {
 		tr.Proxy = nil
 	}
-	tr.DialContext = newPublicOnlyDialer(cfg).DialContext
+	tr.DialContext = newPublicOnlyDialerWithPolicy(cfg, policy).DialContext
 	return tr
 }
 
 func newPublicOnlyDialer(cfg TransportConfig) *net.Dialer {
-	policy := newDestinationPolicy(cfg)
+	return newPublicOnlyDialerWithPolicy(cfg, newDestinationPolicy(cfg))
+}
+
+func newPublicOnlyDialerWithPolicy(cfg TransportConfig, policy destinationPolicy) *net.Dialer {
 	return &net.Dialer{
 		Timeout:   cfg.Timeout,
 		KeepAlive: 30 * time.Second,

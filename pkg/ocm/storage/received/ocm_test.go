@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"bytes"
 	"context"
+	"crypto/tls"
 	"encoding/base64"
 	"encoding/json"
 	"errors"
@@ -1485,9 +1486,9 @@ func TestReceivedAllowedFederationCIDRs(t *testing.T) {
 			if d.ocmClient == nil || d.webdavTransport == nil {
 				t.Fatal("New() did not store both received transports")
 			}
-			tr, ok := d.webdavTransport.(*http.Transport)
-			if !ok {
-				t.Fatalf("webdav transport: got %T, want *http.Transport", d.webdavTransport)
+			tr := client.HTTPTransport(d.webdavTransport)
+			if tr == nil {
+				t.Fatalf("webdav transport: got %T, want *http.Transport or public-only wrapper", d.webdavTransport)
 			}
 			if tr.Proxy != nil {
 				t.Fatal("default received WebDAV round tripper must not use a proxy")
@@ -1509,9 +1510,9 @@ func TestReceivedUseEnvProxyKeepsGuardedDialer(t *testing.T) {
 	d := newReceivedDriver(t, map[string]any{
 		"ocm_use_env_proxy": true,
 	})
-	tr, ok := d.webdavTransport.(*http.Transport)
-	if !ok {
-		t.Fatalf("webdav transport: got %T, want *http.Transport", d.webdavTransport)
+	tr := client.HTTPTransport(d.webdavTransport)
+	if tr == nil {
+		t.Fatalf("webdav transport: got %T, want *http.Transport or public-only wrapper", d.webdavTransport)
 	}
 	if tr.Proxy == nil {
 		t.Fatal("ocm_use_env_proxy true must install the environment proxy")
@@ -1583,9 +1584,9 @@ func receivedPolicyCtx(t *testing.T) context.Context {
 
 func dialReceivedTransport(t *testing.T, rt http.RoundTripper, address string) error {
 	t.Helper()
-	tr, ok := rt.(*http.Transport)
-	if !ok {
-		t.Fatalf("transport: got %T, want *http.Transport", rt)
+	tr := client.HTTPTransport(rt)
+	if tr == nil {
+		t.Fatalf("transport: got %T, want *http.Transport or public-only wrapper", rt)
 	}
 	if tr.DialContext == nil {
 		t.Fatal("received transport must install a guarded DialContext")
@@ -1635,4 +1636,123 @@ func assertReceivedDenied(t *testing.T, op string, err error) {
 	if !errors.Is(err, client.ErrPolicyViolation) {
 		t.Fatalf("%s = %v, want ErrPolicyViolation", op, err)
 	}
+}
+
+func TestReceivedCIDRDoesNotRelaxSchemeOrRedirect(t *testing.T) {
+	for _, insecure := range []bool{false, true} {
+		name := "verify TLS"
+		if insecure {
+			name = "insecure retains floor"
+		}
+		t.Run(name, func(t *testing.T) {
+			d := newReceivedDriver(t, map[string]any{
+				"ocm_timeout":  1,
+				"ocm_insecure": insecure,
+				"allowed_federation_cidrs": []any{
+					"10.50.0.0/16",
+					"fd42:8c6d:7a10:23::/64",
+				},
+			})
+			tr := client.HTTPTransport(d.webdavTransport)
+			if tr == nil || tr.TLSClientConfig == nil {
+				t.Fatal("received WebDAV transport is missing a TLS config")
+			}
+			if tr.TLSClientConfig.MinVersion != tls.VersionTLS12 {
+				t.Errorf("MinVersion = %v, want TLS 1.2", tr.TLSClientConfig.MinVersion)
+			}
+			if tr.TLSClientConfig.InsecureSkipVerify != insecure {
+				t.Errorf("InsecureSkipVerify = %v, want %v", tr.TLSClientConfig.InsecureSkipVerify, insecure)
+			}
+
+			ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+			defer cancel()
+			_, err := d.ocmClient.Discover(ctx, "http://10.50.1.1:9")
+			assertReceivedPolicyText(t, "discovery http in range", err, "refusing scheme")
+			_, err = d.ocmClient.Discover(ctx, "http://127.0.0.1:9")
+			assertReceivedPolicyText(t, "discovery http loopback", err, "refusing scheme")
+
+			_, err = d.newWebDAVClient("http://10.50.1.1:9/", nil).Stat("")
+			assertReceivedPolicyText(t, "webdav http in range", err, "refusing scheme")
+			ulaReq, err := http.NewRequest(http.MethodGet, "http://[fd42:8c6d:7a10:23::1]/", nil)
+			if err != nil {
+				t.Fatal(err)
+			}
+			_, err = d.webdavTransport.RoundTrip(ulaReq)
+			assertReceivedPolicyText(t, "webdav http ula", err, "refusing scheme")
+		})
+	}
+
+	d := newReceivedDriver(t, map[string]any{
+		"ocm_timeout":               1,
+		"ocm_insecure":              true,
+		"allow_loopback_federation": true,
+		"allowed_federation_cidrs":  []any{"10.50.0.0/16"},
+	})
+
+	t.Run("http redirect inside CIDR", func(t *testing.T) {
+		var ocmHits, webdavHits int
+		tlsSrv := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			recordReceivedRedirectHit(t, &ocmHits, &webdavHits, r)
+			http.Redirect(w, r, "http://10.50.1.1/ocm", http.StatusFound)
+		}))
+		defer tlsSrv.Close()
+		assertReceivedLiveRedirect(t, d, tlsSrv.URL, "refusing")
+		assertReceivedRedirectHits(t, ocmHits, webdavHits)
+	})
+
+	t.Run("https redirect outside CIDR", func(t *testing.T) {
+		var ocmHits, webdavHits int
+		tlsSrv := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			recordReceivedRedirectHit(t, &ocmHits, &webdavHits, r)
+			http.Redirect(w, r, "https://192.168.9.9:9/ocm", http.StatusFound)
+		}))
+		defer tlsSrv.Close()
+		assertReceivedLiveRedirect(t, d, tlsSrv.URL, "192.168.9.9")
+		assertReceivedRedirectHits(t, ocmHits, webdavHits)
+	})
+}
+
+// recordReceivedRedirectHit splits OCM discovery from WebDAV.
+// OCM discovery retries must not be counted as WebDAV hits.
+func recordReceivedRedirectHit(t *testing.T, ocmHits, webdavHits *int, r *http.Request) {
+	t.Helper()
+	switch {
+	case r.Method == http.MethodGet && (r.URL.Path == "/.well-known/ocm" || r.URL.Path == "/ocm-provider"):
+		*ocmHits++
+	case r.Method == "PROPFIND":
+		*webdavHits++
+	default:
+		t.Errorf("unexpected live redirect request %s %s", r.Method, r.URL.Path)
+	}
+}
+
+func assertReceivedRedirectHits(t *testing.T, ocmHits, webdavHits int) {
+	t.Helper()
+	// Discover tries /.well-known/ocm, then retries the legacy /ocm-provider endpoint.
+	if ocmHits != 2 {
+		t.Fatalf("ocm hits = %d, want 2 discovery attempts", ocmHits)
+	}
+	if webdavHits < 1 {
+		t.Fatalf("webdav hits = %d, want at least 1", webdavHits)
+	}
+}
+
+func assertReceivedPolicyText(t *testing.T, op string, err error, text string) {
+	t.Helper()
+	if !errors.Is(err, client.ErrPolicyViolation) {
+		t.Fatalf("%s = %v, want ErrPolicyViolation", op, err)
+	}
+	if !strings.Contains(err.Error(), text) {
+		t.Fatalf("%s = %q, want substring %q", op, err, text)
+	}
+}
+
+func assertReceivedLiveRedirect(t *testing.T, d *driver, rawURL, text string) {
+	t.Helper()
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+	_, err := d.ocmClient.Discover(ctx, rawURL)
+	assertReceivedPolicyText(t, "ocm redirect", err, text)
+	_, err = d.newWebDAVClient(rawURL, nil).Stat("")
+	assertReceivedPolicyText(t, "webdav redirect", err, text)
 }
