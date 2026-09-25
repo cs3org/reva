@@ -375,6 +375,7 @@ func validateVocabulary(protocolName, kind string, values []string, valid map[st
 
 // Absolute protocol URIs should already be fully usable sender endpoints. Catch
 // malformed values such as double-scheme hosts before they are stored or resolved.
+// Relative values have no host and stay the caller's concern.
 func validateProtocolURI(protocolName, uri string) error {
 	if uri == "" {
 		return nil
@@ -382,21 +383,14 @@ func validateProtocolURI(protocolName, uri string) error {
 
 	parsedURI, err := url.Parse(uri)
 	if err != nil {
-		return fmt.Errorf("protocol %s has invalid uri %q: %w", protocolName, uri, err)
+		return invalidProtocolURI(protocolName)
 	}
-	if parsedURI.Host == "" {
+	if parsedURI.Host == "" && parsedURI.Opaque == "" {
 		return nil
 	}
-	if parsedURI.Scheme != "http" && parsedURI.Scheme != "https" {
-		return fmt.Errorf("protocol %s has unsupported absolute uri scheme %q", protocolName, parsedURI.Scheme)
+	if err := requireAbsoluteHTTPURL(parsedURI); err != nil {
+		return invalidProtocolURI(protocolName)
 	}
-	if parsedURI.Host == "http:" || parsedURI.Host == "https:" ||
-		strings.Contains(parsedURI.Host, "://") ||
-		strings.HasPrefix(parsedURI.Path, "//http://") ||
-		strings.HasPrefix(parsedURI.Path, "//https://") {
-		return fmt.Errorf("protocol %s has malformed absolute uri %q", protocolName, uri)
-	}
-
 	return nil
 }
 
