@@ -67,12 +67,26 @@ func (h *sharesHandler) init(c *config) error {
 	h.exposeRecipientDisplayName = c.ExposeRecipientDisplayName
 	h.machineSecret = c.MachineSecret
 	h.trustForwardedFor = c.TrustForwardedFor
-	h.ocmClient = NewPublicOnlyClientWithConfig(client.TransportConfig{
+
+	// Parse the explicit private-network exception list before any client or
+	// network is constructed: an invalid element must fail init, not start a
+	// partially accepted policy or run discovery first. The typed value is
+	// copied onto the same TransportConfig that carries timeout, TLS, loopback
+	// and proxy; tcfg is not rebuilt elsewhere.
+	allowedCIDRs, err := client.ParseFederationCIDRs(c.AllowedFederationCIDRs)
+	if err != nil {
+		return errors.Wrapf(err, "ocm: invalid allowed_federation_cidrs")
+	}
+
+	tcfg := client.TransportConfig{
 		Timeout:       time.Duration(c.OCMClientTimeout) * time.Second,
 		Insecure:      c.OCMClientInsecure,
 		AllowLoopback: c.AllowLoopbackFederation,
 		UseEnvProxy:   c.OCMClientUseEnvProxy,
-	})
+	}
+	tcfg.AllowedFederationCIDRs = allowedCIDRs
+	h.ocmClient = NewPublicOnlyClientWithConfig(tcfg)
+
 	for _, p := range c.AutoAcceptProviders {
 		re, err := regexp.Compile(p)
 		if err != nil {

@@ -659,3 +659,129 @@ func TestConfigApplyDefaultsOCMClientTimeout(t *testing.T) {
 		t.Errorf("explicit timeout = %d, want 7 (default must not overwrite)", c.OCMClientTimeout)
 	}
 }
+
+// dialOCMTransport dials the address through the real guarded transport; the
+// guard admits allowed private ranges, so the dial proceeds to the network
+// layer, which is expected to fail with a non-policy net.Error
+// (timeout/refused/unreachable) for this unlikely destination.
+func dialOCMTransport(t *testing.T, h *sharesHandler, address string) error {
+	t.Helper()
+	tr, ok := h.ocmClient.client.Transport.(*http.Transport)
+	if !ok {
+		t.Fatalf("transport: got %T, want *http.Transport", h.ocmClient.client.Transport)
+	}
+	if tr.DialContext == nil {
+		t.Fatal("inbound discovery transport must install a guarded DialContext")
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
+	defer cancel()
+	conn, err := tr.DialContext(ctx, "tcp", address)
+	if conn != nil {
+		_ = conn.Close()
+	}
+	return err
+}
+
+// TestOcmServiceAllowedFederationCIDRs drives the native config map through
+// service New so decode and init failures both propagate before the router is
+// served. gatewaysvc is set so the required-field validator passes and the
+// CIDR parse path is reached for the malformed/mixed cases.
+func TestOcmServiceAllowedFederationCIDRs(t *testing.T) {
+	tests := []struct {
+		name      string
+		cidrs     any
+		setKey    bool
+		wantErr   bool
+		wantParse bool
+	}{
+		{name: "absent key succeeds", setKey: false, wantErr: false},
+		{name: "empty list succeeds", cidrs: []any{}, setKey: true, wantErr: false},
+		{name: "valid ipv4 succeeds", cidrs: []any{"10.197.228.0/24"}, setKey: true, wantErr: false},
+		{name: "valid ula succeeds", cidrs: []any{"fd42:8c6d:7a10:23::/64"}, setKey: true, wantErr: false},
+		{name: "valid ipv4 and ula succeeds", cidrs: []any{"10.197.228.0/24", "fd42:8c6d:7a10:23::/64"}, setKey: true, wantErr: false},
+		{name: "scalar instead of list fails decode", cidrs: "10.0.0.0/8", setKey: true, wantErr: true},
+		{name: "wrong element type fails decode", cidrs: []any{"10.0.0.0/8", 5}, setKey: true, wantErr: true},
+		{name: "malformed cidr fails init", cidrs: []any{"not-a-cidr"}, setKey: true, wantErr: true, wantParse: true},
+		{name: "public cidr fails init", cidrs: []any{"8.8.8.0/24"}, setKey: true, wantErr: true, wantParse: true},
+		{name: "mixed valid invalid fails init atomically", cidrs: []any{"10.0.0.0/8", "8.8.8.0/24"}, setKey: true, wantErr: true, wantParse: true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// gatewaysvc satisfies the required-field validator; token_managers
+			// lets the token handler init succeed so success cases pass full New
+			// and CIDR parse failures still surface from sharesHandler.init, which
+			// runs first in routerInit.
+			m := map[string]any{
+				"gatewaysvc": "localhost:9100",
+				"token_managers": map[string]any{
+					"jwt": map[string]any{"secret": "ocm-test-jwt-secret"},
+				},
+			}
+			if tt.setKey {
+				m["allowed_federation_cidrs"] = tt.cidrs
+			}
+			svc, err := New(context.Background(), m)
+			if tt.wantErr {
+				if err == nil {
+					t.Fatalf("New() error = nil, want error")
+				}
+				if svc != nil {
+					t.Fatalf("New() returned a service on error")
+				}
+				if tt.wantParse && !strings.Contains(err.Error(), "invalid federation CIDR") {
+					t.Errorf("error = %v, want it to wrap the parser failure", err)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("New() error = %v, want nil", err)
+			}
+			if svc == nil {
+				t.Fatal("New() returned nil service")
+			}
+		})
+	}
+}
+
+// TestSharesHandlerInitDefaultDeniesPrivateDestinations confirms the stored
+// inbound discovery client refuses RFC 1918 and ULA destinations by default.
+func TestSharesHandlerInitDefaultDeniesPrivateDestinations(t *testing.T) {
+	h := initSharesHandler(t, &config{})
+	for _, addr := range []string{"10.0.0.5:9", "192.168.1.1:9", "172.16.5.4:9", "[fd00::1]:9"} {
+		err := dialOCMTransport(t, h, addr)
+		if !errors.Is(err, client.ErrPolicyViolation) {
+			t.Errorf("default dial %q = %v, want ErrPolicyViolation", addr, err)
+		}
+	}
+}
+
+// TestSharesHandlerInitAllowedFederationCIDRsReachTransport confirms the parsed
+// exception reaches the real guarded transport: configured private ranges pass
+// the guard, while unrelated private ranges stay denied.
+func TestSharesHandlerInitAllowedFederationCIDRsReachTransport(t *testing.T) {
+	h := initSharesHandler(t, &config{
+		AllowedFederationCIDRs: []string{"10.50.0.0/16", "fd42:8c6d:7a10:23::/64"},
+	})
+	// Configured private ranges are admitted past the guard, then the dial
+	// proceeds to the network layer and must fail with a non-policy net.Error
+	// (timeout/refused/unreachable). A nil error (successful handshake) must
+	// FAIL: it would mean the guard admitted AND a real service answered on
+	// this unlikely destination. A non-policy net.Error PASSes (guard admitted,
+	// network failed - expected).
+	for _, addr := range []string{"10.50.1.1:9", "[fd42:8c6d:7a10:23::1]:9"} {
+		err := dialOCMTransport(t, h, addr)
+		if err == nil {
+			t.Fatalf("configured CIDR dial %q = nil; want a non-policy net.Error (guard admitted, network failed)", addr)
+		}
+		if errors.Is(err, client.ErrPolicyViolation) {
+			t.Fatalf("configured CIDR dial %q = %v; want it to pass the guard (non-policy net.Error)", addr, err)
+		}
+	}
+	// Unrelated private ranges stay denied even with a configured exception.
+	for _, addr := range []string{"10.9.9.9:9", "192.168.1.1:9", "172.16.5.4:9", "[fd00::1]:9"} {
+		err := dialOCMTransport(t, h, addr)
+		if !errors.Is(err, client.ErrPolicyViolation) {
+			t.Errorf("unrelated private dial %q = %v, want ErrPolicyViolation", addr, err)
+		}
+	}
+}
