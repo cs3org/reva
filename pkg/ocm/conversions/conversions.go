@@ -206,3 +206,10 @@ const ShareJailID = "a0ca6a90-a365-4782-871e-d44447bbc668"
 type UnifiedRoleDefinition struct {
 	Id *string
 }
+
+// ReceivedWebappMetadata is presence and the exact persisted app name for
+// one received share.
+type ReceivedWebappMetadata struct {
+	Present bool
+	AppName string
+}
