@@ -67,10 +67,6 @@ type svc struct {
 	conf *config
 }
 
-func (s *svc) Prefix() string {
-	return mount
-}
-
 func (s *svc) Routes(r *router.Router) {
 	r.Group(mount, func(r *router.Router) {
 		r.Any("/ping", s.doPing, router.Unprotected())

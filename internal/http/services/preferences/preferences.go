@@ -68,10 +68,6 @@ func (s *svc) Close() error {
 	return nil
 }
 
-func (s *svc) Prefix() string {
-	return mount
-}
-
 func (s *svc) Routes(r *router.Router) {
 	r.Get(mount, s.handleGet)
 	r.Post(mount, s.handlePost)

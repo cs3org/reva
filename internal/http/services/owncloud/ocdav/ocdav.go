@@ -184,12 +184,6 @@ func New(ctx context.Context, m map[string]any) (global.Service, error) {
 	return s, nil
 }
 
-// Prefix is empty: ocdav does not live under one path, it serves a handful of
-// well-known ones declared in Routes.
-func (s *svc) Prefix() string {
-	return mount
-}
-
 func (s *svc) Close() error {
 	return nil
 }
@@ -235,7 +229,7 @@ func (s *svc) handler() http.Handler {
 
 		// to build correct href prop urls we need to keep track of the base path
 		// always starts with /
-		base := path.Join("/", s.Prefix())
+		base := "/"
 
 		// We store the actual incoming URL
 		ctx = context.WithValue(ctx, ctxKeyIncomingURL, r.URL.Path)

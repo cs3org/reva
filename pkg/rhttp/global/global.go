@@ -57,9 +57,5 @@ type Service interface {
 	// definition declares router.Unprotected() rather than relying on a
 	// separate list of paths.
 	Routes(*router.Router)
-	// Prefix is the path the service is mounted under. It no longer takes part
-	// in routing - it is what the service advertises in the registry, so that
-	// peers can build a URL for it.
-	Prefix() string
 	Close() error
 }

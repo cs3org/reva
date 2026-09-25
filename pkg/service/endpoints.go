@@ -23,6 +23,7 @@ import (
 	"fmt"
 	"maps"
 	"net"
+	"strings"
 
 	"github.com/cs3org/reva/v3/pkg/registry"
 )
@@ -82,8 +83,8 @@ func (e endpoint) URL() string {
 		return u
 	}
 	u := e.Scheme() + "://" + e.Address()
-	if p := e.Prefix(); p != "" {
-		u += "/" + p
+	if p := e.Prefix(); p != "" && p != "/" {
+		u += "/" + strings.Trim(p, "/")
 	}
 	return u
 }

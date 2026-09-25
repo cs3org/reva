@@ -92,10 +92,6 @@ func (s *svc) Close() error {
 	return nil
 }
 
-func (s *svc) Prefix() string {
-	return mount
-}
-
 // Routes declares the app provider endpoints. Listing the available apps needs
 // no credentials, everything else acts on a resource and does.
 func (s *svc) Routes(r *router.Router) {

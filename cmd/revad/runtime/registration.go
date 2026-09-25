@@ -30,7 +30,6 @@ import (
 	"github.com/cs3org/reva/v3/cmd/revad/pkg/config"
 	"github.com/cs3org/reva/v3/pkg/invoke"
 	"github.com/cs3org/reva/v3/pkg/registry"
-	"github.com/cs3org/reva/v3/pkg/rhttp/global"
 	"github.com/cs3org/reva/v3/pkg/rhttp/router"
 	"github.com/cs3org/reva/v3/pkg/service"
 	"github.com/rs/zerolog"
@@ -179,9 +178,6 @@ func nodeMetadata(srv *Server, name, id, hostname string, pid int, impl any) map
 	}
 	if srv.transport == registry.TransportHTTP {
 		meta[registry.MetaScheme] = srv.scheme
-		if hs, ok := impl.(global.Service); ok {
-			meta[registry.MetaPrefix] = hs.Prefix()
-		}
 		if routes := routesOf(srv, name); routes != "" {
 			meta[registry.MetaRoutes] = routes
 		}

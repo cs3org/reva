@@ -66,10 +66,6 @@ type svc struct {
 	h http.Handler
 }
 
-func (s *svc) Prefix() string {
-	return mount
-}
-
 // Routes mounts the prometheus handler, which serves the scrape endpoint
 // regardless of the path it is reached at.
 func (s *svc) Routes(r *router.Router) {
