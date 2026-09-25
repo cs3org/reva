@@ -187,6 +187,23 @@ func (s *svc) Close() error {
 	return nil
 }
 
+// webdavMethods are the methods the WebDAV subtrees serve. Declaring them on
+// the mount is what lets the router answer 405 for anything else, and what
+// puts them in the route table a gateway mirrors.
+var webdavMethods = []string{
+	MethodPropfind, MethodProppatch, MethodMkcol, MethodMove, MethodCopy,
+	MethodReport, MethodLock, MethodUnlock,
+	http.MethodGet, http.MethodHead, http.MethodPut, http.MethodPost,
+	http.MethodDelete, http.MethodOptions,
+}
+
+// trashbinMethods are the methods a trash bin serves: it is listed, restored
+// from and purged, but not written to.
+var trashbinMethods = []string{
+	MethodPropfind, MethodMove,
+	http.MethodDelete, http.MethodOptions,
+}
+
 // Routes declares the URLs ocdav serves. The service answers a handful of
 // disjoint entry points rather than one subtree, and each of the WebDAV ones
 // is reachable both directly and under /remote.php, which older clients use.
@@ -213,8 +230,8 @@ func (s *svc) Routes(rt *router.Router) {
 	for _, prefix := range []string{"", "/remote.php"} {
 		webdav, dav := prefix+"/webdav", prefix+"/dav"
 
-		r.Mount(webdav, s.webdav(webdav))
-		r.Mount(dav+"/files", s.files(dav+"/files"))
+		r.Mount(webdav, s.webdav(webdav), router.Methods(webdavMethods...))
+		r.Mount(dav+"/files", s.files(dav+"/files"), router.Methods(webdavMethods...))
 
 		// Avatars and versions address ids and keys rather than resource
 		// paths, so they are declared as patterns: nothing below them has to
@@ -222,16 +239,16 @@ func (s *svc) Routes(rt *router.Router) {
 		r.Any(dav+"/avatars/{user}/{file}", s.avatar(dav))
 		r.Any(dav+"/meta/{id}/v", s.versions(dav+"/meta"))
 		r.Any(dav+"/meta/{id}/v/{key}", s.versions(dav+"/meta"))
-		r.Mount(dav+"/trash-bin", s.trashbin(dav+"/trash-bin"))
+		r.Mount(dav+"/trash-bin", s.trashbin(dav+"/trash-bin"), router.Methods(trashbinMethods...))
 		// The spaces trash bin reports hrefs under /spaces, not under itself,
 		// and is matched ahead of /spaces because a longer mount wins.
-		r.Mount(dav+"/spaces/trash-bin", s.spacesTrashbin(dav+"/spaces"))
-		r.Mount(dav+"/spaces", s.spaces(dav+"/spaces"))
+		r.Mount(dav+"/spaces/trash-bin", s.spacesTrashbin(dav+"/spaces"), router.Methods(trashbinMethods...))
+		r.Mount(dav+"/spaces", s.spaces(dav+"/spaces"), router.Methods(webdavMethods...))
 
 		// OCM and public links carry their own credentials, in the path or in
 		// a header, so they are reachable without the auth middleware.
-		r.Mount(dav+"/ocm", s.ocm(dav+"/ocm"), router.Unprotected())
-		r.Mount(dav+"/public-files", s.publicFiles(dav+"/public-files"), router.Unprotected())
+		r.Mount(dav+"/ocm", s.ocm(dav+"/ocm"), router.Unprotected(), router.Methods(webdavMethods...))
+		r.Mount(dav+"/public-files", s.publicFiles(dav+"/public-files"), router.Unprotected(), router.Methods(webdavMethods...))
 	}
 }
 

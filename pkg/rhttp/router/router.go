@@ -45,6 +45,9 @@ type Route struct {
 	// Subtree is set for mounted handlers: every path under Pattern is served
 	// by the mount, which receives the request path untouched.
 	Subtree bool `json:"subtree,omitempty"`
+	// Methods, on a subtree, are the methods it serves. Empty means every
+	// method. It is not serialised: each method is recorded as its own route.
+	Methods []string `json:"-"`
 	// Unprotected exempts the route from the authentication middleware.
 	Unprotected bool `json:"unprotected,omitempty"`
 }
@@ -57,6 +60,18 @@ type Option func(*Route)
 // links) or that are public by definition (discovery documents).
 func Unprotected() Option {
 	return func(r *Route) { r.Unprotected = true }
+}
+
+// Methods restricts a mounted subtree to the methods it serves. The subtree is
+// then recorded as one route per method, so the table says what it answers,
+// and the router refuses anything else with a 405 rather than leaving the
+// handler to notice.
+//
+// It is how a subtree declares its methods without giving up a mount: below a
+// mount the path is handed over untouched, which is what WebDAV needs and what
+// pattern matching cannot do.
+func Methods(m ...string) Option {
+	return func(r *Route) { r.Methods = m }
 }
 
 // Middleware wraps a handler. Middlewares attached to a Group apply to every
@@ -87,6 +102,15 @@ type registrations struct {
 type mount struct {
 	prefix  string
 	handler http.Handler
+	// methods the subtree serves, empty meaning all of them.
+	methods []string
+}
+
+func (m mount) serves(method string) bool {
+	if len(m.methods) == 0 {
+		return true
+	}
+	return slices.Contains(m.methods, method)
 }
 
 // New returns an empty Router.
@@ -209,11 +233,23 @@ func (r *Router) Mount(prefix string, h http.Handler, opts ...Option) {
 		o(&rt)
 	}
 
-	r.reg.mounts = append(r.reg.mounts, mount{prefix: rt.Pattern, handler: r.wrap(h)})
+	r.reg.mounts = append(r.reg.mounts, mount{prefix: rt.Pattern, handler: r.wrap(h), methods: rt.Methods})
 	sort.SliceStable(r.reg.mounts, func(i, j int) bool {
 		return len(r.reg.mounts[i].prefix) > len(r.reg.mounts[j].prefix)
 	})
-	r.reg.routes = append(r.reg.routes, rt)
+
+	// A subtree that named its methods is recorded as one route per method, so
+	// that the table lists what it serves rather than just where it lives.
+	if len(rt.Methods) == 0 {
+		r.reg.routes = append(r.reg.routes, rt)
+		return
+	}
+	for _, m := range rt.Methods {
+		per := rt
+		per.Method = m
+		per.Methods = nil
+		r.reg.routes = append(r.reg.routes, per)
+	}
 }
 
 // Routes returns every declared route, in declaration order.
@@ -228,8 +264,10 @@ func (r *Router) Routes() []Route {
 // matched route, through Match.
 func (r *Router) Unprotected() []string {
 	var out []string
+	seen := map[string]bool{}
 	for _, rt := range r.reg.routes {
-		if rt.Unprotected {
+		if rt.Unprotected && !seen[rt.Pattern] {
+			seen[rt.Pattern] = true
 			out = append(out, rt.Pattern)
 		}
 	}
@@ -242,7 +280,10 @@ func (r *Router) Unprotected() []string {
 // unmatched request as protected.
 func (r *Router) Match(req *http.Request) (Route, bool) {
 	if i := r.matchMount(req.URL.EscapedPath()); i >= 0 {
-		return r.routeForMount(r.reg.mounts[i].prefix), true
+		if !r.reg.mounts[i].serves(req.Method) {
+			return Route{}, false
+		}
+		return r.routeForMount(r.reg.mounts[i].prefix, req.Method), true
 	}
 	_, pattern := r.mux.Handler(req)
 	if pattern == "" {
@@ -270,7 +311,13 @@ func (r *Router) Match(req *http.Request) (Route, bool) {
 
 func (r *Router) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	if i := r.matchMount(req.URL.EscapedPath()); i >= 0 {
-		r.reg.mounts[i].handler.ServeHTTP(w, req)
+		m := r.reg.mounts[i]
+		if !m.serves(req.Method) {
+			w.Header().Set("Allow", strings.Join(m.methods, ", "))
+			w.WriteHeader(http.StatusMethodNotAllowed)
+			return
+		}
+		m.handler.ServeHTTP(w, req)
 		return
 	}
 	r.mux.ServeHTTP(w, req)
@@ -287,11 +334,21 @@ func (r *Router) matchMount(path string) int {
 	return -1
 }
 
-func (r *Router) routeForMount(prefix string) Route {
+func (r *Router) routeForMount(prefix, method string) Route {
+	var any Route
 	for _, rt := range r.reg.routes {
-		if rt.Subtree && rt.Pattern == prefix {
+		if !rt.Subtree || rt.Pattern != prefix {
+			continue
+		}
+		if rt.Method == method {
 			return rt
 		}
+		if rt.Method == "" {
+			any = rt
+		}
+	}
+	if any.Pattern != "" {
+		return any
 	}
 	return Route{Pattern: prefix, Subtree: true}
 }

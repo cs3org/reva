@@ -285,3 +285,32 @@ func TestRejectsABadRefreshInterval(t *testing.T) {
 		t.Error("expected an error for an unparsable refresh interval")
 	}
 }
+
+// A subtree the service advertised per method is refused anything else at the
+// gateway, rather than forwarded for the service to refuse.
+func TestMirrorsSubtreeMethods(t *testing.T) {
+	ocdav := backend(t)
+	advertise(t, "ocdav", ocdav, []router.Route{
+		{Owner: "ocdav", Method: "PROPFIND", Pattern: "/remote.php/dav", Subtree: true},
+		{Owner: "ocdav", Method: http.MethodGet, Pattern: "/remote.php/dav", Subtree: true},
+	})
+
+	s := newGateway(t, map[string]any{})
+
+	tests := map[string]struct {
+		method string
+		code   int
+	}{
+		"declared":     {http.MethodGet, http.StatusOK},
+		"custom":       {"PROPFIND", http.StatusOK},
+		"not declared": {http.MethodDelete, http.StatusMethodNotAllowed},
+	}
+
+	for name, tt := range tests {
+		t.Run(name, func(t *testing.T) {
+			if rec := request(s, tt.method, "/remote.php/dav/files/a.txt"); rec.Code != tt.code {
+				t.Errorf("got status %d, expected %d", rec.Code, tt.code)
+			}
+		})
+	}
+}
