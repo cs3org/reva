@@ -75,10 +75,6 @@ func (s *svc) Close() error {
 	return nil
 }
 
-func (s *svc) Prefix() string {
-	return mount
-}
-
 // Routes declares the discovery endpoints. They are public by definition:
 // peers read them before they hold any credentials, so the rate limit stands
 // in for the authentication they cannot carry.

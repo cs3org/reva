@@ -100,7 +100,7 @@ func Routes(services map[string]global.Service, counters map[string]*activity.Co
 	root := router.New()
 	for name, svc := range services {
 		svc.Routes(root.Service(name).Use(serviceContext(name, counters[name])))
-		log.Info().Msgf("http service enabled: %s@%s", name, svc.Prefix())
+		log.Info().Msgf("http service enabled: %s", name)
 	}
 	return root
 }
