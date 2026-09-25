@@ -22,6 +22,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -32,6 +33,7 @@ import (
 	"github.com/cs3org/reva/v3/internal/http/services/opencloudmesh/ocmd"
 	"github.com/cs3org/reva/v3/internal/http/services/wellknown"
 	"github.com/cs3org/reva/v3/pkg/ocm/client"
+	"github.com/cs3org/reva/v3/pkg/utils/cfg"
 )
 
 type fakeDiscoverer struct {
@@ -107,6 +109,19 @@ func trustedClient() *ocmd.OCMClient {
 
 func publicOnlyClient() *ocmd.OCMClient {
 	return ocmd.NewPublicOnlyClient(5*time.Second, true)
+}
+
+func publicOnlyClientWithCIDRs(t *testing.T, timeout time.Duration, cidrs ...string) *ocmd.OCMClient {
+	t.Helper()
+	parsed, err := client.ParseFederationCIDRs(cidrs)
+	if err != nil {
+		t.Fatalf("ParseFederationCIDRs: %v", err)
+	}
+	return ocmd.NewPublicOnlyClientWithConfig(client.TransportConfig{
+		Timeout:                timeout,
+		Insecure:               true,
+		AllowedFederationCIDRs: parsed,
+	})
 }
 
 func TestFetchInfoSkipsLoopbackListedProviderBeforeRequest(t *testing.T) {
@@ -292,4 +307,226 @@ func TestDiscoverProviderRejectsLoopbackBeforeRequest(t *testing.T) {
 		t.Fatalf("loopback discover target received %d requests, want 0", hits.Load())
 	}
 	requireFallbackPolicyViolation(t, fake, blocked.URL)
+}
+
+func TestInitRejectsInvalidFederationCIDRsNoDirectoryRequest(t *testing.T) {
+	t.Parallel()
+
+	// A real directory server with a hit counter proves init never fetches
+	// it when the CIDR config is invalid: the helper runs before any startup
+	// network I/O.
+	var dirHits atomic.Int32
+	dir := serveDirectory(t, &dirHits, "fed", []ocmd.DirectoryServiceServer{
+		{DisplayName: "listed", URL: "https://listed.example"},
+	})
+
+	c := &config{
+		DirectoryServiceURLs:   dir.URL,
+		OCMClientTimeout:       2,
+		OCMClientInsecure:      true,
+		AllowedFederationCIDRs: []string{"10.0.0.0/8", "nope"},
+	}
+	h := new(wayfHandler)
+	err := h.init(c)
+	if err == nil {
+		t.Fatal("init: expected error for invalid allowed_federation_cidrs")
+	}
+	if !strings.Contains(err.Error(), invalidFederationCIDRText) {
+		t.Fatalf("init error = %v, want %q in message", err, invalidFederationCIDRText)
+	}
+	if dirHits.Load() != 0 {
+		t.Fatalf("directory server received %d requests, want 0 (config failure must abort before fetch)", dirHits.Load())
+	}
+}
+
+func TestInitRejectsInvalidFederationCIDRsEmptyDirectory(t *testing.T) {
+	t.Parallel()
+
+	// The critical early-return guard: invalid CIDRs abort initialization even
+	// when the directory list is empty. The helper runs before the
+	// empty-directory return at wayf.go, so a bad config cannot disappear.
+	c := &config{
+		DirectoryServiceURLs:   "",
+		OCMClientTimeout:       2,
+		OCMClientInsecure:      true,
+		AllowedFederationCIDRs: []string{"8.8.8.8/32"},
+	}
+	h := new(wayfHandler)
+	err := h.init(c)
+	if err == nil {
+		t.Fatal("init: expected error for invalid allowed_federation_cidrs with empty directory list")
+	}
+	if !strings.Contains(err.Error(), invalidFederationCIDRText) {
+		t.Fatalf("init error = %v, want %q in message", err, invalidFederationCIDRText)
+	}
+}
+
+func TestInitRejectsScalarFederationCIDRs(t *testing.T) {
+	t.Parallel()
+
+	var c config
+	err := cfg.Decode(map[string]any{
+		"gatewaysvc":               "grpc:0",
+		"mesh_directory_url":       "https://dir.example",
+		"provider_domain":          "example.org",
+		"allowed_federation_cidrs": "10.0.0.0/8",
+	}, &c)
+	if err == nil {
+		t.Fatal("decode: expected error for scalar allowed_federation_cidrs")
+	}
+	if strings.Contains(err.Error(), invalidFederationCIDRText) {
+		t.Fatalf("scalar decode error = %v, must not be the CIDR parse error", err)
+	}
+}
+
+func TestInitRejectsMixedValueFederationCIDRs(t *testing.T) {
+	t.Parallel()
+
+	var c config
+	err := cfg.Decode(map[string]any{
+		"gatewaysvc":               "grpc:0",
+		"mesh_directory_url":       "https://dir.example",
+		"provider_domain":          "example.org",
+		"allowed_federation_cidrs": []any{"10.0.0.0/8", 42},
+	}, &c)
+	if err == nil {
+		t.Fatal("decode: expected error for mixed-value allowed_federation_cidrs")
+	}
+	if strings.Contains(err.Error(), invalidFederationCIDRText) {
+		t.Fatalf("mixed-value decode error = %v, must not be the CIDR parse error", err)
+	}
+}
+
+func TestInitAcceptsValidFederationCIDRs(t *testing.T) {
+	t.Parallel()
+
+	c := &config{
+		DirectoryServiceURLs:   "",
+		OCMClientTimeout:       2,
+		OCMClientInsecure:      true,
+		AllowedFederationCIDRs: []string{"10.1.2.0/24", "fd12:3456:789a::/48"},
+	}
+	h := new(wayfHandler)
+	if err := h.init(c); err != nil {
+		t.Fatalf("init: %v", err)
+	}
+	// The helper output flows into NewPublicOnlyClientWithConfig, so the
+	// untrusted client is a real *ocmd.OCMClient (not a stub). The trusted
+	// directory client is also a real *ocmd.OCMClient.
+	if _, ok := h.untrustedClient.(*ocmd.OCMClient); !ok {
+		t.Fatalf("untrustedClient: got %T, want *ocmd.OCMClient", h.untrustedClient)
+	}
+	if h.ocmClient == nil {
+		t.Fatal("trusted ocmClient must be initialized")
+	}
+}
+
+func TestInitConfiguredPolicyDeniesUnlistedRangeForListedProvider(t *testing.T) {
+	t.Parallel()
+
+	// Configure an explicit 10.1.2.0/24 exception. The operator-configured
+	// directory is fetched by the trusted client (loopback allowed); the
+	// listed provider at an unrelated RFC1918 address is discovered by the
+	// public-only client and denied by the configured policy. This preserves
+	// the trusted-directory split while applying the configured public policy
+	// to listed providers.
+	var dirHits atomic.Int32
+	dir := serveDirectory(t, &dirHits, "fed", []ocmd.DirectoryServiceServer{
+		{DisplayName: "private", URL: "http://192.168.1.50"},
+	})
+
+	c := &config{
+		DirectoryServiceURLs:   dir.URL,
+		OCMClientTimeout:       2,
+		OCMClientInsecure:      true,
+		AllowedFederationCIDRs: []string{"10.1.2.0/24"},
+	}
+	h := new(wayfHandler)
+	if err := h.init(c); err != nil {
+		t.Fatalf("init: %v", err)
+	}
+	if dirHits.Load() == 0 {
+		t.Fatal("configured directory URL was not fetched by the trusted client")
+	}
+	if len(h.directoryServices) != 0 {
+		t.Fatalf("directoryServices = %#v, want the unlisted-range listed provider skipped", h.directoryServices)
+	}
+	// Direct Discover proves the configured policy rejected the unlisted
+	// range. fetchInfo skips discovery errors, so an empty provider list
+	// alone cannot tell policy rejection from a network failure.
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+	_, err := h.untrustedClient.Discover(ctx, "http://192.168.1.50")
+	if !errors.Is(err, client.ErrPolicyViolation) {
+		t.Fatalf("discovery error for %q = %v, want ErrPolicyViolation", "http://192.168.1.50", err)
+	}
+}
+
+func TestDiscoverProviderSharesConfiguredPublicPolicy(t *testing.T) {
+	t.Parallel()
+
+	// Request-supplied /discover domains go through the configured public
+	// policy. An out-of-range RFC1918 domain is denied by policy; an in-range
+	// domain passes the guard and then fails to connect with a non-policy
+	// error. This exercises the configured policy on the request-supplied path
+	// without duplicating H1's normalization rules.
+	denied := &fakeDiscoverer{fallback: publicOnlyClientWithCIDRs(t, time.Second, "10.1.2.0/24")}
+	hDenied := &wayfHandler{untrustedClient: denied}
+	req := httptest.NewRequest(http.MethodPost, "/discover", strings.NewReader(`{"domain":"192.168.1.50"}`))
+	rec := httptest.NewRecorder()
+	hDenied.DiscoverProvider(rec, req)
+	if rec.Code != http.StatusNotFound {
+		t.Fatalf("status = %d, body = %s, want 404", rec.Code, rec.Body.String())
+	}
+	requireFallbackPolicyViolation(t, denied, "https://192.168.1.50")
+
+	// A fully deterministic admission test cannot open a real successful
+	// connection here. Configured CIDRs exclude loopback: the parser rejects
+	// 127.0.0.0/8 (federation_cidrs.go:99-108), and loopback is admitted only
+	// through AllowLoopback, never via configured CIDR (client.go:204-213).
+	// Private RFC1918 listener addresses are not portable, and the no-seam
+	// rule forbids injecting a custom transport. Admission is therefore proven
+	// by the Control-decision contrast: admitted -> real dial error, denied ->
+	// ErrPolicyViolation with no real dial. Discover normalizes that dial
+	// error to a non-policy InternalError, so the raw dial is checked on a
+	// direct public-only GET with the same transport config.
+	admitted := &fakeDiscoverer{fallback: publicOnlyClientWithCIDRs(t, 1*time.Second, "10.1.2.0/24")}
+	hAdmitted := &wayfHandler{untrustedClient: admitted}
+	req2 := httptest.NewRequest(http.MethodPost, "/discover", strings.NewReader(`{"domain":"10.1.2.3"}`))
+	rec2 := httptest.NewRecorder()
+	hAdmitted.DiscoverProvider(rec2, req2)
+	if rec2.Code != http.StatusNotFound {
+		t.Fatalf("status = %d, body = %s, want 404", rec2.Code, rec2.Body.String())
+	}
+	err, ok := admitted.fallbackErrs["https://10.1.2.3"]
+	if !ok {
+		t.Fatal("no recorded discovery error for in-range 10.1.2.3")
+	}
+	if errors.Is(err, client.ErrPolicyViolation) {
+		t.Fatalf("in-range 10.1.2.3 denied by policy = %v, want a non-policy discovery error", err)
+	}
+
+	parsed, parseErr := client.ParseFederationCIDRs([]string{"10.1.2.0/24"})
+	if parseErr != nil {
+		t.Fatalf("ParseFederationCIDRs: %v", parseErr)
+	}
+	rawClient := client.NewPublicOnlyHTTPClient(client.TransportConfig{
+		Timeout:                1 * time.Second,
+		Insecure:               true,
+		AllowedFederationCIDRs: parsed,
+	})
+	resp, rawErr := rawClient.Get("https://10.1.2.3")
+	if resp != nil && resp.Body != nil {
+		resp.Body.Close()
+	}
+	if rawErr == nil {
+		t.Fatal("in-range 10.1.2.3 direct GET succeeded, want a dial error")
+	}
+	if errors.Is(rawErr, client.ErrPolicyViolation) {
+		t.Fatalf("in-range 10.1.2.3 direct GET denied by policy = %v, want a non-policy dial error", rawErr)
+	}
+	var netErr net.Error
+	if !errors.As(rawErr, &netErr) {
+		t.Fatalf("in-range 10.1.2.3 direct GET error = %v, want a dial/network error", rawErr)
+	}
 }
