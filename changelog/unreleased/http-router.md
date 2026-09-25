@@ -23,4 +23,11 @@ Services no longer expose a prefix at all: the routes say where they serve. The
 two whose URL a peer builds from the registry, the data provider and the data
 gateway, advertise the path they are served under themselves.
 
+The WebDAV service used to route itself, walking the request path segment by
+segment through nested switches spread over several files, accumulating the
+base URI as it went and rewriting the URL in place. It now declares its entry
+points, each with the base URI it reports fixed at declaration. What is left of
+the walk is one segment read per subtree, for the user, space, share or token
+its URL carries.
+
 https://github.com/cs3org/reva/pull/5831
