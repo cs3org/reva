@@ -43,9 +43,9 @@ func segment(p string) (head, rest string) {
 	return router.ShiftPath(p)
 }
 
-// avatars serves the placeholder avatar. The user segment is read but unused:
+// avatar serves the placeholder avatar. The user the route matches is unused:
 // there is no per-user avatar to serve yet.
-func (s *svc) avatars(base string) http.HandlerFunc {
+func (s *svc) avatar(base string) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodOptions {
 			// No need for the user, and we need to answer preflight checks,
@@ -54,8 +54,7 @@ func (s *svc) avatars(base string) http.HandlerFunc {
 			s.handleOptions(w, r)
 			return
 		}
-		_, rest := segment(below(r, base+"/avatars"))
-		r.URL.Path = rest
+		r.URL.Path = "/" + r.PathValue("file")
 		ctx := context.WithValue(r.Context(), ctxKeyBaseURI, base)
 		s.davHandler.AvatarsHandler.Handler(s).ServeHTTP(w, r.WithContext(ctx))
 	}
@@ -167,12 +166,7 @@ func (s *svc) files(base string) http.HandlerFunc {
 // versions serves the versions of a resource, addressed by its id.
 func (s *svc) versions(base string) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		id, rest := segment(below(r, base))
-		kind, key := segment(rest)
-		if kind != "v" {
-			w.WriteHeader(http.StatusNotFound)
-			return
-		}
+		id, key := r.PathValue("id"), r.PathValue("key")
 
 		rid, ok := spaces.ParseResourceID(id)
 		if !ok {
@@ -185,10 +179,9 @@ func (s *svc) versions(base string) http.HandlerFunc {
 			}
 		}
 
-		r.URL.Path = key
+		r.URL.Path = "/" + key
 		ctx := context.WithValue(r.Context(), ctxKeyBaseURI, base)
-		version, _ := segment(key)
-		s.davHandler.MetaHandler.VersionsHandler.Handler(s, rid, version).ServeHTTP(w, r.WithContext(ctx))
+		s.davHandler.MetaHandler.VersionsHandler.Handler(s, rid, key).ServeHTTP(w, r.WithContext(ctx))
 	}
 }
 
