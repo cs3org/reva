@@ -149,7 +149,7 @@ func TestGetPathByIDWithCreatedFiles(t *testing.T) {
 		t.Logf("Creating %s at path %s", tc.name, tc.path)
 
 		if tc.isDir {
-			err := fs.CreateDir(ctx, &provider.Reference{Path: tc.path})
+			_, err := fs.CreateDir(ctx, &provider.Reference{Path: tc.path})
 			require.NoError(t, err, "Failed to create directory %s", tc.path)
 		} else {
 			err := fs.TouchFile(ctx, &provider.Reference{Path: tc.path})
