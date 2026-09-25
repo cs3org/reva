@@ -25,14 +25,12 @@ import (
 	"fmt"
 	"io"
 	"io/fs"
-	"net"
 	"net/http"
 	"net/url"
 	"path/filepath"
 	"slices"
 	"strings"
 	"time"
-	"unicode"
 
 	"github.com/ReneKroon/ttlcache/v2"
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
@@ -44,6 +42,7 @@ import (
 	"github.com/cs3org/reva/v3/pkg/appctx"
 	"github.com/cs3org/reva/v3/pkg/errtypes"
 	"github.com/cs3org/reva/v3/pkg/mime"
+	"github.com/cs3org/reva/v3/pkg/ocm/providerdomain"
 	"github.com/cs3org/reva/v3/pkg/rhttp/router"
 	"github.com/cs3org/reva/v3/pkg/service"
 	"github.com/cs3org/reva/v3/pkg/sharedconf"
@@ -86,64 +85,6 @@ func (c *config) ApplyDefaults() {
 	}
 }
 
-// validateProviderDomain checks the receiving-server identity without a DNS
-// lookup. Callers keep the configured spelling, including its case.
-func validateProviderDomain(raw string) error {
-	if raw == "" {
-		return fmt.Errorf("provider_domain is required and must be a host-only DNS FQDN")
-	}
-	for _, r := range raw {
-		if unicode.IsSpace(r) {
-			return fmt.Errorf("provider_domain %q must not contain whitespace", raw)
-		}
-		if r > unicode.MaxASCII {
-			return fmt.Errorf("provider_domain %q must be an ASCII DNS name", raw)
-		}
-	}
-	if strings.Contains(raw, "://") || strings.ContainsAny(raw, "/?#@:[") {
-		return fmt.Errorf(
-			"provider_domain %q must be a host-only DNS FQDN without a scheme, "+
-				"port, path, query, fragment, userinfo, or IP literal",
-			raw,
-		)
-	}
-	if net.ParseIP(raw) != nil {
-		return fmt.Errorf("provider_domain %q must be a DNS name, not an IP address", raw)
-	}
-	if strings.HasPrefix(raw, ".") || strings.HasSuffix(raw, ".") || strings.Contains(raw, "..") {
-		return fmt.Errorf("provider_domain %q has an empty DNS label", raw)
-	}
-	if len(raw) > 253 {
-		return fmt.Errorf("provider_domain %q is longer than 253 characters", raw)
-	}
-	labels := strings.Split(raw, ".")
-	if len(labels) < 2 {
-		return fmt.Errorf("provider_domain %q is a single-label host", raw)
-	}
-	for _, label := range labels {
-		if err := validateDNSLabel(label); err != nil {
-			return fmt.Errorf("provider_domain %q: %w", raw, err)
-		}
-	}
-	return nil
-}
-
-func validateDNSLabel(label string) error {
-	if len(label) == 0 || len(label) > 63 {
-		return fmt.Errorf("invalid DNS label length")
-	}
-	for i := 0; i < len(label); i++ {
-		c := label[i]
-		switch {
-		case c >= 'a' && c <= 'z', c >= 'A' && c <= 'Z', c >= '0' && c <= '9':
-		case c == '-' && i > 0 && i < len(label)-1:
-		default:
-			return fmt.Errorf("invalid DNS label %q", label)
-		}
-	}
-	return nil
-}
-
 // New creates an OCM storage driver.
 // This driver exposes remote OCM resources to local users.
 func New(ctx context.Context, m map[string]any) (storage.FS, error) {
@@ -151,7 +92,7 @@ func New(ctx context.Context, m map[string]any) (storage.FS, error) {
 	if err := cfg.Decode(m, &c); err != nil {
 		return nil, err
 	}
-	if err := validateProviderDomain(c.ProviderDomain); err != nil {
+	if err := providerdomain.Validate(c.ProviderDomain); err != nil {
 		return nil, errors.Wrap(err, "ocmreceived")
 	}
 
@@ -274,7 +215,7 @@ func isWebDAV401(err error) bool {
 }
 
 func (d *driver) exchangeAccessToken(ctx context.Context, tokenEndpoint, secret string) (string, error) {
-	if err := validateProviderDomain(d.providerDomain); err != nil {
+	if err := providerdomain.Validate(d.providerDomain); err != nil {
 		return "", err
 	}
 	accessToken, _, err := d.ocmClient.ExchangeToken(ctx, tokenEndpoint, secret, d.providerDomain)

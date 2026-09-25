@@ -260,7 +260,7 @@ func TestOpenInAppFailures(t *testing.T) {
 			client:     &observeClient{token: token},
 			domain:     " ",
 			wantStatus: http.StatusBadRequest,
-			wantText:   "provider_domain \\\" \\\" must not contain whitespace",
+			wantText:   "provider_domain must not contain whitespace",
 		},
 		{
 			name: "traversal",

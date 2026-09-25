@@ -30,6 +30,7 @@ import (
 	"github.com/cs3org/reva/v3/internal/http/services/reqres"
 	"github.com/cs3org/reva/v3/internal/http/services/wellknown"
 	"github.com/cs3org/reva/v3/pkg/errtypes"
+	"github.com/cs3org/reva/v3/pkg/ocm/providerdomain"
 	"github.com/cs3org/reva/v3/pkg/rhttp/router"
 )
 
@@ -59,7 +60,7 @@ type openInAppResponse struct {
 }
 
 func (h *appsHandler) init(c *config) error {
-	if err := validateProviderDomain(c.ProviderDomain); err != nil {
+	if err := providerdomain.Validate(c.ProviderDomain); err != nil {
 		return err
 	}
 	h.ocmMountPoint = c.OCMMountPoint
@@ -114,7 +115,7 @@ func (h *appsHandler) OpenInApp(w http.ResponseWriter, r *http.Request) {
 
 func (h *appsHandler) buildLaunch(ctx context.Context, shareID *ocmpb.ShareId, rel string) (openInAppResponse, error) {
 	var none openInAppResponse
-	if err := validateProviderDomain(h.receiverDomain); err != nil {
+	if err := providerdomain.Validate(h.receiverDomain); err != nil {
 		return none, redactLaunchError(errtypes.BadRequest(err.Error()), "", "")
 	}
 	share, webapp, err := h.receivedWebapp(ctx, shareID)

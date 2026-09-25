@@ -111,7 +111,7 @@ address = "127.0.0.1:12345"
 [http.services.ocm]
 
 [http.services.sciencemesh]
-provider_domain = "127.0.0.1:12345"
+provider_domain = "cernbox.example.test"
 mesh_directory_url = "http://meshdir"
 smtp_credentials = {}
 
