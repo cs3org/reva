@@ -37,6 +37,7 @@ import (
 	mockgateway "github.com/cs3org/go-cs3apis/mocks/github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
 	"github.com/cs3org/reva/v3/pkg/appctx"
 	"github.com/cs3org/reva/v3/pkg/errtypes"
+	"github.com/cs3org/reva/v3/pkg/rhttp/router"
 	"github.com/cs3org/reva/v3/pkg/storage"
 	"github.com/cs3org/reva/v3/pkg/storage/utils/localfs"
 	"github.com/cs3org/reva/v3/pkg/utils/resourceid"
@@ -127,7 +128,7 @@ func TestDavFilesPropfindResolvesHomeAndPaths(t *testing.T) {
 			request := newDavPropfindRequest(tt.target, tt.depth)
 			response := httptest.NewRecorder()
 
-			service.handler().ServeHTTP(response, request)
+			davRouter(t, service).ServeHTTP(response, request)
 
 			if response.Code != http.StatusMultiStatus {
 				t.Fatalf("expected status %d, got %d: %s", http.StatusMultiStatus, response.Code, response.Body.String())
@@ -135,6 +136,15 @@ func TestDavFilesPropfindResolvesHomeAndPaths(t *testing.T) {
 			assertHrefs(t, response.Body.Bytes(), tt.wantHrefs)
 		})
 	}
+}
+
+// davRouter returns the service's declared routes, which is how a request
+// reaches it in a running server.
+func davRouter(t *testing.T, s *svc) http.Handler {
+	t.Helper()
+	r := router.New()
+	s.Routes(r.Service("ocdav"))
+	return r
 }
 
 func newDavPropfindRequest(target, depth string) *http.Request {
