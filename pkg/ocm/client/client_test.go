@@ -34,6 +34,7 @@ import (
 	"strings"
 	"sync"
 	"sync/atomic"
+	"syscall"
 	"testing"
 	"time"
 )
@@ -450,7 +451,7 @@ func TestPublicOnlyDialAddressPolicy(t *testing.T) {
 		{name: "no port", address: "93.184.216.34", wantErr: true},
 	}
 
-	control := refuseNonPublicAddr(false)
+	control := refuseNonPublicAddr(destinationPolicy{})
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
@@ -486,7 +487,7 @@ func TestAllowLoopbackPermitsOnlyLoopback(t *testing.T) {
 		{name: "link-local v6", address: "[fe80::1]:80", wantErr: true},
 	}
 
-	control := refuseNonPublicAddr(true)
+	control := refuseNonPublicAddr(destinationPolicy{allowLoopback: true})
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
@@ -512,7 +513,7 @@ func TestBlockedDialsWrapErrPolicyViolation(t *testing.T) {
 		"[::ffff:192.168.1.1]:443",
 	}
 
-	control := refuseNonPublicAddr(false)
+	control := refuseNonPublicAddr(destinationPolicy{})
 	for _, address := range addresses {
 		t.Run(address, func(t *testing.T) {
 			t.Parallel()
@@ -551,6 +552,381 @@ func TestPublicOnlyConstructorsEnforceSameAddressPolicy(t *testing.T) {
 				t.Errorf("NewPublicOnlyRoundTripper dial %q: %v, want ErrPolicyViolation", address, tripperErr)
 			}
 		})
+	}
+}
+
+func TestMalformedDialAddressWrapsPolicyViolation(t *testing.T) {
+	t.Parallel()
+
+	addresses := []string{
+		"93.184.216.34",
+		"10.1.2.3",
+		"[::1]",
+		"not-a-socket",
+	}
+	policy := destinationPolicy{}
+	for _, address := range addresses {
+		t.Run(address, func(t *testing.T) {
+			t.Parallel()
+			err := checkResolvedAddr(address, policy)
+			if !errors.Is(err, ErrPolicyViolation) {
+				t.Errorf("checkResolvedAddr(%q) = %v, want errors.Is ErrPolicyViolation", address, err)
+			}
+		})
+	}
+}
+
+func TestDefaultTransportConfigHasNoFederationCIDRs(t *testing.T) {
+	t.Parallel()
+
+	defaults := DefaultTransportConfig()
+	if len(defaults.AllowedFederationCIDRs.prefixes) != 0 {
+		t.Fatalf("default federation CIDRs = %v, want none", defaults.AllowedFederationCIDRs.prefixes)
+	}
+	if defaults.AllowedFederationCIDRs.contains(netip.MustParseAddr("10.1.2.3")) {
+		t.Fatal("zero federation policy admitted a private address")
+	}
+}
+
+func TestTrustedClientIgnoresFederationCIDRs(t *testing.T) {
+	t.Parallel()
+
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = ln.Close() })
+
+	// Loopback is never admitted by a CIDR, only by AllowLoopback. Dialing it
+	// through the real trusted DialContext fails if that path grows a CIDR guard.
+	cidrs := mustFederationCIDRs(t, "10.1.0.0/16")
+	c := NewTrustedHTTPClient(TransportConfig{
+		Timeout:                time.Second,
+		UseEnvProxy:            false,
+		AllowLoopback:          false,
+		AllowedFederationCIDRs: cidrs,
+	})
+	tr, ok := c.Transport.(*http.Transport)
+	if !ok {
+		t.Fatalf("trusted transport: got %T, want *http.Transport", c.Transport)
+	}
+	if tr.Proxy == nil {
+		t.Fatal("trusted client must retain a proxy callback")
+	}
+	got := reflect.ValueOf(tr.Proxy).Pointer()
+	want := reflect.ValueOf(http.ProxyFromEnvironment).Pointer()
+	if got != want {
+		t.Error("trusted client Proxy must stay http.ProxyFromEnvironment")
+	}
+	if tr.DialContext == nil {
+		t.Fatal("trusted client must retain the standard dialer")
+	}
+	if err := dialThrough(t, tr, ln.Addr().String()); err != nil {
+		t.Fatalf(
+			"trusted dial %s: %v, want nil (trusted path must be unguarded)",
+			ln.Addr().String(),
+			err,
+		)
+	}
+
+	public := NewPublicOnlyHTTPClient(TransportConfig{
+		Timeout:                time.Second,
+		AllowLoopback:          false,
+		AllowedFederationCIDRs: cidrs,
+	})
+	publicTr, ok := public.Transport.(*http.Transport)
+	if !ok {
+		t.Fatalf("public-only transport: got %T, want *http.Transport", public.Transport)
+	}
+	if err := dialThrough(t, publicTr, ln.Addr().String()); !errors.Is(err, ErrPolicyViolation) {
+		t.Fatalf("public-only dial %s = %v, want ErrPolicyViolation", ln.Addr().String(), err)
+	}
+}
+
+func TestPublicOnlyConstructorsKeepGuardedDefaultDeny(t *testing.T) {
+	t.Parallel()
+
+	cfg := TransportConfig{Timeout: time.Second}
+	clientRT := NewPublicOnlyHTTPClient(cfg).Transport
+	tripperRT := NewPublicOnlyRoundTripper(cfg)
+	blocked := []string{
+		"10.9.8.7:9",
+		"192.168.4.4:9",
+		"127.0.0.1:9",
+		"[fd00::1]:9",
+	}
+
+	for _, rt := range []http.RoundTripper{clientRT, tripperRT} {
+		tr, ok := rt.(*http.Transport)
+		if !ok {
+			t.Fatalf("transport: got %T, want *http.Transport", rt)
+		}
+		if tr.DialContext == nil {
+			t.Fatal("public constructor must install a guarded DialContext")
+		}
+		for _, address := range blocked {
+			err := dialThrough(t, rt, address)
+			if !errors.Is(err, ErrPolicyViolation) {
+				t.Errorf("default-deny dial %q: %v, want ErrPolicyViolation", address, err)
+			}
+		}
+	}
+}
+
+func TestFederationCIDRDestinationPolicy(t *testing.T) {
+	t.Parallel()
+
+	cidrs := mustFederationCIDRs(t, "10.1.2.0/24", "fd12:3456:789a::/48")
+	policy := destinationPolicy{cidrs: cidrs}
+	loopbackPolicy := destinationPolicy{allowLoopback: true}
+	both := destinationPolicy{allowLoopback: true, cidrs: cidrs}
+
+	tests := []struct {
+		name    string
+		policy  destinationPolicy
+		address string
+		wantErr bool
+	}{
+		{name: "exact subnet base", policy: policy, address: "10.1.2.0:443"},
+		{name: "exact subnet end", policy: policy, address: "10.1.2.255:443"},
+		{name: "below subnet", policy: policy, address: "10.1.1.255:443", wantErr: true},
+		{name: "above subnet", policy: policy, address: "10.1.3.0:443", wantErr: true},
+		{name: "ipv4-mapped in cidr", policy: policy, address: "[::ffff:10.1.2.3]:443"},
+		{name: "nat64 in cidr", policy: policy, address: "[64:ff9b::a01:203]:443"},
+		{name: "nat64 outside cidr", policy: policy, address: "[64:ff9b::a01:303]:443", wantErr: true},
+		{name: "mapped outside cidr", policy: policy, address: "[::ffff:10.9.9.9]:443", wantErr: true},
+		{name: "unlisted rfc1918", policy: policy, address: "192.168.1.1:443", wantErr: true},
+		{name: "unlisted ula", policy: policy, address: "[fd00::1]:443", wantErr: true},
+		{name: "listed ula", policy: policy, address: "[fd12:3456:789a::1]:443"},
+		{name: "public still allowed", policy: policy, address: "93.184.216.34:443"},
+		{name: "loopback not granted by cidr", policy: policy, address: "127.0.0.1:8080", wantErr: true},
+		{name: "v6 loopback not granted by cidr", policy: policy, address: "[::1]:8080", wantErr: true},
+		{name: "mapped loopback not granted by cidr", policy: policy, address: "[::ffff:127.0.0.1]:8080", wantErr: true},
+		{name: "nat64 loopback not granted by cidr", policy: policy, address: "[64:ff9b::7f00:1]:8080", wantErr: true},
+		{name: "link-local still denied", policy: policy, address: "169.254.169.254:80", wantErr: true},
+		{name: "cgnat still denied", policy: policy, address: "100.64.0.1:443", wantErr: true},
+		{name: "allow loopback without cidr", policy: loopbackPolicy, address: "127.0.0.1:8080"},
+		{
+			name:    "allow loopback does not admit ula",
+			policy:  loopbackPolicy,
+			address: "[fd12:3456:789a::1]:443",
+			wantErr: true,
+		},
+		{name: "allow loopback does not admit rfc1918", policy: loopbackPolicy, address: "10.1.2.3:443", wantErr: true},
+		{name: "both flags admit loopback and cidr", policy: both, address: "[::1]:8080"},
+		{name: "both flags admit listed private", policy: both, address: "10.1.2.9:443"},
+		{name: "both flags deny unlisted private", policy: both, address: "172.16.0.1:443", wantErr: true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			err := checkResolvedAddr(tt.address, tt.policy)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("checkResolvedAddr(%q) error = %v, wantErr %v", tt.address, err, tt.wantErr)
+			}
+			if tt.wantErr && !errors.Is(err, ErrPolicyViolation) {
+				t.Errorf("blocked dial %q: %v, want errors.Is ErrPolicyViolation", tt.address, err)
+			}
+		})
+	}
+}
+
+func TestFederationCIDRClientIsolation(t *testing.T) {
+	t.Parallel()
+
+	ten := mustFederationCIDRs(t, "10.1.0.0/16")
+	lan := mustFederationCIDRs(t, "192.168.5.0/24")
+	cfgTen := TransportConfig{Timeout: time.Second, AllowedFederationCIDRs: ten}
+	cfgLan := TransportConfig{Timeout: time.Second, AllowedFederationCIDRs: lan}
+
+	clientTen := NewPublicOnlyHTTPClient(cfgTen)
+	clientLan := NewPublicOnlyHTTPClient(cfgLan)
+	tripperTen := NewPublicOnlyRoundTripper(cfgTen)
+	if err := dialThrough(t, clientTen.Transport, "192.168.5.9:9"); !errors.Is(err, ErrPolicyViolation) {
+		t.Errorf("10/16 client dialed 192.168.5.9: %v", err)
+	}
+	if err := dialThrough(t, clientLan.Transport, "10.1.2.3:9"); !errors.Is(err, ErrPolicyViolation) {
+		t.Errorf("192.168 client dialed 10.1.2.3: %v", err)
+	}
+	if err := dialThrough(t, tripperTen, "192.168.5.9:9"); !errors.Is(err, ErrPolicyViolation) {
+		t.Errorf("10/16 round tripper dialed 192.168.5.9: %v", err)
+	}
+
+	wide := mustFederationCIDRs(t, "10.0.0.0/8")
+	cfgWide := TransportConfig{Timeout: time.Second, AllowedFederationCIDRs: wide}
+	dialer := newPublicOnlyDialer(cfgWide)
+	sentinel := guardDialerControlSentinel(t, dialer)
+	const (
+		allowed = "10.1.2.3:443"
+		denied  = "192.168.9.9:443"
+	)
+	assertGuardedCIDRDial(t, dialer, allowed, denied, sentinel)
+	cfgWide.AllowedFederationCIDRs = lan
+	wide.prefixes[0] = netip.MustParsePrefix("11.0.0.0/8")
+	assertGuardedCIDRDial(t, dialer, allowed, denied, sentinel)
+}
+
+// guardDialerControlSentinel wraps the production Control callback. The
+// original runs first. A policy denial is returned as-is. An allowed address
+// returns the sentinel so DialContext stops before connect.
+func guardDialerControlSentinel(t *testing.T, dialer *net.Dialer) error {
+	t.Helper()
+	if dialer.Control == nil {
+		t.Fatal("production dialer must install Control")
+	}
+	sentinel := errors.New("in-range federation dial sentinel")
+	orig := dialer.Control
+	dialer.Control = func(network, address string, c syscall.RawConn) error {
+		if err := orig(network, address, c); err != nil {
+			return err
+		}
+		return sentinel
+	}
+	return sentinel
+}
+
+func assertGuardedCIDRDial(t *testing.T, dialer *net.Dialer, allowed, denied string, sentinel error) {
+	t.Helper()
+
+	probe := func(address string, wantSentinel bool) {
+		t.Helper()
+		ctx, cancel := context.WithTimeout(context.Background(), 200*time.Millisecond)
+		defer cancel()
+		conn, err := dialer.DialContext(ctx, "tcp", address)
+		if conn != nil {
+			_ = conn.Close()
+			t.Fatalf("dial %q returned a connection", address)
+		}
+		if wantSentinel {
+			if !errors.Is(err, sentinel) {
+				t.Fatalf("in-range dial %q = %v, want sentinel", address, err)
+			}
+			if errors.Is(err, ErrPolicyViolation) {
+				t.Fatalf("in-range dial %q = %v, want no policy violation", address, err)
+			}
+			return
+		}
+		if !errors.Is(err, ErrPolicyViolation) {
+			t.Fatalf("denied dial %q = %v, want ErrPolicyViolation", address, err)
+		}
+		if errors.Is(err, sentinel) {
+			t.Fatalf("denied dial %q returned the allow sentinel", address)
+		}
+	}
+
+	probe(allowed, true)
+	probe(denied, false)
+}
+
+func TestFederationCIDRConcurrentClassification(t *testing.T) {
+	t.Parallel()
+
+	ten := mustFederationCIDRs(t, "10.8.0.0/16")
+	ula := mustFederationCIDRs(t, "fd00:abcd::/32")
+	policyTen := destinationPolicy{cidrs: ten}
+	policyULA := destinationPolicy{cidrs: ula}
+	dialer := newPublicOnlyDialer(TransportConfig{
+		Timeout:                time.Second,
+		AllowedFederationCIDRs: ten,
+	})
+	sentinel := errors.New("concurrent federation dial sentinel")
+	orig := dialer.Control
+	dialer.Control = func(network, address string, c syscall.RawConn) error {
+		if err := orig(network, address, c); err != nil {
+			return err
+		}
+		return sentinel
+	}
+
+	var wg sync.WaitGroup
+	for range 4 {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for range 10 {
+				if err := checkResolvedAddr("10.8.1.1:443", policyTen); err != nil {
+					t.Errorf("listed private: %v", err)
+				}
+				if err := checkResolvedAddr("192.168.9.9:443", policyTen); !errors.Is(err, ErrPolicyViolation) {
+					t.Errorf("unlisted private: %v", err)
+				}
+				if err := checkResolvedAddr("[fd00:abcd::5]:443", policyULA); err != nil {
+					t.Errorf("listed ula: %v", err)
+				}
+				ctx, cancel := context.WithTimeout(context.Background(), 200*time.Millisecond)
+				conn, err := dialer.DialContext(ctx, "tcp", "10.8.1.1:443")
+				cancel()
+				if conn != nil {
+					_ = conn.Close()
+					t.Error("concurrent allow returned a connection")
+				}
+				if !errors.Is(err, sentinel) {
+					t.Errorf("concurrent allow = %v, want sentinel", err)
+				}
+				ctx, cancel = context.WithTimeout(context.Background(), 200*time.Millisecond)
+				conn, err = dialer.DialContext(ctx, "tcp", "192.168.9.9:443")
+				cancel()
+				if conn != nil {
+					_ = conn.Close()
+				}
+				if !errors.Is(err, ErrPolicyViolation) {
+					t.Errorf("concurrent deny = %v, want ErrPolicyViolation", err)
+				}
+			}
+		}()
+	}
+	wg.Wait()
+}
+
+func TestPublicOnlyDialerCIDRSentinelDoesNotConnect(t *testing.T) {
+	t.Parallel()
+
+	cidrs := mustFederationCIDRs(t, "10.50.0.0/16")
+	dialer := newPublicOnlyDialer(TransportConfig{
+		Timeout:                time.Second,
+		AllowedFederationCIDRs: cidrs,
+	})
+	assertDialSentinel(t, dialer, "10.50.1.1:443", "10.51.1.1:443")
+}
+
+func assertDialSentinel(t *testing.T, dialer *net.Dialer, allowed, denied string) {
+	t.Helper()
+	if dialer.Control == nil {
+		t.Fatal("production dialer must install Control")
+	}
+	sentinel := errors.New("federation dial sentinel")
+	orig := dialer.Control
+	dialer.Control = func(network, address string, c syscall.RawConn) error {
+		if err := orig(network, address, c); err != nil {
+			return err
+		}
+		return sentinel
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 200*time.Millisecond)
+	defer cancel()
+	conn, err := dialer.DialContext(ctx, "tcp", allowed)
+	if conn != nil {
+		_ = conn.Close()
+		t.Fatal("allowed dial returned a connection")
+	}
+	if !errors.Is(err, sentinel) {
+		t.Fatalf("allowed dial %q = %v, want sentinel", allowed, err)
+	}
+	if errors.Is(err, ErrPolicyViolation) {
+		t.Fatal("allowed dial wrapped policy violation")
+	}
+
+	conn, err = dialer.DialContext(ctx, "tcp", denied)
+	if conn != nil {
+		_ = conn.Close()
+	}
+	if !errors.Is(err, ErrPolicyViolation) {
+		t.Fatalf("denied dial %q = %v, want ErrPolicyViolation", denied, err)
+	}
+	if errors.Is(err, sentinel) {
+		t.Fatal("denied dial returned the allow sentinel")
 	}
 }
 

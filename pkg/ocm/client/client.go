@@ -64,6 +64,17 @@ type TransportConfig struct {
 	// safe default. True installs http.ProxyFromEnvironment. Trusted clients
 	// ignore this field and retain proxy support from #5674.
 	UseEnvProxy bool
+	// AllowedFederationCIDRs is an explicit private-network exception list for
+	// the public-only dial guard. The zero value allows no private exceptions.
+	// Trusted clients ignore this field.
+	AllowedFederationCIDRs FederationCIDRs
+}
+
+// destinationPolicy is the per-dialer address policy. It is captured by value
+// when the dialer is built so later caller config changes cannot affect it.
+type destinationPolicy struct {
+	allowLoopback bool
+	cidrs         FederationCIDRs
 }
 
 // DefaultTransportConfig returns normalized runtime defaults.
@@ -90,10 +101,10 @@ func NewTrustedHTTPClient(cfg TransportConfig) *http.Client {
 	}
 }
 
-// NewPublicOnlyHTTPClient returns an HTTP client that only dials public
-// addresses. Direct mode (UseEnvProxy false) is the safe default. True
-// installs http.ProxyFromEnvironment. A selected proxy hides the OCM target
-// from Control; the guarded dialer classifies the proxy hop.
+// NewPublicOnlyHTTPClient returns an HTTP client that dials public addresses
+// and, when set, AllowedFederationCIDRs. Direct mode (UseEnvProxy false) is
+// the safe default. True installs http.ProxyFromEnvironment. A selected proxy
+// hides the OCM target from Control; the guarded dialer classifies the proxy hop.
 func NewPublicOnlyHTTPClient(cfg TransportConfig) *http.Client {
 	cfg = normalizeTransportConfig(cfg)
 	return &http.Client{
@@ -133,24 +144,37 @@ func newPublicOnlyTransport(cfg TransportConfig) *http.Transport {
 	} else {
 		tr.Proxy = nil
 	}
-	tr.DialContext = (&net.Dialer{
-		Timeout:   cfg.Timeout,
-		KeepAlive: 30 * time.Second,
-		Control:   refuseNonPublicAddr(cfg.AllowLoopback),
-	}).DialContext
+	tr.DialContext = newPublicOnlyDialer(cfg).DialContext
 	return tr
 }
 
-func refuseNonPublicAddr(allowLoopback bool) func(network, address string, c syscall.RawConn) error {
-	return func(_, address string, _ syscall.RawConn) error {
-		return checkResolvedAddr(address, allowLoopback)
+func newPublicOnlyDialer(cfg TransportConfig) *net.Dialer {
+	policy := destinationPolicy{
+		allowLoopback: cfg.AllowLoopback,
+		cidrs:         cfg.AllowedFederationCIDRs.clone(),
+	}
+	return &net.Dialer{
+		Timeout:   cfg.Timeout,
+		KeepAlive: 30 * time.Second,
+		Control:   refuseNonPublicAddr(policy),
 	}
 }
 
-func checkResolvedAddr(address string, allowLoopback bool) error {
+func refuseNonPublicAddr(policy destinationPolicy) func(network, address string, c syscall.RawConn) error {
+	return func(_, address string, _ syscall.RawConn) error {
+		return checkResolvedAddr(address, policy)
+	}
+}
+
+func checkResolvedAddr(address string, policy destinationPolicy) error {
 	host, _, err := net.SplitHostPort(address)
 	if err != nil {
-		return err
+		return fmt.Errorf(
+			"%w: refusing to connect to malformed address %s: %w",
+			ErrPolicyViolation,
+			address,
+			err,
+		)
 	}
 	ip, err := netip.ParseAddr(host)
 	if err != nil {
@@ -167,17 +191,26 @@ func checkResolvedAddr(address string, allowLoopback bool) error {
 			address,
 		)
 	}
-	if !isAllowedIP(ip, allowLoopback) {
+	if !isAllowedIP(ip, policy) {
 		return fmt.Errorf("%w: refusing to connect to non-public address %s", ErrPolicyViolation, address)
 	}
 	return nil
 }
 
-func isAllowedIP(ip netip.Addr, allowLoopback bool) bool {
-	if allowLoopback && effectiveAddr(ip).IsLoopback() {
+func isAllowedIP(ip netip.Addr, policy destinationPolicy) bool {
+	normalized := effectiveAddr(ip)
+	if policy.allowLoopback && normalized.IsLoopback() {
 		return true
 	}
-	return isPublicIP(ip)
+	if isPublicIP(ip) {
+		return true
+	}
+	// Loopback is only the AllowLoopback flag. A CIDR match cannot admit it,
+	// and neither can any other non-private denial (link-local, CGNAT, and so on).
+	if !normalized.IsPrivate() {
+		return false
+	}
+	return policy.cidrs.contains(normalized)
 }
 
 func effectiveAddr(ip netip.Addr) netip.Addr {

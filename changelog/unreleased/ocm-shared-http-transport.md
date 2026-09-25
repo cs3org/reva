@@ -10,4 +10,9 @@ opt in to honoring `HTTP_PROXY`/`HTTPS_PROXY`/`NO_PROXY` via the new
 `UseEnvProxy` transport field. Trusted clients honor environment proxies
 regardless. Existing `ocmd.OCMClient` callers are unchanged.
 
+Public-only clients accept an explicit private-network exception list.
+The list is empty by default, so private addresses stay denied until a
+caller installs prefixes parsed by `ParseFederationCIDRs`. Trusted clients
+do not consult that list and keep their existing proxy behavior.
+
 https://github.com/cs3org/reva/pull/5833
