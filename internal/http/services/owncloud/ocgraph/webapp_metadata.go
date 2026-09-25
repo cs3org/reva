@@ -24,15 +24,15 @@ import (
 	"fmt"
 	"io"
 
+	ocmconversions "github.com/cs3org/reva/v3/pkg/ocm/conversions"
 	libregraph "github.com/owncloud/libre-graph-api-go"
 )
 
 const receivedWebappJSONKey = "@ocm.webApp"
 
-type receivedWebappMetadata struct {
-	Present bool
-	AppName string
-}
+// receivedWebappMetadata aliases the canonical conversions DTO so the
+// carrier reuses that canonical definition.
+type receivedWebappMetadata = ocmconversions.ReceivedWebappMetadata
 
 type receivedShareDriveItem struct {
 	*libregraph.DriveItem
