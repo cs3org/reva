@@ -23,6 +23,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"reflect"
+	"strings"
 	"testing"
 )
 
@@ -389,4 +390,103 @@ func TestMatchMountMethods(t *testing.T) {
 	if _, ok := r.Match(httptest.NewRequest(http.MethodPost, "/dav/x", nil)); ok {
 		t.Error("expected an undeclared method to resolve to no route")
 	}
+}
+
+// A subtree declares a handler per method, so the router picks the operation
+// and the handler below it never switches on the method.
+func TestSubtree(t *testing.T) {
+	r := New()
+	r.Service("ocdav").Subtree("/dav", func(sub *Subtree) {
+		sub.Get(echo("get"))
+		sub.HandleFunc("PROPFIND", echo("propfind"))
+		sub.Delete(echo("delete"))
+	})
+
+	tests := map[string]struct {
+		method string
+		code   int
+		body   string
+	}{
+		"get":           {http.MethodGet, http.StatusOK, "get"},
+		"custom method": {"PROPFIND", http.StatusOK, "propfind"},
+		"delete":        {http.MethodDelete, http.StatusOK, "delete"},
+		"undeclared":    {http.MethodPut, http.StatusMethodNotAllowed, ""},
+	}
+
+	for name, tt := range tests {
+		t.Run(name, func(t *testing.T) {
+			rec := serve(r, tt.method, "/dav/files/a.txt")
+			if rec.Code != tt.code {
+				t.Fatalf("got status %d, expected %d", rec.Code, tt.code)
+			}
+			if tt.body != "" && rec.Body.String() != tt.body {
+				t.Errorf("got %q, expected %q", rec.Body.String(), tt.body)
+			}
+			if tt.code == http.StatusMethodNotAllowed && rec.Header().Get("Allow") == "" {
+				t.Error("expected an Allow header on the refusal")
+			}
+		})
+	}
+}
+
+// The path below a subtree reaches its handler untouched, as it does below a
+// mount: that is why WebDAV can use one and patterns it cannot.
+func TestSubtreeLeavesPathUntouched(t *testing.T) {
+	var seen string
+	r := New()
+	r.Subtree("/dav", func(sub *Subtree) {
+		sub.Get(func(_ http.ResponseWriter, req *http.Request) { seen = req.URL.Path })
+	})
+
+	for _, target := range []string{"/dav/files/a%2Fb.txt", "/dav/files//double", "/dav/files/x/."} {
+		t.Run(target, func(t *testing.T) {
+			seen = ""
+			serve(r, http.MethodGet, target)
+			decoded := strings.ReplaceAll(target, "%2F", "/")
+			if seen != decoded {
+				t.Errorf("handler saw %q, expected %q", seen, decoded)
+			}
+		})
+	}
+}
+
+// Every method a subtree declares is its own route, so the table says what the
+// subtree serves rather than only where it lives.
+func TestSubtreeRoutesRecorded(t *testing.T) {
+	r := New()
+	r.Service("ocdav").Subtree("/dav", func(sub *Subtree) {
+		sub.HandleFunc("PROPFIND", echo("!"))
+		sub.Get(echo("!"))
+	}, Unprotected())
+
+	expected := []Route{
+		{Owner: "ocdav", Method: "PROPFIND", Pattern: "/dav", Subtree: true, Unprotected: true},
+		{Owner: "ocdav", Method: http.MethodGet, Pattern: "/dav", Subtree: true, Unprotected: true},
+	}
+	if got := r.Routes(); !reflect.DeepEqual(got, expected) {
+		t.Errorf("got %+v, expected %+v", got, expected)
+	}
+}
+
+func TestSubtreeRejectsDuplicateAndEmpty(t *testing.T) {
+	t.Run("duplicate method", func(t *testing.T) {
+		defer func() {
+			if recover() == nil {
+				t.Error("expected a panic on a redeclared method")
+			}
+		}()
+		New().Subtree("/dav", func(sub *Subtree) {
+			sub.Get(echo("!"))
+			sub.Get(echo("!"))
+		})
+	})
+
+	t.Run("no methods", func(t *testing.T) {
+		defer func() {
+			if recover() == nil {
+				t.Error("expected a panic on a subtree serving nothing")
+			}
+		}()
+		New().Subtree("/dav", func(*Subtree) {})
+	})
 }
