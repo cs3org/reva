@@ -21,20 +21,18 @@ package ocmd
 import (
 	"bytes"
 	"context"
-	"crypto/tls"
 	"encoding/json"
 	"fmt"
 	"io"
-	"net"
 	"net/http"
 	"net/url"
 	"strings"
-	"syscall"
 	"time"
 
 	"github.com/cs3org/reva/v3/internal/http/services/wellknown"
 	"github.com/cs3org/reva/v3/pkg/appctx"
 	"github.com/cs3org/reva/v3/pkg/errtypes"
+	"github.com/cs3org/reva/v3/pkg/ocm/client"
 	"github.com/pkg/errors"
 )
 
@@ -59,83 +57,36 @@ type OCMClient struct {
 	client *http.Client
 }
 
-// newOCMTransport returns the HTTP transport used for outbound OCM requests.
-// It honors the standard HTTP_PROXY, HTTPS_PROXY, and NO_PROXY environment
-// variables and optionally skips TLS certificate verification.
-func newOCMTransport(insecure bool) *http.Transport {
-	var tr *http.Transport
-	if dt, ok := http.DefaultTransport.(*http.Transport); ok {
-		tr = dt.Clone()
-	} else {
-		tr = &http.Transport{
-			Proxy: http.ProxyFromEnvironment,
-		}
-	}
-	tr.TLSClientConfig = &tls.Config{InsecureSkipVerify: insecure}
-	return tr
-}
-
-// NewClient returns a new OCMClient.
+// NewClient returns a new trusted OCMClient that honors HTTP proxy environment variables.
 func NewClient(timeout time.Duration, insecure bool) *OCMClient {
-	return &OCMClient{
-		client: &http.Client{
-			Transport: newOCMTransport(insecure),
-			Timeout:   timeout,
-		},
-	}
+	return NewClientWithConfig(client.TransportConfig{
+		Timeout:  timeout,
+		Insecure: insecure,
+	})
 }
 
 // NewPublicOnlyClient returns an OCMClient that only dials public addresses, for
 // discovery of hosts named by an untrusted caller. The check is in the dialer so
 // it also covers redirects and DNS rebinding.
 func NewPublicOnlyClient(timeout time.Duration, insecure bool) *OCMClient {
-	tr := newOCMTransport(insecure)
-	// with a proxy the dial goes to the proxy, so Control never sees the target
-	tr.Proxy = nil
-	tr.DialContext = (&net.Dialer{
-		Timeout:   timeout,
-		KeepAlive: 30 * time.Second,
-		Control:   refuseNonPublicAddr,
-	}).DialContext
+	return NewPublicOnlyClientWithConfig(client.TransportConfig{
+		Timeout:  timeout,
+		Insecure: insecure,
+	})
+}
+
+// NewClientWithConfig returns a trusted OCMClient using cfg.
+func NewClientWithConfig(cfg client.TransportConfig) *OCMClient {
 	return &OCMClient{
-		client: &http.Client{
-			Transport: tr,
-			Timeout:   timeout,
-		},
+		client: client.NewTrustedHTTPClient(cfg),
 	}
 }
 
-func refuseNonPublicAddr(_, address string, _ syscall.RawConn) error {
-	host, _, err := net.SplitHostPort(address)
-	if err != nil {
-		return err
+// NewPublicOnlyClientWithConfig returns a public-only OCMClient using cfg.
+func NewPublicOnlyClientWithConfig(cfg client.TransportConfig) *OCMClient {
+	return &OCMClient{
+		client: client.NewPublicOnlyHTTPClient(cfg),
 	}
-	ip := net.ParseIP(host)
-	if ip == nil || !isPublicIP(ip) {
-		return errtypes.BadRequest("refusing to connect to non-public address " + address)
-	}
-	return nil
-}
-
-// 64:ff9b::/96 embeds an IPv4 address in its low 32 bits (RFC 6052), so on a
-// NAT64 network it can still reach internal hosts.
-var nat64WellKnownPrefix = net.IPNet{IP: net.ParseIP("64:ff9b::"), Mask: net.CIDRMask(96, 128)}
-
-func isPublicIP(ip net.IP) bool {
-	if nat64WellKnownPrefix.Contains(ip) {
-		v6 := ip.To16()
-		return isPublicIP(net.IPv4(v6[12], v6[13], v6[14], v6[15]))
-	}
-	if ip.IsLoopback() || ip.IsPrivate() || ip.IsUnspecified() ||
-		ip.IsLinkLocalUnicast() || ip.IsLinkLocalMulticast() ||
-		ip.IsMulticast() || ip.IsInterfaceLocalMulticast() {
-		return false
-	}
-	// 100.64.0.0/10 is carrier-grade NAT, which net.IP.IsPrivate does not cover
-	if ip4 := ip.To4(); ip4 != nil && ip4[0] == 100 && ip4[1]&0xc0 == 64 {
-		return false
-	}
-	return true
 }
 
 // Discover returns a number of properties used to discover the capabilities offered by a remote cloud storage.
