@@ -1435,3 +1435,204 @@ func TestReceivedExplicitLoopbackAllowsDiscoveryAndWebDAV(t *testing.T) {
 		t.Fatal("expected WebDAV Stat to reach loopback when opted in")
 	}
 }
+
+func TestReceivedAllowedFederationCIDRs(t *testing.T) {
+	tests := []struct {
+		name      string
+		cidrs     any
+		setKey    bool
+		wantErr   bool
+		wantParse bool
+	}{
+		{name: "absent key succeeds", setKey: false},
+		{name: "empty list succeeds", cidrs: []any{}, setKey: true},
+		{name: "valid ipv4 succeeds", cidrs: []any{"10.197.228.0/24"}, setKey: true},
+		{name: "valid ula succeeds", cidrs: []any{"fd42:8c6d:7a10:23::/64"}, setKey: true},
+		{name: "valid ipv4 and ula succeeds", cidrs: []any{"10.50.0.0/16", "fd42:8c6d:7a10:23::/64"}, setKey: true},
+		{name: "malformed cidr fails", cidrs: []any{"not-a-cidr"}, setKey: true, wantErr: true, wantParse: true},
+		{name: "public cidr fails", cidrs: []any{"8.8.8.0/24"}, setKey: true, wantErr: true, wantParse: true},
+		{name: "mixed valid invalid fails atomically", cidrs: []any{"10.0.0.0/8", "8.8.8.0/24"}, setKey: true, wantErr: true, wantParse: true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			m := map[string]any{}
+			if tt.setKey {
+				m["allowed_federation_cidrs"] = tt.cidrs
+			}
+			fs, err := New(context.Background(), m)
+			if tt.wantErr {
+				if err == nil {
+					t.Fatal("New() error = nil, want error")
+				}
+				if fs != nil {
+					t.Fatal("New() returned a driver on error")
+				}
+				if tt.wantParse && !strings.Contains(err.Error(), "invalid federation CIDR") {
+					t.Errorf("error = %v, want it to wrap the parser failure", err)
+				}
+				if tt.wantParse && !strings.Contains(err.Error(), "allowed_federation_cidrs") {
+					t.Errorf("error = %v, want the received config key", err)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("New() error = %v, want nil", err)
+			}
+			d, ok := fs.(*driver)
+			if !ok || d == nil {
+				t.Fatalf("New() type = %T, want *driver", fs)
+			}
+			if d.ocmClient == nil || d.webdavTransport == nil {
+				t.Fatal("New() did not store both received transports")
+			}
+			tr, ok := d.webdavTransport.(*http.Transport)
+			if !ok {
+				t.Fatalf("webdav transport: got %T, want *http.Transport", d.webdavTransport)
+			}
+			if tr.Proxy != nil {
+				t.Fatal("default received WebDAV round tripper must not use a proxy")
+			}
+			if tr.TLSClientConfig != nil && tr.TLSClientConfig.InsecureSkipVerify {
+				t.Fatal("default received WebDAV round tripper must verify TLS")
+			}
+			if tr.DialContext == nil {
+				t.Fatal("received WebDAV round tripper must install a guarded DialContext")
+			}
+			if d.c.OCMClientTimeout != 10 {
+				t.Errorf("default ocm_timeout = %d, want 10", d.c.OCMClientTimeout)
+			}
+		})
+	}
+}
+
+func TestReceivedUseEnvProxyKeepsGuardedDialer(t *testing.T) {
+	d := newReceivedDriver(t, map[string]any{
+		"ocm_use_env_proxy": true,
+	})
+	tr, ok := d.webdavTransport.(*http.Transport)
+	if !ok {
+		t.Fatalf("webdav transport: got %T, want *http.Transport", d.webdavTransport)
+	}
+	if tr.Proxy == nil {
+		t.Fatal("ocm_use_env_proxy true must install the environment proxy")
+	}
+	if tr.DialContext == nil {
+		t.Fatal("ocm_use_env_proxy true must keep the guarded dialer")
+	}
+	if tr.TLSClientConfig != nil && tr.TLSClientConfig.InsecureSkipVerify {
+		t.Fatal("proxy opt-in must not disable TLS verification")
+	}
+	if d.c.OCMClientTimeout != 10 {
+		t.Errorf("default ocm_timeout = %d, want 10", d.c.OCMClientTimeout)
+	}
+}
+
+func TestReceivedFederationCIDRPolicyPropagation(t *testing.T) {
+	d := newReceivedDriver(t, map[string]any{
+		"ocm_timeout": 1,
+		"allowed_federation_cidrs": []any{
+			"10.50.0.0/16",
+			"fd42:8c6d:7a10:23::/64",
+		},
+	})
+	// Mutating the decoded list must not change the policy captured at New.
+	d.c.AllowedFederationCIDRs[0] = "192.168.0.0/16"
+
+	for _, addr := range []string{"10.50.1.1:9", "[fd42:8c6d:7a10:23::1]:9"} {
+		assertReceivedAdmittedDial(t, dialReceivedTransport(t, d.webdavTransport, addr), addr)
+	}
+	for _, addr := range []string{"10.9.9.9:9", "192.168.1.1:9", "[fd00::1]:9"} {
+		assertReceivedDeniedDial(t, dialReceivedTransport(t, d.webdavTransport, addr), addr)
+	}
+
+	inShare := testCodeFlowReceivedShare("10.50.1.1:9", "https://10.50.1.1:9")
+	_, err := d.getTokenEndpoint(receivedPolicyCtx(t), inShare)
+	assertReceivedAdmitted(t, "discovery in range", err)
+
+	outShare := testCodeFlowReceivedShare("10.9.9.9:9", "https://10.9.9.9:9")
+	_, err = d.getTokenEndpoint(receivedPolicyCtx(t), outShare)
+	assertReceivedDenied(t, "discovery out of range", err)
+
+	_, err = d.exchangeAccessToken(receivedPolicyCtx(t), inShare, "https://10.50.1.1:9/ocm/token", "secret")
+	assertReceivedAdmitted(t, "token in range", err)
+	_, err = d.exchangeAccessToken(receivedPolicyCtx(t), outShare, "https://192.168.1.1:9/ocm/token", "secret")
+	assertReceivedDenied(t, "token out of range", err)
+
+	inDAV := d.newWebDAVClient("https://10.50.1.1:9/remote.php/dav/ocm/", nil)
+	_, err = inDAV.Stat("")
+	assertReceivedAdmitted(t, "read in range", err)
+	outDAV := d.newWebDAVClient("https://192.168.50.9:9/remote.php/dav/ocm/", nil)
+	_, err = outDAV.Stat("")
+	assertReceivedDenied(t, "read out of range", err)
+
+	err = d.uploadOnFreshClient("https://10.50.1.1:9/remote.php/dav/ocm/", "Bearer tok", "file.txt", bytes.NewReader([]byte("hi")))
+	assertReceivedAdmitted(t, "upload in range", err)
+	err = d.uploadOnFreshClient("https://192.168.50.9:9/remote.php/dav/ocm/", "Bearer tok", "file.txt", bytes.NewReader([]byte("hi")))
+	assertReceivedDenied(t, "upload out of range", err)
+
+	_, err = d.ocmClient.Discover(receivedPolicyCtx(t), "http://127.0.0.1:9")
+	assertReceivedDenied(t, "loopback without allow flag", err)
+}
+
+func receivedPolicyCtx(t *testing.T) context.Context {
+	t.Helper()
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	t.Cleanup(cancel)
+	return ctx
+}
+
+func dialReceivedTransport(t *testing.T, rt http.RoundTripper, address string) error {
+	t.Helper()
+	tr, ok := rt.(*http.Transport)
+	if !ok {
+		t.Fatalf("transport: got %T, want *http.Transport", rt)
+	}
+	if tr.DialContext == nil {
+		t.Fatal("received transport must install a guarded DialContext")
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
+	defer cancel()
+	conn, err := tr.DialContext(ctx, "tcp", address)
+	if conn != nil {
+		_ = conn.Close()
+	}
+	return err
+}
+
+func assertReceivedAdmittedDial(t *testing.T, err error, addr string) {
+	t.Helper()
+	if err == nil {
+		t.Fatalf("dial %q = nil; want a non-policy net.Error", addr)
+	}
+	if errors.Is(err, client.ErrPolicyViolation) {
+		t.Fatalf("dial %q = %v; want it to pass the guard", addr, err)
+	}
+	var netErr net.Error
+	if !errors.As(err, &netErr) {
+		t.Fatalf("dial %q = %T %v; want a non-policy net.Error", addr, err, err)
+	}
+}
+
+func assertReceivedDeniedDial(t *testing.T, err error, addr string) {
+	t.Helper()
+	if !errors.Is(err, client.ErrPolicyViolation) {
+		t.Errorf("dial %q = %v, want ErrPolicyViolation", addr, err)
+	}
+}
+
+func assertReceivedAdmitted(t *testing.T, op string, err error) {
+	t.Helper()
+	if err == nil {
+		t.Fatalf("%s error = nil; want a network failure after the guard admits", op)
+	}
+	if errors.Is(err, client.ErrPolicyViolation) {
+		t.Fatalf("%s = %v; want the guard to admit", op, err)
+	}
+}
+
+func assertReceivedDenied(t *testing.T, op string, err error) {
+	t.Helper()
+	if !errors.Is(err, client.ErrPolicyViolation) {
+		t.Fatalf("%s = %v, want ErrPolicyViolation", op, err)
+	}
+}

@@ -78,6 +78,11 @@ type config struct {
 	OCMClientInsecure       bool   `mapstructure:"ocm_insecure"`
 	AllowLoopbackFederation bool   `mapstructure:"allow_loopback_federation"`
 	UseEnvProxy             bool   `mapstructure:"ocm_use_env_proxy"`
+	// AllowedFederationCIDRs admits explicit private ranges on this driver's
+	// OCM client and WebDAV transport. Empty by default. Set the same
+	// allowed_federation_cidrs key on both the storage provider and the data
+	// provider; configuring one does not authorize the other.
+	AllowedFederationCIDRs []string `mapstructure:"allowed_federation_cidrs"`
 }
 
 func (c *config) ApplyDefaults() {
@@ -95,6 +100,13 @@ func New(ctx context.Context, m map[string]any) (storage.FS, error) {
 		return nil, err
 	}
 
+	// Parse before caches or clients exist so an invalid element fails New
+	// with no partial policy and no network client.
+	allowedCIDRs, err := client.ParseFederationCIDRs(c.AllowedFederationCIDRs)
+	if err != nil {
+		return nil, errors.Wrapf(err, "ocmreceived: invalid allowed_federation_cidrs")
+	}
+
 	disco := ttlcache.NewCache()
 	_ = disco.SetTTL(5 * time.Minute)
 
@@ -102,10 +114,11 @@ func New(ctx context.Context, m map[string]any) (storage.FS, error) {
 	insecure := c.OCMClientInsecure
 	allowLoopback := c.AllowLoopbackFederation
 	tcfg := client.TransportConfig{
-		Timeout:       timeout,
-		Insecure:      insecure,
-		AllowLoopback: allowLoopback,
-		UseEnvProxy:   c.UseEnvProxy,
+		Timeout:                timeout,
+		Insecure:               insecure,
+		AllowLoopback:          allowLoopback,
+		UseEnvProxy:            c.UseEnvProxy,
+		AllowedFederationCIDRs: allowedCIDRs,
 	}
 
 	// Loopback is opt-in for local federation tests; production stays public-only.
