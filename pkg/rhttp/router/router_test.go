@@ -327,3 +327,66 @@ func TestJoin(t *testing.T) {
 		})
 	}
 }
+
+// A subtree that names its methods is refused anything else by the router, so
+// the handler below it never sees a method it does not serve.
+func TestMountMethods(t *testing.T) {
+	r := New()
+	r.Service("ocdav").Mount("/dav", echo("dav"), Methods("PROPFIND", http.MethodGet))
+
+	tests := map[string]struct {
+		method string
+		code   int
+	}{
+		"declared":        {http.MethodGet, http.StatusOK},
+		"custom method":   {"PROPFIND", http.StatusOK},
+		"not declared":    {http.MethodPost, http.StatusMethodNotAllowed},
+		"also undeclared": {"LOCK", http.StatusMethodNotAllowed},
+	}
+
+	for name, tt := range tests {
+		t.Run(name, func(t *testing.T) {
+			rec := serve(r, tt.method, "/dav/files/a.txt")
+			if rec.Code != tt.code {
+				t.Errorf("got status %d, expected %d", rec.Code, tt.code)
+			}
+			if tt.code == http.StatusMethodNotAllowed && rec.Header().Get("Allow") == "" {
+				t.Error("expected an Allow header on the refusal")
+			}
+		})
+	}
+}
+
+// Naming the methods records the subtree once per method, so the table says
+// what it serves rather than only where it lives.
+func TestMountMethodsAreRecorded(t *testing.T) {
+	r := New()
+	r.Service("ocdav").Mount("/dav", echo("!"), Methods(http.MethodGet, "PROPFIND"), Unprotected())
+
+	expected := []Route{
+		{Owner: "ocdav", Method: http.MethodGet, Pattern: "/dav", Subtree: true, Unprotected: true},
+		{Owner: "ocdav", Method: "PROPFIND", Pattern: "/dav", Subtree: true, Unprotected: true},
+	}
+	if got := r.Routes(); !reflect.DeepEqual(got, expected) {
+		t.Errorf("got %+v, expected %+v", got, expected)
+	}
+
+	// The path is still listed once, however many methods it was recorded for.
+	if got := r.Unprotected(); !reflect.DeepEqual(got, []string{"/dav"}) {
+		t.Errorf("got %v, expected %v", got, []string{"/dav"})
+	}
+}
+
+// A method the subtree does not serve resolves to no route, so a middleware
+// reads it as the stricter case rather than as an exempt one.
+func TestMatchMountMethods(t *testing.T) {
+	r := New()
+	r.Service("ocdav").Mount("/dav", echo("!"), Methods(http.MethodGet), Unprotected())
+
+	if rt, ok := r.Match(httptest.NewRequest(http.MethodGet, "/dav/x", nil)); !ok || !rt.Unprotected {
+		t.Errorf("got %+v %v, expected the declared unprotected route", rt, ok)
+	}
+	if _, ok := r.Match(httptest.NewRequest(http.MethodPost, "/dav/x", nil)); ok {
+		t.Error("expected an undeclared method to resolve to no route")
+	}
+}

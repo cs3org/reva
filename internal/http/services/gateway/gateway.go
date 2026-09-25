@@ -260,15 +260,60 @@ func (s *svc) declare(mirror *router.Router, name string, routes []router.Route)
 
 	proxy := s.proxyTo(name)
 	view := mirror.Service(name)
+
+	// A subtree that named its methods arrives as one route per method, all
+	// sharing a pattern. They are collected back into a single mount, so the
+	// gateway refuses a method the service does not serve instead of
+	// forwarding it only to have the service refuse it.
+	subtrees := map[string]*subtree{}
+	var order []string
+
 	for _, rt := range routes {
-		if rt.Subtree {
-			view.Mount(rt.Pattern, proxy)
-		} else {
+		if !rt.Subtree {
 			view.Handle(rt.Method, rt.Pattern, proxy)
+			n++
+			continue
 		}
+		st, ok := subtrees[rt.Pattern]
+		if !ok {
+			st = &subtree{}
+			subtrees[rt.Pattern] = st
+			order = append(order, rt.Pattern)
+		}
+		st.add(rt)
 		n++
 	}
+
+	for _, pattern := range order {
+		st := subtrees[pattern]
+		var opts []router.Option
+		if st.unprotected {
+			opts = append(opts, router.Unprotected())
+		}
+		if !st.anyMethod {
+			opts = append(opts, router.Methods(st.methods...))
+		}
+		view.Mount(pattern, proxy, opts...)
+	}
 	return n, nil
+}
+
+// subtree collects the routes a mounted subtree was advertised as.
+type subtree struct {
+	methods     []string
+	anyMethod   bool
+	unprotected bool
+}
+
+func (t *subtree) add(rt router.Route) {
+	if rt.Unprotected {
+		t.unprotected = true
+	}
+	if rt.Method == "" {
+		t.anyMethod = true
+		return
+	}
+	t.methods = append(t.methods, rt.Method)
 }
 
 // httpRoutes returns the routes advertised by a service's nodes. Nodes of one
