@@ -126,7 +126,7 @@ func TestCheckResolvedAddrRejectsIPv6Zone(t *testing.T) {
 
 func requireZonedRejection(t *testing.T, address string, allowLoopback bool) {
 	t.Helper()
-	err := checkResolvedAddr(address, allowLoopback)
+	err := checkResolvedAddr(address, destinationPolicy{allowLoopback: allowLoopback})
 	if !errors.Is(err, ErrPolicyViolation) {
 		t.Errorf(
 			"checkResolvedAddr(%q, allowLoopback=%t) error = %v, want errors.Is ErrPolicyViolation",
@@ -160,7 +160,7 @@ func requireZonedRejection(t *testing.T, address string, allowLoopback bool) {
 
 func requireNonPublic(t *testing.T, address string, allowLoopback bool) {
 	t.Helper()
-	err := checkResolvedAddr(address, allowLoopback)
+	err := checkResolvedAddr(address, destinationPolicy{allowLoopback: allowLoopback})
 	if !errors.Is(err, ErrPolicyViolation) {
 		t.Errorf(
 			"checkResolvedAddr(%q, allowLoopback=%t) error = %v, want errors.Is ErrPolicyViolation",
@@ -202,7 +202,7 @@ func requireNonPublic(t *testing.T, address string, allowLoopback bool) {
 
 func requireAllowed(t *testing.T, address string, allowLoopback bool) {
 	t.Helper()
-	err := checkResolvedAddr(address, allowLoopback)
+	err := checkResolvedAddr(address, destinationPolicy{allowLoopback: allowLoopback})
 	if err != nil {
 		t.Errorf("checkResolvedAddr(%q, allowLoopback=%t) error = %v, want nil", address, allowLoopback, err)
 	}
