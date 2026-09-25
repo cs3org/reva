@@ -387,10 +387,10 @@ func projectToStorageSpace(p *Project, perms *provider.ResourcePermissions) *pro
 			Path:          p.Path,
 			PermissionSet: perms,
 		},
-		Description:   p.Description,
-		ThumbnailId:   p.ThumbnailPath,
-		ReadmeId:      p.ReadmePath,
-		PermissionSet: perms,
+		Description: p.Description,
+		ThumbnailId: p.ThumbnailPath,
+		ReadmeId:    p.ReadmePath,
+		//PermissionSet: perms,
 	}
 }
 
