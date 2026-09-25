@@ -187,16 +187,6 @@ func (s *svc) Close() error {
 	return nil
 }
 
-// webdavMethods are the methods the WebDAV subtrees serve. Declaring them on
-// the mount is what lets the router answer 405 for anything else, and what
-// puts them in the route table a gateway mirrors.
-var webdavMethods = []string{
-	MethodPropfind, MethodProppatch, MethodMkcol, MethodMove, MethodCopy,
-	MethodReport, MethodLock, MethodUnlock,
-	http.MethodGet, http.MethodHead, http.MethodPut, http.MethodPost,
-	http.MethodDelete, http.MethodOptions,
-}
-
 // trashbinMethods are the methods a trash bin serves: it is listed, restored
 // from and purged, but not written to.
 var trashbinMethods = []string{
@@ -230,8 +220,8 @@ func (s *svc) Routes(rt *router.Router) {
 	for _, prefix := range []string{"", "/remote.php"} {
 		webdav, dav := prefix+"/webdav", prefix+"/dav"
 
-		r.Mount(webdav, s.webdav(webdav), router.Methods(webdavMethods...))
-		r.Mount(dav+"/files", s.files(dav+"/files"), router.Methods(webdavMethods...))
+		r.Subtree(webdav, s.davSubtree(s.webdav(webdav)))
+		r.Subtree(dav+"/files", s.davSubtree(s.files(dav+"/files")))
 
 		// Avatars and versions address ids and keys rather than resource
 		// paths, so they are declared as patterns: nothing below them has to
@@ -243,12 +233,12 @@ func (s *svc) Routes(rt *router.Router) {
 		// The spaces trash bin reports hrefs under /spaces, not under itself,
 		// and is matched ahead of /spaces because a longer mount wins.
 		r.Mount(dav+"/spaces/trash-bin", s.spacesTrashbin(dav+"/spaces"), router.Methods(trashbinMethods...))
-		r.Mount(dav+"/spaces", s.spaces(dav+"/spaces"), router.Methods(webdavMethods...))
+		r.Subtree(dav+"/spaces", s.davSubtree(s.spaces(dav+"/spaces")))
 
 		// OCM and public links carry their own credentials, in the path or in
 		// a header, so they are reachable without the auth middleware.
-		r.Mount(dav+"/ocm", s.ocm(dav+"/ocm"), router.Unprotected(), router.Methods(webdavMethods...))
-		r.Mount(dav+"/public-files", s.publicFiles(dav+"/public-files"), router.Unprotected(), router.Methods(webdavMethods...))
+		r.Subtree(dav+"/ocm", s.davSubtree(s.ocm(dav+"/ocm")), router.Unprotected())
+		r.Subtree(dav+"/public-files", s.davSubtree(s.publicFiles(dav+"/public-files")), router.Unprotected())
 	}
 }
 
@@ -296,13 +286,6 @@ func (s *svc) redirectPublicLink(w http.ResponseWriter, r *http.Request) {
 // redirectOCMDiscovery supports the legacy OCM discovery endpoint.
 func (s *svc) redirectOCMDiscovery(w http.ResponseWriter, r *http.Request) {
 	http.Redirect(w, r, "/.well-known/ocm", http.StatusMovedPermanently)
-}
-
-// webdav serves the old endpoint, which addresses the user's home directly.
-func (s *svc) webdav(prefix string) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		serveAt(w, r, prefix, prefix, s.webDavHandler.Handler(s))
-	}
 }
 
 func applyLayout(ctx context.Context, ns string, useLoggedInUserNS bool, requestPath string) string {
