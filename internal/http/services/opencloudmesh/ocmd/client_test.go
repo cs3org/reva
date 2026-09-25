@@ -19,6 +19,7 @@
 package ocmd
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -32,7 +33,9 @@ import (
 	"testing"
 	"time"
 
+	"github.com/cs3org/reva/v3/pkg/appctx"
 	"github.com/cs3org/reva/v3/pkg/errtypes"
+	"github.com/rs/zerolog"
 )
 
 var proxyEnvKeys = []string{
@@ -418,4 +421,130 @@ func TestPublicOnlyClientRefusesInternalHosts(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestNewShareLogsOmitSecretMarker(t *testing.T) {
+	const marker = "synthetic-secret-marker"
+	newReq := func() *NewShareRequest {
+		return &NewShareRequest{
+			ShareWith:    "marie@remote.example",
+			Name:         "notes.txt",
+			ProviderID:   "provider-1",
+			Owner:        "einstein@sender.example",
+			Sender:       "einstein@sender.example",
+			ShareType:    "user",
+			ResourceType: "file",
+			Protocols: Protocols{
+				&WebDAV{
+					URI:          "https://sender.example/remote.php/dav/ocm/share-opaque",
+					SharedSecret: marker,
+					Permissions:  []string{"read"},
+					Requirements: []string{"must-exchange-token"},
+				},
+			},
+		}
+	}
+
+	t.Run("success", func(t *testing.T) {
+		var seen bool
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			body, err := io.ReadAll(r.Body)
+			if err != nil {
+				t.Error(err)
+			}
+			if !strings.Contains(string(body), marker) {
+				t.Errorf("posted body missing marker: %s", body)
+			}
+			seen = true
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusCreated)
+			_, _ = w.Write([]byte(`{"recipientDisplayName":"Marie"}`))
+		}))
+		defer srv.Close()
+
+		logs := captureNewShareLogs(t, srv.URL, http.StatusCreated, newReq())
+		if !seen {
+			t.Fatal("server did not see the share request")
+		}
+		if strings.Contains(logs, marker) {
+			t.Fatalf("logs contain secret marker: %s", logs)
+		}
+		if !strings.Contains(logs, "Sending OCM share") || !strings.Contains(logs, "provider-1") {
+			t.Fatalf("logs missing outcome diagnostic: %s", logs)
+		}
+		if !strings.Contains(logs, "remote OCM server responded") {
+			t.Fatalf("logs missing response diagnostic: %s", logs)
+		}
+	})
+
+	t.Run("error", func(t *testing.T) {
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			body, err := io.ReadAll(r.Body)
+			if err != nil {
+				t.Error(err)
+			}
+			if !strings.Contains(string(body), marker) {
+				t.Errorf("posted body missing marker: %s", body)
+			}
+			w.WriteHeader(http.StatusInternalServerError)
+			_, _ = w.Write([]byte(marker))
+		}))
+		defer srv.Close()
+
+		var logs string
+		var err error
+		logs, err = captureNewShareLogsResult(t, srv.URL, newReq())
+		if err == nil || !strings.Contains(err.Error(), marker) {
+			t.Fatalf("error = %v, want the response marker in the returned error only", err)
+		}
+		if strings.Contains(logs, marker) {
+			t.Fatalf("error logs contain secret marker: %s", logs)
+		}
+		if !strings.Contains(logs, "error in remote OCM server response") {
+			t.Fatalf("logs missing error diagnostic: %s", logs)
+		}
+	})
+}
+
+func captureNewShareLogs(t *testing.T, endpoint string, wantStatus int, req *NewShareRequest) string {
+	t.Helper()
+	logs, status, err := observeNewShareLogs(t, endpoint, req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if status != wantStatus {
+		t.Fatalf("status = %d, want %d", status, wantStatus)
+	}
+	return logs
+}
+
+func captureNewShareLogsResult(t *testing.T, endpoint string, req *NewShareRequest) (string, error) {
+	t.Helper()
+	logs, _, err := observeNewShareLogs(t, endpoint, req)
+	return logs, err
+}
+
+func observeNewShareLogs(t *testing.T, endpoint string, req *NewShareRequest) (string, int, error) {
+	t.Helper()
+	var buf bytes.Buffer
+	logger := zerolog.New(&buf)
+	ctx := appctx.WithLogger(context.Background(), &logger)
+	client := NewClient(2*time.Second, true)
+	capture := &statusCaptureTransport{base: client.client.Transport}
+	client.client.Transport = capture
+	_, err := client.NewShare(ctx, endpoint, req)
+	return buf.String(), capture.status, err
+}
+
+type statusCaptureTransport struct {
+	base   http.RoundTripper
+	status int
+}
+
+func (s *statusCaptureTransport) RoundTrip(req *http.Request) (*http.Response, error) {
+	resp, err := s.base.RoundTrip(req)
+	if resp != nil {
+		s.status = resp.StatusCode
+	}
+	return resp, err
 }
