@@ -144,8 +144,8 @@ func (c *Converter) OCMReceivedShareToDriveItem(ctx context.Context, receivedOCM
 	return d, nil
 }
 
-// WebappMetadataForReceivedShare reads webapp protocols on a received share.
-// It returns nil when there is no single non-nil webapp protocol.
+// WebappMetadataForReceivedShare returns metadata for the single persisted
+// webapp protocol, or nil when there is not exactly one.
 func WebappMetadataForReceivedShare(received *ocm.ReceivedShare) *ReceivedWebappMetadata {
 	if received == nil {
 		return nil
