@@ -93,6 +93,7 @@ data_server_url = "http://127.0.0.1:54321/data"
 address = "127.0.0.1:54321"
 
 [http.services.ocm]
+allow_loopback_federation = true
 
 [http.services.sciencemesh]
 provider_domain = "127.0.0.1:54321"

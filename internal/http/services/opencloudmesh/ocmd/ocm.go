@@ -52,6 +52,22 @@ type config struct {
 	// OCMClientInsecure skips TLS verification when probing a remote provider's
 	// discovery endpoint. Off by default; turning it on exposes discovery to MITM.
 	OCMClientInsecure bool `mapstructure:"ocm_client_insecure"`
+	// OCMClientTimeout is the per-request timeout, in seconds, for probing a
+	// remote provider's discovery endpoint. Defaults to 10 when unset or zero.
+	OCMClientTimeout int `mapstructure:"ocm_client_timeout"`
+	// AllowLoopbackFederation lets inbound share discovery dial loopback. Off
+	// by default; only local two-provider integration topologies should enable it.
+	AllowLoopbackFederation bool `mapstructure:"allow_loopback_federation"`
+	// OCMClientUseEnvProxy lets inbound share discovery honor HTTP_PROXY,
+	// HTTPS_PROXY, and NO_PROXY. Off by default; public-only discovery stays
+	// direct unless operators opt in.
+	OCMClientUseEnvProxy bool `mapstructure:"ocm_client_use_env_proxy"`
+	// AllowedFederationCIDRs is an explicit private-network exception list for
+	// inbound share discovery. Off by default; only controlled federation
+	// deployments with private RFC 1918 / IPv6 ULA destinations should set it.
+	// Each entry must be a canonical CIDR wholly inside RFC 1918 or fc00::/7;
+	// any invalid element fails service startup before discovery runs.
+	AllowedFederationCIDRs []string `mapstructure:"allowed_federation_cidrs"`
 }
 
 func (c *config) ApplyDefaults() {
@@ -61,6 +77,9 @@ func (c *config) ApplyDefaults() {
 	}
 	if c.TokenManager == "" {
 		c.TokenManager = "jwt"
+	}
+	if c.OCMClientTimeout == 0 {
+		c.OCMClientTimeout = 10
 	}
 }
 
