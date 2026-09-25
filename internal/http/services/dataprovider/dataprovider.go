@@ -91,10 +91,11 @@ func New(ctx context.Context, m map[string]any) (global.Service, error) {
 	return s, nil
 }
 
-// RegistryMetadata advertises the mount affinity and the externally reachable
-// URL so a storage provider can discover this data provider through the registry.
+// RegistryMetadata advertises the mount affinity, the path the service is
+// served under and the externally reachable URL, so a storage provider can
+// discover this data provider through the registry.
 func (s *svc) RegistryMetadata() map[string]string {
-	m := map[string]string{}
+	m := map[string]string{svcregistry.MetaPrefix: mount}
 	if s.conf.MountID != "" {
 		m[svcregistry.MetaMountID] = s.conf.MountID
 	}
@@ -136,10 +137,6 @@ func getDataTXs(ctx context.Context, c *config, fs storage.FS) (map[string]http.
 
 func (s *svc) Close() error {
 	return nil
-}
-
-func (s *svc) Prefix() string {
-	return mount
 }
 
 // Routes mounts one subtree per data transfer protocol. They are mounts

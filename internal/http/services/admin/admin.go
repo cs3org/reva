@@ -62,8 +62,6 @@ func New(ctx context.Context, m map[string]any) (global.Service, error) {
 
 func (s *svc) Close() error { return nil }
 
-func (s *svc) Prefix() string { return mount }
-
 // Routes declares the admin endpoints. Both identify the caller, so both are
 // behind the auth middleware.
 func (s *svc) Routes(r *router.Router) {

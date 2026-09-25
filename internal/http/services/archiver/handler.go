@@ -286,10 +286,6 @@ func (s *svc) handleGet(rw http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func (s *svc) Prefix() string {
-	return mount
-}
-
 func (s *svc) Close() error {
 	return nil
 }

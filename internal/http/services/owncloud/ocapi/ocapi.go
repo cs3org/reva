@@ -70,6 +70,4 @@ func (s svc) Routes(r *router.Router) {
 	})
 }
 
-func (s svc) Prefix() string { return mount }
-
 func (s svc) Close() error { return nil }
