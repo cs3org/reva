@@ -22,6 +22,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	stderrors "errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -35,6 +36,9 @@ import (
 	"github.com/cs3org/reva/v3/pkg/ocm/client"
 	"github.com/pkg/errors"
 )
+
+// DefaultResponseLimit is the maximum OCM control-plane response body size.
+const DefaultResponseLimit int64 = 1 << 20
 
 // ErrTokenInvalid is the error returned by the invite-accepted
 // endpoint when the token is not valid or not existing.
@@ -51,6 +55,29 @@ var ErrUserAlreadyAccepted = errors.New("invitation already accepted")
 // ErrInvalidParameters is the error returned by the shares endpoint
 // when the request does not contain required properties.
 var ErrInvalidParameters = errors.New("invalid parameters")
+
+// ErrResponseTooLarge is returned when an OCM control-plane response
+// body exceeds DefaultResponseLimit.
+var ErrResponseTooLarge = errors.New("ocm response body exceeds size limit")
+
+func readOCMBody(body io.Reader, limit int64) ([]byte, error) {
+	data, err := io.ReadAll(io.LimitReader(body, limit+1))
+	if err != nil {
+		return nil, err
+	}
+	if int64(len(data)) > limit {
+		return nil, ErrResponseTooLarge
+	}
+	return data, nil
+}
+
+func decodeOCMJSON(body io.Reader, limit int64, dst any) error {
+	data, err := readOCMBody(body, limit)
+	if err != nil {
+		return err
+	}
+	return json.Unmarshal(data, dst)
+}
 
 // OCMClient is the client for an OCM provider.
 type OCMClient struct {
@@ -103,13 +130,16 @@ func (c *OCMClient) Discover(ctx context.Context, endpoint string) (*wellknown.O
 		}
 	}
 	remoteurl, _ := url.JoinPath(endpoint, "/.well-known/ocm")
-	body, err := c.httpget(ctx, remoteurl)
+	body, err := c.httpget(ctx, remoteurl, DefaultResponseLimit)
 	if err != nil || len(body) == 0 {
 		log.Debug().Err(err).Any("remote", remoteurl).Str("response", string(body)).Msg("invalid or empty response, falling back to legacy discovery")
 		remoteurl, _ := url.JoinPath(endpoint, "/ocm-provider") // legacy discovery endpoint
-		body, err = c.httpget(ctx, remoteurl)
+		body, err = c.httpget(ctx, remoteurl, DefaultResponseLimit)
 		if err != nil || len(body) == 0 {
 			log.Warn().Err(err).Any("remote", remoteurl).Str("response", string(body)).Msg("invalid or empty response")
+			if stderrors.Is(err, ErrResponseTooLarge) || stderrors.Is(err, client.ErrPolicyViolation) {
+				return nil, err
+			}
 			return nil, errtypes.InternalError("Invalid response on OCM discovery")
 		}
 	}
@@ -125,9 +155,7 @@ func (c *OCMClient) Discover(ctx context.Context, endpoint string) (*wellknown.O
 	return &disco, nil
 }
 
-func (c *OCMClient) httpget(ctx context.Context, url string) ([]byte, error) {
-	log := appctx.GetLogger(ctx)
-
+func (c *OCMClient) httpget(ctx context.Context, url string, limit int64) ([]byte, error) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {
 		return nil, errors.Wrap(err, "error creating OCM discovery request")
@@ -138,18 +166,19 @@ func (c *OCMClient) httpget(ctx context.Context, url string) ([]byte, error) {
 	if err != nil {
 		return nil, errors.Wrap(err, "error doing OCM discovery request")
 	}
-	defer func(body io.ReadCloser) {
-		err := body.Close()
-		if err != nil {
-			log.Warn().Err(err).Msg("error closing response body")
-		}
-	}(resp.Body)
+	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
+		if _, err := readOCMBody(resp.Body, limit); err != nil {
+			return nil, err
+		}
 		return nil, errtypes.InternalError("Remote does not offer a valid OCM discovery endpoint")
 	}
 
-	body, err := io.ReadAll(resp.Body)
+	body, err := readOCMBody(resp.Body, limit)
 	if err != nil {
+		if err == ErrResponseTooLarge {
+			return nil, err
+		}
 		return nil, errors.Wrap(err, "malformed remote OCM discovery")
 	}
 	return body, nil
@@ -194,7 +223,7 @@ func (c *OCMClient) parseNewShareResponse(r *http.Response) (*NewShareResponse, 
 	switch r.StatusCode {
 	case http.StatusOK, http.StatusCreated:
 		var res NewShareResponse
-		err := json.NewDecoder(r.Body).Decode(&res)
+		err := decodeOCMJSON(r.Body, DefaultResponseLimit, &res)
 		return &res, err
 	case http.StatusBadRequest:
 		return nil, ErrInvalidParameters
@@ -202,8 +231,11 @@ func (c *OCMClient) parseNewShareResponse(r *http.Response) (*NewShareResponse, 
 		return nil, ErrServiceNotTrusted
 	}
 
-	body, err := io.ReadAll(r.Body)
+	body, err := readOCMBody(r.Body, DefaultResponseLimit)
 	if err != nil {
+		if err == ErrResponseTooLarge {
+			return nil, err
+		}
 		return nil, errors.Wrap(err, "error decoding response body")
 	}
 	return nil, errtypes.InternalError(string(body))
@@ -248,7 +280,10 @@ func (c *OCMClient) parseInviteAcceptedResponse(r *http.Response) (*RemoteUser, 
 	switch r.StatusCode {
 	case http.StatusOK:
 		var u RemoteUser
-		if err := json.NewDecoder(r.Body).Decode(&u); err != nil {
+		if err := decodeOCMJSON(r.Body, DefaultResponseLimit, &u); err != nil {
+			if err == ErrResponseTooLarge {
+				return nil, err
+			}
 			return nil, errors.Wrap(err, "error decoding response body")
 		}
 		return &u, nil
@@ -260,8 +295,11 @@ func (c *OCMClient) parseInviteAcceptedResponse(r *http.Response) (*RemoteUser, 
 		return nil, ErrServiceNotTrusted
 	}
 
-	body, err := io.ReadAll(r.Body)
+	body, err := readOCMBody(r.Body, DefaultResponseLimit)
 	if err != nil {
+		if err == ErrResponseTooLarge {
+			return nil, err
+		}
 		return nil, errors.Wrap(err, "error decoding response body")
 	}
 	return nil, errtypes.InternalError(string(body))
@@ -299,16 +337,23 @@ func (c *OCMClient) ExchangeToken(ctx context.Context, tokenEndpoint, code, clie
 	case http.StatusOK:
 		// success, decode below
 	case http.StatusBadRequest:
+		data, err := readOCMBody(resp.Body, DefaultResponseLimit)
+		if err != nil {
+			return "", 0, err
+		}
 		var errBody struct {
 			Error string `json:"error"`
 		}
-		if err := json.NewDecoder(resp.Body).Decode(&errBody); err == nil && errBody.Error == "invalid_grant" {
+		if err := json.Unmarshal(data, &errBody); err == nil && errBody.Error == "invalid_grant" {
 			return "", 0, errtypes.InvalidCredentials("token exchange: invalid_grant")
 		}
 		return "", 0, errtypes.InternalError("token exchange returned HTTP 400 (sender contract error)")
 	case http.StatusUnauthorized, http.StatusForbidden:
 		return "", 0, errtypes.PermissionDenied("token exchange was rejected by the sender")
 	default:
+		if _, err := readOCMBody(resp.Body, DefaultResponseLimit); err != nil {
+			return "", 0, err
+		}
 		return "", 0, errtypes.InternalError(fmt.Sprintf("token exchange returned HTTP %d", resp.StatusCode))
 	}
 
@@ -316,7 +361,10 @@ func (c *OCMClient) ExchangeToken(ctx context.Context, tokenEndpoint, code, clie
 		AccessToken string `json:"access_token"`
 		ExpiresIn   int64  `json:"expires_in"`
 	}
-	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+	if err := decodeOCMJSON(resp.Body, DefaultResponseLimit, &result); err != nil {
+		if err == ErrResponseTooLarge {
+			return "", 0, err
+		}
 		return "", 0, errors.Wrap(err, "error decoding token exchange response")
 	}
 	if result.AccessToken == "" {
@@ -330,7 +378,7 @@ func (c *OCMClient) GetDirectoryService(ctx context.Context, directoryURL string
 	log := appctx.GetLogger(ctx)
 
 	// TODO(@MahdiBaghbani): the discover() should be changed into a generic function that can be used to fetch any OCM endpoint. I'll do it in the security PR to minimize conflicts.
-	body, err := c.httpget(ctx, directoryURL)
+	body, err := c.httpget(ctx, directoryURL, DefaultResponseLimit)
 	if err != nil {
 		return nil, errors.Wrap(err, "error fetching directory service")
 	}
