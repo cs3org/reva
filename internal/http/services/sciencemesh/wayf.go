@@ -74,8 +74,17 @@ func (h *wayfHandler) init(c *config) error {
 
 	// Directory URL is operator-configured (trusted client). Listed and
 	// request-supplied hosts are untrusted (public-only client).
+	//
+	// Build the public-only client before any directory startup I/O. Parsing
+	// the CIDR exception list is fail-fast: invalid CIDRs abort initialization
+	// here, even when the directory list is empty, so a bad config cannot
+	// disappear through the early return below.
+	publicCfg, err := c.publicOCMTransportConfig()
+	if err != nil {
+		return err
+	}
 	h.ocmClient = ocmd.NewClient(time.Duration(c.OCMClientTimeout)*time.Second, c.OCMClientInsecure)
-	h.untrustedClient = ocmd.NewPublicOnlyClient(time.Duration(c.OCMClientTimeout)*time.Second, c.OCMClientInsecure)
+	h.untrustedClient = ocmd.NewPublicOnlyClientWithConfig(publicCfg)
 	log.Debug().
 		Int("timeout_seconds", c.OCMClientTimeout).
 		Bool("insecure", c.OCMClientInsecure).

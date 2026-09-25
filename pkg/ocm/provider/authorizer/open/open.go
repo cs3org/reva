@@ -44,10 +44,20 @@ func New(ctx context.Context, m map[string]any) (provider.Authorizer, error) {
 		return nil, err
 	}
 
+	// Parse the explicit private-network exception list before constructing
+	// the public client. Invalid CIDRs abort initialization: open discovery
+	// never starts with a partial or trusted fallback policy.
+	cidrs, err := client.ParseFederationCIDRs(c.AllowedFederationCIDRs)
+	if err != nil {
+		return nil, err
+	}
+
 	// Loopback stays off: open discovery has no local two-provider topology.
+	// The default timeout is supplied by the shared transport config.
 	a := &authorizer{
 		ocmClient: ocmd.NewPublicOnlyClientWithConfig(client.TransportConfig{
-			Insecure: c.Insecure,
+			Insecure:               c.Insecure,
+			AllowedFederationCIDRs: cidrs,
 		}),
 	}
 	return a, nil
@@ -59,6 +69,11 @@ type config struct {
 	// Insecure skips TLS verification when discovering an unknown provider. Off by
 	// default; turning it on exposes discovery to MITM.
 	Insecure bool `mapstructure:"insecure"`
+	// AllowedFederationCIDRs is an explicit private-network exception list for
+	// open discovery of peers in a controlled network. Empty by default; any
+	// invalid entry aborts initialization. Loopback is never admitted by this
+	// list and stays on its separate flag (off here).
+	AllowedFederationCIDRs []string `mapstructure:"allowed_federation_cidrs"`
 }
 
 func (c *config) ApplyDefaults() {
