@@ -62,6 +62,12 @@ type config struct {
 	// HTTPS_PROXY, and NO_PROXY. Off by default; public-only discovery stays
 	// direct unless operators opt in.
 	OCMClientUseEnvProxy bool `mapstructure:"ocm_client_use_env_proxy"`
+	// AllowedFederationCIDRs is an explicit private-network exception list for
+	// inbound share discovery. Off by default; only controlled federation
+	// deployments with private RFC 1918 / IPv6 ULA destinations should set it.
+	// Each entry must be a canonical CIDR wholly inside RFC 1918 or fc00::/7;
+	// any invalid element fails service startup before discovery runs.
+	AllowedFederationCIDRs []string `mapstructure:"allowed_federation_cidrs"`
 }
 
 func (c *config) ApplyDefaults() {
