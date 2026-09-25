@@ -285,21 +285,6 @@ func (s *svc) webdav(prefix string) http.HandlerFunc {
 
 func applyLayout(ctx context.Context, ns string, useLoggedInUserNS bool, requestPath string) string {
 	return ns
-	// If useLoggedInUserNS is false, that implies that the request is coming from
-	// the FilesHandler method invoked by a /dav/files/fileOwner where fileOwner
-	// is not the same as the logged in user. In that case, we'll treat fileOwner
-	// as the username whose files are to be accessed and use that in the
-	// namespace template.
-	/*
-		u, ok := appctx.ContextGetUser(ctx)
-		if !ok || !useLoggedInUserNS {
-			requestUserID, _ := router.ShiftPath(requestPath)
-			u = &userpb.User{
-				Username: requestUserID,
-			}
-		}
-		return templates.WithUser(u, ns)
-	*/
 }
 
 func addAccessHeaders(w http.ResponseWriter, r *http.Request) {
@@ -342,7 +327,7 @@ func extractDestination(r *http.Request, ns string) (string, error) {
 	destination := strings.TrimPrefix(dstURL.Path, baseURI)
 
 	// If the destination is in a spaces format, we replace with the space path
-	dstSpaceID, dstRelPath := router.ShiftPath(destination)
+	dstSpaceID, dstRelPath := segment(destination)
 	_, spaceRoot, ok := spaces.DecodeStorageSpaceIDToPath(dstSpaceID)
 	if ok && ns != "/public" {
 		destination = path.Join(spaceRoot, dstRelPath)
