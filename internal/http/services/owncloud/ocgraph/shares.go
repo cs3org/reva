@@ -127,11 +127,10 @@ func (s *svc) getSharedWithMe(w http.ResponseWriter, r *http.Request) {
 				// remoteUser, err := gw.GetAcceptedUser(ctx, &ocm.GetAcceptedUserRequest{...})
 				drive, err := s.OCMReceivedShareToDriveItem(ctx, share)
 				if err != nil {
-					log.Error().Err(err).Any("share", share).Msg("error parsing received share, ignoring")
+					log.Error().Err(err).Str("shareId", share.GetId().GetOpaqueId()).Msg("error parsing received share, ignoring")
 				} else {
 					shares = append(shares, newReceivedShareDriveItem(drive, receivedShareWebappMetadata(share)))
 				}
-				log.Debug().Any("share", share).Msg("processing received ocm share")
 			}
 		}
 	}
