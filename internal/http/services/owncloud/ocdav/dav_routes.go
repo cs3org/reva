@@ -29,17 +29,18 @@ import (
 	ocmv1beta1 "github.com/cs3org/go-cs3apis/cs3/sharing/ocm/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/cs3org/reva/v3/pkg/appctx"
+	"github.com/cs3org/reva/v3/pkg/rhttp/router"
 	"github.com/cs3org/reva/v3/pkg/service"
 	"github.com/cs3org/reva/v3/pkg/spaces"
 	"google.golang.org/grpc/metadata"
 )
 
-// segment splits the first path segment off a rooted path. It is how a mounted
-// subtree reads the one parameter its URL carries, now that the router rather
-// than the handler decides which subtree a request belongs to.
+// segment splits the first path segment off a rooted path, cleaning it first.
+// It is how a mounted subtree reads the one parameter its URL carries, now
+// that the router rather than the handler decides which subtree a request
+// belongs to: what is left is reading a parameter, not deciding a route.
 func segment(p string) (head, rest string) {
-	head, rest, _ = strings.Cut(strings.TrimPrefix(p, "/"), "/")
-	return head, "/" + rest
+	return router.ShiftPath(p)
 }
 
 // avatars serves the placeholder avatar. The user segment is read but unused:
@@ -202,7 +203,7 @@ func (s *svc) trashbin(base string) http.HandlerFunc {
 // /spaces rather than under the trash bin itself.
 func (s *svc) spacesTrashbin(base string) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		serveAt(w, r, base, base+"/trash-bin", s.davHandler.TrashbinHandler.Handler(s))
+		serveAt(w, r, base, base+"/trash-bin", s.davHandler.TrashbinHandler.HandlerSpaces(s))
 	}
 }
 
