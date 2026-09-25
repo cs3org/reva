@@ -149,6 +149,7 @@ Key config options (see `fs/config.go` for the full list):
 | `version_invariant`                              | Stable inodes across file versions (default `true`)                            |
 | `enable_home_creation`                           | Allow `CreateHome` calls; requires `create_home_hook`                          |
 | `create_home_hook`                               | Path to a script invoked to provision new home directories                     |
+| `create_lightweight_home_hook`                   | Script creating a lightweight account's home and sharing it with the account   |
 | `force_single_user_mode` / `single_username`     | Impersonate one account for all calls                                          |
 | `read_uses_local_temp` / `write_uses_local_temp` | Buffer I/O via `cache_directory`                                               |
 | `user_id_cache_size`                             | Max entries in the UID ↔ CS3 user ID cache (default 1 000 000)                |
