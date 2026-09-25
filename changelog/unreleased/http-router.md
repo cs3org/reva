@@ -19,4 +19,8 @@ to move its clients. And `ocdav`, previously mounted at the root and therefore
 answering every unmatched URL, now declares the entry points it actually
 serves, so anything else gets a 404.
 
+Services no longer expose a prefix at all: the routes say where they serve. The
+two whose URL a peer builds from the registry, the data provider and the data
+gateway, advertise the path they are served under themselves.
+
 https://github.com/cs3org/reva/pull/5831
