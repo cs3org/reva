@@ -23,8 +23,18 @@ import (
 	"net/http"
 	"net/url"
 	"path/filepath"
+	"strings"
+	"sync"
 
 	"github.com/cs3org/reva/v3/pkg/appctx"
+)
+
+const webappReceiveTargetBlank = "blank"
+
+var (
+	localWebappMu      sync.RWMutex
+	localWebappTargets []string
+	localWebappReady   bool
 )
 
 const OCMAPIVersion = "1.3.0"
@@ -62,6 +72,70 @@ type wkocmHandler struct {
 	data *OcmDiscoveryData
 }
 
+// WebappReceiveTargets returns the webapp-receive targets this provider
+// advertises. The only usable target is "blank", and only when the discovery
+// base is an absolute http or https URL with a hostname and no userinfo.
+func WebappReceiveTargets(c *OcmProviderConfig) []string {
+	if c == nil || !c.EnableWebapp || !usableDiscoveryBase(c.Endpoint) {
+		return []string{}
+	}
+	return []string{webappReceiveTargetBlank}
+}
+
+// LocalWebappReceiveTargets returns the targets published by the local
+// well-known handler. The boolean is false until that handler has initialized.
+func LocalWebappReceiveTargets() ([]string, bool) {
+	localWebappMu.RLock()
+	defer localWebappMu.RUnlock()
+	if !localWebappReady {
+		return nil, false
+	}
+	return append([]string{}, localWebappTargets...), true
+}
+
+// ResolveLocalWebappReceiveTargets prefers an explicit override.
+// A nil override uses the published local targets. An explicit empty override
+// disables receipt. An unknown local configuration returns no targets.
+func ResolveLocalWebappReceiveTargets(override *[]string) []string {
+	if override != nil {
+		return append([]string{}, (*override)...)
+	}
+	if targets, ok := LocalWebappReceiveTargets(); ok {
+		return targets
+	}
+	return []string{}
+}
+
+func publishLocalWebappReceiveTargets(targets []string) {
+	localWebappMu.Lock()
+	defer localWebappMu.Unlock()
+	localWebappReady = true
+	localWebappTargets = append([]string{}, targets...)
+}
+
+func usableDiscoveryBase(raw string) bool {
+	if strings.TrimSpace(raw) == "" || strings.TrimSpace(raw) != raw {
+		return false
+	}
+	parsed, err := url.Parse(raw)
+	if err != nil || parsed == nil || parsed.User != nil || parsed.Opaque != "" {
+		return false
+	}
+	if parsed.Scheme != "http" && parsed.Scheme != "https" {
+		return false
+	}
+	if !parsed.IsAbs() || parsed.Hostname() == "" {
+		return false
+	}
+	if parsed.Host == "http:" || parsed.Host == "https:" || strings.Contains(parsed.Host, "://") {
+		return false
+	}
+	if strings.HasPrefix(parsed.Path, "//http://") || strings.HasPrefix(parsed.Path, "//https://") {
+		return false
+	}
+	return true
+}
+
 func (c *OcmProviderConfig) ApplyDefaults() {
 	if c.OCMPrefix == "" {
 		c.OCMPrefix = "ocm"
@@ -84,6 +158,8 @@ func (h *wkocmHandler) init(c *OcmProviderConfig) {
 	// generates the (static) data structure to be exposed by /.well-known/ocm:
 	// first prepare an empty and disabled payload
 	c.ApplyDefaults()
+	receiveTargets := WebappReceiveTargets(c)
+	publishLocalWebappReceiveTargets(receiveTargets)
 	d := &OcmDiscoveryData{}
 	d.Enabled = false
 	d.Endpoint = ""
@@ -116,11 +192,11 @@ func (h *wkocmHandler) init(c *OcmProviderConfig) {
 	rtProtos["webdav-receive"] = map[string]any{
 		"uri": "absolute",
 	}
-	if c.EnableWebapp {
+	if len(receiveTargets) > 0 {
 		// if webapps are enabled, we can both send and receive webapp shares
 		rtProtos["webapp"] = map[string]any{}
 		rtProtos["webapp-receive"] = map[string]any{
-			"targets": []string{"blank"},
+			"targets": receiveTargets,
 		}
 	}
 	d.ResourceTypes = []ResourceTypes{

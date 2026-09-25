@@ -21,11 +21,14 @@ package ocmd
 import (
 	"context"
 	"encoding/json"
+	"errors"
+	"io"
 	"net"
 	"net/http"
 	"net/http/httptest"
 	"os"
 	"reflect"
+	"strings"
 	"testing"
 	"time"
 
@@ -50,6 +53,16 @@ func TestMain(m *testing.M) {
 
 func TestExchangeTokenSuccess(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.RawQuery != "" {
+			t.Errorf("token request used a query: %s", r.URL.RawQuery)
+		}
+		body, err := io.ReadAll(r.Body)
+		if err != nil {
+			t.Error(err)
+		}
+		if !strings.Contains(string(body), "grant_type=authorization_code") || !strings.Contains(string(body), "code=code123") {
+			t.Errorf("form body %s", body)
+		}
 		w.Header().Set("Content-Type", "application/json")
 		_ = json.NewEncoder(w).Encode(map[string]any{
 			"access_token": "jwt-tok",
@@ -187,6 +200,43 @@ func TestExchangeTokenMalformedJSON(t *testing.T) {
 	_, _, err := c.ExchangeToken(context.Background(), srv.URL, "code", "")
 	if err == nil {
 		t.Fatal("expected error for malformed JSON response")
+	}
+	var internal errtypes.InternalError
+	if !errors.As(err, &internal) {
+		t.Fatalf("expected InternalError, got %T: %v", err, err)
+	}
+	if strings.Contains(err.Error(), srv.URL) || strings.Contains(err.Error(), "not json") {
+		t.Fatalf("decode error leaked remote material: %v", err)
+	}
+}
+
+func TestExchangeTokenTransportAndConstructionOmitRemoteMaterial(t *testing.T) {
+	const endpoint = "https://token.example/ocm/token"
+	const code = "code-secret"
+	c := &OCMClient{client: &http.Client{Transport: roundTripperFunc(func(*http.Request) (*http.Response, error) {
+		return nil, errors.New("dial " + endpoint + " " + code)
+	})}}
+	_, _, err := c.ExchangeToken(context.Background(), endpoint, code, "client")
+	if err == nil {
+		t.Fatal("expected transport error")
+	}
+	var internal errtypes.InternalError
+	if !errors.As(err, &internal) {
+		t.Fatalf("expected InternalError, got %T: %v", err, err)
+	}
+	if strings.Contains(err.Error(), endpoint) || strings.Contains(err.Error(), code) {
+		t.Fatalf("transport error leaked remote material: %v", err)
+	}
+
+	_, _, err = c.ExchangeToken(context.Background(), "http://[::1", code, "client")
+	if err == nil {
+		t.Fatal("expected construction error")
+	}
+	if !errors.As(err, &internal) {
+		t.Fatalf("expected InternalError, got %T: %v", err, err)
+	}
+	if strings.Contains(err.Error(), code) || strings.Contains(err.Error(), "[::1") {
+		t.Fatalf("construction error leaked remote material: %v", err)
 	}
 }
 
