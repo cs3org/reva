@@ -477,14 +477,7 @@ func (s *svc) OCMReceivedShareToDriveItem(ctx context.Context, receivedOCMShare 
 }
 
 func receivedShareWebappMetadata(received *ocm.ReceivedShare) *receivedWebappMetadata {
-	meta := ocmconversions.WebappMetadataForReceivedShare(received)
-	if meta == nil {
-		return nil
-	}
-	return &receivedWebappMetadata{
-		Present: meta.Present,
-		AppName: meta.AppName,
-	}
+	return ocmconversions.WebappMetadataForReceivedShare(received)
 }
 
 func (s *svc) cs3sharesToPermissions(ctx context.Context, shares []*GenericShare) ([]libregraph.Permission, error) {
