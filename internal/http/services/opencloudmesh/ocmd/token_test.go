@@ -82,8 +82,14 @@ func setupTokenHandler(t *testing.T, statusCode rpc.Code, gwErr error) (*tokenHa
 		Id:         &ocmv1beta1.ShareId{OpaqueId: "share-abc"},
 		ResourceId: &provider.ResourceId{StorageId: "stor", OpaqueId: "res"},
 	}
-	scopes, _ := scope.AddCodeFlowOCMShareScope(share, authpb.Role_ROLE_VIEWER, nil)
-	mintedToken, _ := tokenmgr.MintToken(context.Background(), u, scopes)
+	scopes, err := scope.AddCodeFlowOCMShareScope(share, authpb.Role_ROLE_VIEWER, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	mintedToken, err := tokenmgr.MintToken(context.Background(), u, scopes)
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	mockGW := &tokenMockGW{
 		status: &rpc.Status{Code: statusCode},
@@ -167,14 +173,16 @@ func TestExchangeTokenValid(t *testing.T) {
 
 func TestExchangeTokenOcmShareGrant(t *testing.T) {
 	h, mockGW := setupTokenHandler(t, rpc.Code_CODE_OK, nil)
-	rr := postTokenForm(h, "ocm_share", "code123", "receiver-b.example")
-	assertUnchangedToken(t, rr, mockGW.token)
-	if mockGW.lastReq == nil {
-		t.Fatal("expected Authenticate to be called")
+	rr := postTokenForm(h, "ocm_share", "code123", "not a domain")
+
+	assertTokenError(t, rr, http.StatusBadRequest, "unsupported_grant_type")
+	if mockGW.lastReq != nil || gatewayCalls() != 0 {
+		t.Fatalf("gateway/auth calls: auth=%v gateway=%d", mockGW.lastReq, gatewayCalls())
 	}
-	if mockGW.lastReq.ClientSecret != "code123" || mockGW.lastReq.ClientId != "receiver-b.example" {
-		t.Fatalf("authenticate request: %+v", mockGW.lastReq)
+	if strings.Contains(rr.Body.String(), "not a domain") {
+		t.Fatalf("error echoed rejected input: %s", rr.Body.String())
 	}
+	assertNoAccessToken(t, rr)
 }
 
 func TestExchangeTokenRequestClientIDDoesNotChangeToken(t *testing.T) {
@@ -205,18 +213,23 @@ func TestExchangeTokenUnsupportedGrant(t *testing.T) {
 	if errResp.Error != "unsupported_grant_type" {
 		t.Errorf("error: got %q, want unsupported_grant_type", errResp.Error)
 	}
-	if mockGW.lastReq != nil {
-		t.Fatalf("Authenticate should not be called for unsupported grant, got %+v", mockGW.lastReq)
+	if mockGW.lastReq != nil || gatewayCalls() != 0 {
+		t.Fatalf(
+			"Authenticate should not be called for unsupported grant, got %+v gateway=%d",
+			mockGW.lastReq,
+			gatewayCalls(),
+		)
 	}
 	assertNoAccessToken(t, rr)
 }
 
 func TestExchangeTokenEmptyGrant(t *testing.T) {
-	h, _ := setupTokenHandler(t, rpc.Code_CODE_OK, nil)
+	h, mockGW := setupTokenHandler(t, rpc.Code_CODE_OK, nil)
 	rr := postTokenForm(h, "", "code123", "nextcloud1.docker")
 
-	if rr.Code != http.StatusBadRequest {
-		t.Fatalf("status: got %d, want %d", rr.Code, http.StatusBadRequest)
+	assertTokenError(t, rr, http.StatusBadRequest, "unsupported_grant_type")
+	if mockGW.lastReq != nil || gatewayCalls() != 0 {
+		t.Fatalf("gateway/auth calls: auth=%v gateway=%d", mockGW.lastReq, gatewayCalls())
 	}
 	assertNoAccessToken(t, rr)
 }
@@ -282,25 +295,101 @@ func TestExchangeTokenEmptyCode(t *testing.T) {
 	if errResp.Error != "invalid_grant" {
 		t.Errorf("error: got %q, want invalid_grant", errResp.Error)
 	}
-	if mockGW.lastReq != nil {
-		t.Fatalf("Authenticate should not be called for empty code, got %+v", mockGW.lastReq)
+	if mockGW.lastReq != nil || gatewayCalls() != 0 {
+		t.Fatalf("Authenticate should not be called for empty code, got %+v gateway=%d", mockGW.lastReq, gatewayCalls())
 	}
 	assertNoAccessToken(t, rr)
 }
 
-func TestExchangeTokenEmptyClientIDStillUsesCode(t *testing.T) {
+func TestExchangeTokenMissingClientID(t *testing.T) {
 	h, mockGW := setupTokenHandler(t, rpc.Code_CODE_OK, nil)
 	rr := postTokenForm(h, "authorization_code", "code123", "")
-	assertUnchangedToken(t, rr, mockGW.token)
 
-	if mockGW.lastReq == nil {
-		t.Fatal("expected Authenticate to be called")
+	assertTokenError(t, rr, http.StatusBadRequest, "invalid_request")
+	if mockGW.lastReq != nil || gatewayCalls() != 0 {
+		t.Fatalf("gateway/auth calls: auth=%v gateway=%d", mockGW.lastReq, gatewayCalls())
 	}
-	if mockGW.lastReq.ClientId != "" {
-		t.Errorf("client_id: got %q, want empty", mockGW.lastReq.ClientId)
+	assertNoAccessToken(t, rr)
+}
+
+func TestExchangeTokenGrantAndIdentityPriority(t *testing.T) {
+	tests := []struct {
+		name      string
+		grant     string
+		code      string
+		clientID  string
+		wantError string
+	}{
+		{
+			name:      "ocm_share before identity and code",
+			grant:     "ocm_share",
+			code:      "",
+			clientID:  "https://receiver.example",
+			wantError: "unsupported_grant_type",
+		},
+		{
+			name:      "unknown grant",
+			grant:     "client_credentials",
+			code:      "",
+			clientID:  "",
+			wantError: "unsupported_grant_type",
+		},
+		{
+			name:      "missing grant",
+			grant:     "",
+			code:      "code123",
+			clientID:  "receiver.example",
+			wantError: "unsupported_grant_type",
+		},
+		{
+			name:      "invalid identity before empty code",
+			grant:     "authorization_code",
+			code:      "",
+			clientID:  "https://receiver.example",
+			wantError: "invalid_request",
+		},
+		{
+			name:      "missing identity",
+			grant:     "authorization_code",
+			code:      "code123",
+			clientID:  "",
+			wantError: "invalid_request",
+		},
+		{
+			name:      "valid identity empty code",
+			grant:     "authorization_code",
+			code:      "",
+			clientID:  "receiver.example",
+			wantError: "invalid_grant",
+		},
 	}
-	if mockGW.lastReq.ClientSecret != "code123" {
-		t.Errorf("code: got %q, want code123", mockGW.lastReq.ClientSecret)
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			h, mockGW := setupTokenHandler(t, rpc.Code_CODE_OK, nil)
+			rr := postTokenForm(h, tt.grant, tt.code, tt.clientID)
+			assertTokenError(t, rr, http.StatusBadRequest, tt.wantError)
+			if mockGW.lastReq != nil || gatewayCalls() != 0 {
+				t.Fatalf("gateway/auth calls: auth=%v gateway=%d", mockGW.lastReq, gatewayCalls())
+			}
+			if tt.clientID != "" && strings.Contains(rr.Body.String(), tt.clientID) {
+				t.Fatalf("error echoed rejected input: %s", rr.Body.String())
+			}
+			assertNoAccessToken(t, rr)
+		})
+	}
+}
+
+func assertTokenError(t *testing.T, rr *httptest.ResponseRecorder, status int, code string) {
+	t.Helper()
+	if rr.Code != status {
+		t.Fatalf("status: got %d, want %d, body %s", rr.Code, status, rr.Body.String())
+	}
+	var errResp tokenErrorResponse
+	if err := json.Unmarshal(rr.Body.Bytes(), &errResp); err != nil {
+		t.Fatal(err)
+	}
+	if errResp.Error != code {
+		t.Fatalf("error: got %q, want %q", errResp.Error, code)
 	}
 }
 
