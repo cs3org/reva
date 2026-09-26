@@ -26,6 +26,7 @@ import (
 
 	authpb "github.com/cs3org/go-cs3apis/cs3/auth/provider/v1beta1"
 	gateway "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
+	grouppb "github.com/cs3org/go-cs3apis/cs3/identity/group/v1beta1"
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	ocminvite "github.com/cs3org/go-cs3apis/cs3/ocm/invite/v1beta1"
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
@@ -37,6 +38,7 @@ import (
 	"github.com/cs3org/reva/v3/pkg/permissions"
 	"github.com/cs3org/reva/v3/pkg/token"
 	jwtpkg "github.com/cs3org/reva/v3/pkg/token/manager/jwt"
+	"github.com/cs3org/reva/v3/pkg/utils"
 	jwtv5 "github.com/golang-jwt/jwt/v5"
 	"google.golang.org/grpc"
 )
@@ -49,25 +51,52 @@ const testJWTSigningKey = "test-jwt-signing-key"
 type mockGW struct {
 	gateway.GatewayAPIClient
 
-	share     *ocm.Share
-	shareErr  rpc.Code
-	shareMsg  string
-	remoteErr rpc.Code
-	remoteMsg string
-	lastToken string
+	share         *ocm.Share
+	shareErr      rpc.Code
+	shareMsg      string
+	remoteErr     rpc.Code
+	remoteMsg     string
+	lastToken     string
+	shareCalls    int
+	acceptedCalls int
+	shareRPCErr   error
+	nilResponse   bool
+	nilStatus     bool
+	lastAccepted  *ocminvite.GetAcceptedUserRequest
 }
 
-func (m *mockGW) GetOCMShareByToken(_ context.Context, req *ocm.GetOCMShareByTokenRequest, _ ...grpc.CallOption) (*ocm.GetOCMShareByTokenResponse, error) {
+func (m *mockGW) GetOCMShareByToken(
+	_ context.Context,
+	req *ocm.GetOCMShareByTokenRequest,
+	_ ...grpc.CallOption,
+) (*ocm.GetOCMShareByTokenResponse, error) {
+	m.shareCalls++
 	if req != nil {
 		m.lastToken = req.Token
 	}
+	if m.shareRPCErr != nil {
+		return nil, m.shareRPCErr
+	}
+	if m.nilResponse {
+		return nil, nil
+	}
+	var status *rpc.Status
+	if !m.nilStatus {
+		status = &rpc.Status{Code: m.shareErr, Message: m.shareMsg}
+	}
 	return &ocm.GetOCMShareByTokenResponse{
-		Status: &rpc.Status{Code: m.shareErr, Message: m.shareMsg},
+		Status: status,
 		Share:  m.share,
 	}, nil
 }
 
-func (m *mockGW) GetAcceptedUser(_ context.Context, _ *ocminvite.GetAcceptedUserRequest, _ ...grpc.CallOption) (*ocminvite.GetAcceptedUserResponse, error) {
+func (m *mockGW) GetAcceptedUser(
+	_ context.Context,
+	req *ocminvite.GetAcceptedUserRequest,
+	_ ...grpc.CallOption,
+) (*ocminvite.GetAcceptedUserResponse, error) {
+	m.acceptedCalls++
+	m.lastAccepted = req
 	return &ocminvite.GetAcceptedUserResponse{
 		Status: &rpc.Status{Code: m.remoteErr, Message: m.remoteMsg},
 		RemoteUser: &userpb.User{
@@ -110,7 +139,7 @@ func TestAuthenticateValidCode(t *testing.T) {
 		c: &config{},
 	}
 
-	user, scopes, err := mgr.Authenticate(context.Background(), "nextcloud1.docker", "code123")
+	user, scopes, err := mgr.Authenticate(context.Background(), "remote.example.com", "code123")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -141,23 +170,7 @@ func TestAuthenticateClientIDDoesNotNeedShareIDMatch(t *testing.T) {
 		c: &config{},
 	}
 
-	user, _, err := mgr.Authenticate(context.Background(), "nextcloud1.docker", "code123")
-	if err != nil {
-		t.Fatal(err)
-	}
-	if user.Id.OpaqueId != "accepted-user" {
-		t.Errorf("user: got %s, want accepted-user", user.Id.OpaqueId)
-	}
-}
-
-func TestAuthenticateEmptyShareIDAccepts(t *testing.T) {
-	s := testShare("share-abc", "code123")
-	stampGateway(&mockGW{share: s, shareErr: rpc.Code_CODE_OK, remoteErr: rpc.Code_CODE_OK})
-	mgr := &manager{
-		c: &config{},
-	}
-
-	user, _, err := mgr.Authenticate(context.Background(), "", "code123")
+	user, _, err := mgr.Authenticate(context.Background(), "remote.example.com", "code123")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -167,41 +180,141 @@ func TestAuthenticateEmptyShareIDAccepts(t *testing.T) {
 }
 
 func TestAuthenticateShareNotFound(t *testing.T) {
-	stampGateway(&mockGW{shareErr: rpc.Code_CODE_NOT_FOUND, shareMsg: "not found"})
+	gw := &mockGW{shareErr: rpc.Code_CODE_NOT_FOUND, shareMsg: "not found"}
+	stampGateway(gw)
 	mgr := &manager{
 		c: &config{},
 	}
 
-	_, _, err := mgr.Authenticate(context.Background(), "share-abc", "bad-code")
+	_, _, err := mgr.Authenticate(context.Background(), "remote.example.com", "bad-code")
 	if err == nil {
 		t.Fatal("expected error for not found share")
 	}
 	if _, ok := err.(errtypes.NotFound); !ok {
 		t.Errorf("expected NotFound, got %T: %v", err, err)
 	}
+	if gw.shareCalls != 1 || gw.acceptedCalls != 0 {
+		t.Fatalf("calls: share=%d accepted=%d", gw.shareCalls, gw.acceptedCalls)
+	}
 }
 
 func TestAuthenticatePermissionDenied(t *testing.T) {
-	stampGateway(&mockGW{shareErr: rpc.Code_CODE_PERMISSION_DENIED, shareMsg: "denied"})
+	gw := &mockGW{shareErr: rpc.Code_CODE_PERMISSION_DENIED, shareMsg: "denied"}
+	stampGateway(gw)
 	mgr := &manager{
 		c: &config{},
 	}
 
-	_, _, err := mgr.Authenticate(context.Background(), "share-abc", "bad-code")
+	_, _, err := mgr.Authenticate(context.Background(), "remote.example.com", "bad-code")
 	if err == nil {
 		t.Fatal("expected error for permission denied")
 	}
 	if _, ok := err.(errtypes.InvalidCredentials); !ok {
 		t.Errorf("expected InvalidCredentials, got %T: %v", err, err)
 	}
+	if gw.shareCalls != 1 || gw.acceptedCalls != 0 {
+		t.Fatalf("calls: share=%d accepted=%d", gw.shareCalls, gw.acceptedCalls)
+	}
 }
 
-func distinctShare(opaqueID, resourceID, ownerIdP, senderDomain string) *ocm.Share {
-	s := testShare(opaqueID, "exchange-code-"+opaqueID)
-	s.ResourceId = &provider.ResourceId{StorageId: "stor", OpaqueId: resourceID}
-	s.Owner = &userpb.UserId{OpaqueId: "owner", Idp: ownerIdP}
-	s.Creator = &userpb.UserId{OpaqueId: "creator", Idp: senderDomain}
-	return s
+func applyShareMutators(share *ocm.Share, mutators ...func(*ocm.Share)) *ocm.Share {
+	for _, mutate := range mutators {
+		mutate(share)
+	}
+	return share
+}
+
+func mutateResource(resourceID string) func(*ocm.Share) {
+	return func(s *ocm.Share) {
+		s.ResourceId = &provider.ResourceId{StorageId: "stor", OpaqueId: resourceID}
+	}
+}
+
+func mutateOwner(idp string) func(*ocm.Share) {
+	return func(s *ocm.Share) {
+		s.Owner = &userpb.UserId{OpaqueId: "owner", Idp: idp}
+	}
+}
+
+func mutateCreator(idp string) func(*ocm.Share) {
+	return func(s *ocm.Share) {
+		s.Creator = &userpb.UserId{OpaqueId: "creator", Idp: idp}
+	}
+}
+
+func mutateRecipient(idp string) func(*ocm.Share) {
+	return func(s *ocm.Share) {
+		if s.GetGrantee().GetUserId() == nil {
+			s.Grantee = &provider.Grantee{
+				Type: provider.GranteeType_GRANTEE_TYPE_USER,
+				Id: &provider.Grantee_UserId{
+					UserId: &userpb.UserId{
+						OpaqueId: "grantee",
+						Idp:      idp,
+						Type:     userpb.UserType_USER_TYPE_FEDERATED,
+					},
+				},
+			}
+			return
+		}
+		s.Grantee.GetUserId().Idp = idp
+	}
+}
+
+func mutateNilGrantee(s *ocm.Share) {
+	s.Grantee = nil
+}
+
+func mutateAbsentGranteeID(s *ocm.Share) {
+	s.Grantee = &provider.Grantee{Type: provider.GranteeType_GRANTEE_TYPE_USER}
+}
+
+func mutateGroupGrantee(s *ocm.Share) {
+	s.Grantee = &provider.Grantee{
+		Type: provider.GranteeType_GRANTEE_TYPE_GROUP,
+		Id: &provider.Grantee_GroupId{
+			GroupId: &grouppb.GroupId{OpaqueId: "grp", Idp: "receiver-a.example"},
+		},
+	}
+}
+
+func mutateNilUserPayload(s *ocm.Share) {
+	s.Grantee = &provider.Grantee{
+		Type: provider.GranteeType_GRANTEE_TYPE_USER,
+		Id:   &provider.Grantee_UserId{},
+	}
+}
+
+func mutateMissingOpaqueID(s *ocm.Share) {
+	s.Id = nil
+}
+
+func mutateBlankOpaqueID(s *ocm.Share) {
+	s.Id = &ocm.ShareId{OpaqueId: "   "}
+}
+
+func mutateMissingOpaqueAndGrantee(s *ocm.Share) {
+	s.Id = nil
+	s.Grantee = nil
+}
+
+func mutateEmptyRecipient(s *ocm.Share) {
+	mutateRecipient("")(s)
+}
+
+func mutateInvalidRecipient(s *ocm.Share) {
+	mutateRecipient("https://receiver.example")(s)
+}
+
+func distinctShare(opaqueID, resourceID, ownerIdP, senderDomain, recipient string) *ocm.Share {
+	share := testShare(opaqueID, "exchange-code-"+opaqueID)
+	return applyShareMutators(
+		share,
+		mutateResource(resourceID),
+		mutateOwner(ownerIdP),
+		mutateCreator(senderDomain),
+		mutateRecipient(recipient),
+	)
 }
 
 func newTestMinter(t *testing.T) token.Manager {
@@ -255,29 +368,45 @@ func TestAuthenticateClientIDClaimFollowsResolvedShare(t *testing.T) {
 		"res-alpha",
 		"owner-alpha.example",
 		"sender-alpha.example",
+		"receiver-a.example",
 	)
 	beta := distinctShare(
 		"share-beta",
 		"res-beta",
 		"owner-beta.example",
 		"sender-beta.example",
+		"receiver-b.example",
 	)
 	minter := newTestMinter(t)
 
-	firstReceiver := "receiver-a.example"
-	secondReceiver := "receiver-b.example"
-	gotAlphaFirst := mintAuthenticatedShare(t, minter, alpha, firstReceiver)
-	gotAlphaSecond := mintAuthenticatedShare(t, minter, alpha, secondReceiver)
-	gotBeta := mintAuthenticatedShare(t, minter, beta, firstReceiver)
-
-	if gotAlphaFirst != "share-alpha" || gotAlphaSecond != "share-alpha" {
-		t.Fatalf("alpha client_id: %q and %q, want share-alpha", gotAlphaFirst, gotAlphaSecond)
+	gotAlpha := mintAuthenticatedShare(t, minter, alpha, "receiver-a.example")
+	gotBeta := mintAuthenticatedShare(t, minter, beta, "receiver-b.example")
+	if gotAlpha != "share-alpha" {
+		t.Fatalf("alpha client_id: got %q, want share-alpha", gotAlpha)
 	}
 	if gotBeta != "share-beta" {
 		t.Fatalf("beta client_id: got %q, want share-beta", gotBeta)
 	}
-	if gotAlphaFirst == gotBeta {
+	if gotAlpha == gotBeta {
 		t.Fatal("client_id leaked between shares")
+	}
+
+	gw := &mockGW{share: alpha, shareErr: rpc.Code_CODE_OK, remoteErr: rpc.Code_CODE_OK}
+	stampGateway(gw)
+	mgr := &manager{c: &config{}}
+	user, scopes, err := mgr.Authenticate(context.Background(), "receiver-b.example", alpha.Token)
+	cred, ok := err.(errtypes.InvalidCredentials)
+	if !ok || string(cred) != "ocm share receiver does not match client_id" {
+		t.Fatalf("unrelated receiver: got %T %v", err, err)
+	}
+	if user != nil || scopes != nil {
+		t.Fatalf("auth result: user=%v scopes=%v, want no token inputs", user, scopes)
+	}
+	if gw.shareCalls != 1 || gw.acceptedCalls != 0 {
+		t.Fatalf("calls: share=%d accepted=%d", gw.shareCalls, gw.acceptedCalls)
+	}
+	if gw.lastToken != alpha.Token {
+		t.Fatalf("lookup key: got %q, want %q", gw.lastToken, alpha.Token)
 	}
 }
 
@@ -296,6 +425,33 @@ func mintAuthenticatedShare(t *testing.T, minter token.Manager, share *ocm.Share
 	}
 	if gw.lastToken == receiver {
 		t.Fatal("request client_id was used as the share lookup key")
+	}
+
+	if gw.acceptedCalls != 1 || gw.lastAccepted == nil {
+		t.Fatalf("accepted-user lookups: %d", gw.acceptedCalls)
+	}
+	if gw.lastAccepted.GetRemoteUserId().GetOpaqueId() != share.GetGrantee().GetUserId().GetOpaqueId() {
+		t.Fatalf("accepted user: got %#v", gw.lastAccepted.GetRemoteUserId())
+	}
+	if gw.lastAccepted.GetRemoteUserId().GetIdp() != share.GetGrantee().GetUserId().GetIdp() {
+		t.Fatalf("accepted user idp: got %q", gw.lastAccepted.GetRemoteUserId().GetIdp())
+	}
+	filter := gw.lastAccepted.GetOpaque().GetMap()["user-filter"]
+	if filter == nil || filter.Decoder != "json" {
+		t.Fatal("accepted-user filter missing")
+	}
+	var filtered userpb.UserId
+	if err := utils.UnmarshalJSONToProtoV1(filter.Value, &filtered); err != nil {
+		t.Fatal(err)
+	}
+	if filtered.GetOpaqueId() != share.GetCreator().GetOpaqueId() || filtered.GetIdp() != share.GetCreator().GetIdp() {
+		t.Fatalf("user filter: got %#v, want creator", filtered)
+	}
+	if filtered.GetIdp() == share.GetGrantee().GetUserId().GetIdp() {
+		t.Fatal("user filter used the recipient instead of the creator")
+	}
+	if share.GetOwner().GetIdp() != share.GetCreator().GetIdp() && filtered.GetIdp() == share.GetOwner().GetIdp() {
+		t.Fatal("user filter used the owner instead of the creator")
 	}
 
 	shares, err := scope.GetOCMSharesFromScopes(scopes)
@@ -320,8 +476,10 @@ func mintAuthenticatedShare(t *testing.T, minter token.Manager, share *ocm.Share
 		t.Fatal(err)
 	}
 	clientID := signedClientID(t, minter, raw)
+	storedRecipient := share.GetGrantee().GetUserId().GetIdp()
 	for _, unexpected := range []string{
 		receiver,
+		storedRecipient,
 		share.ResourceId.OpaqueId,
 		share.Owner.Idp,
 		share.Creator.Idp,
@@ -356,26 +514,30 @@ func TestAuthenticateMissingProviderID(t *testing.T) {
 		share *ocm.Share
 	}{
 		{name: "nil share", share: nil},
-		{name: "nil id", share: testShare("share-abc", "code123")},
+		{name: "nil id", share: applyShareMutators(testShare("share-abc", "code123"), mutateMissingOpaqueID)},
 		{name: "blank opaque id", share: testShare("", "code123")},
 		{name: "whitespace opaque id", share: testShare("   ", "code123")},
 	}
-	tests[1].share.Id = nil
 
 	minter := newTestMinter(t)
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			stampGateway(&mockGW{share: tt.share, shareErr: rpc.Code_CODE_OK, remoteErr: rpc.Code_CODE_OK})
+			gw := &mockGW{share: tt.share, shareErr: rpc.Code_CODE_OK, remoteErr: rpc.Code_CODE_OK}
+			stampGateway(gw)
 			mgr := &manager{c: &config{}}
 			user, scopes, err := mgr.Authenticate(context.Background(), "receiver.example", "code123")
 			if err == nil {
 				t.Fatal("expected missing provider id to fail code-flow auth")
 			}
-			if _, ok := err.(errtypes.InvalidCredentials); !ok {
-				t.Errorf("expected InvalidCredentials, got %T: %v", err, err)
+			cred, ok := err.(errtypes.InvalidCredentials)
+			if !ok || string(cred) != "ocm share is missing provider id" {
+				t.Errorf("expected InvalidCredentials missing provider id, got %T: %v", err, err)
 			}
 			if user != nil || scopes != nil {
 				t.Fatalf("auth result: user=%v scopes=%v, want no token inputs", user, scopes)
+			}
+			if gw.shareCalls != 1 || gw.acceptedCalls != 0 {
+				t.Fatalf("calls: share=%d accepted=%d", gw.shareCalls, gw.acceptedCalls)
 			}
 		})
 	}
@@ -396,12 +558,12 @@ func TestMintAmbiguousOrMalformedCodeFlowScope(t *testing.T) {
 	minter := newTestMinter(t)
 	user := &userpb.User{Id: &userpb.UserId{OpaqueId: "accepted-user", Idp: "remote.example.com"}}
 
-	alphaShare := distinctShare("share-alpha", "res-alpha", "owner-a.example", "sender-a.example")
+	alphaShare := distinctShare("share-alpha", "res-alpha", "owner-a.example", "sender-a.example", "receiver-a.example")
 	alpha, err := scope.AddCodeFlowOCMShareScope(alphaShare, authpb.Role_ROLE_VIEWER, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
-	betaShare := distinctShare("share-beta", "res-beta", "owner-b.example", "sender-b.example")
+	betaShare := distinctShare("share-beta", "res-beta", "owner-b.example", "sender-b.example", "receiver-b.example")
 	both, err := scope.AddCodeFlowOCMShareScope(betaShare, authpb.Role_ROLE_VIEWER, alpha)
 	if err != nil {
 		t.Fatal(err)

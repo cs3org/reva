@@ -105,6 +105,30 @@ methods.
 Normalization errors return a gRPC invalid-argument error with fixed safe
 text and perform no remote POST or store call.
 
+## Token exchange
+
+The token endpoint accepts only the `authorization_code` grant. A missing
+grant, an unknown grant, and the legacy `ocm_share` grant are rejected
+with `unsupported_grant_type` before any gateway or share lookup.
+
+For `authorization_code`, the form `client_id` is the receiving
+provider's host-only DNS FQDN. That identity is checked before the code
+is looked up or authenticated. A missing or invalid identity returns
+`invalid_request` and the response does not include the rejected value.
+A valid FQDN with an empty code returns `invalid_grant`.
+
+The exchanged code is the only share lookup key. Authentication binds
+the form `client_id` to the share's stored recipient, compared without
+regard to case. The check does not use the sender, the creator, the HTTP
+Host, forwarded headers, or the request address. An invalid, empty, or
+different stored recipient is rejected before the accepted user is
+resolved and before a token is minted.
+
+The minted JWT `client_id` claim is the resolved outgoing share opaque
+id. It is not the form receiver domain and it is not the shared secret.
+Legacy direct-secret tokens and other non-OCM tokens omit the claim. The
+endpoint returns that minted access token unchanged.
+
 ## Deployment checks
 
 The well-known service's `enable_webapp` setting controls discovery
