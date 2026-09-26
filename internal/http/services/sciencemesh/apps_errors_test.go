@@ -554,7 +554,7 @@ func TestOpenInAppReceivedWebappRequirements(t *testing.T) {
 			reqs:         []string{"must-exchange-token", "must-use-mfa"},
 			receiver:     blank,
 			wantStatus:   http.StatusForbidden,
-			wantText:     "unsupported requirement",
+			wantText:     "must-use-mfa cannot be satisfied by this receiver",
 			discoverZero: true,
 		},
 		{
