@@ -163,6 +163,8 @@ func (m *manager) Authenticate(
 	switch {
 	case err != nil:
 		return nil, nil, err
+	case userRes == nil || userRes.Status == nil:
+		return nil, nil, errtypes.InternalError("missing accepted user response")
 	case userRes.Status.Code == rpc.Code_CODE_NOT_FOUND:
 		return nil, nil, errtypes.NotFound(userRes.Status.Message)
 	case userRes.Status.Code != rpc.Code_CODE_OK:
