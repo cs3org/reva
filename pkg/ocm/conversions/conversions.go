@@ -32,6 +32,7 @@ import (
 	"github.com/cs3org/reva/v3/pkg/spaces"
 	"github.com/cs3org/reva/v3/pkg/utils"
 	libregraph "github.com/owncloud/libre-graph-api-go"
+	"github.com/rs/zerolog/log"
 )
 
 // Config contains the configuration for OCM conversions
@@ -152,12 +153,18 @@ func WebappMetadataForReceivedShare(received *ocm.ReceivedShare) *ReceivedWebapp
 	}
 
 	var meta *ReceivedWebappMetadata
-	for _, p := range received.Protocols {
+	for i, p := range received.Protocols {
 		if p.GetWebappOptions() == nil {
 			continue
 		}
 		if meta != nil {
 			// Two or more stored webapp protocols are ambiguous.
+			log.Warn().
+				Str("share_id", received.GetId().GetOpaqueId()).
+				Int("protocol_index", i).
+				Str("app_name", meta.AppName).
+				Str("duplicate_app_name", p.GetWebappOptions().GetAppName()).
+				Msg("dropping ambiguous received webapp protocols")
 			return nil
 		}
 		meta = &ReceivedWebappMetadata{
