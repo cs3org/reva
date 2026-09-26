@@ -219,12 +219,18 @@ func TestMintTokenLegacyAndNonOCMOmitClientID(t *testing.T) {
 		"user": {Role: authpb.Role_ROLE_OWNER},
 	}
 
+	machineOnly, err := scope.AddMachineScope(nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+
 	tests := []struct {
 		name   string
 		scopes map[string]*authpb.Scope
 	}{
 		{name: "legacy direct-secret", scopes: legacyScope},
 		{name: "non-ocm", scopes: nonOCM},
+		{name: "machine", scopes: machineOnly},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -256,5 +262,55 @@ func TestMintTokenAmbiguousCodeFlowFails(t *testing.T) {
 	raw, err := mgr.MintToken(context.Background(), federatedUser(), extra)
 	if err == nil || raw != "" {
 		t.Fatalf("ambiguous mint: token=%q err=%v", raw, err)
+	}
+}
+
+func TestMintTokenMachineRemintKeepsClientID(t *testing.T) {
+	mgr := newMinter(t, testSigningKey)
+	user := federatedUser()
+	scopes := codeFlowScope(t, "share-alpha", "exchange-code-alpha")
+	first, err := mgr.MintToken(context.Background(), user, scopes)
+	if err != nil {
+		t.Fatal(err)
+	}
+	withMachine, err := scope.AddMachineScope(scopes)
+	if err != nil {
+		t.Fatal(err)
+	}
+	second, err := mgr.MintToken(context.Background(), user, withMachine)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	for _, raw := range []string{first, second} {
+		payload := payloadObject(t, raw)
+		if payload["client_id"] != "share-alpha" {
+			t.Fatalf("client_id: %#v", payload["client_id"])
+		}
+		encoded, err := json.Marshal(payload)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if strings.Contains(string(encoded), "exchange-code-alpha") {
+			t.Fatal("reminted token embedded the exchanged code")
+		}
+		if _, _, err := mgr.DismantleToken(context.Background(), raw); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	_, dismantledScope, err := mgr.DismantleToken(context.Background(), second)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := dismantledScope[scope.MachineScope]; !ok {
+		t.Fatal("machine scope missing after remint")
+	}
+	shares, err := scope.GetOCMSharesFromScopes(dismantledScope)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(shares) != 1 || shares[0].GetId().GetOpaqueId() != "share-alpha" || shares[0].Token != "" {
+		t.Fatalf("scope share: %#v", shares)
 	}
 }

@@ -27,6 +27,7 @@ import (
 	gateway "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	"github.com/cs3org/reva/v3/pkg/appctx"
+	"github.com/cs3org/reva/v3/pkg/ocm/providerdomain"
 	"github.com/cs3org/reva/v3/pkg/service"
 	"github.com/cs3org/reva/v3/pkg/token"
 	tokenregistry "github.com/cs3org/reva/v3/pkg/token/manager/registry"
@@ -65,18 +66,20 @@ func (h *tokenHandler) ExchangeToken(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	grantType := r.FormValue("grant_type")
-	code := r.FormValue("code")
-	clientID := r.FormValue("client_id")
-
-	switch grantType {
-	case "authorization_code", "ocm_share":
-		// Keep the legacy OCM grant name alongside the OAuth2-standard one while
-		// partner stacks converge on the same token exchange contract.
+	switch r.FormValue("grant_type") {
+	case "authorization_code":
 	default:
 		writeTokenError(w, http.StatusBadRequest, "unsupported_grant_type")
 		return
 	}
+
+	clientID := r.FormValue("client_id")
+	if err := providerdomain.Validate(clientID); err != nil {
+		writeTokenError(w, http.StatusBadRequest, "invalid_request")
+		return
+	}
+
+	code := r.FormValue("code")
 	if code == "" {
 		writeTokenError(w, http.StatusBadRequest, "invalid_grant")
 		return
@@ -89,9 +92,8 @@ func (h *tokenHandler) ExchangeToken(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// client_id identifies the receiving server, but the exchanged code remains
-	// the lookup key for the accepted share. Do not reinterpret client_id as a
-	// share identifier.
+	// client_id is the receiving provider FQDN. The exchanged code remains the
+	// only share lookup key.
 	authRes, err := gw.Authenticate(ctx, &gateway.AuthenticateRequest{
 		Type:         "ocmsharecode",
 		ClientId:     clientID,

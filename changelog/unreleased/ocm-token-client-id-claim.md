@@ -1,7 +1,8 @@
-Bugfix: put the share id in the outbound OCM token
+Bugfix: complete code-flow OCM token client identity
 
-Code-flow token exchange now sets the JWT client_id claim to the
-outgoing share opaque id. That id is the wire providerId, and it
-comes from the share resolved for the exchanged code. The OAuth
-request client_id, the server domain, and legacy direct-secret
-tokens do not provide this claim.
+The token endpoint accepts only the authorization_code grant. The form
+client_id must be the receiving provider's host-only FQDN and must
+match the stored share recipient. The minted JWT client_id claim is
+the resolved outgoing share opaque id. Legacy direct-secret tokens
+omit that claim. Missing, unknown, and ocm_share grants are rejected
+before any share lookup.
