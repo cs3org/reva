@@ -20,12 +20,22 @@ package ocmshareprovider
 
 import (
 	"bytes"
+	"context"
+	"net/http"
+	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
+	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
+	ocmprovider "github.com/cs3org/go-cs3apis/cs3/ocm/provider/v1beta1"
+	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	ocm "github.com/cs3org/go-cs3apis/cs3/sharing/ocm/v1beta1"
 	providerpb "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
+	"github.com/cs3org/reva/v3/internal/http/services/opencloudmesh/ocmd"
+	"github.com/cs3org/reva/v3/pkg/appctx"
 	"github.com/cs3org/reva/v3/pkg/ocm/share"
+	"github.com/rs/zerolog"
 	"google.golang.org/protobuf/proto"
 )
 
@@ -294,5 +304,78 @@ func TestCreateOCMShareOfferGate(t *testing.T) {
 				t.Fatal("stored webapp access method invented a targets field")
 			}
 		})
+	}
+}
+
+func TestCreateOCMShareWebappOnlyNoProtocol(t *testing.T) {
+	peer := &remotePeer{disco: discoverySpec{}.payload()}
+	srv := httptest.NewServer(http.HandlerFunc(peer.handler))
+	t.Cleanup(srv.Close)
+
+	repo := &capturingRepo{nextID: "opaque-share"}
+	svc := &service{
+		conf: &config{
+			ProviderDomain: "sender.example",
+			WebDAVEndpoint: testWebDAVRoot,
+			OfferWebapp:    true,
+			WebappName:     testAppName,
+			WebAppEndpoint: testOpener,
+		},
+		repo:   repo,
+		client: ocmd.NewClient(2*time.Second, true),
+	}
+	stampGateway(&statGateway{info: &providerpb.ResourceInfo{
+		Path: "/files/notes.txt",
+		Type: providerpb.ResourceType_RESOURCE_TYPE_FILE,
+		Owner: &userpb.UserId{
+			OpaqueId: "einstein",
+			Idp:      "sender.example",
+		},
+	}})
+
+	user := &userpb.User{
+		Id:          &userpb.UserId{OpaqueId: "einstein", Idp: "sender.example"},
+		DisplayName: "Albert",
+	}
+	logs := &bytes.Buffer{}
+	logger := zerolog.New(logs)
+	ctx := appctx.ContextSetUser(context.Background(), user)
+	ctx = appctx.WithLogger(ctx, &logger)
+	resp, err := svc.CreateOCMShare(ctx, &ocm.CreateOCMShareRequest{
+		ResourceId: &providerpb.ResourceId{StorageId: "storage", OpaqueId: "resource"},
+		Grantee: &providerpb.Grantee{
+			Type: providerpb.GranteeType_GRANTEE_TYPE_USER,
+			Id: &providerpb.Grantee_UserId{
+				UserId: &userpb.UserId{OpaqueId: "marie", Idp: "remote.example"},
+			},
+		},
+		RecipientMeshProvider: &ocmprovider.ProviderInfo{
+			Domain: "remote.example",
+			Services: []*ocmprovider.Service{
+				{
+					Endpoint: &ocmprovider.ServiceEndpoint{
+						Type: &ocmprovider.ServiceType{Name: "OCM"},
+						Path: srv.URL + "/ocm",
+					},
+				},
+			},
+		},
+		AccessMethods: []*ocm.AccessMethod{webappMethod("")},
+	})
+	if err != nil {
+		t.Fatalf("CreateOCMShare returned transport error %v", err)
+	}
+	if resp == nil || resp.Status == nil || resp.Status.Code != rpc.Code_CODE_INVALID_ARGUMENT {
+		t.Fatalf("status = %#v, want INVALID_ARGUMENT", statusOf(resp))
+	}
+	if resp.Status.Message != webappOnlyNoProtocolText {
+		t.Fatalf("message = %q, want %q", resp.Status.Message, webappOnlyNoProtocolText)
+	}
+	posts, body := peer.posted()
+	if posts != 0 {
+		t.Fatalf("remote posts = %d, want 0 body=%s", posts, body)
+	}
+	if repo.storeN != 0 || repo.stored != nil {
+		t.Fatalf("store count = %d, stored set = %t, want 0 and unset", repo.storeN, repo.stored != nil)
 	}
 }
