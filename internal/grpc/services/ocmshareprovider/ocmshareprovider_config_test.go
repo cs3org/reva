@@ -182,6 +182,24 @@ func TestOfferWebappInitializationRejectsInvalidConfig(t *testing.T) {
 			},
 			substr: "webapp_endpoint",
 		},
+		{
+			name: "endpoint with userinfo",
+			cfg: map[string]any{
+				"offer_webapp":    true,
+				"webapp_name":     testAppName,
+				"webapp_endpoint": "https://user:pass@provider.example/services/ocm/open",
+			},
+			substr: "webapp_endpoint",
+		},
+		{
+			name: "non-http endpoint",
+			cfg: map[string]any{
+				"offer_webapp":    true,
+				"webapp_name":     testAppName,
+				"webapp_endpoint": "ftp://provider.example/services/ocm/open",
+			},
+			substr: "webapp_endpoint",
+		},
 	}
 	for _, tt := range cases {
 		t.Run(tt.name, func(t *testing.T) {
