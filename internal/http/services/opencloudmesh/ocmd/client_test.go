@@ -57,14 +57,31 @@ func TestMain(m *testing.M) {
 func TestExchangeTokenSuccess(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.RawQuery != "" {
-			t.Errorf("token request used a query: %s", r.URL.RawQuery)
+			t.Fatalf("token request used a query: %s", r.URL.RawQuery)
 		}
 		body, err := io.ReadAll(r.Body)
 		if err != nil {
-			t.Error(err)
+			t.Fatal(err)
 		}
-		if !strings.Contains(string(body), "grant_type=authorization_code") || !strings.Contains(string(body), "code=code123") {
-			t.Errorf("form body %s", body)
+		r.Body = io.NopCloser(bytes.NewReader(body))
+		if err := r.ParseForm(); err != nil {
+			t.Fatal(err)
+		}
+		form := string(body)
+		if !strings.Contains(form, "grant_type=authorization_code") ||
+			!strings.Contains(form, "code=code123") ||
+			!strings.Contains(form, "client_id=client1") {
+			t.Fatalf("form body %s", form)
+		}
+		if r.PostForm.Get("grant_type") != "authorization_code" ||
+			r.PostForm.Get("code") != "code123" ||
+			r.PostForm.Get("client_id") != "client1" {
+			t.Fatalf(
+				"form values grant_type=%q code=%q client_id=%q",
+				r.PostForm.Get("grant_type"),
+				r.PostForm.Get("code"),
+				r.PostForm.Get("client_id"),
+			)
 		}
 		w.Header().Set("Content-Type", "application/json")
 		_ = json.NewEncoder(w).Encode(map[string]any{

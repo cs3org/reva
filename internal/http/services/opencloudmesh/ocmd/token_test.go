@@ -27,6 +27,7 @@ import (
 	"net/url"
 	"strings"
 	"testing"
+	"time"
 
 	authpb "github.com/cs3org/go-cs3apis/cs3/auth/provider/v1beta1"
 	gateway "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
@@ -121,7 +122,7 @@ type exchangedClaims struct {
 	jwtv5.RegisteredClaims
 }
 
-func assertUnchangedToken(t *testing.T, rr *httptest.ResponseRecorder, minted string) tokenResponse {
+func assertUnchangedToken(t *testing.T, rr *httptest.ResponseRecorder, minted string, before, after time.Time) tokenResponse {
 	t.Helper()
 	if rr.Code != http.StatusOK {
 		t.Fatalf("status: got %d, want %d, body %s", rr.Code, http.StatusOK, rr.Body.String())
@@ -131,13 +132,10 @@ func assertUnchangedToken(t *testing.T, rr *httptest.ResponseRecorder, minted st
 		t.Fatal(err)
 	}
 	if resp.TokenType != "Bearer" {
-		t.Errorf("token_type: got %q, want Bearer", resp.TokenType)
+		t.Fatalf("token_type: got %q, want %q", resp.TokenType, "Bearer")
 	}
 	if resp.AccessToken != minted {
 		t.Fatal("access_token was rewritten instead of returned unchanged")
-	}
-	if resp.ExpiresIn <= 0 || resp.ExpiresIn > tokenHandlerTestTTL {
-		t.Errorf("expires_in: got %d, want 1..%d", resp.ExpiresIn, tokenHandlerTestTTL)
 	}
 	parsed, err := jwtv5.ParseWithClaims(resp.AccessToken, &exchangedClaims{}, func(tok *jwtv5.Token) (any, error) {
 		return []byte(tokenHandlerTestSecret), nil
@@ -149,7 +147,32 @@ func assertUnchangedToken(t *testing.T, rr *httptest.ResponseRecorder, minted st
 	if !ok || claims.ClientID != "share-abc" {
 		t.Fatalf("client_id: got %#v, want share-abc", claims)
 	}
+	assertExactExpiresIn(t, resp.ExpiresIn, claims, before, after)
 	return resp
+}
+
+// assertExactExpiresIn checks expires_in against the minted JWT exp.
+// The handler uses max(0, exp-now) for one unix second inside the request
+// window. Minting samples time.Now twice, so the token lifetime is the
+// configured TTL or one second less when those samples cross a boundary.
+func assertExactExpiresIn(t *testing.T, got int64, claims *exchangedClaims, before, after time.Time) {
+	t.Helper()
+	if claims.ExpiresAt == nil || claims.IssuedAt == nil {
+		t.Fatal("minted token missing iat or exp")
+	}
+	lifetime := claims.ExpiresAt.Unix() - claims.IssuedAt.Unix()
+	if lifetime != tokenHandlerTestTTL && lifetime != tokenHandlerTestTTL-1 {
+		t.Fatalf("token lifetime: got %d, want %d", lifetime, tokenHandlerTestTTL)
+	}
+	if after.Before(before) {
+		t.Fatal("clock went backwards around token exchange")
+	}
+	exp := claims.ExpiresAt.Unix()
+	earliest := max(int64(0), exp-after.Unix())
+	latest := max(int64(0), exp-before.Unix())
+	if got < earliest || got > latest {
+		t.Fatalf("expires_in: got %d, want %d", got, latest)
+	}
 }
 
 func assertNoAccessToken(t *testing.T, rr *httptest.ResponseRecorder) {
@@ -161,8 +184,10 @@ func assertNoAccessToken(t *testing.T, rr *httptest.ResponseRecorder) {
 
 func TestExchangeTokenValid(t *testing.T) {
 	h, mockGW := setupTokenHandler(t, rpc.Code_CODE_OK, nil)
+	before := time.Now()
 	rr := postTokenForm(h, "authorization_code", "code123", "nextcloud1.docker")
-	assertUnchangedToken(t, rr, mockGW.token)
+	after := time.Now()
+	assertUnchangedToken(t, rr, mockGW.token, before, after)
 	if mockGW.lastReq == nil {
 		t.Fatal("expected Authenticate to be called")
 	}
@@ -187,10 +212,14 @@ func TestExchangeTokenOcmShareGrant(t *testing.T) {
 
 func TestExchangeTokenRequestClientIDDoesNotChangeToken(t *testing.T) {
 	h, mockGW := setupTokenHandler(t, rpc.Code_CODE_OK, nil)
+	beforeFirst := time.Now()
 	first := postTokenForm(h, "authorization_code", "code123", "receiver-a.example")
+	afterFirst := time.Now()
+	beforeSecond := time.Now()
 	second := postTokenForm(h, "authorization_code", "code123", "receiver-b.example")
-	gotFirst := assertUnchangedToken(t, first, mockGW.token)
-	gotSecond := assertUnchangedToken(t, second, mockGW.token)
+	afterSecond := time.Now()
+	gotFirst := assertUnchangedToken(t, first, mockGW.token, beforeFirst, afterFirst)
+	gotSecond := assertUnchangedToken(t, second, mockGW.token, beforeSecond, afterSecond)
 	if gotFirst.AccessToken != gotSecond.AccessToken {
 		t.Fatal("request client_id changed the returned token")
 	}
@@ -412,4 +441,69 @@ func TestExchangeTokenMalformedForm(t *testing.T) {
 		t.Errorf("error: got %q, want invalid_request", errResp.Error)
 	}
 	assertNoAccessToken(t, rr)
+}
+
+func TestExchangeTokenValidatedExpiryFailures(t *testing.T) {
+	now := time.Now()
+	negativeExp := now.Add(-time.Duration(tokenHandlerTestTTL) * time.Second)
+	tests := []struct {
+		name  string
+		token string
+	}{
+		{
+			name: "expired expiry",
+			token: hs256Token(t, jwtv5.RegisteredClaims{
+				IssuedAt:  jwtv5.NewNumericDate(now.Add(-time.Hour)),
+				ExpiresAt: jwtv5.NewNumericDate(now.Add(-time.Second)),
+			}),
+		},
+		{
+			name:  "malformed token",
+			token: "not-a-jwt",
+		},
+		{
+			name: "malformed expiry",
+			token: hs256Token(t, jwtv5.MapClaims{
+				"exp": "not-a-timestamp",
+			}),
+		},
+		{
+			name: "zero expiry",
+			token: hs256Token(t, jwtv5.MapClaims{
+				"exp": 0,
+			}),
+		},
+		{
+			name: "missing expiry",
+			token: hs256Token(t, jwtv5.RegisteredClaims{
+				IssuedAt: jwtv5.NewNumericDate(now),
+			}),
+		},
+		{
+			name: "negative duration",
+			token: hs256Token(t, jwtv5.RegisteredClaims{
+				IssuedAt:  jwtv5.NewNumericDate(now),
+				ExpiresAt: jwtv5.NewNumericDate(negativeExp),
+			}),
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			h, mockGW := setupTokenHandler(t, rpc.Code_CODE_OK, nil)
+			mockGW.token = tt.token
+			rr := postTokenForm(h, "authorization_code", "code123", "nextcloud1.docker")
+			assertTokenError(t, rr, http.StatusInternalServerError, "server_error")
+			assertNoAccessToken(t, rr)
+		})
+	}
+}
+
+func hs256Token(t *testing.T, claims jwtv5.Claims) string {
+	t.Helper()
+	raw, err := jwtv5.NewWithClaims(jwtv5.SigningMethodHS256, claims).
+		SignedString([]byte(tokenHandlerTestSecret))
+	if err != nil {
+		t.Fatal(err)
+	}
+	return raw
 }
