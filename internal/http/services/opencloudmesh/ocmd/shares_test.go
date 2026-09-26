@@ -1247,49 +1247,6 @@ func mustSharesRequest(t *testing.T, rawURL string) *http.Request {
 	return req
 }
 
-func webappReceiveHandler(targets []string) *sharesHandler {
-	copied := append([]string{}, targets...)
-	return &sharesHandler{webappReceiveTargets: &copied}
-}
-
-func postShare(t *testing.T, h *sharesHandler, body map[string]any) *httptest.ResponseRecorder {
-	t.Helper()
-	raw, err := json.Marshal(body)
-	if err != nil {
-		t.Fatal(err)
-	}
-	req := httptest.NewRequest(http.MethodPost, "/ocm/shares", bytes.NewReader(raw))
-	req.Header.Set("Content-Type", "application/json")
-	req.RemoteAddr = "192.0.2.15:12345"
-	rr := httptest.NewRecorder()
-	h.CreateShare(rr, req)
-	return rr
-}
-
-func shareBody(sender, resourceType string, protocol map[string]any) map[string]any {
-	return map[string]any{
-		"shareWith":    "marie@local.example.org",
-		"name":         "test.txt",
-		"providerId":   "provider-id",
-		"owner":        "einstein@" + sender,
-		"sender":       "einstein@" + sender,
-		"shareType":    "user",
-		"resourceType": resourceType,
-		"protocol":     protocol,
-	}
-}
-
-func webappOffer(uri string, requirements, targets []string) map[string]any {
-	offer := map[string]any{
-		"uri":          uri,
-		"sharedSecret": "secret",
-		"permissions":  []string{"read"},
-		"requirements": requirements,
-		"targets":      targets,
-	}
-	return map[string]any{"webapp": offer}
-}
-
 func TestCreateShareWebappValidation(t *testing.T) {
 	disco := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		_ = json.NewEncoder(w).Encode(wellknown.OcmDiscoveryData{
