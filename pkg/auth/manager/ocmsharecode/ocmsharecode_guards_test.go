@@ -141,6 +141,50 @@ func TestAuthenticateResponseAndGranteeGuards(t *testing.T) {
 	}
 }
 
+func TestAuthenticateAcceptedUserResponseGuards(t *testing.T) {
+	tests := []struct {
+		name                string
+		nilAcceptedResponse bool
+		nilAcceptedStatus   bool
+	}{
+		{
+			name:                "nil accepted user response",
+			nilAcceptedResponse: true,
+		},
+		{
+			name:              "nil accepted user status",
+			nilAcceptedStatus: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			share := testShare("share-abc", "code123")
+			gw := &mockGW{
+				share:               share,
+				shareErr:            rpc.Code_CODE_OK,
+				remoteErr:           rpc.Code_CODE_OK,
+				nilAcceptedResponse: tt.nilAcceptedResponse,
+				nilAcceptedStatus:   tt.nilAcceptedStatus,
+			}
+			stampGateway(gw)
+			mgr := &manager{c: &config{}}
+
+			user, scopes, err := mgr.Authenticate(context.Background(), "remote.example.com", "code123")
+			if user != nil || scopes != nil {
+				t.Fatalf("auth result: user=%v scopes=%v, want no token inputs", user, scopes)
+			}
+			if gw.shareCalls != 1 || gw.acceptedCalls != 1 {
+				t.Fatalf("calls: share=%d accepted=%d, want share=1 accepted=1", gw.shareCalls, gw.acceptedCalls)
+			}
+			if gw.lastToken != "code123" {
+				t.Fatalf("lookup key: got %q, want code123", gw.lastToken)
+			}
+			assertAuthError(t, err, "internal", "missing accepted user response")
+		})
+	}
+}
+
 func assertAuthError(t *testing.T, err error, class, message string) {
 	t.Helper()
 	if err == nil {
