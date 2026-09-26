@@ -32,6 +32,23 @@ webapp_endpoint = "https://provider.example/services/ocm/open"
 Invalid enabled configuration fails startup with a bad-request error rather
 than silently offering an incomplete webapp.
 
+## Receiver configuration
+
+Token exchange identifies the receiving provider by its host-only
+`provider_domain`. ScienceMesh and every `ocmreceived` driver must share
+this host-only FQDN.
+
+```toml
+[http.services.sciencemesh]
+provider_domain = "receiver.example"
+
+[grpc.services.storageprovider.drivers.ocmreceived]
+provider_domain = "receiver.example"
+
+[http.services.dataprovider.drivers.ocmreceived]
+provider_domain = "receiver.example"
+```
+
 ## Offer gate
 
 The provider offers a webapp method only when all four conditions hold:
