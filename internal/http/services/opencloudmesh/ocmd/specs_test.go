@@ -316,10 +316,18 @@ func TestValidateReceivedWebapp(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			before := cloneWebapp(tt.webapp)
+			// Production conversion aliases requirement, target, and media
+			// slices. Copy them so an in-place rewrite still fails this check.
+			before := tt.webapp.ToOCMProtocol()
+			if opts := before.GetWebappOptions(); opts != nil {
+				opts.Requirements = append([]string(nil), opts.Requirements...)
+				opts.Targets = append([]string(nil), opts.Targets...)
+				opts.MediaTypes = append([]string(nil), opts.MediaTypes...)
+			}
 			err := tt.webapp.ValidateReceived(tt.receiver)
-			if !reflect.DeepEqual(tt.webapp, before) {
-				t.Fatalf("validation mutated the DTO: got %#v want %#v", tt.webapp, before)
+			after := tt.webapp.ToOCMProtocol()
+			if !reflect.DeepEqual(after, before) {
+				t.Fatalf("validation mutated the DTO: got %#v want %#v", after, before)
 			}
 			if tt.wantError == "" {
 				if err != nil {
@@ -435,48 +443,4 @@ func TestScreenIncomingWebappsNilAndDuplicate(t *testing.T) {
 	if err := ScreenIncomingWebapps(Protocols{offer, offer}, []string{"blank"}); err == nil {
 		t.Fatal("expected ambiguous webapp error")
 	}
-}
-
-func TestCloneWebappPreservesNilSlices(t *testing.T) {
-	nilWebapp := &Webapp{
-		URI:          "https://app.example/hub",
-		SharedSecret: "secret",
-	}
-	copiedNil := cloneWebapp(nilWebapp)
-	if copiedNil.Permissions != nil || copiedNil.Requirements != nil || copiedNil.Targets != nil || copiedNil.MediaTypes != nil {
-		t.Fatalf("nil slices became %#v", copiedNil)
-	}
-	copiedNil.Permissions = append(copiedNil.Permissions, "read")
-	if nilWebapp.Permissions != nil {
-		t.Fatal("nil permission copy aliased the original")
-	}
-
-	filled := validCodeFlowWebapp()
-	copied := cloneWebapp(filled)
-	copied.Permissions[0] = "write"
-	copied.Requirements[0] = "other"
-	copied.Targets[0] = "iframe"
-	copied.MediaTypes[0] = "text/html"
-	if filled.Permissions[0] != "read" || filled.Requirements[0] != "must-exchange-token" || filled.Targets[0] != "blank" || filled.MediaTypes[0] != "text/plain" {
-		t.Fatalf("non-nil slice copy aliased the original: %#v", filled)
-	}
-}
-
-func cloneWebapp(w *Webapp) *Webapp {
-	if w == nil {
-		return nil
-	}
-	cloned := *w
-	cloned.Permissions = cloneStrings(w.Permissions)
-	cloned.Requirements = cloneStrings(w.Requirements)
-	cloned.Targets = cloneStrings(w.Targets)
-	cloned.MediaTypes = cloneStrings(w.MediaTypes)
-	return &cloned
-}
-
-func cloneStrings(in []string) []string {
-	if in == nil {
-		return nil
-	}
-	return append([]string{}, in...)
 }
