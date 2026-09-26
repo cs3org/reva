@@ -29,23 +29,36 @@ import (
 	"github.com/cs3org/reva/v3/pkg/utils"
 )
 
-// CodeFlowOCMShareClientID returns the providerId carried by the single
-// code-flow OCM share in scopes. The id is share.Id.OpaqueId from a scope
-// built by AddCodeFlowOCMShareScope. Legacy shares that still carry Token, and
-// any non-OCM scope, are not candidates. No code-flow share returns ("", nil).
-// A missing id, a malformed ocmshare payload, or more than one code-flow share
-// returns an error so minting fails closed instead of choosing an entry.
-func CodeFlowOCMShareClientID(scopes map[string]*authpb.Scope) (string, error) {
+// SharesFromScopes decodes every scope whose key uses the ocmshare: prefix.
+// Unrelated keys are ignored, including nil values. A matching nil scope, nil
+// resource, or non-json decoder fails closed. No matching scopes returns a
+// nil slice so callers can tell "nothing matched" from a decoded list.
+func SharesFromScopes(scopes map[string]*authpb.Scope) ([]*ocmv1beta1.Share, error) {
+	var shares []*ocmv1beta1.Share
 	for k, s := range scopes {
 		if !strings.HasPrefix(k, "ocmshare:") {
 			continue
 		}
-		if s == nil || s.Resource == nil {
-			return "", errtypes.InternalError("resource should be json encoded")
+		if s == nil || s.Resource == nil || s.Resource.Decoder != "json" {
+			return nil, errtypes.InternalError("resource should be json encoded")
 		}
+		var share ocmv1beta1.Share
+		err := utils.UnmarshalJSONToProtoV1(s.Resource.Value, &share)
+		if err != nil {
+			return nil, err
+		}
+		shares = append(shares, &share)
 	}
+	return shares, nil
+}
 
-	shares, err := sharesFromScopes(scopes)
+// CodeFlowOCMShareClientID returns the opaque id of the single code-flow OCM
+// share in scopes. Every ocmshare entry is decoded before legacy token-bearing
+// shares are ignored, so a malformed legacy payload still fails. The returned
+// id keeps the share's exact opaque spelling. No code-flow share returns
+// ("", nil). A blank id or more than one code-flow share returns an error.
+func CodeFlowOCMShareClientID(scopes map[string]*authpb.Scope) (string, error) {
+	shares, err := SharesFromScopes(scopes)
 	if err != nil {
 		return "", err
 	}
@@ -67,24 +80,4 @@ func CodeFlowOCMShareClientID(scopes map[string]*authpb.Scope) (string, error) {
 		found = true
 	}
 	return clientID, nil
-}
-
-func sharesFromScopes(scopes map[string]*authpb.Scope) ([]*ocmv1beta1.Share, error) {
-	shares := []*ocmv1beta1.Share{}
-	for k, s := range scopes {
-		if !strings.HasPrefix(k, "ocmshare:") {
-			continue
-		}
-		res := s.Resource
-		if res.Decoder != "json" {
-			return nil, errtypes.InternalError("resource should be json encoded")
-		}
-		var share ocmv1beta1.Share
-		err := utils.UnmarshalJSONToProtoV1(res.Value, &share)
-		if err != nil {
-			return nil, err
-		}
-		shares = append(shares, &share)
-	}
-	return shares, nil
 }
