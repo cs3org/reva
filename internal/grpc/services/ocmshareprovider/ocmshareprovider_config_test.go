@@ -189,7 +189,7 @@ func TestOfferWebappInitializationRejectsInvalidConfig(t *testing.T) {
 				"webapp_name":     testAppName,
 				"webapp_endpoint": "https://user:pass@provider.example/services/ocm/open",
 			},
-			substr: "webapp_endpoint",
+			substr: "http or https URL with a hostname and no userinfo",
 		},
 		{
 			name: "non-http endpoint",
@@ -198,7 +198,7 @@ func TestOfferWebappInitializationRejectsInvalidConfig(t *testing.T) {
 				"webapp_name":     testAppName,
 				"webapp_endpoint": "ftp://provider.example/services/ocm/open",
 			},
-			substr: "webapp_endpoint",
+			substr: "http or https",
 		},
 	}
 	for _, tt := range cases {
