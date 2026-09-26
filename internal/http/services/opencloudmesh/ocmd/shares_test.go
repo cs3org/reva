@@ -1319,52 +1319,6 @@ func TestCreateShareRejectsUnsignedFromSigningServer(t *testing.T) {
 	}
 }
 
-func webappReceiveHandler(t *testing.T, targets []string) *sharesHandler {
-	t.Helper()
-	h := initSharesHandler(t, &config{AllowLoopbackFederation: true})
-	copied := append([]string{}, targets...)
-	h.webappReceiveTargets = &copied
-	return h
-}
-
-func postShare(t *testing.T, h *sharesHandler, body map[string]any) *httptest.ResponseRecorder {
-	t.Helper()
-	raw, err := json.Marshal(body)
-	if err != nil {
-		t.Fatal(err)
-	}
-	req := httptest.NewRequest(http.MethodPost, "/ocm/shares", bytes.NewReader(raw))
-	req.Header.Set("Content-Type", "application/json")
-	req.RemoteAddr = "192.0.2.15:12345"
-	rr := httptest.NewRecorder()
-	h.CreateShare(rr, req)
-	return rr
-}
-
-func shareBody(sender, resourceType string, protocol map[string]any) map[string]any {
-	return map[string]any{
-		"shareWith":    "marie@local.example.org",
-		"name":         "test.txt",
-		"providerId":   "provider-id",
-		"owner":        "einstein@" + sender,
-		"sender":       "einstein@" + sender,
-		"shareType":    "user",
-		"resourceType": resourceType,
-		"protocol":     protocol,
-	}
-}
-
-func webappOffer(uri string, requirements, targets []string) map[string]any {
-	offer := map[string]any{
-		"uri":          uri,
-		"sharedSecret": "secret",
-		"permissions":  []string{"read"},
-		"requirements": requirements,
-		"targets":      targets,
-	}
-	return map[string]any{"webapp": offer}
-}
-
 func TestCreateShareWebappValidation(t *testing.T) {
 	disco := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		_ = json.NewEncoder(w).Encode(wellknown.OcmDiscoveryData{
@@ -1388,7 +1342,7 @@ func TestCreateShareWebappValidation(t *testing.T) {
 	t.Run("compatible target is stored", func(t *testing.T) {
 		gw := &sharesMockGW{createResp: okCreate}
 		stampGateway(gw)
-		rr := postShare(t, webappReceiveHandler(t, []string{"blank"}), shareBody(sender, "file", webappOffer(
+		rr := postShare(t, webappReceiveHandler([]string{"blank"}), shareBody(sender, "file", webappOffer(
 			"https://app.example/hub",
 			[]string{"must-exchange-token"},
 			[]string{"blank"},
@@ -1404,7 +1358,7 @@ func TestCreateShareWebappValidation(t *testing.T) {
 	t.Run("relative uri resolves against advertised root", func(t *testing.T) {
 		gw := &sharesMockGW{createResp: okCreate}
 		stampGateway(gw)
-		rr := postShare(t, webappReceiveHandler(t, []string{"blank"}), shareBody(sender, "file", webappOffer(
+		rr := postShare(t, webappReceiveHandler([]string{"blank"}), shareBody(sender, "file", webappOffer(
 			"/hub",
 			[]string{"must-exchange-token"},
 			[]string{"blank"},
@@ -1496,7 +1450,7 @@ func TestCreateShareWebappValidation(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			gw := &sharesMockGW{createResp: okCreate}
 			stampGateway(gw)
-			rr := postShare(t, webappReceiveHandler(t, []string{"blank"}), shareBody(sender, "file", tt.protocol))
+			rr := postShare(t, webappReceiveHandler([]string{"blank"}), shareBody(sender, "file", tt.protocol))
 			if rr.Code == http.StatusCreated {
 				t.Fatalf("stored invalid share: %s", rr.Body.String())
 			}
@@ -1522,7 +1476,7 @@ func TestCreateShareWebappValidation(t *testing.T) {
 		defer noRoot.Close()
 		gw := &sharesMockGW{createResp: okCreate}
 		stampGateway(gw)
-		rr := postShare(t, webappReceiveHandler(t, []string{"blank"}), shareBody(
+		rr := postShare(t, webappReceiveHandler([]string{"blank"}), shareBody(
 			noRoot.Listener.Addr().String(),
 			"file",
 			webappOffer("/hub", []string{"must-exchange-token"}, []string{"blank"}),
@@ -1535,7 +1489,7 @@ func TestCreateShareWebappValidation(t *testing.T) {
 	t.Run("nil webapp does not panic", func(t *testing.T) {
 		gw := &sharesMockGW{createResp: okCreate}
 		stampGateway(gw)
-		rr := postShare(t, webappReceiveHandler(t, []string{"blank"}), shareBody(sender, "file", map[string]any{
+		rr := postShare(t, webappReceiveHandler([]string{"blank"}), shareBody(sender, "file", map[string]any{
 			"webapp": nil,
 		}))
 		if gw.createCalls != 0 {
@@ -1546,7 +1500,7 @@ func TestCreateShareWebappValidation(t *testing.T) {
 	t.Run("duplicate webapp does not persist", func(t *testing.T) {
 		gw := &sharesMockGW{createResp: okCreate}
 		stampGateway(gw)
-		h := webappReceiveHandler(t, []string{"blank"})
+		h := webappReceiveHandler([]string{"blank"})
 		first := &Webapp{
 			URI: "https://app.example/hub", SharedSecret: "secret",
 			Permissions: []string{"read"}, Requirements: []string{"must-exchange-token"},
@@ -1572,7 +1526,7 @@ func TestCreateShareWebappValidation(t *testing.T) {
 	t.Run("webdav only still persists", func(t *testing.T) {
 		gw := &sharesMockGW{createResp: okCreate}
 		stampGateway(gw)
-		rr := postShare(t, webappReceiveHandler(t, nil), shareBody(sender, "file", map[string]any{
+		rr := postShare(t, webappReceiveHandler(nil), shareBody(sender, "file", map[string]any{
 			"webdav": map[string]any{
 				"sharedSecret": "secret",
 				"permissions":  []string{"read"},
