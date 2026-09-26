@@ -377,6 +377,16 @@ func (s *service) CreateOCMShare(ctx context.Context, req *ocm.CreateOCMShareReq
 	}
 	ocmshare.AccessMethods = methods
 
+	// Normalization can omit every method on a webapp-only offer. Return a
+	// user-facing invalid-argument error before NewShare when no protocol
+	// remains. The attach gate still decides whether a webapp method is kept.
+	protocols := s.getProtocols(ctx, ocmshare)
+	if len(protocols) == 0 {
+		return &ocm.CreateOCMShareResponse{
+			Status: status.NewInvalidArg(ctx, webappOnlyNoProtocolText),
+		}, nil
+	}
+
 	// prepare the request to be sent to the remote OCM server
 	newShareReq := &ocmd.NewShareRequest{
 		ShareWith:  formatOCMUser(req.Grantee.GetUserId()),
@@ -393,7 +403,7 @@ func (s *service) CreateOCMShare(ctx context.Context, req *ocm.CreateOCMShareReq
 		SenderDisplayName: user.DisplayName,
 		ShareType:         "user",
 		ResourceType:      resType,
-		Protocols:         s.getProtocols(ctx, ocmshare),
+		Protocols:         protocols,
 	}
 
 	if req.Expiration != nil {
