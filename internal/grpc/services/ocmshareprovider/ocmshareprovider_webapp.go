@@ -37,6 +37,9 @@ const (
 	// invalidShareAccessMethodsText is the only gRPC message returned when
 	// normalized access methods are rejected. It carries no request content.
 	invalidShareAccessMethodsText = "invalid ocm share access methods"
+	// webappOnlyNoProtocolText is returned when a webapp-only offer normalizes
+	// to zero protocols. It carries no request content.
+	webappOnlyNoProtocolText = "webapp-only offer has no shareable protocol"
 	// webappOmissionReason is logged once when a requested webapp candidate is
 	// left off the share. It has no URL, name, secret, or token.
 	webappOmissionReason = "omitting requested webapp access method"
@@ -48,8 +51,8 @@ var errInvalidShareAccessMethods = errors.New(invalidShareAccessMethodsText)
 
 // validateWebappOffer checks the provider-local offer at startup.
 // Disabled mode accepts an omitted name and endpoint. Enabled mode keeps the
-// configured name exactly, including padding, and requires an absolute opener
-// with a hostname.
+// configured name exactly, including padding, and requires an absolute http
+// or https opener with a hostname and no userinfo.
 func (c *config) validateWebappOffer() error {
 	if c == nil || !c.OfferWebapp {
 		return nil
@@ -58,10 +61,27 @@ func (c *config) validateWebappOffer() error {
 		return errtypes.BadRequest("ocmshareprovider: webapp_name must be non-empty when offer_webapp is true")
 	}
 	parsed, err := url.Parse(c.WebAppEndpoint)
-	if err != nil || parsed == nil || !parsed.IsAbs() || parsed.Hostname() == "" {
+	if err != nil || !validOutboundWebappEndpoint(parsed) {
 		return errtypes.BadRequest("ocmshareprovider: webapp_endpoint must be an absolute URL with a hostname when offer_webapp is true")
 	}
 	return nil
+}
+
+// validOutboundWebappEndpoint reports whether parsed is an absolute http or
+// https URL with a hostname and no userinfo.
+func validOutboundWebappEndpoint(parsed *url.URL) bool {
+	if parsed == nil || parsed.User != nil {
+		return false
+	}
+	if !parsed.IsAbs() || parsed.Hostname() == "" {
+		return false
+	}
+	switch parsed.Scheme {
+	case "http", "https":
+		return true
+	default:
+		return false
+	}
 }
 
 // webappURL returns the configured opener unchanged. The share id is not
