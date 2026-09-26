@@ -62,7 +62,8 @@ func (c *config) validateWebappOffer() error {
 	}
 	parsed, err := url.Parse(c.WebAppEndpoint)
 	if err != nil || !validOutboundWebappEndpoint(parsed) {
-		return errtypes.BadRequest("ocmshareprovider: webapp_endpoint must be an absolute URL with a hostname when offer_webapp is true")
+		return errtypes.BadRequest("ocmshareprovider: webapp_endpoint must be an absolute " +
+			"http or https URL with a hostname and no userinfo when offer_webapp is true")
 	}
 	return nil
 }
