@@ -26,7 +26,8 @@ webapp_endpoint = "https://provider.example/services/ocm/open"
 `webapp_endpoint` may be omitted. When it is enabled:
 
 - `webapp_name` must not be empty or whitespace-only.
-- `webapp_endpoint` must be an absolute URL with a non-empty host.
+- `webapp_endpoint` must be an absolute http or https URL with a non-empty
+  host and no userinfo.
 - The configured application name is preserved exactly on offered shares.
 
 Invalid enabled configuration fails startup with a bad-request error rather
