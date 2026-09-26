@@ -51,18 +51,20 @@ const testJWTSigningKey = "test-jwt-signing-key"
 type mockGW struct {
 	gateway.GatewayAPIClient
 
-	share         *ocm.Share
-	shareErr      rpc.Code
-	shareMsg      string
-	remoteErr     rpc.Code
-	remoteMsg     string
-	lastToken     string
-	shareCalls    int
-	acceptedCalls int
-	shareRPCErr   error
-	nilResponse   bool
-	nilStatus     bool
-	lastAccepted  *ocminvite.GetAcceptedUserRequest
+	share               *ocm.Share
+	shareErr            rpc.Code
+	shareMsg            string
+	remoteErr           rpc.Code
+	remoteMsg           string
+	lastToken           string
+	shareCalls          int
+	acceptedCalls       int
+	shareRPCErr         error
+	nilResponse         bool
+	nilStatus           bool
+	nilAcceptedResponse bool
+	nilAcceptedStatus   bool
+	lastAccepted        *ocminvite.GetAcceptedUserRequest
 }
 
 func (m *mockGW) GetOCMShareByToken(
@@ -97,8 +99,15 @@ func (m *mockGW) GetAcceptedUser(
 ) (*ocminvite.GetAcceptedUserResponse, error) {
 	m.acceptedCalls++
 	m.lastAccepted = req
+	if m.nilAcceptedResponse {
+		return nil, nil
+	}
+	var status *rpc.Status
+	if !m.nilAcceptedStatus {
+		status = &rpc.Status{Code: m.remoteErr, Message: m.remoteMsg}
+	}
 	return &ocminvite.GetAcceptedUserResponse{
-		Status: &rpc.Status{Code: m.remoteErr, Message: m.remoteMsg},
+		Status: status,
 		RemoteUser: &userpb.User{
 			Id: &userpb.UserId{OpaqueId: "accepted-user", Idp: "remote.example.com", Type: userpb.UserType_USER_TYPE_FEDERATED},
 		},
