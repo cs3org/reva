@@ -20,7 +20,6 @@ package ocmd
 
 import (
 	"errors"
-	"net/url"
 	"reflect"
 	"strings"
 	"testing"
@@ -225,6 +224,15 @@ func TestValidateReceivedWebapp(t *testing.T) {
 			receiver: blank,
 		},
 		{
+			name: "padded app name stays exact",
+			webapp: func() *Webapp {
+				w := validCodeFlowWebapp()
+				w.AppName = " Jupyter "
+				return w
+			}(),
+			receiver: blank,
+		},
+		{
 			name:      "empty targets",
 			webapp:    func() *Webapp { w := validCodeFlowWebapp(); w.Targets = nil; return w }(),
 			receiver:  blank,
@@ -326,28 +334,90 @@ func TestValidateReceivedWebapp(t *testing.T) {
 	}
 }
 
-func TestResolveReceivedWebappURI(t *testing.T) {
-	base, err := url.Parse("http://sender.example/ocm")
-	if err != nil {
-		t.Fatal(err)
+func TestWebappValidatorsAgree(t *testing.T) {
+	blank := []string{"blank"}
+	tests := []struct {
+		name string
+		reqs []string
+		want string
+		mfa  bool
+		ok   bool
+	}{
+		{name: "exchange token", reqs: []string{"must-exchange-token"}, ok: true},
+		{name: "padded requirement", reqs: []string{" must-exchange-token"}, want: "malformed requirement"},
+		{name: "blank requirement", reqs: []string{" "}, want: "malformed requirement"},
+		{name: "unknown requirement", reqs: []string{"must-exchange-token", "must-sign"}, want: "unsupported requirement"},
+		{name: "missing exchange", reqs: []string{"must-use-mfa"}, want: "must-exchange-token"},
+		{name: "permanent mfa", reqs: []string{"must-exchange-token", "must-use-mfa"}, mfa: true},
 	}
-	resolved, err := ResolveReceivedWebappURI("/hub", base)
-	if err != nil {
-		t.Fatal(err)
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			offer := validCodeFlowWebapp()
+			offer.Requirements = tt.reqs
+			received := offer.ValidateReceived(blank)
+			validated := Protocols{offer}.Validate()
+			if tt.ok {
+				if received != nil || validated != nil {
+					t.Fatalf("received %v validate %v", received, validated)
+				}
+				return
+			}
+			if tt.mfa {
+				if !errors.Is(received, ErrWebappMFAUnproven) || received.Error() != ErrWebappMFAUnproven.Error() {
+					t.Fatalf("received %v", received)
+				}
+				if !errors.Is(validated, ErrWebappMFAUnproven) || validated.Error() != ErrWebappMFAUnproven.Error() {
+					t.Fatalf("validate %v", validated)
+				}
+				return
+			}
+			if received == nil || validated == nil || !strings.Contains(received.Error(), tt.want) || !strings.Contains(validated.Error(), tt.want) {
+				t.Fatalf("received %v validate %v", received, validated)
+			}
+		})
 	}
-	if resolved != "http://sender.example/hub" {
-		t.Fatalf("resolved %q", resolved)
+}
+
+func TestProtocolsValidateTypedNilWebapp(t *testing.T) {
+	err := Protocols{(*Webapp)(nil)}.Validate()
+	if err == nil || !strings.Contains(err.Error(), "nil webapp") {
+		t.Fatalf("err %v", err)
 	}
-	if _, err := ResolveReceivedWebappURI("/hub", nil); err == nil {
-		t.Fatal("expected unresolved relative uri error")
+}
+
+func TestValidateAbsoluteWebappURISyntax(t *testing.T) {
+	tests := []struct {
+		name    string
+		raw     string
+		want    string
+		wantErr string
+	}{
+		{name: "absolute https", raw: "https://app.example/hub?x=1#y", want: "https://app.example/hub?x=1#y"},
+		{name: "absolute http", raw: "http://app.example/hub", want: "http://app.example/hub"},
+		{name: "relative", raw: "/hub", wantErr: "invalid uri"},
+		{name: "network path", raw: "//evil.example/hub", wantErr: "invalid uri"},
+		{name: "userinfo", raw: "https://user:pass@app.example/hub", wantErr: "invalid uri"},
+		{name: "malformed", raw: "http://http://evil.example/hub", wantErr: "invalid uri"},
 	}
-	absolute := "https://app.example/hub"
-	got, err := ResolveReceivedWebappURI(absolute, nil)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if got != absolute {
-		t.Fatalf("absolute uri changed %q", got)
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := ValidateAbsoluteWebappURI(tt.raw)
+			if tt.wantErr != "" {
+				if err == nil || !strings.Contains(err.Error(), tt.wantErr) || got != "" {
+					t.Fatalf("got %q err %v", got, err)
+				}
+				if strings.Contains(err.Error(), "user:pass") || strings.Contains(err.Error(), "evil.example") {
+					t.Fatalf("error leaked uri material: %v", err)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatal(err)
+			}
+			if got != tt.want {
+				t.Fatalf("got %q want %q", got, tt.want)
+			}
+		})
 	}
 }
 

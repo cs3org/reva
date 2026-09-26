@@ -45,7 +45,15 @@ func TestUnmarshalProtocol(t *testing.T) {
 		},
 		{
 			raw: `{"name":"foo","options":{"unsupported":"value"}}`,
-			err: `missing sharedSecret from options {"unsupported":"value"}`,
+			err: "missing sharedSecret from options",
+		},
+		{
+			raw: `{"name":"foo","options":"super-secret-value"}`,
+			err: "malformed protocol options",
+		},
+		{
+			raw: `{"name":"foo","options":{"sharedSecret":["super-secret-value"]}}`,
+			err: "missing sharedSecret from options",
 		},
 		{
 			raw: `{"name":"ocm10format","options":{"sharedSecret":"secret"}}`,
@@ -187,7 +195,7 @@ func TestProtocolsValidateRejectsUnsupportedWebDAVRequirement(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected validation error for unsupported requirement")
 	}
-	if got, want := err.Error(), `protocol webdav has unsupported requirement "unsupported-requirement"`; got != want {
+	if got, want := err.Error(), "protocol webdav has unsupported requirement"; got != want {
 		t.Fatalf("Validate() error = %q, want %q", got, want)
 	}
 }
@@ -271,7 +279,7 @@ func TestProtocolsValidateWebapp(t *testing.T) {
 				Targets:      []string{"blank"},
 				URI:          "https://example.org/app",
 			},
-			err: `protocol webapp has unsupported permission "admin"`,
+			err: "protocol webapp has unsupported permission",
 		},
 		{
 			name: "unsupported target",
@@ -282,7 +290,7 @@ func TestProtocolsValidateWebapp(t *testing.T) {
 				Targets:      []string{"popup"},
 				URI:          "https://example.org/app",
 			},
-			err: `protocol webapp has unsupported target "popup"`,
+			err: "protocol webapp has unsupported target",
 		},
 	}
 

@@ -37,9 +37,37 @@ var ErrInvalidProtocolURI = errors.New("invalid protocol uri")
 // is checked or claimed.
 var ErrWebappMFAUnproven = errors.New("protocol webapp requirement must-use-mfa cannot be satisfied by this receiver")
 
+// ScreenIncomingWebapps rejects nil, duplicate, and unusable webapp offers
+// before discovery, conversion, or persistence. Other protocols are left
+// untouched.
+func ScreenIncomingWebapps(protocols Protocols, receiverTargets []string) error {
+	seen := 0
+	for _, protocol := range protocols {
+		if protocol == nil {
+			return errors.New("nil protocol")
+		}
+		webapp, ok := protocol.(*Webapp)
+		if !ok {
+			continue
+		}
+		if webapp == nil {
+			return errors.New("nil webapp protocol")
+		}
+		seen++
+		if seen > 1 {
+			return errors.New("ambiguous webapp protocol")
+		}
+		if err := webapp.ValidateReceived(receiverTargets); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 // ValidateReceived checks a webapp offer against this receiver's targets.
-// Empty AppName is valid metadata. Relative URIs are resolved later.
-// The offer is not mutated.
+// Empty AppName is valid metadata and is not rewritten. The offer is not
+// mutated. Absolute URI checks that decide whether the share is stored run
+// again before persistence.
 func (w *Webapp) ValidateReceived(receiverTargets []string) error {
 	if w == nil {
 		return errors.New("nil webapp protocol")
@@ -60,7 +88,7 @@ func (w *Webapp) ValidateReceived(receiverTargets []string) error {
 		validWebappPermissions,
 		w.Requirements,
 		validWebappRequirements,
-		w.URI,
+		"",
 	); err != nil {
 		return err
 	}
@@ -87,20 +115,35 @@ func ValidateWebappLaunch(uri, secret string, requirements, targets, receiverTar
 	return err
 }
 
+// validateRequirementValues rejects blank, padded, and unknown requirements.
+// Callers decide membership, including must-exchange-token, after this check.
+// Returned errors are fixed text; the supplied requirement is not included.
+func validateRequirementValues(protocolName string, requirements []string, valid map[string]struct{}) error {
+	for _, requirement := range requirements {
+		trimmed := strings.TrimSpace(requirement)
+		if trimmed == "" || trimmed != requirement {
+			return fixedProtocolFieldError(protocolName, "requirement", "malformed")
+		}
+		if _, ok := valid[requirement]; !ok {
+			return fixedProtocolFieldError(protocolName, "requirement", "unsupported")
+		}
+	}
+	return nil
+}
+
 func validateWebappRequirements(requirements []string) error {
+	if err := validateRequirementValues("webapp", requirements, validWebappRequirements); err != nil {
+		return err
+	}
+	return validateWebappExchangePolicy(requirements)
+}
+
+func validateWebappExchangePolicy(requirements []string) error {
 	if !slices.Contains(requirements, "must-exchange-token") {
 		return errors.New("protocol webapp requirements must include must-exchange-token")
 	}
-	for _, requirement := range requirements {
-		if strings.TrimSpace(requirement) == "" || strings.TrimSpace(requirement) != requirement {
-			return errors.New("protocol webapp has malformed requirement")
-		}
-		if _, ok := validWebappRequirements[requirement]; !ok {
-			return fmt.Errorf("protocol webapp has unsupported requirement %q", requirement)
-		}
-		if requirement == "must-use-mfa" {
-			return ErrWebappMFAUnproven
-		}
+	if slices.Contains(requirements, "must-use-mfa") {
+		return ErrWebappMFAUnproven
 	}
 	return nil
 }
