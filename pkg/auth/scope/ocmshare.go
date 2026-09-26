@@ -33,7 +33,7 @@ import (
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	registry "github.com/cs3org/go-cs3apis/cs3/storage/registry/v1beta1"
 	types "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
-	"github.com/cs3org/reva/v3/pkg/errtypes"
+	"github.com/cs3org/reva/v3/pkg/auth/scope/ocmshare"
 	"github.com/cs3org/reva/v3/pkg/utils"
 	"github.com/rs/zerolog"
 )
@@ -255,21 +255,7 @@ func AddCodeFlowOCMShareScope(share *ocmv1beta1.Share, role authpb.Role, scopes 
 }
 
 // GetOCMSharesFromScopes returns all OCM shares in the given scope.
+// No matching scopes returns a nil slice; this does not coerce that to empty.
 func GetOCMSharesFromScopes(scopes map[string]*authpb.Scope) ([]*ocmv1beta1.Share, error) {
-	var shares []*ocmv1beta1.Share
-	for k, s := range scopes {
-		if strings.HasPrefix(k, "ocmshare:") {
-			res := s.Resource
-			if res.Decoder != "json" {
-				return nil, errtypes.InternalError("resource should be json encoded")
-			}
-			var share ocmv1beta1.Share
-			err := utils.UnmarshalJSONToProtoV1(res.Value, &share)
-			if err != nil {
-				return nil, err
-			}
-			shares = append(shares, &share)
-		}
-	}
-	return shares, nil
+	return ocmshare.SharesFromScopes(scopes)
 }

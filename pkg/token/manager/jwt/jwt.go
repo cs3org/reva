@@ -58,9 +58,11 @@ type manager struct {
 // claims are custom claims for the JWT token.
 type claims struct {
 	jwt.RegisteredClaims
-	User     *user.User             `json:"user"`
-	Scope    map[string]*auth.Scope `json:"scope"`
-	ClientID string                 `json:"client_id,omitempty"`
+	User  *user.User             `json:"user"`
+	Scope map[string]*auth.Scope `json:"scope"`
+	// OCMShareID is serialized as client_id. The value is the outgoing share
+	// opaque id for one code-flow OCM share; omitempty drops every other scope.
+	OCMShareID string `json:"client_id,omitempty"`
 }
 
 func (c *config) ApplyDefaults() {
@@ -89,7 +91,7 @@ func New(m map[string]any) (token.Manager, error) {
 func (m *manager) MintToken(ctx context.Context, u *user.User, scope map[string]*auth.Scope) (string, error) {
 	// client_id is set only for one unambiguous code-flow OCM share. Other
 	// scope kinds return an empty id, which omitempty leaves out of the token.
-	clientID, err := ocmshare.CodeFlowOCMShareClientID(scope)
+	ocmShareID, err := ocmshare.CodeFlowOCMShareClientID(scope)
 	if err != nil {
 		return "", err
 	}
@@ -101,9 +103,9 @@ func (m *manager) MintToken(ctx context.Context, u *user.User, scope map[string]
 			Audience:  jwt.ClaimStrings{"reva"},
 			IssuedAt:  jwt.NewNumericDate(time.Now()),
 		},
-		User:     u,
-		Scope:    scope,
-		ClientID: clientID,
+		User:       u,
+		Scope:      scope,
+		OCMShareID: ocmShareID,
 	}
 
 	t := jwt.NewWithClaims(jwt.GetSigningMethod("HS256"), claims)
