@@ -256,15 +256,32 @@ type launchGatewayResolver struct {
 	service.Clients
 	mu sync.Mutex
 	gw gateway.GatewayAPIClient
+	// returnNil reports a nil client and a nil error.
+	returnNil bool
 }
 
 func (r *launchGatewayResolver) Gateway(context.Context) (gateway.GatewayAPIClient, error) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
+	if r.returnNil {
+		return nil, nil
+	}
 	if r.gw == nil {
 		return nil, errors.New("test gateway is not set")
 	}
 	return r.gw, nil
+}
+
+func setLaunchGatewayReturnsNil(t *testing.T) {
+	t.Helper()
+	t.Cleanup(func() {
+		launchResolver.mu.Lock()
+		launchResolver.returnNil = false
+		launchResolver.mu.Unlock()
+	})
+	launchResolver.mu.Lock()
+	launchResolver.returnNil = true
+	launchResolver.mu.Unlock()
 }
 
 var (

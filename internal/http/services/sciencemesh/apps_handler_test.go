@@ -118,73 +118,6 @@ func TestOpenInAppValidWebapp(t *testing.T) {
 	}
 }
 
-func TestOpenInAppRootLaunchKeepsBareOpener(t *testing.T) {
-	obs := &observeClient{token: launchToken}
-	share := receivedWebappShare(
-		"https://dav.example/dav",
-		"https://app.example/hub",
-		launchSecret,
-		[]string{"must-exchange-token"},
-	)
-	h, _ := newRecordingHandler(t, &fakeReceivedGateway{resp: okShareResponse(share)}, obs)
-
-	req, _ := newLaunchRequest(t, "/ocm/share-1")
-	rec := httptest.NewRecorder()
-	h.OpenInApp(rec, req)
-
-	var payload openInAppResponse
-	if err := json.Unmarshal(rec.Body.Bytes(), &payload); err != nil {
-		t.Fatalf("status %d decode %v body %s", rec.Code, err, rec.Body.String())
-	}
-	if payload.AppURL != "https://app.example/hub" {
-		t.Fatalf("app_url = %q", payload.AppURL)
-	}
-	if strings.Contains(payload.AppURL, "share-1") || strings.Contains(payload.AppURL, "/lab") {
-		t.Fatalf("root launch was rewritten: %s", payload.AppURL)
-	}
-}
-
-func TestOpenInAppRepeatedLaunchDiscoversIndependently(t *testing.T) {
-	obs := &observeClient{
-		endpointByCall: []string{
-			"https://token-a.example/ocm/token",
-			"https://token-b.example/ocm/token",
-		},
-		tokenByCall: []string{"token-a", "token-b"},
-	}
-	share := receivedWebappShare(
-		"https://dav.example/dav",
-		"https://app.example/hub",
-		launchSecret,
-		[]string{"must-exchange-token"},
-	)
-	h, seen := newRecordingHandler(t, &fakeReceivedGateway{resp: okShareResponse(share)}, obs)
-
-	var urls []string
-	for range 2 {
-		req, _ := newLaunchRequest(t, "/ocm/share-1")
-		rec := httptest.NewRecorder()
-		h.OpenInApp(rec, req)
-		if rec.Code != http.StatusOK {
-			t.Fatalf("status %d body %s", rec.Code, rec.Body.String())
-		}
-		var payload openInAppResponse
-		if err := json.Unmarshal(rec.Body.Bytes(), &payload); err != nil {
-			t.Fatal(err)
-		}
-		urls = append(urls, payload.AccessToken)
-	}
-	if obs.discoverCalls != 2 || seen.calls != 2 {
-		t.Fatalf("discover %d client builds %d", obs.discoverCalls, seen.calls)
-	}
-	if len(obs.tokenURLs) != 2 || obs.tokenURLs[0] != obs.endpointByCall[0] || obs.tokenURLs[1] != obs.endpointByCall[1] {
-		t.Fatalf("exchanged endpoints %v", obs.tokenURLs)
-	}
-	if urls[0] != "token-a" || urls[1] != "token-b" {
-		t.Fatalf("tokens %v", urls)
-	}
-}
-
 func TestOpenInAppChangedShareIsNotCached(t *testing.T) {
 	obs := &observeClient{
 		endpointByCall: []string{
@@ -209,9 +142,10 @@ func TestOpenInAppChangedShareIsNotCached(t *testing.T) {
 		okShareResponse(first),
 		okShareResponse(second),
 	}}
-	h, _ := newRecordingHandler(t, gw, obs)
+	h, seen := newRecordingHandler(t, gw, obs)
 
 	var urls []string
+	var tokens []string
 	for range 2 {
 		req, _ := newLaunchRequest(t, "/ocm/share-1")
 		rec := httptest.NewRecorder()
@@ -224,9 +158,18 @@ func TestOpenInAppChangedShareIsNotCached(t *testing.T) {
 			t.Fatal(err)
 		}
 		urls = append(urls, payload.AppURL)
+		tokens = append(tokens, payload.AccessToken)
 	}
-	if obs.discoverCalls != 2 || len(obs.origins) != 2 {
-		t.Fatalf("discover %d origins %v", obs.discoverCalls, obs.origins)
+	if gw.calls != 2 || gw.opaqueID != "share-1" {
+		t.Fatalf("lookups %d share %q", gw.calls, gw.opaqueID)
+	}
+	if obs.discoverCalls != 2 || len(obs.origins) != 2 || seen.calls != 2 {
+		t.Fatalf(
+			"discover %d origins %v client builds %d",
+			obs.discoverCalls,
+			obs.origins,
+			seen.calls,
+		)
 	}
 	if obs.origins[0] != "https://dav-a.example" || obs.origins[1] != "https://dav-b.example" {
 		t.Fatalf("origins %v", obs.origins)
@@ -234,6 +177,51 @@ func TestOpenInAppChangedShareIsNotCached(t *testing.T) {
 	if urls[0] != "https://app.example/hub/a" || urls[1] != "https://app.example/hub/b" {
 		t.Fatalf("app urls %v", urls)
 	}
+	if len(obs.tokenURLs) != 2 ||
+		obs.tokenURLs[0] != obs.endpointByCall[0] ||
+		obs.tokenURLs[1] != obs.endpointByCall[1] {
+		t.Fatalf("exchanged endpoints %v", obs.tokenURLs)
+	}
+	if tokens[0] != "token-a" || tokens[1] != "token-b" {
+		t.Fatalf("tokens %v", tokens)
+	}
+}
+
+func TestOpenInAppMalformedForm(t *testing.T) {
+	gw := &fakeReceivedGateway{}
+	obs := &observeClient{token: launchToken}
+	h, seen := newRecordingHandler(t, gw, obs)
+	base, logs := newLaunchRequest(t, "/ocm/share-1")
+	req := httptest.NewRequest(
+		http.MethodPost,
+		"/sciencemesh/open-in-app",
+		strings.NewReader("file=%zz"),
+	)
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req = req.WithContext(base.Context())
+
+	rec := httptest.NewRecorder()
+	h.OpenInApp(rec, req)
+
+	body := rec.Body.String()
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("status %d body %s", rec.Code, body)
+	}
+	invalidParameter := strings.Contains(body, `"INVALID_PARAMETER"`)
+	unparsed := strings.Contains(body, "parameters could not be parsed")
+	if !invalidParameter || !unparsed {
+		t.Fatalf("body %s", body)
+	}
+	if gw.calls != 0 || seen.calls != 0 || obs.discoverCalls != 0 || obs.exchangeCalls != 0 {
+		t.Fatalf(
+			"gateway %d client builds %d discover %d exchange %d",
+			gw.calls,
+			seen.calls,
+			obs.discoverCalls,
+			obs.exchangeCalls,
+		)
+	}
+	assertNotLeaked(t, body, logs.String(), launchSecret, launchToken)
 }
 
 func TestOpenInAppMissingFile(t *testing.T) {

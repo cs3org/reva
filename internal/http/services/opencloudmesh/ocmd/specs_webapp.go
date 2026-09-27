@@ -26,15 +26,12 @@ import (
 	"strings"
 )
 
-// implementedWebappTarget is the only target this receiver can open.
 const implementedWebappTarget = "blank"
 
 // ErrInvalidProtocolURI is the stable sentinel for a malformed protocol URI.
 var ErrInvalidProtocolURI = errors.New("invalid protocol uri")
 
-// ErrWebappMFAUnproven means this receiver cannot satisfy must-use-mfa.
-// The requirement is recognized and permanently rejected. No session proof
-// is checked or claimed.
+// ErrWebappMFAUnproven permanently rejects must-use-mfa; no session proof is checked or claimed.
 var ErrWebappMFAUnproven = errors.New("protocol webapp requirement must-use-mfa cannot be satisfied by this receiver")
 
 // ValidateReceived checks a webapp offer against this receiver's targets.
@@ -69,8 +66,7 @@ func (w *Webapp) ValidateReceived(receiverTargets []string) error {
 	return webappTargetCompatible(w.Targets, receiverTargets)
 }
 
-// ValidateWebappLaunch rechecks a stored webapp before any remote call.
-// Permissions are not re-derived. Empty AppName stays valid.
+// ValidateWebappLaunch rechecks a stored offer without re-deriving permissions.
 func ValidateWebappLaunch(uri, secret string, requirements, targets, receiverTargets []string) error {
 	offer := &Webapp{
 		URI:          uri,
@@ -115,10 +111,7 @@ func webappTargetCompatible(offered, advertised []string) error {
 	return errors.New("protocol webapp has no compatible target")
 }
 
-// ValidateAbsoluteWebappURI returns raw when it is a non-blank, unpadded,
-// absolute http or https URI with a hostname and no userinfo. Relative,
-// network-path, and opaque references are rejected. Escaping, query, and
-// fragment are preserved.
+// ValidateAbsoluteWebappURI accepts an absolute http(s) URL and returns the exact stored string.
 func ValidateAbsoluteWebappURI(raw string) (string, error) {
 	if strings.TrimSpace(raw) == "" {
 		return "", errors.New("protocol webapp missing uri")
