@@ -307,9 +307,6 @@ func (h *wkocmHandler) buildData(c *OcmProviderConfig) *OcmDiscoveryData {
 	return d
 }
 
-// advertisedTokenEndpoint returns the code-flow token URL when JoinPath
-// succeeds and the result is an absolute http or https URL with a hostname
-// and no userinfo.
 func advertisedTokenEndpoint(baseURL, prefix string) (string, bool) {
 	endpoint, err := TokenEndpoint(baseURL, prefix)
 	if err != nil || !usableDiscoveryBase(endpoint) {

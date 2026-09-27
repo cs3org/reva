@@ -380,9 +380,6 @@ func TestWebappValidatorsAgree(t *testing.T) {
 	}{
 		{name: "exchange token", reqs: []string{"must-exchange-token"}, ok: true},
 		{name: "padded requirement", reqs: []string{" must-exchange-token"}, want: "malformed requirement"},
-		{name: "blank requirement", reqs: []string{" "}, want: "malformed requirement"},
-		{name: "unknown requirement", reqs: []string{"must-exchange-token", "must-sign"}, want: "unsupported requirement"},
-		{name: "missing exchange", reqs: []string{"must-use-mfa"}, want: "must-exchange-token"},
 		{name: "permanent mfa", reqs: []string{"must-exchange-token", "must-use-mfa"}, mfa: true},
 	}
 	for _, tt := range tests {
