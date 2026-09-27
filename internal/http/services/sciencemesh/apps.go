@@ -240,9 +240,6 @@ func (h *appsHandler) buildLaunch(ctx context.Context, shareID *ocmpb.ShareId, r
 	if err != nil {
 		return fail(err, "")
 	}
-	if strings.TrimSpace(h.receiverDomain) == "" {
-		return fail(errtypes.BadRequest("provider domain is not configured"), "")
-	}
 
 	launched, err := joinShareRelativePath(appURI, rel)
 	if err != nil {
