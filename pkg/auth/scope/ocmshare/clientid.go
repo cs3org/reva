@@ -29,10 +29,8 @@ import (
 	"github.com/cs3org/reva/v3/pkg/utils"
 )
 
-// SharesFromScopes decodes every scope whose key uses the ocmshare: prefix.
-// Unrelated keys are ignored, including nil values. A matching nil scope, nil
-// resource, or non-json decoder fails closed. No matching scopes returns a
-// nil slice so callers can tell "nothing matched" from a decoded list.
+// SharesFromScopes decodes ocmshare: keys and ignores unrelated keys. A nil
+// scope, nil resource, or non-json decoder fails closed; no matches returns a nil slice.
 func SharesFromScopes(scopes map[string]*authpb.Scope) ([]*ocmv1beta1.Share, error) {
 	var shares []*ocmv1beta1.Share
 	for k, s := range scopes {
@@ -52,11 +50,8 @@ func SharesFromScopes(scopes map[string]*authpb.Scope) ([]*ocmv1beta1.Share, err
 	return shares, nil
 }
 
-// CodeFlowOCMShareClientID returns the opaque id of the single code-flow OCM
-// share in scopes. Every ocmshare entry is decoded before legacy token-bearing
-// shares are ignored, so a malformed legacy payload still fails. The returned
-// id keeps the share's exact opaque spelling. No code-flow share returns
-// ("", nil). A blank id or more than one code-flow share returns an error.
+// CodeFlowOCMShareClientID returns one code-flow share's exact opaque spelling.
+// Malformed legacy payloads fail closed; none returns ("", nil); blank or many error.
 func CodeFlowOCMShareClientID(scopes map[string]*authpb.Scope) (string, error) {
 	shares, err := SharesFromScopes(scopes)
 	if err != nil {

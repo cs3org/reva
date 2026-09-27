@@ -30,6 +30,7 @@ import (
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	ocmv1beta1 "github.com/cs3org/go-cs3apis/cs3/sharing/ocm/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
+	types "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
 	"github.com/cs3org/reva/v3/pkg/auth/scope"
 	"github.com/cs3org/reva/v3/pkg/token"
 	"github.com/cs3org/reva/v3/pkg/token/manager/jwt"
@@ -251,17 +252,39 @@ func TestMintTokenLegacyAndNonOCMOmitClientID(t *testing.T) {
 
 func TestMintTokenAmbiguousCodeFlowFails(t *testing.T) {
 	mgr := newMinter(t, testSigningKey)
-	scopes := codeFlowScope(t, "share-alpha", "exchange-code-alpha")
+	user := federatedUser()
+
+	ambiguous := codeFlowScope(t, "share-alpha", "exchange-code-alpha")
 	extra, err := scope.AddCodeFlowOCMShareScope(&ocmv1beta1.Share{
 		Id:         &ocmv1beta1.ShareId{OpaqueId: "share-beta"},
 		ResourceId: &provider.ResourceId{StorageId: "stor", OpaqueId: "res-beta"},
-	}, authpb.Role_ROLE_VIEWER, scopes)
+	}, authpb.Role_ROLE_VIEWER, ambiguous)
 	if err != nil {
 		t.Fatal(err)
 	}
-	raw, err := mgr.MintToken(context.Background(), federatedUser(), extra)
-	if err == nil || raw != "" {
-		t.Fatalf("ambiguous mint: token=%q err=%v", raw, err)
+	blank := codeFlowScope(t, " ", "exchange-code-blank")
+	malformed := map[string]*authpb.Scope{
+		"ocmshare:broken": {
+			Resource: &types.OpaqueEntry{Decoder: "json", Value: []byte("{")},
+			Role:     authpb.Role_ROLE_VIEWER,
+		},
+	}
+
+	tests := []struct {
+		name   string
+		scopes map[string]*authpb.Scope
+	}{
+		{name: "ambiguous", scopes: extra},
+		{name: "blank id", scopes: blank},
+		{name: "malformed json", scopes: malformed},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			raw, err := mgr.MintToken(context.Background(), user, tt.scopes)
+			if err == nil || raw != "" {
+				t.Fatalf("mint: token=%q err=%v", raw, err)
+			}
+		})
 	}
 }
 

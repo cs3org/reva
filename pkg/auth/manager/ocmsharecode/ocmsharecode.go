@@ -79,9 +79,7 @@ func (m *manager) Configure(ml map[string]any) error {
 	return nil
 }
 
-// Authenticate validates an exchange code and the receiving provider named by
-// clientID. clientID must be the host-only FQDN of the share's stored
-// recipient. The exchanged code is the only share lookup key.
+// Authenticate checks that clientID is the receiving provider. The code is the only share lookup key.
 func (m *manager) Authenticate(
 	ctx context.Context,
 	clientID string,
@@ -120,14 +118,11 @@ func (m *manager) Authenticate(
 	}
 
 	share := shareRes.GetShare()
-	// providerId is the resolved share's opaque id. A missing share, a missing
-	// id, or a blank opaque id cannot authenticate a code-flow token.
 	if strings.TrimSpace(share.GetId().GetOpaqueId()) == "" {
 		return nil, nil, errtypes.InvalidCredentials("ocm share is missing provider id")
 	}
 
-	// The stored recipient is the grantee IdP. It must be a host-only FQDN and
-	// match clientID without regard to case. Sender and creator are not compared.
+	// The stored recipient must match clientID; sender and creator are not compared.
 	grantee := share.GetGrantee().GetUserId()
 	if grantee == nil {
 		return nil, nil, errtypes.InvalidCredentials("ocm share is missing grantee")
