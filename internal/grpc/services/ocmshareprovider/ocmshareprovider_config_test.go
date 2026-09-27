@@ -200,6 +200,24 @@ func TestOfferWebappInitializationRejectsInvalidConfig(t *testing.T) {
 			},
 			substr: "http or https",
 		},
+		{
+			name: "double-scheme http endpoint",
+			cfg: map[string]any{
+				"offer_webapp":    true,
+				"webapp_name":     testAppName,
+				"webapp_endpoint": "http://http://evil.example/services/ocm/open",
+			},
+			substr: "http or https URL with a hostname and no userinfo",
+		},
+		{
+			name: "double-scheme https endpoint",
+			cfg: map[string]any{
+				"offer_webapp":    true,
+				"webapp_name":     testAppName,
+				"webapp_endpoint": "https://https://evil.example/services/ocm/open",
+			},
+			substr: "http or https URL with a hostname and no userinfo",
+		},
 	}
 	for _, tt := range cases {
 		t.Run(tt.name, func(t *testing.T) {
