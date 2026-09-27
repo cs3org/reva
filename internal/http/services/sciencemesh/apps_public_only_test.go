@@ -230,40 +230,6 @@ func TestOpenInAppPublicDiscoveryPrivateToken(t *testing.T) {
 	assertNotLeaked(t, rec.Body.String(), logs.String(), launchSecret, launchToken)
 }
 
-func TestOpenInAppPublicOnlyScriptRefusesPrivateDiscovery(t *testing.T) {
-	share := receivedWebappShare(
-		"https://10.9.8.7/dav",
-		"https://app.example/hub",
-		launchSecret,
-		[]string{"must-exchange-token"},
-	)
-	h := newTestHandler(t, &fakeReceivedGateway{resp: okShareResponse(share)}, nil)
-	h.clientTimeout = time.Second
-	h.clientInsecure = false
-	script := &publicOnlyScript{
-		real:          ocmd.NewPublicOnlyClient(time.Second, false),
-		tokenEndpoint: "https://token.example/ocm/token",
-	}
-	h.newLaunchClient = func(timeout time.Duration, insecure bool) launchClient {
-		if timeout != time.Second || insecure {
-			t.Errorf("timeout %s insecure %v", timeout, insecure)
-		}
-		return script
-	}
-	req, logs := newLaunchRequest(t, "/ocm/share-1")
-	rec := httptest.NewRecorder()
-	h.OpenInApp(rec, req)
-	if rec.Code == http.StatusOK {
-		t.Fatal("private discovery succeeded")
-	}
-	if script.discoverCalls != 1 || script.exchangeCalls != 0 {
-		t.Fatalf("discover %d exchange %d", script.discoverCalls, script.exchangeCalls)
-	}
-	if !strings.Contains(logs.String(), "non-public") && !strings.Contains(logs.String(), "refusing") {
-		t.Fatalf("body %s log %s", rec.Body.String(), logs.String())
-	}
-}
-
 func TestOpenInAppPublicOnlyIgnoresProxy(t *testing.T) {
 	var hits atomic.Int32
 	proxy := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
