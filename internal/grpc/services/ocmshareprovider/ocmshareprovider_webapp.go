@@ -33,7 +33,7 @@ import (
 	"google.golang.org/protobuf/proto"
 )
 
-// Fixed texts carry no request data. Configured names are kept exactly, including padding.
+// Fixed texts carry no request data.
 const (
 	invalidShareAccessMethodsText = "invalid ocm share access methods"
 	webappOnlyNoProtocolText      = "webapp-only offer has no shareable protocol"
