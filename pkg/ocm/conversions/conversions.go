@@ -161,7 +161,6 @@ func WebappMetadataForReceivedShare(received *ocm.ReceivedShare) *ReceivedWebapp
 			continue
 		}
 		if meta != nil {
-			// Two or more stored webapp protocols are ambiguous.
 			log.Warn().
 				Str("share_id", received.GetId().GetOpaqueId()).
 				Int("protocol_index", i).
