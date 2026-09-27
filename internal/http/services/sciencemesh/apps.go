@@ -95,10 +95,6 @@ func (h *appsHandler) OpenInApp(w http.ResponseWriter, r *http.Request) {
 		reqres.WriteError(w, r, reqres.APIErrorInvalidParameter, "missing file", nil)
 		return
 	}
-	if err := validateShareFilePath(filePath); err != nil {
-		writeLaunchError(w, r, err)
-		return
-	}
 
 	shareID, rel := h.shareInfo(filePath)
 	payload, err := h.buildLaunch(ctx, shareID, rel)
@@ -135,6 +131,10 @@ func (h *appsHandler) buildLaunch(ctx context.Context, shareID *ocmpb.ShareId, r
 			return fail(errtypes.BadRequest("malformed remote URL"), "")
 		}
 		return fail(errtypes.BadRequest(err.Error()), "")
+	}
+
+	if err := validateShareFilePath(rel); err != nil {
+		return fail(err, "")
 	}
 
 	appURI, err := requireHTTPSAppURI(webapp.GetUri())
