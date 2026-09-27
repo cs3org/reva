@@ -33,26 +33,18 @@ import (
 	"google.golang.org/protobuf/proto"
 )
 
+// Fixed texts carry no request data. Configured names are kept exactly, including padding.
 const (
-	// invalidShareAccessMethodsText is the only gRPC message returned when
-	// normalized access methods are rejected. It carries no request content.
 	invalidShareAccessMethodsText = "invalid ocm share access methods"
-	// webappOnlyNoProtocolText is returned when a webapp-only offer normalizes
-	// to zero protocols. It carries no request content.
-	webappOnlyNoProtocolText = "webapp-only offer has no shareable protocol"
-	// webappOmissionReason is logged once when a requested webapp candidate is
-	// left off the share. It has no URL, name, secret, or token.
-	webappOmissionReason = "omitting requested webapp access method"
-	reqMustExchangeToken = "must-exchange-token"
-	reqMustUseMFA        = "must-use-mfa"
+	webappOnlyNoProtocolText      = "webapp-only offer has no shareable protocol"
+	webappOmissionReason          = "omitting requested webapp access method"
+	reqMustExchangeToken          = "must-exchange-token"
+	reqMustUseMFA                 = "must-use-mfa"
 )
 
 var errInvalidShareAccessMethods = errors.New(invalidShareAccessMethodsText)
 
-// validateWebappOffer checks the provider-local offer at startup.
-// Disabled mode accepts an omitted name and endpoint. Enabled mode keeps the
-// configured name exactly, including padding, and requires an absolute http
-// or https opener with a hostname, no userinfo, and no embedded scheme.
+// validateWebappOffer keeps the configured name exactly, including padding.
 func (c *config) validateWebappOffer() error {
 	if c == nil || !c.OfferWebapp {
 		return nil
@@ -68,8 +60,6 @@ func (c *config) validateWebappOffer() error {
 	return nil
 }
 
-// validOutboundWebappEndpoint reports whether parsed is an absolute http or
-// https URL with a hostname, no userinfo, and no embedded scheme.
 func validOutboundWebappEndpoint(parsed *url.URL) bool {
 	if parsed == nil || parsed.User != nil {
 		return false
@@ -93,8 +83,7 @@ func validOutboundWebappEndpoint(parsed *url.URL) bool {
 	return true
 }
 
-// webappURL returns the configured opener unchanged. The share id is not
-// appended and no /lab suffix is added.
+// webappURL returns the configured opener unchanged.
 func (s *service) webappURL() string {
 	return s.conf.WebAppEndpoint
 }
@@ -124,11 +113,7 @@ func (s *service) getWebappProtocol(ocmShare *ocm.Share, m *ocm.AccessMethod_Web
 	}
 }
 
-// freshAccessMethods clones the request methods that will be stored and sent.
-// webappSupported and tokenExchangeSupported are computed by the caller;
-// this helper does not query discovery. The offer gate is decided before any
-// webapp candidate is validated, so a candidate that will be omitted cannot
-// fail the share.
+// The offer gate runs before validation, so an omitted candidate cannot fail the share.
 func (s *service) freshAccessMethods(
 	ctx context.Context,
 	requested []*ocm.AccessMethod,
@@ -225,7 +210,6 @@ func countWebappCandidates(methods []*ocm.AccessMethod) (int, error) {
 	return count, nil
 }
 
-// isWebappAccessMethod reports whether m is a webapp candidate.
 // A typed-nil webapp term is still a candidate. Its error is ignored until
 // the offer gate is true, so omitted candidates are not validated.
 func isWebappAccessMethod(m *ocm.AccessMethod) (bool, error) {
