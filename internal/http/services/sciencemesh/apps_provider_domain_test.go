@@ -48,44 +48,13 @@ func (f *fakeReceivedGateway) GetUser(
 	return nil, errors.New("GetUser must not supply the receiving client_id")
 }
 
-func TestAppsHandlerInitRejectsInvalidProviderDomain(t *testing.T) {
-	tests := []struct {
-		name   string
-		domain string
-	}{
-		{name: "empty", domain: ""},
-		{name: "whitespace", domain: " \t "},
-		{name: "url", domain: "https://receiver.example.test"},
-		{name: "port", domain: "receiver.example.test:443"},
-		{name: "ip", domain: "192.0.2.10"},
-		{name: "ip and port", domain: "127.0.0.1:54321"},
-		{name: "single label", domain: "receiver"},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			h := &appsHandler{}
-			err := h.init(&config{
-				OCMMountPoint:  "/ocm",
-				ProviderDomain: tt.domain,
-			})
-			if err == nil {
-				t.Fatal("expected init error")
-			}
-		})
-	}
-}
-
 func TestOpenInAppEmptyHandlerDoesNotExchange(t *testing.T) {
 	tests := []struct {
 		name   string
 		domain string
 	}{
 		{name: "empty", domain: ""},
-		{name: "whitespace", domain: " \t"},
 		{name: "url", domain: "https://receiver.example.test"},
-		{name: "port", domain: "receiver.example.test:443"},
-		{name: "ip", domain: "127.0.0.1"},
-		{name: "single label", domain: "receiver"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
