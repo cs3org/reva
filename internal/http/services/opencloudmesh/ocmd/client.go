@@ -240,9 +240,7 @@ func (c *OCMClient) NewShare(ctx context.Context, endpoint string, r *NewShareRe
 	return sresp, err
 }
 
-// logNewShareDiagnostic records a fixed outcome and the provider id.
-// Callers pass values they already computed. This helper does not read the
-// share JSON and does not query discovery.
+// logNewShareDiagnostic logs fixed fields and never reads share JSON.
 func logNewShareDiagnostic(log *zerolog.Logger, providerID, httpStatus, outcome string) {
 	event := log.Info().Str("provider_id", providerID)
 	if httpStatus != "" {

@@ -126,8 +126,7 @@ func getEmbeddedTransferrer(ctx context.Context, c *config) (embedded.Transferre
 func New(ctx context.Context, m map[string]any) (rgrpc.Service, error) {
 	var c config
 	decodeErr := cfg.Decode(m, &c)
-	// Enabled-offer failures are startup BadRequest, including when required_if
-	// already rejected the same config. Disabled mode does not reach that check.
+	// Offer validation is ordered before the required_if decode error.
 	if err := c.validateWebappOffer(); err != nil {
 		return nil, err
 	}
@@ -216,8 +215,7 @@ func (s *service) walk(ctx context.Context, path string, fn walker.WalkFunc) err
 }
 
 // return the protocols that can be used by remote users to access a local OCM share.
-// The access-method list is already normalized; webapp methods that failed the
-// offer gate are absent here and are not rebuilt from the original request.
+// Access methods are already normalized.
 func (s *service) getProtocols(ctx context.Context, share *ocm.Share) ocmd.Protocols {
 	var p ocmd.Protocols
 	for _, m := range share.AccessMethods {
@@ -366,9 +364,6 @@ func (s *service) CreateOCMShare(ctx context.Context, req *ocm.CreateOCMShareReq
 		}
 	}
 
-	// Gate inputs are the booleans computed above. Normalization does not
-	// discover the remote again. Invalid methods fail before NewShare and
-	// before the local store.
 	methods, err := s.freshAccessMethods(ctx, req.AccessMethods, webapp_supported, token_exchange_supported)
 	if err != nil {
 		return &ocm.CreateOCMShareResponse{
@@ -377,9 +372,7 @@ func (s *service) CreateOCMShare(ctx context.Context, req *ocm.CreateOCMShareReq
 	}
 	ocmshare.AccessMethods = methods
 
-	// Normalization can omit every method on a webapp-only offer. Return a
-	// user-facing invalid-argument error before NewShare when no protocol
-	// remains. The attach gate still decides whether a webapp method is kept.
+	// An empty normalized protocol list fails before NewShare.
 	protocols := s.getProtocols(ctx, ocmshare)
 	if len(protocols) == 0 {
 		return &ocm.CreateOCMShareResponse{
