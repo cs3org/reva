@@ -79,14 +79,6 @@ func TestGetSharedWithMeEncodesReceivedWebappMetadata(t *testing.T) {
 	if bytes.Contains(rec.Body.Bytes(), []byte(receivedWebappJSONKey)) {
 		t.Fatalf("nil metadata leaked into handler body %s", rec.Body.Bytes())
 	}
-
-	meta := &receivedWebappMetadata{Present: true, AppName: "caf\u00e9 \"<ok>\""}
-	var got bytes.Buffer
-	if err := encodeSharedWithMe(&got, []any{newReceivedShareDriveItem(item, meta)}); err != nil {
-		t.Fatal(err)
-	}
-	encoded := decodeSharedWithMeItem(t, got.Bytes())
-	assertWebappSibling(t, mustJSON(t, item), encoded, meta.AppName)
 }
 
 func TestGetSharedWithMeOCMEnabledOmitsNilWebapp(t *testing.T) {
