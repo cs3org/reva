@@ -63,8 +63,7 @@ type sharesHandler struct {
 	machineSecret              string
 	autoAcceptProviders        []*regexp.Regexp
 	trustForwardedFor          bool
-	// ocmClient is the shared discovery client created at init.
-	ocmClient *OCMClient
+	ocmClient                  *OCMClient
 	// webappReceiveTargets overrides local discovery when non-nil.
 	webappReceiveTargets *[]string
 }
