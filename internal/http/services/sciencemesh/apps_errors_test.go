@@ -263,8 +263,8 @@ func TestOpenInAppFailures(t *testing.T) {
 			wantText:   "provider domain",
 		},
 		{
-			name: "traversal",
-			file: "/ocm/share-1/../secret",
+			name: "nested encoded traversal",
+			file: "/ocm/share-1/dir/%2e%2e/secret",
 			gw: &fakeReceivedGateway{resp: okShareResponse(
 				validWebapp("https://app.example/hub", []string{"must-exchange-token"}),
 			)},
@@ -285,8 +285,8 @@ func TestOpenInAppFailures(t *testing.T) {
 			forbidURL:  "https://app.example/hub",
 		},
 		{
-			name: "absolute replacement",
-			file: "/ocm/share-1/https://evil.example/x",
+			name: "encoded absolute replacement",
+			file: "/ocm/share-1/https:%2f%2fevil.example/x",
 			gw: &fakeReceivedGateway{resp: okShareResponse(
 				validWebapp("https://app.example/hub", []string{"must-exchange-token"}),
 			)},
