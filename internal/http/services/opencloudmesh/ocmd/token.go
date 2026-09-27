@@ -92,8 +92,7 @@ func (h *tokenHandler) ExchangeToken(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// client_id is the receiving provider FQDN. The exchanged code remains the
-	// only share lookup key.
+	// client_id is the receiver FQDN; the exchanged code is the only share lookup key.
 	authRes, err := gw.Authenticate(ctx, &gateway.AuthenticateRequest{
 		Type:         "ocmsharecode",
 		ClientId:     clientID,

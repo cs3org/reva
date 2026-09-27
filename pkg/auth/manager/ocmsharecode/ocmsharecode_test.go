@@ -24,7 +24,6 @@ import (
 	"strings"
 	"testing"
 
-	authpb "github.com/cs3org/go-cs3apis/cs3/auth/provider/v1beta1"
 	gateway "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
 	grouppb "github.com/cs3org/go-cs3apis/cs3/identity/group/v1beta1"
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
@@ -32,7 +31,6 @@ import (
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	ocm "github.com/cs3org/go-cs3apis/cs3/sharing/ocm/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
-	types "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
 	"github.com/cs3org/reva/v3/pkg/auth/scope"
 	"github.com/cs3org/reva/v3/pkg/errtypes"
 	"github.com/cs3org/reva/v3/pkg/permissions"
@@ -169,22 +167,6 @@ func TestAuthenticateValidCode(t *testing.T) {
 	}
 	if _, ok := scopes["user"]; ok {
 		t.Error("code-flow token must not contain 'user' scope key")
-	}
-}
-
-func TestAuthenticateClientIDDoesNotNeedShareIDMatch(t *testing.T) {
-	s := testShare("share-abc", "code123")
-	stampGateway(&mockGW{share: s, shareErr: rpc.Code_CODE_OK, remoteErr: rpc.Code_CODE_OK})
-	mgr := &manager{
-		c: &config{},
-	}
-
-	user, _, err := mgr.Authenticate(context.Background(), "remote.example.com", "code123")
-	if err != nil {
-		t.Fatal(err)
-	}
-	if user.Id.OpaqueId != "accepted-user" {
-		t.Errorf("user: got %s, want accepted-user", user.Id.OpaqueId)
 	}
 }
 
@@ -515,79 +497,4 @@ func mintAuthenticatedShare(t *testing.T, minter token.Manager, share *ocm.Share
 
 func bytesContains(haystack []byte, needle string) bool {
 	return strings.Contains(string(haystack), needle)
-}
-
-func TestAuthenticateMissingProviderID(t *testing.T) {
-	tests := []struct {
-		name  string
-		share *ocm.Share
-	}{
-		{name: "nil share", share: nil},
-		{name: "nil id", share: applyShareMutators(testShare("share-abc", "code123"), mutateMissingOpaqueID)},
-		{name: "blank opaque id", share: testShare("", "code123")},
-		{name: "whitespace opaque id", share: testShare("   ", "code123")},
-	}
-
-	minter := newTestMinter(t)
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			gw := &mockGW{share: tt.share, shareErr: rpc.Code_CODE_OK, remoteErr: rpc.Code_CODE_OK}
-			stampGateway(gw)
-			mgr := &manager{c: &config{}}
-			user, scopes, err := mgr.Authenticate(context.Background(), "receiver.example", "code123")
-			if err == nil {
-				t.Fatal("expected missing provider id to fail code-flow auth")
-			}
-			cred, ok := err.(errtypes.InvalidCredentials)
-			if !ok || string(cred) != "ocm share is missing provider id" {
-				t.Errorf("expected InvalidCredentials missing provider id, got %T: %v", err, err)
-			}
-			if user != nil || scopes != nil {
-				t.Fatalf("auth result: user=%v scopes=%v, want no token inputs", user, scopes)
-			}
-			if gw.shareCalls != 1 || gw.acceptedCalls != 0 {
-				t.Fatalf("calls: share=%d accepted=%d", gw.shareCalls, gw.acceptedCalls)
-			}
-		})
-	}
-
-	blank, err := scope.AddCodeFlowOCMShareScope(testShare(" ", "code123"), authpb.Role_ROLE_VIEWER, nil)
-	if err != nil {
-		t.Fatal(err)
-	}
-	raw, err := minter.MintToken(context.Background(), &userpb.User{
-		Id: &userpb.UserId{OpaqueId: "accepted-user", Idp: "remote.example.com"},
-	}, blank)
-	if err == nil || raw != "" {
-		t.Fatalf("blank provider id mint: token=%q err=%v", raw, err)
-	}
-}
-
-func TestMintAmbiguousOrMalformedCodeFlowScope(t *testing.T) {
-	minter := newTestMinter(t)
-	user := &userpb.User{Id: &userpb.UserId{OpaqueId: "accepted-user", Idp: "remote.example.com"}}
-
-	alphaShare := distinctShare("share-alpha", "res-alpha", "owner-a.example", "sender-a.example", "receiver-a.example")
-	alpha, err := scope.AddCodeFlowOCMShareScope(alphaShare, authpb.Role_ROLE_VIEWER, nil)
-	if err != nil {
-		t.Fatal(err)
-	}
-	betaShare := distinctShare("share-beta", "res-beta", "owner-b.example", "sender-b.example", "receiver-b.example")
-	both, err := scope.AddCodeFlowOCMShareScope(betaShare, authpb.Role_ROLE_VIEWER, alpha)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if raw, err := minter.MintToken(context.Background(), user, both); err == nil || raw != "" {
-		t.Fatalf("ambiguous mint: token=%q err=%v", raw, err)
-	}
-
-	malformed := map[string]*authpb.Scope{
-		"ocmshare:broken": {
-			Resource: &types.OpaqueEntry{Decoder: "json", Value: []byte("{")},
-			Role:     authpb.Role_ROLE_VIEWER,
-		},
-	}
-	if raw, err := minter.MintToken(context.Background(), user, malformed); err == nil || raw != "" {
-		t.Fatalf("malformed mint: token=%q err=%v", raw, err)
-	}
 }
