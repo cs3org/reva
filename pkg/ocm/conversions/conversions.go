@@ -210,8 +210,7 @@ type UnifiedRoleDefinition struct {
 	Id *string
 }
 
-// ReceivedWebappMetadata is presence and the exact persisted app name for
-// one received share.
+// ReceivedWebappMetadata is presence and the exact persisted app name for one received share.
 type ReceivedWebappMetadata struct {
 	Present bool
 	AppName string
