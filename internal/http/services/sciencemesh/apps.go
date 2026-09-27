@@ -247,9 +247,6 @@ func (h *appsHandler) buildLaunch(ctx context.Context, shareID *ocmpb.ShareId, r
 	if err != nil {
 		return fail(err, "")
 	}
-	if strings.TrimSpace(h.receiverDomain) == "" {
-		return fail(errtypes.BadRequest("provider domain is not configured"), "")
-	}
 
 	origin, err := senderDiscoveryOrigin(share.GetProtocols())
 	if err != nil {
