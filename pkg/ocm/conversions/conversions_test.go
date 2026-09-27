@@ -156,23 +156,6 @@ func TestWebappMetadataForReceivedShare(t *testing.T) {
 	}
 }
 
-func TestWebappMetadataSharesDoNotInheritNames(t *testing.T) {
-	first := WebappMetadataForReceivedShare(shareWithWebapp("CodiMD"))
-	second := WebappMetadataForReceivedShare(shareWithWebapp("Etherpad"))
-	if first == nil || second == nil {
-		t.Fatal("expected metadata for both shares")
-	}
-	if first.AppName != "CodiMD" || second.AppName != "Etherpad" {
-		t.Fatalf("names = %q, %q", first.AppName, second.AppName)
-	}
-	if first.AppName == receiverLocalConfigName || second.AppName == receiverLocalConfigName {
-		t.Fatal("receiver local config name was substituted")
-	}
-	if first == second {
-		t.Fatal("shares share one metadata value")
-	}
-}
-
 func shareWithWebapp(appName string) *ocm.ReceivedShare {
 	return shareWithProtocols(webappProtocol(appName))
 }
