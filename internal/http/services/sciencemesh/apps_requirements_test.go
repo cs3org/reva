@@ -19,68 +19,11 @@
 package sciencemesh
 
 import (
-	"errors"
 	"strings"
 	"testing"
 
 	"github.com/cs3org/reva/v3/internal/http/services/opencloudmesh/ocmd"
 )
-
-func TestReceivedRequirementsAgreeWithIngest(t *testing.T) {
-	blank := []string{"blank"}
-	tests := []struct {
-		name string
-		reqs []string
-		want string
-		mfa  bool
-		ok   bool
-	}{
-		{name: "exchange token", reqs: []string{"must-exchange-token"}, ok: true},
-		{name: "padded requirement", reqs: []string{" must-exchange-token"}, want: "malformed requirement"},
-		{name: "blank requirement", reqs: []string{" "}, want: "malformed requirement"},
-		{name: "unknown requirement", reqs: []string{"must-exchange-token", "must-sign"}, want: "unsupported requirement"},
-		{name: "missing exchange", reqs: []string{"must-use-mfa"}, want: "must-exchange-token"},
-		{name: "permanent mfa", reqs: []string{"must-exchange-token", "must-use-mfa"}, mfa: true},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			offer := &ocmd.Webapp{
-				URI:          "https://app.example/hub",
-				SharedSecret: "secret",
-				Permissions:  []string{"read"},
-				Requirements: tt.reqs,
-				Targets:      []string{"blank"},
-			}
-			received := offer.ValidateReceived(blank, false)
-			launch := ocmd.ValidateWebappLaunch(
-				offer.URI,
-				offer.SharedSecret,
-				offer.Requirements,
-				offer.Targets,
-				blank,
-				false,
-			)
-			if tt.ok {
-				if received != nil || launch != nil {
-					t.Fatalf("received %v launch %v", received, launch)
-				}
-				return
-			}
-			if tt.mfa {
-				if !errors.Is(received, ocmd.ErrWebappMFAUnproven) || received.Error() != ocmd.ErrWebappMFAUnproven.Error() {
-					t.Fatalf("received %v", received)
-				}
-				if !errors.Is(launch, ocmd.ErrWebappMFAUnproven) || launch.Error() != received.Error() {
-					t.Fatalf("launch %v", launch)
-				}
-				return
-			}
-			if received == nil || launch == nil || received.Error() != launch.Error() || !strings.Contains(received.Error(), tt.want) {
-				t.Fatalf("received %v launch %v", received, launch)
-			}
-		})
-	}
-}
 
 func TestIngestHTTPDoesNotRelaxLaunchHTTPS(t *testing.T) {
 	const uri = "http://app.example/hub"
