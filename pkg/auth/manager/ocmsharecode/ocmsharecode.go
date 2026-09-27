@@ -169,6 +169,8 @@ func (m *manager) Authenticate(
 		return nil, nil, errtypes.NotFound(userRes.Status.Message)
 	case userRes.Status.Code != rpc.Code_CODE_OK:
 		return nil, nil, errtypes.InternalError(userRes.Status.Message)
+	case userRes.RemoteUser == nil:
+		return nil, nil, errtypes.InvalidCredentials("ocm share is missing grantee")
 	}
 
 	role, roleStr := ocmshareutil.GetRole(shareRes.Share)
