@@ -83,6 +83,11 @@ func TestRedactLaunchError(t *testing.T) {
 			err:  context.Canceled,
 			keep: context.Canceled,
 		},
+		{
+			name: "deadline exceeded stays observable",
+			err:  context.DeadlineExceeded,
+			keep: context.DeadlineExceeded,
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

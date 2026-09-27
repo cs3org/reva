@@ -27,10 +27,8 @@ import (
 	"github.com/cs3org/reva/v3/pkg/errtypes"
 )
 
-// WebappTokenEndpoint resolves the sender token endpoint from discovery.
-// It does not contact the network. A path-relative endpoint is resolved
-// against the absolute discovery endPoint. The result may still be http;
-// launch policy applies https separately.
+// WebappTokenEndpoint resolves a path-relative endpoint locally and does not dial the network.
+// The result may still be http; launch enforces https separately.
 func WebappTokenEndpoint(disco *wellknown.OcmDiscoveryData) (string, error) {
 	if disco == nil {
 		return "", errtypes.BadRequest("sender discovery is missing")

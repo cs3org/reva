@@ -72,9 +72,7 @@ type wkocmHandler struct {
 	data *OcmDiscoveryData
 }
 
-// WebappReceiveTargets returns the webapp-receive targets this provider
-// advertises. The only usable target is "blank", and only when the discovery
-// base is an absolute http or https URL with a hostname and no userinfo.
+// WebappReceiveTargets returns advertised receive targets; the only usable target is "blank".
 func WebappReceiveTargets(c *OcmProviderConfig) []string {
 	if c == nil || !c.EnableWebapp || !usableDiscoveryBase(c.Endpoint) {
 		return []string{}
@@ -82,8 +80,7 @@ func WebappReceiveTargets(c *OcmProviderConfig) []string {
 	return []string{webappReceiveTargetBlank}
 }
 
-// LocalWebappReceiveTargets returns the targets published by the local
-// well-known handler. The boolean is false until that handler has initialized.
+// LocalWebappReceiveTargets returns published targets and whether the handler has initialized.
 func LocalWebappReceiveTargets() ([]string, bool) {
 	localWebappMu.RLock()
 	defer localWebappMu.RUnlock()
@@ -93,9 +90,8 @@ func LocalWebappReceiveTargets() ([]string, bool) {
 	return append([]string{}, localWebappTargets...), true
 }
 
-// ResolveLocalWebappReceiveTargets prefers an explicit override.
-// A nil override uses the published local targets. An explicit empty override
-// disables receipt. An unknown local configuration returns no targets.
+// ResolveLocalWebappReceiveTargets treats nil as the published targets, an explicit
+// empty override as disabled receipt, and an unknown local configuration as no targets.
 func ResolveLocalWebappReceiveTargets(override *[]string) []string {
 	if override != nil {
 		return append([]string{}, (*override)...)
