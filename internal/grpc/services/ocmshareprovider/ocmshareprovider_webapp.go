@@ -52,7 +52,7 @@ var errInvalidShareAccessMethods = errors.New(invalidShareAccessMethodsText)
 // validateWebappOffer checks the provider-local offer at startup.
 // Disabled mode accepts an omitted name and endpoint. Enabled mode keeps the
 // configured name exactly, including padding, and requires an absolute http
-// or https opener with a hostname and no userinfo.
+// or https opener with a hostname, no userinfo, and no embedded scheme.
 func (c *config) validateWebappOffer() error {
 	if c == nil || !c.OfferWebapp {
 		return nil
@@ -69,7 +69,7 @@ func (c *config) validateWebappOffer() error {
 }
 
 // validOutboundWebappEndpoint reports whether parsed is an absolute http or
-// https URL with a hostname and no userinfo.
+// https URL with a hostname, no userinfo, and no embedded scheme.
 func validOutboundWebappEndpoint(parsed *url.URL) bool {
 	if parsed == nil || parsed.User != nil {
 		return false
@@ -79,10 +79,18 @@ func validOutboundWebappEndpoint(parsed *url.URL) bool {
 	}
 	switch parsed.Scheme {
 	case "http", "https":
-		return true
 	default:
 		return false
 	}
+	// url.Parse stores "http://http://host/..." as Host "http:" and a path
+	// that does not contain "://". Match the receiver's parsed-URL checks.
+	if parsed.Host == "http:" || parsed.Host == "https:" || strings.Contains(parsed.Host, "://") {
+		return false
+	}
+	if strings.HasPrefix(parsed.Path, "//http://") || strings.HasPrefix(parsed.Path, "//https://") {
+		return false
+	}
+	return true
 }
 
 // webappURL returns the configured opener unchanged. The share id is not
