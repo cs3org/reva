@@ -30,8 +30,6 @@ import (
 
 const receivedWebappJSONKey = "@ocm.webApp"
 
-// receivedWebappMetadata aliases the canonical conversions DTO so the
-// carrier reuses that canonical definition.
 type receivedWebappMetadata = ocmconversions.ReceivedWebappMetadata
 
 type receivedShareDriveItem struct {
@@ -39,7 +37,6 @@ type receivedShareDriveItem struct {
 	webapp *receivedWebappMetadata
 }
 
-// encodeSharedWithMe writes the getSharedWithMe collection envelope.
 func encodeSharedWithMe(w io.Writer, shares []any) error {
 	return json.NewEncoder(w).Encode(map[string]any{
 		"value": shares,
