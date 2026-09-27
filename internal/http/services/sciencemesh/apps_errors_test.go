@@ -43,6 +43,8 @@ func TestOpenInAppFailures(t *testing.T) {
 		gw           *fakeReceivedGateway
 		client       *observeClient
 		domain       string
+		nilClient    bool
+		nilGateway   bool
 		wantStatus   int
 		wantDiscover int
 		wantExchange int
@@ -117,6 +119,30 @@ func TestOpenInAppFailures(t *testing.T) {
 			client:     &observeClient{token: token},
 			wantStatus: http.StatusUnauthorized,
 			wantText:   "received share unauthenticated",
+		},
+		{
+			name: "internal share status",
+			file: "/ocm/share-1",
+			gw: &fakeReceivedGateway{resp: &ocmpb.GetReceivedOCMShareResponse{
+				Status: &rpcv1beta1.Status{
+					Code:    rpcv1beta1.Code_CODE_INTERNAL,
+					Message: secret,
+				},
+			}},
+			client:     &observeClient{token: token},
+			wantStatus: http.StatusInternalServerError,
+			wantText:   "received share lookup failed",
+		},
+		{
+			name: "nil gateway client",
+			file: "/ocm/share-1",
+			gw: &fakeReceivedGateway{resp: okShareResponse(
+				validWebapp("https://app.example/hub", []string{"must-exchange-token"}),
+			)},
+			client:     &observeClient{token: token},
+			nilGateway: true,
+			wantStatus: http.StatusInternalServerError,
+			wantText:   "gateway client is not available",
 		},
 		{
 			name:       "gateway failure",
@@ -263,6 +289,53 @@ func TestOpenInAppFailures(t *testing.T) {
 			wantText:   "provider domain",
 		},
 		{
+			name: "nil launch client",
+			file: "/ocm/share-1",
+			gw: &fakeReceivedGateway{resp: okShareResponse(
+				validWebapp("https://app.example/hub", []string{"must-exchange-token"}),
+			)},
+			client:     &observeClient{token: token},
+			nilClient:  true,
+			wantStatus: http.StatusInternalServerError,
+			wantText:   "launch client is not available",
+		},
+		{
+			name: "backslash file path",
+			file: "/ocm/share-1/dir\\secret",
+			gw: &fakeReceivedGateway{resp: okShareResponse(
+				validWebapp("https://app.example/hub", []string{"must-exchange-token"}),
+			)},
+			client:     &observeClient{token: token},
+			wantStatus: http.StatusBadRequest,
+			wantText:   "invalid file path",
+			forbidURL:  "https://app.example/hub",
+		},
+		{
+			name: "malformed percent escaping",
+			file: "/ocm/share-1/%zz",
+			gw: &fakeReceivedGateway{resp: okShareResponse(
+				validWebapp("https://app.example/hub", []string{"must-exchange-token"}),
+			)},
+			client:     &observeClient{token: token},
+			wantStatus: http.StatusBadRequest,
+			wantText:   "malformed file path",
+			forbidURL:  "https://app.example/hub",
+		},
+		{
+			// %2e stays through path.Clean, then unescapes to a single-dot segment.
+			name: "single dot segment after exchange",
+			file: "/ocm/share-1/foo/%2e/bar",
+			gw: &fakeReceivedGateway{resp: okShareResponse(
+				validWebapp("https://app.example/hub", []string{"must-exchange-token"}),
+			)},
+			client:       &observeClient{token: token},
+			wantStatus:   http.StatusBadRequest,
+			wantDiscover: 1,
+			wantExchange: 1,
+			wantText:     "invalid share-relative path",
+			forbidURL:    "https://app.example/hub",
+		},
+		{
 			name: "nested encoded traversal",
 			file: "/ocm/share-1/dir/%2e%2e/secret",
 			gw: &fakeReceivedGateway{resp: okShareResponse(
@@ -375,7 +448,14 @@ func TestOpenInAppFailures(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			h, _ := newRecordingHandler(t, tt.gw, tt.client)
+			client := launchClient(tt.client)
+			if tt.nilClient {
+				client = nil
+			}
+			h, seen := newRecordingHandler(t, tt.gw, client)
+			if tt.nilGateway {
+				setLaunchGatewayReturnsNil(t)
+			}
 			if tt.domain != "" {
 				h.receiverDomain = tt.domain
 			}
@@ -402,12 +482,21 @@ func TestOpenInAppFailures(t *testing.T) {
 			if tt.client.discoverCalls != tt.wantDiscover || tt.client.exchangeCalls != tt.wantExchange {
 				t.Fatalf("discover %d exchange %d", tt.client.discoverCalls, tt.client.exchangeCalls)
 			}
+			if tt.nilClient && seen.calls != 1 {
+				t.Fatalf("client builds %d", seen.calls)
+			}
+			if tt.nilGateway && (tt.gw.calls != 0 || seen.calls != 0) {
+				t.Fatalf("gateway %d client builds %d", tt.gw.calls, seen.calls)
+			}
 			if tt.forbidURL != "" && strings.Contains(rec.Body.String(), tt.forbidURL) {
 				t.Fatalf("fell back to bare app URL: %s", rec.Body.String())
 			}
 			assertNotLeaked(t, rec.Body.String(), logs.String(), secret, token)
-			if strings.Contains(rec.Body.String(), `"app_url"`) {
-				t.Fatalf("error body looked like a launch payload: %s", rec.Body.String())
+			body := rec.Body.String()
+			leakedURL := strings.Contains(body, `"app_url"`)
+			leakedToken := strings.Contains(body, `"access_token"`)
+			if leakedURL || leakedToken {
+				t.Fatalf("error body looked like a launch payload: %s", body)
 			}
 		})
 	}
