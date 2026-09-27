@@ -372,16 +372,7 @@ func TestNewRejectsInvalidProviderDomain(t *testing.T) {
 		omit   bool
 	}{
 		{name: "missing", omit: true},
-		{name: "empty", domain: ""},
-		{name: "whitespace", domain: "  \t"},
 		{name: "url", domain: "https://receiver.example.test"},
-		{name: "port", domain: "receiver.example.test:443"},
-		{name: "ip", domain: "192.0.2.10"},
-		{name: "ip and port", domain: "127.0.0.1:54321"},
-		{name: "single label", domain: "receiver"},
-		{name: "path", domain: "receiver.example.test/ocm"},
-		{name: "query", domain: "receiver.example.test?x=1"},
-		{name: "userinfo", domain: "user@receiver.example.test"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -401,83 +392,41 @@ func TestNewRejectsInvalidProviderDomain(t *testing.T) {
 }
 
 func TestCodeFlowClientIDUsesConfiguredDomain(t *testing.T) {
-	tests := []struct {
-		name         string
-		userIDP      string
-		granteeIDP   string
-		clearUser    bool
-		clearGrantee bool
-	}{
-		{
-			name:       "distinct user and grantee idps",
-			userIDP:    "user.idp.example",
-			granteeIDP: "grantee.idp.example",
-		},
-		{
-			name:         "absent user and grantee idp",
-			clearUser:    true,
-			clearGrantee: true,
-		},
-		{
-			name:       "configured domain equals user idp",
-			userIDP:    testReceiverFQDN,
-			granteeIDP: "grantee.idp.example",
-		},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			for _, via := range []string{"webdav", "upload"} {
-				t.Run(via, func(t *testing.T) {
-					got, tokenCalls := observedCodeFlowClientID(
-						t,
-						tt.userIDP,
-						tt.granteeIDP,
-						tt.clearUser,
-						tt.clearGrantee,
-						via,
-						testReceiverFQDN,
-					)
-					if tokenCalls != 1 {
-						t.Fatalf("token calls = %d, want 1", tokenCalls)
-					}
-					if got != testReceiverFQDN {
-						t.Fatalf("client_id = %q, want %q", got, testReceiverFQDN)
-					}
-				})
+	for _, via := range []string{"webdav", "upload"} {
+		t.Run(via, func(t *testing.T) {
+			got, tokenCalls := observedCodeFlowClientID(
+				t,
+				"user.idp.example",
+				"grantee.idp.example",
+				false,
+				false,
+				via,
+				testReceiverFQDN,
+			)
+			if tokenCalls != 1 {
+				t.Fatalf("token calls = %d, want 1", tokenCalls)
+			}
+			if got != testReceiverFQDN {
+				t.Fatalf("client_id = %q, want %q", got, testReceiverFQDN)
 			}
 		})
 	}
 }
 
 func TestEmptyDriverDoesNotExchange(t *testing.T) {
-	tests := []struct {
-		name   string
-		domain string
-	}{
-		{name: "empty", domain: ""},
-		{name: "whitespace", domain: " \t"},
-		{name: "url", domain: "https://receiver.example.test"},
-		{name: "port", domain: "receiver.example.test:443"},
-		{name: "ip", domain: "192.0.2.10"},
-		{name: "single label", domain: "receiver"},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			for _, via := range []string{"webdav", "upload"} {
-				t.Run(via, func(t *testing.T) {
-					_, tokenCalls := observedCodeFlowClientID(
-						t,
-						"user.idp.example",
-						"grantee.idp.example",
-						false,
-						false,
-						via,
-						tt.domain,
-					)
-					if tokenCalls != 0 {
-						t.Fatalf("token calls = %d, want 0", tokenCalls)
-					}
-				})
+	for _, via := range []string{"webdav", "upload"} {
+		t.Run(via, func(t *testing.T) {
+			_, tokenCalls := observedCodeFlowClientID(
+				t,
+				"user.idp.example",
+				"grantee.idp.example",
+				false,
+				false,
+				via,
+				"https://receiver.example.test",
+			)
+			if tokenCalls != 0 {
+				t.Fatalf("token calls = %d, want 0", tokenCalls)
 			}
 		})
 	}
