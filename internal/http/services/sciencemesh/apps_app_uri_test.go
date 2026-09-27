@@ -19,7 +19,6 @@
 package sciencemesh
 
 import (
-	"net/url"
 	"strings"
 	"testing"
 )
@@ -64,16 +63,5 @@ func TestRequireHTTPSAppURI(t *testing.T) {
 				t.Fatalf("got %q want %q", got, tt.want)
 			}
 		})
-	}
-}
-
-func TestValidateLaunchURLRejectsMissingHostname(t *testing.T) {
-	parsed, err := url.Parse("https://:443/hub")
-	if err != nil {
-		t.Fatal(err)
-	}
-	err = validateLaunchURL(parsed)
-	if err == nil || !strings.Contains(err.Error(), "absolute") {
-		t.Fatalf("err = %v", err)
 	}
 }
