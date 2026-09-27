@@ -399,8 +399,6 @@ func TestCodeFlowClientIDUsesConfiguredDomain(t *testing.T) {
 				t,
 				"user.idp.example",
 				"grantee.idp.example",
-				false,
-				false,
 				via,
 				testReceiverFQDN,
 			)
@@ -421,8 +419,6 @@ func TestEmptyDriverDoesNotExchange(t *testing.T) {
 				t,
 				"user.idp.example",
 				"grantee.idp.example",
-				false,
-				false,
 				via,
 				"https://receiver.example.test",
 			)
@@ -441,8 +437,6 @@ func TestCodeFlowClientIDPreservesSpelling(t *testing.T) {
 				t,
 				"user.idp.example",
 				"grantee.idp.example",
-				false,
-				false,
 				via,
 				want,
 			)
@@ -1978,7 +1972,6 @@ func (g *getUserGuard) GetUser(
 func observedCodeFlowClientID(
 	t *testing.T,
 	userIDP, granteeIDP string,
-	clearUser, clearGrantee bool,
 	via, domain string,
 ) (string, int) {
 	t.Helper()
@@ -2022,9 +2015,7 @@ func observedCodeFlowClientID(
 	t.Cleanup(srv.Close)
 
 	share := testCodeFlowReceivedShare(srv.Listener.Addr().String(), srv.URL)
-	if clearGrantee {
-		share.Grantee = nil
-	} else if share.GetGrantee().GetUserId() != nil {
+	if share.GetGrantee().GetUserId() != nil {
 		share.Grantee.GetUserId().Idp = granteeIDP
 	}
 	stampGateway(&getUserGuard{
@@ -2036,12 +2027,9 @@ func observedCodeFlowClientID(
 
 	d := newTestReceivedDriver(t)
 	d.providerDomain = domain
-	ctx := context.Background()
-	if !clearUser {
-		ctx = appctx.ContextSetUser(ctx, &userpb.User{
-			Id: &userpb.UserId{OpaqueId: "local-user", Idp: userIDP},
-		})
-	}
+	ctx := appctx.ContextSetUser(context.Background(), &userpb.User{
+		Id: &userpb.UserId{OpaqueId: "local-user", Idp: userIDP},
+	})
 
 	var callErr error
 	switch via {
