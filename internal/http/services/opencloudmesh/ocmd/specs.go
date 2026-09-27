@@ -323,10 +323,8 @@ func (p Protocols) Validate() error {
 			if data == nil {
 				return errors.New("nil webapp protocol")
 			}
-			// Malformed and unknown requirements are classified before the
-			// must-exchange-token membership check. Shared fields stay ahead
-			// of that membership check so a missing permission is reported
-			// on its own.
+			// Malformed and unknown requirements are classified before must-exchange-token.
+			// Shared fields stay ahead so a missing permission is reported on its own.
 			if err := validateRequirementValues("webapp", data.Requirements, validWebappRequirements); err != nil {
 				return err
 			}
@@ -381,8 +379,7 @@ func validateSharedProtocolFields(name, sharedSecret string, permissions []strin
 	return validateProtocolURI(name, uri)
 }
 
-// protocolFieldError is a fixed failure for a requirement, target, or permission.
-// The text names the protocol and field kind only, never the supplied value.
+// protocolFieldError is fixed text for a requirement, target, or permission and never includes the supplied value.
 type protocolFieldError struct {
 	protocol string
 	kind     string
@@ -438,8 +435,7 @@ func safeClassToken(class string) string {
 	}
 }
 
-// validateVocabulary checks that every value belongs to the allowed set.
-// The supplied value is inspected and then dropped; the error text is fixed.
+// validateVocabulary checks membership, then drops the value. The error text is fixed.
 func validateVocabulary(protocolName, kind string, values []string, valid map[string]struct{}) error {
 	for _, value := range values {
 		if _, ok := valid[value]; !ok {
