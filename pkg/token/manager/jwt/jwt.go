@@ -60,8 +60,7 @@ type claims struct {
 	jwt.RegisteredClaims
 	User  *user.User             `json:"user"`
 	Scope map[string]*auth.Scope `json:"scope"`
-	// OCMShareID is serialized as client_id. The value is the outgoing share
-	// opaque id for one code-flow OCM share; omitempty drops every other scope.
+	// OCMShareID is the JWT client_id claim (share opaque id), not the receiver FQDN.
 	OCMShareID string `json:"client_id,omitempty"`
 }
 
@@ -89,8 +88,6 @@ func New(m map[string]any) (token.Manager, error) {
 }
 
 func (m *manager) MintToken(ctx context.Context, u *user.User, scope map[string]*auth.Scope) (string, error) {
-	// client_id is set only for one unambiguous code-flow OCM share. Other
-	// scope kinds return an empty id, which omitempty leaves out of the token.
 	ocmShareID, err := ocmshare.CodeFlowOCMShareClientID(scope)
 	if err != nil {
 		return "", err

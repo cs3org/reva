@@ -36,6 +36,9 @@ func TestAuthenticateResponseAndGranteeGuards(t *testing.T) {
 		mutate       func(*ocm.Share)
 		nilResponse  bool
 		nilStatus    bool
+		nilShare     bool
+		statusCode   rpc.Code
+		statusMsg    string
 		gatewayErr   error
 		wantClass    string
 		wantMessage  string
@@ -61,6 +64,14 @@ func TestAuthenticateResponseAndGranteeGuards(t *testing.T) {
 			nilStatus:    true,
 			wantClass:    "internal",
 			wantMessage:  "missing ocm share response",
+			wantShareHit: 1,
+		},
+		{
+			name:         "unknown share status",
+			statusCode:   rpc.Code_CODE_INTERNAL,
+			statusMsg:    "share lookup failed",
+			wantClass:    "internal",
+			wantMessage:  "share lookup failed",
 			wantShareHit: 1,
 		},
 		{
@@ -112,17 +123,32 @@ func TestAuthenticateResponseAndGranteeGuards(t *testing.T) {
 			wantMessage:  "ocm share is missing provider id",
 			wantShareHit: 1,
 		},
+		{
+			name:         "nil share",
+			nilShare:     true,
+			wantClass:    "credentials",
+			wantMessage:  "ocm share is missing provider id",
+			wantShareHit: 1,
+		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			share := testShare("share-abc", "code123")
-			if tt.mutate != nil {
-				tt.mutate(share)
+			var share *ocm.Share
+			if !tt.nilShare {
+				share = testShare("share-abc", "code123")
+				if tt.mutate != nil {
+					tt.mutate(share)
+				}
+			}
+			shareCode := tt.statusCode
+			if shareCode == 0 {
+				shareCode = rpc.Code_CODE_OK
 			}
 			gw := &mockGW{
 				share:       share,
-				shareErr:    rpc.Code_CODE_OK,
+				shareErr:    shareCode,
+				shareMsg:    tt.statusMsg,
 				remoteErr:   rpc.Code_CODE_OK,
 				shareRPCErr: tt.gatewayErr,
 				nilResponse: tt.nilResponse,

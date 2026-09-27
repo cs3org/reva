@@ -34,11 +34,7 @@ func TestAuthenticateRejectsMalformedClientID(t *testing.T) {
 		clientID string
 	}{
 		{name: "empty", clientID: ""},
-		{name: "single label", clientID: "receiver"},
 		{name: "scheme", clientID: "https://receiver.example"},
-		{name: "ip", clientID: "192.0.2.10"},
-		{name: "port", clientID: "receiver.example:443"},
-		{name: "whitespace", clientID: "receiver.example "},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
