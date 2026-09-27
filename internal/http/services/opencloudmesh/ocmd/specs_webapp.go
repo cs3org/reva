@@ -34,9 +34,8 @@ var ErrInvalidProtocolURI = errors.New("invalid protocol uri")
 // ErrWebappMFAUnproven is returned when the receiver mfa_policy is reject and the offer requires must-use-mfa.
 var ErrWebappMFAUnproven = errors.New("protocol webapp requirement must-use-mfa cannot be satisfied by this receiver")
 
-// ScreenIncomingWebapps rejects nil, duplicate, and unusable webapp offers
-// before discovery, conversion, or persistence. Other protocols are left
-// untouched.
+// ScreenIncomingWebapps rejects nil, duplicate, and unusable offers before discovery, conversion, or persistence.
+// Other protocols are left untouched.
 func ScreenIncomingWebapps(protocols Protocols, receiverTargets []string) error {
 	seen := 0
 	for _, protocol := range protocols {
@@ -62,9 +61,8 @@ func ScreenIncomingWebapps(protocols Protocols, receiverTargets []string) error 
 }
 
 // ValidateReceived checks a webapp offer against this receiver's targets.
-// Empty AppName is valid metadata and is not rewritten. The offer is not
-// mutated. Absolute URI checks that decide whether the share is stored run
-// again before persistence.
+// Empty AppName is valid metadata and is not rewritten. The offer is not mutated.
+// Absolute URI checks run again before persistence.
 func (w *Webapp) ValidateReceived(receiverTargets []string, admitMFA bool) error {
 	if w == nil {
 		return errors.New("nil webapp protocol")
@@ -112,8 +110,7 @@ func ValidateWebappLaunch(uri, secret string, requirements, targets, receiverTar
 }
 
 // validateRequirementValues rejects blank, padded, and unknown requirements.
-// Callers decide membership, including must-exchange-token, after this check.
-// Returned errors are fixed text; the supplied requirement is not included.
+// Membership, including must-exchange-token, is checked afterward. Errors omit the supplied value.
 func validateRequirementValues(protocolName string, requirements []string, valid map[string]struct{}) error {
 	for _, requirement := range requirements {
 		trimmed := strings.TrimSpace(requirement)
