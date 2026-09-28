@@ -79,19 +79,19 @@ func ValidateWebappLaunch(uri, secret string, requirements, targets, receiverTar
 }
 
 func validateWebappRequirements(requirements []string) error {
-	if !slices.Contains(requirements, "must-exchange-token") {
-		return errors.New("protocol webapp requirements must include must-exchange-token")
-	}
 	for _, requirement := range requirements {
 		if strings.TrimSpace(requirement) == "" || strings.TrimSpace(requirement) != requirement {
 			return errors.New("protocol webapp has malformed requirement")
 		}
 		if _, ok := validWebappRequirements[requirement]; !ok {
-			return fmt.Errorf("protocol webapp has unsupported requirement %q", requirement)
+			return errors.New("protocol webapp has unsupported requirement")
 		}
-		if requirement == "must-use-mfa" {
-			return ErrWebappMFAUnproven
-		}
+	}
+	if !slices.Contains(requirements, "must-exchange-token") {
+		return errors.New("protocol webapp requirements must include must-exchange-token")
+	}
+	if slices.Contains(requirements, "must-use-mfa") {
+		return ErrWebappMFAUnproven
 	}
 	return nil
 }
