@@ -151,8 +151,10 @@ func TestGetSharedWithMeExposesPersistedWebappName(t *testing.T) {
 		secretMustNotLeak       = "secret-must-stay-in-storage"
 		webdavSecretMustNotLeak = "webdav-secret-must-stay-in-storage"
 	)
-	share := receivedOCMShareWithWebapp("ocm-share-webapp", "remote.txt", appName)
+	fixtures := loadReceivedWebappFixturesStrict(t)
+	share := receivedWebappContractShare(true, appName)
 	body := sharedWithMeOCM(t, share)
+	assertSharedWithMeEnvelopeEqual(t, body, fixtures.Positive)
 
 	if bytes.Contains(body, []byte(secretMustNotLeak)) || bytes.Contains(body, []byte(webdavSecretMustNotLeak)) {
 		t.Fatalf("secret leaked into handler body %s", body)
@@ -202,8 +204,10 @@ func TestGetSharedWithMeExposesPersistedWebappName(t *testing.T) {
 }
 
 func TestGetSharedWithMeWebDAVOnlyOmitsWebapp(t *testing.T) {
-	share := receivedOCMShareInfo()
+	fixtures := loadReceivedWebappFixturesStrict(t)
+	share := receivedWebappContractShare(false, "")
 	body := sharedWithMeOCM(t, share)
+	assertSharedWithMeEnvelopeEqual(t, body, fixtures.WebDAVOnly)
 	if bytes.Contains(body, []byte(receivedWebappJSONKey)) {
 		t.Fatalf("webdav-only body contains %s: %s", receivedWebappJSONKey, body)
 	}
@@ -230,8 +234,14 @@ func TestGetSharedWithMeWebDAVOnlyOmitsWebapp(t *testing.T) {
 
 func TestGetSharedWithMeWebappNamesStayOnMatchingShare(t *testing.T) {
 	const receiverLocalConfig = "LocalPad"
-	first := receivedOCMShareWithWebapp("ocm-share-a", "a.txt", "CodiMD")
-	second := receivedOCMShareWithWebapp("ocm-share-b", "b.txt", "Etherpad")
+	first := receivedWebappContractShare(true, "CodiMD")
+	first.Id = &ocm.ShareId{OpaqueId: "ocm-share-a"}
+	first.Name = "shared-folder-a"
+	first.Protocols[0].GetWebdavOptions().Uri = "https://remote.example/dav/shared-folder-a"
+	second := receivedWebappContractShare(true, "Etherpad")
+	second.Id = &ocm.ShareId{OpaqueId: "ocm-share-b"}
+	second.Name = "shared-folder-b"
+	second.Protocols[0].GetWebdavOptions().Uri = "https://remote.example/dav/shared-folder-b"
 	body := sharedWithMeOCM(t, first, second)
 	if bytes.Contains(body, []byte(receiverLocalConfig)) {
 		t.Fatalf("receiver local config name leaked into handler body %s", body)
@@ -265,6 +275,21 @@ func TestGetSharedWithMeWebappNamesStayOnMatchingShare(t *testing.T) {
 	}
 	if bytes.Contains(remoteItemOf(t, values[1]), []byte("CodiMD")) {
 		t.Fatal("second remoteItem inherited CodiMD")
+	}
+
+	firstRemoteID := remoteItemID(t, values[0])
+	secondRemoteID := remoteItemID(t, values[1])
+	if firstRemoteID == "" || secondRemoteID == "" {
+		t.Fatal("remoteItem id missing")
+	}
+	if firstRemoteID == secondRemoteID {
+		t.Fatalf("remoteItem ids must differ: %q", firstRemoteID)
+	}
+	if bytes.Contains(remoteItemOf(t, values[0]), []byte(secondRemoteID)) {
+		t.Fatal("first remoteItem contains second remoteItem id")
+	}
+	if bytes.Contains(remoteItemOf(t, values[1]), []byte(firstRemoteID)) {
+		t.Fatal("second remoteItem contains first remoteItem id")
 	}
 }
 
@@ -397,13 +422,15 @@ func TestGetSharedWithMeMalformedWebappProtocolOmitsExtension(t *testing.T) {
 }
 
 func TestGetSharedWithMeEmptyAppNameExposesBlankSibling(t *testing.T) {
-	share := receivedOCMShareWithWebapp("ocm-share-empty", "remote.txt", "")
+	fixtures := loadReceivedWebappFixturesStrict(t)
+	share := receivedWebappContractShare(true, "")
 	meta := receivedShareWebappMetadata(share)
 	if meta == nil || !meta.Present || meta.AppName != "" {
 		t.Fatalf("adapter metadata = %+v", meta)
 	}
 
 	body := sharedWithMeOCM(t, share)
+	assertSharedWithMeEnvelopeEqual(t, body, fixtures.EmptyName)
 	values := decodeSharedWithMeValues(t, body)
 	if len(values) != 1 {
 		t.Fatalf("value length = %d, want 1", len(values))
@@ -560,4 +587,14 @@ func webappName(t *testing.T, item []byte) string {
 func remoteItemOf(t *testing.T, item []byte) []byte {
 	t.Helper()
 	return decodeObject(t, item)["remoteItem"]
+}
+
+func remoteItemID(t *testing.T, item []byte) string {
+	t.Helper()
+	remote := decodeObject(t, remoteItemOf(t, item))
+	var id string
+	if err := json.Unmarshal(remote["id"], &id); err != nil {
+		t.Fatal(err)
+	}
+	return id
 }
