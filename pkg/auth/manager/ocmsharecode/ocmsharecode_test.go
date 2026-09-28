@@ -436,7 +436,7 @@ func mintAuthenticatedShare(t *testing.T, minter token.Manager, share *ocm.Share
 		t.Fatal(err)
 	}
 	if filtered.GetOpaqueId() != share.GetCreator().GetOpaqueId() || filtered.GetIdp() != share.GetCreator().GetIdp() {
-		t.Fatalf("user filter: got %#v, want creator", filtered)
+		t.Fatalf("user filter: got %#v, want creator", &filtered)
 	}
 	if filtered.GetIdp() == share.GetGrantee().GetUserId().GetIdp() {
 		t.Fatal("user filter used the recipient instead of the creator")
