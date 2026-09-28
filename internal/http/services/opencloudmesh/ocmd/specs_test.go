@@ -77,6 +77,22 @@ func TestValidateWebappLaunch(t *testing.T) {
 			want: "unsupported requirement",
 		},
 		{
+			name:    "unknown without exchange",
+			uri:     "https://app.example/hub",
+			secret:  "secret",
+			reqs:    []string{"must-sign"},
+			targets: blank, receiver: blank,
+			want: "unsupported requirement",
+		},
+		{
+			name:    "MFA only",
+			uri:     "https://app.example/hub",
+			secret:  "secret",
+			reqs:    []string{"must-use-mfa"},
+			targets: blank, receiver: blank,
+			want: "must-exchange-token",
+		},
+		{
 			name:    "missing token exchange",
 			uri:     "https://app.example/hub",
 			secret:  "secret",
@@ -117,6 +133,14 @@ func TestValidateWebappLaunch(t *testing.T) {
 			targets: blank, receiver: []string{},
 			want: "no compatible target",
 		},
+		{
+			name:    "MFA before a padded value",
+			uri:     "https://app.example/hub",
+			secret:  "secret",
+			reqs:    []string{"must-use-mfa", " must-exchange-token"},
+			targets: blank, receiver: blank,
+			want: "malformed requirement",
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -144,6 +168,9 @@ func TestValidateWebappLaunch(t *testing.T) {
 			}
 			if err == nil || !strings.Contains(err.Error(), tt.want) {
 				t.Fatalf("err = %v", err)
+			}
+			if tt.name == "unknown requirement" && strings.Contains(err.Error(), "must-sign") {
+				t.Fatalf("unsupported requirement echoed input: %v", err)
 			}
 		})
 	}
