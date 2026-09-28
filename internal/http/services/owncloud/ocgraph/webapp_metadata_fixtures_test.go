@@ -354,3 +354,29 @@ func receivedOCMShareInfo() *ocm.ReceivedShare {
 		},
 	}
 }
+
+func receivedWebappContractShare(present bool, appName string) *ocm.ReceivedShare {
+	const folderName = "shared-folder"
+	share := receivedOCMShareInfo()
+	share.Name = folderName
+	share.SharedResourceType = ocm.SharedResourceType_SHARE_RESOURCE_TYPE_CONTAINER
+	share.Protocols[0].GetWebdavOptions().Uri = "https://remote.example/dav/" + folderName
+	if !present {
+		return share
+	}
+	share.Protocols[0].GetWebdavOptions().SharedSecret = "webdav-secret-must-stay-in-storage"
+	share.Protocols = append(share.Protocols, &ocm.Protocol{
+		Term: &ocm.Protocol_WebappOptions{
+			WebappOptions: &ocm.WebappProtocol{
+				Uri:          "https://remote.example/open",
+				SharedSecret: "secret-must-stay-in-storage",
+				AppName:      appName,
+				AppIconHint:  "image/png",
+				MediaTypes:   []string{"text/markdown"},
+				Requirements: []string{"must-exchange-token"},
+				Targets:      []string{"blank"},
+			},
+		},
+	})
+	return share
+}
