@@ -19,8 +19,16 @@
 package ocgraph
 
 import (
+	"bytes"
+	"crypto/sha256"
 	"encoding/base32"
+	"encoding/hex"
+	"encoding/json"
 	"errors"
+	"os"
+	"path/filepath"
+	"strings"
+	"testing"
 	"time"
 
 	gateway "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
@@ -33,6 +41,151 @@ import (
 
 	"github.com/cs3org/reva/v3/pkg/permissions"
 )
+
+const (
+	receivedWebappFixtureSubdir        = "testdata/received-webapp"
+	receivedWebappManifestSHA256       = "2a8d0b6dbc82b2478aa53abefdf7864b1c016d261b345f4a6ebfcde852f3cbb1"
+	receivedWebappExpectationsRevision = "received-webapp-v1-2026-09-28"
+)
+
+var receivedWebappFixtureJSONFiles = []string{
+	"empty-name.sharedWithMe.json",
+	"positive.sharedWithMe.json",
+	"resource-expectations.json",
+	"webdav-only.sharedWithMe.json",
+}
+
+type receivedWebappFixtures struct {
+	Positive     []byte
+	WebDAVOnly   []byte
+	EmptyName    []byte
+	Expectations receivedWebappResourceExpectations
+	Sums         map[string]string
+}
+
+type receivedWebappResourceExpectations struct {
+	Revision string `json:"revision"`
+	Cases    []struct {
+		Response string `json:"response"`
+	} `json:"cases"`
+}
+
+func loadReceivedWebappFixturesStrict(t *testing.T) receivedWebappFixtures {
+	t.Helper()
+
+	dir := receivedWebappFixtureSubdir
+	manifestPath := filepath.Join(dir, "SHA256SUMS")
+	manifestBytes, err := os.ReadFile(manifestPath)
+	if err != nil {
+		t.Fatalf("read SHA256SUMS: %v", err)
+	}
+	if got := sha256Hex(manifestBytes); got != receivedWebappManifestSHA256 {
+		t.Fatalf("SHA256SUMS digest = %s, want %s", got, receivedWebappManifestSHA256)
+	}
+
+	sums, err := parseReceivedWebappSHA256SUMS(manifestBytes)
+	if err != nil {
+		t.Fatalf("parse SHA256SUMS: %v", err)
+	}
+	if len(sums) != len(receivedWebappFixtureJSONFiles) {
+		t.Fatalf("SHA256SUMS entries = %d, want %d", len(sums), len(receivedWebappFixtureJSONFiles))
+	}
+
+	readFixture := func(name string) []byte {
+		t.Helper()
+		raw, err := os.ReadFile(filepath.Join(dir, name))
+		if err != nil {
+			t.Fatalf("read %s: %v", name, err)
+		}
+		wantHash, ok := sums[name]
+		if !ok {
+			t.Fatalf("SHA256SUMS missing %s", name)
+		}
+		if got := sha256Hex(raw); got != wantHash {
+			t.Fatalf("%s digest = %s, want %s", name, got, wantHash)
+		}
+		return raw
+	}
+
+	for _, name := range receivedWebappFixtureJSONFiles {
+		if _, ok := sums[name]; !ok {
+			t.Fatalf("SHA256SUMS missing required file %s", name)
+		}
+	}
+
+	positive := readFixture("positive.sharedWithMe.json")
+	webdavOnly := readFixture("webdav-only.sharedWithMe.json")
+	emptyName := readFixture("empty-name.sharedWithMe.json")
+	expectationsRaw := readFixture("resource-expectations.json")
+
+	var expectations receivedWebappResourceExpectations
+	if err := json.Unmarshal(expectationsRaw, &expectations); err != nil {
+		t.Fatalf("decode resource-expectations.json: %v", err)
+	}
+
+	return receivedWebappFixtures{
+		Positive:     positive,
+		WebDAVOnly:   webdavOnly,
+		EmptyName:    emptyName,
+		Expectations: expectations,
+		Sums:         sums,
+	}
+}
+
+func parseReceivedWebappSHA256SUMS(raw []byte) (map[string]string, error) {
+	sums := make(map[string]string)
+	for _, line := range strings.Split(strings.TrimSpace(string(raw)), "\n") {
+		line = strings.TrimSpace(line)
+		if line == "" {
+			continue
+		}
+		fields := strings.Fields(line)
+		if len(fields) != 2 {
+			return nil, errors.New("malformed SHA256SUMS line: " + line)
+		}
+		sums[fields[1]] = fields[0]
+	}
+	return sums, nil
+}
+
+func sha256Hex(raw []byte) string {
+	sum := sha256.Sum256(raw)
+	return hex.EncodeToString(sum[:])
+}
+
+func goldenReceivedShareDriveItem(t *testing.T, webdavOnly []byte) *libregraph.DriveItem {
+	t.Helper()
+	raw := decodeSharedWithMeItem(t, webdavOnly)
+	var item libregraph.DriveItem
+	if err := json.Unmarshal(raw, &item); err != nil {
+		t.Fatalf("decode golden drive item: %v", err)
+	}
+	return &item
+}
+
+func assertSharedWithMeEnvelopeEqual(t *testing.T, got, want []byte) {
+	t.Helper()
+	if !jsonSemanticEqual(t, got, want) {
+		t.Fatalf("sharedWithMe envelope differs\n got %s\nwant %s", got, want)
+	}
+}
+
+func jsonSemanticEqual(t *testing.T, a, b []byte) bool {
+	t.Helper()
+	normalize := func(raw []byte) []byte {
+		t.Helper()
+		var v any
+		if err := json.Unmarshal(raw, &v); err != nil {
+			t.Fatalf("decode json: %v; raw %s", err, raw)
+		}
+		out, err := json.Marshal(v)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return out
+	}
+	return bytes.Equal(normalize(a), normalize(b))
+}
 
 type failJSON struct{}
 

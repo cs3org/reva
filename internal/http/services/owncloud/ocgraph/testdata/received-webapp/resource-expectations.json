@@ -1,0 +1,356 @@
+{
+  "revision": "received-webapp-v1-2026-09-28",
+  "projectionFields": [
+    "id",
+    "remoteItemId",
+    "fileId",
+    "storageId",
+    "driveId",
+    "parentFolderId",
+    "name",
+    "path",
+    "isFolder",
+    "type",
+    "mimeType",
+    "size",
+    "sharedBy",
+    "sharedWith",
+    "shareTypes",
+    "shareRoles",
+    "sharePermissions",
+    "syncEnabled",
+    "hidden",
+    "outgoing",
+    "ocmWebApp"
+  ],
+  "inputs": {
+    "serverUrl": "https://example.test",
+    "graphRoles": {
+      "b1e2218d-eef8-4d4c-b82d-0f1a1b48f3b5": {
+        "id": "b1e2218d-eef8-4d4c-b82d-0f1a1b48f3b5",
+        "displayName": "Viewer",
+        "rolePermissions": [
+          {
+            "allowedResourceActions": [
+              "libre.graph/driveItem/content/read"
+            ]
+          }
+        ]
+      }
+    },
+    "shareSpace": {
+      "id": "ocm-received$F5XWG3JNOJSWGZLJOZSWIL3PMNWS243IMFZGKLJR",
+      "driveAlias": "ocm-share/shared-folder",
+      "driveType": "share"
+    },
+    "currentFolder": {
+      "id": "ocm-received$F5XWG3JNOJSWGZLJOZSWIL3PMNWS243IMFZGKLJR!ocm-share-1:/docs",
+      "fileId": "ocm-received$F5XWG3JNOJSWGZLJOZSWIL3PMNWS243IMFZGKLJR!ocm-share-1:/docs",
+      "path": "/docs",
+      "type": "folder",
+      "isFolder": true
+    },
+    "children": [
+      {
+        "id": "ocm-received$F5XWG3JNOJSWGZLJOZSWIL3PMNWS243IMFZGKLJR!ocm-share-1:/docs/notes.md",
+        "fileId": "ocm-received$F5XWG3JNOJSWGZLJOZSWIL3PMNWS243IMFZGKLJR!ocm-share-1:/docs/notes.md",
+        "path": "/docs/notes.md",
+        "name": "notes.md",
+        "type": "file",
+        "isFolder": false
+      }
+    ]
+  },
+  "cases": [
+    {
+      "response": "positive.sharedWithMe.json",
+      "mappedResource": {
+        "id": "ocm-share-1",
+        "remoteItemId": "ocm-received$F5XWG3JNOJSWGZLJOZSWIL3PMNWS243IMFZGKLJR",
+        "fileId": "ocm-received$F5XWG3JNOJSWGZLJOZSWIL3PMNWS243IMFZGKLJR",
+        "storageId": "",
+        "driveId": "a0ca6a90-a365-4782-871e-d44447bbc668$a0ca6a90-a365-4782-871e-d44447bbc668",
+        "parentFolderId": "a0ca6a90-a365-4782-871e-d44447bbc668$a0ca6a90-a365-4782-871e-d44447bbc668!a0ca6a90-a365-4782-871e-d44447bbc668",
+        "name": "shared-folder",
+        "path": "/",
+        "isFolder": true,
+        "type": "folder",
+        "mimeType": "httpd/unix-directory",
+        "size": 0,
+        "sharedBy": [
+          {
+            "@libre.graph.userType": "Federated",
+            "displayName": "Federated User",
+            "id": "remote-c... on remote.example"
+          }
+        ],
+        "sharedWith": [
+          {
+            "@libre.graph.userType": "Federated",
+            "displayName": "Federated User",
+            "id": "me on local.example",
+            "shareType": 6
+          }
+        ],
+        "shareTypes": [
+          6
+        ],
+        "shareRoles": [
+          {
+            "id": "b1e2218d-eef8-4d4c-b82d-0f1a1b48f3b5",
+            "displayName": "Viewer",
+            "rolePermissions": [
+              {
+                "allowedResourceActions": [
+                  "libre.graph/driveItem/content/read"
+                ]
+              }
+            ]
+          }
+        ],
+        "sharePermissions": [
+          "libre.graph/driveItem/content/read"
+        ],
+        "syncEnabled": false,
+        "hidden": false,
+        "outgoing": false,
+        "ocmWebApp": {
+          "appName": "CodiMD"
+        }
+      },
+      "shareSpaceProjection": {
+        "id": "ocm-received$F5XWG3JNOJSWGZLJOZSWIL3PMNWS243IMFZGKLJR",
+        "ocmWebApp": {
+          "appName": "CodiMD"
+        }
+      },
+      "currentFolder": {
+        "id": "ocm-received$F5XWG3JNOJSWGZLJOZSWIL3PMNWS243IMFZGKLJR!ocm-share-1:/docs",
+        "fileId": "ocm-received$F5XWG3JNOJSWGZLJOZSWIL3PMNWS243IMFZGKLJR!ocm-share-1:/docs",
+        "path": "/docs",
+        "type": "folder",
+        "isFolder": true,
+        "remoteItemId": "ocm-received$F5XWG3JNOJSWGZLJOZSWIL3PMNWS243IMFZGKLJR",
+        "ocmWebApp": {
+          "appName": "CodiMD"
+        }
+      },
+      "children": [
+        {
+          "id": "ocm-received$F5XWG3JNOJSWGZLJOZSWIL3PMNWS243IMFZGKLJR!ocm-share-1:/docs/notes.md",
+          "fileId": "ocm-received$F5XWG3JNOJSWGZLJOZSWIL3PMNWS243IMFZGKLJR!ocm-share-1:/docs/notes.md",
+          "path": "/docs/notes.md",
+          "name": "notes.md",
+          "type": "file",
+          "isFolder": false,
+          "remoteItemId": "ocm-received$F5XWG3JNOJSWGZLJOZSWIL3PMNWS243IMFZGKLJR",
+          "ocmWebApp": {
+            "appName": "CodiMD"
+          }
+        }
+      ],
+      "action": {
+        "featureEnabled": true,
+        "visible": true,
+        "label": "Open remotely with CodiMD"
+      }
+    },
+    {
+      "response": "webdav-only.sharedWithMe.json",
+      "mappedResource": {
+        "id": "ocm-share-1",
+        "remoteItemId": "ocm-received$F5XWG3JNOJSWGZLJOZSWIL3PMNWS243IMFZGKLJR",
+        "fileId": "ocm-received$F5XWG3JNOJSWGZLJOZSWIL3PMNWS243IMFZGKLJR",
+        "storageId": "",
+        "driveId": "a0ca6a90-a365-4782-871e-d44447bbc668$a0ca6a90-a365-4782-871e-d44447bbc668",
+        "parentFolderId": "a0ca6a90-a365-4782-871e-d44447bbc668$a0ca6a90-a365-4782-871e-d44447bbc668!a0ca6a90-a365-4782-871e-d44447bbc668",
+        "name": "shared-folder",
+        "path": "/",
+        "isFolder": true,
+        "type": "folder",
+        "mimeType": "httpd/unix-directory",
+        "size": 0,
+        "sharedBy": [
+          {
+            "@libre.graph.userType": "Federated",
+            "displayName": "Federated User",
+            "id": "remote-c... on remote.example"
+          }
+        ],
+        "sharedWith": [
+          {
+            "@libre.graph.userType": "Federated",
+            "displayName": "Federated User",
+            "id": "me on local.example",
+            "shareType": 6
+          }
+        ],
+        "shareTypes": [
+          6
+        ],
+        "shareRoles": [
+          {
+            "id": "b1e2218d-eef8-4d4c-b82d-0f1a1b48f3b5",
+            "displayName": "Viewer",
+            "rolePermissions": [
+              {
+                "allowedResourceActions": [
+                  "libre.graph/driveItem/content/read"
+                ]
+              }
+            ]
+          }
+        ],
+        "sharePermissions": [
+          "libre.graph/driveItem/content/read"
+        ],
+        "syncEnabled": false,
+        "hidden": false,
+        "outgoing": false
+      },
+      "shareSpaceProjection": {
+        "id": "ocm-received$F5XWG3JNOJSWGZLJOZSWIL3PMNWS243IMFZGKLJR"
+      },
+      "currentFolder": {
+        "id": "ocm-received$F5XWG3JNOJSWGZLJOZSWIL3PMNWS243IMFZGKLJR!ocm-share-1:/docs",
+        "fileId": "ocm-received$F5XWG3JNOJSWGZLJOZSWIL3PMNWS243IMFZGKLJR!ocm-share-1:/docs",
+        "path": "/docs",
+        "type": "folder",
+        "isFolder": true,
+        "remoteItemId": "ocm-received$F5XWG3JNOJSWGZLJOZSWIL3PMNWS243IMFZGKLJR"
+      },
+      "children": [
+        {
+          "id": "ocm-received$F5XWG3JNOJSWGZLJOZSWIL3PMNWS243IMFZGKLJR!ocm-share-1:/docs/notes.md",
+          "fileId": "ocm-received$F5XWG3JNOJSWGZLJOZSWIL3PMNWS243IMFZGKLJR!ocm-share-1:/docs/notes.md",
+          "path": "/docs/notes.md",
+          "name": "notes.md",
+          "type": "file",
+          "isFolder": false,
+          "remoteItemId": "ocm-received$F5XWG3JNOJSWGZLJOZSWIL3PMNWS243IMFZGKLJR"
+        }
+      ],
+      "action": {
+        "featureEnabled": true,
+        "visible": false,
+        "label": ""
+      }
+    },
+    {
+      "response": "empty-name.sharedWithMe.json",
+      "mappedResource": {
+        "id": "ocm-share-1",
+        "remoteItemId": "ocm-received$F5XWG3JNOJSWGZLJOZSWIL3PMNWS243IMFZGKLJR",
+        "fileId": "ocm-received$F5XWG3JNOJSWGZLJOZSWIL3PMNWS243IMFZGKLJR",
+        "storageId": "",
+        "driveId": "a0ca6a90-a365-4782-871e-d44447bbc668$a0ca6a90-a365-4782-871e-d44447bbc668",
+        "parentFolderId": "a0ca6a90-a365-4782-871e-d44447bbc668$a0ca6a90-a365-4782-871e-d44447bbc668!a0ca6a90-a365-4782-871e-d44447bbc668",
+        "name": "shared-folder",
+        "path": "/",
+        "isFolder": true,
+        "type": "folder",
+        "mimeType": "httpd/unix-directory",
+        "size": 0,
+        "sharedBy": [
+          {
+            "@libre.graph.userType": "Federated",
+            "displayName": "Federated User",
+            "id": "remote-c... on remote.example"
+          }
+        ],
+        "sharedWith": [
+          {
+            "@libre.graph.userType": "Federated",
+            "displayName": "Federated User",
+            "id": "me on local.example",
+            "shareType": 6
+          }
+        ],
+        "shareTypes": [
+          6
+        ],
+        "shareRoles": [
+          {
+            "id": "b1e2218d-eef8-4d4c-b82d-0f1a1b48f3b5",
+            "displayName": "Viewer",
+            "rolePermissions": [
+              {
+                "allowedResourceActions": [
+                  "libre.graph/driveItem/content/read"
+                ]
+              }
+            ]
+          }
+        ],
+        "sharePermissions": [
+          "libre.graph/driveItem/content/read"
+        ],
+        "syncEnabled": false,
+        "hidden": false,
+        "outgoing": false,
+        "ocmWebApp": {
+          "appName": ""
+        }
+      },
+      "shareSpaceProjection": {
+        "id": "ocm-received$F5XWG3JNOJSWGZLJOZSWIL3PMNWS243IMFZGKLJR",
+        "ocmWebApp": {
+          "appName": ""
+        }
+      },
+      "currentFolder": {
+        "id": "ocm-received$F5XWG3JNOJSWGZLJOZSWIL3PMNWS243IMFZGKLJR!ocm-share-1:/docs",
+        "fileId": "ocm-received$F5XWG3JNOJSWGZLJOZSWIL3PMNWS243IMFZGKLJR!ocm-share-1:/docs",
+        "path": "/docs",
+        "type": "folder",
+        "isFolder": true,
+        "remoteItemId": "ocm-received$F5XWG3JNOJSWGZLJOZSWIL3PMNWS243IMFZGKLJR",
+        "ocmWebApp": {
+          "appName": ""
+        }
+      },
+      "children": [
+        {
+          "id": "ocm-received$F5XWG3JNOJSWGZLJOZSWIL3PMNWS243IMFZGKLJR!ocm-share-1:/docs/notes.md",
+          "fileId": "ocm-received$F5XWG3JNOJSWGZLJOZSWIL3PMNWS243IMFZGKLJR!ocm-share-1:/docs/notes.md",
+          "path": "/docs/notes.md",
+          "name": "notes.md",
+          "type": "file",
+          "isFolder": false,
+          "remoteItemId": "ocm-received$F5XWG3JNOJSWGZLJOZSWIL3PMNWS243IMFZGKLJR",
+          "ocmWebApp": {
+            "appName": ""
+          }
+        }
+      ],
+      "action": {
+        "featureEnabled": true,
+        "visible": false,
+        "label": ""
+      }
+    }
+  ],
+  "additionalNames": [
+    {
+      "appName": "Etherpad",
+      "visible": true,
+      "label": "Open remotely with Etherpad"
+    },
+    {
+      "appName": " CodiMD ",
+      "visible": true,
+      "label": "Open remotely with  CodiMD "
+    },
+    {
+      "appName": "   ",
+      "visible": false,
+      "label": ""
+    }
+  ],
+  "launch": {
+    "rootFileParameter": "ocm-share-1",
+    "nestedFileParameter": "ocm-received$F5XWG3JNOJSWGZLJOZSWIL3PMNWS243IMFZGKLJR!ocm-share-1:/docs/notes.md",
+    "expectedReceivedShareId": "ocm-share-1",
+    "expectedRelativePath": "docs/notes.md"
+  }
+}

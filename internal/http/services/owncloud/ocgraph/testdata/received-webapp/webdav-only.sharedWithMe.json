@@ -1,0 +1,65 @@
+{
+  "value": [
+    {
+      "@UI.Hidden": false,
+      "@client.synchronize": false,
+      "createdBy": {
+        "user": {
+          "@libre.graph.userType": "Federated",
+          "displayName": "Federated User",
+          "id": "remote-c... on remote.example"
+        }
+      },
+      "eTag": "seconds:1700000000",
+      "folder": {},
+      "id": "ocm-share-1",
+      "lastModifiedDateTime": "2023-11-14T22:13:20Z",
+      "name": "shared-folder",
+      "parentReference": {
+        "driveId": "a0ca6a90-a365-4782-871e-d44447bbc668$a0ca6a90-a365-4782-871e-d44447bbc668",
+        "driveType": "virtual",
+        "id": "a0ca6a90-a365-4782-871e-d44447bbc668$a0ca6a90-a365-4782-871e-d44447bbc668!a0ca6a90-a365-4782-871e-d44447bbc668"
+      },
+      "remoteItem": {
+        "createdBy": {
+          "user": {
+            "@libre.graph.userType": "Federated",
+            "displayName": "Federated User",
+            "id": "remote-c... on remote.example"
+          }
+        },
+        "eTag": "seconds:1700000000",
+        "id": "ocm-received$F5XWG3JNOJSWGZLJOZSWIL3PMNWS243IMFZGKLJR",
+        "lastModifiedDateTime": "2023-11-14T22:13:20Z",
+        "name": "shared-folder",
+        "permissions": [
+          {
+            "createdDateTime": "2023-11-14T22:13:20Z",
+            "grantedToV2": {
+              "user": {
+                "@libre.graph.userType": "Federated",
+                "displayName": "Federated User",
+                "id": "me on local.example"
+              }
+            },
+            "invitation": {
+              "invitedBy": {
+                "user": {
+                  "@libre.graph.userType": "Federated",
+                  "displayName": "Federated User",
+                  "id": "remote-c... on remote.example"
+                }
+              }
+            },
+            "roles": [
+              "b1e2218d-eef8-4d4c-b82d-0f1a1b48f3b5"
+            ]
+          }
+        ],
+        "size": 0,
+        "webUrl": "https://example.test/files/spaces/ocm-share/shared-folder"
+      },
+      "size": 0
+    }
+  ]
+}
