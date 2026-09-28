@@ -26,6 +26,7 @@ import (
 	"net/url"
 	"strings"
 	"time"
+	"unicode"
 
 	rpcv1beta1 "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	ocmpb "github.com/cs3org/go-cs3apis/cs3/sharing/ocm/v1beta1"
@@ -34,8 +35,8 @@ import (
 	"github.com/cs3org/reva/v3/internal/http/services/wellknown"
 	"github.com/cs3org/reva/v3/pkg/appctx"
 	"github.com/cs3org/reva/v3/pkg/errtypes"
-	"github.com/cs3org/reva/v3/pkg/rhttp/router"
 	"github.com/cs3org/reva/v3/pkg/service"
+	"github.com/cs3org/reva/v3/pkg/spaces"
 )
 
 // launchClient is one client for discovery and token exchange; tests may install a factory.
@@ -76,13 +77,100 @@ func (h *appsHandler) remoteClient() launchClient {
 	return ocmd.NewPublicOnlyClient(h.clientTimeout, h.clientInsecure)
 }
 
-func (h *appsHandler) shareInfo(p string) (*ocmpb.ShareId, string) {
-	p = strings.TrimPrefix(p, h.ocmMountPoint)
-	shareID, rel := router.ShiftPath(p)
-	if len(rel) > 0 {
+func (h *appsHandler) shareInfo(p string) (*ocmpb.ShareId, string, error) {
+	p = stripOCMMountPoint(p, h.ocmMountPoint)
+	p = strings.TrimPrefix(p, "/")
+	if p == "" {
+		return nil, "", errtypes.BadRequest("invalid file identifier")
+	}
+
+	bang := strings.IndexByte(p, '!')
+	slash := strings.IndexByte(p, '/')
+	if bang >= 0 && (slash < 0 || bang < slash) {
+		return parseResourceIDFileIdentifier(p)
+	}
+	return parsePathFileIdentifier(p)
+}
+
+func stripOCMMountPoint(p, mount string) string {
+	if mount == "" {
+		return p
+	}
+	if p == mount {
+		return ""
+	}
+	if strings.HasPrefix(p, mount+"/") {
+		return strings.TrimPrefix(p, mount)
+	}
+	return p
+}
+
+func parsePathFileIdentifier(p string) (*ocmpb.ShareId, string, error) {
+	shareID, rel, _ := strings.Cut(p, "/")
+	if invalidShareIdentifierComponent(shareID) {
+		return nil, "", errtypes.BadRequest("invalid file identifier")
+	}
+	return &ocmpb.ShareId{OpaqueId: shareID}, rel, nil
+}
+
+func parseResourceIDFileIdentifier(p string) (*ocmpb.ShareId, string, error) {
+	prefix, opaque, ok := strings.Cut(p, "!")
+	if !ok || prefix == "" || opaque == "" {
+		return nil, "", errtypes.BadRequest("invalid file identifier")
+	}
+	if invalidStoragePrefix(prefix) {
+		return nil, "", errtypes.BadRequest("invalid file identifier")
+	}
+	if strings.Contains(prefix, "$") {
+		storage, space, ok := strings.Cut(prefix, "$")
+		if !ok || storage == "" || space == "" {
+			return nil, "", errtypes.BadRequest("invalid file identifier")
+		}
+		if _, err := spaces.DecodeSpaceID(space); err != nil {
+			return nil, "", errtypes.BadRequest("invalid file identifier")
+		}
+	}
+	colon := strings.IndexByte(opaque, ':')
+	if colon < 0 {
+		return nil, "", errtypes.BadRequest("invalid file identifier")
+	}
+	shareID := opaque[:colon]
+	rel := opaque[colon+1:]
+	if invalidShareIdentifierComponent(shareID) {
+		return nil, "", errtypes.BadRequest("invalid file identifier")
+	}
+	if strings.HasPrefix(rel, "//") {
+		return nil, "", errtypes.BadRequest("invalid file identifier")
+	}
+	if strings.HasPrefix(rel, "/") {
 		rel = rel[1:]
 	}
-	return &ocmpb.ShareId{OpaqueId: shareID}, rel
+	return &ocmpb.ShareId{OpaqueId: shareID}, rel, nil
+}
+
+func invalidStoragePrefix(prefix string) bool {
+	if prefix == "" {
+		return true
+	}
+	if strings.ContainsAny(prefix, "/\\") {
+		return true
+	}
+	for _, r := range prefix {
+		if unicode.IsSpace(r) {
+			return true
+		}
+	}
+	return false
+}
+
+func invalidShareIdentifierComponent(component string) bool {
+	if component == "" || strings.TrimSpace(component) != component {
+		return true
+	}
+	if component == "." || component == ".." {
+		return true
+	}
+	return strings.ContainsAny(component, "/\\:!%")
 }
 
 func (h *appsHandler) OpenInApp(w http.ResponseWriter, r *http.Request) {
@@ -99,7 +187,11 @@ func (h *appsHandler) OpenInApp(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	shareID, rel := h.shareInfo(filePath)
+	shareID, rel, err := h.shareInfo(filePath)
+	if err != nil {
+		writeLaunchError(w, r, err)
+		return
+	}
 	payload, err := h.buildLaunch(ctx, shareID, rel)
 	if err != nil {
 		writeLaunchError(w, r, err)
@@ -312,10 +404,6 @@ func relativePathSegments(rel string) ([]string, error) {
 	hasBackslash := strings.Contains(unescaped, `\`)
 	hasScheme := strings.Contains(unescaped, "://")
 	if unescaped == "" || absolutePath || hasBackslash || hasScheme {
-		return nil, errtypes.BadRequest("invalid share-relative path")
-	}
-	parsed, err := url.Parse(unescaped)
-	if err != nil || parsed.IsAbs() {
 		return nil, errtypes.BadRequest("invalid share-relative path")
 	}
 	parts := strings.Split(unescaped, "/")
