@@ -140,6 +140,14 @@ func (s *svc) Authenticate(ctx context.Context, req *gateway.AuthenticateRequest
 		return res, nil
 	}
 
+	if res.User.Id.Type == userpb.UserType_USER_TYPE_LIGHTWEIGHT && s.c.LightweightHomeLayout != "" && !s.c.DisableHomeCreationOnLogin && req.Type != "machine" {
+		// Unlike a primary home, the account is usable without it: it still
+		// reaches what others shared with it. So log, and retry on next login.
+		if err := s.ensureLightweightHome(ctx, res.User); err != nil {
+			log.Err(err).Str("user", res.User.Username).Msg("error setting up lightweight home")
+		}
+	}
+
 	if scope, ok := res.TokenScope["user"]; s.c.DisableHomeCreationOnLogin || !ok || scope.Role != authpb.Role_ROLE_OWNER || res.User.Id.Type == userpb.UserType_USER_TYPE_FEDERATED {
 		gwRes := &gateway.AuthenticateResponse{
 			Status: status.NewOK(ctx),
