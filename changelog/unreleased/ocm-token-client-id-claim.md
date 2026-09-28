@@ -1,8 +1,8 @@
-Bugfix: complete code-flow OCM token client identity
+Bugfix: add client_id claim to minted OCM token
 
-The token endpoint accepts only the authorization_code grant. The form
-client_id must be the receiving provider's host-only FQDN and must
-match the stored share recipient. The minted JWT client_id claim is
-the resolved outgoing share opaque id. Legacy direct-secret tokens
-omit that claim. Missing, unknown, and ocm_share grants are rejected
-before any share lookup.
+The OCM token endpoint now accepts only the `authorization_code` grant, and
+the form `client_id` must be the receiving provider FQDN and match the stored
+share recipient. Tokens minted through the code flow carry a `client_id`
+claim set to the share id; legacy direct-secret tokens do not.
+
+https://github.com/cs3org/reva/pull/5856
