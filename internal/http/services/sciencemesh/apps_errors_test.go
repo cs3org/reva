@@ -199,7 +199,7 @@ func TestOpenInAppFailures(t *testing.T) {
 			name: "absent must-exchange-token",
 			file: "/ocm/share-1",
 			gw: &fakeReceivedGateway{resp: okShareResponse(
-				validWebapp("https://app.example/hub", []string{"must-invite"}),
+				validWebapp("https://app.example/hub", []string{"must-use-mfa"}),
 			)},
 			client:     &observeClient{token: token},
 			wantStatus: http.StatusBadRequest,
