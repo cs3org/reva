@@ -161,6 +161,119 @@ func TestReceivedShareDriveItemAddsWebappSiblingOnly(t *testing.T) {
 	})
 }
 
+func TestSharedWithMeContractFixtures(t *testing.T) {
+	fixtures := loadReceivedWebappFixturesStrict(t)
+	item := goldenReceivedShareDriveItem(t, fixtures.WebDAVOnly)
+
+	tests := []struct {
+		name        string
+		meta        *receivedWebappMetadata
+		wantFixture []byte
+		wantWebapp  bool
+		appName     string
+	}{
+		{
+			name:        "nil metadata",
+			meta:        nil,
+			wantFixture: fixtures.WebDAVOnly,
+		},
+		{
+			name:        "present false",
+			meta:        &receivedWebappMetadata{Present: false, AppName: "ignored"},
+			wantFixture: fixtures.WebDAVOnly,
+		},
+		{
+			name:        "present true CodiMD",
+			meta:        &receivedWebappMetadata{Present: true, AppName: "CodiMD"},
+			wantFixture: fixtures.Positive,
+			wantWebapp:  true,
+			appName:     "CodiMD",
+		},
+		{
+			name:        "present true empty name",
+			meta:        &receivedWebappMetadata{Present: true, AppName: ""},
+			wantFixture: fixtures.EmptyName,
+			wantWebapp:  true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if tt.meta == nil || !tt.meta.Present {
+				want := mustJSON(t, item)
+				got := mustJSON(t, newReceivedShareDriveItem(item, tt.meta))
+				if !bytes.Equal(got, want) {
+					t.Fatalf("wrapper bytes differ\n got %s\nwant %s", got, want)
+				}
+			}
+
+			var buf bytes.Buffer
+			if err := encodeSharedWithMe(&buf, []any{newReceivedShareDriveItem(item, tt.meta)}); err != nil {
+				t.Fatal(err)
+			}
+			assertSharedWithMeEnvelopeEqual(t, buf.Bytes(), tt.wantFixture)
+
+			values := decodeSharedWithMeValues(t, buf.Bytes())
+			if len(values) != 1 {
+				t.Fatalf("value length = %d, want 1", len(values))
+			}
+			root := decodeObject(t, values[0])
+			if _, ok := root["folder"]; !ok {
+				t.Fatal("folder missing on drive item")
+			}
+
+			if tt.wantWebapp {
+				assertWebappSibling(t, mustJSON(t, item), values[0], tt.appName)
+				return
+			}
+			assertPermissionCount(t, values[0], 1)
+			remote := decodeObject(t, root["remoteItem"])
+			if _, ok := remote[receivedWebappJSONKey]; ok {
+				t.Fatal("unexpected remoteItem webapp sibling")
+			}
+		})
+	}
+}
+
+func TestReceivedWebappFixtureManifest(t *testing.T) {
+	fixtures := loadReceivedWebappFixturesStrict(t)
+	if fixtures.Expectations.Revision != receivedWebappExpectationsRevision {
+		t.Fatalf("revision = %q, want %q", fixtures.Expectations.Revision, receivedWebappExpectationsRevision)
+	}
+	if len(fixtures.Expectations.Cases) == 0 {
+		t.Fatal("resource-expectations cases empty")
+	}
+
+	knownResponses := map[string][]byte{
+		"positive.sharedWithMe.json":    fixtures.Positive,
+		"webdav-only.sharedWithMe.json": fixtures.WebDAVOnly,
+		"empty-name.sharedWithMe.json":  fixtures.EmptyName,
+	}
+	seen := make(map[string]struct{}, len(fixtures.Expectations.Cases))
+	for _, c := range fixtures.Expectations.Cases {
+		if c.Response == "" {
+			t.Fatal("case response filename empty")
+		}
+		raw, ok := knownResponses[c.Response]
+		if !ok {
+			t.Fatalf("unknown response filename %q", c.Response)
+		}
+		wantHash, ok := fixtures.Sums[c.Response]
+		if !ok {
+			t.Fatalf("SHA256SUMS missing response %q", c.Response)
+		}
+		if got := sha256Hex(raw); got != wantHash {
+			t.Fatalf("%s digest = %s, want %s", c.Response, got, wantHash)
+		}
+		seen[c.Response] = struct{}{}
+	}
+	for name := range knownResponses {
+		if _, ok := seen[name]; !ok {
+			t.Fatalf("resource-expectations missing case for %q", name)
+		}
+	}
+}
+
 func TestReceivedShareDriveItemMetadataErrors(t *testing.T) {
 	t.Run("nil item", func(t *testing.T) {
 		got, err := newReceivedShareDriveItem(nil, &receivedWebappMetadata{
