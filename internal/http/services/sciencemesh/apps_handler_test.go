@@ -30,6 +30,7 @@ import (
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	ocmpb "github.com/cs3org/go-cs3apis/cs3/sharing/ocm/v1beta1"
 	ocmprovider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
+	"github.com/cs3org/reva/v3/pkg/spaces"
 	"google.golang.org/grpc/metadata"
 )
 
@@ -231,5 +232,297 @@ func TestOpenInAppMissingFile(t *testing.T) {
 	h.OpenInApp(rec, req)
 	if rec.Code != http.StatusBadRequest || !strings.Contains(rec.Body.String(), "missing file") {
 		t.Fatalf("status %d body %s", rec.Code, rec.Body.String())
+	}
+}
+
+func launchWebappShare(t *testing.T) *ocmpb.ReceivedShare {
+	t.Helper()
+	return receivedWebappShare(
+		"https://dav.example/dav",
+		"https://app.example/hub/open?keep=1#frag",
+		launchSecret,
+		[]string{"must-exchange-token"},
+	)
+}
+
+func TestOpenInAppFileIdentifierSuccess(t *testing.T) {
+	const bareApp = "https://app.example/hub/open?keep=1#frag"
+	validSpace := spaces.EncodeSpaceID("/teams/demo")
+	withSpace := "storage-id$" + validSpace
+
+	tests := []struct {
+		name      string
+		file      string
+		wantShare string
+		wantURL   string
+	}{
+		{
+			name:      "exact gateway share id",
+			file:      "/ocm/share-1",
+			wantShare: "share-1",
+			wantURL:   bareApp,
+		},
+		{
+			name:      "resource root colon",
+			file:      "/ocm/storage-id!share-1:",
+			wantShare: "share-1",
+			wantURL:   bareApp,
+		},
+		{
+			name:      "resource root slash after colon",
+			file:      "/ocm/storage-id!share-1:/",
+			wantShare: "share-1",
+			wantURL:   bareApp,
+		},
+		{
+			name:      "nested resource id without space component",
+			file:      "/ocm/storage-id!share-1:nested/file.txt",
+			wantShare: "share-1",
+			wantURL:   "https://app.example/hub/open/nested/file.txt?keep=1#frag",
+		},
+		{
+			name:      "nested resource id without space and driver slash",
+			file:      "/ocm/storage-id!share-1:/nested/file.txt",
+			wantShare: "share-1",
+			wantURL:   "https://app.example/hub/open/nested/file.txt?keep=1#frag",
+		},
+		{
+			name:      "nested resource id with space component",
+			file:      "/ocm/" + withSpace + "!share-1:nested/file.txt",
+			wantShare: "share-1",
+			wantURL:   "https://app.example/hub/open/nested/file.txt?keep=1#frag",
+		},
+		{
+			name:      "nested resource id with received driver slash",
+			file:      "/ocm/" + withSpace + "!share-1:/nested/file.txt",
+			wantShare: "share-1",
+			wantURL:   "https://app.example/hub/open/nested/file.txt?keep=1#frag",
+		},
+		{
+			name:      "exact relative app url with spaces",
+			file:      "/ocm/share-1/nested/my%20file.txt",
+			wantShare: "share-1",
+			wantURL:   "https://app.example/hub/open/nested/my%20file.txt?keep=1#frag",
+		},
+		{
+			name:      "escaped characters as path data",
+			file:      "/ocm/share-1/a%2bb%20c",
+			wantShare: "share-1",
+			wantURL:   "https://app.example/hub/open/a+b%20c?keep=1#frag",
+		},
+		{
+			name:      "bang as path data",
+			file:      "/ocm/share-1/my!file.txt",
+			wantShare: "share-1",
+			wantURL:   "https://app.example/hub/open/my%21file.txt?keep=1#frag",
+		},
+		{
+			name:      "colon and bang as path form path data",
+			file:      "/ocm/share-1/a:b!c",
+			wantShare: "share-1",
+			wantURL:   "https://app.example/hub/open/a:b%21c?keep=1#frag",
+		},
+		{
+			name:      "colon as resource id suffix path data",
+			file:      "/ocm/storage-id!share-1:dir/colon:name",
+			wantShare: "share-1",
+			wantURL:   "https://app.example/hub/open/dir/colon:name?keep=1#frag",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			obs := &observeClient{token: launchToken}
+			gw := &fakeReceivedGateway{resp: okShareResponse(launchWebappShare(t))}
+			h, _ := newRecordingHandler(t, gw, obs)
+			req, logs := newLaunchRequest(t, tt.file)
+			rec := httptest.NewRecorder()
+			h.OpenInApp(rec, req)
+
+			if rec.Code != http.StatusOK {
+				t.Fatalf("status %d body %s", rec.Code, rec.Body.String())
+			}
+			var payload openInAppResponse
+			if err := json.Unmarshal(rec.Body.Bytes(), &payload); err != nil {
+				t.Fatal(err)
+			}
+			if payload.AppURL != tt.wantURL {
+				t.Fatalf("app_url = %q want %q", payload.AppURL, tt.wantURL)
+			}
+			if payload.AccessToken != launchToken {
+				t.Fatalf("access_token = %q", payload.AccessToken)
+			}
+			if gw.opaqueID != tt.wantShare {
+				t.Fatalf("gateway share %q", gw.opaqueID)
+			}
+			if obs.discoverCalls != 1 || obs.exchangeCalls != 1 {
+				t.Fatalf("discover %d exchange %d", obs.discoverCalls, obs.exchangeCalls)
+			}
+			assertLogsClean(t, logs.String(), launchSecret, launchToken)
+			if strings.Contains(rec.Body.String(), launchSecret) {
+				t.Fatalf("response included the shared secret")
+			}
+		})
+	}
+}
+
+func TestOpenInAppFileIdentifierRejectedBeforeRemote(t *testing.T) {
+	validSpace := spaces.EncodeSpaceID("/teams/demo")
+	tests := []struct {
+		name   string
+		file   string
+		forbid string
+	}{
+		{
+			name:   "internal whitespace in storage prefix",
+			file:   "/ocm/stor age-id!LEAK-PARSE-1:",
+			forbid: "LEAK-PARSE-1",
+		},
+		{
+			name:   "missing colon",
+			file:   "/ocm/storage-id!LEAK-PARSE-2",
+			forbid: "LEAK-PARSE-2",
+		},
+		{
+			name:   "malformed base32 space",
+			file:   "/ocm/storage-id$not-valid-base32!LEAK-PARSE-3:",
+			forbid: "LEAK-PARSE-3",
+		},
+		{
+			name:   "double leading suffix slash",
+			file:   "/ocm/storage-id!LEAK-PARSE-4://nested",
+			forbid: "LEAK-PARSE-4",
+		},
+		{
+			name:   "empty share id",
+			file:   "/ocm/storage-id!:LEAK-PARSE-5",
+			forbid: "LEAK-PARSE-5",
+		},
+		{
+			name:   "malformed storage prefix with space component",
+			file:   "/ocm/bad prefix$" + validSpace + "!LEAK-PARSE-6:",
+			forbid: "LEAK-PARSE-6",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			obs := &observeClient{token: launchToken}
+			gw := &fakeReceivedGateway{resp: okShareResponse(launchWebappShare(t))}
+			h, _ := newRecordingHandler(t, gw, obs)
+			req, logs := newLaunchRequest(t, tt.file)
+			rec := httptest.NewRecorder()
+			h.OpenInApp(rec, req)
+
+			if rec.Code != http.StatusBadRequest {
+				t.Fatalf("status %d body %s", rec.Code, rec.Body.String())
+			}
+			body := rec.Body.String()
+			if !strings.Contains(body, "invalid file identifier") {
+				t.Fatalf("body %s", body)
+			}
+			if strings.Contains(body, tt.forbid) || strings.Contains(logs.String(), tt.forbid) {
+				t.Fatalf("leaked identifier body=%s logs=%s", body, logs.String())
+			}
+			if gw.calls != 0 || obs.discoverCalls != 0 || obs.exchangeCalls != 0 {
+				t.Fatalf("gateway %d discover %d exchange %d", gw.calls, obs.discoverCalls, obs.exchangeCalls)
+			}
+			assertNotLeaked(t, body, logs.String(), launchSecret, launchToken)
+		})
+	}
+}
+
+func TestOpenInAppSharePathPolicyBeforeExchange(t *testing.T) {
+	tests := []struct {
+		name     string
+		file     string
+		wantText string
+	}{
+		{
+			name:     "literal traversal suffix",
+			file:     "/ocm/share-1/../secret",
+			wantText: "escapes the share",
+		},
+		{
+			name:     "encoded traversal suffix",
+			file:     "/ocm/share-1/%2e%2e/secret",
+			wantText: "escapes the share",
+		},
+		{
+			name:     "repeatedly encoded traversal suffix",
+			file:     "/ocm/share-1/%252e%252e/secret",
+			wantText: "escapes the share",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			obs := &observeClient{token: launchToken}
+			gw := &fakeReceivedGateway{resp: okShareResponse(launchWebappShare(t))}
+			h, _ := newRecordingHandler(t, gw, obs)
+			req, logs := newLaunchRequest(t, tt.file)
+			rec := httptest.NewRecorder()
+			h.OpenInApp(rec, req)
+
+			if rec.Code != http.StatusBadRequest {
+				t.Fatalf("status %d body %s", rec.Code, rec.Body.String())
+			}
+			body := rec.Body.String()
+			if !strings.Contains(body, tt.wantText) {
+				t.Fatalf("body %s", body)
+			}
+			if gw.calls != 1 {
+				t.Fatalf("gateway calls %d", gw.calls)
+			}
+			if obs.discoverCalls != 0 || obs.exchangeCalls != 0 {
+				t.Fatalf("discover %d exchange %d", obs.discoverCalls, obs.exchangeCalls)
+			}
+			if strings.Contains(body, "https://app.example/hub") {
+				t.Fatalf("fell back to bare app URL: %s", body)
+			}
+			assertNotLeaked(t, body, logs.String(), launchSecret, launchToken)
+		})
+	}
+}
+
+func TestOpenInAppSecondShareIDNotCached(t *testing.T) {
+	obs := &observeClient{token: launchToken}
+	first := receivedWebappShare(
+		"https://dav-a.example/dav",
+		"https://app.example/hub/a",
+		launchSecret,
+		[]string{"must-exchange-token"},
+	)
+	second := receivedWebappShare(
+		"https://dav-b.example/dav",
+		"https://app.example/hub/b",
+		launchSecret,
+		[]string{"must-exchange-token"},
+	)
+	gw := &fakeReceivedGateway{resps: []*ocmpb.GetReceivedOCMShareResponse{
+		okShareResponse(first),
+		okShareResponse(second),
+	}}
+	h, _ := newRecordingHandler(t, gw, obs)
+
+	paths := []string{"/ocm/share-1", "/ocm/share-2"}
+	wantURLs := []string{
+		"https://app.example/hub/a",
+		"https://app.example/hub/b",
+	}
+	for i, path := range paths {
+		req, _ := newLaunchRequest(t, path)
+		rec := httptest.NewRecorder()
+		h.OpenInApp(rec, req)
+		if rec.Code != http.StatusOK {
+			t.Fatalf("status %d body %s", rec.Code, rec.Body.String())
+		}
+		var payload openInAppResponse
+		if err := json.Unmarshal(rec.Body.Bytes(), &payload); err != nil {
+			t.Fatal(err)
+		}
+		if payload.AppURL != wantURLs[i] {
+			t.Fatalf("app_url = %q", payload.AppURL)
+		}
+	}
+	if gw.opaqueID != "share-2" {
+		t.Fatalf("last lookup share %q", gw.opaqueID)
 	}
 }
