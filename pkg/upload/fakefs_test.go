@@ -59,6 +59,8 @@ type fakeFS struct {
 	touchRef    *provider.Reference
 	touchMtime  string
 
+	touchSkippedPropagation bool
+
 	// hooks fire inside a driver call, to make the coordinator's next step fail.
 	afterMark, afterPrepare func()
 }
@@ -100,9 +102,10 @@ func (f *fakeFS) GetPathByID(_ context.Context, _ *provider.ResourceId) (string,
 	return f.pathByID, f.pathByIDErr
 }
 
-func (f *fakeFS) TouchFile(_ context.Context, ref *provider.Reference, markprocessing bool, mtime string) (*storage.TouchFileResult, error) {
+func (f *fakeFS) TouchFile(ctx context.Context, ref *provider.Reference, markprocessing bool, mtime string) (*storage.TouchFileResult, error) {
 	f.record("TouchFile(markprocessing=%v)", markprocessing)
 	f.touchRef, f.touchMtime = ref, mtime
+	f.touchSkippedPropagation = storage.SkipTouchPropagation(ctx)
 	if f.touchErr != nil {
 		return nil, f.touchErr
 	}

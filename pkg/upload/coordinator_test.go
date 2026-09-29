@@ -125,6 +125,16 @@ var _ = Describe("coordinator", func() {
 				Expect(err).ToNot(HaveOccurred())
 				Expect(session.NodeID()).To(Equal("real-node-id"))
 			})
+
+			// PrepareUpload propagates the node, so a second walk would be wasted.
+			It("tells TouchFile not to propagate", func() {
+				session := newSession(false)
+
+				_, err := c.finishUpload(ctx, session)
+
+				Expect(err).ToNot(HaveOccurred())
+				Expect(fs.touchSkippedPropagation).To(BeTrue())
+			})
 		})
 
 		Context("for an overwrite", func() {
