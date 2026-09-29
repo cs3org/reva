@@ -36,7 +36,7 @@ var ErrWebappMFAUnproven = errors.New("protocol webapp requirement must-use-mfa 
 
 // ScreenIncomingWebapps rejects nil, duplicate, and unusable offers before discovery, conversion, or persistence.
 // Other protocols are left untouched.
-func ScreenIncomingWebapps(protocols Protocols, receiverTargets []string) error {
+func ScreenIncomingWebapps(protocols Protocols, receiverTargets []string, admitMFA bool) error {
 	seen := 0
 	for _, protocol := range protocols {
 		if protocol == nil {
@@ -53,7 +53,7 @@ func ScreenIncomingWebapps(protocols Protocols, receiverTargets []string) error 
 		if seen > 1 {
 			return errors.New("ambiguous webapp protocol")
 		}
-		if err := webapp.ValidateReceived(receiverTargets, false); err != nil {
+		if err := webapp.ValidateReceived(receiverTargets, admitMFA); err != nil {
 			return err
 		}
 	}
