@@ -33,7 +33,6 @@ import (
 	"time"
 
 	"github.com/ReneKroon/ttlcache/v2"
-	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	ocmpb "github.com/cs3org/go-cs3apis/cs3/sharing/ocm/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
@@ -43,6 +42,7 @@ import (
 	"github.com/cs3org/reva/v3/pkg/appctx"
 	"github.com/cs3org/reva/v3/pkg/errtypes"
 	"github.com/cs3org/reva/v3/pkg/mime"
+	"github.com/cs3org/reva/v3/pkg/ocm/providerdomain"
 	"github.com/cs3org/reva/v3/pkg/rhttp/router"
 	"github.com/cs3org/reva/v3/pkg/service"
 	"github.com/cs3org/reva/v3/pkg/sharedconf"
@@ -65,6 +65,7 @@ type cachedClient struct {
 
 type driver struct {
 	c              *config
+	providerDomain string
 	ccache         *ttlcache.Cache
 	discoveryCache *ttlcache.Cache
 	ocmClient      *ocmd.OCMClient
@@ -72,6 +73,7 @@ type driver struct {
 
 type config struct {
 	GatewaySVC        string `mapstructure:"gatewaysvc"`
+	ProviderDomain    string `mapstructure:"provider_domain"`
 	OCMClientTimeout  int    `mapstructure:"ocm_timeout"`
 	OCMClientInsecure bool   `mapstructure:"ocm_insecure"`
 }
@@ -90,12 +92,16 @@ func New(ctx context.Context, m map[string]any) (storage.FS, error) {
 	if err := cfg.Decode(m, &c); err != nil {
 		return nil, err
 	}
+	if err := providerdomain.Validate(c.ProviderDomain); err != nil {
+		return nil, errors.Wrap(err, "ocmreceived")
+	}
 
 	disco := ttlcache.NewCache()
 	_ = disco.SetTTL(5 * time.Minute)
 
 	d := &driver{
 		c:              &c,
+		providerDomain: c.ProviderDomain,
 		ccache:         ttlcache.NewCache(),
 		discoveryCache: disco,
 		ocmClient:      ocmd.NewClient(time.Duration(c.OCMClientTimeout)*time.Second, c.OCMClientInsecure),
@@ -208,47 +214,11 @@ func isWebDAV401(err error) bool {
 	return gowebdav.IsErrCode(err, http.StatusUnauthorized)
 }
 
-func receiverClientID(ctx context.Context, share *ocmpb.ReceivedShare) string {
-	if u, ok := appctx.ContextGetUser(ctx); ok && u.GetId() != nil && u.GetId().GetIdp() != "" {
-		return u.GetId().GetIdp()
+func (d *driver) exchangeAccessToken(ctx context.Context, tokenEndpoint, secret string) (string, error) {
+	if err := providerdomain.Validate(d.providerDomain); err != nil {
+		return "", err
 	}
-	if share != nil && share.GetGrantee() != nil && share.GetGrantee().GetUserId() != nil {
-		return share.GetGrantee().GetUserId().GetIdp()
-	}
-	return ""
-}
-
-func receiverClientIDWithLookup(ctx context.Context, share *ocmpb.ReceivedShare, lookup func(context.Context, *userpb.UserId) string) string {
-	clientID := receiverClientID(ctx, share)
-	if clientID == "" && lookup != nil && share != nil && share.GetGrantee() != nil && share.GetGrantee().GetUserId() != nil {
-		clientID = lookup(ctx, share.GetGrantee().GetUserId())
-	}
-	return clientID
-}
-
-func (d *driver) lookupReceiverUserIDP(ctx context.Context, userID *userpb.UserId) string {
-	if d == nil || userID == nil || userID.GetOpaqueId() == "" {
-		return ""
-	}
-
-	gw, err := service.Gateway(ctx)
-	if err != nil {
-		return ""
-	}
-
-	res, err := gw.GetUser(ctx, &userpb.GetUserRequest{
-		UserId:                 userID,
-		SkipFetchingUserGroups: true,
-	})
-	if err != nil || res.GetStatus().GetCode() != rpc.Code_CODE_OK || res.GetUser() == nil || res.GetUser().GetId() == nil {
-		return ""
-	}
-	return res.GetUser().GetId().GetIdp()
-}
-
-func (d *driver) exchangeAccessToken(ctx context.Context, share *ocmpb.ReceivedShare, tokenEndpoint, secret string) (string, error) {
-	clientID := receiverClientIDWithLookup(ctx, share, d.lookupReceiverUserIDP)
-	accessToken, _, err := d.ocmClient.ExchangeToken(ctx, tokenEndpoint, secret, clientID)
+	accessToken, _, err := d.ocmClient.ExchangeToken(ctx, tokenEndpoint, secret, d.providerDomain)
 	if err != nil {
 		return "", err
 	}
@@ -308,7 +278,7 @@ func (d *driver) webdavClient(ctx context.Context, ref *provider.Reference) (*go
 	if err != nil {
 		return nil, nil, "", errors.Wrap(err, "could not discover token endpoint for code-flow share")
 	}
-	accessToken, err := d.exchangeAccessToken(ctx, share, tokenEndpoint, secret)
+	accessToken, err := d.exchangeAccessToken(ctx, tokenEndpoint, secret)
 	if err != nil {
 		return nil, nil, "", errors.Wrap(err, "token exchange failed")
 	}
@@ -617,7 +587,7 @@ func (d *driver) uploadAuth(ctx context.Context, share *ocmpb.ReceivedShare, end
 		if err != nil {
 			return "", errors.Wrap(err, "could not discover token endpoint for upload")
 		}
-		accessToken, err := d.exchangeAccessToken(ctx, share, tokenEndpoint, secret)
+		accessToken, err := d.exchangeAccessToken(ctx, tokenEndpoint, secret)
 		if err != nil {
 			return "", errors.Wrap(err, "token exchange failed for upload")
 		}
