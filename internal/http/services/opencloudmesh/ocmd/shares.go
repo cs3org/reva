@@ -72,6 +72,8 @@ type sharesHandler struct {
 	webdavTransport            http.RoundTripper
 	// webappReceiveTargets overrides local discovery when non-nil.
 	webappReceiveTargets *[]string
+	// mfaPolicy overrides the published mfa_policy when non-nil.
+	mfaPolicy *string
 }
 
 func (h *sharesHandler) init(c *config) error {
@@ -119,6 +121,13 @@ func (h *sharesHandler) receiverWebappTargets() []string {
 		return wellknown.ResolveLocalWebappReceiveTargets(nil)
 	}
 	return wellknown.ResolveLocalWebappReceiveTargets(h.webappReceiveTargets)
+}
+
+func (h *sharesHandler) receiverAdmitMFA() bool {
+	if h == nil {
+		return wellknown.ResolveLocalMFAPolicy(nil) == wellknown.MFAPolicyOff
+	}
+	return wellknown.ResolveLocalMFAPolicy(h.mfaPolicy) == wellknown.MFAPolicyOff
 }
 
 // matchesAutoAccept reports whether the given sender provider domain matches any
@@ -453,7 +462,7 @@ func (h *sharesHandler) getCreateShareRequest(r *http.Request) (*NewShareRequest
 	if err := req.Protocols.Validate(); err != nil {
 		return nil, err
 	}
-	if err := ScreenIncomingWebapps(req.Protocols, h.receiverWebappTargets()); err != nil {
+	if err := ScreenIncomingWebapps(req.Protocols, h.receiverWebappTargets(), h.receiverAdmitMFA()); err != nil {
 		return nil, err
 	}
 	return &req, nil
@@ -492,7 +501,7 @@ func (h *sharesHandler) getAndResolveProtocols(p Protocols, resType string, disc
 	protos = make([]*ocm.Protocol, 0, len(p))
 	legacy = false
 
-	if err := ScreenIncomingWebapps(p, h.receiverWebappTargets()); err != nil {
+	if err := ScreenIncomingWebapps(p, h.receiverWebappTargets(), h.receiverAdmitMFA()); err != nil {
 		return nil, false, err
 	}
 
