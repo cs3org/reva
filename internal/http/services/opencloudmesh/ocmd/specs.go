@@ -348,7 +348,7 @@ func (p Protocols) Validate() error {
 			if err := validateVocabulary("webapp", "target", data.Targets, validWebappTargets); err != nil {
 				return err
 			}
-			if err := validateWebappExchangePolicy(data.Requirements, false); err != nil {
+			if err := validateWebappExchangePolicy(data.Requirements, true); err != nil {
 				return err
 			}
 		}

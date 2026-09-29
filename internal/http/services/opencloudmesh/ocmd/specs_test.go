@@ -36,6 +36,7 @@ func TestValidateWebappLaunch(t *testing.T) {
 		receiver   []string
 		want       string
 		mfa        bool
+		admitMFA   bool
 		invalidURI bool
 	}{
 		{
@@ -111,6 +112,15 @@ func TestValidateWebappLaunch(t *testing.T) {
 			mfa:      true,
 		},
 		{
+			name:     "off policy admits mfa",
+			uri:      "https://app.example/hub",
+			secret:   "secret",
+			reqs:     []string{"must-exchange-token", "must-use-mfa"},
+			targets:  blank,
+			receiver: blank,
+			admitMFA: true,
+		},
+		{
 			name:    "relative uri",
 			uri:     "/apps/open",
 			secret:  "secret",
@@ -145,7 +155,7 @@ func TestValidateWebappLaunch(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			err := ValidateWebappLaunch(tt.uri, tt.secret, tt.reqs, tt.targets, tt.receiver, false)
+			err := ValidateWebappLaunch(tt.uri, tt.secret, tt.reqs, tt.targets, tt.receiver, tt.admitMFA)
 			if tt.mfa {
 				if !errors.Is(err, ErrWebappMFAUnproven) {
 					t.Fatalf("err = %v", err)
@@ -398,8 +408,8 @@ func TestWebappValidatorsAgree(t *testing.T) {
 				if !errors.Is(received, ErrWebappMFAUnproven) || received.Error() != ErrWebappMFAUnproven.Error() {
 					t.Fatalf("received %v", received)
 				}
-				if !errors.Is(validated, ErrWebappMFAUnproven) || validated.Error() != ErrWebappMFAUnproven.Error() {
-					t.Fatalf("validate %v", validated)
+				if validated != nil {
+					t.Fatalf("validate should not enforce mfa policy: %v", validated)
 				}
 				return
 			}
@@ -455,16 +465,16 @@ func TestValidateAbsoluteWebappURISyntax(t *testing.T) {
 
 func TestScreenIncomingWebappsNilAndDuplicate(t *testing.T) {
 	offer := validCodeFlowWebapp()
-	if err := ScreenIncomingWebapps(Protocols{offer}, []string{"blank"}); err != nil {
+	if err := ScreenIncomingWebapps(Protocols{offer}, []string{"blank"}, false); err != nil {
 		t.Fatal(err)
 	}
-	if err := ScreenIncomingWebapps(Protocols{nil}, []string{"blank"}); err == nil {
+	if err := ScreenIncomingWebapps(Protocols{nil}, []string{"blank"}, false); err == nil {
 		t.Fatal("expected nil protocol error")
 	}
-	if err := ScreenIncomingWebapps(Protocols{(*Webapp)(nil)}, []string{"blank"}); err == nil {
+	if err := ScreenIncomingWebapps(Protocols{(*Webapp)(nil)}, []string{"blank"}, false); err == nil {
 		t.Fatal("expected nil webapp error")
 	}
-	if err := ScreenIncomingWebapps(Protocols{offer, offer}, []string{"blank"}); err == nil {
+	if err := ScreenIncomingWebapps(Protocols{offer, offer}, []string{"blank"}, false); err == nil {
 		t.Fatal("expected ambiguous webapp error")
 	}
 }
