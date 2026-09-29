@@ -334,13 +334,19 @@ func (c *OCMClient) ExchangeToken(ctx context.Context, tokenEndpoint, code, clie
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, tokenEndpoint, strings.NewReader(values.Encode()))
 	if err != nil {
-		return "", 0, errors.Wrap(err, "error creating token exchange request")
+		return "", 0, errtypes.InternalError("token exchange request could not be created")
 	}
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 
 	resp, err := c.client.Do(req)
 	if err != nil {
-		return "", 0, errors.Wrap(err, "error sending token exchange request")
+		if errors.Is(err, context.Canceled) {
+			return "", 0, context.Canceled
+		}
+		if errors.Is(err, context.DeadlineExceeded) {
+			return "", 0, context.DeadlineExceeded
+		}
+		return "", 0, errtypes.InternalError("token exchange request failed")
 	}
 	defer resp.Body.Close()
 
@@ -366,7 +372,7 @@ func (c *OCMClient) ExchangeToken(ctx context.Context, tokenEndpoint, code, clie
 		ExpiresIn   int64  `json:"expires_in"`
 	}
 	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
-		return "", 0, errors.Wrap(err, "error decoding token exchange response")
+		return "", 0, errtypes.InternalError("token exchange response could not be decoded")
 	}
 	if result.AccessToken == "" {
 		return "", 0, errtypes.InternalError("token exchange response missing access_token")
