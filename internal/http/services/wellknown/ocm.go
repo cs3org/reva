@@ -20,6 +20,7 @@ package wellknown
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/url"
 	"path/filepath"
@@ -31,10 +32,19 @@ import (
 
 const webappReceiveTargetBlank = "blank"
 
+const (
+	MFAPolicyReject = "reject"
+	MFAPolicyOff    = "off"
+)
+
 var (
 	localWebappMu      sync.RWMutex
 	localWebappTargets []string
 	localWebappReady   bool
+
+	localMFAPolicyMu    sync.RWMutex
+	localMFAPolicy      string
+	localMFAPolicyReady bool
 )
 
 const OCMAPIVersion = "1.3.0"
@@ -48,6 +58,7 @@ type OcmProviderConfig struct {
 	EnableWebapp       bool   `docs:"false;Whether web apps are enabled in OCM shares."                                          mapstructure:"enable_webapp"`
 	EnableEmbedded     bool   `docs:"false;Whether embedded shares are enabled in OCM shares."                                   mapstructure:"enable_embedded"`
 	EnableCodeFlow     bool   `docs:"false;Whether code-flow token exchange is enabled in OCM shares."                           mapstructure:"enable_code_flow"`
+	MFAPolicy          string `docs:"reject;Admission of received webapp must-use-mfa offers: reject or off. Off skips the check; nothing is advertised." mapstructure:"mfa_policy"`
 }
 
 type OcmDiscoveryData struct {
@@ -109,6 +120,37 @@ func publishLocalWebappReceiveTargets(targets []string) {
 	localWebappTargets = append([]string{}, targets...)
 }
 
+// LocalMFAPolicy returns the published receive-side MFA policy and whether init ran.
+func LocalMFAPolicy() (string, bool) {
+	localMFAPolicyMu.RLock()
+	defer localMFAPolicyMu.RUnlock()
+	if !localMFAPolicyReady {
+		return "", false
+	}
+	return localMFAPolicy, true
+}
+
+// ResolveLocalMFAPolicy treats a non-nil override as authoritative; unpublished or unknown -> reject.
+func ResolveLocalMFAPolicy(override *string) string {
+	if override != nil {
+		if *override == MFAPolicyOff {
+			return MFAPolicyOff
+		}
+		return MFAPolicyReject
+	}
+	if policy, ok := LocalMFAPolicy(); ok && policy == MFAPolicyOff {
+		return MFAPolicyOff
+	}
+	return MFAPolicyReject
+}
+
+func publishLocalMFAPolicy(policy string) {
+	localMFAPolicyMu.Lock()
+	defer localMFAPolicyMu.Unlock()
+	localMFAPolicyReady = true
+	localMFAPolicy = policy
+}
+
 func usableDiscoveryBase(raw string) bool {
 	if strings.TrimSpace(raw) == "" || strings.TrimSpace(raw) != raw {
 		return false
@@ -148,6 +190,16 @@ func (c *OcmProviderConfig) ApplyDefaults() {
 	if c.InviteAcceptDialog == "" {
 		c.InviteAcceptDialog = "/open-cloud-mesh/accept-invite"
 	}
+	if c.MFAPolicy == "" {
+		c.MFAPolicy = MFAPolicyReject
+	}
+}
+
+func (c *OcmProviderConfig) validateMFAPolicy() error {
+	if c.MFAPolicy != MFAPolicyReject && c.MFAPolicy != MFAPolicyOff {
+		return fmt.Errorf("invalid ocmprovider mfa_policy %q: want reject or off", c.MFAPolicy)
+	}
+	return nil
 }
 
 func (h *wkocmHandler) init(c *OcmProviderConfig) {
@@ -156,6 +208,7 @@ func (h *wkocmHandler) init(c *OcmProviderConfig) {
 	c.ApplyDefaults()
 	receiveTargets := WebappReceiveTargets(c)
 	publishLocalWebappReceiveTargets(receiveTargets)
+	publishLocalMFAPolicy(c.MFAPolicy)
 	d := &OcmDiscoveryData{}
 	d.Enabled = false
 	d.Endpoint = ""

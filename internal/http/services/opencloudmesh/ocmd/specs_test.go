@@ -33,6 +33,7 @@ func TestValidateWebappLaunch(t *testing.T) {
 		reqs       []string
 		targets    []string
 		receiver   []string
+		admitMFA   bool
 		want       string
 		mfa        bool
 		invalidURI bool
@@ -101,13 +102,22 @@ func TestValidateWebappLaunch(t *testing.T) {
 			want: "must-exchange-token",
 		},
 		{
-			name:     "permanent mfa rejection",
+			name:     "reject policy mfa rejection",
 			uri:      "https://app.example/hub",
 			secret:   "secret",
 			reqs:     []string{"must-exchange-token", "must-use-mfa"},
 			targets:  blank,
 			receiver: blank,
 			mfa:      true,
+		},
+		{
+			name:     "off policy admits mfa",
+			uri:      "https://app.example/hub",
+			secret:   "secret",
+			reqs:     []string{"must-exchange-token", "must-use-mfa"},
+			targets:  blank,
+			receiver: blank,
+			admitMFA: true,
 		},
 		{
 			name:    "relative uri",
@@ -144,7 +154,7 @@ func TestValidateWebappLaunch(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			err := ValidateWebappLaunch(tt.uri, tt.secret, tt.reqs, tt.targets, tt.receiver)
+			err := ValidateWebappLaunch(tt.uri, tt.secret, tt.reqs, tt.targets, tt.receiver, tt.admitMFA)
 			if tt.mfa {
 				if !errors.Is(err, ErrWebappMFAUnproven) {
 					t.Fatalf("err = %v", err)

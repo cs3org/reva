@@ -31,12 +31,12 @@ const implementedWebappTarget = "blank"
 // ErrInvalidProtocolURI is the stable sentinel for a malformed protocol URI.
 var ErrInvalidProtocolURI = errors.New("invalid protocol uri")
 
-// ErrWebappMFAUnproven permanently rejects must-use-mfa; no session proof is checked or claimed.
+// ErrWebappMFAUnproven is returned when the receiver mfa_policy is reject and the offer requires must-use-mfa.
 var ErrWebappMFAUnproven = errors.New("protocol webapp requirement must-use-mfa cannot be satisfied by this receiver")
 
 // ValidateReceived checks a webapp offer against this receiver's targets.
 // Empty AppName is valid metadata. The offer is not mutated.
-func (w *Webapp) ValidateReceived(receiverTargets []string) error {
+func (w *Webapp) ValidateReceived(receiverTargets []string, admitMFA bool) error {
 	if w == nil {
 		return errors.New("nil webapp protocol")
 	}
@@ -46,7 +46,7 @@ func (w *Webapp) ValidateReceived(receiverTargets []string) error {
 	if strings.TrimSpace(w.SharedSecret) != w.SharedSecret {
 		return errors.New("protocol webapp missing sharedSecret")
 	}
-	if err := validateWebappRequirements(w.Requirements); err != nil {
+	if err := validateWebappRequirements(w.Requirements, admitMFA); err != nil {
 		return err
 	}
 	if err := validateSharedProtocolFields(
@@ -67,7 +67,7 @@ func (w *Webapp) ValidateReceived(receiverTargets []string) error {
 }
 
 // ValidateWebappLaunch rechecks a stored offer without re-deriving permissions.
-func ValidateWebappLaunch(uri, secret string, requirements, targets, receiverTargets []string) error {
+func ValidateWebappLaunch(uri, secret string, requirements, targets, receiverTargets []string, admitMFA bool) error {
 	offer := &Webapp{
 		URI:          uri,
 		SharedSecret: secret,
@@ -75,10 +75,10 @@ func ValidateWebappLaunch(uri, secret string, requirements, targets, receiverTar
 		Requirements: requirements,
 		Targets:      targets,
 	}
-	return offer.ValidateReceived(receiverTargets)
+	return offer.ValidateReceived(receiverTargets, admitMFA)
 }
 
-func validateWebappRequirements(requirements []string) error {
+func validateWebappRequirements(requirements []string, admitMFA bool) error {
 	for _, requirement := range requirements {
 		if strings.TrimSpace(requirement) == "" || strings.TrimSpace(requirement) != requirement {
 			return errors.New("protocol webapp has malformed requirement")
@@ -90,7 +90,7 @@ func validateWebappRequirements(requirements []string) error {
 	if !slices.Contains(requirements, "must-exchange-token") {
 		return errors.New("protocol webapp requirements must include must-exchange-token")
 	}
-	if slices.Contains(requirements, "must-use-mfa") {
+	if !admitMFA && slices.Contains(requirements, "must-use-mfa") {
 		return ErrWebappMFAUnproven
 	}
 	return nil
