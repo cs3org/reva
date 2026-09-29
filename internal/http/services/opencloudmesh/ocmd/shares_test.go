@@ -71,7 +71,9 @@ func ocmDiscoveryServer(t *testing.T, proto, resType string) *httptest.Server {
 
 type sharesMockGW struct {
 	gateway.GatewayAPIClient
-	createResp *ocmincoming.CreateOCMIncomingShareResponse
+	createResp  *ocmincoming.CreateOCMIncomingShareResponse
+	createCalls int
+	created     *ocmincoming.CreateOCMIncomingShareRequest
 }
 
 func (m *sharesMockGW) IsProviderAllowed(context.Context, *ocmprovider.IsProviderAllowedRequest, ...grpc.CallOption) (*ocmprovider.IsProviderAllowedResponse, error) {
@@ -89,7 +91,9 @@ func (m *sharesMockGW) GetUser(context.Context, *userpb.GetUserRequest, ...grpc.
 	}, nil
 }
 
-func (m *sharesMockGW) CreateOCMIncomingShare(context.Context, *ocmincoming.CreateOCMIncomingShareRequest, ...grpc.CallOption) (*ocmincoming.CreateOCMIncomingShareResponse, error) {
+func (m *sharesMockGW) CreateOCMIncomingShare(_ context.Context, req *ocmincoming.CreateOCMIncomingShareRequest, _ ...grpc.CallOption) (*ocmincoming.CreateOCMIncomingShareResponse, error) {
+	m.createCalls++
+	m.created = req
 	return m.createResp, nil
 }
 
@@ -102,12 +106,12 @@ func (m *sharesMockGW) GetAcceptedUser(context.Context, *invitepb.GetAcceptedUse
 // --- tests ---
 
 func TestCreateShareReturnsServerErrorForNonOKCreateStatus(t *testing.T) {
-	// Start a local OCM discovery server so discoverOcmResourceTypes succeeds.
+	// Start a local OCM discovery server so discoverOcm succeeds.
 	disco := ocmDiscoveryServer(t, "webdav", "file")
 	defer disco.Close()
 
 	// The sender's Idp must equal the host:port of our local discovery server
-	// so that discoverOcmResourceTypes calls it instead of the real internet.
+	// so that discoverOcm calls it instead of the real internet.
 	senderAddr := disco.Listener.Addr().String() // e.g. "127.0.0.1:54321"
 
 	stampGateway(&sharesMockGW{
@@ -119,6 +123,9 @@ func TestCreateShareReturnsServerErrorForNonOKCreateStatus(t *testing.T) {
 		},
 	})
 	h := &sharesHandler{}
+	if err := h.init(&config{}); err != nil {
+		t.Fatal(err)
+	}
 
 	body, _ := json.Marshal(map[string]any{
 		"shareWith":    "marie@local.example.org",
@@ -267,19 +274,23 @@ func TestDiscoverVerifiesTLSUnlessInsecure(t *testing.T) {
 	defer srv.Close()
 
 	tests := []struct {
-		name    string
-		handler *sharesHandler
-		wantErr bool
+		name     string
+		insecure bool
+		wantErr  bool
 	}{
-		{name: "verifies by default", handler: &sharesHandler{}, wantErr: true},
-		{name: "skips when opted out", handler: &sharesHandler{ocmClientInsecure: true}, wantErr: false},
+		{name: "verifies by default", insecure: false, wantErr: true},
+		{name: "skips when opted out", insecure: true, wantErr: false},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			_, _, err := tt.handler.discoverOcmResourceTypes(context.Background(), srv.URL)
+			h := &sharesHandler{}
+			if err := h.init(&config{OCMClientInsecure: tt.insecure}); err != nil {
+				t.Fatal(err)
+			}
+			_, err := h.discoverOcm(context.Background(), srv.URL)
 			if (err != nil) != tt.wantErr {
-				t.Errorf("discoverOcmResourceTypes() error = %v, wantErr %v", err, tt.wantErr)
+				t.Errorf("discoverOcm() error = %v, wantErr %v", err, tt.wantErr)
 			}
 		})
 	}
