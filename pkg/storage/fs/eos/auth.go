@@ -52,7 +52,7 @@ func extractUIDAndGID(u *userpb.User) (eosclient.Authorization, error) {
 
 func (fs *Eosfs) getUIDGateway(ctx context.Context, u *userpb.UserId) (eosclient.Authorization, error) {
 	log := appctx.GetLogger(ctx)
-	if userIDInterface, err := fs.userIDCache.Get(u.OpaqueId); err == nil {
+	if userIDInterface, err := fs.userCache.Get(u.OpaqueId); err == nil {
 		log.Debug().Msg("eosfs: found cached user " + u.OpaqueId)
 		return extractUIDAndGID(userIDInterface.(*userpb.User))
 	}
@@ -66,15 +66,15 @@ func (fs *Eosfs) getUIDGateway(ctx context.Context, u *userpb.UserId) (eosclient
 		SkipFetchingUserGroups: true,
 	})
 	if err != nil {
-		_ = fs.userIDCache.SetWithTTL(u.OpaqueId, &userpb.User{}, 12*time.Hour)
+		_ = fs.userCache.SetWithTTL(u.OpaqueId, &userpb.User{}, 12*time.Hour)
 		return eosclient.Authorization{}, errors.Wrap(err, "eosfs: error getting user")
 	}
 	if getUserResp.Status.Code != rpc.Code_CODE_OK {
-		_ = fs.userIDCache.SetWithTTL(u.OpaqueId, &userpb.User{}, 12*time.Hour)
+		_ = fs.userCache.SetWithTTL(u.OpaqueId, &userpb.User{}, 12*time.Hour)
 		return eosclient.Authorization{}, status.NewErrorFromCode(getUserResp.Status.Code, "eosfs")
 	}
 
-	_ = fs.userIDCache.Set(u.OpaqueId, getUserResp.User)
+	_ = fs.userCache.Set(u.OpaqueId, getUserResp.User)
 	return extractUIDAndGID(getUserResp.User)
 }
 
