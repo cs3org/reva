@@ -55,6 +55,8 @@ type appsHandler struct {
 	newLaunchClient func(timeout time.Duration, insecure bool) launchClient
 	// Nil uses the published targets; an explicit empty set disables receipt.
 	webappReceiveTargets *[]string
+	// Nil uses the published MFA policy; tests may pin reject or off.
+	mfaPolicy *string
 }
 
 type openInAppResponse struct {
@@ -212,12 +214,14 @@ func (h *appsHandler) buildLaunch(ctx context.Context, shareID *ocmpb.ShareId, r
 	}
 
 	receiverTargets := wellknown.ResolveLocalWebappReceiveTargets(h.webappReceiveTargets)
+	admitMFA := wellknown.ResolveLocalMFAPolicy(h.mfaPolicy) == wellknown.MFAPolicyOff
 	if err := ocmd.ValidateWebappLaunch(
 		webapp.GetUri(),
 		secret,
 		webapp.GetRequirements(),
 		webapp.GetTargets(),
 		receiverTargets,
+		admitMFA,
 	); err != nil {
 		if errors.Is(err, ocmd.ErrWebappMFAUnproven) {
 			return fail(errtypes.PermissionDenied(ocmd.ErrWebappMFAUnproven.Error()), "")

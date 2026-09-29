@@ -30,9 +30,39 @@ import (
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	ocmpb "github.com/cs3org/go-cs3apis/cs3/sharing/ocm/v1beta1"
 	ocmprovider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
+	"github.com/cs3org/reva/v3/internal/http/services/wellknown"
 	"github.com/cs3org/reva/v3/pkg/spaces"
 	"google.golang.org/grpc/metadata"
 )
+
+func TestOpenInAppMustUseMFAOffPolicy(t *testing.T) {
+	obs := &observeClient{token: launchToken}
+	share := receivedWebappShare(
+		"https://dav.example/remote.php/dav/ocm/share",
+		"https://app.example/hub/open?folder=1",
+		launchSecret,
+		[]string{"must-exchange-token", "must-use-mfa"},
+	)
+	gw := &fakeReceivedGateway{resp: okShareResponse(share)}
+	h, seen := newRecordingHandler(t, gw, obs)
+	off := wellknown.MFAPolicyOff
+	h.mfaPolicy = &off
+
+	req, logs := newLaunchRequest(t, "/ocm/share-1/dir/file.txt")
+	rec := httptest.NewRecorder()
+	h.OpenInApp(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status %d body %s", rec.Code, rec.Body.String())
+	}
+	if obs.discoverCalls != 1 || obs.exchangeCalls != 1 {
+		t.Fatalf("discover %d exchange %d", obs.discoverCalls, obs.exchangeCalls)
+	}
+	if seen.calls != 1 {
+		t.Fatalf("client builds %d", seen.calls)
+	}
+	assertLogsClean(t, logs.String(), launchSecret, launchToken)
+}
 
 func TestOpenInAppValidWebapp(t *testing.T) {
 	obs := &observeClient{token: launchToken}

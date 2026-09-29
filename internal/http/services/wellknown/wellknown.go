@@ -57,6 +57,10 @@ func New(ctx context.Context, m map[string]any) (global.Service, error) {
 	if err := cfg.Decode(m, &c); err != nil {
 		return nil, err
 	}
+	c.OCMProvider.ApplyDefaults()
+	if err := c.OCMProvider.validateMFAPolicy(); err != nil {
+		return nil, err
+	}
 
 	limiter, err := c.RateLimit.NewLimiter(appctx.GetLogger(ctx))
 	if err != nil {
