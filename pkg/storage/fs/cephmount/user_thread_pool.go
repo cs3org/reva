@@ -35,6 +35,7 @@ import (
 	userv1beta1 "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	"github.com/cs3org/reva/v3/pkg/appctx"
 	"github.com/cs3org/reva/v3/pkg/utils"
+	"golang.org/x/sys/unix"
 )
 
 // PrivilegeVerificationResult contains the results of privilege verification
@@ -474,10 +475,9 @@ func (ut *UserThread) run() {
 	originalFsgid := setfsgidSafe(-1)
 
 	// Get original groups before changing them
-	originalGroups, err := syscall.Getgroups()
-	if err != nil {
-		appctx.GetLogger(context.Background()).Error().Err(err).Msg("failed to get original groups, continuing without group restoration")
-		originalGroups = nil
+	originalGroups, getGroupsErr := unix.Getgroups()
+	if getGroupsErr != nil {
+		appctx.GetLogger(context.Background()).Error().Err(getGroupsErr).Msg("failed to get original groups, continuing without group restoration")
 	}
 
 	// We need to set additional groups before setting uid/gid.
@@ -488,8 +488,9 @@ func (ut *UserThread) run() {
 		gids = nil
 	}
 
+	// unix.Setgroups only affects this thread, unlike syscall.Setgroups which changes every thread
 	if gids != nil {
-		if err := syscall.Setgroups(gids); err != nil {
+		if err := unix.Setgroups(gids); err != nil {
 			appctx.GetLogger(context.Background()).Error().Err(err).Str("username", ut.username).Msg("failed to set additional groups")
 		}
 	}
@@ -499,9 +500,9 @@ func (ut *UserThread) run() {
 	setfsgidSafe(ut.gid)
 
 	defer func() {
-		// Restore original groups before restoring UID/GID
-		if originalGroups != nil {
-			if err := syscall.Setgroups(originalGroups); err != nil {
+		// Restore original groups before restoring UID/GID; an empty list is valid and clears the groups
+		if getGroupsErr == nil {
+			if err := unix.Setgroups(originalGroups); err != nil {
 				appctx.GetLogger(context.Background()).Error().Err(err).Msg("failed to restore original groups")
 			}
 		}
