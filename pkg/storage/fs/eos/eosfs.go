@@ -146,6 +146,7 @@ type Eosfs struct {
 	chunkHandler   *chunking.ChunkHandler
 	singleUserAuth eosclient.Authorization
 	userIDCache    *ttlcache.Cache
+	userCache      *ttlcache.Cache
 	quotaCache     *quotaCache
 }
 
@@ -220,6 +221,7 @@ func NewEOSFS(ctx context.Context, c *Config) (storage.FS, error) {
 		conf:         c,
 		chunkHandler: chunking.NewChunkHandler(c.CacheDirectory),
 		userIDCache:  ttlcache.NewCache(),
+		userCache:    ttlcache.NewCache(),
 	}
 
 	if c.EnableQuotaCache {
@@ -235,6 +237,7 @@ func NewEOSFS(ctx context.Context, c *Config) (storage.FS, error) {
 	}
 
 	eosfs.userIDCache.SetCacheSizeLimit(c.UserIDCacheSize)
+	eosfs.userCache.SetCacheSizeLimit(c.UserIDCacheSize)
 	eosfs.userIDCache.SetExpirationReasonCallback(func(key string, reason ttlcache.EvictionReason, value any) {
 		// We only set those keys with TTL which we weren't able to retrieve the last time
 		// For those keys, try to contact the userprovider service again when they expire
