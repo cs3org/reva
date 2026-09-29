@@ -19,6 +19,7 @@
 package wellknown
 
 import (
+	"context"
 	"slices"
 	"strings"
 	"testing"
@@ -96,17 +97,30 @@ func TestInitCapabilitiesDoNotDuplicateExchangeToken(t *testing.T) {
 	}
 }
 
-func TestWebappReceiveDiscoveryAndLocalTargets(t *testing.T) {
+func resetLocalWebappAndMFAPolicy(t *testing.T) {
+	t.Helper()
 	localWebappMu.Lock()
-	prevReady := localWebappReady
+	prevWebappReady := localWebappReady
 	prevTargets := append([]string{}, localWebappTargets...)
 	localWebappMu.Unlock()
+	localMFAPolicyMu.Lock()
+	prevMFAReady := localMFAPolicyReady
+	prevMFA := localMFAPolicy
+	localMFAPolicyMu.Unlock()
 	t.Cleanup(func() {
 		localWebappMu.Lock()
-		localWebappReady = prevReady
+		localWebappReady = prevWebappReady
 		localWebappTargets = prevTargets
 		localWebappMu.Unlock()
+		localMFAPolicyMu.Lock()
+		localMFAPolicyReady = prevMFAReady
+		localMFAPolicy = prevMFA
+		localMFAPolicyMu.Unlock()
 	})
+}
+
+func TestWebappReceiveDiscoveryAndLocalTargets(t *testing.T) {
+	resetLocalWebappAndMFAPolicy(t)
 
 	t.Run("valid base publishes blank", func(t *testing.T) {
 		h := &wkocmHandler{}
@@ -196,6 +210,72 @@ func TestWebappReceiveDiscoveryAndLocalTargets(t *testing.T) {
 		}
 		if resolved := ResolveLocalWebappReceiveTargets(nil); len(resolved) != 0 {
 			t.Fatalf("resolved %#v", resolved)
+		}
+	})
+}
+
+func TestApplyDefaultsMFAPolicyReject(t *testing.T) {
+	c := &OcmProviderConfig{}
+	c.ApplyDefaults()
+	if c.MFAPolicy != MFAPolicyReject {
+		t.Fatalf("mfa_policy = %q", c.MFAPolicy)
+	}
+}
+
+func TestNewMFAPolicy(t *testing.T) {
+	resetLocalWebappAndMFAPolicy(t)
+
+	t.Run("off accepted", func(t *testing.T) {
+		svc, err := New(context.Background(), map[string]any{
+			"ocmprovider": map[string]any{
+				"endpoint":      "https://cernbox.cern.ch",
+				"mfa_policy":    MFAPolicyOff,
+				"enable_webapp": true,
+			},
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if got, ok := LocalMFAPolicy(); !ok || got != MFAPolicyOff {
+			t.Fatalf("published %q ready %v", got, ok)
+		}
+		if ResolveLocalMFAPolicy(nil) != MFAPolicyOff {
+			t.Fatal("nil override should resolve off")
+		}
+		_ = svc.Close()
+	})
+
+	t.Run("unknown fails startup", func(t *testing.T) {
+		_, err := New(context.Background(), map[string]any{
+			"ocmprovider": map[string]any{"mfa_policy": "enforce"},
+		})
+		if err == nil || !strings.Contains(err.Error(), "mfa_policy") {
+			t.Fatalf("err = %v", err)
+		}
+	})
+
+	t.Run("override wins", func(t *testing.T) {
+		off := MFAPolicyOff
+		if ResolveLocalMFAPolicy(&off) != MFAPolicyOff {
+			t.Fatal("off override")
+		}
+		reject := MFAPolicyReject
+		if ResolveLocalMFAPolicy(&reject) != MFAPolicyReject {
+			t.Fatal("reject override")
+		}
+		bogus := "enforce"
+		if ResolveLocalMFAPolicy(&bogus) != MFAPolicyReject {
+			t.Fatal("unknown override fails closed")
+		}
+	})
+
+	t.Run("unpublished resolves reject", func(t *testing.T) {
+		localMFAPolicyMu.Lock()
+		localMFAPolicyReady = false
+		localMFAPolicy = ""
+		localMFAPolicyMu.Unlock()
+		if ResolveLocalMFAPolicy(nil) != MFAPolicyReject {
+			t.Fatal("unpublished fails closed")
 		}
 	})
 }
