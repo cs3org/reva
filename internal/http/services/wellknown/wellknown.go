@@ -71,6 +71,10 @@ func New(ctx context.Context, m map[string]any) (global.Service, error) {
 }
 
 func (s *svc) routerInit(log *zerolog.Logger) error {
+	s.Conf.OCMProvider.ApplyDefaults()
+	if err := s.Conf.OCMProvider.validateMFAPolicy(); err != nil {
+		return err
+	}
 	limiter, err := s.Conf.RateLimit.NewLimiter(log)
 	if err != nil {
 		return err
