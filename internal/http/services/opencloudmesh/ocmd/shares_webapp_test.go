@@ -44,6 +44,12 @@ func webappReceiveHandler(targets []string) *sharesHandler {
 	}
 }
 
+func webappReceiveHandlerWithMFAPolicy(targets []string, policy *string) *sharesHandler {
+	h := webappReceiveHandler(targets)
+	h.mfaPolicy = policy
+	return h
+}
+
 func postShareLogged(t *testing.T, h *sharesHandler, body map[string]any, logs *bytes.Buffer) *httptest.ResponseRecorder {
 	t.Helper()
 	raw, err := json.Marshal(body)
@@ -124,6 +130,27 @@ func TestCreateShareWebappIngest(t *testing.T) {
 	okCreate := &ocmincoming.CreateOCMIncomingShareResponse{
 		Status: &rpc.Status{Code: rpc.Code_CODE_OK},
 	}
+
+	t.Run("mfa off admits must-use-mfa offer", func(t *testing.T) {
+		before := hits.Load()
+		gw := &sharesMockGW{createResp: okCreate}
+		stampGateway(gw)
+		off := wellknown.MFAPolicyOff
+		rr := postShare(t, webappReceiveHandlerWithMFAPolicy([]string{"blank"}, &off), shareBody(sender, "file", webappOffer(
+			"https://app.example/hub",
+			[]string{"must-exchange-token", "must-use-mfa"},
+			[]string{"blank"},
+		)))
+		if rr.Code != http.StatusCreated {
+			t.Fatalf("status %d body %s", rr.Code, rr.Body.String())
+		}
+		if gw.createCalls != 1 || gw.created == nil {
+			t.Fatalf("create calls %d", gw.createCalls)
+		}
+		if hits.Load()-before != 1 {
+			t.Fatalf("discovery hits %d", hits.Load()-before)
+		}
+	})
 
 	t.Run("absolute https is stored unchanged", func(t *testing.T) {
 		before := hits.Load()
@@ -593,7 +620,7 @@ func TestCreateShareWebappValidationErrorsAreSafe(t *testing.T) {
 			if verr == nil || !strings.Contains(verr.Error(), tt.classText) {
 				t.Fatalf("validator error %v", verr)
 			}
-			screenErr := ScreenIncomingWebapps(decoded, []string{"blank"})
+			screenErr := ScreenIncomingWebapps(decoded, []string{"blank"}, false)
 			if screenErr == nil || !strings.Contains(screenErr.Error(), tt.classText) {
 				t.Fatalf("screen error %v", screenErr)
 			}
