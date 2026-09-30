@@ -99,6 +99,9 @@ func (s *svc) handlePathPropfind(w http.ResponseWriter, r *http.Request, ns stri
 		// getResourceInfos handles responses in case of an error so we can just return here.
 		return
 	}
+
+	// The target only: its children may have other owners.
+	logResourceAccess(ctx, &sublog, parentInfo)
 	s.propfindResponse(ctx, w, r, ns, hrefBase, pf, parentInfo, resourceInfos, sublog)
 }
 
