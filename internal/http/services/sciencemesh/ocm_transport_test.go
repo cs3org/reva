@@ -61,9 +61,9 @@ func TestPublicOCMTransportConfigScalesTimeoutAndCopiesTLS(t *testing.T) {
 	// passes the guard (then fails to connect); an unrelated private range is
 	// denied by policy. This does not duplicate H1's normalization rules.
 	httpClient := client.NewPublicOnlyHTTPClient(cfg)
-	tr, ok := httpClient.Transport.(*http.Transport)
-	if !ok {
-		t.Fatalf("transport: got %T, want *http.Transport", httpClient.Transport)
+	tr := client.HTTPTransport(httpClient.Transport)
+	if tr == nil {
+		t.Fatalf("transport: got %T, want public-only base *http.Transport", httpClient.Transport)
 	}
 	if err := dialTransport(tr, "10.1.2.3:9"); errors.Is(err, client.ErrPolicyViolation) {
 		t.Errorf("in-range 10.1.2.3 denied by policy = %v, want a non-policy dial error", err)
@@ -112,9 +112,9 @@ func TestPublicOCMTransportConfigDefaultDeniesPrivate(t *testing.T) {
 		t.Fatal("default policy must keep AllowLoopback and UseEnvProxy false")
 	}
 	httpClient := client.NewPublicOnlyHTTPClient(cfg)
-	tr, ok := httpClient.Transport.(*http.Transport)
-	if !ok {
-		t.Fatalf("transport: got %T, want *http.Transport", httpClient.Transport)
+	tr := client.HTTPTransport(httpClient.Transport)
+	if tr == nil {
+		t.Fatalf("transport: got %T, want public-only base *http.Transport", httpClient.Transport)
 	}
 	if err := dialTransport(tr, "192.168.1.50:9"); !errors.Is(err, client.ErrPolicyViolation) {
 		t.Errorf("default 192.168.1.50 = %v, want ErrPolicyViolation", err)
@@ -136,9 +136,9 @@ func TestPublicOCMTransportConfigImmutableToConfigMutation(t *testing.T) {
 		t.Fatalf("publicOCMTransportConfig: %v", err)
 	}
 	httpClient := client.NewPublicOnlyHTTPClient(cfg)
-	tr, ok := httpClient.Transport.(*http.Transport)
-	if !ok {
-		t.Fatalf("transport: got %T, want *http.Transport", httpClient.Transport)
+	tr := client.HTTPTransport(httpClient.Transport)
+	if tr == nil {
+		t.Fatalf("transport: got %T, want public-only base *http.Transport", httpClient.Transport)
 	}
 
 	// Mutating the service config after the helper ran must not broaden the
