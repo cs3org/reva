@@ -35,6 +35,10 @@ import (
 // The caller goes under "accessor", not "user": other lines already log an
 // object under that key, and a consumer decoding it would break on one shape
 // or the other.
+//
+// The resource id tells apart which shared thing was reached: the share id
+// itself is not on the ResourceInfo, and looking it up would cost a call per
+// request.
 func logResourceAccess(ctx context.Context, log *zerolog.Logger, info *provider.ResourceInfo) {
 	if info == nil || info.Owner == nil {
 		return
@@ -43,9 +47,13 @@ func logResourceAccess(ctx context.Context, log *zerolog.Logger, info *provider.
 	if !ok || user.Id == nil {
 		return
 	}
-	log.Info().
+	//nolint:zerologlint
+	e := log.Info().
 		Str("accessor", user.Id.OpaqueId).
 		Str("owner", info.Owner.OpaqueId).
-		Bool("shared", !isCurrentUserOwner(ctx, info.Owner)).
-		Msg("accessed resource")
+		Bool("shared", !isCurrentUserOwner(ctx, info.Owner))
+	if info.Id != nil {
+		e = e.Str("resource_id", info.Id.StorageId+"!"+info.Id.OpaqueId)
+	}
+	e.Msg("accessed resource")
 }
