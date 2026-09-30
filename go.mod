@@ -39,7 +39,7 @@ require (
 	github.com/maxymania/go-system v0.0.0-20170110133659-647cc364bf0b
 	github.com/mileusna/useragent v1.3.5
 	github.com/mitchellh/mapstructure v1.5.0
-	github.com/nats-io/nats.go v1.53.1
+	github.com/nats-io/nats.go v1.54.0
 	github.com/onsi/ginkgo v1.16.5
 	github.com/onsi/gomega v1.43.1
 	github.com/owncloud/libre-graph-api-go v1.0.5-0.20250217093259-fa3804be6c27
@@ -113,7 +113,7 @@ require (
 	github.com/imdario/mergo v0.3.16 // indirect
 	github.com/jinzhu/inflection v1.0.0 // indirect
 	github.com/jinzhu/now v1.1.5 // indirect
-	github.com/klauspost/compress v1.19.1 // indirect
+	github.com/klauspost/compress v1.20.0 // indirect
 	github.com/kylelemons/godebug v1.1.0 // indirect
 	github.com/leodido/go-urn v1.5.0 // indirect
 	github.com/lestrrat-go/strftime v1.0.4 // indirect
@@ -126,7 +126,7 @@ require (
 	github.com/mitchellh/hashstructure v1.1.0 // indirect
 	github.com/mitchellh/reflectwalk v1.0.2 // indirect
 	github.com/munnerz/goautoneg v0.0.0-20191010083416-a7dc8b61c822 // indirect
-	github.com/nats-io/nkeys v0.4.15 // indirect
+	github.com/nats-io/nkeys v0.4.16 // indirect
 	github.com/nats-io/nuid v1.0.1 // indirect
 	github.com/nxadm/tail v1.4.8 // indirect
 	github.com/oklog/ulid/v2 v2.1.1 // indirect
