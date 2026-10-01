@@ -54,6 +54,8 @@ func lightweightAccountScope(_ context.Context, scope *authpb.Scope, resource an
 		return true, nil
 	case *ocm.GetReceivedOCMShareRequest:
 		return true, nil
+	case *ocm.UpdateReceivedOCMShareRequest:
+		return true, nil
 	case *sp.ListStorageSpacesRequest:
 		return true, nil
 	// Creates the account's home, see ensureLightweightHome in the gateway.
