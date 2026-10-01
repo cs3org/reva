@@ -196,6 +196,12 @@ type IsInsufficientStorage interface {
 	IsInsufficientStorage()
 }
 
+// IsConflict is the interface to implement
+// to specify that the request conflicts with the current state of the server.
+type IsConflict interface {
+	IsConflict()
+}
+
 // ShareParentConflict is returned when creating a share is redundant or inconsistent
 // because a parent resource is already shared with the same grantee.
 type ShareParentConflict string

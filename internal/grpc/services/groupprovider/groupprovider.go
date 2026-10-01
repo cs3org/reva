@@ -33,7 +33,6 @@ import (
 	"github.com/cs3org/reva/v3/pkg/rgrpc/status"
 	"github.com/cs3org/reva/v3/pkg/utils"
 	"github.com/cs3org/reva/v3/pkg/utils/cfg"
-	"github.com/pkg/errors"
 	"google.golang.org/grpc"
 )
 
@@ -105,8 +104,7 @@ func (s *service) GetGroup(ctx context.Context, req *grouppb.GetGroupRequest) (*
 		if _, ok := err.(errtypes.NotFound); ok {
 			res.Status = status.NewNotFound(ctx, "group not found")
 		} else {
-			err = errors.Wrap(err, "groupprovidersvc: error getting group")
-			res.Status = status.NewInternal(ctx, err, "error getting group")
+			res.Status = status.NewStatusFromErrType(ctx, "error getting group", err)
 		}
 		return res, nil
 	}
@@ -124,8 +122,7 @@ func (s *service) GetGroupByClaim(ctx context.Context, req *grouppb.GetGroupByCl
 		if _, ok := err.(errtypes.NotFound); ok {
 			res.Status = status.NewNotFound(ctx, fmt.Sprintf("group not found %s %s", req.Claim, req.Value))
 		} else {
-			err = errors.Wrap(err, "groupprovidersvc: error getting group by claim")
-			res.Status = status.NewInternal(ctx, err, "error getting group by claim")
+			res.Status = status.NewStatusFromErrType(ctx, "error getting group by claim", err)
 		}
 		return res, nil
 	}
@@ -143,9 +140,8 @@ func (s *service) FindGroups(ctx context.Context, req *grouppb.FindGroupsRequest
 	}
 	groups, err := s.groupmgr.FindGroups(ctx, req.Filters[idx].GetQuery(), req.SkipFetchingMembers)
 	if err != nil {
-		err = errors.Wrap(err, "groupprovidersvc: error finding groups")
 		return &grouppb.FindGroupsResponse{
-			Status: status.NewInternal(ctx, err, "error finding groups"),
+			Status: status.NewStatusFromErrType(ctx, "error finding groups", err),
 		}, nil
 	}
 
@@ -163,9 +159,8 @@ func (s *service) FindGroups(ctx context.Context, req *grouppb.FindGroupsRequest
 func (s *service) GetMembers(ctx context.Context, req *grouppb.GetMembersRequest) (*grouppb.GetMembersResponse, error) {
 	members, err := s.groupmgr.GetMembers(ctx, req.GroupId)
 	if err != nil {
-		err = errors.Wrap(err, "groupprovidersvc: error getting group members")
 		return &grouppb.GetMembersResponse{
-			Status: status.NewInternal(ctx, err, "error getting group members"),
+			Status: status.NewStatusFromErrType(ctx, "error getting group members", err),
 		}, nil
 	}
 
@@ -178,9 +173,8 @@ func (s *service) GetMembers(ctx context.Context, req *grouppb.GetMembersRequest
 func (s *service) HasMember(ctx context.Context, req *grouppb.HasMemberRequest) (*grouppb.HasMemberResponse, error) {
 	ok, err := s.groupmgr.HasMember(ctx, req.GroupId, req.UserId)
 	if err != nil {
-		err = errors.Wrap(err, "groupprovidersvc: error checking for group member")
 		return &grouppb.HasMemberResponse{
-			Status: status.NewInternal(ctx, err, "error checking for group member"),
+			Status: status.NewStatusFromErrType(ctx, "error checking for group member", err),
 		}, nil
 	}
 
