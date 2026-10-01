@@ -538,6 +538,26 @@ func mergePermissions(l *provider.ResourcePermissions, r *provider.ResourcePermi
 	l.DenyGrant = l.DenyGrant || r.DenyGrant
 }
 
+// checksumFromEOS converts the checksum EOS reported into the CS3 one. The two
+// clients spell the type differently: the binary one reads "adler" from
+// fileinfo, the gRPC one passes on the MGM's "adler32".
+//
+// Returned by pointer because copying a ResourceChecksum copies the mutex in it.
+func checksumFromEOS(xs *eosclient.Checksum) *provider.ResourceChecksum {
+	out := &provider.ResourceChecksum{Sum: xs.XSSum}
+	switch strings.ToLower(xs.XSType) {
+	case "adler", "adler32":
+		out.Type = provider.ResourceChecksumType_RESOURCE_CHECKSUM_TYPE_ADLER32
+	case "md5":
+		out.Type = provider.ResourceChecksumType_RESOURCE_CHECKSUM_TYPE_MD5
+	case "sha1":
+		out.Type = provider.ResourceChecksumType_RESOURCE_CHECKSUM_TYPE_SHA1
+	default:
+		out.Type = provider.ResourceChecksumType_RESOURCE_CHECKSUM_TYPE_INVALID
+	}
+	return out
+}
+
 func (fs *Eosfs) convert(ctx context.Context, eosFileInfo *eosclient.FileInfo) (*provider.ResourceInfo, error) {
 	p, err := fs.unwrap(ctx, eosFileInfo.File)
 	if err != nil {
@@ -555,15 +575,9 @@ func (fs *Eosfs) convert(ctx context.Context, eosFileInfo *eosclient.FileInfo) (
 		sublog.Warn().Uint64("uid", eosFileInfo.UID).Msg("could not lookup userid, leaving empty")
 	}
 
-	var xs provider.ResourceChecksum
+	xs := &provider.ResourceChecksum{}
 	if eosFileInfo.Size != 0 && eosFileInfo.XS != nil {
-		xs.Sum = strings.TrimLeft(eosFileInfo.XS.XSSum, "0")
-		switch eosFileInfo.XS.XSType {
-		case "adler":
-			xs.Type = provider.ResourceChecksumType_RESOURCE_CHECKSUM_TYPE_ADLER32
-		default:
-			xs.Type = provider.ResourceChecksumType_RESOURCE_CHECKSUM_TYPE_INVALID
-		}
+		xs = checksumFromEOS(eosFileInfo.XS)
 	}
 
 	// filter 'sys' attrs
@@ -592,7 +606,7 @@ func (fs *Eosfs) convert(ctx context.Context, eosFileInfo *eosclient.FileInfo) (
 		Size:          size,
 		ParentId:      &provider.ResourceId{OpaqueId: fmt.Sprintf("%d", eosFileInfo.FID)},
 		PermissionSet: fs.permissionSet(ctx, eosFileInfo, owner),
-		Checksum:      &xs,
+		Checksum:      xs,
 		Type:          getResourceType(eosFileInfo.IsDir),
 		Mtime: &types.Timestamp{
 			Seconds: eosFileInfo.MTimeSec,
