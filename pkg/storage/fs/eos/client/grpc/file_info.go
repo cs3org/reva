@@ -238,7 +238,7 @@ func (c *Client) grpcMDResponseToFileInfo(ctx context.Context, st *erpc.MDRespon
 
 		if st.Fmd.Checksum != nil {
 			xs := &eosclient.Checksum{
-				XSSum:  hex.EncodeToString(st.Fmd.Checksum.Value),
+				XSSum:  checksumHex(st.Fmd.Checksum.Type, st.Fmd.Checksum.Value),
 				XSType: st.Fmd.Checksum.Type,
 			}
 			fi.XS = xs
@@ -247,4 +247,23 @@ func (c *Client) grpcMDResponseToFileInfo(ctx context.Context, st *erpc.MDRespon
 		}
 	}
 	return fi, nil
+}
+
+// checksumWidths is how many bytes each checksum EOS can report occupies.
+var checksumWidths = map[string]int{
+	"adler":   4,
+	"adler32": 4,
+	"md5":     16,
+	"sha1":    20,
+	"sha256":  32,
+}
+
+// checksumHex encodes the checksum without the padding after it: the Fmd field
+// is fixed width, so encoding all of it leaves zeros that are not part of the
+// checksum. An unknown type is encoded whole.
+func checksumHex(xsType string, value []byte) string {
+	if n, ok := checksumWidths[strings.ToLower(xsType)]; ok && n <= len(value) {
+		value = value[:n]
+	}
+	return hex.EncodeToString(value)
 }
