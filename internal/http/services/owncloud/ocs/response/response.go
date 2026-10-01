@@ -27,7 +27,6 @@ import (
 	"reflect"
 
 	"github.com/cs3org/reva/v3/pkg/appctx"
-	"github.com/go-chi/chi/v5"
 )
 
 type key int
@@ -231,20 +230,17 @@ func OcsV2StatusCodes(meta Meta) int {
 	return http.StatusOK
 }
 
-// WithAPIVersion puts the api version in the context.
-func VersionCtx(next http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		version := chi.URLParam(r, "version")
-		if version == "" {
-			WriteOCSError(w, r, MetaBadRequest.StatusCode, "unknown ocs api version", nil)
-			return
-		}
-		w.Header().Set("Ocs-Api-Version", version)
-
-		// store version in context so handlers can access it
-		ctx := context.WithValue(r.Context(), apiVersionKey, version)
-		next.ServeHTTP(w, r.WithContext(ctx))
-	})
+// VersionCtx announces the api version and puts it in the context, so handlers
+// can access it. The version is part of the route, so it is known up front
+// rather than read back out of the URL.
+func VersionCtx(version string) func(http.Handler) http.Handler {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Set("Ocs-Api-Version", version)
+			ctx := context.WithValue(r.Context(), apiVersionKey, version)
+			next.ServeHTTP(w, r.WithContext(ctx))
+		})
+	}
 }
 
 // APIVersion retrieves the api version from the context.

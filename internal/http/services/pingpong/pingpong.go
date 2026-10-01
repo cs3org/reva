@@ -21,15 +21,18 @@ package pingpong
 import (
 	"context"
 	"net/http"
-	"strings"
 
 	"github.com/cs3org/reva/v3/internal/grpc/services/pingpong/proto"
 	"github.com/cs3org/reva/v3/pkg/appctx"
 	"github.com/cs3org/reva/v3/pkg/rhttp/global"
+	"github.com/cs3org/reva/v3/pkg/rhttp/router"
 	"github.com/cs3org/reva/v3/pkg/utils/cfg"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 )
+
+// mount is where the service is served.
+const mount = "/pingpong"
 
 func init() {
 	global.Register("pingpong", New)
@@ -51,15 +54,10 @@ func (s *svc) Close() error {
 }
 
 type config struct {
-	Prefix   string `mapstructure:"prefix"`
 	Endpoint string `mapstructure:"endpoint"`
 }
 
 func (c *config) ApplyDefaults() {
-	if c.Prefix == "" {
-		c.Prefix = "pingpong"
-	}
-
 	if c.Endpoint == "" {
 		c.Endpoint = "localhost:8081"
 	}
@@ -69,30 +67,10 @@ type svc struct {
 	conf *config
 }
 
-func (s *svc) Prefix() string {
-	return s.conf.Prefix
-}
-
-func (s *svc) Unprotected() []string {
-	return []string{"/"}
-}
-
-func (s *svc) Handler() http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		action := strings.TrimPrefix(r.URL.Path, s.conf.Prefix)
-		log := appctx.GetLogger(r.Context())
-		log.Info().Msgf("action: %s", action)
-		switch action {
-		case "/ping":
-			s.doPing(w, r)
-			return
-		case "/pong":
-			s.doPong(w, r)
-			return
-		default:
-			w.WriteHeader(http.StatusBadRequest)
-			return
-		}
+func (s *svc) Routes(r *router.Router) {
+	r.Group(mount, func(r *router.Router) {
+		r.Any("/ping", s.doPing, router.Unprotected())
+		r.Any("/pong", s.doPong, router.Unprotected())
 	})
 }
 

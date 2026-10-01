@@ -24,7 +24,6 @@ import (
 
 // Config holds the config options that need to be passed down to all ocs handlers.
 type Config struct {
-	Prefix                   string                    `mapstructure:"prefix"`
 	Config                   data.ConfigData           `mapstructure:"config"`
 	Capabilities             data.CapabilitiesData     `mapstructure:"capabilities"`
 	DefaultUploadProtocol    string                    `mapstructure:"default_upload_protocol"`
@@ -55,9 +54,6 @@ type Config struct {
 
 // Init sets sane defaults.
 func (c *Config) ApplyDefaults() {
-	if c.Prefix == "" {
-		c.Prefix = "ocs"
-	}
 
 	if c.SharePrefix == "" {
 		c.SharePrefix = "/Shares"

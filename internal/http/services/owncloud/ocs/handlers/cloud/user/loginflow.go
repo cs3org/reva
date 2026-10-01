@@ -30,7 +30,6 @@ import (
 	"github.com/cs3org/reva/v3/pkg/appauth/loginflow"
 	"github.com/cs3org/reva/v3/pkg/appctx"
 	"github.com/cs3org/reva/v3/pkg/errtypes"
-	"github.com/go-chi/chi/v5"
 )
 
 // These handlers implement the authenticated, user-facing side of the login
@@ -141,7 +140,7 @@ func (h *Handler) LoginFlowDeny(w http.ResponseWriter, r *http.Request) {
 // parameter and maps the "gone" vs "unknown" distinction the web UI relies on:
 // 404 unknown, 410 expired. A zero code means the authorization is live.
 func (h *Handler) lookupAuthorization(r *http.Request) (*loginflow.ClientAuthorization, int) {
-	lt := chi.URLParam(r, "lt")
+	lt := r.PathValue("lt")
 	if lt == "" {
 		return nil, http.StatusNotFound
 	}

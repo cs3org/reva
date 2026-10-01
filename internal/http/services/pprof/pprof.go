@@ -24,8 +24,11 @@ import (
 	"net/http/pprof"
 
 	"github.com/cs3org/reva/v3/pkg/rhttp/global"
-	"github.com/cs3org/reva/v3/pkg/utils/cfg"
+	"github.com/cs3org/reva/v3/pkg/rhttp/router"
 )
+
+// mount is where the profiling endpoints are served.
+const mount = "/debug"
 
 func init() {
 	global.Register("pprof", New)
@@ -33,14 +36,7 @@ func init() {
 
 // New returns a new pprof service.
 func New(ctx context.Context, m map[string]any) (global.Service, error) {
-	var c config
-	if err := cfg.Decode(m, &c); err != nil {
-		return nil, err
-	}
-
-	c.ApplyDefaults()
-
-	return &svc{conf: &c}, nil
+	return &svc{}, nil
 }
 
 // Close performs cleanup.
@@ -48,37 +44,20 @@ func (s *svc) Close() error {
 	return nil
 }
 
-type config struct {
-	Prefix string `mapstructure:"prefix"`
-}
+type svc struct{}
 
-func (c *config) ApplyDefaults() {
-	// pprof is always exposed at /debug
-	c.Prefix = "debug"
-}
-
-type svc struct {
-	conf *config
-}
-
-func (s *svc) Prefix() string {
-	return s.conf.Prefix
-}
-
-func (s *svc) Unprotected() []string {
-	return []string{"/", "/pprof/", "/pprof/profile", "/pprof/symbol", "/pprof/trace", "/pprof/heap", "/pprof/goroutine"}
-}
-
-func (s *svc) Handler() http.Handler {
+// Routes mounts the standard library's pprof endpoints rather than declaring
+// them one by one: pprof.Index derives the profile name from the request path,
+// and only recognizes it under /debug/pprof/, so it needs the path untouched.
+func (s *svc) Routes(r *router.Router) {
 	mux := http.NewServeMux()
-	// example: /debug/pprof/profile
-	mux.HandleFunc("/pprof/", pprof.Index)
-	mux.HandleFunc("/pprof/profile", pprof.Profile)
-	mux.HandleFunc("/pprof/symbol", pprof.Symbol)
-	mux.HandleFunc("/pprof/trace", pprof.Trace)
+	mux.HandleFunc(mount+"/pprof/", pprof.Index)
+	mux.HandleFunc(mount+"/pprof/profile", pprof.Profile)
+	mux.HandleFunc(mount+"/pprof/symbol", pprof.Symbol)
+	mux.HandleFunc(mount+"/pprof/trace", pprof.Trace)
 	// See https://pkg.go.dev/runtime/pprof#Profile for predefined profile names.
-	mux.HandleFunc("/pprof/heap", func(w http.ResponseWriter, r *http.Request) { pprof.Handler("heap").ServeHTTP(w, r) })
-	mux.HandleFunc("/pprof/goroutine", func(w http.ResponseWriter, r *http.Request) { pprof.Handler("goroutine").ServeHTTP(w, r) })
+	mux.HandleFunc(mount+"/pprof/heap", func(w http.ResponseWriter, r *http.Request) { pprof.Handler("heap").ServeHTTP(w, r) })
+	mux.HandleFunc(mount+"/pprof/goroutine", func(w http.ResponseWriter, r *http.Request) { pprof.Handler("goroutine").ServeHTTP(w, r) })
 
-	return mux
+	r.Mount(mount, mux, router.Unprotected())
 }

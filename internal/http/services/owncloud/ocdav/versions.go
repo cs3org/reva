@@ -32,7 +32,6 @@ import (
 
 	"github.com/cs3org/reva/v3/pkg/appctx"
 	"github.com/cs3org/reva/v3/pkg/httpclient"
-	"github.com/cs3org/reva/v3/pkg/rhttp/router"
 	"github.com/cs3org/reva/v3/pkg/service"
 	"github.com/cs3org/reva/v3/pkg/spaces"
 	"github.com/cs3org/reva/v3/pkg/storage/utils/downloader"
@@ -49,7 +48,7 @@ func (h *VersionsHandler) init(c *Config) error {
 // Handler handles requests
 // versions can be listed with a PROPFIND to /remote.php/dav/meta/<fileid>/v
 // a version is identified by a timestamp, eg. /remote.php/dav/meta/<fileid>/v/1561410426.
-func (h *VersionsHandler) Handler(s *svc, rid *provider.ResourceId) http.Handler {
+func (h *VersionsHandler) Handler(s *svc, rid *provider.ResourceId, key string) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		ctx := r.Context()
 		log := appctx.GetLogger(ctx)
@@ -70,8 +69,6 @@ func (h *VersionsHandler) Handler(s *svc, rid *provider.ResourceId) http.Handler
 		ctx = context.WithValue(ctx, ctxKeyBaseURI, baseURI)
 		r = r.WithContext(ctx)
 
-		var key string
-		key, r.URL.Path = router.ShiftPath(r.URL.Path)
 		if r.Method == http.MethodOptions {
 			s.handleOptions(w, r)
 			return

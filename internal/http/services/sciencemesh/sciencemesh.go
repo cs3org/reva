@@ -20,15 +20,16 @@ package sciencemesh
 
 import (
 	"context"
-	"net/http"
 
-	"github.com/cs3org/reva/v3/pkg/appctx"
 	"github.com/cs3org/reva/v3/pkg/rhttp/global"
+	"github.com/cs3org/reva/v3/pkg/rhttp/router"
 	"github.com/cs3org/reva/v3/pkg/sharedconf"
 	"github.com/cs3org/reva/v3/pkg/smtpclient"
 	"github.com/cs3org/reva/v3/pkg/utils/cfg"
-	"github.com/go-chi/chi/v5"
 )
+
+// mount is where the ScienceMesh API is served.
+const mount = "/sciencemesh"
 
 func init() {
 	global.Register("sciencemesh", New)
@@ -42,13 +43,9 @@ func New(ctx context.Context, m map[string]any) (global.Service, error) {
 		return nil, err
 	}
 
-	r := chi.NewRouter()
-	s := &svc{
-		conf:   &c,
-		router: r,
-	}
+	s := &svc{conf: &c}
 
-	if err := s.routerInit(); err != nil {
+	if err := s.handlersInit(); err != nil {
 		return nil, err
 	}
 
@@ -61,7 +58,6 @@ func (s *svc) Close() error {
 }
 
 type config struct {
-	Prefix               string                      `mapstructure:"prefix"`
 	SMTPCredentials      *smtpclient.SMTPCredentials `mapstructure:"smtp_credentials"`
 	GatewaySvc           string                      `mapstructure:"gatewaysvc"         validate:"required"`
 	MeshDirectoryURL     string                      `mapstructure:"mesh_directory_url" validate:"required"`
@@ -75,9 +71,6 @@ type config struct {
 }
 
 func (c *config) ApplyDefaults() {
-	if c.Prefix == "" {
-		c.Prefix = "sciencemesh"
-	}
 	if c.OCMMountPoint == "" {
 		c.OCMMountPoint = "/ocm"
 	}
@@ -89,11 +82,16 @@ func (c *config) ApplyDefaults() {
 }
 
 type svc struct {
-	conf   *config
-	router chi.Router
+	conf *config
+
+	token     *tokenHandler
+	providers *providersHandler
+	apps      *appsHandler
+	wayf      *wayfHandler
+	embedded  *embeddedHandler
 }
 
-func (s *svc) routerInit() error {
+func (s *svc) handlersInit() error {
 	tokenHandler := new(tokenHandler)
 	if err := tokenHandler.init(s.conf); err != nil {
 		return err
@@ -117,35 +115,28 @@ func (s *svc) routerInit() error {
 		return err
 	}
 
-	s.router.Post("/generate-invite", tokenHandler.Generate)
-	s.router.Get("/list-invite", tokenHandler.ListInvite)
-	s.router.Post("/accept-invite", tokenHandler.AcceptInvite)
-	s.router.Get("/find-accepted-users", tokenHandler.FindAccepted)
-	s.router.Delete("/delete-accepted-user", tokenHandler.DeleteAccepted)
-	s.router.Get("/list-providers", providersHandler.ListProviders)
-	s.router.Post("/open-in-app", appsHandler.OpenInApp)
-	s.router.Get("/federations", wayfHandler.GetFederations)
-	s.router.Post("/discover", wayfHandler.DiscoverProvider)
-	s.router.Get("/embedded-shares", embeddedHandler.ListEmbeddedShares)
-	s.router.Post("/process-embedded-share", embeddedHandler.ProcessEmbeddedShare)
+	s.token = tokenHandler
+	s.providers = providersHandler
+	s.apps = appsHandler
+	s.wayf = wayfHandler
+	s.embedded = embeddedHandler
 	return nil
 }
 
-func (s *svc) Prefix() string {
-	return s.conf.Prefix
-}
-
-func (s *svc) Unprotected() []string {
-	return []string{"/federations", "/discover"}
-}
-
-func (s *svc) Handler() http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		log := appctx.GetLogger(r.Context())
-		log.Debug().Str("path", r.URL.Path).Msg("sciencemesh routing")
-
-		// unset raw path, otherwise chi uses it to route and then fails to match percent encoded path segments
-		r.URL.RawPath = ""
-		s.router.ServeHTTP(w, r)
+// Routes declares the ScienceMesh endpoints. Discovery is reachable without
+// credentials, everything else is behind the auth middleware.
+func (s *svc) Routes(r *router.Router) {
+	r.Group(mount, func(r *router.Router) {
+		r.Post("/generate-invite", s.token.Generate)
+		r.Get("/list-invite", s.token.ListInvite)
+		r.Post("/accept-invite", s.token.AcceptInvite)
+		r.Get("/find-accepted-users", s.token.FindAccepted)
+		r.Delete("/delete-accepted-user", s.token.DeleteAccepted)
+		r.Get("/list-providers", s.providers.ListProviders)
+		r.Post("/open-in-app", s.apps.OpenInApp)
+		r.Get("/federations", s.wayf.GetFederations, router.Unprotected())
+		r.Post("/discover", s.wayf.DiscoverProvider, router.Unprotected())
+		r.Get("/embedded-shares", s.embedded.ListEmbeddedShares)
+		r.Post("/process-embedded-share", s.embedded.ProcessEmbeddedShare)
 	})
 }

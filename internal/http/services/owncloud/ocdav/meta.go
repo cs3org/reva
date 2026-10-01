@@ -18,13 +18,7 @@
 
 package ocdav
 
-import (
-	"net/http"
-
-	"github.com/cs3org/reva/v3/pkg/appctx"
-	"github.com/cs3org/reva/v3/pkg/rhttp/router"
-	"github.com/cs3org/reva/v3/pkg/spaces"
-)
+import ()
 
 // MetaHandler handles meta requests.
 type MetaHandler struct {
@@ -34,45 +28,4 @@ type MetaHandler struct {
 func (h *MetaHandler) init(c *Config) error {
 	h.VersionsHandler = new(VersionsHandler)
 	return h.VersionsHandler.init(c)
-}
-
-// Handler handles requests.
-func (h *MetaHandler) Handler(s *svc) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		ctx := r.Context()
-		log := appctx.GetLogger(ctx)
-		
-		var id string
-		id, r.URL.Path = router.ShiftPath(r.URL.Path)
-		if id == "" {
-			http.Error(w, "400 Bad Request", http.StatusBadRequest)
-			return
-		}
-
-		rid, ok := spaces.ParseResourceID(id)
-		if !ok {
-			// If this fails, client might be non-spaces
-			var err error
-			rid, err = spaces.ResourceIdFromString(id)
-			if err != nil {
-				http.Error(w, "400 Bad Request", http.StatusBadRequest)
-				return
-			}
-		}
-
-		log.Debug().
-			Str("storage_id", rid.StorageId).
-			Str("space_id", rid.SpaceId).
-			Str("opaque_id", rid.OpaqueId).
-			Msg("meta: parsed resource ID")
-
-		var head string
-		head, r.URL.Path = router.ShiftPath(r.URL.Path)
-		switch head {
-		case "v":
-			h.VersionsHandler.Handler(s, rid).ServeHTTP(w, r)
-		default:
-			w.WriteHeader(http.StatusNotFound)
-		}
-	})
 }
