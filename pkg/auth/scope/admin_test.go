@@ -60,6 +60,9 @@ func TestAdminScopeIsolation(t *testing.T) {
 		// admin token must not.
 		{"user token, RequestAdmin", userToken, &adminpb.RequestAdminRequest{}, true},
 		{"admin token, RequestAdmin", adminToken, &adminpb.RequestAdminRequest{}, false},
+		// CheckAdmin only reports the caller's standing, so it is reached the
+		// same way.
+		{"user token, CheckAdmin", userToken, &adminpb.CheckAdminRequest{}, true},
 		// Streaming admin/control RPCs are identified by method (the request
 		// message is not available yet): the same isolation must hold.
 		{"admin token, admin stream method", adminToken, MethodResource("/reva.admin.v1beta1.AdminAPI/InvokeStream"), true},
