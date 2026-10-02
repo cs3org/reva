@@ -52,6 +52,7 @@ import (
 	datatx "github.com/cs3org/go-cs3apis/cs3/tx/v1beta1"
 
 	revtrace "github.com/cs3org/reva/v3/internal/grpc/interceptors/trace"
+	"github.com/cs3org/reva/v3/pkg/admin/adminpb"
 	"github.com/cs3org/reva/v3/pkg/appctx"
 	"github.com/cs3org/reva/v3/pkg/logger"
 	"github.com/cs3org/reva/v3/pkg/registry"
@@ -135,6 +136,7 @@ type Clients interface {
 	AppProvider(ctx context.Context) (appprovider.ProviderAPIClient, error)
 	DataTx(ctx context.Context) (datatx.TxAPIClient, error)
 	Labels(ctx context.Context) (labels.LabelsAPIClient, error)
+	Admin(ctx context.Context) (adminpb.AdminAPIClient, error)
 
 	// Degrade marks the node at address degraded and passes it over locally.
 	Degrade(service, address string)

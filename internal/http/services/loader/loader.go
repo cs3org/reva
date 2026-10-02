@@ -20,6 +20,7 @@ package loader
 
 import (
 	// Load core HTTP services.
+	_ "github.com/cs3org/reva/v3/internal/http/services/admin"
 	_ "github.com/cs3org/reva/v3/internal/http/services/appprovider"
 	_ "github.com/cs3org/reva/v3/internal/http/services/archiver"
 	_ "github.com/cs3org/reva/v3/internal/http/services/datagateway"

@@ -26,11 +26,12 @@ package reva.admin.v1beta1;
 option go_package = "github.com/cs3org/reva/v3/pkg/admin/adminpb";
 
 // AdminAPI is the client-facing operator surface. Every method requires the
-// admin scope except RequestAdmin, the elevation door.
+// admin scope except RequestAdmin, the elevation door, and CheckAdmin.
 service AdminAPI {
   // Access / step-up.
   rpc RequestAdmin(RequestAdminRequest) returns (RequestAdminResponse);
   rpc Impersonate(ImpersonateRequest) returns (ImpersonateResponse);
+  rpc CheckAdmin(CheckAdminRequest) returns (CheckAdminResponse);
 
   // Introspection (read-only).
   rpc GetServerInfo(GetServerInfoRequest) returns (GetServerInfoResponse);
@@ -79,6 +80,15 @@ message ImpersonateResponse {
   // token is an ordinary user-scoped token for the target user (never
   // admin+user).
   string token = 1;
+}
+
+// CheckAdminRequest asks whether the caller may step up, without stepping up:
+// nothing is minted, so nothing is audited.
+message CheckAdminRequest {
+}
+
+message CheckAdminResponse {
+  bool admin = 1;
 }
 
 // ----- Introspection -----
