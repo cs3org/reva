@@ -37,6 +37,7 @@ import (
 	"github.com/cs3org/reva/v3/pkg/spaces"
 	"github.com/cs3org/reva/v3/pkg/utils"
 
+	"github.com/bluele/gcache"
 	"github.com/pkg/errors"
 
 	"github.com/cs3org/reva/v3/pkg/appctx"
@@ -59,6 +60,8 @@ const (
 	ctxPublicLink
 	ctxStorageId
 	ctxResourceOpaqueId
+	// the base URI of the dav endpoint, e.g. /remote.php/dav
+	ctxKeyDavBaseURI
 )
 
 var (
@@ -134,6 +137,14 @@ type Config struct {
 	// legacy links and status. Browsers and sync clients hit them during
 	// normal use, hence a higher default than the OCM services.
 	RateLimit ratelimit.ServiceConfig `mapstructure:",squash"`
+
+	// EnableLinkTargets exposes the targets of symbolic links and Windows .lnk
+	// shortcuts in PROPFIND, when they can be navigated by clients (see links.go).
+	EnableLinkTargets bool `mapstructure:"enable_link_targets"`
+	// MaxShortcutSize is the maximum size of a .lnk file to be parsed. Default 64 KiB.
+	MaxShortcutSize int64 `mapstructure:"max_shortcut_size"`
+	// ShortcutCacheSize is the number of parsed .lnk files kept in memory. Default 10000.
+	ShortcutCacheSize int `mapstructure:"shortcut_cache_size"`
 }
 
 // Default rate limit of the unauthenticated routes.
@@ -157,6 +168,13 @@ func (c *Config) ApplyDefaults() {
 	}
 
 	c.RateLimit.ApplyDefaultsWith(defaultUnauthRateLimit, defaultUnauthRateLimitBurst)
+
+	if c.MaxShortcutSize == 0 {
+		c.MaxShortcutSize = 64 * 1024
+	}
+	if c.ShortcutCacheSize == 0 {
+		c.ShortcutCacheSize = 10000
+	}
 }
 
 type svc struct {
@@ -166,6 +184,7 @@ type svc struct {
 	myOfficeFilesManager myofficefiles.Manager
 	client               *httpclient.Client
 	limiter              *ratelimit.Limiter
+	lnkCache             gcache.Cache
 }
 
 // New returns a new ocdav.
@@ -199,6 +218,7 @@ func New(ctx context.Context, m map[string]any) (global.Service, error) {
 		),
 		myOfficeFilesManager: myOfficeFilesManager,
 		limiter:              limiter,
+		lnkCache:             gcache.New(c.ShortcutCacheSize).LRU().Build(),
 	}
 	// initialize handlers and set default cigs
 	if err := s.webDavHandler.init(c.WebdavNamespace, true); err != nil {
@@ -255,25 +275,34 @@ func (s *svc) Routes(rt *router.Router) {
 	for _, prefix := range []string{"", "/remote.php"} {
 		webdav, dav := prefix+"/webdav", prefix+"/dav"
 
+		// Link targets are exposed as hrefs under the dav endpoint, which the
+		// legacy webdav endpoint does not offer.
+		withDavBase := func(h http.Handler) http.Handler {
+			return http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+				h.ServeHTTP(w, req.WithContext(context.WithValue(req.Context(), ctxKeyDavBaseURI, dav)))
+			})
+		}
+		d, dLimited := r.Use(withDavBase), limited.Use(withDavBase)
+
 		r.Subtree(webdav, s.davSubtree(s.webdav(webdav)))
-		r.Subtree(dav+"/files", s.davSubtree(s.files(dav+"/files")))
+		d.Subtree(dav+"/files", s.davSubtree(s.files(dav+"/files")))
 
 		// Avatars and versions address ids and keys rather than resource
 		// paths, so they are declared as patterns: nothing below them has to
 		// survive canonicalization, and the parameters they carry are named.
-		r.Any(dav+"/avatars/{user}/{file}", s.avatar(dav))
-		r.Any(dav+"/meta/{id}/v", s.versions(dav+"/meta"))
+		d.Any(dav+"/avatars/{user}/{file}", s.avatar(dav))
+		d.Any(dav+"/meta/{id}/v", s.versions(dav+"/meta"))
 		r.Any(dav+"/meta/{id}/v/{key}", s.versions(dav+"/meta"))
-		r.Mount(dav+"/trash-bin", s.trashbin(dav+"/trash-bin"), router.Methods(trashbinMethods...))
+		d.Mount(dav+"/trash-bin", s.trashbin(dav+"/trash-bin"), router.Methods(trashbinMethods...))
 		// The spaces trash bin reports hrefs under /spaces, not under itself,
 		// and is matched ahead of /spaces because a longer mount wins.
-		r.Mount(dav+"/spaces/trash-bin", s.spacesTrashbin(dav+"/spaces"), router.Methods(trashbinMethods...))
-		r.Subtree(dav+"/spaces", s.davSubtree(s.spaces(dav+"/spaces")))
+		d.Mount(dav+"/spaces/trash-bin", s.spacesTrashbin(dav+"/spaces"), router.Methods(trashbinMethods...))
+		d.Subtree(dav+"/spaces", s.davSubtree(s.spaces(dav+"/spaces")))
 
 		// OCM and public links carry their own credentials, in the path or in
 		// a header, so they are reachable without the auth middleware.
-		r.Subtree(dav+"/ocm", s.davSubtree(s.ocm(dav+"/ocm")), router.Unprotected())
-		limited.Subtree(dav+"/public-files", s.davSubtree(s.publicFiles(dav+"/public-files")), router.Unprotected())
+		d.Subtree(dav+"/ocm", s.davSubtree(s.ocm(dav+"/ocm")), router.Unprotected())
+		dLimited.Subtree(dav+"/public-files", s.davSubtree(s.publicFiles(dav+"/public-files")), router.Unprotected())
 	}
 }
 
