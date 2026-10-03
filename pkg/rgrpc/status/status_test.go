@@ -55,3 +55,18 @@ func TestNewStatusFromErrType(t *testing.T) {
 		})
 	}
 }
+
+func TestNewRedactedStatusFromErrType(t *testing.T) {
+	got := NewRedactedStatusFromErrType(context.Background(), "op", errtypes.NotFound("secret detail"))
+	if got.Code != rpc.Code_CODE_NOT_FOUND {
+		t.Fatalf("code = %v, want %v", got.Code, rpc.Code_CODE_NOT_FOUND)
+	}
+	if got.Message != "op" {
+		t.Fatalf("message = %q, want %q", got.Message, "op")
+	}
+
+	got = NewRedactedStatusFromErrType(context.Background(), "op", errors.New("db unreachable"))
+	if got.Code != rpc.Code_CODE_INTERNAL || got.Message != "op" {
+		t.Fatalf("got %v %q, want INTERNAL %q", got.Code, got.Message, "op")
+	}
+}

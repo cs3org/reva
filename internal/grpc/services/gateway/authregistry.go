@@ -49,7 +49,7 @@ func (s *svc) ListAuthProviders(ctx context.Context, req *registry.ListAuthProvi
 
 	if res.Status.Code != rpc.Code_CODE_OK {
 		return &gateway.ListAuthProvidersResponse{
-			Status: res.Status,
+			Status: status.NewRedactedStatusFromErrType(ctx, "error listing auth providers", status.NewErrtypeFromStatus(res.Status)),
 		}, nil
 	}
 

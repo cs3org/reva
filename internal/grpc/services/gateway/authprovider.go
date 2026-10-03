@@ -46,7 +46,7 @@ func (s *svc) Authenticate(ctx context.Context, req *gateway.AuthenticateRequest
 	c, err := s.findAuthProvider(ctx, req.Type)
 	if err != nil {
 		return &gateway.AuthenticateResponse{
-			Status: status.NewStatusFromErrType(ctx, "error finding auth provider for type: "+req.Type, err),
+			Status: status.NewRedactedStatusFromErrType(ctx, "error finding auth provider for type: "+req.Type, err),
 		}, nil
 	}
 
@@ -72,8 +72,10 @@ func (s *svc) Authenticate(ctx context.Context, req *gateway.AuthenticateRequest
 			Status: res.Status,
 		}, nil
 	case res.Status.Code != rpc.Code_CODE_OK:
+		// unexpected failure: log the whole status, but do not leak its details
+		log.Error().Any("status", res.Status).Str("type", req.Type).Msg("error authenticating credentials to auth provider")
 		return &gateway.AuthenticateResponse{
-			Status: res.Status,
+			Status: status.NewRedactedStatusFromErrType(ctx, "error authenticating credentials to auth provider for type: "+req.Type, status.NewErrtypeFromStatus(res.Status)),
 		}, nil
 	}
 
@@ -183,7 +185,7 @@ func (s *svc) Authenticate(ctx context.Context, req *gateway.AuthenticateRequest
 			if createHomeRes.Status.Code != rpc.Code_CODE_OK {
 				log.Err(status.NewErrorFromCode(createHomeRes.Status.Code, "gateway")).Any("response", createHomeRes).Msg("return from CreateHome")
 				return &gateway.AuthenticateResponse{
-					Status: createHomeRes.Status,
+					Status: status.NewRedactedStatusFromErrType(ctx, "error creating user home", status.NewErrtypeFromStatus(createHomeRes.Status)),
 				}, nil
 			}
 			if s.c.CreateHomeCacheTTL > 0 {

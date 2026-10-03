@@ -147,6 +147,8 @@ func NewInvalidArg(ctx context.Context, msg string) *rpc.Status {
 
 // NewConflict returns a Status with Code_CODE_ABORTED and logs the msg.
 func NewConflict(ctx context.Context, err error, msg string) *rpc.Status {
+	log := appctx.GetLogger(ctx).With().CallerWithSkipFrameCount(3).Logger()
+	log.Warn().Err(err).Msg(msg)
 	return &rpc.Status{
 		Code:    rpc.Code_CODE_ABORTED,
 		Message: msg,
@@ -213,6 +215,17 @@ func NewStatusFromErrType(ctx context.Context, msg string, err error) *rpc.Statu
 	}
 
 	return NewInternal(ctx, err, msg+": "+err.Error())
+}
+
+// NewRedactedStatusFromErrType is like NewStatusFromErrType, but the returned
+// message is only msg: the details of err are logged and not sent to the caller.
+// To be used where errors must not leak internals, e.g. by the auth providers.
+func NewRedactedStatusFromErrType(ctx context.Context, msg string, err error) *rpc.Status {
+	st := NewStatusFromErrType(ctx, msg, err)
+	if err != nil {
+		st.Message = msg
+	}
+	return st
 }
 
 // NewErrtypeFromStatus returns an errtype matching a non-OK status, so a helper
