@@ -38,6 +38,7 @@ import (
 	"github.com/cs3org/reva/v3/pkg/spaces"
 	"github.com/cs3org/reva/v3/pkg/utils"
 
+	"github.com/bluele/gcache"
 	"github.com/pkg/errors"
 
 	"github.com/cs3org/reva/v3/pkg/httpclient"
@@ -58,6 +59,8 @@ const (
 	ctxPublicLink
 	ctxStorageId
 	ctxResourceOpaqueId
+	// the base URI of the dav endpoint, e.g. /remote.php/dav
+	ctxKeyDavBaseURI
 )
 
 var (
@@ -125,6 +128,13 @@ type Config struct {
 	PublicLinkDownload           *ConfigPublicLinkDownload `mapstructure:"publiclink_download"`
 	DisabledOpenInAppPaths       []string                  `mapstructure:"disabled_open_in_app_paths"`
 	MyOfficeFilesAllowedProjects []string                  `mapstructure:"my_office_files_projects"`
+	// EnableLinkTargets exposes the targets of symbolic links and Windows .lnk
+	// shortcuts in PROPFIND, when they can be navigated by clients (see links.go).
+	EnableLinkTargets bool `mapstructure:"enable_link_targets"`
+	// MaxShortcutSize is the maximum size of a .lnk file to be parsed. Default 64 KiB.
+	MaxShortcutSize int64 `mapstructure:"max_shortcut_size"`
+	// ShortcutCacheSize is the number of parsed .lnk files kept in memory. Default 10000.
+	ShortcutCacheSize int `mapstructure:"shortcut_cache_size"`
 }
 
 func (c *Config) ApplyDefaults() {
@@ -138,6 +148,13 @@ func (c *Config) ApplyDefaults() {
 	if len(c.MyOfficeFilesAllowedProjects) == 0 {
 		c.MyOfficeFilesAllowedProjects = []string{"cernbox"}
 	}
+
+	if c.MaxShortcutSize == 0 {
+		c.MaxShortcutSize = 64 * 1024
+	}
+	if c.ShortcutCacheSize == 0 {
+		c.ShortcutCacheSize = 10000
+	}
 }
 
 type svc struct {
@@ -146,6 +163,7 @@ type svc struct {
 	davHandler           *DavHandler
 	myOfficeFilesManager myofficefiles.Manager
 	client               *httpclient.Client
+	lnkCache             gcache.Cache
 }
 
 // New returns a new ocdav.
@@ -171,6 +189,7 @@ func New(ctx context.Context, m map[string]any) (global.Service, error) {
 			httpclient.RoundTripper(tr),
 		),
 		myOfficeFilesManager: myOfficeFilesManager,
+		lnkCache:             gcache.New(c.ShortcutCacheSize).LRU().Build(),
 	}
 	// initialize handlers and set default cigs
 	if err := s.webDavHandler.init(c.WebdavNamespace, true); err != nil {
@@ -274,6 +293,7 @@ func (s *svc) Handler() http.Handler {
 			// or we take the path starting at /dav and allow rewriting it?
 			base = path.Join(base, "dav")
 			ctx := context.WithValue(ctx, ctxKeyBaseURI, base)
+			ctx = context.WithValue(ctx, ctxKeyDavBaseURI, base)
 			r = r.WithContext(ctx)
 			s.davHandler.Handler(s).ServeHTTP(w, r)
 			return

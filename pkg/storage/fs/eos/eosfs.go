@@ -593,7 +593,8 @@ func (fs *Eosfs) convert(ctx context.Context, eosFileInfo *eosclient.FileInfo) (
 		ParentId:      &provider.ResourceId{OpaqueId: fmt.Sprintf("%d", eosFileInfo.FID)},
 		PermissionSet: fs.permissionSet(ctx, eosFileInfo, owner),
 		Checksum:      &xs,
-		Type:          getResourceType(eosFileInfo.IsDir),
+		Type:          getResourceType(eosFileInfo),
+		Target:        eosFileInfo.LinkTarget,
 		Mtime: &types.Timestamp{
 			Seconds: eosFileInfo.MTimeSec,
 			Nanos:   eosFileInfo.MTimeNanos,
@@ -631,9 +632,12 @@ func (fs *Eosfs) convert(ctx context.Context, eosFileInfo *eosclient.FileInfo) (
 	return info, nil
 }
 
-func getResourceType(isDir bool) provider.ResourceType {
-	if isDir {
+func getResourceType(fi *eosclient.FileInfo) provider.ResourceType {
+	switch {
+	case fi.IsDir:
 		return provider.ResourceType_RESOURCE_TYPE_CONTAINER
+	case fi.LinkTarget != "":
+		return provider.ResourceType_RESOURCE_TYPE_SYMLINK
 	}
 	return provider.ResourceType_RESOURCE_TYPE_FILE
 }

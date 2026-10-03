@@ -98,6 +98,8 @@ type FileInfo struct {
 	XS         *Checksum         `json:"xs"`
 	SysACL     *acl.ACLs         `json:"sys_acl"`
 	Attrs      map[string]string `json:"attrs"`
+	// LinkTarget is the target of a symbolic link, empty for any other entry.
+	LinkTarget string `json:"link_target,omitempty"`
 }
 
 // DeletedEntry represents an entry from the trashbin.

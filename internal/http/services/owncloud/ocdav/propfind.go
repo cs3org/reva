@@ -434,9 +434,13 @@ func readPropfind(r io.Reader) (pf propfindXML, status int, err error) {
 }
 
 func (s *svc) multistatusResponse(ctx context.Context, pf *propfindXML, mds []*provider.ResourceInfo, parent *provider.ResourceInfo, ns, href string, usershares, linkshares map[string]struct{}) (string, error) {
+	var links map[string]*linkInfo
+	if isLinkProp(&pf.Prop) {
+		links = s.resolveLinks(ctx, mds)
+	}
 	responses := make([]*responseXML, 0, len(mds))
 	for i := range mds {
-		res, err := s.mdToPropResponse(ctx, pf, mds[i], parent, ns, href, usershares, linkshares)
+		res, err := s.mdToPropResponse(ctx, pf, mds[i], parent, ns, href, usershares, linkshares, links)
 		if err != nil {
 			return "", err
 		}
@@ -507,36 +511,46 @@ func (s *svc) isOpenable(path string) bool {
 	return true
 }
 
+// computeHref returns the href of the resource at mdPath, given its parent
+// (if known) and the href of the latter.
+func computeHref(mdPath, spaceID string, parent *provider.ResourceInfo, hrefBase string) (string, error) {
+	var href string
+	if parent != nil {
+		relativePath, err := filepath.Rel(encodePath(parent.Path), encodePath(mdPath))
+		if err != nil {
+			return "", errors.Wrapf(err, "failed to calculate path relative to parent: %v", mdPath)
+		}
+		href, err = url.JoinPath(encodePath(hrefBase), relativePath)
+		if err != nil {
+			return "", errors.Wrapf(err, "failed to join relative path with ref: %v", mdPath)
+		}
+	} else {
+		// If no parent specified, we just take space id + path relative to space
+		spacePath, _ := spaces.DecodeSpaceID(spaceID)
+		relativePath, err := filepath.Rel(spacePath, encodePath(mdPath))
+		if err != nil {
+			return "", errors.Wrapf(err, "failed to calculate path relative to space: %v. %v", spacePath, mdPath)
+		}
+		href, err = url.JoinPath(encodePath(hrefBase), spaceID, relativePath)
+		if err != nil {
+			return "", errors.Wrapf(err, "failed to join relative path with ref: %v", mdPath)
+		}
+	}
+
+	return href, nil
+}
+
 // mdToPropResponse converts the CS3 metadata into a webdav PropResponse
 // ns is the CS3 namespace that needs to be removed from the CS3 path before
 // prefixing it with the baseURI.
 // hrefBase is the base of the `href` value, to which the `md`'s relative path to it's `parent` will be appended
 // in case no parent is given, the resource's space id + it's path relative to the space root is given
-func (s *svc) mdToPropResponse(ctx context.Context, pf *propfindXML, md *provider.ResourceInfo, parent *provider.ResourceInfo, ns, hrefBase string, usershares, linkshares map[string]struct{}) (*responseXML, error) {
+func (s *svc) mdToPropResponse(ctx context.Context, pf *propfindXML, md *provider.ResourceInfo, parent *provider.ResourceInfo, ns, hrefBase string, usershares, linkshares map[string]struct{}, links map[string]*linkInfo) (*responseXML, error) {
 	sublog := appctx.GetLogger(ctx).With().Str("ns", ns).Logger()
 
-	var href string
-	if parent != nil {
-		relativePath, err := filepath.Rel(encodePath(parent.Path), encodePath(md.Path))
-		if err != nil {
-			return nil, errors.Wrapf(err, "failed to calculate path relative to parent: %v", md.Path)
-		}
-		href, err = url.JoinPath(encodePath(hrefBase), relativePath)
-		if err != nil {
-			return nil, errors.Wrapf(err, "failed to join relative path with ref: %v", md.Path)
-		}
-	} else {
-		// If no parent specified, we just take space id + path relative to space
-		spaceID := md.Id.SpaceId
-		spacePath, _ := spaces.DecodeSpaceID(spaceID)
-		relativePath, err := filepath.Rel(spacePath, encodePath(md.Path))
-		if err != nil {
-			return nil, errors.Wrapf(err, "failed to calculate path relative to space: %v. %v", spacePath, md.Path)
-		}
-		href, err = url.JoinPath(encodePath(hrefBase), spaceID, relativePath)
-		if err != nil {
-			return nil, errors.Wrapf(err, "failed to join relative path with ref: %v", md.Path)
-		}
+	href, err := computeHref(md.Path, md.Id.GetSpaceId(), parent, hrefBase)
+	if err != nil {
+		return nil, err
 	}
 
 	if md.Type == provider.ResourceType_RESOURCE_TYPE_CONTAINER {
@@ -950,6 +964,28 @@ func (s *svc) mdToPropResponse(ctx context.Context, pf *propfindXML, md *provide
 						propstatOK.Prop = append(propstatOK.Prop, s.newProp("oc:privatelink", privateURL.String()))
 					} else {
 						propstatNotFound.Prop = append(propstatNotFound.Prop, s.newProp("oc:privatelink", ""))
+					}
+				case _propLinkType:
+					if li, ok := links[md.Path]; ok {
+						propstatOK.Prop = append(propstatOK.Prop, s.newProp("oc:"+_propLinkType, li.Type))
+					} else {
+						propstatNotFound.Prop = append(propstatNotFound.Prop, s.newProp("oc:"+_propLinkType, ""))
+					}
+				case _propLinkTarget:
+					var target string
+					if li, ok := links[md.Path]; ok {
+						target = li.TargetHref
+						if li.TargetPath != "" {
+							if target, err = computeHref(li.TargetPath, md.Id.GetSpaceId(), parent, hrefBase); err != nil {
+								sublog.Warn().Err(err).Str("target", li.TargetPath).Msg("could not compute link target href")
+								target = ""
+							}
+						}
+					}
+					if target != "" {
+						propstatOK.Prop = append(propstatOK.Prop, s.newProp("oc:"+_propLinkTarget, target))
+					} else {
+						propstatNotFound.Prop = append(propstatNotFound.Prop, s.newProp("oc:"+_propLinkTarget, ""))
 					}
 				case "dDC": // desktop
 					fallthrough
