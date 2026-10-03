@@ -184,7 +184,7 @@ func NewStatusFromErrType(ctx context.Context, msg string, err error) *rpc.Statu
 	case errtypes.IsNotSupported:
 		return NewUnimplemented(ctx, err, msg+": "+err.Error())
 	case errtypes.IsBadRequest:
-		return NewInvalidArg(ctx, msg+": "+err.Error())
+		return NewInvalid(ctx, msg+": "+err.Error())
 	case errtypes.IsAlreadyExists:
 		return NewAlreadyExists(ctx, err, msg+": "+err.Error())
 	case errtypes.IsConflict:

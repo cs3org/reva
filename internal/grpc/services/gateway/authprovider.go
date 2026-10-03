@@ -67,9 +67,14 @@ func (s *svc) Authenticate(ctx context.Context, req *gateway.AuthenticateRequest
 	case res.Status.Code == rpc.Code_CODE_NOT_FOUND:
 		fallthrough
 	case res.Status.Code == rpc.Code_CODE_ABORTED:
-		// normal failures, no need to log
+		// normal failures, already logged by the auth provider: keep the code
+		// but do not forward the provider's message
 		return &gateway.AuthenticateResponse{
-			Status: res.Status,
+			Status: &rpc.Status{
+				Code:    res.Status.Code,
+				Message: "authentication failed for type: " + req.Type,
+				Trace:   res.Status.Trace,
+			},
 		}, nil
 	case res.Status.Code != rpc.Code_CODE_OK:
 		// unexpected failure: log the whole status, but do not leak its details

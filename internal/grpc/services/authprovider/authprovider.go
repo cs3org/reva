@@ -161,7 +161,7 @@ func (s *service) Authenticate(ctx context.Context, req *provider.AuthenticateRe
 		}, nil
 	case errtypes.NotFound:
 		return &provider.AuthenticateResponse{
-			Status: status.NewNotFound(ctx, "unknown client id: "+err.Error()),
+			Status: status.NewRedactedStatusFromErrType(ctx, "unknown client id", err),
 		}, nil
 	case errtypes.Conflict:
 		return &provider.AuthenticateResponse{
