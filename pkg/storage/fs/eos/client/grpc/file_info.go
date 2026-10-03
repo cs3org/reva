@@ -235,6 +235,8 @@ func (c *Client) grpcMDResponseToFileInfo(ctx context.Context, st *erpc.MDRespon
 		}
 
 		fi.Size = st.Fmd.Size
+		// symbolic links are file entries carrying the link target
+		fi.LinkTarget = string(st.Fmd.LinkName)
 
 		if st.Fmd.Checksum != nil {
 			xs := &eosclient.Checksum{
