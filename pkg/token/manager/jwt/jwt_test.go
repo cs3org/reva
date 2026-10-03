@@ -19,9 +19,20 @@
 package jwt
 
 import (
+	"strings"
 	"testing"
 	"time"
 )
+
+func TestNewRequiresConfiguredSecret(t *testing.T) {
+	_, err := New(nil)
+	if err == nil {
+		t.Fatal("expected an error when no JWT secret is configured")
+	}
+	if !strings.Contains(err.Error(), "shared.jwt_secret") {
+		t.Fatalf("expected an actionable missing-secret error, got %q", err)
+	}
+}
 
 func TestGetNextWeekend(t *testing.T) {
 	tests := []struct {
