@@ -13,6 +13,7 @@ import (
 	"net"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"os"
 	"os/exec"
 	"strings"
@@ -1098,15 +1099,17 @@ func TestReceivedExchangeTokenRejectsPrivateEndpoint(t *testing.T) {
 	if !errors.Is(err, client.ErrPolicyViolation) {
 		t.Errorf("exchangeAccessToken() error = %v, want ErrPolicyViolation", err)
 	}
+	var internal errtypes.InternalError
+	if !errors.As(err, &internal) || string(internal) != "token exchange request failed" {
+		t.Errorf("exchangeAccessToken() error = %v, want InternalError %q", err, "token exchange request failed")
+	}
+	var urlErr *url.Error
+	if errors.As(err, &urlErr) {
+		t.Errorf("exchangeAccessToken() retained url.Error: %v", err)
+	}
 	got := err.Error()
-	if !strings.Contains(got, "non-public address") {
-		t.Errorf("exchangeAccessToken() error = %q, want non-public address", got)
-	}
-	if !strings.Contains(got, "192.168.1.1:9") {
-		t.Errorf("exchangeAccessToken() error = %q, want 192.168.1.1:9", got)
-	}
-	if strings.Contains(got, "refusing scheme") {
-		t.Errorf("exchangeAccessToken() error = %q, must not contain refusing scheme", got)
+	if strings.Contains(got, endpoint) || strings.Contains(got, "192.168.1.1") || strings.Contains(got, "secret") {
+		t.Errorf("exchangeAccessToken() error = %q, leaked endpoint, address, or secret", got)
 	}
 }
 

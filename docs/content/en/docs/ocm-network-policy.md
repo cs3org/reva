@@ -27,10 +27,11 @@ The address policy, TLS verification, loopback exception, and environment
 proxy are independent. Turning one on never turns another on:
 
 - `allowed_federation_cidrs` admits explicit private addresses only. Directory
-  fetches are not granted any CIDR exception; only listed providers and
-  `/discover` requests are subject to the public-only policy with the
-  configured exception. It grants no TLS bypass and no loopback. Loopback
-  keeps its own flag and stays off for ScienceMesh and the open authorizer.
+  fetches are not granted any CIDR exception. Listed providers, `/discover`
+  requests, and received-webapp sender discovery and token exchange use the
+  public-only policy with the configured exception. It grants no TLS bypass
+  and no loopback. Loopback keeps its own flag and stays off for ScienceMesh
+  and the open authorizer.
 - `insecure` skips TLS certificate verification only. It grants no address
   access. A private destination still requires an explicit CIDR entry.
 - `allow_loopback_federation` admits loopback IP destinations only, and only
@@ -111,9 +112,10 @@ and wiring apply.
 
 ### [http.services.sciencemesh]
 
-ScienceMesh WAYF handler. Operator-configured directory fetches stay trusted.
-Listed providers and request-supplied `/discover` domains use the public-only
-client with the configured exception. Loopback and environment proxy stay off.
+ScienceMesh WAYF and received-webapp launch. Operator-configured directory
+fetches stay trusted. Listed providers, request-supplied `/discover` domains,
+and `/open-in-app` sender discovery and token exchange use public-only clients
+with the configured exception. Loopback and environment proxy stay off.
 
 | Key | Default | Use |
 |---|---|---|

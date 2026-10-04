@@ -40,7 +40,7 @@ func TestOpenInAppRelativeTokenEndpoint(t *testing.T) {
 		launchSecret,
 		[]string{"must-exchange-token"},
 	)
-	h, _ := newRecordingHandler(t, &fakeReceivedGateway{resp: okShareResponse(share)}, obs)
+	h := newTestHandler(t, &fakeReceivedGateway{resp: okShareResponse(share)}, obs)
 	req, _ := newLaunchRequest(t, "/ocm/share-1")
 	rec := httptest.NewRecorder()
 	h.OpenInApp(rec, req)

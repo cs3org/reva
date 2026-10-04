@@ -44,7 +44,7 @@ func TestOpenInAppMustUseMFAOffPolicy(t *testing.T) {
 		[]string{"must-exchange-token", "must-use-mfa"},
 	)
 	gw := &fakeReceivedGateway{resp: okShareResponse(share)}
-	h, seen := newRecordingHandler(t, gw, obs)
+	h := newTestHandler(t, gw, obs)
 	off := wellknown.MFAPolicyOff
 	h.mfaPolicy = &off
 
@@ -55,11 +55,11 @@ func TestOpenInAppMustUseMFAOffPolicy(t *testing.T) {
 	if rec.Code != http.StatusOK {
 		t.Fatalf("status %d body %s", rec.Code, rec.Body.String())
 	}
+	if h.launchClient != obs {
+		t.Fatal("launch client was not retained")
+	}
 	if obs.discoverCalls != 1 || obs.exchangeCalls != 1 {
 		t.Fatalf("discover %d exchange %d", obs.discoverCalls, obs.exchangeCalls)
-	}
-	if seen.calls != 1 {
-		t.Fatalf("client builds %d", seen.calls)
 	}
 	assertLogsClean(t, logs.String(), launchSecret, launchToken)
 }
@@ -78,7 +78,7 @@ func TestOpenInAppValidWebapp(t *testing.T) {
 		},
 	}
 	gw := &fakeReceivedGateway{resp: okShareResponse(share)}
-	h, seen := newRecordingHandler(t, gw, obs)
+	h := newTestHandler(t, gw, obs)
 
 	req, logs := newLaunchRequest(t, "/ocm/share-1/dir/my file.txt")
 	ctx, cancel := context.WithTimeout(req.Context(), 2*time.Second)
@@ -130,8 +130,8 @@ func TestOpenInAppValidWebapp(t *testing.T) {
 	if obs.deadlines != 2 || obs.missingCtxValue {
 		t.Fatalf("deadlines %d missing ctx %v", obs.deadlines, obs.missingCtxValue)
 	}
-	if seen.calls != 1 || seen.timeout != 3*time.Second || !seen.insecure {
-		t.Fatalf("client init calls=%d timeout=%s insecure=%v", seen.calls, seen.timeout, seen.insecure)
+	if h.launchClient != obs {
+		t.Fatal("launch client was not retained")
 	}
 	if len(gw.contexts) != 1 {
 		t.Fatalf("gateway calls %d", len(gw.contexts))
@@ -173,7 +173,7 @@ func TestOpenInAppChangedShareIsNotCached(t *testing.T) {
 		okShareResponse(first),
 		okShareResponse(second),
 	}}
-	h, seen := newRecordingHandler(t, gw, obs)
+	h := newTestHandler(t, gw, obs)
 
 	var urls []string
 	var tokens []string
@@ -194,12 +194,15 @@ func TestOpenInAppChangedShareIsNotCached(t *testing.T) {
 	if gw.calls != 2 || gw.opaqueID != "share-1" {
 		t.Fatalf("lookups %d share %q", gw.calls, gw.opaqueID)
 	}
-	if obs.discoverCalls != 2 || len(obs.origins) != 2 || seen.calls != 2 {
+	if h.launchClient != obs {
+		t.Fatal("repeated launch did not keep the same client")
+	}
+	if obs.discoverCalls != 2 || obs.exchangeCalls != 2 || len(obs.origins) != 2 {
 		t.Fatalf(
-			"discover %d origins %v client builds %d",
+			"discover %d exchange %d origins %v",
 			obs.discoverCalls,
+			obs.exchangeCalls,
 			obs.origins,
-			seen.calls,
 		)
 	}
 	if obs.origins[0] != "https://dav-a.example" || obs.origins[1] != "https://dav-b.example" {
@@ -221,7 +224,7 @@ func TestOpenInAppChangedShareIsNotCached(t *testing.T) {
 func TestOpenInAppMalformedForm(t *testing.T) {
 	gw := &fakeReceivedGateway{}
 	obs := &observeClient{token: launchToken}
-	h, seen := newRecordingHandler(t, gw, obs)
+	h := newTestHandler(t, gw, obs)
 	base, logs := newLaunchRequest(t, "/ocm/share-1")
 	req := httptest.NewRequest(
 		http.MethodPost,
@@ -243,11 +246,10 @@ func TestOpenInAppMalformedForm(t *testing.T) {
 	if !invalidParameter || !unparsed {
 		t.Fatalf("body %s", body)
 	}
-	if gw.calls != 0 || seen.calls != 0 || obs.discoverCalls != 0 || obs.exchangeCalls != 0 {
+	if gw.calls != 0 || obs.discoverCalls != 0 || obs.exchangeCalls != 0 {
 		t.Fatalf(
-			"gateway %d client builds %d discover %d exchange %d",
+			"gateway %d discover %d exchange %d",
 			gw.calls,
-			seen.calls,
 			obs.discoverCalls,
 			obs.exchangeCalls,
 		)
@@ -363,7 +365,7 @@ func TestOpenInAppFileIdentifierSuccess(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			obs := &observeClient{token: launchToken}
 			gw := &fakeReceivedGateway{resp: okShareResponse(launchWebappShare(t))}
-			h, _ := newRecordingHandler(t, gw, obs)
+			h := newTestHandler(t, gw, obs)
 			req, logs := newLaunchRequest(t, tt.file)
 			rec := httptest.NewRecorder()
 			h.OpenInApp(rec, req)
@@ -437,7 +439,7 @@ func TestOpenInAppFileIdentifierRejectedBeforeRemote(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			obs := &observeClient{token: launchToken}
 			gw := &fakeReceivedGateway{resp: okShareResponse(launchWebappShare(t))}
-			h, _ := newRecordingHandler(t, gw, obs)
+			h := newTestHandler(t, gw, obs)
 			req, logs := newLaunchRequest(t, tt.file)
 			rec := httptest.NewRecorder()
 			h.OpenInApp(rec, req)
@@ -486,7 +488,7 @@ func TestOpenInAppSharePathPolicyBeforeExchange(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			obs := &observeClient{token: launchToken}
 			gw := &fakeReceivedGateway{resp: okShareResponse(launchWebappShare(t))}
-			h, _ := newRecordingHandler(t, gw, obs)
+			h := newTestHandler(t, gw, obs)
 			req, logs := newLaunchRequest(t, tt.file)
 			rec := httptest.NewRecorder()
 			h.OpenInApp(rec, req)
@@ -530,7 +532,7 @@ func TestOpenInAppSecondShareIDNotCached(t *testing.T) {
 		okShareResponse(first),
 		okShareResponse(second),
 	}}
-	h, _ := newRecordingHandler(t, gw, obs)
+	h := newTestHandler(t, gw, obs)
 
 	paths := []string{"/ocm/share-1", "/ocm/share-2"}
 	wantURLs := []string{

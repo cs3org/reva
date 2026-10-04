@@ -25,7 +25,6 @@ import (
 	"net/http"
 	"net/url"
 	"strings"
-	"time"
 	"unicode"
 
 	rpcv1beta1 "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
@@ -39,7 +38,7 @@ import (
 	"github.com/cs3org/reva/v3/pkg/spaces"
 )
 
-// launchClient is one client for discovery and token exchange; tests may install a factory.
+// launchClient serves discovery and token exchange.
 type launchClient interface {
 	Discover(ctx context.Context, endpoint string) (*wellknown.OcmDiscoveryData, error)
 	ExchangeToken(ctx context.Context, tokenEndpoint, code, clientID string) (string, int64, error)
@@ -48,11 +47,9 @@ type launchClient interface {
 var _ launchClient = (*ocmd.OCMClient)(nil)
 
 type appsHandler struct {
-	ocmMountPoint   string
-	receiverDomain  string
-	clientTimeout   time.Duration
-	clientInsecure  bool
-	newLaunchClient func(timeout time.Duration, insecure bool) launchClient
+	ocmMountPoint  string
+	receiverDomain string
+	launchClient   launchClient
 	// Nil uses the published targets; an explicit empty set disables receipt.
 	webappReceiveTargets *[]string
 	// Nil uses the published MFA policy; tests may pin reject or off.
@@ -65,18 +62,14 @@ type openInAppResponse struct {
 }
 
 func (h *appsHandler) init(c *config) error {
+	transportConfig, err := c.publicOCMTransportConfig()
+	if err != nil {
+		return err
+	}
 	h.ocmMountPoint = c.OCMMountPoint
 	h.receiverDomain = c.ProviderDomain
-	h.clientTimeout = time.Duration(c.OCMClientTimeout) * time.Second
-	h.clientInsecure = c.OCMClientInsecure
+	h.launchClient = ocmd.NewPublicOnlyClientWithConfig(transportConfig)
 	return nil
-}
-
-func (h *appsHandler) remoteClient() launchClient {
-	if h.newLaunchClient != nil {
-		return h.newLaunchClient(h.clientTimeout, h.clientInsecure)
-	}
-	return ocmd.NewPublicOnlyClient(h.clientTimeout, h.clientInsecure)
 }
 
 func (h *appsHandler) shareInfo(p string) (*ocmpb.ShareId, string, error) {
@@ -249,7 +242,7 @@ func (h *appsHandler) buildLaunch(ctx context.Context, shareID *ocmpb.ShareId, r
 		return fail(err, "")
 	}
 
-	client := h.remoteClient()
+	client := h.launchClient
 	if client == nil {
 		return fail(errtypes.InternalError("launch client is not available"), "")
 	}

@@ -23,9 +23,11 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"os"
 	"strings"
 	"sync"
@@ -238,6 +240,159 @@ func TestExchangeTokenTransportAndConstructionOmitRemoteMaterial(t *testing.T) {
 	}
 	if strings.Contains(err.Error(), code) || strings.Contains(err.Error(), "[::1") {
 		t.Fatalf("construction error leaked remote material: %v", err)
+	}
+}
+
+func TestExchangeTokenPolicyFailureIsSafe(t *testing.T) {
+	const endpoint = "https://10.9.9.9:9/ocm/token"
+	const code = "code-secret"
+	const marker = "ENDPOINT-MARKER"
+	c := &OCMClient{client: &http.Client{Transport: roundTripperFunc(func(*http.Request) (*http.Response, error) {
+		return nil, &url.Error{
+			Op:  "Post",
+			URL: endpoint,
+			Err: fmt.Errorf("%s %s: %w", marker, code, client.ErrPolicyViolation),
+		}
+	})}}
+	tok, ttl, err := c.ExchangeToken(
+		context.Background(),
+		endpoint,
+		code,
+		"client",
+	)
+	if err == nil {
+		t.Fatal("expected policy error")
+	}
+	if tok != "" || ttl != 0 {
+		t.Fatalf("token %q ttl %d, want empty token and zero ttl", tok, ttl)
+	}
+	if !errors.Is(err, client.ErrPolicyViolation) {
+		t.Fatalf("error = %v, want ErrPolicyViolation", err)
+	}
+	var internal errtypes.InternalError
+	if !errors.As(err, &internal) || string(internal) != "token exchange request failed" {
+		t.Fatalf("error = %v (%T), want InternalError %q", err, err, "token exchange request failed")
+	}
+	var urlErr *url.Error
+	if errors.As(err, &urlErr) {
+		t.Fatalf("retained url.Error: %v", err)
+	}
+	got := err.Error()
+	if strings.Contains(got, endpoint) || strings.Contains(got, code) || strings.Contains(got, marker) {
+		t.Fatalf("policy error leaked remote material: %v", err)
+	}
+}
+
+type markerReadCloser struct {
+	err    error
+	closed bool
+}
+
+func (b *markerReadCloser) Read([]byte) (int, error) {
+	return 0, b.err
+}
+
+func (b *markerReadCloser) Close() error {
+	b.closed = true
+	return nil
+}
+
+func TestExchangeTokenReadErrorsAreSafe(t *testing.T) {
+	const endpoint = "https://token.example/ocm/token"
+	const code = "code-secret"
+	const marker = "BODY-MARKER"
+	tests := []struct {
+		name    string
+		status  int
+		message string
+	}{
+		{
+			name:    "http 200",
+			status:  http.StatusOK,
+			message: "token exchange response could not be decoded",
+		},
+		{
+			name:    "http 400",
+			status:  http.StatusBadRequest,
+			message: "token exchange response could not be read",
+		},
+		{
+			name:    "http 500",
+			status:  http.StatusInternalServerError,
+			message: "token exchange response could not be read",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			body := &markerReadCloser{
+				err: fmt.Errorf("read %s %s %s", endpoint, code, marker),
+			}
+			c := &OCMClient{client: &http.Client{Transport: roundTripperFunc(func(*http.Request) (*http.Response, error) {
+				return &http.Response{
+					StatusCode: tt.status,
+					Header:     make(http.Header),
+					Body:       body,
+				}, nil
+			})}}
+			tok, ttl, err := c.ExchangeToken(
+				context.Background(),
+				endpoint,
+				code,
+				"client",
+			)
+			if err == nil {
+				t.Fatal("expected read error")
+			}
+			if tok != "" || ttl != 0 {
+				t.Fatalf("token %q ttl %d, want empty token and zero ttl", tok, ttl)
+			}
+			var internal errtypes.InternalError
+			if !errors.As(err, &internal) || string(internal) != tt.message {
+				t.Fatalf("error = %v (%T), want InternalError %q", err, err, tt.message)
+			}
+			got := err.Error()
+			if strings.Contains(got, endpoint) || strings.Contains(got, code) || strings.Contains(got, marker) {
+				t.Fatalf("read error leaked remote material: %v", err)
+			}
+			if !body.closed {
+				t.Fatal("response body was not closed")
+			}
+		})
+	}
+}
+
+func TestExchangeTokenContextFailuresRemainObservable(t *testing.T) {
+	const endpoint = "https://token.example/ocm/token"
+	const code = "code-secret"
+	tests := []struct {
+		name string
+		err  error
+	}{
+		{name: "canceled", err: context.Canceled},
+		{name: "deadline", err: context.DeadlineExceeded},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			c := &OCMClient{client: &http.Client{Transport: roundTripperFunc(func(*http.Request) (*http.Response, error) {
+				return nil, fmt.Errorf("post %s %s: %w", endpoint, code, tt.err)
+			})}}
+			tok, ttl, err := c.ExchangeToken(
+				context.Background(),
+				endpoint,
+				code,
+				"client",
+			)
+			if tok != "" || ttl != 0 {
+				t.Fatalf("token %q ttl %d, want empty token and zero ttl", tok, ttl)
+			}
+			if err != tt.err {
+				t.Fatalf("error = %v, want canonical %v", err, tt.err)
+			}
+			got := err.Error()
+			if strings.Contains(got, endpoint) || strings.Contains(got, code) {
+				t.Fatalf("context error retained remote material: %v", err)
+			}
+		})
 	}
 }
 

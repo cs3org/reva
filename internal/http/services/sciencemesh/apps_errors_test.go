@@ -448,11 +448,10 @@ func TestOpenInAppFailures(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			client := launchClient(tt.client)
+			h := newTestHandler(t, tt.gw, tt.client)
 			if tt.nilClient {
-				client = nil
+				h.launchClient = nil
 			}
-			h, seen := newRecordingHandler(t, tt.gw, client)
 			if tt.nilGateway {
 				setLaunchGatewayReturnsNil(t)
 			}
@@ -482,11 +481,8 @@ func TestOpenInAppFailures(t *testing.T) {
 			if tt.client.discoverCalls != tt.wantDiscover || tt.client.exchangeCalls != tt.wantExchange {
 				t.Fatalf("discover %d exchange %d", tt.client.discoverCalls, tt.client.exchangeCalls)
 			}
-			if tt.nilClient && seen.calls != 1 {
-				t.Fatalf("client builds %d", seen.calls)
-			}
-			if tt.nilGateway && (tt.gw.calls != 0 || seen.calls != 0) {
-				t.Fatalf("gateway %d client builds %d", tt.gw.calls, seen.calls)
+			if tt.nilGateway && tt.gw.calls != 0 {
+				t.Fatalf("gateway %d", tt.gw.calls)
 			}
 			if tt.forbidURL != "" && strings.Contains(rec.Body.String(), tt.forbidURL) {
 				t.Fatalf("fell back to bare app URL: %s", rec.Body.String())
