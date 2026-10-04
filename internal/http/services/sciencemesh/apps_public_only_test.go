@@ -26,7 +26,6 @@ import (
 	"strings"
 	"sync/atomic"
 	"testing"
-	"time"
 
 	"github.com/cs3org/reva/v3/internal/http/services/opencloudmesh/ocmd"
 )
@@ -118,9 +117,12 @@ func TestOpenInAppPublicOnlyRejectsBeforeContact(t *testing.T) {
 				launchSecret,
 				[]string{"must-exchange-token"},
 			)
-			h := newTestHandler(t, &fakeReceivedGateway{resp: okShareResponse(share)}, nil)
-			h.clientTimeout = time.Second
-			h.clientInsecure = tt.insecure
+			h := newTestHandlerWithConfig(t, &fakeReceivedGateway{resp: okShareResponse(share)}, &config{
+				OCMMountPoint:     "/ocm",
+				ProviderDomain:    "receiver.example",
+				OCMClientTimeout:  1,
+				OCMClientInsecure: tt.insecure,
+			}, nil)
 			req, logs := newLaunchRequest(t, "/ocm/share-1")
 			rec := httptest.NewRecorder()
 			h.OpenInApp(rec, req)
@@ -187,18 +189,19 @@ func TestOpenInAppPublicDiscoveryPrivateToken(t *testing.T) {
 		launchSecret,
 		[]string{"must-exchange-token"},
 	)
-	h := newTestHandler(t, &fakeReceivedGateway{resp: okShareResponse(share)}, nil)
-	h.clientTimeout = time.Second
-	h.clientInsecure = true
-	var gotTimeout time.Duration
-	var gotInsecure bool
-	h.newLaunchClient = func(timeout time.Duration, insecure bool) launchClient {
-		gotTimeout = timeout
-		gotInsecure = insecure
-		return &publicOnlyScript{
-			real:          ocmd.NewPublicOnlyClient(timeout, insecure),
-			tokenEndpoint: tokenURL,
-		}
+	h := newTestHandlerWithConfig(t, &fakeReceivedGateway{resp: okShareResponse(share)}, &config{
+		OCMMountPoint:     "/ocm",
+		ProviderDomain:    "receiver.example",
+		OCMClientTimeout:  1,
+		OCMClientInsecure: true,
+	}, nil)
+	real, ok := h.launchClient.(*ocmd.OCMClient)
+	if !ok {
+		t.Fatalf("launchClient = %T, want *ocmd.OCMClient", h.launchClient)
+	}
+	h.launchClient = &publicOnlyScript{
+		real:          real,
+		tokenEndpoint: tokenURL,
 	}
 
 	req, logs := newLaunchRequest(t, "/ocm/share-1")
@@ -224,9 +227,6 @@ func TestOpenInAppPublicDiscoveryPrivateToken(t *testing.T) {
 	if accepted.Load() != 0 {
 		t.Fatalf("token endpoint accepted %d connections", accepted.Load())
 	}
-	if gotTimeout != time.Second || !gotInsecure {
-		t.Fatalf("timeout %s insecure %v", gotTimeout, gotInsecure)
-	}
 	assertNotLeaked(t, rec.Body.String(), logs.String(), launchSecret, launchToken)
 }
 
@@ -248,9 +248,12 @@ func TestOpenInAppPublicOnlyIgnoresProxy(t *testing.T) {
 		launchSecret,
 		[]string{"must-exchange-token"},
 	)
-	h := newTestHandler(t, &fakeReceivedGateway{resp: okShareResponse(share)}, nil)
-	h.clientTimeout = time.Second
-	h.clientInsecure = true
+	h := newTestHandlerWithConfig(t, &fakeReceivedGateway{resp: okShareResponse(share)}, &config{
+		OCMMountPoint:     "/ocm",
+		ProviderDomain:    "receiver.example",
+		OCMClientTimeout:  1,
+		OCMClientInsecure: true,
+	}, nil)
 	req, logs := newLaunchRequest(t, "/ocm/share-1")
 	rec := httptest.NewRecorder()
 	h.OpenInApp(rec, req)

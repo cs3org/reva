@@ -329,13 +329,7 @@ func (c *OCMClient) ExchangeToken(ctx context.Context, tokenEndpoint, code, clie
 
 	resp, err := c.client.Do(req)
 	if err != nil {
-		if errors.Is(err, context.Canceled) {
-			return "", 0, context.Canceled
-		}
-		if errors.Is(err, context.DeadlineExceeded) {
-			return "", 0, context.DeadlineExceeded
-		}
-		return "", 0, errtypes.InternalError("token exchange request failed")
+		return "", 0, tokenExchangeFailure(err, "token exchange request failed")
 	}
 	defer resp.Body.Close()
 
@@ -345,7 +339,7 @@ func (c *OCMClient) ExchangeToken(ctx context.Context, tokenEndpoint, code, clie
 	case http.StatusBadRequest:
 		data, err := readOCMBody(resp.Body, DefaultResponseLimit)
 		if err != nil {
-			return "", 0, err
+			return "", 0, tokenExchangeFailure(err, "token exchange response could not be read")
 		}
 		var errBody struct {
 			Error string `json:"error"`
@@ -358,7 +352,7 @@ func (c *OCMClient) ExchangeToken(ctx context.Context, tokenEndpoint, code, clie
 		return "", 0, errtypes.PermissionDenied("token exchange was rejected by the sender")
 	default:
 		if _, err := readOCMBody(resp.Body, DefaultResponseLimit); err != nil {
-			return "", 0, err
+			return "", 0, tokenExchangeFailure(err, "token exchange response could not be read")
 		}
 		return "", 0, errtypes.InternalError(fmt.Sprintf("token exchange returned HTTP %d", resp.StatusCode))
 	}
@@ -368,15 +362,27 @@ func (c *OCMClient) ExchangeToken(ctx context.Context, tokenEndpoint, code, clie
 		ExpiresIn   int64  `json:"expires_in"`
 	}
 	if err := decodeOCMJSON(resp.Body, DefaultResponseLimit, &result); err != nil {
-		if err == ErrResponseTooLarge {
-			return "", 0, err
-		}
-		return "", 0, errtypes.InternalError("token exchange response could not be decoded")
+		return "", 0, tokenExchangeFailure(err, "token exchange response could not be decoded")
 	}
 	if result.AccessToken == "" {
 		return "", 0, errtypes.InternalError("token exchange response missing access_token")
 	}
 	return result.AccessToken, result.ExpiresIn, nil
+}
+
+func tokenExchangeFailure(err error, message string) error {
+	switch {
+	case stderrors.Is(err, context.Canceled):
+		return context.Canceled
+	case stderrors.Is(err, context.DeadlineExceeded):
+		return context.DeadlineExceeded
+	case stderrors.Is(err, ErrResponseTooLarge):
+		return ErrResponseTooLarge
+	case stderrors.Is(err, client.ErrPolicyViolation):
+		return stderrors.Join(errtypes.InternalError(message), client.ErrPolicyViolation)
+	default:
+		return errtypes.InternalError(message)
+	}
 }
 
 // GetDirectoryService fetches a directory service listing from the given URL per OCM spec Appendix C.
