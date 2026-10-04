@@ -20,6 +20,7 @@ package sciencemesh
 
 import (
 	"context"
+	"crypto/tls"
 	"errors"
 	"net/http"
 	"strings"
@@ -61,9 +62,24 @@ func TestPublicOCMTransportConfigScalesTimeoutAndCopiesTLS(t *testing.T) {
 	// passes the guard (then fails to connect); an unrelated private range is
 	// denied by policy. This does not duplicate H1's normalization rules.
 	httpClient := client.NewPublicOnlyHTTPClient(cfg)
+	if httpClient.Timeout != 7*time.Second {
+		t.Errorf("HTTP client Timeout = %v, want 7s", httpClient.Timeout)
+	}
 	tr := client.HTTPTransport(httpClient.Transport)
 	if tr == nil {
 		t.Fatalf("transport: got %T, want public-only base *http.Transport", httpClient.Transport)
+	}
+	if tr.TLSClientConfig == nil {
+		t.Fatal("TLSClientConfig is nil")
+	}
+	if !tr.TLSClientConfig.InsecureSkipVerify {
+		t.Error("InsecureSkipVerify = false, want true")
+	}
+	if tr.TLSClientConfig.MinVersion != tls.VersionTLS12 {
+		t.Errorf("MinVersion = %v, want TLS 1.2", tr.TLSClientConfig.MinVersion)
+	}
+	if tr.Proxy != nil {
+		t.Error("Proxy is set, want nil")
 	}
 	if err := dialTransport(tr, "10.1.2.3:9"); errors.Is(err, client.ErrPolicyViolation) {
 		t.Errorf("in-range 10.1.2.3 denied by policy = %v, want a non-policy dial error", err)
