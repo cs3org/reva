@@ -29,7 +29,6 @@ import (
 	"strings"
 	"sync"
 	"testing"
-	"time"
 
 	gateway "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
 	rpcv1beta1 "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
@@ -180,12 +179,6 @@ func endpointIsNonPublic(endpoint string) bool {
 		ip.IsLinkLocalUnicast() || ip.IsLinkLocalMulticast()
 }
 
-type clientConfigSeen struct {
-	calls    int
-	timeout  time.Duration
-	insecure bool
-}
-
 type fakeReceivedGateway struct {
 	gateway.GatewayAPIClient
 	mu       sync.Mutex
@@ -301,42 +294,32 @@ func installLaunchGateway(t *testing.T, gw gateway.GatewayAPIClient) {
 
 func newTestHandler(t *testing.T, gw gateway.GatewayAPIClient, client launchClient) *appsHandler {
 	t.Helper()
-	installLaunchGateway(t, gw)
-	h := &appsHandler{}
-	if err := h.init(&config{
+	return newTestHandlerWithConfig(t, gw, &config{
 		OCMMountPoint:     "/ocm",
 		ProviderDomain:    "receiver.example",
 		OCMClientTimeout:  3,
 		OCMClientInsecure: true,
-	}); err != nil {
+	}, client)
+}
+
+func newTestHandlerWithConfig(
+	t *testing.T,
+	gw gateway.GatewayAPIClient,
+	conf *config,
+	client launchClient,
+) *appsHandler {
+	t.Helper()
+	installLaunchGateway(t, gw)
+	h := &appsHandler{}
+	if err := h.init(conf); err != nil {
 		t.Fatal(err)
-	}
-	if client != nil {
-		h.newLaunchClient = func(time.Duration, bool) launchClient {
-			return client
-		}
 	}
 	targets := []string{"blank"}
 	h.webappReceiveTargets = &targets
-	return h
-}
-
-func newRecordingHandler(
-	t *testing.T,
-	gw gateway.GatewayAPIClient,
-	client launchClient,
-) (*appsHandler, *clientConfigSeen) {
-	t.Helper()
-	h := newTestHandler(t, gw, nil)
-	seen := &clientConfigSeen{}
-	h.newLaunchClient = func(timeout time.Duration, insecure bool) launchClient {
-		seen.calls++
-		seen.timeout = timeout
-		seen.insecure = insecure
-		_ = ocmd.NewPublicOnlyClient(timeout, insecure)
-		return client
+	if client != nil {
+		h.launchClient = client
 	}
-	return h, seen
+	return h
 }
 
 func newLaunchRequest(t *testing.T, filePath string) (*http.Request, *bytes.Buffer) {
