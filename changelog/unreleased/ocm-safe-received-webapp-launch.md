@@ -7,8 +7,10 @@ exchanged for an access token over the public-only OCM client, with the
 configured provider domain as `client_id`. The response is `app_url` and
 `access_token`; the secret stays on the server. `must-use-mfa` offers are
 refused unless `mfa_policy` in `[http.services.wellknown.ocmprovider]` is
-`off` (default `reject`); nothing is advertised in discovery. The launch
-only dials public addresses and ignores environment proxies, so senders on
-loopback or private networks are refused.
+`off` (default `reject`); nothing is advertised in discovery. The launch uses
+the ScienceMesh timeout, TLS settings and explicit `allowed_federation_cidrs`
+for both discovery and token exchange. Without an exception, private
+addresses are refused; loopback and environment proxies remain disabled on
+this service.
 
 https://github.com/cs3org/reva/pull/5850
