@@ -50,6 +50,28 @@ provider_domain = "receiver.example"
 provider_domain = "receiver.example"
 ```
 
+## Receiver network policy
+
+Received-share discovery, WebDAV access and token exchange use the configured
+public-only transports described in
+[OCM network policy](../ocm-network-policy/). ScienceMesh `/open-in-app` uses
+its own service configuration for both sender discovery and token exchange.
+Private federation requires the same intended `allowed_federation_cidrs` on
+each participating receiver service and each `ocmreceived` driver instance;
+configuring one does not configure the others.
+
+An empty list denies private destinations. CIDR exceptions do not disable TLS
+verification or the TLS 1.2 floor and do not admit plain HTTP or loopback.
+ScienceMesh keeps loopback and environment proxy disabled. Receiver OCM and
+`ocmreceived` proxy options are separate opt-ins; direct mode is required when
+the dial guard must enforce the destination CIDR. A selected proxy changes
+the connection the guard sees and is not proof of target-range enforcement.
+
+The browser opens the returned application URL itself. Server network policy
+applies to Reva's discovery, token exchange and WebDAV requests; it is not a
+browser application-origin allowlist. Open-in-app still requires HTTPS for
+the application URI and token endpoint.
+
 ## Offer gate
 
 The provider offers a webapp method only when all four conditions hold:
@@ -93,7 +115,7 @@ methods.
   and only known, non-blank, unpadded, unique values. Their order is
   preserved.
 - An outbound `must-use-mfa` request is recognized and never erased; the
-  receiving server's permanent MFA rejection policy is not applied to
+  receiving server's MFA admission policy is not applied to
   sending.
 - For mixed webapp and WebDAV offers, an empty retained WebDAV requirements
   list defaults to a separate exchange-requirement copy. Supplied non-empty
