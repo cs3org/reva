@@ -350,8 +350,36 @@ func testCodeFlowReceivedShare(senderAddr, baseURL string) *ocmpb.ReceivedShare 
 
 func TestNewStoresConfiguredProviderDomain(t *testing.T) {
 	const want = "Receiver.Example.Test"
+	var gotClientID string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/ocm/token" {
+			http.Error(w, "unexpected path", http.StatusInternalServerError)
+			return
+		}
+		if err := r.ParseForm(); err != nil {
+			t.Errorf("ParseForm: %v", err)
+			http.Error(w, "bad form", http.StatusBadRequest)
+			return
+		}
+		gotClientID = r.FormValue("client_id")
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"access_token": "jwt-tok",
+			"token_type":   "Bearer",
+			"expires_in":   3600,
+		})
+	}))
+	defer srv.Close()
+
+	// Loopback HTTP is only so this exchange can reach the local token server.
+	// Allowed CIDRs do not admit loopback or plain HTTP.
 	fs, err := New(context.Background(), map[string]any{
-		"provider_domain": want,
+		"provider_domain":           want,
+		"allow_loopback_federation": true,
+		"allowed_federation_cidrs": []any{
+			"10.50.0.0/16",
+			"fd42:8c6d:7a10:23::/64",
+		},
 	})
 	if err != nil {
 		t.Fatalf("New: %v", err)
@@ -362,6 +390,22 @@ func TestNewStoresConfiguredProviderDomain(t *testing.T) {
 	}
 	if d.providerDomain != want {
 		t.Fatalf("providerDomain = %q, want %q", d.providerDomain, want)
+	}
+
+	const mutated = "other.example.test"
+	d.c.ProviderDomain = mutated
+	token, err := d.exchangeAccessToken(context.Background(), srv.URL+"/ocm/token", "secret")
+	if err != nil {
+		t.Fatalf("exchangeAccessToken: %v", err)
+	}
+	if token != "jwt-tok" {
+		t.Fatalf("access token = %q, want jwt-tok", token)
+	}
+	if gotClientID != d.providerDomain {
+		t.Fatalf("client_id = %q, want copied providerDomain %q", gotClientID, d.providerDomain)
+	}
+	if d.c.ProviderDomain != mutated {
+		t.Fatalf("config provider_domain = %q, want %q", d.c.ProviderDomain, mutated)
 	}
 }
 
@@ -376,7 +420,12 @@ func TestNewRejectsInvalidProviderDomain(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			raw := map[string]any{}
+			raw := map[string]any{
+				"allowed_federation_cidrs": []any{
+					"10.50.0.0/16",
+					"fd42:8c6d:7a10:23::/64",
+				},
+			}
 			if !tt.omit {
 				raw["provider_domain"] = tt.domain
 			}
@@ -1507,7 +1556,9 @@ func TestReceivedAllowedFederationCIDRs(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			m := map[string]any{}
+			m := map[string]any{
+				"provider_domain": testReceiverFQDN,
+			}
 			if tt.setKey {
 				m["allowed_federation_cidrs"] = tt.cidrs
 			}
@@ -1919,7 +1970,8 @@ type ocmServerFixture struct {
 				Driver  string `toml:"driver"`
 				Drivers struct {
 					OCMReceived struct {
-						ProviderDomain string `toml:"provider_domain"`
+						ProviderDomain          string `toml:"provider_domain"`
+						AllowLoopbackFederation bool   `toml:"allow_loopback_federation"`
 					} `toml:"ocmreceived"`
 				} `toml:"drivers"`
 			} `toml:"storageprovider"`
@@ -1927,6 +1979,9 @@ type ocmServerFixture struct {
 	} `toml:"grpc"`
 	HTTP struct {
 		Services struct {
+			OCM struct {
+				AllowLoopbackFederation bool `toml:"allow_loopback_federation"`
+			} `toml:"ocm"`
 			ScienceMesh struct {
 				ProviderDomain string `toml:"provider_domain"`
 			} `toml:"sciencemesh"`
@@ -1934,7 +1989,8 @@ type ocmServerFixture struct {
 				Driver  string `toml:"driver"`
 				Drivers struct {
 					OCMReceived struct {
-						ProviderDomain string `toml:"provider_domain"`
+						ProviderDomain          string `toml:"provider_domain"`
+						AllowLoopbackFederation bool   `toml:"allow_loopback_federation"`
 					} `toml:"ocmreceived"`
 				} `toml:"drivers"`
 			} `toml:"dataprovider"`
@@ -1967,18 +2023,29 @@ func loadOCMFixture(t *testing.T, name string) ocmServerFixture {
 
 func TestCesnetFixtureProviderDomainReachesDriver(t *testing.T) {
 	fx := loadOCMFixture(t, "ocm-server-cesnet-grpc.toml")
-	got := fx.GRPC.Services.StorageProvider.Drivers.OCMReceived.ProviderDomain
-	httpGot := fx.HTTP.Services.DataProvider.Drivers.OCMReceived.ProviderDomain
+	storage := fx.GRPC.Services.StorageProvider.Drivers.OCMReceived
+	data := fx.HTTP.Services.DataProvider.Drivers.OCMReceived
+	got := storage.ProviderDomain
+	httpGot := data.ProviderDomain
 	const want = "cesnet.example.test"
 	mesh := fx.HTTP.Services.ScienceMesh.ProviderDomain
 	if got != want || httpGot != want || mesh != want {
 		t.Fatalf("grpc %q http %q sciencemesh %q, want %q", got, httpGot, mesh, want)
+	}
+	if !storage.AllowLoopbackFederation || !data.AllowLoopbackFederation {
+		t.Fatal("both received drivers must set allow_loopback_federation")
+	}
+	if !fx.HTTP.Services.OCM.AllowLoopbackFederation {
+		t.Fatal("OCM service must set allow_loopback_federation")
 	}
 	if err := providerdomain.Validate(mesh); err != nil {
 		t.Fatalf("ScienceMesh provider_domain: %v", err)
 	}
 	if fx.GRPC.Services.StorageProvider.Driver != "ocmreceived" {
 		t.Fatalf("storage driver %q", fx.GRPC.Services.StorageProvider.Driver)
+	}
+	if fx.HTTP.Services.DataProvider.Driver != "ocmreceived" {
+		t.Fatalf("data provider driver %q", fx.HTTP.Services.DataProvider.Driver)
 	}
 
 	var c config
@@ -2022,5 +2089,12 @@ func TestCERNBoxFixtureHasNoReceivedDriver(t *testing.T) {
 	}
 	if fx.HTTP.Services.DataProvider.Driver != "ocmoutcoming" {
 		t.Fatalf("data provider driver %q", fx.HTTP.Services.DataProvider.Driver)
+	}
+	if !fx.HTTP.Services.OCM.AllowLoopbackFederation {
+		t.Fatal("OCM service must set allow_loopback_federation")
+	}
+	const want = "cernbox.example.test"
+	if fx.HTTP.Services.ScienceMesh.ProviderDomain != want {
+		t.Fatalf("sciencemesh provider_domain = %q, want %q", fx.HTTP.Services.ScienceMesh.ProviderDomain, want)
 	}
 }
