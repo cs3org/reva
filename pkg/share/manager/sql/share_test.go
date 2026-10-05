@@ -674,3 +674,41 @@ func TestListSharesWithMultipleFilters(t *testing.T) {
 		t.Errorf("Expected 1 share, got %d", len(shares))
 	}
 }
+
+func TestListExpiredShares(t *testing.T) {
+	m, err, teardown := setupSuiteShares(t)
+	defer teardown(t)
+	if err != nil {
+		t.Fatal(err)
+	}
+	mgr := m.(*ShareMgr)
+
+	userctx := getUserContext("123456")
+	user, _ := appctx.ContextGetUser(userctx)
+	file := getRandomFile(user)
+
+	expired := getUserShareGrant("1000", "file")
+	expired.Expiration = &typesv1beta1.Timestamp{Seconds: uint64(time.Now().Add(-time.Hour).Unix())}
+	future := getUserShareGrant("1001", "file")
+	future.Expiration = &typesv1beta1.Timestamp{Seconds: uint64(time.Now().Add(time.Hour).Unix())}
+	never := getUserShareGrant("1002", "file")
+
+	var want string
+	for _, g := range []*collaboration.ShareGrant{expired, future, never} {
+		s, err := mgr.Share(userctx, file, g)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if g == expired {
+			want = s.Id.OpaqueId
+		}
+	}
+
+	shares, err := mgr.ListExpiredShares(userctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(shares) != 1 || shares[0].Id.OpaqueId != want {
+		t.Fatalf("expected only share %s, got %v", want, shares)
+	}
+}
