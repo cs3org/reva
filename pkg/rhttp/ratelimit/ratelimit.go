@@ -31,6 +31,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/cs3org/reva/v3/pkg/appctx"
 	"golang.org/x/time/rate"
 )
 
@@ -137,13 +138,17 @@ func (l *Limiter) Middleware(next http.Handler) http.Handler {
 	}
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		now := time.Now()
-		res := l.limiterFor(l.clientKey(r), now).ReserveN(now, 1)
+		key := l.clientKey(r)
+		res := l.limiterFor(key, now).ReserveN(now, 1)
 		if delay := res.DelayFrom(now); !res.OK() || delay > 0 {
 			res.CancelAt(now)
 			secs := int(math.Ceil(delay.Seconds()))
 			if !res.OK() || secs < 1 {
 				secs = 1
 			}
+			// Debug only: under a flood this fires on every request.
+			appctx.GetLogger(r.Context()).Debug().Str("client", key).Str("path", r.URL.Path).
+				Int("retry_after", secs).Msg("rate limited unauthenticated request")
 			w.Header().Set("Retry-After", strconv.Itoa(secs))
 			w.Header().Set("Content-Type", "application/json")
 			w.WriteHeader(http.StatusTooManyRequests)
@@ -217,9 +222,11 @@ func (l *Limiter) clientKey(r *http.Request) string {
 		// untrusted hop is the client. Anything to its left is attacker
 		// controlled and ignored. An unparsable hop stops the walk and the
 		// request is keyed on the proxy, which fails towards stricter limiting.
+		// Some proxies append the client port, so hops are parsed like
+		// RemoteAddr.
 		hops := strings.Split(strings.Join(r.Header.Values("X-Forwarded-For"), ","), ",")
 		for i := len(hops) - 1; i >= 0; i-- {
-			h := net.ParseIP(strings.TrimSpace(hops[i]))
+			h := peerIP(strings.TrimSpace(hops[i]))
 			if h == nil {
 				break
 			}

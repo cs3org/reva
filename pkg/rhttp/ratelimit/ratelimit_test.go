@@ -146,3 +146,19 @@ func TestNilLimiterIsPassthrough(t *testing.T) {
 	}
 	l.Close() // must not panic
 }
+
+func TestForwardedForWithPort(t *testing.T) {
+	h := newHandler(t, Config{RequestsPerMinute: 1, Burst: 1, TrustedProxyCIDRs: []string{"10.0.0.0/8"}})
+
+	// A proxy that appends the client port must not collapse every client
+	// onto the proxy's own bucket.
+	if got := do(h, "10.0.0.1:1", "198.51.100.1:4000").Code; got != http.StatusOK {
+		t.Fatalf("got %d, want 200", got)
+	}
+	if got := do(h, "10.0.0.1:1", "[2001:db8::1]:4000").Code; got != http.StatusOK {
+		t.Fatalf("other client behind same proxy: got %d, want 200", got)
+	}
+	if got := do(h, "10.0.0.1:1", "198.51.100.1:4001").Code; got != http.StatusTooManyRequests {
+		t.Fatalf("same client, other port: got %d, want 429", got)
+	}
+}
