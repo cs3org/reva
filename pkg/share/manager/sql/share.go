@@ -389,6 +389,24 @@ func (m *ShareMgr) GetSharesByShareWith(ctx context.Context, shareWith string) (
 	return shares, nil
 }
 
+// ListShareSpaces returns the id of every space that holds at least one share
+// ListShares would return, which is what the reconciliation jobs walk. A row
+// without a space id is left out: there is no space to reconcile it under.
+func (m *ShareMgr) ListShareSpaces(ctx context.Context) ([]string, error) {
+	var spaces []string
+	res := m.db.Model(&model.Share{}).
+		Where("orphan = ?", false).
+		Where("orphaned_at IS NULL").
+		Where("space_id IS NOT NULL").
+		Distinct().
+		Pluck("space_id", &spaces)
+	if res.Error != nil {
+		return nil, res.Error
+	}
+
+	return spaces, nil
+}
+
 // TransferShare transfers a share to a new initiator. Only to be used for shares in projects.
 func (m *ShareMgr) TransferShare(ctx context.Context, ref *collaboration.ShareReference, newInitiator string) error {
 	if newInitiator == "" {

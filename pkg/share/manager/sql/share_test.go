@@ -4,6 +4,7 @@ import (
 	"context"
 	"log"
 	"os"
+	"sort"
 	"testing"
 	"time"
 
@@ -672,5 +673,68 @@ func TestListSharesWithMultipleFilters(t *testing.T) {
 
 	if len(shares) != 1 {
 		t.Errorf("Expected 1 share, got %d", len(shares))
+	}
+}
+
+// TestListShareSpaces asserts that every space holding a share comes back once,
+// and that a space whose shares are all orphaned does not come back at all.
+// This is what the reconciliation jobs walk, so it has to match what
+// ListShares would return.
+func TestListShareSpaces(t *testing.T) {
+	mgr, err, teardown := setupSuiteShares(t)
+	defer teardown(t)
+
+	if err != nil {
+		t.Error(err)
+	}
+
+	userctx := getUserContext("123456")
+	user, _ := appctx.ContextGetUser(userctx)
+
+	// two shares in one space and one in another, so a space that holds more
+	// than one share still comes back once.
+	var inSpaceB *collaboration.Share
+	for _, s := range []struct{ space, inode, sharee string }{
+		{"space-a", "100", "1000"},
+		{"space-a", "101", "1001"},
+		{"space-b", "102", "1000"},
+	} {
+		file := getRandomFile(user)
+		file.Id.SpaceId = s.space
+		file.Id.OpaqueId = s.inode
+
+		share, err := mgr.Share(userctx, file, getUserShareGrant(s.sharee, "file"))
+		if err != nil {
+			t.Error(err)
+			t.FailNow()
+		}
+		inSpaceB = share
+	}
+
+	spaces, err := mgr.(*ShareMgr).ListShareSpaces(userctx)
+	if err != nil {
+		t.Error(err)
+		t.FailNow()
+	}
+	sort.Strings(spaces)
+	if len(spaces) != 2 || spaces[0] != "space-a" || spaces[1] != "space-b" {
+		t.Errorf("Expected [space-a space-b], got %v", spaces)
+	}
+
+	err = mgr.(*ShareMgr).MarkAsOrphaned(userctx, &collaboration.ShareReference{
+		Spec: &collaboration.ShareReference_Id{Id: inSpaceB.Id},
+	})
+	if err != nil {
+		t.Error(err)
+		t.FailNow()
+	}
+
+	spaces, err = mgr.(*ShareMgr).ListShareSpaces(userctx)
+	if err != nil {
+		t.Error(err)
+		t.FailNow()
+	}
+	if len(spaces) != 1 || spaces[0] != "space-a" {
+		t.Errorf("Expected [space-a], got %v", spaces)
 	}
 }
