@@ -27,7 +27,6 @@ import (
 	"strings"
 	"sync/atomic"
 	"testing"
-	"time"
 
 	ocmincoming "github.com/cs3org/go-cs3apis/cs3/ocm/incoming/v1beta1"
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
@@ -36,16 +35,17 @@ import (
 	"github.com/rs/zerolog"
 )
 
-func webappReceiveHandler(targets []string) *sharesHandler {
+func webappReceiveHandler(t *testing.T, targets []string) *sharesHandler {
+	t.Helper()
+	h := initSharesHandler(t, &config{OCMClientTimeout: 1, AllowLoopbackFederation: true})
 	copied := append([]string{}, targets...)
-	return &sharesHandler{
-		webappReceiveTargets: &copied,
-		ocmClient:            NewClient(10*time.Second, false),
-	}
+	h.webappReceiveTargets = &copied
+	return h
 }
 
-func webappReceiveHandlerWithMFAPolicy(targets []string, policy *string) *sharesHandler {
-	h := webappReceiveHandler(targets)
+func webappReceiveHandlerWithMFAPolicy(t *testing.T, targets []string, policy *string) *sharesHandler {
+	t.Helper()
+	h := webappReceiveHandler(t, targets)
 	h.mfaPolicy = policy
 	return h
 }
@@ -136,11 +136,15 @@ func TestCreateShareWebappIngest(t *testing.T) {
 		gw := &sharesMockGW{createResp: okCreate}
 		stampGateway(gw)
 		off := wellknown.MFAPolicyOff
-		rr := postShare(t, webappReceiveHandlerWithMFAPolicy([]string{"blank"}, &off), shareBody(sender, "file", webappOffer(
-			"https://app.example/hub",
-			[]string{"must-exchange-token", "must-use-mfa"},
-			[]string{"blank"},
-		)))
+		rr := postShare(t, webappReceiveHandlerWithMFAPolicy(t, []string{"blank"}, &off), shareBody(
+			sender,
+			"file",
+			webappOffer(
+				"https://app.example/hub",
+				[]string{"must-exchange-token", "must-use-mfa"},
+				[]string{"blank"},
+			),
+		))
 		if rr.Code != http.StatusCreated {
 			t.Fatalf("status %d body %s", rr.Code, rr.Body.String())
 		}
@@ -157,7 +161,7 @@ func TestCreateShareWebappIngest(t *testing.T) {
 		gw := &sharesMockGW{createResp: okCreate}
 		stampGateway(gw)
 		const uri = "https://app.example/hub?x=1#y"
-		rr := postShare(t, webappReceiveHandler([]string{"blank"}), shareBody(sender, "file", webappOffer(
+		rr := postShare(t, webappReceiveHandler(t, []string{"blank"}), shareBody(sender, "file", webappOffer(
 			uri,
 			[]string{"must-exchange-token"},
 			[]string{"blank"},
@@ -181,7 +185,7 @@ func TestCreateShareWebappIngest(t *testing.T) {
 		gw := &sharesMockGW{createResp: okCreate}
 		stampGateway(gw)
 		const uri = "http://app.example/hub"
-		rr := postShare(t, webappReceiveHandler([]string{"blank"}), shareBody(sender, "file", webappOffer(
+		rr := postShare(t, webappReceiveHandler(t, []string{"blank"}), shareBody(sender, "file", webappOffer(
 			uri,
 			[]string{"must-exchange-token"},
 			[]string{"blank"},
@@ -201,7 +205,7 @@ func TestCreateShareWebappIngest(t *testing.T) {
 			stampGateway(gw)
 			offer := webappOffer("https://app.example/hub", []string{"must-exchange-token"}, []string{"blank"})
 			offer["webapp"].(map[string]any)["appName"] = appName
-			rr := postShare(t, webappReceiveHandler([]string{"blank"}), shareBody(sender, "file", offer))
+			rr := postShare(t, webappReceiveHandler(t, []string{"blank"}), shareBody(sender, "file", offer))
 			if rr.Code != http.StatusCreated {
 				t.Fatalf("appName %q status %d body %s", appName, rr.Code, rr.Body.String())
 			}
@@ -345,7 +349,7 @@ func TestCreateShareWebappIngest(t *testing.T) {
 			before := hits.Load()
 			gw := &sharesMockGW{createResp: okCreate}
 			stampGateway(gw)
-			rr := postShare(t, webappReceiveHandler([]string{"blank"}), shareBody(sender, "file", tt.protocol))
+			rr := postShare(t, webappReceiveHandler(t, []string{"blank"}), shareBody(sender, "file", tt.protocol))
 			if rr.Code != tt.wantStatus {
 				t.Fatalf("status %d body %s", rr.Code, rr.Body.String())
 			}
@@ -381,7 +385,7 @@ func TestCreateShareWebappIngest(t *testing.T) {
 		before := hits.Load()
 		gw := &sharesMockGW{createResp: okCreate}
 		stampGateway(gw)
-		rr := postShare(t, webappReceiveHandler([]string{"blank"}), shareBody(sender, "file", map[string]any{
+		rr := postShare(t, webappReceiveHandler(t, []string{"blank"}), shareBody(sender, "file", map[string]any{
 			"webapp": nil,
 		}))
 		if rr.Code == http.StatusCreated || gw.createCalls != 0 {
@@ -394,7 +398,7 @@ func TestCreateShareWebappIngest(t *testing.T) {
 
 	t.Run("duplicate webapp does not discover or save", func(t *testing.T) {
 		before := hits.Load()
-		h := webappReceiveHandler([]string{"blank"})
+		h := webappReceiveHandler(t, []string{"blank"})
 		first := &Webapp{
 			URI: "https://app.example/hub", SharedSecret: "secret",
 			Permissions: []string{"read"}, Requirements: []string{"must-exchange-token"},
@@ -419,7 +423,7 @@ func TestCreateShareWebappIngest(t *testing.T) {
 
 	t.Run("typed nil webapp does not discover", func(t *testing.T) {
 		before := hits.Load()
-		h := webappReceiveHandler([]string{"blank"})
+		h := webappReceiveHandler(t, []string{"blank"})
 		_, _, err := h.getAndResolveProtocols(context.Background(), Protocols{(*Webapp)(nil)}, "file", sender)
 		if err == nil || !strings.Contains(err.Error(), "nil webapp") {
 			t.Fatalf("err %v", err)
@@ -432,7 +436,7 @@ func TestCreateShareWebappIngest(t *testing.T) {
 	t.Run("webdav only still persists", func(t *testing.T) {
 		gw := &sharesMockGW{createResp: okCreate}
 		stampGateway(gw)
-		rr := postShare(t, webappReceiveHandler(nil), shareBody(sender, "file", map[string]any{
+		rr := postShare(t, webappReceiveHandler(t, nil), shareBody(sender, "file", map[string]any{
 			"webdav": map[string]any{
 				"sharedSecret": "secret",
 				"permissions":  []string{"read"},
@@ -470,7 +474,11 @@ func TestCreateShareWebappTokenEndpoint(t *testing.T) {
 		})
 		gw := &sharesMockGW{createResp: okCreate}
 		stampGateway(gw)
-		rr := postShare(t, webappReceiveHandler([]string{"blank"}), shareBody(srv.Listener.Addr().String(), "file", offer()))
+		rr := postShare(t, webappReceiveHandler(t, []string{"blank"}), shareBody(
+			srv.Listener.Addr().String(),
+			"file",
+			offer(),
+		))
 		if rr.Code != http.StatusCreated || gw.createCalls != 1 {
 			t.Fatalf("status %d calls %d body %s", rr.Code, gw.createCalls, rr.Body.String())
 		}
@@ -492,7 +500,11 @@ func TestCreateShareWebappTokenEndpoint(t *testing.T) {
 		})
 		gw := &sharesMockGW{createResp: okCreate}
 		stampGateway(gw)
-		rr := postShare(t, webappReceiveHandler([]string{"blank"}), shareBody(srv.Listener.Addr().String(), "file", offer()))
+		rr := postShare(t, webappReceiveHandler(t, []string{"blank"}), shareBody(
+			srv.Listener.Addr().String(),
+			"file",
+			offer(),
+		))
 		if rr.Code == http.StatusCreated || gw.createCalls != 0 {
 			t.Fatalf("status %d calls %d body %s", rr.Code, gw.createCalls, rr.Body.String())
 		}
@@ -512,7 +524,11 @@ func TestCreateShareWebappTokenEndpoint(t *testing.T) {
 		})
 		gw := &sharesMockGW{createResp: okCreate}
 		stampGateway(gw)
-		rr := postShare(t, webappReceiveHandler([]string{"blank"}), shareBody(srv.Listener.Addr().String(), "file", offer()))
+		rr := postShare(t, webappReceiveHandler(t, []string{"blank"}), shareBody(
+			srv.Listener.Addr().String(),
+			"file",
+			offer(),
+		))
 		if rr.Code == http.StatusCreated || gw.createCalls != 0 {
 			t.Fatalf("status %d calls %d body %s", rr.Code, gw.createCalls, rr.Body.String())
 		}
@@ -527,7 +543,7 @@ func TestCreateShareWebappTokenEndpoint(t *testing.T) {
 
 func TestCreateShareParserErrorOmitsSecret(t *testing.T) {
 	const secret = "super-secret-share-token"
-	h := webappReceiveHandler([]string{"blank"})
+	h := webappReceiveHandler(t, []string{"blank"})
 	var logs bytes.Buffer
 	req := httptest.NewRequest(http.MethodPost, "/ocm/shares", bytes.NewReader([]byte(`{"sharedSecret":"`+secret)))
 	req.Header.Set("Content-Type", "application/json")
@@ -634,7 +650,7 @@ func TestCreateShareWebappValidationErrorsAreSafe(t *testing.T) {
 			gw := &sharesMockGW{createResp: okCreate}
 			stampGateway(gw)
 			var logs bytes.Buffer
-			rr := postShareLogged(t, webappReceiveHandler([]string{"blank"}), shareBody(sender, "file", tt.protocol), &logs)
+			rr := postShareLogged(t, webappReceiveHandler(t, []string{"blank"}), shareBody(sender, "file", tt.protocol), &logs)
 			if rr.Code != http.StatusBadRequest {
 				t.Fatalf("status %d body %s", rr.Code, rr.Body.String())
 			}
@@ -659,6 +675,131 @@ func TestCreateShareWebappValidationErrorsAreSafe(t *testing.T) {
 			}
 			if hits.Load() != before {
 				t.Fatalf("discovery hits %d", hits.Load()-before)
+			}
+		})
+	}
+}
+
+func TestCreateShareWebappDiscoveryUsesConfiguredPolicy(t *testing.T) {
+	const (
+		marker = "synthetic-secret-marker"
+		uri    = "https://app.example/hub"
+	)
+	srv, hits := countingDiscovery(t, capableDiscovery)
+	sender := srv.Listener.Addr().String()
+	okCreate := &ocmincoming.CreateOCMIncomingShareResponse{
+		Status: &rpc.Status{Code: rpc.Code_CODE_OK},
+	}
+	cases := []struct {
+		name       string
+		conf       config
+		reqs       []string
+		wantStatus int
+		wantHits   int32
+		wantCalls  int
+	}{
+		{
+			name:       "Default denial",
+			conf:       config{OCMClientTimeout: 1},
+			reqs:       []string{"must-exchange-token"},
+			wantStatus: http.StatusBadRequest,
+			wantHits:   0,
+			wantCalls:  0,
+		},
+		{
+			name:       "Controlled receipt",
+			conf:       config{OCMClientTimeout: 1, AllowLoopbackFederation: true},
+			reqs:       []string{"must-exchange-token"},
+			wantStatus: http.StatusCreated,
+			wantHits:   1,
+			wantCalls:  1,
+		},
+		{
+			name:       "Validation before network",
+			conf:       config{OCMClientTimeout: 1, AllowLoopbackFederation: true},
+			reqs:       []string{"must-use-mfa"},
+			wantStatus: http.StatusBadRequest,
+			wantHits:   0,
+			wantCalls:  0,
+		},
+	}
+	for _, tt := range cases {
+		t.Run(tt.name, func(t *testing.T) {
+			before := hits.Load()
+			gw := &sharesMockGW{createResp: okCreate}
+			stampGateway(gw)
+			h := &sharesHandler{}
+			conf := tt.conf
+			if err := h.init(&conf); err != nil {
+				t.Fatal(err)
+			}
+			targets := []string{"blank"}
+			copied := append([]string{}, targets...)
+			h.webappReceiveTargets = &copied
+
+			offer := webappOffer(uri, tt.reqs, []string{"blank"})
+			webapp, ok := offer["webapp"].(map[string]any)
+			if !ok {
+				t.Fatal("offer missing webapp object")
+			}
+			webapp["sharedSecret"] = marker
+			raw, err := json.Marshal(shareBody(sender, "file", offer))
+			if err != nil {
+				t.Fatal(err)
+			}
+			if !strings.Contains(string(raw), marker) {
+				t.Fatalf("posted body missing marker: %s", raw)
+			}
+			var logs bytes.Buffer
+			rr := postShareLogged(
+				t,
+				h,
+				shareBody(sender, "file", offer),
+				&logs,
+			)
+			body := rr.Body.String()
+			logged := logs.String()
+			if logs.Len() == 0 {
+				t.Fatal("expected captured logs")
+			}
+			if strings.Contains(body, marker) || strings.Contains(logged, marker) {
+				t.Fatalf("secret marker leaked body %s logs %s", body, logged)
+			}
+			if rr.Code != tt.wantStatus {
+				t.Fatalf("status %d body %s", rr.Code, body)
+			}
+			if got := hits.Load() - before; got != tt.wantHits {
+				t.Fatalf("discovery hits %d", got)
+			}
+			if gw.createCalls != tt.wantCalls {
+				t.Fatalf("create calls %d body %s", gw.createCalls, body)
+			}
+			if tt.wantStatus != http.StatusCreated {
+				if !strings.Contains(body, "INVALID_PARAMETER") {
+					t.Fatalf("class missing from %s", body)
+				}
+				if !strings.Contains(body, errInvalidShareRequest.Error()) {
+					t.Fatalf("body %s", body)
+				}
+				if !strings.Contains(logged, errInvalidShareRequest.Error()) {
+					t.Fatalf("log %s", logged)
+				}
+				return
+			}
+			if gw.created == nil || len(gw.created.Protocols) == 0 {
+				t.Fatal("expected stored protocol")
+			}
+			opts := gw.created.Protocols[0].GetWebappOptions()
+			if opts == nil || opts.Uri != uri {
+				t.Fatalf("stored uri %#v", opts)
+			}
+			if len(opts.Requirements) != len(tt.reqs) {
+				t.Fatalf("stored requirements %#v", opts.Requirements)
+			}
+			for i, req := range tt.reqs {
+				if opts.Requirements[i] != req {
+					t.Fatalf("stored requirements %#v", opts.Requirements)
+				}
 			}
 		})
 	}
