@@ -24,6 +24,7 @@ import (
 
 	"github.com/cs3org/reva/v3/pkg/appctx"
 	"github.com/cs3org/reva/v3/pkg/rhttp/global"
+	"github.com/cs3org/reva/v3/pkg/rhttp/ratelimit"
 	"github.com/cs3org/reva/v3/pkg/sharedconf"
 	"github.com/cs3org/reva/v3/pkg/smtpclient"
 	"github.com/cs3org/reva/v3/pkg/utils/cfg"
@@ -49,6 +50,7 @@ func New(ctx context.Context, m map[string]any) (global.Service, error) {
 	}
 
 	if err := s.routerInit(); err != nil {
+		_ = s.Close()
 		return nil, err
 	}
 
@@ -57,6 +59,7 @@ func New(ctx context.Context, m map[string]any) (global.Service, error) {
 
 // Close performs cleanup.
 func (s *svc) Close() error {
+	s.limiter.Close()
 	return nil
 }
 
@@ -76,6 +79,16 @@ type config struct {
 	// the public-only OCM discovery client. Empty by default; any invalid entry
 	// aborts service initialization before any directory fetch.
 	AllowedFederationCIDRs []string `mapstructure:"allowed_federation_cidrs"`
+	// UnauthRateLimit is the sustained number of requests per minute allowed
+	// per client on the unauthenticated routes (see Unprotected). 0 selects the
+	// default; a negative value disables limiting.
+	UnauthRateLimit      int `mapstructure:"unauth_rate_limit"`
+	UnauthRateLimitBurst int `mapstructure:"unauth_rate_limit_burst"`
+	// TrustedProxyCIDRs lists the reverse proxies whose X-Forwarded-For header
+	// is trusted to identify the client. Without it, clients behind a proxy
+	// all share the proxy's address and therefore a single rate limit bucket.
+	// Any invalid entry aborts service initialization.
+	TrustedProxyCIDRs []string `mapstructure:"trusted_proxy_cidrs"`
 }
 
 func (c *config) ApplyDefaults() {
@@ -88,16 +101,55 @@ func (c *config) ApplyDefaults() {
 	if c.OCMClientTimeout == 0 {
 		c.OCMClientTimeout = 10
 	}
+	if c.UnauthRateLimit == 0 {
+		c.UnauthRateLimit = 30
+	}
+	if c.UnauthRateLimitBurst == 0 {
+		c.UnauthRateLimitBurst = 10
+	}
 
 	c.GatewaySvc = sharedconf.GetGatewaySVC(c.GatewaySvc)
 }
 
+// unauthRateLimiter builds the limiter guarding the unauthenticated routes.
+// It returns a nil limiter (a no-op middleware) when limiting is disabled.
+func (c *config) unauthRateLimiter() (*ratelimit.Limiter, error) {
+	if c.UnauthRateLimit < 0 {
+		return nil, nil
+	}
+	return ratelimit.New(ratelimit.Config{
+		RequestsPerMinute: c.UnauthRateLimit,
+		Burst:             c.UnauthRateLimitBurst,
+		TrustedProxyCIDRs: c.TrustedProxyCIDRs,
+	})
+}
+
 type svc struct {
-	conf   *config
-	router chi.Router
+	conf    *config
+	router  chi.Router
+	limiter *ratelimit.Limiter
 }
 
 func (s *svc) routerInit() error {
+	// Build the limiter before any handler startup I/O, so that an invalid
+	// trusted_proxy_cidrs entry fails fast, like allowed_federation_cidrs.
+	limiter, err := s.conf.unauthRateLimiter()
+	if err != nil {
+		return err
+	}
+	s.limiter = limiter
+	log := appctx.GetLogger(context.Background())
+	if limiter == nil {
+		log.Warn().Msg("Rate limiting of unauthenticated routes is disabled")
+	} else {
+		log.Info().
+			Int("requests_per_minute", s.conf.UnauthRateLimit).
+			Int("burst", s.conf.UnauthRateLimitBurst).
+			Int("trusted_proxies", len(s.conf.TrustedProxyCIDRs)).
+			Msg("Rate limiting unauthenticated routes")
+	}
+	unauth := limiter.Middleware
+
 	tokenHandler := new(tokenHandler)
 	if err := tokenHandler.init(s.conf); err != nil {
 		return err
@@ -128,8 +180,9 @@ func (s *svc) routerInit() error {
 	s.router.Delete("/delete-accepted-user", tokenHandler.DeleteAccepted)
 	s.router.Get("/list-providers", providersHandler.ListProviders)
 	s.router.Post("/open-in-app", appsHandler.OpenInApp)
-	s.router.Get("/federations", wayfHandler.GetFederations)
-	s.router.Post("/discover", wayfHandler.DiscoverProvider)
+	// Unauthenticated routes (keep in sync with Unprotected) are rate limited.
+	s.router.With(unauth).Get("/federations", wayfHandler.GetFederations)
+	s.router.With(unauth).Post("/discover", wayfHandler.DiscoverProvider)
 	s.router.Get("/embedded-shares", embeddedHandler.ListEmbeddedShares)
 	s.router.Post("/process-embedded-share", embeddedHandler.ProcessEmbeddedShare)
 	return nil
