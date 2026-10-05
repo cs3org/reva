@@ -21,6 +21,7 @@ package reconciliation
 import (
 	"context"
 	"errors"
+	"slices"
 	"sort"
 	"strconv"
 	"testing"
@@ -57,27 +58,28 @@ type fakeStore struct {
 	listErr    error
 	markErr    error
 	unshareErr error
-	// listHook, when set, runs before every listing with the space it is
+	// listHook, when set, runs before every listing with the spaces it is
 	// narrowed to and the number of listings already done. It lets a test change
 	// the shares under a run, the way a user sharing during a run does.
-	listHook func(f *fakeStore, space string, done int)
+	listHook func(f *fakeStore, spaces []string, done int)
 	// lists counts the listings, so a test can assert which spaces a run looked
 	// at again.
-	lists int
+	lists      int
+	spaceLists int
 }
 
 func (f *fakeStore) ListShares(ctx context.Context, filters []*collaboration.Filter) ([]*collaboration.Share, error) {
-	// only the space filter is honoured, the one the shallow job narrows a run
-	// with.
-	var space string
+	// only the space filters are honoured, the ones the jobs narrow a listing
+	// with. They are ORed, the way the share managers group them.
+	var spaces []string
 	for _, filter := range filters {
 		if filter.GetType() == collaboration.Filter_TYPE_SPACE_ID {
-			space = filter.GetSpaceId()
+			spaces = append(spaces, filter.GetSpaceId())
 		}
 	}
 
 	if f.listHook != nil {
-		f.listHook(f, space, f.lists)
+		f.listHook(f, spaces, f.lists)
 	}
 	f.lists++
 	if f.listErr != nil {
@@ -89,10 +91,33 @@ func (f *fakeStore) ListShares(ctx context.Context, filters []*collaboration.Fil
 		if s.orphan {
 			continue
 		}
-		if space != "" && s.share.GetResourceId().GetSpaceId() != space {
+		if len(spaces) > 0 && !slices.Contains(spaces, s.share.GetResourceId().GetSpaceId()) {
 			continue
 		}
 		out = append(out, s.share)
+	}
+	return out, nil
+}
+
+// ListShareSpaces counts separately from the listings: a test asserts on both.
+func (f *fakeStore) ListShareSpaces(ctx context.Context) ([]string, error) {
+	f.spaceLists++
+	if f.listErr != nil {
+		return nil, f.listErr
+	}
+
+	var out []string
+	seen := map[string]struct{}{}
+	for _, s := range f.shares {
+		if s.orphan {
+			continue
+		}
+		space := s.share.GetResourceId().GetSpaceId()
+		if _, ok := seen[space]; ok {
+			continue
+		}
+		seen[space] = struct{}{}
+		out = append(out, space)
 	}
 	return out, nil
 }
@@ -122,14 +147,37 @@ type fakeLinkStore struct {
 	markErr error
 }
 
-func (f *fakeLinkStore) ListPublicShares(ctx context.Context, u *userpb.User, filters []*link.ListPublicSharesRequest_Filter, md *provider.ResourceInfo, sign bool) ([]*link.PublicShare, error) {
+// ListPublicSharesInSpaces returns every space's links when given no space, the
+// way the sql driver does.
+func (f *fakeLinkStore) ListPublicSharesInSpaces(ctx context.Context, spaceIDs []string) ([]*link.PublicShare, error) {
 	if f.listErr != nil {
 		return nil, f.listErr
 	}
 	var out []*link.PublicShare
 	for _, l := range f.links {
-		if !l.orphan {
-			out = append(out, l.link)
+		if l.orphan {
+			continue
+		}
+		if len(spaceIDs) > 0 && !slices.Contains(spaceIDs, l.link.GetResourceId().GetSpaceId()) {
+			continue
+		}
+		out = append(out, l.link)
+	}
+	return out, nil
+}
+
+func (f *fakeLinkStore) ListPublicShareSpaces(ctx context.Context) ([]string, error) {
+	if f.listErr != nil {
+		return nil, f.listErr
+	}
+
+	var out []string
+	for _, l := range f.links {
+		if l.orphan {
+			continue
+		}
+		if space := l.link.GetResourceId().GetSpaceId(); !slices.Contains(out, space) {
+			out = append(out, space)
 		}
 	}
 	return out, nil
@@ -637,5 +685,163 @@ func TestOrphanMarkErrorIsNotReportedAsOrphaned(t *testing.T) {
 	}
 	if report.Failed != 1 || len(report.Orphaned) != 0 {
 		t.Fatalf("report = %+v, want 1 failed / 0 orphaned", report)
+	}
+}
+
+// TestOrphanReadsOneSpacePerListing asserts that one space per batch reads the
+// items of each space on its own, in a fixed order. Holding every item of the
+// database at once is what the per-space walk avoids.
+func TestOrphanReadsOneSpacePerListing(t *testing.T) {
+	store := &fakeStore{shares: []storedShare{
+		share(70, "eosuser", "inode-70", "jdoe", false, false),
+		share(71, "eosuser", "inode-71", "jdoe", false, false),
+	}}
+	store.shares[0].share.ResourceId.SpaceId = "space-b"
+	store.shares[1].share.ResourceId.SpaceId = "space-a"
+	var listed [][]string
+	store.listHook = func(_ *fakeStore, spaces []string, _ int) {
+		listed = append(listed, spaces)
+	}
+	gw := &fakeGateway{
+		resources: map[string]bool{"eosuser/inode-70": true, "eosuser/inode-71": true},
+		users:     map[string]bool{"jdoe": true},
+	}
+
+	job := &OrphanJob{Shares: store, Gateway: gw, SpacesPerBatch: 1}
+	report, err := job.Run(context.Background())
+	if err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	if report.Checked != 2 || len(report.Orphaned) != 0 {
+		t.Fatalf("report = %+v, want 2 checked / 0 orphaned", report)
+	}
+	want := [][]string{{"space-a"}, {"space-b"}}
+	if !slices.EqualFunc(listed, want, slices.Equal) {
+		t.Errorf("listings = %v, want %v", listed, want)
+	}
+}
+
+// TestOrphanBatchesSpacesIntoOneListing asserts that SpacesPerBatch spaces are
+// covered by a single listing.
+func TestOrphanBatchesSpacesIntoOneListing(t *testing.T) {
+	store := &fakeStore{shares: []storedShare{
+		share(72, "eosuser", "inode-72", "jdoe", false, false),
+		share(73, "eosuser", "inode-73", "jdoe", false, false),
+	}}
+	store.shares[0].share.ResourceId.SpaceId = "space-a"
+	store.shares[1].share.ResourceId.SpaceId = "space-b"
+	var listed [][]string
+	store.listHook = func(_ *fakeStore, spaces []string, _ int) {
+		listed = append(listed, spaces)
+	}
+	gw := &fakeGateway{
+		resources: map[string]bool{}, // both resources gone
+		users:     map[string]bool{"jdoe": true},
+	}
+
+	job := &OrphanJob{Shares: store, Gateway: gw, SpacesPerBatch: 2}
+	report, err := job.Run(context.Background())
+	if err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	if len(report.Orphaned) != 2 {
+		t.Fatalf("report = %+v, want 2 orphaned", report)
+	}
+	want := [][]string{{"space-a", "space-b"}}
+	if !slices.EqualFunc(listed, want, slices.Equal) {
+		t.Errorf("listings = %v, want %v", listed, want)
+	}
+}
+
+// TestOrphanVisitsSpacesOfBothStores asserts that a space holding only a public
+// link is visited too. Both stores are asked which spaces they hold, since a
+// link needs no share next to it.
+func TestOrphanVisitsSpacesOfBothStores(t *testing.T) {
+	shares := &fakeStore{shares: []storedShare{
+		share(74, "eosuser", "inode-74", "jdoe", false, false),
+	}}
+	shares.shares[0].share.ResourceId.SpaceId = "space-a"
+	links := &fakeLinkStore{links: []storedLink{
+		publicLink(75, "eosuser", "inode-75", false),
+	}}
+	links.links[0].link.ResourceId.SpaceId = "space-b"
+	gw := &fakeGateway{resources: map[string]bool{}} // both resources gone
+
+	job := &OrphanJob{Shares: shares, Links: links, Gateway: gw}
+	report, err := job.Run(context.Background())
+	if err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	if report.Checked != 2 || len(report.Orphaned) != 2 {
+		t.Fatalf("report = %+v, want 2 checked / 2 orphaned", report)
+	}
+	if len(shares.marked) != 1 || len(links.marked) != 1 {
+		t.Errorf("marked shares %v and links %v, want one of each", shares.marked, links.marked)
+	}
+}
+
+// TestOrphanStopsWhenCancelled asserts that a cancelled run gives back the
+// cancellation instead of checking its way through the spaces it has left.
+func TestOrphanStopsWhenCancelled(t *testing.T) {
+	store := &fakeStore{shares: []storedShare{
+		share(76, "eosuser", "inode-76", "jdoe", false, false),
+		share(77, "eosuser", "inode-77", "jdoe", false, false),
+	}}
+	store.shares[0].share.ResourceId.SpaceId = "space-a"
+	store.shares[1].share.ResourceId.SpaceId = "space-b"
+	ctx, cancel := context.WithCancel(context.Background())
+	// the run is cancelled while it is checking the first space.
+	store.listHook = func(_ *fakeStore, spaces []string, _ int) {
+		if slices.Contains(spaces, "space-a") {
+			cancel()
+		}
+	}
+	gw := &fakeGateway{
+		resources: map[string]bool{}, // every resource gone
+		users:     map[string]bool{"jdoe": true},
+	}
+
+	job := &OrphanJob{Shares: store, Gateway: gw, SpacesPerBatch: 1}
+	report, err := job.Run(ctx)
+	if !errors.Is(err, context.Canceled) {
+		t.Fatalf("Run returned %v, want the cancellation", err)
+	}
+	if report.Checked != 1 || len(store.marked) != 1 || store.marked[0] != "76" {
+		t.Errorf("report = %+v / marked = %v, want only the first space checked", report, store.marked)
+	}
+}
+
+// TestOrphanReadsEverythingWithoutABatchSize asserts that a run without
+// SpacesPerBatch reads every item in one listing per store and never asks which
+// spaces there are, the way the job worked before it could batch.
+func TestOrphanReadsEverythingWithoutABatchSize(t *testing.T) {
+	store := &fakeStore{shares: []storedShare{
+		share(78, "eosuser", "inode-78", "jdoe", false, false),
+		share(79, "eosuser", "inode-79", "jdoe", false, false),
+	}}
+	store.shares[0].share.ResourceId.SpaceId = "space-a"
+	store.shares[1].share.ResourceId.SpaceId = "space-b"
+	var listed [][]string
+	store.listHook = func(_ *fakeStore, spaces []string, _ int) {
+		listed = append(listed, spaces)
+	}
+	gw := &fakeGateway{
+		resources: map[string]bool{}, // both resources gone
+		users:     map[string]bool{"jdoe": true},
+	}
+
+	report, err := (&OrphanJob{Shares: store, Gateway: gw}).Run(context.Background())
+	if err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	if report.Checked != 2 || len(report.Orphaned) != 2 {
+		t.Fatalf("report = %+v, want 2 checked / 2 orphaned", report)
+	}
+	if store.spaceLists != 0 {
+		t.Errorf("asked for the spaces %d times, want 0 without a batch size", store.spaceLists)
+	}
+	want := [][]string{nil}
+	if !slices.EqualFunc(listed, want, slices.Equal) {
+		t.Errorf("listings = %v, want one listing with no space narrowing it", listed)
 	}
 }

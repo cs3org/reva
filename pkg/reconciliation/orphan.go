@@ -20,6 +20,8 @@ package reconciliation
 
 import (
 	"context"
+	"maps"
+	"slices"
 
 	gateway "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
 	grouppb "github.com/cs3org/go-cs3apis/cs3/identity/group/v1beta1"
@@ -84,6 +86,12 @@ const (
 // OrphanJob marks shares and public links whose resource or recipient is gone
 // as orphaned. It is idempotent: an item already orphaned is skipped by the
 // hideOrphans filter, and re-running never marks a valid one.
+//
+// Given a batch size, a run asks both stores which spaces hold an item and
+// reads them that many spaces at a time, so it never holds more than the items
+// of one batch. Without one it reads every item in a single listing per store,
+// see Config.SpacesPerBatch. A batch is only a listing: items are judged one by
+// one and nothing is held back.
 type OrphanJob struct {
 	// Shares is the share store to scan and mutate. A nil store leaves shares
 	// unscanned.
@@ -107,6 +115,9 @@ type OrphanJob struct {
 	DryRun bool
 	// RunOnStart, when set, fires the job once as soon as the runner starts.
 	RunOnStart bool
+	// SpacesPerBatch is how many spaces one listing covers, see
+	// Config.SpacesPerBatch. Zero or less means no batching.
+	SpacesPerBatch int
 }
 
 // entry is one share-like item to check. Shares and public links are flattened
@@ -159,7 +170,9 @@ type OrphanReport struct {
 // Run scans both stores and orphans the items whose resource or recipient is
 // gone. A per-item lookup failure is logged and the item is skipped, never
 // orphaned, so a flaky gateway can never produce a false orphan. The run itself
-// only fails if the stores cannot be listed at all.
+// only fails if the stores cannot be listed, a single batch of spaces included.
+// The job is idempotent, so what such a run marked stands and the next one picks
+// up the rest. A cancellation ends it at the next batch the same way.
 //
 // Every decision is logged with the identifiers needed to revert it. Items that
 // pass the check are logged at debug level only, since there is normally one
@@ -188,81 +201,40 @@ func (j *OrphanJob) Run(ctx context.Context) (OrphanReport, error) {
 		return OrphanReport{}, err
 	}
 
-	entries, err := j.entries(ctx)
-	if err != nil {
-		return OrphanReport{}, err
+	size := j.SpacesPerBatch
+	var spaceIDs []string
+	if size > 0 {
+		var err error
+		if spaceIDs, err = j.spaces(ctx); err != nil {
+			return OrphanReport{}, err
+		}
 	}
+	batches := spaceBatches(spaceIDs, size)
 
-	log.Info().
+	start := log.Info().
 		Str("event", EventOrphanStart).
 		Bool("dry_run", j.DryRun).
-		Int("candidates", len(entries)).
-		Msg("reconciliation: run started")
+		Int("batches", len(batches))
+	if size > 0 {
+		start = start.Int("spaces", len(spaceIDs)).Int("spaces_per_batch", size)
+	}
+	start.Msg("reconciliation: run started")
 
 	report := OrphanReport{RunID: runID, DryRun: j.DryRun}
-	for _, e := range entries {
-		report.Checked++
+	var cancelled error
+	for _, batch := range batches {
+		if cancelled = ctx.Err(); cancelled != nil {
+			break
+		}
 
-		// Each item gets its own trace id, propagated into every gateway and
-		// storage provider call it makes by the client interceptor the service
-		// package dials with. It is logged on each per-item line so a skip here
-		// can be joined against the revad logs that explain it: grep the same
-		// traceid there.
-		traceID := trace.Generate()
-		itemCtx := trace.Set(ctx, traceID)
-
-		reason, orphaned, err := j.classify(itemCtx, gw, e)
+		entries, err := j.entries(ctx, batch)
 		if err != nil {
-			report.Skipped++
-			log.Error().Err(err).
-				Str("event", EventOrphanSkip).
-				Str("kind", string(e.kind)).
-				Str("id", e.id).
-				Str("traceid", traceID).
-				Msg("reconciliation: existence check failed, item left untouched")
-			continue
-		}
-		if !orphaned {
-			log.Debug().
-				Str("kind", string(e.kind)).
-				Str("id", e.id).
-				Str("traceid", traceID).
-				Msg("reconciliation: item is valid")
-			continue
+			return OrphanReport{}, err
 		}
 
-		if !j.DryRun {
-			if err := j.mark(itemCtx, e); err != nil {
-				report.Failed++
-				log.Error().Err(err).
-					Str("event", EventOrphanFail).
-					Str("kind", string(e.kind)).
-					Str("id", e.id).
-					Str("traceid", traceID).
-					Msg("reconciliation: marking item orphaned failed")
-				continue
-			}
+		for _, e := range entries {
+			j.check(ctx, log, &report, gw, e)
 		}
-
-		report.Orphaned = append(report.Orphaned, OrphanedItem{
-			Kind:       e.kind,
-			ID:         e.id,
-			Reason:     reason,
-			ResourceID: e.resourceID,
-			ShareWith:  e.shareWith,
-		})
-		log.Info().
-			Str("event", EventOrphanMark).
-			Str("kind", string(e.kind)).
-			Str("id", e.id).
-			Str("reason", string(reason)).
-			Str("storage_id", e.resourceID.GetStorageId()).
-			Str("opaque_id", e.resourceID.GetOpaqueId()).
-			Str("owner", e.owner).
-			Str("share_with", e.shareWith).
-			Bool("dry_run", j.DryRun).
-			Str("traceid", traceID).
-			Msg("reconciliation: item marked orphaned")
 	}
 
 	log.Info().
@@ -274,18 +246,114 @@ func (j *OrphanJob) Run(ctx context.Context) (OrphanReport, error) {
 		Int("failed", report.Failed).
 		Msg("reconciliation: run finished")
 
-	return report, nil
+	return report, cancelled
 }
 
-// entries lists the configured stores and flattens them into a single list to
-// check.
-func (j *OrphanJob) entries(ctx context.Context) ([]entry, error) {
+// check classifies one item and marks it when it is orphaned. A failure is
+// about that one item, so it is logged rather than handed back.
+func (j *OrphanJob) check(ctx context.Context, log *zerolog.Logger, report *OrphanReport, gw gateway.GatewayAPIClient, e entry) {
+	report.Checked++
+
+	// Each item gets its own trace id, propagated into every gateway and
+	// storage provider call it makes by the client interceptor the service
+	// package dials with. It is logged on each per-item line so a skip here
+	// can be joined against the revad logs that explain it: grep the same
+	// traceid there.
+	traceID := trace.Generate()
+	ctx = trace.Set(ctx, traceID)
+
+	reason, orphaned, err := j.classify(ctx, gw, e)
+	if err != nil {
+		report.Skipped++
+		log.Error().Err(err).
+			Str("event", EventOrphanSkip).
+			Str("kind", string(e.kind)).
+			Str("id", e.id).
+			Str("traceid", traceID).
+			Msg("reconciliation: existence check failed, item left untouched")
+		return
+	}
+	if !orphaned {
+		log.Debug().
+			Str("kind", string(e.kind)).
+			Str("id", e.id).
+			Str("traceid", traceID).
+			Msg("reconciliation: item is valid")
+		return
+	}
+
+	if !j.DryRun {
+		if err := j.mark(ctx, e); err != nil {
+			report.Failed++
+			log.Error().Err(err).
+				Str("event", EventOrphanFail).
+				Str("kind", string(e.kind)).
+				Str("id", e.id).
+				Str("traceid", traceID).
+				Msg("reconciliation: marking item orphaned failed")
+			return
+		}
+	}
+
+	report.Orphaned = append(report.Orphaned, OrphanedItem{
+		Kind:       e.kind,
+		ID:         e.id,
+		Reason:     reason,
+		ResourceID: e.resourceID,
+		ShareWith:  e.shareWith,
+	})
+	log.Info().
+		Str("event", EventOrphanMark).
+		Str("kind", string(e.kind)).
+		Str("id", e.id).
+		Str("reason", string(reason)).
+		Str("storage_id", e.resourceID.GetStorageId()).
+		Str("opaque_id", e.resourceID.GetOpaqueId()).
+		Str("owner", e.owner).
+		Str("share_with", e.shareWith).
+		Bool("dry_run", j.DryRun).
+		Str("traceid", traceID).
+		Msg("reconciliation: item marked orphaned")
+}
+
+// spaces is every space holding a share or a public link, in a fixed order so
+// that a batch holds the same spaces on every run. Both stores are asked: a
+// space can hold a link and no share, or the other way round.
+func (j *OrphanJob) spaces(ctx context.Context) ([]string, error) {
+	all := map[string]struct{}{}
+
+	if j.Shares != nil {
+		spaces, err := j.Shares.ListShareSpaces(ctx)
+		if err != nil {
+			return nil, errors.Wrap(err, "reconciliation: listing the spaces that hold a share")
+		}
+		for _, s := range spaces {
+			all[s] = struct{}{}
+		}
+	}
+
+	if j.Links != nil {
+		spaces, err := j.Links.ListPublicShareSpaces(ctx)
+		if err != nil {
+			return nil, errors.Wrap(err, "reconciliation: listing the spaces that hold a public link")
+		}
+		for _, s := range spaces {
+			all[s] = struct{}{}
+		}
+	}
+
+	return slices.Sorted(maps.Keys(all)), nil
+}
+
+// entries lists the items of a batch of spaces from the configured stores and
+// flattens them into a single list to check. No space means every space.
+func (j *OrphanJob) entries(ctx context.Context, spaceIDs []string) ([]entry, error) {
 	var entries []entry
 
 	if j.Shares != nil {
-		shares, err := j.Shares.ListShares(ctx, nil)
+		shares, err := j.Shares.ListShares(ctx, spaceFilters(spaceIDs))
 		if err != nil {
-			return nil, errors.Wrap(err, "reconciliation: listing shares")
+			return nil, errors.Wrapf(err, "reconciliation: listing the shares of %d space(s)", len(spaceIDs))
 		}
 		for _, s := range shares {
 			e := entry{
@@ -305,9 +373,9 @@ func (j *OrphanJob) entries(ctx context.Context) ([]entry, error) {
 	}
 
 	if j.Links != nil {
-		links, err := j.Links.ListPublicShares(ctx, nil, nil, nil, false)
+		links, err := j.Links.ListPublicSharesInSpaces(ctx, spaceIDs)
 		if err != nil {
-			return nil, errors.Wrap(err, "reconciliation: listing public links")
+			return nil, errors.Wrapf(err, "reconciliation: listing the public links of %d space(s)", len(spaceIDs))
 		}
 		for _, l := range links {
 			entries = append(entries, entry{
