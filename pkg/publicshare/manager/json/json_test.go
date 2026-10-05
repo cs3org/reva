@@ -35,6 +35,7 @@ import (
 	ctxpkg "github.com/owncloud/reva/v2/pkg/ctx"
 	"github.com/owncloud/reva/v2/pkg/publicshare"
 	"github.com/owncloud/reva/v2/pkg/publicshare/manager/json"
+	"github.com/owncloud/reva/v2/pkg/publicshare/manager/json/persistence"
 	"github.com/owncloud/reva/v2/pkg/publicshare/manager/json/persistence/cs3"
 	"github.com/owncloud/reva/v2/pkg/rgrpc/status"
 	"github.com/owncloud/reva/v2/pkg/rgrpc/todo/pool"
@@ -50,6 +51,67 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 )
+
+// barrierPersistence is a fake persistence.Persistence standing in for one
+// whose Read is a network round trip, such as the cs3 layer's Stat and
+// SimpleDownload against metadata.CS3. Its Read parks until the expected number
+// of callers are inside it at once and records how many ever were, which turns
+// "do these calls overlap?" into a counter the test can assert on rather than
+// an elapsed time it has to interpret. A loaded CI runner slows every caller
+// equally and so cannot change the answer.
+type barrierPersistence struct {
+	expected int
+
+	mu            sync.Mutex
+	concurrent    int
+	maxConcurrent int
+
+	releaseOnce sync.Once
+	release     chan struct{}
+}
+
+func newBarrierPersistence(expected int) *barrierPersistence {
+	return &barrierPersistence{expected: expected, release: make(chan struct{})}
+}
+
+func (p *barrierPersistence) Init(_ context.Context) error { return nil }
+
+func (p *barrierPersistence) Read(_ context.Context) (persistence.PublicShares, error) {
+	p.mu.Lock()
+	p.concurrent++
+	if p.concurrent > p.maxConcurrent {
+		p.maxConcurrent = p.concurrent
+	}
+	if p.concurrent == p.expected {
+		p.releaseOnce.Do(func() { close(p.release) })
+	}
+	p.mu.Unlock()
+
+	select {
+	case <-p.release:
+	case <-time.After(10 * time.Second):
+		// Nobody joined us, so the callers are being serialized somewhere above.
+		// Open the gate for good, or every queued caller would wait out its own
+		// timeout and the test would take expected*timeout to report it.
+		p.releaseOnce.Do(func() { close(p.release) })
+	}
+
+	p.mu.Lock()
+	p.concurrent--
+	p.mu.Unlock()
+
+	return persistence.PublicShares{}, nil
+}
+
+func (p *barrierPersistence) Write(_ context.Context, _ persistence.PublicShares) error {
+	return nil
+}
+
+func (p *barrierPersistence) peakConcurrency() int {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	return p.maxConcurrent
+}
 
 var _ = Describe("Json", func() {
 	var (
@@ -750,6 +812,92 @@ var _ = Describe("Json", func() {
 				Expect(ps[0].ResourceId).To(Equal(sharedResource.Id))
 			})
 
+			It("serves concurrent readers and writers without racing", func() {
+				// This doesn't assert much beyond "no error" - its real job is to
+				// give `go test -race` enough concurrent traffic through the
+				// manager's RWMutex and the cs3 persistence's own internal mutex
+				// to catch a regression of either lock being removed or a
+				// persistence Read() result being aliased across goroutines.
+				const writers = 4
+				const readers = 4
+				const perWorker = 25
+
+				var wg sync.WaitGroup
+				createErrs := make(chan error, writers*perWorker)
+
+				wg.Add(writers)
+				for range writers {
+					go func() {
+						defer wg.Done()
+						for range perWorker {
+							if _, err := m.CreatePublicShare(ctx, user1, sharedResource, grant); err != nil {
+								createErrs <- err
+							}
+						}
+					}()
+				}
+
+				wg.Add(readers)
+				for range readers {
+					go func() {
+						defer wg.Done()
+						missingRef := &link.PublicShareReference{
+							Spec: &link.PublicShareReference_Id{Id: &link.PublicShareId{OpaqueId: "missing"}},
+						}
+						for range perWorker {
+							_, _ = m.ListPublicShares(ctx, user1, nil, false)
+							_, _ = m.GetPublicShare(ctx, user1, missingRef, false)
+							_, _ = m.GetPublicShareByToken(ctx, "missing-token", nil, false)
+
+							sharesChan := make(chan *publicshare.WithPassword)
+							go func() {
+								for range sharesChan {
+								}
+							}()
+							_ = m.(publicshare.DumpableManager).Dump(ctx, sharesChan)
+							close(sharesChan)
+						}
+					}()
+				}
+
+				wg.Wait()
+				close(createErrs)
+				for err := range createErrs {
+					Expect(err).ToNot(HaveOccurred())
+				}
+			})
+
+			It("overlaps concurrent ListPublicShares calls instead of queueing them", func() {
+				// Regression test for manager.init (json.go) taking the manager's
+				// write lock on every call ahead of ListPublicShares' own RLock.
+				// Because a pending sync.RWMutex writer blocks new readers, that
+				// turned every concurrent ListPublicShares call into a queue behind
+				// whichever call was already inside persistence.Read - silently
+				// undoing the switch from sync.Mutex to sync.RWMutex. A wrong
+				// re-introduction of that lock wouldn't fail -race (it's a
+				// correctly-used lock), only show up here as the reads no longer
+				// managing to be inside persistence.Read at the same time.
+				const concurrency = 8
+
+				barrier := newBarrierPersistence(concurrency)
+				slow, err := json.New("https://localhost:9200", 11, 60, false, barrier)
+				Expect(err).ToNot(HaveOccurred())
+
+				var wg sync.WaitGroup
+				wg.Add(concurrency)
+				for range concurrency {
+					go func() {
+						defer wg.Done()
+						_, _ = slow.ListPublicShares(ctx, user1, nil, false)
+					}()
+				}
+				wg.Wait()
+
+				Expect(barrier.peakConcurrency()).To(Equal(concurrency),
+					"only %d of %d ListPublicShares calls were ever inside persistence.Read together, so they are being serialized",
+					barrier.peakConcurrency(), concurrency)
+			})
+
 			It("refreshes its cache before writing new data", func() {
 				_, err := m.CreatePublicShare(ctx, user1, sharedResource, grant)
 				Expect(err).ToNot(HaveOccurred())
@@ -771,6 +919,62 @@ var _ = Describe("Json", func() {
 				Expect(err).ToNot(HaveOccurred())
 				Expect(len(ps)).To(Equal(1)) // Make sure the first created public share is gone
 			})
+		})
+	})
+
+	Context("with a memory persistence layer", func() {
+		// Unlike cs3, the memory backend has no lock of its own - Read/Write
+		// rely entirely on persistence.Copy plus the manager's own RWMutex
+		// for safety. This is the test that would catch persistence.Copy
+		// being dropped from memory.Read.
+		BeforeEach(func() {
+			var err error
+			m, err = json.NewMemory(map[string]interface{}{})
+			Expect(err).ToNot(HaveOccurred())
+
+			ctx = ctxpkg.ContextSetUser(context.Background(), user1)
+		})
+
+		It("serves concurrent readers and writers without racing", func() {
+			const writers = 4
+			const readers = 4
+			const perWorker = 25
+
+			var wg sync.WaitGroup
+			createErrs := make(chan error, writers*perWorker)
+
+			wg.Add(writers)
+			for range writers {
+				go func() {
+					defer wg.Done()
+					for range perWorker {
+						if _, err := m.CreatePublicShare(ctx, user1, sharedResource, grant); err != nil {
+							createErrs <- err
+						}
+					}
+				}()
+			}
+
+			wg.Add(readers)
+			for range readers {
+				go func() {
+					defer wg.Done()
+					missingRef := &link.PublicShareReference{
+						Spec: &link.PublicShareReference_Id{Id: &link.PublicShareId{OpaqueId: "missing"}},
+					}
+					for range perWorker {
+						_, _ = m.ListPublicShares(ctx, user1, nil, false)
+						_, _ = m.GetPublicShare(ctx, user1, missingRef, false)
+						_, _ = m.GetPublicShareByToken(ctx, "missing-token", nil, false)
+					}
+				}()
+			}
+
+			wg.Wait()
+			close(createErrs)
+			for err := range createErrs {
+				Expect(err).ToNot(HaveOccurred())
+			}
 		})
 	})
 })
