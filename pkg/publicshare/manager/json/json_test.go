@@ -704,6 +704,22 @@ var _ = Describe("Json", func() {
 				Expect(err).ToNot(HaveOccurred())
 				Expect(ps).ToNot(BeNil())
 			})
+
+			It("rejects a resource info with a nil resource id instead of persisting it", func() {
+				noID := &providerv1beta1.ResourceInfo{
+					ArbitraryMetadata: &providerv1beta1.ArbitraryMetadata{
+						Metadata: map[string]string{"name": "publicshare"},
+					},
+				}
+
+				ps, err := m.CreatePublicShare(ctx, user1, noID, grant)
+				Expect(err).To(HaveOccurred())
+				Expect(ps).To(BeNil())
+
+				shares, err := m.ListPublicShares(ctx, user1, []*link.ListPublicSharesRequest_Filter{}, false)
+				Expect(err).ToNot(HaveOccurred())
+				Expect(shares).To(BeEmpty())
+			})
 		})
 
 		Describe("PublicShares", func() {

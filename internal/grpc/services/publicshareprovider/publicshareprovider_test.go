@@ -213,6 +213,81 @@ var _ = Describe("PublicShareProvider", func() {
 			Expect(res.GetStatus().GetCode()).To(Equal(rpc.Code_CODE_OK))
 			Expect(res.GetShare()).To(Equal(createdLink))
 		})
+		It("persists the stat-verified resource id, not the client-supplied one", func() {
+			statResourceResponse.Info.Id = &providerpb.ResourceId{
+				StorageId: "verified-storage-id",
+				SpaceId:   "verified-space-id",
+				OpaqueId:  "verified-opaque-id",
+			}
+
+			manager.
+				EXPECT().
+				CreatePublicShare(
+					mock.Anything,
+					mock.Anything,
+					mock.MatchedBy(func(rInfo *providerpb.ResourceInfo) bool {
+						return rInfo.GetId().GetStorageId() == "verified-storage-id" &&
+							rInfo.GetId().GetSpaceId() == "verified-space-id" &&
+							rInfo.GetId().GetOpaqueId() == "verified-opaque-id"
+					}),
+					mock.Anything,
+				).
+				Return(createdLink, nil)
+
+			req := &link.CreatePublicShareRequest{
+				ResourceInfo: &providerpb.ResourceInfo{
+					Owner: &userpb.UserId{
+						OpaqueId: "alice",
+					},
+					Path: "./NewFolder/file.txt",
+				},
+				Grant: &link.Grant{
+					Permissions: &link.PublicSharePermissions{
+						Permissions: linkPermissions,
+					},
+					Password: "SecretPassw0rd!",
+				},
+			}
+
+			res, err := provider.CreatePublicShare(ctx, req)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(res.GetStatus().GetCode()).To(Equal(rpc.Code_CODE_OK))
+		})
+		It("fails cleanly when stat reports a non-OK status instead of an error", func() {
+			gatewayClient.
+				EXPECT().
+				Stat(mock.Anything, mock.Anything).
+				Unset()
+			gatewayClient.
+				EXPECT().
+				CheckPermission(mock.Anything, mock.Anything).
+				Unset()
+			statResourceResponse.Status = status.NewNotFound(ctx, "not found")
+			statResourceResponse.Info = nil
+			gatewayClient.
+				EXPECT().
+				Stat(mock.Anything, mock.Anything).
+				Return(statResourceResponse, nil)
+
+			req := &link.CreatePublicShareRequest{
+				ResourceInfo: &providerpb.ResourceInfo{
+					Owner: &userpb.UserId{
+						OpaqueId: "alice",
+					},
+					Path: "./NewFolder/file.txt",
+				},
+				Grant: &link.Grant{
+					Permissions: &link.PublicSharePermissions{
+						Permissions: linkPermissions,
+					},
+					Password: "SecretPassw0rd!",
+				},
+			}
+
+			res, err := provider.CreatePublicShare(ctx, req)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(res.GetStatus().GetCode()).To(Equal(rpc.Code_CODE_NOT_FOUND))
+		})
 		It("has no user permission to create public share", func() {
 			gatewayClient.
 				EXPECT().

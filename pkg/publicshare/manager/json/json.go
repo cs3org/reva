@@ -261,6 +261,10 @@ func (m *manager) Load(ctx context.Context, shareChan <-chan *publicshare.WithPa
 
 // CreatePublicShare adds a new entry to manager.shares
 func (m *manager) CreatePublicShare(ctx context.Context, u *user.User, rInfo *provider.ResourceInfo, g *link.Grant) (*link.PublicShare, error) {
+	if rInfo.GetId() == nil || rInfo.GetId().GetStorageId() == "" {
+		return nil, errtypes.BadRequest("resource id is required to create a public share")
+	}
+
 	id := &link.PublicShareId{
 		OpaqueId: utils.RandString(15),
 	}
