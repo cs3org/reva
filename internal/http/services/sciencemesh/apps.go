@@ -358,6 +358,10 @@ func validateShareFilePath(filePath string) error {
 			return errtypes.BadRequest("file path escapes the share")
 		}
 	}
+	if filePath != "" {
+		_, err := relativePathSegments(filePath)
+		return err
+	}
 	return nil
 }
 

@@ -483,6 +483,46 @@ func TestOpenInAppSharePathPolicyBeforeExchange(t *testing.T) {
 			file:     "/ocm/share-1/%252e%252e/secret",
 			wantText: "escapes the share",
 		},
+		{
+			name:     "absolute suffix",
+			file:     "/ocm/share-1//notes.md",
+			wantText: "invalid share-relative path",
+		},
+		{
+			name:     "literal single dot segment",
+			file:     "/ocm/share-1/docs/./notes.md",
+			wantText: "invalid share-relative path",
+		},
+		{
+			name:     "empty interior segment",
+			file:     "/ocm/share-1/docs//notes.md",
+			wantText: "invalid share-relative path",
+		},
+		{
+			name:     "encoded absolute suffix",
+			file:     "/ocm/share-1/%2fnotes.md",
+			wantText: "invalid share-relative path",
+		},
+		{
+			name:     "repeatedly encoded absolute suffix",
+			file:     "/ocm/share-1/%252fnotes.md",
+			wantText: "invalid share-relative path",
+		},
+		{
+			name:     "received resource dot segment",
+			file:     "/ocm/storage-id!share-1:/docs/./notes.md",
+			wantText: "invalid share-relative path",
+		},
+		{
+			name:     "received resource empty segment",
+			file:     "/ocm/storage-id!share-1:/docs//notes.md",
+			wantText: "invalid share-relative path",
+		},
+		{
+			name:     "received resource encoded absolute suffix",
+			file:     "/ocm/storage-id!share-1:%2fnotes.md",
+			wantText: "invalid share-relative path",
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -497,6 +537,17 @@ func TestOpenInAppSharePathPolicyBeforeExchange(t *testing.T) {
 				t.Fatalf("status %d body %s", rec.Code, rec.Body.String())
 			}
 			body := rec.Body.String()
+			if !strings.Contains(body, "\"INVALID_PARAMETER\"") {
+				t.Fatalf("body %s missing INVALID_PARAMETER", body)
+			}
+			if strings.Contains(body, tt.file) || strings.Contains(logs.String(), tt.file) {
+				t.Fatalf("file identifier leaked: body=%s logs=%s", body, logs.String())
+			}
+			if unescaped, unescapeErr := fullyUnescape(tt.file); unescapeErr == nil && unescaped != tt.file {
+				if strings.Contains(body, unescaped) || strings.Contains(logs.String(), unescaped) {
+					t.Fatalf("decoded file identifier leaked: body=%s logs=%s", body, logs.String())
+				}
+			}
 			if !strings.Contains(body, tt.wantText) {
 				t.Fatalf("body %s", body)
 			}
