@@ -20,7 +20,7 @@ package reconciliation
 
 import (
 	"context"
-	"sort"
+	"slices"
 
 	gateway "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
@@ -30,7 +30,6 @@ import (
 	"github.com/cs3org/reva/v3/pkg/appctx"
 	"github.com/cs3org/reva/v3/pkg/rjobs"
 	"github.com/cs3org/reva/v3/pkg/service"
-	revashare "github.com/cs3org/reva/v3/pkg/share"
 	"github.com/cs3org/reva/v3/pkg/sharehierarchy"
 	"github.com/cs3org/reva/v3/pkg/spaces"
 	"github.com/cs3org/reva/v3/pkg/trace"
@@ -111,12 +110,17 @@ type GrantStore interface {
 // is a valid unit of work because spaces are disjoint: no share outside a space
 // can shadow one inside it. A schedule is optional on top of that.
 //
-// A space is also the unit the changes are applied in. A run decides everything
-// before it writes anything, and a user can share in the meantime, so the shares
-// of a space are listed again just before its changes go out. A space that
-// gained one since is left for the next run, whole: the new share is not in what
-// the run compared, and it may well be what makes a share the run wants to
-// remove no longer redundant.
+// A space is therefore also the unit a full run can be split into: given a
+// batch size it asks the database which spaces hold a share and takes them that
+// many at a time, so it never holds more than the shares of one batch. Without
+// one it reads every share in a single listing, see Config.SpacesPerBatch.
+//
+// A space is the unit the changes are applied in too. A run decides the changes
+// of a space before it writes any of them, and a user can share in the
+// meantime, so the shares of a space are listed again just before its changes
+// go out. A space that gained one since is left for the next run, whole: the
+// new share is not in what the run compared, and it may well be what makes a
+// share the run wants to remove no longer redundant.
 type ShallowJob struct {
 	ShareStore ShareStore
 	// Gateway resolves the path of a shared resource and the identity of its
@@ -142,6 +146,9 @@ type ShallowJob struct {
 	DryRun bool
 	// RunOnStart, when set, fires the job once as soon as the runner starts.
 	RunOnStart bool
+	// SpacesPerBatch is how many spaces one listing covers, see
+	// Config.SpacesPerBatch. Zero or less means no batching.
+	SpacesPerBatch int
 }
 
 // ActionKind is what the job did to an ACL entry. There is no remove: the job
@@ -242,10 +249,12 @@ type ShallowReport struct {
 	// removed). Every share counted covered or conflicting is on it, unless its
 	// removal failed or its space was skipped.
 	Removed []RemovedShare
-	// SkippedSpaces lists the spaces nothing was applied to because a share
-	// appeared in them while the run was checking. Their shares are counted
-	// checked, covered and conflicting all the same, since the check did run on
-	// them, but nothing they called for was written or removed.
+	// SkippedSpaces lists the spaces nothing was applied to, either because a
+	// share appeared in one while the run was checking or because its shares
+	// could not be listed. A space the check did run on has its shares counted
+	// checked, covered and conflicting all the same, but nothing they called
+	// for was written or removed. A space that could not be listed is counted
+	// nowhere.
 	SkippedSpaces []string
 	// DryRun reports whether the run was a simulation.
 	DryRun bool
@@ -254,10 +263,12 @@ type ShallowReport struct {
 // Run reconciles every non-orphan share against the storage. A per-share lookup
 // failure is logged and the share is skipped, never guessed at, so a flaky
 // gateway can never cause a wrong ACL to be written. The run itself only fails
-// if the shares cannot be listed at all.
+// if the spaces holding a share cannot be listed at all; a space whose own
+// shares cannot be listed is skipped, like one that changed under the run.
 //
 // A space whose shares changed while the run was checking is skipped whole, and
-// left to the next run.
+// left to the next run. A cancelled run stops at the next space and gives back
+// the cancellation, with the report of what it did get through.
 //
 // Every write is logged with the permissions found and the permissions written,
 // so a run can be undone from its log alone.
@@ -301,22 +312,86 @@ func (j *ShallowJob) run(ctx context.Context, spaceID string) (ShallowReport, er
 		return ShallowReport{}, err
 	}
 
-	var filters []*collaboration.Filter
-	if spaceID != "" {
-		filters = append(filters, revashare.SpaceIDFilter(spaceID))
+	size := j.SpacesPerBatch
+	var spaceIDs []string
+	switch {
+	case spaceID != "":
+		spaceIDs, size = []string{spaceID}, max(size, 1)
+	case size > 0:
+		if spaceIDs, err = j.ShareStore.ListShareSpaces(ctx); err != nil {
+			return ShallowReport{}, errors.Wrap(err, "reconciliation: listing the spaces that hold a share")
+		}
+		// a fixed order, so a batch holds the same spaces on every run.
+		slices.Sort(spaceIDs)
 	}
-	shares, err := j.ShareStore.ListShares(ctx, filters)
-	if err != nil {
-		return ShallowReport{}, errors.Wrap(err, "reconciliation: listing shares")
+	batches := spaceBatches(spaceIDs, size)
+
+	start := log.Info().
+		Str("event", EventShallowStart).
+		Bool("dry_run", j.DryRun).
+		Int("batches", len(batches))
+	if size > 0 {
+		start = start.Int("spaces", len(spaceIDs)).Int("spaces_per_batch", size)
+	}
+	start.Msg("reconciliation: run started")
+
+	report := ShallowReport{RunID: runID, SpaceID: spaceID, DryRun: j.DryRun}
+	// one gateway lookup per recipient instead of one per share: a recipient
+	// holds many shares, in many spaces, so the same names come back over and
+	// over. It holds an entry per name, not per share, so it spans the batches.
+	grantees := map[string]*provider.Grantee{}
+	var cancelled error
+	for _, batch := range batches {
+		if cancelled = ctx.Err(); cancelled != nil {
+			break
+		}
+
+		err := j.reconcileSpaces(ctx, log, &report, gw, grantees, batch)
+		if err == nil {
+			continue
+		}
+		// one listing means nothing else to carry on with, so the failure is the
+		// run's rather than an empty success.
+		if len(batches) == 1 {
+			return ShallowReport{}, err
+		}
+		for _, space := range batch {
+			report.SkippedSpaces = append(report.SkippedSpaces, space)
+			log.Error().Err(err).
+				Str("event", EventShallowSkipSpace).
+				Str("skipped_space", space).
+				Bool("dry_run", j.DryRun).
+				Msg("reconciliation: shares could not be listed, space left untouched")
+		}
 	}
 
 	log.Info().
-		Str("event", EventShallowStart).
+		Str("event", EventShallowEnd).
 		Bool("dry_run", j.DryRun).
-		Int("candidates", len(shares)).
-		Msg("reconciliation: run started")
+		Int("checked", report.Checked).
+		Int("covered", report.Covered).
+		Int("conflicting", report.Conflicting).
+		Int("written", len(report.Written)).
+		Int("removed", len(report.Removed)).
+		Int("skipped", report.Skipped).
+		Int("skipped_spaces", len(report.SkippedSpaces)).
+		Int("failed", report.Failed).
+		Msg("reconciliation: run finished")
 
-	report := ShallowReport{RunID: runID, SpaceID: spaceID, DryRun: j.DryRun}
+	return report, cancelled
+}
+
+// reconcileSpaces checks the shares of a batch of spaces against the storage
+// and applies what it decided. The batch is how much is listed at once; what is
+// decided and applied is still one space, since spaces are disjoint.
+//
+// The error is the shares of the batch not being listable at all.
+func (j *ShallowJob) reconcileSpaces(ctx context.Context, log *zerolog.Logger, report *ShallowReport, gw gateway.GatewayAPIClient, grantees map[string]*provider.Grantee, spaceIDs []string) error {
+	shares, err := j.ShareStore.ListShares(ctx, spaceFilters(spaceIDs))
+	if err != nil {
+		return errors.Wrapf(err, "reconciliation: listing the shares of %d space(s)", len(spaceIDs))
+	}
+
 	// the shares are grouped the way the hierarchy check expects them: all the
 	// live shares of one recipient in one space. The key is the space id, the
 	// grantee type and the sharee, joined by a NUL byte, which no name contains.
@@ -329,9 +404,6 @@ func (j *ShallowJob) run(ctx context.Context, spaceID string) (ShallowReport, er
 	// passes, so a skip here can be joined against the revad logs that explain
 	// it: grep the same traceid there.
 	traces := map[string]string{}
-	// one gateway lookup per recipient instead of one per share: a recipient
-	// holds many shares, so the same names come back over and over.
-	grantees := map[string]*provider.Grantee{}
 	// the shares each space held when the check ran, by space, so a share that
 	// appears under the run can be told from one the run has seen. A share that
 	// does not resolve is on it too: it exists, it is only the run that cannot
@@ -409,7 +481,7 @@ func (j *ShallowJob) run(ctx context.Context, spaceID string) (ShallowReport, er
 			// weaker and take away access that ancestor grants.
 			_, err := checker.CheckGrantConsistency(ctx, rs.Path, rs.Share.GetPermissions().GetPermissions(), nearest)
 			if err != nil {
-				if r, ok := j.shadowed(log, &report, rs, traces[rs.Share.GetId().GetOpaqueId()], err); ok {
+				if r, ok := j.shadowed(log, report, rs, traces[rs.Share.GetId().GetOpaqueId()], err); ok {
 					redundant = append(redundant, r)
 				}
 				continue
@@ -422,7 +494,7 @@ func (j *ShallowJob) run(ctx context.Context, spaceID string) (ShallowReport, er
 	// what to write is decided against the storage before anything goes out, so
 	// that the changes of a space can be checked against the database as a whole
 	// and then applied in one go.
-	planned := j.plan(ctx, log, &report, required, traces)
+	planned := j.plan(ctx, log, report, required, traces)
 
 	// the changes are grouped per space, the unit a run applies or holds back.
 	grants := map[string][]plannedGrant{}
@@ -448,7 +520,7 @@ func (j *ShallowJob) run(ctx context.Context, spaceID string) (ShallowReport, er
 			pending = append(pending, space)
 		}
 	}
-	sort.Strings(pending)
+	slices.Sort(pending)
 
 	for _, space := range pending {
 		fresh, err := j.appeared(ctx, space, seen[space])
@@ -476,29 +548,15 @@ func (j *ShallowJob) run(ctx context.Context, spaceID string) (ShallowReport, er
 			continue
 		}
 
-		j.applyGrants(ctx, log, &report, grants[space], traces)
+		j.applyGrants(ctx, log, report, grants[space], traces)
 		// the removals go last, so the entry a share is removed in favour of is
 		// on the storage before its row is gone, the order the share API removes
 		// a redundant share in. The two are always in the same space: a share is
 		// only ever made redundant by one above it, and no share above it lives
 		// anywhere else.
-		j.applyRemovals(ctx, log, &report, removals[space], traces)
+		j.applyRemovals(ctx, log, report, removals[space], traces)
 	}
-
-	log.Info().
-		Str("event", EventShallowEnd).
-		Bool("dry_run", j.DryRun).
-		Int("checked", report.Checked).
-		Int("covered", report.Covered).
-		Int("conflicting", report.Conflicting).
-		Int("written", len(report.Written)).
-		Int("removed", len(report.Removed)).
-		Int("skipped", report.Skipped).
-		Int("skipped_spaces", len(report.SkippedSpaces)).
-		Int("failed", report.Failed).
-		Msg("reconciliation: run finished")
-
-	return report, nil
+	return nil
 }
 
 // plannedGrant is one grant a run decided on, held until the space it belongs
@@ -652,7 +710,7 @@ func (j *ShallowJob) applyRemovals(ctx context.Context, log *zerolog.Logger, rep
 // ancestor of it needs, or what stops a share the run wants to remove from being
 // redundant, so the caller leaves the whole space to the next run.
 func (j *ShallowJob) appeared(ctx context.Context, spaceID string, seen map[string]struct{}) (string, error) {
-	shares, err := j.ShareStore.ListShares(ctx, []*collaboration.Filter{revashare.SpaceIDFilter(spaceID)})
+	shares, err := j.ShareStore.ListShares(ctx, spaceFilters([]string{spaceID}))
 	if err != nil {
 		return "", errors.Wrapf(err, "reconciliation: listing the shares of space %q again", spaceID)
 	}

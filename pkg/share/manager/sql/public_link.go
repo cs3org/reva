@@ -305,7 +305,53 @@ func (m *PublicShareMgr) GetPublicShareByToken(ctx context.Context, token string
 	return cs3link, nil
 }
 
-// Exported functions below are not part of the CS3-defined API, but are used by cernboxcop
+// Exported functions below are not part of the CS3-defined API
+
+// ListPublicSharesInSpaces returns the public links of the given spaces that
+// ListPublicShares would return, and the links of every space when given none.
+// The public share API has no space filter, so the reconciliation jobs pass the
+// spaces themselves.
+func (m *PublicShareMgr) ListPublicSharesInSpaces(ctx context.Context, spaceIDs []string) ([]*link.PublicShare, error) {
+	query := m.db.Model(&model.PublicLink{}).
+		Where("orphan = ?", false).
+		Where("orphaned_at IS NULL")
+	if len(spaceIDs) > 0 {
+		query = query.Where("space_id IN ?", spaceIDs)
+	}
+
+	var links []model.PublicLink
+	res := query.Find(&links)
+	if res.Error != nil {
+		return nil, res.Error
+	}
+
+	cs3links := make([]*link.PublicShare, 0, len(links))
+	for _, l := range links {
+		cs3links = append(cs3links, l.AsCS3PublicShare())
+	}
+
+	return cs3links, nil
+}
+
+// ListPublicShareSpaces returns the id of every space that holds at least one
+// public link ListPublicShares would return. A row without a space id is left
+// out: there is no space to reconcile it under.
+func (m *PublicShareMgr) ListPublicShareSpaces(ctx context.Context) ([]string, error) {
+	var spaces []string
+	res := m.db.Model(&model.PublicLink{}).
+		Where("orphan = ?", false).
+		Where("orphaned_at IS NULL").
+		Where("space_id IS NOT NULL").
+		Distinct().
+		Pluck("space_id", &spaces)
+	if res.Error != nil {
+		return nil, res.Error
+	}
+
+	return spaces, nil
+}
+
+// The functions below are used by cernboxcop
 
 // List public links in the CERN-specific format. Used in cernboxcop.
 func (m *PublicShareMgr) ListPublicLinks(u *user.User, filters []*link.ListPublicSharesRequest_Filter, expiry *ExpiryRange, remove_orphan bool) ([]model.PublicLink, error) {
