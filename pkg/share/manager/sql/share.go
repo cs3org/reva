@@ -226,6 +226,26 @@ func (m *ShareMgr) ListShares(ctx context.Context, filters []*collaboration.Filt
 	return cs3shares, nil
 }
 
+func (m *ShareMgr) ListExpiredShares(ctx context.Context) ([]*collaboration.Share, error) {
+	var shares []model.Share
+	res := m.db.Model(&model.Share{}).
+		Where("orphan = ?", false).
+		Where("orphaned_at IS NULL").
+		Where("expiration IS NOT NULL").
+		Where("expiration <= ?", time.Now()).
+		Where("expired_at IS NULL").
+		Find(&shares)
+	if res.Error != nil {
+		return nil, res.Error
+	}
+
+	cs3shares := make([]*collaboration.Share, len(shares))
+	for i, s := range shares {
+		cs3shares[i] = s.AsCS3Share(m.getGrantee(ctx, s))
+	}
+	return cs3shares, nil
+}
+
 // we list the shares that are targeted to the user in context or to the user groups.
 func (m *ShareMgr) ListReceivedShares(ctx context.Context, filters []*collaboration.Filter) ([]*collaboration.ReceivedShare, error) {
 	user := appctx.ContextMustGetUser(ctx)
@@ -417,6 +437,16 @@ func (m *ShareMgr) MarkAsOrphaned(ctx context.Context, ref *collaboration.ShareR
 		"orphan":      true,
 		"orphaned_at": time.Now(),
 	})
+	return res.Error
+}
+
+func (m *ShareMgr) MarkAsExpired(ctx context.Context, ref *collaboration.ShareReference) error {
+	share, err := m.getEmptyShareByRef(ctx, ref)
+	if err != nil {
+		return err
+	}
+
+	res := m.db.Model(&share).Where("id = ?", share.Id).Update("expired_at", time.Now())
 	return res.Error
 }
 

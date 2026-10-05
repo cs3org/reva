@@ -162,6 +162,9 @@ type Share struct {
 	ShareWith         string         `gorm:"size:255;uniqueIndex:u_share;index:idx_space_sharewith"` // 255 because this can be an external account, which has a long representation
 	SharedWithIsGroup bool
 	Description       string `gorm:"size:1024"`
+	// ExpiredAt is set when the ACL of an expired share is removed. The row
+	// stays, so that the owner still sees the share.
+	ExpiredAt datatypes.NullTime `gorm:"index"`
 }
 
 // PublicLink is a public link share. We only enforce a unique constraint on the token.

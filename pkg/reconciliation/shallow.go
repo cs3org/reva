@@ -736,7 +736,7 @@ func (j *ShallowJob) resolve(ctx context.Context, gw gateway.GatewayAPIClient, g
 		return sharehierarchy.ResolvedShare{}, errors.Errorf("reconciliation: get path: %s: %s", code, res.GetStatus().GetMessage())
 	}
 
-	grantee, err := j.grantee(ctx, gw, grantees, s.GetGrantee())
+	grantee, err := verifyGrantee(ctx, gw, grantees, s.GetGrantee())
 	if err != nil {
 		return sharehierarchy.ResolvedShare{}, err
 	}
@@ -746,7 +746,7 @@ func (j *ShallowJob) resolve(ctx context.Context, gw gateway.GatewayAPIClient, g
 	return sharehierarchy.ResolvedShare{Share: share, Path: res.GetPath()}, nil
 }
 
-// grantee verifies the recipient of a share. A user grantee is resolved through
+// verifyGrantee verifies the recipient of a share. A user grantee is resolved through
 // the gateway rather than taken as it comes, because its user type is what
 // tells the storage driver where the entry goes: a lightweight account is not
 // written to the native ACLs. The share manager falls back to a primary account
@@ -754,7 +754,7 @@ func (j *ShallowJob) resolve(ctx context.Context, gw gateway.GatewayAPIClient, g
 // would write an external account into the native ACLs.
 // A name that resolves is kept in grantees for the rest of the run. A name that
 // does not is not kept, so the next share for it is looked up again.
-func (j *ShallowJob) grantee(ctx context.Context, gw gateway.GatewayAPIClient, grantees map[string]*provider.Grantee, g *provider.Grantee) (*provider.Grantee, error) {
+func verifyGrantee(ctx context.Context, gw gateway.GatewayAPIClient, grantees map[string]*provider.Grantee, g *provider.Grantee) (*provider.Grantee, error) {
 	if g.GetType() == provider.GranteeType_GRANTEE_TYPE_GROUP {
 		return g, nil
 	}
