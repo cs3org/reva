@@ -23,11 +23,13 @@ service_user_gid   = 2766
 schedule = "@daily"      # "@every <dur>" | "@hourly" | "@daily" | "@weekly"
 dry_run  = false
 log_file = "/var/log/revad/reconciliation-orphan.log"
+spaces_per_batch = 500   # omit to read everything in one go
 
 [serverless.services.reconciliation.shallow]
 schedule = "never"       # or a cadence, on-demand runs work either way
 dry_run  = true
 log_file = "/var/log/revad/reconciliation-shallow.log"
+spaces_per_batch = 500   # omit to read everything in one go
 ```
 
 A job runs only if it is listed in `jobs`. `orphan` needs a `schedule`; on
@@ -35,6 +37,23 @@ A job runs only if it is listed in `jobs`. `orphan` needs a `schedule`; on
 on demand whether or not it has a cadence. `log_file` defaults to the path shown
 above for each, and both drivers default to `sql`, so all four keys above the
 service user can be omitted.
+
+`spaces_per_batch` makes a job walk the spaces that hold a share or a public link
+instead of reading the whole database into memory. It is how many spaces one
+listing covers, so it trades memory for round trips: a small batch holds little
+at once, a bigger one asks the database fewer times. The bound is in spaces, not
+in rows, so a single space holding a great many shares is still read whole. It
+does not change what a run decides: the shallow job decides and applies one
+space at a time either way, and the orphan job judges each item on its own.
+
+Leave it out and neither job batches: it reads every share, and every public
+link, in one listing, which is what both did before this knob existed. A value
+below `1` is a configuration error.
+
+With a batch size, a row whose `space_id` is `NULL` is not visited: there is no
+space to put it in a batch under. The hierarchy check the share API runs already
+skips such a share for the same reason, so a `NULL` there is a row to backfill,
+not something a job can work with.
 
 The drivers take their configuration from
 `[serverless.services.reconciliation.share_drivers.<name>]` and
@@ -57,7 +76,11 @@ provider, since the auth interceptor looks its groups up.
 ## Jobs
 
 `reconciliation.orphans` marks the shares and public links whose resource or
-recipient no longer exists.
+recipient no longer exists. With a `spaces_per_batch` it asks both stores which
+spaces they hold an item in and reads those spaces a batch at a time. Each item
+is judged on its own, so a batch is a listing and nothing more. If a batch cannot
+be listed the run fails there: the job is idempotent, so what it marked stands
+and the next run picks up the rest.
 
 `reconciliation.shallow` writes the ACL entry each share implies onto its path,
 when the storage has no entry or the wrong permissions. On the storage it only
@@ -74,9 +97,14 @@ With a `schedule`, the job also runs on a cadence over every space. That run has
 its own name, so `reva admin jobs trigger reconciliation.shallow.scheduled`
 starts it before its next fire.
 
-A run works out every change before it writes anything, and a user can share in
-the meantime. So the shares of a space are listed again right before its changes
-go out. A space that gained a share since the run listed it is left untouched,
+With a `spaces_per_batch`, a full run asks the database which spaces hold a share
+and reads them a batch at a time. It decides and applies one space at a time
+either way, so a run scoped with `space=<space-id>` is that same work over one
+space.
+
+A run works out the changes of a space before it writes any of them, and a user
+can share in the meantime. So the shares of a space are listed again right before
+its changes go out. A space that gained a share since the run listed it is left untouched,
 whole, and picked up by the next run: the new share is not in what the run
 compared, and it can be what makes a share the run wants to remove no longer
 redundant. Only the spaces the run has something to change in are looked at
@@ -131,6 +159,8 @@ means the entry was added and has to be removed.
 the row with id `share`.
 
 `reconciliation.shallow.skipspace` carries `skipped_space`, `new_share` (the
-share that appeared, absent when the listing itself failed), `grants` and
-`removals`, the number of changes held back, and `dry_run`. Nothing was applied,
-so there is nothing to revert. Run the job on that space again to apply them.
+share that appeared, absent when a listing failed), `grants` and `removals`, the
+number of changes held back, and `dry_run`. The two counts are absent when the
+space could not be listed in the first place: the run never got as far as
+deciding. Nothing was applied, so there is nothing to revert. Run the job on that
+space again to apply them.
