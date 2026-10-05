@@ -322,18 +322,15 @@ func TestOpenInAppFailures(t *testing.T) {
 			forbidURL:  "https://app.example/hub",
 		},
 		{
-			// %2e stays through path.Clean, then unescapes to a single-dot segment.
-			name: "single dot segment after exchange",
+			name: "single dot segment before exchange",
 			file: "/ocm/share-1/foo/%2e/bar",
 			gw: &fakeReceivedGateway{resp: okShareResponse(
 				validWebapp("https://app.example/hub", []string{"must-exchange-token"}),
 			)},
-			client:       &observeClient{token: token},
-			wantStatus:   http.StatusBadRequest,
-			wantDiscover: 1,
-			wantExchange: 1,
-			wantText:     "invalid share-relative path",
-			forbidURL:    "https://app.example/hub",
+			client:     &observeClient{token: token},
+			wantStatus: http.StatusBadRequest,
+			wantText:   "invalid share-relative path",
+			forbidURL:  "https://app.example/hub",
 		},
 		{
 			name: "nested encoded traversal",
