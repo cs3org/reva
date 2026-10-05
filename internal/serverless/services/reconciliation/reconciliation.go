@@ -56,6 +56,7 @@ func init() {
 const (
 	jobOrphan  = "orphan"
 	jobShallow = "shallow"
+	jobExpired = "expired"
 )
 
 // scheduleNever is the schedule of a job that only runs when it is asked for.
@@ -89,6 +90,7 @@ type config struct {
 	Orphan reconciliation.Config `mapstructure:"orphan"`
 	// Shallow configures the shallow job.
 	Shallow reconciliation.Config `mapstructure:"shallow"`
+	Expired reconciliation.Config `mapstructure:"expired"`
 }
 
 func (c *config) ApplyDefaults() {
@@ -109,6 +111,9 @@ func (c *config) ApplyDefaults() {
 	if c.Shallow.LogFile == "" {
 		c.Shallow.LogFile = "/var/log/revad/reconciliation-shallow.log"
 	}
+	if c.Expired.LogFile == "" {
+		c.Expired.LogFile = "/var/log/revad/reconciliation-expired.log"
+	}
 }
 
 type svc struct {
@@ -126,7 +131,7 @@ func New(ctx context.Context, m map[string]any) (_ rserverless.Service, err erro
 		return nil, err
 	}
 	if len(c.Jobs) == 0 {
-		return nil, errors.Errorf("reconciliation: no jobs enabled, set jobs to any of %q, %q", jobOrphan, jobShallow)
+		return nil, errors.Errorf("reconciliation: no jobs enabled, set jobs to any of %q, %q, %q", jobOrphan, jobShallow, jobExpired)
 	}
 
 	shares, err := getShareStore(ctx, &c)
@@ -163,6 +168,7 @@ func New(ctx context.Context, m map[string]any) (_ rserverless.Service, err erro
 
 	log := appctx.GetLogger(ctx)
 	s := &svc{}
+	providers := &storageProviders{clients: map[string]provider.ProviderAPIClient{}}
 	// a job that never got registered still opened its log, so a failure part
 	// way through the list has files to give back.
 	defer func() {
@@ -179,13 +185,18 @@ func New(ctx context.Context, m map[string]any) (_ rserverless.Service, err erro
 			if jc.Schedule == "" {
 				return nil, errors.Errorf("reconciliation: job %q has no schedule", name)
 			}
+		case jobExpired:
+			jc = c.Expired
+			if jc.Schedule == "" {
+				return nil, errors.Errorf("reconciliation: job %q has no schedule", name)
+			}
 		case jobShallow:
 			jc = c.Shallow
 			if jc.Schedule == scheduleNever {
 				jc.Schedule = ""
 			}
 		default:
-			return nil, errors.Errorf("reconciliation: unknown job %q, want %q or %q", name, jobOrphan, jobShallow)
+			return nil, errors.Errorf("reconciliation: unknown job %q, want %q, %q or %q", name, jobOrphan, jobShallow, jobExpired)
 		}
 
 		jobLog, logFile, err := reconciliation.OpenLog(jc.LogFile)
@@ -221,9 +232,9 @@ func New(ctx context.Context, m map[string]any) (_ rserverless.Service, err erro
 			job := &reconciliation.ShallowJob{
 				ShareStore: shares,
 				Auth:       identity.authenticate,
-				Grants: (&storageProviders{
-					clients: map[string]reconciliation.GrantStore{},
-				}).grants,
+				Grants: func(ctx context.Context, storageID string) (reconciliation.GrantStore, error) {
+					return providers.grants(ctx, storageID)
+				},
 				Log:        jobLog,
 				DryRun:     jc.DryRun,
 				RunOnStart: jc.RunOnStart,
@@ -239,6 +250,26 @@ func New(ctx context.Context, m map[string]any) (_ rserverless.Service, err erro
 				if err := rjobs.RegisterPeriodic(periodic); err != nil {
 					return nil, errors.Wrapf(err, "reconciliation: registering %s", periodic.Name)
 				}
+			}
+		case jobExpired:
+			store, ok := shares.(reconciliation.ExpiredShareStore)
+			if !ok {
+				return nil, errors.Errorf("reconciliation: share driver %s cannot list expired shares", c.ShareDriver)
+			}
+			job := &reconciliation.ExpiredJob{
+				ShareStore: store,
+				Auth:       identity.authenticate,
+				Grants: func(ctx context.Context, storageID string) (reconciliation.ExpiredGrantStore, error) {
+					return providers.grants(ctx, storageID)
+				},
+				Log:        jobLog,
+				DryRun:     jc.DryRun,
+				RunOnStart: jc.RunOnStart,
+			}
+			periodic := job.Periodic(jc.Schedule)
+			jobName = periodic.Name
+			if err := rjobs.RegisterPeriodic(periodic); err != nil {
+				return nil, errors.Wrapf(err, "reconciliation: registering %s", periodic.Name)
 			}
 		}
 
@@ -325,11 +356,11 @@ type storageProviders struct {
 	// address only changes when the registry is reconfigured, which needs a
 	// restart anyway, and a run would otherwise look the same storage up twice
 	// per share.
-	clients map[string]reconciliation.GrantStore
+	clients map[string]provider.ProviderAPIClient
 }
 
 // grants returns the grant API of the provider hosting storageID.
-func (p *storageProviders) grants(ctx context.Context, storageID string) (reconciliation.GrantStore, error) {
+func (p *storageProviders) grants(ctx context.Context, storageID string) (provider.ProviderAPIClient, error) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	if c, ok := p.clients[storageID]; ok {
