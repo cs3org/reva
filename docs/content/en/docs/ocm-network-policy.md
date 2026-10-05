@@ -148,3 +148,37 @@ list is empty. Restart the process after changing the list, the timeout, the
 TLS keys, or (for opt-in services) the proxy environment variables: Go reads
 `HTTP_PROXY`, `HTTPS_PROXY`, and `NO_PROXY` once per process on the first
 `ProxyFromEnvironment` call, and the clients are built once at startup.
+
+## Rate limiting of unauthenticated endpoints
+
+The OCM routes that bypass the HTTP auth middleware are rate limited per
+client with a token bucket. A client over its limit gets `429 Too Many
+Requests` with a `Retry-After` header, before the request reaches the
+handler. The same three keys apply to each service:
+
+| Key | Use |
+|---|---|
+| `unauth_rate_limit` | Sustained requests per minute per client, default 60; a negative value disables limiting |
+| `unauth_rate_limit_burst` | Requests a client may send back-to-back, default 20 |
+| `trusted_proxy_cidrs` | Reverse proxies whose `X-Forwarded-For` identifies the client |
+
+| Service | Limited routes |
+|---|---|
+| `[http.services.ocm]` | all ingress routes (`/shares`, `/invite-accepted`, `/notifications`, `/token`) |
+| `[http.services.wellknown]` | `/.well-known/ocm` |
+| `[http.services.sciencemesh]` | `/federations`, `/discover` |
+
+A client is its IPv4 address, or its IPv6 /64. Without
+`trusted_proxy_cidrs`, every client behind a reverse proxy shares the proxy's
+bucket. With it, `X-Forwarded-For` is walked right to left, skipping trusted
+proxies, and the first untrusted hop is the client. `trusted_proxy_cidrs` is
+separate from the `ocm` service's `trust_forwarded_for` flag. That flag only
+selects the sender IP that inbound shares are checked against. When
+`trust_forwarded_for` is set without `trusted_proxy_cidrs`, the service logs a
+startup warning.
+
+The limit is per service and per process: replicas behind a load balancer each
+keep their own buckets. Remote providers often reach you from a few egress
+addresses and can send legitimate bursts, such as a folder shared with many
+users. Raise the `ocm` limits if partners report 429 responses. An invalid
+`trusted_proxy_cidrs` entry aborts service initialization.

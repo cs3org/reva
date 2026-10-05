@@ -29,6 +29,7 @@ import (
 	"github.com/cs3org/reva/v3/pkg/smtpclient"
 	"github.com/cs3org/reva/v3/pkg/utils/cfg"
 	"github.com/go-chi/chi/v5"
+	"github.com/rs/zerolog"
 )
 
 func init() {
@@ -49,7 +50,7 @@ func New(ctx context.Context, m map[string]any) (global.Service, error) {
 		router: r,
 	}
 
-	if err := s.routerInit(); err != nil {
+	if err := s.routerInit(appctx.GetLogger(ctx)); err != nil {
 		_ = s.Close()
 		return nil, err
 	}
@@ -79,16 +80,9 @@ type config struct {
 	// the public-only OCM discovery client. Empty by default; any invalid entry
 	// aborts service initialization before any directory fetch.
 	AllowedFederationCIDRs []string `mapstructure:"allowed_federation_cidrs"`
-	// UnauthRateLimit is the sustained number of requests per minute allowed
-	// per client on the unauthenticated routes (see Unprotected). 0 selects the
-	// default; a negative value disables limiting.
-	UnauthRateLimit      int `mapstructure:"unauth_rate_limit"`
-	UnauthRateLimitBurst int `mapstructure:"unauth_rate_limit_burst"`
-	// TrustedProxyCIDRs lists the reverse proxies whose X-Forwarded-For header
-	// is trusted to identify the client. Without it, clients behind a proxy
-	// all share the proxy's address and therefore a single rate limit bucket.
-	// Any invalid entry aborts service initialization.
-	TrustedProxyCIDRs []string `mapstructure:"trusted_proxy_cidrs"`
+	// RateLimit guards the unauthenticated routes (see Unprotected), which a
+	// browser hits during the WAYF flow and which trigger outbound requests.
+	RateLimit ratelimit.ServiceConfig `mapstructure:",squash"`
 }
 
 func (c *config) ApplyDefaults() {
@@ -101,27 +95,9 @@ func (c *config) ApplyDefaults() {
 	if c.OCMClientTimeout == 0 {
 		c.OCMClientTimeout = 10
 	}
-	if c.UnauthRateLimit == 0 {
-		c.UnauthRateLimit = 30
-	}
-	if c.UnauthRateLimitBurst == 0 {
-		c.UnauthRateLimitBurst = 10
-	}
+	c.RateLimit.ApplyDefaults()
 
 	c.GatewaySvc = sharedconf.GetGatewaySVC(c.GatewaySvc)
-}
-
-// unauthRateLimiter builds the limiter guarding the unauthenticated routes.
-// It returns a nil limiter (a no-op middleware) when limiting is disabled.
-func (c *config) unauthRateLimiter() (*ratelimit.Limiter, error) {
-	if c.UnauthRateLimit < 0 {
-		return nil, nil
-	}
-	return ratelimit.New(ratelimit.Config{
-		RequestsPerMinute: c.UnauthRateLimit,
-		Burst:             c.UnauthRateLimitBurst,
-		TrustedProxyCIDRs: c.TrustedProxyCIDRs,
-	})
 }
 
 type svc struct {
@@ -130,24 +106,14 @@ type svc struct {
 	limiter *ratelimit.Limiter
 }
 
-func (s *svc) routerInit() error {
+func (s *svc) routerInit(log *zerolog.Logger) error {
 	// Build the limiter before any handler startup I/O, so that an invalid
 	// trusted_proxy_cidrs entry fails fast, like allowed_federation_cidrs.
-	limiter, err := s.conf.unauthRateLimiter()
+	limiter, err := s.conf.RateLimit.NewLimiter(log)
 	if err != nil {
 		return err
 	}
 	s.limiter = limiter
-	log := appctx.GetLogger(context.Background())
-	if limiter == nil {
-		log.Warn().Msg("Rate limiting of unauthenticated routes is disabled")
-	} else {
-		log.Info().
-			Int("requests_per_minute", s.conf.UnauthRateLimit).
-			Int("burst", s.conf.UnauthRateLimitBurst).
-			Int("trusted_proxies", len(s.conf.TrustedProxyCIDRs)).
-			Msg("Rate limiting unauthenticated routes")
-	}
 	unauth := limiter.Middleware
 
 	tokenHandler := new(tokenHandler)
