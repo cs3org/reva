@@ -145,9 +145,11 @@ validator and the received-webapp check:
 
 - `must-exchange-token` is mandatory.
 - Blank, padded, and unknown requirements are rejected.
-- `must-use-mfa` is recognized and permanently rejected. This receiver does
-  not check or claim a session proof. The rejection text is: "protocol
-  webapp requirement must-use-mfa cannot be satisfied by this receiver".
+- `must-use-mfa` is rejected by the default `mfa_policy = "reject"`. Setting
+  `mfa_policy = "off"` under `[http.services.wellknown.ocmprovider]` skips that
+  admission check for both ingest and launch. It does not verify a session
+  proof or advertise `enforce-mfa`. The rejection text is: "protocol webapp
+  requirement must-use-mfa cannot be satisfied by this receiver".
 
 A webapp is kept only when discovery for that share shows `exchange-token`
 and a usable token endpoint. The endpoint may be absolute http or https, or
@@ -197,12 +199,14 @@ empty override accepts no webapp share.
 This service does not implement the whole webapp profile that an
 `apiVersion` of 1.4.0 might suggest:
 
-- `must-use-mfa` is rejected rather than satisfied.
+- `must-use-mfa` is rejected by default; the off policy skips admission
+  without proving MFA.
 - `iframe` is not a usable receive target.
 - Discovery does not advertise `enforce-mfa`, HTTP request signatures, or
   `jwksUri`.
-- There is no second launch-policy check beyond the https rule used by
-  open-in-app.
+- The browser application URI has no additional origin allowlist beyond the
+  HTTPS and URI validation. Server discovery and exchange enforce the
+  configured OCM network policy.
 - `expired_session_redirect_uri` session-redirect completion is not
   implemented; this service does not perform or advertise session-redirect
   handoff.

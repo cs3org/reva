@@ -264,7 +264,7 @@ func (h *sharesHandler) CreateShare(w http.ResponseWriter, r *http.Request) {
 
 	disco, err := h.ocmClient.Discover(ctx, sender.Idp)
 	if err != nil {
-		reqres.WriteError(w, r, reqres.APIErrorInvalidParameter, "error discovering the remote OCM server", err)
+		rejectShare(w, r, err)
 		return
 	}
 	if err := verifySignature(ctx, h.ocmClient, r, body, h.endpoint, h.strictHTTPSig, disco); err != nil {
