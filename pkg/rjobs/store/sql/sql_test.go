@@ -299,3 +299,40 @@ func TestProgress(t *testing.T) {
 		t.Errorf("unexpected progress %+v at %v", got.Progress, got.ProgressAt)
 	}
 }
+
+func TestPrune(t *testing.T) {
+	s := newTestStore(t)
+	ctx := context.Background()
+	now := time.Now().UTC().Truncate(time.Second)
+	old := now.Add(-48 * time.Hour)
+
+	put := func(id string, state rjobs.State, finished *time.Time) {
+		t.Helper()
+		if err := s.Put(ctx, rjobs.Status{RunID: rjobs.RunID(id), Job: "j", State: state, EnqueuedAt: old, FinishedAt: finished}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	put("old-1", rjobs.StateSucceeded, &old)
+	put("old-2", rjobs.StateCancelled, &old)
+	put("old-3", rjobs.StateAborted, &old)
+	put("old-failed", rjobs.StateFailed, &old) // not terminal: kept
+	put("new", rjobs.StateSucceeded, &now)
+	put("queued", rjobs.StateQueued, nil)
+
+	p := s.(rjobs.RunPruner)
+	before := now.Add(-time.Hour)
+	if n, err := p.Prune(ctx, before, 2); err != nil || n != 2 {
+		t.Fatalf("first batch: deleted %d, err %v", n, err)
+	}
+	if n, err := p.Prune(ctx, before, 2); err != nil || n != 1 {
+		t.Fatalf("second batch: deleted %d, err %v", n, err)
+	}
+
+	runs, err := s.List(ctx, rjobs.ListFilter{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(runs) != 3 {
+		t.Fatalf("expected the failed, new and queued runs to stay, got %d", len(runs))
+	}
+}
