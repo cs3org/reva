@@ -304,7 +304,21 @@ func (s *Server) getHandler() (http.Handler, error) {
 		handler = m(handler)
 	}
 
-	return handler, nil
+	return s.rejectDotSegments(handler), nil
+}
+
+// rejectDotSegments makes auth, which matches the path as sent, and routing, which cleans it, agree.
+func (s *Server) rejectDotSegments(h http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		for seg := range strings.SplitSeq(r.URL.Path, "/") {
+			if seg == "." || seg == ".." {
+				s.log.Warn().Str("method", r.Method).Str("uri", r.RequestURI).Str("remote", r.RemoteAddr).Msg("rejected request with dot segments in path")
+				http.Error(w, "path must not contain . or .. segments", http.StatusBadRequest)
+				return
+			}
+		}
+		h.ServeHTTP(w, r)
+	})
 }
 
 // withServiceLogger stamps the service owning the routed prefix onto the
