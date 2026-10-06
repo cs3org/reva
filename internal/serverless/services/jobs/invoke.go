@@ -242,5 +242,11 @@ func statusMap(s rjobs.Status) map[string]any {
 	if s.Result != nil {
 		m["result"] = s.Result
 	}
+	if s.Progress != nil {
+		m["progress"] = s.Progress
+	}
+	if s.ProgressAt != nil {
+		m["progress_at"] = s.ProgressAt.UTC().Format(time.RFC3339)
+	}
 	return m
 }

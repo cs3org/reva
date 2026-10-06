@@ -50,8 +50,11 @@ type config struct {
 	// without a heartbeat before it is redelivered. The runner heartbeats well
 	// within this window, so it bounds detection of a dead worker, not the
 	// maximum job duration.
-	AckWaitSeconds int               `mapstructure:"ack_wait_seconds"`
-	StatusDB       revadcfg.Database `mapstructure:"status_db"`
+	AckWaitSeconds int `mapstructure:"ack_wait_seconds"`
+	// ProgressIntervalSeconds is how often the progress of a running run is
+	// persisted. Defaults to 10.
+	ProgressIntervalSeconds int               `mapstructure:"progress_interval_seconds"`
+	StatusDB                revadcfg.Database `mapstructure:"status_db"`
 	// OnDemand holds the configuration of the on-demand jobs, keyed by job
 	// name. Each entry is the job's own config section and is handed to the
 	// job's constructor when a run is dispatched. Job names contain dots, so
@@ -105,8 +108,9 @@ func New(ctx context.Context, m map[string]any) (rserverless.Service, error) {
 // for single-node setups that only warm local caches.
 func (s *svc) Start() {
 	opts := rjobs.Options{
-		Workers:        s.conf.WorkerPoolSize,
-		OnDemandConfig: s.conf.OnDemand,
+		Workers:          s.conf.WorkerPoolSize,
+		OnDemandConfig:   s.conf.OnDemand,
+		ProgressInterval: time.Duration(s.conf.ProgressIntervalSeconds) * time.Second,
 	}
 
 	// the durable queue and the status store go together: on-demand and

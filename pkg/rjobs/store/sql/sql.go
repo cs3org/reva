@@ -25,6 +25,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"time"
 
 	"github.com/cs3org/reva/v3/cmd/revad/pkg/config"
 	"github.com/cs3org/reva/v3/pkg/errtypes"
@@ -70,10 +71,11 @@ func (s *store) Put(ctx context.Context, st rjobs.Status) error {
 	if err != nil {
 		return err
 	}
-	// later transition. The reservation column is owned by Reserve/Release and
-	// the cancel intent by RequestCancel, so both are omitted here: a lifecycle
-	// write must never wipe a live reservation or clobber a concurrent cancel.
-	res := s.db.WithContext(ctx).Omit("ActiveDedupKey", "CancelRequested").Save(row)
+	// later transition. The reservation column is owned by Reserve/Release, the
+	// cancel intent by RequestCancel and the progress by PutProgress, so they are
+	// omitted here: a lifecycle write must never wipe a live reservation, clobber
+	// a concurrent cancel or drop the progress.
+	res := s.db.WithContext(ctx).Omit("ActiveDedupKey", "CancelRequested", "Progress", "ProgressAt").Save(row)
 	if res.Error != nil {
 		return errors.Wrap(res.Error, "rjobs sql: storing status failed")
 	}
@@ -101,6 +103,28 @@ func (s *store) RequestCancel(ctx context.Context, id rjobs.RunID) (rjobs.Status
 	// NotFound from Get.
 	return s.Get(ctx, id)
 }
+
+// PutProgress records the latest progress of a run that is not terminal yet, so
+// a late write can never replace the final snapshot.
+func (s *store) PutProgress(ctx context.Context, id rjobs.RunID, p rjobs.Progress, at time.Time) error {
+	b, err := json.Marshal(p)
+	if err != nil {
+		return errors.Wrap(err, "rjobs sql: marshalling progress failed")
+	}
+	res := s.db.WithContext(ctx).Model(&model.Run{}).
+		Where("run_id = ? AND state NOT IN ?", string(id), terminalStates).
+		Updates(map[string]any{
+			"progress":    datatypes.JSON(b),
+			"progress_at": at,
+		})
+	if res.Error != nil {
+		return errors.Wrap(res.Error, "rjobs sql: storing progress failed")
+	}
+	return nil
+}
+
+// terminalStates are the states a run never leaves.
+var terminalStates = []string{string(rjobs.StateSucceeded), string(rjobs.StateCancelled)}
 
 func (s *store) Get(ctx context.Context, id rjobs.RunID) (rjobs.Status, error) {
 	var row model.Run
@@ -259,8 +283,16 @@ func fromModel(row model.Run) (rjobs.Status, error) {
 		FinishedAt:      row.FinishedAt,
 		LastError:       row.LastError,
 		CancelRequested: row.CancelRequested,
+		ProgressAt:      row.ProgressAt,
 	}
 	st.Owner = row.Owner
+	if len(row.Progress) > 0 {
+		var p rjobs.Progress
+		if err := json.Unmarshal(row.Progress, &p); err != nil {
+			return rjobs.Status{}, errors.Wrap(err, "rjobs sql: unmarshalling progress failed")
+		}
+		st.Progress = &p
+	}
 	if len(row.Result) > 0 {
 		var p rjobs.Params
 		if err := json.Unmarshal(row.Result, &p); err != nil {

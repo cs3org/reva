@@ -214,11 +214,22 @@ message JobDefinition {
   string overlap = 5;  // periodic only: "skip" | "allow"
 }
 
+// JobProgress is the latest progress a run reported.
+message JobProgress {
+  string phase = 1;
+  int64 done = 2;
+  int64 total = 3; // 0 while unknown
+  string unit = 4;
+  string details_json = 5;
+  string at = 6; // RFC3339, when the run reported it
+}
+
 // ActiveJobRun is one run executing on a runner right now.
 message ActiveJobRun {
   string run_id = 1;
   string job = 2;
   string started = 3; // RFC3339
+  JobProgress progress = 4;
 }
 
 // JobRunnerInfo is one runner's live self-report; error is set instead of the
@@ -247,6 +258,7 @@ message JobRun {
   string last_error = 9;
   bool cancel_requested = 10;
   string result_json = 11; // the job's result payload as JSON
+  JobProgress progress = 12;
 }
 
 message InspectJobsRequest {
