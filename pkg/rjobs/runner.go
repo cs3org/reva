@@ -58,18 +58,22 @@ type Options struct {
 	// job's constructor; a job with no entry is built with a nil map and falls
 	// back to its own defaults.
 	OnDemandConfig map[string]map[string]any
+	// ProgressInterval is how often the progress of a running run is
+	// persisted. Defaults to 10 seconds.
+	ProgressInterval time.Duration
 }
 
 // Runner owns the scheduling, dispatching and execution of jobs. A process
 // has a single Runner, created by the jobs service and reachable through
 // Default for in-process Enqueue.
 type Runner struct {
-	workers        int
-	store          Store
-	status         StatusStore
-	log            zerolog.Logger
-	periodic       []Periodic
-	onDemandConfig map[string]map[string]any
+	workers          int
+	store            Store
+	status           StatusStore
+	log              zerolog.Logger
+	periodic         []Periodic
+	onDemandConfig   map[string]map[string]any
+	progressInterval time.Duration
 
 	cancel context.CancelFunc
 	wg     sync.WaitGroup
@@ -100,6 +104,7 @@ type Runner struct {
 type runHandle struct {
 	job       string
 	started   time.Time
+	progress  *progressReporter
 	cancel    context.CancelFunc
 	cancelled atomic.Bool
 	once      sync.Once
@@ -119,17 +124,21 @@ func NewRunner(ctx context.Context, opts Options) (*Runner, error) {
 	if opts.Workers <= 0 {
 		opts.Workers = 4
 	}
+	if opts.ProgressInterval <= 0 {
+		opts.ProgressInterval = defaultProgressInterval
+	}
 
 	r := &Runner{
-		workers:        opts.Workers,
-		store:          opts.Store,
-		status:         opts.Status,
-		log:            *appctx.GetLogger(ctx),
-		periodic:       registeredPeriodic(),
-		onDemandConfig: opts.OnDemandConfig,
-		running:        make(map[string]bool),
-		cancels:        make(map[RunID]*runHandle),
-		known:          make(map[string]time.Time),
+		workers:          opts.Workers,
+		store:            opts.Store,
+		status:           opts.Status,
+		log:              *appctx.GetLogger(ctx),
+		periodic:         registeredPeriodic(),
+		onDemandConfig:   opts.OnDemandConfig,
+		progressInterval: opts.ProgressInterval,
+		running:          make(map[string]bool),
+		cancels:          make(map[RunID]*runHandle),
+		known:            make(map[string]time.Time),
 	}
 
 	// leader-scoped and on-demand work both need a store.
@@ -656,7 +665,7 @@ func (r *Runner) execRun(ctx context.Context, run Run) {
 	// this specific run. It derives from ctx, so a shutdown still cancels it too;
 	// the runHandle.cancelled flag is what tells the two apart below.
 	runCtx, cancel := context.WithCancel(ctx)
-	h := &runHandle{job: run.Job, started: time.Now(), cancel: cancel}
+	h := &runHandle{job: run.Job, started: time.Now(), cancel: cancel, progress: &progressReporter{}}
 	r.registerRun(run.ID, h)
 	defer r.deregisterRun(run.ID)
 	defer cancel()
@@ -675,7 +684,10 @@ func (r *Runner) execRun(ctx context.Context, run Run) {
 
 	r.recordStatus(ctx, run, StateRunning, nil, nil, h.started, log)
 
-	result, err := r.invoke(runCtx, run, log)
+	// the final progress snapshot is written before the terminal status.
+	stopProgress := r.startProgressWriter(ctx, run, h.progress, log)
+	result, err := r.invoke(runCtx, run, h.progress, log)
+	stopProgress()
 
 	// An explicit cancellation wins over the job's return value: the run is
 	// terminal and must not be retried, whether the job returned an error or
@@ -839,8 +851,9 @@ func (r *Runner) recordStatus(ctx context.Context, run Run, state State, result 
 // invoke dispatches a run to the right registered job. Periodic runs (empty
 // Params and a known periodic name) call the periodic Run closure; everything
 // else is an on-demand job. The returned Params are the on-demand job's result
-// (always nil for periodic runs).
-func (r *Runner) invoke(ctx context.Context, run Run, log zerolog.Logger) (Params, error) {
+// (always nil for periodic runs). A job implementing ProgressJob reports its
+// progress to rep.
+func (r *Runner) invoke(ctx context.Context, run Run, rep Reporter, log zerolog.Logger) (Params, error) {
 	jobCtx := appctx.WithLogger(ctx, &log)
 
 	if p, ok := r.lookupPeriodic(run.Job); ok {
@@ -854,6 +867,9 @@ func (r *Runner) invoke(ctx context.Context, run Run, log zerolog.Logger) (Param
 	job, err := newFunc(jobCtx, r.onDemandConfig[run.Job])
 	if err != nil {
 		return nil, errors.Wrap(err, "rjobs: building on-demand job failed")
+	}
+	if pj, ok := job.(ProgressJob); ok && rep != nil {
+		return pj.RunWithProgress(jobCtx, run.Params, rep)
 	}
 	return job.Run(jobCtx, run.Params)
 }

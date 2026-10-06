@@ -195,6 +195,23 @@ st, err := rjobs.Default().Status(ctx, runID)
 Note that `failed` is **not terminal**: a failed run is retried, so `failed`
 means "the last attempt failed, another is coming".
 
+### Reporting progress
+
+A job that implements `rjobs.ProgressJob` gets `RunWithProgress` called instead
+of `Run`, with a `Reporter` to report how far it has got. `Report` never blocks;
+the runner persists the latest snapshot every `progress_interval_seconds` and
+once more when the job returns. It shows up in `Status.Progress` and in
+`reva admin jobs status` and `active`.
+
+```go
+func (j *exportJob) RunWithProgress(ctx context.Context, p rjobs.Params, r rjobs.Reporter) (rjobs.Params, error) {
+    for i, f := range files {
+        r.Report(rjobs.Progress{Phase: "export", Done: int64(i), Total: int64(len(files)), Unit: "files"})
+        // ...
+    }
+}
+```
+
 ### Listing a user's runs
 
 `ListByOwner` returns the runs created for a user with `WithOwner`, most
@@ -261,6 +278,7 @@ extra run, not a reschedule. Like `Enqueue`, all of these are in-process today.
 ```toml
 [serverless.services.jobs]
 worker_pool_size = 4
+progress_interval_seconds = 10
 nats_address     = "nats:4222"   # omit to run only ScopeAllNodes jobs
 nats_prefix      = "reva-jobs"
 

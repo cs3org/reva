@@ -197,10 +197,10 @@ func TestInvokePassesOnDemandConfig(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if _, err := r.invoke(context.Background(), Run{Job: "test.configured"}, r.log); err != nil {
+	if _, err := r.invoke(context.Background(), Run{Job: "test.configured"}, nil, r.log); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := r.invoke(context.Background(), Run{Job: "test.bare"}, r.log); err != nil {
+	if _, err := r.invoke(context.Background(), Run{Job: "test.bare"}, nil, r.log); err != nil {
 		t.Fatal(err)
 	}
 
@@ -240,8 +240,22 @@ func (f *fakeStatus) Put(_ context.Context, s Status) error {
 	defer f.mu.Unlock()
 	if cur, ok := f.rec[s.RunID]; ok {
 		s.CancelRequested = cur.CancelRequested
+		s.Progress, s.ProgressAt = cur.Progress, cur.ProgressAt
 	}
 	f.rec[s.RunID] = s
+	return nil
+}
+
+// PutProgress, like the real store, only touches a run that is not terminal.
+func (f *fakeStatus) PutProgress(_ context.Context, id RunID, p Progress, at time.Time) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	s, ok := f.rec[id]
+	if !ok || s.State == StateSucceeded || s.State == StateCancelled {
+		return nil
+	}
+	s.Progress, s.ProgressAt = &p, &at
+	f.rec[id] = s
 	return nil
 }
 
@@ -682,5 +696,62 @@ func TestEnqueueJobRegisteredElsewhere(t *testing.T) {
 	_, err = r.Enqueue(context.Background(), "remote.typo", nil)
 	if _, ok := err.(errtypes.IsNotFound); !ok {
 		t.Errorf("expected NotFound for a job no runner registered, got %v", err)
+	}
+}
+
+// progressJob reports a few snapshots and returns.
+type progressJob struct{}
+
+func (progressJob) Run(context.Context, Params) (Params, error) { return nil, nil }
+
+func (progressJob) RunWithProgress(_ context.Context, _ Params, r Reporter) (Params, error) {
+	details := Params{}
+	for i := range 3 {
+		details["file"] = i
+		r.Report(Progress{Phase: "copy", Done: int64(i + 1), Total: 3, Details: details})
+	}
+	details["file"] = "changed after report"
+	return nil, nil
+}
+
+func TestProgressFinalSnapshot(t *testing.T) {
+	resetRegistry()
+	if err := RegisterOnDemand("test.progress", func(context.Context, map[string]any) (Job, error) {
+		return progressJob{}, nil
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	status := newFakeStatus()
+	store := &oneRunStore{run: Run{ID: "run-1", Job: "test.progress", Attempt: 1}}
+	_ = status.Put(context.Background(), Status{RunID: "run-1", Job: "test.progress", State: StateQueued})
+
+	r, err := NewRunner(context.Background(), Options{Workers: 1, Store: store, Status: status, ProgressInterval: time.Hour})
+	if err != nil {
+		t.Fatal(err)
+	}
+	r.Start()
+	defer r.Stop(context.Background())
+
+	deadline := time.After(2 * time.Second)
+	for !store.completed.Load() {
+		select {
+		case <-deadline:
+			t.Fatal("run did not complete")
+		case <-time.After(5 * time.Millisecond):
+		}
+	}
+
+	got, _ := status.Get(context.Background(), "run-1")
+	if got.State != StateSucceeded {
+		t.Fatalf("state = %q, want succeeded", got.State)
+	}
+	// the final snapshot is written before the terminal status, even though the
+	// interval never ticked.
+	if got.Progress == nil || got.Progress.Done != 3 {
+		t.Fatalf("final progress not recorded: %+v", got.Progress)
+	}
+	if got.Progress.Details["file"] != 2 {
+		t.Errorf("reported details must be copied, got %v", got.Progress.Details)
 	}
 }

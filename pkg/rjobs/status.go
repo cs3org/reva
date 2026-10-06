@@ -73,6 +73,10 @@ type Status struct {
 	// The worker executing the run observes it and stops; a still-queued run is
 	// dropped when claimed. It stays false for runs that were never cancelled.
 	CancelRequested bool
+	// Progress is the latest progress the run reported, and ProgressAt when it
+	// reported it; both nil for a run that never reported progress.
+	Progress   *Progress
+	ProgressAt *time.Time
 }
 
 // Internal reports whether the run was created by reva itself rather than on

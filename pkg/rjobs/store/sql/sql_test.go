@@ -266,3 +266,36 @@ func TestRequestCancelTerminalIsNoop(t *testing.T) {
 		t.Error("expected NotFound cancelling an unknown run")
 	}
 }
+
+func TestProgress(t *testing.T) {
+	s := newTestStore(t)
+	ps := s.(rjobs.ProgressStore)
+	ctx := context.Background()
+	now := time.Now().UTC().Truncate(time.Second)
+
+	run := rjobs.Status{RunID: "run-p", Job: "j", State: rjobs.StateRunning, Attempt: 1, EnqueuedAt: now}
+	if err := s.Put(ctx, run); err != nil {
+		t.Fatal(err)
+	}
+	if err := ps.PutProgress(ctx, "run-p", rjobs.Progress{Phase: "copy", Done: 5, Total: 10, Unit: "bytes"}, now); err != nil {
+		t.Fatal(err)
+	}
+
+	// a lifecycle write keeps the progress.
+	run.State = rjobs.StateSucceeded
+	if err := s.Put(ctx, run); err != nil {
+		t.Fatal(err)
+	}
+	// a write after the run is terminal is ignored.
+	if err := ps.PutProgress(ctx, "run-p", rjobs.Progress{Done: 1}, now); err != nil {
+		t.Fatal(err)
+	}
+
+	got, err := s.Get(ctx, "run-p")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Progress == nil || got.Progress.Done != 5 || got.Progress.Phase != "copy" || got.ProgressAt == nil {
+		t.Errorf("unexpected progress %+v at %v", got.Progress, got.ProgressAt)
+	}
+}

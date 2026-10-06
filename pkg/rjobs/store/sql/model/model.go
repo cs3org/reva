@@ -51,6 +51,11 @@ type Run struct {
 
 	// CancelRequested is set once a cancellation has been requested for the run.
 	CancelRequested bool
+
+	// Progress is the latest progress snapshot of the run, written by
+	// PutProgress only, and ProgressAt when the run reported it.
+	Progress   datatypes.JSON `gorm:"type:json"`
+	ProgressAt *time.Time
 }
 
 // TableName sets the table name explicitly so it does not collide with other
