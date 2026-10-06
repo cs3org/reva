@@ -161,6 +161,20 @@ func (s *svc) buildInvokeSet() *invoke.Set {
 			return invoke.Result{"stopped": a.String("job")}, nil
 		})
 
+	set.Add("forget", "Drop the queue state of an on-demand job no runner registers anymore.").
+		Arg("job", "the job name").
+		Mutating().
+		Handle(func(ctx context.Context, a invoke.Args) (invoke.Result, error) {
+			r, err := s.ready()
+			if err != nil {
+				return nil, err
+			}
+			if err := r.ForgetJob(ctx, a.String("job")); err != nil {
+				return nil, err
+			}
+			return invoke.Result{"forgotten": a.String("job")}, nil
+		})
+
 	return set
 }
 

@@ -204,6 +204,17 @@ func (s *svc) CancelPeriodicJob(ctx context.Context, req *adminpb.CancelPeriodic
 	return &adminpb.CancelPeriodicJobResponse{}, nil
 }
 
+func (s *svc) ForgetJob(ctx context.Context, req *adminpb.ForgetJobRequest) (*adminpb.ForgetJobResponse, error) {
+	if req.Job == "" {
+		return nil, status.Error(codes.InvalidArgument, "admin: job is required")
+	}
+	if _, err := s.invokeJobsOne(ctx, "forget", map[string]string{"job": req.Job}); err != nil {
+		return nil, err
+	}
+	s.auditJob(ctx, "forget_job", req.Job, nil)
+	return &adminpb.ForgetJobResponse{}, nil
+}
+
 // auditJob records a jobs mutation.
 func (s *svc) auditJob(ctx context.Context, action, target string, fields map[string]string) {
 	admin.Audit(ctx, admin.AuditEvent{Action: action, Actor: actorName(ctx), Target: target, Fields: fields})
