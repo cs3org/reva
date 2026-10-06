@@ -76,8 +76,9 @@ type Store interface {
 	// Enqueue persists a ready-to-run job instance and returns its id.
 	Enqueue(ctx context.Context, run Run) (RunID, error)
 	// Claim atomically leases the next ready run to the caller. It blocks
-	// until a run is available or ctx is cancelled.
-	Claim(ctx context.Context) (Run, error)
+	// until a run is available or ctx is cancelled. It only claims runs of the
+	// given jobs.
+	Claim(ctx context.Context, jobs []string) (Run, error)
 	// Complete acknowledges a run as successfully processed.
 	Complete(ctx context.Context, id RunID) error
 	// Fail marks a run as failed and schedules it to become claimable again

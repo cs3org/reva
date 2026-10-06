@@ -28,6 +28,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"math/rand/v2"
 	"sync"
 	"time"
 
@@ -83,7 +84,7 @@ const (
 type store struct {
 	nc      *nats.Conn
 	js      nats.JetStreamContext
-	subs    []*nats.Subscription
+	subs    map[string]*nats.Subscription // by job name
 	kv      nats.KeyValue
 	prefix  string
 	ackWait time.Duration
@@ -152,6 +153,7 @@ func New(ctx context.Context, opts Options) (rjobs.Store, error) {
 		prefix:    opts.Prefix,
 		ackWait:   opts.AckWait,
 		log:       log,
+		subs:      make(map[string]*nats.Subscription),
 		inflight:  make(map[rjobs.RunID]*nats.Msg),
 		scheduled: make(map[string]struct{}),
 	}
@@ -222,7 +224,7 @@ func (s *store) setup(ackWait time.Duration, jobs []rjobs.QueueJob) error {
 		if err != nil {
 			return errors.Wrapf(err, "rjobs: pull subscription failed for job %q", job)
 		}
-		s.subs = append(s.subs, sub)
+		s.subs[job] = sub
 	}
 
 	kv, err := s.js.CreateKeyValue(&nats.KeyValueConfig{Bucket: s.bucketName()})
@@ -330,24 +332,33 @@ func (s *store) Enqueue(ctx context.Context, run rjobs.Run) (rjobs.RunID, error)
 	return run.ID, nil
 }
 
-func (s *store) Claim(ctx context.Context) (rjobs.Run, error) {
-	if len(s.subs) == 0 {
+func (s *store) Claim(ctx context.Context, jobs []string) (rjobs.Run, error) {
+	var subs []*nats.Subscription
+	for _, job := range jobs {
+		if sub, ok := s.subs[job]; ok {
+			subs = append(subs, sub)
+		}
+	}
+	if len(subs) == 0 {
 		// no registered jobs: nothing to claim, block until shutdown.
 		<-ctx.Done()
 		return rjobs.Run{}, ctx.Err()
 	}
 
-	// Poll each per-job subscription in turn. The per-subscription fetch wait
-	// is spread so a full no-work cycle takes about fetchWait regardless of how
-	// many jobs are registered.
-	perSubWait := max(fetchWait/time.Duration(len(s.subs)), 100*time.Millisecond)
+	// Poll each per-job subscription in turn, from a random one, so a busy job
+	// cannot keep the others waiting. The per-subscription fetch wait is spread
+	// so a full no-work cycle takes about fetchWait regardless of how many jobs
+	// are registered.
+	perSubWait := max(fetchWait/time.Duration(len(subs)), 100*time.Millisecond)
 
 	for {
 		if err := ctx.Err(); err != nil {
 			return rjobs.Run{}, err
 		}
 
-		for _, sub := range s.subs {
+		start := rand.IntN(len(subs))
+		for k := range subs {
+			sub := subs[(start+k)%len(subs)]
 			if err := ctx.Err(); err != nil {
 				return rjobs.Run{}, err
 			}

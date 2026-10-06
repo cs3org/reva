@@ -21,6 +21,9 @@ package rjobs
 import (
 	"context"
 	"errors"
+	"maps"
+	"slices"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -32,7 +35,7 @@ import (
 func TestAllNodesRunOnStart(t *testing.T) {
 	resetRegistry()
 
-	var runs int32
+	var runs atomic.Int32
 	done := make(chan struct{}, 1)
 	err := RegisterPeriodic(Periodic{
 		Name:       "test.warm",
@@ -40,7 +43,7 @@ func TestAllNodesRunOnStart(t *testing.T) {
 		Scope:      ScopeAllNodes,
 		RunOnStart: true,
 		Run: func(ctx context.Context) error {
-			if atomic.AddInt32(&runs, 1) == 1 {
+			if runs.Add(1) == 1 {
 				done <- struct{}{}
 			}
 			return nil
@@ -93,7 +96,7 @@ func TestStoreRequiresStatusStore(t *testing.T) {
 type stubStore struct{}
 
 func (stubStore) Enqueue(context.Context, Run) (RunID, error)      { return "", nil }
-func (stubStore) Claim(context.Context) (Run, error)               { return Run{}, nil }
+func (stubStore) Claim(context.Context, []string) (Run, error)     { return Run{}, nil }
 func (stubStore) Complete(context.Context, RunID) error            { return nil }
 func (stubStore) Fail(context.Context, RunID, time.Duration) error { return nil }
 func (stubStore) Heartbeat(context.Context, RunID) error           { return nil }
@@ -314,7 +317,7 @@ type oneRunStore struct {
 
 func (s *oneRunStore) Enqueue(_ context.Context, r Run) (RunID, error) { return r.ID, nil }
 
-func (s *oneRunStore) Claim(ctx context.Context) (Run, error) {
+func (s *oneRunStore) Claim(ctx context.Context, _ []string) (Run, error) {
 	if s.claimed.CompareAndSwap(false, true) {
 		return s.run, nil
 	}
@@ -446,7 +449,7 @@ func TestCancelBroadcastStopsRemoteRun(t *testing.T) {
 	}
 
 	status := newFakeStatus()
-	store := &busStore{oneRunStore: oneRunStore{run: Run{ID: "run-1", Job: "test.remote", Attempt: 1}}}
+	store := &busStore{run: Run{ID: "run-1", Job: "test.remote", Attempt: 1}}
 	_ = status.Put(context.Background(), Status{RunID: "run-1", Job: "test.remote", State: StateQueued})
 
 	r, err := NewRunner(context.Background(), Options{Workers: 1, Store: store, Status: status})
@@ -556,7 +559,7 @@ type periodicStore struct {
 
 func (s *periodicStore) Enqueue(_ context.Context, r Run) (RunID, error) { return r.ID, nil }
 
-func (s *periodicStore) Claim(ctx context.Context) (Run, error) {
+func (s *periodicStore) Claim(ctx context.Context, _ []string) (Run, error) {
 	if s.claimed.CompareAndSwap(false, true) {
 		s.mu.Lock()
 		s.running = true
@@ -813,5 +816,75 @@ func TestPermanent(t *testing.T) {
 	}
 	if st.State != StateAborted || st.FinishedAt == nil || st.LastError != "source is gone" {
 		t.Errorf("unexpected status %+v", st)
+	}
+}
+
+// claimsStore records the jobs of every Claim call and has no runs.
+type claimsStore struct {
+	stubStore
+	mu    sync.Mutex
+	calls []string
+}
+
+func (s *claimsStore) Claim(ctx context.Context, jobs []string) (Run, error) {
+	s.mu.Lock()
+	s.calls = append(s.calls, strings.Join(slices.Sorted(slices.Values(jobs)), ","))
+	s.mu.Unlock()
+	<-ctx.Done()
+	return Run{}, ctx.Err()
+}
+
+func TestWorkersSplitByJob(t *testing.T) {
+	resetRegistry()
+	newJob := func(context.Context, map[string]any) (Job, error) { return nil, nil }
+	for _, name := range []string{"test.capped", "test.free"} {
+		if err := RegisterOnDemand(name, newJob); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := RegisterPeriodic(Periodic{
+		Name: "test.lead", Schedule: "@every 1h", Scope: ScopeLeader,
+		Run: func(context.Context) error { return nil },
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	store := &claimsStore{}
+	r, err := NewRunner(context.Background(), Options{
+		Workers: 4, Store: store, Status: newFakeStatus(),
+		MaxConcurrent: map[string]int{"test.capped": 2}, PeriodicReserve: 1,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	r.Start()
+	defer r.Stop(context.Background())
+
+	deadline := time.After(2 * time.Second)
+	for {
+		store.mu.Lock()
+		n := len(store.calls)
+		store.mu.Unlock()
+		if n == 4 {
+			break
+		}
+		select {
+		case <-deadline:
+			t.Fatalf("expected 4 dispatchers, got %d", n)
+		case <-time.After(5 * time.Millisecond):
+		}
+	}
+
+	got := make(map[string]int)
+	store.mu.Lock()
+	for _, c := range store.calls {
+		got[c]++
+	}
+	store.mu.Unlock()
+	// the capped job has its workers, the reserve is kept for the leader job
+	// and the other worker claims the uncapped jobs.
+	want := map[string]int{"test.capped": 2, "test.lead": 1, "test.free,test.lead": 1}
+	if !maps.Equal(got, want) {
+		t.Fatalf("dispatchers claim %v, want %v", got, want)
 	}
 }
