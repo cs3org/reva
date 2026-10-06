@@ -76,7 +76,7 @@ func (c *OcmProviderConfig) ApplyDefaults() {
 		c.WebdavRoot += "/"
 	}
 	if c.InviteAcceptDialog == "" {
-		c.InviteAcceptDialog = "/sciencemesh/accept-invite"
+		c.InviteAcceptDialog = "/open-cloud-mesh/accept-invite"
 	}
 }
 
