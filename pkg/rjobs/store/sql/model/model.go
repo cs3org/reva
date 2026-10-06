@@ -29,11 +29,11 @@ import (
 type Run struct {
 	RunID      string `gorm:"primaryKey;size:255"`
 	Job        string `gorm:"index;size:255"`
-	State      string `gorm:"index;size:32"`
+	State      string `gorm:"index;index:idx_prune,priority:1;size:32"`
 	Attempt    int
 	EnqueuedAt time.Time
 	StartedAt  *time.Time
-	FinishedAt *time.Time
+	FinishedAt *time.Time     `gorm:"index:idx_prune,priority:2"`
 	LastError  string         `gorm:"type:text"`
 	Result     datatypes.JSON `gorm:"type:json"`
 
