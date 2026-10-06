@@ -97,6 +97,11 @@ type Runner struct {
 	cancelsMu sync.Mutex
 	cancels   map[RunID]*runHandle
 
+	// pauseMu guards resumed, which is non-nil while the runner is paused and
+	// closed when it resumes.
+	pauseMu sync.Mutex
+	resumed chan struct{}
+
 	// known caches, per job name, until when the store last confirmed that some
 	// runner registered a job this process does not run.
 	knownMu sync.Mutex
@@ -116,6 +121,36 @@ type runHandle struct {
 	cancel    context.CancelFunc
 	cancelled atomic.Bool
 	once      sync.Once
+
+	// handOff is the HandOff of the running job, if it implements HandOffJob.
+	// handedOff makes sure it is called at most once.
+	handOffMu sync.Mutex
+	handOff   func()
+	handedOff bool
+}
+
+// setHandOff records the job's HandOff, and calls it at once when the runner is
+// already paused.
+func (h *runHandle) setHandOff(f func(), paused bool) {
+	h.handOffMu.Lock()
+	h.handOff = f
+	h.handOffMu.Unlock()
+	if paused {
+		h.handOffNow()
+	}
+}
+
+// handOffNow calls the job's HandOff, if it has one and was not handed off yet.
+func (h *runHandle) handOffNow() {
+	h.handOffMu.Lock()
+	f := h.handOff
+	if f == nil || h.handedOff {
+		h.handOffMu.Unlock()
+		return
+	}
+	h.handedOff = true
+	h.handOffMu.Unlock()
+	f()
 }
 
 // trip marks the run cancelled and cancels its context. Only the first call has
@@ -518,6 +553,66 @@ func (r *Runner) CancelPeriodic(ctx context.Context, job string) error {
 	return nil
 }
 
+// Pause stops the runner from claiming new runs, e.g. while its node is
+// drained, and asks the running jobs that implement HandOffJob to hand their
+// work off. Running jobs are not stopped. It is a no-op when already paused.
+func (r *Runner) Pause() {
+	r.pauseMu.Lock()
+	if r.resumed != nil {
+		r.pauseMu.Unlock()
+		return
+	}
+	r.resumed = make(chan struct{})
+	r.pauseMu.Unlock()
+	r.log.Info().Msg("rjobs: runner paused")
+
+	r.cancelsMu.Lock()
+	handles := make([]*runHandle, 0, len(r.cancels))
+	for _, h := range r.cancels {
+		handles = append(handles, h)
+	}
+	r.cancelsMu.Unlock()
+	for _, h := range handles {
+		h.handOffNow()
+	}
+}
+
+// Resume lets a paused runner claim runs again.
+func (r *Runner) Resume() {
+	r.pauseMu.Lock()
+	defer r.pauseMu.Unlock()
+	if r.resumed == nil {
+		return
+	}
+	close(r.resumed)
+	r.resumed = nil
+	r.log.Info().Msg("rjobs: runner resumed")
+}
+
+// Paused reports whether the runner is paused.
+func (r *Runner) Paused() bool {
+	r.pauseMu.Lock()
+	defer r.pauseMu.Unlock()
+	return r.resumed != nil
+}
+
+// waitResumed blocks while the runner is paused. It returns false when ctx is
+// done first.
+func (r *Runner) waitResumed(ctx context.Context) bool {
+	r.pauseMu.Lock()
+	ch := r.resumed
+	r.pauseMu.Unlock()
+	if ch == nil {
+		return true
+	}
+	select {
+	case <-ctx.Done():
+		return false
+	case <-ch:
+		return true
+	}
+}
+
 // registerRun records a run's cancellation handle for the duration of its
 // execution on this process.
 func (r *Runner) registerRun(id RunID, h *runHandle) {
@@ -640,6 +735,9 @@ func (r *Runner) runScheduler(ctx context.Context) {
 // per-job caps.
 func (r *Runner) runDispatcher(ctx context.Context) {
 	for {
+		if !r.waitResumed(ctx) {
+			return
+		}
 		freed := r.slots.released()
 		slots := &claimSlots{pool: r.slots}
 		run, err := r.store.Claim(ctx, slots)
@@ -666,9 +764,27 @@ func (r *Runner) runDispatcher(ctx context.Context) {
 			continue
 		}
 		release := slots.take()
+		if r.Paused() {
+			// claimed while pausing: give it back, late enough that the paused
+			// consumers do not spin on it, so another node picks it up.
+			if err := r.store.Fail(ctx, run.ID, r.pausedRetryAfter()); err != nil {
+				r.log.Error().Err(err).Str("run", string(run.ID)).Msg("rjobs: handing back a run claimed while paused errored")
+			}
+			release()
+			continue
+		}
 		r.execRun(ctx, run)
 		release()
 	}
+}
+
+// pausedRetryAfter is the delay of a run handed back by a paused runner: the
+// store's visibility timeout, twice its heartbeat interval.
+func (r *Runner) pausedRetryAfter() time.Duration {
+	if hb := r.store.HeartbeatInterval(); hb > 0 {
+		return 2 * hb
+	}
+	return defaultRetryAfter
 }
 
 // execRun runs a claimed durable run (on-demand or leader periodic), records
@@ -718,7 +834,7 @@ func (r *Runner) execRun(ctx context.Context, run Run) {
 
 	// the final progress snapshot is written before the terminal status.
 	stopProgress := r.startProgressWriter(ctx, run, h.progress, log)
-	result, err := r.invoke(runCtx, run, h.progress, log)
+	result, err := r.invoke(runCtx, run, h, log)
 	stopProgress()
 
 	// An explicit cancellation wins over the job's return value: the run is
@@ -907,8 +1023,8 @@ func (r *Runner) recordStatus(ctx context.Context, run Run, state State, result 
 // Params and a known periodic name) call the periodic Run closure; everything
 // else is an on-demand job. The returned Params are the on-demand job's result
 // (always nil for periodic runs). A job implementing ProgressJob reports its
-// progress to rep.
-func (r *Runner) invoke(ctx context.Context, run Run, rep Reporter, log zerolog.Logger) (Params, error) {
+// progress to h, and one implementing HandOffJob is registered on h.
+func (r *Runner) invoke(ctx context.Context, run Run, h *runHandle, log zerolog.Logger) (Params, error) {
 	jobCtx := appctx.WithLogger(ctx, &log)
 
 	if p, ok := r.lookupPeriodic(run.Job); ok {
@@ -923,8 +1039,14 @@ func (r *Runner) invoke(ctx context.Context, run Run, rep Reporter, log zerolog.
 	if err != nil {
 		return nil, errors.Wrap(err, "rjobs: building on-demand job failed")
 	}
-	if pj, ok := job.(ProgressJob); ok && rep != nil {
-		return pj.RunWithProgress(jobCtx, run.Params, rep)
+	if h == nil {
+		return job.Run(jobCtx, run.Params)
+	}
+	if hj, ok := job.(HandOffJob); ok {
+		h.setHandOff(hj.HandOff, r.Paused())
+	}
+	if pj, ok := job.(ProgressJob); ok {
+		return pj.RunWithProgress(jobCtx, run.Params, h.progress)
 	}
 	return job.Run(jobCtx, run.Params)
 }
