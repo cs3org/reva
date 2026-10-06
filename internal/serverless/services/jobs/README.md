@@ -291,6 +291,9 @@ progress_interval_seconds = 10
 # (default 1, workers kept for leader periodic jobs) they must fit the pool.
 max_concurrent = { "transfer.user" = 2 }
 periodic_reserve = 1
+# finished runs older than this are deleted daily by the rjobs.retention job;
+# a negative value keeps them forever.
+run_retention_days = 30
 nats_address     = "nats:4222"   # omit to run only ScopeAllNodes jobs
 nats_prefix      = "reva-jobs"
 
