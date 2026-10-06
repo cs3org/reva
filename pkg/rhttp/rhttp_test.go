@@ -18,7 +18,16 @@
 
 package rhttp
 
-import "testing"
+import (
+	"bytes"
+	"net/http"
+	"net/http/httptest"
+	"strings"
+	"testing"
+
+	"github.com/cs3org/reva/v3/pkg/rhttp/global"
+	"github.com/rs/zerolog"
+)
 
 func TestURLHasPrefix(t *testing.T) {
 	tests := map[string]struct {
@@ -70,5 +79,63 @@ func TestURLHasPrefix(t *testing.T) {
 				t.Fatalf("%s got an unexpected result: %+v instead of %+v", t.Name(), res, test.expected)
 			}
 		})
+	}
+}
+
+type testService struct{}
+
+func (testService) Handler() http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {})
+}
+func (testService) Prefix() string        { return "data" }
+func (testService) Close() error          { return nil }
+func (testService) Unprotected() []string { return nil }
+
+func TestRejectDotSegments(t *testing.T) {
+	tests := map[string]struct {
+		target   string
+		rejected bool
+	}{
+		"dotdot":          {target: "/data/tus/../simple/x", rejected: true},
+		"dot":             {target: "/data/tus/./x", rejected: true},
+		"trailing_dotdot": {target: "/data/tus/..", rejected: true},
+		"leading_dotdot":  {target: "/../data/x", rejected: true},
+		"encoded_dotdot":  {target: "/data/tus/%2e%2e/simple/x", rejected: true},
+		"encoded_dot":     {target: "/data/tus/%2E/x", rejected: true},
+		"half_encoded":    {target: "/data/tus/.%2e/simple/x", rejected: true},
+		"encoded_slashes": {target: "/data/tus%2F..%2Fsimple/x", rejected: true},
+		"dotdot_prefix":   {target: "/data/..foo"},
+		"inner_dots":      {target: "/data/a..b"},
+		"hidden":          {target: "/data/.hidden"},
+		"three_dots":      {target: "/data/..."},
+		"trailing_slash":  {target: "/data/tus/x/"},
+		"root":            {target: "/"},
+	}
+
+	for name, test := range tests {
+		for _, method := range []string{http.MethodGet, http.MethodPut, http.MethodOptions} {
+			t.Run(name+"_"+method, func(t *testing.T) {
+				var reached bool
+				var buf bytes.Buffer
+				s, _ := New(
+					WithLogger(zerolog.New(&buf)),
+					WithServices(map[string]global.Service{"dataprovider": testService{}}),
+					WithMiddlewares([]global.Middleware{func(h http.Handler) http.Handler {
+						return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+							reached = true
+							h.ServeHTTP(w, r)
+						})
+					}}),
+				)
+				h, _ := s.getHandler()
+				w := httptest.NewRecorder()
+				h.ServeHTTP(w, httptest.NewRequest(method, test.target, nil))
+
+				logged := strings.Contains(buf.String(), "dot segments")
+				if rejected := w.Code == http.StatusBadRequest && !reached; rejected != test.rejected || logged != test.rejected {
+					t.Fatalf("%s got status %d, middlewares reached %t, rejection logged %t", t.Name(), w.Code, reached, logged)
+				}
+			})
+		}
 	}
 }
