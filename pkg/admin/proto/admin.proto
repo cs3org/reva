@@ -249,7 +249,7 @@ message JobRunnerInfo {
 message JobRun {
   string run_id = 1;
   string job = 2;
-  string state = 3; // queued|running|succeeded|failed|cancelling|cancelled
+  string state = 3; // queued|running|succeeded|failed|cancelling|cancelled|aborted
   int32 attempt = 4;
   string owner = 5; // empty for internal runs
   string enqueued_at = 6; // RFC3339

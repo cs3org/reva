@@ -282,7 +282,7 @@ func (s *svc) respondWithStatus(w http.ResponseWriter, st rjobs.Status) {
 		FinishedAt: st.FinishedAt,
 	}
 	switch st.State {
-	case rjobs.StateFailed:
+	case rjobs.StateFailed, rjobs.StateAborted:
 		rep.Error = st.LastError
 	case rjobs.StateSucceeded:
 		// Reply with the public link to the archives, their location stays internal

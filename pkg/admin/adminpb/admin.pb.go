@@ -1726,7 +1726,7 @@ type JobRun struct {
 
 	RunId           string       `protobuf:"bytes,1,opt,name=run_id,json=runId,proto3" json:"run_id,omitempty"`
 	Job             string       `protobuf:"bytes,2,opt,name=job,proto3" json:"job,omitempty"`
-	State           string       `protobuf:"bytes,3,opt,name=state,proto3" json:"state,omitempty"` // queued|running|succeeded|failed|cancelling|cancelled
+	State           string       `protobuf:"bytes,3,opt,name=state,proto3" json:"state,omitempty"` // queued|running|succeeded|failed|cancelling|cancelled|aborted
 	Attempt         int32        `protobuf:"varint,4,opt,name=attempt,proto3" json:"attempt,omitempty"`
 	Owner           string       `protobuf:"bytes,5,opt,name=owner,proto3" json:"owner,omitempty"`                             // empty for internal runs
 	EnqueuedAt      string       `protobuf:"bytes,6,opt,name=enqueued_at,json=enqueuedAt,proto3" json:"enqueued_at,omitempty"` // RFC3339

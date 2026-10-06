@@ -187,13 +187,16 @@ Use the `RunID` to read a single run back:
 
 ```go
 st, err := rjobs.Default().Status(ctx, runID)
-// st.State is queued | running | succeeded | failed | cancelling | cancelled
+// st.State is queued | running | succeeded | failed | cancelling | cancelled | aborted
 // st.Result holds the payload the job returned on success
 // st.LastError holds the error of the last failed attempt
 ```
 
 Note that `failed` is **not terminal**: a failed run is retried, so `failed`
-means "the last attempt failed, another is coming".
+means "the last attempt failed, another is coming". A job controls this with
+its error: `rjobs.RetryAfter(d, err)` retries after `d` and keeps the run
+`queued`, and `rjobs.Permanent(err)` gives up, ending the run as `aborted`.
+`Run.Attempt` counts the deliveries, so a job can escalate its own backoff.
 
 ### Reporting progress
 
