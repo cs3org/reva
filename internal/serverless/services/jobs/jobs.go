@@ -23,6 +23,7 @@ package jobs
 
 import (
 	"context"
+	"fmt"
 	"time"
 
 	revadcfg "github.com/cs3org/reva/v3/cmd/revad/pkg/config"
@@ -61,6 +62,12 @@ type config struct {
 	// the name must be quoted in the table header, e.g.
 	// [serverless.services.jobs.on_demand."example.pingpong"].
 	OnDemand map[string]map[string]any `mapstructure:"on_demand"`
+	// MaxConcurrent caps, per job name, how many runs of a job this process
+	// executes at once, e.g. max_concurrent = { "transfer.user" = 6 }.
+	MaxConcurrent map[string]int `mapstructure:"max_concurrent"`
+	// PeriodicReserve is the number of workers kept for leader periodic jobs,
+	// which on-demand jobs never take. Defaults to 1.
+	PeriodicReserve *int `mapstructure:"periodic_reserve"`
 }
 
 func (c *config) ApplyDefaults() {
@@ -73,7 +80,30 @@ func (c *config) ApplyDefaults() {
 	if c.AckWaitSeconds == 0 {
 		c.AckWaitSeconds = 60
 	}
+	if c.PeriodicReserve == nil {
+		reserve := 1
+		c.PeriodicReserve = &reserve
+	}
 	c.StatusDB = sharedconf.GetDBInfo(c.StatusDB)
+}
+
+// validateCaps makes sure the per-job caps and the periodic reserve fit in the
+// worker pool.
+func (c *config) validateCaps() error {
+	if *c.PeriodicReserve < 0 {
+		return fmt.Errorf("jobs: periodic_reserve must not be negative")
+	}
+	sum := *c.PeriodicReserve
+	for job, n := range c.MaxConcurrent {
+		if n <= 0 {
+			return fmt.Errorf("jobs: max_concurrent of %q must be positive", job)
+		}
+		sum += n
+	}
+	if sum > c.WorkerPoolSize {
+		return fmt.Errorf("jobs: max_concurrent plus periodic_reserve (%d) exceed worker_pool_size (%d)", sum, c.WorkerPoolSize)
+	}
+	return nil
 }
 
 type svc struct {
@@ -88,6 +118,9 @@ type svc struct {
 func New(ctx context.Context, m map[string]any) (rserverless.Service, error) {
 	var c config
 	if err := cfg.Decode(m, &c); err != nil {
+		return nil, err
+	}
+	if err := c.validateCaps(); err != nil {
 		return nil, err
 	}
 
@@ -111,6 +144,8 @@ func (s *svc) Start() {
 		Workers:          s.conf.WorkerPoolSize,
 		OnDemandConfig:   s.conf.OnDemand,
 		ProgressInterval: time.Duration(s.conf.ProgressIntervalSeconds) * time.Second,
+		MaxConcurrent:    s.conf.MaxConcurrent,
+		PeriodicReserve:  *s.conf.PeriodicReserve,
 	}
 
 	// the durable queue and the status store go together: on-demand and
