@@ -61,6 +61,13 @@ type Options struct {
 	// ProgressInterval is how often the progress of a running run is
 	// persisted. Defaults to 10 seconds.
 	ProgressInterval time.Duration
+	// MaxConcurrent gives, per job name, the number of workers that execute
+	// the job. These workers execute only this job.
+	MaxConcurrent map[string]int
+	// PeriodicReserve is the number of workers kept for leader periodic jobs,
+	// which on-demand jobs never take. It only applies when this process
+	// registered a leader periodic job.
+	PeriodicReserve int
 }
 
 // Runner owns the scheduling, dispatching and execution of jobs. A process
@@ -74,6 +81,8 @@ type Runner struct {
 	periodic         []Periodic
 	onDemandConfig   map[string]map[string]any
 	progressInterval time.Duration
+	maxConcurrent    map[string]int
+	periodicReserve  int
 
 	cancel context.CancelFunc
 	wg     sync.WaitGroup
@@ -136,6 +145,8 @@ func NewRunner(ctx context.Context, opts Options) (*Runner, error) {
 		periodic:         registeredPeriodic(),
 		onDemandConfig:   opts.OnDemandConfig,
 		progressInterval: opts.ProgressInterval,
+		maxConcurrent:    opts.MaxConcurrent,
+		periodicReserve:  opts.PeriodicReserve,
 		running:          make(map[string]bool),
 		cancels:          make(map[RunID]*runHandle),
 		known:            make(map[string]time.Time),
@@ -203,9 +214,33 @@ func (r *Runner) Start() {
 
 	r.wg.Go(func() { r.runScheduler(ctx) })
 
-	for i := 0; i < r.workers; i++ {
-		r.wg.Go(func() { r.runDispatcher(ctx) })
+	// Each dispatcher claims only some jobs, so a busy job cannot take every
+	// worker: a capped job has its own dispatchers, and the reserve claims only
+	// leader periodic jobs.
+	dispatch := func(n int, jobs []string) {
+		for range n {
+			r.wg.Go(func() { r.runDispatcher(ctx, jobs) })
+		}
 	}
+	free := r.workers
+	var leader, rest []string
+	for _, qj := range RegisteredQueueJobs() {
+		if n := r.maxConcurrent[qj.Name]; n > 0 {
+			dispatch(n, []string{qj.Name})
+			free -= n
+			continue
+		}
+		if qj.Leader {
+			leader = append(leader, qj.Name)
+		}
+		rest = append(rest, qj.Name)
+	}
+	if len(leader) > 0 && r.periodicReserve > 0 {
+		dispatch(r.periodicReserve, leader)
+		free -= r.periodicReserve
+	}
+	// the uncapped jobs always get one worker, also when the caps fill the pool.
+	dispatch(max(free, 1), rest)
 
 	r.log.Info().Int("workers", r.workers).Msg("rjobs: runner started")
 }
@@ -619,10 +654,10 @@ func (r *Runner) runScheduler(ctx context.Context) {
 	}
 }
 
-// runDispatcher claims runs from the store and executes them.
-func (r *Runner) runDispatcher(ctx context.Context) {
+// runDispatcher claims runs of jobs from the store and executes them.
+func (r *Runner) runDispatcher(ctx context.Context, jobs []string) {
 	for {
-		run, err := r.store.Claim(ctx)
+		run, err := r.store.Claim(ctx, jobs)
 		if err != nil {
 			if ctx.Err() != nil {
 				return
