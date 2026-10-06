@@ -79,8 +79,10 @@ type Params map[string]any
 type Job interface {
 	// Run executes the job. The returned Params are recorded as the run's
 	// result (e.g. a download URL) and surfaced through the run status; return
-	// nil if the job has no result. Returning an error marks the run as failed;
-	// the store decides retry and backoff. ctx is cancelled on shutdown.
+	// nil if the job has no result. Returning an error marks the run as failed
+	// and retries it after a default delay; wrap the error with RetryAfter to
+	// choose the delay, or with Permanent to give up. ctx is cancelled on
+	// shutdown.
 	Run(ctx context.Context, p Params) (Params, error)
 }
 
