@@ -112,7 +112,7 @@ func (s *store) PutProgress(ctx context.Context, id rjobs.RunID, p rjobs.Progres
 		return errors.Wrap(err, "rjobs sql: marshalling progress failed")
 	}
 	res := s.db.WithContext(ctx).Model(&model.Run{}).
-		Where("run_id = ? AND state NOT IN ?", string(id), terminalStates).
+		Where("run_id = ? AND state NOT IN ?", string(id), terminalStates()).
 		Updates(map[string]any{
 			"progress":    datatypes.JSON(b),
 			"progress_at": at,
@@ -123,8 +123,14 @@ func (s *store) PutProgress(ctx context.Context, id rjobs.RunID, p rjobs.Progres
 	return nil
 }
 
-// terminalStates are the states a run never leaves.
-var terminalStates = []string{string(rjobs.StateSucceeded), string(rjobs.StateCancelled)}
+// terminalStates returns rjobs.TerminalStates as column values.
+func terminalStates() []string {
+	var out []string
+	for _, st := range rjobs.TerminalStates() {
+		out = append(out, string(st))
+	}
+	return out
+}
 
 func (s *store) Get(ctx context.Context, id rjobs.RunID) (rjobs.Status, error) {
 	var row model.Run

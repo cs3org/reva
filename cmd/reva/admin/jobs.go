@@ -49,7 +49,7 @@ Flags (before the subcommand):
   -admin-host <addr>   admin gRPC endpoint, persisted
   -owner <user>        runs: filter by owner; run: attribute the run to a user
   -job <name>          runs: filter by job
-  -state <s,...>       runs: filter by states (queued,running,succeeded,failed,cancelled)
+  -state <s,...>       runs: filter by states (queued,running,succeeded,failed,cancelled,aborted)
   -internal            runs: only internal (ownerless) runs
   -n <N>               runs: max rows (default 50)
 `
