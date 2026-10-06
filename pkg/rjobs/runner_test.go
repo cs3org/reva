@@ -823,3 +823,112 @@ func TestPermanent(t *testing.T) {
 		t.Errorf("unexpected status %+v", st)
 	}
 }
+
+// handOffJob runs until handed off, then asks to be retried elsewhere.
+type handOffJob struct{ handedOff chan struct{} }
+
+func (j handOffJob) Run(ctx context.Context, _ Params) (Params, error) {
+	select {
+	case <-j.handedOff:
+		return nil, RetryAfter(0, errors.New("handed off"))
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	}
+}
+
+func (j handOffJob) HandOff() { close(j.handedOff) }
+
+func TestPauseHandsOffRunningJob(t *testing.T) {
+	resetRegistry()
+	started := make(chan struct{})
+	job := handOffJob{handedOff: make(chan struct{})}
+	if err := RegisterOnDemand("test.handoff", func(context.Context, map[string]any) (Job, error) {
+		close(started)
+		return job, nil
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	status := newFakeStatus()
+	store := &oneRunStore{run: Run{ID: "run-1", Job: "test.handoff", Attempt: 1}}
+	_ = status.Put(context.Background(), Status{RunID: "run-1", Job: "test.handoff", State: StateQueued})
+	r, err := NewRunner(context.Background(), Options{Workers: 1, Store: store, Status: status})
+	if err != nil {
+		t.Fatal(err)
+	}
+	r.Start()
+	defer r.Stop(context.Background())
+
+	select {
+	case <-started:
+	case <-time.After(2 * time.Second):
+		t.Fatal("job did not start")
+	}
+	r.Pause()
+
+	deadline := time.After(2 * time.Second)
+	for !store.failed.Load() {
+		select {
+		case <-deadline:
+			t.Fatal("handed-off run was not given back")
+		case <-time.After(5 * time.Millisecond):
+		}
+	}
+	if d := time.Duration(store.failDelay.Load()); d != 0 {
+		t.Errorf("a handed-off run should be retried at once, got %v", d)
+	}
+	if !r.Paused() {
+		t.Error("runner should stay paused")
+	}
+	r.Resume()
+	if r.Paused() {
+		t.Error("runner should resume")
+	}
+}
+
+// countingStore hands out a run on every Claim and counts the claims.
+type countingStore struct {
+	stubStore
+	claims atomic.Int32
+}
+
+func (s *countingStore) Claim(ctx context.Context, slots Slots) (Run, error) {
+	s.claims.Add(1)
+	select {
+	case <-ctx.Done():
+		return Run{}, ctx.Err()
+	case <-time.After(time.Millisecond):
+	}
+	return claimWith(slots, Run{ID: "r", Job: "test.noop"})
+}
+
+func TestPausedRunnerDoesNotClaim(t *testing.T) {
+	resetRegistry()
+	if err := RegisterOnDemand("test.noop", func(context.Context, map[string]any) (Job, error) {
+		return jobFunc(func(context.Context, Params) (Params, error) { return nil, nil }), nil
+	}); err != nil {
+		t.Fatal(err)
+	}
+	store := &countingStore{}
+	r, err := NewRunner(context.Background(), Options{Workers: 2, Store: store, Status: newFakeStatus()})
+	if err != nil {
+		t.Fatal(err)
+	}
+	r.Pause()
+	r.Start()
+	defer r.Stop(context.Background())
+
+	time.Sleep(50 * time.Millisecond)
+	if n := store.claims.Load(); n != 0 {
+		t.Fatalf("a paused runner claimed %d runs", n)
+	}
+	r.Resume()
+	deadline := time.After(2 * time.Second)
+	for store.claims.Load() == 0 {
+		select {
+		case <-deadline:
+			t.Fatal("a resumed runner should claim again")
+		case <-time.After(5 * time.Millisecond):
+		}
+	}
+}

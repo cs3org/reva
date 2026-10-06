@@ -61,6 +61,11 @@ registered, even if it is down right now, and refuses a job nobody registered.
 `reva admin jobs forget <job>` drops a job that was removed from the code, once
 it has no pending runs.
 
+Draining a node with `reva admin services drain` also pauses its runner: it
+stops claiming runs, and running jobs that implement `rjobs.HandOffJob` get
+`HandOff` called, so they can wrap up and return `rjobs.RetryAfter(0, err)` to
+continue on another node. Other running jobs finish normally.
+
 ### Delivery semantics
 
 Delivery is **at-least-once**: a run may execute more than once (e.g. after a

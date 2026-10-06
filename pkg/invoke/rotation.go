@@ -53,6 +53,9 @@ func init() {
 			default:
 				return nil, fmt.Errorf("state must be drain or ready")
 			}
+			if d, ok := inst.inv.(Drainable); ok {
+				d.SetDraining(IsDrained(inst.id))
+			}
 			return Result{"node": inst.id, "previous": previous, "state": rotationState(inst.id)}, nil
 		},
 	})

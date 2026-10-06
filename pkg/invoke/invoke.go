@@ -77,3 +77,10 @@ type Invokable interface {
 	// to be a router across all names returned by Invocations().
 	Invoke(ctx context.Context, name string, args map[string]any) (Result, error)
 }
+
+// Drainable is an optional interface of an Invokable whose service does
+// background work of its own. The rotation invocation calls SetDraining, so a
+// drained instance also stops picking up new work, not just new traffic.
+type Drainable interface {
+	SetDraining(draining bool)
+}
