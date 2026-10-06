@@ -43,6 +43,7 @@ type AdminAPIClient interface {
 	TriggerJob(ctx context.Context, in *TriggerJobRequest, opts ...grpc.CallOption) (*TriggerJobResponse, error)
 	CancelJobRun(ctx context.Context, in *CancelJobRunRequest, opts ...grpc.CallOption) (*JobRun, error)
 	CancelPeriodicJob(ctx context.Context, in *CancelPeriodicJobRequest, opts ...grpc.CallOption) (*CancelPeriodicJobResponse, error)
+	ForgetJob(ctx context.Context, in *ForgetJobRequest, opts ...grpc.CallOption) (*ForgetJobResponse, error)
 }
 
 type adminAPIClient struct {
@@ -229,6 +230,15 @@ func (c *adminAPIClient) CancelPeriodicJob(ctx context.Context, in *CancelPeriod
 	return out, nil
 }
 
+func (c *adminAPIClient) ForgetJob(ctx context.Context, in *ForgetJobRequest, opts ...grpc.CallOption) (*ForgetJobResponse, error) {
+	out := new(ForgetJobResponse)
+	err := c.cc.Invoke(ctx, "/reva.admin.v1beta1.AdminAPI/ForgetJob", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // AdminAPIServer is the server API for AdminAPI service.
 // All implementations must embed UnimplementedAdminAPIServer
 // for forward compatibility
@@ -254,6 +264,7 @@ type AdminAPIServer interface {
 	TriggerJob(context.Context, *TriggerJobRequest) (*TriggerJobResponse, error)
 	CancelJobRun(context.Context, *CancelJobRunRequest) (*JobRun, error)
 	CancelPeriodicJob(context.Context, *CancelPeriodicJobRequest) (*CancelPeriodicJobResponse, error)
+	ForgetJob(context.Context, *ForgetJobRequest) (*ForgetJobResponse, error)
 	mustEmbedUnimplementedAdminAPIServer()
 }
 
@@ -311,6 +322,9 @@ func (UnimplementedAdminAPIServer) CancelJobRun(context.Context, *CancelJobRunRe
 }
 func (UnimplementedAdminAPIServer) CancelPeriodicJob(context.Context, *CancelPeriodicJobRequest) (*CancelPeriodicJobResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method CancelPeriodicJob not implemented")
+}
+func (UnimplementedAdminAPIServer) ForgetJob(context.Context, *ForgetJobRequest) (*ForgetJobResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method ForgetJob not implemented")
 }
 func (UnimplementedAdminAPIServer) mustEmbedUnimplementedAdminAPIServer() {}
 
@@ -634,6 +648,24 @@ func _AdminAPI_CancelPeriodicJob_Handler(srv interface{}, ctx context.Context, d
 	return interceptor(ctx, in, info, handler)
 }
 
+func _AdminAPI_ForgetJob_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ForgetJobRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(AdminAPIServer).ForgetJob(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/reva.admin.v1beta1.AdminAPI/ForgetJob",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(AdminAPIServer).ForgetJob(ctx, req.(*ForgetJobRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // AdminAPI_ServiceDesc is the grpc.ServiceDesc for AdminAPI service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -704,6 +736,10 @@ var AdminAPI_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "CancelPeriodicJob",
 			Handler:    _AdminAPI_CancelPeriodicJob_Handler,
+		},
+		{
+			MethodName: "ForgetJob",
+			Handler:    _AdminAPI_ForgetJob_Handler,
 		},
 	},
 	Streams: []grpc.StreamDesc{

@@ -27,9 +27,11 @@ package nats
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"sync"
 	"time"
 
+	"github.com/cs3org/reva/v3/pkg/errtypes"
 	"github.com/cs3org/reva/v3/pkg/messagequeue"
 	"github.com/cs3org/reva/v3/pkg/rjobs"
 	"github.com/nats-io/nats.go"
@@ -59,12 +61,24 @@ type Options struct {
 	// AckWait is the visibility timeout: how long a claimed run may be in
 	// flight before JetStream redelivers it. Defaults to one minute.
 	AckWait time.Duration
-	// Jobs is the set of job names this process has registered and is willing
-	// to run. The store subscribes only to these jobs, so a process never
-	// claims a run for a job it does not have registered; such a run waits in
-	// the stream for a process that does. Enqueue accepts any job name.
-	Jobs []string
+	// Jobs is the set of jobs this process has registered and is willing to
+	// run. The store subscribes only to these jobs, so a process never claims
+	// a run for a job it does not have registered; such a run waits in the
+	// stream for a process that does. Enqueue accepts any job name.
+	Jobs []rjobs.QueueJob
 }
+
+// Consumer metadata keys. A runner tags the consumer of every job it registers
+// with the job's name and kind, so any process can tell that the job is
+// consumed somewhere (see OnDemandJobKnown). Old runners create consumers
+// without metadata; those are read as on-demand.
+const (
+	metaJob  = "rjobs.job"
+	metaKind = "rjobs.kind"
+
+	kindOnDemand = "on_demand"
+	kindLeader   = "leader"
+)
 
 type store struct {
 	nc      *nats.Conn
@@ -172,7 +186,7 @@ func (s *store) consumerFor(job string) string {
 	return s.prefix + "-worker-" + subjectToken(job)
 }
 
-func (s *store) setup(ackWait time.Duration, jobs []string) error {
+func (s *store) setup(ackWait time.Duration, jobs []rjobs.QueueJob) error {
 	// One work-queue stream captures every per-job subject. WorkQueuePolicy
 	// deletes a message once it is acked, so each run is delivered once.
 	if _, err := s.js.AddStream(&nats.StreamConfig{
@@ -186,13 +200,21 @@ func (s *store) setup(ackWait time.Duration, jobs []string) error {
 	// Subscribe only to the jobs this process has registered: one durable,
 	// subject-filtered consumer per job. A run for a job not in this set is
 	// never delivered here; it waits in the stream for a process that has it.
-	for _, job := range jobs {
-		if _, err := s.js.AddConsumer(s.streamName(), &nats.ConsumerConfig{
+	// UpdateConsumer creates the consumer or updates it in place, so the
+	// metadata also lands on a consumer created by an older runner.
+	for _, qj := range jobs {
+		job := qj.Name
+		kind := kindOnDemand
+		if qj.Leader {
+			kind = kindLeader
+		}
+		if _, err := s.js.UpdateConsumer(s.streamName(), &nats.ConsumerConfig{
 			Durable:       s.consumerFor(job),
 			FilterSubject: s.subjectFor(job),
 			AckPolicy:     nats.AckExplicitPolicy,
 			AckWait:       ackWait,
 			MaxAckPending: -1,
+			Metadata:      map[string]string{metaJob: job, metaKind: kind},
 		}); err != nil {
 			return errors.Wrapf(err, "rjobs: consumer creation failed for job %q", job)
 		}
@@ -227,6 +249,47 @@ func subjectToken(job string) string {
 		}
 	}
 	return string(b)
+}
+
+// OnDemandJobKnown reports whether some runner created the consumer of job as
+// an on-demand job. The job name is compared too, since different names can
+// share one consumer token (e.g. "copy.x" and "copy_x"). A consumer without
+// metadata was created by an older runner and counts as on-demand.
+func (s *store) OnDemandJobKnown(ctx context.Context, job string) (bool, error) {
+	info, err := s.js.ConsumerInfo(s.streamName(), s.consumerFor(job), nats.Context(ctx))
+	if err != nil {
+		if errors.Is(err, nats.ErrConsumerNotFound) {
+			return false, nil
+		}
+		return false, errors.Wrap(err, "rjobs: reading consumer info failed")
+	}
+	md := info.Config.Metadata
+	if md[metaJob] == "" {
+		return true, nil
+	}
+	return md[metaJob] == job && md[metaKind] == kindOnDemand, nil
+}
+
+// ForgetJob deletes the consumer of a job that no runner registers anymore. It
+// refuses while the job still has runs in the stream, so none is lost.
+func (s *store) ForgetJob(ctx context.Context, job string) error {
+	info, err := s.js.ConsumerInfo(s.streamName(), s.consumerFor(job), nats.Context(ctx))
+	if err != nil {
+		if errors.Is(err, nats.ErrConsumerNotFound) {
+			return errtypes.NotFound(fmt.Sprintf("no consumer for job %q", job))
+		}
+		return errors.Wrap(err, "rjobs: reading consumer info failed")
+	}
+	if md := info.Config.Metadata; md[metaJob] != "" && md[metaJob] != job {
+		return errtypes.BadRequest(fmt.Sprintf("the consumer of job %q belongs to job %q", job, md[metaJob]))
+	}
+	if pending := info.NumPending + uint64(info.NumAckPending); pending > 0 {
+		return errtypes.Conflict(fmt.Sprintf("job %q still has %d pending runs", job, pending))
+	}
+	if err := s.js.DeleteConsumer(s.streamName(), s.consumerFor(job), nats.Context(ctx)); err != nil {
+		return errors.Wrap(err, "rjobs: deleting consumer failed")
+	}
+	return nil
 }
 
 func (s *store) track(id rjobs.RunID, msg *nats.Msg) {

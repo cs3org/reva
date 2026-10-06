@@ -158,3 +158,21 @@ type ControlBus interface {
 	// active.
 	SubscribeCancel(ctx context.Context, handler func(CancelSignal)) error
 }
+
+// KnownJobs is implemented by stores that can tell whether any runner,
+// anywhere, has registered a job. Enqueue uses it to accept a job this process
+// does not run itself. A store without it only accepts locally registered jobs.
+type KnownJobs interface {
+	// OnDemandJobKnown reports whether some runner has registered job as an
+	// on-demand job. It does not mean that a runner is up right now: runs wait
+	// in the queue until one is.
+	OnDemandJobKnown(ctx context.Context, job string) (bool, error)
+}
+
+// JobForgetter is implemented by stores that keep per-job state for every job
+// a runner ever registered. ForgetJob drops that state for a job removed from
+// the code, so it is no longer accepted by Enqueue. It refuses while runs of
+// the job are still pending.
+type JobForgetter interface {
+	ForgetJob(ctx context.Context, job string) error
+}

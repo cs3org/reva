@@ -648,3 +648,39 @@ func TestCancelPeriodicStopsInFlightRun(t *testing.T) {
 		t.Error("expected an error cancelling a job with no run in flight")
 	}
 }
+
+// knownStore answers KnownJobs from a fixed set and counts the lookups.
+type knownStore struct {
+	triggerStore
+	jobs    map[string]bool
+	lookups atomic.Int32
+}
+
+func (s *knownStore) OnDemandJobKnown(_ context.Context, job string) (bool, error) {
+	s.lookups.Add(1)
+	return s.jobs[job], nil
+}
+
+func TestEnqueueJobRegisteredElsewhere(t *testing.T) {
+	resetRegistry()
+
+	store := &knownStore{jobs: map[string]bool{"remote.copy": true}}
+	r, err := NewRunner(context.Background(), Options{Workers: 1, Store: store, Status: newFakeStatus()})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	for range 2 {
+		if _, err := r.Enqueue(context.Background(), "remote.copy", nil); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if n := store.lookups.Load(); n != 1 {
+		t.Errorf("a known job should be cached, got %d lookups", n)
+	}
+
+	_, err = r.Enqueue(context.Background(), "remote.typo", nil)
+	if _, ok := err.(errtypes.IsNotFound); !ok {
+		t.Errorf("expected NotFound for a job no runner registered, got %v", err)
+	}
+}
