@@ -122,7 +122,7 @@ func (s *svc) Start() {
 				Token:   s.conf.NatsToken,
 				Prefix:  s.conf.NatsPrefix,
 				AckWait: time.Duration(s.conf.AckWaitSeconds) * time.Second,
-				Jobs:    rjobs.RegisteredQueueJobNames(),
+				Jobs:    rjobs.RegisteredQueueJobs(),
 			})
 			if err != nil {
 				s.log.Error().Err(err).Msg("jobs: connecting to the queue failed, leader and on-demand jobs disabled")

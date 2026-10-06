@@ -133,21 +133,28 @@ func lookupOnDemand(name string) (NewJob, bool) {
 	return f, ok
 }
 
-// RegisteredQueueJobNames returns the names of every job that flows through the
-// durable queue in this process: all on-demand jobs plus the leader-scoped
-// periodic jobs. All-nodes periodic jobs are excluded since they never touch
-// the queue. The jobs service passes this to the store so a process only
-// subscribes to (and therefore only claims) the jobs it has registered.
-func RegisteredQueueJobNames() []string {
+// QueueJob is a job that flows through the durable queue: an on-demand job or a
+// leader-scoped periodic job.
+type QueueJob struct {
+	Name   string
+	Leader bool
+}
+
+// RegisteredQueueJobs returns every job that flows through the durable queue in
+// this process: all on-demand jobs plus the leader-scoped periodic jobs.
+// All-nodes periodic jobs are excluded since they never touch the queue. The
+// jobs service passes this to the store so a process only subscribes to (and
+// therefore only claims) the jobs it has registered.
+func RegisteredQueueJobs() []QueueJob {
 	reg.mu.Lock()
 	defer reg.mu.Unlock()
-	out := make([]string, 0, len(reg.onDemand)+len(reg.periodic))
+	out := make([]QueueJob, 0, len(reg.onDemand)+len(reg.periodic))
 	for name := range reg.onDemand {
-		out = append(out, name)
+		out = append(out, QueueJob{Name: name})
 	}
 	for name, p := range reg.periodic {
 		if p.Scope == ScopeLeader {
-			out = append(out, name)
+			out = append(out, QueueJob{Name: name, Leader: true})
 		}
 	}
 	return out

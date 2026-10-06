@@ -43,6 +43,7 @@ Subcommands:
   jobs trigger <job>            run a periodic job now
   jobs cancel <run-id>          cancel a run
   jobs stop <job>               cancel a periodic job's in-flight run
+  jobs forget <job>             drop the queue state of a removed job
 
 Flags (before the subcommand):
   -admin-host <addr>   admin gRPC endpoint, persisted
@@ -56,7 +57,7 @@ Flags (before the subcommand):
 func adminJobsCommand() *command {
 	cmd := newCommand("jobs")
 	cmd.Description = func() string { return "inspect and drive the background jobs runner" }
-	cmd.Usage = func() string { return "Usage: admin jobs <list|active|runs|status|run|trigger|cancel|stop> ..." }
+	cmd.Usage = func() string { return "Usage: admin jobs <list|active|runs|status|run|trigger|cancel|stop|forget> ..." }
 	cmd.FlagSet.Usage = func() { fmt.Fprint(cmd.Output(), jobsHelp) }
 	adminHost := cmd.String("admin-host", "", "address of the admin gRPC endpoint (persisted)")
 	owner := cmd.String("owner", "", "runs: filter by owner; run: attribute to a user")
@@ -94,6 +95,8 @@ func adminJobsCommand() *command {
 			return jobsCancel(ctx, client, rest)
 		case "stop":
 			return jobsSimple(ctx, client, "stop", rest)
+		case "forget":
+			return jobsSimple(ctx, client, "forget", rest)
 		default:
 			return fmt.Errorf("unknown jobs subcommand %q; run `admin jobs` for help", sub)
 		}
@@ -243,16 +246,19 @@ func jobsCancel(ctx context.Context, client adminpb.AdminAPIClient, args []strin
 	return nil
 }
 
-// jobsSimple handles the job-name mutations with no interesting result: trigger
-// and stop.
+// jobsSimple handles the job-name mutations with no interesting result: trigger,
+// stop and forget.
 func jobsSimple(ctx context.Context, client adminpb.AdminAPIClient, op string, args []string) error {
 	if len(args) < 1 {
 		return fmt.Errorf("Usage: admin jobs %s <job>", op)
 	}
 	var err error
-	if op == "trigger" {
+	switch op {
+	case "trigger":
 		_, err = client.TriggerJob(ctx, &adminpb.TriggerJobRequest{Job: args[0]})
-	} else {
+	case "forget":
+		_, err = client.ForgetJob(ctx, &adminpb.ForgetJobRequest{Job: args[0]})
+	default:
 		_, err = client.CancelPeriodicJob(ctx, &adminpb.CancelPeriodicJobRequest{Job: args[0]})
 	}
 	if err != nil {
