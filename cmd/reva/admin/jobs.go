@@ -159,20 +159,20 @@ func jobsActive(ctx context.Context, client adminpb.AdminAPIClient) error {
 		return adminErr(err)
 	}
 	tw := newTab()
-	fmt.Fprintln(tw, "NODE\tRUN ID\tJOB\tRUNNING FOR\tWORKERS\tSTORE")
+	fmt.Fprintln(tw, "NODE\tRUN ID\tJOB\tRUNNING FOR\tPROGRESS\tWORKERS\tSTORE")
 	for _, r := range resp.Runners {
 		if r.Error != "" {
-			fmt.Fprintf(tw, "%s\terror: %s\t\t\t\t\n", r.Node, r.Error)
+			fmt.Fprintf(tw, "%s\terror: %s\t\t\t\t\t\n", r.Node, r.Error)
 			continue
 		}
 		store := boolLabel(r.StoreWired, "yes", "no")
 		workers := fmt.Sprintf("%d/%d", r.Busy, r.Workers)
 		if len(r.ActiveRuns) == 0 {
-			fmt.Fprintf(tw, "%s\t-\t-\t-\t%s\t%s\n", r.Node, workers, store)
+			fmt.Fprintf(tw, "%s\t-\t-\t-\t-\t%s\t%s\n", r.Node, workers, store)
 			continue
 		}
 		for _, a := range r.ActiveRuns {
-			fmt.Fprintf(tw, "%s\t%s\t%s\t%s\t%s\t%s\n", r.Node, a.RunId, a.Job, since(a.Started), workers, store)
+			fmt.Fprintf(tw, "%s\t%s\t%s\t%s\t%s\t%s\t%s\n", r.Node, a.RunId, a.Job, since(a.Started), progressLabel(a.Progress), workers, store)
 		}
 	}
 	return tw.Flush()
@@ -208,6 +208,12 @@ func jobsStatus(ctx context.Context, client adminpb.AdminAPIClient, args []strin
 		r.RunId, r.Job, r.State, r.Attempt, dash(r.Owner), dash(r.EnqueuedAt), dash(r.StartedAt), dash(r.FinishedAt))
 	if r.CancelRequested {
 		fmt.Println("cancel:   requested")
+	}
+	if r.Progress != nil {
+		fmt.Printf("progress: %s (%s)\n", progressLabel(r.Progress), since(r.Progress.At))
+		if r.Progress.DetailsJson != "" {
+			fmt.Printf("details:  %s\n", r.Progress.DetailsJson)
+		}
 	}
 	if r.LastError != "" {
 		fmt.Printf("error:    %s\n", r.LastError)
@@ -300,6 +306,28 @@ func duration(startRFC, finishRFC string) string {
 		}
 	}
 	return end.Sub(start).Round(time.Second).String()
+}
+
+// progressLabel renders a progress snapshot as "phase done/total unit (pct)".
+func progressLabel(p *adminpb.JobProgress) string {
+	if p == nil {
+		return "-"
+	}
+	var b strings.Builder
+	if p.Phase != "" {
+		b.WriteString(p.Phase + " ")
+	}
+	fmt.Fprintf(&b, "%d", p.Done)
+	if p.Total > 0 {
+		fmt.Fprintf(&b, "/%d", p.Total)
+	}
+	if p.Unit != "" {
+		b.WriteString(" " + p.Unit)
+	}
+	if p.Total > 0 {
+		fmt.Fprintf(&b, " (%d%%)", p.Done*100/p.Total)
+	}
+	return b.String()
 }
 
 func dash(s string) string {

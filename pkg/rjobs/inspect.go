@@ -40,6 +40,8 @@ type ActiveRun struct {
 	RunID   RunID     `json:"run_id"`
 	Job     string    `json:"job"`
 	Started time.Time `json:"started"`
+	// Progress is the latest snapshot the run reported, if any.
+	Progress *Progress `json:"progress,omitempty"`
 }
 
 // RunnerInfo is a runner's live self-report: what it knows and what it is doing,
@@ -75,7 +77,13 @@ func (r *Runner) Inspect() RunnerInfo {
 
 	r.cancelsMu.Lock()
 	for id, h := range r.cancels {
-		info.Active = append(info.Active, ActiveRun{RunID: id, Job: h.job, Started: h.started})
+		a := ActiveRun{RunID: id, Job: h.job, Started: h.started}
+		if h.progress != nil {
+			if p, _, _, ok := h.progress.latest(); ok {
+				a.Progress = &p
+			}
+		}
+		info.Active = append(info.Active, a)
 	}
 	r.cancelsMu.Unlock()
 	info.Busy = len(info.Active)
