@@ -61,6 +61,13 @@ type Options struct {
 	// ProgressInterval is how often the progress of a running run is
 	// persisted. Defaults to 10 seconds.
 	ProgressInterval time.Duration
+	// MaxConcurrent caps, per job name, how many runs of the job this runner
+	// executes at once. A job without an entry is only bound by the pool.
+	MaxConcurrent map[string]int
+	// PeriodicReserve is the number of workers kept for leader periodic jobs,
+	// which on-demand jobs never take. It only applies when this process
+	// registered a leader periodic job.
+	PeriodicReserve int
 }
 
 // Runner owns the scheduling, dispatching and execution of jobs. A process
@@ -74,6 +81,7 @@ type Runner struct {
 	periodic         []Periodic
 	onDemandConfig   map[string]map[string]any
 	progressInterval time.Duration
+	slots            *slotPool
 
 	cancel context.CancelFunc
 	wg     sync.WaitGroup
@@ -140,6 +148,15 @@ func NewRunner(ctx context.Context, opts Options) (*Runner, error) {
 		cancels:          make(map[RunID]*runHandle),
 		known:            make(map[string]time.Time),
 	}
+
+	reserve := 0
+	for _, p := range r.periodic {
+		if p.Scope == ScopeLeader {
+			reserve = opts.PeriodicReserve
+			break
+		}
+	}
+	r.slots = newSlotPool(r.workers, reserve, opts.MaxConcurrent, r.isLeaderJob)
 
 	// leader-scoped and on-demand work both need a store.
 	if r.store == nil {
@@ -619,13 +636,26 @@ func (r *Runner) runScheduler(ctx context.Context) {
 	}
 }
 
-// runDispatcher claims runs from the store and executes them.
+// runDispatcher claims runs from the store and executes them, within the
+// per-job caps.
 func (r *Runner) runDispatcher(ctx context.Context) {
 	for {
-		run, err := r.store.Claim(ctx)
+		freed := r.slots.released()
+		slots := &claimSlots{pool: r.slots}
+		run, err := r.store.Claim(ctx, slots)
 		if err != nil {
+			slots.take()()
 			if ctx.Err() != nil {
 				return
+			}
+			if errors.Is(err, ErrNoSlot) {
+				// every job is at its cap: wait until a run ends.
+				select {
+				case <-ctx.Done():
+					return
+				case <-freed:
+				}
+				continue
 			}
 			r.log.Error().Err(err).Msg("rjobs: claiming run failed")
 			select {
@@ -635,7 +665,9 @@ func (r *Runner) runDispatcher(ctx context.Context) {
 			}
 			continue
 		}
+		release := slots.take()
 		r.execRun(ctx, run)
+		release()
 	}
 }
 
