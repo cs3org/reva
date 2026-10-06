@@ -24,6 +24,7 @@ package jobs
 import (
 	"context"
 	"fmt"
+	"sync/atomic"
 	"time"
 
 	revadcfg "github.com/cs3org/reva/v3/cmd/revad/pkg/config"
@@ -112,6 +113,9 @@ type svc struct {
 	log    *zerolog.Logger
 	runner *rjobs.Runner
 	set    *invoke.Set
+	// draining is set while the node is out of rotation; the runner then
+	// claims no new runs.
+	draining atomic.Bool
 }
 
 // New returns a new jobs service.
@@ -181,10 +185,27 @@ func (s *svc) Start() {
 		return
 	}
 
+	if s.draining.Load() {
+		runner.Pause()
+	}
 	s.runner = runner
 	rjobs.SetDefault(runner)
 	runner.Start()
 	s.log.Info().Msg("jobs service ready")
+}
+
+// SetDraining pauses the runner while the node is drained, so it stops claiming
+// runs and hands off the running jobs that can move, and resumes it after.
+func (s *svc) SetDraining(draining bool) {
+	s.draining.Store(draining)
+	if s.runner == nil {
+		return
+	}
+	if draining {
+		s.runner.Pause()
+	} else {
+		s.runner.Resume()
+	}
 }
 
 // Close stops the runner, draining in-flight work within ctx.
