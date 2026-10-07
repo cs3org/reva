@@ -151,7 +151,7 @@ func TestMdToPropResponseLockDiscovery(t *testing.T) {
 	pf := &propfindXML{Prop: propfindProps{{Space: _nsDav, Local: "lockdiscovery"}}}
 
 	t.Run("unlocked resource reports an empty lockdiscovery", func(t *testing.T) {
-		res, err := s.mdToPropResponse(ctx, pf, newMd(nil), parent, "", "/remote.php/dav/files/einstein", nil, nil)
+		res, err := s.mdToPropResponse(ctx, pf, newMd(nil), parent, "", "/remote.php/dav/files/einstein", nil, nil, nil)
 		if err != nil {
 			t.Fatalf("mdToPropResponse failed: %v", err)
 		}
@@ -171,7 +171,7 @@ func TestMdToPropResponseLockDiscovery(t *testing.T) {
 			CreationTime: &types.Timestamp{Seconds: 1786432355},
 		})
 
-		res, err := s.mdToPropResponse(ctx, pf, locked, parent, "", "/remote.php/dav/files/einstein", nil, nil)
+		res, err := s.mdToPropResponse(ctx, pf, locked, parent, "", "/remote.php/dav/files/einstein", nil, nil, nil)
 		if err != nil {
 			t.Fatalf("mdToPropResponse failed: %v", err)
 		}
