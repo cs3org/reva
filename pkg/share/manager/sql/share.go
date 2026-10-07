@@ -226,6 +226,25 @@ func (m *ShareMgr) ListShares(ctx context.Context, filters []*collaboration.Filt
 	return cs3shares, nil
 }
 
+func (m *ShareMgr) ListExpiredShares(ctx context.Context) ([]*collaboration.Share, error) {
+	var shares []model.Share
+	res := m.db.Model(&model.Share{}).
+		Where("orphan = ?", false).
+		Where("orphaned_at IS NULL").
+		Where("expiration IS NOT NULL").
+		Where("expiration <= ?", time.Now()).
+		Find(&shares)
+	if res.Error != nil {
+		return nil, res.Error
+	}
+
+	cs3shares := make([]*collaboration.Share, len(shares))
+	for i, s := range shares {
+		cs3shares[i] = s.AsCS3Share(m.getGrantee(ctx, s))
+	}
+	return cs3shares, nil
+}
+
 // we list the shares that are targeted to the user in context or to the user groups.
 func (m *ShareMgr) ListReceivedShares(ctx context.Context, filters []*collaboration.Filter) ([]*collaboration.ReceivedShare, error) {
 	user := appctx.ContextMustGetUser(ctx)
