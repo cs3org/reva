@@ -125,3 +125,7 @@ func getCredentials() map[string]Credentials {
 		},
 	}
 }
+
+func (m *manager) Cacheable() bool {
+	return true
+}

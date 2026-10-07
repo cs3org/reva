@@ -64,3 +64,7 @@ func (s *strategy) AddWWWAuthenticate(w http.ResponseWriter, r *http.Request, re
 	}
 	w.Header().Add("WWW-Authenticate", fmt.Sprintf(`Bearer realm="%s"`, realm))
 }
+
+func (s *strategy) Cacheable() bool {
+	return true
+}

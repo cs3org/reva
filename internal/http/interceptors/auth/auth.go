@@ -298,8 +298,11 @@ func (m *middleware) authenticateUser(w http.ResponseWriter, r *http.Request, is
 
 	// obtain credentials (basic auth, bearer token, ...) based on user agent
 	var creds *auth.Credentials
+	var cacheable bool
 	for _, k := range userAgentCredKeys {
 		creds, err = credChain[k].GetCredentials(w, r)
+		cs, ok := credChain[k].(auth.Cacheable)
+		cacheable = ok && cs.Cacheable()
 		if err != nil {
 			log.Debug().Err(err).Msg("error retrieving credentials")
 		}
@@ -372,7 +375,9 @@ func (m *middleware) authenticateUser(w http.ResponseWriter, r *http.Request, is
 			}
 		}
 
-		m.credCache.Set(credKey, id, rejected, notAfter)
+		if cacheable {
+			m.credCache.Set(credKey, id, rejected, notAfter)
+		}
 	}
 
 	if rejected != nil {

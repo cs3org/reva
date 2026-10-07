@@ -119,3 +119,7 @@ func parseUser(user string) (string, string) {
 	}
 	return "username", user
 }
+
+func (m *manager) Cacheable() bool {
+	return true
+}

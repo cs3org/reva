@@ -99,3 +99,7 @@ func (m *manager) Authenticate(ctx context.Context, username, password string) (
 
 	return userResponse.GetUser(), appAuthResponse.GetAppPassword().TokenScope, nil
 }
+
+func (m *manager) Cacheable() bool {
+	return true
+}

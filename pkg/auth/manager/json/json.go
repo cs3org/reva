@@ -134,3 +134,7 @@ func (m *manager) Authenticate(ctx context.Context, username string, secret stri
 	}
 	return nil, nil, errtypes.InvalidCredentials(username)
 }
+
+func (m *manager) Cacheable() bool {
+	return true
+}

@@ -223,3 +223,7 @@ func (am *mgr) Authenticate(ctx context.Context, clientID, clientSecret string) 
 func (am *mgr) getLoginFilter(login string) string {
 	return strings.ReplaceAll(am.c.LoginFilter, "{{login}}", ldap.EscapeFilter(login))
 }
+
+func (am *mgr) Cacheable() bool {
+	return true
+}
