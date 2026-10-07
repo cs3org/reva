@@ -1,3 +1,12 @@
+
+---
+title: "v3.13.1"
+linkTitle: "v3.13.1"
+weight: 999569
+description: >
+  Changelog for Reva v3.13.1 (2026-10-07)
+---
+
 Changelog for reva 3.13.1 (2026-10-07)
 =======================================
 
