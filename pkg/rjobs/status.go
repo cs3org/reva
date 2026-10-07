@@ -118,6 +118,13 @@ type ListFilter struct {
 	Offset int
 }
 
+// RunPruner is an optional interface of a StatusStore that can delete old
+// runs. Prune deletes up to limit terminal runs that finished before before,
+// oldest first, and returns how many it deleted.
+type RunPruner interface {
+	Prune(ctx context.Context, before time.Time, limit int) (int, error)
+}
+
 // StatusStore persists and serves the per-run status. It is a separate
 // concern from the work-queue Store: the queue handles delivery, the status
 // store handles observability, and a deployment may in principle back them
