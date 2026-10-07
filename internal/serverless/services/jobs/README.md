@@ -282,6 +282,10 @@ extra run, not a reschedule. Like `Enqueue`, all of these are in-process today.
 [serverless.services.jobs]
 worker_pool_size = 4
 progress_interval_seconds = 10
+# per-job caps on concurrent runs in this process; with periodic_reserve
+# (default 1, workers kept for leader periodic jobs) they must fit the pool.
+max_concurrent = { "transfer.user" = 2 }
+periodic_reserve = 1
 nats_address     = "nats:4222"   # omit to run only ScopeAllNodes jobs
 nats_prefix      = "reva-jobs"
 

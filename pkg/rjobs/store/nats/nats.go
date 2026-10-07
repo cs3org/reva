@@ -83,7 +83,7 @@ const (
 type store struct {
 	nc      *nats.Conn
 	js      nats.JetStreamContext
-	subs    []*nats.Subscription
+	subs    []jobSub
 	kv      nats.KeyValue
 	prefix  string
 	ackWait time.Duration
@@ -96,10 +96,18 @@ type store struct {
 	// Complete and Fail can ack or nak the right message.
 	mu       sync.Mutex
 	inflight map[rjobs.RunID]*nats.Msg
+	// cursor is the next subscription Claim polls.
+	cursor int
 
 	// scheduled is the set of periodic job names this process has registered.
 	schedMu   sync.Mutex
 	scheduled map[string]struct{}
+}
+
+// jobSub is the pull subscription of one job.
+type jobSub struct {
+	job string
+	sub *nats.Subscription
 }
 
 // scheduleState is what we keep per leader-scoped periodic job in the KV
@@ -222,7 +230,7 @@ func (s *store) setup(ackWait time.Duration, jobs []rjobs.QueueJob) error {
 		if err != nil {
 			return errors.Wrapf(err, "rjobs: pull subscription failed for job %q", job)
 		}
-		s.subs = append(s.subs, sub)
+		s.subs = append(s.subs, jobSub{job: job, sub: sub})
 	}
 
 	kv, err := s.js.CreateKeyValue(&nats.KeyValueConfig{Bucket: s.bucketName()})
@@ -330,32 +338,40 @@ func (s *store) Enqueue(ctx context.Context, run rjobs.Run) (rjobs.RunID, error)
 	return run.ID, nil
 }
 
-func (s *store) Claim(ctx context.Context) (rjobs.Run, error) {
+func (s *store) Claim(ctx context.Context, slots rjobs.Slots) (rjobs.Run, error) {
 	if len(s.subs) == 0 {
 		// no registered jobs: nothing to claim, block until shutdown.
 		<-ctx.Done()
 		return rjobs.Run{}, ctx.Err()
 	}
 
-	// Poll each per-job subscription in turn. The per-subscription fetch wait
-	// is spread so a full no-work cycle takes about fetchWait regardless of how
-	// many jobs are registered.
+	// Poll each per-job subscription in turn, starting after the job served
+	// last, so a busy job cannot keep the others waiting. The per-subscription
+	// fetch wait is spread so a full no-work cycle takes about fetchWait
+	// regardless of how many jobs are registered.
 	perSubWait := max(fetchWait/time.Duration(len(s.subs)), 100*time.Millisecond)
 
 	for {
-		if err := ctx.Err(); err != nil {
-			return rjobs.Run{}, err
-		}
-
-		for _, sub := range s.subs {
+		acquired := false
+		start := s.nextStart()
+		for k := range s.subs {
 			if err := ctx.Err(); err != nil {
 				return rjobs.Run{}, err
 			}
 
+			i := (start + k) % len(s.subs)
+			js := s.subs[i]
+			release, ok := slots.TryAcquire(js.job)
+			if !ok {
+				continue // this job is at its cap
+			}
+			acquired = true
+
 			fetchCtx, cancel := context.WithTimeout(ctx, perSubWait)
-			msgs, err := sub.Fetch(1, nats.Context(fetchCtx))
+			msgs, err := js.sub.Fetch(1, nats.Context(fetchCtx))
 			cancel()
 			if err != nil {
+				release()
 				if ctx.Err() != nil {
 					return rjobs.Run{}, ctx.Err()
 				}
@@ -365,6 +381,7 @@ func (s *store) Claim(ctx context.Context) (rjobs.Run, error) {
 				return rjobs.Run{}, errors.Wrap(err, "rjobs: fetching run failed")
 			}
 			if len(msgs) == 0 {
+				release()
 				continue
 			}
 
@@ -373,6 +390,7 @@ func (s *store) Claim(ctx context.Context) (rjobs.Run, error) {
 			if err := json.Unmarshal(msg.Data, &run); err != nil {
 				// a run we cannot decode is poison; drop it so it does not
 				// block the queue, and keep going.
+				release()
 				s.log.Error().Err(err).Msg("rjobs: dropping undecodable run")
 				_ = msg.Term()
 				continue
@@ -384,10 +402,32 @@ func (s *store) Claim(ctx context.Context) (rjobs.Run, error) {
 				run.Attempt = int(meta.NumDelivered)
 			}
 
+			s.served(i)
 			s.track(run.ID, msg)
 			return run, nil
 		}
+		if !acquired {
+			return rjobs.Run{}, rjobs.ErrNoSlot
+		}
 	}
+}
+
+// nextStart returns the subscription a pass over all jobs starts with, and
+// advances the cursor so concurrent claims start at different jobs.
+func (s *store) nextStart() int {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	i := s.cursor % len(s.subs)
+	s.cursor = i + 1
+	return i
+}
+
+// served moves the cursor past the subscription that just delivered a run, so
+// the next claim starts with the job after it.
+func (s *store) served(i int) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.cursor = i + 1
 }
 
 func (s *store) Complete(ctx context.Context, id rjobs.RunID) error {
@@ -701,8 +741,8 @@ func (s *store) Close(ctx context.Context) error {
 	if s.ctrlSub != nil {
 		_ = s.ctrlSub.Drain()
 	}
-	for _, sub := range s.subs {
-		_ = sub.Drain()
+	for _, js := range s.subs {
+		_ = js.sub.Drain()
 	}
 	return s.nc.Drain()
 }
