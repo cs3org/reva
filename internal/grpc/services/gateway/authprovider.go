@@ -45,9 +45,8 @@ func (s *svc) Authenticate(ctx context.Context, req *gateway.AuthenticateRequest
 	// find auth provider
 	c, err := s.findAuthProvider(ctx, req.Type)
 	if err != nil {
-		err = errtypes.NotFound("gateway: error finding auth provider for type: " + req.Type)
 		return &gateway.AuthenticateResponse{
-			Status: status.NewInternal(ctx, err, "error getting auth provider client"),
+			Status: status.NewRedactedStatusFromErrType(ctx, "error finding auth provider for type: "+req.Type, err),
 		}, nil
 	}
 
@@ -68,14 +67,20 @@ func (s *svc) Authenticate(ctx context.Context, req *gateway.AuthenticateRequest
 	case res.Status.Code == rpc.Code_CODE_NOT_FOUND:
 		fallthrough
 	case res.Status.Code == rpc.Code_CODE_ABORTED:
-		// normal failures, no need to log
+		// normal failures, already logged by the auth provider: keep the code
+		// but do not forward the provider's message
 		return &gateway.AuthenticateResponse{
-			Status: res.Status,
+			Status: &rpc.Status{
+				Code:    res.Status.Code,
+				Message: "authentication failed for type: " + req.Type,
+				Trace:   res.Status.Trace,
+			},
 		}, nil
 	case res.Status.Code != rpc.Code_CODE_OK:
-		err := status.NewErrorFromCode(res.Status.Code, "gateway")
+		// unexpected failure: log the whole status, but do not leak its details
+		log.Error().Any("status", res.Status).Str("type", req.Type).Msg("error authenticating credentials to auth provider")
 		return &gateway.AuthenticateResponse{
-			Status: status.NewInternal(ctx, err, fmt.Sprintf("error authenticating credentials to auth provider for type: %s", req.Type)),
+			Status: status.NewRedactedStatusFromErrType(ctx, "error authenticating credentials to auth provider for type: "+req.Type, status.NewErrtypeFromStatus(res.Status)),
 		}, nil
 	}
 
@@ -183,10 +188,9 @@ func (s *svc) Authenticate(ctx context.Context, req *gateway.AuthenticateRequest
 			}
 
 			if createHomeRes.Status.Code != rpc.Code_CODE_OK {
-				err := status.NewErrorFromCode(createHomeRes.Status.Code, "gateway")
-				log.Err(err).Any("response", createHomeRes).Msg("return from CreateHome")
+				log.Err(status.NewErrorFromCode(createHomeRes.Status.Code, "gateway")).Any("response", createHomeRes).Msg("return from CreateHome")
 				return &gateway.AuthenticateResponse{
-					Status: status.NewInternal(ctx, err, "error creating user home"),
+					Status: status.NewRedactedStatusFromErrType(ctx, "error creating user home", status.NewErrtypeFromStatus(createHomeRes.Status)),
 				}, nil
 			}
 			if s.c.CreateHomeCacheTTL > 0 {

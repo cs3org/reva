@@ -142,22 +142,22 @@ func Test_GetAppProviders(t *testing.T) {
 		{
 			name:     "not existing MimeType",
 			search:   &providerv1beta1.ResourceInfo{MimeType: "doesnot/exist"},
-			wantCode: rpcv1beta1.Code_CODE_INTERNAL,
+			wantCode: rpcv1beta1.Code_CODE_NOT_FOUND,
 		},
 		{
 			name:     "empty MimeType",
 			search:   &providerv1beta1.ResourceInfo{MimeType: ""},
-			wantCode: rpcv1beta1.Code_CODE_INTERNAL,
+			wantCode: rpcv1beta1.Code_CODE_NOT_FOUND,
 		},
 		{
 			name:     "no data in resource info",
 			search:   &providerv1beta1.ResourceInfo{},
-			wantCode: rpcv1beta1.Code_CODE_INTERNAL,
+			wantCode: rpcv1beta1.Code_CODE_NOT_FOUND,
 		},
 		{
 			name:     "not valid MimeType",
 			search:   &providerv1beta1.ResourceInfo{MimeType: "this/type\\IS.not?VALID@all"},
-			wantCode: rpcv1beta1.Code_CODE_INTERNAL,
+			wantCode: rpcv1beta1.Code_CODE_NOT_FOUND,
 		},
 	}
 
