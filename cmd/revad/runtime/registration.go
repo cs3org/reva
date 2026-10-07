@@ -19,6 +19,7 @@
 package runtime
 
 import (
+	"encoding/json"
 	"fmt"
 	"maps"
 	"net"
@@ -29,7 +30,7 @@ import (
 	"github.com/cs3org/reva/v3/cmd/revad/pkg/config"
 	"github.com/cs3org/reva/v3/pkg/invoke"
 	"github.com/cs3org/reva/v3/pkg/registry"
-	"github.com/cs3org/reva/v3/pkg/rhttp/global"
+	"github.com/cs3org/reva/v3/pkg/rhttp/router"
 	"github.com/cs3org/reva/v3/pkg/service"
 	"github.com/rs/zerolog"
 )
@@ -125,7 +126,7 @@ func (r *Reva) addNodes(msg string) {
 		addr := hostPort(hostname, srv.listener.Addr().String())
 		for name, impl := range srv.services {
 			id := nodeID(addr, name)
-			meta := nodeMetadata(srv, id, hostname, pid, impl)
+			meta := nodeMetadata(srv, name, id, hostname, pid, impl)
 			// Advertise the process's control channel on every node.
 			if r.controlAddr != "" {
 				meta[registry.MetaControl] = r.controlAddr
@@ -167,7 +168,7 @@ func isWildcard(host string) bool {
 
 // nodeMetadata builds a node's metadata: framework keys, HTTP scheme/prefix,
 // the instance's invocation names, and any service-owned keys.
-func nodeMetadata(srv *Server, id, hostname string, pid int, impl any) map[string]string {
+func nodeMetadata(srv *Server, name, id, hostname string, pid int, impl any) map[string]string {
 	meta := map[string]string{
 		registry.MetaTransport: srv.transport,
 		"host":                 hostname,
@@ -177,8 +178,8 @@ func nodeMetadata(srv *Server, id, hostname string, pid int, impl any) map[strin
 	}
 	if srv.transport == registry.TransportHTTP {
 		meta[registry.MetaScheme] = srv.scheme
-		if hs, ok := impl.(global.Service); ok {
-			meta[registry.MetaPrefix] = hs.Prefix()
+		if routes := routesOf(srv, name); routes != "" {
+			meta[registry.MetaRoutes] = routes
 		}
 	}
 	if names := invoke.InvocationNames(id); len(names) > 0 {
@@ -188,6 +189,26 @@ func nodeMetadata(srv *Server, id, hostname string, pid int, impl any) map[strin
 		maps.Copy(meta, mp.RegistryMetadata())
 	}
 	return meta
+}
+
+// routesOf returns the service's declared routes as JSON, for a gateway to
+// mirror. It returns empty when the service declared none, or when they cannot
+// be encoded, since a node without routes is still worth registering.
+func routesOf(srv *Server, name string) string {
+	owned := make([]router.Route, 0, len(srv.routes))
+	for _, rt := range srv.routes {
+		if rt.Owner == name {
+			owned = append(owned, rt)
+		}
+	}
+	if len(owned) == 0 {
+		return ""
+	}
+	encoded, err := json.Marshal(owned)
+	if err != nil {
+		return ""
+	}
+	return string(encoded)
 }
 
 // rotationState is the registry state a node advertises: draining if an

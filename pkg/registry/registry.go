@@ -72,6 +72,9 @@ const (
 	// MetaApp carries an app provider's CS3 ProviderInfo as protojson, minus
 	// its address, which the app registry fills in from the node itself.
 	MetaApp = "app"
+	// MetaRoutes carries an HTTP service's declared routes as JSON, so a
+	// gateway can mirror them without being told what the service serves.
+	MetaRoutes = "routes"
 
 	StateReady    = "ready"
 	StateDegraded = "degraded"

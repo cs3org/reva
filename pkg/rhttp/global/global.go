@@ -21,6 +21,8 @@ package global
 import (
 	"context"
 	"net/http"
+
+	"github.com/cs3org/reva/v3/pkg/rhttp/router"
 )
 
 // NewMiddlewares contains all the registered new middleware functions.
@@ -50,11 +52,10 @@ type NewService func(context.Context, map[string]any) (Service, error)
 
 // Service represents a HTTP service.
 type Service interface {
-	Handler() http.Handler
-	Prefix() string
+	// Routes declares the URLs the service serves. Patterns are absolute, and
+	// a route that authenticates at the protocol layer or is public by
+	// definition declares router.Unprotected() rather than relying on a
+	// separate list of paths.
+	Routes(*router.Router)
 	Close() error
-	// List of url relative to the prefix to be unprotected by the authentication
-	// middleware. To be seen if we need url-verb fine grained skip checks like
-	// GET is public and POST is not.
-	Unprotected() []string
 }
