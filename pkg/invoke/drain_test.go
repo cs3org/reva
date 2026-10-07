@@ -62,3 +62,28 @@ func TestRotationInvocation(t *testing.T) {
 		t.Fatalf("expected error for invalid state")
 	}
 }
+
+// drainableInvokable records the drain state the rotation invocation hands it.
+type drainableInvokable struct {
+	extraInvokable
+	draining []bool
+}
+
+func (d *drainableInvokable) SetDraining(draining bool) { d.draining = append(d.draining, draining) }
+
+// TestRotationDrainsInvokable checks that rotation tells a Drainable service.
+func TestRotationDrainsInvokable(t *testing.T) {
+	id := "127.0.0.1:9811/svc-drainable"
+	d := &drainableInvokable{}
+	RegisterInstance(id, "svc-drainable", nil, d, nil)
+	t.Cleanup(func() { SetDrained(id, false) })
+
+	for _, state := range []string{"drain", "ready"} {
+		if _, err := Invoke(context.Background(), id, RotationInvocation, map[string]any{"state": state}); err != nil {
+			t.Fatalf("Invoke(rotation %s): %v", state, err)
+		}
+	}
+	if len(d.draining) != 2 || !d.draining[0] || d.draining[1] {
+		t.Fatalf("unexpected drain calls: %v", d.draining)
+	}
+}

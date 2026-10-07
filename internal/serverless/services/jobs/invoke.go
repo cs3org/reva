@@ -33,6 +33,8 @@ import (
 // it over the control channel through these invocations. They are the
 // admin↔runner transport, not a user-facing surface.
 
+var _ invoke.Drainable = (*svc)(nil)
+
 func (s *svc) Invocations() []invoke.InvocationSpec { return s.set.Invocations() }
 
 func (s *svc) Invoke(ctx context.Context, name string, args map[string]any) (invoke.Result, error) {
