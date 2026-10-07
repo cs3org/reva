@@ -4,6 +4,7 @@ import (
 	"context"
 	"log"
 	"os"
+	"sort"
 	"testing"
 	"time"
 
@@ -323,5 +324,68 @@ func TestListPublicSharesWithFilters(t *testing.T) {
 
 	if shares[0].Id.OpaqueId != share.Id.OpaqueId {
 		t.Errorf("Expected share ID %s, got %s", share.Id.OpaqueId, shares[0].Id.OpaqueId)
+	}
+}
+
+// TestListPublicShareSpaces asserts that every space holding a public link comes
+// back once, and that the links of a batch of spaces come back together. This is
+// what the reconciliation jobs walk, so it has to match what ListPublicShares
+// would return.
+func TestListPublicShareSpaces(t *testing.T) {
+	mgr, err, teardown := setupSuiteLinks(t)
+	defer teardown(t)
+
+	if err != nil {
+		t.Error(err)
+		t.FailNow()
+	}
+
+	userctx := getUserContext("123456")
+	user, _ := appctx.ContextGetUser(userctx)
+
+	// two links in one space and one in another, so a space that holds more
+	// than one link still comes back once.
+	for _, s := range []struct{ space, inode string }{
+		{"space-a", "200"},
+		{"space-a", "201"},
+		{"space-b", "202"},
+	} {
+		file := getRandomFile(user)
+		file.Id.SpaceId = s.space
+		file.Id.OpaqueId = s.inode
+
+		_, err := mgr.CreatePublicShare(userctx, nil, file, getTestPublicLinkGrant(""), "test", false, false, "")
+		if err != nil {
+			t.Error(err)
+			t.FailNow()
+		}
+	}
+
+	spaces, err := mgr.(*PublicShareMgr).ListPublicShareSpaces(userctx)
+	if err != nil {
+		t.Error(err)
+		t.FailNow()
+	}
+	sort.Strings(spaces)
+	if len(spaces) != 2 || spaces[0] != "space-a" || spaces[1] != "space-b" {
+		t.Errorf("Expected [space-a space-b], got %v", spaces)
+	}
+
+	links, err := mgr.(*PublicShareMgr).ListPublicSharesInSpaces(userctx, spaces)
+	if err != nil {
+		t.Error(err)
+		t.FailNow()
+	}
+	if len(links) != 3 {
+		t.Errorf("Expected 3 links in both spaces, got %d", len(links))
+	}
+
+	links, err = mgr.(*PublicShareMgr).ListPublicSharesInSpaces(userctx, []string{"space-b"})
+	if err != nil {
+		t.Error(err)
+		t.FailNow()
+	}
+	if len(links) != 1 || links[0].ResourceId.OpaqueId != "202" {
+		t.Errorf("Expected only the link in space-b, got %+v", links)
 	}
 }

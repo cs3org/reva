@@ -34,30 +34,36 @@ package reconciliation
 import (
 	"context"
 	"os"
+	"slices"
 
-	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	collaboration "github.com/cs3org/go-cs3apis/cs3/sharing/collaboration/v1beta1"
 	link "github.com/cs3org/go-cs3apis/cs3/sharing/link/v1beta1"
-	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
+	revashare "github.com/cs3org/reva/v3/pkg/share"
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog"
 )
 
 // ShareStore is what the jobs need from a share manager: the CS3 listing every
-// manager implements, plus marking, which the CS3 API has no call for. A
-// manager that cannot mark cannot be reconciled. The listing is expected to
-// cover every owner and to leave out the already-orphaned.
+// manager implements, plus marking and the space listing, which the CS3 API has
+// no call for. A manager that lacks either cannot be reconciled. The listing is
+// expected to cover every owner and to leave out the already-orphaned.
 type ShareStore interface {
 	ListShares(ctx context.Context, filters []*collaboration.Filter) ([]*collaboration.Share, error)
+	ListShareSpaces(ctx context.Context) ([]string, error)
 	MarkAsOrphaned(ctx context.Context, ref *collaboration.ShareReference) error
 	// Unshare removes the referenced share. The row is soft deleted, so a
 	// removal can be undone in the database.
 	Unshare(ctx context.Context, ref *collaboration.ShareReference) error
 }
 
-// PublicLinkStore is the same for a public share manager.
+// PublicLinkStore is the same for a public share manager. Listing by space is
+// not CS3 either: the public share API has no space filter, so the store takes
+// the spaces itself.
 type PublicLinkStore interface {
-	ListPublicShares(ctx context.Context, u *userpb.User, filters []*link.ListPublicSharesRequest_Filter, md *provider.ResourceInfo, sign bool) ([]*link.PublicShare, error)
+	// ListPublicSharesInSpaces returns the links of the given spaces, and the
+	// links of every space when given none.
+	ListPublicSharesInSpaces(ctx context.Context, spaceIDs []string) ([]*link.PublicShare, error)
+	ListPublicShareSpaces(ctx context.Context) ([]string, error)
 	MarkAsOrphaned(ctx context.Context, ref *link.PublicShareReference) error
 }
 
@@ -76,6 +82,33 @@ type Config struct {
 	// LogFile is the path the job writes its own log to. It takes "stdout" or
 	// "stderr" to write to the standard streams instead.
 	LogFile string `mapstructure:"log_file"`
+	// SpacesPerBatch is how many spaces one listing covers, trading memory for
+	// round trips. The bound is in spaces, not in shares, so one space holding
+	// a great many shares is still read whole. Unset means no batching: every
+	// space in one listing.
+	SpacesPerBatch int `mapstructure:"spaces_per_batch" validate:"omitempty,min=1"`
+}
+
+// spaceBatches is the listings a run works through. A size below one means no
+// batching: one batch naming no space at all, which lists every space.
+func spaceBatches(spaceIDs []string, size int) [][]string {
+	if size < 1 {
+		return [][]string{nil}
+	}
+	return slices.Collect(slices.Chunk(spaceIDs, size))
+}
+
+// spaceFilters covers exactly the given spaces, which the share managers OR
+// together, and every space when given none.
+func spaceFilters(spaceIDs []string) []*collaboration.Filter {
+	if len(spaceIDs) == 0 {
+		return nil
+	}
+	filters := make([]*collaboration.Filter, 0, len(spaceIDs))
+	for _, id := range spaceIDs {
+		filters = append(filters, revashare.SpaceIDFilter(id))
+	}
+	return filters
 }
 
 // OpenLog opens a job's own log. A job keeps its own log rather than writing to

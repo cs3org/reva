@@ -22,6 +22,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"slices"
 	"testing"
 
 	grouppb "github.com/cs3org/go-cs3apis/cs3/identity/group/v1beta1"
@@ -1018,7 +1019,7 @@ func TestShallowSkipsSpaceWithANewShare(t *testing.T) {
 		shared(100, "space-a", "inode-100", "jdoe", false, ocsRead),
 	}}
 	// the share a user creates between the check and the writes.
-	store.listHook = func(f *fakeStore, space string, done int) {
+	store.listHook = func(f *fakeStore, spaces []string, done int) {
 		if done == 1 {
 			f.shares = append(f.shares, shared(101, "space-a", "inode-101", "asmith", false, ocsRead))
 		}
@@ -1048,8 +1049,9 @@ func TestShallowSkipsOnlyTheChangedSpace(t *testing.T) {
 		shared(102, "space-a", "inode-102", "jdoe", false, ocsRead),
 		shared(103, "space-b", "inode-103", "jdoe", false, ocsRead),
 	}}
-	store.listHook = func(f *fakeStore, space string, done int) {
-		if space == "space-a" {
+	// the share appears once the run has listed space-a and is checking it.
+	store.listHook = func(f *fakeStore, spaces []string, done int) {
+		if slices.Contains(spaces, "space-a") && done > 0 {
 			f.shares = append(f.shares, shared(104, "space-a", "inode-104", "asmith", false, ocsRead))
 		}
 	}
@@ -1082,7 +1084,7 @@ func TestShallowHoldsBackRemovalsOfAChangedSpace(t *testing.T) {
 		shared(105, "space-a", "inode-parent", "jdoe", false, ocsRead),
 		shared(106, "space-a", "inode-child", "jdoe", false, ocsRead),
 	}}
-	store.listHook = func(f *fakeStore, space string, done int) {
+	store.listHook = func(f *fakeStore, spaces []string, done int) {
 		if done == 1 {
 			f.shares = append(f.shares, shared(107, "space-a", "inode-107", "asmith", false, ocsRead))
 		}
@@ -1112,7 +1114,7 @@ func TestShallowSkipsSpaceWhenTheCheckCannotRun(t *testing.T) {
 	store := &fakeStore{shares: []storedShare{
 		shared(108, "space-a", "inode-108", "jdoe", false, ocsRead),
 	}}
-	store.listHook = func(f *fakeStore, space string, done int) {
+	store.listHook = func(f *fakeStore, spaces []string, done int) {
 		if done == 1 {
 			f.listErr = errors.New("db down")
 		}
@@ -1165,7 +1167,7 @@ func TestShallowDryRunSkipsAChangedSpace(t *testing.T) {
 	store := &fakeStore{shares: []storedShare{
 		shared(110, "space-a", "inode-110", "jdoe", false, ocsRead),
 	}}
-	store.listHook = func(f *fakeStore, space string, done int) {
+	store.listHook = func(f *fakeStore, spaces []string, done int) {
 		if done == 1 {
 			f.shares = append(f.shares, shared(111, "space-a", "inode-111", "asmith", false, ocsRead))
 		}
@@ -1194,7 +1196,7 @@ func TestShallowRunSpaceChecksItsOwnSpace(t *testing.T) {
 	store := &fakeStore{shares: []storedShare{
 		shared(112, "space-a", "inode-112", "jdoe", false, ocsRead),
 	}}
-	store.listHook = func(f *fakeStore, space string, done int) {
+	store.listHook = func(f *fakeStore, spaces []string, done int) {
 		if done == 1 {
 			f.shares = append(f.shares, shared(113, "space-a", "inode-113", "asmith", false, ocsRead))
 		}
@@ -1211,6 +1213,234 @@ func TestShallowRunSpaceChecksItsOwnSpace(t *testing.T) {
 	}
 	if len(report.SkippedSpaces) != 1 || len(grants.writes) != 0 {
 		t.Fatalf("report = %+v / writes = %+v, want the space skipped", report, grants.writes)
+	}
+}
+
+// TestShallowReadsEverythingWithoutABatchSize asserts that a run without
+// SpacesPerBatch reads every share in one listing and never asks which spaces
+// there are, the way the job worked before it could batch.
+func TestShallowReadsEverythingWithoutABatchSize(t *testing.T) {
+	store := &fakeStore{shares: []storedShare{
+		shared(140, "space-b", "inode-140", "jdoe", false, ocsRead),
+		shared(141, "space-a", "inode-141", "jdoe", false, ocsRead),
+	}}
+	var listed [][]string
+	store.listHook = func(_ *fakeStore, spaces []string, _ int) {
+		listed = append(listed, spaces)
+	}
+	gw := &fakeGateway{
+		users: map[string]bool{"jdoe": true},
+		paths: map[string]string{
+			"eosuser/inode-140": "/eos/project/b/one",
+			"eosuser/inode-141": "/eos/project/a/one",
+		},
+	}
+	grants := &fakeGrants{}
+
+	report, err := shallowJob(store, gw, grants).Run(context.Background())
+	if err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	if report.Checked != 2 || len(report.Written) != 2 {
+		t.Fatalf("report = %+v, want 2 checked / 2 written", report)
+	}
+	if store.spaceLists != 0 {
+		t.Errorf("asked for the spaces %d times, want 0 without a batch size", store.spaceLists)
+	}
+	want := [][]string{nil, {"space-a"}, {"space-b"}}
+	if !slices.EqualFunc(listed, want, slices.Equal) {
+		t.Errorf("listings = %v, want %v", listed, want)
+	}
+}
+
+// TestShallowListsOneSpaceAtATime asserts that one space per batch lists the
+// shares of each space on its own, in a fixed order. Holding every share of the
+// database at once is what the per-space walk avoids.
+func TestShallowListsOneSpaceAtATime(t *testing.T) {
+	store := &fakeStore{shares: []storedShare{
+		shared(120, "space-b", "inode-120", "jdoe", false, ocsRead),
+		shared(121, "space-a", "inode-121", "jdoe", false, ocsRead),
+	}}
+	var listed [][]string
+	store.listHook = func(_ *fakeStore, spaces []string, _ int) {
+		listed = append(listed, spaces)
+	}
+	gw := &fakeGateway{
+		users: map[string]bool{"jdoe": true},
+		paths: map[string]string{
+			"eosuser/inode-120": "/eos/project/b/one",
+			"eosuser/inode-121": "/eos/project/a/one",
+		},
+	}
+	// both entries are already on the storage, so nothing is held back and no
+	// space is listed a second time.
+	grants := &fakeGrants{grants: map[string][]*provider.Grant{
+		"eosuser/inode-120": {grant(provider.GranteeType_GRANTEE_TYPE_USER, "jdoe", ocsRead)},
+		"eosuser/inode-121": {grant(provider.GranteeType_GRANTEE_TYPE_USER, "jdoe", ocsRead)},
+	}}
+
+	job := shallowJob(store, gw, grants)
+	job.SpacesPerBatch = 1
+	report, err := job.Run(context.Background())
+	if err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	if report.Checked != 2 || len(report.Written) != 0 {
+		t.Fatalf("report = %+v, want 2 checked / 0 written", report)
+	}
+	want := [][]string{{"space-a"}, {"space-b"}}
+	if !slices.EqualFunc(listed, want, slices.Equal) {
+		t.Errorf("listings = %v, want %v", listed, want)
+	}
+}
+
+// TestShallowBatchesSpacesIntoOneListing asserts that SpacesPerBatch spaces are
+// covered by a single listing, and that each of them is still looked at on its
+// own before its changes go out.
+func TestShallowBatchesSpacesIntoOneListing(t *testing.T) {
+	store := &fakeStore{shares: []storedShare{
+		shared(130, "space-b", "inode-130", "jdoe", false, ocsRead),
+		shared(131, "space-a", "inode-131", "jdoe", false, ocsRead),
+	}}
+	var listed [][]string
+	store.listHook = func(_ *fakeStore, spaces []string, _ int) {
+		listed = append(listed, spaces)
+	}
+	gw := &fakeGateway{
+		users: map[string]bool{"jdoe": true},
+		paths: map[string]string{
+			"eosuser/inode-130": "/eos/project/b/one",
+			"eosuser/inode-131": "/eos/project/a/one",
+		},
+	}
+	grants := &fakeGrants{}
+
+	job := shallowJob(store, gw, grants)
+	job.SpacesPerBatch = 2
+	report, err := job.Run(context.Background())
+	if err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	if report.Checked != 2 || len(report.Written) != 2 {
+		t.Fatalf("report = %+v, want 2 checked / 2 written", report)
+	}
+	want := [][]string{{"space-a", "space-b"}, {"space-a"}, {"space-b"}}
+	if !slices.EqualFunc(listed, want, slices.Equal) {
+		t.Errorf("listings = %v, want %v", listed, want)
+	}
+}
+
+// TestShallowHoldsBackOneSpaceOfABatch asserts that a batch is how much is read
+// at once and nothing more: a space that changed under the run is held back on
+// its own, and the other spaces read with it are still applied.
+func TestShallowHoldsBackOneSpaceOfABatch(t *testing.T) {
+	store := &fakeStore{shares: []storedShare{
+		shared(132, "space-a", "inode-132", "jdoe", false, ocsRead),
+		shared(133, "space-b", "inode-133", "jdoe", false, ocsRead),
+	}}
+	// the share a user creates between the check and the writes.
+	store.listHook = func(f *fakeStore, _ []string, done int) {
+		if done == 1 {
+			f.shares = append(f.shares, shared(134, "space-a", "inode-134", "asmith", false, ocsRead))
+		}
+	}
+	gw := &fakeGateway{
+		users: map[string]bool{"jdoe": true, "asmith": true},
+		paths: map[string]string{
+			"eosuser/inode-132": "/eos/project/a/one",
+			"eosuser/inode-133": "/eos/project/b/one",
+		},
+	}
+	grants := &fakeGrants{}
+
+	job := shallowJob(store, gw, grants)
+	job.SpacesPerBatch = 2
+	report, err := job.Run(context.Background())
+	if err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	if len(report.SkippedSpaces) != 1 || report.SkippedSpaces[0] != "space-a" {
+		t.Fatalf("skipped spaces = %v, want [space-a]", report.SkippedSpaces)
+	}
+	if len(grants.writes) != 1 || grants.writes[0].node != "eosuser/inode-133" {
+		t.Errorf("writes = %+v, want only the share in space-b", grants.writes)
+	}
+}
+
+// TestShallowSkipsASpaceThatCannotBeListed asserts that a space whose shares
+// cannot be read is left to the next run, and that it does not hold up the
+// other spaces.
+func TestShallowSkipsASpaceThatCannotBeListed(t *testing.T) {
+	store := &fakeStore{shares: []storedShare{
+		shared(122, "space-a", "inode-122", "jdoe", false, ocsRead),
+		shared(123, "space-b", "inode-123", "jdoe", false, ocsRead),
+	}}
+	// only space-a cannot be listed.
+	store.listHook = func(f *fakeStore, spaces []string, _ int) {
+		f.listErr = nil
+		if slices.Contains(spaces, "space-a") {
+			f.listErr = errors.New("db down")
+		}
+	}
+	gw := &fakeGateway{
+		users: map[string]bool{"jdoe": true},
+		paths: map[string]string{
+			"eosuser/inode-122": "/eos/project/a/one",
+			"eosuser/inode-123": "/eos/project/b/one",
+		},
+	}
+	grants := &fakeGrants{}
+
+	job := shallowJob(store, gw, grants)
+	job.SpacesPerBatch = 1
+	report, err := job.Run(context.Background())
+	if err != nil {
+		t.Fatalf("Run must not fail when one space cannot be listed: %v", err)
+	}
+	if len(report.SkippedSpaces) != 1 || report.SkippedSpaces[0] != "space-a" {
+		t.Fatalf("skipped spaces = %v, want [space-a]", report.SkippedSpaces)
+	}
+	if len(grants.writes) != 1 || grants.writes[0].node != "eosuser/inode-123" {
+		t.Errorf("writes = %+v, want only the share in space-b", grants.writes)
+	}
+}
+
+// TestShallowStopsWhenCancelled asserts that a cancelled run gives back the
+// cancellation instead of working through the spaces it has left.
+func TestShallowStopsWhenCancelled(t *testing.T) {
+	store := &fakeStore{shares: []storedShare{
+		shared(124, "space-a", "inode-124", "jdoe", false, ocsRead),
+		shared(125, "space-b", "inode-125", "jdoe", false, ocsRead),
+	}}
+	ctx, cancel := context.WithCancel(context.Background())
+	// the run is cancelled while it is checking the first space.
+	store.listHook = func(_ *fakeStore, spaces []string, _ int) {
+		if slices.Contains(spaces, "space-a") {
+			cancel()
+		}
+	}
+	gw := &fakeGateway{
+		users: map[string]bool{"jdoe": true},
+		paths: map[string]string{
+			"eosuser/inode-124": "/eos/project/a/one",
+			"eosuser/inode-125": "/eos/project/b/one",
+		},
+	}
+	grants := &fakeGrants{}
+
+	job := shallowJob(store, gw, grants)
+	job.SpacesPerBatch = 1
+	report, err := job.Run(ctx)
+	if !errors.Is(err, context.Canceled) {
+		t.Fatalf("Run returned %v, want the cancellation", err)
+	}
+	if len(report.SkippedSpaces) != 0 {
+		t.Errorf("skipped spaces = %v, want none: a space left unvisited was not skipped", report.SkippedSpaces)
+	}
+	for _, w := range grants.writes {
+		if w.node == "eosuser/inode-125" {
+			t.Errorf("wrote %+v, want nothing in the space after the cancellation", w)
+		}
 	}
 }
 
