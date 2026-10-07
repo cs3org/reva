@@ -113,26 +113,30 @@ and wiring apply.
 ### [http.services.sciencemesh]
 
 ScienceMesh WAYF and received-webapp launch. Operator-configured directory
-fetches stay trusted. Listed providers, request-supplied `/discover` domains,
-and `/open-in-app` sender discovery and token exchange use public-only clients
-with the configured exception. Loopback and environment proxy stay off.
+fetches stay trusted. Listed providers, request-supplied `/discover`
+domains, and `/open-in-app` sender discovery and token exchange use
+public-only clients with the configured exception. Loopback stays off.
+`ocm_client_use_env_proxy` is the explicit proxy opt-in.
 
 | Key | Default | Use |
 |---|---|---|
 | `ocm_client_timeout` | 10 | Request timeout, integer seconds |
 | `ocm_client_insecure` | false | Skip TLS verification |
+| `ocm_client_use_env_proxy` | false | Environment-proxy opt-in |
 | `allowed_federation_cidrs` | [] | Explicit private-network exception |
 
 ### [grpc.services.ocmproviderauthorizer.drivers.open]
 
 Open provider authorizer. Public-only first-hop discovery; no local
-two-provider topology. Loopback stays off. Configure this key only when using
-the open driver; do not switch a configured `json` or `mentix` driver to `open`
+two-provider topology. Loopback stays off. `ocm_client_use_env_proxy` is
+the explicit proxy opt-in. Configure these keys only when using the open
+driver; do not switch a configured `json` or `mentix` driver to `open`
 to get this control.
 
 | Key | Default | Use |
 |---|---|---|
 | `insecure` | false | Skip TLS verification |
+| `ocm_client_use_env_proxy` | false | Environment-proxy opt-in |
 | `allowed_federation_cidrs` | [] | Explicit private-network exception |
 
 ## Defaults and equivalence

@@ -72,6 +72,7 @@ type config struct {
 	DirectoryServiceURLs string                      `mapstructure:"directory_service_urls"`
 	OCMClientTimeout     int                         `mapstructure:"ocm_client_timeout"`
 	OCMClientInsecure    bool                        `mapstructure:"ocm_client_insecure"`
+	OCMClientUseEnvProxy bool                        `mapstructure:"ocm_client_use_env_proxy"`
 	// AllowedFederationCIDRs is an explicit private-network exception list for
 	// the public-only OCM discovery client. Empty by default; any invalid entry
 	// aborts service initialization before any directory fetch.
