@@ -23,10 +23,12 @@ import (
 	"crypto/tls"
 	"errors"
 	"net/http"
+	"reflect"
 	"strings"
 	"testing"
 	"time"
 
+	"github.com/cs3org/reva/v3/internal/http/services/opencloudmesh/ocmd"
 	"github.com/cs3org/reva/v3/pkg/ocm/client"
 )
 
@@ -174,6 +176,100 @@ func TestPublicOCMTransportConfigImmutableToConfigMutation(t *testing.T) {
 	cfg.AllowedFederationCIDRs = other
 	if err := dialTransport(tr, "192.168.5.9:9"); !errors.Is(err, client.ErrPolicyViolation) {
 		t.Errorf("after runtime reassignment 192.168.5.9 = %v, want ErrPolicyViolation", err)
+	}
+}
+
+func TestPublicOCMTransportConfigUseEnvProxy(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name    string
+		enabled bool
+	}{
+		{name: "false", enabled: false},
+		{name: "true", enabled: true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			c := &config{
+				OCMClientTimeout:       3,
+				OCMClientInsecure:      true,
+				OCMClientUseEnvProxy:   tt.enabled,
+				AllowedFederationCIDRs: []string{"10.1.2.0/24"},
+			}
+			cfg, err := c.publicOCMTransportConfig()
+			if err != nil {
+				t.Fatalf("publicOCMTransportConfig: %v", err)
+			}
+			if cfg.UseEnvProxy != tt.enabled {
+				t.Fatalf("UseEnvProxy = %v, want %v", cfg.UseEnvProxy, tt.enabled)
+			}
+			if cfg.AllowLoopback {
+				t.Fatal("AllowLoopback must stay false")
+			}
+			if !cfg.Insecure {
+				t.Fatal("Insecure = false, want true (copied from service config)")
+			}
+			httpClient := client.NewPublicOnlyHTTPClient(cfg)
+			tr := client.HTTPTransport(httpClient.Transport)
+			if tr == nil {
+				t.Fatalf("transport: got %T, want public-only base *http.Transport", httpClient.Transport)
+			}
+			if tr.TLSClientConfig == nil || !tr.TLSClientConfig.InsecureSkipVerify {
+				t.Fatal("InsecureSkipVerify = false, want true (from OCMClientInsecure)")
+			}
+			assertProxyMode(t, tr, tt.enabled)
+			if err := dialTransport(tr, "10.1.2.3:9"); errors.Is(err, client.ErrPolicyViolation) {
+				t.Errorf("in-range 10.1.2.3 denied by policy = %v, want a non-policy dial error", err)
+			}
+		})
+	}
+}
+
+// ocmClientTransport returns the base *http.Transport of an OCM client.
+// The client may be the guarded public-only client or the trusted
+// directory client.
+func ocmClientTransport(t *testing.T, c *ocmd.OCMClient) *http.Transport {
+	t.Helper()
+	if c == nil {
+		t.Fatal("nil OCM client")
+	}
+	tr := client.HTTPTransport(c.Transport())
+	if tr == nil {
+		t.Fatalf("transport: got %T, want public-only base *http.Transport", c.Transport())
+	}
+	return tr
+}
+
+// assertProxyMode checks the public-only proxy callback and that the policy
+// dialer still rejects loopback. enabled false leaves Proxy nil.
+func assertProxyMode(t *testing.T, tr *http.Transport, enabled bool) {
+	t.Helper()
+	if tr.DialContext == nil {
+		t.Fatal("DialContext is nil, want the policy dialer")
+	}
+	if err := dialTransport(tr, "127.0.0.1:9"); !errors.Is(err, client.ErrPolicyViolation) {
+		t.Errorf("dial 127.0.0.1:9 = %v, want ErrPolicyViolation", err)
+	}
+	if !enabled {
+		if tr.Proxy != nil {
+			t.Error("Proxy is set, want nil")
+		}
+		return
+	}
+	assertProxyFromEnvironment(t, tr)
+}
+
+func assertProxyFromEnvironment(t *testing.T, tr *http.Transport) {
+	t.Helper()
+	if tr.Proxy == nil {
+		t.Fatal("Proxy is nil, want http.ProxyFromEnvironment")
+	}
+	got := reflect.ValueOf(tr.Proxy).Pointer()
+	want := reflect.ValueOf(http.ProxyFromEnvironment).Pointer()
+	if got != want {
+		t.Errorf("Proxy function = %#x, want http.ProxyFromEnvironment (%#x)", got, want)
 	}
 }
 
