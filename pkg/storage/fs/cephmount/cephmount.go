@@ -606,7 +606,7 @@ func (fs *cephmountfs) CreateHome(ctx context.Context) error {
 	return errtypes.NotSupported("cephmount: CreateHome not implemented")
 }
 
-func (fs *cephmountfs) CreateDir(ctx context.Context, ref *provider.Reference) error {
+func (fs *cephmountfs) CreateDir(ctx context.Context, ref *provider.Reference) (*provider.ResourceInfo, error) {
 	// Capture the original received path for logging
 	var receivedPath string
 	if ref != nil && ref.Path != "" {
@@ -617,14 +617,14 @@ func (fs *cephmountfs) CreateDir(ctx context.Context, ref *provider.Reference) e
 
 	path, err := fs.resolveRef(ctx, ref)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	fs.logOperationWithPaths(ctx, "CreateDir", receivedPath, path)
 
 	if err := fs.authorizeExternal(ctx, path, "CreateDir", canCreate); err != nil {
 		fs.logOperationError(ctx, "CreateDir", path, err)
-		return err
+		return nil, err
 	}
 
 	// Execute directory creation on user's thread with correct UID
@@ -632,10 +632,16 @@ func (fs *cephmountfs) CreateDir(ctx context.Context, ref *provider.Reference) e
 	if err != nil {
 		wrappedErr := errors.Wrap(err, "cephmount: failed to create directory")
 		fs.logOperationError(ctx, "CreateDir", path, wrappedErr)
-		return wrappedErr
+		return nil, wrappedErr
 	}
 
-	return nil
+	// the dir is there, we only miss its metadata
+	md, err := fs.GetMD(ctx, ref, nil)
+	if err != nil {
+		appctx.GetLogger(ctx).Warn().Str("path", path).Err(err).Msg("cephmount: error statting created directory")
+		return nil, nil
+	}
+	return md, nil
 }
 
 func (fs *cephmountfs) Delete(ctx context.Context, ref *provider.Reference) (err error) {

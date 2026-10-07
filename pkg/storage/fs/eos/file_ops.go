@@ -42,13 +42,13 @@ import (
 	"github.com/pkg/errors"
 )
 
-func (fs *Eosfs) CreateDir(ctx context.Context, ref *provider.Reference) error {
+func (fs *Eosfs) CreateDir(ctx context.Context, ref *provider.Reference) (*provider.ResourceInfo, error) {
 	log := appctx.GetLogger(ctx)
 
 	fn, err := fs.resolve(ctx, ref)
 	log.Debug().Any("ref", ref).Str("fn", fn).Err(err).Msgf("CreateDir")
 	if err != nil {
-		return errors.Wrap(err, "eosfs: error resolving reference")
+		return nil, errors.Wrap(err, "eosfs: error resolving reference")
 	}
 
 	// We are creating a directory, so we should have write access in the parent directory
@@ -56,11 +56,21 @@ func (fs *Eosfs) CreateDir(ctx context.Context, ref *provider.Reference) error {
 	if err != nil {
 		log.Error().Any("ref", ref).Any("auth", auth).Str("fn", fn).Err(err).Msgf("CreateDir auth error")
 
-		return err
+		return nil, err
 	}
 
 	log.Info().Msgf("eosfs: createdir: path=%s", fn)
-	return fs.c.CreateDir(ctx, auth, fn)
+	if err := fs.c.CreateDir(ctx, auth, fn); err != nil {
+		return nil, err
+	}
+
+	md, err := fs.GetMD(ctx, ref, nil)
+	if err != nil {
+		// the dir is there, we only miss its metadata
+		log.Warn().Str("fn", fn).Err(err).Msg("eosfs: error statting created directory")
+		return nil, nil
+	}
+	return md, nil
 }
 
 func (fs *Eosfs) CreateReference(ctx context.Context, fn string, targetURI *url.URL) error {

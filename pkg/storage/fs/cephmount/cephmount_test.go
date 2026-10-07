@@ -77,7 +77,7 @@ func TestCephMount_BasicOperations(t *testing.T) {
 
 	// Test CreateDir
 	ref := &provider.Reference{Path: "/testdir"}
-	err = fs.CreateDir(ctx, ref)
+	_, err = fs.CreateDir(ctx, ref)
 	assert.NoError(t, err)
 
 	// Verify directory was created within the chroot
