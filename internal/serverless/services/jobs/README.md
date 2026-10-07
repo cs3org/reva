@@ -54,8 +54,12 @@ DB without duplicating work:
   only subscribes to the jobs it has **registered**, so it never claims a run
   for a job it does not know about; that run waits for a process that does.
 
-This means each process must register the jobs it is expected to run. A run for
-a job that no process has registered simply stays in the queue.
+This means each process must register the jobs it is expected to run. Any
+process can still enqueue a job it does not run: the runners tag the queue
+consumer of each job they register, so `Enqueue` accepts a job some runner has
+registered, even if it is down right now, and refuses a job nobody registered.
+`reva admin jobs forget <job>` drops a job that was removed from the code, once
+it has no pending runs.
 
 ### Delivery semantics
 
@@ -175,7 +179,7 @@ runID, err := runner.Enqueue(ctx, "mycomponent.export", params,
   `errtypes.AlreadyExists` error instead of collapsing onto the in-flight run.
 
 `Enqueue` is the seam a future RPC service would wrap; today it is in-process
-only.
+only, but it works from any process connected to the queue and the status DB.
 
 ### Checking a run's status
 
