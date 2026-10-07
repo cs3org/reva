@@ -24,9 +24,11 @@ import (
 
 	"github.com/cs3org/reva/v3/pkg/appctx"
 	"github.com/cs3org/reva/v3/pkg/rhttp/global"
+	"github.com/cs3org/reva/v3/pkg/rhttp/ratelimit"
 	"github.com/cs3org/reva/v3/pkg/sharedconf"
 	"github.com/cs3org/reva/v3/pkg/utils/cfg"
 	"github.com/go-chi/chi/v5"
+	"github.com/rs/zerolog"
 )
 
 func init() {
@@ -68,6 +70,10 @@ type config struct {
 	// Each entry must be a canonical CIDR wholly inside RFC 1918 or fc00::/7;
 	// any invalid element fails service startup before discovery runs.
 	AllowedFederationCIDRs []string `mapstructure:"allowed_federation_cidrs"`
+	// RateLimit guards all the OCM ingress routes, which are unauthenticated
+	// at the HTTP layer. Callers are remote providers, typically a few egress
+	// addresses each: raise the limit for partners that send large bursts.
+	RateLimit ratelimit.ServiceConfig `mapstructure:",squash"`
 }
 
 func (c *config) ApplyDefaults() {
@@ -81,11 +87,13 @@ func (c *config) ApplyDefaults() {
 	if c.OCMClientTimeout == 0 {
 		c.OCMClientTimeout = 10
 	}
+	c.RateLimit.ApplyDefaults()
 }
 
 type svc struct {
-	Conf   *config
-	router chi.Router
+	Conf    *config
+	router  chi.Router
+	limiter *ratelimit.Limiter
 }
 
 // New returns a new ocmd object, that implements
@@ -102,14 +110,30 @@ func New(ctx context.Context, m map[string]any) (global.Service, error) {
 		router: r,
 	}
 
-	if err := s.routerInit(); err != nil {
+	if err := s.routerInit(appctx.GetLogger(ctx)); err != nil {
+		_ = s.Close()
 		return nil, err
 	}
 
 	return s, nil
 }
 
-func (s *svc) routerInit() error {
+func (s *svc) routerInit(log *zerolog.Logger) error {
+	// Build the limiter before any handler startup work, so that an invalid
+	// trusted_proxy_cidrs entry fails fast, like allowed_federation_cidrs.
+	limiter, err := s.Conf.RateLimit.NewLimiter(log)
+	if err != nil {
+		return err
+	}
+	s.limiter = limiter
+	if limiter != nil && s.Conf.TrustForwardedFor && len(s.Conf.RateLimit.TrustedProxyCIDRs) == 0 {
+		log.Warn().Msg("trust_forwarded_for is set but trusted_proxy_cidrs is empty: " +
+			"all remote providers behind the proxy share a single rate limit bucket")
+	}
+	// All the routes below are unauthenticated (see Unprotected), so the
+	// limiter applies to the whole router, unmatched paths included.
+	s.router.Use(limiter.Middleware)
+
 	sharesHandler := new(sharesHandler)
 	invitesHandler := new(invitesHandler)
 	notifHandler := new(notifHandler)
@@ -138,6 +162,7 @@ func (s *svc) routerInit() error {
 
 // Close performs cleanup.
 func (s *svc) Close() error {
+	s.limiter.Close()
 	return nil
 }
 

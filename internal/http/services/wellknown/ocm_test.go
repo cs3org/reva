@@ -19,8 +19,12 @@
 package wellknown
 
 import (
+	"encoding/json"
+	"net/http"
+	"net/http/httptest"
 	"slices"
 	"strings"
+	"sync"
 	"testing"
 )
 
@@ -94,4 +98,33 @@ func TestInitCapabilitiesDoNotDuplicateExchangeToken(t *testing.T) {
 	if count != 1 {
 		t.Errorf("expected exactly 1 exchange-token capability, got %d in %v", count, h.data.Capabilities)
 	}
+}
+
+func TestOcmConcurrentUserAgents(t *testing.T) {
+	h := &wkocmHandler{}
+	h.init(&OcmProviderConfig{Endpoint: "https://cernbox.cern.ch"})
+
+	want := map[string]string{"Nextcloud Server Crawler": "1.1", "reva": OCMAPIVersion}
+	var wg sync.WaitGroup
+	for i := 0; i < 50; i++ {
+		for ua, version := range want {
+			wg.Add(1)
+			go func() {
+				defer wg.Done()
+				req := httptest.NewRequest(http.MethodGet, "/ocm", nil)
+				req.Header.Set("User-Agent", ua)
+				rec := httptest.NewRecorder()
+				h.Ocm(rec, req)
+				var got OcmDiscoveryData
+				if err := json.Unmarshal(rec.Body.Bytes(), &got); err != nil {
+					t.Errorf("%s: invalid JSON: %v", ua, err)
+					return
+				}
+				if got.APIVersion != version {
+					t.Errorf("%s: apiVersion %q, want %q", ua, got.APIVersion, version)
+				}
+			}()
+		}
+	}
+	wg.Wait()
 }
