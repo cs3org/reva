@@ -130,6 +130,10 @@ func TestAppsInitDefaultTransport(t *testing.T) {
 			if !ok || ocmClient == nil {
 				t.Fatalf("launchClient = %T, want *ocmd.OCMClient", h.launchClient)
 			}
+			if c.OCMClientUseEnvProxy {
+				t.Fatal("omitted ocm_client_use_env_proxy must stay false")
+			}
+			assertProxyMode(t, ocmClientTransport(t, ocmClient), false)
 			for _, endpoint := range []string{
 				"https://192.168.1.50:9",
 				"https://127.0.0.1:9",
@@ -137,6 +141,72 @@ func TestAppsInitDefaultTransport(t *testing.T) {
 				assertLaunchDenied(t, callRetainedDiscovery(t, ocmClient, endpoint), "discovery "+endpoint)
 				assertLaunchDenied(t, callRetainedExchange(t, ocmClient, endpoint+"/ocm/token"), "exchange "+endpoint)
 			}
+		})
+	}
+}
+
+func TestDecodeOCMClientUseEnvProxy(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name  string
+		set   bool
+		value bool
+		want  bool
+	}{
+		{name: "omitted", want: false},
+		{name: "false", set: true, value: false, want: false},
+		{name: "true", set: true, value: true, want: true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			input := map[string]any{
+				"gatewaysvc":         "grpc:0",
+				"mesh_directory_url": "https://dir.example",
+				"provider_domain":    "receiver.example",
+			}
+			if tt.set {
+				input["ocm_client_use_env_proxy"] = tt.value
+			}
+			var c config
+			if err := cfg.Decode(input, &c); err != nil {
+				t.Fatalf("decode: %v", err)
+			}
+			if c.OCMClientUseEnvProxy != tt.want {
+				t.Fatalf("OCMClientUseEnvProxy = %v, want %v", c.OCMClientUseEnvProxy, tt.want)
+			}
+		})
+	}
+}
+
+// TestAppsInitUseEnvProxyWiring checks the open-in-app client. Discover and
+// ExchangeToken share that one public-only client.
+func TestAppsInitUseEnvProxyWiring(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name    string
+		enabled bool
+	}{
+		{name: "false", enabled: false},
+		{name: "true", enabled: true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			h := &appsHandler{}
+			if err := h.init(&config{
+				ProviderDomain:       "receiver.example",
+				OCMClientUseEnvProxy: tt.enabled,
+			}); err != nil {
+				t.Fatalf("init: %v", err)
+			}
+			ocmClient, ok := h.launchClient.(*ocmd.OCMClient)
+			if !ok || ocmClient == nil {
+				t.Fatalf("launchClient = %T, want *ocmd.OCMClient", h.launchClient)
+			}
+			assertProxyMode(t, ocmClientTransport(t, ocmClient), tt.enabled)
 		})
 	}
 }

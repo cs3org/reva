@@ -10,7 +10,7 @@ refused unless `mfa_policy` in `[http.services.wellknown.ocmprovider]` is
 `off` (default `reject`); nothing is advertised in discovery. The launch uses
 the ScienceMesh timeout, TLS settings and explicit `allowed_federation_cidrs`
 for both discovery and token exchange. Without an exception, private
-addresses are refused; loopback and environment proxies remain disabled on
-this service.
+addresses are refused. Loopback stays off. Environment proxy stays off
+unless `ocm_client_use_env_proxy` is set.
 
 https://github.com/cs3org/reva/pull/5850

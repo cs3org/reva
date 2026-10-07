@@ -116,6 +116,11 @@ func NewPublicOnlyClientWithConfig(cfg client.TransportConfig) *OCMClient {
 	}
 }
 
+// Transport returns the HTTP round tripper used for OCM requests.
+func (c *OCMClient) Transport() http.RoundTripper {
+	return c.client.Transport
+}
+
 // Discover returns a number of properties used to discover the capabilities offered by a remote cloud storage.
 // https://cs3org.github.io/OCM-API/docs.html?branch=develop&repo=OCM-API&user=cs3org#/paths/~1.well-known~1ocm/get
 func (c *OCMClient) Discover(ctx context.Context, endpoint string) (*wellknown.OcmDiscoveryData, error) {
