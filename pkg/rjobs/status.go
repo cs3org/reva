@@ -38,7 +38,9 @@ const (
 	// StateFailed means the most recent attempt returned an error. It is NOT
 	// terminal: the framework re-delivers a failed run, so the run will move
 	// back to queued and be retried. A client should read StateFailed as
-	// "last attempt failed, another is coming", not "given up".
+	// "last attempt failed, another is coming", not "given up". A job that
+	// knows a retry cannot help returns Permanent, which ends the run as
+	// StateAborted instead.
 	StateFailed State = "failed"
 	// StateCancelling means a cancellation was requested and the framework is
 	// winding the run down. It is transient: the run becomes StateCancelled once
@@ -49,7 +51,20 @@ const (
 	// cancellation. Unlike StateFailed it is NOT retried: the run is acked and
 	// never redelivered.
 	StateCancelled State = "cancelled"
+	// StateAborted is the terminal state of a run that failed for good: the job
+	// returned a Permanent error, or the run never reached the queue. It is NOT
+	// retried.
+	StateAborted State = "aborted"
 )
+
+// Terminal reports whether a run in state s is finished for good.
+func (s State) Terminal() bool {
+	switch s {
+	case StateSucceeded, StateCancelled, StateAborted:
+		return true
+	}
+	return false
+}
 
 // Status is the observable state of a single run, addressable by its RunID.
 type Status struct {
@@ -127,8 +142,8 @@ type StatusStore interface {
 	// RequestCancel records that a run should be cancelled and returns its
 	// updated status. It is a targeted write of the cancel intent, not a full
 	// status upsert, so it does not race with the worker's lifecycle writes. It
-	// is a no-op on a run that has already reached a terminal state (succeeded
-	// or cancelled), returning that status unchanged, which makes cancel
+	// is a no-op on a run that has already reached a terminal state (succeeded,
+	// cancelled or aborted), returning that status unchanged, which makes cancel
 	// idempotent. It returns an errtypes.NotFound error if the run is unknown.
 	RequestCancel(ctx context.Context, id RunID) (Status, error)
 	// Close releases the status store's resources.

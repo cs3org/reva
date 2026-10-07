@@ -20,6 +20,7 @@ package rjobs
 
 import (
 	"context"
+	"errors"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -251,7 +252,7 @@ func (f *fakeStatus) PutProgress(_ context.Context, id RunID, p Progress, at tim
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	s, ok := f.rec[id]
-	if !ok || s.State == StateSucceeded || s.State == StateCancelled {
+	if !ok || s.State.Terminal() {
 		return nil
 	}
 	s.Progress, s.ProgressAt = &p, &at
@@ -276,7 +277,7 @@ func (f *fakeStatus) RequestCancel(_ context.Context, id RunID) (Status, error) 
 	if !ok {
 		return Status{}, errtypes.NotFound(string(id))
 	}
-	if s.State == StateSucceeded || s.State == StateCancelled {
+	if s.State.Terminal() {
 		return s, nil
 	}
 	s.CancelRequested = true
@@ -308,6 +309,7 @@ type oneRunStore struct {
 	claimed   atomic.Bool
 	completed atomic.Bool
 	failed    atomic.Bool
+	failDelay atomic.Int64
 }
 
 func (s *oneRunStore) Enqueue(_ context.Context, r Run) (RunID, error) { return r.ID, nil }
@@ -321,7 +323,8 @@ func (s *oneRunStore) Claim(ctx context.Context) (Run, error) {
 }
 
 func (s *oneRunStore) Complete(context.Context, RunID) error { s.completed.Store(true); return nil }
-func (s *oneRunStore) Fail(context.Context, RunID, time.Duration) error {
+func (s *oneRunStore) Fail(_ context.Context, _ RunID, d time.Duration) error {
+	s.failDelay.Store(int64(d))
 	s.failed.Store(true)
 	return nil
 }
@@ -753,5 +756,62 @@ func TestProgressFinalSnapshot(t *testing.T) {
 	}
 	if got.Progress.Details["file"] != 2 {
 		t.Errorf("reported details must be copied, got %v", got.Progress.Details)
+	}
+}
+
+// runOnce runs a single on-demand run of job through a runner and returns its
+// final status once the store acked or naked it.
+func runOnce(t *testing.T, job Job, run Run) (Status, *oneRunStore) {
+	t.Helper()
+	resetRegistry()
+	if err := RegisterOnDemand(run.Job, func(context.Context, map[string]any) (Job, error) { return job, nil }); err != nil {
+		t.Fatal(err)
+	}
+	status := newFakeStatus()
+	store := &oneRunStore{run: run}
+	_ = status.Put(context.Background(), Status{RunID: run.ID, Job: run.Job, State: StateQueued})
+
+	r, err := NewRunner(context.Background(), Options{Workers: 1, Store: store, Status: status})
+	if err != nil {
+		t.Fatal(err)
+	}
+	r.Start()
+	defer r.Stop(context.Background())
+
+	deadline := time.After(2 * time.Second)
+	for !store.completed.Load() && !store.failed.Load() {
+		select {
+		case <-deadline:
+			t.Fatal("run did not finish")
+		case <-time.After(5 * time.Millisecond):
+		}
+	}
+	st, _ := status.Get(context.Background(), run.ID)
+	return st, store
+}
+
+func TestRetryAfter(t *testing.T) {
+	job := jobFunc(func(context.Context, Params) (Params, error) {
+		return nil, RetryAfter(5*time.Second, errors.New("busy"))
+	})
+	st, store := runOnce(t, job, Run{ID: "run-1", Job: "test.retry", Attempt: 2})
+	if !store.failed.Load() || time.Duration(store.failDelay.Load()) != 5*time.Second {
+		t.Errorf("expected a nak after 5s, got failed=%v delay=%v", store.failed.Load(), time.Duration(store.failDelay.Load()))
+	}
+	if st.State != StateQueued || st.LastError != "busy" || st.Attempt != 2 {
+		t.Errorf("unexpected status %+v", st)
+	}
+}
+
+func TestPermanent(t *testing.T) {
+	job := jobFunc(func(context.Context, Params) (Params, error) {
+		return nil, Permanent(errors.New("source is gone"))
+	})
+	st, store := runOnce(t, job, Run{ID: "run-1", Job: "test.permanent", Attempt: 1})
+	if !store.completed.Load() || store.failed.Load() {
+		t.Error("an aborted run must be acked, not retried")
+	}
+	if st.State != StateAborted || st.FinishedAt == nil || st.LastError != "source is gone" {
+		t.Errorf("unexpected status %+v", st)
 	}
 }

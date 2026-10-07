@@ -375,14 +375,14 @@ func (r *Runner) enqueueUnique(ctx context.Context, run Run) (RunID, error) {
 
 	if _, err := r.store.Enqueue(ctx, run); err != nil {
 		// the key is reserved but nothing reached the queue. Release it and mark
-		// the orphaned run failed, so the key is not stuck and no phantom queued
+		// the orphaned run aborted, so the key is not stuck and no phantom queued
 		// run lingers.
 		if rerr := r.status.Release(ctx, run.ID); rerr != nil {
 			r.log.Error().Err(rerr).Str("run", string(run.ID)).Msg("rjobs: releasing reservation after failed enqueue errored")
 		}
 		now := time.Now()
 		failed := queued
-		failed.State = StateFailed
+		failed.State = StateAborted
 		failed.FinishedAt = &now
 		failed.LastError = err.Error()
 		if perr := r.status.Put(ctx, failed); perr != nil {
@@ -710,6 +710,28 @@ func (r *Runner) execRun(ctx context.Context, run Run) {
 		return
 	}
 
+	// A permanent failure ends the run for good: ack it and free its key.
+	if isPermanent(err) {
+		log.Error().Err(err).Msg("rjobs: run aborted")
+		r.recordStatus(ctx, run, StateAborted, nil, err, h.started, log)
+		r.releaseDedup(ctx, run, log)
+		if cerr := r.store.Complete(ctx, run.ID); cerr != nil {
+			log.Error().Err(cerr).Msg("rjobs: completing aborted run errored")
+		}
+		return
+	}
+
+	// A run asking to be retried later is waiting, not broken: record it as
+	// queued and redeliver it after the delay it asked for.
+	if after, ok := retryDelay(err); ok {
+		log.Info().Err(err).Dur("after", after).Msg("rjobs: run asked to be retried")
+		r.recordStatus(ctx, run, StateQueued, nil, err, h.started, log)
+		if ferr := r.store.Fail(ctx, run.ID, after); ferr != nil {
+			log.Error().Err(ferr).Msg("rjobs: rescheduling run errored")
+		}
+		return
+	}
+
 	if err != nil {
 		log.Error().Err(err).Msg("rjobs: run failed")
 		r.recordStatus(ctx, run, StateFailed, nil, err, h.started, log)
@@ -720,12 +742,7 @@ func (r *Runner) execRun(ctx context.Context, run Run) {
 	}
 
 	r.recordStatus(ctx, run, StateSucceeded, result, nil, h.started, log)
-	if run.DedupKey != "" && r.status != nil {
-		// the run is done; free its Unique key so a new run can take it.
-		if err := r.status.Release(ctx, run.ID); err != nil {
-			log.Error().Err(err).Msg("rjobs: releasing dedup reservation errored")
-		}
-	}
+	r.releaseDedup(ctx, run, log)
 	if cerr := r.store.Complete(ctx, run.ID); cerr != nil {
 		log.Error().Err(cerr).Msg("rjobs: completing run errored")
 	}
@@ -758,13 +775,19 @@ func (r *Runner) cancelRequested(ctx context.Context, run Run) bool {
 // redelivered. Cancellation is terminal, unlike a failure.
 func (r *Runner) finishCancelled(ctx context.Context, run Run, started time.Time, log zerolog.Logger) {
 	r.recordStatus(ctx, run, StateCancelled, nil, nil, started, log)
-	if run.DedupKey != "" && r.status != nil {
-		if err := r.status.Release(ctx, run.ID); err != nil {
-			log.Error().Err(err).Msg("rjobs: releasing dedup reservation errored")
-		}
-	}
+	r.releaseDedup(ctx, run, log)
 	if err := r.store.Complete(ctx, run.ID); err != nil {
 		log.Error().Err(err).Msg("rjobs: completing cancelled run errored")
+	}
+}
+
+// releaseDedup frees the Unique key of a finished run, so a new run can take it.
+func (r *Runner) releaseDedup(ctx context.Context, run Run, log zerolog.Logger) {
+	if run.DedupKey == "" || r.status == nil {
+		return
+	}
+	if err := r.status.Release(ctx, run.ID); err != nil {
+		log.Error().Err(err).Msg("rjobs: releasing dedup reservation errored")
 	}
 }
 
@@ -836,7 +859,7 @@ func (r *Runner) recordStatus(ctx context.Context, run Run, state State, result 
 		st.StartedAt = &s
 	}
 	switch state {
-	case StateSucceeded, StateFailed, StateCancelled:
+	case StateSucceeded, StateFailed, StateCancelled, StateAborted:
 		st.FinishedAt = &now
 	}
 	if runErr != nil {
