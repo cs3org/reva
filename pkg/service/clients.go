@@ -231,7 +231,9 @@ func (c *clients) pick(name string, tried []string) (registry.Node, error) {
 		return nil, fmt.Errorf("service registry: resolving %q: %w", name, err)
 	}
 	nodes := filterByMetadata(svc.Nodes(), map[string]string{registry.MetaTransport: registry.TransportGRPC})
-	node, ok := c.selector.Pick(c.unpenalized(name, without(nodes, tried)))
+	// Penalties are weighed among the nodes a selector may pick: an offline or
+	// draining node that escaped them must not hide every penalized one.
+	node, ok := c.selector.Pick(c.unpenalized(name, eligible(without(nodes, tried))))
 	if !ok {
 		return nil, fmt.Errorf("service registry: no selectable grpc node for %q", name)
 	}

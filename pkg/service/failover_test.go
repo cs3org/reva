@@ -51,16 +51,25 @@ type fakePeer struct {
 	state   connectivity.State
 	answer  func(address string) error
 	calls   *callLog
+	// dropOnFailure makes a failed call take the connection down with it.
+	dropOnFailure bool
 }
 
 func (p *fakePeer) Invoke(ctx context.Context, method string, args, reply any, opts ...grpc.CallOption) error {
-	p.calls.add(p.address)
-	return p.answer(p.address)
+	return p.call()
 }
 
 func (p *fakePeer) NewStream(ctx context.Context, desc *grpc.StreamDesc, method string, opts ...grpc.CallOption) (grpc.ClientStream, error) {
+	return nil, p.call()
+}
+
+func (p *fakePeer) call() error {
 	p.calls.add(p.address)
-	return nil, p.answer(p.address)
+	err := p.answer(p.address)
+	if err != nil && p.dropOnFailure {
+		p.state = connectivity.Idle
+	}
+	return err
 }
 
 func (p *fakePeer) GetState() connectivity.State { return p.state }
@@ -199,6 +208,43 @@ func TestAReadyConnectionOnlyReplaysReads(t *testing.T) {
 	}
 }
 
+// A node whose connection is still up answered: the Unavailable it returned came
+// from further down, so it keeps its place for the next call.
+func TestARelayedFailureBlamesNobody(t *testing.T) {
+	c, calls := peers(connectivity.Ready, unavailableAt(nodeA), nodeA, nodeB)
+
+	for range 2 {
+		if err := invoke(t, c, readMethod); err != nil {
+			t.Fatalf("expected the read to succeed on another node: %v", err)
+		}
+	}
+	if got := calls.addresses(); !slices.Equal(got, []string{nodeA, nodeB, nodeA, nodeB}) {
+		t.Fatalf("expected %s to be tried first again, got %v", nodeA, got)
+	}
+	if c.penalized(NameGateway, nodeA) {
+		t.Fatal("a node that answered must not be penalized")
+	}
+}
+
+func TestALostConnectionIsBlamed(t *testing.T) {
+	c, calls := peers(connectivity.Ready, unavailableAt(nodeA), nodeA, nodeB)
+	open := c.open
+	c.open = func(address string) (peerConn, error) {
+		conn, err := open(address)
+		conn.(*fakePeer).dropOnFailure = true
+		return conn, err
+	}
+
+	for range 2 {
+		if err := invoke(t, c, readMethod); err != nil {
+			t.Fatalf("expected the read to succeed on another node: %v", err)
+		}
+	}
+	if got := calls.addresses(); !slices.Equal(got, []string{nodeA, nodeB, nodeB}) {
+		t.Fatalf("expected the second call to skip %s, got %v", nodeA, got)
+	}
+}
+
 func TestAnUnreachableNodeIsPassedOverNextTime(t *testing.T) {
 	c, calls := peers(connectivity.Idle, unavailableAt(nodeA), nodeA, nodeB, nodeC)
 
@@ -264,6 +310,24 @@ func TestEveryNodePenalizedStillResolves(t *testing.T) {
 	}
 	if got := calls.addresses(); len(got) != 1 {
 		t.Fatalf("expected one call, got %v", got)
+	}
+}
+
+// The incident behind this: two penalized gateways and a third draining one left
+// nothing to pick, because the draining node alone escaped the penalty.
+func TestADrainingNodeDoesNotHideThePenalizedOnes(t *testing.T) {
+	c, calls := peers(connectivity.Idle, unavailableAt(), nodeA, nodeB)
+	_ = c.registry.Add(registry.NewService(NameGateway, []registry.Node{
+		registry.NewNode("c", nodeC, meta(registry.StateDraining)),
+	}))
+	c.penalize(NameGateway, nodeA)
+	c.penalize(NameGateway, nodeB)
+
+	if err := invoke(t, c, writeMethod); err != nil {
+		t.Fatalf("expected the call to go through a penalized node: %v", err)
+	}
+	if got := calls.addresses(); !slices.Equal(got, []string{nodeA}) {
+		t.Fatalf("expected the call to land on %s, got %v", nodeA, got)
 	}
 }
 

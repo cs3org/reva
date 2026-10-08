@@ -74,7 +74,9 @@ func (f *failoverConn) Invoke(ctx context.Context, method string, args, reply an
 		if !retryElsewhere(err, state, method) {
 			return err
 		}
-		f.clients.unreachable(ctx, f.service, addr, method, err)
+		if lost(conn) {
+			f.clients.unreachable(ctx, f.service, addr, method, err)
+		}
 	}
 	return err
 }
@@ -102,7 +104,9 @@ func (f *failoverConn) NewStream(ctx context.Context, desc *grpc.StreamDesc, met
 		if !retryElsewhere(err, state, method) {
 			return nil, err
 		}
-		f.clients.unreachable(ctx, f.service, addr, method, err)
+		if lost(conn) {
+			f.clients.unreachable(ctx, f.service, addr, method, err)
+		}
 	}
 	return nil, err
 }
@@ -139,6 +143,15 @@ func retryElsewhere(err error, state connectivity.State, method string) bool {
 		return false
 	}
 	return state != connectivity.Ready || idempotent(method)
+}
+
+// lost reports whether a failed call left its node unreachable. A connection
+// still up means the node answered: the Unavailable came from further down, a
+// gateway relaying a storage provider that is down, say. Another node may do
+// better, but this one is not to blame, and passing it over would turn one
+// broken backend into every caller in the process losing the service.
+func lost(conn peerConn) bool {
+	return conn.GetState() != connectivity.Ready
 }
 
 // Matching by prefix keeps this from drifting as CS3 grows. The prefixes were
