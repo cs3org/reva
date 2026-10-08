@@ -249,7 +249,7 @@ func onHost(n registry.Node, host string) bool {
 			return true
 		}
 	}
-	return n.Metadata()["host"] == host
+	return n.Metadata()[registry.MetaHost] == host
 }
 
 // controlEndpointFor builds the endpoint dialing a node's control channel,
