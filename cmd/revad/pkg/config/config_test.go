@@ -264,7 +264,7 @@ nats_token = "secret-token-example"`
 		BlockedUsers: []string{},
 		Registry: Registry{
 			Driver:            "memory",
-			Selector:          "first",
+			Selector:          "local",
 			HeartbeatInterval: "5s",
 			DegradedAfter:     "15s",
 			OfflineAfter:      "30s",

@@ -239,12 +239,15 @@ the import.
 ### Choosing between candidates
 
 When several nodes serve the same name, the resolver picks one through a
-`Selector`, chosen with `selector` in `[shared.registry]`. The registry lists a
-service's nodes in node id order, so `first`, the default, always picks the same
-node, which makes debugging pleasant; `roundrobin` and `random` spread the load
-instead. All three apply the same eligibility rule before choosing: `ready`
-nodes if there are any, `degraded` ones if that is all that is left, and never
-anything `offline` or `draining`.
+`Selector`, chosen with `selector` in `[shared.registry]`. `local`, the default,
+takes a node registered from the same host (its `host` metadata), so a call stays
+on the machine it started on, and a random one when none there is selectable.
+The registry lists a service's nodes in node id order, so `first` always picks
+the same node, which makes debugging pleasant; `roundrobin` and `random` spread
+the load instead. All of them apply the same eligibility rule before choosing:
+`ready` nodes if there are any, `degraded` ones if that is all that is left, and
+never anything `offline` or `draining`. A ready node elsewhere is therefore
+preferred to a degraded one on the same host.
 
 Callers can also push information back. `service.Degrade(name, address)` marks a
 node degraded after a failed dial or RPC, so subsequent lookups step over it
@@ -303,7 +306,7 @@ process and applies to every service that process loads.
 ```toml
 [shared.registry]
 driver = "memory"          # "memory" (default) | "nats"
-selector = "first"         # "first" (default) | "random" | "roundrobin"
+selector = "local"         # "local" (default) | "first" | "random" | "roundrobin"
 
 heartbeat_interval = "5s"  # how often this process refreshes its nodes
 degraded_after     = "15s" # quiet for longer than this -> degraded

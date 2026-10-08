@@ -74,7 +74,8 @@ func TestSelectorNoSelectableNode(t *testing.T) {
 
 func TestNewSelector(t *testing.T) {
 	for name, want := range map[string]Selector{
-		"":           FirstSelector{},
+		"":           LocalSelector{},
+		"local":      LocalSelector{},
 		"first":      FirstSelector{},
 		"random":     RandomSelector{},
 		"roundrobin": &RoundRobinSelector{},
@@ -89,6 +90,82 @@ func TestNewSelector(t *testing.T) {
 	}
 	if _, err := NewSelector("closest"); err == nil {
 		t.Fatal("an unknown selector must be refused")
+	}
+}
+
+func onHost(id, address, host, state string) registry.Node {
+	m := meta(state)
+	m[registry.MetaHost] = host
+	return registry.NewNode(id, address, m)
+}
+
+func TestLocalSelectorPrefersThisHost(t *testing.T) {
+	here := LocalSelector{Host: "here"}
+	for _, tc := range []struct {
+		name  string
+		nodes []registry.Node
+		want  string
+	}{
+		{"local ready", []registry.Node{
+			onHost("a", "10.0.0.1:1", "there", registry.StateReady),
+			onHost("b", "10.0.0.2:1", "here", registry.StateReady),
+		}, "10.0.0.2:1"},
+		{"local draining", []registry.Node{
+			onHost("a", "10.0.0.1:1", "there", registry.StateReady),
+			onHost("b", "10.0.0.2:1", "here", registry.StateDraining),
+		}, "10.0.0.1:1"},
+		{"local offline", []registry.Node{
+			onHost("a", "10.0.0.1:1", "there", registry.StateReady),
+			onHost("b", "10.0.0.2:1", "here", registry.StateOffline),
+		}, "10.0.0.1:1"},
+		// a healthy node elsewhere beats a degraded one here
+		{"local degraded", []registry.Node{
+			onHost("a", "10.0.0.1:1", "there", registry.StateReady),
+			onHost("b", "10.0.0.2:1", "here", registry.StateDegraded),
+		}, "10.0.0.1:1"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			for range 20 {
+				n, ok := here.Pick(tc.nodes)
+				if !ok || n.Address() != tc.want {
+					t.Fatalf("expected %s, got %v ok=%v", tc.want, n, ok)
+				}
+			}
+		})
+	}
+}
+
+func TestLocalSelectorFallsBackToRandom(t *testing.T) {
+	nodes := []registry.Node{
+		onHost("a", "10.0.0.1:1", "there", registry.StateReady),
+		onHost("b", "10.0.0.2:1", "elsewhere", registry.StateReady),
+	}
+	seen := map[string]bool{}
+	for range 200 {
+		n, ok := LocalSelector{Host: "here"}.Pick(nodes)
+		if !ok {
+			t.Fatal("expected a remote node")
+		}
+		seen[n.Address()] = true
+	}
+	if len(seen) != len(nodes) {
+		t.Fatalf("expected every remote node to be picked at some point, got %v", seen)
+	}
+}
+
+// A local node this process cannot reach is passed over like any other.
+func TestLocalSelectorSkipsAPenalizedLocalNode(t *testing.T) {
+	reg := memory.New(nil)
+	_ = reg.Add(registry.NewService(NameGateway, []registry.Node{
+		onHost("a", "10.0.0.1:1", "there", registry.StateReady),
+		onHost("b", "10.0.0.2:1", "here", registry.StateReady),
+	}))
+	c := NewClients(reg, LocalSelector{Host: "here"}).(*clients)
+	c.penalize(NameGateway, "10.0.0.2:1")
+
+	n, err := c.pick(context.Background(), NameGateway, nil)
+	if err != nil || n.Address() != "10.0.0.1:1" {
+		t.Fatalf("expected the remote node, got %v: %v", n, err)
 	}
 }
 
