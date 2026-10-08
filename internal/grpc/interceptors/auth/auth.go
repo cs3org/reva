@@ -24,7 +24,6 @@ import (
 
 	"github.com/bluele/gcache"
 	authpb "github.com/cs3org/go-cs3apis/cs3/auth/provider/v1beta1"
-	gatewayv1beta1 "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	"github.com/mitchellh/mapstructure"
 	"github.com/pkg/errors"
@@ -142,8 +141,7 @@ func (i *interceptor) unary(unprotected []string) grpc.UnaryServerInterceptor {
 		// scopes, validate the token and ensure access to the resource is allowed
 		u, scopes, err := i.dismantleToken(ctx, tkn, req, false)
 		if err != nil {
-			log.Warn().Err(err).Msg("access token is invalid")
-			return nil, status.Errorf(codes.PermissionDenied, "auth: core access token is invalid")
+			return nil, tokenError(ctx, err)
 		}
 
 		if i.blockedUsers.IsBlocked(u.Username) {
@@ -178,8 +176,7 @@ func (i *interceptor) stream(unprotected []string) grpc.StreamServerInterceptor 
 		// the call by method.
 		u, scopes, err := i.dismantleToken(ctx, tkn, scope.MethodResource(info.FullMethod), false)
 		if err != nil {
-			log.Warn().Err(err).Msg("access token is invalid")
-			return status.Errorf(codes.PermissionDenied, "auth: core access token is invalid")
+			return tokenError(ctx, err)
 		}
 
 		// store user and core access token in context.
@@ -189,6 +186,23 @@ func (i *interceptor) stream(unprotected []string) grpc.StreamServerInterceptor 
 		wrapped := newWrappedServerStream(ctx, ss)
 		return handler(srv, wrapped)
 	}
+}
+
+// unverifiedError is a token that could not be checked, as opposed to one that
+// was checked and rejected: the call may be retried, nobody has to log in again.
+type unverifiedError struct{ error }
+
+func (e unverifiedError) Unwrap() error { return e.error }
+
+// tokenError is the status for a token dismantleToken did not accept.
+func tokenError(ctx context.Context, err error) error {
+	log := appctx.GetLogger(ctx)
+	if errors.As(err, new(unverifiedError)) {
+		log.Error().Err(err).Msg("cannot verify access token")
+		return status.Errorf(codes.Unavailable, "auth: cannot verify access token: %v", err)
+	}
+	log.Warn().Err(err).Msg("access token is invalid")
+	return status.Errorf(codes.PermissionDenied, "auth: core access token is invalid")
 }
 
 // withUserLogger stamps the authenticated user onto the request logger, so a
@@ -227,13 +241,9 @@ func (i *interceptor) dismantleToken(ctx context.Context, tkn string, req any, u
 	// knows — so skip the group re-fetch, which would otherwise reject a valid
 	// admin token whenever the lookup errors (e.g. unknown or unreachable user).
 	if sharedconf.SkipUserGroupsInToken() && !scope.HasAdminScope(tokenScope) {
-		client, err := service.Gateway(ctx)
+		groups, err := getUserGroups(ctx, u)
 		if err != nil {
-			return nil, nil, err
-		}
-		groups, err := getUserGroups(ctx, u, client)
-		if err != nil {
-			return nil, nil, err
+			return nil, nil, unverifiedError{err}
 		}
 		u.Groups = groups
 	}
@@ -254,13 +264,19 @@ func (i *interceptor) dismantleToken(ctx context.Context, tkn string, req any, u
 	return u, tokenScope, nil
 }
 
-func getUserGroups(ctx context.Context, u *userpb.User, client gatewayv1beta1.GatewayAPIClient) ([]string, error) {
+// getUserGroups resolves the gateway only on a cache miss, so cached users are
+// still served while it cannot be reached.
+func getUserGroups(ctx context.Context, u *userpb.User) ([]string, error) {
 	if groupsIf, err := userGroupsCache.Get(u.Id.OpaqueId); err == nil {
 		log := appctx.GetLogger(ctx)
 		log.Debug().Msgf("user groups found in cache %s", u.Id.OpaqueId)
 		return groupsIf.([]string), nil
 	}
 
+	client, err := service.Gateway(ctx)
+	if err != nil {
+		return nil, err
+	}
 	res, err := client.GetUserGroups(ctx, &userpb.GetUserGroupsRequest{UserId: u.Id})
 	if err != nil {
 		return nil, errors.Wrap(err, "gateway: error calling GetUserGroups")
