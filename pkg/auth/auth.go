@@ -32,6 +32,13 @@ type Manager interface {
 	Authenticate(ctx context.Context, clientID, clientSecret string) (*user.User, map[string]*authpb.Scope, error)
 }
 
+// Cacheable is implemented by a Manager or a CredentialStrategy whose outcome
+// depends on the credential alone, so it may be cached. Without it nothing is
+// cached: a public link, for example, follows the current share permissions.
+type Cacheable interface {
+	Cacheable() bool
+}
+
 // Credentials contains the auth type, client id and secret.
 type Credentials struct {
 	Type         string

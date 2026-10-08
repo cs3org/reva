@@ -86,6 +86,9 @@ func New(ctx context.Context, m map[string]any) (rgrpc.Service, error) {
 	if err != nil {
 		return nil, err
 	}
+	if cm, ok := authManager.(auth.Cacheable); !ok || !cm.Cacheable() {
+		c.TTL = -1
+	}
 
 	// Share the process-wide blocked set (seeded from config, blocked_users) with
 	// the auth interceptor so both gates enforce the same list.
