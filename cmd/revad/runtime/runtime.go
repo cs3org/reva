@@ -151,9 +151,15 @@ func New(config *config.Config, opt ...Option) (*Reva, error) {
 		return nil, err
 	}
 
+	selector, err := service.NewSelector(config.Shared.Registry.Selector)
+	if err != nil {
+		watcher.Clean()
+		return nil, err
+	}
+
 	// Install the process-wide resolver before constructing services, so any
 	// service that resolves a peer at construction time finds it (first wins).
-	service.SetGlobal(service.NewClients(reg))
+	service.SetGlobal(service.NewClients(reg, selector))
 	// Expose the registry to the Admin API for fleet introspection.
 	service.SetGlobalRegistry(reg)
 

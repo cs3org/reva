@@ -19,6 +19,7 @@
 package service
 
 import (
+	"fmt"
 	"math/rand"
 	"sync/atomic"
 
@@ -29,6 +30,20 @@ import (
 // draining.
 type Selector interface {
 	Pick(nodes []registry.Node) (registry.Node, bool)
+}
+
+// NewSelector returns the selector configured by name: "first" (also the
+// default for an empty name), "random" or "roundrobin".
+func NewSelector(name string) (Selector, error) {
+	switch name {
+	case "", "first":
+		return FirstSelector{}, nil
+	case "random":
+		return RandomSelector{}, nil
+	case "roundrobin":
+		return &RoundRobinSelector{}, nil
+	}
+	return nil, fmt.Errorf("service registry: unknown selector %q, expected first, random or roundrobin", name)
 }
 
 // eligible drops the nodes no selector may pick: offline and draining ones.

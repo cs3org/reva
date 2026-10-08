@@ -57,7 +57,7 @@ func buildRegistry(cfg *config.Config, override registry.Registry, log *zerolog.
 	if err != nil {
 		return nil, fmt.Errorf("runtime: building service registry: %w", err)
 	}
-	log.Info().Str("driver", driverOrDefault(rc.Driver)).Msg("service registry initialized")
+	log.Info().Str("driver", driverOrDefault(rc.Driver)).Str("selector", rc.Selector).Msg("service registry initialized")
 	return reg, nil
 }
 

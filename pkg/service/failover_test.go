@@ -96,7 +96,7 @@ func (l *callLog) addresses() []string {
 }
 
 // byAddress picks the lowest address, so a test knows which node a call lands
-// on: the registry hands its nodes back in map order.
+// on whatever ids its nodes were given.
 type byAddress struct{}
 
 func (byAddress) Pick(nodes []registry.Node) (registry.Node, bool) {
@@ -120,7 +120,7 @@ func peers(state connectivity.State, answer func(address string) error, addresse
 	_ = reg.Add(registry.NewService(NameGateway, nodes))
 
 	calls := &callLog{}
-	c := NewClients(reg).(*clients)
+	c := NewClients(reg, FirstSelector{}).(*clients)
 	c.selector = byAddress{}
 	c.open = func(address string) (peerConn, error) {
 		return &fakePeer{address: address, state: state, answer: answer, calls: calls}, nil

@@ -73,6 +73,9 @@ type Registry struct {
 	// Drivers holds per-driver configuration, keyed by driver name. The block
 	// for the active Driver is passed to its constructor.
 	Drivers map[string]map[string]any `key:"drivers" mapstructure:"drivers"`
+	// Selector picks among a service's nodes: "first" (default), "random" or
+	// "roundrobin".
+	Selector string `default:"first" key:"selector" mapstructure:"selector"`
 
 	// Heartbeat / liveness thresholds. Defaults shown.
 	HeartbeatInterval string `default:"5s"  key:"heartbeat_interval" mapstructure:"heartbeat_interval"`

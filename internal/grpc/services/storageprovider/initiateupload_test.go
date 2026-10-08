@@ -177,7 +177,7 @@ func newServiceForInitiateUploadTest(t *testing.T, fs storage.FS, expose bool) *
 			registry.MetaPublicURL: "http://localhost/data",
 		}),
 	}))
-	svc.SetGlobal(svc.NewClients(reg))
+	svc.SetGlobal(svc.NewClients(reg, svc.FirstSelector{}))
 	return s
 }
 

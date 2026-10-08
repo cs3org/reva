@@ -239,8 +239,9 @@ the import.
 ### Choosing between candidates
 
 When several nodes serve the same name, the resolver picks one through a
-`Selector`. `FirstSelector` is the default and is deterministic, which makes
-debugging pleasant; `RoundRobinSelector` and `RandomSelector` spread the load
+`Selector`, chosen with `selector` in `[shared.registry]`. The registry lists a
+service's nodes in node id order, so `first`, the default, always picks the same
+node, which makes debugging pleasant; `roundrobin` and `random` spread the load
 instead. All three apply the same eligibility rule before choosing: `ready`
 nodes if there are any, `degraded` ones if that is all that is left, and never
 anything `offline` or `draining`.
@@ -302,6 +303,7 @@ process and applies to every service that process loads.
 ```toml
 [shared.registry]
 driver = "memory"          # "memory" (default) | "nats"
+selector = "first"         # "first" (default) | "random" | "roundrobin"
 
 heartbeat_interval = "5s"  # how often this process refreshes its nodes
 degraded_after     = "15s" # quiet for longer than this -> degraded

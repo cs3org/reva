@@ -21,6 +21,7 @@ package service
 import (
 	"context"
 	"errors"
+	"reflect"
 	"testing"
 	"time"
 
@@ -71,8 +72,28 @@ func TestSelectorNoSelectableNode(t *testing.T) {
 	}
 }
 
+func TestNewSelector(t *testing.T) {
+	for name, want := range map[string]Selector{
+		"":           FirstSelector{},
+		"first":      FirstSelector{},
+		"random":     RandomSelector{},
+		"roundrobin": &RoundRobinSelector{},
+	} {
+		got, err := NewSelector(name)
+		if err != nil {
+			t.Fatalf("%q: %v", name, err)
+		}
+		if reflect.TypeOf(got) != reflect.TypeOf(want) {
+			t.Fatalf("%q: expected %T, got %T", name, want, got)
+		}
+	}
+	if _, err := NewSelector("closest"); err == nil {
+		t.Fatal("an unknown selector must be refused")
+	}
+}
+
 func TestResolveUnknownService(t *testing.T) {
-	c := NewClients(memory.New(nil)).(*clients)
+	c := NewClients(memory.New(nil), FirstSelector{}).(*clients)
 	if _, _, err := c.resolve(context.Background(), "nope"); err == nil {
 		t.Fatal("expected error resolving unknown service")
 	}
@@ -83,7 +104,7 @@ func TestResolveReturnsAddressAndCachesConn(t *testing.T) {
 	_ = reg.Add(registry.NewService(NameGateway, []registry.Node{
 		registry.NewNode("g1", "127.0.0.1:19000", meta(registry.StateReady)),
 	}))
-	c := NewClients(reg).(*clients)
+	c := NewClients(reg, FirstSelector{}).(*clients)
 
 	conn1, addr, err := c.resolve(context.Background(), NameGateway)
 	if err != nil {
@@ -107,7 +128,7 @@ func TestResolveSkipsSameNamedHTTPNode(t *testing.T) {
 		registry.NewNode("http", "127.0.0.1:19143", metaTransport(registry.StateReady, registry.TransportHTTP)),
 		registry.NewNode("grpc", "127.0.0.1:19142", metaTransport(registry.StateReady, registry.TransportGRPC)),
 	}))
-	c := NewClients(reg).(*clients)
+	c := NewClients(reg, FirstSelector{}).(*clients)
 
 	for range 20 {
 		_, addr, err := c.resolve(context.Background(), NamePreferences)
@@ -125,7 +146,7 @@ func TestResolveNoGRPCNode(t *testing.T) {
 	_ = reg.Add(registry.NewService(NamePreferences, []registry.Node{
 		registry.NewNode("http", "127.0.0.1:19143", metaTransport(registry.StateReady, registry.TransportHTTP)),
 	}))
-	c := NewClients(reg).(*clients)
+	c := NewClients(reg, FirstSelector{}).(*clients)
 
 	if _, _, err := c.resolve(context.Background(), NamePreferences); err == nil {
 		t.Fatal("expected no selectable grpc node")
@@ -138,7 +159,7 @@ func TestHTTPEndpointSkipsSameNamedGRPCNode(t *testing.T) {
 		registry.NewNode("grpc", "127.0.0.1:19142", metaTransport(registry.StateReady, registry.TransportGRPC)),
 		registry.NewNode("http", "127.0.0.1:19143", metaTransport(registry.StateReady, registry.TransportHTTP)),
 	}))
-	c := NewClients(reg)
+	c := NewClients(reg, FirstSelector{})
 
 	for range 20 {
 		ep, err := c.HTTPEndpoint(context.Background(), ByName(NamePreferences))
@@ -152,7 +173,7 @@ func TestHTTPEndpointSkipsSameNamedGRPCNode(t *testing.T) {
 }
 
 func TestLookupRetriesUntilPeerResolves(t *testing.T) {
-	c := NewClients(memory.New(nil)).(*clients)
+	c := NewClients(memory.New(nil), FirstSelector{}).(*clients)
 	attempts := 0
 	err := c.lookup(context.Background(), NameGateway, func() error {
 		attempts++
@@ -178,7 +199,7 @@ func TestUnresolvedPeerExitsOnlyAfterBothThresholds(t *testing.T) {
 	exit = func(r string) { reason = r }
 	defer func() { exit = restore }()
 
-	c := NewClients(memory.New(nil)).(*clients)
+	c := NewClients(memory.New(nil), FirstSelector{}).(*clients)
 	c.unresolved(context.Background(), NameGateway, errors.New("boom"))
 	if reason != "" {
 		t.Fatal("a single failed lookup must not end the process")
@@ -197,7 +218,7 @@ func TestOnlyTheGatewayEndsTheProcess(t *testing.T) {
 	exit = func(r string) { reason = r }
 	defer func() { exit = restore }()
 
-	c := NewClients(memory.New(nil)).(*clients)
+	c := NewClients(memory.New(nil), FirstSelector{}).(*clients)
 	c.fails[NameStorageProvider] = &failure{first: time.Now().Add(-2 * unresolvableFor), calls: unresolvableCalls}
 	c.unresolved(context.Background(), NameStorageProvider, errors.New("boom"))
 	if reason != "" {
@@ -210,7 +231,7 @@ func TestDegradeMarksNode(t *testing.T) {
 	_ = reg.Add(registry.NewService(NameGateway, []registry.Node{
 		registry.NewNode("g1", "127.0.0.1:19000", meta(registry.StateReady)),
 	}))
-	c := NewClients(reg).(*clients)
+	c := NewClients(reg, FirstSelector{}).(*clients)
 	c.Degrade(NameGateway, "127.0.0.1:19000")
 
 	svc, _ := reg.GetService(NameGateway)
