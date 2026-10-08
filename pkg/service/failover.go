@@ -71,10 +71,13 @@ func (f *failoverConn) Invoke(ctx context.Context, method string, args, reply an
 			f.clients.reached(f.service, addr)
 			return nil
 		}
-		if !retryElsewhere(err, state, method) {
+		retry := retryElsewhere(err, state, method)
+		blame := retry && lost(conn)
+		traceFailure(ctx, f.service, addr, method, attempt, state, err, retry, blame)
+		if !retry {
 			return err
 		}
-		if lost(conn) {
+		if blame {
 			f.clients.unreachable(ctx, f.service, addr, method, err)
 		}
 	}
@@ -101,14 +104,25 @@ func (f *failoverConn) NewStream(ctx context.Context, desc *grpc.StreamDesc, met
 			f.clients.reached(f.service, addr)
 			return stream, nil
 		}
-		if !retryElsewhere(err, state, method) {
+		retry := retryElsewhere(err, state, method)
+		blame := retry && lost(conn)
+		traceFailure(ctx, f.service, addr, method, attempt, state, err, retry, blame)
+		if !retry {
 			return nil, err
 		}
-		if lost(conn) {
+		if blame {
 			f.clients.unreachable(ctx, f.service, addr, method, err)
 		}
 	}
 	return nil, err
+}
+
+// traceFailure records what a failed attempt led to: whether the call moves on
+// to another node, and whether this one is passed over for it.
+func traceFailure(ctx context.Context, service, address, method string, attempt int, state connectivity.State, err error, retry, blame bool) {
+	appctx.GetLogger(ctx).Trace().Err(err).Str("peer", service).Str("node", address).
+		Str("method", method).Int("attempt", attempt).Stringer("state_before", state).
+		Bool("retry_elsewhere", retry).Bool("blamed", blame).Msg("failed attempt")
 }
 
 // next picks the node for one attempt. Only the first goes through the retrying
@@ -122,7 +136,7 @@ func (f *failoverConn) next(ctx context.Context, attempt int, tried []string) (p
 	if attempt == 0 {
 		return f.clients.resolve(ctx, f.service)
 	}
-	return f.clients.resolveOther(f.service, tried)
+	return f.clients.resolveOther(ctx, f.service, tried)
 }
 
 // setIfNil keeps the first error of a call: what a caller wants to hear is why
@@ -229,6 +243,17 @@ func (c *clients) penalized(service, address string) bool {
 	defer c.penMu.Unlock()
 	until, ok := c.penalties[penaltyKey(service, address)]
 	return ok && time.Now().Before(until)
+}
+
+// penalizedOf lists the addresses of nodes that are being passed over.
+func (c *clients) penalizedOf(service string, nodes []registry.Node) []string {
+	out := make([]string, 0, len(nodes))
+	for _, n := range nodes {
+		if c.penalized(service, n.Address()) {
+			out = append(out, n.Address())
+		}
+	}
+	return out
 }
 
 // unpenalized drops the penalized nodes, unless that would leave none: a penalty

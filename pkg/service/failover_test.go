@@ -19,7 +19,9 @@
 package service
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
 	"slices"
 	"strings"
@@ -27,8 +29,10 @@ import (
 	"testing"
 	"time"
 
+	"github.com/cs3org/reva/v3/pkg/appctx"
 	"github.com/cs3org/reva/v3/pkg/registry"
 	"github.com/cs3org/reva/v3/pkg/registry/memory"
+	"github.com/rs/zerolog"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/connectivity"
@@ -328,6 +332,49 @@ func TestADrainingNodeDoesNotHideThePenalizedOnes(t *testing.T) {
 	}
 	if got := calls.addresses(); !slices.Equal(got, []string{nodeA}) {
 		t.Fatalf("expected the call to land on %s, got %v", nodeA, got)
+	}
+}
+
+// The trace of a selection shows what each stage left, so a node that was not
+// picked can be told apart: tried, draining or penalized.
+func TestTheSelectionIsTraced(t *testing.T) {
+	c, _ := peers(connectivity.Idle, unavailableAt(), nodeA, nodeB)
+	_ = c.registry.Add(registry.NewService(NameGateway, []registry.Node{
+		registry.NewNode("c", nodeC, meta(registry.StateDraining)),
+	}))
+	c.penalize(NameGateway, nodeA)
+
+	var out bytes.Buffer
+	log := zerolog.New(&out).Level(zerolog.TraceLevel)
+	ctx := appctx.WithLogger(context.Background(), &log)
+	if _, err := c.pick(ctx, NameGateway, []string{nodeB}); err != nil {
+		t.Fatalf("pick: %v", err)
+	}
+
+	var trace struct {
+		Nodes, Untried, Eligible, Penalized, Unpenalized []string
+		Picked                                           string
+	}
+	if err := json.Unmarshal(out.Bytes(), &trace); err != nil {
+		t.Fatalf("expected one trace entry, got %q: %v", out.String(), err)
+	}
+	ready, draining := "["+registry.StateReady+"]", "["+registry.StateDraining+"]"
+	for _, stage := range []struct {
+		name      string
+		got, want []string
+	}{
+		{"nodes", trace.Nodes, []string{nodeA + ready, nodeB + ready, nodeC + draining}},
+		{"untried", trace.Untried, []string{nodeA + ready, nodeC + draining}},
+		{"eligible", trace.Eligible, []string{nodeA + ready}},
+		{"penalized", trace.Penalized, []string{nodeA}},
+		{"unpenalized", trace.Unpenalized, []string{nodeA + ready}},
+	} {
+		if got := slices.Sorted(slices.Values(stage.got)); !slices.Equal(got, stage.want) {
+			t.Errorf("%s: expected %v, got %v", stage.name, stage.want, got)
+		}
+	}
+	if trace.Picked != nodeA {
+		t.Errorf("expected %s to be picked, got %q", nodeA, trace.Picked)
 	}
 }
 

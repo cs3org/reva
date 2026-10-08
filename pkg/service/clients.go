@@ -202,7 +202,7 @@ func (c *clients) conn(ctx context.Context, name string) (grpc.ClientConnInterfa
 func (c *clients) resolve(ctx context.Context, name string) (peerConn, string, error) {
 	var node registry.Node
 	err := c.lookup(ctx, name, func() error {
-		picked, err := c.pick(name, nil)
+		picked, err := c.pick(ctx, name, nil)
 		if err != nil {
 			return err
 		}
@@ -217,27 +217,52 @@ func (c *clients) resolve(ctx context.Context, name string) (peerConn, string, e
 
 // resolveOther picks a node a call has not tried yet. It does not retry and does
 // not book a failure against the peer; see failoverConn.next.
-func (c *clients) resolveOther(name string, tried []string) (peerConn, string, error) {
-	node, err := c.pick(name, tried)
+func (c *clients) resolveOther(ctx context.Context, name string, tried []string) (peerConn, string, error) {
+	node, err := c.pick(ctx, name, tried)
 	if err != nil {
 		return nil, "", err
 	}
 	return c.connTo(node)
 }
 
-func (c *clients) pick(name string, tried []string) (registry.Node, error) {
+func (c *clients) pick(ctx context.Context, name string, tried []string) (registry.Node, error) {
 	svc, err := c.registry.GetService(name)
 	if err != nil {
 		return nil, fmt.Errorf("service registry: resolving %q: %w", name, err)
 	}
 	nodes := filterByMetadata(svc.Nodes(), map[string]string{registry.MetaTransport: registry.TransportGRPC})
+	untried := without(nodes, tried)
 	// Penalties are weighed among the nodes a selector may pick: an offline or
 	// draining node that escaped them must not hide every penalized one.
-	node, ok := c.selector.Pick(c.unpenalized(name, eligible(without(nodes, tried))))
+	candidates := eligible(untried)
+	preferred := c.unpenalized(name, candidates)
+	node, ok := c.selector.Pick(preferred)
+
+	// Every stage of the choice, to tell why a node was or was not picked.
+	if e := appctx.GetLogger(ctx).Trace(); e.Enabled() {
+		var picked string
+		if ok {
+			picked = node.Address()
+		}
+		e.Str("peer", name).Strs("tried", tried).Strs("nodes", describe(nodes)).
+			Strs("untried", describe(untried)).Strs("eligible", describe(candidates)).
+			Strs("penalized", c.penalizedOf(name, candidates)).Strs("unpenalized", describe(preferred)).
+			Str("picked", picked).Msg("node selection")
+	}
+
 	if !ok {
 		return nil, fmt.Errorf("service registry: no selectable grpc node for %q", name)
 	}
 	return node, nil
+}
+
+// describe renders nodes as address[state] for the selection trace.
+func describe(nodes []registry.Node) []string {
+	out := make([]string, len(nodes))
+	for i, n := range nodes {
+		out[i] = n.Address() + "[" + n.Metadata()[registry.MetaState] + "]"
+	}
+	return out
 }
 
 func (c *clients) connTo(node registry.Node) (peerConn, string, error) {
