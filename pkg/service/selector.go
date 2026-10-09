@@ -31,17 +31,27 @@ type Selector interface {
 	Pick(nodes []registry.Node) (registry.Node, bool)
 }
 
-// selectable returns ready nodes, or degraded if none are ready.
-func selectable(nodes []registry.Node) []registry.Node {
-	ready := make([]registry.Node, 0, len(nodes))
-	degraded := make([]registry.Node, 0, len(nodes))
+// eligible drops the nodes no selector may pick: offline and draining ones.
+func eligible(nodes []registry.Node) []registry.Node {
+	out := make([]registry.Node, 0, len(nodes))
 	for _, n := range nodes {
 		switch n.Metadata()[registry.MetaState] {
 		case registry.StateOffline, registry.StateDraining:
 			continue
-		case registry.StateDegraded:
+		}
+		out = append(out, n)
+	}
+	return out
+}
+
+// selectable returns ready nodes, or degraded if none are ready.
+func selectable(nodes []registry.Node) []registry.Node {
+	ready := make([]registry.Node, 0, len(nodes))
+	degraded := make([]registry.Node, 0, len(nodes))
+	for _, n := range eligible(nodes) {
+		if n.Metadata()[registry.MetaState] == registry.StateDegraded {
 			degraded = append(degraded, n)
-		default:
+		} else {
 			ready = append(ready, n)
 		}
 	}
