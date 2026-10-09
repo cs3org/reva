@@ -84,6 +84,8 @@ type sharesMockGW struct {
 	gateway.GatewayAPIClient
 	createResp     *ocmincoming.CreateOCMIncomingShareResponse
 	rejectAccepted bool
+	createCalls    int
+	created        *ocmincoming.CreateOCMIncomingShareRequest
 }
 
 func (m *sharesMockGW) IsProviderAllowed(context.Context, *ocmprovider.IsProviderAllowedRequest, ...grpc.CallOption) (*ocmprovider.IsProviderAllowedResponse, error) {
@@ -101,7 +103,9 @@ func (m *sharesMockGW) GetUser(context.Context, *userpb.GetUserRequest, ...grpc.
 	}, nil
 }
 
-func (m *sharesMockGW) CreateOCMIncomingShare(context.Context, *ocmincoming.CreateOCMIncomingShareRequest, ...grpc.CallOption) (*ocmincoming.CreateOCMIncomingShareResponse, error) {
+func (m *sharesMockGW) CreateOCMIncomingShare(_ context.Context, req *ocmincoming.CreateOCMIncomingShareRequest, _ ...grpc.CallOption) (*ocmincoming.CreateOCMIncomingShareResponse, error) {
+	m.createCalls++
+	m.created = req
 	return m.createResp, nil
 }
 
@@ -131,12 +135,12 @@ func initSharesHandler(t *testing.T, c *config) *sharesHandler {
 // --- tests ---
 
 func TestCreateShareReturnsServerErrorForNonOKCreateStatus(t *testing.T) {
-	// Start a local OCM discovery server so discoverOcmResourceTypes succeeds.
+	// Start a local OCM discovery server so discoverOcm succeeds.
 	disco := ocmDiscoveryServer(t, "webdav", "file")
 	defer disco.Close()
 
 	// The sender's Idp must equal the host:port of our local discovery server
-	// so that discoverOcmResourceTypes calls it instead of the real internet.
+	// so that discoverOcm calls it instead of the real internet.
 	senderAddr := disco.Listener.Addr().String() // e.g. "127.0.0.1:54321"
 
 	stampGateway(&sharesMockGW{
@@ -317,9 +321,9 @@ func TestDiscoverVerifiesTLSUnlessInsecure(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			h := initSharesHandler(t, &tt.conf)
-			_, _, err := h.discoverOcmResourceTypes(context.Background(), srv.URL)
+			_, err := h.discoverOcm(context.Background(), srv.URL)
 			if (err != nil) != tt.wantErr {
-				t.Errorf("discoverOcmResourceTypes() error = %v, wantErr %v", err, tt.wantErr)
+				t.Errorf("discoverOcm() error = %v, wantErr %v", err, tt.wantErr)
 			}
 		})
 	}
@@ -527,7 +531,7 @@ func runSharesProxyChild(t *testing.T, scenario string) {
 	h := initSharesHandler(t, conf)
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancel()
-	_, _, err := h.discoverOcmResourceTypes(ctx, sharesProxyTarget)
+	_, err := h.discoverOcm(ctx, sharesProxyTarget)
 	if scenario == "direct" && !errors.Is(err, client.ErrPolicyViolation) {
 		t.Fatalf("zero config error = %v, want ErrPolicyViolation", err)
 	}
@@ -536,9 +540,9 @@ func runSharesProxyChild(t *testing.T, scenario string) {
 	}
 }
 
-func TestDiscoverOcmResourceTypesLoopbackPolicy(t *testing.T) {
-	disco := ocmDiscoveryServer(t, "webdav", "file")
-	defer disco.Close()
+func TestDiscoverOcmLoopbackPolicy(t *testing.T) {
+	srv := ocmDiscoveryServer(t, "webdav", "file")
+	defer srv.Close()
 
 	tests := []struct {
 		name    string
@@ -555,30 +559,33 @@ func TestDiscoverOcmResourceTypesLoopbackPolicy(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			h := initSharesHandler(t, &tt.conf)
-			rts, endpoint, err := h.discoverOcmResourceTypes(context.Background(), disco.URL)
+			disco, err := h.discoverOcm(context.Background(), srv.URL)
 			if (err != nil) != tt.wantErr {
-				t.Errorf("discoverOcmResourceTypes() error = %v, wantErr %v", err, tt.wantErr)
+				t.Errorf("discoverOcm() error = %v, wantErr %v", err, tt.wantErr)
 			}
 			if tt.wantErr {
 				if !errors.Is(err, client.ErrPolicyViolation) {
-					t.Errorf("discoverOcmResourceTypes() error = %v, want ErrPolicyViolation", err)
+					t.Errorf("discoverOcm() error = %v, want ErrPolicyViolation", err)
 				}
 				return
 			}
 			if err != nil {
 				return
 			}
-			if len(rts) == 0 {
+			if disco == nil {
+				t.Fatal("expected discovery data")
+			}
+			if len(disco.ResourceTypes) == 0 {
 				t.Fatal("expected advertised resource types")
 			}
-			if endpoint == "" {
+			if disco.Endpoint == "" {
 				t.Fatal("expected discovery endpoint")
 			}
 		})
 	}
 }
 
-func TestDiscoverOcmResourceTypesMalformedReturnsDecodeError(t *testing.T) {
+func TestDiscoverOcmMalformedReturnsDecodeError(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		_, _ = w.Write([]byte("not json"))
@@ -586,7 +593,7 @@ func TestDiscoverOcmResourceTypesMalformedReturnsDecodeError(t *testing.T) {
 	defer srv.Close()
 
 	h := initSharesHandler(t, &config{AllowLoopbackFederation: true})
-	_, _, err := h.discoverOcmResourceTypes(context.Background(), srv.URL)
+	_, err := h.discoverOcm(context.Background(), srv.URL)
 	if err == nil {
 		t.Fatal("expected discovery decode error")
 	}

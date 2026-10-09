@@ -34,8 +34,35 @@ var ErrInvalidProtocolURI = errors.New("invalid protocol uri")
 // ErrWebappMFAUnproven is returned when the receiver mfa_policy is reject and the offer requires must-use-mfa.
 var ErrWebappMFAUnproven = errors.New("protocol webapp requirement must-use-mfa cannot be satisfied by this receiver")
 
+// ScreenIncomingWebapps rejects nil, duplicate, and unusable offers before discovery, conversion, or persistence.
+// Other protocols are left untouched.
+func ScreenIncomingWebapps(protocols Protocols, receiverTargets []string, admitMFA bool) error {
+	seen := 0
+	for _, protocol := range protocols {
+		if protocol == nil {
+			return errors.New("nil protocol")
+		}
+		webapp, ok := protocol.(*Webapp)
+		if !ok {
+			continue
+		}
+		if webapp == nil {
+			return errors.New("nil webapp protocol")
+		}
+		seen++
+		if seen > 1 {
+			return errors.New("ambiguous webapp protocol")
+		}
+		if err := webapp.ValidateReceived(receiverTargets, admitMFA); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 // ValidateReceived checks a webapp offer against this receiver's targets.
-// Empty AppName is valid metadata. The offer is not mutated.
+// Empty AppName is valid metadata and is not rewritten. The offer is not mutated.
+// Absolute URI checks run again before persistence.
 func (w *Webapp) ValidateReceived(receiverTargets []string, admitMFA bool) error {
 	if w == nil {
 		return errors.New("nil webapp protocol")
@@ -56,11 +83,11 @@ func (w *Webapp) ValidateReceived(receiverTargets []string, admitMFA bool) error
 		validWebappPermissions,
 		w.Requirements,
 		validWebappRequirements,
-		w.URI,
+		"",
 	); err != nil {
 		return err
 	}
-	if _, err := ValidateAbsoluteWebappURI(w.URI); err != nil {
+	if err := validateReceivedWebappURI(w.URI); err != nil {
 		return err
 	}
 	return webappTargetCompatible(w.Targets, receiverTargets)
@@ -75,18 +102,36 @@ func ValidateWebappLaunch(uri, secret string, requirements, targets, receiverTar
 		Requirements: requirements,
 		Targets:      targets,
 	}
-	return offer.ValidateReceived(receiverTargets, admitMFA)
+	if err := offer.ValidateReceived(receiverTargets, admitMFA); err != nil {
+		return err
+	}
+	_, err := ValidateAbsoluteWebappURI(uri)
+	return err
+}
+
+// validateRequirementValues rejects blank, padded, and unknown requirements.
+// Membership, including must-exchange-token, is checked afterward. Errors omit the supplied value.
+func validateRequirementValues(protocolName string, requirements []string, valid map[string]struct{}) error {
+	for _, requirement := range requirements {
+		trimmed := strings.TrimSpace(requirement)
+		if trimmed == "" || trimmed != requirement {
+			return fixedProtocolFieldError(protocolName, "requirement", "malformed")
+		}
+		if _, ok := valid[requirement]; !ok {
+			return fixedProtocolFieldError(protocolName, "requirement", "unsupported")
+		}
+	}
+	return nil
 }
 
 func validateWebappRequirements(requirements []string, admitMFA bool) error {
-	for _, requirement := range requirements {
-		if strings.TrimSpace(requirement) == "" || strings.TrimSpace(requirement) != requirement {
-			return errors.New("protocol webapp has malformed requirement")
-		}
-		if _, ok := validWebappRequirements[requirement]; !ok {
-			return errors.New("protocol webapp has unsupported requirement")
-		}
+	if err := validateRequirementValues("webapp", requirements, validWebappRequirements); err != nil {
+		return err
 	}
+	return validateWebappExchangePolicy(requirements, admitMFA)
+}
+
+func validateWebappExchangePolicy(requirements []string, admitMFA bool) error {
 	if !slices.Contains(requirements, "must-exchange-token") {
 		return errors.New("protocol webapp requirements must include must-exchange-token")
 	}
@@ -109,6 +154,26 @@ func webappTargetCompatible(offered, advertised []string) error {
 		return nil
 	}
 	return errors.New("protocol webapp has no compatible target")
+}
+
+func validateReceivedWebappURI(raw string) error {
+	if strings.TrimSpace(raw) == "" {
+		return errors.New("protocol webapp missing uri")
+	}
+	if strings.TrimSpace(raw) != raw {
+		return fmt.Errorf("protocol webapp has malformed uri: %w", ErrInvalidProtocolURI)
+	}
+	parsed, err := url.Parse(raw)
+	if err != nil {
+		return fmt.Errorf("protocol webapp has malformed uri: %w", ErrInvalidProtocolURI)
+	}
+	if parsed.Scheme == "" && parsed.Host == "" {
+		return nil
+	}
+	if err := requireAbsoluteHTTPURL(parsed); err != nil {
+		return fmt.Errorf("protocol webapp has malformed uri: %w", ErrInvalidProtocolURI)
+	}
+	return nil
 }
 
 // ValidateAbsoluteWebappURI accepts an absolute http(s) URL and returns the exact stored string.

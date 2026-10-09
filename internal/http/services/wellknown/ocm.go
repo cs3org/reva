@@ -47,7 +47,7 @@ var (
 	localMFAPolicyReady bool
 )
 
-const OCMAPIVersion = "1.3.0"
+const OCMAPIVersion = "1.4.0"
 
 type OcmProviderConfig struct {
 	OCMPrefix          string `docs:"ocm;The prefix URL where the OCM API is served."                                            mapstructure:"ocm_prefix"`
@@ -55,7 +55,7 @@ type OcmProviderConfig struct {
 	Provider           string `docs:"reva;A friendly name that defines this service."                                            mapstructure:"provider"`
 	WebdavRoot         string `docs:"/remote.php/dav/ocm;The root URL of the WebDAV endpoint to serve OCM shares."               mapstructure:"webdav_root"`
 	InviteAcceptDialog string `docs:"/open-cloud-mesh/accept-invite;The frontend URL where to land when receiving an invitation" mapstructure:"invite_accept_dialog"`
-	EnableWebapp       bool   `docs:"false;Whether web apps are enabled in OCM shares."                                          mapstructure:"enable_webapp"`
+	EnableWebapp       bool   `docs:"false;Advertise webapp receive in discovery only. Distinct from offer_webapp."              mapstructure:"enable_webapp"`
 	EnableEmbedded     bool   `docs:"false;Whether embedded shares are enabled in OCM shares."                                   mapstructure:"enable_embedded"`
 	EnableCodeFlow     bool   `docs:"false;Whether code-flow token exchange is enabled in OCM shares."                           mapstructure:"enable_code_flow"`
 	MFAPolicy          string `docs:"reject;Admission of received webapp must-use-mfa offers: reject or off. Off skips the check; nothing is advertised." mapstructure:"mfa_policy"`
@@ -221,7 +221,7 @@ func (h *wkocmHandler) init(c *OcmProviderConfig) {
 	}}
 	d.Capabilities = []string{}
 
-	if c.Endpoint == "" {
+	if !usableDiscoveryBase(c.Endpoint) {
 		h.data = d
 		return
 	}
@@ -230,6 +230,12 @@ func (h *wkocmHandler) init(c *OcmProviderConfig) {
 	if err != nil {
 		h.data = d
 		return
+	}
+
+	tokenEndpoint, tokenOK := advertisedTokenEndpoint(c.Endpoint, c.OCMPrefix)
+	if !c.EnableCodeFlow {
+		tokenEndpoint = ""
+		tokenOK = false
 	}
 
 	// now prepare the enabled one
@@ -242,10 +248,13 @@ func (h *wkocmHandler) init(c *OcmProviderConfig) {
 		"uri": "absolute",
 	}
 	if len(receiveTargets) > 0 {
-		// if webapps are enabled, we can both send and receive webapp shares
-		rtProtos["webapp"] = map[string]any{}
 		rtProtos["webapp-receive"] = map[string]any{
 			"targets": receiveTargets,
+		}
+		// Sending a webapp requires a usable code-flow token endpoint.
+		// Receiving only requires the discovery base and enable_webapp.
+		if tokenOK {
+			rtProtos["webapp"] = map[string]any{}
 		}
 	}
 	d.ResourceTypes = []ResourceTypes{
@@ -275,11 +284,19 @@ func (h *wkocmHandler) init(c *OcmProviderConfig) {
 	d.Capabilities = []string{"invites", "protocol-object", "invite-wayf"}
 	d.Criteria = []string{"must-invite"}
 	d.InviteAcceptDialog, _ = url.JoinPath(c.Endpoint, c.InviteAcceptDialog)
-	if c.EnableCodeFlow {
-		d.TokenEndPoint, _ = TokenEndpoint(c.Endpoint, c.OCMPrefix)
+	if tokenOK {
+		d.TokenEndPoint = tokenEndpoint
 		d.Capabilities = append(d.Capabilities, "exchange-token")
 	}
 	h.data = d
+}
+
+func advertisedTokenEndpoint(baseURL, prefix string) (string, bool) {
+	endpoint, err := TokenEndpoint(baseURL, prefix)
+	if err != nil || !usableDiscoveryBase(endpoint) {
+		return "", false
+	}
+	return endpoint, true
 }
 
 // TokenEndpoint builds the advertised code-flow token endpoint for OCM discovery.
@@ -293,13 +310,6 @@ func (h *wkocmHandler) Ocm(w http.ResponseWriter, r *http.Request) {
 	log := appctx.GetLogger(r.Context())
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
-	if r.UserAgent() == "Nextcloud Server Crawler" {
-		// Nextcloud decided to only support OCM 1.0 and 1.1, not any 1.x as per SemVer. See
-		// https://github.com/nextcloud/server/pull/39574#issuecomment-1679191188
-		h.data.APIVersion = "1.1"
-	} else {
-		h.data.APIVersion = OCMAPIVersion
-	}
 	indented, _ := json.MarshalIndent(h.data, "", "   ")
 	if _, err := w.Write(indented); err != nil {
 		log.Err(err).Msg("Error writing to ResponseWriter")
