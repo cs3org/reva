@@ -19,6 +19,7 @@
 package registry
 
 import (
+	"slices"
 	"sync"
 	"testing"
 	"time"
@@ -74,6 +75,28 @@ func TestBaseAddWritesCacheThenDriver(t *testing.T) {
 	defer d.mu.Unlock()
 	if len(d.added) != 1 || d.added[0] != "gateway/n1" {
 		t.Fatalf("expected driver.Add(gateway/n1), got %v", d.added)
+	}
+}
+
+func TestBaseListsNodesInIDOrder(t *testing.T) {
+	b := NewBase(newRecordingDriver(), Thresholds{})
+	defer b.Close()
+
+	want := []string{"n0", "n1", "n2", "n3", "n4", "n5", "n6", "n7"}
+	for _, i := range []int{5, 2, 7, 0, 3, 6, 1, 4} {
+		_ = b.Add(NewService("gateway", []Node{NewNode(want[i], "10.0.0.1:1", nil)}))
+	}
+
+	// map order would differ between lookups; the listing must not
+	for range 20 {
+		svc, _ := b.GetService("gateway")
+		got := make([]string, 0, len(want))
+		for _, n := range svc.Nodes() {
+			got = append(got, n.ID())
+		}
+		if !slices.Equal(got, want) {
+			t.Fatalf("expected nodes in id order %v, got %v", want, got)
+		}
 	}
 }
 

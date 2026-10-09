@@ -19,7 +19,9 @@
 package service
 
 import (
+	"fmt"
 	"math/rand"
+	"os"
 	"sync/atomic"
 
 	"github.com/cs3org/reva/v3/pkg/registry"
@@ -29,6 +31,26 @@ import (
 // draining.
 type Selector interface {
 	Pick(nodes []registry.Node) (registry.Node, bool)
+}
+
+// NewSelector returns the selector configured by name: "local" (also the
+// default for an empty name), "first", "random" or "roundrobin".
+func NewSelector(name string) (Selector, error) {
+	switch name {
+	case "", "local":
+		host, err := os.Hostname()
+		if err != nil {
+			return nil, fmt.Errorf("service registry: local selector: %w", err)
+		}
+		return LocalSelector{Host: host}, nil
+	case "first":
+		return FirstSelector{}, nil
+	case "random":
+		return RandomSelector{}, nil
+	case "roundrobin":
+		return &RoundRobinSelector{}, nil
+	}
+	return nil, fmt.Errorf("service registry: unknown selector %q, expected local, first, random or roundrobin", name)
 }
 
 // eligible drops the nodes no selector may pick: offline and draining ones.
@@ -61,7 +83,28 @@ func selectable(nodes []registry.Node) []registry.Node {
 	return degraded
 }
 
-// FirstSelector returns the first selectable node (the default).
+// LocalSelector picks a node registered from this host, so that a call stays on
+// the machine it started on, and a random one when none here is selectable.
+type LocalSelector struct{ Host string }
+
+func (s LocalSelector) Pick(nodes []registry.Node) (registry.Node, bool) {
+	c := selectable(nodes)
+	if len(c) == 0 {
+		return nil, false
+	}
+	local := make([]registry.Node, 0, len(c))
+	for _, n := range c {
+		if n.Metadata()[registry.MetaHost] == s.Host {
+			local = append(local, n)
+		}
+	}
+	if len(local) > 0 {
+		c = local
+	}
+	return c[rand.Intn(len(c))], true
+}
+
+// FirstSelector returns the first selectable node.
 type FirstSelector struct{}
 
 func (FirstSelector) Pick(nodes []registry.Node) (registry.Node, bool) {

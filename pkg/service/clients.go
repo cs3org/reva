@@ -169,21 +169,17 @@ type failure struct {
 	calls int
 }
 
-// NewClients builds a resolver over the registry, one per Reva instance.
-func NewClients(r registry.Registry) Clients {
+// NewClients builds a resolver over the registry, one per Reva instance, that
+// picks among a service's nodes with s.
+func NewClients(r registry.Registry, s Selector) Clients {
 	return &clients{
 		registry:  r,
-		selector:  FirstSelector{},
+		selector:  s,
 		conns:     map[string]peerConn{},
 		open:      func(address string) (peerConn, error) { return dial(address) },
 		fails:     map[string]*failure{},
 		penalties: map[string]time.Time{},
 	}
-}
-
-func (c *clients) WithSelector(s Selector) *clients {
-	c.selector = s
-	return c
 }
 
 // conn returns the connection the CS3 clients are built on. The eager resolve is

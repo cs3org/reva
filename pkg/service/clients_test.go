@@ -21,6 +21,7 @@ package service
 import (
 	"context"
 	"errors"
+	"reflect"
 	"testing"
 	"time"
 
@@ -71,8 +72,105 @@ func TestSelectorNoSelectableNode(t *testing.T) {
 	}
 }
 
+func TestNewSelector(t *testing.T) {
+	for name, want := range map[string]Selector{
+		"":           LocalSelector{},
+		"local":      LocalSelector{},
+		"first":      FirstSelector{},
+		"random":     RandomSelector{},
+		"roundrobin": &RoundRobinSelector{},
+	} {
+		got, err := NewSelector(name)
+		if err != nil {
+			t.Fatalf("%q: %v", name, err)
+		}
+		if reflect.TypeOf(got) != reflect.TypeOf(want) {
+			t.Fatalf("%q: expected %T, got %T", name, want, got)
+		}
+	}
+	if _, err := NewSelector("closest"); err == nil {
+		t.Fatal("an unknown selector must be refused")
+	}
+}
+
+func onHost(id, address, host, state string) registry.Node {
+	m := meta(state)
+	m[registry.MetaHost] = host
+	return registry.NewNode(id, address, m)
+}
+
+func TestLocalSelectorPrefersThisHost(t *testing.T) {
+	here := LocalSelector{Host: "here"}
+	for _, tc := range []struct {
+		name  string
+		nodes []registry.Node
+		want  string
+	}{
+		{"local ready", []registry.Node{
+			onHost("a", "10.0.0.1:1", "there", registry.StateReady),
+			onHost("b", "10.0.0.2:1", "here", registry.StateReady),
+		}, "10.0.0.2:1"},
+		{"local draining", []registry.Node{
+			onHost("a", "10.0.0.1:1", "there", registry.StateReady),
+			onHost("b", "10.0.0.2:1", "here", registry.StateDraining),
+		}, "10.0.0.1:1"},
+		{"local offline", []registry.Node{
+			onHost("a", "10.0.0.1:1", "there", registry.StateReady),
+			onHost("b", "10.0.0.2:1", "here", registry.StateOffline),
+		}, "10.0.0.1:1"},
+		// a healthy node elsewhere beats a degraded one here
+		{"local degraded", []registry.Node{
+			onHost("a", "10.0.0.1:1", "there", registry.StateReady),
+			onHost("b", "10.0.0.2:1", "here", registry.StateDegraded),
+		}, "10.0.0.1:1"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			for range 20 {
+				n, ok := here.Pick(tc.nodes)
+				if !ok || n.Address() != tc.want {
+					t.Fatalf("expected %s, got %v ok=%v", tc.want, n, ok)
+				}
+			}
+		})
+	}
+}
+
+func TestLocalSelectorFallsBackToRandom(t *testing.T) {
+	nodes := []registry.Node{
+		onHost("a", "10.0.0.1:1", "there", registry.StateReady),
+		onHost("b", "10.0.0.2:1", "elsewhere", registry.StateReady),
+	}
+	seen := map[string]bool{}
+	for range 200 {
+		n, ok := LocalSelector{Host: "here"}.Pick(nodes)
+		if !ok {
+			t.Fatal("expected a remote node")
+		}
+		seen[n.Address()] = true
+	}
+	if len(seen) != len(nodes) {
+		t.Fatalf("expected every remote node to be picked at some point, got %v", seen)
+	}
+}
+
+// A local node this process cannot reach is passed over like any other.
+func TestLocalSelectorSkipsAPenalizedLocalNode(t *testing.T) {
+	reg := memory.New(nil)
+	_ = reg.Add(registry.NewService(NameGateway, []registry.Node{
+		onHost("a", "10.0.0.1:1", "there", registry.StateReady),
+		onHost("b", "10.0.0.2:1", "here", registry.StateReady),
+	}))
+	c := NewClients(reg, LocalSelector{Host: "here"}).(*clients)
+	c.penalize(NameGateway, "10.0.0.2:1")
+
+	n, err := c.pick(context.Background(), NameGateway, nil)
+	if err != nil || n.Address() != "10.0.0.1:1" {
+		t.Fatalf("expected the remote node, got %v: %v", n, err)
+	}
+}
+
 func TestResolveUnknownService(t *testing.T) {
-	c := NewClients(memory.New(nil)).(*clients)
+	c := NewClients(memory.New(nil), FirstSelector{}).(*clients)
 	if _, _, err := c.resolve(context.Background(), "nope"); err == nil {
 		t.Fatal("expected error resolving unknown service")
 	}
@@ -83,7 +181,7 @@ func TestResolveReturnsAddressAndCachesConn(t *testing.T) {
 	_ = reg.Add(registry.NewService(NameGateway, []registry.Node{
 		registry.NewNode("g1", "127.0.0.1:19000", meta(registry.StateReady)),
 	}))
-	c := NewClients(reg).(*clients)
+	c := NewClients(reg, FirstSelector{}).(*clients)
 
 	conn1, addr, err := c.resolve(context.Background(), NameGateway)
 	if err != nil {
@@ -107,7 +205,7 @@ func TestResolveSkipsSameNamedHTTPNode(t *testing.T) {
 		registry.NewNode("http", "127.0.0.1:19143", metaTransport(registry.StateReady, registry.TransportHTTP)),
 		registry.NewNode("grpc", "127.0.0.1:19142", metaTransport(registry.StateReady, registry.TransportGRPC)),
 	}))
-	c := NewClients(reg).(*clients)
+	c := NewClients(reg, FirstSelector{}).(*clients)
 
 	for range 20 {
 		_, addr, err := c.resolve(context.Background(), NamePreferences)
@@ -125,7 +223,7 @@ func TestResolveNoGRPCNode(t *testing.T) {
 	_ = reg.Add(registry.NewService(NamePreferences, []registry.Node{
 		registry.NewNode("http", "127.0.0.1:19143", metaTransport(registry.StateReady, registry.TransportHTTP)),
 	}))
-	c := NewClients(reg).(*clients)
+	c := NewClients(reg, FirstSelector{}).(*clients)
 
 	if _, _, err := c.resolve(context.Background(), NamePreferences); err == nil {
 		t.Fatal("expected no selectable grpc node")
@@ -138,7 +236,7 @@ func TestHTTPEndpointSkipsSameNamedGRPCNode(t *testing.T) {
 		registry.NewNode("grpc", "127.0.0.1:19142", metaTransport(registry.StateReady, registry.TransportGRPC)),
 		registry.NewNode("http", "127.0.0.1:19143", metaTransport(registry.StateReady, registry.TransportHTTP)),
 	}))
-	c := NewClients(reg)
+	c := NewClients(reg, FirstSelector{})
 
 	for range 20 {
 		ep, err := c.HTTPEndpoint(context.Background(), ByName(NamePreferences))
@@ -152,7 +250,7 @@ func TestHTTPEndpointSkipsSameNamedGRPCNode(t *testing.T) {
 }
 
 func TestLookupRetriesUntilPeerResolves(t *testing.T) {
-	c := NewClients(memory.New(nil)).(*clients)
+	c := NewClients(memory.New(nil), FirstSelector{}).(*clients)
 	attempts := 0
 	err := c.lookup(context.Background(), NameGateway, func() error {
 		attempts++
@@ -178,7 +276,7 @@ func TestUnresolvedPeerExitsOnlyAfterBothThresholds(t *testing.T) {
 	exit = func(r string) { reason = r }
 	defer func() { exit = restore }()
 
-	c := NewClients(memory.New(nil)).(*clients)
+	c := NewClients(memory.New(nil), FirstSelector{}).(*clients)
 	c.unresolved(context.Background(), NameGateway, errors.New("boom"))
 	if reason != "" {
 		t.Fatal("a single failed lookup must not end the process")
@@ -197,7 +295,7 @@ func TestOnlyTheGatewayEndsTheProcess(t *testing.T) {
 	exit = func(r string) { reason = r }
 	defer func() { exit = restore }()
 
-	c := NewClients(memory.New(nil)).(*clients)
+	c := NewClients(memory.New(nil), FirstSelector{}).(*clients)
 	c.fails[NameStorageProvider] = &failure{first: time.Now().Add(-2 * unresolvableFor), calls: unresolvableCalls}
 	c.unresolved(context.Background(), NameStorageProvider, errors.New("boom"))
 	if reason != "" {
@@ -210,7 +308,7 @@ func TestDegradeMarksNode(t *testing.T) {
 	_ = reg.Add(registry.NewService(NameGateway, []registry.Node{
 		registry.NewNode("g1", "127.0.0.1:19000", meta(registry.StateReady)),
 	}))
-	c := NewClients(reg).(*clients)
+	c := NewClients(reg, FirstSelector{}).(*clients)
 	c.Degrade(NameGateway, "127.0.0.1:19000")
 
 	svc, _ := reg.GetService(NameGateway)

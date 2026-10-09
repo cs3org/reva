@@ -21,6 +21,7 @@ package registry
 import (
 	"fmt"
 	"maps"
+	"slices"
 	"sync"
 )
 
@@ -205,10 +206,12 @@ func (b *BaseRegistry) nodeIDs(service string) []string {
 	return ids
 }
 
+// serviceFromCache lists a service's nodes by id, so that a selector sees the
+// same order on every lookup; randomizing is the selector's choice.
 func serviceFromCache(name string, nodes map[string]Node) Service {
 	ns := make([]Node, 0, len(nodes))
-	for _, n := range nodes {
-		ns = append(ns, n)
+	for _, id := range slices.Sorted(maps.Keys(nodes)) {
+		ns = append(ns, nodes[id])
 	}
 	return NewService(name, ns)
 }

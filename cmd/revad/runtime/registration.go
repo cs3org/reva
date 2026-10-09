@@ -57,7 +57,7 @@ func buildRegistry(cfg *config.Config, override registry.Registry, log *zerolog.
 	if err != nil {
 		return nil, fmt.Errorf("runtime: building service registry: %w", err)
 	}
-	log.Info().Str("driver", driverOrDefault(rc.Driver)).Msg("service registry initialized")
+	log.Info().Str("driver", driverOrDefault(rc.Driver)).Str("selector", rc.Selector).Msg("service registry initialized")
 	return reg, nil
 }
 
@@ -93,7 +93,7 @@ func (r *Reva) addServerlessNodes(msg string) {
 		id := nodeID(r.controlAddr, si.name)
 		meta := map[string]string{
 			registry.MetaTransport: registry.TransportServerless,
-			"host":                 hostname,
+			registry.MetaHost:      hostname,
 			"pid":                  fmt.Sprintf("%d", pid),
 			registry.MetaState:     rotationState(id),
 			registry.MetaLastSeen:  time.Now().UTC().Format(time.RFC3339),
@@ -170,7 +170,7 @@ func isWildcard(host string) bool {
 func nodeMetadata(srv *Server, id, hostname string, pid int, impl any) map[string]string {
 	meta := map[string]string{
 		registry.MetaTransport: srv.transport,
-		"host":                 hostname,
+		registry.MetaHost:      hostname,
 		"pid":                  fmt.Sprintf("%d", pid),
 		registry.MetaState:     rotationState(id),
 		registry.MetaLastSeen:  time.Now().UTC().Format(time.RFC3339),

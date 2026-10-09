@@ -264,6 +264,7 @@ nats_token = "secret-token-example"`
 		BlockedUsers: []string{},
 		Registry: Registry{
 			Driver:            "memory",
+			Selector:          "local",
 			HeartbeatInterval: "5s",
 			DegradedAfter:     "15s",
 			OfflineAfter:      "30s",
@@ -525,6 +526,7 @@ func TestDump(t *testing.T) {
 			"registry": map[string]any{
 				"driver":             "",
 				"drivers":            map[string]any{},
+				"selector":           "",
 				"heartbeat_interval": "",
 				"degraded_after":     "",
 				"offline_after":      "",
