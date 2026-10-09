@@ -20,11 +20,31 @@ package wellknown
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/url"
 	"path/filepath"
+	"strings"
+	"sync"
 
 	"github.com/cs3org/reva/v3/pkg/appctx"
+)
+
+const webappReceiveTargetBlank = "blank"
+
+const (
+	MFAPolicyReject = "reject"
+	MFAPolicyOff    = "off"
+)
+
+var (
+	localWebappMu      sync.RWMutex
+	localWebappTargets []string
+	localWebappReady   bool
+
+	localMFAPolicyMu    sync.RWMutex
+	localMFAPolicy      string
+	localMFAPolicyReady bool
 )
 
 const OCMAPIVersion = "1.3.0"
@@ -38,6 +58,7 @@ type OcmProviderConfig struct {
 	EnableWebapp       bool   `docs:"false;Whether web apps are enabled in OCM shares."                                          mapstructure:"enable_webapp"`
 	EnableEmbedded     bool   `docs:"false;Whether embedded shares are enabled in OCM shares."                                   mapstructure:"enable_embedded"`
 	EnableCodeFlow     bool   `docs:"false;Whether code-flow token exchange is enabled in OCM shares."                           mapstructure:"enable_code_flow"`
+	MFAPolicy          string `docs:"reject;Admission of received webapp must-use-mfa offers: reject or off. Off skips the check; nothing is advertised." mapstructure:"mfa_policy"`
 }
 
 type OcmDiscoveryData struct {
@@ -62,6 +83,97 @@ type wkocmHandler struct {
 	data *OcmDiscoveryData
 }
 
+// WebappReceiveTargets returns advertised receive targets; the only usable target is "blank".
+func WebappReceiveTargets(c *OcmProviderConfig) []string {
+	if c == nil || !c.EnableWebapp || !usableDiscoveryBase(c.Endpoint) {
+		return []string{}
+	}
+	return []string{webappReceiveTargetBlank}
+}
+
+// LocalWebappReceiveTargets returns published targets and whether the handler has initialized.
+func LocalWebappReceiveTargets() ([]string, bool) {
+	localWebappMu.RLock()
+	defer localWebappMu.RUnlock()
+	if !localWebappReady {
+		return nil, false
+	}
+	return append([]string{}, localWebappTargets...), true
+}
+
+// ResolveLocalWebappReceiveTargets treats nil as the published targets, an explicit
+// empty override as disabled receipt, and an unknown local configuration as no targets.
+func ResolveLocalWebappReceiveTargets(override *[]string) []string {
+	if override != nil {
+		return append([]string{}, (*override)...)
+	}
+	if targets, ok := LocalWebappReceiveTargets(); ok {
+		return targets
+	}
+	return []string{}
+}
+
+func publishLocalWebappReceiveTargets(targets []string) {
+	localWebappMu.Lock()
+	defer localWebappMu.Unlock()
+	localWebappReady = true
+	localWebappTargets = append([]string{}, targets...)
+}
+
+// LocalMFAPolicy returns the published receive-side MFA policy and whether init ran.
+func LocalMFAPolicy() (string, bool) {
+	localMFAPolicyMu.RLock()
+	defer localMFAPolicyMu.RUnlock()
+	if !localMFAPolicyReady {
+		return "", false
+	}
+	return localMFAPolicy, true
+}
+
+// ResolveLocalMFAPolicy treats a non-nil override as authoritative; unpublished or unknown -> reject.
+func ResolveLocalMFAPolicy(override *string) string {
+	if override != nil {
+		if *override == MFAPolicyOff {
+			return MFAPolicyOff
+		}
+		return MFAPolicyReject
+	}
+	if policy, ok := LocalMFAPolicy(); ok && policy == MFAPolicyOff {
+		return MFAPolicyOff
+	}
+	return MFAPolicyReject
+}
+
+func publishLocalMFAPolicy(policy string) {
+	localMFAPolicyMu.Lock()
+	defer localMFAPolicyMu.Unlock()
+	localMFAPolicyReady = true
+	localMFAPolicy = policy
+}
+
+func usableDiscoveryBase(raw string) bool {
+	if strings.TrimSpace(raw) == "" || strings.TrimSpace(raw) != raw {
+		return false
+	}
+	parsed, err := url.Parse(raw)
+	if err != nil || parsed == nil || parsed.User != nil || parsed.Opaque != "" {
+		return false
+	}
+	if parsed.Scheme != "http" && parsed.Scheme != "https" {
+		return false
+	}
+	if !parsed.IsAbs() || parsed.Hostname() == "" {
+		return false
+	}
+	if parsed.Host == "http:" || parsed.Host == "https:" || strings.Contains(parsed.Host, "://") {
+		return false
+	}
+	if strings.HasPrefix(parsed.Path, "//http://") || strings.HasPrefix(parsed.Path, "//https://") {
+		return false
+	}
+	return true
+}
+
 func (c *OcmProviderConfig) ApplyDefaults() {
 	if c.OCMPrefix == "" {
 		c.OCMPrefix = "ocm"
@@ -78,12 +190,25 @@ func (c *OcmProviderConfig) ApplyDefaults() {
 	if c.InviteAcceptDialog == "" {
 		c.InviteAcceptDialog = "/open-cloud-mesh/accept-invite"
 	}
+	if c.MFAPolicy == "" {
+		c.MFAPolicy = MFAPolicyReject
+	}
+}
+
+func (c *OcmProviderConfig) validateMFAPolicy() error {
+	if c.MFAPolicy != MFAPolicyReject && c.MFAPolicy != MFAPolicyOff {
+		return fmt.Errorf("invalid ocmprovider mfa_policy %q: want reject or off", c.MFAPolicy)
+	}
+	return nil
 }
 
 func (h *wkocmHandler) init(c *OcmProviderConfig) {
 	// generates the (static) data structure to be exposed by /.well-known/ocm:
 	// first prepare an empty and disabled payload
 	c.ApplyDefaults()
+	receiveTargets := WebappReceiveTargets(c)
+	publishLocalWebappReceiveTargets(receiveTargets)
+	publishLocalMFAPolicy(c.MFAPolicy)
 	d := &OcmDiscoveryData{}
 	d.Enabled = false
 	d.Endpoint = ""
@@ -116,11 +241,11 @@ func (h *wkocmHandler) init(c *OcmProviderConfig) {
 	rtProtos["webdav-receive"] = map[string]any{
 		"uri": "absolute",
 	}
-	if c.EnableWebapp {
+	if len(receiveTargets) > 0 {
 		// if webapps are enabled, we can both send and receive webapp shares
 		rtProtos["webapp"] = map[string]any{}
 		rtProtos["webapp-receive"] = map[string]any{
-			"targets": []string{"blank"},
+			"targets": receiveTargets,
 		}
 	}
 	d.ResourceTypes = []ResourceTypes{
