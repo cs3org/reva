@@ -27,6 +27,7 @@ import (
 	"net/url"
 	"strings"
 	"testing"
+	"time"
 
 	authpb "github.com/cs3org/go-cs3apis/cs3/auth/provider/v1beta1"
 	gateway "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
@@ -36,8 +37,12 @@ import (
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/cs3org/reva/v3/pkg/auth/scope"
 	jwt "github.com/cs3org/reva/v3/pkg/token/manager/jwt"
+	jwtv5 "github.com/golang-jwt/jwt/v5"
 	"google.golang.org/grpc"
 )
+
+const tokenHandlerTestSecret = "test-secret-for-token-handler"
+const tokenHandlerTestTTL int64 = 3600
 
 type tokenMockGW struct {
 	gateway.GatewayAPIClient
@@ -66,7 +71,7 @@ func (m *tokenMockGW) Authenticate(_ context.Context, req *gateway.AuthenticateR
 
 func setupTokenHandler(t *testing.T, statusCode rpc.Code, gwErr error) (*tokenHandler, *tokenMockGW) {
 	t.Helper()
-	tokenmgr, err := jwt.New(map[string]any{"secret": "test-secret-for-token-handler", "expires": int64(3600)})
+	tokenmgr, err := jwt.New(map[string]any{"secret": tokenHandlerTestSecret, "expires": tokenHandlerTestTTL})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -78,8 +83,14 @@ func setupTokenHandler(t *testing.T, statusCode rpc.Code, gwErr error) (*tokenHa
 		Id:         &ocmv1beta1.ShareId{OpaqueId: "share-abc"},
 		ResourceId: &provider.ResourceId{StorageId: "stor", OpaqueId: "res"},
 	}
-	scopes, _ := scope.AddCodeFlowOCMShareScope(share, authpb.Role_ROLE_VIEWER, nil)
-	mintedToken, _ := tokenmgr.MintToken(context.Background(), u, scopes)
+	scopes, err := scope.AddCodeFlowOCMShareScope(share, authpb.Role_ROLE_VIEWER, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	mintedToken, err := tokenmgr.MintToken(context.Background(), u, scopes)
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	mockGW := &tokenMockGW{
 		status: &rpc.Status{Code: statusCode},
@@ -106,34 +117,114 @@ func postTokenForm(h *tokenHandler, grantType, code, clientID string) *httptest.
 	return rr
 }
 
-func TestExchangeTokenValid(t *testing.T) {
-	h, _ := setupTokenHandler(t, rpc.Code_CODE_OK, nil)
-	rr := postTokenForm(h, "authorization_code", "code123", "nextcloud1.docker")
+type exchangedClaims struct {
+	ClientID string `json:"client_id"`
+	jwtv5.RegisteredClaims
+}
 
+func assertUnchangedToken(t *testing.T, rr *httptest.ResponseRecorder, minted string, before, after time.Time) tokenResponse {
+	t.Helper()
 	if rr.Code != http.StatusOK {
-		t.Fatalf("status: got %d, want %d", rr.Code, http.StatusOK)
+		t.Fatalf("status: got %d, want %d, body %s", rr.Code, http.StatusOK, rr.Body.String())
 	}
 	var resp tokenResponse
 	if err := json.NewDecoder(rr.Body).Decode(&resp); err != nil {
 		t.Fatal(err)
 	}
 	if resp.TokenType != "Bearer" {
-		t.Errorf("token_type: got %q, want Bearer", resp.TokenType)
+		t.Fatalf("token_type: got %q, want %q", resp.TokenType, "Bearer")
 	}
-	if resp.AccessToken == "" {
-		t.Error("access_token should not be empty")
+	if resp.AccessToken != minted {
+		t.Fatal("access_token was rewritten instead of returned unchanged")
 	}
-	if resp.ExpiresIn <= 0 {
-		t.Errorf("expires_in should be positive, got %d", resp.ExpiresIn)
+	parsed, err := jwtv5.ParseWithClaims(resp.AccessToken, &exchangedClaims{}, func(tok *jwtv5.Token) (any, error) {
+		return []byte(tokenHandlerTestSecret), nil
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	claims, ok := parsed.Claims.(*exchangedClaims)
+	if !ok || claims.ClientID != "share-abc" {
+		t.Fatalf("client_id: got %#v, want share-abc", claims)
+	}
+	assertExactExpiresIn(t, resp.ExpiresIn, claims, before, after)
+	return resp
+}
+
+// assertExactExpiresIn checks expires_in against the minted JWT exp.
+// The handler uses max(0, exp-now) for one unix second inside the request
+// window. Minting samples time.Now twice, so the token lifetime is the
+// configured TTL or one second less when those samples cross a boundary.
+func assertExactExpiresIn(t *testing.T, got int64, claims *exchangedClaims, before, after time.Time) {
+	t.Helper()
+	if claims.ExpiresAt == nil || claims.IssuedAt == nil {
+		t.Fatal("minted token missing iat or exp")
+	}
+	lifetime := claims.ExpiresAt.Unix() - claims.IssuedAt.Unix()
+	if lifetime != tokenHandlerTestTTL && lifetime != tokenHandlerTestTTL-1 {
+		t.Fatalf("token lifetime: got %d, want %d", lifetime, tokenHandlerTestTTL)
+	}
+	if after.Before(before) {
+		t.Fatal("clock went backwards around token exchange")
+	}
+	exp := claims.ExpiresAt.Unix()
+	earliest := max(int64(0), exp-after.Unix())
+	latest := max(int64(0), exp-before.Unix())
+	if got < earliest || got > latest {
+		t.Fatalf("expires_in: got %d, want %d", got, latest)
+	}
+}
+
+func assertNoAccessToken(t *testing.T, rr *httptest.ResponseRecorder) {
+	t.Helper()
+	if strings.Contains(rr.Body.String(), "access_token") {
+		t.Fatalf("error response included a token: %s", rr.Body.String())
+	}
+}
+
+func TestExchangeTokenValid(t *testing.T) {
+	h, mockGW := setupTokenHandler(t, rpc.Code_CODE_OK, nil)
+	before := time.Now()
+	rr := postTokenForm(h, "authorization_code", "code123", "nextcloud1.docker")
+	after := time.Now()
+	assertUnchangedToken(t, rr, mockGW.token, before, after)
+	if mockGW.lastReq == nil {
+		t.Fatal("expected Authenticate to be called")
+	}
+	if mockGW.lastReq.ClientSecret != "code123" || mockGW.lastReq.ClientId != "nextcloud1.docker" {
+		t.Fatalf("authenticate request: %+v", mockGW.lastReq)
 	}
 }
 
 func TestExchangeTokenOcmShareGrant(t *testing.T) {
-	h, _ := setupTokenHandler(t, rpc.Code_CODE_OK, nil)
-	rr := postTokenForm(h, "ocm_share", "code123", "nextcloud1.docker")
+	h, mockGW := setupTokenHandler(t, rpc.Code_CODE_OK, nil)
+	rr := postTokenForm(h, "ocm_share", "code123", "not a domain")
 
-	if rr.Code != http.StatusOK {
-		t.Fatalf("status: got %d, want %d", rr.Code, http.StatusOK)
+	assertTokenError(t, rr, http.StatusBadRequest, "unsupported_grant_type")
+	if mockGW.lastReq != nil || gatewayCalls() != 0 {
+		t.Fatalf("gateway/auth calls: auth=%v gateway=%d", mockGW.lastReq, gatewayCalls())
+	}
+	if strings.Contains(rr.Body.String(), "not a domain") {
+		t.Fatalf("error echoed rejected input: %s", rr.Body.String())
+	}
+	assertNoAccessToken(t, rr)
+}
+
+func TestExchangeTokenRequestClientIDDoesNotChangeToken(t *testing.T) {
+	h, mockGW := setupTokenHandler(t, rpc.Code_CODE_OK, nil)
+	beforeFirst := time.Now()
+	first := postTokenForm(h, "authorization_code", "code123", "receiver-a.example")
+	afterFirst := time.Now()
+	beforeSecond := time.Now()
+	second := postTokenForm(h, "authorization_code", "code123", "receiver-b.example")
+	afterSecond := time.Now()
+	gotFirst := assertUnchangedToken(t, first, mockGW.token, beforeFirst, afterFirst)
+	gotSecond := assertUnchangedToken(t, second, mockGW.token, beforeSecond, afterSecond)
+	if gotFirst.AccessToken != gotSecond.AccessToken {
+		t.Fatal("request client_id changed the returned token")
+	}
+	if mockGW.lastReq.ClientId != "receiver-b.example" || mockGW.lastReq.ClientSecret != "code123" {
+		t.Fatalf("lookup used client_id: %+v", mockGW.lastReq)
 	}
 }
 
@@ -151,18 +242,25 @@ func TestExchangeTokenUnsupportedGrant(t *testing.T) {
 	if errResp.Error != "unsupported_grant_type" {
 		t.Errorf("error: got %q, want unsupported_grant_type", errResp.Error)
 	}
-	if mockGW.lastReq != nil {
-		t.Fatalf("Authenticate should not be called for unsupported grant, got %+v", mockGW.lastReq)
+	if mockGW.lastReq != nil || gatewayCalls() != 0 {
+		t.Fatalf(
+			"Authenticate should not be called for unsupported grant, got %+v gateway=%d",
+			mockGW.lastReq,
+			gatewayCalls(),
+		)
 	}
+	assertNoAccessToken(t, rr)
 }
 
 func TestExchangeTokenEmptyGrant(t *testing.T) {
-	h, _ := setupTokenHandler(t, rpc.Code_CODE_OK, nil)
+	h, mockGW := setupTokenHandler(t, rpc.Code_CODE_OK, nil)
 	rr := postTokenForm(h, "", "code123", "nextcloud1.docker")
 
-	if rr.Code != http.StatusBadRequest {
-		t.Fatalf("status: got %d, want %d", rr.Code, http.StatusBadRequest)
+	assertTokenError(t, rr, http.StatusBadRequest, "unsupported_grant_type")
+	if mockGW.lastReq != nil || gatewayCalls() != 0 {
+		t.Fatalf("gateway/auth calls: auth=%v gateway=%d", mockGW.lastReq, gatewayCalls())
 	}
+	assertNoAccessToken(t, rr)
 }
 
 func TestExchangeTokenNotFound(t *testing.T) {
@@ -179,6 +277,7 @@ func TestExchangeTokenNotFound(t *testing.T) {
 	if errResp.Error != "invalid_grant" {
 		t.Errorf("error: got %q, want invalid_grant", errResp.Error)
 	}
+	assertNoAccessToken(t, rr)
 }
 
 func TestExchangeTokenPermissionDenied(t *testing.T) {
@@ -193,6 +292,7 @@ func TestExchangeTokenPermissionDenied(t *testing.T) {
 	if errResp.Error != "invalid_grant" {
 		t.Errorf("error: got %q, want invalid_grant", errResp.Error)
 	}
+	assertNoAccessToken(t, rr)
 }
 
 func TestExchangeTokenGatewayError(t *testing.T) {
@@ -207,6 +307,7 @@ func TestExchangeTokenGatewayError(t *testing.T) {
 	if errResp.Error != "server_error" {
 		t.Errorf("error: got %q, want server_error", errResp.Error)
 	}
+	assertNoAccessToken(t, rr)
 }
 
 func TestExchangeTokenEmptyCode(t *testing.T) {
@@ -223,26 +324,101 @@ func TestExchangeTokenEmptyCode(t *testing.T) {
 	if errResp.Error != "invalid_grant" {
 		t.Errorf("error: got %q, want invalid_grant", errResp.Error)
 	}
-	if mockGW.lastReq != nil {
-		t.Fatalf("Authenticate should not be called for empty code, got %+v", mockGW.lastReq)
+	if mockGW.lastReq != nil || gatewayCalls() != 0 {
+		t.Fatalf("Authenticate should not be called for empty code, got %+v gateway=%d", mockGW.lastReq, gatewayCalls())
 	}
+	assertNoAccessToken(t, rr)
 }
 
-func TestExchangeTokenEmptyClientIDStillUsesCode(t *testing.T) {
+func TestExchangeTokenMissingClientID(t *testing.T) {
 	h, mockGW := setupTokenHandler(t, rpc.Code_CODE_OK, nil)
 	rr := postTokenForm(h, "authorization_code", "code123", "")
 
-	if rr.Code != http.StatusOK {
-		t.Fatalf("status: got %d, want %d", rr.Code, http.StatusOK)
+	assertTokenError(t, rr, http.StatusBadRequest, "invalid_request")
+	if mockGW.lastReq != nil || gatewayCalls() != 0 {
+		t.Fatalf("gateway/auth calls: auth=%v gateway=%d", mockGW.lastReq, gatewayCalls())
 	}
-	if mockGW.lastReq == nil {
-		t.Fatal("expected Authenticate to be called")
+	assertNoAccessToken(t, rr)
+}
+
+func TestExchangeTokenGrantAndIdentityPriority(t *testing.T) {
+	tests := []struct {
+		name      string
+		grant     string
+		code      string
+		clientID  string
+		wantError string
+	}{
+		{
+			name:      "ocm_share before identity and code",
+			grant:     "ocm_share",
+			code:      "",
+			clientID:  "https://receiver.example",
+			wantError: "unsupported_grant_type",
+		},
+		{
+			name:      "unknown grant",
+			grant:     "client_credentials",
+			code:      "",
+			clientID:  "",
+			wantError: "unsupported_grant_type",
+		},
+		{
+			name:      "missing grant",
+			grant:     "",
+			code:      "code123",
+			clientID:  "receiver.example",
+			wantError: "unsupported_grant_type",
+		},
+		{
+			name:      "invalid identity before empty code",
+			grant:     "authorization_code",
+			code:      "",
+			clientID:  "https://receiver.example",
+			wantError: "invalid_request",
+		},
+		{
+			name:      "missing identity",
+			grant:     "authorization_code",
+			code:      "code123",
+			clientID:  "",
+			wantError: "invalid_request",
+		},
+		{
+			name:      "valid identity empty code",
+			grant:     "authorization_code",
+			code:      "",
+			clientID:  "receiver.example",
+			wantError: "invalid_grant",
+		},
 	}
-	if mockGW.lastReq.ClientId != "" {
-		t.Errorf("client_id: got %q, want empty", mockGW.lastReq.ClientId)
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			h, mockGW := setupTokenHandler(t, rpc.Code_CODE_OK, nil)
+			rr := postTokenForm(h, tt.grant, tt.code, tt.clientID)
+			assertTokenError(t, rr, http.StatusBadRequest, tt.wantError)
+			if mockGW.lastReq != nil || gatewayCalls() != 0 {
+				t.Fatalf("gateway/auth calls: auth=%v gateway=%d", mockGW.lastReq, gatewayCalls())
+			}
+			if tt.clientID != "" && strings.Contains(rr.Body.String(), tt.clientID) {
+				t.Fatalf("error echoed rejected input: %s", rr.Body.String())
+			}
+			assertNoAccessToken(t, rr)
+		})
 	}
-	if mockGW.lastReq.ClientSecret != "code123" {
-		t.Errorf("code: got %q, want code123", mockGW.lastReq.ClientSecret)
+}
+
+func assertTokenError(t *testing.T, rr *httptest.ResponseRecorder, status int, code string) {
+	t.Helper()
+	if rr.Code != status {
+		t.Fatalf("status: got %d, want %d, body %s", rr.Code, status, rr.Body.String())
+	}
+	var errResp tokenErrorResponse
+	if err := json.Unmarshal(rr.Body.Bytes(), &errResp); err != nil {
+		t.Fatal(err)
+	}
+	if errResp.Error != code {
+		t.Fatalf("error: got %q, want %q", errResp.Error, code)
 	}
 }
 
@@ -264,4 +440,70 @@ func TestExchangeTokenMalformedForm(t *testing.T) {
 	if errResp.Error != "invalid_request" {
 		t.Errorf("error: got %q, want invalid_request", errResp.Error)
 	}
+	assertNoAccessToken(t, rr)
+}
+
+func TestExchangeTokenValidatedExpiryFailures(t *testing.T) {
+	now := time.Now()
+	negativeExp := now.Add(-time.Duration(tokenHandlerTestTTL) * time.Second)
+	tests := []struct {
+		name  string
+		token string
+	}{
+		{
+			name: "expired expiry",
+			token: hs256Token(t, jwtv5.RegisteredClaims{
+				IssuedAt:  jwtv5.NewNumericDate(now.Add(-time.Hour)),
+				ExpiresAt: jwtv5.NewNumericDate(now.Add(-time.Second)),
+			}),
+		},
+		{
+			name:  "malformed token",
+			token: "not-a-jwt",
+		},
+		{
+			name: "malformed expiry",
+			token: hs256Token(t, jwtv5.MapClaims{
+				"exp": "not-a-timestamp",
+			}),
+		},
+		{
+			name: "zero expiry",
+			token: hs256Token(t, jwtv5.MapClaims{
+				"exp": 0,
+			}),
+		},
+		{
+			name: "missing expiry",
+			token: hs256Token(t, jwtv5.RegisteredClaims{
+				IssuedAt: jwtv5.NewNumericDate(now),
+			}),
+		},
+		{
+			name: "negative duration",
+			token: hs256Token(t, jwtv5.RegisteredClaims{
+				IssuedAt:  jwtv5.NewNumericDate(now),
+				ExpiresAt: jwtv5.NewNumericDate(negativeExp),
+			}),
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			h, mockGW := setupTokenHandler(t, rpc.Code_CODE_OK, nil)
+			mockGW.token = tt.token
+			rr := postTokenForm(h, "authorization_code", "code123", "nextcloud1.docker")
+			assertTokenError(t, rr, http.StatusInternalServerError, "server_error")
+			assertNoAccessToken(t, rr)
+		})
+	}
+}
+
+func hs256Token(t *testing.T, claims jwtv5.Claims) string {
+	t.Helper()
+	raw, err := jwtv5.NewWithClaims(jwtv5.SigningMethodHS256, claims).
+		SignedString([]byte(tokenHandlerTestSecret))
+	if err != nil {
+		t.Fatal(err)
+	}
+	return raw
 }
