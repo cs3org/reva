@@ -34,6 +34,7 @@ import (
 	"github.com/cs3org/reva/v3/internal/http/services/wellknown"
 	"github.com/cs3org/reva/v3/pkg/appctx"
 	"github.com/cs3org/reva/v3/pkg/errtypes"
+	"github.com/cs3org/reva/v3/pkg/ocm/providerdomain"
 	"github.com/cs3org/reva/v3/pkg/service"
 	"github.com/cs3org/reva/v3/pkg/spaces"
 )
@@ -62,6 +63,9 @@ type openInAppResponse struct {
 }
 
 func (h *appsHandler) init(c *config) error {
+	if err := providerdomain.Validate(c.ProviderDomain); err != nil {
+		return err
+	}
 	transportConfig, err := c.publicOCMTransportConfig()
 	if err != nil {
 		return err
@@ -197,6 +201,9 @@ func (h *appsHandler) OpenInApp(w http.ResponseWriter, r *http.Request) {
 
 func (h *appsHandler) buildLaunch(ctx context.Context, shareID *ocmpb.ShareId, rel string) (openInAppResponse, error) {
 	var none openInAppResponse
+	if err := providerdomain.Validate(h.receiverDomain); err != nil {
+		return none, redactLaunchError(errtypes.BadRequest(err.Error()), "", "")
+	}
 	share, webapp, err := h.receivedWebapp(ctx, shareID)
 	if err != nil {
 		return none, redactLaunchError(err, "", "")
@@ -232,9 +239,6 @@ func (h *appsHandler) buildLaunch(ctx context.Context, shareID *ocmpb.ShareId, r
 	appURI, err := requireHTTPSAppURI(webapp.GetUri())
 	if err != nil {
 		return fail(err, "")
-	}
-	if strings.TrimSpace(h.receiverDomain) == "" {
-		return fail(errtypes.BadRequest("provider domain is not configured"), "")
 	}
 
 	origin, err := senderDiscoveryOrigin(share.GetProtocols())

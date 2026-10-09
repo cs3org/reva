@@ -301,3 +301,33 @@ func assertLaunchDenied(t *testing.T, err error, op string) {
 		t.Fatalf("%s = %v, want ErrPolicyViolation", op, err)
 	}
 }
+
+func scienceMeshServiceConfig(domain string, setDomain bool) map[string]any {
+	cfg := map[string]any{
+		"gatewaysvc":         "127.0.0.1:19000",
+		"mesh_directory_url": "https://mesh.example.test",
+	}
+	if setDomain {
+		cfg["provider_domain"] = domain
+	}
+	return cfg
+}
+
+func TestAppsServiceNewFailsOnAbsentProviderDomain(t *testing.T) {
+	svc, err := New(context.Background(), scienceMeshServiceConfig("", false))
+	if err == nil || svc != nil {
+		t.Fatalf("absent provider_domain: svc=%v err=%v", svc, err)
+	}
+
+	svc, err = New(context.Background(), scienceMeshServiceConfig("", true))
+	if err == nil || svc != nil {
+		t.Fatalf("empty provider_domain: svc=%v err=%v", svc, err)
+	}
+}
+
+func TestAppsServiceNewFailsOnInvalidProviderDomain(t *testing.T) {
+	svc, err := New(context.Background(), scienceMeshServiceConfig("https://receiver.example.test", true))
+	if err == nil || svc != nil {
+		t.Fatalf("svc=%v err=%v", svc, err)
+	}
+}

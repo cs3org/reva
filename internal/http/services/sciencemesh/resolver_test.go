@@ -181,13 +181,14 @@ func endpointIsNonPublic(endpoint string) bool {
 
 type fakeReceivedGateway struct {
 	gateway.GatewayAPIClient
-	mu       sync.Mutex
-	resp     *ocmpb.GetReceivedOCMShareResponse
-	resps    []*ocmpb.GetReceivedOCMShareResponse
-	err      error
-	opaqueID string
-	calls    int
-	contexts []context.Context
+	mu        sync.Mutex
+	resp      *ocmpb.GetReceivedOCMShareResponse
+	resps     []*ocmpb.GetReceivedOCMShareResponse
+	err       error
+	opaqueID  string
+	calls     int
+	contexts  []context.Context
+	onGetUser func()
 }
 
 func (f *fakeReceivedGateway) setResp(resp *ocmpb.GetReceivedOCMShareResponse) {
