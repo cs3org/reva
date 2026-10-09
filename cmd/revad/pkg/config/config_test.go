@@ -391,6 +391,14 @@ nats_token = "secret-token-example"`
 	}, c2.Serverless)
 }
 
+func TestLoadDoesNotDefaultJWTSecret(t *testing.T) {
+	c, err := Load(strings.NewReader("[shared]\ngatewaysvc = \"localhost:9142\""))
+	if err != nil {
+		t.Fatalf("unexpected error loading config: %v", err)
+	}
+	assert.Empty(t, c.Shared.JWTSecret)
+}
+
 func assertGRPCEqual(t *testing.T, g1, g2 *GRPC) {
 	assert.Equal(t, g1.Address, g2.Address)
 	assert.Equal(t, g1.Network, g2.Network)
