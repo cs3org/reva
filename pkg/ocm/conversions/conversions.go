@@ -32,6 +32,7 @@ import (
 	"github.com/cs3org/reva/v3/pkg/spaces"
 	"github.com/cs3org/reva/v3/pkg/utils"
 	libregraph "github.com/owncloud/libre-graph-api-go"
+	"github.com/rs/zerolog/log"
 )
 
 // Config contains the configuration for OCM conversions
@@ -145,6 +146,35 @@ func (c *Converter) OCMReceivedShareToDriveItem(ctx context.Context, receivedOCM
 		d.Folder = libregraph.NewFolder()
 	}
 	return d, nil
+}
+
+// WebappMetadataForReceivedShare returns metadata for the single persisted
+// webapp protocol, or nil when there is not exactly one.
+func WebappMetadataForReceivedShare(received *ocm.ReceivedShare) *ReceivedWebappMetadata {
+	if received == nil {
+		return nil
+	}
+
+	var meta *ReceivedWebappMetadata
+	for i, p := range received.Protocols {
+		if p.GetWebappOptions() == nil {
+			continue
+		}
+		if meta != nil {
+			log.Warn().
+				Str("share_id", received.GetId().GetOpaqueId()).
+				Int("protocol_index", i).
+				Str("app_name", meta.AppName).
+				Str("duplicate_app_name", p.GetWebappOptions().GetAppName()).
+				Msg("dropping ambiguous received webapp protocols")
+			return nil
+		}
+		meta = &ReceivedWebappMetadata{
+			Present: true,
+			AppName: p.GetWebappOptions().GetAppName(),
+		}
+	}
+	return meta
 }
 
 // CS3GranteeToSharePointIdentitySet converts a CS3 grantee to a SharePoint identity set for OCM users

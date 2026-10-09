@@ -178,6 +178,7 @@ func jsonSemanticEqual(t *testing.T, a, b []byte) bool {
 		if err := json.Unmarshal(raw, &v); err != nil {
 			t.Fatalf("decode json: %v; raw %s", err, raw)
 		}
+		canonicalizeTimeStrings(v)
 		out, err := json.Marshal(v)
 		if err != nil {
 			t.Fatal(err)
@@ -185,6 +186,29 @@ func jsonSemanticEqual(t *testing.T, a, b []byte) bool {
 		return out
 	}
 	return bytes.Equal(normalize(a), normalize(b))
+}
+
+// The graph conversions render time.Unix values in the server's local
+// timezone, so envelope goldens must compare timestamps as instants, not
+// by zone rendering. Canonicalize RFC 3339 strings to UTC before the
+// byte comparison so the fixtures hold on runners in any timezone.
+func canonicalizeTimeStrings(v any) {
+	switch node := v.(type) {
+	case map[string]any:
+		for key, item := range node {
+			if s, ok := item.(string); ok {
+				if ts, err := time.Parse(time.RFC3339, s); err == nil {
+					node[key] = ts.UTC().Format(time.RFC3339Nano)
+				}
+				continue
+			}
+			canonicalizeTimeStrings(item)
+		}
+	case []any:
+		for _, item := range node {
+			canonicalizeTimeStrings(item)
+		}
+	}
 }
 
 type failJSON struct{}
@@ -353,4 +377,30 @@ func receivedOCMShareInfo() *ocm.ReceivedShare {
 			},
 		},
 	}
+}
+
+func receivedWebappContractShare(present bool, appName string) *ocm.ReceivedShare {
+	const folderName = "shared-folder"
+	share := receivedOCMShareInfo()
+	share.Name = folderName
+	share.SharedResourceType = ocm.SharedResourceType_SHARE_RESOURCE_TYPE_CONTAINER
+	share.Protocols[0].GetWebdavOptions().Uri = "https://remote.example/dav/" + folderName
+	if !present {
+		return share
+	}
+	share.Protocols[0].GetWebdavOptions().SharedSecret = "webdav-secret-must-stay-in-storage"
+	share.Protocols = append(share.Protocols, &ocm.Protocol{
+		Term: &ocm.Protocol_WebappOptions{
+			WebappOptions: &ocm.WebappProtocol{
+				Uri:          "https://remote.example/open",
+				SharedSecret: "secret-must-stay-in-storage",
+				AppName:      appName,
+				AppIconHint:  "image/png",
+				MediaTypes:   []string{"text/markdown"},
+				Requirements: []string{"must-exchange-token"},
+				Targets:      []string{"blank"},
+			},
+		},
+	})
+	return share
 }
