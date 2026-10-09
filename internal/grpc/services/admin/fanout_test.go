@@ -21,14 +21,16 @@ package admin
 import (
 	"context"
 	"testing"
+
+	"github.com/cs3org/reva/v3/pkg/invoke/client"
 )
 
 // TestFanOutInvokeReportsPerNodeErrors checks that unresolved/offline nodes are
 // reported per-node (in order) rather than failing the whole fan-out.
 func TestFanOutInvokeReportsPerNodeErrors(t *testing.T) {
-	eps := []endpoint{
-		{node: "n1", err: "node advertises no control endpoint"},
-		{node: "n2", err: "offline"},
+	eps := []client.Endpoint{
+		{Node: "n1", Err: "node advertises no control endpoint"},
+		{Node: "n2", Err: "offline"},
 	}
 	res := fanOutInvoke(context.Background(), eps, "op", nil)
 	if len(res) != 2 {
