@@ -504,7 +504,7 @@ func (fs *cephmountfs) fileAsResourceInfo(ctx context.Context, path string, info
 	// An external account only ever sees what it was granted, since the uid the
 	// operation runs under is a service account and says nothing about them.
 	if u, ok := externalUser(ctx); ok {
-		perms, found := fs.externalAccountGrant(u.Id.OpaqueId, path)
+		perms, found := fs.externalPermissions(u, path)
 		if !found {
 			perms = &provider.ResourcePermissions{}
 		}
@@ -770,14 +770,21 @@ func (fs *cephmountfs) GetMD(ctx context.Context, ref *provider.Reference, mdKey
 
 	fs.logOperationWithPaths(ctx, "GetMD", receivedPath, path)
 
-	if err := fs.authorizeExternal(ctx, path, "GetMD", canStat); err != nil {
+	// The scope check stats resources before knowing they are shared, so this must not grant.
+	if err := fs.checkExternal(ctx, path, "GetMD", canStat); err != nil {
 		fs.logOperationError(ctx, "GetMD", path, err)
 		return nil, err
 	}
 
 	// path is already chroot-relative from resolveRef
-	// Execute stat operation on user's thread with correct UID
-	info, err := fs.statAsUser(ctx, path)
+	var info os.FileInfo
+	if _, external := externalUser(ctx); external {
+		// Checked above, so stat as the driver, as eos does.
+		info, err = fs.rootFS.Stat(path)
+	} else {
+		// Execute stat operation on user's thread with correct UID
+		info, err = fs.statAsUser(ctx, path)
+	}
 	if err != nil {
 		if os.IsNotExist(err) {
 			wrappedErr := errtypes.NotFound("file not found")
