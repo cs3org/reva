@@ -531,6 +531,58 @@ func assertMemoryLogOmitsSentinels(t *testing.T, log string) {
 	}
 }
 
+type memorySkippedRowState struct {
+	Invites       map[string]*invitepb.InviteToken `json:"invites"`
+	AcceptedUsers map[string][]*userpb.User        `json:"accepted_users"`
+}
+
+func snapshotMemorySkippedRowState(t *testing.T, repo invite.Repository) []byte {
+	t.Helper()
+	m := repo.(*manager)
+	m.acceptedUsersMu.RLock()
+	defer m.acceptedUsersMu.RUnlock()
+	state := memorySkippedRowState{
+		Invites:       make(map[string]*invitepb.InviteToken),
+		AcceptedUsers: m.acceptedUsers,
+	}
+	m.Invites.Range(func(key, value any) bool {
+		token, ok := value.(*invitepb.InviteToken)
+		if !ok {
+			t.Fatal("unexpected diagnostic token type")
+		}
+		state.Invites[key.(string)] = token
+		return true
+	})
+	data, err := stdjson.Marshal(&state)
+	if err != nil {
+		t.Fatal("could not snapshot diagnostic state")
+	}
+	return data
+}
+
+func expectedMemorySkippedRowState(t *testing.T, before []byte, owner *userpb.UserId, operation string) []byte {
+	t.Helper()
+	var expected memorySkippedRowState
+	if err := stdjson.Unmarshal(before, &expected); err != nil {
+		t.Fatal("could not decode diagnostic baseline")
+	}
+	users := expected.AcceptedUsers[owner.GetOpaqueId()]
+	if len(users) != 4 {
+		t.Fatal("unexpected diagnostic seed row count")
+	}
+	switch operation {
+	case "add":
+		expected.AcceptedUsers[owner.GetOpaqueId()] = append(users, newRemoteUser("new-u", "one.example.com"))
+	case "delete":
+		expected.AcceptedUsers[owner.GetOpaqueId()] = users[:3]
+	}
+	data, err := stdjson.Marshal(&expected)
+	if err != nil {
+		t.Fatal("could not encode diagnostic expected state")
+	}
+	return data
+}
+
 // TestMemorySkippedRowDiagnostics emits exactly one fixed warning per scan.
 func TestMemorySkippedRowDiagnostics(t *testing.T) {
 	userWarn := "skipping malformed stored remote user"
@@ -665,6 +717,8 @@ func TestMemorySkippedRowDiagnostics(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			repo, owner, goodUser := seedMemorySkippedRowRepository(t)
+			beforeState := snapshotMemorySkippedRowState(t, repo)
+			expectedState := expectedMemorySkippedRowState(t, beforeState, owner, tc.name)
 			beforeOrder := memoryAcceptedUserOrder(t, repo, owner)
 			beforeKeys := memoryInviteTokenKeys(t, repo)
 			ctx, logBuf := ctxWithCapturedWarnLog(t)
@@ -676,39 +730,55 @@ func TestMemorySkippedRowDiagnostics(t *testing.T) {
 			assertOneSkippedRowWarning(t, logBuf.String(), want)
 			assertMemoryLogOmitsSentinels(t, logBuf.String())
 			tc.check(t, repo, owner, goodUser, beforeOrder, beforeKeys)
+			if !bytes.Equal(expectedState, snapshotMemorySkippedRowState(t, repo)) {
+				t.Fatal("unexpected diagnostic state after operation")
+			}
 		})
 	}
 
 	for _, tc := range []struct {
 		name string
-		run  func(repo invite.Repository, owner *userpb.UserId, ctx context.Context) error
+		run  func(t *testing.T, repo invite.Repository, owner *userpb.UserId, ctx context.Context) error
 	}{
-		{"AddRemoteUser nil owner", func(repo invite.Repository, _ *userpb.UserId, ctx context.Context) error {
+		{"AddRemoteUser nil owner", func(t *testing.T, repo invite.Repository, _ *userpb.UserId, ctx context.Context) error {
 			return repo.AddRemoteUser(ctx, nil, newRemoteUser("new-u", "one.example.com"))
 		}},
-		{"GetRemoteUser nil remote id", func(repo invite.Repository, owner *userpb.UserId, ctx context.Context) error {
-			_, err := repo.GetRemoteUser(ctx, owner, nil)
+		{"GetRemoteUser nil remote id", func(t *testing.T, repo invite.Repository, owner *userpb.UserId, ctx context.Context) error {
+			result, err := repo.GetRemoteUser(ctx, owner, nil)
+			if result != nil {
+				t.Fatal("invalid input returned user")
+			}
 			return err
 		}},
-		{"FindRemoteUsers nil owner", func(repo invite.Repository, _ *userpb.UserId, ctx context.Context) error {
-			_, err := repo.FindRemoteUsers(ctx, nil, "")
+		{"FindRemoteUsers nil owner", func(t *testing.T, repo invite.Repository, _ *userpb.UserId, ctx context.Context) error {
+			result, err := repo.FindRemoteUsers(ctx, nil, "")
+			if result != nil {
+				t.Fatal("invalid input returned users")
+			}
 			return err
 		}},
-		{"DeleteRemoteUser nil remote id", func(repo invite.Repository, owner *userpb.UserId, ctx context.Context) error {
+		{"DeleteRemoteUser nil remote id", func(t *testing.T, repo invite.Repository, owner *userpb.UserId, ctx context.Context) error {
 			return repo.DeleteRemoteUser(ctx, owner, nil)
 		}},
-		{"ListTokens nil owner", func(repo invite.Repository, _ *userpb.UserId, ctx context.Context) error {
-			_, err := repo.ListTokens(ctx, nil)
+		{"ListTokens nil owner", func(t *testing.T, repo invite.Repository, _ *userpb.UserId, ctx context.Context) error {
+			result, err := repo.ListTokens(ctx, nil)
+			if result != nil {
+				t.Fatal("invalid input returned tokens")
+			}
 			return err
 		}},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			repo, owner, _ := seedMemorySkippedRowRepository(t)
+			beforeState := snapshotMemorySkippedRowState(t, repo)
 			beforeOrder := memoryAcceptedUserOrder(t, repo, owner)
 			beforeKeys := memoryInviteTokenKeys(t, repo)
 			ctx, logBuf := ctxWithCapturedWarnLog(t)
-			err := tc.run(repo, owner, ctx)
+			err := tc.run(t, repo, owner, ctx)
 			assertMemoryBadRequest(t, err)
+			if !bytes.Equal(beforeState, snapshotMemorySkippedRowState(t, repo)) {
+				t.Fatal("invalid input changed diagnostic state")
+			}
 			if logBuf.Len() != 0 {
 				t.Fatal("invalid input must not emit warnings")
 			}

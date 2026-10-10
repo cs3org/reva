@@ -507,6 +507,29 @@ func TestMalformedStoredInviteTokenMatrix(t *testing.T) {
 	}
 }
 
+func expectedJSONSkippedRowState(t *testing.T, before string, owner *userpb.UserId, operation string) liveModelSnapshot {
+	t.Helper()
+	var expected inviteModel
+	if err := stdjson.Unmarshal([]byte(before), &expected); err != nil {
+		t.Fatal("could not decode diagnostic baseline")
+	}
+	users := expected.AcceptedUsers[owner.GetOpaqueId()]
+	if len(users) != 4 {
+		t.Fatal("unexpected diagnostic seed row count")
+	}
+	switch operation {
+	case "add":
+		expected.AcceptedUsers[owner.GetOpaqueId()] = append(users, newRemoteUser("new-u", "one.example.com"))
+	case "delete":
+		expected.AcceptedUsers[owner.GetOpaqueId()] = users[:3]
+	}
+	data, err := stdjson.Marshal(&expected)
+	if err != nil {
+		t.Fatal("could not encode diagnostic expected state")
+	}
+	return liveModelSnapshot(data)
+}
+
 // TestJSONSkippedRowDiagnostics emits exactly one fixed warning per scan.
 func TestJSONSkippedRowDiagnostics(t *testing.T) {
 	userWarn := "skipping malformed stored remote user"
@@ -599,8 +622,10 @@ func TestJSONSkippedRowDiagnostics(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			repo, file, owner, goodUser, beforeBytes := seedJSONSkippedRowRepository(t)
+			expectedState := expectedJSONSkippedRowState(t, beforeBytes, owner, tc.name)
 			ctx, logBuf := ctxWithCapturedWarnLog(t)
 			tc.run(t, repo, file, owner, goodUser, ctx, beforeBytes)
+			assertLiveSnapshotsEqual(t, expectedState, snapshotLiveModel(t, managerFromRepo(t, repo)))
 			want := userWarn
 			if tc.tokenOp {
 				want = tokenWarn
@@ -612,32 +637,43 @@ func TestJSONSkippedRowDiagnostics(t *testing.T) {
 
 	for _, tc := range []struct {
 		name string
-		run  func(repo invite.Repository, owner *userpb.UserId, ctx context.Context) error
+		run  func(t *testing.T, repo invite.Repository, owner *userpb.UserId, ctx context.Context) error
 	}{
-		{"AddRemoteUser nil owner", func(repo invite.Repository, _ *userpb.UserId, ctx context.Context) error {
+		{"AddRemoteUser nil owner", func(t *testing.T, repo invite.Repository, _ *userpb.UserId, ctx context.Context) error {
 			return repo.AddRemoteUser(ctx, nil, newRemoteUser("new-u", "one.example.com"))
 		}},
-		{"GetRemoteUser nil remote id", func(repo invite.Repository, owner *userpb.UserId, ctx context.Context) error {
-			_, err := repo.GetRemoteUser(ctx, owner, nil)
+		{"GetRemoteUser nil remote id", func(t *testing.T, repo invite.Repository, owner *userpb.UserId, ctx context.Context) error {
+			result, err := repo.GetRemoteUser(ctx, owner, nil)
+			if result != nil {
+				t.Fatal("invalid input returned user")
+			}
 			return err
 		}},
-		{"FindRemoteUsers nil owner", func(repo invite.Repository, _ *userpb.UserId, ctx context.Context) error {
-			_, err := repo.FindRemoteUsers(ctx, nil, "")
+		{"FindRemoteUsers nil owner", func(t *testing.T, repo invite.Repository, _ *userpb.UserId, ctx context.Context) error {
+			result, err := repo.FindRemoteUsers(ctx, nil, "")
+			if result != nil {
+				t.Fatal("invalid input returned users")
+			}
 			return err
 		}},
-		{"DeleteRemoteUser nil remote id", func(repo invite.Repository, owner *userpb.UserId, ctx context.Context) error {
+		{"DeleteRemoteUser nil remote id", func(t *testing.T, repo invite.Repository, owner *userpb.UserId, ctx context.Context) error {
 			return repo.DeleteRemoteUser(ctx, owner, nil)
 		}},
-		{"ListTokens nil owner", func(repo invite.Repository, _ *userpb.UserId, ctx context.Context) error {
-			_, err := repo.ListTokens(ctx, nil)
+		{"ListTokens nil owner", func(t *testing.T, repo invite.Repository, _ *userpb.UserId, ctx context.Context) error {
+			result, err := repo.ListTokens(ctx, nil)
+			if result != nil {
+				t.Fatal("invalid input returned tokens")
+			}
 			return err
 		}},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			repo, file, owner, _, beforeBytes := seedJSONSkippedRowRepository(t)
+			beforeState := snapshotLiveModel(t, managerFromRepo(t, repo))
 			ctx, logBuf := ctxWithCapturedWarnLog(t)
-			err := tc.run(repo, owner, ctx)
+			err := tc.run(t, repo, owner, ctx)
 			assertJSONBadRequest(t, err)
+			assertLiveSnapshotsEqual(t, beforeState, snapshotLiveModel(t, managerFromRepo(t, repo)))
 			if logBuf.Len() != 0 {
 				t.Fatal("invalid input must not emit warnings")
 			}

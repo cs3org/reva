@@ -198,6 +198,8 @@ func Run(t *testing.T, newRepository func(*testing.T) invite.Repository) {
 			t.Fatalf("expected exactly one seeded neighbor, got %d", len(before))
 		}
 
+		beforeNeighbor := proto.Clone(before[0]).(*userpb.User)
+
 		for _, tc := range []struct {
 			name      string
 			initiator *userpb.UserId
@@ -227,10 +229,10 @@ func Run(t *testing.T, newRepository func(*testing.T) invite.Repository) {
 			if err != nil {
 				t.Fatalf("%s: valid neighbor must remain retrievable: %v", tc.name, err)
 			}
-			if !proto.Equal(got, before[0]) {
+			if !proto.Equal(got, beforeNeighbor) {
 				t.Fatalf("%s: valid neighbor changed after rejected lookup", tc.name)
 			}
-			if !proto.Equal(after[0], before[0]) {
+			if !proto.Equal(after[0], beforeNeighbor) {
 				t.Fatalf("%s: find result changed after rejected lookup", tc.name)
 			}
 		}
@@ -273,6 +275,8 @@ func Run(t *testing.T, newRepository func(*testing.T) invite.Repository) {
 			t.Fatalf("expected exactly one seeded neighbor, got %d", len(before))
 		}
 
+		beforeNeighbor := proto.Clone(before[0]).(*userpb.User)
+
 		for _, tc := range []struct {
 			name      string
 			initiator *userpb.UserId
@@ -298,10 +302,10 @@ func Run(t *testing.T, newRepository func(*testing.T) invite.Repository) {
 			if err != nil {
 				t.Fatalf("%s: valid neighbor must remain after rejected delete: %v", tc.name, err)
 			}
-			if !proto.Equal(got, before[0]) {
+			if !proto.Equal(got, beforeNeighbor) {
 				t.Fatalf("%s: valid neighbor changed after rejected delete", tc.name)
 			}
-			if !proto.Equal(after[0], before[0]) {
+			if !proto.Equal(after[0], beforeNeighbor) {
 				t.Fatalf("%s: find result changed after rejected delete", tc.name)
 			}
 		}
