@@ -22,7 +22,10 @@ import (
 	"context"
 	"encoding/json"
 	"io"
+	"maps"
 	"os"
+	"path/filepath"
+	"slices"
 	"strings"
 	"sync"
 	"time"
@@ -121,14 +124,84 @@ func loadOrCreate(file string) (*inviteModel, error) {
 	return model, nil
 }
 
+func (model *inviteModel) clone() *inviteModel {
+	return &inviteModel{
+		File:          model.File,
+		Invites:       maps.Clone(model.Invites),
+		AcceptedUsers: maps.Clone(model.AcceptedUsers),
+	}
+}
+
+func (m *manager) commitModel(candidate *inviteModel) error {
+	if err := candidate.save(); err != nil {
+		return errors.Wrap(err, "json: error saving model")
+	}
+	m.model = candidate
+	return nil
+}
+
 func (model *inviteModel) save() error {
 	data, err := json.Marshal(model)
 	if err != nil {
 		return errors.Wrap(err, "error encoding invite data to json")
 	}
 
-	if err := os.WriteFile(model.File, data, 0644); err != nil {
-		return errors.Wrap(err, "error writing invite data to file: "+model.File)
+	absPath, err := filepath.Abs(model.File)
+	if err != nil {
+		return errors.Wrap(err, "error resolving invite storage path")
+	}
+	targetPath, err := filepath.EvalSymlinks(absPath)
+	if err != nil {
+		return errors.Wrap(err, "error resolving invite storage symlinks")
+	}
+	info, err := os.Stat(targetPath)
+	if err != nil {
+		return errors.Wrap(err, "error stating invite storage file")
+	}
+	if !info.Mode().IsRegular() {
+		return errors.Errorf("invite storage path is not a regular file: %s", targetPath)
+	}
+
+	dir := filepath.Dir(targetPath)
+	tmp, err := os.CreateTemp(dir, ".ocm-invites-*.tmp")
+	if err != nil {
+		return errors.Wrap(err, "error creating temporary invite storage file")
+	}
+	tmpPath := tmp.Name()
+	removeTmp := func() {
+		_ = os.Remove(tmpPath)
+	}
+
+	n, err := tmp.Write(data)
+	if err != nil {
+		_ = tmp.Close()
+		removeTmp()
+		return errors.Wrap(err, "error writing temporary invite storage file")
+	}
+	if n != len(data) {
+		_ = tmp.Close()
+		removeTmp()
+		return errors.Wrap(io.ErrShortWrite, "error writing temporary invite storage file")
+	}
+
+	if err := tmp.Chmod(info.Mode().Perm()); err != nil {
+		_ = tmp.Close()
+		removeTmp()
+		return errors.Wrap(err, "error setting permissions on temporary invite storage file")
+	}
+	if err := tmp.Sync(); err != nil {
+		_ = tmp.Close()
+		removeTmp()
+		return errors.Wrap(err, "error syncing temporary invite storage file")
+	}
+	if err := tmp.Close(); err != nil {
+		removeTmp()
+		return errors.Wrap(err, "error closing temporary invite storage file")
+	}
+
+	if err := os.Rename(tmpPath, targetPath); err != nil {
+		removeTmp()
+		return errors.Wrap(err, "error replacing invite storage file: "+targetPath)
 	}
 
 	return nil
@@ -142,11 +215,9 @@ func (m *manager) AddToken(ctx context.Context, token *invitepb.InviteToken) err
 	m.Lock()
 	defer m.Unlock()
 
-	m.model.Invites[token.GetToken()] = token
-	if err := m.model.save(); err != nil {
-		return errors.Wrap(err, "json: error saving model")
-	}
-	return nil
+	candidate := m.model.clone()
+	candidate.Invites[token.GetToken()] = token
+	return m.commitModel(candidate)
 }
 
 func (m *manager) GetToken(ctx context.Context, token string) (*invitepb.InviteToken, error) {
@@ -222,11 +293,10 @@ func (m *manager) AddRemoteUser(ctx context.Context, initiator *userpb.UserId, r
 		}
 	}
 
-	m.model.AcceptedUsers[initiator.GetOpaqueId()] = append(m.model.AcceptedUsers[initiator.GetOpaqueId()], remoteUser)
-	if err := m.model.save(); err != nil {
-		return errors.Wrap(err, "json: error saving model")
-	}
-	return nil
+	candidate := m.model.clone()
+	key := initiator.GetOpaqueId()
+	candidate.AcceptedUsers[key] = append(slices.Clone(m.model.AcceptedUsers[key]), remoteUser)
+	return m.commitModel(candidate)
 }
 
 func (m *manager) GetRemoteUser(ctx context.Context, initiator *userpb.UserId, remoteUserID *userpb.UserId) (*userpb.User, error) {
@@ -325,12 +395,9 @@ func (m *manager) DeleteRemoteUser(ctx context.Context, initiator *userpb.UserId
 			continue
 		}
 		if (user.Id.GetOpaqueId() == remoteUser.OpaqueId) && (remoteUser.Idp == "" || user.Id.GetIdp() == remoteUser.Idp) {
-			acceptedUsers = list.Remove(acceptedUsers, i)
-			m.model.AcceptedUsers[initiator.GetOpaqueId()] = acceptedUsers
-			// the ignored save error is a known limitation of the json
-			// driver's persistence semantics, tracked separately
-			_ = m.model.save()
-			return nil
+			candidate := m.model.clone()
+			candidate.AcceptedUsers[initiator.GetOpaqueId()] = list.Remove(slices.Clone(acceptedUsers), i)
+			return m.commitModel(candidate)
 		}
 	}
 	return nil

@@ -5,4 +5,7 @@ before direct-secret authentication. Validate invitation requests,
 context identities, stored records and successful repository results,
 and fix the memory repository's first-insert and identity-key handling.
 
+JSON invitation updates replace the data file before publishing the live
+model; failed persistence reports an error without changing that model.
+
 https://github.com/cs3org/reva/pull/5885

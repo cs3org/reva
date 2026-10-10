@@ -22,9 +22,12 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"fmt"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -500,4 +503,499 @@ func TestJSONSkippedRowDiagnostics(t *testing.T) {
 
 	_ = repo.DeleteRemoteUser(ctx, initiator, &userpb.UserId{OpaqueId: "ghost", Idp: "ghost.example.com"})
 	assertAtMostOneWarning(t, logBuf.String(), "skipping malformed stored remote user")
+}
+
+type acceptedUserKey struct {
+	opaque string
+	idp    string
+}
+
+type liveModelSnapshot struct {
+	invites       map[string]string
+	acceptedUsers map[string][]acceptedUserKey
+}
+
+func managerFromRepo(t *testing.T, repo invite.Repository) *manager {
+	t.Helper()
+	m, ok := repo.(*manager)
+	if !ok {
+		t.Fatal("expected *manager repository")
+	}
+	return m
+}
+
+func snapshotLiveModel(t *testing.T, m *manager) liveModelSnapshot {
+	t.Helper()
+	snap := liveModelSnapshot{
+		invites:       make(map[string]string, len(m.model.Invites)),
+		acceptedUsers: make(map[string][]acceptedUserKey, len(m.model.AcceptedUsers)),
+	}
+	for key, token := range m.model.Invites {
+		if token == nil {
+			snap.invites[key] = ""
+			continue
+		}
+		snap.invites[key] = token.GetToken()
+	}
+	for initiator, users := range m.model.AcceptedUsers {
+		order := make([]acceptedUserKey, len(users))
+		for i, user := range users {
+			if user == nil || user.Id == nil {
+				continue
+			}
+			order[i] = acceptedUserKey{opaque: user.Id.GetOpaqueId(), idp: user.Id.GetIdp()}
+		}
+		snap.acceptedUsers[initiator] = order
+	}
+	return snap
+}
+
+func assertLiveSnapshotsEqual(t *testing.T, before, after liveModelSnapshot) {
+	t.Helper()
+	if len(before.invites) != len(after.invites) {
+		t.Fatalf("invite map size changed: before=%d after=%d", len(before.invites), len(after.invites))
+	}
+	for key, beforeSecret := range before.invites {
+		afterSecret, ok := after.invites[key]
+		if !ok {
+			t.Fatalf("invite key %q disappeared from live model", key)
+		}
+		if afterSecret != beforeSecret {
+			t.Fatalf("invite %q changed: before=%q after=%q", key, beforeSecret, afterSecret)
+		}
+	}
+	for key, beforeUsers := range before.acceptedUsers {
+		afterUsers, ok := after.acceptedUsers[key]
+		if !ok {
+			t.Fatalf("accepted-user key %q disappeared from live model", key)
+		}
+		if len(beforeUsers) != len(afterUsers) {
+			t.Fatalf("accepted-user list length changed for %q: before=%d after=%d", key, len(beforeUsers), len(afterUsers))
+		}
+		for i := range beforeUsers {
+			if beforeUsers[i] != afterUsers[i] {
+				t.Fatalf("accepted-user order changed for %q at %d: before=%+v after=%+v", key, i, beforeUsers[i], afterUsers[i])
+			}
+		}
+	}
+}
+
+func assertNoInviteTempFiles(t *testing.T, dir string) {
+	t.Helper()
+	matches, err := filepath.Glob(filepath.Join(dir, ".ocm-invites-*.tmp"))
+	if err != nil {
+		t.Fatalf("glob temp files: %v", err)
+	}
+	if len(matches) > 0 {
+		t.Fatalf("expected no temporary invite files, found %v", matches)
+	}
+}
+
+func blockJSONSaveAtConfiguredPath(t *testing.T, configuredPath string) (savedPath string, restore func()) {
+	t.Helper()
+	saved := configuredPath + ".saved"
+	if err := os.Rename(configuredPath, saved); err != nil {
+		t.Fatalf("rename file aside: %v", err)
+	}
+	if err := os.Mkdir(configuredPath, 0700); err != nil {
+		t.Fatalf("create blocking directory: %v", err)
+	}
+	return saved, func() {
+		if err := os.RemoveAll(configuredPath); err != nil {
+			t.Fatalf("remove blocking directory: %v", err)
+		}
+		if err := os.Rename(saved, configuredPath); err != nil {
+			t.Fatalf("restore saved file: %v", err)
+		}
+	}
+}
+
+func seedJSONMutationRepository(t *testing.T) (invite.Repository, context.Context, string, *userpb.UserId) {
+	t.Helper()
+	file := filepath.Join(t.TempDir(), "invites.json")
+	mustWriteFile(t, file, `{
+		"invites": {
+			"seed-token": {
+				"token": "seed-token",
+				"user_id": {"idp": "local.example.com", "opaque_id": "initiator"},
+				"expiration": {"seconds": 32503680000}
+			}
+		},
+		"accepted_users": {
+			"initiator": [
+				null,
+				{"id": {"opaque_id": "alice", "idp": "one.example.com"}, "username": "alice", "display_name": "Display alice", "mail": "alice@one.example.com"},
+				{"id": {"opaque_id": "bob", "idp": "one.example.com"}, "username": "bob", "display_name": "Display bob", "mail": "bob@one.example.com"}
+			],
+			"other-initiator": [
+				{"id": {"opaque_id": "carol", "idp": "two.example.com"}, "username": "carol", "display_name": "Display carol", "mail": "carol@two.example.com"}
+			]
+		}
+	}`)
+	repo := newRepositoryAtFile(t, file)
+	return repo, context.Background(), file, newInitiatorID()
+}
+
+func assertReopenMatchesLiveModel(t *testing.T, live invite.Repository, file string, ctx context.Context, initiator *userpb.UserId) {
+	t.Helper()
+	reloaded := newRepositoryAtFile(t, file)
+
+	liveTokens, err := live.ListTokens(ctx, initiator)
+	if err != nil {
+		t.Fatalf("live list tokens: %v", err)
+	}
+	reloadedTokens, err := reloaded.ListTokens(ctx, initiator)
+	if err != nil {
+		t.Fatalf("reloaded list tokens: %v", err)
+	}
+	if len(liveTokens) != len(reloadedTokens) {
+		t.Fatalf("token count mismatch: live=%d reloaded=%d", len(liveTokens), len(reloadedTokens))
+	}
+	liveSet := map[string]struct{}{}
+	for _, token := range liveTokens {
+		liveSet[token.GetToken()] = struct{}{}
+	}
+	for _, token := range reloadedTokens {
+		if _, ok := liveSet[token.GetToken()]; !ok {
+			t.Fatalf("reloaded token %q missing from live model", token.GetToken())
+		}
+	}
+
+	liveUsers, err := live.FindRemoteUsers(ctx, initiator, "")
+	if err != nil {
+		t.Fatalf("live find users: %v", err)
+	}
+	reloadedUsers, err := reloaded.FindRemoteUsers(ctx, initiator, "")
+	if err != nil {
+		t.Fatalf("reloaded find users: %v", err)
+	}
+	if len(liveUsers) != len(reloadedUsers) {
+		t.Fatalf("accepted-user count mismatch: live=%d reloaded=%d", len(liveUsers), len(reloadedUsers))
+	}
+	liveUsersSet := map[acceptedUserKey]struct{}{}
+	for _, user := range liveUsers {
+		liveUsersSet[acceptedUserKey{user.Id.GetOpaqueId(), user.Id.GetIdp()}] = struct{}{}
+	}
+	for _, user := range reloadedUsers {
+		key := acceptedUserKey{user.Id.GetOpaqueId(), user.Id.GetIdp()}
+		if _, ok := liveUsersSet[key]; !ok {
+			t.Fatalf("reloaded user %+v missing from live model", key)
+		}
+	}
+}
+
+func assertSaveFailureRollback(t *testing.T, repo invite.Repository, file string, ctx context.Context, initiator *userpb.UserId, beforeBytes string, beforeSnap liveModelSnapshot, mutate func() error) {
+	t.Helper()
+	mgr := managerFromRepo(t, repo)
+	savedPath, restore := blockJSONSaveAtConfiguredPath(t, file)
+
+	if err := mutate(); err == nil {
+		t.Fatal("expected persistence failure, got nil")
+	} else if !strings.Contains(err.Error(), "json: error saving model") {
+		t.Fatalf("expected wrapped save error, got %v", err)
+	}
+
+	afterSnap := snapshotLiveModel(t, mgr)
+	assertLiveSnapshotsEqual(t, beforeSnap, afterSnap)
+	if afterBytes := mustReadFile(t, savedPath); afterBytes != beforeBytes {
+		t.Fatal("file bytes changed after failed persistence")
+	}
+	assertNoInviteTempFiles(t, filepath.Dir(file))
+
+	restore()
+	assertReopenMatchesLiveModel(t, repo, file, ctx, initiator)
+}
+
+func TestJSONMutationSaveFailureLeavesStateUnchanged(t *testing.T) {
+	t.Run("AddToken", func(t *testing.T) {
+		repo, ctx, file, initiator := seedJSONMutationRepository(t)
+		mgr := managerFromRepo(t, repo)
+		beforeBytes := mustReadFile(t, file)
+		beforeSnap := snapshotLiveModel(t, mgr)
+
+		assertSaveFailureRollback(t, repo, file, ctx, initiator, beforeBytes, beforeSnap, func() error {
+			return repo.AddToken(ctx, &invitepb.InviteToken{
+				Token:      "new-token",
+				UserId:     initiator,
+				Expiration: &typespb.Timestamp{Seconds: uint64(time.Now().Add(24 * time.Hour).Unix())},
+			})
+		})
+	})
+
+	t.Run("token replacement", func(t *testing.T) {
+		repo, ctx, file, initiator := seedJSONMutationRepository(t)
+		mgr := managerFromRepo(t, repo)
+		beforeBytes := mustReadFile(t, file)
+		beforeSnap := snapshotLiveModel(t, mgr)
+
+		assertSaveFailureRollback(t, repo, file, ctx, initiator, beforeBytes, beforeSnap, func() error {
+			return repo.AddToken(ctx, &invitepb.InviteToken{
+				Token:      "seed-token",
+				UserId:     initiator,
+				Expiration: &typespb.Timestamp{Seconds: uint64(time.Now().Add(48 * time.Hour).Unix())},
+			})
+		})
+
+		if tkn, err := repo.GetToken(ctx, "seed-token"); err != nil {
+			t.Fatalf("seed token lookup failed: %v", err)
+		} else if tkn.GetExpiration().GetSeconds() != 32503680000 {
+			t.Fatalf("token replacement must not publish on failed save, expiration=%d", tkn.GetExpiration().GetSeconds())
+		}
+	})
+
+	t.Run("AddRemoteUser", func(t *testing.T) {
+		repo, ctx, file, initiator := seedJSONMutationRepository(t)
+		mgr := managerFromRepo(t, repo)
+		beforeBytes := mustReadFile(t, file)
+		beforeSnap := snapshotLiveModel(t, mgr)
+
+		assertSaveFailureRollback(t, repo, file, ctx, initiator, beforeBytes, beforeSnap, func() error {
+			return repo.AddRemoteUser(ctx, initiator, newRemoteUser("dave", "one.example.com"))
+		})
+	})
+
+	t.Run("DeleteRemoteUser", func(t *testing.T) {
+		repo, ctx, file, initiator := seedJSONMutationRepository(t)
+		mgr := managerFromRepo(t, repo)
+		beforeBytes := mustReadFile(t, file)
+		beforeSnap := snapshotLiveModel(t, mgr)
+		aliceID := &userpb.UserId{OpaqueId: "alice", Idp: "one.example.com"}
+
+		assertSaveFailureRollback(t, repo, file, ctx, initiator, beforeBytes, beforeSnap, func() error {
+			return repo.DeleteRemoteUser(ctx, initiator, aliceID)
+		})
+
+		if _, err := repo.GetRemoteUser(ctx, initiator, aliceID); err != nil {
+			t.Fatalf("deleted row must remain available after failed save: %v", err)
+		}
+	})
+}
+
+func TestJSONSuccessfulMutationsSurviveReopen(t *testing.T) {
+	repo, ctx, file, initiator := seedJSONMutationRepository(t)
+	otherInitiator := &userpb.UserId{OpaqueId: "other-initiator", Idp: "local.example.com", Type: userpb.UserType_USER_TYPE_PRIMARY}
+
+	if err := repo.AddRemoteUser(ctx, initiator, newRemoteUser("dave", "one.example.com")); err != nil {
+		t.Fatalf("add remote user: %v", err)
+	}
+	assertReopenMatchesLiveModel(t, repo, file, ctx, initiator)
+
+	if err := repo.AddToken(ctx, &invitepb.InviteToken{
+		Token:      "persisted-token",
+		UserId:     initiator,
+		Expiration: &typespb.Timestamp{Seconds: uint64(time.Now().Add(24 * time.Hour).Unix())},
+	}); err != nil {
+		t.Fatalf("add token: %v", err)
+	}
+	assertReopenMatchesLiveModel(t, repo, file, ctx, initiator)
+
+	if err := repo.DeleteRemoteUser(ctx, initiator, &userpb.UserId{OpaqueId: "bob", Idp: "one.example.com"}); err != nil {
+		t.Fatalf("delete remote user: %v", err)
+	}
+	assertReopenMatchesLiveModel(t, repo, file, ctx, initiator)
+
+	if users, err := repo.FindRemoteUsers(ctx, otherInitiator, ""); err != nil || len(users) != 1 || users[0].Id.GetOpaqueId() != "carol" {
+		t.Fatalf("other initiator data lost: users=%v err=%v", users, err)
+	}
+}
+
+func TestJSONNoOpDeleteLeavesBytesUnchanged(t *testing.T) {
+	repo, ctx, file, initiator := seedJSONMutationRepository(t)
+	before := mustReadFile(t, file)
+
+	if err := repo.DeleteRemoteUser(ctx, initiator, &userpb.UserId{OpaqueId: "ghost", Idp: "ghost.example.com"}); err != nil {
+		t.Fatalf("no-op delete must succeed: %v", err)
+	}
+	if after := mustReadFile(t, file); after != before {
+		t.Fatal("no-op delete must not rewrite the file")
+	}
+	assertNoInviteTempFiles(t, filepath.Dir(file))
+}
+
+func TestJSONDeleteRollbackSpareSliceCapacity(t *testing.T) {
+	repo, ctx, file, initiator := seedJSONMutationRepository(t)
+	mgr := managerFromRepo(t, repo)
+	key := initiator.GetOpaqueId()
+
+	if err := repo.AddRemoteUser(ctx, initiator, newRemoteUser("erin", "one.example.com")); err != nil {
+		t.Fatalf("seed erin: %v", err)
+	}
+
+	valid := make([]*userpb.User, 0, 8)
+	for _, user := range mgr.model.AcceptedUsers[key] {
+		if invite.ValidateRemoteUser(user) == nil {
+			valid = append(valid, user)
+		}
+	}
+	users := make([]*userpb.User, len(valid), 8)
+	copy(users, valid)
+	mgr.model.AcceptedUsers[key] = users
+
+	beforeSnap := snapshotLiveModel(t, mgr)
+	beforeBytes := mustReadFile(t, file)
+	savedPath, restore := blockJSONSaveAtConfiguredPath(t, file)
+	if err := repo.DeleteRemoteUser(ctx, initiator, &userpb.UserId{OpaqueId: "bob", Idp: "one.example.com"}); err == nil {
+		t.Fatal("expected persistence failure, got nil")
+	} else if !strings.Contains(err.Error(), "json: error saving model") {
+		t.Fatalf("expected wrapped save error, got %v", err)
+	}
+
+	assertLiveSnapshotsEqual(t, beforeSnap, snapshotLiveModel(t, mgr))
+	if afterBytes := mustReadFile(t, savedPath); afterBytes != beforeBytes {
+		t.Fatal("file bytes changed after failed persistence")
+	}
+	assertNoInviteTempFiles(t, filepath.Dir(file))
+	restore()
+
+	liveUsers := mgr.model.AcceptedUsers[key]
+	if len(liveUsers) != 3 {
+		t.Fatalf("live slice length changed during failed delete: got %d", len(liveUsers))
+	}
+	if liveUsers[1].Id.GetOpaqueId() != "bob" {
+		t.Fatalf("swap-with-last mutated live backing array: index 1 is %q", liveUsers[1].Id.GetOpaqueId())
+	}
+}
+
+func TestJSONSavePreservesFileMode(t *testing.T) {
+	dir := t.TempDir()
+	file := filepath.Join(dir, "invites.json")
+	mustWriteFile(t, file, `{}`)
+	if err := os.Chmod(file, 0600); err != nil {
+		t.Fatal(err)
+	}
+
+	repo := newRepositoryAtFile(t, file)
+	ctx := context.Background()
+	initiator := newInitiatorID()
+	if err := repo.AddRemoteUser(ctx, initiator, newRemoteUser("alice", "one.example.com")); err != nil {
+		t.Fatalf("add remote user: %v", err)
+	}
+
+	info, err := os.Stat(file)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if info.Mode().Perm() != 0600 {
+		t.Fatalf("expected mode 0600 after save, got %o", info.Mode().Perm())
+	}
+}
+
+func TestJSONSaveThroughSymlink(t *testing.T) {
+	dir := t.TempDir()
+	target := filepath.Join(dir, "invites-target.json")
+	link := filepath.Join(dir, "invites.json")
+	mustWriteFile(t, target, `{}`)
+	if err := os.Symlink(target, link); err != nil {
+		t.Fatal(err)
+	}
+
+	repo := newRepositoryAtFile(t, link)
+	ctx := context.Background()
+	initiator := newInitiatorID()
+	if err := repo.AddRemoteUser(ctx, initiator, newRemoteUser("alice", "one.example.com")); err != nil {
+		t.Fatalf("add through symlink: %v", err)
+	}
+
+	linkInfo, err := os.Lstat(link)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if linkInfo.Mode()&fs.ModeSymlink == 0 {
+		t.Fatal("configured path must remain a symlink")
+	}
+
+	targetData, err := os.ReadFile(target)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(targetData), "alice") {
+		t.Fatalf("symlink target was not updated: %q", string(targetData))
+	}
+
+	reloaded := newRepositoryAtFile(t, link)
+	if _, err := reloaded.GetRemoteUser(ctx, initiator, &userpb.UserId{OpaqueId: "alice", Idp: "one.example.com"}); err != nil {
+		t.Fatalf("reopen through symlink failed: %v", err)
+	}
+	assertNoInviteTempFiles(t, dir)
+}
+
+func TestJSONConcurrentReadWrite(t *testing.T) {
+	repo := newJSONRepository(t)
+	ctx := context.Background()
+	initiator := newInitiatorID()
+	if err := repo.AddRemoteUser(ctx, initiator, newRemoteUser("alice", "one.example.com")); err != nil {
+		t.Fatal(err)
+	}
+
+	const workers = 16
+	var wg sync.WaitGroup
+	errCh := make(chan error, workers*3)
+
+	for i := 0; i < workers; i++ {
+		wg.Add(1)
+		go func(i int) {
+			defer wg.Done()
+			if _, err := repo.GetRemoteUser(ctx, initiator, &userpb.UserId{OpaqueId: "alice", Idp: "one.example.com"}); err != nil {
+				if _, ok := err.(errtypes.NotFound); !ok {
+					errCh <- err
+				}
+			}
+			if _, err := repo.FindRemoteUsers(ctx, initiator, ""); err != nil {
+				errCh <- err
+			}
+			if _, err := repo.ListTokens(ctx, initiator); err != nil {
+				errCh <- err
+			}
+		}(i)
+
+		wg.Add(1)
+		go func(i int) {
+			defer wg.Done()
+			user := newRemoteUser(fmt.Sprintf("worker-%d", i), "one.example.com")
+			if err := repo.AddRemoteUser(ctx, initiator, user); err != nil {
+				if !errors.Is(err, invite.ErrUserAlreadyAccepted) {
+					errCh <- err
+				}
+			}
+		}(i)
+
+		wg.Add(1)
+		go func(i int) {
+			defer wg.Done()
+			if err := repo.AddToken(ctx, &invitepb.InviteToken{
+				Token:      fmt.Sprintf("token-%d", i),
+				UserId:     initiator,
+				Expiration: &typespb.Timestamp{Seconds: uint64(time.Now().Add(24 * time.Hour).Unix())},
+			}); err != nil {
+				errCh <- err
+			}
+		}(i)
+	}
+
+	wg.Wait()
+	close(errCh)
+	for err := range errCh {
+		if err != nil {
+			t.Fatalf("concurrent operation failed: %v", err)
+		}
+	}
+
+	users, err := repo.FindRemoteUsers(ctx, initiator, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, user := range users {
+		if invite.ValidateRemoteUser(user) != nil {
+			t.Fatalf("observed invalid user in concurrent reads: %+v", user)
+		}
+	}
+	tokens, err := repo.ListTokens(ctx, initiator)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, token := range tokens {
+		if invite.ValidateInviteToken(token) != nil {
+			t.Fatalf("observed invalid token in concurrent reads: %+v", token)
+		}
+	}
 }
