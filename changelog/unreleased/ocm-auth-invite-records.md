@@ -8,3 +8,5 @@ the accepted-user status message on not-found. The invite manager
 validates requests and context identities before storage access, and all
 three invite repositories reject invalid input, skip corrupt stored rows,
 and no longer panic on the memory driver's first accepted-user insert.
+
+https://github.com/cs3org/reva/pull/5885
