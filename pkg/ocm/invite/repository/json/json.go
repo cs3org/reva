@@ -168,39 +168,30 @@ func (model *inviteModel) save() error {
 		return errors.Wrap(err, "error creating temporary invite storage file")
 	}
 	tmpPath := tmp.Name()
-	removeTmp := func() {
+	defer func() {
+		_ = tmp.Close()
 		_ = os.Remove(tmpPath)
-	}
+	}()
 
 	n, err := tmp.Write(data)
 	if err != nil {
-		_ = tmp.Close()
-		removeTmp()
 		return errors.Wrap(err, "error writing temporary invite storage file")
 	}
 	if n != len(data) {
-		_ = tmp.Close()
-		removeTmp()
 		return errors.Wrap(io.ErrShortWrite, "error writing temporary invite storage file")
 	}
 
 	if err := tmp.Chmod(info.Mode().Perm()); err != nil {
-		_ = tmp.Close()
-		removeTmp()
 		return errors.Wrap(err, "error setting permissions on temporary invite storage file")
 	}
 	if err := tmp.Sync(); err != nil {
-		_ = tmp.Close()
-		removeTmp()
 		return errors.Wrap(err, "error syncing temporary invite storage file")
 	}
 	if err := tmp.Close(); err != nil {
-		removeTmp()
 		return errors.Wrap(err, "error closing temporary invite storage file")
 	}
 
 	if err := os.Rename(tmpPath, targetPath); err != nil {
-		removeTmp()
 		return errors.Wrap(err, "error replacing invite storage file: "+targetPath)
 	}
 
