@@ -21,18 +21,21 @@ package ocmshares
 import (
 	"context"
 	"slices"
+	"strings"
 
 	authpb "github.com/cs3org/go-cs3apis/cs3/auth/provider/v1beta1"
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	ocminvite "github.com/cs3org/go-cs3apis/cs3/ocm/invite/v1beta1"
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	ocm "github.com/cs3org/go-cs3apis/cs3/sharing/ocm/v1beta1"
+	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	types "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
 	"github.com/cs3org/reva/v3/pkg/appctx"
 	"github.com/cs3org/reva/v3/pkg/auth"
 	"github.com/cs3org/reva/v3/pkg/auth/manager/registry"
 	"github.com/cs3org/reva/v3/pkg/auth/scope"
 	"github.com/cs3org/reva/v3/pkg/errtypes"
+	"github.com/cs3org/reva/v3/pkg/ocm/invite"
 	ocmshareutil "github.com/cs3org/reva/v3/pkg/ocm/share"
 	"github.com/cs3org/reva/v3/pkg/service"
 	"github.com/cs3org/reva/v3/pkg/sharedconf"
@@ -76,6 +79,41 @@ func (m *manager) Configure(ml map[string]any) error {
 	return nil
 }
 
+// granteeUserID extracts the user id from a grantee without going through
+// the generated getter: a typed-nil (*provider.Grantee_UserId)(nil) stored in
+// the oneof interface makes GetUserId panic on its inner nil check.
+func granteeUserID(grantee *provider.Grantee) *userpb.UserId {
+	if grantee == nil {
+		return nil
+	}
+	if id, ok := grantee.Id.(*provider.Grantee_UserId); ok {
+		if id == nil {
+			return nil
+		}
+		return id.UserId
+	}
+	return nil
+}
+
+// validateAccessMethod rejects structurally malformed access methods before
+// GetRole reads their permissions.
+func validateAccessMethod(am *ocm.AccessMethod) error {
+	if am == nil || am.Term == nil {
+		return errtypes.InvalidCredentials("malformed ocm share access method")
+	}
+	switch term := am.Term.(type) {
+	case *ocm.AccessMethod_WebdavOptions:
+		if term == nil || term.WebdavOptions == nil || term.WebdavOptions.Permissions == nil {
+			return errtypes.InvalidCredentials("malformed ocm share access method")
+		}
+	case *ocm.AccessMethod_WebappOptions:
+		if term == nil || term.WebappOptions == nil || term.WebappOptions.Permissions == nil {
+			return errtypes.InvalidCredentials("malformed ocm share access method")
+		}
+	}
+	return nil
+}
+
 func (m *manager) Authenticate(ctx context.Context, ocmshare, token string) (*userpb.User, map[string]*authpb.Scope, error) {
 	log := appctx.GetLogger(ctx).With().Str("ocmshare", ocmshare).Logger()
 
@@ -92,6 +130,8 @@ func (m *manager) Authenticate(ctx context.Context, ocmshare, token string) (*us
 	case err != nil:
 		log.Error().Err(err).Msg("error getting ocm share by token")
 		return nil, nil, err
+	case shareRes == nil || shareRes.Status == nil:
+		return nil, nil, errtypes.InternalError("missing ocm share response")
 	case shareRes.Status.Code == rpc.Code_CODE_NOT_FOUND:
 		log.Debug().Msg("ocm share not found")
 		return nil, nil, errtypes.NotFound(shareRes.Status.Message)
@@ -103,14 +143,24 @@ func (m *manager) Authenticate(ctx context.Context, ocmshare, token string) (*us
 		return nil, nil, errtypes.InternalError(shareRes.Status.Message)
 	}
 
+	// the share record itself is untrusted input
+	share := shareRes.GetShare()
+	if share == nil || strings.TrimSpace(share.GetId().GetOpaqueId()) == "" {
+		return nil, nil, errtypes.InvalidCredentials("malformed ocm share record")
+	}
+
 	// validate OCM share id if given (OCM v1.1)
-	if ocmshare != "" && shareRes.GetShare().GetId().GetOpaqueId() != ocmshare {
-		log.Error().Str("requested_share", ocmshare).Str("share_from_provider", shareRes.GetShare().GetId().GetOpaqueId()).Msg("mismatching ocm share id for existing secret")
+	if ocmshare != "" && share.GetId().GetOpaqueId() != ocmshare {
+		log.Error().Str("requested_share", ocmshare).Str("share_from_provider", share.GetId().GetOpaqueId()).Msg("mismatching ocm share id for existing secret")
 		return nil, nil, errtypes.InvalidCredentials("invalid shared secret")
 	}
 
-	// Reject direct-secret access to shares that require token exchange
-	for _, am := range shareRes.Share.AccessMethods {
+	// Reject direct-secret access to shares that require token exchange and
+	// access methods GetRole would dereference blindly.
+	for _, am := range share.AccessMethods {
+		if err := validateAccessMethod(am); err != nil {
+			return nil, nil, err
+		}
 		if dav, ok := am.Term.(*ocm.AccessMethod_WebdavOptions); ok {
 			if slices.Contains(dav.WebdavOptions.Requirements, "must-exchange-token") {
 				return nil, nil, errtypes.InvalidCredentials("share requires token exchange")
@@ -120,10 +170,16 @@ func (m *manager) Authenticate(ctx context.Context, ocmshare, token string) (*us
 
 	// the user authenticated using the ocmshares authentication method
 	// is the recipient of the share
-	u := shareRes.Share.Grantee.GetUserId()
+	u := granteeUserID(share.Grantee)
+	if err := invite.ValidateUserID(u, "grantee user id"); err != nil {
+		return nil, nil, errtypes.InvalidCredentials("ocm share is missing grantee")
+	}
 	log.Debug().Msgf("ocmshares found grantee '%s' at '%s'", u.OpaqueId, u.Idp)
 
-	d, err := utils.MarshalProtoV1ToJSON(shareRes.GetShare().Creator)
+	if err := invite.ValidateUserID(share.GetCreator(), "creator user id"); err != nil {
+		return nil, nil, errtypes.InvalidCredentials("ocm share is missing creator")
+	}
+	d, err := utils.MarshalProtoV1ToJSON(share.GetCreator())
 	if err != nil {
 		return nil, nil, err
 	}
@@ -145,15 +201,21 @@ func (m *manager) Authenticate(ctx context.Context, ocmshare, token string) (*us
 	switch {
 	case err != nil:
 		return nil, nil, err
+	case userRes == nil || userRes.Status == nil:
+		return nil, nil, errtypes.InternalError("missing accepted user response")
 	case userRes.Status.Code == rpc.Code_CODE_NOT_FOUND:
-		return nil, nil, errtypes.NotFound(shareRes.Status.Message)
+		return nil, nil, errtypes.NotFound(userRes.Status.Message)
 	case userRes.Status.Code != rpc.Code_CODE_OK:
 		return nil, nil, errtypes.InternalError(userRes.Status.Message)
 	}
 
-	role, roleStr := ocmshareutil.GetRole(shareRes.Share)
+	if err := invite.ValidateRemoteUser(userRes.RemoteUser); err != nil {
+		return nil, nil, errtypes.InternalError("malformed accepted user response")
+	}
 
-	scope, err := scope.AddOCMShareScope(shareRes.Share, role, nil)
+	role, roleStr := ocmshareutil.GetRole(share)
+
+	scope, err := scope.AddOCMShareScope(share, role, nil)
 	if err != nil {
 		return nil, nil, err
 	}

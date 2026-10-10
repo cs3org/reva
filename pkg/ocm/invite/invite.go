@@ -27,6 +27,14 @@ import (
 )
 
 // Repository is the interfaces used to store the tokens and the invited users.
+//
+// Callers must pass core-valid identities and secrets: every method validates
+// its inputs (see validation.go) and returns errtypes.BadRequest before any
+// storage access, so invalid input never writes or locks. Stored records are
+// untrusted too: malformed rows are skipped or surfaced as internal errors
+// instead of crashing lookups. Initiator keys are the unmodified opaque ids
+// as provided; whether an empty Idp acts as a wildcard in GetRemoteUser and
+// DeleteRemoteUser depends on the driver.
 type Repository interface {
 	// AddToken stores the token in the repository.
 	AddToken(ctx context.Context, token *invitepb.InviteToken) error

@@ -20,7 +20,7 @@ package ocminvitemanager
 
 import (
 	"context"
-	"fmt"
+	"strings"
 	"time"
 
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
@@ -127,8 +127,36 @@ func (s *service) UnprotectedEndpoints() []string {
 	return []string{"/cs3.ocm.invite.v1beta1.InviteAPI/AcceptInvite", "/cs3.ocm.invite.v1beta1.InviteAPI/GetAcceptedUser"}
 }
 
+// errMissingUser is the constant diagnostic for protected calls whose context
+// identity is absent or malformed. It deliberately carries no request data.
+var errMissingUser = errors.New("user not found in context")
+
+// contextUser returns the context identity for protected calls. A present
+// but broken identity (nil user or blank id) is rejected the same way as a
+// missing one; callers must not fall back to untrusted request data.
+func contextUser(ctx context.Context) (*userpb.User, error) {
+	user, ok := appctx.ContextGetUser(ctx)
+	if !ok || user == nil {
+		return nil, errMissingUser
+	}
+	if err := invite.ValidateUserID(user.GetId(), "context user id"); err != nil {
+		return nil, errMissingUser
+	}
+	return user, nil
+}
+
 func (s *service) GenerateInviteToken(ctx context.Context, req *invitepb.GenerateInviteTokenRequest) (*invitepb.GenerateInviteTokenResponse, error) {
-	user := appctx.ContextMustGetUser(ctx)
+	if req == nil {
+		return &invitepb.GenerateInviteTokenResponse{
+			Status: status.NewInvalidArg(ctx, "missing request"),
+		}, nil
+	}
+	user, err := contextUser(ctx)
+	if err != nil {
+		return &invitepb.GenerateInviteTokenResponse{
+			Status: status.NewUnauthenticated(ctx, err, "user not found in context"),
+		}, nil
+	}
 	token := CreateToken(s.conf.tokenExpiration, user.GetId(), req.Description)
 
 	if err := s.repo.AddToken(ctx, token); err != nil {
@@ -144,8 +172,18 @@ func (s *service) GenerateInviteToken(ctx context.Context, req *invitepb.Generat
 }
 
 func (s *service) ListInviteTokens(ctx context.Context, req *invitepb.ListInviteTokensRequest) (*invitepb.ListInviteTokensResponse, error) {
-	user := appctx.ContextMustGetUser(ctx)
-	tokens, err := s.repo.ListTokens(ctx, user.Id)
+	if req == nil {
+		return &invitepb.ListInviteTokensResponse{
+			Status: status.NewInvalidArg(ctx, "missing request"),
+		}, nil
+	}
+	user, err := contextUser(ctx)
+	if err != nil {
+		return &invitepb.ListInviteTokensResponse{
+			Status: status.NewUnauthenticated(ctx, err, "user not found in context"),
+		}, nil
+	}
+	tokens, err := s.repo.ListTokens(ctx, user.GetId())
 	if err != nil {
 		return &invitepb.ListInviteTokensResponse{
 			Status: status.NewInternal(ctx, err, "error listing tokens"),
@@ -238,7 +276,25 @@ func GetOCMEndpoint(originProvider *ocmprovider.ProviderInfo) (string, error) {
 }
 
 func (s *service) AcceptInvite(ctx context.Context, req *invitepb.AcceptInviteRequest) (*invitepb.AcceptInviteResponse, error) {
-	token, err := s.repo.GetToken(ctx, req.InviteToken.Token)
+	if req == nil {
+		return &invitepb.AcceptInviteResponse{
+			Status: status.NewInvalidArg(ctx, "missing request"),
+		}, nil
+	}
+	// the request's invite token only needs its secret; UserId and
+	// Expiration are optional accompanying metadata
+	if req.GetInviteToken() == nil || strings.TrimSpace(req.GetInviteToken().GetToken()) == "" {
+		return &invitepb.AcceptInviteResponse{
+			Status: status.NewInvalidArg(ctx, "missing invite token"),
+		}, nil
+	}
+	if err := invite.ValidateRemoteUser(req.GetRemoteUser()); err != nil {
+		return &invitepb.AcceptInviteResponse{
+			Status: status.NewInvalidArg(ctx, "invalid remote user"),
+		}, nil
+	}
+
+	token, err := s.repo.GetToken(ctx, req.GetInviteToken().GetToken())
 	if err != nil {
 		if errors.Is(err, invite.ErrTokenNotFound) {
 			return &invitepb.AcceptInviteResponse{
@@ -250,7 +306,9 @@ func (s *service) AcceptInvite(ctx context.Context, req *invitepb.AcceptInviteRe
 		}, nil
 	}
 
-	if !isTokenValid(token) {
+	// the stored token is untrusted: validate the core record and the
+	// expiry before resolving the initiator
+	if invite.ValidateInviteToken(token) != nil || !isTokenValid(token) {
 		return &invitepb.AcceptInviteResponse{
 			Status: status.NewInvalid(ctx, "token invalid or not found"),
 		}, nil
@@ -265,6 +323,11 @@ func (s *service) AcceptInvite(ctx context.Context, req *invitepb.AcceptInviteRe
 
 	remoteUser := req.GetRemoteUser()
 	ocmd.CanonicalizeRemoteUserID(remoteUser.GetId())
+	if err := invite.ValidateUserID(remoteUser.GetId(), "remote user id"); err != nil {
+		return &invitepb.AcceptInviteResponse{
+			Status: status.NewInvalidArg(ctx, "invalid remote user"),
+		}, nil
+	}
 
 	if err := s.repo.AddRemoteUser(ctx, token.GetUserId(), remoteUser); err != nil {
 		if errors.Is(err, invite.ErrUserAlreadyAccepted) {
@@ -296,14 +359,23 @@ func (s *service) getUserInfo(ctx context.Context, id *userpb.UserId) (*userpb.U
 	if err != nil {
 		return nil, err
 	}
+	if res == nil || res.Status == nil {
+		return nil, errors.New("missing user info response")
+	}
 	if res.Status.Code != rpcv1beta1.Code_CODE_OK {
 		return nil, errors.New(res.Status.Message)
+	}
+	if err := invite.ValidateRemoteUser(res.User); err != nil {
+		return nil, err
 	}
 
 	return res.User, nil
 }
 
 func isTokenValid(token *invitepb.InviteToken) bool {
+	if token == nil || token.Expiration == nil {
+		return false
+	}
 	return time.Now().Unix() < int64(token.Expiration.Seconds)
 }
 
@@ -311,10 +383,20 @@ func (s *service) GetAcceptedUser(ctx context.Context, req *invitepb.GetAccepted
 	log := appctx.GetLogger(ctx)
 	// TODO(lopresti): here we extract an opaque field to get the initiator of the invite, whereas we should implement
 	// a GetRemoteUser() call in the repository that only takes the remoteUserId no matter the initiator.
+	if req == nil {
+		return &invitepb.GetAcceptedUserResponse{
+			Status: status.NewInvalidArg(ctx, "missing request"),
+		}, nil
+	}
+	if err := invite.ValidateUserID(req.GetRemoteUserId(), "remote user id"); err != nil {
+		return &invitepb.GetAcceptedUserResponse{
+			Status: status.NewInvalidArg(ctx, "invalid remote user id"),
+		}, nil
+	}
 	user, ok := getUserFilter(ctx, req)
 	if !ok {
 		return &invitepb.GetAcceptedUserResponse{
-			Status: status.NewInvalidArg(ctx, fmt.Sprintf("user not found, req was %+v", req)),
+			Status: status.NewInvalidArg(ctx, "invalid user filter"),
 		}, nil
 	}
 
@@ -325,6 +407,11 @@ func (s *service) GetAcceptedUser(ctx context.Context, req *invitepb.GetAccepted
 			Status: status.NewStatusFromErrType(ctx, "error fetching remote user details", err),
 		}, nil
 	}
+	if err := invite.ValidateRemoteUser(remoteUser); err != nil {
+		return &invitepb.GetAcceptedUserResponse{
+			Status: status.NewInternal(ctx, err, "error fetching remote user details"),
+		}, nil
+	}
 
 	return &invitepb.GetAcceptedUserResponse{
 		Status:     status.NewOK(ctx),
@@ -333,17 +420,22 @@ func (s *service) GetAcceptedUser(ctx context.Context, req *invitepb.GetAccepted
 }
 
 func getUserFilter(ctx context.Context, req *invitepb.GetAcceptedUserRequest) (*userpb.User, bool) {
+	// a present but broken context identity is not a signal to fall back to
+	// the untrusted opaque payload
 	user, ok := appctx.ContextGetUser(ctx)
 	if ok {
+		if user == nil || invite.ValidateUserID(user.GetId(), "context user id") != nil {
+			return nil, false
+		}
 		return user, true
 	}
 
-	if req.Opaque == nil || req.Opaque.Map == nil {
+	if req == nil || req.Opaque == nil || req.Opaque.Map == nil {
 		return nil, false
 	}
 
 	v, ok := req.Opaque.Map["user-filter"]
-	if !ok {
+	if !ok || v == nil {
 		return nil, false
 	}
 
@@ -351,11 +443,24 @@ func getUserFilter(ctx context.Context, req *invitepb.GetAcceptedUserRequest) (*
 	if err := utils.UnmarshalJSONToProtoV1(v.Value, &u); err != nil {
 		return nil, false
 	}
+	if err := invite.ValidateUserID(&u, "user filter id"); err != nil {
+		return nil, false
+	}
 	return &userpb.User{Id: &u}, true
 }
 
 func (s *service) FindAcceptedUsers(ctx context.Context, req *invitepb.FindAcceptedUsersRequest) (*invitepb.FindAcceptedUsersResponse, error) {
-	user := appctx.ContextMustGetUser(ctx)
+	if req == nil {
+		return &invitepb.FindAcceptedUsersResponse{
+			Status: status.NewInvalidArg(ctx, "missing request"),
+		}, nil
+	}
+	user, err := contextUser(ctx)
+	if err != nil {
+		return &invitepb.FindAcceptedUsersResponse{
+			Status: status.NewUnauthenticated(ctx, err, "user not found in context"),
+		}, nil
+	}
 	acceptedUsers, err := s.repo.FindRemoteUsers(ctx, user.GetId(), req.GetFilter())
 	if err != nil {
 		return &invitepb.FindAcceptedUsersResponse{
@@ -370,8 +475,23 @@ func (s *service) FindAcceptedUsers(ctx context.Context, req *invitepb.FindAccep
 }
 
 func (s *service) DeleteAcceptedUser(ctx context.Context, req *invitepb.DeleteAcceptedUserRequest) (*invitepb.DeleteAcceptedUserResponse, error) {
-	user := appctx.ContextMustGetUser(ctx)
-	if err := s.repo.DeleteRemoteUser(ctx, user.Id, req.RemoteUserId); err != nil {
+	if req == nil {
+		return &invitepb.DeleteAcceptedUserResponse{
+			Status: status.NewInvalidArg(ctx, "missing request"),
+		}, nil
+	}
+	user, err := contextUser(ctx)
+	if err != nil {
+		return &invitepb.DeleteAcceptedUserResponse{
+			Status: status.NewUnauthenticated(ctx, err, "user not found in context"),
+		}, nil
+	}
+	if err := invite.ValidateUserID(req.GetRemoteUserId(), "remote user id"); err != nil {
+		return &invitepb.DeleteAcceptedUserResponse{
+			Status: status.NewInvalidArg(ctx, "invalid remote user id"),
+		}, nil
+	}
+	if err := s.repo.DeleteRemoteUser(ctx, user.GetId(), req.GetRemoteUserId()); err != nil {
 		return &invitepb.DeleteAcceptedUserResponse{
 			Status: status.NewInternal(ctx, err, "error deleting remote users: "+err.Error()),
 		}, nil

@@ -135,6 +135,10 @@ func (model *inviteModel) save() error {
 }
 
 func (m *manager) AddToken(ctx context.Context, token *invitepb.InviteToken) error {
+	if err := invite.ValidateInviteToken(token); err != nil {
+		return err
+	}
+
 	m.Lock()
 	defer m.Unlock()
 
@@ -146,21 +150,37 @@ func (m *manager) AddToken(ctx context.Context, token *invitepb.InviteToken) err
 }
 
 func (m *manager) GetToken(ctx context.Context, token string) (*invitepb.InviteToken, error) {
+	if strings.TrimSpace(token) == "" {
+		return nil, errtypes.BadRequest("blank token")
+	}
+
 	m.RLock()
 	defer m.RUnlock()
 
 	if tkn, ok := m.model.Invites[token]; ok {
+		if invite.ValidateInviteToken(tkn) != nil {
+			return nil, errtypes.InternalError("stored invite token is malformed")
+		}
 		return tkn, nil
 	}
 	return nil, invite.ErrTokenNotFound
 }
 
 func (m *manager) ListTokens(ctx context.Context, initiator *userpb.UserId) ([]*invitepb.InviteToken, error) {
+	if err := invite.ValidateUserID(initiator, "initiator id"); err != nil {
+		return nil, err
+	}
+
 	m.RLock()
 	defer m.RUnlock()
 
+	log := appctx.GetLogger(ctx)
 	tokens := []*invitepb.InviteToken{}
 	for _, token := range m.model.Invites {
+		if invite.ValidateInviteToken(token) != nil {
+			log.Warn().Msg("skipping malformed stored invite token")
+			continue
+		}
 		if utils.UserEqual(token.UserId, initiator) && !tokenIsExpired(token) {
 			tokens = append(tokens, token)
 		}
@@ -173,10 +193,20 @@ func tokenIsExpired(token *invitepb.InviteToken) bool {
 }
 
 func (m *manager) AddRemoteUser(ctx context.Context, initiator *userpb.UserId, remoteUser *userpb.User) error {
+	if err := invite.ValidateUserID(initiator, "initiator id"); err != nil {
+		return err
+	}
+	if err := invite.ValidateRemoteUser(remoteUser); err != nil {
+		return err
+	}
+
 	m.Lock()
 	defer m.Unlock()
 
 	for _, acceptedUser := range m.model.AcceptedUsers[initiator.GetOpaqueId()] {
+		if invite.ValidateRemoteUser(acceptedUser) != nil {
+			continue
+		}
 		if acceptedUser.Id.GetOpaqueId() == remoteUser.Id.OpaqueId && acceptedUser.Id.GetIdp() == remoteUser.Id.Idp {
 			return invite.ErrUserAlreadyAccepted
 		}
@@ -190,11 +220,21 @@ func (m *manager) AddRemoteUser(ctx context.Context, initiator *userpb.UserId, r
 }
 
 func (m *manager) GetRemoteUser(ctx context.Context, initiator *userpb.UserId, remoteUserID *userpb.UserId) (*userpb.User, error) {
+	if err := invite.ValidateUserID(initiator, "initiator id"); err != nil {
+		return nil, err
+	}
+	if err := invite.ValidateUserID(remoteUserID, "remote user id"); err != nil {
+		return nil, err
+	}
+
 	m.RLock()
 	defer m.RUnlock()
 
 	log := appctx.GetLogger(ctx)
 	for _, acceptedUser := range m.model.AcceptedUsers[initiator.GetOpaqueId()] {
+		if invite.ValidateRemoteUser(acceptedUser) != nil {
+			continue
+		}
 		log.Info().Msgf("looking for '%s' at '%s' - considering '%s' at '%s'",
 			remoteUserID.OpaqueId,
 			remoteUserID.Idp,
@@ -209,11 +249,20 @@ func (m *manager) GetRemoteUser(ctx context.Context, initiator *userpb.UserId, r
 }
 
 func (m *manager) FindRemoteUsers(ctx context.Context, initiator *userpb.UserId, query string) ([]*userpb.User, error) {
+	if err := invite.ValidateUserID(initiator, "initiator id"); err != nil {
+		return nil, err
+	}
+
 	m.RLock()
 	defer m.RUnlock()
 
+	log := appctx.GetLogger(ctx)
 	users := []*userpb.User{}
 	for _, acceptedUser := range m.model.AcceptedUsers[initiator.GetOpaqueId()] {
+		if invite.ValidateRemoteUser(acceptedUser) != nil {
+			log.Warn().Msg("skipping malformed stored remote user")
+			continue
+		}
 		if query == "" || userContains(acceptedUser, query) {
 			users = append(users, acceptedUser)
 		}
@@ -222,12 +271,22 @@ func (m *manager) FindRemoteUsers(ctx context.Context, initiator *userpb.UserId,
 }
 
 func userContains(u *userpb.User, query string) bool {
+	if u == nil || u.Id == nil {
+		return false
+	}
 	query = strings.ToLower(query)
 	return strings.Contains(strings.ToLower(u.Username), query) || strings.Contains(strings.ToLower(u.DisplayName), query) ||
 		strings.Contains(strings.ToLower(u.Mail), query) || strings.Contains(strings.ToLower(u.Id.OpaqueId), query)
 }
 
 func (m *manager) DeleteRemoteUser(ctx context.Context, initiator *userpb.UserId, remoteUser *userpb.UserId) error {
+	if err := invite.ValidateUserID(initiator, "initiator id"); err != nil {
+		return err
+	}
+	if err := invite.ValidateUserID(remoteUser, "remote user id"); err != nil {
+		return err
+	}
+
 	m.Lock()
 	defer m.Unlock()
 
@@ -237,9 +296,14 @@ func (m *manager) DeleteRemoteUser(ctx context.Context, initiator *userpb.UserId
 	}
 
 	for i, user := range acceptedUsers {
+		if invite.ValidateRemoteUser(user) != nil {
+			continue
+		}
 		if (user.Id.GetOpaqueId() == remoteUser.OpaqueId) && (remoteUser.Idp == "" || user.Id.GetIdp() == remoteUser.Idp) {
 			acceptedUsers = list.Remove(acceptedUsers, i)
 			m.model.AcceptedUsers[initiator.GetOpaqueId()] = acceptedUsers
+			// the ignored save error is a known limitation of the json
+			// driver's persistence semantics, tracked separately
 			_ = m.model.save()
 			return nil
 		}
