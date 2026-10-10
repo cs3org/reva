@@ -22,6 +22,7 @@ import (
 	"context"
 	"strings"
 	"sync"
+	"time"
 
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	invitepb "github.com/cs3org/go-cs3apis/cs3/ocm/invite/v1beta1"
@@ -87,6 +88,7 @@ func (m *manager) ListTokens(ctx context.Context, initiator *userpb.UserId) ([]*
 	log := appctx.GetLogger(ctx)
 	tokens := []*invitepb.InviteToken{}
 	var warnedMalformedToken bool
+	now := uint64(time.Now().Unix())
 	m.Invites.Range(func(_, value any) bool {
 		token, ok := value.(*invitepb.InviteToken)
 		if !ok || invite.ValidateInviteToken(token) != nil {
@@ -96,12 +98,16 @@ func (m *manager) ListTokens(ctx context.Context, initiator *userpb.UserId) ([]*
 			}
 			return true
 		}
-		if utils.UserEqual(token.UserId, initiator) {
+		if utils.UserEqual(token.UserId, initiator) && !tokenIsExpired(token, now) {
 			tokens = append(tokens, token)
 		}
 		return true
 	})
 	return tokens, nil
+}
+
+func tokenIsExpired(token *invitepb.InviteToken, now uint64) bool {
+	return token.Expiration != nil && token.Expiration.Seconds < now
 }
 
 func (m *manager) AddRemoteUser(ctx context.Context, initiator *userpb.UserId, remoteUser *userpb.User) error {

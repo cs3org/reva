@@ -21,10 +21,12 @@ package memory
 import (
 	"bytes"
 	"context"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
 	"testing"
+	"time"
 
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	invitepb "github.com/cs3org/go-cs3apis/cs3/ocm/invite/v1beta1"
@@ -465,5 +467,106 @@ func TestMemorySkippedRowDiagnostics(t *testing.T) {
 	}
 	if strings.Contains(logBuf.String(), "good-u") {
 		t.Fatalf("log must not contain row contents: %q", logBuf.String())
+	}
+}
+
+func TestTokenIsExpired(t *testing.T) {
+	initiator := newInitiatorID()
+	coreValid := &invitepb.InviteToken{
+		Token:  "secret",
+		UserId: initiator,
+	}
+	const now = uint64(200)
+
+	tests := []struct {
+		name       string
+		expiration *typespb.Timestamp
+		want       bool
+	}{
+		{name: "nil expiration", expiration: nil, want: false},
+		{name: "seconds before now", expiration: &typespb.Timestamp{Seconds: 199}, want: true},
+		{name: "seconds equal now", expiration: &typespb.Timestamp{Seconds: 200}, want: false},
+		{name: "seconds after now", expiration: &typespb.Timestamp{Seconds: 201}, want: false},
+		{
+			name:       "nonzero nanos does not alter seconds-only policy",
+			expiration: &typespb.Timestamp{Seconds: 200, Nanos: 999999999},
+			want:       false,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			token := &invitepb.InviteToken{
+				Token:      coreValid.Token,
+				UserId:     coreValid.UserId,
+				Expiration: tt.expiration,
+			}
+			if got := tokenIsExpired(token, now); got != tt.want {
+				t.Fatalf("tokenIsExpired() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+func tokenSecrets(tokens []*invitepb.InviteToken) []string {
+	secrets := make([]string, len(tokens))
+	for i, tok := range tokens {
+		secrets[i] = tok.Token
+	}
+	slices.Sort(secrets)
+	return secrets
+}
+
+func TestListTokensFiltersElapsedExpiration(t *testing.T) {
+	repo := newMemoryRepository(t)
+	ctx := context.Background()
+	initiator := newInitiatorID()
+	otherOwner := &userpb.UserId{
+		OpaqueId: "other-initiator",
+		Idp:      "local.example.com",
+		Type:     userpb.UserType_USER_TYPE_PRIMARY,
+	}
+	now := time.Now()
+
+	expired := &invitepb.InviteToken{
+		Token:      "elapsed-secret",
+		UserId:     initiator,
+		Expiration: &typespb.Timestamp{Seconds: uint64(now.Add(-24 * time.Hour).Unix())},
+	}
+	future := &invitepb.InviteToken{
+		Token:      "future-secret",
+		UserId:     initiator,
+		Expiration: &typespb.Timestamp{Seconds: uint64(now.Add(24 * time.Hour).Unix())},
+	}
+	noExpiry := &invitepb.InviteToken{
+		Token:  "no-expiry-secret",
+		UserId: initiator,
+	}
+	otherOwnerToken := &invitepb.InviteToken{
+		Token:      "other-owner-secret",
+		UserId:     otherOwner,
+		Expiration: &typespb.Timestamp{Seconds: uint64(now.Add(24 * time.Hour).Unix())},
+	}
+
+	for _, tok := range []*invitepb.InviteToken{expired, future, noExpiry, otherOwnerToken} {
+		if err := repo.AddToken(ctx, tok); err != nil {
+			t.Fatalf("AddToken(%q): %v", tok.Token, err)
+		}
+	}
+
+	listed, err := repo.ListTokens(ctx, initiator)
+	if err != nil {
+		t.Fatalf("ListTokens: %v", err)
+	}
+	wantListed := []string{"future-secret", "no-expiry-secret"}
+	if got := tokenSecrets(listed); !slices.Equal(got, wantListed) {
+		t.Fatalf("ListTokens secrets = %v, want %v", got, wantListed)
+	}
+
+	gotExpired, err := repo.GetToken(ctx, "elapsed-secret")
+	if err != nil {
+		t.Fatalf("GetToken(elapsed): %v", err)
+	}
+	if gotExpired.Token != expired.Token {
+		t.Fatalf("GetToken(elapsed) = %+v, want elapsed token retained", gotExpired)
 	}
 }

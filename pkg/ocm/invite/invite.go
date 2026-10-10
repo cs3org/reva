@@ -42,7 +42,9 @@ type Repository interface {
 	// GetToken gets the token from the repository.
 	GetToken(ctx context.Context, token string) (*invitepb.InviteToken, error)
 
-	// ListTokens gets the valid tokens from the repository (i.e. not expired).
+	// ListTokens lists core-valid tokens for the initiator, omitting elapsed expirations.
+	// JSON and memory retain tokens without expiration; SQL does not store them.
+	// Listing does not authorize redemption, which applies its own expiry check.
 	ListTokens(ctx context.Context, initiator *userpb.UserId) ([]*invitepb.InviteToken, error)
 
 	// AddRemoteUser stores the remote user.
