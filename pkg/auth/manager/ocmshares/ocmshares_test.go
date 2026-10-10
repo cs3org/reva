@@ -408,6 +408,11 @@ func TestAuthenticateRejectsMalformedGrantees(t *testing.T) {
 			}
 			return s
 		}()},
+		{"group type with user payload", func() *ocm.Share {
+			s := base()
+			s.Grantee.Type = provider.GranteeType_GRANTEE_TYPE_GROUP
+			return s
+		}()},
 		{"invalid grantee type with user payload", func() *ocm.Share {
 			s := base()
 			s.Grantee.Type = provider.GranteeType_GRANTEE_TYPE_INVALID

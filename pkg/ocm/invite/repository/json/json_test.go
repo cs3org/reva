@@ -21,8 +21,10 @@ package json
 import (
 	"bytes"
 	"context"
+	stdjson "encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"io/fs"
 	"os"
 	"path/filepath"
@@ -385,11 +387,65 @@ func ctxWithCapturedWarnLog(t *testing.T) (context.Context, *bytes.Buffer) {
 	return appctx.WithLogger(context.Background(), &logger), &buf
 }
 
-func assertAtMostOneWarning(t *testing.T, log string, msg string) {
+func assertOneSkippedRowWarning(t *testing.T, data, want string) {
 	t.Helper()
-	if c := strings.Count(log, msg); c > 1 {
-		t.Fatalf("expected at most one %q warning, got %d in %q", msg, c, log)
+	decoder := stdjson.NewDecoder(strings.NewReader(data))
+	count := 0
+	for {
+		var entry map[string]any
+		err := decoder.Decode(&entry)
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			t.Fatal("invalid captured warning JSON")
+		}
+		if len(entry) != 2 || entry["level"] != "warn" || entry["message"] != want {
+			t.Fatal("unexpected skipped-row diagnostic fields")
+		}
+		count++
 	}
+	if count != 1 {
+		t.Fatalf("expected one skipped-row warning, got %d", count)
+	}
+}
+
+func assertJSONBadRequest(t *testing.T, err error) {
+	t.Helper()
+	if err == nil {
+		t.Fatal("expected bad request error, got nil")
+	}
+	if _, ok := err.(errtypes.BadRequest); !ok {
+		t.Fatalf("expected errtypes.BadRequest, got %T: %v", err, err)
+	}
+}
+
+func seedJSONSkippedRowRepository(t *testing.T) (invite.Repository, string, *userpb.UserId, *userpb.User, string) {
+	t.Helper()
+	file := filepath.Join(t.TempDir(), "invites.json")
+	mustWriteFile(t, file, `{"invites":{},"accepted_users":{}}`)
+	repo := newRepositoryAtFile(t, file)
+	m := managerFromRepo(t, repo)
+	owner := newInitiatorID()
+	key := owner.GetOpaqueId()
+	goodUser := newRemoteUser("good-u", "one.example.com")
+	m.model.Invites = map[string]*invitepb.InviteToken{
+		"bad-a": nil,
+		"bad-b": {Token: "SYNTHETIC-CORRUPT-TOKEN", Expiration: &typespb.Timestamp{Seconds: 32503680000}},
+		"good":  {Token: "good", UserId: owner, Expiration: &typespb.Timestamp{Seconds: 32503680000}},
+	}
+	m.model.AcceptedUsers = map[string][]*userpb.User{
+		key: {
+			nil,
+			{Username: "SYNTHETIC-CORRUPT-USER", Mail: "SYNTHETIC-CORRUPT-MAIL"},
+			{Id: &userpb.UserId{OpaqueId: "   ", Idp: "one.example.com"}, Username: "SYNTHETIC-CORRUPT-USER", Mail: "SYNTHETIC-CORRUPT-MAIL"},
+			goodUser,
+		},
+	}
+	if err := m.model.save(); err != nil {
+		t.Fatal(err)
+	}
+	return repo, file, owner, goodUser, mustReadFile(t, file)
 }
 
 func assertLogOmitsSentinels(t *testing.T, log string, sentinels ...string) {
@@ -410,7 +466,8 @@ func TestMalformedStoredInviteTokenMatrix(t *testing.T) {
 			"good": {"token": "good", "user_id": {"idp": "local.example.com", "opaque_id": "initiator"}, "expiration": {"seconds": 32503680000}},
 			"null-row": null,
 			"missing-owner": {"token": "missing-owner", "expiration": {"seconds": 32503680000}},
-			"empty-owner": {"token": "empty-owner", "user_id": {"opaque_id": "   ", "idp": "local.example.com"}, "expiration": {"seconds": 32503680000}},
+			"empty-owner": {"token": "empty-owner", "user_id": {"opaque_id": "", "idp": "local.example.com"}, "expiration": {"seconds": 32503680000}},
+			"whitespace-owner": {"token": "whitespace-owner", "user_id": {"opaque_id": "   ", "idp": "local.example.com"}, "expiration": {"seconds": 32503680000}},
 			"blank-secret-key": {"token": "", "user_id": {"idp": "local.example.com", "opaque_id": "initiator"}, "expiration": {"seconds": 32503680000}}
 		},
 		"accepted_users": {}
@@ -420,7 +477,7 @@ func TestMalformedStoredInviteTokenMatrix(t *testing.T) {
 	initiator := newInitiatorID()
 	before := mustReadFile(t, file)
 
-	for _, lookupKey := range []string{"null-row", "missing-owner", "empty-owner", "blank-secret-key"} {
+	for _, lookupKey := range []string{"null-row", "missing-owner", "empty-owner", "whitespace-owner", "blank-secret-key"} {
 		tkn, err := repo.GetToken(ctx, lookupKey)
 		if tkn != nil {
 			t.Fatalf("%s: expected nil token, got %+v", lookupKey, tkn)
@@ -450,70 +507,148 @@ func TestMalformedStoredInviteTokenMatrix(t *testing.T) {
 	}
 }
 
-// TestJSONSkippedRowDiagnostics emits at most one fixed warning per scan.
+// TestJSONSkippedRowDiagnostics emits exactly one fixed warning per scan.
 func TestJSONSkippedRowDiagnostics(t *testing.T) {
-	file := filepath.Join(t.TempDir(), "invites.json")
-	mustWriteFile(t, file, `{
-		"invites": {
-			"bad-a": null,
-			"bad-b": {"token": "bad-b", "expiration": {"seconds": 32503680000}},
-			"good": {"token": "good", "user_id": {"idp": "local.example.com", "opaque_id": "initiator"}, "expiration": {"seconds": 32503680000}}
+	userWarn := "skipping malformed stored remote user"
+	tokenWarn := "skipping malformed stored invite token"
+	skipSentinels := []string{
+		"SYNTHETIC-CORRUPT-USER", "SYNTHETIC-CORRUPT-MAIL", "SYNTHETIC-CORRUPT-TOKEN",
+		"good-u", "new-u", "one.example.com",
+	}
+
+	for _, tc := range []struct {
+		name    string
+		tokenOp bool
+		reopen  bool
+		run     func(t *testing.T, repo invite.Repository, file string, owner *userpb.UserId, goodUser *userpb.User, ctx context.Context, beforeBytes string)
+	}{
+		{
+			name: "tokens", tokenOp: true,
+			run: func(t *testing.T, repo invite.Repository, _ string, owner *userpb.UserId, _ *userpb.User, ctx context.Context, _ string) {
+				tokens, err := repo.ListTokens(ctx, owner)
+				if err != nil || len(tokens) != 1 || tokens[0].Token != "good" {
+					t.Fatalf("list tokens: %v %v", tokens, err)
+				}
+			},
 		},
-		"accepted_users": {
-			"initiator": [
-				null,
-				{"username": "no-id"},
-				{"id": {"opaque_id": "   ", "idp": "one.example.com"}, "username": "blank-id"},
-				{"id": {"opaque_id": "good-u", "idp": "one.example.com"}, "username": "good-u", "display_name": "Display good-u", "mail": "good-u@one.example.com"}
-			]
-		}
-	}`)
-	repo := newRepositoryAtFile(t, file)
-	initiator := newInitiatorID()
-	goodUserID := &userpb.UserId{OpaqueId: "good-u", Idp: "one.example.com"}
-
-	ctx, logBuf := ctxWithCapturedWarnLog(t)
-	tokens, err := repo.ListTokens(ctx, initiator)
-	if err != nil || len(tokens) != 1 {
-		t.Fatalf("list tokens: %v %v", tokens, err)
+		{
+			name: "add", reopen: true,
+			run: func(t *testing.T, repo invite.Repository, file string, owner *userpb.UserId, _ *userpb.User, ctx context.Context, _ string) {
+				if err := repo.AddRemoteUser(ctx, owner, newRemoteUser("new-u", "one.example.com")); err != nil {
+					t.Fatal(err)
+				}
+				assertReopenMatchesLiveModel(t, repo, file)
+			},
+		},
+		{
+			name: "duplicate",
+			run: func(t *testing.T, repo invite.Repository, file string, owner *userpb.UserId, _ *userpb.User, ctx context.Context, beforeBytes string) {
+				err := repo.AddRemoteUser(ctx, owner, newRemoteUser("good-u", "one.example.com"))
+				if !errors.Is(err, invite.ErrUserAlreadyAccepted) {
+					t.Fatalf("duplicate: %v", err)
+				}
+				if after := mustReadFile(t, file); after != beforeBytes {
+					t.Fatal("duplicate row changed file bytes")
+				}
+			},
+		},
+		{
+			name: "get",
+			run: func(t *testing.T, repo invite.Repository, file string, owner *userpb.UserId, goodUser *userpb.User, ctx context.Context, beforeBytes string) {
+				got, err := repo.GetRemoteUser(ctx, owner, goodUser.Id)
+				if err != nil || got.Id.GetOpaqueId() != "good-u" {
+					t.Fatalf("get: %v %v", got, err)
+				}
+				if after := mustReadFile(t, file); after != beforeBytes {
+					t.Fatal("get row changed file bytes")
+				}
+			},
+		},
+		{
+			name: "find",
+			run: func(t *testing.T, repo invite.Repository, file string, owner *userpb.UserId, _ *userpb.User, ctx context.Context, beforeBytes string) {
+				users, err := repo.FindRemoteUsers(ctx, owner, "")
+				if err != nil || len(users) != 1 {
+					t.Fatalf("find: %v %v", users, err)
+				}
+				if after := mustReadFile(t, file); after != beforeBytes {
+					t.Fatal("find row changed file bytes")
+				}
+			},
+		},
+		{
+			name: "delete", reopen: true,
+			run: func(t *testing.T, repo invite.Repository, file string, owner *userpb.UserId, goodUser *userpb.User, ctx context.Context, _ string) {
+				if err := repo.DeleteRemoteUser(ctx, owner, goodUser.Id); err != nil {
+					t.Fatal(err)
+				}
+				assertReopenMatchesLiveModel(t, repo, file)
+			},
+		},
+		{
+			name: "noop",
+			run: func(t *testing.T, repo invite.Repository, file string, owner *userpb.UserId, _ *userpb.User, ctx context.Context, beforeBytes string) {
+				if err := repo.DeleteRemoteUser(ctx, owner, &userpb.UserId{OpaqueId: "ghost", Idp: "ghost.example.com"}); err != nil {
+					t.Fatal(err)
+				}
+				if after := mustReadFile(t, file); after != beforeBytes {
+					t.Fatal("noop row changed file bytes")
+				}
+			},
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			repo, file, owner, goodUser, beforeBytes := seedJSONSkippedRowRepository(t)
+			ctx, logBuf := ctxWithCapturedWarnLog(t)
+			tc.run(t, repo, file, owner, goodUser, ctx, beforeBytes)
+			want := userWarn
+			if tc.tokenOp {
+				want = tokenWarn
+			}
+			assertOneSkippedRowWarning(t, logBuf.String(), want)
+			assertLogOmitsSentinels(t, logBuf.String(), skipSentinels...)
+		})
 	}
-	assertAtMostOneWarning(t, logBuf.String(), "skipping malformed stored invite token")
-	logBuf.Reset()
 
-	_, err = repo.FindRemoteUsers(ctx, initiator, "")
-	if err != nil {
-		t.Fatal(err)
+	for _, tc := range []struct {
+		name string
+		run  func(repo invite.Repository, owner *userpb.UserId, ctx context.Context) error
+	}{
+		{"AddRemoteUser nil owner", func(repo invite.Repository, _ *userpb.UserId, ctx context.Context) error {
+			return repo.AddRemoteUser(ctx, nil, newRemoteUser("new-u", "one.example.com"))
+		}},
+		{"GetRemoteUser nil remote id", func(repo invite.Repository, owner *userpb.UserId, ctx context.Context) error {
+			_, err := repo.GetRemoteUser(ctx, owner, nil)
+			return err
+		}},
+		{"FindRemoteUsers nil owner", func(repo invite.Repository, _ *userpb.UserId, ctx context.Context) error {
+			_, err := repo.FindRemoteUsers(ctx, nil, "")
+			return err
+		}},
+		{"DeleteRemoteUser nil remote id", func(repo invite.Repository, owner *userpb.UserId, ctx context.Context) error {
+			return repo.DeleteRemoteUser(ctx, owner, nil)
+		}},
+		{"ListTokens nil owner", func(repo invite.Repository, _ *userpb.UserId, ctx context.Context) error {
+			_, err := repo.ListTokens(ctx, nil)
+			return err
+		}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			repo, file, owner, _, beforeBytes := seedJSONSkippedRowRepository(t)
+			ctx, logBuf := ctxWithCapturedWarnLog(t)
+			err := tc.run(repo, owner, ctx)
+			assertJSONBadRequest(t, err)
+			if logBuf.Len() != 0 {
+				t.Fatal("invalid input must not emit warnings")
+			}
+			if after := mustReadFile(t, file); after != beforeBytes {
+				t.Fatal("invalid input changed file bytes")
+			}
+		})
 	}
-	assertAtMostOneWarning(t, logBuf.String(), "skipping malformed stored remote user")
-	assertLogOmitsSentinels(t, logBuf.String(), "good-u", "no-id", "blank-id")
-	logBuf.Reset()
-
-	_, err = repo.GetRemoteUser(ctx, initiator, goodUserID)
-	if err != nil {
-		t.Fatal(err)
-	}
-	assertAtMostOneWarning(t, logBuf.String(), "skipping malformed stored remote user")
-	logBuf.Reset()
-
-	if err := repo.AddRemoteUser(ctx, initiator, newRemoteUser("good-u", "one.example.com")); !errors.Is(err, invite.ErrUserAlreadyAccepted) {
-		t.Fatalf("expected duplicate against valid row, got %v", err)
-	}
-	assertAtMostOneWarning(t, logBuf.String(), "skipping malformed stored remote user")
-	logBuf.Reset()
-
-	_ = repo.DeleteRemoteUser(ctx, initiator, &userpb.UserId{OpaqueId: "ghost", Idp: "ghost.example.com"})
-	assertAtMostOneWarning(t, logBuf.String(), "skipping malformed stored remote user")
 }
 
-type acceptedUserKey struct {
-	opaque string
-	idp    string
-}
-
-type liveModelSnapshot struct {
-	invites       map[string]string
-	acceptedUsers map[string][]acceptedUserKey
-}
+type liveModelSnapshot []byte
 
 func managerFromRepo(t *testing.T, repo invite.Repository) *manager {
 	t.Helper()
@@ -526,57 +661,19 @@ func managerFromRepo(t *testing.T, repo invite.Repository) *manager {
 
 func snapshotLiveModel(t *testing.T, m *manager) liveModelSnapshot {
 	t.Helper()
-	snap := liveModelSnapshot{
-		invites:       make(map[string]string, len(m.model.Invites)),
-		acceptedUsers: make(map[string][]acceptedUserKey, len(m.model.AcceptedUsers)),
+	m.RLock()
+	defer m.RUnlock()
+	data, err := stdjson.Marshal(m.model)
+	if err != nil {
+		t.Fatal("could not snapshot invite model")
 	}
-	for key, token := range m.model.Invites {
-		if token == nil {
-			snap.invites[key] = ""
-			continue
-		}
-		snap.invites[key] = token.GetToken()
-	}
-	for initiator, users := range m.model.AcceptedUsers {
-		order := make([]acceptedUserKey, len(users))
-		for i, user := range users {
-			if user == nil || user.Id == nil {
-				continue
-			}
-			order[i] = acceptedUserKey{opaque: user.Id.GetOpaqueId(), idp: user.Id.GetIdp()}
-		}
-		snap.acceptedUsers[initiator] = order
-	}
-	return snap
+	return liveModelSnapshot(data)
 }
 
 func assertLiveSnapshotsEqual(t *testing.T, before, after liveModelSnapshot) {
 	t.Helper()
-	if len(before.invites) != len(after.invites) {
-		t.Fatalf("invite map size changed: before=%d after=%d", len(before.invites), len(after.invites))
-	}
-	for key, beforeSecret := range before.invites {
-		afterSecret, ok := after.invites[key]
-		if !ok {
-			t.Fatalf("invite key %q disappeared from live model", key)
-		}
-		if afterSecret != beforeSecret {
-			t.Fatalf("invite %q changed: before=%q after=%q", key, beforeSecret, afterSecret)
-		}
-	}
-	for key, beforeUsers := range before.acceptedUsers {
-		afterUsers, ok := after.acceptedUsers[key]
-		if !ok {
-			t.Fatalf("accepted-user key %q disappeared from live model", key)
-		}
-		if len(beforeUsers) != len(afterUsers) {
-			t.Fatalf("accepted-user list length changed for %q: before=%d after=%d", key, len(beforeUsers), len(afterUsers))
-		}
-		for i := range beforeUsers {
-			if beforeUsers[i] != afterUsers[i] {
-				t.Fatalf("accepted-user order changed for %q at %d: before=%+v after=%+v", key, i, beforeUsers[i], afterUsers[i])
-			}
-		}
+	if !bytes.Equal(before, after) {
+		t.Fatal("live invite model changed")
 	}
 }
 
@@ -617,8 +714,9 @@ func seedJSONMutationRepository(t *testing.T) (invite.Repository, context.Contex
 		"invites": {
 			"seed-token": {
 				"token": "seed-token",
-				"user_id": {"idp": "local.example.com", "opaque_id": "initiator"},
-				"expiration": {"seconds": 32503680000}
+				"user_id": {"idp": "local.example.com", "opaque_id": "initiator", "type": 1},
+				"expiration": {"seconds": 32503680000, "nanos": 123},
+				"description": "seed-description"
 			}
 		},
 		"accepted_users": {
@@ -636,57 +734,18 @@ func seedJSONMutationRepository(t *testing.T) (invite.Repository, context.Contex
 	return repo, context.Background(), file, newInitiatorID()
 }
 
-func assertReopenMatchesLiveModel(t *testing.T, live invite.Repository, file string, ctx context.Context, initiator *userpb.UserId) {
+func assertReopenMatchesLiveModel(t *testing.T, live invite.Repository, file string) {
 	t.Helper()
 	reloaded := newRepositoryAtFile(t, file)
-
-	liveTokens, err := live.ListTokens(ctx, initiator)
-	if err != nil {
-		t.Fatalf("live list tokens: %v", err)
-	}
-	reloadedTokens, err := reloaded.ListTokens(ctx, initiator)
-	if err != nil {
-		t.Fatalf("reloaded list tokens: %v", err)
-	}
-	if len(liveTokens) != len(reloadedTokens) {
-		t.Fatalf("token count mismatch: live=%d reloaded=%d", len(liveTokens), len(reloadedTokens))
-	}
-	liveSet := map[string]struct{}{}
-	for _, token := range liveTokens {
-		liveSet[token.GetToken()] = struct{}{}
-	}
-	for _, token := range reloadedTokens {
-		if _, ok := liveSet[token.GetToken()]; !ok {
-			t.Fatalf("reloaded token %q missing from live model", token.GetToken())
-		}
-	}
-
-	liveUsers, err := live.FindRemoteUsers(ctx, initiator, "")
-	if err != nil {
-		t.Fatalf("live find users: %v", err)
-	}
-	reloadedUsers, err := reloaded.FindRemoteUsers(ctx, initiator, "")
-	if err != nil {
-		t.Fatalf("reloaded find users: %v", err)
-	}
-	if len(liveUsers) != len(reloadedUsers) {
-		t.Fatalf("accepted-user count mismatch: live=%d reloaded=%d", len(liveUsers), len(reloadedUsers))
-	}
-	liveUsersSet := map[acceptedUserKey]struct{}{}
-	for _, user := range liveUsers {
-		liveUsersSet[acceptedUserKey{user.Id.GetOpaqueId(), user.Id.GetIdp()}] = struct{}{}
-	}
-	for _, user := range reloadedUsers {
-		key := acceptedUserKey{user.Id.GetOpaqueId(), user.Id.GetIdp()}
-		if _, ok := liveUsersSet[key]; !ok {
-			t.Fatalf("reloaded user %+v missing from live model", key)
-		}
-	}
+	before := snapshotLiveModel(t, managerFromRepo(t, live))
+	after := snapshotLiveModel(t, managerFromRepo(t, reloaded))
+	assertLiveSnapshotsEqual(t, before, after)
 }
 
-func assertSaveFailureRollback(t *testing.T, repo invite.Repository, file string, ctx context.Context, initiator *userpb.UserId, beforeBytes string, beforeSnap liveModelSnapshot, mutate func() error) {
+func assertSaveFailureRollback(t *testing.T, repo invite.Repository, file string, beforeBytes string, beforeSnap liveModelSnapshot, mutate func() error) {
 	t.Helper()
 	mgr := managerFromRepo(t, repo)
+	oldModel := mgr.model
 	savedPath, restore := blockJSONSaveAtConfiguredPath(t, file)
 
 	if err := mutate(); err == nil {
@@ -695,6 +754,9 @@ func assertSaveFailureRollback(t *testing.T, repo invite.Repository, file string
 		t.Fatalf("expected wrapped save error, got %v", err)
 	}
 
+	if mgr.model != oldModel {
+		t.Fatal("live model pointer changed after failed persistence")
+	}
 	afterSnap := snapshotLiveModel(t, mgr)
 	assertLiveSnapshotsEqual(t, beforeSnap, afterSnap)
 	if afterBytes := mustReadFile(t, savedPath); afterBytes != beforeBytes {
@@ -703,7 +765,55 @@ func assertSaveFailureRollback(t *testing.T, repo invite.Repository, file string
 	assertNoInviteTempFiles(t, filepath.Dir(file))
 
 	restore()
-	assertReopenMatchesLiveModel(t, repo, file, ctx, initiator)
+	assertReopenMatchesLiveModel(t, repo, file)
+}
+
+func TestLiveModelSnapshotDetectsChanges(t *testing.T) {
+	t.Run("unchanged control", func(t *testing.T) {
+		repo, _, _, _ := seedJSONMutationRepository(t)
+		m := managerFromRepo(t, repo)
+		before := snapshotLiveModel(t, m)
+		after := snapshotLiveModel(t, m)
+		assertLiveSnapshotsEqual(t, before, after)
+	})
+
+	for _, tc := range []struct {
+		name   string
+		mutate func(*manager)
+	}{
+		{"file", func(m *manager) { m.model.File += ".changed" }},
+		{"token description", func(m *manager) { m.model.Invites["seed-token"].Description = "changed" }},
+		{"token owner", func(m *manager) { m.model.Invites["seed-token"].UserId.OpaqueId = "changed-owner" }},
+		{"token owner type", func(m *manager) {
+			m.model.Invites["seed-token"].UserId.Type = userpb.UserType_USER_TYPE_FEDERATED
+		}},
+		{"token expiry", func(m *manager) { m.model.Invites["seed-token"].Expiration.Seconds++ }},
+		{"token nanos", func(m *manager) { m.model.Invites["seed-token"].Expiration.Nanos++ }},
+		{"token removal", func(m *manager) { delete(m.model.Invites, "seed-token") }},
+		{"user mail", func(m *manager) { m.model.AcceptedUsers["initiator"][1].Mail = "changed-mail" }},
+		{"user username", func(m *manager) { m.model.AcceptedUsers["initiator"][1].Username = "changed-name" }},
+		{"user display name", func(m *manager) { m.model.AcceptedUsers["initiator"][1].DisplayName = "changed-display" }},
+		{"additional accepted-user key", func(m *manager) {
+			m.model.AcceptedUsers["extra-key"] = []*userpb.User{newRemoteUser("extra", "one.example.com")}
+		}},
+		{"malformed user shape", func(m *manager) { m.model.AcceptedUsers["initiator"][0] = &userpb.User{} }},
+		{"user order", func(m *manager) {
+			m.model.AcceptedUsers["initiator"][1], m.model.AcceptedUsers["initiator"][2] =
+				m.model.AcceptedUsers["initiator"][2], m.model.AcceptedUsers["initiator"][1]
+		}},
+		{"other initiator", func(m *manager) { m.model.AcceptedUsers["other-initiator"][0].Mail = "changed-other-mail" }},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			repo, _, _, _ := seedJSONMutationRepository(t)
+			m := managerFromRepo(t, repo)
+			before := snapshotLiveModel(t, m)
+			tc.mutate(m)
+			after := snapshotLiveModel(t, m)
+			if bytes.Equal(before, after) {
+				t.Fatal(tc.name)
+			}
+		})
+	}
 }
 
 func TestJSONMutationSaveFailureLeavesStateUnchanged(t *testing.T) {
@@ -713,7 +823,7 @@ func TestJSONMutationSaveFailureLeavesStateUnchanged(t *testing.T) {
 		beforeBytes := mustReadFile(t, file)
 		beforeSnap := snapshotLiveModel(t, mgr)
 
-		assertSaveFailureRollback(t, repo, file, ctx, initiator, beforeBytes, beforeSnap, func() error {
+		assertSaveFailureRollback(t, repo, file, beforeBytes, beforeSnap, func() error {
 			return repo.AddToken(ctx, &invitepb.InviteToken{
 				Token:      "new-token",
 				UserId:     initiator,
@@ -728,7 +838,7 @@ func TestJSONMutationSaveFailureLeavesStateUnchanged(t *testing.T) {
 		beforeBytes := mustReadFile(t, file)
 		beforeSnap := snapshotLiveModel(t, mgr)
 
-		assertSaveFailureRollback(t, repo, file, ctx, initiator, beforeBytes, beforeSnap, func() error {
+		assertSaveFailureRollback(t, repo, file, beforeBytes, beforeSnap, func() error {
 			return repo.AddToken(ctx, &invitepb.InviteToken{
 				Token:      "seed-token",
 				UserId:     initiator,
@@ -749,7 +859,7 @@ func TestJSONMutationSaveFailureLeavesStateUnchanged(t *testing.T) {
 		beforeBytes := mustReadFile(t, file)
 		beforeSnap := snapshotLiveModel(t, mgr)
 
-		assertSaveFailureRollback(t, repo, file, ctx, initiator, beforeBytes, beforeSnap, func() error {
+		assertSaveFailureRollback(t, repo, file, beforeBytes, beforeSnap, func() error {
 			return repo.AddRemoteUser(ctx, initiator, newRemoteUser("dave", "one.example.com"))
 		})
 	})
@@ -761,7 +871,7 @@ func TestJSONMutationSaveFailureLeavesStateUnchanged(t *testing.T) {
 		beforeSnap := snapshotLiveModel(t, mgr)
 		aliceID := &userpb.UserId{OpaqueId: "alice", Idp: "one.example.com"}
 
-		assertSaveFailureRollback(t, repo, file, ctx, initiator, beforeBytes, beforeSnap, func() error {
+		assertSaveFailureRollback(t, repo, file, beforeBytes, beforeSnap, func() error {
 			return repo.DeleteRemoteUser(ctx, initiator, aliceID)
 		})
 
@@ -778,7 +888,7 @@ func TestJSONSuccessfulMutationsSurviveReopen(t *testing.T) {
 	if err := repo.AddRemoteUser(ctx, initiator, newRemoteUser("dave", "one.example.com")); err != nil {
 		t.Fatalf("add remote user: %v", err)
 	}
-	assertReopenMatchesLiveModel(t, repo, file, ctx, initiator)
+	assertReopenMatchesLiveModel(t, repo, file)
 
 	if err := repo.AddToken(ctx, &invitepb.InviteToken{
 		Token:      "persisted-token",
@@ -787,12 +897,27 @@ func TestJSONSuccessfulMutationsSurviveReopen(t *testing.T) {
 	}); err != nil {
 		t.Fatalf("add token: %v", err)
 	}
-	assertReopenMatchesLiveModel(t, repo, file, ctx, initiator)
+	assertReopenMatchesLiveModel(t, repo, file)
+
+	if err := repo.AddToken(ctx, &invitepb.InviteToken{
+		Token:       "persisted-token",
+		UserId:      initiator,
+		Description: "replacement-description",
+		Expiration:  &typespb.Timestamp{Seconds: uint64(time.Now().Add(48 * time.Hour).Unix())},
+	}); err != nil {
+		t.Fatalf("replace token: %v", err)
+	}
+	if tkn, err := repo.GetToken(ctx, "persisted-token"); err != nil {
+		t.Fatalf("replaced token lookup failed: %v", err)
+	} else if tkn.GetDescription() != "replacement-description" {
+		t.Fatalf("replacement description not published, got %q", tkn.GetDescription())
+	}
+	assertReopenMatchesLiveModel(t, repo, file)
 
 	if err := repo.DeleteRemoteUser(ctx, initiator, &userpb.UserId{OpaqueId: "bob", Idp: "one.example.com"}); err != nil {
 		t.Fatalf("delete remote user: %v", err)
 	}
-	assertReopenMatchesLiveModel(t, repo, file, ctx, initiator)
+	assertReopenMatchesLiveModel(t, repo, file)
 
 	if users, err := repo.FindRemoteUsers(ctx, otherInitiator, ""); err != nil || len(users) != 1 || users[0].Id.GetOpaqueId() != "carol" {
 		t.Fatalf("other initiator data lost: users=%v err=%v", users, err)

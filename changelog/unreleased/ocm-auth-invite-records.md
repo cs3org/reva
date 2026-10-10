@@ -7,7 +7,6 @@ and fix the memory repository's first-insert and identity-key handling.
 
 JSON invitation updates replace the data file before publishing the live
 model; failed persistence reports an error without changing that model.
-
 Memory invitation listings omit elapsed tokens while retaining storage
 and listing of tokens without expiration. Redemption still requires a
 valid expiration.

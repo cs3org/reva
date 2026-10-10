@@ -202,7 +202,7 @@ func TestAcceptInviteStoredTokenValidation(t *testing.T) {
 	blankSecret := validStoredToken()
 	blankSecret.Token = "   "
 	blankOwner := validStoredToken()
-	blankOwner.UserId = &userpb.UserId{OpaqueId: "   ", Idp: initiatorTokenID.GetIdp()}
+	blankOwner.UserId = &userpb.UserId{OpaqueId: "", Idp: initiatorTokenID.GetIdp()}
 	whitespaceOwner := validStoredToken()
 	whitespaceOwner.UserId = &userpb.UserId{OpaqueId: " ", Idp: initiatorTokenID.GetIdp()}
 

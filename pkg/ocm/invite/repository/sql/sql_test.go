@@ -282,7 +282,11 @@ func TestSQLMalformedStoredInviteTokens(t *testing.T) {
 			if err := m.db.Create(&OcmToken{Token: tc.token, Initiator: tc.init, Expiration: future}).Error; err != nil {
 				t.Fatal(err)
 			}
-			if _, err := repo.GetToken(ctx, tc.token); err == nil {
+			token, err := repo.GetToken(ctx, tc.token)
+			if token != nil {
+				t.Fatal("malformed stored token returned a payload")
+			}
+			if err == nil {
 				t.Fatal("expected InternalError for malformed initiator row")
 			} else if _, ok := err.(errtypes.InternalError); !ok {
 				t.Fatalf("expected InternalError, got %T: %v", err, err)

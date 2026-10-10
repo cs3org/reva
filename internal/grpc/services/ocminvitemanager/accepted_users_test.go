@@ -21,6 +21,8 @@ package ocminvitemanager
 import (
 	"bytes"
 	"context"
+	stdjson "encoding/json"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -37,6 +39,7 @@ import (
 	"github.com/cs3org/reva/v3/pkg/ocm/invite"
 	jsoninvite "github.com/cs3org/reva/v3/pkg/ocm/invite/repository/json"
 	"github.com/cs3org/reva/v3/pkg/utils"
+	"github.com/rs/zerolog"
 )
 
 // fakeRepo is a call-counting invite.Repository used by the service tests. It
@@ -145,6 +148,10 @@ func (f *fakeRepo) totalCalls() int {
 	defer f.mu.Unlock()
 	return f.addTokenCalls + f.getTokenCalls + f.listTokensCalls +
 		f.addRemoteUserCalls + f.getRemoteUserCalls + f.findRemoteUsersCalls + f.deleteRemoteUserCalls
+}
+
+func (f *fakeRepo) calls() int {
+	return f.totalCalls()
 }
 
 func newTestService(repo invite.Repository) *service {
@@ -600,14 +607,47 @@ func assertInternalMessage(t *testing.T, status *rpcv1beta1.Status, want string)
 	if status.Code != rpcv1beta1.Code_CODE_INTERNAL {
 		t.Fatalf("expected CODE_INTERNAL, got %v: %q", status.Code, status.Message)
 	}
-	if !strings.Contains(status.Message, want) {
-		t.Fatalf("expected internal message containing %q, got %q", want, status.Message)
+	if status.Message != want {
+		t.Fatalf("expected internal message %q, got %q", want, status.Message)
+	}
+}
+
+func assertSafeResultDiagnostic(t *testing.T, data, want string) {
+	t.Helper()
+	decoder := stdjson.NewDecoder(strings.NewReader(data))
+	var entry map[string]any
+	if err := decoder.Decode(&entry); err != nil {
+		t.Fatal("missing result diagnostic")
+	}
+	if entry["level"] != "error" || entry["message"] != want {
+		t.Fatal("unexpected result diagnostic")
+	}
+	for key := range entry {
+		switch key {
+		case "level", "message", "caller", "error":
+		default:
+			t.Fatal("unexpected result diagnostic field")
+		}
+	}
+	switch entry["error"] {
+	case "error: bad request: missing invite token", "error: bad request: blank invite token",
+		"error: bad request: missing invite token user id", "error: bad request: blank invite token user id",
+		"error: bad request: missing remote user", "error: bad request: missing remote user id",
+		"error: bad request: blank remote user id":
+	default:
+		t.Fatal("unexpected result validation error")
+	}
+	var extra map[string]any
+	if err := decoder.Decode(&extra); err != io.EOF {
+		t.Fatal("expected exactly one result diagnostic")
+	}
+	if strings.Contains(data, "SYNTHETIC-") {
+		t.Fatal("result diagnostic disclosed stored contents")
 	}
 }
 
 func TestListInviteTokensRejectsMalformedSuccess(t *testing.T) {
-	validNeighbor := &invitepb.InviteToken{Token: "valid-secret", UserId: testInitiatorID}
-	ctx := ctxWithUser(testCtxUser)
+	validNeighbor := &invitepb.InviteToken{Token: "SYNTHETIC-VALID-SECRET", UserId: testInitiatorID}
 
 	for _, tc := range []struct {
 		name   string
@@ -615,12 +655,16 @@ func TestListInviteTokensRejectsMalformedSuccess(t *testing.T) {
 	}{
 		{"nil token", []*invitepb.InviteToken{nil}},
 		{"blank secret", []*invitepb.InviteToken{{Token: " ", UserId: testInitiatorID}}},
-		{"missing user id", []*invitepb.InviteToken{{Token: "secret"}}},
-		{"empty user id", []*invitepb.InviteToken{{Token: "secret", UserId: &userpb.UserId{}}}},
-		{"whitespace user id", []*invitepb.InviteToken{{Token: "secret", UserId: &userpb.UserId{OpaqueId: "   "}}}},
-		{"mixed valid and invalid", []*invitepb.InviteToken{validNeighbor, {Token: "bad-secret"}}},
+		{"missing user id", []*invitepb.InviteToken{{Token: "SYNTHETIC-INVALID-SECRET"}}},
+		{"empty user id", []*invitepb.InviteToken{{Token: "SYNTHETIC-INVALID-SECRET", UserId: &userpb.UserId{}}}},
+		{"whitespace user id", []*invitepb.InviteToken{{Token: "SYNTHETIC-INVALID-SECRET", UserId: &userpb.UserId{OpaqueId: "   "}}}},
+		{"mixed valid and invalid", []*invitepb.InviteToken{validNeighbor, {Token: "SYNTHETIC-INVALID-SECRET"}}},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
+			var captured bytes.Buffer
+			logger := zerolog.New(&captured).Level(zerolog.WarnLevel)
+			ctx := appctx.WithLogger(ctxWithUser(testCtxUser), &logger)
+
 			repo := &fakeRepo{listTokensRes: tc.tokens}
 			resp, err := newTestService(repo).ListInviteTokens(ctx, &invitepb.ListInviteTokensRequest{})
 			status := mustStatus(t, err, resp.GetStatus())
@@ -631,7 +675,11 @@ func TestListInviteTokensRejectsMalformedSuccess(t *testing.T) {
 			if repo.listTokensCalls != 1 {
 				t.Fatalf("expected one ListTokens call, got %d", repo.listTokensCalls)
 			}
-			if strings.Contains(status.Message, "secret") || strings.Contains(status.Message, "valid-secret") {
+			if repo.calls() != 1 {
+				t.Fatalf("expected one repository call, got %d", repo.calls())
+			}
+			assertSafeResultDiagnostic(t, captured.String(), "malformed invite token result")
+			if strings.Contains(status.Message, "SYNTHETIC-") {
 				t.Fatalf("response must not disclose token contents: %q", status.Message)
 			}
 		})
@@ -639,20 +687,23 @@ func TestListInviteTokensRejectsMalformedSuccess(t *testing.T) {
 }
 
 func TestFindAcceptedUsersRejectsMalformedSuccess(t *testing.T) {
-	validNeighbor := &userpb.User{Id: &userpb.UserId{OpaqueId: "alice", Idp: "one.example.com"}}
-	ctx := ctxWithUser(testCtxUser)
+	validNeighbor := &userpb.User{Id: &userpb.UserId{OpaqueId: "SYNTHETIC-VALID-ID", Idp: "SYNTHETIC-VALID-IDP"}}
 
 	for _, tc := range []struct {
 		name  string
 		users []*userpb.User
 	}{
 		{"nil user", []*userpb.User{nil}},
-		{"missing id", []*userpb.User{{Username: "ghost"}}},
+		{"missing id", []*userpb.User{{Username: "SYNTHETIC-CORRUPT-NAME", Mail: "SYNTHETIC-CORRUPT-MAIL"}}},
 		{"empty opaque id", []*userpb.User{{Id: &userpb.UserId{}}}},
 		{"whitespace opaque id", []*userpb.User{{Id: &userpb.UserId{OpaqueId: "   "}}}},
-		{"mixed valid and invalid", []*userpb.User{validNeighbor, {Id: &userpb.UserId{OpaqueId: " "}}}},
+		{"mixed valid and invalid", []*userpb.User{validNeighbor, {Username: "SYNTHETIC-CORRUPT-NAME", Mail: "SYNTHETIC-CORRUPT-MAIL"}}},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
+			var captured bytes.Buffer
+			logger := zerolog.New(&captured).Level(zerolog.WarnLevel)
+			ctx := appctx.WithLogger(ctxWithUser(testCtxUser), &logger)
+
 			repo := &fakeRepo{findRes: tc.users}
 			resp, err := newTestService(repo).FindAcceptedUsers(ctx, &invitepb.FindAcceptedUsersRequest{})
 			status := mustStatus(t, err, resp.GetStatus())
@@ -663,7 +714,11 @@ func TestFindAcceptedUsersRejectsMalformedSuccess(t *testing.T) {
 			if repo.findRemoteUsersCalls != 1 {
 				t.Fatalf("expected one FindRemoteUsers call, got %d", repo.findRemoteUsersCalls)
 			}
-			if strings.Contains(status.Message, "alice") {
+			if repo.calls() != 1 {
+				t.Fatalf("expected one repository call, got %d", repo.calls())
+			}
+			assertSafeResultDiagnostic(t, captured.String(), "malformed remote user result")
+			if strings.Contains(status.Message, "SYNTHETIC-") {
 				t.Fatalf("response must not disclose row contents: %q", status.Message)
 			}
 		})
@@ -671,9 +726,10 @@ func TestFindAcceptedUsersRejectsMalformedSuccess(t *testing.T) {
 }
 
 func TestListFindValidSuccessfulResults(t *testing.T) {
-	ctx := ctxWithUser(testCtxUser)
-	validToken := &invitepb.InviteToken{Token: "stored-secret", UserId: testInitiatorID}
-	validUser := &userpb.User{Id: &userpb.UserId{OpaqueId: "alice", Idp: "one.example.com"}}
+	secondToken := &invitepb.InviteToken{Token: "second", UserId: testInitiatorID}
+	firstToken := &invitepb.InviteToken{Token: "first", UserId: testInitiatorID}
+	secondUser := &userpb.User{Id: &userpb.UserId{OpaqueId: "second", Idp: "one.example.com"}}
+	firstUser := &userpb.User{Id: &userpb.UserId{OpaqueId: "first", Idp: "one.example.com"}}
 
 	for _, tc := range []struct {
 		name string
@@ -682,9 +738,10 @@ func TestListFindValidSuccessfulResults(t *testing.T) {
 	}{
 		{"nil slices", nil, nil},
 		{"empty slices", []*invitepb.InviteToken{}, []*userpb.User{}},
-		{"valid entries", []*invitepb.InviteToken{validToken}, []*userpb.User{validUser}},
+		{"valid entries", []*invitepb.InviteToken{secondToken, firstToken}, []*userpb.User{secondUser, firstUser}},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
+			ctx := ctxWithUser(testCtxUser)
 			repo := &fakeRepo{listTokensRes: tc.list, findRes: tc.find}
 			svc := newTestService(repo)
 
@@ -696,6 +753,14 @@ func TestListFindValidSuccessfulResults(t *testing.T) {
 			if len(listResp.GetInviteTokens()) != len(tc.list) {
 				t.Fatalf("list: expected %d tokens, got %d", len(tc.list), len(listResp.GetInviteTokens()))
 			}
+			for i := range tc.list {
+				if listResp.InviteTokens[i] != tc.list[i] {
+					t.Fatalf("list: expected pointer identity at %d", i)
+				}
+			}
+			if repo.listTokensCalls != 1 {
+				t.Fatalf("expected one ListTokens call, got %d", repo.listTokensCalls)
+			}
 
 			findResp, err := svc.FindAcceptedUsers(ctx, &invitepb.FindAcceptedUsersRequest{})
 			findStatus := mustStatus(t, err, findResp.GetStatus())
@@ -704,6 +769,17 @@ func TestListFindValidSuccessfulResults(t *testing.T) {
 			}
 			if len(findResp.GetAcceptedUsers()) != len(tc.find) {
 				t.Fatalf("find: expected %d users, got %d", len(tc.find), len(findResp.GetAcceptedUsers()))
+			}
+			for i := range tc.find {
+				if findResp.AcceptedUsers[i] != tc.find[i] {
+					t.Fatalf("find: expected pointer identity at %d", i)
+				}
+			}
+			if repo.findRemoteUsersCalls != 1 {
+				t.Fatalf("expected one FindRemoteUsers call, got %d", repo.findRemoteUsersCalls)
+			}
+			if repo.calls() != 2 {
+				t.Fatalf("expected two repository calls, got %d", repo.calls())
 			}
 		})
 	}

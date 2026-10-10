@@ -32,6 +32,7 @@ import (
 	typespb "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
 	"github.com/cs3org/reva/v3/pkg/errtypes"
 	"github.com/cs3org/reva/v3/pkg/ocm/invite"
+	"google.golang.org/protobuf/proto"
 )
 
 // Run exercises the invite.Repository contract against a repository produced
@@ -193,6 +194,9 @@ func Run(t *testing.T, newRepository func(*testing.T) invite.Repository) {
 		if err != nil {
 			t.Fatal(err)
 		}
+		if len(before) != 1 {
+			t.Fatalf("expected exactly one seeded neighbor, got %d", len(before))
+		}
 
 		for _, tc := range []struct {
 			name      string
@@ -211,17 +215,24 @@ func Run(t *testing.T, newRepository func(*testing.T) invite.Repository) {
 				t.Fatalf("%s: expected nil user, got %v", tc.name, user)
 			}
 			assertBadRequest(t, err)
-		}
 
-		after, err := repo.FindRemoteUsers(ctx, initiator, "")
-		if err != nil {
-			t.Fatal(err)
-		}
-		if len(after) != len(before) {
-			t.Fatalf("rejected lookups changed record count: before=%d after=%d", len(before), len(after))
-		}
-		if _, err := repo.GetRemoteUser(ctx, initiator, remoteID); err != nil {
-			t.Fatalf("valid neighbor must remain retrievable: %v", err)
+			after, err := repo.FindRemoteUsers(ctx, initiator, "")
+			if err != nil {
+				t.Fatal(err)
+			}
+			if len(after) != len(before) {
+				t.Fatalf("%s: rejected lookup changed record count: before=%d after=%d", tc.name, len(before), len(after))
+			}
+			got, err := repo.GetRemoteUser(ctx, initiator, remoteID)
+			if err != nil {
+				t.Fatalf("%s: valid neighbor must remain retrievable: %v", tc.name, err)
+			}
+			if !proto.Equal(got, before[0]) {
+				t.Fatalf("%s: valid neighbor changed after rejected lookup", tc.name)
+			}
+			if !proto.Equal(after[0], before[0]) {
+				t.Fatalf("%s: find result changed after rejected lookup", tc.name)
+			}
 		}
 	})
 
@@ -258,6 +269,9 @@ func Run(t *testing.T, newRepository func(*testing.T) invite.Repository) {
 		if err != nil {
 			t.Fatal(err)
 		}
+		if len(before) != 1 {
+			t.Fatalf("expected exactly one seeded neighbor, got %d", len(before))
+		}
 
 		for _, tc := range []struct {
 			name      string
@@ -272,17 +286,24 @@ func Run(t *testing.T, newRepository func(*testing.T) invite.Repository) {
 			{"whitespace remote id", initiator, &userpb.UserId{OpaqueId: " "}},
 		} {
 			assertBadRequest(t, repo.DeleteRemoteUser(ctx, tc.initiator, tc.remote))
-		}
 
-		after, err := repo.FindRemoteUsers(ctx, initiator, "")
-		if err != nil {
-			t.Fatal(err)
-		}
-		if len(after) != len(before) {
-			t.Fatalf("rejected deletes changed record count: before=%d after=%d", len(before), len(after))
-		}
-		if _, err := repo.GetRemoteUser(ctx, initiator, remoteID); err != nil {
-			t.Fatalf("valid neighbor must remain after rejected deletes: %v", err)
+			after, err := repo.FindRemoteUsers(ctx, initiator, "")
+			if err != nil {
+				t.Fatal(err)
+			}
+			if len(after) != len(before) {
+				t.Fatalf("%s: rejected delete changed record count: before=%d after=%d", tc.name, len(before), len(after))
+			}
+			got, err := repo.GetRemoteUser(ctx, initiator, remoteID)
+			if err != nil {
+				t.Fatalf("%s: valid neighbor must remain after rejected delete: %v", tc.name, err)
+			}
+			if !proto.Equal(got, before[0]) {
+				t.Fatalf("%s: valid neighbor changed after rejected delete", tc.name)
+			}
+			if !proto.Equal(after[0], before[0]) {
+				t.Fatalf("%s: find result changed after rejected delete", tc.name)
+			}
 		}
 
 		// a valid delete with no matching user remains a successful no-op

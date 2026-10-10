@@ -21,6 +21,9 @@ package memory
 import (
 	"bytes"
 	"context"
+	stdjson "encoding/json"
+	"errors"
+	"io"
 	"slices"
 	"strconv"
 	"strings"
@@ -407,11 +410,16 @@ func TestMemoryMalformedStoredInviteTokenMatrix(t *testing.T) {
 	injectStoredToken(t, repo, "typed-nil", (*invitepb.InviteToken)(nil))
 	injectStoredToken(t, repo, "wrong-type", "not-a-token")
 	injectStoredToken(t, repo, "missing-owner", &invitepb.InviteToken{Token: "missing-owner"})
-	injectStoredToken(t, repo, "blank-owner", &invitepb.InviteToken{Token: "blank-owner", UserId: &userpb.UserId{OpaqueId: "   "}})
+	injectStoredToken(t, repo, "blank-owner", &invitepb.InviteToken{Token: "blank-owner", UserId: &userpb.UserId{OpaqueId: ""}})
+	injectStoredToken(t, repo, "whitespace-owner", &invitepb.InviteToken{Token: "whitespace-owner", UserId: &userpb.UserId{OpaqueId: "   "}})
 	injectStoredToken(t, repo, "blank-secret", &invitepb.InviteToken{Token: "   ", UserId: initiator})
 
-	for _, key := range []string{"typed-nil", "wrong-type", "missing-owner", "blank-owner", "blank-secret"} {
-		if _, err := repo.GetToken(ctx, key); err == nil {
+	for _, key := range []string{"typed-nil", "wrong-type", "missing-owner", "blank-owner", "whitespace-owner", "blank-secret"} {
+		token, err := repo.GetToken(ctx, key)
+		if token != nil {
+			t.Fatalf("%s: expected nil token, got %+v", key, token)
+		}
+		if err == nil {
 			t.Fatalf("%s: expected error, got nil", key)
 		} else if _, ok := err.(errtypes.InternalError); !ok {
 			t.Fatalf("%s: expected InternalError, got %T: %v", key, err, err)
@@ -427,46 +435,290 @@ func TestMemoryMalformedStoredInviteTokenMatrix(t *testing.T) {
 	}
 }
 
-// TestMemorySkippedRowDiagnostics emits at most one fixed warning per operation.
-func TestMemorySkippedRowDiagnostics(t *testing.T) {
+func assertOneSkippedRowWarning(t *testing.T, data, want string) {
+	t.Helper()
+	decoder := stdjson.NewDecoder(strings.NewReader(data))
+	count := 0
+	for {
+		var entry map[string]any
+		err := decoder.Decode(&entry)
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			t.Fatal("invalid captured warning JSON")
+		}
+		if len(entry) != 2 || entry["level"] != "warn" || entry["message"] != want {
+			t.Fatal("unexpected skipped-row diagnostic fields")
+		}
+		count++
+	}
+	if count != 1 {
+		t.Fatalf("expected one skipped-row warning, got %d", count)
+	}
+}
+
+func assertMemoryBadRequest(t *testing.T, err error) {
+	t.Helper()
+	if err == nil {
+		t.Fatal("expected bad request error, got nil")
+	}
+	if _, ok := err.(errtypes.BadRequest); !ok {
+		t.Fatalf("expected errtypes.BadRequest, got %T: %v", err, err)
+	}
+}
+
+func seedMemorySkippedRowRepository(t *testing.T) (invite.Repository, *userpb.UserId, *userpb.User) {
+	t.Helper()
 	repo := newMemoryRepository(t)
-	initiator := newInitiatorID()
-	ctx, logBuf := ctxWithCapturedWarnLog(t)
-
+	owner := newInitiatorID()
 	injectStoredToken(t, repo, "bad-a", (*invitepb.InviteToken)(nil))
-	injectStoredToken(t, repo, "bad-b", &invitepb.InviteToken{Token: "bad-b"})
-	if err := repo.AddToken(ctx, &invitepb.InviteToken{
-		Token: "good", UserId: initiator, Expiration: &typespb.Timestamp{Seconds: 32503680000},
-	}); err != nil {
+	injectStoredToken(t, repo, "bad-b", &invitepb.InviteToken{Token: "SYNTHETIC-CORRUPT-TOKEN"})
+	injectStoredToken(t, repo, "good", &invitepb.InviteToken{
+		Token: "good", UserId: owner, Expiration: &typespb.Timestamp{Seconds: 32503680000},
+	})
+	injectStoredUser(t, repo, owner, nil)
+	injectStoredUser(t, repo, owner, &userpb.User{Username: "SYNTHETIC-CORRUPT-USER", Mail: "SYNTHETIC-CORRUPT-MAIL"})
+	injectStoredUser(t, repo, owner, &userpb.User{
+		Id:       &userpb.UserId{OpaqueId: "   ", Idp: "one.example.com"},
+		Username: "SYNTHETIC-CORRUPT-USER", Mail: "SYNTHETIC-CORRUPT-MAIL",
+	})
+	goodUser := newRemoteUser("good-u", "one.example.com")
+	if err := repo.AddRemoteUser(context.Background(), owner, goodUser); err != nil {
 		t.Fatal(err)
 	}
+	return repo, owner, goodUser
+}
 
-	tokens, err := repo.ListTokens(ctx, initiator)
-	if err != nil || len(tokens) != 1 {
-		t.Fatalf("list tokens: %v %v", tokens, err)
+func memoryAcceptedUserOrder(t *testing.T, repo invite.Repository, owner *userpb.UserId) []string {
+	t.Helper()
+	m := repo.(*manager)
+	m.acceptedUsersMu.RLock()
+	defer m.acceptedUsersMu.RUnlock()
+	users := m.acceptedUsers[owner.GetOpaqueId()]
+	order := make([]string, len(users))
+	for i, user := range users {
+		if user == nil || user.Id == nil {
+			order[i] = ""
+			continue
+		}
+		order[i] = user.Id.GetOpaqueId()
 	}
-	if strings.Count(logBuf.String(), "skipping malformed stored invite token") > 1 {
-		t.Fatalf("expected at most one token warning, got %q", logBuf.String())
-	}
-	logBuf.Reset()
+	return order
+}
 
-	injectStoredUser(t, repo, initiator, nil)
-	injectStoredUser(t, repo, initiator, &userpb.User{})
-	injectStoredUser(t, repo, initiator, &userpb.User{Id: &userpb.UserId{OpaqueId: "   "}})
-	if err := repo.AddRemoteUser(ctx, initiator, newRemoteUser("good-u", "one.example.com")); err != nil {
-		t.Fatal(err)
-	}
-	logBuf.Reset()
+func memoryInviteTokenKeys(t *testing.T, repo invite.Repository) []string {
+	t.Helper()
+	m := repo.(*manager)
+	var keys []string
+	m.Invites.Range(func(key, _ any) bool {
+		keys = append(keys, key.(string))
+		return true
+	})
+	slices.Sort(keys)
+	return keys
+}
 
-	_, err = repo.FindRemoteUsers(ctx, initiator, "")
-	if err != nil {
-		t.Fatal(err)
+func assertMemoryLogOmitsSentinels(t *testing.T, log string) {
+	t.Helper()
+	for _, s := range []string{
+		"SYNTHETIC-CORRUPT-USER", "SYNTHETIC-CORRUPT-MAIL", "SYNTHETIC-CORRUPT-TOKEN",
+		"good-u", "new-u", "one.example.com",
+	} {
+		if strings.Contains(log, s) {
+			t.Fatalf("log must not contain %q", s)
+		}
 	}
-	if strings.Count(logBuf.String(), "skipping malformed stored remote user") > 1 {
-		t.Fatalf("expected at most one user warning on find, got %q", logBuf.String())
+}
+
+// TestMemorySkippedRowDiagnostics emits exactly one fixed warning per scan.
+func TestMemorySkippedRowDiagnostics(t *testing.T) {
+	userWarn := "skipping malformed stored remote user"
+	tokenWarn := "skipping malformed stored invite token"
+	goodUserID := &userpb.UserId{OpaqueId: "good-u", Idp: "one.example.com"}
+
+	for _, tc := range []struct {
+		name     string
+		userWarn bool
+		mutate   bool
+		run      func(t *testing.T, repo invite.Repository, owner *userpb.UserId, goodUser *userpb.User, ctx context.Context)
+		check    func(t *testing.T, repo invite.Repository, owner *userpb.UserId, goodUser *userpb.User, beforeOrder []string, beforeKeys []string)
+	}{
+		{
+			name: "tokens", userWarn: false,
+			run: func(t *testing.T, repo invite.Repository, owner *userpb.UserId, _ *userpb.User, ctx context.Context) {
+				tokens, err := repo.ListTokens(ctx, owner)
+				if err != nil || len(tokens) != 1 || tokens[0].Token != "good" {
+					t.Fatalf("list tokens: %v", tokens)
+				}
+			},
+			check: func(t *testing.T, repo invite.Repository, owner *userpb.UserId, _ *userpb.User, beforeOrder, beforeKeys []string) {
+				if !slices.Equal(memoryAcceptedUserOrder(t, repo, owner), beforeOrder) {
+					t.Fatal("tokens row changed accepted-user order")
+				}
+				if !slices.Equal(memoryInviteTokenKeys(t, repo), beforeKeys) {
+					t.Fatal("tokens row changed invite keys")
+				}
+			},
+		},
+		{
+			name: "add", userWarn: true, mutate: true,
+			run: func(t *testing.T, repo invite.Repository, owner *userpb.UserId, _ *userpb.User, ctx context.Context) {
+				if err := repo.AddRemoteUser(ctx, owner, newRemoteUser("new-u", "one.example.com")); err != nil {
+					t.Fatal(err)
+				}
+			},
+			check: func(t *testing.T, repo invite.Repository, owner *userpb.UserId, _ *userpb.User, beforeOrder, beforeKeys []string) {
+				users, err := repo.FindRemoteUsers(context.Background(), owner, "")
+				if err != nil || len(users) != 2 || users[1].Id.GetOpaqueId() != "new-u" {
+					t.Fatalf("add row: %v %v", users, err)
+				}
+				if len(beforeOrder)+1 != len(memoryAcceptedUserOrder(t, repo, owner)) {
+					t.Fatal("add row did not append exactly one user")
+				}
+			},
+		},
+		{
+			name: "duplicate", userWarn: true,
+			run: func(t *testing.T, repo invite.Repository, owner *userpb.UserId, _ *userpb.User, ctx context.Context) {
+				err := repo.AddRemoteUser(ctx, owner, newRemoteUser("good-u", "one.example.com"))
+				if !errors.Is(err, invite.ErrUserAlreadyAccepted) {
+					t.Fatalf("duplicate: %v", err)
+				}
+			},
+			check: func(t *testing.T, repo invite.Repository, owner *userpb.UserId, _ *userpb.User, beforeOrder, beforeKeys []string) {
+				if !slices.Equal(memoryAcceptedUserOrder(t, repo, owner), beforeOrder) {
+					t.Fatal("duplicate row changed accepted-user order")
+				}
+				if !slices.Equal(memoryInviteTokenKeys(t, repo), beforeKeys) {
+					t.Fatal("duplicate row changed invite keys")
+				}
+			},
+		},
+		{
+			name: "get", userWarn: true,
+			run: func(t *testing.T, repo invite.Repository, owner *userpb.UserId, goodUser *userpb.User, ctx context.Context) {
+				got, err := repo.GetRemoteUser(ctx, owner, goodUser.Id)
+				if err != nil || got.Id.GetOpaqueId() != "good-u" {
+					t.Fatalf("get: %v %v", got, err)
+				}
+			},
+			check: func(t *testing.T, repo invite.Repository, owner *userpb.UserId, _ *userpb.User, beforeOrder, beforeKeys []string) {
+				if !slices.Equal(memoryAcceptedUserOrder(t, repo, owner), beforeOrder) {
+					t.Fatal("get row changed accepted-user order")
+				}
+				if !slices.Equal(memoryInviteTokenKeys(t, repo), beforeKeys) {
+					t.Fatal("get row changed invite keys")
+				}
+			},
+		},
+		{
+			name: "find", userWarn: true,
+			run: func(t *testing.T, repo invite.Repository, owner *userpb.UserId, _ *userpb.User, ctx context.Context) {
+				users, err := repo.FindRemoteUsers(ctx, owner, "")
+				if err != nil || len(users) != 1 {
+					t.Fatalf("find: %v %v", users, err)
+				}
+			},
+			check: func(t *testing.T, repo invite.Repository, owner *userpb.UserId, _ *userpb.User, beforeOrder, beforeKeys []string) {
+				if !slices.Equal(memoryAcceptedUserOrder(t, repo, owner), beforeOrder) {
+					t.Fatal("find row changed accepted-user order")
+				}
+				if !slices.Equal(memoryInviteTokenKeys(t, repo), beforeKeys) {
+					t.Fatal("find row changed invite keys")
+				}
+			},
+		},
+		{
+			name: "delete", userWarn: true, mutate: true,
+			run: func(t *testing.T, repo invite.Repository, owner *userpb.UserId, goodUser *userpb.User, ctx context.Context) {
+				if err := repo.DeleteRemoteUser(ctx, owner, goodUser.Id); err != nil {
+					t.Fatal(err)
+				}
+			},
+			check: func(t *testing.T, repo invite.Repository, owner *userpb.UserId, goodUser *userpb.User, beforeOrder, beforeKeys []string) {
+				if _, err := repo.GetRemoteUser(context.Background(), owner, goodUserID); err == nil {
+					t.Fatal("delete row must remove good user")
+				}
+				users, err := repo.FindRemoteUsers(context.Background(), owner, "")
+				if err != nil || len(users) != 0 {
+					t.Fatalf("delete row left valid users: %v", users)
+				}
+			},
+		},
+		{
+			name: "noop", userWarn: true,
+			run: func(t *testing.T, repo invite.Repository, owner *userpb.UserId, _ *userpb.User, ctx context.Context) {
+				if err := repo.DeleteRemoteUser(ctx, owner, &userpb.UserId{OpaqueId: "ghost", Idp: "ghost.example.com"}); err != nil {
+					t.Fatal(err)
+				}
+			},
+			check: func(t *testing.T, repo invite.Repository, owner *userpb.UserId, _ *userpb.User, beforeOrder, beforeKeys []string) {
+				if !slices.Equal(memoryAcceptedUserOrder(t, repo, owner), beforeOrder) {
+					t.Fatal("noop row changed accepted-user order")
+				}
+				if !slices.Equal(memoryInviteTokenKeys(t, repo), beforeKeys) {
+					t.Fatal("noop row changed invite keys")
+				}
+			},
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			repo, owner, goodUser := seedMemorySkippedRowRepository(t)
+			beforeOrder := memoryAcceptedUserOrder(t, repo, owner)
+			beforeKeys := memoryInviteTokenKeys(t, repo)
+			ctx, logBuf := ctxWithCapturedWarnLog(t)
+			tc.run(t, repo, owner, goodUser, ctx)
+			want := userWarn
+			if !tc.userWarn {
+				want = tokenWarn
+			}
+			assertOneSkippedRowWarning(t, logBuf.String(), want)
+			assertMemoryLogOmitsSentinels(t, logBuf.String())
+			tc.check(t, repo, owner, goodUser, beforeOrder, beforeKeys)
+		})
 	}
-	if strings.Contains(logBuf.String(), "good-u") {
-		t.Fatalf("log must not contain row contents: %q", logBuf.String())
+
+	for _, tc := range []struct {
+		name string
+		run  func(repo invite.Repository, owner *userpb.UserId, ctx context.Context) error
+	}{
+		{"AddRemoteUser nil owner", func(repo invite.Repository, _ *userpb.UserId, ctx context.Context) error {
+			return repo.AddRemoteUser(ctx, nil, newRemoteUser("new-u", "one.example.com"))
+		}},
+		{"GetRemoteUser nil remote id", func(repo invite.Repository, owner *userpb.UserId, ctx context.Context) error {
+			_, err := repo.GetRemoteUser(ctx, owner, nil)
+			return err
+		}},
+		{"FindRemoteUsers nil owner", func(repo invite.Repository, _ *userpb.UserId, ctx context.Context) error {
+			_, err := repo.FindRemoteUsers(ctx, nil, "")
+			return err
+		}},
+		{"DeleteRemoteUser nil remote id", func(repo invite.Repository, owner *userpb.UserId, ctx context.Context) error {
+			return repo.DeleteRemoteUser(ctx, owner, nil)
+		}},
+		{"ListTokens nil owner", func(repo invite.Repository, _ *userpb.UserId, ctx context.Context) error {
+			_, err := repo.ListTokens(ctx, nil)
+			return err
+		}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			repo, owner, _ := seedMemorySkippedRowRepository(t)
+			beforeOrder := memoryAcceptedUserOrder(t, repo, owner)
+			beforeKeys := memoryInviteTokenKeys(t, repo)
+			ctx, logBuf := ctxWithCapturedWarnLog(t)
+			err := tc.run(repo, owner, ctx)
+			assertMemoryBadRequest(t, err)
+			if logBuf.Len() != 0 {
+				t.Fatal("invalid input must not emit warnings")
+			}
+			if !slices.Equal(memoryAcceptedUserOrder(t, repo, owner), beforeOrder) {
+				t.Fatal("invalid input changed accepted-user order")
+			}
+			if !slices.Equal(memoryInviteTokenKeys(t, repo), beforeKeys) {
+				t.Fatal("invalid input changed invite keys")
+			}
+		})
 	}
 }
 
