@@ -20,16 +20,19 @@ package cephmount
 
 import (
 	"context"
+	"encoding/binary"
 	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"syscall"
 
 	userv1beta1 "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/cs3org/reva/v3/pkg/appctx"
 	"github.com/cs3org/reva/v3/pkg/errtypes"
+	"github.com/cs3org/reva/v3/pkg/permissions"
 	"github.com/cs3org/reva/v3/pkg/utils"
 	"github.com/pkg/errors"
 	"github.com/pkg/xattr"
@@ -39,7 +42,15 @@ import (
 // cannot decide what they may do. Operations on their behalf run as the service
 // account configured in external_accounts_user_*. This file holds the grants
 // those accounts are given, stored in xattrs because there is no uid to put in
-// a POSIX ACL, and decides from them what the service account may do.
+// a POSIX ACL, and decides from them what the service account may do. Public
+// links and OCM shares carry their role in the token instead. As on eos, the
+// service account itself gets rwx wherever an external account goes.
+
+const (
+	xattrACLAccess = "system.posix_acl_access"
+	aclTagUser     = 0x02
+	aclTagMask     = 0x10
+)
 
 // externalAccountQualifier returns the xattr qualifier for a lightweight or
 // federated grantee. Those accounts only exist inside reva and must never be
@@ -74,7 +85,7 @@ func (fs *cephmountfs) addExternalAccountGrant(ctx context.Context, path, qualif
 
 	// The grant is only meaningful to reva. The service account acting for the
 	// sharee still needs the kernel to let it through.
-	if err := fs.ensureServiceAccountAccess(ctx, path, perms); err != nil {
+	if err := fs.ensureServiceAccountAccess(ctx, path); err != nil {
 		return err
 	}
 
@@ -87,27 +98,14 @@ func (fs *cephmountfs) addExternalAccountGrant(ctx context.Context, path, qualif
 	return nil
 }
 
-// removeExternalAccountGrant drops the xattr holding the grant.
+// removeExternalAccountGrant drops the xattr holding the grant. The service
+// account keeps its ACL: other external accounts may still go through it.
 func (fs *cephmountfs) removeExternalAccountGrant(ctx context.Context, path, qualifier string) error {
 	fullPath := filepath.Join(fs.chrootDir, path)
 	key := xattrExtShare + qualifier
 
 	if err := xattr.Remove(fullPath, key); err != nil && !errors.Is(err, xattr.ENOATTR) {
 		return errors.Wrapf(err, "cephmount: failed to remove xattr %s", key)
-	}
-
-	// Once the last external account loses its grant, the service account has no
-	// reason to keep reaching the resource. Revoking it is recursive, so it may
-	// only happen when the remaining grants are known: a failed read here would
-	// otherwise cut off every other account sharing this tree.
-	remaining, err := fs.hasExternalAccountGrants(fullPath)
-	if err != nil {
-		return errors.Wrap(err, "cephmount: failed to check the remaining grants for external accounts")
-	}
-	if !remaining {
-		if err := fs.removeServiceAccountAccess(ctx, path); err != nil {
-			return err
-		}
 	}
 
 	appctx.GetLogger(ctx).Debug().
@@ -189,11 +187,51 @@ func (fs *cephmountfs) externalAccountGrant(account, chrootPath string) (*provid
 	}
 }
 
-// authorizeExternal denies an operation when the user is an external account
-// that has no grant covering chrootPath, or a grant that does not allow it. For
+// shareRolePermissions returns the role of the public link or OCM share the user came in through.
+func shareRolePermissions(u *userv1beta1.User) (*provider.ResourcePermissions, bool) {
+	if role, ok := utils.HasPublicShareRole(u); ok {
+		switch role {
+		case "editor":
+			return permissions.NewEditorRole().CS3ResourcePermissions(), true
+		case "uploader":
+			return permissions.NewUploaderRole().CS3ResourcePermissions(), true
+		}
+		return permissions.NewViewerRole().CS3ResourcePermissions(), true
+	}
+	if role, ok := utils.HasOCMShareRole(u); ok {
+		if role == "editor" {
+			return permissions.NewEditorRole().CS3ResourcePermissions(), true
+		}
+		return permissions.NewViewerRole().CS3ResourcePermissions(), true
+	}
+	return nil, false
+}
+
+// externalPermissions returns what the external account u may do on a chroot-relative path.
+func (fs *cephmountfs) externalPermissions(u *userv1beta1.User, chrootPath string) (*provider.ResourcePermissions, bool) {
+	// The token scope already confines these to the shared resource.
+	if perms, ok := shareRolePermissions(u); ok {
+		return perms, true
+	}
+	return fs.externalAccountGrant(u.Id.OpaqueId, chrootPath)
+}
+
+// authorizeExternal denies an operation the external account may not do, and
+// otherwise makes sure the service account it runs as can carry it out. For
 // every other user it does nothing: the operation runs under their own uid and
 // the kernel enforces access, as it always has.
 func (fs *cephmountfs) authorizeExternal(ctx context.Context, chrootPath, operation string, allowed func(*provider.ResourcePermissions) bool) error {
+	if err := fs.checkExternal(ctx, chrootPath, operation, allowed); err != nil {
+		return err
+	}
+	if _, ok := externalUser(ctx); !ok {
+		return nil
+	}
+	return fs.ensureServiceAccountAccess(ctx, chrootPath)
+}
+
+// checkExternal is authorizeExternal without touching the service account's access.
+func (fs *cephmountfs) checkExternal(ctx context.Context, chrootPath, operation string, allowed func(*provider.ResourcePermissions) bool) error {
 	u, ok := externalUser(ctx)
 	if !ok {
 		return nil
@@ -202,7 +240,18 @@ func (fs *cephmountfs) authorizeExternal(ctx context.Context, chrootPath, operat
 	log := appctx.GetLogger(ctx)
 	account := u.Id.OpaqueId
 
-	perms, found := fs.externalAccountGrant(account, chrootPath)
+	// The driver resolves paths as root, and a symlink could lead out of the share.
+	symlinked, err := fs.throughSymlink(chrootPath)
+	if err != nil {
+		return err
+	}
+	if symlinked {
+		log.Debug().Str("account", account).Str("path", chrootPath).Str("operation", operation).
+			Msg("cephmount: denying external account through a symlink")
+		return errtypes.PermissionDenied(fmt.Sprintf("cephmount: %s goes through a symlink", chrootPath))
+	}
+
+	perms, found := fs.externalPermissions(u, chrootPath)
 	if !found {
 		log.Debug().Str("account", account).Str("path", chrootPath).Str("operation", operation).
 			Msg("cephmount: denying external account without a grant")
@@ -240,40 +289,112 @@ func canRestoreRevision(p *provider.ResourcePermissions) bool {
 	return p.RestoreFileVersion
 }
 
-// ensureServiceAccountAccess gives the external accounts service account the
-// POSIX access it needs to reach chrootPath for a sharee whose own uid does not
-// exist, and without which the kernel refuses before reva's check is reached:
-// the granted permissions on the shared resource, and rwx on the project root
-// above it. The rest is assumed provisioned — world-readable directories down
-// to the project roots, which are closed (other::--x) with named entries for
-// the accounts let in. This adds the service account's on the first external
-// share, as provisioning does for the others.
-func (fs *cephmountfs) ensureServiceAccountAccess(ctx context.Context, chrootPath string, perms *provider.ResourcePermissions) error {
-	fullPath := filepath.Join(fs.chrootDir, chrootPath)
-	info, err := os.Stat(fullPath)
-	if err != nil {
+// ensureServiceAccountAccess gives the external accounts service account rwx on
+// chrootPath, and below it for a directory, unless it has it already. A path
+// that does not exist yet gets it on its parent alone. The space root above also
+// gets rwx; the rest is assumed provisioned — world-readable directories down to
+// the project roots, which are closed (other::--x) with named entries for the
+// accounts let in.
+func (fs *cephmountfs) ensureServiceAccountAccess(ctx context.Context, chrootPath string) error {
+	p := filepath.Clean(chrootPath)
+	recursive := true
+	info, err := os.Lstat(filepath.Join(fs.chrootDir, p))
+	if os.IsNotExist(err) {
+		p, recursive = filepath.Dir(p), false
+		info, err = os.Lstat(filepath.Join(fs.chrootDir, p))
+	}
+	switch {
+	case os.IsNotExist(err):
+		return nil
+	case err != nil:
 		return errors.Wrap(err, "cephmount: failed to stat path")
 	}
 
-	// The service account needs at least read and search on the shared resource
-	// itself, whatever the sharee is allowed to do with it.
-	acl := fs.permissionsToACLString(perms)
-	if !strings.Contains(acl, "r") {
-		acl = "r" + acl[1:]
+	// Never open a whole space, nor follow a symlink as root.
+	if !fs.insideSpace(p) || info.Mode()&os.ModeSymlink != 0 {
+		return nil
 	}
-	if info.IsDir() && !strings.Contains(acl, "x") {
-		acl = acl[:2] + "x"
+	// A named entry does nothing for the owner.
+	if st, ok := info.Sys().(*syscall.Stat_t); ok && int(st.Uid) == fs.conf.ExternalAccountsUserUID {
+		return nil
 	}
-	if err := fs.setServiceACL(ctx, fullPath, acl, info.IsDir()); err != nil {
+
+	fullPath := filepath.Join(fs.chrootDir, p)
+	want := uint16(0b110)
+	if info.IsDir() {
+		want = 0b111
+	}
+	has, err := fs.serviceAccountHas(fullPath, want)
+	if err != nil || has {
 		return err
 	}
 
-	if root, ok := fs.spaceRootFor(chrootPath); ok {
+	if err := fs.setServiceACL(ctx, fullPath, "rwx", recursive && info.IsDir()); err != nil {
+		return err
+	}
+	if root, ok := fs.spaceRootFor(p); ok {
 		if err := fs.setServiceACL(ctx, filepath.Join(fs.chrootDir, root), "rwx", false); err != nil {
 			return err
 		}
 	}
 	return nil
+}
+
+// serviceAccountHas reports whether the access ACL of fullPath gives the service account the want bits.
+func (fs *cephmountfs) serviceAccountHas(fullPath string, want uint16) (bool, error) {
+	buf, err := xattr.Get(fullPath, xattrACLAccess)
+	if errors.Is(err, xattr.ENOATTR) {
+		return false, nil
+	}
+	if err != nil {
+		return false, errors.Wrapf(err, "cephmount: failed to read the ACL of %s", fullPath)
+	}
+	// A version header, then 8-byte little-endian entries: tag, perm, id.
+	if len(buf) < 4 || (len(buf)-4)%8 != 0 {
+		return false, errors.Errorf("cephmount: malformed ACL on %s", fullPath)
+	}
+	var perm, mask uint16 = 0, 0b111
+	for e := buf[4:]; len(e) > 0; e = e[8:] {
+		switch binary.LittleEndian.Uint16(e) {
+		case aclTagUser:
+			if binary.LittleEndian.Uint32(e[4:]) == uint32(fs.conf.ExternalAccountsUserUID) {
+				perm = binary.LittleEndian.Uint16(e[2:])
+			}
+		case aclTagMask:
+			mask = binary.LittleEndian.Uint16(e[2:])
+		}
+	}
+	return perm&mask&want == want, nil
+}
+
+// insideSpace reports whether a chroot-relative path lies strictly below a space root.
+func (fs *cephmountfs) insideSpace(chrootPath string) bool {
+	p := filepath.Clean(chrootPath)
+	return p != "." && filepath.IsLocal(p) && len(strings.Split(p, string(filepath.Separator))) > fs.conf.SpaceDepth
+}
+
+// throughSymlink reports whether a chroot-relative path, or the part of it that exists, resolves through a symlink.
+func (fs *cephmountfs) throughSymlink(chrootPath string) (bool, error) {
+	root, err := filepath.EvalSymlinks(fs.chrootDir)
+	if err != nil {
+		return false, errors.Wrap(err, "cephmount: failed to resolve the chroot")
+	}
+	for p := filepath.Clean(chrootPath); ; p = filepath.Dir(p) {
+		fullPath := filepath.Join(fs.chrootDir, p)
+		resolved, err := filepath.EvalSymlinks(fullPath)
+		if err == nil {
+			return resolved != filepath.Join(root, p), nil
+		}
+		if !os.IsNotExist(err) && !errors.Is(err, syscall.ENOTDIR) {
+			return false, errors.Wrap(err, "cephmount: failed to resolve path")
+		}
+		if _, err := os.Lstat(fullPath); err == nil {
+			return true, nil // a dangling symlink
+		}
+		if p == "." {
+			return false, nil
+		}
+	}
 }
 
 // spaceRootFor returns the space (project) root a chroot-relative path lives
@@ -291,43 +412,6 @@ func (fs *cephmountfs) spaceRootFor(chrootPath string) (string, bool) {
 		return "", false
 	}
 	return filepath.Join(parts[:fs.conf.SpaceDepth]...), true
-}
-
-// removeServiceAccountAccess drops the service account's ACL from a resource
-// that is no longer shared with any external account. The search rights on the
-// ancestors are left in place: other shares below them may still need those, and
-// they grant nothing beyond traversal.
-func (fs *cephmountfs) removeServiceAccountAccess(ctx context.Context, chrootPath string) error {
-	fullPath := filepath.Join(fs.chrootDir, chrootPath)
-	info, err := os.Stat(fullPath)
-	if err != nil {
-		return errors.Wrap(err, "cephmount: failed to stat path")
-	}
-
-	entry := fmt.Sprintf("u:%d", fs.conf.ExternalAccountsUserUID)
-	args := []string{"-x", entry}
-	if info.IsDir() {
-		args = append(args, "-x", "d:"+entry, "-R")
-	}
-	args = append(args, fullPath)
-
-	return fs.runSetfacl(ctx, args, fullPath)
-}
-
-// hasExternalAccountGrants reports whether any external account still holds a
-// grant on the resource. The error must not be mistaken for a false: the caller
-// revokes access on it.
-func (fs *cephmountfs) hasExternalAccountGrants(fullPath string) (bool, error) {
-	names, err := xattr.List(fullPath)
-	if err != nil {
-		return false, errors.Wrap(err, "cephmount: failed to list xattrs")
-	}
-	for _, name := range names {
-		if strings.HasPrefix(name, xattrExtShare) {
-			return true, nil
-		}
-	}
-	return false, nil
 }
 
 // setServiceACL grants the service account acl on fullPath. Directories also get
