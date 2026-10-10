@@ -21,18 +21,23 @@ package cephmount
 import (
 	"context"
 	"fmt"
+	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	userv1beta1 "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
+	typesv1beta1 "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
 	"github.com/cs3org/reva/v3/pkg/appctx"
 	"github.com/cs3org/reva/v3/pkg/errtypes"
+	"github.com/cs3org/reva/v3/pkg/permissions"
 	"github.com/pkg/xattr"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"google.golang.org/protobuf/proto"
 )
 
 const testExternalAccount = "guest@example.org"
@@ -239,10 +244,10 @@ func TestServiceAccountGetsRwxOnSpaceRoot(t *testing.T) {
 	assert.NotContains(t, aclEntries(t, filepath.Join(tempDir, "c")), "user:"+fmt.Sprint(fs.conf.ExternalAccountsUserUID),
 		"world-readable directories must not be touched")
 
-	// Removing the last grant clears the file's entry but leaves the space root:
-	// other shares in the same project may still rely on it.
+	// Removing the last grant leaves the service account's entries: public links
+	// and other external accounts may still go through them.
 	require.NoError(t, fs.RemoveGrant(ctx, &provider.Reference{Path: "/c/myproj/file.txt"}, grant))
-	assert.NotContains(t, aclEntries(t, filepath.Join(spaceRoot, "file.txt")), fmt.Sprint(fs.conf.ExternalAccountsUserUID))
+	assert.Contains(t, aclEntries(t, filepath.Join(spaceRoot, "file.txt")), uidEntry)
 	assert.Contains(t, aclEntries(t, spaceRoot), uidEntry)
 }
 
@@ -320,4 +325,230 @@ func TestExternalAccountMapsToServiceUID(t *testing.T) {
 	assert.Equal(t, fs.conf.ExternalAccountsUserUID, uid, "external accounts must act as the service account")
 	assert.Equal(t, fs.conf.ExternalAccountsUserGID, gid)
 	assert.NotEqual(t, 1000, uid, "external accounts must not fall through to the default uid")
+}
+
+func shareRoleUser(t userv1beta1.UserType, key, role string) *userv1beta1.User {
+	return &userv1beta1.User{
+		Id: &userv1beta1.UserId{OpaqueId: "publiclink:" + role, Type: t},
+		Opaque: &typesv1beta1.Opaque{Map: map[string]*typesv1beta1.OpaqueEntry{
+			key: {Decoder: "plain", Value: []byte(role)},
+		}},
+	}
+}
+
+// linkCtx is the context of a request coming in through a public link with role.
+func linkCtx(ctx context.Context, role string) context.Context {
+	return appctx.ContextSetUser(ctx, shareRoleUser(userv1beta1.UserType_USER_TYPE_GUEST, "public-share-role", role))
+}
+
+// serviceEntry is the getfacl line giving the service account rwx.
+func serviceEntry(fs *cephmountfs) string {
+	return fmt.Sprintf("user:%d:rwx", fs.conf.ExternalAccountsUserUID)
+}
+
+func TestShareRolePermissions(t *testing.T) {
+	viewer := permissions.NewViewerRole().CS3ResourcePermissions()
+	editor := permissions.NewEditorRole().CS3ResourcePermissions()
+	public := func(role string) *userv1beta1.User {
+		return shareRoleUser(userv1beta1.UserType_USER_TYPE_GUEST, "public-share-role", role)
+	}
+	ocm := func(role string) *userv1beta1.User {
+		return shareRoleUser(userv1beta1.UserType_USER_TYPE_FEDERATED, "ocm-share-role", role)
+	}
+
+	tests := []struct {
+		name string
+		user *userv1beta1.User
+		want *provider.ResourcePermissions
+	}{
+		{"public link viewer", public("viewer"), viewer},
+		{"public link editor", public("editor"), editor},
+		{"public link uploader", public("uploader"), permissions.NewUploaderRole().CS3ResourcePermissions()},
+		{"unknown public link role", public("bogus"), viewer},
+		{"ocm editor", ocm("editor"), editor},
+		{"ocm viewer", ocm("viewer"), viewer},
+		{"lightweight account", &userv1beta1.User{Id: &userv1beta1.UserId{
+			OpaqueId: testExternalAccount, Type: userv1beta1.UserType_USER_TYPE_LIGHTWEIGHT,
+		}}, nil},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			perms, ok := shareRolePermissions(tt.user)
+			require.Equal(t, tt.want != nil, ok)
+			if tt.want != nil {
+				assert.True(t, proto.Equal(tt.want, perms), "got %v", perms)
+			}
+		})
+	}
+}
+
+// Nothing is ever stored for a public link: its role comes with its token.
+func TestPublicLinkUsesTheRoleInItsToken(t *testing.T) {
+	fs, ctx := newAuthTestFS(t)
+	ref := &provider.Reference{Path: "/shared/sub/deep.txt"}
+
+	viewer := linkCtx(ctx, "viewer")
+	ri, err := fs.GetMD(viewer, ref, nil)
+	require.NoError(t, err)
+	assert.True(t, ri.PermissionSet.InitiateFileDownload)
+	assert.False(t, ri.PermissionSet.InitiateFileUpload)
+	assert.False(t, ri.PermissionSet.AddGrant)
+	assert.IsType(t, errtypes.PermissionDenied(""), fs.Delete(viewer, ref))
+
+	editor := linkCtx(ctx, "editor")
+	ri, err = fs.GetMD(editor, ref, nil)
+	require.NoError(t, err)
+	assert.True(t, ri.PermissionSet.InitiateFileUpload)
+	require.NoError(t, fs.CreateDir(editor, &provider.Reference{Path: "/shared/newdir"}))
+}
+
+// The scope check stats a resource before it knows whether it is shared, so a
+// stat must not widen what the service account can reach.
+func TestGetMDDoesNotGrantTheServiceAccount(t *testing.T) {
+	fs, ctx := newAuthTestFS(t)
+
+	_, err := fs.GetMD(linkCtx(ctx, "editor"), &provider.Reference{Path: "/private.txt"}, nil)
+	require.NoError(t, err)
+	assert.NotContains(t, aclEntries(t, filepath.Join(fs.chrootDir, "private.txt")), fmt.Sprint(fs.conf.ExternalAccountsUserUID))
+}
+
+// The kernel entry is the same whichever link is used, so a read-only link used
+// first must not leave a writable one on the same folder without write access.
+func TestLinksWithDifferentRolesOnTheSamePath(t *testing.T) {
+	fs, ctx := newAuthTestFS(t)
+	shared := filepath.Join(fs.chrootDir, "shared")
+
+	_, err := fs.ListFolder(linkCtx(ctx, "viewer"), &provider.Reference{Path: "/shared"}, nil)
+	require.NoError(t, err)
+	assert.Contains(t, aclEntries(t, shared), serviceEntry(fs))
+	assert.Contains(t, aclEntries(t, filepath.Join(shared, "sub", "deep.txt")), serviceEntry(fs), "the whole folder is covered")
+
+	err = fs.Upload(linkCtx(ctx, "editor"), &provider.Reference{Path: "/shared/new.txt"}, io.NopCloser(strings.NewReader("x")), nil)
+	require.NoError(t, err)
+}
+
+// A read-only lightweight share used to narrow the service account's entry for
+// everyone going through the same folder, including writable shares and links.
+func TestLightweightShareDoesNotNarrowTheServiceAccount(t *testing.T) {
+	fs, ctx := newAuthTestFS(t)
+	shared := filepath.Join(fs.chrootDir, "shared")
+	editor := &provider.Grant{
+		Grantee:     externalGrantee("editor@example.org", userv1beta1.UserType_USER_TYPE_LIGHTWEIGHT),
+		Permissions: permissions.NewEditorRole().CS3ResourcePermissions(),
+	}
+	viewer := &provider.Grant{
+		Grantee:     externalGrantee("viewer@example.org", userv1beta1.UserType_USER_TYPE_LIGHTWEIGHT),
+		Permissions: permissions.NewViewerRole().CS3ResourcePermissions(),
+	}
+
+	require.NoError(t, fs.AddGrant(ctx, &provider.Reference{Path: "/shared"}, editor))
+	require.NoError(t, fs.AddGrant(ctx, &provider.Reference{Path: "/shared"}, viewer))
+	assert.Contains(t, aclEntries(t, shared), serviceEntry(fs))
+
+	require.NoError(t, fs.AddGrant(ctx, &provider.Reference{Path: "/shared/sub"}, viewer))
+	assert.Contains(t, aclEntries(t, filepath.Join(shared, "sub", "deep.txt")), serviceEntry(fs))
+}
+
+// Content that did not inherit the entry, or whose mask hides it, is fixed the
+// first time an external account reaches it.
+func TestServiceAccountAccessIsRepaired(t *testing.T) {
+	fs, ctx := newAuthTestFS(t)
+	editor := linkCtx(ctx, "editor")
+	ref := &provider.Reference{Path: "/shared/sub/deep.txt"}
+	deep := filepath.Join(fs.chrootDir, "shared", "sub", "deep.txt")
+
+	download := func() {
+		t.Helper()
+		rc, err := fs.Download(editor, ref, nil)
+		require.NoError(t, err)
+		require.NoError(t, rc.Close())
+	}
+
+	_, err := fs.ListFolder(editor, &provider.Reference{Path: "/shared"}, nil)
+	require.NoError(t, err)
+
+	// Moved in from elsewhere, without the entry.
+	out, err := exec.Command("setfacl", "-x", fmt.Sprintf("u:%d", fs.conf.ExternalAccountsUserUID), deep).CombinedOutput()
+	require.NoError(t, err, string(out))
+	download()
+	assert.Contains(t, aclEntries(t, deep), serviceEntry(fs))
+
+	// Created by someone else with 0644 below a default ACL: the mask hides the entry.
+	out, err = exec.Command("setfacl", "-m", "m::r--", deep).CombinedOutput()
+	require.NoError(t, err, string(out))
+	require.Contains(t, aclEntries(t, deep), "#effective:r--")
+	download()
+	assert.NotContains(t, aclEntries(t, deep), "#effective")
+}
+
+// A path about to be created is granted on its parent, and only there: what else
+// the parent holds was not shared.
+func TestNewPathIsGrantedOnItsParentOnly(t *testing.T) {
+	fs, ctx := newAuthTestFS(t)
+	sub := filepath.Join(fs.chrootDir, "shared", "sub")
+
+	require.NoError(t, fs.CreateDir(linkCtx(ctx, "editor"), &provider.Reference{Path: "/shared/sub/newdir"}))
+	assert.Contains(t, aclEntries(t, sub), serviceEntry(fs))
+	assert.NotContains(t, aclEntries(t, filepath.Join(sub, "deep.txt")), fmt.Sprint(fs.conf.ExternalAccountsUserUID))
+}
+
+// The driver resolves paths as root: a symlink must not take an external account,
+// or the service account's ACL, out of the share.
+func TestExternalAccountsDoNotFollowSymlinks(t *testing.T) {
+	fs, ctx := newAuthTestFS(t)
+	editor := linkCtx(ctx, "editor")
+	other := filepath.Join(fs.chrootDir, "other")
+	require.NoError(t, os.Mkdir(other, 0755))
+	require.NoError(t, os.Symlink("../other", filepath.Join(fs.chrootDir, "shared", "link")))
+	require.NoError(t, os.Symlink("../nowhere", filepath.Join(fs.chrootDir, "shared", "dangling")))
+
+	for _, p := range []string{"/shared/link", "/shared/link/new.txt", "/shared/dangling"} {
+		_, err := fs.GetMD(editor, &provider.Reference{Path: p}, nil)
+		assert.IsType(t, errtypes.PermissionDenied(""), err, p)
+	}
+	err := fs.CreateDir(editor, &provider.Reference{Path: "/shared/link/newdir"})
+	assert.IsType(t, errtypes.PermissionDenied(""), err)
+	assert.NotContains(t, aclEntries(t, other), fmt.Sprint(fs.conf.ExternalAccountsUserUID))
+
+	// Paths without symlinks are unaffected.
+	_, err = fs.GetMD(editor, &provider.Reference{Path: "/shared/sub/new.txt"}, nil)
+	assert.IsType(t, errtypes.NotFound(""), err)
+}
+
+// Shares sit strictly below a space root, so nothing done through one may grant
+// on the root itself.
+func TestServiceAccountIsNotGrantedOnASpaceRoot(t *testing.T) {
+	tempDir, cleanup := GetTestDir(t, "space-root-guard")
+	t.Cleanup(cleanup)
+	spaceRoot := filepath.Join(tempDir, "c", "myproj")
+	require.NoError(t, os.MkdirAll(spaceRoot, 0755))
+
+	ctx := ContextWithTestLogger(t)
+	fs := CreateCephMountFSForTesting(t, ctx, map[string]any{
+		"testing_allow_local_mode": true,
+		"space_depth":              2,
+	}, "/volumes/_nogroup/test", tempDir)
+	editor := linkCtx(ctx, "editor")
+
+	_, err := fs.ListFolder(editor, &provider.Reference{Path: "/c/myproj"}, nil)
+	require.NoError(t, err)
+	// A new directory directly in the space root would be granted on its parent.
+	require.NoError(t, fs.CreateDir(editor, &provider.Reference{Path: "/c/myproj/newdir"}))
+	assert.NotContains(t, aclEntries(t, spaceRoot), fmt.Sprint(fs.conf.ExternalAccountsUserUID))
+}
+
+// setfacl runs as root, so a path that climbs out of the chroot must never reach it.
+func TestServiceAccountIsNotGrantedOutsideTheChroot(t *testing.T) {
+	tempDir, cleanup := GetTestDir(t, "chroot-escape")
+	t.Cleanup(cleanup)
+	chroot := filepath.Join(tempDir, "chroot")
+	outside := filepath.Join(tempDir, "outside")
+	require.NoError(t, os.MkdirAll(filepath.Join(chroot, "shared"), 0755))
+	require.NoError(t, os.Mkdir(outside, 0755))
+
+	ctx := ContextWithTestLogger(t)
+	fs := CreateCephMountFSForTesting(t, ctx, map[string]any{"testing_allow_local_mode": true}, "/volumes/_nogroup/test", chroot)
+
+	require.NoError(t, fs.authorizeExternal(linkCtx(ctx, "editor"), "shared/../../outside", "Download", canDownload))
+	assert.NotContains(t, aclEntries(t, outside), fmt.Sprint(fs.conf.ExternalAccountsUserUID))
 }
