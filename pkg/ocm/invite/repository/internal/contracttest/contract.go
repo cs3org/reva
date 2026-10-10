@@ -185,6 +185,14 @@ func Run(t *testing.T, newRepository func(*testing.T) invite.Repository) {
 		repo := newRepository(t)
 		initiator := newInitiator()
 		remoteID := &userpb.UserId{OpaqueId: "alice", Idp: "one.example.com"}
+		neighbor := newRemoteUser("alice", "one.example.com")
+		if err := repo.AddRemoteUser(ctx, initiator, neighbor); err != nil {
+			t.Fatalf("seed valid neighbor failed: %v", err)
+		}
+		before, err := repo.FindRemoteUsers(ctx, initiator, "")
+		if err != nil {
+			t.Fatal(err)
+		}
 
 		for _, tc := range []struct {
 			name      string
@@ -193,6 +201,7 @@ func Run(t *testing.T, newRepository func(*testing.T) invite.Repository) {
 		}{
 			{"nil initiator", nil, remoteID},
 			{"blank initiator", &userpb.UserId{}, remoteID},
+			{"whitespace initiator", &userpb.UserId{OpaqueId: " "}, remoteID},
 			{"nil remote id", initiator, nil},
 			{"blank remote id", initiator, &userpb.UserId{}},
 			{"whitespace remote id", initiator, &userpb.UserId{OpaqueId: " "}},
@@ -204,9 +213,16 @@ func Run(t *testing.T, newRepository func(*testing.T) invite.Repository) {
 			assertBadRequest(t, err)
 		}
 
-		// no phantom state was created by the rejected lookups
-		_, err := repo.GetRemoteUser(ctx, initiator, remoteID)
-		assertNotFound(t, err)
+		after, err := repo.FindRemoteUsers(ctx, initiator, "")
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(after) != len(before) {
+			t.Fatalf("rejected lookups changed record count: before=%d after=%d", len(before), len(after))
+		}
+		if _, err := repo.GetRemoteUser(ctx, initiator, remoteID); err != nil {
+			t.Fatalf("valid neighbor must remain retrievable: %v", err)
+		}
 	})
 
 	t.Run("FindRemoteUsersRejectsInvalidInitiator", func(t *testing.T) {
@@ -234,6 +250,14 @@ func Run(t *testing.T, newRepository func(*testing.T) invite.Repository) {
 		repo := newRepository(t)
 		initiator := newInitiator()
 		remoteID := &userpb.UserId{OpaqueId: "alice", Idp: "one.example.com"}
+		neighbor := newRemoteUser("alice", "one.example.com")
+		if err := repo.AddRemoteUser(ctx, initiator, neighbor); err != nil {
+			t.Fatalf("seed valid neighbor failed: %v", err)
+		}
+		before, err := repo.FindRemoteUsers(ctx, initiator, "")
+		if err != nil {
+			t.Fatal(err)
+		}
 
 		for _, tc := range []struct {
 			name      string
@@ -242,10 +266,23 @@ func Run(t *testing.T, newRepository func(*testing.T) invite.Repository) {
 		}{
 			{"nil initiator", nil, remoteID},
 			{"blank initiator", &userpb.UserId{}, remoteID},
+			{"whitespace initiator", &userpb.UserId{OpaqueId: " "}, remoteID},
 			{"nil remote id", initiator, nil},
 			{"blank remote id", initiator, &userpb.UserId{}},
+			{"whitespace remote id", initiator, &userpb.UserId{OpaqueId: " "}},
 		} {
 			assertBadRequest(t, repo.DeleteRemoteUser(ctx, tc.initiator, tc.remote))
+		}
+
+		after, err := repo.FindRemoteUsers(ctx, initiator, "")
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(after) != len(before) {
+			t.Fatalf("rejected deletes changed record count: before=%d after=%d", len(before), len(after))
+		}
+		if _, err := repo.GetRemoteUser(ctx, initiator, remoteID); err != nil {
+			t.Fatalf("valid neighbor must remain after rejected deletes: %v", err)
 		}
 
 		// a valid delete with no matching user remains a successful no-op

@@ -84,10 +84,16 @@ func (m *manager) ListTokens(ctx context.Context, initiator *userpb.UserId) ([]*
 		return nil, err
 	}
 
+	log := appctx.GetLogger(ctx)
 	tokens := []*invitepb.InviteToken{}
+	var warnedMalformedToken bool
 	m.Invites.Range(func(_, value any) bool {
 		token, ok := value.(*invitepb.InviteToken)
 		if !ok || invite.ValidateInviteToken(token) != nil {
+			if !warnedMalformedToken {
+				log.Warn().Msg("skipping malformed stored invite token")
+				warnedMalformedToken = true
+			}
 			return true
 		}
 		if utils.UserEqual(token.UserId, initiator) {
@@ -109,10 +115,16 @@ func (m *manager) AddRemoteUser(ctx context.Context, initiator *userpb.UserId, r
 	m.acceptedUsersMu.Lock()
 	defer m.acceptedUsersMu.Unlock()
 
+	log := appctx.GetLogger(ctx)
 	key := initiator.GetOpaqueId()
 	acceptedUsers := m.acceptedUsers[key]
+	var warnedMalformedUser bool
 	for _, acceptedUser := range acceptedUsers {
 		if invite.ValidateRemoteUser(acceptedUser) != nil {
+			if !warnedMalformedUser {
+				log.Warn().Msg("skipping malformed stored remote user")
+				warnedMalformedUser = true
+			}
 			continue
 		}
 		if acceptedUser.Id.GetOpaqueId() == remoteUser.Id.OpaqueId && acceptedUser.Id.GetIdp() == remoteUser.Id.Idp {
@@ -135,8 +147,14 @@ func (m *manager) GetRemoteUser(ctx context.Context, initiator *userpb.UserId, r
 	m.acceptedUsersMu.RLock()
 	defer m.acceptedUsersMu.RUnlock()
 
+	log := appctx.GetLogger(ctx)
+	var warnedMalformedUser bool
 	for _, acceptedUser := range m.acceptedUsers[initiator.GetOpaqueId()] {
 		if invite.ValidateRemoteUser(acceptedUser) != nil {
+			if !warnedMalformedUser {
+				log.Warn().Msg("skipping malformed stored remote user")
+				warnedMalformedUser = true
+			}
 			continue
 		}
 		if (acceptedUser.Id.GetOpaqueId() == remoteUserID.OpaqueId) && (remoteUserID.Idp == "" || acceptedUser.Id.GetIdp() == remoteUserID.Idp) {
@@ -156,9 +174,13 @@ func (m *manager) FindRemoteUsers(ctx context.Context, initiator *userpb.UserId,
 
 	log := appctx.GetLogger(ctx)
 	users := []*userpb.User{}
+	var warnedMalformedUser bool
 	for _, acceptedUser := range m.acceptedUsers[initiator.GetOpaqueId()] {
 		if invite.ValidateRemoteUser(acceptedUser) != nil {
-			log.Warn().Msg("skipping malformed stored remote user")
+			if !warnedMalformedUser {
+				log.Warn().Msg("skipping malformed stored remote user")
+				warnedMalformedUser = true
+			}
 			continue
 		}
 		if query == "" || userContains(acceptedUser, query) {
@@ -188,10 +210,16 @@ func (m *manager) DeleteRemoteUser(ctx context.Context, initiator *userpb.UserId
 	m.acceptedUsersMu.Lock()
 	defer m.acceptedUsersMu.Unlock()
 
+	log := appctx.GetLogger(ctx)
 	key := initiator.GetOpaqueId()
 	acceptedUsers := m.acceptedUsers[key]
+	var warnedMalformedUser bool
 	for i, user := range acceptedUsers {
 		if invite.ValidateRemoteUser(user) != nil {
+			if !warnedMalformedUser {
+				log.Warn().Msg("skipping malformed stored remote user")
+				warnedMalformedUser = true
+			}
 			continue
 		}
 		if (user.Id.GetOpaqueId() == remoteUser.OpaqueId) && (remoteUser.Idp == "" || user.Id.GetIdp() == remoteUser.Idp) {

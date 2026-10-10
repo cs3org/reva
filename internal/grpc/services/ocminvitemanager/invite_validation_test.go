@@ -21,6 +21,7 @@ package ocminvitemanager
 import (
 	"context"
 	"errors"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -198,12 +199,22 @@ func TestAcceptInviteStoredTokenValidation(t *testing.T) {
 	missingInitiator := validStoredToken()
 	missingInitiator.UserId = nil
 
+	blankSecret := validStoredToken()
+	blankSecret.Token = "   "
+	blankOwner := validStoredToken()
+	blankOwner.UserId = &userpb.UserId{OpaqueId: "   ", Idp: initiatorTokenID.GetIdp()}
+	whitespaceOwner := validStoredToken()
+	whitespaceOwner.UserId = &userpb.UserId{OpaqueId: " ", Idp: initiatorTokenID.GetIdp()}
+
 	for _, tc := range []struct {
 		name        string
 		storedToken *invitepb.InviteToken
 		storedErr   error
 	}{
 		{"nil stored token", nil, nil},
+		{"blank stored secret", blankSecret, nil},
+		{"blank stored owner", blankOwner, nil},
+		{"whitespace stored owner", whitespaceOwner, nil},
 		{"stored token without initiator", missingInitiator, nil},
 		{"stored token without expiration", nilExpiration, nil},
 		{"expired stored token", expired, nil},
@@ -223,10 +234,37 @@ func TestAcceptInviteStoredTokenValidation(t *testing.T) {
 			if gw.calls() != 0 {
 				t.Fatalf("expected no GetUser call, got %d", gw.calls())
 			}
+			if repo.getTokenCalls != 1 {
+				t.Fatalf("expected one GetToken call, got %d", repo.getTokenCalls)
+			}
 			if repo.addRemoteUserCalls != 0 {
 				t.Fatalf("expected no AddRemoteUser call, got %d", repo.addRemoteUserCalls)
 			}
 		})
+	}
+}
+
+func TestAcceptInvitePostCanonicalizationInvalidID(t *testing.T) {
+	repo := &fakeRepo{getTokenStubbed: true, getTokenStub: validStoredToken()}
+	gw := stampUserGateway(okGetUserResponse(), nil)
+	req := acceptInviteReq()
+	req.RemoteUser.Id.OpaqueId = " @remote.example.org"
+	req.RemoteUser.Id.Idp = "https://remote.example.org"
+
+	resp, err := newTestService(repo).AcceptInvite(context.Background(), req)
+	status := mustStatus(t, err, resp.GetStatus())
+	assertInvalidArgument(t, status)
+	if !strings.Contains(status.Message, "invalid remote user") {
+		t.Fatalf("expected invalid remote user diagnostic, got %q", status.Message)
+	}
+	if repo.getTokenCalls != 1 {
+		t.Fatalf("expected one GetToken call, got %d", repo.getTokenCalls)
+	}
+	if gw.calls() != 1 {
+		t.Fatalf("expected one GetUser call, got %d", gw.calls())
+	}
+	if repo.addRemoteUserCalls != 0 {
+		t.Fatalf("expected no AddRemoteUser call, got %d", repo.addRemoteUserCalls)
 	}
 }
 

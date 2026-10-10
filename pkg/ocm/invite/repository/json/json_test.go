@@ -19,6 +19,7 @@
 package json
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"os"
@@ -30,9 +31,11 @@ import (
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	invitepb "github.com/cs3org/go-cs3apis/cs3/ocm/invite/v1beta1"
 	typespb "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
+	"github.com/cs3org/reva/v3/pkg/appctx"
 	"github.com/cs3org/reva/v3/pkg/errtypes"
 	"github.com/cs3org/reva/v3/pkg/ocm/invite"
 	"github.com/cs3org/reva/v3/pkg/ocm/invite/repository/internal/contracttest"
+	"github.com/rs/zerolog"
 )
 
 func newJSONRepository(t *testing.T) invite.Repository {
@@ -370,4 +373,131 @@ func TestExpiredTokenLookupKept(t *testing.T) {
 	if len(tokens) != 0 {
 		t.Fatalf("expired token must not be listed, got %d", len(tokens))
 	}
+}
+
+func ctxWithCapturedWarnLog(t *testing.T) (context.Context, *bytes.Buffer) {
+	t.Helper()
+	var buf bytes.Buffer
+	logger := zerolog.New(&buf).Level(zerolog.WarnLevel)
+	return appctx.WithLogger(context.Background(), &logger), &buf
+}
+
+func assertAtMostOneWarning(t *testing.T, log string, msg string) {
+	t.Helper()
+	if c := strings.Count(log, msg); c > 1 {
+		t.Fatalf("expected at most one %q warning, got %d in %q", msg, c, log)
+	}
+}
+
+func assertLogOmitsSentinels(t *testing.T, log string, sentinels ...string) {
+	t.Helper()
+	for _, s := range sentinels {
+		if strings.Contains(log, s) {
+			t.Fatalf("log must not contain %q, got %q", s, log)
+		}
+	}
+}
+
+// TestMalformedStoredInviteTokenMatrix covers corrupt token rows with a valid
+// neighbor: invalid lookups fail closed, lists stay filtered, reads are stable.
+func TestMalformedStoredInviteTokenMatrix(t *testing.T) {
+	file := filepath.Join(t.TempDir(), "invites.json")
+	mustWriteFile(t, file, `{
+		"invites": {
+			"good": {"token": "good", "user_id": {"idp": "local.example.com", "opaque_id": "initiator"}, "expiration": {"seconds": 32503680000}},
+			"null-row": null,
+			"missing-owner": {"token": "missing-owner", "expiration": {"seconds": 32503680000}},
+			"empty-owner": {"token": "empty-owner", "user_id": {"opaque_id": "   ", "idp": "local.example.com"}, "expiration": {"seconds": 32503680000}},
+			"blank-secret-key": {"token": "", "user_id": {"idp": "local.example.com", "opaque_id": "initiator"}, "expiration": {"seconds": 32503680000}}
+		},
+		"accepted_users": {}
+	}`)
+	repo := newRepositoryAtFile(t, file)
+	ctx := context.Background()
+	initiator := newInitiatorID()
+	before := mustReadFile(t, file)
+
+	for _, lookupKey := range []string{"null-row", "missing-owner", "empty-owner", "blank-secret-key"} {
+		tkn, err := repo.GetToken(ctx, lookupKey)
+		if tkn != nil {
+			t.Fatalf("%s: expected nil token, got %+v", lookupKey, tkn)
+		}
+		if _, ok := err.(errtypes.InternalError); !ok {
+			t.Fatalf("%s: expected InternalError, got %T: %v", lookupKey, err, err)
+		}
+	}
+
+	tokens, err := repo.ListTokens(ctx, initiator)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(tokens) != 1 || tokens[0].Token != "good" {
+		t.Fatalf("expected only the valid token, got %v", tokens)
+	}
+
+	if after := mustReadFile(t, file); after != before {
+		t.Fatal("read-only operations must not change file bytes")
+	}
+	reloaded := newRepositoryAtFile(t, file)
+	if afterReload := mustReadFile(t, file); afterReload != before {
+		t.Fatal("reopen must not change file bytes")
+	}
+	if tokens, err = reloaded.ListTokens(ctx, initiator); err != nil || len(tokens) != 1 {
+		t.Fatalf("reloaded list mismatch: tokens=%v err=%v", tokens, err)
+	}
+}
+
+// TestJSONSkippedRowDiagnostics emits at most one fixed warning per scan.
+func TestJSONSkippedRowDiagnostics(t *testing.T) {
+	file := filepath.Join(t.TempDir(), "invites.json")
+	mustWriteFile(t, file, `{
+		"invites": {
+			"bad-a": null,
+			"bad-b": {"token": "bad-b", "expiration": {"seconds": 32503680000}},
+			"good": {"token": "good", "user_id": {"idp": "local.example.com", "opaque_id": "initiator"}, "expiration": {"seconds": 32503680000}}
+		},
+		"accepted_users": {
+			"initiator": [
+				null,
+				{"username": "no-id"},
+				{"id": {"opaque_id": "   ", "idp": "one.example.com"}, "username": "blank-id"},
+				{"id": {"opaque_id": "good-u", "idp": "one.example.com"}, "username": "good-u", "display_name": "Display good-u", "mail": "good-u@one.example.com"}
+			]
+		}
+	}`)
+	repo := newRepositoryAtFile(t, file)
+	initiator := newInitiatorID()
+	goodUserID := &userpb.UserId{OpaqueId: "good-u", Idp: "one.example.com"}
+
+	ctx, logBuf := ctxWithCapturedWarnLog(t)
+	tokens, err := repo.ListTokens(ctx, initiator)
+	if err != nil || len(tokens) != 1 {
+		t.Fatalf("list tokens: %v %v", tokens, err)
+	}
+	assertAtMostOneWarning(t, logBuf.String(), "skipping malformed stored invite token")
+	logBuf.Reset()
+
+	_, err = repo.FindRemoteUsers(ctx, initiator, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	assertAtMostOneWarning(t, logBuf.String(), "skipping malformed stored remote user")
+	assertLogOmitsSentinels(t, logBuf.String(), "good-u", "no-id", "blank-id")
+	logBuf.Reset()
+
+	_, err = repo.GetRemoteUser(ctx, initiator, goodUserID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	assertAtMostOneWarning(t, logBuf.String(), "skipping malformed stored remote user")
+	logBuf.Reset()
+
+	if err := repo.AddRemoteUser(ctx, initiator, newRemoteUser("good-u", "one.example.com")); !errors.Is(err, invite.ErrUserAlreadyAccepted) {
+		t.Fatalf("expected duplicate against valid row, got %v", err)
+	}
+	assertAtMostOneWarning(t, logBuf.String(), "skipping malformed stored remote user")
+	logBuf.Reset()
+
+	_ = repo.DeleteRemoteUser(ctx, initiator, &userpb.UserId{OpaqueId: "ghost", Idp: "ghost.example.com"})
+	assertAtMostOneWarning(t, logBuf.String(), "skipping malformed stored remote user")
 }

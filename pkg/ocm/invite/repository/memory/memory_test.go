@@ -19,16 +19,21 @@
 package memory
 
 import (
+	"bytes"
 	"context"
 	"strconv"
+	"strings"
 	"sync"
 	"testing"
 
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	invitepb "github.com/cs3org/go-cs3apis/cs3/ocm/invite/v1beta1"
+	typespb "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
+	"github.com/cs3org/reva/v3/pkg/appctx"
 	"github.com/cs3org/reva/v3/pkg/errtypes"
 	"github.com/cs3org/reva/v3/pkg/ocm/invite"
 	"github.com/cs3org/reva/v3/pkg/ocm/invite/repository/internal/contracttest"
+	"github.com/rs/zerolog"
 )
 
 func newMemoryRepository(t *testing.T) invite.Repository {
@@ -363,5 +368,102 @@ func TestInjectedTypedNilToken(t *testing.T) {
 	}
 	if len(tokens) != 0 {
 		t.Fatalf("expected the malformed token to be skipped, got %+v", tokens)
+	}
+}
+
+func ctxWithCapturedWarnLog(t *testing.T) (context.Context, *bytes.Buffer) {
+	t.Helper()
+	var buf bytes.Buffer
+	logger := zerolog.New(&buf).Level(zerolog.WarnLevel)
+	return appctx.WithLogger(context.Background(), &logger), &buf
+}
+
+func injectStoredToken(t *testing.T, repo invite.Repository, key string, value any) {
+	t.Helper()
+	m, ok := repo.(*manager)
+	if !ok {
+		t.Fatalf("expected *manager, got %T", repo)
+	}
+	m.Invites.Store(key, value)
+}
+
+// TestMemoryMalformedStoredInviteTokenMatrix rejects corrupt stored tokens while
+// listing only the valid neighbor.
+func TestMemoryMalformedStoredInviteTokenMatrix(t *testing.T) {
+	repo := newMemoryRepository(t)
+	ctx := context.Background()
+	initiator := newInitiatorID()
+	valid := &invitepb.InviteToken{
+		Token:      "good",
+		UserId:     initiator,
+		Expiration: &typespb.Timestamp{Seconds: 32503680000},
+	}
+	if err := repo.AddToken(ctx, valid); err != nil {
+		t.Fatal(err)
+	}
+
+	injectStoredToken(t, repo, "typed-nil", (*invitepb.InviteToken)(nil))
+	injectStoredToken(t, repo, "wrong-type", "not-a-token")
+	injectStoredToken(t, repo, "missing-owner", &invitepb.InviteToken{Token: "missing-owner"})
+	injectStoredToken(t, repo, "blank-owner", &invitepb.InviteToken{Token: "blank-owner", UserId: &userpb.UserId{OpaqueId: "   "}})
+	injectStoredToken(t, repo, "blank-secret", &invitepb.InviteToken{Token: "   ", UserId: initiator})
+
+	for _, key := range []string{"typed-nil", "wrong-type", "missing-owner", "blank-owner", "blank-secret"} {
+		if _, err := repo.GetToken(ctx, key); err == nil {
+			t.Fatalf("%s: expected error, got nil", key)
+		} else if _, ok := err.(errtypes.InternalError); !ok {
+			t.Fatalf("%s: expected InternalError, got %T: %v", key, err, err)
+		}
+	}
+
+	tokens, err := repo.ListTokens(ctx, initiator)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(tokens) != 1 || tokens[0].Token != "good" {
+		t.Fatalf("expected only the valid token, got %v", tokens)
+	}
+}
+
+// TestMemorySkippedRowDiagnostics emits at most one fixed warning per operation.
+func TestMemorySkippedRowDiagnostics(t *testing.T) {
+	repo := newMemoryRepository(t)
+	initiator := newInitiatorID()
+	ctx, logBuf := ctxWithCapturedWarnLog(t)
+
+	injectStoredToken(t, repo, "bad-a", (*invitepb.InviteToken)(nil))
+	injectStoredToken(t, repo, "bad-b", &invitepb.InviteToken{Token: "bad-b"})
+	if err := repo.AddToken(ctx, &invitepb.InviteToken{
+		Token: "good", UserId: initiator, Expiration: &typespb.Timestamp{Seconds: 32503680000},
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	tokens, err := repo.ListTokens(ctx, initiator)
+	if err != nil || len(tokens) != 1 {
+		t.Fatalf("list tokens: %v %v", tokens, err)
+	}
+	if strings.Count(logBuf.String(), "skipping malformed stored invite token") > 1 {
+		t.Fatalf("expected at most one token warning, got %q", logBuf.String())
+	}
+	logBuf.Reset()
+
+	injectStoredUser(t, repo, initiator, nil)
+	injectStoredUser(t, repo, initiator, &userpb.User{})
+	injectStoredUser(t, repo, initiator, &userpb.User{Id: &userpb.UserId{OpaqueId: "   "}})
+	if err := repo.AddRemoteUser(ctx, initiator, newRemoteUser("good-u", "one.example.com")); err != nil {
+		t.Fatal(err)
+	}
+	logBuf.Reset()
+
+	_, err = repo.FindRemoteUsers(ctx, initiator, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Count(logBuf.String(), "skipping malformed stored remote user") > 1 {
+		t.Fatalf("expected at most one user warning on find, got %q", logBuf.String())
+	}
+	if strings.Contains(logBuf.String(), "good-u") {
+		t.Fatalf("log must not contain row contents: %q", logBuf.String())
 	}
 }

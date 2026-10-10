@@ -271,7 +271,14 @@ func TestAuthenticateMismatchBeatsMissingGrantee(t *testing.T) {
 
 func TestAuthenticateShareTransportErrorWins(t *testing.T) {
 	transportErr := errors.New("connection refused")
-	stampGateway(&fakeGW{shareErr: transportErr})
+	fake := &fakeGW{
+		shareErr: transportErr,
+		shareRes: &ocm.GetOCMShareByTokenResponse{
+			Status: &rpc.Status{Code: rpc.Code_CODE_OK},
+			Share:  malformedShareCases()[0].share,
+		},
+	}
+	stampGateway(fake)
 
 	user, scopes, err := authenticate(context.Background(), "share-abc")
 	if user != nil || scopes != nil {
@@ -279,6 +286,30 @@ func TestAuthenticateShareTransportErrorWins(t *testing.T) {
 	}
 	if !errors.Is(err, transportErr) {
 		t.Fatalf("expected the transport error to win, got %v", err)
+	}
+	assertNoAcceptedUserCall(t, fake)
+}
+
+func TestAuthenticateMismatchBeatsMalformedShare(t *testing.T) {
+	for _, shareCase := range malformedShareCases() {
+		for _, tc := range []struct {
+			name        string
+			requestedID string
+			wantMsg     string
+		}{
+			{"empty request uses malformed diagnostic", "", "malformed ocm share record"},
+			{"nonempty mismatch uses invalid secret", "other-share", "invalid shared secret"},
+		} {
+			t.Run(shareCase.name+"/"+tc.name, func(t *testing.T) {
+				fake := stampOK(shareCase.share)
+				user, scopes, err := authenticate(context.Background(), tc.requestedID)
+				if user != nil || scopes != nil {
+					t.Fatalf("expected nil auth outputs, got %v %v", user, scopes)
+				}
+				assertInvalidCredentials(t, err, tc.wantMsg)
+				assertNoAcceptedUserCall(t, fake)
+			})
+		}
 	}
 }
 
@@ -373,6 +404,24 @@ func TestAuthenticateRejectsMalformedGrantees(t *testing.T) {
 			s := base()
 			s.Grantee = &provider.Grantee{
 				Type: provider.GranteeType_GRANTEE_TYPE_GROUP,
+				Id:   &provider.Grantee_GroupId{GroupId: &grouppb.GroupId{OpaqueId: "group"}},
+			}
+			return s
+		}()},
+		{"invalid grantee type with user payload", func() *ocm.Share {
+			s := base()
+			s.Grantee.Type = provider.GranteeType_GRANTEE_TYPE_INVALID
+			return s
+		}()},
+		{"unknown grantee enum with user payload", func() *ocm.Share {
+			s := base()
+			s.Grantee.Type = provider.GranteeType(99)
+			return s
+		}()},
+		{"user type with group oneof", func() *ocm.Share {
+			s := base()
+			s.Grantee = &provider.Grantee{
+				Type: provider.GranteeType_GRANTEE_TYPE_USER,
 				Id:   &provider.Grantee_GroupId{GroupId: &grouppb.GroupId{OpaqueId: "group"}},
 			}
 			return s

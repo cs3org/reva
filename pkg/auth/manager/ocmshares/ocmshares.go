@@ -83,7 +83,7 @@ func (m *manager) Configure(ml map[string]any) error {
 // the generated getter: a typed-nil (*provider.Grantee_UserId)(nil) stored in
 // the oneof interface makes GetUserId panic on its inner nil check.
 func granteeUserID(grantee *provider.Grantee) *userpb.UserId {
-	if grantee == nil {
+	if grantee == nil || grantee.GetType() != provider.GranteeType_GRANTEE_TYPE_USER {
 		return nil
 	}
 	if id, ok := grantee.Id.(*provider.Grantee_UserId); ok {
@@ -145,14 +145,12 @@ func (m *manager) Authenticate(ctx context.Context, ocmshare, token string) (*us
 
 	// the share record itself is untrusted input
 	share := shareRes.GetShare()
-	if share == nil || strings.TrimSpace(share.GetId().GetOpaqueId()) == "" {
-		return nil, nil, errtypes.InvalidCredentials("malformed ocm share record")
-	}
-
-	// validate OCM share id if given (OCM v1.1)
 	if ocmshare != "" && share.GetId().GetOpaqueId() != ocmshare {
 		log.Error().Str("requested_share", ocmshare).Str("share_from_provider", share.GetId().GetOpaqueId()).Msg("mismatching ocm share id for existing secret")
 		return nil, nil, errtypes.InvalidCredentials("invalid shared secret")
+	}
+	if share == nil || strings.TrimSpace(share.GetId().GetOpaqueId()) == "" {
+		return nil, nil, errtypes.InvalidCredentials("malformed ocm share record")
 	}
 
 	// Reject direct-secret access to shares that require token exchange and

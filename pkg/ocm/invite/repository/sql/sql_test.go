@@ -27,6 +27,7 @@ import (
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	invitepb "github.com/cs3org/go-cs3apis/cs3/ocm/invite/v1beta1"
 	typespb "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
+	conversions "github.com/cs3org/reva/v3/pkg/cbox/utils"
 	"github.com/cs3org/reva/v3/pkg/errtypes"
 	"github.com/cs3org/reva/v3/pkg/ocm/invite"
 	"github.com/cs3org/reva/v3/pkg/ocm/invite/repository/internal/contracttest"
@@ -256,5 +257,110 @@ func TestSoftDeleteRevival(t *testing.T) {
 	}
 	if err := repo.AddRemoteUser(ctx, initiator, newRemoteUser("alice", "one.example.com")); err != invite.ErrUserAlreadyAccepted {
 		t.Fatalf("expected ErrUserAlreadyAccepted after revival, got %v", err)
+	}
+}
+
+// TestSQLMalformedStoredInviteTokens exercises corrupt token rows inserted
+// directly into SQLite without going through AddToken validation.
+func TestSQLMalformedStoredInviteTokens(t *testing.T) {
+	repo := newSQLiteRepository(t)
+	m := repo.(*mgr)
+	ctx := context.Background()
+	initiator := newInitiatorID()
+	initiatorKey := conversions.FormatUserID(initiator)
+	future := time.Now().Add(24 * time.Hour)
+
+	for _, tc := range []struct {
+		name  string
+		token string
+		init  string
+	}{
+		{"empty initiator", "lookup-empty-init", ""},
+		{"whitespace initiator", "lookup-ws-init", "   "},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if err := m.db.Create(&OcmToken{Token: tc.token, Initiator: tc.init, Expiration: future}).Error; err != nil {
+				t.Fatal(err)
+			}
+			if _, err := repo.GetToken(ctx, tc.token); err == nil {
+				t.Fatal("expected InternalError for malformed initiator row")
+			} else if _, ok := err.(errtypes.InternalError); !ok {
+				t.Fatalf("expected InternalError, got %T: %v", err, err)
+			}
+		})
+	}
+
+	neighbor := coreValidToken("valid-neighbor", 48*time.Hour)
+	if err := repo.AddToken(ctx, neighbor); err != nil {
+		t.Fatal(err)
+	}
+	for _, tc := range []struct {
+		name  string
+		token string
+	}{
+		{"blank token", ""},
+		{"whitespace token", "   "},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if err := m.db.Create(&OcmToken{
+				Token: tc.token, Initiator: initiatorKey, Expiration: future,
+			}).Error; err != nil {
+				t.Fatal(err)
+			}
+		})
+	}
+
+	tokens, err := repo.ListTokens(ctx, initiator)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(tokens) != 1 || tokens[0].Token != "valid-neighbor" {
+		t.Fatalf("expected only the valid neighbor token, got %v", tokens)
+	}
+}
+
+// TestSQLMalformedStoredRemoteUsers skips corrupt user rows on find while
+// keeping valid lookups and raw row counts unchanged by reads.
+func TestSQLMalformedStoredRemoteUsers(t *testing.T) {
+	repo := newSQLiteRepository(t)
+	m := repo.(*mgr)
+	ctx := context.Background()
+	initiator := newInitiatorID()
+	initiatorKey := conversions.FormatUserID(initiator)
+	alice := newRemoteUser("alice", "one.example.com")
+
+	if err := repo.AddRemoteUser(ctx, initiator, alice); err != nil {
+		t.Fatal(err)
+	}
+	for _, opaque := range []string{"", "   "} {
+		if err := m.db.Create(&OcmRemoteUser{
+			Initiator: initiatorKey, OpaqueUserID: opaque, Idp: "one.example.com",
+		}).Error; err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	var rawCount int64
+	if err := m.db.Model(&OcmRemoteUser{}).Where("initiator = ?", initiatorKey).Count(&rawCount).Error; err != nil {
+		t.Fatal(err)
+	}
+
+	users, err := repo.FindRemoteUsers(ctx, initiator, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(users) != 1 || users[0].Id.GetOpaqueId() != "alice" {
+		t.Fatalf("expected only the valid user in find results, got %v", users)
+	}
+	if _, err := repo.GetRemoteUser(ctx, initiator, alice.Id); err != nil {
+		t.Fatalf("valid get must still work: %v", err)
+	}
+
+	var afterCount int64
+	if err := m.db.Model(&OcmRemoteUser{}).Where("initiator = ?", initiatorKey).Count(&afterCount).Error; err != nil {
+		t.Fatal(err)
+	}
+	if afterCount != rawCount {
+		t.Fatalf("reads changed raw row count: before=%d after=%d", rawCount, afterCount)
 	}
 }

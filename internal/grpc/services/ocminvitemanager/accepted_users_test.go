@@ -23,6 +23,7 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -513,7 +514,9 @@ func TestProtectedMethodsWithValidUser(t *testing.T) {
 	})
 
 	t.Run("ListInviteTokens", func(t *testing.T) {
-		repo := &fakeRepo{listTokensRes: []*invitepb.InviteToken{{Token: "stored-secret"}}}
+		repo := &fakeRepo{listTokensRes: []*invitepb.InviteToken{{
+			Token: "stored-secret", UserId: testInitiatorID,
+		}}}
 		resp, err := newTestService(repo).ListInviteTokens(ctx, &invitepb.ListInviteTokensRequest{})
 		status := mustStatus(t, err, resp.GetStatus())
 		if status.Code != rpcv1beta1.Code_CODE_OK {
@@ -589,5 +592,119 @@ func TestGetAcceptedUserJSONRepositoryNilRemoteID(t *testing.T) {
 	}
 	if !bytes.Equal(before, after) {
 		t.Fatal("the invite file must stay unchanged by a rejected request")
+	}
+}
+
+func assertInternalMessage(t *testing.T, status *rpcv1beta1.Status, want string) {
+	t.Helper()
+	if status.Code != rpcv1beta1.Code_CODE_INTERNAL {
+		t.Fatalf("expected CODE_INTERNAL, got %v: %q", status.Code, status.Message)
+	}
+	if !strings.Contains(status.Message, want) {
+		t.Fatalf("expected internal message containing %q, got %q", want, status.Message)
+	}
+}
+
+func TestListInviteTokensRejectsMalformedSuccess(t *testing.T) {
+	validNeighbor := &invitepb.InviteToken{Token: "valid-secret", UserId: testInitiatorID}
+	ctx := ctxWithUser(testCtxUser)
+
+	for _, tc := range []struct {
+		name   string
+		tokens []*invitepb.InviteToken
+	}{
+		{"nil token", []*invitepb.InviteToken{nil}},
+		{"blank secret", []*invitepb.InviteToken{{Token: " ", UserId: testInitiatorID}}},
+		{"missing user id", []*invitepb.InviteToken{{Token: "secret"}}},
+		{"empty user id", []*invitepb.InviteToken{{Token: "secret", UserId: &userpb.UserId{}}}},
+		{"whitespace user id", []*invitepb.InviteToken{{Token: "secret", UserId: &userpb.UserId{OpaqueId: "   "}}}},
+		{"mixed valid and invalid", []*invitepb.InviteToken{validNeighbor, {Token: "bad-secret"}}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			repo := &fakeRepo{listTokensRes: tc.tokens}
+			resp, err := newTestService(repo).ListInviteTokens(ctx, &invitepb.ListInviteTokensRequest{})
+			status := mustStatus(t, err, resp.GetStatus())
+			assertInternalMessage(t, status, "malformed invite token result")
+			if resp.InviteTokens != nil {
+				t.Fatalf("expected nil invite tokens, got %v", resp.InviteTokens)
+			}
+			if repo.listTokensCalls != 1 {
+				t.Fatalf("expected one ListTokens call, got %d", repo.listTokensCalls)
+			}
+			if strings.Contains(status.Message, "secret") || strings.Contains(status.Message, "valid-secret") {
+				t.Fatalf("response must not disclose token contents: %q", status.Message)
+			}
+		})
+	}
+}
+
+func TestFindAcceptedUsersRejectsMalformedSuccess(t *testing.T) {
+	validNeighbor := &userpb.User{Id: &userpb.UserId{OpaqueId: "alice", Idp: "one.example.com"}}
+	ctx := ctxWithUser(testCtxUser)
+
+	for _, tc := range []struct {
+		name  string
+		users []*userpb.User
+	}{
+		{"nil user", []*userpb.User{nil}},
+		{"missing id", []*userpb.User{{Username: "ghost"}}},
+		{"empty opaque id", []*userpb.User{{Id: &userpb.UserId{}}}},
+		{"whitespace opaque id", []*userpb.User{{Id: &userpb.UserId{OpaqueId: "   "}}}},
+		{"mixed valid and invalid", []*userpb.User{validNeighbor, {Id: &userpb.UserId{OpaqueId: " "}}}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			repo := &fakeRepo{findRes: tc.users}
+			resp, err := newTestService(repo).FindAcceptedUsers(ctx, &invitepb.FindAcceptedUsersRequest{})
+			status := mustStatus(t, err, resp.GetStatus())
+			assertInternalMessage(t, status, "malformed remote user result")
+			if resp.AcceptedUsers != nil {
+				t.Fatalf("expected nil accepted users, got %v", resp.AcceptedUsers)
+			}
+			if repo.findRemoteUsersCalls != 1 {
+				t.Fatalf("expected one FindRemoteUsers call, got %d", repo.findRemoteUsersCalls)
+			}
+			if strings.Contains(status.Message, "alice") {
+				t.Fatalf("response must not disclose row contents: %q", status.Message)
+			}
+		})
+	}
+}
+
+func TestListFindValidSuccessfulResults(t *testing.T) {
+	ctx := ctxWithUser(testCtxUser)
+	validToken := &invitepb.InviteToken{Token: "stored-secret", UserId: testInitiatorID}
+	validUser := &userpb.User{Id: &userpb.UserId{OpaqueId: "alice", Idp: "one.example.com"}}
+
+	for _, tc := range []struct {
+		name string
+		list []*invitepb.InviteToken
+		find []*userpb.User
+	}{
+		{"nil slices", nil, nil},
+		{"empty slices", []*invitepb.InviteToken{}, []*userpb.User{}},
+		{"valid entries", []*invitepb.InviteToken{validToken}, []*userpb.User{validUser}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			repo := &fakeRepo{listTokensRes: tc.list, findRes: tc.find}
+			svc := newTestService(repo)
+
+			listResp, err := svc.ListInviteTokens(ctx, &invitepb.ListInviteTokensRequest{})
+			listStatus := mustStatus(t, err, listResp.GetStatus())
+			if listStatus.Code != rpcv1beta1.Code_CODE_OK {
+				t.Fatalf("list: expected CODE_OK, got %v: %q", listStatus.Code, listStatus.Message)
+			}
+			if len(listResp.GetInviteTokens()) != len(tc.list) {
+				t.Fatalf("list: expected %d tokens, got %d", len(tc.list), len(listResp.GetInviteTokens()))
+			}
+
+			findResp, err := svc.FindAcceptedUsers(ctx, &invitepb.FindAcceptedUsersRequest{})
+			findStatus := mustStatus(t, err, findResp.GetStatus())
+			if findStatus.Code != rpcv1beta1.Code_CODE_OK {
+				t.Fatalf("find: expected CODE_OK, got %v: %q", findStatus.Code, findStatus.Message)
+			}
+			if len(findResp.GetAcceptedUsers()) != len(tc.find) {
+				t.Fatalf("find: expected %d users, got %d", len(tc.find), len(findResp.GetAcceptedUsers()))
+			}
+		})
 	}
 }

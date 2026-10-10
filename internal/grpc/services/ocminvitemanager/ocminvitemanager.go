@@ -189,6 +189,13 @@ func (s *service) ListInviteTokens(ctx context.Context, req *invitepb.ListInvite
 			Status: status.NewInternal(ctx, err, "error listing tokens"),
 		}, nil
 	}
+	for _, token := range tokens {
+		if err := invite.ValidateInviteToken(token); err != nil {
+			return &invitepb.ListInviteTokensResponse{
+				Status: status.NewInternal(ctx, err, "malformed invite token result"),
+			}, nil
+		}
+	}
 	return &invitepb.ListInviteTokensResponse{
 		Status:       status.NewOK(ctx),
 		InviteTokens: tokens,
@@ -466,6 +473,13 @@ func (s *service) FindAcceptedUsers(ctx context.Context, req *invitepb.FindAccep
 		return &invitepb.FindAcceptedUsersResponse{
 			Status: status.NewInternal(ctx, err, "error finding remote users: "+err.Error()),
 		}, nil
+	}
+	for _, remoteUser := range acceptedUsers {
+		if err := invite.ValidateRemoteUser(remoteUser); err != nil {
+			return &invitepb.FindAcceptedUsersResponse{
+				Status: status.NewInternal(ctx, err, "malformed remote user result"),
+			}, nil
+		}
 	}
 
 	return &invitepb.FindAcceptedUsersResponse{
