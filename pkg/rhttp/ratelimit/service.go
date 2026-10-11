@@ -49,11 +49,18 @@ type ServiceConfig struct {
 
 // ApplyDefaults fills in the default rate and burst.
 func (c *ServiceConfig) ApplyDefaults() {
+	c.ApplyDefaultsWith(DefaultRequestsPerMinute, DefaultBurst)
+}
+
+// ApplyDefaultsWith fills in a service-specific default rate and burst, for
+// services whose unauthenticated routes are hit by ordinary clients and need
+// more headroom than the package defaults.
+func (c *ServiceConfig) ApplyDefaultsWith(requestsPerMinute, burst int) {
 	if c.UnauthRateLimit == 0 {
-		c.UnauthRateLimit = DefaultRequestsPerMinute
+		c.UnauthRateLimit = requestsPerMinute
 	}
 	if c.UnauthRateLimitBurst == 0 {
-		c.UnauthRateLimitBurst = DefaultBurst
+		c.UnauthRateLimitBurst = burst
 	}
 }
 

@@ -167,6 +167,14 @@ handler. The same three keys apply to each service:
 | `[http.services.ocm]` | all ingress routes (`/shares`, `/invite-accepted`, `/notifications`, `/token`) |
 | `[http.services.wellknown]` | `/.well-known/ocm` |
 | `[http.services.sciencemesh]` | `/federations`, `/discover` |
+| `[http.services.ocdav]` | the unauthenticated routes: public links (`/remote.php/dav/public-files/`, `/s/`, `/index.php/s/`), legacy paths (`/apps/files/`, `/index.php/f/`), `/status.php`, `/ocm-provider` |
+| `[http.services.appprovider]` | `/list` |
+
+Browsers and sync clients hit the `ocdav` and `appprovider` routes during
+normal use, so these two services default to 600 requests per minute with a
+burst of 100. Authenticated `ocdav` routes are not limited, nor is OCM WebDAV
+(`/remote.php/dav/ocm/`): remote providers authenticate there with the share
+secret or token, and it carries their data traffic.
 
 A client is its IPv4 address, or its IPv6 /64. Without
 `trusted_proxy_cidrs`, every client behind a reverse proxy shares the proxy's

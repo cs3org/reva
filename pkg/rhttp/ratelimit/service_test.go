@@ -37,6 +37,19 @@ func TestServiceConfigDefaults(t *testing.T) {
 	}
 }
 
+func TestServiceConfigDefaultsWith(t *testing.T) {
+	c := ServiceConfig{}
+	c.ApplyDefaultsWith(600, 100)
+	if c.UnauthRateLimit != 600 || c.UnauthRateLimitBurst != 100 {
+		t.Fatalf("service defaults not applied: %+v", c)
+	}
+	c = ServiceConfig{UnauthRateLimit: -1}
+	c.ApplyDefaultsWith(600, 100)
+	if c.UnauthRateLimit != -1 {
+		t.Fatalf("disabled limit overridden: %+v", c)
+	}
+}
+
 func TestServiceConfigNewLimiter(t *testing.T) {
 	log := zerolog.Nop()
 
