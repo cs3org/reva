@@ -48,7 +48,7 @@ import (
 	"github.com/cs3org/reva/v3/pkg/auth/scope"
 	"github.com/cs3org/reva/v3/pkg/errtypes"
 	"github.com/cs3org/reva/v3/pkg/rhttp/global"
-	"github.com/cs3org/reva/v3/pkg/utils"
+	"github.com/cs3org/reva/v3/pkg/rhttp/ratelimit"
 	"github.com/cs3org/reva/v3/pkg/utils/cfg"
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
@@ -60,9 +60,55 @@ func init() {
 
 type rateLimitConfig struct {
 	InitPerIPPerMin    int `mapstructure:"init_per_ip_per_min"`
+	FlowPerIPPerMin    int `mapstructure:"flow_per_ip_per_min"`
 	PollPerIPPerMin    int `mapstructure:"poll_per_ip_per_min"`
 	PollPerTokenPerMin int `mapstructure:"poll_per_token_per_min"`
 	PollWaitMs         int `mapstructure:"poll_wait_ms"`
+	// TrustedProxyCIDRs lists the reverse proxies whose X-Forwarded-For
+	// header identifies the client for the per-IP limits.
+	TrustedProxyCIDRs []string `mapstructure:"trusted_proxy_cidrs"`
+}
+
+// limiters holds one limiter per configured limit. A nil limiter is disabled.
+type limiters struct {
+	init, flow, pollIP, pollToken *ratelimit.Limiter
+}
+
+func (l *limiters) close() {
+	l.init.Close()
+	l.flow.Close()
+	l.pollIP.Close()
+	l.pollToken.Close()
+}
+
+// newLimiters builds the limiters of rc. As before, a limit of perMin <= 0 is
+// disabled and a bucket holds up to a minute's worth of requests.
+func newLimiters(rc rateLimitConfig) (*limiters, error) {
+	l := &limiters{}
+	for _, x := range []struct {
+		lim    **ratelimit.Limiter
+		perMin int
+	}{
+		{&l.init, rc.InitPerIPPerMin},
+		{&l.flow, rc.FlowPerIPPerMin},
+		{&l.pollIP, rc.PollPerIPPerMin},
+		{&l.pollToken, rc.PollPerTokenPerMin},
+	} {
+		if x.perMin <= 0 {
+			continue
+		}
+		lim, err := ratelimit.New(ratelimit.Config{
+			RequestsPerMinute: x.perMin,
+			Burst:             x.perMin,
+			TrustedProxyCIDRs: rc.TrustedProxyCIDRs,
+		})
+		if err != nil {
+			l.close()
+			return nil, fmt.Errorf("loginflow: %w", err)
+		}
+		*x.lim = lim
+	}
+	return l, nil
 }
 
 type config struct {
@@ -106,7 +152,7 @@ type svc struct {
 	router  *chi.Mux
 	am      appauth.Manager
 	store   loginflow.Manager
-	limiter *limiter
+	limiter *limiters
 }
 
 // New creates a new loginflow HTTP service.
@@ -120,21 +166,31 @@ func New(ctx context.Context, m map[string]any) (global.Service, error) {
 		return nil, errors.New("loginflow: server_base_url is required")
 	}
 
+	// Built first so that an invalid trusted_proxy_cidrs entry fails fast.
+	lims, err := newLimiters(c.RateLimit)
+	if err != nil {
+		return nil, err
+	}
+
 	af, ok := appauthregistry.NewFuncs[c.AppAuthDriver]
 	if !ok {
+		lims.close()
 		return nil, fmt.Errorf("loginflow: appauth driver %q not registered", c.AppAuthDriver)
 	}
 	am, err := af(ctx, c.AppAuthDrivers[c.AppAuthDriver])
 	if err != nil {
+		lims.close()
 		return nil, fmt.Errorf("loginflow: initialising appauth driver: %w", err)
 	}
 
 	sf, ok := storeregistry.NewFuncs[c.StoreDriver]
 	if !ok {
+		lims.close()
 		return nil, fmt.Errorf("loginflow: store driver %q not registered", c.StoreDriver)
 	}
 	store, err := sf(ctx, c.StoreDrivers[c.StoreDriver])
 	if err != nil {
+		lims.close()
 		return nil, fmt.Errorf("loginflow: initialising store driver: %w", err)
 	}
 
@@ -142,13 +198,13 @@ func New(ctx context.Context, m map[string]any) (global.Service, error) {
 		c:       &c,
 		am:      am,
 		store:   store,
-		limiter: newLimiter(),
+		limiter: lims,
 	}
 
 	r := chi.NewRouter()
-	r.Post("/", s.handleInit)
-	r.Get("/flow/{lt}", s.handleBrowserFlow)
-	r.Post("/poll", s.handlePoll)
+	r.With(lims.init.Middleware).Post("/", s.handleInit)
+	r.With(lims.flow.Middleware).Get("/flow/{lt}", s.handleBrowserFlow)
+	r.With(lims.pollIP.Middleware).Post("/poll", s.handlePoll)
 	s.router = r
 
 	appctx.GetLogger(ctx).Info().Str("service", "loginflow").Str("prefix", c.Prefix).Str("server_base_url", c.ServerBaseURL).Str("webui_url", c.WebUIURL).Str("appauth_driver", c.AppAuthDriver).Str("store_driver", c.StoreDriver).Int("flow_ttl_seconds", c.FlowTTLSeconds).Msg("loginflow service initialised")
@@ -157,7 +213,7 @@ func New(ctx context.Context, m map[string]any) (global.Service, error) {
 }
 
 func (s *svc) Prefix() string        { return s.c.Prefix }
-func (s *svc) Close() error          { return nil }
+func (s *svc) Close() error          { s.limiter.close(); return nil }
 func (s *svc) Unprotected() []string { return []string{"/"} }
 func (s *svc) Handler() http.Handler { return s.router }
 
@@ -194,13 +250,6 @@ func generateToken() (string, error) {
 // handleInit implements POST /index.php/login/v2.
 func (s *svc) handleInit(w http.ResponseWriter, r *http.Request) {
 	log := appctx.GetLogger(r.Context()).With().Str("service", "loginflow").Str("handler", "init").Logger()
-
-	ip := clientIP(r)
-	if !s.limiter.allow("init:"+ip, s.c.RateLimit.InitPerIPPerMin) {
-		w.Header().Set("Retry-After", "60")
-		http.Error(w, "too many requests", http.StatusTooManyRequests)
-		return
-	}
 
 	lt, err := generateToken()
 	if err != nil {
@@ -273,10 +322,8 @@ func (s *svc) handlePoll(w http.ResponseWriter, r *http.Request) {
 	}
 
 	ph := loginflow.HashToken(pt)
-	if !s.limiter.allow("poll-ip:"+clientIP(r), s.c.RateLimit.PollPerIPPerMin) ||
-		!s.limiter.allow("poll-tok:"+base64.RawURLEncoding.EncodeToString(ph), s.c.RateLimit.PollPerTokenPerMin) {
-		w.Header().Set("Retry-After", "1")
-		http.Error(w, "too many requests", http.StatusTooManyRequests)
+	if retryAfter, ok := s.limiter.pollToken.AllowKey(base64.RawURLEncoding.EncodeToString(ph)); !ok {
+		ratelimit.Reject(w, r, retryAfter)
 		return
 	}
 
@@ -394,14 +441,6 @@ func statusForError(err error) int {
 	default:
 		return http.StatusInternalServerError
 	}
-}
-
-func clientIP(r *http.Request) string {
-	ip, err := utils.GetClientIP(r, false)
-	if err != nil {
-		return r.RemoteAddr
-	}
-	return ip
 }
 
 func writeJSON(w http.ResponseWriter, code int, v any) {

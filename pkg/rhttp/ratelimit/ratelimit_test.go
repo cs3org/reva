@@ -162,3 +162,30 @@ func TestForwardedForWithPort(t *testing.T) {
 		t.Fatalf("same client, other port: got %d, want 429", got)
 	}
 }
+
+func TestAllowKey(t *testing.T) {
+	l, err := New(Config{RequestsPerMinute: 1, Burst: 1})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(l.Close)
+
+	if _, ok := l.AllowKey("a"); !ok {
+		t.Fatal("first request on key a rejected")
+	}
+	retryAfter, ok := l.AllowKey("a")
+	if ok {
+		t.Fatal("second request on key a allowed")
+	}
+	if retryAfter < 1 {
+		t.Fatalf("retry after %d, want >= 1", retryAfter)
+	}
+	if _, ok := l.AllowKey("b"); !ok {
+		t.Fatal("key b shares key a's bucket")
+	}
+
+	var disabled *Limiter
+	if _, ok := disabled.AllowKey("a"); !ok {
+		t.Fatal("nil limiter rejected a request")
+	}
+}

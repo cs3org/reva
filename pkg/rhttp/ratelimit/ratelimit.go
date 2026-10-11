@@ -137,26 +137,52 @@ func (l *Limiter) Middleware(next http.Handler) http.Handler {
 		return next
 	}
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		now := time.Now()
-		key := l.clientKey(r)
-		res := l.limiterFor(key, now).ReserveN(now, 1)
-		if delay := res.DelayFrom(now); !res.OK() || delay > 0 {
-			res.CancelAt(now)
-			secs := int(math.Ceil(delay.Seconds()))
-			if !res.OK() || secs < 1 {
-				secs = 1
-			}
-			// Debug only: under a flood this fires on every request.
-			appctx.GetLogger(r.Context()).Debug().Str("client", key).Str("path", r.URL.Path).
-				Int("retry_after", secs).Msg("rate limited unauthenticated request")
-			w.Header().Set("Retry-After", strconv.Itoa(secs))
-			w.Header().Set("Content-Type", "application/json")
-			w.WriteHeader(http.StatusTooManyRequests)
-			_, _ = w.Write([]byte(`{"code":"RATE_LIMITED","message":"Too many requests"}`))
+		if retryAfter, ok := l.Allow(r); !ok {
+			Reject(w, r, retryAfter)
 			return
 		}
 		next.ServeHTTP(w, r)
 	})
+}
+
+// Allow takes one token from the bucket of the request's client, see
+// clientKey. When the bucket is empty it returns false and the number of
+// seconds after which the client may retry. A nil Limiter allows everything.
+func (l *Limiter) Allow(r *http.Request) (retryAfter int, ok bool) {
+	if l == nil {
+		return 0, true
+	}
+	return l.AllowKey(l.clientKey(r))
+}
+
+// AllowKey is like Allow for a caller-chosen bucket key, for limits that are
+// not per client address (e.g. per token).
+func (l *Limiter) AllowKey(key string) (retryAfter int, ok bool) {
+	if l == nil {
+		return 0, true
+	}
+	now := time.Now()
+	res := l.limiterFor(key, now).ReserveN(now, 1)
+	if delay := res.DelayFrom(now); !res.OK() || delay > 0 {
+		res.CancelAt(now)
+		secs := int(math.Ceil(delay.Seconds()))
+		if !res.OK() || secs < 1 {
+			secs = 1
+		}
+		return secs, false
+	}
+	return 0, true
+}
+
+// Reject writes the 429 response for a request refused by Allow or AllowKey.
+func Reject(w http.ResponseWriter, r *http.Request, retryAfter int) {
+	// Debug only: under a flood this fires on every request.
+	appctx.GetLogger(r.Context()).Debug().Str("remote", r.RemoteAddr).Str("path", r.URL.Path).
+		Int("retry_after", retryAfter).Msg("rate limited unauthenticated request")
+	w.Header().Set("Retry-After", strconv.Itoa(retryAfter))
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusTooManyRequests)
+	_, _ = w.Write([]byte(`{"code":"RATE_LIMITED","message":"Too many requests"}`))
 }
 
 func (l *Limiter) limiterFor(key string, now time.Time) *rate.Limiter {
