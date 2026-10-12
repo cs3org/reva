@@ -117,7 +117,7 @@ func New(m map[string]any, unprotected []string) (global.Middleware, error) {
 	}
 
 	if len(conf.CredentialChain) == 0 {
-		conf.CredentialChain = []string{"apppassword", "basic", "bearer", "publicshares"}
+		conf.CredentialChain = []string{"appauth", "basic", "bearer", "publicshares"}
 	}
 
 	if conf.AppPasswordCacheTTL == 0 {

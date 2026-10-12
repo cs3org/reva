@@ -23,6 +23,7 @@ import (
 	"maps"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -135,7 +136,7 @@ func newAppPasswordMiddleware(t *testing.T, conf map[string]any) (http.Handler, 
 
 	m := map[string]any{
 		"token_managers":   map[string]any{"jwt": map[string]any{"secret": testJWTSecret}},
-		"credential_chain": []string{"apppassword", "appauth", "bearer"},
+		"credential_chain": []string{"appauth", "basic", "bearer"},
 	}
 	maps.Copy(m, conf)
 	mw, err := New(m, nil)
@@ -191,6 +192,21 @@ func TestAppPasswordBearerRouting(t *testing.T) {
 	}
 	if reqs := gw.authentications(); len(reqs) != 2 || reqs[1].Type != "bearer" {
 		t.Fatalf("JWT as bearer: authenticated as %+v", reqs[1:])
+	}
+
+	// With basic auth, an app password goes to appauth with the username, and a
+	// regular password to the basic strategy.
+	if code := serve(h, request{path: webdav, ua: mirall, basic: syncPassword}); code != http.StatusOK {
+		t.Fatalf("app password with basic auth: got %d", code)
+	}
+	if reqs := gw.authentications(); len(reqs) != 3 || reqs[2].Type != "appauth" || reqs[2].ClientId != "einstein" {
+		t.Fatalf("app password with basic auth: authenticated as %+v", reqs[2:])
+	}
+	if code := serve(h, request{path: webdav, ua: mirall, basic: "relativity"}); code != http.StatusUnauthorized {
+		t.Fatalf("regular password: got %d", code)
+	}
+	if reqs := gw.authentications(); len(reqs) != 4 || reqs[3].Type != "basic" {
+		t.Fatalf("regular password: authenticated as %+v", reqs[3:])
 	}
 }
 
@@ -302,25 +318,27 @@ func TestAppPasswordRevocationForgetsCache(t *testing.T) {
 
 func TestAppPasswordFailuresThrottled(t *testing.T) {
 	h, gw := newAppPasswordMiddleware(t, map[string]any{"credential_strategies": map[string]any{
-		"apppassword": map[string]any{"failures_per_ip_per_min": 2},
+		"appauth": map[string]any{"failures_per_ip_per_min": 2},
 	}})
 	valid := request{path: webdav, ua: "curl/8.0", bearer: webdavPassword}
 	if code := serve(h, valid); code != http.StatusOK {
 		t.Fatalf("got %d", code)
 	}
 
+	// Wrong, but shaped like app passwords.
+	wrong1, wrong2, wrong3 := strings.Repeat("A", 43), strings.Repeat("B", 43), strings.Repeat("C", 43)
 	wrong := func(s string) request { return request{path: webdav, ua: "curl/8.0", bearer: s} }
-	for _, s := range []string{"wrong1", "wrong2"} {
+	for _, s := range []string{wrong1, wrong2} {
 		if code := serve(h, wrong(s)); code != http.StatusUnauthorized {
 			t.Fatalf("%s: got %d", s, code)
 		}
 	}
 	// A wrong app password already answered from the cache costs nothing.
-	if code := serve(h, wrong("wrong1")); code != http.StatusUnauthorized {
+	if code := serve(h, wrong(wrong1)); code != http.StatusUnauthorized {
 		t.Fatalf("cached wrong1: got %d", code)
 	}
 	n := len(gw.authentications())
-	if code := serve(h, wrong("wrong3")); code != http.StatusTooManyRequests {
+	if code := serve(h, wrong(wrong3)); code != http.StatusTooManyRequests {
 		t.Fatalf("wrong3: got %d", code)
 	}
 	if len(gw.authentications()) != n {
