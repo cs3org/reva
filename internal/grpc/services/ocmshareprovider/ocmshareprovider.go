@@ -299,6 +299,11 @@ func (s *service) CreateOCMShare(ctx context.Context, req *ocm.CreateOCMShareReq
 
 	info := statRes.Info
 	user := appctx.ContextMustGetUser(ctx)
+	// e.g. lightweight homes are owned by service accounts that don't resolve to a user
+	owner := info.Owner
+	if owner.GetOpaqueId() == "" {
+		owner = user.Id
+	}
 	tkn := utils.RandString(32)
 	now := time.Now().UnixNano()
 	ts := &typespb.Timestamp{
@@ -312,7 +317,7 @@ func (s *service) CreateOCMShare(ctx context.Context, req *ocm.CreateOCMShareReq
 		ResourceId:    req.ResourceId,
 		Grantee:       req.Grantee,
 		RecipientType: ocm.RecipientType_RECIPIENT_TYPE_USER,
-		Owner:         info.Owner,
+		Owner:         owner,
 		Creator:       user.Id,
 		Ctime:         ts,
 		Mtime:         ts,
@@ -327,7 +332,7 @@ func (s *service) CreateOCMShare(ctx context.Context, req *ocm.CreateOCMShareReq
 	switch _, err := s.repo.GetShare(ctx, user, &ocm.ShareReference{
 		Spec: &ocm.ShareReference_Key{
 			Key: &ocm.ShareKey{
-				Owner:      info.Owner,
+				Owner:      owner,
 				ResourceId: req.ResourceId,
 				Grantee:    req.Grantee,
 			},
@@ -409,7 +414,7 @@ func (s *service) CreateOCMShare(ctx context.Context, req *ocm.CreateOCMShareReq
 		Name:       ocmshare.Name,
 		ProviderID: ocmshare.Id.OpaqueId,
 		Owner: formatOCMUser(&userpb.UserId{
-			OpaqueId: info.Owner.OpaqueId,
+			OpaqueId: owner.OpaqueId,
 			Idp:      s.conf.ProviderDomain, // FIXME: this is not generally true in case of resharing
 		}),
 		Sender: formatOCMUser(&userpb.UserId{
