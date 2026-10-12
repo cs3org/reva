@@ -44,6 +44,9 @@ type Credentials struct {
 	Type         string
 	ClientID     string
 	ClientSecret string
+	// Presentation is how the client sent them, basic auth or a bearer header,
+	// which the client kind of an app password restricts.
+	Presentation string
 }
 
 // CredentialStrategy obtains Credentials from the request.

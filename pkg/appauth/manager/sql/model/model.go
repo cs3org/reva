@@ -24,12 +24,16 @@ import "time"
 // stored; only its SHA-256 hash is. The 256-bit token entropy makes a
 // single SHA-256 enough: a DB dump holds no usable credential.
 type AppPassword struct {
-	ID         uint       `gorm:"primaryKey"`
-	UserID     string     `gorm:"size:64;index;not null"`       // opaque user id
-	TokenHash  []byte     `gorm:"uniqueIndex;size:32;not null"` // SHA256(token)
-	Label      string     `gorm:"size:255"`
-	ScopeJSON  []byte     // JSON-encoded map[string]*auth.Scope
-	Ctime      time.Time  `gorm:"not null"`
-	Utime      time.Time  `gorm:"not null"` // last seen; buffered write
-	Expiration *time.Time // nil = never expires
+	ID          uint       `gorm:"primaryKey"`
+	PasswordID  string     `gorm:"size:36;uniqueIndex;not null"` // public handle, a UUID
+	UserID      string     `gorm:"size:64;index;not null"`       // opaque user id
+	TokenHash   []byte     `gorm:"uniqueIndex;size:32;not null"` // SHA256(token)
+	Label       string     `gorm:"size:255"`
+	Client      string     `gorm:"size:16;not null"`                   // kind of client, see pkg/auth/scope
+	Permissions []string   `gorm:"type:text;serializer:json;not null"` // permission names, or ["*"]
+	Roots       []string   `gorm:"type:text;serializer:json"`          // absolute paths; empty = whole account
+	CreatedBy   string     `gorm:"size:64;not null"`                   // opaque id of the owner or of an administrator
+	Ctime       time.Time  `gorm:"not null"`
+	Utime       time.Time  `gorm:"not null"` // last seen; buffered write
+	Expiration  *time.Time // nil = never expires
 }
