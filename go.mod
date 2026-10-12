@@ -5,7 +5,7 @@ require (
 	github.com/CiscoM31/godata v1.0.11
 	github.com/Masterminds/sprig v2.22.0+incompatible
 	github.com/ReneKroon/ttlcache/v2 v2.11.0
-	github.com/alitto/pond/v2 v2.7.1
+	github.com/alitto/pond/v2 v2.7.2
 	github.com/beevik/etree v1.8.1
 	github.com/bluele/gcache v0.0.2
 	github.com/c-bata/go-prompt v0.2.6
