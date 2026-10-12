@@ -20,19 +20,21 @@ package scope
 
 import (
 	"context"
-	"strings"
 	"fmt"
+	"strings"
 
 	appregistry "github.com/cs3org/go-cs3apis/cs3/app/registry/v1beta1"
 	authpb "github.com/cs3org/go-cs3apis/cs3/auth/provider/v1beta1"
 	grouppb "github.com/cs3org/go-cs3apis/cs3/identity/group/v1beta1"
-	collaboration "github.com/cs3org/go-cs3apis/cs3/sharing/collaboration/v1beta1"
-	ocm "github.com/cs3org/go-cs3apis/cs3/sharing/ocm/v1beta1"
-	link "github.com/cs3org/go-cs3apis/cs3/sharing/link/v1beta1"
+	userv1beta1 "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	invitepb "github.com/cs3org/go-cs3apis/cs3/ocm/invite/v1beta1"
+	ocmprovider "github.com/cs3org/go-cs3apis/cs3/ocm/provider/v1beta1"
 	prefpb "github.com/cs3org/go-cs3apis/cs3/preferences/v1beta1"
-	stregistry "github.com/cs3org/go-cs3apis/cs3/storage/registry/v1beta1"
+	collaboration "github.com/cs3org/go-cs3apis/cs3/sharing/collaboration/v1beta1"
+	link "github.com/cs3org/go-cs3apis/cs3/sharing/link/v1beta1"
+	ocm "github.com/cs3org/go-cs3apis/cs3/sharing/ocm/v1beta1"
 	sp "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
+	stregistry "github.com/cs3org/go-cs3apis/cs3/storage/registry/v1beta1"
 	types "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
 	"github.com/cs3org/reva/v3/pkg/utils"
 	"github.com/rs/zerolog"
@@ -47,15 +49,32 @@ func lightweightAccountScope(_ context.Context, scope *authpb.Scope, resource an
 		return true, nil
 	case *collaboration.ListReceivedSharesRequest:
 		return true, nil
+	case *collaboration.CreateShareRequest:
+		return true, nil
+	case *ocm.CreateOCMShareRequest:
+		return true, nil
 	case *ocm.ListOCMSharesRequest:
 		return true, nil
 	case *ocm.ListReceivedOCMSharesRequest:
 		return true, nil
 	case *ocm.GetReceivedOCMShareRequest:
 		return true, nil
+	case *ocm.UpdateReceivedOCMShareRequest:
+		return true, nil
 	case *sp.ListStorageSpacesRequest:
 		return true, nil
+	// Creates the account's home, see ensureLightweightHome in the gateway.
+	case *sp.CreateHomeRequest:
+		return true, nil
 	case *grouppb.GetGroupRequest:
+		return true, nil
+	case *grouppb.GetGroupByClaimRequest:
+		return true, nil
+	case *userv1beta1.FindUsersRequest:
+		return true, nil
+	case *userv1beta1.GetUserByClaimRequest:
+		return true, nil
+	case *ocmprovider.GetInfoByDomainRequest:
 		return true, nil
 	case *invitepb.AcceptInviteRequest:
 		return true, nil
@@ -119,9 +138,14 @@ func checkLightweightPath(path string) bool {
 		"/sciencemesh/discover",
 		"/sciencemesh/embedded-shares",
 		"/sciencemesh/process-embedded-share",
+		// Legacy paths
 		"/remote.php/webdav",
 		"/remote.php/dav/files",
 		"/remote.php/dav/spaces",
+		// Modern paths
+		"/webdav",
+		"/dav/files",
+		"/dav/spaces",
 		"/thumbnails",
 	}
 	for _, p := range paths {

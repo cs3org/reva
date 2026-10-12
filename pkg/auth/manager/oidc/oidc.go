@@ -65,7 +65,7 @@ type config struct {
 	Insecure       bool              `docs:"false;Whether to skip certificate checks when sending requests."                                                     mapstructure:"insecure"`
 	Issuer         string            `docs:";The issuer of the OIDC token."                                                                                      mapstructure:"issuer"`
 	DefaultIDClaim string            `docs:"sub;The default claim used as the user ID when no per-IDP override is configured."                                   mapstructure:"default_id_claim"`
-	IDPToIDClaim   map[string]string `docs:";Per-IDP claim to use as the user ID, keyed by the value of the identity_provider token claim. Overrides default_id_claim for matching IDPs." mapstructure:"idp_to_id_claim"`
+	IDPToIDClaim   map[string]string `docs:"nil;Per-IDP claim to use as the user ID, keyed by the value of the identity_provider token claim. Overrides default_id_claim for matching IDPs." mapstructure:"idp_to_id_claim"`
 	UIDClaim       string            `docs:";The claim containing the UID of the user."                                                                          mapstructure:"uid_claim"`
 	GIDClaim       string            `docs:";The claim containing the GID of the user."                                                                          mapstructure:"gid_claim"`
 	GatewaySvc     string            `docs:";The endpoint at which the GRPC gateway is exposed."                                                                 mapstructure:"gatewaysvc"`

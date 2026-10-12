@@ -43,171 +43,171 @@ import (
 	datatx "github.com/cs3org/go-cs3apis/cs3/tx/v1beta1"
 )
 
-// Each getter bakes in its peer name and builds the CS3 client over the
-// resolved connection.
+// Each getter bakes in its peer name and builds the CS3 client over a connection
+// that resolves a node per call and fails over when it cannot be reached.
 
-func (c *clients) Gateway(_ context.Context) (gateway.GatewayAPIClient, error) {
-	conn, _, err := c.resolve(NameGateway)
+func (c *clients) Gateway(ctx context.Context) (gateway.GatewayAPIClient, error) {
+	conn, err := c.conn(ctx, NameGateway)
 	if err != nil {
 		return nil, err
 	}
 	return gateway.NewGatewayAPIClient(conn), nil
 }
 
-func (c *clients) StorageProvider(_ context.Context) (storageprovider.ProviderAPIClient, error) {
-	conn, _, err := c.resolve(NameStorageProvider)
+func (c *clients) StorageProvider(ctx context.Context) (storageprovider.ProviderAPIClient, error) {
+	conn, err := c.conn(ctx, NameStorageProvider)
 	if err != nil {
 		return nil, err
 	}
 	return storageprovider.NewProviderAPIClient(conn), nil
 }
 
-func (c *clients) StorageRegistry(_ context.Context) (storageregistry.RegistryAPIClient, error) {
-	conn, _, err := c.resolve(NameStorageRegistry)
+func (c *clients) StorageRegistry(ctx context.Context) (storageregistry.RegistryAPIClient, error) {
+	conn, err := c.conn(ctx, NameStorageRegistry)
 	if err != nil {
 		return nil, err
 	}
 	return storageregistry.NewRegistryAPIClient(conn), nil
 }
 
-func (c *clients) Spaces(_ context.Context) (storageprovider.SpacesAPIClient, error) {
-	conn, _, err := c.resolve(NameSpaces)
+func (c *clients) Spaces(ctx context.Context) (storageprovider.SpacesAPIClient, error) {
+	conn, err := c.conn(ctx, NameSpaces)
 	if err != nil {
 		return nil, err
 	}
 	return storageprovider.NewSpacesAPIClient(conn), nil
 }
 
-func (c *clients) AuthProvider(_ context.Context) (authprovider.ProviderAPIClient, error) {
-	conn, _, err := c.resolve(NameAuthProvider)
+func (c *clients) AuthProvider(ctx context.Context) (authprovider.ProviderAPIClient, error) {
+	conn, err := c.conn(ctx, NameAuthProvider)
 	if err != nil {
 		return nil, err
 	}
 	return authprovider.NewProviderAPIClient(conn), nil
 }
 
-func (c *clients) AuthRegistry(_ context.Context) (authregistry.RegistryAPIClient, error) {
-	conn, _, err := c.resolve(NameAuthRegistry)
+func (c *clients) AuthRegistry(ctx context.Context) (authregistry.RegistryAPIClient, error) {
+	conn, err := c.conn(ctx, NameAuthRegistry)
 	if err != nil {
 		return nil, err
 	}
 	return authregistry.NewRegistryAPIClient(conn), nil
 }
 
-func (c *clients) AppAuthProvider(_ context.Context) (applicationauth.ApplicationsAPIClient, error) {
-	conn, _, err := c.resolve(NameAppAuthProvider)
+func (c *clients) AppAuthProvider(ctx context.Context) (applicationauth.ApplicationsAPIClient, error) {
+	conn, err := c.conn(ctx, NameAppAuthProvider)
 	if err != nil {
 		return nil, err
 	}
 	return applicationauth.NewApplicationsAPIClient(conn), nil
 }
 
-func (c *clients) UserProvider(_ context.Context) (user.UserAPIClient, error) {
-	conn, _, err := c.resolve(NameUserProvider)
+func (c *clients) UserProvider(ctx context.Context) (user.UserAPIClient, error) {
+	conn, err := c.conn(ctx, NameUserProvider)
 	if err != nil {
 		return nil, err
 	}
 	return user.NewUserAPIClient(conn), nil
 }
 
-func (c *clients) GroupProvider(_ context.Context) (group.GroupAPIClient, error) {
-	conn, _, err := c.resolve(NameGroupProvider)
+func (c *clients) GroupProvider(ctx context.Context) (group.GroupAPIClient, error) {
+	conn, err := c.conn(ctx, NameGroupProvider)
 	if err != nil {
 		return nil, err
 	}
 	return group.NewGroupAPIClient(conn), nil
 }
 
-func (c *clients) UserShareProvider(_ context.Context) (collaboration.CollaborationAPIClient, error) {
-	conn, _, err := c.resolve(NameUserShare)
+func (c *clients) UserShareProvider(ctx context.Context) (collaboration.CollaborationAPIClient, error) {
+	conn, err := c.conn(ctx, NameUserShare)
 	if err != nil {
 		return nil, err
 	}
 	return collaboration.NewCollaborationAPIClient(conn), nil
 }
 
-func (c *clients) PublicShareProvider(_ context.Context) (link.LinkAPIClient, error) {
-	conn, _, err := c.resolve(NamePublicShare)
+func (c *clients) PublicShareProvider(ctx context.Context) (link.LinkAPIClient, error) {
+	conn, err := c.conn(ctx, NamePublicShare)
 	if err != nil {
 		return nil, err
 	}
 	return link.NewLinkAPIClient(conn), nil
 }
 
-func (c *clients) OCMShareProvider(_ context.Context) (ocm.OcmAPIClient, error) {
-	conn, _, err := c.resolve(NameOCMShare)
+func (c *clients) OCMShareProvider(ctx context.Context) (ocm.OcmAPIClient, error) {
+	conn, err := c.conn(ctx, NameOCMShare)
 	if err != nil {
 		return nil, err
 	}
 	return ocm.NewOcmAPIClient(conn), nil
 }
 
-func (c *clients) OCMInviteManager(_ context.Context) (invitepb.InviteAPIClient, error) {
-	conn, _, err := c.resolve(NameOCMInvite)
+func (c *clients) OCMInviteManager(ctx context.Context) (invitepb.InviteAPIClient, error) {
+	conn, err := c.conn(ctx, NameOCMInvite)
 	if err != nil {
 		return nil, err
 	}
 	return invitepb.NewInviteAPIClient(conn), nil
 }
 
-func (c *clients) OCMProviderAuthorizer(_ context.Context) (ocmprovider.ProviderAPIClient, error) {
-	conn, _, err := c.resolve(NameOCMProvider)
+func (c *clients) OCMProviderAuthorizer(ctx context.Context) (ocmprovider.ProviderAPIClient, error) {
+	conn, err := c.conn(ctx, NameOCMProvider)
 	if err != nil {
 		return nil, err
 	}
 	return ocmprovider.NewProviderAPIClient(conn), nil
 }
 
-func (c *clients) OCMIncoming(_ context.Context) (ocmincoming.OcmIncomingAPIClient, error) {
-	conn, _, err := c.resolve(NameOCMIncoming)
+func (c *clients) OCMIncoming(ctx context.Context) (ocmincoming.OcmIncomingAPIClient, error) {
+	conn, err := c.conn(ctx, NameOCMIncoming)
 	if err != nil {
 		return nil, err
 	}
 	return ocmincoming.NewOcmIncomingAPIClient(conn), nil
 }
 
-func (c *clients) Preferences(_ context.Context) (preferences.PreferencesAPIClient, error) {
-	conn, _, err := c.resolve(NamePreferences)
+func (c *clients) Preferences(ctx context.Context) (preferences.PreferencesAPIClient, error) {
+	conn, err := c.conn(ctx, NamePreferences)
 	if err != nil {
 		return nil, err
 	}
 	return preferences.NewPreferencesAPIClient(conn), nil
 }
 
-func (c *clients) Permissions(_ context.Context) (permissions.PermissionsAPIClient, error) {
-	conn, _, err := c.resolve(NamePermissions)
+func (c *clients) Permissions(ctx context.Context) (permissions.PermissionsAPIClient, error) {
+	conn, err := c.conn(ctx, NamePermissions)
 	if err != nil {
 		return nil, err
 	}
 	return permissions.NewPermissionsAPIClient(conn), nil
 }
 
-func (c *clients) AppRegistry(_ context.Context) (appregistry.RegistryAPIClient, error) {
-	conn, _, err := c.resolve(NameAppRegistry)
+func (c *clients) AppRegistry(ctx context.Context) (appregistry.RegistryAPIClient, error) {
+	conn, err := c.conn(ctx, NameAppRegistry)
 	if err != nil {
 		return nil, err
 	}
 	return appregistry.NewRegistryAPIClient(conn), nil
 }
 
-func (c *clients) AppProvider(_ context.Context) (appprovider.ProviderAPIClient, error) {
-	conn, _, err := c.resolve(NameAppProvider)
+func (c *clients) AppProvider(ctx context.Context) (appprovider.ProviderAPIClient, error) {
+	conn, err := c.conn(ctx, NameAppProvider)
 	if err != nil {
 		return nil, err
 	}
 	return appprovider.NewProviderAPIClient(conn), nil
 }
 
-func (c *clients) DataTx(_ context.Context) (datatx.TxAPIClient, error) {
-	conn, _, err := c.resolve(NameDataTx)
+func (c *clients) DataTx(ctx context.Context) (datatx.TxAPIClient, error) {
+	conn, err := c.conn(ctx, NameDataTx)
 	if err != nil {
 		return nil, err
 	}
 	return datatx.NewTxAPIClient(conn), nil
 }
 
-func (c *clients) Labels(_ context.Context) (labels.LabelsAPIClient, error) {
-	conn, _, err := c.resolve(NameLabels)
+func (c *clients) Labels(ctx context.Context) (labels.LabelsAPIClient, error) {
+	conn, err := c.conn(ctx, NameLabels)
 	if err != nil {
 		return nil, err
 	}

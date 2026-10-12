@@ -171,12 +171,13 @@ func newServiceForInitiateUploadTest(t *testing.T, fs storage.FS, expose bool) *
 	reg := memory.New(nil)
 	_ = reg.Add(registry.NewService("dataprovider", []registry.Node{
 		registry.NewNode("dp1", "localhost", map[string]string{
+			registry.MetaTransport: registry.TransportHTTP,
 			registry.MetaState:     registry.StateReady,
 			registry.MetaMountID:   mountID,
 			registry.MetaPublicURL: "http://localhost/data",
 		}),
 	}))
-	svc.SetGlobal(svc.NewClients(reg))
+	svc.SetGlobal(svc.NewClients(reg, svc.FirstSelector{}))
 	return s
 }
 

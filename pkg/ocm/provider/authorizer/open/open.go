@@ -23,10 +23,10 @@ import (
 	"net/url"
 	"path/filepath"
 	"strings"
-	"time"
 
 	ocmprovider "github.com/cs3org/go-cs3apis/cs3/ocm/provider/v1beta1"
-	client "github.com/cs3org/reva/v3/internal/http/services/opencloudmesh/ocmd"
+	"github.com/cs3org/reva/v3/internal/http/services/opencloudmesh/ocmd"
+	"github.com/cs3org/reva/v3/pkg/ocm/client"
 	"github.com/cs3org/reva/v3/pkg/ocm/provider"
 	"github.com/cs3org/reva/v3/pkg/ocm/provider/authorizer/registry"
 	"github.com/cs3org/reva/v3/pkg/utils/cfg"
@@ -44,7 +44,22 @@ func New(ctx context.Context, m map[string]any) (provider.Authorizer, error) {
 		return nil, err
 	}
 
-	a := &authorizer{insecure: c.Insecure}
+	// Parse the explicit private-network exception list before constructing
+	// the public client. Invalid CIDRs abort initialization: open discovery
+	// never starts with a partial or trusted fallback policy.
+	cidrs, err := client.ParseFederationCIDRs(c.AllowedFederationCIDRs)
+	if err != nil {
+		return nil, err
+	}
+
+	// Loopback stays off: open discovery has no local two-provider topology.
+	// The default timeout is supplied by the shared transport config.
+	a := &authorizer{
+		ocmClient: ocmd.NewPublicOnlyClientWithConfig(client.TransportConfig{
+			Insecure:               c.Insecure,
+			AllowedFederationCIDRs: cidrs,
+		}),
+	}
 	return a, nil
 }
 
@@ -54,6 +69,11 @@ type config struct {
 	// Insecure skips TLS verification when discovering an unknown provider. Off by
 	// default; turning it on exposes discovery to MITM.
 	Insecure bool `mapstructure:"insecure"`
+	// AllowedFederationCIDRs is an explicit private-network exception list for
+	// open discovery of peers in a controlled network. Empty by default; any
+	// invalid entry aborts initialization. Loopback is never admitted by this
+	// list and stays on its separate flag (off here).
+	AllowedFederationCIDRs []string `mapstructure:"allowed_federation_cidrs"`
 }
 
 func (c *config) ApplyDefaults() {
@@ -61,7 +81,8 @@ func (c *config) ApplyDefaults() {
 
 type authorizer struct {
 	providers []*ocmprovider.ProviderInfo
-	insecure  bool
+	// public-only; loopback disabled (no local two-provider topology)
+	ocmClient *ocmd.OCMClient
 }
 
 func (a *authorizer) GetInfoByDomain(ctx context.Context, domain string) (*ocmprovider.ProviderInfo, error) {
@@ -79,8 +100,7 @@ func (a *authorizer) GetInfoByDomain(ctx context.Context, domain string) (*ocmpr
 	}
 
 	// not yet known: try to discover the remote OCM endpoint
-	ocmClient := client.NewClient(time.Duration(10)*time.Second, a.insecure)
-	ocmCaps, err := ocmClient.Discover(ctx, endpoint)
+	ocmCaps, err := a.ocmClient.Discover(ctx, endpoint)
 	if err != nil {
 		return nil, errors.Wrap(err, "error probing OCM services at remote server")
 	}

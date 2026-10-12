@@ -151,9 +151,15 @@ func New(config *config.Config, opt ...Option) (*Reva, error) {
 		return nil, err
 	}
 
+	selector, err := service.NewSelector(config.Shared.Registry.Selector)
+	if err != nil {
+		watcher.Clean()
+		return nil, err
+	}
+
 	// Install the process-wide resolver before constructing services, so any
 	// service that resolves a peer at construction time finds it (first wins).
-	service.SetGlobal(service.NewClients(reg))
+	service.SetGlobal(service.NewClients(reg, selector))
 	// Expose the registry to the Admin API for fleet introspection.
 	service.SetGlobalRegistry(reg)
 
@@ -570,7 +576,7 @@ func newServers(ctx context.Context, grpc []*config.GRPC, http []*config.HTTP, l
 		server := &Server{
 			server:    s,
 			listener:  ln,
-			transport: "grpc",
+			transport: registry.TransportGRPC,
 			services:  maps.MapValues(services, func(s rgrpc.Service) any { return s }),
 		}
 		log.Debug().
@@ -609,7 +615,7 @@ func newServers(ctx context.Context, grpc []*config.GRPC, http []*config.HTTP, l
 		server := &Server{
 			server:    s,
 			listener:  ln,
-			transport: "http",
+			transport: registry.TransportHTTP,
 			scheme:    scheme,
 			services:  maps.MapValues(services, func(s global.Service) any { return s }),
 		}
@@ -661,7 +667,7 @@ func newControlServer(cfg *config.Config, hasServerless bool, log *zerolog.Logge
 	server := &Server{
 		server:    s,
 		listener:  ln,
-		transport: "grpc",
+		transport: registry.TransportGRPC,
 		internal:  true,
 		services:  maps.MapValues(services, func(s rgrpc.Service) any { return s }),
 	}

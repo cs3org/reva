@@ -76,7 +76,14 @@ func newSvcConfigFromMap(domain, name string, m map[string]any) ServicesConfig {
 
 func parseServices(domain string, cfg map[string]any) (map[string]ServicesConfig, error) {
 	// parse services
-	svcCfg, ok := cfg["services"].(map[string]any)
+	raw, ok := cfg["services"]
+	if !ok {
+		// A block may carry settings and no service at all: a process whose
+		// only grpc listener is the control channel declares [grpc] just for
+		// control_address.
+		return map[string]ServicesConfig{}, nil
+	}
+	svcCfg, ok := raw.(map[string]any)
 	if !ok {
 		return nil, fmt.Errorf("%s.services must be a map", domain)
 	}

@@ -151,6 +151,10 @@ type Config struct {
 	// TODO(lopresti): to be replaced by a call to the Resource Lifecycle API being developed
 	CreateHomeHook string `mapstructure:"create_home_hook"`
 
+	// Path of the script to run in order to create a lightweight account's home
+	// and share it with the account. Takes the same arguments as CreateHomeHook.
+	CreateLightweightHomeHook string `mapstructure:"create_lightweight_home_hook"`
+
 	// Maximum entries count a ListRecycle call may return: if exceeded, ListRecycle
 	// will return a BadRequest error
 	MaxRecycleEntries int `mapstructure:"max_recycle_entries"`

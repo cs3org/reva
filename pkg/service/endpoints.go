@@ -21,6 +21,7 @@ package service
 import (
 	"context"
 	"fmt"
+	"maps"
 	"net"
 
 	"github.com/cs3org/reva/v3/pkg/registry"
@@ -110,8 +111,19 @@ func ByMetadata(key, value string) EndpointOption {
 	}
 }
 
+// httpFilters adds the http transport to the query filters, unless the caller
+// asked for a specific transport.
+func (q endpointQuery) httpFilters() map[string]string {
+	meta := make(map[string]string, len(q.meta)+1)
+	maps.Copy(meta, q.meta)
+	if _, ok := meta[registry.MetaTransport]; !ok {
+		meta[registry.MetaTransport] = registry.TransportHTTP
+	}
+	return meta
+}
+
 // HTTPEndpoints returns every ready node matching the filters.
-func (c *clients) HTTPEndpoints(_ context.Context, opts ...EndpointOption) ([]Endpoint, error) {
+func (c *clients) HTTPEndpoints(ctx context.Context, opts ...EndpointOption) ([]Endpoint, error) {
 	q := endpointQuery{}
 	for _, o := range opts {
 		o(&q)
@@ -119,17 +131,24 @@ func (c *clients) HTTPEndpoints(_ context.Context, opts ...EndpointOption) ([]En
 	if q.name == "" {
 		return nil, fmt.Errorf("service registry: HTTPEndpoint requires ByName")
 	}
-	svc, err := c.registry.GetService(q.name)
+	var out []Endpoint
+	err := c.lookup(ctx, q.name, func() error {
+		svc, err := c.registry.GetService(q.name)
+		if err != nil {
+			return fmt.Errorf("service registry: resolving %q: %w", q.name, err)
+		}
+		nodes := filterByMetadata(svc.Nodes(), q.httpFilters())
+		if len(nodes) == 0 {
+			return fmt.Errorf("service registry: no node for %q matching filters", q.name)
+		}
+		out = make([]Endpoint, 0, len(nodes))
+		for _, n := range nodes {
+			out = append(out, endpoint{name: q.name, node: n})
+		}
+		return nil
+	})
 	if err != nil {
-		return nil, fmt.Errorf("service registry: resolving %q: %w", q.name, err)
-	}
-	nodes := filterByMetadata(svc.Nodes(), q.meta)
-	out := make([]Endpoint, 0, len(nodes))
-	for _, n := range nodes {
-		out = append(out, endpoint{name: q.name, node: n})
-	}
-	if len(out) == 0 {
-		return nil, fmt.Errorf("service registry: no node for %q matching filters", q.name)
+		return nil, err
 	}
 	return out, nil
 }
@@ -143,15 +162,23 @@ func (c *clients) HTTPEndpoint(ctx context.Context, opts ...EndpointOption) (End
 	if q.name == "" {
 		return nil, fmt.Errorf("service registry: HTTPEndpoint requires ByName")
 	}
-	svc, err := c.registry.GetService(q.name)
+	var ep Endpoint
+	err := c.lookup(ctx, q.name, func() error {
+		svc, err := c.registry.GetService(q.name)
+		if err != nil {
+			return fmt.Errorf("service registry: resolving %q: %w", q.name, err)
+		}
+		node, ok := c.selector.Pick(filterByMetadata(svc.Nodes(), q.httpFilters()))
+		if !ok {
+			return fmt.Errorf("service registry: no selectable node for %q matching filters", q.name)
+		}
+		ep = endpoint{name: q.name, node: node}
+		return nil
+	})
 	if err != nil {
-		return nil, fmt.Errorf("service registry: resolving %q: %w", q.name, err)
+		return nil, err
 	}
-	node, ok := c.selector.Pick(filterByMetadata(svc.Nodes(), q.meta))
-	if !ok {
-		return nil, fmt.Errorf("service registry: no selectable node for %q matching filters", q.name)
-	}
-	return endpoint{name: q.name, node: node}, nil
+	return ep, nil
 }
 
 func filterByMetadata(nodes []registry.Node, meta map[string]string) []registry.Node {

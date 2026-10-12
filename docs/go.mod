@@ -1,6 +1,6 @@
 module github.com/cs3org/reva/docs
 
-go 1.25.1
+go 1.27
 
 require (
 	github.com/FortAwesome/Font-Awesome v4.7.0+incompatible // indirect

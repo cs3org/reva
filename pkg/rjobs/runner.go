@@ -568,9 +568,15 @@ func (r *Runner) execRun(ctx context.Context, run Run) {
 	log := r.log.With().Str("job", run.Job).Str("run", string(run.ID)).Int("attempt", run.Attempt).Logger()
 
 	// once this run finishes, a leader-scoped periodic job is no longer in
-	// flight, so the scheduler may schedule it again.
+	// flight, so the scheduler may schedule it again. A run dropped by the
+	// overlap guard is the exception: it never owned the schedule mark, so the
+	// still-running owner must clear it, not this run.
+	var skippedOverlap bool
 	if r.isLeaderJob(run.Job) {
 		defer func() {
+			if skippedOverlap {
+				return
+			}
 			if err := r.store.ClearScheduledRunning(ctx, run.Job); err != nil {
 				log.Error().Err(err).Msg("rjobs: clearing schedule running mark failed")
 			}
@@ -609,6 +615,17 @@ func (r *Runner) execRun(ctx context.Context, run Run) {
 	if h.cancelled.Load() {
 		log.Info().Msg("rjobs: run cancelled")
 		r.finishCancelled(ctx, run, h.started, log)
+		return
+	}
+
+	// An overlap-skip is an expected outcome, not a failure.
+	// So, we just ack and drop it, without a retry.
+	if errors.Is(err, errSkippedOverlap) {
+		skippedOverlap = true
+		log.Debug().Msg("rjobs: run skipped, previous run still in flight")
+		if cerr := r.store.Complete(ctx, run.ID); cerr != nil {
+			log.Error().Err(cerr).Msg("rjobs: completing skipped run errored")
+		}
 		return
 	}
 
@@ -660,6 +677,11 @@ func (r *Runner) cancelRequested(ctx context.Context, run Run) bool {
 // redelivered. Cancellation is terminal, unlike a failure.
 func (r *Runner) finishCancelled(ctx context.Context, run Run, started time.Time, log zerolog.Logger) {
 	r.recordStatus(ctx, run, StateCancelled, nil, nil, started, log)
+	if run.DedupKey != "" && r.status != nil {
+		if err := r.status.Release(ctx, run.ID); err != nil {
+			log.Error().Err(err).Msg("rjobs: releasing dedup reservation errored")
+		}
+	}
 	if err := r.store.Complete(ctx, run.ID); err != nil {
 		log.Error().Err(err).Msg("rjobs: completing cancelled run errored")
 	}

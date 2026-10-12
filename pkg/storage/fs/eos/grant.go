@@ -160,6 +160,12 @@ func (fs *Eosfs) getEosACL(ctx context.Context, g *provider.Grant) (*acl.Entry, 
 			g.Grantee.GetUserId().Type == userpb.UserType_USER_TYPE_FEDERATED {
 			t = acl.TypeLightweight
 			qualifier = g.Grantee.GetUserId().OpaqueId
+		} else if g.Grantee.GetUserId().OpaqueId == fs.conf.ExternalAccountsUserName {
+			// The uid of the external accounts user is configured, so we resolve it
+			// locally. This grant is added lazily on the access path of every external
+			// user (getExternalAccountAuth), where a gateway failure would deny access
+			// over a uid we already know.
+			qualifier = fs.conf.ExternalAccountsUserUID
 		} else {
 			// since EOS Citrine ACLs are stored with uid, we need to convert username to
 			// uid only for users.

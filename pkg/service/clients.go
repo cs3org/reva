@@ -24,7 +24,11 @@ package service
 import (
 	"context"
 	"fmt"
+	"maps"
+	"os"
+	"sort"
 	"sync"
+	"time"
 
 	appprovider "github.com/cs3org/go-cs3apis/cs3/app/provider/v1beta1"
 	appregistry "github.com/cs3org/go-cs3apis/cs3/app/registry/v1beta1"
@@ -48,7 +52,10 @@ import (
 	datatx "github.com/cs3org/go-cs3apis/cs3/tx/v1beta1"
 
 	revtrace "github.com/cs3org/reva/v3/internal/grpc/interceptors/trace"
+	"github.com/cs3org/reva/v3/pkg/appctx"
+	"github.com/cs3org/reva/v3/pkg/logger"
 	"github.com/cs3org/reva/v3/pkg/registry"
+	"github.com/rs/zerolog"
 	"go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
@@ -56,6 +63,24 @@ import (
 
 // maxCallRecvMsgSize is the default maximum gRPC receive message size (in bytes).
 const maxCallRecvMsgSize = 10240000
+
+// A peer may be starting, restarting or waiting for its registration to
+// propagate, so a lookup retries before it fails the call.
+// If the gateway keeps failing to resolve, this instance cannot route at all,
+// so we exit: that makes it clear for the monitoring systems that this
+// instance is de facto dead. Tools like systemd can then take care of automatic
+// restarts etc.
+const (
+	resolveAttempts   = 3
+	resolveRetryWait  = 250 * time.Millisecond
+	unresolvableCalls = 5
+	unresolvableFor   = time.Minute
+)
+
+var exit = func(reason string) {
+	logger.New().Error().Msg(reason)
+	os.Exit(1)
+}
 
 // Service names processes register under and the resolver looks up.
 const (
@@ -79,7 +104,7 @@ const (
 	NameAppProvider     = "appprovider"
 	NameSpaces          = "spacesregistry"
 	NameDataTx          = "datatx"
-	NameLabels          = "labels"
+	NameLabels          = "labelsprovider"
 	NameAdmin           = "admin"
 	// NameControl labels the per-process control channel on its internal
 	// server; it is discovered via node metadata, not registered as a service.
@@ -111,7 +136,7 @@ type Clients interface {
 	DataTx(ctx context.Context) (datatx.TxAPIClient, error)
 	Labels(ctx context.Context) (labels.LabelsAPIClient, error)
 
-	// Degrade marks the node at address degraded after a failed dial/RPC.
+	// Degrade marks the node at address degraded and passes it over locally.
 	Degrade(service, address string)
 
 	// HTTPEndpoint resolves one ready node matching the filters; HTTPEndpoints
@@ -126,33 +151,117 @@ type clients struct {
 	selector Selector
 
 	mu    sync.Mutex
-	conns map[string]*grpc.ClientConn
+	conns map[string]peerConn
+	// open is a field so that a test can stand in for a peer with no listener.
+	open func(address string) (peerConn, error)
+
+	failMu sync.Mutex
+	fails  map[string]*failure
+
+	// penalties holds the nodes this process could not reach; see failover.go.
+	penMu     sync.Mutex
+	penalties map[string]time.Time
 }
 
-// NewClients builds a resolver over the registry, one per Reva instance.
-func NewClients(r registry.Registry) Clients {
+// failure is a service's current run of failed lookups.
+type failure struct {
+	first time.Time
+	calls int
+}
+
+// NewClients builds a resolver over the registry, one per Reva instance, that
+// picks among a service's nodes with s.
+func NewClients(r registry.Registry, s Selector) Clients {
 	return &clients{
-		registry: r,
-		selector: FirstSelector{},
-		conns:    map[string]*grpc.ClientConn{},
+		registry:  r,
+		selector:  s,
+		conns:     map[string]peerConn{},
+		open:      func(address string) (peerConn, error) { return dial(address) },
+		fails:     map[string]*failure{},
+		penalties: map[string]time.Time{},
 	}
 }
 
-func (c *clients) WithSelector(s Selector) *clients {
-	c.selector = s
-	return c
+// conn returns the connection the CS3 clients are built on. The eager resolve is
+// there to keep the getter's contract: it still reports a peer it cannot resolve,
+// while the connection handed back resolves again on every call.
+func (c *clients) conn(ctx context.Context, name string) (grpc.ClientConnInterface, error) {
+	if _, _, err := c.resolve(ctx, name); err != nil {
+		return nil, err
+	}
+	return &failoverConn{clients: c, service: name}, nil
 }
 
-// resolve picks a node for name and returns a cached connection to it.
-func (c *clients) resolve(name string) (*grpc.ClientConn, string, error) {
+// resolve picks a gRPC node for name and returns a cached connection to it,
+// retrying while the peer is unresolvable. A name is unique per transport, so an
+// HTTP service can carry the same one.
+func (c *clients) resolve(ctx context.Context, name string) (peerConn, string, error) {
+	var node registry.Node
+	err := c.lookup(ctx, name, func() error {
+		picked, err := c.pick(ctx, name, nil)
+		if err != nil {
+			return err
+		}
+		node = picked
+		return nil
+	})
+	if err != nil {
+		return nil, "", err
+	}
+	return c.connTo(node)
+}
+
+// resolveOther picks a node a call has not tried yet. It does not retry and does
+// not book a failure against the peer; see failoverConn.next.
+func (c *clients) resolveOther(ctx context.Context, name string, tried []string) (peerConn, string, error) {
+	node, err := c.pick(ctx, name, tried)
+	if err != nil {
+		return nil, "", err
+	}
+	return c.connTo(node)
+}
+
+func (c *clients) pick(ctx context.Context, name string, tried []string) (registry.Node, error) {
 	svc, err := c.registry.GetService(name)
 	if err != nil {
-		return nil, "", fmt.Errorf("service registry: resolving %q: %w", name, err)
+		return nil, fmt.Errorf("service registry: resolving %q: %w", name, err)
 	}
-	node, ok := c.selector.Pick(svc.Nodes())
+	nodes := filterByMetadata(svc.Nodes(), map[string]string{registry.MetaTransport: registry.TransportGRPC})
+	untried := without(nodes, tried)
+	// Penalties are weighed among the nodes a selector may pick: an offline or
+	// draining node that escaped them must not hide every penalized one.
+	candidates := eligible(untried)
+	preferred := c.unpenalized(name, candidates)
+	node, ok := c.selector.Pick(preferred)
+
+	// Every stage of the choice, to tell why a node was or was not picked.
+	if e := appctx.GetLogger(ctx).Trace(); e.Enabled() {
+		var picked string
+		if ok {
+			picked = node.Address()
+		}
+		e.Str("peer", name).Strs("tried", tried).Strs("nodes", describe(nodes)).
+			Strs("untried", describe(untried)).Strs("eligible", describe(candidates)).
+			Strs("penalized", c.penalizedOf(name, candidates)).Strs("unpenalized", describe(preferred)).
+			Str("picked", picked).Msg("node selection")
+	}
+
 	if !ok {
-		return nil, "", fmt.Errorf("service registry: no selectable node for %q", name)
+		return nil, fmt.Errorf("service registry: no selectable grpc node for %q", name)
 	}
+	return node, nil
+}
+
+// describe renders nodes as address[state] for the selection trace.
+func describe(nodes []registry.Node) []string {
+	out := make([]string, len(nodes))
+	for i, n := range nodes {
+		out[i] = n.Address() + "[" + n.Metadata()[registry.MetaState] + "]"
+	}
+	return out
+}
+
+func (c *clients) connTo(node registry.Node) (peerConn, string, error) {
 	addr := node.Address()
 	conn, err := c.connFor(addr)
 	if err != nil {
@@ -161,14 +270,103 @@ func (c *clients) resolve(name string) (*grpc.ClientConn, string, error) {
 	return conn, addr, nil
 }
 
+// lookup runs try until it succeeds, retrying a peer that is not resolvable yet
+// After too many failures, the issue is reported
+func (c *clients) lookup(ctx context.Context, name string, try func() error) error {
+	var err error
+	for attempt := 1; ; attempt++ {
+		if err = try(); err == nil {
+			c.resolved(name)
+			return nil
+		}
+		if attempt >= resolveAttempts {
+			break
+		}
+		select {
+		case <-ctx.Done():
+			return err
+		case <-time.After(resolveRetryWait):
+		}
+	}
+	c.unresolved(ctx, name, err)
+	return err
+}
+
+func (c *clients) resolved(name string) {
+	c.failMu.Lock()
+	delete(c.fails, name)
+	c.failMu.Unlock()
+}
+
+// unresolved records a failed lookup and ends the process once `name` has been
+// unresolvable for too long. This process will then die, so that it is picked up by
+// monitoring systems etc.
+func (c *clients) unresolved(ctx context.Context, name string, cause error) {
+	now := time.Now()
+	c.failMu.Lock()
+	f, ok := c.fails[name]
+	if !ok {
+		f = &failure{first: now}
+		c.fails[name] = f
+	}
+	f.calls++
+	calls, since := f.calls, now.Sub(f.first)
+	c.failMu.Unlock()
+
+	// Only an unresolvable gateway is fatal. Every request goes through it, so a
+	// process that cannot reach it can do no work at all. Any other peer being
+	// gone is a partial failure: that call fails, the rest of the process keeps
+	// serving. The process hosting the gateway never exits on this, because Add
+	// caches a node locally before it writes it, so a process always resolves
+	// the services it hosts.
+	log := appctx.GetLogger(ctx)
+	if name != NameGateway || calls < unresolvableCalls || since < unresolvableFor {
+		log.Error().Err(cause).Str("service", name).Int("failed_lookups", calls).
+			Str("registry", c.registrySnapshot(name)).Msg("cannot resolve peer, retrying")
+		return
+	}
+	reason := fmt.Sprintf("reva: %q has been unresolvable for %s over %d lookups, exiting: %v",
+		name, since.Truncate(time.Second), calls, cause)
+	log.WithLevel(zerolog.FatalLevel).Err(cause).Str("service", name).Int("failed_lookups", calls).
+		Dur("unresolvable_for", since).Str("registry", c.registrySnapshot(name)).
+		Msg("peer is unresolvable, exiting")
+	exit(reason)
+}
+
+// Get a snapshot of the registry for debugging connection failures
+func (c *clients) registrySnapshot(name string) string {
+	svcs, err := c.registry.ListServices()
+	if err != nil {
+		return fmt.Sprintf("cannot list services: %v", err)
+	}
+	names := make([]string, 0, len(svcs))
+	var target registry.Service
+	for _, s := range svcs {
+		names = append(names, fmt.Sprintf("%s(%d)", s.Name(), len(s.Nodes())))
+		if s.Name() == name {
+			target = s
+		}
+	}
+	sort.Strings(names)
+	if target == nil {
+		return fmt.Sprintf("%d services cached %v; %q absent", len(svcs), names, name)
+	}
+	nodes := make([]string, 0, len(target.Nodes()))
+	for _, n := range target.Nodes() {
+		md := n.Metadata()
+		nodes = append(nodes, fmt.Sprintf("%s[%s/%s]", n.Address(), md[registry.MetaTransport], md[registry.MetaState]))
+	}
+	return fmt.Sprintf("%d services cached; %q nodes: %v", len(svcs), name, nodes)
+}
+
 // connFor returns a cached connection to address, dialing on first use.
-func (c *clients) connFor(address string) (*grpc.ClientConn, error) {
+func (c *clients) connFor(address string) (peerConn, error) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	if conn, ok := c.conns[address]; ok {
 		return conn, nil
 	}
-	conn, err := dial(address)
+	conn, err := c.open(address)
 	if err != nil {
 		return nil, err
 	}
@@ -188,8 +386,16 @@ func dial(address string) (*grpc.ClientConn, error) {
 	)
 }
 
-// Degrade is a best-effort hint; it never errors.
+// Degrade passes the node over locally and marks it degraded in the registry. It
+// never errors.
 func (c *clients) Degrade(service, address string) {
+	c.penalize(service, address)
+	c.markDegraded(service, address)
+}
+
+// markDegraded is only a hint: the node re-registers itself as ready on its next
+// heartbeat, so this cannot outlive one heartbeat interval.
+func (c *clients) markDegraded(service, address string) {
 	svc, err := c.registry.GetService(service)
 	if err != nil {
 		return
@@ -198,7 +404,8 @@ func (c *clients) Degrade(service, address string) {
 		if n.Address() != address {
 			continue
 		}
-		meta := n.Metadata()
+		// The map belongs to the node the registry handed us.
+		meta := maps.Clone(n.Metadata())
 		meta[registry.MetaState] = registry.StateDegraded
 		_ = c.registry.Add(registry.NewService(service, []registry.Node{
 			registry.NewNode(n.ID(), n.Address(), meta),

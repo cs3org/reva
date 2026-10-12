@@ -208,7 +208,7 @@ func onHost(n registry.Node, host string) bool {
 			return true
 		}
 	}
-	return n.Metadata()["host"] == host
+	return n.Metadata()[registry.MetaHost] == host
 }
 
 // nodeState reads a node's self-reported state, defaulting to ready.

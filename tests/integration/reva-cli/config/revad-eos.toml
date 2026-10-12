@@ -157,6 +157,8 @@ prefix = "datagw"
 
 
 [http.services.dataprovider]
+mount_id = "eos"
+public_url = "http://localhost:38001/data"
 driver = "eoswrapper"
 
 [http.services.dataprovider.drivers.eoswrapper]

@@ -57,11 +57,6 @@ func NewConverter(gatewayClient gateway.GatewayAPIClient, config *Config) *Conve
 func (c *Converter) OCMReceivedShareToDriveItem(ctx context.Context, receivedOCMShare *ocm.ReceivedShare, unifiedRoleConverter func(context.Context, *provider.ResourcePermissions) *UnifiedRoleDefinition) (*libregraph.DriveItem, error) {
 	createdTime := utils.TSToTime(receivedOCMShare.Ctime)
 
-	grantee, err := c.CS3GranteeToSharePointIdentitySet(ctx, receivedOCMShare.Grantee)
-	if err != nil {
-		return nil, err
-	}
-
 	log := appctx.GetLogger(ctx)
 	log.Debug().Str("shareId", receivedOCMShare.GetId().GetOpaqueId()).Msg("processing received OCM share")
 
@@ -94,6 +89,9 @@ func (c *Converter) OCMReceivedShareToDriveItem(ctx context.Context, receivedOCM
 		LibreGraphUserType: libregraph.PtrString("Federated"),
 	}
 
+	// the grantee of a received share is the local user
+	user := appctx.ContextMustGetUser(ctx)
+
 	d := &libregraph.DriveItem{
 		// The OCM share state tracks the embedded transfer lifecycle, so the
 		// hidden flag is carried by the dedicated Hidden field instead.
@@ -124,7 +122,12 @@ func (c *Converter) OCMReceivedShareToDriveItem(ctx context.Context, receivedOCM
 			Permissions: []libregraph.Permission{
 				{
 					CreatedDateTime: *libregraph.NewNullableTime(&createdTime),
-					GrantedToV2:     grantee,
+					GrantedToV2: &libregraph.SharePointIdentitySet{
+						User: &libregraph.Identity{
+							DisplayName: user.DisplayName,
+							Id:          libregraph.PtrString(user.Id.OpaqueId),
+						},
+					},
 					Invitation: &libregraph.SharingInvitation{
 						InvitedBy: &libregraph.IdentitySet{
 							User: lgOCMUser,

@@ -43,6 +43,7 @@ import (
 	"github.com/cs3org/reva/v3/pkg/appctx"
 	"github.com/cs3org/reva/v3/pkg/errtypes"
 	"github.com/cs3org/reva/v3/pkg/mime"
+	"github.com/cs3org/reva/v3/pkg/ocm/client"
 	"github.com/cs3org/reva/v3/pkg/rhttp/router"
 	"github.com/cs3org/reva/v3/pkg/service"
 	"github.com/cs3org/reva/v3/pkg/sharedconf"
@@ -64,16 +65,24 @@ type cachedClient struct {
 }
 
 type driver struct {
-	c              *config
-	ccache         *ttlcache.Cache
-	discoveryCache *ttlcache.Cache
-	ocmClient      *ocmd.OCMClient
+	c               *config
+	ccache          *ttlcache.Cache
+	discoveryCache  *ttlcache.Cache
+	ocmClient       *ocmd.OCMClient
+	webdavTransport http.RoundTripper
 }
 
 type config struct {
-	GatewaySVC        string `mapstructure:"gatewaysvc"`
-	OCMClientTimeout  int    `mapstructure:"ocm_timeout"`
-	OCMClientInsecure bool   `mapstructure:"ocm_insecure"`
+	GatewaySVC              string `mapstructure:"gatewaysvc"`
+	OCMClientTimeout        int    `mapstructure:"ocm_timeout"`
+	OCMClientInsecure       bool   `mapstructure:"ocm_insecure"`
+	AllowLoopbackFederation bool   `mapstructure:"allow_loopback_federation"`
+	UseEnvProxy             bool   `mapstructure:"ocm_use_env_proxy"`
+	// AllowedFederationCIDRs admits explicit private ranges on this driver's
+	// OCM client and WebDAV transport. Empty by default. Set the same
+	// allowed_federation_cidrs key on both the storage provider and the data
+	// provider; configuring one does not authorize the other.
+	AllowedFederationCIDRs []string `mapstructure:"allowed_federation_cidrs"`
 }
 
 func (c *config) ApplyDefaults() {
@@ -91,16 +100,46 @@ func New(ctx context.Context, m map[string]any) (storage.FS, error) {
 		return nil, err
 	}
 
+	// Parse before caches or clients exist so an invalid element fails New
+	// with no partial policy and no network client.
+	allowedCIDRs, err := client.ParseFederationCIDRs(c.AllowedFederationCIDRs)
+	if err != nil {
+		return nil, errors.Wrapf(err, "ocmreceived: invalid allowed_federation_cidrs")
+	}
+
 	disco := ttlcache.NewCache()
 	_ = disco.SetTTL(5 * time.Minute)
 
+	timeout := time.Duration(c.OCMClientTimeout) * time.Second
+	insecure := c.OCMClientInsecure
+	allowLoopback := c.AllowLoopbackFederation
+	tcfg := client.TransportConfig{
+		Timeout:                timeout,
+		Insecure:               insecure,
+		AllowLoopback:          allowLoopback,
+		UseEnvProxy:            c.UseEnvProxy,
+		AllowedFederationCIDRs: allowedCIDRs,
+	}
+
+	// Loopback is opt-in for local federation tests; production stays public-only.
+	// Enforce at dial time (after DNS) so redirects and rebinding cannot hide a private target.
 	d := &driver{
-		c:              &c,
-		ccache:         ttlcache.NewCache(),
-		discoveryCache: disco,
-		ocmClient:      ocmd.NewClient(time.Duration(c.OCMClientTimeout)*time.Second, c.OCMClientInsecure),
+		c:               &c,
+		ccache:          ttlcache.NewCache(),
+		discoveryCache:  disco,
+		ocmClient:       ocmd.NewPublicOnlyClientWithConfig(tcfg),
+		webdavTransport: client.NewPublicOnlyRoundTripper(tcfg),
 	}
 	return d, nil
+}
+
+func (d *driver) newWebDAVClient(endpoint string, headers map[string]string) *gowebdav.Client {
+	c := gowebdav.NewClient(endpoint, "", "")
+	for key, value := range headers {
+		c.SetHeader(key, value)
+	}
+	c.SetTransport(d.webdavTransport)
+	return c
 }
 
 func shareInfoFromPath(path string) (*ocmpb.ShareId, string) {
@@ -280,14 +319,18 @@ func (d *driver) webdavClient(ctx context.Context, ref *provider.Reference) (*go
 		var c *gowebdav.Client
 		var authHdr string
 		bearerHdr := "Bearer " + secret
-		c = gowebdav.NewClient(endpoint, "", "")
-		c.SetHeader("Authorization", bearerHdr)
+		c = d.newWebDAVClient(endpoint, map[string]string{"Authorization": bearerHdr})
 		_, err = c.Stat("")
+		if errors.Is(err, client.ErrPolicyViolation) {
+			return nil, nil, "", err
+		}
 		if err != nil {
 			basicHdr := "Basic " + base64.StdEncoding.EncodeToString([]byte(secret+":"))
-			c = gowebdav.NewClient(endpoint, "", "")
-			c.SetHeader("Authorization", basicHdr)
+			c = d.newWebDAVClient(endpoint, map[string]string{"Authorization": basicHdr})
 			_, err2 := c.Stat("")
+			if errors.Is(err2, client.ErrPolicyViolation) {
+				return nil, nil, "", err2
+			}
 			if err2 != nil {
 				log.Info().Any("former_error", err).Err(err2).Str("endpoint", endpoint).Str("shareId", share.GetId().GetOpaqueId()).Msg("failed accessing OCM share")
 				return nil, nil, "", errtypes.InvalidCredentials("error accessing OCM share: " + err2.Error())
@@ -312,8 +355,9 @@ func (d *driver) webdavClient(ctx context.Context, ref *provider.Reference) (*go
 	if err != nil {
 		return nil, nil, "", errors.Wrap(err, "token exchange failed")
 	}
-	c := gowebdav.NewClient(endpoint, "", "")
-	c.SetHeader("Authorization", "Bearer "+accessToken)
+	c := d.newWebDAVClient(endpoint, map[string]string{
+		"Authorization": "Bearer " + accessToken,
+	})
 	return c, share, rel, nil
 }
 
@@ -546,10 +590,11 @@ func (d *driver) InitiateUpload(ctx context.Context, ref *provider.Reference, _ 
 
 // uploadOnFreshClient creates a one-off DAV client for the upload so that
 // Upload-Length: -1 does not leak onto a cached client used by later operations.
-func uploadOnFreshClient(endpoint, authHeader, rel string, body io.Reader) error {
-	c := gowebdav.NewClient(endpoint, "", "")
-	c.SetHeader("Authorization", authHeader)
-	c.SetHeader(ocdav.HeaderUploadLength, "-1")
+func (d *driver) uploadOnFreshClient(endpoint, authHeader, rel string, body io.Reader) error {
+	c := d.newWebDAVClient(endpoint, map[string]string{
+		"Authorization":          authHeader,
+		ocdav.HeaderUploadLength: "-1",
+	})
 	return c.WriteStream(rel, body, 0)
 }
 
@@ -576,7 +621,7 @@ func (d *driver) Upload(ctx context.Context, ref *provider.Reference, r io.ReadC
 		return err
 	}
 
-	err = uploadOnFreshClient(endpoint, authHeader, rel, bytes.NewReader(buf))
+	err = d.uploadOnFreshClient(endpoint, authHeader, rel, bytes.NewReader(buf))
 	if err == nil {
 		return nil
 	}
@@ -598,7 +643,7 @@ func (d *driver) Upload(ctx context.Context, ref *provider.Reference, r io.ReadC
 	if err != nil {
 		return err
 	}
-	if err = uploadOnFreshClient(endpoint, authHeader, rel, bytes.NewReader(buf)); err != nil {
+	if err = d.uploadOnFreshClient(endpoint, authHeader, rel, bytes.NewReader(buf)); err != nil {
 		if isWebDAV401(err) {
 			return errtypes.InvalidCredentials("remote OCM upload denied after token re-exchange")
 		}

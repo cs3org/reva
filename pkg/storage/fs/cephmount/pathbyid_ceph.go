@@ -40,14 +40,13 @@ import (
 // adminMount is used for privileged operations like MDS commands
 type CephAdminConn struct {
 	radosConn  *rados2.Conn
-	adminMount *goceph.MountInfo // Admin mount for privileged MDS commands
+	adminMount *goceph.MountInfo // Initialized but never mounted; only used for MDS commands
 }
 
 // Close releases resources and closes the admin connection
 // Close cleans up the CephAdminConn resources
 func (c *CephAdminConn) Close() {
 	if c.adminMount != nil {
-		c.adminMount.Unmount()
 		c.adminMount.Release()
 	}
 	if c.radosConn != nil {
@@ -124,17 +123,17 @@ func newCephAdminConnFromFstab(ctx context.Context, o *Options, mountInfo *Fstab
 	}
 	logger.Info().Msg("successfully created ceph admin mount from rados connection")
 
-	// Mount the filesystem at default root
-	// Path trimming will be handled by convertCephVolumePathToUserPath using chrootDir
-	logger.Info().Msg("mounting ceph filesystem at default root")
-	err = adminMount.MountWithRoot(mountInfo.CephVolumePath)
+	// Only initialize the client, do not mount: MdsCommand just needs an
+	// initialized client, and the admin key is not allowed to mount.
+	logger.Info().Msg("initializing ceph admin client")
+	err = adminMount.Init()
 	if err != nil {
-		logger.Error().Err(err).Msg("failed to mount ceph filesystem at default root")
+		logger.Error().Err(err).Msg("failed to initialize ceph admin client")
 		adminMount.Release()
 		conn.Shutdown()
 		return nil, err
 	}
-	logger.Info().Msg("successfully mounted ceph filesystem at default root")
+	logger.Info().Msg("successfully initialized ceph admin client")
 
 	logger.Info().Msg("ceph admin connection created successfully")
 

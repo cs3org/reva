@@ -75,6 +75,8 @@ func (s *svc) handleGet(ctx context.Context, w http.ResponseWriter, r *http.Requ
 		return
 	}
 
+	logResourceAccess(ctx, &log, sRes.Info)
+
 	dReq := &provider.InitiateFileDownloadRequest{Ref: ref}
 	dRes, err := client.InitiateFileDownload(ctx, dReq)
 	if err != nil {

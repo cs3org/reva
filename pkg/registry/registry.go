@@ -63,14 +63,26 @@ type Event struct {
 const (
 	MetaState     = "state"
 	MetaLastSeen  = "last_seen"
+	MetaTransport = "transport"  // "grpc" | "http" | "serverless"
 	MetaScheme    = "scheme"     // "http" | "https" for HTTP services
 	MetaPrefix    = "prefix"     // HTTP URL path prefix
 	MetaPublicURL = "public_url" // explicit external URL override
 	MetaMountID   = "mount_id"   // storage affinity key (data provider)
 	MetaControl   = "control"    // host:port of the process's control channel
+	MetaHost      = "host"       // hostname of the process that registered the node
+	// MetaApp carries an app provider's CS3 ProviderInfo as protojson, minus
+	// its address, which the app registry fills in from the node itself.
+	MetaApp = "app"
 
 	StateReady    = "ready"
 	StateDegraded = "degraded"
 	StateOffline  = "offline"
 	StateDraining = "draining"
+
+	// A service name is unique per transport, not globally: the same name can
+	// name a gRPC service and an HTTP one (e.g. "preferences"). Resolution
+	// must therefore filter on the transport it can speak.
+	TransportGRPC       = "grpc"
+	TransportHTTP       = "http"
+	TransportServerless = "serverless"
 )

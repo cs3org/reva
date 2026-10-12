@@ -44,6 +44,7 @@ import (
 	"google.golang.org/grpc/metadata"
 
 	"github.com/cs3org/reva/v3/pkg/auth"
+	authcache "github.com/cs3org/reva/v3/pkg/auth/cache"
 	"github.com/cs3org/reva/v3/pkg/auth/scope"
 	"github.com/cs3org/reva/v3/pkg/errtypes"
 	"github.com/cs3org/reva/v3/pkg/rgrpc/status"
@@ -74,6 +75,7 @@ type config struct {
 	TokenWriter            string                    `mapstructure:"token_writer"`
 	TokenWriters           map[string]map[string]any `mapstructure:"token_writers"`
 	MachineSecret          string                    `mapstructure:"machine_secret" docs:"nil;Secret used for the gateway to authenticate a user when using a signed URL"`
+	authcache.Config       `mapstructure:",squash"`
 }
 
 func parseConfig(m map[string]any) (*config, error) {
@@ -186,6 +188,7 @@ func New(m map[string]any, unprotected []string) (global.Middleware, error) {
 		tokenManager:       tokenManager,
 		tokenWriter:        tokenWriter,
 		credChain:          credChain,
+		credCache:          authcache.New(conf.Config),
 	}
 	return mw.handler, nil
 }
@@ -198,6 +201,7 @@ type middleware struct {
 	tokenManager       token.Manager
 	tokenWriter        auth.TokenWriter
 	credChain          map[string]auth.CredentialStrategy
+	credCache          *authcache.Cache
 }
 
 func (m *middleware) handler(h http.Handler) http.Handler {
@@ -321,47 +325,70 @@ func (m *middleware) authenticateUser(w http.ResponseWriter, r *http.Request, is
 		return nil, errtypes.PermissionDenied("no credentials found")
 	}
 
-	req := &gateway.AuthenticateRequest{
-		Type:         creds.Type,
-		ClientId:     creds.ClientID,
-		ClientSecret: creds.ClientSecret,
-	}
+	// A sync client repeats the same credentials on every request. Answering
+	// them from the cache skips the whole gateway round trip below.
+	credKey := authcache.Key(creds.Type, creds.ClientID, creds.ClientSecret)
+	id, rejected, cached := m.credCache.Get(credKey)
 
-	log.Debug().Msgf("AuthenticateRequest: type: %s, client_id: %s against %s", req.Type, req.ClientId, conf.GatewaySvc)
+	if !cached {
+		req := &gateway.AuthenticateRequest{
+			Type:         creds.Type,
+			ClientId:     creds.ClientID,
+			ClientSecret: creds.ClientSecret,
+		}
 
-	res, err := client.Authenticate(ctx, req)
-	if err != nil {
-		logError(isUnprotectedEndpoint, log, err, "error calling Authenticate", http.StatusUnauthorized, w)
-		return nil, err
-	}
+		log.Debug().Msgf("AuthenticateRequest: type: %s, client_id: %s against %s", req.Type, req.ClientId, conf.GatewaySvc)
 
-	if res.Status.Code != rpc.Code_CODE_OK {
-		err := status.NewErrorFromCode(res.Status.Code, "auth")
-		if res.Status.Code == rpc.Code_CODE_ABORTED {
+		res, err := client.Authenticate(ctx, req)
+		if err != nil {
+			// A transport failure says nothing about the credentials, so it is
+			// not cached.
+			logError(isUnprotectedEndpoint, log, err, "error calling Authenticate", http.StatusUnauthorized, w)
+			return nil, err
+		}
+
+		var notAfter time.Time
+		switch {
+		case res.Status.Code == rpc.Code_CODE_ABORTED:
 			// A conflict occurs when an identity cannot be resolved for a known reason,
 			// e.g. a lightweight account that has been linked to a primary account.
-			logError(isUnprotectedEndpoint, log, err, "conflict when generating access token from credentials", http.StatusConflict, w)
-		} else {
-			logError(isUnprotectedEndpoint, log, err, "error generating access token from credentials", http.StatusUnauthorized, w)
+			rejected = errtypes.Conflict(status.NewErrorFromCode(res.Status.Code, "auth").Error())
+		case res.Status.Code != rpc.Code_CODE_OK:
+			rejected = status.NewErrorFromCode(res.Status.Code, "auth")
+		default:
+			_, tokenScope, err := tokenManager.DismantleToken(ctx, res.Token)
+			if err != nil {
+				logError(isUnprotectedEndpoint, log, err, "error dismantling token", http.StatusUnauthorized, w)
+				return nil, err
+			}
+			log.Info().Msg("core access token generated")
+			id = &authcache.Identity{User: res.User, Scopes: tokenScope, Token: res.Token}
+			// The cached token is handed out as it is, so the entry must not
+			// outlive it.
+			if expmgr, ok := tokenManager.(token.ValidatedExpiry); ok {
+				if exp, err := expmgr.ValidatedExpiresAt(ctx, res.Token); err == nil {
+					notAfter = exp
+				}
+			}
 		}
-		return nil, err
+
+		m.credCache.Set(credKey, id, rejected, notAfter)
 	}
 
-	log.Info().Msg("core access token generated")
+	if rejected != nil {
+		if _, isConflict := rejected.(errtypes.Conflict); isConflict {
+			logError(isUnprotectedEndpoint, log, rejected, "conflict when generating access token from credentials", http.StatusConflict, w)
+		} else {
+			logError(isUnprotectedEndpoint, log, rejected, "error generating access token from credentials", http.StatusUnauthorized, w)
+		}
+		return nil, rejected
+	}
 
 	// write token to response
-	token := res.Token
-	tokenWriter.WriteToken(token, w)
-
-	// validate token
-	_, tokenScope, err := tokenManager.DismantleToken(r.Context(), token)
-	if err != nil {
-		logError(isUnprotectedEndpoint, log, err, "error dismantling token", http.StatusUnauthorized, w)
-		return nil, err
-	}
+	tokenWriter.WriteToken(id.Token, w)
 
 	// ensure access to the resource is allowed
-	ok, err := scope.VerifyScope(ctx, tokenScope, r.URL.Path)
+	ok, err := scope.VerifyScope(ctx, id.Scopes, r.URL.Path)
 	if err != nil {
 		logError(isUnprotectedEndpoint, log, err, "error verifying scope of access token", http.StatusInternalServerError, w)
 		return nil, err
@@ -372,7 +399,7 @@ func (m *middleware) authenticateUser(w http.ResponseWriter, r *http.Request, is
 		return nil, err
 	}
 
-	return ctxWithUserInfo(ctx, r, res.User, token, tokenScope), nil
+	return ctxWithUserInfo(ctx, r, id.User, id.Token, id.Scopes), nil
 }
 
 // Keep the authenticated request state together so downstream handlers see the

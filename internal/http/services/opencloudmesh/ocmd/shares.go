@@ -45,6 +45,7 @@ import (
 	"github.com/cs3org/reva/v3/internal/http/services/reqres"
 	"github.com/cs3org/reva/v3/internal/http/services/wellknown"
 	"github.com/cs3org/reva/v3/pkg/appctx"
+	"github.com/cs3org/reva/v3/pkg/ocm/client"
 	"github.com/cs3org/reva/v3/pkg/service"
 	"github.com/cs3org/reva/v3/pkg/utils"
 	"github.com/go-playground/validator/v10"
@@ -59,14 +60,38 @@ type sharesHandler struct {
 	machineSecret              string
 	autoAcceptProviders        []*regexp.Regexp
 	trustForwardedFor          bool
-	ocmClientInsecure          bool
+	ocmClient                  *OCMClient
+	webdavTransport            http.RoundTripper
 }
 
 func (h *sharesHandler) init(c *config) error {
 	h.exposeRecipientDisplayName = c.ExposeRecipientDisplayName
 	h.machineSecret = c.MachineSecret
 	h.trustForwardedFor = c.TrustForwardedFor
-	h.ocmClientInsecure = c.OCMClientInsecure
+	// Parse the explicit private-network exception list before any client or
+	// network is constructed: an invalid element must fail init, not start a
+	// partially accepted policy or run discovery first. The typed value is
+	// copied onto the same TransportConfig that carries timeout, TLS, loopback
+	// and proxy; tcfg is not rebuilt elsewhere.
+	allowedCIDRs, err := client.ParseFederationCIDRs(c.AllowedFederationCIDRs)
+	if err != nil {
+		return errors.Wrapf(err, "ocm: invalid allowed_federation_cidrs")
+	}
+
+	tcfg := client.TransportConfig{
+		Timeout:       time.Duration(c.OCMClientTimeout) * time.Second,
+		Insecure:      c.OCMClientInsecure,
+		AllowLoopback: c.AllowLoopbackFederation,
+		UseEnvProxy:   c.OCMClientUseEnvProxy,
+	}
+	tcfg.AllowedFederationCIDRs = allowedCIDRs
+
+	// Inbound discovery and legacy WebDAV probing share this TransportConfig,
+	// so both use the same address and transport policy.
+	// One public-only OCMClient so Discover and ExchangeToken share the same dial guard.
+	// A discovered token URL cannot skip policy by using a second, unguarded client.
+	h.ocmClient = NewPublicOnlyClientWithConfig(tcfg)
+	h.webdavTransport = client.NewPublicOnlyRoundTripper(tcfg)
 	for _, p := range c.AutoAcceptProviders {
 		re, err := regexp.Compile(p)
 		if err != nil {
@@ -213,6 +238,7 @@ func (h *sharesHandler) CreateShare(w http.ResponseWriter, r *http.Request) {
 		// because remote systems such as Nextcloud may send "file" even if the resource is a folder.
 		c := gowebdav.NewClient(protocols[0].GetWebdavOptions().Uri, "", "")
 		c.SetHeader("Authorization", "Basic "+base64.StdEncoding.EncodeToString([]byte(protocols[0].GetWebdavOptions().SharedSecret+":")))
+		c.SetTransport(h.webdavTransport)
 		target, err := c.Stat("")
 		if err != nil {
 			log.Info().Err(err).Str("endpoint", protocols[0].GetWebdavOptions().Uri).Msg("error stating remote resource, assuming file")
@@ -507,8 +533,7 @@ func (h *sharesHandler) getAndResolveProtocols(ctx context.Context, p Protocols,
 }
 
 func (h *sharesHandler) discoverOcmResourceTypes(ctx context.Context, ownerServer string) ([]wellknown.ResourceTypes, string, error) {
-	ocmClient := NewClient(time.Duration(10)*time.Second, h.ocmClientInsecure)
-	ocmCaps, err := ocmClient.Discover(ctx, ownerServer)
+	ocmCaps, err := h.ocmClient.Discover(ctx, ownerServer)
 	if err != nil {
 		return nil, "", err
 	}
