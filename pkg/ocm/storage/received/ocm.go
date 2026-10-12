@@ -465,10 +465,14 @@ func convertStatToResourceInfo(f fs.FileInfo, share *ocmpb.ReceivedShare, relPat
 	}
 
 	var name string
-	if share.SharedResourceType == ocmpb.SharedResourceType_SHARE_RESOURCE_TYPE_FILE {
+	switch {
+	case share.SharedResourceType == ocmpb.SharedResourceType_SHARE_RESOURCE_TYPE_FILE:
 		name = share.Name
-	} else {
+	case f.Name() != "":
 		name = f.Name()
+	default:
+		// gowebdav's Stat only reads displayname, which reva doesn't serve
+		name = filepath.Base(filepath.Join(share.Name, relPath))
 	}
 
 	webdav, _ := getWebDAVProtocol(share.Protocols)
@@ -476,7 +480,7 @@ func convertStatToResourceInfo(f fs.FileInfo, share *ocmpb.ReceivedShare, relPat
 	return &provider.ResourceInfo{
 		Type:     t,
 		Id:       getResourceInfo(share.Id, relPath),
-		MimeType: mime.Detect(f.IsDir(), f.Name()),
+		MimeType: mime.Detect(f.IsDir(), name),
 		Path:     getPathFromShareIDAndRelPath(share.Id, relPath),
 		Name:     name,
 		Size:     uint64(f.Size()),

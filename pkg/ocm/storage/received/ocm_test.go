@@ -747,6 +747,40 @@ func TestConvertStatToResourceInfo_Dir(t *testing.T) {
 	}
 }
 
+// Stat on a reva remote returns no displayname, so FileInfo.Name() is empty.
+func TestConvertStatToResourceInfo_FileShareNoDisplayName(t *testing.T) {
+	fi := &fakeFileInfo{size: 1024}
+	share := testReceivedShare("sender.example.com", "share-abc", true)
+	share.Name = "report.odt"
+
+	info := convertStatToResourceInfo(fi, share, "/")
+
+	if info.Name != "report.odt" {
+		t.Errorf("name: got %q, want report.odt", info.Name)
+	}
+	if info.MimeType != "application/vnd.oasis.opendocument.text" {
+		t.Errorf("mime: got %q, want application/vnd.oasis.opendocument.text", info.MimeType)
+	}
+}
+
+func TestConvertStatToResourceInfo_FolderShareNoDisplayName(t *testing.T) {
+	share := testReceivedShare("sender.example.com", "share-abc", false)
+	share.Name = "docs"
+
+	info := convertStatToResourceInfo(&fakeFileInfo{size: 1024}, share, "/sub/report.odt")
+	if info.Name != "report.odt" {
+		t.Errorf("name: got %q, want report.odt", info.Name)
+	}
+	if info.MimeType != "application/vnd.oasis.opendocument.text" {
+		t.Errorf("mime: got %q, want application/vnd.oasis.opendocument.text", info.MimeType)
+	}
+
+	root := convertStatToResourceInfo(&fakeFileInfo{isDir: true}, share, "/")
+	if root.Name != "docs" {
+		t.Errorf("root name: got %q, want docs", root.Name)
+	}
+}
+
 // --- isWebDAV401 tests ---
 
 func TestIsWebDAV401_True(t *testing.T) {
