@@ -20,11 +20,14 @@ package applicationauth
 
 import (
 	"context"
+	"encoding/json"
 
 	appauthpb "github.com/cs3org/go-cs3apis/cs3/auth/applications/v1beta1"
+	typespb "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
 	"github.com/cs3org/reva/v3/pkg/appauth"
 	"github.com/cs3org/reva/v3/pkg/appauth/manager/registry"
 	"github.com/cs3org/reva/v3/pkg/errtypes"
+	"github.com/cs3org/reva/v3/pkg/invoke"
 	"github.com/cs3org/reva/v3/pkg/plugin"
 	"github.com/cs3org/reva/v3/pkg/rgrpc"
 	"github.com/cs3org/reva/v3/pkg/rgrpc/status"
@@ -48,6 +51,7 @@ type config struct {
 }
 
 type service struct {
+	*invoke.Set
 	conf *config
 	am   appauth.Manager
 }
@@ -84,6 +88,7 @@ func New(ctx context.Context, m map[string]any) (rgrpc.Service, error) {
 		conf: &c,
 		am:   am,
 	}
+	service.registerInvocations()
 
 	return service, nil
 }
@@ -100,7 +105,7 @@ func (s *service) GenerateAppPassword(ctx context.Context, req *appauthpb.Genera
 	pwd, err := s.am.GenerateAppPassword(ctx, req.TokenScope, req.Label, req.Expiration)
 	if err != nil {
 		return &appauthpb.GenerateAppPasswordResponse{
-			Status: status.NewInternal(ctx, err, "error generating app password"),
+			Status: status.NewStatusFromErrType(ctx, "error generating app password", err),
 		}, nil
 	}
 
@@ -118,10 +123,27 @@ func (s *service) ListAppPasswords(ctx context.Context, req *appauthpb.ListAppPa
 		}, nil
 	}
 
-	return &appauthpb.ListAppPasswordsResponse{
+	res := &appauthpb.ListAppPasswordsResponse{
 		Status:       status.NewOK(ctx),
 		AppPasswords: pwds,
-	}, nil
+	}
+	// The CS3 AppPassword has no field for who created it.
+	if cl, ok := s.am.(appauth.CreatorLister); ok {
+		creators, err := cl.ListAppPasswordCreators(ctx)
+		if err != nil {
+			return &appauthpb.ListAppPasswordsResponse{
+				Status: status.NewInternal(ctx, err, "error listing app password creators"),
+			}, nil
+		}
+		val, err := json.Marshal(creators)
+		if err != nil {
+			return nil, err
+		}
+		res.Opaque = &typespb.Opaque{Map: map[string]*typespb.OpaqueEntry{
+			appauth.OpaqueCreatedBy: {Decoder: "json", Value: val},
+		}}
+	}
+	return res, nil
 }
 
 func (s *service) InvalidateAppPassword(ctx context.Context, req *appauthpb.InvalidateAppPasswordRequest) (*appauthpb.InvalidateAppPasswordResponse, error) {
@@ -141,7 +163,7 @@ func (s *service) GetAppPassword(ctx context.Context, req *appauthpb.GetAppPassw
 	pwd, err := s.am.GetAppPassword(ctx, req.User, req.Password)
 	if err != nil {
 		return &appauthpb.GetAppPasswordResponse{
-			Status: status.NewInternal(ctx, err, "error getting app password via username/password"),
+			Status: status.NewStatusFromErrType(ctx, "error getting app password", err),
 		}, nil
 	}
 

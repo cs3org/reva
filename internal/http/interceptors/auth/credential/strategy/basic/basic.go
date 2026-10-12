@@ -24,6 +24,7 @@ import (
 
 	"github.com/cs3org/reva/v3/internal/http/interceptors/auth/credential/registry"
 	"github.com/cs3org/reva/v3/pkg/auth"
+	"github.com/cs3org/reva/v3/pkg/auth/scope"
 )
 
 func init() {
@@ -43,7 +44,7 @@ func (s *strategy) GetCredentials(w http.ResponseWriter, r *http.Request) (*auth
 	if !ok {
 		return nil, fmt.Errorf("no basic auth provided")
 	}
-	return &auth.Credentials{Type: "basic", ClientID: id, ClientSecret: secret}, nil
+	return &auth.Credentials{Type: "basic", ClientID: id, ClientSecret: secret, Presentation: string(scope.PresentationBasic)}, nil
 }
 
 func (s *strategy) AddWWWAuthenticate(w http.ResponseWriter, r *http.Request, realm string) {
