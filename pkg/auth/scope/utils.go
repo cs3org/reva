@@ -56,6 +56,12 @@ func FormatScope(scopeType string, scope *authpb.Scope) (string, error) {
 			return "", err
 		}
 		return fmt.Sprintf("path:\"%s\" %s", resInfo.Path, scope.Role.String()), nil
+	case strings.HasPrefix(scopeType, appAuthScopeKey):
+		s, err := parseAppAuthScope(scope)
+		if err != nil {
+			return "", err
+		}
+		return fmt.Sprintf("client:%s permissions:%s roots:%s", s.Client, strings.Join(s.Permissions, ","), strings.Join(s.Roots, ",")), nil
 	default:
 		return "", errtypes.NotSupported("scope not yet supported")
 	}

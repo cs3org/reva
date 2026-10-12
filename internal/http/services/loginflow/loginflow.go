@@ -38,6 +38,7 @@ import (
 	"time"
 
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
+	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	"github.com/cs3org/reva/v3/pkg/appauth"
 	"github.com/cs3org/reva/v3/pkg/appauth/loginflow"
 	storeregistry "github.com/cs3org/reva/v3/pkg/appauth/loginflow/registry"
@@ -50,6 +51,7 @@ import (
 	"github.com/cs3org/reva/v3/pkg/rhttp/global"
 	"github.com/cs3org/reva/v3/pkg/rhttp/ratelimit"
 	"github.com/cs3org/reva/v3/pkg/rhttp/router"
+	"github.com/cs3org/reva/v3/pkg/service"
 	"github.com/cs3org/reva/v3/pkg/utils/cfg"
 	"github.com/google/uuid"
 )
@@ -337,6 +339,14 @@ func (s *svc) handlePoll(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Before consuming, so that a failed lookup does not lose the approval.
+	owner, err := s.owner(r.Context(), ca)
+	if err != nil {
+		log.Error().Err(err).Str("client_id", ca.ClientID).Msg("could not resolve the user who approved the client")
+		http.Error(w, "internal error", http.StatusInternalServerError)
+		return
+	}
+
 	consumed, err := s.store.Consume(r.Context(), ph)
 	if err != nil {
 		// Lost the consume race or already consumed: the client just sees 404.
@@ -344,9 +354,13 @@ func (s *svc) handlePoll(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	appPass, err := s.mintAppPassword(r.Context(), consumed)
+	appPass, err := s.mintAppPassword(r.Context(), owner, consumed)
 	if err != nil {
 		log.Error().Err(err).Str("client_id", consumed.ClientID).Msg("could not mint app password after consume")
+		if _, ok := err.(errtypes.PermissionDenied); ok {
+			http.Error(w, "app passwords are not allowed for this account", http.StatusForbidden)
+			return
+		}
 		http.Error(w, "internal error", http.StatusInternalServerError)
 		return
 	}
@@ -361,17 +375,36 @@ func (s *svc) handlePoll(w http.ResponseWriter, r *http.Request) {
 
 // Helpers -----------------------------------------------------------------
 
-// mintAppPassword generates an owner-scoped, non-expiring app password for the
-// authorization's user. The label carries the client_id so the management API
-// can map a row back to a client authorization.
-func (s *svc) mintAppPassword(ctx context.Context, ca *loginflow.ClientAuthorization) (string, error) {
-	user := &userpb.User{
-		Id:       &userpb.UserId{OpaqueId: ca.UserID},
-		Username: ca.Username,
+// owner returns the user who approved the authorization, whose type decides
+// whether the app password may be created.
+func (s *svc) owner(ctx context.Context, ca *loginflow.ClientAuthorization) (*userpb.User, error) {
+	gw, err := service.Gateway(ctx)
+	if err != nil {
+		return nil, err
 	}
-	ctx = appctx.ContextSetUser(ctx, user)
+	res, err := gw.GetUser(ctx, &userpb.GetUserRequest{UserId: &userpb.UserId{OpaqueId: ca.UserID}, SkipFetchingUserGroups: true})
+	if err != nil {
+		return nil, err
+	}
+	if res.GetStatus().GetCode() != rpc.Code_CODE_OK {
+		return nil, fmt.Errorf("loginflow: looking up user %s: %s", ca.UserID, res.GetStatus().GetMessage())
+	}
+	return res.GetUser(), nil
+}
 
-	ownerScope, err := scope.AddOwnerScope(nil)
+// mintAppPassword generates the app password of the enrolled client: one for
+// a sync client with every permission and no expiry, or, for the CERNBox CLI,
+// one with the read and write preset and the default expiry. The label carries
+// the client_id so the management API can map a row back to a client
+// authorization.
+func (s *svc) mintAppPassword(ctx context.Context, owner *userpb.User, ca *loginflow.ClientAuthorization) (string, error) {
+	ctx = appctx.ContextSetUser(ctx, owner)
+
+	ap := &scope.AppAuthScope{Client: scope.ClientSync, Permissions: []string{scope.PermAll}}
+	if strings.HasPrefix(ca.UserAgent, "cernbox-cli/") {
+		ap = &scope.AppAuthScope{Client: scope.ClientCLI, Permissions: scope.ReadWritePermissions()}
+	}
+	scopes, err := scope.AddAppAuthScope(ap, nil)
 	if err != nil {
 		return "", err
 	}
@@ -380,7 +413,7 @@ func (s *svc) mintAppPassword(ctx context.Context, ca *loginflow.ClientAuthoriza
 	// "<user-chosen name>|<client description>|<client_id>". Both the name and
 	// the description are clean strings; the raw User-Agent is not stored.
 	label := ca.DeviceName + "|" + loginflow.ClientDescription(ca.UserAgent) + "|" + ca.ClientID
-	appPass, err := s.am.GenerateAppPassword(ctx, ownerScope, label, nil)
+	appPass, err := s.am.GenerateAppPassword(ctx, scopes, label, nil)
 	if err != nil {
 		return "", err
 	}

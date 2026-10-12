@@ -23,10 +23,13 @@ import (
 
 	appauthpb "github.com/cs3org/go-cs3apis/cs3/auth/applications/v1beta1"
 	authpb "github.com/cs3org/go-cs3apis/cs3/auth/provider/v1beta1"
+	gateway "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
 	user "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	rpcv1beta1 "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
+	"github.com/cs3org/reva/v3/pkg/appctx"
 	"github.com/cs3org/reva/v3/pkg/auth"
 	"github.com/cs3org/reva/v3/pkg/auth/manager/registry"
+	"github.com/cs3org/reva/v3/pkg/auth/scope"
 	"github.com/cs3org/reva/v3/pkg/errtypes"
 	"github.com/cs3org/reva/v3/pkg/service"
 	"github.com/cs3org/reva/v3/pkg/sharedconf"
@@ -67,6 +70,24 @@ func (m *manager) Authenticate(ctx context.Context, username, password string) (
 		return nil, nil, err
 	}
 
+	// An app password sent alone, as a bearer: the store knows its owner.
+	if username == "" {
+		pw, err := getAppPassword(ctx, gtw, nil, password)
+		if err != nil {
+			return nil, nil, err
+		}
+		userResponse, err := gtw.GetUser(ctx, &user.GetUserRequest{UserId: pw.GetUser()})
+		switch {
+		case err != nil:
+			return nil, nil, err
+		case userResponse.Status.Code == rpcv1beta1.Code_CODE_NOT_FOUND:
+			return nil, nil, errtypes.NotFound(userResponse.Status.Message)
+		case userResponse.Status.Code != rpcv1beta1.Code_CODE_OK:
+			return nil, nil, errtypes.InternalError(userResponse.Status.Message)
+		}
+		return identity(ctx, userResponse.GetUser(), pw)
+	}
+
 	// get user info
 	userResponse, err := gtw.GetUserByClaim(ctx, &user.GetUserByClaimRequest{
 		Claim: "username",
@@ -83,21 +104,50 @@ func (m *manager) Authenticate(ctx context.Context, username, password string) (
 	}
 
 	// get the app password associated with the user and password
+	pw, err := getAppPassword(ctx, gtw, userResponse.GetUser().Id, password)
+	if err != nil {
+		return nil, nil, err
+	}
+	return identity(ctx, userResponse.GetUser(), pw)
+}
+
+func getAppPassword(ctx context.Context, gtw gateway.GatewayAPIClient, owner *user.UserId, password string) (*appauthpb.AppPassword, error) {
 	appAuthResponse, err := gtw.GetAppPassword(ctx, &appauthpb.GetAppPasswordRequest{
-		User:     userResponse.GetUser().Id,
+		User:     owner,
 		Password: password,
 	})
 
 	switch {
 	case err != nil:
-		return nil, nil, err
+		return nil, err
 	case appAuthResponse.Status.Code == rpcv1beta1.Code_CODE_NOT_FOUND:
-		return nil, nil, errtypes.NotFound(appAuthResponse.Status.Message)
+		appctx.GetLogger(ctx).Info().Str("user", owner.GetOpaqueId()).Msg("appauth: app password not found")
+		return nil, errtypes.NotFound(appAuthResponse.Status.Message)
 	case appAuthResponse.Status.Code != rpcv1beta1.Code_CODE_OK:
-		return nil, nil, errtypes.InternalError(appAuthResponse.Status.Message)
+		return nil, errtypes.InternalError(appAuthResponse.Status.Message)
 	}
+	return appAuthResponse.GetAppPassword(), nil
+}
 
-	return userResponse.GetUser(), appAuthResponse.GetAppPassword().TokenScope, nil
+// identity returns the user and scope an app password authenticates as. The
+// app password of a lightweight or guest account is held to the lightweight
+// rules as well.
+func identity(ctx context.Context, u *user.User, pw *appauthpb.AppPassword) (*user.User, map[string]*authpb.Scope, error) {
+	scopes := pw.GetTokenScope()
+	ap, ok := scope.GetAppAuthScope(scopes)
+	if !ok {
+		return u, scopes, nil
+	}
+	if t := u.GetId().GetType(); t == user.UserType_USER_TYPE_LIGHTWEIGHT || t == user.UserType_USER_TYPE_GUEST {
+		ap.Lightweight = true
+		var err error
+		if scopes, err = scope.AddAppAuthScope(ap, nil); err != nil {
+			return nil, nil, err
+		}
+	}
+	appctx.GetLogger(ctx).Info().Str("user", u.GetUsername()).Str("password_id", ap.PasswordID).Str("client", ap.Client).
+		Str("label", pw.GetLabel()).Msg("appauth: authenticated with an app password")
+	return u, scopes, nil
 }
 
 func (m *manager) Cacheable() bool {
