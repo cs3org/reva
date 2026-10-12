@@ -349,7 +349,7 @@ func checkIfNestedResource(ctx context.Context, ref *provider.Reference, parent 
 		childPath = childStat.Info.Path
 	}
 
-	return strings.HasPrefix(childPath, parentPath), nil
+	return childPath == parentPath || strings.HasPrefix(childPath, parentPath+"/"), nil
 }
 
 func extractRefForReaderRole(req any) (*provider.Reference, bool) {
