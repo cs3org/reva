@@ -53,6 +53,7 @@ import (
 	types "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
 	"github.com/cs3org/reva/v3/pkg/admin/adminpb"
 	"github.com/cs3org/reva/v3/pkg/appctx"
+	"github.com/cs3org/reva/v3/pkg/errtypes"
 	"github.com/rs/zerolog"
 	"google.golang.org/protobuf/reflect/protoreflect"
 	"google.golang.org/protobuf/reflect/protoregistry"
@@ -250,6 +251,32 @@ func (s *AppPasswordScope) wildcard() bool {
 // Has reports whether the app password grants perm.
 func (s *AppPasswordScope) Has(perm string) bool {
 	return s.wildcard() || slices.Contains(s.Permissions, perm)
+}
+
+// Validate checks that the app password names a known kind of client,
+// permissions from the catalogue or the wildcard alone, and clean absolute
+// roots.
+func (s *AppPasswordScope) Validate() error {
+	if _, ok := clientRules[s.Client]; !ok {
+		return errtypes.BadRequest(fmt.Sprintf("unknown client kind %q", s.Client))
+	}
+	if len(s.Permissions) == 0 {
+		return errtypes.BadRequest("an app password needs at least one permission")
+	}
+	if s.wildcard() && len(s.Permissions) > 1 {
+		return errtypes.BadRequest("the wildcard permission cannot be combined with others")
+	}
+	for _, p := range s.Permissions {
+		if _, ok := writePermission[p]; !ok && p != PermAll {
+			return errtypes.BadRequest(fmt.Sprintf("unknown permission %q", p))
+		}
+	}
+	for _, r := range s.Roots {
+		if !path.IsAbs(r) || path.Clean(r) != r {
+			return errtypes.BadRequest(fmt.Sprintf("root %q is not a clean absolute path", r))
+		}
+	}
+	return nil
 }
 
 // Expired reports whether the app password is past its expiry.

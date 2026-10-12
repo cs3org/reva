@@ -27,6 +27,8 @@ import (
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	"github.com/cs3org/reva/v3/internal/http/services/owncloud/ocs/response"
 	"github.com/cs3org/reva/v3/pkg/appctx"
+	authcache "github.com/cs3org/reva/v3/pkg/auth/cache"
+	"github.com/cs3org/reva/v3/pkg/auth/scope"
 	"github.com/cs3org/reva/v3/pkg/service"
 	"github.com/go-chi/chi/v5"
 )
@@ -101,10 +103,13 @@ func (h *Handler) DeleteClient(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var secret string
+	var secret, passwordID string
 	for _, pw := range res.AppPasswords {
 		if _, _, c := parseLabel(pw.Label); c == cid {
 			secret = pw.Password
+			if ap, ok := scope.GetAppPasswordScope(pw.TokenScope); ok {
+				passwordID = ap.PasswordID
+			}
 			break
 		}
 	}
@@ -124,8 +129,20 @@ func (h *Handler) DeleteClient(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	appctx.GetLogger(ctx).Info().Str("client_id", cid).Msg("client revoked")
+	if passwordID != "" {
+		forgetAppPassword(passwordID)
+	}
+	appctx.GetLogger(ctx).Info().Str("client_id", cid).Str("password_id", passwordID).Msg("client revoked")
 	w.WriteHeader(http.StatusNoContent)
+}
+
+// forgetAppPassword drops the identities this node cached for an app password,
+// so that it stops working here at once.
+func forgetAppPassword(passwordID string) {
+	authcache.Forget(func(id *authcache.Identity) bool {
+		ap, ok := scope.GetAppPasswordScope(id.Scopes)
+		return ok && ap.PasswordID == passwordID
+	})
 }
 
 // parseLabel decodes the "<name>|<description>|<client_id>" app password label.

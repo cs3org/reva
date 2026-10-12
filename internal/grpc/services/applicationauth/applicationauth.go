@@ -100,7 +100,7 @@ func (s *service) GenerateAppPassword(ctx context.Context, req *appauthpb.Genera
 	pwd, err := s.am.GenerateAppPassword(ctx, req.TokenScope, req.Label, req.Expiration)
 	if err != nil {
 		return &appauthpb.GenerateAppPasswordResponse{
-			Status: status.NewInternal(ctx, err, "error generating app password"),
+			Status: status.NewStatusFromErrType(ctx, "error generating app password", err),
 		}, nil
 	}
 
@@ -141,7 +141,7 @@ func (s *service) GetAppPassword(ctx context.Context, req *appauthpb.GetAppPassw
 	pwd, err := s.am.GetAppPassword(ctx, req.User, req.Password)
 	if err != nil {
 		return &appauthpb.GetAppPasswordResponse{
-			Status: status.NewInternal(ctx, err, "error getting app password via username/password"),
+			Status: status.NewStatusFromErrType(ctx, "error getting app password", err),
 		}, nil
 	}
 

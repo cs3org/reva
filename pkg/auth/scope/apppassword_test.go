@@ -479,3 +479,26 @@ func TestAppPasswordPresets(t *testing.T) {
 		t.Errorf("presets changed: %v, %v", ReadOnlyPermissions(), ReadWritePermissions())
 	}
 }
+
+func TestAppPasswordValidate(t *testing.T) {
+	cases := []struct {
+		name string
+		s    AppPasswordScope
+		ok   bool
+	}{
+		{"read-only", AppPasswordScope{Client: ClientWebDAV, Permissions: ReadOnlyPermissions()}, true},
+		{"wildcard", AppPasswordScope{Client: ClientSync, Permissions: []string{PermAll}}, true},
+		{"roots", AppPasswordScope{Client: ClientMCP, Permissions: ReadOnlyPermissions(), Roots: []string{testRoot}}, true},
+		{"unknown client", AppPasswordScope{Client: "printer", Permissions: ReadOnlyPermissions()}, false},
+		{"no permission", AppPasswordScope{Client: ClientWebDAV}, false},
+		{"unknown permission", AppPasswordScope{Client: ClientWebDAV, Permissions: []string{"files:steal"}}, false},
+		{"wildcard and more", AppPasswordScope{Client: ClientSync, Permissions: []string{PermAll, PermFilesList}}, false},
+		{"relative root", AppPasswordScope{Client: ClientMCP, Permissions: ReadOnlyPermissions(), Roots: []string{"thesis"}}, false},
+		{"unclean root", AppPasswordScope{Client: ClientMCP, Permissions: ReadOnlyPermissions(), Roots: []string{testRoot + "/../private"}}, false},
+	}
+	for _, c := range cases {
+		if err := c.s.Validate(); (err == nil) != c.ok {
+			t.Errorf("%s: Validate() = %v", c.name, err)
+		}
+	}
+}

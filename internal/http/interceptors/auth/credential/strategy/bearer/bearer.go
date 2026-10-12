@@ -25,6 +25,7 @@ import (
 
 	"github.com/cs3org/reva/v3/internal/http/interceptors/auth/credential/registry"
 	"github.com/cs3org/reva/v3/pkg/auth"
+	"github.com/cs3org/reva/v3/pkg/auth/scope"
 )
 
 func init() {
@@ -44,7 +45,7 @@ func (s *strategy) GetCredentials(w http.ResponseWriter, r *http.Request) (*auth
 	hdr := r.Header.Get("Authorization")
 	token := strings.TrimPrefix(hdr, "Bearer ")
 	if token != "" {
-		return &auth.Credentials{Type: "bearer", ClientSecret: token}, nil
+		return &auth.Credentials{Type: "bearer", ClientSecret: token, Presentation: string(scope.PresentationBearer)}, nil
 	}
 	// TODO 2. check form encoded body parameter for POST requests, see https://tools.ietf.org/html/rfc6750#section-2.2
 
@@ -53,7 +54,7 @@ func (s *strategy) GetCredentials(w http.ResponseWriter, r *http.Request) (*auth
 	if !ok || len(tokens[0]) < 1 {
 		return nil, fmt.Errorf("no bearer auth provided")
 	}
-	return &auth.Credentials{Type: "bearer", ClientSecret: tokens[0]}, nil
+	return &auth.Credentials{Type: "bearer", ClientSecret: tokens[0], Presentation: string(scope.PresentationBearer)}, nil
 }
 
 func (s *strategy) AddWWWAuthenticate(w http.ResponseWriter, r *http.Request, realm string) {

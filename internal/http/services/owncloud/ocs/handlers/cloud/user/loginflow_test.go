@@ -19,9 +19,14 @@
 package user
 
 import (
+	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
+
+	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
+	"github.com/cs3org/reva/v3/pkg/appctx"
+	"github.com/cs3org/reva/v3/pkg/auth/scope"
 )
 
 func TestParseDeviceName(t *testing.T) {
@@ -78,5 +83,23 @@ func TestParseLabel(t *testing.T) {
 		if name != c.wantName || description != c.wantDescription || cid != c.wantCID {
 			t.Errorf("parseLabel(%q) = (%q,%q,%q), want (%q,%q,%q)", c.label, name, description, cid, c.wantName, c.wantDescription, c.wantCID)
 		}
+	}
+}
+
+// The login flow mints its app password without the gateway, so an app
+// password must not be able to approve a client and get another one.
+func TestLoginFlowGrantRefusesAppPasswords(t *testing.T) {
+	scopes, err := scope.AddAppPasswordScope(&scope.AppPasswordScope{Client: scope.ClientCLI, Permissions: scope.ReadWritePermissions()}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ctx := appctx.ContextSetUser(t.Context(), &userpb.User{Id: &userpb.UserId{OpaqueId: "einstein"}, Username: "einstein"})
+	ctx = appctx.ContextSetScopes(ctx, scopes)
+	r := httptest.NewRequest(http.MethodPost, "/cloud/user/login-flow/lt/grant", strings.NewReader(`{"name":"laptop"}`)).WithContext(ctx)
+	w := httptest.NewRecorder()
+
+	(&Handler{}).LoginFlowGrant(w, r)
+	if w.Code != http.StatusForbidden {
+		t.Fatalf("got %d, want 403", w.Code)
 	}
 }

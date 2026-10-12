@@ -166,3 +166,23 @@ func TestNegativeTTLDisablesTheCache(t *testing.T) {
 		t.Fatal("a disabled cache must never report a hit")
 	}
 }
+
+func TestForget(t *testing.T) {
+	a, b := New(Config{}), New(Config{})
+	id := testIdentity()
+	a.Set("k1", id, nil, time.Time{})
+	b.Set("k2", id, nil, time.Time{})
+	a.Set("k3", &Identity{User: &userpb.User{Username: "other"}}, nil, time.Time{})
+
+	Forget(func(i *Identity) bool { return i.User.GetUsername() == id.User.GetUsername() })
+
+	for _, c := range []struct {
+		cache *Cache
+		key   string
+		want  bool
+	}{{a, "k1", false}, {b, "k2", false}, {a, "k3", true}} {
+		if _, _, ok := c.cache.Get(c.key); ok != c.want {
+			t.Errorf("%s cached = %v, want %v", c.key, ok, c.want)
+		}
+	}
+}
