@@ -557,6 +557,7 @@ func (s *svc) Stat(ctx context.Context, req *provider.StatRequest) (*provider.St
 			Str("opaque_id", rsp.Info.Id.OpaqueId).
 			Str("path", rsp.Info.Path).
 			Msg("gateway: Stat response from storage provider")
+		s.addSpaceRoles(ctx, rsp.Info)
 		return rsp, nil
 	}
 
@@ -687,6 +688,9 @@ func (s *svc) ListContainer(ctx context.Context, req *provider.ListContainerRequ
 		rsp, err := c.ListContainer(ctx, req)
 		if err != nil || rsp.Status.Code != rpc.Code_CODE_OK {
 			return rsp, err
+		}
+		for _, info := range rsp.Infos {
+			s.addSpaceRoles(ctx, info)
 		}
 		return rsp, nil
 	}

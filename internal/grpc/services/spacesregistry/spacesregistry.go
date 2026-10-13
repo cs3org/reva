@@ -447,7 +447,6 @@ func (s *service) userSpace(ctx context.Context, user *userpb.User) (*provider.S
 				},
 			},
 		},
-		//PermissionSet: permissions.NewManagerRole().CS3ResourcePermissions(),
 	}, nil
 }
 
