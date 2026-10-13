@@ -112,6 +112,7 @@ var (
 	syncPassword   = "syncsyncsyncsyncsyncsyncsyncsyncsyncsyncsyn"
 	cliPassword    = "clicliclicliclicliclicliclicliclicliclicliX"
 	webdavPassword = "webdavwebdavwebdavwebdavwebdavwebdavwebdavw"
+	mcpPassword    = "mcpmcpmcpmcpmcpmcpmcpmcpmcpmcpmcpmcpmcpmcpm"
 )
 
 func newAppAuthGateway() *fakeGateway {
@@ -119,6 +120,7 @@ func newAppAuthGateway() *fakeGateway {
 		syncPassword:   {PasswordID: "p-sync", Client: scope.ClientSync, Permissions: []string{scope.PermAll}},
 		cliPassword:    {PasswordID: "p-cli", Client: scope.ClientCLI, Permissions: scope.ReadWritePermissions()},
 		webdavPassword: {PasswordID: "p-webdav", Client: scope.ClientWebDAV, Permissions: scope.ReadOnlyPermissions()},
+		mcpPassword:    {PasswordID: "p-mcp", Client: scope.ClientMCP, Permissions: scope.ReadOnlyPermissions()},
 	}}
 }
 
@@ -152,9 +154,14 @@ func newAppAuthMiddleware(t *testing.T, conf map[string]any) (http.Handler, *fak
 type request struct {
 	path, ua      string
 	basic, bearer string
+	token         string
 }
 
 func serve(h http.Handler, req request) int {
+	return serveRecorded(h, req).Code
+}
+
+func serveRecorded(h http.Handler, req request) *httptest.ResponseRecorder {
 	r := httptest.NewRequest(http.MethodGet, "https://cernbox.example.org"+req.path, nil)
 	r.Header.Set("User-Agent", req.ua)
 	if req.basic != "" {
@@ -163,9 +170,12 @@ func serve(h http.Handler, req request) int {
 	if req.bearer != "" {
 		r.Header.Set("Authorization", "Bearer "+req.bearer)
 	}
+	if req.token != "" {
+		r.Header.Set(appctx.TokenHeader, req.token)
+	}
 	w := httptest.NewRecorder()
 	h.ServeHTTP(w, r)
-	return w.Code
+	return w
 }
 
 const (
@@ -233,6 +243,13 @@ func TestAppAuthClientRules(t *testing.T) {
 		{"cli, unexpected client", request{path: webdav, ua: "curl/8.0", bearer: cliPassword}, http.StatusUnauthorized},
 		{"webdav, basic", request{path: webdav, ua: "rclone/v1.66", basic: webdavPassword}, http.StatusOK},
 		{"webdav, bearer", request{path: webdav, ua: "curl/8.0", bearer: webdavPassword}, http.StatusOK},
+		{"mcp, bearer", request{path: "/mcp", ua: "claude-code/2.0.1", bearer: mcpPassword}, http.StatusOK},
+		{"mcp, basic", request{path: "/mcp", ua: "claude-code/2.0.1", basic: mcpPassword}, http.StatusUnauthorized},
+		{"mcp, data provider", request{path: "/data/simple/thesis/a.txt", ua: "curl/8.0", bearer: mcpPassword}, http.StatusOK},
+		{"mcp, webdav", request{path: webdav, ua: "curl/8.0", bearer: mcpPassword}, http.StatusUnauthorized},
+		{"mcp, ocs", request{path: "/ocs/v2.php/cloud/user", ua: "curl/8.0", bearer: mcpPassword}, http.StatusUnauthorized},
+		// The mcp service itself refuses other kinds.
+		{"webdav at the mcp endpoint", request{path: "/mcp", ua: "curl/8.0", bearer: webdavPassword}, http.StatusOK},
 	}
 	for _, c := range cases {
 		// Twice: the second answer comes from the cache and must not differ.
@@ -264,8 +281,54 @@ func TestAppAuthClientOverrides(t *testing.T) {
 		}
 	}
 
+	h, _ = newAppAuthMiddleware(t, map[string]any{"appauth_clients": map[string]any{
+		"mcp": map[string]any{"paths": []string{"/mcp", "/dataprovider"}},
+	}})
+	for _, c := range []struct {
+		path string
+		want int
+	}{
+		{"/mcp", http.StatusOK},
+		{"/dataprovider/simple/a.txt", http.StatusOK},
+		{"/data/simple/a.txt", http.StatusUnauthorized},
+	} {
+		if got := serve(h, request{path: c.path, ua: "curl/8.0", bearer: mcpPassword}); got != c.want {
+			t.Errorf("mcp with overridden paths at %s: got %d, want %d", c.path, got, c.want)
+		}
+	}
+
 	if _, err := New(map[string]any{"appauth_clients": map[string]any{"printer": map[string]any{}}}, nil); err == nil {
 		t.Error("an unknown client kind must be refused")
+	}
+}
+
+// The reva token minted from an app password is held to the path rule of its
+// client kind as well, since the data gateway forwards it to the data provider.
+func TestAppAuthPathRuleOnToken(t *testing.T) {
+	h, _ := newAppAuthMiddleware(t, nil)
+	w := serveRecorded(h, request{path: "/mcp", ua: "claude-code/2.0.1", bearer: mcpPassword})
+	tkn := w.Header().Get(appctx.TokenHeader)
+	if w.Code != http.StatusOK || tkn == "" {
+		t.Fatalf("mcp app password at /mcp: got %d, token %q", w.Code, tkn)
+	}
+	cases := []struct {
+		path string
+		want int
+	}{
+		{"/mcp", http.StatusOK},
+		{"/data/simple/thesis/a.txt", http.StatusOK},
+		{webdav, http.StatusUnauthorized},
+		{"/ocs/v2.php/cloud/user", http.StatusUnauthorized},
+	}
+	for _, c := range cases {
+		if got := serve(h, request{path: c.path, ua: "curl/8.0", token: tkn}); got != c.want {
+			t.Errorf("mcp token at %s: got %d, want %d", c.path, got, c.want)
+		}
+	}
+
+	w = serveRecorded(h, request{path: webdav, ua: "curl/8.0", bearer: webdavPassword})
+	if got := serve(h, request{path: "/ocs/v2.php/cloud/user", ua: "curl/8.0", token: w.Header().Get(appctx.TokenHeader)}); got != http.StatusOK {
+		t.Errorf("webdav token reaches any path: got %d", got)
 	}
 }
 

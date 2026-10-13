@@ -288,12 +288,30 @@ func TestRejectsInvalidScopes(t *testing.T) {
 		"unknown permission":    appAuthScope(t, scope.ClientWebDAV, []string{"files:steal"}),
 		"wildcard and more":     appAuthScope(t, scope.ClientSync, []string{scope.PermAll, scope.PermFilesList}),
 		"relative root":         appAuthScope(t, scope.ClientCLI, scope.ReadOnlyPermissions(), "thesis"),
-		"roots":                 appAuthScope(t, scope.ClientWebDAV, scope.ReadOnlyPermissions(), "/eos/user/j/jdoe/thesis"),
+		"roots for webdav":      appAuthScope(t, scope.ClientWebDAV, scope.ReadOnlyPermissions(), "/eos/user/j/jdoe/thesis"),
+		"roots for cli":         appAuthScope(t, scope.ClientCLI, scope.ReadOnlyPermissions(), "/eos/user/j/jdoe/thesis"),
+		"roots for sync":        appAuthScope(t, scope.ClientSync, []string{scope.PermAll}, "/eos/user/j/jdoe/thesis"),
+		"unclean root for mcp":  appAuthScope(t, scope.ClientMCP, scope.ReadOnlyPermissions(), "/eos/user/j/jdoe/../x"),
 	}
 	for name, scopes := range cases {
 		if _, err := m.GenerateAppPassword(ctx, scopes, name, nil); !isBadRequest(err) {
 			t.Errorf("%s: want a bad request, got %v", name, err)
 		}
+	}
+}
+
+// Only the MCP service filters reference-less listings against the roots, so
+// only mcp app passwords may have them.
+func TestRootsForMCP(t *testing.T) {
+	m, ctx, uid := newTestManager(t)
+	roots := []string{"/eos/project/c/cernbox", "/eos/user/j/jdoe/thesis"}
+	pw, err := m.GenerateAppPassword(ctx, appAuthScope(t, scope.ClientMCP, scope.ReadOnlyPermissions(), roots...), "assistant", nil)
+	if err != nil {
+		t.Fatalf("generate: %v", err)
+	}
+	ap, ok := scope.GetAppAuthScope(mustGet(t, m, ctx, uid, pw.Password).TokenScope)
+	if !ok || ap.Client != scope.ClientMCP || !slices.Equal(ap.Roots, roots) || ap.ExpiresAt == 0 {
+		t.Fatalf("scope %+v", ap)
 	}
 }
 

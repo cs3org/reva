@@ -19,6 +19,7 @@
 package scope
 
 import (
+	"path"
 	"slices"
 	"strings"
 )
@@ -28,6 +29,7 @@ const (
 	ClientSync   = "sync"
 	ClientCLI    = "cli"
 	ClientWebDAV = "webdav"
+	ClientMCP    = "mcp"
 )
 
 // Presentation is how a client sends its app password.
@@ -47,6 +49,9 @@ type ClientRule struct {
 	UserAgents []string
 	// Strict rejects a user agent mismatch instead of only logging it.
 	Strict bool
+	// Paths are the HTTP path prefixes the app password may reach; nil means
+	// any path.
+	Paths []string
 }
 
 var clientRules = map[string]ClientRule{
@@ -66,11 +71,17 @@ var clientRules = map[string]ClientRule{
 	ClientWebDAV: {
 		Presentations: []Presentation{PresentationBasic, PresentationBearer},
 	},
+	ClientMCP: {
+		Presentations: []Presentation{PresentationBearer},
+		// The MCP service downloads and uploads through the data gateway,
+		// which forwards the app password's token to the data provider.
+		Paths: []string{"/mcp", "/data"},
+	},
 }
 
 // ClientKinds returns the kinds of client app passwords can be issued for.
 func ClientKinds() []string {
-	return []string{ClientSync, ClientCLI, ClientWebDAV}
+	return []string{ClientSync, ClientCLI, ClientWebDAV, ClientMCP}
 }
 
 // GetClientRule returns the rule of a kind of client.
@@ -90,4 +101,16 @@ func (c ClientRule) UserAgentMatches(ua string) bool {
 		return true
 	}
 	return slices.ContainsFunc(c.UserAgents, func(s string) bool { return strings.Contains(ua, s) })
+}
+
+// PathAllowed reports whether the app password may reach the HTTP path p.
+func (c ClientRule) PathAllowed(p string) bool {
+	if c.Paths == nil {
+		return true
+	}
+	p = path.Clean("/" + p)
+	return slices.ContainsFunc(c.Paths, func(prefix string) bool {
+		prefix = path.Clean("/" + prefix)
+		return prefix == "/" || p == prefix || strings.HasPrefix(p, prefix+"/")
+	})
 }

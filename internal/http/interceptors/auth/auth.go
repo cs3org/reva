@@ -77,12 +77,13 @@ type config struct {
 	MachineSecret          string                    `mapstructure:"machine_secret" docs:"nil;Secret used for the gateway to authenticate a user when using a signed URL"`
 	authcache.Config       `mapstructure:",squash"`
 	AppAuthCacheTTL        int                            `mapstructure:"appauth_cache_ttl_seconds" docs:"300;Seconds an identity resolved from an app password stays cached, which bounds how long a revoked app password keeps working. A negative value disables caching them."`
-	AppAuthClients         map[string]appAuthClientConfig `mapstructure:"appauth_clients" docs:"nil;Per client kind (sync, cli, webdav, mcp), overrides of the expected user agents and of whether a mismatch is rejected."`
+	AppAuthClients         map[string]appAuthClientConfig `mapstructure:"appauth_clients" docs:"nil;Per client kind (sync, cli, webdav, mcp), overrides of the expected user agents, of whether a mismatch is rejected, and of the HTTP path prefixes the app password may reach."`
 }
 
 type appAuthClientConfig struct {
 	StrictUserAgent *bool    `mapstructure:"strict_user_agent"`
 	UserAgents      []string `mapstructure:"user_agents"`
+	Paths           []string `mapstructure:"paths"`
 }
 
 func parseConfig(m map[string]any) (*config, error) {
@@ -225,6 +226,9 @@ func appAuthClientRules(overrides map[string]appAuthClientConfig) (map[string]sc
 		if o.UserAgents != nil {
 			r.UserAgents = o.UserAgents
 		}
+		if o.Paths != nil {
+			r.Paths = o.Paths
+		}
 		rules[kind] = r
 	}
 	return rules, nil
@@ -328,6 +332,12 @@ func (m *middleware) authenticateUser(w http.ResponseWriter, r *http.Request, is
 		token := tokenStrategy.GetToken(r)
 		if token != "" {
 			if user, scopes, ok := isTokenValid(r, tokenManager, token); ok {
+				if ap, ok := scope.GetAppAuthScope(scopes); ok {
+					if err := m.checkAppAuthPath(r, ap); err != nil {
+						logError(isUnprotectedEndpoint, log, err, "app password used outside its client kind", http.StatusUnauthorized, w)
+						return nil, err
+					}
+				}
 				if err := insertGroupsInUser(ctx, userGroupsCache, client, user); err != nil {
 					logError(isUnprotectedEndpoint, log, err, "got an error retrieving groups for user "+user.Username, http.StatusInternalServerError, w)
 					return nil, err
@@ -475,14 +485,13 @@ func (m *middleware) authenticateUser(w http.ResponseWriter, r *http.Request, is
 	return ctxWithUserInfo(ctx, r, id.User, id.Token, id.Scopes), nil
 }
 
-// checkAppAuthClient applies the presentation and user agent rules of the
-// client kind an app password was issued for. Its path rule is applied with the
-// scope.
+// checkAppAuthClient applies the rules of the client kind an app password was
+// issued for: presentation, path and user agent.
 func (m *middleware) checkAppAuthClient(r *http.Request, ap *scope.AppAuthScope, creds *auth.Credentials) error {
-	rule, ok := m.clientRules[ap.Client]
-	if !ok {
-		return errtypes.PermissionDenied("app password for an unknown client kind " + ap.Client)
+	if err := m.checkAppAuthPath(r, ap); err != nil {
+		return err
 	}
+	rule := m.clientRules[ap.Client]
 	if !rule.PresentationAllowed(scope.Presentation(creds.Presentation)) {
 		return errtypes.PermissionDenied(fmt.Sprintf("an app password for %s cannot be sent as %s", ap.Client, creds.Presentation))
 	}
@@ -492,6 +501,19 @@ func (m *middleware) checkAppAuthClient(r *http.Request, ap *scope.AppAuthScope,
 		if rule.Strict {
 			return errtypes.PermissionDenied(fmt.Sprintf("an app password for %s cannot be used by %q", ap.Client, r.UserAgent()))
 		}
+	}
+	return nil
+}
+
+// checkAppAuthPath applies the path rule of the client kind an app password
+// was issued for, also to the reva token minted from it.
+func (m *middleware) checkAppAuthPath(r *http.Request, ap *scope.AppAuthScope) error {
+	rule, ok := m.clientRules[ap.Client]
+	if !ok {
+		return errtypes.PermissionDenied("app password for an unknown client kind " + ap.Client)
+	}
+	if !rule.PathAllowed(r.URL.Path) {
+		return errtypes.PermissionDenied(fmt.Sprintf("an app password for %s cannot reach %s", ap.Client, r.URL.Path))
 	}
 	return nil
 }

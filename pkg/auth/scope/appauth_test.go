@@ -314,6 +314,7 @@ func TestAppAuthClientRules(t *testing.T) {
 		{ClientCLI, false, true, "cernbox-cli/1.2.0", true, true},
 		{ClientCLI, false, true, "curl/8.0", false, true},
 		{ClientWebDAV, true, true, "rclone/v1.66", true, false},
+		{ClientMCP, false, true, "claude-code/2.0.1", true, false},
 	}
 	for _, c := range cases {
 		r, ok := GetClientRule(c.kind)
@@ -329,6 +330,40 @@ func TestAppAuthClientRules(t *testing.T) {
 		if r.Strict != c.strictByDefult {
 			t.Errorf("%s: strict = %v", c.kind, r.Strict)
 		}
+	}
+}
+
+func TestClientPathRule(t *testing.T) {
+	cases := []struct {
+		kind, path string
+		allowed    bool
+	}{
+		{ClientMCP, "/mcp", true},
+		{ClientMCP, "/mcp/", true},
+		{ClientMCP, "/data/simple/eos/user/e/einstein/a.txt", true},
+		{ClientMCP, "/data", true},
+		{ClientMCP, "/mcpx", false},
+		{ClientMCP, "/database", false},
+		{ClientMCP, "/remote.php/webdav/a", false},
+		{ClientMCP, "/ocs/v2.php/cloud/user", false},
+		{ClientMCP, "/mcp/../remote.php/webdav", false},
+		{ClientMCP, "/", false},
+		{ClientSync, "/remote.php/webdav/a", true},
+		{ClientSync, "/mcp", true},
+		{ClientCLI, "/ocs/v2.php/cloud/user", true},
+		{ClientWebDAV, "/anything", true},
+	}
+	for _, c := range cases {
+		r, _ := GetClientRule(c.kind)
+		if got := r.PathAllowed(c.path); got != c.allowed {
+			t.Errorf("%s at %s: allowed = %v", c.kind, c.path, got)
+		}
+	}
+	if !(ClientRule{Paths: []string{"/"}}).PathAllowed("/remote.php") {
+		t.Error("a root prefix allows every path")
+	}
+	if (ClientRule{Paths: []string{}}).PathAllowed("/mcp") {
+		t.Error("an empty, non-nil list allows no path")
 	}
 }
 

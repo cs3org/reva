@@ -68,3 +68,23 @@ func TestPruneKeepsBusyBuckets(t *testing.T) {
 		t.Fatalf("prune kept busy=%v idle=%v", busy, idle)
 	}
 }
+
+func TestAllowNTakesFromAllOrNone(t *testing.T) {
+	l := New()
+	if ok, _ := l.AllowN([]string{"token", "user"}, 60, 50); !ok {
+		t.Fatal("both buckets hold 60")
+	}
+	if ok, _ := l.AllowN([]string{"other-token", "user"}, 60, 20); ok {
+		t.Fatal("the user bucket holds only 10")
+	}
+	if l.Exhausted("other-token", 60) {
+		t.Fatal("a refused call must take nothing")
+	}
+	ok, wait := l.AllowN([]string{"token"}, 60, 30)
+	if ok || wait < 19*time.Second || wait > 21*time.Second {
+		t.Fatalf("20 tokens are missing at one a second: ok=%v wait=%v", ok, wait)
+	}
+	if ok, _ := l.AllowN([]string{"token"}, 0, 1000); !ok {
+		t.Fatal("a limit of zero disables the buckets")
+	}
+}

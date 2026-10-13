@@ -65,6 +65,35 @@ func (l *Limiter) Allow(key string, perMin int) bool {
 	return true
 }
 
+// AllowN takes n tokens from each bucket named in keys, sized for perMin
+// tokens per minute, or from none of them when one holds fewer than n. When it
+// refuses, it also returns how long until they all hold n. perMin <= 0
+// disables the limit.
+func (l *Limiter) AllowN(keys []string, perMin, n int) (bool, time.Duration) {
+	if perMin <= 0 {
+		return true, 0
+	}
+	l.mu.Lock()
+	defer l.mu.Unlock()
+
+	var wait time.Duration
+	buckets := make([]*bucket, 0, len(keys))
+	for _, k := range keys {
+		b := l.refilled(k, perMin)
+		if missing := float64(n) - b.tokens; missing > 0 {
+			wait = max(wait, time.Duration(missing/b.refill*float64(time.Second)))
+		}
+		buckets = append(buckets, b)
+	}
+	if wait > 0 {
+		return false, wait
+	}
+	for _, b := range buckets {
+		b.tokens -= float64(n)
+	}
+	return true, 0
+}
+
 // Exhausted reports whether the bucket named key is empty, without taking a
 // token.
 func (l *Limiter) Exhausted(key string, perMin int) bool {

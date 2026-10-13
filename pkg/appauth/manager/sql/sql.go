@@ -156,8 +156,8 @@ func (m *mgr) GenerateAppPassword(ctx context.Context, scopes map[string]*authpb
 		return nil, err
 	}
 	// A consumer that lists shares or spaces has to filter them against the
-	// roots, and none does yet.
-	if len(ap.Roots) > 0 {
+	// roots, and only the MCP service does.
+	if len(ap.Roots) > 0 && ap.Client != scope.ClientMCP {
 		return nil, errtypes.BadRequest("roots are not supported yet")
 	}
 	createdBy := owner.GetId().GetOpaqueId()
