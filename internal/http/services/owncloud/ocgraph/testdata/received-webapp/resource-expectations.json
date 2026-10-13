@@ -86,10 +86,9 @@
         ],
         "sharedWith": [
           {
-            "@libre.graph.userType": "Federated",
-            "displayName": "Federated User",
-            "id": "me on local.example",
-            "shareType": 6
+            "displayName": "",
+            "id": "me",
+            "shareType": 0
           }
         ],
         "shareTypes": [
@@ -179,10 +178,9 @@
         ],
         "sharedWith": [
           {
-            "@libre.graph.userType": "Federated",
-            "displayName": "Federated User",
-            "id": "me on local.example",
-            "shareType": 6
+            "displayName": "",
+            "id": "me",
+            "shareType": 0
           }
         ],
         "shareTypes": [
@@ -260,10 +258,9 @@
         ],
         "sharedWith": [
           {
-            "@libre.graph.userType": "Federated",
-            "displayName": "Federated User",
-            "id": "me on local.example",
-            "shareType": 6
+            "displayName": "",
+            "id": "me",
+            "shareType": 0
           }
         ],
         "shareTypes": [
