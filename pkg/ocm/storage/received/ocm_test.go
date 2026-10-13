@@ -9,6 +9,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"io/fs"
 	"net"
 	"net/http"
@@ -706,7 +707,7 @@ func TestConvertStatToResourceInfo_File(t *testing.T) {
 	// senderAddr is irrelevant: convertStatToResourceInfo never triggers discovery.
 	share := testReceivedShare("sender.example.com", "share-abc", true)
 
-	info := convertStatToResourceInfo(fi, share, "sub/file.txt")
+	info := convertStatToResourceInfo(fi, share, "/")
 
 	if info.Type != provider.ResourceType_RESOURCE_TYPE_FILE {
 		t.Errorf("type: got %v, want FILE", info.Type)
@@ -718,11 +719,12 @@ func TestConvertStatToResourceInfo_File(t *testing.T) {
 	if info.Size != 1024 {
 		t.Errorf("size: got %d, want 1024", info.Size)
 	}
-	if info.Path != "/share-abc/sub/file.txt" {
-		t.Errorf("path: got %q, want /share-abc/sub/file.txt", info.Path)
+	// for file shares, the path ends in the file name while the id stays the share root
+	if info.Path != "/share-abc/shared-doc.txt" {
+		t.Errorf("path: got %q, want /share-abc/shared-doc.txt", info.Path)
 	}
-	if info.Id.OpaqueId != "share-abc:sub/file.txt" {
-		t.Errorf("id: got %q, want share-abc:sub/file.txt", info.Id.OpaqueId)
+	if info.Id.OpaqueId != "share-abc:/" {
+		t.Errorf("id: got %q, want share-abc:/", info.Id.OpaqueId)
 	}
 	if info.Owner.OpaqueId != "creator" {
 		t.Errorf("owner: got %q, want creator", info.Owner.OpaqueId)
@@ -778,6 +780,116 @@ func TestConvertStatToResourceInfo_FolderShareNoDisplayName(t *testing.T) {
 	root := convertStatToResourceInfo(&fakeFileInfo{isDir: true}, share, "/")
 	if root.Name != "docs" {
 		t.Errorf("root name: got %q, want docs", root.Name)
+	}
+}
+
+func TestConvertStatToResourceInfo_FileShareUnsafeName(t *testing.T) {
+	for _, name := range []string{"", ".", "..", "../share-other/x.odt"} {
+		share := testReceivedShare("sender.example.com", "share-abc", true)
+		share.Name = name
+
+		info := convertStatToResourceInfo(&fakeFileInfo{size: 1}, share, "/")
+		if info.Path != "/share-abc" {
+			t.Errorf("name %q: path: got %q, want /share-abc", name, info.Path)
+		}
+	}
+}
+
+// --- resolveRelPath tests ---
+
+func TestResolveRelPath(t *testing.T) {
+	fileShare := testReceivedShare("sender.example.com", "share-abc", true)
+	fileShare.Name = "report.odt"
+	unsafeShare := testReceivedShare("sender.example.com", "share-abc", true)
+	unsafeShare.Name = "../x.odt"
+	folderShare := testReceivedShare("sender.example.com", "share-abc", false)
+
+	tests := []struct {
+		name     string
+		share    *ocmpb.ReceivedShare
+		rel      string
+		want     string
+		notFound bool
+	}{
+		{name: "file share root", share: fileShare, rel: "/", want: "/"},
+		{name: "file share empty", share: fileShare, rel: "", want: "/"},
+		{name: "file share dot", share: fileShare, rel: ".", want: "/"},
+		{name: "file share own name", share: fileShare, rel: "/report.odt", want: "/"},
+		{name: "file share own name relative", share: fileShare, rel: "report.odt/", want: "/"},
+		{name: "libreoffice lock", share: fileShare, rel: "/.~lock.report.odt#", notFound: true},
+		{name: "ms office lock", share: fileShare, rel: "/~$report.odt", notFound: true},
+		{name: "conflict copy", share: fileShare, rel: "/report-webconflict-20261013-11.odt", notFound: true},
+		{name: "child of own name", share: fileShare, rel: "/report.odt/x", notFound: true},
+		{name: "escape", share: fileShare, rel: "/../share-other/report.odt", notFound: true},
+		{name: "unsafe name root", share: unsafeShare, rel: "/", want: "/"},
+		{name: "unsafe name", share: unsafeShare, rel: "/x.odt", notFound: true},
+		{name: "folder share child", share: folderShare, rel: "/sub/report.odt", want: "/sub/report.odt"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := resolveRelPath(tt.share, tt.rel)
+			if tt.notFound {
+				if _, ok := err.(errtypes.IsNotFound); !ok {
+					t.Fatalf("resolveRelPath(%q): got %q, %v, want NotFound", tt.rel, got, err)
+				}
+				return
+			}
+			if err != nil || got != tt.want {
+				t.Fatalf("resolveRelPath(%q): got %q, %v, want %q", tt.rel, got, err, tt.want)
+			}
+		})
+	}
+}
+
+// Siblings of a single-file share, such as the lock files apps create next to a
+// document, must never be written to the shared file itself.
+func TestFileShareSiblingsDoNotReachRemote(t *testing.T) {
+	var writes []string
+	var propfindPaths []string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == "PROPFIND" {
+			propfindPaths = append(propfindPaths, r.URL.Path)
+			writeReceivedWebDAVPropfind(w, false)
+			return
+		}
+		writes = append(writes, r.Method+" "+r.URL.Path)
+		http.Error(w, "unexpected write", http.StatusInternalServerError)
+	}))
+	defer srv.Close()
+
+	share := testReceivedShare(srv.Listener.Addr().String(), "share-abc", true)
+	share.Name = "report.odt"
+	d := newTestReceivedDriver(t)
+	stampGateway(&mockReceivedGateway{shares: []*ocmpb.ReceivedShare{share}})
+	ctx := context.Background()
+
+	file := &provider.Reference{Path: "/share-abc/report.odt"}
+	info, err := d.GetMD(ctx, file, nil)
+	if err != nil {
+		t.Fatalf("GetMD(%s): %v", file.Path, err)
+	}
+	if info.Path != "/share-abc/report.odt" || info.Id.OpaqueId != "share-abc:/" {
+		t.Errorf("GetMD(%s): got path %q id %q", file.Path, info.Path, info.Id.OpaqueId)
+	}
+	if last := propfindPaths[len(propfindPaths)-1]; last != "/remote.php/dav/ocm/share-abc/" {
+		t.Errorf("GetMD(%s) stat'ed %q, want the share root", file.Path, last)
+	}
+
+	lock := &provider.Reference{Path: "/share-abc/.~lock.report.odt#"}
+	checks := map[string]error{
+		"GetMD":     func() error { _, err := d.GetMD(ctx, lock, nil); return err }(),
+		"TouchFile": d.TouchFile(ctx, lock),
+		"Delete":    d.Delete(ctx, lock),
+		"Upload":    d.Upload(ctx, lock, io.NopCloser(strings.NewReader("lock")), nil),
+		"Move":      d.Move(ctx, file, &provider.Reference{Path: "/share-abc/renamed.odt"}),
+	}
+	for op, err := range checks {
+		if _, ok := err.(errtypes.IsNotFound); !ok {
+			t.Errorf("%s on a sibling: got %v, want NotFound", op, err)
+		}
+	}
+	if len(writes) > 0 {
+		t.Errorf("expected no writes to the remote, got %v", writes)
 	}
 }
 

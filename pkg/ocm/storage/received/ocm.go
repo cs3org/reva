@@ -164,6 +164,27 @@ func shareInfoFromReference(ref *provider.Reference) (*ocmpb.ShareId, string) {
 	return shareID, path
 }
 
+// fileShareName returns the name a single-file share exposes in its path, if the remote-provided name is usable.
+func fileShareName(share *ocmpb.ReceivedShare) (string, bool) {
+	name := share.GetName()
+	if share.SharedResourceType != ocmpb.SharedResourceType_SHARE_RESOURCE_TYPE_FILE || name == "" || name == "." || name == ".." || strings.Contains(name, "/") {
+		return "", false
+	}
+	return name, true
+}
+
+// resolveRelPath maps rel onto the remote resource; a single-file share only contains its root and its own name.
+func resolveRelPath(share *ocmpb.ReceivedShare, rel string) (string, error) {
+	if share.SharedResourceType != ocmpb.SharedResourceType_SHARE_RESOURCE_TYPE_FILE {
+		return rel, nil
+	}
+	p := filepath.Clean("/" + rel)
+	if name, ok := fileShareName(share); p == "/" || ok && p == "/"+name {
+		return "/", nil
+	}
+	return "", errtypes.NotFound(rel)
+}
+
 func (d *driver) getWebDAVFromShare(ctx context.Context, shareID *ocmpb.ShareId) (*ocmpb.ReceivedShare, string, string, error) {
 	gw, err := service.Gateway(ctx)
 	if err != nil {
@@ -302,6 +323,9 @@ func (d *driver) webdavClient(ctx context.Context, ref *provider.Reference) (*go
 	if err != nil {
 		return nil, nil, "", err
 	}
+	if rel, err = resolveRelPath(share, rel); err != nil {
+		return nil, nil, "", err
+	}
 	endpoint, err = url.PathUnescape(endpoint)
 	if err != nil {
 		return nil, nil, "", err
@@ -418,8 +442,11 @@ func (d *driver) withExchangeMoveRetry(ctx context.Context, oldRef, newRef *prov
 		return errtypes.BadRequest("cross-share move is not supported")
 	}
 
-	client, _, relOld, err := d.webdavClient(ctx, oldRef)
+	client, share, relOld, err := d.webdavClient(ctx, oldRef)
 	if err != nil {
+		return err
+	}
+	if relNew, err = resolveRelPath(share, relNew); err != nil {
 		return err
 	}
 	if err = fn(client, relOld, relNew); err == nil {
@@ -475,13 +502,19 @@ func convertStatToResourceInfo(f fs.FileInfo, share *ocmpb.ReceivedShare, relPat
 		name = filepath.Base(filepath.Join(share.Name, relPath))
 	}
 
+	pathRel := relPath
+	if n, ok := fileShareName(share); ok {
+		// expose the file name in the path, like single-file public links
+		pathRel = n
+	}
+
 	webdav, _ := getWebDAVProtocol(share.Protocols)
 
 	return &provider.ResourceInfo{
 		Type:     t,
 		Id:       getResourceInfo(share.Id, relPath),
 		MimeType: mime.Detect(f.IsDir(), name),
-		Path:     getPathFromShareIDAndRelPath(share.Id, relPath),
+		Path:     getPathFromShareIDAndRelPath(share.Id, pathRel),
 		Name:     name,
 		Size:     uint64(f.Size()),
 		Mtime: &typepb.Timestamp{
@@ -613,6 +646,9 @@ func (d *driver) Upload(ctx context.Context, ref *provider.Reference, r io.ReadC
 	id, rel := shareInfoFromReference(ref)
 	share, endpoint, secret, err := d.getWebDAVFromShare(ctx, id)
 	if err != nil {
+		return err
+	}
+	if rel, err = resolveRelPath(share, rel); err != nil {
 		return err
 	}
 	endpoint, err = url.PathUnescape(endpoint)

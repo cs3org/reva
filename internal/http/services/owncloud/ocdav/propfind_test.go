@@ -20,14 +20,19 @@ package ocdav
 
 import (
 	"context"
+	"net/http/httptest"
 	"strings"
 	"testing"
 	"time"
 
 	userv1beta1 "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
+	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	types "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
+	mockgateway "github.com/cs3org/go-cs3apis/mocks/github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
 	"github.com/cs3org/reva/v3/pkg/appctx"
+	"github.com/rs/zerolog"
+	"github.com/stretchr/testify/mock"
 )
 
 func TestActiveLock(t *testing.T) {
@@ -221,5 +226,55 @@ func TestActiveLockTimeoutCountsDown(t *testing.T) {
 	// allow for the second that may elapse while running the test
 	if !strings.Contains(got, "<d:timeout>Second-1800</d:timeout>") && !strings.Contains(got, "<d:timeout>Second-1799</d:timeout>") {
 		t.Errorf("expected a timeout of roughly 1800 seconds, got %q", got)
+	}
+}
+
+func TestGetResourceInfosDepthOneOnFile(t *testing.T) {
+	inFolder := &provider.ResourceInfo{
+		Id:   &provider.ResourceId{StorageId: "eos", OpaqueId: "2"},
+		Type: provider.ResourceType_RESOURCE_TYPE_FILE,
+		Path: "/eos/user/a/alice/report.odt",
+	}
+	folder := &provider.ResourceInfo{
+		Id:   &provider.ResourceId{StorageId: "eos", OpaqueId: "1"},
+		Type: provider.ResourceType_RESOURCE_TYPE_CONTAINER,
+		Path: "/eos/user/a/alice",
+	}
+	// the parent path of a single-file share resolves to the shared file itself
+	shareRoot := &provider.ResourceInfo{
+		Id:   &provider.ResourceId{StorageId: "ocm-received", OpaqueId: "70:/"},
+		Type: provider.ResourceType_RESOURCE_TYPE_FILE,
+		Path: "/ocm-received/70/report.odt",
+	}
+
+	tests := []struct {
+		name       string
+		file       *provider.ResourceInfo
+		parent     *provider.ResourceInfo
+		wantParent *provider.ResourceInfo
+		wantInfos  int
+		wantHref   string
+	}{
+		{name: "file in a folder", file: inFolder, parent: folder, wantParent: folder, wantInfos: 2, wantHref: "/dav/spaces/sp"},
+		{name: "single-file share root", file: shareRoot, parent: shareRoot, wantParent: shareRoot, wantInfos: 1, wantHref: "/dav/spaces/sp/report.odt"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			gw := mockgateway.NewMockGatewayAPIClient(t)
+			gw.On("Stat", mock.Anything, mock.Anything).Return(&provider.StatResponse{Status: &rpc.Status{Code: rpc.Code_CODE_OK}, Info: tt.file}, nil).Once()
+			gw.On("Stat", mock.Anything, mock.Anything).Return(&provider.StatResponse{Status: &rpc.Status{Code: rpc.Code_CODE_OK}, Info: tt.parent}, nil).Once()
+			stampGateway(gw)
+
+			r := httptest.NewRequest("PROPFIND", "/dav/spaces/sp/report.odt", nil)
+			r.Header.Set(HeaderDepth, "1")
+			s := &svc{c: &Config{}}
+			parent, infos, href, ok := s.getResourceInfos(context.Background(), httptest.NewRecorder(), r, propfindXML{}, &provider.Reference{ResourceId: tt.file.Id}, zerolog.Nop())
+			if !ok {
+				t.Fatal("getResourceInfos failed")
+			}
+			if parent != tt.wantParent || len(infos) != tt.wantInfos || href != tt.wantHref {
+				t.Errorf("got parent %s, %d infos, href %q; want parent %s, %d infos, href %q", parent.Path, len(infos), href, tt.wantParent.Path, tt.wantInfos, tt.wantHref)
+			}
+		})
 	}
 }
