@@ -44,7 +44,7 @@ import (
 
 const (
 	receivedWebappFixtureSubdir        = "testdata/received-webapp"
-	receivedWebappManifestSHA256       = "2a8d0b6dbc82b2478aa53abefdf7864b1c016d261b345f4a6ebfcde852f3cbb1"
+	receivedWebappManifestSHA256       = "4777bb9bf281045e3033d86d9609b195b2648aad963428e04906454a7af7e851"
 	receivedWebappExpectationsRevision = "received-webapp-v1-2026-09-28"
 )
 
