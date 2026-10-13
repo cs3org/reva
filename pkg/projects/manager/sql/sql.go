@@ -147,7 +147,7 @@ func New(ctx context.Context, m map[string]any) (projects.Catalogue, error) {
 	if c.CacheTTL == 0 {
 		c.CacheTTL = 60
 	}
-	cache.SetTTL(time.Duration(c.CacheTTL))
+	cache.SetTTL(time.Duration(c.CacheTTL) * time.Second)
 	// Even if we get a hit, of course we just want to refresh every 60 seconds
 	cache.SkipTTLExtensionOnHit(true)
 	mgr := &ProjectsManager{

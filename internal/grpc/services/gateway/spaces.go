@@ -21,11 +21,15 @@ package gateway
 import (
 	"context"
 
+	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/pkg/errors"
 
+	"github.com/cs3org/reva/v3/pkg/appctx"
+	"github.com/cs3org/reva/v3/pkg/errtypes"
 	"github.com/cs3org/reva/v3/pkg/rgrpc/status"
 	"github.com/cs3org/reva/v3/pkg/service"
+	"github.com/cs3org/reva/v3/pkg/spaces"
 )
 
 func (s *svc) CreateStorageSpace(ctx context.Context, req *provider.CreateStorageSpaceRequest) (*provider.CreateStorageSpaceResponse, error) {
@@ -58,6 +62,50 @@ func (s *svc) ListStorageSpaces(ctx context.Context, req *provider.ListStorageSp
 	}
 
 	return res, nil
+}
+
+// addSpaceRoles adds to info the permissions that the roles of its project
+// space give to the user in the context.
+func (s *svc) addSpaceRoles(ctx context.Context, info *provider.ResourceInfo) {
+	if info.GetSpace().GetSpaceType() != spaces.SpaceTypeProject.AsString() || info.GetSpace().GetId() == nil || info.GetPermissionSet() == nil {
+		return
+	}
+	user, ok := appctx.ContextGetUser(ctx)
+	if !ok {
+		return
+	}
+
+	space, err := s.fetchSpace(ctx, info.Space.Id.OpaqueId)
+	if err != nil {
+		appctx.GetLogger(ctx).Error().Err(err).Str("space_id", info.Space.Id.OpaqueId).Msg("gateway: failed to fetch space, its roles are not applied")
+		return
+	}
+	spaces.MergeRolesWithPermissions(info.PermissionSet, space.GetRoles(), user)
+}
+
+// fetchSpace returns the project space with the given ID. A space holds
+// nothing that depends on the user, so all users share the cached entry.
+func (s *svc) fetchSpace(ctx context.Context, spaceID string) (*provider.StorageSpace, error) {
+	if space, err := s.spaceInfoCache.Get(spaceID); err == nil {
+		return space, nil
+	}
+
+	res, err := s.ListStorageSpaces(ctx, &provider.ListStorageSpacesRequest{
+		Filters: spaces.ListStorageSpaceFilter{}.ByID(&provider.StorageSpaceId{OpaqueId: spaceID}).List(),
+	})
+	if err != nil {
+		return nil, err
+	}
+	if res.Status.Code != rpc.Code_CODE_OK {
+		return nil, errors.Errorf("gateway: failed to list space %s: %s", spaceID, res.Status.Message)
+	}
+	if len(res.StorageSpaces) != 1 {
+		return nil, errtypes.NotFound(spaceID)
+	}
+
+	space := res.StorageSpaces[0]
+	_ = s.spaceInfoCache.SetWithExpire(spaceID, space, s.spaceInfoCacheTTL)
+	return space, nil
 }
 
 func (s *svc) UpdateStorageSpace(ctx context.Context, req *provider.UpdateStorageSpaceRequest) (*provider.UpdateStorageSpaceResponse, error) {
