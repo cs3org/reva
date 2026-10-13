@@ -63,6 +63,9 @@ type config struct {
 	ResourceInfoCacheDriver  string                    `mapstructure:"resource_info_cache_type"`
 	ResourceInfoCacheTTL     int                       `mapstructure:"resource_info_cache_ttl"`
 	ResourceInfoCacheDrivers map[string]map[string]any `mapstructure:"resource_info_caches"`
+	SpaceInfoCacheDriver     string                    `mapstructure:"space_info_cache_type"`
+	SpaceInfoCacheTTL        int                       `mapstructure:"space_info_cache_ttl"`
+	SpaceInfoCacheDrivers    map[string]map[string]any `mapstructure:"space_info_caches"`
 	HomeLayout               string                    `mapstructure:"home_layout"`
 	OCMEnabled               bool                      `mapstructure:"ocm_enabled"`
 	Events                   eventBackendConfig        `mapstructure:"events"`
@@ -95,6 +98,15 @@ func (c *config) ApplyDefaults() {
 	if c.HomeLayout == "" {
 		c.HomeLayout = "/home"
 	}
+
+	if c.SpaceInfoCacheDriver == "" {
+		c.SpaceInfoCacheDriver = "memory_space"
+	}
+
+	// projects change rarely
+	if c.SpaceInfoCacheTTL == 0 {
+		c.SpaceInfoCacheTTL = 3600
+	}
 }
 
 type svc struct {
@@ -104,6 +116,8 @@ type svc struct {
 	createHomeCache      *ttlcache.Cache `mapstructure:"create_home_cache"`
 	resourceInfoCache    cache.ResourceInfoCache
 	resourceInfoCacheTTL time.Duration
+	spaceInfoCache       cache.SpaceInfoCache
+	spaceInfoCacheTTL    time.Duration
 	eventBackend         backends.Backend
 	eventLimiter         ratelimiters.Limiter
 	// Drains the NATS connection on service close
@@ -152,6 +166,13 @@ func New(ctx context.Context, m map[string]any) (rgrpc.Service, error) {
 		s.resourceInfoCache = ricache
 		s.resourceInfoCacheTTL = time.Second * time.Duration(c.ResourceInfoCacheTTL)
 	}
+
+	sicache, err := getSpaceInfoCacheManager(&c)
+	if err != nil {
+		return nil, err
+	}
+	s.spaceInfoCache = sicache
+	s.spaceInfoCacheTTL = time.Second * time.Duration(c.SpaceInfoCacheTTL)
 
 	return s, nil
 }
@@ -221,4 +242,12 @@ func getCacheManager(c *config) (cache.ResourceInfoCache, error) {
 		return nil, err
 	}
 	return factory(c.ResourceInfoCacheDrivers[c.ResourceInfoCacheDriver])
+}
+
+func getSpaceInfoCacheManager(c *config) (cache.SpaceInfoCache, error) {
+	factory, err := cachereg.GetCacheFunc[cache.SpaceInfoCache](c.SpaceInfoCacheDriver)
+	if err != nil {
+		return nil, err
+	}
+	return factory(c.SpaceInfoCacheDrivers[c.SpaceInfoCacheDriver])
 }
