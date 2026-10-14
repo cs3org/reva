@@ -52,6 +52,9 @@ import (
 
 const (
 	testOpener      = "https://sender.example/services/ocm/open"
+	testHTTPOpener  = "http://sender.example/services/ocm/open"
+	testMixedOpener = "HTTPS://sender.example/services/ocm/open"
+	testSchemeLess  = "sender.example/services/ocm/open"
 	testWebDAVRoot  = "https://sender.example/webdav"
 	testAppName     = "SynthApp"
 	testQuotedName  = `Synth "Lab" & <tag>`

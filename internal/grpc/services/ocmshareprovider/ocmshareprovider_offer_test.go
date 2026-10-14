@@ -232,6 +232,35 @@ func TestCreateOCMShareOfferGate(t *testing.T) {
 			wantWebapp: 0,
 			wantWebdav: 1,
 		},
+		{
+			name:       "gate true http endpoint",
+			offer:      true,
+			methods:    []*ocm.AccessMethod{webdavMethod(), webappMethod("")},
+			disco:      capableDiscovery(),
+			wantWebapp: 1,
+			wantWebdav: 1,
+			appName:    testAppName,
+			endpoint:   testHTTPOpener,
+		},
+		{
+			name:       "gate true mixed case https scheme",
+			offer:      true,
+			methods:    []*ocm.AccessMethod{webdavMethod(), webappMethod("")},
+			disco:      capableDiscovery(),
+			wantWebapp: 1,
+			wantWebdav: 1,
+			appName:    testAppName,
+			endpoint:   testMixedOpener,
+		},
+		{
+			name:       "gate true scheme-less endpoint omitted",
+			offer:      true,
+			methods:    []*ocm.AccessMethod{webdavMethod(), webappMethod("")},
+			disco:      capableDiscovery(),
+			wantWebapp: 0,
+			wantWebdav: 1,
+			endpoint:   testSchemeLess,
+		},
 	}
 
 	for _, tt := range cases {
@@ -240,6 +269,7 @@ func TestCreateOCMShareOfferGate(t *testing.T) {
 			logs := &bytes.Buffer{}
 			wire, stored, _, _ := shareFixture{
 				offer:    tt.offer,
+				endpoint: tt.endpoint,
 				methods:  tt.methods,
 				disco:    tt.disco,
 				resource: tt.resource,
