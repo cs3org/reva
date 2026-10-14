@@ -190,7 +190,7 @@ func TestGetSharedWithMeExposesPersistedWebappName(t *testing.T) {
 	assertWebappSibling(t, base, values[0], appName)
 	assertPermissionCountAllowingWebapp(t, values[0], 1)
 
-	meta := receivedShareWebappMetadata(share)
+	meta := receivedShareWebappMetadata(ctx, share)
 	if meta == nil || !meta.Present || meta.AppName != appName {
 		t.Fatalf("adapter metadata = %+v", meta)
 	}
@@ -227,7 +227,7 @@ func TestGetSharedWithMeWebDAVOnlyOmitsWebapp(t *testing.T) {
 	if !bytes.Equal(body, want.Bytes()) {
 		t.Fatalf("webdav-only bytes differ from absent metadata\n got %s\nwant %s", body, want.Bytes())
 	}
-	if receivedShareWebappMetadata(share) != nil {
+	if receivedShareWebappMetadata(ctx, share) != nil {
 		t.Fatal("webdav-only adapter metadata is not nil")
 	}
 }
@@ -295,7 +295,7 @@ func TestGetSharedWithMeWebappNamesStayOnMatchingShare(t *testing.T) {
 
 func TestReceivedWebappMetadataMissingRemoteItemPropagates(t *testing.T) {
 	share := receivedOCMShareWithWebapp("ocm-share-missing", "remote.txt", "CodiMD")
-	meta := receivedShareWebappMetadata(share)
+	meta := receivedShareWebappMetadata(context.Background(), share)
 	if meta == nil || meta.AppName != "CodiMD" {
 		t.Fatalf("adapter metadata = %+v", meta)
 	}
@@ -384,7 +384,7 @@ func TestGetSharedWithMeDuplicateWebappProtocolsOmitExtension(t *testing.T) {
 			},
 		},
 	})
-	if receivedShareWebappMetadata(share) != nil {
+	if receivedShareWebappMetadata(context.Background(), share) != nil {
 		t.Fatal("duplicate webapp protocols produced metadata")
 	}
 
@@ -406,7 +406,7 @@ func TestGetSharedWithMeMalformedWebappProtocolOmitsExtension(t *testing.T) {
 	share.Protocols = append(share.Protocols, &ocm.Protocol{
 		Term: &ocm.Protocol_WebappOptions{WebappOptions: nil},
 	})
-	if receivedShareWebappMetadata(share) != nil {
+	if receivedShareWebappMetadata(context.Background(), share) != nil {
 		t.Fatal("malformed webapp protocol produced metadata")
 	}
 
@@ -424,7 +424,7 @@ func TestGetSharedWithMeMalformedWebappProtocolOmitsExtension(t *testing.T) {
 func TestGetSharedWithMeEmptyAppNameExposesBlankSibling(t *testing.T) {
 	fixtures := loadReceivedWebappFixturesStrict(t)
 	share := receivedWebappContractShare(true, "")
-	meta := receivedShareWebappMetadata(share)
+	meta := receivedShareWebappMetadata(context.Background(), share)
 	if meta == nil || !meta.Present || meta.AppName != "" {
 		t.Fatalf("adapter metadata = %+v", meta)
 	}
