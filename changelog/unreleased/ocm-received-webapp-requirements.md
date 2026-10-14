@@ -7,4 +7,6 @@ stored only after sender discovery reports `exchange-token` with a usable
 token endpoint and the webapp URI is absolute http(s); relative URIs are
 rejected. OCM discovery now advertises `apiVersion` 1.4.0.
 
+The SQL store now keeps webapp permissions exact.
+
 https://github.com/cs3org/reva/pull/5855

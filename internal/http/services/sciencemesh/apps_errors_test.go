@@ -27,6 +27,7 @@ import (
 
 	rpcv1beta1 "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	ocmpb "github.com/cs3org/go-cs3apis/cs3/sharing/ocm/v1beta1"
+	providerv1beta1 "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/cs3org/reva/v3/pkg/errtypes"
 )
 
@@ -618,6 +619,41 @@ func TestOpenInAppReceivedWebappRequirements(t *testing.T) {
 			}
 			if tt.wantStatus == http.StatusOK && obs.exchangeCalls != 1 {
 				t.Fatalf("exchange calls %d", obs.exchangeCalls)
+			}
+		})
+	}
+}
+
+func TestOpenInAppEmptyStoredPermissions(t *testing.T) {
+	tests := []struct {
+		name  string
+		perms *providerv1beta1.ResourcePermissions
+	}{
+		{name: "nil", perms: nil},
+		{name: "empty", perms: &providerv1beta1.ResourcePermissions{}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			obs := &observeClient{token: launchToken}
+			share := receivedWebappShare(
+				"https://dav.example/dav",
+				"https://app.example/hub",
+				launchSecret,
+				[]string{"must-exchange-token"},
+			)
+			share.Protocols[1].GetWebappOptions().SharePermissions = tt.perms
+			h := newTestHandler(t, &fakeReceivedGateway{resp: okShareResponse(share)}, obs)
+			req, _ := newLaunchRequest(t, "/ocm/share-1")
+			rec := httptest.NewRecorder()
+			h.OpenInApp(rec, req)
+			if rec.Code != http.StatusBadRequest {
+				t.Fatalf("status %d body %s", rec.Code, rec.Body.String())
+			}
+			if !strings.Contains(rec.Body.String(), "missing permissions") {
+				t.Fatalf("body %s", rec.Body.String())
+			}
+			if obs.discoverCalls != 0 || obs.exchangeCalls != 0 {
+				t.Fatalf("discover %d exchange %d", obs.discoverCalls, obs.exchangeCalls)
 			}
 		})
 	}

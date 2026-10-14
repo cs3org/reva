@@ -159,16 +159,19 @@ func storeWebDAVAccessMethod(tx *gorm.DB, shareID uint, o *ocm.AccessMethod_Webd
 }
 
 func storeWebappAccessMethod(tx *gorm.DB, shareID uint, o *ocm.AccessMethod_WebappOptions) error {
+	raw, err := webappPermissionsToJSON(o.WebappOptions.GetPermissions())
+	if err != nil {
+		return errors.Wrap(err, "failed to encode webapp permissions")
+	}
 	accessMethod := &model.OcmShareProtocol{
-		OcmShareID:   uint(shareID),
-		Type:         model.WebappProtocol,
-		Permissions:  int(permissions.OCSFromCS3Permission(o.WebappOptions.GetPermissions())),
-		Requirements: stringsToJSON(o.WebappOptions.Requirements),
-		AppName:      o.WebappOptions.AppName,
+		OcmShareID:        uint(shareID),
+		Type:              model.WebappProtocol,
+		WebappPermissions: raw,
+		Requirements:      stringsToJSON(o.WebappOptions.Requirements),
+		AppName:           o.WebappOptions.AppName,
 	}
 
-	err := tx.Create(accessMethod).Error
-	if err != nil {
+	if err := tx.Create(accessMethod).Error; err != nil {
 		return errors.Wrap(err, "failed to store webapp access method")
 	}
 	return nil
@@ -354,12 +357,16 @@ func storeWebDAVProtocol(tx *gorm.DB, shareID int64, o *ocm.Protocol_WebdavOptio
 }
 
 func storeWebappProtocol(tx *gorm.DB, shareID int64, o *ocm.Protocol_WebappOptions) error {
+	raw, err := webappPermissionsToJSON(o.WebappOptions.GetSharePermissions())
+	if err != nil {
+		return errors.Wrap(err, "failed to encode webapp permissions")
+	}
 	protocol := &model.OcmReceivedShareProtocol{
 		OcmReceivedShareID: uint(shareID),
 		Type:               model.WebappProtocol,
 		Uri:                o.WebappOptions.Uri,
 		SharedSecret:       o.WebappOptions.SharedSecret,
-		Permissions:        int(permissions.OCSFromCS3Permission(o.WebappOptions.GetSharePermissions())),
+		WebappPermissions:  raw,
 		Requirements:       stringsToJSON(o.WebappOptions.Requirements),
 		Targets:            stringsToJSON(o.WebappOptions.Targets),
 		AppName:            o.WebappOptions.AppName,
@@ -660,16 +667,20 @@ func (m *mgr) queriesUpdatesOnShare(ctx context.Context, id *ocm.ShareId, f ...*
 				})
 			case *ocm.AccessMethod_WebappOptions:
 				accessMethodUpdates = append(accessMethodUpdates, func(tx *gorm.DB) error {
+					raw, err := webappPermissionsToJSON(t.WebappOptions.GetPermissions())
+					if err != nil {
+						return errors.Wrap(err, "failed to encode webapp permissions")
+					}
 					// omitted fields mean "preserve stored value", as for webdav
-					u := map[string]any{
-						"permissions": int(permissions.RoleFromResourcePermissions(t.WebappOptions.GetPermissions()).OCSPermissions()),
+					cols := map[string]any{
+						"webapp_permissions": raw,
 					}
 					if t.WebappOptions.AppName != "" {
-						u["app_name"] = t.WebappOptions.AppName
+						cols["app_name"] = t.WebappOptions.AppName
 					}
 					return tx.Model(&model.OcmShareProtocol{}).
 						Where("ocm_share_id = ? AND type = ?", id.OpaqueId, model.WebappProtocol).
-						Updates(u).Error
+						Updates(cols).Error
 				})
 			}
 		}

@@ -30,6 +30,7 @@ import (
 	"github.com/cs3org/reva/v3/pkg/ocm/share"
 	"github.com/cs3org/reva/v3/pkg/permissions"
 	model "github.com/cs3org/reva/v3/pkg/share/manager/sql/model"
+	"google.golang.org/protobuf/encoding/protojson"
 	"gorm.io/datatypes"
 )
 
@@ -195,7 +196,7 @@ func convertToCS3AccessMethod(m *model.OcmShareProtocol) *ocm.AccessMethod {
 		)
 	case model.WebappProtocol:
 		return share.NewWebappAccessMethod(
-			permissions.RoleFromOCSPermissions(permissions.OcsPermissions(m.Permissions)).CS3ResourcePermissions(),
+			webappPermissionsFromJSON(m.WebappPermissions),
 			stringsFromJSON(m.Requirements),
 			m.AppName,
 		)
@@ -215,7 +216,7 @@ func convertToCS3Protocol(p *model.OcmReceivedShareProtocol) *ocm.Protocol {
 		)
 	case model.WebappProtocol:
 		return share.NewWebappProtocol(p.Uri, p.SharedSecret,
-			permissions.RoleFromOCSPermissions(permissions.OcsPermissions(p.Permissions)).CS3ResourcePermissions(),
+			webappPermissionsFromJSON(p.WebappPermissions),
 			stringsFromJSON(p.Requirements),
 			stringsFromJSON(p.Targets),
 			p.AppName,
@@ -226,6 +227,28 @@ func convertToCS3Protocol(p *model.OcmReceivedShareProtocol) *ocm.Protocol {
 		return share.NewEmbeddedProtocol(string(p.Payload))
 	}
 	return nil
+}
+
+func webappPermissionsToJSON(p *provider.ResourcePermissions) (datatypes.JSON, error) {
+	if p == nil {
+		return nil, nil
+	}
+	encoded, err := protojson.Marshal(p)
+	if err != nil {
+		return nil, err
+	}
+	return datatypes.JSON(encoded), nil
+}
+
+func webappPermissionsFromJSON(raw datatypes.JSON) *provider.ResourcePermissions {
+	if len(raw) == 0 {
+		return &provider.ResourcePermissions{}
+	}
+	perms := &provider.ResourcePermissions{}
+	if err := protojson.Unmarshal(raw, perms); err != nil {
+		return &provider.ResourcePermissions{}
+	}
+	return perms
 }
 
 func convertToCS3SharedResourceType(t model.ItemType) ocm.SharedResourceType {
