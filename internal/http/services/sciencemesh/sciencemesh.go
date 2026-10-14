@@ -129,6 +129,7 @@ func (s *svc) routerInit() error {
 	s.router.Delete("/delete-accepted-user", tokenHandler.DeleteAccepted)
 	s.router.Get("/list-providers", providersHandler.ListProviders)
 	s.router.Post("/open-in-app", appsHandler.OpenInApp)
+	s.router.Post("/webapp-launch", appsHandler.WebappLaunch)
 	s.router.Get("/federations", wayfHandler.GetFederations)
 	s.router.Post("/discover", wayfHandler.DiscoverProvider)
 	s.router.Get("/embedded-shares", embeddedHandler.ListEmbeddedShares)
