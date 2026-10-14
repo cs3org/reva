@@ -225,7 +225,7 @@ func connAt(address string) (*grpc.ClientConn, error) {
 	if conn, ok := byAddr.conns[address]; ok {
 		return conn, nil
 	}
-	conn, err := dial(address)
+	conn, err := Dial(address)
 	if err != nil {
 		return nil, err
 	}

@@ -19,6 +19,7 @@
 package runtime
 
 import (
+	"cmp"
 	"context"
 	"fmt"
 	"net"
@@ -41,6 +42,7 @@ import (
 	"github.com/cs3org/reva/v3/pkg/invoke"
 	"github.com/cs3org/reva/v3/pkg/registry"
 	"github.com/cs3org/reva/v3/pkg/rgrpc"
+	"github.com/cs3org/reva/v3/pkg/rgrpc/mtls"
 	"github.com/cs3org/reva/v3/pkg/rhttp"
 	"github.com/cs3org/reva/v3/pkg/service"
 	"github.com/cs3org/reva/v3/pkg/trace"
@@ -157,6 +159,13 @@ func New(config *config.Config, opt ...Option) (*Reva, error) {
 		return nil, err
 	}
 
+	dialCreds, err := mtls.ClientCredentials(config.Shared.MTLS)
+	if err != nil {
+		watcher.Clean()
+		return nil, err
+	}
+	service.SetDialCredentials(dialCreds)
+
 	// Install the process-wide resolver before constructing services, so any
 	// service that resolves a peer at construction time finds it (first wins).
 	service.SetGlobal(service.NewClients(reg, selector))
@@ -165,7 +174,7 @@ func New(config *config.Config, opt ...Option) (*Reva, error) {
 
 	grpc := groupGRPCByAddress(config)
 	http := groupHTTPByAddress(config)
-	servers, err := newServers(ctx, grpc, http, listeners, log)
+	servers, err := newServers(ctx, config.Shared.MTLS, grpc, http, listeners, log)
 	if err != nil {
 		watcher.Clean()
 		return nil, err
@@ -376,6 +385,7 @@ func groupGRPCByAddress(cfg *config.Config) []*config.GRPC {
 				Network:          s.Network,
 				ShutdownDeadline: cfg.GRPC.ShutdownDeadline,
 				EnableReflection: cfg.GRPC.EnableReflection,
+				MTLS:             cfg.GRPC.MTLS,
 				Services:         make(map[string]config.ServicesConfig),
 				Interceptors:     cfg.GRPC.Interceptors,
 			}
@@ -545,7 +555,7 @@ func captureInstances[T any](services map[string]T, cfgServices map[string]confi
 	}
 }
 
-func newServers(ctx context.Context, grpc []*config.GRPC, http []*config.HTTP, lns map[string]net.Listener, log *zerolog.Logger) ([]*Server, error) {
+func newServers(ctx context.Context, certs config.MTLS, grpc []*config.GRPC, http []*config.HTTP, lns map[string]net.Listener, log *zerolog.Logger) ([]*Server, error) {
 	hostname, _ := os.Hostname()
 	servers := make([]*Server, 0, len(grpc)+len(http))
 	for _, cfg := range grpc {
@@ -562,6 +572,10 @@ func newServers(ctx context.Context, grpc []*config.GRPC, http []*config.HTTP, l
 		if err != nil {
 			return nil, err
 		}
+		creds, err := mtls.ServerCredentials(cfg.MTLS, certs)
+		if err != nil {
+			return nil, err
+		}
 		s, err := rgrpc.NewServer(
 			rgrpc.EnableReflection(cfg.EnableReflection),
 			rgrpc.WithShutdownDeadline(cfg.ShutdownDeadline),
@@ -569,6 +583,7 @@ func newServers(ctx context.Context, grpc []*config.GRPC, http []*config.HTTP, l
 			rgrpc.WithServices(services),
 			rgrpc.WithUnaryServerInterceptors(unaryChain),
 			rgrpc.WithStreamServerInterceptors(streamChain),
+			rgrpc.WithCredentials(creds),
 		)
 		if err != nil {
 			return nil, err
@@ -580,8 +595,9 @@ func newServers(ctx context.Context, grpc []*config.GRPC, http []*config.HTTP, l
 			services:  maps.MapValues(services, func(s rgrpc.Service) any { return s }),
 		}
 		log.Debug().
-			Interface("services", maps.Keys(cfg.Services)).
+			Interface("services", maps.Keys(cfg.Services)).Str("mtls", cfg.MTLS).
 			Msgf("spawned grpc server for services listening at %s:%s", ln.Addr().Network(), ln.Addr().String())
+		warnUnprotected(log, cfg.MTLS, ln.Addr())
 		servers = append(servers, server)
 	}
 	for _, cfg := range http {
@@ -635,6 +651,11 @@ func newControlServer(cfg *config.Config, hasServerless bool, log *zerolog.Logge
 	if !invoke.HasInvocations() && !hasServerless {
 		return nil, "", nil
 	}
+	mode := cmp.Or(cfg.GRPC.ControlMTLS, cfg.GRPC.MTLS)
+	creds, err := mtls.ServerCredentials(mode, cfg.Shared.MTLS)
+	if err != nil {
+		return nil, "", err
+	}
 	bind := cfg.GRPC.ControlAddress
 	if bind == "" {
 		// A random port on every interface; the auth interceptor, not the bind
@@ -657,6 +678,7 @@ func newControlServer(cfg *config.Config, hasServerless bool, log *zerolog.Logge
 		rgrpc.WithServices(services),
 		rgrpc.WithUnaryServerInterceptors(unaryChain),
 		rgrpc.WithStreamServerInterceptors(streamChain),
+		rgrpc.WithCredentials(creds),
 	)
 	if err != nil {
 		_ = ln.Close()
@@ -671,6 +693,15 @@ func newControlServer(cfg *config.Config, hasServerless bool, log *zerolog.Logge
 		internal:  true,
 		services:  maps.MapValues(services, func(s rgrpc.Service) any { return s }),
 	}
-	log.Info().Str("address", addr).Msg("spawned per-process control channel")
+	log.Info().Str("address", addr).Str("mtls", mode).Msg("spawned per-process control channel")
+	warnUnprotected(log, mode, ln.Addr())
 	return server, addr, nil
+}
+
+// warnUnprotected warns when a gRPC server takes plaintext calls from other hosts.
+func warnUnprotected(log *zerolog.Logger, mode string, addr net.Addr) {
+	if mtls.Unprotected(mode, addr) {
+		log.Warn().Str("address", addr.String()).
+			Msg("grpc server accepts plaintext calls from anyone who can reach it; set mtls in [grpc] to require reva's certificate")
+	}
 }

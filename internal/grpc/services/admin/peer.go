@@ -22,8 +22,8 @@ import (
 	"sync"
 
 	"github.com/cs3org/reva/v3/pkg/control/controlpb"
+	"github.com/cs3org/reva/v3/pkg/service"
 	"google.golang.org/grpc"
-	"google.golang.org/grpc/credentials/insecure"
 )
 
 // peerConns caches gRPC connections to peer control endpoints; the caller's
@@ -39,7 +39,7 @@ func peerConn(address string) (*grpc.ClientConn, error) {
 	if c, ok := peerConns.conns[address]; ok {
 		return c, nil
 	}
-	c, err := grpc.NewClient(address, grpc.WithTransportCredentials(insecure.NewCredentials()))
+	c, err := service.Dial(address)
 	if err != nil {
 		return nil, err
 	}
