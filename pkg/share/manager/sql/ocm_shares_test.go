@@ -18,6 +18,7 @@ import (
 	"github.com/cs3org/reva/v3/pkg/appctx"
 	"github.com/cs3org/reva/v3/pkg/ocm/share"
 	"google.golang.org/genproto/protobuf/field_mask"
+	"google.golang.org/protobuf/proto"
 )
 
 // ===========================
@@ -860,6 +861,290 @@ func TestUpdateRejectsDifferentRequirements(t *testing.T) {
 	})
 	if err == nil {
 		t.Fatal("expected error when updating with different requirements, got nil")
+	}
+}
+
+// webappCS3Permissions mirrors ocmd.Webapp.ToOCMProtocol. The SQL package
+// does not import that HTTP package, so the expected flags live here.
+func webappCS3Permissions(names []string) *provider.ResourcePermissions {
+	perms := &provider.ResourcePermissions{}
+	for _, name := range names {
+		switch name {
+		case "view":
+			perms.GetPath = true
+			perms.ListContainer = true
+			perms.Stat = true
+		case "read":
+			perms.GetPath = true
+			perms.ListContainer = true
+			perms.Stat = true
+			perms.InitiateFileDownload = true
+		case "write":
+			perms.InitiateFileUpload = true
+		case "share":
+			perms.AddGrant = true
+		}
+	}
+	return perms
+}
+
+func findWebappAccessMethod(methods []*ocm.AccessMethod) *ocm.WebappAccessMethod {
+	for _, method := range methods {
+		if webapp, ok := method.Term.(*ocm.AccessMethod_WebappOptions); ok {
+			return webapp.WebappOptions
+		}
+	}
+	return nil
+}
+
+func findWebappProtocol(protocols []*ocm.Protocol) *ocm.WebappProtocol {
+	for _, protocol := range protocols {
+		if webapp, ok := protocol.Term.(*ocm.Protocol_WebappOptions); ok {
+			return webapp.WebappOptions
+		}
+	}
+	return nil
+}
+
+func TestWebappPermissionsRoundTrip(t *testing.T) {
+	mgr, err, teardown := setupSuiteOcmShares(t)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer teardown(t)
+
+	cases := []struct {
+		name  string
+		perms []string
+	}{
+		{name: "view", perms: []string{"view"}},
+		{name: "read", perms: []string{"read"}},
+		{name: "write", perms: []string{"write"}},
+		{name: "share", perms: []string{"share"}},
+		{name: "read-write-share", perms: []string{"read", "write", "share"}},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			want := webappCS3Permissions(tc.perms)
+
+			userctx := getUserContext("123456")
+			user, _ := appctx.ContextGetUser(userctx)
+			grantee := getUserOcmShareGrantee("sharee1")
+			sent := getOcmShare(
+				[]*ocm.AccessMethod{
+					share.NewWebappAccessMethod(want, share.DefaultWebappRequirements, "app"),
+				},
+				grantee,
+				user.Id,
+				&provider.ResourceId{StorageId: "storageid", OpaqueId: "webapp-" + tc.name},
+				"webapp-token-"+tc.name,
+			)
+			stored, err := storeOcmShareWithID(mgr, userctx, sent)
+			if err != nil {
+				t.Fatal(err)
+			}
+			retrieved, err := mgr.GetShare(userctx, user, &ocm.ShareReference{
+				Spec: &ocm.ShareReference_Id{Id: stored.Id},
+			})
+			if err != nil {
+				t.Fatal(err)
+			}
+			gotSent := findWebappAccessMethod(retrieved.AccessMethods)
+			if gotSent == nil {
+				t.Fatal("expected webapp access method")
+			}
+			if !proto.Equal(gotSent.GetPermissions(), webappCS3Permissions(tc.perms)) {
+				t.Fatalf(
+					"sent permissions = %v, want %v",
+					gotSent.GetPermissions(),
+					webappCS3Permissions(tc.perms),
+				)
+			}
+
+			recvCtx := getUserContext("sharee1")
+			recvUser, _ := appctx.ContextGetUser(recvCtx)
+			received := &ocm.ReceivedShare{
+				Name:          "receivedshare",
+				RemoteShareId: "remote-webapp-" + tc.name,
+				Grantee:       getUserOcmShareGrantee("sharee1"),
+				Owner:         recvUser.Id,
+				Creator:       recvUser.Id,
+				Ctime:         &typesv1beta1.Timestamp{Seconds: uint64(time.Now().Unix())},
+				Mtime:         &typesv1beta1.Timestamp{Seconds: uint64(time.Now().Unix())},
+				ShareType:     ocm.ShareType_SHARE_TYPE_USER,
+				ResourceType:  provider.ResourceType_RESOURCE_TYPE_FILE,
+				Protocols: []*ocm.Protocol{
+					share.NewWebappProtocol(
+						"https://app.example/hub",
+						"sharedsecret",
+						want,
+						share.DefaultWebappRequirements,
+						share.DefaultWebappTargets,
+						"app",
+						"",
+						nil,
+					),
+				},
+			}
+			storedRecv, err := mgr.StoreReceivedShare(recvCtx, received)
+			if err != nil {
+				t.Fatal(err)
+			}
+			retrievedRecv, err := mgr.GetReceivedShare(recvCtx, recvUser, &ocm.ShareReference{
+				Spec: &ocm.ShareReference_Id{Id: storedRecv.Id},
+			})
+			if err != nil {
+				t.Fatal(err)
+			}
+			gotRecv := findWebappProtocol(retrievedRecv.Protocols)
+			if gotRecv == nil {
+				t.Fatal("expected webapp protocol")
+			}
+			if !proto.Equal(gotRecv.GetSharePermissions(), webappCS3Permissions(tc.perms)) {
+				t.Fatalf(
+					"received permissions = %v, want %v",
+					gotRecv.GetSharePermissions(),
+					webappCS3Permissions(tc.perms),
+				)
+			}
+		})
+	}
+}
+
+func TestUpdateWebappPermissionsRoundTrip(t *testing.T) {
+	mgr, err, teardown := setupSuiteOcmShares(t)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer teardown(t)
+
+	userctx := getUserContext("123456")
+	user, _ := appctx.ContextGetUser(userctx)
+	grantee := getUserOcmShareGrantee("sharee1")
+	sent := getOcmShare(
+		[]*ocm.AccessMethod{
+			share.NewWebappAccessMethod(
+				webappCS3Permissions([]string{"view"}),
+				share.DefaultWebappRequirements,
+				"app",
+			),
+		},
+		grantee,
+		user.Id,
+		&provider.ResourceId{StorageId: "storageid", OpaqueId: "webapp-update"},
+		"webapp-update-token",
+	)
+	stored, err := storeOcmShareWithID(mgr, userctx, sent)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ref := &ocm.ShareReference{Spec: &ocm.ShareReference_Id{Id: stored.Id}}
+	updated, err := mgr.UpdateShare(userctx, user, ref, &ocm.UpdateOCMShareRequest_UpdateField{
+		Field: &ocm.UpdateOCMShareRequest_UpdateField_AccessMethods{
+			AccessMethods: share.NewWebappAccessMethod(
+				webappCS3Permissions([]string{"share"}),
+				share.DefaultWebappRequirements,
+				"",
+			),
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := findWebappAccessMethod(updated.AccessMethods)
+	if got == nil {
+		t.Fatal("expected webapp access method")
+	}
+	if !proto.Equal(got.GetPermissions(), webappCS3Permissions([]string{"share"})) {
+		t.Fatalf("updated permissions = %v", got.GetPermissions())
+	}
+}
+
+func TestWebDAVViewOnlyPermissionsStayOCSDerived(t *testing.T) {
+	mgr, err, teardown := setupSuiteOcmShares(t)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer teardown(t)
+
+	viewOnly := &provider.ResourcePermissions{
+		GetPath:       true,
+		ListContainer: true,
+		Stat:          true,
+	}
+
+	userctx := getUserContext("123456")
+	user, _ := appctx.ContextGetUser(userctx)
+	grantee := getUserOcmShareGrantee("sharee1")
+	sent := getOcmShare(
+		[]*ocm.AccessMethod{
+			share.NewWebDavAccessMethod(
+				viewOnly,
+				[]ocm.AccessType{ocm.AccessType_ACCESS_TYPE_REMOTE},
+				[]string{"must-exchange-token"},
+			),
+		},
+		grantee,
+		user.Id,
+		&provider.ResourceId{StorageId: "storageid", OpaqueId: "webdav-view-only"},
+		"webdav-view-token",
+	)
+	stored, err := storeOcmShareWithID(mgr, userctx, sent)
+	if err != nil {
+		t.Fatal(err)
+	}
+	retrieved, err := mgr.GetShare(userctx, user, &ocm.ShareReference{
+		Spec: &ocm.ShareReference_Id{Id: stored.Id},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	gotSent := findWebDAVAccessMethod(retrieved.AccessMethods)
+	if gotSent == nil {
+		t.Fatal("expected webdav access method")
+	}
+	if !proto.Equal(gotSent.GetPermissions(), &provider.ResourcePermissions{}) {
+		t.Fatalf("sent webdav permissions = %v, want empty", gotSent.GetPermissions())
+	}
+
+	recvCtx := getUserContext("sharee1")
+	recvUser, _ := appctx.ContextGetUser(recvCtx)
+	received := &ocm.ReceivedShare{
+		Name:          "receivedshare",
+		RemoteShareId: "remote-webdav-view-only",
+		Grantee:       getUserOcmShareGrantee("sharee1"),
+		Owner:         recvUser.Id,
+		Creator:       recvUser.Id,
+		Ctime:         &typesv1beta1.Timestamp{Seconds: uint64(time.Now().Unix())},
+		Mtime:         &typesv1beta1.Timestamp{Seconds: uint64(time.Now().Unix())},
+		ShareType:     ocm.ShareType_SHARE_TYPE_USER,
+		ResourceType:  provider.ResourceType_RESOURCE_TYPE_FILE,
+		Protocols: []*ocm.Protocol{
+			share.NewWebDAVProtocol(
+				"https://dav.example/dav",
+				"sharedsecret",
+				&ocm.SharePermissions{Permissions: viewOnly},
+				[]ocm.AccessType{ocm.AccessType_ACCESS_TYPE_REMOTE},
+				[]string{"must-exchange-token"},
+			),
+		},
+	}
+	storedRecv, err := mgr.StoreReceivedShare(recvCtx, received)
+	if err != nil {
+		t.Fatal(err)
+	}
+	retrievedRecv, err := mgr.GetReceivedShare(recvCtx, recvUser, &ocm.ShareReference{
+		Spec: &ocm.ShareReference_Id{Id: storedRecv.Id},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	gotRecv := findWebDAVProtocol(retrievedRecv.Protocols)
+	if gotRecv == nil || gotRecv.Permissions == nil {
+		t.Fatal("expected webdav protocol permissions")
+	}
+	if !proto.Equal(gotRecv.Permissions.Permissions, &provider.ResourcePermissions{}) {
+		t.Fatalf("received webdav permissions = %v, want empty", gotRecv.Permissions.Permissions)
 	}
 }
 
