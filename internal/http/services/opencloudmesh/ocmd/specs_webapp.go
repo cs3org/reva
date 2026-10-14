@@ -93,12 +93,20 @@ func (w *Webapp) ValidateReceived(receiverTargets []string, admitMFA bool) error
 	return webappTargetCompatible(w.Targets, receiverTargets)
 }
 
-// ValidateWebappLaunch rechecks a stored offer without re-deriving permissions.
-func ValidateWebappLaunch(uri, secret string, requirements, targets, receiverTargets []string, admitMFA bool) error {
+// ValidateWebappLaunch rechecks a stored offer, including its stored permissions.
+func ValidateWebappLaunch(
+	uri string,
+	secret string,
+	permissions []string,
+	requirements []string,
+	targets []string,
+	receiverTargets []string,
+	admitMFA bool,
+) error {
 	offer := &Webapp{
 		URI:          uri,
 		SharedSecret: secret,
-		Permissions:  []string{"view"},
+		Permissions:  permissions,
 		Requirements: requirements,
 		Targets:      targets,
 	}
