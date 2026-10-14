@@ -39,3 +39,32 @@ type Manager interface {
 	// GetAppPassword retrieves the password information by the combination of username and password.
 	GetAppPassword(ctx context.Context, user *userpb.UserId, secret string) (*apppb.AppPassword, error)
 }
+
+// OpaqueCreatedBy is the key, in the opaque of a ListAppPasswordsResponse, of
+// the JSON map from password id to the opaque id of its creator.
+const OpaqueCreatedBy = "created_by"
+
+type administratorKey struct{}
+
+// ContextWithAdministrator marks the creation of an app password as made by an
+// administrator for the user in the context: the store records the
+// administrator as its creator and does not apply the policy on which accounts
+// can create app passwords.
+func ContextWithAdministrator(ctx context.Context, admin *userpb.UserId) context.Context {
+	return context.WithValue(ctx, administratorKey{}, admin)
+}
+
+// AdministratorFromContext returns the administrator set by
+// ContextWithAdministrator.
+func AdministratorFromContext(ctx context.Context) (*userpb.UserId, bool) {
+	admin, ok := ctx.Value(administratorKey{}).(*userpb.UserId)
+	return admin, ok && admin != nil
+}
+
+// CreatorLister is a Manager that records who created each app password.
+type CreatorLister interface {
+	// ListAppPasswordCreators returns, by password id, the opaque id of who
+	// created each app password of the user in the context: the user, or an
+	// administrator.
+	ListAppPasswordCreators(ctx context.Context) (map[string]string, error)
+}
