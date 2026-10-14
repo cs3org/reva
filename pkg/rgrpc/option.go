@@ -21,6 +21,7 @@ package rgrpc
 import (
 	"github.com/rs/zerolog"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials"
 )
 
 type Option func(*Server)
@@ -58,5 +59,11 @@ func WithStreamServerInterceptors(in []grpc.StreamServerInterceptor) Option {
 func WithUnaryServerInterceptors(in []grpc.UnaryServerInterceptor) Option {
 	return func(s *Server) {
 		s.UnaryServerInterceptors = in
+	}
+}
+
+func WithCredentials(creds credentials.TransportCredentials) Option {
+	return func(s *Server) {
+		s.Credentials = creds
 	}
 }

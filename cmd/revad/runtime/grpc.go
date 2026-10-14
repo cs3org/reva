@@ -31,6 +31,7 @@ import (
 	"github.com/cs3org/reva/v3/internal/grpc/interceptors/useragent"
 	"github.com/cs3org/reva/v3/pkg/activity"
 	"github.com/cs3org/reva/v3/pkg/rgrpc"
+	"github.com/cs3org/reva/v3/pkg/rgrpc/mtls"
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog"
 	"google.golang.org/grpc"
@@ -90,6 +91,7 @@ func initGRPCInterceptors(conf map[string]map[string]any, unprotected []string, 
 		trace.NewUnary(),
 		metrics.NewUnary(),
 		appctx.NewUnary(*logger, counters),
+		mtls.NewUnary(),
 		token.NewUnary(),
 		useragent.NewUnary(),
 		log.NewUnary(),
@@ -129,6 +131,7 @@ func initGRPCInterceptors(conf map[string]map[string]any, unprotected []string, 
 		trace.NewStream(),
 		metrics.NewStream(),
 		appctx.NewStream(*logger, counters),
+		mtls.NewStream(),
 		token.NewStream(),
 		useragent.NewStream(),
 		log.NewStream(),

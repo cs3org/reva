@@ -31,6 +31,7 @@ import (
 	"github.com/rs/zerolog"
 	"go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/reflection"
 )
 
@@ -81,6 +82,7 @@ type Server struct {
 	EnableReflection         bool
 	UnaryServerInterceptors  []grpc.UnaryServerInterceptor
 	StreamServerInterceptors []grpc.StreamServerInterceptor
+	Credentials              credentials.TransportCredentials
 
 	s        *grpc.Server
 	listener net.Listener
@@ -138,6 +140,9 @@ func (s *Server) Start(ln net.Listener) error {
 
 func (s *Server) initServices() error {
 	opts := s.getInterceptors()
+	if s.Credentials != nil {
+		opts = append(opts, grpc.Creds(s.Credentials))
+	}
 	grpcServer := grpc.NewServer(opts...)
 
 	// Record which proto services each reva service registers (the diff around

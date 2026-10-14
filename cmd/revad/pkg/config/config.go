@@ -60,7 +60,19 @@ type Shared struct {
 	SkipUserGroupsInToken bool     `key:"skip_user_groups_in_token"            mapstructure:"skip_user_groups_in_token"`
 	BlockedUsers          []string `default:"[]"                               key:"blocked_users"                      mapstructure:"blocked_users"`
 	Registry              Registry `default:"{}"                               key:"registry"                           mapstructure:"registry"`
+	MTLS                  MTLS     `default:"{}"                               key:"mtls"                               mapstructure:"mtls"`
 	Database              `mapstructure:",squash"`
+}
+
+// MTLS holds the certificate reva presents to its gRPC peers and the CA it trusts them by.
+type MTLS struct {
+	CertFile string `key:"certfile" mapstructure:"certfile"`
+	KeyFile  string `key:"keyfile"  mapstructure:"keyfile"`
+	CAFile   string `key:"cafile"   mapstructure:"cafile"`
+	// ServerName is checked against peers' certificates instead of the dialed host.
+	ServerName string `key:"server_name" mapstructure:"server_name"`
+	// OutgoingMTLS makes outgoing gRPC calls use TLS with the certificate.
+	OutgoingMTLS bool `key:"outgoing_mtls" mapstructure:"outgoing_mtls"`
 }
 
 // Registry holds the process-level service registry configuration. It selects

@@ -58,6 +58,7 @@ import (
 	"github.com/rs/zerolog"
 	"go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/credentials/insecure"
 )
 
@@ -176,7 +177,7 @@ func NewClients(r registry.Registry, s Selector) Clients {
 		registry:  r,
 		selector:  s,
 		conns:     map[string]peerConn{},
-		open:      func(address string) (peerConn, error) { return dial(address) },
+		open:      func(address string) (peerConn, error) { return Dial(address) },
 		fails:     map[string]*failure{},
 		penalties: map[string]time.Time{},
 	}
@@ -374,11 +375,26 @@ func (c *clients) connFor(address string) (peerConn, error) {
 	return conn, nil
 }
 
-// dial opens a gRPC connection to address with reva's standard options.
-func dial(address string) (*grpc.ClientConn, error) {
+var (
+	dialMu    sync.RWMutex
+	dialCreds = insecure.NewCredentials()
+)
+
+// SetDialCredentials sets the transport credentials of every peer dialed after it.
+func SetDialCredentials(creds credentials.TransportCredentials) {
+	dialMu.Lock()
+	defer dialMu.Unlock()
+	dialCreds = creds
+}
+
+// Dial opens a gRPC connection to address with reva's standard options.
+func Dial(address string) (*grpc.ClientConn, error) {
+	dialMu.RLock()
+	creds := dialCreds
+	dialMu.RUnlock()
 	return grpc.NewClient(
 		address,
-		grpc.WithTransportCredentials(insecure.NewCredentials()),
+		grpc.WithTransportCredentials(creds),
 		grpc.WithDefaultCallOptions(grpc.MaxCallRecvMsgSize(maxCallRecvMsgSize)),
 		grpc.WithStatsHandler(otelgrpc.NewClientHandler()),
 		grpc.WithChainUnaryInterceptor(revtrace.NewUnaryClientInterceptor()),

@@ -33,6 +33,10 @@ type GRPC struct {
 	// per-process gRPC server hosting reva.control.v1beta1). Empty binds a random
 	// port on every interface; the advertised address is derived from it.
 	ControlAddress string `key:"control_address" mapstructure:"control_address"`
+	// MTLS is the mode the gRPC servers run in: "off", "permissive" or "strict".
+	MTLS string `default:"off" key:"mtls" mapstructure:"mtls"`
+	// ControlMTLS is the mode of the control channel; empty follows MTLS.
+	ControlMTLS string `key:"control_mtls" mapstructure:"control_mtls"`
 
 	Services     map[string]ServicesConfig `key:"services"     mapstructure:"-"`
 	Interceptors map[string]map[string]any `key:"interceptors" mapstructure:"-"`
