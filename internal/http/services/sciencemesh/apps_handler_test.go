@@ -118,7 +118,7 @@ func TestOpenInAppValidWebapp(t *testing.T) {
 	if obs.discoverCalls != 1 || obs.exchangeCalls != 1 {
 		t.Fatalf("discover %d exchange %d", obs.discoverCalls, obs.exchangeCalls)
 	}
-	if len(obs.origins) != 1 || obs.origins[0] != "https://dav.example" {
+	if len(obs.origins) != 1 || obs.origins[0] != "dav.example" {
 		t.Fatalf("discovery origin %v", obs.origins)
 	}
 	if len(obs.clientIDs) != 1 || obs.clientIDs[0] != "receiver.example" {
@@ -205,7 +205,7 @@ func TestOpenInAppChangedShareIsNotCached(t *testing.T) {
 			obs.origins,
 		)
 	}
-	if obs.origins[0] != "https://dav-a.example" || obs.origins[1] != "https://dav-b.example" {
+	if obs.origins[0] != "dav-a.example" || obs.origins[1] != "dav-b.example" {
 		t.Fatalf("origins %v", obs.origins)
 	}
 	if urls[0] != "https://app.example/hub/a" || urls[1] != "https://app.example/hub/b" {

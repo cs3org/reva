@@ -62,7 +62,6 @@ func TestOpenInAppPublicOnlyRejectsBeforeContact(t *testing.T) {
 		webdav     string
 		insecure   bool
 		wantRefuse bool
-		wantScheme bool
 	}{
 		{
 			name:       "loopback discovery",
@@ -75,11 +74,6 @@ func TestOpenInAppPublicOnlyRejectsBeforeContact(t *testing.T) {
 			webdav:     fmt.Sprintf("https://127.0.0.1:%d/dav", port),
 			insecure:   true,
 			wantRefuse: true,
-		},
-		{
-			name:       "http loopback is scheme rejection",
-			webdav:     fmt.Sprintf("http://127.0.0.1:%d/dav", port),
-			wantScheme: true,
 		},
 		{
 			name:       "private discovery",
@@ -136,15 +130,6 @@ func TestOpenInAppPublicOnlyRejectsBeforeContact(t *testing.T) {
 			if tt.wantRefuse {
 				if !strings.Contains(logs.String(), "non-public") && !strings.Contains(logs.String(), "refusing") {
 					t.Fatalf("dial guard did not refuse: body %s log %s", body, logs.String())
-				}
-			}
-			if tt.wantScheme {
-				if strings.Contains(body, "refusing") || strings.Contains(body, "non-public") ||
-					strings.Contains(logs.String(), "refusing") || strings.Contains(logs.String(), "non-public") {
-					t.Fatal("scheme rejection was reported as address rejection")
-				}
-				if !strings.Contains(body, "https") {
-					t.Fatalf("body %s", body)
 				}
 			}
 			if accepted.Load() != before {

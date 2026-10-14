@@ -31,6 +31,7 @@ import (
 	"testing"
 
 	gateway "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
+	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	rpcv1beta1 "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	ocmpb "github.com/cs3org/go-cs3apis/cs3/sharing/ocm/v1beta1"
 	"github.com/cs3org/reva/v3/internal/http/services/opencloudmesh/ocmd"
@@ -353,9 +354,21 @@ func receivedWebappShare(webdavURI, appURI, secret string, reqs []string) *ocmpb
 	}
 	protocols = append(protocols, webappProtocol(appURI, secret, reqs))
 	return &ocmpb.ReceivedShare{
-		Id:        &ocmpb.ShareId{OpaqueId: "share-1"},
+		Id: &ocmpb.ShareId{OpaqueId: "share-1"},
+		Creator: &userpb.UserId{
+			OpaqueId: "creator",
+			Idp:      webdavHost(webdavURI),
+		},
 		Protocols: protocols,
 	}
+}
+
+func webdavHost(raw string) string {
+	parsed, err := url.Parse(raw)
+	if err != nil {
+		return ""
+	}
+	return parsed.Host
 }
 
 func webdavProtocol(uri string) *ocmpb.Protocol {

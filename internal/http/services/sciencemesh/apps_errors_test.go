@@ -429,17 +429,38 @@ func TestOpenInAppFailures(t *testing.T) {
 			wantText:     "exchange-token",
 		},
 		{
-			name: "http webdav is not a webapp fallback",
+			name: "empty sender idp",
 			file: "/ocm/share-1",
-			gw: &fakeReceivedGateway{resp: okShareResponse(receivedWebappShare(
-				"http://dav.example/dav",
-				"https://app.example/hub",
-				secret,
-				[]string{"must-exchange-token"},
-			))},
+			gw: &fakeReceivedGateway{resp: okShareResponse(func() *ocmpb.ReceivedShare {
+				share := receivedWebappShare(
+					"https://dav.example/dav",
+					"https://app.example/hub",
+					secret,
+					[]string{"must-exchange-token"},
+				)
+				share.Creator.Idp = ""
+				return share
+			}())},
 			client:     &observeClient{token: token},
-			wantStatus: http.StatusBadRequest,
-			wantText:   "https",
+			wantStatus: http.StatusNotFound,
+			wantText:   "sender idp",
+		},
+		{
+			name: "missing sender",
+			file: "/ocm/share-1",
+			gw: &fakeReceivedGateway{resp: okShareResponse(func() *ocmpb.ReceivedShare {
+				share := receivedWebappShare(
+					"https://dav.example/dav",
+					"https://app.example/hub",
+					secret,
+					[]string{"must-exchange-token"},
+				)
+				share.Creator = nil
+				return share
+			}())},
+			client:     &observeClient{token: token},
+			wantStatus: http.StatusNotFound,
+			wantText:   "sender idp",
 		},
 	}
 

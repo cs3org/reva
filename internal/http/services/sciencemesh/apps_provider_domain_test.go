@@ -257,6 +257,9 @@ func TestOpenInAppEncodedClientIDUsesProviderDomain(t *testing.T) {
 		launchSecret,
 		[]string{"must-exchange-token"},
 	)
+	// The TLS test server is not a bare host. Discover only adds http://
+	// for 127.0.0.1, so keep the server URL as the sender idp.
+	share.Creator.Idp = srv.URL
 	installLaunchGateway(t, &fakeReceivedGateway{resp: okShareResponse(share)})
 	h := &appsHandler{}
 	if err := h.init(&c); err != nil {

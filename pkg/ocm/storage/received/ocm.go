@@ -243,30 +243,24 @@ func requiresExchange(protocols []*ocmpb.Protocol) bool {
 }
 
 func (d *driver) getTokenEndpoint(ctx context.Context, share *ocmpb.ReceivedShare) (string, error) {
-	dav, ok := getWebDAVProtocol(share.Protocols)
-	if !ok {
-		return "", errtypes.NotFound("share has no WebDAV protocol")
+	idp := strings.TrimSpace(share.GetCreator().GetIdp())
+	if idp == "" {
+		return "", errtypes.NotFound("share has no sender idp")
 	}
 
-	parsed, err := url.Parse(dav.Uri)
-	if err != nil {
-		return "", errors.Wrap(err, "could not parse sender WebDAV URI")
-	}
-	origin := parsed.Scheme + "://" + parsed.Host
-
-	if entry, err := d.discoveryCache.Get(origin); err == nil {
+	if entry, err := d.discoveryCache.Get(idp); err == nil {
 		return entry.(string), nil
 	}
 
-	disco, err := d.ocmClient.Discover(ctx, origin)
+	disco, err := d.ocmClient.Discover(ctx, idp)
 	if err != nil {
-		return "", errors.Wrap(err, "OCM discovery failed for "+origin)
+		return "", errors.Wrap(err, "OCM discovery failed for "+idp)
 	}
 	if disco.TokenEndPoint == "" {
-		return "", errtypes.NotFound("sender discovery at " + origin + " has no tokenEndPoint")
+		return "", errtypes.NotFound("sender discovery at " + idp + " has no tokenEndPoint")
 	}
 
-	_ = d.discoveryCache.Set(origin, disco.TokenEndPoint)
+	_ = d.discoveryCache.Set(idp, disco.TokenEndPoint)
 	return disco.TokenEndPoint, nil
 }
 
