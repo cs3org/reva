@@ -19,9 +19,14 @@
 package conversions
 
 import (
+	"bytes"
+	"context"
+	"strings"
 	"testing"
 
 	ocm "github.com/cs3org/go-cs3apis/cs3/sharing/ocm/v1beta1"
+	"github.com/cs3org/reva/v3/pkg/appctx"
+	"github.com/rs/zerolog"
 )
 
 // receiverLocalConfigName is a stand-in for a receiver product name. The
@@ -131,9 +136,10 @@ func TestWebappMetadataForReceivedShare(t *testing.T) {
 		},
 	}
 
+	ctx := context.Background()
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := WebappMetadataForReceivedShare(tt.share)
+			got := WebappMetadataForReceivedShare(ctx, tt.share)
 			if tt.wantNil {
 				if got != nil {
 					t.Fatalf("metadata = %+v, want nil", got)
@@ -153,6 +159,43 @@ func TestWebappMetadataForReceivedShare(t *testing.T) {
 				t.Fatalf("AppName used receiver local config %q", receiverLocalConfigName)
 			}
 		})
+	}
+}
+
+func TestWebappMetadataForReceivedShareDuplicateLogsWarning(t *testing.T) {
+	share := shareWithProtocols(
+		webappProtocol("CodiMD"),
+		webappProtocol("Etherpad"),
+	)
+
+	var buf bytes.Buffer
+	log := zerolog.New(&buf).Level(zerolog.DebugLevel)
+	ctx := appctx.WithLogger(context.Background(), &log)
+
+	got := WebappMetadataForReceivedShare(ctx, share)
+	if got != nil {
+		t.Fatalf("metadata = %+v, want nil", got)
+	}
+
+	out := buf.String()
+	if !strings.Contains(out, "dropping ambiguous received webapp protocols") {
+		t.Fatalf("log output missing warning message: %q", out)
+	}
+	for _, want := range []string{
+		`share_id`,
+		`protocol_index`,
+		`app_name`,
+		`duplicate_app_name`,
+		`CodiMD`,
+		`Etherpad`,
+	} {
+		if !strings.Contains(out, want) {
+			t.Fatalf("log output missing %q: %q", want, out)
+		}
+	}
+
+	if got := WebappMetadataForReceivedShare(context.Background(), share); got != nil {
+		t.Fatalf("bare context metadata = %+v, want nil", got)
 	}
 }
 

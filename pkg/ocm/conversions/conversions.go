@@ -32,7 +32,6 @@ import (
 	"github.com/cs3org/reva/v3/pkg/spaces"
 	"github.com/cs3org/reva/v3/pkg/utils"
 	libregraph "github.com/owncloud/libre-graph-api-go"
-	"github.com/rs/zerolog/log"
 )
 
 // Config contains the configuration for OCM conversions
@@ -150,11 +149,12 @@ func (c *Converter) OCMReceivedShareToDriveItem(ctx context.Context, receivedOCM
 
 // WebappMetadataForReceivedShare returns metadata for the single persisted
 // webapp protocol, or nil when there is not exactly one.
-func WebappMetadataForReceivedShare(received *ocm.ReceivedShare) *ReceivedWebappMetadata {
+func WebappMetadataForReceivedShare(ctx context.Context, received *ocm.ReceivedShare) *ReceivedWebappMetadata {
 	if received == nil {
 		return nil
 	}
 
+	log := appctx.GetLogger(ctx)
 	var meta *ReceivedWebappMetadata
 	for i, p := range received.Protocols {
 		if p.GetWebappOptions() == nil {
