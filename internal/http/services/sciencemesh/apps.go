@@ -29,6 +29,7 @@ import (
 
 	rpcv1beta1 "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	ocmpb "github.com/cs3org/go-cs3apis/cs3/sharing/ocm/v1beta1"
+	providerv1beta1 "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/cs3org/reva/v3/internal/http/services/opencloudmesh/ocmd"
 	"github.com/cs3org/reva/v3/internal/http/services/reqres"
 	"github.com/cs3org/reva/v3/internal/http/services/wellknown"
@@ -199,6 +200,29 @@ func (h *appsHandler) OpenInApp(w http.ResponseWriter, r *http.Request) {
 	writeLaunchJSON(w, r, payload)
 }
 
+// storedWebappPermissions reads the share's stored webapp permission flags.
+// A share with no flags does not receive a synthetic view grant.
+func storedWebappPermissions(perms *providerv1beta1.ResourcePermissions) []string {
+	names := []string{}
+	if perms == nil {
+		return names
+	}
+	hasViewBits := perms.GetPath && perms.ListContainer && perms.Stat
+	switch {
+	case perms.InitiateFileDownload:
+		names = append(names, "read")
+	case hasViewBits:
+		names = append(names, "view")
+	}
+	if perms.InitiateFileUpload {
+		names = append(names, "write")
+	}
+	if perms.AddGrant {
+		names = append(names, "share")
+	}
+	return names
+}
+
 func (h *appsHandler) buildLaunch(ctx context.Context, shareID *ocmpb.ShareId, rel string) (openInAppResponse, error) {
 	var none openInAppResponse
 	if err := providerdomain.Validate(h.receiverDomain); err != nil {
@@ -218,6 +242,7 @@ func (h *appsHandler) buildLaunch(ctx context.Context, shareID *ocmpb.ShareId, r
 	if err := ocmd.ValidateWebappLaunch(
 		webapp.GetUri(),
 		secret,
+		storedWebappPermissions(webapp.GetSharePermissions()),
 		webapp.GetRequirements(),
 		webapp.GetTargets(),
 		receiverTargets,
