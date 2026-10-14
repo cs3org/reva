@@ -237,6 +237,11 @@ func (h *appsHandler) buildLaunch(ctx context.Context, shareID *ocmpb.ShareId, r
 		return fail(errtypes.BadRequest("provider domain is not configured"), "")
 	}
 
+	launched, err := joinShareRelativePath(appURI, rel)
+	if err != nil {
+		return fail(err, "")
+	}
+
 	origin, err := senderDiscoveryOrigin(share.GetProtocols())
 	if err != nil {
 		return fail(err, "")
@@ -267,10 +272,6 @@ func (h *appsHandler) buildLaunch(ctx context.Context, shareID *ocmpb.ShareId, r
 		return fail(errtypes.InternalError("token exchange returned an empty access token"), "")
 	}
 
-	launched, err := joinShareRelativePath(appURI, rel)
-	if err != nil {
-		return fail(err, accessToken)
-	}
 	return openInAppResponse{
 		AppURL:      launched,
 		AccessToken: accessToken,
