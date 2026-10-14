@@ -65,4 +65,16 @@ func TestStoredWebappPermissionsUseShareFlags(t *testing.T) {
 	if got := storedWebappPermissions(view); !reflect.DeepEqual(got, []string{"view"}) {
 		t.Fatalf("view flags = %v", got)
 	}
+	write := &providerv1beta1.ResourcePermissions{
+		InitiateFileUpload: true,
+	}
+	if got := storedWebappPermissions(write); !reflect.DeepEqual(got, []string{"write"}) {
+		t.Fatalf("write flags = %v", got)
+	}
+	shareOnly := &providerv1beta1.ResourcePermissions{
+		AddGrant: true,
+	}
+	if got := storedWebappPermissions(shareOnly); !reflect.DeepEqual(got, []string{"share"}) {
+		t.Fatalf("share flags = %v", got)
+	}
 }
