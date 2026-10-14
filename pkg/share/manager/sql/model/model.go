@@ -136,9 +136,9 @@ type ProtoShare struct {
 	Permissions  uint8
 	// Orphan is being replaced by OrphanedAt: while the migration is ongoing, both
 	// are written when orphaning a share and both have to be checked when reading.
-	Orphan       bool               `gorm:"index"`
-	Expiration   datatypes.NullTime `gorm:"index"`
-	SpaceID      string             `gorm:"index"`
+	Orphan     bool               `gorm:"index"`
+	Expiration datatypes.NullTime `gorm:"index"`
+	SpaceID    string             `gorm:"index"`
 }
 
 // IsOrphan reports whether the share was orphaned, according to either the
@@ -220,9 +220,11 @@ type OcmShareProtocol struct {
 	Permissions  int            `gorm:"default:null"`
 	AccessTypes  OcmAccessType  `gorm:"default:null"`
 	Requirements datatypes.JSON `gorm:"type:json;default:null"`
-	// Webapp protocol fields
-	Targets datatypes.JSON `gorm:"type:json;default:null"`
-	AppName string         `gorm:"size:255"`
+	// Webapp protocol fields. WebappPermissions holds the exact CS3 flags.
+	// WebDAV rows leave it empty and keep using the integer Permissions column.
+	Targets           datatypes.JSON `gorm:"type:json;default:null"`
+	WebappPermissions datatypes.JSON `gorm:"type:json;default:null"`
+	AppName           string         `gorm:"size:255"`
 }
 
 // OcmReceivedShare represents an OCM share received from a remote user.
@@ -257,11 +259,13 @@ type OcmReceivedShareProtocol struct {
 	// JSON field for the embedded protocol payload
 	Payload      datatypes.JSON `gorm:"type:json;default:null"`
 	Requirements datatypes.JSON `gorm:"type:json;default:null"`
-	// Webapp protocol fields
-	Targets     datatypes.JSON `gorm:"type:json;default:null"`
-	AppName     string         `gorm:"size:255"`
-	AppIconHint string         `gorm:"size:255"`
-	MediaTypes  datatypes.JSON `gorm:"type:json;default:null"`
+	// Webapp protocol fields. WebappPermissions holds the exact CS3 flags.
+	// WebDAV rows leave it empty and keep using the integer Permissions column.
+	Targets           datatypes.JSON `gorm:"type:json;default:null"`
+	WebappPermissions datatypes.JSON `gorm:"type:json;default:null"`
+	AppName           string         `gorm:"size:255"`
+	AppIconHint       string         `gorm:"size:255"`
+	MediaTypes        datatypes.JSON `gorm:"type:json;default:null"`
 }
 
 func (s *Share) AsCS3Share(grantee *provider.Grantee) *collaboration.Share {
