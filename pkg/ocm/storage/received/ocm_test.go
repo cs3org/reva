@@ -268,10 +268,9 @@ func (m *mockReceivedGateway) GetReceivedOCMShare(_ context.Context, _ *ocmpb.Ge
 }
 
 // testReceivedShare builds a minimal ReceivedShare whose Creator.Idp and WebDAV
-// URI host both point at senderAddr (e.g. "127.0.0.1:12345"), so that any
-// discovery call the driver makes — whether it derives the target from the
-// WebDAV URI or from Creator.Idp — hits the local httptest.Server instead of
-// the real internet.
+// URI host both point at senderAddr (e.g. "127.0.0.1:12345"). Discovery uses
+// the sender idp, and WebDAV access uses the URI, so both stay on the local
+// httptest.Server.
 func testReceivedShare(senderAddr, id string, isFile bool) *ocmpb.ReceivedShare {
 	srt := ocmpb.SharedResourceType_SHARE_RESOURCE_TYPE_CONTAINER
 	if isFile {
@@ -575,6 +574,139 @@ func TestGetTokenEndpointRequiresDiscoveryTokenEndpoint(t *testing.T) {
 	}
 	if _, ok := err.(errtypes.IsNotFound); !ok {
 		t.Fatalf("expected NotFound error, got %T: %v", err, err)
+	}
+}
+
+func TestGetTokenEndpointDiscoversAtSenderIdp(t *testing.T) {
+	discoveryHosts := []string{}
+	var srv *httptest.Server
+	srv = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/.well-known/ocm" {
+			http.Error(w, "unexpected path", http.StatusInternalServerError)
+			return
+		}
+		discoveryHosts = append(discoveryHosts, r.Host)
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"enabled":       true,
+			"apiVersion":    "1.2.0",
+			"endPoint":      srv.URL + "/ocm",
+			"provider":      "reva",
+			"resourceTypes": []any{},
+			"capabilities":  []string{"exchange-token"},
+			"tokenEndPoint": srv.URL + "/ocm/token",
+		})
+	}))
+	defer srv.Close()
+
+	d := newTestReceivedDriver(t)
+	sender := srv.Listener.Addr().String()
+	share := testCodeFlowReceivedShare(sender, "https://dav.example")
+	otherWebDAV := testCodeFlowReceivedShare(sender, "https://other-dav.example")
+
+	got, err := d.getTokenEndpoint(context.Background(), share)
+	if err != nil {
+		t.Fatalf("getTokenEndpoint returned error: %v", err)
+	}
+	gotAgain, err := d.getTokenEndpoint(context.Background(), otherWebDAV)
+	if err != nil {
+		t.Fatalf("cached getTokenEndpoint returned error: %v", err)
+	}
+	want := srv.URL + "/ocm/token"
+	if got != want || gotAgain != want {
+		t.Fatalf("getTokenEndpoint() = %q, %q, want %q", got, gotAgain, want)
+	}
+	if len(discoveryHosts) != 1 || discoveryHosts[0] != sender {
+		t.Fatalf("discovery hosts = %v, want one call to sender %q", discoveryHosts, sender)
+	}
+}
+
+func TestGetTokenEndpointTrimsSenderIdp(t *testing.T) {
+	discoveryHosts := []string{}
+	var srv *httptest.Server
+	srv = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/.well-known/ocm" {
+			http.Error(w, "unexpected path", http.StatusInternalServerError)
+			return
+		}
+		discoveryHosts = append(discoveryHosts, r.Host)
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"enabled":       true,
+			"apiVersion":    "1.2.0",
+			"endPoint":      srv.URL + "/ocm",
+			"provider":      "reva",
+			"resourceTypes": []any{},
+			"capabilities":  []string{"exchange-token"},
+			"tokenEndPoint": srv.URL + "/ocm/token",
+		})
+	}))
+	defer srv.Close()
+
+	d := newTestReceivedDriver(t)
+	sender := srv.Listener.Addr().String()
+	padded := testCodeFlowReceivedShare(" "+sender+" ", "https://dav.example")
+	plain := testCodeFlowReceivedShare(sender, "https://other-dav.example")
+
+	got, err := d.getTokenEndpoint(context.Background(), padded)
+	if err != nil {
+		t.Fatalf("padded getTokenEndpoint returned error: %v", err)
+	}
+	gotAgain, err := d.getTokenEndpoint(context.Background(), plain)
+	if err != nil {
+		t.Fatalf("plain getTokenEndpoint returned error: %v", err)
+	}
+	want := srv.URL + "/ocm/token"
+	if got != want || gotAgain != want {
+		t.Fatalf("getTokenEndpoint() = %q, %q, want %q", got, gotAgain, want)
+	}
+	if len(discoveryHosts) != 1 || discoveryHosts[0] != sender {
+		t.Fatalf("discovery hosts = %v, want one call to trimmed sender %q", discoveryHosts, sender)
+	}
+}
+
+func TestGetTokenEndpointEmptySenderIdp(t *testing.T) {
+	hits := 0
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		hits++
+		http.Error(w, "discovery must not run", http.StatusInternalServerError)
+	}))
+	defer srv.Close()
+
+	d := newTestReceivedDriver(t)
+	sender := srv.Listener.Addr().String()
+	tests := []struct {
+		name  string
+		share *ocmpb.ReceivedShare
+	}{
+		{
+			name:  "empty idp",
+			share: testCodeFlowReceivedShare(sender, srv.URL),
+		},
+		{
+			name:  "whitespace idp",
+			share: testCodeFlowReceivedShare(sender, srv.URL),
+		},
+		{
+			name:  "missing creator",
+			share: testCodeFlowReceivedShare(sender, srv.URL),
+		},
+	}
+	tests[0].share.Creator.Idp = ""
+	tests[1].share.Creator.Idp = " "
+	tests[2].share.Creator = nil
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			before := hits
+			_, err := d.getTokenEndpoint(context.Background(), tt.share)
+			if _, ok := err.(errtypes.IsNotFound); !ok {
+				t.Fatalf("error = %T %v, want NotFound", err, err)
+			}
+			if hits != before {
+				t.Fatalf("discovery hits = %d, want 0", hits-before)
+			}
+		})
 	}
 }
 
