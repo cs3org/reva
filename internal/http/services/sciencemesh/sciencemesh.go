@@ -147,6 +147,7 @@ func (s *svc) routerInit(log *zerolog.Logger) error {
 	s.router.Delete("/delete-accepted-user", tokenHandler.DeleteAccepted)
 	s.router.Get("/list-providers", providersHandler.ListProviders)
 	s.router.Post("/open-in-app", appsHandler.OpenInApp)
+	s.router.Post("/webapp-launch", appsHandler.WebappLaunch)
 	// Unauthenticated routes (keep in sync with Unprotected) are rate limited.
 	s.router.With(unauth).Get("/federations", wayfHandler.GetFederations)
 	s.router.With(unauth).Post("/discover", wayfHandler.DiscoverProvider)
