@@ -27,135 +27,215 @@ import (
 
 func TestValidateWebappLaunch(t *testing.T) {
 	blank := []string{"blank"}
+	view := []string{"view"}
+	read := []string{"read"}
 	tests := []struct {
-		name       string
-		uri        string
-		secret     string
-		reqs       []string
-		targets    []string
-		receiver   []string
-		want       string
-		mfa        bool
-		admitMFA   bool
-		invalidURI bool
+		name        string
+		uri         string
+		secret      string
+		permissions []string
+		reqs        []string
+		targets     []string
+		receiver    []string
+		want        string
+		mfa         bool
+		admitMFA    bool
+		invalidURI  bool
 	}{
 		{
-			name:     "absolute https",
-			uri:      "https://app.example/hub?x=1#y",
-			secret:   "secret",
-			reqs:     []string{"must-exchange-token"},
-			targets:  blank,
-			receiver: blank,
+			name:        "absolute https",
+			uri:         "https://app.example/hub?x=1#y",
+			secret:      "secret",
+			permissions: view,
+			reqs:        []string{"must-exchange-token"},
+			targets:     blank,
+			receiver:    blank,
 		},
 		{
-			name:     "empty app name is not required",
-			uri:      "https://app.example/hub",
-			secret:   "secret",
-			reqs:     []string{"must-exchange-token"},
-			targets:  []string{"iframe", "blank"},
-			receiver: blank,
+			name:        "stored read permission",
+			uri:         "https://app.example/hub",
+			secret:      "secret",
+			permissions: read,
+			reqs:        []string{"must-exchange-token"},
+			targets:     blank,
+			receiver:    blank,
 		},
 		{
-			name:    "missing secret",
-			uri:     "https://app.example/hub",
-			reqs:    []string{"must-exchange-token"},
-			targets: blank, receiver: blank,
+			name:        "http endpoint",
+			uri:         "http://app.example/hub",
+			secret:      "secret",
+			permissions: view,
+			reqs:        []string{"must-exchange-token"},
+			targets:     blank,
+			receiver:    blank,
+		},
+		{
+			name:        "mixed-case HTTPS endpoint",
+			uri:         "HTTPS://app.example/hub",
+			secret:      "secret",
+			permissions: view,
+			reqs:        []string{"must-exchange-token"},
+			targets:     blank,
+			receiver:    blank,
+		},
+		{
+			name:        "scheme-less endpoint",
+			uri:         "app.example/hub",
+			secret:      "secret",
+			permissions: view,
+			reqs:        []string{"must-exchange-token"},
+			targets:     blank,
+			receiver:    blank,
+			invalidURI:  true,
+		},
+		{
+			name:        "empty app name is not required",
+			uri:         "https://app.example/hub",
+			secret:      "secret",
+			permissions: view,
+			reqs:        []string{"must-exchange-token"},
+			targets:     []string{"iframe", "blank"},
+			receiver:    blank,
+		},
+		{
+			name:        "missing secret",
+			uri:         "https://app.example/hub",
+			permissions: view,
+			reqs:        []string{"must-exchange-token"},
+			targets:     blank, receiver: blank,
 			want: "sharedSecret",
 		},
 		{
-			name:    "padded requirement",
-			uri:     "https://app.example/hub",
-			secret:  "secret",
-			reqs:    []string{" must-exchange-token"},
-			targets: blank, receiver: blank,
+			name:        "missing permissions",
+			uri:         "https://app.example/hub",
+			secret:      "secret",
+			permissions: []string{},
+			reqs:        []string{"must-exchange-token"},
+			targets:     blank, receiver: blank,
+			want: "missing permissions",
+		},
+		{
+			name:        "unsupported permission",
+			uri:         "https://app.example/hub",
+			secret:      "secret",
+			permissions: []string{"send"},
+			reqs:        []string{"must-exchange-token"},
+			targets:     blank, receiver: blank,
+			want: "unsupported permission",
+		},
+		{
+			name:        "padded requirement",
+			uri:         "https://app.example/hub",
+			secret:      "secret",
+			permissions: view,
+			reqs:        []string{" must-exchange-token"},
+			targets:     blank, receiver: blank,
 			want: "malformed requirement",
 		},
 		{
-			name:    "unknown requirement",
-			uri:     "https://app.example/hub",
-			secret:  "secret",
-			reqs:    []string{"must-exchange-token", "must-sign"},
-			targets: blank, receiver: blank,
+			name:        "unknown requirement",
+			uri:         "https://app.example/hub",
+			secret:      "secret",
+			permissions: view,
+			reqs:        []string{"must-exchange-token", "must-sign"},
+			targets:     blank, receiver: blank,
 			want: "unsupported requirement",
 		},
 		{
-			name:    "unknown without exchange",
-			uri:     "https://app.example/hub",
-			secret:  "secret",
-			reqs:    []string{"must-sign"},
-			targets: blank, receiver: blank,
+			name:        "unknown without exchange",
+			uri:         "https://app.example/hub",
+			secret:      "secret",
+			permissions: view,
+			reqs:        []string{"must-sign"},
+			targets:     blank, receiver: blank,
 			want: "unsupported requirement",
 		},
 		{
-			name:    "MFA only",
-			uri:     "https://app.example/hub",
-			secret:  "secret",
-			reqs:    []string{"must-use-mfa"},
-			targets: blank, receiver: blank,
+			name:        "MFA only",
+			uri:         "https://app.example/hub",
+			secret:      "secret",
+			permissions: view,
+			reqs:        []string{"must-use-mfa"},
+			targets:     blank, receiver: blank,
 			want: "must-exchange-token",
 		},
 		{
-			name:    "missing token exchange",
-			uri:     "https://app.example/hub",
-			secret:  "secret",
-			reqs:    []string{},
-			targets: blank, receiver: blank,
+			name:        "missing token exchange",
+			uri:         "https://app.example/hub",
+			secret:      "secret",
+			permissions: view,
+			reqs:        []string{},
+			targets:     blank, receiver: blank,
 			want: "must-exchange-token",
 		},
 		{
-			name:     "permanent mfa rejection",
-			uri:      "https://app.example/hub",
-			secret:   "secret",
-			reqs:     []string{"must-exchange-token", "must-use-mfa"},
-			targets:  blank,
-			receiver: blank,
-			mfa:      true,
+			name:        "permanent mfa rejection",
+			uri:         "https://app.example/hub",
+			secret:      "secret",
+			permissions: view,
+			reqs:        []string{"must-exchange-token", "must-use-mfa"},
+			targets:     blank,
+			receiver:    blank,
+			mfa:         true,
 		},
 		{
-			name:     "off policy admits mfa",
-			uri:      "https://app.example/hub",
-			secret:   "secret",
-			reqs:     []string{"must-exchange-token", "must-use-mfa"},
-			targets:  blank,
-			receiver: blank,
-			admitMFA: true,
+			name:        "off policy admits mfa",
+			uri:         "https://app.example/hub",
+			secret:      "secret",
+			permissions: view,
+			reqs:        []string{"must-exchange-token", "must-use-mfa"},
+			targets:     blank,
+			receiver:    blank,
+			admitMFA:    true,
 		},
 		{
-			name:    "relative uri",
-			uri:     "/apps/open",
-			secret:  "secret",
-			reqs:    []string{"must-exchange-token"},
-			targets: blank, receiver: blank,
+			name:        "relative uri",
+			uri:         "/apps/open",
+			secret:      "secret",
+			permissions: view,
+			reqs:        []string{"must-exchange-token"},
+			targets:     blank, receiver: blank,
 			invalidURI: true,
 		},
 		{
-			name:    "iframe only",
-			uri:     "https://app.example/hub",
-			secret:  "secret",
-			reqs:    []string{"must-exchange-token"},
-			targets: []string{"iframe"}, receiver: blank,
+			name:        "iframe only",
+			uri:         "https://app.example/hub",
+			secret:      "secret",
+			permissions: view,
+			reqs:        []string{"must-exchange-token"},
+			targets:     []string{"iframe"}, receiver: blank,
 			want: "no compatible target",
 		},
 		{
-			name:    "receiver does not advertise blank",
-			uri:     "https://app.example/hub",
-			secret:  "secret",
-			reqs:    []string{"must-exchange-token"},
-			targets: blank, receiver: []string{},
+			name:        "receiver does not advertise blank",
+			uri:         "https://app.example/hub",
+			secret:      "secret",
+			permissions: view,
+			reqs:        []string{"must-exchange-token"},
+			targets:     blank, receiver: []string{},
 			want: "no compatible target",
 		},
 		{
-			name:    "MFA before a padded value",
-			uri:     "https://app.example/hub",
-			secret:  "secret",
-			reqs:    []string{"must-use-mfa", " must-exchange-token"},
-			targets: blank, receiver: blank,
+			name:        "MFA before a padded value",
+			uri:         "https://app.example/hub",
+			secret:      "secret",
+			permissions: view,
+			reqs:        []string{"must-use-mfa", " must-exchange-token"},
+			targets:     blank, receiver: blank,
 			want: "malformed requirement",
 		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			err := ValidateWebappLaunch(tt.uri, tt.secret, tt.reqs, tt.targets, tt.receiver, tt.admitMFA)
+			err := ValidateWebappLaunch(
+				tt.uri,
+				tt.secret,
+				tt.permissions,
+				tt.reqs,
+				tt.targets,
+				tt.receiver,
+				tt.admitMFA,
+			)
 			if tt.mfa {
 				if !errors.Is(err, ErrWebappMFAUnproven) {
 					t.Fatalf("err = %v", err)
@@ -184,6 +264,35 @@ func TestValidateWebappLaunch(t *testing.T) {
 				t.Fatalf("unsupported requirement echoed input: %v", err)
 			}
 		})
+	}
+}
+
+func TestDuplicateWebappRequirementsAccepted(t *testing.T) {
+	reqs := []string{"must-exchange-token", "must-exchange-token"}
+	offer := validCodeFlowWebapp()
+	offer.Requirements = append([]string{}, reqs...)
+	blank := []string{"blank"}
+	if err := offer.ValidateReceived(blank, false); err != nil {
+		t.Fatalf("received: %v", err)
+	}
+	if err := (Protocols{offer}).Validate(); err != nil {
+		t.Fatalf("validate: %v", err)
+	}
+	if err := ValidateWebappLaunch(
+		offer.URI,
+		offer.SharedSecret,
+		[]string{"read"},
+		reqs,
+		offer.Targets,
+		blank,
+		false,
+	); err != nil {
+		t.Fatalf("launch: %v", err)
+	}
+	if len(offer.Requirements) != 2 ||
+		offer.Requirements[0] != "must-exchange-token" ||
+		offer.Requirements[1] != "must-exchange-token" {
+		t.Fatalf("requirements rewritten: %v", offer.Requirements)
 	}
 }
 

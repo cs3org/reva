@@ -19,9 +19,11 @@
 package sciencemesh
 
 import (
+	"reflect"
 	"strings"
 	"testing"
 
+	providerv1beta1 "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/cs3org/reva/v3/internal/http/services/opencloudmesh/ocmd"
 )
 
@@ -43,5 +45,24 @@ func TestIngestHTTPDoesNotRelaxLaunchHTTPS(t *testing.T) {
 	}
 	if _, err := requireHTTPSAppURI(uri); err == nil || !strings.Contains(err.Error(), "https") {
 		t.Fatalf("launch err %v", err)
+	}
+}
+
+func TestStoredWebappPermissionsUseShareFlags(t *testing.T) {
+	read := sunetReadPermissions()
+	got := storedWebappPermissions(read)
+	if !reflect.DeepEqual(got, []string{"read"}) {
+		t.Fatalf("read flags = %v", got)
+	}
+	if got := storedWebappPermissions(nil); len(got) != 0 {
+		t.Fatalf("nil flags = %v", got)
+	}
+	view := &providerv1beta1.ResourcePermissions{
+		GetPath:       true,
+		ListContainer: true,
+		Stat:          true,
+	}
+	if got := storedWebappPermissions(view); !reflect.DeepEqual(got, []string{"view"}) {
+		t.Fatalf("view flags = %v", got)
 	}
 }
