@@ -20,6 +20,7 @@ package bearer
 
 import (
 	"fmt"
+	"mime"
 	"net/http"
 	"strings"
 
@@ -46,7 +47,10 @@ func (s *strategy) GetCredentials(w http.ResponseWriter, r *http.Request) (*auth
 	if token != "" {
 		return &auth.Credentials{Type: "bearer", ClientSecret: token}, nil
 	}
-	// TODO 2. check form encoded body parameter for POST requests, see https://tools.ietf.org/html/rfc6750#section-2.2
+	// 2. form-encoded body parameter (RFC 6750 section 2.2)
+	if token, ok := getFromFormBody(r); ok {
+		return &auth.Credentials{Type: "bearer", ClientSecret: token}, nil
+	}
 
 	// 3. check uri query parameter, see https://tools.ietf.org/html/rfc6750#section-2.3
 	tokens, ok := r.URL.Query()["access_token"]
@@ -54,6 +58,24 @@ func (s *strategy) GetCredentials(w http.ResponseWriter, r *http.Request) (*auth
 		return nil, fmt.Errorf("no bearer auth provided")
 	}
 	return &auth.Credentials{Type: "bearer", ClientSecret: tokens[0]}, nil
+}
+
+func getFromFormBody(r *http.Request) (string, bool) {
+	if r.Method != http.MethodPost {
+		return "", false
+	}
+	mediatype, _, err := mime.ParseMediaType(r.Header.Get("Content-Type"))
+	if err != nil {
+		return "", false
+	}
+	if mediatype != "application/x-www-form-urlencoded" {
+		return "", false
+	}
+	if err := r.ParseForm(); err != nil {
+		return "", false
+	}
+	tkn := r.PostForm.Get("access_token")
+	return tkn, tkn != ""
 }
 
 func (s *strategy) AddWWWAuthenticate(w http.ResponseWriter, r *http.Request, realm string) {
