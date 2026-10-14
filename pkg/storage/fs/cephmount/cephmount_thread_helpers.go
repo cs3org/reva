@@ -25,8 +25,10 @@ import (
 	"path/filepath"
 
 	userv1beta1 "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
+	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/cs3org/reva/v3/pkg/appctx"
 	"github.com/pkg/xattr"
+	"golang.org/x/sys/unix"
 )
 
 // getUserInfo extracts user information for logging
@@ -224,6 +226,33 @@ func (fs *cephmountfs) uploadFileAsUser(ctx context.Context, path string, r io.R
 		_, err = io.Copy(file, r)
 		return err
 	})
+}
+
+// permissionsAsUser reports what the kernel lets the user do on path; sharing comes from the space roles
+func (fs *cephmountfs) permissionsAsUser(ctx context.Context, path string, isDir bool) (*provider.ResourcePermissions, error) {
+	result, err := fs.executeAsUser(ctx, func() (any, error) {
+		fullPath := filepath.Join(fs.chrootDir, path)
+		read, write := uint32(unix.R_OK), uint32(unix.W_OK)
+		if isDir {
+			read |= unix.X_OK
+			write |= unix.X_OK
+		}
+		perms := roleForAccess(canAccess(fullPath, read), canAccess(fullPath, write)).CS3ResourcePermissions()
+
+		// Deleting or moving a resource writes to its parent directory
+		canRemove := path != "." && canAccess(filepath.Dir(fullPath), unix.W_OK|unix.X_OK)
+		perms.Delete, perms.Move = canRemove, canRemove
+		return perms, nil
+	})
+	if err != nil {
+		return nil, err
+	}
+	return result.(*provider.ResourcePermissions), nil
+}
+
+// canAccess checks with the fsuid, groups and ACLs of the calling thread; without faccessat2 (kernel < 5.8) root passes every check
+func canAccess(path string, mode uint32) bool {
+	return unix.Faccessat(unix.AT_FDCWD, path, mode, unix.AT_EACCESS) == nil
 }
 
 // setXattrAsUser sets an extended attribute on the user's thread with correct UID
