@@ -60,6 +60,14 @@ func (c *config) validateWebappOffer() error {
 	return nil
 }
 
+func (s *service) outboundWebappEndpointConfigured() bool {
+	if s == nil || s.conf == nil {
+		return false
+	}
+	parsed, err := url.Parse(s.conf.WebAppEndpoint)
+	return err == nil && validOutboundWebappEndpoint(parsed)
+}
+
 func validOutboundWebappEndpoint(parsed *url.URL) bool {
 	if parsed == nil || parsed.User != nil {
 		return false
@@ -128,7 +136,8 @@ func (s *service) freshAccessMethods(
 	if err != nil {
 		return nil, err
 	}
-	attach := s.conf.OfferWebapp && hasCandidate && webappSupported && tokenExchangeSupported
+	attach := s.conf.OfferWebapp && hasCandidate && webappSupported && tokenExchangeSupported &&
+		s.outboundWebappEndpointConfigured()
 	if hasCandidate && !attach {
 		appctx.GetLogger(ctx).Info().Msg(webappOmissionReason)
 	}
