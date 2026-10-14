@@ -299,7 +299,7 @@ func (s *service) CreateOCMShare(ctx context.Context, req *ocm.CreateOCMShareReq
 
 	info := statRes.Info
 	user := appctx.ContextMustGetUser(ctx)
-	// e.g. lightweight homes are owned by service accounts that don't resolve to a user
+	// lightweight homes are owned by service accounts that may not resolve to a user with the current user provider
 	owner := info.Owner
 	if owner.GetOpaqueId() == "" {
 		owner = user.Id
