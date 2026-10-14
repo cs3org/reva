@@ -19,7 +19,9 @@
 package jwt
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
 	"time"
 
 	auth "github.com/cs3org/go-cs3apis/cs3/auth/provider/v1beta1"
@@ -61,7 +63,37 @@ type claims struct {
 	User  *user.User             `json:"user"`
 	Scope map[string]*auth.Scope `json:"scope"`
 	// OCMShareID is the JWT client_id claim (share opaque id), not the receiver FQDN.
-	OCMShareID string `json:"client_id,omitempty"`
+	OCMShareID clientIDClaim `json:"client_id,omitzero"`
+}
+
+// clientIDClaim records whether client_id was present in the payload.
+// encoding/json decodes an omitted claim, an empty string, and null into the
+// same Go string, so presence has to be tracked on unmarshal.
+type clientIDClaim struct {
+	value   string
+	present bool
+	isNull  bool
+}
+
+func (c clientIDClaim) MarshalJSON() ([]byte, error) {
+	if c.isNull {
+		return []byte("null"), nil
+	}
+	return json.Marshal(c.value)
+}
+
+func (c *clientIDClaim) UnmarshalJSON(data []byte) error {
+	c.present = true
+	if bytes.Equal(data, []byte("null")) {
+		c.isNull = true
+		return nil
+	}
+	return json.Unmarshal(data, &c.value)
+}
+
+// IsZero reports an omitted claim so minting can skip client_id.
+func (c clientIDClaim) IsZero() bool {
+	return !c.present
 }
 
 func (c *config) ApplyDefaults() {
@@ -102,7 +134,7 @@ func (m *manager) MintToken(ctx context.Context, u *user.User, scope map[string]
 		},
 		User:       u,
 		Scope:      scope,
-		OCMShareID: ocmShareID,
+		OCMShareID: clientIDClaim{value: ocmShareID, present: ocmShareID != ""},
 	}
 
 	t := jwt.NewWithClaims(jwt.GetSigningMethod("HS256"), claims)
@@ -157,6 +189,13 @@ func (m *manager) DismantleToken(ctx context.Context, tkn string) (*user.User, m
 		return nil, nil, err
 	}
 
+	// A present client_id claim must be the code-flow share opaque id.
+	// Tokens that omit the claim stay valid.
+	if err := checkOCMClientIDClaim(c); err != nil {
+		m.cache.Set(key, nil, err, time.Time{})
+		return nil, nil, err
+	}
+
 	// Bound the entry by the expiration of the token itself, so a cache hit can
 	// never resurrect a token that has run out.
 	var notAfter time.Time
@@ -166,6 +205,26 @@ func (m *manager) DismantleToken(ctx context.Context, tkn string) (*user.User, m
 	m.cache.Set(key, &authcache.Identity{User: c.User, Scopes: c.Scope}, nil, notAfter)
 
 	return c.User, c.Scope, nil
+}
+
+// checkOCMClientIDClaim compares a present client_id claim with the code-flow
+// share opaque id. An omitted claim is allowed. An empty or null claim is not.
+func checkOCMClientIDClaim(c *claims) error {
+	if !c.OCMShareID.present {
+		return nil
+	}
+	if c.OCMShareID.isNull || c.OCMShareID.value == "" {
+		return errtypes.InvalidCredentials("ocm token client_id does not match share scope")
+	}
+
+	derived, err := ocmshare.CodeFlowOCMShareClientID(c.Scope)
+	if err != nil {
+		return err
+	}
+	if c.OCMShareID.value != derived {
+		return errtypes.InvalidCredentials("ocm token client_id does not match share scope")
+	}
+	return nil
 }
 
 // ValidatedExpiresAt parses the token, validates it, and returns the expiration time.

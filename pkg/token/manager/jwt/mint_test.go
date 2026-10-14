@@ -32,6 +32,7 @@ import (
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	types "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
 	"github.com/cs3org/reva/v3/pkg/auth/scope"
+	"github.com/cs3org/reva/v3/pkg/errtypes"
 	"github.com/cs3org/reva/v3/pkg/token"
 	"github.com/cs3org/reva/v3/pkg/token/manager/jwt"
 	jwtv5 "github.com/golang-jwt/jwt/v5"
@@ -200,6 +201,124 @@ func TestMintTokenCodeFlowClientID(t *testing.T) {
 	if _, _, err := other.DismantleToken(context.Background(), raw); err == nil {
 		t.Fatal("token validated under a different signing key")
 	}
+}
+
+func TestDismantleTokenOCMClientIDClaim(t *testing.T) {
+	mgr := newMinter(t, testSigningKey)
+	user := federatedUser()
+	scopes := codeFlowScope(t, "share-alpha", "exchange-code-alpha")
+	raw, err := mgr.MintToken(context.Background(), user, scopes)
+	if err != nil {
+		t.Fatal(err)
+	}
+	base := payloadObject(t, raw)
+
+	const mismatch = "ocm token client_id does not match share scope"
+	tests := []struct {
+		name    string
+		rewrite func(map[string]any)
+		wantErr string
+	}{
+		{name: "match"},
+		{
+			name: "mismatch",
+			rewrite: func(payload map[string]any) {
+				payload["client_id"] = "share-beta"
+			},
+			wantErr: mismatch,
+		},
+		{
+			name: "receiver domain claim",
+			rewrite: func(payload map[string]any) {
+				// Form client_id is the receiver FQDN. The claim must stay the share id.
+				payload["client_id"] = "receiver.example"
+			},
+			wantErr: mismatch,
+		},
+		{
+			name: "claim-less",
+			rewrite: func(payload map[string]any) {
+				delete(payload, "client_id")
+			},
+		},
+		{
+			name: "present empty",
+			rewrite: func(payload map[string]any) {
+				payload["client_id"] = ""
+			},
+			wantErr: mismatch,
+		},
+		{
+			name: "present null",
+			rewrite: func(payload map[string]any) {
+				payload["client_id"] = nil
+			},
+			wantErr: mismatch,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			rawToken := raw
+			if tt.rewrite != nil {
+				payload := clonePayload(t, base)
+				tt.rewrite(payload)
+				rawToken = resignPayload(t, payload, testSigningKey)
+			}
+
+			gotUser, gotScope, err := mgr.DismantleToken(context.Background(), rawToken)
+			if tt.wantErr == "" {
+				if err != nil {
+					t.Fatal(err)
+				}
+				shares, shareErr := scope.GetOCMSharesFromScopes(gotScope)
+				if shareErr != nil {
+					t.Fatal(shareErr)
+				}
+				if len(shares) != 1 || shares[0].GetId().GetOpaqueId() != "share-alpha" {
+					t.Fatalf("scope share: %#v", shares)
+				}
+				if gotUser.GetId().GetOpaqueId() != user.Id.OpaqueId {
+					t.Fatalf("user: got %#v", gotUser.GetId())
+				}
+				return
+			}
+
+			cred, ok := err.(errtypes.InvalidCredentials)
+			if !ok || string(cred) != tt.wantErr {
+				t.Fatalf("error: got %T %v, want InvalidCredentials %q", err, err, tt.wantErr)
+			}
+			if gotUser != nil || gotScope != nil {
+				t.Fatalf("result: user=%v scopes=%v", gotUser, gotScope)
+			}
+			if _, _, retryErr := mgr.DismantleToken(context.Background(), rawToken); retryErr == nil {
+				t.Fatal("rejected token dismantled on retry")
+			}
+		})
+	}
+}
+
+func clonePayload(t *testing.T, payload map[string]any) map[string]any {
+	t.Helper()
+	encoded, err := json.Marshal(payload)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var cloned map[string]any
+	if err := json.Unmarshal(encoded, &cloned); err != nil {
+		t.Fatal(err)
+	}
+	return cloned
+}
+
+func resignPayload(t *testing.T, payload map[string]any, secret string) string {
+	t.Helper()
+	token := jwtv5.NewWithClaims(jwtv5.SigningMethodHS256, jwtv5.MapClaims(payload))
+	signed, err := token.SignedString([]byte(secret))
+	if err != nil {
+		t.Fatal(err)
+	}
+	return signed
 }
 
 func TestMintTokenLegacyAndNonOCMOmitClientID(t *testing.T) {

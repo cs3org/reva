@@ -148,8 +148,10 @@ resolved and before a token is minted.
 
 The minted JWT `client_id` claim is the resolved outgoing share opaque
 id. It is not the form receiver domain and it is not the shared secret.
-Legacy direct-secret tokens and other non-OCM tokens omit the claim. The
-endpoint returns that minted access token unchanged.
+Token verification re-derives that share id from the OCM share scope and
+rejects the token when a present `client_id` claim disagrees. Legacy
+direct-secret tokens and other non-OCM tokens omit the claim and still
+work. The endpoint returns that minted access token unchanged.
 
 ## Deployment checks
 
