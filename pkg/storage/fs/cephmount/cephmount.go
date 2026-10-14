@@ -476,11 +476,11 @@ func (fs *cephmountfs) fileAsResourceInfo(ctx context.Context, path string, info
 		Name:  filepath.Base(externalPath),
 		Etag:  calcEtag(info, stat, rctime),
 		Owner: &userv1beta1.UserId{OpaqueId: owner.Username},
+		// Sharing permissions come from the space roles, which the gateway adds
 		PermissionSet: &provider.ResourcePermissions{
 			GetPath:              true,
 			GetQuota:             true,
 			InitiateFileDownload: true,
-			ListGrants:           true,
 			ListContainer:        true,
 			ListFileVersions:     true,
 			ListRecycle:          true,
@@ -492,11 +492,6 @@ func (fs *cephmountfs) fileAsResourceInfo(ctx context.Context, path string, info
 			CreateContainer:      true,
 			Delete:               true,
 			PurgeRecycle:         true,
-
-			AddGrant:    true,
-			RemoveGrant: true,
-			UpdateGrant: true,
-			DenyGrant:   true,
 		},
 		ArbitraryMetadata: &provider.ArbitraryMetadata{Metadata: map[string]string{}},
 	}
