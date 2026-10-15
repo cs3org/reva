@@ -58,8 +58,10 @@ type NodeResult struct {
 // node never stalls a fleet-wide fan-out.
 const PerNodeTimeout = 10 * time.Second
 
-// Resolve maps a selector to its control endpoints: a node id
-// "host:port/service" targets one instance, a service name every live one, a
+// Resolve maps a selector to its control endpoints. An instance is one
+// service process running on a specific node, identified by its node id
+// "host:port/service"; the fleet is every instance of every service in the
+// registry. A node id targets one instance, a service name every live one, a
 // partial id ("host:port" or a bare host) every instance at that address or on
 // that machine, and "*" every live instance in the fleet. It returns the
 // resolved service name when the selector was one.
