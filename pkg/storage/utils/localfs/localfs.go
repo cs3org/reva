@@ -91,6 +91,7 @@ func (c *Config) ApplyDefaults() {
 	c.References = path.Join(c.Shadow, "references")
 	c.RecycleBin = path.Join(c.Shadow, "recycle_bin")
 	c.Versions = path.Join(c.Shadow, "versions")
+	
 }
 
 type localfs struct {
@@ -1256,51 +1257,51 @@ func (fs *localfs) archiveRevision(ctx context.Context, np string) error {
 	return nil
 }
 
-func (fs *localfs) ListRevisions(ctx context.Context, ref *provider.Reference) ([]*provider.FileVersion, error) {
-	np, err := fs.resolve(ctx, ref)
-	if err != nil {
-		return nil, errors.Wrap(err, "localfs: error resolving ref")
+func (fs *localfs) ListRevisions(ctx context.Context, ref *provider.Reference) ([]*provider.FileVersion, error) {  
+	np, err := fs.resolve(ctx, ref)  
+	if err != nil {  
+		return nil, errors.Wrap(err, "localfs: error resolving ref")  
 	}
-
-	if fs.isShareFolder(ctx, np) {
-		return nil, errtypes.PermissionDenied("localfs: cannot list revisions under the virtual share folder")
-	}
-
-	versionsDir := fs.wrapVersions(ctx, np)
-	revisions := []*provider.FileVersion{}
-	entries, err := os.ReadDir(versionsDir)
-	if err != nil {
-		if os.IsNotExist(err) {
-			// Versions directory doesn't exist yet, return empty list
-			return revisions, nil
-		}
-		return nil, errors.Wrap(err, "localfs: error reading"+versionsDir)
-	}
-	mds := make([]iofs.FileInfo, 0, len(entries))
-	for _, entry := range entries {
-		info, err := entry.Info()
-		if err != nil {
-			return nil, err
-		}
-		mds = append(mds, info)
-	}
-
-	for i := range mds {
-		// versions resemble v12345678
-		version := mds[i].Name()[1:]
-
-		mtime, err := strconv.Atoi(version)
-		if err != nil {
-			continue
-		}
-		revisions = append(revisions, &provider.FileVersion{
-			Key:   version,
-			Size:  uint64(mds[i].Size()),
-			Mtime: uint64(mtime),
-			Etag:  calcEtag(ctx, mds[i]),
-		})
-	}
-	return revisions, nil
+  
+	if fs.isShareFolder(ctx, np) {  
+		return nil, errtypes.PermissionDenied("localfs: cannot list revisions under the virtual share folder")  
+	}  
+  
+	versionsDir := fs.wrapVersions(ctx, np)  
+	revisions := []*provider.FileVersion{}  
+	entries, err := os.ReadDir(versionsDir)  
+	if err != nil {  
+		if os.IsNotExist(err) {  
+			// Versions directory doesn't exist yet, return empty list  
+			return revisions, nil  
+		}  
+		return nil, errors.Wrap(err, "localfs: error reading"+versionsDir)  
+	}  
+	mds := make([]iofs.FileInfo, 0, len(entries))  
+	for _, entry := range entries {  
+		info, err := entry.Info()  
+		if err != nil {  
+			return nil, err  
+		}  
+		mds = append(mds, info)  
+	}  
+  
+	for i := range mds {  
+		// versions resemble v12345678  
+		version := mds[i].Name()[1:]  
+  
+		mtime, err := strconv.ParseInt(version, 10, 64)
+		if err != nil {  
+			continue  
+		}  
+		revisions = append(revisions, &provider.FileVersion{  
+			Key:   version,  
+			Size:  uint64(mds[i].Size()),  
+			Mtime: uint64(mtime),  
+			Etag:  calcEtag(ctx, mds[i]),  
+		})  
+	}  
+	return revisions, nil  
 }
 
 func (fs *localfs) DownloadRevision(ctx context.Context, ref *provider.Reference, revisionKey string) (io.ReadCloser, error) {
@@ -1394,7 +1395,7 @@ func (fs *localfs) convertToRecycleItem(ctx context.Context, rp string, md os.Fi
 	}
 
 	trashtime := suffix[2:]
-	ttime, err := strconv.Atoi(trashtime)
+	ttime, err := strconv.ParseInt(trashtime, 10, 64)
 	if err != nil {
 		return nil
 	}
