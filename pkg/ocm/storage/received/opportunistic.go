@@ -277,12 +277,14 @@ func (d *driver) selectLegacyWebDAVAuth(
 	return authHdr, c, mode, nil
 }
 
-func (d *driver) legacyWebDAVClient(
+// cacheLegacyAuth probes the shared secret and caches the accepted client,
+// so later reads and uploads on the share skip the probe.
+func (d *driver) cacheLegacyAuth(
 	ctx context.Context,
 	shareID string,
 	share *ocmpb.ReceivedShare,
-	endpoint, secret, rel string,
-) (*gowebdav.Client, *ocmpb.ReceivedShare, string, error) {
+	endpoint, secret string,
+) (*cachedClient, error) {
 	authHdr, c, mode, err := d.selectLegacyWebDAVAuth(
 		ctx,
 		share,
@@ -290,15 +292,29 @@ func (d *driver) legacyWebDAVClient(
 		secret,
 	)
 	if err != nil {
-		return nil, nil, "", err
+		return nil, err
 	}
-	d.storeClient(shareID, &cachedClient{
+	cc := &cachedClient{
 		client:     c,
 		share:      share,
 		authHeader: authHdr,
 		mode:       mode,
-	}, time.Hour)
-	return c, share, rel, nil
+	}
+	d.storeClient(shareID, cc, time.Hour)
+	return cc, nil
+}
+
+func (d *driver) legacyWebDAVClient(
+	ctx context.Context,
+	shareID string,
+	share *ocmpb.ReceivedShare,
+	endpoint, secret, rel string,
+) (*gowebdav.Client, *ocmpb.ReceivedShare, string, error) {
+	cc, err := d.cacheLegacyAuth(ctx, shareID, share, endpoint, secret)
+	if err != nil {
+		return nil, nil, "", err
+	}
+	return cc.client, share, rel, nil
 }
 
 // openAttempt resolves a WebDAV client. dropCache forces a new client, which
