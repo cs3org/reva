@@ -169,7 +169,7 @@ func TestExternalAccountOperationsAreDenied(t *testing.T) {
 		require.Error(t, err)
 		assert.IsType(t, errtypes.PermissionDenied(""), err)
 
-		err = fs.CreateDir(ctx, &provider.Reference{Path: "/shared/newdir"})
+		_, err = fs.CreateDir(ctx, &provider.Reference{Path: "/shared/newdir"})
 		require.Error(t, err)
 		assert.IsType(t, errtypes.PermissionDenied(""), err)
 
