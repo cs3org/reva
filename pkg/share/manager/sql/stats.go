@@ -22,6 +22,7 @@ import (
 	"context"
 	"time"
 
+	"github.com/cs3org/reva/v3/pkg/permissions"
 	"github.com/cs3org/reva/v3/pkg/share/manager/sql/model"
 	"github.com/cs3org/reva/v3/pkg/stats"
 	"gorm.io/gorm"
@@ -43,17 +44,19 @@ const statusCase = `CASE
   ELSE 'active'
 END`
 
-// permissionClass maps the permission bitmask (1 read, 2 update, 4 create,
-// 8 delete, 16 share) to a small vocabulary: read-only, read-write,
-// upload-only (write bits without read), none.
+// permissionClass maps the OCS permission bitmask to a small vocabulary:
+// read-only, read-write, upload-only (write bits without read), none.
 func permissionClass(p uint8) string {
-	const read, write = 1, 2 | 4 | 8
+	const write = permissions.PermissionWrite | permissions.PermissionCreate | permissions.PermissionDelete
+	perms := permissions.OcsPermissions(p)
+	canRead := perms.Contain(permissions.PermissionRead)
+	canWrite := perms&write != 0
 	switch {
-	case p&read != 0 && p&write != 0:
+	case canRead && canWrite:
 		return "read-write"
-	case p&read != 0:
+	case canRead:
 		return "read"
-	case p&write != 0:
+	case canWrite:
 		return "upload-only"
 	default:
 		return "none"
