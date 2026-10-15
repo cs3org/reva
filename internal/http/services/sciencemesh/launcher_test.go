@@ -188,6 +188,13 @@ func TestWebappLaunchNonceFailureRendersErrorPage(t *testing.T) {
 	if csp := rec.Header().Get("Content-Security-Policy"); !strings.Contains(csp, "form-action 'none'") {
 		t.Fatalf("csp %q", csp)
 	}
+	csp := rec.Header().Get("Content-Security-Policy")
+	if !strings.Contains(csp, "script-src 'none'") {
+		t.Fatalf("csp lacks script-src 'none': %q", csp)
+	}
+	if strings.Contains(csp, "'nonce-") {
+		t.Fatalf("csp carries a nonce: %q", csp)
+	}
 	for k, v := range map[string]string{
 		"Cache-Control":          "no-store",
 		"Referrer-Policy":        "no-referrer",
@@ -266,6 +273,9 @@ func TestWebappLaunchExpiredSessionRedirectOrigin(t *testing.T) {
 		{"other host", "https://evil.example/x", false},
 		{"http scheme", "http://receiver.example/x", false},
 		{"port differs", "https://receiver.example:8443/x", false},
+		{"explicit default port", "https://receiver.example:443/x", true},
+		{"host case fold", "https://Receiver.Example/x", true},
+		{"http default port", "https://receiver.example:80/x", false},
 		{"suffix host", "https://receiver.example.evil.example/x", false},
 		{"userinfo host trick", "https://receiver.example@evil.example/x", false},
 		{"prefix host", "https://evilreceiver.example/x", false},
