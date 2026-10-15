@@ -84,9 +84,10 @@ its origin is exactly `https://<provider_domain>`; any other value is dropped.
 Operator notes:
 
 - The page sets its own `Content-Security-Policy` (nonce-based `script-src`,
-  `form-action` set to the exact validated app origin for standard hosts, with
-  a safe fixed `https:` fallback for unusual validated hosts; error pages use
-  `form-action 'none'`). The reverse-proxy edge must not
+  `form-action` set to the exact validated app origin; error pages use
+  `form-action 'none'`). Internationalized app hosts are posted to in their
+  ASCII form, and an app host that cannot be written as a CSP host source is
+  refused before any token exchange. The reverse-proxy edge must not
   stamp its own CSP on this path, or the inline submit script and the form
   post will be blocked.
 - Reva's default token chain is `["header"]` only. Deployments must set both
