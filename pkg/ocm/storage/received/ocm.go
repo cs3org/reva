@@ -523,7 +523,8 @@ func (d *driver) Upload(ctx context.Context, ref *provider.Reference, r io.ReadC
 
 // uploadAuth returns the Authorization header value for an upload attempt.
 // Strict shares exchange a token on every call. Other shares reuse a cached
-// header, try an opportunistic exchange, then use selectLegacyWebDAVAuth.
+// header, try an opportunistic exchange, then probe and cache the shared
+// secret the same way reads do.
 func (d *driver) uploadAuth(ctx context.Context, share *ocmpb.ReceivedShare, endpoint, secret string, id *ocmpb.ShareId) (string, error) {
 	log := appctx.GetLogger(ctx)
 	if requiresExchange(share.Protocols) {
@@ -552,16 +553,11 @@ func (d *driver) uploadAuth(ctx context.Context, share *ocmpb.ReceivedShare, end
 			Msg("auth selected for remote OCM share")
 		return cc.authHeader, nil
 	}
-	authHeader, _, _, err := d.selectLegacyWebDAVAuth(
-		ctx,
-		share,
-		endpoint,
-		secret,
-	)
+	cc, err = d.cacheLegacyAuth(ctx, id.OpaqueId, share, endpoint, secret)
 	if err != nil {
 		return "", err
 	}
-	return authHeader, nil
+	return cc.authHeader, nil
 }
 
 // withExchangeDownloadOpenRetry wraps ReadStream open with retryUnauthorized

@@ -10,6 +10,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"slices"
 	"strings"
 	"sync"
 	"testing"
@@ -742,6 +743,52 @@ func TestOpportunisticTokenExchange(t *testing.T) {
 		assertLogMode(t, logs, modeExchange)
 		assertLogMode(t, logs, modeLegacy)
 		assertNoLogMode(t, logs, modeBearer)
+	})
+
+	t.Run("cold uploads reuse the legacy probe", func(t *testing.T) {
+		script := &scriptedSender{
+			capabilities:       []string{"invites"},
+			rejectBearerSecret: true,
+		}
+		srv := startScriptedSender(t, script)
+		share := scriptedShare(srv, false)
+		d := newTestReceivedDriver(t)
+		stampGateway(&mockReceivedGateway{shares: []*ocmpb.ReceivedShare{share}})
+		ctx, _ := loggedContext(t)
+
+		upload := func() {
+			t.Helper()
+			err := d.Upload(
+				ctx,
+				&provider.Reference{Path: "/share-abc/file.txt"},
+				io.NopCloser(bytes.NewReader([]byte("hi"))),
+				nil,
+			)
+			if err != nil {
+				t.Fatalf("Upload: %v", err)
+			}
+		}
+		basic := legacyBasicHeader(ocmShareSecret)
+
+		upload()
+		_, _, firstAuths, firstMethods := script.snapshotWire()
+		assertBearerThenBasicUpload(t, firstMethods, firstAuths)
+
+		upload()
+		_, tokens, auths, methods := script.snapshotWire()
+		if tokens != 0 {
+			t.Fatalf("token calls = %d, want 0", tokens)
+		}
+		second := methods[len(firstMethods):]
+		if slices.Contains(second, "PROPFIND") {
+			t.Fatalf("second upload probed again: methods=%v", second)
+		}
+		if countMethodAuth(second, auths[len(firstAuths):], http.MethodPut, basic) == 0 {
+			t.Fatalf("second upload did not use basic: methods=%v auths=%v", second, auths[len(firstAuths):])
+		}
+		if got := c3Auth(t, d, share); got != basic {
+			t.Fatalf("cached auth = %q, want basic", got)
+		}
 	})
 
 	t.Run("legacy rejection after exchange is invalid credentials", func(t *testing.T) {
