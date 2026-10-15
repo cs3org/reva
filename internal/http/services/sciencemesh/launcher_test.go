@@ -268,6 +268,7 @@ func TestWebappLaunchExpiredSessionRedirectOrigin(t *testing.T) {
 		forward  bool
 	}{
 		{"own origin", "https://receiver.example/x?a=1", true},
+		{"own origin with ampersand", "https://receiver.example/x?a=1&b=2", true},
 		{"own origin bare", "https://receiver.example", true},
 		{"other host", "https://evil.example/x", false},
 		{"http scheme", "http://receiver.example/x", false},
@@ -298,9 +299,17 @@ func TestWebappLaunchExpiredSessionRedirectOrigin(t *testing.T) {
 			if rec.Code != http.StatusOK {
 				t.Fatalf("status %d", rec.Code)
 			}
-			has := strings.Contains(rec.Body.String(), "expired_session_redirect_uri")
-			if has != tt.forward {
-				t.Fatalf("forwarded=%v want %v body %s", has, tt.forward, rec.Body.String())
+			body := rec.Body.String()
+			if !tt.forward {
+				if strings.Contains(body, "expired_session_redirect_uri") {
+					t.Fatalf("redirect forwarded: %s", body)
+				}
+				return
+			}
+			// html/template escapes '&' in attribute values; nothing else in these values changes.
+			want := `name="expired_session_redirect_uri" value="` + strings.ReplaceAll(tt.redirect, "&", "&amp;") + `"`
+			if !strings.Contains(body, want) {
+				t.Fatalf("want %s in: %s", want, body)
 			}
 		})
 	}
@@ -541,40 +550,80 @@ func TestWebappLaunchUnauthenticatedFailsClosed(t *testing.T) {
 	}
 }
 
-func TestWebappLaunchFormActionFollowsSharedValidation(t *testing.T) {
+func TestWebappLaunchFormActionIsExactOrigin(t *testing.T) {
 	tests := []struct {
-		name       string
-		appURI     string
-		wantAction string
+		name           string
+		appURI         string
+		wantFormAction string
+		wantAction     string
 	}{
-		{"ascii host", "https://app.example:8443/open", "https://app.example:8443"},
-		{"ipv6 host", "https://[::1]:8443/open", "https://[::1]:8443"},
-		{"non-ascii host", "https://b\u00fccher.example/open", "https:"},
-		{"semicolon host", "https://app;script-src.example/open", "https:"},
-		{"comma host", "https://app,evil.example/open", "https:"},
-		{"quote host", "https://app'evil.example/open", "https:"},
+		{"ascii host with port", "https://app.example:8443/open",
+			"https://app.example:8443", "https://app.example:8443/open/f.txt"},
+		{"mixed case host", "https://App.Example/open",
+			"https://app.example", "https://App.Example/open/f.txt"},
+		{"ipv4 host", "https://192.0.2.10/open",
+			"https://192.0.2.10", "https://192.0.2.10/open/f.txt"},
+		{"internationalized host", "https://b\u00fccher.example/open?x=1",
+			"https://xn--bcher-kva.example", "https://xn--bcher-kva.example/open/f.txt?x=1"},
+		{"internationalized host with port", "https://B\u00dcCHER.example:8443/open",
+			"https://xn--bcher-kva.example:8443", "https://xn--bcher-kva.example:8443/open/f.txt"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if _, err := requireHTTPSAppURI(tt.appURI); err != nil {
-				t.Fatalf("shared validation rejects %q: %v", tt.appURI, err)
-			}
-			h, _ := launcherHandler(t, tt.appURI)
+			h, obs := launcherHandler(t, tt.appURI)
 			req, _ := newLauncherRequest(t, url.Values{"file": {"/ocm/share-1/f.txt"}})
 			rec := httptest.NewRecorder()
 			h.WebappLaunch(rec, req)
 			if rec.Code != http.StatusOK {
 				t.Fatalf("status %d body %s", rec.Code, rec.Body.String())
 			}
-			assertLauncherHeaders(t, rec, tt.wantAction)
-			csp := rec.Header().Get("Content-Security-Policy")
-			if n := strings.Count(csp, "form-action"); n != 1 {
-				t.Fatalf("csp has %d form-action directives: %q", n, csp)
+			assertLauncherHeaders(t, rec, tt.wantFormAction)
+			assertCSPDirectives(t, rec.Header().Get("Content-Security-Policy"), tt.wantFormAction)
+			want := `<form id="launch" method="post" action="` + tt.wantAction + `">`
+			if !strings.Contains(rec.Body.String(), want) {
+				t.Fatalf("form action, want %s in: %s", want, rec.Body.String())
 			}
-			assertCSPDirectives(t, csp, tt.wantAction)
-			if !strings.Contains(rec.Body.String(), `<form id="launch" method="post" action="`) {
-				t.Fatalf("no form: %s", rec.Body.String())
+			if obs.exchangeCalls != 1 {
+				t.Fatalf("exchange calls %d", obs.exchangeCalls)
 			}
+		})
+	}
+}
+
+func TestWebappLaunchRefusesHostsCSPCannotName(t *testing.T) {
+	for name, appURI := range map[string]string{
+		"semicolon":    "https://app;script-src.example/open",
+		"comma":        "https://app,evil.example/open",
+		"quote":        "https://app'evil.example/open",
+		"asterisk":     "https://app*.example/open",
+		"underscore":   "https://app_x.example/open",
+		"ipv6 literal": "https://[2001:db8::1]/open",
+		"trailing dot": "https://app.example./open",
+		"bad hyphen":   "https://-app.example/open",
+	} {
+		t.Run(name, func(t *testing.T) {
+			if _, err := requireHTTPSAppURI(appURI); err != nil {
+				t.Fatalf("shared validation rejects %q: %v", appURI, err)
+			}
+			h, obs := launcherHandler(t, appURI)
+			req, logs := newLauncherRequest(t, url.Values{"file": {"/ocm/share-1/f.txt"}})
+			rec := httptest.NewRecorder()
+			h.WebappLaunch(rec, req)
+			if rec.Code != http.StatusBadRequest {
+				t.Fatalf("status %d body %s", rec.Code, rec.Body.String())
+			}
+			assertLauncherHeaders(t, rec, "'none'")
+			body := rec.Body.String()
+			if !strings.Contains(body, "<p>The shared application cannot be launched.</p>") {
+				t.Fatalf("body: %s", body)
+			}
+			if strings.Contains(body, "<form") || strings.Contains(body, "access_token") {
+				t.Fatalf("error page has a form: %s", body)
+			}
+			if obs.discoverCalls != 0 || obs.exchangeCalls != 0 {
+				t.Fatalf("refused host reached discovery %d / exchange %d", obs.discoverCalls, obs.exchangeCalls)
+			}
+			assertNotLeaked(t, body, logs.String(), launchSecret, launchToken)
 		})
 	}
 }
