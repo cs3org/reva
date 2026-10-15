@@ -7,3 +7,5 @@ or the exchange fails, or the sender's WebDAV rejects the token, the
 driver falls back to the shared secret and remembers that failure for a
 short time. A policy violation from the sender is returned as an error,
 with no fallback. Shares marked must-exchange-token keep the strict path.
+
+https://github.com/cs3org/reva/pull/5907
