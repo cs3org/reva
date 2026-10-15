@@ -557,7 +557,10 @@ func (s *svc) Stat(ctx context.Context, req *provider.StatRequest) (*provider.St
 			Str("opaque_id", rsp.Info.Id.OpaqueId).
 			Str("path", rsp.Info.Path).
 			Msg("gateway: Stat response from storage provider")
-		s.addSpaceRoles(ctx, rsp.Info)
+		// the spaces registry stats project roots for their mtime only, resolving roles there would loop back here
+		if req.GetFieldMask() == nil || slices.Contains(req.FieldMask.GetPaths(), "permission_set") {
+			s.addSpaceRoles(ctx, rsp.Info)
+		}
 		return rsp, nil
 	}
 
