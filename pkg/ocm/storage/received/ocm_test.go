@@ -393,9 +393,12 @@ func TestNewStoresConfiguredProviderDomain(t *testing.T) {
 
 	const mutated = "other.example.test"
 	d.c.ProviderDomain = mutated
-	token, err := d.exchangeAccessToken(context.Background(), srv.URL+"/ocm/token", "secret")
+	token, expiresIn, err := d.exchangeAccessToken(context.Background(), srv.URL+"/ocm/token", "secret")
 	if err != nil {
 		t.Fatalf("exchangeAccessToken: %v", err)
+	}
+	if expiresIn != 3600 {
+		t.Fatalf("expires_in = %d, want 3600", expiresIn)
 	}
 	if token != "jwt-tok" {
 		t.Fatalf("access token = %q, want jwt-tok", token)
@@ -1321,7 +1324,7 @@ func TestReceivedExchangeTokenRejectsPrivateEndpoint(t *testing.T) {
 	if err != nil {
 		t.Fatalf("getTokenEndpoint returned error: %v", err)
 	}
-	_, err = d.exchangeAccessToken(context.Background(), endpoint, "secret")
+	_, _, err = d.exchangeAccessToken(context.Background(), endpoint, "secret")
 	if err == nil {
 		t.Fatal("expected token exchange to refuse RFC1918")
 	}
@@ -1788,9 +1791,9 @@ func TestReceivedFederationCIDRPolicyPropagation(t *testing.T) {
 	_, err = d.getTokenEndpoint(receivedPolicyCtx(t), outShare)
 	assertReceivedDenied(t, "discovery out of range", err)
 
-	_, err = d.exchangeAccessToken(receivedPolicyCtx(t), "https://10.50.1.1:9/ocm/token", "secret")
+	_, _, err = d.exchangeAccessToken(receivedPolicyCtx(t), "https://10.50.1.1:9/ocm/token", "secret")
 	assertReceivedAdmitted(t, "token in range", err)
-	_, err = d.exchangeAccessToken(receivedPolicyCtx(t), "https://192.168.1.1:9/ocm/token", "secret")
+	_, _, err = d.exchangeAccessToken(receivedPolicyCtx(t), "https://192.168.1.1:9/ocm/token", "secret")
 	assertReceivedDenied(t, "token out of range", err)
 
 	inDAV := d.newWebDAVClient("https://10.50.1.1:9/remote.php/dav/ocm/", nil)
