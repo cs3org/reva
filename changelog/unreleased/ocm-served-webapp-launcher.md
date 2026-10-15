@@ -13,3 +13,5 @@ CSP host source is refused before any token exchange. Error pages use
 `form-action 'none'` and carry fixed text only. An
 `expired_session_redirect_uri` is forwarded only when its origin is
 `https://<provider_domain>`; otherwise it is dropped.
+
+https://github.com/cs3org/reva/pull/5906
