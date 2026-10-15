@@ -30,6 +30,7 @@ import (
 
 	"github.com/cs3org/reva/v3/pkg/appctx"
 	"github.com/cs3org/reva/v3/pkg/errtypes"
+	"golang.org/x/net/idna"
 )
 
 var launcherPage = template.Must(template.New("launcher").Parse(`<!DOCTYPE html>
@@ -95,21 +96,24 @@ func (h *appsHandler) WebappLaunch(w http.ResponseWriter, r *http.Request) {
 		writeLauncherLaunchError(w, r, nonce, err)
 		return
 	}
-	payload, err := h.buildLaunch(r.Context(), shareID, rel)
+	var action, formAction string
+	payload, err := h.buildLaunch(r.Context(), shareID, rel, func(appURL string) error {
+		var err error
+		action, formAction, err = launchFormTarget(appURL)
+		return err
+	})
 	if err != nil {
 		writeLauncherLaunchError(w, r, nonce, err)
 		return
 	}
 
-	appOrigin := cspFormAction(payload.AppURL)
-
 	data := launcherData{
-		Action:                    payload.AppURL,
+		Action:                    action,
 		AccessToken:               payload.AccessToken,
 		ExpiredSessionRedirectURI: h.allowedExpiredSessionRedirect(r.Form.Get("expired_session_redirect_uri")),
 		Nonce:                     nonce,
 	}
-	setLauncherHeaders(w, nonce, appOrigin)
+	setLauncherHeaders(w, nonce, formAction)
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.WriteHeader(http.StatusOK)
 	if err := launcherPage.Execute(w, data); err != nil {
@@ -147,24 +151,50 @@ func newCSPNonce() (string, error) {
 	return base64.RawURLEncoding.EncodeToString(b), nil
 }
 
-// cspFormAction returns the form-action source for an app URL that already
-// passed the shared launch validation. A plain ASCII origin is used as is.
-// Hosts that cannot be written safely as a CSP host source (non-ASCII names,
-// or punctuation such as ';' and ',') fall back to the https: scheme source, so
-// a validated URL always gets a usable form and nothing can inject directives.
-func cspFormAction(raw string) string {
-	u, err := url.Parse(raw)
+// launchFormTarget returns the URL the launcher form posts to and the exact
+// form-action origin for it. Internationalized hosts are posted to in their
+// ASCII form so the policy and the target name the same host; a host that a
+// CSP host source cannot name is refused rather than widening the policy.
+func launchFormTarget(appURL string) (action, origin string, err error) {
+	refused := errtypes.BadRequest("app host cannot be named in the launcher policy")
+	u, err := url.Parse(appURL)
 	if err != nil || u.Scheme != "https" || u.Host == "" {
-		return ""
+		return "", "", refused
 	}
-	for _, r := range u.Host {
-		ok := r >= 'a' && r <= 'z' || r >= 'A' && r <= 'Z' || r >= '0' && r <= '9' ||
-			strings.ContainsRune(".-_:[]", r)
-		if !ok {
-			return "https:"
+	host := u.Hostname()
+	ascii, err := idna.Lookup.ToASCII(host)
+	if err != nil || !cspHostSource(ascii) {
+		return "", "", refused
+	}
+	hostPort := ascii
+	if port := u.Port(); port != "" {
+		hostPort += ":" + port
+	}
+	origin = "https://" + hostPort
+	if ascii == strings.ToLower(host) {
+		return appURL, origin, nil
+	}
+	u.Host = hostPort
+	return u.String(), origin, nil
+}
+
+// cspHostSource reports whether host is a DNS name or IPv4 address made of
+// lowercase letters, digits and hyphens in non-empty dot-separated labels.
+func cspHostSource(host string) bool {
+	if host == "" {
+		return false
+	}
+	for _, label := range strings.Split(host, ".") {
+		if label == "" {
+			return false
+		}
+		for _, r := range label {
+			if !(r >= 'a' && r <= 'z' || r >= '0' && r <= '9' || r == '-') {
+				return false
+			}
 		}
 	}
-	return "https://" + u.Host
+	return true
 }
 
 // setLauncherHeaders applies the security headers shared by success and error
