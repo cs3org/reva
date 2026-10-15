@@ -6,3 +6,5 @@ and share it only among the Reva services in the same deployment. If neither a
 shared nor token-manager-specific secret is configured, JWT manager creation
 now fails with an actionable error. Missing configuration can no longer select a
 publicly known signing key.
+
+https://github.com/cs3org/reva/pull/5864
