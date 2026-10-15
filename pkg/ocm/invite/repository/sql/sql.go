@@ -21,12 +21,14 @@ package sql
 import (
 	"context"
 	"fmt"
+	"strings"
 	"time"
 
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	invitepb "github.com/cs3org/go-cs3apis/cs3/ocm/invite/v1beta1"
 	types "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
 	"github.com/cs3org/reva/v3/cmd/revad/pkg/config"
+	"github.com/cs3org/reva/v3/pkg/appctx"
 	conversions "github.com/cs3org/reva/v3/pkg/cbox/utils"
 	"github.com/cs3org/reva/v3/pkg/errtypes"
 	"github.com/cs3org/reva/v3/pkg/ocm/invite"
@@ -130,6 +132,13 @@ func timestampToTime(t *types.Timestamp) time.Time {
 
 // AddToken stores the token in the repository.
 func (m *mgr) AddToken(ctx context.Context, token *invitepb.InviteToken) error {
+	if err := invite.ValidateInviteToken(token); err != nil {
+		return err
+	}
+	if token.Expiration == nil {
+		return errtypes.NotSupported("non-expiring invitations are not supported by the sql repository")
+	}
+
 	t := &OcmToken{
 		Token:       token.Token,
 		Initiator:   conversions.FormatUserID(token.UserId),
@@ -152,6 +161,10 @@ func convertToInviteToken(t *OcmToken) *invitepb.InviteToken {
 
 // GetToken gets the token from the repository.
 func (m *mgr) GetToken(ctx context.Context, token string) (*invitepb.InviteToken, error) {
+	if strings.TrimSpace(token) == "" {
+		return nil, errtypes.BadRequest("blank token")
+	}
+
 	var t OcmToken
 	res := m.db.WithContext(ctx).Where("token = ?", token).First(&t)
 	if res.Error != nil {
@@ -160,11 +173,19 @@ func (m *mgr) GetToken(ctx context.Context, token string) (*invitepb.InviteToken
 		}
 		return nil, res.Error
 	}
-	return convertToInviteToken(&t), nil
+	converted := convertToInviteToken(&t)
+	if invite.ValidateInviteToken(converted) != nil {
+		return nil, errtypes.InternalError("stored invite token is malformed")
+	}
+	return converted, nil
 }
 
 // ListTokens gets the valid tokens from the repository (i.e. not expired).
 func (m *mgr) ListTokens(ctx context.Context, initiator *userpb.UserId) ([]*invitepb.InviteToken, error) {
+	if err := invite.ValidateUserID(initiator, "initiator id"); err != nil {
+		return nil, err
+	}
+
 	var ts []OcmToken
 	res := m.db.WithContext(ctx).
 		Where("initiator = ?", conversions.FormatUserID(initiator)).
@@ -174,9 +195,15 @@ func (m *mgr) ListTokens(ctx context.Context, initiator *userpb.UserId) ([]*invi
 		return nil, res.Error
 	}
 
+	log := appctx.GetLogger(ctx)
 	tokens := make([]*invitepb.InviteToken, 0, len(ts))
 	for i := range ts {
-		tokens = append(tokens, convertToInviteToken(&ts[i]))
+		converted := convertToInviteToken(&ts[i])
+		if invite.ValidateInviteToken(converted) != nil {
+			log.Warn().Msg("skipping malformed stored invite token")
+			continue
+		}
+		tokens = append(tokens, converted)
 	}
 	return tokens, nil
 }
@@ -189,6 +216,13 @@ func (m *mgr) ListTokens(ctx context.Context, initiator *userpb.UserId) ([]*invi
 // report ErrUserAlreadyAccepted, otherwise we revive it by clearing deleted_at
 // and refreshing its details.
 func (m *mgr) AddRemoteUser(ctx context.Context, initiator *userpb.UserId, remoteUser *userpb.User) error {
+	if err := invite.ValidateUserID(initiator, "initiator id"); err != nil {
+		return err
+	}
+	if err := invite.ValidateRemoteUser(remoteUser); err != nil {
+		return err
+	}
+
 	u := &OcmRemoteUser{
 		Initiator:    conversions.FormatUserID(initiator),
 		OpaqueUserID: conversions.FormatUserID(remoteUser.Id),
@@ -239,6 +273,13 @@ func (u *OcmRemoteUser) toCS3User() *userpb.User {
 
 // GetRemoteUser retrieves details about a remote user who has accepted an invite to share.
 func (m *mgr) GetRemoteUser(ctx context.Context, initiator *userpb.UserId, remoteUserID *userpb.UserId) (*userpb.User, error) {
+	if err := invite.ValidateUserID(initiator, "initiator id"); err != nil {
+		return nil, err
+	}
+	if err := invite.ValidateUserID(remoteUserID, "remote user id"); err != nil {
+		return nil, err
+	}
+
 	var u OcmRemoteUser
 	res := m.db.WithContext(ctx).
 		Where("initiator = ?", conversions.FormatUserID(initiator)).
@@ -251,11 +292,19 @@ func (m *mgr) GetRemoteUser(ctx context.Context, initiator *userpb.UserId, remot
 		}
 		return nil, res.Error
 	}
-	return u.toCS3User(), nil
+	converted := u.toCS3User()
+	if invite.ValidateRemoteUser(converted) != nil {
+		return nil, errtypes.InternalError("stored remote user record is malformed")
+	}
+	return converted, nil
 }
 
 // FindRemoteUsers finds remote users who have accepted invites based on their attributes.
 func (m *mgr) FindRemoteUsers(ctx context.Context, initiator *userpb.UserId, attr string) ([]*userpb.User, error) {
+	if err := invite.ValidateUserID(initiator, "initiator id"); err != nil {
+		return nil, err
+	}
+
 	// TODO: (gdelmont) this query can get really slow in case the number of rows is too high.
 	// For the time being this is not expected, but if in future this happens, consider to add
 	// a fulltext index.
@@ -269,9 +318,15 @@ func (m *mgr) FindRemoteUsers(ctx context.Context, initiator *userpb.UserId, att
 		return nil, res.Error
 	}
 
+	log := appctx.GetLogger(ctx)
 	users := make([]*userpb.User, 0, len(us))
 	for i := range us {
-		users = append(users, us[i].toCS3User())
+		converted := us[i].toCS3User()
+		if invite.ValidateRemoteUser(converted) != nil {
+			log.Warn().Msg("skipping malformed stored remote user")
+			continue
+		}
+		users = append(users, converted)
 	}
 	return users, nil
 }
@@ -282,6 +337,13 @@ func (m *mgr) FindRemoteUsers(ctx context.Context, initiator *userpb.UserId, att
 // excludes it from subsequent queries. AddRemoteUser revives such a row if the
 // same user is accepted again.
 func (m *mgr) DeleteRemoteUser(ctx context.Context, initiator *userpb.UserId, remoteUser *userpb.UserId) error {
+	if err := invite.ValidateUserID(initiator, "initiator id"); err != nil {
+		return err
+	}
+	if err := invite.ValidateUserID(remoteUser, "remote user id"); err != nil {
+		return err
+	}
+
 	return m.db.WithContext(ctx).
 		Where("initiator = ?", conversions.FormatUserID(initiator)).
 		Where("opaque_user_id = ?", conversions.FormatUserID(remoteUser)).
