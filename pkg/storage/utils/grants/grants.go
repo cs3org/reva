@@ -59,6 +59,18 @@ func GetACLPerm(set *provider.ResourcePermissions) (string, error) {
 		b.WriteString("!d")
 	}
 
+	if set.DeleteContainer {
+		b.WriteString("+dc")
+	} else {
+		b.WriteString("!dc")
+	}
+
+	if set.MoveContainer {
+		b.WriteString("+mc")
+	} else {
+		b.WriteString("!mc")
+	}
+
 	return b.String(), nil
 }
 
@@ -96,6 +108,16 @@ func GetGrantPermissionSet(perm string) *provider.ResourcePermissions {
 		rp.Delete = false
 		rp.PurgeRecycle = false
 	}
+
+	if strings.Contains(perm, "+dc") {
+		rp.DeleteContainer = true
+	}
+	// !dc is the default (false), no action needed
+
+	if strings.Contains(perm, "+mc") {
+		rp.MoveContainer = true
+	}
+	// !mc is the default (false), no action needed
 
 	if strings.Contains(perm, "m") && !strings.Contains(perm, "!m") {
 		rp.AddGrant = true
