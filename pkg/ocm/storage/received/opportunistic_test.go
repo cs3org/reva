@@ -56,6 +56,7 @@ type scriptedSender struct {
 	discoveryCalls int
 	tokenCalls     int
 	auths          []string
+	methods        []string
 	accessTokens   []string
 
 	capabilities       []string
@@ -72,6 +73,12 @@ func (s *scriptedSender) snapshot() (discovery, tokens int, auths []string) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	return s.discoveryCalls, s.tokenCalls, append([]string{}, s.auths...)
+}
+
+func (s *scriptedSender) snapshotWire() (discovery, tokens int, auths, methods []string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.discoveryCalls, s.tokenCalls, append([]string{}, s.auths...), append([]string{}, s.methods...)
 }
 
 func (s *scriptedSender) lastToken() string {
@@ -147,6 +154,7 @@ func (s *scriptedSender) serve(t *testing.T, srv *httptest.Server, w http.Respon
 		auth := r.Header.Get("Authorization")
 		s.mu.Lock()
 		s.auths = append(s.auths, auth)
+		s.methods = append(s.methods, r.Method)
 		rejectToken := s.rejectAccessToken
 		rejectSecret := s.rejectBearerSecret
 		rejectLegacy := s.rejectLegacy
@@ -652,6 +660,90 @@ func TestOpportunisticTokenExchange(t *testing.T) {
 		assertLogMode(t, logs, modeBearer)
 	})
 
+	t.Run("basic-only upload after exchange failure", func(t *testing.T) {
+		script := &scriptedSender{
+			tokenStatus:        http.StatusInternalServerError,
+			rejectBearerSecret: true,
+		}
+		srv := startScriptedSender(t, script)
+		share := scriptedShare(srv, false)
+		d := newTestReceivedDriver(t)
+		stampGateway(&mockReceivedGateway{shares: []*ocmpb.ReceivedShare{share}})
+		ctx, logs := loggedContext(t)
+
+		err := d.Upload(
+			ctx,
+			&provider.Reference{Path: "/share-abc/file.txt"},
+			io.NopCloser(bytes.NewReader([]byte("hi"))),
+			nil,
+		)
+		if err != nil {
+			t.Fatalf("Upload: %v", err)
+		}
+		discovery, tokens, auths, methods := script.snapshotWire()
+		if discovery != 1 || tokens != 1 {
+			t.Fatalf("discovery = %d token = %d, want 1 and 1", discovery, tokens)
+		}
+		if containsAuth(auths, "Bearer ocm-access-token-1") {
+			t.Fatalf("failed exchange sent an access token: %v", auths)
+		}
+		assertBearerThenBasicUpload(t, methods, auths)
+		if !d.exchangeRememberedDown(share.GetId().GetOpaqueId()) {
+			t.Fatal("exchange failure was not remembered")
+		}
+		assertLogMode(t, logs, modeLegacy)
+		assertNoLogMode(t, logs, modeBearer)
+		assertNoLogMode(t, logs, modeExchange)
+	})
+
+	t.Run("basic-only upload after token rejection", func(t *testing.T) {
+		script := &scriptedSender{
+			rejectAccessToken:  true,
+			rejectBearerSecret: true,
+		}
+		srv := startScriptedSender(t, script)
+		share := scriptedShare(srv, false)
+		d := newTestReceivedDriver(t)
+		stampGateway(&mockReceivedGateway{shares: []*ocmpb.ReceivedShare{share}})
+		ctx, logs := loggedContext(t)
+
+		err := d.Upload(
+			ctx,
+			&provider.Reference{Path: "/share-abc/file.txt"},
+			io.NopCloser(bytes.NewReader([]byte("hi"))),
+			nil,
+		)
+		if err != nil {
+			t.Fatalf("Upload: %v", err)
+		}
+		// The first 401 re-exchanges once. The final attempt remembers that
+		// rejection and selects Basic through the legacy probe.
+		_, tokens, auths, methods := script.snapshotWire()
+		if tokens != 2 {
+			t.Fatalf("token calls = %d, want 2", tokens)
+		}
+		token1 := firstAuthIndex(methods, auths, http.MethodPut, "Bearer ocm-access-token-1")
+		token2 := firstAuthIndex(methods, auths, http.MethodPut, "Bearer ocm-access-token-2")
+		bearer := firstAuthIndex(methods, auths, "PROPFIND", "Bearer "+ocmShareSecret)
+		if token1 < 0 || token2 < token1 || bearer < token2 {
+			t.Fatalf(
+				"post-401 order token1=%d token2=%d bearer=%d methods=%v auths=%v",
+				token1,
+				token2,
+				bearer,
+				methods,
+				auths,
+			)
+		}
+		assertBearerThenBasicUpload(t, methods, auths)
+		if !d.exchangeRememberedDown(share.GetId().GetOpaqueId()) {
+			t.Fatal("rejected token was not remembered")
+		}
+		assertLogMode(t, logs, modeExchange)
+		assertLogMode(t, logs, modeLegacy)
+		assertNoLogMode(t, logs, modeBearer)
+	})
+
 	t.Run("legacy rejection after exchange is invalid credentials", func(t *testing.T) {
 		script := &scriptedSender{
 			rejectAccessToken: true,
@@ -697,16 +789,31 @@ func TestOpportunisticTokenExchange(t *testing.T) {
 
 		dUp := newTestReceivedDriver(t)
 		stampGateway(&mockReceivedGateway{shares: []*ocmpb.ReceivedShare{share}})
-		_, before, beforeAuths := script.snapshot()
+		_, before, beforeAuths, beforeMethods := script.snapshotWire()
 		uploadRef := &provider.Reference{Path: "/share-abc/file.txt"}
 		err = dUp.Upload(ctx, uploadRef, io.NopCloser(bytes.NewReader([]byte("hi"))), nil)
 		assertDenied(t, err)
-		_, after, afterAuths := script.snapshot()
+		if !strings.Contains(err.Error(), "error accessing OCM share") {
+			t.Fatalf("upload error = %q, want legacy probe denial", err)
+		}
+		_, after, afterAuths, afterMethods := script.snapshotWire()
 		if after != before+2 {
 			t.Fatalf("upload token calls = %d, want 2", after-before)
 		}
 		if countAuth(afterAuths, "Bearer "+ocmShareSecret) <= countAuth(beforeAuths, "Bearer "+ocmShareSecret) {
 			t.Fatalf("upload did not challenge the legacy bearer: %v", afterAuths)
+		}
+		basic := legacyBasicHeader(ocmShareSecret)
+		if countAuth(afterAuths, basic) <= countAuth(beforeAuths, basic) {
+			t.Fatalf("upload did not challenge the legacy basic: %v", afterAuths)
+		}
+		if countMethodAuth(afterMethods, afterAuths, http.MethodPut, "Bearer "+ocmShareSecret) !=
+			countMethodAuth(beforeMethods, beforeAuths, http.MethodPut, "Bearer "+ocmShareSecret) {
+			t.Fatalf("legacy bearer write ran after probe denial: methods=%v auths=%v", afterMethods, afterAuths)
+		}
+		if countMethodAuth(afterMethods, afterAuths, http.MethodPut, basic) !=
+			countMethodAuth(beforeMethods, beforeAuths, http.MethodPut, basic) {
+			t.Fatalf("legacy basic write ran after probe denial: methods=%v auths=%v", afterMethods, afterAuths)
 		}
 		assertLogMode(t, logs, modeExchange)
 	})
@@ -798,4 +905,45 @@ func countAuth(auths []string, want string) int {
 		}
 	}
 	return n
+}
+
+func countMethodAuth(methods, auths []string, method, auth string) int {
+	n := 0
+	for i, got := range auths {
+		if i < len(methods) && methods[i] == method && got == auth {
+			n++
+		}
+	}
+	return n
+}
+
+func firstAuthIndex(methods, auths []string, method, auth string) int {
+	for i, got := range auths {
+		if i < len(methods) && methods[i] == method && got == auth {
+			return i
+		}
+	}
+	return -1
+}
+
+func assertBearerThenBasicUpload(t *testing.T, methods, auths []string) {
+	t.Helper()
+	bearer := "Bearer " + ocmShareSecret
+	basic := legacyBasicHeader(ocmShareSecret)
+	bearerProbe := firstAuthIndex(methods, auths, "PROPFIND", bearer)
+	basicProbe := firstAuthIndex(methods, auths, "PROPFIND", basic)
+	basicPut := firstAuthIndex(methods, auths, http.MethodPut, basic)
+	if bearerProbe < 0 || basicProbe < bearerProbe || basicPut < basicProbe {
+		t.Fatalf(
+			"legacy selection order bearer=%d basicProbe=%d basicPut=%d methods=%v auths=%v",
+			bearerProbe,
+			basicProbe,
+			basicPut,
+			methods,
+			auths,
+		)
+	}
+	if countMethodAuth(methods, auths, http.MethodPut, bearer) != 0 {
+		t.Fatalf("upload write used the bearer secret: methods=%v auths=%v", methods, auths)
+	}
 }

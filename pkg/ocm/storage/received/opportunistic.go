@@ -234,18 +234,19 @@ func (d *driver) rememberExchangeFailure(shareID string) {
 	_ = d.exchangeMiss.SetWithTTL(shareID, true, exchangeFailureTTL)
 }
 
-func (d *driver) legacyWebDAVClient(
+// selectLegacyWebDAVAuth probes Bearer then Basic with the shared secret
+// and returns the header the sender accepted, plus the client that probed it.
+func (d *driver) selectLegacyWebDAVAuth(
 	ctx context.Context,
-	shareID string,
 	share *ocmpb.ReceivedShare,
-	endpoint, secret, rel string,
-) (*gowebdav.Client, *ocmpb.ReceivedShare, string, error) {
+	endpoint, secret string,
+) (string, *gowebdav.Client, string, error) {
 	log := appctx.GetLogger(ctx)
 	bearerHdr := "Bearer " + secret
 	c := d.newWebDAVClient(endpoint, map[string]string{"Authorization": bearerHdr})
 	_, err := c.Stat("")
 	if errors.Is(err, client.ErrPolicyViolation) {
-		return nil, nil, "", err
+		return "", nil, "", err
 	}
 	authHdr := bearerHdr
 	mode := modeBearer
@@ -254,7 +255,7 @@ func (d *driver) legacyWebDAVClient(
 		c = d.newWebDAVClient(endpoint, map[string]string{"Authorization": basicHdr})
 		_, err2 := c.Stat("")
 		if errors.Is(err2, client.ErrPolicyViolation) {
-			return nil, nil, "", err2
+			return "", nil, "", err2
 		}
 		if err2 != nil {
 			log.Info().
@@ -263,21 +264,33 @@ func (d *driver) legacyWebDAVClient(
 				Str("endpoint", endpoint).
 				Str("shareId", share.GetId().GetOpaqueId()).
 				Msg("failed accessing OCM share")
-			return nil, nil, "", errtypes.InvalidCredentials("error accessing OCM share: " + err2.Error())
+			return "", nil, "", errtypes.InvalidCredentials("error accessing OCM share: " + err2.Error())
 		}
 		authHdr = basicHdr
 		mode = modeLegacy
-		log.Info().
-			Str("endpoint", endpoint).
-			Str("shareId", share.GetId().GetOpaqueId()).
-			Str("mode", mode).
-			Msg("access to remote OCM share succeeded")
-	} else {
-		log.Info().
-			Str("endpoint", endpoint).
-			Str("shareId", share.GetId().GetOpaqueId()).
-			Str("mode", mode).
-			Msg("access to remote OCM share succeeded")
+	}
+	log.Info().
+		Str("endpoint", endpoint).
+		Str("shareId", share.GetId().GetOpaqueId()).
+		Str("mode", mode).
+		Msg("access to remote OCM share succeeded")
+	return authHdr, c, mode, nil
+}
+
+func (d *driver) legacyWebDAVClient(
+	ctx context.Context,
+	shareID string,
+	share *ocmpb.ReceivedShare,
+	endpoint, secret, rel string,
+) (*gowebdav.Client, *ocmpb.ReceivedShare, string, error) {
+	authHdr, c, mode, err := d.selectLegacyWebDAVAuth(
+		ctx,
+		share,
+		endpoint,
+		secret,
+	)
+	if err != nil {
+		return nil, nil, "", err
 	}
 	d.storeClient(shareID, &cachedClient{
 		client:     c,
