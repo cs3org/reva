@@ -37,24 +37,16 @@ import (
 	"maps"
 	"os"
 	"sort"
-	"strings"
 	"sync"
 	"time"
 
-	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	"github.com/cs3org/reva/v3/pkg/appctx"
-	"github.com/cs3org/reva/v3/pkg/auth/scope"
-	"github.com/cs3org/reva/v3/pkg/invoke"
 	"github.com/cs3org/reva/v3/pkg/invoke/client"
 	"github.com/cs3org/reva/v3/pkg/prom/registry"
-	svcregistry "github.com/cs3org/reva/v3/pkg/registry"
-	"github.com/cs3org/reva/v3/pkg/service"
 	"github.com/cs3org/reva/v3/pkg/stats"
-	"github.com/cs3org/reva/v3/pkg/token"
 	jwtmgr "github.com/cs3org/reva/v3/pkg/token/manager/jwt"
 	"github.com/cs3org/reva/v3/pkg/utils/cfg"
 	"github.com/prometheus/client_golang/prometheus"
-	"google.golang.org/grpc/metadata"
 )
 
 func init() {
@@ -74,18 +66,6 @@ type config struct {
 
 // DefaultOwnerAttributesFile is the conventional owner-attributes path.
 const DefaultOwnerAttributesFile = "/etc/revad/owner-attributes.json"
-
-// fleet abstracts discovery and invocation for testability.
-type fleet interface {
-	// AuthContext returns a context authorized to call the control
-	// channel (the collector's own admin-scoped identity).
-	AuthContext(ctx context.Context) (context.Context, error)
-	// StatsTargets returns, per service advertising the stats invocation,
-	// its live control endpoints.
-	StatsTargets() map[string][]client.Endpoint
-	// InvokeStats runs the stats invocation on one endpoint.
-	InvokeStats(ctx context.Context, ep client.Endpoint) (*stats.Payload, error)
-}
 
 // New builds the collector and starts its refresh loop.
 func New(ctx context.Context, m map[string]any) ([]prometheus.Collector, error) {
@@ -284,75 +264,4 @@ func (c *collector) selfMetricsLocked() []prometheus.Metric {
 		out = append(out, prometheus.MustNewConstMetric(errDesc, prometheus.CounterValue, n, svcName))
 	}
 	return out
-}
-
-// registryFleet is the production fleet: the process-wide service
-// registry plus the control channel.
-type registryFleet struct {
-	tokenManager token.Manager
-}
-
-// AuthContext mints a short-lived admin-scoped token for the collector's
-// own identity — the control channel only accepts admin scope — and puts
-// it on the outgoing metadata, exactly like an admin fan-out does. The
-// token is signed with the deployment's shared JWT secret, so every
-// process in the fleet validates it.
-func (f registryFleet) AuthContext(ctx context.Context) (context.Context, error) {
-	u := &userpb.User{
-		Id:       &userpb.UserId{OpaqueId: "reva:stats-collector", Type: userpb.UserType_USER_TYPE_APPLICATION},
-		Username: "stats-collector",
-	}
-	scopes, err := scope.AddAdminScope(nil)
-	if err != nil {
-		return nil, err
-	}
-	tkn, err := f.tokenManager.MintToken(ctx, u, scopes)
-	if err != nil {
-		return nil, err
-	}
-	return metadata.AppendToOutgoingContext(ctx, appctx.TokenHeader, tkn), nil
-}
-
-// StatsTargets scans registry metadata for services advertising the stats
-// invocation — no dialing involved.
-func (registryFleet) StatsTargets() map[string][]client.Endpoint {
-	reg := service.GlobalRegistry()
-	if reg == nil {
-		return nil
-	}
-	svcs, err := reg.ListServices()
-	if err != nil {
-		return nil
-	}
-	targets := map[string][]client.Endpoint{}
-	for _, sv := range svcs {
-		if !advertisesStats(sv.Nodes()) {
-			continue
-		}
-		if _, eps, err := client.Resolve(reg, sv.Name()); err == nil && len(eps) > 0 {
-			targets[sv.Name()] = eps
-		}
-	}
-	return targets
-}
-
-func advertisesStats(nodes []svcregistry.Node) bool {
-	for _, n := range nodes {
-		for name := range strings.SplitSeq(n.Metadata()[invoke.MetaInvocations], ",") {
-			if strings.TrimSpace(name) == stats.Invocation {
-				return true
-			}
-		}
-	}
-	return false
-}
-
-// InvokeStats runs the stats invocation on one endpoint and parses the
-// payload.
-func (registryFleet) InvokeStats(ctx context.Context, ep client.Endpoint) (*stats.Payload, error) {
-	res := client.InvokeOne(ctx, ep, stats.Invocation, nil)
-	if res.Error != "" {
-		return nil, fmt.Errorf("%s: %s", res.Node, res.Error)
-	}
-	return stats.FromJSON([]byte(res.ResultJSON))
 }
