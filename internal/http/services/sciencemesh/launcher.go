@@ -127,7 +127,10 @@ func (h *appsHandler) allowedExpiredSessionRedirect(raw string) string {
 	if err != nil || u.Scheme != "https" || u.User != nil || u.Opaque != "" {
 		return ""
 	}
-	if u.Host == "" || !strings.EqualFold(u.Host, h.receiverDomain) {
+	if u.Host == "" || !strings.EqualFold(u.Hostname(), h.receiverDomain) {
+		return ""
+	}
+	if p := u.Port(); p != "" && p != "443" {
 		return ""
 	}
 	return raw
@@ -174,6 +177,8 @@ func setLauncherHeaders(w http.ResponseWriter, nonce, origin string) {
 	csp := "default-src 'none'; base-uri 'none'; frame-ancestors 'none'; form-action " + formAction
 	if nonce != "" {
 		csp += "; script-src 'nonce-" + nonce + "'"
+	} else {
+		csp += "; script-src 'none'"
 	}
 	h := w.Header()
 	h.Set("Content-Security-Policy", csp)
