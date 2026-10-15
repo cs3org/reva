@@ -20,6 +20,7 @@ package auth
 
 import (
 	"context"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"reflect"
@@ -28,6 +29,9 @@ import (
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	"github.com/cs3org/reva/v3/pkg/appctx"
 	authscope "github.com/cs3org/reva/v3/pkg/auth/scope"
+	"github.com/cs3org/reva/v3/pkg/rhttp"
+	"github.com/cs3org/reva/v3/pkg/rhttp/global"
+	"github.com/cs3org/reva/v3/pkg/rhttp/router"
 	jwt "github.com/cs3org/reva/v3/pkg/token/manager/jwt"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/protobuf/proto"
@@ -106,6 +110,55 @@ func TestIsTokenValidReturnsScopes(t *testing.T) {
 	for k, want := range scopes {
 		if got, ok := gotScopes[k]; !ok || !proto.Equal(got, want) {
 			t.Fatalf("isTokenValid() scopes[%q] = %+v, want %+v", k, got, want)
+		}
+	}
+}
+
+type dataService struct{}
+
+// Handler routes like the dataprovider: anything but tus falls back to simple.
+func (dataService) Handler() http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if head, _ := router.ShiftPath(r.URL.Path); head != "tus" {
+			w.Header().Set("X-Handler", "simple")
+		}
+	})
+}
+func (dataService) Prefix() string        { return "data" }
+func (dataService) Close() error          { return nil }
+func (dataService) Unprotected() []string { return []string{"/tus"} }
+
+func TestUnprotectedPrefixDotSegments(t *testing.T) {
+	mw := &middleware{conf: &config{}, unprotected: []string{"/data/tus"}}
+	s, err := rhttp.New(
+		rhttp.WithServices(map[string]global.Service{"dataprovider": dataService{}}),
+		rhttp.WithMiddlewares([]global.Middleware{mw.handler}),
+	)
+	if err != nil {
+		t.Fatalf("rhttp.New returned error: %v", err)
+	}
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("net.Listen returned error: %v", err)
+	}
+	go func() { _ = s.Start(ln) }()
+	t.Cleanup(func() { _ = s.Stop() })
+
+	tests := map[string]int{
+		"/data/tus/x":               http.StatusOK,
+		"/data/simple/x":            http.StatusUnauthorized,
+		"/data/tus/../simple/x":     http.StatusBadRequest,
+		"/data/tus/%2e%2e/simple/x": http.StatusBadRequest,
+		"/data/tus/x/../../simple":  http.StatusBadRequest,
+	}
+	for target, status := range tests {
+		resp, err := http.Get("http://" + ln.Addr().String() + target)
+		if err != nil {
+			t.Fatalf("GET %s returned error: %v", target, err)
+		}
+		resp.Body.Close()
+		if resp.StatusCode != status || resp.Header.Get("X-Handler") == "simple" {
+			t.Errorf("GET %s got status %d, handler %q; want %d and simple not reached", target, resp.StatusCode, resp.Header.Get("X-Handler"), status)
 		}
 	}
 }
