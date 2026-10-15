@@ -49,6 +49,7 @@ import (
 	"github.com/rs/zerolog/log"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/metadata"
+	"google.golang.org/protobuf/types/known/fieldmaskpb"
 )
 
 func init() {
@@ -368,9 +369,12 @@ func (s *service) decorateProject(ctx context.Context, proj *provider.StorageSpa
 	if res, err := s.resourceInfoCache.Get(proj.RootInfo.Path); err == nil && res != nil {
 		resourceInfo = res
 	} else {
-		statRes, err := gw.Stat(ctx, &provider.StatRequest{Ref: &provider.Reference{
-			Path: proj.RootInfo.Path,
-		}})
+		statRes, err := gw.Stat(ctx, &provider.StatRequest{
+			Ref: &provider.Reference{
+				Path: proj.RootInfo.Path,
+			},
+			FieldMask: &fieldmaskpb.FieldMask{Paths: []string{"mtime"}},
+		})
 		if err != nil || statRes.Status == nil || statRes.Status.Code != rpcv1beta1.Code_CODE_OK {
 			return fmt.Errorf("failed to stat path %s for project %s", proj.RootInfo.Path, proj.Name)
 		}
