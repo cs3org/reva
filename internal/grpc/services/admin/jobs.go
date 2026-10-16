@@ -91,7 +91,7 @@ func (s *svc) InspectJobs(ctx context.Context, _ *adminpb.InspectJobsRequest) (*
 			})
 		}
 		for _, a := range info.Active {
-			ri.ActiveRuns = append(ri.ActiveRuns, &adminpb.ActiveJobRun{RunId: a.RunID, Job: a.Job, Started: a.Started})
+			ri.ActiveRuns = append(ri.ActiveRuns, &adminpb.ActiveJobRun{RunId: a.RunID, Job: a.Job, Started: a.Started, Progress: a.Progress.toProto("")})
 		}
 		resp.Runners = append(resp.Runners, ri)
 	}
@@ -236,9 +236,30 @@ type jobDefJSON struct {
 }
 
 type activeRunJSON struct {
-	RunID   string `json:"run_id"`
-	Job     string `json:"job"`
-	Started string `json:"started"`
+	RunID    string        `json:"run_id"`
+	Job      string        `json:"job"`
+	Started  string        `json:"started"`
+	Progress *progressJSON `json:"progress"`
+}
+
+type progressJSON struct {
+	Phase   string         `json:"phase"`
+	Done    int64          `json:"done"`
+	Total   int64          `json:"total"`
+	Unit    string         `json:"unit"`
+	Details map[string]any `json:"details"`
+}
+
+func (p *progressJSON) toProto(at string) *adminpb.JobProgress {
+	if p == nil {
+		return nil
+	}
+	pb := &adminpb.JobProgress{Phase: p.Phase, Done: p.Done, Total: p.Total, Unit: p.Unit, At: at}
+	if len(p.Details) > 0 {
+		b, _ := json.Marshal(p.Details)
+		pb.DetailsJson = string(b)
+	}
+	return pb
 }
 
 type jobRunJSON struct {
@@ -253,6 +274,8 @@ type jobRunJSON struct {
 	LastError       string         `json:"last_error"`
 	CancelRequested bool           `json:"cancel_requested"`
 	Result          map[string]any `json:"result"`
+	Progress        *progressJSON  `json:"progress"`
+	ProgressAt      string         `json:"progress_at"`
 }
 
 func (r jobRunJSON) toProto() *adminpb.JobRun {
@@ -260,6 +283,7 @@ func (r jobRunJSON) toProto() *adminpb.JobRun {
 		RunId: r.RunID, Job: r.Job, State: r.State, Attempt: int32(r.Attempt), Owner: r.Owner,
 		EnqueuedAt: r.EnqueuedAt, StartedAt: r.StartedAt, FinishedAt: r.FinishedAt,
 		LastError: r.LastError, CancelRequested: r.CancelRequested,
+		Progress: r.Progress.toProto(r.ProgressAt),
 	}
 	if len(r.Result) > 0 {
 		b, _ := json.Marshal(r.Result)
