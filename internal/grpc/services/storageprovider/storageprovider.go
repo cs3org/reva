@@ -36,8 +36,6 @@ import (
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 
-	cachereg "github.com/cs3org/reva/v3/pkg/share/cache/registry"
-
 	"github.com/google/uuid"
 	"github.com/pkg/errors"
 	"google.golang.org/grpc"
@@ -50,7 +48,6 @@ import (
 	"github.com/cs3org/reva/v3/pkg/rgrpc/status"
 	"github.com/cs3org/reva/v3/pkg/rhttp/router"
 	svc "github.com/cs3org/reva/v3/pkg/service"
-	"github.com/cs3org/reva/v3/pkg/share/cache"
 	"github.com/cs3org/reva/v3/pkg/sharedconf"
 	"github.com/cs3org/reva/v3/pkg/spaces"
 	"github.com/cs3org/reva/v3/pkg/storage"
@@ -69,19 +66,16 @@ func init() {
 }
 
 type config struct {
-	MountPath             string                    `docs:"/;The path where the file system would be mounted."                                                           mapstructure:"mount_path"`
-	MountID               string                    `docs:"-;The ID of the mounted file system."                                                                         mapstructure:"mount_id"`
-	Driver                string                    `docs:"localhome;The storage driver to be used."                                                                     mapstructure:"driver"`
-	Drivers               map[string]map[string]any `docs:"url:pkg/storage/fs/localhome/localhome.go"                                                                    mapstructure:"drivers"`
-	ExposeDataServer      bool                      `docs:"false;Whether to expose data server."                                                                         mapstructure:"expose_data_server"` // if true the client will be able to upload/download directly to it
-	AvailableXS           map[string]uint32         `docs:"nil;List of available checksums."                                                                             mapstructure:"available_checksums"`
-	CustomMimeTypesJSON   string                    `docs:"nil;An optional mapping file with the list of supported custom file extensions and corresponding mime types." mapstructure:"custom_mime_types_json"`
-	GatewaySvc            string                    `mapstructure:"gatewaysvc"`
-	SpaceInfoCacheDriver  string                    `mapstructure:"space_info_cache_type"`
-	SpaceInfoCacheTTL     int                       `mapstructure:"space_info_cache_ttl"`
-	SpaceInfoCacheDrivers map[string]map[string]any `mapstructure:"space_info_caches"`
-	ProvidesSpaceType     string                    `docs:"nil;Defines which type of spaces this storage provider provides (e.g. home, project, ...)."  mapstructure:"provides_space_type"`
-	SpaceDepth            int                       `docs:"nil;Defines at which level spaces start. E.g. if spaces are located under '/eos/{space}', this would be 2. Any number lower than the depth of the SP's mount_path means only one space is provided by this StorageProvider."  mapstructure:"space_depth"`
+	MountPath           string                    `docs:"/;The path where the file system would be mounted."                                                           mapstructure:"mount_path"`
+	MountID             string                    `docs:"-;The ID of the mounted file system."                                                                         mapstructure:"mount_id"`
+	Driver              string                    `docs:"localhome;The storage driver to be used."                                                                     mapstructure:"driver"`
+	Drivers             map[string]map[string]any `docs:"url:pkg/storage/fs/localhome/localhome.go"                                                                    mapstructure:"drivers"`
+	ExposeDataServer    bool                      `docs:"false;Whether to expose data server."                                                                         mapstructure:"expose_data_server"` // if true the client will be able to upload/download directly to it
+	AvailableXS         map[string]uint32         `docs:"nil;List of available checksums."                                                                             mapstructure:"available_checksums"`
+	CustomMimeTypesJSON string                    `docs:"nil;An optional mapping file with the list of supported custom file extensions and corresponding mime types." mapstructure:"custom_mime_types_json"`
+	GatewaySvc          string                    `mapstructure:"gatewaysvc"`
+	ProvidesSpaceType   string                    `docs:"nil;Defines which type of spaces this storage provider provides (e.g. home, project, ...)."  mapstructure:"provides_space_type"`
+	SpaceDepth          int                       `docs:"nil;Defines at which level spaces start. E.g. if spaces are located under '/eos/{space}', this would be 2. Any number lower than the depth of the SP's mount_path means only one space is provided by this StorageProvider."  mapstructure:"space_depth"`
 }
 
 func (c *config) ApplyDefaults() {
@@ -95,10 +89,6 @@ func (c *config) ApplyDefaults() {
 
 	if c.MountID == "" {
 		c.MountID = "00000000-0000-0000-0000-000000000000"
-	}
-
-	if c.SpaceInfoCacheDriver == "" {
-		c.SpaceInfoCacheDriver = "memory_space"
 	}
 
 	// set sane defaults
@@ -854,7 +844,9 @@ func (s *service) addSpaceInfo(ctx context.Context, ri *provider.ResourceInfo) e
 	ri.Space = &provider.StorageSpace{}
 	ri.Space.SpaceType = s.conf.ProvidesSpaceType
 
-	spaceID, err := s.pathToSpaceID(ri.Path)
+	// ri.Path is the path of the driver, so that relative references, which
+	// are not prefixed with the mount path on wrap, get a space too
+	spaceID, err := s.pathToSpaceID(path.Join(s.mountPath, ri.Path))
 	if err != nil {
 		log.Error().Err(err).Str("ri.Path", ri.Path).Int("spaceDepth", s.conf.SpaceDepth).Msgf("addSpaceInfo: failed call to pathToSpaceID")
 		return err
@@ -926,6 +918,7 @@ func (s *service) Stat(ctx context.Context, req *provider.StatRequest) (*provide
 		}, nil
 	}
 
+	s.addSpaceInfo(ctx, md)
 	if err := s.wrap(ctx, md, true); err != nil {
 		return &provider.StatResponse{
 			Status: status.NewInternal(ctx, err, "error wrapping path"),
@@ -934,7 +927,6 @@ func (s *service) Stat(ctx context.Context, req *provider.StatRequest) (*provide
 
 	s.fixPermissions(md)
 	s.stripNonUtf8Metadata(ctx, md)
-	s.addSpaceInfo(ctx, md)
 
 	res := &provider.StatResponse{
 		Status: status.NewOK(ctx),
@@ -1132,6 +1124,7 @@ func (s *service) ListContainer(ctx context.Context, req *provider.ListContainer
 	infos := make([]*provider.ResourceInfo, 0, len(mds))
 	prefixMountpoint := utils.IsAbsoluteReference(req.Ref)
 	for _, md := range mds {
+		s.addSpaceInfo(ctx, md)
 		if err := s.wrap(ctx, md, prefixMountpoint); err != nil {
 			return &provider.ListContainerResponse{
 				Status: status.NewInternal(ctx, err, "error wrapping path"),
@@ -1139,7 +1132,6 @@ func (s *service) ListContainer(ctx context.Context, req *provider.ListContainer
 		}
 		s.fixPermissions(md)
 		s.stripNonUtf8Metadata(ctx, md)
-		s.addSpaceInfo(ctx, md)
 		infos = append(infos, md)
 	}
 	res := &provider.ListContainerResponse{
@@ -1814,51 +1806,4 @@ func (v descendingMtime) Less(i, j int) bool {
 
 func (v descendingMtime) Swap(i, j int) {
 	v[i], v[j] = v[j], v[i]
-}
-
-func getCacheManager(c *config) (cache.SpaceInfoCache, error) {
-	factory, err := cachereg.GetCacheFunc[cache.SpaceInfoCache](c.SpaceInfoCacheDriver)
-	if err != nil {
-		return nil, err
-	}
-	return factory(c.SpaceInfoCacheDrivers[c.SpaceInfoCacheDriver])
-}
-
-func (s *service) fetchSpace(ctx context.Context, spaceID string) (*provider.StorageSpace, error) {
-	gw, err := svc.Gateway(ctx)
-	log := appctx.GetLogger(ctx)
-
-	request := &provider.ListStorageSpacesRequest{
-		Filters: []*provider.ListStorageSpacesRequest_Filter{
-			&provider.ListStorageSpacesRequest_Filter{
-				Type: provider.ListStorageSpacesRequest_Filter_TYPE_SPACE_TYPE,
-				Term: &provider.ListStorageSpacesRequest_Filter_SpaceType{
-					SpaceType: spaces.SpaceTypeProject.AsString(),
-				},
-			},
-		},
-	}
-
-	if s.conf.ProvidesSpaceType == spaces.SpaceTypeProject.AsString() {
-		request.Filters = append(request.Filters, &provider.ListStorageSpacesRequest_Filter{
-			Type: provider.ListStorageSpacesRequest_Filter_TYPE_ID,
-			Term: &provider.ListStorageSpacesRequest_Filter_Id{
-				Id: &provider.StorageSpaceId{
-					OpaqueId: spaceID,
-				},
-			},
-		})
-	}
-
-	spacesResp, err := gw.ListStorageSpaces(ctx, request)
-	if err != nil {
-		log.Error().Err(err).Msg("Failed to list storage spaces")
-		return nil, err
-	}
-	if spacesResp.Status == nil || spacesResp.Status.Code != rpc.Code_CODE_OK || len(spacesResp.StorageSpaces) != 1 {
-		log.Error().Any("Status", spacesResp.Status).Int("found?", len(spacesResp.StorageSpaces)).Msgf("Failed to list storage spaces for %s", spaceID)
-		return nil, fmt.Errorf("Failed to list storage spaces for %s", spaceID)
-	}
-	space := spacesResp.StorageSpaces[0]
-	return space, nil
 }

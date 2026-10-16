@@ -25,6 +25,7 @@ import (
 	"reflect"
 	"testing"
 
+	groupv1beta1 "github.com/cs3org/go-cs3apis/cs3/identity/group/v1beta1"
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/cs3org/reva/v3/pkg/appctx"
@@ -56,6 +57,48 @@ func setupSuite(tb testing.TB) (projects_catalogue.Catalogue, error, func(tb tes
 func TestListProjects(t *testing.T) {
 
 	spaceID := spaces.EncodeSpaceID("/path/to/project")
+
+	// Every project in the test cases below uses these e-groups
+	roles := []*provider.SpaceRole{{
+		RoleName:      "reader",
+		PermissionSet: permissions.NewViewerRole().CS3ResourcePermissions(),
+		Recipients: []*provider.Grantee{
+			{
+				Type: provider.GranteeType_GRANTEE_TYPE_GROUP,
+				Id: &provider.Grantee_GroupId{
+					GroupId: &groupv1beta1.GroupId{
+						OpaqueId: "project-readers",
+					},
+				},
+			},
+		},
+	}, {
+		RoleName:      "writer",
+		PermissionSet: permissions.NewEditorRole().CS3ResourcePermissions(),
+		Recipients: []*provider.Grantee{
+			{
+				Type: provider.GranteeType_GRANTEE_TYPE_GROUP,
+				Id: &provider.Grantee_GroupId{
+					GroupId: &groupv1beta1.GroupId{
+						OpaqueId: "project-writers",
+					},
+				},
+			},
+		},
+	}, {
+		RoleName:      "admin",
+		PermissionSet: permissions.NewManagerRole().CS3ResourcePermissions(),
+		Recipients: []*provider.Grantee{
+			{
+				Type: provider.GranteeType_GRANTEE_TYPE_GROUP,
+				Id: &provider.Grantee_GroupId{
+					GroupId: &groupv1beta1.GroupId{
+						OpaqueId: "project-admins",
+					},
+				},
+			},
+		},
+	}}
 
 	tests := []struct {
 		description string
@@ -100,7 +143,7 @@ func TestListProjects(t *testing.T) {
 						Path:          "/path/to/project",
 						PermissionSet: permissions.NewManagerRole().CS3ResourcePermissions(),
 					},
-					PermissionSet: permissions.NewManagerRole().CS3ResourcePermissions(),
+					Roles: roles,
 				},
 			},
 		},
@@ -135,7 +178,7 @@ func TestListProjects(t *testing.T) {
 						Path:          "/path/to/project",
 						PermissionSet: permissions.NewViewerRole().CS3ResourcePermissions(),
 					},
-					PermissionSet: permissions.NewViewerRole().CS3ResourcePermissions(),
+					Roles: roles,
 				},
 			},
 		},
@@ -170,7 +213,7 @@ func TestListProjects(t *testing.T) {
 						Path:          "/path/to/project",
 						PermissionSet: permissions.NewEditorRole().CS3ResourcePermissions(),
 					},
-					PermissionSet: permissions.NewEditorRole().CS3ResourcePermissions(),
+					Roles: roles,
 				},
 			},
 		},
@@ -205,7 +248,7 @@ func TestListProjects(t *testing.T) {
 						Path:          "/path/to/project",
 						PermissionSet: permissions.NewManagerRole().CS3ResourcePermissions(),
 					},
-					PermissionSet: permissions.NewManagerRole().CS3ResourcePermissions(),
+					Roles: roles,
 				},
 			},
 		},
@@ -240,7 +283,7 @@ func TestListProjects(t *testing.T) {
 						Path:          "/path/to/project",
 						PermissionSet: permissions.NewManagerRole().CS3ResourcePermissions(),
 					},
-					PermissionSet: permissions.NewManagerRole().CS3ResourcePermissions(),
+					Roles: roles,
 				},
 			},
 		},
