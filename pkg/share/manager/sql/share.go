@@ -188,7 +188,8 @@ func (m *ShareMgr) UpdateShare(ctx context.Context, ref *collaboration.ShareRefe
 		// Our shares don't support display names at the moment ...
 	case *collaboration.UpdateShareRequest_UpdateField_Expiration:
 		expiration := req.Field.GetExpiration()
-		if expiration == nil {
+		// A nil expiration arrives over grpc as an empty timestamp.
+		if expiration.GetSeconds() == 0 {
 			res := m.db.Model(&share).Where("id = ?", share.Id).Update("expiration", nil)
 			if res.Error != nil {
 				return nil, res.Error

@@ -26,6 +26,7 @@ import (
 	"strings"
 	"sync"
 	"testing"
+	"time"
 
 	grouppb "github.com/cs3org/go-cs3apis/cs3/identity/group/v1beta1"
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
@@ -209,6 +210,128 @@ func TestShareHierarchyEndUserScenarios(t *testing.T) {
 	})
 }
 
+func TestShareExpiration(t *testing.T) {
+	past := &types.Timestamp{Seconds: uint64(time.Now().Add(-time.Hour).Unix())}
+	future := &types.Timestamp{Seconds: uint64(time.Now().Add(time.Hour).Unix())}
+
+	t.Run("future expiration keeps access", func(t *testing.T) {
+		h := newShareHierarchyGatewayHarness(t)
+
+		share := h.createShare(t, parentPath, userAGrantee(), permissions.NewViewerRole().CS3ResourcePermissions(), false)
+		res := h.updateExpiration(t, share.Id, future)
+
+		require.Equal(t, rpc.Code_CODE_OK, res.Status.Code, res.Status.Message)
+		h.assertCanRead(t, userAGrantee(), parentPath)
+	})
+
+	t.Run("past expiration removes access but keeps the share", func(t *testing.T) {
+		h := newShareHierarchyGatewayHarness(t)
+
+		share := h.createShare(t, parentPath, userAGrantee(), permissions.NewViewerRole().CS3ResourcePermissions(), false)
+		res := h.updateExpiration(t, share.Id, past)
+
+		require.Equal(t, rpc.Code_CODE_OK, res.Status.Code, res.Status.Message)
+		h.assertCannotRead(t, userAGrantee(), parentPath)
+		h.assertCannotRead(t, userAGrantee(), childPath)
+		h.assertSharePaths(t, userAGrantee(), parentPath)
+	})
+
+	t.Run("expiring a child share falls back to the parent share", func(t *testing.T) {
+		h := newShareHierarchyGatewayHarness(t)
+
+		h.createShare(t, parentPath, userAGrantee(), permissions.NewViewerRole().CS3ResourcePermissions(), false)
+		child := h.createShare(t, childPath, userAGrantee(), permissions.NewEditorRole().CS3ResourcePermissions(), false)
+		res := h.updateExpiration(t, child.Id, past)
+
+		require.Equal(t, rpc.Code_CODE_OK, res.Status.Code, res.Status.Message)
+		h.assertCanRead(t, userAGrantee(), childPath)
+		h.assertCannotWrite(t, userAGrantee(), childPath)
+	})
+
+	t.Run("moving the expiration to the future restores access", func(t *testing.T) {
+		h := newShareHierarchyGatewayHarness(t)
+
+		share := h.createShare(t, parentPath, userAGrantee(), permissions.NewViewerRole().CS3ResourcePermissions(), false)
+		h.updateExpiration(t, share.Id, past)
+		res := h.updateExpiration(t, share.Id, future)
+
+		require.Equal(t, rpc.Code_CODE_OK, res.Status.Code, res.Status.Message)
+		h.assertCanRead(t, userAGrantee(), parentPath)
+	})
+
+	t.Run("removing the expiration restores access and clears it", func(t *testing.T) {
+		h := newShareHierarchyGatewayHarness(t)
+
+		share := h.createShare(t, parentPath, userAGrantee(), permissions.NewViewerRole().CS3ResourcePermissions(), false)
+		h.updateExpiration(t, share.Id, past)
+		res := h.updateExpiration(t, share.Id, nil)
+
+		require.Equal(t, rpc.Code_CODE_OK, res.Status.Code, res.Status.Message)
+		assert.Nil(t, res.Share.Expiration)
+		h.assertCanRead(t, userAGrantee(), parentPath)
+	})
+
+	t.Run("permission update on an expired share gives no access until it is restored", func(t *testing.T) {
+		h := newShareHierarchyGatewayHarness(t)
+
+		share := h.createShare(t, parentPath, userAGrantee(), permissions.NewViewerRole().CS3ResourcePermissions(), false)
+		h.updateExpiration(t, share.Id, past)
+		h.updateShare(t, share.Id, permissions.NewEditorRole().CS3ResourcePermissions(), false)
+		h.assertCannotRead(t, userAGrantee(), parentPath)
+
+		h.updateExpiration(t, share.Id, future)
+		h.assertCanWrite(t, userAGrantee(), parentPath)
+	})
+
+	t.Run("expired child share does not block a parent share", func(t *testing.T) {
+		h := newShareHierarchyGatewayHarness(t)
+
+		child := h.createShare(t, childPath, userAGrantee(), permissions.NewViewerRole().CS3ResourcePermissions(), false)
+		h.updateExpiration(t, child.Id, past)
+		h.createShare(t, parentPath, userAGrantee(), permissions.NewViewerRole().CS3ResourcePermissions(), false)
+
+		h.assertCanRead(t, userAGrantee(), childPath)
+		h.assertSharePaths(t, userAGrantee(), parentPath, childPath)
+	})
+
+	t.Run("restoring a share that a parent share now covers is a conflict", func(t *testing.T) {
+		h := newShareHierarchyGatewayHarness(t)
+
+		child := h.createShare(t, childPath, userAGrantee(), permissions.NewViewerRole().CS3ResourcePermissions(), false)
+		h.updateExpiration(t, child.Id, past)
+		h.createShare(t, parentPath, userAGrantee(), permissions.NewViewerRole().CS3ResourcePermissions(), false)
+		res := h.updateExpiration(t, child.Id, future)
+
+		require.Equal(t, rpc.Code_CODE_ABORTED, res.Status.Code)
+		assert.Contains(t, res.Status.Message, "already accessible")
+	})
+
+	t.Run("removing a parent share does not restore an expired child share", func(t *testing.T) {
+		h := newShareHierarchyGatewayHarness(t)
+
+		parent := h.createShare(t, parentPath, userAGrantee(), permissions.NewViewerRole().CS3ResourcePermissions(), false)
+		child := h.createShare(t, childPath, userAGrantee(), permissions.NewEditorRole().CS3ResourcePermissions(), false)
+		h.updateExpiration(t, child.Id, past)
+		h.removeShare(t, parent.Id)
+
+		h.assertCannotRead(t, userAGrantee(), childPath)
+		h.assertSharePaths(t, userAGrantee(), childPath)
+	})
+
+	t.Run("removing an expired share keeps the parent access", func(t *testing.T) {
+		h := newShareHierarchyGatewayHarness(t)
+
+		h.createShare(t, parentPath, userAGrantee(), permissions.NewViewerRole().CS3ResourcePermissions(), false)
+		child := h.createShare(t, childPath, userAGrantee(), permissions.NewEditorRole().CS3ResourcePermissions(), false)
+		h.updateExpiration(t, child.Id, past)
+		h.removeShare(t, child.Id)
+
+		h.assertCanRead(t, userAGrantee(), childPath)
+		h.assertCannotWrite(t, userAGrantee(), childPath)
+		h.assertSharePaths(t, userAGrantee(), parentPath)
+	})
+}
+
 func (h *shareHierarchyGatewayHarness) createShare(t *testing.T, p string, grantee *provider.Grantee, perms *provider.ResourcePermissions, force bool) *collaboration.Share {
 	t.Helper()
 	res := h.createShareResponse(t, p, grantee, perms, force)
@@ -246,6 +369,32 @@ func (h *shareHierarchyGatewayHarness) updateShare(t *testing.T, id *collaborati
 			},
 		},
 		Opaque: forceOpaque(force),
+	})
+	require.NoError(t, err)
+	require.Equal(t, rpc.Code_CODE_OK, res.Status.Code, res.Status.Message)
+}
+
+func (h *shareHierarchyGatewayHarness) updateExpiration(t *testing.T, id *collaboration.ShareId, exp *types.Timestamp) *collaboration.UpdateShareResponse {
+	t.Helper()
+	res, err := h.svc.UpdateShare(context.Background(), &collaboration.UpdateShareRequest{
+		Ref: &collaboration.ShareReference{
+			Spec: &collaboration.ShareReference_Id{Id: id},
+		},
+		Field: &collaboration.UpdateShareRequest_UpdateField{
+			Field: &collaboration.UpdateShareRequest_UpdateField_Expiration{Expiration: exp},
+		},
+	})
+	require.NoError(t, err)
+	require.NotNil(t, res.Status)
+	return res
+}
+
+func (h *shareHierarchyGatewayHarness) removeShare(t *testing.T, id *collaboration.ShareId) {
+	t.Helper()
+	res, err := h.svc.RemoveShare(context.Background(), &collaboration.RemoveShareRequest{
+		Ref: &collaboration.ShareReference{
+			Spec: &collaboration.ShareReference_Id{Id: id},
+		},
 	})
 	require.NoError(t, err)
 	require.Equal(t, rpc.Code_CODE_OK, res.Status.Code, res.Status.Message)
@@ -356,6 +505,13 @@ func (s *fakeCollaborationServer) UpdateShare(_ context.Context, req *collaborat
 	if perms := req.Field.GetPermissions(); perms != nil {
 		share.Permissions = &collaboration.SharePermissions{Permissions: perms.Permissions}
 	}
+	if _, ok := req.Field.GetField().(*collaboration.UpdateShareRequest_UpdateField_Expiration); ok {
+		// Like the SQL manager, an empty timestamp clears the expiration.
+		share.Expiration = nil
+		if exp := req.Field.GetExpiration(); exp.GetSeconds() != 0 {
+			share.Expiration = exp
+		}
+	}
 	return &collaboration.UpdateShareResponse{Status: okStatus(), Share: proto.Clone(share).(*collaboration.Share)}, nil
 }
 
@@ -415,7 +571,13 @@ func (s *fakeStorageProviderServer) RemoveGrant(_ context.Context, req *provider
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	delete(s.grants[req.Ref.GetResourceId().OpaqueId], granteeKey(req.Grant.Grantee))
+	// Like EOS, removing a grant on a container also removes it from everything below.
+	targetPath := pathForOpaqueID(req.Ref.GetResourceId().OpaqueId)
+	for currentOpaqueID := range s.grants {
+		if isSameOrDescendant(targetPath, pathForOpaqueID(currentOpaqueID)) {
+			delete(s.grants[currentOpaqueID], granteeKey(req.Grant.Grantee))
+		}
+	}
 	return &provider.RemoveGrantResponse{Status: okStatus()}, nil
 }
 
