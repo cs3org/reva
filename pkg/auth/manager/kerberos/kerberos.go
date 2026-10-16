@@ -22,7 +22,7 @@
 //
 // The client presents a SPNEGO token, which this manager validates against the
 // service keytab. What it gets back is a client principal, which it resolves to
-// a user through the gateway. The principal is authoritative: the client id
+// a user through the user provider. The principal is authoritative: the client id
 // supplied alongside the token is ignored, because anything the client says
 // about who it is has not been verified and the ticket has.
 //
