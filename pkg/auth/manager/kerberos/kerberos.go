@@ -72,15 +72,14 @@ type config struct {
 	// ServicePrincipal.
 	Keytab string `docs:";Path to the service keytab." mapstructure:"keytab"`
 	// ServicePrincipal is the SPN clients request a ticket for, such as
-	// HTTP/cernbox.cern.ch. Empty accepts any principal the keytab holds,
-	// which is what a deployment behind a DNS alias usually wants.
+	// HTTP/cernbox.cern.ch. Empty accepts any principal the keytab holds.
 	ServicePrincipal string `docs:";The service principal name clients authenticate to. Empty accepts any principal in the keytab." mapstructure:"service_principal"`
 	// Realm is the Kerberos realm to accept. Empty accepts any realm the
 	// keytab can validate.
 	Realm string `docs:";The Kerberos realm to accept. Empty accepts any." mapstructure:"realm"`
-	// UserClaim is the claim the principal is resolved against. The principal
-	// name without its realm is a username at CERN, which is the default.
-	UserClaim string `docs:"username;The user claim the Kerberos principal is resolved against." mapstructure:"user_claim"`
+	// UserClaim is the claim the username from the ticket is resolved
+	// against.
+	UserClaim string `docs:"username;The user claim the username from the ticket is resolved against." mapstructure:"user_claim"`
 	// MaxClockSkewSeconds bounds the difference between the client's clock and
 	// this host's. Kerberos is sensitive to it, and the default matches the
 	// protocol's own.
@@ -98,8 +97,9 @@ func (c *config) ApplyDefaults() {
 
 // Ticket is what a validated SPNEGO token yields.
 type Ticket struct {
-	// Principal is the client principal without its realm.
-	Principal string
+	// Username is the first component of the client principal, without realm
+	// or instance: "gdelmont" for gdelmont/admin@CERN.CH.
+	Username string
 	// Realm is the realm the client authenticated in.
 	Realm string
 }
@@ -107,7 +107,7 @@ type Ticket struct {
 // Validator turns a SPNEGO token into the identity it proves.
 //
 // It is an interface so the manager's own behaviour — configuration, realm
-// checks, principal resolution, error mapping — can be tested without a KDC.
+// checks, user resolution, error mapping — can be tested without a KDC.
 // Producing a genuine AP-REQ needs a live realm, which belongs in an
 // integration test, not in a unit one.
 type Validator interface {
@@ -145,8 +145,7 @@ func NewWithValidator(c *config, v Validator) auth.Manager {
 	return &manager{conf: c, validator: v}
 }
 
-// Authenticate validates a SPNEGO token and resolves the principal it proves to
-// a user.
+// Authenticate validates a SPNEGO token and resolves the user it names.
 //
 // clientID is ignored on purpose. The ticket says who the client is and has
 // been verified; the client id has not.
@@ -175,11 +174,11 @@ func (m *manager) Authenticate(ctx context.Context, clientID, clientSecret strin
 			Msg("kerberos: ticket from an unexpected realm")
 		return nil, nil, errtypes.InvalidCredentials("kerberos: ticket is from another realm")
 	}
-	if ticket.Principal == "" {
-		return nil, nil, errtypes.InvalidCredentials("kerberos: ticket carries no principal")
+	if ticket.Username == "" {
+		return nil, nil, errtypes.InvalidCredentials("kerberos: ticket names no user")
 	}
 
-	user, err := m.resolveUser(ctx, ticket.Principal)
+	user, err := m.resolveUser(ctx, ticket.Username)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -189,19 +188,19 @@ func (m *manager) Authenticate(ctx context.Context, clientID, clientSecret strin
 		return nil, nil, errors.Wrap(err, "kerberos: error creating scope")
 	}
 
-	log.Debug().Str("principal", ticket.Principal).Str("realm", ticket.Realm).
+	log.Debug().Str("username", ticket.Username).Str("realm", ticket.Realm).
 		Str("user", user.Username).Msg("kerberos: authenticated")
 	return user, scopes, nil
 }
 
-// resolveUser maps a Kerberos principal to a reva user.
+// resolveUser maps the username from a ticket to a reva user.
 //
 // It asks the user provider directly, discovered through the service registry,
 // rather than routing through the gateway at an address from the shared
-// configuration. Resolving a principal to a user is the user provider's own job,
+// configuration. Resolving a username to a user is the user provider's own job,
 // and going straight there means one fewer hop on the authentication path and
 // one fewer address to keep correct in a config file.
-func (m *manager) resolveUser(ctx context.Context, principal string) (*userpb.User, error) {
+func (m *manager) resolveUser(ctx context.Context, username string) (*userpb.User, error) {
 	users, err := service.UserProvider(ctx)
 	if err != nil {
 		return nil, errors.Wrap(err, "kerberos: error getting the user provider")
@@ -209,16 +208,16 @@ func (m *manager) resolveUser(ctx context.Context, principal string) (*userpb.Us
 
 	res, err := users.GetUserByClaim(ctx, &userpb.GetUserByClaimRequest{
 		Claim: m.conf.UserClaim,
-		Value: principal,
+		Value: username,
 	})
 	switch {
 	case err != nil:
-		return nil, errors.Wrap(err, "kerberos: error resolving the principal")
+		return nil, errors.Wrap(err, "kerberos: error resolving the user")
 	case res.Status.Code == rpc.Code_CODE_NOT_FOUND:
 		// The ticket is genuine but names somebody this deployment does not
 		// know. That is a real situation — a valid principal in the realm with
 		// no account here — and saying so plainly beats a generic failure.
-		return nil, errtypes.NotFound(fmt.Sprintf("kerberos: no user for principal %q", principal))
+		return nil, errtypes.NotFound(fmt.Sprintf("kerberos: no user with %s %q", m.conf.UserClaim, username))
 	case res.Status.Code != rpc.Code_CODE_OK:
 		return nil, errtypes.InternalError(res.Status.Message)
 	}

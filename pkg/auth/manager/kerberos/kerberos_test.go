@@ -137,7 +137,7 @@ func TestAuthenticate(t *testing.T) {
 	users := &stubUsers{user: testUser("gdelmont")}
 	useUsers(t, users)
 
-	validator := &stubValidator{ticket: &Ticket{Principal: "gdelmont", Realm: "CERN.CH"}}
+	validator := &stubValidator{ticket: &Ticket{Username: "gdelmont", Realm: "CERN.CH"}}
 	m := NewWithValidator(&config{}, validator)
 
 	user, scopes, err := m.Authenticate(context.Background(), "", encode("spnego-token"))
@@ -170,7 +170,7 @@ func TestAuthenticateIgnoresTheClientID(t *testing.T) {
 	useUsers(t, users)
 
 	m := NewWithValidator(&config{}, &stubValidator{
-		ticket: &Ticket{Principal: "gdelmont", Realm: "CERN.CH"},
+		ticket: &Ticket{Username: "gdelmont", Realm: "CERN.CH"},
 	})
 
 	user, _, err := m.Authenticate(context.Background(), "root", encode("token"))
@@ -206,7 +206,7 @@ func TestAuthenticateRejectsAnInvalidTicket(t *testing.T) {
 
 func TestAuthenticateRejectsMalformedInput(t *testing.T) {
 	useUsers(t, &stubUsers{user: testUser("gdelmont")})
-	validator := &stubValidator{ticket: &Ticket{Principal: "gdelmont", Realm: "CERN.CH"}}
+	validator := &stubValidator{ticket: &Ticket{Username: "gdelmont", Realm: "CERN.CH"}}
 	m := NewWithValidator(&config{}, validator)
 
 	for _, secret := range []string{"", "not base64!!", "!!!"} {
@@ -225,7 +225,7 @@ func TestAuthenticateChecksTheRealm(t *testing.T) {
 	useUsers(t, &stubUsers{user: testUser("gdelmont")})
 
 	m := NewWithValidator(&config{Realm: "CERN.CH"}, &stubValidator{
-		ticket: &Ticket{Principal: "gdelmont", Realm: "EXAMPLE.ORG"},
+		ticket: &Ticket{Username: "gdelmont", Realm: "EXAMPLE.ORG"},
 	})
 
 	_, _, err := m.Authenticate(context.Background(), "", encode("token"))
@@ -241,7 +241,7 @@ func TestAuthenticateRealmComparisonIsCaseInsensitive(t *testing.T) {
 	useUsers(t, &stubUsers{user: testUser("gdelmont")})
 
 	m := NewWithValidator(&config{Realm: "cern.ch"}, &stubValidator{
-		ticket: &Ticket{Principal: "gdelmont", Realm: "CERN.CH"},
+		ticket: &Ticket{Username: "gdelmont", Realm: "CERN.CH"},
 	})
 
 	if _, _, err := m.Authenticate(context.Background(), "", encode("token")); err != nil {
@@ -253,7 +253,7 @@ func TestAuthenticateAcceptsAnyRealmWhenUnset(t *testing.T) {
 	useUsers(t, &stubUsers{user: testUser("gdelmont")})
 
 	m := NewWithValidator(&config{}, &stubValidator{
-		ticket: &Ticket{Principal: "gdelmont", Realm: "EXAMPLE.ORG"},
+		ticket: &Ticket{Username: "gdelmont", Realm: "EXAMPLE.ORG"},
 	})
 
 	if _, _, err := m.Authenticate(context.Background(), "", encode("token")); err != nil {
@@ -261,13 +261,13 @@ func TestAuthenticateAcceptsAnyRealmWhenUnset(t *testing.T) {
 	}
 }
 
-func TestAuthenticateRejectsAnEmptyPrincipal(t *testing.T) {
+func TestAuthenticateRejectsAnEmptyUsername(t *testing.T) {
 	useUsers(t, &stubUsers{user: testUser("gdelmont")})
 
 	m := NewWithValidator(&config{}, &stubValidator{ticket: &Ticket{Realm: "CERN.CH"}})
 
 	if _, _, err := m.Authenticate(context.Background(), "", encode("token")); err == nil {
-		t.Fatal("a ticket with no principal should be rejected")
+		t.Fatal("a ticket with no username should be rejected")
 	}
 }
 
@@ -277,7 +277,7 @@ func TestAuthenticateUnknownPrincipal(t *testing.T) {
 	useUsers(t, &stubUsers{status: rpc.Code_CODE_NOT_FOUND})
 
 	m := NewWithValidator(&config{}, &stubValidator{
-		ticket: &Ticket{Principal: "stranger", Realm: "CERN.CH"},
+		ticket: &Ticket{Username: "stranger", Realm: "CERN.CH"},
 	})
 
 	_, _, err := m.Authenticate(context.Background(), "", encode("token"))
@@ -288,7 +288,7 @@ func TestAuthenticateUnknownPrincipal(t *testing.T) {
 		t.Errorf("error is %T, want NotFound", err)
 	}
 	if !strings.Contains(err.Error(), "stranger") {
-		t.Errorf("the error should name the principal, got %v", err)
+		t.Errorf("the error should name the username, got %v", err)
 	}
 }
 
@@ -297,7 +297,7 @@ func TestAuthenticateWithACustomUserClaim(t *testing.T) {
 	useUsers(t, users)
 
 	m := NewWithValidator(&config{UserClaim: "mail"}, &stubValidator{
-		ticket: &Ticket{Principal: "gdelmont", Realm: "CERN.CH"},
+		ticket: &Ticket{Username: "gdelmont", Realm: "CERN.CH"},
 	})
 
 	if _, _, err := m.Authenticate(context.Background(), "", encode("token")); err != nil {
