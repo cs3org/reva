@@ -6,3 +6,5 @@ token to the browser as JSON. Received webapp shares now launch only through
 validated app URL. The lightweight account scope no longer allows the old
 path. The CS3 app provider `OpenInApp` call and the `reva open-in-app` CLI
 command are unchanged.
+
+https://github.com/cs3org/reva/pull/5909
