@@ -59,7 +59,8 @@ type ResourceTypes struct {
 }
 
 type wkocmHandler struct {
-	data *OcmDiscoveryData
+	data               *OcmDiscoveryData
+	payload, payloadNC []byte
 }
 
 func (c *OcmProviderConfig) ApplyDefaults() {
@@ -81,6 +82,23 @@ func (c *OcmProviderConfig) ApplyDefaults() {
 }
 
 func (h *wkocmHandler) init(c *OcmProviderConfig) {
+	h.setData(h.buildData(c))
+}
+
+// setData stores d and encodes the responses once, the second one for the
+// Nextcloud crawler: the handler must not mutate data, as it serves requests
+// concurrently.
+func (h *wkocmHandler) setData(d *OcmDiscoveryData) {
+	h.data = d
+	h.payload, _ = json.MarshalIndent(d, "", "   ")
+	// Nextcloud decided to only support OCM 1.0 and 1.1, not any 1.x as per SemVer. See
+	// https://github.com/nextcloud/server/pull/39574#issuecomment-1679191188
+	nc := *d
+	nc.APIVersion = "1.1"
+	h.payloadNC, _ = json.MarshalIndent(&nc, "", "   ")
+}
+
+func (h *wkocmHandler) buildData(c *OcmProviderConfig) *OcmDiscoveryData {
 	// generates the (static) data structure to be exposed by /.well-known/ocm:
 	// first prepare an empty and disabled payload
 	c.ApplyDefaults()
@@ -97,14 +115,12 @@ func (h *wkocmHandler) init(c *OcmProviderConfig) {
 	d.Capabilities = []string{}
 
 	if c.Endpoint == "" {
-		h.data = d
-		return
+		return d
 	}
 
 	endpointURL, err := url.Parse(c.Endpoint)
 	if err != nil {
-		h.data = d
-		return
+		return d
 	}
 
 	// now prepare the enabled one
@@ -154,7 +170,7 @@ func (h *wkocmHandler) init(c *OcmProviderConfig) {
 		d.TokenEndPoint, _ = TokenEndpoint(c.Endpoint, c.OCMPrefix)
 		d.Capabilities = append(d.Capabilities, "exchange-token")
 	}
-	h.data = d
+	return d
 }
 
 // TokenEndpoint builds the advertised code-flow token endpoint for OCM discovery.
@@ -168,15 +184,11 @@ func (h *wkocmHandler) Ocm(w http.ResponseWriter, r *http.Request) {
 	log := appctx.GetLogger(r.Context())
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
+	payload := h.payload
 	if r.UserAgent() == "Nextcloud Server Crawler" {
-		// Nextcloud decided to only support OCM 1.0 and 1.1, not any 1.x as per SemVer. See
-		// https://github.com/nextcloud/server/pull/39574#issuecomment-1679191188
-		h.data.APIVersion = "1.1"
-	} else {
-		h.data.APIVersion = OCMAPIVersion
+		payload = h.payloadNC
 	}
-	indented, _ := json.MarshalIndent(h.data, "", "   ")
-	if _, err := w.Write(indented); err != nil {
+	if _, err := w.Write(payload); err != nil {
 		log.Err(err).Msg("Error writing to ResponseWriter")
 	}
 }

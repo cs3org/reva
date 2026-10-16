@@ -24,8 +24,10 @@ import (
 
 	"github.com/cs3org/reva/v3/pkg/appctx"
 	"github.com/cs3org/reva/v3/pkg/rhttp/global"
+	"github.com/cs3org/reva/v3/pkg/rhttp/ratelimit"
 	"github.com/cs3org/reva/v3/pkg/utils/cfg"
 	"github.com/go-chi/chi/v5"
+	"github.com/rs/zerolog"
 )
 
 func init() {
@@ -33,12 +35,19 @@ func init() {
 }
 
 type svc struct {
-	router chi.Router
-	Conf   *config
+	router  chi.Router
+	Conf    *config
+	limiter *ratelimit.Limiter
 }
 
 type config struct {
 	OCMProvider OcmProviderConfig `mapstructure:"ocmprovider"`
+	// RateLimit guards the (unauthenticated) discovery endpoint.
+	RateLimit ratelimit.ServiceConfig `mapstructure:",squash"`
+}
+
+func (c *config) ApplyDefaults() {
+	c.RateLimit.ApplyDefaults()
 }
 
 // New returns a new wellknown object.
@@ -53,14 +62,23 @@ func New(ctx context.Context, m map[string]any) (global.Service, error) {
 		router: r,
 		Conf:   &c,
 	}
-	if err := s.routerInit(); err != nil {
+	if err := s.routerInit(appctx.GetLogger(ctx)); err != nil {
+		_ = s.Close()
 		return nil, err
 	}
 
 	return s, nil
 }
 
-func (s *svc) routerInit() error {
+func (s *svc) routerInit(log *zerolog.Logger) error {
+	limiter, err := s.Conf.RateLimit.NewLimiter(log)
+	if err != nil {
+		return err
+	}
+	s.limiter = limiter
+	// Everything under this prefix is unauthenticated (see Unprotected).
+	s.router.Use(limiter.Middleware)
+
 	wkocmHandler := new(wkocmHandler)
 	wkocmHandler.init(&s.Conf.OCMProvider)
 	s.router.Get("/ocm", wkocmHandler.Ocm)
@@ -68,6 +86,7 @@ func (s *svc) routerInit() error {
 }
 
 func (s *svc) Close() error {
+	s.limiter.Close()
 	return nil
 }
 
