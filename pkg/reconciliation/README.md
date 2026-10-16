@@ -12,7 +12,7 @@ rescheduled, or pointed at another log, without touching the other.
 
 ```toml
 [serverless.services.reconciliation]
-jobs = ["orphan", "shallow"]
+jobs = ["orphan", "shallow", "expired"]
 share_driver       = "sql"
 publicshare_driver = "sql"
 service_user_name  = "cboxreco"
@@ -28,9 +28,14 @@ log_file = "/var/log/revad/reconciliation-orphan.log"
 schedule = "never"       # or a cadence, on-demand runs work either way
 dry_run  = true
 log_file = "/var/log/revad/reconciliation-shallow.log"
+
+[serverless.services.reconciliation.expired]
+schedule = "@hourly"
+dry_run  = false
+log_file = "/var/log/revad/reconciliation-expired.log"
 ```
 
-A job runs only if it is listed in `jobs`. `orphan` needs a `schedule`; on
+A job runs only if it is listed in `jobs`. `orphan` and `expired` need a `schedule`; on
 `shallow` it is optional and also takes `never`, since that job can be triggered
 on demand whether or not it has a cadence. `log_file` defaults to the path shown
 above for each, and both drivers default to `sql`, so all four keys above the
@@ -64,6 +69,13 @@ when the storage has no entry or the wrong permissions. On the storage it only
 adds and corrects entries. It never removes an ACL entry. In the share database
 it does remove rows: a share that a higher share of the same recipient makes
 redundant is deleted (soft). See below for the details.
+
+`reconciliation.expired` removes the shares whose expiration date has passed.
+The share manager hides an expired share, but its ACL entry stays until this
+job runs. For each expired share it removes the entry, reapplies the entries of
+the same recipient's live shares above and below it (as `RemoveShare` does),
+and soft deletes the row. If a step fails, the row stays and the next run
+tries again.
 
 Start a run with `reva admin jobs run reconciliation.shallow [space=<space-id>]`.
 Leave the space out to cover every space. This needs the admin API enabled. The
@@ -112,6 +124,10 @@ have to be told apart from the other's by hand.
 | `reconciliation.shallow.skipspace`| space left untouched, its shares changed       |
 | `reconciliation.shallow.fail`     | a grant or a removal was needed but failed     |
 | `reconciliation.shallow.end`      | run totals                                     |
+| `reconciliation.expired.start`    | run started                                    |
+| `reconciliation.expired.remove`   | expired share removed (or would be, dry-run)   |
+| `reconciliation.expired.fail`     | cleanup failed, row kept for the next run      |
+| `reconciliation.expired.end`      | run totals                                     |
 
 Every line also carries `job` and `run`, a uuid identifying the run, so the two
 logs stay readable if both jobs are pointed at the same file.
@@ -134,3 +150,8 @@ the row with id `share`.
 share that appeared, absent when the listing itself failed), `grants` and
 `removals`, the number of changes held back, and `dry_run`. Nothing was applied,
 so there is nothing to revert. Run the job on that space again to apply them.
+
+`reconciliation.expired.remove` carries `share`, `storage_id`, `opaque_id`,
+`grantee`, `grantee_type`, `level`, `dry_run`. Revert by clearing `deleted_at`
+on the row with id `share` and adding back a `level` grant for `grantee` on the
+resource.
