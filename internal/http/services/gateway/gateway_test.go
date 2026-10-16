@@ -38,7 +38,9 @@ import (
 var reg = func() registry.Registry {
 	r := memory.New(nil)
 	service.SetGlobalRegistry(r)
-	service.SetGlobal(service.NewClients(r))
+	// Each service here has a single node, so the selector only has to be
+	// deterministic.
+	service.SetGlobal(service.NewClients(r, service.FirstSelector{}))
 	return r
 }()
 
