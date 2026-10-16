@@ -41,6 +41,7 @@ import (
 	storageprovider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	storageregistry "github.com/cs3org/go-cs3apis/cs3/storage/registry/v1beta1"
 	datatx "github.com/cs3org/go-cs3apis/cs3/tx/v1beta1"
+	"github.com/cs3org/reva/v3/pkg/admin/adminpb"
 )
 
 // Each getter bakes in its peer name and builds the CS3 client over a connection
@@ -52,6 +53,14 @@ func (c *clients) Gateway(ctx context.Context) (gateway.GatewayAPIClient, error)
 		return nil, err
 	}
 	return gateway.NewGatewayAPIClient(conn), nil
+}
+
+func (c *clients) Admin(ctx context.Context) (adminpb.AdminAPIClient, error) {
+	conn, err := c.conn(ctx, NameAdmin)
+	if err != nil {
+		return nil, err
+	}
+	return adminpb.NewAdminAPIClient(conn), nil
 }
 
 func (c *clients) StorageProvider(ctx context.Context) (storageprovider.ProviderAPIClient, error) {
