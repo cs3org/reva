@@ -32,13 +32,15 @@ import (
 // once and swap the returned client per test.
 type testResolver struct {
 	service.Clients
-	mu sync.Mutex
-	gw gateway.GatewayAPIClient
+	mu    sync.Mutex
+	gw    gateway.GatewayAPIClient
+	calls int
 }
 
 func (r *testResolver) Gateway(context.Context) (gateway.GatewayAPIClient, error) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
+	r.calls++
 	return r.gw, nil
 }
 
@@ -55,5 +57,12 @@ func stampGateway(gw gateway.GatewayAPIClient) {
 	})
 	globalTestResolver.mu.Lock()
 	globalTestResolver.gw = gw
+	globalTestResolver.calls = 0
 	globalTestResolver.mu.Unlock()
+}
+
+func gatewayCalls() int {
+	globalTestResolver.mu.Lock()
+	defer globalTestResolver.mu.Unlock()
+	return globalTestResolver.calls
 }
