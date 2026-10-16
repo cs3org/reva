@@ -27,11 +27,13 @@ import (
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/cs3org/reva/v3/pkg/appctx"
 	"github.com/cs3org/reva/v3/pkg/errtypes"
+	"github.com/cs3org/reva/v3/pkg/invoke"
 	"github.com/cs3org/reva/v3/pkg/plugin"
 	"github.com/cs3org/reva/v3/pkg/publicshare"
 	"github.com/cs3org/reva/v3/pkg/publicshare/manager/registry"
 	"github.com/cs3org/reva/v3/pkg/rgrpc"
 	"github.com/cs3org/reva/v3/pkg/rgrpc/status"
+	"github.com/cs3org/reva/v3/pkg/stats"
 	"github.com/cs3org/reva/v3/pkg/utils"
 	"github.com/cs3org/reva/v3/pkg/utils/cfg"
 	"google.golang.org/grpc"
@@ -59,6 +61,7 @@ func (c *config) ApplyDefaults() {
 }
 
 type service struct {
+	*invoke.Set
 	conf                  *config
 	sm                    publicshare.Manager
 	allowedPathsForShares []*regexp.Regexp
@@ -106,6 +109,7 @@ func New(ctx context.Context, m map[string]any) (rgrpc.Service, error) {
 	}
 
 	service := &service{
+		Set:                   stats.NewInvokeSet(sm),
 		conf:                  &c,
 		sm:                    sm,
 		allowedPathsForShares: allowedPathsForShares,
