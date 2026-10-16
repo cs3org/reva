@@ -44,6 +44,7 @@ import (
 
 	"github.com/cs3org/reva/v3/pkg/appctx"
 	"github.com/cs3org/reva/v3/pkg/errtypes"
+	"github.com/cs3org/reva/v3/pkg/invoke"
 	"github.com/cs3org/reva/v3/pkg/mime"
 	"github.com/cs3org/reva/v3/pkg/plugin"
 	"github.com/cs3org/reva/v3/pkg/rgrpc"
@@ -114,10 +115,14 @@ type FSWithListRegexSuport interface {
 }
 
 type service struct {
+	*invoke.Set
 	conf               *config
 	storage            storage.FS
 	mountPath, mountID string
 	availableXS        []*provider.ResourceChecksumPriority
+	// lookup resolves a username for the admin invocations; nil means the
+	// gateway.
+	lookup func(ctx context.Context, username string) (*userpb.User, error)
 }
 
 // dataServerURL resolves this storage's data provider from the registry (by
@@ -225,6 +230,7 @@ func New(ctx context.Context, m map[string]any) (rgrpc.Service, error) {
 		mountID:     mountID,
 		availableXS: xsTypes,
 	}
+	service.registerInvocations()
 
 	return service, nil
 }

@@ -101,3 +101,28 @@ type PathWrapper interface {
 	Unwrap(ctx context.Context, rp string) (string, error)
 	Wrap(ctx context.Context, rp string) (string, error)
 }
+
+// QuotaRef names a quota node and the identity whose quota it is.
+type QuotaRef struct {
+	// Path is the quota node, relative to the storage's root; empty means the
+	// storage's default quota node.
+	Path string
+	// UID and GID select the quota: a user quota by uid, or a group quota by
+	// gid. EOS keeps project quotas as group quotas of a well-known gid.
+	UID, GID string
+}
+
+// QuotaInfo is the quota of a node for an identity.
+type QuotaInfo struct {
+	TotalBytes, UsedBytes   uint64
+	TotalInodes, UsedInodes uint64
+}
+
+// QuotaAdmin is the optional interface of a storage that lets administrators
+// read and set quotas directly, independently of the user of the context. It
+// is not part of FS: a user never sets a quota, and reads their own through
+// GetQuota.
+type QuotaAdmin interface {
+	GetQuotaFor(ctx context.Context, q QuotaRef) (*QuotaInfo, error)
+	SetQuotaFor(ctx context.Context, q QuotaRef, maxBytes, maxInodes uint64) error
+}

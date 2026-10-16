@@ -451,6 +451,59 @@ reva admin invoke spacesregistry flush_cache
 
 Only the `sql` driver implements the catalogue surface these need.
 
+## Quotas
+
+The `storageprovider` reads and sets the quotas of the spaces it serves, through
+the optional `storage.QuotaAdmin` interface of its driver (the EOS driver
+implements it). A provider only knows its own mount, so the caller addresses the
+instance serving the path; each instance advertises `mount_id` and `mount_path`
+in its registry metadata (`reva admin services -v storageprovider`) and answers
+the `mount` invocation. Catalog:
+
+```
+mount
+quota_get   path= [style=gid99|uid] [user=]
+quota_set   path= max_bytes= max_inodes= [style=gid99|uid] [user=]
+```
+
+`style=gid99` (the default) is the project quota set on the path itself;
+`style=uid` is the quota of `user` on the path, or on the storage's quota node
+when the path is the mount. Bytes and inodes are what EOS stores: a tool that
+shows logical volumes applies the replica factor itself. A path served by
+another instance fails loudly rather than silently touching the wrong storage.
+
+```
+reva admin invoke host:14503/storageprovider quota_get path=/eos/project/c/cernbox
+reva admin invoke host:14503/storageprovider quota_set path=/eos/project/c/cernbox max_bytes=4000000000000 max_inodes=5000000
+```
+
+## Routing
+
+The `storageregistry` lists its providers and resolves paths on any driver, and
+administers the routing table of the `dynamic` driver, which every instance
+reads once at start-up into an in-memory tree:
+
+```
+providers
+resolve        path=
+routes
+route_add      path= mount_id=      (one instance, then route_reload the others)
+route_remove   path=                (one instance, then route_reload the others)
+route_reload
+```
+
+`route_add` and `route_remove` change the table and reload the instance they
+ran on; `route_reload` is idempotent and safe to fan out by service name, so
+the usual sequence is one node for the change, the service for the reload:
+
+```
+reva admin invoke host:9142/storageregistry route_add path=/eos/user/z mount_id=eoshome-z
+reva admin invoke storageregistry route_reload
+```
+
+A route to a mount that is not in the registry's `rules` is refused, as it
+would be skipped at load time anyway.
+
 ## Adding an invocation to a service (for developers)
 
 A service exposes admin operations by building an [`invoke.Set`](../../../../pkg/invoke/set.go)

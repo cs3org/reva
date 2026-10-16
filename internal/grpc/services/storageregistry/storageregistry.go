@@ -24,6 +24,7 @@ import (
 	registrypb "github.com/cs3org/go-cs3apis/cs3/storage/registry/v1beta1"
 	"github.com/cs3org/reva/v3/pkg/appctx"
 	"github.com/cs3org/reva/v3/pkg/errtypes"
+	"github.com/cs3org/reva/v3/pkg/invoke"
 	"github.com/cs3org/reva/v3/pkg/plugin"
 	"github.com/cs3org/reva/v3/pkg/rgrpc"
 	"github.com/cs3org/reva/v3/pkg/rgrpc/status"
@@ -44,7 +45,9 @@ func init() {
 }
 
 type service struct {
-	reg storage.Registry
+	*invoke.Set
+	conf *config
+	reg  storage.Registry
 }
 
 func (s *service) Close() error {
@@ -83,8 +86,10 @@ func New(ctx context.Context, m map[string]any) (rgrpc.Service, error) {
 	}
 
 	service := &service{
-		reg: reg,
+		conf: &c,
+		reg:  reg,
 	}
+	service.registerInvocations()
 
 	return service, nil
 }

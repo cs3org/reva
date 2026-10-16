@@ -24,6 +24,7 @@ import (
 	"database/sql"
 	"fmt"
 	"strings"
+	"sync"
 
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	registrypb "github.com/cs3org/go-cs3apis/cs3/storage/registry/v1beta1"
@@ -50,8 +51,17 @@ type dynamic struct {
 	log     *zerolog.Logger
 	aliases map[string]string
 	r       map[string]string
-	rt      *routingtree.RoutingTree
 	ur      *rewriter.UserRewriter
+	// db is the routing table; rt is its in-memory tree, rebuilt by Reload
+	// and guarded by mu.
+	db *sql.DB
+	mu sync.RWMutex
+	rt *routingtree.RoutingTree
+}
+
+// openDB opens the routing database; a variable so tests can substitute it.
+var openDB = func(dsn string) (*sql.DB, error) {
+	return sql.Open("mysql", dsn)
 }
 
 type Config struct {
@@ -78,7 +88,11 @@ func New(ctx context.Context, m map[string]any) (storage.Registry, error) {
 	log := appctx.GetLogger(ctx)
 	annotatedLog := log.With().Str("storageregistry", "dynamic").Logger()
 
-	rt, err := initRoutingTree(ctx, c.DBUsername, c.DBPassword, c.DBHost, c.DBPort, c.DBName, c.Rules)
+	db, err := openDB(fmt.Sprintf("%s:%s@tcp(%s:%d)/%s", c.DBUsername, c.DBPassword, c.DBHost, c.DBPort, c.DBName))
+	if err != nil {
+		return nil, errors.Wrap(err, "error opening sql connection")
+	}
+	rt, err := loadRoutingTree(ctx, db, c.Rules)
 	if err != nil {
 		return nil, errors.Wrap(err, "error initializing routing tree")
 	}
@@ -94,46 +108,63 @@ func New(ctx context.Context, m map[string]any) (storage.Registry, error) {
 		ur: &rewriter.UserRewriter{
 			Tpls: c.Rewrites,
 		},
+		db: db,
 	}
 
 	return d, nil
 }
 
-func initRoutingTree(ctx context.Context, dbUsername, dbPassword, dbHost string, dbPort int, dbName string, rules map[string]string) (*routingtree.RoutingTree, error) {
+// loadRoutingTree reads the routing table and builds the tree of the routes
+// whose mount is configured in rules; the others are logged and skipped.
+func loadRoutingTree(ctx context.Context, db *sql.DB, rules map[string]string) (*routingtree.RoutingTree, error) {
 	log := appctx.GetLogger(ctx).With().Str("storageregistry", "dynamic").Logger()
 
-	db, err := sql.Open("mysql", fmt.Sprintf("%s:%s@tcp(%s:%d)/%s", dbUsername, dbPassword, dbHost, dbPort, dbName))
+	routes, err := readRoutes(ctx, db)
 	if err != nil {
-		return nil, errors.Wrap(err, "error opening sql connection")
+		return nil, err
 	}
 
-	results, err := db.Query("SELECT path, mount_id FROM routing")
-	if err != nil {
-		return nil, errors.Wrap(err, "error getting routing table from db")
-	}
-
-	rs := make(map[string]string)
-
+	rs := make(map[string]string, len(routes))
 	missingRules := []string{}
-
-	for results.Next() {
-		var p, m string
-		err = results.Scan(&p, &m)
-		if err != nil {
-			return nil, errors.Wrap(err, "error scanning rows from db")
-		}
-		if _, ok := rules[m]; !ok {
-			missingRules = append(missingRules, m)
+	for _, r := range routes {
+		if _, ok := rules[r.MountID]; !ok {
+			missingRules = append(missingRules, r.Path+" => "+r.MountID)
 		} else {
-			rs[p] = m
+			rs[r.Path] = r.MountID
 		}
 	}
 
 	if len(missingRules) != 0 {
-		log.Error().Msgf("missing routes for: %s", strings.Join(missingRules, ", "))
+		log.Error().Msgf("routes without a configured mount, skipped: %s", strings.Join(missingRules, ", "))
 	}
 
 	return routingtree.New(rs), nil
+}
+
+// readRoutes reads the routing table, by path.
+func readRoutes(ctx context.Context, db *sql.DB) ([]Route, error) {
+	results, err := db.QueryContext(ctx, "SELECT path, mount_id FROM routing ORDER BY path")
+	if err != nil {
+		return nil, errors.Wrap(err, "error getting routing table from db")
+	}
+	defer results.Close()
+
+	var routes []Route
+	for results.Next() {
+		var r Route
+		if err := results.Scan(&r.Path, &r.MountID); err != nil {
+			return nil, errors.Wrap(err, "error scanning rows from db")
+		}
+		routes = append(routes, r)
+	}
+	return routes, results.Err()
+}
+
+// tree is the current routing tree.
+func (d *dynamic) tree() *routingtree.RoutingTree {
+	d.mu.RLock()
+	defer d.mu.RUnlock()
+	return d.rt
 }
 
 func initAliases(aliasesConfig map[string]string) map[string]string {
@@ -165,7 +196,7 @@ func (d *dynamic) ListProviders(ctx context.Context) ([]*registrypb.ProviderInfo
 // GetHome returns the storage provider for the home path.
 func (d *dynamic) GetHome(ctx context.Context) (*registrypb.ProviderInfo, error) {
 	providerAlias := d.ur.GetAlias(ctx, d.c.HomePath)
-	p, err := d.rt.Resolve(providerAlias)
+	p, err := d.tree().Resolve(providerAlias)
 	if err != nil {
 		return nil, errors.New("failed to get home provider")
 	}
@@ -207,7 +238,7 @@ func (d *dynamic) FindProviders(ctx context.Context, ref *provider.Reference) ([
 	}
 
 	providerAlias := d.ur.GetAlias(ctx, ref.Path)
-	ps, err := d.rt.Resolve(providerAlias)
+	ps, err := d.tree().Resolve(providerAlias)
 	if err != nil {
 		return nil, errtypes.NotFound("storage provider not found for ref " + ref.String())
 	}
