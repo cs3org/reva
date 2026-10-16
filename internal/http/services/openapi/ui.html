@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>{{.Title}} API</title>
+    <link rel="stylesheet" href="{{.Stylesheet}}" />
+    <style>
+      body { margin: 0; background: #fafafa; }
+      .swagger-ui .topbar { display: none; }
+      noscript { display: block; padding: 2rem; font-family: system-ui, sans-serif; }
+    </style>
+  </head>
+  <body>
+    <noscript>
+      This page needs JavaScript to render. The document itself is at
+      <a href="{{.Spec}}">{{.Spec}}</a>.
+    </noscript>
+    <div id="ui"></div>
+    <script src="{{.Bundle}}" crossorigin="anonymous"></script>
+    <script>
+      window.onload = function () {
+        if (typeof SwaggerUIBundle === "undefined") {
+          document.getElementById("ui").innerHTML =
+            '<p style="padding:2rem;font-family:system-ui,sans-serif">' +
+            "The viewer could not be loaded. Point <code>ui_bundle</code> at a " +
+            'local copy of swagger-ui-dist, or read <a href="{{.Spec}}">{{.Spec}}</a> directly.</p>';
+          return;
+        }
+        SwaggerUIBundle({
+          url: "{{.Spec}}",
+          dom_id: "#ui",
+          deepLinking: true,
+          docExpansion: "none",
+          filter: true,
+          tryItOutEnabled: true,
+        });
+      };
+    </script>
+  </body>
+</html>
