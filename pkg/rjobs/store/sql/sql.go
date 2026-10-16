@@ -124,7 +124,7 @@ func (s *store) PutProgress(ctx context.Context, id rjobs.RunID, p rjobs.Progres
 }
 
 // terminalStates are the states a run never leaves.
-var terminalStates = []string{string(rjobs.StateSucceeded), string(rjobs.StateCancelled)}
+var terminalStates = []string{string(rjobs.StateSucceeded), string(rjobs.StateCancelled), string(rjobs.StateAborted)}
 
 func (s *store) Get(ctx context.Context, id rjobs.RunID) (rjobs.Status, error) {
 	var row model.Run

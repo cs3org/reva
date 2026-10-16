@@ -378,6 +378,12 @@ func (s *store) Claim(ctx context.Context) (rjobs.Run, error) {
 				continue
 			}
 
+			// the attempt counts the deliveries of the message, so a job can
+			// escalate its own backoff.
+			if meta, err := msg.Metadata(); err == nil {
+				run.Attempt = int(meta.NumDelivered)
+			}
+
 			s.track(run.ID, msg)
 			return run, nil
 		}
