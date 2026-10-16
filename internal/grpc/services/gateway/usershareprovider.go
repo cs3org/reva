@@ -22,7 +22,9 @@ import (
 	"context"
 	"fmt"
 	"path"
+	"slices"
 	"strings"
+	"time"
 
 	"github.com/alitto/pond/v2"
 	gateway "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
@@ -35,6 +37,7 @@ import (
 	"github.com/cs3org/reva/v3/pkg/service"
 	revashare "github.com/cs3org/reva/v3/pkg/share"
 	"github.com/cs3org/reva/v3/pkg/sharehierarchy"
+	"github.com/cs3org/reva/v3/pkg/utils"
 	"github.com/cs3org/reva/v3/pkg/utils/resourceid"
 
 	"github.com/pkg/errors"
@@ -198,8 +201,6 @@ func (s *svc) RemoveShare(ctx context.Context, req *collaboration.RemoveShareReq
 		}, nil
 	}
 
-	checker := &sharehierarchy.Checker{GetPath: s.getPathForResourceId}
-
 	if share.ResourceId.SpaceId == "" {
 		if stat, statErr := s.Stat(ctx, &provider.StatRequest{Ref: &provider.Reference{ResourceId: share.ResourceId}}); statErr == nil && stat.Status.Code == rpc.Code_CODE_OK && stat.Info.Id.SpaceId != "" {
 			share.ResourceId.SpaceId = stat.Info.Id.SpaceId
@@ -209,34 +210,13 @@ func (s *svc) RemoveShare(ctx context.Context, req *collaboration.RemoveShareReq
 		}
 	}
 
-	// Resolve parent / child shares so we can reapply the hierarchy (ADR-GENERAL-005).
-	existingShares, listErr := s.listSharesForGranteeInSpace(ctx, c, share.ResourceId.SpaceId, share.Grantee)
-	if listErr != nil {
-		return &collaboration.RemoveShareResponse{
-			Status: status.NewStatusFromErrType(ctx, "error listing shares for hierarchy reapply", listErr),
-		}, nil
-	}
-	reapply := checker.GrantsToReapplyAfterRemove(ctx, share.Id.OpaqueId, share.ResourceId, existingShares)
-
 	if s.c.CommitShareToStorageGrant {
-		removeGrantStatus, err := s.removeGrant(ctx, share.ResourceId, share.Grantee, share.Permissions.Permissions)
-		if err != nil {
-			return nil, errors.Wrap(err, "gateway: error removing grant from storage")
-		}
-		if removeGrantStatus.Code != rpc.Code_CODE_OK {
-			return &collaboration.RemoveShareResponse{Status: removeGrantStatus}, nil
-		}
-
-		// Re-apply the closest parent's permissions to the now-unshared node (if any).
-		if reapply.ParentGrant != nil {
-			if _, err := s.addGrant(ctx, share.ResourceId, share.Grantee, reapply.ParentGrant.Permissions.Permissions); err != nil {
-				log.Error().Err(err).Str("shareId", share.Id.OpaqueId).Msg("error reapplying parent grant after RemoveShare")
+		if revokeStatus, err := s.revokeGrant(ctx, c, share); err != nil || revokeStatus.Code != rpc.Code_CODE_OK {
+			if err != nil {
+				return nil, err
 			}
+			return &collaboration.RemoveShareResponse{Status: revokeStatus}, nil
 		}
-
-		// Re-apply descendant grants shallowest-first so child permissions are not overridden.
-		// (and the results are already pre-sorted to be shallowest-first)
-		s.reapplyChildGrants(ctx, reapply.ChildGrants)
 	}
 
 	res, err := c.RemoveShare(ctx, req)
@@ -393,9 +373,20 @@ func (s *svc) UpdateShare(ctx context.Context, req *collaboration.UpdateShareReq
 	}
 
 	_, isPermUpdate := req.Field.GetField().(*collaboration.UpdateShareRequest_UpdateField_Permissions)
-	newPerms := req.Field.GetPermissions().GetPermissions()
+	_, isExpUpdate := req.Field.GetField().(*collaboration.UpdateShareRequest_UpdateField_Expiration)
+	wasExpired := isExpired(currentShare.Expiration)
+	willBeExpired := isExpUpdate && isExpired(req.Field.GetExpiration())
 
-	if isPermUpdate && currentShare.ResourceId.SpaceId == "" {
+	// An expired share has no storage grant: a permission update on it only changes the db,
+	// and the grant comes back (through the hierarchy check) when the expiration moves to the future.
+	regrant := (isPermUpdate && !wasExpired) || (isExpUpdate && wasExpired && !willBeExpired)
+	revoke := isExpUpdate && !wasExpired && willBeExpired
+	newPerms := currentShare.Permissions.Permissions
+	if isPermUpdate {
+		newPerms = req.Field.GetPermissions().GetPermissions()
+	}
+
+	if (regrant || revoke) && currentShare.ResourceId.SpaceId == "" {
 		if stat, statErr := s.Stat(ctx, &provider.StatRequest{Ref: &provider.Reference{ResourceId: currentShare.ResourceId}}); statErr == nil && stat.Status.Code == rpc.Code_CODE_OK && stat.Info.Id.SpaceId != "" {
 			currentShare.ResourceId.SpaceId = stat.Info.Id.SpaceId
 			appctx.GetLogger(ctx).Debug().Str("spaceId", currentShare.ResourceId.SpaceId).Msg("sharehierarchy: populated missing spaceId for UpdateShare via stat")
@@ -404,11 +395,11 @@ func (s *svc) UpdateShare(ctx context.Context, req *collaboration.UpdateShareReq
 		}
 	}
 
-	// Hierarchy check (ADR-GENERAL-005) — only for permission updates when SpaceId is available.
+	// Hierarchy check (ADR-GENERAL-005) — only when the grant is (re)applied and SpaceId is available.
 	// Returns early on conflict; on success, populates toDelete/toReapply for use below.
 	checker := &sharehierarchy.Checker{GetPath: s.getPathForResourceId}
 	var toDelete, toReapply []*collaboration.Share
-	if isPermUpdate && currentShare.ResourceId.SpaceId != "" {
+	if regrant && currentShare.ResourceId.SpaceId != "" {
 		force := parseForce(req.Opaque)
 
 		existingShares, listErr := s.listSharesForGranteeInSpace(ctx, c, currentShare.ResourceId.SpaceId, currentShare.Grantee)
@@ -443,10 +434,25 @@ func (s *svc) UpdateShare(ctx context.Context, req *collaboration.UpdateShareReq
 		toReapply = sharehierarchy.Shares(result.ToReapply)
 	}
 
-	if isPermUpdate && s.c.CommitShareToStorageGrant {
-		if grantStatus, err := s.updateGrant(ctx, currentShare.ResourceId, currentShare.Grantee, newPerms); err != nil || grantStatus.Code != rpc.Code_CODE_OK {
+	if revoke && s.c.CommitShareToStorageGrant {
+		if revokeStatus, err := s.revokeGrant(ctx, c, currentShare); err != nil || revokeStatus.Code != rpc.Code_CODE_OK {
 			if err != nil {
-				return nil, errors.Wrap(err, "gateway: error calling updateGrant")
+				return nil, err
+			}
+			return &collaboration.UpdateShareResponse{Status: revokeStatus}, nil
+		}
+	}
+
+	if regrant && s.c.CommitShareToStorageGrant {
+		var grantStatus *rpc.Status
+		if isPermUpdate {
+			grantStatus, err = s.updateGrant(ctx, currentShare.ResourceId, currentShare.Grantee, newPerms)
+		} else {
+			grantStatus, err = s.applyGrant(ctx, currentShare.ResourceId, currentShare.Grantee, newPerms)
+		}
+		if err != nil || grantStatus.Code != rpc.Code_CODE_OK {
+			if err != nil {
+				return nil, errors.Wrap(err, "gateway: error committing grant to storage")
 			}
 			return &collaboration.UpdateShareResponse{Status: grantStatus}, nil
 		}
@@ -680,7 +686,51 @@ func (s *svc) listSharesForGranteeInSpace(ctx context.Context, c collaboration.C
 	if res.Status.Code != rpc.Code_CODE_OK {
 		return nil, status.NewErrtypeFromStatus(res.Status)
 	}
-	return res.Shares, nil
+	// Expired shares hold no storage grant, so they take no part in the hierarchy.
+	return slices.DeleteFunc(res.Shares, func(sh *collaboration.Share) bool {
+		return isExpired(sh.Expiration)
+	}), nil
+}
+
+// isExpired reports whether exp lies in the past. An empty timestamp means no expiration.
+func isExpired(exp *typesv1beta1.Timestamp) bool {
+	return exp.GetSeconds() != 0 && utils.TSToTime(exp).Before(time.Now())
+}
+
+// revokeGrant removes the storage grant of share, then re-applies the grants of the
+// surrounding shares so the grantee keeps the access they give (ADR-GENERAL-005).
+func (s *svc) revokeGrant(ctx context.Context, c collaboration.CollaborationAPIClient, share *collaboration.Share) (*rpc.Status, error) {
+	log := appctx.GetLogger(ctx)
+	checker := &sharehierarchy.Checker{GetPath: s.getPathForResourceId}
+
+	// Resolve parent / child shares so we can reapply the hierarchy (ADR-GENERAL-005).
+	existingShares, listErr := s.listSharesForGranteeInSpace(ctx, c, share.ResourceId.SpaceId, share.Grantee)
+	if listErr != nil {
+		return status.NewStatusFromErrType(ctx, "error listing shares for hierarchy reapply", listErr), nil
+	}
+	// The listing skips expired shares, but the removed share must be present to resolve its path.
+	existingShares = append(filterOutShare(existingShares, share.Id.OpaqueId), share)
+	reapply := checker.GrantsToReapplyAfterRemove(ctx, share.Id.OpaqueId, share.ResourceId, existingShares)
+
+	removeGrantStatus, err := s.removeGrant(ctx, share.ResourceId, share.Grantee, share.Permissions.Permissions)
+	if err != nil {
+		return nil, errors.Wrap(err, "gateway: error removing grant from storage")
+	}
+	if removeGrantStatus.Code != rpc.Code_CODE_OK {
+		return removeGrantStatus, nil
+	}
+
+	// Re-apply the closest parent's permissions to the now-unshared node (if any).
+	if reapply.ParentGrant != nil {
+		if _, err := s.addGrant(ctx, share.ResourceId, share.Grantee, reapply.ParentGrant.Permissions.Permissions); err != nil {
+			log.Error().Err(err).Str("shareId", share.Id.OpaqueId).Msg("error reapplying parent grant after revoking grant")
+		}
+	}
+
+	// Re-apply descendant grants shallowest-first so child permissions are not overridden.
+	// (and the results are already pre-sorted to be shallowest-first)
+	s.reapplyChildGrants(ctx, reapply.ChildGrants)
+	return status.NewOK(ctx), nil
 }
 
 // applyGrant sets an ACL on EOS for the given resource, calling denyGrant for empty permissions
