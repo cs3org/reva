@@ -30,7 +30,7 @@ import (
 	"github.com/cs3org/reva/v3/internal/http/services/opencloudmesh/ocmd"
 )
 
-func TestOpenInAppPublicOnlyRejectsBeforeContact(t *testing.T) {
+func TestWebappLaunchPublicOnlyRejectsBeforeContact(t *testing.T) {
 	ln, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
 		t.Fatal(err)
@@ -119,7 +119,7 @@ func TestOpenInAppPublicOnlyRejectsBeforeContact(t *testing.T) {
 			}, nil)
 			req, logs := newLaunchRequest(t, "/ocm/share-1")
 			rec := httptest.NewRecorder()
-			h.OpenInApp(rec, req)
+			h.WebappLaunch(rec, req)
 
 			if rec.Code == http.StatusOK {
 				t.Fatalf("non-public launch succeeded: %s", rec.Body.String())
@@ -140,7 +140,7 @@ func TestOpenInAppPublicOnlyRejectsBeforeContact(t *testing.T) {
 	}
 }
 
-func TestOpenInAppPublicDiscoveryPrivateToken(t *testing.T) {
+func TestWebappLaunchPublicDiscoveryPrivateToken(t *testing.T) {
 	ln, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
 		t.Fatal(err)
@@ -191,31 +191,20 @@ func TestOpenInAppPublicDiscoveryPrivateToken(t *testing.T) {
 
 	req, logs := newLaunchRequest(t, "/ocm/share-1")
 	rec := httptest.NewRecorder()
-	h.OpenInApp(rec, req)
+	h.WebappLaunch(rec, req)
 
-	if rec.Code == http.StatusOK {
-		t.Fatalf("private token hop succeeded: %s", rec.Body.String())
-	}
 	// The private token endpoint is non-public, so the public-only dialer
 	// refuses the exchange before any connection. The launch error is
-	// redacted to a generic "launch failed" body; the dialer's non-public
+	// redacted to a generic "launch failed"; the dialer's non-public
 	// message never reaches the response.
-	if rec.Code != http.StatusInternalServerError {
-		t.Fatalf("status %d body %s", rec.Code, rec.Body.String())
-	}
-	if !strings.Contains(rec.Body.String(), "launch failed") {
-		t.Fatalf("body %s", rec.Body.String())
-	}
-	if strings.Contains(rec.Body.String(), "app_url") || strings.Contains(rec.Body.String(), "access_token") {
-		t.Fatalf("launch payload leaked: %s", rec.Body.String())
-	}
+	assertLaunchRefused(t, rec, logs.String(), http.StatusInternalServerError, "launch failed")
 	if accepted.Load() != 0 {
 		t.Fatalf("token endpoint accepted %d connections", accepted.Load())
 	}
 	assertNotLeaked(t, rec.Body.String(), logs.String(), launchSecret, launchToken)
 }
 
-func TestOpenInAppPublicOnlyIgnoresProxy(t *testing.T) {
+func TestWebappLaunchPublicOnlyIgnoresProxy(t *testing.T) {
 	var hits atomic.Int32
 	proxy := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		hits.Add(1)
@@ -241,7 +230,7 @@ func TestOpenInAppPublicOnlyIgnoresProxy(t *testing.T) {
 	}, nil)
 	req, logs := newLaunchRequest(t, "/ocm/share-1")
 	rec := httptest.NewRecorder()
-	h.OpenInApp(rec, req)
+	h.WebappLaunch(rec, req)
 	if rec.Code == http.StatusOK {
 		t.Fatal("proxied launch succeeded")
 	}

@@ -54,8 +54,9 @@ provider_domain = "receiver.example"
 
 Received-share discovery, WebDAV access and token exchange use the configured
 public-only transports described in
-[OCM network policy](../ocm-network-policy/). ScienceMesh `/open-in-app` uses
-its own service configuration for both sender discovery and token exchange.
+[OCM network policy](../ocm-network-policy/). ScienceMesh `/webapp-launch`
+uses its own service configuration for both sender discovery and token
+exchange.
 Private federation requires the same intended `allowed_federation_cidrs` on
 each participating receiver service and each `ocmreceived` driver instance;
 configuring one does not configure the others.
@@ -67,19 +68,21 @@ ScienceMesh keeps loopback and environment proxy disabled. Receiver OCM and
 the dial guard must enforce the destination CIDR. A selected proxy changes
 the connection the guard sees and is not proof of target-range enforcement.
 
-The browser opens the returned application URL itself. Server network policy
-applies to Reva's discovery, token exchange and WebDAV requests; it is not a
-browser application-origin allowlist. Open-in-app still requires HTTPS for
-the application URI and token endpoint.
+The browser posts the launcher form to the application URL itself. Server
+network policy applies to Reva's discovery, token exchange and WebDAV
+requests; it is not a browser application-origin allowlist. Launch still
+requires HTTPS for the application URI and token endpoint.
 
 ## Served launcher page
 
-`POST /sciencemesh/webapp-launch` is a protected route. It takes `file` and an
-optional `expired_session_redirect_uri`, runs the same validation, stored
-permission check, token exchange and path join as `/open-in-app`, and returns
-an HTML page that submits `access_token` to the validated app URL. The server
-keeps no handle or store. `expired_session_redirect_uri` is forwarded only when
-its origin is exactly `https://<provider_domain>`; any other value is dropped.
+`POST /sciencemesh/webapp-launch` is a protected route and the only received
+webapp launch entry point. It takes `file` and an optional
+`expired_session_redirect_uri`, validates the stored offer and its
+permissions, exchanges the shared secret for an access token, joins the file
+path onto the app URL, and returns an HTML page that submits `access_token`
+to the validated app URL. The server keeps no handle or store.
+`expired_session_redirect_uri` is forwarded only when its origin is exactly
+`https://<provider_domain>`; any other value is dropped.
 
 Operator notes:
 
@@ -212,7 +215,7 @@ The webapp URI that is stored must already be absolute http or https, with a
 hostname and no userinfo. Relative, network-path, and malformed webapp URIs
 are rejected. They are not resolved against the sender. WebDAV relative
 paths are unchanged. Accepting an absolute http URI at ingest does not
-change launch: open-in-app still requires https for the application URI and
+change launch: the launcher still requires https for the application URI and
 the token endpoint.
 
 Empty and padded `appName` values are stored as received. The only receive

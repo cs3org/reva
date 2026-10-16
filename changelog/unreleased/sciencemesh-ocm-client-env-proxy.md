@@ -1,7 +1,7 @@
 Enhancement: opt ScienceMesh clients into the env proxy
 
 ScienceMesh WAYF listed-provider discovery, request-supplied `/discover`,
-and open-in-app discovery and token exchange honor `HTTP_PROXY`,
+and webapp launch discovery and token exchange honor `HTTP_PROXY`,
 `HTTPS_PROXY`, and `NO_PROXY` when `ocm_client_use_env_proxy` is set on
 `[http.services.sciencemesh]` (default false). The open provider
 authorizer accepts the same key on

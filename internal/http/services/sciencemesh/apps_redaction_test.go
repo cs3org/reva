@@ -26,7 +26,7 @@ import (
 	"testing"
 )
 
-func TestOpenInAppSensitiveRemoteErrorIsRedacted(t *testing.T) {
+func TestWebappLaunchSensitiveRemoteErrorIsRedacted(t *testing.T) {
 	obs := &observeClient{
 		token:       launchToken,
 		exchangeErr: fmt.Errorf("rejected %s %s", launchSecret, launchToken),
@@ -40,14 +40,14 @@ func TestOpenInAppSensitiveRemoteErrorIsRedacted(t *testing.T) {
 	h := newTestHandler(t, &fakeReceivedGateway{resp: okShareResponse(share)}, obs)
 	req, logs := newLaunchRequest(t, "/ocm/share-1")
 	rec := httptest.NewRecorder()
-	h.OpenInApp(rec, req)
+	h.WebappLaunch(rec, req)
 	if rec.Code == http.StatusOK {
 		t.Fatal("sensitive error committed HTTP 200")
 	}
 	assertNotLeaked(t, rec.Body.String(), logs.String(), launchSecret, launchToken)
 }
 
-func TestOpenInAppCanceledContext(t *testing.T) {
+func TestWebappLaunchCanceledContext(t *testing.T) {
 	obs := &observeClient{token: launchToken}
 	share := receivedWebappShare(
 		"https://dav.example/dav",
@@ -56,15 +56,13 @@ func TestOpenInAppCanceledContext(t *testing.T) {
 		[]string{"must-exchange-token"},
 	)
 	h := newTestHandler(t, &fakeReceivedGateway{resp: okShareResponse(share)}, obs)
-	req, _ := newLaunchRequest(t, "/ocm/share-1")
+	req, logs := newLaunchRequest(t, "/ocm/share-1")
 	ctx, cancel := context.WithCancel(req.Context())
 	cancel()
 	req = req.WithContext(ctx)
 	rec := httptest.NewRecorder()
-	h.OpenInApp(rec, req)
-	if rec.Code == http.StatusOK {
-		t.Fatal("canceled launch succeeded")
-	}
+	h.WebappLaunch(rec, req)
+	assertLaunchRefused(t, rec, logs.String(), http.StatusGatewayTimeout, "context canceled")
 	if obs.discoverCalls != 1 || obs.exchangeCalls != 0 {
 		t.Fatalf("discover %d exchange %d", obs.discoverCalls, obs.exchangeCalls)
 	}

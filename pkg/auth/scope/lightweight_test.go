@@ -38,7 +38,7 @@ func TestLightweightScopeHTTPPaths(t *testing.T) {
 		want bool
 	}{
 		{"/sciencemesh/webapp-launch", true},
-		{"/sciencemesh/open-in-app", true},
+		{"/sciencemesh/open-in-app", false},
 		{"/sciencemesh/list-providers", true},
 		{"/sciencemesh/unknown", false},
 		{"/ocs/v2.php/apps/files_sharing/api/v1/sharees", false},
