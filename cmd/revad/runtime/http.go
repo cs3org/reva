@@ -19,12 +19,14 @@
 package runtime
 
 import (
+	"context"
 	"sort"
 
 	"github.com/cs3org/reva/v3/internal/http/interceptors/appctx"
-	"github.com/cs3org/reva/v3/internal/http/interceptors/auth"
+	authmw "github.com/cs3org/reva/v3/internal/http/interceptors/auth"
 	"github.com/cs3org/reva/v3/internal/http/interceptors/log"
 	"github.com/cs3org/reva/v3/internal/http/interceptors/trace"
+	"github.com/cs3org/reva/v3/pkg/auth"
 	"github.com/cs3org/reva/v3/pkg/rhttp/global"
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog"
@@ -61,7 +63,7 @@ func initHTTPMiddlewares(conf map[string]map[string]any, logger *zerolog.Logger)
 		return triples[i].Priority > triples[j].Priority
 	})
 
-	authMiddle, err := auth.New(conf["auth"])
+	authMiddle, err := authmw.New(conf["auth"])
 	if err != nil {
 		return nil, errors.Wrap(err, "rhttp: error creating auth middleware")
 	}
@@ -78,4 +80,18 @@ func initHTTPMiddlewares(conf map[string]map[string]any, logger *zerolog.Logger)
 	}
 
 	return middlewares, nil
+}
+
+// withAuthSchemes carries how a server authenticates into the context its
+// services are built with.
+//
+// It is the same configuration the auth middleware reads, resolved a second
+// time rather than restated: a service that publishes the server's API, such
+// as openapi, then describes what the middleware actually accepts.
+func withAuthSchemes(ctx context.Context, conf map[string]map[string]any) (context.Context, error) {
+	schemes, err := authmw.Schemes(conf["auth"])
+	if err != nil {
+		return nil, errors.Wrap(err, "rhttp: error describing the authentication")
+	}
+	return auth.WithSchemes(ctx, schemes), nil
 }

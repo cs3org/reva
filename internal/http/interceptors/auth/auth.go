@@ -87,6 +87,32 @@ func parseConfig(m map[string]any) (*config, error) {
 	return c, nil
 }
 
+// applyDefaults fills in the chains the middleware falls back to when the
+// configuration leaves them out. Schemes resolves a configuration the same
+// way, so what a deployment tells its clients cannot drift from what it
+// accepts.
+func (c *config) applyDefaults() {
+	if len(c.TokenStrategyChain) == 0 {
+		c.TokenStrategyChain = []string{"header"}
+	}
+
+	if c.TokenWriter == "" {
+		c.TokenWriter = "header"
+	}
+
+	if c.TokenManager == "" {
+		c.TokenManager = "jwt"
+	}
+
+	if len(c.CredentialChain) == 0 {
+		c.CredentialChain = []string{"basic", "bearer", "publicshares"}
+	}
+
+	if c.CredentialsByUserAgent == nil {
+		c.CredentialsByUserAgent = map[string]string{}
+	}
+}
+
 // New returns a new auth middleware.
 func New(m map[string]any) (global.Middleware, error) {
 	conf, err := parseConfig(m)
@@ -95,27 +121,7 @@ func New(m map[string]any) (global.Middleware, error) {
 	}
 
 	conf.GatewaySvc = sharedconf.GetGatewaySVC(conf.GatewaySvc)
-
-	// set defaults
-	if len(conf.TokenStrategyChain) == 0 {
-		conf.TokenStrategyChain = []string{"header"}
-	}
-
-	if conf.TokenWriter == "" {
-		conf.TokenWriter = "header"
-	}
-
-	if conf.TokenManager == "" {
-		conf.TokenManager = "jwt"
-	}
-
-	if len(conf.CredentialChain) == 0 {
-		conf.CredentialChain = []string{"basic", "bearer", "publicshares"}
-	}
-
-	if conf.CredentialsByUserAgent == nil {
-		conf.CredentialsByUserAgent = map[string]string{}
-	}
+	conf.applyDefaults()
 
 	userGroupsCache = gcache.New(1000000).LFU().Build()
 

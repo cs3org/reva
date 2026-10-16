@@ -26,6 +26,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/cs3org/reva/v3/pkg/auth"
 	"github.com/cs3org/reva/v3/pkg/rhttp/router"
 )
 
@@ -34,9 +35,13 @@ var noop = http.HandlerFunc(func(http.ResponseWriter, *http.Request) {})
 // serve builds a router holding the service plus a service of its own, which
 // is what the document should describe.
 func serve(t *testing.T, m map[string]any) *router.Router {
+	return serveWith(t, context.Background(), m)
+}
+
+func serveWith(t *testing.T, ctx context.Context, m map[string]any) *router.Router {
 	t.Helper()
 
-	s, err := New(context.Background(), m)
+	s, err := New(ctx, m)
 	if err != nil {
 		t.Fatalf("New returned error: %v", err)
 	}
@@ -137,5 +142,40 @@ func TestDocumentationIsProtectedByDefault(t *testing.T) {
 	rt, _ := public.Match(httptest.NewRequest(http.MethodGet, "/openapi.json", nil))
 	if !rt.Unprotected {
 		t.Error("public = true should open the documentation")
+	}
+}
+
+// How the server authenticates is settled by its auth middleware, so the
+// service is told rather than configured with it a second time.
+func TestAuthenticationComesFromTheServer(t *testing.T) {
+	ctx := auth.WithSchemes(context.Background(), []auth.Scheme{
+		{Name: "appauth", Kind: auth.SchemeBasic, Description: "An app password."},
+		{Name: "revaToken", Kind: auth.SchemeHeader, Param: "x-access-token"},
+	})
+	r := serveWith(t, ctx, map[string]any{"public": true})
+
+	var doc struct {
+		Components struct {
+			SecuritySchemes map[string]struct {
+				Type   string `json:"type"`
+				Scheme string `json:"scheme"`
+				In     string `json:"in"`
+				Name   string `json:"name"`
+			} `json:"securitySchemes"`
+		} `json:"components"`
+	}
+	if err := json.Unmarshal(get(r, "/openapi.json").Body.Bytes(), &doc); err != nil {
+		t.Fatalf("the document is not valid JSON: %v", err)
+	}
+
+	got := doc.Components.SecuritySchemes
+	if len(got) != 2 {
+		t.Fatalf("got security schemes %+v, want the two the server accepts", got)
+	}
+	if s := got["appauth"]; s.Type != "http" || s.Scheme != "basic" {
+		t.Errorf("appauth: got %+v, want http basic", s)
+	}
+	if s := got["revaToken"]; s.Type != "apiKey" || s.In != "header" || s.Name != "x-access-token" {
+		t.Errorf("revaToken: got %+v, want the x-access-token header", s)
 	}
 }

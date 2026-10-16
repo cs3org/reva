@@ -34,6 +34,7 @@ import (
 	"sync"
 
 	"github.com/cs3org/reva/v3/pkg/appctx"
+	"github.com/cs3org/reva/v3/pkg/auth"
 	"github.com/cs3org/reva/v3/pkg/openapi"
 	"github.com/cs3org/reva/v3/pkg/rhttp/global"
 	"github.com/cs3org/reva/v3/pkg/rhttp/router"
@@ -92,6 +93,11 @@ type svc struct {
 	// the other services have not declared yet at that point.
 	routes *router.Router
 
+	// schemes is how this server authenticates, as its auth middleware was
+	// configured. The document reports it so that a reader is told what to
+	// send, rather than this service deciding for itself.
+	schemes []auth.Scheme
+
 	once sync.Once
 	doc  []byte
 	err  error
@@ -103,7 +109,7 @@ func New(ctx context.Context, m map[string]any) (global.Service, error) {
 	if err := cfg.Decode(m, &c); err != nil {
 		return nil, err
 	}
-	return &svc{conf: &c}, nil
+	return &svc{conf: &c, schemes: auth.SchemesFromContext(ctx)}, nil
 }
 
 func (s *svc) Close() error { return nil }
@@ -141,7 +147,7 @@ func (s *svc) document(w http.ResponseWriter, r *http.Request) {
 			Title:       s.conf.Title,
 			Version:     rversion.Version,
 			Description: s.conf.Description,
-		}, servers)
+		}, servers, s.schemes)
 
 		s.doc, s.err = json.MarshalIndent(doc, "", "  ")
 	})
