@@ -293,7 +293,7 @@ func (s *service) CreateOCMShare(ctx context.Context, req *ocm.CreateOCMShareReq
 			}, nil
 		}
 		return &ocm.CreateOCMShareResponse{
-			Status: status.NewInternal(ctx, errors.New(statRes.Status.Message), statRes.Status.Message),
+			Status: statRes.Status,
 		}, nil
 	}
 
@@ -478,7 +478,7 @@ func (s *service) RemoveOCMShare(ctx context.Context, req *ocm.RemoveOCMShareReq
 			}, nil
 		}
 		return &ocm.RemoveOCMShareResponse{
-			Status: status.NewInternal(ctx, err, "error removing share"),
+			Status: status.NewStatusFromErrType(ctx, "error removing share", err),
 		}, nil
 	}
 
@@ -501,7 +501,7 @@ func (s *service) GetOCMShare(ctx context.Context, req *ocm.GetOCMShareRequest) 
 			}, nil
 		}
 		return &ocm.GetOCMShareResponse{
-			Status: status.NewInternal(ctx, err, "error getting share"),
+			Status: status.NewStatusFromErrType(ctx, "error getting share", err),
 		}, nil
 	}
 
@@ -524,7 +524,7 @@ func (s *service) GetOCMShareByToken(ctx context.Context, req *ocm.GetOCMShareBy
 			}, nil
 		}
 		return &ocm.GetOCMShareByTokenResponse{
-			Status: status.NewInternal(ctx, err, "error getting share"),
+			Status: status.NewStatusFromErrType(ctx, "error getting share", err),
 		}, nil
 	}
 
@@ -539,7 +539,7 @@ func (s *service) ListOCMShares(ctx context.Context, req *ocm.ListOCMSharesReque
 	shares, err := s.repo.ListShares(ctx, user, req.Filters)
 	if err != nil {
 		return &ocm.ListOCMSharesResponse{
-			Status: status.NewInternal(ctx, err, "error listing shares"),
+			Status: status.NewStatusFromErrType(ctx, "error listing shares", err),
 		}, nil
 	}
 
@@ -565,7 +565,7 @@ func (s *service) UpdateOCMShare(ctx context.Context, req *ocm.UpdateOCMShareReq
 			}, nil
 		}
 		return &ocm.UpdateOCMShareResponse{
-			Status: status.NewInternal(ctx, err, "error updating share"),
+			Status: status.NewStatusFromErrType(ctx, "error updating share", err),
 		}, nil
 	}
 
@@ -580,7 +580,7 @@ func (s *service) ListReceivedOCMShares(ctx context.Context, req *ocm.ListReceiv
 	shares, err := s.repo.ListReceivedShares(ctx, user, req.Filters)
 	if err != nil {
 		return &ocm.ListReceivedOCMSharesResponse{
-			Status: status.NewInternal(ctx, err, "error listing received shares"),
+			Status: status.NewStatusFromErrType(ctx, "error listing received shares", err),
 		}, nil
 	}
 
@@ -607,7 +607,7 @@ func (s *service) UpdateReceivedOCMShare(ctx context.Context, req *ocm.UpdateRec
 				}, nil
 			}
 			return &ocm.UpdateReceivedOCMShareResponse{
-				Status: status.NewInternal(ctx, err, "error retrieving embedded share payload"),
+				Status: status.NewStatusFromErrType(ctx, "error retrieving embedded share payload", err),
 			}, nil
 		}
 		if payload != "" {
@@ -622,7 +622,7 @@ func (s *service) UpdateReceivedOCMShare(ctx context.Context, req *ocm.UpdateRec
 			}, nil
 		}
 		return &ocm.UpdateReceivedOCMShareResponse{
-			Status: status.NewInternal(ctx, err, "error updating received share"),
+			Status: status.NewStatusFromErrType(ctx, "error updating received share", err),
 		}, nil
 	}
 
@@ -651,7 +651,7 @@ func (s *service) processEmbeddedShare(ctx context.Context, user *userpb.User, r
 			}, nil
 		}
 		return &ocm.UpdateReceivedOCMShareResponse{
-			Status: status.NewInternal(ctx, err, "error getting received share"),
+			Status: status.NewStatusFromErrType(ctx, "error getting received share", err),
 		}, nil
 	}
 	if current.State == ocm.ShareState_SHARE_STATE_TRANSFERRING {
@@ -670,7 +670,7 @@ func (s *service) processEmbeddedShare(ctx context.Context, user *userpb.User, r
 			}, nil
 		}
 		return &ocm.UpdateReceivedOCMShareResponse{
-			Status: status.NewInternal(ctx, err, "error updating received share"),
+			Status: status.NewStatusFromErrType(ctx, "error updating received share", err),
 		}, nil
 	}
 
@@ -701,7 +701,7 @@ func (s *service) processEmbeddedShare(ctx context.Context, user *userpb.User, r
 			appctx.GetLogger(ctx).Error().Err(err).Msg("error rejecting received share")
 		}
 		return &ocm.UpdateReceivedOCMShareResponse{
-			Status: status.NewInternal(ctx, err, "error processing embedded share"),
+			Status: status.NewStatusFromErrType(ctx, "error processing embedded share", err),
 		}, nil
 	}
 
@@ -742,7 +742,7 @@ func (s *service) GetReceivedOCMShare(ctx context.Context, req *ocm.GetReceivedO
 			}, nil
 		}
 		return &ocm.GetReceivedOCMShareResponse{
-			Status: status.NewInternal(ctx, err, "error getting received share"),
+			Status: status.NewStatusFromErrType(ctx, "error getting received share", err),
 		}, nil
 	}
 
