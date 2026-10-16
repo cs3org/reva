@@ -203,12 +203,13 @@ func New(ctx context.Context, m map[string]any) (_ rserverless.Service, err erro
 			// service registry per run, since a gateway need not be registered
 			// yet at the time the jobs are wired.
 			job := &reconciliation.OrphanJob{
-				Shares:     shares,
-				Links:      links,
-				Auth:       identity.authenticate,
-				Log:        jobLog,
-				DryRun:     jc.DryRun,
-				RunOnStart: jc.RunOnStart,
+				Shares:         shares,
+				Links:          links,
+				Auth:           identity.authenticate,
+				Log:            jobLog,
+				DryRun:         jc.DryRun,
+				RunOnStart:     jc.RunOnStart,
+				SpacesPerBatch: jc.SpacesPerBatch,
 			}
 			periodic := job.Periodic(jc.Schedule)
 			jobName = periodic.Name
@@ -224,9 +225,10 @@ func New(ctx context.Context, m map[string]any) (_ rserverless.Service, err erro
 				Grants: (&storageProviders{
 					clients: map[string]reconciliation.GrantStore{},
 				}).grants,
-				Log:        jobLog,
-				DryRun:     jc.DryRun,
-				RunOnStart: jc.RunOnStart,
+				Log:            jobLog,
+				DryRun:         jc.DryRun,
+				RunOnStart:     jc.RunOnStart,
+				SpacesPerBatch: jc.SpacesPerBatch,
 			}
 			jobName = reconciliation.ShallowJobName
 			if err := rjobs.RegisterOnDemand(jobName, job.OnDemand); err != nil {
@@ -247,7 +249,8 @@ func New(ctx context.Context, m map[string]any) (_ rserverless.Service, err erro
 			Str("schedule", jc.Schedule).
 			Str("log_file", jc.LogFile).
 			Bool("dry_run", jc.DryRun).
-			Bool("run_on_start", jc.RunOnStart)
+			Bool("run_on_start", jc.RunOnStart).
+			Int("spaces_per_batch", jc.SpacesPerBatch)
 		if name == jobShallow {
 			entry = entry.Bool("on_demand", true)
 		}
@@ -271,7 +274,7 @@ func getShareStore(ctx context.Context, c *config) (reconciliation.ShareStore, e
 	}
 	store, ok := sm.(reconciliation.ShareStore)
 	if !ok {
-		return nil, errors.Errorf("reconciliation: share driver %s cannot be reconciled, it cannot mark a share orphaned", c.ShareDriver)
+		return nil, errors.Errorf("reconciliation: share driver %s cannot be reconciled, it has to mark a share orphaned and to list the spaces that hold a share", c.ShareDriver)
 	}
 	return store, nil
 }
@@ -288,7 +291,7 @@ func getPublicLinkStore(ctx context.Context, c *config) (reconciliation.PublicLi
 	}
 	store, ok := pm.(reconciliation.PublicLinkStore)
 	if !ok {
-		return nil, errors.Errorf("reconciliation: public share driver %s cannot be reconciled, it cannot mark a link orphaned", c.PublicShareDriver)
+		return nil, errors.Errorf("reconciliation: public share driver %s cannot be reconciled, it has to mark a link orphaned and to list links by space", c.PublicShareDriver)
 	}
 	return store, nil
 }
