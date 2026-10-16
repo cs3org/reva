@@ -17,7 +17,8 @@
 // or submit itself to any jurisdiction.
 
 // Package admin holds the primitives specific to the reva Admin API: the
-// audit helper. The invocation framework lives in pkg/invoke.
+// audit helper and the service identity (AsService). The invocation framework
+// lives in pkg/invoke.
 package admin
 
 import (
