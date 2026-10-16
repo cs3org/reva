@@ -50,6 +50,9 @@ type Route struct {
 	Methods []string `json:"-"`
 	// Unprotected exempts the route from the authentication middleware.
 	Unprotected bool `json:"unprotected,omitempty"`
+	// Doc describes what the route takes and returns, when it says. It is not
+	// serialised: see Doc for why.
+	Doc *Doc `json:"-"`
 }
 
 // Option customizes a route at declaration time.
