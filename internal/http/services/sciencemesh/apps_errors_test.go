@@ -27,6 +27,7 @@ import (
 
 	rpcv1beta1 "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	ocmpb "github.com/cs3org/go-cs3apis/cs3/sharing/ocm/v1beta1"
+	providerv1beta1 "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/cs3org/reva/v3/pkg/errtypes"
 )
 
@@ -511,6 +512,148 @@ func TestOpenInAppFailures(t *testing.T) {
 			leakedToken := strings.Contains(body, `"access_token"`)
 			if leakedURL || leakedToken {
 				t.Fatalf("error body looked like a launch payload: %s", body)
+			}
+		})
+	}
+}
+
+func TestOpenInAppReceivedWebappRequirements(t *testing.T) {
+	secret := launchSecret
+	blank := []string{"blank"}
+	tests := []struct {
+		name         string
+		targets      []string
+		reqs         []string
+		receiver     []string
+		wantStatus   int
+		wantText     string
+		discoverZero bool
+	}{
+		{
+			name:       "compatible blank target",
+			targets:    blank,
+			reqs:       []string{"must-exchange-token"},
+			receiver:   blank,
+			wantStatus: http.StatusOK,
+		},
+		{
+			name:         "empty targets",
+			targets:      nil,
+			reqs:         []string{"must-exchange-token"},
+			receiver:     blank,
+			wantStatus:   http.StatusBadRequest,
+			wantText:     "missing targets",
+			discoverZero: true,
+		},
+		{
+			name:         "no intersection",
+			targets:      []string{"iframe"},
+			reqs:         []string{"must-exchange-token"},
+			receiver:     blank,
+			wantStatus:   http.StatusBadRequest,
+			wantText:     "no compatible target",
+			discoverZero: true,
+		},
+		{
+			name:         "unsupported target only",
+			targets:      []string{"iframe"},
+			reqs:         []string{"must-exchange-token"},
+			receiver:     []string{"iframe"},
+			wantStatus:   http.StatusBadRequest,
+			wantText:     "no compatible target",
+			discoverZero: true,
+		},
+		{
+			name:       "mixed targets keep blank",
+			targets:    []string{"iframe", "blank"},
+			reqs:       []string{"must-exchange-token"},
+			receiver:   blank,
+			wantStatus: http.StatusOK,
+		},
+		{
+			name:         "must-use-mfa fails closed",
+			targets:      blank,
+			reqs:         []string{"must-exchange-token", "must-use-mfa"},
+			receiver:     blank,
+			wantStatus:   http.StatusForbidden,
+			wantText:     "must-use-mfa cannot be satisfied by this receiver",
+			discoverZero: true,
+		},
+		{
+			name:         "unknown must requirement",
+			targets:      blank,
+			reqs:         []string{"must-exchange-token", "must-sign"},
+			receiver:     blank,
+			wantStatus:   http.StatusBadRequest,
+			wantText:     "unsupported requirement",
+			discoverZero: true,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			obs := &observeClient{token: launchToken}
+			share := receivedWebappShare(
+				"https://dav.example/dav",
+				"https://app.example/hub",
+				secret,
+				tt.reqs,
+			)
+			share.Protocols[1].GetWebappOptions().Targets = tt.targets
+			h := newTestHandler(t, &fakeReceivedGateway{resp: okShareResponse(share)}, obs)
+			receiver := append([]string{}, tt.receiver...)
+			h.webappReceiveTargets = &receiver
+			req, _ := newLaunchRequest(t, "/ocm/share-1")
+			rec := httptest.NewRecorder()
+			h.OpenInApp(rec, req)
+			if rec.Code != tt.wantStatus {
+				t.Fatalf("status %d body %s", rec.Code, rec.Body.String())
+			}
+			if tt.wantText != "" && !strings.Contains(rec.Body.String(), tt.wantText) {
+				t.Fatalf("body %s", rec.Body.String())
+			}
+			if tt.discoverZero && (obs.discoverCalls != 0 || obs.exchangeCalls != 0) {
+				t.Fatalf("discover %d exchange %d", obs.discoverCalls, obs.exchangeCalls)
+			}
+			if tt.wantStatus != http.StatusOK && obs.exchangeCalls != 0 {
+				t.Fatalf("exchange calls %d", obs.exchangeCalls)
+			}
+			if tt.wantStatus == http.StatusOK && obs.exchangeCalls != 1 {
+				t.Fatalf("exchange calls %d", obs.exchangeCalls)
+			}
+		})
+	}
+}
+
+func TestOpenInAppEmptyStoredPermissions(t *testing.T) {
+	tests := []struct {
+		name  string
+		perms *providerv1beta1.ResourcePermissions
+	}{
+		{name: "nil", perms: nil},
+		{name: "empty", perms: &providerv1beta1.ResourcePermissions{}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			obs := &observeClient{token: launchToken}
+			share := receivedWebappShare(
+				"https://dav.example/dav",
+				"https://app.example/hub",
+				launchSecret,
+				[]string{"must-exchange-token"},
+			)
+			share.Protocols[1].GetWebappOptions().SharePermissions = tt.perms
+			h := newTestHandler(t, &fakeReceivedGateway{resp: okShareResponse(share)}, obs)
+			req, _ := newLaunchRequest(t, "/ocm/share-1")
+			rec := httptest.NewRecorder()
+			h.OpenInApp(rec, req)
+			if rec.Code != http.StatusBadRequest {
+				t.Fatalf("status %d body %s", rec.Code, rec.Body.String())
+			}
+			if !strings.Contains(rec.Body.String(), "missing permissions") {
+				t.Fatalf("body %s", rec.Body.String())
+			}
+			if obs.discoverCalls != 0 || obs.exchangeCalls != 0 {
+				t.Fatalf("discover %d exchange %d", obs.discoverCalls, obs.exchangeCalls)
 			}
 		})
 	}
