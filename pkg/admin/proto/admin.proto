@@ -53,6 +53,7 @@ service AdminAPI {
   rpc CancelJobRun(CancelJobRunRequest) returns (JobRun);
   rpc CancelPeriodicJob(CancelPeriodicJobRequest)
       returns (CancelPeriodicJobResponse);
+  rpc ForgetJob(ForgetJobRequest) returns (ForgetJobResponse);
 }
 
 // ----- Access / step-up -----
@@ -299,6 +300,14 @@ message CancelPeriodicJobRequest {
 }
 
 message CancelPeriodicJobResponse {
+}
+
+// ForgetJobRequest drops the queue state of a job removed from the code.
+message ForgetJobRequest {
+  string job = 1;
+}
+
+message ForgetJobResponse {
 }
 
 // The generated Go stubs are exported from pkg/admin/adminpb. Regenerate from
