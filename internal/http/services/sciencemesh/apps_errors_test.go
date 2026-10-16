@@ -31,7 +31,7 @@ import (
 	"github.com/cs3org/reva/v3/pkg/errtypes"
 )
 
-func TestOpenInAppFailures(t *testing.T) {
+func TestWebappLaunchFailures(t *testing.T) {
 	secret := launchSecret
 	token := launchToken
 	validWebapp := func(uri string, reqs []string) *ocmpb.ReceivedShare {
@@ -479,24 +479,9 @@ func TestOpenInAppFailures(t *testing.T) {
 			}
 			req, logs := newLaunchRequest(t, tt.file)
 			rec := httptest.NewRecorder()
-			h.OpenInApp(rec, req)
+			h.WebappLaunch(rec, req)
 
-			if rec.Code != tt.wantStatus {
-				t.Fatalf("status %d body %s", rec.Code, rec.Body.String())
-			}
-			wantCode := map[int]string{
-				http.StatusBadRequest:          "INVALID_PARAMETER",
-				http.StatusUnauthorized:        "UNAUTHENTICATED",
-				http.StatusForbidden:           "UNTRUSTED_SERVICE",
-				http.StatusNotFound:            "RESOURCE_NOT_FOUND",
-				http.StatusInternalServerError: "SERVER_ERROR",
-			}[tt.wantStatus]
-			if !strings.Contains(rec.Body.String(), `"`+wantCode+`"`) {
-				t.Fatalf("body %s missing %s", rec.Body.String(), wantCode)
-			}
-			if !strings.Contains(rec.Body.String(), tt.wantText) {
-				t.Fatalf("body %s", rec.Body.String())
-			}
+			assertLaunchRefused(t, rec, logs.String(), tt.wantStatus, tt.wantText)
 			if tt.client.discoverCalls != tt.wantDiscover || tt.client.exchangeCalls != tt.wantExchange {
 				t.Fatalf("discover %d exchange %d", tt.client.discoverCalls, tt.client.exchangeCalls)
 			}
@@ -507,17 +492,11 @@ func TestOpenInAppFailures(t *testing.T) {
 				t.Fatalf("fell back to bare app URL: %s", rec.Body.String())
 			}
 			assertNotLeaked(t, rec.Body.String(), logs.String(), secret, token)
-			body := rec.Body.String()
-			leakedURL := strings.Contains(body, `"app_url"`)
-			leakedToken := strings.Contains(body, `"access_token"`)
-			if leakedURL || leakedToken {
-				t.Fatalf("error body looked like a launch payload: %s", body)
-			}
 		})
 	}
 }
 
-func TestOpenInAppReceivedWebappRequirements(t *testing.T) {
+func TestWebappLaunchReceivedWebappRequirements(t *testing.T) {
 	secret := launchSecret
 	blank := []string{"blank"}
 	tests := []struct {
@@ -602,14 +581,13 @@ func TestOpenInAppReceivedWebappRequirements(t *testing.T) {
 			h := newTestHandler(t, &fakeReceivedGateway{resp: okShareResponse(share)}, obs)
 			receiver := append([]string{}, tt.receiver...)
 			h.webappReceiveTargets = &receiver
-			req, _ := newLaunchRequest(t, "/ocm/share-1")
+			req, logs := newLaunchRequest(t, "/ocm/share-1")
 			rec := httptest.NewRecorder()
-			h.OpenInApp(rec, req)
-			if rec.Code != tt.wantStatus {
-				t.Fatalf("status %d body %s", rec.Code, rec.Body.String())
-			}
-			if tt.wantText != "" && !strings.Contains(rec.Body.String(), tt.wantText) {
-				t.Fatalf("body %s", rec.Body.String())
+			h.WebappLaunch(rec, req)
+			if tt.wantStatus == http.StatusOK {
+				launchedForm(t, rec)
+			} else {
+				assertLaunchRefused(t, rec, logs.String(), tt.wantStatus, tt.wantText)
 			}
 			if tt.discoverZero && (obs.discoverCalls != 0 || obs.exchangeCalls != 0) {
 				t.Fatalf("discover %d exchange %d", obs.discoverCalls, obs.exchangeCalls)
@@ -624,7 +602,7 @@ func TestOpenInAppReceivedWebappRequirements(t *testing.T) {
 	}
 }
 
-func TestOpenInAppEmptyStoredPermissions(t *testing.T) {
+func TestWebappLaunchEmptyStoredPermissions(t *testing.T) {
 	tests := []struct {
 		name  string
 		perms *providerv1beta1.ResourcePermissions
@@ -643,15 +621,10 @@ func TestOpenInAppEmptyStoredPermissions(t *testing.T) {
 			)
 			share.Protocols[1].GetWebappOptions().SharePermissions = tt.perms
 			h := newTestHandler(t, &fakeReceivedGateway{resp: okShareResponse(share)}, obs)
-			req, _ := newLaunchRequest(t, "/ocm/share-1")
+			req, logs := newLaunchRequest(t, "/ocm/share-1")
 			rec := httptest.NewRecorder()
-			h.OpenInApp(rec, req)
-			if rec.Code != http.StatusBadRequest {
-				t.Fatalf("status %d body %s", rec.Code, rec.Body.String())
-			}
-			if !strings.Contains(rec.Body.String(), "missing permissions") {
-				t.Fatalf("body %s", rec.Body.String())
-			}
+			h.WebappLaunch(rec, req)
+			assertLaunchRefused(t, rec, logs.String(), http.StatusBadRequest, "missing permissions")
 			if obs.discoverCalls != 0 || obs.exchangeCalls != 0 {
 				t.Fatalf("discover %d exchange %d", obs.discoverCalls, obs.exchangeCalls)
 			}
