@@ -27,6 +27,7 @@ import (
 	"net/http"
 	"net/url"
 	"strings"
+	"time"
 
 	gateway "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
 	grouppb "github.com/cs3org/go-cs3apis/cs3/identity/group/v1beta1"
@@ -295,6 +296,10 @@ func (s *svc) share(w http.ResponseWriter, r *http.Request) {
 	// Then we also set an expiry, if needed
 	var exp *types.Timestamp
 	if invite.ExpirationDateTime != nil {
+		if invite.ExpirationDateTime.Before(time.Now()) {
+			handleBadRequest(ctx, errors.New("shares cannot expire in the past"), w)
+			return
+		}
 		exp = &types.Timestamp{
 			Seconds: uint64(invite.ExpirationDateTime.Unix()),
 		}
