@@ -20,14 +20,10 @@ package sciencemesh
 
 import (
 	"context"
-	"encoding/json"
-	"net/http"
-	"net/http/httptest"
 	"strings"
 	"testing"
 
 	"github.com/cs3org/reva/v3/internal/http/services/opencloudmesh/ocmd"
-	"github.com/cs3org/reva/v3/internal/http/services/reqres"
 	"github.com/cs3org/reva/v3/pkg/errtypes"
 )
 
@@ -120,48 +116,4 @@ func TestRedactLaunchError(t *testing.T) {
 			}
 		})
 	}
-}
-
-func TestWriteLaunchJSONEncoderFailure(t *testing.T) {
-	rec := httptest.NewRecorder()
-	req, _ := newLaunchRequest(t, "/ocm/share-1")
-	writeLaunchJSON(rec, req, make(chan int))
-	if rec.Code == http.StatusOK {
-		t.Fatal("encoder failure committed HTTP 200")
-	}
-	if rec.Code != http.StatusInternalServerError {
-		t.Fatalf("status %d", rec.Code)
-	}
-	if strings.Contains(rec.Body.String(), "app_url") || strings.Contains(rec.Body.String(), launchToken) {
-		t.Fatalf("body %s", rec.Body.String())
-	}
-	var apiErr reqres.APIError
-	if err := json.Unmarshal(rec.Body.Bytes(), &apiErr); err != nil {
-		t.Fatal(err)
-	}
-	if apiErr.Code != reqres.APIErrorServerError {
-		t.Fatalf("code %s", apiErr.Code)
-	}
-}
-
-func TestWriteLaunchJSONWriterFailure(t *testing.T) {
-	req, logs := newLaunchRequest(t, "/ocm/share-1")
-	w := &failingResponseWriter{header: make(http.Header)}
-	writeLaunchJSON(w, req, openInAppResponse{
-		AppURL:      "https://app.example/hub",
-		AccessToken: launchToken,
-	})
-	if w.status != http.StatusOK {
-		t.Fatalf("status %d", w.status)
-	}
-	if w.writes != 1 {
-		t.Fatalf("writes %d body %s", w.writes, w.body)
-	}
-	if strings.Contains(w.body, "SERVER_ERROR") {
-		t.Fatalf("second error was appended: %s", w.body)
-	}
-	if !strings.Contains(logs.String(), "error writing launch response") {
-		t.Fatalf("log %q", logs.String())
-	}
-	assertLogsClean(t, logs.String(), launchSecret, launchToken)
 }

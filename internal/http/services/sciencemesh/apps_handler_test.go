@@ -20,7 +20,6 @@ package sciencemesh
 
 import (
 	"context"
-	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -35,7 +34,7 @@ import (
 	"google.golang.org/grpc/metadata"
 )
 
-func TestOpenInAppMustUseMFAOffPolicy(t *testing.T) {
+func TestWebappLaunchMustUseMFAOffPolicy(t *testing.T) {
 	obs := &observeClient{token: launchToken}
 	share := receivedWebappShare(
 		"https://dav.example/remote.php/dav/ocm/share",
@@ -50,11 +49,9 @@ func TestOpenInAppMustUseMFAOffPolicy(t *testing.T) {
 
 	req, logs := newLaunchRequest(t, "/ocm/share-1/dir/file.txt")
 	rec := httptest.NewRecorder()
-	h.OpenInApp(rec, req)
+	h.WebappLaunch(rec, req)
 
-	if rec.Code != http.StatusOK {
-		t.Fatalf("status %d body %s", rec.Code, rec.Body.String())
-	}
+	launchedForm(t, rec)
 	if h.launchClient != obs {
 		t.Fatal("launch client was not retained")
 	}
@@ -64,7 +61,7 @@ func TestOpenInAppMustUseMFAOffPolicy(t *testing.T) {
 	assertLogsClean(t, logs.String(), launchSecret, launchToken)
 }
 
-func TestOpenInAppValidWebapp(t *testing.T) {
+func TestWebappLaunchValidWebapp(t *testing.T) {
 	obs := &observeClient{token: launchToken}
 	share := receivedWebappShare(
 		"https://dav.example/remote.php/dav/ocm/share",
@@ -86,27 +83,18 @@ func TestOpenInAppValidWebapp(t *testing.T) {
 	req = req.WithContext(ctx)
 
 	rec := httptest.NewRecorder()
-	h.OpenInApp(rec, req)
+	h.WebappLaunch(rec, req)
 
-	if rec.Code != http.StatusOK {
-		t.Fatalf("status %d body %s", rec.Code, rec.Body.String())
-	}
-	if rec.Header().Get("Content-Type") != "application/json" {
-		t.Fatalf("content type %q", rec.Header().Get("Content-Type"))
-	}
-	var payload map[string]any
-	if err := json.Unmarshal(rec.Body.Bytes(), &payload); err != nil {
-		t.Fatalf("decode: %v", err)
-	}
-	if len(payload) != 2 {
-		t.Fatalf("payload keys = %#v", payload)
+	action, token := launchedForm(t, rec)
+	if ct := rec.Header().Get("Content-Type"); !strings.HasPrefix(ct, "text/html") {
+		t.Fatalf("content type %q", ct)
 	}
 	const wantURL = "https://app.example/hub/open/dir/my%20file.txt?folder=1"
-	if payload["app_url"] != wantURL {
-		t.Fatalf("app_url = %#v", payload["app_url"])
+	if action != wantURL {
+		t.Fatalf("form action = %q", action)
 	}
-	if payload["access_token"] != launchToken {
-		t.Fatalf("access_token = %#v", payload["access_token"])
+	if token != launchToken {
+		t.Fatalf("access_token = %q", token)
 	}
 	if strings.Contains(rec.Body.String(), launchSecret) {
 		t.Fatal("response included the shared secret")
@@ -149,7 +137,7 @@ func TestOpenInAppValidWebapp(t *testing.T) {
 	}
 }
 
-func TestOpenInAppChangedShareIsNotCached(t *testing.T) {
+func TestWebappLaunchChangedShareIsNotCached(t *testing.T) {
 	obs := &observeClient{
 		endpointByCall: []string{
 			"https://token-a.example/ocm/token",
@@ -180,16 +168,10 @@ func TestOpenInAppChangedShareIsNotCached(t *testing.T) {
 	for range 2 {
 		req, _ := newLaunchRequest(t, "/ocm/share-1")
 		rec := httptest.NewRecorder()
-		h.OpenInApp(rec, req)
-		if rec.Code != http.StatusOK {
-			t.Fatalf("status %d body %s", rec.Code, rec.Body.String())
-		}
-		var payload openInAppResponse
-		if err := json.Unmarshal(rec.Body.Bytes(), &payload); err != nil {
-			t.Fatal(err)
-		}
-		urls = append(urls, payload.AppURL)
-		tokens = append(tokens, payload.AccessToken)
+		h.WebappLaunch(rec, req)
+		action, token := launchedForm(t, rec)
+		urls = append(urls, action)
+		tokens = append(tokens, token)
 	}
 	if gw.calls != 2 || gw.opaqueID != "share-1" {
 		t.Fatalf("lookups %d share %q", gw.calls, gw.opaqueID)
@@ -221,29 +203,25 @@ func TestOpenInAppChangedShareIsNotCached(t *testing.T) {
 	}
 }
 
-func TestOpenInAppMalformedForm(t *testing.T) {
+func TestWebappLaunchMalformedForm(t *testing.T) {
 	gw := &fakeReceivedGateway{}
 	obs := &observeClient{token: launchToken}
 	h := newTestHandler(t, gw, obs)
 	base, logs := newLaunchRequest(t, "/ocm/share-1")
 	req := httptest.NewRequest(
 		http.MethodPost,
-		"/sciencemesh/open-in-app",
+		"/sciencemesh/webapp-launch",
 		strings.NewReader("file=%zz"),
 	)
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	req = req.WithContext(base.Context())
 
 	rec := httptest.NewRecorder()
-	h.OpenInApp(rec, req)
+	h.WebappLaunch(rec, req)
 
+	assertLaunchRefused(t, rec, logs.String(), http.StatusBadRequest, "webapp launch rejected")
 	body := rec.Body.String()
-	if rec.Code != http.StatusBadRequest {
-		t.Fatalf("status %d body %s", rec.Code, body)
-	}
-	invalidParameter := strings.Contains(body, `"INVALID_PARAMETER"`)
-	unparsed := strings.Contains(body, "parameters could not be parsed")
-	if !invalidParameter || !unparsed {
+	if !strings.Contains(body, "<p>The launch request could not be read.</p>") {
 		t.Fatalf("body %s", body)
 	}
 	if gw.calls != 0 || obs.discoverCalls != 0 || obs.exchangeCalls != 0 {
@@ -257,13 +235,14 @@ func TestOpenInAppMalformedForm(t *testing.T) {
 	assertNotLeaked(t, body, logs.String(), launchSecret, launchToken)
 }
 
-func TestOpenInAppMissingFile(t *testing.T) {
+func TestWebappLaunchMissingFile(t *testing.T) {
 	h := &appsHandler{ocmMountPoint: "/ocm"}
-	req, _ := newLaunchRequest(t, "")
+	req, logs := newLaunchRequest(t, "")
 	rec := httptest.NewRecorder()
-	h.OpenInApp(rec, req)
-	if rec.Code != http.StatusBadRequest || !strings.Contains(rec.Body.String(), "missing file") {
-		t.Fatalf("status %d body %s", rec.Code, rec.Body.String())
+	h.WebappLaunch(rec, req)
+	assertLaunchRefused(t, rec, logs.String(), http.StatusBadRequest, "webapp launch rejected")
+	if !strings.Contains(rec.Body.String(), "<p>The launch request is missing the file.</p>") {
+		t.Fatalf("body %s", rec.Body.String())
 	}
 }
 
@@ -277,7 +256,7 @@ func launchWebappShare(t *testing.T) *ocmpb.ReceivedShare {
 	)
 }
 
-func TestOpenInAppFileIdentifierSuccess(t *testing.T) {
+func TestWebappLaunchFileIdentifierSuccess(t *testing.T) {
 	const bareApp = "https://app.example/hub/open?keep=1#frag"
 	validSpace := spaces.EncodeSpaceID("/teams/demo")
 	withSpace := "storage-id$" + validSpace
@@ -368,20 +347,14 @@ func TestOpenInAppFileIdentifierSuccess(t *testing.T) {
 			h := newTestHandler(t, gw, obs)
 			req, logs := newLaunchRequest(t, tt.file)
 			rec := httptest.NewRecorder()
-			h.OpenInApp(rec, req)
+			h.WebappLaunch(rec, req)
 
-			if rec.Code != http.StatusOK {
-				t.Fatalf("status %d body %s", rec.Code, rec.Body.String())
+			action, token := launchedForm(t, rec)
+			if action != tt.wantURL {
+				t.Fatalf("form action = %q want %q", action, tt.wantURL)
 			}
-			var payload openInAppResponse
-			if err := json.Unmarshal(rec.Body.Bytes(), &payload); err != nil {
-				t.Fatal(err)
-			}
-			if payload.AppURL != tt.wantURL {
-				t.Fatalf("app_url = %q want %q", payload.AppURL, tt.wantURL)
-			}
-			if payload.AccessToken != launchToken {
-				t.Fatalf("access_token = %q", payload.AccessToken)
+			if token != launchToken {
+				t.Fatalf("access_token = %q", token)
 			}
 			if gw.opaqueID != tt.wantShare {
 				t.Fatalf("gateway share %q", gw.opaqueID)
@@ -397,7 +370,7 @@ func TestOpenInAppFileIdentifierSuccess(t *testing.T) {
 	}
 }
 
-func TestOpenInAppFileIdentifierRejectedBeforeRemote(t *testing.T) {
+func TestWebappLaunchFileIdentifierRejectedBeforeRemote(t *testing.T) {
 	validSpace := spaces.EncodeSpaceID("/teams/demo")
 	tests := []struct {
 		name   string
@@ -442,15 +415,10 @@ func TestOpenInAppFileIdentifierRejectedBeforeRemote(t *testing.T) {
 			h := newTestHandler(t, gw, obs)
 			req, logs := newLaunchRequest(t, tt.file)
 			rec := httptest.NewRecorder()
-			h.OpenInApp(rec, req)
+			h.WebappLaunch(rec, req)
 
-			if rec.Code != http.StatusBadRequest {
-				t.Fatalf("status %d body %s", rec.Code, rec.Body.String())
-			}
+			assertLaunchRefused(t, rec, logs.String(), http.StatusBadRequest, "invalid file identifier")
 			body := rec.Body.String()
-			if !strings.Contains(body, "invalid file identifier") {
-				t.Fatalf("body %s", body)
-			}
 			if strings.Contains(body, tt.forbid) || strings.Contains(logs.String(), tt.forbid) {
 				t.Fatalf("leaked identifier body=%s logs=%s", body, logs.String())
 			}
@@ -462,7 +430,7 @@ func TestOpenInAppFileIdentifierRejectedBeforeRemote(t *testing.T) {
 	}
 }
 
-func TestOpenInAppSharePathPolicyBeforeExchange(t *testing.T) {
+func TestWebappLaunchSharePathPolicyBeforeExchange(t *testing.T) {
 	tests := []struct {
 		name     string
 		file     string
@@ -531,15 +499,10 @@ func TestOpenInAppSharePathPolicyBeforeExchange(t *testing.T) {
 			h := newTestHandler(t, gw, obs)
 			req, logs := newLaunchRequest(t, tt.file)
 			rec := httptest.NewRecorder()
-			h.OpenInApp(rec, req)
+			h.WebappLaunch(rec, req)
 
-			if rec.Code != http.StatusBadRequest {
-				t.Fatalf("status %d body %s", rec.Code, rec.Body.String())
-			}
+			assertLaunchRefused(t, rec, logs.String(), http.StatusBadRequest, tt.wantText)
 			body := rec.Body.String()
-			if !strings.Contains(body, "\"INVALID_PARAMETER\"") {
-				t.Fatalf("body %s missing INVALID_PARAMETER", body)
-			}
 			if strings.Contains(body, tt.file) || strings.Contains(logs.String(), tt.file) {
 				t.Fatalf("file identifier leaked: body=%s logs=%s", body, logs.String())
 			}
@@ -547,9 +510,6 @@ func TestOpenInAppSharePathPolicyBeforeExchange(t *testing.T) {
 				if strings.Contains(body, unescaped) || strings.Contains(logs.String(), unescaped) {
 					t.Fatalf("decoded file identifier leaked: body=%s logs=%s", body, logs.String())
 				}
-			}
-			if !strings.Contains(body, tt.wantText) {
-				t.Fatalf("body %s", body)
 			}
 			if gw.calls != 1 {
 				t.Fatalf("gateway calls %d", gw.calls)
@@ -565,7 +525,7 @@ func TestOpenInAppSharePathPolicyBeforeExchange(t *testing.T) {
 	}
 }
 
-func TestOpenInAppSecondShareIDNotCached(t *testing.T) {
+func TestWebappLaunchSecondShareIDNotCached(t *testing.T) {
 	obs := &observeClient{token: launchToken}
 	first := receivedWebappShare(
 		"https://dav-a.example/dav",
@@ -593,16 +553,9 @@ func TestOpenInAppSecondShareIDNotCached(t *testing.T) {
 	for i, path := range paths {
 		req, _ := newLaunchRequest(t, path)
 		rec := httptest.NewRecorder()
-		h.OpenInApp(rec, req)
-		if rec.Code != http.StatusOK {
-			t.Fatalf("status %d body %s", rec.Code, rec.Body.String())
-		}
-		var payload openInAppResponse
-		if err := json.Unmarshal(rec.Body.Bytes(), &payload); err != nil {
-			t.Fatal(err)
-		}
-		if payload.AppURL != wantURLs[i] {
-			t.Fatalf("app_url = %q", payload.AppURL)
+		h.WebappLaunch(rec, req)
+		if action, _ := launchedForm(t, rec); action != wantURLs[i] {
+			t.Fatalf("form action = %q", action)
 		}
 	}
 	if gw.opaqueID != "share-2" {

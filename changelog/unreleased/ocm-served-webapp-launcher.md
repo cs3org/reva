@@ -1,8 +1,8 @@
 Enhancement: add served webapp launcher page
 
 ScienceMesh now serves `POST /sciencemesh/webapp-launch`, a protected route
-that validates the received webapp share the same way `/open-in-app` does,
-exchanges the shared secret for an access token, and renders a small page that
+that validates the received webapp share, exchanges the shared secret for an
+access token, and renders a small page that
 auto-submits a form posting `access_token` to the validated app URL. Nothing
 is stored on the server and no unprotected route is added. Every response sets
 `Content-Security-Policy` plus `Cache-Control: no-store`,

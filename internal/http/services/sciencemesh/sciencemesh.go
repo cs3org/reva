@@ -159,7 +159,6 @@ func (s *svc) Routes(r *router.Router) {
 		r.Get("/find-accepted-users", s.token.FindAccepted)
 		r.Delete("/delete-accepted-user", s.token.DeleteAccepted)
 		r.Get("/list-providers", s.providers.ListProviders)
-		r.Post("/open-in-app", s.apps.OpenInApp)
 		r.Post("/webapp-launch", s.apps.WebappLaunch)
 		// Reached without credentials, so rate limited per client.
 		unauth := r.Use(s.limiter.Middleware)

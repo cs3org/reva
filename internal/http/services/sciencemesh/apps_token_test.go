@@ -19,8 +19,6 @@
 package sciencemesh
 
 import (
-	"encoding/json"
-	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
@@ -28,7 +26,7 @@ import (
 	"github.com/cs3org/reva/v3/internal/http/services/wellknown"
 )
 
-func TestOpenInAppRelativeTokenEndpoint(t *testing.T) {
+func TestWebappLaunchRelativeTokenEndpoint(t *testing.T) {
 	obs := &observeClient{
 		token:             launchToken,
 		endpointByCall:    []string{"/ocm/token"},
@@ -43,16 +41,9 @@ func TestOpenInAppRelativeTokenEndpoint(t *testing.T) {
 	h := newTestHandler(t, &fakeReceivedGateway{resp: okShareResponse(share)}, obs)
 	req, _ := newLaunchRequest(t, "/ocm/share-1")
 	rec := httptest.NewRecorder()
-	h.OpenInApp(rec, req)
-	if rec.Code != http.StatusOK {
-		t.Fatalf("status %d body %s", rec.Code, rec.Body.String())
-	}
-	var payload openInAppResponse
-	if err := json.Unmarshal(rec.Body.Bytes(), &payload); err != nil {
-		t.Fatal(err)
-	}
-	if payload.AppURL != "https://app.example/hub/open?folder=1#lab" {
-		t.Fatalf("app_url = %q", payload.AppURL)
+	h.WebappLaunch(rec, req)
+	if action, _ := launchedForm(t, rec); action != "https://app.example/hub/open?folder=1#lab" {
+		t.Fatalf("form action = %q", action)
 	}
 	if len(obs.tokenURLs) != 1 || obs.tokenURLs[0] != "https://sender.example/ocm/token" {
 		t.Fatalf("token url %v", obs.tokenURLs)
