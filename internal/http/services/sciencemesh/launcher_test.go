@@ -22,6 +22,7 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"html"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -125,6 +126,44 @@ func assertCSPDirectives(t *testing.T, csp, wantFormAction string) {
 		if got[k] != v {
 			t.Fatalf("directive %s = %q, want %q in %q", k, got[k], v, csp)
 		}
+	}
+}
+
+var (
+	launchFormAction = regexp.MustCompile(`<form id="launch" method="post" action="([^"]*)">`)
+	launchFormToken  = regexp.MustCompile(`name="access_token" value="([^"]*)"`)
+)
+
+// launchedForm returns the unescaped form action and access token of a
+// launcher page.
+func launchedForm(t *testing.T, rec *httptest.ResponseRecorder) (action, token string) {
+	t.Helper()
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status %d body %s", rec.Code, rec.Body.String())
+	}
+	body := rec.Body.String()
+	a := launchFormAction.FindStringSubmatch(body)
+	tok := launchFormToken.FindStringSubmatch(body)
+	if a == nil || tok == nil {
+		t.Fatalf("no launch form: %s", body)
+	}
+	return html.UnescapeString(a[1]), html.UnescapeString(tok[1])
+}
+
+// assertLaunchRefused checks a formless error page. Error pages carry fixed
+// copy only, so the redacted cause is matched in the request log.
+func assertLaunchRefused(t *testing.T, rec *httptest.ResponseRecorder, logs string, status int, cause string) {
+	t.Helper()
+	if rec.Code != status {
+		t.Fatalf("status %d, want %d; body %s", rec.Code, status, rec.Body.String())
+	}
+	assertLauncherHeaders(t, rec, "'none'")
+	body := rec.Body.String()
+	if strings.Contains(body, "<form") || strings.Contains(body, "access_token") {
+		t.Fatalf("error page has a form: %s", body)
+	}
+	if !strings.Contains(logs, cause) {
+		t.Fatalf("log missing %q: %s", cause, logs)
 	}
 }
 
@@ -445,9 +484,6 @@ func TestWebappLaunchRouteIsProtectedAndPostOnly(t *testing.T) {
 	if slices.Contains(svc.Unprotected(), "/webapp-launch") {
 		t.Fatalf("/webapp-launch must be protected: %v", svc.Unprotected())
 	}
-	if slices.Contains(svc.Unprotected(), "/open-in-app") {
-		t.Fatalf("/open-in-app must stay protected: %v", svc.Unprotected())
-	}
 
 	for _, method := range []string{http.MethodGet, http.MethodPut, http.MethodDelete, http.MethodPatch} {
 		req := httptest.NewRequest(method, "/webapp-launch", nil)
@@ -456,6 +492,19 @@ func TestWebappLaunchRouteIsProtectedAndPostOnly(t *testing.T) {
 		if rec.Code != http.StatusMethodNotAllowed {
 			t.Fatalf("%s status %d, want 405", method, rec.Code)
 		}
+	}
+}
+
+func TestOpenInAppRouteIsRemoved(t *testing.T) {
+	svc, err := New(context.Background(), scienceMeshServiceConfig("receiver.example", true))
+	if err != nil {
+		t.Fatal(err)
+	}
+	req := httptest.NewRequest(http.MethodPost, "/open-in-app", nil)
+	rec := httptest.NewRecorder()
+	svc.Handler().ServeHTTP(rec, req)
+	if rec.Code != http.StatusNotFound {
+		t.Fatalf("POST /open-in-app status %d, want 404", rec.Code)
 	}
 }
 

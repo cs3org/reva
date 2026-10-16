@@ -20,9 +20,7 @@ package sciencemesh
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
-	"net/http"
 	"net/url"
 	"strings"
 	"unicode"
@@ -31,9 +29,7 @@ import (
 	ocmpb "github.com/cs3org/go-cs3apis/cs3/sharing/ocm/v1beta1"
 	providerv1beta1 "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/cs3org/reva/v3/internal/http/services/opencloudmesh/ocmd"
-	"github.com/cs3org/reva/v3/internal/http/services/reqres"
 	"github.com/cs3org/reva/v3/internal/http/services/wellknown"
-	"github.com/cs3org/reva/v3/pkg/appctx"
 	"github.com/cs3org/reva/v3/pkg/errtypes"
 	"github.com/cs3org/reva/v3/pkg/ocm/providerdomain"
 	"github.com/cs3org/reva/v3/pkg/service"
@@ -58,9 +54,9 @@ type appsHandler struct {
 	mfaPolicy *string
 }
 
-type openInAppResponse struct {
-	AppURL      string `json:"app_url"`
-	AccessToken string `json:"access_token"`
+type launchPayload struct {
+	AppURL      string
+	AccessToken string
 }
 
 func (h *appsHandler) init(c *config) error {
@@ -173,33 +169,6 @@ func invalidShareIdentifierComponent(component string) bool {
 	return strings.ContainsAny(component, "/\\:!%")
 }
 
-func (h *appsHandler) OpenInApp(w http.ResponseWriter, r *http.Request) {
-	ctx := r.Context()
-
-	if err := r.ParseForm(); err != nil {
-		reqres.WriteError(w, r, reqres.APIErrorInvalidParameter, "parameters could not be parsed", nil)
-		return
-	}
-
-	filePath := r.Form.Get("file")
-	if filePath == "" {
-		reqres.WriteError(w, r, reqres.APIErrorInvalidParameter, "missing file", nil)
-		return
-	}
-
-	shareID, rel, err := h.shareInfo(filePath)
-	if err != nil {
-		writeLaunchError(w, r, err)
-		return
-	}
-	payload, err := h.buildLaunch(ctx, shareID, rel, nil)
-	if err != nil {
-		writeLaunchError(w, r, err)
-		return
-	}
-	writeLaunchJSON(w, r, payload)
-}
-
 // storedWebappPermissions reads the share's stored webapp permission flags.
 // A share with no flags does not receive a synthetic view grant.
 func storedWebappPermissions(perms *providerv1beta1.ResourcePermissions) []string {
@@ -230,8 +199,8 @@ func (h *appsHandler) buildLaunch(
 	shareID *ocmpb.ShareId,
 	rel string,
 	checkAppURL func(appURL string) error,
-) (openInAppResponse, error) {
-	var none openInAppResponse
+) (launchPayload, error) {
+	var none launchPayload
 	if err := providerdomain.Validate(h.receiverDomain); err != nil {
 		return none, redactLaunchError(errtypes.BadRequest(err.Error()), "", "")
 	}
@@ -240,7 +209,7 @@ func (h *appsHandler) buildLaunch(
 		return none, redactLaunchError(err, "", "")
 	}
 	secret := webapp.GetSharedSecret()
-	fail := func(err error, token string) (openInAppResponse, error) {
+	fail := func(err error, token string) (launchPayload, error) {
 		return none, redactLaunchError(err, secret, token)
 	}
 
@@ -313,7 +282,7 @@ func (h *appsHandler) buildLaunch(
 		return fail(errtypes.InternalError("token exchange returned an empty access token"), "")
 	}
 
-	return openInAppResponse{
+	return launchPayload{
 		AppURL:      launched,
 		AccessToken: accessToken,
 	}, nil
@@ -600,43 +569,4 @@ func safeDetail(detail, secret, token, fallback string) string {
 
 func containsSensitive(msg, secret string) bool {
 	return secret != "" && strings.Contains(msg, secret)
-}
-
-func writeLaunchError(w http.ResponseWriter, r *http.Request, err error) {
-	sanitized := redactLaunchError(err, "", "")
-	var (
-		notFound           errtypes.NotFound
-		badRequest         errtypes.BadRequest
-		invalidCredentials errtypes.InvalidCredentials
-		permissionDenied   errtypes.PermissionDenied
-		internal           errtypes.InternalError
-	)
-	switch {
-	case errors.As(sanitized, &notFound):
-		reqres.WriteError(w, r, reqres.APIErrorNotFound, notFound.Error(), sanitized)
-	case errors.As(sanitized, &badRequest):
-		reqres.WriteError(w, r, reqres.APIErrorInvalidParameter, badRequest.Error(), sanitized)
-	case errors.As(sanitized, &invalidCredentials):
-		reqres.WriteError(w, r, reqres.APIErrorUnauthenticated, invalidCredentials.Error(), sanitized)
-	case errors.As(sanitized, &permissionDenied):
-		reqres.WriteError(w, r, reqres.APIErrorUntrustedService, permissionDenied.Error(), sanitized)
-	case errors.As(sanitized, &internal):
-		reqres.WriteError(w, r, reqres.APIErrorServerError, internal.Error(), sanitized)
-	default:
-		reqres.WriteError(w, r, reqres.APIErrorServerError, "launch failed", sanitized)
-	}
-}
-
-// writeLaunchJSON marshals the payload before committing a successful status.
-func writeLaunchJSON(w http.ResponseWriter, r *http.Request, payload any) {
-	encoded, err := json.Marshal(payload)
-	if err != nil {
-		reqres.WriteError(w, r, reqres.APIErrorServerError, "error marshalling JSON response", err)
-		return
-	}
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusOK)
-	if _, err := w.Write(encoded); err != nil {
-		appctx.GetLogger(r.Context()).Error().Err(err).Msg("error writing launch response")
-	}
 }
