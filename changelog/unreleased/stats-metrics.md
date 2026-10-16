@@ -1,8 +1,8 @@
 Enhancement: Expose service statistics as Prometheus metrics
 
 Services can now publish statistics (share and public-link counts by
-status, permission class, item type and storage instance; creation
-counters; creator and recipient counts) on reva's Prometheus endpoint.
+status, permission class, item type and storage instance; creator and
+recipient counts) on reva's Prometheus endpoint.
 
 A driver opts in by implementing the `stats.Reporter` capability
 (`pkg/stats`), which its service exposes as a `stats` invocation — the

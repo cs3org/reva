@@ -110,23 +110,6 @@ func countsByDimensions(db *gorm.DB, tbl any, kind string) (stats.Metric, error)
 	return m, nil
 }
 
-// createdTotal counts every row ever created (soft deletes keep rows, so
-// the count is monotonic and usable as a Prometheus counter).
-func createdTotal(db *gorm.DB, tbl any, kind string) (stats.Metric, error) {
-	var count int64
-	if err := db.Model(tbl).Unscoped().Count(&count).Error; err != nil {
-		return stats.Metric{}, err
-	}
-	return stats.Metric{
-		Name: "shares_created",
-		Help: "Shares ever created.",
-		Kind: stats.KindCounter,
-		Samples: []stats.Sample{
-			{Labels: map[string]string{"kind": kind}, Value: float64(count)},
-		},
-	}, nil
-}
-
 // creators counts the distinct initiators of live shares.
 func creators(db *gorm.DB, tbl any, kind string) (stats.Metric, error) {
 	var count int64
@@ -149,10 +132,6 @@ func (m *ShareMgr) Stats(ctx context.Context) (*stats.Payload, error) {
 	p := &stats.Payload{Scope: stats.ScopeShared}
 
 	byDim, err := countsByDimensions(db, &model.Share{}, "share")
-	if err != nil {
-		return nil, err
-	}
-	created, err := createdTotal(db, &model.Share{}, "share")
 	if err != nil {
 		return nil, err
 	}
@@ -216,7 +195,7 @@ func (m *ShareMgr) Stats(ctx context.Context) (*stats.Payload, error) {
 		Samples: []stats.Sample{{Value: dist.Avg}},
 	}
 
-	p.Metrics = append(p.Metrics, byDim, created, creat, recipients, perRecipientMax, perRecipientAvg)
+	p.Metrics = append(p.Metrics, byDim, creat, recipients, perRecipientMax, perRecipientAvg)
 	return p, nil
 }
 
@@ -226,10 +205,6 @@ func (m *PublicShareMgr) Stats(ctx context.Context) (*stats.Payload, error) {
 	p := &stats.Payload{Scope: stats.ScopeShared}
 
 	byDim, err := countsByDimensions(db, &model.PublicLink{}, "link")
-	if err != nil {
-		return nil, err
-	}
-	created, err := createdTotal(db, &model.PublicLink{}, "link")
 	if err != nil {
 		return nil, err
 	}
@@ -267,7 +242,7 @@ func (m *PublicShareMgr) Stats(ctx context.Context) (*stats.Payload, error) {
 		})
 	}
 
-	p.Metrics = append(p.Metrics, byDim, created, creat, links)
+	p.Metrics = append(p.Metrics, byDim, creat, links)
 	return p, nil
 }
 

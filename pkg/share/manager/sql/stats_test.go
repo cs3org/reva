@@ -83,9 +83,6 @@ func TestShareManagerStats(t *testing.T) {
 	}); !ok || v != 2 {
 		t.Errorf("active file shares = %v (found=%v), want 2", v, ok)
 	}
-	if v, ok := findSample(p, "shares_created", map[string]string{"kind": "share"}); !ok || v != 2 {
-		t.Errorf("shares_created = %v (found=%v), want 2", v, ok)
-	}
 	if v, ok := findSample(p, "share_creators", map[string]string{"kind": "share"}); !ok || v != 1 {
 		t.Errorf("share_creators = %v (found=%v), want 1", v, ok)
 	}
@@ -135,8 +132,5 @@ func TestPublicShareManagerStats(t *testing.T) {
 	}
 	if v, ok := findSample(p, "links", map[string]string{"password_protected": "false"}); !ok || v != 1 {
 		t.Errorf("open links = %v (found=%v), want 1", v, ok)
-	}
-	if v, ok := findSample(p, "shares_created", map[string]string{"kind": "link"}); !ok || v != 2 {
-		t.Errorf("links created = %v (found=%v), want 2", v, ok)
 	}
 }
