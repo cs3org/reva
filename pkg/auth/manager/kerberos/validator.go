@@ -121,11 +121,11 @@ func (v *keytabValidator) Validate(ctx context.Context, token []byte) (*Ticket, 
 		return nil, errors.New("kerberos: the ticket verified but carried no identity")
 	}
 
-	ticket := &Ticket{Principal: id.UserName(), Realm: id.Domain()}
-	// A principal with an instance ("user/admin") keeps it in the username, and
-	// a caller matching against an account name needs only the first component.
-	if name, _, found := strings.Cut(ticket.Principal, "/"); found {
-		ticket.Principal = name
+	// UserName is the principal without its realm, so an instance
+	// ("user/admin") is still in it; only the first component is an account name.
+	ticket := &Ticket{Username: id.UserName(), Realm: id.Domain()}
+	if name, _, found := strings.Cut(ticket.Username, "/"); found {
+		ticket.Username = name
 	}
 	return ticket, nil
 }
