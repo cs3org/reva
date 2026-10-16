@@ -93,7 +93,7 @@ func TestStoreRequiresStatusStore(t *testing.T) {
 type stubStore struct{}
 
 func (stubStore) Enqueue(context.Context, Run) (RunID, error)      { return "", nil }
-func (stubStore) Claim(context.Context) (Run, error)               { return Run{}, nil }
+func (stubStore) Claim(context.Context, Slots) (Run, error)        { return Run{}, nil }
 func (stubStore) Complete(context.Context, RunID) error            { return nil }
 func (stubStore) Fail(context.Context, RunID, time.Duration) error { return nil }
 func (stubStore) Heartbeat(context.Context, RunID) error           { return nil }
@@ -314,12 +314,20 @@ type oneRunStore struct {
 
 func (s *oneRunStore) Enqueue(_ context.Context, r Run) (RunID, error) { return r.ID, nil }
 
-func (s *oneRunStore) Claim(ctx context.Context) (Run, error) {
+func (s *oneRunStore) Claim(ctx context.Context, slots Slots) (Run, error) {
 	if s.claimed.CompareAndSwap(false, true) {
-		return s.run, nil
+		return claimWith(slots, s.run)
 	}
 	<-ctx.Done()
 	return Run{}, ctx.Err()
+}
+
+// claimWith hands run out through slots, the way a real store does.
+func claimWith(slots Slots, run Run) (Run, error) {
+	if _, ok := slots.TryAcquire(run.Job); !ok {
+		return Run{}, ErrNoSlot
+	}
+	return run, nil
 }
 
 func (s *oneRunStore) Complete(context.Context, RunID) error { s.completed.Store(true); return nil }
@@ -556,12 +564,12 @@ type periodicStore struct {
 
 func (s *periodicStore) Enqueue(_ context.Context, r Run) (RunID, error) { return r.ID, nil }
 
-func (s *periodicStore) Claim(ctx context.Context) (Run, error) {
+func (s *periodicStore) Claim(ctx context.Context, slots Slots) (Run, error) {
 	if s.claimed.CompareAndSwap(false, true) {
 		s.mu.Lock()
 		s.running = true
 		s.mu.Unlock()
-		return s.run, nil
+		return claimWith(slots, s.run)
 	}
 	<-ctx.Done()
 	return Run{}, ctx.Err()
