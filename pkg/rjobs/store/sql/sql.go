@@ -126,6 +126,28 @@ func (s *store) PutProgress(ctx context.Context, id rjobs.RunID, p rjobs.Progres
 // terminalStates are the states a run never leaves.
 var terminalStates = []string{string(rjobs.StateSucceeded), string(rjobs.StateCancelled), string(rjobs.StateAborted)}
 
+// Prune deletes up to limit terminal runs that finished before before, oldest
+// first. It selects the ids first and deletes by id, since not every driver
+// supports a LIMIT on DELETE.
+func (s *store) Prune(ctx context.Context, before time.Time, limit int) (int, error) {
+	var ids []string
+	if err := s.db.WithContext(ctx).Model(&model.Run{}).
+		Where("state IN ? AND finished_at < ?", terminalStates, before).
+		Order("finished_at").
+		Limit(limit).
+		Pluck("run_id", &ids).Error; err != nil {
+		return 0, errors.Wrap(err, "rjobs sql: selecting runs to prune failed")
+	}
+	if len(ids) == 0 {
+		return 0, nil
+	}
+	res := s.db.WithContext(ctx).Where("run_id IN ?", ids).Delete(&model.Run{})
+	if res.Error != nil {
+		return 0, errors.Wrap(res.Error, "rjobs sql: pruning runs failed")
+	}
+	return int(res.RowsAffected), nil
+}
+
 func (s *store) Get(ctx context.Context, id rjobs.RunID) (rjobs.Status, error) {
 	var row model.Run
 	res := s.db.WithContext(ctx).First(&row, "run_id = ?", string(id))

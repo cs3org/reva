@@ -24,6 +24,7 @@ package jobs
 import (
 	"context"
 	"fmt"
+	"sync"
 	"sync/atomic"
 	"time"
 
@@ -69,6 +70,9 @@ type config struct {
 	// PeriodicReserve is the number of workers kept for leader periodic jobs,
 	// which on-demand jobs never take. Defaults to 1.
 	PeriodicReserve *int `mapstructure:"periodic_reserve"`
+	// RunRetentionDays is how long finished runs are kept in the status DB.
+	// Defaults to 30; a negative value keeps them forever.
+	RunRetentionDays int `mapstructure:"run_retention_days"`
 }
 
 func (c *config) ApplyDefaults() {
@@ -80,6 +84,9 @@ func (c *config) ApplyDefaults() {
 	}
 	if c.AckWaitSeconds == 0 {
 		c.AckWaitSeconds = 60
+	}
+	if c.RunRetentionDays == 0 {
+		c.RunRetentionDays = 30
 	}
 	if c.PeriodicReserve == nil {
 		reserve := 1
@@ -165,7 +172,7 @@ func (s *svc) Start() {
 				Token:   s.conf.NatsToken,
 				Prefix:  s.conf.NatsPrefix,
 				AckWait: time.Duration(s.conf.AckWaitSeconds) * time.Second,
-				Jobs:    rjobs.RegisteredQueueJobs(),
+				Jobs:    s.queueJobs(),
 			})
 			if err != nil {
 				s.log.Error().Err(err).Msg("jobs: connecting to the queue failed, leader and on-demand jobs disabled")
@@ -173,6 +180,8 @@ func (s *svc) Start() {
 			} else {
 				opts.Store = store
 				opts.Status = status
+				// only with a queue: a leader job without one fails the runner.
+				s.registerRetention()
 			}
 		}
 	} else {
@@ -192,6 +201,53 @@ func (s *svc) Start() {
 	rjobs.SetDefault(runner)
 	runner.Start()
 	s.log.Info().Msg("jobs service ready")
+}
+
+// queueJobs returns the jobs the queue store consumes: the registered ones,
+// plus the retention job, which is registered only once the queue is up.
+func (s *svc) queueJobs() []rjobs.QueueJob {
+	jobs := rjobs.RegisteredQueueJobs()
+	if s.conf.RunRetentionDays < 0 {
+		return jobs
+	}
+	for _, j := range jobs {
+		if j.Name == retentionJob {
+			return jobs
+		}
+	}
+	return append(jobs, rjobs.QueueJob{Name: retentionJob, Leader: true})
+}
+
+// retentionJob is the leader job that prunes old runs from the status store.
+const retentionJob = "rjobs.retention"
+
+var retentionOnce sync.Once
+
+// registerRetention registers the job that deletes finished runs older than
+// run_retention_days. It registers at most once per process.
+func (s *svc) registerRetention() {
+	if s.conf.RunRetentionDays < 0 {
+		return
+	}
+	retention := time.Duration(s.conf.RunRetentionDays) * 24 * time.Hour
+	retentionOnce.Do(func() {
+		err := rjobs.RegisterPeriodic(rjobs.Periodic{
+			Name:     retentionJob,
+			Schedule: "@daily",
+			Scope:    rjobs.ScopeLeader,
+			Run: func(ctx context.Context) error {
+				if s.runner == nil {
+					return nil
+				}
+				n, err := s.runner.PruneRuns(ctx, time.Now().Add(-retention))
+				appctx.GetLogger(ctx).Info().Int("deleted", n).Msg("jobs: pruned finished runs")
+				return err
+			},
+		})
+		if err != nil {
+			s.log.Error().Err(err).Msg("jobs: registering the retention job failed")
+		}
+	})
 }
 
 // SetDraining pauses the runner while the node is drained, so it stops claiming
