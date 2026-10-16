@@ -407,6 +407,28 @@ func (m *ShareMgr) TransferShare(ctx context.Context, ref *collaboration.ShareRe
 	return nil
 }
 
+// SetExpiration sets or, with a nil expiration, clears the expiration of a
+// share. Unlike UpdateShare it checks neither the owner nor the path, so an
+// administrator can act on any share.
+func (m *ShareMgr) SetExpiration(ctx context.Context, ref *collaboration.ShareReference, expiration *time.Time) error {
+	share, err := m.getEmptyShareByRef(ctx, ref)
+	if err != nil {
+		return err
+	}
+	var value any
+	if expiration != nil {
+		value = *expiration
+	}
+	res := m.db.Model(&share).Where("id = ?", share.Id).Update("expiration", value)
+	if res.Error != nil {
+		return res.Error
+	}
+	if res.RowsAffected == 0 {
+		return errtypes.NotFound(ref.String())
+	}
+	return nil
+}
+
 func (m *ShareMgr) MarkAsOrphaned(ctx context.Context, ref *collaboration.ShareReference) error {
 	share, err := m.getEmptyShareByRef(ctx, ref)
 	if err != nil {
@@ -725,6 +747,16 @@ func (m *ShareMgr) appendShareFiltersToQuery(query *gorm.DB, filters []*collabor
 					innerQuery = innerQuery.Where("uid_initiator = ?", filter.GetCreator().OpaqueId)
 				} else {
 					innerQuery = innerQuery.Or("uid_initiator = ?", filter.GetCreator().OpaqueId)
+				}
+			}
+			query = query.Where(innerQuery)
+		case collaboration.Filter_TYPE_OWNER:
+			innerQuery := m.db
+			for i, filter := range filters {
+				if i == 0 {
+					innerQuery = innerQuery.Where("uid_owner = ?", filter.GetOwner().OpaqueId)
+				} else {
+					innerQuery = innerQuery.Or("uid_owner = ?", filter.GetOwner().OpaqueId)
 				}
 			}
 			query = query.Where(innerQuery)

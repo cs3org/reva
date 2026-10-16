@@ -363,6 +363,61 @@ channel — the admin↔runner transport, never a user-facing surface. Caveats:
 but *do* show in `list`/`active`; and `failed` is not terminal — the framework
 retries.
 
+## Shares and public links
+
+The `usershareprovider` and the `publicshareprovider` expose the operations an
+operator needs on the shares and public links of **any** user, as invocations
+on top of the built-in ones. Their catalog (`reva admin invocations
+usershareprovider`, `... publicshareprovider`):
+
+```
+list          owner= initiator= sharee= id= resource= space= path= [as=] [include_orphans=] [include_expired=] [resolve_paths=] [limit=] [offset=]
+get           id=  (links: id= or token=)                        [resolve_path=]
+create        path= initiator= sharee= permissions= [type=user|group] [expires_at=] [ignore_existing=] [force=]
+              (links: path= initiator= permissions= [password=] [expires_at=] [name=] [description=] [internal=] [force=])
+remove        id=  [db_only=]                                     (links: id= or token=)
+set_expiry    id= expires_at=<date|RFC 3339|none> [sync=]         (links: [force=] to clear an editor link's expiry)
+set_password  id= password=                                       (links only; empty removes it)
+sync_expiry   id=                                                 (shares only: drop the storage grant of an expired share)
+transfer      id= initiator=                                      (project shares only; the new initiator must administer the project)
+move          id= path= [owner=]                                  (dangerous: repoints the record, grants are not touched)
+mark_orphan   id=
+```
+
+Two things make these different from the built-ins:
+
+- **They act as users.** An invocation runs with the operator's admin-only
+  token, which no protected CS3 endpoint accepts. So a handler that has to stat
+  a path, create a share or remove a grant does it *as the share's initiator*
+  (or the owner), with a token minted on the spot by
+  [`pkg/admin.Identity`](../../../../pkg/admin/identity.go) from the
+  deployment's JWT secret (`jwt_secret` in the service config, falling back to
+  `[shared]`). `create` and `remove` therefore go through the gateway and end
+  up with exactly the storage grants, hierarchy checks and permission checks a
+  share made from the web interface gets. The admin token itself never travels
+  downstream: `Identity.As` replaces it in the outgoing metadata.
+- **Mutations target one instance.** The share database is shared, so a
+  mutation selected by service name would run once per instance. Address a
+  node id (`host:port/usershareprovider`); `list` and `get` are safe to fan
+  out.
+
+Every mutation emits an audit event (`action=usershareprovider.<name>` or
+`publicshareprovider.<name>`, actor = the operator, target = the user acted
+as) in the provider's log, next to the admin service's own `invoke` audit line.
+The result of a link never includes its password hash.
+
+```
+reva admin invoke usershareprovider list owner=einstein resolve_paths=true
+reva admin invoke host:9144/usershareprovider create path=/eos/user/e/einstein/doc initiator=einstein sharee=marie permissions=editor
+reva admin invoke host:9144/usershareprovider set_expiry id=4711 expires_at=2026-12-31
+reva admin invoke host:9144/publicshareprovider create path=/eos/project/c/cernbox/data initiator=admin1 permissions=viewer expires_at=2026-12-31 name=handout
+reva admin invoke publicshareprovider list expiring_from=2026-10-20 expiring_to=2026-10-27
+```
+
+Only the `sql` driver implements the manager surface these need; with any
+other driver the invocations are listed but answer that the driver does not
+support them.
+
 ## Adding an invocation to a service (for developers)
 
 A service exposes admin operations by building an [`invoke.Set`](../../../../pkg/invoke/set.go)

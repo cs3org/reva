@@ -100,8 +100,16 @@ func (s *svc) Invoke(ctx context.Context, req *adminpb.InvokeRequest) (*adminpb.
 		return nil, status.Errorf(codes.NotFound, "admin: resolving %q: %v", req.Service, err)
 	}
 	results := fanOutInvoke(ctx, eps, req.Invocation, req.Args)
-	admin.Audit(ctx, admin.AuditEvent{Action: "invoke", Actor: actor, Target: req.Service,
-		Fields: map[string]string{"invocation": req.Invocation, "selector": req.Service, "instances": strconv.Itoa(len(results))}})
+	fields := map[string]string{"invocation": req.Invocation, "selector": req.Service, "instances": strconv.Itoa(len(results))}
+	// A client acting under a shared identity (a service account) says who
+	// really asked and why in these conventional arguments; they are recorded
+	// here so the audit trail keeps the attribution.
+	for _, k := range []string{"reason", "invoked_by"} {
+		if v := req.Args[k]; v != "" {
+			fields[k] = v
+		}
+	}
+	admin.Audit(ctx, admin.AuditEvent{Action: "invoke", Actor: actor, Target: req.Service, Fields: fields})
 	return &adminpb.InvokeResponse{Results: results}, nil
 }
 

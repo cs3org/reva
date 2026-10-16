@@ -337,6 +337,22 @@ func (m *PublicShareMgr) ListPublicLinks(u *user.User, filters []*link.ListPubli
 	return links, nil
 }
 
+// ListPublicLinksInSpace lists the public links of a space, orphans included
+// when includeOrphans is set. The CS3 link filters have no space type, hence
+// this separate entry point.
+func (m *PublicShareMgr) ListPublicLinksInSpace(spaceID string, includeOrphans bool) ([]model.PublicLink, error) {
+	query := m.db.Model(&model.PublicLink{}).Where("space_id = ?", spaceID)
+	if !includeOrphans {
+		query = query.Where("orphan = ?", false).Where("orphaned_at IS NULL")
+	}
+	var links []model.PublicLink
+	res := query.Find(&links)
+	if res.Error != nil {
+		return nil, res.Error
+	}
+	return links, nil
+}
+
 // TransferPublicShare transfers a publicshare to a new initiator. Only to be used for shares in projects.
 func (m *PublicShareMgr) TransferPublicShare(ctx context.Context, ref *link.PublicShareReference, newInitiator string) error {
 	if newInitiator == "" {

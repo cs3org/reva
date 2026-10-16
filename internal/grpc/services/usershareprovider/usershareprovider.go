@@ -25,13 +25,16 @@ import (
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	collaboration "github.com/cs3org/go-cs3apis/cs3/sharing/collaboration/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
+	"github.com/cs3org/reva/v3/pkg/admin"
 	"github.com/cs3org/reva/v3/pkg/appctx"
 	"github.com/cs3org/reva/v3/pkg/errtypes"
+	"github.com/cs3org/reva/v3/pkg/invoke"
 	"github.com/cs3org/reva/v3/pkg/plugin"
 	"github.com/cs3org/reva/v3/pkg/rgrpc"
 	"github.com/cs3org/reva/v3/pkg/rgrpc/status"
 	"github.com/cs3org/reva/v3/pkg/share"
 	"github.com/cs3org/reva/v3/pkg/share/manager/registry"
+	"github.com/cs3org/reva/v3/pkg/sharedconf"
 	"github.com/cs3org/reva/v3/pkg/utils"
 	"github.com/cs3org/reva/v3/pkg/utils/cfg"
 	"google.golang.org/grpc"
@@ -50,18 +53,29 @@ type config struct {
 	Driver                string                    `mapstructure:"driver"`
 	Drivers               map[string]map[string]any `mapstructure:"drivers"`
 	AllowedPathsForShares []string                  `mapstructure:"allowed_paths_for_shares"`
+	// JWTSecret signs the tokens the admin invocations act as users with.
+	// Falls back to [shared].
+	JWTSecret string `mapstructure:"jwt_secret"`
 }
 
 func (c *config) ApplyDefaults() {
 	if c.Driver == "" {
 		c.Driver = "json"
 	}
+	c.JWTSecret = sharedconf.GetJWTSecret(c.JWTSecret)
 }
 
 type service struct {
+	*invoke.Set
 	conf                  *config
 	sm                    share.Manager
 	allowedPathsForShares []*regexp.Regexp
+	// identity lets the admin invocations act as a share's owner or initiator;
+	// nil when no jwt secret is configured, in which case they refuse.
+	identity *admin.Identity
+	// grantsAt returns the grant API of the storage provider hosting a
+	// storage; a field so tests can substitute it.
+	grantsAt grantsFunc
 }
 
 func getShareManager(ctx context.Context, c *config) (share.Manager, error) {
@@ -109,7 +123,14 @@ func New(ctx context.Context, m map[string]any) (rgrpc.Service, error) {
 		conf:                  &c,
 		sm:                    sm,
 		allowedPathsForShares: allowedPathsForShares,
+		grantsAt:              grantsAtStorage,
 	}
+	if identity, err := admin.NewIdentity(c.JWTSecret); err == nil {
+		service.identity = identity
+	} else {
+		appctx.GetLogger(ctx).Warn().Err(err).Msg("usershareprovider: admin invocations cannot act as users")
+	}
+	service.registerInvocations()
 
 	return service, nil
 }
