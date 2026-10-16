@@ -21,20 +21,32 @@ package openapi
 import (
 	"encoding/json"
 	"net/http"
+	"reflect"
 	"strings"
 	"testing"
 
+	"github.com/cs3org/reva/v3/pkg/auth"
 	"github.com/cs3org/reva/v3/pkg/rhttp/router"
 )
 
 // noop stands in for the handlers, which the document does not look at.
 var noop = http.HandlerFunc(func(http.ResponseWriter, *http.Request) {})
 
+// schemes stand in for how a deployment was configured to authenticate.
+var schemes = []auth.Scheme{
+	{Name: "basic", Kind: auth.SchemeBasic, Description: "A username and password."},
+	{Name: "revaToken", Kind: auth.SchemeHeader, Param: "x-access-token"},
+}
+
 func render(t *testing.T, declare func(*router.Router)) *Document {
+	return renderWith(t, declare, schemes)
+}
+
+func renderWith(t *testing.T, declare func(*router.Router), schemes []auth.Scheme) *Document {
 	t.Helper()
 	r := router.New()
 	declare(r)
-	return From(r.Routes(), Info{Title: "reva", Version: "test"}, nil)
+	return From(r.Routes(), Info{Title: "reva", Version: "test"}, nil, schemes)
 }
 
 // What a service declared is what the document says, without the service
@@ -258,5 +270,64 @@ func TestDocumentIsValidJSON(t *testing.T) {
 	}
 	if _, ok := round["paths"]; !ok {
 		t.Error("the document has no paths")
+	}
+}
+
+// How a deployment authenticates is the deployment's business: the document
+// reports the schemes it was given, each described the way OpenAPI names it,
+// and asks protected operations for any one of them.
+func TestSecurityComesFromTheGivenSchemes(t *testing.T) {
+	doc := renderWith(t, func(r *router.Router) {
+		r.Service("ocs").Get("/ocs/v1.php/cloud/user", noop)
+		r.Service("ocs").Get("/ocs/v1.php/cloud/capabilities", noop, router.Unprotected())
+	}, []auth.Scheme{
+		{Name: "appauth", Kind: auth.SchemeBasic, Description: "An app password."},
+		{Name: "publicshares", Kind: auth.SchemeHeader, Param: "public-token"},
+		{Name: "bearer", Kind: auth.SchemeBearer},
+		{Name: "signature", Kind: auth.SchemeQuery, Param: "OC-Signature"},
+	})
+
+	want := map[string]*SecurityScheme{
+		"appauth":      {Type: "http", Scheme: "basic", Description: "An app password."},
+		"publicshares": {Type: "apiKey", In: "header", Name: "public-token"},
+		"bearer":       {Type: "http", Scheme: "bearer"},
+		"signature":    {Type: "apiKey", In: "query", Name: "OC-Signature"},
+	}
+	if got := doc.Components.SecuritySchemes; !reflect.DeepEqual(got, want) {
+		t.Errorf("got security schemes %+v, want %+v", got, want)
+	}
+
+	user := doc.Paths["/ocs/v1.php/cloud/user"]
+	if user == nil || user.Get == nil {
+		t.Fatalf("the user endpoint is missing: %+v", doc.Paths)
+	}
+	wantReq := []map[string][]string{
+		{"appauth": {}}, {"publicshares": {}}, {"bearer": {}}, {"signature": {}},
+	}
+	if got := user.Get.Security; !reflect.DeepEqual(got, wantReq) {
+		t.Errorf("got requirement %+v, want any one of the schemes in order: %+v", got, wantReq)
+	}
+
+	caps := doc.Paths["/ocs/v1.php/cloud/capabilities"]
+	if caps == nil || caps.Get == nil {
+		t.Fatal("the capabilities endpoint is missing")
+	}
+	if len(caps.Get.Security) != 0 {
+		t.Errorf("an unprotected route should need no credentials, got %+v", caps.Get.Security)
+	}
+}
+
+// A deployment whose authentication could not be described is not given a
+// made-up one.
+func TestNoSchemesLeavesSecurityOut(t *testing.T) {
+	doc := renderWith(t, func(r *router.Router) {
+		r.Service("ocs").Get("/ocs/v1.php/cloud/user", noop)
+	}, nil)
+
+	if doc.Components.SecuritySchemes != nil {
+		t.Errorf("got security schemes %+v, want none", doc.Components.SecuritySchemes)
+	}
+	if got := doc.Paths["/ocs/v1.php/cloud/user"].Get.Security; got != nil {
+		t.Errorf("got requirement %+v, want none", got)
 	}
 }

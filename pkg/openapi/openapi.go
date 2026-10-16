@@ -37,6 +37,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/cs3org/reva/v3/pkg/auth"
 	"github.com/cs3org/reva/v3/pkg/rhttp/router"
 )
 
@@ -76,10 +77,11 @@ type Components struct {
 }
 
 type SecurityScheme struct {
-	Type         string `json:"type"`
-	Scheme       string `json:"scheme,omitempty"`
-	BearerFormat string `json:"bearerFormat,omitempty"`
-	Description  string `json:"description,omitempty"`
+	Type        string `json:"type"`
+	Scheme      string `json:"scheme,omitempty"`
+	In          string `json:"in,omitempty"`
+	Name        string `json:"name,omitempty"`
+	Description string `json:"description,omitempty"`
 }
 
 // PathItem holds the operations of one path.
@@ -148,30 +150,23 @@ var operationField = map[string]func(*PathItem) **Operation{
 	http.MethodTrace:   func(p *PathItem) **Operation { return &p.Trace },
 }
 
-// From builds the document describing the given routes.
-func From(routes []router.Route, info Info, servers []Server) *Document {
+// From builds the document describing the given routes, authenticated by the
+// given schemes.
+//
+// The schemes are the deployment's own, resolved from how its authentication
+// is configured, so that what the document tells a client to send is what the
+// server reads. Passing none leaves the document silent about authentication
+// rather than guessing at it.
+func From(routes []router.Route, info Info, servers []Server, schemes []auth.Scheme) *Document {
 	f := newReflector()
 	doc := &Document{
-		OpenAPI: Version,
-		Info:    info,
-		Servers: servers,
-		Paths:   map[string]*PathItem{},
-		Components: Components{
-			SecuritySchemes: map[string]*SecurityScheme{
-				"basic": {
-					Type:        "http",
-					Scheme:      "basic",
-					Description: "A username and password, as the sync clients send them.",
-				},
-				"bearer": {
-					Type:         "http",
-					Scheme:       "bearer",
-					BearerFormat: "JWT",
-					Description:  "A reva token, as returned by authentication.",
-				},
-			},
-		},
+		OpenAPI:    Version,
+		Info:       info,
+		Servers:    servers,
+		Paths:      map[string]*PathItem{},
+		Components: Components{SecuritySchemes: securitySchemes(schemes)},
 	}
+	security := requirement(schemes)
 
 	owners := map[string]bool{}
 	for _, rt := range routes {
@@ -204,7 +199,7 @@ func From(routes []router.Route, info Info, servers []Server) *Document {
 				// the router refuses it. Keep the first all the same.
 				continue
 			}
-			*field(item) = operationFor(f, rt, m, path)
+			*field(item) = operationFor(f, rt, m, path, security)
 		}
 	}
 
@@ -230,7 +225,7 @@ var anyMethods = []string{
 	http.MethodPatch, http.MethodDelete, http.MethodOptions,
 }
 
-func operationFor(f *reflector, rt router.Route, method, path string) *Operation {
+func operationFor(f *reflector, rt router.Route, method, path string, security []map[string][]string) *Operation {
 	op := &Operation{
 		OperationID: operationID(rt.Owner, method, path),
 		Responses:   map[string]*Response{},
@@ -239,7 +234,7 @@ func operationFor(f *reflector, rt router.Route, method, path string) *Operation
 		op.Tags = []string{rt.Owner}
 	}
 	if !rt.Unprotected {
-		op.Security = []map[string][]string{{"basic": {}}, {"bearer": {}}}
+		op.Security = security
 	}
 
 	if rt.Subtree {

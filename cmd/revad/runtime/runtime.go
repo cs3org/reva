@@ -592,6 +592,12 @@ func newServers(ctx context.Context, grpc []*config.GRPC, http []*config.HTTP, l
 	for _, cfg := range http {
 		logger := log.With().Str("pkg", "http").Logger()
 		ctx := appctx.WithLogger(ctx, &logger)
+		// A service describing this server's API reports how it
+		// authenticates, which the auth middleware's configuration decides.
+		ctx, err := withAuthSchemes(ctx, cfg.Middlewares)
+		if err != nil {
+			return nil, err
+		}
 		services, err := rhttp.InitServices(ctx, cfg.Services)
 		if err != nil {
 			return nil, err
