@@ -34,6 +34,7 @@ import (
 
 	"github.com/cs3org/reva/v3/pkg/appctx"
 	"github.com/cs3org/reva/v3/pkg/errtypes"
+	"github.com/cs3org/reva/v3/pkg/invoke"
 	"github.com/cs3org/reva/v3/pkg/permissions"
 	"github.com/cs3org/reva/v3/pkg/plugin"
 	"github.com/cs3org/reva/v3/pkg/projects"
@@ -83,6 +84,7 @@ func (c *config) ApplyDefaults() {
 }
 
 type service struct {
+	*invoke.Set
 	c                    *config
 	projects             projects.Catalogue
 	resourceInfoCache    cache.ResourceInfoCache
@@ -117,7 +119,9 @@ func New(ctx context.Context, m map[string]any) (rgrpc.Service, error) {
 		svc.timeoutSkipSpaces = time.Second * time.Duration(3) // 3 seconds.
 	}
 
-	return &svc, nil
+	svcp := &svc
+	svcp.registerInvocations()
+	return svcp, nil
 }
 
 func getCacheManager(c *config) (cache.ResourceInfoCache, error) {

@@ -146,7 +146,7 @@ func New(ctx context.Context, m map[string]any) (projects.Catalogue, error) {
 	if c.CacheTTL == 0 {
 		c.CacheTTL = 60
 	}
-	cache.SetTTL(time.Duration(c.CacheTTL))
+	cache.SetTTL(time.Duration(c.CacheTTL) * time.Second)
 	// Even if we get a hit, of course we just want to refresh every 60 seconds
 	cache.SkipTTLExtensionOnHit(true)
 	mgr := &ProjectsManager{
@@ -330,29 +330,17 @@ func (m *ProjectsManager) UpdateProjectStatus(ctx context.Context, name string, 
 	if res.RowsAffected == 0 {
 		return fmt.Errorf("no project found with name %s", name)
 	}
+	m.InvalidateCache()
 
 	log.Info().Str("project", name).Str("status", status.AsString()).Msg("Updated project status")
 	return nil
 }
 
-// To be used only by cernboxcop.
+// ListAllProjects lists every project, archived ones included, optionally
+// filtered by status and owner. It predates ListProjects, which the Admin API
+// uses, and is kept for cernboxcop.
 func (m *ProjectsManager) ListAllProjects(ctx context.Context, status projects.ProjectStatus, owner string) ([]*Project, error) {
-	var fetchedProjects []*Project
-	query := m.db.Model(&Project{})
-
-	if status != "" {
-		query = query.Where("status = ?", status)
-	}
-
-	if owner != "" {
-		query = query.Where("owner = ?", owner)
-	}
-
-	res := query.Find(&fetchedProjects)
-	if res.Error != nil {
-		return nil, res.Error
-	}
-	return fetchedProjects, nil
+	return m.ListProjects(ctx, ProjectFilter{Status: status, Owner: owner, IncludeArchived: true})
 }
 
 func projectBelongsToUser(user *userpb.User, p *Project) (*provider.ResourcePermissions, bool) {

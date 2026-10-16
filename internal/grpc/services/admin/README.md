@@ -418,6 +418,39 @@ Only the `sql` driver implements the manager surface these need; with any
 other driver the invocations are listed but answer that the driver does not
 support them.
 
+## Projects
+
+The `spacesregistry` exposes the projects catalogue to operators; the CS3
+surface only ever lists the caller's own projects. Catalog (`reva admin
+invocations spacesregistry`):
+
+```
+list          [status=] [owner=] [created_after=] [created_before=] [include_archived=]
+get           name=
+set_status    name= status=creating|active|archiving|archived
+set_owner     name= owner=
+create        name= owner= [path=] [storage_id=] [space_id=] [status=] [readers= writers= admins= resource_admins=] [description=] [service_account=] [snow_ticket=] [comments=] [capabilities=]   (dangerous)
+delete        name= [hard=]                                                                                                                                                                    (dangerous)
+flush_cache
+```
+
+`create` records a project the storage already serves (provisioning the space
+on EOS is a separate workflow): the path, the space id and the access groups
+are derived from the name, and the storage id is copied from the projects
+already under the same initial unless given. `delete` is soft by default,
+which keeps the space id taken; `hard=true` removes the row.
+
+Every gateway process caches the project list for `cache_ttl` seconds, and a
+mutation only invalidates the cache of the instance it ran on. Address one node
+for the mutation, then fan `flush_cache` out by service name:
+
+```
+reva admin invoke host:9142/spacesregistry set_status name=cernbox status=archiving
+reva admin invoke spacesregistry flush_cache
+```
+
+Only the `sql` driver implements the catalogue surface these need.
+
 ## Adding an invocation to a service (for developers)
 
 A service exposes admin operations by building an [`invoke.Set`](../../../../pkg/invoke/set.go)
