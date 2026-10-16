@@ -43,6 +43,7 @@ import (
 	storageprovider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	storageregistry "github.com/cs3org/go-cs3apis/cs3/storage/registry/v1beta1"
 	datatx "github.com/cs3org/go-cs3apis/cs3/tx/v1beta1"
+	"github.com/cs3org/reva/v3/pkg/admin/adminpb"
 	"google.golang.org/grpc"
 )
 
@@ -85,6 +86,11 @@ func resolved[T any](get func(Clients) (T, error)) (T, error) {
 // Gateway resolves the gateway through the global resolver.
 func Gateway(ctx context.Context) (gateway.GatewayAPIClient, error) {
 	return resolved(func(c Clients) (gateway.GatewayAPIClient, error) { return c.Gateway(ctx) })
+}
+
+// Admin resolves the Admin API through the global resolver.
+func Admin(ctx context.Context) (adminpb.AdminAPIClient, error) {
+	return resolved(func(c Clients) (adminpb.AdminAPIClient, error) { return c.Admin(ctx) })
 }
 
 // StorageProvider resolves the storage provider through the global resolver.

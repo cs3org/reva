@@ -50,6 +50,7 @@ import (
 	storageprovider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	storageregistry "github.com/cs3org/go-cs3apis/cs3/storage/registry/v1beta1"
 	datatx "github.com/cs3org/go-cs3apis/cs3/tx/v1beta1"
+	"github.com/cs3org/reva/v3/pkg/admin/adminpb"
 
 	revtrace "github.com/cs3org/reva/v3/internal/grpc/interceptors/trace"
 	"github.com/cs3org/reva/v3/pkg/appctx"
@@ -116,6 +117,7 @@ const (
 // selection and dialing happen below the call.
 type Clients interface {
 	Gateway(ctx context.Context) (gateway.GatewayAPIClient, error)
+	Admin(ctx context.Context) (adminpb.AdminAPIClient, error)
 	StorageProvider(ctx context.Context) (storageprovider.ProviderAPIClient, error)
 	StorageRegistry(ctx context.Context) (storageregistry.RegistryAPIClient, error)
 	Spaces(ctx context.Context) (storageprovider.SpacesAPIClient, error)

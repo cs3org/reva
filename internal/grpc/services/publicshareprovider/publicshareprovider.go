@@ -27,6 +27,7 @@ import (
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/cs3org/reva/v3/pkg/appctx"
 	"github.com/cs3org/reva/v3/pkg/errtypes"
+	"github.com/cs3org/reva/v3/pkg/invoke"
 	"github.com/cs3org/reva/v3/pkg/plugin"
 	"github.com/cs3org/reva/v3/pkg/publicshare"
 	"github.com/cs3org/reva/v3/pkg/publicshare/manager/registry"
@@ -62,6 +63,8 @@ type service struct {
 	conf                  *config
 	sm                    publicshare.Manager
 	allowedPathsForShares []*regexp.Regexp
+	// set holds the operator invocations, served through the Admin API.
+	set *invoke.Set
 }
 
 func getShareManager(ctx context.Context, c *config) (publicshare.Manager, error) {
@@ -110,6 +113,7 @@ func New(ctx context.Context, m map[string]any) (rgrpc.Service, error) {
 		sm:                    sm,
 		allowedPathsForShares: allowedPathsForShares,
 	}
+	service.registerInvocations()
 
 	return service, nil
 }
