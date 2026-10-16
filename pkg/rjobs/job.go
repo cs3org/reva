@@ -86,6 +86,14 @@ type Job interface {
 	Run(ctx context.Context, p Params) (Params, error)
 }
 
+// HandOffJob is an optional interface of an on-demand job value. When the
+// runner is paused, e.g. because its node is drained, it calls HandOff on every
+// running job that implements it. A job that wants to move to another node
+// finishes what it is doing and returns RetryAfter(0, ...).
+type HandOffJob interface {
+	HandOff()
+}
+
 // NewJob constructs an on-demand job from its configuration. It is the
 // function registered with RegisterOnDemand. The map is the job's own section
 // of the service configuration
