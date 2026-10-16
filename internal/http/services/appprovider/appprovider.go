@@ -42,16 +42,19 @@ import (
 	"github.com/cs3org/reva/v3/pkg/httpclient"
 	"github.com/cs3org/reva/v3/pkg/rgrpc/status"
 	"github.com/cs3org/reva/v3/pkg/rhttp/global"
+	"github.com/cs3org/reva/v3/pkg/rhttp/router"
 	"github.com/cs3org/reva/v3/pkg/service"
 	"github.com/cs3org/reva/v3/pkg/sharedconf"
 	"github.com/cs3org/reva/v3/pkg/spaces"
 	"github.com/cs3org/reva/v3/pkg/utils"
 	"github.com/cs3org/reva/v3/pkg/utils/cfg"
 	"github.com/cs3org/reva/v3/pkg/utils/resourceid"
-	"github.com/go-chi/chi/v5"
 	ua "github.com/mileusna/useragent"
 	"github.com/pkg/errors"
 )
+
+// mount is where the service is served.
+const mount = "/app"
 
 func init() {
 	global.Register("appprovider", New)
@@ -59,7 +62,6 @@ func init() {
 
 // Config holds the config options for the HTTP appprovider service.
 type Config struct {
-	Prefix     string `mapstructure:"prefix"`
 	GatewaySvc string `mapstructure:"gatewaysvc"                                              validate:"required"`
 	Insecure   bool   `docs:"false;Whether to skip certificate checks when sending requests." mapstructure:"insecure"`
 	// FeedbackRecipient is the email address user feedback submitted through the
@@ -68,15 +70,11 @@ type Config struct {
 }
 
 func (c *Config) ApplyDefaults() {
-	if c.Prefix == "" {
-		c.Prefix = "app"
-	}
 	c.GatewaySvc = sharedconf.GetGatewaySVC(c.GatewaySvc)
 }
 
 type svc struct {
-	conf   *Config
-	router *chi.Mux
+	conf *Config
 }
 
 // New returns a new ocmd object.
@@ -86,27 +84,7 @@ func New(ctx context.Context, m map[string]any) (global.Service, error) {
 		return nil, err
 	}
 
-	r := chi.NewRouter()
-	s := &svc{
-		conf:   &c,
-		router: r,
-	}
-
-	if err := s.routerInit(); err != nil {
-		return nil, err
-	}
-
-	return s, nil
-}
-
-func (s *svc) routerInit() error {
-	s.router.Get("/list", s.handleList)
-	s.router.Post("/new", s.handleNew)
-	s.router.Post("/open", s.handleOpen)
-	s.router.Post("/notify", s.handleNotify)
-	s.router.Post("/mentions", s.handleMentions)
-	s.router.Post("/feedback", s.handleFeedback)
-	return nil
+	return &svc{conf: &c}, nil
 }
 
 // Close performs cleanup.
@@ -114,17 +92,16 @@ func (s *svc) Close() error {
 	return nil
 }
 
-func (s *svc) Prefix() string {
-	return s.conf.Prefix
-}
-
-func (s *svc) Unprotected() []string {
-	return []string{"/list"}
-}
-
-func (s *svc) Handler() http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		s.router.ServeHTTP(w, r)
+// Routes declares the app provider endpoints. Listing the available apps needs
+// no credentials, everything else acts on a resource and does.
+func (s *svc) Routes(r *router.Router) {
+	r.Group(mount, func(r *router.Router) {
+		r.Get("/list", s.handleList, router.Unprotected())
+		r.Post("/new", s.handleNew)
+		r.Post("/open", s.handleOpen)
+		r.Post("/notify", s.handleNotify)
+		r.Post("/mentions", s.handleMentions)
+		r.Post("/feedback", s.handleFeedback)
 	})
 }
 
