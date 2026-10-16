@@ -114,7 +114,7 @@ and wiring apply.
 
 ScienceMesh WAYF and received-webapp launch. Operator-configured directory
 fetches stay trusted. Listed providers, request-supplied `/discover`
-domains, and `/open-in-app` sender discovery and token exchange use
+domains, and `/webapp-launch` sender discovery and token exchange use
 public-only clients with the configured exception. Loopback stays off.
 `ocm_client_use_env_proxy` is the explicit proxy opt-in.
 

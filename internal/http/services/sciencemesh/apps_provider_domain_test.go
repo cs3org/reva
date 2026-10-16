@@ -48,7 +48,7 @@ func (f *fakeReceivedGateway) GetUser(
 	return nil, errors.New("GetUser must not supply the receiving client_id")
 }
 
-func TestOpenInAppEmptyHandlerDoesNotExchange(t *testing.T) {
+func TestWebappLaunchEmptyHandlerDoesNotExchange(t *testing.T) {
 	tests := []struct {
 		name   string
 		domain string
@@ -90,7 +90,7 @@ func TestOpenInAppEmptyHandlerDoesNotExchange(t *testing.T) {
 				Id: &userpb.UserId{OpaqueId: "local-user", Idp: "user.idp.example"},
 			}))
 			rec := httptest.NewRecorder()
-			h.OpenInApp(rec, req)
+			h.WebappLaunch(rec, req)
 			if rec.Code == http.StatusOK {
 				t.Fatalf("status %d body %s", rec.Code, rec.Body.String())
 			}
@@ -104,7 +104,7 @@ func TestOpenInAppEmptyHandlerDoesNotExchange(t *testing.T) {
 	}
 }
 
-func TestOpenInAppClientIDIsDecodedProviderDomain(t *testing.T) {
+func TestWebappLaunchClientIDIsDecodedProviderDomain(t *testing.T) {
 	const want = "Receiver.Example.Test"
 	var c config
 	err := cfg.Decode(map[string]any{
@@ -188,7 +188,7 @@ func TestOpenInAppClientIDIsDecodedProviderDomain(t *testing.T) {
 				}))
 			}
 			rec := httptest.NewRecorder()
-			h.OpenInApp(rec, req)
+			h.WebappLaunch(rec, req)
 			if rec.Code != http.StatusOK {
 				t.Fatalf("status %d body %s", rec.Code, rec.Body.String())
 			}
@@ -202,7 +202,7 @@ func TestOpenInAppClientIDIsDecodedProviderDomain(t *testing.T) {
 	}
 }
 
-func TestOpenInAppEncodedClientIDUsesProviderDomain(t *testing.T) {
+func TestWebappLaunchEncodedClientIDUsesProviderDomain(t *testing.T) {
 	const want = "receiver.example.test"
 	var gotClientID string
 	tokenCalls := 0
@@ -272,7 +272,7 @@ func TestOpenInAppEncodedClientIDUsesProviderDomain(t *testing.T) {
 
 	req, _ := newLaunchRequest(t, "/ocm/share-1")
 	rec := httptest.NewRecorder()
-	h.OpenInApp(rec, req)
+	h.WebappLaunch(rec, req)
 	if rec.Code != http.StatusOK {
 		t.Fatalf("status %d body %s", rec.Code, rec.Body.String())
 	}
