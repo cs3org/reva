@@ -61,6 +61,10 @@ func New(ctx context.Context, m map[string]any) (global.Service, error) {
 }
 
 func (s *svc) routerInit() error {
+	s.Conf.OCMProvider.ApplyDefaults()
+	if err := s.Conf.OCMProvider.validateMFAPolicy(); err != nil {
+		return err
+	}
 	wkocmHandler := new(wkocmHandler)
 	wkocmHandler.init(&s.Conf.OCMProvider)
 	s.router.Get("/ocm", wkocmHandler.Ocm)
