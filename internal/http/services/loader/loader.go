@@ -30,6 +30,7 @@ import (
 	_ "github.com/cs3org/reva/v3/internal/http/services/helloworld"
 	_ "github.com/cs3org/reva/v3/internal/http/services/loginflow"
 	_ "github.com/cs3org/reva/v3/internal/http/services/metrics"
+	_ "github.com/cs3org/reva/v3/internal/http/services/openapi"
 	_ "github.com/cs3org/reva/v3/internal/http/services/opencloudmesh/ocmd"
 	_ "github.com/cs3org/reva/v3/internal/http/services/owncloud/ocapi"
 	_ "github.com/cs3org/reva/v3/internal/http/services/owncloud/ocdav"
