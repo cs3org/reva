@@ -26,6 +26,9 @@ import (
 	"time"
 
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
+	"github.com/cs3org/reva/v3/pkg/appctx"
+	"github.com/cs3org/reva/v3/pkg/permissions"
+	"github.com/cs3org/reva/v3/pkg/storage/utils/grants"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -155,5 +158,53 @@ func TestRctimeSeconds(t *testing.T) {
 		seconds, ok := rctimeSeconds(tt.rctime)
 		assert.Equal(t, tt.ok, ok, tt.rctime)
 		assert.Equal(t, tt.seconds, seconds, tt.rctime)
+	}
+}
+
+// TestPermissionsFollowFilesystem checks that a user is only offered what the
+// filesystem lets them do, so that Web does not show actions that then fail.
+func TestPermissionsFollowFilesystem(t *testing.T) {
+	if os.Geteuid() == 0 {
+		t.Skip("root passes every access check")
+	}
+
+	tempDir, cleanup := GetTestDir(t, "permissions")
+	t.Cleanup(cleanup)
+
+	require.NoError(t, os.WriteFile(filepath.Join(tempDir, "writable.txt"), []byte("data"), 0644))
+	require.NoError(t, os.WriteFile(filepath.Join(tempDir, "readonly.txt"), []byte("data"), 0444))
+	require.NoError(t, os.WriteFile(filepath.Join(tempDir, "writeonly.txt"), []byte("data"), 0200))
+	locked := filepath.Join(tempDir, "locked")
+	require.NoError(t, os.Mkdir(locked, 0755))
+	require.NoError(t, os.WriteFile(filepath.Join(locked, "inside.txt"), []byte("data"), 0644))
+	require.NoError(t, os.Chmod(locked, 0555))
+	// Runs before the cleanup above, which could not empty the directory otherwise
+	t.Cleanup(func() { _ = os.Chmod(locked, 0755) })
+
+	ctx := appctx.ContextSetUser(ContextWithTestLogger(t), GetCurrentTestUser(t))
+	fs := CreateCephMountFSForTesting(t, ctx, map[string]any{"testing_allow_local_mode": true}, "/volumes/_nogroup/test", tempDir)
+
+	tests := []struct {
+		path      string
+		role      *permissions.Role
+		canRemove bool
+	}{
+		{path: "/writable.txt", role: permissions.NewEditorRole(), canRemove: true},
+		{path: "/readonly.txt", role: permissions.NewViewerRole(), canRemove: true},
+		{path: "/writeonly.txt", role: permissions.NewUploaderRole(), canRemove: true},
+		{path: "/locked", role: permissions.NewViewerRole(), canRemove: true},
+		{path: "/locked/inside.txt", role: permissions.NewEditorRole(), canRemove: false},
+		{path: "/", role: permissions.NewEditorRole(), canRemove: false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.path, func(t *testing.T) {
+			ri, err := fs.GetMD(ctx, &provider.Reference{Path: tt.path}, nil)
+			require.NoError(t, err)
+
+			want := tt.role.CS3ResourcePermissions()
+			want.Delete, want.Move = tt.canRemove, tt.canRemove
+			assert.True(t, grants.PermissionsEqual(want, ri.PermissionSet), "want %v, got %v", want, ri.PermissionSet)
+		})
 	}
 }
