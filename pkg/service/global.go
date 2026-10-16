@@ -43,6 +43,7 @@ import (
 	storageprovider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	storageregistry "github.com/cs3org/go-cs3apis/cs3/storage/registry/v1beta1"
 	datatx "github.com/cs3org/go-cs3apis/cs3/tx/v1beta1"
+	"github.com/cs3org/reva/v3/pkg/admin/adminpb"
 	"google.golang.org/grpc"
 )
 
@@ -185,6 +186,11 @@ func DataTx(ctx context.Context) (datatx.TxAPIClient, error) {
 // Labels resolves the labels service through the global resolver.
 func Labels(ctx context.Context) (labels.LabelsAPIClient, error) {
 	return resolved(func(c Clients) (labels.LabelsAPIClient, error) { return c.Labels(ctx) })
+}
+
+// Admin resolves the Admin API through the global resolver.
+func Admin(ctx context.Context) (adminpb.AdminAPIClient, error) {
+	return resolved(func(c Clients) (adminpb.AdminAPIClient, error) { return c.Admin(ctx) })
 }
 
 // HTTPEndpoint resolves one ready HTTP endpoint matching the filters through the

@@ -46,7 +46,7 @@ func (s *svc) Impersonate(ctx context.Context, req *adminpb.ImpersonateRequest) 
 		return nil, status.Errorf(codes.Internal, "admin: impersonating %q: %v", req.User, err)
 	}
 
-	tkn, err := s.tokenManager.MintToken(ctx, u, scopes)
+	tkn, err := s.userTokenManager.MintToken(ctx, u, scopes)
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "admin: minting user token: %v", err)
 	}

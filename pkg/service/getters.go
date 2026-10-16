@@ -41,6 +41,7 @@ import (
 	storageprovider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	storageregistry "github.com/cs3org/go-cs3apis/cs3/storage/registry/v1beta1"
 	datatx "github.com/cs3org/go-cs3apis/cs3/tx/v1beta1"
+	"github.com/cs3org/reva/v3/pkg/admin/adminpb"
 )
 
 // Each getter bakes in its peer name and builds the CS3 client over a connection
@@ -212,4 +213,12 @@ func (c *clients) Labels(ctx context.Context) (labels.LabelsAPIClient, error) {
 		return nil, err
 	}
 	return labels.NewLabelsAPIClient(conn), nil
+}
+
+func (c *clients) Admin(ctx context.Context) (adminpb.AdminAPIClient, error) {
+	conn, _, err := c.resolve(ctx, NameAdmin)
+	if err != nil {
+		return nil, err
+	}
+	return adminpb.NewAdminAPIClient(conn), nil
 }
