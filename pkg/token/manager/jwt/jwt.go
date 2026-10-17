@@ -77,7 +77,7 @@ func New(m map[string]any) (token.Manager, error) {
 	}
 
 	if c.Secret == "" {
-		return nil, errors.New("jwt: secret for signing payloads is not defined in config")
+		return nil, errors.New("jwt: signing secret is not configured; set shared.jwt_secret or the token manager secret")
 	}
 
 	mgr := &manager{conf: &c, cache: authcache.New(c.Config)}
