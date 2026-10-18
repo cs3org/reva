@@ -22,6 +22,7 @@ import (
 	"context"
 	"encoding/json"
 	"io"
+	"math"
 	"os"
 	"sync"
 	"time"
@@ -38,6 +39,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/pkg/errors"
 	"google.golang.org/genproto/protobuf/field_mask"
+	"google.golang.org/protobuf/proto"
 )
 
 func init() {
@@ -94,6 +96,9 @@ func loadOrCreate(file string) (*shareModel, error) {
 	if m.ReceivedShares == nil {
 		m.ReceivedShares = map[string]*ocm.ReceivedShare{}
 	}
+	if m.TransferGenerations == nil {
+		m.TransferGenerations = map[string]uint64{}
+	}
 
 	return &m, nil
 }
@@ -101,12 +106,16 @@ func loadOrCreate(file string) (*shareModel, error) {
 type shareModel struct {
 	Shares         map[string]*ocm.Share         `json:"shares"`          // share_id -> share
 	ReceivedShares map[string]*ocm.ReceivedShare `json:"received_shares"` // share_id -> share
+	// TransferGenerations holds the embedded transfer attempt of received
+	// shares, which the CS3 received share has no field for.
+	TransferGenerations map[string]uint64 `json:"transfer_generations"` // share_id -> attempt
 }
 
 func (s *shareModel) UnmarshalJSON(d []byte) error {
 	m := struct {
-		Shares         map[string]json.RawMessage `json:"shares"`
-		ReceivedShares map[string]json.RawMessage `json:"received_shares"`
+		Shares              map[string]json.RawMessage `json:"shares"`
+		ReceivedShares      map[string]json.RawMessage `json:"received_shares"`
+		TransferGenerations map[string]uint64          `json:"transfer_generations"`
 	}{}
 
 	if err := json.Unmarshal(d, &m); err != nil {
@@ -131,9 +140,15 @@ func (s *shareModel) UnmarshalJSON(d []byte) error {
 		received[k] = &s
 	}
 
+	generations := m.TransferGenerations
+	if generations == nil {
+		generations = map[string]uint64{}
+	}
+
 	*s = shareModel{
-		Shares:         share,
-		ReceivedShares: received,
+		Shares:              share,
+		ReceivedShares:      received,
+		TransferGenerations: generations,
 	}
 
 	return nil
@@ -159,8 +174,9 @@ func (s *shareModel) MarshalJSON() ([]byte, error) {
 	}
 
 	return json.Marshal(map[string]any{
-		"shares":          shares,
-		"received_shares": received,
+		"shares":               shares,
+		"received_shares":      received,
+		"transfer_generations": s.TransferGenerations,
 	})
 }
 
@@ -340,23 +356,30 @@ func (m *mgr) getByKey(ctx context.Context, key *ocm.ShareKey) (*ocm.Share, erro
 	return nil, share.ErrShareNotFound
 }
 
-func (m *mgr) DeleteShare(ctx context.Context, user *userpb.User, ref *ocm.ShareReference) error {
+// DeleteShare deletes the share and returns it as it was stored. The
+// receipt is only returned once the file is saved. Reloading per operation
+// does not coordinate separate processes writing the same file.
+func (m *mgr) DeleteShare(ctx context.Context, user *userpb.User, ref *ocm.ShareReference) (*share.ShareRemoval, error) {
 	m.Lock()
 	defer m.Unlock()
 
 	if err := m.load(); err != nil {
-		return err
+		return nil, err
 	}
 
-	for id, share := range m.model.Shares {
-		if sharesEqual(ref, share) {
-			if utils.UserEqual(user.Id, share.Owner) || utils.UserEqual(user.Id, share.Creator) {
+	for id, s := range m.model.Shares {
+		if sharesEqual(ref, s) {
+			if utils.UserEqual(user.Id, s.Owner) || utils.UserEqual(user.Id, s.Creator) {
+				removed := cloneShare(s)
 				delete(m.model.Shares, id)
-				return m.save()
+				if err := m.save(); err != nil {
+					return nil, err
+				}
+				return &share.ShareRemoval{Share: removed}, nil
 			}
 		}
 	}
-	return errtypes.NotFound(ref.String())
+	return nil, errtypes.NotFound(ref.String())
 }
 
 func sharesEqual(ref *ocm.ShareReference, s *ocm.Share) bool {
@@ -382,7 +405,7 @@ func receivedShareEqual(ref *ocm.ShareReference, s *ocm.ReceivedShare) bool {
 	return false
 }
 
-func (m *mgr) UpdateShare(ctx context.Context, user *userpb.User, ref *ocm.ShareReference, f ...*ocm.UpdateOCMShareRequest_UpdateField) (*ocm.Share, error) {
+func (m *mgr) UpdateShare(ctx context.Context, user *userpb.User, ref *ocm.ShareReference, f ...*ocm.UpdateOCMShareRequest_UpdateField) (*share.ShareUpdate, error) {
 	m.Lock()
 	defer m.Unlock()
 
@@ -409,6 +432,7 @@ func (m *mgr) UpdateShare(ctx context.Context, user *userpb.User, ref *ocm.Share
 	if !utils.UserEqual(user.Id, s.Owner) && !utils.UserEqual(user.Id, s.Creator) {
 		return nil, share.ErrShareNotFound
 	}
+	before := cloneShare(s)
 
 	for _, field := range f {
 		switch u := field.Field.(type) {
@@ -432,7 +456,38 @@ func (m *mgr) UpdateShare(ctx context.Context, user *userpb.User, ref *ocm.Share
 		return nil, errors.Wrap(err, "error saving model")
 	}
 
-	return s, nil
+	after := cloneShare(s)
+	return &share.ShareUpdate{
+		Before:                   before,
+		After:                    after,
+		WebDAVPermissionsChanged: permissionsChanged(webdavPermissions(before), webdavPermissions(after)),
+		WebappPermissionsChanged: permissionsChanged(webappPermissions(before), webappPermissions(after)),
+	}, nil
+}
+
+func webdavPermissions(s *ocm.Share) proto.Message {
+	for _, m := range s.AccessMethods {
+		if w, ok := m.Term.(*ocm.AccessMethod_WebdavOptions); ok {
+			return w.WebdavOptions.GetPermissions()
+		}
+	}
+	return nil
+}
+
+func webappPermissions(s *ocm.Share) proto.Message {
+	for _, m := range s.AccessMethods {
+		if w, ok := m.Term.(*ocm.AccessMethod_WebappOptions); ok {
+			return w.WebappOptions.GetPermissions()
+		}
+	}
+	return nil
+}
+
+func permissionsChanged(before, after proto.Message) bool {
+	if before == nil || after == nil {
+		return (before == nil) != (after == nil)
+	}
+	return !proto.Equal(before, after)
 }
 
 func mergeAccessMethod(s *ocm.Share, incoming *ocm.AccessMethod) error {
@@ -601,35 +656,132 @@ func (m *mgr) GetReceivedShare(ctx context.Context, user *userpb.User, ref *ocm.
 	return nil, errtypes.NotFound(ref.String())
 }
 
-func (m *mgr) UpdateReceivedShare(ctx context.Context, user *userpb.User, share *ocm.ReceivedShare, fieldMask *field_mask.FieldMask) (*ocm.ReceivedShare, error) {
-	rs, err := m.GetReceivedShare(ctx, user, &ocm.ShareReference{Spec: &ocm.ShareReference_Id{Id: share.Id}})
-	if err != nil {
-		return nil, err
-	}
+// maxTransferGeneration matches the SQL driver bound.
+const maxTransferGeneration = math.MaxInt64
 
+// receivedOf returns the stored received share of the user, under the lock.
+func (m *mgr) receivedOf(user *userpb.User, id *ocm.ShareId) (*ocm.ReceivedShare, error) {
+	if id == nil {
+		return nil, share.ErrShareNotFound
+	}
+	rs, ok := m.model.ReceivedShares[id.OpaqueId]
+	if !ok || rs.Grantee.Type != provider.GranteeType_GRANTEE_TYPE_USER || !utils.UserEqual(user.Id, rs.Grantee.GetUserId()) {
+		return nil, errtypes.NotFound(id.String())
+	}
+	return rs, nil
+}
+
+func (m *mgr) bumpGeneration(id string) (uint64, error) {
+	gen := m.model.TransferGenerations[id]
+	if gen >= maxTransferGeneration {
+		return 0, share.ErrTransferGenerationExhausted
+	}
+	gen++
+	m.model.TransferGenerations[id] = gen
+	return gen, nil
+}
+
+func touch(rs *ocm.ReceivedShare) {
+	now := time.Now().UnixNano()
+	rs.Mtime = &typespb.Timestamp{
+		Seconds: uint64(now / 1000000000),
+		Nanos:   uint32(now % 1000000000),
+	}
+}
+
+// UpdateReceivedShare updates the state under the lock and returns the values
+// before and after. A state change invalidates the running transfer attempt.
+func (m *mgr) UpdateReceivedShare(ctx context.Context, user *userpb.User, s *ocm.ReceivedShare, fieldMask *field_mask.FieldMask) (*share.ReceivedShareUpdate, error) {
 	m.Lock()
 	defer m.Unlock()
 
 	if err := m.load(); err != nil {
 		return nil, err
 	}
+	rs, err := m.receivedOf(user, s.Id)
+	if err != nil {
+		return nil, err
+	}
+	before := cloneReceivedShare(rs)
 
-	for _, mask := range fieldMask.Paths {
+	for _, mask := range fieldMask.GetPaths() {
 		switch mask {
 		case "state":
-			rs.State = share.State
-			m.model.ReceivedShares[share.Id.OpaqueId].State = share.State
+			if rs.State != s.State {
+				if _, err := m.bumpGeneration(rs.Id.OpaqueId); err != nil {
+					return nil, err
+				}
+			}
+			rs.State = s.State
 		// TODO case "mount_point":
 		default:
 			return nil, errtypes.NotSupported("updating " + mask + " is not supported")
 		}
 	}
+	touch(rs)
 
 	if err := m.save(); err != nil {
 		return nil, errors.Wrap(err, "error saving model")
 	}
+	return &share.ReceivedShareUpdate{Before: before, After: cloneReceivedShare(rs)}, nil
+}
 
-	return rs, nil
+// StartReceivedShareTransfer moves a share that is not transferring to
+// TRANSFERRING and starts a new attempt.
+func (m *mgr) StartReceivedShareTransfer(ctx context.Context, user *userpb.User, s *ocm.ReceivedShare, fieldMask *field_mask.FieldMask) (*share.TransferStart, error) {
+	m.Lock()
+	defer m.Unlock()
+
+	if err := m.load(); err != nil {
+		return nil, err
+	}
+	rs, err := m.receivedOf(user, s.Id)
+	if err != nil {
+		return nil, err
+	}
+	for _, mask := range fieldMask.GetPaths() {
+		if mask != "state" {
+			return nil, errtypes.NotSupported("updating " + mask + " is not supported")
+		}
+	}
+	if rs.State == ocm.ShareState_SHARE_STATE_TRANSFERRING {
+		return nil, share.ErrTransferInProgress
+	}
+	gen, err := m.bumpGeneration(rs.Id.OpaqueId)
+	if err != nil {
+		return nil, err
+	}
+	rs.State = ocm.ShareState_SHARE_STATE_TRANSFERRING
+	touch(rs)
+	if err := m.save(); err != nil {
+		return nil, errors.Wrap(err, "error saving model")
+	}
+	return &share.TransferStart{Share: cloneReceivedShare(rs), Generation: gen}, nil
+}
+
+// CompleteReceivedShareTransfer writes the final state and mtime only, and
+// only while the same attempt is still running.
+func (m *mgr) CompleteReceivedShareTransfer(ctx context.Context, user *userpb.User, id *ocm.ShareId, generation uint64, state ocm.ShareState) (*share.ReceivedShareUpdate, error) {
+	m.Lock()
+	defer m.Unlock()
+
+	if err := m.load(); err != nil {
+		return nil, err
+	}
+	rs, err := m.receivedOf(user, id)
+	if err != nil {
+		return nil, err
+	}
+	before := cloneReceivedShare(rs)
+	if rs.State != ocm.ShareState_SHARE_STATE_TRANSFERRING || m.model.TransferGenerations[rs.Id.OpaqueId] != generation {
+		return &share.ReceivedShareUpdate{Before: before, After: before}, nil
+	}
+	rs.State = state
+	touch(rs)
+	if err := m.save(); err != nil {
+		return nil, errors.Wrap(err, "error saving model")
+	}
+	return &share.ReceivedShareUpdate{Before: before, After: cloneReceivedShare(rs)}, nil
 }
 
 func (m *mgr) GetEmbeddedPayload(ctx context.Context, user *userpb.User, share *ocm.ReceivedShare) (string, error) {

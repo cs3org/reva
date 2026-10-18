@@ -42,11 +42,13 @@ type Repository interface {
 	// GetShare gets the information for a share by the given ref.
 	GetShare(ctx context.Context, user *userpb.User, ref *ocm.ShareReference) (*ocm.Share, error)
 
-	// DeleteShare deletes the share pointed by ref.
-	DeleteShare(ctx context.Context, user *userpb.User, ref *ocm.ShareReference) error
+	// DeleteShare deletes the share pointed by ref. The receipt carries the
+	// share as it was stored when it was deleted.
+	DeleteShare(ctx context.Context, user *userpb.User, ref *ocm.ShareReference) (*ShareRemoval, error)
 
-	// UpdateShare updates the mode of the given share.
-	UpdateShare(ctx context.Context, user *userpb.User, ref *ocm.ShareReference, f ...*ocm.UpdateOCMShareRequest_UpdateField) (*ocm.Share, error)
+	// UpdateShare updates the mode of the given share. The receipt compares
+	// the stored values before and after the update.
+	UpdateShare(ctx context.Context, user *userpb.User, ref *ocm.ShareReference, f ...*ocm.UpdateOCMShareRequest_UpdateField) (*ShareUpdate, error)
 
 	// ListShares returns the shares created by the user. If md is provided is not nil,
 	// it returns only shares attached to the given resource.
@@ -61,8 +63,21 @@ type Repository interface {
 	// GetReceivedShare returns the information for a received share the user has access.
 	GetReceivedShare(ctx context.Context, user *userpb.User, ref *ocm.ShareReference) (*ocm.ReceivedShare, error)
 
-	// UpdateReceivedShare updates the received share with share state.
-	UpdateReceivedShare(ctx context.Context, user *userpb.User, share *ocm.ReceivedShare, fieldMask *field_mask.FieldMask) (*ocm.ReceivedShare, error)
+	// UpdateReceivedShare updates the received share with share state. A
+	// state change invalidates any running embedded transfer attempt.
+	UpdateReceivedShare(ctx context.Context, user *userpb.User, share *ocm.ReceivedShare, fieldMask *field_mask.FieldMask) (*ReceivedShareUpdate, error)
+
+	// StartReceivedShareTransfer atomically moves a received share that is
+	// not transferring yet to TRANSFERRING, applying the other fields of the
+	// mask, and starts a new transfer attempt. It fails with
+	// ErrTransferInProgress if a transfer is already running.
+	StartReceivedShareTransfer(ctx context.Context, user *userpb.User, share *ocm.ReceivedShare, fieldMask *field_mask.FieldMask) (*TransferStart, error)
+
+	// CompleteReceivedShareTransfer sets the final state of a transfer
+	// attempt. Only the state and mtime are written, and only if the share is
+	// still TRANSFERRING with the same attempt generation; otherwise the
+	// receipt reports no change.
+	CompleteReceivedShareTransfer(ctx context.Context, user *userpb.User, id *ocm.ShareId, generation uint64, state ocm.ShareState) (*ReceivedShareUpdate, error)
 
 	// GetEmbeddedPayload returns the RO-Crate JSON payload carried by the embedded
 	// protocol of a received share, or an empty string if the share carries no
@@ -70,6 +85,55 @@ type Repository interface {
 	// share contents.
 	GetEmbeddedPayload(ctx context.Context, user *userpb.User, share *ocm.ReceivedShare) (string, error)
 }
+
+// ShareRemoval is the receipt of a committed deletion of an outgoing share.
+// It is only returned once the deletion is persisted.
+type ShareRemoval struct {
+	// Share is the deleted share, read inside the deletion.
+	Share *ocm.Share
+}
+
+// ShareUpdate is the receipt of a committed update of an outgoing share. The
+// before and after values are read inside the update.
+type ShareUpdate struct {
+	Before *ocm.Share
+	After  *ocm.Share
+	// WebDAVPermissionsChanged and WebappPermissionsChanged compare the stored
+	// permission values, not the presence of fields in the request.
+	WebDAVPermissionsChanged bool
+	WebappPermissionsChanged bool
+}
+
+// PermissionsChanged reports whether any stored permission value changed.
+func (u *ShareUpdate) PermissionsChanged() bool {
+	return u != nil && (u.WebDAVPermissionsChanged || u.WebappPermissionsChanged)
+}
+
+// ReceivedShareUpdate is the receipt of a committed update of a received
+// share. The before and after values are read inside the update.
+type ReceivedShareUpdate struct {
+	Before *ocm.ReceivedShare
+	After  *ocm.ReceivedShare
+}
+
+// StateChanged reports whether the persisted state changed.
+func (u *ReceivedShareUpdate) StateChanged() bool {
+	return u != nil && u.Before != nil && u.After != nil && u.Before.State != u.After.State
+}
+
+// TransferStart is the receipt of a committed embedded transfer start.
+type TransferStart struct {
+	Share *ocm.ReceivedShare
+	// Generation identifies this attempt; only its completion is accepted.
+	Generation uint64
+}
+
+// ErrTransferInProgress is returned when a transfer is already running.
+var ErrTransferInProgress = errtypes.Conflict("transfer already in progress")
+
+// ErrTransferGenerationExhausted is returned instead of wrapping the
+// transfer attempt counter.
+var ErrTransferGenerationExhausted = errtypes.InternalError("transfer attempt counter exhausted")
 
 // ResourceIDFilter is an abstraction for creating filter by resource id.
 func ResourceIDFilter(id *provider.ResourceId) *ocm.ListOCMSharesRequest_Filter {

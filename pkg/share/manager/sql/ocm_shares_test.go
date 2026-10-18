@@ -572,7 +572,7 @@ func TestDeleteOCMShare(t *testing.T) {
 		},
 	}
 
-	err = mgr.DeleteShare(userctx, user, &ref)
+	_, err = mgr.DeleteShare(userctx, user, &ref)
 	if err != nil {
 		t.Error(err)
 		t.FailNow()
@@ -618,7 +618,7 @@ func TestUpdateOCMShare(t *testing.T) {
 		t.FailNow()
 	}
 
-	if updatedShare.Expiration.Seconds <= share.Expiration.Seconds {
+	if updatedShare.After.Expiration.Seconds <= share.Expiration.Seconds {
 		t.Error("Expected expiration to be updated to a later time")
 		t.FailNow()
 	}
@@ -1049,7 +1049,7 @@ func TestUpdateWebappPermissionsRoundTrip(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	got := findWebappAccessMethod(updated.AccessMethods)
+	got := findWebappAccessMethod(updated.After.AccessMethods)
 	if got == nil {
 		t.Fatal("expected webapp access method")
 	}

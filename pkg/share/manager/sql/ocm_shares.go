@@ -22,6 +22,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"math"
 	"strconv"
 	"strings"
 	"time"
@@ -39,6 +40,7 @@ import (
 	"google.golang.org/protobuf/proto"
 	"gorm.io/datatypes"
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 
 	_ "github.com/go-sql-driver/mysql"
 )
@@ -192,18 +194,68 @@ func (m *mgr) GetShare(ctx context.Context, user *userpb.User, ref *ocm.ShareRef
 	return s, err
 }
 
-func (m *mgr) DeleteShare(ctx context.Context, user *userpb.User, ref *ocm.ShareReference) error {
-	switch {
-	case ref.GetId() != nil:
-		return m.deleteByID(ctx, user, ref.GetId())
-	case ref.GetKey() != nil:
-		return m.deleteByKey(ctx, user, ref.GetKey())
-	default:
-		return errtypes.NotFound(ref.String())
+// maxTransferGeneration bounds the transfer attempt counter. SQLite stores
+// signed 64-bit integers, so the bound is the same on both dialects.
+const maxTransferGeneration = math.MaxInt64
+
+// forUpdate locks the selected rows until the end of the transaction on
+// MySQL. SQLite transactions are serializable: a concurrent writer makes one
+// of the transactions fail instead of committing a stale read.
+func forUpdate(tx *gorm.DB) *gorm.DB {
+	if tx.Dialector.Name() == "mysql" {
+		return tx.Clauses(clause.Locking{Strength: "UPDATE"})
 	}
+	return tx
 }
 
-func (m *mgr) UpdateShare(ctx context.Context, user *userpb.User, ref *ocm.ShareReference, f ...*ocm.UpdateOCMShareRequest_UpdateField) (*ocm.Share, error) {
+// DeleteShare deletes an outgoing share. The share is read and deleted in one
+// transaction, and its receipt is only returned after the commit.
+func (m *mgr) DeleteShare(ctx context.Context, user *userpb.User, ref *ocm.ShareReference) (*share.ShareRemoval, error) {
+	var removed *ocm.Share
+	err := m.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		q := forUpdate(tx)
+		switch {
+		case ref.GetId() != nil:
+			shareID, err := strconv.Atoi(ref.GetId().OpaqueId)
+			if err != nil {
+				return errtypes.BadRequest("invalid share ID")
+			}
+			q = q.Where("id = ? AND (owner = ? OR initiator = ?)", shareID, user.Id.OpaqueId, user.Id.OpaqueId)
+		case ref.GetKey() != nil:
+			key := ref.GetKey()
+			q = q.Where("owner = ? AND instance = ? AND inode = ? AND share_with = ? AND (initiator = ? OR owner = ?)",
+				key.Owner.OpaqueId, key.ResourceId.StorageId, key.ResourceId.OpaqueId, formatUserID(key.Grantee.GetUserId()), user.Id.OpaqueId, user.Id.OpaqueId)
+		default:
+			return errtypes.NotFound(ref.String())
+		}
+		var shareModel model.OcmShare
+		if err := q.First(&shareModel).Error; err != nil {
+			if errors.Is(err, gorm.ErrRecordNotFound) {
+				return share.ErrShareNotFound
+			}
+			return err
+		}
+		am, err := accessMethodsTx(tx, shareModel.Id)
+		if err != nil {
+			return err
+		}
+		result := tx.Where("id = ?", shareModel.Id).Delete(&model.OcmShare{})
+		if result.Error != nil {
+			return result.Error
+		}
+		if result.RowsAffected == 0 {
+			return share.ErrShareNotFound
+		}
+		removed = convertToCS3OCMShare(&shareModel, am)
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+	return &share.ShareRemoval{Share: removed}, nil
+}
+
+func (m *mgr) UpdateShare(ctx context.Context, user *userpb.User, ref *ocm.ShareReference, f ...*ocm.UpdateOCMShareRequest_UpdateField) (*share.ShareUpdate, error) {
 	switch {
 	case ref.GetId() != nil:
 		return m.updateShareByID(ctx, user, ref.GetId(), f...)
@@ -212,6 +264,57 @@ func (m *mgr) UpdateShare(ctx context.Context, user *userpb.User, ref *ocm.Share
 	default:
 		return nil, errtypes.NotFound(ref.String())
 	}
+}
+
+func accessMethodsTx(tx *gorm.DB, shareID uint) ([]*ocm.AccessMethod, error) {
+	var modelAMs []model.OcmShareProtocol
+	if err := tx.Where("ocm_share_id = ?", shareID).Order("id").Find(&modelAMs).Error; err != nil {
+		return nil, err
+	}
+	var methods []*ocm.AccessMethod
+	for _, am := range modelAMs {
+		methods = append(methods, convertToCS3AccessMethod(&am))
+	}
+	return methods, nil
+}
+
+func protocolsTx(tx *gorm.DB, shareID uint) ([]*ocm.Protocol, error) {
+	var protocolModels []model.OcmReceivedShareProtocol
+	if err := tx.Where("ocm_received_share_id = ?", shareID).Order("id").Find(&protocolModels).Error; err != nil {
+		return nil, err
+	}
+	var protocols []*ocm.Protocol
+	for _, p := range protocolModels {
+		protocols = append(protocols, convertToCS3Protocol(&p))
+	}
+	return protocols, nil
+}
+
+// webdavPermissions and webappPermissions return the stored permission
+// values of the access methods, nil when the method is absent.
+func webdavPermissions(methods []*ocm.AccessMethod) proto.Message {
+	for _, m := range methods {
+		if w, ok := m.Term.(*ocm.AccessMethod_WebdavOptions); ok {
+			return w.WebdavOptions.GetPermissions()
+		}
+	}
+	return nil
+}
+
+func webappPermissions(methods []*ocm.AccessMethod) proto.Message {
+	for _, m := range methods {
+		if w, ok := m.Term.(*ocm.AccessMethod_WebappOptions); ok {
+			return w.WebappOptions.GetPermissions()
+		}
+	}
+	return nil
+}
+
+func permissionsChanged(before, after proto.Message) bool {
+	if before == nil || after == nil {
+		return (before == nil) != (after == nil)
+	}
+	return !proto.Equal(before, after)
 }
 
 func (m *mgr) ListShares(ctx context.Context, user *userpb.User, filters []*ocm.ListOCMSharesRequest_Filter) ([]*ocm.Share, error) {
@@ -458,30 +561,168 @@ func (m *mgr) GetReceivedShare(ctx context.Context, user *userpb.User, ref *ocm.
 	return s, err
 }
 
-func (m *mgr) UpdateReceivedShare(ctx context.Context, user *userpb.User, s *ocm.ReceivedShare, fieldMask *field_mask.FieldMask) (*ocm.ReceivedShare, error) {
-	shareID, err := strconv.Atoi(s.Id.OpaqueId)
+// lockReceived reads a received share of the user, locked for the rest of
+// the transaction.
+func lockReceived(tx *gorm.DB, user *userpb.User, id *ocm.ShareId) (*model.OcmReceivedShare, *ocm.ReceivedShare, error) {
+	shareID, err := strconv.Atoi(id.GetOpaqueId())
 	if err != nil {
-		return nil, errtypes.BadRequest("invalid share ID")
+		return nil, nil, errtypes.BadRequest("invalid share ID")
 	}
+	var row model.OcmReceivedShare
+	if err := forUpdate(tx).Where("id = ? AND share_with = ?", shareID, user.Id.OpaqueId).First(&row).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, nil, share.ErrShareNotFound
+		}
+		return nil, nil, err
+	}
+	p, err := protocolsTx(tx, row.ID)
+	if err != nil {
+		return nil, nil, err
+	}
+	return &row, convertToCS3OCMReceivedShare(&row, p), nil
+}
 
-	updates, updatedShare, err := m.translateUpdateFieldMask(s, fieldMask)
+func reloadReceived(tx *gorm.DB, id uint) (*ocm.ReceivedShare, error) {
+	var row model.OcmReceivedShare
+	if err := tx.Where("id = ?", id).First(&row).Error; err != nil {
+		return nil, err
+	}
+	p, err := protocolsTx(tx, row.ID)
 	if err != nil {
 		return nil, err
 	}
+	return convertToCS3OCMReceivedShare(&row, p), nil
+}
 
-	result := m.db.WithContext(ctx).
-		Model(&model.OcmReceivedShare{}).
-		Where("id = ? AND share_with = ?", shareID, user.Id.OpaqueId).
-		Updates(updates)
-
-	if result.Error != nil {
-		return nil, result.Error
+func nextTransferGeneration(current uint64) (uint64, error) {
+	if current >= maxTransferGeneration {
+		return 0, share.ErrTransferGenerationExhausted
 	}
-	if result.RowsAffected == 0 {
-		return nil, share.ErrShareNotFound
-	}
+	return current + 1, nil
+}
 
-	return updatedShare, nil
+// UpdateReceivedShare applies the masked fields in one transaction and
+// returns the values read before and after. A state change invalidates the
+// running transfer attempt, if any.
+func (m *mgr) UpdateReceivedShare(ctx context.Context, user *userpb.User, s *ocm.ReceivedShare, fieldMask *field_mask.FieldMask) (*share.ReceivedShareUpdate, error) {
+	updates, _, err := m.translateUpdateFieldMask(s, fieldMask)
+	if err != nil {
+		return nil, err
+	}
+	var receipt share.ReceivedShareUpdate
+	err = m.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		row, before, err := lockReceived(tx, user, s.Id)
+		if err != nil {
+			return err
+		}
+		if state, ok := updates["state"]; ok && state != row.State {
+			gen, err := nextTransferGeneration(row.TransferGeneration)
+			if err != nil {
+				return err
+			}
+			updates["transfer_generation"] = gen
+		}
+		if err := tx.Model(&model.OcmReceivedShare{}).Where("id = ?", row.ID).Updates(updates).Error; err != nil {
+			return err
+		}
+		after, err := reloadReceived(tx, row.ID)
+		if err != nil {
+			return err
+		}
+		receipt = share.ReceivedShareUpdate{Before: before, After: after}
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+	return &receipt, nil
+}
+
+// StartReceivedShareTransfer moves a share that is not transferring to
+// TRANSFERRING and starts a new attempt, in one transaction.
+func (m *mgr) StartReceivedShareTransfer(ctx context.Context, user *userpb.User, s *ocm.ReceivedShare, fieldMask *field_mask.FieldMask) (*share.TransferStart, error) {
+	transferring := proto.Clone(s).(*ocm.ReceivedShare)
+	transferring.State = ocm.ShareState_SHARE_STATE_TRANSFERRING
+	paths := []string{"state"}
+	for _, p := range fieldMask.GetPaths() {
+		if p != "state" {
+			paths = append(paths, p)
+		}
+	}
+	updates, _, err := m.translateUpdateFieldMask(transferring, &field_mask.FieldMask{Paths: paths})
+	if err != nil {
+		return nil, err
+	}
+	var receipt share.TransferStart
+	err = m.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		row, _, err := lockReceived(tx, user, s.Id)
+		if err != nil {
+			return err
+		}
+		if row.State == model.OcmShareStateTransferring {
+			return share.ErrTransferInProgress
+		}
+		gen, err := nextTransferGeneration(row.TransferGeneration)
+		if err != nil {
+			return err
+		}
+		updates["transfer_generation"] = gen
+		if err := tx.Model(&model.OcmReceivedShare{}).Where("id = ?", row.ID).Updates(updates).Error; err != nil {
+			return err
+		}
+		after, err := reloadReceived(tx, row.ID)
+		if err != nil {
+			return err
+		}
+		receipt = share.TransferStart{Share: after, Generation: gen}
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+	return &receipt, nil
+}
+
+// CompleteReceivedShareTransfer writes the final state and mtime only, and
+// only while the same attempt is still running.
+func (m *mgr) CompleteReceivedShareTransfer(ctx context.Context, user *userpb.User, id *ocm.ShareId, generation uint64, state ocm.ShareState) (*share.ReceivedShareUpdate, error) {
+	shareID, err := strconv.Atoi(id.GetOpaqueId())
+	if err != nil {
+		return nil, errtypes.BadRequest("invalid share ID")
+	}
+	var receipt share.ReceivedShareUpdate
+	err = m.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		result := tx.Model(&model.OcmReceivedShare{}).
+			Where("id = ? AND share_with = ? AND state = ? AND transfer_generation = ?",
+				shareID, user.Id.OpaqueId, model.OcmShareStateTransferring, generation).
+			Updates(map[string]any{
+				"state": convertFromCS3OCMShareState(state),
+				"mtime": time.Now().Unix(),
+			})
+		if result.Error != nil {
+			return result.Error
+		}
+		if result.RowsAffected == 0 {
+			_, current, err := lockReceived(tx, user, id)
+			if err != nil {
+				return err
+			}
+			receipt = share.ReceivedShareUpdate{Before: current, After: current}
+			return nil
+		}
+		after, err := reloadReceived(tx, uint(shareID))
+		if err != nil {
+			return err
+		}
+		before := proto.Clone(after).(*ocm.ReceivedShare)
+		before.State = ocm.ShareState_SHARE_STATE_TRANSFERRING
+		receipt = share.ReceivedShareUpdate{Before: before, After: after}
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+	return &receipt, nil
 }
 
 func (m *mgr) translateUpdateFieldMask(share *ocm.ReceivedShare, fieldMask *field_mask.FieldMask) (map[string]any, *ocm.ReceivedShare, error) {
@@ -606,42 +847,6 @@ func (m *mgr) getAccessMethods(ctx context.Context, id int) ([]*ocm.AccessMethod
 	return methods, nil
 }
 
-func (m *mgr) deleteByID(ctx context.Context, user *userpb.User, id *ocm.ShareId) error {
-	shareID, err := strconv.Atoi(id.OpaqueId)
-	if err != nil {
-		return errtypes.BadRequest("invalid share ID")
-	}
-
-	result := m.db.WithContext(ctx).
-		Where("id = ? AND (owner = ? OR initiator = ?)", shareID, user.Id.OpaqueId, user.Id.OpaqueId).
-		Delete(&model.OcmShare{})
-
-	if result.Error != nil {
-		return result.Error
-	}
-	if result.RowsAffected == 0 {
-		return share.ErrShareNotFound
-	}
-
-	return nil
-}
-
-func (m *mgr) deleteByKey(ctx context.Context, user *userpb.User, key *ocm.ShareKey) error {
-	result := m.db.WithContext(ctx).
-		Where("owner = ? AND instance = ? AND inode = ? AND share_with = ? AND (initiator = ? OR owner = ?)",
-			key.Owner.OpaqueId, key.ResourceId.StorageId, key.ResourceId.OpaqueId, formatUserID(key.Grantee.GetUserId()), user.Id.OpaqueId, user.Id.OpaqueId).
-		Delete(&model.OcmShare{})
-
-	if result.Error != nil {
-		return result.Error
-	}
-	if result.RowsAffected == 0 {
-		return share.ErrShareNotFound
-	}
-
-	return nil
-}
-
 func (m *mgr) queriesUpdatesOnShare(ctx context.Context, id *ocm.ShareId, f ...*ocm.UpdateOCMShareRequest_UpdateField) (map[string]any, []func(*gorm.DB) error, error) {
 	var updates map[string]any
 	var accessMethodUpdates []func(*gorm.DB) error
@@ -678,59 +883,71 @@ func (m *mgr) queriesUpdatesOnShare(ctx context.Context, id *ocm.ShareId, f ...*
 	return updates, accessMethodUpdates, nil
 }
 
-func (m *mgr) updateShareByID(ctx context.Context, user *userpb.User, id *ocm.ShareId, f ...*ocm.UpdateOCMShareRequest_UpdateField) (*ocm.Share, error) {
+func (m *mgr) updateShareByID(ctx context.Context, user *userpb.User, id *ocm.ShareId, f ...*ocm.UpdateOCMShareRequest_UpdateField) (*share.ShareUpdate, error) {
 	shareID, err := strconv.Atoi(id.OpaqueId)
 	if err != nil {
 		return nil, errtypes.BadRequest("invalid share ID")
-	}
-
-	currentMethods, err := m.getAccessMethods(ctx, shareID)
-	if err != nil {
-		return nil, err
-	}
-
-	if err := validateImmutableFields(currentMethods, f...); err != nil {
-		return nil, err
 	}
 
 	updates, accessMethodUpdates, err := m.queriesUpdatesOnShare(ctx, id, f...)
 	if err != nil {
 		return nil, err
 	}
-
 	if updates == nil {
 		updates = make(map[string]any)
 	}
+	updates["mtime"] = time.Now().Unix()
 
-	now := time.Now().Unix()
-	updates["mtime"] = now
-
+	var receipt share.ShareUpdate
 	err = m.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		result := tx.Model(&model.OcmShare{}).
+		var before model.OcmShare
+		if err := forUpdate(tx).
 			Where("id = ? AND (initiator = ? OR owner = ?)", shareID, user.Id.OpaqueId, user.Id.OpaqueId).
-			Updates(updates)
-
-		if result.Error != nil {
-			return result.Error
+			First(&before).Error; err != nil {
+			if errors.Is(err, gorm.ErrRecordNotFound) {
+				return share.ErrShareNotFound
+			}
+			return err
 		}
-		if result.RowsAffected == 0 {
-			return share.ErrShareNotFound
+		beforeMethods, err := accessMethodsTx(tx, before.Id)
+		if err != nil {
+			return err
+		}
+		if err := validateImmutableFields(beforeMethods, f...); err != nil {
+			return err
 		}
 
+		// The row is locked and known to exist, so an update that leaves
+		// every column unchanged is not an error.
+		if err := tx.Model(&model.OcmShare{}).Where("id = ?", before.Id).Updates(updates).Error; err != nil {
+			return err
+		}
 		for _, updateFunc := range accessMethodUpdates {
 			if err := updateFunc(tx); err != nil {
 				return err
 			}
 		}
 
+		var after model.OcmShare
+		if err := tx.Where("id = ?", before.Id).First(&after).Error; err != nil {
+			return err
+		}
+		afterMethods, err := accessMethodsTx(tx, after.Id)
+		if err != nil {
+			return err
+		}
+		receipt = share.ShareUpdate{
+			Before:                   convertToCS3OCMShare(&before, beforeMethods),
+			After:                    convertToCS3OCMShare(&after, afterMethods),
+			WebDAVPermissionsChanged: permissionsChanged(webdavPermissions(beforeMethods), webdavPermissions(afterMethods)),
+			WebappPermissionsChanged: permissionsChanged(webappPermissions(beforeMethods), webappPermissions(afterMethods)),
+		}
 		return nil
 	})
-
 	if err != nil {
 		return nil, err
 	}
-
-	return m.getByID(ctx, user, id)
+	return &receipt, nil
 }
 
 // validateImmutableFields checks that a partial update does not attempt to
@@ -814,7 +1031,7 @@ func checkImmutableAccessTypes(stored, incoming []ocm.AccessType, field string) 
 	return nil
 }
 
-func (m *mgr) updateShareByKey(ctx context.Context, user *userpb.User, key *ocm.ShareKey, f ...*ocm.UpdateOCMShareRequest_UpdateField) (*ocm.Share, error) {
+func (m *mgr) updateShareByKey(ctx context.Context, user *userpb.User, key *ocm.ShareKey, f ...*ocm.UpdateOCMShareRequest_UpdateField) (*share.ShareUpdate, error) {
 	share, err := m.getByKey(ctx, user, key)
 	if err != nil {
 		return nil, err
