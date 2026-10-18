@@ -326,12 +326,6 @@ func (c *OCMClient) parseInviteAcceptedResponse(r *http.Response) (*RemoteUser, 
 	return nil, errtypes.InternalError(string(body))
 }
 
-// NewNotification sends a notification to the remote end. Not implemented for now.
-// https://cs3org.github.io/OCM-API/docs.html?branch=develop&repo=OCM-API&user=cs3org#/paths/~1notifications/post
-func (c *OCMClient) NewNotification(ctx context.Context, endpoint string, r *InviteAcceptedRequest) (*RemoteUser, error) {
-	return nil, errtypes.NotSupported("not implemented")
-}
-
 // ExchangeToken performs an OAuth2 authorization_code exchange against the
 // sender's token endpoint, returning the short-lived access token and its TTL.
 // If key is not nil, it signs the request.
