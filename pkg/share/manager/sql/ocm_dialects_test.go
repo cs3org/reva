@@ -102,26 +102,40 @@ func ocmTestConfig(t *testing.T, dialect string) map[string]any {
 	}
 }
 
-// forEachDialect runs fn against a fresh OCM share manager on SQLite and,
-// when configured, on MySQL.
-func forEachDialect(t *testing.T, fn func(t *testing.T, m *mgr)) {
+// openOCMManager opens a manager, with its own connection pool, on cfg.
+func openOCMManager(t *testing.T, cfg map[string]any) *mgr {
+	t.Helper()
+	repo, err := NewOCMShareManager(context.Background(), cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	m := repo.(*mgr)
+	pool, err := m.db.DB()
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = pool.Close() })
+	return m
+}
+
+// forEachDialectConfig runs fn with the configuration of a fresh database on
+// SQLite and, when configured, on MySQL.
+func forEachDialectConfig(t *testing.T, fn func(t *testing.T, cfg map[string]any)) {
 	dialects := []string{"sqlite"}
 	if _, ok := mysqlTestTarget(t); ok {
 		dialects = append(dialects, "mysql")
 	}
 	for _, d := range dialects {
 		t.Run(d, func(t *testing.T) {
-			repo, err := NewOCMShareManager(context.Background(), ocmTestConfig(t, d))
-			if err != nil {
-				t.Fatal(err)
-			}
-			m := repo.(*mgr)
-			pool, err := m.db.DB()
-			if err != nil {
-				t.Fatal(err)
-			}
-			t.Cleanup(func() { _ = pool.Close() })
-			fn(t, m)
+			fn(t, ocmTestConfig(t, d))
 		})
 	}
+}
+
+// forEachDialect runs fn against a fresh OCM share manager on SQLite and,
+// when configured, on MySQL.
+func forEachDialect(t *testing.T, fn func(t *testing.T, m *mgr)) {
+	forEachDialectConfig(t, func(t *testing.T, cfg map[string]any) {
+		fn(t, openOCMManager(t, cfg))
+	})
 }

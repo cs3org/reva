@@ -299,6 +299,7 @@ func testReceivedShare(senderAddr, id string, isFile bool) *ocmpb.ReceivedShare 
 			},
 		},
 		SharedResourceType: srt,
+		State:              ocmpb.ShareState_SHARE_STATE_ACCEPTED,
 		Protocols: []*ocmpb.Protocol{
 			{Term: &ocmpb.Protocol_WebdavOptions{WebdavOptions: &ocmpb.WebDAVProtocol{
 				Uri:          "http://" + senderAddr + "/remote.php/dav/ocm/" + id,

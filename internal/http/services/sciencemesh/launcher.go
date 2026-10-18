@@ -115,6 +115,7 @@ func launcherErrorText(err error) (int, string) {
 		badRequest         errtypes.BadRequest
 		invalidCredentials errtypes.InvalidCredentials
 		permissionDenied   errtypes.PermissionDenied
+		conflict           errtypes.Conflict
 	)
 	switch {
 	case errors.Is(err, context.Canceled), errors.Is(err, context.DeadlineExceeded):
@@ -127,6 +128,8 @@ func launcherErrorText(err error) (int, string) {
 		return http.StatusUnauthorized, "You are not signed in."
 	case errors.As(err, &permissionDenied):
 		return http.StatusForbidden, "The sharing service is not trusted."
+	case errors.As(err, &conflict):
+		return http.StatusConflict, "This share is no longer available."
 	default:
 		return http.StatusInternalServerError, "Failed to open webapp."
 	}

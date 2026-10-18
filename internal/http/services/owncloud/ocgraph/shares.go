@@ -842,6 +842,10 @@ func (s *svc) updateReceivedOCMShare(ctx context.Context, w http.ResponseWriter,
 		handleError(ctx, err, w)
 		return
 	}
+	if shareRes.GetStatus().GetCode() == rpc.Code_CODE_FAILED_PRECONDITION && shareRes.GetStatus().GetMessage() == share.WithdrawnShareMessage {
+		handleCustomError(ctx, errors.New(share.WithdrawnShareMessage), http.StatusConflict, w)
+		return
+	}
 	if shareRes.Status == nil || shareRes.Status.Code != rpc.Code_CODE_OK {
 		handleRpcStatus(ctx, shareRes.Status, "ocgraph: failed to update received OCM share", w)
 		return

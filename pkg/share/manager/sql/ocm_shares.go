@@ -22,6 +22,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"maps"
 	"math"
 	"slices"
 	"strconv"
@@ -70,7 +71,7 @@ func NewOCMShareManager(ctx context.Context, m map[string]any) (share.Repository
 	}
 
 	err = db.AutoMigrate(&model.OcmShare{}, &model.OcmShareProtocol{},
-		&model.OcmReceivedShare{}, &model.OcmReceivedShareProtocol{})
+		&model.OcmGrantIdentity{}, &model.OcmReceivedShare{}, &model.OcmReceivedShareProtocol{})
 	if err != nil {
 		log.Debug().Err(err).Msg("error migrating database")
 		return nil, err
@@ -80,6 +81,12 @@ func NewOCMShareManager(ctx context.Context, m map[string]any) (share.Repository
 		c:  &c,
 		db: db,
 	}
+	report, err := mgr.backfillGrantIdentities(ctx)
+	if err != nil {
+		log.Debug().Err(err).Msg("error binding received shares to grant identities")
+		return nil, err
+	}
+	log.Debug().Int("bound", report.Bound).Int("identities", report.Identities).Msg("received OCM shares bound to grant identities")
 	return mgr, nil
 }
 
@@ -428,10 +435,31 @@ func (m *mgr) GetEmbeddedPayload(ctx context.Context, user *userpb.User, receive
 	return "", nil
 }
 
+// StoreReceivedShare stores a received share bound to the identity of its
+// provider grant. A grant that was withdrawn cannot be recreated: a stale
+// or repeated creation fails with ErrShareWithdrawn instead of adding a row.
 func (m *mgr) StoreReceivedShare(ctx context.Context, s *ocm.ReceivedShare) (*ocm.ReceivedShare, error) {
-	if err := m.db.Transaction(func(tx *gorm.DB) error {
+	origin, bindable := grantOrigin(formatUserID(s.Creator))
+	if bindable && (s.RemoteShareId == "" || len(s.RemoteShareId) > share.MaxGrantFieldLength) {
+		bindable = false
+	}
+	if err := m.transact(ctx, func(tx *gorm.DB) error {
+		var grantKey *string
+		if bindable {
+			ident, err := ensureIdentity(tx, origin, s.RemoteShareId)
+			if err != nil {
+				return err
+			}
+			if withdrawn(ident) {
+				return share.ErrShareWithdrawn
+			}
+			grantKey = &ident.GrantKey
+		} else {
+			appctx.GetLogger(ctx).Warn().Msg("storing received OCM share without a verifiable grant identity")
+		}
 
 		receivedShare := &model.OcmReceivedShare{
+			GrantKey:      grantKey,
 			Name:          s.Name,
 			RemoteShareID: s.RemoteShareId,
 			ItemType:      convertFromCS3ResourceType(s.SharedResourceType),
@@ -482,6 +510,34 @@ func (m *mgr) StoreReceivedShare(ctx context.Context, s *ocm.ReceivedShare) (*oc
 		return nil, err
 	}
 	return s, nil
+}
+
+// lockReceivedWithIdentity locks the grant identity of a received share of
+// the user, then the share itself, in that order, and verifies the binding.
+func lockReceivedWithIdentity(tx *gorm.DB, user *userpb.User, id *ocm.ShareId) (*model.OcmReceivedShare, *ocm.ReceivedShare, *model.OcmGrantIdentity, error) {
+	shareID, err := strconv.Atoi(id.GetOpaqueId())
+	if err != nil {
+		return nil, nil, nil, errtypes.BadRequest("invalid share ID")
+	}
+	var advisory model.OcmReceivedShare
+	if err := tx.Where("id = ? AND share_with = ?", shareID, user.Id.OpaqueId).Take(&advisory).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, nil, nil, share.ErrShareNotFound
+		}
+		return nil, nil, nil, err
+	}
+	ident, err := lockGuardedReceived(tx, &advisory)
+	if err != nil {
+		return nil, nil, nil, err
+	}
+	row, current, err := lockReceived(tx, user, id)
+	if err != nil {
+		return nil, nil, nil, err
+	}
+	if (row.GrantKey == nil) != (advisory.GrantKey == nil) || (row.GrantKey != nil && *row.GrantKey != *advisory.GrantKey) {
+		return nil, nil, nil, share.ErrGrantIdentityMismatch
+	}
+	return row, current, ident, nil
 }
 
 func storeWebDAVProtocol(tx *gorm.DB, shareID int64, o *ocm.Protocol_WebdavOptions) error {
@@ -659,19 +715,24 @@ func (m *mgr) UpdateReceivedShare(ctx context.Context, user *userpb.User, s *ocm
 		return nil, err
 	}
 	var receipt share.ReceivedShareUpdate
-	err = m.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		row, before, err := lockReceived(tx, user, s.Id)
+	err = m.transact(ctx, func(tx *gorm.DB) error {
+		row, before, ident, err := lockReceivedWithIdentity(tx, user, s.Id)
 		if err != nil {
 			return err
 		}
-		if state, ok := updates["state"]; ok && state != row.State {
+		if withdrawn(ident) {
+			return share.ErrShareWithdrawn
+		}
+		// A fresh copy per attempt, so a retry never reuses a stale value.
+		attempt := maps.Clone(updates)
+		if state, ok := attempt["state"]; ok && state != row.State {
 			gen, err := nextTransferGeneration(row.TransferGeneration)
 			if err != nil {
 				return err
 			}
-			updates["transfer_generation"] = gen
+			attempt["transfer_generation"] = gen
 		}
-		if err := tx.Model(&model.OcmReceivedShare{}).Where("id = ?", row.ID).Updates(updates).Error; err != nil {
+		if err := tx.Model(&model.OcmReceivedShare{}).Where("id = ?", row.ID).Updates(attempt).Error; err != nil {
 			return err
 		}
 		after, err := reloadReceived(tx, row.ID)
@@ -703,10 +764,13 @@ func (m *mgr) StartReceivedShareTransfer(ctx context.Context, user *userpb.User,
 		return nil, err
 	}
 	var receipt share.TransferStart
-	err = m.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		row, _, err := lockReceived(tx, user, s.Id)
+	err = m.transact(ctx, func(tx *gorm.DB) error {
+		row, _, ident, err := lockReceivedWithIdentity(tx, user, s.Id)
 		if err != nil {
 			return err
+		}
+		if withdrawn(ident) {
+			return share.ErrShareWithdrawn
 		}
 		switch row.State {
 		case model.OcmShareStateTransferring:
@@ -718,8 +782,9 @@ func (m *mgr) StartReceivedShareTransfer(ctx context.Context, user *userpb.User,
 		if err != nil {
 			return err
 		}
-		updates["transfer_generation"] = gen
-		if err := tx.Model(&model.OcmReceivedShare{}).Where("id = ?", row.ID).Updates(updates).Error; err != nil {
+		attempt := maps.Clone(updates)
+		attempt["transfer_generation"] = gen
+		if err := tx.Model(&model.OcmReceivedShare{}).Where("id = ?", row.ID).Updates(attempt).Error; err != nil {
 			return err
 		}
 		after, err := reloadReceived(tx, row.ID)
@@ -738,18 +803,24 @@ func (m *mgr) StartReceivedShareTransfer(ctx context.Context, user *userpb.User,
 // CompleteReceivedShareTransfer writes the final state and mtime only, and
 // only while the same attempt is still running.
 func (m *mgr) CompleteReceivedShareTransfer(ctx context.Context, user *userpb.User, id *ocm.ShareId, generation uint64, state ocm.ShareState) (*share.ReceivedShareUpdate, error) {
+	shareID, err := strconv.Atoi(id.GetOpaqueId())
+	if err != nil {
+		return nil, errtypes.BadRequest("invalid share ID")
+	}
 	var receipt share.ReceivedShareUpdate
-	err := m.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		row, before, err := lockReceived(tx, user, id)
+	err = m.transact(ctx, func(tx *gorm.DB) error {
+		_, current, ident, err := lockReceivedWithIdentity(tx, user, id)
 		if err != nil {
 			return err
 		}
-		if row.State != model.OcmShareStateTransferring || row.TransferGeneration != generation {
-			receipt = share.ReceivedShareUpdate{Before: before, After: before}
+		if withdrawn(ident) {
+			// The withdrawal wins: the attempt completes nothing.
+			receipt = share.ReceivedShareUpdate{Before: current, After: current}
 			return nil
 		}
 		result := tx.Model(&model.OcmReceivedShare{}).
-			Where("id = ? AND state = ? AND transfer_generation = ?", row.ID, model.OcmShareStateTransferring, generation).
+			Where("id = ? AND share_with = ? AND state = ? AND transfer_generation = ?",
+				shareID, user.Id.OpaqueId, model.OcmShareStateTransferring, generation).
 			Updates(map[string]any{
 				"state": convertFromCS3OCMShareState(state),
 				"mtime": time.Now().Unix(),
@@ -757,10 +828,16 @@ func (m *mgr) CompleteReceivedShareTransfer(ctx context.Context, user *userpb.Us
 		if result.Error != nil {
 			return result.Error
 		}
-		after, err := reloadReceived(tx, row.ID)
+		if result.RowsAffected == 0 {
+			receipt = share.ReceivedShareUpdate{Before: current, After: current}
+			return nil
+		}
+		after, err := reloadReceived(tx, uint(shareID))
 		if err != nil {
 			return err
 		}
+		before := proto.Clone(after).(*ocm.ReceivedShare)
+		before.State = ocm.ShareState_SHARE_STATE_TRANSFERRING
 		receipt = share.ReceivedShareUpdate{Before: before, After: after}
 		return nil
 	})

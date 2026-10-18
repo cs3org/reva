@@ -363,6 +363,7 @@ func receivedWebappShare(webdavURI, appURI, secret string, reqs []string) *ocmpb
 			OpaqueId: "creator",
 			Idp:      webdavHost(webdavURI),
 		},
+		State:     ocmpb.ShareState_SHARE_STATE_ACCEPTED,
 		Protocols: protocols,
 	}
 }

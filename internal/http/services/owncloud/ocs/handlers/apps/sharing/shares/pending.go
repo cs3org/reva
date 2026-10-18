@@ -28,6 +28,7 @@ import (
 	"github.com/cs3org/reva/v3/internal/http/services/owncloud/ocs/conversions"
 	"github.com/cs3org/reva/v3/internal/http/services/owncloud/ocs/response"
 	"github.com/cs3org/reva/v3/pkg/appctx"
+	ocmshare "github.com/cs3org/reva/v3/pkg/ocm/share"
 	"github.com/cs3org/reva/v3/pkg/service"
 	"github.com/pkg/errors"
 	"google.golang.org/protobuf/types/known/fieldmaskpb"
@@ -118,6 +119,12 @@ func (h *Handler) updateReceivedShare(w http.ResponseWriter, r *http.Request, sh
 	response.WriteOCSSuccess(w, r, []*conversions.ShareData{data})
 }
 
+// isWithdrawnShareStatus reports the refusal to change a received share
+// whose provider withdrew it.
+func isWithdrawnShareStatus(s *rpc.Status) bool {
+	return s.GetCode() == rpc.Code_CODE_FAILED_PRECONDITION && s.GetMessage() == ocmshare.WithdrawnShareMessage
+}
+
 func (h *Handler) updateReceivedFederatedShare(w http.ResponseWriter, r *http.Request, shareID string, rejectShare bool) {
 	ctx := r.Context()
 
@@ -172,6 +179,11 @@ func (h *Handler) updateReceivedFederatedShare(w http.ResponseWriter, r *http.Re
 	if updateRes.Status.Code != rpc.Code_CODE_OK {
 		if updateRes.Status.Code == rpc.Code_CODE_NOT_FOUND {
 			response.WriteOCSError(w, r, response.MetaNotFound.StatusCode, "not found", nil)
+			return
+		}
+		if isWithdrawnShareStatus(updateRes.Status) {
+			// HTTP 200 with meta 409 on OCS v1, HTTP 409 on OCS v2.
+			response.WriteOCSError(w, r, http.StatusConflict, ocmshare.WithdrawnShareMessage, nil)
 			return
 		}
 		response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "grpc update received share request failed", errors.Errorf("code: %d, message: %s", updateRes.Status.Code, updateRes.Status.Message))

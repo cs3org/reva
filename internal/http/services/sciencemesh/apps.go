@@ -483,6 +483,11 @@ func (h *appsHandler) receivedWebapp(
 	if res.Share == nil {
 		return nil, nil, errtypes.NotFound("missing share")
 	}
+	// A share that is no longer usable, e.g. withdrawn by its provider, is
+	// refused before any protocol validation, discovery or token exchange.
+	if res.Share.GetState() == ocmpb.ShareState_SHARE_STATE_INVALID {
+		return nil, nil, errtypes.Conflict("received share is no longer available")
+	}
 
 	webapp, err := requireWebappProtocol(res.Share.Protocols)
 	if err != nil {
@@ -531,6 +536,7 @@ func redactLaunchError(err error, secret, token string) error {
 	var badRequest errtypes.BadRequest
 	var invalidCredentials errtypes.InvalidCredentials
 	var permissionDenied errtypes.PermissionDenied
+	var conflict errtypes.Conflict
 	var internal errtypes.InternalError
 	switch {
 	case errors.As(err, &notFound):
@@ -541,6 +547,8 @@ func redactLaunchError(err error, secret, token string) error {
 		return errtypes.InvalidCredentials(safeDetail(string(invalidCredentials), secret, token, "unauthenticated"))
 	case errors.As(err, &permissionDenied):
 		return errtypes.PermissionDenied(safeDetail(string(permissionDenied), secret, token, "untrusted service"))
+	case errors.As(err, &conflict):
+		return errtypes.Conflict("received share is no longer available")
 	case errors.As(err, &internal):
 		return errtypes.InternalError(safeInternalDetail(string(internal), secret, token))
 	default:

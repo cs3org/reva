@@ -22,6 +22,7 @@ package ocmincoming
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"time"
 
@@ -114,7 +115,7 @@ func (s *service) CreateOCMIncomingShare(ctx context.Context, req *ocmincoming.C
 		Seconds: uint64(time.Now().Unix()),
 	}
 
-	share, err := s.repo.StoreReceivedShare(ctx, &ocm.ReceivedShare{
+	stored, err := s.repo.StoreReceivedShare(ctx, &ocm.ReceivedShare{
 		RemoteShareId: req.ResourceId,
 		Name:          req.Name,
 		Grantee: &providerpb.Grantee{
@@ -134,6 +135,12 @@ func (s *service) CreateOCMIncomingShare(ctx context.Context, req *ocmincoming.C
 		State:              ocm.ShareState_SHARE_STATE_PENDING,
 	})
 	if err != nil {
+		if errors.Is(err, share.ErrShareWithdrawn) {
+			// A stale or repeated creation of a withdrawn grant.
+			return &ocmincoming.CreateOCMIncomingShareResponse{
+				Status: status.NewFailedPrecondition(ctx, err, share.WithdrawnShareMessage),
+			}, nil
+		}
 		// TODO: identify errors
 		return &ocmincoming.CreateOCMIncomingShareResponse{
 			Status: status.NewInternal(ctx, err, err.Error()),
@@ -142,8 +149,8 @@ func (s *service) CreateOCMIncomingShare(ctx context.Context, req *ocmincoming.C
 
 	return &ocmincoming.CreateOCMIncomingShareResponse{
 		Status:  status.NewOK(ctx),
-		Id:      share.Id.OpaqueId,
-		Created: share.Ctime,
+		Id:      stored.Id.OpaqueId,
+		Created: stored.Ctime,
 	}, nil
 }
 

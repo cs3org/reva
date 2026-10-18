@@ -76,6 +76,13 @@ type Repository interface {
 	// attempt, only while that attempt is still running.
 	CompleteReceivedShareTransfer(ctx context.Context, user *userpb.User, id *ocm.ShareId, generation uint64, state ocm.ShareState) (*ReceivedShareUpdate, error)
 
+	// WithdrawReceivedGrant records that the provider withdrew a grant and
+	// retains its received shares as INVALID and hidden. It only acts on
+	// existing shares bound to that exact grant with matching types; an
+	// unmatched grant is not recorded. Repeating it changes nothing.
+	// Drivers that cannot coordinate all writers return NotSupported.
+	WithdrawReceivedGrant(ctx context.Context, w *GrantWithdrawal) (*GrantWithdrawalReceipt, error)
+
 	// GetEmbeddedPayload returns the RO-Crate JSON payload carried by the embedded
 	// protocol of a received share, or an empty string if the share carries no
 	// embedded protocol. It is used to drive the background transfer of embedded

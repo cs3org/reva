@@ -63,6 +63,8 @@ func convertFromCS3OCMShareState(shareState ocm.ShareState) model.OcmShareState 
 		return model.OcmShareStateRejected
 	case ocm.ShareState_SHARE_STATE_TRANSFERRING:
 		return model.OcmShareStateTransferring
+	case ocm.ShareState_SHARE_STATE_INVALID:
+		return model.OcmShareStateInvalid
 	}
 	return -1
 }
@@ -77,7 +79,10 @@ func convertToCS3OCMShareState(state model.OcmShareState) ocm.ShareState {
 		return ocm.ShareState_SHARE_STATE_REJECTED
 	case model.OcmShareStateTransferring:
 		return ocm.ShareState_SHARE_STATE_TRANSFERRING
+	case model.OcmShareStateInvalid:
+		return ocm.ShareState_SHARE_STATE_INVALID
 	}
+	// Historical rows may hold other values, e.g. -1: they stay INVALID.
 	return ocm.ShareState_SHARE_STATE_INVALID
 }
 

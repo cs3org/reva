@@ -68,6 +68,16 @@ func (r *testResolver) DataTx(context.Context) (datatx.TxAPIClient, error) {
 	return r.datatx, nil
 }
 
+// stampOCMShareProvider points the test resolver at an OCM share provider.
+func stampOCMShareProvider(c ocm.OcmAPIClient) {
+	globalTestResolverOnce.Do(func() {
+		revaservice.SetGlobal(globalTestResolver)
+	})
+	globalTestResolver.mu.Lock()
+	globalTestResolver.ocm = c
+	globalTestResolver.mu.Unlock()
+}
+
 func (r *testResolver) StorageRegistry(context.Context) (storageregistry.RegistryAPIClient, error) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
