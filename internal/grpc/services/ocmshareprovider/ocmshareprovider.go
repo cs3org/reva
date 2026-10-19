@@ -603,8 +603,9 @@ func (s *service) ListReceivedOCMShares(ctx context.Context, req *ocm.ListReceiv
 func (s *service) UpdateReceivedOCMShare(ctx context.Context, req *ocm.UpdateReceivedOCMShareRequest) (*ocm.UpdateReceivedOCMShareResponse, error) {
 	user := appctx.ContextMustGetUser(ctx)
 	// Accepting a share with embedded content holds it in TRANSFERRING until
-	// the copy completes.
-	if req.Share.State == ocm.ShareState_SHARE_STATE_ACCEPTED && req.Share.Destination != "" {
+	// the copy completes. Only a state the mask asks to change can start it.
+	if slices.Contains(req.GetUpdateMask().GetPaths(), "state") &&
+		req.Share.State == ocm.ShareState_SHARE_STATE_ACCEPTED && req.Share.Destination != "" {
 		payload, err := s.repo.GetEmbeddedPayload(ctx, user, req.Share)
 		if err != nil {
 			if errors.Is(err, share.ErrShareNotFound) {

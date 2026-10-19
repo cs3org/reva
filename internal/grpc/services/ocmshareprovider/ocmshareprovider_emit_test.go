@@ -579,6 +579,35 @@ func TestShareWithoutStoredResourceTypeIsNotNotified(t *testing.T) {
 	}
 }
 
+func TestUnmaskedAcceptanceStartsNoTransfer(t *testing.T) {
+	e := newEmitEnv(t)
+	rs := e.received(t, "remote-m", true)
+	for _, paths := range [][]string{{"hidden"}, {}, nil} {
+		res, err := e.svc.UpdateReceivedOCMShare(e.recip, &ocm.UpdateReceivedOCMShareRequest{
+			Share:      &ocm.ReceivedShare{Id: rs.Id, State: ocm.ShareState_SHARE_STATE_ACCEPTED, Destination: "/home/dest", Hidden: true},
+			UpdateMask: &field_mask.FieldMask{Paths: paths},
+		})
+		if err != nil || res.Status.Code != rpc.Code_CODE_OK {
+			t.Fatalf("mask %v: %v %v", paths, res, err)
+		}
+	}
+	cur, err := e.repo.GetReceivedShare(e.recip, &userpb.User{Id: &userpb.UserId{OpaqueId: "marie"}}, &ocm.ShareReference{Spec: &ocm.ShareReference_Id{Id: rs.Id}})
+	if err != nil || cur.State != ocm.ShareState_SHARE_STATE_PENDING || !cur.Hidden {
+		t.Fatalf("share %v %v", cur, err)
+	}
+	if n := len(e.xfer.callbacks); n != 0 {
+		t.Fatalf("%d transfers started", n)
+	}
+	requireNotices(t, e.peer)
+
+	// The requested acceptance still starts one transfer.
+	if res := e.setState(t, rs.Id, ocm.ShareState_SHARE_STATE_ACCEPTED, "/home/dest"); res.Status.Code != rpc.Code_CODE_OK {
+		t.Fatalf("accept: %v", res.Status)
+	}
+	e.xfer.callback(0)(nil)
+	requireNotices(t, e.peer, ocmd.NotificationShareAccepted)
+}
+
 func TestServiceCloseStopsNotifications(t *testing.T) {
 	e := newEmitEnv(t)
 	e.svc.notifier = &ocmd.AsyncNotifier{Client: ocmd.NewClient(2*time.Second, false)}
