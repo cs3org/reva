@@ -41,6 +41,29 @@ func (s *svc) Invoke(ctx context.Context, name string, args map[string]any) (inv
 	return s.set.Invoke(ctx, name, args)
 }
 
+type runsArgs struct {
+	Job      string `arg:"job" help:"restrict to this job"`
+	Owner    string `arg:"owner" help:"restrict to this owner"`
+	States   string `arg:"states" help:"comma-separated states"`
+	Internal bool   `arg:"internal" help:"only internal (ownerless) runs"`
+	Limit    int    `arg:"limit" help:"max runs"`
+	Offset   int    `arg:"offset" help:"skip this many"`
+}
+
+type runArgs struct {
+	RunID rjobs.RunID `arg:"run_id,required" help:"the run id"`
+}
+
+type enqueueArgs struct {
+	Job    string `arg:"job,required" help:"the on-demand job name"`
+	Params string `arg:"params" help:"JSON object of parameters"`
+	Owner  string `arg:"owner" help:"attribute the run to this user"`
+}
+
+type periodicArgs struct {
+	Job string `arg:"job,required" help:"the periodic job name"`
+}
+
 // buildInvokeSet declares the jobs invocations. Handlers read s.runner at call
 // time (it is built in Start), so a call before the runner is ready fails
 // cleanly rather than panicking. All but inspect work on the shared store, so
@@ -49,36 +72,23 @@ func (s *svc) buildInvokeSet() *invoke.Set {
 	set := invoke.NewSet()
 
 	set.Add("inspect", "Report this runner's live in-memory state (registered jobs, what is executing, worker pool).").
-		Handle(func(_ context.Context, _ invoke.Args) (invoke.Result, error) {
+		Handle(invoke.Typed(func(_ context.Context, _ struct{}) (invoke.Result, error) {
 			r, err := s.ready()
 			if err != nil {
 				return nil, err
 			}
 			return toResult(r.Inspect())
-		})
+		}))
 
-	job := invoke.OptArg[string]("job", "restrict to this job")
-	owner := invoke.OptArg[string]("owner", "restrict to this owner")
-	states := invoke.OptArg[string]("states", "comma-separated states")
-	internal := invoke.OptArg[bool]("internal", "only internal (ownerless) runs")
-	limit := invoke.OptArg[int]("limit", "max runs")
-	offset := invoke.OptArg[int]("offset", "skip this many")
 	set.Add("runs", "List durable run history from the store, filtered.").
-		Args(job, owner, states, internal, limit, offset).
 		Shared().
-		Handle(func(ctx context.Context, a invoke.Args) (invoke.Result, error) {
+		Handle(invoke.Typed(func(ctx context.Context, a runsArgs) (invoke.Result, error) {
 			r, err := s.ready()
 			if err != nil {
 				return nil, err
 			}
-			f := rjobs.ListFilter{
-				Job:      job.Get(a),
-				Owner:    owner.Get(a),
-				Internal: internal.Get(a),
-				Limit:    limit.Get(a),
-				Offset:   offset.Get(a),
-			}
-			for st := range strings.SplitSeq(states.Get(a), ",") {
+			f := rjobs.ListFilter{Job: a.Job, Owner: a.Owner, Internal: a.Internal, Limit: a.Limit, Offset: a.Offset}
+			for st := range strings.SplitSeq(a.States, ",") {
 				if st = strings.TrimSpace(st); st != "" {
 					f.States = append(f.States, rjobs.State(st))
 				}
@@ -92,99 +102,89 @@ func (s *svc) buildInvokeSet() *invoke.Set {
 				out = append(out, statusMap(st))
 			}
 			return invoke.Result{"runs": out}, nil
-		})
+		}))
 
-	runID := invoke.Arg[string]("run_id", "the run id")
 	set.Add("status", "Report one run's full persisted status.").
-		Args(runID).
 		Shared().
-		Handle(func(ctx context.Context, a invoke.Args) (invoke.Result, error) {
+		Handle(invoke.Typed(func(ctx context.Context, a runArgs) (invoke.Result, error) {
 			r, err := s.ready()
 			if err != nil {
 				return nil, err
 			}
-			st, err := r.Status(ctx, rjobs.RunID(runID.Get(a)))
+			st, err := r.Status(ctx, a.RunID)
 			if err != nil {
 				return nil, err
 			}
 			return statusMap(st), nil
-		})
+		}))
 
-	onDemandJob := invoke.Arg[string]("job", "the on-demand job name")
-	params := invoke.OptArg[string]("params", "JSON object of parameters")
-	runOwner := invoke.OptArg[string]("owner", "attribute the run to this user")
 	set.Add("enqueue", "Enqueue an on-demand run; returns its run id.").
-		Args(onDemandJob, params, runOwner).
 		Mutating().
 		Shared().
-		Handle(func(ctx context.Context, a invoke.Args) (invoke.Result, error) {
+		Handle(invoke.Typed(func(ctx context.Context, a enqueueArgs) (invoke.Result, error) {
 			r, err := s.ready()
 			if err != nil {
 				return nil, err
 			}
-			var p rjobs.Params
-			if raw := params.Get(a); raw != "" {
-				if err := json.Unmarshal([]byte(raw), &p); err != nil {
+			var params rjobs.Params
+			if a.Params != "" {
+				if err := json.Unmarshal([]byte(a.Params), &params); err != nil {
 					return nil, errors.New("jobs: params must be a JSON object")
 				}
 			}
 			var opts []rjobs.EnqueueOption
-			if o := runOwner.Get(a); o != "" {
-				opts = append(opts, rjobs.WithOwner(o))
+			if a.Owner != "" {
+				opts = append(opts, rjobs.WithOwner(a.Owner))
 			}
-			id, err := r.Enqueue(ctx, onDemandJob.Get(a), p, opts...)
+			id, err := r.Enqueue(ctx, a.Job, params, opts...)
 			if err != nil {
 				return nil, err
 			}
 			return invoke.Result{"run_id": string(id)}, nil
-		})
+		}))
 
-	periodicJob := invoke.Arg[string]("job", "the periodic job name")
 	set.Add("trigger", "Run a leader-scoped periodic job now.").
-		Args(periodicJob).
 		Mutating().
 		Shared().
-		Handle(func(ctx context.Context, a invoke.Args) (invoke.Result, error) {
+		Handle(invoke.Typed(func(ctx context.Context, a periodicArgs) (invoke.Result, error) {
 			r, err := s.ready()
 			if err != nil {
 				return nil, err
 			}
-			if err := r.TriggerNow(ctx, periodicJob.Get(a)); err != nil {
+			if err := r.TriggerNow(ctx, a.Job); err != nil {
 				return nil, err
 			}
-			return invoke.Result{"triggered": periodicJob.Get(a)}, nil
-		})
+			return invoke.Result{"triggered": a.Job}, nil
+		}))
 
 	set.Add("cancel", "Cancel a run by id; returns its updated status.").
-		Args(runID).
 		Mutating().
 		Shared().
-		Handle(func(ctx context.Context, a invoke.Args) (invoke.Result, error) {
+		Handle(invoke.Typed(func(ctx context.Context, a runArgs) (invoke.Result, error) {
 			r, err := s.ready()
 			if err != nil {
 				return nil, err
 			}
-			st, err := r.Cancel(ctx, rjobs.RunID(runID.Get(a)))
+			st, err := r.Cancel(ctx, a.RunID)
 			if err != nil {
 				return nil, err
 			}
 			return statusMap(st), nil
-		})
+		}))
 
 	set.Add("stop", "Cancel a periodic job's in-flight run.").
-		Args(periodicJob).
 		Mutating().
 		Shared().
-		Handle(func(ctx context.Context, a invoke.Args) (invoke.Result, error) {
+		Handle(invoke.Typed(func(ctx context.Context, a periodicArgs) (invoke.Result, error) {
 			r, err := s.ready()
 			if err != nil {
 				return nil, err
 			}
-			if err := r.CancelPeriodic(ctx, periodicJob.Get(a)); err != nil {
+			if err := r.CancelPeriodic(ctx, a.Job); err != nil {
 				return nil, err
 			}
-			return invoke.Result{"stopped": periodicJob.Get(a)}, nil
-		})
+			return invoke.Result{"stopped": a.Job}, nil
+		}))
 
 	set.Add("forget", "Drop the queue state of an on-demand job no runner registers anymore.").
 		Arg("job", "the job name").

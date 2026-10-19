@@ -27,14 +27,15 @@ import (
 // TestSet exercises the developer-facing builder: declaring a method, its
 // catalog entry, required-arg validation, and routing to the handler.
 func TestSet(t *testing.T) {
+	type memberArgs struct {
+		Group string `arg:"group,required" help:"the group id"`
+		User  string `arg:"user,required" help:"the user id"`
+	}
 	set := NewSet()
-	group := Arg[string]("group", "the group id")
-	user := Arg[string]("user", "the user id")
 	set.Add("is_member", "Report whether a user is a member of a group").
-		Args(group, user).
-		Handle(func(_ context.Context, a Args) (Result, error) {
-			return Result{"member": group.Get(a) == "admins" && user.Get(a) == "alice"}, nil
-		})
+		Handle(Typed(func(_ context.Context, a memberArgs) (Result, error) {
+			return Result{"member": a.Group == "admins" && a.User == "alice"}, nil
+		}))
 
 	// Catalog reflects the declaration.
 	specs := set.Invocations()
@@ -69,19 +70,20 @@ func TestSet(t *testing.T) {
 // handler emits several results, required args are enforced, and a unary Invoke
 // of a stream-only method is rejected (and vice versa).
 func TestSetStreaming(t *testing.T) {
+	type tailArgs struct {
+		N int `arg:"n,required" help:"how many"`
+	}
 	set := NewSet()
-	n := Arg[int]("n", "how many")
 	set.Add("tail", "stream N ticks").
-		Args(n).
 		Stream().
-		HandleStream(func(_ context.Context, a Args, emit StreamEmit) error {
-			for i := range n.Get(a) {
+		HandleStream(TypedStream(func(_ context.Context, a tailArgs, emit StreamEmit) error {
+			for i := range a.N {
 				if err := emit(Result{"i": i}); err != nil {
 					return err
 				}
 			}
 			return nil
-		})
+		}))
 
 	specs := set.Invocations()
 	if len(specs) != 1 || !specs[0].Streaming {
@@ -109,50 +111,57 @@ func TestSetStreaming(t *testing.T) {
 	}
 
 	// A unary-only method cannot be invoked as a stream.
-	set.Add("ping", "unary").Handle(func(context.Context, Args) (Result, error) { return Result{}, nil })
+	set.Add("ping", "unary").Handle(Typed(func(context.Context, struct{}) (Result, error) { return Result{}, nil }))
 	if err := set.InvokeStream(context.Background(), "ping", nil, func(Result) error { return nil }); err == nil {
 		t.Fatal("expected error stream-invoking a unary-only method")
 	}
 }
 
-// TestSetParsesTypedArgs checks that arguments arrive in the handler as their
-// declared types, and that a value of the wrong type is rejected before the
-// handler runs.
+// TestSetParsesTypedArgs checks that arguments arrive in the handler as the
+// types of their fields, and that a value of the wrong type is rejected before
+// the handler runs.
 func TestSetParsesTypedArgs(t *testing.T) {
+	type runID string
+	type opArgs struct {
+		Limit int           `arg:"limit"`
+		All   bool          `arg:"all"`
+		Wait  time.Duration `arg:"wait"`
+		Since time.Time     `arg:"since"`
+		ID    runID         `arg:"id"`
+		Owner *string       `arg:"owner"`
+	}
 	set := NewSet()
-	limit := OptArg[int]("limit", "")
-	all := OptArg[bool]("all", "")
-	wait := OptArg[time.Duration]("wait", "")
-	since := OptArg[time.Time]("since", "")
-	var got Args
-	set.Add("op", "").
-		Args(limit, all, wait, since).
-		Handle(func(_ context.Context, a Args) (Result, error) { got = a; return Result{}, nil })
+	var got opArgs
+	set.Add("op", "").Handle(Typed(func(_ context.Context, a opArgs) (Result, error) { got = a; return Result{}, nil }))
 
 	before := time.Now()
 	_, err := set.Invoke(context.Background(), "op", map[string]any{
-		"limit": "7", "all": "true", "wait": "2s", "since": "5m",
+		"limit": "7", "all": "true", "wait": "2s", "since": "5m", "id": "r1", "owner": "",
 	})
 	after := time.Now()
 	if err != nil {
 		t.Fatalf("Invoke: %v", err)
 	}
-	if limit.Get(got) != 7 || !all.Get(got) || wait.Get(got) != 2*time.Second {
+	if got.Limit != 7 || !got.All || got.Wait != 2*time.Second || got.ID != "r1" {
 		t.Fatalf("unexpected args: %+v", got)
 	}
+	// A pointer is set when the argument is given, even if it is empty.
+	if got.Owner == nil || *got.Owner != "" {
+		t.Fatalf("owner: want a pointer to \"\", got %v", got.Owner)
+	}
 	// A duration means that long ago.
-	if s := since.Get(got); s.Before(before.Add(-5*time.Minute)) || s.After(after.Add(-5*time.Minute)) {
-		t.Fatalf("since %v is not 5m ago", s)
+	if got.Since.Before(before.Add(-5*time.Minute)) || got.Since.After(after.Add(-5*time.Minute)) {
+		t.Fatalf("since %v is not 5m ago", got.Since)
 	}
 
 	if _, err := set.Invoke(context.Background(), "op", map[string]any{"since": "2026-10-19T10:00:00Z"}); err != nil {
 		t.Fatalf("Invoke with an RFC3339 time: %v", err)
 	}
-	if want := time.Date(2026, 10, 19, 10, 0, 0, 0, time.UTC); !since.Get(got).Equal(want) {
-		t.Fatalf("since: want %v, got %v", want, since.Get(got))
+	if want := time.Date(2026, 10, 19, 10, 0, 0, 0, time.UTC); !got.Since.Equal(want) {
+		t.Fatalf("since: want %v, got %v", want, got.Since)
 	}
-	if limit.Has(got) {
-		t.Fatal("an absent argument must not be reported as supplied")
+	if got.Owner != nil || got.Limit != 0 {
+		t.Fatalf("absent arguments must be zero, got %+v", got)
 	}
 
 	for _, bad := range []map[string]any{{"limit": "abc"}, {"all": "maybe"}, {"wait": "soon"}, {"since": "yesterday"}} {
@@ -160,4 +169,19 @@ func TestSetParsesTypedArgs(t *testing.T) {
 			t.Errorf("expected an error for %v", bad)
 		}
 	}
+}
+
+// TestTypedRejectsUnsupportedType checks that a field type the framework cannot
+// parse fails when the handler is made, not at the first call.
+func TestTypedRejectsUnsupportedType(t *testing.T) {
+	defer func() {
+		if recover() == nil {
+			t.Fatal("expected a panic for an unsupported argument type")
+		}
+	}()
+	Typed(func(context.Context, struct {
+		Ratio float64 `arg:"ratio"`
+	}) (Result, error) {
+		return nil, nil
+	})
 }

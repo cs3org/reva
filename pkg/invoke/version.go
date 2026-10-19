@@ -37,16 +37,17 @@ const VersionInvocation = "version"
 var processStart = time.Now()
 
 func init() {
-	registerDefault(defaultInvocation{
-		spec: InvocationSpec{
+	registerDefault(
+		InvocationSpec{
 			Name:        VersionInvocation,
 			Description: "Return the binary's build information and the process uptime.",
 			Kind:        KindReadonly,
 		},
-		fn: func(_ context.Context, _ instance, _ Args) (Result, error) {
+		func(_ context.Context, _ instance, _ struct{}) (Result, error) {
 			return versionResult(), nil
 		},
-	})
+		nil,
+	)
 }
 
 // versionResult reports the reva version (from the link-time metadata in
