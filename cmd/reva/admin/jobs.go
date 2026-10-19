@@ -25,6 +25,7 @@ import (
 	"io"
 	"os"
 	"sort"
+	"strconv"
 	"strings"
 	"text/tabwriter"
 	"time"
@@ -39,6 +40,7 @@ Subcommands:
   jobs active                   the runs executing right now, per node (fan-out)
   jobs runs                     durable run history from the store
   jobs status <run-id>          one run's full status
+  jobs logs <run-id>            one run's recent log lines, from every service it called (fan-out)
   jobs run <job> [k=v ...]      enqueue an on-demand run
   jobs trigger <job>            run a periodic job now
   jobs cancel <run-id>          cancel a run
@@ -51,22 +53,27 @@ Flags (before the subcommand):
   -job <name>          runs: filter by job
   -state <s,...>       runs: filter by states (queued,running,succeeded,failed,cancelled,aborted)
   -internal            runs: only internal (ownerless) runs
-  -n <N>               runs: max rows (default 50)
+  -n <N>               runs: max rows; logs: lines per instance (default 50)
+  -f                   logs: follow until the run succeeds or is cancelled
+  -o <text|json>       logs: output format (default text)
 `
 
 func adminJobsCommand() *command {
 	cmd := newCommand("jobs")
 	cmd.Description = func() string { return "inspect and drive the background jobs runner" }
-	cmd.Usage = func() string { return "Usage: admin jobs <list|active|runs|status|run|trigger|cancel|stop|forget> ..." }
+	cmd.Usage = func() string { return "Usage: admin jobs <list|active|runs|status|logs|run|trigger|cancel|stop|forget> ..." }
 	cmd.FlagSet.Usage = func() { fmt.Fprint(cmd.Output(), jobsHelp) }
 	adminHost := cmd.String("admin-host", "", "address of the admin gRPC endpoint (persisted)")
 	owner := cmd.String("owner", "", "runs: filter by owner; run: attribute to a user")
 	jobFilter := cmd.String("job", "", "runs: filter by job")
 	stateFilter := cmd.String("state", "", "runs: filter by states (comma-separated)")
 	internal := cmd.Bool("internal", false, "runs: only internal (ownerless) runs")
-	n := cmd.Int("n", 50, "runs: max rows")
+	n := cmd.Int("n", 50, "runs: max rows; logs: lines per instance")
+	follow := cmd.Bool("f", false, "logs: follow until the run succeeds or is cancelled")
+	output := cmd.String("o", "text", "logs: output format: text | json")
 	cmd.ResetFlags = func() {
 		*adminHost, *owner, *jobFilter, *stateFilter, *internal, *n = "", "", "", "", false, 50
+		*follow, *output = false, "text"
 	}
 	cmd.Action = func(w ...io.Writer) error {
 		if cmd.NArg() < 1 {
@@ -87,6 +94,8 @@ func adminJobsCommand() *command {
 			return jobsRuns(ctx, client, *jobFilter, *owner, *stateFilter, *internal, int32(*n))
 		case "status":
 			return jobsStatus(ctx, client, rest)
+		case "logs":
+			return jobsLogs(ctx, client, rest, *n, *follow, *output)
 		case "run":
 			return jobsRun(ctx, client, rest, *owner)
 		case "trigger":
@@ -222,6 +231,51 @@ func jobsStatus(ctx context.Context, client adminpb.AdminAPIClient, args []strin
 		fmt.Printf("result:   %s\n", r.ResultJson)
 	}
 	return nil
+}
+
+func jobsLogs(ctx context.Context, client adminpb.AdminAPIClient, args []string, limit int, follow bool, output string) error {
+	if len(args) < 1 {
+		return errors.New("Usage: admin jobs [-f] [-n N] [-o text|json] logs <run-id>")
+	}
+	if output != "text" && output != "json" {
+		return fmt.Errorf("unknown -o %q (use text or json)", output)
+	}
+	// The runner uses the run id as the trace id of the job, so a grep for it
+	// also finds the lines of the services that the job called.
+	id := args[0]
+	logArgs := map[string]string{"limit": strconv.Itoa(limit), "grep": id}
+	if !follow {
+		return snapshotLogs(ctx, client, "*", logArgs, output, true)
+	}
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
+	go stopWhenRunEnds(ctx, cancel, client, id)
+	return followLogs(ctx, client, "*", logArgs, output, true)
+}
+
+// stopWhenRunEnds cancels a follow when the run succeeds or is cancelled. A
+// failed run is retried, so the follow continues. Periodic runs have no
+// status, so for them the follow continues until interrupted.
+func stopWhenRunEnds(ctx context.Context, cancel context.CancelFunc, client adminpb.AdminAPIClient, id string) {
+	ticker := time.NewTicker(2 * time.Second)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+		}
+		r, err := client.GetJobRun(ctx, &adminpb.GetJobRunRequest{RunId: id})
+		if err != nil {
+			continue
+		}
+		if r.State == "succeeded" || r.State == "cancelled" {
+			// Give the last lines of the other instances time to arrive.
+			time.Sleep(time.Second)
+			cancel()
+			return
+		}
+	}
 }
 
 func jobsRun(ctx context.Context, client adminpb.AdminAPIClient, args []string, owner string) error {

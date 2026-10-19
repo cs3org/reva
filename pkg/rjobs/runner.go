@@ -28,6 +28,7 @@ import (
 
 	"github.com/cs3org/reva/v3/pkg/appctx"
 	"github.com/cs3org/reva/v3/pkg/errtypes"
+	"github.com/cs3org/reva/v3/pkg/trace"
 	"github.com/google/uuid"
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog"
@@ -1027,7 +1028,9 @@ func (r *Runner) recordStatus(ctx context.Context, run Run, state State, result 
 // (always nil for periodic runs). A job implementing ProgressJob reports its
 // progress to h, and one implementing HandOffJob is registered on h.
 func (r *Runner) invoke(ctx context.Context, run Run, h *runHandle, log zerolog.Logger) (Params, error) {
-	jobCtx := appctx.WithLogger(ctx, &log)
+	// The run id is the trace id, so the logs of the services the job calls
+	// carry it too and `admin jobs logs <run-id>` finds them.
+	jobCtx := appctx.WithLogger(trace.Set(ctx, string(run.ID)), &log)
 
 	if p, ok := r.lookupPeriodic(run.Job); ok {
 		return nil, r.guard(p, func() error { return p.Run(jobCtx) })
