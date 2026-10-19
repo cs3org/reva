@@ -48,11 +48,7 @@ func Invoke(ctx context.Context, target, name string, args map[string]any) (Resu
 		if d.fn == nil {
 			return nil, fmt.Errorf("invoke: %q is streaming-only (use InvokeStream)", name)
 		}
-		a, err := parseArgs(name, d.args, args)
-		if err != nil {
-			return nil, err
-		}
-		return d.fn(ctx, inst, a)
+		return d.fn(ctx, inst, args)
 	}
 	if inst.inv == nil {
 		return nil, fmt.Errorf("invoke: %q exposes no invocation %q on this node", target, name)
@@ -79,11 +75,7 @@ func InvokeStream(ctx context.Context, target, name string, args map[string]any,
 		return fmt.Errorf("invoke: unknown target %q on this node", target)
 	}
 	if d, ok := lookupDefault(name); ok {
-		a, err := parseArgs(name, d.args, args)
-		if err != nil {
-			return err
-		}
-		return d.stream(ctx, inst, a, emit)
+		return d.stream(ctx, inst, args, emit)
 	}
 	sv, ok := inst.inv.(StreamInvokable)
 	if !ok {
