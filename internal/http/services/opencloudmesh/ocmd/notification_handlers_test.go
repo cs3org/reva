@@ -146,8 +146,6 @@ func TestRegistryRegistrationRules(t *testing.T) {
 	}
 }
 
-// A later layer can add a scoped type with its own schema without touching
-// USER_REMOVED; the type then stops being accept-and-ignore.
 func TestRegistryExtensionBecomesKnownAndValidated(t *testing.T) {
 	r := NewNotificationRegistry()
 	h := &recordingHandler{}
