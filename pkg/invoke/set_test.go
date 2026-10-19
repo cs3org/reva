@@ -20,6 +20,8 @@ package invoke
 
 import (
 	"context"
+	"errors"
+	"net/netip"
 	"testing"
 	"time"
 )
@@ -129,6 +131,11 @@ func TestSetParsesTypedArgs(t *testing.T) {
 		Since time.Time     `arg:"since"`
 		ID    runID         `arg:"id"`
 		Owner *string       `arg:"owner"`
+		IDs   []runID       `arg:"ids"`
+		Port  uint16        `arg:"port"`
+		Ratio float64       `arg:"ratio"`
+		Addrs []netip.Addr  `arg:"addrs"`
+		Color color         `arg:"color"`
 	}
 	set := NewSet()
 	var got opArgs
@@ -137,13 +144,22 @@ func TestSetParsesTypedArgs(t *testing.T) {
 	before := time.Now()
 	_, err := set.Invoke(context.Background(), "op", map[string]any{
 		"limit": "7", "all": "true", "wait": "2s", "since": "5m", "id": "r1", "owner": "",
+		"ids": "r1, r2,,", "port": "8080", "ratio": "0.5", "addrs": "10.0.0.1,::1", "color": "red",
 	})
 	after := time.Now()
 	if err != nil {
 		t.Fatalf("Invoke: %v", err)
 	}
-	if got.Limit != 7 || !got.All || got.Wait != 2*time.Second || got.ID != "r1" {
+	if got.Limit != 7 || !got.All || got.Wait != 2*time.Second || got.ID != "r1" ||
+		got.Port != 8080 || got.Ratio != 0.5 || got.Color != "red" {
 		t.Fatalf("unexpected args: %+v", got)
+	}
+	// A slice takes comma-separated values and drops the empty ones.
+	if len(got.IDs) != 2 || got.IDs[0] != "r1" || got.IDs[1] != "r2" {
+		t.Fatalf("ids: want [r1 r2], got %v", got.IDs)
+	}
+	if len(got.Addrs) != 2 || got.Addrs[1] != netip.IPv6Loopback() {
+		t.Fatalf("addrs: want [10.0.0.1 ::1], got %v", got.Addrs)
 	}
 	// A pointer is set when the argument is given, even if it is empty.
 	if got.Owner == nil || *got.Owner != "" {
@@ -160,11 +176,14 @@ func TestSetParsesTypedArgs(t *testing.T) {
 	if want := time.Date(2026, 10, 19, 10, 0, 0, 0, time.UTC); !got.Since.Equal(want) {
 		t.Fatalf("since: want %v, got %v", want, got.Since)
 	}
-	if got.Owner != nil || got.Limit != 0 {
+	if got.Owner != nil || got.Limit != 0 || got.IDs != nil {
 		t.Fatalf("absent arguments must be zero, got %+v", got)
 	}
 
-	for _, bad := range []map[string]any{{"limit": "abc"}, {"all": "maybe"}, {"wait": "soon"}, {"since": "yesterday"}} {
+	for _, bad := range []map[string]any{
+		{"limit": "abc"}, {"all": "maybe"}, {"wait": "soon"}, {"since": "yesterday"},
+		{"port": "70000"}, {"ratio": "half"}, {"addrs": "10.0.0.1,nope"}, {"color": "blue"},
+	} {
 		if _, err := set.Invoke(context.Background(), "op", bad); err == nil {
 			t.Errorf("expected an error for %v", bad)
 		}
@@ -180,8 +199,19 @@ func TestTypedRejectsUnsupportedType(t *testing.T) {
 		}
 	}()
 	Typed(func(context.Context, struct {
-		Ratio float64 `arg:"ratio"`
+		Labels map[string]string `arg:"labels"`
 	}) (Result, error) {
 		return nil, nil
 	})
+}
+
+// color is an argument type that parses itself.
+type color string
+
+func (c *color) UnmarshalText(b []byte) error {
+	if string(b) != "red" && string(b) != "green" {
+		return errors.New("want red or green")
+	}
+	*c = color(b)
+	return nil
 }

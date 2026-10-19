@@ -22,7 +22,6 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"strings"
 	"time"
 
 	"github.com/cs3org/reva/v3/pkg/invoke"
@@ -40,12 +39,12 @@ func (s *svc) Invoke(ctx context.Context, name string, args map[string]any) (inv
 }
 
 type runsArgs struct {
-	Job      string `arg:"job" help:"restrict to this job"`
-	Owner    string `arg:"owner" help:"restrict to this owner"`
-	States   string `arg:"states" help:"comma-separated states"`
-	Internal bool   `arg:"internal" help:"only internal (ownerless) runs"`
-	Limit    int    `arg:"limit" help:"max runs"`
-	Offset   int    `arg:"offset" help:"skip this many"`
+	Job      string        `arg:"job" help:"restrict to this job"`
+	Owner    string        `arg:"owner" help:"restrict to this owner"`
+	States   []rjobs.State `arg:"states" help:"comma-separated states"`
+	Internal bool          `arg:"internal" help:"only internal (ownerless) runs"`
+	Limit    int           `arg:"limit" help:"max runs"`
+	Offset   int           `arg:"offset" help:"skip this many"`
 }
 
 type runArgs struct {
@@ -83,13 +82,9 @@ func (s *svc) buildInvokeSet() *invoke.Set {
 			if err != nil {
 				return nil, err
 			}
-			f := rjobs.ListFilter{Job: a.Job, Owner: a.Owner, Internal: a.Internal, Limit: a.Limit, Offset: a.Offset}
-			for st := range strings.SplitSeq(a.States, ",") {
-				if st = strings.TrimSpace(st); st != "" {
-					f.States = append(f.States, rjobs.State(st))
-				}
-			}
-			runs, err := r.ListRuns(ctx, f)
+			runs, err := r.ListRuns(ctx, rjobs.ListFilter{
+				Job: a.Job, Owner: a.Owner, States: a.States, Internal: a.Internal, Limit: a.Limit, Offset: a.Offset,
+			})
 			if err != nil {
 				return nil, err
 			}
