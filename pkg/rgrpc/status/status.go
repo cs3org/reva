@@ -147,6 +147,8 @@ func NewInvalidArg(ctx context.Context, msg string) *rpc.Status {
 
 // NewConflict returns a Status with Code_CODE_ABORTED and logs the msg.
 func NewConflict(ctx context.Context, err error, msg string) *rpc.Status {
+	log := appctx.GetLogger(ctx).With().CallerWithSkipFrameCount(3).Logger()
+	log.Warn().Err(err).Msg(msg)
 	return &rpc.Status{
 		Code:    rpc.Code_CODE_ABORTED,
 		Message: msg,
@@ -165,24 +167,30 @@ func NewFailedPrecondition(ctx context.Context, err error, msg string) *rpc.Stat
 	}
 }
 
-// NewStatusFromErrType returns a status that corresponds to the given errtype.
+// NewStatusFromErrType returns the status matching the type of err.
+// A nil error maps to OK, an unknown error falls back to INTERNAL.
 func NewStatusFromErrType(ctx context.Context, msg string, err error) *rpc.Status {
-	switch e := err.(type) {
+	switch err.(type) {
 	case nil:
-		NewOK(ctx)
+		return NewOK(ctx)
 	case errtypes.IsNotFound:
-		return NewNotFound(ctx, "gateway: "+msg+": "+err.Error())
+		return NewNotFound(ctx, msg+": "+err.Error())
 	case errtypes.IsInvalidCredentials:
-		// TODO this maps badly
-		return NewUnauthenticated(ctx, err, "gateway: "+msg+": "+err.Error())
-	case errtypes.PermissionDenied:
-		return NewPermissionDenied(ctx, e, "gateway: "+msg+": "+err.Error())
+		return NewUnauthenticated(ctx, err, msg+": "+err.Error())
+	case errtypes.IsPermissionDenied:
+		return NewPermissionDenied(ctx, err, msg+": "+err.Error())
+	case errtypes.IsUserRequired:
+		return NewUnauthenticated(ctx, err, msg+": "+err.Error())
 	case errtypes.IsNotSupported:
-		return NewUnimplemented(ctx, err, "gateway: "+msg+":"+err.Error())
-	case errtypes.BadRequest:
-		return NewInvalidArg(ctx, "gateway: "+msg+":"+err.Error())
-	case errtypes.AlreadyExists:
-		return NewAlreadyExists(ctx, err, "gateway: "+msg+":"+err.Error())
+		return NewUnimplemented(ctx, err, msg+": "+err.Error())
+	case errtypes.IsBadRequest:
+		return NewInvalid(ctx, msg+": "+err.Error())
+	case errtypes.IsAlreadyExists:
+		return NewAlreadyExists(ctx, err, msg+": "+err.Error())
+	case errtypes.IsConflict:
+		return NewConflict(ctx, err, msg+": "+err.Error())
+	case errtypes.IsInsufficientStorage:
+		return NewInsufficientStorage(ctx, err, msg+": "+err.Error())
 	}
 
 	// map GRPC status codes coming from the auth middleware
@@ -192,11 +200,11 @@ func NewStatusFromErrType(ctx context.Context, msg string, err error) *rpc.Statu
 		if ok {
 			switch st.Code() {
 			case codes.NotFound:
-				return NewNotFound(ctx, "gateway: "+msg+": "+err.Error())
+				return NewNotFound(ctx, msg+": "+err.Error())
 			case codes.Unauthenticated:
-				return NewUnauthenticated(ctx, err, "gateway: "+msg+": "+err.Error())
+				return NewUnauthenticated(ctx, err, msg+": "+err.Error())
 			case codes.PermissionDenied:
-				return NewPermissionDenied(ctx, err, "gateway: "+msg+": "+err.Error())
+				return NewPermissionDenied(ctx, err, msg+": "+err.Error())
 			}
 		}
 		// the actual error can be wrapped multiple times
@@ -206,7 +214,40 @@ func NewStatusFromErrType(ctx context.Context, msg string, err error) *rpc.Statu
 		}
 	}
 
-	return NewInternal(ctx, err, "gateway: "+msg+":"+err.Error())
+	return NewInternal(ctx, err, msg+": "+err.Error())
+}
+
+// NewRedactedStatusFromErrType is like NewStatusFromErrType, but the returned
+// message is only msg: the details of err are logged and not sent to the caller.
+// To be used where errors must not leak internals, e.g. by the auth providers.
+func NewRedactedStatusFromErrType(ctx context.Context, msg string, err error) *rpc.Status {
+	st := NewStatusFromErrType(ctx, msg, err)
+	if err != nil {
+		st.Message = msg
+	}
+	return st
+}
+
+// NewErrtypeFromStatus returns an errtype matching a non-OK status, so a helper
+// that receives a downstream status can hand its caller an error that
+// NewStatusFromErrType maps back to the right code instead of a flattened one.
+func NewErrtypeFromStatus(s *rpc.Status) error {
+	switch s.Code {
+	case rpc.Code_CODE_NOT_FOUND:
+		return errtypes.NotFound(s.Message)
+	case rpc.Code_CODE_PERMISSION_DENIED:
+		return errtypes.PermissionDenied(s.Message)
+	case rpc.Code_CODE_ALREADY_EXISTS:
+		return errtypes.AlreadyExists(s.Message)
+	case rpc.Code_CODE_INVALID_ARGUMENT:
+		return errtypes.BadRequest(s.Message)
+	case rpc.Code_CODE_UNAUTHENTICATED:
+		return errtypes.InvalidCredentials(s.Message)
+	case rpc.Code_CODE_UNIMPLEMENTED:
+		return errtypes.NotSupported(s.Message)
+	default:
+		return errtypes.InternalError(s.Message)
+	}
 }
 
 // NewErrorFromCode returns a standardized Error for a given RPC code.

@@ -167,11 +167,10 @@ func (s *service) GetTransferStatus(ctx context.Context, req *datatx.GetTransfer
 
 	txInfo, err := s.txManager.GetTransferStatus(ctx, req.GetTxId().OpaqueId)
 	if err != nil {
-		err = errors.Wrap(err, "datatx service: error retrieving transfer status")
 		return &datatx.GetTransferStatusResponse{
-			Status: status.NewInternal(ctx, err, "datatx service: error getting transfer status"),
+			Status: status.NewStatusFromErrType(ctx, "datatx service: error getting transfer status", err),
 			TxInfo: txInfo,
-		}, err
+		}, nil
 	}
 
 	txInfo.ShareId = &ocm.ShareId{OpaqueId: transfer.ShareID}
@@ -189,7 +188,6 @@ func (s *service) CancelTransfer(ctx context.Context, req *datatx.CancelTransfer
 		return nil, errtypes.InternalError("datatx service: transfer not found")
 	}
 
-	transferRemovedMessage := ""
 	if s.conf.RemoveOnCancel {
 		if err := s.storageDriver.DeleteTransfer(transfer); err != nil {
 			err = errors.Wrap(err, "datatx service: error deleting transfer: "+datatx.Status_STATUS_INVALID.String())
@@ -197,17 +195,15 @@ func (s *service) CancelTransfer(ctx context.Context, req *datatx.CancelTransfer
 				Status: status.NewInvalid(ctx, "error cancelling transfer"),
 			}, err
 		}
-		transferRemovedMessage = "transfer successfully removed"
 	}
 
 	txInfo, err := s.txManager.CancelTransfer(ctx, req.GetTxId().OpaqueId)
 	if err != nil {
 		txInfo.ShareId = &ocm.ShareId{OpaqueId: transfer.ShareID}
-		err = errors.Wrapf(err, "(%v) datatx service: error cancelling transfer", transferRemovedMessage)
 		return &datatx.CancelTransferResponse{
-			Status: status.NewInternal(ctx, err, "error cancelling transfer"),
+			Status: status.NewStatusFromErrType(ctx, "error cancelling transfer", err),
 			TxInfo: txInfo,
-		}, err
+		}, nil
 	}
 
 	txInfo.ShareId = &ocm.ShareId{OpaqueId: transfer.ShareID}
@@ -222,12 +218,11 @@ func (s *service) ListTransfers(ctx context.Context, req *datatx.ListTransfersRe
 	userID := appctx.ContextMustGetUser(ctx).GetId()
 	transfers, err := s.storageDriver.ListTransfers(req.Filters, userID)
 	if err != nil {
-		err = errors.Wrap(err, "datatx service: error listing transfers")
 		var txInfos []*datatx.TxInfo
 		return &datatx.ListTransfersResponse{
-			Status:    status.NewInternal(ctx, err, "error listing transfers"),
+			Status:    status.NewStatusFromErrType(ctx, "error listing transfers", err),
 			Transfers: txInfos,
-		}, err
+		}, nil
 	}
 
 	txInfos := []*datatx.TxInfo{}
@@ -252,11 +247,10 @@ func (s *service) RetryTransfer(ctx context.Context, req *datatx.RetryTransferRe
 
 	txInfo, err := s.txManager.RetryTransfer(ctx, req.GetTxId().OpaqueId)
 	if err != nil {
-		err = errors.Wrap(err, "datatx service: error retrying transfer")
 		return &datatx.RetryTransferResponse{
-			Status: status.NewInternal(ctx, err, "error retrying transfer"),
+			Status: status.NewStatusFromErrType(ctx, "error retrying transfer", err),
 			TxInfo: txInfo,
-		}, err
+		}, nil
 	}
 
 	txInfo.ShareId = &ocm.ShareId{OpaqueId: transfer.ShareID}
