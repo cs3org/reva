@@ -54,19 +54,32 @@ func (s *svc) buildInvokeSet() *invoke.Set {
 			return toResult(r.Inspect())
 		})
 
+	job := invoke.OptArg[string]("job", "restrict to this job")
+	owner := invoke.OptArg[string]("owner", "restrict to this owner")
+	states := invoke.OptArg[string]("states", "comma-separated states")
+	internal := invoke.OptArg[bool]("internal", "only internal (ownerless) runs")
+	limit := invoke.OptArg[int]("limit", "max runs")
+	offset := invoke.OptArg[int]("offset", "skip this many")
 	set.Add("runs", "List durable run history from the store, filtered.").
-		OptArg("job", "restrict to this job").
-		OptArg("owner", "restrict to this owner").
-		OptArg("states", "comma-separated states").
-		OptArg("internal", "only internal (ownerless) runs").
-		OptArg("limit", "max runs").
-		OptArg("offset", "skip this many").
+		Args(job, owner, states, internal, limit, offset).
 		Handle(func(ctx context.Context, a invoke.Args) (invoke.Result, error) {
 			r, err := s.ready()
 			if err != nil {
 				return nil, err
 			}
-			runs, err := r.ListRuns(ctx, runFilter(a))
+			f := rjobs.ListFilter{
+				Job:      job.Get(a),
+				Owner:    owner.Get(a),
+				Internal: internal.Get(a),
+				Limit:    limit.Get(a),
+				Offset:   offset.Get(a),
+			}
+			for st := range strings.SplitSeq(states.Get(a), ",") {
+				if st = strings.TrimSpace(st); st != "" {
+					f.States = append(f.States, rjobs.State(st))
+				}
+			}
+			runs, err := r.ListRuns(ctx, f)
 			if err != nil {
 				return nil, err
 			}
@@ -77,70 +90,73 @@ func (s *svc) buildInvokeSet() *invoke.Set {
 			return invoke.Result{"runs": out}, nil
 		})
 
+	runID := invoke.Arg[string]("run_id", "the run id")
 	set.Add("status", "Report one run's full persisted status.").
-		Arg("run_id", "the run id").
+		Args(runID).
 		Handle(func(ctx context.Context, a invoke.Args) (invoke.Result, error) {
 			r, err := s.ready()
 			if err != nil {
 				return nil, err
 			}
-			st, err := r.Status(ctx, rjobs.RunID(a.String("run_id")))
+			st, err := r.Status(ctx, rjobs.RunID(runID.Get(a)))
 			if err != nil {
 				return nil, err
 			}
 			return statusMap(st), nil
 		})
 
+	onDemandJob := invoke.Arg[string]("job", "the on-demand job name")
+	params := invoke.OptArg[string]("params", "JSON object of parameters")
+	runOwner := invoke.OptArg[string]("owner", "attribute the run to this user")
 	set.Add("enqueue", "Enqueue an on-demand run; returns its run id.").
-		Arg("job", "the on-demand job name").
-		OptArg("params", "JSON object of parameters").
-		OptArg("owner", "attribute the run to this user").
+		Args(onDemandJob, params, runOwner).
 		Mutating().
 		Handle(func(ctx context.Context, a invoke.Args) (invoke.Result, error) {
 			r, err := s.ready()
 			if err != nil {
 				return nil, err
 			}
-			var params rjobs.Params
-			if raw := a.String("params"); raw != "" {
-				if err := json.Unmarshal([]byte(raw), &params); err != nil {
+			var p rjobs.Params
+			if raw := params.Get(a); raw != "" {
+				if err := json.Unmarshal([]byte(raw), &p); err != nil {
 					return nil, errors.New("jobs: params must be a JSON object")
 				}
 			}
 			var opts []rjobs.EnqueueOption
-			if owner := a.String("owner"); owner != "" {
-				opts = append(opts, rjobs.WithOwner(owner))
+			if o := runOwner.Get(a); o != "" {
+				opts = append(opts, rjobs.WithOwner(o))
 			}
-			id, err := r.Enqueue(ctx, a.String("job"), params, opts...)
+			id, err := r.Enqueue(ctx, onDemandJob.Get(a), p, opts...)
 			if err != nil {
 				return nil, err
 			}
 			return invoke.Result{"run_id": string(id)}, nil
 		})
 
+	periodicJob := invoke.Arg[string]("job", "the periodic job name")
 	set.Add("trigger", "Run a leader-scoped periodic job now.").
-		Arg("job", "the periodic job name").
+		Args(periodicJob).
 		Mutating().
 		Handle(func(ctx context.Context, a invoke.Args) (invoke.Result, error) {
 			r, err := s.ready()
 			if err != nil {
 				return nil, err
 			}
-			if err := r.TriggerNow(ctx, a.String("job")); err != nil {
+			if err := r.TriggerNow(ctx, periodicJob.Get(a)); err != nil {
 				return nil, err
 			}
-			return invoke.Result{"triggered": a.String("job")}, nil
+			return invoke.Result{"triggered": periodicJob.Get(a)}, nil
 		})
 
 	set.Add("cancel", "Cancel a run by id; returns its updated status.").
-		Arg("run_id", "the run id").
+		Args(runID).
 		Mutating().
 		Handle(func(ctx context.Context, a invoke.Args) (invoke.Result, error) {
 			r, err := s.ready()
 			if err != nil {
 				return nil, err
 			}
-			st, err := r.Cancel(ctx, rjobs.RunID(a.String("run_id")))
+			st, err := r.Cancel(ctx, rjobs.RunID(runID.Get(a)))
 			if err != nil {
 				return nil, err
 			}
@@ -148,17 +164,17 @@ func (s *svc) buildInvokeSet() *invoke.Set {
 		})
 
 	set.Add("stop", "Cancel a periodic job's in-flight run.").
-		Arg("job", "the periodic job name").
+		Args(periodicJob).
 		Mutating().
 		Handle(func(ctx context.Context, a invoke.Args) (invoke.Result, error) {
 			r, err := s.ready()
 			if err != nil {
 				return nil, err
 			}
-			if err := r.CancelPeriodic(ctx, a.String("job")); err != nil {
+			if err := r.CancelPeriodic(ctx, periodicJob.Get(a)); err != nil {
 				return nil, err
 			}
-			return invoke.Result{"stopped": a.String("job")}, nil
+			return invoke.Result{"stopped": periodicJob.Get(a)}, nil
 		})
 
 	set.Add("forget", "Drop the queue state of an on-demand job no runner registers anymore.").
@@ -185,25 +201,6 @@ func (s *svc) ready() (*rjobs.Runner, error) {
 		return nil, errors.New("jobs: runner not ready")
 	}
 	return s.runner, nil
-}
-
-// runFilter maps invocation args to a store list filter.
-func runFilter(a invoke.Args) rjobs.ListFilter {
-	f := rjobs.ListFilter{
-		Job:      a.String("job"),
-		Owner:    a.String("owner"),
-		Internal: a.Bool("internal"),
-		Limit:    a.Int("limit"),
-		Offset:   a.Int("offset"),
-	}
-	if states := a.String("states"); states != "" {
-		for st := range strings.SplitSeq(states, ",") {
-			if st = strings.TrimSpace(st); st != "" {
-				f.States = append(f.States, rjobs.State(st))
-			}
-		}
-	}
-	return f
 }
 
 // toResult renders any JSON-taggable value as an invoke.Result (a map), so the

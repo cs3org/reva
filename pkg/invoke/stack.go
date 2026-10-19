@@ -33,17 +33,17 @@ const StackInvocation = "stack"
 // limit; a hit is reported as truncated.
 const maxStackDump = 2 << 20
 
+var stackGrepArg = OptArg[string]("grep", "keep only goroutines whose stack contains this substring")
+
 func init() {
 	registerDefault(defaultInvocation{
 		spec: InvocationSpec{
 			Name:        StackInvocation,
 			Description: "Dump the process's goroutine stacks with basic runtime stats.",
 			Kind:        KindReadonly,
-			Args: []ArgSpec{
-				{Name: "grep", Description: "keep only goroutines whose stack contains this substring"},
-			},
 		},
-		fn: stackDump,
+		args: []argDecl{stackGrepArg},
+		fn:   stackDump,
 	})
 }
 
@@ -63,7 +63,7 @@ func stackDump(_ context.Context, _ instance, a Args) (Result, error) {
 		buf = make([]byte, 2*len(buf))
 	}
 	dump := string(buf)
-	if g := a.String("grep"); g != "" {
+	if g := stackGrepArg.Get(a); g != "" {
 		// Goroutine blocks are separated by blank lines.
 		var kept []string
 		for b := range strings.SplitSeq(dump, "\n\n") {
