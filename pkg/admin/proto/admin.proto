@@ -175,6 +175,9 @@ message InvocationSpec {
   // streaming reports the invocation emits a stream of results (via
   // InvokeStream) rather than a single one (Invoke).
   bool streaming = 5;
+  // scope is empty when every instance runs the invocation, or "shared" when
+  // one instance per service runs it.
+  string scope = 6;
 }
 
 message ListInvocationsRequest {

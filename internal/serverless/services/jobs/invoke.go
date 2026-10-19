@@ -43,7 +43,8 @@ func (s *svc) Invoke(ctx context.Context, name string, args map[string]any) (inv
 
 // buildInvokeSet declares the jobs invocations. Handlers read s.runner at call
 // time (it is built in Start), so a call before the runner is ready fails
-// cleanly rather than panicking.
+// cleanly rather than panicking. All but inspect work on the shared store, so
+// they are Shared: one runner is enough.
 func (s *svc) buildInvokeSet() *invoke.Set {
 	set := invoke.NewSet()
 
@@ -63,6 +64,7 @@ func (s *svc) buildInvokeSet() *invoke.Set {
 		OptArg("internal", "only internal (ownerless) runs").
 		OptArg("limit", "max runs").
 		OptArg("offset", "skip this many").
+		Shared().
 		Handle(func(ctx context.Context, a invoke.Args) (invoke.Result, error) {
 			r, err := s.ready()
 			if err != nil {
@@ -81,6 +83,7 @@ func (s *svc) buildInvokeSet() *invoke.Set {
 
 	set.Add("status", "Report one run's full persisted status.").
 		Arg("run_id", "the run id").
+		Shared().
 		Handle(func(ctx context.Context, a invoke.Args) (invoke.Result, error) {
 			r, err := s.ready()
 			if err != nil {
@@ -98,6 +101,7 @@ func (s *svc) buildInvokeSet() *invoke.Set {
 		OptArg("params", "JSON object of parameters").
 		OptArg("owner", "attribute the run to this user").
 		Mutating().
+		Shared().
 		Handle(func(ctx context.Context, a invoke.Args) (invoke.Result, error) {
 			r, err := s.ready()
 			if err != nil {
@@ -123,6 +127,7 @@ func (s *svc) buildInvokeSet() *invoke.Set {
 	set.Add("trigger", "Run a leader-scoped periodic job now.").
 		Arg("job", "the periodic job name").
 		Mutating().
+		Shared().
 		Handle(func(ctx context.Context, a invoke.Args) (invoke.Result, error) {
 			r, err := s.ready()
 			if err != nil {
@@ -137,6 +142,7 @@ func (s *svc) buildInvokeSet() *invoke.Set {
 	set.Add("cancel", "Cancel a run by id; returns its updated status.").
 		Arg("run_id", "the run id").
 		Mutating().
+		Shared().
 		Handle(func(ctx context.Context, a invoke.Args) (invoke.Result, error) {
 			r, err := s.ready()
 			if err != nil {
@@ -152,6 +158,7 @@ func (s *svc) buildInvokeSet() *invoke.Set {
 	set.Add("stop", "Cancel a periodic job's in-flight run.").
 		Arg("job", "the periodic job name").
 		Mutating().
+		Shared().
 		Handle(func(ctx context.Context, a invoke.Args) (invoke.Result, error) {
 			r, err := s.ready()
 			if err != nil {

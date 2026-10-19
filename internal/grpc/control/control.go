@@ -105,6 +105,7 @@ func toPBSpec(spec invoke.InvocationSpec) *controlpb.InvocationSpec {
 		Args:        args,
 		Kind:        string(spec.Kind),
 		Streaming:   spec.Streaming,
+		Scope:       string(spec.Scope),
 	}
 }
 
