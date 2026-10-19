@@ -257,9 +257,8 @@ type OcmReceivedShare struct {
 	State         OcmShareState      `gorm:"index:i_ocmrecshare_state;not null"`
 	Alias         string             `gorm:"size:64"`
 	Hidden        bool
-	// TransferGeneration identifies the current embedded transfer attempt.
-	// It grows on every transfer start and every state change, so that the
-	// completion of an older attempt cannot match a later one.
+	// TransferGeneration grows on every transfer start and state change, so
+	// that the completion of an older attempt cannot match a later one.
 	TransferGeneration uint64 `gorm:"not null;default:0"`
 }
 

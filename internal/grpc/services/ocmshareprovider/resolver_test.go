@@ -156,8 +156,10 @@ type capturingRepo struct {
 	mu     sync.Mutex
 	nextID string
 	stored *ocm.Share
-	storeN int
-	idN    int
+	// storedType is the resource type passed to StoreShare.
+	storedType ocm.SharedResourceType
+	storeN     int
+	idN        int
 }
 
 func (r *capturingRepo) GetShare(context.Context, *userpb.User, *ocm.ShareReference) (*ocm.Share, error) {
@@ -175,11 +177,12 @@ func (r *capturingRepo) GenerateID(context.Context) (*ocm.ShareId, error) {
 	return &ocm.ShareId{OpaqueId: id}, nil
 }
 
-func (r *capturingRepo) StoreShare(_ context.Context, s *ocm.Share) (*ocm.Share, error) {
+func (r *capturingRepo) StoreShare(_ context.Context, s *ocm.Share, resourceType ocm.SharedResourceType) (*ocm.Share, error) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	r.storeN++
 	r.stored = s
+	r.storedType = resourceType
 	return s, nil
 }
 

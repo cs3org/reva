@@ -32,6 +32,7 @@ import (
 	"testing"
 	"time"
 
+	gateway "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	ocm "github.com/cs3org/go-cs3apis/cs3/sharing/ocm/v1beta1"
@@ -45,6 +46,7 @@ import (
 	sqlmgr "github.com/cs3org/reva/v3/pkg/share/manager/sql"
 	"github.com/rs/zerolog"
 	"google.golang.org/genproto/protobuf/field_mask"
+	"google.golang.org/grpc"
 )
 
 const emitSecret = "received-secret-5b2d"
@@ -196,6 +198,11 @@ func newEmitEnv(t *testing.T) *emitEnv {
 
 func (e *emitEnv) outgoing(t *testing.T) *ocm.Share {
 	t.Helper()
+	return e.outgoingOfType(t, ocm.SharedResourceType_SHARE_RESOURCE_TYPE_FILE)
+}
+
+func (e *emitEnv) outgoingOfType(t *testing.T, resourceType ocm.SharedResourceType) *ocm.Share {
+	t.Helper()
 	id, err := e.repo.GenerateID(e.owner)
 	if err != nil {
 		t.Fatal(err)
@@ -216,7 +223,7 @@ func (e *emitEnv) outgoing(t *testing.T) *ocm.Share {
 			share.NewWebDavAccessMethod(permissions.NewViewerRole().CS3ResourcePermissions(), nil, nil),
 			share.NewWebappAccessMethod(permissions.NewViewerRole().CS3ResourcePermissions(), share.DefaultWebappRequirements, "app"),
 		},
-	})
+	}, resourceType)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -365,7 +372,7 @@ func TestUpdateOCMShareEmitsOnlyPermissionChanges(t *testing.T) {
 		return &ocm.UpdateOCMShareRequest_UpdateField{Field: &ocm.UpdateOCMShareRequest_UpdateField_AccessMethods{AccessMethods: share.NewWebappAccessMethod(p, nil, app)}}
 	}
 
-	update() // empty update
+	update()
 	update(&ocm.UpdateOCMShareRequest_UpdateField{Field: &ocm.UpdateOCMShareRequest_UpdateField_Expiration{
 		Expiration: &typespb.Timestamp{Seconds: uint64(time.Now().Add(time.Hour).Unix())},
 	}})
@@ -502,7 +509,7 @@ func TestSenderFailureKeepsCommittedChange(t *testing.T) {
 	if err != nil || res.Status.Code != rpc.Code_CODE_OK {
 		t.Fatalf("%v %v", res, err)
 	}
-	requireNotices(t, e.peer, ocmd.NotificationShareUnshared) // one attempt, no retry
+	requireNotices(t, e.peer, ocmd.NotificationShareUnshared)
 	if _, err := e.repo.GetShare(e.owner, &userpb.User{Id: &userpb.UserId{OpaqueId: "einstein"}}, &ocm.ShareReference{Spec: &ocm.ShareReference_Id{Id: sh.Id}}); err == nil {
 		t.Fatal("deletion was rolled back")
 	}
@@ -512,24 +519,82 @@ func TestSenderFailureKeepsCommittedChange(t *testing.T) {
 	if res := e.setState(t, rs.Id, ocm.ShareState_SHARE_STATE_ACCEPTED, ""); res.Status.Code != rpc.Code_CODE_OK {
 		t.Fatalf("%v", res.Status)
 	}
-	requireNotices(t, e.peer, ocmd.NotificationShareUnshared) // no capability, no POST
+	requireNotices(t, e.peer, ocmd.NotificationShareUnshared)
 	if strings.Contains(e.logs.String(), emitSecret) || strings.Contains(e.logs.String(), sh.Token) {
 		t.Fatal("secret logged")
 	}
 }
 
-type recordingNotifier struct{ n int }
-
-func (r *recordingNotifier) NewNotification(context.Context, string, *ocmd.OutgoingNotification) ocmd.SendResult {
-	r.n++
-	return ocmd.SendResult{}
+// unavailableGateway fails every Stat, as when the resource is already gone.
+type unavailableGateway struct {
+	gateway.GatewayAPIClient
+	stats int
 }
 
-func TestCreateSeamSendsNothing(t *testing.T) {
-	rec := &recordingNotifier{}
-	s := &service{notifier: rec, conf: &config{}}
-	s.shareCreated(context.Background(), &ocm.Share{Id: &ocm.ShareId{OpaqueId: "1"}})
-	if rec.n != 0 {
-		t.Fatal("create seam sent a notification")
+func (g *unavailableGateway) Stat(context.Context, *providerpb.StatRequest, ...grpc.CallOption) (*providerpb.StatResponse, error) {
+	g.stats++
+	return &providerpb.StatResponse{Status: &rpc.Status{Code: rpc.Code_CODE_NOT_FOUND}}, nil
+}
+
+func TestCommittedChangesAreNotifiedWithoutStat(t *testing.T) {
+	e := newEmitEnv(t)
+	folder := e.outgoingOfType(t, ocm.SharedResourceType_SHARE_RESOURCE_TYPE_CONTAINER)
+	file := e.outgoing(t)
+	gw := &unavailableGateway{}
+	stampGateway(gw)
+
+	ref := &ocm.ShareReference{Spec: &ocm.ShareReference_Id{Id: folder.Id}}
+	if res, err := e.svc.UpdateOCMShare(e.owner, &ocm.UpdateOCMShareRequest{Ref: ref, Field: []*ocm.UpdateOCMShareRequest_UpdateField{{
+		Field: &ocm.UpdateOCMShareRequest_UpdateField_AccessMethods{AccessMethods: share.NewWebDavAccessMethod(permissions.NewEditorRole().CS3ResourcePermissions(), nil, nil)},
+	}}}); err != nil || res.Status.Code != rpc.Code_CODE_OK {
+		t.Fatalf("%v %v", res, err)
+	}
+	if res, err := e.svc.RemoveOCMShare(e.owner, &ocm.RemoveOCMShareRequest{Ref: ref}); err != nil || res.Status.Code != rpc.Code_CODE_OK {
+		t.Fatalf("%v %v", res, err)
+	}
+	key := &ocm.ShareReference{Spec: &ocm.ShareReference_Key{Key: &ocm.ShareKey{Owner: file.Owner, ResourceId: file.ResourceId, Grantee: file.Grantee}}}
+	if res, err := e.svc.RemoveOCMShare(e.owner, &ocm.RemoveOCMShareRequest{Ref: key}); err != nil || res.Status.Code != rpc.Code_CODE_OK {
+		t.Fatalf("%v %v", res, err)
+	}
+	got := requireNotices(t, e.peer, ocmd.NotificationShareChangePermission, ocmd.NotificationShareUnshared, ocmd.NotificationShareUnshared)
+	if got[0]["resourceType"] != "folder" || got[1]["resourceType"] != "folder" || fileOf(got[1])["providerId"] != folder.Id.OpaqueId ||
+		got[2]["resourceType"] != "file" || fileOf(got[2])["providerId"] != file.Id.OpaqueId {
+		t.Fatalf("payloads %v", got)
+	}
+	if gw.stats != 0 {
+		t.Fatalf("emission used %d Stat calls", gw.stats)
+	}
+}
+
+func TestShareWithoutStoredResourceTypeIsNotNotified(t *testing.T) {
+	e := newEmitEnv(t)
+	sh := e.outgoingOfType(t, ocm.SharedResourceType_SHARE_RESOURCE_TYPE_INVALID)
+	res, err := e.svc.RemoveOCMShare(e.owner, &ocm.RemoveOCMShareRequest{Ref: &ocm.ShareReference{Spec: &ocm.ShareReference_Id{Id: sh.Id}}})
+	if err != nil || res.Status.Code != rpc.Code_CODE_OK {
+		t.Fatalf("%v %v", res, err)
+	}
+	requireNotices(t, e.peer)
+	if !strings.Contains(e.logs.String(), "no stored resource type") {
+		t.Fatalf("missing warning: %s", e.logs.String())
+	}
+}
+
+func TestServiceCloseStopsNotifications(t *testing.T) {
+	e := newEmitEnv(t)
+	e.svc.notifier = &ocmd.AsyncNotifier{Client: ocmd.NewClient(2*time.Second, false)}
+	sh := e.outgoing(t)
+	if err := e.svc.Close(); err != nil {
+		t.Fatal(err)
+	}
+	if err := e.svc.Close(); err != nil {
+		t.Fatal(err)
+	}
+	res, err := e.svc.RemoveOCMShare(e.owner, &ocm.RemoveOCMShareRequest{Ref: &ocm.ShareReference{Spec: &ocm.ShareReference_Id{Id: sh.Id}}})
+	if err != nil || res.Status.Code != rpc.Code_CODE_OK {
+		t.Fatalf("%v %v", res, err)
+	}
+	requireNotices(t, e.peer)
+	if _, err := e.repo.GetShare(e.owner, &userpb.User{Id: &userpb.UserId{OpaqueId: "einstein"}}, &ocm.ShareReference{Spec: &ocm.ShareReference_Id{Id: sh.Id}}); err == nil {
+		t.Fatal("deletion was rolled back")
 	}
 }

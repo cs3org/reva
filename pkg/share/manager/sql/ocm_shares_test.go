@@ -78,7 +78,7 @@ func storeOcmShareWithID(mgr share.Repository, ctx context.Context, s *ocm.Share
 		return nil, err
 	}
 	s.Id = id
-	return mgr.StoreShare(ctx, s)
+	return mgr.StoreShare(ctx, s, ocm.SharedResourceType_SHARE_RESOURCE_TYPE_FILE)
 }
 
 func getWebDavProtocol(uri string, sharedsecret string, perms *ocm.SharePermissions, role string) *ocm.Protocol {
@@ -303,7 +303,7 @@ func TestStoreOCMShareWithPregeneratedID(t *testing.T) {
 	ocmshare := getOcmShare(accessMethods, grantee, user.Id, getResourceId(), "sometoken")
 	ocmshare.Id = id
 
-	stored, err := mgr.StoreShare(userctx, ocmshare)
+	stored, err := mgr.StoreShare(userctx, ocmshare, ocm.SharedResourceType_SHARE_RESOURCE_TYPE_FILE)
 	if err != nil {
 		t.Error(err)
 		t.FailNow()

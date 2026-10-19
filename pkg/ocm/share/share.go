@@ -36,8 +36,9 @@ type Repository interface {
 	GenerateID(ctx context.Context) (*ocm.ShareId, error)
 
 	// StoreShare stores a share. The share must carry an ID pre-generated with
-	// GenerateID, under which it is stored.
-	StoreShare(ctx context.Context, share *ocm.Share) (*ocm.Share, error)
+	// GenerateID, under which it is stored. The CS3 share has no resource
+	// type, so it is stored separately and returned in the receipts.
+	StoreShare(ctx context.Context, share *ocm.Share, resourceType ocm.SharedResourceType) (*ocm.Share, error)
 
 	// GetShare gets the information for a share by the given ref.
 	GetShare(ctx context.Context, user *userpb.User, ref *ocm.ShareReference) (*ocm.Share, error)
@@ -67,16 +68,12 @@ type Repository interface {
 	// state change invalidates any running embedded transfer attempt.
 	UpdateReceivedShare(ctx context.Context, user *userpb.User, share *ocm.ReceivedShare, fieldMask *field_mask.FieldMask) (*ReceivedShareUpdate, error)
 
-	// StartReceivedShareTransfer atomically moves a received share that is
-	// not transferring yet to TRANSFERRING, applying the other fields of the
-	// mask, and starts a new transfer attempt. It fails with
-	// ErrTransferInProgress if a transfer is already running.
+	// StartReceivedShareTransfer atomically moves a share that is not
+	// transferring to TRANSFERRING and starts a new transfer attempt.
 	StartReceivedShareTransfer(ctx context.Context, user *userpb.User, share *ocm.ReceivedShare, fieldMask *field_mask.FieldMask) (*TransferStart, error)
 
 	// CompleteReceivedShareTransfer sets the final state of a transfer
-	// attempt. Only the state and mtime are written, and only if the share is
-	// still TRANSFERRING with the same attempt generation; otherwise the
-	// receipt reports no change.
+	// attempt, only while that attempt is still running.
 	CompleteReceivedShareTransfer(ctx context.Context, user *userpb.User, id *ocm.ShareId, generation uint64, state ocm.ShareState) (*ReceivedShareUpdate, error)
 
 	// GetEmbeddedPayload returns the RO-Crate JSON payload carried by the embedded
@@ -86,18 +83,22 @@ type Repository interface {
 	GetEmbeddedPayload(ctx context.Context, user *userpb.User, share *ocm.ReceivedShare) (string, error)
 }
 
-// ShareRemoval is the receipt of a committed deletion of an outgoing share.
-// It is only returned once the deletion is persisted.
+// ShareRemoval, ShareUpdate, ReceivedShareUpdate and TransferStart are only
+// returned once their change is committed, with values read inside it.
+
+// ShareRemoval is the receipt of the deletion of an outgoing share.
 type ShareRemoval struct {
-	// Share is the deleted share, read inside the deletion.
 	Share *ocm.Share
+	// ResourceType is the type stored with the share. It is INVALID for
+	// shares stored without one.
+	ResourceType ocm.SharedResourceType
 }
 
-// ShareUpdate is the receipt of a committed update of an outgoing share. The
-// before and after values are read inside the update.
+// ShareUpdate is the receipt of an update of an outgoing share.
 type ShareUpdate struct {
-	Before *ocm.Share
-	After  *ocm.Share
+	Before       *ocm.Share
+	After        *ocm.Share
+	ResourceType ocm.SharedResourceType
 	// WebDAVPermissionsChanged and WebappPermissionsChanged compare the stored
 	// permission values, not the presence of fields in the request.
 	WebDAVPermissionsChanged bool
@@ -109,8 +110,7 @@ func (u *ShareUpdate) PermissionsChanged() bool {
 	return u != nil && (u.WebDAVPermissionsChanged || u.WebappPermissionsChanged)
 }
 
-// ReceivedShareUpdate is the receipt of a committed update of a received
-// share. The before and after values are read inside the update.
+// ReceivedShareUpdate is the receipt of an update of a received share.
 type ReceivedShareUpdate struct {
 	Before *ocm.ReceivedShare
 	After  *ocm.ReceivedShare
@@ -121,7 +121,7 @@ func (u *ReceivedShareUpdate) StateChanged() bool {
 	return u != nil && u.Before != nil && u.After != nil && u.Before.State != u.After.State
 }
 
-// TransferStart is the receipt of a committed embedded transfer start.
+// TransferStart is the receipt of an embedded transfer start.
 type TransferStart struct {
 	Share *ocm.ReceivedShare
 	// Generation identifies this attempt; only its completion is accepted.

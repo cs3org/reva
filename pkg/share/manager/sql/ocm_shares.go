@@ -92,7 +92,7 @@ func (m *mgr) GenerateID(ctx context.Context) (*ocm.ShareId, error) {
 	return &ocm.ShareId{OpaqueId: strconv.FormatUint(uint64(id), 10)}, nil
 }
 
-func (m *mgr) StoreShare(ctx context.Context, s *ocm.Share) (*ocm.Share, error) {
+func (m *mgr) StoreShare(ctx context.Context, s *ocm.Share, resourceType ocm.SharedResourceType) (*ocm.Share, error) {
 	parsed, err := strconv.ParseUint(s.Id.OpaqueId, 10, 64)
 	if err != nil {
 		return nil, errtypes.BadRequest("invalid share ID")
@@ -117,6 +117,9 @@ func (m *mgr) StoreShare(ctx context.Context, s *ocm.Share) (*ocm.Share, error) 
 				V:     time.Unix(int64(s.Expiration.Seconds), 0),
 				Valid: true,
 			}
+		}
+		if resourceType != ocm.SharedResourceType_SHARE_RESOURCE_TYPE_INVALID {
+			share.ItemType = convertFromCS3ResourceType(resourceType)
 		}
 		share.Id = id
 		share.ShareId = model.ShareID{ID: id}
@@ -199,8 +202,7 @@ func (m *mgr) GetShare(ctx context.Context, user *userpb.User, ref *ocm.ShareRef
 const maxTransferGeneration = math.MaxInt64
 
 // forUpdate locks the selected rows until the end of the transaction on
-// MySQL. SQLite transactions are serializable: a concurrent writer makes one
-// of the transactions fail instead of committing a stale read.
+// MySQL. SQLite has no row locks.
 func forUpdate(tx *gorm.DB) *gorm.DB {
 	if tx.Dialector.Name() == "mysql" {
 		return tx.Clauses(clause.Locking{Strength: "UPDATE"})
@@ -211,7 +213,7 @@ func forUpdate(tx *gorm.DB) *gorm.DB {
 // DeleteShare deletes an outgoing share. The share is read and deleted in one
 // transaction, and its receipt is only returned after the commit.
 func (m *mgr) DeleteShare(ctx context.Context, user *userpb.User, ref *ocm.ShareReference) (*share.ShareRemoval, error) {
-	var removed *ocm.Share
+	var removal share.ShareRemoval
 	err := m.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		q := forUpdate(tx)
 		switch {
@@ -246,13 +248,16 @@ func (m *mgr) DeleteShare(ctx context.Context, user *userpb.User, ref *ocm.Share
 		if result.RowsAffected == 0 {
 			return share.ErrShareNotFound
 		}
-		removed = convertToCS3OCMShare(&shareModel, am)
+		removal = share.ShareRemoval{
+			Share:        convertToCS3OCMShare(&shareModel, am),
+			ResourceType: convertToCS3SharedResourceType(shareModel.ItemType),
+		}
 		return nil
 	})
 	if err != nil {
 		return nil, err
 	}
-	return &share.ShareRemoval{Share: removed}, nil
+	return &removal, nil
 }
 
 func (m *mgr) UpdateShare(ctx context.Context, user *userpb.User, ref *ocm.ShareReference, f ...*ocm.UpdateOCMShareRequest_UpdateField) (*share.ShareUpdate, error) {
@@ -939,6 +944,7 @@ func (m *mgr) updateShareByID(ctx context.Context, user *userpb.User, id *ocm.Sh
 		receipt = share.ShareUpdate{
 			Before:                   convertToCS3OCMShare(&before, beforeMethods),
 			After:                    convertToCS3OCMShare(&after, afterMethods),
+			ResourceType:             convertToCS3SharedResourceType(after.ItemType),
 			WebDAVPermissionsChanged: permissionsChanged(webdavPermissions(beforeMethods), webdavPermissions(afterMethods)),
 			WebappPermissionsChanged: permissionsChanged(webappPermissions(beforeMethods), webappPermissions(afterMethods)),
 		}

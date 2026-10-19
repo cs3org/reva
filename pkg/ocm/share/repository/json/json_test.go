@@ -145,7 +145,7 @@ func TestStoreAndGetShareRoundTrip(t *testing.T) {
 	user := testUser()
 	s := testShare("tok1", legacyMethods())
 
-	stored, err := mgr.StoreShare(ctx, s)
+	stored, err := mgr.StoreShare(ctx, s, ocm.SharedResourceType_SHARE_RESOURCE_TYPE_FILE)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -173,7 +173,7 @@ func TestFederatedGranteeCanGetShareByID(t *testing.T) {
 	s.Creator = owner.Id
 	s.Grantee = testFederatedGrantee("michiel", "nextcloud1.docker")
 
-	stored, err := mgr.StoreShare(ctx, s)
+	stored, err := mgr.StoreShare(ctx, s, ocm.SharedResourceType_SHARE_RESOURCE_TYPE_FILE)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -204,7 +204,7 @@ func TestCodeFlowShareRoundTripsRequirementsAndAccessTypes(t *testing.T) {
 	user := testUser()
 	s := testShare("cf-tok1", codeFlowMethods())
 
-	stored, err := mgr.StoreShare(ctx, s)
+	stored, err := mgr.StoreShare(ctx, s, ocm.SharedResourceType_SHARE_RESOURCE_TYPE_FILE)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -235,7 +235,7 @@ func TestUpdateSharePreservesImmutableFields(t *testing.T) {
 	user := testUser()
 	s := testShare("cf-tok2", codeFlowMethods())
 
-	stored, err := mgr.StoreShare(ctx, s)
+	stored, err := mgr.StoreShare(ctx, s, ocm.SharedResourceType_SHARE_RESOURCE_TYPE_FILE)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -286,7 +286,7 @@ func TestUpdateShareRejectsDifferentRequirements(t *testing.T) {
 	user := testUser()
 	s := testShare("cf-tok3", codeFlowMethods())
 
-	stored, err := mgr.StoreShare(ctx, s)
+	stored, err := mgr.StoreShare(ctx, s, ocm.SharedResourceType_SHARE_RESOURCE_TYPE_FILE)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -318,7 +318,7 @@ func TestUpdateShareRejectsNewRequirementsOnLegacyShare(t *testing.T) {
 	user := testUser()
 	s := testShare("legacy-tok", legacyMethods())
 
-	stored, err := mgr.StoreShare(ctx, s)
+	stored, err := mgr.StoreShare(ctx, s, ocm.SharedResourceType_SHARE_RESOURCE_TYPE_FILE)
 	if err != nil {
 		t.Fatal(err)
 	}

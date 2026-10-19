@@ -31,6 +31,7 @@ import (
 	typespb "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
 	"github.com/cs3org/reva/v3/pkg/ocm/share"
 	"github.com/cs3org/reva/v3/pkg/permissions"
+	"github.com/cs3org/reva/v3/pkg/utils"
 	"google.golang.org/genproto/protobuf/field_mask"
 )
 
@@ -60,10 +61,15 @@ func TestJSONDeleteAndUpdateShareReceipts(t *testing.T) {
 	ctx := context.Background()
 	u := testUser()
 	s := testShare("tok", legacyMethods())
-	if _, err := m.StoreShare(ctx, s); err != nil {
+	if _, err := m.StoreShare(ctx, s, ocm.SharedResourceType_SHARE_RESOURCE_TYPE_CONTAINER); err != nil {
 		t.Fatal(err)
 	}
 	ref := &ocm.ShareReference{Spec: &ocm.ShareReference_Id{Id: s.Id}}
+	// The resource type is persisted with the share.
+	m, err := New(ctx, map[string]any{"file": m.(*mgr).c.File})
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	exp := &ocm.UpdateOCMShareRequest_UpdateField{Field: &ocm.UpdateOCMShareRequest_UpdateField_Expiration{
 		Expiration: &typespb.Timestamp{Seconds: 1},
@@ -74,7 +80,8 @@ func TestJSONDeleteAndUpdateShareReceipts(t *testing.T) {
 	editor := &ocm.UpdateOCMShareRequest_UpdateField{Field: &ocm.UpdateOCMShareRequest_UpdateField_AccessMethods{
 		AccessMethods: share.NewWebDavAccessMethod(permissions.NewEditorRole().CS3ResourcePermissions(), nil, nil),
 	}}
-	if up, err := m.UpdateShare(ctx, u, ref, editor); err != nil || !up.WebDAVPermissionsChanged || up.WebappPermissionsChanged {
+	if up, err := m.UpdateShare(ctx, u, ref, editor); err != nil || !up.WebDAVPermissionsChanged || up.WebappPermissionsChanged ||
+		up.ResourceType != ocm.SharedResourceType_SHARE_RESOURCE_TYPE_CONTAINER {
 		t.Fatalf("webdav change: %v %v", up, err)
 	}
 	if up, err := m.UpdateShare(ctx, u, ref, editor); err != nil || up.PermissionsChanged() {
@@ -82,7 +89,8 @@ func TestJSONDeleteAndUpdateShareReceipts(t *testing.T) {
 	}
 
 	removal, err := m.DeleteShare(ctx, u, ref)
-	if err != nil || removal.Share.GetToken() != "tok" || removal.Share.GetGrantee() == nil {
+	if err != nil || removal.Share.GetToken() != "tok" || removal.Share.GetGrantee() == nil ||
+		removal.ResourceType != ocm.SharedResourceType_SHARE_RESOURCE_TYPE_CONTAINER {
 		t.Fatalf("delete: %v %v", removal, err)
 	}
 	if r, err := m.DeleteShare(ctx, u, ref); err == nil || r != nil {
@@ -163,5 +171,27 @@ func TestJSONTransferGenerationExhaustion(t *testing.T) {
 	}
 	if _, err := os.Stat(path); err != nil {
 		t.Fatal(err)
+	}
+}
+
+func TestJSONShareWithoutStoredResourceType(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "ocm.json")
+	s := testShare("tok", legacyMethods())
+	raw, err := utils.MarshalProtoV1ToJSON(s)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// A file written before resource types were stored.
+	old := `{"shares":{"` + s.Id.OpaqueId + `":` + string(raw) + `},"received_shares":{}}`
+	if err := os.WriteFile(path, []byte(old), 0600); err != nil {
+		t.Fatal(err)
+	}
+	m, err := New(context.Background(), map[string]any{"file": path})
+	if err != nil {
+		t.Fatal(err)
+	}
+	removal, err := m.DeleteShare(context.Background(), testUser(), &ocm.ShareReference{Spec: &ocm.ShareReference_Id{Id: s.Id}})
+	if err != nil || removal.ResourceType != ocm.SharedResourceType_SHARE_RESOURCE_TYPE_INVALID {
+		t.Fatalf("delete: %v %v", removal, err)
 	}
 }

@@ -23,6 +23,7 @@ package ocmshareprovider
 
 import (
 	"context"
+	"io"
 	"net/url"
 	"path/filepath"
 	"slices"
@@ -163,13 +164,16 @@ func New(ctx context.Context, m map[string]any) (rgrpc.Service, error) {
 		client:      ocmcl,
 		transferrer: transferrer,
 		signingKey: key,
-		notifier:   asyncNotifier{c: ocmcl},
+		notifier:   &ocmd.AsyncNotifier{Client: ocmcl},
 	}
 
 	return service, nil
 }
 
 func (s *service) Close() error {
+	if c, ok := s.notifier.(io.Closer); ok {
+		return c.Close()
+	}
 	return nil
 }
 
@@ -193,6 +197,16 @@ func getResourceType(info *providerpb.ResourceInfo) string {
 		return "folder"
 	}
 	return "unknown"
+}
+
+func sharedResourceType(info *providerpb.ResourceInfo) ocm.SharedResourceType {
+	switch info.Type {
+	case providerpb.ResourceType_RESOURCE_TYPE_FILE:
+		return ocm.SharedResourceType_SHARE_RESOURCE_TYPE_FILE
+	case providerpb.ResourceType_RESOURCE_TYPE_CONTAINER:
+		return ocm.SharedResourceType_SHARE_RESOURCE_TYPE_CONTAINER
+	}
+	return ocm.SharedResourceType_SHARE_RESOURCE_TYPE_INVALID
 }
 
 func (s *service) webdavURL(share *ocm.Share) string {
@@ -441,7 +455,7 @@ func (s *service) CreateOCMShare(ctx context.Context, req *ocm.CreateOCMShareReq
 		}
 	}
 
-	stored, err := s.repo.StoreShare(ctx, ocmshare)
+	stored, err := s.repo.StoreShare(ctx, ocmshare, sharedResourceType(info))
 	if err != nil {
 		// the remote server has already accepted the share, so a failure here
 		// leaves a dangling share on the remote end
@@ -450,8 +464,6 @@ func (s *service) CreateOCMShare(ctx context.Context, req *ocm.CreateOCMShareReq
 			Status: status.NewInternal(ctx, err, err.Error()),
 		}, nil
 	}
-
-	s.shareCreated(ctx, stored)
 
 	res := &ocm.CreateOCMShareResponse{
 		Status:               status.NewOK(ctx),
@@ -475,7 +487,6 @@ func (s *service) RemoveOCMShare(ctx context.Context, req *ocm.RemoveOCMShareReq
 		}, nil
 	}
 
-	// The deletion is committed: notify the grantee once, without retry.
 	s.notifyUnshared(ctx, removal)
 
 	return &ocm.RemoveOCMShareResponse{
@@ -565,8 +576,6 @@ func (s *service) UpdateOCMShare(ctx context.Context, req *ocm.UpdateOCMShareReq
 		}, nil
 	}
 
-	// Only a committed change of a stored permission value is notified;
-	// expiration-only and unchanged updates are not.
 	s.notifyPermissionChange(ctx, update)
 
 	res := &ocm.UpdateOCMShareResponse{
@@ -593,11 +602,8 @@ func (s *service) ListReceivedOCMShares(ctx context.Context, req *ocm.ListReceiv
 
 func (s *service) UpdateReceivedOCMShare(ctx context.Context, req *ocm.UpdateReceivedOCMShareRequest) (*ocm.UpdateReceivedOCMShareResponse, error) {
 	user := appctx.ContextMustGetUser(ctx)
-	// Accepting a share that carries embedded content triggers a background
-	// transfer of that content. Rather than jumping straight to ACCEPTED, the
-	// share is held in the TRANSFERRING state while the copy runs and only
-	// flipped to ACCEPTED once it completes, so the state progresses
-	// pending -> transferring -> accepted.
+	// Accepting a share with embedded content holds it in TRANSFERRING until
+	// the copy completes.
 	if req.Share.State == ocm.ShareState_SHARE_STATE_ACCEPTED && req.Share.Destination != "" {
 		payload, err := s.repo.GetEmbeddedPayload(ctx, user, req.Share)
 		if err != nil {
@@ -626,8 +632,6 @@ func (s *service) UpdateReceivedOCMShare(ctx context.Context, req *ocm.UpdateRec
 		}, nil
 	}
 
-	// A committed transition to accepted or rejected is notified once; an
-	// explicit rejection here is the recipient declining.
 	s.notifyReceivedState(ctx, update, true)
 
 	res := &ocm.UpdateReceivedOCMShareResponse{
@@ -636,15 +640,13 @@ func (s *service) UpdateReceivedOCMShare(ctx context.Context, req *ocm.UpdateRec
 	return res, nil
 }
 
-// processEmbeddedShare starts a transfer attempt, kicks off the background
-// transfer of the embedded content and arranges for the share to become
-// ACCEPTED once every file arrived, or REJECTED if the transfer failed.
+// processEmbeddedShare starts a transfer attempt. The share becomes ACCEPTED
+// once every file arrived, or REJECTED if the transfer failed.
 func (s *service) processEmbeddedShare(ctx context.Context, user *userpb.User, req *ocm.UpdateReceivedOCMShareRequest, payload string) (*ocm.UpdateReceivedOCMShareResponse, error) {
 	recvShare := req.Share
 
-	// Persist TRANSFERRING before the copy starts so the recipient can observe
-	// the in-progress state. The start is atomic, so a second concurrent start
-	// fails instead of racing on the same destination.
+	// The start is atomic, so a second start fails instead of racing on the
+	// same destination.
 	start, err := s.repo.StartReceivedShareTransfer(ctx, user, recvShare, req.UpdateMask)
 	if err != nil {
 		switch {
@@ -700,10 +702,8 @@ func (s *service) processEmbeddedShare(ctx context.Context, user *userpb.User, r
 	}, nil
 }
 
-// endTransfer completes one transfer attempt. The state is only written while
-// that same attempt is still running: a reset or a newer attempt takes
-// precedence over a result arriving afterwards. Only a committed transition
-// to ACCEPTED is notified; a failed transfer is not the recipient declining.
+// endTransfer completes one transfer attempt, unless a reset or a newer
+// attempt replaced it. A failed transfer is not the recipient declining.
 func (s *service) endTransfer(ctx context.Context, user *userpb.User, id *ocm.ShareId, generation uint64, state ocm.ShareState) error {
 	update, err := s.repo.CompleteReceivedShareTransfer(ctx, user, id, generation, state)
 	if err != nil {

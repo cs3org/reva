@@ -155,9 +155,7 @@ func TestUpdateShareReceiptComparesStoredPermissions(t *testing.T) {
 		}
 		for _, tc := range cases {
 			if tc.name == "expiration only" && m.db.Dialector.Name() == "mysql" {
-				// Inherited on the frozen base: the expiration update writes
-				// epoch seconds into a DATETIME column and MySQL rejects it.
-				// The failed update returns no receipt, so nothing is notified.
+				// MySQL rejects the inherited expiration update; a failed update has no receipt.
 				if u, err := m.UpdateShare(ctx, owner, ref, tc.field); err == nil || u != nil {
 					t.Fatalf("expiration on mysql: %v %v", u, err)
 				}
@@ -389,6 +387,44 @@ func TestConcurrentSameChangeHasOneReceipt(t *testing.T) {
 		wg.Wait()
 		if deletes > 1 {
 			t.Fatalf("delete receipts %d", deletes)
+		}
+	})
+}
+
+func TestShareReceiptsCarryStoredResourceType(t *testing.T) {
+	forEachDialect(t, func(t *testing.T, m *mgr) {
+		ctx, owner := ownerContext(t, "einstein")
+		sh := getOcmShare(getOcmAccessMethods("viewer"), getUserOcmShareGrantee("marie"), owner.Id, getResourceId(), "tok-folder")
+		id, err := m.GenerateID(ctx)
+		if err != nil {
+			t.Fatal(err)
+		}
+		sh.Id = id
+		if _, err := m.StoreShare(ctx, sh, ocm.SharedResourceType_SHARE_RESOURCE_TYPE_CONTAINER); err != nil {
+			t.Fatal(err)
+		}
+		editor := &ocm.UpdateOCMShareRequest_UpdateField{Field: &ocm.UpdateOCMShareRequest_UpdateField_AccessMethods{
+			AccessMethods: share.NewWebDavAccessMethod(permissions.NewEditorRole().CS3ResourcePermissions(), nil, nil),
+		}}
+		up, err := m.UpdateShare(ctx, owner, idRef(id), editor)
+		if err != nil || up.ResourceType != ocm.SharedResourceType_SHARE_RESOURCE_TYPE_CONTAINER {
+			t.Fatalf("update: %v %v", up, err)
+		}
+		removal, err := m.DeleteShare(ctx, owner, &ocm.ShareReference{Spec: &ocm.ShareReference_Key{Key: &ocm.ShareKey{
+			Owner: owner.Id, ResourceId: sh.ResourceId, Grantee: sh.Grantee,
+		}}})
+		if err != nil || removal.ResourceType != ocm.SharedResourceType_SHARE_RESOURCE_TYPE_CONTAINER {
+			t.Fatalf("delete: %v %v", removal, err)
+		}
+
+		// A row stored before the type was recorded has none; it is not guessed.
+		legacy := storeOutgoing(t, m, ctx, owner, "viewer", "tok-legacy")
+		if err := m.db.Model(&model.OcmShare{}).Where("id = ?", legacy.Id.OpaqueId).Update("item_type", "").Error; err != nil {
+			t.Fatal(err)
+		}
+		removal, err = m.DeleteShare(ctx, owner, idRef(legacy.Id))
+		if err != nil || removal.ResourceType != ocm.SharedResourceType_SHARE_RESOURCE_TYPE_INVALID {
+			t.Fatalf("legacy delete: %v %v", removal, err)
 		}
 	})
 }

@@ -99,6 +99,9 @@ func loadOrCreate(file string) (*shareModel, error) {
 	if m.TransferGenerations == nil {
 		m.TransferGenerations = map[string]uint64{}
 	}
+	if m.ResourceTypes == nil {
+		m.ResourceTypes = map[string]ocm.SharedResourceType{}
+	}
 
 	return &m, nil
 }
@@ -109,13 +112,17 @@ type shareModel struct {
 	// TransferGenerations holds the embedded transfer attempt of received
 	// shares, which the CS3 received share has no field for.
 	TransferGenerations map[string]uint64 `json:"transfer_generations"` // share_id -> attempt
+	// ResourceTypes holds the resource type of outgoing shares, which the
+	// CS3 share has no field for. Older files have none.
+	ResourceTypes map[string]ocm.SharedResourceType `json:"resource_types"` // share_id -> type
 }
 
 func (s *shareModel) UnmarshalJSON(d []byte) error {
 	m := struct {
-		Shares              map[string]json.RawMessage `json:"shares"`
-		ReceivedShares      map[string]json.RawMessage `json:"received_shares"`
-		TransferGenerations map[string]uint64          `json:"transfer_generations"`
+		Shares              map[string]json.RawMessage        `json:"shares"`
+		ReceivedShares      map[string]json.RawMessage        `json:"received_shares"`
+		TransferGenerations map[string]uint64                 `json:"transfer_generations"`
+		ResourceTypes       map[string]ocm.SharedResourceType `json:"resource_types"`
 	}{}
 
 	if err := json.Unmarshal(d, &m); err != nil {
@@ -144,11 +151,16 @@ func (s *shareModel) UnmarshalJSON(d []byte) error {
 	if generations == nil {
 		generations = map[string]uint64{}
 	}
+	resourceTypes := m.ResourceTypes
+	if resourceTypes == nil {
+		resourceTypes = map[string]ocm.SharedResourceType{}
+	}
 
 	*s = shareModel{
 		Shares:              share,
 		ReceivedShares:      received,
 		TransferGenerations: generations,
+		ResourceTypes:       resourceTypes,
 	}
 
 	return nil
@@ -177,6 +189,7 @@ func (s *shareModel) MarshalJSON() ([]byte, error) {
 		"shares":               shares,
 		"received_shares":      received,
 		"transfer_generations": s.TransferGenerations,
+		"resource_types":       s.ResourceTypes,
 	})
 }
 
@@ -241,7 +254,7 @@ func (m *mgr) GenerateID(ctx context.Context) (*ocm.ShareId, error) {
 	return &ocm.ShareId{OpaqueId: genID()}, nil
 }
 
-func (m *mgr) StoreShare(ctx context.Context, ocmshare *ocm.Share) (*ocm.Share, error) {
+func (m *mgr) StoreShare(ctx context.Context, ocmshare *ocm.Share, resourceType ocm.SharedResourceType) (*ocm.Share, error) {
 	m.Lock()
 	defer m.Unlock()
 
@@ -257,37 +270,14 @@ func (m *mgr) StoreShare(ctx context.Context, ocmshare *ocm.Share) (*ocm.Share, 
 		return nil, share.ErrShareAlreadyExisting
 	}
 
-	m.model.Shares[ocmshare.Id.OpaqueId] = cloneShare(ocmshare)
+	m.model.Shares[ocmshare.Id.OpaqueId] = proto.Clone(ocmshare).(*ocm.Share)
+	m.model.ResourceTypes[ocmshare.Id.OpaqueId] = resourceType
 
 	if err := m.save(); err != nil {
 		return nil, errors.Wrap(err, "error saving share")
 	}
 
 	return ocmshare, nil
-}
-
-func cloneShare(s *ocm.Share) *ocm.Share {
-	d, err := utils.MarshalProtoV1ToJSON(s)
-	if err != nil {
-		panic(err)
-	}
-	var cloned ocm.Share
-	if err := utils.UnmarshalJSONToProtoV1(d, &cloned); err != nil {
-		panic(err)
-	}
-	return &cloned
-}
-
-func cloneReceivedShare(s *ocm.ReceivedShare) *ocm.ReceivedShare {
-	d, err := utils.MarshalProtoV1ToJSON(s)
-	if err != nil {
-		panic(err)
-	}
-	var cloned ocm.ReceivedShare
-	if err := utils.UnmarshalJSONToProtoV1(d, &cloned); err != nil {
-		panic(err)
-	}
-	return &cloned
 }
 
 func (m *mgr) GetShare(ctx context.Context, user *userpb.User, ref *ocm.ShareReference) (*ocm.Share, error) {
@@ -356,9 +346,8 @@ func (m *mgr) getByKey(ctx context.Context, key *ocm.ShareKey) (*ocm.Share, erro
 	return nil, share.ErrShareNotFound
 }
 
-// DeleteShare deletes the share and returns it as it was stored. The
-// receipt is only returned once the file is saved. Reloading per operation
-// does not coordinate separate processes writing the same file.
+// DeleteShare deletes the share and returns it as it was stored. Separate
+// processes writing the same file are not coordinated.
 func (m *mgr) DeleteShare(ctx context.Context, user *userpb.User, ref *ocm.ShareReference) (*share.ShareRemoval, error) {
 	m.Lock()
 	defer m.Unlock()
@@ -370,12 +359,13 @@ func (m *mgr) DeleteShare(ctx context.Context, user *userpb.User, ref *ocm.Share
 	for id, s := range m.model.Shares {
 		if sharesEqual(ref, s) {
 			if utils.UserEqual(user.Id, s.Owner) || utils.UserEqual(user.Id, s.Creator) {
-				removed := cloneShare(s)
+				removal := &share.ShareRemoval{Share: s, ResourceType: m.model.ResourceTypes[id]}
 				delete(m.model.Shares, id)
+				delete(m.model.ResourceTypes, id)
 				if err := m.save(); err != nil {
 					return nil, err
 				}
-				return &share.ShareRemoval{Share: removed}, nil
+				return removal, nil
 			}
 		}
 	}
@@ -432,7 +422,7 @@ func (m *mgr) UpdateShare(ctx context.Context, user *userpb.User, ref *ocm.Share
 	if !utils.UserEqual(user.Id, s.Owner) && !utils.UserEqual(user.Id, s.Creator) {
 		return nil, share.ErrShareNotFound
 	}
-	before := cloneShare(s)
+	before := proto.Clone(s).(*ocm.Share)
 
 	for _, field := range f {
 		switch u := field.Field.(type) {
@@ -450,16 +440,15 @@ func (m *mgr) UpdateShare(ctx context.Context, user *userpb.User, ref *ocm.Share
 		Seconds: uint64(now / 1000000000),
 		Nanos:   uint32(now % 1000000000),
 	}
-	m.model.Shares[s.Id.OpaqueId] = cloneShare(s)
-
 	if err := m.save(); err != nil {
 		return nil, errors.Wrap(err, "error saving model")
 	}
 
-	after := cloneShare(s)
+	after := proto.Clone(s).(*ocm.Share)
 	return &share.ShareUpdate{
 		Before:                   before,
 		After:                    after,
+		ResourceType:             m.model.ResourceTypes[s.Id.OpaqueId],
 		WebDAVPermissionsChanged: permissionsChanged(webdavPermissions(before), webdavPermissions(after)),
 		WebappPermissionsChanged: permissionsChanged(webappPermissions(before), webappPermissions(after)),
 	}, nil
@@ -608,7 +597,7 @@ func (m *mgr) StoreReceivedShare(ctx context.Context, share *ocm.ReceivedShare) 
 	share.Ctime = ts
 	share.Mtime = ts
 
-	m.model.ReceivedShares[share.Id.OpaqueId] = cloneReceivedShare(share)
+	m.model.ReceivedShares[share.Id.OpaqueId] = proto.Clone(share).(*ocm.ReceivedShare)
 	if err := m.save(); err != nil {
 		return nil, err
 	}
@@ -702,7 +691,7 @@ func (m *mgr) UpdateReceivedShare(ctx context.Context, user *userpb.User, s *ocm
 	if err != nil {
 		return nil, err
 	}
-	before := cloneReceivedShare(rs)
+	before := proto.Clone(rs).(*ocm.ReceivedShare)
 
 	for _, mask := range fieldMask.GetPaths() {
 		switch mask {
@@ -723,7 +712,7 @@ func (m *mgr) UpdateReceivedShare(ctx context.Context, user *userpb.User, s *ocm
 	if err := m.save(); err != nil {
 		return nil, errors.Wrap(err, "error saving model")
 	}
-	return &share.ReceivedShareUpdate{Before: before, After: cloneReceivedShare(rs)}, nil
+	return &share.ReceivedShareUpdate{Before: before, After: proto.Clone(rs).(*ocm.ReceivedShare)}, nil
 }
 
 // StartReceivedShareTransfer moves a share that is not transferring to
@@ -756,7 +745,7 @@ func (m *mgr) StartReceivedShareTransfer(ctx context.Context, user *userpb.User,
 	if err := m.save(); err != nil {
 		return nil, errors.Wrap(err, "error saving model")
 	}
-	return &share.TransferStart{Share: cloneReceivedShare(rs), Generation: gen}, nil
+	return &share.TransferStart{Share: proto.Clone(rs).(*ocm.ReceivedShare), Generation: gen}, nil
 }
 
 // CompleteReceivedShareTransfer writes the final state and mtime only, and
@@ -772,7 +761,7 @@ func (m *mgr) CompleteReceivedShareTransfer(ctx context.Context, user *userpb.Us
 	if err != nil {
 		return nil, err
 	}
-	before := cloneReceivedShare(rs)
+	before := proto.Clone(rs).(*ocm.ReceivedShare)
 	if rs.State != ocm.ShareState_SHARE_STATE_TRANSFERRING || m.model.TransferGenerations[rs.Id.OpaqueId] != generation {
 		return &share.ReceivedShareUpdate{Before: before, After: before}, nil
 	}
@@ -781,7 +770,7 @@ func (m *mgr) CompleteReceivedShareTransfer(ctx context.Context, user *userpb.Us
 	if err := m.save(); err != nil {
 		return nil, errors.Wrap(err, "error saving model")
 	}
-	return &share.ReceivedShareUpdate{Before: before, After: cloneReceivedShare(rs)}, nil
+	return &share.ReceivedShareUpdate{Before: before, After: proto.Clone(rs).(*ocm.ReceivedShare)}, nil
 }
 
 func (m *mgr) GetEmbeddedPayload(ctx context.Context, user *userpb.User, share *ocm.ReceivedShare) (string, error) {
