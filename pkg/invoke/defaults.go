@@ -25,6 +25,7 @@ import "context"
 // invocation of the same name.
 type defaultInvocation struct {
 	spec   InvocationSpec
+	args   []argDecl
 	fn     func(ctx context.Context, inst instance, args Args) (Result, error)
 	stream func(ctx context.Context, inst instance, args Args, emit StreamEmit) error
 }
@@ -35,7 +36,10 @@ type defaultInvocation struct {
 var defaults []defaultInvocation
 
 // registerDefault records a built-in invocation.
-func registerDefault(d defaultInvocation) { defaults = append(defaults, d) }
+func registerDefault(d defaultInvocation) {
+	d.spec.Args = specsOf(d.args)
+	defaults = append(defaults, d)
+}
 
 // defaultSpecs are the catalog entries of the built-in invocations.
 func defaultSpecs() []InvocationSpec {

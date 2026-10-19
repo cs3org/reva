@@ -31,9 +31,19 @@ import (
 // returns a snapshot, InvokeStream follows.
 const LogsInvocation = "logs"
 
+var (
+	logsLevel   = OptArg[string]("level", "minimum level: trace|debug|info|warn|error")
+	logsSince   = OptArg[time.Time]("since", "only lines newer than a duration (e.g. 5m) or an RFC3339 time")
+	logsLimit   = OptArg[int]("limit", "max lines for a snapshot, or backlog before a follow")
+	logsGrep    = OptArg[string]("grep", "keep only lines containing this substring")
+	logsAll     = OptArg[bool]("all", "the whole process, not just this service (true|false)")
+	logsService = OptArg[string]("service", "only this service, not the instance's own")
+)
+
 func init() {
 	registerDefault(defaultInvocation{
 		spec:   logsSpec(),
+		args:   []argDecl{logsLevel, logsSince, logsLimit, logsGrep, logsAll, logsService},
 		fn:     logsSnapshot,
 		stream: logsStream,
 	})
@@ -50,13 +60,6 @@ func logsSpec() InvocationSpec {
 		Description: "Return recent log lines from this process (snapshot), or follow them (stream).",
 		Kind:        KindReadonly,
 		Streaming:   true,
-		Args: []ArgSpec{
-			{Name: "level", Description: "minimum level: trace|debug|info|warn|error"},
-			{Name: "since", Description: "only lines newer than a duration (e.g. 5m) or an RFC3339 time"},
-			{Name: "limit", Description: "max lines for a snapshot, or backlog before a follow"},
-			{Name: "grep", Description: "keep only lines containing this substring"},
-			{Name: "all", Description: "the whole process, not just this service (true|false)"},
-		},
 	}
 }
 
@@ -66,11 +69,7 @@ func logsSnapshot(_ context.Context, inst instance, args Args) (Result, error) {
 	if !buf.Enabled() {
 		return nil, errLogBufferDisabled
 	}
-	f, err := logFilter(inst, args)
-	if err != nil {
-		return nil, err
-	}
-	entries, truncated := buf.Read(f)
+	entries, truncated := buf.Read(logFilter(inst, args))
 	out := make([]map[string]any, len(entries))
 	for i, e := range entries {
 		out[i] = logEntryMap(e)
@@ -85,11 +84,7 @@ func logsStream(ctx context.Context, inst instance, args Args, emit StreamEmit) 
 	if !buf.Enabled() {
 		return errLogBufferDisabled
 	}
-	f, err := logFilter(inst, args)
-	if err != nil {
-		return err
-	}
-	backlog, live, cancel := buf.ReadAndSubscribe(f)
+	backlog, live, cancel := buf.ReadAndSubscribe(logFilter(inst, args))
 	defer cancel()
 	for _, e := range backlog {
 		if err := emit(Result(logEntryMap(e))); err != nil {
@@ -113,39 +108,21 @@ func logsStream(ctx context.Context, inst instance, args Args, emit StreamEmit) 
 
 // logFilter builds a logtail.Filter from the arguments. The service defaults
 // to the instance's own unless all=true or an explicit override is given.
-func logFilter(inst instance, a Args) (logtail.Filter, error) {
+func logFilter(inst instance, a Args) logtail.Filter {
 	service := inst.service
-	if a.Bool("all") {
+	if logsAll.Get(a) {
 		service = ""
 	}
-	if a.Has("service") {
-		service = a.String("service")
+	if logsService.Has(a) {
+		service = logsService.Get(a)
 	}
-	f := logtail.Filter{
+	return logtail.Filter{
 		Service:  service,
-		MinLevel: a.String("level"),
-		Grep:     a.String("grep"),
-		Limit:    a.Int("limit"),
+		MinLevel: logsLevel.Get(a),
+		Grep:     logsGrep.Get(a),
+		Limit:    logsLimit.Get(a),
+		Since:    logsSince.Get(a),
 	}
-	if s := a.String("since"); s != "" {
-		since, err := parseSince(s)
-		if err != nil {
-			return f, err
-		}
-		f.Since = since
-	}
-	return f, nil
-}
-
-// parseSince accepts a duration ("5m") or an RFC3339 timestamp.
-func parseSince(s string) (time.Time, error) {
-	if d, err := time.ParseDuration(s); err == nil {
-		return time.Now().Add(-d), nil
-	}
-	if t, err := time.Parse(time.RFC3339, s); err == nil {
-		return t, nil
-	}
-	return time.Time{}, errors.New("since: want a duration (e.g. 5m) or an RFC3339 timestamp")
 }
 
 // logEntryMap renders a buffered entry as a serializable result.
