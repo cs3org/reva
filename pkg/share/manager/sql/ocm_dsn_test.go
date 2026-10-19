@@ -25,6 +25,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -385,6 +386,48 @@ func TestSQLiteRejectsConflictingOCMOptions(t *testing.T) {
 			}
 			if _, statErr := os.Stat(path); !os.IsNotExist(statErr) {
 				t.Fatalf("configuration should be rejected before opening the database: %v", statErr)
+			}
+		})
+	}
+}
+
+// A short competing write must delay, not fail, a write of the manager, for
+// every supported form of db_name.
+func TestSQLiteWritersWaitForAShortCompetingWrite(t *testing.T) {
+	for name, dsn := range map[string]func(path string) string{
+		"plain path":         func(p string) string { return p },
+		"path with options":  func(p string) string { return p + "?cache=private" },
+		"file URI":           func(p string) string { return "file:" + p },
+		"file URI + options": func(p string) string { return "file:" + p + "?cache=private&mode=rwc" },
+	} {
+		t.Run(name, func(t *testing.T) {
+			path := filepath.Join(t.TempDir(), "ocm.sqlite")
+			m := openOCMManager(t, map[string]any{"db_engine": "sqlite", "db_name": dsn(path)})
+			rs := mustStore(t, m, grantShare(recipient("marie"), "a.example.org", "contended", file))
+
+			other, err := dbsql.Open("sqlite3", path)
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer other.Close()
+			holder, err := other.Begin()
+			if err != nil {
+				t.Fatal(err)
+			}
+			if _, err := holder.Exec("UPDATE ocm_received_shares SET mtime = mtime + 1"); err != nil {
+				t.Fatal(err)
+			}
+			var wg sync.WaitGroup
+			wg.Add(1)
+			go func() {
+				defer wg.Done()
+				time.Sleep(500 * time.Millisecond)
+				_ = holder.Commit()
+			}()
+			u, err := m.UpdateReceivedShare(context.Background(), recipient("marie"), &ocm.ReceivedShare{Id: rs.Id, State: ocm.ShareState_SHARE_STATE_ACCEPTED}, stateMask())
+			wg.Wait()
+			if err != nil || !u.StateChanged() {
+				t.Fatalf("%v %v", u, err)
 			}
 		})
 	}
