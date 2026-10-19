@@ -18,10 +18,8 @@
 
 package ocmd
 
-// This file holds the portable OCM notification contract: the canonical
-// notification, legacy normalization and per-type validation. It must not
-// import reva adapters, gateway clients or HTTP wiring, so that other
-// implementations can reuse it as is.
+// The notification contract below imports no reva adapter, gateway or HTTP
+// wiring, so that other implementations can reuse it.
 
 import (
 	"bytes"
@@ -45,10 +43,8 @@ const (
 	NotificationGroupRemoved          = "GROUP_REMOVED"
 )
 
-// NotificationReshareUndo is a legacy Nextcloud type without a registered
-// successor. It is validated like SHARE_UNSHARED but keeps its own identity,
-// because it is sent to the owner about an outgoing share and must never be
-// handled as the withdrawal of a received share.
+// NotificationReshareUndo is a legacy Nextcloud type validated like
+// SHARE_UNSHARED. It is about an outgoing share, so it never withdraws a received one.
 const NotificationReshareUndo = "RESHARE_UNDO"
 
 // Notification types defined by the OCM-MLS draft. They are validated
@@ -85,10 +81,9 @@ type NotificationSecret string
 
 const redactedSecret = "[redacted]"
 
-// Reveal returns the secret itself, for comparison only.
+// Reveal returns the secret itself. Do not format or log the result.
 func (s NotificationSecret) Reveal() string { return string(s) }
 
-// String implements fmt.Stringer.
 func (s NotificationSecret) String() string {
 	if s == "" {
 		return ""
@@ -96,10 +91,8 @@ func (s NotificationSecret) String() string {
 	return redactedSecret
 }
 
-// GoString implements fmt.GoStringer.
 func (s NotificationSecret) GoString() string { return s.String() }
 
-// MarshalText implements encoding.TextMarshaler.
 func (s NotificationSecret) MarshalText() ([]byte, error) { return []byte(s.String()), nil }
 
 // NotificationFile is the file object of resource notifications.
@@ -136,7 +129,7 @@ func (s NotificationShape) Legacy() bool {
 }
 
 // Notification is the canonical form of a received notification that every
-// TypeHandler consumes.
+// TypeHandler consumes. Formatting it prints fixed metadata only.
 type Notification struct {
 	// Type is the notificationType as received. Aliases keep their identity.
 	Type string
@@ -164,16 +157,15 @@ type Notification struct {
 	Payload map[string]json.RawMessage `json:"-"`
 
 	rawSecret json.RawMessage
+	// members are the raw envelope members, to tell an absent field from a null or empty one.
+	members map[string]json.RawMessage
 }
 
-// String implements fmt.Stringer with fixed metadata only, so formatting a
-// notification never prints payload values or the secret.
 func (n Notification) String() string {
 	return fmt.Sprintf("notification{type=%q contract=%q class=%s legacy=%t}",
 		n.Type, n.ContractType, n.Class, n.Shape.Legacy())
 }
 
-// GoString implements fmt.GoStringer.
 func (n Notification) GoString() string { return n.String() }
 
 // NotificationErrorCode is the closed set of notification contract errors.
@@ -262,6 +254,7 @@ func decodeNotification(body []byte) (*Notification, error) {
 		ResourceType: env.ResourceType,
 		ShareType:    env.ShareType,
 		ProviderID:   env.ProviderID,
+		members:      members,
 	}
 	if len(env.Notification) > 0 && !isJSONNull(env.Notification) {
 		if err := json.Unmarshal(env.Notification, &n.Payload); err != nil || n.Payload == nil {
@@ -280,47 +273,52 @@ func isJSONNull(raw json.RawMessage) bool {
 	return bytes.Equal(bytes.TrimSpace(raw), []byte("null"))
 }
 
-// payloadString reads an optional string member of the notification object.
-func (n *Notification) payloadString(key string) (string, bool, error) {
-	raw, ok := n.Payload[key]
-	if !ok || isJSONNull(raw) {
-		return "", false, nil
+// hasMember reports whether the envelope has the member, even if null or empty.
+func (n *Notification) hasMember(key string) bool {
+	_, ok := n.members[key]
+	return ok
+}
+
+// decodeMember decodes a present member into out. A null value is invalid,
+// because no known member is nullable.
+func decodeMember(raw json.RawMessage, field string, out any) error {
+	if isJSONNull(raw) || json.Unmarshal(raw, out) != nil {
+		return invalidField(field)
 	}
-	var s string
-	if err := json.Unmarshal(raw, &s); err != nil {
-		return "", true, invalidField("notification." + key)
-	}
-	return s, true, nil
+	return nil
 }
 
 // payloadObject decodes a member of the notification object into out.
 func (n *Notification) payloadObject(key string, out any) (bool, error) {
 	raw, ok := n.Payload[key]
-	if !ok || isJSONNull(raw) {
+	if !ok {
 		return false, nil
 	}
-	if err := json.Unmarshal(raw, out); err != nil {
-		return true, invalidField("notification." + key)
-	}
-	return true, nil
+	return true, decodeMember(raw, "notification."+key, out)
 }
 
 // normalizeCommon maps the fields shared by the processable known types. It
 // never applies to MLS types, whose bytes feed cryptographic processing.
 func (n *Notification) normalizeCommon() error {
+	for _, key := range []string{"senderDomain", "resourceType", "shareType", "providerId"} {
+		if raw, ok := n.members[key]; ok && isJSONNull(raw) {
+			return invalidField(key)
+		}
+	}
 	if n.SenderDomain == "" {
 		n.Shape.MissingSenderDomain = true
 	}
-	if len(n.rawSecret) > 0 && !isJSONNull(n.rawSecret) {
+	if n.rawSecret != nil {
 		var secret string
-		if err := json.Unmarshal(n.rawSecret, &secret); err != nil {
-			return invalidField("notification.sharedSecret")
+		if err := decodeMember(n.rawSecret, "notification.sharedSecret", &secret); err != nil {
+			return err
 		}
 		n.SharedSecret = NotificationSecret(secret)
 	}
-	// The message is optional human text; a non-string value is dropped.
-	if msg, _, err := n.payloadString("message"); err == nil {
-		n.Message = msg
+	if raw, ok := n.Payload["message"]; ok {
+		if err := decodeMember(raw, "notification.message", &n.Message); err != nil {
+			return err
+		}
 	}
 	return nil
 }
@@ -355,21 +353,90 @@ var notificationValidate = newNotificationValidator()
 func newNotificationValidator() *validator.Validate {
 	v := validator.New()
 	_ = v.RegisterValidation("ocmaddress", func(fl validator.FieldLevel) bool {
-		return validOCMAddress(fl.Field().String())
+		_, _, ok := splitOCMAddress(fl.Field().String())
+		return ok
+	})
+	_ = v.RegisterValidation("ocmpermission", func(fl validator.FieldLevel) bool {
+		switch fl.Field().String() {
+		case "read", "write", "share":
+			return true
+		}
+		return false
 	})
 	return v
 }
 
-// validOCMAddress checks the <id>@<provider> form with both parts non-empty.
-func validOCMAddress(addr string) bool {
-	last := strings.LastIndex(addr, "@")
-	return last > 0 && last < len(addr)-1 && strings.TrimSpace(addr) == addr
+// splitOCMAddress splits identifier "@" host [":" port] at the last "@".
+// The identifier is opaque and kept as is; the host follows RFC 3986.
+func splitOCMAddress(addr string) (id, host string, ok bool) {
+	i := strings.LastIndex(addr, "@")
+	if i <= 0 {
+		return "", "", false
+	}
+	id, host = addr[:i], addr[i+1:]
+	return id, host, validOCMHost(host)
+}
+
+// validOCMHost accepts an IP literal, an IPv4 address or a registered name,
+// with an optional port. Paths, queries, userinfo and spaces are rejected.
+func validOCMHost(h string) bool {
+	name, port := h, ""
+	if strings.HasPrefix(h, "[") {
+		end := strings.IndexByte(h, ']')
+		if end < 0 || !validIPLiteral(h[1:end]) {
+			return false
+		}
+		name, port = "", h[end+1:]
+		if port != "" && port[0] != ':' {
+			return false
+		}
+	} else if i := strings.IndexByte(h, ':'); i >= 0 {
+		name, port = h[:i], h[i:]
+	}
+	if port != "" && (len(port) == 1 || strings.Trim(port[1:], "0123456789") != "") {
+		return false
+	}
+	if strings.HasPrefix(h, "[") {
+		return true
+	}
+	return name != "" && validRegName(name)
+}
+
+func validIPLiteral(s string) bool {
+	if strings.HasPrefix(s, "v") || strings.HasPrefix(s, "V") {
+		dot := strings.IndexByte(s, '.')
+		return dot > 1 && strings.Trim(s[1:dot], hexDigits) == "" && dot < len(s)-1 &&
+			strings.Trim(s[dot+1:], unreservedOrSubDelims+":") == ""
+	}
+	return s != "" && strings.Trim(s, hexDigits+":.") == ""
+}
+
+const (
+	hexDigits             = "0123456789abcdefABCDEF"
+	unreservedOrSubDelims = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-._~!$&'()*+,;="
+)
+
+// validRegName accepts unreserved, sub-delims and percent-encoded octets.
+func validRegName(s string) bool {
+	for i := 0; i < len(s); i++ {
+		switch {
+		case s[i] == '%':
+			if i+2 >= len(s) || !strings.ContainsRune(hexDigits, rune(s[i+1])) || !strings.ContainsRune(hexDigits, rune(s[i+2])) {
+				return false
+			}
+			i += 2
+		case !strings.ContainsRune(unreservedOrSubDelims, rune(s[i])):
+			return false
+		}
+	}
+	return true
 }
 
 // Per-type schemas, checked with the same validator tags as the other ocmd specs.
 type shareStateSchema struct {
-	ResourceType string `validate:"required"`
-	ProviderID   string `validate:"required"`
+	ResourceType string   `validate:"required"`
+	ProviderID   string   `validate:"required"`
+	Permissions  []string `validate:"dive,ocmpermission"`
 }
 
 type userRemovedSchema struct {
@@ -401,6 +468,7 @@ func validateSchema(schema any) error {
 }
 
 func schemaFieldName(structField string) string {
+	structField, _, _ = strings.Cut(structField, "[")
 	switch structField {
 	case "ResourceType":
 		return "resourceType"
@@ -408,6 +476,8 @@ func schemaFieldName(structField string) string {
 		return "shareType"
 	case "ProviderID":
 		return "notification.file.providerId"
+	case "Permissions":
+		return "notification.file.permissions"
 	case "UserID":
 		return "notification.user.userId"
 	case "GroupID":
@@ -434,7 +504,11 @@ func validateShareState(n *Notification) error {
 	if err := n.normalizeFile(); err != nil {
 		return err
 	}
-	return validateSchema(shareStateSchema{ResourceType: n.ResourceType, ProviderID: n.ProviderID})
+	schema := shareStateSchema{ResourceType: n.ResourceType, ProviderID: n.ProviderID}
+	if n.File != nil {
+		schema.Permissions = n.File.Permissions
+	}
+	return validateSchema(schema)
 }
 
 // validateUserRemoved is the contract of USER_REMOVED. The userId belongs to
@@ -443,7 +517,7 @@ func validateUserRemoved(n *Notification) error {
 	if err := n.normalizeCommon(); err != nil {
 		return err
 	}
-	if n.ResourceType != "" {
+	if n.hasMember("resourceType") {
 		return invalidField("resourceType")
 	}
 	var u NotificationUser
@@ -462,7 +536,7 @@ func validateGroupRemoved(n *Notification) error {
 	if err := n.normalizeCommon(); err != nil {
 		return err
 	}
-	if n.ResourceType != "" {
+	if n.hasMember("resourceType") {
 		return invalidField("resourceType")
 	}
 	var g NotificationGroup

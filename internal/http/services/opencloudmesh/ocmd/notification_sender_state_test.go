@@ -21,8 +21,11 @@ package ocmd
 import (
 	"context"
 	"errors"
+	"fmt"
 	"net/http"
+	"strings"
 	"testing"
+	"time"
 )
 
 type fakeNotificationTransport struct {
@@ -60,7 +63,7 @@ func TestSendNotificationTransitions(t *testing.T) {
 		outcome SendOutcome
 		class   NotificationStatusClass
 		posts   int
-		retry   string
+		retry   time.Duration
 	}{
 		{name: "discovery failure", tr: &fakeNotificationTransport{discoverErr: errors.New("dial")}, outcome: SendDiscoveryFailed},
 		{name: "nil peer", tr: &fakeNotificationTransport{}, outcome: SendCapabilityMissing},
@@ -76,7 +79,7 @@ func TestSendNotificationTransitions(t *testing.T) {
 		{name: "403", tr: &fakeNotificationTransport{peer: advertising("notifications"), status: 403}, outcome: SendRejected, class: NotificationStatusForbidden, posts: 1},
 		{name: "404", tr: &fakeNotificationTransport{peer: advertising("notifications"), status: 404}, outcome: SendRejected, class: NotificationStatusNotFound, posts: 1},
 		{name: "501", tr: &fakeNotificationTransport{peer: advertising("notifications"), status: 501}, outcome: SendRejected, class: NotificationStatusNotImplemented, posts: 1},
-		{name: "503 records Retry-After", tr: &fakeNotificationTransport{peer: advertising("notifications"), status: 503, header: retry}, outcome: SendRejected, class: NotificationStatusUnavailable, posts: 1, retry: "120"},
+		{name: "503 records Retry-After", tr: &fakeNotificationTransport{peer: advertising("notifications"), status: 503, header: retry}, outcome: SendRejected, class: NotificationStatusUnavailable, posts: 1, retry: 120 * time.Second},
 		{name: "500 unclassified", tr: &fakeNotificationTransport{peer: advertising("notifications"), status: 500}, outcome: SendRejected, posts: 1},
 		{name: "302 unclassified", tr: &fakeNotificationTransport{peer: advertising("notifications"), status: 302}, outcome: SendRejected, posts: 1},
 	}
@@ -93,6 +96,31 @@ func TestSendNotificationTransitions(t *testing.T) {
 				t.Fatalf("endpoint %q", tc.tr.endpoint)
 			}
 		})
+	}
+}
+
+func TestRetryAfterKeepsOnlyBoundedSeconds(t *testing.T) {
+	const secret = "hfiuhworzwnur98d3wjiwhr"
+	cases := map[string]time.Duration{
+		"":                               0,
+		"0":                              0,
+		"86400":                          24 * time.Hour,
+		"999999999":                      24 * time.Hour,
+		"-1":                             0,
+		"1.5":                            0,
+		"Wed, 21 Oct 2026 07:28:00 GMT":  0,
+		secret:                           0,
+		secret + "\r\nX-Leak: " + secret: 0,
+		strings.Repeat(secret, 1000):     0,
+	}
+	for value, want := range cases {
+		res := ClassifyNotificationResponse(503, http.Header{"Retry-After": []string{value}})
+		if res.Class != NotificationStatusUnavailable || res.RetryAfter != want {
+			t.Fatalf("Retry-After %.20q: %+v", value, res)
+		}
+		if out := fmt.Sprintf("%v %+v %#v", res, res, res); strings.Contains(out, secret) {
+			t.Fatalf("secret in %s", out)
+		}
 	}
 }
 

@@ -18,15 +18,14 @@
 
 package ocmd
 
-// Portable outbound notification transitions: Discover -> HasCapability ->
-// Post -> classify. The transport is injected; this file performs no I/O
-// itself and has no retry, queue, re-publish or signature hook. Each
-// notification is attempted at most once.
+// A notification is attempted at most once: there is no retry or queue.
 
 import (
 	"context"
 	"net/http"
 	"slices"
+	"strconv"
+	"time"
 )
 
 // NotificationsCapability is the discovery capability of a receiver that
@@ -34,8 +33,7 @@ import (
 const NotificationsCapability = "notifications"
 
 // NotificationStatusClass is the closed set of notification response
-// classes. 503 is only ever a sender-side classification: the receiver
-// never answers with it.
+// classes. Only senders use 503: the receiver never answers with it.
 type NotificationStatusClass int
 
 const (
@@ -48,9 +46,7 @@ const (
 	NotificationStatusUnavailable    NotificationStatusClass = http.StatusServiceUnavailable
 )
 
-// ReceiverStatus returns the response class of a parsed notification:
-// 201 for valid known, unknown and MLS-classified notifications, 501 for
-// request types and 400 for every other contract error.
+// ReceiverStatus returns the response class of a parsed notification.
 func ReceiverStatus(err error) NotificationStatusClass {
 	if err == nil {
 		return NotificationStatusCreated
@@ -98,14 +94,17 @@ type SendResult struct {
 	Status int
 	// Class is set for the recorded error classes; zero otherwise.
 	Class NotificationStatusClass
-	// RetryAfter is recorded from a 503 for diagnostics; it is never acted upon.
-	RetryAfter string
+	// RetryAfter is the delay-seconds of a 503 Retry-After, up to
+	// maxRetryAfter, for diagnostics only. Other values are not kept,
+	// because a peer can reflect any request value in the header.
+	RetryAfter time.Duration
 	Err        error
 }
 
+const maxRetryAfter = 24 * time.Hour
+
 // ClassifyNotificationResponse maps a response to its outcome. Any 2xx is
-// a delivery; the recorded error classes are explicit, other statuses are
-// rejections without a class.
+// a delivery.
 func ClassifyNotificationResponse(status int, header http.Header) SendResult {
 	if status >= 200 && status < 300 {
 		return SendResult{Outcome: SendDelivered, Status: status, Class: NotificationStatusCreated}
@@ -117,8 +116,8 @@ func ClassifyNotificationResponse(status int, header http.Header) SendResult {
 		res.Class = NotificationStatusClass(status)
 	case NotificationStatusUnavailable:
 		res.Class = NotificationStatusUnavailable
-		if header != nil {
-			res.RetryAfter = header.Get("Retry-After")
+		if secs, err := strconv.ParseUint(header.Get("Retry-After"), 10, 32); err == nil {
+			res.RetryAfter = min(time.Duration(secs)*time.Second, maxRetryAfter)
 		}
 	}
 	return res

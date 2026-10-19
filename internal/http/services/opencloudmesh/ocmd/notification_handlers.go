@@ -18,9 +18,7 @@
 
 package ocmd
 
-// Portable notification dispatch: the TypeHandler registry and the MLS
-// ingress seam. Like specs_notifications.go, this file carries no reva
-// adapter, gateway or HTTP imports.
+// Like specs_notifications.go, this file imports no reva adapter, gateway or HTTP wiring.
 
 import (
 	"context"
@@ -29,9 +27,8 @@ import (
 	"sync"
 )
 
-// TypeHandler processes a validated notification of one type. A returned
-// error is a policy or processing outcome; it never changes the receiver
-// status of a notification that passed validation.
+// TypeHandler processes a validated notification of one type. Its error
+// never changes the response to a valid notification.
 type TypeHandler interface {
 	HandleNotification(ctx context.Context, n *Notification) error
 }
@@ -44,16 +41,14 @@ func (f TypeHandlerFunc) HandleNotification(ctx context.Context, n *Notification
 	return f(ctx, n)
 }
 
-// MLSIngress receives the five MLS notification types, unnormalized, for
-// strict validation and cryptographic processing. It may be nil until the
-// MLS layers install it.
+// MLSIngress receives the MLS notification types. Their bytes bypass
+// legacy normalization, because they feed cryptographic processing.
 type MLSIngress interface {
 	HandleMLSNotification(ctx context.Context, n *Notification) error
 }
 
 // ErrMLSIngressUnavailable reports an MLS notification received while no
-// MLS ingress is installed. The caller decides the response; this layer
-// invents no MLS status.
+// MLS ingress is installed.
 var ErrMLSIngressUnavailable = errors.New("mls notification ingress unavailable")
 
 // NotificationExtension is the contract of a notification type that is not
@@ -101,9 +96,8 @@ func NewNotificationRegistry() *NotificationRegistry {
 	return r
 }
 
-// SetHandler installs the handler of a built-in or registered type. The
-// alias RESHARE_UNDO has its own handler slot, so a SHARE_UNSHARED handler
-// never receives it.
+// SetHandler installs the handler of a built-in or registered type.
+// RESHARE_UNDO has its own handler slot.
 func (r *NotificationRegistry) SetHandler(notificationType string, h TypeHandler) error {
 	if h == nil {
 		return fmt.Errorf("nil handler for notification type %s", notificationType)
@@ -145,9 +139,7 @@ func (r *NotificationRegistry) SetMLSIngress(m MLSIngress) {
 }
 
 // Parse decodes, classifies, normalizes and validates a notification body.
-// On error the returned class tells the caller how to answer: class D and
-// schema failures of known types are bad requests, class R is not
-// implemented. Unknown and MLS types are returned without normalization.
+// Unknown and MLS types are returned without normalization.
 func (r *NotificationRegistry) Parse(body []byte) (*Notification, error) {
 	n, err := decodeNotification(body)
 	if err != nil {
