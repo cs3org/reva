@@ -844,7 +844,8 @@ func (r *Runner) recordStatus(ctx context.Context, run Run, state State, result 
 func (r *Runner) invoke(ctx context.Context, run Run, log zerolog.Logger) (Params, error) {
 	// The run id is the trace id, so the logs of the services the job calls
 	// carry it too and `admin jobs logs <run-id>` finds them.
-	jobCtx := appctx.WithLogger(trace.Set(ctx, string(run.ID)), &log)
+	jobCtx := trace.SetJob(trace.Set(ctx, string(run.ID)), run.Job)
+	jobCtx = appctx.WithLogger(jobCtx, &log)
 
 	if p, ok := r.lookupPeriodic(run.Job); ok {
 		return nil, r.guard(p, func() error { return p.Run(jobCtx) })
@@ -864,7 +865,7 @@ func (r *Runner) invoke(ctx context.Context, run Run, log zerolog.Logger) (Param
 // execPeriodic runs a periodic Run closure inline (used by the local ticker).
 func (r *Runner) execPeriodic(ctx context.Context, p Periodic, log zerolog.Logger) {
 	start := time.Now()
-	err := r.guard(p, func() error { return p.Run(appctx.WithLogger(ctx, &log)) })
+	err := r.guard(p, func() error { return p.Run(appctx.WithLogger(trace.SetJob(ctx, p.Name), &log)) })
 	switch {
 	case errors.Is(err, errSkippedOverlap):
 		log.Debug().Msg("rjobs: skipped, previous run still in flight")
