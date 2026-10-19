@@ -1,4 +1,4 @@
-// Copyright 2018-2024 CERN
+// Copyright 2018-2026 CERN
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -140,9 +140,7 @@ const (
 	defaultUnauthRateLimitBurst = 100
 )
 
-// ocmWebDAVPath serves the files of federated shares to remote providers,
-// which authenticate with the share secret or token. It carries their data
-// traffic, so it is not rate limited.
+// ocmWebDAVPath serves the files of federated shares to remote users. It's also exposed by the .wellknown endpoint.
 const ocmWebDAVPath = "/remote.php/dav/ocm/"
 
 func (c *Config) ApplyDefaults() {
