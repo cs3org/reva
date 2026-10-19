@@ -25,15 +25,16 @@ import "context"
 const ConfigInvocation = "config"
 
 func init() {
-	registerDefault(defaultInvocation{
-		spec: InvocationSpec{
+	registerDefault(
+		InvocationSpec{
 			Name:        ConfigInvocation,
 			Description: "Return the service's effective, redacted configuration.",
 			Kind:        KindReadonly,
 		},
-		fn: func(_ context.Context, inst instance, _ Args) (Result, error) {
+		func(_ context.Context, inst instance, _ struct{}) (Result, error) {
 			// The config is redacted at registration, so it is safe to return.
 			return Result(inst.config), nil
 		},
-	})
+		nil,
+	)
 }

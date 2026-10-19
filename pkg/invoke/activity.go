@@ -30,13 +30,13 @@ import (
 const ActivityInvocation = "activity"
 
 func init() {
-	registerDefault(defaultInvocation{
-		spec: InvocationSpec{
+	registerDefault(
+		InvocationSpec{
 			Name:        ActivityInvocation,
 			Description: "Report the instance's in-flight and recent request activity.",
 			Kind:        KindReadonly,
 		},
-		fn: func(_ context.Context, inst instance, _ Args) (Result, error) {
+		func(_ context.Context, inst instance, _ struct{}) (Result, error) {
 			s := inst.activity.Snapshot()
 			res := Result{"in_flight": s.InFlight, "total": s.Total}
 			idleFields(res, s.LastRequest)
@@ -51,7 +51,8 @@ func init() {
 			}
 			return res, nil
 		},
-	})
+		nil,
+	)
 }
 
 // idleFields writes idle_seconds and last_request onto a result from a request

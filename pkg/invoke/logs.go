@@ -31,22 +31,17 @@ import (
 // returns a snapshot, InvokeStream follows.
 const LogsInvocation = "logs"
 
-var (
-	logsLevel   = OptArg[string]("level", "minimum level: trace|debug|info|warn|error")
-	logsSince   = OptArg[time.Time]("since", "only lines newer than a duration (e.g. 5m) or an RFC3339 time")
-	logsLimit   = OptArg[int]("limit", "max lines for a snapshot, or backlog before a follow")
-	logsGrep    = OptArg[string]("grep", "keep only lines containing this substring")
-	logsAll     = OptArg[bool]("all", "the whole process, not just this service (true|false)")
-	logsService = OptArg[string]("service", "only this service, not the instance's own")
-)
+type logsArgs struct {
+	Level   string    `arg:"level" help:"minimum level: trace|debug|info|warn|error"`
+	Since   time.Time `arg:"since" help:"only lines newer than a duration (e.g. 5m) or an RFC3339 time"`
+	Limit   int       `arg:"limit" help:"max lines for a snapshot, or backlog before a follow"`
+	Grep    string    `arg:"grep" help:"keep only lines containing this substring"`
+	All     bool      `arg:"all" help:"the whole process, not just this service (true|false)"`
+	Service *string   `arg:"service" help:"only this service, not the instance's own"`
+}
 
 func init() {
-	registerDefault(defaultInvocation{
-		spec:   logsSpec(),
-		args:   []argDecl{logsLevel, logsSince, logsLimit, logsGrep, logsAll, logsService},
-		fn:     logsSnapshot,
-		stream: logsStream,
-	})
+	registerDefault(logsSpec(), logsSnapshot, logsStream)
 }
 
 // errLogBufferDisabled makes a disabled buffer ([log] tail = 0) report a clear
@@ -64,7 +59,7 @@ func logsSpec() InvocationSpec {
 }
 
 // logsSnapshot serves the unary logs invocation: matching lines, newest first.
-func logsSnapshot(_ context.Context, inst instance, args Args) (Result, error) {
+func logsSnapshot(_ context.Context, inst instance, args logsArgs) (Result, error) {
 	buf := logtail.Default()
 	if !buf.Enabled() {
 		return nil, errLogBufferDisabled
@@ -79,7 +74,7 @@ func logsSnapshot(_ context.Context, inst instance, args Args) (Result, error) {
 
 // logsStream serves the streaming logs invocation: the matching backlog, then
 // new lines until the consumer goes away.
-func logsStream(ctx context.Context, inst instance, args Args, emit StreamEmit) error {
+func logsStream(ctx context.Context, inst instance, args logsArgs, emit StreamEmit) error {
 	buf := logtail.Default()
 	if !buf.Enabled() {
 		return errLogBufferDisabled
@@ -108,20 +103,20 @@ func logsStream(ctx context.Context, inst instance, args Args, emit StreamEmit) 
 
 // logFilter builds a logtail.Filter from the arguments. The service defaults
 // to the instance's own unless all=true or an explicit override is given.
-func logFilter(inst instance, a Args) logtail.Filter {
+func logFilter(inst instance, a logsArgs) logtail.Filter {
 	service := inst.service
-	if logsAll.Get(a) {
+	if a.All {
 		service = ""
 	}
-	if logsService.Has(a) {
-		service = logsService.Get(a)
+	if a.Service != nil {
+		service = *a.Service
 	}
 	return logtail.Filter{
 		Service:  service,
-		MinLevel: logsLevel.Get(a),
-		Grep:     logsGrep.Get(a),
-		Limit:    logsLimit.Get(a),
-		Since:    logsSince.Get(a),
+		MinLevel: a.Level,
+		Grep:     a.Grep,
+		Limit:    a.Limit,
+		Since:    a.Since,
 	}
 }
 

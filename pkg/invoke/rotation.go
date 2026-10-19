@@ -33,19 +33,20 @@ import (
 // alive and control-reachable.
 const RotationInvocation = "rotation"
 
-var rotationStateArg = Arg[string]("state", "drain|ready")
+type rotationArgs struct {
+	State string `arg:"state,required" help:"drain|ready"`
+}
 
 func init() {
-	registerDefault(defaultInvocation{
-		spec: InvocationSpec{
+	registerDefault(
+		InvocationSpec{
 			Name:        RotationInvocation,
 			Description: "Take the instance out of rotation (state=drain) or return it (state=ready).",
 			Kind:        KindDangerous,
 		},
-		args: []argDecl{rotationStateArg},
-		fn: func(_ context.Context, inst instance, a Args) (Result, error) {
+		func(_ context.Context, inst instance, a rotationArgs) (Result, error) {
 			previous := rotationState(inst.id)
-			switch rotationStateArg.Get(a) {
+			switch a.State {
 			case "drain", "draining", "out":
 				SetDrained(inst.id, true)
 			case "ready", "in", "enable":
@@ -58,7 +59,8 @@ func init() {
 			}
 			return Result{"node": inst.id, "previous": previous, "state": rotationState(inst.id)}, nil
 		},
-	})
+		nil,
+	)
 }
 
 // rotationState maps the drain flag to the registry state name it advertises.
