@@ -59,25 +59,23 @@ func init() {
 }
 
 type rateLimitConfig struct {
-	InitPerIPPerMin    int `mapstructure:"init_per_ip_per_min"`
-	FlowPerIPPerMin    int `mapstructure:"flow_per_ip_per_min"`
-	PollPerIPPerMin    int `mapstructure:"poll_per_ip_per_min"`
-	PollPerTokenPerMin int `mapstructure:"poll_per_token_per_min"`
-	PollWaitMs         int `mapstructure:"poll_wait_ms"`
+	// SyncClientPerIPPerMin is the per-IP limit shared by all routes.
+	SyncClientPerIPPerMin int `mapstructure:"syncclient_per_ip_per_min"`
+	PollPerTokenPerMin    int `mapstructure:"poll_per_token_per_min"`
+	PollWaitMs            int `mapstructure:"poll_wait_ms"`
 	// TrustedProxyCIDRs lists the reverse proxies whose X-Forwarded-For
-	// header identifies the client for the per-IP limits.
+	// header identifies the client for the per-IP limit.
 	TrustedProxyCIDRs []string `mapstructure:"trusted_proxy_cidrs"`
 }
 
-// limiters holds one limiter per configured limit. A nil limiter is disabled.
+// limiters holds the per-IP limiter shared by all routes and the per-token
+// limiter of the poll route. A nil limiter is disabled.
 type limiters struct {
-	init, flow, pollIP, pollToken *ratelimit.Limiter
+	ip, pollToken *ratelimit.Limiter
 }
 
 func (l *limiters) close() {
-	l.init.Close()
-	l.flow.Close()
-	l.pollIP.Close()
+	l.ip.Close()
 	l.pollToken.Close()
 }
 
@@ -89,9 +87,7 @@ func newLimiters(rc rateLimitConfig) (*limiters, error) {
 		lim    **ratelimit.Limiter
 		perMin int
 	}{
-		{&l.init, rc.InitPerIPPerMin},
-		{&l.flow, rc.FlowPerIPPerMin},
-		{&l.pollIP, rc.PollPerIPPerMin},
+		{&l.ip, rc.SyncClientPerIPPerMin},
 		{&l.pollToken, rc.PollPerTokenPerMin},
 	} {
 		if x.perMin <= 0 {
@@ -202,9 +198,10 @@ func New(ctx context.Context, m map[string]any) (global.Service, error) {
 	}
 
 	r := chi.NewRouter()
-	r.With(lims.init.Middleware).Post("/", s.handleInit)
-	r.With(lims.flow.Middleware).Get("/flow/{lt}", s.handleBrowserFlow)
-	r.With(lims.pollIP.Middleware).Post("/poll", s.handlePoll)
+	r.Use(lims.ip.Middleware)
+	r.Post("/", s.handleInit)
+	r.Get("/flow/{lt}", s.handleBrowserFlow)
+	r.Post("/poll", s.handlePoll)
 	s.router = r
 
 	appctx.GetLogger(ctx).Info().Str("service", "loginflow").Str("prefix", c.Prefix).Str("server_base_url", c.ServerBaseURL).Str("webui_url", c.WebUIURL).Str("appauth_driver", c.AppAuthDriver).Str("store_driver", c.StoreDriver).Int("flow_ttl_seconds", c.FlowTTLSeconds).Msg("loginflow service initialised")
