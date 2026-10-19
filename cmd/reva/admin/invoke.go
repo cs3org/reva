@@ -56,6 +56,9 @@ func adminInvocationsCommand() *command {
 			if inv.Streaming {
 				kind += ",stream"
 			}
+			if inv.Scope != "" {
+				kind += "," + inv.Scope
+			}
 			fmt.Printf("%-20s [%s] %s\n", inv.Name, kind, inv.Description)
 		}
 		return nil

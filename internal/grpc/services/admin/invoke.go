@@ -21,6 +21,7 @@ package admin
 import (
 	"context"
 	"fmt"
+	"slices"
 	"strconv"
 	"strings"
 
@@ -112,10 +113,15 @@ func invocationsFromMetadata(reg registry.Registry, svcName string) ([]*adminpb.
 	}
 	for _, n := range sv.Nodes() {
 		if csv := n.Metadata()[invoke.MetaInvocations]; csv != "" {
+			shared := strings.Split(n.Metadata()[invoke.MetaSharedInvocations], ",")
 			var specs []*adminpb.InvocationSpec
 			for name := range strings.SplitSeq(csv, ",") {
 				if name = strings.TrimSpace(name); name != "" {
-					specs = append(specs, &adminpb.InvocationSpec{Name: name})
+					spec := &adminpb.InvocationSpec{Name: name}
+					if slices.Contains(shared, name) {
+						spec.Scope = string(invoke.ScopeShared)
+					}
+					specs = append(specs, spec)
 				}
 			}
 			return specs, nil
@@ -146,6 +152,7 @@ func specsToAdmin(in []*controlpb.InvocationSpec) []*adminpb.InvocationSpec {
 			Args:        args,
 			Kind:        s.Kind,
 			Streaming:   s.Streaming,
+			Scope:       s.Scope,
 		})
 	}
 	return out

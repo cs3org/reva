@@ -35,6 +35,18 @@ const (
 	KindDangerous InvocationKind = "dangerous"
 )
 
+// InvocationScope tells which instances of a service run an invocation.
+type InvocationScope string
+
+const (
+	// ScopeInstance runs on every matched instance, because each one acts on
+	// its own state. It is the zero value.
+	ScopeInstance InvocationScope = ""
+	// ScopeShared runs on one live instance per service, because all instances
+	// act on the same shared state (for example a database).
+	ScopeShared InvocationScope = "shared"
+)
+
 // ArgSpec describes one argument an invocation accepts.
 type ArgSpec struct {
 	Name        string
@@ -48,6 +60,7 @@ type InvocationSpec struct {
 	Description string
 	Args        []ArgSpec
 	Kind        InvocationKind
+	Scope       InvocationScope
 	// Streaming marks an invocation that emits a stream of results (via
 	// InvokeStream) rather than a single one (Invoke).
 	Streaming bool

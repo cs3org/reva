@@ -21,6 +21,7 @@ package invoke
 import (
 	"context"
 	"errors"
+	"strings"
 	"testing"
 )
 
@@ -132,5 +133,22 @@ func TestUnknownTarget(t *testing.T) {
 	}
 	if !HasInvocations() {
 		t.Fatal("HasInvocations should be true once anything is registered")
+	}
+}
+
+// TestMetadataAdvertisesSharedInvocations checks that the registry metadata
+// lists every invocation and, apart, the shared ones.
+func TestMetadataAdvertisesSharedInvocations(t *testing.T) {
+	set := NewSet()
+	set.Add("mine", "").Handle(nil)
+	set.Add("ours", "").Shared().Handle(nil)
+	RegisterInstance("127.0.0.1:9201/meta", "meta", nil, set, nil)
+
+	meta := Metadata("127.0.0.1:9201/meta")
+	if got := meta[MetaSharedInvocations]; got != "ours" {
+		t.Fatalf("expected only %q shared, got %q", "ours", got)
+	}
+	if !strings.HasSuffix(meta[MetaInvocations], ",mine,ours") {
+		t.Fatalf("expected all invocations advertised, got %q", meta[MetaInvocations])
 	}
 }

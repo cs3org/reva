@@ -50,19 +50,20 @@ func (s *svc) InvokeStream(req *adminpb.InvokeRequest, stream adminpb.AdminAPI_I
 		return status.Errorf(codes.NotFound, "admin: resolving %q: %v", req.Service, err)
 	}
 
+	groups := client.Route(eps, req.Invocation)
 	admin.Audit(ctx, admin.AuditEvent{Action: "invoke-stream", Actor: actorName(ctx), Target: req.Service,
-		Fields: map[string]string{"invocation": req.Invocation, "selector": req.Service, "instances": strconv.Itoa(len(eps))}})
+		Fields: map[string]string{"invocation": req.Invocation, "selector": req.Service, "instances": strconv.Itoa(len(groups))}})
 
-	// One goroutine per endpoint feeds a shared channel, closed when all are
-	// done.
+	// One goroutine per routed group feeds a shared channel, closed when all
+	// are done.
 	items := make(chan *adminpb.InvokeStreamResponse)
 	var wg sync.WaitGroup
-	for _, ep := range eps {
+	for _, g := range groups {
 		wg.Add(1)
-		go func(ep client.Endpoint) {
+		go func(g []client.Endpoint) {
 			defer wg.Done()
-			streamUpstream(ctx, ep, req.Invocation, req.Args, items)
-		}(ep)
+			streamUpstream(ctx, client.Pick(ctx, g), req.Invocation, req.Args, items)
+		}(g)
 	}
 	go func() { wg.Wait(); close(items) }()
 

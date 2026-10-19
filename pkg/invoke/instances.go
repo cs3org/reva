@@ -28,6 +28,11 @@ import (
 // names (comma-separated), so catalogs can be answered without dialing.
 const MetaInvocations = "invocations"
 
+// MetaSharedInvocations is the registry metadata key holding the names of a
+// node's ScopeShared invocations (comma-separated), so the caller can send each
+// of them to one instance only.
+const MetaSharedInvocations = "shared_invocations"
+
 // instance is one service instance in this process, addressed by its registry
 // node id. inv holds the service's own operations, or is nil; activity is the
 // instance's request counter, shared with the server's interceptor (nil if none

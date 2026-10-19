@@ -125,6 +125,10 @@ func (b *Builder) Mutating() *Builder { b.m.spec.Kind = KindMutating; return b }
 // Dangerous marks the invocation as warranting a confirmation prompt.
 func (b *Builder) Dangerous() *Builder { b.m.spec.Kind = KindDangerous; return b }
 
+// Shared marks the invocation as acting on state that all instances share, so
+// one instance per service runs it.
+func (b *Builder) Shared() *Builder { b.m.spec.Scope = ScopeShared; return b }
+
 // Stream marks the invocation as producing a stream of results (implied by
 // HandleStream).
 func (b *Builder) Stream() *Builder { b.m.spec.Streaming = true; return b }
