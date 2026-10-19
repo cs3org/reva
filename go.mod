@@ -33,7 +33,6 @@ require (
 	github.com/google/uuid v1.6.0
 	github.com/grpc-ecosystem/go-grpc-middleware v1.4.0
 	github.com/grpc-ecosystem/go-grpc-middleware/providers/prometheus v1.1.0
-	github.com/jcmturner/goidentity/v6 v6.0.1
 	github.com/jcmturner/gokrb5/v8 v8.4.4
 	github.com/jedib0t/go-pretty v4.3.0+incompatible
 	github.com/juliangruber/go-intersect v1.1.0
@@ -68,7 +67,7 @@ require (
 	go.step.sm/crypto v0.91.0
 	golang.org/x/crypto v0.57.0
 	golang.org/x/oauth2 v0.37.0
-	golang.org/x/sync v0.23.0
+	golang.org/x/sync v0.24.0
 	golang.org/x/sys v0.48.0
 	golang.org/x/term v0.46.0
 	golang.org/x/time v0.16.0
@@ -118,6 +117,7 @@ require (
 	github.com/jcmturner/aescts/v2 v2.0.0 // indirect
 	github.com/jcmturner/dnsutils/v2 v2.0.0 // indirect
 	github.com/jcmturner/gofork v1.7.6 // indirect
+	github.com/jcmturner/goidentity/v6 v6.0.1 // indirect
 	github.com/jcmturner/rpc/v2 v2.0.3 // indirect
 	github.com/jinzhu/inflection v1.0.0 // indirect
 	github.com/jinzhu/now v1.1.5 // indirect
