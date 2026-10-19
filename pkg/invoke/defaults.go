@@ -25,9 +25,8 @@ import "context"
 // invocation of the same name.
 type defaultInvocation struct {
 	spec   InvocationSpec
-	args   []argDecl
-	fn     func(ctx context.Context, inst instance, args Args) (Result, error)
-	stream func(ctx context.Context, inst instance, args Args, emit StreamEmit) error
+	fn     func(ctx context.Context, inst instance, raw map[string]any) (Result, error)
+	stream func(ctx context.Context, inst instance, raw map[string]any, emit StreamEmit) error
 }
 
 // defaults are the built-in invocations, in registration order. Each registers
@@ -35,9 +34,30 @@ type defaultInvocation struct {
 // file, not a dispatch edit.
 var defaults []defaultInvocation
 
-// registerDefault records a built-in invocation.
-func registerDefault(d defaultInvocation) {
-	d.spec.Args = specsOf(d.args)
+// registerDefault records a built-in invocation. Like Typed, fn and stream
+// take their arguments as the struct A; either one can be nil.
+func registerDefault[A any](spec InvocationSpec, fn func(context.Context, instance, A) (Result, error), stream func(context.Context, instance, A, StreamEmit) error) {
+	fields := argFields[A]()
+	spec.Args = specsOf(fields)
+	d := defaultInvocation{spec: spec}
+	if fn != nil {
+		d.fn = func(ctx context.Context, inst instance, raw map[string]any) (Result, error) {
+			a, err := bind[A](fields, raw)
+			if err != nil {
+				return nil, err
+			}
+			return fn(ctx, inst, a)
+		}
+	}
+	if stream != nil {
+		d.stream = func(ctx context.Context, inst instance, raw map[string]any, emit StreamEmit) error {
+			a, err := bind[A](fields, raw)
+			if err != nil {
+				return err
+			}
+			return stream(ctx, inst, a, emit)
+		}
+	}
 	defaults = append(defaults, d)
 }
 
