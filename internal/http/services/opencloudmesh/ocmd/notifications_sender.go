@@ -31,30 +31,24 @@ import (
 )
 
 // OutgoingNotification is a notification this server sends. Its
-// SharedSecret is only written to the wire; every log and string form of
-// the notification redacts it.
+// SharedSecret is only written to the wire.
 type OutgoingNotification struct {
 	Type         string
 	SenderDomain string
 	ResourceType string
 	ShareType    string
-	// EnvelopeProviderID duplicates notification.file.providerId in the
-	// deprecated top-level providerId. This is the temporary
-	// DEV-NC-PROVIDERID deviation for share-state notices: peers still on
-	// the dated Nextcloud receiver require it. Retire it together with the
-	// Nextcloud notification rework.
+	// EnvelopeProviderID also sends the deprecated top-level providerId,
+	// which current Nextcloud receivers need (DEV-NC-PROVIDERID, temporary).
 	EnvelopeProviderID bool
 	Message            string
 	SharedSecret       NotificationSecret
 	File               *NotificationFile
 }
 
-// String implements fmt.Stringer without payload values.
 func (n OutgoingNotification) String() string {
 	return "outgoing notification{type=" + n.Type + "}"
 }
 
-// GoString implements fmt.GoStringer.
 func (n OutgoingNotification) GoString() string { return n.String() }
 
 type wireNotificationBody struct {
@@ -96,19 +90,14 @@ func (n *OutgoingNotification) wireBody() ([]byte, error) {
 	return json.Marshal(w)
 }
 
-// ShareStateNotification is the payload of the share-state notices. The
-// providerId is the identifier the provider assigned to the share: for
-// SHARE_UNSHARED and SHARE_CHANGE_PERMISSION it is this server's own share
-// ID, for SHARE_ACCEPTED and SHARE_DECLINED it is the remote share ID that
-// the provider sent. The optional secret is the share's protocol secret:
-// the outgoing token for SHARE_UNSHARED, the received secret for
-// SHARE_ACCEPTED and SHARE_DECLINED. Permissions are only sent with
-// SHARE_CHANGE_PERMISSION.
+// ShareStateNotification is the payload of the share-state notices.
 type ShareStateNotification struct {
 	Type         string
 	SenderDomain string
 	ResourceType string
 	ShareType    string
+	// ProviderID is always the ID the provider assigned to the share: our own
+	// ID when we are the provider, the received remote ID otherwise.
 	ProviderID   string
 	SharedSecret string
 	Permissions  []string
@@ -192,10 +181,8 @@ func (t ocmNotificationTransport) PostNotification(ctx context.Context, endpoint
 	return resp.StatusCode, resp.Header, nil
 }
 
-// NewNotification sends one notification to the OCM server at domain, if it
-// advertises the notifications capability. It is attempted exactly once:
-// there is no retry, queue or re-publish, and the result never undoes the
-// change that caused the notification. The caller logs or ignores it.
+// NewNotification sends a notification to the OCM server at domain if it
+// advertises the notifications capability. It is attempted at most once.
 // https://cs3org.github.io/OCM-API/docs.html?branch=develop&repo=OCM-API&user=cs3org#/paths/~1notifications/post
 func (c *OCMClient) NewNotification(ctx context.Context, domain string, n *OutgoingNotification) SendResult {
 	log := appctx.GetLogger(ctx)
@@ -218,8 +205,8 @@ func (c *OCMClient) NewNotification(ctx context.Context, domain string, n *Outgo
 	if res.Class != 0 {
 		event = event.Int("class", int(res.Class))
 	}
-	if res.RetryAfter != "" {
-		event = event.Str("retry_after", res.RetryAfter)
+	if res.RetryAfter > 0 {
+		event = event.Dur("retry_after", res.RetryAfter)
 	}
 	if res.Err != nil {
 		event = event.Str("error", res.Err.Error())
