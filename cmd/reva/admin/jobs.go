@@ -41,6 +41,7 @@ Subcommands:
   jobs runs                     durable run history from the store
   jobs status <run-id>          one run's full status
   jobs logs <run-id>            one run's recent log lines, from every service it called (fan-out)
+  jobs -job <name> logs         the recent log lines of every run of a job (fan-out)
   jobs run <job> [k=v ...]      enqueue an on-demand run
   jobs trigger <job>            run a periodic job now
   jobs cancel <run-id>          cancel a run
@@ -50,11 +51,11 @@ Subcommands:
 Flags (before the subcommand):
   -admin-host <addr>   admin gRPC endpoint, persisted
   -owner <user>        runs: filter by owner; run: attribute the run to a user
-  -job <name>          runs: filter by job
+  -job <name>          runs: filter by job; logs: show this job
   -state <s,...>       runs: filter by states (queued,running,succeeded,failed,cancelled,aborted)
   -internal            runs: only internal (ownerless) runs
   -n <N>               runs: max rows; logs: lines per instance (default 50)
-  -f                   logs: follow until the run succeeds or is cancelled
+  -f                   logs: follow (a run until it succeeds or is cancelled, a job until interrupted)
   -o <text|json>       logs: output format (default text)
 `
 
@@ -65,7 +66,7 @@ func adminJobsCommand() *command {
 	cmd.FlagSet.Usage = func() { fmt.Fprint(cmd.Output(), jobsHelp) }
 	adminHost := cmd.String("admin-host", "", "address of the admin gRPC endpoint (persisted)")
 	owner := cmd.String("owner", "", "runs: filter by owner; run: attribute to a user")
-	jobFilter := cmd.String("job", "", "runs: filter by job")
+	jobFilter := cmd.String("job", "", "runs: filter by job; logs: show this job")
 	stateFilter := cmd.String("state", "", "runs: filter by states (comma-separated)")
 	internal := cmd.Bool("internal", false, "runs: only internal (ownerless) runs")
 	n := cmd.Int("n", 50, "runs: max rows; logs: lines per instance")
@@ -95,7 +96,7 @@ func adminJobsCommand() *command {
 		case "status":
 			return jobsStatus(ctx, client, rest)
 		case "logs":
-			return jobsLogs(ctx, client, rest, *n, *follow, *output)
+			return jobsLogs(ctx, client, rest, *jobFilter, *n, *follow, *output)
 		case "run":
 			return jobsRun(ctx, client, rest, *owner)
 		case "trigger":
@@ -233,12 +234,19 @@ func jobsStatus(ctx context.Context, client adminpb.AdminAPIClient, args []strin
 	return nil
 }
 
-func jobsLogs(ctx context.Context, client adminpb.AdminAPIClient, args []string, limit int, follow bool, output string) error {
-	if len(args) < 1 {
-		return errors.New("Usage: admin jobs [-f] [-n N] [-o text|json] logs <run-id>")
+func jobsLogs(ctx context.Context, client adminpb.AdminAPIClient, args []string, job string, limit int, follow bool, output string) error {
+	if (len(args) < 1) == (job == "") {
+		return errors.New("Usage: admin jobs [-f] [-n N] [-o text|json] logs <run-id>\n       admin jobs [-f] [-n N] [-o text|json] -job <name> logs")
 	}
 	if output != "text" && output != "json" {
 		return fmt.Errorf("unknown -o %q (use text or json)", output)
+	}
+	if job != "" {
+		logArgs := map[string]string{"limit": strconv.Itoa(limit), "job": job}
+		if follow {
+			return followLogs(ctx, client, "*", logArgs, output, true)
+		}
+		return snapshotLogs(ctx, client, "*", logArgs, output, true)
 	}
 	// The runner uses the run id as the trace id of the job, so a grep for it
 	// also finds the lines of the services that the job called.

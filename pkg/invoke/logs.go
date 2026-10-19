@@ -36,6 +36,7 @@ type logsArgs struct {
 	Since   time.Time `arg:"since" help:"only lines newer than a duration (e.g. 5m) or an RFC3339 time"`
 	Limit   int       `arg:"limit" help:"max lines for a snapshot, or backlog before a follow"`
 	Grep    string    `arg:"grep" help:"keep only lines containing this substring"`
+	Job     string    `arg:"job" help:"keep only lines of this background job"`
 	All     bool      `arg:"all" help:"the whole process, not just this service (true|false)"`
 	Service *string   `arg:"service" help:"only this service, not the instance's own"`
 }
@@ -113,6 +114,7 @@ func logFilter(inst instance, a logsArgs) logtail.Filter {
 	}
 	return logtail.Filter{
 		Service:  service,
+		Job:      a.Job,
 		MinLevel: a.Level,
 		Grep:     a.Grep,
 		Limit:    a.Limit,
