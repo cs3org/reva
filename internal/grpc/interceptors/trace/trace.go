@@ -40,6 +40,11 @@ import (
 // the caller's. Preferring the span would drop the id of every caller that
 // traces without OTel.
 func getContext(ctx context.Context) context.Context {
+	if md, ok := metadata.FromIncomingContext(ctx); ok {
+		if val := md["revad-grpc-job"]; len(val) > 0 && val[0] != "" {
+			ctx = revatrace.SetJob(ctx, val[0])
+		}
+	}
 	if id := revatrace.Get(ctx); id != "" {
 		return ctx
 	}
@@ -80,6 +85,9 @@ func NewUnaryClientInterceptor() grpc.UnaryClientInterceptor {
 		if traceID := revatrace.Get(ctx); traceID != "" {
 			ctx = metadata.AppendToOutgoingContext(ctx, "revad-grpc-trace-id", traceID)
 		}
+		if job := revatrace.GetJob(ctx); job != "" {
+			ctx = metadata.AppendToOutgoingContext(ctx, "revad-grpc-job", job)
+		}
 		return invoker(ctx, method, req, reply, cc, opts...)
 	}
 }
@@ -90,6 +98,9 @@ func NewStreamClientInterceptor() grpc.StreamClientInterceptor {
 	return func(ctx context.Context, desc *grpc.StreamDesc, cc *grpc.ClientConn, method string, streamer grpc.Streamer, opts ...grpc.CallOption) (grpc.ClientStream, error) {
 		if traceID := revatrace.Get(ctx); traceID != "" {
 			ctx = metadata.AppendToOutgoingContext(ctx, "revad-grpc-trace-id", traceID)
+		}
+		if job := revatrace.GetJob(ctx); job != "" {
+			ctx = metadata.AppendToOutgoingContext(ctx, "revad-grpc-job", job)
 		}
 		return streamer(ctx, desc, cc, method, opts...)
 	}
