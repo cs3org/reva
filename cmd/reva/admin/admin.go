@@ -50,6 +50,7 @@ var adminCommands = []*command{
 	adminInvokeCommand(),
 	adminLogsCommand(),
 	adminJobsCommand(),
+	adminRemindersCommand(),
 	adminTraceCommand(),
 	adminStackCommand(),
 	adminImpersonateCommand(),
