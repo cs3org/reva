@@ -77,6 +77,19 @@ func TestReadFiltersAndTruncation(t *testing.T) {
 	}
 }
 
+func TestReadFiltersByJob(t *testing.T) {
+	b := New(100)
+	now := time.Now().UTC().Format(time.RFC3339Nano)
+	_, _ = fmt.Fprintf(b, `{"level":"info","time":%q,"job":"takeout","message":"a"}`+"\n", now)
+	_, _ = fmt.Fprintf(b, `{"level":"info","time":%q,"job":"takeout.export","message":"b"}`+"\n", now)
+	writeLine(b, "info", "svc", "no job")
+
+	// The match is exact, so a job name does not match a longer one.
+	if got, _ := b.Read(Filter{Job: "takeout"}); len(got) != 1 || got[0].Message != "a" {
+		t.Fatalf("job filter: got %+v", got)
+	}
+}
+
 func TestReadAndSubscribeBacklogThenLive(t *testing.T) {
 	b := New(100)
 	writeLine(b, "info", "svc", "old-1")

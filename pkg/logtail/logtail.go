@@ -35,14 +35,16 @@ type Entry struct {
 	Time    time.Time
 	Level   string
 	Service string
+	Job     string
 	Message string
 	JSON    []byte
 }
 
-// Filter selects entries by service, minimum level, lower time bound and raw
-// substring, capped at Limit (0 = default).
+// Filter selects entries by service, job, minimum level, lower time bound and
+// raw substring, capped at Limit (0 = default).
 type Filter struct {
 	Service  string
+	Job      string
 	MinLevel string
 	Grep     string
 	Since    time.Time
@@ -205,6 +207,9 @@ func matches(e Entry, f Filter) bool {
 	if f.Service != "" && e.Service != f.Service {
 		return false
 	}
+	if f.Job != "" && e.Job != f.Job {
+		return false
+	}
 	if f.MinLevel != "" && levelRank(e.Level) < levelRank(f.MinLevel) {
 		return false
 	}
@@ -245,6 +250,7 @@ type rawLine struct {
 	Time    string `json:"time"`
 	Message string `json:"message"`
 	Service string `json:"service"`
+	Job     string `json:"job"`
 }
 
 // parse extracts the filterable fields from a JSON log line. Unparseable lines
@@ -256,7 +262,7 @@ func parse(raw []byte) Entry {
 	if err != nil {
 		t = time.Now()
 	}
-	return Entry{Time: t, Level: r.Level, Service: r.Service, Message: r.Message, JSON: raw}
+	return Entry{Time: t, Level: r.Level, Service: r.Service, Job: r.Job, Message: r.Message, JSON: raw}
 }
 
 // droppedNotice is the synthetic warn entry a follower receives after n lines

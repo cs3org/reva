@@ -26,6 +26,8 @@ import (
 
 type key struct{}
 
+type jobKey struct{}
+
 func Get(ctx context.Context) (t string) {
 	t, _ = ctx.Value(key{}).(string)
 	return
@@ -38,4 +40,16 @@ func Generate() string {
 // ContextSetTrace stores the trace in the context.
 func Set(ctx context.Context, trace string) context.Context {
 	return context.WithValue(ctx, key{}, trace)
+}
+
+// GetJob returns the name of the background job that caused the request.
+func GetJob(ctx context.Context) (job string) {
+	job, _ = ctx.Value(jobKey{}).(string)
+	return
+}
+
+// SetJob stores the name of the background job in the context. It goes to
+// other services with the trace id, so their logs can be filtered by job.
+func SetJob(ctx context.Context, job string) context.Context {
+	return context.WithValue(ctx, jobKey{}, job)
 }
