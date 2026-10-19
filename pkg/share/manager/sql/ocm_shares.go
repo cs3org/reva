@@ -443,10 +443,12 @@ func (m *mgr) StoreReceivedShare(ctx context.Context, s *ocm.ReceivedShare) (*oc
 	if !ok {
 		return nil, share.ErrInvalidGrantIdentity
 	}
-	if _, err := share.GrantKey(origin, s.RemoteShareId); err != nil {
+	key, err := share.GrantKey(origin, s.RemoteShareId)
+	if err != nil {
 		return nil, err
 	}
-	if err := m.transact(ctx, func(tx *gorm.DB) error {
+	shareWith := s.Grantee.GetUserId().GetOpaqueId()
+	if err := m.transact(ctx, "store_received_share", func(tx *gorm.DB) error {
 		ident, err := ensureIdentity(tx, origin, s.RemoteShareId)
 		if err != nil {
 			return err
@@ -460,7 +462,7 @@ func (m *mgr) StoreReceivedShare(ctx context.Context, s *ocm.ReceivedShare) (*oc
 			Name:          s.Name,
 			RemoteShareID: s.RemoteShareId,
 			ItemType:      convertFromCS3ResourceType(s.SharedResourceType),
-			ShareWith:     s.Grantee.GetUserId().OpaqueId,
+			ShareWith:     shareWith,
 			Owner:         formatUserID(s.Owner),
 			Initiator:     formatUserID(s.Creator),
 			Ctime:         s.Ctime.Seconds,
@@ -501,6 +503,16 @@ func (m *mgr) StoreReceivedShare(ctx context.Context, s *ocm.ReceivedShare) (*oc
 
 		s.Id = &ocm.ShareId{OpaqueId: fmt.Sprintf("%d", receivedShare.ID)}
 		return nil
+	}, func(db *gorm.DB) (share.CommitObservation, error) {
+		// Another creation of the same grant would match as well.
+		var n int64
+		if err := db.Model(&model.OcmReceivedShare{}).Where("grant_key = ? AND share_with = ?", key, shareWith).Count(&n).Error; err != nil {
+			return "", err
+		}
+		if n > 0 {
+			return share.CommitObservedRequested, nil
+		}
+		return share.CommitObservedPrevious, nil
 	}); err != nil {
 		return nil, err
 	}
@@ -710,7 +722,9 @@ func (m *mgr) UpdateReceivedShare(ctx context.Context, user *userpb.User, s *ocm
 		return nil, err
 	}
 	var receipt share.ReceivedShareUpdate
-	err = m.transact(ctx, func(tx *gorm.DB) error {
+	var prev model.OcmReceivedShare
+	var attempt map[string]any
+	err = m.transact(ctx, "update_received_share", func(tx *gorm.DB) error {
 		row, before, ident, err := lockReceivedWithIdentity(tx, user, s.Id)
 		if err != nil {
 			return err
@@ -718,8 +732,9 @@ func (m *mgr) UpdateReceivedShare(ctx context.Context, user *userpb.User, s *ocm
 		if withdrawn(ident) {
 			return share.ErrShareWithdrawn
 		}
+		prev = *row
 		// A fresh copy per attempt, so a retry never reuses a stale value.
-		attempt := maps.Clone(updates)
+		attempt = maps.Clone(updates)
 		if state, ok := attempt["state"]; ok && state != row.State {
 			gen, err := nextTransferGeneration(row.TransferGeneration)
 			if err != nil {
@@ -736,11 +751,38 @@ func (m *mgr) UpdateReceivedShare(ctx context.Context, user *userpb.User, s *ocm
 		}
 		receipt = share.ReceivedShareUpdate{Before: before, After: after}
 		return nil
+	}, func(db *gorm.DB) (share.CommitObservation, error) {
+		return observeReceived(db, prev.ID, func(r model.OcmReceivedShare) bool {
+			return receivedMatches(r, attempt)
+		}, func(r model.OcmReceivedShare) bool {
+			return r.State == prev.State && r.Hidden == prev.Hidden && r.TransferGeneration == prev.TransferGeneration
+		})
 	})
 	if err != nil {
 		return nil, err
 	}
 	return &receipt, nil
+}
+
+// receivedMatches reports whether a row holds the updated column values.
+func receivedMatches(r model.OcmReceivedShare, updates map[string]any) bool {
+	for k, v := range updates {
+		switch k {
+		case "state":
+			if r.State != v {
+				return false
+			}
+		case "hidden":
+			if r.Hidden != v {
+				return false
+			}
+		case "transfer_generation":
+			if r.TransferGeneration != v {
+				return false
+			}
+		}
+	}
+	return true
 }
 
 // StartReceivedShareTransfer moves a share that is neither transferring nor
@@ -759,7 +801,9 @@ func (m *mgr) StartReceivedShareTransfer(ctx context.Context, user *userpb.User,
 		return nil, err
 	}
 	var receipt share.TransferStart
-	err = m.transact(ctx, func(tx *gorm.DB) error {
+	var prev model.OcmReceivedShare
+	var attempt map[string]any
+	err = m.transact(ctx, "start_transfer", func(tx *gorm.DB) error {
 		row, _, ident, err := lockReceivedWithIdentity(tx, user, s.Id)
 		if err != nil {
 			return err
@@ -777,7 +821,8 @@ func (m *mgr) StartReceivedShareTransfer(ctx context.Context, user *userpb.User,
 		if err != nil {
 			return err
 		}
-		attempt := maps.Clone(updates)
+		prev = *row
+		attempt = maps.Clone(updates)
 		attempt["transfer_generation"] = gen
 		if err := tx.Model(&model.OcmReceivedShare{}).Where("id = ?", row.ID).Updates(attempt).Error; err != nil {
 			return err
@@ -788,6 +833,13 @@ func (m *mgr) StartReceivedShareTransfer(ctx context.Context, user *userpb.User,
 		}
 		receipt = share.TransferStart{Share: after, Generation: gen}
 		return nil
+	}, func(db *gorm.DB) (share.CommitObservation, error) {
+		// A matching attempt may still belong to another caller.
+		return observeReceived(db, prev.ID, func(r model.OcmReceivedShare) bool {
+			return receivedMatches(r, attempt)
+		}, func(r model.OcmReceivedShare) bool {
+			return r.State == prev.State && r.TransferGeneration == prev.TransferGeneration
+		})
 	})
 	if err != nil {
 		return nil, err
@@ -803,7 +855,7 @@ func (m *mgr) CompleteReceivedShareTransfer(ctx context.Context, user *userpb.Us
 		return nil, errtypes.BadRequest("invalid share ID")
 	}
 	var receipt share.ReceivedShareUpdate
-	err = m.transact(ctx, func(tx *gorm.DB) error {
+	err = m.transact(ctx, "complete_transfer", func(tx *gorm.DB) error {
 		_, current, ident, err := lockReceivedWithIdentity(tx, user, id)
 		if err != nil {
 			return err
@@ -835,6 +887,12 @@ func (m *mgr) CompleteReceivedShareTransfer(ctx context.Context, user *userpb.Us
 		before.State = ocm.ShareState_SHARE_STATE_TRANSFERRING
 		receipt = share.ReceivedShareUpdate{Before: before, After: after}
 		return nil
+	}, func(db *gorm.DB) (share.CommitObservation, error) {
+		return observeReceived(db, uint(shareID), func(r model.OcmReceivedShare) bool {
+			return r.State == convertFromCS3OCMShareState(state) && r.TransferGeneration == generation
+		}, func(r model.OcmReceivedShare) bool {
+			return r.State == model.OcmShareStateTransferring && r.TransferGeneration == generation
+		})
 	})
 	if err != nil {
 		return nil, err

@@ -42,6 +42,9 @@ import (
 // a retryable lock conflict.
 const maxTransactionAttempts = 4
 
+// recoveryTimeout bounds the read that follows an unacknowledged commit.
+const recoveryTimeout = 10 * time.Second
+
 // retryable reports lock conflicts that roll the transaction back without
 // changing anything, so running it again is safe.
 func retryable(err error) bool {
@@ -53,18 +56,81 @@ func retryable(err error) bool {
 	return strings.Contains(msg, "database is locked") || strings.Contains(msg, "database table is locked")
 }
 
-// transact runs fn in one transaction, retrying retryable lock conflicts.
-// fn must rebuild any result it returns on every attempt.
-func (m *mgr) transact(ctx context.Context, fn func(tx *gorm.DB) error) error {
-	var err error
-	for attempt := 1; attempt <= maxTransactionAttempts; attempt++ {
-		err = m.db.WithContext(ctx).Transaction(fn)
-		if err == nil || !retryable(err) || ctx.Err() != nil {
+// reconcileFunc reads, outside the failed transaction, whether the change
+// of an unacknowledged commit is durable.
+type reconcileFunc func(db *gorm.DB) (share.CommitObservation, error)
+
+// transact runs fn in one transaction. fn must rebuild any result it returns
+// on every attempt. A failure before the commit rolled the transaction back,
+// so a retryable one runs it again. A failed commit is never run again: it
+// returns a *share.CommitUnknownError after reconcile, if any.
+func (m *mgr) transact(ctx context.Context, op string, fn func(tx *gorm.DB) error, reconcile reconcileFunc) error {
+	for attempt := 1; ; attempt++ {
+		committing, err := m.attempt(ctx, fn)
+		if committing {
+			return m.reconcileCommit(ctx, op, reconcile)
+		}
+		if err == nil || !retryable(err) || attempt == maxTransactionAttempts {
 			return err
 		}
-		time.Sleep(time.Duration(attempt) * 10 * time.Millisecond)
+		select {
+		case <-ctx.Done():
+			return err
+		case <-time.After(time.Duration(attempt) * 10 * time.Millisecond):
+		}
 	}
-	return err
+}
+
+// attempt runs fn once. committing is true when the commit itself failed.
+func (m *mgr) attempt(ctx context.Context, fn func(tx *gorm.DB) error) (committing bool, err error) {
+	tx := m.db.WithContext(ctx).Begin()
+	if tx.Error != nil {
+		return false, tx.Error
+	}
+	done := false
+	defer func() {
+		if !done {
+			tx.Rollback()
+		}
+	}()
+	if err := fn(tx); err != nil {
+		return false, err
+	}
+	done = true
+	if err := tx.Commit().Error; err != nil {
+		return true, err
+	}
+	return false, nil
+}
+
+// observeReceived reads a received share after an unacknowledged commit and
+// compares it with the requested and the previous values.
+func observeReceived(db *gorm.DB, id uint, requested, previous func(model.OcmReceivedShare) bool) (share.CommitObservation, error) {
+	var row model.OcmReceivedShare
+	if err := db.Where("id = ?", id).Take(&row).Error; err != nil {
+		return "", err
+	}
+	switch {
+	case requested(row):
+		return share.CommitObservedRequested, nil
+	case previous(row):
+		return share.CommitObservedPrevious, nil
+	}
+	return share.CommitObservedOther, nil
+}
+
+func (m *mgr) reconcileCommit(ctx context.Context, op string, reconcile reconcileFunc) error {
+	observed := share.CommitObservedUnread
+	if reconcile != nil {
+		rctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), recoveryTimeout)
+		defer cancel()
+		if o, err := reconcile(m.db.WithContext(rctx)); err == nil {
+			observed = o
+		}
+	}
+	appctx.GetLogger(ctx).Error().Str("operation", op).Str("observed", string(observed)).
+		Msg("OCM share commit was not acknowledged; no receipt is returned")
+	return &share.CommitUnknownError{Observed: observed}
 }
 
 // grantOrigin returns the canonical origin of a received share: the domain
@@ -165,7 +231,7 @@ func (m *mgr) WithdrawReceivedGrant(ctx context.Context, w *share.GrantWithdrawa
 	itemType := convertFromCS3ResourceType(w.ResourceType)
 
 	var receipt share.GrantWithdrawalReceipt
-	err = m.transact(ctx, func(tx *gorm.DB) error {
+	err = m.transact(ctx, "withdraw_grant", func(tx *gorm.DB) error {
 		receipt = share.GrantWithdrawalReceipt{}
 		ident, err := lockIdentityByKey(tx, key, origin, w.RemoteShareID)
 		if err != nil || ident == nil {
@@ -214,6 +280,15 @@ func (m *mgr) WithdrawReceivedGrant(ctx context.Context, w *share.GrantWithdrawa
 			receipt.Shares = append(receipt.Shares, after)
 		}
 		return nil
+	}, func(db *gorm.DB) (share.CommitObservation, error) {
+		var ident model.OcmGrantIdentity
+		if err := db.Where("grant_key = ?", key).Take(&ident).Error; err != nil {
+			return "", err
+		}
+		if ident.WithdrawnAt.Valid {
+			return share.CommitObservedRequested, nil
+		}
+		return share.CommitObservedPrevious, nil
 	})
 	if err != nil {
 		return nil, err
@@ -266,7 +341,7 @@ func (m *mgr) backfillGrantIdentities(ctx context.Context) (backfillReport, erro
 			continue
 		}
 		bound, conflict := 0, false
-		err := m.transact(ctx, func(tx *gorm.DB) error {
+		err := m.transact(ctx, "bind_grant_identity", func(tx *gorm.DB) error {
 			bound, conflict = 0, false
 			ident, err := ensureIdentity(tx, g.origin, g.remote)
 			if err != nil {
@@ -300,7 +375,7 @@ func (m *mgr) backfillGrantIdentities(ctx context.Context) (backfillReport, erro
 			}
 			bound = int(res.RowsAffected)
 			return nil
-		})
+		}, nil)
 		if err != nil {
 			return report, err
 		}

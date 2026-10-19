@@ -45,6 +45,33 @@ var ErrShareWithdrawn = errtypes.Conflict(WithdrawnShareMessage)
 // cannot form a grant identity.
 var ErrInvalidGrantIdentity = errtypes.BadRequest("invalid grant identity")
 
+// ErrCommitUnknown is returned when a change was sent for commit but the
+// commit was not acknowledged. The change may be durable; it has no receipt.
+var ErrCommitUnknown = errtypes.InternalError("the outcome of the change is unknown")
+
+// CommitObservation is the durable state read after an unacknowledged
+// commit. A state equal to the requested one does not prove that this
+// caller made the change.
+type CommitObservation string
+
+const (
+	CommitObservedRequested CommitObservation = "requested_state"
+	CommitObservedPrevious  CommitObservation = "previous_state"
+	CommitObservedOther     CommitObservation = "other_state"
+	CommitObservedUnread    CommitObservation = "unread"
+)
+
+// CommitUnknownError is an ErrCommitUnknown with the state read afterwards.
+type CommitUnknownError struct {
+	Observed CommitObservation
+}
+
+func (e *CommitUnknownError) Error() string {
+	return ErrCommitUnknown.Error() + " (" + string(e.Observed) + ")"
+}
+
+func (e *CommitUnknownError) Is(target error) bool { return target == ErrCommitUnknown }
+
 // ErrGrantIdentityMismatch is returned when a stored identity record does
 // not hold exactly the fields its key was computed from. It fails closed.
 var ErrGrantIdentityMismatch = errtypes.InternalError("grant identity record does not match its key")
