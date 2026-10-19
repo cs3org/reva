@@ -209,6 +209,23 @@ func (m *ShareMgr) UpdateShare(ctx context.Context, ref *collaboration.ShareRefe
 	return m.GetShare(ctx, ref)
 }
 
+// ExpiringShares returns at most limit shares, not orphans, that expire in
+// [from, to), ordered by expiration and id, after the share with
+// afterExpiration and afterID. An afterID of 0 starts from the first share.
+func (m *ShareMgr) ExpiringShares(from, to, afterExpiration time.Time, afterID uint, limit int) ([]model.Share, error) {
+	// sqlite compares times as text, and the shares are stored in local time.
+	from, to, afterExpiration = from.Local(), to.Local(), afterExpiration.Local()
+	query := m.db.Model(&model.Share{}).
+		Where("orphan = ? AND orphaned_at IS NULL", false).
+		Where("expiration >= ? AND expiration < ?", from, to)
+	if afterID != 0 {
+		query = query.Where("(expiration > ? OR (expiration = ? AND id > ?))", afterExpiration, afterExpiration, afterID)
+	}
+	var shares []model.Share
+	err := query.Order("expiration, id").Limit(limit).Find(&shares).Error
+	return shares, err
+}
+
 func (m *ShareMgr) ListShares(ctx context.Context, filters []*collaboration.Filter) ([]*collaboration.Share, error) {
 	shares, err := m.ListModelShares(nil, filters, true)
 	if err != nil {
