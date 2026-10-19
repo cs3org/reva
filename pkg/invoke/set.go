@@ -38,10 +38,11 @@ type StreamHandler struct {
 
 // Typed makes a Handler from fn, which takes its arguments as the struct A.
 // Each argument is a field with an `arg:"name"` tag (`arg:"name,required"` if
-// it is required) and a `help` tag. The field type is string, bool, int,
-// time.Duration or time.Time, or a pointer to one, which is nil when the
-// argument is absent. A time is RFC3339, or a duration that means that long
-// ago. Use struct{} for no arguments.
+// it is required) and a `help` tag. The field type is a string, bool, integer
+// or float kind, time.Duration, time.Time, or an encoding.TextUnmarshaler; a
+// slice of one of these takes comma-separated values, and a pointer to one is
+// nil when the argument is absent. A time is RFC3339, or a duration that means
+// that long ago. Use struct{} for no arguments.
 func Typed[A any](fn func(ctx context.Context, args A) (Result, error)) Handler {
 	fields := argFields[A]()
 	return Handler{

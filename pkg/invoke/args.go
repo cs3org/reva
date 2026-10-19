@@ -19,6 +19,7 @@
 package invoke
 
 import (
+	"encoding"
 	"fmt"
 	"reflect"
 	"strconv"
@@ -33,8 +34,9 @@ type argField struct {
 }
 
 var (
-	durationType = reflect.TypeFor[time.Duration]()
-	timeType     = reflect.TypeFor[time.Time]()
+	durationType        = reflect.TypeFor[time.Duration]()
+	timeType            = reflect.TypeFor[time.Time]()
+	textUnmarshalerType = reflect.TypeFor[encoding.TextUnmarshaler]()
 )
 
 // argFields reads the argument fields of the struct A: the fields with an `arg`
@@ -65,17 +67,26 @@ func argFields[A any]() []argField {
 }
 
 // parsable reports whether an argument can have type t. A pointer is nil when
-// the argument is absent.
+// the argument is absent, and a slice takes comma-separated values.
 func parsable(t reflect.Type) bool {
 	if t.Kind() == reflect.Pointer {
 		t = t.Elem()
 	}
-	switch t {
-	case durationType, timeType:
+	return scalar(t) || t.Kind() == reflect.Slice && scalar(t.Elem())
+}
+
+// scalar reports whether one value of type t can be parsed from a string.
+func scalar(t reflect.Type) bool {
+	// Check before the kinds: a named type can parse itself, and
+	// time.Duration is an int64.
+	if t == durationType || t == timeType || reflect.PointerTo(t).Implements(textUnmarshalerType) {
 		return true
 	}
 	switch t.Kind() {
-	case reflect.String, reflect.Bool, reflect.Int:
+	case reflect.String, reflect.Bool,
+		reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64,
+		reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64,
+		reflect.Float32, reflect.Float64:
 		return true
 	}
 	return false
@@ -132,6 +143,25 @@ func parseArg(t reflect.Type, raw any) (reflect.Value, error) {
 	if !ok {
 		return reflect.Value{}, fmt.Errorf("want %s, got %T", t, raw)
 	}
+	if scalar(t) {
+		return parseScalar(t, s)
+	}
+	out := reflect.MakeSlice(t, 0, 0)
+	for e := range strings.SplitSeq(s, ",") {
+		if e = strings.TrimSpace(e); e == "" {
+			continue
+		}
+		v, err := parseScalar(t.Elem(), e)
+		if err != nil {
+			return reflect.Value{}, err
+		}
+		out = reflect.Append(out, v)
+	}
+	return out, nil
+}
+
+// parseScalar converts one string to type t.
+func parseScalar(t reflect.Type, s string) (reflect.Value, error) {
 	var v any
 	var err error
 	switch {
@@ -141,12 +171,25 @@ func parseArg(t reflect.Type, raw any) (reflect.Value, error) {
 		if v, err = parseTime(s); err != nil {
 			return reflect.Value{}, err
 		}
-	case t.Kind() == reflect.String:
-		v = s
-	case t.Kind() == reflect.Bool:
-		v, err = strconv.ParseBool(s)
-	case t.Kind() == reflect.Int:
-		v, err = strconv.Atoi(s)
+	case reflect.PointerTo(t).Implements(textUnmarshalerType):
+		p := reflect.New(t)
+		if err := p.Interface().(encoding.TextUnmarshaler).UnmarshalText([]byte(s)); err != nil {
+			return reflect.Value{}, fmt.Errorf("%q: %w", s, err)
+		}
+		return p.Elem(), nil
+	default:
+		switch t.Kind() {
+		case reflect.String:
+			v = s
+		case reflect.Bool:
+			v, err = strconv.ParseBool(s)
+		case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
+			v, err = strconv.ParseInt(s, 10, t.Bits())
+		case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
+			v, err = strconv.ParseUint(s, 10, t.Bits())
+		case reflect.Float32, reflect.Float64:
+			v, err = strconv.ParseFloat(s, t.Bits())
+		}
 	}
 	if err != nil {
 		return reflect.Value{}, fmt.Errorf("%q is not a valid %s", s, t)
