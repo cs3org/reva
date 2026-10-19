@@ -23,7 +23,6 @@ import (
 	"maps"
 	"net"
 	"os"
-	"strings"
 	"time"
 
 	"github.com/cs3org/reva/v3/cmd/revad/pkg/config"
@@ -99,9 +98,7 @@ func (r *Reva) addServerlessNodes(msg string) {
 			registry.MetaLastSeen:  time.Now().UTC().Format(time.RFC3339),
 			registry.MetaControl:   r.controlAddr,
 		}
-		if names := invoke.InvocationNames(id); len(names) > 0 {
-			meta[invoke.MetaInvocations] = strings.Join(names, ",")
-		}
+		maps.Copy(meta, invoke.Metadata(id))
 		node := registry.NewNode(id, "", meta) // no listen address for serverless
 		if err := r.registry.Add(registry.NewService(si.name, []registry.Node{node})); err != nil {
 			r.log.Error().Err(err).Str("service", si.name).Msg("failed to register serverless service")
@@ -181,9 +178,7 @@ func nodeMetadata(srv *Server, id, hostname string, pid int, impl any) map[strin
 			meta[registry.MetaPrefix] = hs.Prefix()
 		}
 	}
-	if names := invoke.InvocationNames(id); len(names) > 0 {
-		meta[invoke.MetaInvocations] = strings.Join(names, ",")
-	}
+	maps.Copy(meta, invoke.Metadata(id))
 	if mp, ok := impl.(service.MetadataProvider); ok {
 		maps.Copy(meta, mp.RegistryMetadata())
 	}

@@ -21,6 +21,7 @@ package invoke
 import (
 	"context"
 	"fmt"
+	"strings"
 )
 
 // Invocations returns the invocations a target exposes on this node: the
@@ -98,13 +99,23 @@ func IsStreaming(target, name string) bool {
 	return false
 }
 
-// InvocationNames returns just the names a target exposes, for the
-// MetaInvocations registry metadata.
-func InvocationNames(target string) []string {
+// Metadata returns the registry metadata that advertises a target's
+// invocations, so callers can list and route them without a dial.
+func Metadata(target string) map[string]string {
 	specs, _ := Invocations(target)
-	names := make([]string, 0, len(specs))
+	var names, shared []string
 	for _, s := range specs {
 		names = append(names, s.Name)
+		if s.Scope == ScopeShared {
+			shared = append(shared, s.Name)
+		}
 	}
-	return names
+	meta := map[string]string{}
+	if len(names) > 0 {
+		meta[MetaInvocations] = strings.Join(names, ",")
+	}
+	if len(shared) > 0 {
+		meta[MetaSharedInvocations] = strings.Join(shared, ",")
+	}
+	return meta
 }

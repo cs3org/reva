@@ -26,25 +26,32 @@ import (
 	"context"
 	"fmt"
 	"net"
+	"slices"
 	"sort"
 	"strings"
 	"sync"
 	"time"
 
 	"github.com/cs3org/reva/v3/pkg/control/controlpb"
+	"github.com/cs3org/reva/v3/pkg/invoke"
 	"github.com/cs3org/reva/v3/pkg/registry"
 	"github.com/cs3org/reva/v3/pkg/service"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/connectivity"
 )
 
 // Endpoint is one resolved invocation target: the node id to report, the
 // control address to dial, and the target the control channel routes on.
-// Err set means the target could not be resolved.
+// Err set means the target could not be resolved. Service, Draining and Shared
+// come from the node's registry entry and route the shared invocations.
 type Endpoint struct {
-	Node   string
-	Addr   string
-	Target string
-	Err    string
+	Node     string
+	Addr     string
+	Target   string
+	Err      string
+	Service  string
+	Draining bool
+	Shared   []string
 }
 
 // NodeResult is the outcome of one peer invocation.
@@ -57,6 +64,10 @@ type NodeResult struct {
 // PerNodeTimeout bounds a single peer invocation so one slow or offline
 // node never stalls a fleet-wide fan-out.
 const PerNodeTimeout = 10 * time.Second
+
+// readyTimeout bounds the wait for a connection before a shared invocation
+// moves on to the next instance.
+const readyTimeout = 2 * time.Second
 
 // Resolve maps a selector to its control endpoints. An instance is one
 // service process running on a specific node, identified by its node id
@@ -120,20 +131,88 @@ func Resolve(reg registry.Registry, selector string) (string, []Endpoint, error)
 	return "", nil, fmt.Errorf("%q matches no service, instance, address or host", selector)
 }
 
-// FanOut invokes every endpoint in parallel. An unreachable node is a
-// per-node error rather than a failure of the whole call.
+// FanOut invokes every routed group in parallel, one result per group. An
+// unreachable node is a per-node error rather than a failure of the whole call.
 func FanOut(ctx context.Context, eps []Endpoint, invocation string, args map[string]string) []NodeResult {
-	results := make([]NodeResult, len(eps))
+	groups := Route(eps, invocation)
+	results := make([]NodeResult, len(groups))
 	var wg sync.WaitGroup
-	for i, ep := range eps {
+	for i, g := range groups {
 		wg.Add(1)
-		go func(i int, ep Endpoint) {
+		go func(i int, g []Endpoint) {
 			defer wg.Done()
-			results[i] = InvokeOne(ctx, ep, invocation, args)
-		}(i, ep)
+			results[i] = InvokeOne(ctx, Pick(ctx, g), invocation, args)
+		}(i, g)
 	}
 	wg.Wait()
 	return results
+}
+
+// Route groups the endpoints into the calls an invocation makes, one call per
+// group. A shared invocation needs one instance per service, so the instances
+// of a service share a group. Any other invocation gets a group per instance.
+// A node that does not advertise the invocation as shared gets its own group,
+// as before shared invocations existed.
+func Route(eps []Endpoint, invocation string) [][]Endpoint {
+	var groups [][]Endpoint
+	byService := map[string]int{}
+	for _, ep := range eps {
+		if !slices.Contains(ep.Shared, invocation) {
+			groups = append(groups, []Endpoint{ep})
+			continue
+		}
+		if i, ok := byService[ep.Service]; ok {
+			groups[i] = append(groups[i], ep)
+			continue
+		}
+		byService[ep.Service] = len(groups)
+		groups = append(groups, []Endpoint{ep})
+	}
+	return groups
+}
+
+// Pick selects the endpoint of a group that gets the call: the first one that
+// can take it now, with instances in rotation before draining ones. It moves
+// on only before the call is sent, because a sent call can have run already.
+// If no endpoint can take the call, the first one gets it and reports the
+// failure.
+func Pick(ctx context.Context, eps []Endpoint) Endpoint {
+	if len(eps) == 1 {
+		return eps[0]
+	}
+	for _, draining := range []bool{false, true} {
+		for _, ep := range eps {
+			if ep.Draining == draining && ep.Err == "" && connReady(ctx, ep.Addr) {
+				return ep
+			}
+		}
+	}
+	return eps[0]
+}
+
+// connReady reports whether the connection to a control endpoint becomes ready
+// within readyTimeout. A failed connection stays failed for its backoff time,
+// so there is no reason to wait for it.
+func connReady(ctx context.Context, addr string) bool {
+	conn, err := peerConn(addr)
+	if err != nil {
+		return false
+	}
+	ctx, cancel := context.WithTimeout(ctx, readyTimeout)
+	defer cancel()
+	conn.Connect()
+	for {
+		st := conn.GetState()
+		switch st {
+		case connectivity.Ready:
+			return true
+		case connectivity.TransientFailure, connectivity.Shutdown:
+			return false
+		}
+		if !conn.WaitForStateChange(ctx, st) {
+			return false
+		}
+	}
 }
 
 // InvokeOne runs a single peer invocation with a bounded timeout.
@@ -157,10 +236,21 @@ func InvokeOne(ctx context.Context, ep Endpoint, invocation string, args map[str
 // EndpointFor builds the endpoint dialing a node's control channel,
 // routing by its id.
 func EndpointFor(n registry.Node) Endpoint {
-	if ctrl := n.Metadata()[registry.MetaControl]; ctrl != "" {
-		return Endpoint{Node: n.ID(), Addr: ctrl, Target: n.ID()}
+	id := n.ID()
+	ep := Endpoint{
+		Node:     id,
+		Service:  id[strings.LastIndex(id, "/")+1:],
+		Draining: nodeState(n) == registry.StateDraining,
 	}
-	return Endpoint{Node: n.ID(), Err: "node advertises no control endpoint"}
+	if csv := n.Metadata()[invoke.MetaSharedInvocations]; csv != "" {
+		ep.Shared = strings.Split(csv, ",")
+	}
+	if ctrl := n.Metadata()[registry.MetaControl]; ctrl != "" {
+		ep.Addr, ep.Target = ctrl, id
+		return ep
+	}
+	ep.Err = "node advertises no control endpoint"
+	return ep
 }
 
 // endpointsMatchingAddress resolves a partial node id: "host:port" matches the
