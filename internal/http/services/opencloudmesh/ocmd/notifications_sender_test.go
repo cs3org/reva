@@ -145,7 +145,7 @@ func TestNewNotificationTransportTable(t *testing.T) {
 		outcome SendOutcome
 		class   NotificationStatusClass
 		posts   int
-		retry   string
+		retry   time.Duration
 	}{
 		{name: "capability missing", setup: func(p *notificationPeer) { p.caps = []string{"invites", "exchange-token"} }, outcome: SendCapabilityMissing},
 		{name: "discovery disabled", setup: func(p *notificationPeer) { p.enabled = false }, outcome: SendCapabilityMissing},
@@ -163,7 +163,11 @@ func TestNewNotificationTransportTable(t *testing.T) {
 		{name: "403", setup: func(p *notificationPeer) { p.status = 403 }, outcome: SendRejected, class: NotificationStatusForbidden, posts: 1},
 		{name: "404", setup: func(p *notificationPeer) { p.status = 404 }, outcome: SendRejected, class: NotificationStatusNotFound, posts: 1},
 		{name: "501", setup: func(p *notificationPeer) { p.status = 501 }, outcome: SendRejected, class: NotificationStatusNotImplemented, posts: 1},
-		{name: "503 with Retry-After is not retried", setup: func(p *notificationPeer) { p.status, p.header = 503, retry }, outcome: SendRejected, class: NotificationStatusUnavailable, posts: 1, retry: "60"},
+		{name: "503 with Retry-After is not retried", setup: func(p *notificationPeer) { p.status, p.header = 503, retry }, outcome: SendRejected, class: NotificationStatusUnavailable, posts: 1, retry: time.Minute},
+		{name: "503 reflecting the secret", setup: func(p *notificationPeer) {
+			p.status, p.respBody = 503, []byte(senderSecret)
+			p.header = http.Header{"Retry-After": []string{senderSecret}, "X-Echo": []string{senderSecret}}
+		}, outcome: SendRejected, class: NotificationStatusUnavailable, posts: 1},
 		{name: "500", setup: func(p *notificationPeer) { p.status = 500 }, outcome: SendRejected, posts: 1},
 		{name: "307 redirect is not followed", setup: func(p *notificationPeer) {
 			p.status, p.header = 307, http.Header{"Location": []string{"/elsewhere"}}
@@ -189,8 +193,8 @@ func TestNewNotificationTransportTable(t *testing.T) {
 			if peer.redirectHits != 0 {
 				t.Fatalf("redirect followed %d times", peer.redirectHits)
 			}
-			if strings.Contains(logs, senderSecret) {
-				t.Fatalf("secret in logs: %s", logs)
+			if strings.Contains(logs, senderSecret) || strings.Contains(fmt.Sprintf("%+v", res), senderSecret) {
+				t.Fatalf("secret in logs or result: %s %+v", logs, res)
 			}
 			if res.Err != nil && strings.Contains(res.Err.Error(), senderSecret) {
 				t.Fatalf("secret in error: %v", res.Err)
@@ -202,9 +206,7 @@ func TestNewNotificationTransportTable(t *testing.T) {
 	}
 }
 
-// The share-state payload carries the normative fields, the optional secret
-// extension and the temporary envelope providerId, and our own receiver
-// parses it as a spec-shaped notification.
+// Our own receiver parses the share-state payload as a spec-shaped notification.
 func TestShareStatePayloadFixtures(t *testing.T) {
 	cases := []struct {
 		name   string
@@ -251,7 +253,6 @@ func TestShareStatePayloadFixtures(t *testing.T) {
 			if err := json.Unmarshal(peer.lastBody, &wire); err != nil {
 				t.Fatal(err)
 			}
-			// Normative fields.
 			if wire["notificationType"] != tc.in.Type || wire["senderDomain"] != tc.in.SenderDomain || wire["resourceType"] != tc.in.ResourceType {
 				t.Fatalf("wire %v", wire)
 			}
