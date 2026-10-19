@@ -43,9 +43,7 @@ type notifHandler struct {
 
 func (h *notifHandler) init(c *config) error {
 	h.registry = NewNotificationRegistry()
-	// Every processable type validates and logs. Acting effects replace
-	// individual handlers in later layers; legacy USER_REMOVED,
-	// GROUP_REMOVED and RESHARE_UNDO stay log-only.
+	// Legacy USER_REMOVED, GROUP_REMOVED and RESHARE_UNDO stay log-only.
 	for _, t := range []string{
 		NotificationShareAccepted,
 		NotificationShareDeclined,
@@ -64,9 +62,7 @@ func (h *notifHandler) init(c *config) error {
 
 // Notifications receives notifications from remote OCM servers, see
 // https://cs3org.github.io/OCM-API/docs.html?branch=develop&repo=OCM-API&user=cs3org#/paths/~1notifications/post
-// Known types are validated after legacy normalization, unknown types are
-// accepted and ignored, and REQUEST_SHARE/REQUEST_RESHARE are not
-// implemented. A successful response is a bodyless 201.
+// A handler outcome never changes the bodyless 201 of a valid notification.
 func (h *notifHandler) Notifications(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	log := appctx.GetLogger(ctx)
@@ -93,11 +89,9 @@ func (h *notifHandler) Notifications(w http.ResponseWriter, r *http.Request) {
 	outcome, err := h.registry.Dispatch(ctx, n)
 	switch {
 	case errors.Is(err, ErrMLSIngressUnavailable):
-		// No MLS support is advertised in this layer: the type is not
-		// known here, so it is accepted and ignored.
+		// MLS support is not advertised, so MLS types are unknown here.
 		notificationLog(log.Info(), n).Str("outcome", string(DispatchIgnored)).Msg("OCM MLS notification ignored")
 	case err != nil:
-		// A handler outcome never changes the status of a valid notification.
 		notificationLog(log.Warn(), n).Str("outcome", string(outcome)).Str("error", err.Error()).Msg("OCM notification handler failed")
 	case outcome == DispatchIgnored:
 		notificationLog(log.Info(), n).Str("outcome", string(outcome)).Msg("OCM notification of unknown type ignored")
@@ -118,9 +112,7 @@ func readNotificationBody(w http.ResponseWriter, r *http.Request) ([]byte, error
 	return body, nil
 }
 
-// notificationLog adds the structured, value-safe fields of a notification:
-// type, class, contract and legacy mapping. It never adds the payload or
-// the shared secret.
+// notificationLog adds fixed metadata fields, never the payload or the shared secret.
 func notificationLog(e *zerolog.Event, n *Notification) *zerolog.Event {
 	if n == nil {
 		return e
@@ -140,9 +132,7 @@ func notificationLog(e *zerolog.Event, n *Notification) *zerolog.Event {
 		Bool("has_shared_secret", n.SharedSecret != "")
 }
 
-// logNotification is the log tier of every processable type: it records
-// the canonical identity fields and performs no mutation, outbound call,
-// local delivery or signature processing.
+// logNotification records the identity fields of a valid notification and has no other effect.
 func logNotification(ctx context.Context, n *Notification) error {
 	e := notificationLog(appctx.GetLogger(ctx).Info(), n).
 		Str("sender_domain", n.SenderDomain).
