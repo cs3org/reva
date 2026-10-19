@@ -28,6 +28,7 @@ import (
 
 	"github.com/cs3org/reva/v3/pkg/appctx"
 	"github.com/cs3org/reva/v3/pkg/errtypes"
+	"github.com/cs3org/reva/v3/pkg/trace"
 	"github.com/google/uuid"
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog"
@@ -841,7 +842,9 @@ func (r *Runner) recordStatus(ctx context.Context, run Run, state State, result 
 // else is an on-demand job. The returned Params are the on-demand job's result
 // (always nil for periodic runs).
 func (r *Runner) invoke(ctx context.Context, run Run, log zerolog.Logger) (Params, error) {
-	jobCtx := appctx.WithLogger(ctx, &log)
+	// The run id is the trace id, so the logs of the services the job calls
+	// carry it too and `admin jobs logs <run-id>` finds them.
+	jobCtx := appctx.WithLogger(trace.Set(ctx, string(run.ID)), &log)
 
 	if p, ok := r.lookupPeriodic(run.Job); ok {
 		return nil, r.guard(p, func() error { return p.Run(jobCtx) })
