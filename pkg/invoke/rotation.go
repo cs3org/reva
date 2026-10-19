@@ -33,19 +33,19 @@ import (
 // alive and control-reachable.
 const RotationInvocation = "rotation"
 
+var rotationStateArg = Arg[string]("state", "drain|ready")
+
 func init() {
 	registerDefault(defaultInvocation{
 		spec: InvocationSpec{
 			Name:        RotationInvocation,
 			Description: "Take the instance out of rotation (state=drain) or return it (state=ready).",
 			Kind:        KindDangerous,
-			Args: []ArgSpec{
-				{Name: "state", Description: "drain|ready", Required: true},
-			},
 		},
+		args: []argDecl{rotationStateArg},
 		fn: func(_ context.Context, inst instance, a Args) (Result, error) {
 			previous := rotationState(inst.id)
-			switch a.String("state") {
+			switch rotationStateArg.Get(a) {
 			case "drain", "draining", "out":
 				SetDrained(inst.id, true)
 			case "ready", "in", "enable":
