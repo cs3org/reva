@@ -157,8 +157,8 @@ func TestParseNotificationMatrix(t *testing.T) {
 			},
 		},
 		{
-			name:   "A non-string message is dropped",
-			body:   `{"notificationType":"SHARE_UNSHARED","senderDomain":"a.example.org","resourceType":"file","notification":{"message":7,"file":{"providerId":"42"}}}`,
+			name:   "A opaque identifiers and host forms",
+			body:   `{"notificationType":"USER_REMOVED","senderDomain":"a.example.org","shareType":"user","notification":{"user":{"userId":"nomen%nescio*@example.org@[2001:db8::1]:8443"}}}`,
 			class:  NotificationClassSpec,
 			status: NotificationStatusCreated,
 		},
@@ -288,6 +288,126 @@ func TestParseNotificationMatrix(t *testing.T) {
 			code: NotificationErrMissingField, field: "notification.group.groupId", status: NotificationStatusBadRequest,
 		},
 		{
+			name: "400 user removed with null resourceType",
+			body: `{"notificationType":"USER_REMOVED","senderDomain":"a.example.org","shareType":"user","resourceType":null,"notification":{"user":{"userId":"alice@a.example.org"}}}`,
+			code: NotificationErrInvalidField, field: "resourceType", status: NotificationStatusBadRequest,
+		},
+		{
+			name: "400 user removed with empty resourceType",
+			body: `{"notificationType":"USER_REMOVED","senderDomain":"a.example.org","shareType":"user","resourceType":"","notification":{"user":{"userId":"alice@a.example.org"}}}`,
+			code: NotificationErrInvalidField, field: "resourceType", status: NotificationStatusBadRequest,
+		},
+		{
+			name: "400 group removed with null resourceType",
+			body: `{"notificationType":"GROUP_REMOVED","senderDomain":"a.example.org","shareType":"group","resourceType":null,"notification":{"group":{"groupId":"g1"}}}`,
+			code: NotificationErrInvalidField, field: "resourceType", status: NotificationStatusBadRequest,
+		},
+		{
+			name: "400 null shareType",
+			body: `{"notificationType":"SHARE_UNSHARED","senderDomain":"a.example.org","resourceType":"file","shareType":null,"notification":{"file":{"providerId":"42"}}}`,
+			code: NotificationErrInvalidField, field: "shareType", status: NotificationStatusBadRequest,
+		},
+		{
+			name: "400 null senderDomain",
+			body: `{"notificationType":"SHARE_UNSHARED","senderDomain":null,"resourceType":"file","notification":{"file":{"providerId":"42"}}}`,
+			code: NotificationErrInvalidField, field: "senderDomain", status: NotificationStatusBadRequest,
+		},
+		{
+			name: "400 numeric message",
+			body: `{"notificationType":"SHARE_UNSHARED","senderDomain":"a.example.org","resourceType":"file","notification":{"message":7,"file":{"providerId":"42"}}}`,
+			code: NotificationErrInvalidField, field: "notification.message", status: NotificationStatusBadRequest,
+		},
+		{
+			name: "400 null message",
+			body: `{"notificationType":"SHARE_UNSHARED","senderDomain":"a.example.org","resourceType":"file","notification":{"message":null,"file":{"providerId":"42"}}}`,
+			code: NotificationErrInvalidField, field: "notification.message", status: NotificationStatusBadRequest,
+		},
+		{
+			name: "400 null sharedSecret",
+			body: `{"notificationType":"SHARE_UNSHARED","senderDomain":"a.example.org","resourceType":"file","notification":{"sharedSecret":null,"file":{"providerId":"42"}}}`,
+			code: NotificationErrInvalidField, field: "notification.sharedSecret", status: NotificationStatusBadRequest,
+		},
+		{
+			name: "400 null file",
+			body: `{"notificationType":"SHARE_UNSHARED","senderDomain":"a.example.org","resourceType":"file","providerId":"42","notification":{"file":null}}`,
+			code: NotificationErrInvalidField, field: "notification.file", status: NotificationStatusBadRequest,
+		},
+		{
+			name: "400 undefined permission",
+			body: `{"notificationType":"SHARE_CHANGE_PERMISSION","senderDomain":"a.example.org","resourceType":"file","notification":{"file":{"providerId":"42","permissions":["read","admin"]}}}`,
+			code: NotificationErrInvalidField, field: "notification.file.permissions", status: NotificationStatusBadRequest,
+		},
+		{
+			name: "400 numeric permission",
+			body: `{"notificationType":"SHARE_CHANGE_PERMISSION","senderDomain":"a.example.org","resourceType":"file","notification":{"file":{"providerId":"42","permissions":[1]}}}`,
+			code: NotificationErrInvalidField, field: "notification.file", status: NotificationStatusBadRequest,
+		},
+		{
+			name: "400 user removed empty userId",
+			body: `{"notificationType":"USER_REMOVED","senderDomain":"a.example.org","shareType":"user","notification":{"user":{"userId":""}}}`,
+			code: NotificationErrMissingField, field: "notification.user.userId", status: NotificationStatusBadRequest,
+		},
+		{
+			name: "400 group removed empty groupId",
+			body: `{"notificationType":"GROUP_REMOVED","senderDomain":"a.example.org","shareType":"group","notification":{"group":{"groupId":""}}}`,
+			code: NotificationErrMissingField, field: "notification.group.groupId", status: NotificationStatusBadRequest,
+		},
+		{
+			name: "400 null user",
+			body: `{"notificationType":"USER_REMOVED","senderDomain":"a.example.org","shareType":"user","notification":{"user":null}}`,
+			code: NotificationErrInvalidField, field: "notification.user", status: NotificationStatusBadRequest,
+		},
+		{
+			name: "400 user removed host a.example.org/path",
+			body: `{"notificationType":"USER_REMOVED","senderDomain":"a.example.org","shareType":"user","notification":{"user":{"userId":"alice@a.example.org/path"}}}`,
+			code: NotificationErrInvalidField, field: "notification.user.userId", status: NotificationStatusBadRequest,
+		},
+		{
+			name: "400 user removed host a.example .org",
+			body: `{"notificationType":"USER_REMOVED","senderDomain":"a.example.org","shareType":"user","notification":{"user":{"userId":"alice@a.example .org"}}}`,
+			code: NotificationErrInvalidField, field: "notification.user.userId", status: NotificationStatusBadRequest,
+		},
+		{
+			name: "400 user removed host https://a.example.org",
+			body: `{"notificationType":"USER_REMOVED","senderDomain":"a.example.org","shareType":"user","notification":{"user":{"userId":"alice@https://a.example.org"}}}`,
+			code: NotificationErrInvalidField, field: "notification.user.userId", status: NotificationStatusBadRequest,
+		},
+		{
+			name: "400 user removed host a.example.org?q",
+			body: `{"notificationType":"USER_REMOVED","senderDomain":"a.example.org","shareType":"user","notification":{"user":{"userId":"alice@a.example.org?q"}}}`,
+			code: NotificationErrInvalidField, field: "notification.user.userId", status: NotificationStatusBadRequest,
+		},
+		{
+			name: "400 user removed host a.example.org#f",
+			body: `{"notificationType":"USER_REMOVED","senderDomain":"a.example.org","shareType":"user","notification":{"user":{"userId":"alice@a.example.org#f"}}}`,
+			code: NotificationErrInvalidField, field: "notification.user.userId", status: NotificationStatusBadRequest,
+		},
+		{
+			name: "400 user removed host a.example.org:",
+			body: `{"notificationType":"USER_REMOVED","senderDomain":"a.example.org","shareType":"user","notification":{"user":{"userId":"alice@a.example.org:"}}}`,
+			code: NotificationErrInvalidField, field: "notification.user.userId", status: NotificationStatusBadRequest,
+		},
+		{
+			name: "400 user removed host a.example.org:http",
+			body: `{"notificationType":"USER_REMOVED","senderDomain":"a.example.org","shareType":"user","notification":{"user":{"userId":"alice@a.example.org:http"}}}`,
+			code: NotificationErrInvalidField, field: "notification.user.userId", status: NotificationStatusBadRequest,
+		},
+		{
+			name: "400 user removed host [2001:db8::1",
+			body: `{"notificationType":"USER_REMOVED","senderDomain":"a.example.org","shareType":"user","notification":{"user":{"userId":"alice@[2001:db8::1"}}}`,
+			code: NotificationErrInvalidField, field: "notification.user.userId", status: NotificationStatusBadRequest,
+		},
+		{
+			name: "400 user removed host []",
+			body: `{"notificationType":"USER_REMOVED","senderDomain":"a.example.org","shareType":"user","notification":{"user":{"userId":"alice@[]"}}}`,
+			code: NotificationErrInvalidField, field: "notification.user.userId", status: NotificationStatusBadRequest,
+		},
+		{
+			name: "400 user removed host a%zzexample.org",
+			body: `{"notificationType":"USER_REMOVED","senderDomain":"a.example.org","shareType":"user","notification":{"user":{"userId":"alice@a%zzexample.org"}}}`,
+			code: NotificationErrInvalidField, field: "notification.user.userId", status: NotificationStatusBadRequest,
+		},
+		{
 			name: "400 alias still needs providerId",
 			body: `{"notificationType":"RESHARE_UNDO","senderDomain":"b.example.org","resourceType":"file"}`,
 			code: NotificationErrMissingField, field: "notification.file.providerId", status: NotificationStatusBadRequest,
@@ -375,7 +495,7 @@ func TestNotificationSecretIsRedacted(t *testing.T) {
 func TestNotificationCorePortability(t *testing.T) {
 	allowed := map[string]bool{
 		"bytes": true, "context": true, "encoding/json": true, "errors": true,
-		"fmt": true, "net/http": true, "slices": true, "strings": true, "sync": true,
+		"fmt": true, "net/http": true, "slices": true, "strconv": true, "strings": true, "sync": true, "time": true,
 		"github.com/go-playground/validator/v10": true,
 	}
 	for _, f := range []string{"specs_notifications.go", "notification_handlers.go", "notification_sender_state.go"} {
