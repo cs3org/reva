@@ -30,20 +30,20 @@ import (
 // [log] level.
 const LogLevelInvocation = "loglevel"
 
+var logLevelArg = OptArg[string]("level", "new level: trace|debug|info|warn|error, or 'reset' to restore the configured level (omit to report the current one)")
+
 func init() {
 	registerDefault(defaultInvocation{
 		spec: InvocationSpec{
 			Name:        LogLevelInvocation,
 			Description: "Report or set the process's log level at runtime (reverts on restart).",
 			Kind:        KindMutating,
-			Args: []ArgSpec{
-				{Name: "level", Description: "new level: trace|debug|info|warn|error, or 'reset' to restore the configured level (omit to report the current one)"},
-			},
 		},
+		args: []argDecl{logLevelArg},
 		fn: func(_ context.Context, _ instance, a Args) (Result, error) {
 			previous := logger.Level()
 			level := previous
-			switch l := a.String("level"); l {
+			switch l := logLevelArg.Get(a); l {
 			case "":
 			case "reset", "default":
 				level = logger.ResetLevel()

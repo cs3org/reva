@@ -21,17 +21,19 @@ package invoke
 import (
 	"context"
 	"testing"
+	"time"
 )
 
 // TestSet exercises the developer-facing builder: declaring a method, its
 // catalog entry, required-arg validation, and routing to the handler.
 func TestSet(t *testing.T) {
 	set := NewSet()
+	group := Arg[string]("group", "the group id")
+	user := Arg[string]("user", "the user id")
 	set.Add("is_member", "Report whether a user is a member of a group").
-		Arg("group", "the group id").
-		Arg("user", "the user id").
+		Args(group, user).
 		Handle(func(_ context.Context, a Args) (Result, error) {
-			return Result{"member": a.String("group") == "admins" && a.String("user") == "alice"}, nil
+			return Result{"member": group.Get(a) == "admins" && user.Get(a) == "alice"}, nil
 		})
 
 	// Catalog reflects the declaration.
@@ -68,11 +70,12 @@ func TestSet(t *testing.T) {
 // of a stream-only method is rejected (and vice versa).
 func TestSetStreaming(t *testing.T) {
 	set := NewSet()
+	n := Arg[int]("n", "how many")
 	set.Add("tail", "stream N ticks").
-		Arg("n", "how many").
+		Args(n).
 		Stream().
 		HandleStream(func(_ context.Context, a Args, emit StreamEmit) error {
-			for i := 0; i < a.Int("n"); i++ {
+			for i := range n.Get(a) {
 				if err := emit(Result{"i": i}); err != nil {
 					return err
 				}
@@ -109,5 +112,52 @@ func TestSetStreaming(t *testing.T) {
 	set.Add("ping", "unary").Handle(func(context.Context, Args) (Result, error) { return Result{}, nil })
 	if err := set.InvokeStream(context.Background(), "ping", nil, func(Result) error { return nil }); err == nil {
 		t.Fatal("expected error stream-invoking a unary-only method")
+	}
+}
+
+// TestSetParsesTypedArgs checks that arguments arrive in the handler as their
+// declared types, and that a value of the wrong type is rejected before the
+// handler runs.
+func TestSetParsesTypedArgs(t *testing.T) {
+	set := NewSet()
+	limit := OptArg[int]("limit", "")
+	all := OptArg[bool]("all", "")
+	wait := OptArg[time.Duration]("wait", "")
+	since := OptArg[time.Time]("since", "")
+	var got Args
+	set.Add("op", "").
+		Args(limit, all, wait, since).
+		Handle(func(_ context.Context, a Args) (Result, error) { got = a; return Result{}, nil })
+
+	before := time.Now()
+	_, err := set.Invoke(context.Background(), "op", map[string]any{
+		"limit": "7", "all": "true", "wait": "2s", "since": "5m",
+	})
+	after := time.Now()
+	if err != nil {
+		t.Fatalf("Invoke: %v", err)
+	}
+	if limit.Get(got) != 7 || !all.Get(got) || wait.Get(got) != 2*time.Second {
+		t.Fatalf("unexpected args: %+v", got)
+	}
+	// A duration means that long ago.
+	if s := since.Get(got); s.Before(before.Add(-5*time.Minute)) || s.After(after.Add(-5*time.Minute)) {
+		t.Fatalf("since %v is not 5m ago", s)
+	}
+
+	if _, err := set.Invoke(context.Background(), "op", map[string]any{"since": "2026-10-19T10:00:00Z"}); err != nil {
+		t.Fatalf("Invoke with an RFC3339 time: %v", err)
+	}
+	if want := time.Date(2026, 10, 19, 10, 0, 0, 0, time.UTC); !since.Get(got).Equal(want) {
+		t.Fatalf("since: want %v, got %v", want, since.Get(got))
+	}
+	if limit.Has(got) {
+		t.Fatal("an absent argument must not be reported as supplied")
+	}
+
+	for _, bad := range []map[string]any{{"limit": "abc"}, {"all": "maybe"}, {"wait": "soon"}, {"since": "yesterday"}} {
+		if _, err := set.Invoke(context.Background(), "op", bad); err == nil {
+			t.Errorf("expected an error for %v", bad)
+		}
 	}
 }
