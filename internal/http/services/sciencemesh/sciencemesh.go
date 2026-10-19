@@ -24,10 +24,12 @@ import (
 
 	"github.com/cs3org/reva/v3/pkg/appctx"
 	"github.com/cs3org/reva/v3/pkg/rhttp/global"
+	"github.com/cs3org/reva/v3/pkg/rhttp/ratelimit"
 	"github.com/cs3org/reva/v3/pkg/sharedconf"
 	"github.com/cs3org/reva/v3/pkg/smtpclient"
 	"github.com/cs3org/reva/v3/pkg/utils/cfg"
 	"github.com/go-chi/chi/v5"
+	"github.com/rs/zerolog"
 )
 
 func init() {
@@ -48,7 +50,8 @@ func New(ctx context.Context, m map[string]any) (global.Service, error) {
 		router: r,
 	}
 
-	if err := s.routerInit(); err != nil {
+	if err := s.routerInit(appctx.GetLogger(ctx)); err != nil {
+		_ = s.Close()
 		return nil, err
 	}
 
@@ -57,6 +60,7 @@ func New(ctx context.Context, m map[string]any) (global.Service, error) {
 
 // Close performs cleanup.
 func (s *svc) Close() error {
+	s.limiter.Close()
 	return nil
 }
 
@@ -76,6 +80,9 @@ type config struct {
 	// the public-only OCM discovery client. Empty by default; any invalid entry
 	// aborts service initialization before any directory fetch.
 	AllowedFederationCIDRs []string `mapstructure:"allowed_federation_cidrs"`
+	// RateLimit guards the unauthenticated routes (see Unprotected), which a
+	// browser hits during the WAYF flow and which trigger outbound requests.
+	RateLimit ratelimit.ServiceConfig `mapstructure:",squash"`
 }
 
 func (c *config) ApplyDefaults() {
@@ -88,16 +95,27 @@ func (c *config) ApplyDefaults() {
 	if c.OCMClientTimeout == 0 {
 		c.OCMClientTimeout = 10
 	}
+	c.RateLimit.ApplyDefaults()
 
 	c.GatewaySvc = sharedconf.GetGatewaySVC(c.GatewaySvc)
 }
 
 type svc struct {
-	conf   *config
-	router chi.Router
+	conf    *config
+	router  chi.Router
+	limiter *ratelimit.Limiter
 }
 
-func (s *svc) routerInit() error {
+func (s *svc) routerInit(log *zerolog.Logger) error {
+	// Build the limiter before any handler startup I/O, so that an invalid
+	// trusted_proxy_cidrs entry fails fast, like allowed_federation_cidrs.
+	limiter, err := s.conf.RateLimit.NewLimiter(log)
+	if err != nil {
+		return err
+	}
+	s.limiter = limiter
+	unauth := limiter.Middleware
+
 	tokenHandler := new(tokenHandler)
 	if err := tokenHandler.init(s.conf); err != nil {
 		return err
@@ -128,8 +146,9 @@ func (s *svc) routerInit() error {
 	s.router.Delete("/delete-accepted-user", tokenHandler.DeleteAccepted)
 	s.router.Get("/list-providers", providersHandler.ListProviders)
 	s.router.Post("/open-in-app", appsHandler.OpenInApp)
-	s.router.Get("/federations", wayfHandler.GetFederations)
-	s.router.Post("/discover", wayfHandler.DiscoverProvider)
+	// Unauthenticated routes (keep in sync with Unprotected) are rate limited.
+	s.router.With(unauth).Get("/federations", wayfHandler.GetFederations)
+	s.router.With(unauth).Post("/discover", wayfHandler.DiscoverProvider)
 	s.router.Get("/embedded-shares", embeddedHandler.ListEmbeddedShares)
 	s.router.Post("/process-embedded-share", embeddedHandler.ProcessEmbeddedShare)
 	return nil
