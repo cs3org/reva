@@ -49,9 +49,8 @@ var ErrInvalidGrantIdentity = errtypes.BadRequest("invalid grant identity")
 // not hold exactly the fields its key was computed from. It fails closed.
 var ErrGrantIdentityMismatch = errtypes.InternalError("grant identity record does not match its key")
 
-// CanonicalGrantOrigin returns the canonical form of the domain of the
-// provider that sent a share: an optional http(s) scheme is removed and the
-// host is lowercased. Anything that is not a plain host[:port] is rejected.
+// CanonicalGrantOrigin lowercases the domain of the provider that sent a
+// share and drops an http(s) scheme. Anything but a plain host[:port] is rejected.
 func CanonicalGrantOrigin(domain string) (string, error) {
 	d := strings.TrimPrefix(strings.TrimPrefix(domain, "https://"), "http://")
 	d = strings.ToLower(d)
@@ -66,10 +65,8 @@ func CanonicalGrantOrigin(domain string) (string, error) {
 	return d, nil
 }
 
-// GrantKey returns the identity key of a provider grant: the lowercase hex
-// SHA-256 of the big-endian uint32 byte length of the canonical origin, the
-// origin, the big-endian uint32 byte length of the remote share ID and the
-// remote share ID. The remote share ID is used byte-exact.
+// GrantKey returns the identity key of a provider grant, a length-prefixed
+// SHA-256 of the canonical origin and the byte-exact remote share ID.
 func GrantKey(origin, remoteShareID string) (string, error) {
 	if origin == "" || remoteShareID == "" || len(origin) > MaxGrantFieldLength || len(remoteShareID) > MaxGrantFieldLength {
 		return "", ErrInvalidGrantIdentity
@@ -85,9 +82,8 @@ func GrantKey(origin, remoteShareID string) (string, error) {
 	return hex.EncodeToString(h.Sum(nil)), nil
 }
 
-// GrantWithdrawal identifies a provider grant to withdraw: the canonical
-// origin, the remote share ID and the resource and share types the stored
-// shares must match.
+// GrantWithdrawal identifies a provider grant to withdraw and the types its
+// stored shares must match.
 type GrantWithdrawal struct {
 	Origin        string
 	RemoteShareID string

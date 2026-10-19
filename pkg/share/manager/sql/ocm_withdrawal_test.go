@@ -532,7 +532,6 @@ func TestWithdrawalRacesOnSeparateConnections(t *testing.T) {
 	})
 }
 
-// helperRequest is the work of one helper process.
 type helperRequest struct {
 	Config map[string]any `json:"config"`
 	Op     string         `json:"op"`

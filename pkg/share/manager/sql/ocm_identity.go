@@ -18,21 +18,8 @@
 
 package sql
 
-// Grant identities serialize every writer of a received share that belongs
-// to the same provider grant, across connections and processes:
-//
-//   - MySQL: the identity row is inserted if absent (ON DUPLICATE KEY, which
-//     never changes an existing row) and then locked with SELECT ... FOR
-//     UPDATE inside the same transaction. Looking up an absent key with FOR
-//     UPDATE also locks the gap, so a concurrent insert of that key waits.
-//   - SQLite: every transaction of this manager starts with BEGIN IMMEDIATE
-//     (the _txlock=immediate connection option), so a writer holds the
-//     database write lock before it reads anything.
-//
-// Locks are taken in a fixed order: the identity, then the received rows by
-// ascending ID, then their protocols. Retryable lock failures are retried a
-// bounded number of times; receipts are rebuilt on every attempt and only
-// returned after a successful commit.
+// Writers lock the grant identity first, then the received rows by ID. On
+// SQLite every transaction takes the write lock when it begins (BEGIN IMMEDIATE).
 
 import (
 	"context"
@@ -137,9 +124,8 @@ func ensureIdentity(tx *gorm.DB, origin, remoteShareID string) (*model.OcmGrantI
 	return ident, nil
 }
 
-// lockGuardedReceived locks the identity of a received share, then the
-// share itself, and verifies the binding. It returns the identity, nil for
-// an unbound share.
+// lockGuardedReceived locks and verifies the identity of a received share.
+// It returns nil for an unbound share.
 func lockGuardedReceived(tx *gorm.DB, row *model.OcmReceivedShare) (*model.OcmGrantIdentity, error) {
 	if row.GrantKey == nil {
 		return nil, nil
@@ -243,11 +229,9 @@ type backfillReport struct {
 	ConflictingMap int
 }
 
-// backfillGrantIdentities binds historical received shares to the identity
-// of their verified origin and remote share ID. Shares without a verifiable
-// sender origin, or whose grant has conflicting type mappings, stay unbound
-// and never take part in a withdrawal. Generic INVALID or hidden rows get no
-// withdrawal. It is idempotent.
+// backfillGrantIdentities binds historical received shares to their grant.
+// Shares without a verifiable origin or with conflicting type mappings stay
+// unbound and cannot be withdrawn. It is idempotent.
 func (m *mgr) backfillGrantIdentities(ctx context.Context) (backfillReport, error) {
 	var report backfillReport
 	var rows []model.OcmReceivedShare

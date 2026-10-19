@@ -72,9 +72,8 @@ const (
 	// OcmShareStateTransferring is the state for a share whose embedded
 	// content is currently being transferred to its destination.
 	OcmShareStateTransferring
-	// OcmShareStateInvalid is the state of a share that cannot be used,
-	// e.g. because its provider withdrew it. It does not tell why: only the
-	// grant identity records a withdrawal.
+	// OcmShareStateInvalid is the state of a share that cannot be used. Only
+	// the grant identity records whether its provider withdrew it.
 	OcmShareStateInvalid
 )
 
@@ -261,18 +260,16 @@ type OcmReceivedShare struct {
 	State         OcmShareState      `gorm:"index:i_ocmrecshare_state;not null"`
 	Alias         string             `gorm:"size:64"`
 	Hidden        bool
-	// GrantKey binds the share to the identity of its provider grant. It is
-	// empty for historical shares whose origin could not be verified; once
-	// set it never changes.
+	// GrantKey binds the share to its provider grant. It is empty only for
+	// historical shares whose origin could not be verified, and never changes.
 	GrantKey *string `gorm:"size:64;index:i_ocmrecshare_grantkey"`
 	// TransferGeneration grows on every transfer start and state change, so
 	// that the completion of an older attempt cannot match a later one.
 	TransferGeneration uint64 `gorm:"not null;default:0"`
 }
 
-// OcmGrantIdentity is the durable identity of a provider grant, keyed by
-// the digest of its canonical origin and remote share ID. WithdrawnAt is the
-// only record of a withdrawal by the provider. Rows are never deleted.
+// OcmGrantIdentity is the durable identity of a provider grant. WithdrawnAt
+// is the only record of a withdrawal; rows are never deleted.
 type OcmGrantIdentity struct {
 	GrantKey      string             `gorm:"column:grant_key;primaryKey;size:64"`
 	Origin        string             `gorm:"size:255;not null"`
