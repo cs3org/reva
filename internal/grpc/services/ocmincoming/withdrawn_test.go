@@ -21,6 +21,7 @@ package ocmincoming
 import (
 	"context"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
@@ -66,5 +67,35 @@ func TestStaleCreateOfWithdrawnGrantIsRefused(t *testing.T) {
 	}
 	if res, err := s.CreateOCMIncomingShare(ctx, req("43")); err != nil || res.Status.Code != rpc.Code_CODE_OK {
 		t.Fatalf("fresh grant: %v %v", res, err)
+	}
+}
+
+func TestUnrepresentableGrantIsInvalidArgument(t *testing.T) {
+	ctx := context.Background()
+	repo, err := sqlmgr.NewOCMShareManager(ctx, map[string]any{
+		"db_engine": "sqlite",
+		"db_name":   filepath.Join(t.TempDir(), "ocm.sqlite"),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	s := &service{repo: repo}
+	for _, remote := range []string{"", strings.Repeat("r", share.MaxGrantFieldLength+1)} {
+		res, err := s.CreateOCMIncomingShare(ctx, &ocmincoming.CreateOCMIncomingShareRequest{
+			Name:               "doc.txt",
+			ResourceId:         remote,
+			Owner:              &userpb.UserId{OpaqueId: "alice", Idp: "a.example.org"},
+			Sender:             &userpb.UserId{OpaqueId: "alice", Idp: "a.example.org"},
+			ShareWith:          &userpb.UserId{OpaqueId: "marie"},
+			SharedResourceType: ocm.SharedResourceType_SHARE_RESOURCE_TYPE_FILE,
+			RecipientType:      ocm.RecipientType_RECIPIENT_TYPE_USER,
+		})
+		if err != nil || res.Status.Code != rpc.Code_CODE_INVALID_ARGUMENT {
+			t.Fatalf("%d-byte remote id: %v %v", len(remote), res, err)
+		}
+	}
+	shares, err := repo.ListReceivedShares(ctx, &userpb.User{Id: &userpb.UserId{OpaqueId: "marie"}}, nil)
+	if err != nil || len(shares) != 0 {
+		t.Fatalf("stored %d shares: %v", len(shares), err)
 	}
 }

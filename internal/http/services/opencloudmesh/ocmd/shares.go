@@ -324,6 +324,10 @@ func (h *sharesHandler) CreateShare(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if createShareResp.Status.Code == rpc.Code_CODE_INVALID_ARGUMENT {
+		reqres.WriteError(w, r, reqres.APIErrorInvalidParameter, "invalid providerId or sender", nil)
+		return
+	}
 	if createShareResp.Status.Code != rpc.Code_CODE_OK {
 		// TODO: define errors in the cs3apis
 		reqres.WriteError(w, r, reqres.APIErrorServerError, "could not create ocm share", errors.New(createShareResp.Status.Message))

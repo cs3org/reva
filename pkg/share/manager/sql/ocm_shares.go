@@ -436,30 +436,27 @@ func (m *mgr) GetEmbeddedPayload(ctx context.Context, user *userpb.User, receive
 }
 
 // StoreReceivedShare stores a received share bound to the identity of its
-// provider grant. A grant that was withdrawn cannot be recreated: a stale
-// or repeated creation fails with ErrShareWithdrawn instead of adding a row.
+// provider grant. A share whose grant identity cannot be formed is rejected
+// with ErrInvalidGrantIdentity. A withdrawn grant cannot be recreated.
 func (m *mgr) StoreReceivedShare(ctx context.Context, s *ocm.ReceivedShare) (*ocm.ReceivedShare, error) {
-	origin, bindable := grantOrigin(formatUserID(s.Creator))
-	if bindable && (s.RemoteShareId == "" || len(s.RemoteShareId) > share.MaxGrantFieldLength) {
-		bindable = false
+	origin, ok := grantOrigin(formatUserID(s.Creator))
+	if !ok {
+		return nil, share.ErrInvalidGrantIdentity
+	}
+	if _, err := share.GrantKey(origin, s.RemoteShareId); err != nil {
+		return nil, err
 	}
 	if err := m.transact(ctx, func(tx *gorm.DB) error {
-		var grantKey *string
-		if bindable {
-			ident, err := ensureIdentity(tx, origin, s.RemoteShareId)
-			if err != nil {
-				return err
-			}
-			if withdrawn(ident) {
-				return share.ErrShareWithdrawn
-			}
-			grantKey = &ident.GrantKey
-		} else {
-			appctx.GetLogger(ctx).Warn().Msg("storing received OCM share without a verifiable grant identity")
+		ident, err := ensureIdentity(tx, origin, s.RemoteShareId)
+		if err != nil {
+			return err
+		}
+		if withdrawn(ident) {
+			return share.ErrShareWithdrawn
 		}
 
 		receivedShare := &model.OcmReceivedShare{
-			GrantKey:      grantKey,
+			GrantKey:      &ident.GrantKey,
 			Name:          s.Name,
 			RemoteShareID: s.RemoteShareId,
 			ItemType:      convertFromCS3ResourceType(s.SharedResourceType),
@@ -478,9 +475,7 @@ func (m *mgr) StoreReceivedShare(ctx context.Context, s *ocm.ReceivedShare) (*oc
 			}
 		}
 
-		id := tx.Create(receivedShare)
-		err := id.Error
-		if err != nil {
+		if err := tx.Create(receivedShare).Error; err != nil {
 			if strings.Contains(err.Error(), "Duplicate entry") {
 				return share.ErrShareAlreadyExisting
 			}
