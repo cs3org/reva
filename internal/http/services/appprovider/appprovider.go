@@ -1,4 +1,4 @@
-// Copyright 2018-2024 CERN
+// Copyright 2018-2026 CERN
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -27,7 +27,6 @@ import (
 	"net/url"
 	"path"
 	"path/filepath"
-	"regexp"
 	"strconv"
 
 	apppb "github.com/cs3org/go-cs3apis/cs3/app/provider/v1beta1"
@@ -42,6 +41,7 @@ import (
 	"github.com/cs3org/reva/v3/pkg/httpclient"
 	"github.com/cs3org/reva/v3/pkg/rgrpc/status"
 	"github.com/cs3org/reva/v3/pkg/rhttp/global"
+	"github.com/cs3org/reva/v3/pkg/rhttp/ratelimit"
 	"github.com/cs3org/reva/v3/pkg/service"
 	"github.com/cs3org/reva/v3/pkg/sharedconf"
 	"github.com/cs3org/reva/v3/pkg/spaces"
@@ -65,18 +65,30 @@ type Config struct {
 	// FeedbackRecipient is the email address user feedback submitted through the
 	// /feedback endpoint is sent to. Empty disables the endpoint.
 	FeedbackRecipient string `mapstructure:"feedback_recipient"`
+	// RateLimit guards the unauthenticated /list route, which queries the app
+	// registry and which the web UI calls on every load, hence a higher
+	// default than the OCM services.
+	RateLimit ratelimit.ServiceConfig `mapstructure:",squash"`
 }
+
+// Default rate limit of the unauthenticated routes.
+const (
+	defaultUnauthRateLimit      = 600
+	defaultUnauthRateLimitBurst = 100
+)
 
 func (c *Config) ApplyDefaults() {
 	if c.Prefix == "" {
 		c.Prefix = "app"
 	}
 	c.GatewaySvc = sharedconf.GetGatewaySVC(c.GatewaySvc)
+	c.RateLimit.ApplyDefaultsWith(defaultUnauthRateLimit, defaultUnauthRateLimitBurst)
 }
 
 type svc struct {
-	conf   *Config
-	router *chi.Mux
+	conf    *Config
+	router  *chi.Mux
+	limiter *ratelimit.Limiter
 }
 
 // New returns a new ocmd object.
@@ -86,13 +98,20 @@ func New(ctx context.Context, m map[string]any) (global.Service, error) {
 		return nil, err
 	}
 
+	limiter, err := c.RateLimit.NewLimiter(appctx.GetLogger(ctx))
+	if err != nil {
+		return nil, err
+	}
+
 	r := chi.NewRouter()
 	s := &svc{
-		conf:   &c,
-		router: r,
+		conf:    &c,
+		router:  r,
+		limiter: limiter,
 	}
 
 	if err := s.routerInit(); err != nil {
+		_ = s.Close()
 		return nil, err
 	}
 
@@ -100,7 +119,7 @@ func New(ctx context.Context, m map[string]any) (global.Service, error) {
 }
 
 func (s *svc) routerInit() error {
-	s.router.Get("/list", s.handleList)
+	s.router.With(s.limiter.Middleware).Get("/list", s.handleList)
 	s.router.Post("/new", s.handleNew)
 	s.router.Post("/open", s.handleOpen)
 	s.router.Post("/notify", s.handleNotify)
@@ -111,6 +130,7 @@ func (s *svc) routerInit() error {
 
 // Close performs cleanup.
 func (s *svc) Close() error {
+	s.limiter.Close()
 	return nil
 }
 
@@ -477,16 +497,7 @@ func (s *svc) handleOpen(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var appForEditing string
-	// TODO(lopresti) this is a shortcut for now to avoid changing the protocol. In the future we want to only pass a coded "reason",
-	// the actual message is to be rendered by the web frontend (potentially localized).
-	if m := regexp.MustCompile(`\b([A-Za-z0-9._+-]+)\s+to edit instead$`).FindStringSubmatch(openRes.ForcedViewModeReason); m != nil {
-		appForEditing = m[1]
-	}
-
 	// UI-related parameters
-	// TODO(lopresti) this overrides pkg/app/provider/wopi/wopi.go,
-	// we need to drop that one and the corresponding config entry
 	lang := r.Form.Get("lang")
 	if lang != "" {
 		appFullURL, err := url.Parse(openRes.AppUrl.AppUrl)
@@ -502,10 +513,7 @@ func (s *svc) handleOpen(w http.ResponseWriter, r *http.Request) {
 		openRes.AppUrl.AppUrl = appFullURL.String()
 	}
 	theme := r.Form.Get("ui_theme")
-	if theme == "light" || theme == "dark" {
-		if openRes.AppUrl.FormParameters == nil {
-			openRes.AppUrl.FormParameters = map[string]string{}
-		}
+	if (theme == "light" || theme == "dark") && openRes.AppUrl.FormParameters != nil {
 		openRes.AppUrl.FormParameters["ui_defaults"] = "UITheme=" + theme
 	}
 
@@ -517,7 +525,7 @@ func (s *svc) handleOpen(w http.ResponseWriter, r *http.Request) {
 		"headers":                openRes.AppUrl.Headers,
 		"target":                 appTargetToString(openRes.AppUrl.Target),
 		"forced_viewmode_reason": openRes.ForcedViewModeReason,
-		"app_for_editing":        appForEditing,
+		"app_for_editing":        openRes.AppForEdit,
 	}
 
 	js, err := json.Marshal(resPayload)

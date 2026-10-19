@@ -557,6 +557,10 @@ func (s *svc) Stat(ctx context.Context, req *provider.StatRequest) (*provider.St
 			Str("opaque_id", rsp.Info.Id.OpaqueId).
 			Str("path", rsp.Info.Path).
 			Msg("gateway: Stat response from storage provider")
+		// the spaces registry stats project roots for their mtime only, resolving roles there would loop back here
+		if req.GetFieldMask() == nil || slices.Contains(req.FieldMask.GetPaths(), "permission_set") {
+			s.addSpaceRoles(ctx, rsp.Info)
+		}
 		return rsp, nil
 	}
 
@@ -687,6 +691,9 @@ func (s *svc) ListContainer(ctx context.Context, req *provider.ListContainerRequ
 		rsp, err := c.ListContainer(ctx, req)
 		if err != nil || rsp.Status.Code != rpc.Code_CODE_OK {
 			return rsp, err
+		}
+		for _, info := range rsp.Infos {
+			s.addSpaceRoles(ctx, info)
 		}
 		return rsp, nil
 	}
@@ -944,7 +951,7 @@ func (s *svc) findProviders(ctx context.Context, ref *provider.Reference) ([]*re
 		case rpc.Code_CODE_UNIMPLEMENTED:
 			return nil, errtypes.NotSupported("gateway: " + res.Status.Message + " for " + ref.String() + " with code " + res.Status.Code.String())
 		default:
-			return nil, status.NewErrorFromCode(res.Status.Code, "gateway")
+			return nil, status.NewErrtypeFromStatus(res.Status)
 		}
 	}
 

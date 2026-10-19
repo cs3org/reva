@@ -532,6 +532,13 @@ func TestDump(t *testing.T) {
 				"offline_after":      "",
 				"reap_after":         "",
 			},
+			"mtls": map[string]any{
+				"certfile":      "",
+				"keyfile":       "",
+				"cafile":        "",
+				"server_name":   "",
+				"outgoing_mtls": false,
+			},
 			"Database": map[string]any{
 				"DBHost":     "",
 				"DBName":     "",
@@ -565,6 +572,8 @@ func TestDump(t *testing.T) {
 			"shutdown_deadline": 10,
 			"enable_reflection": true,
 			"control_address":   "",
+			"mtls":              "",
+			"control_mtls":      "",
 			"interceptors":      map[string]any{},
 			"services": map[string]any{
 				"gateway": []any{

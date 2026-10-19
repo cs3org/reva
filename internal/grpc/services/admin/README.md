@@ -273,6 +273,10 @@ control_address = "127.0.0.1:19700"
 address    = "127.0.0.1:19010"
 admin_group = "sailing-lovers"   # required: members may step up. Unset => no Admin API.
 admin_ttl  = "15m"               # lifetime of a minted admin token (default 15m)
+# Lifetime of a token minted by Impersonate. Unset, it is the token manager's
+# own (a day for jwt), as for signing in: an impersonated session is used like
+# any other, long transfers included.
+# impersonation_ttl = "12h"
 
 # Optional: enables Impersonate.
 machine_auth_apikey = "..."
@@ -318,6 +322,30 @@ reva admin impersonate <user>
 # if it is absent (or denies you) does it need the network host + elevate above.
 reva admin services
 ```
+
+### Over HTTP
+
+Clients that only speak the public HTTPS surface (the web UI, the `cernbox`
+CLI) reach the user-facing part of the Admin API through the `admin` HTTP
+service. It sits behind the normal HTTP auth middleware, so the caller
+authenticates as any other request does, and resolves the Admin API through the
+service registry.
+
+```toml
+[http.services.admin]
+# prefix = "admin"   # the default
+```
+
+| Request | Answer |
+|---|---|
+| `GET /admin/status` | `{"admin": true\|false}`. Backed by `CheckAdmin`, which mints nothing and is not audited. |
+| `POST /admin/impersonate` `{"user": "...", "reason": "..."}` (reason optional) | `{"token": "..."}`, a user token for the target. |
+
+`impersonate` runs `RequestAdmin` and `Impersonate` back to back on the
+server, so the admin token never reaches the client: the client holds at most
+a user token. Both steps are audited as usual, with `reason` when one is given. Errors
+are `{"message": "..."}` with 401 (caller not identified), 403 (not an admin),
+404 (no such user), 501 (impersonation not configured) or 503 (no Admin API).
 
 ## Jobs
 

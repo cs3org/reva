@@ -23,6 +23,7 @@ import (
 	_ "github.com/cs3org/reva/v3/pkg/auth/manager/appauth"
 	_ "github.com/cs3org/reva/v3/pkg/auth/manager/demo"
 	_ "github.com/cs3org/reva/v3/pkg/auth/manager/json"
+	_ "github.com/cs3org/reva/v3/pkg/auth/manager/kerberos"
 	_ "github.com/cs3org/reva/v3/pkg/auth/manager/ldap"
 	_ "github.com/cs3org/reva/v3/pkg/auth/manager/machine"
 	_ "github.com/cs3org/reva/v3/pkg/auth/manager/ocmexchangedtoken"

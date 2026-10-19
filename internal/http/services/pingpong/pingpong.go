@@ -26,9 +26,8 @@ import (
 	"github.com/cs3org/reva/v3/internal/grpc/services/pingpong/proto"
 	"github.com/cs3org/reva/v3/pkg/appctx"
 	"github.com/cs3org/reva/v3/pkg/rhttp/global"
+	"github.com/cs3org/reva/v3/pkg/service"
 	"github.com/cs3org/reva/v3/pkg/utils/cfg"
-	"google.golang.org/grpc"
-	"google.golang.org/grpc/credentials/insecure"
 )
 
 func init() {
@@ -97,11 +96,7 @@ func (s *svc) Handler() http.Handler {
 }
 
 func (s *svc) getClient() (proto.PingPongServiceClient, error) {
-	conn, err := grpc.NewClient(
-		s.conf.Endpoint,
-		grpc.WithTransportCredentials(insecure.NewCredentials()),
-	)
-
+	conn, err := service.Dial(s.conf.Endpoint)
 	if err != nil {
 		return nil, err
 	}

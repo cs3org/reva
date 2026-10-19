@@ -61,6 +61,11 @@ type config struct {
 	AdminGroup string `mapstructure:"admin_group"`
 	// AdminTTL is the lifetime of a minted admin token (default 15m).
 	AdminTTL string `mapstructure:"admin_ttl"`
+	// ImpersonationTTL is the lifetime of a token minted by Impersonate. Unset,
+	// it is the token manager's own, the same as a token from signing in: an
+	// impersonated session is used like any other, transfers included, and
+	// the admin token's short lifetime would cut those off.
+	ImpersonationTTL string `mapstructure:"impersonation_ttl"`
 
 	TokenManager  string                    `mapstructure:"token_manager"`
 	TokenManagers map[string]map[string]any `mapstructure:"token_managers"`
@@ -91,13 +96,16 @@ func (c *config) ApplyDefaults() {
 type svc struct {
 	adminpb.UnimplementedAdminAPIServer
 
-	conf          *config
-	adminGroup    string
-	adminTTL      time.Duration
-	tokenManager  token.Manager
-	machineAuth   auth.Manager
-	machineAPIKey string
-	startTime     time.Time
+	conf         *config
+	adminGroup   string
+	adminTTL     time.Duration
+	tokenManager token.Manager
+	// userTokenManager mints the user tokens Impersonate hands out, which live
+	// longer than admin tokens.
+	userTokenManager token.Manager
+	machineAuth      auth.Manager
+	machineAPIKey    string
+	startTime        time.Time
 
 	// socket is the configured value; socketPath the path actually bound.
 	socket       string
@@ -128,6 +136,16 @@ func New(ctx context.Context, m map[string]any) (rgrpc.Service, error) {
 	if err != nil {
 		return nil, err
 	}
+	var impersonationTTL time.Duration
+	if c.ImpersonationTTL != "" {
+		if impersonationTTL, err = time.ParseDuration(c.ImpersonationTTL); err != nil {
+			return nil, errors.Wrapf(err, "admin: invalid impersonation_ttl %q", c.ImpersonationTTL)
+		}
+	}
+	utm, err := newTokenManager(c, impersonationTTL)
+	if err != nil {
+		return nil, err
+	}
 
 	// Optionally wire the machine auth manager for impersonation.
 	var machineAuth auth.Manager
@@ -139,16 +157,17 @@ func New(ctx context.Context, m map[string]any) (rgrpc.Service, error) {
 	}
 
 	s := &svc{
-		conf:          &c,
-		adminGroup:    c.AdminGroup,
-		adminTTL:      ttl,
-		tokenManager:  tm,
-		machineAuth:   machineAuth,
-		machineAPIKey: c.MachineAuthAPIKey,
-		startTime:     time.Now(),
-		socket:        c.Socket,
-		socketGroup:   c.SocketGroup,
-		logger:        appctx.GetLogger(ctx),
+		conf:             &c,
+		adminGroup:       c.AdminGroup,
+		adminTTL:         ttl,
+		tokenManager:     tm,
+		userTokenManager: utm,
+		machineAuth:      machineAuth,
+		machineAPIKey:    c.MachineAuthAPIKey,
+		startTime:        time.Now(),
+		socket:           c.Socket,
+		socketGroup:      c.SocketGroup,
+		logger:           appctx.GetLogger(ctx),
 	}
 	// Fail closed: a configured socket that cannot be opened is an error.
 	if err := s.startSocket(); err != nil {
@@ -157,9 +176,10 @@ func New(ctx context.Context, m map[string]any) (rgrpc.Service, error) {
 	return s, nil
 }
 
-// newTokenManager builds the manager minting short-TTL admin tokens. The
-// signing secret defaults to the shared JWT secret so the auth interceptor can
-// verify what we mint.
+// newTokenManager builds a manager minting tokens that live for ttl, unless the
+// token manager's config sets its own lifetime; a zero ttl keeps the manager's
+// default. The signing secret defaults to the shared JWT secret so the auth
+// interceptor can verify what we mint.
 func newTokenManager(c config, ttl time.Duration) (token.Manager, error) {
 	h, ok := tokenregistry.NewFuncs[c.TokenManager]
 	if !ok {
@@ -167,7 +187,7 @@ func newTokenManager(c config, ttl time.Duration) (token.Manager, error) {
 	}
 	tmConf := map[string]any{}
 	maps.Copy(tmConf, c.TokenManagers[c.TokenManager])
-	if _, ok := tmConf["expires"]; !ok {
+	if _, ok := tmConf["expires"]; !ok && ttl > 0 {
 		tmConf["expires"] = int64(ttl.Seconds())
 	}
 	tm, err := h(tmConf)
@@ -183,7 +203,7 @@ func (s *svc) Close() error {
 }
 
 // UnprotectedEndpoints returns none: every method needs a valid token.
-// RequestAdmin is satisfied by the user scope, everything else by the admin
+// RequestAdmin and CheckAdmin are satisfied by the user scope, everything else by the admin
 // scope (enforced by the auth interceptor).
 func (s *svc) UnprotectedEndpoints() []string {
 	return nil
@@ -225,6 +245,16 @@ func (s *svc) RequestAdmin(ctx context.Context, _ *adminpb.RequestAdminRequest) 
 		Token:     tkn,
 		ExpiresAt: expires.Unix(),
 	}, nil
+}
+
+// CheckAdmin reports whether the caller may step up. It mints nothing, so it is
+// not audited; clients use it to show the caller's standing without elevating.
+func (s *svc) CheckAdmin(ctx context.Context, _ *adminpb.CheckAdminRequest) (*adminpb.CheckAdminResponse, error) {
+	u, err := s.caller(ctx)
+	if err != nil {
+		return nil, status.Errorf(codes.Unauthenticated, "admin: cannot identify caller: %v", err)
+	}
+	return &adminpb.CheckAdminResponse{Admin: slices.Contains(u.Groups, s.adminGroup)}, nil
 }
 
 // caller returns the authenticated user, falling back to dismantling the token

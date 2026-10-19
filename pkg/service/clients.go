@@ -52,12 +52,14 @@ import (
 	datatx "github.com/cs3org/go-cs3apis/cs3/tx/v1beta1"
 
 	revtrace "github.com/cs3org/reva/v3/internal/grpc/interceptors/trace"
+	"github.com/cs3org/reva/v3/pkg/admin/adminpb"
 	"github.com/cs3org/reva/v3/pkg/appctx"
 	"github.com/cs3org/reva/v3/pkg/logger"
 	"github.com/cs3org/reva/v3/pkg/registry"
 	"github.com/rs/zerolog"
 	"go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/credentials/insecure"
 )
 
@@ -135,6 +137,7 @@ type Clients interface {
 	AppProvider(ctx context.Context) (appprovider.ProviderAPIClient, error)
 	DataTx(ctx context.Context) (datatx.TxAPIClient, error)
 	Labels(ctx context.Context) (labels.LabelsAPIClient, error)
+	Admin(ctx context.Context) (adminpb.AdminAPIClient, error)
 
 	// Degrade marks the node at address degraded and passes it over locally.
 	Degrade(service, address string)
@@ -176,7 +179,7 @@ func NewClients(r registry.Registry, s Selector) Clients {
 		registry:  r,
 		selector:  s,
 		conns:     map[string]peerConn{},
-		open:      func(address string) (peerConn, error) { return dial(address) },
+		open:      func(address string) (peerConn, error) { return Dial(address) },
 		fails:     map[string]*failure{},
 		penalties: map[string]time.Time{},
 	}
@@ -374,11 +377,26 @@ func (c *clients) connFor(address string) (peerConn, error) {
 	return conn, nil
 }
 
-// dial opens a gRPC connection to address with reva's standard options.
-func dial(address string) (*grpc.ClientConn, error) {
+var (
+	dialMu    sync.RWMutex
+	dialCreds = insecure.NewCredentials()
+)
+
+// SetDialCredentials sets the transport credentials of every peer dialed after it.
+func SetDialCredentials(creds credentials.TransportCredentials) {
+	dialMu.Lock()
+	defer dialMu.Unlock()
+	dialCreds = creds
+}
+
+// Dial opens a gRPC connection to address with reva's standard options.
+func Dial(address string) (*grpc.ClientConn, error) {
+	dialMu.RLock()
+	creds := dialCreds
+	dialMu.RUnlock()
 	return grpc.NewClient(
 		address,
-		grpc.WithTransportCredentials(insecure.NewCredentials()),
+		grpc.WithTransportCredentials(creds),
 		grpc.WithDefaultCallOptions(grpc.MaxCallRecvMsgSize(maxCallRecvMsgSize)),
 		grpc.WithStatsHandler(otelgrpc.NewClientHandler()),
 		grpc.WithChainUnaryInterceptor(revtrace.NewUnaryClientInterceptor()),

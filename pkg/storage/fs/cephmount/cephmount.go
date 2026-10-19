@@ -44,6 +44,7 @@ import (
 	"github.com/cs3org/reva/v3/pkg/appctx"
 	"github.com/cs3org/reva/v3/pkg/errtypes"
 	"github.com/cs3org/reva/v3/pkg/mime"
+	"github.com/cs3org/reva/v3/pkg/permissions"
 	"github.com/cs3org/reva/v3/pkg/storage"
 	"github.com/cs3org/reva/v3/pkg/storage/fs/registry"
 	"github.com/cs3org/reva/v3/pkg/utils"
@@ -464,6 +465,21 @@ func (fs *cephmountfs) fileAsResourceInfo(ctx context.Context, path string, info
 		}
 	}
 
+	// An external account only ever sees what it was granted, since the uid the
+	// operation runs under is a service account and says nothing about them.
+	var perms *provider.ResourcePermissions
+	if u, ok := externalUser(ctx); ok {
+		var found bool
+		if perms, found = fs.externalAccountGrant(u.Id.OpaqueId, path); !found {
+			perms = &provider.ResourcePermissions{}
+		}
+	} else {
+		var err error
+		if perms, err = fs.permissionsAsUser(ctx, path, info.IsDir()); err != nil {
+			return nil, errors.Wrap(err, "cephmount: failed to check permissions")
+		}
+	}
+
 	ri := &provider.ResourceInfo{
 		Type:     resourceType,
 		Id:       resourceId,
@@ -473,38 +489,17 @@ func (fs *cephmountfs) fileAsResourceInfo(ctx context.Context, path string, info
 		Path:     externalPath,
 		// Clients list a received share by its name and etag, so both must be set
 		// even though the resource itself is addressed by path or id.
-		Name:  filepath.Base(externalPath),
-		Etag:  calcEtag(info, stat, rctime),
-		Owner: &userv1beta1.UserId{OpaqueId: owner.Username},
-		PermissionSet: &provider.ResourcePermissions{
-			GetPath:              true,
-			GetQuota:             true,
-			InitiateFileDownload: true,
-			ListGrants:           true,
-			ListContainer:        true,
-			ListFileVersions:     true,
-			ListRecycle:          true,
-			Stat:                 true,
-			InitiateFileUpload:   true,
-			RestoreFileVersion:   true,
-			RestoreRecycleItem:   true,
-			Move:                 true,
-			CreateContainer:      true,
-			Delete:               true,
-			PurgeRecycle:         true,
-
-			AddGrant:    true,
-			RemoveGrant: true,
-			UpdateGrant: true,
-			DenyGrant:   true,
-		},
+		Name:              filepath.Base(externalPath),
+		Etag:              calcEtag(info, stat, rctime),
+		Owner:             &userv1beta1.UserId{OpaqueId: owner.Username},
+		PermissionSet:     perms,
 		ArbitraryMetadata: &provider.ArbitraryMetadata{Metadata: map[string]string{}},
 	}
 
 	// An external account only ever sees what it was granted, since the uid the
 	// operation runs under is a service account and says nothing about them.
 	if u, ok := externalUser(ctx); ok {
-		perms, found := fs.externalAccountGrant(u.Id.OpaqueId, path)
+		perms, found := fs.externalPermissions(u, path)
 		if !found {
 			perms = &provider.ResourcePermissions{}
 		}
@@ -770,14 +765,21 @@ func (fs *cephmountfs) GetMD(ctx context.Context, ref *provider.Reference, mdKey
 
 	fs.logOperationWithPaths(ctx, "GetMD", receivedPath, path)
 
-	if err := fs.authorizeExternal(ctx, path, "GetMD", canStat); err != nil {
+	// The scope check stats resources before knowing they are shared, so this must not grant.
+	if err := fs.checkExternal(ctx, path, "GetMD", canStat); err != nil {
 		fs.logOperationError(ctx, "GetMD", path, err)
 		return nil, err
 	}
 
 	// path is already chroot-relative from resolveRef
-	// Execute stat operation on user's thread with correct UID
-	info, err := fs.statAsUser(ctx, path)
+	var info os.FileInfo
+	if _, external := externalUser(ctx); external {
+		// Checked above, so stat as the driver, as eos does.
+		info, err = fs.rootFS.Stat(path)
+	} else {
+		// Execute stat operation on user's thread with correct UID
+		info, err = fs.statAsUser(ctx, path)
+	}
 	if err != nil {
 		if os.IsNotExist(err) {
 			wrappedErr := errtypes.NotFound("file not found")
@@ -1906,42 +1908,23 @@ func (fs *cephmountfs) removeGrantViaSetfacl(ctx context.Context, path string, g
 	return nil
 }
 
+// roleForAccess maps read and write access on a resource to the role that grants it
+func roleForAccess(canRead, canWrite bool) *permissions.Role {
+	switch {
+	case canRead && canWrite:
+		return permissions.NewEditorRole()
+	case canRead:
+		return permissions.NewViewerRole()
+	case canWrite:
+		return permissions.NewUploaderRole()
+	default:
+		return permissions.NewDeniedRole()
+	}
+}
+
 // aclStringToPermissions converts ACL rwx string to CS3 ResourcePermissions
 func (fs *cephmountfs) aclStringToPermissions(aclStr string) *provider.ResourcePermissions {
-	perms := &provider.ResourcePermissions{}
-
-	if strings.Contains(aclStr, "r") {
-		perms.Stat = true
-		perms.GetPath = true
-		perms.GetQuota = true
-		perms.InitiateFileDownload = true
-		perms.ListGrants = true
-	}
-
-	if strings.Contains(aclStr, "w") {
-		perms.CreateContainer = true
-		perms.Delete = true
-		perms.InitiateFileUpload = true
-		perms.Move = true
-		perms.PurgeRecycle = true
-		perms.RestoreFileVersion = true
-		perms.RestoreRecycleItem = true
-		// TODO(lopresti) we should implement an additional xattr to store whether the user has
-		// permissions to add/edit permissions. For now write access also grants that so this is readily
-		// usable for personal spaces.
-		perms.AddGrant = true
-		perms.UpdateGrant = true
-		perms.RemoveGrant = true
-		perms.DenyGrant = true
-	}
-
-	if strings.Contains(aclStr, "x") {
-		perms.ListRecycle = true
-		perms.ListContainer = true
-		perms.ListFileVersions = true
-	}
-
-	return perms
+	return roleForAccess(strings.Contains(aclStr, "r"), strings.Contains(aclStr, "w")).CS3ResourcePermissions()
 }
 
 // permissionsToACLString converts CS3 ResourcePermissions to ACL rwx string

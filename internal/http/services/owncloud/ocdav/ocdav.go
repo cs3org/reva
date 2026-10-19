@@ -1,4 +1,4 @@
-// Copyright 2018-2024 CERN
+// Copyright 2018-2026 CERN
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -26,6 +26,7 @@ import (
 	"net/url"
 	"path"
 	"regexp"
+	"slices"
 	"strings"
 	"time"
 
@@ -42,6 +43,7 @@ import (
 
 	"github.com/cs3org/reva/v3/pkg/httpclient"
 	"github.com/cs3org/reva/v3/pkg/rhttp/global"
+	"github.com/cs3org/reva/v3/pkg/rhttp/ratelimit"
 	"github.com/cs3org/reva/v3/pkg/rhttp/router"
 	"github.com/cs3org/reva/v3/pkg/service"
 	"github.com/cs3org/reva/v3/pkg/sharedconf"
@@ -125,7 +127,21 @@ type Config struct {
 	PublicLinkDownload           *ConfigPublicLinkDownload `mapstructure:"publiclink_download"`
 	DisabledOpenInAppPaths       []string                  `mapstructure:"disabled_open_in_app_paths"`
 	MyOfficeFilesAllowedProjects []string                  `mapstructure:"my_office_files_projects"`
+	// RateLimit guards the unauthenticated routes (see Unprotected) except
+	// OCM WebDAV: public links, whose password is checked on every request,
+	// legacy links and status. Browsers and sync clients hit them during
+	// normal use, hence a higher default than the OCM services.
+	RateLimit ratelimit.ServiceConfig `mapstructure:",squash"`
 }
+
+// Default rate limit of the unauthenticated routes.
+const (
+	defaultUnauthRateLimit      = 600
+	defaultUnauthRateLimitBurst = 100
+)
+
+// ocmWebDAVPath serves the files of federated shares to remote users. It's also exposed by the .wellknown endpoint.
+const ocmWebDAVPath = "/remote.php/dav/ocm/"
 
 func (c *Config) ApplyDefaults() {
 	// note: default c.Prefix is an empty string
@@ -138,6 +154,8 @@ func (c *Config) ApplyDefaults() {
 	if len(c.MyOfficeFilesAllowedProjects) == 0 {
 		c.MyOfficeFilesAllowedProjects = []string{"cernbox"}
 	}
+
+	c.RateLimit.ApplyDefaultsWith(defaultUnauthRateLimit, defaultUnauthRateLimitBurst)
 }
 
 type svc struct {
@@ -146,6 +164,7 @@ type svc struct {
 	davHandler           *DavHandler
 	myOfficeFilesManager myofficefiles.Manager
 	client               *httpclient.Client
+	limiter              *ratelimit.Limiter
 }
 
 // New returns a new ocdav.
@@ -155,8 +174,15 @@ func New(ctx context.Context, m map[string]any) (global.Service, error) {
 		return nil, err
 	}
 
+	// Built first so that an invalid trusted_proxy_cidrs entry fails fast.
+	limiter, err := c.RateLimit.NewLimiter(appctx.GetLogger(ctx))
+	if err != nil {
+		return nil, err
+	}
+
 	myOfficeFilesManager, err := myofficefiles.New(ctx, c.GatewaySvc, c.MyOfficeFilesAllowedProjects)
 	if err != nil {
+		limiter.Close()
 		return nil, err
 	}
 
@@ -171,12 +197,15 @@ func New(ctx context.Context, m map[string]any) (global.Service, error) {
 			httpclient.RoundTripper(tr),
 		),
 		myOfficeFilesManager: myOfficeFilesManager,
+		limiter:              limiter,
 	}
 	// initialize handlers and set default cigs
 	if err := s.webDavHandler.init(c.WebdavNamespace, true); err != nil {
+		_ = s.Close()
 		return nil, err
 	}
 	if err := s.davHandler.init(&c); err != nil {
+		_ = s.Close()
 		return nil, err
 	}
 	return s, nil
@@ -187,14 +216,38 @@ func (s *svc) Prefix() string {
 }
 
 func (s *svc) Close() error {
+	s.limiter.Close()
 	return nil
 }
 
+// Unprotected returns a fresh slice on every call: the HTTP server rewrites
+// the one it gets in place.
 func (s *svc) Unprotected() []string {
-	return []string{"/status.php", "/remote.php/dav/public-files/", "/apps/files/", "/index.php/f/", "/index.php/s/", "/s/", "/remote.php/dav/ocm/", "/ocm-provider"}
+	return []string{"/status.php", "/remote.php/dav/public-files/", "/apps/files/", "/index.php/f/", "/index.php/s/", "/s/", ocmWebDAVPath, "/ocm-provider"}
 }
 
 func (s *svc) Handler() http.Handler {
+	return s.limitUnprotected(s.handler())
+}
+
+// limitUnprotected rate limits the requests to the unauthenticated routes
+// other than ocmWebDAVPath, leaving the authenticated ones alone.
+func (s *svc) limitUnprotected(next http.Handler) http.Handler {
+	if s.limiter == nil {
+		return next
+	}
+	unprotected := slices.DeleteFunc(s.Unprotected(), func(p string) bool { return p == ocmWebDAVPath })
+	limited := s.limiter.Middleware(next)
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if utils.Skip(r.URL.Path, unprotected) {
+			limited.ServeHTTP(w, r)
+			return
+		}
+		next.ServeHTTP(w, r)
+	})
+}
+
+func (s *svc) handler() http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		ctx := r.Context()
 		log := appctx.GetLogger(ctx)

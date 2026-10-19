@@ -309,6 +309,10 @@ func (s *svc) getResourceInfos(ctx context.Context, w http.ResponseWriter, r *ht
 			HandleErrorStatus(&log, w, parentRes.Status)
 			return nil, nil, "", false
 		}
+		if utils.ResourceIDEqual(parentRes.Info.Id, parentInfo.Id) {
+			// the file is the root of a single-file share and has no parent to list
+			return parentInfo, resourceInfos[:1], hrefBase, true
+		}
 		parentInfo = parentRes.Info
 		// The incoming URL was not to a folder, but to the file itself.
 		// So the href we constructed up to now is wrong: it needs to be refering to the parent

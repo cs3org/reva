@@ -49,6 +49,7 @@ import (
 	"github.com/rs/zerolog/log"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/metadata"
+	"google.golang.org/protobuf/types/known/fieldmaskpb"
 )
 
 func init() {
@@ -161,7 +162,7 @@ func (s *service) ListStorageSpaces(ctx context.Context, req *provider.ListStora
 		log.Debug().Bool("filterByID", byId).Str("id", id).Msg("ListStorageSpaces: going over all possible space types")
 		homes, err := s.listSpacesByType(ctx, req, user, spaces.SpaceTypeHome)
 		if err != nil {
-			return &provider.ListStorageSpacesResponse{Status: status.NewInternal(ctx, err, err.Error())}, nil
+			return &provider.ListStorageSpacesResponse{Status: status.NewStatusFromErrType(ctx, "error listing storage spaces", err)}, nil
 		}
 		sp = append(sp, homes...)
 		if byId && len(homes) == 1 {
@@ -173,7 +174,7 @@ func (s *service) ListStorageSpaces(ctx context.Context, req *provider.ListStora
 			sp = append(sp, projects...)
 		}
 		if err != nil {
-			return &provider.ListStorageSpacesResponse{Status: status.NewInternal(ctx, err, err.Error()), StorageSpaces: sp}, nil
+			return &provider.ListStorageSpacesResponse{Status: status.NewStatusFromErrType(ctx, "error listing storage spaces", err), StorageSpaces: sp}, nil
 		}
 		if byId && len(projects) == 1 {
 			return &provider.ListStorageSpacesResponse{Status: status.NewOK(ctx), StorageSpaces: sp}, nil
@@ -181,7 +182,7 @@ func (s *service) ListStorageSpaces(ctx context.Context, req *provider.ListStora
 
 		publicSpaces, err := s.listSpacesByType(ctx, req, user, spaces.SpaceTypePublic)
 		if err != nil {
-			return &provider.ListStorageSpacesResponse{Status: status.NewInternal(ctx, err, err.Error())}, nil
+			return &provider.ListStorageSpacesResponse{Status: status.NewStatusFromErrType(ctx, "error listing storage spaces", err)}, nil
 		}
 		sp = append(sp, publicSpaces...)
 	} else {
@@ -194,7 +195,7 @@ func (s *service) ListStorageSpaces(ctx context.Context, req *provider.ListStora
 				log.Debug().Bool("filterByID", byId).Str("id", id).Msgf("ListStorageSpaces: listing type %s", filter.Term.(*provider.ListStorageSpacesRequest_Filter_SpaceType).SpaceType)
 				spaces, err := s.listSpacesByType(ctx, req, user, spaces.SpaceType(filter.Term.(*provider.ListStorageSpacesRequest_Filter_SpaceType).SpaceType))
 				if err != nil {
-					return &provider.ListStorageSpacesResponse{Status: status.NewInternal(ctx, err, err.Error())}, nil
+					return &provider.ListStorageSpacesResponse{Status: status.NewStatusFromErrType(ctx, "error listing storage spaces", err)}, nil
 				}
 				sp = append(sp, spaces...)
 			}
@@ -336,7 +337,7 @@ func (s *service) decorateProject(ctx context.Context, proj *provider.StorageSpa
 			return err
 		}
 		if authRes.Status.Code != rpcv1beta1.Code_CODE_OK {
-			return errors.New(authRes.Status.Message)
+			return status.NewErrtypeFromStatus(authRes.Status)
 		}
 
 		token := authRes.Token
@@ -368,9 +369,12 @@ func (s *service) decorateProject(ctx context.Context, proj *provider.StorageSpa
 	if res, err := s.resourceInfoCache.Get(proj.RootInfo.Path); err == nil && res != nil {
 		resourceInfo = res
 	} else {
-		statRes, err := gw.Stat(ctx, &provider.StatRequest{Ref: &provider.Reference{
-			Path: proj.RootInfo.Path,
-		}})
+		statRes, err := gw.Stat(ctx, &provider.StatRequest{
+			Ref: &provider.Reference{
+				Path: proj.RootInfo.Path,
+			},
+			FieldMask: &fieldmaskpb.FieldMask{Paths: []string{"mtime"}},
+		})
 		if err != nil || statRes.Status == nil || statRes.Status.Code != rpcv1beta1.Code_CODE_OK {
 			return fmt.Errorf("failed to stat path %s for project %s", proj.RootInfo.Path, proj.Name)
 		}
@@ -433,7 +437,20 @@ func (s *service) userSpace(ctx context.Context, user *userpb.User) (*provider.S
 			QuotaMaxBytes:  quota.TotalBytes,
 			RemainingBytes: quota.TotalBytes - quota.UsedBytes,
 		},
-		PermissionSet: permissions.NewManagerRole().CS3ResourcePermissions(),
+		Roles: []*provider.SpaceRole{
+			{
+				RoleName:      "owner",
+				PermissionSet: permissions.NewManagerRole().CS3ResourcePermissions(),
+				Recipients: []*provider.Grantee{
+					{
+						Type: provider.GranteeType_GRANTEE_TYPE_USER,
+						Id: &provider.Grantee_UserId{
+							UserId: user.Id,
+						},
+					},
+				},
+			},
+		},
 	}, nil
 }
 
@@ -443,6 +460,11 @@ func (s *service) getAllPublicSpaces(ctx context.Context) ([]*provider.StorageSp
 	gw, err := revaservice.Gateway(ctx)
 	if err != nil {
 		return nil, err
+	}
+
+	user, ok := appctx.ContextGetUser(ctx)
+	if !ok {
+		return nil, errtypes.UserRequired("Must have a user to list public spaces")
 	}
 
 	publicSpaces := make([]*provider.StorageSpace, 0)
@@ -488,7 +510,20 @@ func (s *service) getAllPublicSpaces(ctx context.Context) ([]*provider.StorageSp
 				QuotaMaxBytes:  uint64(math.Pow10(18)),
 				RemainingBytes: uint64(math.Pow10(18)) - resourceInfo.Size,
 			},
-			PermissionSet: resourceInfo.PermissionSet,
+			Roles: []*provider.SpaceRole{
+				{
+					RoleName:      "user",
+					PermissionSet: resourceInfo.PermissionSet,
+					Recipients: []*provider.Grantee{
+						{
+							Type: provider.GranteeType_GRANTEE_TYPE_USER,
+							Id: &provider.Grantee_UserId{
+								UserId: user.Id,
+							},
+						},
+					},
+				},
+			},
 		}
 
 		if description, ok := content["description"]; ok {

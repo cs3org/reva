@@ -43,6 +43,7 @@ import (
 	storageprovider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	storageregistry "github.com/cs3org/go-cs3apis/cs3/storage/registry/v1beta1"
 	datatx "github.com/cs3org/go-cs3apis/cs3/tx/v1beta1"
+	"github.com/cs3org/reva/v3/pkg/admin/adminpb"
 	"google.golang.org/grpc"
 )
 
@@ -187,6 +188,11 @@ func Labels(ctx context.Context) (labels.LabelsAPIClient, error) {
 	return resolved(func(c Clients) (labels.LabelsAPIClient, error) { return c.Labels(ctx) })
 }
 
+// Admin resolves the Admin API through the global resolver.
+func Admin(ctx context.Context) (adminpb.AdminAPIClient, error) {
+	return resolved(func(c Clients) (adminpb.AdminAPIClient, error) { return c.Admin(ctx) })
+}
+
 // HTTPEndpoint resolves one ready HTTP endpoint matching the filters through the
 // global resolver.
 func HTTPEndpoint(ctx context.Context, opts ...EndpointOption) (Endpoint, error) {
@@ -225,7 +231,7 @@ func connAt(address string) (*grpc.ClientConn, error) {
 	if conn, ok := byAddr.conns[address]; ok {
 		return conn, nil
 	}
-	conn, err := dial(address)
+	conn, err := Dial(address)
 	if err != nil {
 		return nil, err
 	}

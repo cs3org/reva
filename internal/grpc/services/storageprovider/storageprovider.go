@@ -36,8 +36,6 @@ import (
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 
-	cachereg "github.com/cs3org/reva/v3/pkg/share/cache/registry"
-
 	"github.com/google/uuid"
 	"github.com/pkg/errors"
 	"google.golang.org/grpc"
@@ -50,7 +48,6 @@ import (
 	"github.com/cs3org/reva/v3/pkg/rgrpc/status"
 	"github.com/cs3org/reva/v3/pkg/rhttp/router"
 	svc "github.com/cs3org/reva/v3/pkg/service"
-	"github.com/cs3org/reva/v3/pkg/share/cache"
 	"github.com/cs3org/reva/v3/pkg/sharedconf"
 	"github.com/cs3org/reva/v3/pkg/spaces"
 	"github.com/cs3org/reva/v3/pkg/storage"
@@ -69,19 +66,16 @@ func init() {
 }
 
 type config struct {
-	MountPath             string                    `docs:"/;The path where the file system would be mounted."                                                           mapstructure:"mount_path"`
-	MountID               string                    `docs:"-;The ID of the mounted file system."                                                                         mapstructure:"mount_id"`
-	Driver                string                    `docs:"localhome;The storage driver to be used."                                                                     mapstructure:"driver"`
-	Drivers               map[string]map[string]any `docs:"url:pkg/storage/fs/localhome/localhome.go"                                                                    mapstructure:"drivers"`
-	ExposeDataServer      bool                      `docs:"false;Whether to expose data server."                                                                         mapstructure:"expose_data_server"` // if true the client will be able to upload/download directly to it
-	AvailableXS           map[string]uint32         `docs:"nil;List of available checksums."                                                                             mapstructure:"available_checksums"`
-	CustomMimeTypesJSON   string                    `docs:"nil;An optional mapping file with the list of supported custom file extensions and corresponding mime types." mapstructure:"custom_mime_types_json"`
-	GatewaySvc            string                    `mapstructure:"gatewaysvc"`
-	SpaceInfoCacheDriver  string                    `mapstructure:"space_info_cache_type"`
-	SpaceInfoCacheTTL     int                       `mapstructure:"space_info_cache_ttl"`
-	SpaceInfoCacheDrivers map[string]map[string]any `mapstructure:"space_info_caches"`
-	ProvidesSpaceType     string                    `docs:"nil;Defines which type of spaces this storage provider provides (e.g. home, project, ...)."  mapstructure:"provides_space_type"`
-	SpaceDepth            int                       `docs:"nil;Defines at which level spaces start. E.g. if spaces are located under '/eos/{space}', this would be 2. Any number lower than the depth of the SP's mount_path means only one space is provided by this StorageProvider."  mapstructure:"space_depth"`
+	MountPath           string                    `docs:"/;The path where the file system would be mounted."                                                           mapstructure:"mount_path"`
+	MountID             string                    `docs:"-;The ID of the mounted file system."                                                                         mapstructure:"mount_id"`
+	Driver              string                    `docs:"localhome;The storage driver to be used."                                                                     mapstructure:"driver"`
+	Drivers             map[string]map[string]any `docs:"url:pkg/storage/fs/localhome/localhome.go"                                                                    mapstructure:"drivers"`
+	ExposeDataServer    bool                      `docs:"false;Whether to expose data server."                                                                         mapstructure:"expose_data_server"` // if true the client will be able to upload/download directly to it
+	AvailableXS         map[string]uint32         `docs:"nil;List of available checksums."                                                                             mapstructure:"available_checksums"`
+	CustomMimeTypesJSON string                    `docs:"nil;An optional mapping file with the list of supported custom file extensions and corresponding mime types." mapstructure:"custom_mime_types_json"`
+	GatewaySvc          string                    `mapstructure:"gatewaysvc"`
+	ProvidesSpaceType   string                    `docs:"nil;Defines which type of spaces this storage provider provides (e.g. home, project, ...)."  mapstructure:"provides_space_type"`
+	SpaceDepth          int                       `docs:"nil;Defines at which level spaces start. E.g. if spaces are located under '/eos/{space}', this would be 2. Any number lower than the depth of the SP's mount_path means only one space is provided by this StorageProvider."  mapstructure:"space_depth"`
 }
 
 func (c *config) ApplyDefaults() {
@@ -95,10 +89,6 @@ func (c *config) ApplyDefaults() {
 
 	if c.MountID == "" {
 		c.MountID = "00000000-0000-0000-0000-000000000000"
-	}
-
-	if c.SpaceInfoCacheDriver == "" {
-		c.SpaceInfoCacheDriver = "memory_space"
 	}
 
 	// set sane defaults
@@ -232,9 +222,8 @@ func New(ctx context.Context, m map[string]any) (rgrpc.Service, error) {
 func (s *service) SetArbitraryMetadata(ctx context.Context, req *provider.SetArbitraryMetadataRequest) (*provider.SetArbitraryMetadataResponse, error) {
 	newRef, err := s.unwrap(ctx, req.Ref)
 	if err != nil {
-		err := errors.Wrap(err, "storageprovidersvc: error unwrapping path")
 		return &provider.SetArbitraryMetadataResponse{
-			Status: status.NewInternal(ctx, err, "error setting arbitrary metadata"),
+			Status: status.NewStatusFromErrType(ctx, "error setting arbitrary metadata", err),
 		}, nil
 	}
 
@@ -246,7 +235,7 @@ func (s *service) SetArbitraryMetadata(ctx context.Context, req *provider.SetArb
 		case errtypes.PermissionDenied:
 			st = status.NewPermissionDenied(ctx, err, "permission denied")
 		default:
-			st = status.NewInternal(ctx, err, "error setting arbitrary metadata: "+req.Ref.String())
+			st = status.NewStatusFromErrType(ctx, "error setting arbitrary metadata: "+req.Ref.String(), err)
 		}
 		return &provider.SetArbitraryMetadataResponse{
 			Status: st,
@@ -263,9 +252,8 @@ func (s *service) UnsetArbitraryMetadata(ctx context.Context, req *provider.Unse
 	log := appctx.GetLogger(ctx)
 	newRef, err := s.unwrap(ctx, req.Ref)
 	if err != nil {
-		err := errors.Wrap(err, "storageprovidersvc: error unwrapping path")
 		return &provider.UnsetArbitraryMetadataResponse{
-			Status: status.NewInternal(ctx, err, "error unsetting arbitrary metadata"),
+			Status: status.NewStatusFromErrType(ctx, "error unsetting arbitrary metadata", err),
 		}, nil
 	}
 
@@ -278,7 +266,7 @@ func (s *service) UnsetArbitraryMetadata(ctx context.Context, req *provider.Unse
 			st = status.NewPermissionDenied(ctx, err, "permission denied")
 		default:
 			log.Error().Err(err).Str("ref", req.Ref.String()).Any("keys", req.ArbitraryMetadataKeys).Msg("error unsetting arbitrary metadata")
-			st = status.NewInternal(ctx, err, "error unsetting arbitrary metadata: "+req.Ref.String())
+			st = status.NewStatusFromErrType(ctx, "error unsetting arbitrary metadata: "+req.Ref.String(), err)
 		}
 		return &provider.UnsetArbitraryMetadataResponse{
 			Status: st,
@@ -295,9 +283,8 @@ func (s *service) UnsetArbitraryMetadata(ctx context.Context, req *provider.Unse
 func (s *service) SetLock(ctx context.Context, req *provider.SetLockRequest) (*provider.SetLockResponse, error) {
 	newRef, err := s.unwrap(ctx, req.Ref)
 	if err != nil {
-		err := errors.Wrap(err, "storageprovidersvc: error unwrapping path")
 		return &provider.SetLockResponse{
-			Status: status.NewInternal(ctx, err, "error setting lock"),
+			Status: status.NewStatusFromErrType(ctx, "error setting lock", err),
 		}, nil
 	}
 
@@ -311,7 +298,7 @@ func (s *service) SetLock(ctx context.Context, req *provider.SetLockRequest) (*p
 		case errtypes.Conflict:
 			st = status.NewFailedPrecondition(ctx, err, "reference already locked")
 		default:
-			st = status.NewInternal(ctx, err, "error setting lock: "+req.Ref.String())
+			st = status.NewStatusFromErrType(ctx, "error setting lock: "+req.Ref.String(), err)
 		}
 		return &provider.SetLockResponse{
 			Status: st,
@@ -328,9 +315,8 @@ func (s *service) SetLock(ctx context.Context, req *provider.SetLockRequest) (*p
 func (s *service) GetLock(ctx context.Context, req *provider.GetLockRequest) (*provider.GetLockResponse, error) {
 	newRef, err := s.unwrap(ctx, req.Ref)
 	if err != nil {
-		err := errors.Wrap(err, "storageprovidersvc: error unwrapping path")
 		return &provider.GetLockResponse{
-			Status: status.NewInternal(ctx, err, "error getting lock"),
+			Status: status.NewStatusFromErrType(ctx, "error getting lock", err),
 		}, nil
 	}
 
@@ -343,7 +329,7 @@ func (s *service) GetLock(ctx context.Context, req *provider.GetLockRequest) (*p
 		case errtypes.PermissionDenied:
 			st = status.NewPermissionDenied(ctx, err, "permission denied")
 		default:
-			st = status.NewInternal(ctx, err, "error getting lock: "+req.Ref.String())
+			st = status.NewStatusFromErrType(ctx, "error getting lock: "+req.Ref.String(), err)
 		}
 		return &provider.GetLockResponse{
 			Status: st,
@@ -361,9 +347,8 @@ func (s *service) GetLock(ctx context.Context, req *provider.GetLockRequest) (*p
 func (s *service) RefreshLock(ctx context.Context, req *provider.RefreshLockRequest) (*provider.RefreshLockResponse, error) {
 	newRef, err := s.unwrap(ctx, req.Ref)
 	if err != nil {
-		err := errors.Wrap(err, "storageprovidersvc: error unwrapping path")
 		return &provider.RefreshLockResponse{
-			Status: status.NewInternal(ctx, err, "error refreshing lock"),
+			Status: status.NewStatusFromErrType(ctx, "error refreshing lock", err),
 		}, nil
 	}
 
@@ -377,7 +362,7 @@ func (s *service) RefreshLock(ctx context.Context, req *provider.RefreshLockRequ
 		case errtypes.BadRequest:
 			st = status.NewFailedPrecondition(ctx, err, "reference not locked or caller does not hold the lock")
 		default:
-			st = status.NewInternal(ctx, err, "error refreshing lock: "+req.Ref.String())
+			st = status.NewStatusFromErrType(ctx, "error refreshing lock: "+req.Ref.String(), err)
 		}
 		return &provider.RefreshLockResponse{
 			Status: st,
@@ -394,9 +379,8 @@ func (s *service) RefreshLock(ctx context.Context, req *provider.RefreshLockRequ
 func (s *service) Unlock(ctx context.Context, req *provider.UnlockRequest) (*provider.UnlockResponse, error) {
 	newRef, err := s.unwrap(ctx, req.Ref)
 	if err != nil {
-		err := errors.Wrap(err, "storageprovidersvc: error unwrapping path")
 		return &provider.UnlockResponse{
-			Status: status.NewInternal(ctx, err, "error on unlocking"),
+			Status: status.NewStatusFromErrType(ctx, "error on unlocking", err),
 		}, nil
 	}
 
@@ -410,7 +394,7 @@ func (s *service) Unlock(ctx context.Context, req *provider.UnlockRequest) (*pro
 		case errtypes.BadRequest:
 			st = status.NewFailedPrecondition(ctx, err, "reference not locked")
 		default:
-			st = status.NewInternal(ctx, err, "error unlocking: "+req.Ref.String())
+			st = status.NewStatusFromErrType(ctx, "error unlocking: "+req.Ref.String(), err)
 		}
 		return &provider.UnlockResponse{
 			Status: st,
@@ -448,7 +432,7 @@ func (s *service) InitiateFileDownload(ctx context.Context, req *provider.Initia
 		newRef, err := s.unwrap(ctx, req.Ref)
 		if err != nil {
 			return &provider.InitiateFileDownloadResponse{
-				Status: status.NewInternal(ctx, err, "error unwrapping path"),
+				Status: status.NewStatusFromErrType(ctx, "error unwrapping path", err),
 			}, nil
 		}
 		// Currently, we only support the simple protocol for GET requests
@@ -496,7 +480,7 @@ func (s *service) InitiateFileUpload(ctx context.Context, req *provider.Initiate
 	newRef, err := s.unwrap(ctx, req.Ref)
 	if err != nil {
 		return &provider.InitiateFileUploadResponse{
-			Status: status.NewInternal(ctx, err, "error unwrapping path"),
+			Status: status.NewStatusFromErrType(ctx, "error unwrapping path", err),
 		}, nil
 	}
 
@@ -518,7 +502,7 @@ func (s *service) InitiateFileUpload(ctx context.Context, req *provider.Initiate
 	}
 	if uploadRef.GetPath() == "/" {
 		return &provider.InitiateFileUploadResponse{
-			Status: status.NewInternal(ctx, errtypes.BadRequest("can't upload to mount path"), "can't upload to mount path"),
+			Status: status.NewInvalidArg(ctx, "can't upload to mount path"),
 		}, nil
 	}
 
@@ -530,7 +514,7 @@ func (s *service) InitiateFileUpload(ctx context.Context, req *provider.Initiate
 			uploadLength, err = strconv.ParseInt(string(req.Opaque.Map["Upload-Length"].Value), 10, 64)
 			if err != nil {
 				return &provider.InitiateFileUploadResponse{
-					Status: status.NewInternal(ctx, err, "error parsing upload length"),
+					Status: status.NewInvalidArg(ctx, "error parsing upload length: "+err.Error()),
 				}, nil
 			}
 		}
@@ -565,7 +549,7 @@ func (s *service) InitiateFileUpload(ctx context.Context, req *provider.Initiate
 		case errtypes.InsufficientStorage:
 			st = status.NewInsufficientStorage(ctx, err, "insufficient storage")
 		default:
-			st = status.NewInternal(ctx, err, "error getting upload id: "+req.Ref.String())
+			st = status.NewStatusFromErrType(ctx, "error getting upload id: "+req.Ref.String(), err)
 		}
 		return &provider.InitiateFileUploadResponse{
 			Status: st,
@@ -608,7 +592,7 @@ func (s *service) GetPath(ctx context.Context, req *provider.GetPathRequest) (*p
 	fn, err := s.storage.GetPathByID(ctx, req.ResourceId)
 	if err != nil {
 		return &provider.GetPathResponse{
-			Status: status.NewInternal(ctx, err, "error getting path by id"),
+			Status: status.NewStatusFromErrType(ctx, "error getting path by id", err),
 		}, nil
 	}
 
@@ -634,7 +618,7 @@ func (s *service) GetHome(ctx context.Context, req *provider.GetHomeRequest) (*p
 func (s *service) CreateHome(ctx context.Context, req *provider.CreateHomeRequest) (*provider.CreateHomeResponse, error) {
 	log := appctx.GetLogger(ctx)
 	if err := s.storage.CreateHome(ctx); err != nil {
-		st := status.NewInternal(ctx, err, "error creating home")
+		st := status.NewStatusFromErrType(ctx, "error creating home", err)
 		log.Err(err).Msg("storageprovider: error calling CreateHome of storage driver")
 		return &provider.CreateHomeResponse{
 			Status: st,
@@ -677,7 +661,7 @@ func (s *service) ListStorageSpaces(ctx context.Context, req *provider.ListStora
 		case errtypes.NotSupported:
 			st = status.NewUnimplemented(ctx, err, "not implemented")
 		default:
-			st = status.NewInternal(ctx, err, "error listing spaces")
+			st = status.NewStatusFromErrType(ctx, "error listing spaces", err)
 		}
 		return &provider.ListStorageSpacesResponse{
 			Status: st,
@@ -719,7 +703,7 @@ func (s *service) CreateContainer(ctx context.Context, req *provider.CreateConta
 	newRef, err := s.unwrap(ctx, req.Ref)
 	if err != nil {
 		return &provider.CreateContainerResponse{
-			Status: status.NewInternal(ctx, err, "error unwrapping path"),
+			Status: status.NewStatusFromErrType(ctx, "error unwrapping path", err),
 		}, nil
 	}
 	if err := s.storage.CreateDir(ctx, newRef); err != nil {
@@ -732,7 +716,7 @@ func (s *service) CreateContainer(ctx context.Context, req *provider.CreateConta
 		case errtypes.PermissionDenied:
 			st = status.NewPermissionDenied(ctx, err, "permission denied")
 		default:
-			st = status.NewInternal(ctx, err, "error creating container: "+req.Ref.String())
+			st = status.NewStatusFromErrType(ctx, "error creating container: "+req.Ref.String(), err)
 		}
 		return &provider.CreateContainerResponse{
 			Status: st,
@@ -749,7 +733,7 @@ func (s *service) TouchFile(ctx context.Context, req *provider.TouchFileRequest)
 	newRef, err := s.unwrap(ctx, req.Ref)
 	if err != nil {
 		return &provider.TouchFileResponse{
-			Status: status.NewInternal(ctx, err, "error unwrapping path"),
+			Status: status.NewStatusFromErrType(ctx, "error unwrapping path", err),
 		}, nil
 	}
 	if err := s.storage.TouchFile(ctx, newRef); err != nil {
@@ -762,7 +746,7 @@ func (s *service) TouchFile(ctx context.Context, req *provider.TouchFileRequest)
 		case errtypes.PermissionDenied:
 			st = status.NewPermissionDenied(ctx, err, "permission denied")
 		default:
-			st = status.NewInternal(ctx, err, "error touching file "+req.Ref.String()+": "+err.Error())
+			st = status.NewStatusFromErrType(ctx, "error touching file "+req.Ref.String(), err)
 		}
 		return &provider.TouchFileResponse{
 			Status: st,
@@ -779,12 +763,12 @@ func (s *service) Delete(ctx context.Context, req *provider.DeleteRequest) (*pro
 	newRef, err := s.unwrap(ctx, req.Ref)
 	if err != nil {
 		return &provider.DeleteResponse{
-			Status: status.NewInternal(ctx, err, "error unwrapping path"),
+			Status: status.NewStatusFromErrType(ctx, "error unwrapping path", err),
 		}, nil
 	}
 	if newRef.GetPath() == "/" {
 		return &provider.DeleteResponse{
-			Status: status.NewInternal(ctx, errtypes.BadRequest("can't delete mount path"), "can't delete mount path"),
+			Status: status.NewInvalidArg(ctx, "can't delete mount path"),
 		}, nil
 	}
 
@@ -796,7 +780,7 @@ func (s *service) Delete(ctx context.Context, req *provider.DeleteRequest) (*pro
 		case errtypes.PermissionDenied:
 			st = status.NewPermissionDenied(ctx, err, "permission denied")
 		default:
-			st = status.NewInternal(ctx, err, "error deleting file: "+req.Ref.String())
+			st = status.NewStatusFromErrType(ctx, "error deleting file: "+req.Ref.String(), err)
 		}
 		return &provider.DeleteResponse{
 			Status: st,
@@ -813,13 +797,13 @@ func (s *service) Move(ctx context.Context, req *provider.MoveRequest) (*provide
 	sourceRef, err := s.unwrap(ctx, req.Source)
 	if err != nil {
 		return &provider.MoveResponse{
-			Status: status.NewInternal(ctx, err, "error unwrapping source path"),
+			Status: status.NewStatusFromErrType(ctx, "error unwrapping source path", err),
 		}, nil
 	}
 	targetRef, err := s.unwrap(ctx, req.Destination)
 	if err != nil {
 		return &provider.MoveResponse{
-			Status: status.NewInternal(ctx, err, "error unwrapping destination path"),
+			Status: status.NewStatusFromErrType(ctx, "error unwrapping destination path", err),
 		}, nil
 	}
 
@@ -831,7 +815,7 @@ func (s *service) Move(ctx context.Context, req *provider.MoveRequest) (*provide
 		case errtypes.PermissionDenied:
 			st = status.NewPermissionDenied(ctx, err, "permission denied")
 		default:
-			st = status.NewInternal(ctx, err, "error moving: "+sourceRef.String())
+			st = status.NewStatusFromErrType(ctx, "error moving: "+sourceRef.String(), err)
 		}
 		return &provider.MoveResponse{
 			Status: st,
@@ -854,7 +838,9 @@ func (s *service) addSpaceInfo(ctx context.Context, ri *provider.ResourceInfo) e
 	ri.Space = &provider.StorageSpace{}
 	ri.Space.SpaceType = s.conf.ProvidesSpaceType
 
-	spaceID, err := s.pathToSpaceID(ri.Path)
+	// ri.Path is the path of the driver, so that relative references, which
+	// are not prefixed with the mount path on wrap, get a space too
+	spaceID, err := s.pathToSpaceID(path.Join(s.mountPath, ri.Path))
 	if err != nil {
 		log.Error().Err(err).Str("ri.Path", ri.Path).Int("spaceDepth", s.conf.SpaceDepth).Msgf("addSpaceInfo: failed call to pathToSpaceID")
 		return err
@@ -906,7 +892,7 @@ func (s *service) Stat(ctx context.Context, req *provider.StatRequest) (*provide
 			return s.statVirtualView(ctx, req.Ref)
 		}
 		return &provider.StatResponse{
-			Status: status.NewInternal(ctx, err, "error unwrapping path"),
+			Status: status.NewStatusFromErrType(ctx, "error unwrapping path", err),
 		}, nil
 	}
 
@@ -919,13 +905,14 @@ func (s *service) Stat(ctx context.Context, req *provider.StatRequest) (*provide
 		case errtypes.PermissionDenied:
 			st = status.NewPermissionDenied(ctx, err, "permission denied")
 		default:
-			st = status.NewInternal(ctx, err, "error statting: "+req.Ref.String())
+			st = status.NewStatusFromErrType(ctx, "error statting: "+req.Ref.String(), err)
 		}
 		return &provider.StatResponse{
 			Status: st,
 		}, nil
 	}
 
+	s.addSpaceInfo(ctx, md)
 	if err := s.wrap(ctx, md, true); err != nil {
 		return &provider.StatResponse{
 			Status: status.NewInternal(ctx, err, "error wrapping path"),
@@ -934,7 +921,6 @@ func (s *service) Stat(ctx context.Context, req *provider.StatRequest) (*provide
 
 	s.fixPermissions(md)
 	s.stripNonUtf8Metadata(ctx, md)
-	s.addSpaceInfo(ctx, md)
 
 	res := &provider.StatResponse{
 		Status: status.NewOK(ctx),
@@ -995,7 +981,7 @@ func (s *service) statVirtualView(ctx context.Context, ref *provider.Reference) 
 		case errtypes.PermissionDenied:
 			st = status.NewPermissionDenied(ctx, err, "permission denied")
 		default:
-			st = status.NewInternal(ctx, err, "error statting root")
+			st = status.NewStatusFromErrType(ctx, "error statting root", err)
 		}
 		return &provider.StatResponse{
 			Status: st,
@@ -1024,7 +1010,7 @@ func (s *service) ListContainerStream(req *provider.ListContainerStreamRequest, 
 	newRef, err := s.unwrap(ctx, req.Ref)
 	if err != nil {
 		res := &provider.ListContainerStreamResponse{
-			Status: status.NewInternal(ctx, err, "error unwrapping path"),
+			Status: status.NewStatusFromErrType(ctx, "error unwrapping path", err),
 		}
 		if err := ss.Send(res); err != nil {
 			log.Error().Err(err).Msg("ListContainerStream: error sending response")
@@ -1042,7 +1028,7 @@ func (s *service) ListContainerStream(req *provider.ListContainerStreamRequest, 
 		case errtypes.PermissionDenied:
 			st = status.NewPermissionDenied(ctx, err, "permission denied")
 		default:
-			st = status.NewInternal(ctx, err, "error listing container: "+req.Ref.String())
+			st = status.NewStatusFromErrType(ctx, "error listing container: "+req.Ref.String(), err)
 		}
 		res := &provider.ListContainerStreamResponse{
 			Status: st,
@@ -1089,7 +1075,7 @@ func (s *service) ListContainer(ctx context.Context, req *provider.ListContainer
 		}
 
 		return &provider.ListContainerResponse{
-			Status: status.NewInternal(ctx, err, "error unwrapping path"),
+			Status: status.NewStatusFromErrType(ctx, "error unwrapping path", err),
 		}, nil
 	}
 
@@ -1122,7 +1108,7 @@ func (s *service) ListContainer(ctx context.Context, req *provider.ListContainer
 			st = status.NewPermissionDenied(ctx, err, "permission denied")
 		default:
 			log.Error().Any("ref", newRef).Err(err).Msg("storageprovider: error listing container")
-			st = status.NewInternal(ctx, err, "error listing container: "+req.Ref.String())
+			st = status.NewStatusFromErrType(ctx, "error listing container: "+req.Ref.String(), err)
 		}
 		return &provider.ListContainerResponse{
 			Status: st,
@@ -1132,6 +1118,7 @@ func (s *service) ListContainer(ctx context.Context, req *provider.ListContainer
 	infos := make([]*provider.ResourceInfo, 0, len(mds))
 	prefixMountpoint := utils.IsAbsoluteReference(req.Ref)
 	for _, md := range mds {
+		s.addSpaceInfo(ctx, md)
 		if err := s.wrap(ctx, md, prefixMountpoint); err != nil {
 			return &provider.ListContainerResponse{
 				Status: status.NewInternal(ctx, err, "error wrapping path"),
@@ -1139,7 +1126,6 @@ func (s *service) ListContainer(ctx context.Context, req *provider.ListContainer
 		}
 		s.fixPermissions(md)
 		s.stripNonUtf8Metadata(ctx, md)
-		s.addSpaceInfo(ctx, md)
 		infos = append(infos, md)
 	}
 	res := &provider.ListContainerResponse{
@@ -1161,7 +1147,7 @@ func (s *service) listVirtualView(ctx context.Context, ref *provider.Reference) 
 		case errtypes.PermissionDenied:
 			st = status.NewPermissionDenied(ctx, err, "permission denied")
 		default:
-			st = status.NewInternal(ctx, err, "error listing root")
+			st = status.NewStatusFromErrType(ctx, "error listing root", err)
 		}
 		return &provider.ListContainerResponse{
 			Status: st,
@@ -1228,7 +1214,7 @@ func (s *service) ListFileVersions(ctx context.Context, req *provider.ListFileVe
 	newRef, err := s.unwrap(ctx, req.Ref)
 	if err != nil {
 		return &provider.ListFileVersionsResponse{
-			Status: status.NewInternal(ctx, err, "error unwrapping path"),
+			Status: status.NewStatusFromErrType(ctx, "error unwrapping path", err),
 		}, nil
 	}
 
@@ -1241,7 +1227,7 @@ func (s *service) ListFileVersions(ctx context.Context, req *provider.ListFileVe
 		case errtypes.PermissionDenied:
 			st = status.NewPermissionDenied(ctx, err, "permission denied")
 		default:
-			st = status.NewInternal(ctx, err, "error listing file versions for "+req.Ref.String()+": "+err.Error())
+			st = status.NewStatusFromErrType(ctx, "error listing file versions for "+req.Ref.String(), err)
 		}
 		return &provider.ListFileVersionsResponse{
 			Status: st,
@@ -1261,7 +1247,7 @@ func (s *service) RestoreFileVersion(ctx context.Context, req *provider.RestoreF
 	newRef, err := s.unwrap(ctx, req.Ref)
 	if err != nil {
 		return &provider.RestoreFileVersionResponse{
-			Status: status.NewInternal(ctx, err, "error unwrapping path"),
+			Status: status.NewStatusFromErrType(ctx, "error unwrapping path", err),
 		}, nil
 	}
 
@@ -1273,7 +1259,7 @@ func (s *service) RestoreFileVersion(ctx context.Context, req *provider.RestoreF
 		case errtypes.PermissionDenied:
 			st = status.NewPermissionDenied(ctx, err, "permission denied")
 		default:
-			st = status.NewInternal(ctx, err, "error restoring version: "+req.Ref.String())
+			st = status.NewStatusFromErrType(ctx, "error restoring version: "+req.Ref.String(), err)
 		}
 		return &provider.RestoreFileVersionResponse{
 			Status: st,
@@ -1307,7 +1293,7 @@ func (s *service) ListRecycleStream(req *provider.ListRecycleStreamRequest, ss p
 		case errtypes.BadRequest:
 			st = status.NewInvalidArg(ctx, "too many days or too many entries")
 		default:
-			st = status.NewInternal(ctx, err, "error listing recycle stream")
+			st = status.NewStatusFromErrType(ctx, "error listing recycle stream", err)
 		}
 		res := &provider.ListRecycleStreamResponse{
 			Status: st,
@@ -1351,7 +1337,7 @@ func (s *service) ListRecycle(ctx context.Context, req *provider.ListRecycleRequ
 		case errtypes.BadRequest:
 			st = status.NewInvalidArg(ctx, "too many days or too many entries")
 		default:
-			st = status.NewInternal(ctx, err, "error listing recycle")
+			st = status.NewStatusFromErrType(ctx, "error listing recycle", err)
 		}
 		return &provider.ListRecycleResponse{
 			Status: st,
@@ -1389,7 +1375,7 @@ func (s *service) RestoreRecycleItem(ctx context.Context, req *provider.RestoreR
 		case errtypes.PermissionDenied:
 			st = status.NewPermissionDenied(ctx, err, "permission denied")
 		default:
-			st = status.NewInternal(ctx, err, "error restoring recycle bin item")
+			st = status.NewStatusFromErrType(ctx, "error restoring recycle bin item", err)
 		}
 		return &provider.RestoreRecycleItemResponse{
 			Status: st,
@@ -1418,7 +1404,7 @@ func (s *service) PurgeRecycle(ctx context.Context, req *provider.PurgeRecycleRe
 			case errtypes.PermissionDenied:
 				st = status.NewPermissionDenied(ctx, err, "permission denied")
 			default:
-				st = status.NewInternal(ctx, err, "error purging recycle item")
+				st = status.NewStatusFromErrType(ctx, "error purging recycle item", err)
 			}
 			return &provider.PurgeRecycleResponse{
 				Status: st,
@@ -1433,7 +1419,7 @@ func (s *service) PurgeRecycle(ctx context.Context, req *provider.PurgeRecycleRe
 		case errtypes.PermissionDenied:
 			st = status.NewPermissionDenied(ctx, err, "permission denied")
 		default:
-			st = status.NewInternal(ctx, err, "error purging recycle bin")
+			st = status.NewStatusFromErrType(ctx, "error purging recycle bin", err)
 		}
 		return &provider.PurgeRecycleResponse{
 			Status: st,
@@ -1450,7 +1436,7 @@ func (s *service) ListGrants(ctx context.Context, req *provider.ListGrantsReques
 	newRef, err := s.unwrap(ctx, req.Ref)
 	if err != nil {
 		return &provider.ListGrantsResponse{
-			Status: status.NewInternal(ctx, err, "error unwrapping path"),
+			Status: status.NewStatusFromErrType(ctx, "error unwrapping path", err),
 		}, nil
 	}
 
@@ -1463,7 +1449,7 @@ func (s *service) ListGrants(ctx context.Context, req *provider.ListGrantsReques
 		case errtypes.PermissionDenied:
 			st = status.NewPermissionDenied(ctx, err, "permission denied")
 		default:
-			st = status.NewInternal(ctx, err, "error listing grants")
+			st = status.NewStatusFromErrType(ctx, "error listing grants", err)
 		}
 		return &provider.ListGrantsResponse{
 			Status: st,
@@ -1481,7 +1467,7 @@ func (s *service) DenyGrant(ctx context.Context, req *provider.DenyGrantRequest)
 	newRef, err := s.unwrap(ctx, req.Ref)
 	if err != nil {
 		return &provider.DenyGrantResponse{
-			Status: status.NewInternal(ctx, err, "error unwrapping path"),
+			Status: status.NewStatusFromErrType(ctx, "error unwrapping path", err),
 		}, nil
 	}
 
@@ -1501,7 +1487,7 @@ func (s *service) DenyGrant(ctx context.Context, req *provider.DenyGrantRequest)
 		case errtypes.PermissionDenied:
 			st = status.NewPermissionDenied(ctx, err, "permission denied")
 		default:
-			st = status.NewInternal(ctx, err, "error setting grants")
+			st = status.NewStatusFromErrType(ctx, "error setting grants", err)
 		}
 		return &provider.DenyGrantResponse{
 			Status: st,
@@ -1518,7 +1504,7 @@ func (s *service) AddGrant(ctx context.Context, req *provider.AddGrantRequest) (
 	newRef, err := s.unwrap(ctx, req.Ref)
 	if err != nil {
 		return &provider.AddGrantResponse{
-			Status: status.NewInternal(ctx, err, "error unwrapping path"),
+			Status: status.NewStatusFromErrType(ctx, "error unwrapping path", err),
 		}, nil
 	}
 
@@ -1538,7 +1524,7 @@ func (s *service) AddGrant(ctx context.Context, req *provider.AddGrantRequest) (
 		case errtypes.PermissionDenied:
 			st = status.NewPermissionDenied(ctx, err, "permission denied")
 		default:
-			st = status.NewInternal(ctx, err, "error setting grants")
+			st = status.NewStatusFromErrType(ctx, "error setting grants", err)
 		}
 		return &provider.AddGrantResponse{
 			Status: st,
@@ -1562,7 +1548,7 @@ func (s *service) UpdateGrant(ctx context.Context, req *provider.UpdateGrantRequ
 	newRef, err := s.unwrap(ctx, req.Ref)
 	if err != nil {
 		return &provider.UpdateGrantResponse{
-			Status: status.NewInternal(ctx, err, "error unwrapping path"),
+			Status: status.NewStatusFromErrType(ctx, "error unwrapping path", err),
 		}, nil
 	}
 
@@ -1574,7 +1560,7 @@ func (s *service) UpdateGrant(ctx context.Context, req *provider.UpdateGrantRequ
 		case errtypes.PermissionDenied:
 			st = status.NewPermissionDenied(ctx, err, "permission denied")
 		default:
-			st = status.NewInternal(ctx, err, "error updating grant")
+			st = status.NewStatusFromErrType(ctx, "error updating grant", err)
 		}
 		return &provider.UpdateGrantResponse{
 			Status: st,
@@ -1598,7 +1584,7 @@ func (s *service) RemoveGrant(ctx context.Context, req *provider.RemoveGrantRequ
 	newRef, err := s.unwrap(ctx, req.Ref)
 	if err != nil {
 		return &provider.RemoveGrantResponse{
-			Status: status.NewInternal(ctx, err, "error unwrapping path"),
+			Status: status.NewStatusFromErrType(ctx, "error unwrapping path", err),
 		}, nil
 	}
 
@@ -1610,7 +1596,7 @@ func (s *service) RemoveGrant(ctx context.Context, req *provider.RemoveGrantRequ
 		case errtypes.PermissionDenied:
 			st = status.NewPermissionDenied(ctx, err, "permission denied")
 		default:
-			st = status.NewInternal(ctx, err, "error removing grant")
+			st = status.NewStatusFromErrType(ctx, "error removing grant", err)
 		}
 		return &provider.RemoveGrantResponse{
 			Status: st,
@@ -1638,7 +1624,7 @@ func (s *service) CreateReference(ctx context.Context, req *provider.CreateRefer
 	newRef, err := s.unwrap(ctx, req.Ref)
 	if err != nil {
 		return &provider.CreateReferenceResponse{
-			Status: status.NewInternal(ctx, err, "error unwrapping path"),
+			Status: status.NewStatusFromErrType(ctx, "error unwrapping path", err),
 		}, nil
 	}
 
@@ -1651,7 +1637,7 @@ func (s *service) CreateReference(ctx context.Context, req *provider.CreateRefer
 		case errtypes.PermissionDenied:
 			st = status.NewPermissionDenied(ctx, err, "permission denied")
 		default:
-			st = status.NewInternal(ctx, err, "error creating reference")
+			st = status.NewStatusFromErrType(ctx, "error creating reference", err)
 		}
 		return &provider.CreateReferenceResponse{
 			Status: st,
@@ -1685,7 +1671,7 @@ func (s *service) GetQuota(ctx context.Context, req *provider.GetQuotaRequest) (
 	newRef, err := s.unwrap(ctx, req.Ref)
 	if err != nil {
 		return &provider.GetQuotaResponse{
-			Status: status.NewInternal(ctx, err, "error unwrapping path"),
+			Status: status.NewStatusFromErrType(ctx, "error unwrapping path", err),
 		}, nil
 	}
 	total, used, err := s.storage.GetQuota(ctx, newRef)
@@ -1697,7 +1683,7 @@ func (s *service) GetQuota(ctx context.Context, req *provider.GetQuotaRequest) (
 		case errtypes.PermissionDenied:
 			st = status.NewPermissionDenied(ctx, err, "permission denied")
 		default:
-			st = status.NewInternal(ctx, err, "error getting quota")
+			st = status.NewStatusFromErrType(ctx, "error getting quota", err)
 		}
 		return &provider.GetQuotaResponse{
 			Status: st,
@@ -1814,51 +1800,4 @@ func (v descendingMtime) Less(i, j int) bool {
 
 func (v descendingMtime) Swap(i, j int) {
 	v[i], v[j] = v[j], v[i]
-}
-
-func getCacheManager(c *config) (cache.SpaceInfoCache, error) {
-	factory, err := cachereg.GetCacheFunc[cache.SpaceInfoCache](c.SpaceInfoCacheDriver)
-	if err != nil {
-		return nil, err
-	}
-	return factory(c.SpaceInfoCacheDrivers[c.SpaceInfoCacheDriver])
-}
-
-func (s *service) fetchSpace(ctx context.Context, spaceID string) (*provider.StorageSpace, error) {
-	gw, err := svc.Gateway(ctx)
-	log := appctx.GetLogger(ctx)
-
-	request := &provider.ListStorageSpacesRequest{
-		Filters: []*provider.ListStorageSpacesRequest_Filter{
-			&provider.ListStorageSpacesRequest_Filter{
-				Type: provider.ListStorageSpacesRequest_Filter_TYPE_SPACE_TYPE,
-				Term: &provider.ListStorageSpacesRequest_Filter_SpaceType{
-					SpaceType: spaces.SpaceTypeProject.AsString(),
-				},
-			},
-		},
-	}
-
-	if s.conf.ProvidesSpaceType == spaces.SpaceTypeProject.AsString() {
-		request.Filters = append(request.Filters, &provider.ListStorageSpacesRequest_Filter{
-			Type: provider.ListStorageSpacesRequest_Filter_TYPE_ID,
-			Term: &provider.ListStorageSpacesRequest_Filter_Id{
-				Id: &provider.StorageSpaceId{
-					OpaqueId: spaceID,
-				},
-			},
-		})
-	}
-
-	spacesResp, err := gw.ListStorageSpaces(ctx, request)
-	if err != nil {
-		log.Error().Err(err).Msg("Failed to list storage spaces")
-		return nil, err
-	}
-	if spacesResp.Status == nil || spacesResp.Status.Code != rpc.Code_CODE_OK || len(spacesResp.StorageSpaces) != 1 {
-		log.Error().Any("Status", spacesResp.Status).Int("found?", len(spacesResp.StorageSpaces)).Msgf("Failed to list storage spaces for %s", spaceID)
-		return nil, fmt.Errorf("Failed to list storage spaces for %s", spaceID)
-	}
-	space := spacesResp.StorageSpaces[0]
-	return space, nil
 }

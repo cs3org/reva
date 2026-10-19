@@ -328,3 +328,7 @@ func (am *mgr) getOAuthCtx(ctx context.Context) context.Context {
 	ctx = context.WithValue(ctx, oauth2.HTTPClient, customHTTPClient)
 	return ctx
 }
+
+func (am *mgr) Cacheable() bool {
+	return true
+}

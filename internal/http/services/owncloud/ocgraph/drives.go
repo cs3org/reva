@@ -472,8 +472,16 @@ func shareID(spaceID string) string {
 }
 
 func fullURL(base, path string) string {
-	full, _ := url.JoinPath(base, path)
-	return full
+	// url.JoinPath expects already-escaped elements and fails on raw paths containing '%'
+	// so we parse this manually
+	u, err := url.Parse(base)
+	if err != nil {
+		return ""
+	}
+	u.Path = filepath.Join(u.Path, path)
+	u.RawPath = ""
+	// .String() escapes characters in the path
+	return u.String()
 }
 
 func cs3PermissionsToLibreGraph(user *userpb.User, perms *provider.ResourcePermissions) []libregraph.Permission {
