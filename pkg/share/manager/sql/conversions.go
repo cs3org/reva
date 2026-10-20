@@ -30,7 +30,6 @@ import (
 	"github.com/cs3org/reva/v3/pkg/ocm/share"
 	"github.com/cs3org/reva/v3/pkg/permissions"
 	model "github.com/cs3org/reva/v3/pkg/share/manager/sql/model"
-	"google.golang.org/protobuf/encoding/protojson"
 	"gorm.io/datatypes"
 )
 
@@ -190,13 +189,13 @@ func convertToCS3AccessMethod(m *model.OcmShareProtocol) *ocm.AccessMethod {
 	switch m.Type {
 	case model.WebDAVProtocol:
 		return share.NewWebDavAccessMethod(
-			permissions.RoleFromOCSPermissions(permissions.OcsPermissions(m.Permissions)).CS3ResourcePermissions(),
+			webdavPermissionsFromModel(m.Permissions),
 			accessTypesIntToArray(ocm.AccessType(m.AccessTypes)),
 			stringsFromJSON(m.Requirements),
 		)
 	case model.WebappProtocol:
 		return share.NewWebappAccessMethod(
-			webappPermissionsFromJSON(m.WebappPermissions),
+			webappPermissionsFromModel(m.Permissions),
 			stringsFromJSON(m.Requirements),
 			m.AppName,
 		)
@@ -209,14 +208,14 @@ func convertToCS3Protocol(p *model.OcmReceivedShareProtocol) *ocm.Protocol {
 	case model.WebDAVProtocol:
 		return share.NewWebDAVProtocol(p.Uri, p.SharedSecret,
 			&ocm.SharePermissions{
-				Permissions: permissions.RoleFromOCSPermissions(permissions.OcsPermissions(p.Permissions)).CS3ResourcePermissions(),
+				Permissions: webdavPermissionsFromModel(p.Permissions),
 			},
 			accessTypesIntToArray(ocm.AccessType(p.AccessTypes)),
 			stringsFromJSON(p.Requirements),
 		)
 	case model.WebappProtocol:
 		return share.NewWebappProtocol(p.Uri, p.SharedSecret,
-			webappPermissionsFromJSON(p.WebappPermissions),
+			webappPermissionsFromModel(p.Permissions),
 			stringsFromJSON(p.Requirements),
 			stringsFromJSON(p.Targets),
 			p.AppName,
@@ -229,24 +228,69 @@ func convertToCS3Protocol(p *model.OcmReceivedShareProtocol) *ocm.Protocol {
 	return nil
 }
 
-func webappPermissionsToJSON(p *provider.ResourcePermissions) (datatypes.JSON, error) {
-	if p == nil {
-		return nil, nil
+// webdavPermissionsToModel keeps the legacy OCS encoding of webdav rows.
+func webdavPermissionsToModel(p *provider.ResourcePermissions) model.OcmPermissions {
+	switch {
+	case p.GetInitiateFileUpload() && !p.GetInitiateFileDownload():
+		return model.OcmPermissionCreate
+	case p.GetInitiateFileUpload():
+		return model.OcmPermissionRead | model.OcmPermissionWrite | model.OcmPermissionCreate | model.OcmPermissionDelete
+	case p.GetInitiateFileDownload():
+		return model.OcmPermissionRead
 	}
-	encoded, err := protojson.Marshal(p)
-	if err != nil {
-		return nil, err
-	}
-	return datatypes.JSON(encoded), nil
+	return 0
 }
 
-func webappPermissionsFromJSON(raw datatypes.JSON) *provider.ResourcePermissions {
-	if len(raw) == 0 {
-		return &provider.ResourcePermissions{}
+// webdavPermissionsFromModel gives the same role permissions as the legacy
+// OCS decoding, because the consumers map them back to roles.
+func webdavPermissionsFromModel(p model.OcmPermissions) *provider.ResourcePermissions {
+	editor := model.OcmPermissionRead | model.OcmPermissionWrite | model.OcmPermissionCreate | model.OcmPermissionDelete
+	switch {
+	case p&(editor|model.OcmPermissionShare) == editor|model.OcmPermissionShare:
+		return permissions.NewManagerRole().CS3ResourcePermissions()
+	case p&editor == editor:
+		return permissions.NewEditorRole().CS3ResourcePermissions()
+	case p == model.OcmPermissionRead:
+		return permissions.NewViewerRole().CS3ResourcePermissions()
+	case p == model.OcmPermissionCreate:
+		return permissions.NewUploaderRole().CS3ResourcePermissions()
 	}
+	return &provider.ResourcePermissions{}
+}
+
+// webappPermissionsToModel must agree with ocmd.Webapp.ToOCMProtocol.
+func webappPermissionsToModel(p *provider.ResourcePermissions) model.OcmPermissions {
+	var perms model.OcmPermissions
+	switch {
+	case p.GetInitiateFileDownload():
+		perms |= model.OcmPermissionRead
+	case p.GetGetPath() && p.GetListContainer() && p.GetStat():
+		perms |= model.OcmPermissionView
+	}
+	if p.GetInitiateFileUpload() {
+		perms |= model.OcmPermissionWrite
+	}
+	if p.GetAddGrant() {
+		perms |= model.OcmPermissionShare
+	}
+	return perms
+}
+
+func webappPermissionsFromModel(p model.OcmPermissions) *provider.ResourcePermissions {
 	perms := &provider.ResourcePermissions{}
-	if err := protojson.Unmarshal(raw, perms); err != nil {
-		return &provider.ResourcePermissions{}
+	if p&(model.OcmPermissionRead|model.OcmPermissionView) != 0 {
+		perms.GetPath = true
+		perms.ListContainer = true
+		perms.Stat = true
+	}
+	if p&model.OcmPermissionRead != 0 {
+		perms.InitiateFileDownload = true
+	}
+	if p&model.OcmPermissionWrite != 0 {
+		perms.InitiateFileUpload = true
+	}
+	if p&model.OcmPermissionShare != 0 {
+		perms.AddGrant = true
 	}
 	return perms
 }
