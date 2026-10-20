@@ -40,6 +40,9 @@ const defaultRetryAfter = 30 * time.Second
 // schedulerTick is how often the scheduler loop checks for due periodic jobs.
 const schedulerTick = 10 * time.Second
 
+// knownJobTTL is how long a positive answer of KnownJobs is cached.
+const knownJobTTL = time.Minute
+
 // Options configures a Runner.
 type Options struct {
 	// Workers is the number of concurrent workers draining the durable queue.
@@ -81,6 +84,11 @@ type Runner struct {
 	// added when execRun starts it and removed when it returns.
 	cancelsMu sync.Mutex
 	cancels   map[RunID]*runHandle
+
+	// known caches, per job name, until when the store last confirmed that some
+	// runner registered a job this process does not run.
+	knownMu sync.Mutex
+	known   map[string]time.Time
 }
 
 // runHandle is the per-run cancellation handle held while a run executes on
@@ -121,6 +129,7 @@ func NewRunner(ctx context.Context, opts Options) (*Runner, error) {
 		onDemandConfig: opts.OnDemandConfig,
 		running:        make(map[string]bool),
 		cancels:        make(map[RunID]*runHandle),
+		known:          make(map[string]time.Time),
 	}
 
 	// leader-scoped and on-demand work both need a store.
@@ -232,8 +241,8 @@ func (r *Runner) Enqueue(ctx context.Context, name string, p Params, opts ...Enq
 	if r.store == nil {
 		return "", errors.New("rjobs: cannot enqueue, no store configured")
 	}
-	if _, ok := lookupOnDemand(name); !ok {
-		return "", errors.Errorf("rjobs: no on-demand job %q registered", name)
+	if err := r.checkOnDemand(ctx, name); err != nil {
+		return "", err
 	}
 
 	run := Run{Job: name, Params: p}
@@ -263,6 +272,66 @@ func (r *Runner) Enqueue(ctx context.Context, name string, p Params, opts ...Enq
 		r.log.Error().Err(err).Str("run", string(id)).Msg("rjobs: recording queued status failed")
 	}
 	return id, nil
+}
+
+// checkOnDemand makes sure some runner consumes the runs of an on-demand job, so
+// a run of a misspelled job does not sit in the queue forever. A job registered
+// in this process is accepted at once; any other is accepted when the store
+// knows a runner that registered it.
+func (r *Runner) checkOnDemand(ctx context.Context, name string) error {
+	if _, ok := lookupOnDemand(name); ok {
+		return nil
+	}
+	notFound := errtypes.NotFound(fmt.Sprintf("no runner registered for job %q", name))
+	kj, ok := r.store.(KnownJobs)
+	if !ok {
+		return notFound
+	}
+
+	r.knownMu.Lock()
+	until, cached := r.known[name]
+	r.knownMu.Unlock()
+	if cached && time.Now().Before(until) {
+		return nil
+	}
+
+	known, err := kj.OnDemandJobKnown(ctx, name)
+	if err != nil {
+		return err
+	}
+	if !known {
+		return notFound
+	}
+	r.knownMu.Lock()
+	r.known[name] = time.Now().Add(knownJobTTL)
+	r.knownMu.Unlock()
+	return nil
+}
+
+// ForgetJob drops the queue state of a job that no runner registers anymore,
+// so Enqueue stops accepting it. It refuses a job registered in this process,
+// and the store refuses while runs of the job are pending.
+func (r *Runner) ForgetJob(ctx context.Context, name string) error {
+	if r.store == nil {
+		return errors.New("rjobs: cannot forget, no store configured")
+	}
+	if _, ok := lookupOnDemand(name); ok {
+		return errtypes.BadRequest(fmt.Sprintf("job %q is registered in this process", name))
+	}
+	if _, ok := r.lookupPeriodic(name); ok {
+		return errtypes.BadRequest(fmt.Sprintf("job %q is registered in this process", name))
+	}
+	f, ok := r.store.(JobForgetter)
+	if !ok {
+		return errtypes.NotSupported("rjobs: the store cannot forget jobs")
+	}
+	if err := f.ForgetJob(ctx, name); err != nil {
+		return err
+	}
+	r.knownMu.Lock()
+	delete(r.known, name)
+	r.knownMu.Unlock()
+	return nil
 }
 
 // enqueueUnique enqueues a run that carries a Unique key. It reserves the key in
