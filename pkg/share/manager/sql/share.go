@@ -189,16 +189,19 @@ func (m *ShareMgr) UpdateShare(ctx context.Context, ref *collaboration.ShareRefe
 	case *collaboration.UpdateShareRequest_UpdateField_Expiration:
 		expiration := req.Field.GetExpiration()
 		// A nil expiration arrives over grpc as an empty timestamp.
-		if expiration.GetSeconds() == 0 {
-			res := m.db.Model(&share).Where("id = ?", share.Id).Update("expiration", nil)
-			if res.Error != nil {
-				return nil, res.Error
-			}
-		} else {
-			res := m.db.Model(&share).Where("id = ?", share.Id).Update("expiration", time.Unix(int64(expiration.Seconds), 0))
-			if res.Error != nil {
-				return nil, res.Error
-			}
+		var newExpiration *time.Time
+		if expiration.GetSeconds() != 0 {
+			t := time.Unix(int64(expiration.Seconds), 0)
+			newExpiration = &t
+		}
+		updates := map[string]any{"expiration": newExpiration}
+		// A share that is not expired anymore has its grant back, so the expired job must treat it again.
+		if newExpiration == nil || newExpiration.After(time.Now()) {
+			updates["expired_at"] = nil
+		}
+		res := m.db.Model(&share).Where("id = ?", share.Id).Updates(updates)
+		if res.Error != nil {
+			return nil, res.Error
 		}
 
 	}

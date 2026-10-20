@@ -746,3 +746,72 @@ func TestMarkAsExpiredKeepsShare(t *testing.T) {
 		t.Fatalf("the owner no longer sees the share: %v", err)
 	}
 }
+
+func TestUpdateExpirationOfTreatedShare(t *testing.T) {
+	past := &typesv1beta1.Timestamp{Seconds: uint64(time.Now().Add(-time.Hour).Unix())}
+	future := &typesv1beta1.Timestamp{Seconds: uint64(time.Now().Add(time.Hour).Unix())}
+
+	tests := []struct {
+		name       string
+		expiration *typesv1beta1.Timestamp
+		// wantListed tells if the expired job must treat the share again once it expires.
+		wantListed bool
+	}{
+		{name: "expiration removed", expiration: &typesv1beta1.Timestamp{}, wantListed: true},
+		{name: "expiration moved to the future", expiration: future, wantListed: true},
+		{name: "expiration moved within the past", expiration: past, wantListed: false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			m, err, teardown := setupSuiteShares(t)
+			defer teardown(t)
+			if err != nil {
+				t.Fatal(err)
+			}
+			mgr := m.(*ShareMgr)
+
+			userctx := getUserContext("123456")
+			user, _ := appctx.ContextGetUser(userctx)
+			grant := getUserShareGrant("1000", "file")
+			grant.Expiration = &typesv1beta1.Timestamp{Seconds: uint64(time.Now().Add(-2 * time.Hour).Unix())}
+			s, err := mgr.Share(userctx, getRandomFile(user), grant)
+			if err != nil {
+				t.Fatal(err)
+			}
+			ref := &collaboration.ShareReference{Spec: &collaboration.ShareReference_Id{Id: s.Id}}
+			if err := mgr.MarkAsExpired(userctx, ref); err != nil {
+				t.Fatal(err)
+			}
+
+			updateExpiration := func(exp *typesv1beta1.Timestamp) *collaboration.Share {
+				updated, err := mgr.UpdateShare(userctx, ref, &collaboration.UpdateShareRequest{
+					Field: &collaboration.UpdateShareRequest_UpdateField{
+						Field: &collaboration.UpdateShareRequest_UpdateField_Expiration{Expiration: exp},
+					},
+				})
+				if err != nil {
+					t.Fatal(err)
+				}
+				return updated
+			}
+
+			updated := updateExpiration(tt.expiration)
+			if updated.Expiration.GetSeconds() != tt.expiration.GetSeconds() {
+				t.Fatalf("expected expiration %d, got %d", tt.expiration.GetSeconds(), updated.Expiration.GetSeconds())
+			}
+
+			// The share expires again: only a share whose treated mark was reset must show up.
+			if tt.expiration != past {
+				updateExpiration(past)
+			}
+			shares, err := mgr.ListExpiredShares(userctx)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if listed := len(shares) == 1 && shares[0].Id.OpaqueId == s.Id.OpaqueId; listed != tt.wantListed || len(shares) > 1 {
+				t.Fatalf("expected listed=%v, got %v", tt.wantListed, shares)
+			}
+		})
+	}
+}
