@@ -61,6 +61,10 @@ type periodicArgs struct {
 	Job string `arg:"job,required" help:"the periodic job name"`
 }
 
+type forgetArgs struct {
+	Job string `arg:"job,required" help:"the job name"`
+}
+
 // buildInvokeSet declares the jobs invocations. Handlers read s.runner at call
 // time (it is built in Start), so a call before the runner is ready fails
 // cleanly rather than panicking.
@@ -173,18 +177,17 @@ func (s *svc) buildInvokeSet() *invoke.Set {
 		}))
 
 	set.Add("forget", "Drop the queue state of an on-demand job no runner registers anymore.").
-		Arg("job", "the job name").
 		Mutating().
-		Handle(func(ctx context.Context, a invoke.Args) (invoke.Result, error) {
+		Handle(invoke.Typed(func(ctx context.Context, a forgetArgs) (invoke.Result, error) {
 			r, err := s.ready()
 			if err != nil {
 				return nil, err
 			}
-			if err := r.ForgetJob(ctx, a.String("job")); err != nil {
+			if err := r.ForgetJob(ctx, a.Job); err != nil {
 				return nil, err
 			}
-			return invoke.Result{"forgotten": a.String("job")}, nil
-		})
+			return invoke.Result{"forgotten": a.Job}, nil
+		}))
 
 	return set
 }
