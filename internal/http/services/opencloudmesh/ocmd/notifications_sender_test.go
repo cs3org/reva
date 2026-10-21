@@ -531,3 +531,20 @@ func TestSafePostErrorKeepsNoCause(t *testing.T) {
 		}
 	}
 }
+
+// The transport itself returns no error that quotes the peer bytes.
+func TestPostNotificationErrorQuotesNoPeerBytes(t *testing.T) {
+	for name, response := range malformedResponses {
+		t.Run(name, func(t *testing.T) {
+			raw := newRawPeer(t, response)
+			tr := ocmNotificationTransport{c: NewClient(5*time.Second, false)}
+			resp, err := tr.PostNotification(context.Background(), raw.url()+"/ocm/notifications", []byte(`{}`))
+			if err == nil || resp != (NotificationResponse{}) {
+				t.Fatalf("response %+v error %v", resp, err)
+			}
+			if strings.Contains(fmt.Sprintf("%v %+v %#v", err, err, err), senderSecret) || errors.Unwrap(err) != nil {
+				t.Fatalf("cause kept: %v", err)
+			}
+		})
+	}
+}
