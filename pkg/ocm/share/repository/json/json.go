@@ -113,7 +113,7 @@ type shareModel struct {
 	// shares, which the CS3 received share has no field for.
 	TransferGenerations map[string]uint64 `json:"transfer_generations"` // share_id -> attempt
 	// ResourceTypes holds the resource type of outgoing shares, which the
-	// CS3 share has no field for. Older files have none.
+	// CS3 share has no field for.
 	ResourceTypes map[string]ocm.SharedResourceType `json:"resource_types"` // share_id -> type
 }
 
@@ -255,6 +255,9 @@ func (m *mgr) GenerateID(ctx context.Context) (*ocm.ShareId, error) {
 }
 
 func (m *mgr) StoreShare(ctx context.Context, ocmshare *ocm.Share, resourceType ocm.SharedResourceType) (*ocm.Share, error) {
+	if !share.SupportedResourceType(resourceType) {
+		return nil, share.ErrInvalidResourceType
+	}
 	m.Lock()
 	defer m.Unlock()
 
@@ -359,7 +362,11 @@ func (m *mgr) DeleteShare(ctx context.Context, user *userpb.User, ref *ocm.Share
 	for id, s := range m.model.Shares {
 		if sharesEqual(ref, s) {
 			if utils.UserEqual(user.Id, s.Owner) || utils.UserEqual(user.Id, s.Creator) {
-				removal := &share.ShareRemoval{Share: s, ResourceType: m.model.ResourceTypes[id]}
+				rt := m.model.ResourceTypes[id]
+				if !share.SupportedResourceType(rt) {
+					return nil, share.ErrInvalidResourceType
+				}
+				removal := &share.ShareRemoval{Share: s, ResourceType: rt}
 				delete(m.model.Shares, id)
 				delete(m.model.ResourceTypes, id)
 				if err := m.save(); err != nil {
@@ -422,6 +429,10 @@ func (m *mgr) UpdateShare(ctx context.Context, user *userpb.User, ref *ocm.Share
 	if !utils.UserEqual(user.Id, s.Owner) && !utils.UserEqual(user.Id, s.Creator) {
 		return nil, share.ErrShareNotFound
 	}
+	resourceType := m.model.ResourceTypes[s.Id.OpaqueId]
+	if !share.SupportedResourceType(resourceType) {
+		return nil, share.ErrInvalidResourceType
+	}
 	before := proto.Clone(s).(*ocm.Share)
 
 	for _, field := range f {
@@ -448,7 +459,7 @@ func (m *mgr) UpdateShare(ctx context.Context, user *userpb.User, ref *ocm.Share
 	return &share.ShareUpdate{
 		Before:                   before,
 		After:                    after,
-		ResourceType:             m.model.ResourceTypes[s.Id.OpaqueId],
+		ResourceType:             resourceType,
 		WebDAVPermissionsChanged: permissionsChanged(webdavPermissions(before), webdavPermissions(after)),
 		WebappPermissionsChanged: permissionsChanged(webappPermissions(before), webappPermissions(after)),
 	}, nil

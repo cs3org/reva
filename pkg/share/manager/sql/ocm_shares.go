@@ -93,6 +93,9 @@ func (m *mgr) GenerateID(ctx context.Context) (*ocm.ShareId, error) {
 }
 
 func (m *mgr) StoreShare(ctx context.Context, s *ocm.Share, resourceType ocm.SharedResourceType) (*ocm.Share, error) {
+	if !share.SupportedResourceType(resourceType) {
+		return nil, share.ErrInvalidResourceType
+	}
 	parsed, err := strconv.ParseUint(s.Id.OpaqueId, 10, 64)
 	if err != nil {
 		return nil, errtypes.BadRequest("invalid share ID")
@@ -118,9 +121,7 @@ func (m *mgr) StoreShare(ctx context.Context, s *ocm.Share, resourceType ocm.Sha
 				Valid: true,
 			}
 		}
-		if resourceType != ocm.SharedResourceType_SHARE_RESOURCE_TYPE_INVALID {
-			share.ItemType = convertFromCS3ResourceType(resourceType)
-		}
+		share.ItemType = convertFromCS3ResourceType(resourceType)
 		share.Id = id
 		share.ShareId = model.ShareID{ID: id}
 		if err := tx.Create(share).Error; err != nil {
@@ -237,6 +238,10 @@ func (m *mgr) DeleteShare(ctx context.Context, user *userpb.User, ref *ocm.Share
 			}
 			return err
 		}
+		resourceType := convertToCS3SharedResourceType(shareModel.ItemType)
+		if !share.SupportedResourceType(resourceType) {
+			return share.ErrInvalidResourceType
+		}
 		am, err := accessMethodsTx(tx, shareModel.Id)
 		if err != nil {
 			return err
@@ -250,7 +255,7 @@ func (m *mgr) DeleteShare(ctx context.Context, user *userpb.User, ref *ocm.Share
 		}
 		removal = share.ShareRemoval{
 			Share:        convertToCS3OCMShare(&shareModel, am),
-			ResourceType: convertToCS3SharedResourceType(shareModel.ItemType),
+			ResourceType: resourceType,
 		}
 		return nil
 	})
@@ -913,6 +918,9 @@ func (m *mgr) updateShareByID(ctx context.Context, user *userpb.User, id *ocm.Sh
 				return share.ErrShareNotFound
 			}
 			return err
+		}
+		if !share.SupportedResourceType(convertToCS3SharedResourceType(before.ItemType)) {
+			return share.ErrInvalidResourceType
 		}
 		beforeMethods, err := accessMethodsTx(tx, before.Id)
 		if err != nil {

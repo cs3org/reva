@@ -89,8 +89,7 @@ type Repository interface {
 // ShareRemoval is the receipt of the deletion of an outgoing share.
 type ShareRemoval struct {
 	Share *ocm.Share
-	// ResourceType is the type stored with the share. It is INVALID for
-	// shares stored without one.
+	// ResourceType is the type stored with the share.
 	ResourceType ocm.SharedResourceType
 }
 
@@ -126,6 +125,21 @@ type TransferStart struct {
 	Share *ocm.ReceivedShare
 	// Generation identifies this attempt; only its completion is accepted.
 	Generation uint64
+}
+
+// ErrInvalidResourceType is returned for an outgoing share without a
+// supported resource type: it is never stored, and a stored one is not changed.
+var ErrInvalidResourceType = errtypes.InternalError("share has no supported resource type")
+
+// SupportedResourceType reports whether an outgoing share can be stored with t.
+func SupportedResourceType(t ocm.SharedResourceType) bool {
+	switch t {
+	case ocm.SharedResourceType_SHARE_RESOURCE_TYPE_FILE,
+		ocm.SharedResourceType_SHARE_RESOURCE_TYPE_CONTAINER,
+		ocm.SharedResourceType_SHARE_RESOURCE_TYPE_EMBEDDED:
+		return true
+	}
+	return false
 }
 
 // ErrTransferInProgress is returned when a transfer is already running.

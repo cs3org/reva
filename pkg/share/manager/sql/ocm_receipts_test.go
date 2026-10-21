@@ -417,14 +417,125 @@ func TestShareReceiptsCarryStoredResourceType(t *testing.T) {
 			t.Fatalf("delete: %v %v", removal, err)
 		}
 
-		// A row stored before the type was recorded has none; it is not guessed.
-		legacy := storeOutgoing(t, m, ctx, owner, "viewer", "tok-legacy")
-		if err := m.db.Model(&model.OcmShare{}).Where("id = ?", legacy.Id.OpaqueId).Update("item_type", "").Error; err != nil {
+	})
+}
+
+// A share without a supported resource type is never stored, and a corrupt
+// row is refused before any change; its type is not guessed.
+func TestShareWithoutSupportedResourceTypeIsRefused(t *testing.T) {
+	forEachDialect(t, func(t *testing.T, m *mgr) {
+		ctx, owner := ownerContext(t, "einstein")
+		sh := getOcmShare(getOcmAccessMethods("viewer"), getUserOcmShareGrantee("marie"), owner.Id, getResourceId(), "tok-none")
+		id, err := m.GenerateID(ctx)
+		if err != nil {
 			t.Fatal(err)
 		}
-		removal, err = m.DeleteShare(ctx, owner, idRef(legacy.Id))
-		if err != nil || removal.ResourceType != ocm.SharedResourceType_SHARE_RESOURCE_TYPE_INVALID {
-			t.Fatalf("legacy delete: %v %v", removal, err)
+		sh.Id = id
+		if _, err := m.StoreShare(ctx, sh, ocm.SharedResourceType_SHARE_RESOURCE_TYPE_INVALID); !errors.Is(err, share.ErrInvalidResourceType) {
+			t.Fatalf("store: %v", err)
+		}
+		var rows int64
+		if err := m.db.Model(&model.OcmShare{}).Count(&rows).Error; err != nil || rows != 0 {
+			t.Fatalf("rows %d %v", rows, err)
+		}
+
+		for _, itemType := range []string{"", "reference"} {
+			corrupt := storeOutgoing(t, m, ctx, owner, "viewer", "tok-"+itemType)
+			if err := m.db.Model(&model.OcmShare{}).Where("id = ?", corrupt.Id.OpaqueId).Update("item_type", itemType).Error; err != nil {
+				t.Fatal(err)
+			}
+			var before model.OcmShare
+			if err := m.db.Where("id = ?", corrupt.Id.OpaqueId).First(&before).Error; err != nil {
+				t.Fatal(err)
+			}
+			stored, err := m.GetShare(ctx, owner, idRef(corrupt.Id))
+			if err != nil {
+				t.Fatal(err)
+			}
+			editor := &ocm.UpdateOCMShareRequest_UpdateField{Field: &ocm.UpdateOCMShareRequest_UpdateField_AccessMethods{
+				AccessMethods: share.NewWebDavAccessMethod(permissions.NewEditorRole().CS3ResourcePermissions(), nil, nil),
+			}}
+			if up, err := m.UpdateShare(ctx, owner, idRef(corrupt.Id), editor); !errors.Is(err, share.ErrInvalidResourceType) || up != nil {
+				t.Fatalf("%q update: %v %v", itemType, up, err)
+			}
+			if r, err := m.DeleteShare(ctx, owner, idRef(corrupt.Id)); !errors.Is(err, share.ErrInvalidResourceType) || r != nil {
+				t.Fatalf("%q delete: %v %v", itemType, r, err)
+			}
+			var after model.OcmShare
+			if err := m.db.Where("id = ?", corrupt.Id.OpaqueId).First(&after).Error; err != nil || after.Mtime != before.Mtime {
+				t.Fatalf("%q row changed: %v %v", itemType, after, err)
+			}
+			got, err := m.GetShare(ctx, owner, idRef(corrupt.Id))
+			if err != nil || !proto.Equal(got, stored) {
+				t.Fatalf("%q methods changed: %v %v", itemType, got, err)
+			}
+		}
+	})
+}
+
+// Receipts compare the stored model.OcmPermissions, so a request that
+// normalizes to the stored value is not a change, and view, read, write and
+// share stay distinct.
+func TestUpdateShareReceiptUnderTypedPermissions(t *testing.T) {
+	forEachDialect(t, func(t *testing.T, m *mgr) {
+		ctx, owner := ownerContext(t, "einstein")
+		stored := storeOutgoing(t, m, ctx, owner, "viewer", "tok-typed")
+		ref := idRef(stored.Id)
+		storedBits := func(typ model.OcmProtocol) model.OcmPermissions {
+			t.Helper()
+			var row model.OcmShareProtocol
+			if err := m.db.Where("ocm_share_id = ? AND type = ?", stored.Id.OpaqueId, typ).First(&row).Error; err != nil {
+				t.Fatal(err)
+			}
+			return row.Permissions
+		}
+		webapp := func(names []string, extra func(*provider.ResourcePermissions)) *ocm.UpdateOCMShareRequest_UpdateField {
+			perms := webappCS3Permissions(names)
+			if extra != nil {
+				extra(perms)
+			}
+			return &ocm.UpdateOCMShareRequest_UpdateField{Field: &ocm.UpdateOCMShareRequest_UpdateField_AccessMethods{
+				AccessMethods: share.NewWebappAccessMethod(perms, nil, ""),
+			}}
+		}
+		webdav := func(perms *provider.ResourcePermissions) *ocm.UpdateOCMShareRequest_UpdateField {
+			return &ocm.UpdateOCMShareRequest_UpdateField{Field: &ocm.UpdateOCMShareRequest_UpdateField_AccessMethods{
+				AccessMethods: share.NewWebDavAccessMethod(perms, nil, nil),
+			}}
+		}
+		versions := func(p *provider.ResourcePermissions) { p.ListFileVersions = true }
+		viewerPlus := permissions.NewViewerRole().CS3ResourcePermissions()
+		viewerPlus.ListGrants = true
+
+		cases := []struct {
+			name    string
+			field   *ocm.UpdateOCMShareRequest_UpdateField
+			typ     model.OcmProtocol
+			changed bool
+			bits    model.OcmPermissions
+		}{
+			{"webapp read with an unstored extra", webapp([]string{"read"}, versions), model.WebappProtocol, false, model.OcmPermissionRead},
+			{"webapp view", webapp([]string{"view"}, nil), model.WebappProtocol, true, model.OcmPermissionView},
+			{"webapp view repeated", webapp([]string{"view"}, versions), model.WebappProtocol, false, model.OcmPermissionView},
+			{"webapp view and write", webapp([]string{"view", "write"}, nil), model.WebappProtocol, true, model.OcmPermissionView | model.OcmPermissionWrite},
+			{"webapp read, write and share", webapp([]string{"read", "write", "share"}, nil), model.WebappProtocol, true, model.OcmPermissionRead | model.OcmPermissionWrite | model.OcmPermissionShare},
+			{"webapp read, write and share repeated", webapp([]string{"read", "write", "share"}, versions), model.WebappProtocol, false, model.OcmPermissionRead | model.OcmPermissionWrite | model.OcmPermissionShare},
+			{"webdav viewer with an unstored extra", webdav(viewerPlus), model.WebDAVProtocol, false, model.OcmPermissionRead},
+			{"webdav editor", webdav(permissions.NewEditorRole().CS3ResourcePermissions()), model.WebDAVProtocol, true,
+				model.OcmPermissionRead | model.OcmPermissionWrite | model.OcmPermissionCreate | model.OcmPermissionDelete},
+		}
+		for _, tc := range cases {
+			u, err := m.UpdateShare(ctx, owner, ref, tc.field)
+			if err != nil {
+				t.Fatalf("%s: %v", tc.name, err)
+			}
+			got := u.WebappPermissionsChanged
+			if tc.typ == model.WebDAVProtocol {
+				got = u.WebDAVPermissionsChanged
+			}
+			if got != tc.changed || storedBits(tc.typ) != tc.bits {
+				t.Fatalf("%s: changed=%v bits=%d, want %v %d", tc.name, got, storedBits(tc.typ), tc.changed, tc.bits)
+			}
 		}
 	})
 }

@@ -21,10 +21,18 @@ package ocmshareprovider
 import (
 	"encoding/json"
 	"net/http"
+	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
+	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
+	ocmprovider "github.com/cs3org/go-cs3apis/cs3/ocm/provider/v1beta1"
+	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	ocm "github.com/cs3org/go-cs3apis/cs3/sharing/ocm/v1beta1"
+	providerpb "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
+	"github.com/cs3org/reva/v3/internal/http/services/opencloudmesh/ocmd"
+	"github.com/cs3org/reva/v3/pkg/appctx"
 	"github.com/cs3org/reva/v3/pkg/ocm/share"
 )
 
@@ -173,5 +181,37 @@ func TestWebappProtocolBuilderDoesNotDefaultRequirements(t *testing.T) {
 	protocol.Requirements = append(protocol.Requirements, "mutated")
 	if share.DefaultWebappTargets[0] != "blank" {
 		t.Fatal("wire target mutation changed the package default")
+	}
+}
+
+// A resource without a supported type is refused before an ID is generated,
+// the peer is contacted or anything is stored.
+func TestCreateOCMShareRefusesUnsupportedResourceType(t *testing.T) {
+	for _, rt := range []providerpb.ResourceType{providerpb.ResourceType_RESOURCE_TYPE_REFERENCE, providerpb.ResourceType_RESOURCE_TYPE_SYMLINK, providerpb.ResourceType_RESOURCE_TYPE_INVALID} {
+		t.Run(rt.String(), func(t *testing.T) {
+			peer := &remotePeer{disco: capableDiscovery().payload()}
+			srv := httptest.NewServer(http.HandlerFunc(peer.handler))
+			t.Cleanup(srv.Close)
+			repo := &capturingRepo{}
+			svc := &service{conf: &config{ProviderDomain: "sender.example", WebDAVEndpoint: testWebDAVRoot}, repo: repo, client: ocmd.NewClient(2*time.Second, true)}
+			stampGateway(&statGateway{info: &providerpb.ResourceInfo{Path: "/files/x", Type: rt, Owner: &userpb.UserId{OpaqueId: "einstein", Idp: "sender.example"}}})
+			ctx := appctx.ContextSetUser(context.Background(), &userpb.User{Id: &userpb.UserId{OpaqueId: "einstein", Idp: "sender.example"}})
+			resp, err := svc.CreateOCMShare(ctx, &ocm.CreateOCMShareRequest{
+				ResourceId: &providerpb.ResourceId{StorageId: "storage", OpaqueId: "resource"},
+				Grantee: &providerpb.Grantee{Type: providerpb.GranteeType_GRANTEE_TYPE_USER, Id: &providerpb.Grantee_UserId{
+					UserId: &userpb.UserId{OpaqueId: "marie", Idp: "remote.example"},
+				}},
+				RecipientMeshProvider: &ocmprovider.ProviderInfo{Domain: "remote.example", Services: []*ocmprovider.Service{{
+					Endpoint: &ocmprovider.ServiceEndpoint{Type: &ocmprovider.ServiceType{Name: "OCM"}, Path: srv.URL + "/ocm"},
+				}}},
+				AccessMethods: []*ocm.AccessMethod{webdavMethod()},
+			})
+			if err != nil || resp.GetStatus().GetCode() != rpc.Code_CODE_INVALID_ARGUMENT {
+				t.Fatalf("%v %v", resp, err)
+			}
+			if posts, _ := peer.posted(); posts != 0 || repo.storeN != 0 || repo.idN != 0 {
+				t.Fatalf("posts %d stores %d ids %d", posts, repo.storeN, repo.idN)
+			}
+		})
 	}
 }

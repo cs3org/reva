@@ -174,24 +174,45 @@ func TestJSONTransferGenerationExhaustion(t *testing.T) {
 	}
 }
 
-func TestJSONShareWithoutStoredResourceType(t *testing.T) {
+// A share without a supported resource type is never stored, and a stored
+// one, e.g. in a hand-edited file, is not changed.
+func TestJSONRefusesShareWithoutSupportedResourceType(t *testing.T) {
+	m, cleanup := setup(t)
+	defer cleanup()
+	ctx := context.Background()
+	if _, err := m.StoreShare(ctx, testShare("tok-none", legacyMethods()), ocm.SharedResourceType_SHARE_RESOURCE_TYPE_INVALID); !errors.Is(err, share.ErrInvalidResourceType) {
+		t.Fatalf("store: %v", err)
+	}
+	if shares, err := m.ListShares(ctx, testUser(), nil); err != nil || len(shares) != 0 {
+		t.Fatalf("stored: %v %v", shares, err)
+	}
+
 	path := filepath.Join(t.TempDir(), "ocm.json")
 	s := testShare("tok", legacyMethods())
 	raw, err := utils.MarshalProtoV1ToJSON(s)
 	if err != nil {
 		t.Fatal(err)
 	}
-	// A file written before resource types were stored.
-	old := `{"shares":{"` + s.Id.OpaqueId + `":` + string(raw) + `},"received_shares":{}}`
-	if err := os.WriteFile(path, []byte(old), 0600); err != nil {
+	file := `{"shares":{"` + s.Id.OpaqueId + `":` + string(raw) + `},"received_shares":{},"resource_types":{}}`
+	if err := os.WriteFile(path, []byte(file), 0600); err != nil {
 		t.Fatal(err)
 	}
-	m, err := New(context.Background(), map[string]any{"file": path})
+	m, err = New(ctx, map[string]any{"file": path})
 	if err != nil {
 		t.Fatal(err)
 	}
-	removal, err := m.DeleteShare(context.Background(), testUser(), &ocm.ShareReference{Spec: &ocm.ShareReference_Id{Id: s.Id}})
-	if err != nil || removal.ResourceType != ocm.SharedResourceType_SHARE_RESOURCE_TYPE_INVALID {
-		t.Fatalf("delete: %v %v", removal, err)
+	ref := &ocm.ShareReference{Spec: &ocm.ShareReference_Id{Id: s.Id}}
+	editor := &ocm.UpdateOCMShareRequest_UpdateField{Field: &ocm.UpdateOCMShareRequest_UpdateField_AccessMethods{
+		AccessMethods: share.NewWebDavAccessMethod(permissions.NewEditorRole().CS3ResourcePermissions(), nil, nil),
+	}}
+	if up, err := m.UpdateShare(ctx, testUser(), ref, editor); !errors.Is(err, share.ErrInvalidResourceType) || up != nil {
+		t.Fatalf("update: %v %v", up, err)
+	}
+	if r, err := m.DeleteShare(ctx, testUser(), ref); !errors.Is(err, share.ErrInvalidResourceType) || r != nil {
+		t.Fatalf("delete: %v %v", r, err)
+	}
+	after, err := os.ReadFile(path)
+	if err != nil || string(after) != file {
+		t.Fatalf("file changed: %s %v", after, err)
 	}
 }

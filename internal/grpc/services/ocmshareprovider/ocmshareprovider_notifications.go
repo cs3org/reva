@@ -99,10 +99,6 @@ func (s *service) notifyUnshared(ctx context.Context, removal *share.ShareRemova
 	}
 	sh := removal.Share
 	rt := resourceTypeName(removal.ResourceType)
-	if rt == "" {
-		appctx.GetLogger(ctx).Warn().Str("share_id", sh.GetId().GetOpaqueId()).Msg("not sending SHARE_UNSHARED: share has no stored resource type")
-		return
-	}
 	s.emit(ctx, sh.GetGrantee().GetUserId().GetIdp(), ocmd.ShareStateNotification{
 		Type:         ocmd.NotificationShareUnshared,
 		SenderDomain: s.conf.ProviderDomain,
@@ -121,10 +117,6 @@ func (s *service) notifyPermissionChange(ctx context.Context, update *share.Shar
 	}
 	sh := update.After
 	rt := resourceTypeName(update.ResourceType)
-	if rt == "" {
-		appctx.GetLogger(ctx).Warn().Str("share_id", sh.GetId().GetOpaqueId()).Msg("not sending SHARE_CHANGE_PERMISSION: share has no stored resource type")
-		return
-	}
 	var perms []string
 	if update.WebDAVPermissionsChanged {
 		perms = webdavPermissionNames(sh)

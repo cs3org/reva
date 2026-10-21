@@ -44,9 +44,13 @@ import (
 	"github.com/cs3org/reva/v3/pkg/ocm/share"
 	"github.com/cs3org/reva/v3/pkg/permissions"
 	sqlmgr "github.com/cs3org/reva/v3/pkg/share/manager/sql"
+	model "github.com/cs3org/reva/v3/pkg/share/manager/sql/model"
 	"github.com/rs/zerolog"
 	"google.golang.org/genproto/protobuf/field_mask"
 	"google.golang.org/grpc"
+	"google.golang.org/protobuf/proto"
+	"gorm.io/driver/sqlite"
+	"gorm.io/gorm"
 )
 
 const emitSecret = "received-secret-5b2d"
@@ -159,13 +163,16 @@ type emitEnv struct {
 	owner context.Context
 	recip context.Context
 	logs  *lockedBuffer
+	// dbPath is the SQLite file of repo.
+	dbPath string
 }
 
 func newEmitEnv(t *testing.T) *emitEnv {
 	t.Helper()
+	dbPath := filepath.Join(t.TempDir(), "ocm.sqlite")
 	repo, err := sqlmgr.NewOCMShareManager(context.Background(), map[string]any{
 		"db_engine": "sqlite",
-		"db_name":   filepath.Join(t.TempDir(), "ocm.sqlite"),
+		"db_name":   dbPath,
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -180,10 +187,11 @@ func newEmitEnv(t *testing.T) *emitEnv {
 			transferrer: xfer,
 			notifier:    &syncNotifier{c: ocmd.NewClient(2*time.Second, false)},
 		},
-		repo: repo,
-		peer: peer,
-		xfer: xfer,
-		logs: &lockedBuffer{},
+		repo:   repo,
+		peer:   peer,
+		xfer:   xfer,
+		logs:   &lockedBuffer{},
+		dbPath: dbPath,
 	}
 	logger := zerolog.New(env.logs)
 	env.owner = appctx.WithLogger(appctx.ContextSetUser(context.Background(), &userpb.User{
@@ -566,16 +574,42 @@ func TestCommittedChangesAreNotifiedWithoutStat(t *testing.T) {
 	}
 }
 
-func TestShareWithoutStoredResourceTypeIsNotNotified(t *testing.T) {
-	e := newEmitEnv(t)
-	sh := e.outgoingOfType(t, ocm.SharedResourceType_SHARE_RESOURCE_TYPE_INVALID)
-	res, err := e.svc.RemoveOCMShare(e.owner, &ocm.RemoveOCMShareRequest{Ref: &ocm.ShareReference{Spec: &ocm.ShareReference_Id{Id: sh.Id}}})
-	if err != nil || res.Status.Code != rpc.Code_CODE_OK {
-		t.Fatalf("%v %v", res, err)
-	}
-	requireNotices(t, e.peer)
-	if !strings.Contains(e.logs.String(), "no stored resource type") {
-		t.Fatalf("missing warning: %s", e.logs.String())
+// A corrupt row without a supported resource type is refused before any
+// change, instead of committing a change that cannot be notified.
+func TestCorruptResourceTypeRefusesMutation(t *testing.T) {
+	for _, itemType := range []string{"", "reference"} {
+		t.Run("item_type="+itemType, func(t *testing.T) {
+			e := newEmitEnv(t)
+			sh := e.outgoing(t)
+			db, err := gorm.Open(sqlite.Open(e.dbPath), &gorm.Config{})
+			if err != nil {
+				t.Fatal(err)
+			}
+			if err := db.Model(&model.OcmShare{}).Where("id = ?", sh.Id.OpaqueId).Update("item_type", itemType).Error; err != nil {
+				t.Fatal(err)
+			}
+			ref := &ocm.ShareReference{Spec: &ocm.ShareReference_Id{Id: sh.Id}}
+			owner := &userpb.User{Id: sh.Owner}
+			before, err := e.repo.GetShare(e.owner, owner, ref)
+			if err != nil {
+				t.Fatal(err)
+			}
+			up, err := e.svc.UpdateOCMShare(e.owner, &ocm.UpdateOCMShareRequest{Ref: ref, Field: []*ocm.UpdateOCMShareRequest_UpdateField{{
+				Field: &ocm.UpdateOCMShareRequest_UpdateField_AccessMethods{AccessMethods: share.NewWebDavAccessMethod(permissions.NewEditorRole().CS3ResourcePermissions(), nil, nil)},
+			}}})
+			if err != nil || up.Status.Code != rpc.Code_CODE_FAILED_PRECONDITION {
+				t.Fatalf("update: %v %v", up, err)
+			}
+			rm, err := e.svc.RemoveOCMShare(e.owner, &ocm.RemoveOCMShareRequest{Ref: ref})
+			if err != nil || rm.Status.Code != rpc.Code_CODE_FAILED_PRECONDITION {
+				t.Fatalf("remove: %v %v", rm, err)
+			}
+			got, err := e.repo.GetShare(e.owner, owner, ref)
+			if err != nil || !proto.Equal(got, before) {
+				t.Fatalf("share changed: %v %v", got, err)
+			}
+			requireNotices(t, e.peer)
+		})
 	}
 }
 

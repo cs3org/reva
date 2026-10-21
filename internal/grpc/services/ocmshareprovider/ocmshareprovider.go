@@ -288,6 +288,14 @@ func (s *service) CreateOCMShare(ctx context.Context, req *ocm.CreateOCMShareReq
 	}
 
 	info := statRes.Info
+	// The type is stored with the share for its later notifications, so a
+	// share without one is never created, remotely or locally.
+	resourceType := sharedResourceType(info)
+	if !share.SupportedResourceType(resourceType) {
+		return &ocm.CreateOCMShareResponse{
+			Status: status.NewInvalidArg(ctx, "unsupported resource type"),
+		}, nil
+	}
 	user := appctx.ContextMustGetUser(ctx)
 	// lightweight homes are owned by service accounts that may not resolve to a user with the current user provider
 	owner := info.Owner
@@ -455,7 +463,7 @@ func (s *service) CreateOCMShare(ctx context.Context, req *ocm.CreateOCMShareReq
 		}
 	}
 
-	stored, err := s.repo.StoreShare(ctx, ocmshare, sharedResourceType(info))
+	stored, err := s.repo.StoreShare(ctx, ocmshare, resourceType)
 	if err != nil {
 		// the remote server has already accepted the share, so a failure here
 		// leaves a dangling share on the remote end
@@ -477,9 +485,14 @@ func (s *service) RemoveOCMShare(ctx context.Context, req *ocm.RemoveOCMShareReq
 	user := appctx.ContextMustGetUser(ctx)
 	removal, err := s.repo.DeleteShare(ctx, user, req.Ref)
 	if err != nil {
-		if errors.Is(err, share.ErrShareNotFound) {
+		switch {
+		case errors.Is(err, share.ErrShareNotFound):
 			return &ocm.RemoveOCMShareResponse{
 				Status: status.NewNotFound(ctx, "share does not exist"),
+			}, nil
+		case errors.Is(err, share.ErrInvalidResourceType):
+			return &ocm.RemoveOCMShareResponse{
+				Status: status.NewFailedPrecondition(ctx, err, "share has no supported resource type"),
 			}, nil
 		}
 		return &ocm.RemoveOCMShareResponse{
@@ -566,9 +579,14 @@ func (s *service) UpdateOCMShare(ctx context.Context, req *ocm.UpdateOCMShareReq
 	}
 	update, err := s.repo.UpdateShare(ctx, user, req.Ref, req.Field...)
 	if err != nil {
-		if errors.Is(err, share.ErrShareNotFound) {
+		switch {
+		case errors.Is(err, share.ErrShareNotFound):
 			return &ocm.UpdateOCMShareResponse{
 				Status: status.NewNotFound(ctx, "share does not exist"),
+			}, nil
+		case errors.Is(err, share.ErrInvalidResourceType):
+			return &ocm.UpdateOCMShareResponse{
+				Status: status.NewFailedPrecondition(ctx, err, "share has no supported resource type"),
 			}, nil
 		}
 		return &ocm.UpdateOCMShareResponse{
