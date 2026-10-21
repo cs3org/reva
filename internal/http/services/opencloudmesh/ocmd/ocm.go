@@ -139,6 +139,7 @@ func (s *svc) handlersInit(log *zerolog.Logger) error {
 	sharesHandler := new(sharesHandler)
 	invitesHandler := new(invitesHandler)
 	notifHandler := new(notifHandler)
+	s.notif = notifHandler
 
 	if err := sharesHandler.init(s.Conf); err != nil {
 		return err

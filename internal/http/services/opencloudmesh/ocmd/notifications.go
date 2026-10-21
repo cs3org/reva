@@ -43,13 +43,12 @@ type notifHandler struct {
 
 func (h *notifHandler) init(c *config) error {
 	h.registry = NewNotificationRegistry()
-	// Legacy USER_REMOVED, GROUP_REMOVED and RESHARE_UNDO stay log-only.
+	// No effect is wired at this layer: valid notifications are only logged.
 	for _, t := range []string{
 		NotificationShareAccepted,
 		NotificationShareDeclined,
 		NotificationShareUnshared,
 		NotificationShareChangePermission,
-		NotificationReshareUndo,
 		NotificationUserRemoved,
 		NotificationGroupRemoved,
 	} {
@@ -88,9 +87,6 @@ func (h *notifHandler) Notifications(w http.ResponseWriter, r *http.Request) {
 
 	outcome, err := h.registry.Dispatch(ctx, n)
 	switch {
-	case errors.Is(err, ErrMLSIngressUnavailable):
-		// MLS support is not advertised, so MLS types are unknown here.
-		notificationLog(log.Info(), n).Str("outcome", string(DispatchIgnored)).Msg("OCM MLS notification ignored")
 	case err != nil:
 		notificationLog(log.Warn(), n).Str("outcome", string(outcome)).Str("error", err.Error()).Msg("OCM notification handler failed")
 	case outcome == DispatchIgnored:
@@ -123,12 +119,6 @@ func notificationLog(e *zerolog.Event, n *Notification) *zerolog.Event {
 	}
 	return e.Str("type", typ).
 		Str("class", string(n.Class)).
-		Str("contract", n.ContractType).
-		Bool("legacy", n.Shape.Legacy()).
-		Bool("missing_sender_domain", n.Shape.MissingSenderDomain).
-		Bool("envelope_provider_id", n.Shape.EnvelopeProviderID).
-		Bool("provider_id_conflict", n.Shape.ProviderIDConflict).
-		Bool("alias", n.Shape.Alias).
 		Bool("has_shared_secret", n.SharedSecret != "")
 }
 
