@@ -43,22 +43,14 @@ on demand whether or not it has a cadence. `log_file` defaults to the path shown
 above for each, and both drivers default to `sql`, so all four keys above the
 service user can be omitted.
 
-`spaces_per_batch` makes a job walk the spaces that hold a share or a public link
-instead of reading the whole database into memory. It is how many spaces one
-listing covers, so it trades memory for round trips: a small batch holds little
-at once, a bigger one asks the database fewer times. The bound is in spaces, not
-in rows, so a single space holding a great many shares is still read whole. It
-does not change what a run decides: the shallow job decides and applies one
-space at a time either way, and the orphan job judges each item on its own.
-
-Leave it out and neither job batches: it reads every share, and every public
-link, in one listing, which is what both did before this knob existed. A value
-below `1` is a configuration error.
+`spaces_per_batch` limits one batch to a given number of spaces.
+This has been introduces to avoid memory spikes due to large numbers of
+shares being loaded into memory at the same time. If no value is set,
+all shares will be loaded into memory at the same time.
 
 With a batch size, a row whose `space_id` is `NULL` is not visited: there is no
 space to put it in a batch under. The hierarchy check the share API runs already
-skips such a share for the same reason, so a `NULL` there is a row to backfill,
-not something a job can work with.
+skips such a share for the same reason.
 
 The drivers take their configuration from
 `[serverless.services.reconciliation.share_drivers.<name>]` and
@@ -130,6 +122,10 @@ same access (`covered` in the totals) or less (`conflicting`). The job deletes
 the row of such a share, which is what the share API does when the higher share
 is created. The delete is soft, so you can undo it in the database. The ACL entry
 on the path stays.
+
+A share whose expiration date has passed is left out (`expired` in the totals).
+The job does not write its entry, and it does not make a share below it
+redundant. The share API ignores expired shares in the same way.
 
 ## Logs
 

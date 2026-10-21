@@ -21,6 +21,7 @@ package reconciliation
 import (
 	"context"
 	"slices"
+	"time"
 
 	gateway "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
@@ -231,6 +232,9 @@ type ShallowReport struct {
 	SpaceID string
 	// Checked is the number of shares whose implied entry was resolved.
 	Checked int
+	// Expired is the number of shares left out because their expiration date
+	// has passed.
+	Expired int
 	// Covered is the number of shares that needed no entry of their own because
 	// an ancestor share already grants the same access.
 	Covered int
@@ -260,7 +264,7 @@ type ShallowReport struct {
 	DryRun bool
 }
 
-// Run reconciles every non-orphan share against the storage. A per-share lookup
+// Run reconciles every non-orphan, non-expired share against the storage. A per-share lookup
 // failure is logged and the share is skipped, never guessed at, so a flaky
 // gateway can never cause a wrong ACL to be written. The run itself only fails
 // if the spaces holding a share cannot be listed at all; a space whose own
@@ -369,6 +373,7 @@ func (j *ShallowJob) run(ctx context.Context, spaceID string) (ShallowReport, er
 		Str("event", EventShallowEnd).
 		Bool("dry_run", j.DryRun).
 		Int("checked", report.Checked).
+		Int("expired", report.Expired).
 		Int("covered", report.Covered).
 		Int("conflicting", report.Conflicting).
 		Int("written", len(report.Written)).
@@ -409,6 +414,7 @@ func (j *ShallowJob) reconcileSpaces(ctx context.Context, log *zerolog.Logger, r
 	// does not resolve is on it too: it exists, it is only the run that cannot
 	// judge it.
 	seen := map[string]map[string]struct{}{}
+	now := time.Now()
 	for _, s := range shares {
 		id := s.GetId().GetOpaqueId()
 		space := s.GetResourceId().GetSpaceId()
@@ -416,6 +422,13 @@ func (j *ShallowJob) reconcileSpaces(ctx context.Context, log *zerolog.Logger, r
 			seen[space] = map[string]struct{}{}
 		}
 		seen[space][id] = struct{}{}
+
+		// an expired share has no entry and takes no part in the hierarchy, as in
+		// the gateway. It stays in seen, or the second listing reports it as new.
+		if isExpired(s, now) {
+			report.Expired++
+			continue
+		}
 
 		traceID := trace.Generate()
 		traces[id] = traceID
@@ -966,6 +979,7 @@ func (r *shallowRun) Run(ctx context.Context, p rjobs.Params) (rjobs.Params, err
 		"space":       report.SpaceID,
 		"dry_run":     report.DryRun,
 		"checked":     report.Checked,
+		"expired":     report.Expired,
 		"covered":     report.Covered,
 		"conflicting": report.Conflicting,
 		"written":     len(report.Written),
