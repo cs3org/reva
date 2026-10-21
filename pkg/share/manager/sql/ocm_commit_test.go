@@ -389,10 +389,14 @@ func TestUnacknowledgedCreateIgnoresAnOlderRowOfTheGrant(t *testing.T) {
 		p := &commitFault{}
 		withCommitFault(t, m, p)
 		p.armed.Store(true)
-		got, err := m.StoreReceivedShare(context.Background(), grantShare(recipient("marie"), "a.example.org", "dup", file))
+		in := grantShare(recipient("marie"), "a.example.org", "dup", file)
+		got, err := m.StoreReceivedShare(context.Background(), in)
 		var unknown *share.CommitUnknownError
 		if got != nil || !errors.As(err, &unknown) || unknown.Observed != share.CommitObservedPrevious {
 			t.Fatalf("%v %v", got, err)
+		}
+		if in.Id != nil {
+			t.Fatalf("unconfirmed creation published ID %v", in.Id)
 		}
 		if id := rowOf(t, other(t, cfg), "dup"); fmt.Sprint(id) != older.Id.OpaqueId {
 			t.Fatalf("rows changed: newest %d", id)
