@@ -22,9 +22,12 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"strings"
+	"sync/atomic"
 	"testing"
 
 	"github.com/cs3org/reva/v3/internal/http/services/reqres"
@@ -34,8 +37,9 @@ import (
 
 const receiverSecret = "receiver-secret-0f8a7c"
 
-// newNotificationsRouter builds the real ocmd service router.
-func newNotificationsRouter(t *testing.T) http.Handler {
+// newNotificationsService builds the real ocmd service, inherited ingress
+// limiter included, and closes it when the test ends.
+func newNotificationsService(t *testing.T) *svc {
 	t.Helper()
 	s, err := New(context.Background(), map[string]any{
 		"gatewaysvc":     "localhost:0",
@@ -44,14 +48,20 @@ func newNotificationsRouter(t *testing.T) http.Handler {
 	if err != nil {
 		t.Fatalf("ocmd service: %v", err)
 	}
-	return s.Handler()
+	t.Cleanup(func() { _ = s.Close() })
+	return s.(*svc)
 }
+
+var clientSeq atomic.Uint32
 
 func postNotification(t *testing.T, h http.Handler, contentType, body string) (*httptest.ResponseRecorder, string) {
 	t.Helper()
 	var logs bytes.Buffer
 	logger := zerolog.New(&logs).Level(zerolog.DebugLevel)
 	req := httptest.NewRequest(http.MethodPost, notificationsPath, strings.NewReader(body))
+	// Each request comes from its own client, so that the contract tests
+	// never drain one bucket of the shared ingress limiter.
+	req.RemoteAddr = fmt.Sprintf("[2001:db8::%x]:1000", clientSeq.Add(1))
 	if contentType != "" {
 		req.Header.Set("Content-Type", contentType)
 	}
@@ -61,73 +71,102 @@ func postNotification(t *testing.T, h http.Handler, contentType, body string) (*
 	return rr, logs.String()
 }
 
-func TestNotificationsReceiverMatrix(t *testing.T) {
-	h := newNotificationsRouter(t)
-	cases := []struct {
-		name        string
-		class       string
-		contentType string
-		body        string
-		status      int
-		apiCode     reqres.APIErrorCode
-	}{
-		{"A SHARE_ACCEPTED", "A", "application/json", `{"notificationType":"SHARE_ACCEPTED","senderDomain":"b.example.org","resourceType":"file","notification":{"file":{"providerId":"42"}}}`, 201, ""},
-		{"A SHARE_DECLINED", "A", "application/json", `{"notificationType":"SHARE_DECLINED","senderDomain":"b.example.org","resourceType":"file","shareType":"user","notification":{"file":{"providerId":"42"}}}`, 201, ""},
-		{"A SHARE_UNSHARED", "A", "application/json", `{"notificationType":"SHARE_UNSHARED","senderDomain":"a.example.org","resourceType":"file","notification":{"file":{"providerId":"42"}}}`, 201, ""},
-		{"A SHARE_CHANGE_PERMISSION", "A", "application/json", `{"notificationType":"SHARE_CHANGE_PERMISSION","senderDomain":"a.example.org","resourceType":"folder","notification":{"file":{"providerId":"42","permissions":["read"]}}}`, 201, ""},
-		{"A USER_REMOVED", "A", "application/json", `{"notificationType":"USER_REMOVED","senderDomain":"a.example.org","shareType":"user","notification":{"user":{"userId":"alice@a.example.org"}}}`, 201, ""},
-		{"A GROUP_REMOVED", "A", "application/json", `{"notificationType":"GROUP_REMOVED","senderDomain":"a.example.org","shareType":"group","notification":{"group":{"groupId":"g1"}}}`, 201, ""},
-		{"A json content type with charset", "A", "application/json; charset=utf-8", `{"notificationType":"SHARE_UNSHARED","senderDomain":"a.example.org","resourceType":"file","notification":{"file":{"providerId":"42"}}}`, 201, ""},
-		{"B Nextcloud flat SHARE_ACCEPTED", "B", "application/json", `{"notificationType":"SHARE_ACCEPTED","resourceType":"file","providerId":"42","notification":{"sharedSecret":"` + receiverSecret + `","message":"m","shareWith":"bob","senderId":"alice","shareType":"user"}}`, 201, ""},
-		{"B RESHARE_UNDO alias", "B", "application/json", `{"notificationType":"RESHARE_UNDO","resourceType":"file","providerId":"42","notification":{"sharedSecret":"` + receiverSecret + `"}}`, 201, ""},
-		{"B USER_REMOVED without senderDomain", "B", "application/json", `{"notificationType":"USER_REMOVED","shareType":"user","notification":{"user":{"userId":"alice@a.example.org"}}}`, 201, ""},
-		{"C unknown type", "C", "application/json", `{"notificationType":"ACME_EVENT","senderDomain":"a.example.org","notification":{"sharedSecret":"` + receiverSecret + `"}}`, 201, ""},
-		{"C CONTACT_REMOVED before its handler exists", "C", "application/json", `{"notificationType":"CONTACT_REMOVED","senderDomain":"a.example.org","shareType":"user","notification":{"user":{"userId":"alice@a.example.org"}}}`, 201, ""},
-		{"C MLS type without MLS support", "C", "application/json", `{"notificationType":"MLS_COMMIT","senderDomain":"a.example.org","shareType":"federation","notification":{"federation":{"mlsGroupId":"g"}}}`, 201, ""},
-		{"D malformed JSON", "D", "application/json", `{"notificationType":`, 400, reqres.APIErrorInvalidParameter},
-		{"D non-JSON content type", "D", "text/plain", `{"notificationType":"SHARE_UNSHARED"}`, 400, reqres.APIErrorInvalidParameter},
-		{"D missing content type", "D", "", `{"notificationType":"SHARE_UNSHARED"}`, 400, reqres.APIErrorInvalidParameter},
-		{"D missing notificationType", "D", "application/json", `{"senderDomain":"a.example.org","resourceType":"file"}`, 400, reqres.APIErrorInvalidParameter},
-		{"D oversized body", "D", "application/json", `{"notificationType":"ACME","x":"` + strings.Repeat("a", maxNotificationBody) + `"}`, 400, reqres.APIErrorInvalidParameter},
-		{"400 providerId missing", "A", "application/json", `{"notificationType":"SHARE_UNSHARED","senderDomain":"a.example.org","resourceType":"file","notification":{"sharedSecret":"` + receiverSecret + `"}}`, 400, reqres.APIErrorInvalidParameter},
-		{"400 userId missing", "A", "application/json", `{"notificationType":"USER_REMOVED","senderDomain":"a.example.org","shareType":"user","notification":{"user":{}}}`, 400, reqres.APIErrorInvalidParameter},
-		{"400 userId not an OCM address", "A", "application/json", `{"notificationType":"USER_REMOVED","senderDomain":"a.example.org","shareType":"user","notification":{"user":{"userId":"alice"}}}`, 400, reqres.APIErrorInvalidParameter},
-		{"400 groupId missing", "A", "application/json", `{"notificationType":"GROUP_REMOVED","senderDomain":"a.example.org","shareType":"group","notification":{"group":{"groupId":""}}}`, 400, reqres.APIErrorInvalidParameter},
-		{"400 non-string sharedSecret", "B", "application/json", `{"notificationType":"SHARE_ACCEPTED","resourceType":"file","providerId":"42","notification":{"sharedSecret":42}}`, 400, reqres.APIErrorInvalidParameter},
-		{"400 null resourceType on USER_REMOVED", "A", "application/json", `{"notificationType":"USER_REMOVED","senderDomain":"a.example.org","shareType":"user","resourceType":null,"notification":{"user":{"userId":"alice@a.example.org"}}}`, 400, reqres.APIErrorInvalidParameter},
-		{"400 empty resourceType on USER_REMOVED", "A", "application/json", `{"notificationType":"USER_REMOVED","senderDomain":"a.example.org","shareType":"user","resourceType":"","notification":{"user":{"userId":"alice@a.example.org"}}}`, 400, reqres.APIErrorInvalidParameter},
-		{"400 numeric message", "A", "application/json", `{"notificationType":"SHARE_UNSHARED","senderDomain":"a.example.org","resourceType":"file","notification":{"message":17,"file":{"providerId":"42"}}}`, 400, reqres.APIErrorInvalidParameter},
-		{"400 undefined permission", "A", "application/json", `{"notificationType":"SHARE_CHANGE_PERMISSION","senderDomain":"a.example.org","resourceType":"file","notification":{"file":{"providerId":"42","permissions":["admin"]}}}`, 400, reqres.APIErrorInvalidParameter},
-		{"400 userId host with path", "A", "application/json", `{"notificationType":"USER_REMOVED","senderDomain":"a.example.org","shareType":"user","notification":{"user":{"userId":"alice@a.example.org/path"}}}`, 400, reqres.APIErrorInvalidParameter},
-		{"201 unknown type with null and odd fields", "C", "application/json", `{"notificationType":"ACME_EVENT","senderDomain":"a.example.org","resourceType":null,"notification":{"message":17,"user":null}}`, 201, ""},
-		{"R REQUEST_SHARE", "R", "application/json", `{"notificationType":"REQUEST_SHARE","senderDomain":"b.example.org","resourceType":"file","notification":{"file":{"owner":"a@a.org","shareWith":"b@b.org","shareId":"x","permissions":["read"]}}}`, 501, reqres.APIErrorUnimplemented},
-		{"R REQUEST_RESHARE", "R", "application/json", `{"notificationType":"REQUEST_RESHARE","senderDomain":"b.example.org","resourceType":"file","notification":{"file":{"providerId":"42","shareWith":"c@c.org"}}}`, 501, reqres.APIErrorUnimplemented},
+func checkResponse(t *testing.T, rr *httptest.ResponseRecorder, status int, apiCode reqres.APIErrorCode) {
+	t.Helper()
+	if rr.Code != status {
+		t.Fatalf("status %d, want %d; body %s", rr.Code, status, rr.Body.String())
 	}
+	if status == http.StatusCreated {
+		if rr.Body.Len() != 0 {
+			t.Fatalf("201 has a body: %q", rr.Body.String())
+		}
+		return
+	}
+	var apiErr reqres.APIError
+	if err := json.Unmarshal(rr.Body.Bytes(), &apiErr); err != nil || apiErr.Code != apiCode {
+		t.Fatalf("error body %q", rr.Body.String())
+	}
+}
+
+// The shared envelope corpus through the real router: rejected and request
+// notifications reach no registered handler.
+func TestNotificationsEnvelopeCorpusThroughRouter(t *testing.T) {
+	raw, err := os.ReadFile("testdata/notification-envelopes.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var cases []envelopeCase
+	if err := json.Unmarshal(raw, &cases); err != nil {
+		t.Fatal(err)
+	}
+	codes := map[int]reqres.APIErrorCode{400: reqres.APIErrorInvalidParameter, 501: reqres.APIErrorUnimplemented}
 	for _, tc := range cases {
-		t.Run(tc.name, func(t *testing.T) {
-			rr, logs := postNotification(t, h, tc.contentType, tc.body)
-			if rr.Code != tc.status {
-				t.Fatalf("status %d, want %d; body %s", rr.Code, tc.status, rr.Body.String())
+		t.Run(tc.ID, func(t *testing.T) {
+			want := tc
+			if d, ok := deferredEnvelopes[tc.ID]; ok {
+				want.HTTP, want.HandlerCalls = d.HTTP, d.HandlerCalls
 			}
-			if strings.Contains(logs, receiverSecret) || strings.Contains(rr.Body.String(), receiverSecret) {
-				t.Fatalf("shared secret leaked: %s", logs)
-			}
-			if tc.status == http.StatusCreated {
-				if rr.Body.Len() != 0 {
-					t.Fatalf("201 has a body: %q", rr.Body.String())
+			s := newNotificationsService(t)
+			h := &recordingHandler{}
+			for typ := range builtinContracts {
+				if !IsRequestNotification(typ) {
+					if err := s.notif.registry.SetHandler(typ, h); err != nil {
+						t.Fatal(err)
+					}
 				}
-				return
 			}
-			var apiErr reqres.APIError
-			if err := json.Unmarshal(rr.Body.Bytes(), &apiErr); err != nil || apiErr.Code != tc.apiCode {
-				t.Fatalf("error body %q", rr.Body.String())
+			rr, _ := postNotification(t, s.Handler(), "application/json", string(tc.Body))
+			checkResponse(t, rr, want.HTTP, codes[want.HTTP])
+			if len(h.seen) != want.HandlerCalls {
+				t.Fatalf("%s: handler calls %d, want %d", tc.Purpose, len(h.seen), want.HandlerCalls)
 			}
 		})
 	}
 }
 
+func TestNotificationsReceiverMatrix(t *testing.T) {
+	h := newNotificationsService(t).Handler()
+	cases := []struct {
+		name        string
+		contentType string
+		body        string
+		status      int
+		apiCode     reqres.APIErrorCode
+	}{
+		{"SHARE_ACCEPTED", "application/json", `{"notificationType":"SHARE_ACCEPTED","senderDomain":"b.example.org","resourceType":"file","notification":{"file":{"providerId":"42"}}}`, 201, ""},
+		{"SHARE_DECLINED with secret", "application/json", `{"notificationType":"SHARE_DECLINED","senderDomain":"b.example.org","resourceType":"file","shareType":"user","notification":{"sharedSecret":"` + receiverSecret + `","file":{"providerId":"42"}}}`, 201, ""},
+		{"SHARE_CHANGE_PERMISSION", "application/json", `{"notificationType":"SHARE_CHANGE_PERMISSION","senderDomain":"a.example.org","resourceType":"folder","notification":{"file":{"providerId":"42","permissions":["read"]}}}`, 201, ""},
+		{"json content type with charset", "application/json; charset=utf-8", `{"notificationType":"SHARE_UNSHARED","senderDomain":"a.example.org","resourceType":"file","notification":{"file":{"providerId":"42"}}}`, 201, ""},
+		{"unknown future type", "application/json", `{"notificationType":"EXAMPLE_FUTURE","senderDomain":"a.example.org","shareType":"user","notification":{"sharedSecret":"` + receiverSecret + `","future":{"x":1}}}`, 201, ""},
+		{"RESHARE_UNDO is unknown", "application/json", `{"notificationType":"RESHARE_UNDO","senderDomain":"a.example.org","resourceType":"file","notification":{"file":{"providerId":"42"}}}`, 201, ""},
+		{"flat providerId only", "application/json", `{"notificationType":"SHARE_ACCEPTED","senderDomain":"b.example.org","resourceType":"file","providerId":"42","notification":{"sharedSecret":"` + receiverSecret + `"}}`, 400, reqres.APIErrorInvalidParameter},
+		{"missing senderDomain", "application/json", `{"notificationType":"USER_REMOVED","shareType":"user","notification":{"user":{"userId":"alice@a.example.org"}}}`, 400, reqres.APIErrorInvalidParameter},
+		{"senderDomain with port", "application/json", `{"notificationType":"SHARE_UNSHARED","senderDomain":"a.example.org:443","resourceType":"file","notification":{"file":{"providerId":"42"}}}`, 400, reqres.APIErrorInvalidParameter},
+		{"unknown type with null selector", "application/json", `{"notificationType":"EXAMPLE_FUTURE","senderDomain":"a.example.org","resourceType":null}`, 400, reqres.APIErrorInvalidParameter},
+		{"malformed JSON", "application/json", `{"notificationType":`, 400, reqres.APIErrorInvalidParameter},
+		{"non-JSON content type", "text/plain", `{"notificationType":"SHARE_UNSHARED"}`, 400, reqres.APIErrorInvalidParameter},
+		{"missing content type", "", `{"notificationType":"SHARE_UNSHARED"}`, 400, reqres.APIErrorInvalidParameter},
+		{"oversized body", "application/json", `{"notificationType":"EXAMPLE_FUTURE","senderDomain":"a.example.org","shareType":"user","x":"` + strings.Repeat("a", maxNotificationBody) + `"}`, 400, reqres.APIErrorInvalidParameter},
+		{"non-string sharedSecret", "application/json", `{"notificationType":"SHARE_ACCEPTED","senderDomain":"b.example.org","resourceType":"file","notification":{"sharedSecret":42,"file":{"providerId":"42"}}}`, 400, reqres.APIErrorInvalidParameter},
+		{"userId not an OCM address", "application/json", `{"notificationType":"USER_REMOVED","senderDomain":"a.example.org","shareType":"user","notification":{"user":{"userId":"alice"}}}`, 400, reqres.APIErrorInvalidParameter},
+		{"userId host with path", "application/json", `{"notificationType":"USER_REMOVED","senderDomain":"a.example.org","shareType":"user","notification":{"user":{"userId":"alice@a.example.org/path"}}}`, 400, reqres.APIErrorInvalidParameter},
+		{"userId with zoned IPv6", "application/json", `{"notificationType":"USER_REMOVED","senderDomain":"a.example.org","shareType":"user","notification":{"user":{"userId":"alice@[fe80::1%25eth0]"}}}`, 400, reqres.APIErrorInvalidParameter},
+		{"REQUEST_SHARE", "application/json", `{"notificationType":"REQUEST_SHARE","senderDomain":"b.example.org","resourceType":"file","notification":{"file":{"owner":"a@a.example.org","shareWith":"b@b.example.org","shareId":"x","permissions":["read"]}}}`, 501, reqres.APIErrorUnimplemented},
+		{"malformed REQUEST_SHARE", "application/json", `{"notificationType":"REQUEST_SHARE","senderDomain":"b.example.org","resourceType":"file"}`, 400, reqres.APIErrorInvalidParameter},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			rr, logs := postNotification(t, h, tc.contentType, tc.body)
+			if strings.Contains(logs, receiverSecret) || strings.Contains(rr.Body.String(), receiverSecret) {
+				t.Fatalf("shared secret leaked: %s", logs)
+			}
+			checkResponse(t, rr, tc.status, tc.apiCode)
+		})
+	}
+}
+
 func TestNotificationsSuccessResponseBytes(t *testing.T) {
-	h := newNotificationsRouter(t)
+	h := newNotificationsService(t).Handler()
 	rr, _ := postNotification(t, h, "application/json", `{"notificationType":"SHARE_UNSHARED","senderDomain":"a.example.org","resourceType":"file","notification":{"file":{"providerId":"42"}}}`)
 	if rr.Code != http.StatusCreated || rr.Body.Len() != 0 || rr.Header().Get("Content-Type") != "" {
 		t.Fatalf("status %d body %q content-type %q", rr.Code, rr.Body.String(), rr.Header().Get("Content-Type"))
@@ -135,12 +174,12 @@ func TestNotificationsSuccessResponseBytes(t *testing.T) {
 }
 
 func TestNotificationsLogsStructuredFieldsWithoutPayload(t *testing.T) {
-	h := newNotificationsRouter(t)
+	h := newNotificationsService(t).Handler()
 	paths := map[string]string{
-		"success": `{"notificationType":"SHARE_ACCEPTED","resourceType":"file","providerId":"42","notification":{"sharedSecret":"` + receiverSecret + `","message":"payload-text"}}`,
-		"schema":  `{"notificationType":"SHARE_ACCEPTED","resourceType":"file","notification":{"sharedSecret":"` + receiverSecret + `","message":"payload-text"}}`,
-		"unknown": `{"notificationType":"ACME","notification":{"sharedSecret":"` + receiverSecret + `","message":"payload-text"}}`,
-		"request": `{"notificationType":"REQUEST_SHARE","notification":{"sharedSecret":"` + receiverSecret + `","message":"payload-text"}}`,
+		"success": `{"notificationType":"SHARE_ACCEPTED","senderDomain":"b.example.org","resourceType":"file","notification":{"sharedSecret":"` + receiverSecret + `","message":"payload-text","file":{"providerId":"42"}}}`,
+		"schema":  `{"notificationType":"SHARE_ACCEPTED","senderDomain":"b.example.org","resourceType":"file","notification":{"sharedSecret":"` + receiverSecret + `","message":"payload-text"}}`,
+		"unknown": `{"notificationType":"ACME","senderDomain":"b.example.org","shareType":"user","notification":{"sharedSecret":"` + receiverSecret + `","message":"payload-text"}}`,
+		"request": `{"notificationType":"REQUEST_SHARE","senderDomain":"b.example.org","resourceType":"file","notification":{"sharedSecret":"` + receiverSecret + `","message":"payload-text","file":{"owner":"a@a.example.org","shareWith":"b@b.example.org","shareId":"x","permissions":["read"]}}}`,
 		"decode":  `{"notificationType":"SHARE_ACCEPTED","notification":{"sharedSecret":"` + receiverSecret + `"`,
 	}
 	for name, body := range paths {
@@ -155,9 +194,14 @@ func TestNotificationsLogsStructuredFieldsWithoutPayload(t *testing.T) {
 		})
 	}
 	_, logs := postNotification(t, h, "application/json", paths["success"])
-	for _, want := range []string{`"type":"SHARE_ACCEPTED"`, `"class":"B"`, `"envelope_provider_id":true`, `"missing_sender_domain":true`, `"has_shared_secret":true`, `"provider_id":"42"`} {
+	for _, want := range []string{`"type":"SHARE_ACCEPTED"`, `"class":"A"`, `"has_shared_secret":true`, `"provider_id":"42"`, `"sender_domain":"b.example.org"`} {
 		if !strings.Contains(logs, want) {
 			t.Fatalf("log lacks %s: %s", want, logs)
+		}
+	}
+	for _, gone := range []string{"legacy", "alias", "envelope_provider_id", "missing_sender_domain", "contract"} {
+		if strings.Contains(logs, `"`+gone+`"`) {
+			t.Fatalf("compatibility field %s logged: %s", gone, logs)
 		}
 	}
 }
@@ -169,29 +213,26 @@ func TestNotificationsLogTierNeedsNoGatewayOrPeer(t *testing.T) {
 		t.Errorf("unexpected outbound request %s %s", r.Method, r.URL)
 	}))
 	defer peer.Close()
-	h := newNotificationsRouter(t)
+	h := newNotificationsService(t).Handler()
 	host := strings.TrimPrefix(peer.URL, "http://")
-	for _, typ := range []string{"SHARE_ACCEPTED", "SHARE_DECLINED", "SHARE_UNSHARED", "SHARE_CHANGE_PERMISSION", "RESHARE_UNDO"} {
-		rr, _ := postNotification(t, h, "application/json", `{"notificationType":"`+typ+`","senderDomain":"`+host+`","resourceType":"file","notification":{"file":{"providerId":"42"}}}`)
+	for _, typ := range []string{"SHARE_ACCEPTED", "SHARE_DECLINED", "SHARE_UNSHARED", "SHARE_CHANGE_PERMISSION"} {
+		rr, _ := postNotification(t, h, "application/json", `{"notificationType":"`+typ+`","senderDomain":"peer.example.org","resourceType":"file","notification":{"file":{"providerId":"42"}}}`)
 		if rr.Code != http.StatusCreated {
 			t.Fatalf("%s: %d", typ, rr.Code)
 		}
 	}
-	rr, _ := postNotification(t, h, "application/json", `{"notificationType":"USER_REMOVED","senderDomain":"`+host+`","shareType":"user","notification":{"user":{"userId":"alice@`+host+`"}}}`)
+	rr, _ := postNotification(t, h, "application/json", `{"notificationType":"USER_REMOVED","senderDomain":"peer.example.org","shareType":"user","notification":{"user":{"userId":"alice@`+host+`"}}}`)
 	if rr.Code != http.StatusCreated {
 		t.Fatalf("USER_REMOVED: %d", rr.Code)
 	}
 }
 
 func TestNotificationsRejectedKnownTypeReachesNoHandler(t *testing.T) {
-	h := &notifHandler{}
-	if err := h.init(nil); err != nil {
-		t.Fatal(err)
-	}
+	s := newNotificationsService(t)
 	calls := 0
 	count := TypeHandlerFunc(func(context.Context, *Notification) error { calls++; return nil })
 	for _, typ := range []string{NotificationUserRemoved, NotificationShareUnshared, NotificationShareChangePermission} {
-		if err := h.registry.SetHandler(typ, count); err != nil {
+		if err := s.notif.registry.SetHandler(typ, count); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -199,8 +240,9 @@ func TestNotificationsRejectedKnownTypeReachesNoHandler(t *testing.T) {
 		`{"notificationType":"USER_REMOVED","senderDomain":"a.example.org","shareType":"user","resourceType":null,"notification":{"user":{"userId":"leaky-value@a.example.org"}}}`,
 		`{"notificationType":"SHARE_UNSHARED","senderDomain":"a.example.org","resourceType":"file","notification":{"message":["leaky-value"],"file":{"providerId":"42"}}}`,
 		`{"notificationType":"SHARE_CHANGE_PERMISSION","senderDomain":"a.example.org","resourceType":"file","notification":{"file":{"providerId":"42","permissions":["leaky-value"]}}}`,
+		`{"notificationType":"SHARE_UNSHARED","senderDomain":"leaky-value.example.org:8443","resourceType":"file","notification":{"file":{"providerId":"42"}}}`,
 	} {
-		rr, logs := postNotification(t, http.HandlerFunc(h.Notifications), "application/json", body)
+		rr, logs := postNotification(t, s.Handler(), "application/json", body)
 		if rr.Code != http.StatusBadRequest || strings.Contains(rr.Body.String(), "leaky-value") || strings.Contains(logs, "leaky-value") {
 			t.Fatalf("status %d body %s logs %s", rr.Code, rr.Body.String(), logs)
 		}
@@ -208,7 +250,7 @@ func TestNotificationsRejectedKnownTypeReachesNoHandler(t *testing.T) {
 	if calls != 0 {
 		t.Fatalf("handler ran %d times for invalid notifications", calls)
 	}
-	rr, _ := postNotification(t, http.HandlerFunc(h.Notifications), "application/json", `{"notificationType":"USER_REMOVED","senderDomain":"a.example.org","shareType":"user","notification":{"user":{"userId":"alice@a.example.org"}}}`)
+	rr, _ := postNotification(t, s.Handler(), "application/json", `{"notificationType":"USER_REMOVED","senderDomain":"a.example.org","shareType":"user","notification":{"user":{"userId":"alice@a.example.org"}}}`)
 	if rr.Code != http.StatusCreated || calls != 1 {
 		t.Fatalf("valid notification: status %d calls %d", rr.Code, calls)
 	}
