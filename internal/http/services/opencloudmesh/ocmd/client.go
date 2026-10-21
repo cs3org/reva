@@ -124,8 +124,20 @@ func (c *OCMClient) Transport() http.RoundTripper {
 }
 
 // Discover returns a number of properties used to discover the capabilities offered by a remote cloud storage.
+// It falls back to the legacy /ocm-provider document.
 // https://cs3org.github.io/OCM-API/docs.html?branch=develop&repo=OCM-API&user=cs3org#/paths/~1.well-known~1ocm/get
 func (c *OCMClient) Discover(ctx context.Context, endpoint string) (*wellknown.OcmDiscoveryData, error) {
+	return c.discover(ctx, endpoint, true)
+}
+
+// DiscoverCanonical is Discover without the legacy /ocm-provider fallback.
+func (c *OCMClient) DiscoverCanonical(ctx context.Context, endpoint string) (*wellknown.OcmDiscoveryData, error) {
+	return c.discover(ctx, endpoint, false)
+}
+
+// discover logs only fixed outcomes with the status and length: peer bytes,
+// error causes and URLs can carry reflected secrets.
+func (c *OCMClient) discover(ctx context.Context, endpoint string, legacyFallback bool) (*wellknown.OcmDiscoveryData, error) {
 	log := appctx.GetLogger(ctx)
 
 	if !strings.HasPrefix(endpoint, "http://") && !strings.HasPrefix(endpoint, "https://") {
@@ -137,58 +149,58 @@ func (c *OCMClient) Discover(ctx context.Context, endpoint string) (*wellknown.O
 		}
 	}
 	remoteurl, _ := url.JoinPath(endpoint, "/.well-known/ocm")
-	body, err := c.httpget(ctx, remoteurl, DefaultResponseLimit)
-	if err != nil || len(body) == 0 {
-		log.Debug().Err(err).Any("remote", remoteurl).Str("response", string(body)).Msg("invalid or empty response, falling back to legacy discovery")
+	body, status, err := c.httpget(ctx, remoteurl, DefaultResponseLimit)
+	if (err != nil || len(body) == 0) && legacyFallback {
+		log.Debug().Int("status", status).Int("length", len(body)).Msg("invalid or empty response, falling back to legacy discovery")
 		remoteurl, _ := url.JoinPath(endpoint, "/ocm-provider") // legacy discovery endpoint
-		body, err = c.httpget(ctx, remoteurl, DefaultResponseLimit)
-		if err != nil || len(body) == 0 {
-			log.Warn().Err(err).Any("remote", remoteurl).Str("response", string(body)).Msg("invalid or empty response")
-			if stderrors.Is(err, ErrResponseTooLarge) || stderrors.Is(err, client.ErrPolicyViolation) {
-				return nil, err
-			}
-			return nil, errtypes.InternalError("Invalid response on OCM discovery")
+		body, status, err = c.httpget(ctx, remoteurl, DefaultResponseLimit)
+	}
+	if err != nil || len(body) == 0 {
+		log.Warn().Int("status", status).Int("length", len(body)).Msg("invalid or empty OCM discovery response")
+		if stderrors.Is(err, ErrResponseTooLarge) || stderrors.Is(err, client.ErrPolicyViolation) {
+			return nil, err
 		}
+		return nil, errtypes.InternalError("Invalid response on OCM discovery")
 	}
 
 	var disco wellknown.OcmDiscoveryData
-	err = json.Unmarshal(body, &disco)
-	if err != nil {
-		log.Warn().Err(err).Any("remote", remoteurl).Str("response", string(body)).Msg("malformed response")
+	if err := json.Unmarshal(body, &disco); err != nil {
+		log.Warn().Int("status", status).Int("length", len(body)).Msg("malformed OCM discovery response")
 		return nil, errtypes.InternalError("Invalid payload on OCM discovery")
 	}
 
-	log.Debug().Any("remote", remoteurl).Any("response", disco).Msg("discovery response")
+	log.Debug().Int("status", status).Int("length", len(body)).Bool("enabled", disco.Enabled).Msg("OCM discovery response")
 	return &disco, nil
 }
 
-func (c *OCMClient) httpget(ctx context.Context, url string, limit int64) ([]byte, error) {
+// httpget also returns the status, 0 when no response was received.
+func (c *OCMClient) httpget(ctx context.Context, url string, limit int64) ([]byte, int, error) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {
-		return nil, errors.Wrap(err, "error creating OCM discovery request")
+		return nil, 0, errors.Wrap(err, "error creating OCM discovery request")
 	}
 	req.Header.Set("Content-Type", "application/json")
 
 	resp, err := c.client.Do(req)
 	if err != nil {
-		return nil, errors.Wrap(err, "error doing OCM discovery request")
+		return nil, 0, errors.Wrap(err, "error doing OCM discovery request")
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
 		if _, err := readOCMBody(resp.Body, limit); err != nil {
-			return nil, err
+			return nil, resp.StatusCode, err
 		}
-		return nil, errtypes.InternalError("Remote does not offer a valid OCM discovery endpoint")
+		return nil, resp.StatusCode, errtypes.InternalError("Remote does not offer a valid OCM discovery endpoint")
 	}
 
 	body, err := readOCMBody(resp.Body, limit)
 	if err != nil {
 		if err == ErrResponseTooLarge {
-			return nil, err
+			return nil, resp.StatusCode, err
 		}
-		return nil, errors.Wrap(err, "malformed remote OCM discovery")
+		return nil, resp.StatusCode, errors.Wrap(err, "malformed remote OCM discovery")
 	}
-	return body, nil
+	return body, resp.StatusCode, nil
 }
 
 // NewShare sends a new OCM share to the remote system. If key is not nil, it signs the request.
@@ -412,7 +424,7 @@ func (c *OCMClient) GetDirectoryService(ctx context.Context, directoryURL string
 	log := appctx.GetLogger(ctx)
 
 	// TODO(@MahdiBaghbani): the discover() should be changed into a generic function that can be used to fetch any OCM endpoint. I'll do it in the security PR to minimize conflicts.
-	body, err := c.httpget(ctx, directoryURL, DefaultResponseLimit)
+	body, _, err := c.httpget(ctx, directoryURL, DefaultResponseLimit)
 	if err != nil {
 		return nil, errors.Wrap(err, "error fetching directory service")
 	}
