@@ -54,6 +54,7 @@ import (
 	"github.com/cs3org/reva/v3/pkg/spaces"
 
 	"github.com/cs3org/reva/v3/pkg/publicshare"
+	"github.com/cs3org/reva/v3/pkg/rhttp/router"
 	"github.com/cs3org/reva/v3/pkg/service"
 	"github.com/cs3org/reva/v3/pkg/share"
 	"github.com/cs3org/reva/v3/pkg/share/cache"
@@ -150,6 +151,27 @@ func (h *Handler) startCacheWarmup(c cache.WarmupResourceInfo) {
 	}
 }
 
+// fullPath maps a client path to a CS3 path. As in ocdav, a leading "home"
+// segment is the user's home, which is sharded per user and has no registry mount.
+func (h *Handler) fullPath(ctx context.Context, p string) (string, error) {
+	root, rest := router.ShiftPath(p)
+	if root != "home" {
+		return path.Join(h.homeNamespace, p), nil
+	}
+	client, err := service.Gateway(ctx)
+	if err != nil {
+		return "", err
+	}
+	res, err := client.GetHome(ctx, &provider.GetHomeRequest{})
+	if err != nil {
+		return "", err
+	}
+	if res.Status.Code != rpc.Code_CODE_OK {
+		return "", errors.New(res.Status.Message)
+	}
+	return path.Join(res.Path, rest), nil
+}
+
 func (h *Handler) extractReference(r *http.Request) (*provider.Reference, error) {
 	var ref provider.Reference
 	if h.EnableSpaces {
@@ -163,14 +185,22 @@ func (h *Handler) extractReference(r *http.Request) (*provider.Reference, error)
 		}
 		if p := r.FormValue("path"); p != "" {
 			if ref.Path == "" {
-				ref.Path = path.Join(h.homeNamespace, p)
+				fp, err := h.fullPath(r.Context(), p)
+				if err != nil {
+					return nil, err
+				}
+				ref.Path = fp
 			} else {
 				ref.Path = path.Join(ref.Path, p)
 			}
 		}
 	} else {
 		if p := r.FormValue("path"); p != "" {
-			ref = provider.Reference{Path: path.Join(h.homeNamespace, p)}
+			fp, err := h.fullPath(r.Context(), p)
+			if err != nil {
+				return nil, err
+			}
+			ref = provider.Reference{Path: fp}
 		} else if spaceRef := r.FormValue("space_ref"); spaceRef != "" {
 			var err error
 			ref, err = utils.ParseStorageSpaceReference(spaceRef)
@@ -875,7 +905,11 @@ func (h *Handler) listSharesWithMe(w http.ResponseWriter, r *http.Request) {
 	// we need to lookup the resource id so we can filter the list of shares later
 	if p != "" {
 		// prefix the path with the owners home, because ocs share requests are relative to the home dir
-		target := path.Join(h.homeNamespace, r.FormValue("path"))
+		target, err := h.fullPath(ctx, r.FormValue("path"))
+		if err != nil {
+			response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "error resolving path", err)
+			return
+		}
 
 		var status *rpc.Status
 		pinfo, status, err = h.getResourceInfoByPath(ctx, client, target)
