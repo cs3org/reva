@@ -287,12 +287,16 @@ func (s *svc) UpdateReceivedOCMShare(ctx context.Context, req *ocm.UpdateReceive
 		}, nil
 	}
 
-	for i := range req.UpdateMask.Paths {
-		switch req.UpdateMask.Paths[i] {
+	// Only a masked state change accepts the share: other fields of
+	// req.Share, including a stale state, are ignored like in the provider.
+	acceptRequested := false
+	for _, p := range req.GetUpdateMask().GetPaths() {
+		switch p {
 		case "state":
 			switch req.GetShare().GetState() {
 			case ocm.ShareState_SHARE_STATE_ACCEPTED:
-				// for a transfer this is handled elsewhere
+				// for a transfer this is handled below
+				acceptRequested = true
 			case ocm.ShareState_SHARE_STATE_PENDING:
 				// currently no consequences
 			case ocm.ShareState_SHARE_STATE_REJECTED:
@@ -310,11 +314,11 @@ func (s *svc) UpdateReceivedOCMShare(ctx context.Context, req *ocm.UpdateReceive
 				Status: status.NewUnimplemented(ctx, err, "error updating received share"),
 			}, nil
 		default:
-			return nil, errtypes.NotSupported("updating " + req.UpdateMask.Paths[i] + " is not supported")
+			return nil, errtypes.NotSupported("updating " + p + " is not supported")
 		}
 	}
 	// handle transfer in case it has not already been accepted
-	if s.isTransferShare(share) && req.GetShare().State == ocm.ShareState_SHARE_STATE_ACCEPTED {
+	if acceptRequested && s.isTransferShare(share) {
 		if share.State == ocm.ShareState_SHARE_STATE_ACCEPTED {
 			log.Err(err).Msg("gateway: error calling UpdateReceivedShare, share already accepted.")
 			return &ocm.UpdateReceivedOCMShareResponse{

@@ -23,10 +23,13 @@ import (
 	"sync"
 
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
+	ocmprovider "github.com/cs3org/go-cs3apis/cs3/ocm/provider/v1beta1"
 	collaboration "github.com/cs3org/go-cs3apis/cs3/sharing/collaboration/v1beta1"
 	link "github.com/cs3org/go-cs3apis/cs3/sharing/link/v1beta1"
+	ocm "github.com/cs3org/go-cs3apis/cs3/sharing/ocm/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	storageregistry "github.com/cs3org/go-cs3apis/cs3/storage/registry/v1beta1"
+	datatx "github.com/cs3org/go-cs3apis/cs3/tx/v1beta1"
 	revaservice "github.com/cs3org/reva/v3/pkg/service"
 )
 
@@ -42,6 +45,27 @@ type testResolver struct {
 	links    link.LinkAPIClient
 	users    userpb.UserAPIClient
 	spaces   provider.SpacesAPIClient
+	ocm      ocm.OcmAPIClient
+	authz    ocmprovider.ProviderAPIClient
+	datatx   datatx.TxAPIClient
+}
+
+func (r *testResolver) OCMShareProvider(context.Context) (ocm.OcmAPIClient, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return r.ocm, nil
+}
+
+func (r *testResolver) OCMProviderAuthorizer(context.Context) (ocmprovider.ProviderAPIClient, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return r.authz, nil
+}
+
+func (r *testResolver) DataTx(context.Context) (datatx.TxAPIClient, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return r.datatx, nil
 }
 
 func (r *testResolver) StorageRegistry(context.Context) (storageregistry.RegistryAPIClient, error) {
@@ -78,6 +102,16 @@ var (
 	globalTestResolver     = &testResolver{}
 	globalTestResolverOnce sync.Once
 )
+
+// stampOCMPeers points the test resolver at the OCM and transfer peers.
+func stampOCMPeers(c ocm.OcmAPIClient, authz ocmprovider.ProviderAPIClient, tx datatx.TxAPIClient) {
+	globalTestResolverOnce.Do(func() {
+		revaservice.SetGlobal(globalTestResolver)
+	})
+	globalTestResolver.mu.Lock()
+	globalTestResolver.ocm, globalTestResolver.authz, globalTestResolver.datatx = c, authz, tx
+	globalTestResolver.mu.Unlock()
+}
 
 // stampGatewayPeers installs the swappable test resolver (once) and points it at
 // the given peers, so a subsequent service.StorageRegistry(ctx) or
