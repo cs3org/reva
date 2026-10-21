@@ -28,8 +28,8 @@ import (
 	"time"
 
 	ocm "github.com/cs3org/go-cs3apis/cs3/sharing/ocm/v1beta1"
-	"github.com/cs3org/reva/v3/internal/http/services/opencloudmesh/ocmd"
 	"github.com/cs3org/reva/v3/pkg/appctx"
+	"github.com/cs3org/reva/v3/pkg/ocm/providerdomain"
 	"github.com/cs3org/reva/v3/pkg/ocm/share"
 	model "github.com/cs3org/reva/v3/pkg/share/manager/sql/model"
 	"github.com/go-sql-driver/mysql"
@@ -133,14 +133,15 @@ func (m *mgr) reconcileCommit(ctx context.Context, op string, reconcile reconcil
 	return &share.CommitUnknownError{Observed: observed}
 }
 
-// grantOrigin returns the canonical origin of a received share: the domain
-// of its original sender, never of its owner.
+// grantOrigin returns the canonical origin of a received share: the host of
+// its original sender, never of its owner. The raw address is validated
+// before any normalization could hide a scheme or another invalid part.
 func grantOrigin(creator string) (string, bool) {
-	u, err := ocmd.GetUserIdFromOCMAddress(creator)
+	_, host, err := providerdomain.ParseOCMAddress(creator)
 	if err != nil {
 		return "", false
 	}
-	origin, err := share.CanonicalGrantOrigin(u.Idp)
+	origin, err := share.CanonicalGrantOrigin(host)
 	if err != nil {
 		return "", false
 	}
@@ -191,10 +192,10 @@ func ensureIdentity(tx *gorm.DB, origin, remoteShareID string) (*model.OcmGrantI
 }
 
 // lockGuardedReceived locks and verifies the identity of a received share.
-// It returns nil for an unbound share.
+// Every stored share is bound, so a share without a binding fails closed.
 func lockGuardedReceived(tx *gorm.DB, row *model.OcmReceivedShare) (*model.OcmGrantIdentity, error) {
-	if row.GrantKey == nil {
-		return nil, nil
+	if row.GrantKey == nil || *row.GrantKey == "" {
+		return nil, share.ErrGrantIdentityMismatch
 	}
 	origin, ok := grantOrigin(row.Initiator)
 	if !ok {
@@ -294,107 +295,4 @@ func (m *mgr) WithdrawReceivedGrant(ctx context.Context, w *share.GrantWithdrawa
 		return nil, err
 	}
 	return &receipt, nil
-}
-
-// backfillReport counts the outcome of binding historical received shares.
-type backfillReport struct {
-	Bound          int
-	Identities     int
-	MissingOrigin  int
-	ConflictingMap int
-}
-
-// backfillGrantIdentities binds historical received shares to their grant.
-// Shares without a verifiable origin or with conflicting type mappings stay
-// unbound and cannot be withdrawn. It is idempotent.
-func (m *mgr) backfillGrantIdentities(ctx context.Context) (backfillReport, error) {
-	var report backfillReport
-	var rows []model.OcmReceivedShare
-	if err := m.db.WithContext(ctx).Where("grant_key IS NULL").Order("id").Find(&rows).Error; err != nil {
-		return report, err
-	}
-	type grant struct{ origin, remote string }
-	groups := map[grant][]model.OcmReceivedShare{}
-	var order []grant
-	for _, r := range rows {
-		origin, ok := grantOrigin(r.Initiator)
-		if !ok || r.RemoteShareID == "" || len(r.RemoteShareID) > share.MaxGrantFieldLength {
-			report.MissingOrigin++
-			continue
-		}
-		g := grant{origin, r.RemoteShareID}
-		if _, ok := groups[g]; !ok {
-			order = append(order, g)
-		}
-		groups[g] = append(groups[g], r)
-	}
-	for _, g := range order {
-		members := groups[g]
-		consistent := true
-		for _, r := range members[1:] {
-			if r.ItemType != members[0].ItemType || r.RecipientType != members[0].RecipientType {
-				consistent = false
-			}
-		}
-		if !consistent {
-			report.ConflictingMap += len(members)
-			continue
-		}
-		bound, conflict := 0, false
-		err := m.transact(ctx, "bind_grant_identity", func(tx *gorm.DB) error {
-			bound, conflict = 0, false
-			ident, err := ensureIdentity(tx, g.origin, g.remote)
-			if err != nil {
-				return err
-			}
-			// A grant already bound with another type mapping is a conflict.
-			var other int64
-			if err := tx.Model(&model.OcmReceivedShare{}).
-				Where("grant_key = ? AND (item_type <> ? OR recipient_type <> ?)", ident.GrantKey, members[0].ItemType, members[0].RecipientType).
-				Count(&other).Error; err != nil {
-				return err
-			}
-			if other > 0 {
-				conflict = true
-				return nil
-			}
-			ids := make([]uint, 0, len(members))
-			for _, r := range members {
-				ids = append(ids, r.ID)
-			}
-			updates := map[string]any{"grant_key": ident.GrantKey}
-			if withdrawn(ident) {
-				// Rows written for an already withdrawn grant join its
-				// retained terminal projection.
-				updates["state"] = model.OcmShareStateInvalid
-				updates["hidden"] = true
-			}
-			res := tx.Model(&model.OcmReceivedShare{}).Where("id IN ? AND grant_key IS NULL", ids).Updates(updates)
-			if res.Error != nil {
-				return res.Error
-			}
-			bound = int(res.RowsAffected)
-			return nil
-		}, nil)
-		if err != nil {
-			return report, err
-		}
-		if conflict {
-			report.ConflictingMap += len(members)
-			continue
-		}
-		if bound == 0 {
-			// Another instance bound these rows meanwhile.
-			continue
-		}
-		report.Identities++
-		report.Bound += bound
-	}
-	if report.MissingOrigin > 0 || report.ConflictingMap > 0 {
-		appctx.GetLogger(ctx).Warn().
-			Int("missing_origin", report.MissingOrigin).
-			Int("conflicting_mapping", report.ConflictingMap).
-			Msg("received OCM shares left without grant identity; they cannot be withdrawn by notification")
-	}
-	return report, nil
 }

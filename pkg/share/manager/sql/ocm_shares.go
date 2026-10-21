@@ -77,17 +77,10 @@ func NewOCMShareManager(ctx context.Context, m map[string]any) (share.Repository
 		return nil, err
 	}
 
-	mgr := &mgr{
+	return &mgr{
 		c:  &c,
 		db: db,
-	}
-	report, err := mgr.backfillGrantIdentities(ctx)
-	if err != nil {
-		log.Debug().Err(err).Msg("error binding received shares to grant identities")
-		return nil, err
-	}
-	log.Debug().Int("bound", report.Bound).Int("identities", report.Identities).Msg("received OCM shares bound to grant identities")
-	return mgr, nil
+	}, nil
 }
 
 func formatUserID(u *userpb.UserId) string {
@@ -439,6 +432,9 @@ func (m *mgr) GetEmbeddedPayload(ctx context.Context, user *userpb.User, receive
 // provider grant. A share whose grant identity cannot be formed is rejected
 // with ErrInvalidGrantIdentity. A withdrawn grant cannot be recreated.
 func (m *mgr) StoreReceivedShare(ctx context.Context, s *ocm.ReceivedShare) (*ocm.ReceivedShare, error) {
+	if s.GetCreator() == nil {
+		return nil, share.ErrInvalidGrantIdentity
+	}
 	origin, ok := grantOrigin(formatUserID(s.Creator))
 	if !ok {
 		return nil, share.ErrInvalidGrantIdentity

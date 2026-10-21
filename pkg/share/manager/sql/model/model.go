@@ -260,8 +260,8 @@ type OcmReceivedShare struct {
 	State         OcmShareState      `gorm:"index:i_ocmrecshare_state;not null"`
 	Alias         string             `gorm:"size:64"`
 	Hidden        bool
-	// GrantKey binds the share to its provider grant. It is empty only for
-	// historical shares whose origin could not be verified, and never changes.
+	// GrantKey binds the share to its provider grant. Every share is stored
+	// with one and it never changes.
 	GrantKey *string `gorm:"size:64;index:i_ocmrecshare_grantkey"`
 	// TransferGeneration grows on every transfer start and state change, so
 	// that the completion of an older attempt cannot match a later one.

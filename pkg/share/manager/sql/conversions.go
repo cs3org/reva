@@ -82,7 +82,7 @@ func convertToCS3OCMShareState(state model.OcmShareState) ocm.ShareState {
 	case model.OcmShareStateInvalid:
 		return ocm.ShareState_SHARE_STATE_INVALID
 	}
-	// Historical rows may hold other values, e.g. -1: they stay INVALID.
+	// Any other value, e.g. the -1 written for an unknown state, stays INVALID.
 	return ocm.ShareState_SHARE_STATE_INVALID
 }
 

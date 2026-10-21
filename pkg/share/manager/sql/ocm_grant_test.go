@@ -57,6 +57,13 @@ func TestNewGrantMustBeRepresentable(t *testing.T) {
 			grant("a.example.org", ""),
 			grant("", "no-origin"),
 			grant("bad host/path", "bad-origin"),
+			// The raw sender host is validated before any normalization.
+			grant("https://a.example.org", "https-origin"),
+			grant("http://a.example.org", "http-origin"),
+			grant("a.example.org:x8443", "bad-port"),
+			grant("[2001:db8::1", "bad-bracket"),
+			grant("a.example.org ", "space"),
+			grant("a.example.org\t", "tab"),
 		} {
 			if _, err := m.StoreReceivedShare(context.Background(), rs); !errors.Is(err, share.ErrInvalidGrantIdentity) {
 				t.Fatalf("%d-byte remote id from %q: %v", len(rs.RemoteShareId), rs.Creator.Idp, err)
@@ -70,6 +77,19 @@ func TestNewGrantMustBeRepresentable(t *testing.T) {
 		}
 		if rows != 2 || protocols != 2 || countIdentities(t, m) != before {
 			t.Fatalf("rejected grants left rows=%d protocols=%d identities=%d", rows, protocols, countIdentities(t, m))
+		}
+
+		noCreator := grant("a.example.org", "no-creator")
+		noCreator.Creator = nil
+		emptyID := grant("a.example.org", "empty-id")
+		emptyID.Creator.OpaqueId = ""
+		for _, rs := range []*ocm.ReceivedShare{noCreator, emptyID} {
+			if _, err := m.StoreReceivedShare(context.Background(), rs); !errors.Is(err, share.ErrInvalidGrantIdentity) {
+				t.Fatalf("creator %v: %v", rs.Creator, err)
+			}
+		}
+		if err := m.db.Model(&model.OcmReceivedShare{}).Count(&rows).Error; err != nil || rows != 2 || countIdentities(t, m) != before {
+			t.Fatalf("rejected creators left rows=%d %v", rows, err)
 		}
 
 		fresh := mustStore(t, m, grant("a.example.org", "fresh"))

@@ -37,7 +37,6 @@ import (
 	"github.com/cs3org/reva/v3/pkg/permissions"
 	model "github.com/cs3org/reva/v3/pkg/share/manager/sql/model"
 	"google.golang.org/genproto/protobuf/field_mask"
-	"gorm.io/datatypes"
 	"gorm.io/gorm"
 )
 
@@ -132,7 +131,11 @@ func TestWithdrawalRetainsEveryProjectionOfOneGrantOnly(t *testing.T) {
 		}
 		before := receivedRow(t, m, a42.Id.OpaqueId)
 
-		r, err := m.WithdrawReceivedGrant(ctx, withdrawal("https://a.example.org", "42"))
+		// A scheme is an invalid origin, not one to strip.
+		if r, err := m.WithdrawReceivedGrant(ctx, withdrawal("https://a.example.org", "42")); !errors.Is(err, share.ErrInvalidGrantIdentity) || r != nil {
+			t.Fatalf("scheme origin: %v %v", r, err)
+		}
+		r, err := m.WithdrawReceivedGrant(ctx, withdrawal("A.Example.org", "42"))
 		if err != nil || !r.Changed || len(r.Shares) != 2 {
 			t.Fatalf("withdraw: %v %v", r, err)
 		}
@@ -212,7 +215,7 @@ func TestWithdrawnGrantRefusesEveryWriterAcrossRestart(t *testing.T) {
 			}
 			var before int64
 			mm.db.Model(&model.OcmReceivedShare{}).Count(&before)
-			if _, err := mm.StoreReceivedShare(ctx, grantShare(alice, "https://A.example.org", "42", file)); !errors.Is(err, share.ErrShareWithdrawn) {
+			if _, err := mm.StoreReceivedShare(ctx, grantShare(alice, "A.example.org", "42", file)); !errors.Is(err, share.ErrShareWithdrawn) {
 				t.Fatalf("stale create: %v", err)
 			}
 			var after int64
@@ -251,78 +254,42 @@ func TestGenericInvalidHiddenIsNotWithdrawal(t *testing.T) {
 		}
 		got, err := m.GetReceivedShare(ctx, alice, idRef(rs.Id))
 		if err != nil || got.State != ocm.ShareState_SHARE_STATE_INVALID {
-			t.Fatalf("legacy state %v %v", got, err)
+			t.Fatalf("generic invalid state %v %v", got, err)
 		}
 	})
 }
 
-func TestBackfillBindsOnlyVerifiedOrigins(t *testing.T) {
+// Every stored share is bound to its grant. A row without a binding, which
+// only a manual edit can produce, is refused by every writer and is not
+// repaired at startup.
+func TestUnboundRowFailsClosed(t *testing.T) {
 	forEachDialectConfig(t, func(t *testing.T, cfg map[string]any) {
 		ctx := context.Background()
 		m := openOCMManager(t, cfg)
-		legacy := func(initiator, remote string, item model.ItemType, state model.OcmShareState, hidden bool) uint {
-			row := model.OcmReceivedShare{
-				RemoteShareID: remote, Name: "legacy", ItemType: item, ShareWith: "alice-local",
-				Owner: "service@owner.example.org", Initiator: initiator, Ctime: 1, Mtime: 1,
-				RecipientType: model.OcmShareType(0), State: state, Hidden: hidden,
-			}
-			if err := m.db.Create(&row).Error; err != nil {
+		marie := recipient("marie")
+		for _, key := range []any{nil, ""} {
+			rs := mustStore(t, m, grantShare(marie, "a.example.org", fmt.Sprintf("unbound-%v", key), file))
+			if err := m.db.Model(&model.OcmReceivedShare{}).Where("id = ?", rs.Id.OpaqueId).Update("grant_key", key).Error; err != nil {
 				t.Fatal(err)
 			}
-			return row.ID
-		}
-		dup1 := legacy("alice@a.example.org", "42", model.ItemTypeFile, model.OcmShareStateAccepted, false)
-		dup2 := legacy("alice@https://A.example.org", "42", model.ItemTypeFile, model.OcmShareStatePending, false)
-		conf1 := legacy("alice@a.example.org", "50", model.ItemTypeFile, model.OcmShareStatePending, false)
-		conf2 := legacy("alice@a.example.org", "50", model.ItemTypeFolder, model.OcmShareStatePending, false)
-		noOrigin := legacy("alice", "51", model.ItemTypeFile, model.OcmShareStatePending, false)
-		emptyIdp := legacy("alice@", "52", model.ItemTypeFile, model.OcmShareStatePending, false)
-		generic := legacy("alice@a.example.org", "60", model.ItemTypeFile, model.OcmShareState(-1), true)
-		// An identity already withdrawn, with a row written by an old writer.
-		key70, _ := share.GrantKey("a.example.org", "70")
-		if err := m.db.Create(&model.OcmGrantIdentity{GrantKey: key70, Origin: "a.example.org", RemoteShareID: "70",
-			WithdrawnAt: datatypes.NullTime{V: time.Now(), Valid: true}}).Error; err != nil {
-			t.Fatal(err)
-		}
-		late := legacy("alice@a.example.org", "70", model.ItemTypeFile, model.OcmShareStateAccepted, false)
-
-		report, err := m.backfillGrantIdentities(ctx)
-		if err != nil {
-			t.Fatal(err)
-		}
-		if report.Bound != 4 || report.MissingOrigin != 2 || report.ConflictingMap != 2 {
-			t.Fatalf("report %+v", report)
-		}
-		k := func(id uint) *string { return receivedRow(t, m, fmt.Sprint(id)).GrantKey }
-		if k(dup1) == nil || k(dup2) == nil || *k(dup1) != *k(dup2) {
-			t.Fatal("duplicates not bound to one identity")
-		}
-		for _, id := range []uint{conf1, conf2, noOrigin, emptyIdp} {
-			if k(id) != nil {
-				t.Fatalf("row %d bound without verified, consistent origin", id)
+			before := receivedRow(t, m, rs.Id.OpaqueId)
+			accept := &ocm.ReceivedShare{Id: rs.Id, State: ocm.ShareState_SHARE_STATE_ACCEPTED}
+			if u, err := m.UpdateReceivedShare(ctx, marie, accept, stateMask()); !errors.Is(err, share.ErrGrantIdentityMismatch) || u != nil {
+				t.Fatalf("update %v: %v %v", key, u, err)
+			}
+			if s, err := m.StartReceivedShareTransfer(ctx, marie, &ocm.ReceivedShare{Id: rs.Id}, stateMask()); !errors.Is(err, share.ErrGrantIdentityMismatch) || s != nil {
+				t.Fatalf("start %v: %v %v", key, s, err)
+			}
+			if u, err := m.CompleteReceivedShareTransfer(ctx, marie, rs.Id, 0, ocm.ShareState_SHARE_STATE_ACCEPTED); !errors.Is(err, share.ErrGrantIdentityMismatch) || u != nil {
+				t.Fatalf("complete %v: %v %v", key, u, err)
+			}
+			openOCMManager(t, cfg)
+			if after := receivedRow(t, m, rs.Id.OpaqueId); after.State != before.State || after.Mtime != before.Mtime ||
+				after.TransferGeneration != before.TransferGeneration ||
+				(after.GrantKey == nil) != (before.GrantKey == nil) || (after.GrantKey != nil && *after.GrantKey != *before.GrantKey) {
+				t.Fatalf("unbound row changed: %+v", after)
 			}
 		}
-		if k(generic) == nil {
-			t.Fatal("generic invalid row with origin not bound")
-		}
-		if ident, _ := identityRow(t, m, "a.example.org", "60"); ident.WithdrawnAt.Valid {
-			t.Fatal("backfill invented a withdrawal")
-		}
-		if row := receivedRow(t, m, fmt.Sprint(late)); row.State != model.OcmShareStateInvalid || !row.Hidden || row.GrantKey == nil {
-			t.Fatalf("late row of a withdrawn grant not projected: %+v", row)
-		}
-		if row := receivedRow(t, m, fmt.Sprint(dup1)); row.State != model.OcmShareStateAccepted {
-			t.Fatal("backfill changed an active row")
-		}
-		// Unbound rows never act; re-running changes nothing.
-		if r, err := m.WithdrawReceivedGrant(ctx, withdrawal("a.example.org", "50")); err != nil || r.Changed {
-			t.Fatalf("withdrawal of an unbound grant: %v %v", r, err)
-		}
-		again, err := m.backfillGrantIdentities(ctx)
-		if err != nil || again.Bound != 0 {
-			t.Fatalf("second run %+v %v", again, err)
-		}
-		openOCMManager(t, cfg) // a restart runs the backfill again
 	})
 }
 
@@ -600,41 +567,6 @@ func TestWithdrawalRacesAcrossProcesses(t *testing.T) {
 			if identities != 1 {
 				t.Fatalf("identities %d", identities)
 			}
-		}
-	})
-}
-
-func TestConcurrentBackfillsBindOnce(t *testing.T) {
-	forEachDialectConfig(t, func(t *testing.T, cfg map[string]any) {
-		m1, m2 := openOCMManager(t, cfg), openOCMManager(t, cfg)
-		for i := 0; i < 6; i++ {
-			row := model.OcmReceivedShare{RemoteShareID: fmt.Sprintf("bf-%d", i), Name: "legacy", ItemType: model.ItemTypeFile,
-				ShareWith: "alice-local", Owner: "o@owner.example.org", Initiator: "alice@a.example.org", Ctime: 1, Mtime: 1}
-			if err := m1.db.Create(&row).Error; err != nil {
-				t.Fatal(err)
-			}
-		}
-		var wg sync.WaitGroup
-		reports := make([]backfillReport, 2)
-		errs := make([]error, 2)
-		for i, mm := range []*mgr{m1, m2} {
-			wg.Add(1)
-			go func(i int, mm *mgr) {
-				defer wg.Done()
-				reports[i], errs[i] = mm.backfillGrantIdentities(context.Background())
-			}(i, mm)
-		}
-		wg.Wait()
-		if errs[0] != nil || errs[1] != nil {
-			t.Fatalf("%v %v", errs[0], errs[1])
-		}
-		if reports[0].Bound+reports[1].Bound != 6 || reports[0].ConflictingMap+reports[1].ConflictingMap != 0 {
-			t.Fatalf("reports %+v %+v", reports[0], reports[1])
-		}
-		var unbound int64
-		m1.db.Model(&model.OcmReceivedShare{}).Where("grant_key IS NULL").Count(&unbound)
-		if unbound != 0 {
-			t.Fatalf("unbound %d", unbound)
 		}
 	})
 }

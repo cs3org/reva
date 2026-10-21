@@ -22,11 +22,10 @@ import (
 	"crypto/sha256"
 	"encoding/binary"
 	"encoding/hex"
-	"strings"
-	"unicode"
 
 	ocm "github.com/cs3org/go-cs3apis/cs3/sharing/ocm/v1beta1"
 	"github.com/cs3org/reva/v3/pkg/errtypes"
+	"github.com/cs3org/reva/v3/pkg/ocm/providerdomain"
 )
 
 // MaxGrantFieldLength bounds the origin and remote share ID of a grant
@@ -76,20 +75,18 @@ func (e *CommitUnknownError) Is(target error) bool { return target == ErrCommitU
 // not hold exactly the fields its key was computed from. It fails closed.
 var ErrGrantIdentityMismatch = errtypes.InternalError("grant identity record does not match its key")
 
-// CanonicalGrantOrigin lowercases the domain of the provider that sent a
-// share and drops an http(s) scheme. Anything but a plain host[:port] is rejected.
+// CanonicalGrantOrigin validates the host[:port] of the provider that sent a
+// share with the OCM address host grammar and lowercases it. A scheme, path
+// or any other invalid part is rejected, never stripped.
 func CanonicalGrantOrigin(domain string) (string, error) {
-	d := strings.TrimPrefix(strings.TrimPrefix(domain, "https://"), "http://")
-	d = strings.ToLower(d)
-	if d == "" || len(d) > MaxGrantFieldLength {
+	if len(domain) > MaxGrantFieldLength {
 		return "", ErrInvalidGrantIdentity
 	}
-	for _, r := range d {
-		if r > unicode.MaxASCII || unicode.IsSpace(r) || unicode.IsControl(r) || strings.ContainsRune("/@?#\\", r) {
-			return "", ErrInvalidGrantIdentity
-		}
+	origin, err := providerdomain.CanonicalOCMHost(domain)
+	if err != nil {
+		return "", ErrInvalidGrantIdentity
 	}
-	return d, nil
+	return origin, nil
 }
 
 // GrantKey returns the identity key of a provider grant, a length-prefixed

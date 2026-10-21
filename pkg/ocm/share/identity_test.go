@@ -58,21 +58,25 @@ func TestGrantKeyEncoding(t *testing.T) {
 
 func TestCanonicalGrantOrigin(t *testing.T) {
 	ok := map[string]string{
-		"a.example.org":         "a.example.org",
-		"A.Example.ORG":         "a.example.org",
-		"https://a.example.org": "a.example.org",
-		"http://a.example.org":  "a.example.org",
-		"a.example.org:8443":    "a.example.org:8443",
-		"127.0.0.1:9200":        "127.0.0.1:9200",
-		"https://A.example.org": "a.example.org",
+		"a.example.org":        "a.example.org",
+		"A.Example.ORG":        "a.example.org",
+		"a.example.org:8443":   "a.example.org:8443",
+		"a.example.org:443":    "a.example.org:443",
+		"127.0.0.1:9200":       "127.0.0.1:9200",
+		"[2001:DB8::1]:9200":   "[2001:db8::1]:9200",
+		"localhost":            "localhost",
+		"reg%4A.example.org:1": "reg%4a.example.org:1",
 	}
 	for in, want := range ok {
 		if got, err := CanonicalGrantOrigin(in); err != nil || got != want {
 			t.Fatalf("%q -> %q %v", in, got, err)
 		}
 	}
-	for _, bad := range []string{"", " a.example.org", "a.example.org/path", "u@a.example.org",
-		"a.example.org?x", "a.example.org#x", "a\\b", "a b", "ä.example.org", "https://", strings.Repeat("a", 256)} {
+	// A scheme or any other invalid part is rejected, never stripped.
+	for _, bad := range []string{"", " a.example.org", "a.example.org ", "a.example.org\n", "a.example.org/path", "u@a.example.org",
+		"a.example.org?x", "a.example.org#x", "a\\b", "a b", "ä.example.org", "https://", "https://a.example.org",
+		"http://a.example.org", "HTTPS://a.example.org", "a.example.org:x443", "a.example.org:443:1", "[::1", "::1",
+		"[fe80::1%25eth0]", "[192.0.2.1]", strings.Repeat("a", 256)} {
 		if _, err := CanonicalGrantOrigin(bad); err == nil {
 			t.Fatalf("accepted %q", bad)
 		}
