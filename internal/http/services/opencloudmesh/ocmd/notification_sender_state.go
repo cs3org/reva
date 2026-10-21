@@ -22,9 +22,8 @@ package ocmd
 
 import (
 	"context"
-	"net/http"
+	"errors"
 	"slices"
-	"strconv"
 	"time"
 )
 
@@ -37,13 +36,13 @@ const NotificationsCapability = "notifications"
 type NotificationStatusClass int
 
 const (
-	NotificationStatusCreated        NotificationStatusClass = http.StatusCreated
-	NotificationStatusBadRequest     NotificationStatusClass = http.StatusBadRequest
-	NotificationStatusUnauthorized   NotificationStatusClass = http.StatusUnauthorized
-	NotificationStatusForbidden      NotificationStatusClass = http.StatusForbidden
-	NotificationStatusNotFound       NotificationStatusClass = http.StatusNotFound
-	NotificationStatusNotImplemented NotificationStatusClass = http.StatusNotImplemented
-	NotificationStatusUnavailable    NotificationStatusClass = http.StatusServiceUnavailable
+	NotificationStatusCreated        NotificationStatusClass = 201
+	NotificationStatusBadRequest     NotificationStatusClass = 400
+	NotificationStatusUnauthorized   NotificationStatusClass = 401
+	NotificationStatusForbidden      NotificationStatusClass = 403
+	NotificationStatusNotFound       NotificationStatusClass = 404
+	NotificationStatusNotImplemented NotificationStatusClass = 501
+	NotificationStatusUnavailable    NotificationStatusClass = 503
 )
 
 // ReceiverStatus returns the response class of a parsed notification.
@@ -69,10 +68,18 @@ func (p *NotificationPeer) HasNotificationsCapability() bool {
 	return p != nil && slices.Contains(p.Capabilities, NotificationsCapability)
 }
 
-// NotificationTransport performs the discovery and the single POST.
+// NotificationResponse is what the transport keeps of a peer response: the
+// status and an already parsed Retry-After delay, never raw peer bytes.
+type NotificationResponse struct {
+	Status     int
+	RetryAfter time.Duration
+}
+
+// NotificationTransport performs the discovery and the single POST. Its
+// errors can quote peer bytes, so they are only classified, never kept.
 type NotificationTransport interface {
 	DiscoverNotificationPeer(ctx context.Context, domain string) (*NotificationPeer, error)
-	PostNotification(ctx context.Context, endpoint string, body []byte) (status int, header http.Header, err error)
+	PostNotification(ctx context.Context, endpoint string, body []byte) (NotificationResponse, error)
 }
 
 // SendOutcome is the terminal state of one notification attempt.
@@ -86,39 +93,55 @@ const (
 	SendRejected          SendOutcome = "rejected"
 )
 
-// SendResult describes one attempt. Err holds transport or discovery
-// errors only; it never contains the payload.
+// SendFailure is the fixed category of a failed discovery or POST.
+type SendFailure string
+
+const (
+	FailureCanceled SendFailure = "canceled"
+	FailureTimeout  SendFailure = "timeout"
+	FailureError    SendFailure = "error"
+)
+
+// SendResult describes one attempt. It holds no peer bytes.
 type SendResult struct {
 	Outcome SendOutcome
 	// Status is the HTTP status received, if any.
 	Status int
 	// Class is set for the recorded error classes; zero otherwise.
 	Class NotificationStatusClass
-	// RetryAfter is the delay-seconds of a 503 Retry-After, up to
-	// maxRetryAfter, for diagnostics only. Other values are not kept,
-	// because a peer can reflect any request value in the header.
+	// RetryAfter is the 503 delay, up to maxRetryAfter, for diagnostics only.
 	RetryAfter time.Duration
-	Err        error
+	Failure    SendFailure
 }
 
 const maxRetryAfter = 24 * time.Hour
 
+// classifyFailure keeps only the category of a transport error.
+func classifyFailure(err error) SendFailure {
+	var timeout interface{ Timeout() bool }
+	switch {
+	case errors.Is(err, context.Canceled):
+		return FailureCanceled
+	case errors.Is(err, context.DeadlineExceeded), errors.As(err, &timeout) && timeout.Timeout():
+		return FailureTimeout
+	}
+	return FailureError
+}
+
 // ClassifyNotificationResponse maps a response to its outcome. Any 2xx is
 // a delivery.
-func ClassifyNotificationResponse(status int, header http.Header) SendResult {
-	if status >= 200 && status < 300 {
-		return SendResult{Outcome: SendDelivered, Status: status, Class: NotificationStatusCreated}
+func ClassifyNotificationResponse(r NotificationResponse) SendResult {
+	if r.Status >= 200 && r.Status < 300 {
+		return SendResult{Outcome: SendDelivered, Status: r.Status, Class: NotificationStatusCreated}
 	}
-	res := SendResult{Outcome: SendRejected, Status: status}
-	switch NotificationStatusClass(status) {
+	res := SendResult{Outcome: SendRejected, Status: r.Status}
+	switch NotificationStatusClass(r.Status) {
 	case NotificationStatusBadRequest, NotificationStatusUnauthorized, NotificationStatusForbidden,
 		NotificationStatusNotFound, NotificationStatusNotImplemented:
-		res.Class = NotificationStatusClass(status)
+		res.Class = NotificationStatusClass(r.Status)
 	case NotificationStatusUnavailable:
 		res.Class = NotificationStatusUnavailable
-		if secs, err := strconv.ParseUint(header.Get("Retry-After"), 10, 32); err == nil {
-			res.RetryAfter = min(time.Duration(secs)*time.Second, maxRetryAfter)
-		}
+		res.RetryAfter = min(max(r.RetryAfter, 0), maxRetryAfter)
 	}
 	return res
 }
@@ -128,14 +151,14 @@ func ClassifyNotificationResponse(status int, header http.Header) SendResult {
 func SendNotification(ctx context.Context, t NotificationTransport, domain string, body []byte) SendResult {
 	peer, err := t.DiscoverNotificationPeer(ctx, domain)
 	if err != nil {
-		return SendResult{Outcome: SendDiscoveryFailed, Err: err}
+		return SendResult{Outcome: SendDiscoveryFailed, Failure: classifyFailure(err)}
 	}
 	if !peer.HasNotificationsCapability() || peer.Endpoint == "" {
 		return SendResult{Outcome: SendCapabilityMissing}
 	}
-	status, header, err := t.PostNotification(ctx, peer.Endpoint, body)
+	resp, err := t.PostNotification(ctx, peer.Endpoint, body)
 	if err != nil {
-		return SendResult{Outcome: SendPostFailed, Status: status, Err: err}
+		return SendResult{Outcome: SendPostFailed, Failure: classifyFailure(err)}
 	}
-	return ClassifyNotificationResponse(status, header)
+	return ClassifyNotificationResponse(resp)
 }
