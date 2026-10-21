@@ -124,37 +124,45 @@ func (c *OCMClient) Transport() http.RoundTripper {
 }
 
 // Discover returns a number of properties used to discover the capabilities offered by a remote cloud storage.
-// It falls back to the legacy /ocm-provider document.
 // https://cs3org.github.io/OCM-API/docs.html?branch=develop&repo=OCM-API&user=cs3org#/paths/~1.well-known~1ocm/get
 func (c *OCMClient) Discover(ctx context.Context, endpoint string) (*wellknown.OcmDiscoveryData, error) {
-	return c.discover(ctx, endpoint, true)
-}
-
-// DiscoverCanonical is Discover without the legacy /ocm-provider fallback.
-func (c *OCMClient) DiscoverCanonical(ctx context.Context, endpoint string) (*wellknown.OcmDiscoveryData, error) {
-	return c.discover(ctx, endpoint, false)
-}
-
-// discover logs only fixed outcomes with the status and length: peer bytes,
-// error causes and URLs can carry reflected secrets.
-func (c *OCMClient) discover(ctx context.Context, endpoint string, legacyFallback bool) (*wellknown.OcmDiscoveryData, error) {
 	log := appctx.GetLogger(ctx)
 
-	if !strings.HasPrefix(endpoint, "http://") && !strings.HasPrefix(endpoint, "https://") {
-		if strings.HasPrefix(endpoint, "localhost") || strings.HasPrefix(endpoint, "127.0.0.1") {
-			// for testing purposes we allow no TLS on localhost
-			endpoint = "http://" + endpoint
-		} else {
-			endpoint = "https://" + endpoint
+	endpoint = discoveryBase(endpoint)
+	remoteurl, _ := url.JoinPath(endpoint, "/.well-known/ocm")
+	body, _, err := c.httpget(ctx, remoteurl, DefaultResponseLimit)
+	if err != nil || len(body) == 0 {
+		log.Debug().Err(err).Any("remote", remoteurl).Str("response", string(body)).Msg("invalid or empty response, falling back to legacy discovery")
+		remoteurl, _ := url.JoinPath(endpoint, "/ocm-provider") // legacy discovery endpoint
+		body, _, err = c.httpget(ctx, remoteurl, DefaultResponseLimit)
+		if err != nil || len(body) == 0 {
+			log.Warn().Err(err).Any("remote", remoteurl).Str("response", string(body)).Msg("invalid or empty response")
+			if stderrors.Is(err, ErrResponseTooLarge) || stderrors.Is(err, client.ErrPolicyViolation) {
+				return nil, err
+			}
+			return nil, errtypes.InternalError("Invalid response on OCM discovery")
 		}
 	}
-	remoteurl, _ := url.JoinPath(endpoint, "/.well-known/ocm")
-	body, status, err := c.httpget(ctx, remoteurl, DefaultResponseLimit)
-	if (err != nil || len(body) == 0) && legacyFallback {
-		log.Debug().Int("status", status).Int("length", len(body)).Msg("invalid or empty response, falling back to legacy discovery")
-		remoteurl, _ := url.JoinPath(endpoint, "/ocm-provider") // legacy discovery endpoint
-		body, status, err = c.httpget(ctx, remoteurl, DefaultResponseLimit)
+
+	var disco wellknown.OcmDiscoveryData
+	err = json.Unmarshal(body, &disco)
+	if err != nil {
+		log.Warn().Err(err).Any("remote", remoteurl).Str("response", string(body)).Msg("malformed response")
+		return nil, errtypes.InternalError("Invalid payload on OCM discovery")
 	}
+
+	log.Debug().Any("remote", remoteurl).Any("response", disco).Msg("discovery response")
+	return &disco, nil
+}
+
+// DiscoverCanonical reads only /.well-known/ocm. It logs fixed outcomes with
+// the status and length: peer bytes, error causes and URLs can carry
+// reflected secrets.
+func (c *OCMClient) DiscoverCanonical(ctx context.Context, endpoint string) (*wellknown.OcmDiscoveryData, error) {
+	log := appctx.GetLogger(ctx)
+
+	remoteurl, _ := url.JoinPath(discoveryBase(endpoint), "/.well-known/ocm")
+	body, status, err := c.httpget(ctx, remoteurl, DefaultResponseLimit)
 	if err != nil || len(body) == 0 {
 		log.Warn().Int("status", status).Int("length", len(body)).Msg("invalid or empty OCM discovery response")
 		if stderrors.Is(err, ErrResponseTooLarge) || stderrors.Is(err, client.ErrPolicyViolation) {
@@ -171,6 +179,17 @@ func (c *OCMClient) discover(ctx context.Context, endpoint string, legacyFallbac
 
 	log.Debug().Int("status", status).Int("length", len(body)).Bool("enabled", disco.Enabled).Msg("OCM discovery response")
 	return &disco, nil
+}
+
+func discoveryBase(endpoint string) string {
+	if !strings.HasPrefix(endpoint, "http://") && !strings.HasPrefix(endpoint, "https://") {
+		if strings.HasPrefix(endpoint, "localhost") || strings.HasPrefix(endpoint, "127.0.0.1") {
+			// for testing purposes we allow no TLS on localhost
+			return "http://" + endpoint
+		}
+		return "https://" + endpoint
+	}
+	return endpoint
 }
 
 // httpget also returns the status, 0 when no response was received.
