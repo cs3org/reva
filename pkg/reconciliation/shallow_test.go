@@ -24,6 +24,7 @@ import (
 	"errors"
 	"slices"
 	"testing"
+	"time"
 
 	grouppb "github.com/cs3org/go-cs3apis/cs3/identity/group/v1beta1"
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
@@ -1499,5 +1500,55 @@ func TestShallowRetriesAnUnresolvedRecipient(t *testing.T) {
 	}
 	if report.Skipped != 2 || gw.userLookups != 2 {
 		t.Fatalf("report = %+v / %d lookups, want 2 skipped and 2 lookups", report, gw.userLookups)
+	}
+}
+
+// TestShallowIgnoresExpiredShare asserts that the entry of an expired share is
+// not written back: the expired job removed it on purpose.
+func TestShallowIgnoresExpiredShare(t *testing.T) {
+	store := &fakeStore{shares: []storedShare{
+		expiring(shared(120, "space-a", "inode-120", "jdoe", false, ocsRead), time.Now().Add(-time.Hour)),
+	}}
+	gw := &fakeGateway{
+		users: map[string]bool{"jdoe": true},
+		paths: map[string]string{"eosuser/inode-120": "/eos/user/a/alice/dir"},
+	}
+	grants := &fakeGrants{}
+
+	report, err := shallowJob(store, gw, grants).Run(context.Background())
+	if err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	if report.Expired != 1 || report.Checked != 0 || len(report.Written) != 0 || len(grants.writes) != 0 {
+		t.Fatalf("report = %+v / writes = %+v, want 1 expired and nothing written", report, grants.writes)
+	}
+}
+
+// TestShallowExpiredAncestorDoesNotShadow asserts that an expired share above a
+// live share of the same recipient does not make the live share redundant. The
+// expired share has no entry, so the live share is the only access left.
+func TestShallowExpiredAncestorDoesNotShadow(t *testing.T) {
+	store := &fakeStore{shares: []storedShare{
+		expiring(shared(121, "space-a", "inode-parent", "jdoe", false, ocsWrite), time.Now().Add(-time.Hour)),
+		shared(122, "space-a", "inode-child", "jdoe", false, ocsRead),
+	}}
+	gw := &fakeGateway{
+		users: map[string]bool{"jdoe": true},
+		paths: map[string]string{
+			"eosuser/inode-parent": "/eos/user/a/alice/dir",
+			"eosuser/inode-child":  "/eos/user/a/alice/dir/sub",
+		},
+	}
+	grants := &fakeGrants{}
+
+	report, err := shallowJob(store, gw, grants).Run(context.Background())
+	if err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	if len(report.Removed) != 0 || len(store.unshared) != 0 || len(report.SkippedSpaces) != 0 {
+		t.Fatalf("report = %+v / unshared = %v, want nothing removed and no space skipped", report, store.unshared)
+	}
+	if len(grants.writes) != 1 || grants.writes[0].node != "eosuser/inode-child" {
+		t.Errorf("writes = %+v, want only the child", grants.writes)
 	}
 }
