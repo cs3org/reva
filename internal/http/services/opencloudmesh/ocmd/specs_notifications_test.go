@@ -125,6 +125,20 @@ func TestParseNotificationRejectsFlatProviderFallback(t *testing.T) {
 	}
 }
 
+// A present selector must be a non-empty string even when the other one is valid.
+func TestParseNotificationRejectsNullSelectorBesideValidOne(t *testing.T) {
+	reg := NewNotificationRegistry()
+	for _, body := range []string{
+		`{"notificationType":"ACME","senderDomain":"a.example.org","resourceType":null,"shareType":"user"}`,
+		`{"notificationType":"ACME","senderDomain":"a.example.org","resourceType":"file","shareType":""}`,
+		`{"notificationType":"ACME","senderDomain":"a.example.org","resourceType":"file","shareType":null}`,
+	} {
+		if _, err := reg.Parse([]byte(body)); ReceiverStatus(err) != NotificationStatusBadRequest {
+			t.Fatalf("%s: %v", body, err)
+		}
+	}
+}
+
 func TestNotificationErrorsCarryNoValues(t *testing.T) {
 	reg := NewNotificationRegistry()
 	bodies := []string{
