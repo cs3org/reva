@@ -1,0 +1,705 @@
+[
+ {
+  "id": "ENV-001",
+  "purpose": "Unknown type: resource-only envelope; notification absent is allowed",
+  "body": {
+   "notificationType": "EXAMPLE_FUTURE",
+   "senderDomain": "a.example.org",
+   "resourceType": "file"
+  },
+  "http": 201,
+  "handlerCalls": 0
+ },
+ {
+  "id": "ENV-002",
+  "purpose": "Unknown type: share-only envelope; object contents remain uninterpreted",
+  "body": {
+   "notificationType": "EXAMPLE_FUTURE",
+   "senderDomain": "a.example.org",
+   "shareType": "federation",
+   "notification": {
+    "future": {
+     "providerId": null,
+     "permissions": null,
+     "owner": 42,
+     "items": [
+      false,
+      "opaque"
+     ],
+     "label": "caf\u00e9",
+     "nested": {
+      "x": "anything"
+     }
+    }
+   }
+  },
+  "http": 201,
+  "handlerCalls": 0
+ },
+ {
+  "id": "ENV-003",
+  "purpose": "Generic envelope permits both selectors; retired RESHARE_UNDO is unregistered and ignored",
+  "body": {
+   "notificationType": "RESHARE_UNDO",
+   "senderDomain": "a.example.org",
+   "resourceType": "file",
+   "shareType": "user"
+  },
+  "http": 201,
+  "handlerCalls": 0
+ },
+ {
+  "id": "ENV-004",
+  "purpose": "Request body must be a JSON object",
+  "body": [],
+  "http": 400,
+  "handlerCalls": 0
+ },
+ {
+  "id": "ENV-005",
+  "purpose": "Missing notificationType",
+  "body": {
+   "senderDomain": "a.example.org",
+   "resourceType": "file"
+  },
+  "http": 400,
+  "handlerCalls": 0
+ },
+ {
+  "id": "ENV-006",
+  "purpose": "Null notificationType",
+  "body": {
+   "notificationType": null,
+   "senderDomain": "a.example.org",
+   "resourceType": "file"
+  },
+  "http": 400,
+  "handlerCalls": 0
+ },
+ {
+  "id": "ENV-007",
+  "purpose": "Empty notificationType",
+  "body": {
+   "notificationType": "",
+   "senderDomain": "a.example.org",
+   "resourceType": "file"
+  },
+  "http": 400,
+  "handlerCalls": 0
+ },
+ {
+  "id": "ENV-008",
+  "purpose": "Wrong-type notificationType",
+  "body": {
+   "notificationType": 7,
+   "senderDomain": "a.example.org",
+   "resourceType": "file"
+  },
+  "http": 400,
+  "handlerCalls": 0
+ },
+ {
+  "id": "ENV-009",
+  "purpose": "Missing senderDomain is not unknown-type compatibility",
+  "body": {
+   "notificationType": "EXAMPLE_FUTURE",
+   "resourceType": "file"
+  },
+  "http": 400,
+  "handlerCalls": 0
+ },
+ {
+  "id": "ENV-010",
+  "purpose": "Null senderDomain",
+  "body": {
+   "notificationType": "EXAMPLE_FUTURE",
+   "senderDomain": null,
+   "resourceType": "file"
+  },
+  "http": 400,
+  "handlerCalls": 0
+ },
+ {
+  "id": "ENV-011",
+  "purpose": "Empty senderDomain",
+  "body": {
+   "notificationType": "EXAMPLE_FUTURE",
+   "senderDomain": "",
+   "resourceType": "file"
+  },
+  "http": 400,
+  "handlerCalls": 0
+ },
+ {
+  "id": "ENV-012",
+  "purpose": "Wrong-type senderDomain",
+  "body": {
+   "notificationType": "EXAMPLE_FUTURE",
+   "senderDomain": [],
+   "resourceType": "file"
+  },
+  "http": 400,
+  "handlerCalls": 0
+ },
+ {
+  "id": "ENV-013",
+  "purpose": "senderDomain rejects a nonnumeric port; no port syntax is allowed",
+  "body": {
+   "notificationType": "EXAMPLE_FUTURE",
+   "senderDomain": "a.example.org:bad",
+   "resourceType": "file"
+  },
+  "http": 400,
+  "handlerCalls": 0
+ },
+ {
+  "id": "ENV-014",
+  "purpose": "Neither resourceType nor shareType supplied",
+  "body": {
+   "notificationType": "EXAMPLE_FUTURE",
+   "senderDomain": "a.example.org"
+  },
+  "http": 400,
+  "handlerCalls": 0
+ },
+ {
+  "id": "ENV-015",
+  "purpose": "Null supplied resourceType cannot satisfy the selector requirement",
+  "body": {
+   "notificationType": "EXAMPLE_FUTURE",
+   "senderDomain": "a.example.org",
+   "resourceType": null
+  },
+  "http": 400,
+  "handlerCalls": 0
+ },
+ {
+  "id": "ENV-016",
+  "purpose": "Empty supplied resourceType cannot satisfy the selector requirement",
+  "body": {
+   "notificationType": "EXAMPLE_FUTURE",
+   "senderDomain": "a.example.org",
+   "resourceType": ""
+  },
+  "http": 400,
+  "handlerCalls": 0
+ },
+ {
+  "id": "ENV-017",
+  "purpose": "Wrong-type supplied resourceType",
+  "body": {
+   "notificationType": "EXAMPLE_FUTURE",
+   "senderDomain": "a.example.org",
+   "resourceType": {}
+  },
+  "http": 400,
+  "handlerCalls": 0
+ },
+ {
+  "id": "ENV-018",
+  "purpose": "Null supplied shareType cannot satisfy the selector requirement",
+  "body": {
+   "notificationType": "EXAMPLE_FUTURE",
+   "senderDomain": "a.example.org",
+   "shareType": null,
+   "notification": {
+    "future": {
+     "providerId": null,
+     "permissions": null,
+     "owner": 42,
+     "items": [
+      false,
+      "opaque"
+     ],
+     "label": "caf\u00e9",
+     "nested": {
+      "x": "anything"
+     }
+    }
+   }
+  },
+  "http": 400,
+  "handlerCalls": 0
+ },
+ {
+  "id": "ENV-019",
+  "purpose": "Unknown notification object is optional but cannot be present-null",
+  "body": {
+   "notificationType": "EXAMPLE_FUTURE",
+   "senderDomain": "a.example.org",
+   "resourceType": "file",
+   "notification": null
+  },
+  "http": 400,
+  "handlerCalls": 0
+ },
+ {
+  "id": "ENV-020",
+  "purpose": "Actual generic additionalProperties requires immediate extension values to be objects",
+  "body": {
+   "notificationType": "EXAMPLE_FUTURE",
+   "senderDomain": "a.example.org",
+   "resourceType": "file",
+   "notification": {
+    "future": "not-an-object"
+   }
+  },
+  "http": 400,
+  "handlerCalls": 0
+ },
+ {
+  "id": "ENV-021",
+  "purpose": "senderDomain is FQDN only: a DNS name with a numeric port is rejected",
+  "body": {
+   "notificationType": "EXAMPLE_FUTURE",
+   "senderDomain": "a.example.org:8443",
+   "resourceType": "file"
+  },
+  "http": 400,
+  "handlerCalls": 0
+ },
+ {
+  "id": "ENV-022",
+  "purpose": "senderDomain is FQDN only: a bare IPv4 address is rejected",
+  "body": {
+   "notificationType": "EXAMPLE_FUTURE",
+   "senderDomain": "192.0.2.1",
+   "resourceType": "file"
+  },
+  "http": 400,
+  "handlerCalls": 0
+ },
+ {
+  "id": "ENV-023",
+  "purpose": "Canonical share state: required nested providerId; optional permissions and secret absent",
+  "body": {
+   "notificationType": "SHARE_UNSHARED",
+   "senderDomain": "a.example.org",
+   "resourceType": "file",
+   "notification": {
+    "file": {
+     "providerId": "share-7"
+    }
+   }
+  },
+  "http": 201,
+  "handlerCalls": 1
+ },
+ {
+  "id": "ENV-024",
+  "purpose": "Known state missing nested providerId cannot escape to unknown or use flat fallback",
+  "body": {
+   "notificationType": "SHARE_UNSHARED",
+   "senderDomain": "a.example.org",
+   "resourceType": "file",
+   "notification": {
+    "file": {}
+   },
+   "providerId": "flat-does-not-substitute"
+  },
+  "http": 400,
+  "handlerCalls": 0
+ },
+ {
+  "id": "ENV-025",
+  "purpose": "Known state null nested providerId remains invalid with a flat extra",
+  "body": {
+   "notificationType": "SHARE_UNSHARED",
+   "senderDomain": "a.example.org",
+   "resourceType": "file",
+   "notification": {
+    "file": {
+     "providerId": null
+    }
+   },
+   "providerId": "flat-does-not-substitute"
+  },
+  "http": 400,
+  "handlerCalls": 0
+ },
+ {
+  "id": "ENV-026",
+  "purpose": "Known state empty required nested providerId",
+  "body": {
+   "notificationType": "SHARE_UNSHARED",
+   "senderDomain": "a.example.org",
+   "resourceType": "file",
+   "notification": {
+    "file": {
+     "providerId": ""
+    }
+   }
+  },
+  "http": 400,
+  "handlerCalls": 0
+ },
+ {
+  "id": "ENV-027",
+  "purpose": "Known state wrong-type required nested providerId",
+  "body": {
+   "notificationType": "SHARE_UNSHARED",
+   "senderDomain": "a.example.org",
+   "resourceType": "file",
+   "notification": {
+    "file": {
+     "providerId": 42
+    }
+   }
+  },
+  "http": 400,
+  "handlerCalls": 0
+ },
+ {
+  "id": "ENV-028",
+  "purpose": "Optional known permissions absent is allowed; present-null is invalid",
+  "body": {
+   "notificationType": "SHARE_UNSHARED",
+   "senderDomain": "a.example.org",
+   "resourceType": "file",
+   "notification": {
+    "file": {
+     "providerId": "share-7",
+     "permissions": null
+    }
+   }
+  },
+  "http": 400,
+  "handlerCalls": 0
+ },
+ {
+  "id": "ENV-029",
+  "purpose": "Known permissions elements must be read/write/share strings",
+  "body": {
+   "notificationType": "SHARE_UNSHARED",
+   "senderDomain": "a.example.org",
+   "resourceType": "file",
+   "notification": {
+    "file": {
+     "providerId": "share-7",
+     "permissions": [
+      "read",
+      null
+     ]
+    }
+   }
+  },
+  "http": 400,
+  "handlerCalls": 0
+ },
+ {
+  "id": "ENV-030",
+  "purpose": "Legitimate REQUEST_SHARE has owner/shareWith/shareId/permissions, no providerId and no shareType",
+  "body": {
+   "notificationType": "REQUEST_SHARE",
+   "senderDomain": "a.example.org",
+   "resourceType": "file",
+   "notification": {
+    "file": {
+     "owner": "owner@a.example.org",
+     "shareWith": "recipient@b.example.org",
+     "shareId": "resource-9",
+     "permissions": [
+      "read",
+      "write"
+     ]
+    }
+   }
+  },
+  "http": 501,
+  "handlerCalls": 0
+ },
+ {
+  "id": "ENV-031",
+  "purpose": "Legitimate REQUEST_RESHARE has providerId/shareWith/resourceType; optional permissions absent",
+  "body": {
+   "notificationType": "REQUEST_RESHARE",
+   "senderDomain": "a.example.org",
+   "resourceType": "folder",
+   "notification": {
+    "file": {
+     "providerId": "share-7",
+     "shareWith": "third@c.example.org"
+    }
+   }
+  },
+  "http": 501,
+  "handlerCalls": 0
+ },
+ {
+  "id": "ENV-032",
+  "purpose": "REQUEST_SHARE missing required notification object is malformed before 501",
+  "body": {
+   "notificationType": "REQUEST_SHARE",
+   "senderDomain": "a.example.org",
+   "resourceType": "file"
+  },
+  "http": 400,
+  "handlerCalls": 0
+ },
+ {
+  "id": "ENV-033",
+  "purpose": "REQUEST_SHARE forbids a supplied shareType even though generic both-selectors is legal",
+  "body": {
+   "notificationType": "REQUEST_SHARE",
+   "senderDomain": "a.example.org",
+   "resourceType": "file",
+   "notification": {
+    "file": {
+     "owner": "owner@a.example.org",
+     "shareWith": "recipient@b.example.org",
+     "shareId": "resource-9",
+     "permissions": [
+      "read",
+      "write"
+     ]
+    }
+   },
+   "shareType": "user"
+  },
+  "http": 400,
+  "handlerCalls": 0
+ },
+ {
+  "id": "ENV-034",
+  "purpose": "REQUEST_RESHARE malformed required address is rejected before 501",
+  "body": {
+   "notificationType": "REQUEST_RESHARE",
+   "senderDomain": "a.example.org",
+   "resourceType": "folder",
+   "notification": {
+    "file": {
+     "providerId": "share-7",
+     "shareWith": "third@c.example.org/path"
+    }
+   }
+  },
+  "http": 400,
+  "handlerCalls": 0
+ },
+ {
+  "id": "ENV-035",
+  "purpose": "USER_REMOVED is structurally valid and remains log-only",
+  "body": {
+   "notificationType": "USER_REMOVED",
+   "senderDomain": "a.example.org",
+   "shareType": "user",
+   "notification": {
+    "user": {
+     "userId": "alice@a.example.org"
+    }
+   }
+  },
+  "http": 201,
+  "handlerCalls": 1
+ },
+ {
+  "id": "ENV-036",
+  "purpose": "Known USER_REMOVED forbids resourceType and cannot escape to unknown",
+  "body": {
+   "notificationType": "USER_REMOVED",
+   "senderDomain": "a.example.org",
+   "shareType": "user",
+   "notification": {
+    "user": {
+     "userId": "alice@a.example.org"
+    }
+   },
+   "resourceType": "file"
+  },
+  "http": 400,
+  "handlerCalls": 0
+ },
+ {
+  "id": "ENV-037",
+  "purpose": "GROUP_REMOVED uses a group identifier and remains log-only",
+  "body": {
+   "notificationType": "GROUP_REMOVED",
+   "senderDomain": "a.example.org",
+   "shareType": "group",
+   "notification": {
+    "group": {
+     "groupId": "group-1"
+    }
+   }
+  },
+  "http": 201,
+  "handlerCalls": 1
+ },
+ {
+  "id": "ENV-038",
+  "purpose": "Known GROUP_REMOVED forbids resourceType even when null",
+  "body": {
+   "notificationType": "GROUP_REMOVED",
+   "senderDomain": "a.example.org",
+   "shareType": "group",
+   "notification": {
+    "group": {
+     "groupId": "group-1"
+    }
+   },
+   "resourceType": null
+  },
+  "http": 400,
+  "handlerCalls": 0
+ },
+ {
+  "id": "ENV-039",
+  "purpose": "CONTACT_REMOVED requires both addresses and shareType user in final06/composed31",
+  "body": {
+   "notificationType": "CONTACT_REMOVED",
+   "senderDomain": "a.example.org",
+   "shareType": "user",
+   "notification": {
+    "user": {
+     "userId": "alice@a.example.org",
+     "counterpartUserId": "bob@b.example.org"
+    }
+   }
+  },
+  "http": 201,
+  "handlerCalls": 1
+ },
+ {
+  "id": "ENV-040",
+  "purpose": "Known CONTACT_REMOVED forbids resourceType; standalone24 does not know that type",
+  "body": {
+   "notificationType": "CONTACT_REMOVED",
+   "senderDomain": "a.example.org",
+   "shareType": "user",
+   "notification": {
+    "user": {
+     "userId": "alice@a.example.org",
+     "counterpartUserId": "bob@b.example.org"
+    }
+   },
+   "resourceType": "file"
+  },
+  "http": 400,
+  "handlerCalls": 0
+ },
+ {
+  "id": "ENV-041",
+  "purpose": "Retain nonblank notificationType rule with matching schema; do not normalize unknown type identity",
+  "body": {
+   "notificationType": " \t\r\n",
+   "senderDomain": "a.example.org",
+   "resourceType": "file"
+  },
+  "http": 400,
+  "handlerCalls": 0
+ },
+ {
+  "id": "ENV-042",
+  "purpose": "Optional declared generic message may be absent but cannot be present-null",
+  "body": {
+   "notificationType": "EXAMPLE_FUTURE",
+   "senderDomain": "a.example.org",
+   "resourceType": "file",
+   "notification": {
+    "message": null
+   }
+  },
+  "http": 400,
+  "handlerCalls": 0
+ },
+ {
+  "id": "ENV-043",
+  "purpose": "Optional declared top-level providerId must be a string when present",
+  "body": {
+   "notificationType": "EXAMPLE_FUTURE",
+   "senderDomain": "a.example.org",
+   "resourceType": "file",
+   "providerId": 42
+  },
+  "http": 400,
+  "handlerCalls": 0
+ },
+ {
+  "id": "ENV-044",
+  "purpose": "Mixed ASCII case remains valid in a DNS sender name",
+  "body": {
+   "notificationType": "EXAMPLE_FUTURE",
+   "senderDomain": "A.Example.ORG",
+   "resourceType": "file"
+  },
+  "http": 201,
+  "handlerCalls": 0
+ },
+ {
+  "id": "ENV-045",
+  "purpose": "senderDomain rejects bracketed IPv6 while OCMAddress syntax remains broader",
+  "body": {
+   "notificationType": "EXAMPLE_FUTURE",
+   "senderDomain": "[2001:db8::1]",
+   "resourceType": "file"
+  },
+  "http": 400,
+  "handlerCalls": 0
+ },
+ {
+  "id": "ENV-046",
+  "purpose": "Existing canonical DNS spelling rejects a terminal root dot",
+  "body": {
+   "notificationType": "EXAMPLE_FUTURE",
+   "senderDomain": "a.example.org.",
+   "resourceType": "file"
+  },
+  "http": 400,
+  "handlerCalls": 0
+ },
+ {
+  "id": "ENV-047",
+  "purpose": "Existing canonical DNS labels reject underscores",
+  "body": {
+   "notificationType": "EXAMPLE_FUTURE",
+   "senderDomain": "a_b.example.org",
+   "resourceType": "file"
+  },
+  "http": 400,
+  "handlerCalls": 0
+ },
+ {
+  "id": "ENV-048",
+  "purpose": "Existing canonical DNS spelling requires at least two labels",
+  "body": {
+   "notificationType": "EXAMPLE_FUTURE",
+   "senderDomain": "localhost",
+   "resourceType": "file"
+  },
+  "http": 400,
+  "handlerCalls": 0
+ },
+ {
+  "id": "ENV-049",
+  "purpose": "Punycode A-label spelling is accepted without IDNA conversion",
+  "body": {
+   "notificationType": "EXAMPLE_FUTURE",
+   "senderDomain": "xn--bcher-kva.example",
+   "resourceType": "file"
+  },
+  "http": 201,
+  "handlerCalls": 0
+ },
+ {
+  "id": "ENV-050",
+  "purpose": "senderDomain rejects a URI scheme rather than removing it",
+  "body": {
+   "notificationType": "EXAMPLE_FUTURE",
+   "senderDomain": "https://a.example.org",
+   "resourceType": "file"
+  },
+  "http": 400,
+  "handlerCalls": 0
+ },
+ {
+  "id": "ENV-051",
+  "purpose": "senderDomain full-input validation rejects a terminal newline",
+  "body": {
+   "notificationType": "EXAMPLE_FUTURE",
+   "senderDomain": "a.example.org\n",
+   "resourceType": "file"
+  },
+  "http": 400,
+  "handlerCalls": 0
+ }
+]

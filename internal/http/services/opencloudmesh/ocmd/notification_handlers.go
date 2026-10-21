@@ -41,16 +41,6 @@ func (f TypeHandlerFunc) HandleNotification(ctx context.Context, n *Notification
 	return f(ctx, n)
 }
 
-// MLSIngress receives the MLS notification types. Their bytes bypass
-// legacy normalization, because they feed cryptographic processing.
-type MLSIngress interface {
-	HandleMLSNotification(ctx context.Context, n *Notification) error
-}
-
-// ErrMLSIngressUnavailable reports an MLS notification received while no
-// MLS ingress is installed.
-var ErrMLSIngressUnavailable = errors.New("mls notification ingress unavailable")
-
 // NotificationExtension is the contract of a notification type that is not
 // built in, e.g. a scoped type defined by a later specification.
 type NotificationExtension struct {
@@ -69,35 +59,30 @@ const (
 	DispatchIgnored DispatchOutcome = "ignored"
 	// DispatchNotImplemented means a request type that is never fulfilled.
 	DispatchNotImplemented DispatchOutcome = "not_implemented"
-	// DispatchMLSUnavailable means an MLS type arrived without an MLS ingress.
-	DispatchMLSUnavailable DispatchOutcome = "mls_unavailable"
 )
 
 type typeEntry struct {
-	contractType string
-	validate     ValidateNotificationFunc
-	handler      TypeHandler
+	validate ValidateNotificationFunc
+	handler  TypeHandler
 }
 
 // NotificationRegistry holds the known notification contracts and their handlers.
 type NotificationRegistry struct {
 	mu    sync.RWMutex
 	types map[string]*typeEntry
-	mls   MLSIngress
 }
 
 // NewNotificationRegistry returns a registry with the built-in contracts and
 // no handlers; notifications of known types without a handler are ignored.
 func NewNotificationRegistry() *NotificationRegistry {
 	r := &NotificationRegistry{types: make(map[string]*typeEntry, len(builtinContracts))}
-	for t, c := range builtinContracts {
-		r.types[t] = &typeEntry{contractType: c.contractType, validate: c.validate}
+	for t, validate := range builtinContracts {
+		r.types[t] = &typeEntry{validate: validate}
 	}
 	return r
 }
 
 // SetHandler installs the handler of a built-in or registered type.
-// RESHARE_UNDO has its own handler slot.
 func (r *NotificationRegistry) SetHandler(notificationType string, h TypeHandler) error {
 	if h == nil {
 		return fmt.Errorf("nil handler for notification type %s", notificationType)
@@ -113,12 +98,12 @@ func (r *NotificationRegistry) SetHandler(notificationType string, h TypeHandler
 }
 
 // RegisterExtension adds the contract and handler of a type that is not
-// built in. Built-in, request and MLS types cannot be redefined.
+// built in. Built-in and request types cannot be redefined.
 func (r *NotificationRegistry) RegisterExtension(ext NotificationExtension) error {
 	if ext.Type == "" || ext.Validate == nil || ext.Handler == nil {
 		return errors.New("incomplete notification extension")
 	}
-	if IsRequestNotification(ext.Type) || IsMLSNotification(ext.Type) {
+	if IsRequestNotification(ext.Type) {
 		return fmt.Errorf("notification type %s is reserved", ext.Type)
 	}
 	r.mu.Lock()
@@ -126,32 +111,23 @@ func (r *NotificationRegistry) RegisterExtension(ext NotificationExtension) erro
 	if _, ok := r.types[ext.Type]; ok {
 		return fmt.Errorf("notification type %s already registered", ext.Type)
 	}
-	r.types[ext.Type] = &typeEntry{contractType: ext.Type, validate: ext.Validate, handler: ext.Handler}
+	r.types[ext.Type] = &typeEntry{validate: ext.Validate, handler: ext.Handler}
 	return nil
 }
 
-// SetMLSIngress installs the MLS ingress. A nil ingress keeps MLS
-// notifications reported as unavailable.
-func (r *NotificationRegistry) SetMLSIngress(m MLSIngress) {
-	r.mu.Lock()
-	defer r.mu.Unlock()
-	r.mls = m
-}
-
-// Parse decodes, classifies, normalizes and validates a notification body.
-// Unknown and MLS types are returned without normalization.
+// Parse decodes the generic envelope and validates a known type. Valid
+// requests return a not-implemented error; unknown types are not interpreted.
 func (r *NotificationRegistry) Parse(body []byte) (*Notification, error) {
 	n, err := decodeNotification(body)
 	if err != nil {
 		return &Notification{Class: NotificationClassMalformed}, err
 	}
-	switch {
-	case IsRequestNotification(n.Type):
+	if validate, ok := requestContracts[n.Type]; ok {
 		n.Class = NotificationClassRequest
+		if err := validate(n); err != nil {
+			return n, err
+		}
 		return n, &NotificationError{Code: NotificationErrNotImplemented}
-	case IsMLSNotification(n.Type):
-		n.Class = NotificationClassMLS
-		return n, nil
 	}
 	r.mu.RLock()
 	e, ok := r.types[n.Type]
@@ -160,10 +136,8 @@ func (r *NotificationRegistry) Parse(body []byte) (*Notification, error) {
 		n.Class = NotificationClassUnknown
 		return n, nil
 	}
-	if err := finishKnown(n, e.contractType, e.validate); err != nil {
-		return n, err
-	}
-	return n, nil
+	n.Class = NotificationClassSpec
+	return n, e.validate(n)
 }
 
 // Dispatch hands a parsed notification to its handler. Unknown types and
@@ -172,15 +146,7 @@ func (r *NotificationRegistry) Dispatch(ctx context.Context, n *Notification) (D
 	switch n.Class {
 	case NotificationClassRequest:
 		return DispatchNotImplemented, nil
-	case NotificationClassMLS:
-		r.mu.RLock()
-		m := r.mls
-		r.mu.RUnlock()
-		if m == nil {
-			return DispatchMLSUnavailable, ErrMLSIngressUnavailable
-		}
-		return DispatchHandled, m.HandleMLSNotification(ctx, n)
-	case NotificationClassSpec, NotificationClassLegacy:
+	case NotificationClassSpec:
 	default:
 		return DispatchIgnored, nil
 	}
