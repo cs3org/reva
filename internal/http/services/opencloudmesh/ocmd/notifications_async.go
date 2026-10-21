@@ -20,7 +20,6 @@ package ocmd
 
 import (
 	"context"
-	"errors"
 	"sync"
 
 	"github.com/cs3org/reva/v3/pkg/appctx"
@@ -38,8 +37,6 @@ type AsyncNotifier struct {
 	wg       sync.WaitGroup
 }
 
-var errNotifierClosed = errors.New("notifier is closed")
-
 // NewNotification starts one attempt and returns at once. The attempt keeps
 // the values of ctx, but only Close cancels it: the change it reports is
 // already committed.
@@ -48,7 +45,7 @@ func (a *AsyncNotifier) NewNotification(ctx context.Context, domain string, n *O
 	defer a.mu.Unlock()
 	if a.closed {
 		appctx.GetLogger(ctx).Warn().Str("type", n.Type).Msg("OCM notification not sent: service is closing")
-		return SendResult{Outcome: SendPostFailed, Err: errNotifierClosed}
+		return SendResult{Outcome: SendPostFailed, Failure: FailureCanceled}
 	}
 	if a.lifetime == nil {
 		a.lifetime, a.cancel = context.WithCancel(context.Background())
