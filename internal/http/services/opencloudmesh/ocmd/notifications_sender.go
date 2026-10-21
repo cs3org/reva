@@ -22,12 +22,16 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"io"
+	"net"
 	"net/http"
 	"net/url"
+	"strconv"
+	"time"
 
 	"github.com/cs3org/reva/v3/pkg/appctx"
-	"github.com/pkg/errors"
+	"github.com/cs3org/reva/v3/pkg/ocm/providerdomain"
 )
 
 // OutgoingNotification is a notification this server sends. Its
@@ -37,12 +41,9 @@ type OutgoingNotification struct {
 	SenderDomain string
 	ResourceType string
 	ShareType    string
-	// EnvelopeProviderID also sends the deprecated top-level providerId,
-	// which current Nextcloud receivers need (DEV-NC-PROVIDERID, temporary).
-	EnvelopeProviderID bool
-	Message            string
-	SharedSecret       NotificationSecret
-	File               *NotificationFile
+	Message      string
+	SharedSecret NotificationSecret
+	File         *NotificationFile
 }
 
 func (n OutgoingNotification) String() string {
@@ -62,7 +63,6 @@ type wireNotification struct {
 	SenderDomain     string               `json:"senderDomain"`
 	ResourceType     string               `json:"resourceType,omitempty"`
 	ShareType        string               `json:"shareType,omitempty"`
-	ProviderID       string               `json:"providerId,omitempty"`
 	Notification     wireNotificationBody `json:"notification"`
 }
 
@@ -83,9 +83,6 @@ func (n *OutgoingNotification) wireBody() ([]byte, error) {
 			SharedSecret: n.SharedSecret.Reveal(),
 			File:         n.File,
 		},
-	}
-	if n.EnvelopeProviderID && n.File != nil {
-		w.ProviderID = n.File.ProviderID
 	}
 	return json.Marshal(w)
 }
@@ -117,17 +114,19 @@ func (s ShareStateNotification) Build() (*OutgoingNotification, error) {
 	default:
 		return nil, errors.New("not a share-state notification type")
 	}
-	if s.SenderDomain == "" || s.ResourceType == "" || s.ProviderID == "" {
+	if s.ResourceType == "" || s.ProviderID == "" {
 		return nil, errors.New("incomplete share-state notification")
 	}
+	if providerdomain.Validate(s.SenderDomain) != nil {
+		return nil, errors.New("senderDomain is not a DNS name")
+	}
 	return &OutgoingNotification{
-		Type:               s.Type,
-		SenderDomain:       s.SenderDomain,
-		ResourceType:       s.ResourceType,
-		ShareType:          s.ShareType,
-		EnvelopeProviderID: true,
-		SharedSecret:       NotificationSecret(s.SharedSecret),
-		File:               &NotificationFile{ProviderID: s.ProviderID, Permissions: s.Permissions},
+		Type:         s.Type,
+		SenderDomain: s.SenderDomain,
+		ResourceType: s.ResourceType,
+		ShareType:    s.ShareType,
+		SharedSecret: NotificationSecret(s.SharedSecret),
+		File:         &NotificationFile{ProviderID: s.ProviderID, Permissions: s.Permissions},
 	}, nil
 }
 
@@ -136,10 +135,9 @@ type ocmNotificationTransport struct {
 	c *OCMClient
 }
 
-// DiscoverNotificationPeer reuses the client's discovery, including the
-// legacy /ocm-provider fallback and the response size limit.
+// DiscoverNotificationPeer uses only the canonical /.well-known/ocm document.
 func (t ocmNotificationTransport) DiscoverNotificationPeer(ctx context.Context, domain string) (*NotificationPeer, error) {
-	disco, err := t.c.Discover(ctx, domain)
+	disco, err := t.c.DiscoverCanonical(ctx, domain)
 	if err != nil {
 		return nil, err
 	}
@@ -160,12 +158,54 @@ func (t ocmNotificationTransport) DiscoverNotificationPeer(ctx context.Context, 
 	return peer, nil
 }
 
+// errPostFailed and postTimeoutError replace transport errors, whose text
+// can quote peer bytes from a malformed status line or header.
+var errPostFailed = errors.New("notification request failed")
+
+type postTimeoutError struct{}
+
+func (postTimeoutError) Error() string { return "notification request timed out" }
+func (postTimeoutError) Timeout() bool { return true }
+
+// safePostError keeps only the category of a transport error.
+func safePostError(ctx context.Context, err error) error {
+	if ctxErr := ctx.Err(); ctxErr != nil {
+		return ctxErr
+	}
+	var netErr net.Error
+	if errors.Is(err, context.DeadlineExceeded) || errors.As(err, &netErr) && netErr.Timeout() {
+		return postTimeoutError{}
+	}
+	return errPostFailed
+}
+
+// maxRetryAfterDigits bounds the delay-seconds value that is parsed at all.
+const maxRetryAfterDigits = 9
+
+// parseRetryAfter reads a delay-seconds Retry-After. An HTTP date or any
+// other value is ignored.
+func parseRetryAfter(v string) time.Duration {
+	if v == "" || len(v) > maxRetryAfterDigits {
+		return 0
+	}
+	for i := 0; i < len(v); i++ {
+		if v[i] < '0' || v[i] > '9' {
+			return 0
+		}
+	}
+	n, err := strconv.Atoi(v)
+	if err != nil {
+		return 0
+	}
+	return time.Duration(n) * time.Second
+}
+
 // PostNotification sends the body once, without following redirects. The
 // response body is ignored and read only up to the control-plane limit.
-func (t ocmNotificationTransport) PostNotification(ctx context.Context, endpoint string, body []byte) (int, http.Header, error) {
+func (t ocmNotificationTransport) PostNotification(ctx context.Context, endpoint string, body []byte) (NotificationResponse, error) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, endpoint, bytes.NewReader(body))
 	if err != nil {
-		return 0, nil, errors.New("error creating notification request")
+		return NotificationResponse{}, errPostFailed
 	}
 	req.Header.Set("Content-Type", "application/json")
 	// Never follow a redirect: a 307/308 would re-send the body, including
@@ -174,11 +214,11 @@ func (t ocmNotificationTransport) PostNotification(ctx context.Context, endpoint
 	noRedirect.CheckRedirect = func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }
 	resp, err := noRedirect.Do(req)
 	if err != nil {
-		return 0, nil, errors.Wrap(err, "error sending notification")
+		return NotificationResponse{}, safePostError(ctx, err)
 	}
 	defer resp.Body.Close()
 	_, _ = io.Copy(io.Discard, io.LimitReader(resp.Body, DefaultResponseLimit))
-	return resp.StatusCode, resp.Header, nil
+	return NotificationResponse{Status: resp.StatusCode, RetryAfter: parseRetryAfter(resp.Header.Get("Retry-After"))}, nil
 }
 
 // NewNotification sends a notification to the OCM server at domain if it
@@ -187,11 +227,11 @@ func (t ocmNotificationTransport) PostNotification(ctx context.Context, endpoint
 func (c *OCMClient) NewNotification(ctx context.Context, domain string, n *OutgoingNotification) SendResult {
 	log := appctx.GetLogger(ctx)
 	if n == nil {
-		return SendResult{Outcome: SendPostFailed, Err: errors.New("nil notification")}
+		return SendResult{Outcome: SendPostFailed, Failure: FailureError}
 	}
 	body, err := n.wireBody()
 	if err != nil {
-		return SendResult{Outcome: SendPostFailed, Err: errors.New("notification could not be encoded")}
+		return SendResult{Outcome: SendPostFailed, Failure: FailureError}
 	}
 	res := SendNotification(ctx, ocmNotificationTransport{c: c}, domain, body)
 	event := log.Info()
@@ -208,8 +248,8 @@ func (c *OCMClient) NewNotification(ctx context.Context, domain string, n *Outgo
 	if res.RetryAfter > 0 {
 		event = event.Dur("retry_after", res.RetryAfter)
 	}
-	if res.Err != nil {
-		event = event.Str("error", res.Err.Error())
+	if res.Failure != "" {
+		event = event.Str("failure", string(res.Failure))
 	}
 	event.Msg("OCM notification sent")
 	return res
