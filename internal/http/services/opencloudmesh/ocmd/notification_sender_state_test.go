@@ -22,7 +22,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"net/http"
+	"net"
 	"strings"
 	"testing"
 	"time"
@@ -31,8 +31,7 @@ import (
 type fakeNotificationTransport struct {
 	peer        *NotificationPeer
 	discoverErr error
-	status      int
-	header      http.Header
+	resp        NotificationResponse
 	postErr     error
 	discovers   int
 	posts       int
@@ -44,10 +43,10 @@ func (f *fakeNotificationTransport) DiscoverNotificationPeer(context.Context, st
 	return f.peer, f.discoverErr
 }
 
-func (f *fakeNotificationTransport) PostNotification(_ context.Context, endpoint string, _ []byte) (int, http.Header, error) {
+func (f *fakeNotificationTransport) PostNotification(_ context.Context, endpoint string, _ []byte) (NotificationResponse, error) {
 	f.posts++
 	f.endpoint = endpoint
-	return f.status, f.header, f.postErr
+	return f.resp, f.postErr
 }
 
 func advertising(caps ...string) *NotificationPeer {
@@ -55,38 +54,40 @@ func advertising(caps ...string) *NotificationPeer {
 }
 
 func TestSendNotificationTransitions(t *testing.T) {
-	retry := http.Header{}
-	retry.Set("Retry-After", "120")
 	cases := []struct {
 		name    string
 		tr      *fakeNotificationTransport
 		outcome SendOutcome
 		class   NotificationStatusClass
+		failure SendFailure
 		posts   int
 		retry   time.Duration
 	}{
-		{name: "discovery failure", tr: &fakeNotificationTransport{discoverErr: errors.New("dial")}, outcome: SendDiscoveryFailed},
+		{name: "discovery failure", tr: &fakeNotificationTransport{discoverErr: errors.New("dial")}, outcome: SendDiscoveryFailed, failure: FailureError},
 		{name: "nil peer", tr: &fakeNotificationTransport{}, outcome: SendCapabilityMissing},
 		{name: "capability missing", tr: &fakeNotificationTransport{peer: advertising("invites", "exchange-token")}, outcome: SendCapabilityMissing},
 		{name: "capability without endpoint", tr: &fakeNotificationTransport{peer: &NotificationPeer{Capabilities: []string{"notifications"}}}, outcome: SendCapabilityMissing},
-		{name: "post failure", tr: &fakeNotificationTransport{peer: advertising("notifications"), postErr: errors.New("reset")}, outcome: SendPostFailed, posts: 1},
-		{name: "201", tr: &fakeNotificationTransport{peer: advertising("notifications"), status: 201}, outcome: SendDelivered, class: NotificationStatusCreated, posts: 1},
-		{name: "200 tolerated", tr: &fakeNotificationTransport{peer: advertising("notifications"), status: 200}, outcome: SendDelivered, class: NotificationStatusCreated, posts: 1},
-		{name: "202 tolerated", tr: &fakeNotificationTransport{peer: advertising("notifications"), status: 202}, outcome: SendDelivered, class: NotificationStatusCreated, posts: 1},
-		{name: "204 tolerated", tr: &fakeNotificationTransport{peer: advertising("notifications"), status: 204}, outcome: SendDelivered, class: NotificationStatusCreated, posts: 1},
-		{name: "400", tr: &fakeNotificationTransport{peer: advertising("notifications"), status: 400}, outcome: SendRejected, class: NotificationStatusBadRequest, posts: 1},
-		{name: "401", tr: &fakeNotificationTransport{peer: advertising("notifications"), status: 401}, outcome: SendRejected, class: NotificationStatusUnauthorized, posts: 1},
-		{name: "403", tr: &fakeNotificationTransport{peer: advertising("notifications"), status: 403}, outcome: SendRejected, class: NotificationStatusForbidden, posts: 1},
-		{name: "404", tr: &fakeNotificationTransport{peer: advertising("notifications"), status: 404}, outcome: SendRejected, class: NotificationStatusNotFound, posts: 1},
-		{name: "501", tr: &fakeNotificationTransport{peer: advertising("notifications"), status: 501}, outcome: SendRejected, class: NotificationStatusNotImplemented, posts: 1},
-		{name: "503 records Retry-After", tr: &fakeNotificationTransport{peer: advertising("notifications"), status: 503, header: retry}, outcome: SendRejected, class: NotificationStatusUnavailable, posts: 1, retry: 120 * time.Second},
-		{name: "500 unclassified", tr: &fakeNotificationTransport{peer: advertising("notifications"), status: 500}, outcome: SendRejected, posts: 1},
-		{name: "302 unclassified", tr: &fakeNotificationTransport{peer: advertising("notifications"), status: 302}, outcome: SendRejected, posts: 1},
+		{name: "post failure", tr: &fakeNotificationTransport{peer: advertising("notifications"), postErr: errors.New("reset")}, outcome: SendPostFailed, failure: FailureError, posts: 1},
+		{name: "post canceled", tr: &fakeNotificationTransport{peer: advertising("notifications"), postErr: fmt.Errorf("post: %w", context.Canceled)}, outcome: SendPostFailed, failure: FailureCanceled, posts: 1},
+		{name: "post deadline", tr: &fakeNotificationTransport{peer: advertising("notifications"), postErr: fmt.Errorf("post: %w", context.DeadlineExceeded)}, outcome: SendPostFailed, failure: FailureTimeout, posts: 1},
+		{name: "post net timeout", tr: &fakeNotificationTransport{peer: advertising("notifications"), postErr: &net.OpError{Op: "read", Err: timeoutError{}}}, outcome: SendPostFailed, failure: FailureTimeout, posts: 1},
+		{name: "201", tr: &fakeNotificationTransport{peer: advertising("notifications"), resp: NotificationResponse{Status: 201}}, outcome: SendDelivered, class: NotificationStatusCreated, posts: 1},
+		{name: "200 tolerated", tr: &fakeNotificationTransport{peer: advertising("notifications"), resp: NotificationResponse{Status: 200}}, outcome: SendDelivered, class: NotificationStatusCreated, posts: 1},
+		{name: "202 tolerated", tr: &fakeNotificationTransport{peer: advertising("notifications"), resp: NotificationResponse{Status: 202}}, outcome: SendDelivered, class: NotificationStatusCreated, posts: 1},
+		{name: "204 tolerated", tr: &fakeNotificationTransport{peer: advertising("notifications"), resp: NotificationResponse{Status: 204}}, outcome: SendDelivered, class: NotificationStatusCreated, posts: 1},
+		{name: "400", tr: &fakeNotificationTransport{peer: advertising("notifications"), resp: NotificationResponse{Status: 400}}, outcome: SendRejected, class: NotificationStatusBadRequest, posts: 1},
+		{name: "401", tr: &fakeNotificationTransport{peer: advertising("notifications"), resp: NotificationResponse{Status: 401}}, outcome: SendRejected, class: NotificationStatusUnauthorized, posts: 1},
+		{name: "403", tr: &fakeNotificationTransport{peer: advertising("notifications"), resp: NotificationResponse{Status: 403}}, outcome: SendRejected, class: NotificationStatusForbidden, posts: 1},
+		{name: "404", tr: &fakeNotificationTransport{peer: advertising("notifications"), resp: NotificationResponse{Status: 404}}, outcome: SendRejected, class: NotificationStatusNotFound, posts: 1},
+		{name: "501", tr: &fakeNotificationTransport{peer: advertising("notifications"), resp: NotificationResponse{Status: 501}}, outcome: SendRejected, class: NotificationStatusNotImplemented, posts: 1},
+		{name: "503 records Retry-After", tr: &fakeNotificationTransport{peer: advertising("notifications"), resp: NotificationResponse{Status: 503, RetryAfter: 120 * time.Second}}, outcome: SendRejected, class: NotificationStatusUnavailable, posts: 1, retry: 120 * time.Second},
+		{name: "500 unclassified", tr: &fakeNotificationTransport{peer: advertising("notifications"), resp: NotificationResponse{Status: 500}}, outcome: SendRejected, posts: 1},
+		{name: "302 unclassified", tr: &fakeNotificationTransport{peer: advertising("notifications"), resp: NotificationResponse{Status: 302}}, outcome: SendRejected, posts: 1},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			res := SendNotification(context.Background(), tc.tr, "peer.example.org", []byte(`{}`))
-			if res.Outcome != tc.outcome || res.Class != tc.class || res.RetryAfter != tc.retry {
+			if res.Outcome != tc.outcome || res.Class != tc.class || res.RetryAfter != tc.retry || res.Failure != tc.failure {
 				t.Fatalf("result %+v", res)
 			}
 			if tc.tr.discovers != 1 || tc.tr.posts != tc.posts {
@@ -99,27 +100,44 @@ func TestSendNotificationTransitions(t *testing.T) {
 	}
 }
 
-func TestRetryAfterKeepsOnlyBoundedSeconds(t *testing.T) {
-	const secret = "hfiuhworzwnur98d3wjiwhr"
-	cases := map[string]time.Duration{
-		"":                               0,
-		"0":                              0,
-		"86400":                          24 * time.Hour,
-		"999999999":                      24 * time.Hour,
-		"-1":                             0,
-		"1.5":                            0,
-		"Wed, 21 Oct 2026 07:28:00 GMT":  0,
-		secret:                           0,
-		secret + "\r\nX-Leak: " + secret: 0,
-		strings.Repeat(secret, 1000):     0,
+type timeoutError struct{}
+
+func (timeoutError) Error() string { return "i/o timeout" }
+func (timeoutError) Timeout() bool { return true }
+
+func TestRetryAfterIsBounded(t *testing.T) {
+	cases := map[time.Duration]time.Duration{
+		0:                 0,
+		-time.Second:      0,
+		120 * time.Second: 120 * time.Second,
+		24 * time.Hour:    24 * time.Hour,
+		1000 * time.Hour:  24 * time.Hour,
 	}
-	for value, want := range cases {
-		res := ClassifyNotificationResponse(503, http.Header{"Retry-After": []string{value}})
+	for in, want := range cases {
+		res := ClassifyNotificationResponse(NotificationResponse{Status: 503, RetryAfter: in})
 		if res.Class != NotificationStatusUnavailable || res.RetryAfter != want {
-			t.Fatalf("Retry-After %.20q: %+v", value, res)
+			t.Fatalf("Retry-After %s: %+v", in, res)
 		}
-		if out := fmt.Sprintf("%v %+v %#v", res, res, res); strings.Contains(out, secret) {
-			t.Fatalf("secret in %s", out)
+	}
+	if res := ClassifyNotificationResponse(NotificationResponse{Status: 400, RetryAfter: time.Hour}); res.RetryAfter != 0 {
+		t.Fatalf("Retry-After kept outside 503: %+v", res)
+	}
+}
+
+// The transport errors quote peer bytes; the result must keep only a category.
+func TestSendResultKeepsNoTransportError(t *testing.T) {
+	const canary = "hfiuhworzwnur98d3wjiwhr"
+	leak := fmt.Errorf("wrapped: %w", &net.OpError{Op: "read", Err: errors.New(canary + "\r\nX-Leak: " + canary)})
+	for _, tr := range []*fakeNotificationTransport{
+		{discoverErr: leak},
+		{peer: advertising("notifications"), postErr: leak},
+	} {
+		res := SendNotification(context.Background(), tr, "peer.example.org", []byte(`{}`))
+		if res.Failure != FailureError {
+			t.Fatalf("failure %+v", res)
+		}
+		if out := fmt.Sprintf("%v %+v %#v", res, res, res); strings.Contains(out, canary) {
+			t.Fatalf("canary in %s", out)
 		}
 	}
 }
