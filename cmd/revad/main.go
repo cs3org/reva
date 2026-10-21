@@ -26,6 +26,7 @@ import (
 	"slices"
 
 	"os"
+	"os/signal"
 	"path"
 	"reflect"
 	"regexp"
@@ -48,12 +49,13 @@ import (
 	"github.com/google/uuid"
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog"
+	"golang.org/x/sys/unix"
 )
 
 var (
 	versionFlag = flag.Bool("version", false, "show version and exit")
 	testFlag    = flag.Bool("t", false, "test configuration and exit")
-	signalFlag  = flag.String("s", "", "send signal to a master process: stop, quit, reload")
+	signalFlag  = flag.String("s", "", "send signal to a master process: stop, quit, reload, dump, reopen")
 	configFlag  = flag.String("c", "/etc/revad/revad.toml", "set configuration file")
 	pidFlag     = flag.String("p", "", "pid file. If empty defaults to a random file in the OS temporary directory")
 	dirFlag     = flag.String("dev-dir", "", "runs any toml file in the specified directory. Intended for development use only")
@@ -78,6 +80,9 @@ var (
 
 func Main() {
 	flag.Parse()
+
+	// SIGUSR2 reopens the log files; until they are open it must not kill us.
+	signal.Ignore(syscall.SIGUSR2)
 
 	initPlugins()
 
@@ -204,6 +209,8 @@ func handleSignalFlag() {
 			signal = syscall.SIGTERM
 		case "dump":
 			signal = syscall.SIGUSR1
+		case "reopen":
+			signal = syscall.SIGUSR2
 		default:
 			fmt.Fprintf(os.Stderr, "unknown signal %q\n", *signalFlag)
 			os.Exit(1)
@@ -410,6 +417,27 @@ func getWriter(out string) (io.Writer, error) {
 	if err != nil {
 		return nil, errors.Wrap(err, "error creating log file: "+out)
 	}
+	reopenOnSignal(fd)
 
 	return fd, nil
+}
+
+// reopenOnSignal points fd to a fresh file at its path on SIGUSR2, so the log
+// can be rotated by renaming it instead of copytruncate. dup2 swaps the file
+// behind the descriptor atomically: no write is lost or sees it closed.
+func reopenOnSignal(fd *os.File) {
+	sigs := make(chan os.Signal, 1)
+	signal.Notify(sigs, syscall.SIGUSR2)
+	go func() {
+		for range sigs {
+			nf, err := os.OpenFile(fd.Name(), os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+			if err == nil {
+				err = unix.Dup2(int(nf.Fd()), int(fd.Fd()))
+				nf.Close()
+			}
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "error reopening log file %s: %v\n", fd.Name(), err)
+			}
+		}
+	}()
 }
