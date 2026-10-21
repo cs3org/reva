@@ -61,7 +61,7 @@ func TestRegistryDispatchOutcomes(t *testing.T) {
 	for _, body := range []string{
 		`{"notificationType":"ACME","senderDomain":"a.example.org","shareType":"user"}`,
 		`{"notificationType":"RESHARE_UNDO","senderDomain":"a.example.org","resourceType":"file","notification":{"file":{"providerId":"42"}}}`,
-		`{"notificationType":"MLS_COMMIT","senderDomain":"a.example.org","shareType":"federation","notification":{"federation":{"mlsGroupId":"g"}}}`,
+		`{"notificationType":"EXAMPLE_FUTURE","senderDomain":"a.example.org","shareType":"federation","notification":{"future":{"groupId":"g"}}}`,
 	} {
 		n = mustParse(t, r, body)
 		if out, err := r.Dispatch(ctx, n); n.Class != NotificationClassUnknown || out != DispatchIgnored || err != nil {
