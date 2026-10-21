@@ -31,13 +31,6 @@ func (h *recordingHandler) HandleNotification(_ context.Context, n *Notification
 	return nil
 }
 
-type recordingMLS struct{ got *Notification }
-
-func (m *recordingMLS) HandleMLSNotification(_ context.Context, n *Notification) error {
-	m.got = n
-	return nil
-}
-
 func mustParse(t *testing.T, r *NotificationRegistry, body string) *Notification {
 	t.Helper()
 	n, err := r.Parse([]byte(body))
@@ -45,24 +38,6 @@ func mustParse(t *testing.T, r *NotificationRegistry, body string) *Notification
 		t.Fatalf("parse: %v", err)
 	}
 	return n
-}
-
-func TestRegistryAliasNeverReachesUnsharedHandler(t *testing.T) {
-	r := NewNotificationRegistry()
-	unshared, undo := &recordingHandler{}, &recordingHandler{}
-	if err := r.SetHandler(NotificationShareUnshared, unshared); err != nil {
-		t.Fatal(err)
-	}
-	if err := r.SetHandler(NotificationReshareUndo, undo); err != nil {
-		t.Fatal(err)
-	}
-	n := mustParse(t, r, `{"notificationType":"RESHARE_UNDO","senderDomain":"b.example.org","resourceType":"file","notification":{"file":{"providerId":"42"}}}`)
-	if out, err := r.Dispatch(context.Background(), n); out != DispatchHandled || err != nil {
-		t.Fatalf("dispatch %s %v", out, err)
-	}
-	if len(unshared.seen) != 0 || len(undo.seen) != 1 {
-		t.Fatalf("unshared %v undo %v", unshared.seen, undo.seen)
-	}
 }
 
 func TestRegistryDispatchOutcomes(t *testing.T) {
@@ -83,27 +58,23 @@ func TestRegistryDispatchOutcomes(t *testing.T) {
 		t.Fatalf("no handler %s %v", out, err)
 	}
 
-	n = mustParse(t, r, `{"notificationType":"ACME","shareType":"user"}`)
-	if out, err := r.Dispatch(ctx, n); out != DispatchIgnored || err != nil {
-		t.Fatalf("unknown %s %v", out, err)
+	for _, body := range []string{
+		`{"notificationType":"ACME","senderDomain":"a.example.org","shareType":"user"}`,
+		`{"notificationType":"RESHARE_UNDO","senderDomain":"a.example.org","resourceType":"file","notification":{"file":{"providerId":"42"}}}`,
+		`{"notificationType":"MLS_COMMIT","senderDomain":"a.example.org","shareType":"federation","notification":{"federation":{"mlsGroupId":"g"}}}`,
+	} {
+		n = mustParse(t, r, body)
+		if out, err := r.Dispatch(ctx, n); n.Class != NotificationClassUnknown || out != DispatchIgnored || err != nil {
+			t.Fatalf("unknown %s: %s %s %v", body, n.Class, out, err)
+		}
 	}
 
-	req, err := r.Parse([]byte(`{"notificationType":"REQUEST_SHARE","resourceType":"file"}`))
+	req, err := r.Parse([]byte(`{"notificationType":"REQUEST_SHARE","senderDomain":"b.example.org","resourceType":"file","notification":{"file":{"owner":"a@a.example.org","shareWith":"b@b.example.org","shareId":"x","permissions":["read"]}}}`))
 	if ReceiverStatus(err) != NotificationStatusNotImplemented {
 		t.Fatalf("request status %v", err)
 	}
 	if out, err := r.Dispatch(ctx, req); out != DispatchNotImplemented || err != nil {
 		t.Fatalf("request %s %v", out, err)
-	}
-
-	mls := mustParse(t, r, `{"notificationType":"MLS_WELCOME","senderDomain":"a.example.org","shareType":"federation","notification":{"federation":{"mlsGroupId":"g"}}}`)
-	if out, err := r.Dispatch(ctx, mls); out != DispatchMLSUnavailable || !errors.Is(err, ErrMLSIngressUnavailable) {
-		t.Fatalf("mls nil seam %s %v", out, err)
-	}
-	ingress := &recordingMLS{}
-	r.SetMLSIngress(ingress)
-	if out, err := r.Dispatch(ctx, mls); out != DispatchHandled || err != nil || ingress.got != mls {
-		t.Fatalf("mls installed %s %v", out, err)
 	}
 
 	malformed, err := r.Parse([]byte(`{`))
@@ -132,11 +103,14 @@ func TestRegistryRegistrationRules(t *testing.T) {
 	if err := r.SetHandler("ACME", h); err == nil {
 		t.Fatal("handler for a type without contract")
 	}
+	if err := r.SetHandler("RESHARE_UNDO", h); err == nil {
+		t.Fatal("RESHARE_UNDO has a handler slot")
+	}
 	if err := r.SetHandler(NotificationShareAccepted, nil); err == nil {
 		t.Fatal("nil handler accepted")
 	}
 	valid := func(*Notification) error { return nil }
-	for _, typ := range []string{NotificationUserRemoved, NotificationReshareUndo, NotificationRequestShare, NotificationRequestReshare, NotificationMLSCommit, ""} {
+	for _, typ := range []string{NotificationUserRemoved, NotificationRequestShare, NotificationRequestReshare, ""} {
 		if err := r.RegisterExtension(NotificationExtension{Type: typ, Validate: valid, Handler: h}); err == nil {
 			t.Fatalf("extension %q accepted", typ)
 		}
@@ -150,41 +124,34 @@ func TestRegistryExtensionBecomesKnownAndValidated(t *testing.T) {
 	r := NewNotificationRegistry()
 	h := &recordingHandler{}
 	err := r.RegisterExtension(NotificationExtension{
-		Type: "CONTACT_REMOVED",
+		Type: "EXAMPLE_PAIR",
 		Validate: func(n *Notification) error {
-			if err := n.normalizeCommon(); err != nil {
+			pair, err := n.payloadObject("pair")
+			if err != nil {
 				return err
 			}
-			var u struct {
-				UserID      string `json:"userId"`
-				Counterpart string `json:"counterpartUserId"`
-			}
-			if _, err := n.payloadObject("user", &u); err != nil {
-				return err
-			}
-			if u.Counterpart == "" {
-				return missingField("notification.user.counterpartUserId")
-			}
-			return nil
+			_, err = payloadAddress(pair, "pair", "with")
+			return err
 		},
 		Handler: h,
 	})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := r.Parse([]byte(`{"notificationType":"CONTACT_REMOVED","senderDomain":"a.example.org","shareType":"user","notification":{"user":{"userId":"alice@a.example.org"}}}`)); ReceiverStatus(err) != NotificationStatusBadRequest {
-		t.Fatalf("malformed extension escaped: %v", err)
+	for _, body := range []string{
+		`{"notificationType":"EXAMPLE_PAIR","senderDomain":"a.example.org","shareType":"user"}`,
+		`{"notificationType":"EXAMPLE_PAIR","senderDomain":"a.example.org","shareType":"user","notification":{"pair":{"with":"bob@b.example.org/path"}}}`,
+	} {
+		if _, err := r.Parse([]byte(body)); ReceiverStatus(err) != NotificationStatusBadRequest {
+			t.Fatalf("malformed extension escaped: %v", err)
+		}
 	}
-	n := mustParse(t, r, `{"notificationType":"CONTACT_REMOVED","senderDomain":"a.example.org","shareType":"user","notification":{"user":{"userId":"alice@a.example.org","counterpartUserId":"bob@b.example.org"}}}`)
+	n := mustParse(t, r, `{"notificationType":"EXAMPLE_PAIR","senderDomain":"a.example.org","shareType":"user","notification":{"pair":{"with":"bob@b.example.org"}}}`)
 	if n.Class != NotificationClassSpec {
 		t.Fatalf("class %s", n.Class)
 	}
 	if out, err := r.Dispatch(context.Background(), n); out != DispatchHandled || err != nil || len(h.seen) != 1 {
 		t.Fatalf("%s %v", out, err)
-	}
-	legacy := mustParse(t, r, `{"notificationType":"USER_REMOVED","senderDomain":"a.example.org","shareType":"user","notification":{"user":{"userId":"alice@a.example.org"}}}`)
-	if out, _ := r.Dispatch(context.Background(), legacy); out != DispatchIgnored || len(h.seen) != 1 {
-		t.Fatalf("legacy reached the extension handler: %s", out)
 	}
 }
 

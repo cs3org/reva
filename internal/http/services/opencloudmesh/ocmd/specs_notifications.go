@@ -28,7 +28,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/go-playground/validator/v10"
+	"github.com/cs3org/reva/v3/pkg/ocm/providerdomain"
 )
 
 // Notification types registered in the "OCM Notification Types" IANA registry.
@@ -43,34 +43,16 @@ const (
 	NotificationGroupRemoved          = "GROUP_REMOVED"
 )
 
-// NotificationReshareUndo is a legacy Nextcloud type validated like
-// SHARE_UNSHARED. It is about an outgoing share, so it never withdraws a received one.
-const NotificationReshareUndo = "RESHARE_UNDO"
-
-// Notification types defined by the OCM-MLS draft. They are validated
-// strictly by the MLS ingress, never by the legacy normalizer.
-const (
-	NotificationMLSWelcome     = "MLS_WELCOME"
-	NotificationMLSProposal    = "MLS_PROPOSAL"
-	NotificationMLSCommit      = "MLS_COMMIT"
-	NotificationMLSApplication = "MLS_APPLICATION"
-	NotificationMLSRejoin      = "MLS_REJOIN"
-)
-
 // NotificationClass is the triage class of a received notification.
 type NotificationClass string
 
 const (
-	// NotificationClassSpec is a known type in the specified shape.
+	// NotificationClassSpec is a known type with a valid payload.
 	NotificationClassSpec NotificationClass = "A"
-	// NotificationClassLegacy is a known type normalized from a legacy shape.
-	NotificationClassLegacy NotificationClass = "B"
 	// NotificationClassUnknown is a type without a registered contract.
 	NotificationClassUnknown NotificationClass = "C"
-	// NotificationClassMalformed is a body that cannot be decoded.
+	// NotificationClassMalformed is a body that is not a valid envelope.
 	NotificationClassMalformed NotificationClass = "D"
-	// NotificationClassMLS is one of the MLS types, reserved for strict validation.
-	NotificationClassMLS NotificationClass = "M"
 	// NotificationClassRequest is a request type that is never fulfilled.
 	NotificationClassRequest NotificationClass = "R"
 )
@@ -97,7 +79,7 @@ func (s NotificationSecret) MarshalText() ([]byte, error) { return []byte(s.Stri
 
 // NotificationFile is the file object of resource notifications.
 type NotificationFile struct {
-	ProviderID  string   `json:"providerId"`
+	ProviderID  string   `json:"providerId,omitempty"`
 	Permissions []string `json:"permissions,omitempty"`
 	ShareWith   string   `json:"shareWith,omitempty"`
 	Owner       string   `json:"owner,omitempty"`
@@ -114,36 +96,16 @@ type NotificationGroup struct {
 	GroupID string `json:"groupId"`
 }
 
-// NotificationShape records how a received payload was mapped to the
-// canonical form. It never contains payload values.
-type NotificationShape struct {
-	MissingSenderDomain bool `json:"missingSenderDomain,omitempty"`
-	EnvelopeProviderID  bool `json:"envelopeProviderId,omitempty"`
-	ProviderIDConflict  bool `json:"providerIdConflict,omitempty"`
-	Alias               bool `json:"alias,omitempty"`
-}
-
-// Legacy reports whether any legacy mapping was applied.
-func (s NotificationShape) Legacy() bool {
-	return s.MissingSenderDomain || s.EnvelopeProviderID || s.Alias
-}
-
 // Notification is the canonical form of a received notification that every
 // TypeHandler consumes. Formatting it prints fixed metadata only.
 type Notification struct {
-	// Type is the notificationType as received. Aliases keep their identity.
-	Type string
-	// ContractType is the type whose contract validated the payload, e.g.
-	// SHARE_UNSHARED for RESHARE_UNDO. Empty for unknown types.
-	ContractType string
-	Class        NotificationClass
-	Shape        NotificationShape
+	Type  string
+	Class NotificationClass
 
 	SenderDomain string
 	ResourceType string
 	ShareType    string
-	// ProviderID is notification.file.providerId, or the deprecated envelope
-	// providerId when the nested one is absent.
+	// ProviderID is notification.file.providerId.
 	ProviderID   string
 	Message      string
 	SharedSecret NotificationSecret
@@ -152,18 +114,16 @@ type Notification struct {
 	User  *NotificationUser
 	Group *NotificationGroup
 
-	// Payload holds the raw members of the notification object, for
-	// extension and MLS contracts, without the sharedSecret. It is never logged.
+	// Payload holds the raw members of the notification object, without the
+	// sharedSecret, for registered extensions. It is never logged.
 	Payload map[string]json.RawMessage `json:"-"`
 
-	rawSecret json.RawMessage
 	// members are the raw envelope members, to tell an absent field from a null or empty one.
 	members map[string]json.RawMessage
 }
 
 func (n Notification) String() string {
-	return fmt.Sprintf("notification{type=%q contract=%q class=%s legacy=%t}",
-		n.Type, n.ContractType, n.Class, n.Shape.Legacy())
+	return fmt.Sprintf("notification{type=%q class=%s}", n.Type, n.Class)
 }
 
 func (n Notification) GoString() string { return n.String() }
@@ -220,57 +180,110 @@ func NotificationErrorCodeOf(err error) (NotificationErrorCode, bool) {
 	return "", false
 }
 
-// notificationEnvelope captures the spec layout and the legacy flat fields.
-type notificationEnvelope struct {
-	NotificationType string          `json:"notificationType"`
-	SenderDomain     string          `json:"senderDomain"`
-	ResourceType     string          `json:"resourceType"`
-	ShareType        string          `json:"shareType"`
-	ProviderID       string          `json:"providerId"`
-	Notification     json.RawMessage `json:"notification"`
-}
-
-// decodeNotification decodes the envelope only. Any failure here is class D.
+// decodeNotification decodes and validates the generic envelope, which every
+// type must satisfy, including types that are not known.
 func decodeNotification(body []byte) (*Notification, error) {
 	var members map[string]json.RawMessage
 	if err := json.Unmarshal(body, &members); err != nil || members == nil {
 		return nil, &NotificationError{Code: NotificationErrMalformed}
 	}
+	n := &Notification{members: members}
 	rawType, ok := members["notificationType"]
 	if !ok || isJSONNull(rawType) {
 		return nil, &NotificationError{Code: NotificationErrMissingType}
 	}
-	var env notificationEnvelope
-	if err := json.Unmarshal(body, &env); err != nil {
+	if json.Unmarshal(rawType, &n.Type) != nil {
 		return nil, &NotificationError{Code: NotificationErrMalformed}
 	}
-	if strings.TrimSpace(env.NotificationType) == "" {
+	if strings.TrimSpace(n.Type) == "" {
 		return nil, &NotificationError{Code: NotificationErrMissingType}
 	}
-
-	n := &Notification{
-		Type:         env.NotificationType,
-		SenderDomain: env.SenderDomain,
-		ResourceType: env.ResourceType,
-		ShareType:    env.ShareType,
-		ProviderID:   env.ProviderID,
-		members:      members,
+	sender, err := memberString(members, "senderDomain", "senderDomain", true)
+	if err != nil {
+		return nil, err
 	}
-	if len(env.Notification) > 0 && !isJSONNull(env.Notification) {
-		if err := json.Unmarshal(env.Notification, &n.Payload); err != nil || n.Payload == nil {
-			return nil, &NotificationError{Code: NotificationErrMalformed}
+	if providerdomain.Validate(sender) != nil {
+		return nil, invalidField("senderDomain")
+	}
+	n.SenderDomain = sender
+	if n.ResourceType, err = memberString(members, "resourceType", "resourceType", false); err != nil {
+		return nil, err
+	}
+	if n.ShareType, err = memberString(members, "shareType", "shareType", false); err != nil {
+		return nil, err
+	}
+	if n.ResourceType == "" && n.ShareType == "" {
+		return nil, missingField("resourceType or shareType")
+	}
+	// The deprecated top-level providerId is only type-checked: it never
+	// stands in for notification.file.providerId.
+	if raw, ok := members["providerId"]; ok {
+		var s string
+		if isJSONNull(raw) || json.Unmarshal(raw, &s) != nil {
+			return nil, invalidField("providerId")
 		}
-		// Keep the secret out of the raw payload so that no raw view leaks it.
-		if raw, ok := n.Payload["sharedSecret"]; ok {
-			n.rawSecret = raw
-			delete(n.Payload, "sharedSecret")
+	}
+	if raw, ok := members["notification"]; ok {
+		if err := n.decodePayload(raw); err != nil {
+			return nil, err
 		}
 	}
 	return n, nil
 }
 
+// decodePayload checks the generic notification object: message and
+// sharedSecret are strings, every other member is an object.
+func (n *Notification) decodePayload(raw json.RawMessage) error {
+	if isJSONNull(raw) || json.Unmarshal(raw, &n.Payload) != nil {
+		return invalidField("notification")
+	}
+	for key, value := range n.Payload {
+		switch key {
+		case "message":
+			if isJSONNull(value) || json.Unmarshal(value, &n.Message) != nil {
+				return invalidField("notification.message")
+			}
+		case "sharedSecret":
+			var secret string
+			if isJSONNull(value) || json.Unmarshal(value, &secret) != nil {
+				return invalidField("notification.sharedSecret")
+			}
+			n.SharedSecret = NotificationSecret(secret)
+		default:
+			if !isJSONObject(value) {
+				return invalidField("notification." + key)
+			}
+		}
+	}
+	// Keep the secret out of the raw payload so that no raw view leaks it.
+	delete(n.Payload, "sharedSecret")
+	return nil
+}
+
 func isJSONNull(raw json.RawMessage) bool {
 	return bytes.Equal(bytes.TrimSpace(raw), []byte("null"))
+}
+
+func isJSONObject(raw json.RawMessage) bool {
+	raw = bytes.TrimSpace(raw)
+	return len(raw) > 0 && raw[0] == '{'
+}
+
+// memberString reads a string member of obj. A present member must be a
+// non-empty string: null and "" are invalid, not absent.
+func memberString(obj map[string]json.RawMessage, key, field string, required bool) (string, error) {
+	raw, ok := obj[key]
+	if !ok {
+		if required {
+			return "", missingField(field)
+		}
+		return "", nil
+	}
+	var s string
+	if isJSONNull(raw) || json.Unmarshal(raw, &s) != nil || s == "" {
+		return "", invalidField(field)
+	}
+	return s, nil
 }
 
 // hasMember reports whether the envelope has the member, even if null or empty.
@@ -279,324 +292,221 @@ func (n *Notification) hasMember(key string) bool {
 	return ok
 }
 
-// decodeMember decodes a present member into out. A null value is invalid,
-// because no known member is nullable.
-func decodeMember(raw json.RawMessage, field string, out any) error {
-	if isJSONNull(raw) || json.Unmarshal(raw, out) != nil {
-		return invalidField(field)
-	}
-	return nil
-}
-
-// payloadObject decodes a member of the notification object into out.
-func (n *Notification) payloadObject(key string, out any) (bool, error) {
+// payloadObject returns the raw members of a required object of the
+// notification payload.
+func (n *Notification) payloadObject(key string) (map[string]json.RawMessage, error) {
+	field := "notification." + key
 	raw, ok := n.Payload[key]
 	if !ok {
-		return false, nil
+		return nil, missingField(field)
 	}
-	return true, decodeMember(raw, "notification."+key, out)
+	var obj map[string]json.RawMessage
+	if json.Unmarshal(raw, &obj) != nil || obj == nil {
+		return nil, invalidField(field)
+	}
+	return obj, nil
 }
 
-// normalizeCommon maps the fields shared by the processable known types. It
-// never applies to MLS types, whose bytes feed cryptographic processing.
-func (n *Notification) normalizeCommon() error {
-	for _, key := range []string{"senderDomain", "resourceType", "shareType", "providerId"} {
-		if raw, ok := n.members[key]; ok && isJSONNull(raw) {
-			return invalidField(key)
-		}
+// payloadString reads a required non-empty string member of a payload object.
+func payloadString(obj map[string]json.RawMessage, object, key string) (string, error) {
+	return memberString(obj, key, "notification."+object+"."+key, true)
+}
+
+// payloadAddress reads a required OCM address member of a payload object.
+func payloadAddress(obj map[string]json.RawMessage, object, key string) (string, error) {
+	s, err := payloadString(obj, object, key)
+	if err != nil {
+		return "", err
 	}
-	if n.SenderDomain == "" {
-		n.Shape.MissingSenderDomain = true
+	if _, _, err := providerdomain.ParseOCMAddress(s); err != nil {
+		return "", invalidField("notification." + object + "." + key)
 	}
-	if n.rawSecret != nil {
-		var secret string
-		if err := decodeMember(n.rawSecret, "notification.sharedSecret", &secret); err != nil {
-			return err
+	return s, nil
+}
+
+// payloadPermissions reads file.permissions: an array of read, write and share.
+func payloadPermissions(file map[string]json.RawMessage, required bool) ([]string, error) {
+	const field = "notification.file.permissions"
+	raw, ok := file["permissions"]
+	if !ok {
+		if required {
+			return nil, missingField(field)
 		}
-		n.SharedSecret = NotificationSecret(secret)
+		return nil, nil
 	}
-	if raw, ok := n.Payload["message"]; ok {
-		if err := decodeMember(raw, "notification.message", &n.Message); err != nil {
-			return err
+	var elems []json.RawMessage
+	if isJSONNull(raw) || json.Unmarshal(raw, &elems) != nil {
+		return nil, invalidField(field)
+	}
+	perms := make([]string, 0, len(elems))
+	for _, e := range elems {
+		var p string
+		if isJSONNull(e) || json.Unmarshal(e, &p) != nil {
+			return nil, invalidField(field)
 		}
+		switch p {
+		case "read", "write", "share":
+		default:
+			return nil, invalidField(field)
+		}
+		perms = append(perms, p)
+	}
+	return perms, nil
+}
+
+func (n *Notification) requireResourceType() error {
+	if n.ResourceType == "" {
+		return missingField("resourceType")
 	}
 	return nil
 }
 
-// normalizeFile resolves file.providerId before the deprecated envelope one.
-func (n *Notification) normalizeFile() error {
-	var f NotificationFile
-	present, err := n.payloadObject("file", &f)
+// forbid rejects a member by presence: null and "" count as present.
+func (n *Notification) forbid(key string) error {
+	if n.hasMember(key) {
+		return invalidField(key)
+	}
+	return nil
+}
+
+// validateShareState is the contract of the share acceptance and updating notifications.
+func validateShareState(n *Notification) error {
+	if err := n.requireResourceType(); err != nil {
+		return err
+	}
+	file, err := n.payloadObject("file")
 	if err != nil {
 		return err
 	}
-	envelope := n.ProviderID
-	switch {
-	case present && f.ProviderID != "":
-		if envelope != "" && envelope != f.ProviderID {
-			n.Shape.ProviderIDConflict = true
-		}
-		n.ProviderID = f.ProviderID
-	case envelope != "":
-		n.Shape.EnvelopeProviderID = true
-		f.ProviderID = envelope
-		present = true
+	f := &NotificationFile{}
+	if f.ProviderID, err = payloadString(file, "file", "providerId"); err != nil {
+		return err
 	}
-	if present {
-		n.File = &f
+	if f.Permissions, err = payloadPermissions(file, false); err != nil {
+		return err
 	}
+	n.File, n.ProviderID = f, f.ProviderID
 	return nil
 }
 
-var notificationValidate = newNotificationValidator()
-
-func newNotificationValidator() *validator.Validate {
-	v := validator.New()
-	_ = v.RegisterValidation("ocmaddress", func(fl validator.FieldLevel) bool {
-		_, _, ok := splitOCMAddress(fl.Field().String())
-		return ok
-	})
-	_ = v.RegisterValidation("ocmpermission", func(fl validator.FieldLevel) bool {
-		switch fl.Field().String() {
-		case "read", "write", "share":
-			return true
-		}
-		return false
-	})
-	return v
-}
-
-// splitOCMAddress splits identifier "@" host [":" port] at the last "@".
-// The identifier is opaque and kept as is; the host follows RFC 3986.
-func splitOCMAddress(addr string) (id, host string, ok bool) {
-	i := strings.LastIndex(addr, "@")
-	if i <= 0 {
-		return "", "", false
+// validateRequestReshare is the contract of REQUEST_RESHARE, checked before
+// the request is refused as not implemented.
+func validateRequestReshare(n *Notification) error {
+	if err := n.requireResourceType(); err != nil {
+		return err
 	}
-	id, host = addr[:i], addr[i+1:]
-	return id, host, validOCMHost(host)
-}
-
-// validOCMHost accepts an IP literal, an IPv4 address or a registered name,
-// with an optional port. Paths, queries, userinfo and spaces are rejected.
-func validOCMHost(h string) bool {
-	name, port := h, ""
-	if strings.HasPrefix(h, "[") {
-		end := strings.IndexByte(h, ']')
-		if end < 0 || !validIPLiteral(h[1:end]) {
-			return false
-		}
-		name, port = "", h[end+1:]
-		if port != "" && port[0] != ':' {
-			return false
-		}
-	} else if i := strings.IndexByte(h, ':'); i >= 0 {
-		name, port = h[:i], h[i:]
+	file, err := n.payloadObject("file")
+	if err != nil {
+		return err
 	}
-	if port != "" && (len(port) == 1 || strings.Trim(port[1:], "0123456789") != "") {
-		return false
+	f := &NotificationFile{}
+	if f.ProviderID, err = payloadString(file, "file", "providerId"); err != nil {
+		return err
 	}
-	if strings.HasPrefix(h, "[") {
-		return true
+	if f.ShareWith, err = payloadAddress(file, "file", "shareWith"); err != nil {
+		return err
 	}
-	return name != "" && validRegName(name)
-}
-
-func validIPLiteral(s string) bool {
-	if strings.HasPrefix(s, "v") || strings.HasPrefix(s, "V") {
-		dot := strings.IndexByte(s, '.')
-		return dot > 1 && strings.Trim(s[1:dot], hexDigits) == "" && dot < len(s)-1 &&
-			strings.Trim(s[dot+1:], unreservedOrSubDelims+":") == ""
+	if f.Permissions, err = payloadPermissions(file, false); err != nil {
+		return err
 	}
-	return s != "" && strings.Trim(s, hexDigits+":.") == ""
-}
-
-const (
-	hexDigits             = "0123456789abcdefABCDEF"
-	unreservedOrSubDelims = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-._~!$&'()*+,;="
-)
-
-// validRegName accepts unreserved, sub-delims and percent-encoded octets.
-func validRegName(s string) bool {
-	for i := 0; i < len(s); i++ {
-		switch {
-		case s[i] == '%':
-			if i+2 >= len(s) || !strings.ContainsRune(hexDigits, rune(s[i+1])) || !strings.ContainsRune(hexDigits, rune(s[i+2])) {
-				return false
-			}
-			i += 2
-		case !strings.ContainsRune(unreservedOrSubDelims, rune(s[i])):
-			return false
-		}
-	}
-	return true
-}
-
-// Per-type schemas, checked with the same validator tags as the other ocmd specs.
-type shareStateSchema struct {
-	ResourceType string   `validate:"required"`
-	ProviderID   string   `validate:"required"`
-	Permissions  []string `validate:"dive,ocmpermission"`
-}
-
-type userRemovedSchema struct {
-	ShareType string `validate:"required"`
-	UserID    string `validate:"required,ocmaddress"`
-}
-
-type groupRemovedSchema struct {
-	ShareType string `validate:"required"`
-	GroupID   string `validate:"required"`
-}
-
-// validateSchema maps validator failures to fixed contract errors.
-func validateSchema(schema any) error {
-	err := notificationValidate.Struct(schema)
-	if err == nil {
-		return nil
-	}
-	var verrs validator.ValidationErrors
-	if !errors.As(err, &verrs) || len(verrs) == 0 {
-		return &NotificationError{Code: NotificationErrInvalidField, Field: "notification"}
-	}
-	fe := verrs[0]
-	field := schemaFieldName(fe.StructField())
-	if fe.Tag() == "required" {
-		return missingField(field)
-	}
-	return invalidField(field)
-}
-
-func schemaFieldName(structField string) string {
-	structField, _, _ = strings.Cut(structField, "[")
-	switch structField {
-	case "ResourceType":
-		return "resourceType"
-	case "ShareType":
-		return "shareType"
-	case "ProviderID":
-		return "notification.file.providerId"
-	case "Permissions":
-		return "notification.file.permissions"
-	case "UserID":
-		return "notification.user.userId"
-	case "GroupID":
-		return "notification.group.groupId"
-	default:
-		return "notification"
-	}
-}
-
-// requireResourceOrShareType applies the either-or rule; both are permitted.
-func (n *Notification) requireResourceOrShareType() error {
-	if n.ResourceType == "" && n.ShareType == "" {
-		return missingField("resourceType or shareType")
-	}
+	n.File, n.ProviderID = f, f.ProviderID
 	return nil
 }
 
-// validateShareState is the contract of the share acceptance and updating
-// notifications, shared by the RESHARE_UNDO alias.
-func validateShareState(n *Notification) error {
-	if err := n.normalizeCommon(); err != nil {
+// validateRequestShare is the contract of REQUEST_SHARE. It names the
+// resource by shareId and has no providerId requirement.
+func validateRequestShare(n *Notification) error {
+	if err := n.requireResourceType(); err != nil {
 		return err
 	}
-	if err := n.normalizeFile(); err != nil {
+	if err := n.forbid("shareType"); err != nil {
 		return err
 	}
-	schema := shareStateSchema{ResourceType: n.ResourceType, ProviderID: n.ProviderID}
-	if n.File != nil {
-		schema.Permissions = n.File.Permissions
+	file, err := n.payloadObject("file")
+	if err != nil {
+		return err
 	}
-	return validateSchema(schema)
+	f := &NotificationFile{}
+	if f.Owner, err = payloadAddress(file, "file", "owner"); err != nil {
+		return err
+	}
+	if f.ShareWith, err = payloadAddress(file, "file", "shareWith"); err != nil {
+		return err
+	}
+	if f.ShareID, err = payloadString(file, "file", "shareId"); err != nil {
+		return err
+	}
+	if f.Permissions, err = payloadPermissions(file, true); err != nil {
+		return err
+	}
+	n.File = f
+	return nil
 }
 
 // validateUserRemoved is the contract of USER_REMOVED. The userId belongs to
 // the sending server and names no counterpart, so this type stays log-only.
 func validateUserRemoved(n *Notification) error {
-	if err := n.normalizeCommon(); err != nil {
+	if n.ShareType == "" {
+		return missingField("shareType")
+	}
+	if err := n.forbid("resourceType"); err != nil {
 		return err
 	}
-	if n.hasMember("resourceType") {
-		return invalidField("resourceType")
-	}
-	var u NotificationUser
-	if _, err := n.payloadObject("user", &u); err != nil {
+	user, err := n.payloadObject("user")
+	if err != nil {
 		return err
 	}
-	if err := validateSchema(userRemovedSchema{ShareType: n.ShareType, UserID: u.UserID}); err != nil {
+	id, err := payloadAddress(user, "user", "userId")
+	if err != nil {
 		return err
 	}
-	n.User = &u
+	n.User = &NotificationUser{UserID: id}
 	return nil
 }
 
 // validateGroupRemoved is the contract of GROUP_REMOVED.
 func validateGroupRemoved(n *Notification) error {
-	if err := n.normalizeCommon(); err != nil {
+	if n.ShareType == "" {
+		return missingField("shareType")
+	}
+	if err := n.forbid("resourceType"); err != nil {
 		return err
 	}
-	if n.hasMember("resourceType") {
-		return invalidField("resourceType")
-	}
-	var g NotificationGroup
-	if _, err := n.payloadObject("group", &g); err != nil {
+	group, err := n.payloadObject("group")
+	if err != nil {
 		return err
 	}
-	if err := validateSchema(groupRemovedSchema{ShareType: n.ShareType, GroupID: g.GroupID}); err != nil {
+	id, err := payloadString(group, "group", "groupId")
+	if err != nil {
 		return err
 	}
-	n.Group = &g
+	n.Group = &NotificationGroup{GroupID: id}
 	return nil
 }
 
-// ValidateNotificationFunc validates and normalizes a known notification in
-// place. It returns a *NotificationError for schema failures.
+// ValidateNotificationFunc validates a known notification after its generic
+// envelope and fills its typed fields. It returns a *NotificationError.
 type ValidateNotificationFunc func(n *Notification) error
 
-// builtinContracts maps the processable known types to their contract.
-// The alias entry validates RESHARE_UNDO against the SHARE_UNSHARED contract.
-var builtinContracts = map[string]struct {
-	contractType string
-	validate     ValidateNotificationFunc
-}{
-	NotificationShareAccepted:         {NotificationShareAccepted, validateShareState},
-	NotificationShareDeclined:         {NotificationShareDeclined, validateShareState},
-	NotificationShareUnshared:         {NotificationShareUnshared, validateShareState},
-	NotificationShareChangePermission: {NotificationShareChangePermission, validateShareState},
-	NotificationReshareUndo:           {NotificationShareUnshared, validateShareState},
-	NotificationUserRemoved:           {NotificationUserRemoved, validateUserRemoved},
-	NotificationGroupRemoved:          {NotificationGroupRemoved, validateGroupRemoved},
+// builtinContracts are the known types that can have a handler.
+var builtinContracts = map[string]ValidateNotificationFunc{
+	NotificationShareAccepted:         validateShareState,
+	NotificationShareDeclined:         validateShareState,
+	NotificationShareUnshared:         validateShareState,
+	NotificationShareChangePermission: validateShareState,
+	NotificationUserRemoved:           validateUserRemoved,
+	NotificationGroupRemoved:          validateGroupRemoved,
+}
+
+// requestContracts are the known request types: valid requests are refused
+// as not implemented, malformed ones are rejected.
+var requestContracts = map[string]ValidateNotificationFunc{
+	NotificationRequestShare:   validateRequestShare,
+	NotificationRequestReshare: validateRequestReshare,
 }
 
 // IsRequestNotification reports the request types that are never fulfilled.
 func IsRequestNotification(notificationType string) bool {
-	return notificationType == NotificationRequestShare || notificationType == NotificationRequestReshare
-}
-
-// IsMLSNotification reports the five OCM-MLS notification types.
-func IsMLSNotification(notificationType string) bool {
-	switch notificationType {
-	case NotificationMLSWelcome, NotificationMLSProposal, NotificationMLSCommit,
-		NotificationMLSApplication, NotificationMLSRejoin:
-		return true
-	}
-	return false
-}
-
-// finishKnown validates a known type and assigns its A/B class.
-func finishKnown(n *Notification, contractType string, validate ValidateNotificationFunc) error {
-	n.ContractType = contractType
-	n.Shape.Alias = contractType != n.Type
-	err := validate(n)
-	if err == nil {
-		err = n.requireResourceOrShareType()
-	}
-	// The class is set on failure too, so that diagnostics keep the shape.
-	if n.Shape.Legacy() {
-		n.Class = NotificationClassLegacy
-	} else {
-		n.Class = NotificationClassSpec
-	}
-	return err
+	_, ok := requestContracts[notificationType]
+	return ok
 }

@@ -20,10 +20,12 @@ package ocmd
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"go/parser"
 	"go/token"
+	"os"
 	"strconv"
 	"strings"
 	"testing"
@@ -33,419 +35,93 @@ import (
 
 const testSecret = "hfiuhworzwnur98d3wjiwhr"
 
-func TestParseNotificationMatrix(t *testing.T) {
-	cases := []struct {
-		name     string
-		body     string
-		class    NotificationClass
-		code     NotificationErrorCode
-		field    string
-		status   NotificationStatusClass
-		provider string
-		check    func(t *testing.T, n *Notification)
-	}{
-		{
-			name:     "A share accepted nested",
-			body:     `{"notificationType":"SHARE_ACCEPTED","senderDomain":"b.example.org","resourceType":"file","notification":{"file":{"providerId":"42"}}}`,
-			class:    NotificationClassSpec,
-			status:   NotificationStatusCreated,
-			provider: "42",
-		},
-		{
-			name:     "A both resourceType and shareType",
-			body:     `{"notificationType":"SHARE_UNSHARED","senderDomain":"a.example.org","resourceType":"file","shareType":"user","notification":{"file":{"providerId":"42"}}}`,
-			class:    NotificationClassSpec,
-			status:   NotificationStatusCreated,
-			provider: "42",
-		},
-		{
-			name:     "A change permission keeps permissions",
-			body:     `{"notificationType":"SHARE_CHANGE_PERMISSION","senderDomain":"a.example.org","resourceType":"folder","notification":{"file":{"providerId":"42","permissions":["read","write"]}}}`,
-			class:    NotificationClassSpec,
-			status:   NotificationStatusCreated,
-			provider: "42",
-			check: func(t *testing.T, n *Notification) {
-				if n.File == nil || strings.Join(n.File.Permissions, ",") != "read,write" {
-					t.Fatalf("permissions %#v", n.File)
-				}
-			},
-		},
-		{
-			name:     "A declined with optional string secret",
-			body:     `{"notificationType":"SHARE_DECLINED","senderDomain":"b.example.org","resourceType":"file","notification":{"sharedSecret":"` + testSecret + `","file":{"providerId":"42"}}}`,
-			class:    NotificationClassSpec,
-			status:   NotificationStatusCreated,
-			provider: "42",
-			check: func(t *testing.T, n *Notification) {
-				if n.SharedSecret.Reveal() != testSecret {
-					t.Fatal("secret not preserved")
-				}
-				if _, ok := n.Payload["sharedSecret"]; ok {
-					t.Fatal("secret left in raw payload")
-				}
-			},
-		},
-		{
-			name:     "B Nextcloud flat shape",
-			body:     `{"notificationType":"SHARE_ACCEPTED","resourceType":"file","providerId":"7c08","notification":{"sharedSecret":"` + testSecret + `","message":"accepted","shareWith":"bob","senderId":"alice","shareType":"user"}}`,
-			class:    NotificationClassLegacy,
-			status:   NotificationStatusCreated,
-			provider: "7c08",
-			check: func(t *testing.T, n *Notification) {
-				if !n.Shape.MissingSenderDomain || !n.Shape.EnvelopeProviderID || n.Shape.Alias {
-					t.Fatalf("shape %+v", n.Shape)
-				}
-				if n.File == nil || n.File.ProviderID != "7c08" || n.Message != "accepted" {
-					t.Fatalf("normalized %#v %q", n.File, n.Message)
-				}
-				if n.SharedSecret.Reveal() != testSecret {
-					t.Fatal("secret not preserved")
-				}
-			},
-		},
-		{
-			name:     "B nested providerId wins over envelope",
-			body:     `{"notificationType":"SHARE_UNSHARED","senderDomain":"a.example.org","resourceType":"file","providerId":"envelope","notification":{"file":{"providerId":"nested"}}}`,
-			class:    NotificationClassSpec,
-			status:   NotificationStatusCreated,
-			provider: "nested",
-			check: func(t *testing.T, n *Notification) {
-				if !n.Shape.ProviderIDConflict || n.Shape.EnvelopeProviderID {
-					t.Fatalf("shape %+v", n.Shape)
-				}
-			},
-		},
-		{
-			name:     "B missing senderDomain only",
-			body:     `{"notificationType":"SHARE_UNSHARED","resourceType":"file","notification":{"file":{"providerId":"42"}}}`,
-			class:    NotificationClassLegacy,
-			status:   NotificationStatusCreated,
-			provider: "42",
-		},
-		{
-			name:     "B RESHARE_UNDO keeps its identity",
-			body:     `{"notificationType":"RESHARE_UNDO","senderDomain":"b.example.org","resourceType":"file","notification":{"file":{"providerId":"42"}}}`,
-			class:    NotificationClassLegacy,
-			status:   NotificationStatusCreated,
-			provider: "42",
-			check: func(t *testing.T, n *Notification) {
-				if n.Type != NotificationReshareUndo || n.ContractType != NotificationShareUnshared || !n.Shape.Alias {
-					t.Fatalf("alias identity %q %q %+v", n.Type, n.ContractType, n.Shape)
-				}
-			},
-		},
-		{
-			name:   "A user removed",
-			body:   `{"notificationType":"USER_REMOVED","senderDomain":"a.example.org","shareType":"user","notification":{"user":{"userId":"alice@a.example.org"}}}`,
-			class:  NotificationClassSpec,
-			status: NotificationStatusCreated,
-			check: func(t *testing.T, n *Notification) {
-				if n.User == nil || n.User.UserID != "alice@a.example.org" {
-					t.Fatalf("user %#v", n.User)
-				}
-			},
-		},
-		{
-			name:   "A group removed",
-			body:   `{"notificationType":"GROUP_REMOVED","senderDomain":"a.example.org","shareType":"group","notification":{"group":{"groupId":"g1"}}}`,
-			class:  NotificationClassSpec,
-			status: NotificationStatusCreated,
-			check: func(t *testing.T, n *Notification) {
-				if n.Group == nil || n.Group.GroupID != "g1" {
-					t.Fatalf("group %#v", n.Group)
-				}
-			},
-		},
-		{
-			name:   "A opaque identifiers and host forms",
-			body:   `{"notificationType":"USER_REMOVED","senderDomain":"a.example.org","shareType":"user","notification":{"user":{"userId":"nomen%nescio*@example.org@[2001:db8::1]:8443"}}}`,
-			class:  NotificationClassSpec,
-			status: NotificationStatusCreated,
-		},
-		{
-			name:   "C unknown type without known fields",
-			body:   `{"notificationType":"ACME_EVENT","senderDomain":"a.example.org"}`,
-			class:  NotificationClassUnknown,
-			status: NotificationStatusCreated,
-		},
-		{
-			name:   "C contact removal is unknown to the core",
-			body:   `{"notificationType":"CONTACT_REMOVED","senderDomain":"a.example.org","shareType":"user","notification":{"user":{"userId":"alice@a.example.org"}}}`,
-			class:  NotificationClassUnknown,
-			status: NotificationStatusCreated,
-			check: func(t *testing.T, n *Notification) {
-				if n.User != nil || n.ContractType != "" {
-					t.Fatal("unknown type was interpreted")
-				}
-			},
-		},
-		{
-			name:   "M MLS type is not normalized",
-			body:   `{"notificationType":"MLS_COMMIT","senderDomain":"a.example.org","shareType":"federation","providerId":"x","notification":{"federation":{"mlsGroupId":"g","content":"AAAA"}}}`,
-			class:  NotificationClassMLS,
-			status: NotificationStatusCreated,
-			check: func(t *testing.T, n *Notification) {
-				if n.File != nil || n.Shape != (NotificationShape{}) || n.ContractType != "" {
-					t.Fatalf("mls normalized: %#v %+v", n.File, n.Shape)
-				}
-				if _, ok := n.Payload["federation"]; !ok {
-					t.Fatal("mls payload lost")
-				}
-			},
-		},
-		{
-			name:   "R request share",
-			body:   `{"notificationType":"REQUEST_SHARE","senderDomain":"b.example.org","resourceType":"file"}`,
-			class:  NotificationClassRequest,
-			code:   NotificationErrNotImplemented,
-			status: NotificationStatusNotImplemented,
-		},
-		{
-			name:   "R request reshare",
-			body:   `{"notificationType":"REQUEST_RESHARE","senderDomain":"b.example.org","resourceType":"file","notification":{"file":{"providerId":"42","shareWith":"c@c.example.org"}}}`,
-			class:  NotificationClassRequest,
-			code:   NotificationErrNotImplemented,
-			status: NotificationStatusNotImplemented,
-		},
-		{name: "D invalid JSON", body: `{"notificationType":`, class: NotificationClassMalformed, code: NotificationErrMalformed, status: NotificationStatusBadRequest},
-		{name: "D array body", body: `["SHARE_UNSHARED"]`, class: NotificationClassMalformed, code: NotificationErrMalformed, status: NotificationStatusBadRequest},
-		{name: "D null body", body: `null`, class: NotificationClassMalformed, code: NotificationErrMalformed, status: NotificationStatusBadRequest},
-		{name: "D empty body", body: ``, class: NotificationClassMalformed, code: NotificationErrMalformed, status: NotificationStatusBadRequest},
-		{name: "D missing type", body: `{"senderDomain":"a.example.org","resourceType":"file"}`, class: NotificationClassMalformed, code: NotificationErrMissingType, status: NotificationStatusBadRequest},
-		{name: "D null type", body: `{"notificationType":null,"resourceType":"file"}`, class: NotificationClassMalformed, code: NotificationErrMissingType, status: NotificationStatusBadRequest},
-		{name: "D empty type", body: `{"notificationType":" ","resourceType":"file"}`, class: NotificationClassMalformed, code: NotificationErrMissingType, status: NotificationStatusBadRequest},
-		{name: "D non-string type", body: `{"notificationType":7,"resourceType":"file"}`, class: NotificationClassMalformed, code: NotificationErrMalformed, status: NotificationStatusBadRequest},
-		{name: "D non-string senderDomain", body: `{"notificationType":"ACME","senderDomain":1}`, class: NotificationClassMalformed, code: NotificationErrMalformed, status: NotificationStatusBadRequest},
-		{name: "D notification not an object", body: `{"notificationType":"ACME","shareType":"user","notification":"x"}`, class: NotificationClassMalformed, code: NotificationErrMalformed, status: NotificationStatusBadRequest},
-		{
-			name: "400 share state without providerId",
-			body: `{"notificationType":"SHARE_UNSHARED","senderDomain":"a.example.org","resourceType":"file","notification":{"file":{}}}`,
-			code: NotificationErrMissingField, field: "notification.file.providerId", status: NotificationStatusBadRequest,
-		},
-		{
-			name: "400 share state without notification",
-			body: `{"notificationType":"SHARE_ACCEPTED","senderDomain":"b.example.org","resourceType":"file"}`,
-			code: NotificationErrMissingField, field: "notification.file.providerId", status: NotificationStatusBadRequest,
-		},
-		{
-			name: "400 share state without resourceType",
-			body: `{"notificationType":"SHARE_ACCEPTED","senderDomain":"b.example.org","shareType":"user","notification":{"file":{"providerId":"42"}}}`,
-			code: NotificationErrMissingField, field: "resourceType", status: NotificationStatusBadRequest,
-		},
-		{
-			name: "400 file not an object",
-			body: `{"notificationType":"SHARE_UNSHARED","senderDomain":"a.example.org","resourceType":"file","notification":{"file":"42"}}`,
-			code: NotificationErrInvalidField, field: "notification.file", status: NotificationStatusBadRequest,
-		},
-		{
-			name: "400 numeric providerId",
-			body: `{"notificationType":"SHARE_UNSHARED","senderDomain":"a.example.org","resourceType":"file","notification":{"file":{"providerId":42}}}`,
-			code: NotificationErrInvalidField, field: "notification.file", status: NotificationStatusBadRequest,
-		},
-		{
-			name: "400 object sharedSecret",
-			body: `{"notificationType":"SHARE_UNSHARED","senderDomain":"a.example.org","resourceType":"file","notification":{"sharedSecret":{"x":1},"file":{"providerId":"42"}}}`,
-			code: NotificationErrInvalidField, field: "notification.sharedSecret", status: NotificationStatusBadRequest,
-		},
-		{
-			name: "400 user removed without userId",
-			body: `{"notificationType":"USER_REMOVED","senderDomain":"a.example.org","shareType":"user","notification":{"user":{}}}`,
-			code: NotificationErrMissingField, field: "notification.user.userId", status: NotificationStatusBadRequest,
-		},
-		{
-			name: "400 user removed without user",
-			body: `{"notificationType":"USER_REMOVED","senderDomain":"a.example.org","shareType":"user"}`,
-			code: NotificationErrMissingField, field: "notification.user.userId", status: NotificationStatusBadRequest,
-		},
-		{
-			name: "400 user removed userId not an address",
-			body: `{"notificationType":"USER_REMOVED","senderDomain":"a.example.org","shareType":"user","notification":{"user":{"userId":"alice"}}}`,
-			code: NotificationErrInvalidField, field: "notification.user.userId", status: NotificationStatusBadRequest,
-		},
-		{
-			name: "400 user removed empty id part",
-			body: `{"notificationType":"USER_REMOVED","senderDomain":"a.example.org","shareType":"user","notification":{"user":{"userId":"@a.example.org"}}}`,
-			code: NotificationErrInvalidField, field: "notification.user.userId", status: NotificationStatusBadRequest,
-		},
-		{
-			name: "400 user removed empty provider part",
-			body: `{"notificationType":"USER_REMOVED","senderDomain":"a.example.org","shareType":"user","notification":{"user":{"userId":"alice@"}}}`,
-			code: NotificationErrInvalidField, field: "notification.user.userId", status: NotificationStatusBadRequest,
-		},
-		{
-			name: "400 user removed with resourceType",
-			body: `{"notificationType":"USER_REMOVED","senderDomain":"a.example.org","shareType":"user","resourceType":"file","notification":{"user":{"userId":"alice@a.example.org"}}}`,
-			code: NotificationErrInvalidField, field: "resourceType", status: NotificationStatusBadRequest,
-		},
-		{
-			name: "400 user removed without shareType",
-			body: `{"notificationType":"USER_REMOVED","senderDomain":"a.example.org","notification":{"user":{"userId":"alice@a.example.org"}}}`,
-			code: NotificationErrMissingField, field: "shareType", status: NotificationStatusBadRequest,
-		},
-		{
-			name: "400 group removed without groupId",
-			body: `{"notificationType":"GROUP_REMOVED","senderDomain":"a.example.org","shareType":"group","notification":{"group":{}}}`,
-			code: NotificationErrMissingField, field: "notification.group.groupId", status: NotificationStatusBadRequest,
-		},
-		{
-			name: "400 user removed with null resourceType",
-			body: `{"notificationType":"USER_REMOVED","senderDomain":"a.example.org","shareType":"user","resourceType":null,"notification":{"user":{"userId":"alice@a.example.org"}}}`,
-			code: NotificationErrInvalidField, field: "resourceType", status: NotificationStatusBadRequest,
-		},
-		{
-			name: "400 user removed with empty resourceType",
-			body: `{"notificationType":"USER_REMOVED","senderDomain":"a.example.org","shareType":"user","resourceType":"","notification":{"user":{"userId":"alice@a.example.org"}}}`,
-			code: NotificationErrInvalidField, field: "resourceType", status: NotificationStatusBadRequest,
-		},
-		{
-			name: "400 group removed with null resourceType",
-			body: `{"notificationType":"GROUP_REMOVED","senderDomain":"a.example.org","shareType":"group","resourceType":null,"notification":{"group":{"groupId":"g1"}}}`,
-			code: NotificationErrInvalidField, field: "resourceType", status: NotificationStatusBadRequest,
-		},
-		{
-			name: "400 null shareType",
-			body: `{"notificationType":"SHARE_UNSHARED","senderDomain":"a.example.org","resourceType":"file","shareType":null,"notification":{"file":{"providerId":"42"}}}`,
-			code: NotificationErrInvalidField, field: "shareType", status: NotificationStatusBadRequest,
-		},
-		{
-			name: "400 null senderDomain",
-			body: `{"notificationType":"SHARE_UNSHARED","senderDomain":null,"resourceType":"file","notification":{"file":{"providerId":"42"}}}`,
-			code: NotificationErrInvalidField, field: "senderDomain", status: NotificationStatusBadRequest,
-		},
-		{
-			name: "400 numeric message",
-			body: `{"notificationType":"SHARE_UNSHARED","senderDomain":"a.example.org","resourceType":"file","notification":{"message":7,"file":{"providerId":"42"}}}`,
-			code: NotificationErrInvalidField, field: "notification.message", status: NotificationStatusBadRequest,
-		},
-		{
-			name: "400 null message",
-			body: `{"notificationType":"SHARE_UNSHARED","senderDomain":"a.example.org","resourceType":"file","notification":{"message":null,"file":{"providerId":"42"}}}`,
-			code: NotificationErrInvalidField, field: "notification.message", status: NotificationStatusBadRequest,
-		},
-		{
-			name: "400 null sharedSecret",
-			body: `{"notificationType":"SHARE_UNSHARED","senderDomain":"a.example.org","resourceType":"file","notification":{"sharedSecret":null,"file":{"providerId":"42"}}}`,
-			code: NotificationErrInvalidField, field: "notification.sharedSecret", status: NotificationStatusBadRequest,
-		},
-		{
-			name: "400 null file",
-			body: `{"notificationType":"SHARE_UNSHARED","senderDomain":"a.example.org","resourceType":"file","providerId":"42","notification":{"file":null}}`,
-			code: NotificationErrInvalidField, field: "notification.file", status: NotificationStatusBadRequest,
-		},
-		{
-			name: "400 undefined permission",
-			body: `{"notificationType":"SHARE_CHANGE_PERMISSION","senderDomain":"a.example.org","resourceType":"file","notification":{"file":{"providerId":"42","permissions":["read","admin"]}}}`,
-			code: NotificationErrInvalidField, field: "notification.file.permissions", status: NotificationStatusBadRequest,
-		},
-		{
-			name: "400 numeric permission",
-			body: `{"notificationType":"SHARE_CHANGE_PERMISSION","senderDomain":"a.example.org","resourceType":"file","notification":{"file":{"providerId":"42","permissions":[1]}}}`,
-			code: NotificationErrInvalidField, field: "notification.file", status: NotificationStatusBadRequest,
-		},
-		{
-			name: "400 user removed empty userId",
-			body: `{"notificationType":"USER_REMOVED","senderDomain":"a.example.org","shareType":"user","notification":{"user":{"userId":""}}}`,
-			code: NotificationErrMissingField, field: "notification.user.userId", status: NotificationStatusBadRequest,
-		},
-		{
-			name: "400 group removed empty groupId",
-			body: `{"notificationType":"GROUP_REMOVED","senderDomain":"a.example.org","shareType":"group","notification":{"group":{"groupId":""}}}`,
-			code: NotificationErrMissingField, field: "notification.group.groupId", status: NotificationStatusBadRequest,
-		},
-		{
-			name: "400 null user",
-			body: `{"notificationType":"USER_REMOVED","senderDomain":"a.example.org","shareType":"user","notification":{"user":null}}`,
-			code: NotificationErrInvalidField, field: "notification.user", status: NotificationStatusBadRequest,
-		},
-		{
-			name: "400 user removed host a.example.org/path",
-			body: `{"notificationType":"USER_REMOVED","senderDomain":"a.example.org","shareType":"user","notification":{"user":{"userId":"alice@a.example.org/path"}}}`,
-			code: NotificationErrInvalidField, field: "notification.user.userId", status: NotificationStatusBadRequest,
-		},
-		{
-			name: "400 user removed host a.example .org",
-			body: `{"notificationType":"USER_REMOVED","senderDomain":"a.example.org","shareType":"user","notification":{"user":{"userId":"alice@a.example .org"}}}`,
-			code: NotificationErrInvalidField, field: "notification.user.userId", status: NotificationStatusBadRequest,
-		},
-		{
-			name: "400 user removed host https://a.example.org",
-			body: `{"notificationType":"USER_REMOVED","senderDomain":"a.example.org","shareType":"user","notification":{"user":{"userId":"alice@https://a.example.org"}}}`,
-			code: NotificationErrInvalidField, field: "notification.user.userId", status: NotificationStatusBadRequest,
-		},
-		{
-			name: "400 user removed host a.example.org?q",
-			body: `{"notificationType":"USER_REMOVED","senderDomain":"a.example.org","shareType":"user","notification":{"user":{"userId":"alice@a.example.org?q"}}}`,
-			code: NotificationErrInvalidField, field: "notification.user.userId", status: NotificationStatusBadRequest,
-		},
-		{
-			name: "400 user removed host a.example.org#f",
-			body: `{"notificationType":"USER_REMOVED","senderDomain":"a.example.org","shareType":"user","notification":{"user":{"userId":"alice@a.example.org#f"}}}`,
-			code: NotificationErrInvalidField, field: "notification.user.userId", status: NotificationStatusBadRequest,
-		},
-		{
-			name: "400 user removed host a.example.org:",
-			body: `{"notificationType":"USER_REMOVED","senderDomain":"a.example.org","shareType":"user","notification":{"user":{"userId":"alice@a.example.org:"}}}`,
-			code: NotificationErrInvalidField, field: "notification.user.userId", status: NotificationStatusBadRequest,
-		},
-		{
-			name: "400 user removed host a.example.org:http",
-			body: `{"notificationType":"USER_REMOVED","senderDomain":"a.example.org","shareType":"user","notification":{"user":{"userId":"alice@a.example.org:http"}}}`,
-			code: NotificationErrInvalidField, field: "notification.user.userId", status: NotificationStatusBadRequest,
-		},
-		{
-			name: "400 user removed host [2001:db8::1",
-			body: `{"notificationType":"USER_REMOVED","senderDomain":"a.example.org","shareType":"user","notification":{"user":{"userId":"alice@[2001:db8::1"}}}`,
-			code: NotificationErrInvalidField, field: "notification.user.userId", status: NotificationStatusBadRequest,
-		},
-		{
-			name: "400 user removed host []",
-			body: `{"notificationType":"USER_REMOVED","senderDomain":"a.example.org","shareType":"user","notification":{"user":{"userId":"alice@[]"}}}`,
-			code: NotificationErrInvalidField, field: "notification.user.userId", status: NotificationStatusBadRequest,
-		},
-		{
-			name: "400 user removed host a%zzexample.org",
-			body: `{"notificationType":"USER_REMOVED","senderDomain":"a.example.org","shareType":"user","notification":{"user":{"userId":"alice@a%zzexample.org"}}}`,
-			code: NotificationErrInvalidField, field: "notification.user.userId", status: NotificationStatusBadRequest,
-		},
-		{
-			name: "400 alias still needs providerId",
-			body: `{"notificationType":"RESHARE_UNDO","senderDomain":"b.example.org","resourceType":"file"}`,
-			code: NotificationErrMissingField, field: "notification.file.providerId", status: NotificationStatusBadRequest,
-		},
+type envelopeCase struct {
+	ID           string          `json:"id"`
+	Purpose      string          `json:"purpose"`
+	Body         json.RawMessage `json:"body"`
+	HTTP         int             `json:"http"`
+	HandlerCalls int             `json:"handlerCalls"`
+}
+
+// deferredEnvelopes are rows whose final expectation needs a type registered
+// later in the stack; until then the type is unknown and ignored.
+var deferredEnvelopes = map[string]envelopeCase{
+	"ENV-039": {HTTP: 201},
+	"ENV-040": {HTTP: 201},
+}
+
+func TestParseNotificationEnvelopeCorpus(t *testing.T) {
+	raw, err := os.ReadFile("testdata/notification-envelopes.json")
+	if err != nil {
+		t.Fatal(err)
 	}
-	reg := NewNotificationRegistry()
+	var cases []envelopeCase
+	if err := json.Unmarshal(raw, &cases); err != nil {
+		t.Fatal(err)
+	}
+	if len(cases) == 0 {
+		t.Fatal("empty corpus")
+	}
 	for _, tc := range cases {
-		t.Run(tc.name, func(t *testing.T) {
-			n, err := reg.Parse([]byte(tc.body))
-			if got := ReceiverStatus(err); got != tc.status {
-				t.Fatalf("status %d, want %d (err %v)", got, tc.status, err)
+		t.Run(tc.ID, func(t *testing.T) {
+			want := tc
+			if d, ok := deferredEnvelopes[tc.ID]; ok {
+				want.HTTP, want.HandlerCalls = d.HTTP, d.HandlerCalls
 			}
-			if tc.code == "" {
-				if err != nil {
-					t.Fatalf("unexpected error %v", err)
-				}
-				if n.Class != tc.class {
-					t.Fatalf("class %s, want %s", n.Class, tc.class)
-				}
-			} else {
-				code, ok := NotificationErrorCodeOf(err)
-				if !ok || code != tc.code {
-					t.Fatalf("error %v, want code %s", err, tc.code)
-				}
-				if tc.field != "" && err.(*NotificationError).Field != tc.field {
-					t.Fatalf("field %q, want %q", err.(*NotificationError).Field, tc.field)
-				}
-				if tc.class != "" && tc.class != NotificationClassUnknown && n.Class != tc.class {
-					t.Fatalf("class %s, want %s", n.Class, tc.class)
+			reg := NewNotificationRegistry()
+			h := &recordingHandler{}
+			for typ := range builtinContracts {
+				if !IsRequestNotification(typ) {
+					if err := reg.SetHandler(typ, h); err != nil {
+						t.Fatal(err)
+					}
 				}
 			}
-			if tc.provider != "" && n.ProviderID != tc.provider {
-				t.Fatalf("providerId %q, want %q", n.ProviderID, tc.provider)
+			n, err := reg.Parse(tc.Body)
+			if got := int(ReceiverStatus(err)); got != want.HTTP {
+				t.Fatalf("%s: status %d, want %d (%v)", tc.Purpose, got, want.HTTP, err)
 			}
-			if tc.check != nil {
-				tc.check(t, n)
+			if err == nil {
+				if _, err := reg.Dispatch(context.Background(), n); err != nil {
+					t.Fatal(err)
+				}
+			}
+			if len(h.seen) != want.HandlerCalls {
+				t.Fatalf("%s: handler calls %d, want %d", tc.Purpose, len(h.seen), want.HandlerCalls)
 			}
 		})
+	}
+}
+
+func TestParseNotificationFields(t *testing.T) {
+	reg := NewNotificationRegistry()
+	n := mustParse(t, reg, `{"notificationType":"SHARE_CHANGE_PERMISSION","senderDomain":"a.example.org","resourceType":"folder","shareType":"user","notification":{"message":"m","sharedSecret":"`+testSecret+`","file":{"providerId":"42","permissions":["read","write"]}}}`)
+	if n.Class != NotificationClassSpec || n.ProviderID != "42" || n.ResourceType != "folder" || n.ShareType != "user" ||
+		n.File == nil || strings.Join(n.File.Permissions, ",") != "read,write" || n.SharedSecret.Reveal() != testSecret {
+		t.Fatalf("fields %#v %#v", n, n.File)
+	}
+	n = mustParse(t, reg, `{"notificationType":"USER_REMOVED","senderDomain":"a.example.org","shareType":"user","notification":{"user":{"userId":"Alice @x@a.example.org"}}}`)
+	if n.User == nil || n.User.UserID != "Alice @x@a.example.org" {
+		t.Fatalf("user %#v", n.User)
+	}
+	n = mustParse(t, reg, `{"notificationType":"ACME","senderDomain":"A.Example.org","shareType":"user","providerId":"flat"}`)
+	if n.Class != NotificationClassUnknown || n.SenderDomain != "A.Example.org" || n.ProviderID != "" {
+		t.Fatalf("unknown %#v", n)
+	}
+}
+
+func TestParseNotificationRejectsFlatProviderFallback(t *testing.T) {
+	reg := NewNotificationRegistry()
+	for _, body := range []string{
+		`{"notificationType":"SHARE_ACCEPTED","senderDomain":"b.example.org","resourceType":"file","providerId":"42","notification":{"file":{}}}`,
+		`{"notificationType":"SHARE_ACCEPTED","senderDomain":"b.example.org","resourceType":"file","providerId":"42","notification":{"file":{"providerId":null}}}`,
+		`{"notificationType":"SHARE_ACCEPTED","senderDomain":"b.example.org","resourceType":"file","providerId":"42"}`,
+		`{"notificationType":"SHARE_ACCEPTED","resourceType":"file","notification":{"file":{"providerId":"42"}}}`,
+		`{"notificationType":"SHARE_CHANGE_PERMISSION","senderDomain":"b.example.org","resourceType":"file","notification":{"file":{"providerId":"42","permissions":null}}}`,
+	} {
+		if _, err := reg.Parse([]byte(body)); ReceiverStatus(err) != NotificationStatusBadRequest {
+			t.Fatalf("%s: %v", body, err)
+		}
 	}
 }
 
@@ -470,7 +146,7 @@ func TestNotificationSecretIsRedacted(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	unknown, err := reg.Parse([]byte(`{"notificationType":"ACME","shareType":"user","notification":{"sharedSecret":"` + testSecret + `"}}`))
+	unknown, err := reg.Parse([]byte(`{"notificationType":"ACME","senderDomain":"a.example.org","shareType":"user","notification":{"sharedSecret":"` + testSecret + `"}}`))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -495,8 +171,8 @@ func TestNotificationSecretIsRedacted(t *testing.T) {
 func TestNotificationCorePortability(t *testing.T) {
 	allowed := map[string]bool{
 		"bytes": true, "context": true, "encoding/json": true, "errors": true,
-		"fmt": true, "net/http": true, "slices": true, "strconv": true, "strings": true, "sync": true, "time": true,
-		"github.com/go-playground/validator/v10": true,
+		"fmt": true, "slices": true, "strconv": true, "strings": true, "sync": true, "time": true,
+		"github.com/cs3org/reva/v3/pkg/ocm/providerdomain": true,
 	}
 	for _, f := range []string{"specs_notifications.go", "notification_handlers.go", "notification_sender_state.go"} {
 		file, err := parser.ParseFile(token.NewFileSet(), f, nil, parser.ImportsOnly)
