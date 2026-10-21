@@ -22,6 +22,7 @@ package sql
 // SQLite every transaction takes the write lock when it begins (BEGIN IMMEDIATE).
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"strings"
@@ -56,19 +57,26 @@ func retryable(err error) bool {
 	return strings.Contains(msg, "database is locked") || strings.Contains(msg, "database table is locked")
 }
 
-// reconcileFunc reads, outside the failed transaction, whether the change
-// of an unacknowledged commit is durable.
-type reconcileFunc func(db *gorm.DB) (share.CommitObservation, error)
+// commitCheck is what an attempt expects to be durable, captured before its
+// commit, with the identifiers logged when the commit is not acknowledged.
+// The transaction function rebuilds it on every attempt.
+type commitCheck struct {
+	shareID    uint
+	grantKey   string
+	generation uint64
+	// observe reads, outside the failed transaction, which projection is durable.
+	observe func(db *gorm.DB) (share.CommitObservation, error)
+}
 
-// transact runs fn in one transaction. fn must rebuild any result it returns
-// on every attempt. A failure before the commit rolled the transaction back,
-// so a retryable one runs it again. A failed commit is never run again: it
-// returns a *share.CommitUnknownError after reconcile, if any.
-func (m *mgr) transact(ctx context.Context, op string, fn func(tx *gorm.DB) error, reconcile reconcileFunc) error {
+// transact runs fn in one transaction. fn must rebuild any result and check
+// it returns on every attempt. A failure before the commit rolled the
+// transaction back, so a retryable one runs it again. A failed commit is
+// never run again: it returns a *share.CommitUnknownError.
+func (m *mgr) transact(ctx context.Context, op string, fn func(tx *gorm.DB) error, check *commitCheck) error {
 	for attempt := 1; ; attempt++ {
 		committing, err := m.attempt(ctx, fn)
 		if committing {
-			return m.reconcileCommit(ctx, op, reconcile)
+			return m.reconcileCommit(ctx, op, check)
 		}
 		if err == nil || !retryable(err) || attempt == maxTransactionAttempts {
 			return err
@@ -103,33 +111,106 @@ func (m *mgr) attempt(ctx context.Context, fn func(tx *gorm.DB) error) (committi
 	return false, nil
 }
 
-// observeReceived reads a received share after an unacknowledged commit and
-// compares it with the requested and the previous values.
-func observeReceived(db *gorm.DB, id uint, requested, previous func(model.OcmReceivedShare) bool) (share.CommitObservation, error) {
-	var row model.OcmReceivedShare
-	if err := db.Where("id = ?", id).Take(&row).Error; err != nil {
+// receivedProjection is the durable state of a received share: its row and
+// protocols, without the bookkeeping times that gorm writes.
+type receivedProjection struct {
+	row       model.OcmReceivedShare
+	protocols []model.OcmReceivedShareProtocol
+}
+
+// readReceivedProjection returns nil for an absent share.
+func readReceivedProjection(tx *gorm.DB, id uint) (*receivedProjection, error) {
+	var p receivedProjection
+	err := tx.Where("id = ?", id).Take(&p.row).Error
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	if err := tx.Where("ocm_received_share_id = ?", id).Order("id").Find(&p.protocols).Error; err != nil {
+		return nil, err
+	}
+	return &p, nil
+}
+
+func (p *receivedProjection) equal(q *receivedProjection) bool {
+	if p == nil || q == nil {
+		return p == q
+	}
+	a, b := p.row, q.row
+	if a.ID != b.ID || !equalGrantKey(a.GrantKey, b.GrantKey) || a.RemoteShareID != b.RemoteShareID || a.Name != b.Name ||
+		a.ItemType != b.ItemType || a.ShareWith != b.ShareWith || a.Owner != b.Owner || a.Initiator != b.Initiator ||
+		a.Ctime != b.Ctime || a.Mtime != b.Mtime || !equalNullTime(a.Expiration, b.Expiration) ||
+		a.RecipientType != b.RecipientType || a.State != b.State || a.Alias != b.Alias || a.Hidden != b.Hidden ||
+		a.TransferGeneration != b.TransferGeneration || a.DeletedAt.Valid != b.DeletedAt.Valid ||
+		len(p.protocols) != len(q.protocols) {
+		return false
+	}
+	for i := range p.protocols {
+		x, y := p.protocols[i], q.protocols[i]
+		if x.ID != y.ID || x.Type != y.Type || x.Uri != y.Uri || x.SharedSecret != y.SharedSecret ||
+			x.Permissions != y.Permissions || x.AccessTypes != y.AccessTypes || !bytes.Equal(x.Payload, y.Payload) ||
+			!bytes.Equal(x.Requirements, y.Requirements) || !bytes.Equal(x.Targets, y.Targets) ||
+			x.AppName != y.AppName || x.AppIconHint != y.AppIconHint || !bytes.Equal(x.MediaTypes, y.MediaTypes) {
+			return false
+		}
+	}
+	return true
+}
+
+func equalGrantKey(a, b *string) bool {
+	return (a == nil) == (b == nil) && (a == nil || *a == *b)
+}
+
+func equalNullTime(a, b datatypes.NullTime) bool {
+	return a.Valid == b.Valid && (!a.Valid || a.V.Equal(b.V))
+}
+
+// observeReceived reads one received share on a fresh snapshot and compares
+// it with the projections captured by the failed attempt. A nil expected
+// projection means the attempt changed nothing; a nil previous one means
+// the share did not exist.
+func observeReceived(db *gorm.DB, id uint, expected, previous *receivedProjection) (share.CommitObservation, error) {
+	var got *receivedProjection
+	if err := db.Transaction(func(tx *gorm.DB) error {
+		var err error
+		got, err = readReceivedProjection(tx, id)
+		return err
+	}); err != nil {
 		return "", err
 	}
 	switch {
-	case requested(row):
+	case expected != nil && got.equal(expected):
 		return share.CommitObservedRequested, nil
-	case previous(row):
+	case got.equal(previous):
 		return share.CommitObservedPrevious, nil
 	}
 	return share.CommitObservedOther, nil
 }
 
-func (m *mgr) reconcileCommit(ctx context.Context, op string, reconcile reconcileFunc) error {
+func (m *mgr) reconcileCommit(ctx context.Context, op string, check *commitCheck) error {
 	observed := share.CommitObservedUnread
-	if reconcile != nil {
+	if check != nil && check.observe != nil {
 		rctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), recoveryTimeout)
 		defer cancel()
-		if o, err := reconcile(m.db.WithContext(rctx)); err == nil {
+		if o, err := check.observe(m.db.WithContext(rctx)); err == nil {
 			observed = o
 		}
 	}
-	appctx.GetLogger(ctx).Error().Str("operation", op).Str("observed", string(observed)).
-		Msg("OCM share commit was not acknowledged; no receipt is returned")
+	e := appctx.GetLogger(ctx).Error().Str("operation", op).Str("observed", string(observed))
+	if check != nil {
+		if check.shareID != 0 {
+			e = e.Uint("share_id", check.shareID)
+		}
+		if check.grantKey != "" {
+			e = e.Str("grant_key", check.grantKey)
+		}
+		if check.generation != 0 {
+			e = e.Uint64("transfer_generation", check.generation)
+		}
+	}
+	e.Msg("OCM share commit was not acknowledged; no receipt is returned")
 	return &share.CommitUnknownError{Observed: observed}
 }
 
@@ -232,8 +313,14 @@ func (m *mgr) WithdrawReceivedGrant(ctx context.Context, w *share.GrantWithdrawa
 	itemType := convertFromCS3ResourceType(w.ResourceType)
 
 	var receipt share.GrantWithdrawalReceipt
+	var check commitCheck
 	err = m.transact(ctx, "withdraw_grant", func(tx *gorm.DB) error {
 		receipt = share.GrantWithdrawalReceipt{}
+		check = commitCheck{grantKey: key}
+		var expected, previous *grantProjection
+		check.observe = func(db *gorm.DB) (share.CommitObservation, error) {
+			return observeGrant(db, key, expected, previous)
+		}
 		ident, err := lockIdentityByKey(tx, key, origin, w.RemoteShareID)
 		if err != nil || ident == nil {
 			// An unknown grant is not recorded: there is nothing to withdraw.
@@ -241,6 +328,9 @@ func (m *mgr) WithdrawReceivedGrant(ctx context.Context, w *share.GrantWithdrawa
 		}
 		var rows []model.OcmReceivedShare
 		if err := forUpdate(tx).Where("grant_key = ?", key).Order("id").Find(&rows).Error; err != nil {
+			return err
+		}
+		if previous, err = readGrantProjection(tx, key); err != nil {
 			return err
 		}
 		if len(rows) == 0 {
@@ -272,6 +362,9 @@ func (m *mgr) WithdrawReceivedGrant(ctx context.Context, w *share.GrantWithdrawa
 				return err
 			}
 			receipt.Changed = true
+			if expected, err = readGrantProjection(tx, key); err != nil {
+				return err
+			}
 		}
 		for _, r := range rows {
 			after, err := reloadReceived(tx, r.ID)
@@ -281,18 +374,76 @@ func (m *mgr) WithdrawReceivedGrant(ctx context.Context, w *share.GrantWithdrawa
 			receipt.Shares = append(receipt.Shares, after)
 		}
 		return nil
-	}, func(db *gorm.DB) (share.CommitObservation, error) {
-		var ident model.OcmGrantIdentity
-		if err := db.Where("grant_key = ?", key).Take(&ident).Error; err != nil {
-			return "", err
-		}
-		if ident.WithdrawnAt.Valid {
-			return share.CommitObservedRequested, nil
-		}
-		return share.CommitObservedPrevious, nil
-	})
+	}, &check)
 	if err != nil {
 		return nil, err
 	}
 	return &receipt, nil
+}
+
+// grantProjection is the durable state of a grant: its ledger record and
+// every bound received share.
+type grantProjection struct {
+	ident  model.OcmGrantIdentity
+	shares []*receivedProjection
+}
+
+// readGrantProjection returns nil for an unknown grant.
+func readGrantProjection(tx *gorm.DB, key string) (*grantProjection, error) {
+	var g grantProjection
+	err := tx.Where("grant_key = ?", key).Take(&g.ident).Error
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	var ids []uint
+	if err := tx.Model(&model.OcmReceivedShare{}).Where("grant_key = ?", key).Order("id").Pluck("id", &ids).Error; err != nil {
+		return nil, err
+	}
+	for _, id := range ids {
+		p, err := readReceivedProjection(tx, id)
+		if err != nil {
+			return nil, err
+		}
+		g.shares = append(g.shares, p)
+	}
+	return &g, nil
+}
+
+func (g *grantProjection) equal(h *grantProjection) bool {
+	if g == nil || h == nil {
+		return g == h
+	}
+	if g.ident.GrantKey != h.ident.GrantKey || g.ident.Origin != h.ident.Origin || g.ident.RemoteShareID != h.ident.RemoteShareID ||
+		!equalNullTime(g.ident.WithdrawnAt, h.ident.WithdrawnAt) || len(g.shares) != len(h.shares) {
+		return false
+	}
+	for i := range g.shares {
+		if !g.shares[i].equal(h.shares[i]) {
+			return false
+		}
+	}
+	return true
+}
+
+// observeGrant reads a grant on a fresh snapshot and compares it with the
+// projections captured by the failed attempt, like observeReceived.
+func observeGrant(db *gorm.DB, key string, expected, previous *grantProjection) (share.CommitObservation, error) {
+	var got *grantProjection
+	if err := db.Transaction(func(tx *gorm.DB) error {
+		var err error
+		got, err = readGrantProjection(tx, key)
+		return err
+	}); err != nil {
+		return "", err
+	}
+	switch {
+	case expected != nil && got.equal(expected):
+		return share.CommitObservedRequested, nil
+	case got.equal(previous):
+		return share.CommitObservedPrevious, nil
+	}
+	return share.CommitObservedOther, nil
 }

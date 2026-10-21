@@ -19,16 +19,22 @@
 package sql
 
 import (
+	"bytes"
 	"context"
 	dbsql "database/sql"
 	"errors"
+	"fmt"
 	"strings"
 	"sync/atomic"
 	"testing"
+	"time"
 
 	ocm "github.com/cs3org/go-cs3apis/cs3/sharing/ocm/v1beta1"
+	"github.com/cs3org/reva/v3/pkg/appctx"
 	"github.com/cs3org/reva/v3/pkg/ocm/share"
 	model "github.com/cs3org/reva/v3/pkg/share/manager/sql/model"
+	"github.com/rs/zerolog"
+	"gorm.io/datatypes"
 	"gorm.io/gorm"
 )
 
@@ -42,8 +48,9 @@ type commitFault struct {
 	failRead bool         // fail the reads that follow the fault
 	armed    atomic.Bool  // the next commit is faulted
 	faulted  atomic.Bool  // a commit was faulted
-	commits  atomic.Int32 // commits attempted
+	commits  atomic.Int32 // commits attempted before the fault
 	reads    atomic.Int32 // reads after the fault
+	writes   atomic.Int32 // writes after the fault
 }
 
 var errLostAck = errors.New("commit acknowledgment lost")
@@ -56,24 +63,34 @@ func (p *commitFault) BeginTx(ctx context.Context, opts *dbsql.TxOptions) (gorm.
 	return &faultTx{Tx: tx, p: p}, nil
 }
 
+// read counts a read after the fault and reports whether it must fail.
+func (p *commitFault) read() bool {
+	if !p.faulted.Load() {
+		return false
+	}
+	p.reads.Add(1)
+	return p.failRead
+}
+
 func (p *commitFault) QueryContext(ctx context.Context, q string, args ...any) (*dbsql.Rows, error) {
-	if p.faulted.Load() {
-		p.reads.Add(1)
-		if p.failRead {
-			return nil, errors.New("recovery read failed")
-		}
+	if p.read() {
+		return nil, errors.New("recovery read failed")
 	}
 	return p.DB.QueryContext(ctx, q, args...)
 }
 
 func (p *commitFault) QueryRowContext(ctx context.Context, q string, args ...any) *dbsql.Row {
-	if p.faulted.Load() {
-		p.reads.Add(1)
-		if p.failRead {
-			return p.DB.QueryRowContext(ctx, "SELECT * FROM no_such_table_for_the_fault")
-		}
+	if p.read() {
+		return p.DB.QueryRowContext(ctx, "SELECT * FROM no_such_table_for_the_fault")
 	}
 	return p.DB.QueryRowContext(ctx, q, args...)
+}
+
+func (p *commitFault) ExecContext(ctx context.Context, q string, args ...any) (dbsql.Result, error) {
+	if p.faulted.Load() {
+		p.writes.Add(1)
+	}
+	return p.DB.ExecContext(ctx, q, args...)
 }
 
 type faultTx struct {
@@ -81,7 +98,31 @@ type faultTx struct {
 	p *commitFault
 }
 
+func (t *faultTx) QueryContext(ctx context.Context, q string, args ...any) (*dbsql.Rows, error) {
+	if t.p.read() {
+		return nil, errors.New("recovery read failed")
+	}
+	return t.Tx.QueryContext(ctx, q, args...)
+}
+
+func (t *faultTx) QueryRowContext(ctx context.Context, q string, args ...any) *dbsql.Row {
+	if t.p.read() {
+		return t.Tx.QueryRowContext(ctx, "SELECT * FROM no_such_table_for_the_fault")
+	}
+	return t.Tx.QueryRowContext(ctx, q, args...)
+}
+
+func (t *faultTx) ExecContext(ctx context.Context, q string, args ...any) (dbsql.Result, error) {
+	if t.p.faulted.Load() {
+		t.p.writes.Add(1)
+	}
+	return t.Tx.ExecContext(ctx, q, args...)
+}
+
 func (t *faultTx) Commit() error {
+	if t.p.faulted.Load() {
+		return t.Tx.Commit()
+	}
 	t.p.commits.Add(1)
 	if !t.p.armed.CompareAndSwap(true, false) {
 		return t.Tx.Commit()
@@ -111,64 +152,137 @@ func withCommitFault(t *testing.T, m *mgr, p *commitFault) {
 	m.db.Statement.ConnPool = p
 }
 
-func TestUnacknowledgedCommitsAreReconciled(t *testing.T) {
+// other writes through a separate manager, like another instance.
+func other(t *testing.T, cfg map[string]any) *gorm.DB {
+	return openOCMManager(t, cfg).db
+}
+
+// rowOf returns the ID of the received share of remote for marie, or 0.
+func rowOf(t *testing.T, db *gorm.DB, remote string) uint {
+	t.Helper()
+	var ids []uint
+	if err := db.Model(&model.OcmReceivedShare{}).Where("remote_share_id = ? AND share_with = ?", remote, "marie").Order("id DESC").Pluck("id", &ids).Error; err != nil {
+		t.Fatal(err)
+	}
+	if len(ids) == 0 {
+		return 0
+	}
+	return ids[0]
+}
+
+func setRow(t *testing.T, db *gorm.DB, id uint, updates map[string]any) {
+	t.Helper()
+	if err := db.Model(&model.OcmReceivedShare{}).Where("id = ?", id).Updates(updates).Error; err != nil {
+		t.Fatal(err)
+	}
+}
+
+func setProtocolURI(t *testing.T, db *gorm.DB, id uint) {
+	t.Helper()
+	if err := db.Model(&model.OcmReceivedShareProtocol{}).Where("ocm_received_share_id = ?", id).Update("uri", "https://other.example.org/dav/x").Error; err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestUnacknowledgedCommitsObserveTheExactProjection(t *testing.T) {
+	marie := recipient("marie")
 	type op struct {
 		name string
-		// run performs the operation and reports whether it returned a receipt.
-		run func(t *testing.T, m *mgr, rs *ocm.ReceivedShare) (bool, error)
-		// done reports whether the change is durable.
-		done func(t *testing.T, m *mgr, rs *ocm.ReceivedShare) bool
-		// compete makes the same change through another connection.
-		compete func(t *testing.T, m *mgr, rs *ocm.ReceivedShare)
+		// setup prepares the share and returns what run needs.
+		setup func(t *testing.T, m *mgr, remote string) (*ocm.ReceivedShare, uint64)
+		run   func(ctx context.Context, m *mgr, rs *ocm.ReceivedShare, remote string, gen uint64) (bool, error)
+		// done reports whether the requested state is durable.
+		done func(t *testing.T, db *gorm.DB, remote string) bool
+		// compete reaches the requested state with other values.
+		compete func(t *testing.T, db *gorm.DB, remote string)
+		// generation is logged with an unknown outcome.
+		generation bool
 	}
-	accept := &ocm.ReceivedShare{State: ocm.ShareState_SHARE_STATE_ACCEPTED}
+	stored := func(t *testing.T, m *mgr, remote string) (*ocm.ReceivedShare, uint64) {
+		return mustStore(t, m, grantShare(marie, "a.example.org", remote, file)), 0
+	}
+	stateIs := func(state model.OcmShareState) func(t *testing.T, db *gorm.DB, remote string) bool {
+		return func(t *testing.T, db *gorm.DB, remote string) bool {
+			id := rowOf(t, db, remote)
+			var row model.OcmReceivedShare
+			return id != 0 && db.Where("id = ?", id).Take(&row).Error == nil && row.State == state
+		}
+	}
 	ops := []op{
 		{
-			name: "update state",
-			run: func(t *testing.T, m *mgr, rs *ocm.ReceivedShare) (bool, error) {
-				u, err := m.UpdateReceivedShare(context.Background(), recipient("marie"), &ocm.ReceivedShare{Id: rs.Id, State: accept.State}, stateMask())
+			name:  "create",
+			setup: func(t *testing.T, m *mgr, remote string) (*ocm.ReceivedShare, uint64) { return nil, 0 },
+			run: func(ctx context.Context, m *mgr, _ *ocm.ReceivedShare, remote string, _ uint64) (bool, error) {
+				got, err := m.StoreReceivedShare(ctx, grantShare(marie, "a.example.org", remote, file))
+				return got != nil, err
+			},
+			done: func(t *testing.T, db *gorm.DB, remote string) bool { return rowOf(t, db, remote) != 0 },
+		},
+		{
+			name:  "update state",
+			setup: stored,
+			run: func(ctx context.Context, m *mgr, rs *ocm.ReceivedShare, _ string, _ uint64) (bool, error) {
+				u, err := m.UpdateReceivedShare(ctx, marie, &ocm.ReceivedShare{Id: rs.Id, State: ocm.ShareState_SHARE_STATE_ACCEPTED}, stateMask())
 				return u != nil, err
 			},
-			done: func(t *testing.T, m *mgr, rs *ocm.ReceivedShare) bool {
-				return receivedRow(t, m, rs.Id.OpaqueId).State == model.OcmShareStateAccepted
+			done: stateIs(model.OcmShareStateAccepted),
+			compete: func(t *testing.T, db *gorm.DB, remote string) {
+				setRow(t, db, rowOf(t, db, remote), map[string]any{"state": model.OcmShareStateAccepted, "transfer_generation": 1, "mtime": 1})
 			},
-			compete: func(t *testing.T, m *mgr, rs *ocm.ReceivedShare) {
-				if err := m.db.Session(&gorm.Session{NewDB: true}).Model(&model.OcmReceivedShare{}).Where("id = ?", rs.Id.OpaqueId).
-					Updates(map[string]any{"state": model.OcmShareStateAccepted, "transfer_generation": 1}).Error; err != nil {
-					t.Fatal(err)
-				}
-			},
+			generation: true,
 		},
 		{
-			name: "start transfer",
-			run: func(t *testing.T, m *mgr, rs *ocm.ReceivedShare) (bool, error) {
-				s, err := m.StartReceivedShareTransfer(context.Background(), recipient("marie"), &ocm.ReceivedShare{Id: rs.Id}, stateMask())
+			name:  "start transfer",
+			setup: stored,
+			run: func(ctx context.Context, m *mgr, rs *ocm.ReceivedShare, _ string, _ uint64) (bool, error) {
+				s, err := m.StartReceivedShareTransfer(ctx, marie, &ocm.ReceivedShare{Id: rs.Id}, stateMask())
 				return s != nil, err
 			},
-			done: func(t *testing.T, m *mgr, rs *ocm.ReceivedShare) bool {
-				return receivedRow(t, m, rs.Id.OpaqueId).State == model.OcmShareStateTransferring
+			done: stateIs(model.OcmShareStateTransferring),
+			compete: func(t *testing.T, db *gorm.DB, remote string) {
+				setRow(t, db, rowOf(t, db, remote), map[string]any{"state": model.OcmShareStateTransferring, "transfer_generation": 1, "mtime": 1})
 			},
-			compete: func(t *testing.T, m *mgr, rs *ocm.ReceivedShare) {
-				if err := m.db.Session(&gorm.Session{NewDB: true}).Model(&model.OcmReceivedShare{}).Where("id = ?", rs.Id.OpaqueId).
-					Updates(map[string]any{"state": model.OcmShareStateTransferring, "transfer_generation": 1}).Error; err != nil {
-					t.Fatal(err)
-				}
-			},
+			generation: true,
 		},
 		{
-			name: "withdraw",
-			run: func(t *testing.T, m *mgr, rs *ocm.ReceivedShare) (bool, error) {
-				r, err := m.WithdrawReceivedGrant(context.Background(), withdrawal("a.example.org", rs.RemoteShareId))
-				return r != nil, err
-			},
-			done: func(t *testing.T, m *mgr, rs *ocm.ReceivedShare) bool {
-				ident, _ := identityRow(t, m, "a.example.org", rs.RemoteShareId)
-				return ident.WithdrawnAt.Valid
-			},
-			compete: func(t *testing.T, m *mgr, rs *ocm.ReceivedShare) {
-				if _, err := m.WithdrawReceivedGrant(context.Background(), withdrawal("a.example.org", rs.RemoteShareId)); err != nil {
+			name: "complete transfer",
+			setup: func(t *testing.T, m *mgr, remote string) (*ocm.ReceivedShare, uint64) {
+				rs := mustStore(t, m, grantShare(marie, "a.example.org", remote, file))
+				start, err := m.StartReceivedShareTransfer(context.Background(), marie, &ocm.ReceivedShare{Id: rs.Id}, stateMask())
+				if err != nil {
 					t.Fatal(err)
 				}
+				return rs, start.Generation
+			},
+			run: func(ctx context.Context, m *mgr, rs *ocm.ReceivedShare, _ string, gen uint64) (bool, error) {
+				u, err := m.CompleteReceivedShareTransfer(ctx, marie, rs.Id, gen, ocm.ShareState_SHARE_STATE_ACCEPTED)
+				return u != nil, err
+			},
+			done: stateIs(model.OcmShareStateAccepted),
+			compete: func(t *testing.T, db *gorm.DB, remote string) {
+				setRow(t, db, rowOf(t, db, remote), map[string]any{"state": model.OcmShareStateAccepted, "mtime": 1})
+			},
+			generation: true,
+		},
+		{
+			name:  "withdraw",
+			setup: stored,
+			run: func(ctx context.Context, m *mgr, rs *ocm.ReceivedShare, _ string, _ uint64) (bool, error) {
+				r, err := m.WithdrawReceivedGrant(ctx, withdrawal("a.example.org", rs.RemoteShareId))
+				return r != nil, err
+			},
+			done: func(t *testing.T, db *gorm.DB, remote string) bool {
+				key, _ := share.GrantKey("a.example.org", remote)
+				var ident model.OcmGrantIdentity
+				return db.Where("grant_key = ?", key).Take(&ident).Error == nil && ident.WithdrawnAt.Valid
+			},
+			compete: func(t *testing.T, db *gorm.DB, remote string) {
+				key, _ := share.GrantKey("a.example.org", remote)
+				if err := db.Model(&model.OcmGrantIdentity{}).Where("grant_key = ?", key).
+					Update("withdrawn_at", datatypes.NullTime{V: time.Unix(1000, 0), Valid: true}).Error; err != nil {
+					t.Fatal(err)
+				}
+				setRow(t, db, rowOf(t, db, remote), map[string]any{"state": model.OcmShareStateInvalid, "hidden": true, "mtime": 1})
 			},
 		},
 	}
@@ -176,51 +290,87 @@ func TestUnacknowledgedCommitsAreReconciled(t *testing.T) {
 		name     string
 		apply    bool
 		failRead bool
-		compete  bool
+		// change runs after the commit outcome is decided.
+		change   func(t *testing.T, o op, db *gorm.DB, remote string)
 		observed share.CommitObservation
 		durable  bool
 	}{
 		{name: "applied", apply: true, observed: share.CommitObservedRequested, durable: true},
 		{name: "not applied", observed: share.CommitObservedPrevious},
 		{name: "recovery read fails", apply: true, failRead: true, observed: share.CommitObservedUnread, durable: true},
-		{name: "competing writer", compete: true, observed: share.CommitObservedRequested, durable: true},
+		{name: "same state by another writer", change: func(t *testing.T, o op, db *gorm.DB, remote string) {
+			o.compete(t, db, remote)
+		}, observed: share.CommitObservedOther, durable: true},
+		{name: "applied then row changed", apply: true, change: func(t *testing.T, o op, db *gorm.DB, remote string) {
+			setRow(t, db, rowOf(t, db, remote), map[string]any{"mtime": 2})
+		}, observed: share.CommitObservedOther, durable: true},
+		{name: "applied then protocol changed", apply: true, change: func(t *testing.T, o op, db *gorm.DB, remote string) {
+			setProtocolURI(t, db, rowOf(t, db, remote))
+		}, observed: share.CommitObservedOther, durable: true},
 	}
 	for _, o := range ops {
 		t.Run(o.name, func(t *testing.T) {
 			forEachDialectConfig(t, func(t *testing.T, cfg map[string]any) {
+				run := func(t *testing.T, m *mgr, rs *ocm.ReceivedShare, remote string, gen uint64) (bool, error, string) {
+					var logs bytes.Buffer
+					logger := zerolog.New(&logs)
+					ctx := appctx.WithLogger(context.Background(), &logger)
+					got, err := o.run(ctx, m, rs, remote, gen)
+					return got, err, logs.String()
+				}
 				t.Run("acknowledged", func(t *testing.T) {
 					m := openOCMManager(t, cfg)
-					rs := mustStore(t, m, grantShare(recipient("marie"), "a.example.org", "ack-"+o.name, file))
+					remote := "ack-" + strings.ReplaceAll(o.name, " ", "-")
+					rs, gen := o.setup(t, m, remote)
 					p := &commitFault{}
 					withCommitFault(t, m, p)
-					got, err := o.run(t, m, rs)
-					if err != nil || !got || !o.done(t, m, rs) || p.reads.Load() != 0 {
+					got, err, _ := run(t, m, rs, remote, gen)
+					if err != nil || !got || !o.done(t, m.db, remote) || p.reads.Load() != 0 {
 						t.Fatalf("receipt=%t err=%v reads=%d", got, err, p.reads.Load())
 					}
 				})
 				for _, tc := range cases {
+					if tc.name == "same state by another writer" && o.compete == nil {
+						continue
+					}
 					t.Run(tc.name, func(t *testing.T) {
 						m := openOCMManager(t, cfg)
-						rs := mustStore(t, m, grantShare(recipient("marie"), "a.example.org", strings.ReplaceAll(o.name+"-"+tc.name, " ", "-"), file))
+						remote := strings.ReplaceAll(o.name+"-"+tc.name, " ", "-")
+						rs, gen := o.setup(t, m, remote)
 						p := &commitFault{apply: tc.apply, failRead: tc.failRead}
-						if tc.compete {
-							p.between = func() { o.compete(t, openOCMManager(t, cfg), rs) }
+						if tc.change != nil {
+							p.between = func() { tc.change(t, o, other(t, cfg), remote) }
 						}
 						withCommitFault(t, m, p)
 						p.armed.Store(true)
-						got, err := o.run(t, m, rs)
+						got, err, logs := run(t, m, rs, remote, gen)
 						var unknown *share.CommitUnknownError
 						if got || !errors.As(err, &unknown) || !errors.Is(err, share.ErrCommitUnknown) || unknown.Observed != tc.observed {
 							t.Fatalf("receipt=%t err=%v", got, err)
 						}
-						if p.commits.Load() != 1 {
-							t.Fatalf("an unacknowledged commit was run %d times", p.commits.Load())
+						if p.commits.Load() != 1 || p.writes.Load() != 0 {
+							t.Fatalf("after an unacknowledged commit: commits %d, writes %d", p.commits.Load(), p.writes.Load())
 						}
 						if p.reads.Load() == 0 {
 							t.Fatal("no reconciliation read")
 						}
+						key, _ := share.GrantKey("a.example.org", remote)
+						for _, want := range []string{`"observed":"` + string(tc.observed) + `"`, `"grant_key":"` + key + `"`} {
+							if !strings.Contains(logs, want) {
+								t.Fatalf("log lacks %s: %s", want, logs)
+							}
+						}
+						if o.generation && !strings.Contains(logs, `"transfer_generation"`) {
+							t.Fatalf("log lacks the generation: %s", logs)
+						}
+						if o.name != "create" && o.name != "withdraw" && !strings.Contains(logs, `"share_id":`+rs.Id.OpaqueId) {
+							t.Fatalf("log lacks the share ID: %s", logs)
+						}
+						if strings.Contains(logs, "secret-") || strings.Contains(logs, "dav/") || strings.Contains(logs, "marie") {
+							t.Fatalf("log holds share data: %s", logs)
+						}
 						p.failRead = false
-						if o.done(t, m, rs) != tc.durable {
+						if o.done(t, other(t, cfg), remote) != tc.durable {
 							t.Fatalf("durable change %t, want %t", !tc.durable, tc.durable)
 						}
 					})
@@ -228,4 +378,49 @@ func TestUnacknowledgedCommitsAreReconciled(t *testing.T) {
 			})
 		})
 	}
+}
+
+// An older row of the same grant and user is not the row a failed creation
+// allocated, so it is not its requested state.
+func TestUnacknowledgedCreateIgnoresAnOlderRowOfTheGrant(t *testing.T) {
+	forEachDialectConfig(t, func(t *testing.T, cfg map[string]any) {
+		m := openOCMManager(t, cfg)
+		older := mustStore(t, m, grantShare(recipient("marie"), "a.example.org", "dup", file))
+		p := &commitFault{}
+		withCommitFault(t, m, p)
+		p.armed.Store(true)
+		got, err := m.StoreReceivedShare(context.Background(), grantShare(recipient("marie"), "a.example.org", "dup", file))
+		var unknown *share.CommitUnknownError
+		if got != nil || !errors.As(err, &unknown) || unknown.Observed != share.CommitObservedPrevious {
+			t.Fatalf("%v %v", got, err)
+		}
+		if id := rowOf(t, other(t, cfg), "dup"); fmt.Sprint(id) != older.Id.OpaqueId {
+			t.Fatalf("rows changed: newest %d", id)
+		}
+	})
+}
+
+// A completion of a finished attempt changes nothing, so its unknown commit
+// is never observed as the requested completion.
+func TestUnacknowledgedNoOpCompletionIsNotACompletion(t *testing.T) {
+	forEachDialectConfig(t, func(t *testing.T, cfg map[string]any) {
+		m := openOCMManager(t, cfg)
+		marie := recipient("marie")
+		rs := mustStore(t, m, grantShare(marie, "a.example.org", "noop", file))
+		start, err := m.StartReceivedShareTransfer(context.Background(), marie, &ocm.ReceivedShare{Id: rs.Id}, stateMask())
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, err := m.CompleteReceivedShareTransfer(context.Background(), marie, rs.Id, start.Generation, ocm.ShareState_SHARE_STATE_ACCEPTED); err != nil {
+			t.Fatal(err)
+		}
+		p := &commitFault{apply: true}
+		withCommitFault(t, m, p)
+		p.armed.Store(true)
+		u, err := m.CompleteReceivedShareTransfer(context.Background(), marie, rs.Id, start.Generation, ocm.ShareState_SHARE_STATE_ACCEPTED)
+		var unknown *share.CommitUnknownError
+		if u != nil || !errors.As(err, &unknown) || unknown.Observed != share.CommitObservedPrevious {
+			t.Fatalf("%v %v", u, err)
+		}
+	})
 }

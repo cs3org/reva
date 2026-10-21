@@ -444,7 +444,9 @@ func (m *mgr) StoreReceivedShare(ctx context.Context, s *ocm.ReceivedShare) (*oc
 		return nil, err
 	}
 	shareWith := s.Grantee.GetUserId().GetOpaqueId()
+	var check commitCheck
 	if err := m.transact(ctx, "store_received_share", func(tx *gorm.DB) error {
+		check = commitCheck{grantKey: key}
 		ident, err := ensureIdentity(tx, origin, s.RemoteShareId)
 		if err != nil {
 			return err
@@ -497,21 +499,23 @@ func (m *mgr) StoreReceivedShare(ctx context.Context, s *ocm.ReceivedShare) (*oc
 			}
 		}
 
-		s.Id = &ocm.ShareId{OpaqueId: fmt.Sprintf("%d", receivedShare.ID)}
+		// The row allocated by this attempt is the only one that can show
+		// that this creation is durable; another row of the same grant cannot.
+		expected, err := readReceivedProjection(tx, receivedShare.ID)
+		if err != nil {
+			return err
+		}
+		id := receivedShare.ID
+		check.shareID = id
+		check.observe = func(db *gorm.DB) (share.CommitObservation, error) {
+			return observeReceived(db, id, expected, nil)
+		}
 		return nil
-	}, func(db *gorm.DB) (share.CommitObservation, error) {
-		// Another creation of the same grant would match as well.
-		var n int64
-		if err := db.Model(&model.OcmReceivedShare{}).Where("grant_key = ? AND share_with = ?", key, shareWith).Count(&n).Error; err != nil {
-			return "", err
-		}
-		if n > 0 {
-			return share.CommitObservedRequested, nil
-		}
-		return share.CommitObservedPrevious, nil
-	}); err != nil {
+	}, &check); err != nil {
 		return nil, err
 	}
+	// The ID is published only with an acknowledged commit.
+	s.Id = &ocm.ShareId{OpaqueId: fmt.Sprintf("%d", check.shareID)}
 	return s, nil
 }
 
@@ -718,9 +722,9 @@ func (m *mgr) UpdateReceivedShare(ctx context.Context, user *userpb.User, s *ocm
 		return nil, err
 	}
 	var receipt share.ReceivedShareUpdate
-	var prev model.OcmReceivedShare
-	var attempt map[string]any
+	var check commitCheck
 	err = m.transact(ctx, "update_received_share", func(tx *gorm.DB) error {
+		check = commitCheck{}
 		row, before, ident, err := lockReceivedWithIdentity(tx, user, s.Id)
 		if err != nil {
 			return err
@@ -728,9 +732,12 @@ func (m *mgr) UpdateReceivedShare(ctx context.Context, user *userpb.User, s *ocm
 		if withdrawn(ident) {
 			return share.ErrShareWithdrawn
 		}
-		prev = *row
+		previous, err := readReceivedProjection(tx, row.ID)
+		if err != nil {
+			return err
+		}
 		// A fresh copy per attempt, so a retry never reuses a stale value.
-		attempt = maps.Clone(updates)
+		attempt := maps.Clone(updates)
 		if state, ok := attempt["state"]; ok && state != row.State {
 			gen, err := nextTransferGeneration(row.TransferGeneration)
 			if err != nil {
@@ -741,44 +748,37 @@ func (m *mgr) UpdateReceivedShare(ctx context.Context, user *userpb.User, s *ocm
 		if err := tx.Model(&model.OcmReceivedShare{}).Where("id = ?", row.ID).Updates(attempt).Error; err != nil {
 			return err
 		}
+		expected, err := readReceivedProjection(tx, row.ID)
+		if err != nil {
+			return err
+		}
+		check = receivedCheck(row, expected, previous)
 		after, err := reloadReceived(tx, row.ID)
 		if err != nil {
 			return err
 		}
 		receipt = share.ReceivedShareUpdate{Before: before, After: after}
 		return nil
-	}, func(db *gorm.DB) (share.CommitObservation, error) {
-		return observeReceived(db, prev.ID, func(r model.OcmReceivedShare) bool {
-			return receivedMatches(r, attempt)
-		}, func(r model.OcmReceivedShare) bool {
-			return r.State == prev.State && r.Hidden == prev.Hidden && r.TransferGeneration == prev.TransferGeneration
-		})
-	})
+	}, &check)
 	if err != nil {
 		return nil, err
 	}
 	return &receipt, nil
 }
 
-// receivedMatches reports whether a row holds the updated column values.
-func receivedMatches(r model.OcmReceivedShare, updates map[string]any) bool {
-	for k, v := range updates {
-		switch k {
-		case "state":
-			if r.State != v {
-				return false
-			}
-		case "hidden":
-			if r.Hidden != v {
-				return false
-			}
-		case "transfer_generation":
-			if r.TransferGeneration != v {
-				return false
-			}
-		}
+// receivedCheck observes one received share against the projections an
+// attempt captured before and after its change.
+func receivedCheck(row *model.OcmReceivedShare, expected, previous *receivedProjection) commitCheck {
+	c := commitCheck{shareID: row.ID, observe: func(db *gorm.DB) (share.CommitObservation, error) {
+		return observeReceived(db, row.ID, expected, previous)
+	}}
+	if row.GrantKey != nil {
+		c.grantKey = *row.GrantKey
 	}
-	return true
+	if expected != nil {
+		c.generation = expected.row.TransferGeneration
+	}
+	return c
 }
 
 // StartReceivedShareTransfer moves a share that is neither transferring nor
@@ -797,9 +797,9 @@ func (m *mgr) StartReceivedShareTransfer(ctx context.Context, user *userpb.User,
 		return nil, err
 	}
 	var receipt share.TransferStart
-	var prev model.OcmReceivedShare
-	var attempt map[string]any
+	var check commitCheck
 	err = m.transact(ctx, "start_transfer", func(tx *gorm.DB) error {
+		check = commitCheck{}
 		row, _, ident, err := lockReceivedWithIdentity(tx, user, s.Id)
 		if err != nil {
 			return err
@@ -817,26 +817,28 @@ func (m *mgr) StartReceivedShareTransfer(ctx context.Context, user *userpb.User,
 		if err != nil {
 			return err
 		}
-		prev = *row
-		attempt = maps.Clone(updates)
+		previous, err := readReceivedProjection(tx, row.ID)
+		if err != nil {
+			return err
+		}
+		attempt := maps.Clone(updates)
 		attempt["transfer_generation"] = gen
 		if err := tx.Model(&model.OcmReceivedShare{}).Where("id = ?", row.ID).Updates(attempt).Error; err != nil {
 			return err
 		}
+		// A matching projection may still belong to another caller.
+		expected, err := readReceivedProjection(tx, row.ID)
+		if err != nil {
+			return err
+		}
+		check = receivedCheck(row, expected, previous)
 		after, err := reloadReceived(tx, row.ID)
 		if err != nil {
 			return err
 		}
 		receipt = share.TransferStart{Share: after, Generation: gen}
 		return nil
-	}, func(db *gorm.DB) (share.CommitObservation, error) {
-		// A matching attempt may still belong to another caller.
-		return observeReceived(db, prev.ID, func(r model.OcmReceivedShare) bool {
-			return receivedMatches(r, attempt)
-		}, func(r model.OcmReceivedShare) bool {
-			return r.State == prev.State && r.TransferGeneration == prev.TransferGeneration
-		})
-	})
+	}, &check)
 	if err != nil {
 		return nil, err
 	}
@@ -851,11 +853,20 @@ func (m *mgr) CompleteReceivedShareTransfer(ctx context.Context, user *userpb.Us
 		return nil, errtypes.BadRequest("invalid share ID")
 	}
 	var receipt share.ReceivedShareUpdate
+	var check commitCheck
 	err = m.transact(ctx, "complete_transfer", func(tx *gorm.DB) error {
-		_, current, ident, err := lockReceivedWithIdentity(tx, user, id)
+		check = commitCheck{}
+		row, current, ident, err := lockReceivedWithIdentity(tx, user, id)
 		if err != nil {
 			return err
 		}
+		previous, err := readReceivedProjection(tx, row.ID)
+		if err != nil {
+			return err
+		}
+		// A refused or no-op completion expects no change.
+		check = receivedCheck(row, nil, previous)
+		check.generation = generation
 		if withdrawn(ident) {
 			// The withdrawal wins: the attempt completes nothing.
 			receipt = share.ReceivedShareUpdate{Before: current, After: current}
@@ -875,6 +886,11 @@ func (m *mgr) CompleteReceivedShareTransfer(ctx context.Context, user *userpb.Us
 			receipt = share.ReceivedShareUpdate{Before: current, After: current}
 			return nil
 		}
+		expected, err := readReceivedProjection(tx, row.ID)
+		if err != nil {
+			return err
+		}
+		check = receivedCheck(row, expected, previous)
 		after, err := reloadReceived(tx, uint(shareID))
 		if err != nil {
 			return err
@@ -883,13 +899,7 @@ func (m *mgr) CompleteReceivedShareTransfer(ctx context.Context, user *userpb.Us
 		before.State = ocm.ShareState_SHARE_STATE_TRANSFERRING
 		receipt = share.ReceivedShareUpdate{Before: before, After: after}
 		return nil
-	}, func(db *gorm.DB) (share.CommitObservation, error) {
-		return observeReceived(db, uint(shareID), func(r model.OcmReceivedShare) bool {
-			return r.State == convertFromCS3OCMShareState(state) && r.TransferGeneration == generation
-		}, func(r model.OcmReceivedShare) bool {
-			return r.State == model.OcmShareStateTransferring && r.TransferGeneration == generation
-		})
-	})
+	}, &check)
 	if err != nil {
 		return nil, err
 	}
