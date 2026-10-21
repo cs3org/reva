@@ -19,11 +19,14 @@
 package ocmd
 
 import (
+	"bufio"
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -54,6 +57,8 @@ type notificationPeer struct {
 	respBody      []byte
 	hangup        bool
 	redirectHits  int
+	legacyHits    int
+	endpoint      string
 }
 
 func newNotificationPeer(t *testing.T) *notificationPeer {
@@ -68,6 +73,9 @@ func (p *notificationPeer) serve(w http.ResponseWriter, r *http.Request) {
 	defer p.mu.Unlock()
 	switch r.URL.Path {
 	case "/.well-known/ocm", "/ocm-provider":
+		if r.URL.Path == "/ocm-provider" {
+			p.legacyHits++
+		}
 		if (r.URL.Path == "/.well-known/ocm" && p.wellKnownOff) || (r.URL.Path == "/ocm-provider" && p.legacyOff) {
 			http.NotFound(w, r)
 			return
@@ -79,7 +87,7 @@ func (p *notificationPeer) serve(w http.ResponseWriter, r *http.Request) {
 		_ = json.NewEncoder(w).Encode(wellknown.OcmDiscoveryData{
 			Enabled:      p.enabled,
 			APIVersion:   "1.4.0",
-			Endpoint:     p.srv.URL + "/ocm",
+			Endpoint:     p.discoveredEndpoint(),
 			Capabilities: p.caps,
 		})
 	case "/elsewhere":
@@ -103,6 +111,13 @@ func (p *notificationPeer) serve(w http.ResponseWriter, r *http.Request) {
 	default:
 		http.NotFound(w, r)
 	}
+}
+
+func (p *notificationPeer) discoveredEndpoint() string {
+	if p.endpoint != "" {
+		return p.endpoint
+	}
+	return p.srv.URL + "/ocm"
 }
 
 func (p *notificationPeer) postCount() int {
@@ -151,7 +166,7 @@ func TestNewNotificationTransportTable(t *testing.T) {
 		{name: "discovery disabled", setup: func(p *notificationPeer) { p.enabled = false }, outcome: SendCapabilityMissing},
 		{name: "no discovery", setup: func(p *notificationPeer) { p.wellKnownOff, p.legacyOff = true, true }, outcome: SendDiscoveryFailed},
 		{name: "oversized discovery", setup: func(p *notificationPeer) { p.hugeDiscovery = true }, outcome: SendDiscoveryFailed},
-		{name: "legacy ocm-provider fallback", setup: func(p *notificationPeer) { p.wellKnownOff = true }, outcome: SendDelivered, class: NotificationStatusCreated, posts: 1},
+		{name: "no legacy ocm-provider fallback", setup: func(p *notificationPeer) { p.wellKnownOff = true }, outcome: SendDiscoveryFailed},
 		{name: "201 bodyless", outcome: SendDelivered, class: NotificationStatusCreated, posts: 1},
 		{name: "200 with ignored body", setup: func(p *notificationPeer) { p.status, p.respBody = 200, []byte(`{"x":1}`) }, outcome: SendDelivered, class: NotificationStatusCreated, posts: 1},
 		{name: "204", setup: func(p *notificationPeer) { p.status = 204 }, outcome: SendDelivered, class: NotificationStatusCreated, posts: 1},
@@ -190,14 +205,11 @@ func TestNewNotificationTransportTable(t *testing.T) {
 			if got := peer.postCount(); got != tc.posts {
 				t.Fatalf("posts %d, want %d", got, tc.posts)
 			}
-			if peer.redirectHits != 0 {
-				t.Fatalf("redirect followed %d times", peer.redirectHits)
+			if peer.redirectHits != 0 || peer.legacyHits != 0 {
+				t.Fatalf("redirect followed %d times, legacy discovery %d times", peer.redirectHits, peer.legacyHits)
 			}
 			if strings.Contains(logs, senderSecret) || strings.Contains(fmt.Sprintf("%+v", res), senderSecret) {
 				t.Fatalf("secret in logs or result: %s %+v", logs, res)
-			}
-			if res.Err != nil && strings.Contains(res.Err.Error(), senderSecret) {
-				t.Fatalf("secret in error: %v", res.Err)
 			}
 			if !strings.Contains(logs, `"outcome":"`+string(tc.outcome)+`"`) {
 				t.Fatalf("outcome not logged: %s", logs)
@@ -261,9 +273,8 @@ func TestShareStatePayloadFixtures(t *testing.T) {
 			if file["providerId"] != tc.in.ProviderID {
 				t.Fatalf("file %v", file)
 			}
-			// Named temporary deviation DEV-NC-PROVIDERID.
-			if wire["providerId"] != tc.in.ProviderID {
-				t.Fatalf("envelope providerId %v", wire["providerId"])
+			if _, has := wire["providerId"]; has {
+				t.Fatalf("deprecated top-level providerId sent: %v", wire)
 			}
 			// Draft-silent optional secret extension.
 			got, has := body["sharedSecret"]
@@ -283,13 +294,20 @@ func TestShareStatePayloadFixtures(t *testing.T) {
 
 func TestShareStateBuildRejectsInvalidPayloads(t *testing.T) {
 	bad := []ShareStateNotification{
-		{Type: NotificationUserRemoved, SenderDomain: "a", ResourceType: "file", ProviderID: "1"},
-		{Type: NotificationRequestShare, SenderDomain: "a", ResourceType: "file", ProviderID: "1"},
+		{Type: NotificationUserRemoved, SenderDomain: "a.example.org", ResourceType: "file", ProviderID: "1"},
+		{Type: NotificationRequestShare, SenderDomain: "a.example.org", ResourceType: "file", ProviderID: "1"},
 		{Type: NotificationShareUnshared, ResourceType: "file", ProviderID: "1"},
-		{Type: NotificationShareUnshared, SenderDomain: "a", ProviderID: "1"},
-		{Type: NotificationShareUnshared, SenderDomain: "a", ResourceType: "file"},
-		{Type: NotificationShareUnshared, SenderDomain: "a", ResourceType: "file", ProviderID: "1", Permissions: []string{"read"}},
-		{Type: NotificationShareChangePermission, SenderDomain: "a", ResourceType: "file", ProviderID: "1", SharedSecret: "s"},
+		{Type: NotificationShareUnshared, SenderDomain: "a.example.org", ProviderID: "1"},
+		{Type: NotificationShareUnshared, SenderDomain: "a.example.org", ResourceType: "file"},
+		{Type: NotificationShareUnshared, SenderDomain: "a.example.org", ResourceType: "file", ProviderID: "1", Permissions: []string{"read"}},
+		{Type: NotificationShareChangePermission, SenderDomain: "a.example.org", ResourceType: "file", ProviderID: "1", SharedSecret: "s"},
+		{Type: NotificationShareUnshared, SenderDomain: "a.example.org:443", ResourceType: "file", ProviderID: "1"},
+		{Type: NotificationShareUnshared, SenderDomain: "192.0.2.1", ResourceType: "file", ProviderID: "1"},
+		{Type: NotificationShareUnshared, SenderDomain: "https://a.example.org", ResourceType: "file", ProviderID: "1"},
+	}
+	good := ShareStateNotification{Type: NotificationShareUnshared, SenderDomain: "a.example.org", ResourceType: "file", ProviderID: "1"}
+	if _, err := good.Build(); err != nil {
+		t.Fatalf("valid payload rejected: %v", err)
 	}
 	for i, s := range bad {
 		if _, err := s.Build(); err == nil {
@@ -318,5 +336,198 @@ func TestNewNotificationNilAndUnreachable(t *testing.T) {
 	}
 	if res := c.NewNotification(context.Background(), "http://127.0.0.1:1", unsharedNotification(t)); res.Outcome != SendDiscoveryFailed {
 		t.Fatalf("unreachable: %+v", res)
+	}
+}
+
+// rawPeer answers every request on a real TCP connection with fixed bytes,
+// which can be a status line or header that net/http fails to parse.
+type rawPeer struct {
+	ln       net.Listener
+	mu       sync.Mutex
+	requests []string
+	response string
+	hang     bool
+	got      chan struct{}
+}
+
+func newRawPeer(t *testing.T, response string) *rawPeer {
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	p := &rawPeer{ln: ln, response: response, got: make(chan struct{}, 8)}
+	t.Cleanup(func() { _ = ln.Close() })
+	go func() {
+		for {
+			conn, err := ln.Accept()
+			if err != nil {
+				return
+			}
+			go p.handle(conn)
+		}
+	}()
+	return p
+}
+
+func (p *rawPeer) handle(conn net.Conn) {
+	defer conn.Close()
+	br := bufio.NewReader(conn)
+	req, err := http.ReadRequest(br)
+	if err != nil {
+		return
+	}
+	_, _ = io.Copy(io.Discard, req.Body)
+	p.mu.Lock()
+	p.requests = append(p.requests, req.Method+" "+req.URL.Path)
+	p.mu.Unlock()
+	p.got <- struct{}{}
+	if p.hang {
+		// Wait for the client to give up.
+		_, _ = io.Copy(io.Discard, br)
+		return
+	}
+	_, _ = conn.Write([]byte(p.response))
+}
+
+func (p *rawPeer) url() string { return "http://" + p.ln.Addr().String() }
+
+func (p *rawPeer) count(request string) int {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	n := 0
+	for _, r := range p.requests {
+		if r == request {
+			n++
+		}
+	}
+	return n
+}
+
+func assertNoCanary(t *testing.T, res SendResult, logs string) {
+	t.Helper()
+	out := fmt.Sprintf("%v %+v %#v %s", res, res, res, logs)
+	if strings.Contains(out, senderSecret) {
+		t.Fatalf("secret leaked: %s", out)
+	}
+}
+
+var malformedResponses = map[string]string{
+	"status line":    "HTTP/1.1 " + senderSecret + "\r\n\r\n",
+	"status code":    "HTTP/1.1 2" + senderSecret + " Created\r\n\r\n",
+	"version":        "HTTP/" + senderSecret + " 201 Created\r\n\r\n",
+	"header line":    "HTTP/1.1 201 Created\r\n" + senderSecret + "\r\n\r\n",
+	"content length": "HTTP/1.1 201 Created\r\nContent-Length: " + senderSecret + "\r\n\r\n",
+}
+
+// A malformed status line or header makes net/http return an error that
+// quotes the peer bytes; it must not reach the result or the logs.
+func TestNewNotificationMalformedPostResponseOverTCP(t *testing.T) {
+	for name, response := range malformedResponses {
+		t.Run(name, func(t *testing.T) {
+			raw := newRawPeer(t, response)
+			peer := newNotificationPeer(t)
+			peer.endpoint = raw.url() + "/ocm"
+			res, logs := sendWithLogs(t, peer, unsharedNotification(t))
+			if res.Outcome != SendPostFailed || res.Failure != FailureError {
+				t.Fatalf("result %+v", res)
+			}
+			if got := raw.count("POST /ocm/notifications"); got != 1 {
+				t.Fatalf("posts %d", got)
+			}
+			assertNoCanary(t, res, logs)
+		})
+	}
+}
+
+func TestNewNotificationMalformedDiscoveryOverTCP(t *testing.T) {
+	for name, response := range malformedResponses {
+		t.Run(name, func(t *testing.T) {
+			raw := newRawPeer(t, response)
+			var logs bytes.Buffer
+			logger := zerolog.New(&logs).Level(zerolog.DebugLevel)
+			ctx := appctx.WithLogger(context.Background(), &logger)
+			res := NewClient(5*time.Second, false).NewNotification(ctx, raw.url(), unsharedNotification(t))
+			if res.Outcome != SendDiscoveryFailed || res.Failure != FailureError {
+				t.Fatalf("result %+v", res)
+			}
+			if raw.count("GET /ocm-provider") != 0 || raw.count("POST /ocm/notifications") != 0 {
+				t.Fatalf("requests %v", raw.requests)
+			}
+			assertNoCanary(t, res, logs.String())
+		})
+	}
+}
+
+func TestNewNotificationWellFormedResponsesOverTCP(t *testing.T) {
+	cases := []struct {
+		response string
+		outcome  SendOutcome
+		retry    time.Duration
+	}{
+		{"HTTP/1.1 201 Created\r\nContent-Length: 0\r\n\r\n", SendDelivered, 0},
+		{"HTTP/1.1 503 Service Unavailable\r\nRetry-After: 30\r\nContent-Length: 0\r\n\r\n", SendRejected, 30 * time.Second},
+		{"HTTP/1.1 503 Service Unavailable\r\nRetry-After: " + senderSecret + "\r\nContent-Length: 0\r\n\r\n", SendRejected, 0},
+	}
+	for _, tc := range cases {
+		raw := newRawPeer(t, tc.response)
+		peer := newNotificationPeer(t)
+		peer.endpoint = raw.url() + "/ocm"
+		res, logs := sendWithLogs(t, peer, unsharedNotification(t))
+		if res.Outcome != tc.outcome || res.RetryAfter != tc.retry || res.Failure != "" {
+			t.Fatalf("%q: %+v", tc.response, res)
+		}
+		if raw.count("POST /ocm/notifications") != 1 {
+			t.Fatalf("posts %v", raw.requests)
+		}
+		assertNoCanary(t, res, logs)
+	}
+}
+
+func TestNewNotificationTimeoutAndCancel(t *testing.T) {
+	raw := newRawPeer(t, "")
+	raw.hang = true
+	peer := newNotificationPeer(t)
+	peer.endpoint = raw.url() + "/ocm"
+	res := NewClient(300*time.Millisecond, false).NewNotification(context.Background(), peer.srv.URL, unsharedNotification(t))
+	if res.Outcome != SendPostFailed || res.Failure != FailureTimeout {
+		t.Fatalf("timeout: %+v", res)
+	}
+	<-raw.got
+
+	ctx, cancel := context.WithCancel(context.Background())
+	go func() {
+		<-raw.got
+		cancel()
+	}()
+	res = NewClient(5*time.Second, false).NewNotification(ctx, peer.srv.URL, unsharedNotification(t))
+	if res.Outcome != SendPostFailed || res.Failure != FailureCanceled {
+		t.Fatalf("cancel: %+v", res)
+	}
+	if raw.count("POST /ocm/notifications") != 2 {
+		t.Fatalf("posts %v", raw.requests)
+	}
+}
+
+func TestParseRetryAfter(t *testing.T) {
+	for v, want := range map[string]time.Duration{
+		"0": 0, "30": 30 * time.Second, "999999999": 999999999 * time.Second,
+		"": 0, "1000000000": 0, "-1": 0, "+5": 0, "1.5": 0, " 30": 0, "30 ": 0,
+		"Wed, 21 Oct 2026 07:28:00 GMT": 0, senderSecret: 0,
+	} {
+		if got := parseRetryAfter(v); got != want {
+			t.Errorf("%q: %s, want %s", v, got, want)
+		}
+	}
+}
+
+func TestSafePostErrorKeepsNoCause(t *testing.T) {
+	cause := errors.New(senderSecret)
+	for _, err := range []error{
+		safePostError(context.Background(), cause),
+		safePostError(context.Background(), &net.OpError{Op: "read", Err: cause}),
+	} {
+		if strings.Contains(fmt.Sprintf("%v %+v", err, err), senderSecret) || errors.Is(err, cause) || errors.Unwrap(err) != nil {
+			t.Fatalf("cause kept: %v", err)
+		}
 	}
 }
