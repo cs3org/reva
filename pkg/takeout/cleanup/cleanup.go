@@ -28,11 +28,11 @@ func RegisterCleanup(c *Config, l *zerolog.Logger) error {
 	}
 
 	return rjobs.RegisterPeriodic(rjobs.Periodic{
-		Name:       CleanupJobName,
-		Schedule:   cj.conf.CleanupSchedule,
-		Scope:      rjobs.ScopeLeader,
-		RunOnStart: true,
-		Run:        cj.Run,
+		Name:            CleanupJobName,
+		Schedule:        cj.conf.CleanupSchedule,
+		Scope:           rjobs.ScopeLeader,
+		RunOnStart:      true,
+		RunWithProgress: cj.Run,
 	})
 }
 
@@ -53,7 +53,7 @@ type Config struct {
 	CleanupDelay int64
 }
 
-func (cj *CleanupJob) Run(ctx context.Context) error {
+func (cj *CleanupJob) Run(ctx context.Context, rep rjobs.Reporter) error {
 	cj.log.Info().Msg("running cleanup job")
 
 	// Resolve the gateway through the service registry
@@ -97,7 +97,10 @@ func (cj *CleanupJob) Run(ctx context.Context) error {
 	// Compute time threshold
 	threshold := time.Duration(cj.conf.CleanupDelay) * time.Hour
 
-	for _, info := range containerRes.Infos {
+	total := int64(len(containerRes.Infos))
+	deleted := 0
+	for i, info := range containerRes.Infos {
+		rep.Report(rjobs.Progress{Phase: "clean", Done: int64(i), Total: total, Unit: "folders", Details: rjobs.Params{"deleted": deleted}})
 		// Compute time since takeout
 		timeSinceTakeout := time.Since(time.Unix(int64(info.Mtime.Seconds), 0))
 
@@ -116,8 +119,10 @@ func (cj *CleanupJob) Run(ctx context.Context) error {
 			if delRes.Status.Code != rpc.Code_CODE_OK {
 				return errors.Wrap(errors.New(delRes.Status.Message), "cleanup: could not delete container")
 			}
+			deleted++
 		}
 	}
+	rep.Report(rjobs.Progress{Phase: "clean", Done: total, Total: total, Unit: "folders", Details: rjobs.Params{"deleted": deleted}})
 
 	return nil
 }
