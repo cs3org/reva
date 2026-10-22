@@ -140,8 +140,8 @@ func TestUnknownTarget(t *testing.T) {
 // lists every invocation and, apart, the shared ones.
 func TestMetadataAdvertisesSharedInvocations(t *testing.T) {
 	set := NewSet()
-	set.Add("mine", "").Handle(nil)
-	set.Add("ours", "").Shared().Handle(nil)
+	set.Add("mine", "").Handle(Handler{})
+	set.Add("ours", "").Shared().Handle(Handler{})
 	RegisterInstance("127.0.0.1:9201/meta", "meta", nil, set, nil)
 
 	meta := Metadata("127.0.0.1:9201/meta")
