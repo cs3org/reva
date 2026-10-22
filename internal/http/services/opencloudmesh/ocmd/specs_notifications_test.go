@@ -185,8 +185,9 @@ func TestNotificationErrorsCarryNoValues(t *testing.T) {
 		if ReceiverStatus(err) != NotificationStatusBadRequest || NotificationReason(err) != tc.reason {
 			t.Fatalf("%s: %q, want %q", tc.body, NotificationReason(err), tc.reason)
 		}
-		if code, _ := NotificationErrorCodeOf(err); strings.Contains(tc.body, key) && code != NotificationErrInvalidField {
-			t.Fatalf("%s: code %s", tc.body, code)
+		var ne *NotificationError
+		if strings.Contains(tc.body, key) && (!errors.As(err, &ne) || ne.Code != NotificationErrInvalidField || strings.Contains(ne.Field, key)) {
+			t.Fatalf("%s: error %#v", tc.body, ne)
 		}
 		if _, err := reg.Dispatch(context.Background(), n); err != nil {
 			t.Fatal(err)
