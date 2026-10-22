@@ -434,7 +434,12 @@ func (fs *Eosfs) permissionSet(ctx context.Context, eosFileInfo *eosclient.FileI
 	// read bit: owner access is handled above, group access is expressed
 	// through the sys.acl rather than the unix group bits, and write access
 	// is never granted through the mode bits.
-	if eosFileInfo.Mode&worldRead != 0 {
+	// EOS checks access on the mode after it applies sys.mask.
+	mode := eosFileInfo.Mode
+	if mask, err := strconv.ParseUint(eosFileInfo.Attrs["sys.mask"], 8, 64); err == nil {
+		mode &= mask
+	}
+	if mode&worldRead != 0 {
 		mergePermissions(&perm, permissions.NewViewerRole().CS3ResourcePermissions())
 	}
 
