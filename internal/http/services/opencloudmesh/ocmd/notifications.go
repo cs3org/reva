@@ -77,11 +77,12 @@ func (h *notifHandler) Notifications(w http.ResponseWriter, r *http.Request) {
 	switch ReceiverStatus(err) {
 	case NotificationStatusNotImplemented:
 		notificationLog(log.Info(), n).Str("outcome", "not_implemented").Msg("OCM notification type not implemented")
-		reqres.WriteError(w, r, reqres.APIErrorUnimplemented, err.Error(), nil)
+		reqres.WriteError(w, r, reqres.APIErrorUnimplemented, NotificationReason(err), nil)
 		return
 	case NotificationStatusBadRequest:
-		notificationLog(log.Info(), n).Str("outcome", "rejected").Str("reason", err.Error()).Msg("invalid OCM notification")
-		reqres.WriteError(w, r, reqres.APIErrorInvalidParameter, err.Error(), nil)
+		reason := NotificationReason(err)
+		notificationLog(log.Info(), n).Str("outcome", "rejected").Str("reason", reason).Msg("invalid OCM notification")
+		reqres.WriteError(w, r, reqres.APIErrorInvalidParameter, reason, nil)
 		return
 	}
 
