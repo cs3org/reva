@@ -220,6 +220,9 @@ func (j *exportJob) RunWithProgress(ctx context.Context, p rjobs.Params, r rjobs
 }
 ```
 
+A periodic job sets `RunWithProgress` instead of `Run`. Only `ScopeLeader` runs
+have a status, so the progress of a `ScopeAllNodes` run is dropped.
+
 ### Listing a user's runs
 
 `ListByOwner` returns the runs created for a user with `WithOwner`, most
