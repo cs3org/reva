@@ -26,7 +26,6 @@ import (
 	"io"
 	"net"
 	"net/http"
-	"net/netip"
 	"net/url"
 	"strconv"
 	"strings"
@@ -150,11 +149,6 @@ func notificationDiscoveryBase(host string) (string, bool) {
 	u, err := url.Parse(discoveryBase(host))
 	if err != nil || u.Host != host || strings.ContainsAny(u.Hostname(), "%[") || strings.HasSuffix(host, ":") {
 		return "", false
-	}
-	if strings.HasPrefix(host, "[") {
-		if _, err := netip.ParseAddr(u.Hostname()); err != nil {
-			return "", false
-		}
 	}
 	if p := u.Port(); p != "" {
 		if n, err := strconv.Atoi(p); err != nil || n < 1 || n > 65535 {
