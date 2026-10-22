@@ -26,8 +26,10 @@ import (
 	"io"
 	"net"
 	"net/http"
+	"net/netip"
 	"net/url"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/cs3org/reva/v3/pkg/appctx"
@@ -117,12 +119,13 @@ func (s ShareStateNotification) Build() (*OutgoingNotification, error) {
 	if s.ResourceType == "" || s.ProviderID == "" {
 		return nil, errors.New("incomplete share-state notification")
 	}
-	if providerdomain.Validate(s.SenderDomain) != nil {
-		return nil, errors.New("senderDomain is not a DNS name")
+	sender, err := providerdomain.CanonicalOCMHost(s.SenderDomain)
+	if err != nil {
+		return nil, errors.New("senderDomain is not an OCM host")
 	}
 	return &OutgoingNotification{
 		Type:         s.Type,
-		SenderDomain: s.SenderDomain,
+		SenderDomain: sender,
 		ResourceType: s.ResourceType,
 		ShareType:    s.ShareType,
 		SharedSecret: NotificationSecret(s.SharedSecret),
@@ -135,9 +138,44 @@ type ocmNotificationTransport struct {
 	c *OCMClient
 }
 
-// DiscoverNotificationPeer uses only the canonical /.well-known/ocm document.
+var (
+	errInvalidPeer     = errors.New("peer is not an OCM host")
+	errUnsupportedPeer = errors.New("peer host cannot be reached over HTTP as written")
+)
+
+// notificationDiscoveryBase is the URL of the peer identity, or false when
+// HTTP cannot reach that exact host and port: the identity is never
+// rewritten, e.g. by dropping an empty port or decoding a percent triplet.
+func notificationDiscoveryBase(host string) (string, bool) {
+	u, err := url.Parse(discoveryBase(host))
+	if err != nil || u.Host != host || strings.ContainsAny(u.Hostname(), "%[") || strings.HasSuffix(host, ":") {
+		return "", false
+	}
+	if strings.HasPrefix(host, "[") {
+		if _, err := netip.ParseAddr(u.Hostname()); err != nil {
+			return "", false
+		}
+	}
+	if p := u.Port(); p != "" {
+		if n, err := strconv.Atoi(p); err != nil || n < 1 || n > 65535 {
+			return "", false
+		}
+	}
+	return u.String(), true
+}
+
+// DiscoverNotificationPeer uses only the canonical /.well-known/ocm document
+// of the peer identity. The endpoint it advertises is only used for routing.
 func (t ocmNotificationTransport) DiscoverNotificationPeer(ctx context.Context, domain string) (*NotificationPeer, error) {
-	disco, err := t.c.DiscoverCanonical(ctx, domain)
+	host, err := providerdomain.CanonicalOCMHost(domain)
+	if err != nil {
+		return nil, errInvalidPeer
+	}
+	base, ok := notificationDiscoveryBase(host)
+	if !ok {
+		return nil, errUnsupportedPeer
+	}
+	disco, err := t.c.DiscoverCanonical(ctx, base)
 	if err != nil {
 		return nil, err
 	}
@@ -146,11 +184,11 @@ func (t ocmNotificationTransport) DiscoverNotificationPeer(ctx context.Context, 
 		return peer, nil
 	}
 	peer.Capabilities = disco.Capabilities
-	base, err := absoluteDiscoveryBase(disco.Endpoint)
+	route, err := absoluteDiscoveryBase(disco.Endpoint)
 	if err != nil {
 		return nil, errors.New("peer discovery has no usable endpoint")
 	}
-	endpoint, err := url.JoinPath(base.String(), notificationsPath)
+	endpoint, err := url.JoinPath(route.String(), notificationsPath)
 	if err != nil {
 		return nil, errors.New("peer discovery has no usable endpoint")
 	}
