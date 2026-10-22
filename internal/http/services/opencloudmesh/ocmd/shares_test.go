@@ -213,69 +213,26 @@ func TestMatchesAutoAccept(t *testing.T) {
 	}
 }
 
-func TestParseOCMUser(t *testing.T) {
-	tests := []struct {
-		name       string
-		addr       string
-		wantOpaque string
-		wantIdp    string
-		wantErr    bool
-	}{
-		{
-			name:       "spec-conformant bare id",
-			addr:       "marie@cernbox2.docker",
-			wantOpaque: "marie",
-			wantIdp:    "cernbox2.docker",
-		},
-		{
-			name:       "oCIS doubled recipient host collapses (shareWith)",
-			addr:       "cbcbcbcb-2222@cernbox2.docker@cernbox2.docker",
-			wantOpaque: "cbcbcbcb-2222",
-			wantIdp:    "cernbox2.docker",
-		},
-		{
-			name:       "oCIS doubled remote host collapses (sender/owner)",
-			addr:       "4c510ada-1234@ocis1.docker@ocis1.docker",
-			wantOpaque: "4c510ada-1234",
-			wantIdp:    "ocis1.docker",
-		},
-		{
-			name:       "OpenCloud doubled remote host with scheme collapses (sender/owner)",
-			addr:       "b1f74ec4-5678@https://opencloud1.docker@opencloud1.docker",
-			wantOpaque: "b1f74ec4-5678",
-			wantIdp:    "opencloud1.docker",
-		},
-		{
-			name:       "single scheme-qualified host is stripped to bare id",
-			addr:       "b1f74ec4-5678@https://opencloud1.docker",
-			wantOpaque: "b1f74ec4-5678",
-			wantIdp:    "opencloud1.docker",
-		},
-		{
-			name:    "address without provider is rejected",
-			addr:    "no-at-sign",
-			wantErr: true,
-		},
+// Incoming addresses are parsed strictly at the last @: the opaque ID keeps
+// every byte and a scheme or other invalid host is refused, never stripped.
+func TestOCMUserIsStrict(t *testing.T) {
+	for _, tc := range []struct{ addr, opaque, idp string }{
+		{"marie@cernbox2.docker", "marie", "cernbox2.docker"},
+		{"opaque@extra@a.example.org", "opaque@extra", "a.example.org"},
+		{"alice@a.example.org@a.example.org", "alice@a.example.org", "a.example.org"},
+		{" id @A.Example.org:8443", " id ", "a.example.org:8443"},
+		{"bob@[2001:db8::1]:8443", "bob", "[2001:db8::1]:8443"},
+	} {
+		got, err := ocmUser(tc.addr)
+		if err != nil || got.OpaqueId != tc.opaque || got.Idp != tc.idp || got.Type != userpb.UserType_USER_TYPE_FEDERATED {
+			t.Fatalf("%q: %v %v", tc.addr, got, err)
+		}
 	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			got, err := parseOCMUser(tt.addr)
-			if tt.wantErr {
-				if err == nil {
-					t.Fatalf("parseOCMUser(%q) expected error, got nil", tt.addr)
-				}
-				return
-			}
-			if err != nil {
-				t.Fatalf("parseOCMUser(%q) unexpected error: %v", tt.addr, err)
-			}
-			if got.OpaqueId != tt.wantOpaque {
-				t.Errorf("parseOCMUser(%q) OpaqueId = %q, want %q", tt.addr, got.OpaqueId, tt.wantOpaque)
-			}
-			if got.Idp != tt.wantIdp {
-				t.Errorf("parseOCMUser(%q) Idp = %q, want %q", tt.addr, got.Idp, tt.wantIdp)
-			}
-		})
+	for _, addr := range []string{"no-at-sign", "@a.example.org", "alice@https://a.example.org",
+		"b1f74ec4-5678@https://opencloud1.docker", "alice@a.example.org:bad", "alice@a.example.org/x", "alice@"} {
+		if got, err := ocmUser(addr); err == nil {
+			t.Fatalf("%q accepted as %v", addr, got)
+		}
 	}
 }
 
