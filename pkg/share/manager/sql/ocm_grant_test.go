@@ -92,6 +92,26 @@ func TestNewGrantMustBeRepresentable(t *testing.T) {
 			t.Fatalf("rejected creators left rows=%d %v", rows, err)
 		}
 
+		// The typed host is checked alone: joined with the opaque ID, an @ in
+		// it would still parse as an address with a different host.
+		for _, idp := range []string{"evil.example@a.example.org", "@a.example.org", "a.example.org@"} {
+			if _, err := m.StoreReceivedShare(context.Background(), grant(idp, "at-"+idp)); !errors.Is(err, share.ErrInvalidGrantIdentity) {
+				t.Fatalf("idp %q: %v", idp, err)
+			}
+		}
+		if err := m.db.Model(&model.OcmReceivedShare{}).Count(&rows).Error; err != nil || rows != 2 || countIdentities(t, m) != before {
+			t.Fatalf("rejected idps left rows=%d %v", rows, err)
+		}
+		atID := grant("A.Example.ORG:8443", "at-id")
+		atID.Creator.OpaqueId = "alice@evil.example"
+		stored := mustStore(t, m, atID)
+		if got := receivedRow(t, m, stored.Id.OpaqueId).Initiator; got != "alice@evil.example@a.example.org:8443" {
+			t.Fatalf("initiator %q", got)
+		}
+		if r, err := m.WithdrawReceivedGrant(context.Background(), withdrawal("a.example.org:8443", "at-id")); err != nil || !r.Changed {
+			t.Fatalf("withdraw by port origin: %v %v", r, err)
+		}
+
 		fresh := mustStore(t, m, grant("a.example.org", "fresh"))
 		if receivedRow(t, m, fresh.Id.OpaqueId).GrantKey == nil {
 			t.Fatal("fresh grant unbound")

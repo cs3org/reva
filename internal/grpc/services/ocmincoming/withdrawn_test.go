@@ -99,3 +99,51 @@ func TestUnrepresentableGrantIsInvalidArgument(t *testing.T) {
 		t.Fatalf("stored %d shares: %v", len(shares), err)
 	}
 }
+
+// countingRepo records every repository call made by the service.
+type countingRepo struct {
+	share.Repository
+	calls int
+}
+
+func (r *countingRepo) StoreReceivedShare(ctx context.Context, rs *ocm.ReceivedShare) (*ocm.ReceivedShare, error) {
+	r.calls++
+	return r.Repository.StoreReceivedShare(ctx, rs)
+}
+
+func TestMalformedSenderNeverReachesTheRepository(t *testing.T) {
+	ctx := context.Background()
+	inner, err := sqlmgr.NewOCMShareManager(ctx, map[string]any{
+		"db_engine": "sqlite",
+		"db_name":   filepath.Join(t.TempDir(), "ocm.sqlite"),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	repo := &countingRepo{Repository: inner}
+	s := &service{repo: repo}
+	for _, sender := range []*userpb.UserId{
+		nil,
+		{OpaqueId: "", Idp: "a.example.org"},
+		{OpaqueId: "alice", Idp: ""},
+		{OpaqueId: "alice", Idp: "evil.example@a.example.org"},
+		{OpaqueId: "alice", Idp: "https://a.example.org"},
+		{OpaqueId: "alice", Idp: "a.example.org:x8443"},
+	} {
+		res, err := s.CreateOCMIncomingShare(ctx, &ocmincoming.CreateOCMIncomingShareRequest{
+			Name:               "doc.txt",
+			ResourceId:         "42",
+			Owner:              &userpb.UserId{OpaqueId: "alice", Idp: "a.example.org"},
+			Sender:             sender,
+			ShareWith:          &userpb.UserId{OpaqueId: "marie"},
+			SharedResourceType: ocm.SharedResourceType_SHARE_RESOURCE_TYPE_FILE,
+			RecipientType:      ocm.RecipientType_RECIPIENT_TYPE_USER,
+		})
+		if err != nil || res.Status.Code != rpc.Code_CODE_INVALID_ARGUMENT {
+			t.Fatalf("sender %v: %v %v", sender, res, err)
+		}
+	}
+	if repo.calls != 0 {
+		t.Fatalf("repository called %d times", repo.calls)
+	}
+}

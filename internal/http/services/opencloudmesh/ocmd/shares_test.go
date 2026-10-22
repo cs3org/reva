@@ -42,6 +42,7 @@ import (
 	invitepb "github.com/cs3org/go-cs3apis/cs3/ocm/invite/v1beta1"
 	ocmprovider "github.com/cs3org/go-cs3apis/cs3/ocm/provider/v1beta1"
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
+	"github.com/cs3org/reva/v3/internal/http/services/reqres"
 	"github.com/cs3org/reva/v3/internal/http/services/wellknown"
 	"github.com/cs3org/reva/v3/pkg/appctx"
 	"github.com/cs3org/reva/v3/pkg/errtypes"
@@ -1278,5 +1279,48 @@ func TestCreateShareRejectsUnsignedFromSigningServer(t *testing.T) {
 
 	if rr.Code != http.StatusUnauthorized {
 		t.Fatalf("CreateShare() status = %d, want %d", rr.Code, http.StatusUnauthorized)
+	}
+}
+
+// A malformed address is refused by the routed handler before the gateway,
+// so no policy call, lookup or repository write sees a rewritten identity.
+func TestRoutedCreateShareRefusesMalformedAddresses(t *testing.T) {
+	gw := &sharesMockGW{}
+	stampGateway(gw)
+	h := initSharesHandler(t, &config{AllowLoopbackFederation: true})
+	valid := "alice@a.example.org"
+	for _, tc := range []struct{ field, sender, owner, shareWith, message string }{
+		{"sender", "alice@https://a.example.org", valid, "marie@local.example.org", "error with remote sender"},
+		{"sender", "alice@evil.example@a.example.org/x", valid, "marie@local.example.org", "error with remote sender"},
+		{"sender", "alice@a.example.org:x8443", valid, "marie@local.example.org", "error with remote sender"},
+		{"owner", valid, "alice@http://a.example.org", "marie@local.example.org", "error with remote owner"},
+		{"shareWith", valid, valid, "marie@local example.org", "error with shareWith user"},
+	} {
+		body, _ := json.Marshal(map[string]any{
+			"shareWith":    tc.shareWith,
+			"name":         "test.txt",
+			"providerId":   "provider-id",
+			"owner":        tc.owner,
+			"sender":       tc.sender,
+			"shareType":    "user",
+			"resourceType": "file",
+			"protocol": map[string]any{"webdav": map[string]any{
+				"sharedSecret": "secret",
+				"permissions":  []string{"read"},
+				"uri":          "https://a.example.org/remote.php/dav/ocm/x",
+			}},
+		})
+		req := httptest.NewRequest(http.MethodPost, sharesPath, bytes.NewReader(body))
+		req.Header.Set("Content-Type", "application/json")
+		req.RemoteAddr = fmt.Sprintf("[2001:db8:%x::1]:1000", clientSeq.Add(1))
+		rr := httptest.NewRecorder()
+		h.ServeHTTP(rr, req)
+		var apiErr reqres.APIError
+		if rr.Code != http.StatusBadRequest || json.Unmarshal(rr.Body.Bytes(), &apiErr) != nil || apiErr.Message != tc.message {
+			t.Fatalf("%s %q: %d %s", tc.field, tc.sender, rr.Code, rr.Body.String())
+		}
+	}
+	if gatewayCalls() != 0 || gw.createCalls != 0 {
+		t.Fatalf("gateway resolved %d times, create called %d times", gatewayCalls(), gw.createCalls)
 	}
 }
