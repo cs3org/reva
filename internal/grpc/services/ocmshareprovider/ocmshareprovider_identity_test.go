@@ -159,3 +159,16 @@ func TestEmitValidatesThePeerHost(t *testing.T) {
 		t.Fatalf("valid target %v", n.domains)
 	}
 }
+
+// The old formatter removed a sender suffix equal to the configured host.
+func TestCreateOCMShareKeepsSenderSuffixOfThisHost(t *testing.T) {
+	peer, _, resp := createWith(t, "a.example.org", "alice@a.example.org", &userpb.UserId{OpaqueId: "bob", Idp: "b.example.org"})
+	_, body := peer.posted()
+	var wire ocmd.NewShareRequest
+	if err := json.Unmarshal(body, &wire); err != nil || resp.GetStatus().GetCode() != rpc.Code_CODE_OK {
+		t.Fatalf("%v %v", resp.GetStatus(), err)
+	}
+	if wire.Sender != "alice@a.example.org@a.example.org" || wire.Owner != "alice@a.example.org@a.example.org" {
+		t.Fatalf("sender %q owner %q", wire.Sender, wire.Owner)
+	}
+}
