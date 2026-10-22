@@ -23,6 +23,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -81,7 +82,7 @@ func wait(t *testing.T, c <-chan struct{}, what string) {
 func TestAsyncNotifierCloseCancelsAdmittedSend(t *testing.T) {
 	p := newGatedPeer(t)
 	a := &AsyncNotifier{Client: NewClient(time.Minute, false)}
-	a.NewNotification(context.Background(), p.srv.URL, unsharedNotification(t))
+	a.NewNotification(context.Background(), strings.TrimPrefix(p.srv.URL, "http://"), unsharedNotification(t))
 	wait(t, p.entered, "discovery")
 
 	if err := a.Close(); err != nil {
@@ -92,7 +93,7 @@ func TestAsyncNotifierCloseCancelsAdmittedSend(t *testing.T) {
 	if p.posts.Load() != 0 {
 		t.Fatalf("%d posts after Close", p.posts.Load())
 	}
-	if res := a.NewNotification(context.Background(), p.srv.URL, unsharedNotification(t)); res.Outcome != SendPostFailed {
+	if res := a.NewNotification(context.Background(), strings.TrimPrefix(p.srv.URL, "http://"), unsharedNotification(t)); res.Outcome != SendPostFailed {
 		t.Fatalf("send after Close: %+v", res)
 	}
 	if err := a.Close(); err != nil {
@@ -108,7 +109,7 @@ func TestAsyncNotifierOutlivesCallerContext(t *testing.T) {
 	close(p.release)
 	a := &AsyncNotifier{Client: NewClient(time.Minute, false)}
 	ctx, cancel := context.WithCancel(context.Background())
-	a.NewNotification(ctx, p.srv.URL, unsharedNotification(t))
+	a.NewNotification(ctx, strings.TrimPrefix(p.srv.URL, "http://"), unsharedNotification(t))
 	cancel()
 	wait(t, p.posted, "notification")
 	if err := a.Close(); err != nil {
@@ -127,7 +128,7 @@ func TestAsyncNotifierCloseRacesAdmission(t *testing.T) {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			a.NewNotification(context.Background(), p.srv.URL, unsharedNotification(t))
+			a.NewNotification(context.Background(), strings.TrimPrefix(p.srv.URL, "http://"), unsharedNotification(t))
 		}()
 	}
 	if err := a.Close(); err != nil {
