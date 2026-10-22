@@ -199,11 +199,21 @@ type remotePeer struct {
 	drop   bool
 	body   []byte
 	posts  int
+	discos int
+}
+
+func (p *remotePeer) discoveries() int {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	return p.discos
 }
 
 func (p *remotePeer) handler(w http.ResponseWriter, r *http.Request) {
 	switch {
 	case r.URL.Path == "/.well-known/ocm":
+		p.mu.Lock()
+		p.discos++
+		p.mu.Unlock()
 		w.Header().Set("Content-Type", "application/json")
 		_, _ = w.Write(p.disco)
 	case strings.HasSuffix(r.URL.Path, "/shares"):

@@ -41,6 +41,7 @@ import (
 	"github.com/cs3org/reva/v3/pkg/errtypes"
 	"github.com/cs3org/reva/v3/pkg/ocm/embedded"
 	"github.com/cs3org/reva/v3/pkg/ocm/httpsig"
+	"github.com/cs3org/reva/v3/pkg/ocm/providerdomain"
 	"github.com/cs3org/reva/v3/pkg/ocm/share"
 	"github.com/cs3org/reva/v3/pkg/ocm/share/repository/registry"
 	"github.com/cs3org/reva/v3/pkg/plugin"
@@ -141,6 +142,13 @@ func New(ctx context.Context, m map[string]any) (rgrpc.Service, error) {
 	if decodeErr != nil {
 		return nil, decodeErr
 	}
+	// provider_domain is the identity of this server in every share and
+	// notice, so it is checked before anything is allocated.
+	providerDomain, err := providerdomain.CanonicalOCMHost(c.ProviderDomain)
+	if err != nil {
+		return nil, errors.New("ocmshareprovider: provider_domain is not an OCM host")
+	}
+	c.ProviderDomain = providerDomain
 
 	repo, err := getShareRepository(ctx, &c)
 	if err != nil {
@@ -179,14 +187,6 @@ func (s *service) Close() error {
 
 func (s *service) UnprotectedEndpoints() []string {
 	return []string{"/cs3.sharing.ocm.v1beta1.OcmAPI/GetOCMShareByToken"}
-}
-
-func formatOCMUser(u *userpb.UserId) string {
-	// Delegate to the shared OCM Address formatter so recipient, owner and
-	// sender ids are always spec-conformant "<opaque-id>@<host>" strings and
-	// never the malformed "id@host@host" form produced when a non-conformant
-	// peer's qualified userID was stored verbatim.
-	return ocmd.FormatOCMUser(u)
 }
 
 func getResourceType(info *providerpb.ResourceInfo) string {
@@ -294,6 +294,14 @@ func (s *service) CreateOCMShare(ctx context.Context, req *ocm.CreateOCMShareReq
 	if !share.SupportedResourceType(resourceType) {
 		return &ocm.CreateOCMShareResponse{
 			Status: status.NewInvalidArg(ctx, "unsupported resource type"),
+		}, nil
+	}
+	// The grantee host is validated as received, before any peer is contacted.
+	grantee := req.GetGrantee().GetUserId()
+	granteeHost, err := providerdomain.CanonicalOCMHost(grantee.GetIdp())
+	if err != nil || grantee.GetOpaqueId() == "" {
+		return &ocm.CreateOCMShareResponse{
+			Status: status.NewInvalidArg(ctx, "invalid grantee"),
 		}, nil
 	}
 	user := appctx.ContextMustGetUser(ctx)
@@ -423,18 +431,15 @@ func (s *service) CreateOCMShare(ctx context.Context, req *ocm.CreateOCMShareReq
 	}
 
 	// prepare the request to be sent to the remote OCM server
+	// Opaque IDs are sent as they are, even with an @ or a host suffix:
+	// the receiver splits each address at its last @.
 	newShareReq := &ocmd.NewShareRequest{
-		ShareWith:  formatOCMUser(req.Grantee.GetUserId()),
+		ShareWith:  grantee.GetOpaqueId() + "@" + granteeHost,
 		Name:       ocmshare.Name,
 		ProviderID: ocmshare.Id.OpaqueId,
-		Owner: formatOCMUser(&userpb.UserId{
-			OpaqueId: owner.OpaqueId,
-			Idp:      s.conf.ProviderDomain, // FIXME: this is not generally true in case of resharing
-		}),
-		Sender: formatOCMUser(&userpb.UserId{
-			OpaqueId: user.Id.OpaqueId,
-			Idp:      s.conf.ProviderDomain,
-		}),
+		// FIXME: the owner host is not generally this server in case of resharing
+		Owner:             owner.OpaqueId + "@" + s.conf.ProviderDomain,
+		Sender:            user.Id.OpaqueId + "@" + s.conf.ProviderDomain,
 		SenderDisplayName: user.DisplayName,
 		ShareType:         "user",
 		ResourceType:      resType,

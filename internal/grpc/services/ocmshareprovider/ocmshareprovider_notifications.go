@@ -24,6 +24,7 @@ import (
 	ocm "github.com/cs3org/go-cs3apis/cs3/sharing/ocm/v1beta1"
 	"github.com/cs3org/reva/v3/internal/http/services/opencloudmesh/ocmd"
 	"github.com/cs3org/reva/v3/pkg/appctx"
+	"github.com/cs3org/reva/v3/pkg/ocm/providerdomain"
 	"github.com/cs3org/reva/v3/pkg/ocm/share"
 )
 
@@ -39,8 +40,10 @@ func (s *service) emit(ctx context.Context, domain string, b ocmd.ShareStateNoti
 	if s.notifier == nil {
 		return
 	}
-	if domain == "" {
-		log.Warn().Str("type", b.Type).Msg("not sending OCM notification: unknown peer domain")
+	// The stored peer host is validated as it is; nothing is stripped from it.
+	peer, err := providerdomain.CanonicalOCMHost(domain)
+	if err != nil {
+		log.Warn().Str("type", b.Type).Msg("not sending OCM notification: invalid peer host")
 		return
 	}
 	n, err := b.Build()
@@ -48,7 +51,7 @@ func (s *service) emit(ctx context.Context, domain string, b ocmd.ShareStateNoti
 		log.Warn().Str("type", b.Type).Str("error", err.Error()).Msg("not sending OCM notification")
 		return
 	}
-	s.notifier.NewNotification(ctx, ocmd.TrimOCMScheme(domain), n)
+	s.notifier.NewNotification(ctx, peer, n)
 }
 
 func resourceTypeName(t ocm.SharedResourceType) string {
