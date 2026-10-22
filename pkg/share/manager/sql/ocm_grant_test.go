@@ -94,7 +94,8 @@ func TestNewGrantMustBeRepresentable(t *testing.T) {
 
 		// The typed host is checked alone: joined with the opaque ID, an @ in
 		// it would still parse as an address with a different host.
-		for _, idp := range []string{"evil.example@a.example.org", "@a.example.org", "a.example.org@"} {
+		for _, idp := range []string{"extra@a.example.org", "https://evil@a.example.org", "@a.example.org",
+			"a.example.org:bad@b.example.org", "a.example.org@"} {
 			if _, err := m.StoreReceivedShare(context.Background(), grant(idp, "at-"+idp)); !errors.Is(err, share.ErrInvalidGrantIdentity) {
 				t.Fatalf("idp %q: %v", idp, err)
 			}
@@ -110,6 +111,22 @@ func TestNewGrantMustBeRepresentable(t *testing.T) {
 		}
 		if r, err := m.WithdrawReceivedGrant(context.Background(), withdrawal("a.example.org:8443", "at-id")); err != nil || !r.Changed {
 			t.Fatalf("withdraw by port origin: %v %v", r, err)
+		}
+
+		for _, tc := range []struct{ opaque, idp, initiator, origin string }{
+			{"opaque@kept ", "A.Example.org", "opaque@kept @a.example.org", "a.example.org"},
+			{"v4", "192.0.2.10:9443", "v4@192.0.2.10:9443", "192.0.2.10:9443"},
+			{"v6", "[2001:DB8::1]", "v6@[2001:db8::1]", "[2001:db8::1]"},
+		} {
+			rs := grant(tc.idp, "kept-"+tc.opaque)
+			rs.Creator.OpaqueId = tc.opaque
+			stored := mustStore(t, m, rs)
+			if got := receivedRow(t, m, stored.Id.OpaqueId).Initiator; got != tc.initiator {
+				t.Fatalf("initiator %q, want %q", got, tc.initiator)
+			}
+			if r, err := m.WithdrawReceivedGrant(context.Background(), withdrawal(tc.origin, "kept-"+tc.opaque)); err != nil || !r.Changed {
+				t.Fatalf("withdraw %q: %v %v", tc.origin, r, err)
+			}
 		}
 
 		fresh := mustStore(t, m, grant("a.example.org", "fresh"))

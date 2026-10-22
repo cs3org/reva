@@ -146,4 +146,23 @@ func TestMalformedSenderNeverReachesTheRepository(t *testing.T) {
 	if repo.calls != 0 {
 		t.Fatalf("repository called %d times", repo.calls)
 	}
+
+	// A legal opaque ID keeps its @ and spaces; only the host is lowercased.
+	res, err := s.CreateOCMIncomingShare(ctx, &ocmincoming.CreateOCMIncomingShareRequest{
+		Name:               "doc.txt",
+		ResourceId:         "42",
+		Owner:              &userpb.UserId{OpaqueId: "alice", Idp: "a.example.org"},
+		Sender:             &userpb.UserId{OpaqueId: "opaque@kept ", Idp: "A.Example.org:8443"},
+		ShareWith:          &userpb.UserId{OpaqueId: "marie"},
+		SharedResourceType: ocm.SharedResourceType_SHARE_RESOURCE_TYPE_FILE,
+		RecipientType:      ocm.RecipientType_RECIPIENT_TYPE_USER,
+	})
+	if err != nil || res.Status.Code != rpc.Code_CODE_OK || repo.calls != 1 {
+		t.Fatalf("valid sender: %v %v, %d calls", res, err, repo.calls)
+	}
+	if r, err := inner.WithdrawReceivedGrant(ctx, &share.GrantWithdrawal{
+		Origin: "a.example.org:8443", RemoteShareID: "42", ResourceType: ocm.SharedResourceType_SHARE_RESOURCE_TYPE_FILE,
+	}); err != nil || !r.Changed {
+		t.Fatalf("withdraw by sender origin: %v %v", r, err)
+	}
 }
