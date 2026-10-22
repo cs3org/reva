@@ -24,6 +24,7 @@ package sql
 import (
 	"bytes"
 	"context"
+	dbsql "database/sql"
 	"errors"
 	"strings"
 	"time"
@@ -167,13 +168,23 @@ func equalNullTime(a, b datatypes.NullTime) bool {
 	return a.Valid == b.Valid && (!a.Valid || a.V.Equal(b.V))
 }
 
+// observeTx runs every query of one observation in a single read-only
+// transaction. MySQL gets an explicit REPEATABLE READ snapshot whatever the
+// session default; on SQLite the immediate transaction keeps writers out.
+func observeTx(db *gorm.DB, read func(tx *gorm.DB) error) error {
+	if db.Dialector.Name() == "mysql" {
+		return db.Transaction(read, &dbsql.TxOptions{Isolation: dbsql.LevelRepeatableRead, ReadOnly: true})
+	}
+	return db.Transaction(read)
+}
+
 // observeReceived reads one received share on a fresh snapshot and compares
 // it with the projections captured by the failed attempt. A nil expected
 // projection means the attempt changed nothing; a nil previous one means
 // the share did not exist.
 func observeReceived(db *gorm.DB, id uint, expected, previous *receivedProjection) (share.CommitObservation, error) {
 	var got *receivedProjection
-	if err := db.Transaction(func(tx *gorm.DB) error {
+	if err := observeTx(db, func(tx *gorm.DB) error {
 		var err error
 		got, err = readReceivedProjection(tx, id)
 		return err
@@ -432,7 +443,7 @@ func (g *grantProjection) equal(h *grantProjection) bool {
 // projections captured by the failed attempt, like observeReceived.
 func observeGrant(db *gorm.DB, key string, expected, previous *grantProjection) (share.CommitObservation, error) {
 	var got *grantProjection
-	if err := db.Transaction(func(tx *gorm.DB) error {
+	if err := observeTx(db, func(tx *gorm.DB) error {
 		var err error
 		got, err = readGrantProjection(tx, key)
 		return err
