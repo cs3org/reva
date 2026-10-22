@@ -61,7 +61,7 @@ func postNotification(t *testing.T, h http.Handler, contentType, body string) (*
 	req := httptest.NewRequest(http.MethodPost, notificationsPath, strings.NewReader(body))
 	// Each request comes from its own client, so that the contract tests
 	// never drain one bucket of the shared ingress limiter.
-	req.RemoteAddr = fmt.Sprintf("[2001:db8::%x]:1000", clientSeq.Add(1))
+	req.RemoteAddr = fmt.Sprintf("[2001:db8:%x::1]:1000", clientSeq.Add(1))
 	if contentType != "" {
 		req.Header.Set("Content-Type", contentType)
 	}
@@ -141,7 +141,9 @@ func TestNotificationsReceiverMatrix(t *testing.T) {
 		{"RESHARE_UNDO is unknown", "application/json", `{"notificationType":"RESHARE_UNDO","senderDomain":"a.example.org","resourceType":"file","notification":{"file":{"providerId":"42"}}}`, 201, ""},
 		{"flat providerId only", "application/json", `{"notificationType":"SHARE_ACCEPTED","senderDomain":"b.example.org","resourceType":"file","providerId":"42","notification":{"sharedSecret":"` + receiverSecret + `"}}`, 400, reqres.APIErrorInvalidParameter},
 		{"missing senderDomain", "application/json", `{"notificationType":"USER_REMOVED","shareType":"user","notification":{"user":{"userId":"alice@a.example.org"}}}`, 400, reqres.APIErrorInvalidParameter},
-		{"senderDomain with port", "application/json", `{"notificationType":"SHARE_UNSHARED","senderDomain":"a.example.org:443","resourceType":"file","notification":{"file":{"providerId":"42"}}}`, 400, reqres.APIErrorInvalidParameter},
+		// Under the host[:port] amendment a port is part of a valid senderDomain.
+		{"senderDomain with port", "application/json", `{"notificationType":"SHARE_UNSHARED","senderDomain":"a.example.org:443","resourceType":"file","notification":{"file":{"providerId":"42"}}}`, 201, ""},
+		{"senderDomain with scheme", "application/json", `{"notificationType":"SHARE_UNSHARED","senderDomain":"https://a.example.org","resourceType":"file","notification":{"file":{"providerId":"42"}}}`, 400, reqres.APIErrorInvalidParameter},
 		{"unknown type with null selector", "application/json", `{"notificationType":"EXAMPLE_FUTURE","senderDomain":"a.example.org","resourceType":null}`, 400, reqres.APIErrorInvalidParameter},
 		{"malformed JSON", "application/json", `{"notificationType":`, 400, reqres.APIErrorInvalidParameter},
 		{"non-JSON content type", "text/plain", `{"notificationType":"SHARE_UNSHARED"}`, 400, reqres.APIErrorInvalidParameter},
@@ -240,7 +242,7 @@ func TestNotificationsRejectedKnownTypeReachesNoHandler(t *testing.T) {
 		`{"notificationType":"USER_REMOVED","senderDomain":"a.example.org","shareType":"user","resourceType":null,"notification":{"user":{"userId":"leaky-value@a.example.org"}}}`,
 		`{"notificationType":"SHARE_UNSHARED","senderDomain":"a.example.org","resourceType":"file","notification":{"message":["leaky-value"],"file":{"providerId":"42"}}}`,
 		`{"notificationType":"SHARE_CHANGE_PERMISSION","senderDomain":"a.example.org","resourceType":"file","notification":{"file":{"providerId":"42","permissions":["leaky-value"]}}}`,
-		`{"notificationType":"SHARE_UNSHARED","senderDomain":"leaky-value.example.org:8443","resourceType":"file","notification":{"file":{"providerId":"42"}}}`,
+		`{"notificationType":"SHARE_UNSHARED","senderDomain":"leaky-value.example.org:bad","resourceType":"file","notification":{"file":{"providerId":"42"}}}`,
 	} {
 		rr, logs := postNotification(t, s.Handler(), "application/json", body)
 		if rr.Code != http.StatusBadRequest || strings.Contains(rr.Body.String(), "leaky-value") || strings.Contains(logs, "leaky-value") {
@@ -253,5 +255,95 @@ func TestNotificationsRejectedKnownTypeReachesNoHandler(t *testing.T) {
 	rr, _ := postNotification(t, s.Handler(), "application/json", `{"notificationType":"USER_REMOVED","senderDomain":"a.example.org","shareType":"user","notification":{"user":{"userId":"alice@a.example.org"}}}`)
 	if rr.Code != http.StatusCreated || calls != 1 {
 		t.Fatalf("valid notification: status %d calls %d", rr.Code, calls)
+	}
+}
+
+// Representative router checks of the shared notificationType corpus: the
+// type is kept exactly and an unknown type reaches no handler.
+func TestNotificationsTypeBlanknessThroughRouter(t *testing.T) {
+	s := newNotificationsService(t)
+	h := &recordingHandler{}
+	for typ := range builtinContracts {
+		if !IsRequestNotification(typ) {
+			if err := s.notif.registry.SetHandler(typ, h); err != nil {
+				t.Fatal(err)
+			}
+		}
+	}
+	for _, tc := range []struct {
+		typ    string
+		status int
+	}{
+		{`\u0085`, http.StatusBadRequest},
+		{`\ufeff`, http.StatusCreated},
+		{`\u001c`, http.StatusCreated},
+		{`\u0085EXT\u2003`, http.StatusCreated},
+		{" SHARE_UNSHARED ", http.StatusCreated},
+	} {
+		rr, logs := postNotification(t, s.Handler(), "application/json",
+			`{"notificationType":"`+tc.typ+`","senderDomain":"a.example.org","resourceType":"file","notification":{"file":{"providerId":"42"}}}`)
+		code := reqres.APIErrorCode("")
+		if tc.status == http.StatusBadRequest {
+			code = reqres.APIErrorInvalidParameter
+		}
+		checkResponse(t, rr, tc.status, code)
+		if tc.status == http.StatusCreated && !loggedType(logs, mustUnquoteJSON(t, tc.typ)) {
+			t.Fatalf("%q: type not kept exactly: %s", tc.typ, logs)
+		}
+	}
+	if len(h.seen) != 0 {
+		t.Fatalf("handlers ran: %v", h.seen)
+	}
+}
+
+func loggedType(logs, typ string) bool {
+	for _, line := range strings.Split(strings.TrimSpace(logs), "\n") {
+		var m map[string]any
+		if json.Unmarshal([]byte(line), &m) == nil && m["type"] == typ {
+			return true
+		}
+	}
+	return false
+}
+
+func mustUnquoteJSON(t *testing.T, s string) string {
+	t.Helper()
+	var v string
+	if err := json.Unmarshal([]byte(`"`+s+`"`), &v); err != nil {
+		t.Fatal(err)
+	}
+	return v
+}
+
+// A caller-chosen extension member name and an ordinary secret value never
+// reach the response or the logs.
+func TestNotificationsDiagnosticsCarryNoCallerText(t *testing.T) {
+	key := "key-marker-" + strings.Repeat("k", 108)
+	const value = "secret-value-marker-0b5e"
+	s := newNotificationsService(t)
+	h := &recordingHandler{}
+	if err := s.notif.registry.SetHandler(NotificationShareUnshared, h); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.notif.registry.RegisterExtension(NotificationExtension{
+		Type:     "EXAMPLE_WRAP",
+		Validate: func(*Notification) error { return fmt.Errorf("%s: %w", key, invalidField("notification")) },
+		Handler:  h,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	for _, body := range []string{
+		`{"notificationType":"SHARE_UNSHARED","senderDomain":"a.example.org","resourceType":"file","notification":{"sharedSecret":"` + value + `","` + key + `":"x","file":{"providerId":"42"}}}`,
+		`{"notificationType":"EXAMPLE_WRAP","senderDomain":"a.example.org","shareType":"user","notification":{"sharedSecret":"` + value + `"}}`,
+	} {
+		rr, logs := postNotification(t, s.Handler(), "application/json", body)
+		checkResponse(t, rr, http.StatusBadRequest, reqres.APIErrorInvalidParameter)
+		out := rr.Body.String() + logs
+		if strings.Contains(out, key) || strings.Contains(out, value) || !strings.Contains(out, "invalid notification") {
+			t.Fatalf("caller text in diagnostics: %s", out)
+		}
+	}
+	if len(h.seen) != 0 {
+		t.Fatalf("handlers ran: %v", h.seen)
 	}
 }
