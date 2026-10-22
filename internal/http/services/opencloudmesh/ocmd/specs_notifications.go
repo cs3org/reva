@@ -146,6 +146,24 @@ type NotificationError struct {
 	Field string
 }
 
+// notificationFields are the field paths a notification error may name.
+// Any other Field, e.g. one built by an extension, renders as notification.
+var notificationFields = map[string]bool{
+	"senderDomain": true, "resourceType": true, "shareType": true, "resourceType or shareType": true,
+	"providerId": true, "notification": true, "notification.message": true,
+	"notification.sharedSecret": true, "notification.file": true, "notification.file.providerId": true,
+	"notification.file.permissions": true, "notification.file.owner": true, "notification.file.shareWith": true,
+	"notification.file.shareId": true, "notification.user": true, "notification.user.userId": true,
+	"notification.user.counterpartUserId": true, "notification.group": true, "notification.group.groupId": true,
+}
+
+func (e *NotificationError) field() string {
+	if notificationFields[e.Field] {
+		return e.Field
+	}
+	return "notification"
+}
+
 func (e *NotificationError) Error() string {
 	switch e.Code {
 	case NotificationErrMalformed:
@@ -153,9 +171,9 @@ func (e *NotificationError) Error() string {
 	case NotificationErrMissingType:
 		return "missing notificationType"
 	case NotificationErrMissingField:
-		return "missing " + e.Field
+		return "missing " + e.field()
 	case NotificationErrInvalidField:
-		return "invalid " + e.Field
+		return "invalid " + e.field()
 	case NotificationErrNotImplemented:
 		return "notification type not implemented"
 	default:
@@ -169,6 +187,16 @@ func missingField(field string) error {
 
 func invalidField(field string) error {
 	return &NotificationError{Code: NotificationErrInvalidField, Field: field}
+}
+
+// NotificationReason is the fixed text of a parse error for responses and
+// logs. It never formats the cause of an error that wraps a contract error.
+func NotificationReason(err error) string {
+	var ne *NotificationError
+	if errors.As(err, &ne) {
+		return ne.Error()
+	}
+	return "invalid notification"
 }
 
 // NotificationErrorCodeOf returns the code of a contract error, if any.
@@ -249,8 +277,9 @@ func (n *Notification) decodePayload(raw json.RawMessage) error {
 			}
 			n.SharedSecret = NotificationSecret(secret)
 		default:
+			// The member name is chosen by the sender, so it is not reported.
 			if !isJSONObject(value) {
-				return invalidField("notification." + key)
+				return invalidField("notification")
 			}
 		}
 	}
