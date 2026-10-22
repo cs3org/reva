@@ -31,6 +31,7 @@ import (
 	"net/http/httptest"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -120,6 +121,8 @@ func (p *notificationPeer) discoveredEndpoint() string {
 	return p.srv.URL + "/ocm"
 }
 
+func (p *notificationPeer) host() string { return strings.TrimPrefix(p.srv.URL, "http://") }
+
 func (p *notificationPeer) postCount() int {
 	p.mu.Lock()
 	defer p.mu.Unlock()
@@ -147,7 +150,7 @@ func sendWithLogs(t *testing.T, peer *notificationPeer, n *OutgoingNotification)
 	var logs bytes.Buffer
 	logger := zerolog.New(&logs)
 	ctx := appctx.WithLogger(context.Background(), &logger)
-	res := NewClient(5*time.Second, false).NewNotification(ctx, peer.srv.URL, n)
+	res := NewClient(5*time.Second, false).NewNotification(ctx, peer.host(), n)
 	return res, logs.String()
 }
 
@@ -301,8 +304,6 @@ func TestShareStateBuildRejectsInvalidPayloads(t *testing.T) {
 		{Type: NotificationShareUnshared, SenderDomain: "a.example.org", ResourceType: "file"},
 		{Type: NotificationShareUnshared, SenderDomain: "a.example.org", ResourceType: "file", ProviderID: "1", Permissions: []string{"read"}},
 		{Type: NotificationShareChangePermission, SenderDomain: "a.example.org", ResourceType: "file", ProviderID: "1", SharedSecret: "s"},
-		{Type: NotificationShareUnshared, SenderDomain: "a.example.org:443", ResourceType: "file", ProviderID: "1"},
-		{Type: NotificationShareUnshared, SenderDomain: "192.0.2.1", ResourceType: "file", ProviderID: "1"},
 		{Type: NotificationShareUnshared, SenderDomain: "https://a.example.org", ResourceType: "file", ProviderID: "1"},
 	}
 	good := ShareStateNotification{Type: NotificationShareUnshared, SenderDomain: "a.example.org", ResourceType: "file", ProviderID: "1"}
@@ -334,7 +335,7 @@ func TestNewNotificationNilAndUnreachable(t *testing.T) {
 	if res := c.NewNotification(context.Background(), "127.0.0.1:1", nil); res.Outcome != SendPostFailed {
 		t.Fatalf("nil: %+v", res)
 	}
-	if res := c.NewNotification(context.Background(), "http://127.0.0.1:1", unsharedNotification(t)); res.Outcome != SendDiscoveryFailed {
+	if res := c.NewNotification(context.Background(), "127.0.0.1:1", unsharedNotification(t)); res.Outcome != SendDiscoveryFailed {
 		t.Fatalf("unreachable: %+v", res)
 	}
 }
@@ -446,7 +447,7 @@ func TestNewNotificationMalformedDiscoveryOverTCP(t *testing.T) {
 			var logs bytes.Buffer
 			logger := zerolog.New(&logs).Level(zerolog.DebugLevel)
 			ctx := appctx.WithLogger(context.Background(), &logger)
-			res := NewClient(5*time.Second, false).NewNotification(ctx, raw.url(), unsharedNotification(t))
+			res := NewClient(5*time.Second, false).NewNotification(ctx, raw.ln.Addr().String(), unsharedNotification(t))
 			if res.Outcome != SendDiscoveryFailed || res.Failure != FailureError {
 				t.Fatalf("result %+v", res)
 			}
@@ -488,7 +489,7 @@ func TestNewNotificationTimeoutAndCancel(t *testing.T) {
 	raw.hang = true
 	peer := newNotificationPeer(t)
 	peer.endpoint = raw.url() + "/ocm"
-	res := NewClient(300*time.Millisecond, false).NewNotification(context.Background(), peer.srv.URL, unsharedNotification(t))
+	res := NewClient(300*time.Millisecond, false).NewNotification(context.Background(), peer.host(), unsharedNotification(t))
 	if res.Outcome != SendPostFailed || res.Failure != FailureTimeout {
 		t.Fatalf("timeout: %+v", res)
 	}
@@ -499,7 +500,7 @@ func TestNewNotificationTimeoutAndCancel(t *testing.T) {
 		<-raw.got
 		cancel()
 	}()
-	res = NewClient(5*time.Second, false).NewNotification(ctx, peer.srv.URL, unsharedNotification(t))
+	res = NewClient(5*time.Second, false).NewNotification(ctx, peer.host(), unsharedNotification(t))
 	if res.Outcome != SendPostFailed || res.Failure != FailureCanceled {
 		t.Fatalf("cancel: %+v", res)
 	}
@@ -546,5 +547,49 @@ func TestPostNotificationErrorQuotesNoPeerBytes(t *testing.T) {
 				t.Fatalf("cause kept: %v", err)
 			}
 		})
+	}
+}
+
+// The sender is the complete host and port, lowercased only. Under the
+// host[:port] amendment a port or an IP literal is a valid sender.
+func TestShareStateBuildCanonicalSender(t *testing.T) {
+	for in, want := range map[string]string{
+		"a.example.org":      "a.example.org",
+		"A.Example.ORG:8443": "a.example.org:8443",
+		"a.example.org:0443": "a.example.org:0443",
+		"192.0.2.1":          "192.0.2.1",
+		"[2001:DB8::1]:8443": "[2001:db8::1]:8443",
+	} {
+		n, err := ShareStateNotification{Type: NotificationShareUnshared, SenderDomain: in, ResourceType: "file", ProviderID: "1"}.Build()
+		if err != nil || n.SenderDomain != want {
+			t.Fatalf("%q: %v %v", in, n, err)
+		}
+	}
+	for _, in := range []string{"", "https://a.example.org", "x@a.example.org", "a.example.org:bad", "a.example.org/x", " a.example.org"} {
+		if _, err := (ShareStateNotification{Type: NotificationShareUnshared, SenderDomain: in, ResourceType: "file", ProviderID: "1"}).Build(); err == nil {
+			t.Fatalf("%q accepted", in)
+		}
+	}
+}
+
+type countingTransport struct{ n atomic.Int32 }
+
+func (c *countingTransport) RoundTrip(*http.Request) (*http.Response, error) {
+	c.n.Add(1)
+	return nil, errors.New("no request expected")
+}
+
+// Valid identities that HTTP cannot reach as written, and invalid ones, end
+// without any request: the identity is never rewritten to reach it.
+func TestNotificationToUnusableHostMakesNoRequest(t *testing.T) {
+	for _, domain := range []string{"a.example.org:", "a.example.org:999999999999999999999999", "a.example.org:0", "[v1.a]",
+		"a%2eexample.org", "https://a.example.org", "x@a.example.org", "a.example.org/path", "a.example.org:bad"} {
+		c := NewClient(time.Second, false)
+		rt := &countingTransport{}
+		c.client.Transport = rt
+		res := c.NewNotification(context.Background(), domain, unsharedNotification(t))
+		if res.Outcome != SendDiscoveryFailed || res.Failure != FailureError || rt.n.Load() != 0 {
+			t.Fatalf("%q: %+v requests %d", domain, res, rt.n.Load())
+		}
 	}
 }
