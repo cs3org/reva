@@ -22,6 +22,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"go/parser"
 	"go/token"
@@ -145,17 +146,59 @@ func TestParseNotificationRejectsNullSelectorBesideValidOne(t *testing.T) {
 }
 
 func TestNotificationErrorsCarryNoValues(t *testing.T) {
+	const key = "caller-chosen-member-name"
 	reg := NewNotificationRegistry()
-	bodies := []string{
-		`{"notificationType":"USER_REMOVED","senderDomain":"a.example.org","shareType":"user","notification":{"user":{"userId":"leaky-value"}}}`,
-		`{"notificationType":"SHARE_UNSHARED","senderDomain":"a.example.org","resourceType":"file","notification":{"sharedSecret":["leaky-value"],"file":{"providerId":"42"}}}`,
-		`{"notificationType":"leaky-value"`,
+	h := &recordingHandler{}
+	if err := reg.SetHandler(NotificationShareUnshared, h); err != nil {
+		t.Fatal(err)
 	}
-	for _, b := range bodies {
-		_, err := reg.Parse([]byte(b))
-		if err == nil || strings.Contains(err.Error(), "leaky-value") {
-			t.Fatalf("error %v", err)
+	if err := reg.RegisterExtension(NotificationExtension{
+		Type: "EXAMPLE_WRAP",
+		Validate: func(*Notification) error {
+			return fmt.Errorf("leaky-value: %w", &NotificationError{Code: NotificationErrInvalidField, Field: "notification.leaky-value"})
+		},
+		Handler: h,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if err := reg.RegisterExtension(NotificationExtension{
+		Type:     "EXAMPLE_RAW",
+		Validate: func(*Notification) error { return errors.New("leaky-value") },
+		Handler:  h,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	cases := []struct {
+		body, reason string
+	}{
+		{`{"notificationType":"USER_REMOVED","senderDomain":"a.example.org","shareType":"user","notification":{"user":{"userId":"leaky-value"}}}`, "invalid notification.user.userId"},
+		{`{"notificationType":"SHARE_UNSHARED","senderDomain":"a.example.org","resourceType":"file","notification":{"sharedSecret":["leaky-value"],"file":{"providerId":"42"}}}`, "invalid notification.sharedSecret"},
+		{`{"notificationType":"leaky-value"`, "malformed notification"},
+		{`{"notificationType":"ACME","senderDomain":"a.example.org","shareType":"user","notification":{"` + key + `":"leaky-value"}}`, "invalid notification"},
+		{`{"notificationType":"ACME","senderDomain":"a.example.org","shareType":"user","notification":{"` + key + `":null}}`, "invalid notification"},
+		{`{"notificationType":"SHARE_UNSHARED","senderDomain":"a.example.org","resourceType":"file","notification":{"` + key + `":["leaky-value"],"file":{"providerId":"42"}}}`, "invalid notification"},
+		{`{"notificationType":"EXAMPLE_WRAP","senderDomain":"a.example.org","shareType":"user"}`, "invalid notification"},
+		{`{"notificationType":"EXAMPLE_RAW","senderDomain":"a.example.org","shareType":"user"}`, "invalid notification"},
+	}
+	for _, tc := range cases {
+		n, err := reg.Parse([]byte(tc.body))
+		if ReceiverStatus(err) != NotificationStatusBadRequest || NotificationReason(err) != tc.reason {
+			t.Fatalf("%s: %q, want %q", tc.body, NotificationReason(err), tc.reason)
 		}
+		if code, _ := NotificationErrorCodeOf(err); strings.Contains(tc.body, key) && code != NotificationErrInvalidField {
+			t.Fatalf("%s: code %s", tc.body, code)
+		}
+		if _, err := reg.Dispatch(context.Background(), n); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if len(h.seen) != 0 {
+		t.Fatalf("handlers ran for invalid notifications: %v", h.seen)
+	}
+	// An unknown object-valued member stays opaque, whatever it contains.
+	n := mustParse(t, reg, `{"notificationType":"ACME","senderDomain":"a.example.org","shareType":"user","notification":{"`+key+`":{"a":1,"b":null,"c":[true]}}}`)
+	if n.Class != NotificationClassUnknown || len(n.Payload[key]) == 0 {
+		t.Fatalf("unknown object member %#v", n.Payload)
 	}
 }
 
