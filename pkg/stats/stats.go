@@ -188,12 +188,12 @@ func NewInvokeSet(manager any) *invoke.Set {
 		return set
 	}
 	set.Add(Invocation, "Service statistics as a self-describing metrics payload.").
-		Handle(func(ctx context.Context, _ invoke.Args) (invoke.Result, error) {
+		Handle(invoke.Typed(func(ctx context.Context, _ struct{}) (invoke.Result, error) {
 			p, err := r.Stats(ctx)
 			if err != nil {
 				return nil, err
 			}
 			return p.Result()
-		})
+		}))
 	return set
 }
