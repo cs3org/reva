@@ -1,0 +1,288 @@
+// Copyright 2018-2024 CERN
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+//
+// In applying this license, CERN does not waive the privileges and immunities
+// granted to it by virtue of its status as an Intergovernmental Organization
+// or submit itself to any jurisdiction.
+
+package sql
+
+import (
+	"context"
+	dbsql "database/sql"
+	"errors"
+	"fmt"
+	"net/url"
+	"sync/atomic"
+	"testing"
+	"time"
+
+	"github.com/cs3org/reva/v3/pkg/ocm/share"
+	model "github.com/cs3org/reva/v3/pkg/share/manager/sql/model"
+	"gorm.io/datatypes"
+	gormmysql "gorm.io/driver/mysql"
+	"gorm.io/gorm"
+)
+
+const newURI = "https://a.example.org/dav/new"
+
+// observer opens a separate pool for the observation. On MySQL every session
+// of the pool starts with the given default isolation.
+func observer(t *testing.T, cfg map[string]any, isolation string) *gorm.DB {
+	t.Helper()
+	if cfg["db_engine"] != "mysql" {
+		return other(t, cfg)
+	}
+	dsn := fmt.Sprintf("%s:%s@tcp(%s:%d)/%s?parseTime=true&transaction_isolation=%s",
+		cfg["db_username"], cfg["db_password"], cfg["db_host"], cfg["db_port"], cfg["db_name"], url.QueryEscape("'"+isolation+"'"))
+	db, err := gorm.Open(gormmysql.Open(dsn), &gorm.Config{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	sqlDB, _ := db.DB()
+	t.Cleanup(func() { _ = sqlDB.Close() })
+	var got string
+	if err := db.Raw("SELECT @@SESSION.transaction_isolation").Scan(&got).Error; err != nil || got != isolation {
+		t.Fatalf("observer session isolation %q: %v", got, err)
+	}
+	return db
+}
+
+// afterFirstSelect runs write from another connection once, right after the
+// observer's first SELECT. On MySQL it commits before the next SELECT. On
+// SQLite it cannot commit until the immediate observation ends, so it runs
+// in the background and wait reports its later completion.
+func afterFirstSelect(t *testing.T, obs *gorm.DB, write func() error) (wait func() error) {
+	t.Helper()
+	var fired atomic.Bool
+	done := make(chan error, 1)
+	blocking := obs.Dialector.Name() == "sqlite"
+	if err := obs.Callback().Query().After("gorm:query").Register("test:interleave", func(*gorm.DB) {
+		if !fired.CompareAndSwap(false, true) {
+			return
+		}
+		if !blocking {
+			done <- write()
+			return
+		}
+		go func() { done <- write() }()
+		// Bounded: the writer must still be waiting for the observation.
+		select {
+		case err := <-done:
+			done <- fmt.Errorf("writer finished inside the observation: %v", err)
+		case <-time.After(200 * time.Millisecond):
+		}
+	}); err != nil {
+		t.Fatal(err)
+	}
+	return func() error {
+		if !fired.Load() {
+			return errors.New("observer made no query")
+		}
+		select {
+		case err := <-done:
+			return err
+		case <-time.After(15 * time.Second):
+			return errors.New("writer did not finish")
+		}
+	}
+}
+
+// changeAtomically renames the share, replaces its protocol URI and, for a
+// grant, withdraws it, all in one transaction.
+func changeAtomically(db *gorm.DB, id uint, key string) error {
+	return db.Transaction(func(tx *gorm.DB) error {
+		if key != "" {
+			if err := tx.Model(&model.OcmGrantIdentity{}).Where("grant_key = ?", key).
+				Update("withdrawn_at", datatypes.NullTime{V: time.Now().UTC().Truncate(time.Second), Valid: true}).Error; err != nil {
+				return err
+			}
+		}
+		if err := tx.Model(&model.OcmReceivedShare{}).Where("id = ?", id).Update("name", "renamed").Error; err != nil {
+			return err
+		}
+		return tx.Model(&model.OcmReceivedShareProtocol{}).Where("ocm_received_share_id = ?", id).Update("uri", newURI).Error
+	})
+}
+
+// mixture is the share as it never existed: its old row with the new protocol.
+func mixture(p *receivedProjection) *receivedProjection {
+	m := &receivedProjection{row: p.row, protocols: append([]model.OcmReceivedShareProtocol(nil), p.protocols...)}
+	for i := range m.protocols {
+		m.protocols[i].Uri = newURI
+	}
+	return m
+}
+
+func mustRead[P any](t *testing.T, read func(*gorm.DB) (P, error), db *gorm.DB) P {
+	t.Helper()
+	p, err := read(db)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return p
+}
+
+// Each case changes the share between the observer's SELECTs and expects a
+// combination of old and new rows that never existed. A coherent observation
+// sees one state and never reports that mixture as requested.
+func TestObservationNeverCombinesTwoStates(t *testing.T) {
+	marie := recipient("marie")
+	for _, isolation := range []string{"READ-COMMITTED", "REPEATABLE-READ"} {
+		t.Run(isolation, func(t *testing.T) {
+			forEachDialectConfig(t, func(t *testing.T, cfg map[string]any) {
+				if cfg["db_engine"] != "mysql" && isolation != "READ-COMMITTED" {
+					t.Skip("SQLite has a single isolation")
+				}
+				m := openOCMManager(t, cfg)
+				readShare := func(id uint) func(*gorm.DB) (*receivedProjection, error) {
+					return func(db *gorm.DB) (*receivedProjection, error) { return readReceivedProjection(db, id) }
+				}
+				readGrant := func(key string) func(*gorm.DB) (*grantProjection, error) {
+					return func(db *gorm.DB) (*grantProjection, error) { return readGrantProjection(db, key) }
+				}
+
+				t.Run("received", func(t *testing.T) {
+					mustStore(t, m, grantShare(marie, "a.example.org", "r1", file))
+					id := rowOf(t, m.db, "r1")
+					before := mustRead(t, readShare(id), m.db)
+					expected := mixture(before)
+					obs := observer(t, cfg, isolation)
+					wait := afterFirstSelect(t, obs, func() error { return changeAtomically(m.db, id, "") })
+					got, err := observeReceived(obs, id, expected, nil)
+					if werr := wait(); werr != nil {
+						t.Fatal(werr)
+					}
+					after := mustRead(t, readShare(id), m.db)
+					if after.row.Name != "renamed" || after.protocols[0].Uri != newURI || before.equal(expected) || after.equal(expected) {
+						t.Fatal("the writer did not commit a state different from the mixture")
+					}
+					if err != nil || got != share.CommitObservedOther {
+						t.Fatalf("observed %q %v", got, err)
+					}
+				})
+
+				t.Run("grant", func(t *testing.T) {
+					stored := mustStore(t, m, grantShare(marie, "a.example.org", "r2", file))
+					key := *receivedRow(t, m, stored.Id.OpaqueId).GrantKey
+					id := rowOf(t, m.db, "r2")
+					before := mustRead(t, readGrant(key), m.db)
+					expected := &grantProjection{ident: before.ident}
+					for _, s := range before.shares {
+						expected.shares = append(expected.shares, mixture(s))
+					}
+					expected.shares[0].row.Name = "renamed"
+					obs := observer(t, cfg, isolation)
+					wait := afterFirstSelect(t, obs, func() error { return changeAtomically(m.db, id, key) })
+					got, err := observeGrant(obs, key, expected, nil)
+					if werr := wait(); werr != nil {
+						t.Fatal(werr)
+					}
+					after := mustRead(t, readGrant(key), m.db)
+					if !after.ident.WithdrawnAt.Valid || before.equal(expected) || after.equal(expected) {
+						t.Fatal("the writer did not commit a state different from the mixture")
+					}
+					if err != nil || got != share.CommitObservedOther {
+						t.Fatalf("observed %q %v", got, err)
+					}
+				})
+			})
+		})
+	}
+}
+
+// observeFault fails the begin or the commit of the observation transaction.
+type observeFault struct {
+	*dbsql.DB
+	failBegin, failCommit bool
+	reads                 atomic.Int32
+}
+
+var errObserveFault = errors.New("observation transaction failed")
+
+func (p *observeFault) BeginTx(ctx context.Context, opts *dbsql.TxOptions) (gorm.ConnPool, error) {
+	if p.failBegin {
+		return nil, errObserveFault
+	}
+	tx, err := p.DB.BeginTx(ctx, opts)
+	if err != nil {
+		return nil, err
+	}
+	return &observeFaultTx{Tx: tx, p: p}, nil
+}
+
+func (p *observeFault) QueryContext(ctx context.Context, q string, args ...any) (*dbsql.Rows, error) {
+	p.reads.Add(1)
+	return p.DB.QueryContext(ctx, q, args...)
+}
+
+type observeFaultTx struct {
+	*dbsql.Tx
+	p *observeFault
+}
+
+func (t *observeFaultTx) Commit() error {
+	if t.p.failCommit {
+		_ = t.Tx.Rollback()
+		return errObserveFault
+	}
+	return t.Tx.Commit()
+}
+
+// A failed begin or commit of the observation leaves it unread, with no
+// read outside the transaction and no change to the share.
+func TestObservationTransactionFailureIsUnread(t *testing.T) {
+	marie := recipient("marie")
+	forEachDialectConfig(t, func(t *testing.T, cfg map[string]any) {
+		m := openOCMManager(t, cfg)
+		stored := mustStore(t, m, grantShare(marie, "a.example.org", "r1", file))
+		key := *receivedRow(t, m, stored.Id.OpaqueId).GrantKey
+		id := rowOf(t, m.db, "r1")
+		before, err := readGrantProjection(m.db, key)
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, fault := range []*observeFault{{failBegin: true}, {failCommit: true}} {
+			obs := openOCMManager(t, cfg)
+			sqlDB, err := obs.db.DB()
+			if err != nil {
+				t.Fatal(err)
+			}
+			fault.DB = sqlDB
+			obs.db.Statement.ConnPool = fault
+			checks := []*commitCheck{
+				{shareID: id, observe: func(db *gorm.DB) (share.CommitObservation, error) {
+					return observeReceived(db, id, before.shares[0], before.shares[0])
+				}},
+				{grantKey: key, observe: func(db *gorm.DB) (share.CommitObservation, error) {
+					return observeGrant(db, key, before, before)
+				}},
+			}
+			for _, check := range checks {
+				err := obs.reconcileCommit(context.Background(), "test", check)
+				var unknown *share.CommitUnknownError
+				if !errors.As(err, &unknown) || unknown.Observed != share.CommitObservedUnread {
+					t.Fatalf("begin=%v commit=%v: %v", fault.failBegin, fault.failCommit, err)
+				}
+			}
+			if fault.reads.Load() != 0 {
+				t.Fatalf("%d reads outside the observation", fault.reads.Load())
+			}
+		}
+		after, err := readGrantProjection(m.db, key)
+		if err != nil || !after.equal(before) {
+			t.Fatalf("a failed observation changed the grant: %v", err)
+		}
+	})
+}
