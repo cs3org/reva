@@ -202,10 +202,9 @@ func decodeNotification(body []byte) (*Notification, error) {
 	if err != nil {
 		return nil, err
 	}
-	if providerdomain.Validate(sender) != nil {
+	if n.SenderDomain, err = providerdomain.CanonicalOCMHost(sender); err != nil {
 		return nil, invalidField("senderDomain")
 	}
-	n.SenderDomain = sender
 	if n.ResourceType, err = memberString(members, "resourceType", "resourceType", false); err != nil {
 		return nil, err
 	}

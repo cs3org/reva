@@ -249,24 +249,24 @@
  },
  {
   "id": "ENV-021",
-  "purpose": "senderDomain is FQDN only: a DNS name with a numeric port is rejected",
+  "purpose": "senderDomain host[:port]: a DNS name with a numeric port is valid (round-03 host amendment)",
   "body": {
    "notificationType": "EXAMPLE_FUTURE",
    "senderDomain": "a.example.org:8443",
    "resourceType": "file"
   },
-  "http": 400,
+  "http": 201,
   "handlerCalls": 0
  },
  {
   "id": "ENV-022",
-  "purpose": "senderDomain is FQDN only: a bare IPv4 address is rejected",
+  "purpose": "senderDomain host[:port]: a bare IPv4 address is valid (round-03 host amendment)",
   "body": {
    "notificationType": "EXAMPLE_FUTURE",
    "senderDomain": "192.0.2.1",
    "resourceType": "file"
   },
-  "http": 400,
+  "http": 201,
   "handlerCalls": 0
  },
  {
@@ -616,7 +616,7 @@
  },
  {
   "id": "ENV-044",
-  "purpose": "Mixed ASCII case remains valid in a DNS sender name",
+  "purpose": "Mixed ASCII case remains valid and canonicalizes to lower case (round-03 host amendment)",
   "body": {
    "notificationType": "EXAMPLE_FUTURE",
    "senderDomain": "A.Example.ORG",
@@ -627,51 +627,51 @@
  },
  {
   "id": "ENV-045",
-  "purpose": "senderDomain rejects bracketed IPv6 while OCMAddress syntax remains broader",
+  "purpose": "senderDomain host[:port]: a bracketed IPv6 literal is valid (round-03 host amendment)",
   "body": {
    "notificationType": "EXAMPLE_FUTURE",
    "senderDomain": "[2001:db8::1]",
    "resourceType": "file"
   },
-  "http": 400,
+  "http": 201,
   "handlerCalls": 0
  },
  {
   "id": "ENV-046",
-  "purpose": "Existing canonical DNS spelling rejects a terminal root dot",
+  "purpose": "senderDomain host grammar keeps a terminal root dot as a distinct spelling (round-03 host amendment)",
   "body": {
    "notificationType": "EXAMPLE_FUTURE",
    "senderDomain": "a.example.org.",
    "resourceType": "file"
   },
-  "http": 400,
+  "http": 201,
   "handlerCalls": 0
  },
  {
   "id": "ENV-047",
-  "purpose": "Existing canonical DNS labels reject underscores",
+  "purpose": "senderDomain reg-name grammar admits underscore (round-03 host amendment)",
   "body": {
    "notificationType": "EXAMPLE_FUTURE",
    "senderDomain": "a_b.example.org",
    "resourceType": "file"
   },
-  "http": 400,
+  "http": 201,
   "handlerCalls": 0
  },
  {
   "id": "ENV-048",
-  "purpose": "Existing canonical DNS spelling requires at least two labels",
+  "purpose": "senderDomain reg-name grammar admits a single label (round-03 host amendment)",
   "body": {
    "notificationType": "EXAMPLE_FUTURE",
    "senderDomain": "localhost",
    "resourceType": "file"
   },
-  "http": 400,
+  "http": 201,
   "handlerCalls": 0
  },
  {
   "id": "ENV-049",
-  "purpose": "Punycode A-label spelling is accepted without IDNA conversion",
+  "purpose": "Punycode A-label spelling is accepted without IDNA conversion (round-03 host amendment)",
   "body": {
    "notificationType": "EXAMPLE_FUTURE",
    "senderDomain": "xn--bcher-kva.example",
@@ -682,7 +682,7 @@
  },
  {
   "id": "ENV-050",
-  "purpose": "senderDomain rejects a URI scheme rather than removing it",
+  "purpose": "senderDomain rejects a URI scheme rather than removing it (round-03 host amendment)",
   "body": {
    "notificationType": "EXAMPLE_FUTURE",
    "senderDomain": "https://a.example.org",
@@ -693,10 +693,598 @@
  },
  {
   "id": "ENV-051",
-  "purpose": "senderDomain full-input validation rejects a terminal newline",
+  "purpose": "senderDomain full-input validation rejects a terminal newline (round-03 host amendment)",
   "body": {
    "notificationType": "EXAMPLE_FUTURE",
    "senderDomain": "a.example.org\n",
+   "resourceType": "file"
+  },
+  "http": 400,
+  "handlerCalls": 0
+ },
+ {
+  "id": "ENV-052",
+  "purpose": "notificationType U+0009 alone is blank",
+  "body": {
+   "notificationType": "\t",
+   "senderDomain": "a.example.org",
+   "resourceType": "file"
+  },
+  "http": 400,
+  "handlerCalls": 0
+ },
+ {
+  "id": "ENV-053",
+  "purpose": "notificationType U+000A alone is blank",
+  "body": {
+   "notificationType": "\n",
+   "senderDomain": "a.example.org",
+   "resourceType": "file"
+  },
+  "http": 400,
+  "handlerCalls": 0
+ },
+ {
+  "id": "ENV-054",
+  "purpose": "notificationType U+000B alone is blank",
+  "body": {
+   "notificationType": "\u000b",
+   "senderDomain": "a.example.org",
+   "resourceType": "file"
+  },
+  "http": 400,
+  "handlerCalls": 0
+ },
+ {
+  "id": "ENV-055",
+  "purpose": "notificationType U+000C alone is blank",
+  "body": {
+   "notificationType": "\f",
+   "senderDomain": "a.example.org",
+   "resourceType": "file"
+  },
+  "http": 400,
+  "handlerCalls": 0
+ },
+ {
+  "id": "ENV-056",
+  "purpose": "notificationType U+000D alone is blank",
+  "body": {
+   "notificationType": "\r",
+   "senderDomain": "a.example.org",
+   "resourceType": "file"
+  },
+  "http": 400,
+  "handlerCalls": 0
+ },
+ {
+  "id": "ENV-057",
+  "purpose": "notificationType U+0020 alone is blank",
+  "body": {
+   "notificationType": " ",
+   "senderDomain": "a.example.org",
+   "resourceType": "file"
+  },
+  "http": 400,
+  "handlerCalls": 0
+ },
+ {
+  "id": "ENV-058",
+  "purpose": "notificationType U+0085 alone is blank",
+  "body": {
+   "notificationType": "\u0085",
+   "senderDomain": "a.example.org",
+   "resourceType": "file"
+  },
+  "http": 400,
+  "handlerCalls": 0
+ },
+ {
+  "id": "ENV-059",
+  "purpose": "notificationType U+00A0 alone is blank",
+  "body": {
+   "notificationType": "\u00a0",
+   "senderDomain": "a.example.org",
+   "resourceType": "file"
+  },
+  "http": 400,
+  "handlerCalls": 0
+ },
+ {
+  "id": "ENV-060",
+  "purpose": "notificationType U+1680 alone is blank",
+  "body": {
+   "notificationType": "\u1680",
+   "senderDomain": "a.example.org",
+   "resourceType": "file"
+  },
+  "http": 400,
+  "handlerCalls": 0
+ },
+ {
+  "id": "ENV-061",
+  "purpose": "notificationType U+2000 alone is blank",
+  "body": {
+   "notificationType": "\u2000",
+   "senderDomain": "a.example.org",
+   "resourceType": "file"
+  },
+  "http": 400,
+  "handlerCalls": 0
+ },
+ {
+  "id": "ENV-062",
+  "purpose": "notificationType U+2001 alone is blank",
+  "body": {
+   "notificationType": "\u2001",
+   "senderDomain": "a.example.org",
+   "resourceType": "file"
+  },
+  "http": 400,
+  "handlerCalls": 0
+ },
+ {
+  "id": "ENV-063",
+  "purpose": "notificationType U+2002 alone is blank",
+  "body": {
+   "notificationType": "\u2002",
+   "senderDomain": "a.example.org",
+   "resourceType": "file"
+  },
+  "http": 400,
+  "handlerCalls": 0
+ },
+ {
+  "id": "ENV-064",
+  "purpose": "notificationType U+2003 alone is blank",
+  "body": {
+   "notificationType": "\u2003",
+   "senderDomain": "a.example.org",
+   "resourceType": "file"
+  },
+  "http": 400,
+  "handlerCalls": 0
+ },
+ {
+  "id": "ENV-065",
+  "purpose": "notificationType U+2004 alone is blank",
+  "body": {
+   "notificationType": "\u2004",
+   "senderDomain": "a.example.org",
+   "resourceType": "file"
+  },
+  "http": 400,
+  "handlerCalls": 0
+ },
+ {
+  "id": "ENV-066",
+  "purpose": "notificationType U+2005 alone is blank",
+  "body": {
+   "notificationType": "\u2005",
+   "senderDomain": "a.example.org",
+   "resourceType": "file"
+  },
+  "http": 400,
+  "handlerCalls": 0
+ },
+ {
+  "id": "ENV-067",
+  "purpose": "notificationType U+2006 alone is blank",
+  "body": {
+   "notificationType": "\u2006",
+   "senderDomain": "a.example.org",
+   "resourceType": "file"
+  },
+  "http": 400,
+  "handlerCalls": 0
+ },
+ {
+  "id": "ENV-068",
+  "purpose": "notificationType U+2007 alone is blank",
+  "body": {
+   "notificationType": "\u2007",
+   "senderDomain": "a.example.org",
+   "resourceType": "file"
+  },
+  "http": 400,
+  "handlerCalls": 0
+ },
+ {
+  "id": "ENV-069",
+  "purpose": "notificationType U+2008 alone is blank",
+  "body": {
+   "notificationType": "\u2008",
+   "senderDomain": "a.example.org",
+   "resourceType": "file"
+  },
+  "http": 400,
+  "handlerCalls": 0
+ },
+ {
+  "id": "ENV-070",
+  "purpose": "notificationType U+2009 alone is blank",
+  "body": {
+   "notificationType": "\u2009",
+   "senderDomain": "a.example.org",
+   "resourceType": "file"
+  },
+  "http": 400,
+  "handlerCalls": 0
+ },
+ {
+  "id": "ENV-071",
+  "purpose": "notificationType U+200A alone is blank",
+  "body": {
+   "notificationType": "\u200a",
+   "senderDomain": "a.example.org",
+   "resourceType": "file"
+  },
+  "http": 400,
+  "handlerCalls": 0
+ },
+ {
+  "id": "ENV-072",
+  "purpose": "notificationType U+2028 alone is blank",
+  "body": {
+   "notificationType": "\u2028",
+   "senderDomain": "a.example.org",
+   "resourceType": "file"
+  },
+  "http": 400,
+  "handlerCalls": 0
+ },
+ {
+  "id": "ENV-073",
+  "purpose": "notificationType U+2029 alone is blank",
+  "body": {
+   "notificationType": "\u2029",
+   "senderDomain": "a.example.org",
+   "resourceType": "file"
+  },
+  "http": 400,
+  "handlerCalls": 0
+ },
+ {
+  "id": "ENV-074",
+  "purpose": "notificationType U+202F alone is blank",
+  "body": {
+   "notificationType": "\u202f",
+   "senderDomain": "a.example.org",
+   "resourceType": "file"
+  },
+  "http": 400,
+  "handlerCalls": 0
+ },
+ {
+  "id": "ENV-075",
+  "purpose": "notificationType U+205F alone is blank",
+  "body": {
+   "notificationType": "\u205f",
+   "senderDomain": "a.example.org",
+   "resourceType": "file"
+  },
+  "http": 400,
+  "handlerCalls": 0
+ },
+ {
+  "id": "ENV-076",
+  "purpose": "notificationType U+3000 alone is blank",
+  "body": {
+   "notificationType": "\u3000",
+   "senderDomain": "a.example.org",
+   "resourceType": "file"
+  },
+  "http": 400,
+  "handlerCalls": 0
+ },
+ {
+  "id": "ENV-077",
+  "purpose": "notificationType of listed whitespace only is blank",
+  "body": {
+   "notificationType": " \u0085\u00a0\u2003\u3000\t",
+   "senderDomain": "a.example.org",
+   "resourceType": "file"
+  },
+  "http": 400,
+  "handlerCalls": 0
+ },
+ {
+  "id": "ENV-078",
+  "purpose": "notificationType U+FEFF alone is a nonblank unknown type",
+  "body": {
+   "notificationType": "\ufeff",
+   "senderDomain": "a.example.org",
+   "resourceType": "file"
+  },
+  "http": 201,
+  "handlerCalls": 0
+ },
+ {
+  "id": "ENV-079",
+  "purpose": "notificationType U+001C alone is a nonblank unknown type",
+  "body": {
+   "notificationType": "\u001c",
+   "senderDomain": "a.example.org",
+   "resourceType": "file"
+  },
+  "http": 201,
+  "handlerCalls": 0
+ },
+ {
+  "id": "ENV-080",
+  "purpose": "notificationType U+001D alone is a nonblank unknown type",
+  "body": {
+   "notificationType": "\u001d",
+   "senderDomain": "a.example.org",
+   "resourceType": "file"
+  },
+  "http": 201,
+  "handlerCalls": 0
+ },
+ {
+  "id": "ENV-081",
+  "purpose": "notificationType U+001E alone is a nonblank unknown type",
+  "body": {
+   "notificationType": "\u001e",
+   "senderDomain": "a.example.org",
+   "resourceType": "file"
+  },
+  "http": 201,
+  "handlerCalls": 0
+ },
+ {
+  "id": "ENV-082",
+  "purpose": "notificationType U+001F alone is a nonblank unknown type",
+  "body": {
+   "notificationType": "\u001f",
+   "senderDomain": "a.example.org",
+   "resourceType": "file"
+  },
+  "http": 201,
+  "handlerCalls": 0
+ },
+ {
+  "id": "ENV-083",
+  "purpose": "notificationType U+200B alone is a nonblank unknown type",
+  "body": {
+   "notificationType": "\u200b",
+   "senderDomain": "a.example.org",
+   "resourceType": "file"
+  },
+  "http": 201,
+  "handlerCalls": 0
+ },
+ {
+  "id": "ENV-084",
+  "purpose": "notificationType U+180E alone is a nonblank unknown type",
+  "body": {
+   "notificationType": "\u180e",
+   "senderDomain": "a.example.org",
+   "resourceType": "file"
+  },
+  "http": 201,
+  "handlerCalls": 0
+ },
+ {
+  "id": "ENV-085",
+  "purpose": "notificationType keeps surrounding listed whitespace as part of an unknown identity",
+  "body": {
+   "notificationType": "\u0085EXT\u2003",
+   "senderDomain": "a.example.org",
+   "resourceType": "file"
+  },
+  "http": 201,
+  "handlerCalls": 0
+ },
+ {
+  "id": "ENV-086",
+  "purpose": "A padded known type name is an unknown type with no share effect",
+  "body": {
+   "notificationType": " SHARE_UNSHARED ",
+   "senderDomain": "a.example.org",
+   "resourceType": "file",
+   "notification": {
+    "file": {
+     "providerId": "42"
+    }
+   }
+  },
+  "http": 201,
+  "handlerCalls": 0
+ },
+ {
+  "id": "ENV-087",
+  "purpose": "senderDomain 'a.example.org:8443' is a valid host[:port]",
+  "body": {
+   "notificationType": "EXAMPLE_FUTURE",
+   "senderDomain": "a.example.org:8443",
+   "resourceType": "file"
+  },
+  "http": 201,
+  "handlerCalls": 0
+ },
+ {
+  "id": "ENV-088",
+  "purpose": "senderDomain '[2001:db8::1]:8443' is a valid host[:port]",
+  "body": {
+   "notificationType": "EXAMPLE_FUTURE",
+   "senderDomain": "[2001:db8::1]:8443",
+   "resourceType": "file"
+  },
+  "http": 201,
+  "handlerCalls": 0
+ },
+ {
+  "id": "ENV-089",
+  "purpose": "senderDomain '192.0.2.1:8443' is a valid host[:port]",
+  "body": {
+   "notificationType": "EXAMPLE_FUTURE",
+   "senderDomain": "192.0.2.1:8443",
+   "resourceType": "file"
+  },
+  "http": 201,
+  "handlerCalls": 0
+ },
+ {
+  "id": "ENV-090",
+  "purpose": "senderDomain 'a.example.org:' is a valid host[:port]",
+  "body": {
+   "notificationType": "EXAMPLE_FUTURE",
+   "senderDomain": "a.example.org:",
+   "resourceType": "file"
+  },
+  "http": 201,
+  "handlerCalls": 0
+ },
+ {
+  "id": "ENV-091",
+  "purpose": "senderDomain 'a.example.org:0443' is a valid host[:port]",
+  "body": {
+   "notificationType": "EXAMPLE_FUTURE",
+   "senderDomain": "a.example.org:0443",
+   "resourceType": "file"
+  },
+  "http": 201,
+  "handlerCalls": 0
+ },
+ {
+  "id": "ENV-092",
+  "purpose": "senderDomain '[v1.a]' is a valid host[:port]",
+  "body": {
+   "notificationType": "EXAMPLE_FUTURE",
+   "senderDomain": "[v1.a]",
+   "resourceType": "file"
+  },
+  "http": 201,
+  "handlerCalls": 0
+ },
+ {
+  "id": "ENV-093",
+  "purpose": "senderDomain 'a%2eexample.org' is a valid host[:port]",
+  "body": {
+   "notificationType": "EXAMPLE_FUTURE",
+   "senderDomain": "a%2eexample.org",
+   "resourceType": "file"
+  },
+  "http": 201,
+  "handlerCalls": 0
+ },
+ {
+  "id": "ENV-094",
+  "purpose": "senderDomain 'a.example.org:999999999999999999999999' is a valid host[:port]",
+  "body": {
+   "notificationType": "EXAMPLE_FUTURE",
+   "senderDomain": "a.example.org:999999999999999999999999",
+   "resourceType": "file"
+  },
+  "http": 201,
+  "handlerCalls": 0
+ },
+ {
+  "id": "ENV-095",
+  "purpose": "senderDomain '[abcd]' is not a host[:port]",
+  "body": {
+   "notificationType": "EXAMPLE_FUTURE",
+   "senderDomain": "[abcd]",
+   "resourceType": "file"
+  },
+  "http": 400,
+  "handlerCalls": 0
+ },
+ {
+  "id": "ENV-096",
+  "purpose": "senderDomain '[fe80::1%25eth0]' is not a host[:port]",
+  "body": {
+   "notificationType": "EXAMPLE_FUTURE",
+   "senderDomain": "[fe80::1%25eth0]",
+   "resourceType": "file"
+  },
+  "http": 400,
+  "handlerCalls": 0
+ },
+ {
+  "id": "ENV-097",
+  "purpose": "senderDomain 'a%zz.example.org' is not a host[:port]",
+  "body": {
+   "notificationType": "EXAMPLE_FUTURE",
+   "senderDomain": "a%zz.example.org",
+   "resourceType": "file"
+  },
+  "http": 400,
+  "handlerCalls": 0
+ },
+ {
+  "id": "ENV-098",
+  "purpose": "senderDomain 'x@a.example.org' is not a host[:port]",
+  "body": {
+   "notificationType": "EXAMPLE_FUTURE",
+   "senderDomain": "x@a.example.org",
+   "resourceType": "file"
+  },
+  "http": 400,
+  "handlerCalls": 0
+ },
+ {
+  "id": "ENV-099",
+  "purpose": "senderDomain 'a.example.org/path' is not a host[:port]",
+  "body": {
+   "notificationType": "EXAMPLE_FUTURE",
+   "senderDomain": "a.example.org/path",
+   "resourceType": "file"
+  },
+  "http": 400,
+  "handlerCalls": 0
+ },
+ {
+  "id": "ENV-100",
+  "purpose": "senderDomain 'a.example.org?x' is not a host[:port]",
+  "body": {
+   "notificationType": "EXAMPLE_FUTURE",
+   "senderDomain": "a.example.org?x",
+   "resourceType": "file"
+  },
+  "http": 400,
+  "handlerCalls": 0
+ },
+ {
+  "id": "ENV-101",
+  "purpose": "senderDomain 'a.example.org#x' is not a host[:port]",
+  "body": {
+   "notificationType": "EXAMPLE_FUTURE",
+   "senderDomain": "a.example.org#x",
+   "resourceType": "file"
+  },
+  "http": 400,
+  "handlerCalls": 0
+ },
+ {
+  "id": "ENV-102",
+  "purpose": "senderDomain 'a.example.org:bad' is not a host[:port]",
+  "body": {
+   "notificationType": "EXAMPLE_FUTURE",
+   "senderDomain": "a.example.org:bad",
+   "resourceType": "file"
+  },
+  "http": 400,
+  "handlerCalls": 0
+ },
+ {
+  "id": "ENV-103",
+  "purpose": "senderDomain 'http://a.example.org' is not a host[:port]",
+  "body": {
+   "notificationType": "EXAMPLE_FUTURE",
+   "senderDomain": "http://a.example.org",
+   "resourceType": "file"
+  },
+  "http": 400,
+  "handlerCalls": 0
+ },
+ {
+  "id": "ENV-104",
+  "purpose": "senderDomain ' a.example.org' is not a host[:port]",
+  "body": {
+   "notificationType": "EXAMPLE_FUTURE",
+   "senderDomain": " a.example.org",
    "resourceType": "file"
   },
   "http": 400,
