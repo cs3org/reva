@@ -208,6 +208,11 @@ func (c *Client) fixupACLsAndAttrs(ctx context.Context, auth eosclient.Authoriza
 				info.Attrs[k] = v
 			}
 		}
+
+		// A file has no sys.mask of its own: EOS applies the mask of the parent folder.
+		if parentInfo != nil {
+			info.Attrs["sys.mask"] = parentInfo.Attrs["sys.mask"]
+		}
 	}
 	return info
 }

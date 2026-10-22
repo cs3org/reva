@@ -29,6 +29,7 @@ import (
 	"github.com/cs3org/reva/v3/pkg/appctx"
 	"github.com/cs3org/reva/v3/pkg/errtypes"
 	eosclient "github.com/cs3org/reva/v3/pkg/storage/fs/eos/client"
+	"github.com/cs3org/reva/v3/pkg/storage/utils/grants"
 	"github.com/pkg/errors"
 )
 
@@ -107,13 +108,14 @@ func (fs *Eosfs) GetMD(ctx context.Context, ref *provider.Reference, mdKeys []st
 		return nil, err
 	}
 
+	var eosFileInfo *eosclient.FileInfo
 	if ref.ResourceId != nil {
 		fid, err := strconv.ParseUint(ref.ResourceId.OpaqueId, 10, 64)
 		if err != nil {
 			return nil, fmt.Errorf("error converting string to int for eos fileid: %s", ref.ResourceId.OpaqueId)
 		}
 
-		eosFileInfo, err := fs.c.GetFileInfoByInode(ctx, auth, fid)
+		eosFileInfo, err = fs.c.GetFileInfoByInode(ctx, auth, fid)
 		if err != nil {
 			log.Error().Err(err).Str("fid", strconv.Itoa(int(fid))).Msg("Failed to get file info by inode")
 			return nil, err
@@ -127,16 +129,25 @@ func (fs *Eosfs) GetMD(ctx context.Context, ref *provider.Reference, mdKeys []st
 				return nil, err
 			}
 		}
-		return fs.convertToResourceInfo(ctx, eosFileInfo)
+	} else {
+		eosFileInfo, err = fs.c.GetFileInfoByPath(ctx, auth, fn)
+		if err != nil {
+			log.Error().Err(err).Str("path", fn).Msg("Failed to get file info by path")
+			return nil, err
+		}
 	}
 
-	eosFileInfo, err := fs.c.GetFileInfoByPath(ctx, auth, fn)
+	ri, err := fs.convertToResourceInfo(ctx, eosFileInfo)
 	if err != nil {
-		log.Error().Err(err).Str("path", fn).Msg("Failed to get file info by path")
 		return nil, err
 	}
 
-	return fs.convertToResourceInfo(ctx, eosFileInfo)
+	// EOS does not check access, because the stat uses the daemon auth.
+	if grants.PermissionsEqual(ri.PermissionSet, &provider.ResourcePermissions{}) {
+		return nil, errtypes.PermissionDenied("eosfs: user has no permissions on resource")
+	}
+
+	return ri, nil
 }
 
 func (fs *Eosfs) convertToResourceInfo(ctx context.Context, eosFileInfo *eosclient.FileInfo) (*provider.ResourceInfo, error) {

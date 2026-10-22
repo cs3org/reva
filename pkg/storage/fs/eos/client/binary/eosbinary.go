@@ -450,6 +450,11 @@ func (c *Client) mergeACLsAndAttrsForFiles(ctx context.Context, auth eosclient.A
 			}
 			maps.Copy(info.Attrs, versionFolderInfo.Attrs)
 		}
+
+		// A file has no sys.mask of its own: EOS applies the mask of the parent folder.
+		if parentInfo != nil {
+			info.Attrs["sys.mask"] = parentInfo.Attrs["sys.mask"]
+		}
 	}
 
 	return info
@@ -1074,6 +1079,11 @@ func (c *Client) parseFind(ctx context.Context, auth eosclient.Authorization, di
 			}
 			if cache {
 				c.versionFolderCache.Set(versionFolderPath, fi)
+			}
+
+			// A file has no sys.mask of its own: EOS applies the mask of the parent folder.
+			if parent != nil {
+				fi.Attrs["sys.mask"] = parent.Attrs["sys.mask"]
 			}
 		}
 	}

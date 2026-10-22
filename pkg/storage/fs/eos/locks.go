@@ -355,6 +355,9 @@ func (fs *Eosfs) getUserFromID(ctx context.Context, userID *userpb.UserId) (*use
 func (fs *Eosfs) userHasWriteAccess(ctx context.Context, user *userpb.User, ref *provider.Reference) (bool, error) {
 	ctx = appctx.ContextSetUser(ctx, user)
 	resInfo, err := fs.GetMD(ctx, ref, nil)
+	if _, ok := err.(errtypes.PermissionDenied); ok {
+		return false, nil
+	}
 	if err != nil {
 		return false, err
 	}
@@ -372,6 +375,9 @@ func (fs *Eosfs) userIDHasWriteAccess(ctx context.Context, userID *userpb.UserId
 func (fs *Eosfs) userHasReadAccess(ctx context.Context, user *userpb.User, ref *provider.Reference) (bool, error) {
 	ctx = appctx.ContextSetUser(ctx, user)
 	resInfo, err := fs.GetMD(ctx, ref, nil)
+	if _, ok := err.(errtypes.PermissionDenied); ok {
+		return false, nil
+	}
 	if err != nil {
 		return false, err
 	}

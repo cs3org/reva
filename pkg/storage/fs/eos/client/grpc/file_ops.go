@@ -442,6 +442,11 @@ func (c *Client) list(ctx context.Context, auth eosclient.Authorization, dpath s
 					log.Error().Err(err).Interface("auth", auth).Str("path", versionFolderPath).Msg("got error creating version folder")
 				}
 			}
+
+			// A file has no sys.mask of its own: EOS applies the mask of the parent folder.
+			if parent != nil {
+				fi.Attrs["sys.mask"] = parent.Attrs["sys.mask"]
+			}
 		}
 	}
 
