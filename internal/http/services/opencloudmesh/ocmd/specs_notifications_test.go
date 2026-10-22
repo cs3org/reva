@@ -104,9 +104,14 @@ func TestParseNotificationFields(t *testing.T) {
 	if n.User == nil || n.User.UserID != "Alice @x@a.example.org" {
 		t.Fatalf("user %#v", n.User)
 	}
-	n = mustParse(t, reg, `{"notificationType":"ACME","senderDomain":"A.Example.org","shareType":"user","providerId":"flat"}`)
-	if n.Class != NotificationClassUnknown || n.SenderDomain != "A.Example.org" || n.ProviderID != "" {
+	// senderDomain is the complete host and port, lowercased only.
+	n = mustParse(t, reg, `{"notificationType":"ACME","senderDomain":"A.Example.org:0443","shareType":"user","providerId":"flat"}`)
+	if n.Class != NotificationClassUnknown || n.SenderDomain != "a.example.org:0443" || n.ProviderID != "" {
 		t.Fatalf("unknown %#v", n)
+	}
+	n = mustParse(t, reg, `{"notificationType":"\u0085EXT\u2003","senderDomain":"[2001:DB8::1]:8443","shareType":"user"}`)
+	if n.Type != "\u0085EXT\u2003" || n.SenderDomain != "[2001:db8::1]:8443" {
+		t.Fatalf("identity %q %q", n.Type, n.SenderDomain)
 	}
 }
 
