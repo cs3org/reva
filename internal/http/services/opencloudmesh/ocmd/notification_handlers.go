@@ -136,8 +136,13 @@ func (r *NotificationRegistry) Parse(body []byte) (*Notification, error) {
 		n.Class = NotificationClassUnknown
 		return n, nil
 	}
+	// A known type with an invalid payload is never dispatched.
+	if err := e.validate(n); err != nil {
+		n.Class = NotificationClassMalformed
+		return n, err
+	}
 	n.Class = NotificationClassSpec
-	return n, e.validate(n)
+	return n, nil
 }
 
 // Dispatch hands a parsed notification to its handler. Unknown types and
