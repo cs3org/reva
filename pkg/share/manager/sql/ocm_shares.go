@@ -432,11 +432,8 @@ func (m *mgr) GetEmbeddedPayload(ctx context.Context, user *userpb.User, receive
 // provider grant. A share whose grant identity cannot be formed is rejected
 // with ErrInvalidGrantIdentity. A withdrawn grant cannot be recreated.
 func (m *mgr) StoreReceivedShare(ctx context.Context, s *ocm.ReceivedShare) (*ocm.ReceivedShare, error) {
-	if s.GetCreator() == nil {
-		return nil, share.ErrInvalidGrantIdentity
-	}
-	origin, ok := grantOrigin(formatUserID(s.Creator))
-	if !ok {
+	origin, err := share.ReceivedGrantOrigin(s.GetCreator())
+	if err != nil {
 		return nil, share.ErrInvalidGrantIdentity
 	}
 	key, err := share.GrantKey(origin, s.RemoteShareId)
@@ -462,7 +459,7 @@ func (m *mgr) StoreReceivedShare(ctx context.Context, s *ocm.ReceivedShare) (*oc
 			ItemType:      convertFromCS3ResourceType(s.SharedResourceType),
 			ShareWith:     shareWith,
 			Owner:         formatUserID(s.Owner),
-			Initiator:     formatUserID(s.Creator),
+			Initiator:     s.Creator.GetOpaqueId() + "@" + origin,
 			Ctime:         s.Ctime.Seconds,
 			Mtime:         s.Mtime.Seconds,
 			RecipientType: convertFromCS3OCMShareType(s.RecipientType),

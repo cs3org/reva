@@ -693,7 +693,10 @@ func (m *mgr) ListShares(ctx context.Context, user *userpb.User, filters []*ocm.
 	return ss, nil
 }
 
-func (m *mgr) StoreReceivedShare(ctx context.Context, share *ocm.ReceivedShare) (*ocm.ReceivedShare, error) {
+func (m *mgr) StoreReceivedShare(ctx context.Context, rs *ocm.ReceivedShare) (*ocm.ReceivedShare, error) {
+	if _, err := share.ReceivedGrantOrigin(rs.GetCreator()); err != nil {
+		return nil, share.ErrInvalidGrantIdentity
+	}
 	m.Lock()
 	defer m.Unlock()
 
@@ -707,18 +710,18 @@ func (m *mgr) StoreReceivedShare(ctx context.Context, share *ocm.ReceivedShare) 
 		Nanos:   uint32(now % 1000000000),
 	}
 
-	share.Id = &ocm.ShareId{
+	rs.Id = &ocm.ShareId{
 		OpaqueId: genID(),
 	}
-	share.Ctime = ts
-	share.Mtime = ts
+	rs.Ctime = ts
+	rs.Mtime = ts
 
-	m.model.ReceivedShares[share.Id.OpaqueId] = proto.Clone(share).(*ocm.ReceivedShare)
+	m.model.ReceivedShares[rs.Id.OpaqueId] = proto.Clone(rs).(*ocm.ReceivedShare)
 	if err := m.save(); err != nil {
 		return nil, err
 	}
 
-	return share, nil
+	return rs, nil
 }
 
 func (m *mgr) ListReceivedShares(ctx context.Context, user *userpb.User, filters []*ocm.ListReceivedOCMSharesRequest_Filter) ([]*ocm.ReceivedShare, error) {

@@ -23,6 +23,7 @@ import (
 	"encoding/binary"
 	"encoding/hex"
 
+	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	ocm "github.com/cs3org/go-cs3apis/cs3/sharing/ocm/v1beta1"
 	"github.com/cs3org/reva/v3/pkg/errtypes"
 	"github.com/cs3org/reva/v3/pkg/ocm/providerdomain"
@@ -87,6 +88,16 @@ func CanonicalGrantOrigin(domain string) (string, error) {
 		return "", ErrInvalidGrantIdentity
 	}
 	return origin, nil
+}
+
+// ReceivedGrantOrigin validates the creator of a new received share and
+// returns its origin. The opaque ID and the separate host are checked before
+// they are joined, so an @ in the host cannot move the origin.
+func ReceivedGrantOrigin(creator *userpb.UserId) (string, error) {
+	if creator.GetOpaqueId() == "" {
+		return "", ErrInvalidGrantIdentity
+	}
+	return CanonicalGrantOrigin(creator.GetIdp())
 }
 
 // GrantKey returns the identity key of a provider grant, a length-prefixed

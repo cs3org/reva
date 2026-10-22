@@ -110,6 +110,11 @@ func (s *service) CreateOCMIncomingShare(ctx context.Context, req *ocmincoming.C
 	if req.RecipientType != ocm.RecipientType_RECIPIENT_TYPE_USER {
 		return nil, errtypes.NotSupported("share type not supported")
 	}
+	if _, err := share.ReceivedGrantOrigin(req.GetSender()); err != nil {
+		return &ocmincoming.CreateOCMIncomingShareResponse{
+			Status: status.NewInvalidArg(ctx, "invalid provider or remote share ID"),
+		}, nil
+	}
 
 	now := &typesv1beta1.Timestamp{
 		Seconds: uint64(time.Now().Unix()),
