@@ -23,6 +23,7 @@ import (
 	"os"
 	"runtime"
 	"runtime/debug"
+	"slices"
 	"time"
 
 	"github.com/cs3org/reva/v3/pkg/admin/adminpb"
@@ -121,6 +122,12 @@ func (s *svc) ListServices(ctx context.Context, req *adminpb.ListServicesRequest
 	}
 	out := make([]*adminpb.Service, 0, len(svcs))
 	for _, sv := range svcs {
+		if req.Invocation != "" {
+			specs, err := invocationsFromMetadata(reg, sv.Name())
+			if err != nil || !slices.ContainsFunc(specs, func(spec *adminpb.InvocationSpec) bool { return spec.Name == req.Invocation }) {
+				continue
+			}
+		}
 		nodes := make([]*adminpb.Node, 0, len(sv.Nodes()))
 		for _, n := range sv.Nodes() {
 			nodes = append(nodes, toNode(n))

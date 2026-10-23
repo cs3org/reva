@@ -60,7 +60,7 @@ func (s *svc) invokeJobsOne(ctx context.Context, invocation string, args map[str
 	if err != nil {
 		return nil, err
 	}
-	res := client.InvokeOne(ctx, client.Pick(ctx, eps), invocation, args, client.PerNodeTimeout)
+	res := client.InvokeOne(ctx, client.Pick(ctx, eps), invocation, args)
 	if res.Error != "" {
 		return nil, status.Errorf(codes.Internal, "admin: jobs %s: %s", invocation, res.Error)
 	}

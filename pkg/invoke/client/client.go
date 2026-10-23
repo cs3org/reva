@@ -141,7 +141,7 @@ func FanOut(ctx context.Context, eps []Endpoint, invocation string, args map[str
 		wg.Add(1)
 		go func(i int, g []Endpoint) {
 			defer wg.Done()
-			results[i] = InvokeOne(ctx, Pick(ctx, g), invocation, args, PerNodeTimeout)
+			results[i] = InvokeOne(ctx, Pick(ctx, g), invocation, args)
 		}(i, g)
 	}
 	wg.Wait()
@@ -215,8 +215,8 @@ func connReady(ctx context.Context, addr string) bool {
 	}
 }
 
-// InvokeOne runs a single peer invocation, bounded by timeout.
-func InvokeOne(ctx context.Context, ep Endpoint, invocation string, args map[string]string, timeout time.Duration) NodeResult {
+// InvokeOne runs a single peer invocation with a bounded timeout.
+func InvokeOne(ctx context.Context, ep Endpoint, invocation string, args map[string]string) NodeResult {
 	if ep.Err != "" {
 		return NodeResult{Node: ep.Node, Error: ep.Err}
 	}
@@ -224,7 +224,7 @@ func InvokeOne(ctx context.Context, ep Endpoint, invocation string, args map[str
 	if err != nil {
 		return NodeResult{Node: ep.Node, Error: err.Error()}
 	}
-	cctx, cancel := context.WithTimeout(ctx, timeout)
+	cctx, cancel := context.WithTimeout(ctx, PerNodeTimeout)
 	defer cancel()
 	resp, err := cli.Invoke(cctx, &controlpb.InvokeRequest{Target: ep.Target, Invocation: invocation, Args: args})
 	if err != nil {

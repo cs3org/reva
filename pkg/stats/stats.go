@@ -36,6 +36,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"regexp"
+	"slices"
 
 	"github.com/cs3org/reva/v3/pkg/invoke"
 )
@@ -171,15 +172,44 @@ func NewInvokeSet(manager any) *invoke.Set {
 		return set
 	}
 	// Every Reporter reads state that all the instances share, such as a
-	// database, so one instance per service answers.
-	set.Add(Invocation, "Service statistics as a self-describing metrics payload.").
+	// database, so one instance per service answers. The payload can hold
+	// one sample per user, so it is streamed in chunks.
+	set.Add(Invocation, "Service statistics as a stream of self-describing metrics payloads.").
 		Shared().
-		Handle(invoke.Typed(func(ctx context.Context, _ struct{}) (invoke.Result, error) {
+		HandleStream(invoke.TypedStream(func(ctx context.Context, _ struct{}, emit invoke.StreamEmit) error {
 			p, err := r.Stats(ctx)
 			if err != nil {
-				return nil, err
+				return err
 			}
-			return p.Result()
+			for _, c := range p.chunks(chunkSamples) {
+				res, err := c.Result()
+				if err != nil {
+					return err
+				}
+				if err := emit(res); err != nil {
+					return err
+				}
+			}
+			return nil
 		}))
 	return set
+}
+
+// chunkSamples bounds the samples of one streamed payload, so that a message
+// stays far below the gRPC message limit.
+const chunkSamples = 10000
+
+// chunks splits the payload into payloads of at most n samples. The collector
+// sums the samples of a metric, so the chunks give the same metrics.
+func (p *Payload) chunks(n int) []*Payload {
+	var out []*Payload
+	for _, m := range p.Metrics {
+		for s := range slices.Chunk(m.Samples, n) {
+			out = append(out, &Payload{Metrics: []Metric{{Name: m.Name, Help: m.Help, Kind: m.Kind, Samples: s}}})
+		}
+		for s := range slices.Chunk(m.OwnerSamples, n) {
+			out = append(out, &Payload{Metrics: []Metric{{Name: m.Name, Help: m.Help, Kind: m.Kind, OwnerSamples: s}}})
+		}
+	}
+	return out
 }

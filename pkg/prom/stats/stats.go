@@ -17,10 +17,10 @@
 // or submit itself to any jurisdiction.
 
 // Package stats is the prometheus collector turning the fleet's service
-// statistics into metrics. It needs no configuration: it discovers the
-// services advertising a "stats" invocation through the service registry,
-// invokes them over the control channel on a background refresh loop, and
-// serves the cached results — a scrape never triggers an invocation.
+// statistics into metrics. It needs no configuration: through the Admin
+// API it finds the services advertising a "stats" invocation and invokes
+// them on a background refresh loop, and it serves the cached results — a
+// scrape never triggers an invocation.
 //
 // If an owner-attributes file is present (default
 // /etc/revad/owner-attributes.json, a JSON object mapping owner ids to
@@ -44,10 +44,7 @@ import (
 	"time"
 
 	"github.com/cs3org/reva/v3/pkg/appctx"
-	"github.com/cs3org/reva/v3/pkg/invoke/client"
 	"github.com/cs3org/reva/v3/pkg/prom/registry"
-	"github.com/cs3org/reva/v3/pkg/stats"
-	jwtmgr "github.com/cs3org/reva/v3/pkg/token/manager/jwt"
 	"github.com/cs3org/reva/v3/pkg/utils/cfg"
 	"github.com/prometheus/client_golang/prometheus"
 )
@@ -99,16 +96,12 @@ func New(ctx context.Context, m map[string]any) ([]prometheus.Collector, error) 
 		attrFile = DefaultOwnerAttributesFile
 	}
 
-	tm, err := jwtmgr.New(nil)
-	if err != nil {
-		return nil, fmt.Errorf("prom stats: token manager: %w", err)
-	}
 	col := &collector{
 		namespace: namespace,
 		attrFile:  attrFile,
 		attrKey:   c.Stats.OwnerAttributesKey,
 		attrKeys:  c.Stats.OwnerAttributes,
-		fleet:     registryFleet{tokenManager: tm},
+		fleet:     adminFleet{},
 		errors:    map[string]float64{},
 	}
 	go col.run(ctx, interval)
@@ -166,13 +159,12 @@ func (c *collector) run(ctx context.Context, interval time.Duration) {
 // refreshOnce queries every discovered stats target and swaps the cache.
 func (c *collector) refreshOnce(ctx context.Context) {
 	log := appctx.GetLogger(ctx)
-	targets := c.fleet.StatsTargets()
-	if len(targets) == 0 {
+	services, err := c.fleet.StatsServices(ctx)
+	if err != nil {
+		log.Warn().Err(err).Msg("prom stats: cannot list the stats services")
 		return
 	}
-	ctx, err := c.fleet.AuthContext(ctx)
-	if err != nil {
-		log.Warn().Err(err).Msg("prom stats: cannot authenticate to the control channel")
+	if len(services) == 0 {
 		return
 	}
 	attrs, attrKeys := c.loadOwnerAttributes()
@@ -184,9 +176,9 @@ func (c *collector) refreshOnce(ctx context.Context) {
 	errors := c.errors
 	c.mu.Unlock()
 
-	for svcName, eps := range targets {
+	for _, svcName := range services {
 		start := time.Now()
-		payloads, err := c.collectService(ctx, eps)
+		payloads, err := c.fleet.InvokeStats(ctx, svcName)
 		if err != nil {
 			errors[svcName]++
 			log.Warn().Err(err).Str("service", svcName).Msg("prom stats: refresh failed")
@@ -208,23 +200,6 @@ func (c *collector) refreshOnce(ctx context.Context) {
 	c.refresh = refresh
 	c.errors = errors
 	c.mu.Unlock()
-}
-
-// collectService invokes stats once per route group: on one instance when
-// the service declares the invocation shared, else on every instance.
-func (c *collector) collectService(ctx context.Context, eps []client.Endpoint) ([]*stats.Payload, error) {
-	if len(eps) == 0 {
-		return nil, fmt.Errorf("no live instances")
-	}
-	var payloads []*stats.Payload
-	for _, group := range client.Route(eps, stats.Invocation) {
-		p, err := c.fleet.InvokeStats(ctx, group)
-		if err != nil {
-			return nil, err
-		}
-		payloads = append(payloads, p)
-	}
-	return payloads, nil
 }
 
 // loadOwnerAttributes reads the attributes file; a missing file means no

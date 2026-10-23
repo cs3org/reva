@@ -21,111 +21,89 @@ package stats
 import (
 	"context"
 	"fmt"
-	"strings"
+	"io"
 	"time"
 
-	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
-	"github.com/cs3org/reva/v3/pkg/appctx"
-	"github.com/cs3org/reva/v3/pkg/auth/scope"
-	"github.com/cs3org/reva/v3/pkg/invoke"
-	"github.com/cs3org/reva/v3/pkg/invoke/client"
-	svcregistry "github.com/cs3org/reva/v3/pkg/registry"
+	"github.com/cs3org/reva/v3/pkg/admin"
+	"github.com/cs3org/reva/v3/pkg/admin/adminpb"
 	"github.com/cs3org/reva/v3/pkg/service"
 	"github.com/cs3org/reva/v3/pkg/stats"
-	"github.com/cs3org/reva/v3/pkg/token"
-	"google.golang.org/grpc/metadata"
 )
 
-// fleet is the set of reva services registered in the deployment's service
-// registry, each running as one or more instances (a service process on a
-// specific node, identified by its node id "host:port/service"). The
-// collector discovers the services advertising the stats invocation and
-// invokes them over the control channel; this interface abstracts that
-// discovery and invocation for testability.
+// fleet is the set of reva services registered in the deployment, as the
+// Admin API sees it. This interface abstracts it for testability.
 type fleet interface {
-	// AuthContext returns a context authorized to call the control
-	// channel (the collector's own admin-scoped identity).
-	AuthContext(ctx context.Context) (context.Context, error)
-	// StatsTargets returns, per service advertising the stats invocation,
-	// its live control endpoints.
-	StatsTargets() map[string][]client.Endpoint
-	// InvokeStats runs the stats invocation on one endpoint of a route
-	// group (see client.Route).
-	InvokeStats(ctx context.Context, group []client.Endpoint) (*stats.Payload, error)
+	// StatsServices returns the services advertising the stats invocation.
+	StatsServices(ctx context.Context) ([]string, error)
+	// InvokeStats runs the stats invocation on a service and returns the
+	// payloads that its instances streamed.
+	InvokeStats(ctx context.Context, service string) ([]*stats.Payload, error)
 }
 
-// registryFleet is the production fleet: the process-wide service
-// registry plus the control channel.
-type registryFleet struct {
-	tokenManager token.Manager
-}
+// adminFleet is the production fleet, reached through the Admin API as
+// the service stats-collector.
+type adminFleet struct{}
 
-// AuthContext mints a short-lived admin-scoped token for the collector's
-// own identity — the control channel only accepts admin scope — and puts
-// it on the outgoing metadata, exactly like an admin fan-out does. The
-// token is signed with the deployment's shared JWT secret, so every
-// process in the fleet validates it.
-func (f registryFleet) AuthContext(ctx context.Context) (context.Context, error) {
-	u := &userpb.User{
-		Id:       &userpb.UserId{OpaqueId: "reva:stats-collector", Type: userpb.UserType_USER_TYPE_APPLICATION},
-		Username: "stats-collector",
-	}
-	scopes, err := scope.AddAdminScope(nil)
+// StatsServices asks the Admin API for the services that advertise the
+// stats invocation.
+func (adminFleet) StatsServices(ctx context.Context) ([]string, error) {
+	adm, err := service.Admin(ctx)
 	if err != nil {
 		return nil, err
 	}
-	tkn, err := f.tokenManager.MintToken(ctx, u, scopes)
+	ctx, err = admin.AsService(ctx, "stats-collector")
 	if err != nil {
 		return nil, err
 	}
-	return metadata.AppendToOutgoingContext(ctx, appctx.TokenHeader, tkn), nil
-}
-
-// StatsTargets scans registry metadata for services advertising the stats
-// invocation — no dialing involved.
-func (registryFleet) StatsTargets() map[string][]client.Endpoint {
-	reg := service.GlobalRegistry()
-	if reg == nil {
-		return nil
-	}
-	svcs, err := reg.ListServices()
+	res, err := adm.ListServices(ctx, &adminpb.ListServicesRequest{Invocation: stats.Invocation})
 	if err != nil {
-		return nil
+		return nil, err
 	}
-	targets := map[string][]client.Endpoint{}
-	for _, sv := range svcs {
-		if !advertisesStats(sv.Nodes()) {
-			continue
-		}
-		if _, eps, err := client.Resolve(reg, sv.Name()); err == nil && len(eps) > 0 {
-			targets[sv.Name()] = eps
-		}
+	names := make([]string, 0, len(res.Services))
+	for _, sv := range res.Services {
+		names = append(names, sv.Name)
 	}
-	return targets
+	return names, nil
 }
 
-func advertisesStats(nodes []svcregistry.Node) bool {
-	for _, n := range nodes {
-		for name := range strings.SplitSeq(n.Metadata()[invoke.MetaInvocations], ",") {
-			if strings.TrimSpace(name) == stats.Invocation {
-				return true
-			}
-		}
-	}
-	return false
-}
-
-// invokeTimeout is longer than client.PerNodeTimeout: a stats invocation
-// can aggregate large tables or call storage once per project, and the
-// refresh runs in the background, so a scrape never waits for it.
+// invokeTimeout bounds the stats stream of one service. The Admin API sets
+// no time limit on a stream, and a stats invocation can aggregate large
+// tables or call storage once per project.
 const invokeTimeout = 5 * time.Minute
 
-// InvokeStats runs the stats invocation on the endpoint of the group that
-// can take it now, and parses the payload.
-func (registryFleet) InvokeStats(ctx context.Context, group []client.Endpoint) (*stats.Payload, error) {
-	res := client.InvokeOne(ctx, client.Pick(ctx, group), stats.Invocation, nil, invokeTimeout)
-	if res.Error != "" {
-		return nil, fmt.Errorf("%s: %s", res.Node, res.Error)
+// InvokeStats streams stats through the Admin API, which routes the call:
+// one instance for a shared invocation, every instance otherwise.
+func (adminFleet) InvokeStats(ctx context.Context, svc string) ([]*stats.Payload, error) {
+	adm, err := service.Admin(ctx)
+	if err != nil {
+		return nil, err
 	}
-	return stats.FromJSON([]byte(res.ResultJSON))
+	ctx, err = admin.AsService(ctx, "stats-collector")
+	if err != nil {
+		return nil, err
+	}
+	ctx, cancel := context.WithTimeout(ctx, invokeTimeout)
+	defer cancel()
+	stream, err := adm.InvokeStream(ctx, &adminpb.InvokeRequest{Service: svc, Invocation: stats.Invocation})
+	if err != nil {
+		return nil, err
+	}
+	var payloads []*stats.Payload
+	for {
+		msg, err := stream.Recv()
+		if err == io.EOF {
+			return payloads, nil
+		}
+		if err != nil {
+			return nil, err
+		}
+		if msg.Error != "" {
+			return nil, fmt.Errorf("%s: %s", msg.Node, msg.Error)
+		}
+		p, err := stats.FromJSON([]byte(msg.ResultJson))
+		if err != nil {
+			return nil, err
+		}
+		payloads = append(payloads, p)
+	}
 }
