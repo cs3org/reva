@@ -21,57 +21,52 @@ package admin
 import (
 	"errors"
 	"fmt"
-	"io"
 	"strconv"
+
+	"github.com/spf13/cobra"
 )
 
-func adminTraceCommand() *command {
-	cmd := newCommand("trace")
-	cmd.Description = func() string { return "follow one request (by trace id) or one user across the whole fleet" }
-	cmd.Usage = func() string {
-		return "Usage: admin trace [-admin-host h] [-user u] [-f] [-n N] [-since D] [-o text|json] [<traceid>]"
-	}
-	adminHost := cmd.String("admin-host", "", "address of the admin gRPC endpoint (persisted)")
-	user := cmd.String("user", "", "trace by username instead of trace id")
-	follow := cmd.Bool("f", false, "follow: stream new matching lines until interrupted")
-	tail := cmd.Int("n", 200, "number of recent lines per instance")
-	since := cmd.String("since", "", "only lines newer than a duration (e.g. 5m) or an RFC3339 time")
-	output := cmd.String("o", "text", "output format: text | json")
-	cmd.ResetFlags = func() { *adminHost, *user, *follow, *tail, *since, *output = "", "", false, 200, "", "text" }
-	cmd.Action = func(w ...io.Writer) error {
-		if cmd.NArg() < 1 && *user == "" {
-			return errors.New(cmd.Usage())
-		}
-		if *output != "text" && *output != "json" {
-			return fmt.Errorf("unknown -o %q (use text or json)", *output)
-		}
-		// A trace id is grepped as a bare substring; a user by its structured
-		// log field, which the auth layer stamps on every authenticated request.
-		grep := ""
-		if cmd.NArg() > 0 {
-			grep = cmd.Args()[0]
-		}
-		if *user != "" {
-			if grep != "" {
-				return errors.New("pass a trace id or -user, not both")
+func traceCommand() *cobra.Command {
+	var user, since string
+	var follow bool
+	var tail int
+	cmd := &cobra.Command{
+		Use:   "trace [<traceid>]",
+		Short: "Follow one request (by trace id) or one user across the whole fleet",
+		Args:  cobra.MaximumNArgs(1),
+		RunE: func(cmd *cobra.Command, posArgs []string) error {
+			// A trace id is grepped as a bare substring; a user by its structured
+			// log field, which the auth layer stamps on every authenticated request.
+			var grep string
+			switch {
+			case len(posArgs) > 0 && user != "":
+				return errors.New("pass a trace id or --user, not both")
+			case len(posArgs) > 0:
+				grep = posArgs[0]
+			case user != "":
+				grep = fmt.Sprintf("%q:%q", "user", user)
+			default:
+				return errors.New("pass a trace id or --user")
 			}
-			grep = fmt.Sprintf("%q:%q", "user", *user)
-		}
-		args := map[string]string{"limit": strconv.Itoa(*tail), "grep": grep}
-		if *since != "" {
-			args["since"] = *since
-		}
-
-		client, ctx, err := adminDial(*adminHost)
-		if err != nil {
-			return err
-		}
-		// Fan out to every instance in the fleet; each returns its own service's
-		// matching lines, so the merged result is the request's full path.
-		if *follow {
-			return followLogs(ctx, client, "*", args, *output, true)
-		}
-		return snapshotLogs(ctx, client, "*", args, *output, true)
+			args := map[string]string{"limit": strconv.Itoa(tail), "grep": grep}
+			if since != "" {
+				args["since"] = since
+			}
+			client, ctx, err := adminDial(cmd)
+			if err != nil {
+				return err
+			}
+			// Fan out to every instance in the fleet; each returns its own service's
+			// matching lines, so the merged result is the request's full path.
+			if follow {
+				return followLogs(ctx, client, "*", args, rt.Output, true)
+			}
+			return snapshotLogs(ctx, client, "*", args, rt.Output, true)
+		},
 	}
+	cmd.Flags().StringVar(&user, "user", "", "trace by username instead of trace id")
+	cmd.Flags().BoolVarP(&follow, "follow", "f", false, "stream new matching lines until interrupted")
+	cmd.Flags().IntVarP(&tail, "lines", "n", 200, "number of recent lines per instance")
+	cmd.Flags().StringVar(&since, "since", "", "only lines newer than a duration (e.g. 5m) or an RFC3339 time")
 	return cmd
 }

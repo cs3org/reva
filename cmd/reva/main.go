@@ -1,4 +1,4 @@
-// Copyright 2018-2024 CERN
+// Copyright 2018-2026 CERN
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -19,169 +19,104 @@
 package main
 
 import (
-	"crypto/tls"
-	"flag"
+	"context"
 	"fmt"
-	"net/http"
 	"os"
-	"strings"
-	"time"
 
-	"github.com/c-bata/go-prompt"
-	"github.com/cs3org/reva/v3/pkg/httpclient"
+	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
+	"github.com/cs3org/reva/v3/cmd/reva/admin"
+	"github.com/cs3org/reva/v3/cmd/reva/internal/cli"
+	"github.com/spf13/cobra"
 )
 
-var (
-	conf                                                        *config
-	host                                                        string
-	tokenFile                                                   string
-	insecure, skipverify, disableargprompt, insecuredatagateway bool
-	timeout                                                     int64
-
-	helpCommandOutput string
-
-	gitCommit, buildDate, version, goVersion string
-
-	client *httpclient.Client
-
-	commands = []*command{
-		versionCommand(),
-		configureCommand(),
-		loginCommand(),
-		whoamiCommand(),
-		lsCommand(),
-		listVersionsCommand(),
-		statCommand(),
-		uploadCommand(),
-		downloadCommand(),
-		rmCommand(),
-		moveCommand(),
-		mkdirCommand(),
-		touchCommand(),
-		ocmFindAcceptedUsersCommand(),
-		ocmRemoveAcceptedUser(),
-		ocmInviteGenerateCommand(),
-		ocmInviteForwardCommand(),
-		ocmShareCreateCommand(),
-		ocmShareListCommand(),
-		ocmShareRemoveCommand(),
-		ocmShareUpdateCommand(),
-		ocmShareGetCommand(),
-		ocmShareListReceivedCommand(),
-		ocmShareUpdateReceivedCommand(),
-		ocmShareGetReceivedCommand(),
-		openInAppCommand(),
-		preferencesCommand(),
-		publicShareCreateCommand(),
-		publicShareListCommand(),
-		publicShareRemoveCommand(),
-		publicShareUpdateCommand(),
-		recycleListCommand(),
-		recycleRestoreCommand(),
-		recyclePurgeCommand(),
-		shareCreateCommand(),
-		shareListCommand(),
-		shareRemoveCommand(),
-		shareUpdateCommand(),
-		shareListReceivedCommand(),
-		shareUpdateReceivedCommand(),
-		transferGetStatusCommand(),
-		transferCancelCommand(),
-		transferListCommand(),
-		transferRetryCommand(),
-		appTokensListCommand(),
-		appTokensRemoveCommand(),
-		appTokensCreateCommand(),
-		setlockCommand(),
-		getlockCommand(),
-		unlockCommand(),
-		adminCommand(),
-		helpCommand(),
-		testCommand(),
-	}
-)
-
-func init() {
-	flag.StringVar(&host, "host", "", "address of the GRPC gateway host")
-	flag.BoolVar(&insecure, "insecure", false, "disables grpc transport security")
-	flag.BoolVar(
-		&insecuredatagateway,
-		"insecure-data-gateway",
-		false,
-		"disables grpc transport security for data gateway service",
-	)
-	flag.BoolVar(
-		&skipverify,
-		"skip-verify",
-		false,
-		"whether to skip verifying the server's certificate chain and host name",
-	)
-	flag.BoolVar(&disableargprompt, "disable-arg-prompt", false, "whether to disable prompts for command arguments")
-	flag.Int64Var(&timeout, "timeout", -1, "the timeout in seconds for executing the commands, -1 means no timeout")
-	flag.StringVar(&tokenFile, "token-file", "", "path to the token file")
-	flag.Parse()
-}
+var gitCommit, buildDate, version, goVersion string
 
 func main() {
-	if host != "" {
-		// Preserve any existing admin_host when the gateway host is set.
-		if existing, err := readConfig(); err == nil && existing != nil {
-			conf = existing
-		} else {
-			conf = &config{}
-		}
-		conf.Host = host
-		if err := writeConfig(conf); err != nil {
-			fmt.Println("error writing to config file")
-			os.Exit(1)
+	rt := &cli.Runtime{}
+	// started is set when the command itself runs. An error before that comes
+	// from cobra (unknown command, bad flag, wrong arguments): a usage error.
+	started := false
+
+	root := &cobra.Command{
+		Use:           "reva",
+		Short:         "Command line client for the reva gateway",
+		SilenceUsage:  true,
+		SilenceErrors: true,
+		PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
+			// cobra checks the required flags only after this hook, so check them
+			// here to report them as usage errors.
+			if err := cmd.ValidateRequiredFlags(); err != nil {
+				return err
+			}
+			if err := cmd.ValidateFlagGroups(); err != nil {
+				return err
+			}
+			started = true
+			if err := rt.Load(cmd.Flags()); err != nil {
+				return err
+			}
+			if rt.Timeout > 0 {
+				ctx, cancel := context.WithTimeout(cmd.Context(), rt.Timeout)
+				cobra.OnFinalize(cancel)
+				cmd.SetContext(ctx)
+			}
+			return nil
+		},
+	}
+	pf := root.PersistentFlags()
+	pf.StringVar(&rt.Host, "host", "", "address of the gateway (env REVA_HOST)")
+	pf.BoolVar(&rt.Insecure, "insecure", false, "disable transport security for gRPC")
+	pf.BoolVar(&rt.SkipVerify, "skip-verify", false, "do not verify the server certificate (gRPC and HTTP)")
+	pf.StringVar(&rt.TokenFile, "token-file", "", "file that holds the login token (env REVA_TOKEN_FILE)")
+	pf.DurationVar(&rt.Timeout, "timeout", 0, "stop the command after this duration, for example 30s (0 means no limit)")
+	pf.StringVarP(&rt.Output, "output", "o", "text", "output format: text or json")
+
+	root.AddGroup(
+		&cobra.Group{ID: "files", Title: "Files:"},
+		&cobra.Group{ID: "sharing", Title: "Sharing:"},
+		&cobra.Group{ID: "other", Title: "Other:"},
+	)
+	add := func(group string, cmds ...*cobra.Command) {
+		for _, c := range cmds {
+			c.GroupID = group
+			root.AddCommand(c)
 		}
 	}
-
-	tr := &http.Transport{TLSClientConfig: &tls.Config{InsecureSkipVerify: insecuredatagateway}}
-
-	client = httpclient.New(
-		httpclient.RoundTripper(tr),
-		httpclient.Timeout(time.Duration(timeout*int64(time.Hour))),
+	add("files",
+		lsCommand(rt), statCommand(rt), mkdirCommand(rt), mvCommand(rt), rmCommand(rt), touchCommand(rt),
+		uploadCommand(rt), downloadCommand(rt), versionsCommand(rt), recycleCommand(rt), lockCommand(rt),
 	)
+	add("sharing", shareCommand(rt), publicShareCommand(rt), ocmCommand(rt))
+	add("other",
+		loginCommand(rt), whoamiCommand(rt), configCommand(rt), openCommand(rt), appPasswordCommand(rt),
+		preferencesCommand(rt), transferCommand(rt), admin.Command(rt), versionCommand(),
+	)
+	root.SetHelpCommandGroupID("other")
+	root.SetCompletionCommandGroupID("other")
 
-	generateMainUsage()
-	executor := Executor{Timeout: timeout}
-	completer := Completer{DisableArgPrompt: disableargprompt}
-	completer.init()
-
-	if len(flag.Args()) > 0 {
-		executor.Execute(strings.Join(flag.Args(), " "))
-		return
+	err := root.Execute()
+	rt.Close()
+	if err != nil {
+		fmt.Fprintln(os.Stderr, "Error:", err)
+		if !started {
+			fmt.Fprintln(os.Stderr, "Run 'reva --help' for usage.")
+			os.Exit(2)
+		}
+		os.Exit(1)
 	}
-
-	fmt.Printf("reva-cli %s (rev-%s)\n", version, gitCommit)
-	fmt.Println("Please use `exit` or `Ctrl-D` to exit this program.")
-
-	p := prompt.New(
-		executor.Execute,
-		completer.Complete,
-		prompt.OptionTitle("reva-cli"),
-		prompt.OptionPrefix(">> "),
-	)
-	p.Run()
 }
 
-func generateMainUsage() {
-	n := 0
-	for _, cmd := range commands {
-		l := len(cmd.Name)
-		if l > n {
-			n = l
-		}
+func versionCommand() *cobra.Command {
+	return &cobra.Command{
+		Use:   "version",
+		Short: "Print the version of this tool",
+		Args:  cobra.NoArgs,
+		Run: func(cmd *cobra.Command, args []string) {
+			fmt.Fprintf(cmd.OutOrStdout(), "version=%s commit=%s go_version=%s build_date=%s\n", version, gitCommit, goVersion, buildDate)
+		},
 	}
+}
 
-	helpCommandOutput = "Command line interface to REVA:\n"
-	for _, cmd := range commands {
-		helpCommandOutput += fmt.Sprintf(
-			"%s%s%s\n",
-			cmd.Name,
-			strings.Repeat(" ", 4+(n-len(cmd.Name))),
-			cmd.Description(),
-		)
-	}
+func formatError(status *rpc.Status) error {
+	return fmt.Errorf("error: code=%+v msg=%q support_trace=%q", status.Code, status.Message, status.Trace)
 }
