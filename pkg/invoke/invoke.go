@@ -64,6 +64,9 @@ type InvocationSpec struct {
 	// Streaming marks an invocation that emits a stream of results (via
 	// InvokeStream) rather than a single one (Invoke).
 	Streaming bool
+	// StreamOnly marks a streaming invocation that has no single-result form,
+	// so Invoke cannot run it.
+	StreamOnly bool
 }
 
 // Result is an invocation's serializable, already-redacted return value.

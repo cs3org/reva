@@ -215,3 +215,25 @@ func (c *color) UnmarshalText(b []byte) error {
 	*c = color(b)
 	return nil
 }
+
+func TestSetStreamOnly(t *testing.T) {
+	stream := StreamHandler{fn: func(context.Context, map[string]any, StreamEmit) error { return nil }}
+	set := NewSet()
+	set.Add("tail", "").HandleStream(stream)
+	set.Add("ping", "").Handle(Handler{})
+	// logs has both forms, as the built-in logs invocation.
+	logs := set.Add("logs", "")
+	logs.Handle(Handler{})
+	logs.HandleStream(stream)
+
+	got := map[string]bool{}
+	for _, s := range set.Invocations() {
+		got[s.Name] = s.StreamOnly
+	}
+	want := map[string]bool{"tail": true, "logs": false, "ping": false}
+	for name, w := range want {
+		if got[name] != w {
+			t.Errorf("%s: StreamOnly = %v, want %v", name, got[name], w)
+		}
+	}
+}

@@ -39,6 +39,7 @@ var defaults []defaultInvocation
 func registerDefault[A any](spec InvocationSpec, fn func(context.Context, instance, A) (Result, error), stream func(context.Context, instance, A, StreamEmit) error) {
 	fields := argFields[A]()
 	spec.Args = specsOf(fields)
+	spec.StreamOnly = fn == nil && stream != nil
 	d := defaultInvocation{spec: spec}
 	if fn != nil {
 		d.fn = func(ctx context.Context, inst instance, raw map[string]any) (Result, error) {

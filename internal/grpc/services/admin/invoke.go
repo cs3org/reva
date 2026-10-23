@@ -153,6 +153,7 @@ func specsToAdmin(in []*controlpb.InvocationSpec) []*adminpb.InvocationSpec {
 			Kind:        s.Kind,
 			Streaming:   s.Streaming,
 			Scope:       s.Scope,
+			StreamOnly:  s.StreamOnly,
 		})
 	}
 	return out
