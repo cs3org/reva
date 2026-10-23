@@ -26,10 +26,10 @@ import (
 	"strings"
 	"time"
 
+	"github.com/cs3org/reva/v3/cmd/reva/internal/cli"
 	"github.com/cs3org/reva/v3/pkg/admin/adminpb"
 	"github.com/jedib0t/go-pretty/table"
 	"github.com/jedib0t/go-pretty/text"
-	"golang.org/x/term"
 )
 
 // nodeRow is one row of the services/nodes table.
@@ -101,7 +101,7 @@ func renderNodeTable(rows []nodeRow, wide bool) {
 		t.AppendHeader(table.Row{"SERVICE", "ADDRESS", "STATE", "TRANSPORT", "LAST SEEN"})
 	}
 
-	colorize := stdoutIsTTY()
+	colorize := cli.UseColor(os.Stdout)
 	for _, r := range rows {
 		state := stateCell(r.state, colorize)
 		if wide {
@@ -180,7 +180,7 @@ func renderServiceSummary(rows []nodeRow, wide bool) {
 		header = append(header, "HOSTS")
 	}
 	t.AppendHeader(header)
-	colorize := stdoutIsTTY()
+	colorize := cli.UseColor(os.Stdout)
 	for _, name := range names {
 		a := byName[name]
 		row := table.Row{name, a.nodes, a.ready,
@@ -199,12 +199,6 @@ func renderServiceSummary(rows []nodeRow, wide bool) {
 	}
 	t.Render()
 	printFleetSummary(rows)
-}
-
-// stdoutIsTTY reports whether stdout is an interactive terminal, so coloring
-// never reaches pipes or files.
-func stdoutIsTTY() bool {
-	return term.IsTerminal(int(os.Stdout.Fd()))
 }
 
 // stateColors maps a non-ready state to its highlight color.
