@@ -26,7 +26,6 @@ import (
 
 func validPayload() *Payload {
 	return &Payload{
-		Scope: ScopeShared,
 		Metrics: []Metric{
 			{Name: "shares", Kind: KindGauge, Samples: []Sample{
 				{Labels: map[string]string{"status": "active"}, Value: 3},
@@ -44,7 +43,6 @@ func TestValidate(t *testing.T) {
 	}
 
 	bad := []*Payload{
-		{Scope: "wat"},
 		{Metrics: []Metric{{Name: "Bad-Name", Kind: KindGauge}}},
 		{Metrics: []Metric{{Name: "ok", Kind: "histogram"}}},
 		{Metrics: []Metric{{Name: "ok", Kind: KindGauge,
@@ -105,7 +103,7 @@ func TestNewInvokeSet(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if p.Scope != ScopeShared || len(p.Metrics) != 2 {
+	if len(p.Metrics) != 2 {
 		t.Errorf("invoked payload = %+v", p)
 	}
 }

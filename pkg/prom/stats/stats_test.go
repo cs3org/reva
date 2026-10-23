@@ -44,7 +44,8 @@ type fakeFleet struct {
 
 func (f fakeFleet) AuthContext(ctx context.Context) (context.Context, error) { return ctx, nil }
 func (f fakeFleet) StatsTargets() map[string][]client.Endpoint               { return f.targets }
-func (f fakeFleet) InvokeStats(_ context.Context, ep client.Endpoint) (*stats.Payload, error) {
+func (f fakeFleet) InvokeStats(_ context.Context, group []client.Endpoint) (*stats.Payload, error) {
+	ep := group[0]
 	p, ok := f.payloads[ep.Node]
 	if !ok {
 		return nil, fmt.Errorf("no payload for %s", ep.Node)
@@ -91,7 +92,7 @@ func descName(s string) string {
 }
 
 func shared(metrics ...stats.Metric) *stats.Payload {
-	return &stats.Payload{Scope: stats.ScopeShared, Metrics: metrics}
+	return &stats.Payload{Metrics: metrics}
 }
 
 func TestRefreshMergesFamiliesAcrossServices(t *testing.T) {
@@ -127,9 +128,9 @@ func TestInstanceScopeSums(t *testing.T) {
 			"gateway": {{Node: "n1", Addr: "a1"}, {Node: "n2", Addr: "a2"}},
 		},
 		payloads: map[string]*stats.Payload{
-			"n1": {Scope: stats.ScopeInstance, Metrics: []stats.Metric{
+			"n1": {Metrics: []stats.Metric{
 				{Name: "sessions", Kind: stats.KindGauge, Samples: []stats.Sample{{Value: 3}}}}},
-			"n2": {Scope: stats.ScopeInstance, Metrics: []stats.Metric{
+			"n2": {Metrics: []stats.Metric{
 				{Name: "sessions", Kind: stats.KindGauge, Samples: []stats.Sample{{Value: 4}}}}},
 		},
 	}
@@ -139,6 +140,30 @@ func TestInstanceScopeSums(t *testing.T) {
 	got := gather(t, c)
 	if got["reva_sessions{}"] != 7 {
 		t.Errorf("instance-scope sum = %v, want 7: %v", got["reva_sessions{}"], got)
+	}
+}
+
+func TestSharedInvocationCallsOneInstance(t *testing.T) {
+	shared := []string{stats.Invocation}
+	f := fakeFleet{
+		targets: map[string][]client.Endpoint{
+			"usershareprovider": {
+				{Node: "n1", Addr: "a1", Service: "usershareprovider", Shared: shared},
+				{Node: "n2", Addr: "a2", Service: "usershareprovider", Shared: shared},
+			},
+		},
+		// n2 has no payload: calling it fails the refresh.
+		payloads: map[string]*stats.Payload{
+			"n1": {Metrics: []stats.Metric{
+				{Name: "shares", Kind: stats.KindGauge, Samples: []stats.Sample{{Value: 5}}}}},
+		},
+	}
+	c := &collector{namespace: "reva", attrFile: "/nonexistent", fleet: f, errors: map[string]float64{}}
+	c.refreshOnce(context.Background())
+
+	got := gather(t, c)
+	if got["reva_shares{}"] != 5 {
+		t.Errorf("shared sum = %v, want 5 (one instance): %v", got["reva_shares{}"], got)
 	}
 }
 

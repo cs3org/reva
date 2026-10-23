@@ -53,5 +53,5 @@ func (m *ProjectsManager) Stats(ctx context.Context) (*stats.Payload, error) {
 		}
 		projs.OwnerSamples = append(projs.OwnerSamples, stats.OwnerSample{Owner: r.Owner, Labels: labels, Value: float64(r.Count)})
 	}
-	return &stats.Payload{Scope: stats.ScopeShared, Metrics: []stats.Metric{projs}}, nil
+	return &stats.Payload{Metrics: []stats.Metric{projs}}, nil
 }

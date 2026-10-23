@@ -44,16 +44,6 @@ import (
 // expose their statistics.
 const Invocation = "stats"
 
-// Scope declares the state topology of a service's statistics.
-const (
-	// ScopeShared means every instance reports the same state (e.g. a
-	// shared database): the collector queries one live instance.
-	ScopeShared = "shared"
-	// ScopeInstance means each instance holds its own state: the
-	// collector fans out and sums.
-	ScopeInstance = "instance"
-)
-
 // Metric kinds.
 const (
 	KindGauge   = "gauge"
@@ -69,8 +59,6 @@ type Reporter interface {
 
 // Payload is the return value of a "stats" invocation.
 type Payload struct {
-	// Scope is ScopeShared (default when empty) or ScopeInstance.
-	Scope string `json:"scope,omitempty"`
 	// Metrics are the self-described metric families.
 	Metrics []Metric `json:"metrics"`
 }
@@ -107,13 +95,8 @@ type OwnerSample struct {
 var nameRe = regexp.MustCompile(`^[a-z][a-z0-9_]*$`)
 
 // Validate checks the payload is well formed: legal metric and label
-// names, known kinds and scope.
+// names and known kinds.
 func (p *Payload) Validate() error {
-	switch p.Scope {
-	case "", ScopeShared, ScopeInstance:
-	default:
-		return fmt.Errorf("stats: unknown scope %q", p.Scope)
-	}
 	for _, m := range p.Metrics {
 		if !nameRe.MatchString(m.Name) {
 			return fmt.Errorf("stats: metric name %q does not conform to [a-z][a-z0-9_]*", m.Name)
@@ -187,7 +170,10 @@ func NewInvokeSet(manager any) *invoke.Set {
 	if !ok {
 		return set
 	}
+	// Every Reporter reads state that all the instances share, such as a
+	// database, so one instance per service answers.
 	set.Add(Invocation, "Service statistics as a self-describing metrics payload.").
+		Shared().
 		Handle(invoke.Typed(func(ctx context.Context, _ struct{}) (invoke.Result, error) {
 			p, err := r.Stats(ctx)
 			if err != nil {

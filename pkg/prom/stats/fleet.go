@@ -49,8 +49,9 @@ type fleet interface {
 	// StatsTargets returns, per service advertising the stats invocation,
 	// its live control endpoints.
 	StatsTargets() map[string][]client.Endpoint
-	// InvokeStats runs the stats invocation on one endpoint.
-	InvokeStats(ctx context.Context, ep client.Endpoint) (*stats.Payload, error)
+	// InvokeStats runs the stats invocation on one endpoint of a route
+	// group (see client.Route).
+	InvokeStats(ctx context.Context, group []client.Endpoint) (*stats.Payload, error)
 }
 
 // registryFleet is the production fleet: the process-wide service
@@ -119,10 +120,10 @@ func advertisesStats(nodes []svcregistry.Node) bool {
 // refresh runs in the background, so a scrape never waits for it.
 const invokeTimeout = 5 * time.Minute
 
-// InvokeStats runs the stats invocation on one endpoint and parses the
-// payload.
-func (registryFleet) InvokeStats(ctx context.Context, ep client.Endpoint) (*stats.Payload, error) {
-	res := client.InvokeOne(ctx, ep, stats.Invocation, nil, invokeTimeout)
+// InvokeStats runs the stats invocation on the endpoint of the group that
+// can take it now, and parses the payload.
+func (registryFleet) InvokeStats(ctx context.Context, group []client.Endpoint) (*stats.Payload, error) {
+	res := client.InvokeOne(ctx, client.Pick(ctx, group), stats.Invocation, nil, invokeTimeout)
 	if res.Error != "" {
 		return nil, fmt.Errorf("%s: %s", res.Node, res.Error)
 	}

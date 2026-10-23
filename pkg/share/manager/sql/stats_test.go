@@ -74,9 +74,6 @@ func TestShareManagerStats(t *testing.T) {
 	if err := p.Validate(); err != nil {
 		t.Fatal(err)
 	}
-	if p.Scope != stats.ScopeShared {
-		t.Errorf("scope = %q, want shared", p.Scope)
-	}
 
 	if v, ok := findSample(p, "shares", map[string]string{
 		"kind": "share", "status": "active", "item_type": "file",

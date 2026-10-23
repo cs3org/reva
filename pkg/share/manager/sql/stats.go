@@ -169,7 +169,7 @@ func activeByCreator(db *gorm.DB, tbl any, kind string) ([]stats.Metric, error) 
 // Stats implements stats.Reporter for the user/group share manager.
 func (m *ShareMgr) Stats(ctx context.Context) (*stats.Payload, error) {
 	db := m.db.WithContext(ctx)
-	p := &stats.Payload{Scope: stats.ScopeShared}
+	p := &stats.Payload{}
 
 	byDim, err := countsByDimensions(db, &model.Share{}, "share")
 	if err != nil {
@@ -248,7 +248,7 @@ func (m *ShareMgr) Stats(ctx context.Context) (*stats.Payload, error) {
 // Stats implements stats.Reporter for the public link manager.
 func (m *PublicShareMgr) Stats(ctx context.Context) (*stats.Payload, error) {
 	db := m.db.WithContext(ctx)
-	p := &stats.Payload{Scope: stats.ScopeShared}
+	p := &stats.Payload{}
 
 	byDim, err := countsByDimensions(db, &model.PublicLink{}, "link")
 	if err != nil {

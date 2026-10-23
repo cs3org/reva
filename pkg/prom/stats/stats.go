@@ -210,22 +210,15 @@ func (c *collector) refreshOnce(ctx context.Context) {
 	c.mu.Unlock()
 }
 
-// collectService invokes stats on one instance, fanning out to the rest
-// only when the payload declares per-instance scope.
+// collectService invokes stats once per route group: on one instance when
+// the service declares the invocation shared, else on every instance.
 func (c *collector) collectService(ctx context.Context, eps []client.Endpoint) ([]*stats.Payload, error) {
 	if len(eps) == 0 {
 		return nil, fmt.Errorf("no live instances")
 	}
-	first, err := c.fleet.InvokeStats(ctx, eps[0])
-	if err != nil {
-		return nil, err
-	}
-	payloads := []*stats.Payload{first}
-	if first.Scope != stats.ScopeInstance {
-		return payloads, nil
-	}
-	for _, ep := range eps[1:] {
-		p, err := c.fleet.InvokeStats(ctx, ep)
+	var payloads []*stats.Payload
+	for _, group := range client.Route(eps, stats.Invocation) {
+		p, err := c.fleet.InvokeStats(ctx, group)
 		if err != nil {
 			return nil, err
 		}
