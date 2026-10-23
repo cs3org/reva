@@ -25,6 +25,7 @@ import (
 	"net/http"
 	"path"
 	"path/filepath"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -37,7 +38,6 @@ import (
 	"github.com/cs3org/reva/v3/pkg/appctx"
 	"github.com/cs3org/reva/v3/pkg/spaces"
 
-	"github.com/cs3org/reva/v3/pkg/rhttp/router"
 	"github.com/cs3org/reva/v3/pkg/service"
 	"github.com/cs3org/reva/v3/pkg/utils"
 	"github.com/cs3org/reva/v3/pkg/utils/resourceid"
@@ -58,12 +58,24 @@ func (h *TrashbinHandler) init(c *Config) error {
 	return nil
 }
 
+// HandlerSpaces serves the trash bin of a space, which the route addresses by
+// space id.
+func (h *TrashbinHandler) HandlerSpaces(s *svc) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodOptions {
+			s.handleOptions(w, r)
+			return
+		}
+		h.handleTrashbinSpaces(s, w, r)
+	})
+}
+
 func (h *TrashbinHandler) handleTrashbinSpaces(s *svc, w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	log := appctx.GetLogger(ctx)
 
 	var storageSpaceID string
-	storageSpaceID, r.URL.Path = router.ShiftPath(r.URL.Path)
+	storageSpaceID, r.URL.Path = segment(r.URL.Path)
 
 	_, base, ok := spaces.DecodeStorageSpaceIDToPath(storageSpaceID)
 	if !ok {
@@ -80,7 +92,7 @@ func (h *TrashbinHandler) handleTrashbinSpaces(s *svc, w http.ResponseWriter, r 
 	}
 
 	var key string
-	key, r.URL.Path = router.ShiftPath(r.URL.Path)
+	key, r.URL.Path = segment(r.URL.Path)
 	if key != "" && r.Method == MethodMove {
 		// find path in url relative to trash base
 		// TODO make request.php optional in destination header
@@ -105,7 +117,8 @@ func (h *TrashbinHandler) handleTrashbinSpaces(s *svc, w http.ResponseWriter, r 
 	http.Error(w, "501 Not implemented", http.StatusNotImplemented)
 }
 
-// Handler handles requests.
+// Handler serves a user's own trash bin, which the route addresses by
+// username.
 func (h *TrashbinHandler) Handler(s *svc) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		ctx := r.Context()
@@ -116,15 +129,8 @@ func (h *TrashbinHandler) Handler(s *svc) http.Handler {
 			return
 		}
 
-		// check if we are in a space
-		storageSpaceID, _ := router.ShiftPath(r.URL.Path)
-		if _, _, ok := spaces.DecodeStorageSpaceIDToPath(storageSpaceID); ok {
-			h.handleTrashbinSpaces(s, w, r)
-			return
-		}
-
 		var username string
-		username, r.URL.Path = router.ShiftPath(r.URL.Path)
+		username, r.URL.Path = segment(r.URL.Path)
 
 		if username == "" {
 			// listing is disabled, no auth will change that
@@ -160,7 +166,7 @@ func (h *TrashbinHandler) Handler(s *svc) http.Handler {
 
 		// key will be a base64 encoded cs3 path, it uniquely identifies a trash item & storage
 		var key string
-		key, r.URL.Path = router.ShiftPath(r.URL.Path)
+		key, r.URL.Path = segment(r.URL.Path)
 
 		// If the recycle bin corresponding to a speicific path is requested, use that.
 		// If not, we user the user home to route the request
@@ -314,10 +320,10 @@ func (h *TrashbinHandler) listTrashbin(w http.ResponseWriter, r *http.Request, s
 		var stack []string
 		// check sub-containers in reverse order and add them to the stack
 		// the reversed order here will produce a more logical sorting of results
-		for i := len(items) - 1; i >= 0; i-- {
+		for _, item := range slices.Backward(items) {
 			// for i := range res.Infos {
-			if items[i].Type == provider.ResourceType_RESOURCE_TYPE_CONTAINER {
-				stack = append(stack, items[i].Key)
+			if item.Type == provider.ResourceType_RESOURCE_TYPE_CONTAINER {
+				stack = append(stack, item.Key)
 			}
 		}
 
@@ -339,10 +345,10 @@ func (h *TrashbinHandler) listTrashbin(w http.ResponseWriter, r *http.Request, s
 			stack = stack[:len(stack)-1]
 			// check sub-containers in reverse order and add them to the stack
 			// the reversed order here will produce a more logical sorting of results
-			for i := len(getRecycleRes.RecycleItems) - 1; i >= 0; i-- {
+			for _, v := range slices.Backward(getRecycleRes.RecycleItems) {
 				// for i := range res.Infos {
-				if getRecycleRes.RecycleItems[i].Type == provider.ResourceType_RESOURCE_TYPE_CONTAINER {
-					stack = append(stack, getRecycleRes.RecycleItems[i].Key)
+				if v.Type == provider.ResourceType_RESOURCE_TYPE_CONTAINER {
+					stack = append(stack, v.Key)
 				}
 			}
 		}

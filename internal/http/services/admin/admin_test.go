@@ -29,6 +29,7 @@ import (
 
 	"github.com/cs3org/reva/v3/pkg/admin/adminpb"
 	"github.com/cs3org/reva/v3/pkg/appctx"
+	"github.com/cs3org/reva/v3/pkg/rhttp/router"
 	"github.com/cs3org/reva/v3/pkg/service"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
@@ -108,7 +109,9 @@ func newTestService(t *testing.T) http.Handler {
 	if err != nil {
 		t.Fatalf("New: %v", err)
 	}
-	return s.Handler()
+	r := router.New()
+	s.Routes(r.Service("admin"))
+	return r
 }
 
 // serve runs a request as the HTTP auth middleware would leave it: the
@@ -127,7 +130,7 @@ func TestStatus(t *testing.T) {
 	h := newTestService(t)
 	for _, want := range []bool{true, false} {
 		stampAdmin(&fakeAdmin{isAdmin: want})
-		w := serve(t, h, http.MethodGet, "/status", "")
+		w := serve(t, h, http.MethodGet, mount+"/status", "")
 		if w.Code != http.StatusOK {
 			t.Fatalf("status: code %d, body %s", w.Code, w.Body)
 		}
@@ -148,7 +151,7 @@ func TestImpersonateUsesAdminToken(t *testing.T) {
 	fake := &fakeAdmin{}
 	stampAdmin(fake)
 
-	w := serve(t, h, http.MethodPost, "/impersonate", `{"user":"marie","reason":"INC42"}`)
+	w := serve(t, h, http.MethodPost, mount+"/impersonate", `{"user":"marie","reason":"INC42"}`)
 	if w.Code != http.StatusOK {
 		t.Fatalf("code %d, body %s", w.Code, w.Body)
 	}
@@ -176,7 +179,7 @@ func TestImpersonateWithoutReason(t *testing.T) {
 	fake := &fakeAdmin{}
 	stampAdmin(fake)
 
-	w := serve(t, h, http.MethodPost, "/impersonate", `{"user":"marie"}`)
+	w := serve(t, h, http.MethodPost, mount+"/impersonate", `{"user":"marie"}`)
 	if w.Code != http.StatusOK {
 		t.Fatalf("code %d, body %s", w.Code, w.Body)
 	}
@@ -207,7 +210,7 @@ func TestImpersonateErrors(t *testing.T) {
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			stampAdmin(tc.fake)
-			w := serve(t, h, http.MethodPost, "/impersonate", tc.body)
+			w := serve(t, h, http.MethodPost, mount+"/impersonate", tc.body)
 			if w.Code != tc.want {
 				t.Fatalf("code %d, want %d (body %s)", w.Code, tc.want, w.Body)
 			}
