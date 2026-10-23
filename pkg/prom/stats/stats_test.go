@@ -176,6 +176,37 @@ func TestOwnerAttributeEnrichment(t *testing.T) {
 	}
 }
 
+func TestOwnerAttributesKeyAndFilter(t *testing.T) {
+	attrFile := filepath.Join(t.TempDir(), "affiliation.json")
+	os.WriteFile(attrFile, []byte(`{
+		"generated": "2026-10-23T00:30:00Z",
+		"entries": {
+			"alice": {"department": "IT", "employee_id": "1"},
+			"bob":   {"department": "EP", "employee_id": "2"}
+		}
+	}`), 0o644)
+
+	f := fakeFleet{
+		targets: map[string][]client.Endpoint{
+			"projects": {{Node: "n1", Addr: "a1"}},
+		},
+		payloads: map[string]*stats.Payload{
+			"n1": shared(stats.Metric{Name: "projects", Kind: stats.KindGauge, OwnerSamples: []stats.OwnerSample{
+				{Owner: "alice", Value: 2},
+				{Owner: "bob", Value: 1},
+			}}),
+		},
+	}
+	c := &collector{namespace: "reva", attrFile: attrFile, attrKey: "entries", attrKeys: []string{"department"},
+		fleet: f, errors: map[string]float64{}}
+	c.refreshOnce(context.Background())
+
+	got := gather(t, c)
+	if got["reva_projects{department=IT}"] != 2 || got["reva_projects{department=EP}"] != 1 {
+		t.Errorf("want one series per department, without employee_id: %v", got)
+	}
+}
+
 func TestOwnerSamplesCollapseWithoutAttributes(t *testing.T) {
 	f := fakeFleet{
 		targets: map[string][]client.Endpoint{

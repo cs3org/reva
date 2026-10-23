@@ -22,6 +22,7 @@ import (
 	"context"
 	"fmt"
 	"strings"
+	"time"
 
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	"github.com/cs3org/reva/v3/pkg/appctx"
@@ -113,10 +114,15 @@ func advertisesStats(nodes []svcregistry.Node) bool {
 	return false
 }
 
+// invokeTimeout is longer than client.PerNodeTimeout: a stats invocation
+// can aggregate large tables or call storage once per project, and the
+// refresh runs in the background, so a scrape never waits for it.
+const invokeTimeout = 5 * time.Minute
+
 // InvokeStats runs the stats invocation on one endpoint and parses the
 // payload.
 func (registryFleet) InvokeStats(ctx context.Context, ep client.Endpoint) (*stats.Payload, error) {
-	res := client.InvokeOne(ctx, ep, stats.Invocation, nil)
+	res := client.InvokeOne(ctx, ep, stats.Invocation, nil, invokeTimeout)
 	if res.Error != "" {
 		return nil, fmt.Errorf("%s: %s", res.Node, res.Error)
 	}

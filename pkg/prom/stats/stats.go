@@ -26,8 +26,10 @@
 // /etc/revad/owner-attributes.json, a JSON object mapping owner ids to
 // attribute key/value pairs), per-owner samples are folded by those
 // attributes and the attribute keys become metric labels; without the
-// file they collapse into plain totals. The attribute vocabulary is
-// entirely the site's: reva only forwards it.
+// file they collapse into plain totals. owner_attributes limits the labels
+// to the given keys, and owner_attributes_key reads the owner map from one
+// key of the file. The attribute vocabulary is entirely the site's: reva
+// only forwards it.
 package stats
 
 import (
@@ -36,6 +38,7 @@ import (
 	"fmt"
 	"maps"
 	"os"
+	"slices"
 	"sort"
 	"sync"
 	"time"
@@ -61,6 +64,12 @@ type config struct {
 		Namespace string `mapstructure:"namespace"`
 		// OwnerAttributesFile overrides the conventional attributes path.
 		OwnerAttributesFile string `mapstructure:"owner_attributes_file"`
+		// OwnerAttributesKey is the key of the object that holds the owner
+		// map in that file. Empty means the owner map is the whole file.
+		OwnerAttributesKey string `mapstructure:"owner_attributes_key"`
+		// OwnerAttributes are the attribute keys that become labels. Empty
+		// means all the keys found in the file.
+		OwnerAttributes []string `mapstructure:"owner_attributes"`
 	} `mapstructure:"stats"`
 }
 
@@ -97,6 +106,8 @@ func New(ctx context.Context, m map[string]any) ([]prometheus.Collector, error) 
 	col := &collector{
 		namespace: namespace,
 		attrFile:  attrFile,
+		attrKey:   c.Stats.OwnerAttributesKey,
+		attrKeys:  c.Stats.OwnerAttributes,
 		fleet:     registryFleet{tokenManager: tm},
 		errors:    map[string]float64{},
 	}
@@ -108,6 +119,8 @@ func New(ctx context.Context, m map[string]any) ([]prometheus.Collector, error) 
 type collector struct {
 	namespace string
 	attrFile  string
+	attrKey   string
+	attrKeys  []string
 	fleet     fleet
 
 	mu      sync.Mutex
@@ -222,15 +235,26 @@ func (c *collector) collectService(ctx context.Context, eps []client.Endpoint) (
 }
 
 // loadOwnerAttributes reads the attributes file; a missing file means no
-// enrichment. Returns the owner map and the sorted union of attribute keys.
+// enrichment. Returns the owner map and the sorted attribute keys: the
+// configured ones, or else the union of the keys in the file.
 func (c *collector) loadOwnerAttributes() (map[string]map[string]string, []string) {
 	data, err := os.ReadFile(c.attrFile)
 	if err != nil {
 		return nil, nil
 	}
+	if c.attrKey != "" {
+		var wrapper map[string]json.RawMessage
+		if err := json.Unmarshal(data, &wrapper); err != nil {
+			return nil, nil
+		}
+		data = wrapper[c.attrKey]
+	}
 	var attrs map[string]map[string]string
 	if err := json.Unmarshal(data, &attrs); err != nil {
 		return nil, nil
+	}
+	if len(c.attrKeys) > 0 {
+		return attrs, slices.Sorted(slices.Values(c.attrKeys))
 	}
 	keySet := map[string]struct{}{}
 	for _, kv := range attrs {

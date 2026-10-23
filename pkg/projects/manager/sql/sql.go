@@ -336,7 +336,7 @@ func (m *ProjectsManager) UpdateProjectStatus(ctx context.Context, name string, 
 	return nil
 }
 
-// To be used only by cernboxcop.
+// To be used only by cernboxcop and the stats of the spaces registry.
 func (m *ProjectsManager) ListAllProjects(ctx context.Context, status projects.ProjectStatus, owner string) ([]*Project, error) {
 	var fetchedProjects []*Project
 	query := m.db.Model(&Project{})
