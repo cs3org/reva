@@ -140,9 +140,6 @@ const (
 	defaultUnauthRateLimitBurst = 100
 )
 
-// ocmWebDAVPath serves the files of federated shares to remote users. It's also exposed by the .wellknown endpoint.
-const ocmWebDAVPath = "/remote.php/dav/ocm/"
-
 func (c *Config) ApplyDefaults() {
 	// note: default c.Prefix is an empty string
 	c.GatewaySvc = sharedconf.GetGatewaySVC(c.GatewaySvc)
@@ -220,26 +217,26 @@ func (s *svc) Close() error {
 	return nil
 }
 
-// Unprotected returns a fresh slice on every call: the HTTP server rewrites
-// the one it gets in place.
+// limitedPaths are the unauthenticated routes that are rate limited.
+var limitedPaths = []string{"/status.php", "/remote.php/dav/public-files/", "/apps/files/", "/index.php/f/", "/index.php/s/", "/s/", "/ocm-provider"}
+
 func (s *svc) Unprotected() []string {
-	return []string{"/status.php", "/remote.php/dav/public-files/", "/apps/files/", "/index.php/f/", "/index.php/s/", "/s/", ocmWebDAVPath, "/ocm-provider"}
+	return slices.Concat(limitedPaths, []string{"/remote.php/dav/ocm/"})
 }
 
 func (s *svc) Handler() http.Handler {
 	return s.limitUnprotected(s.handler())
 }
 
-// limitUnprotected rate limits the requests to the unauthenticated routes
-// other than ocmWebDAVPath, leaving the authenticated ones alone.
+// limitUnprotected rate limits the requests to limitedPaths, leaving the
+// others alone.
 func (s *svc) limitUnprotected(next http.Handler) http.Handler {
 	if s.limiter == nil {
 		return next
 	}
-	unprotected := slices.DeleteFunc(s.Unprotected(), func(p string) bool { return p == ocmWebDAVPath })
 	limited := s.limiter.Middleware(next)
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if utils.Skip(r.URL.Path, unprotected) {
+		if utils.Skip(r.URL.Path, limitedPaths) {
 			limited.ServeHTTP(w, r)
 			return
 		}
