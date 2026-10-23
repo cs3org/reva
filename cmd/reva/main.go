@@ -93,11 +93,16 @@ func main() {
 	)
 	root.SetHelpCommandGroupID("other")
 	root.SetCompletionCommandGroupID("other")
+	colorHelp(root)
 
 	err := root.Execute()
 	rt.Close()
 	if err != nil {
-		fmt.Fprintln(os.Stderr, "Error:", err)
+		prefix := "Error:"
+		if cli.UseColor(os.Stderr) {
+			prefix = errorColor.Sprint(prefix)
+		}
+		fmt.Fprintln(os.Stderr, prefix, err)
 		if !started {
 			fmt.Fprintln(os.Stderr, "Run 'reva --help' for usage.")
 			os.Exit(2)
