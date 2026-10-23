@@ -32,6 +32,8 @@ import (
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	cachereg "github.com/cs3org/reva/v3/pkg/share/cache/registry"
 
+	"github.com/cs3org/reva/v3/pkg/admin"
+	"github.com/cs3org/reva/v3/pkg/admin/adminpb"
 	"github.com/cs3org/reva/v3/pkg/appctx"
 	"github.com/cs3org/reva/v3/pkg/errtypes"
 	"github.com/cs3org/reva/v3/pkg/invoke"
@@ -64,10 +66,9 @@ func init() {
 }
 
 type config struct {
-	Driver        string                    `mapstructure:"driver"`
-	Drivers       map[string]map[string]any `mapstructure:"drivers"`
-	UserSpace     string                    `mapstructure:"user_space" validate:"required"`
-	MachineSecret string                    `mapstructure:"machine_secret" validate:"required"`
+	Driver    string                    `mapstructure:"driver"`
+	Drivers   map[string]map[string]any `mapstructure:"drivers"`
+	UserSpace string                    `mapstructure:"user_space" validate:"required"`
 	// Provide a list of public spaces, where we map
 	// name:
 	//  - path: <path>
@@ -333,24 +334,23 @@ func (s *service) projectQuota(ctx context.Context, owner, path string) (*provid
 		// but we need to keep it here until we migrate all of the old
 		// project quota nodes
 		// See CERNBOX-3995
-		authRes, err := gw.Authenticate(ctx, &gateway.AuthenticateRequest{
-			Type:         "machine",
-			ClientId:     owner,
-			ClientSecret: s.c.MachineSecret,
-		})
+		adm, err := revaservice.Admin(ctx)
 		if err != nil {
 			return nil, err
 		}
-		if authRes.Status.Code != rpcv1beta1.Code_CODE_OK {
-			return nil, status.NewErrtypeFromStatus(authRes.Status)
+		actx, err := admin.AsService(ctx, "spacesregistry")
+		if err != nil {
+			return nil, err
+		}
+		res, err := adm.Impersonate(actx, &adminpb.ImpersonateRequest{User: owner, Reason: "project quota"})
+		if err != nil {
+			return nil, err
 		}
 
-		token := authRes.Token
-
-		ownerCtx = context.Background()
-		ownerCtx = appctx.ContextSetToken(ownerCtx, token)
-		ownerCtx = metadata.AppendToOutgoingContext(ownerCtx, appctx.TokenHeader, token)
-		ownerCtx = appctx.ContextSetUser(ownerCtx, authRes.User)
+		// Replace the outgoing metadata, so only the owner's token is sent,
+		// but keep the deadline of ctx.
+		ownerCtx = appctx.ContextSetToken(ctx, res.Token)
+		ownerCtx = metadata.NewOutgoingContext(ownerCtx, metadata.Pairs(appctx.TokenHeader, res.Token))
 	}
 
 	return gw.GetQuota(ownerCtx, &gateway.GetQuotaRequest{
