@@ -24,4 +24,6 @@ const (
 	EventFeedback      = "feedback"
 	EventOfficeMention = "office-mention"
 	EventTakeout       = "takeout"
+	// EventLinkExpiry warns the holder of public links that are about to expire.
+	EventLinkExpiry = "link-expiry"
 )
