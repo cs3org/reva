@@ -137,7 +137,10 @@ func (b *Builder) HandleStream(h StreamHandler) {
 func (s *Set) Invocations() []InvocationSpec {
 	out := make([]InvocationSpec, 0, len(s.order))
 	for _, name := range s.order {
-		out = append(out, s.methods[name].spec)
+		m := s.methods[name]
+		spec := m.spec
+		spec.StreamOnly = m.fn == nil && m.stream != nil
+		out = append(out, spec)
 	}
 	return out
 }

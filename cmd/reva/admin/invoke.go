@@ -53,7 +53,10 @@ func adminInvocationsCommand() *command {
 			if kind == "" {
 				kind = "?"
 			}
-			if inv.Streaming {
+			switch {
+			case inv.StreamOnly:
+				kind += ",stream-only"
+			case inv.Streaming:
 				kind += ",stream"
 			}
 			if inv.Scope != "" {
@@ -74,7 +77,7 @@ func adminInvokeCommand() *command {
 	}
 	adminHost := cmd.String("admin-host", "", "address of the admin gRPC endpoint (persisted)")
 	yes := cmd.Bool("y", false, "skip the confirmation prompt for dangerous invocations")
-	stream := cmd.Bool("stream", false, "run a streaming invocation, printing results as they arrive (Ctrl-C stops)")
+	stream := cmd.Bool("stream", false, "run a streaming invocation, printing results as they arrive (Ctrl-C stops); implied for a stream-only invocation")
 	cmd.ResetFlags = func() { *adminHost, *yes, *stream = "", false, false }
 	cmd.Action = func(w ...io.Writer) error {
 		if cmd.NArg() < 2 {
@@ -91,13 +94,14 @@ func adminInvokeCommand() *command {
 
 		// Confirm dangerous invocations unless -y. The kind comes from the
 		// service's own catalog.
-		if !*yes && invocationKind(ctx, client, selector, invocation) == "dangerous" {
+		spec := invocationSpec(ctx, client, selector, invocation)
+		if !*yes && spec.GetKind() == "dangerous" {
 			if !confirm(fmt.Sprintf("invocation %q on %q is DANGEROUS; proceed?", invocation, selector)) {
 				return errors.New("aborted")
 			}
 		}
 
-		if *stream {
+		if *stream || spec.GetStreamOnly() {
 			return runInvokeStream(ctx, client, selector, invocation, args)
 		}
 
@@ -143,19 +147,20 @@ func runInvokeStream(ctx context.Context, client adminpb.AdminAPIClient, selecto
 	}
 }
 
-// invocationKind best-effort resolves an invocation's kind for the confirmation
-// gate; on any error it returns "" (no prompt).
-func invocationKind(ctx context.Context, client adminpb.AdminAPIClient, svcName, invocation string) string {
+// invocationSpec best-effort resolves an invocation's catalog entry, for the
+// confirmation gate and the choice of a stream; on any error it returns nil
+// (no prompt, no stream).
+func invocationSpec(ctx context.Context, client adminpb.AdminAPIClient, svcName, invocation string) *adminpb.InvocationSpec {
 	res, err := client.ListInvocations(ctx, &adminpb.ListInvocationsRequest{Service: svcName})
 	if err != nil {
-		return ""
+		return nil
 	}
 	for _, inv := range res.Invocations {
 		if inv.Name == invocation {
-			return inv.Kind
+			return inv
 		}
 	}
-	return ""
+	return nil
 }
 
 // parseKeyVals turns ["k=v", "a=b"] into a map for invocation arguments.
