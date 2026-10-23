@@ -39,6 +39,7 @@ import (
 	"github.com/cs3org/reva/v3/pkg/spaces"
 	"github.com/cs3org/reva/v3/pkg/utils"
 
+	"github.com/bluele/gcache"
 	"github.com/pkg/errors"
 
 	"github.com/cs3org/reva/v3/pkg/httpclient"
@@ -60,6 +61,8 @@ const (
 	ctxPublicLink
 	ctxStorageId
 	ctxResourceOpaqueId
+	// the base URI of the dav endpoint, e.g. /remote.php/dav
+	ctxKeyDavBaseURI
 )
 
 var (
@@ -132,6 +135,14 @@ type Config struct {
 	// legacy links and status. Browsers and sync clients hit them during
 	// normal use, hence a higher default than the OCM services.
 	RateLimit ratelimit.ServiceConfig `mapstructure:",squash"`
+
+	// EnableLinkTargets exposes the targets of symbolic links and Windows .lnk
+	// shortcuts in PROPFIND, when they can be navigated by clients (see links.go).
+	EnableLinkTargets bool `mapstructure:"enable_link_targets"`
+	// MaxShortcutSize is the maximum size of a .lnk file to be parsed. Default 64 KiB.
+	MaxShortcutSize int64 `mapstructure:"max_shortcut_size"`
+	// ShortcutCacheSize is the number of parsed .lnk files kept in memory. Default 10000.
+	ShortcutCacheSize int `mapstructure:"shortcut_cache_size"`
 }
 
 // Default rate limit of the unauthenticated routes.
@@ -156,6 +167,13 @@ func (c *Config) ApplyDefaults() {
 	}
 
 	c.RateLimit.ApplyDefaultsWith(defaultUnauthRateLimit, defaultUnauthRateLimitBurst)
+
+	if c.MaxShortcutSize == 0 {
+		c.MaxShortcutSize = 64 * 1024
+	}
+	if c.ShortcutCacheSize == 0 {
+		c.ShortcutCacheSize = 10000
+	}
 }
 
 type svc struct {
@@ -165,6 +183,7 @@ type svc struct {
 	myOfficeFilesManager myofficefiles.Manager
 	client               *httpclient.Client
 	limiter              *ratelimit.Limiter
+	lnkCache             gcache.Cache
 }
 
 // New returns a new ocdav.
@@ -198,6 +217,7 @@ func New(ctx context.Context, m map[string]any) (global.Service, error) {
 		),
 		myOfficeFilesManager: myOfficeFilesManager,
 		limiter:              limiter,
+		lnkCache:             gcache.New(c.ShortcutCacheSize).LRU().Build(),
 	}
 	// initialize handlers and set default cigs
 	if err := s.webDavHandler.init(c.WebdavNamespace, true); err != nil {
@@ -327,6 +347,7 @@ func (s *svc) handler() http.Handler {
 			// or we take the path starting at /dav and allow rewriting it?
 			base = path.Join(base, "dav")
 			ctx := context.WithValue(ctx, ctxKeyBaseURI, base)
+			ctx = context.WithValue(ctx, ctxKeyDavBaseURI, base)
 			r = r.WithContext(ctx)
 			s.davHandler.Handler(s).ServeHTTP(w, r)
 			return
