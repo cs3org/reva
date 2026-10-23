@@ -125,7 +125,7 @@ revad-ceph: ## Build revad with Ceph
 
 .PHONY: reva
 reva: ## Build the reva CLI
-	go build -ldflags "-extldflags=-static $(BUILD_FLAGS)" -o ./cmd/reva/reva ./cmd/reva
+	go build -ldflags "-extldflags=-static -X main.gitCommit=$(GIT_COMMIT) -X main.version=$(VERSION) -X main.goVersion=$(GO_VERSION) -X main.buildDate=$(BUILD_DATE)" -o ./cmd/reva/reva ./cmd/reva
 
 # Regenerate the reva-owned Admin API (pkg/admin/adminpb) and control channel
 # (pkg/control/controlpb) stubs from their protos. Needs protoc plus protoc-gen-go and
