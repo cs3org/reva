@@ -150,6 +150,12 @@ func (s *service) Authenticate(ctx context.Context, req *provider.AuthenticateRe
 	}
 
 	u, scope, err := s.authenticate(ctx, username, password)
+	// An app password sent alone names no user until it is resolved.
+	if err == nil && username == "" && s.blockedUsers.IsBlocked(u.GetUsername()) {
+		return &provider.AuthenticateResponse{
+			Status: status.NewPermissionDenied(ctx, errtypes.PermissionDenied(""), "user is blocked"),
+		}, nil
+	}
 	switch v := err.(type) {
 	case nil:
 		log.Info().Interface("userId", u.Id).Msg("user authenticated")

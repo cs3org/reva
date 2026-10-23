@@ -76,6 +76,13 @@ type config struct {
 	TokenWriters           map[string]map[string]any `mapstructure:"token_writers"`
 	MachineSecret          string                    `mapstructure:"machine_secret" docs:"nil;Secret used for the gateway to authenticate a user when using a signed URL"`
 	authcache.Config       `mapstructure:",squash"`
+	AppAuthCacheTTL        int                            `mapstructure:"appauth_cache_ttl_seconds" docs:"300;Seconds an identity resolved from an app password stays cached, which bounds how long a revoked app password keeps working. A negative value disables caching them."`
+	AppAuthClients         map[string]appAuthClientConfig `mapstructure:"appauth_clients" docs:"nil;Per client kind (sync, cli, webdav, mcp), overrides of the expected user agents and of whether a mismatch is rejected."`
+}
+
+type appAuthClientConfig struct {
+	StrictUserAgent *bool    `mapstructure:"strict_user_agent"`
+	UserAgents      []string `mapstructure:"user_agents"`
 }
 
 func parseConfig(m map[string]any) (*config, error) {
@@ -110,7 +117,15 @@ func New(m map[string]any, unprotected []string) (global.Middleware, error) {
 	}
 
 	if len(conf.CredentialChain) == 0 {
-		conf.CredentialChain = []string{"basic", "bearer", "publicshares"}
+		conf.CredentialChain = []string{"appauth", "basic", "bearer", "publicshares"}
+	}
+
+	if conf.AppAuthCacheTTL == 0 {
+		conf.AppAuthCacheTTL = 300
+	}
+	clientRules, err := appAuthClientRules(conf.AppAuthClients)
+	if err != nil {
+		return nil, err
 	}
 
 	if conf.CredentialsByUserAgent == nil {
@@ -189,8 +204,37 @@ func New(m map[string]any, unprotected []string) (global.Middleware, error) {
 		tokenWriter:        tokenWriter,
 		credChain:          credChain,
 		credCache:          authcache.New(conf.Config),
+		clientRules:        clientRules,
 	}
 	return mw.handler, nil
+}
+
+func appAuthClientRules(overrides map[string]appAuthClientConfig) (map[string]scope.ClientRule, error) {
+	rules := make(map[string]scope.ClientRule)
+	for _, kind := range scope.ClientKinds() {
+		rules[kind], _ = scope.GetClientRule(kind)
+	}
+	for kind, o := range overrides {
+		r, ok := rules[kind]
+		if !ok {
+			return nil, fmt.Errorf("appauth_clients: unknown client kind %q", kind)
+		}
+		if o.StrictUserAgent != nil {
+			r.Strict = *o.StrictUserAgent
+		}
+		if o.UserAgents != nil {
+			r.UserAgents = o.UserAgents
+		}
+		rules[kind] = r
+	}
+	return rules, nil
+}
+
+// failureLimiter is a credential strategy that limits the wrong credentials a
+// client may send.
+type failureLimiter interface {
+	Throttled(r *http.Request) bool
+	Failed(r *http.Request)
 }
 
 type middleware struct {
@@ -202,6 +246,7 @@ type middleware struct {
 	tokenWriter        auth.TokenWriter
 	credChain          map[string]auth.CredentialStrategy
 	credCache          *authcache.Cache
+	clientRules        map[string]scope.ClientRule
 }
 
 func (m *middleware) handler(h http.Handler) http.Handler {
@@ -299,6 +344,7 @@ func (m *middleware) authenticateUser(w http.ResponseWriter, r *http.Request, is
 	// obtain credentials (basic auth, bearer token, ...) based on user agent
 	var creds *auth.Credentials
 	var cacheable bool
+	var credStrategy auth.CredentialStrategy
 	for _, k := range userAgentCredKeys {
 		creds, err = credChain[k].GetCredentials(w, r)
 		cs, ok := credChain[k].(auth.Cacheable)
@@ -309,6 +355,7 @@ func (m *middleware) authenticateUser(w http.ResponseWriter, r *http.Request, is
 
 		if creds != nil {
 			log.Debug().Msgf("credentials obtained from credential strategy: type: %s, client_id: %s", creds.Type, creds.ClientID)
+			credStrategy = credChain[k]
 			break
 		}
 	}
@@ -332,6 +379,16 @@ func (m *middleware) authenticateUser(w http.ResponseWriter, r *http.Request, is
 	// them from the cache skips the whole gateway round trip below.
 	credKey := authcache.Key(creds.Type, creds.ClientID, creds.ClientSecret)
 	id, rejected, cached := m.credCache.Get(credKey)
+
+	limiter, _ := credStrategy.(failureLimiter)
+	if !cached && limiter != nil && limiter.Throttled(r) {
+		if !isUnprotectedEndpoint {
+			w.Header().Set("Retry-After", "60")
+		}
+		err := errtypes.PermissionDenied("too many failed authentications")
+		logError(isUnprotectedEndpoint, log, err, "too many failed authentications from this client", http.StatusTooManyRequests, w)
+		return nil, err
+	}
 
 	if !cached {
 		req := &gateway.AuthenticateRequest{
@@ -373,10 +430,19 @@ func (m *middleware) authenticateUser(w http.ResponseWriter, r *http.Request, is
 					notAfter = exp
 				}
 			}
+			// A revoked app password keeps working while it is cached.
+			if _, ok := scope.GetAppAuthScope(tokenScope); ok {
+				if limit := time.Now().Add(time.Duration(conf.AppAuthCacheTTL) * time.Second); notAfter.IsZero() || limit.Before(notAfter) {
+					notAfter = limit
+				}
+			}
 		}
 
 		if cacheable {
 			m.credCache.Set(credKey, id, rejected, notAfter)
+		}
+		if rejected != nil && limiter != nil {
+			limiter.Failed(r)
 		}
 	}
 
@@ -387,6 +453,13 @@ func (m *middleware) authenticateUser(w http.ResponseWriter, r *http.Request, is
 			logError(isUnprotectedEndpoint, log, rejected, "error generating access token from credentials", http.StatusUnauthorized, w)
 		}
 		return nil, rejected
+	}
+
+	if ap, ok := scope.GetAppAuthScope(id.Scopes); ok {
+		if err := m.checkAppAuthClient(r, ap, creds); err != nil {
+			logError(isUnprotectedEndpoint, log, err, "app password used outside its client kind", http.StatusUnauthorized, w)
+			return nil, err
+		}
 	}
 
 	// write token to response
@@ -405,6 +478,27 @@ func (m *middleware) authenticateUser(w http.ResponseWriter, r *http.Request, is
 	}
 
 	return ctxWithUserInfo(ctx, r, id.User, id.Token, id.Scopes), nil
+}
+
+// checkAppAuthClient applies the presentation and user agent rules of the
+// client kind an app password was issued for. Its path rule is applied with the
+// scope.
+func (m *middleware) checkAppAuthClient(r *http.Request, ap *scope.AppAuthScope, creds *auth.Credentials) error {
+	rule, ok := m.clientRules[ap.Client]
+	if !ok {
+		return errtypes.PermissionDenied("app password for an unknown client kind " + ap.Client)
+	}
+	if !rule.PresentationAllowed(scope.Presentation(creds.Presentation)) {
+		return errtypes.PermissionDenied(fmt.Sprintf("an app password for %s cannot be sent as %s", ap.Client, creds.Presentation))
+	}
+	if !rule.UserAgentMatches(r.UserAgent()) {
+		appctx.GetLogger(r.Context()).Warn().Str("password_id", ap.PasswordID).Str("client", ap.Client).Str("user_agent", r.UserAgent()).
+			Bool("rejected", rule.Strict).Msg("app password used by an unexpected client")
+		if rule.Strict {
+			return errtypes.PermissionDenied(fmt.Sprintf("an app password for %s cannot be used by %q", ap.Client, r.UserAgent()))
+		}
+	}
+	return nil
 }
 
 // Keep the authenticated request state together so downstream handlers see the

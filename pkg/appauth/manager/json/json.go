@@ -210,6 +210,10 @@ func (mgr *jsonManager) reload() {
 }
 
 func (mgr *jsonManager) GetAppPassword(ctx context.Context, userID *userpb.UserId, password string) (*apppb.AppPassword, error) {
+	// Passwords are bcrypt hashes kept per user, so finding one needs its user.
+	if userID == nil {
+		return nil, errtypes.NotSupported("json appauth: looking up an app password without its user is not supported, use the sql driver")
+	}
 	mgr.Lock()
 	defer mgr.Unlock()
 
