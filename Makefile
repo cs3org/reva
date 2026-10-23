@@ -4,11 +4,13 @@ SHELL := /usr/bin/env bash
 .PHONY: all
 all: revad reva test-go lint gen-doc ## Build revad and reva, run the unit tests and the linter, generate the docs
 
+HELP_COLORS = if [ -t 1 ] && [ -z "$$NO_COLOR" ]; then h=$$'\e[1;36m' n=$$'\e[1;32m' v=$$'\e[33m' r=$$'\e[0m'; fi
+
 # help lists the targets that have a "## description", grouped under the
 # titles of the section banners below.
 .PHONY: help
 help: ## Show this help
-	@if [ -t 1 ] && [ -z "$$NO_COLOR" ]; then h=$$'\e[1;36m' n=$$'\e[1;32m' r=$$'\e[0m'; fi; \
+	@$(HELP_COLORS); \
 	awk -v h="$$h" -v n="$$n" -v r="$$r" -v test="$(TEST)" ' \
 		BEGIN { printf "%sUsage:%s\n  make <target>\n\n%sTargets:%s\n", h, r, h, r } \
 		/^####/ { banner = 1; next } \
@@ -18,7 +20,35 @@ help: ## Show this help
 			name = substr($$0, 1, RLENGTH - 1); sub(/\$$\(TEST\)/, test, name); \
 			if (section != "") { printf "\n%s%s:%s\n", h, section, r; section = "" } \
 			printf "  %s%-26s%s %s\n", n, name, r, substr($$0, index($$0, " ## ") + 4) \
-		}' $(MAKEFILE_LIST)
+		} \
+		END { printf "\nUse \"make help-<target>\" for more information about a target.\n" }' $(MAKEFILE_LIST)
+
+# help-<target> prints the description of a target, the comment block
+# right above it and its prerequisites. Write the details and the variables
+# of a target in that comment block.
+help-%:
+	@$(HELP_COLORS); \
+	awk -v h="$$h" -v n="$$n" -v v="$$v" -v r="$$r" -v test="$(TEST)" -v want="$*" ' \
+		/^#/ && !/^####/ { line = $$0; sub(/^# ?/, "", line); block[nb++] = line; next } \
+		/^\.PHONY:/ { next } \
+		match($$0, /^[a-zA-Z0-9_$$().-]+:/) && index($$0, " ## ") { \
+			name = substr($$0, 1, RLENGTH - 1); sub(/\$$\(TEST\)/, test, name); \
+			if (index(" " name " ", " " want " ")) { \
+				d = index($$0, " ## "); deps = substr($$0, RLENGTH + 1, d - RLENGTH - 1); gsub(/^ +| +$$/, "", deps); \
+				printf "%s%s%s: %s\n", n, want, r, substr($$0, d + 4); \
+				if (nb) printf "\n"; \
+				for (i = 0; i < nb; i++) { \
+					l = block[i]; \
+					if (l ~ /^[A-Z][A-Za-z ()]*:$$/) l = h l r; \
+					else if (match(l, /^  [A-Z_]+/)) l = "  " v substr(l, 3, RLENGTH - 2) r substr(l, RLENGTH + 1); \
+					print l \
+				} \
+				if (deps != "") printf "\n%sDepends on:%s %s\n", h, r, deps; \
+				found = 1; exit \
+			} \
+		} \
+		{ nb = 0 } \
+		END { if (!found) { print "No help for \"" want "\". Run \"make help\" to list the targets." > "/dev/stderr"; exit 1 } }' $(MAKEFILE_LIST)
 
 
 ################################################################################
@@ -64,19 +94,27 @@ revad-static-musl: ## Build a static revad with musl
 gaia: ## Install the gaia build tool
 	go install github.com/cs3org/gaia@latest
 
+# Build cmd/revad/revad with gaia, with the plugins of
+# github.com/cernbox/reva-plugins and this checkout of reva.
 .PHONY: cernbox-revad
 cernbox-revad: gaia ## Build revad with the CERNBox plugins
 	gaia build --with github.com/cernbox/reva-plugins --with github.com/cs3org/reva/v3=$(shell pwd) --debug -o ./cmd/revad/revad
 
+# Like cernbox-revad, but take the plugins from your checkout in
+# ../reva-plugins instead of the published module.
 .PHONY: cernbox-revad-local
 cernbox-revad-local: gaia ## Build revad with the CERNBox plugins from ../reva-plugins
 	gaia build --with github.com/cernbox/reva-plugins=$(shell pwd)/../reva-plugins --with github.com/cs3org/reva/v3=$(shell pwd) --debug -o ./cmd/revad/revad
 
 
+# Like cernbox-revad, with the ceph build tag. It writes
+# cmd/revad/revad-ceph (and cmd/revad/revad, from cernbox-revad).
 .PHONY: cernbox-revad-ceph
 cernbox-revad-ceph: cernbox-revad ## Build revad with the CERNBox plugins and Ceph
 	gaia build --tags ceph --with github.com/cernbox/reva-plugins --with github.com/cs3org/reva/v3=$(shell pwd) --debug -o ./cmd/revad/revad-ceph
 
+# Like cernbox-revad-local, with the ceph build tag. It writes
+# cmd/revad/revad-ceph.
 .PHONY: cernbox-revad-ceph-local
 cernbox-revad-ceph-local: gaia ## Build revad with the CERNBox plugins from ../reva-plugins and Ceph
 	gaia build --tags ceph --with github.com/cernbox/reva-plugins=$(shell pwd)/../reva-plugins --with github.com/cs3org/reva/v3=$(shell pwd) --debug -o ./cmd/revad/revad-ceph
@@ -133,18 +171,41 @@ export EOS_FULL_IMAGE ?= eos-full
 export PARTS		  ?= 1
 export PART			  ?= 1
 
+# Build the EOS and revad images, then run the litmus WebDAV tests with
+# docker compose (tests/docker/docker-compose.yml).
+#
+# Variables:
+#   EOS_FULL_IMAGE  the EOS image to test against (default eos-full)
 .PHONY: $(TEST)
 $(TEST): docker-eos-full-tests docker-revad-eos ## Run the litmus WebDAV tests in docker
 	docker compose -f ./tests/docker/docker-compose.yml up --force-recreate --always-recreate-deps --build --abort-on-container-exit -V --remove-orphans --exit-code-from $@ $@
 
+# Run the unit tests with the race detector. The tests in tests/integration
+# are left out: use test-integration for them.
+#
+# Variables:
+#   COVER_PROFILE  write a coverage profile to this file
 .PHONY: test-go
 test-go: ## Run the unit tests
 	go test $$([[ -z "$(COVER_PROFILE)" ]] && echo "" || echo "-coverprofile=$(COVER_PROFILE)") -race $$(go list ./... | grep -v /tests/integration)
 
+# Build revad, then run the gRPC integration tests in tests/integration.
+# They need a Redis and a MySQL server.
+#
+# Variables (environment):
+#   REDIS_ADDRESS  address of Redis, for example localhost:6379
+#   SQL_USERNAME   MySQL user
+#   SQL_PASSWORD   MySQL password
+#   SQL_ADDRESS    address of MySQL, for example localhost:3306
+#   SQL_DBNAME     MySQL database
 .PHONY: test-integration
 test-integration: revad ## Run the integration tests (needs Redis and MySQL)
 	go test -race ./tests/integration/...
 
+# Run the reva CLI tests in tests/integration/reva-cli with judo
+# (npm install -g @intuit/judo). Build reva first and start revad with
+# tests/integration/reva-cli/config/revad-localfs.toml: see
+# .github/workflows/test-reva-cli.yml for the setup.
 .PHONY: test-reva-cli
 test-reva-cli: ## Run the reva CLI tests with judo (needs a running revad)
 	@if ! command -v judo >/dev/null 2>&1; then \
@@ -155,6 +216,11 @@ test-reva-cli: ## Run the reva CLI tests with judo (needs a running revad)
 	judo tests/integration/reva-cli/versions-recycle.yaml
 	judo tests/integration/reva-cli/grants.yaml
 
+# Check that the unreleased changelog has an entry that links the pull
+# request. CI runs it on every pull request.
+#
+# Variables:
+#   PR  number of the pull request (required)
 .PHONY: check-changelog
 check-changelog: $(CALENS) ## Check the changelog entry of PR=<number>
 ifndef PR
@@ -179,7 +245,12 @@ gen-doc: ## Generate the config reference of the docs
 dist: gen-doc ## Build the release artifacts
 	go run tools/create-artifacts/main.go -version $(VERSION) -commit $(GIT_COMMIT) -goversion $(GO_VERSION)
 
-# use the following as `NEWVER=3.x.y make release`
+# Run make all, move changelog/unreleased into changelog/<version>_<date>,
+# regenerate CHANGELOG.md and write VERSION and RELEASE_DATE. Then commit
+# and tag the release.
+#
+# Variables:
+#   NEWVER  the version to release, for example 3.14.1 (required)
 release: gen-doc ## Prepare a release (NEWVER=3.x.y)
 	go run tools/prepare-release/main.go -version $(NEWVER) -commit -tag
 
