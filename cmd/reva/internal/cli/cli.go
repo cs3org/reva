@@ -40,6 +40,7 @@ import (
 	"github.com/cs3org/reva/v3/pkg/appctx"
 	"github.com/cs3org/reva/v3/pkg/httpclient"
 	"github.com/spf13/pflag"
+	"golang.org/x/term"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/credentials/insecure"
@@ -246,6 +247,12 @@ func writeState(name string, data []byte) error {
 		return err
 	}
 	return os.WriteFile(filepath.Join(dir, name), data, 0o600)
+}
+
+// UseColor reports whether to color the output written to f: only for a
+// terminal, and never when NO_COLOR is set (https://no-color.org).
+func UseColor(f *os.File) bool {
+	return os.Getenv("NO_COLOR") == "" && term.IsTerminal(int(f.Fd()))
 }
 
 // Print writes v as JSON with --output json. Else it calls text.
