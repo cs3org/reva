@@ -28,94 +28,87 @@ import (
 	"strings"
 
 	"github.com/cs3org/reva/v3/pkg/admin/adminpb"
+	"github.com/spf13/cobra"
 )
 
-func adminInvocationsCommand() *command {
-	cmd := newCommand("invocations")
-	cmd.Description = func() string { return "list the invocations a service exposes" }
-	cmd.Usage = func() string { return "Usage: admin invocations [-admin-host h] <service>" }
-	adminHost := cmd.String("admin-host", "", "address of the admin gRPC endpoint (persisted)")
-	cmd.ResetFlags = func() { *adminHost = "" }
-	cmd.Action = func(w ...io.Writer) error {
-		if cmd.NArg() < 1 {
-			return errors.New(cmd.Usage())
-		}
-		client, ctx, err := adminDial(*adminHost)
-		if err != nil {
-			return err
-		}
-		res, err := client.ListInvocations(ctx, &adminpb.ListInvocationsRequest{Service: cmd.Args()[0]})
-		if err != nil {
-			return adminErr(err)
-		}
-		for _, inv := range res.Invocations {
-			kind := inv.Kind
-			if kind == "" {
-				kind = "?"
+func invocationsCommand() *cobra.Command {
+	return &cobra.Command{
+		Use:   "invocations <service>",
+		Short: "List the invocations a service exposes",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			client, ctx, err := adminDial(cmd)
+			if err != nil {
+				return err
 			}
-			switch {
-			case inv.StreamOnly:
-				kind += ",stream-only"
-			case inv.Streaming:
-				kind += ",stream"
+			res, err := client.ListInvocations(ctx, &adminpb.ListInvocationsRequest{Service: args[0]})
+			if err != nil {
+				return adminErr(err)
 			}
-			if inv.Scope != "" {
-				kind += "," + inv.Scope
+			for _, inv := range res.Invocations {
+				kind := inv.Kind
+				if kind == "" {
+					kind = "?"
+				}
+				switch {
+				case inv.StreamOnly:
+					kind += ",stream-only"
+				case inv.Streaming:
+					kind += ",stream"
+				}
+				if inv.Scope != "" {
+					kind += "," + inv.Scope
+				}
+				fmt.Printf("%-20s [%s] %s\n", inv.Name, kind, inv.Description)
 			}
-			fmt.Printf("%-20s [%s] %s\n", inv.Name, kind, inv.Description)
-		}
-		return nil
+			return nil
+		},
 	}
-	return cmd
 }
 
-func adminInvokeCommand() *command {
-	cmd := newCommand("invoke")
-	cmd.Description = func() string { return "run a service invocation on one or all instances" }
-	cmd.Usage = func() string {
-		return "Usage: admin invoke [-admin-host h] [-y] [-stream] <selector> <invocation> [key=val ...]"
-	}
-	adminHost := cmd.String("admin-host", "", "address of the admin gRPC endpoint (persisted)")
-	yes := cmd.Bool("y", false, "skip the confirmation prompt for dangerous invocations")
-	stream := cmd.Bool("stream", false, "run a streaming invocation, printing results as they arrive (Ctrl-C stops); implied for a stream-only invocation")
-	cmd.ResetFlags = func() { *adminHost, *yes, *stream = "", false, false }
-	cmd.Action = func(w ...io.Writer) error {
-		if cmd.NArg() < 2 {
-			return errors.New(cmd.Usage())
-		}
-		// selector is a service name (every instance) or a node id (one instance).
-		selector, invocation := cmd.Args()[0], cmd.Args()[1]
-		args := parseKeyVals(cmd.Args()[2:])
+func invokeCommand() *cobra.Command {
+	var yes, stream bool
+	cmd := &cobra.Command{
+		Use:   "invoke <selector> <invocation> [key=val ...]",
+		Short: "Run a service invocation on one or all instances",
+		Long:  "Run a service invocation. The selector is a service name (every instance) or a node id (one instance).",
+		Args:  cobra.MinimumNArgs(2),
+		RunE: func(cmd *cobra.Command, posArgs []string) error {
+			selector, invocation := posArgs[0], posArgs[1]
+			args := parseKeyVals(posArgs[2:])
 
-		client, ctx, err := adminDial(*adminHost)
-		if err != nil {
-			return err
-		}
-
-		// Confirm dangerous invocations unless -y. The kind comes from the
-		// service's own catalog.
-		spec := invocationSpec(ctx, client, selector, invocation)
-		if !*yes && spec.GetKind() == "dangerous" {
-			if !confirm(fmt.Sprintf("invocation %q on %q is DANGEROUS; proceed?", invocation, selector)) {
-				return errors.New("aborted")
+			client, ctx, err := adminDial(cmd)
+			if err != nil {
+				return err
 			}
-		}
 
-		if *stream || spec.GetStreamOnly() {
-			return runInvokeStream(ctx, client, selector, invocation, args)
-		}
+			// Confirm dangerous invocations unless --yes. The kind comes from the
+			// service's own catalog.
+			spec := invocationSpec(ctx, client, selector, invocation)
+			if !yes && spec.GetKind() == "dangerous" {
+				if !confirm(fmt.Sprintf("invocation %q on %q is DANGEROUS; proceed?", invocation, selector)) {
+					return errors.New("aborted")
+				}
+			}
 
-		res, err := client.Invoke(ctx, &adminpb.InvokeRequest{
-			Service:    selector,
-			Invocation: invocation,
-			Args:       args,
-		})
-		if err != nil {
-			return adminErr(err)
-		}
-		printNodeResults(res.Results)
-		return nil
+			if stream || spec.GetStreamOnly() {
+				return runInvokeStream(ctx, client, selector, invocation, args)
+			}
+
+			res, err := client.Invoke(ctx, &adminpb.InvokeRequest{
+				Service:    selector,
+				Invocation: invocation,
+				Args:       args,
+			})
+			if err != nil {
+				return adminErr(err)
+			}
+			printNodeResults(res.Results)
+			return nil
+		},
 	}
+	cmd.Flags().BoolVarP(&yes, "yes", "y", false, "skip the confirmation prompt for dangerous invocations")
+	cmd.Flags().BoolVar(&stream, "stream", false, "run a streaming invocation, printing results as they arrive (Ctrl-C stops); implied for a stream-only invocation")
 	return cmd
 }
 

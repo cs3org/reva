@@ -21,7 +21,6 @@ package admin
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -32,75 +31,68 @@ import (
 	"time"
 
 	"github.com/cs3org/reva/v3/pkg/admin/adminpb"
+	"github.com/spf13/cobra"
 )
 
-func adminLogsCommand() *command {
-	cmd := newCommand("logs")
-	cmd.Description = func() string { return "read (or follow) a service's recent logs across the fleet" }
-	cmd.Usage = func() string {
-		return "Usage: admin logs [-admin-host h] [-f] [-n N] [-level L] [-since D] [-grep P] [-o text|json] <selector>\n" +
-			"       admin logs level [-admin-host h] <selector> [trace|debug|info|warn|error|reset]"
-	}
-	adminHost := cmd.String("admin-host", "", "address of the admin gRPC endpoint (persisted)")
-	follow := cmd.Bool("f", false, "follow: stream new lines until interrupted")
-	tail := cmd.Int("n", 200, "number of recent lines (snapshot), or backlog before -f")
-	level := cmd.String("level", "", "minimum level: trace|debug|info|warn|error")
-	since := cmd.String("since", "", "only lines newer than a duration (e.g. 5m) or an RFC3339 time")
-	grep := cmd.String("grep", "", "keep only lines containing this substring")
-	output := cmd.String("o", "text", "output format: text | json")
-	cmd.ResetFlags = func() {
-		*adminHost, *follow, *tail, *level, *since, *grep, *output = "", false, 200, "", "", "", "text"
-	}
-	cmd.Action = func(w ...io.Writer) error {
-		if cmd.NArg() < 1 {
-			return errors.New(cmd.Usage())
-		}
-		// `logs level <selector> [newlevel]` reports or sets the runtime log level.
-		if cmd.Args()[0] == "level" {
-			return adminLogsLevel(*adminHost, cmd.Args()[1:])
-		}
-		if *output != "text" && *output != "json" {
-			return fmt.Errorf("unknown -o %q (use text or json)", *output)
-		}
-		selector := cmd.Args()[0]
-		args := map[string]string{"limit": strconv.Itoa(*tail)}
-		if *level != "" {
-			args["level"] = *level
-		}
-		if *since != "" {
-			args["since"] = *since
-		}
-		if *grep != "" {
-			args["grep"] = *grep
-		}
+func logsCommand() *cobra.Command {
+	var follow bool
+	var tail int
+	var level, since, grep string
+	cmd := &cobra.Command{
+		Use:   "logs <selector>",
+		Short: "Read (or follow) the recent logs of a service across the fleet",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, posArgs []string) error {
+			selector := posArgs[0]
+			args := map[string]string{"limit": strconv.Itoa(tail)}
+			if level != "" {
+				args["level"] = level
+			}
+			if since != "" {
+				args["since"] = since
+			}
+			if grep != "" {
+				args["grep"] = grep
+			}
 
-		client, ctx, err := adminDial(*adminHost)
-		if err != nil {
-			return err
-		}
-		// A node id addresses one instance; a plain service name may span several,
-		// so label lines with their node in that case.
-		multi := !strings.Contains(selector, "/")
-		if *follow {
-			return followLogs(ctx, client, selector, args, *output, multi)
-		}
-		return snapshotLogs(ctx, client, selector, args, *output, multi)
+			client, ctx, err := adminDial(cmd)
+			if err != nil {
+				return err
+			}
+			// A node id addresses one instance; a plain service name may span several,
+			// so label lines with their node in that case.
+			multi := !strings.Contains(selector, "/")
+			if follow {
+				return followLogs(ctx, client, selector, args, rt.Output, multi)
+			}
+			return snapshotLogs(ctx, client, selector, args, rt.Output, multi)
+		},
 	}
+	cmd.Flags().BoolVarP(&follow, "follow", "f", false, "stream new lines until interrupted")
+	cmd.Flags().IntVarP(&tail, "lines", "n", 200, "number of recent lines (snapshot), or backlog before --follow")
+	cmd.Flags().StringVar(&level, "level", "", "minimum level: trace|debug|info|warn|error")
+	cmd.Flags().StringVar(&since, "since", "", "only lines newer than a duration (e.g. 5m) or an RFC3339 time")
+	cmd.Flags().StringVar(&grep, "grep", "", "keep only lines containing this substring")
+	cmd.AddCommand(&cobra.Command{
+		Use:   "level <selector> [trace|debug|info|warn|error|reset]",
+		Short: "Show or set the runtime log level of the selected instances",
+		Args:  cobra.RangeArgs(1, 2),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return adminLogsLevel(cmd, args)
+		},
+	})
 	return cmd
 }
 
 // adminLogsLevel reports or sets the runtime log level of the selected
 // instances: with no level it prints each instance's current one, with a level
 // it changes them (in-memory; a restart reverts to the configured level).
-func adminLogsLevel(adminHost string, args []string) error {
-	if len(args) < 1 {
-		return errors.New("Usage: admin logs level [-admin-host h] <selector> [trace|debug|info|warn|error|reset]")
-	}
+func adminLogsLevel(cmd *cobra.Command, args []string) error {
 	invArgs := map[string]string{}
 	if len(args) >= 2 {
 		invArgs["level"] = args[1]
 	}
-	client, ctx, err := adminDial(adminHost)
+	client, ctx, err := adminDial(cmd)
 	if err != nil {
 		return err
 	}

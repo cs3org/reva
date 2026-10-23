@@ -44,6 +44,6 @@ run:
     prerequisiteCwd: .
     prerequisites:
       - 'echo "Hello World" > local-test-file.txt'
-    command:  'cmd/reva/reva -insecure -host={{REVANODE}} -token-file=token upload local-test-file.txt  /localfs/my-test-file.txt'
+    command:  'cmd/reva/reva --insecure --host={{REVANODE}} --token-file=token upload local-test-file.txt  /localfs/my-test-file.txt'
     expectCode: 0
 ```
