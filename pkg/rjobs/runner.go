@@ -1025,8 +1025,9 @@ func (r *Runner) recordStatus(ctx context.Context, run Run, state State, result 
 // invoke dispatches a run to the right registered job. Periodic runs (empty
 // Params and a known periodic name) call the periodic Run closure; everything
 // else is an on-demand job. The returned Params are the on-demand job's result
-// (always nil for periodic runs). A job implementing ProgressJob reports its
-// progress to h, and one implementing HandOffJob is registered on h.
+// (always nil for periodic runs). A job implementing ProgressJob, or a periodic
+// job with RunWithProgress, reports its progress to h, and one implementing
+// HandOffJob is registered on h.
 func (r *Runner) invoke(ctx context.Context, run Run, h *runHandle, log zerolog.Logger) (Params, error) {
 	// The run id is the trace id, so the logs of the services the job calls
 	// carry it too and `admin jobs logs <run-id>` finds them.
@@ -1034,7 +1035,11 @@ func (r *Runner) invoke(ctx context.Context, run Run, h *runHandle, log zerolog.
 	jobCtx = appctx.WithLogger(jobCtx, &log)
 
 	if p, ok := r.lookupPeriodic(run.Job); ok {
-		return nil, r.guard(p, func() error { return p.Run(jobCtx) })
+		var rep Reporter = NopReporter{}
+		if h != nil {
+			rep = h.progress
+		}
+		return nil, r.guard(p, func() error { return p.run(jobCtx, rep) })
 	}
 
 	newFunc, ok := lookupOnDemand(run.Job)
@@ -1060,7 +1065,7 @@ func (r *Runner) invoke(ctx context.Context, run Run, h *runHandle, log zerolog.
 // execPeriodic runs a periodic Run closure inline (used by the local ticker).
 func (r *Runner) execPeriodic(ctx context.Context, p Periodic, log zerolog.Logger) {
 	start := time.Now()
-	err := r.guard(p, func() error { return p.Run(appctx.WithLogger(trace.SetJob(ctx, p.Name), &log)) })
+	err := r.guard(p, func() error { return p.run(appctx.WithLogger(trace.SetJob(ctx, p.Name), &log), NopReporter{}) })
 	switch {
 	case errors.Is(err, errSkippedOverlap):
 		log.Debug().Msg("rjobs: skipped, previous run still in flight")
