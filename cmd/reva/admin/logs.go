@@ -30,6 +30,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/cs3org/reva/v3/cmd/reva/internal/cli"
 	"github.com/cs3org/reva/v3/pkg/admin/adminpb"
 	"github.com/spf13/cobra"
 )
@@ -172,7 +173,7 @@ func snapshotLogs(ctx context.Context, client adminpb.AdminAPIClient, selector s
 	for _, e := range merged {
 		nodeWidth = max(nodeWidth, len(e.node))
 	}
-	color := stdoutIsTTY()
+	color := cli.UseColor(os.Stdout)
 	for _, e := range merged {
 		fmt.Println(formatLogLine(e.node, nodeWidth, e.line, multi, color, output))
 	}
@@ -190,7 +191,7 @@ func followLogs(ctx context.Context, client adminpb.AdminAPIClient, selector str
 	if err != nil {
 		return adminErr(err)
 	}
-	color := stdoutIsTTY()
+	color := cli.UseColor(os.Stdout)
 	nodeWidth := 0
 	for {
 		msg, err := stream.Recv()
