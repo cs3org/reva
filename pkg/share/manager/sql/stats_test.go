@@ -74,9 +74,6 @@ func TestShareManagerStats(t *testing.T) {
 	if err := p.Validate(); err != nil {
 		t.Fatal(err)
 	}
-	if p.Scope != stats.ScopeShared {
-		t.Errorf("scope = %q, want shared", p.Scope)
-	}
 
 	if v, ok := findSample(p, "shares", map[string]string{
 		"kind": "share", "status": "active", "item_type": "file",
@@ -132,5 +129,60 @@ func TestPublicShareManagerStats(t *testing.T) {
 	}
 	if v, ok := findSample(p, "links", map[string]string{"password_protected": "false"}); !ok || v != 1 {
 		t.Errorf("open links = %v (found=%v), want 1", v, ok)
+	}
+}
+
+// findOwnerSample returns the value of the owner sample of owner in the
+// named metric, and whether it was found.
+func findOwnerSample(p *stats.Payload, name, owner string) (float64, bool) {
+	for _, m := range p.Metrics {
+		if m.Name != name {
+			continue
+		}
+		for _, s := range m.OwnerSamples {
+			if s.Owner == owner {
+				return s.Value, true
+			}
+		}
+	}
+	return 0, false
+}
+
+func TestShareManagerStatsPerCreator(t *testing.T) {
+	mgr, err, teardown := setupSuiteShares(t)
+	defer teardown(t)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	alice := getUserContext("alice")
+	aliceUser, _ := appctx.ContextGetUser(alice)
+	bob := getUserContext("bob")
+	bobUser, _ := appctx.ContextGetUser(bob)
+
+	for _, sharee := range []string{"1000", "1001"} {
+		if _, err := mgr.Share(alice, getRandomFile(aliceUser), getUserShareGrant(sharee, "file")); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if _, err := mgr.Share(bob, getRandomFile(bobUser), getUserShareGrant("1002", "file")); err != nil {
+		t.Fatal(err)
+	}
+
+	p, err := mgr.(stats.Reporter).Stats(alice)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := p.Validate(); err != nil {
+		t.Fatal(err)
+	}
+
+	for owner, want := range map[string]float64{"alice": 2, "bob": 1} {
+		if v, ok := findOwnerSample(p, "active_shares", owner); !ok || v != want {
+			t.Errorf("active_shares of %s = %v (found=%v), want %v", owner, v, ok, want)
+		}
+		if v, ok := findOwnerSample(p, "active_share_creators", owner); !ok || v != 1 {
+			t.Errorf("active_share_creators of %s = %v (found=%v), want 1", owner, v, ok)
+		}
 	}
 }

@@ -32,8 +32,11 @@ import (
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	cachereg "github.com/cs3org/reva/v3/pkg/share/cache/registry"
 
+	"github.com/cs3org/reva/v3/pkg/admin"
+	"github.com/cs3org/reva/v3/pkg/admin/adminpb"
 	"github.com/cs3org/reva/v3/pkg/appctx"
 	"github.com/cs3org/reva/v3/pkg/errtypes"
+	"github.com/cs3org/reva/v3/pkg/invoke"
 	"github.com/cs3org/reva/v3/pkg/permissions"
 	"github.com/cs3org/reva/v3/pkg/plugin"
 	"github.com/cs3org/reva/v3/pkg/projects"
@@ -43,6 +46,7 @@ import (
 	revaservice "github.com/cs3org/reva/v3/pkg/service"
 	"github.com/cs3org/reva/v3/pkg/share/cache"
 	"github.com/cs3org/reva/v3/pkg/spaces"
+	"github.com/cs3org/reva/v3/pkg/stats"
 	"github.com/cs3org/reva/v3/pkg/storage/utils/templates"
 	"github.com/cs3org/reva/v3/pkg/utils"
 	"github.com/cs3org/reva/v3/pkg/utils/cfg"
@@ -62,10 +66,9 @@ func init() {
 }
 
 type config struct {
-	Driver        string                    `mapstructure:"driver"`
-	Drivers       map[string]map[string]any `mapstructure:"drivers"`
-	UserSpace     string                    `mapstructure:"user_space" validate:"required"`
-	MachineSecret string                    `mapstructure:"machine_secret" validate:"required"`
+	Driver    string                    `mapstructure:"driver"`
+	Drivers   map[string]map[string]any `mapstructure:"drivers"`
+	UserSpace string                    `mapstructure:"user_space" validate:"required"`
 	// Provide a list of public spaces, where we map
 	// name:
 	//  - path: <path>
@@ -84,6 +87,7 @@ func (c *config) ApplyDefaults() {
 }
 
 type service struct {
+	*invoke.Set
 	c                    *config
 	projects             projects.Catalogue
 	resourceInfoCache    cache.ResourceInfoCache
@@ -102,8 +106,12 @@ func New(ctx context.Context, m map[string]any) (rgrpc.Service, error) {
 	}
 
 	svc := service{
+		Set:      invoke.NewSet(),
 		c:        &c,
 		projects: s,
+	}
+	if _, ok := s.(stats.Reporter); ok {
+		svc.Set = stats.NewInvokeSet(&svc)
 	}
 
 	ricache, err := getCacheManager(&c)
@@ -306,17 +314,15 @@ func (s *service) decorateProjects(ctx context.Context, projects []*provider.Sto
 	return filtered, nil
 }
 
-func (s *service) decorateProject(ctx context.Context, proj *provider.StorageSpace) error {
-	log := appctx.GetLogger(ctx)
-	// Add quota
-
+// projectQuota returns the quota of the project at path, as seen by its owner.
+func (s *service) projectQuota(ctx context.Context, owner, path string) (*provider.GetQuotaResponse, error) {
 	gw, err := revaservice.Gateway(ctx)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	ownerCtx := ctx
-	if proj.Owner != nil && proj.Owner.Id.OpaqueId != "root" {
+	if owner != "" && owner != "root" {
 		// To get the quota for a project, we cannot do the request
 		// on behalf of the current logged user, because the project
 		// is owned by an other account, in general different from the
@@ -328,33 +334,43 @@ func (s *service) decorateProject(ctx context.Context, proj *provider.StorageSpa
 		// but we need to keep it here until we migrate all of the old
 		// project quota nodes
 		// See CERNBOX-3995
-		authRes, err := gw.Authenticate(ctx, &gateway.AuthenticateRequest{
-			Type:         "machine",
-			ClientId:     proj.Owner.Id.OpaqueId,
-			ClientSecret: s.c.MachineSecret,
-		})
+		adm, err := revaservice.Admin(ctx)
 		if err != nil {
-			return err
+			return nil, err
 		}
-		if authRes.Status.Code != rpcv1beta1.Code_CODE_OK {
-			return status.NewErrtypeFromStatus(authRes.Status)
+		actx, err := admin.AsService(ctx, "spacesregistry")
+		if err != nil {
+			return nil, err
+		}
+		res, err := adm.Impersonate(actx, &adminpb.ImpersonateRequest{User: owner, Reason: "project quota"})
+		if err != nil {
+			return nil, err
 		}
 
-		token := authRes.Token
-		owner := authRes.User
+		// Replace the outgoing metadata, so only the owner's token is sent,
+		// but keep the deadline of ctx.
+		ownerCtx = appctx.ContextSetToken(ctx, res.Token)
+		ownerCtx = metadata.NewOutgoingContext(ownerCtx, metadata.Pairs(appctx.TokenHeader, res.Token))
+	}
 
-		ownerCtx = context.Background()
-		ownerCtx = appctx.ContextSetToken(ownerCtx, token)
-		ownerCtx = metadata.AppendToOutgoingContext(ownerCtx, appctx.TokenHeader, token)
-		ownerCtx = appctx.ContextSetUser(ownerCtx, owner)
+	return gw.GetQuota(ownerCtx, &gateway.GetQuotaRequest{
+		Ref: &provider.Reference{
+			Path: path,
+		},
+	})
+}
+
+func (s *service) decorateProject(ctx context.Context, proj *provider.StorageSpace) error {
+	log := appctx.GetLogger(ctx)
+	// Add quota
+
+	gw, err := revaservice.Gateway(ctx)
+	if err != nil {
+		return err
 	}
 
 	log.Debug().Msgf("Fetching quota for project %s", proj.Name)
-	quota, err := gw.GetQuota(ownerCtx, &gateway.GetQuotaRequest{
-		Ref: &provider.Reference{
-			Path: proj.RootInfo.Path,
-		},
-	})
+	quota, err := s.projectQuota(ctx, proj.GetOwner().GetId().GetOpaqueId(), proj.RootInfo.Path)
 	if err != nil {
 		log.Err(err).Msgf("Failed to fetch quota for project %s", proj.Name)
 		return err

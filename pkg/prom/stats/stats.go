@@ -17,17 +17,19 @@
 // or submit itself to any jurisdiction.
 
 // Package stats is the prometheus collector turning the fleet's service
-// statistics into metrics. It needs no configuration: it discovers the
-// services advertising a "stats" invocation through the service registry,
-// invokes them over the control channel on a background refresh loop, and
-// serves the cached results — a scrape never triggers an invocation.
+// statistics into metrics. It needs no configuration: through the Admin
+// API it finds the services advertising a "stats" invocation and invokes
+// them on a background refresh loop, and it serves the cached results — a
+// scrape never triggers an invocation.
 //
 // If an owner-attributes file is present (default
 // /etc/revad/owner-attributes.json, a JSON object mapping owner ids to
 // attribute key/value pairs), per-owner samples are folded by those
 // attributes and the attribute keys become metric labels; without the
-// file they collapse into plain totals. The attribute vocabulary is
-// entirely the site's: reva only forwards it.
+// file they collapse into plain totals. owner_attributes limits the labels
+// to the given keys, and owner_attributes_key reads the owner map from one
+// key of the file. The attribute vocabulary is entirely the site's: reva
+// only forwards it.
 package stats
 
 import (
@@ -36,15 +38,13 @@ import (
 	"fmt"
 	"maps"
 	"os"
+	"slices"
 	"sort"
 	"sync"
 	"time"
 
 	"github.com/cs3org/reva/v3/pkg/appctx"
-	"github.com/cs3org/reva/v3/pkg/invoke/client"
 	"github.com/cs3org/reva/v3/pkg/prom/registry"
-	"github.com/cs3org/reva/v3/pkg/stats"
-	jwtmgr "github.com/cs3org/reva/v3/pkg/token/manager/jwt"
 	"github.com/cs3org/reva/v3/pkg/utils/cfg"
 	"github.com/prometheus/client_golang/prometheus"
 )
@@ -61,6 +61,12 @@ type config struct {
 		Namespace string `mapstructure:"namespace"`
 		// OwnerAttributesFile overrides the conventional attributes path.
 		OwnerAttributesFile string `mapstructure:"owner_attributes_file"`
+		// OwnerAttributesKey is the key of the object that holds the owner
+		// map in that file. Empty means the owner map is the whole file.
+		OwnerAttributesKey string `mapstructure:"owner_attributes_key"`
+		// OwnerAttributes are the attribute keys that become labels. Empty
+		// means all the keys found in the file.
+		OwnerAttributes []string `mapstructure:"owner_attributes"`
 	} `mapstructure:"stats"`
 }
 
@@ -90,14 +96,12 @@ func New(ctx context.Context, m map[string]any) ([]prometheus.Collector, error) 
 		attrFile = DefaultOwnerAttributesFile
 	}
 
-	tm, err := jwtmgr.New(nil)
-	if err != nil {
-		return nil, fmt.Errorf("prom stats: token manager: %w", err)
-	}
 	col := &collector{
 		namespace: namespace,
 		attrFile:  attrFile,
-		fleet:     registryFleet{tokenManager: tm},
+		attrKey:   c.Stats.OwnerAttributesKey,
+		attrKeys:  c.Stats.OwnerAttributes,
+		fleet:     adminFleet{},
 		errors:    map[string]float64{},
 	}
 	go col.run(ctx, interval)
@@ -108,6 +112,8 @@ func New(ctx context.Context, m map[string]any) ([]prometheus.Collector, error) 
 type collector struct {
 	namespace string
 	attrFile  string
+	attrKey   string
+	attrKeys  []string
 	fleet     fleet
 
 	mu      sync.Mutex
@@ -153,13 +159,12 @@ func (c *collector) run(ctx context.Context, interval time.Duration) {
 // refreshOnce queries every discovered stats target and swaps the cache.
 func (c *collector) refreshOnce(ctx context.Context) {
 	log := appctx.GetLogger(ctx)
-	targets := c.fleet.StatsTargets()
-	if len(targets) == 0 {
+	services, err := c.fleet.StatsServices(ctx)
+	if err != nil {
+		log.Warn().Err(err).Msg("prom stats: cannot list the stats services")
 		return
 	}
-	ctx, err := c.fleet.AuthContext(ctx)
-	if err != nil {
-		log.Warn().Err(err).Msg("prom stats: cannot authenticate to the control channel")
+	if len(services) == 0 {
 		return
 	}
 	attrs, attrKeys := c.loadOwnerAttributes()
@@ -171,9 +176,9 @@ func (c *collector) refreshOnce(ctx context.Context) {
 	errors := c.errors
 	c.mu.Unlock()
 
-	for svcName, eps := range targets {
+	for _, svcName := range services {
 		start := time.Now()
-		payloads, err := c.collectService(ctx, eps)
+		payloads, err := c.fleet.InvokeStats(ctx, svcName)
 		if err != nil {
 			errors[svcName]++
 			log.Warn().Err(err).Str("service", svcName).Msg("prom stats: refresh failed")
@@ -197,40 +202,27 @@ func (c *collector) refreshOnce(ctx context.Context) {
 	c.mu.Unlock()
 }
 
-// collectService invokes stats on one instance, fanning out to the rest
-// only when the payload declares per-instance scope.
-func (c *collector) collectService(ctx context.Context, eps []client.Endpoint) ([]*stats.Payload, error) {
-	if len(eps) == 0 {
-		return nil, fmt.Errorf("no live instances")
-	}
-	first, err := c.fleet.InvokeStats(ctx, eps[0])
-	if err != nil {
-		return nil, err
-	}
-	payloads := []*stats.Payload{first}
-	if first.Scope != stats.ScopeInstance {
-		return payloads, nil
-	}
-	for _, ep := range eps[1:] {
-		p, err := c.fleet.InvokeStats(ctx, ep)
-		if err != nil {
-			return nil, err
-		}
-		payloads = append(payloads, p)
-	}
-	return payloads, nil
-}
-
 // loadOwnerAttributes reads the attributes file; a missing file means no
-// enrichment. Returns the owner map and the sorted union of attribute keys.
+// enrichment. Returns the owner map and the sorted attribute keys: the
+// configured ones, or else the union of the keys in the file.
 func (c *collector) loadOwnerAttributes() (map[string]map[string]string, []string) {
 	data, err := os.ReadFile(c.attrFile)
 	if err != nil {
 		return nil, nil
 	}
+	if c.attrKey != "" {
+		var wrapper map[string]json.RawMessage
+		if err := json.Unmarshal(data, &wrapper); err != nil {
+			return nil, nil
+		}
+		data = wrapper[c.attrKey]
+	}
 	var attrs map[string]map[string]string
 	if err := json.Unmarshal(data, &attrs); err != nil {
 		return nil, nil
+	}
+	if len(c.attrKeys) > 0 {
+		return attrs, slices.Sorted(slices.Values(c.attrKeys))
 	}
 	keySet := map[string]struct{}{}
 	for _, kv := range attrs {

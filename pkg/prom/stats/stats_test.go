@@ -21,35 +21,39 @@ package stats
 import (
 	"context"
 	"fmt"
+	"maps"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 
-	"github.com/cs3org/reva/v3/pkg/appctx"
-	"github.com/cs3org/reva/v3/pkg/auth/scope"
 	"github.com/cs3org/reva/v3/pkg/invoke/client"
 	"github.com/cs3org/reva/v3/pkg/stats"
-	jwtmgr "github.com/cs3org/reva/v3/pkg/token/manager/jwt"
 	"github.com/prometheus/client_golang/prometheus"
 	dto "github.com/prometheus/client_model/go"
-	"google.golang.org/grpc/metadata"
 )
 
-// fakeFleet serves canned payloads per endpoint node id.
+// fakeFleet serves canned payloads per endpoint node id. Like the Admin
+// API, it answers a service with the payloads of all its listed instances.
 type fakeFleet struct {
 	targets  map[string][]client.Endpoint
 	payloads map[string]*stats.Payload
 }
 
-func (f fakeFleet) AuthContext(ctx context.Context) (context.Context, error) { return ctx, nil }
-func (f fakeFleet) StatsTargets() map[string][]client.Endpoint               { return f.targets }
-func (f fakeFleet) InvokeStats(_ context.Context, ep client.Endpoint) (*stats.Payload, error) {
-	p, ok := f.payloads[ep.Node]
-	if !ok {
-		return nil, fmt.Errorf("no payload for %s", ep.Node)
+func (f fakeFleet) StatsServices(context.Context) ([]string, error) {
+	return slices.Sorted(maps.Keys(f.targets)), nil
+}
+func (f fakeFleet) InvokeStats(_ context.Context, svc string) ([]*stats.Payload, error) {
+	var out []*stats.Payload
+	for _, ep := range f.targets[svc] {
+		p, ok := f.payloads[ep.Node]
+		if !ok {
+			return nil, fmt.Errorf("no payload for %s", ep.Node)
+		}
+		out = append(out, p)
 	}
-	return p, nil
+	return out, nil
 }
 
 // gather renders the collector's metrics as text lines "name{labels} value".
@@ -91,7 +95,7 @@ func descName(s string) string {
 }
 
 func shared(metrics ...stats.Metric) *stats.Payload {
-	return &stats.Payload{Scope: stats.ScopeShared, Metrics: metrics}
+	return &stats.Payload{Metrics: metrics}
 }
 
 func TestRefreshMergesFamiliesAcrossServices(t *testing.T) {
@@ -127,9 +131,9 @@ func TestInstanceScopeSums(t *testing.T) {
 			"gateway": {{Node: "n1", Addr: "a1"}, {Node: "n2", Addr: "a2"}},
 		},
 		payloads: map[string]*stats.Payload{
-			"n1": {Scope: stats.ScopeInstance, Metrics: []stats.Metric{
+			"n1": {Metrics: []stats.Metric{
 				{Name: "sessions", Kind: stats.KindGauge, Samples: []stats.Sample{{Value: 3}}}}},
-			"n2": {Scope: stats.ScopeInstance, Metrics: []stats.Metric{
+			"n2": {Metrics: []stats.Metric{
 				{Name: "sessions", Kind: stats.KindGauge, Samples: []stats.Sample{{Value: 4}}}}},
 		},
 	}
@@ -173,6 +177,37 @@ func TestOwnerAttributeEnrichment(t *testing.T) {
 	}
 	if got["reva_projects{department=unknown,experiment=unknown}"] != 4 {
 		t.Errorf("carol bucket (unmapped): %v", got)
+	}
+}
+
+func TestOwnerAttributesKeyAndFilter(t *testing.T) {
+	attrFile := filepath.Join(t.TempDir(), "affiliation.json")
+	os.WriteFile(attrFile, []byte(`{
+		"generated": "2026-10-23T00:30:00Z",
+		"entries": {
+			"alice": {"department": "IT", "employee_id": "1"},
+			"bob":   {"department": "EP", "employee_id": "2"}
+		}
+	}`), 0o644)
+
+	f := fakeFleet{
+		targets: map[string][]client.Endpoint{
+			"projects": {{Node: "n1", Addr: "a1"}},
+		},
+		payloads: map[string]*stats.Payload{
+			"n1": shared(stats.Metric{Name: "projects", Kind: stats.KindGauge, OwnerSamples: []stats.OwnerSample{
+				{Owner: "alice", Value: 2},
+				{Owner: "bob", Value: 1},
+			}}),
+		},
+	}
+	c := &collector{namespace: "reva", attrFile: attrFile, attrKey: "entries", attrKeys: []string{"department"},
+		fleet: f, errors: map[string]float64{}}
+	c.refreshOnce(context.Background())
+
+	got := gather(t, c)
+	if got["reva_projects{department=IT}"] != 2 || got["reva_projects{department=EP}"] != 1 {
+		t.Errorf("want one series per department, without employee_id: %v", got)
 	}
 }
 
@@ -232,31 +267,5 @@ func TestCounterSuffixAndSelfMetrics(t *testing.T) {
 	}
 	if !found {
 		t.Errorf("refresh timestamp missing: %v", got)
-	}
-}
-
-func TestRegistryFleetAuthContext(t *testing.T) {
-	tm, err := jwtmgr.New(map[string]any{"secret": "test-secret"})
-	if err != nil {
-		t.Fatal(err)
-	}
-	f := registryFleet{tokenManager: tm}
-	ctx, err := f.AuthContext(context.Background())
-	if err != nil {
-		t.Fatal(err)
-	}
-	md, ok := metadata.FromOutgoingContext(ctx)
-	if !ok || len(md.Get(appctx.TokenHeader)) == 0 {
-		t.Fatal("no access token on the outgoing metadata")
-	}
-	u, scopes, err := tm.DismantleToken(ctx, md.Get(appctx.TokenHeader)[0])
-	if err != nil {
-		t.Fatal(err)
-	}
-	if u.Username != "stats-collector" {
-		t.Errorf("token user = %q", u.Username)
-	}
-	if !scope.HasAdminScope(scopes) {
-		t.Error("token lacks the admin scope required by the control channel")
 	}
 }

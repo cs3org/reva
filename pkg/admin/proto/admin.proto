@@ -128,6 +128,8 @@ message GetHealthResponse {
 message ListServicesRequest {
   // service optionally filters to a single service name.
   string service = 1;
+  // invocation optionally filters to the services that advertise it.
+  string invocation = 2;
 }
 
 message Node {

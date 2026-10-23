@@ -36,6 +36,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"regexp"
+	"slices"
 
 	"github.com/cs3org/reva/v3/pkg/invoke"
 )
@@ -43,16 +44,6 @@ import (
 // Invocation is the conventional invocation name under which services
 // expose their statistics.
 const Invocation = "stats"
-
-// Scope declares the state topology of a service's statistics.
-const (
-	// ScopeShared means every instance reports the same state (e.g. a
-	// shared database): the collector queries one live instance.
-	ScopeShared = "shared"
-	// ScopeInstance means each instance holds its own state: the
-	// collector fans out and sums.
-	ScopeInstance = "instance"
-)
 
 // Metric kinds.
 const (
@@ -69,8 +60,6 @@ type Reporter interface {
 
 // Payload is the return value of a "stats" invocation.
 type Payload struct {
-	// Scope is ScopeShared (default when empty) or ScopeInstance.
-	Scope string `json:"scope,omitempty"`
 	// Metrics are the self-described metric families.
 	Metrics []Metric `json:"metrics"`
 }
@@ -107,13 +96,8 @@ type OwnerSample struct {
 var nameRe = regexp.MustCompile(`^[a-z][a-z0-9_]*$`)
 
 // Validate checks the payload is well formed: legal metric and label
-// names, known kinds and scope.
+// names and known kinds.
 func (p *Payload) Validate() error {
-	switch p.Scope {
-	case "", ScopeShared, ScopeInstance:
-	default:
-		return fmt.Errorf("stats: unknown scope %q", p.Scope)
-	}
 	for _, m := range p.Metrics {
 		if !nameRe.MatchString(m.Name) {
 			return fmt.Errorf("stats: metric name %q does not conform to [a-z][a-z0-9_]*", m.Name)
@@ -187,13 +171,45 @@ func NewInvokeSet(manager any) *invoke.Set {
 	if !ok {
 		return set
 	}
-	set.Add(Invocation, "Service statistics as a self-describing metrics payload.").
-		Handle(invoke.Typed(func(ctx context.Context, _ struct{}) (invoke.Result, error) {
+	// Every Reporter reads state that all the instances share, such as a
+	// database, so one instance per service answers. The payload can hold
+	// one sample per user, so it is streamed in chunks.
+	set.Add(Invocation, "Service statistics as a stream of self-describing metrics payloads.").
+		Shared().
+		HandleStream(invoke.TypedStream(func(ctx context.Context, _ struct{}, emit invoke.StreamEmit) error {
 			p, err := r.Stats(ctx)
 			if err != nil {
-				return nil, err
+				return err
 			}
-			return p.Result()
+			for _, c := range p.chunks(chunkSamples) {
+				res, err := c.Result()
+				if err != nil {
+					return err
+				}
+				if err := emit(res); err != nil {
+					return err
+				}
+			}
+			return nil
 		}))
 	return set
+}
+
+// chunkSamples bounds the samples of one streamed payload, so that a message
+// stays far below the gRPC message limit.
+const chunkSamples = 10000
+
+// chunks splits the payload into payloads of at most n samples. The collector
+// sums the samples of a metric, so the chunks give the same metrics.
+func (p *Payload) chunks(n int) []*Payload {
+	var out []*Payload
+	for _, m := range p.Metrics {
+		for s := range slices.Chunk(m.Samples, n) {
+			out = append(out, &Payload{Metrics: []Metric{{Name: m.Name, Help: m.Help, Kind: m.Kind, Samples: s}}})
+		}
+		for s := range slices.Chunk(m.OwnerSamples, n) {
+			out = append(out, &Payload{Metrics: []Metric{{Name: m.Name, Help: m.Help, Kind: m.Kind, OwnerSamples: s}}})
+		}
+	}
+	return out
 }

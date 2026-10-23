@@ -126,10 +126,50 @@ func creators(db *gorm.DB, tbl any, kind string) (stats.Metric, error) {
 	}, nil
 }
 
+// activeByCreator counts the active shares of each creator. The samples are
+// per owner, so the collector can fold them by the creator's attributes.
+func activeByCreator(db *gorm.DB, tbl any, kind string) ([]stats.Metric, error) {
+	type row struct {
+		UIDInitiator string
+		Count        int64
+	}
+	var rows []row
+	err := db.Model(tbl).
+		Select("uid_initiator, COUNT(*) AS count").
+		Where("NOT (orphan OR orphaned_at IS NOT NULL) AND (expiration IS NULL OR expiration >= ?)", time.Now()).
+		Group("uid_initiator").
+		Find(&rows).Error
+	if err != nil {
+		return nil, err
+	}
+
+	labels := map[string]string{"kind": kind}
+	shares := stats.Metric{
+		Name: "active_shares",
+		Help: "Active shares, by kind and creator attributes.",
+		Kind: stats.KindGauge,
+	}
+	creators := stats.Metric{
+		Name: "active_share_creators",
+		Help: "Distinct users having active shares, by kind and creator attributes.",
+		Kind: stats.KindGauge,
+	}
+	for _, r := range rows {
+		// An owner sample needs an owner; keep the count of old rows without one.
+		if r.UIDInitiator == "" {
+			shares.Samples = append(shares.Samples, stats.Sample{Labels: labels, Value: float64(r.Count)})
+			continue
+		}
+		shares.OwnerSamples = append(shares.OwnerSamples, stats.OwnerSample{Owner: r.UIDInitiator, Labels: labels, Value: float64(r.Count)})
+		creators.OwnerSamples = append(creators.OwnerSamples, stats.OwnerSample{Owner: r.UIDInitiator, Labels: labels, Value: 1})
+	}
+	return []stats.Metric{shares, creators}, nil
+}
+
 // Stats implements stats.Reporter for the user/group share manager.
 func (m *ShareMgr) Stats(ctx context.Context) (*stats.Payload, error) {
 	db := m.db.WithContext(ctx)
-	p := &stats.Payload{Scope: stats.ScopeShared}
+	p := &stats.Payload{}
 
 	byDim, err := countsByDimensions(db, &model.Share{}, "share")
 	if err != nil {
@@ -195,14 +235,20 @@ func (m *ShareMgr) Stats(ctx context.Context) (*stats.Payload, error) {
 		Samples: []stats.Sample{{Value: dist.Avg}},
 	}
 
+	active, err := activeByCreator(db, &model.Share{}, "share")
+	if err != nil {
+		return nil, err
+	}
+
 	p.Metrics = append(p.Metrics, byDim, creat, recipients, perRecipientMax, perRecipientAvg)
+	p.Metrics = append(p.Metrics, active...)
 	return p, nil
 }
 
 // Stats implements stats.Reporter for the public link manager.
 func (m *PublicShareMgr) Stats(ctx context.Context) (*stats.Payload, error) {
 	db := m.db.WithContext(ctx)
-	p := &stats.Payload{Scope: stats.ScopeShared}
+	p := &stats.Payload{}
 
 	byDim, err := countsByDimensions(db, &model.PublicLink{}, "link")
 	if err != nil {
@@ -242,7 +288,13 @@ func (m *PublicShareMgr) Stats(ctx context.Context) (*stats.Payload, error) {
 		})
 	}
 
+	active, err := activeByCreator(db, &model.PublicLink{}, "link")
+	if err != nil {
+		return nil, err
+	}
+
 	p.Metrics = append(p.Metrics, byDim, creat, links)
+	p.Metrics = append(p.Metrics, active...)
 	return p, nil
 }
 

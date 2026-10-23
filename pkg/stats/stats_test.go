@@ -21,12 +21,14 @@ package stats
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"testing"
+
+	"github.com/cs3org/reva/v3/pkg/invoke"
 )
 
 func validPayload() *Payload {
 	return &Payload{
-		Scope: ScopeShared,
 		Metrics: []Metric{
 			{Name: "shares", Kind: KindGauge, Samples: []Sample{
 				{Labels: map[string]string{"status": "active"}, Value: 3},
@@ -44,7 +46,6 @@ func TestValidate(t *testing.T) {
 	}
 
 	bad := []*Payload{
-		{Scope: "wat"},
 		{Metrics: []Metric{{Name: "Bad-Name", Kind: KindGauge}}},
 		{Metrics: []Metric{{Name: "ok", Kind: "histogram"}}},
 		{Metrics: []Metric{{Name: "ok", Kind: KindGauge,
@@ -96,16 +97,53 @@ func TestNewInvokeSet(t *testing.T) {
 	if len(specs) != 1 || specs[0].Name != Invocation {
 		t.Fatalf("invocations = %+v", specs)
 	}
-	res, err := set.Invoke(context.Background(), Invocation, nil)
+	var metrics []Metric
+	err := set.InvokeStream(context.Background(), Invocation, nil, func(res invoke.Result) error {
+		data, _ := json.Marshal(res)
+		p, err := FromJSON(data)
+		if err != nil {
+			return err
+		}
+		metrics = append(metrics, p.Metrics...)
+		return nil
+	})
 	if err != nil {
 		t.Fatal(err)
 	}
-	data, _ := json.Marshal(res)
-	p, err := FromJSON(data)
-	if err != nil {
-		t.Fatal(err)
+	if len(metrics) != 2 {
+		t.Errorf("invoked metrics = %+v", metrics)
 	}
-	if p.Scope != ScopeShared || len(p.Metrics) != 2 {
-		t.Errorf("invoked payload = %+v", p)
+}
+
+func TestChunks(t *testing.T) {
+	var owners []OwnerSample
+	for i := range 25 {
+		owners = append(owners, OwnerSample{Owner: fmt.Sprintf("u%d", i), Value: 1})
+	}
+	p := &Payload{Metrics: []Metric{
+		{Name: "shares", Kind: KindGauge, Samples: []Sample{{Value: 3}}},
+		{Name: "projects", Kind: KindGauge, OwnerSamples: owners},
+	}}
+
+	chunks := p.chunks(10)
+	if len(chunks) != 4 {
+		t.Fatalf("chunks = %d, want 4 (1 for shares, 3 for projects)", len(chunks))
+	}
+	total := 0
+	for _, c := range chunks {
+		if err := c.Validate(); err != nil {
+			t.Fatal(err)
+		}
+		for _, m := range c.Metrics {
+			if n := len(m.Samples) + len(m.OwnerSamples); n > 10 {
+				t.Errorf("chunk of %s has %d samples, want at most 10", m.Name, n)
+			}
+			if m.Name == "projects" {
+				total += len(m.OwnerSamples)
+			}
+		}
+	}
+	if total != 25 {
+		t.Errorf("projects owner samples = %d, want 25", total)
 	}
 }
