@@ -222,32 +222,6 @@ func (f *fakeReceivedGateway) GetReceivedOCMShare(
 	return f.resp, nil
 }
 
-type failingResponseWriter struct {
-	header http.Header
-	status int
-	writes int
-	body   string
-}
-
-func (w *failingResponseWriter) Header() http.Header {
-	if w.header == nil {
-		w.header = make(http.Header)
-	}
-	return w.header
-}
-
-func (w *failingResponseWriter) WriteHeader(status int) {
-	if w.status == 0 {
-		w.status = status
-	}
-}
-
-func (w *failingResponseWriter) Write(p []byte) (int, error) {
-	w.writes++
-	w.body += string(p)
-	return 0, errors.New("write failed")
-}
-
 type launchGatewayResolver struct {
 	service.Clients
 	mu sync.Mutex
@@ -331,7 +305,7 @@ func newLaunchRequest(t *testing.T, filePath string) (*http.Request, *bytes.Buff
 	if filePath != "" {
 		form.Set("file", filePath)
 	}
-	req := httptest.NewRequest(http.MethodPost, "/sciencemesh/open-in-app", strings.NewReader(form.Encode()))
+	req := httptest.NewRequest(http.MethodPost, "/sciencemesh/webapp-launch", strings.NewReader(form.Encode()))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	var logs bytes.Buffer
 	logger := zerolog.New(&logs)
