@@ -72,6 +72,32 @@ applies to Reva's discovery, token exchange and WebDAV requests; it is not a
 browser application-origin allowlist. Open-in-app still requires HTTPS for
 the application URI and token endpoint.
 
+## Served launcher page
+
+`POST /sciencemesh/webapp-launch` is a protected route. It takes `file` and an
+optional `expired_session_redirect_uri`, runs the same validation, stored
+permission check, token exchange and path join as `/open-in-app`, and returns
+an HTML page that submits `access_token` to the validated app URL. The server
+keeps no handle or store. `expired_session_redirect_uri` is forwarded only when
+its origin is exactly `https://<provider_domain>`; any other value is dropped.
+
+Operator notes:
+
+- The page sets its own `Content-Security-Policy` (nonce-based `script-src`,
+  `form-action` set to the exact validated app origin; error pages use
+  `form-action 'none'`). Internationalized app hosts are posted to in their
+  ASCII form, and an app host that cannot be written as a CSP host source is
+  refused before any token exchange. The reverse-proxy edge must not
+  stamp its own CSP on this path, or the inline submit script and the form
+  post will be blocked.
+- Reva's default token chain is `["header"]` only. Deployments must set both
+  chains with `bearer`, as the checked CI and CERN `gateway.toml` configs do.
+  Inbound, the launcher request fields are read by two strategies: the token
+  strategy bearer reads `access-token` and the credential strategy bearer
+  reads `access_token`. Outbound, the served launcher form posts a different
+  `access_token`, the exchanged token, to the validated app URL. The inbound
+  and outbound `access_token` fields are separate and unrelated.
+
 ## Offer gate
 
 The provider offers a webapp method only when all four conditions hold:
@@ -233,6 +259,6 @@ This service does not implement the whole webapp profile that an
 - The browser application URI has no additional origin allowlist beyond the
   HTTPS and URI validation. Server discovery and exchange enforce the
   configured OCM network policy.
-- `expired_session_redirect_uri` session-redirect completion is not
-  implemented; this service does not perform or advertise session-redirect
-  handoff.
+- `expired_session_redirect_uri` is only forwarded by the served launcher
+  page, and only for the receiver's own origin; session-redirect completion is
+  not implemented and not advertised in discovery.

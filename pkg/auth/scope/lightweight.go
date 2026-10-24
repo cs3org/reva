@@ -134,6 +134,7 @@ func checkLightweightPath(path string) bool {
 		"/sciencemesh/delete-accepted-user",
 		"/sciencemesh/list-providers",
 		"/sciencemesh/open-in-app",
+		"/sciencemesh/webapp-launch",
 		"/sciencemesh/federations",
 		"/sciencemesh/discover",
 		"/sciencemesh/embedded-shares",
