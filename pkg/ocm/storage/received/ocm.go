@@ -21,7 +21,6 @@ package ocm
 import (
 	"bytes"
 	"context"
-	"encoding/base64"
 	"fmt"
 	"io"
 	"io/fs"
@@ -62,6 +61,10 @@ type cachedClient struct {
 	client     *gowebdav.Client
 	share      *ocmpb.ReceivedShare
 	authHeader string
+	mode       string
+	// expiresAt is the absolute expiry of an exchanged access token.
+	// Zero means the cache TTL alone decides, which is the legacy path.
+	expiresAt time.Time
 }
 
 type driver struct {
@@ -69,6 +72,7 @@ type driver struct {
 	providerDomain  string
 	ccache          *ttlcache.Cache
 	discoveryCache  *ttlcache.Cache
+	exchangeMiss    *ttlcache.Cache
 	ocmClient       *ocmd.OCMClient
 	webdavTransport http.RoundTripper
 }
@@ -114,6 +118,11 @@ func New(ctx context.Context, m map[string]any) (storage.FS, error) {
 
 	disco := ttlcache.NewCache()
 	_ = disco.SetTTL(5 * time.Minute)
+	// Hits must not extend the failure window, or a busy share would never
+	// try token exchange again.
+	miss := ttlcache.NewCache()
+	_ = miss.SetTTL(exchangeFailureTTL)
+	miss.SkipTTLExtensionOnHit(true)
 
 	timeout := time.Duration(c.OCMClientTimeout) * time.Second
 	insecure := c.OCMClientInsecure
@@ -133,6 +142,7 @@ func New(ctx context.Context, m map[string]any) (storage.FS, error) {
 		providerDomain:  c.ProviderDomain,
 		ccache:          ttlcache.NewCache(),
 		discoveryCache:  disco,
+		exchangeMiss:    miss,
 		ocmClient:       ocmd.NewPublicOnlyClientWithConfig(tcfg),
 		webdavTransport: client.NewPublicOnlyRoundTripper(tcfg),
 	}
@@ -243,40 +253,32 @@ func requiresExchange(protocols []*ocmpb.Protocol) bool {
 }
 
 func (d *driver) getTokenEndpoint(ctx context.Context, share *ocmpb.ReceivedShare) (string, error) {
-	idp := strings.TrimSpace(share.GetCreator().GetIdp())
-	if idp == "" {
-		return "", errtypes.NotFound("share has no sender idp")
-	}
-
-	if entry, err := d.discoveryCache.Get(idp); err == nil {
-		return entry.(string), nil
-	}
-
-	disco, err := d.ocmClient.Discover(ctx, idp)
+	offer, err := d.lookupSenderOffer(ctx, share)
 	if err != nil {
-		return "", errors.Wrap(err, "OCM discovery failed for "+idp)
+		return "", err
 	}
-	if disco.TokenEndPoint == "" {
+	// A negative cache entry has an empty endpoint. Strict callers still
+	// receive NotFound and never a successful empty endpoint.
+	if offer == nil || offer.tokenEndpoint == "" {
+		idp := strings.TrimSpace(share.GetCreator().GetIdp())
 		return "", errtypes.NotFound("sender discovery at " + idp + " has no tokenEndPoint")
 	}
-
-	_ = d.discoveryCache.Set(idp, disco.TokenEndPoint)
-	return disco.TokenEndPoint, nil
+	return offer.tokenEndpoint, nil
 }
 
 func isWebDAV401(err error) bool {
 	return gowebdav.IsErrCode(err, http.StatusUnauthorized)
 }
 
-func (d *driver) exchangeAccessToken(ctx context.Context, tokenEndpoint, secret string) (string, error) {
+func (d *driver) exchangeAccessToken(ctx context.Context, tokenEndpoint, secret string) (string, int64, error) {
 	if err := providerdomain.Validate(d.providerDomain); err != nil {
-		return "", err
+		return "", 0, err
 	}
-	accessToken, _, err := d.ocmClient.ExchangeToken(ctx, tokenEndpoint, secret, d.providerDomain)
+	accessToken, expiresIn, err := d.ocmClient.ExchangeToken(ctx, tokenEndpoint, secret, d.providerDomain)
 	if err != nil {
-		return "", err
+		return "", 0, err
 	}
-	return accessToken, nil
+	return accessToken, expiresIn, nil
 }
 
 func (d *driver) webdavClient(ctx context.Context, ref *provider.Reference) (*gowebdav.Client, *ocmpb.ReceivedShare, string, error) {
@@ -296,42 +298,27 @@ func (d *driver) webdavClient(ctx context.Context, ref *provider.Reference) (*go
 	}
 
 	if !requiresExchange(share.Protocols) {
-		// legacy path: check cache first
-		if entry, err := d.ccache.Get(id.OpaqueId); err == nil {
-			cc := entry.(*cachedClient)
-			log.Info().Str("shareId", cc.share.GetId().GetOpaqueId()).Str("rel", rel).Msg("accessing OCM share via cached client")
+		if cc, ok := d.takeCachedClient(id.OpaqueId); ok {
+			log.Info().
+				Str("shareId", cc.share.GetId().GetOpaqueId()).
+				Str("rel", rel).
+				Str("mode", cc.mode).
+				Msg("accessing OCM share via cached client")
 			return cc.client, cc.share, rel, nil
 		}
-
-		// build legacy client: try bearer (OCM v1.1+), then basic (OCM v1.0)
-		var c *gowebdav.Client
-		var authHdr string
-		bearerHdr := "Bearer " + secret
-		c = d.newWebDAVClient(endpoint, map[string]string{"Authorization": bearerHdr})
-		_, err = c.Stat("")
-		if errors.Is(err, client.ErrPolicyViolation) {
+		cc, err := d.resolveOpportunistic(ctx, share, endpoint, secret, id.OpaqueId)
+		if err != nil {
 			return nil, nil, "", err
 		}
-		if err != nil {
-			basicHdr := "Basic " + base64.StdEncoding.EncodeToString([]byte(secret+":"))
-			c = d.newWebDAVClient(endpoint, map[string]string{"Authorization": basicHdr})
-			_, err2 := c.Stat("")
-			if errors.Is(err2, client.ErrPolicyViolation) {
-				return nil, nil, "", err2
-			}
-			if err2 != nil {
-				log.Info().Any("former_error", err).Err(err2).Str("endpoint", endpoint).Str("shareId", share.GetId().GetOpaqueId()).Msg("failed accessing OCM share")
-				return nil, nil, "", errtypes.InvalidCredentials("error accessing OCM share: " + err2.Error())
-			}
-			authHdr = basicHdr
-			log.Info().Str("endpoint", endpoint).Str("shareId", share.GetId().GetOpaqueId()).Str("mode", "legacy").Msg("access to remote OCM share succeeded")
-		} else {
-			authHdr = bearerHdr
-			log.Info().Str("endpoint", endpoint).Str("shareId", share.GetId().GetOpaqueId()).Str("mode", "bearer").Msg("access to remote OCM share succeeded")
+		if cc != nil {
+			log.Info().
+				Str("endpoint", endpoint).
+				Str("shareId", share.GetId().GetOpaqueId()).
+				Str("mode", modeExchange).
+				Msg("auth selected for remote OCM share")
+			return cc.client, share, rel, nil
 		}
-
-		d.ccache.SetWithTTL(id.OpaqueId, &cachedClient{client: c, share: share, authHeader: authHdr}, time.Hour)
-		return c, share, rel, nil
+		return d.legacyWebDAVClient(ctx, id.OpaqueId, share, endpoint, secret, rel)
 	}
 
 	// code-flow path: exchange token every time, no cache
@@ -339,7 +326,7 @@ func (d *driver) webdavClient(ctx context.Context, ref *provider.Reference) (*go
 	if err != nil {
 		return nil, nil, "", errors.Wrap(err, "could not discover token endpoint for code-flow share")
 	}
-	accessToken, err := d.exchangeAccessToken(ctx, tokenEndpoint, secret)
+	accessToken, _, err := d.exchangeAccessToken(ctx, tokenEndpoint, secret)
 	if err != nil {
 		return nil, nil, "", errors.Wrap(err, "token exchange failed")
 	}
@@ -350,33 +337,17 @@ func (d *driver) webdavClient(ctx context.Context, ref *provider.Reference) (*go
 }
 
 // withExchangeRetry wraps a unary DAV operation (CreateDir, Delete, TouchFile).
-// On 401 it invalidates the cache, re-calls webdavClient (which re-exchanges
-// for code-flow shares), and retries once. Only a second 401 becomes
-// InvalidCredentials; other second-attempt errors keep the underlying class.
 func (d *driver) withExchangeRetry(ctx context.Context, ref *provider.Reference, fn func(*gowebdav.Client, string) error) error {
-	client, _, rel, err := d.webdavClient(ctx, ref)
-	if err != nil {
-		return err
-	}
-	if err = fn(client, rel); err == nil {
-		return nil
-	}
-	if !isWebDAV401(err) {
-		return err
-	}
-	id, _ := shareInfoFromReference(ref)
-	d.ccache.Remove(id.OpaqueId)
-	client, _, rel, err = d.webdavClient(ctx, ref)
-	if err != nil {
-		return err
-	}
-	if err = fn(client, rel); err != nil {
-		if isWebDAV401(err) {
-			return errtypes.InvalidCredentials("remote OCM access denied after token re-exchange")
-		}
-		return err
-	}
-	return nil
+	_, _, _, err := retryUnauthorized(
+		d,
+		ctx,
+		ref,
+		"remote OCM access denied after token re-exchange",
+		func(c *gowebdav.Client, rel string) (struct{}, error) {
+			return struct{}{}, fn(c, rel)
+		},
+	)
+	return err
 }
 
 func (d *driver) CreateDir(ctx context.Context, ref *provider.Reference) error {
@@ -398,39 +369,30 @@ func (d *driver) TouchFile(ctx context.Context, ref *provider.Reference) error {
 }
 
 // withExchangeMoveRetry resolves both refs, rejects cross-share moves,
-// then retries once on 401 like the unary helper.
+// then retries on 401 like the unary helper.
 func (d *driver) withExchangeMoveRetry(ctx context.Context, oldRef, newRef *provider.Reference, fn func(*gowebdav.Client, string, string) error) error {
 	oldID, _ := shareInfoFromReference(oldRef)
 	newID, relNew := shareInfoFromReference(newRef)
 	if oldID.OpaqueId != newID.OpaqueId {
 		return errtypes.BadRequest("cross-share move is not supported")
 	}
-
-	client, share, relOld, err := d.webdavClient(ctx, oldRef)
+	share, _, _, err := d.getWebDAVFromShare(ctx, oldID)
 	if err != nil {
 		return err
 	}
 	if relNew, err = resolveRelPath(share, relNew); err != nil {
 		return err
 	}
-	if err = fn(client, relOld, relNew); err == nil {
-		return nil
-	}
-	if !isWebDAV401(err) {
-		return err
-	}
-	d.ccache.Remove(oldID.OpaqueId)
-	client, _, relOld, err = d.webdavClient(ctx, oldRef)
-	if err != nil {
-		return err
-	}
-	if err = fn(client, relOld, relNew); err != nil {
-		if isWebDAV401(err) {
-			return errtypes.InvalidCredentials("remote OCM access denied after token re-exchange")
-		}
-		return err
-	}
-	return nil
+	_, _, _, err = retryUnauthorized(
+		d,
+		ctx,
+		oldRef,
+		"remote OCM access denied after token re-exchange",
+		func(c *gowebdav.Client, relOld string) (struct{}, error) {
+			return struct{}{}, fn(c, relOld, relNew)
+		},
+	)
+	return err
 }
 
 func (d *driver) Move(ctx context.Context, oldRef, newRef *provider.Reference) error {
@@ -495,31 +457,7 @@ func convertStatToResourceInfo(f fs.FileInfo, share *ocmpb.ReceivedShare, relPat
 // withExchangeStatRetry wraps a Stat-like operation with 401 retry.
 // It returns fresh share metadata after retry so callers never use stale data.
 func (d *driver) withExchangeStatRetry(ctx context.Context, ref *provider.Reference, fn func(*gowebdav.Client, string) (fs.FileInfo, error)) (fs.FileInfo, *ocmpb.ReceivedShare, string, error) {
-	client, share, rel, err := d.webdavClient(ctx, ref)
-	if err != nil {
-		return nil, nil, "", err
-	}
-	info, err := fn(client, rel)
-	if err == nil {
-		return info, share, rel, nil
-	}
-	if !isWebDAV401(err) {
-		return nil, nil, "", err
-	}
-	id, _ := shareInfoFromReference(ref)
-	d.ccache.Remove(id.OpaqueId)
-	client, share, rel, err = d.webdavClient(ctx, ref)
-	if err != nil {
-		return nil, nil, "", err
-	}
-	info, err = fn(client, rel)
-	if err != nil {
-		if isWebDAV401(err) {
-			return nil, nil, "", errtypes.InvalidCredentials("remote OCM access denied after token re-exchange")
-		}
-		return nil, nil, "", err
-	}
-	return info, share, rel, nil
+	return retryUnauthorized(d, ctx, ref, "remote OCM access denied after token re-exchange", fn)
 }
 
 func (d *driver) GetMD(ctx context.Context, ref *provider.Reference, _ []string) (*provider.ResourceInfo, error) {
@@ -539,31 +477,7 @@ func (d *driver) GetMD(ctx context.Context, ref *provider.Reference, _ []string)
 
 // withExchangeListRetry wraps a ReadDir-like operation with 401 retry.
 func (d *driver) withExchangeListRetry(ctx context.Context, ref *provider.Reference, fn func(*gowebdav.Client, string) ([]fs.FileInfo, error)) ([]fs.FileInfo, *ocmpb.ReceivedShare, string, error) {
-	client, share, rel, err := d.webdavClient(ctx, ref)
-	if err != nil {
-		return nil, nil, "", err
-	}
-	list, err := fn(client, rel)
-	if err == nil {
-		return list, share, rel, nil
-	}
-	if !isWebDAV401(err) {
-		return nil, nil, "", err
-	}
-	id, _ := shareInfoFromReference(ref)
-	d.ccache.Remove(id.OpaqueId)
-	client, share, rel, err = d.webdavClient(ctx, ref)
-	if err != nil {
-		return nil, nil, "", err
-	}
-	list, err = fn(client, rel)
-	if err != nil {
-		if isWebDAV401(err) {
-			return nil, nil, "", errtypes.InvalidCredentials("remote OCM access denied after token re-exchange")
-		}
-		return nil, nil, "", err
-	}
-	return list, share, rel, nil
+	return retryUnauthorized(d, ctx, ref, "remote OCM access denied after token re-exchange", fn)
 }
 
 func (d *driver) ListFolder(ctx context.Context, ref *provider.Reference, _ []string) ([]*provider.ResourceInfo, error) {
@@ -608,105 +522,94 @@ func (d *driver) Upload(ctx context.Context, ref *provider.Reference, r io.ReadC
 	}
 
 	id, rel := shareInfoFromReference(ref)
-	share, endpoint, secret, err := d.getWebDAVFromShare(ctx, id)
-	if err != nil {
-		return err
-	}
-	if rel, err = resolveRelPath(share, rel); err != nil {
-		return err
-	}
-	endpoint, err = url.PathUnescape(endpoint)
-	if err != nil {
-		return err
-	}
-
-	authHeader, err := d.uploadAuth(ctx, share, endpoint, secret, id)
-	if err != nil {
-		return err
-	}
-
-	err = d.uploadOnFreshClient(endpoint, authHeader, rel, bytes.NewReader(buf))
-	if err == nil {
-		return nil
-	}
-	if !isWebDAV401(err) {
-		return err
-	}
-
-	// retry once: re-derive auth (re-exchange for code-flow, same creds for legacy)
-	d.ccache.Remove(id.OpaqueId)
-	share, endpoint, secret, err = d.getWebDAVFromShare(ctx, id)
-	if err != nil {
-		return err
-	}
-	endpoint, err = url.PathUnescape(endpoint)
-	if err != nil {
-		return err
-	}
-	authHeader, err = d.uploadAuth(ctx, share, endpoint, secret, id)
-	if err != nil {
-		return err
-	}
-	if err = d.uploadOnFreshClient(endpoint, authHeader, rel, bytes.NewReader(buf)); err != nil {
-		if isWebDAV401(err) {
+	rejected := ""
+	for attempt := 0; attempt < 3; attempt++ {
+		share, endpoint, secret, err := d.getWebDAVFromShare(ctx, id)
+		if err != nil {
+			return err
+		}
+		if rel, err = resolveRelPath(share, rel); err != nil {
+			return err
+		}
+		endpoint, err = url.PathUnescape(endpoint)
+		if err != nil {
+			return err
+		}
+		if rejected == modeExchange {
+			d.rememberExchangeFailure(id.OpaqueId)
+			_ = d.ccache.Remove(id.OpaqueId)
+		}
+		authHeader, err := d.uploadAuth(ctx, share, endpoint, secret, id)
+		if err != nil {
+			return err
+		}
+		mode := d.sessionMode(id.OpaqueId, share.GetProtocols())
+		err = d.uploadOnFreshClient(endpoint, authHeader, rel, bytes.NewReader(buf))
+		if err == nil {
+			return nil
+		}
+		if !isWebDAV401(err) {
+			return err
+		}
+		// A second 401 on anything except an exchanged token, or a 401 after
+		// the legacy fallback, is an access denial.
+		gaveUp := attempt == 2 || (attempt == 1 && mode != modeExchange)
+		if gaveUp {
 			return errtypes.InvalidCredentials("remote OCM upload denied after token re-exchange")
 		}
-		return err
+		_ = d.ccache.Remove(id.OpaqueId)
+		if attempt == 1 && mode == modeExchange {
+			rejected = modeExchange
+		}
 	}
-	return nil
+	return errtypes.InvalidCredentials("remote OCM upload denied after token re-exchange")
 }
 
 // uploadAuth returns the Authorization header value for an upload attempt.
-// For code-flow shares it performs a token exchange; for legacy shares it
-// returns the cached auth header (Bearer or Basic) if available, falling
-// back to Bearer when the cache has not yet been populated.
+// Strict shares exchange a token on every call. Other shares reuse a cached
+// header, try an opportunistic exchange, then probe and cache the shared
+// secret the same way reads do.
 func (d *driver) uploadAuth(ctx context.Context, share *ocmpb.ReceivedShare, endpoint, secret string, id *ocmpb.ShareId) (string, error) {
+	log := appctx.GetLogger(ctx)
 	if requiresExchange(share.Protocols) {
 		tokenEndpoint, err := d.getTokenEndpoint(ctx, share)
 		if err != nil {
 			return "", errors.Wrap(err, "could not discover token endpoint for upload")
 		}
-		accessToken, err := d.exchangeAccessToken(ctx, tokenEndpoint, secret)
+		accessToken, _, err := d.exchangeAccessToken(ctx, tokenEndpoint, secret)
 		if err != nil {
 			return "", errors.Wrap(err, "token exchange failed for upload")
 		}
 		return "Bearer " + accessToken, nil
 	}
-	// legacy: use the auth header established during the first webdavClient probe
-	if entry, err := d.ccache.Get(id.OpaqueId); err == nil {
-		return entry.(*cachedClient).authHeader, nil
+	if cc, ok := d.takeCachedClient(id.OpaqueId); ok {
+		return cc.authHeader, nil
 	}
-	return "Bearer " + secret, nil
+	cc, err := d.resolveOpportunistic(ctx, share, endpoint, secret, id.OpaqueId)
+	if err != nil {
+		return "", err
+	}
+	if cc != nil {
+		log.Info().
+			Str("endpoint", endpoint).
+			Str("shareId", share.GetId().GetOpaqueId()).
+			Str("mode", modeExchange).
+			Msg("auth selected for remote OCM share")
+		return cc.authHeader, nil
+	}
+	cc, err = d.cacheLegacyAuth(ctx, id.OpaqueId, share, endpoint, secret)
+	if err != nil {
+		return "", err
+	}
+	return cc.authHeader, nil
 }
 
-// withExchangeDownloadOpenRetry wraps ReadStream open with a single 401 retry.
+// withExchangeDownloadOpenRetry wraps ReadStream open with retryUnauthorized
+// (re-open, re-exchange, one further legacy attempt).
 // Once a stream is returned, no mid-stream recovery is attempted.
 func (d *driver) withExchangeDownloadOpenRetry(ctx context.Context, ref *provider.Reference, fn func(*gowebdav.Client, string) (io.ReadCloser, error)) (io.ReadCloser, error) {
-	client, _, rel, err := d.webdavClient(ctx, ref)
-	if err != nil {
-		return nil, err
-	}
-	rc, err := fn(client, rel)
-	if err == nil {
-		return rc, nil
-	}
-	if !isWebDAV401(err) {
-		return nil, err
-	}
-	id, _ := shareInfoFromReference(ref)
-	d.ccache.Remove(id.OpaqueId)
-	client, _, rel, err = d.webdavClient(ctx, ref)
-	if err != nil {
-		return nil, err
-	}
-	rc, err = fn(client, rel)
-	if err != nil {
-		if isWebDAV401(err) {
-			return nil, errtypes.InvalidCredentials("remote OCM download denied after token re-exchange")
-		}
-		return nil, err
-	}
-	return rc, nil
+	rc, _, _, err := retryUnauthorized(d, ctx, ref, "remote OCM download denied after token re-exchange", fn)
+	return rc, err
 }
 
 func (d *driver) Download(ctx context.Context, ref *provider.Reference, ranges []storage.Range) (io.ReadCloser, error) {
