@@ -37,9 +37,8 @@
             "createdDateTime": "2023-11-14T22:13:20Z",
             "grantedToV2": {
               "user": {
-                "@libre.graph.userType": "Federated",
-                "displayName": "Federated User",
-                "id": "me on local.example"
+                "displayName": "",
+                "id": "me"
               }
             },
             "invitation": {
