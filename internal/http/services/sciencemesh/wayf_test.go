@@ -407,6 +407,39 @@ func TestInitRejectsMixedValueFederationCIDRs(t *testing.T) {
 	}
 }
 
+// TestInitUseEnvProxyWiring checks the WAYF public-only client. Listed
+// providers and request-supplied /discover share that client. The trusted
+// directory client keeps its environment proxy either way.
+func TestInitUseEnvProxyWiring(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name    string
+		enabled bool
+	}{
+		{name: "false", enabled: false},
+		{name: "true", enabled: true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			h := new(wayfHandler)
+			if err := h.init(&config{
+				DirectoryServiceURLs: "",
+				OCMClientUseEnvProxy: tt.enabled,
+			}); err != nil {
+				t.Fatalf("init: %v", err)
+			}
+			untrusted, ok := h.untrustedClient.(*ocmd.OCMClient)
+			if !ok || untrusted == nil {
+				t.Fatalf("untrustedClient = %T, want *ocmd.OCMClient", h.untrustedClient)
+			}
+			assertProxyMode(t, ocmClientTransport(t, untrusted), tt.enabled)
+			assertProxyFromEnvironment(t, ocmClientTransport(t, h.ocmClient))
+		})
+	}
+}
+
 func TestInitAcceptsValidFederationCIDRs(t *testing.T) {
 	t.Parallel()
 
