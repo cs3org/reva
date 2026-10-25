@@ -51,7 +51,8 @@ const (
 	NotificationClassSpec NotificationClass = "A"
 	// NotificationClassUnknown is a type without a registered contract.
 	NotificationClassUnknown NotificationClass = "C"
-	// NotificationClassMalformed is a body that is not a valid envelope.
+	// NotificationClassMalformed is an invalid envelope or the invalid payload
+	// of a registered type.
 	NotificationClassMalformed NotificationClass = "D"
 	// NotificationClassRequest is a request type that is never fulfilled.
 	NotificationClassRequest NotificationClass = "R"
