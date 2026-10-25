@@ -44,8 +44,7 @@ type envelopeCase struct {
 	HandlerCalls int             `json:"handlerCalls"`
 }
 
-// deferredEnvelopes are rows whose final expectation needs a type registered
-// later in the stack; until then the type is unknown and ignored.
+// Unregistered types are ignored, so these rows expect 201 without dispatch.
 var deferredEnvelopes = map[string]envelopeCase{
 	"ENV-039": {HTTP: 201},
 	"ENV-040": {HTTP: 201},
