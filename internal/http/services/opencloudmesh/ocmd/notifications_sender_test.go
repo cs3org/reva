@@ -550,8 +550,8 @@ func TestPostNotificationErrorQuotesNoPeerBytes(t *testing.T) {
 	}
 }
 
-// The sender is the complete host and port, lowercased only. Under the
-// host[:port] amendment a port or an IP literal is a valid sender.
+// The sender keeps its complete host and port, lowercased only.
+// Ports and IP literals are valid.
 func TestShareStateBuildCanonicalSender(t *testing.T) {
 	for in, want := range map[string]string{
 		"a.example.org":      "a.example.org",
