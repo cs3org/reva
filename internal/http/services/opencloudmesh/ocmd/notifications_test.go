@@ -141,7 +141,7 @@ func TestNotificationsReceiverMatrix(t *testing.T) {
 		{"RESHARE_UNDO is unknown", "application/json", `{"notificationType":"RESHARE_UNDO","senderDomain":"a.example.org","resourceType":"file","notification":{"file":{"providerId":"42"}}}`, 201, ""},
 		{"flat providerId only", "application/json", `{"notificationType":"SHARE_ACCEPTED","senderDomain":"b.example.org","resourceType":"file","providerId":"42","notification":{"sharedSecret":"` + receiverSecret + `"}}`, 400, reqres.APIErrorInvalidParameter},
 		{"missing senderDomain", "application/json", `{"notificationType":"USER_REMOVED","shareType":"user","notification":{"user":{"userId":"alice@a.example.org"}}}`, 400, reqres.APIErrorInvalidParameter},
-		// Under the host[:port] amendment a port is part of a valid senderDomain.
+		// senderDomain may include a port.
 		{"senderDomain with port", "application/json", `{"notificationType":"SHARE_UNSHARED","senderDomain":"a.example.org:443","resourceType":"file","notification":{"file":{"providerId":"42"}}}`, 201, ""},
 		{"senderDomain with scheme", "application/json", `{"notificationType":"SHARE_UNSHARED","senderDomain":"https://a.example.org","resourceType":"file","notification":{"file":{"providerId":"42"}}}`, 400, reqres.APIErrorInvalidParameter},
 		{"unknown type with null selector", "application/json", `{"notificationType":"EXAMPLE_FUTURE","senderDomain":"a.example.org","resourceType":null}`, 400, reqres.APIErrorInvalidParameter},
