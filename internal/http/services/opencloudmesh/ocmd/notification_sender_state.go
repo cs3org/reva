@@ -107,7 +107,7 @@ type SendResult struct {
 	Outcome SendOutcome
 	// Status is the HTTP status received, if any.
 	Status int
-	// Class is set for the recorded error classes; zero otherwise.
+	// Class is 201 for any 2xx or a defined error class; zero otherwise.
 	Class NotificationStatusClass
 	// RetryAfter is the 503 delay, up to maxRetryAfter, for diagnostics only.
 	RetryAfter time.Duration
