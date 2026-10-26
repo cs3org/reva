@@ -15,7 +15,7 @@ ticket.
 ```sh
 kinit
 reva login --method kerberos --spn HTTP/cernbox.cern.ch
-reva admin elevate
+reva elevate
 ```
 
 ## Settings
