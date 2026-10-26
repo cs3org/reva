@@ -16,11 +16,10 @@
 // granted to it by virtue of its status as an Intergovernmental Organization
 // or submit itself to any jurisdiction.
 
-// Package rversion holds reva's build/version metadata. The values are set at
-// link time on cmd/revad (see the Makefile ldflags) and mirrored here at startup
-// so any package — e.g. the `version` invocation in pkg/invoke — can report the
-// reva version without importing cmd/revad (which would be an import cycle).
-// Fields are empty in binaries built without those ldflags.
+// Package rversion holds the version of the build, for revad and for the
+// CLI. The build sets it with -X (the Makefile, tools/create-artifacts and
+// gaia), so that any package can report it without an import of a main
+// package. The fields are empty in a build without those flags.
 package rversion
 
 var (

@@ -61,17 +61,17 @@ var (
 	dirFlag     = flag.String("dev-dir", "", "runs any toml file in the specified directory. Intended for development use only")
 	pluginsFlag = flag.Bool("plugins", false, "list all the plugins and exit")
 
-	// Compile time variables initialized with gcc flags.
+	// The build sets the version in pkg/rversion. These are the variables of
+	// the older builds, which set them here.
 	gitCommit, buildDate, version, goVersion string
 )
 
-// Mirror the link-time version metadata into pkg/rversion, so packages that
-// cannot import cmd/revad (e.g. the `version` invocation) can still report it.
 func init() {
-	rversion.Version = version
-	rversion.GitCommit = gitCommit
-	rversion.BuildDate = buildDate
-	rversion.GoVersion = goVersion
+	for dst, v := range map[*string]string{&rversion.Version: version, &rversion.GitCommit: gitCommit, &rversion.BuildDate: buildDate, &rversion.GoVersion: goVersion} {
+		if v != "" {
+			*dst = v
+		}
+	}
 }
 
 var (
@@ -203,7 +203,7 @@ func getVersionString() string {
 	msg += "go_version=%s "
 	msg += "build_date=%s"
 
-	return fmt.Sprintf(msg, version, gitCommit, goVersion, buildDate)
+	return fmt.Sprintf(msg, rversion.Version, rversion.GitCommit, rversion.GoVersion, rversion.BuildDate)
 }
 
 func handleSignalFlag() {
