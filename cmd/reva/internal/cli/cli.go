@@ -78,6 +78,11 @@ type Config struct {
 		Gateway   string `toml:"gateway,omitempty" json:"gateway,omitempty"`
 		AdminHost string `toml:"admin_host,omitempty" json:"admin_host,omitempty"`
 	} `toml:"connection" json:"connection"`
+	Auth struct {
+		Kerberos struct {
+			SPN string `toml:"spn,omitempty" json:"spn,omitempty"`
+		} `toml:"kerberos,omitempty" json:"kerberos,omitzero"`
+	} `toml:"auth,omitempty" json:"auth,omitzero"`
 }
 
 // Load fills the settings that are not given as flags from the environment,
