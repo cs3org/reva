@@ -27,6 +27,7 @@ import (
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	"github.com/mitchellh/mapstructure"
 	"github.com/pkg/errors"
+	"github.com/rs/zerolog"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -150,7 +151,7 @@ func (i *interceptor) unary(unprotected []string) grpc.UnaryServerInterceptor {
 
 		ctx = appctx.ContextSetUser(ctx, u)
 		ctx = appctx.ContextSetScopes(ctx, scopes)
-		ctx = withUserLogger(ctx, u.Username)
+		ctx = withUserLogger(ctx, u.Username, scopes)
 		return handler(ctx, req)
 	}
 }
@@ -182,7 +183,7 @@ func (i *interceptor) stream(unprotected []string) grpc.StreamServerInterceptor 
 		// store user and core access token in context.
 		ctx = appctx.ContextSetUser(ctx, u)
 		ctx = appctx.ContextSetScopes(ctx, scopes)
-		ctx = withUserLogger(ctx, u.Username)
+		ctx = withUserLogger(ctx, u.Username, scopes)
 		wrapped := newWrappedServerStream(ctx, ss)
 		return handler(srv, wrapped)
 	}
@@ -207,7 +208,14 @@ func tokenError(ctx context.Context, err error) error {
 
 // withUserLogger stamps the authenticated user onto the request logger, so a
 // request's logs are searchable by user (reva admin trace -user).
-func withUserLogger(ctx context.Context, username string) context.Context {
+func withUserLogger(ctx context.Context, username string, scopes map[string]*authpb.Scope) context.Context {
+	if act := scope.Actor(scopes); act != "" {
+		// Update the request logger in place: the log interceptor holds it, and
+		// writes the request line with it when the call ends. The appctx
+		// interceptor makes one logger for each request, so no other request
+		// sees this.
+		appctx.GetLogger(ctx).UpdateContext(func(c zerolog.Context) zerolog.Context { return c.Str("act", act) })
+	}
 	l := appctx.GetLogger(ctx).With().Str("user", username).Logger()
 	return appctx.WithLogger(ctx, &l)
 }
