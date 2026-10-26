@@ -20,10 +20,257 @@ syntax = "proto3";
 
 package reva.admin.v1beta1;
 
+import "cs3/sharing/collaboration/v1beta1/resources.proto";
+import "cs3/sharing/link/v1beta1/resources.proto";
+import "cs3/types/v1beta1/types.proto";
+import "types.proto";
+
 option go_package = "github.com/cs3org/reva/v3/pkg/admin/adminpb";
 
 // SharesAdmin is the operator surface for the shares and public links of any
 // owner: fleet-wide lists, orphans, transfers, and the operations of the owner
 // fallback. Every method needs the admin scope.
+//
+// A share or a link that does not exist is NotFound. The usershareprovider and
+// the publicshareprovider do the operations, as the identity that their checks
+// accept (the initiator, then the owner). The caller never impersonates.
 service SharesAdmin {
+  // ListShares streams the shares that match the request, by id.
+  rpc ListShares(ListSharesRequest) returns (stream AdminShare);
+  // GetShare returns one share, also when it is orphaned or expired.
+  rpc GetShare(GetShareRequest) returns (AdminShare);
+  // UpdateShare changes the role or the expiration of a share.
+  rpc UpdateShare(UpdateShareRequest) returns (AdminShare);
+  // RemoveShare removes a share and its storage grant, and returns the share
+  // as it was.
+  rpc RemoveShare(RemoveShareRequest) returns (AdminShare);
+  // SyncShareExpiration removes the storage grant of an expired share now,
+  // and keeps the share.
+  rpc SyncShareExpiration(SyncShareExpirationRequest) returns (AdminShare);
+  // TransferShare gives a share to a new initiator.
+  rpc TransferShare(TransferShareRequest) returns (AdminShare);
+  // MarkShareOrphan marks a share orphaned, which hides it from users and
+  // from the reconciliation jobs.
+  rpc MarkShareOrphan(MarkShareOrphanRequest) returns (AdminShare);
+  // MoveShares points the shares and the public links under a path at the
+  // same resources under a new path, after a data move. Dangerous.
+  rpc MoveShares(MoveSharesRequest) returns (stream MovedShare);
+
+  // ListPublicLinks streams the public links that match the request, by id.
+  rpc ListPublicLinks(ListPublicLinksRequest) returns (stream AdminPublicShare);
+  // GetPublicLink returns one public link, also when it is orphaned or
+  // expired.
+  rpc GetPublicLink(GetPublicLinkRequest) returns (AdminPublicShare);
+  // UpdatePublicLink changes the role, the expiration or the password of a
+  // public link.
+  rpc UpdatePublicLink(UpdatePublicLinkRequest) returns (AdminPublicShare);
+  // RemovePublicLink removes a public link, and returns the link as it was.
+  rpc RemovePublicLink(RemovePublicLinkRequest) returns (AdminPublicShare);
+  // TransferPublicLink gives a public link to a new initiator.
+  rpc TransferPublicLink(TransferPublicLinkRequest) returns (AdminPublicShare);
+  // MarkPublicLinkOrphan marks a public link orphaned, which hides it from
+  // users and from the reconciliation jobs.
+  rpc MarkPublicLinkOrphan(MarkPublicLinkOrphanRequest) returns (AdminPublicShare);
+}
+
+// AdminShare is a share, with what CS3 cannot carry.
+message AdminShare {
+  cs3.sharing.collaboration.v1beta1.Share share = 1;
+  // orphan is true when the resource of the share is gone.
+  bool orphan = 2;
+  // path is the current path of the resource, when it was resolved.
+  string path = 3;
+  // extra has, for example, initial_path, orphaned_at and expired_at.
+  map<string, string> extra = 4;
+}
+
+// AdminPublicShare is a public link, with what CS3 cannot carry. It never
+// carries the password or its hash.
+message AdminPublicShare {
+  cs3.sharing.link.v1beta1.PublicShare public_share = 1;
+  // orphan is true when the resource of the link is gone.
+  bool orphan = 2;
+  // path is the current path of the resource, when it was resolved.
+  string path = 3;
+  bool password_protected = 4;
+  // extra has, for example, initial_path, orphaned_at and url.
+  map<string, string> extra = 5;
+}
+
+// ShareSelection tells which shares or links of a kind (orphaned, expired) a
+// list returns.
+enum ShareSelection {
+  // SHARE_SELECTION_DEFAULT is the default of the field.
+  SHARE_SELECTION_DEFAULT = 0;
+  SHARE_SELECTION_EXCLUDE = 1;
+  SHARE_SELECTION_INCLUDE = 2;
+  SHARE_SELECTION_ONLY = 3;
+}
+
+// ListSharesRequest selects shares. Give at least one of owner, initiator,
+// sharee, id, space or path: the share table is too large to read without a
+// filter. The filters are combined with AND, except id, which ignores the
+// others.
+message ListSharesRequest {
+  string owner = 1;
+  string initiator = 2;
+  // sharee is a user or a group that receives the shares.
+  string sharee = 3;
+  string id = 4;
+  SpaceRef space = 5;
+  // path selects the shares of this resource. It is resolved as the user in
+  // as, then as owner, then as initiator.
+  string path = 6;
+  // as is the user that path and the paths of the shares are resolved as. By
+  // default, the initiator, then the owner of each share.
+  string as = 7;
+  // orphans: by default, excluded.
+  ShareSelection orphans = 8;
+  // expired: by default, included.
+  ShareSelection expired = 9;
+  // resolve_paths adds the current path of each share.
+  bool resolve_paths = 10;
+}
+
+message GetShareRequest {
+  string id = 1;
+}
+
+// UpdateShareRequest gives at least one change.
+message UpdateShareRequest {
+  string id = 1;
+  // role is the new role, for example viewer or editor. Empty keeps the role.
+  string role = 2;
+  // expiration is the new expiration. Unset keeps the expiration.
+  cs3.types.v1beta1.Timestamp expiration = 3;
+  // remove_expiration removes the expiration. Do not set it with expiration.
+  bool remove_expiration = 4;
+  // fallback tells that a user command fell back to admin rights, for the
+  // audit.
+  bool fallback = 5;
+}
+
+message RemoveShareRequest {
+  string id = 1;
+  // db_only deletes the share and keeps the storage grant. A share that is
+  // orphaned is always removed so.
+  bool db_only = 2;
+  // fallback tells that a user command fell back to admin rights, for the
+  // audit.
+  bool fallback = 3;
+}
+
+message SyncShareExpirationRequest {
+  string id = 1;
+}
+
+message TransferShareRequest {
+  string id = 1;
+  // initiator is the new initiator. The storage must let this user add a
+  // grant on the resource.
+  string initiator = 2;
+}
+
+message MarkShareOrphanRequest {
+  string id = 1;
+}
+
+// MoveSharesRequest selects the shares and the public links whose resource is
+// under from_path, by its current path or, if the resource cannot be found
+// anymore, by the path at creation. Give owner, space or both: the tables are
+// too large to read without a filter. Orphans are not moved.
+message MoveSharesRequest {
+  string from_path = 1;
+  // to_path is the new path of from_path. A resource keeps its path relative
+  // to from_path.
+  string to_path = 2;
+  string owner = 3;
+  SpaceRef space = 4;
+  // as is the user that the paths are resolved as. By default, the owner,
+  // then the initiator of each share or link.
+  string as = 5;
+  // apply_grant also adds the grant of each share on its new resource.
+  bool apply_grant = 6;
+  // dry_run returns what would be moved, and changes nothing.
+  bool dry_run = 7;
+}
+
+// MovedShare is one share or public link of a MoveShares call.
+message MovedShare {
+  oneof item {
+    AdminShare share = 1;
+    AdminPublicShare public_share = 2;
+  }
+  string from_path = 3;
+  string to_path = 4;
+  // error tells why the item was not moved. The stream continues with the
+  // other items, and ends with the status of the first failure.
+  string error = 5;
+}
+
+// PublicLinkRef identifies a public link.
+message PublicLinkRef {
+  oneof ref {
+    string id = 1;
+    string token = 2;
+  }
+}
+
+// ListPublicLinksRequest selects public links. Give at least one of id,
+// token, owner, initiator or space: the link table is too large to read
+// without a filter. The filters are combined with AND, except id and token,
+// which ignore the others.
+message ListPublicLinksRequest {
+  PublicLinkRef ref = 1;
+  string owner = 2;
+  string initiator = 3;
+  SpaceRef space = 4;
+  // orphans: by default, excluded.
+  ShareSelection orphans = 5;
+  // expired: by default, included.
+  ShareSelection expired = 6;
+  // resolve_paths adds the current path of each link.
+  bool resolve_paths = 7;
+}
+
+message GetPublicLinkRequest {
+  PublicLinkRef ref = 1;
+}
+
+// UpdatePublicLinkRequest gives at least one change.
+message UpdatePublicLinkRequest {
+  PublicLinkRef ref = 1;
+  // role is viewer, uploader or editor. Empty keeps the role.
+  string role = 2;
+  // expiration is the new expiration. Unset keeps the expiration.
+  cs3.types.v1beta1.Timestamp expiration = 3;
+  // remove_expiration removes the expiration. Do not set it with expiration.
+  bool remove_expiration = 4;
+  // password is the new password. Unset keeps the password, and an empty
+  // password removes it. It is never logged nor returned.
+  optional string password = 5;
+  // fallback tells that a user command fell back to admin rights, for the
+  // audit.
+  bool fallback = 6;
+}
+
+message RemovePublicLinkRequest {
+  PublicLinkRef ref = 1;
+  // db_only deletes the link without the checks of the gateway. A link that
+  // is orphaned is always removed so.
+  bool db_only = 2;
+  // fallback tells that a user command fell back to admin rights, for the
+  // audit.
+  bool fallback = 3;
+}
+
+message TransferPublicLinkRequest {
+  PublicLinkRef ref = 1;
+  // initiator is the new initiator. The storage must let this user add a
+  // grant on the resource.
+  string initiator = 2;
+}
+
+message MarkPublicLinkOrphanRequest {
+  PublicLinkRef ref = 1;
 }

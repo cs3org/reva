@@ -581,6 +581,27 @@ pub_rw_link_max_expiration = 2592000              # 0 or unset: no rule
 public_link_base_url = "https://example.org/s/"   # unset: no url in the results
 ```
 
+### SharesAdmin
+
+`SharesAdmin` ([`shares.proto`](../../../../pkg/admin/proto/shares.proto)) is
+the typed facade over the share and link invocations. Each RPC runs one
+invocation, except:
+
+- `ListShares` and `ListPublicLinks` resolve a `SpaceRef` first: by id, or by
+  name through the `spacesregistry` `get` invocation. A path is refused, because
+  only a user can resolve it. The `ONLY` selections of `orphans` and `expired`
+  are applied to what the provider streams.
+- `MoveShares` lists the shares and the links of `owner` and/or `space` with
+  their paths, keeps those under `from_path` (by the current path, or by the
+  path at creation when the resource cannot be found), and runs `move` on each
+  one. A failure does not stop the others; the stream ends with the status of
+  the first failure. `dry_run` only lists. Orphans are not moved.
+
+The mutations write an audit line in the admin service too (for example
+`action=update_share target=share:4711 fallback=true`). A link is named by its
+id in the audit, never by its token, and a password change is only
+`password=set` or `password=removed`.
+
 ## Projects
 
 The `spacesregistry` exposes the catalogue of project spaces to operators. The

@@ -7,7 +7,10 @@
 package adminpb
 
 import (
+	context "context"
 	grpc "google.golang.org/grpc"
+	codes "google.golang.org/grpc/codes"
+	status "google.golang.org/grpc/status"
 )
 
 // This is a compile-time assertion to ensure that this generated file
@@ -19,6 +22,41 @@ const _ = grpc.SupportPackageIsVersion7
 //
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
 type SharesAdminClient interface {
+	// ListShares streams the shares that match the request, by id.
+	ListShares(ctx context.Context, in *ListSharesRequest, opts ...grpc.CallOption) (SharesAdmin_ListSharesClient, error)
+	// GetShare returns one share, also when it is orphaned or expired.
+	GetShare(ctx context.Context, in *GetShareRequest, opts ...grpc.CallOption) (*AdminShare, error)
+	// UpdateShare changes the role or the expiration of a share.
+	UpdateShare(ctx context.Context, in *UpdateShareRequest, opts ...grpc.CallOption) (*AdminShare, error)
+	// RemoveShare removes a share and its storage grant, and returns the share
+	// as it was.
+	RemoveShare(ctx context.Context, in *RemoveShareRequest, opts ...grpc.CallOption) (*AdminShare, error)
+	// SyncShareExpiration removes the storage grant of an expired share now,
+	// and keeps the share.
+	SyncShareExpiration(ctx context.Context, in *SyncShareExpirationRequest, opts ...grpc.CallOption) (*AdminShare, error)
+	// TransferShare gives a share to a new initiator.
+	TransferShare(ctx context.Context, in *TransferShareRequest, opts ...grpc.CallOption) (*AdminShare, error)
+	// MarkShareOrphan marks a share orphaned, which hides it from users and
+	// from the reconciliation jobs.
+	MarkShareOrphan(ctx context.Context, in *MarkShareOrphanRequest, opts ...grpc.CallOption) (*AdminShare, error)
+	// MoveShares points the shares and the public links under a path at the
+	// same resources under a new path, after a data move. Dangerous.
+	MoveShares(ctx context.Context, in *MoveSharesRequest, opts ...grpc.CallOption) (SharesAdmin_MoveSharesClient, error)
+	// ListPublicLinks streams the public links that match the request, by id.
+	ListPublicLinks(ctx context.Context, in *ListPublicLinksRequest, opts ...grpc.CallOption) (SharesAdmin_ListPublicLinksClient, error)
+	// GetPublicLink returns one public link, also when it is orphaned or
+	// expired.
+	GetPublicLink(ctx context.Context, in *GetPublicLinkRequest, opts ...grpc.CallOption) (*AdminPublicShare, error)
+	// UpdatePublicLink changes the role, the expiration or the password of a
+	// public link.
+	UpdatePublicLink(ctx context.Context, in *UpdatePublicLinkRequest, opts ...grpc.CallOption) (*AdminPublicShare, error)
+	// RemovePublicLink removes a public link, and returns the link as it was.
+	RemovePublicLink(ctx context.Context, in *RemovePublicLinkRequest, opts ...grpc.CallOption) (*AdminPublicShare, error)
+	// TransferPublicLink gives a public link to a new initiator.
+	TransferPublicLink(ctx context.Context, in *TransferPublicLinkRequest, opts ...grpc.CallOption) (*AdminPublicShare, error)
+	// MarkPublicLinkOrphan marks a public link orphaned, which hides it from
+	// users and from the reconciliation jobs.
+	MarkPublicLinkOrphan(ctx context.Context, in *MarkPublicLinkOrphanRequest, opts ...grpc.CallOption) (*AdminPublicShare, error)
 }
 
 type sharesAdminClient struct {
@@ -29,10 +67,240 @@ func NewSharesAdminClient(cc grpc.ClientConnInterface) SharesAdminClient {
 	return &sharesAdminClient{cc}
 }
 
+func (c *sharesAdminClient) ListShares(ctx context.Context, in *ListSharesRequest, opts ...grpc.CallOption) (SharesAdmin_ListSharesClient, error) {
+	stream, err := c.cc.NewStream(ctx, &SharesAdmin_ServiceDesc.Streams[0], "/reva.admin.v1beta1.SharesAdmin/ListShares", opts...)
+	if err != nil {
+		return nil, err
+	}
+	x := &sharesAdminListSharesClient{stream}
+	if err := x.ClientStream.SendMsg(in); err != nil {
+		return nil, err
+	}
+	if err := x.ClientStream.CloseSend(); err != nil {
+		return nil, err
+	}
+	return x, nil
+}
+
+type SharesAdmin_ListSharesClient interface {
+	Recv() (*AdminShare, error)
+	grpc.ClientStream
+}
+
+type sharesAdminListSharesClient struct {
+	grpc.ClientStream
+}
+
+func (x *sharesAdminListSharesClient) Recv() (*AdminShare, error) {
+	m := new(AdminShare)
+	if err := x.ClientStream.RecvMsg(m); err != nil {
+		return nil, err
+	}
+	return m, nil
+}
+
+func (c *sharesAdminClient) GetShare(ctx context.Context, in *GetShareRequest, opts ...grpc.CallOption) (*AdminShare, error) {
+	out := new(AdminShare)
+	err := c.cc.Invoke(ctx, "/reva.admin.v1beta1.SharesAdmin/GetShare", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *sharesAdminClient) UpdateShare(ctx context.Context, in *UpdateShareRequest, opts ...grpc.CallOption) (*AdminShare, error) {
+	out := new(AdminShare)
+	err := c.cc.Invoke(ctx, "/reva.admin.v1beta1.SharesAdmin/UpdateShare", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *sharesAdminClient) RemoveShare(ctx context.Context, in *RemoveShareRequest, opts ...grpc.CallOption) (*AdminShare, error) {
+	out := new(AdminShare)
+	err := c.cc.Invoke(ctx, "/reva.admin.v1beta1.SharesAdmin/RemoveShare", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *sharesAdminClient) SyncShareExpiration(ctx context.Context, in *SyncShareExpirationRequest, opts ...grpc.CallOption) (*AdminShare, error) {
+	out := new(AdminShare)
+	err := c.cc.Invoke(ctx, "/reva.admin.v1beta1.SharesAdmin/SyncShareExpiration", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *sharesAdminClient) TransferShare(ctx context.Context, in *TransferShareRequest, opts ...grpc.CallOption) (*AdminShare, error) {
+	out := new(AdminShare)
+	err := c.cc.Invoke(ctx, "/reva.admin.v1beta1.SharesAdmin/TransferShare", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *sharesAdminClient) MarkShareOrphan(ctx context.Context, in *MarkShareOrphanRequest, opts ...grpc.CallOption) (*AdminShare, error) {
+	out := new(AdminShare)
+	err := c.cc.Invoke(ctx, "/reva.admin.v1beta1.SharesAdmin/MarkShareOrphan", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *sharesAdminClient) MoveShares(ctx context.Context, in *MoveSharesRequest, opts ...grpc.CallOption) (SharesAdmin_MoveSharesClient, error) {
+	stream, err := c.cc.NewStream(ctx, &SharesAdmin_ServiceDesc.Streams[1], "/reva.admin.v1beta1.SharesAdmin/MoveShares", opts...)
+	if err != nil {
+		return nil, err
+	}
+	x := &sharesAdminMoveSharesClient{stream}
+	if err := x.ClientStream.SendMsg(in); err != nil {
+		return nil, err
+	}
+	if err := x.ClientStream.CloseSend(); err != nil {
+		return nil, err
+	}
+	return x, nil
+}
+
+type SharesAdmin_MoveSharesClient interface {
+	Recv() (*MovedShare, error)
+	grpc.ClientStream
+}
+
+type sharesAdminMoveSharesClient struct {
+	grpc.ClientStream
+}
+
+func (x *sharesAdminMoveSharesClient) Recv() (*MovedShare, error) {
+	m := new(MovedShare)
+	if err := x.ClientStream.RecvMsg(m); err != nil {
+		return nil, err
+	}
+	return m, nil
+}
+
+func (c *sharesAdminClient) ListPublicLinks(ctx context.Context, in *ListPublicLinksRequest, opts ...grpc.CallOption) (SharesAdmin_ListPublicLinksClient, error) {
+	stream, err := c.cc.NewStream(ctx, &SharesAdmin_ServiceDesc.Streams[2], "/reva.admin.v1beta1.SharesAdmin/ListPublicLinks", opts...)
+	if err != nil {
+		return nil, err
+	}
+	x := &sharesAdminListPublicLinksClient{stream}
+	if err := x.ClientStream.SendMsg(in); err != nil {
+		return nil, err
+	}
+	if err := x.ClientStream.CloseSend(); err != nil {
+		return nil, err
+	}
+	return x, nil
+}
+
+type SharesAdmin_ListPublicLinksClient interface {
+	Recv() (*AdminPublicShare, error)
+	grpc.ClientStream
+}
+
+type sharesAdminListPublicLinksClient struct {
+	grpc.ClientStream
+}
+
+func (x *sharesAdminListPublicLinksClient) Recv() (*AdminPublicShare, error) {
+	m := new(AdminPublicShare)
+	if err := x.ClientStream.RecvMsg(m); err != nil {
+		return nil, err
+	}
+	return m, nil
+}
+
+func (c *sharesAdminClient) GetPublicLink(ctx context.Context, in *GetPublicLinkRequest, opts ...grpc.CallOption) (*AdminPublicShare, error) {
+	out := new(AdminPublicShare)
+	err := c.cc.Invoke(ctx, "/reva.admin.v1beta1.SharesAdmin/GetPublicLink", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *sharesAdminClient) UpdatePublicLink(ctx context.Context, in *UpdatePublicLinkRequest, opts ...grpc.CallOption) (*AdminPublicShare, error) {
+	out := new(AdminPublicShare)
+	err := c.cc.Invoke(ctx, "/reva.admin.v1beta1.SharesAdmin/UpdatePublicLink", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *sharesAdminClient) RemovePublicLink(ctx context.Context, in *RemovePublicLinkRequest, opts ...grpc.CallOption) (*AdminPublicShare, error) {
+	out := new(AdminPublicShare)
+	err := c.cc.Invoke(ctx, "/reva.admin.v1beta1.SharesAdmin/RemovePublicLink", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *sharesAdminClient) TransferPublicLink(ctx context.Context, in *TransferPublicLinkRequest, opts ...grpc.CallOption) (*AdminPublicShare, error) {
+	out := new(AdminPublicShare)
+	err := c.cc.Invoke(ctx, "/reva.admin.v1beta1.SharesAdmin/TransferPublicLink", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *sharesAdminClient) MarkPublicLinkOrphan(ctx context.Context, in *MarkPublicLinkOrphanRequest, opts ...grpc.CallOption) (*AdminPublicShare, error) {
+	out := new(AdminPublicShare)
+	err := c.cc.Invoke(ctx, "/reva.admin.v1beta1.SharesAdmin/MarkPublicLinkOrphan", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // SharesAdminServer is the server API for SharesAdmin service.
 // All implementations must embed UnimplementedSharesAdminServer
 // for forward compatibility
 type SharesAdminServer interface {
+	// ListShares streams the shares that match the request, by id.
+	ListShares(*ListSharesRequest, SharesAdmin_ListSharesServer) error
+	// GetShare returns one share, also when it is orphaned or expired.
+	GetShare(context.Context, *GetShareRequest) (*AdminShare, error)
+	// UpdateShare changes the role or the expiration of a share.
+	UpdateShare(context.Context, *UpdateShareRequest) (*AdminShare, error)
+	// RemoveShare removes a share and its storage grant, and returns the share
+	// as it was.
+	RemoveShare(context.Context, *RemoveShareRequest) (*AdminShare, error)
+	// SyncShareExpiration removes the storage grant of an expired share now,
+	// and keeps the share.
+	SyncShareExpiration(context.Context, *SyncShareExpirationRequest) (*AdminShare, error)
+	// TransferShare gives a share to a new initiator.
+	TransferShare(context.Context, *TransferShareRequest) (*AdminShare, error)
+	// MarkShareOrphan marks a share orphaned, which hides it from users and
+	// from the reconciliation jobs.
+	MarkShareOrphan(context.Context, *MarkShareOrphanRequest) (*AdminShare, error)
+	// MoveShares points the shares and the public links under a path at the
+	// same resources under a new path, after a data move. Dangerous.
+	MoveShares(*MoveSharesRequest, SharesAdmin_MoveSharesServer) error
+	// ListPublicLinks streams the public links that match the request, by id.
+	ListPublicLinks(*ListPublicLinksRequest, SharesAdmin_ListPublicLinksServer) error
+	// GetPublicLink returns one public link, also when it is orphaned or
+	// expired.
+	GetPublicLink(context.Context, *GetPublicLinkRequest) (*AdminPublicShare, error)
+	// UpdatePublicLink changes the role, the expiration or the password of a
+	// public link.
+	UpdatePublicLink(context.Context, *UpdatePublicLinkRequest) (*AdminPublicShare, error)
+	// RemovePublicLink removes a public link, and returns the link as it was.
+	RemovePublicLink(context.Context, *RemovePublicLinkRequest) (*AdminPublicShare, error)
+	// TransferPublicLink gives a public link to a new initiator.
+	TransferPublicLink(context.Context, *TransferPublicLinkRequest) (*AdminPublicShare, error)
+	// MarkPublicLinkOrphan marks a public link orphaned, which hides it from
+	// users and from the reconciliation jobs.
+	MarkPublicLinkOrphan(context.Context, *MarkPublicLinkOrphanRequest) (*AdminPublicShare, error)
 	mustEmbedUnimplementedSharesAdminServer()
 }
 
@@ -40,6 +308,48 @@ type SharesAdminServer interface {
 type UnimplementedSharesAdminServer struct {
 }
 
+func (UnimplementedSharesAdminServer) ListShares(*ListSharesRequest, SharesAdmin_ListSharesServer) error {
+	return status.Errorf(codes.Unimplemented, "method ListShares not implemented")
+}
+func (UnimplementedSharesAdminServer) GetShare(context.Context, *GetShareRequest) (*AdminShare, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method GetShare not implemented")
+}
+func (UnimplementedSharesAdminServer) UpdateShare(context.Context, *UpdateShareRequest) (*AdminShare, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method UpdateShare not implemented")
+}
+func (UnimplementedSharesAdminServer) RemoveShare(context.Context, *RemoveShareRequest) (*AdminShare, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method RemoveShare not implemented")
+}
+func (UnimplementedSharesAdminServer) SyncShareExpiration(context.Context, *SyncShareExpirationRequest) (*AdminShare, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method SyncShareExpiration not implemented")
+}
+func (UnimplementedSharesAdminServer) TransferShare(context.Context, *TransferShareRequest) (*AdminShare, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method TransferShare not implemented")
+}
+func (UnimplementedSharesAdminServer) MarkShareOrphan(context.Context, *MarkShareOrphanRequest) (*AdminShare, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method MarkShareOrphan not implemented")
+}
+func (UnimplementedSharesAdminServer) MoveShares(*MoveSharesRequest, SharesAdmin_MoveSharesServer) error {
+	return status.Errorf(codes.Unimplemented, "method MoveShares not implemented")
+}
+func (UnimplementedSharesAdminServer) ListPublicLinks(*ListPublicLinksRequest, SharesAdmin_ListPublicLinksServer) error {
+	return status.Errorf(codes.Unimplemented, "method ListPublicLinks not implemented")
+}
+func (UnimplementedSharesAdminServer) GetPublicLink(context.Context, *GetPublicLinkRequest) (*AdminPublicShare, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method GetPublicLink not implemented")
+}
+func (UnimplementedSharesAdminServer) UpdatePublicLink(context.Context, *UpdatePublicLinkRequest) (*AdminPublicShare, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method UpdatePublicLink not implemented")
+}
+func (UnimplementedSharesAdminServer) RemovePublicLink(context.Context, *RemovePublicLinkRequest) (*AdminPublicShare, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method RemovePublicLink not implemented")
+}
+func (UnimplementedSharesAdminServer) TransferPublicLink(context.Context, *TransferPublicLinkRequest) (*AdminPublicShare, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method TransferPublicLink not implemented")
+}
+func (UnimplementedSharesAdminServer) MarkPublicLinkOrphan(context.Context, *MarkPublicLinkOrphanRequest) (*AdminPublicShare, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method MarkPublicLinkOrphan not implemented")
+}
 func (UnimplementedSharesAdminServer) mustEmbedUnimplementedSharesAdminServer() {}
 
 // UnsafeSharesAdminServer may be embedded to opt out of forward compatibility for this service.
@@ -53,13 +363,335 @@ func RegisterSharesAdminServer(s grpc.ServiceRegistrar, srv SharesAdminServer) {
 	s.RegisterService(&SharesAdmin_ServiceDesc, srv)
 }
 
+func _SharesAdmin_ListShares_Handler(srv interface{}, stream grpc.ServerStream) error {
+	m := new(ListSharesRequest)
+	if err := stream.RecvMsg(m); err != nil {
+		return err
+	}
+	return srv.(SharesAdminServer).ListShares(m, &sharesAdminListSharesServer{stream})
+}
+
+type SharesAdmin_ListSharesServer interface {
+	Send(*AdminShare) error
+	grpc.ServerStream
+}
+
+type sharesAdminListSharesServer struct {
+	grpc.ServerStream
+}
+
+func (x *sharesAdminListSharesServer) Send(m *AdminShare) error {
+	return x.ServerStream.SendMsg(m)
+}
+
+func _SharesAdmin_GetShare_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetShareRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(SharesAdminServer).GetShare(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/reva.admin.v1beta1.SharesAdmin/GetShare",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(SharesAdminServer).GetShare(ctx, req.(*GetShareRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _SharesAdmin_UpdateShare_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(UpdateShareRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(SharesAdminServer).UpdateShare(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/reva.admin.v1beta1.SharesAdmin/UpdateShare",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(SharesAdminServer).UpdateShare(ctx, req.(*UpdateShareRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _SharesAdmin_RemoveShare_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(RemoveShareRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(SharesAdminServer).RemoveShare(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/reva.admin.v1beta1.SharesAdmin/RemoveShare",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(SharesAdminServer).RemoveShare(ctx, req.(*RemoveShareRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _SharesAdmin_SyncShareExpiration_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(SyncShareExpirationRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(SharesAdminServer).SyncShareExpiration(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/reva.admin.v1beta1.SharesAdmin/SyncShareExpiration",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(SharesAdminServer).SyncShareExpiration(ctx, req.(*SyncShareExpirationRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _SharesAdmin_TransferShare_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(TransferShareRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(SharesAdminServer).TransferShare(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/reva.admin.v1beta1.SharesAdmin/TransferShare",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(SharesAdminServer).TransferShare(ctx, req.(*TransferShareRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _SharesAdmin_MarkShareOrphan_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(MarkShareOrphanRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(SharesAdminServer).MarkShareOrphan(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/reva.admin.v1beta1.SharesAdmin/MarkShareOrphan",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(SharesAdminServer).MarkShareOrphan(ctx, req.(*MarkShareOrphanRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _SharesAdmin_MoveShares_Handler(srv interface{}, stream grpc.ServerStream) error {
+	m := new(MoveSharesRequest)
+	if err := stream.RecvMsg(m); err != nil {
+		return err
+	}
+	return srv.(SharesAdminServer).MoveShares(m, &sharesAdminMoveSharesServer{stream})
+}
+
+type SharesAdmin_MoveSharesServer interface {
+	Send(*MovedShare) error
+	grpc.ServerStream
+}
+
+type sharesAdminMoveSharesServer struct {
+	grpc.ServerStream
+}
+
+func (x *sharesAdminMoveSharesServer) Send(m *MovedShare) error {
+	return x.ServerStream.SendMsg(m)
+}
+
+func _SharesAdmin_ListPublicLinks_Handler(srv interface{}, stream grpc.ServerStream) error {
+	m := new(ListPublicLinksRequest)
+	if err := stream.RecvMsg(m); err != nil {
+		return err
+	}
+	return srv.(SharesAdminServer).ListPublicLinks(m, &sharesAdminListPublicLinksServer{stream})
+}
+
+type SharesAdmin_ListPublicLinksServer interface {
+	Send(*AdminPublicShare) error
+	grpc.ServerStream
+}
+
+type sharesAdminListPublicLinksServer struct {
+	grpc.ServerStream
+}
+
+func (x *sharesAdminListPublicLinksServer) Send(m *AdminPublicShare) error {
+	return x.ServerStream.SendMsg(m)
+}
+
+func _SharesAdmin_GetPublicLink_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetPublicLinkRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(SharesAdminServer).GetPublicLink(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/reva.admin.v1beta1.SharesAdmin/GetPublicLink",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(SharesAdminServer).GetPublicLink(ctx, req.(*GetPublicLinkRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _SharesAdmin_UpdatePublicLink_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(UpdatePublicLinkRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(SharesAdminServer).UpdatePublicLink(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/reva.admin.v1beta1.SharesAdmin/UpdatePublicLink",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(SharesAdminServer).UpdatePublicLink(ctx, req.(*UpdatePublicLinkRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _SharesAdmin_RemovePublicLink_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(RemovePublicLinkRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(SharesAdminServer).RemovePublicLink(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/reva.admin.v1beta1.SharesAdmin/RemovePublicLink",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(SharesAdminServer).RemovePublicLink(ctx, req.(*RemovePublicLinkRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _SharesAdmin_TransferPublicLink_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(TransferPublicLinkRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(SharesAdminServer).TransferPublicLink(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/reva.admin.v1beta1.SharesAdmin/TransferPublicLink",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(SharesAdminServer).TransferPublicLink(ctx, req.(*TransferPublicLinkRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _SharesAdmin_MarkPublicLinkOrphan_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(MarkPublicLinkOrphanRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(SharesAdminServer).MarkPublicLinkOrphan(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/reva.admin.v1beta1.SharesAdmin/MarkPublicLinkOrphan",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(SharesAdminServer).MarkPublicLinkOrphan(ctx, req.(*MarkPublicLinkOrphanRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // SharesAdmin_ServiceDesc is the grpc.ServiceDesc for SharesAdmin service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
 var SharesAdmin_ServiceDesc = grpc.ServiceDesc{
 	ServiceName: "reva.admin.v1beta1.SharesAdmin",
 	HandlerType: (*SharesAdminServer)(nil),
-	Methods:     []grpc.MethodDesc{},
-	Streams:     []grpc.StreamDesc{},
-	Metadata:    "shares.proto",
+	Methods: []grpc.MethodDesc{
+		{
+			MethodName: "GetShare",
+			Handler:    _SharesAdmin_GetShare_Handler,
+		},
+		{
+			MethodName: "UpdateShare",
+			Handler:    _SharesAdmin_UpdateShare_Handler,
+		},
+		{
+			MethodName: "RemoveShare",
+			Handler:    _SharesAdmin_RemoveShare_Handler,
+		},
+		{
+			MethodName: "SyncShareExpiration",
+			Handler:    _SharesAdmin_SyncShareExpiration_Handler,
+		},
+		{
+			MethodName: "TransferShare",
+			Handler:    _SharesAdmin_TransferShare_Handler,
+		},
+		{
+			MethodName: "MarkShareOrphan",
+			Handler:    _SharesAdmin_MarkShareOrphan_Handler,
+		},
+		{
+			MethodName: "GetPublicLink",
+			Handler:    _SharesAdmin_GetPublicLink_Handler,
+		},
+		{
+			MethodName: "UpdatePublicLink",
+			Handler:    _SharesAdmin_UpdatePublicLink_Handler,
+		},
+		{
+			MethodName: "RemovePublicLink",
+			Handler:    _SharesAdmin_RemovePublicLink_Handler,
+		},
+		{
+			MethodName: "TransferPublicLink",
+			Handler:    _SharesAdmin_TransferPublicLink_Handler,
+		},
+		{
+			MethodName: "MarkPublicLinkOrphan",
+			Handler:    _SharesAdmin_MarkPublicLinkOrphan_Handler,
+		},
+	},
+	Streams: []grpc.StreamDesc{
+		{
+			StreamName:    "ListShares",
+			Handler:       _SharesAdmin_ListShares_Handler,
+			ServerStreams: true,
+		},
+		{
+			StreamName:    "MoveShares",
+			Handler:       _SharesAdmin_MoveShares_Handler,
+			ServerStreams: true,
+		},
+		{
+			StreamName:    "ListPublicLinks",
+			Handler:       _SharesAdmin_ListPublicLinks_Handler,
+			ServerStreams: true,
+		},
+	},
+	Metadata: "shares.proto",
 }
