@@ -988,7 +988,7 @@ func TestShallowOnDemandRejectsUnknownParams(t *testing.T) {
 func TestShallowOnDemandTakesAdminParams(t *testing.T) {
 	_, grants, job := twoSpaces()
 
-	// what "reva admin jobs run reconciliation.shallow space=space-b" sends: a
+	// what "reva job run reconciliation.shallow space=space-b" sends: a
 	// string map, marshalled and unmarshalled on the way to the runner.
 	raw, err := json.Marshal(map[string]string{"space": "space-b"})
 	if err != nil {

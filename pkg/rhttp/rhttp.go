@@ -63,7 +63,7 @@ func WithLogger(log zerolog.Logger) Config {
 }
 
 // WithActivityCounters sets this server's per-service request counters (keyed by
-// service name), shared with the services' invoke instances so `admin services
+// service name), shared with the services' invoke instances so `reva service
 // activity` reports live numbers.
 func WithActivityCounters(counters map[string]*activity.Counter) Config {
 	return func(s *Server) {
@@ -321,7 +321,7 @@ func (s *Server) withServiceLogger(r *http.Request, prefix string) *http.Request
 
 // enterActivity records an in-flight request against the service owning the
 // routed prefix, returning the completion func to run when it finishes (nil if
-// the prefix maps to no known service). Feeds `admin services activity`.
+// the prefix maps to no known service). Feeds `reva service activity`.
 func (s *Server) enterActivity(prefix string) func() {
 	if name, ok := s.svcNames[prefix]; ok {
 		// HTTP has no per-method breakdown yet: count toward the aggregate only.

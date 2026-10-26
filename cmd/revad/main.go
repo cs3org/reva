@@ -390,7 +390,7 @@ func newLogger(conf *config.Log) (*zerolog.Logger, error) {
 		return nil, err
 	}
 
-	// Tee recent events into the in-memory ring `reva admin logs` reads.
+	// Tee recent events into the in-memory ring `reva logs` reads.
 	buf := logtail.New(conf.Tail)
 	logtail.SetDefault(buf)
 	var tap io.Writer
