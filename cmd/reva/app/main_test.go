@@ -16,12 +16,12 @@
 // granted to it by virtue of its status as an Intergovernmental Organization
 // or submit itself to any jurisdiction.
 
-package main
+package revacmd
 
 import (
 	"testing"
 
-	"github.com/cs3org/reva/v3/cmd/reva/internal/cli"
+	"github.com/cs3org/reva/v3/pkg/cli"
 	"github.com/spf13/cobra"
 )
 

@@ -16,7 +16,7 @@
 // granted to it by virtue of its status as an Intergovernmental Organization
 // or submit itself to any jurisdiction.
 
-package main
+package revacmd
 
 import (
 	"cmp"
@@ -37,8 +37,8 @@ import (
 	ocm "github.com/cs3org/go-cs3apis/cs3/sharing/ocm/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	types "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
-	"github.com/cs3org/reva/v3/cmd/reva/internal/cli"
 	"github.com/cs3org/reva/v3/pkg/appctx"
+	"github.com/cs3org/reva/v3/pkg/cli"
 	ocmshare "github.com/cs3org/reva/v3/pkg/ocm/share"
 	"github.com/cs3org/reva/v3/pkg/utils"
 	"github.com/jedib0t/go-pretty/table"

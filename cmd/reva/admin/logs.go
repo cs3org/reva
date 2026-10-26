@@ -30,8 +30,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/cs3org/reva/v3/cmd/reva/internal/cli"
 	"github.com/cs3org/reva/v3/pkg/admin/adminpb"
+	"github.com/cs3org/reva/v3/pkg/cli"
 	"github.com/spf13/cobra"
 )
 
@@ -64,9 +64,9 @@ func logsCommand() *cobra.Command {
 			// so label lines with their node in that case.
 			multi := !strings.Contains(selector, "/") || strings.Contains(selector, "[")
 			if follow {
-				return followLogs(ctx, client, selector, args, rt.Output, multi)
+				return followLogs(ctx, client, selector, args, rt.Output(), multi)
 			}
-			return snapshotLogs(ctx, client, selector, args, rt.Output, multi)
+			return snapshotLogs(ctx, client, selector, args, rt.Output(), multi)
 		},
 	}
 	cmd.Flags().BoolVarP(&follow, "follow", "f", false, "stream new lines until interrupted")

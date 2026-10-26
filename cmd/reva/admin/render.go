@@ -26,8 +26,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/cs3org/reva/v3/cmd/reva/internal/cli"
 	"github.com/cs3org/reva/v3/pkg/admin/adminpb"
+	"github.com/cs3org/reva/v3/pkg/cli"
 	"github.com/jedib0t/go-pretty/table"
 	"github.com/jedib0t/go-pretty/text"
 )

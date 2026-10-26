@@ -103,14 +103,14 @@ func (f *fakeAdmin) Impersonate(ctx context.Context, req *adminpb.ImpersonateReq
 	return &adminpb.ImpersonateResponse{Token: "impersonated-" + req.User}, nil
 }
 
-func serve(t *testing.T, lis net.Listener, f *fakeAdmin) {
+func serve(t *testing.T, lis net.Listener, f adminpb.AdminAPIServer) {
 	s := grpc.NewServer()
 	adminpb.RegisterAdminAPIServer(s, f)
 	go func() { _ = s.Serve(lis) }()
 	t.Cleanup(s.Stop)
 }
 
-func serveTCP(t *testing.T, f *fakeAdmin) string {
+func serveTCP(t *testing.T, f adminpb.AdminAPIServer) string {
 	lis, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
 		t.Fatal(err)
@@ -158,7 +158,7 @@ func TestAdminPrefersTheSocket(t *testing.T) {
 	socketPaths = func() []string { return []string{filepath.Join(dir, "missing.sock"), sock} }
 
 	login := token(t, "alice", time.Now().Add(time.Hour))
-	rt := &Runtime{AdminHost: host, Insecure: true, TokenValue: login}
+	rt := &Runtime{adminHost: host, insecure: true, tokenValue: login}
 	defer rt.Close()
 	c, ctx, err := rt.Admin(WithToken(context.Background(), login))
 	if err != nil {
@@ -184,7 +184,7 @@ func TestAdminPrefersTheSocket(t *testing.T) {
 func TestStepUpStaysInMemory(t *testing.T) {
 	dir := setup(t)
 	f := &fakeAdmin{adminToken: token(t, "alice", time.Now().Add(15*time.Minute))}
-	rt := &Runtime{AdminHost: serveTCP(t, f), Insecure: true, TokenValue: token(t, "alice", time.Now().Add(time.Hour))}
+	rt := &Runtime{adminHost: serveTCP(t, f), insecure: true, tokenValue: token(t, "alice", time.Now().Add(time.Hour))}
 	defer rt.Close()
 
 	if got := rt.AdminState(context.Background()); got != "no" {
@@ -219,7 +219,7 @@ func TestOnlyElevatePersists(t *testing.T) {
 	host := serveTCP(t, f)
 	login := token(t, "alice", time.Now().Add(time.Hour))
 
-	rt := &Runtime{AdminHost: host, Insecure: true, TokenValue: login}
+	rt := &Runtime{adminHost: host, insecure: true, tokenValue: login}
 	exp, err := rt.Elevate(context.Background())
 	rt.Close()
 	if err != nil {
@@ -233,7 +233,7 @@ func TestOnlyElevatePersists(t *testing.T) {
 	}
 
 	// The same login uses the stored token.
-	rt = &Runtime{AdminHost: host, Insecure: true, TokenValue: login}
+	rt = &Runtime{adminHost: host, insecure: true, tokenValue: login}
 	if _, _, err := rt.Admin(context.Background()); err != nil {
 		t.Fatal(err)
 	}
@@ -243,7 +243,7 @@ func TestOnlyElevatePersists(t *testing.T) {
 	}
 
 	// Another login does not.
-	rt = &Runtime{AdminHost: host, Insecure: true, TokenValue: token(t, "bob", time.Now().Add(2*time.Hour))}
+	rt = &Runtime{adminHost: host, insecure: true, tokenValue: token(t, "bob", time.Now().Add(2*time.Hour))}
 	if _, _, err := rt.Admin(context.Background()); err != nil {
 		t.Fatal(err)
 	}
@@ -258,12 +258,12 @@ func TestExpiredStoredAdminTokenIsNotUsed(t *testing.T) {
 	f := &fakeAdmin{adminToken: token(t, "alice", time.Now().Add(-time.Minute))}
 	host := serveTCP(t, f)
 	login := token(t, "alice", time.Now().Add(time.Hour))
-	rt := &Runtime{AdminHost: host, Insecure: true, TokenValue: login}
+	rt := &Runtime{adminHost: host, insecure: true, tokenValue: login}
 	if _, err := rt.Elevate(context.Background()); err != nil {
 		t.Fatal(err)
 	}
 	rt.Close()
-	rt = &Runtime{AdminHost: host, Insecure: true, TokenValue: login}
+	rt = &Runtime{adminHost: host, insecure: true, tokenValue: login}
 	defer rt.Close()
 	if got := rt.AdminState(context.Background()); got != "no" {
 		t.Errorf("admin state with an expired token = %q", got)
@@ -280,7 +280,7 @@ func TestNoElevate(t *testing.T) {
 	setup(t)
 	f := &fakeAdmin{adminToken: token(t, "alice", time.Now().Add(time.Hour))}
 	_, routeAdd, _ := tree()
-	rt := &Runtime{AdminHost: serveTCP(t, f), Insecure: true, TokenValue: token(t, "alice", time.Now().Add(time.Hour)), NoElevate: true}
+	rt := &Runtime{adminHost: serveTCP(t, f), insecure: true, tokenValue: token(t, "alice", time.Now().Add(time.Hour)), noElevate: true}
 	defer rt.Close()
 	if err := rt.SelectPlane(routeAdd); err != nil {
 		t.Fatal(err)
@@ -298,7 +298,7 @@ func TestAdminHeaders(t *testing.T) {
 	setup(t)
 	t.Setenv("SUDO_USER", "gdelmont")
 	f := &fakeAdmin{adminToken: token(t, "alice", time.Now().Add(time.Hour))}
-	rt := &Runtime{AdminHost: serveTCP(t, f), Insecure: true, TokenValue: token(t, "alice", time.Now().Add(time.Hour)), Reason: "INC0042"}
+	rt := &Runtime{adminHost: serveTCP(t, f), insecure: true, tokenValue: token(t, "alice", time.Now().Add(time.Hour)), reason: "INC0042"}
 	defer rt.Close()
 	c, ctx, err := rt.Admin(context.Background())
 	if err != nil {
@@ -321,7 +321,7 @@ func TestAs(t *testing.T) {
 	setup(t)
 	f := &fakeAdmin{adminToken: token(t, "alice", time.Now().Add(time.Hour)), isAdmin: true}
 	login := token(t, "alice", time.Now().Add(time.Hour))
-	rt := &Runtime{AdminHost: serveTCP(t, f), Insecure: true, TokenValue: login, As: "bob", Reason: "INC0042"}
+	rt := &Runtime{adminHost: serveTCP(t, f), insecure: true, tokenValue: login, as: "bob", reason: "INC0042"}
 	defer rt.Close()
 	for range 2 {
 		got, err := rt.Token(context.Background())
@@ -341,13 +341,13 @@ func TestAs(t *testing.T) {
 	if got := f.header("Impersonate", appctx.TokenHeader); got != f.adminToken {
 		t.Errorf("Impersonate without the admin token: %q", got)
 	}
-	if got, _ := rt.LoginToken(context.Background()); got != login {
+	if got, _ := rt.loginToken(context.Background()); got != login {
 		t.Errorf("the login token changed")
 	}
 	if rt.CanAdmin(context.Background()) || f.checkAdmin != 0 {
 		t.Errorf("the owner fallback is on under --as")
 	}
-	rt.As = ""
+	rt.as = ""
 	if !rt.CanAdmin(context.Background()) {
 		t.Errorf("an admin cannot be admin")
 	}
@@ -356,7 +356,7 @@ func TestAs(t *testing.T) {
 func TestCanAdminAsksTheServer(t *testing.T) {
 	setup(t)
 	f := &fakeAdmin{}
-	rt := &Runtime{AdminHost: serveTCP(t, f), Insecure: true, TokenValue: token(t, "alice", time.Now().Add(time.Hour))}
+	rt := &Runtime{adminHost: serveTCP(t, f), insecure: true, tokenValue: token(t, "alice", time.Now().Add(time.Hour))}
 	defer rt.Close()
 	if rt.CanAdmin(context.Background()) {
 		t.Error("a non-admin can be admin")
@@ -413,10 +413,10 @@ func TestConfirmWithoutTerminal(t *testing.T) {
 	if err := (&Runtime{}).Confirm("remove"); err == nil || !strings.Contains(err.Error(), "--yes") {
 		t.Errorf("a script confirmed without --yes: %v", err)
 	}
-	if err := (&Runtime{Yes: true}).Confirm("remove"); err != nil {
+	if err := (&Runtime{yes: true}).Confirm("remove"); err != nil {
 		t.Errorf("--yes: %v", err)
 	}
-	if err := (&Runtime{As: "bob"}).ConfirmMutation("reva rm /x"); err == nil {
+	if err := (&Runtime{as: "bob"}).ConfirmMutation("reva rm /x"); err == nil {
 		t.Errorf("a mutation under --as ran without a confirmation")
 	}
 	if err := (&Runtime{}).ConfirmMutation("reva rm /x"); err != nil {

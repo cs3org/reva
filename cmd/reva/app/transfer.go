@@ -16,7 +16,7 @@
 // granted to it by virtue of its status as an Intergovernmental Organization
 // or submit itself to any jurisdiction.
 
-package main
+package revacmd
 
 import (
 	"context"
@@ -27,7 +27,7 @@ import (
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	ocm "github.com/cs3org/go-cs3apis/cs3/sharing/ocm/v1beta1"
 	datatx "github.com/cs3org/go-cs3apis/cs3/tx/v1beta1"
-	"github.com/cs3org/reva/v3/cmd/reva/internal/cli"
+	"github.com/cs3org/reva/v3/pkg/cli"
 	"github.com/jedib0t/go-pretty/table"
 	"github.com/spf13/cobra"
 )

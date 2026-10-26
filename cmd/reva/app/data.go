@@ -16,7 +16,7 @@
 // granted to it by virtue of its status as an Intergovernmental Organization
 // or submit itself to any jurisdiction.
 
-package main
+package revacmd
 
 import (
 	"errors"
@@ -35,10 +35,10 @@ import (
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	typespb "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
-	"github.com/cs3org/reva/v3/cmd/reva/internal/cli"
 	"github.com/cs3org/reva/v3/internal/grpc/services/storageprovider"
 	"github.com/cs3org/reva/v3/internal/http/services/datagateway"
 	"github.com/cs3org/reva/v3/pkg/appctx"
+	"github.com/cs3org/reva/v3/pkg/cli"
 	"github.com/cs3org/reva/v3/pkg/crypto"
 	"github.com/cs3org/reva/v3/pkg/errtypes"
 	"github.com/cs3org/reva/v3/pkg/utils"

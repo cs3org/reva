@@ -123,9 +123,25 @@ cernbox-revad-ceph-local: gaia ## Build revad with the CERNBox plugins from ../r
 revad-ceph: ## Build revad with Ceph
 	go build -ldflags "$(BUILD_FLAGS)" -tags ceph -o ./cmd/revad/revad ./cmd/revad/main
 
+CLI_BUILD_FLAGS = -X github.com/cs3org/reva/v3/pkg/rversion.GitCommit=$(GIT_COMMIT) -X github.com/cs3org/reva/v3/pkg/rversion.Version=$(VERSION) -X github.com/cs3org/reva/v3/pkg/rversion.GoVersion=$(GO_VERSION) -X github.com/cs3org/reva/v3/pkg/rversion.BuildDate=$(BUILD_DATE)
+
 .PHONY: reva
 reva: ## Build the reva CLI
-	go build -ldflags "-extldflags=-static -X main.gitCommit=$(GIT_COMMIT) -X main.version=$(VERSION) -X main.goVersion=$(GO_VERSION) -X main.buildDate=$(BUILD_DATE)" -o ./cmd/reva/reva ./cmd/reva
+	go build -ldflags "-extldflags=-static $(CLI_BUILD_FLAGS)" -o ./cmd/reva/reva ./cmd/reva
+
+# The CERNBox build of the CLI: reva with the CLI plugins of
+# github.com/cernbox/reva-plugins/cli and the CERNBox brand. It needs gaia
+# with --binary, --brand and a subpackage in --with (T35), and the brand
+# file (T40). Until then these targets fail.
+CERNBOX_BRAND ?= $(shell pwd)/../reva-plugins/cli/cernbox.toml
+
+.PHONY: cernbox
+cernbox: gaia ## Build the cernbox CLI (reva with the CERNBox CLI plugins)
+	gaia build --binary reva --brand $(CERNBOX_BRAND) --with github.com/cernbox/reva-plugins/cli --with github.com/cs3org/reva/v3=$(shell pwd) --debug -o ./cmd/reva/cernbox
+
+.PHONY: cernbox-local
+cernbox-local: gaia ## Build the cernbox CLI with the CLI plugins from ../reva-plugins
+	gaia build --binary reva --brand $(CERNBOX_BRAND) --with github.com/cernbox/reva-plugins/cli=$(shell pwd)/../reva-plugins/cli --with github.com/cs3org/reva/v3=$(shell pwd) --debug -o ./cmd/reva/cernbox
 
 # Regenerate the reva-owned Admin API (pkg/admin/adminpb) and control channel
 # (pkg/control/controlpb) stubs from their protos. Needs protoc plus protoc-gen-go and

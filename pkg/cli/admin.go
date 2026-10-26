@@ -35,6 +35,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/cs3org/reva/v3/internal/cli/state"
 	"github.com/cs3org/reva/v3/pkg/admin"
 	"github.com/cs3org/reva/v3/pkg/admin/adminpb"
 	"github.com/cs3org/reva/v3/pkg/appctx"
@@ -116,8 +117,8 @@ func (r *Runtime) AdminContext(ctx context.Context) (context.Context, error) {
 func (r *Runtime) adminHeaders(ctx context.Context) context.Context {
 	md, _ := metadata.FromOutgoingContext(ctx)
 	md = md.Copy()
-	if r.Reason != "" {
-		md.Set(admin.ReasonHeader, r.Reason)
+	if r.reason != "" {
+		md.Set(admin.ReasonHeader, r.reason)
 	}
 	if u := os.Getenv("SUDO_USER"); u != "" {
 		md.Set(admin.SudoUserHeader, u)
@@ -154,11 +155,11 @@ func (r *Runtime) adminClient(ctx context.Context) (*AdminClient, error) {
 }
 
 func (r *Runtime) dialAdminHost() (*AdminClient, error) {
-	host := r.AdminHost
+	host := r.adminHost
 	if host == "" {
 		// The Admin API is served on the gateway listener unless the
 		// deployment puts it elsewhere.
-		host = r.GatewayAddr
+		host = r.gatewayAddr
 	}
 	if host == "" {
 		return nil, errors.New("admin host not set: pass --admin-host, set REVA_ADMIN_HOST or run `reva config set admin-host <host:port>`")
@@ -168,8 +169,8 @@ func (r *Runtime) dialAdminHost() (*AdminClient, error) {
 
 func (r *Runtime) dialAdmin(host string) (*AdminClient, error) {
 	socket := strings.HasPrefix(host, "unix:")
-	creds := credentials.NewTLS(&tls.Config{InsecureSkipVerify: r.SkipVerify})
-	if r.Insecure || socket {
+	creds := credentials.NewTLS(&tls.Config{InsecureSkipVerify: r.skipVerify})
+	if r.insecure || socket {
 		creds = insecure.NewCredentials()
 	}
 	opts := append(r.DialOptions(),
@@ -195,7 +196,7 @@ func (r *Runtime) adminToken(ctx context.Context, c *AdminClient) (string, error
 	if r.adminTok != "" && usable(r.adminTok) {
 		return r.adminTok, nil
 	}
-	login, err := r.LoginToken(ctx)
+	login, err := r.loginToken(ctx)
 	if err != nil {
 		return "", err
 	}
@@ -207,7 +208,7 @@ func (r *Runtime) adminToken(ctx context.Context, c *AdminClient) (string, error
 	if need == "" {
 		need = "this command"
 	}
-	if r.NoElevate {
+	if r.noElevate {
 		return "", fmt.Errorf("%s needs admin rights: run `reva elevate` first, or do not pass --no-elevate", need)
 	}
 	res, err := c.RequestAdmin(WithToken(ctx, login), &adminpb.RequestAdminRequest{})
@@ -222,7 +223,7 @@ func (r *Runtime) adminToken(ctx context.Context, c *AdminClient) (string, error
 // login. It is the only place that writes an admin token to disk.
 func (r *Runtime) Elevate(ctx context.Context) (time.Time, error) {
 	r.usedAdmin = true
-	login, err := r.LoginToken(ctx)
+	login, err := r.loginToken(ctx)
 	if err != nil {
 		return time.Time{}, err
 	}
@@ -243,7 +244,7 @@ func (r *Runtime) Elevate(ctx context.Context) (time.Time, error) {
 	if err != nil {
 		return time.Time{}, err
 	}
-	if err := writeState("admin-token", b); err != nil {
+	if err := state.Write("admin-token", b); err != nil {
 		return time.Time{}, err
 	}
 	r.adminTok = res.Token
@@ -263,7 +264,7 @@ func loginKey(login string) string {
 }
 
 func storedAdminToken(login string) string {
-	b, err := readState("admin-token", ".reva-admin-token")
+	b, err := state.Read("admin-token", ".reva-admin-token")
 	if err != nil {
 		return ""
 	}
@@ -307,7 +308,7 @@ func (r *Runtime) AdminState(ctx context.Context) string {
 	}
 	t := r.adminTok
 	if t == "" {
-		if login, err := r.LoginToken(ctx); err == nil {
+		if login, err := r.loginToken(ctx); err == nil {
 			t = storedAdminToken(login)
 		}
 	}
@@ -325,7 +326,7 @@ func (r *Runtime) AdminState(ctx context.Context) string {
 // CheckAdmin with the login token. It is false under --as, where the caller
 // has chosen an identity.
 func (r *Runtime) CanAdmin(ctx context.Context) bool {
-	if r.As != "" {
+	if r.as != "" {
 		return false
 	}
 	c, err := r.adminClient(ctx)
@@ -336,7 +337,7 @@ func (r *Runtime) CanAdmin(ctx context.Context) bool {
 	if c.Socket || (r.adminTok != "" && usable(r.adminTok)) {
 		return true
 	}
-	login, err := r.LoginToken(ctx)
+	login, err := r.loginToken(ctx)
 	if err != nil {
 		return false
 	}
@@ -355,19 +356,19 @@ func (r *Runtime) impersonate(ctx context.Context) (string, error) {
 	c, actx, err := r.Admin(ctx)
 	if err == nil {
 		var res *adminpb.ImpersonateResponse
-		if res, err = c.Impersonate(actx, &adminpb.ImpersonateRequest{User: r.As, Reason: r.Reason}); err == nil {
+		if res, err = c.Impersonate(actx, &adminpb.ImpersonateRequest{User: r.as, Reason: r.reason}); err == nil {
 			return res.Token, nil
 		}
-		err = fmt.Errorf("--as %s: %w", r.As, err)
+		err = fmt.Errorf("--as %s: %w", r.as, err)
 	}
-	if r.HTTPEndpoint == "" || !unreachable(err) {
+	if r.httpEndpoint == "" || !unreachable(err) {
 		return "", err
 	}
-	login, lerr := r.LoginToken(ctx)
+	login, lerr := r.loginToken(ctx)
 	if lerr != nil {
 		return "", lerr
 	}
-	return ImpersonateHTTP(ctx, r.HTTPClient().GetNativeHTTP(), r.HTTPEndpoint, login, r.As, r.Reason)
+	return ImpersonateHTTP(ctx, r.HTTPClient().GetNativeHTTP(), r.httpEndpoint, login, r.as, r.reason)
 }
 
 func unreachable(err error) bool {
@@ -416,7 +417,7 @@ func ImpersonateHTTP(ctx context.Context, client *http.Client, endpoint, login, 
 // question. Without a terminal and without --yes, it refuses, so that a
 // script never changes data by accident.
 func (r *Runtime) Confirm(prompt string) error {
-	if r.Yes {
+	if r.yes {
 		return nil
 	}
 	if !term.IsTerminal(int(os.Stdin.Fd())) {
@@ -439,16 +440,16 @@ func (r *Runtime) Warnf(format string, args ...any) {
 // ConfirmMutation asks for a confirmation before a command that changes data
 // runs as another user with --as.
 func (r *Runtime) ConfirmMutation(path string) error {
-	if r.As == "" {
+	if r.as == "" {
 		return nil
 	}
-	return r.Confirm(fmt.Sprintf("run `%s` as %s", path, r.As))
+	return r.Confirm(fmt.Sprintf("run `%s` as %s", path, r.as))
 }
 
 // WarnUnusedReason warns when --reason was given, but no call used the
 // admin plane, so the reason is in no audit line.
 func (r *Runtime) WarnUnusedReason() {
-	if r.Reason != "" && !r.usedAdmin {
+	if r.reason != "" && !r.usedAdmin {
 		r.Warnf("--reason ignored: the command made no admin call")
 	}
 }

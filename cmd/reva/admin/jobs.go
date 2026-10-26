@@ -73,7 +73,7 @@ func jobCommand() *cobra.Command {
 			"With --job, show the lines of every run of that job.",
 		Args: cobra.MaximumNArgs(1),
 		RunE: run(func(ctx context.Context, client adminpb.AdminAPIClient, args []string) error {
-			return jobsLogs(ctx, client, args, logsJob, logsLines, logsFollow, rt.Output)
+			return jobsLogs(ctx, client, args, logsJob, logsLines, logsFollow, rt.Output())
 		}),
 	}
 	logs.Flags().StringVar(&logsJob, "job", "", "show the runs of this job")
