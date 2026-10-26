@@ -28,6 +28,7 @@ import (
 	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
 	protoimpl "google.golang.org/protobuf/runtime/protoimpl"
 	reflect "reflect"
+	sync "sync"
 )
 
 const (
@@ -37,25 +38,740 @@ const (
 	_ = protoimpl.EnforceVersion(protoimpl.MaxVersion - 20)
 )
 
+// Route sends the paths under path to a mount.
+type Route struct {
+	state         protoimpl.MessageState
+	sizeCache     protoimpl.SizeCache
+	unknownFields protoimpl.UnknownFields
+
+	Path    string `protobuf:"bytes,1,opt,name=path,proto3" json:"path,omitempty"`
+	MountId string `protobuf:"bytes,2,opt,name=mount_id,json=mountId,proto3" json:"mount_id,omitempty"`
+}
+
+func (x *Route) Reset() {
+	*x = Route{}
+	if protoimpl.UnsafeEnabled {
+		mi := &file_storage_proto_msgTypes[0]
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		ms.StoreMessageInfo(mi)
+	}
+}
+
+func (x *Route) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*Route) ProtoMessage() {}
+
+func (x *Route) ProtoReflect() protoreflect.Message {
+	mi := &file_storage_proto_msgTypes[0]
+	if protoimpl.UnsafeEnabled && x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use Route.ProtoReflect.Descriptor instead.
+func (*Route) Descriptor() ([]byte, []int) {
+	return file_storage_proto_rawDescGZIP(), []int{0}
+}
+
+func (x *Route) GetPath() string {
+	if x != nil {
+		return x.Path
+	}
+	return ""
+}
+
+func (x *Route) GetMountId() string {
+	if x != nil {
+		return x.MountId
+	}
+	return ""
+}
+
+// Mount is a mount that serves a path.
+type Mount struct {
+	state         protoimpl.MessageState
+	sizeCache     protoimpl.SizeCache
+	unknownFields protoimpl.UnknownFields
+
+	MountId string `protobuf:"bytes,1,opt,name=mount_id,json=mountId,proto3" json:"mount_id,omitempty"`
+	// mount_path is the namespace path that the mount serves.
+	MountPath string `protobuf:"bytes,2,opt,name=mount_path,json=mountPath,proto3" json:"mount_path,omitempty"`
+	// address is the provider address in the storage registry configuration.
+	Address string `protobuf:"bytes,3,opt,name=address,proto3" json:"address,omitempty"`
+	// provider_nodes are the ids of the live storage provider instances that
+	// advertise this mount_id. The registry knows only address, and an address
+	// can be a load balancer in front of several instances.
+	ProviderNodes []string `protobuf:"bytes,4,rep,name=provider_nodes,json=providerNodes,proto3" json:"provider_nodes,omitempty"`
+}
+
+func (x *Mount) Reset() {
+	*x = Mount{}
+	if protoimpl.UnsafeEnabled {
+		mi := &file_storage_proto_msgTypes[1]
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		ms.StoreMessageInfo(mi)
+	}
+}
+
+func (x *Mount) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*Mount) ProtoMessage() {}
+
+func (x *Mount) ProtoReflect() protoreflect.Message {
+	mi := &file_storage_proto_msgTypes[1]
+	if protoimpl.UnsafeEnabled && x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use Mount.ProtoReflect.Descriptor instead.
+func (*Mount) Descriptor() ([]byte, []int) {
+	return file_storage_proto_rawDescGZIP(), []int{1}
+}
+
+func (x *Mount) GetMountId() string {
+	if x != nil {
+		return x.MountId
+	}
+	return ""
+}
+
+func (x *Mount) GetMountPath() string {
+	if x != nil {
+		return x.MountPath
+	}
+	return ""
+}
+
+func (x *Mount) GetAddress() string {
+	if x != nil {
+		return x.Address
+	}
+	return ""
+}
+
+func (x *Mount) GetProviderNodes() []string {
+	if x != nil {
+		return x.ProviderNodes
+	}
+	return nil
+}
+
+// StaleInstance is a storage registry instance that did not reload the
+// routing table after a change. It serves the old table until it reloads.
+type StaleInstance struct {
+	state         protoimpl.MessageState
+	sizeCache     protoimpl.SizeCache
+	unknownFields protoimpl.UnknownFields
+
+	Node  string `protobuf:"bytes,1,opt,name=node,proto3" json:"node,omitempty"`
+	Error string `protobuf:"bytes,2,opt,name=error,proto3" json:"error,omitempty"`
+	// code is the gRPC code of error.
+	Code int32 `protobuf:"varint,3,opt,name=code,proto3" json:"code,omitempty"`
+}
+
+func (x *StaleInstance) Reset() {
+	*x = StaleInstance{}
+	if protoimpl.UnsafeEnabled {
+		mi := &file_storage_proto_msgTypes[2]
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		ms.StoreMessageInfo(mi)
+	}
+}
+
+func (x *StaleInstance) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*StaleInstance) ProtoMessage() {}
+
+func (x *StaleInstance) ProtoReflect() protoreflect.Message {
+	mi := &file_storage_proto_msgTypes[2]
+	if protoimpl.UnsafeEnabled && x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use StaleInstance.ProtoReflect.Descriptor instead.
+func (*StaleInstance) Descriptor() ([]byte, []int) {
+	return file_storage_proto_rawDescGZIP(), []int{2}
+}
+
+func (x *StaleInstance) GetNode() string {
+	if x != nil {
+		return x.Node
+	}
+	return ""
+}
+
+func (x *StaleInstance) GetError() string {
+	if x != nil {
+		return x.Error
+	}
+	return ""
+}
+
+func (x *StaleInstance) GetCode() int32 {
+	if x != nil {
+		return x.Code
+	}
+	return 0
+}
+
+type ListRoutesRequest struct {
+	state         protoimpl.MessageState
+	sizeCache     protoimpl.SizeCache
+	unknownFields protoimpl.UnknownFields
+}
+
+func (x *ListRoutesRequest) Reset() {
+	*x = ListRoutesRequest{}
+	if protoimpl.UnsafeEnabled {
+		mi := &file_storage_proto_msgTypes[3]
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		ms.StoreMessageInfo(mi)
+	}
+}
+
+func (x *ListRoutesRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ListRoutesRequest) ProtoMessage() {}
+
+func (x *ListRoutesRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_storage_proto_msgTypes[3]
+	if protoimpl.UnsafeEnabled && x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ListRoutesRequest.ProtoReflect.Descriptor instead.
+func (*ListRoutesRequest) Descriptor() ([]byte, []int) {
+	return file_storage_proto_rawDescGZIP(), []int{3}
+}
+
+type ListRoutesResponse struct {
+	state         protoimpl.MessageState
+	sizeCache     protoimpl.SizeCache
+	unknownFields protoimpl.UnknownFields
+
+	Routes []*Route `protobuf:"bytes,1,rep,name=routes,proto3" json:"routes,omitempty"`
+}
+
+func (x *ListRoutesResponse) Reset() {
+	*x = ListRoutesResponse{}
+	if protoimpl.UnsafeEnabled {
+		mi := &file_storage_proto_msgTypes[4]
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		ms.StoreMessageInfo(mi)
+	}
+}
+
+func (x *ListRoutesResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ListRoutesResponse) ProtoMessage() {}
+
+func (x *ListRoutesResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_storage_proto_msgTypes[4]
+	if protoimpl.UnsafeEnabled && x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ListRoutesResponse.ProtoReflect.Descriptor instead.
+func (*ListRoutesResponse) Descriptor() ([]byte, []int) {
+	return file_storage_proto_rawDescGZIP(), []int{4}
+}
+
+func (x *ListRoutesResponse) GetRoutes() []*Route {
+	if x != nil {
+		return x.Routes
+	}
+	return nil
+}
+
+type ResolvePathRequest struct {
+	state         protoimpl.MessageState
+	sizeCache     protoimpl.SizeCache
+	unknownFields protoimpl.UnknownFields
+
+	Path string `protobuf:"bytes,1,opt,name=path,proto3" json:"path,omitempty"`
+}
+
+func (x *ResolvePathRequest) Reset() {
+	*x = ResolvePathRequest{}
+	if protoimpl.UnsafeEnabled {
+		mi := &file_storage_proto_msgTypes[5]
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		ms.StoreMessageInfo(mi)
+	}
+}
+
+func (x *ResolvePathRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ResolvePathRequest) ProtoMessage() {}
+
+func (x *ResolvePathRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_storage_proto_msgTypes[5]
+	if protoimpl.UnsafeEnabled && x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ResolvePathRequest.ProtoReflect.Descriptor instead.
+func (*ResolvePathRequest) Descriptor() ([]byte, []int) {
+	return file_storage_proto_rawDescGZIP(), []int{5}
+}
+
+func (x *ResolvePathRequest) GetPath() string {
+	if x != nil {
+		return x.Path
+	}
+	return ""
+}
+
+type ResolvePathResponse struct {
+	state         protoimpl.MessageState
+	sizeCache     protoimpl.SizeCache
+	unknownFields protoimpl.UnknownFields
+
+	Path   string   `protobuf:"bytes,1,opt,name=path,proto3" json:"path,omitempty"`
+	Mounts []*Mount `protobuf:"bytes,2,rep,name=mounts,proto3" json:"mounts,omitempty"`
+}
+
+func (x *ResolvePathResponse) Reset() {
+	*x = ResolvePathResponse{}
+	if protoimpl.UnsafeEnabled {
+		mi := &file_storage_proto_msgTypes[6]
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		ms.StoreMessageInfo(mi)
+	}
+}
+
+func (x *ResolvePathResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ResolvePathResponse) ProtoMessage() {}
+
+func (x *ResolvePathResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_storage_proto_msgTypes[6]
+	if protoimpl.UnsafeEnabled && x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ResolvePathResponse.ProtoReflect.Descriptor instead.
+func (*ResolvePathResponse) Descriptor() ([]byte, []int) {
+	return file_storage_proto_rawDescGZIP(), []int{6}
+}
+
+func (x *ResolvePathResponse) GetPath() string {
+	if x != nil {
+		return x.Path
+	}
+	return ""
+}
+
+func (x *ResolvePathResponse) GetMounts() []*Mount {
+	if x != nil {
+		return x.Mounts
+	}
+	return nil
+}
+
+type AddRouteRequest struct {
+	state         protoimpl.MessageState
+	sizeCache     protoimpl.SizeCache
+	unknownFields protoimpl.UnknownFields
+
+	Path    string `protobuf:"bytes,1,opt,name=path,proto3" json:"path,omitempty"`
+	MountId string `protobuf:"bytes,2,opt,name=mount_id,json=mountId,proto3" json:"mount_id,omitempty"`
+}
+
+func (x *AddRouteRequest) Reset() {
+	*x = AddRouteRequest{}
+	if protoimpl.UnsafeEnabled {
+		mi := &file_storage_proto_msgTypes[7]
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		ms.StoreMessageInfo(mi)
+	}
+}
+
+func (x *AddRouteRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*AddRouteRequest) ProtoMessage() {}
+
+func (x *AddRouteRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_storage_proto_msgTypes[7]
+	if protoimpl.UnsafeEnabled && x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use AddRouteRequest.ProtoReflect.Descriptor instead.
+func (*AddRouteRequest) Descriptor() ([]byte, []int) {
+	return file_storage_proto_rawDescGZIP(), []int{7}
+}
+
+func (x *AddRouteRequest) GetPath() string {
+	if x != nil {
+		return x.Path
+	}
+	return ""
+}
+
+func (x *AddRouteRequest) GetMountId() string {
+	if x != nil {
+		return x.MountId
+	}
+	return ""
+}
+
+// AddRouteResponse is sent when the change is written. If stale is not
+// empty, these instances did not apply it.
+type AddRouteResponse struct {
+	state         protoimpl.MessageState
+	sizeCache     protoimpl.SizeCache
+	unknownFields protoimpl.UnknownFields
+
+	Route *Route           `protobuf:"bytes,1,opt,name=route,proto3" json:"route,omitempty"`
+	Stale []*StaleInstance `protobuf:"bytes,2,rep,name=stale,proto3" json:"stale,omitempty"`
+}
+
+func (x *AddRouteResponse) Reset() {
+	*x = AddRouteResponse{}
+	if protoimpl.UnsafeEnabled {
+		mi := &file_storage_proto_msgTypes[8]
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		ms.StoreMessageInfo(mi)
+	}
+}
+
+func (x *AddRouteResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*AddRouteResponse) ProtoMessage() {}
+
+func (x *AddRouteResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_storage_proto_msgTypes[8]
+	if protoimpl.UnsafeEnabled && x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use AddRouteResponse.ProtoReflect.Descriptor instead.
+func (*AddRouteResponse) Descriptor() ([]byte, []int) {
+	return file_storage_proto_rawDescGZIP(), []int{8}
+}
+
+func (x *AddRouteResponse) GetRoute() *Route {
+	if x != nil {
+		return x.Route
+	}
+	return nil
+}
+
+func (x *AddRouteResponse) GetStale() []*StaleInstance {
+	if x != nil {
+		return x.Stale
+	}
+	return nil
+}
+
+type RemoveRouteRequest struct {
+	state         protoimpl.MessageState
+	sizeCache     protoimpl.SizeCache
+	unknownFields protoimpl.UnknownFields
+
+	Path string `protobuf:"bytes,1,opt,name=path,proto3" json:"path,omitempty"`
+}
+
+func (x *RemoveRouteRequest) Reset() {
+	*x = RemoveRouteRequest{}
+	if protoimpl.UnsafeEnabled {
+		mi := &file_storage_proto_msgTypes[9]
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		ms.StoreMessageInfo(mi)
+	}
+}
+
+func (x *RemoveRouteRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*RemoveRouteRequest) ProtoMessage() {}
+
+func (x *RemoveRouteRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_storage_proto_msgTypes[9]
+	if protoimpl.UnsafeEnabled && x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use RemoveRouteRequest.ProtoReflect.Descriptor instead.
+func (*RemoveRouteRequest) Descriptor() ([]byte, []int) {
+	return file_storage_proto_rawDescGZIP(), []int{9}
+}
+
+func (x *RemoveRouteRequest) GetPath() string {
+	if x != nil {
+		return x.Path
+	}
+	return ""
+}
+
+// RemoveRouteResponse is sent when the change is written. If stale is not
+// empty, these instances did not apply it.
+type RemoveRouteResponse struct {
+	state         protoimpl.MessageState
+	sizeCache     protoimpl.SizeCache
+	unknownFields protoimpl.UnknownFields
+
+	Path  string           `protobuf:"bytes,1,opt,name=path,proto3" json:"path,omitempty"`
+	Stale []*StaleInstance `protobuf:"bytes,2,rep,name=stale,proto3" json:"stale,omitempty"`
+}
+
+func (x *RemoveRouteResponse) Reset() {
+	*x = RemoveRouteResponse{}
+	if protoimpl.UnsafeEnabled {
+		mi := &file_storage_proto_msgTypes[10]
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		ms.StoreMessageInfo(mi)
+	}
+}
+
+func (x *RemoveRouteResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*RemoveRouteResponse) ProtoMessage() {}
+
+func (x *RemoveRouteResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_storage_proto_msgTypes[10]
+	if protoimpl.UnsafeEnabled && x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use RemoveRouteResponse.ProtoReflect.Descriptor instead.
+func (*RemoveRouteResponse) Descriptor() ([]byte, []int) {
+	return file_storage_proto_rawDescGZIP(), []int{10}
+}
+
+func (x *RemoveRouteResponse) GetPath() string {
+	if x != nil {
+		return x.Path
+	}
+	return ""
+}
+
+func (x *RemoveRouteResponse) GetStale() []*StaleInstance {
+	if x != nil {
+		return x.Stale
+	}
+	return nil
+}
+
 var File_storage_proto protoreflect.FileDescriptor
 
 var file_storage_proto_rawDesc = []byte{
 	0x0a, 0x0d, 0x73, 0x74, 0x6f, 0x72, 0x61, 0x67, 0x65, 0x2e, 0x70, 0x72, 0x6f, 0x74, 0x6f, 0x12,
 	0x12, 0x72, 0x65, 0x76, 0x61, 0x2e, 0x61, 0x64, 0x6d, 0x69, 0x6e, 0x2e, 0x76, 0x31, 0x62, 0x65,
-	0x74, 0x61, 0x31, 0x32, 0x0e, 0x0a, 0x0c, 0x53, 0x74, 0x6f, 0x72, 0x61, 0x67, 0x65, 0x41, 0x64,
-	0x6d, 0x69, 0x6e, 0x42, 0x2d, 0x5a, 0x2b, 0x67, 0x69, 0x74, 0x68, 0x75, 0x62, 0x2e, 0x63, 0x6f,
-	0x6d, 0x2f, 0x63, 0x73, 0x33, 0x6f, 0x72, 0x67, 0x2f, 0x72, 0x65, 0x76, 0x61, 0x2f, 0x76, 0x33,
-	0x2f, 0x70, 0x6b, 0x67, 0x2f, 0x61, 0x64, 0x6d, 0x69, 0x6e, 0x2f, 0x61, 0x64, 0x6d, 0x69, 0x6e,
-	0x70, 0x62, 0x62, 0x06, 0x70, 0x72, 0x6f, 0x74, 0x6f, 0x33,
+	0x74, 0x61, 0x31, 0x22, 0x36, 0x0a, 0x05, 0x52, 0x6f, 0x75, 0x74, 0x65, 0x12, 0x12, 0x0a, 0x04,
+	0x70, 0x61, 0x74, 0x68, 0x18, 0x01, 0x20, 0x01, 0x28, 0x09, 0x52, 0x04, 0x70, 0x61, 0x74, 0x68,
+	0x12, 0x19, 0x0a, 0x08, 0x6d, 0x6f, 0x75, 0x6e, 0x74, 0x5f, 0x69, 0x64, 0x18, 0x02, 0x20, 0x01,
+	0x28, 0x09, 0x52, 0x07, 0x6d, 0x6f, 0x75, 0x6e, 0x74, 0x49, 0x64, 0x22, 0x82, 0x01, 0x0a, 0x05,
+	0x4d, 0x6f, 0x75, 0x6e, 0x74, 0x12, 0x19, 0x0a, 0x08, 0x6d, 0x6f, 0x75, 0x6e, 0x74, 0x5f, 0x69,
+	0x64, 0x18, 0x01, 0x20, 0x01, 0x28, 0x09, 0x52, 0x07, 0x6d, 0x6f, 0x75, 0x6e, 0x74, 0x49, 0x64,
+	0x12, 0x1d, 0x0a, 0x0a, 0x6d, 0x6f, 0x75, 0x6e, 0x74, 0x5f, 0x70, 0x61, 0x74, 0x68, 0x18, 0x02,
+	0x20, 0x01, 0x28, 0x09, 0x52, 0x09, 0x6d, 0x6f, 0x75, 0x6e, 0x74, 0x50, 0x61, 0x74, 0x68, 0x12,
+	0x18, 0x0a, 0x07, 0x61, 0x64, 0x64, 0x72, 0x65, 0x73, 0x73, 0x18, 0x03, 0x20, 0x01, 0x28, 0x09,
+	0x52, 0x07, 0x61, 0x64, 0x64, 0x72, 0x65, 0x73, 0x73, 0x12, 0x25, 0x0a, 0x0e, 0x70, 0x72, 0x6f,
+	0x76, 0x69, 0x64, 0x65, 0x72, 0x5f, 0x6e, 0x6f, 0x64, 0x65, 0x73, 0x18, 0x04, 0x20, 0x03, 0x28,
+	0x09, 0x52, 0x0d, 0x70, 0x72, 0x6f, 0x76, 0x69, 0x64, 0x65, 0x72, 0x4e, 0x6f, 0x64, 0x65, 0x73,
+	0x22, 0x4d, 0x0a, 0x0d, 0x53, 0x74, 0x61, 0x6c, 0x65, 0x49, 0x6e, 0x73, 0x74, 0x61, 0x6e, 0x63,
+	0x65, 0x12, 0x12, 0x0a, 0x04, 0x6e, 0x6f, 0x64, 0x65, 0x18, 0x01, 0x20, 0x01, 0x28, 0x09, 0x52,
+	0x04, 0x6e, 0x6f, 0x64, 0x65, 0x12, 0x14, 0x0a, 0x05, 0x65, 0x72, 0x72, 0x6f, 0x72, 0x18, 0x02,
+	0x20, 0x01, 0x28, 0x09, 0x52, 0x05, 0x65, 0x72, 0x72, 0x6f, 0x72, 0x12, 0x12, 0x0a, 0x04, 0x63,
+	0x6f, 0x64, 0x65, 0x18, 0x03, 0x20, 0x01, 0x28, 0x05, 0x52, 0x04, 0x63, 0x6f, 0x64, 0x65, 0x22,
+	0x13, 0x0a, 0x11, 0x4c, 0x69, 0x73, 0x74, 0x52, 0x6f, 0x75, 0x74, 0x65, 0x73, 0x52, 0x65, 0x71,
+	0x75, 0x65, 0x73, 0x74, 0x22, 0x47, 0x0a, 0x12, 0x4c, 0x69, 0x73, 0x74, 0x52, 0x6f, 0x75, 0x74,
+	0x65, 0x73, 0x52, 0x65, 0x73, 0x70, 0x6f, 0x6e, 0x73, 0x65, 0x12, 0x31, 0x0a, 0x06, 0x72, 0x6f,
+	0x75, 0x74, 0x65, 0x73, 0x18, 0x01, 0x20, 0x03, 0x28, 0x0b, 0x32, 0x19, 0x2e, 0x72, 0x65, 0x76,
+	0x61, 0x2e, 0x61, 0x64, 0x6d, 0x69, 0x6e, 0x2e, 0x76, 0x31, 0x62, 0x65, 0x74, 0x61, 0x31, 0x2e,
+	0x52, 0x6f, 0x75, 0x74, 0x65, 0x52, 0x06, 0x72, 0x6f, 0x75, 0x74, 0x65, 0x73, 0x22, 0x28, 0x0a,
+	0x12, 0x52, 0x65, 0x73, 0x6f, 0x6c, 0x76, 0x65, 0x50, 0x61, 0x74, 0x68, 0x52, 0x65, 0x71, 0x75,
+	0x65, 0x73, 0x74, 0x12, 0x12, 0x0a, 0x04, 0x70, 0x61, 0x74, 0x68, 0x18, 0x01, 0x20, 0x01, 0x28,
+	0x09, 0x52, 0x04, 0x70, 0x61, 0x74, 0x68, 0x22, 0x5c, 0x0a, 0x13, 0x52, 0x65, 0x73, 0x6f, 0x6c,
+	0x76, 0x65, 0x50, 0x61, 0x74, 0x68, 0x52, 0x65, 0x73, 0x70, 0x6f, 0x6e, 0x73, 0x65, 0x12, 0x12,
+	0x0a, 0x04, 0x70, 0x61, 0x74, 0x68, 0x18, 0x01, 0x20, 0x01, 0x28, 0x09, 0x52, 0x04, 0x70, 0x61,
+	0x74, 0x68, 0x12, 0x31, 0x0a, 0x06, 0x6d, 0x6f, 0x75, 0x6e, 0x74, 0x73, 0x18, 0x02, 0x20, 0x03,
+	0x28, 0x0b, 0x32, 0x19, 0x2e, 0x72, 0x65, 0x76, 0x61, 0x2e, 0x61, 0x64, 0x6d, 0x69, 0x6e, 0x2e,
+	0x76, 0x31, 0x62, 0x65, 0x74, 0x61, 0x31, 0x2e, 0x4d, 0x6f, 0x75, 0x6e, 0x74, 0x52, 0x06, 0x6d,
+	0x6f, 0x75, 0x6e, 0x74, 0x73, 0x22, 0x40, 0x0a, 0x0f, 0x41, 0x64, 0x64, 0x52, 0x6f, 0x75, 0x74,
+	0x65, 0x52, 0x65, 0x71, 0x75, 0x65, 0x73, 0x74, 0x12, 0x12, 0x0a, 0x04, 0x70, 0x61, 0x74, 0x68,
+	0x18, 0x01, 0x20, 0x01, 0x28, 0x09, 0x52, 0x04, 0x70, 0x61, 0x74, 0x68, 0x12, 0x19, 0x0a, 0x08,
+	0x6d, 0x6f, 0x75, 0x6e, 0x74, 0x5f, 0x69, 0x64, 0x18, 0x02, 0x20, 0x01, 0x28, 0x09, 0x52, 0x07,
+	0x6d, 0x6f, 0x75, 0x6e, 0x74, 0x49, 0x64, 0x22, 0x7c, 0x0a, 0x10, 0x41, 0x64, 0x64, 0x52, 0x6f,
+	0x75, 0x74, 0x65, 0x52, 0x65, 0x73, 0x70, 0x6f, 0x6e, 0x73, 0x65, 0x12, 0x2f, 0x0a, 0x05, 0x72,
+	0x6f, 0x75, 0x74, 0x65, 0x18, 0x01, 0x20, 0x01, 0x28, 0x0b, 0x32, 0x19, 0x2e, 0x72, 0x65, 0x76,
+	0x61, 0x2e, 0x61, 0x64, 0x6d, 0x69, 0x6e, 0x2e, 0x76, 0x31, 0x62, 0x65, 0x74, 0x61, 0x31, 0x2e,
+	0x52, 0x6f, 0x75, 0x74, 0x65, 0x52, 0x05, 0x72, 0x6f, 0x75, 0x74, 0x65, 0x12, 0x37, 0x0a, 0x05,
+	0x73, 0x74, 0x61, 0x6c, 0x65, 0x18, 0x02, 0x20, 0x03, 0x28, 0x0b, 0x32, 0x21, 0x2e, 0x72, 0x65,
+	0x76, 0x61, 0x2e, 0x61, 0x64, 0x6d, 0x69, 0x6e, 0x2e, 0x76, 0x31, 0x62, 0x65, 0x74, 0x61, 0x31,
+	0x2e, 0x53, 0x74, 0x61, 0x6c, 0x65, 0x49, 0x6e, 0x73, 0x74, 0x61, 0x6e, 0x63, 0x65, 0x52, 0x05,
+	0x73, 0x74, 0x61, 0x6c, 0x65, 0x22, 0x28, 0x0a, 0x12, 0x52, 0x65, 0x6d, 0x6f, 0x76, 0x65, 0x52,
+	0x6f, 0x75, 0x74, 0x65, 0x52, 0x65, 0x71, 0x75, 0x65, 0x73, 0x74, 0x12, 0x12, 0x0a, 0x04, 0x70,
+	0x61, 0x74, 0x68, 0x18, 0x01, 0x20, 0x01, 0x28, 0x09, 0x52, 0x04, 0x70, 0x61, 0x74, 0x68, 0x22,
+	0x62, 0x0a, 0x13, 0x52, 0x65, 0x6d, 0x6f, 0x76, 0x65, 0x52, 0x6f, 0x75, 0x74, 0x65, 0x52, 0x65,
+	0x73, 0x70, 0x6f, 0x6e, 0x73, 0x65, 0x12, 0x12, 0x0a, 0x04, 0x70, 0x61, 0x74, 0x68, 0x18, 0x01,
+	0x20, 0x01, 0x28, 0x09, 0x52, 0x04, 0x70, 0x61, 0x74, 0x68, 0x12, 0x37, 0x0a, 0x05, 0x73, 0x74,
+	0x61, 0x6c, 0x65, 0x18, 0x02, 0x20, 0x03, 0x28, 0x0b, 0x32, 0x21, 0x2e, 0x72, 0x65, 0x76, 0x61,
+	0x2e, 0x61, 0x64, 0x6d, 0x69, 0x6e, 0x2e, 0x76, 0x31, 0x62, 0x65, 0x74, 0x61, 0x31, 0x2e, 0x53,
+	0x74, 0x61, 0x6c, 0x65, 0x49, 0x6e, 0x73, 0x74, 0x61, 0x6e, 0x63, 0x65, 0x52, 0x05, 0x73, 0x74,
+	0x61, 0x6c, 0x65, 0x32, 0x82, 0x03, 0x0a, 0x0c, 0x53, 0x74, 0x6f, 0x72, 0x61, 0x67, 0x65, 0x41,
+	0x64, 0x6d, 0x69, 0x6e, 0x12, 0x5b, 0x0a, 0x0a, 0x4c, 0x69, 0x73, 0x74, 0x52, 0x6f, 0x75, 0x74,
+	0x65, 0x73, 0x12, 0x25, 0x2e, 0x72, 0x65, 0x76, 0x61, 0x2e, 0x61, 0x64, 0x6d, 0x69, 0x6e, 0x2e,
+	0x76, 0x31, 0x62, 0x65, 0x74, 0x61, 0x31, 0x2e, 0x4c, 0x69, 0x73, 0x74, 0x52, 0x6f, 0x75, 0x74,
+	0x65, 0x73, 0x52, 0x65, 0x71, 0x75, 0x65, 0x73, 0x74, 0x1a, 0x26, 0x2e, 0x72, 0x65, 0x76, 0x61,
+	0x2e, 0x61, 0x64, 0x6d, 0x69, 0x6e, 0x2e, 0x76, 0x31, 0x62, 0x65, 0x74, 0x61, 0x31, 0x2e, 0x4c,
+	0x69, 0x73, 0x74, 0x52, 0x6f, 0x75, 0x74, 0x65, 0x73, 0x52, 0x65, 0x73, 0x70, 0x6f, 0x6e, 0x73,
+	0x65, 0x12, 0x5e, 0x0a, 0x0b, 0x52, 0x65, 0x73, 0x6f, 0x6c, 0x76, 0x65, 0x50, 0x61, 0x74, 0x68,
+	0x12, 0x26, 0x2e, 0x72, 0x65, 0x76, 0x61, 0x2e, 0x61, 0x64, 0x6d, 0x69, 0x6e, 0x2e, 0x76, 0x31,
+	0x62, 0x65, 0x74, 0x61, 0x31, 0x2e, 0x52, 0x65, 0x73, 0x6f, 0x6c, 0x76, 0x65, 0x50, 0x61, 0x74,
+	0x68, 0x52, 0x65, 0x71, 0x75, 0x65, 0x73, 0x74, 0x1a, 0x27, 0x2e, 0x72, 0x65, 0x76, 0x61, 0x2e,
+	0x61, 0x64, 0x6d, 0x69, 0x6e, 0x2e, 0x76, 0x31, 0x62, 0x65, 0x74, 0x61, 0x31, 0x2e, 0x52, 0x65,
+	0x73, 0x6f, 0x6c, 0x76, 0x65, 0x50, 0x61, 0x74, 0x68, 0x52, 0x65, 0x73, 0x70, 0x6f, 0x6e, 0x73,
+	0x65, 0x12, 0x55, 0x0a, 0x08, 0x41, 0x64, 0x64, 0x52, 0x6f, 0x75, 0x74, 0x65, 0x12, 0x23, 0x2e,
+	0x72, 0x65, 0x76, 0x61, 0x2e, 0x61, 0x64, 0x6d, 0x69, 0x6e, 0x2e, 0x76, 0x31, 0x62, 0x65, 0x74,
+	0x61, 0x31, 0x2e, 0x41, 0x64, 0x64, 0x52, 0x6f, 0x75, 0x74, 0x65, 0x52, 0x65, 0x71, 0x75, 0x65,
+	0x73, 0x74, 0x1a, 0x24, 0x2e, 0x72, 0x65, 0x76, 0x61, 0x2e, 0x61, 0x64, 0x6d, 0x69, 0x6e, 0x2e,
+	0x76, 0x31, 0x62, 0x65, 0x74, 0x61, 0x31, 0x2e, 0x41, 0x64, 0x64, 0x52, 0x6f, 0x75, 0x74, 0x65,
+	0x52, 0x65, 0x73, 0x70, 0x6f, 0x6e, 0x73, 0x65, 0x12, 0x5e, 0x0a, 0x0b, 0x52, 0x65, 0x6d, 0x6f,
+	0x76, 0x65, 0x52, 0x6f, 0x75, 0x74, 0x65, 0x12, 0x26, 0x2e, 0x72, 0x65, 0x76, 0x61, 0x2e, 0x61,
+	0x64, 0x6d, 0x69, 0x6e, 0x2e, 0x76, 0x31, 0x62, 0x65, 0x74, 0x61, 0x31, 0x2e, 0x52, 0x65, 0x6d,
+	0x6f, 0x76, 0x65, 0x52, 0x6f, 0x75, 0x74, 0x65, 0x52, 0x65, 0x71, 0x75, 0x65, 0x73, 0x74, 0x1a,
+	0x27, 0x2e, 0x72, 0x65, 0x76, 0x61, 0x2e, 0x61, 0x64, 0x6d, 0x69, 0x6e, 0x2e, 0x76, 0x31, 0x62,
+	0x65, 0x74, 0x61, 0x31, 0x2e, 0x52, 0x65, 0x6d, 0x6f, 0x76, 0x65, 0x52, 0x6f, 0x75, 0x74, 0x65,
+	0x52, 0x65, 0x73, 0x70, 0x6f, 0x6e, 0x73, 0x65, 0x42, 0x2d, 0x5a, 0x2b, 0x67, 0x69, 0x74, 0x68,
+	0x75, 0x62, 0x2e, 0x63, 0x6f, 0x6d, 0x2f, 0x63, 0x73, 0x33, 0x6f, 0x72, 0x67, 0x2f, 0x72, 0x65,
+	0x76, 0x61, 0x2f, 0x76, 0x33, 0x2f, 0x70, 0x6b, 0x67, 0x2f, 0x61, 0x64, 0x6d, 0x69, 0x6e, 0x2f,
+	0x61, 0x64, 0x6d, 0x69, 0x6e, 0x70, 0x62, 0x62, 0x06, 0x70, 0x72, 0x6f, 0x74, 0x6f, 0x33,
 }
 
-var file_storage_proto_goTypes = []interface{}{}
+var (
+	file_storage_proto_rawDescOnce sync.Once
+	file_storage_proto_rawDescData = file_storage_proto_rawDesc
+)
+
+func file_storage_proto_rawDescGZIP() []byte {
+	file_storage_proto_rawDescOnce.Do(func() {
+		file_storage_proto_rawDescData = protoimpl.X.CompressGZIP(file_storage_proto_rawDescData)
+	})
+	return file_storage_proto_rawDescData
+}
+
+var file_storage_proto_msgTypes = make([]protoimpl.MessageInfo, 11)
+var file_storage_proto_goTypes = []interface{}{
+	(*Route)(nil),               // 0: reva.admin.v1beta1.Route
+	(*Mount)(nil),               // 1: reva.admin.v1beta1.Mount
+	(*StaleInstance)(nil),       // 2: reva.admin.v1beta1.StaleInstance
+	(*ListRoutesRequest)(nil),   // 3: reva.admin.v1beta1.ListRoutesRequest
+	(*ListRoutesResponse)(nil),  // 4: reva.admin.v1beta1.ListRoutesResponse
+	(*ResolvePathRequest)(nil),  // 5: reva.admin.v1beta1.ResolvePathRequest
+	(*ResolvePathResponse)(nil), // 6: reva.admin.v1beta1.ResolvePathResponse
+	(*AddRouteRequest)(nil),     // 7: reva.admin.v1beta1.AddRouteRequest
+	(*AddRouteResponse)(nil),    // 8: reva.admin.v1beta1.AddRouteResponse
+	(*RemoveRouteRequest)(nil),  // 9: reva.admin.v1beta1.RemoveRouteRequest
+	(*RemoveRouteResponse)(nil), // 10: reva.admin.v1beta1.RemoveRouteResponse
+}
 var file_storage_proto_depIdxs = []int32{
-	0, // [0:0] is the sub-list for method output_type
-	0, // [0:0] is the sub-list for method input_type
-	0, // [0:0] is the sub-list for extension type_name
-	0, // [0:0] is the sub-list for extension extendee
-	0, // [0:0] is the sub-list for field type_name
+	0,  // 0: reva.admin.v1beta1.ListRoutesResponse.routes:type_name -> reva.admin.v1beta1.Route
+	1,  // 1: reva.admin.v1beta1.ResolvePathResponse.mounts:type_name -> reva.admin.v1beta1.Mount
+	0,  // 2: reva.admin.v1beta1.AddRouteResponse.route:type_name -> reva.admin.v1beta1.Route
+	2,  // 3: reva.admin.v1beta1.AddRouteResponse.stale:type_name -> reva.admin.v1beta1.StaleInstance
+	2,  // 4: reva.admin.v1beta1.RemoveRouteResponse.stale:type_name -> reva.admin.v1beta1.StaleInstance
+	3,  // 5: reva.admin.v1beta1.StorageAdmin.ListRoutes:input_type -> reva.admin.v1beta1.ListRoutesRequest
+	5,  // 6: reva.admin.v1beta1.StorageAdmin.ResolvePath:input_type -> reva.admin.v1beta1.ResolvePathRequest
+	7,  // 7: reva.admin.v1beta1.StorageAdmin.AddRoute:input_type -> reva.admin.v1beta1.AddRouteRequest
+	9,  // 8: reva.admin.v1beta1.StorageAdmin.RemoveRoute:input_type -> reva.admin.v1beta1.RemoveRouteRequest
+	4,  // 9: reva.admin.v1beta1.StorageAdmin.ListRoutes:output_type -> reva.admin.v1beta1.ListRoutesResponse
+	6,  // 10: reva.admin.v1beta1.StorageAdmin.ResolvePath:output_type -> reva.admin.v1beta1.ResolvePathResponse
+	8,  // 11: reva.admin.v1beta1.StorageAdmin.AddRoute:output_type -> reva.admin.v1beta1.AddRouteResponse
+	10, // 12: reva.admin.v1beta1.StorageAdmin.RemoveRoute:output_type -> reva.admin.v1beta1.RemoveRouteResponse
+	9,  // [9:13] is the sub-list for method output_type
+	5,  // [5:9] is the sub-list for method input_type
+	5,  // [5:5] is the sub-list for extension type_name
+	5,  // [5:5] is the sub-list for extension extendee
+	0,  // [0:5] is the sub-list for field type_name
 }
 
 func init() { file_storage_proto_init() }
@@ -63,18 +779,153 @@ func file_storage_proto_init() {
 	if File_storage_proto != nil {
 		return
 	}
+	if !protoimpl.UnsafeEnabled {
+		file_storage_proto_msgTypes[0].Exporter = func(v interface{}, i int) interface{} {
+			switch v := v.(*Route); i {
+			case 0:
+				return &v.state
+			case 1:
+				return &v.sizeCache
+			case 2:
+				return &v.unknownFields
+			default:
+				return nil
+			}
+		}
+		file_storage_proto_msgTypes[1].Exporter = func(v interface{}, i int) interface{} {
+			switch v := v.(*Mount); i {
+			case 0:
+				return &v.state
+			case 1:
+				return &v.sizeCache
+			case 2:
+				return &v.unknownFields
+			default:
+				return nil
+			}
+		}
+		file_storage_proto_msgTypes[2].Exporter = func(v interface{}, i int) interface{} {
+			switch v := v.(*StaleInstance); i {
+			case 0:
+				return &v.state
+			case 1:
+				return &v.sizeCache
+			case 2:
+				return &v.unknownFields
+			default:
+				return nil
+			}
+		}
+		file_storage_proto_msgTypes[3].Exporter = func(v interface{}, i int) interface{} {
+			switch v := v.(*ListRoutesRequest); i {
+			case 0:
+				return &v.state
+			case 1:
+				return &v.sizeCache
+			case 2:
+				return &v.unknownFields
+			default:
+				return nil
+			}
+		}
+		file_storage_proto_msgTypes[4].Exporter = func(v interface{}, i int) interface{} {
+			switch v := v.(*ListRoutesResponse); i {
+			case 0:
+				return &v.state
+			case 1:
+				return &v.sizeCache
+			case 2:
+				return &v.unknownFields
+			default:
+				return nil
+			}
+		}
+		file_storage_proto_msgTypes[5].Exporter = func(v interface{}, i int) interface{} {
+			switch v := v.(*ResolvePathRequest); i {
+			case 0:
+				return &v.state
+			case 1:
+				return &v.sizeCache
+			case 2:
+				return &v.unknownFields
+			default:
+				return nil
+			}
+		}
+		file_storage_proto_msgTypes[6].Exporter = func(v interface{}, i int) interface{} {
+			switch v := v.(*ResolvePathResponse); i {
+			case 0:
+				return &v.state
+			case 1:
+				return &v.sizeCache
+			case 2:
+				return &v.unknownFields
+			default:
+				return nil
+			}
+		}
+		file_storage_proto_msgTypes[7].Exporter = func(v interface{}, i int) interface{} {
+			switch v := v.(*AddRouteRequest); i {
+			case 0:
+				return &v.state
+			case 1:
+				return &v.sizeCache
+			case 2:
+				return &v.unknownFields
+			default:
+				return nil
+			}
+		}
+		file_storage_proto_msgTypes[8].Exporter = func(v interface{}, i int) interface{} {
+			switch v := v.(*AddRouteResponse); i {
+			case 0:
+				return &v.state
+			case 1:
+				return &v.sizeCache
+			case 2:
+				return &v.unknownFields
+			default:
+				return nil
+			}
+		}
+		file_storage_proto_msgTypes[9].Exporter = func(v interface{}, i int) interface{} {
+			switch v := v.(*RemoveRouteRequest); i {
+			case 0:
+				return &v.state
+			case 1:
+				return &v.sizeCache
+			case 2:
+				return &v.unknownFields
+			default:
+				return nil
+			}
+		}
+		file_storage_proto_msgTypes[10].Exporter = func(v interface{}, i int) interface{} {
+			switch v := v.(*RemoveRouteResponse); i {
+			case 0:
+				return &v.state
+			case 1:
+				return &v.sizeCache
+			case 2:
+				return &v.unknownFields
+			default:
+				return nil
+			}
+		}
+	}
 	type x struct{}
 	out := protoimpl.TypeBuilder{
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: file_storage_proto_rawDesc,
 			NumEnums:      0,
-			NumMessages:   0,
+			NumMessages:   11,
 			NumExtensions: 0,
 			NumServices:   1,
 		},
 		GoTypes:           file_storage_proto_goTypes,
 		DependencyIndexes: file_storage_proto_depIdxs,
+		MessageInfos:      file_storage_proto_msgTypes,
 	}.Build()
 	File_storage_proto = out.File
 	file_storage_proto_rawDesc = nil

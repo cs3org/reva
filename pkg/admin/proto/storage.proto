@@ -26,4 +26,82 @@ option go_package = "github.com/cs3org/reva/v3/pkg/admin/adminpb";
 // adds and removes them. A space quota is a property of the space, so it is on
 // SpacesAdmin. Every method needs the admin scope.
 service StorageAdmin {
+  // ListRoutes lists the routing table of the storage registry.
+  rpc ListRoutes(ListRoutesRequest) returns (ListRoutesResponse);
+  // ResolvePath shows the mounts that serve a path, as one storage registry
+  // instance resolves it, and the storage provider instances of each mount.
+  rpc ResolvePath(ResolvePathRequest) returns (ResolvePathResponse);
+  // AddRoute routes a path to a mount, or changes the mount of a routed path.
+  // The change is written once, then every storage registry instance reloads
+  // the table.
+  rpc AddRoute(AddRouteRequest) returns (AddRouteResponse);
+  // RemoveRoute removes the route of a path, then every storage registry
+  // instance reloads the table.
+  rpc RemoveRoute(RemoveRouteRequest) returns (RemoveRouteResponse);
+}
+
+// Route sends the paths under path to a mount.
+message Route {
+  string path = 1;
+  string mount_id = 2;
+}
+
+// Mount is a mount that serves a path.
+message Mount {
+  string mount_id = 1;
+  // mount_path is the namespace path that the mount serves.
+  string mount_path = 2;
+  // address is the provider address in the storage registry configuration.
+  string address = 3;
+  // provider_nodes are the ids of the live storage provider instances that
+  // advertise this mount_id. The registry knows only address, and an address
+  // can be a load balancer in front of several instances.
+  repeated string provider_nodes = 4;
+}
+
+// StaleInstance is a storage registry instance that did not reload the
+// routing table after a change. It serves the old table until it reloads.
+message StaleInstance {
+  string node = 1;
+  string error = 2;
+  // code is the gRPC code of error.
+  int32 code = 3;
+}
+
+message ListRoutesRequest {}
+
+message ListRoutesResponse {
+  repeated Route routes = 1;
+}
+
+message ResolvePathRequest {
+  string path = 1;
+}
+
+message ResolvePathResponse {
+  string path = 1;
+  repeated Mount mounts = 2;
+}
+
+message AddRouteRequest {
+  string path = 1;
+  string mount_id = 2;
+}
+
+// AddRouteResponse is sent when the change is written. If stale is not
+// empty, these instances did not apply it.
+message AddRouteResponse {
+  Route route = 1;
+  repeated StaleInstance stale = 2;
+}
+
+message RemoveRouteRequest {
+  string path = 1;
+}
+
+// RemoveRouteResponse is sent when the change is written. If stale is not
+// empty, these instances did not apply it.
+message RemoveRouteResponse {
+  string path = 1;
+  repeated StaleInstance stale = 2;
 }
