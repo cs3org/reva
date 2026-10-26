@@ -641,6 +641,15 @@ Every mutation logs an audit event `action=spacesregistry.<name>` with
 `target=project:<name or id>`. Only the `sql` driver has what these
 invocations need.
 
+The typed `SpacesAdmin` service ([`spaces.go`](spaces.go)) calls these
+invocations. After a change of the catalogue, it runs `flush_cache` on every
+instance, and logs `action=spaces.<invocation>` with `target=space:<ref>`. If
+the flush fails on an instance, the change stays done: the audit line has
+`flush_cache=<error>`, and that instance shows the old list until its cache
+expires. A `SpaceRef` by path selects the space with the deepest root that holds
+the path. The catalogue has no index on the path, so this reads the whole list.
+A space that is not in the catalogue, a personal space for example, is NotFound.
+
 ## Routing
 
 The `dynamic` storage registry reads its routing table (the `routing` SQL

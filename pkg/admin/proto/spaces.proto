@@ -20,10 +20,154 @@ syntax = "proto3";
 
 package reva.admin.v1beta1;
 
+import "cs3/storage/provider/v1beta1/resources.proto";
+import "google/protobuf/timestamp.proto";
+import "types.proto";
+
 option go_package = "github.com/cs3org/reva/v3/pkg/admin/adminpb";
 
 // SpacesAdmin is the operator surface for storage spaces of any owner: the
 // fleet-wide list, the space catalogue, the status and the owner of a space,
 // and space quotas. Every method needs the admin scope.
+//
+// The catalogue is the spacesregistry. It has only project spaces today. A
+// space that is not in the catalogue is NotFound, also when it exists on the
+// storage.
 service SpacesAdmin {
+  // ListSpaces streams the spaces of the catalogue, of every owner.
+  rpc ListSpaces(ListSpacesRequest) returns (stream AdminSpace);
+  // GetSpace returns one space, archived or not. The CLI uses it to find out
+  // if a space that the user plane did not find exists.
+  rpc GetSpace(GetSpaceRequest) returns (AdminSpace);
+  // UpdateSpace changes the description, the readme or the thumbnail of a
+  // space. The change is made on the server as the owner of the space, with
+  // the checks of a user call. It is the server side of the owner fallback.
+  rpc UpdateSpace(UpdateSpaceRequest) returns (AdminSpace);
+  rpc SetSpaceStatus(SetSpaceStatusRequest) returns (AdminSpace);
+  rpc SetSpaceOwner(SetSpaceOwnerRequest) returns (AdminSpace);
+  // RegisterSpace adds to the catalogue a space that the storage already
+  // serves. It does not provision the space. Dangerous.
+  rpc RegisterSpace(RegisterSpaceRequest) returns (AdminSpace);
+  // UnregisterSpace removes a space from the catalogue. It does not touch the
+  // data. Dangerous.
+  rpc UnregisterSpace(UnregisterSpaceRequest) returns (AdminSpace);
+  // CheckSpaces streams the spaces that have a problem, with their findings.
+  rpc CheckSpaces(CheckSpacesRequest) returns (stream SpaceCheck);
+
+  // Reserved for the profiles of heterogeneous spaces (phase 2):
+  //   rpc ListProfiles(ListProfilesRequest) returns (stream Profile);
+  //   rpc GetProfile(GetProfileRequest) returns (Profile);
+  //   rpc ValidateProfiles(ValidateProfilesRequest) returns (ValidateProfilesResponse);
+  //   rpc GetProfileUsage(GetProfileUsageRequest) returns (GetProfileUsageResponse);
+  //   rpc ExplainCapabilities(ExplainCapabilitiesRequest) returns (ExplainCapabilitiesResponse);
+  //   rpc SetSpaceProfile(SetSpaceProfileRequest) returns (AdminSpace);
+}
+
+// AdminSpace is a space as an operator sees it. The path is in
+// space.root_info.path, and the role groups are in space.roles.
+message AdminSpace {
+  cs3.storage.provider.v1beta1.StorageSpace space = 1;
+  // status is the status of the space in the catalogue: creating, active,
+  // archiving or archived.
+  string status = 2;
+  // profile is the profile of a heterogeneous space. It is empty until the
+  // catalogue stores profiles.
+  string profile = 3;
+  // extra holds the catalogue columns that CS3 cannot carry, for example
+  // created_at and archived_at (RFC 3339) of the sql driver.
+  map<string, string> extra = 4;
+}
+
+// ListSpacesRequest selects spaces. An empty field does not filter.
+message ListSpacesRequest {
+  // type is the space type, for example project.
+  string type = 1;
+  // owner is the username of the owner.
+  string owner = 2;
+  // member keeps the spaces that this user owns or can access through a
+  // role group.
+  string member = 3;
+  string status = 4;
+  string profile = 5;
+  google.protobuf.Timestamp created_after = 6;
+  google.protobuf.Timestamp created_before = 7;
+  bool include_archived = 8;
+}
+
+message GetSpaceRequest {
+  SpaceRef ref = 1;
+}
+
+// UpdateSpaceRequest changes only the fields that are set.
+message UpdateSpaceRequest {
+  SpaceRef ref = 1;
+  optional string description = 2;
+  // readme is the path of the readme.
+  optional string readme = 3;
+  // thumbnail is the path of the thumbnail.
+  optional string thumbnail = 4;
+  // fallback tells the audit that the CLI used admin rights after the user
+  // plane did not find the space.
+  bool fallback = 5;
+}
+
+message SetSpaceStatusRequest {
+  SpaceRef ref = 1;
+  // status is creating, active, archiving or archived.
+  string status = 2;
+}
+
+message SetSpaceOwnerRequest {
+  SpaceRef ref = 1;
+  // owner is the username of the new owner.
+  string owner = 2;
+}
+
+// RegisterSpaceRequest is a space to add to the catalogue. The catalogue can
+// fill an empty field from its configuration, or refuse the request.
+message RegisterSpaceRequest {
+  string name = 1;
+  // owner is the username of the owner.
+  string owner = 2;
+  string path = 3;
+  string storage_id = 4;
+  // space_id is derived from the path if it is empty.
+  string space_id = 5;
+  // readers, writers and admins are the groups of the roles.
+  string readers = 6;
+  string writers = 7;
+  string admins = 8;
+  string description = 9;
+  // status is active if it is empty.
+  string status = 10;
+}
+
+message UnregisterSpaceRequest {
+  SpaceRef ref = 1;
+  // hard removes the record. Without it, the record is soft-deleted and
+  // keeps its name and its space id taken.
+  bool hard = 2;
+}
+
+// CheckSpacesRequest selects the spaces to check. An empty field does not
+// filter.
+message CheckSpacesRequest {
+  string status = 1;
+  // owner is the username of the owner.
+  string owner = 2;
+}
+
+// SpaceCheck is a space that has a problem.
+message SpaceCheck {
+  AdminSpace space = 1;
+  repeated SpaceFinding findings = 2;
+}
+
+// SpaceFinding is one problem of a space.
+message SpaceFinding {
+  // kind is for example owner_missing, owner_expiring, owner_blocked,
+  // path_missing, group_unset, group_missing, no_members, or <what>_error
+  // when a call failed.
+  string kind = 1;
+  string detail = 2;
 }
