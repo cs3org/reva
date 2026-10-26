@@ -22,6 +22,7 @@ package revacmd
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -30,6 +31,7 @@ import (
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	"github.com/cs3org/reva/v3/cmd/reva/admin"
 	"github.com/cs3org/reva/v3/pkg/cli"
+	"github.com/cs3org/reva/v3/pkg/cli/brand"
 	"github.com/cs3org/reva/v3/pkg/rversion"
 	"github.com/spf13/cobra"
 	"google.golang.org/grpc/status"
@@ -50,11 +52,19 @@ var mutating = []string{
 }
 
 // Option changes the program that Main and NewRoot build.
-//
-// TODO(T40): WithBrand.
 type Option func(*options)
 
-type options struct{}
+type options struct {
+	brand *brand.Brand
+}
+
+func newOptions(opts []Option) options {
+	var o options
+	for _, opt := range opts {
+		opt(&o)
+	}
+	return o
+}
 
 // Main runs the CLI with the args of the process, and exits.
 func Main(opts ...Option) {
@@ -64,18 +74,30 @@ func Main(opts ...Option) {
 // NewRoot returns the command tree: the core commands and the command
 // plugins that are compiled in. CheckPlugins tells which plugins it refused.
 func NewRoot(opts ...Option) *cobra.Command {
-	return rootCommand(&cli.Runtime{}, new(bool), opts...)
+	return rootCommand(cli.NewRuntime(newOptions(opts).brand), new(bool))
 }
 
 // run runs the command line args and returns the exit code: 2 for a usage
 // error, 1 for any other error.
 func run(args []string, opts ...Option) int {
-	rt := &cli.Runtime{}
+	o := newOptions(opts)
+	if len(args) == 1 && args[0] == brandCheckArg {
+		b := o.brand
+		if b == nil {
+			b = brand.Reva()
+		}
+		if err := errors.Join(CheckBrand(b), CheckPlugins(NewRoot(opts...))); err != nil {
+			fmt.Fprintln(os.Stderr, err)
+			return 1
+		}
+		return 0
+	}
+	rt := cli.NewRuntime(o.brand)
 	// started is set when the command itself runs. An error before that comes
 	// from cobra (unknown command, bad flag, wrong arguments) or from the
 	// choice of the plane: a usage error.
 	started := false
-	root := rootCommand(rt, &started, opts...)
+	root := rootCommand(rt, &started)
 	for _, line := range refusedPlugins(root) {
 		fmt.Fprintf(os.Stderr, "%s: %s\n", root.Name(), line)
 	}
@@ -97,26 +119,25 @@ func run(args []string, opts ...Option) int {
 		fmt.Fprintf(os.Stderr, "  grpc code=%s details=%v\n", s.Code(), s.Details())
 	}
 	if !started {
-		fmt.Fprintln(os.Stderr, "Run 'reva --help' for usage.")
+		fmt.Fprintf(os.Stderr, "Run '%s --help' for usage.\n", root.Name())
 		return 2
 	}
 	return 1
 }
 
-func rootCommand(rt *cli.Runtime, started *bool, opts ...Option) *cobra.Command {
-	var o options
-	for _, opt := range opts {
-		opt(&o)
-	}
+func rootCommand(rt *cli.Runtime, started *bool) *cobra.Command {
 	// A plugin with its own PersistentPreRunE must not replace the hook of
 	// the root, which loads the settings.
 	cobra.EnableTraverseRunHooks = true
 	root := &cobra.Command{
-		Use:           "reva",
-		Short:         "Command line client for the reva gateway",
+		Use:           rt.Name(),
 		SilenceUsage:  true,
 		SilenceErrors: true,
 		PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
+			// Help must work with a broken config file.
+			if cmd.Annotations[helpAnnotation] != "" {
+				return nil
+			}
 			// cobra checks the required flags only after this hook, so check them
 			// here to report them as usage errors.
 			if err := cmd.ValidateRequiredFlags(); err != nil {
@@ -170,7 +191,7 @@ func rootCommand(rt *cli.Runtime, started *bool, opts ...Option) *cobra.Command 
 	)
 	for _, p := range mutating {
 		c, _, err := root.Find(strings.Fields(p))
-		if err != nil || c.CommandPath() != "reva "+p {
+		if err != nil || c.CommandPath() != root.Name()+" "+p {
 			panic("reva: no command " + p)
 		}
 		cli.Mutates(c)
@@ -178,8 +199,10 @@ func rootCommand(rt *cli.Runtime, started *bool, opts ...Option) *cobra.Command 
 	root.SetHelpCommandGroupID("session")
 	root.CompletionOptions.DisableDefaultCmd = true
 	cli.OperatorHelp(root)
+	helpTemplate(root)
 	colorHelp(root)
 	attachPlugins(rt, root)
+	applyBrand(rt, root)
 	return root
 }
 
@@ -189,6 +212,7 @@ type versionResult struct {
 	GoVersion string      `json:"go_version"`
 	BuildDate string      `json:"build_date"`
 	Brand     string      `json:"brand,omitempty"`
+	BrandSum  string      `json:"brand_sha256,omitempty"`
 	Plugins   []pluginRow `json:"plugins,omitempty"`
 }
 
@@ -201,8 +225,7 @@ func versionCommand(rt *cli.Runtime) *cobra.Command {
 		RunE: func(cmd *cobra.Command, args []string) error {
 			v := versionResult{Version: version, Commit: gitCommit, GoVersion: goVersion, BuildDate: buildDate}
 			if plugins {
-				// TODO(T40): the name of the brand file.
-				v.Brand = cmd.Root().Name()
+				v.Brand, v.BrandSum = rt.Brand().Name(), rt.Brand().Sum()
 				v.Plugins = compiledPlugins()
 			}
 			return rt.Print(cmd.OutOrStdout(), v, func(w io.Writer) {
@@ -210,7 +233,7 @@ func versionCommand(rt *cli.Runtime) *cobra.Command {
 				if !plugins {
 					return
 				}
-				fmt.Fprintf(w, "brand=%s\n", v.Brand)
+				fmt.Fprintf(w, "brand=%s sha256=%s\n", v.Brand, v.BrandSum)
 				if len(v.Plugins) == 0 {
 					fmt.Fprintln(w, "no CLI plugins")
 					return
