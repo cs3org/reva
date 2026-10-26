@@ -96,6 +96,30 @@ type Registry interface {
 	GetHome(ctx context.Context) (*registry.ProviderInfo, error)
 }
 
+// Route is one entry of a routing table: the mount that serves a path.
+type Route struct {
+	Path    string `json:"path"`
+	MountID string `json:"mount_id"`
+}
+
+// Mount is a mount that serves a path, with the address of its provider.
+type Mount struct {
+	MountID   string `json:"mount_id"`
+	MountPath string `json:"mount_path"`
+	Address   string `json:"address"`
+}
+
+// RouteAdmin is implemented by a Registry that has a routing table an
+// operator can change at run time. AddRoute and RemoveRoute change only the
+// table: Reload applies it, and each instance must reload.
+type RouteAdmin interface {
+	ListRoutes(ctx context.Context) ([]Route, error)
+	ResolvePath(ctx context.Context, path string) ([]Mount, error)
+	AddRoute(ctx context.Context, path, mountID string) error
+	RemoveRoute(ctx context.Context, path string) error
+	Reload(ctx context.Context) error
+}
+
 // PathWrapper is the interface to implement for path transformations.
 type PathWrapper interface {
 	Unwrap(ctx context.Context, rp string) (string, error)
