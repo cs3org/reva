@@ -203,7 +203,13 @@ mutually isolated from user scopes (see
 - An **admin-scoped token** satisfies Admin API and control requests and
   *nothing else* — the storage/share verifiers do not recognize admin messages.
 - A **user-scoped token** can never satisfy an admin request — the always-true
-  user scope is guarded by `isAdminResource`.
+  user scope is guarded by `isAdminResource`. The machine scope declines admin
+  requests in the same way.
+- The decision is on the **gRPC method**, not on the request message: every
+  method of the `reva.admin.v1beta1` and `reva.control.v1beta1` packages needs
+  the admin scope, except `RequestAdmin` and `CheckAdmin`. A typed admin RPC can
+  take a CS3 request message, which the user and lightweight scopes accept, so
+  the message cannot decide. A new admin service needs no change to the scopes.
 
 Getting an admin token is a deliberate step-up:
 
@@ -409,6 +415,53 @@ channel — the admin↔runner transport, never a user-facing surface. Caveats:
 `all-nodes` periodic jobs never touch the store so they have no `runs` history
 but *do* show in `list`/`active`; and `failed` is not terminal — the framework
 retries.
+
+## Typed services
+
+The Admin API has two layers:
+
+- **Invocations** (`Invoke`, `InvokeStream`): any operation that a service
+  exposes in its `invoke.Set`, reached by a selector. The arguments are strings
+  and the result is JSON. They need no proto change, so a service, a driver or a
+  plugin can add one.
+- **Typed services**, in their own proto files of the `reva.admin.v1beta1`
+  package: `AdminAPI` (`admin.proto`), `SpacesAdmin` (`spaces.proto`),
+  `SharesAdmin` (`shares.proto`) and `StorageAdmin` (`storage.proto`), with the
+  shared messages in `types.proto`. A typed RPC is a facade over the invocations
+  of the owning service, like the jobs RPCs: the admin service resolves the
+  instances, runs the invocation over the control channel and decodes the result
+  into its message. The helpers are in [`facade.go`](facade.go): `invokeOne` (one
+  picked instance), `invokeAll` (every instance), `relayStream` (an
+  `InvokeStream` relayed into a typed server stream) and `decode` (protojson into
+  an `adminpb` message).
+
+An operation gets a typed RPC when it is generic and a user cannot do it on the
+user plane: a fleet-wide view (any owner, orphans, every space), an operation on
+someone else's resource (the owner fallback of the CLI), a field that CS3 does
+not carry, an operation that no owner can do (a transfer, a database-only
+removal), operator-only state (routes, space quotas, the space catalogue), or
+an orchestration over many instances (a reload or a cache flush on each one).
+Everything else stays an invocation: deployment-specific operations (for
+example CERN's), and the built-ins.
+
+Rules for a typed RPC:
+
+- A resource message wraps the CS3 message of the same resource, and adds only
+  what CS3 cannot carry, with an optional `map<string, string> extra` for the
+  attributes of a driver or a deployment. It never carries a secret.
+- A list is a server stream.
+- The invocation returns the protojson of the message: `invoke.ProtoResult`.
+- An invocation error has a gRPC code: return `invoke.Error{Code, Message}` or a
+  `status.Error`. The control channel sends the code (`code` in the control and
+  admin results), and the typed RPC answers with it. NotFound must mean that the
+  resource does not exist: the CLI reads it so. A service that is not live is
+  Unavailable.
+- Register the service in `register` ([`services.go`](services.go)), which both
+  the gRPC listener and the local socket use.
+
+The protos import CS3 messages. `make protobuf` needs a checkout of
+[cs3apis](https://github.com/cs3org/cs3apis) in `CS3APIS_DIR` (default
+`../cs3apis`).
 
 ## Adding an invocation to a service (for developers)
 

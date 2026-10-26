@@ -54,19 +54,7 @@ func (s *svc) InvokeStream(req *adminpb.InvokeRequest, stream adminpb.AdminAPI_I
 	admin.Audit(ctx, admin.AuditEvent{Action: "invoke-stream", Actor: actorName(ctx), Target: req.Service,
 		Fields: map[string]string{"invocation": req.Invocation, "selector": req.Service, "instances": strconv.Itoa(len(groups))}})
 
-	// One goroutine per routed group feeds a shared channel, closed when all
-	// are done.
-	items := make(chan *adminpb.InvokeStreamResponse)
-	var wg sync.WaitGroup
-	for _, g := range groups {
-		wg.Add(1)
-		go func(g []client.Endpoint) {
-			defer wg.Done()
-			streamUpstream(ctx, client.Pick(ctx, g), req.Invocation, req.Args, items)
-		}(g)
-	}
-	go func() { wg.Wait(); close(items) }()
-
+	items := streamAll(ctx, groups, req.Invocation, req.Args)
 	for {
 		select {
 		case <-ctx.Done():
@@ -82,6 +70,20 @@ func (s *svc) InvokeStream(req *adminpb.InvokeRequest, stream adminpb.AdminAPI_I
 	}
 }
 
+// streamAll opens a stream to one endpoint of each routed group and merges
+// their items into one channel, closed when every upstream has ended.
+func streamAll(ctx context.Context, groups [][]client.Endpoint, invocation string, args map[string]string) <-chan *adminpb.InvokeStreamResponse {
+	items := make(chan *adminpb.InvokeStreamResponse)
+	var wg sync.WaitGroup
+	for _, g := range groups {
+		wg.Go(func() {
+			streamUpstream(ctx, client.Pick(ctx, g), invocation, args, items)
+		})
+	}
+	go func() { wg.Wait(); close(items) }()
+	return items
+}
+
 // streamUpstream forwards one endpoint's stream, node-labelled, into items. An
 // unreachable endpoint yields a single per-node error item rather than failing
 // the whole fan-in.
@@ -95,17 +97,17 @@ func streamUpstream(ctx context.Context, ep client.Endpoint, invocation string, 
 		}
 	}
 	if ep.Err != "" {
-		send(&adminpb.InvokeStreamResponse{Node: ep.Node, Error: ep.Err})
+		send(&adminpb.InvokeStreamResponse{Node: ep.Node, Error: ep.Err, Code: int32(codes.Unavailable)})
 		return
 	}
 	cli, err := client.ControlClientAt(ep.Addr)
 	if err != nil {
-		send(&adminpb.InvokeStreamResponse{Node: ep.Node, Error: err.Error()})
+		send(&adminpb.InvokeStreamResponse{Node: ep.Node, Error: err.Error(), Code: int32(codes.Unavailable)})
 		return
 	}
 	up, err := cli.InvokeStream(ctx, &controlpb.InvokeRequest{Target: ep.Target, Invocation: invocation, Args: args})
 	if err != nil {
-		send(&adminpb.InvokeStreamResponse{Node: ep.Node, Error: err.Error()})
+		send(&adminpb.InvokeStreamResponse{Node: ep.Node, Error: err.Error(), Code: int32(status.Code(err))})
 		return
 	}
 	for {
@@ -116,11 +118,11 @@ func streamUpstream(ctx context.Context, ep client.Endpoint, invocation string, 
 		if err != nil {
 			// A cancelled client is a clean stop, not an error worth surfacing.
 			if ctx.Err() == nil {
-				send(&adminpb.InvokeStreamResponse{Node: ep.Node, Error: err.Error()})
+				send(&adminpb.InvokeStreamResponse{Node: ep.Node, Error: err.Error(), Code: int32(status.Code(err))})
 			}
 			return
 		}
-		if !send(&adminpb.InvokeStreamResponse{Node: ep.Node, ResultJson: msg.ResultJson, Error: msg.Error}) {
+		if !send(&adminpb.InvokeStreamResponse{Node: ep.Node, ResultJson: msg.ResultJson, Error: msg.Error, Code: msg.Code}) {
 			return
 		}
 	}

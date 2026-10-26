@@ -138,8 +138,15 @@ func (i *interceptor) unary(unprotected []string) grpc.UnaryServerInterceptor {
 			return nil, status.Errorf(codes.Unauthenticated, "auth: core access token not found")
 		}
 
+		// An admin method is scoped by its name, not by its request message: a
+		// typed admin RPC can take a CS3 request, which user scopes accept.
+		resource := req
+		if scope.IsAdminMethod(info.FullMethod) {
+			resource = scope.MethodResource(info.FullMethod)
+		}
+
 		// scopes, validate the token and ensure access to the resource is allowed
-		u, scopes, err := i.dismantleToken(ctx, tkn, req, false)
+		u, scopes, err := i.dismantleToken(ctx, tkn, resource, false)
 		if err != nil {
 			return nil, tokenError(ctx, err)
 		}

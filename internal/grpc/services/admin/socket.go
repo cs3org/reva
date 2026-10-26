@@ -30,7 +30,6 @@ import (
 
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	"github.com/cs3org/reva/v3/pkg/admin"
-	"github.com/cs3org/reva/v3/pkg/admin/adminpb"
 	"github.com/cs3org/reva/v3/pkg/appctx"
 	"github.com/cs3org/reva/v3/pkg/auth/scope"
 	"google.golang.org/grpc"
@@ -126,7 +125,7 @@ func (s *svc) startSocket() error {
 			grpc.UnaryInterceptor(s.localRootUnary),
 			grpc.StreamInterceptor(s.localRootStream),
 		)
-		adminpb.RegisterAdminAPIServer(srv, s)
+		s.register(srv)
 		s.socketServer = srv
 		go func() { _ = srv.Serve(ln) }()
 		if s.logger != nil {

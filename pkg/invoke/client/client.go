@@ -37,7 +37,9 @@ import (
 	"github.com/cs3org/reva/v3/pkg/registry"
 	"github.com/cs3org/reva/v3/pkg/service"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/connectivity"
+	"google.golang.org/grpc/status"
 )
 
 // Endpoint is one resolved invocation target: the node id to report, the
@@ -54,11 +56,13 @@ type Endpoint struct {
 	Shared   []string
 }
 
-// NodeResult is the outcome of one peer invocation.
+// NodeResult is the outcome of one peer invocation. Code is the gRPC code of
+// Error, 0 if the node did not send one.
 type NodeResult struct {
 	Node       string
 	ResultJSON string
 	Error      string
+	Code       codes.Code
 }
 
 // PerNodeTimeout bounds a single peer invocation so one slow or offline
@@ -218,19 +222,19 @@ func connReady(ctx context.Context, addr string) bool {
 // InvokeOne runs a single peer invocation with a bounded timeout.
 func InvokeOne(ctx context.Context, ep Endpoint, invocation string, args map[string]string) NodeResult {
 	if ep.Err != "" {
-		return NodeResult{Node: ep.Node, Error: ep.Err}
+		return NodeResult{Node: ep.Node, Error: ep.Err, Code: codes.Unavailable}
 	}
 	cli, err := ControlClientAt(ep.Addr)
 	if err != nil {
-		return NodeResult{Node: ep.Node, Error: err.Error()}
+		return NodeResult{Node: ep.Node, Error: err.Error(), Code: codes.Unavailable}
 	}
 	cctx, cancel := context.WithTimeout(ctx, PerNodeTimeout)
 	defer cancel()
 	resp, err := cli.Invoke(cctx, &controlpb.InvokeRequest{Target: ep.Target, Invocation: invocation, Args: args})
 	if err != nil {
-		return NodeResult{Node: ep.Node, Error: err.Error()}
+		return NodeResult{Node: ep.Node, Error: err.Error(), Code: status.Code(err)}
 	}
-	return NodeResult{Node: ep.Node, ResultJSON: resp.ResultJson, Error: resp.Error}
+	return NodeResult{Node: ep.Node, ResultJSON: resp.ResultJson, Error: resp.Error, Code: codes.Code(resp.Code)}
 }
 
 // EndpointFor builds the endpoint dialing a node's control channel,

@@ -208,6 +208,8 @@ message NodeResult {
   string result_json = 2;
   // error is set (per node) when the invocation failed on that node.
   string error = 3;
+  // code is the gRPC code of error, as in reva.control.v1beta1.InvokeResponse.
+  int32 code = 4;
 }
 
 message InvokeResponse {
@@ -219,6 +221,8 @@ message InvokeStreamResponse {
   string node = 1;
   string result_json = 2;
   string error = 3;
+  // code is the gRPC code of error, as in reva.control.v1beta1.InvokeResponse.
+  int32 code = 4;
 }
 
 // ----- Jobs -----
