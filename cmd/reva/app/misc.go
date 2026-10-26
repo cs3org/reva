@@ -16,7 +16,7 @@
 // granted to it by virtue of its status as an Intergovernmental Organization
 // or submit itself to any jurisdiction.
 
-package main
+package revacmd
 
 import (
 	"bufio"
@@ -38,6 +38,7 @@ import (
 	link "github.com/cs3org/go-cs3apis/cs3/sharing/link/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	types "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
+	"github.com/cs3org/reva/v3/internal/cli/state"
 	"github.com/cs3org/reva/v3/pkg/auth/scope"
 	"github.com/cs3org/reva/v3/pkg/cli"
 	"github.com/cs3org/reva/v3/pkg/utils"
@@ -93,26 +94,26 @@ func loginCommand(rt *cli.Runtime) *cobra.Command {
 
 			var user, secret string
 			var err error
-			if rt.AppTokenFile != "" {
+			if rt.AppTokenFile() != "" {
 				if !cmd.Flags().Changed("method") {
 					method = "appauth"
 				}
-				b, err := os.ReadFile(rt.AppTokenFile)
+				b, err := os.ReadFile(rt.AppTokenFile())
 				if err != nil {
 					return err
 				}
-				if rt.User == "" {
+				if rt.User() == "" {
 					return errors.New("an app token needs a user name: pass --user")
 				}
-				user, secret = rt.User, strings.TrimSpace(string(b))
-			} else if user, secret, err = readCredentials(cmd, rt.User); err != nil {
+				user, secret = rt.User(), strings.TrimSpace(string(b))
+			} else if user, secret, err = readCredentials(cmd, rt.User()); err != nil {
 				return err
 			}
 			token, err := rt.Authenticate(cmd.Context(), method, user, secret)
 			if err != nil {
 				return err
 			}
-			if err := rt.SetToken(token); err != nil {
+			if err := state.SetToken(token); err != nil {
 				return err
 			}
 			rt.Msg(cmd.ErrOrStderr(), "Signed in as %s using %s.", user, method)
@@ -149,7 +150,7 @@ func logoutCommand(rt *cli.Runtime) *cobra.Command {
 		Long:  "Forget the stored login token and the admin token of 'reva elevate'.",
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			if err := cli.ClearTokens(); err != nil {
+			if err := state.ClearTokens(); err != nil {
 				return err
 			}
 			rt.Msg(cmd.ErrOrStderr(), "Signed out.")
@@ -177,9 +178,9 @@ func statusCommand(rt *cli.Runtime) *cobra.Command {
 			"token are kept. Run this first when something does not work.",
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			st := statusResult{Gateway: rt.GatewayAddr, AdminHost: rt.AdminHost, Version: version}
-			st.Config, _ = cli.ConfigPath()
-			st.TokenFile, _ = cli.TokenPath()
+			st := statusResult{Gateway: rt.GatewayAddr(), AdminHost: rt.AdminHost(), Version: version}
+			st.Config, _ = state.ConfigPath()
+			st.TokenFile, _ = state.TokenPath()
 			user, exp, err := whoami(cmd.Context(), rt)
 			if err != nil {
 				st.Error = err.Error()
@@ -278,7 +279,7 @@ func whoamiCommand(rt *cli.Runtime) *cobra.Command {
 			}
 			return rt.Print(cmd.OutOrStdout(), user, func(w io.Writer) {
 				fmt.Fprintln(w, user)
-				if rt.As != "" {
+				if rt.As() != "" {
 					fmt.Fprintf(w, "as: %s (impersonated)\n", user.GetUsername())
 				}
 				fmt.Fprintf(w, "admin: %s\n", rt.AdminState(cmd.Context()))
@@ -297,7 +298,7 @@ func configCommand(rt *cli.Runtime) *cobra.Command {
 			Args:      cobra.ExactArgs(2),
 			ValidArgs: keys,
 			RunE: func(cmd *cobra.Command, args []string) error {
-				c, err := cli.ReadConfig()
+				c, err := state.ReadConfig()
 				if err != nil {
 					return err
 				}
@@ -311,7 +312,7 @@ func configCommand(rt *cli.Runtime) *cobra.Command {
 				default:
 					return fmt.Errorf("unknown key %q: use one of %s", args[0], strings.Join(keys, ", "))
 				}
-				return cli.WriteConfig(c)
+				return state.WriteConfig(c)
 			},
 		},
 		&cobra.Command{
@@ -319,11 +320,11 @@ func configCommand(rt *cli.Runtime) *cobra.Command {
 			Short: "Show the stored settings and where they are",
 			Args:  cobra.NoArgs,
 			RunE: func(cmd *cobra.Command, args []string) error {
-				c, err := cli.ReadConfig()
+				c, err := state.ReadConfig()
 				if err != nil {
 					return err
 				}
-				p, err := cli.ConfigPath()
+				p, err := state.ConfigPath()
 				if err != nil {
 					return err
 				}

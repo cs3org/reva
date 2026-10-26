@@ -59,9 +59,9 @@ func traceCommand() *cobra.Command {
 			// Fan out to every instance in the fleet; each returns its own service's
 			// matching lines, so the merged result is the request's full path.
 			if follow {
-				return followLogs(ctx, client, "*", args, rt.Output, true)
+				return followLogs(ctx, client, "*", args, rt.Output(), true)
 			}
-			return snapshotLogs(ctx, client, "*", args, rt.Output, true)
+			return snapshotLogs(ctx, client, "*", args, rt.Output(), true)
 		},
 	}
 	cmd.Flags().StringVar(&user, "user", "", "trace by username instead of trace id")

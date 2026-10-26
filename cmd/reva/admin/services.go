@@ -71,7 +71,7 @@ func serviceCommand() *cobra.Command {
 			}
 			rows = filterByState(rows, stateFilter)
 			switch {
-			case rt.Output == "json":
+			case rt.Output() == "json":
 				return renderJSON(rows)
 			case verbose:
 				renderNodeTable(rows, wide)

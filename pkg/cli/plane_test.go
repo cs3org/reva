@@ -69,11 +69,11 @@ func TestSelectPlane(t *testing.T) {
 		owner   string
 		wantErr string
 	}{
-		{name: "as with a user command", rt: Runtime{As: "bob"}},
-		{name: "as with an operator command", rt: Runtime{As: "bob"}, admin: true, wantErr: "`reva route add`"},
-		{name: "as with an operator option", rt: Runtime{As: "bob"}, owner: "alice", wantErr: "--owner"},
-		{name: "reason not ascii", rt: Runtime{Reason: "ticket\n42"}, admin: true, wantErr: "--reason"},
-		{name: "reason", rt: Runtime{Reason: "INC0042"}, admin: true},
+		{name: "as with a user command", rt: Runtime{as: "bob"}},
+		{name: "as with an operator command", rt: Runtime{as: "bob"}, admin: true, wantErr: "`reva route add`"},
+		{name: "as with an operator option", rt: Runtime{as: "bob"}, owner: "alice", wantErr: "--owner"},
+		{name: "reason not ascii", rt: Runtime{reason: "ticket\n42"}, admin: true, wantErr: "--reason"},
+		{name: "reason", rt: Runtime{reason: "INC0042"}, admin: true},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			_, routeAdd, shareList := tree()

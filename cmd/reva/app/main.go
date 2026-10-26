@@ -16,7 +16,9 @@
 // granted to it by virtue of its status as an Intergovernmental Organization
 // or submit itself to any jurisdiction.
 
-package main
+// Package revacmd is the reva CLI: the core commands and Main. cmd/reva
+// calls Main.
+package revacmd
 
 import (
 	"context"
@@ -27,11 +29,13 @@ import (
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	"github.com/cs3org/reva/v3/cmd/reva/admin"
 	"github.com/cs3org/reva/v3/pkg/cli"
+	"github.com/cs3org/reva/v3/pkg/rversion"
 	"github.com/spf13/cobra"
 	"google.golang.org/grpc/status"
 )
 
-var gitCommit, buildDate, version, goVersion string
+// The build sets the version in pkg/rversion, the same for reva and revad.
+var gitCommit, buildDate, version, goVersion = rversion.GitCommit, rversion.BuildDate, rversion.Version, rversion.GoVersion
 
 // mutating are the commands that change data. Under --as they ask for a
 // confirmation. cp asks only for an upload, in the command itself.
@@ -44,19 +48,32 @@ var mutating = []string{
 	"token create", "token revoke", "preferences set",
 }
 
-func main() {
-	os.Exit(run(os.Args[1:]))
+// Option changes the program that Main and NewRoot build.
+//
+// TODO(T40): WithBrand.
+type Option func(*options)
+
+type options struct{}
+
+// Main runs the CLI with the args of the process, and exits.
+func Main(opts ...Option) {
+	os.Exit(run(os.Args[1:], opts...))
+}
+
+// NewRoot returns the command tree.
+func NewRoot(opts ...Option) *cobra.Command {
+	return rootCommand(&cli.Runtime{}, new(bool), opts...)
 }
 
 // run runs the command line args and returns the exit code: 2 for a usage
 // error, 1 for any other error.
-func run(args []string) int {
+func run(args []string, opts ...Option) int {
 	rt := &cli.Runtime{}
 	// started is set when the command itself runs. An error before that comes
 	// from cobra (unknown command, bad flag, wrong arguments) or from the
 	// choice of the plane: a usage error.
 	started := false
-	root := rootCommand(rt, &started)
+	root := rootCommand(rt, &started, opts...)
 	root.SetArgs(args)
 	err := root.Execute()
 	if err == nil {
@@ -71,7 +88,7 @@ func run(args []string) int {
 		prefix = errorColor.Sprint(prefix)
 	}
 	fmt.Fprintln(os.Stderr, prefix, err)
-	if s, ok := status.FromError(err); ok && rt.Debug {
+	if s, ok := status.FromError(err); ok && rt.Debug() {
 		fmt.Fprintf(os.Stderr, "  grpc code=%s details=%v\n", s.Code(), s.Details())
 	}
 	if !started {
@@ -81,7 +98,11 @@ func run(args []string) int {
 	return 1
 }
 
-func rootCommand(rt *cli.Runtime, started *bool) *cobra.Command {
+func rootCommand(rt *cli.Runtime, started *bool, opts ...Option) *cobra.Command {
+	var o options
+	for _, opt := range opts {
+		opt(&o)
+	}
 	root := &cobra.Command{
 		Use:           "reva",
 		Short:         "Command line client for the reva gateway",
@@ -103,8 +124,8 @@ func rootCommand(rt *cli.Runtime, started *bool) *cobra.Command {
 			if err := rt.Load(cmd.Flags()); err != nil {
 				return err
 			}
-			if rt.Timeout > 0 {
-				ctx, cancel := context.WithTimeout(cmd.Context(), rt.Timeout)
+			if rt.Timeout() > 0 {
+				ctx, cancel := context.WithTimeout(cmd.Context(), rt.Timeout())
 				cobra.OnFinalize(cancel)
 				cmd.SetContext(ctx)
 			}
@@ -114,23 +135,7 @@ func rootCommand(rt *cli.Runtime, started *bool) *cobra.Command {
 			return nil
 		},
 	}
-	pf := root.PersistentFlags()
-	pf.StringVar(&rt.GatewayAddr, "gateway", "", "address of the gateway, host:port (env REVA_GATEWAY)")
-	pf.StringVar(&rt.AdminHost, "admin-host", "", "address of the Admin API, host:port or unix:///path (env REVA_ADMIN_HOST; default the gateway)")
-	pf.BoolVar(&rt.Insecure, "insecure", false, "allow plaintext, without TLS, on the selected transport (development only)")
-	pf.BoolVar(&rt.SkipVerify, "skip-verify", false, "do not verify the server certificate (development only)")
-	pf.StringVar(&rt.TokenValue, "token", "", "use this token instead of signing in (env REVA_TOKEN)")
-	pf.StringVar(&rt.AppTokenFile, "app-token-file", "", "file holding an app token, to sign in with --user")
-	pf.StringVar(&rt.User, "user", "", "user name, for app-token and basic sign-in")
-	pf.StringVar(&rt.As, "as", "", "run the command as this user (impersonation, needs admin rights)")
-	pf.StringVar(&rt.Reason, "reason", "", "why you use admin rights, written to the audit log")
-	pf.BoolVarP(&rt.Yes, "yes", "y", false, "do not ask for confirmations")
-	pf.BoolVar(&rt.NoElevate, "no-elevate", false, "never get an admin token automatically (env REVA_NO_ELEVATE)")
-	pf.DurationVar(&rt.Timeout, "timeout", 0, "overall timeout for the command, for example 30s (0 for none)")
-	pf.StringVarP(&rt.Output, "output", "o", "table", "output format: table or json")
-	pf.BoolVarP(&rt.Quiet, "quiet", "q", false, "hide progress messages")
-	pf.BoolVar(&rt.Debug, "debug", false, "show the underlying error and request details")
-	pf.BoolVar(&rt.NoProgress, "no-progress", false, "hide the progress bar")
+	rt.AddFlags(root.PersistentFlags())
 
 	root.AddGroup(
 		&cobra.Group{ID: "files", Title: "Files:"},

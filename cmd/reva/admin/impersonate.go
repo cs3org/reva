@@ -49,7 +49,7 @@ func impersonateCommand() *cobra.Command {
 				return err
 			}
 			res, err := client.Impersonate(ctx, &adminpb.ImpersonateRequest{
-				User: args[0], Reason: rt.Reason, AllowPrivileged: allowPrivileged, TtlSeconds: int64(ttl.Seconds()),
+				User: args[0], Reason: rt.Reason(), AllowPrivileged: allowPrivileged, TtlSeconds: int64(ttl.Seconds()),
 			})
 			if err != nil {
 				return adminErr(err)

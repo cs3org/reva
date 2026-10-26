@@ -123,9 +123,11 @@ cernbox-revad-ceph-local: gaia ## Build revad with the CERNBox plugins from ../r
 revad-ceph: ## Build revad with Ceph
 	go build -ldflags "$(BUILD_FLAGS)" -tags ceph -o ./cmd/revad/revad ./cmd/revad/main
 
+CLI_BUILD_FLAGS = -X github.com/cs3org/reva/v3/pkg/rversion.GitCommit=$(GIT_COMMIT) -X github.com/cs3org/reva/v3/pkg/rversion.Version=$(VERSION) -X github.com/cs3org/reva/v3/pkg/rversion.GoVersion=$(GO_VERSION) -X github.com/cs3org/reva/v3/pkg/rversion.BuildDate=$(BUILD_DATE)
+
 .PHONY: reva
 reva: ## Build the reva CLI
-	go build -ldflags "-extldflags=-static -X main.gitCommit=$(GIT_COMMIT) -X main.version=$(VERSION) -X main.goVersion=$(GO_VERSION) -X main.buildDate=$(BUILD_DATE)" -o ./cmd/reva/reva ./cmd/reva
+	go build -ldflags "-extldflags=-static $(CLI_BUILD_FLAGS)" -o ./cmd/reva/reva ./cmd/reva
 
 # Regenerate the reva-owned Admin API (pkg/admin/adminpb) and control channel
 # (pkg/control/controlpb) stubs from their protos. Needs protoc plus protoc-gen-go and

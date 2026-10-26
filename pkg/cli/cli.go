@@ -17,7 +17,8 @@
 // or submit itself to any jurisdiction.
 
 // Package cli holds the state that all reva commands share: the settings,
-// the tokens and the gateway connection.
+// the tokens and the connections. Other modules import it, so its settings
+// are read through accessors.
 package cli
 
 import (
@@ -31,15 +32,14 @@ import (
 	"io/fs"
 	"net/http"
 	"os"
-	"path/filepath"
 	"reflect"
 	"strconv"
 	"strings"
 	"time"
 
-	"github.com/BurntSushi/toml"
 	gateway "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
+	"github.com/cs3org/reva/v3/internal/cli/state"
 	"github.com/cs3org/reva/v3/pkg/appctx"
 	"github.com/cs3org/reva/v3/pkg/httpclient"
 	"github.com/spf13/pflag"
@@ -55,28 +55,32 @@ import (
 
 // Runtime is built once per process from the flags, the environment and the
 // config file, in this order of precedence.
+//
+// TODO(T39): Backend(ctx) and Data(ctx), the metadata backend and the data
+// plane of pkg/cli/backend and pkg/cli/data.
 type Runtime struct {
-	GatewayAddr  string
-	AdminHost    string
-	Insecure     bool
-	SkipVerify   bool
-	TokenValue   string
-	AppTokenFile string
-	User         string
-	Output       string
-	Quiet        bool
-	Debug        bool
-	NoProgress   bool
-	Timeout      time.Duration
-	// As is the user of --as: the user plane runs with an impersonated token.
-	As string
-	// Reason of --reason, sent with every admin-plane call for the audit.
-	Reason    string
-	Yes       bool
-	NoElevate bool
-	// HTTPEndpoint is the HTTPS endpoint of the deployment, used by --as when
+	gatewayAddr  string
+	adminHost    string
+	insecure     bool
+	skipVerify   bool
+	tokenValue   string
+	appTokenFile string
+	user         string
+	output       string
+	quiet        bool
+	debug        bool
+	noProgress   bool
+	timeout      time.Duration
+	// as is the user of --as: the user plane runs with an impersonated token.
+	as string
+	// reason of --reason, sent with every admin-plane call for the audit.
+	reason    string
+	yes       bool
+	noElevate bool
+	// httpEndpoint is the HTTPS endpoint of the deployment, used by --as when
 	// the Admin API cannot be reached. The HTTPS transport sets it.
-	HTTPEndpoint string
+	httpEndpoint string
+	config       state.Config
 
 	conn              *grpc.ClientConn
 	admin             *AdminClient
@@ -88,27 +92,61 @@ type Runtime struct {
 	usedAdmin         bool
 }
 
-// Config is the config file, $XDG_CONFIG_HOME/reva/config.toml. The sections
-// follow the brand file of the CLI, so that one file format serves both.
-type Config struct {
-	Connection struct {
-		Gateway   string `toml:"gateway,omitempty" json:"gateway,omitempty"`
-		AdminHost string `toml:"admin_host,omitempty" json:"admin_host,omitempty"`
-	} `toml:"connection" json:"connection"`
-	Auth struct {
-		Kerberos struct {
-			SPN string `toml:"spn,omitempty" json:"spn,omitempty"`
-		} `toml:"kerberos,omitempty" json:"kerberos,omitzero"`
-	} `toml:"auth,omitempty" json:"auth,omitzero"`
+// AddFlags adds the global flags, which set the runtime, to fs.
+func (r *Runtime) AddFlags(fs *pflag.FlagSet) {
+	fs.StringVar(&r.gatewayAddr, "gateway", "", "address of the gateway, host:port (env REVA_GATEWAY)")
+	fs.StringVar(&r.adminHost, "admin-host", "", "address of the Admin API, host:port or unix:///path (env REVA_ADMIN_HOST; default the gateway)")
+	fs.BoolVar(&r.insecure, "insecure", false, "allow plaintext, without TLS, on the selected transport (development only)")
+	fs.BoolVar(&r.skipVerify, "skip-verify", false, "do not verify the server certificate (development only)")
+	fs.StringVar(&r.tokenValue, "token", "", "use this token instead of signing in (env REVA_TOKEN)")
+	fs.StringVar(&r.appTokenFile, "app-token-file", "", "file holding an app token, to sign in with --user")
+	fs.StringVar(&r.user, "user", "", "user name, for app-token and basic sign-in")
+	fs.StringVar(&r.as, "as", "", "run the command as this user (impersonation, needs admin rights)")
+	fs.StringVar(&r.reason, "reason", "", "why you use admin rights, written to the audit log")
+	fs.BoolVarP(&r.yes, "yes", "y", false, "do not ask for confirmations")
+	fs.BoolVar(&r.noElevate, "no-elevate", false, "never get an admin token automatically (env REVA_NO_ELEVATE)")
+	fs.DurationVar(&r.timeout, "timeout", 0, "overall timeout for the command, for example 30s (0 for none)")
+	fs.StringVarP(&r.output, "output", "o", "table", "output format: table or json")
+	fs.BoolVarP(&r.quiet, "quiet", "q", false, "hide progress messages")
+	fs.BoolVar(&r.debug, "debug", false, "show the underlying error and request details")
+	fs.BoolVar(&r.noProgress, "no-progress", false, "hide the progress bar")
 }
+
+// GatewayAddr returns the address of the gateway.
+func (r *Runtime) GatewayAddr() string { return r.gatewayAddr }
+
+// AdminHost returns the address of the Admin API. Empty means the gateway.
+func (r *Runtime) AdminHost() string { return r.adminHost }
+
+// User returns the user name of --user.
+func (r *Runtime) User() string { return r.user }
+
+// AppTokenFile returns the file of --app-token-file.
+func (r *Runtime) AppTokenFile() string { return r.appTokenFile }
+
+// As returns the user of --as. Empty means no impersonation.
+func (r *Runtime) As() string { return r.as }
+
+// Reason returns the reason of --reason, for the audit.
+func (r *Runtime) Reason() string { return r.reason }
+
+// Output returns the output format: table or json.
+func (r *Runtime) Output() string { return r.output }
+
+// Debug reports whether --debug is set.
+func (r *Runtime) Debug() bool { return r.debug }
+
+// Timeout returns the overall timeout of the command. Zero means none.
+func (r *Runtime) Timeout() time.Duration { return r.timeout }
 
 // Load fills the settings that are not given as flags from the environment,
 // then from the config file.
 func (r *Runtime) Load(flags *pflag.FlagSet) error {
-	c, err := ReadConfig()
+	c, err := state.ReadConfig()
 	if err != nil {
 		return err
 	}
+	r.config = c
 	fill := func(dst *string, flag, conf string, envs ...string) {
 		if flags.Changed(flag) {
 			return
@@ -122,19 +160,19 @@ func (r *Runtime) Load(flags *pflag.FlagSet) error {
 		*dst = conf
 	}
 	// REVA_HOST is the name from before --gateway, kept for old scripts.
-	fill(&r.GatewayAddr, "gateway", c.Connection.Gateway, "REVA_GATEWAY", "REVA_HOST")
-	fill(&r.AdminHost, "admin-host", c.Connection.AdminHost, "REVA_ADMIN_HOST")
+	fill(&r.gatewayAddr, "gateway", c.Connection.Gateway, "REVA_GATEWAY", "REVA_HOST")
+	fill(&r.adminHost, "admin-host", c.Connection.AdminHost, "REVA_ADMIN_HOST")
 	r.adminHostExplicit = flags.Changed("admin-host") || os.Getenv("REVA_ADMIN_HOST") != ""
 	if v, err := strconv.ParseBool(os.Getenv("REVA_NO_ELEVATE")); err == nil && !flags.Changed("no-elevate") {
-		r.NoElevate = v
+		r.noElevate = v
 	}
-	fill(&r.TokenValue, "token", "", "REVA_TOKEN")
-	switch r.Output {
+	fill(&r.tokenValue, "token", "", "REVA_TOKEN")
+	switch r.output {
 	case "table", "json":
 	case "csv":
 		return errors.New("csv output is not available yet: use table or json")
 	default:
-		return fmt.Errorf("unknown output %q: use table or json", r.Output)
+		return fmt.Errorf("unknown output %q: use table or json", r.output)
 	}
 	return nil
 }
@@ -143,15 +181,15 @@ func (r *Runtime) Load(flags *pflag.FlagSet) error {
 // do not need a login (for example Authenticate).
 func (r *Runtime) Client() (gateway.GatewayAPIClient, error) {
 	if r.conn == nil {
-		if r.GatewayAddr == "" {
+		if r.gatewayAddr == "" {
 			return nil, errors.New("gateway not set: pass --gateway, set REVA_GATEWAY or run `reva config set gateway <host:port>`")
 		}
-		creds := credentials.NewTLS(&tls.Config{InsecureSkipVerify: r.SkipVerify})
-		if r.Insecure {
+		creds := credentials.NewTLS(&tls.Config{InsecureSkipVerify: r.skipVerify})
+		if r.insecure {
 			creds = insecure.NewCredentials()
 		}
 		opts := append(r.DialOptions(), grpc.WithTransportCredentials(creds))
-		conn, err := grpc.NewClient(r.GatewayAddr, opts...)
+		conn, err := grpc.NewClient(r.gatewayAddr, opts...)
 		if err != nil {
 			return nil, err
 		}
@@ -162,7 +200,7 @@ func (r *Runtime) Client() (gateway.GatewayAPIClient, error) {
 
 // DialOptions are the options that every gRPC connection of the CLI shares.
 func (r *Runtime) DialOptions() []grpc.DialOption {
-	if !r.Debug {
+	if !r.debug {
 		return nil
 	}
 	return []grpc.DialOption{
@@ -225,7 +263,7 @@ func WithToken(ctx context.Context, t string) context.Context {
 // client has no timeout of its own.
 func (r *Runtime) HTTPClient() *httpclient.Client {
 	tr := http.DefaultTransport.(*http.Transport).Clone()
-	tr.TLSClientConfig = &tls.Config{InsecureSkipVerify: r.SkipVerify}
+	tr.TLSClientConfig = &tls.Config{InsecureSkipVerify: r.skipVerify}
 	return httpclient.New(httpclient.RoundTripper(tr))
 }
 
@@ -242,8 +280,8 @@ func (r *Runtime) Close() {
 // Token returns the token of the user plane: the impersonated token of --as,
 // else the login token. The impersonated token stays in memory.
 func (r *Runtime) Token(ctx context.Context) (string, error) {
-	if r.As == "" {
-		return r.LoginToken(ctx)
+	if r.as == "" {
+		return r.loginToken(ctx)
 	}
 	if r.asTok == "" {
 		t, err := r.impersonate(ctx)
@@ -255,162 +293,33 @@ func (r *Runtime) Token(ctx context.Context) (string, error) {
 	return r.asTok, nil
 }
 
-// LoginToken returns the token from --token or REVA_TOKEN. Else it signs in
+// loginToken returns the token from --token or REVA_TOKEN. Else it signs in
 // with the app token of --app-token-file. Else it returns the token that
 // `reva login` stored.
-func (r *Runtime) LoginToken(ctx context.Context) (string, error) {
-	if r.TokenValue != "" {
-		return r.TokenValue, nil
+func (r *Runtime) loginToken(ctx context.Context) (string, error) {
+	if r.tokenValue != "" {
+		return r.tokenValue, nil
 	}
-	if r.AppTokenFile != "" {
-		b, err := os.ReadFile(r.AppTokenFile)
+	if r.appTokenFile != "" {
+		b, err := os.ReadFile(r.appTokenFile)
 		if err != nil {
 			return "", err
 		}
-		if r.User == "" {
+		if r.user == "" {
 			return "", errors.New("an app token needs a user name: pass --user")
 		}
-		t, err := r.Authenticate(ctx, "appauth", r.User, strings.TrimSpace(string(b)))
+		t, err := r.Authenticate(ctx, "appauth", r.user, strings.TrimSpace(string(b)))
 		if err != nil {
 			return "", err
 		}
-		r.TokenValue = t
+		r.tokenValue = t
 		return t, nil
 	}
-	var b []byte
-	var err error
-	if p := os.Getenv("REVA_TOKEN_FILE"); p != "" {
-		b, err = os.ReadFile(p)
-	} else {
-		b, err = readState("token", ".reva-token")
-	}
+	b, err := state.ReadToken()
 	if errors.Is(err, fs.ErrNotExist) {
 		return "", errors.New("no login token: run `reva login` first")
 	}
 	return strings.TrimSpace(string(b)), err
-}
-
-// TokenPath returns where SetToken stores the login token.
-func TokenPath() (string, error) {
-	if p := os.Getenv("REVA_TOKEN_FILE"); p != "" {
-		return p, nil
-	}
-	dir, err := os.UserConfigDir()
-	return filepath.Join(dir, "reva", "token"), err
-}
-
-// SetToken stores the login token.
-func (r *Runtime) SetToken(t string) error {
-	if p := os.Getenv("REVA_TOKEN_FILE"); p != "" {
-		return os.WriteFile(p, []byte(t), 0o600)
-	}
-	return writeState("token", []byte(t))
-}
-
-// ClearTokens removes the stored login and admin tokens, also the legacy
-// dotfiles, so that no older token is read back.
-func ClearTokens() error {
-	var paths []string
-	if p := os.Getenv("REVA_TOKEN_FILE"); p != "" {
-		paths = append(paths, p)
-	}
-	if dir, err := os.UserConfigDir(); err == nil {
-		paths = append(paths, filepath.Join(dir, "reva", "token"), filepath.Join(dir, "reva", "admin-token"))
-	}
-	if home, err := os.UserHomeDir(); err == nil {
-		paths = append(paths, filepath.Join(home, ".reva-token"), filepath.Join(home, ".reva-admin-token"))
-	}
-	for _, p := range paths {
-		if err := os.Remove(p); err != nil && !errors.Is(err, fs.ErrNotExist) {
-			return err
-		}
-	}
-	return nil
-}
-
-// ReadConfig returns the stored config. A missing file gives an empty config.
-// When the file is missing but the legacy ~/.reva.config exists, ReadConfig
-// copies it to the new file, so it reads the legacy file only once.
-func ReadConfig() (Config, error) {
-	var c Config
-	p, err := ConfigPath()
-	if err != nil {
-		return c, err
-	}
-	if _, err := toml.DecodeFile(p, &c); err == nil || !errors.Is(err, fs.ErrNotExist) {
-		if err != nil {
-			err = fmt.Errorf("reading %s: %w", p, err)
-		}
-		return c, err
-	}
-	home, err := os.UserHomeDir()
-	if err != nil {
-		return c, nil
-	}
-	legacy := filepath.Join(home, ".reva.config")
-	b, err := os.ReadFile(legacy)
-	if errors.Is(err, fs.ErrNotExist) {
-		return c, nil
-	}
-	if err != nil {
-		return c, err
-	}
-	var old struct {
-		Host      string `json:"host"`
-		AdminHost string `json:"admin_host"`
-	}
-	if err := json.Unmarshal(b, &old); err != nil {
-		return c, fmt.Errorf("reading %s: %w", legacy, err)
-	}
-	c.Connection.Gateway, c.Connection.AdminHost = old.Host, old.AdminHost
-	if err := WriteConfig(c); err != nil {
-		return c, err
-	}
-	fmt.Fprintf(os.Stderr, "reva: copied the settings of %s to %s\n", legacy, p)
-	return c, nil
-}
-
-// WriteConfig stores the config.
-func WriteConfig(c Config) error {
-	var b bytes.Buffer
-	if err := toml.NewEncoder(&b).Encode(c); err != nil {
-		return err
-	}
-	return writeState("config.toml", b.Bytes())
-}
-
-// ConfigPath returns where WriteConfig stores the config.
-func ConfigPath() (string, error) {
-	dir, err := os.UserConfigDir()
-	return filepath.Join(dir, "reva", "config.toml"), err
-}
-
-// readState reads name from the reva config dir. If that file does not exist,
-// it reads the legacy dotfile in the home dir, so old setups keep working.
-func readState(name, legacy string) ([]byte, error) {
-	if dir, err := os.UserConfigDir(); err == nil {
-		b, err := os.ReadFile(filepath.Join(dir, "reva", name))
-		if !errors.Is(err, fs.ErrNotExist) {
-			return b, err
-		}
-	}
-	home, err := os.UserHomeDir()
-	if err != nil {
-		return nil, err
-	}
-	return os.ReadFile(filepath.Join(home, legacy))
-}
-
-func writeState(name string, data []byte) error {
-	dir, err := os.UserConfigDir()
-	if err != nil {
-		return err
-	}
-	dir = filepath.Join(dir, "reva")
-	if err := os.MkdirAll(dir, 0o700); err != nil {
-		return err
-	}
-	return os.WriteFile(filepath.Join(dir, name), data, 0o600)
 }
 
 // UseColor reports whether to color the output written to f: only for a
@@ -422,7 +331,7 @@ func UseColor(f *os.File) bool {
 // Msg writes a message for a person to stderr. -q and -o json hide it, so
 // that only the result goes to a script.
 func (r *Runtime) Msg(w io.Writer, format string, args ...any) {
-	if r.Quiet || r.Output == "json" {
+	if r.quiet || r.output == "json" {
 		return
 	}
 	fmt.Fprintf(w, format+"\n", args...)
@@ -430,7 +339,7 @@ func (r *Runtime) Msg(w io.Writer, format string, args ...any) {
 
 // Debugf writes a line to stderr with --debug.
 func (r *Runtime) Debugf(format string, args ...any) {
-	if r.Debug {
+	if r.debug {
 		fmt.Fprintf(os.Stderr, "debug: "+format+"\n", args...)
 	}
 }
@@ -438,12 +347,12 @@ func (r *Runtime) Debugf(format string, args ...any) {
 // ShowProgress reports whether to draw a progress bar: only for a person
 // that watches stderr, and not with -q, --no-progress or -o json.
 func (r *Runtime) ShowProgress() bool {
-	return !r.Quiet && !r.NoProgress && r.Output != "json" && term.IsTerminal(int(os.Stderr.Fd()))
+	return !r.quiet && !r.noProgress && r.output != "json" && term.IsTerminal(int(os.Stderr.Fd()))
 }
 
 // Print writes v as JSON with -o json. Else it calls text.
 func (r *Runtime) Print(w io.Writer, v any, text func(w io.Writer)) error {
-	if r.Output != "json" {
+	if r.output != "json" {
 		text(w)
 		return nil
 	}
