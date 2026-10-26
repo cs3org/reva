@@ -25,9 +25,11 @@ import (
 	"net/textproto"
 	"net/url"
 
+	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	registry "github.com/cs3org/go-cs3apis/cs3/storage/registry/v1beta1"
 	typepb "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
+	"github.com/cs3org/reva/v3/pkg/spaces"
 )
 
 // FS is the interface to implement access to the storage.
@@ -100,4 +102,39 @@ type Registry interface {
 type PathWrapper interface {
 	Unwrap(ctx context.Context, rp string) (string, error)
 	Wrap(ctx context.Context, rp string) (string, error)
+}
+
+// SpaceQuotaRef identifies the space of a quota. The driver chooses from the
+// space how its storage keeps the quota.
+type SpaceQuotaRef struct {
+	// Root is the root of the space, relative to the storage.
+	Root  string
+	Type  spaces.SpaceType
+	Owner *userpb.UserId
+}
+
+// SpaceQuota is the quota of a space. The bytes are logical: the size of the
+// data that users see.
+type SpaceQuota struct {
+	// Root is relative to the storage.
+	Root                string
+	MaxBytes, UsedBytes uint64
+	MaxFiles, UsedFiles uint64
+	// PhysicalMaxBytes is MaxBytes with the copies the storage keeps of each
+	// byte.
+	PhysicalMaxBytes uint64
+	// Form tells operators how the storage keeps this quota.
+	Form string
+}
+
+// QuotaAdmin is the optional interface of a storage that lets administrators
+// read and set the quota of any space it serves, whoever the user of the
+// context is. It is not part of FS: users read their own quota with GetQuota
+// and never set one.
+type QuotaAdmin interface {
+	GetSpaceQuota(ctx context.Context, ref SpaceQuotaRef) (*SpaceQuota, error)
+	// SetSpaceQuota returns the quota as the storage reports it after the
+	// change.
+	SetSpaceQuota(ctx context.Context, ref SpaceQuotaRef, maxBytes, maxFiles uint64) (*SpaceQuota, error)
+	ListSpaceQuotas(ctx context.Context) ([]*SpaceQuota, error)
 }

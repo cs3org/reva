@@ -42,6 +42,7 @@ import (
 
 	"github.com/cs3org/reva/v3/pkg/appctx"
 	"github.com/cs3org/reva/v3/pkg/errtypes"
+	"github.com/cs3org/reva/v3/pkg/invoke"
 	"github.com/cs3org/reva/v3/pkg/mime"
 	"github.com/cs3org/reva/v3/pkg/plugin"
 	"github.com/cs3org/reva/v3/pkg/rgrpc"
@@ -104,6 +105,7 @@ type FSWithListRegexSuport interface {
 }
 
 type service struct {
+	*invoke.Set
 	conf               *config
 	storage            storage.FS
 	mountPath, mountID string
@@ -209,6 +211,7 @@ func New(ctx context.Context, m map[string]any) (rgrpc.Service, error) {
 	}
 
 	service := &service{
+		Set:         invoke.NewSet(),
 		conf:        &c,
 		storage:     fs,
 		mountPath:   mountPath,
@@ -216,6 +219,7 @@ func New(ctx context.Context, m map[string]any) (rgrpc.Service, error) {
 		availableXS: xsTypes,
 	}
 
+	service.addQuotaInvocations()
 	return service, nil
 }
 
