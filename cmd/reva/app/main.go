@@ -149,6 +149,8 @@ func rootCommand(rt *cli.Runtime, started *bool, opts ...Option) *cobra.Command 
 		&cobra.Group{ID: "files", Title: "Files:"},
 		&cobra.Group{ID: "sharing", Title: "Sharing:"},
 		&cobra.Group{ID: "users", Title: "Users:"},
+		&cobra.Group{ID: "spaces", Title: "Spaces:"},
+		&cobra.Group{ID: "storage", Title: "Storage:"},
 		&cobra.Group{ID: "fleet", Title: "Fleet:"},
 		&cobra.Group{ID: "session", Title: "Session:"},
 	)
@@ -164,6 +166,8 @@ func rootCommand(rt *cli.Runtime, started *bool, opts ...Option) *cobra.Command 
 	)
 	add("sharing", shareCommand(rt), linkCommand(rt), ocmCommand(rt))
 	add("users", userCommand(rt))
+	add("spaces", spaceParentCommand(rt))
+	add("storage", admin.RouteCommand(rt))
 	add("fleet", admin.Commands(rt)...)
 	add("session",
 		loginCommand(rt), logoutCommand(rt), statusCommand(rt), whoamiCommand(rt), configCommand(rt),
