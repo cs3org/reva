@@ -32,7 +32,7 @@ import (
 const LogsInvocation = "logs"
 
 type logsArgs struct {
-	Level   string    `arg:"level" help:"minimum level: trace|debug|info|warn|error"`
+	Level   string    `arg:"level" enum:"trace,debug,info,warn,error" help:"minimum level"`
 	Since   time.Time `arg:"since" help:"only lines newer than a duration (e.g. 5m) or an RFC3339 time"`
 	Limit   int       `arg:"limit" help:"max lines for a snapshot, or backlog before a follow"`
 	Grep    string    `arg:"grep" help:"keep only lines containing this substring"`

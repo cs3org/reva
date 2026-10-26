@@ -300,19 +300,4 @@ func humanizeSince(ts string) string {
 	}
 }
 
-// printNodeResults renders the per-node results of a fan-out operation.
-func printNodeResults(results []*adminpb.NodeResult) {
-	for _, r := range results {
-		if r.Error != "" {
-			fmt.Printf("  %s: ERROR %s\n", r.Node, r.Error)
-			continue
-		}
-		if r.ResultJson != "" {
-			fmt.Printf("  %s: %s\n", r.Node, r.ResultJson)
-		} else {
-			fmt.Printf("  %s: ok\n", r.Node)
-		}
-	}
-}
-
 // ----- subcommands -----
