@@ -240,15 +240,20 @@ func TestImpersonateAuditReason(t *testing.T) {
 		t.Run(c.name, func(t *testing.T) {
 			logs := &logBuffer{}
 			log := zerolog.New(logs)
-			s, tm := testService(t)
-			s.machineAuth = fakeMachineAuth{}
-			s.userTokenManager = tm
+			s := impersonationService(t)
 
+			// An admin caller, as the auth interceptor leaves it.
+			scopes, err := scope.AddAdminScope(nil)
+			if err != nil {
+				t.Fatal(err)
+			}
 			ctx := appctx.WithLogger(context.Background(), &log)
+			ctx = appctx.ContextSetUser(ctx, &userpb.User{Id: &userpb.UserId{Idp: "idp", OpaqueId: "boss"}, Username: "boss", Groups: []string{"reva_admins"}})
+			ctx = appctx.ContextSetScopes(ctx, scopes)
 			if c.header != "" {
 				ctx = metadata.NewIncomingContext(ctx, metadata.Pairs(admin.ReasonHeader, c.header))
 			}
-			if _, err := s.Impersonate(ctx, &adminpb.ImpersonateRequest{User: "bob", Reason: c.field}); err != nil {
+			if _, err := s.Impersonate(ctx, &adminpb.ImpersonateRequest{User: "alice", Reason: c.field}); err != nil {
 				t.Fatal(err)
 			}
 			lines := logs.audits(t, "impersonate")

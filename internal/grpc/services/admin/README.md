@@ -231,7 +231,26 @@ Getting an admin token is a deliberate step-up:
   would otherwise reject a valid admin token on every fan-out hop.
 - `Impersonate` mints an ordinary **user-scoped** token for a target user (never
   admin+user), so downstream services apply their normal user checks. It is
-  audited and needs the machine-auth api key configured.
+  audited and needs the machine-auth api key configured. Rules:
+  - The target gets the scopes of its own login: the owner scope for a primary,
+    secondary or service account, the lightweight scope for a lightweight
+    account. Other account types are refused.
+  - The token carries the impersonator in an `actor` scope, which authorizes
+    nothing: the user id of the caller, or `socket:<uid>` on the local-root
+    socket. A scope, not a JWT claim, because the auth cache and the token
+    re-mints (for example the machine scope) keep only the user and the scopes.
+    The request logs, and the audit events, of every call made with the token
+    show `act=<actor>`.
+  - `RequestAdmin` and `Impersonate` refuse a token with an actor, and
+    `CheckAdmin` reports it as not admin. Else an admin who impersonates
+    another admin could step up as that admin, and the audit would lose who did
+    it.
+  - A member of `admin_group` or a service account is refused unless the
+    request sets `allow_privileged`. That is audited on its own line
+    (`impersonate_privileged`).
+  - `ttl_seconds` asks for a shorter lifetime, capped by the lifetime the
+    server would give. The response has `expires_at`. A target that does not
+    exist answers `NotFound`.
 
 Invocations are classified `readonly | mutating | dangerous`; the CLI prompts
 before a `dangerous` one. Every invocation and action emits an audit event via
@@ -345,7 +364,7 @@ reva admin logs level <selector> [trace|debug|info|warn|error]   # report/set ru
 reva admin trace    <traceid> | -user <username>   # one request/user across the fleet
 reva admin stack    <selector> [-grep P]           # goroutine dumps, e.g. of a hung process
 reva admin jobs     list | active | runs | status <id> | run <job> [k=v] | trigger <job> | cancel <id> | stop <job>
-reva admin impersonate <user>
+reva admin impersonate <user> [--reason R] [--ttl D] [--allow-privileged [-y]]
 
 # Local root: on the box, no login/elevate/flag — the CLI finds the socket. Only
 # if it is absent (or denies you) does it need the network host + elevate above.
@@ -368,13 +387,14 @@ service registry.
 | Request | Answer |
 |---|---|
 | `GET /admin/status` | `{"admin": true\|false}`. Backed by `CheckAdmin`, which mints nothing and is not audited. |
-| `POST /admin/impersonate` `{"user": "...", "reason": "..."}` (reason optional) | `{"token": "..."}`, a user token for the target. |
+| `POST /admin/impersonate` `{"user": "...", "reason": "...", "allow_privileged": false, "ttl_seconds": 0}` (all but user optional) | `{"token": "...", "expires_at": ...}`, a user token for the target. |
 
 `impersonate` runs `RequestAdmin` and `Impersonate` back to back on the
 server, so the admin token never reaches the client: the client holds at most
 a user token. Both steps are audited as usual, with `reason` when one is given. Errors
-are `{"message": "..."}` with 401 (caller not identified), 403 (not an admin),
-404 (no such user), 501 (impersonation not configured) or 503 (no Admin API).
+are `{"message": "..."}` with 401 (caller not identified), 403 (not an admin, a
+refused target, or an impersonated caller), 404 (no such user), 501
+(impersonation not configured) or 503 (no Admin API).
 
 ## Jobs
 

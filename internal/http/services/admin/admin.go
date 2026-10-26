@@ -30,6 +30,7 @@ import (
 	"github.com/cs3org/reva/v3/pkg/admin"
 	"github.com/cs3org/reva/v3/pkg/admin/adminpb"
 	"github.com/cs3org/reva/v3/pkg/appctx"
+	"github.com/cs3org/reva/v3/pkg/auth/scope"
 	"github.com/cs3org/reva/v3/pkg/rhttp/global"
 	"github.com/cs3org/reva/v3/pkg/service"
 	"github.com/cs3org/reva/v3/pkg/utils/cfg"
@@ -102,11 +103,14 @@ func (s *svc) handleStatus(w http.ResponseWriter, r *http.Request) {
 type impersonateRequest struct {
 	User string `json:"user"`
 	// Reason is optional, and recorded in the audit log when given.
-	Reason string `json:"reason,omitempty"`
+	Reason          string `json:"reason,omitempty"`
+	AllowPrivileged bool   `json:"allow_privileged,omitempty"`
+	TTLSeconds      int64  `json:"ttl_seconds,omitempty"`
 }
 
 type impersonateResponse struct {
-	Token string `json:"token"`
+	Token     string `json:"token"`
+	ExpiresAt int64  `json:"expires_at,omitempty"`
 }
 
 // handleImpersonate steps the caller up and impersonates the target in one
@@ -125,6 +129,11 @@ func (s *svc) handleImpersonate(w http.ResponseWriter, r *http.Request) {
 		writeMessage(ctx, w, http.StatusBadRequest, "Name the user to impersonate.")
 		return
 	}
+	// The Admin API refuses this too. Refuse here first, with a clear message.
+	if scopes, _ := appctx.ContextGetScopes(ctx); scope.Actor(scopes) != "" {
+		writeMessage(ctx, w, http.StatusForbidden, "An impersonated session cannot impersonate.")
+		return
+	}
 
 	client, err := service.Admin(ctx)
 	if err != nil {
@@ -140,12 +149,20 @@ func (s *svc) handleImpersonate(w http.ResponseWriter, r *http.Request) {
 		writeRPCError(ctx, w, err)
 		return
 	}
-	res, err := client.Impersonate(withToken(ctx, elevated.Token), &adminpb.ImpersonateRequest{User: req.User, Reason: req.Reason})
+	res, err := client.Impersonate(withToken(ctx, elevated.Token), &adminpb.ImpersonateRequest{
+		User: req.User, Reason: req.Reason, AllowPrivileged: req.AllowPrivileged, TtlSeconds: req.TTLSeconds,
+	})
+	if st := status.Convert(err); st.Code() == codes.PermissionDenied {
+		// The caller is an admin at this point, so the refusal is about the
+		// target, and the message tells why.
+		writeMessage(ctx, w, http.StatusForbidden, st.Message())
+		return
+	}
 	if err != nil {
 		writeRPCError(ctx, w, err)
 		return
 	}
-	writeJSON(ctx, w, http.StatusOK, impersonateResponse{Token: res.Token})
+	writeJSON(ctx, w, http.StatusOK, impersonateResponse{Token: res.Token, ExpiresAt: res.ExpiresAt})
 }
 
 // withToken replaces the token carried to outgoing calls. The auth middleware
