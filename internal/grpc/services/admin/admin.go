@@ -28,6 +28,7 @@ import (
 	"slices"
 	"time"
 
+	authpb "github.com/cs3org/go-cs3apis/cs3/auth/provider/v1beta1"
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	rpcv1beta1 "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	"github.com/cs3org/reva/v3/pkg/admin"
@@ -219,9 +220,17 @@ func (s *svc) Register(ss *grpc.Server) {
 // caller's group membership and, on success, mints a short-TTL admin-only
 // token. Grant and deny are both audited.
 func (s *svc) RequestAdmin(ctx context.Context, _ *adminpb.RequestAdminRequest) (*adminpb.RequestAdminResponse, error) {
-	u, err := s.caller(ctx)
+	u, callerScopes, err := s.caller(ctx)
 	if err != nil {
 		return nil, status.Errorf(codes.Unauthenticated, "admin: cannot identify caller: %v", err)
+	}
+
+	// Else an admin who impersonates another admin steps up as that admin,
+	// and the audit loses who did it.
+	if scope.Actor(callerScopes) != "" {
+		denied := errtypes.PermissionDenied("an impersonated session cannot step up")
+		admin.Audit(ctx, admin.AuditEvent{Action: "request_admin", Actor: u.Username, Granted: false, Err: denied})
+		return nil, status.Errorf(codes.PermissionDenied, "admin: %s", denied.Error())
 	}
 
 	if !slices.Contains(u.Groups, s.adminGroup) {
@@ -250,25 +259,27 @@ func (s *svc) RequestAdmin(ctx context.Context, _ *adminpb.RequestAdminRequest) 
 // CheckAdmin reports whether the caller may step up. It mints nothing, so it is
 // not audited; clients use it to show the caller's standing without elevating.
 func (s *svc) CheckAdmin(ctx context.Context, _ *adminpb.CheckAdminRequest) (*adminpb.CheckAdminResponse, error) {
-	u, err := s.caller(ctx)
+	u, scopes, err := s.caller(ctx)
 	if err != nil {
 		return nil, status.Errorf(codes.Unauthenticated, "admin: cannot identify caller: %v", err)
 	}
-	return &adminpb.CheckAdminResponse{Admin: slices.Contains(u.Groups, s.adminGroup)}, nil
+	return &adminpb.CheckAdminResponse{Admin: scope.Actor(scopes) == "" && slices.Contains(u.Groups, s.adminGroup)}, nil
 }
 
-// caller returns the authenticated user, falling back to dismantling the token
-// directly, and resolves groups through the gateway if the user carries none.
-func (s *svc) caller(ctx context.Context) (*userpb.User, error) {
+// caller returns the authenticated user and the scopes of its token, falling
+// back to dismantling the token directly, and resolves groups through the
+// gateway if the user carries none.
+func (s *svc) caller(ctx context.Context) (*userpb.User, map[string]*authpb.Scope, error) {
 	u, ok := appctx.ContextGetUser(ctx)
+	scopes, _ := appctx.ContextGetScopes(ctx)
 	if !ok || u == nil {
 		tkn, ok := appctx.ContextGetToken(ctx)
 		if !ok || tkn == "" {
-			return nil, errtypes.NotFound("no access token in request")
+			return nil, nil, errtypes.NotFound("no access token in request")
 		}
 		var err error
-		if u, _, err = s.tokenManager.DismantleToken(ctx, tkn); err != nil {
-			return nil, err
+		if u, scopes, err = s.tokenManager.DismantleToken(ctx, tkn); err != nil {
+			return nil, nil, err
 		}
 	}
 	if len(u.Groups) == 0 {
@@ -279,5 +290,5 @@ func (s *svc) caller(ctx context.Context) (*userpb.User, error) {
 			}
 		}
 	}
-	return u, nil
+	return u, scopes, nil
 }

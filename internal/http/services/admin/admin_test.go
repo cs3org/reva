@@ -29,6 +29,7 @@ import (
 
 	"github.com/cs3org/reva/v3/pkg/admin/adminpb"
 	"github.com/cs3org/reva/v3/pkg/appctx"
+	"github.com/cs3org/reva/v3/pkg/auth/scope"
 	"github.com/cs3org/reva/v3/pkg/service"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
@@ -99,7 +100,7 @@ func (f *fakeAdmin) Impersonate(ctx context.Context, req *adminpb.ImpersonateReq
 	if f.impersonateErr != nil {
 		return nil, f.impersonateErr
 	}
-	return &adminpb.ImpersonateResponse{Token: "user-token-for-" + req.User}, nil
+	return &adminpb.ImpersonateResponse{Token: "user-token-for-" + req.User, ExpiresAt: 200}, nil
 }
 
 func newTestService(t *testing.T) http.Handler {
@@ -215,5 +216,60 @@ func TestImpersonateErrors(t *testing.T) {
 				t.Errorf("error body carries no message: %s", w.Body)
 			}
 		})
+	}
+}
+
+func TestImpersonateForwardsTheOptions(t *testing.T) {
+	h := newTestService(t)
+	fake := &fakeAdmin{}
+	stampAdmin(fake)
+
+	w := serve(t, h, http.MethodPost, "/impersonate", `{"user":"boss","allow_privileged":true,"ttl_seconds":3600}`)
+	if w.Code != http.StatusOK {
+		t.Fatalf("code %d, body %s", w.Code, w.Body)
+	}
+	if !fake.impersonated.GetAllowPrivileged() || fake.impersonated.GetTtlSeconds() != 3600 {
+		t.Errorf("Impersonate got %v", fake.impersonated)
+	}
+	var got impersonateResponse
+	if err := json.Unmarshal(w.Body.Bytes(), &got); err != nil {
+		t.Fatalf("decoding: %v", err)
+	}
+	if got.ExpiresAt != 200 {
+		t.Errorf("response = %+v, want expires_at 200", got)
+	}
+}
+
+// TestImpersonateRefusedTarget asserts that a refused target is not reported
+// as "not an admin": the caller is one, and the message tells why.
+func TestImpersonateRefusedTarget(t *testing.T) {
+	h := newTestService(t)
+	stampAdmin(&fakeAdmin{impersonateErr: status.Error(codes.PermissionDenied, "admin: \"boss\" is a member of admins; set allow_privileged to impersonate it")})
+
+	w := serve(t, h, http.MethodPost, "/impersonate", `{"user":"boss"}`)
+	if w.Code != http.StatusForbidden || !strings.Contains(w.Body.String(), "allow_privileged") {
+		t.Fatalf("code %d, body %s", w.Code, w.Body)
+	}
+}
+
+func TestImpersonateRefusesAnImpersonatedSession(t *testing.T) {
+	h := newTestService(t)
+	fake := &fakeAdmin{}
+	stampAdmin(fake)
+
+	owner, err := scope.AddOwnerScope(nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	r := httptest.NewRequest(http.MethodPost, "/impersonate", strings.NewReader(`{"user":"marie"}`))
+	ctx := appctx.ContextSetScopes(r.Context(), scope.AddActorScope("gdelmont", owner))
+	w := httptest.NewRecorder()
+	h.ServeHTTP(w, r.WithContext(ctx))
+
+	if w.Code != http.StatusForbidden {
+		t.Fatalf("code %d, body %s", w.Code, w.Body)
+	}
+	if fake.impersonated != nil {
+		t.Error("an impersonated session reached Impersonate")
 	}
 }
