@@ -383,6 +383,25 @@ func (m *PublicShareMgr) ListPublicLinks(u *user.User, filters []*link.ListPubli
 	return links, nil
 }
 
+// ListPublicLinksInSpace returns the public links of one space that match the
+// filters, orphans included on request. The CS3 filters have no space type.
+func (m *PublicShareMgr) ListPublicLinksInSpace(spaceID string, filters []*link.ListPublicSharesRequest_Filter, includeOrphans bool) ([]model.PublicLink, error) {
+	if spaceID == "" {
+		return nil, errtypes.BadRequest("no space id given")
+	}
+	query := m.db.Model(&model.PublicLink{}).Where("space_id = ?", spaceID)
+	if !includeOrphans {
+		query = query.Where("orphan = ?", false).Where("orphaned_at IS NULL")
+	}
+	m.appendLinkFiltersToQuery(query, filters)
+
+	var links []model.PublicLink
+	if err := query.Find(&links).Error; err != nil {
+		return nil, err
+	}
+	return links, nil
+}
+
 // ExpiringPublicLinks returns at most limit public links, not orphans, that
 // expire in [from, to), ordered by expiration and id, after the link with
 // afterExpiration and afterID. An afterID of 0 starts from the first link.
@@ -434,12 +453,13 @@ func (m *PublicShareMgr) MovePublicShare(ctx context.Context, ref *link.PublicSh
 		return err
 	}
 
-	res := m.db.Model(&link).Update("uid_owner", newOwner).Update("inode", newLocation.OpaqueId).Update("instance", newLocation.StorageId)
-	if res.Error != nil {
-		return res.Error
+	updates := map[string]any{"uid_owner": newOwner, "inode": newLocation.OpaqueId, "instance": newLocation.StorageId}
+	// The reconciliation jobs list the links of one space, so a link moved
+	// to another space must carry the new space id.
+	if newLocation.SpaceId != "" {
+		updates["space_id"] = newLocation.SpaceId
 	}
-
-	return nil
+	return m.db.Model(&link).Updates(updates).Error
 }
 
 func (m *PublicShareMgr) GetPublicLink(ctx context.Context, ref *link.PublicShareReference, filter bool) (*model.PublicLink, error) {

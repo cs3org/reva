@@ -4,10 +4,12 @@ import (
 	"context"
 	"log"
 	"os"
+	"slices"
 	"sort"
 	"testing"
 	"time"
 
+	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	link "github.com/cs3org/go-cs3apis/cs3/sharing/link/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	typespb "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
@@ -387,5 +389,93 @@ func TestListPublicShareSpaces(t *testing.T) {
 	}
 	if len(links) != 1 || links[0].ResourceId.OpaqueId != "202" {
 		t.Errorf("Expected only the link in space-b, got %+v", links)
+	}
+}
+
+func TestListPublicLinksInSpace(t *testing.T) {
+	mgr, err, teardown := setupSuiteLinks(t)
+	defer teardown(t)
+	if err != nil {
+		t.Fatal(err)
+	}
+	pm := mgr.(*PublicShareMgr)
+
+	ids := map[string]*link.PublicShareId{}
+	for _, l := range []struct{ name, owner, space string }{
+		{"a-alice", "alice", "space-a"},
+		{"a-bob", "bob", "space-a"},
+		{"a-orphan", "alice", "space-a"},
+		{"b-alice", "alice", "space-b"},
+	} {
+		userctx := getUserContext(l.owner)
+		u, _ := appctx.ContextGetUser(userctx)
+		file := getRandomFile(u)
+		file.Id.SpaceId, file.Id.OpaqueId = l.space, l.name
+		created, err := mgr.CreatePublicShare(userctx, u, file, getTestPublicLinkGrant(""), "", false, false, "")
+		if err != nil {
+			t.Fatal(err)
+		}
+		ids[l.name] = created.Id
+	}
+	if err := pm.MarkAsOrphaned(context.Background(), &link.PublicShareReference{Spec: &link.PublicShareReference_Id{Id: ids["a-orphan"]}}); err != nil {
+		t.Fatal(err)
+	}
+
+	owner := func(u string) *link.ListPublicSharesRequest_Filter {
+		return &link.ListPublicSharesRequest_Filter{Type: link.ListPublicSharesRequest_Filter_TYPE_OWNER, Term: &link.ListPublicSharesRequest_Filter_Owner{Owner: &userpb.UserId{OpaqueId: u}}}
+	}
+	for _, tc := range []struct {
+		filters        []*link.ListPublicSharesRequest_Filter
+		includeOrphans bool
+		want           []string
+	}{
+		{nil, false, []string{"a-alice", "a-bob"}},
+		{nil, true, []string{"a-alice", "a-bob", "a-orphan"}},
+		{[]*link.ListPublicSharesRequest_Filter{owner("alice")}, true, []string{"a-alice", "a-orphan"}},
+	} {
+		links, err := pm.ListPublicLinksInSpace("space-a", tc.filters, tc.includeOrphans)
+		if err != nil {
+			t.Fatal(err)
+		}
+		got := []string{}
+		for _, l := range links {
+			got = append(got, l.Inode)
+		}
+		sort.Strings(got)
+		if !slices.Equal(got, tc.want) {
+			t.Errorf("filters %v, orphans %v: got %v, want %v", tc.filters, tc.includeOrphans, got, tc.want)
+		}
+	}
+	if _, err := pm.ListPublicLinksInSpace("", nil, true); err == nil {
+		t.Error("expected an error without a space")
+	}
+}
+
+func TestMovePublicShareToAnotherSpace(t *testing.T) {
+	mgr, err, teardown := setupSuiteLinks(t)
+	defer teardown(t)
+	if err != nil {
+		t.Fatal(err)
+	}
+	pm := mgr.(*PublicShareMgr)
+
+	userctx := getUserContext("owner")
+	u, _ := appctx.ContextGetUser(userctx)
+	file := getRandomFile(u)
+	file.Id.SpaceId = "space-a"
+	created, err := mgr.CreatePublicShare(userctx, u, file, getTestPublicLinkGrant(""), "", false, false, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	ref := &link.PublicShareReference{Spec: &link.PublicShareReference_Id{Id: created.Id}}
+	if err := pm.MovePublicShare(userctx, ref, &provider.ResourceId{StorageId: "other", OpaqueId: "42", SpaceId: "space-b"}, "newowner"); err != nil {
+		t.Fatal(err)
+	}
+	l, err := pm.GetPublicLink(userctx, ref, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if l.UIDOwner != "newowner" || l.Instance != "other" || l.Inode != "42" || l.SpaceID != "space-b" {
+		t.Fatalf("link not moved: %+v", l)
 	}
 }
