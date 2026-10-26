@@ -41,6 +41,7 @@ import (
 	gateway "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	"github.com/cs3org/reva/v3/pkg/appctx"
+	"github.com/cs3org/reva/v3/pkg/cli/backend"
 	"github.com/cs3org/reva/v3/pkg/httpclient"
 	"github.com/spf13/pflag"
 	"golang.org/x/term"
@@ -74,8 +75,8 @@ type Runtime struct {
 	Reason    string
 	Yes       bool
 	NoElevate bool
-	// HTTPEndpoint is the HTTPS endpoint of the deployment, used by --as when
-	// the Admin API cannot be reached. The HTTPS transport sets it.
+	// HTTPEndpoint is the HTTPS endpoint of the deployment (--endpoint), for
+	// the HTTPS transport, and for --as when the Admin API cannot be reached.
 	HTTPEndpoint string
 
 	conn              *grpc.ClientConn
@@ -86,6 +87,9 @@ type Runtime struct {
 	plane             Plane
 	need              string
 	usedAdmin         bool
+	transport         string
+	backend           backend.Backend
+	data              backend.DataPlane
 }
 
 // Config is the config file, $XDG_CONFIG_HOME/reva/config.toml. The sections
@@ -94,6 +98,8 @@ type Config struct {
 	Connection struct {
 		Gateway   string `toml:"gateway,omitempty" json:"gateway,omitempty"`
 		AdminHost string `toml:"admin_host,omitempty" json:"admin_host,omitempty"`
+		Transport string `toml:"transport,omitempty" json:"transport,omitempty"`
+		Endpoint  string `toml:"endpoint,omitempty" json:"endpoint,omitempty"`
 	} `toml:"connection" json:"connection"`
 	Auth struct {
 		Kerberos struct {
@@ -129,6 +135,9 @@ func (r *Runtime) Load(flags *pflag.FlagSet) error {
 		r.NoElevate = v
 	}
 	fill(&r.TokenValue, "token", "", "REVA_TOKEN")
+	if err := r.loadTransport(flags, c); err != nil {
+		return err
+	}
 	switch r.Output {
 	case "table", "json":
 	case "csv":
@@ -150,7 +159,7 @@ func (r *Runtime) Client() (gateway.GatewayAPIClient, error) {
 		if r.Insecure {
 			creds = insecure.NewCredentials()
 		}
-		opts := append(r.DialOptions(), grpc.WithTransportCredentials(creds))
+		opts := append(r.DialOptions(), grpc.WithTransportCredentials(creds), gatewayDialOption())
 		conn, err := grpc.NewClient(r.GatewayAddr, opts...)
 		if err != nil {
 			return nil, err
