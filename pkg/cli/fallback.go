@@ -23,8 +23,6 @@ import (
 	"errors"
 	"fmt"
 
-	collaboration "github.com/cs3org/go-cs3apis/cs3/sharing/collaboration/v1beta1"
-	link "github.com/cs3org/go-cs3apis/cs3/sharing/link/v1beta1"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 )
@@ -103,22 +101,4 @@ func OnNotFound[T any](ctx context.Context, f Fallback, userCall func(context.Co
 		return zero, err
 	}
 	return adminCall(actx, found)
-}
-
-// SharesAdmin is the part of the SharesAdmin service that the owner fallback
-// of `share` and `link` uses. The errors are gRPC errors, with NotFound for a
-// resource that does not exist.
-type SharesAdmin interface {
-	GetShare(ctx context.Context, ref *collaboration.ShareReference) (*collaboration.Share, error)
-	UpdateShare(ctx context.Context, req *collaboration.UpdateShareRequest) (*collaboration.Share, error)
-	RemoveShare(ctx context.Context, ref *collaboration.ShareReference) error
-	GetPublicLink(ctx context.Context, ref *link.PublicShareReference) (*link.PublicShare, error)
-	UpdatePublicLink(ctx context.Context, req *link.UpdatePublicShareRequest) (*link.PublicShare, error)
-	RemovePublicLink(ctx context.Context, ref *link.PublicShareReference) error
-}
-
-// SharesAdmin returns the client of the SharesAdmin service on the admin
-// connection. The typed RPCs come later, so it answers ErrNotAvailable.
-func (r *Runtime) SharesAdmin(ctx context.Context) (SharesAdmin, error) {
-	return nil, ErrNotAvailable
 }
