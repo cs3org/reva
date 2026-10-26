@@ -23,6 +23,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"testing"
 
@@ -176,7 +177,9 @@ func TestOperatorCommands(t *testing.T) {
 			if tc.shown && !strings.Contains(help, "(admin)") {
 				t.Errorf("an operator command is not marked:\n%s", help)
 			}
-			if got := strings.Contains(help, "8 "+hint); got != tc.hint {
+			// The count changes with every operator command, so only the
+			// presence of a count is checked.
+			if got := regexp.MustCompile(`\n[1-9][0-9]* ` + regexp.QuoteMeta(hint)).MatchString(help); got != tc.hint {
 				t.Errorf("hint = %v, want %v:\n%s", got, tc.hint, help)
 			}
 			if tc.shown {
