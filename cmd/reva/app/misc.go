@@ -25,6 +25,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"slices"
 	"strings"
 	"time"
 
@@ -41,6 +42,7 @@ import (
 	"github.com/cs3org/reva/v3/internal/cli/state"
 	"github.com/cs3org/reva/v3/pkg/auth/scope"
 	"github.com/cs3org/reva/v3/pkg/cli"
+	"github.com/cs3org/reva/v3/pkg/cli/brand"
 	"github.com/cs3org/reva/v3/pkg/utils"
 	"github.com/jedib0t/go-pretty/table"
 	"github.com/spf13/cobra"
@@ -61,8 +63,8 @@ func loginCommand(rt *cli.Runtime) *cobra.Command {
 			"  echo \"$PASSWORD\" | reva login --user alice\n\n" +
 			"--method kerberos uses the ticket of kinit and asks for no password. The\n" +
 			"ticket is read from --ccache, else $KRB5CCNAME, else /tmp/krb5cc_<uid>; only\n" +
-			"FILE: caches can be read. The service principal is --spn, else\n" +
-			"$REVA_KERBEROS_SPN, else 'reva config set kerberos-spn', else HTTP/<gateway host>:\n\n" +
+			"FILE: caches can be read. The service principal is --spn, else the kerberos_spn\n" +
+			"setting ('reva config set kerberos-spn'), else HTTP/<gateway host>:\n\n" +
 			"  kinit && reva login --method kerberos --spn HTTP/cernbox.cern.ch",
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
@@ -96,7 +98,7 @@ func loginCommand(rt *cli.Runtime) *cobra.Command {
 			var err error
 			if rt.AppTokenFile() != "" {
 				if !cmd.Flags().Changed("method") {
-					method = "appauth"
+					method = rt.AuthType("app-token")
 				}
 				b, err := os.ReadFile(rt.AppTokenFile())
 				if err != nil {
@@ -106,6 +108,11 @@ func loginCommand(rt *cli.Runtime) *cobra.Command {
 					return errors.New("an app token needs a user name: pass --user")
 				}
 				user, secret = rt.User(), strings.TrimSpace(string(b))
+			} else if rt.Password() != "" {
+				if rt.User() == "" {
+					return errors.New("a password from the environment needs a user name: pass --user")
+				}
+				user, secret = rt.User(), rt.Password()
 			} else if user, secret, err = readCredentials(cmd, rt.User()); err != nil {
 				return err
 			}
@@ -289,7 +296,7 @@ func whoamiCommand(rt *cli.Runtime) *cobra.Command {
 }
 
 func configCommand(rt *cli.Runtime) *cobra.Command {
-	keys := []string{"gateway", "admin-host", "kerberos-spn"}
+	keys := []string{"gateway", "admin-host", "endpoint", "transport", "kerberos-spn", "output", "operator-commands"}
 	cmd := &cobra.Command{Use: "config", Short: "Show or change the stored settings"}
 	cmd.AddCommand(
 		&cobra.Command{
@@ -302,35 +309,68 @@ func configCommand(rt *cli.Runtime) *cobra.Command {
 				if err != nil {
 					return err
 				}
+				oneOf := func(dst *string, valid []string) error {
+					if !slices.Contains(valid, args[1]) {
+						return fmt.Errorf("%s %q: use one of %s", args[0], args[1], strings.Join(valid, ", "))
+					}
+					*dst = args[1]
+					return nil
+				}
 				switch args[0] {
 				case "gateway":
 					c.Connection.Gateway = args[1]
 				case "admin-host":
 					c.Connection.AdminHost = args[1]
+				case "endpoint":
+					c.Connection.Endpoint = args[1]
+				case "transport":
+					err = oneOf(&c.Connection.Transport, brand.Transports)
 				case "kerberos-spn":
 					c.Auth.Kerberos.SPN = args[1]
+				case "output":
+					err = oneOf(&c.UI.Output, brand.Outputs)
+				case "operator-commands":
+					err = oneOf(&c.UI.OperatorCommands, brand.OperatorModes)
 				default:
 					return fmt.Errorf("unknown key %q: use one of %s", args[0], strings.Join(keys, ", "))
+				}
+				if err != nil {
+					return err
 				}
 				return state.WriteConfig(c)
 			},
 		},
 		&cobra.Command{
 			Use:   "view",
-			Short: "Show the stored settings and where they are",
+			Short: "Show the settings and where they come from",
 			Args:  cobra.NoArgs,
 			RunE: func(cmd *cobra.Command, args []string) error {
-				c, err := state.ReadConfig()
-				if err != nil {
-					return err
-				}
 				p, err := state.ConfigPath()
 				if err != nil {
 					return err
 				}
-				return rt.Print(cmd.OutOrStdout(), c, func(w io.Writer) {
-					fmt.Fprintf(w, "file:         %s\ngateway:      %s\nadmin-host:   %s\nkerberos-spn: %s\n",
-						p, c.Connection.Gateway, c.Connection.AdminHost, c.Auth.Kerberos.SPN)
+				type row struct {
+					Key   string `json:"key"`
+					Value string `json:"value"`
+					From  string `json:"from"`
+				}
+				v := struct {
+					File       string `json:"file"`
+					SystemFile string `json:"system_file"`
+					Settings   []row  `json:"settings"`
+				}{File: p, SystemFile: state.SystemConfigPath()}
+				for _, k := range keys {
+					val, from := rt.Setting(strings.ReplaceAll(k, "-", "_"))
+					v.Settings = append(v.Settings, row{k, val, from})
+				}
+				return rt.Print(cmd.OutOrStdout(), v, func(w io.Writer) {
+					fmt.Fprintf(w, "file:              %s\nsystem file:       %s\n", v.File, v.SystemFile)
+					for _, r := range v.Settings {
+						if r.Value == "" {
+							r.Value = "-"
+						}
+						fmt.Fprintf(w, "%-18s %s (%s)\n", r.Key+":", r.Value, r.From)
+					}
 				})
 			},
 		},

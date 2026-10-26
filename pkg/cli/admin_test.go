@@ -33,6 +33,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/cs3org/reva/v3/internal/cli/state"
 	"github.com/cs3org/reva/v3/pkg/admin"
 	"github.com/cs3org/reva/v3/pkg/admin/adminpb"
 	"github.com/cs3org/reva/v3/pkg/appctx"
@@ -129,15 +130,17 @@ func token(t *testing.T, user string, exp time.Time) string {
 	return s
 }
 
-// setup isolates the config dir and the socket paths of the test.
+// setup isolates the config dirs and the socket paths of the test.
 func setup(t *testing.T) string {
 	dir := t.TempDir()
 	t.Setenv("HOME", dir)
 	t.Setenv("XDG_CONFIG_HOME", filepath.Join(dir, ".config"))
 	t.Setenv("SUDO_USER", "")
-	old := socketPaths
+	old, oldSys := socketPaths, state.SystemDir
 	socketPaths = func() []string { return nil }
-	t.Cleanup(func() { socketPaths = old })
+	state.SystemDir = func() string { return filepath.Join(dir, "etc") }
+	state.Use(state.Layout{Dir: "reva"})
+	t.Cleanup(func() { socketPaths, state.SystemDir = old, oldSys })
 	return dir
 }
 
