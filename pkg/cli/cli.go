@@ -17,8 +17,8 @@
 // or submit itself to any jurisdiction.
 
 // Package cli holds the state that all reva commands share: the settings,
-// the tokens and the connections. Other modules import it, so its settings
-// are read through accessors.
+// the tokens and the connections. It is also the API of the CLI plugins, so
+// what it exports must stay stable.
 package cli
 
 import (
@@ -54,7 +54,8 @@ import (
 )
 
 // Runtime is built once per process from the flags, the environment and the
-// config file, in this order of precedence.
+// config file, in this order of precedence. It is the API of CLI plugins, so
+// its settings are read through accessors.
 //
 // TODO(T39): Backend(ctx) and Data(ctx), the metadata backend and the data
 // plane of pkg/cli/backend and pkg/cli/data.
@@ -350,8 +351,15 @@ func (r *Runtime) ShowProgress() bool {
 	return !r.quiet && !r.noProgress && r.output != "json" && term.IsTerminal(int(os.Stderr.Fd()))
 }
 
-// Print writes v as JSON with -o json. Else it calls text.
+// Print writes v as JSON with -o json. Else it calls text. For a Table, a nil
+// text writes the table.
 func (r *Runtime) Print(w io.Writer, v any, text func(w io.Writer)) error {
+	if t, ok := v.(Table); ok {
+		if text == nil {
+			text = t.Write
+		}
+		v = t.items()
+	}
 	if r.output != "json" {
 		text(w)
 		return nil

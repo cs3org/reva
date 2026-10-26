@@ -16,13 +16,14 @@
 // granted to it by virtue of its status as an Intergovernmental Organization
 // or submit itself to any jurisdiction.
 
-// Package revacmd is the reva CLI: the core commands and Main. cmd/reva
-// calls Main.
+// Package revacmd is the reva CLI: the core commands, the command plugins
+// that are compiled in, and Main. cmd/reva and the builds of gaia call Main.
 package revacmd
 
 import (
 	"context"
 	"fmt"
+	"io"
 	"os"
 	"strings"
 
@@ -60,7 +61,8 @@ func Main(opts ...Option) {
 	os.Exit(run(os.Args[1:], opts...))
 }
 
-// NewRoot returns the command tree.
+// NewRoot returns the command tree: the core commands and the command
+// plugins that are compiled in. CheckPlugins tells which plugins it refused.
 func NewRoot(opts ...Option) *cobra.Command {
 	return rootCommand(&cli.Runtime{}, new(bool), opts...)
 }
@@ -74,6 +76,9 @@ func run(args []string, opts ...Option) int {
 	// choice of the plane: a usage error.
 	started := false
 	root := rootCommand(rt, &started, opts...)
+	for _, line := range refusedPlugins(root) {
+		fmt.Fprintf(os.Stderr, "%s: %s\n", root.Name(), line)
+	}
 	root.SetArgs(args)
 	err := root.Execute()
 	if err == nil {
@@ -103,6 +108,9 @@ func rootCommand(rt *cli.Runtime, started *bool, opts ...Option) *cobra.Command 
 	for _, opt := range opts {
 		opt(&o)
 	}
+	// A plugin with its own PersistentPreRunE must not replace the hook of
+	// the root, which loads the settings.
+	cobra.EnableTraverseRunHooks = true
 	root := &cobra.Command{
 		Use:           "reva",
 		Short:         "Command line client for the reva gateway",
@@ -157,7 +165,7 @@ func rootCommand(rt *cli.Runtime, started *bool, opts ...Option) *cobra.Command 
 	add("fleet", admin.Commands(rt)...)
 	add("session",
 		loginCommand(rt), logoutCommand(rt), statusCommand(rt), whoamiCommand(rt), configCommand(rt),
-		admin.ElevateCommand(rt), openCommand(rt), tokenCommand(rt), preferencesCommand(rt), versionCommand(),
+		admin.ElevateCommand(rt), openCommand(rt), tokenCommand(rt), preferencesCommand(rt), versionCommand(rt),
 		completionCommand(),
 	)
 	for _, p := range mutating {
@@ -171,18 +179,52 @@ func rootCommand(rt *cli.Runtime, started *bool, opts ...Option) *cobra.Command 
 	root.CompletionOptions.DisableDefaultCmd = true
 	cli.OperatorHelp(root)
 	colorHelp(root)
+	attachPlugins(rt, root)
 	return root
 }
 
-func versionCommand() *cobra.Command {
-	return &cobra.Command{
+type versionResult struct {
+	Version   string      `json:"version"`
+	Commit    string      `json:"commit"`
+	GoVersion string      `json:"go_version"`
+	BuildDate string      `json:"build_date"`
+	Brand     string      `json:"brand,omitempty"`
+	Plugins   []pluginRow `json:"plugins,omitempty"`
+}
+
+func versionCommand(rt *cli.Runtime) *cobra.Command {
+	var plugins bool
+	cmd := &cobra.Command{
 		Use:   "version",
 		Short: "Print the version of this tool",
 		Args:  cobra.NoArgs,
-		Run: func(cmd *cobra.Command, args []string) {
-			fmt.Fprintf(cmd.OutOrStdout(), "version=%s commit=%s go_version=%s build_date=%s\n", version, gitCommit, goVersion, buildDate)
+		RunE: func(cmd *cobra.Command, args []string) error {
+			v := versionResult{Version: version, Commit: gitCommit, GoVersion: goVersion, BuildDate: buildDate}
+			if plugins {
+				// TODO(T40): the name of the brand file.
+				v.Brand = cmd.Root().Name()
+				v.Plugins = compiledPlugins()
+			}
+			return rt.Print(cmd.OutOrStdout(), v, func(w io.Writer) {
+				fmt.Fprintf(w, "version=%s commit=%s go_version=%s build_date=%s\n", v.Version, v.Commit, v.GoVersion, v.BuildDate)
+				if !plugins {
+					return
+				}
+				fmt.Fprintf(w, "brand=%s\n", v.Brand)
+				if len(v.Plugins) == 0 {
+					fmt.Fprintln(w, "no CLI plugins")
+					return
+				}
+				t := cli.Table{Headers: []string{"Plugin", "Package", "Version"}}
+				for _, p := range v.Plugins {
+					t.Rows = append(t.Rows, []string{p.ID, p.Package, p.Version})
+				}
+				t.Write(w)
+			})
 		},
 	}
+	cmd.Flags().BoolVar(&plugins, "plugins", false, "also list the CLI plugins that are compiled in, and the brand")
+	return cmd
 }
 
 // formatError returns the error of a CS3 status that is not OK.

@@ -21,6 +21,7 @@ package state
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -55,5 +56,32 @@ func TestReadConfigCopiesLegacyOnce(t *testing.T) {
 	}
 	if c.Connection.Gateway != "new:9142" || c.Connection.AdminHost != "admin:9999" {
 		t.Fatalf("config.toml not used: %+v", c)
+	}
+}
+
+func TestWriteConfigKeepsPluginSections(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+	p, err := ConfigPath()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := Write("config.toml", []byte("[plugins.otg]\nnumber = 42\n")); err != nil {
+		t.Fatal(err)
+	}
+	c, err := ReadConfig()
+	if err != nil {
+		t.Fatal(err)
+	}
+	c.Connection.Gateway = "gw:9142"
+	if err := WriteConfig(c); err != nil {
+		t.Fatal(err)
+	}
+	b, err := os.ReadFile(p)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(b), "[plugins.otg]") || !strings.Contains(string(b), "number = 42") {
+		t.Fatalf("the plugin section is lost:\n%s", b)
 	}
 }

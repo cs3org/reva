@@ -44,6 +44,9 @@ type Config struct {
 			SPN string `toml:"spn,omitempty" json:"spn,omitempty"`
 		} `toml:"kerberos,omitempty" json:"kerberos,omitzero"`
 	} `toml:"auth,omitempty" json:"auth,omitzero"`
+	// Plugins are the [plugins.<name>] sections. They are kept as they are,
+	// so that WriteConfig does not drop them, and each plugin decodes its own.
+	Plugins map[string]map[string]any `toml:"plugins,omitempty" json:"plugins,omitempty"`
 }
 
 // ReadConfig returns the stored config. A missing file gives an empty config.

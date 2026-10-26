@@ -103,14 +103,14 @@ func (f *fakeAdmin) Impersonate(ctx context.Context, req *adminpb.ImpersonateReq
 	return &adminpb.ImpersonateResponse{Token: "impersonated-" + req.User}, nil
 }
 
-func serve(t *testing.T, lis net.Listener, f *fakeAdmin) {
+func serve(t *testing.T, lis net.Listener, f adminpb.AdminAPIServer) {
 	s := grpc.NewServer()
 	adminpb.RegisterAdminAPIServer(s, f)
 	go func() { _ = s.Serve(lis) }()
 	t.Cleanup(s.Stop)
 }
 
-func serveTCP(t *testing.T, f *fakeAdmin) string {
+func serveTCP(t *testing.T, f adminpb.AdminAPIServer) string {
 	lis, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
 		t.Fatal(err)
