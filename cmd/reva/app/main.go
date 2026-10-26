@@ -148,6 +148,7 @@ func rootCommand(rt *cli.Runtime, started *bool, opts ...Option) *cobra.Command 
 	root.AddGroup(
 		&cobra.Group{ID: "files", Title: "Files:"},
 		&cobra.Group{ID: "sharing", Title: "Sharing:"},
+		&cobra.Group{ID: "storage", Title: "Storage:"},
 		&cobra.Group{ID: "fleet", Title: "Fleet:"},
 		&cobra.Group{ID: "session", Title: "Session:"},
 	)
@@ -162,6 +163,7 @@ func rootCommand(rt *cli.Runtime, started *bool, opts ...Option) *cobra.Command 
 		cpCommand(rt), versionsCommand(rt), trashCommand(rt), lockCommand(rt),
 	)
 	add("sharing", shareCommand(rt), linkCommand(rt), ocmCommand(rt))
+	add("storage", admin.RouteCommand(rt))
 	add("fleet", admin.Commands(rt)...)
 	add("session",
 		loginCommand(rt), logoutCommand(rt), statusCommand(rt), whoamiCommand(rt), configCommand(rt),

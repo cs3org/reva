@@ -1,0 +1,118 @@
+// Copyright 2018-2026 CERN
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+//
+// In applying this license, CERN does not waive the privileges and immunities
+// granted to it by virtue of its status as an Intergovernmental Organization
+// or submit itself to any jurisdiction.
+
+package admin
+
+import (
+	"bytes"
+	"context"
+	"net"
+	"path/filepath"
+	"strings"
+	"testing"
+
+	"github.com/cs3org/reva/v3/pkg/admin/adminpb"
+	"github.com/cs3org/reva/v3/pkg/cli"
+	"github.com/spf13/cobra"
+	"google.golang.org/grpc"
+)
+
+// fakeStorage is a StorageAdmin whose reloads fail on the instances in stale.
+type fakeStorage struct {
+	adminpb.UnimplementedStorageAdminServer
+	stale []*adminpb.StaleInstance
+	added []*adminpb.AddRouteRequest
+}
+
+func (f *fakeStorage) ListRoutes(context.Context, *adminpb.ListRoutesRequest) (*adminpb.ListRoutesResponse, error) {
+	return &adminpb.ListRoutesResponse{Routes: []*adminpb.Route{{Path: "/eos/user/a", MountId: "eoshome-i01"}}}, nil
+}
+
+func (f *fakeStorage) ResolvePath(_ context.Context, req *adminpb.ResolvePathRequest) (*adminpb.ResolvePathResponse, error) {
+	return &adminpb.ResolvePathResponse{Path: req.Path, Mounts: []*adminpb.Mount{
+		{MountId: "eoshome-i01", MountPath: "/eos/user/a", Address: "lb:9000", ProviderNodes: []string{"sp1:9001/storageprovider", "sp2:9001/storageprovider"}},
+	}}, nil
+}
+
+func (f *fakeStorage) AddRoute(_ context.Context, req *adminpb.AddRouteRequest) (*adminpb.AddRouteResponse, error) {
+	f.added = append(f.added, req)
+	return &adminpb.AddRouteResponse{Route: &adminpb.Route{Path: req.Path, MountId: req.MountId}, Stale: f.stale}, nil
+}
+
+func runRoute(t *testing.T, f *fakeStorage, args ...string) (stdout, stderr string, err error) {
+	t.Helper()
+	dir := t.TempDir()
+	t.Setenv("HOME", dir)
+	t.Setenv("XDG_CONFIG_HOME", filepath.Join(dir, ".config"))
+	lis, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	s := grpc.NewServer()
+	adminpb.RegisterAdminAPIServer(s, &fakeAdmin{})
+	adminpb.RegisterStorageAdminServer(s, f)
+	go func() { _ = s.Serve(lis) }()
+	t.Cleanup(s.Stop)
+
+	r := &cli.Runtime{}
+	root := &cobra.Command{
+		Use: "reva", SilenceErrors: true, SilenceUsage: true,
+		PersistentPreRunE: func(cmd *cobra.Command, _ []string) error { return r.Load(cmd.Flags()) },
+	}
+	r.AddFlags(root.PersistentFlags())
+	root.AddCommand(RouteCommand(r))
+	root.SetArgs(append([]string{"--admin-host", lis.Addr().String(), "--insecure", "--token", "login", "--yes"}, args...))
+	var out, errOut bytes.Buffer
+	root.SetOut(&out)
+	root.SetErr(&errOut)
+	err = root.Execute()
+	r.Close()
+	return out.String(), errOut.String(), err
+}
+
+func TestRouteAdd(t *testing.T) {
+	f := &fakeStorage{}
+	out, _, err := runRoute(t, f, "route", "add", "/eos/user/z", "eoshome-i05")
+	if err != nil || !strings.Contains(out, "/eos/user/z is routed to eoshome-i05") || len(f.added) != 1 {
+		t.Fatalf("route add: %v, %q, %v", err, out, f.added)
+	}
+}
+
+// An instance that did not reload serves the old table, so the command
+// fails after it reports the change and the stale instance.
+func TestRouteAddWithAStaleInstanceFails(t *testing.T) {
+	f := &fakeStorage{stale: []*adminpb.StaleInstance{{Node: "reg3:9999/storageregistry", Error: "db unreachable"}}}
+	out, errOut, err := runRoute(t, f, "route", "add", "/eos/user/z", "eoshome-i05")
+	if err == nil || !strings.Contains(err.Error(), "1 storage registry instances did not reload") {
+		t.Fatalf("err = %v, want the stale instances", err)
+	}
+	if !strings.Contains(out, "routed to eoshome-i05") || !strings.Contains(errOut, "stale: reg3:9999/storageregistry: db unreachable") {
+		t.Errorf("stdout %q, stderr %q", out, errOut)
+	}
+}
+
+func TestRouteListAndResolve(t *testing.T) {
+	out, _, err := runRoute(t, &fakeStorage{}, "route", "list")
+	if err != nil || !strings.Contains(out, "/eos/user/a") || !strings.Contains(out, "eoshome-i01") {
+		t.Fatalf("route list: %v\n%s", err, out)
+	}
+	out, _, err = runRoute(t, &fakeStorage{}, "route", "resolve", "/eos/user/a/alice")
+	if err != nil || !strings.Contains(out, "sp1:9001/storageprovider,sp2:9001/storageprovider") || !strings.Contains(out, "lb:9000") {
+		t.Fatalf("route resolve: %v\n%s", err, out)
+	}
+}
