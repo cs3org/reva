@@ -1,0 +1,359 @@
+// Copyright 2018-2026 CERN
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+//
+// In applying this license, CERN does not waive the privileges and immunities
+// granted to it by virtue of its status as an Intergovernmental Organization
+// or submit itself to any jurisdiction.
+
+package revacmd
+
+import (
+	"bytes"
+	"context"
+	"errors"
+	"net"
+	"strings"
+	"sync"
+	"testing"
+
+	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
+	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
+	collaboration "github.com/cs3org/go-cs3apis/cs3/sharing/collaboration/v1beta1"
+	link "github.com/cs3org/go-cs3apis/cs3/sharing/link/v1beta1"
+	"github.com/cs3org/reva/v3/pkg/admin/adminpb"
+	"github.com/cs3org/reva/v3/pkg/cli"
+	"github.com/cs3org/reva/v3/pkg/cli/backend"
+	"github.com/cs3org/reva/v3/pkg/cli/clitest"
+	"google.golang.org/grpc"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
+	"google.golang.org/protobuf/proto"
+)
+
+// sharesFleet is an Admin API whose SharesAdmin has share 4711 and link 42,
+// both of bob, and records each request.
+type sharesFleet struct {
+	adminpb.UnimplementedAdminAPIServer
+	adminpb.UnimplementedSharesAdminServer
+	admin bool
+
+	mu       sync.Mutex
+	requests []proto.Message
+}
+
+func (f *sharesFleet) record(m proto.Message) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.requests = append(f.requests, m)
+}
+
+// sent returns the requests of type M.
+func sent[M proto.Message](f *sharesFleet) []M {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	var out []M
+	for _, r := range f.requests {
+		if m, ok := r.(M); ok {
+			out = append(out, m)
+		}
+	}
+	return out
+}
+
+var (
+	bobShare = &adminpb.AdminShare{Share: &collaboration.Share{Id: &collaboration.ShareId{OpaqueId: "4711"}, Owner: &userpb.UserId{OpaqueId: "bob"}}}
+	bobLink  = &adminpb.AdminPublicShare{PublicShare: &link.PublicShare{Id: &link.PublicShareId{OpaqueId: "42"}, Token: "tok", Owner: &userpb.UserId{OpaqueId: "bob"}}}
+)
+
+func (f *sharesFleet) CheckAdmin(context.Context, *adminpb.CheckAdminRequest) (*adminpb.CheckAdminResponse, error) {
+	return &adminpb.CheckAdminResponse{Admin: f.admin}, nil
+}
+
+func (f *sharesFleet) RequestAdmin(context.Context, *adminpb.RequestAdminRequest) (*adminpb.RequestAdminResponse, error) {
+	if !f.admin {
+		return nil, status.Error(codes.PermissionDenied, "not an admin")
+	}
+	return &adminpb.RequestAdminResponse{Token: "admin"}, nil
+}
+
+func (f *sharesFleet) share(id string) (*adminpb.AdminShare, error) {
+	if id != "4711" {
+		return nil, status.Error(codes.NotFound, "share not found")
+	}
+	return bobShare, nil
+}
+
+func (f *sharesFleet) link(ref *adminpb.PublicLinkRef) (*adminpb.AdminPublicShare, error) {
+	if ref.GetId() != "42" && ref.GetToken() != "tok" {
+		return nil, status.Error(codes.NotFound, "link not found")
+	}
+	return bobLink, nil
+}
+
+func (f *sharesFleet) GetShare(_ context.Context, r *adminpb.GetShareRequest) (*adminpb.AdminShare, error) {
+	f.record(r)
+	return f.share(r.Id)
+}
+
+func (f *sharesFleet) UpdateShare(_ context.Context, r *adminpb.UpdateShareRequest) (*adminpb.AdminShare, error) {
+	f.record(r)
+	return f.share(r.Id)
+}
+
+func (f *sharesFleet) RemoveShare(_ context.Context, r *adminpb.RemoveShareRequest) (*adminpb.AdminShare, error) {
+	f.record(r)
+	return f.share(r.Id)
+}
+
+func (f *sharesFleet) TransferShare(_ context.Context, r *adminpb.TransferShareRequest) (*adminpb.AdminShare, error) {
+	f.record(r)
+	return f.share(r.Id)
+}
+
+func (f *sharesFleet) ListShares(r *adminpb.ListSharesRequest, s adminpb.SharesAdmin_ListSharesServer) error {
+	f.record(r)
+	return s.Send(&adminpb.AdminShare{Share: bobShare.Share, Orphan: true, Path: "/eos/user/b/bob/old"})
+}
+
+func (f *sharesFleet) MoveShares(r *adminpb.MoveSharesRequest, s adminpb.SharesAdmin_MoveSharesServer) error {
+	f.record(r)
+	return s.Send(&adminpb.MovedShare{Item: &adminpb.MovedShare_Share{Share: bobShare}, FromPath: r.FromPath + "/x", ToPath: r.ToPath + "/x"})
+}
+
+func (f *sharesFleet) GetPublicLink(_ context.Context, r *adminpb.GetPublicLinkRequest) (*adminpb.AdminPublicShare, error) {
+	f.record(r)
+	return f.link(r.Ref)
+}
+
+func (f *sharesFleet) UpdatePublicLink(_ context.Context, r *adminpb.UpdatePublicLinkRequest) (*adminpb.AdminPublicShare, error) {
+	f.record(r)
+	return f.link(r.Ref)
+}
+
+func (f *sharesFleet) RemovePublicLink(_ context.Context, r *adminpb.RemovePublicLinkRequest) (*adminpb.AdminPublicShare, error) {
+	f.record(r)
+	return f.link(r.Ref)
+}
+
+func (f *sharesFleet) MarkPublicLinkOrphan(_ context.Context, r *adminpb.MarkPublicLinkOrphanRequest) (*adminpb.AdminPublicShare, error) {
+	f.record(r)
+	return f.link(r.Ref)
+}
+
+func (f *sharesFleet) ListPublicLinks(r *adminpb.ListPublicLinksRequest, s adminpb.SharesAdmin_ListPublicLinksServer) error {
+	f.record(r)
+	return s.Send(bobLink)
+}
+
+// runAdmin runs args as alice on b, with f as the Admin API, and stdin as the
+// standard input.
+func runAdmin(t *testing.T, b backend.Backend, f *sharesFleet, stdin string, args ...string) (string, error) {
+	t.Helper()
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+	t.Setenv("HOME", t.TempDir())
+	lis, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	srv := grpc.NewServer()
+	adminpb.RegisterAdminAPIServer(srv, f)
+	adminpb.RegisterSharesAdminServer(srv, f)
+	go func() { _ = srv.Serve(lis) }()
+	t.Cleanup(srv.Stop)
+
+	rt := &cli.Runtime{}
+	rt.UseBackend(b, nil)
+	defer rt.Close()
+	root := rootCommand(rt, new(bool))
+	var out bytes.Buffer
+	root.SetOut(&out)
+	root.SetErr(&out)
+	root.SetIn(strings.NewReader(stdin))
+	root.SetArgs(append([]string{"--admin-host", lis.Addr().String(), "--insecure", "--token", "login", "--yes"}, args...))
+	err = root.Execute()
+	return out.String(), err
+}
+
+// A share or a link of another user is not found on the user plane. An
+// admin finds it with the Admin API and changes it on the server: the
+// request says that it is a fallback, for the audit.
+func TestOwnerFallback(t *testing.T) {
+	b := clitest.New("alice")
+	f := &sharesFleet{admin: true}
+
+	out, err := runAdmin(t, b, f, "", "share", "get", "4711")
+	if err != nil || !strings.Contains(out, "bob") {
+		t.Errorf("share get = %q, %v: want the share of bob", out, err)
+	}
+	if _, err := runAdmin(t, b, f, "", "share", "update", "4711", "--role", "editor", "--expires", "none"); err != nil {
+		t.Fatal(err)
+	}
+	if u := sent[*adminpb.UpdateShareRequest](f); len(u) != 1 || u[0].Role != "editor" || !u[0].RemoveExpiration || !u[0].Fallback {
+		t.Errorf("UpdateShare requests %v", u)
+	}
+	if _, err := runAdmin(t, b, f, "", "share", "remove", "4711"); err != nil {
+		t.Fatal(err)
+	}
+	if r := sent[*adminpb.RemoveShareRequest](f); len(r) != 1 || r[0].DbOnly || !r[0].Fallback {
+		t.Errorf("RemoveShare requests %v", r)
+	}
+
+	if _, err := runAdmin(t, b, f, "s3cret\n", "link", "update", "42", "--password", "--expires", "2026-12-31"); err != nil {
+		t.Fatal(err)
+	}
+	u := sent[*adminpb.UpdatePublicLinkRequest](f)
+	if len(u) != 1 || u[0].GetRef().GetId() != "42" || u[0].GetPassword() != "s3cret" || u[0].GetExpiration().GetSeconds() == 0 || !u[0].Fallback {
+		t.Errorf("UpdatePublicLink requests %v", u)
+	}
+	if _, err := runAdmin(t, b, f, "", "link", "update", "42", "--description", "x"); err == nil {
+		t.Error("link update --description of another user's link: want an error")
+	}
+	if _, err := runAdmin(t, b, f, "", "link", "remove", "42"); err != nil {
+		t.Fatal(err)
+	}
+	if r := sent[*adminpb.RemovePublicLinkRequest](f); len(r) != 1 || !r[0].Fallback {
+		t.Errorf("RemovePublicLink requests %v", r)
+	}
+}
+
+// A caller who cannot be an admin gets the not-found of the user plane, and
+// the Admin API is not asked. A mistyped id stays not found for an admin.
+func TestOwnerFallbackKeepsTheNotFound(t *testing.T) {
+	b := clitest.New("alice")
+	f := &sharesFleet{}
+	if _, err := runAdmin(t, b, f, "", "share", "update", "4711", "--role", "editor"); !cli.IsNotFound(err) {
+		t.Errorf("non-admin: err = %v, want not found", err)
+	}
+	if _, err := runAdmin(t, b, f, "", "link", "remove", "42"); !cli.IsNotFound(err) {
+		t.Errorf("non-admin: err = %v, want not found", err)
+	}
+	if n := len(sent[proto.Message](f)); n != 0 {
+		t.Errorf("a non-admin sent %d SharesAdmin requests", n)
+	}
+
+	f.admin = true
+	if _, err := runAdmin(t, b, f, "", "share", "remove", "4712"); !cli.IsNotFound(err) {
+		t.Errorf("mistyped id: err = %v, want not found", err)
+	}
+	if n := len(sent[*adminpb.RemoveShareRequest](f)); n != 0 {
+		t.Errorf("a mistyped id sent %d RemoveShare requests", n)
+	}
+}
+
+func TestShareOperatorOptions(t *testing.T) {
+	b := clitest.New("alice")
+	f := &sharesFleet{admin: true}
+
+	out, err := runAdmin(t, b, f, "", "share", "list", "--owner", "bob", "--orphans", "--expired", "--space", "cernbox")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(out, "ORPHAN") || !strings.Contains(out, "/eos/user/b/bob/old") {
+		t.Errorf("share list = %q: want the ORPHAN and PATH columns", out)
+	}
+	l := sent[*adminpb.ListSharesRequest](f)
+	want := &adminpb.ListSharesRequest{
+		Owner: "bob", Space: &adminpb.SpaceRef{Ref: &adminpb.SpaceRef_Name{Name: "cernbox"}},
+		Orphans: adminpb.ShareSelection_SHARE_SELECTION_ONLY, Expired: adminpb.ShareSelection_SHARE_SELECTION_ONLY, ResolvePaths: true,
+	}
+	if len(l) != 1 || !proto.Equal(l[0], want) {
+		t.Errorf("ListShares requests %v, want %v", l, want)
+	}
+	if _, err := runAdmin(t, b, f, "", "share", "list", "--all"); err == nil {
+		t.Error("share list --all without a filter: want an error")
+	}
+	if _, err := runAdmin(t, b, f, "", "link", "list", "--space", "eosproject$c3BhY2U"); err != nil {
+		t.Fatal(err)
+	}
+	if l := sent[*adminpb.ListPublicLinksRequest](f); len(l) != 1 || l[0].GetSpace().GetId().GetOpaqueId() != "eosproject$c3BhY2U" {
+		t.Errorf("ListPublicLinks requests %v", l)
+	}
+
+	if _, err := runAdmin(t, b, f, "", "share", "remove", "4711", "--db-only"); err != nil {
+		t.Fatal(err)
+	}
+	if r := sent[*adminpb.RemoveShareRequest](f); len(r) != 1 || !r[0].DbOnly || r[0].Fallback {
+		t.Errorf("RemoveShare requests %v", r)
+	}
+	if _, err := runAdmin(t, b, f, "", "share", "list", "--owner", "bob", "--as", "carol"); err == nil {
+		t.Error("an operator option with --as: want a usage error")
+	}
+}
+
+func TestShareOperatorVerbs(t *testing.T) {
+	b := clitest.New("alice")
+	f := &sharesFleet{admin: true}
+	if _, err := runAdmin(t, b, f, "", "share", "transfer", "4711", "carol"); err != nil {
+		t.Fatal(err)
+	}
+	if r := sent[*adminpb.TransferShareRequest](f); len(r) != 1 || r[0].Initiator != "carol" {
+		t.Errorf("TransferShare requests %v", r)
+	}
+	if _, err := runAdmin(t, b, f, "", "link", "mark-orphan", "tok"); err != nil {
+		t.Fatal(err)
+	}
+	if r := sent[*adminpb.MarkPublicLinkOrphanRequest](f); len(r) != 1 || r[0].GetRef().GetToken() != "tok" {
+		t.Errorf("MarkPublicLinkOrphan requests %v", r)
+	}
+
+	out, err := runAdmin(t, b, f, "", "share", "move", "/eos/a", "/eos/b", "--owner", "bob")
+	if err != nil || !strings.Contains(out, "/eos/b/x") {
+		t.Fatalf("share move = %q, %v", out, err)
+	}
+	// The plan first, then the move.
+	if m := sent[*adminpb.MoveSharesRequest](f); len(m) != 2 || !m[0].DryRun || m[1].DryRun || m[1].Owner != "bob" {
+		t.Errorf("MoveShares requests %v", m)
+	}
+	if _, err := runAdmin(t, b, f, "", "share", "move", "/eos/a", "/eos/b"); err == nil {
+		t.Error("share move without --owner or --space: want an error")
+	}
+}
+
+// existsShares answers AlreadyExists for a second share with the same
+// grantee on a resource, like the share manager.
+type existsBackend struct{ *clitest.Backend }
+
+func (b existsBackend) Shares() backend.Shares { return existsShares{b.Backend.Shares()} }
+
+type existsShares struct{ backend.Shares }
+
+func (s existsShares) Create(ctx context.Context, req *collaboration.CreateShareRequest) (*collaboration.Share, error) {
+	shares, err := s.List(ctx, req.ResourceInfo.Id)
+	if err != nil {
+		return nil, err
+	}
+	for _, sh := range shares {
+		if granteeName(sh.Grantee) == granteeName(req.Grant.Grantee) {
+			return nil, &cli.StatusError{Code: rpc.Code_CODE_ALREADY_EXISTS, Msg: "share already exists"}
+		}
+	}
+	return s.Shares.Create(ctx, req)
+}
+
+func TestShareCreateIgnoreExisting(t *testing.T) {
+	b := existsBackend{clitest.New("alice")}
+	b.AddFile("/docs/a.txt", []byte("x"))
+	f := &sharesFleet{}
+	if _, err := runAdmin(t, b, f, "", "share", "create", "/docs/a.txt", "--with", "bob"); err != nil {
+		t.Fatal(err)
+	}
+	_, err := runAdmin(t, b, f, "", "share", "create", "/docs/a.txt", "--with", "bob")
+	if se, ok := errors.AsType[*cli.StatusError](err); !ok || se.Code != rpc.Code_CODE_ALREADY_EXISTS {
+		t.Errorf("a second share: err = %v, want AlreadyExists", err)
+	}
+	out, err := runAdmin(t, b, f, "", "share", "create", "/docs/a.txt", "--with", "bob", "--ignore-existing")
+	if err != nil || !strings.Contains(out, "already has a share") || !strings.Contains(out, "bob") {
+		t.Errorf("--ignore-existing: %q, %v", out, err)
+	}
+}
