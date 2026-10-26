@@ -208,6 +208,10 @@ func (a sSpaces) List(ctx context.Context) ([]*provider.StorageSpace, error) {
 	return via(a.s, func(b backend.Backend) ([]*provider.StorageSpace, error) { return b.Spaces().List(ctx) })
 }
 
+func (a sSpaces) Update(ctx context.Context, req *provider.UpdateStorageSpaceRequest) (*provider.StorageSpace, error) {
+	return via(a.s, func(b backend.Backend) (*provider.StorageSpace, error) { return b.Spaces().Update(ctx, req) })
+}
+
 func (a sSpaces) Quota(ctx context.Context, ref *provider.Reference) (*backend.Quota, error) {
 	return via(a.s, func(b backend.Backend) (*backend.Quota, error) { return b.Spaces().Quota(ctx, ref) })
 }

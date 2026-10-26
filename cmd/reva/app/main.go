@@ -43,7 +43,7 @@ var gitCommit, buildDate, version, goVersion = rversion.GitCommit, rversion.Buil
 var mutating = []string{
 	"mkdir", "mv", "rm", "touch", "trash restore", "trash purge", "lock set", "lock remove",
 	"share create", "share update", "share remove", "share received update",
-	"link create", "link update", "link remove",
+	"link create", "link update", "link remove", "space update",
 	"ocm invite create", "ocm invite accept", "ocm share create", "ocm share update", "ocm share remove",
 	"ocm received update", "ocm transfer cancel", "ocm transfer retry",
 	"token create", "token revoke", "preferences set",
@@ -148,6 +148,7 @@ func rootCommand(rt *cli.Runtime, started *bool, opts ...Option) *cobra.Command 
 	root.AddGroup(
 		&cobra.Group{ID: "files", Title: "Files:"},
 		&cobra.Group{ID: "sharing", Title: "Sharing:"},
+		&cobra.Group{ID: "spaces", Title: "Spaces:"},
 		&cobra.Group{ID: "fleet", Title: "Fleet:"},
 		&cobra.Group{ID: "session", Title: "Session:"},
 	)
@@ -162,6 +163,7 @@ func rootCommand(rt *cli.Runtime, started *bool, opts ...Option) *cobra.Command 
 		cpCommand(rt), versionsCommand(rt), trashCommand(rt), lockCommand(rt),
 	)
 	add("sharing", shareCommand(rt), linkCommand(rt), ocmCommand(rt))
+	add("spaces", spaceCommand(rt))
 	add("fleet", admin.Commands(rt)...)
 	add("session",
 		loginCommand(rt), logoutCommand(rt), statusCommand(rt), whoamiCommand(rt), configCommand(rt),

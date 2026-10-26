@@ -22,8 +22,9 @@
 //	b := clitest.New("alice")
 //	rt.UseBackend(b, b.Data())
 //
-// It keeps files, trash, versions, locks, shares, links and app tokens. The
-// other calls answer that they are not available over the transport "fake".
+// It keeps files, trash, versions, locks, shares, links, app tokens and
+// spaces. The other calls answer that they are not available over the
+// transport "fake".
 package clitest
 
 import (
@@ -69,6 +70,7 @@ type Backend struct {
 	recvd  []*collaboration.ReceivedShare
 	links  []*link.PublicShare
 	tokens []*authapp.AppPassword
+	spaces []*provider.StorageSpace
 }
 
 type file struct {
@@ -117,6 +119,13 @@ func (b *Backend) Content(p string) ([]byte, bool) {
 		return nil, false
 	}
 	return bytes.Clone(f.data), true
+}
+
+// AddSpace adds a space that the caller sees. Only its owner can update it.
+func (b *Backend) AddSpace(s *provider.StorageSpace) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	b.spaces = append(b.spaces, s)
 }
 
 // AddReceived adds a share that the caller received.
@@ -222,7 +231,7 @@ func (b *Backend) Transport() string          { return Transport }
 func (b *Backend) Files() backend.Files       { return files{b} }
 func (b *Backend) Shares() backend.Shares     { return shares{b} }
 func (b *Backend) Links() backend.Links       { return links{b} }
-func (b *Backend) Spaces() backend.Spaces     { return spaces{} }
+func (b *Backend) Spaces() backend.Spaces     { return spaces{b} }
 func (b *Backend) Trash() backend.Trash       { return trash{b} }
 func (b *Backend) Versions() backend.Versions { return versions{b} }
 func (b *Backend) Locks() backend.Locks       { return locks{b} }
@@ -763,13 +772,35 @@ func (u users) ByClaim(ctx context.Context, claim, value string) (*userpb.User, 
 	return nil, notFound("user " + value)
 }
 
-type spaces struct{}
+type spaces struct{ b *Backend }
 
-func (spaces) List(ctx context.Context) ([]*provider.StorageSpace, error) {
-	return nil, notAvailable("the space list")
+func (s spaces) List(ctx context.Context) ([]*provider.StorageSpace, error) {
+	s.b.mu.Lock()
+	defer s.b.mu.Unlock()
+	return slices.Clone(s.b.spaces), nil
 }
 
-func (spaces) Quota(ctx context.Context, ref *provider.Reference) (*backend.Quota, error) {
+func (s spaces) Update(ctx context.Context, req *provider.UpdateStorageSpaceRequest) (*provider.StorageSpace, error) {
+	s.b.mu.Lock()
+	defer s.b.mu.Unlock()
+	for _, sp := range s.b.spaces {
+		if sp.GetId().GetOpaqueId() != req.GetStorageSpace().GetId().GetOpaqueId() || sp.GetOwner().GetId().GetOpaqueId() != s.b.me.Id.OpaqueId {
+			continue
+		}
+		switch m := req.GetField().GetMetadata(); {
+		case m == nil:
+			sp.Description = req.GetField().GetDescription()
+		case m.Type == provider.SpaceMetadata_TYPE_README:
+			sp.ReadmeId = m.Id
+		case m.Type == provider.SpaceMetadata_TYPE_THUMBNAIL:
+			sp.ThumbnailId = m.Id
+		}
+		return sp, nil
+	}
+	return nil, notFound("space " + req.GetStorageSpace().GetName())
+}
+
+func (s spaces) Quota(ctx context.Context, ref *provider.Reference) (*backend.Quota, error) {
 	return nil, notAvailable("the quota")
 }
 
