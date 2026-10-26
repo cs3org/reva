@@ -78,7 +78,7 @@ func NewRoot(opts ...Option) *cobra.Command {
 }
 
 // run runs the command line args and returns the exit code: 2 for a usage
-// error, 1 for any other error.
+// error (from cobra, or a cli.UsageError), 1 for any other error.
 func run(args []string, opts ...Option) int {
 	o := newOptions(opts)
 	if len(args) == 1 && args[0] == brandCheckArg {
@@ -118,7 +118,8 @@ func run(args []string, opts ...Option) int {
 	if s, ok := status.FromError(err); ok && rt.Debug() {
 		fmt.Fprintf(os.Stderr, "  grpc code=%s details=%v\n", s.Code(), s.Details())
 	}
-	if !started {
+	var usage *cli.UsageError
+	if !started || errors.As(err, &usage) {
 		fmt.Fprintf(os.Stderr, "Run '%s --help' for usage.\n", root.Name())
 		return 2
 	}

@@ -25,6 +25,20 @@ import (
 	"github.com/spf13/cobra"
 )
 
+func init() {
+	cli.RegisterCommand("usageprobe", func(*cli.Runtime) *cobra.Command {
+		return &cobra.Command{Use: "usageprobe", RunE: func(*cobra.Command, []string) error { return cli.Usagef("bad argument") }}
+	})
+}
+
+func TestUsageErrorExitsWith2(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+	if code := run([]string{"usageprobe"}); code != 2 {
+		t.Errorf("exit code = %d, want 2", code)
+	}
+}
+
 func TestAsWithAnOperatorCommandIsAUsageError(t *testing.T) {
 	if code := run([]string{"--as", "bob", "service", "list"}); code != 2 {
 		t.Errorf("exit code = %d, want 2", code)

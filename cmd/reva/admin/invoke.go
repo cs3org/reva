@@ -191,7 +191,7 @@ func invokeCommand() *cobra.Command {
 			// The kind and the arguments come from the service's own catalog.
 			spec := invocationSpec(ctx, client, selector, invocation)
 			if err := checkArgs(spec, args); err != nil {
-				return err
+				return &cli.UsageError{Err: err}
 			}
 			if stream && spec.GetKind() != "" && !spec.Streaming {
 				return fmt.Errorf("invocation %s does not stream", invocation)
