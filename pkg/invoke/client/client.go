@@ -78,8 +78,9 @@ const readyTimeout = 2 * time.Second
 // "host:port/service"; the fleet is every instance of every service in the
 // registry. A node id targets one instance, a service name every live one, a
 // partial id ("host:port" or a bare host) every instance at that address or on
-// that machine, and "*" every live instance in the fleet. It returns the
-// resolved service name when the selector was one.
+// that machine, "service[key=value,...]" every live instance of the service
+// whose registry metadata has all the pairs, and "*" every live instance in
+// the fleet. It returns the resolved service name when the selector was one.
 func Resolve(reg registry.Registry, selector string) (string, []Endpoint, error) {
 	// "*": every live instance in the fleet.
 	if selector == "*" {
@@ -88,6 +89,27 @@ func Resolve(reg registry.Registry, selector string) (string, []Endpoint, error)
 			return "", nil, fmt.Errorf("no live instances in the fleet")
 		}
 		return selector, eps, nil
+	}
+
+	// Before the node id, because a value such as a mount path can contain "/".
+	if svcName, pairs, ok := strings.Cut(selector, "["); ok {
+		pairs, ok = strings.CutSuffix(pairs, "]")
+		if !ok || svcName == "" {
+			return "", nil, fmt.Errorf("invalid selector %q: want service[key=value,...]", selector)
+		}
+		meta := map[string]string{}
+		for pair := range strings.SplitSeq(pairs, ",") {
+			k, v, ok := strings.Cut(pair, "=")
+			if k = strings.TrimSpace(k); !ok || k == "" {
+				return "", nil, fmt.Errorf("invalid selector %q: %q is not key=value", selector, pair)
+			}
+			meta[k] = strings.TrimSpace(v)
+		}
+		eps, err := ResolveMetadata(reg, svcName, meta)
+		if err != nil {
+			return "", nil, err
+		}
+		return svcName, eps, nil
 	}
 
 	// Node id "host:port/service": one exact instance.
@@ -133,6 +155,26 @@ func Resolve(reg registry.Registry, selector string) (string, []Endpoint, error)
 	}
 
 	return "", nil, fmt.Errorf("%q matches no service, instance, address or host", selector)
+}
+
+// ResolveMetadata returns the live instances of a service whose registry
+// metadata has every key and value in meta. Shared invocations then go to one
+// of them, other invocations to all of them.
+func ResolveMetadata(reg registry.Registry, svcName string, meta map[string]string) ([]Endpoint, error) {
+	sv, err := reg.GetService(svcName)
+	if err != nil {
+		return nil, fmt.Errorf("service %q not found", svcName)
+	}
+	var eps []Endpoint
+	for _, n := range service.FilterByMetadata(sv.Nodes(), meta) {
+		if nodeState(n) != registry.StateOffline {
+			eps = append(eps, EndpointFor(n))
+		}
+	}
+	if len(eps) == 0 {
+		return nil, fmt.Errorf("service %q has no live instance with metadata %v", svcName, meta)
+	}
+	return eps, nil
 }
 
 // FanOut invokes every routed group in parallel, one result per group. An

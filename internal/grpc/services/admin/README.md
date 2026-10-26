@@ -76,7 +76,11 @@ selects a peer:
 - a plain **service name** (`userprovider`) fans out to **every** live instance,
   returning one result per instance;
 - a **node id** (`10.0.0.4:19003/userprovider`, as shown by
-  `reva admin services -o wide/json`) targets **exactly that** instance; and
+  `reva admin services -o wide/json`) targets **exactly that** instance;
+- a **metadata selector** (`storageprovider[mount_id=eoshome-i01,mount_path=/eos/user]`)
+  targets the live instances of the service whose registry metadata has all the
+  pairs. A shared invocation goes to one of them. A storage provider advertises
+  `mount_id` and `mount_path`, a data provider `mount_id`; and
 - a **partial id** widens the scope: an address (`10.0.0.4:19003`) targets every
   instance bound to it, a bare host (`10.0.0.4`) every instance on that machine.
   A bare token that is both a service name and a host resolves as the service.

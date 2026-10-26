@@ -67,7 +67,8 @@ const (
 	MetaScheme    = "scheme"     // "http" | "https" for HTTP services
 	MetaPrefix    = "prefix"     // HTTP URL path prefix
 	MetaPublicURL = "public_url" // explicit external URL override
-	MetaMountID   = "mount_id"   // storage affinity key (data provider)
+	MetaMountID   = "mount_id"   // storage affinity key (storage and data provider)
+	MetaMountPath = "mount_path" // namespace path a storage provider serves
 	MetaControl   = "control"    // host:port of the process's control channel
 	MetaHost      = "host"       // hostname of the process that registered the node
 	// MetaApp carries an app provider's CS3 ProviderInfo as protojson, minus
