@@ -32,16 +32,13 @@ import (
 	authapp "github.com/cs3org/go-cs3apis/cs3/auth/applications/v1beta1"
 	authpb "github.com/cs3org/go-cs3apis/cs3/auth/provider/v1beta1"
 	registry "github.com/cs3org/go-cs3apis/cs3/auth/registry/v1beta1"
-	gateway "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
-	preferences "github.com/cs3org/go-cs3apis/cs3/preferences/v1beta1"
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
-	link "github.com/cs3org/go-cs3apis/cs3/sharing/link/v1beta1"
-	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	types "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
 	"github.com/cs3org/reva/v3/internal/cli/state"
 	"github.com/cs3org/reva/v3/pkg/auth/scope"
 	"github.com/cs3org/reva/v3/pkg/cli"
+	"github.com/cs3org/reva/v3/pkg/cli/backend"
 	"github.com/cs3org/reva/v3/pkg/cli/brand"
 	"github.com/cs3org/reva/v3/pkg/utils"
 	"github.com/jedib0t/go-pretty/table"
@@ -167,7 +164,9 @@ func logoutCommand(rt *cli.Runtime) *cobra.Command {
 }
 
 type statusResult struct {
+	Transport string `json:"transport"`
 	Gateway   string `json:"gateway"`
+	Endpoint  string `json:"endpoint,omitempty"`
 	AdminHost string `json:"admin_host,omitempty"`
 	Config    string `json:"config"`
 	TokenFile string `json:"token_file"`
@@ -185,7 +184,7 @@ func statusCommand(rt *cli.Runtime) *cobra.Command {
 			"token are kept. Run this first when something does not work.",
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			st := statusResult{Gateway: rt.GatewayAddr(), AdminHost: rt.AdminHost(), Version: version}
+			st := statusResult{Transport: rt.Transport(), Gateway: rt.GatewayAddr(), Endpoint: rt.HTTPEndpoint(), AdminHost: rt.AdminHost(), Version: version}
 			st.Config, _ = state.ConfigPath()
 			st.TokenFile, _ = state.TokenPath()
 			user, exp, err := whoami(cmd.Context(), rt)
@@ -204,7 +203,9 @@ func statusCommand(rt *cli.Runtime) *cobra.Command {
 					}
 					return s
 				}
+				fmt.Fprintf(w, "Transport:   %s\n", st.Transport)
 				fmt.Fprintf(w, "Gateway:     %s\n", dash(st.Gateway))
+				fmt.Fprintf(w, "Endpoint:    %s\n", dash(st.Endpoint))
 				fmt.Fprintf(w, "Admin host:  %s\n", dash(st.AdminHost))
 				fmt.Fprintf(w, "User:        %s\n", dash(st.User))
 				fmt.Fprintf(w, "Expires:     %s\n", dash(st.Expires))
@@ -221,7 +222,11 @@ func statusCommand(rt *cli.Runtime) *cobra.Command {
 
 // whoami returns the user of the token and when the token expires.
 func whoami(ctx context.Context, rt *cli.Runtime) (*userpb.User, time.Time, error) {
-	client, err := rt.Client()
+	b, err := rt.Backend(ctx)
+	if err != nil {
+		return nil, time.Time{}, err
+	}
+	user, err := b.Users().Me(ctx)
 	if err != nil {
 		return nil, time.Time{}, err
 	}
@@ -229,14 +234,7 @@ func whoami(ctx context.Context, rt *cli.Runtime) (*userpb.User, time.Time, erro
 	if err != nil {
 		return nil, time.Time{}, err
 	}
-	res, err := client.WhoAmI(cli.WithToken(ctx, token), &gateway.WhoAmIRequest{Token: token})
-	if err != nil {
-		return nil, time.Time{}, err
-	}
-	if res.Status.Code != rpc.Code_CODE_OK {
-		return nil, time.Time{}, formatError(res.Status)
-	}
-	return res.User, cli.TokenExpiry(token), nil
+	return user, cli.TokenExpiry(token), nil
 }
 
 // readCredentials asks for the missing user name and for the secret. The
@@ -387,30 +385,20 @@ func openCommand(rt *cli.Runtime) *cobra.Command {
 		Args:              cobra.ExactArgs(1),
 		ValidArgsFunction: completeRemotePath(rt, 1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			client, ctx, err := rt.Gateway(cmd.Context())
+			d, err := rt.Data(cmd.Context())
 			if err != nil {
 				return err
 			}
-			opaque := &types.Opaque{Map: map[string]*types.OpaqueEntry{}}
-			if appInsecure {
-				opaque.Map["insecure"] = &types.OpaqueEntry{}
-			}
-			if appSkipVerify {
-				opaque.Map["skip-verify"] = &types.OpaqueEntry{}
-			}
-			res, err := client.OpenInApp(ctx, &gateway.OpenInAppRequest{
-				Ref:      &provider.Reference{Path: args[0]},
-				ViewMode: utils.GetViewMode(viewMode),
-				App:      app,
-				Opaque:   opaque,
+			appURL, err := d.OpenInApp(cmd.Context(), pathRef(args[0]), backend.AppOptions{
+				App:        app,
+				ViewMode:   utils.GetViewMode(viewMode),
+				Insecure:   appInsecure,
+				SkipVerify: appSkipVerify,
 			})
 			if err != nil {
 				return err
 			}
-			if res.Status.Code != rpc.Code_CODE_OK {
-				return formatError(res.Status)
-			}
-			return rt.Print(cmd.OutOrStdout(), res.AppUrl, func(w io.Writer) { fmt.Fprintf(w, "App URL: %+v\n", res.AppUrl) })
+			return rt.Print(cmd.OutOrStdout(), appURL, func(w io.Writer) { fmt.Fprintf(w, "App URL: %+v\n", appURL) })
 		},
 	}
 	cmd.Flags().StringVar(&viewMode, "view-mode", "view", "view mode: view, read or write")
@@ -464,15 +452,16 @@ func tokenCreateCommand(rt *cli.Runtime) *cobra.Command {
 				// The end of the day, so that the token works during all of that date.
 				exp = &types.Timestamp{Seconds: uint64(t.Add(24*time.Hour - time.Second).Unix())}
 			}
-			client, ctx, err := rt.Gateway(cmd.Context())
+			ctx := cmd.Context()
+			b, err := rt.Backend(ctx)
 			if err != nil {
 				return err
 			}
-			scopes, err := tokenScope(ctx, client, paths, shares, role, unlimited)
+			scopes, err := tokenScope(ctx, b, paths, shares, role, unlimited)
 			if err != nil {
 				return err
 			}
-			res, err := client.GenerateAppPassword(ctx, &authapp.GenerateAppPasswordRequest{
+			pw, err := b.Tokens().Create(ctx, &authapp.GenerateAppPasswordRequest{
 				Expiration: exp,
 				Label:      label,
 				TokenScope: scopes,
@@ -480,11 +469,8 @@ func tokenCreateCommand(rt *cli.Runtime) *cobra.Command {
 			if err != nil {
 				return err
 			}
-			if res.Status.Code != rpc.Code_CODE_OK {
-				return formatError(res.Status)
-			}
-			return rt.Print(cmd.OutOrStdout(), res.AppPassword, func(w io.Writer) {
-				renderAppPasswords(w, "Token", []*authapp.AppPassword{res.AppPassword})
+			return rt.Print(cmd.OutOrStdout(), pw, func(w io.Writer) {
+				renderAppPasswords(w, "Token", []*authapp.AppPassword{pw})
 			})
 		},
 	}
@@ -497,32 +483,26 @@ func tokenCreateCommand(rt *cli.Runtime) *cobra.Command {
 	return cmd
 }
 
-func tokenScope(ctx context.Context, client gateway.GatewayAPIClient, paths, shares []string, role authpb.Role, unlimited bool) (map[string]*authpb.Scope, error) {
+func tokenScope(ctx context.Context, b backend.Backend, paths, shares []string, role authpb.Role, unlimited bool) (map[string]*authpb.Scope, error) {
 	if unlimited {
 		return scope.AddOwnerScope(nil)
 	}
 	var scopes map[string]*authpb.Scope
 	for _, id := range shares {
-		res, err := client.GetPublicShare(ctx, &link.GetPublicShareRequest{Ref: publicShareRef(id)})
+		s, err := b.Links().Get(ctx, publicShareRef(id))
 		if err != nil {
 			return nil, err
 		}
-		if res.Status.Code != rpc.Code_CODE_OK {
-			return nil, formatError(res.Status)
-		}
-		if scopes, err = scope.AddPublicShareScope(res.Share, role, scopes); err != nil {
+		if scopes, err = scope.AddPublicShareScope(s, role, scopes); err != nil {
 			return nil, err
 		}
 	}
 	for _, p := range paths {
-		res, err := client.Stat(ctx, &provider.StatRequest{Ref: &provider.Reference{Path: p}})
+		info, err := b.Files().Stat(ctx, pathRef(p))
 		if err != nil {
 			return nil, err
 		}
-		if res.Status.Code != rpc.Code_CODE_OK {
-			return nil, formatError(res.Status)
-		}
-		if scopes, err = scope.AddResourceInfoScope(res.Info, role, scopes); err != nil {
+		if scopes, err = scope.AddResourceInfoScope(info, role, scopes); err != nil {
 			return nil, err
 		}
 	}
@@ -535,18 +515,15 @@ func tokenListCommand(rt *cli.Runtime) *cobra.Command {
 		Short: "List the app tokens on your account",
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			client, ctx, err := rt.Gateway(cmd.Context())
+			b, err := rt.Backend(cmd.Context())
 			if err != nil {
 				return err
 			}
-			res, err := client.ListAppPasswords(ctx, &authapp.ListAppPasswordsRequest{})
+			pws, err := b.Tokens().List(cmd.Context())
 			if err != nil {
 				return err
 			}
-			if res.Status.Code != rpc.Code_CODE_OK {
-				return formatError(res.Status)
-			}
-			return rt.Print(cmd.OutOrStdout(), res.AppPasswords, func(w io.Writer) { renderAppPasswords(w, "ID", res.AppPasswords) })
+			return rt.Print(cmd.OutOrStdout(), pws, func(w io.Writer) { renderAppPasswords(w, "ID", pws) })
 		},
 	}
 }
@@ -557,28 +534,24 @@ func tokenRevokeCommand(rt *cli.Runtime) *cobra.Command {
 		Short: "Revoke an app token",
 		Long:  "Revoke an app token. The ID is the one that 'reva token list' shows.",
 		Args:  cobra.ExactArgs(1),
-		ValidArgsFunction: completeIDs(rt, func(ctx context.Context, client gateway.GatewayAPIClient) ([]string, error) {
-			res, err := client.ListAppPasswords(ctx, &authapp.ListAppPasswordsRequest{})
+		ValidArgsFunction: completeIDs(rt, func(ctx context.Context, b backend.Backend) ([]string, error) {
+			pws, err := b.Tokens().List(ctx)
 			if err != nil {
 				return nil, err
 			}
-			ids := make([]string, 0, len(res.AppPasswords))
-			for _, pw := range res.AppPasswords {
+			ids := make([]string, 0, len(pws))
+			for _, pw := range pws {
 				ids = append(ids, pw.Password+"\t"+pw.Label)
 			}
 			return ids, nil
 		}),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			client, ctx, err := rt.Gateway(cmd.Context())
+			b, err := rt.Backend(cmd.Context())
 			if err != nil {
 				return err
 			}
-			res, err := client.InvalidateAppPassword(ctx, &authapp.InvalidateAppPasswordRequest{Password: args[0]})
-			if err != nil {
+			if err := b.Tokens().Revoke(cmd.Context(), args[0]); err != nil {
 				return err
-			}
-			if res.Status.Code != rpc.Code_CODE_OK {
-				return formatError(res.Status)
 			}
 			rt.Msg(cmd.ErrOrStderr(), "Revoked app token %s", args[0])
 			return nil
@@ -621,18 +594,15 @@ func preferencesCommand(rt *cli.Runtime) *cobra.Command {
 			Short: "Show a preference",
 			Args:  cobra.ExactArgs(2),
 			RunE: func(cmd *cobra.Command, args []string) error {
-				client, ctx, err := rt.Gateway(cmd.Context())
+				p, err := cli.Ability[backend.PreferenceStore](cmd.Context(), rt, "preferences")
 				if err != nil {
 					return err
 				}
-				res, err := client.GetKey(ctx, &preferences.GetKeyRequest{Key: &preferences.PreferenceKey{Namespace: args[0], Key: args[1]}})
+				val, err := p.GetPreference(cmd.Context(), args[0], args[1])
 				if err != nil {
 					return err
 				}
-				if res.Status.Code != rpc.Code_CODE_OK {
-					return formatError(res.Status)
-				}
-				return rt.Print(cmd.OutOrStdout(), res.Val, func(w io.Writer) { fmt.Fprintln(w, res.Val) })
+				return rt.Print(cmd.OutOrStdout(), val, func(w io.Writer) { fmt.Fprintln(w, val) })
 			},
 		},
 		&cobra.Command{
@@ -640,21 +610,11 @@ func preferencesCommand(rt *cli.Runtime) *cobra.Command {
 			Short: "Set a preference",
 			Args:  cobra.ExactArgs(3),
 			RunE: func(cmd *cobra.Command, args []string) error {
-				client, ctx, err := rt.Gateway(cmd.Context())
+				p, err := cli.Ability[backend.PreferenceStore](cmd.Context(), rt, "preferences")
 				if err != nil {
 					return err
 				}
-				res, err := client.SetKey(ctx, &preferences.SetKeyRequest{
-					Key: &preferences.PreferenceKey{Namespace: args[0], Key: args[1]},
-					Val: args[2],
-				})
-				if err != nil {
-					return err
-				}
-				if res.Status.Code != rpc.Code_CODE_OK {
-					return formatError(res.Status)
-				}
-				return nil
+				return p.SetPreference(cmd.Context(), args[0], args[1], args[2])
 			},
 		},
 	)

@@ -144,7 +144,8 @@ func specsToAdmin(in []*controlpb.InvocationSpec) []*adminpb.InvocationSpec {
 	for _, s := range in {
 		args := make([]*adminpb.ArgSpec, 0, len(s.Args))
 		for _, a := range s.Args {
-			args = append(args, &adminpb.ArgSpec{Name: a.Name, Description: a.Description, Required: a.Required})
+			args = append(args, &adminpb.ArgSpec{Name: a.Name, Description: a.Description, Required: a.Required,
+				Type: a.Type, Repeated: a.Repeated, Default: a.Default, Enum: a.Enum})
 		}
 		out = append(out, &adminpb.InvocationSpec{
 			Name:        s.Name,

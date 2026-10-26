@@ -22,6 +22,7 @@ import (
 	"encoding"
 	"fmt"
 	"reflect"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -58,12 +59,80 @@ func argFields[A any]() []argField {
 		if !parsable(f.Type) {
 			panic(fmt.Sprintf("invoke: argument %q: unsupported type %s", name, f.Type))
 		}
-		fields = append(fields, argField{
-			spec:  ArgSpec{Name: name, Description: f.Tag.Get("help"), Required: opt == "required"},
-			index: i,
-		})
+		spec := ArgSpec{Name: name, Description: f.Tag.Get("help"), Required: opt == "required", Default: f.Tag.Get("default")}
+		t := f.Type
+		if t.Kind() == reflect.Pointer {
+			t = t.Elem()
+		}
+		var elem reflect.Type
+		spec.Type, spec.Repeated, elem = argType(t)
+		if e, ok := f.Tag.Lookup("enum"); ok {
+			spec.Enum = strings.Split(e, ",")
+		} else if e, ok := reflect.New(elem).Interface().(Enumerated); ok {
+			spec.Enum = e.Values()
+		}
+		if spec.Default != "" {
+			if spec.Required {
+				panic(fmt.Sprintf("invoke: argument %q: a required argument cannot have a default", name))
+			}
+			if err := checkEnum(spec, spec.Default); err != nil {
+				panic(fmt.Sprintf("invoke: argument %q: default: %v", name, err))
+			}
+			if _, err := parseArg(t, spec.Default); err != nil {
+				panic(fmt.Sprintf("invoke: argument %q: default: %v", name, err))
+			}
+		}
+		fields = append(fields, argField{spec: spec, index: i})
 	}
 	return fields
+}
+
+// argType returns the catalog type of a parsable type that is not a pointer,
+// whether it is a list, and the type of one value.
+func argType(t reflect.Type) (name string, repeated bool, elem reflect.Type) {
+	elem = t
+	if !scalar(elem) {
+		repeated, elem = true, elem.Elem()
+	}
+	switch {
+	case elem == durationType:
+		return "duration", repeated, elem
+	case elem == timeType:
+		return "time", repeated, elem
+	case reflect.PointerTo(elem).Implements(textUnmarshalerType):
+		return elem.String(), repeated, elem
+	}
+	switch elem.Kind() {
+	case reflect.Bool:
+		name = "bool"
+	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
+		name = "int"
+	case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
+		name = "uint"
+	case reflect.Float32, reflect.Float64:
+		name = "float"
+	default:
+		name = "string"
+	}
+	return name, repeated, elem
+}
+
+// checkEnum checks a wire value, or each value of a list, against the enum
+// of spec.
+func checkEnum(spec ArgSpec, s string) error {
+	if len(spec.Enum) == 0 {
+		return nil
+	}
+	values := []string{s}
+	if spec.Repeated {
+		values = strings.Split(s, ",")
+	}
+	for _, v := range values {
+		if v = strings.TrimSpace(v); (v != "" || !spec.Repeated) && !slices.Contains(spec.Enum, v) {
+			return fmt.Errorf("%q is not one of %s", v, strings.Join(spec.Enum, ", "))
+		}
+	}
+	return nil
 }
 
 // parsable reports whether an argument can have type t. A pointer is nil when
@@ -112,7 +181,17 @@ func bind[A any](fields []argField, raw map[string]any) (A, error) {
 			if f.spec.Required {
 				return a, fmt.Errorf("invoke: missing argument %q", f.spec.Name)
 			}
-			continue
+			if f.spec.Default == "" {
+				continue
+			}
+			// The default is parsed at each call: a time default such as 1h
+			// means that long before the call.
+			r = f.spec.Default
+		}
+		if s, ok := r.(string); ok {
+			if err := checkEnum(f.spec, s); err != nil {
+				return a, fmt.Errorf("invoke: argument %q: %w", f.spec.Name, err)
+			}
 		}
 		fv := v.Field(f.index)
 		t := fv.Type()

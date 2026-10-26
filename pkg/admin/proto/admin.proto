@@ -175,6 +175,15 @@ message ArgSpec {
   string name = 1;
   string description = 2;
   bool required = 3;
+  // type is string, int, uint, bool, float, duration or time, or the Go name
+  // of a type that parses itself (an encoding.TextUnmarshaler).
+  string type = 4;
+  // repeated reports a list: one argument with comma-separated values.
+  bool repeated = 5;
+  // default is the value of an absent argument. Empty means none.
+  string default = 6;
+  // enum lists the only values that the argument accepts. Empty means any.
+  repeated string enum = 7;
 }
 
 message InvocationSpec {

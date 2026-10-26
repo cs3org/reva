@@ -15,7 +15,8 @@ chain = ["token", "basic"]
 
 [env]
 transport    = ["REVA_TRANSPORT"]
-gateway      = ["REVA_GATEWAY", "REVA_HOST"]   # REVA_HOST is the name from before --gateway
+endpoint     = ["REVA_ENDPOINT"]
+gateway      = ["REVA_GATEWAY", "REVA_HOST"] # REVA_HOST is the name from before --gateway
 admin_host   = ["REVA_ADMIN_HOST"]
 token        = ["REVA_TOKEN"]
 token_cache  = ["REVA_TOKEN_FILE"]

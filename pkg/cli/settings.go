@@ -47,6 +47,8 @@ type setting struct {
 	short   string
 	usage   string
 	builtin string
+	// builtinFn is for a built-in default that a variable holds.
+	builtinFn func() string
 	// secret keeps the value out of the flag default that help shows.
 	secret bool
 	field  func(r *Runtime) any // *string or *bool
@@ -62,10 +64,11 @@ func boolString(b *bool) string {
 }
 
 var settings = []setting{
-	{key: "transport", flag: "transport", usage: "transport of the user plane: grpc, http or auto", builtin: "grpc",
-		field:  func(r *Runtime) any { return &r.transport },
-		config: func(c *state.Config) string { return c.Connection.Transport },
-		brand:  func(b *brand.Brand) string { return b.Connection.Transport }},
+	{key: "transport", flag: "transport", usage: "transport of the user plane: grpc, http or auto",
+		builtinFn: func() string { return DefaultTransport },
+		field:     func(r *Runtime) any { return &r.transport },
+		config:    func(c *state.Config) string { return c.Connection.Transport },
+		brand:     func(b *brand.Brand) string { return b.Connection.Transport }},
 	{key: "endpoint", flag: "endpoint", usage: "HTTPS endpoint of the deployment, https://host",
 		field:  func(r *Runtime) any { return &r.httpEndpoint },
 		config: func(c *state.Config) string { return c.Connection.Endpoint },
@@ -216,6 +219,9 @@ func (r *Runtime) lookup(s setting, b *brand.Brand, files []layer) value {
 		if v := s.brand(b); v != "" {
 			return value{v, "brand " + b.Name()}
 		}
+	}
+	if s.builtinFn != nil {
+		return value{s.builtinFn(), "built-in"}
 	}
 	return value{s.builtin, "built-in"}
 }

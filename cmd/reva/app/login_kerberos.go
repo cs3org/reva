@@ -75,7 +75,7 @@ func kerberosSPN(rt *cli.Runtime) (string, error) {
 	}
 	addr := rt.GatewayAddr()
 	if addr == "" {
-		if u, err := url.Parse(rt.Endpoint()); err == nil {
+		if u, err := url.Parse(rt.HTTPEndpoint()); err == nil {
 			addr = u.Host
 		}
 	}

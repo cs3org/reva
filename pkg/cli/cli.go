@@ -40,6 +40,7 @@ import (
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	"github.com/cs3org/reva/v3/internal/cli/state"
 	"github.com/cs3org/reva/v3/pkg/appctx"
+	"github.com/cs3org/reva/v3/pkg/cli/backend"
 	"github.com/cs3org/reva/v3/pkg/cli/brand"
 	"github.com/cs3org/reva/v3/pkg/httpclient"
 	"github.com/spf13/pflag"
@@ -57,9 +58,6 @@ import (
 // environment, the user config, the system config, the brand and the
 // built-in defaults, in this order of precedence. It is the API of CLI
 // plugins, so its settings are read through accessors.
-//
-// TODO(T39): Backend(ctx) and Data(ctx), the metadata backend and the data
-// plane of pkg/cli/backend and pkg/cli/data.
 type Runtime struct {
 	brand            *brand.Brand
 	transport        string
@@ -86,8 +84,8 @@ type Runtime struct {
 	reason    string
 	yes       bool
 	noElevate bool
-	// httpEndpoint is the HTTPS endpoint of the deployment, used by --as when
-	// the Admin API cannot be reached.
+	// httpEndpoint is the HTTPS endpoint of the deployment (--endpoint), for
+	// the HTTPS transport, and for --as when the Admin API cannot be reached.
 	httpEndpoint string
 	config       state.Config
 
@@ -104,6 +102,8 @@ type Runtime struct {
 	plane             Plane
 	need              string
 	usedAdmin         bool
+	backend           backend.Backend
+	data              backend.DataPlane
 }
 
 // AddFlags adds the global flags, which set the runtime, to fs.
@@ -117,12 +117,6 @@ func (r *Runtime) AddFlags(fs *pflag.FlagSet) {
 	fs.BoolVar(&r.debug, "debug", false, "show the underlying error and request details")
 	fs.BoolVar(&r.noProgress, "no-progress", false, "hide the progress bar")
 }
-
-// Transport returns the transport of the user plane: grpc, http or auto.
-func (r *Runtime) Transport() string { return r.transport }
-
-// Endpoint returns the HTTPS endpoint of the deployment.
-func (r *Runtime) Endpoint() string { return r.httpEndpoint }
 
 // GatewayAddr returns the address of the gateway.
 func (r *Runtime) GatewayAddr() string { return r.gatewayAddr }
@@ -169,7 +163,7 @@ func (r *Runtime) Client() (gateway.GatewayAPIClient, error) {
 		if r.insecure {
 			creds = insecure.NewCredentials()
 		}
-		opts := append(r.DialOptions(), grpc.WithTransportCredentials(creds))
+		opts := append(r.DialOptions(), grpc.WithTransportCredentials(creds), gatewayDialOption())
 		conn, err := grpc.NewClient(r.gatewayAddr, opts...)
 		if err != nil {
 			return nil, err
