@@ -16,7 +16,6 @@
 // granted to it by virtue of its status as an Intergovernmental Organization
 // or submit itself to any jurisdiction.
 
-
 package admin
 
 import (
@@ -189,4 +188,3 @@ func TestTheSocketServesEveryService(t *testing.T) {
 		t.Fatalf("socket serves %v, want %v", got, want)
 	}
 }
-
