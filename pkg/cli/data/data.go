@@ -21,6 +21,7 @@
 package data
 
 import (
+	"cmp"
 	"context"
 	"errors"
 	"fmt"
@@ -30,6 +31,7 @@ import (
 	"net/http"
 	"net/url"
 	"strconv"
+	"strings"
 
 	appprovider "github.com/cs3org/go-cs3apis/cs3/app/provider/v1beta1"
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
@@ -39,14 +41,19 @@ import (
 	"github.com/cs3org/reva/v3/pkg/crypto"
 )
 
-// ErrNotBuilt is the answer of the parts of the data plane that come with
-// the transfer engine of the HTTPS transport.
-var ErrNotBuilt = errors.New("not available yet in this version of the CLI")
+// DefaultChunkSize is the size of a TUS part when neither the caller nor
+// the server sets one.
+const DefaultChunkSize = 8 << 20
 
 // Plane implements backend.DataPlane.
 type Plane struct {
 	client *http.Client
 	loc    backend.Locator
+	// ChunkSize is the size of a TUS part. The server can make it smaller.
+	ChunkSize int64
+	// Renew, when it is set, replaces the credentials after a 401. The
+	// request is then sent again once, with a new target.
+	Renew func(ctx context.Context) error
 }
 
 var _ backend.DataPlane = (*Plane)(nil)
@@ -57,20 +64,45 @@ func New(client *http.Client, loc backend.Locator) *Plane {
 	return &Plane{client: client, loc: loc}
 }
 
-func (p *Plane) Download(ctx context.Context, ref *provider.Reference, offset int64) (io.ReadCloser, int64, error) {
-	t, err := p.loc.DownloadTarget(ctx, ref)
-	if err != nil {
-		return nil, 0, err
+// send gets a target and sends the request that build makes for it. After a
+// 401 it renews the credentials and sends it again, with a new target.
+func (p *Plane) send(ctx context.Context, target func() (*backend.Target, error), build func(*backend.Target) (*http.Request, error)) (*http.Response, error) {
+	for attempt := 0; ; attempt++ {
+		t, err := target()
+		if err != nil {
+			return nil, err
+		}
+		req, err := build(t)
+		if err != nil {
+			return nil, err
+		}
+		for k, v := range t.Header {
+			if req.Header.Get(k) == "" {
+				req.Header[k] = v
+			}
+		}
+		res, err := p.client.Do(req)
+		if err != nil {
+			return nil, err
+		}
+		if res.StatusCode != http.StatusUnauthorized || p.Renew == nil || attempt > 0 {
+			return res, nil
+		}
+		res.Body.Close()
+		if err := p.Renew(ctx); err != nil {
+			return nil, err
+		}
 	}
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, t.URL, nil)
-	if err != nil {
-		return nil, 0, err
-	}
-	maps.Copy(req.Header, t.Header)
-	if offset > 0 {
-		req.Header.Set("Range", "bytes="+strconv.FormatInt(offset, 10)+"-")
-	}
-	res, err := p.client.Do(req)
+}
+
+func (p *Plane) get(ctx context.Context, op string, target func() (*backend.Target, error), offset int64) (io.ReadCloser, int64, error) {
+	res, err := p.send(ctx, target, func(t *backend.Target) (*http.Request, error) {
+		req, err := http.NewRequestWithContext(ctx, http.MethodGet, t.URL, nil)
+		if err == nil && offset > 0 {
+			req.Header.Set("Range", "bytes="+strconv.FormatInt(offset, 10)+"-")
+		}
+		return req, err
+	})
 	if err != nil {
 		return nil, 0, err
 	}
@@ -92,7 +124,15 @@ func (p *Plane) Download(ctx context.Context, ref *provider.Reference, offset in
 		return res.Body, size, nil
 	}
 	res.Body.Close()
-	return nil, 0, transferError("download: GET", res)
+	return nil, 0, transferError(op+": GET", res)
+}
+
+func (p *Plane) Download(ctx context.Context, ref *provider.Reference, offset int64) (io.ReadCloser, int64, error) {
+	return p.get(ctx, "download", func() (*backend.Target, error) { return p.loc.DownloadTarget(ctx, ref) }, offset)
+}
+
+func (p *Plane) DownloadVersion(ctx context.Context, ref *provider.Reference, key string) (io.ReadCloser, int64, error) {
+	return p.get(ctx, "download version", func() (*backend.Target, error) { return p.loc.VersionTarget(ctx, ref, key) }, 0)
 }
 
 func (p *Plane) Upload(ctx context.Context, ref *provider.Reference, open func() (io.ReadCloser, error), size int64, checksum string) error {
@@ -115,40 +155,51 @@ func (p *Plane) UploadStream(ctx context.Context, ref *provider.Reference, r io.
 }
 
 func (p *Plane) put(ctx context.Context, ref *provider.Reference, open func() (io.ReadCloser, error), size int64, checksum, ifMatch string) error {
-	t, err := p.loc.UploadTarget(ctx, ref, size, ifMatch)
-	if err != nil {
-		return err
-	}
-	u, err := url.Parse(t.URL)
-	if err != nil {
-		return err
-	}
-	if checksum != "" && t.Checksums != nil {
-		xsType, err := guessXS(checksum, t.Checksums)
-		if err != nil {
-			return err
-		}
-		xs, err := computeXS(xsType, open)
-		if err != nil {
-			return err
-		}
-		q := u.Query()
-		q.Add("xs", xs)
-		q.Add("xs_type", storageprovider.GRPC2PKGXS(xsType).String())
-		u.RawQuery = q.Encode()
-	}
-	body, err := open()
-	if err != nil {
-		return err
-	}
-	defer body.Close()
-	req, err := http.NewRequestWithContext(ctx, http.MethodPut, u.String(), body)
-	if err != nil {
-		return err
-	}
-	req.ContentLength = size
-	maps.Copy(req.Header, t.Header)
-	res, err := p.client.Do(req)
+	res, err := p.send(ctx, func() (*backend.Target, error) { return p.loc.UploadTarget(ctx, ref, size, ifMatch) },
+		func(t *backend.Target) (*http.Request, error) {
+			u, err := url.Parse(t.URL)
+			if err != nil {
+				return nil, err
+			}
+			var xsHeader string
+			if checksum != "" && t.Checksums != nil {
+				xsType, err := guessXS(checksum, t.Checksums)
+				if err != nil {
+					return nil, err
+				}
+				xs, err := computeXS(xsType, open)
+				if err != nil {
+					return nil, err
+				}
+				name := storageprovider.GRPC2PKGXS(xsType).String()
+				if t.ChecksumHeader {
+					xsHeader = strings.ToUpper(name) + ":" + xs
+				} else {
+					q := u.Query()
+					q.Add("xs", xs)
+					q.Add("xs_type", name)
+					u.RawQuery = q.Encode()
+				}
+			}
+			body, err := open()
+			if err != nil {
+				return nil, err
+			}
+			req, err := http.NewRequestWithContext(ctx, http.MethodPut, u.String(), body)
+			if err != nil {
+				body.Close()
+				return nil, err
+			}
+			req.ContentLength = size
+			if size == 0 {
+				body.Close()
+				req.Body = http.NoBody
+			}
+			if xsHeader != "" {
+				req.Header.Set("OC-Checksum", xsHeader)
+			}
+			return req, nil
+		})
 	if err != nil {
 		return err
 	}
@@ -162,20 +213,136 @@ func (p *Plane) put(ctx context.Context, ref *provider.Reference, open func() (i
 	return transferError("upload: PUT", res)
 }
 
-func (p *Plane) UploadResumable(ctx context.Context, ref *provider.Reference, open func() (io.ReadCloser, error), size int64, checksum string) error {
-	return fmt.Errorf("TUS upload: %w", ErrNotBuilt)
+func (p *Plane) UploadResumable(ctx context.Context, ref *provider.Reference, open func() (io.ReadCloser, error), size int64, checksum string, progress func(backend.Upload)) error {
+	t, err := p.loc.ResumableTarget(ctx, ref, size, checksum)
+	if err != nil {
+		return err
+	}
+	return p.sendParts(ctx, backend.Upload{URL: t.URL, Path: ref.GetPath(), Size: size}, t.Header, open, progress)
+}
+
+func (p *Plane) ResumeUpload(ctx context.Context, up backend.Upload, open func() (io.ReadCloser, error), progress func(backend.Upload)) error {
+	h, err := p.loc.AuthHeader(ctx)
+	if err != nil {
+		return err
+	}
+	req, err := http.NewRequestWithContext(ctx, http.MethodHead, up.URL, nil)
+	if err != nil {
+		return err
+	}
+	maps.Copy(req.Header, h)
+	req.Header.Set("Tus-Resumable", tusVersion)
+	res, err := p.client.Do(req)
+	if err != nil {
+		return err
+	}
+	res.Body.Close()
+	switch res.StatusCode {
+	case http.StatusOK, http.StatusNoContent:
+	case http.StatusNotFound, http.StatusGone, http.StatusForbidden:
+		return &backend.StatusError{Code: rpc.Code_CODE_NOT_FOUND, Msg: "the server does not know the upload any more"}
+	default:
+		return transferError("resume upload: HEAD", res)
+	}
+	if up.Offset, err = strconv.ParseInt(res.Header.Get("Upload-Offset"), 10, 64); err != nil {
+		return errors.New("resume upload: the server gives no offset")
+	}
+	return p.sendParts(ctx, up, h, open, progress)
+}
+
+const tusVersion = "1.0.0"
+
+// sendParts sends the file from up.Offset in parts of the chunk size.
+func (p *Plane) sendParts(ctx context.Context, up backend.Upload, h http.Header, open func() (io.ReadCloser, error), progress func(backend.Upload)) error {
+	if progress == nil {
+		progress = func(backend.Upload) {}
+	}
+	progress(up)
+	if up.Offset >= up.Size {
+		return nil
+	}
+	r, err := open()
+	if err != nil {
+		return err
+	}
+	defer r.Close()
+	if s, ok := r.(io.Seeker); ok {
+		_, err = s.Seek(up.Offset, io.SeekStart)
+	} else {
+		_, err = io.CopyN(io.Discard, r, up.Offset)
+	}
+	if err != nil {
+		return err
+	}
+	chunk := p.chunkSize(ctx)
+	for up.Offset < up.Size {
+		n := min(chunk, up.Size-up.Offset)
+		req, err := http.NewRequestWithContext(ctx, http.MethodPatch, up.URL, io.NopCloser(io.LimitReader(r, n)))
+		if err != nil {
+			return err
+		}
+		req.ContentLength = n
+		maps.Copy(req.Header, h)
+		req.Header.Set("Tus-Resumable", tusVersion)
+		req.Header.Set("Upload-Offset", strconv.FormatInt(up.Offset, 10))
+		req.Header.Set("Content-Type", "application/offset+octet-stream")
+		res, err := p.client.Do(req)
+		if err != nil {
+			return err
+		}
+		res.Body.Close()
+		if res.StatusCode != http.StatusNoContent && res.StatusCode != http.StatusOK && res.StatusCode != http.StatusCreated {
+			return transferError("upload: PATCH", res)
+		}
+		next := up.Offset + n
+		if v, err := strconv.ParseInt(res.Header.Get("Upload-Offset"), 10, 64); err == nil {
+			next = v
+		}
+		if next <= up.Offset {
+			return errors.New("upload: the server stopped taking data")
+		}
+		up.Offset = next
+		progress(up)
+	}
+	return nil
+}
+
+func (p *Plane) chunkSize(ctx context.Context) int64 {
+	chunk := cmp.Or(p.ChunkSize, DefaultChunkSize)
+	if c, err := p.loc.Capabilities(ctx); err == nil && c.MaxChunkSize > 0 {
+		chunk = min(chunk, c.MaxChunkSize)
+	}
+	return chunk
 }
 
 func (p *Plane) Archive(ctx context.Context, refs []*provider.Reference, format string) (io.ReadCloser, error) {
-	return nil, fmt.Errorf("archive: %w", ErrNotBuilt)
+	body, _, err := p.get(ctx, "archive", func() (*backend.Target, error) { return p.loc.ArchiveTarget(ctx, refs, format) }, 0)
+	return body, err
+}
+
+func (p *Plane) Capabilities(ctx context.Context) (*backend.Capabilities, error) {
+	return p.loc.Capabilities(ctx)
 }
 
 func (p *Plane) OpenInApp(ctx context.Context, ref *provider.Reference, opts backend.AppOptions) (*appprovider.OpenInAppURL, error) {
 	return p.loc.OpenInApp(ctx, ref, opts)
 }
 
+// statusCodes are the HTTP answers that a command tests by their CS3 code.
+var statusCodes = map[int]rpc.Code{
+	http.StatusUnauthorized:        rpc.Code_CODE_UNAUTHENTICATED,
+	http.StatusForbidden:           rpc.Code_CODE_PERMISSION_DENIED,
+	http.StatusNotFound:            rpc.Code_CODE_NOT_FOUND,
+	http.StatusLocked:              rpc.Code_CODE_LOCKED,
+	http.StatusInsufficientStorage: rpc.Code_CODE_INSUFFICIENT_STORAGE,
+}
+
 func transferError(op string, res *http.Response) error {
-	return errors.New(op + " request returned " + res.Status)
+	msg := op + " request returned " + res.Status
+	if code, ok := statusCodes[res.StatusCode]; ok {
+		return &backend.StatusError{Code: code, Msg: msg}
+	}
+	return errors.New(msg)
 }
 
 func computeXS(t provider.ResourceChecksumType, open func() (io.ReadCloser, error)) (string, error) {

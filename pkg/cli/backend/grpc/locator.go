@@ -35,18 +35,29 @@ import (
 	"github.com/cs3org/reva/v3/pkg/cli/backend"
 )
 
-// The data plane uses only the simple protocol for now: TUS comes with the
-// transfer engine.
-const simpleProtocol = "simple"
+const (
+	simpleProtocol = "simple"
+	tusProtocol    = "tus"
+)
 
 type locator struct{ b *Backend }
 
 func (l locator) DownloadTarget(ctx context.Context, ref *provider.Reference) (*backend.Target, error) {
+	return l.download(ctx, &provider.InitiateFileDownloadRequest{Ref: ref})
+}
+
+func (l locator) VersionTarget(ctx context.Context, ref *provider.Reference, key string) (*backend.Target, error) {
+	return l.download(ctx, &provider.InitiateFileDownloadRequest{Ref: ref, Opaque: &types.Opaque{Map: map[string]*types.OpaqueEntry{
+		"version_key": {Decoder: "plain", Value: []byte(key)},
+	}}})
+}
+
+func (l locator) download(ctx context.Context, req *provider.InitiateFileDownloadRequest) (*backend.Target, error) {
 	c, ctx, err := l.b.gw(ctx)
 	if err != nil {
 		return nil, err
 	}
-	res, err := check(c.InitiateFileDownload(ctx, &provider.InitiateFileDownloadRequest{Ref: ref}))
+	res, err := check(c.InitiateFileDownload(ctx, req))
 	if err != nil {
 		return nil, err
 	}
@@ -94,6 +105,63 @@ func (l locator) UploadTarget(ctx context.Context, ref *provider.Reference, size
 		return t, nil
 	}
 	return nil, fmt.Errorf("upload: the server offers no %s protocol", simpleProtocol)
+}
+
+// ResumableTarget puts the transfer token in the path, as ocdav does,
+// because a TUS client sends no header of its own (the data gateway reads
+// the token from there).
+func (l locator) ResumableTarget(ctx context.Context, ref *provider.Reference, size int64, _ string) (*backend.Target, error) {
+	c, ctx, err := l.b.gw(ctx)
+	if err != nil {
+		return nil, err
+	}
+	res, err := check(c.InitiateFileUpload(ctx, &provider.InitiateFileUploadRequest{
+		Ref: ref,
+		Opaque: &types.Opaque{Map: map[string]*types.OpaqueEntry{
+			"Upload-Length": {Decoder: "plain", Value: []byte(strconv.FormatInt(size, 10))},
+		}},
+	}))
+	if err != nil {
+		return nil, err
+	}
+	for _, p := range res.Protocols {
+		if p.Protocol != tusProtocol {
+			continue
+		}
+		u := p.UploadEndpoint
+		if p.Token != "" {
+			if u, err = url.JoinPath(u, p.Token); err != nil {
+				return nil, err
+			}
+		}
+		h, _ := l.AuthHeader(ctx)
+		return &backend.Target{URL: u, Header: h}, nil
+	}
+	return nil, notAvailable("TUS uploads")
+}
+
+// ArchiveTarget: the archiver is an HTTP service that the gateway does not
+// know.
+func (l locator) ArchiveTarget(ctx context.Context, refs []*provider.Reference, format string) (*backend.Target, error) {
+	return nil, notAvailable("archive")
+}
+
+// Capabilities has no CS3 call. The simple protocol always works, so the
+// data plane does not try TUS.
+func (l locator) Capabilities(ctx context.Context) (*backend.Capabilities, error) {
+	return &backend.Capabilities{}, nil
+}
+
+func (l locator) AuthHeader(ctx context.Context) (http.Header, error) {
+	_, ctx, err := l.b.gw(ctx)
+	if err != nil {
+		return nil, err
+	}
+	h := http.Header{}
+	if t, ok := appctx.ContextGetToken(ctx); ok {
+		h.Set(appctx.TokenHeader, t)
+	}
+	return h, nil
 }
 
 // target is the data gateway with the transfer token, or the WebDAV path

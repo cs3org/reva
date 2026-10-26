@@ -22,6 +22,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net/http"
 	"time"
 
 	appprovider "github.com/cs3org/go-cs3apis/cs3/app/provider/v1beta1"
@@ -364,4 +365,26 @@ func (a sLocator) OpenInApp(ctx context.Context, ref *provider.Reference, opts b
 	return via(a.s, func(b backend.Backend) (*appprovider.OpenInAppURL, error) {
 		return b.Locator().OpenInApp(ctx, ref, opts)
 	})
+}
+
+func (a sLocator) ResumableTarget(ctx context.Context, ref *provider.Reference, size int64, checksum string) (*backend.Target, error) {
+	return via(a.s, func(b backend.Backend) (*backend.Target, error) {
+		return b.Locator().ResumableTarget(ctx, ref, size, checksum)
+	})
+}
+
+func (a sLocator) VersionTarget(ctx context.Context, ref *provider.Reference, key string) (*backend.Target, error) {
+	return via(a.s, func(b backend.Backend) (*backend.Target, error) { return b.Locator().VersionTarget(ctx, ref, key) })
+}
+
+func (a sLocator) ArchiveTarget(ctx context.Context, refs []*provider.Reference, format string) (*backend.Target, error) {
+	return via(a.s, func(b backend.Backend) (*backend.Target, error) { return b.Locator().ArchiveTarget(ctx, refs, format) })
+}
+
+func (a sLocator) Capabilities(ctx context.Context) (*backend.Capabilities, error) {
+	return via(a.s, func(b backend.Backend) (*backend.Capabilities, error) { return b.Locator().Capabilities(ctx) })
+}
+
+func (a sLocator) AuthHeader(ctx context.Context) (http.Header, error) {
+	return via(a.s, func(b backend.Backend) (http.Header, error) { return b.Locator().AuthHeader(ctx) })
 }
