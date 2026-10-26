@@ -42,6 +42,7 @@ import (
 
 	"github.com/cs3org/reva/v3/pkg/appctx"
 	"github.com/cs3org/reva/v3/pkg/errtypes"
+	"github.com/cs3org/reva/v3/pkg/invoke"
 	"github.com/cs3org/reva/v3/pkg/mime"
 	"github.com/cs3org/reva/v3/pkg/plugin"
 	svcregistry "github.com/cs3org/reva/v3/pkg/registry"
@@ -105,6 +106,7 @@ type FSWithListRegexSuport interface {
 }
 
 type service struct {
+	*invoke.Set
 	conf               *config
 	storage            storage.FS
 	mountPath, mountID string
@@ -219,11 +221,15 @@ func New(ctx context.Context, m map[string]any) (rgrpc.Service, error) {
 	}
 
 	service := &service{
+		Set:         invoke.NewSet(),
 		conf:        &c,
 		storage:     fs,
 		mountPath:   mountPath,
 		mountID:     mountID,
 		availableXS: xsTypes,
+	}
+	if err := service.MergeDriver(fs); err != nil {
+		return nil, err
 	}
 
 	return service, nil
