@@ -121,6 +121,9 @@ func New(ctx context.Context, m map[string]any) (rgrpc.Service, error) {
 		svc.timeoutSkipSpaces = time.Second * time.Duration(3) // 3 seconds.
 	}
 	svc.Set = svc.invocations()
+	if err := svc.MergeDriver(s); err != nil {
+		return nil, err
+	}
 
 	return &svc, nil
 }
