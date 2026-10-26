@@ -278,22 +278,3 @@ func TestRouteErrorCodes(t *testing.T) {
 		t.Errorf("a failed call wrote the table %d times", table.writes)
 	}
 }
-
-func TestErrtypeCode(t *testing.T) {
-	for _, tc := range []struct {
-		code codes.Code
-		err  error
-		want codes.Code
-	}{
-		{codes.Unknown, errtypes.NotFound("x"), codes.NotFound},
-		{codes.Unknown, errtypes.BadRequest("x"), codes.InvalidArgument},
-		{codes.Unknown, errtypes.NotSupported("x"), codes.Unimplemented},
-		{codes.Unknown, errors.New("boom"), codes.Unknown},
-		// A code that the node sent wins over the text.
-		{codes.PermissionDenied, errtypes.NotFound("x"), codes.PermissionDenied},
-	} {
-		if got := errtypeCode(tc.code, tc.err.Error()); got != tc.want {
-			t.Errorf("errtypeCode(%v, %q) = %v, want %v", tc.code, tc.err, got, tc.want)
-		}
-	}
-}

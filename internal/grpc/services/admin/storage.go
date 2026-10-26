@@ -25,7 +25,6 @@ import (
 
 	"github.com/cs3org/reva/v3/pkg/admin"
 	"github.com/cs3org/reva/v3/pkg/admin/adminpb"
-	"github.com/cs3org/reva/v3/pkg/errtypes"
 	"github.com/cs3org/reva/v3/pkg/invoke/client"
 	"github.com/cs3org/reva/v3/pkg/registry"
 	"google.golang.org/grpc/codes"
@@ -118,7 +117,7 @@ func (a *storageAdmin) RemoveRoute(ctx context.Context, req *adminpb.RemoveRoute
 // decodes its result into out.
 func invokeRegistry(ctx context.Context, eps []client.Endpoint, invocation string, args map[string]string, out proto.Message) error {
 	res, _ := invokeOne(ctx, eps, invocation, args)
-	if err := nodeStatus(invocation, errtypeCode(res.Code, res.Error), res.Error); err != nil {
+	if err := nodeStatus(invocation, res.Code, res.Error); err != nil {
 		return err
 	}
 	return decode(res.ResultJSON, out)
@@ -135,7 +134,7 @@ func reloadRoutes(ctx context.Context, eps []client.Endpoint) []*adminpb.StaleIn
 	var stale []*adminpb.StaleInstance
 	for _, r := range rs {
 		if r.Error != "" {
-			stale = append(stale, &adminpb.StaleInstance{Node: r.Node, Error: r.Error, Code: int32(errtypeCode(r.Code, r.Error))})
+			stale = append(stale, &adminpb.StaleInstance{Node: r.Node, Error: r.Error, Code: int32(r.Code)})
 		}
 	}
 	return stale
@@ -154,26 +153,4 @@ func auditRoute(ctx context.Context, action, path string, stale []*adminpb.Stale
 		ev.Err = fmt.Errorf("%d storage registry instances did not reload the routes", len(stale))
 	}
 	admin.Audit(ctx, ev)
-}
-
-// errtypeCode is the gRPC code of an invocation error. The control channel
-// sends an errtypes error as Unknown, because errtypes has no gRPC code, so
-// the code comes from the prefix of the message.
-func errtypeCode(code codes.Code, msg string) codes.Code {
-	if code != codes.OK && code != codes.Unknown {
-		return code
-	}
-	for _, e := range []struct {
-		prefix string
-		code   codes.Code
-	}{
-		{errtypes.NotFound("").Error(), codes.NotFound},
-		{errtypes.BadRequest("").Error(), codes.InvalidArgument},
-		{errtypes.NotSupported("").Error(), codes.Unimplemented},
-	} {
-		if strings.HasPrefix(msg, e.prefix) {
-			return e.code
-		}
-	}
-	return code
 }
