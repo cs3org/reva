@@ -114,13 +114,13 @@ func PlaneOf(cmd *cobra.Command) (Plane, string) {
 // combinations that make no sense. Its errors are usage errors.
 func (r *Runtime) SelectPlane(cmd *cobra.Command) error {
 	r.plane, r.need = PlaneOf(cmd)
-	if r.As != "" {
+	if r.as != "" {
 		if r.plane == AdminPlane {
 			return fmt.Errorf("--as runs a user command as another user: it cannot be used with %s, which needs admin rights", r.need)
 		}
 		r.need = "--as"
 	}
-	if strings.ContainsFunc(r.Reason, func(c rune) bool { return c < 0x20 || c > 0x7e }) {
+	if strings.ContainsFunc(r.reason, func(c rune) bool { return c < 0x20 || c > 0x7e }) {
 		// gRPC headers allow only printable ASCII.
 		return errors.New("--reason must be printable ASCII text")
 	}

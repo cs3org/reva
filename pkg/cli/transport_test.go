@@ -26,6 +26,7 @@ import (
 	"testing"
 
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
+	"github.com/cs3org/reva/v3/internal/cli/state"
 	"github.com/cs3org/reva/v3/pkg/cli/backend"
 	"github.com/cs3org/reva/v3/pkg/cli/clitest"
 	"github.com/spf13/pflag"
@@ -45,7 +46,7 @@ func TestBackendSelection(t *testing.T) {
 		{"http", "gw:9142", "http transport is not available yet"},
 		{"bogus", "", "unknown transport"},
 	} {
-		r := &Runtime{transport: tc.transport, GatewayAddr: tc.gateway}
+		r := &Runtime{transport: tc.transport, gatewayAddr: tc.gateway}
 		b, err := r.Backend(context.Background())
 		switch {
 		case tc.wantErr == "" && (err != nil || b.Transport() != backend.GRPC):
@@ -61,17 +62,17 @@ func TestLoadTransport(t *testing.T) {
 	t.Setenv("REVA_ENDPOINT", "https://env.example.org")
 	r := &Runtime{}
 	fs := pflag.NewFlagSet("t", pflag.ContinueOnError)
-	r.TransportFlags(fs)
+	r.AddFlags(fs)
 	if err := fs.Parse([]string{"--endpoint", "https://flag.example.org"}); err != nil {
 		t.Fatal(err)
 	}
-	var c Config
+	var c state.Config
 	c.Connection.Transport = "http"
 	if err := r.loadTransport(fs, c); err != nil {
 		t.Fatal(err)
 	}
-	if r.Transport() != "auto" || r.HTTPEndpoint != "https://flag.example.org" {
-		t.Errorf("transport %q, endpoint %q: want auto from env and the endpoint of the flag", r.Transport(), r.HTTPEndpoint)
+	if r.Transport() != "auto" || r.httpEndpoint != "https://flag.example.org" {
+		t.Errorf("transport %q, endpoint %q: want auto from env and the endpoint of the flag", r.Transport(), r.httpEndpoint)
 	}
 }
 
@@ -145,7 +146,7 @@ func TestAbility(t *testing.T) {
 	if _, err := Ability[backend.PreferenceStore](context.Background(), r, "preferences"); err == nil || err.Error() != "preferences is not available over fake" {
 		t.Errorf("err = %v, want not available over fake", err)
 	}
-	r.HTTPEndpoint = "https://example.org"
+	r.httpEndpoint = "https://example.org"
 	if _, err := Ability[backend.PreferenceStore](context.Background(), r, "preferences"); !errors.Is(err, backend.ErrNotAvailable) || !errors.Is(err, errHTTPNotBuilt) {
 		t.Errorf("err = %v, want not available, and the https backend not built", err)
 	}

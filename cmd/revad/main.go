@@ -113,10 +113,19 @@ func Main() {
 }
 
 func initPlugins() {
-	plugins := reva.GetPlugins("")
+	plugins := revadPlugins()
 	for _, p := range plugins {
 		plugin.RegisterPlugin(p.ID.Namespace(), p.ID.Name(), p.New)
 	}
+}
+
+// revadPlugins returns the registered plugins without the ones of the reva
+// CLI. A CLI plugin linked into revad by mistake would make
+// plugin.RegisterPlugin panic on its unknown namespace.
+func revadPlugins() []reva.PluginInfo {
+	return slices.DeleteFunc(reva.GetPlugins(""), func(p reva.PluginInfo) bool {
+		return strings.HasPrefix(string(p.ID), "cli.")
+	})
 }
 
 func handleVersionFlag() {
@@ -134,7 +143,7 @@ func handlePluginsFlag() {
 	// TODO (gdelmont): maybe in future if needed we can filter
 	// by namespace (for example for getting all the http plugins).
 	// For now we just list all the plugins.
-	plugins := reva.GetPlugins("")
+	plugins := revadPlugins()
 	grouped := groupByNamespace(plugins)
 	bi, ok := debug.ReadBuildInfo()
 	if !ok {

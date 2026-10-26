@@ -64,9 +64,9 @@ func logsCommand() *cobra.Command {
 			// so label lines with their node in that case.
 			multi := !strings.Contains(selector, "/") || strings.Contains(selector, "[")
 			if follow {
-				return followLogs(ctx, client, selector, args, rt.Output, multi)
+				return followLogs(ctx, client, selector, args, rt.Output(), multi)
 			}
-			return snapshotLogs(ctx, client, selector, args, rt.Output, multi)
+			return snapshotLogs(ctx, client, selector, args, rt.Output(), multi)
 		},
 	}
 	cmd.Flags().BoolVarP(&follow, "follow", "f", false, "stream new lines until interrupted")

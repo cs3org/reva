@@ -26,6 +26,7 @@ import (
 	"os"
 	"time"
 
+	"github.com/cs3org/reva/v3/internal/cli/state"
 	"github.com/cs3org/reva/v3/pkg/cli/backend"
 	grpcbackend "github.com/cs3org/reva/v3/pkg/cli/backend/grpc"
 	"github.com/cs3org/reva/v3/pkg/cli/data"
@@ -49,21 +50,14 @@ var errHTTPNotBuilt = errors.New("the http transport is not available yet in thi
 
 var _ backend.Backend = (*switcher)(nil)
 
-// TransportFlags adds the flags that select the transport of the user plane
-// to fs.
-func (r *Runtime) TransportFlags(fs *pflag.FlagSet) {
-	fs.StringVar(&r.transport, "transport", "", "transport of the user plane: grpc, http or auto (env REVA_TRANSPORT; default "+DefaultTransport+")")
-	fs.StringVar(&r.HTTPEndpoint, "endpoint", "", "HTTPS endpoint of the deployment, https://host (env REVA_ENDPOINT)")
-}
-
 // loadTransport fills the transport and the endpoint that are not given as
 // flags from the environment, then from the config file.
-func (r *Runtime) loadTransport(flags *pflag.FlagSet, c Config) error {
+func (r *Runtime) loadTransport(flags *pflag.FlagSet, c state.Config) error {
 	if !flags.Changed("transport") {
 		r.transport = cmp.Or(os.Getenv("REVA_TRANSPORT"), c.Connection.Transport)
 	}
 	if !flags.Changed("endpoint") {
-		r.HTTPEndpoint = cmp.Or(os.Getenv("REVA_ENDPOINT"), c.Connection.Endpoint)
+		r.httpEndpoint = cmp.Or(os.Getenv("REVA_ENDPOINT"), c.Connection.Endpoint)
 	}
 	switch t := r.Transport(); t {
 	case backend.GRPC, backend.HTTP, TransportAuto:
@@ -72,6 +66,10 @@ func (r *Runtime) loadTransport(flags *pflag.FlagSet, c Config) error {
 		return fmt.Errorf("unknown transport %q: use grpc, http or auto", t)
 	}
 }
+
+// HTTPEndpoint returns the HTTPS endpoint of the deployment. Empty means
+// none is known.
+func (r *Runtime) HTTPEndpoint() string { return r.httpEndpoint }
 
 // Transport returns the transport that the settings select: grpc, http or
 // auto.
@@ -93,7 +91,7 @@ func (r *Runtime) Backend(ctx context.Context) (backend.Backend, error) {
 	}
 	t := r.Transport()
 	switch {
-	case t == backend.GRPC, t == TransportAuto && r.GatewayAddr != "":
+	case t == backend.GRPC, t == TransportAuto && r.gatewayAddr != "":
 	case t == backend.HTTP:
 		return nil, errHTTPNotBuilt
 	case t == TransportAuto:
@@ -102,7 +100,7 @@ func (r *Runtime) Backend(ctx context.Context) (backend.Backend, error) {
 		return nil, fmt.Errorf("unknown transport %q: use grpc, http or auto", t)
 	}
 	var b backend.Backend = grpcbackend.New(r.Gateway)
-	if r.HTTPEndpoint != "" {
+	if r.httpEndpoint != "" {
 		b = &switcher{
 			primary: b,
 			auto:    t == TransportAuto,
@@ -150,7 +148,7 @@ func Ability[T any](ctx context.Context, r *Runtime, what string) (T, error) {
 	if a, ok := any(b).(T); ok {
 		return a, nil
 	}
-	if r.HTTPEndpoint == "" || b.Transport() == backend.HTTP {
+	if r.httpEndpoint == "" || b.Transport() == backend.HTTP {
 		return zero, backend.NotAvailable(b.Transport(), what)
 	}
 	h, err := r.httpBackend()

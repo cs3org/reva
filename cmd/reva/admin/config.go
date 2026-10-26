@@ -64,7 +64,7 @@ func configCommand() *cobra.Command {
 					fmt.Printf("# error: %s\n", r.Error)
 					continue
 				}
-				if err := renderConfig(r.ResultJson, rt.Output); err != nil {
+				if err := renderConfig(r.ResultJson, rt.Output()); err != nil {
 					return err
 				}
 			}

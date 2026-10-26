@@ -47,7 +47,7 @@ func invocationCommand() *cobra.Command {
 				if err != nil {
 					return adminErr(err)
 				}
-				if rt.Output == "json" {
+				if rt.Output() == "json" {
 					return rt.Print(cmd.OutOrStdout(), res.Invocations, nil)
 				}
 				for _, inv := range res.Invocations {
