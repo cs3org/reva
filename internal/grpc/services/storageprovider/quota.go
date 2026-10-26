@@ -19,8 +19,8 @@
 package storageprovider
 
 import (
+	"cmp"
 	"context"
-	"errors"
 	"fmt"
 	"path"
 	"strconv"
@@ -29,6 +29,7 @@ import (
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	"github.com/cs3org/reva/v3/pkg/admin"
 	"github.com/cs3org/reva/v3/pkg/appctx"
+	"github.com/cs3org/reva/v3/pkg/errtypes"
 	"github.com/cs3org/reva/v3/pkg/invoke"
 	"github.com/cs3org/reva/v3/pkg/spaces"
 	"github.com/cs3org/reva/v3/pkg/storage"
@@ -36,13 +37,13 @@ import (
 
 type spaceQuotaArgs struct {
 	Root      string           `arg:"root,required"       help:"the root path of the space"`
-	SpaceType spaces.SpaceType `arg:"space_type,required" help:"the type of the space, e.g. personal or project"`
+	SpaceType spaces.SpaceType `arg:"space_type"          help:"the type of the space, e.g. personal or project; if absent, the type of the spaces of this instance"`
 	Owner     string           `arg:"owner"               help:"the user id of the owner of the space"`
 }
 
 type setSpaceQuotaArgs struct {
 	Root      string           `arg:"root,required"       help:"the root path of the space"`
-	SpaceType spaces.SpaceType `arg:"space_type,required" help:"the type of the space, e.g. personal or project"`
+	SpaceType spaces.SpaceType `arg:"space_type"          help:"the type of the space, e.g. personal or project; if absent, the type of the spaces of this instance"`
 	Owner     string           `arg:"owner"               help:"the user id of the owner of the space"`
 	MaxBytes  *uint64          `arg:"max_bytes"           help:"the quota in logical bytes, the size of the data users see; if absent, it does not change"`
 	MaxFiles  *uint64          `arg:"max_files"           help:"the quota in files; if absent, it does not change"`
@@ -71,12 +72,12 @@ func (s *service) quotaGet(ctx context.Context, a spaceQuotaArgs) (invoke.Result
 	if err != nil {
 		return nil, err
 	}
-	return s.quotaResult(q, a.SpaceType, a.Owner), nil
+	return s.quotaResult(q, ref.Type, a.Owner), nil
 }
 
 func (s *service) quotaSet(ctx context.Context, a setSpaceQuotaArgs) (invoke.Result, error) {
 	if a.MaxBytes == nil && a.MaxFiles == nil {
-		return nil, errors.New("give max_bytes, max_files or both")
+		return nil, errtypes.BadRequest("give max_bytes, max_files or both")
 	}
 	qa, ref, err := s.spaceQuotaRef(a.Root, a.SpaceType, a.Owner)
 	if err != nil {
@@ -104,7 +105,7 @@ func (s *service) quotaSet(ctx context.Context, a setSpaceQuotaArgs) (invoke.Res
 		Err:     err,
 		Fields: map[string]string{
 			"mount_id":      s.mountID,
-			"space_type":    string(a.SpaceType),
+			"space_type":    string(ref.Type),
 			"old_max_bytes": strconv.FormatUint(old.MaxBytes, 10),
 			"old_max_files": strconv.FormatUint(old.MaxFiles, 10),
 			"max_bytes":     strconv.FormatUint(maxBytes, 10),
@@ -114,13 +115,13 @@ func (s *service) quotaSet(ctx context.Context, a setSpaceQuotaArgs) (invoke.Res
 	if err != nil {
 		return nil, err
 	}
-	return s.quotaResult(q, a.SpaceType, a.Owner), nil
+	return s.quotaResult(q, ref.Type, a.Owner), nil
 }
 
 func (s *service) quotaList(ctx context.Context, a listSpaceQuotasArgs, emit invoke.StreamEmit) error {
 	qa, ok := s.storage.(storage.QuotaAdmin)
 	if !ok {
-		return fmt.Errorf("the %s driver cannot administer quotas", s.conf.Driver)
+		return errtypes.NotSupported("the " + s.conf.Driver + " driver cannot administer quotas")
 	}
 	qs, err := qa.ListSpaceQuotas(ctx)
 	if err != nil {
@@ -142,24 +143,24 @@ func (s *service) quotaList(ctx context.Context, a listSpaceQuotasArgs, emit inv
 func (s *service) spaceQuotaRef(root string, spaceType spaces.SpaceType, owner string) (storage.QuotaAdmin, storage.SpaceQuotaRef, error) {
 	qa, ok := s.storage.(storage.QuotaAdmin)
 	if !ok {
-		return nil, storage.SpaceQuotaRef{}, fmt.Errorf("the %s driver cannot administer quotas", s.conf.Driver)
+		return nil, storage.SpaceQuotaRef{}, errtypes.NotSupported("the " + s.conf.Driver + " driver cannot administer quotas")
 	}
 	if !strings.HasPrefix(root, "/") {
-		return nil, storage.SpaceQuotaRef{}, fmt.Errorf("root must be an absolute path, not %q", root)
+		return nil, storage.SpaceQuotaRef{}, errtypes.BadRequest(fmt.Sprintf("root must be an absolute path, not %q", root))
 	}
 	root, mount := path.Clean(root), path.Clean(s.mountPath)
 	if root != mount && !strings.HasPrefix(root, strings.TrimSuffix(mount, "/")+"/") {
-		return nil, storage.SpaceQuotaRef{}, fmt.Errorf("%s is not under the mount %s of this instance", root, mount)
+		return nil, storage.SpaceQuotaRef{}, errtypes.BadRequest(fmt.Sprintf("%s is not under the mount %s of this instance", root, mount))
 	}
 	single := s.conf.SpaceDepth <= pathLevels(mount)
 	if single && root != mount || !single && pathLevels(root) != s.conf.SpaceDepth {
-		return nil, storage.SpaceQuotaRef{}, fmt.Errorf("%s is not the root of a space of this instance", root)
+		return nil, storage.SpaceQuotaRef{}, errtypes.BadRequest(fmt.Sprintf("%s is not the root of a space of this instance", root))
 	}
 	rel, err := s.trimMountPrefix(root)
 	if err != nil {
 		return nil, storage.SpaceQuotaRef{}, err
 	}
-	ref := storage.SpaceQuotaRef{Root: rel, Type: spaceType}
+	ref := storage.SpaceQuotaRef{Root: rel, Type: cmp.Or(spaceType, spaces.SpaceType(s.conf.ProvidesSpaceType))}
 	if owner != "" {
 		ref.Owner = &userpb.UserId{OpaqueId: owner}
 	}

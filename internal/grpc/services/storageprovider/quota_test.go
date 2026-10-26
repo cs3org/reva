@@ -126,3 +126,18 @@ func TestQuotaUnsupportedDriver(t *testing.T) {
 		t.Fatal("a driver without quota administration must be reported")
 	}
 }
+
+// The admin facade does not know the type of a space that is not in the
+// catalogue, so the instance gives the type of its spaces.
+func TestQuotaOfASpaceWithoutAType(t *testing.T) {
+	fs := &quotaFS{quotas: map[string]*storage.SpaceQuota{}}
+	s := newQuotaService(fs, "/eos/user", 4)
+	s.conf.ProvidesSpaceType = "personal"
+	res, err := s.Invoke(context.Background(), "quota_get", map[string]any{"root": "/eos/user/e/einstein"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if fs.refs[0].Type != "personal" || res["space_type"] != "personal" {
+		t.Fatalf("ref: %+v, result: %v", fs.refs[0], res)
+	}
+}
