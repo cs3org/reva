@@ -34,8 +34,31 @@ import (
 
 type spaces struct{ b *Backend }
 
+// List returns the spaces that the caller can see: without a filter, the
+// spaces registry gives the personal space, the projects and the explorer
+// spaces.
 func (s spaces) List(ctx context.Context) ([]*provider.StorageSpace, error) {
-	return nil, notAvailable("the space list")
+	c, ctx, err := s.b.gw(ctx)
+	if err != nil {
+		return nil, err
+	}
+	res, err := check(c.ListStorageSpaces(ctx, &provider.ListStorageSpacesRequest{}))
+	if err != nil {
+		return nil, err
+	}
+	return res.StorageSpaces, nil
+}
+
+func (s spaces) Update(ctx context.Context, req *provider.UpdateStorageSpaceRequest) (*provider.StorageSpace, error) {
+	c, ctx, err := s.b.gw(ctx)
+	if err != nil {
+		return nil, err
+	}
+	res, err := check(c.UpdateStorageSpace(ctx, req))
+	if err != nil {
+		return nil, err
+	}
+	return res.StorageSpace, nil
 }
 
 func (s spaces) Quota(ctx context.Context, ref *provider.Reference) (*backend.Quota, error) {

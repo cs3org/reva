@@ -37,6 +37,9 @@ import (
 const spacesRegistry = "spacesregistry"
 
 func (a *spacesAdmin) ListSpaces(req *adminpb.ListSpacesRequest, stream adminpb.SpacesAdmin_ListSpacesServer) error {
+	if req.Profile != "" {
+		return status.Error(codes.Unimplemented, "admin: the profile filter is not implemented yet: the catalogue does not store profiles")
+	}
 	eps, err := a.s.serviceEndpoints(spacesRegistry)
 	if err != nil {
 		return err
@@ -52,13 +55,7 @@ func (a *spacesAdmin) ListSpaces(req *adminpb.ListSpacesRequest, stream adminpb.
 	if req.IncludeArchived {
 		args["include_archived"] = "true"
 	}
-	return relayStream(stream.Context(), eps, "list", args, func(m *adminpb.AdminSpace) error {
-		// The catalogue does not store profiles yet, so the filter runs here.
-		if req.Profile != "" && m.Profile != req.Profile {
-			return nil
-		}
-		return stream.Send(m)
-	})
+	return relayStream(stream.Context(), eps, "list", args, stream.Send)
 }
 
 func (a *spacesAdmin) GetSpace(ctx context.Context, req *adminpb.GetSpaceRequest) (*adminpb.AdminSpace, error) {
