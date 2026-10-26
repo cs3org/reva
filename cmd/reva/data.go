@@ -25,7 +25,10 @@ import (
 	"math"
 	"net/http"
 	"os"
+	"path"
+	"path/filepath"
 	"strconv"
+	"strings"
 
 	"github.com/cheggaaa/pb"
 	gateway "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
@@ -41,216 +44,273 @@ import (
 	"github.com/cs3org/reva/v3/pkg/utils"
 	"github.com/spf13/cobra"
 	"github.com/studio-b12/gowebdav"
-	"golang.org/x/term"
 )
 
-func uploadCommand(rt *cli.Runtime) *cobra.Command {
+// The prefixes of a cp argument. A path is local unless it starts with cb:,
+// because an absolute path like /eos/... can exist on the local machine too.
+// file: marks a local path whose name starts with cb:.
+const (
+	remotePrefix = "cb:"
+	localPrefix  = "file:"
+)
+
+func cpCommand(rt *cli.Runtime) *cobra.Command {
+	var force bool
 	var xsFlag, protocol string
 	cmd := &cobra.Command{
-		Use:   "upload <local_file> <remote_path>",
-		Short: "Upload a local file",
-		Args:  cobra.ExactArgs(2),
+		Use:   "cp SOURCE DEST",
+		Short: "Copy between your computer and reva",
+		Long: "Copy a file between your computer and reva.\n\n" +
+			"Mark the remote side with cb:, because a path like /eos/... can exist on your\n" +
+			"computer too. A destination that is a folder, or that ends with /, gets the\n" +
+			"name of the source. An existing destination is skipped unless you pass -f.",
+		Example: "  reva cp ./report.pdf cb:/home/Documents/\n" +
+			"  reva cp cb:/home/Documents/report.pdf ./report.pdf",
+		Args: cobra.ExactArgs(2),
 		ValidArgsFunction: func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
-			switch len(args) {
-			case 0:
-				return nil, cobra.ShellCompDirectiveDefault
-			case 1:
-				return listRemote(cmd, rt, toComplete)
+			if len(args) >= 2 {
+				return nil, cobra.ShellCompDirectiveNoFileComp
 			}
-			return nil, cobra.ShellCompDirectiveNoFileComp
+			rest, ok := strings.CutPrefix(toComplete, remotePrefix)
+			if !ok {
+				return nil, cobra.ShellCompDirectiveDefault
+			}
+			paths, directive := listRemote(cmd, rt, rest)
+			for i := range paths {
+				paths[i] = remotePrefix + paths[i]
+			}
+			return paths, directive
 		},
 		RunE: func(cmd *cobra.Command, args []string) error {
-			out := cmd.OutOrStdout()
-			target := args[1]
-			absPath, err := utils.ResolvePath(args[0])
-			if err != nil {
-				return err
+			src, srcRemote := splitTransferArg(args[0])
+			dst, dstRemote := splitTransferArg(args[1])
+			switch {
+			case srcRemote && dstRemote:
+				return errors.New("copying between two remote paths is not available over gRPC")
+			case !srcRemote && !dstRemote:
+				return fmt.Errorf("both %q and %q are local paths: mark the remote side with %q, for example %s%s",
+					args[0], args[1], remotePrefix, remotePrefix, args[1])
+			case dstRemote:
+				return upload(cmd, rt, src, dst, force, xsFlag, protocol)
 			}
-			fd, err := os.Open(absPath)
-			if err != nil {
-				return err
-			}
-			defer fd.Close()
-			md, err := fd.Stat()
-			if err != nil {
-				return err
-			}
-			fmt.Fprintf(out, "Local file size: %d bytes\n", md.Size())
-
-			client, ctx, err := rt.Gateway(cmd.Context())
-			if err != nil {
-				return err
-			}
-			res, err := client.InitiateFileUpload(ctx, &provider.InitiateFileUploadRequest{
-				Ref: &provider.Reference{Path: target},
-				Opaque: &typespb.Opaque{
-					Map: map[string]*typespb.OpaqueEntry{
-						"Upload-Length": {Decoder: "plain", Value: []byte(strconv.FormatInt(md.Size(), 10))},
-					},
-				},
-			})
-			if err != nil {
-				return err
-			}
-			if res.Status.Code != rpc.Code_CODE_OK {
-				return formatError(res.Status)
-			}
-
-			if err = checkUploadWebdavRef(res.Protocols, md, fd); err != nil {
-				if _, ok := err.(errtypes.IsNotSupported); !ok {
-					return err
-				}
-			} else {
-				fmt.Fprintln(out, "File uploaded")
-				return nil
-			}
-
-			if protocol != "simple" {
-				return errors.New("upload: protocol not supported: " + protocol)
-			}
-			p, err := getUploadProtocolInfo(res.Protocols, protocol)
-			if err != nil {
-				return err
-			}
-			fmt.Fprintf(out, "Data server: %s\n", p.UploadEndpoint)
-			fmt.Fprintf(out, "Allowed checksums: %+v\n", p.AvailableChecksums)
-
-			xsType, err := guessXS(xsFlag, p.AvailableChecksums)
-			if err != nil {
-				return err
-			}
-			fmt.Fprintf(out, "Checksum selected: %s\n", xsType)
-			xs, err := computeXS(xsType, fd)
-			if err != nil {
-				return err
-			}
-			fmt.Fprintf(out, "Local XS: %s:%s\n", xsType, xs)
-			if _, err := fd.Seek(0, io.SeekStart); err != nil {
-				return err
-			}
-
-			httpReq, err := http.NewRequestWithContext(ctx, http.MethodPut, p.UploadEndpoint, fd)
-			if err != nil {
-				return err
-			}
-			httpReq.Header.Set(datagateway.TokenTransportHeader, p.Token)
-			httpReq.Header.Set("Upload-Length", strconv.FormatInt(md.Size(), 10))
-			q := httpReq.URL.Query()
-			q.Add("xs", xs)
-			q.Add("xs_type", storageprovider.GRPC2PKGXS(xsType).String())
-			httpReq.URL.RawQuery = q.Encode()
-			httpRes, err := rt.HTTPClient().Do(httpReq)
-			if err != nil {
-				return err
-			}
-			defer httpRes.Body.Close()
-			if httpRes.StatusCode != http.StatusOK {
-				return errors.New("upload: PUT request returned " + httpRes.Status)
-			}
-
-			res2, err := client.Stat(ctx, &provider.StatRequest{Ref: &provider.Reference{Path: target}})
-			if err != nil {
-				return err
-			}
-			if res2.Status.Code != rpc.Code_CODE_OK {
-				return formatError(res2.Status)
-			}
-			info := res2.Info
-			fmt.Fprintf(out, "File uploaded: %s:%s %d %s\n", info.Id.StorageId, info.Id.OpaqueId, info.Size, info.Path)
-			return nil
+			return download(cmd, rt, src, dst, force)
 		},
 	}
-	cmd.Flags().StringVar(&xsFlag, "xs", "negotiate", "checksum type, or negotiate to use the server preference")
+	cmd.Flags().BoolVarP(&force, "force", "f", false, "overwrite existing destinations")
+	cmd.Flags().StringVar(&xsFlag, "xs", "negotiate", "checksum type of an upload, or negotiate to use the server preference")
 	cmd.Flags().StringVar(&protocol, "protocol", "simple", "upload protocol")
 	return cmd
 }
 
-func downloadCommand(rt *cli.Runtime) *cobra.Command {
-	return &cobra.Command{
-		Use:   "download <remote_file> <local_file>",
-		Short: "Download a file to the local file system",
-		Args:  cobra.ExactArgs(2),
-		ValidArgsFunction: func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
-			switch len(args) {
-			case 0:
-				return listRemote(cmd, rt, toComplete)
-			case 1:
-				return nil, cobra.ShellCompDirectiveDefault
-			}
-			return nil, cobra.ShellCompDirectiveNoFileComp
-		},
-		RunE: func(cmd *cobra.Command, args []string) error {
-			remote, local := args[0], args[1]
-			client, ctx, err := rt.Gateway(cmd.Context())
-			if err != nil {
-				return err
-			}
-			res1, err := client.Stat(ctx, &provider.StatRequest{Ref: &provider.Reference{Path: remote}})
-			if err != nil {
-				return err
-			}
-			if res1.Status.Code != rpc.Code_CODE_OK {
-				return formatError(res1.Status)
-			}
-			info := res1.Info
-
-			res, err := client.InitiateFileDownload(ctx, &provider.InitiateFileDownloadRequest{Ref: &provider.Reference{Path: remote}})
-			if err != nil {
-				return err
-			}
-			if res.Status.Code != rpc.Code_CODE_OK {
-				return formatError(res.Status)
-			}
-			p, err := getDownloadProtocolInfo(res.Protocols, "simple")
-			if err != nil {
-				return err
-			}
-			fmt.Fprintf(cmd.OutOrStdout(), "Downloading from: %s\n", p.DownloadEndpoint)
-
-			content, err := checkDownloadWebdavRef(res.Protocols)
-			if err != nil {
-				if _, ok := err.(errtypes.IsNotSupported); !ok {
-					return err
-				}
-				httpReq, err := http.NewRequestWithContext(ctx, http.MethodGet, p.DownloadEndpoint, nil)
-				if err != nil {
-					return err
-				}
-				httpReq.Header.Set(datagateway.TokenTransportHeader, p.Token)
-				httpRes, err := rt.HTTPClient().Do(httpReq)
-				if err != nil {
-					return err
-				}
-				defer httpRes.Body.Close()
-				if httpRes.StatusCode != http.StatusOK {
-					return errors.New("download: GET request returned " + httpRes.Status)
-				}
-				content = httpRes.Body
-			}
-
-			absPath, err := utils.ResolvePath(local)
-			if err != nil {
-				return err
-			}
-			fd, err := os.OpenFile(absPath, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0o644)
-			if err != nil {
-				return err
-			}
-			// Show progress only to a person, not in logs or pipes.
-			if term.IsTerminal(int(os.Stderr.Fd())) {
-				bar := pb.New(int(info.Size)).SetUnits(pb.U_BYTES)
-				bar.Output = os.Stderr
-				bar.Start()
-				defer bar.Finish()
-				content = bar.NewProxyReader(content)
-			}
-			if _, err := io.Copy(fd, content); err != nil {
-				fd.Close()
-				return err
-			}
-			return fd.Close()
-		},
+// splitTransferArg removes the prefix of a cp argument and reports whether
+// the argument is remote.
+func splitTransferArg(arg string) (string, bool) {
+	if rest, ok := strings.CutPrefix(arg, localPrefix); ok {
+		return rest, false
 	}
+	if rest, ok := strings.CutPrefix(arg, remotePrefix); ok {
+		return rest, true
+	}
+	return arg, false
+}
+
+func upload(cmd *cobra.Command, rt *cli.Runtime, local, target string, force bool, xsFlag, protocol string) error {
+	absPath, err := utils.ResolvePath(local)
+	if err != nil {
+		return err
+	}
+	fd, err := os.Open(absPath)
+	if err != nil {
+		return err
+	}
+	defer fd.Close()
+	md, err := fd.Stat()
+	if err != nil {
+		return err
+	}
+	if md.IsDir() {
+		return fmt.Errorf("%s is a folder: cp copies only files for now", local)
+	}
+
+	client, ctx, err := rt.Gateway(cmd.Context())
+	if err != nil {
+		return err
+	}
+	// The cp(1) rule: a destination that is a folder means "into it".
+	st, err := client.Stat(ctx, &provider.StatRequest{Ref: &provider.Reference{Path: target}})
+	if err != nil {
+		return err
+	}
+	if st.Status.Code == rpc.Code_CODE_OK && st.Info.Type == provider.ResourceType_RESOURCE_TYPE_CONTAINER || strings.HasSuffix(target, "/") {
+		target = path.Join(target, filepath.Base(absPath))
+		if st, err = client.Stat(ctx, &provider.StatRequest{Ref: &provider.Reference{Path: target}}); err != nil {
+			return err
+		}
+	}
+	if st.Status.Code == rpc.Code_CODE_OK && !force {
+		rt.Msg(cmd.ErrOrStderr(), "Skipped %s: it exists, pass -f to overwrite it", target)
+		return nil
+	}
+	rt.Debugf("local file size: %d bytes", md.Size())
+
+	res, err := client.InitiateFileUpload(ctx, &provider.InitiateFileUploadRequest{
+		Ref: &provider.Reference{Path: target},
+		Opaque: &typespb.Opaque{
+			Map: map[string]*typespb.OpaqueEntry{
+				"Upload-Length": {Decoder: "plain", Value: []byte(strconv.FormatInt(md.Size(), 10))},
+			},
+		},
+	})
+	if err != nil {
+		return err
+	}
+	if res.Status.Code != rpc.Code_CODE_OK {
+		return formatError(res.Status)
+	}
+	done := func() error {
+		rt.Msg(cmd.ErrOrStderr(), "Uploaded %s to %s (%d bytes)", local, target, md.Size())
+		return nil
+	}
+
+	if err = checkUploadWebdavRef(res.Protocols, md, fd); err != nil {
+		if _, ok := err.(errtypes.IsNotSupported); !ok {
+			return err
+		}
+	} else {
+		return done()
+	}
+
+	if protocol != "simple" {
+		return errors.New("upload: protocol not supported: " + protocol)
+	}
+	p, err := getUploadProtocolInfo(res.Protocols, protocol)
+	if err != nil {
+		return err
+	}
+	rt.Debugf("data server: %s", p.UploadEndpoint)
+	rt.Debugf("allowed checksums: %+v", p.AvailableChecksums)
+
+	xsType, err := guessXS(xsFlag, p.AvailableChecksums)
+	if err != nil {
+		return err
+	}
+	xs, err := computeXS(xsType, fd)
+	if err != nil {
+		return err
+	}
+	rt.Debugf("local checksum: %s:%s", xsType, xs)
+	if _, err := fd.Seek(0, io.SeekStart); err != nil {
+		return err
+	}
+
+	httpReq, err := http.NewRequestWithContext(ctx, http.MethodPut, p.UploadEndpoint, fd)
+	if err != nil {
+		return err
+	}
+	httpReq.Header.Set(datagateway.TokenTransportHeader, p.Token)
+	httpReq.Header.Set("Upload-Length", strconv.FormatInt(md.Size(), 10))
+	q := httpReq.URL.Query()
+	q.Add("xs", xs)
+	q.Add("xs_type", storageprovider.GRPC2PKGXS(xsType).String())
+	httpReq.URL.RawQuery = q.Encode()
+	httpRes, err := rt.HTTPClient().Do(httpReq)
+	if err != nil {
+		return err
+	}
+	defer httpRes.Body.Close()
+	if httpRes.StatusCode != http.StatusOK {
+		return errors.New("upload: PUT request returned " + httpRes.Status)
+	}
+	return done()
+}
+
+func download(cmd *cobra.Command, rt *cli.Runtime, remote, local string, force bool) error {
+	client, ctx, err := rt.Gateway(cmd.Context())
+	if err != nil {
+		return err
+	}
+	res1, err := client.Stat(ctx, &provider.StatRequest{Ref: &provider.Reference{Path: remote}})
+	if err != nil {
+		return err
+	}
+	if res1.Status.Code != rpc.Code_CODE_OK {
+		return formatError(res1.Status)
+	}
+	info := res1.Info
+	if info.Type == provider.ResourceType_RESOURCE_TYPE_CONTAINER {
+		return fmt.Errorf("%s is a folder: cp copies only files for now", remote)
+	}
+
+	absPath, err := utils.ResolvePath(local)
+	if err != nil {
+		return err
+	}
+	if st, err := os.Stat(absPath); err == nil && st.IsDir() {
+		absPath = filepath.Join(absPath, path.Base(info.Path))
+	}
+	if _, err := os.Stat(absPath); err == nil && !force {
+		rt.Msg(cmd.ErrOrStderr(), "Skipped %s: it exists, pass -f to overwrite it", absPath)
+		return nil
+	}
+
+	res, err := client.InitiateFileDownload(ctx, &provider.InitiateFileDownloadRequest{Ref: &provider.Reference{Path: remote}})
+	if err != nil {
+		return err
+	}
+	if res.Status.Code != rpc.Code_CODE_OK {
+		return formatError(res.Status)
+	}
+	p, err := getDownloadProtocolInfo(res.Protocols, "simple")
+	if err != nil {
+		return err
+	}
+	rt.Debugf("downloading from: %s", p.DownloadEndpoint)
+
+	content, err := checkDownloadWebdavRef(res.Protocols)
+	if err != nil {
+		if _, ok := err.(errtypes.IsNotSupported); !ok {
+			return err
+		}
+		httpReq, err := http.NewRequestWithContext(ctx, http.MethodGet, p.DownloadEndpoint, nil)
+		if err != nil {
+			return err
+		}
+		httpReq.Header.Set(datagateway.TokenTransportHeader, p.Token)
+		httpRes, err := rt.HTTPClient().Do(httpReq)
+		if err != nil {
+			return err
+		}
+		defer httpRes.Body.Close()
+		if httpRes.StatusCode != http.StatusOK {
+			return errors.New("download: GET request returned " + httpRes.Status)
+		}
+		content = httpRes.Body
+	}
+
+	fd, err := os.OpenFile(absPath, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0o644)
+	if err != nil {
+		return err
+	}
+	var bar *pb.ProgressBar
+	if rt.ShowProgress() {
+		bar = pb.New(int(info.Size)).SetUnits(pb.U_BYTES)
+		bar.Output = os.Stderr
+		bar.Start()
+		content = bar.NewProxyReader(content)
+	}
+	n, err := io.Copy(fd, content)
+	if bar != nil {
+		bar.Finish()
+	}
+	if err != nil {
+		fd.Close()
+		return err
+	}
+	if err := fd.Close(); err != nil {
+		return err
+	}
+	rt.Msg(cmd.ErrOrStderr(), "Downloaded %s to %s (%d bytes)", remote, absPath, n)
+	return nil
 }
 
 func getUploadProtocolInfo(protocolInfos []*gateway.FileUploadProtocol, protocol string) (*gateway.FileUploadProtocol, error) {

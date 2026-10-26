@@ -27,6 +27,7 @@ import (
 	"github.com/cs3org/reva/v3/cmd/reva/admin"
 	"github.com/cs3org/reva/v3/cmd/reva/internal/cli"
 	"github.com/spf13/cobra"
+	"google.golang.org/grpc/status"
 )
 
 var gitCommit, buildDate, version, goVersion string
@@ -64,12 +65,17 @@ func main() {
 		},
 	}
 	pf := root.PersistentFlags()
-	pf.StringVar(&rt.Host, "host", "", "address of the gateway (env REVA_HOST)")
-	pf.BoolVar(&rt.Insecure, "insecure", false, "disable transport security for gRPC")
-	pf.BoolVar(&rt.SkipVerify, "skip-verify", false, "do not verify the server certificate (gRPC and HTTP)")
-	pf.StringVar(&rt.TokenFile, "token-file", "", "file that holds the login token (env REVA_TOKEN_FILE)")
-	pf.DurationVar(&rt.Timeout, "timeout", 0, "stop the command after this duration, for example 30s (0 means no limit)")
-	pf.StringVarP(&rt.Output, "output", "o", "text", "output format: text or json")
+	pf.StringVar(&rt.GatewayAddr, "gateway", "", "address of the gateway, host:port (env REVA_GATEWAY)")
+	pf.BoolVar(&rt.Insecure, "insecure", false, "allow plaintext, without TLS, on the selected transport (development only)")
+	pf.BoolVar(&rt.SkipVerify, "skip-verify", false, "do not verify the server certificate (development only)")
+	pf.StringVar(&rt.TokenValue, "token", "", "use this token instead of signing in (env REVA_TOKEN)")
+	pf.StringVar(&rt.AppTokenFile, "app-token-file", "", "file holding an app token, to sign in with --user")
+	pf.StringVar(&rt.User, "user", "", "user name, for app-token and basic sign-in")
+	pf.DurationVar(&rt.Timeout, "timeout", 0, "overall timeout for the command, for example 30s (0 for none)")
+	pf.StringVarP(&rt.Output, "output", "o", "table", "output format: table or json")
+	pf.BoolVarP(&rt.Quiet, "quiet", "q", false, "hide progress messages")
+	pf.BoolVar(&rt.Debug, "debug", false, "show the underlying error and request details")
+	pf.BoolVar(&rt.NoProgress, "no-progress", false, "hide the progress bar")
 
 	root.AddGroup(
 		&cobra.Group{ID: "files", Title: "Files:"},
@@ -84,15 +90,16 @@ func main() {
 	}
 	add("files",
 		lsCommand(rt), statCommand(rt), mkdirCommand(rt), mvCommand(rt), rmCommand(rt), touchCommand(rt),
-		uploadCommand(rt), downloadCommand(rt), versionsCommand(rt), recycleCommand(rt), lockCommand(rt),
+		cpCommand(rt), versionsCommand(rt), trashCommand(rt), lockCommand(rt),
 	)
-	add("sharing", shareCommand(rt), publicShareCommand(rt), ocmCommand(rt))
+	add("sharing", shareCommand(rt), linkCommand(rt), ocmCommand(rt))
 	add("other",
-		loginCommand(rt), whoamiCommand(rt), configCommand(rt), openCommand(rt), appPasswordCommand(rt),
-		preferencesCommand(rt), transferCommand(rt), admin.Command(rt), versionCommand(),
+		loginCommand(rt), logoutCommand(rt), statusCommand(rt), whoamiCommand(rt), configCommand(rt),
+		openCommand(rt), tokenCommand(rt), preferencesCommand(rt), admin.Command(rt), versionCommand(),
+		completionCommand(),
 	)
 	root.SetHelpCommandGroupID("other")
-	root.SetCompletionCommandGroupID("other")
+	root.CompletionOptions.DisableDefaultCmd = true
 	colorHelp(root)
 
 	err := root.Execute()
@@ -103,6 +110,9 @@ func main() {
 			prefix = errorColor.Sprint(prefix)
 		}
 		fmt.Fprintln(os.Stderr, prefix, err)
+		if s, ok := status.FromError(err); ok && rt.Debug {
+			fmt.Fprintf(os.Stderr, "  grpc code=%s details=%v\n", s.Code(), s.Details())
+		}
 		if !started {
 			fmt.Fprintln(os.Stderr, "Run 'reva --help' for usage.")
 			os.Exit(2)

@@ -177,7 +177,7 @@ func snapshotLogs(ctx context.Context, client adminpb.AdminAPIClient, selector s
 	for _, e := range merged {
 		fmt.Println(formatLogLine(e.node, nodeWidth, e.line, multi, color, output))
 	}
-	if anyTruncated && output == "text" {
+	if anyTruncated && output != "json" {
 		fmt.Printf("# more lines matched than shown; raise -n to see more\n")
 	}
 	return nil

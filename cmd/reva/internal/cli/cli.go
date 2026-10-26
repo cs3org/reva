@@ -36,7 +36,9 @@ import (
 	"strings"
 	"time"
 
+	"github.com/BurntSushi/toml"
 	gateway "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
+	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	"github.com/cs3org/reva/v3/pkg/appctx"
 	"github.com/cs3org/reva/v3/pkg/httpclient"
 	"github.com/spf13/pflag"
@@ -45,6 +47,7 @@ import (
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/metadata"
+	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/proto"
 )
@@ -52,21 +55,29 @@ import (
 // Runtime is built once per process from the flags, the environment and the
 // config file, in this order of precedence.
 type Runtime struct {
-	Host       string
-	AdminHost  string
-	Insecure   bool
-	SkipVerify bool
-	TokenFile  string
-	Output     string
-	Timeout    time.Duration
+	GatewayAddr  string
+	AdminHost    string
+	Insecure     bool
+	SkipVerify   bool
+	TokenValue   string
+	AppTokenFile string
+	User         string
+	Output       string
+	Quiet        bool
+	Debug        bool
+	NoProgress   bool
+	Timeout      time.Duration
 
 	conn *grpc.ClientConn
 }
 
-// Config is the part of the settings that `reva config set` stores.
+// Config is the config file, $XDG_CONFIG_HOME/reva/config.toml. The sections
+// follow the brand file of the CLI, so that one file format serves both.
 type Config struct {
-	Host      string `json:"host,omitempty"`
-	AdminHost string `json:"admin_host,omitempty"`
+	Connection struct {
+		Gateway   string `toml:"gateway,omitempty" json:"gateway,omitempty"`
+		AdminHost string `toml:"admin_host,omitempty" json:"admin_host,omitempty"`
+	} `toml:"connection" json:"connection"`
 }
 
 // Load fills the settings that are not given as flags from the environment,
@@ -76,21 +87,28 @@ func (r *Runtime) Load(flags *pflag.FlagSet) error {
 	if err != nil {
 		return err
 	}
-	fill := func(dst *string, flag, env, conf string) {
+	fill := func(dst *string, flag, conf string, envs ...string) {
 		if flags.Changed(flag) {
 			return
 		}
-		if v := os.Getenv(env); v != "" {
-			*dst = v
-			return
+		for _, env := range envs {
+			if v := os.Getenv(env); v != "" {
+				*dst = v
+				return
+			}
 		}
 		*dst = conf
 	}
-	fill(&r.Host, "host", "REVA_HOST", c.Host)
-	fill(&r.AdminHost, "admin-host", "REVA_ADMIN_HOST", c.AdminHost)
-	fill(&r.TokenFile, "token-file", "REVA_TOKEN_FILE", "")
-	if r.Output != "text" && r.Output != "json" {
-		return fmt.Errorf("unknown output %q: use text or json", r.Output)
+	// REVA_HOST is the name from before --gateway, kept for old scripts.
+	fill(&r.GatewayAddr, "gateway", c.Connection.Gateway, "REVA_GATEWAY", "REVA_HOST")
+	fill(&r.AdminHost, "admin-host", c.Connection.AdminHost, "REVA_ADMIN_HOST")
+	fill(&r.TokenValue, "token", "", "REVA_TOKEN")
+	switch r.Output {
+	case "table", "json":
+	case "csv":
+		return errors.New("csv output is not available yet: use table or json")
+	default:
+		return fmt.Errorf("unknown output %q: use table or json", r.Output)
 	}
 	return nil
 }
@@ -99,14 +117,15 @@ func (r *Runtime) Load(flags *pflag.FlagSet) error {
 // do not need a login (for example Authenticate).
 func (r *Runtime) Client() (gateway.GatewayAPIClient, error) {
 	if r.conn == nil {
-		if r.Host == "" {
-			return nil, errors.New("gateway host not set: pass --host, set REVA_HOST or run `reva config set host <host:port>`")
+		if r.GatewayAddr == "" {
+			return nil, errors.New("gateway not set: pass --gateway, set REVA_GATEWAY or run `reva config set gateway <host:port>`")
 		}
 		creds := credentials.NewTLS(&tls.Config{InsecureSkipVerify: r.SkipVerify})
 		if r.Insecure {
 			creds = insecure.NewCredentials()
 		}
-		conn, err := grpc.NewClient(r.Host, grpc.WithTransportCredentials(creds))
+		opts := append(r.DialOptions(), grpc.WithTransportCredentials(creds))
+		conn, err := grpc.NewClient(r.GatewayAddr, opts...)
 		if err != nil {
 			return nil, err
 		}
@@ -115,17 +134,53 @@ func (r *Runtime) Client() (gateway.GatewayAPIClient, error) {
 	return gateway.NewGatewayAPIClient(r.conn), nil
 }
 
+// DialOptions are the options that every gRPC connection of the CLI shares.
+func (r *Runtime) DialOptions() []grpc.DialOption {
+	if !r.Debug {
+		return nil
+	}
+	return []grpc.DialOption{
+		grpc.WithChainUnaryInterceptor(func(ctx context.Context, method string, req, reply any, cc *grpc.ClientConn, invoker grpc.UnaryInvoker, opts ...grpc.CallOption) error {
+			start := time.Now()
+			err := invoker(ctx, method, req, reply, cc, opts...)
+			r.Debugf("grpc %s %s %s", method, status.Code(err), time.Since(start).Round(time.Millisecond))
+			return err
+		}),
+		grpc.WithChainStreamInterceptor(func(ctx context.Context, desc *grpc.StreamDesc, cc *grpc.ClientConn, method string, streamer grpc.Streamer, opts ...grpc.CallOption) (grpc.ClientStream, error) {
+			r.Debugf("grpc stream %s", method)
+			return streamer(ctx, desc, cc, method, opts...)
+		}),
+	}
+}
+
 // Gateway returns a gateway client and ctx with the login token attached.
 func (r *Runtime) Gateway(ctx context.Context) (gateway.GatewayAPIClient, context.Context, error) {
 	client, err := r.Client()
 	if err != nil {
 		return nil, nil, err
 	}
-	t, err := r.Token()
+	t, err := r.Token(ctx)
 	if err != nil {
 		return nil, nil, err
 	}
 	return client, WithToken(ctx, t), nil
+}
+
+// Authenticate exchanges a credential for a reva token. authType is the name
+// of the auth provider in the gateway, for example basic or appauth.
+func (r *Runtime) Authenticate(ctx context.Context, authType, user, secret string) (string, error) {
+	client, err := r.Client()
+	if err != nil {
+		return "", err
+	}
+	res, err := client.Authenticate(ctx, &gateway.AuthenticateRequest{Type: authType, ClientId: user, ClientSecret: secret})
+	if err != nil {
+		return "", err
+	}
+	if res.Status.Code != rpc.Code_CODE_OK {
+		return "", fmt.Errorf("sign-in with %s failed: code=%v msg=%q", authType, res.Status.Code, res.Status.Message)
+	}
+	return res.Token, nil
 }
 
 // WithToken attaches a reva token to ctx and to the outgoing gRPC metadata.
@@ -150,15 +205,32 @@ func (r *Runtime) Close() {
 	}
 }
 
-// Token returns REVA_TOKEN, or else the token that `reva login` stored.
-func (r *Runtime) Token() (string, error) {
-	if t := os.Getenv("REVA_TOKEN"); t != "" {
+// Token returns the token from --token or REVA_TOKEN. Else it signs in with
+// the app token of --app-token-file. Else it returns the token that
+// `reva login` stored.
+func (r *Runtime) Token(ctx context.Context) (string, error) {
+	if r.TokenValue != "" {
+		return r.TokenValue, nil
+	}
+	if r.AppTokenFile != "" {
+		b, err := os.ReadFile(r.AppTokenFile)
+		if err != nil {
+			return "", err
+		}
+		if r.User == "" {
+			return "", errors.New("an app token needs a user name: pass --user")
+		}
+		t, err := r.Authenticate(ctx, "appauth", r.User, strings.TrimSpace(string(b)))
+		if err != nil {
+			return "", err
+		}
+		r.TokenValue = t
 		return t, nil
 	}
 	var b []byte
 	var err error
-	if r.TokenFile != "" {
-		b, err = os.ReadFile(r.TokenFile)
+	if p := os.Getenv("REVA_TOKEN_FILE"); p != "" {
+		b, err = os.ReadFile(p)
 	} else {
 		b, err = readState("token", ".reva-token")
 	}
@@ -168,12 +240,42 @@ func (r *Runtime) Token() (string, error) {
 	return strings.TrimSpace(string(b)), err
 }
 
+// TokenPath returns where SetToken stores the login token.
+func TokenPath() (string, error) {
+	if p := os.Getenv("REVA_TOKEN_FILE"); p != "" {
+		return p, nil
+	}
+	dir, err := os.UserConfigDir()
+	return filepath.Join(dir, "reva", "token"), err
+}
+
 // SetToken stores the login token.
 func (r *Runtime) SetToken(t string) error {
-	if r.TokenFile != "" {
-		return os.WriteFile(r.TokenFile, []byte(t), 0o600)
+	if p := os.Getenv("REVA_TOKEN_FILE"); p != "" {
+		return os.WriteFile(p, []byte(t), 0o600)
 	}
 	return writeState("token", []byte(t))
+}
+
+// ClearTokens removes the stored login and admin tokens, also the legacy
+// dotfiles, so that no older token is read back.
+func ClearTokens() error {
+	var paths []string
+	if p := os.Getenv("REVA_TOKEN_FILE"); p != "" {
+		paths = append(paths, p)
+	}
+	if dir, err := os.UserConfigDir(); err == nil {
+		paths = append(paths, filepath.Join(dir, "reva", "token"), filepath.Join(dir, "reva", "admin-token"))
+	}
+	if home, err := os.UserHomeDir(); err == nil {
+		paths = append(paths, filepath.Join(home, ".reva-token"), filepath.Join(home, ".reva-admin-token"))
+	}
+	for _, p := range paths {
+		if err := os.Remove(p); err != nil && !errors.Is(err, fs.ErrNotExist) {
+			return err
+		}
+	}
+	return nil
 }
 
 // AdminToken returns the short-TTL token that `reva admin elevate` stored.
@@ -191,34 +293,60 @@ func (r *Runtime) SetAdminToken(t string) error {
 }
 
 // ReadConfig returns the stored config. A missing file gives an empty config.
+// When the file is missing but the legacy ~/.reva.config exists, ReadConfig
+// copies it to the new file, so it reads the legacy file only once.
 func ReadConfig() (Config, error) {
 	var c Config
-	b, err := readState("config.json", ".reva.config")
+	p, err := ConfigPath()
+	if err != nil {
+		return c, err
+	}
+	if _, err := toml.DecodeFile(p, &c); err == nil || !errors.Is(err, fs.ErrNotExist) {
+		if err != nil {
+			err = fmt.Errorf("reading %s: %w", p, err)
+		}
+		return c, err
+	}
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return c, nil
+	}
+	legacy := filepath.Join(home, ".reva.config")
+	b, err := os.ReadFile(legacy)
 	if errors.Is(err, fs.ErrNotExist) {
 		return c, nil
 	}
 	if err != nil {
 		return c, err
 	}
-	if err := json.Unmarshal(b, &c); err != nil {
-		return c, fmt.Errorf("reading config: %w", err)
+	var old struct {
+		Host      string `json:"host"`
+		AdminHost string `json:"admin_host"`
 	}
+	if err := json.Unmarshal(b, &old); err != nil {
+		return c, fmt.Errorf("reading %s: %w", legacy, err)
+	}
+	c.Connection.Gateway, c.Connection.AdminHost = old.Host, old.AdminHost
+	if err := WriteConfig(c); err != nil {
+		return c, err
+	}
+	fmt.Fprintf(os.Stderr, "reva: copied the settings of %s to %s\n", legacy, p)
 	return c, nil
 }
 
 // WriteConfig stores the config.
 func WriteConfig(c Config) error {
-	b, err := json.MarshalIndent(c, "", "  ")
-	if err != nil {
+	var b bytes.Buffer
+	if err := toml.NewEncoder(&b).Encode(c); err != nil {
 		return err
 	}
-	return writeState("config.json", append(b, '\n'))
+	return writeState("config.toml", b.Bytes())
 }
 
 // ConfigPath returns where WriteConfig stores the config.
 func ConfigPath() (string, error) {
 	dir, err := os.UserConfigDir()
-	return filepath.Join(dir, "reva", "config.json"), err
+	return filepath.Join(dir, "reva", "config.toml"), err
 }
 
 // readState reads name from the reva config dir. If that file does not exist,
@@ -255,7 +383,29 @@ func UseColor(f *os.File) bool {
 	return os.Getenv("NO_COLOR") == "" && term.IsTerminal(int(f.Fd()))
 }
 
-// Print writes v as JSON with --output json. Else it calls text.
+// Msg writes a message for a person to stderr. -q and -o json hide it, so
+// that only the result goes to a script.
+func (r *Runtime) Msg(w io.Writer, format string, args ...any) {
+	if r.Quiet || r.Output == "json" {
+		return
+	}
+	fmt.Fprintf(w, format+"\n", args...)
+}
+
+// Debugf writes a line to stderr with --debug.
+func (r *Runtime) Debugf(format string, args ...any) {
+	if r.Debug {
+		fmt.Fprintf(os.Stderr, "debug: "+format+"\n", args...)
+	}
+}
+
+// ShowProgress reports whether to draw a progress bar: only for a person
+// that watches stderr, and not with -q, --no-progress or -o json.
+func (r *Runtime) ShowProgress() bool {
+	return !r.Quiet && !r.NoProgress && r.Output != "json" && term.IsTerminal(int(os.Stderr.Fd()))
+}
+
+// Print writes v as JSON with -o json. Else it calls text.
 func (r *Runtime) Print(w io.Writer, v any, text func(w io.Writer)) error {
 	if r.Output != "json" {
 		text(w)
