@@ -162,3 +162,42 @@ func (s *Set) InvokeStream(ctx context.Context, name string, args map[string]any
 	}
 	return m.stream.fn(ctx, args, emit)
 }
+
+// DriverPrefix is put in front of the invocations that a service takes from
+// its driver, so that they cannot hide the invocations of the service.
+const DriverPrefix = "driver."
+
+// MergeDriver adds the invocations of driver under DriverPrefix, if driver is
+// Invokable. Each one keeps its spec and goes to the driver with its own
+// name. A name that s has already is an error, so the service does not start.
+func (s *Set) MergeDriver(driver any) error {
+	inv, ok := driver.(Invokable)
+	if !ok {
+		return nil
+	}
+	sv, canStream := driver.(StreamInvokable)
+	for _, spec := range inv.Invocations() {
+		name := DriverPrefix + spec.Name
+		if _, dup := s.methods[name]; dup {
+			return fmt.Errorf("invoke: driver invocation %q is already registered", name)
+		}
+		if spec.Streaming && !canStream {
+			return fmt.Errorf("invoke: driver invocation %q is streaming but the driver has no InvokeStream", name)
+		}
+		m := &registered{spec: spec}
+		m.spec.Name = name
+		if !spec.StreamOnly {
+			m.fn = &Handler{fn: func(ctx context.Context, raw map[string]any) (Result, error) {
+				return inv.Invoke(ctx, spec.Name, raw)
+			}}
+		}
+		if spec.Streaming {
+			m.stream = &StreamHandler{fn: func(ctx context.Context, raw map[string]any, emit StreamEmit) error {
+				return sv.InvokeStream(ctx, spec.Name, raw, emit)
+			}}
+		}
+		s.order = append(s.order, name)
+		s.methods[name] = m
+	}
+	return nil
+}

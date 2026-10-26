@@ -237,3 +237,81 @@ func TestSetStreamOnly(t *testing.T) {
 		}
 	}
 }
+
+// fakeDriver is a driver that exposes its invocations with an embedded Set.
+type fakeDriver struct{ *Set }
+
+// unaryDriver is Invokable but not StreamInvokable.
+type unaryDriver struct{ specs []InvocationSpec }
+
+func (d unaryDriver) Invocations() []InvocationSpec { return d.specs }
+func (d unaryDriver) Invoke(context.Context, string, map[string]any) (Result, error) {
+	return Result{}, nil
+}
+
+func TestSetMergeDriver(t *testing.T) {
+	type accountArgs struct {
+		User string `arg:"user,required" help:"the user id"`
+	}
+	drv := fakeDriver{NewSet()}
+	drv.Add("account", "the account of a user").Mutating().Shared().
+		Handle(Typed(func(_ context.Context, a accountArgs) (Result, error) {
+			return Result{"user": a.User}, nil
+		}))
+	drv.Add("tail", "").HandleStream(TypedStream(func(_ context.Context, _ struct{}, emit StreamEmit) error {
+		return emit(Result{"line": 1})
+	}))
+
+	set := NewSet()
+	set.Add("ping", "").Handle(Typed(func(context.Context, struct{}) (Result, error) { return Result{}, nil }))
+	if err := set.MergeDriver(drv); err != nil {
+		t.Fatalf("MergeDriver: %v", err)
+	}
+
+	specs := set.Invocations()
+	if len(specs) != 3 || specs[0].Name != "ping" {
+		t.Fatalf("unexpected catalog: %+v", specs)
+	}
+	account, tail := specs[1], specs[2]
+	if account.Name != "driver.account" || account.Kind != KindMutating || account.Scope != ScopeShared ||
+		account.Streaming || len(account.Args) != 1 || !account.Args[0].Required {
+		t.Fatalf("driver.account: spec not kept: %+v", account)
+	}
+	if tail.Name != "driver.tail" || !tail.Streaming || !tail.StreamOnly {
+		t.Fatalf("driver.tail: spec not kept: %+v", tail)
+	}
+
+	res, err := set.Invoke(context.Background(), "driver.account", map[string]any{"user": "alice"})
+	if err != nil || res["user"] != "alice" {
+		t.Fatalf("Invoke driver.account: %v, %v", res, err)
+	}
+	if _, err := set.Invoke(context.Background(), "driver.account", nil); err == nil {
+		t.Fatal("expected the driver to reject a missing required arg")
+	}
+	if _, err := set.Invoke(context.Background(), "driver.tail", nil); err == nil {
+		t.Fatal("expected error invoking a stream-only driver method unary")
+	}
+	var lines int
+	if err := set.InvokeStream(context.Background(), "driver.tail", nil, func(Result) error { lines++; return nil }); err != nil || lines != 1 {
+		t.Fatalf("InvokeStream driver.tail: %d lines, %v", lines, err)
+	}
+}
+
+func TestSetMergeDriverRefuses(t *testing.T) {
+	set := NewSet()
+	set.Add("driver.account", "").Handle(Handler{})
+	drv := unaryDriver{specs: []InvocationSpec{{Name: "account"}}}
+	if err := set.MergeDriver(drv); err == nil {
+		t.Error("expected an error for a name collision")
+	}
+
+	drv = unaryDriver{specs: []InvocationSpec{{Name: "tail", Streaming: true}}}
+	if err := NewSet().MergeDriver(drv); err == nil {
+		t.Error("expected an error for a streaming invocation without InvokeStream")
+	}
+
+	set = NewSet()
+	if err := set.MergeDriver(struct{}{}); err != nil || len(set.Invocations()) != 0 {
+		t.Errorf("a driver that is not Invokable must add nothing: %v, %v", set.Invocations(), err)
+	}
+}
