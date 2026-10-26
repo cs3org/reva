@@ -39,7 +39,7 @@ func (s *svc) InvokeStream(req *adminpb.InvokeRequest, stream adminpb.AdminAPI_I
 	if req.Service == "" || req.Invocation == "" {
 		return status.Error(codes.InvalidArgument, "admin: service and invocation are required")
 	}
-	ctx := stream.Context()
+	ctx := admin.ForwardReason(stream.Context())
 
 	reg, err := s.registryHandle()
 	if err != nil {

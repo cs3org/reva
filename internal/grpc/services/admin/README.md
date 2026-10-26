@@ -227,6 +227,17 @@ Invocations are classified `readonly | mutating | dangerous`; the CLI prompts
 before a `dangerous` one. Every invocation and action emits an audit event via
 [`pkg/admin`](../../../../pkg/admin) (`audit=true` on the context logger).
 
+A client tells why it makes an admin call in the gRPC metadata header
+`x-reva-admin-reason`. `admin.Audit` reads the header of the incoming call and
+writes it as `reason` on the audit line. The text is from the client: the
+server removes control and format characters and cuts it to 512 bytes. The
+admin service sends the header on to the owning service through the control
+channel, so an audit line that an invocation handler writes has the reason
+too. A typed admin RPC that calls a service must do the same with
+`admin.ForwardReason(ctx)`. `Impersonate` also takes a `reason` field. When
+the header is not set, the field is the `reason`. When both are set and they
+are different, the field is in `request_reason`.
+
 ### Local root
 
 The step-up above answers "who are you?" with a token, which is right for remote
@@ -248,7 +259,15 @@ processes' control channels included. Two gates apply:
 
 reva sets the socket ownership/mode to match: `0660` owned by `socket_group` (so
 reva must be root or a member of it), else `0600` (only the process owner and
-root). Every local-root request is audited with the OS user and uid.
+root). Every local-root request is audited with the OS user, the uid and the pid
+of the peer. Because the OS user is usually `root`, a client can send the
+`SUDO_USER` of its environment in the header `x-reva-sudo-user`, and the audit
+line has it as `sudo_user`. The client sets this value, so do not trust it: it
+only helps to find the person.
+
+Local root is full admin. A member of `socket_group` can also impersonate any
+user (`Impersonate`) without a Kerberos ticket or a password. Give the group
+only to the persons who may do that.
 
 It is **on by default** (Linux): the server binds a well-known path —
 `/run/reva/admin.sock`, or `$XDG_RUNTIME_DIR/reva/admin.sock` when the former is

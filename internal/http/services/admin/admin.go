@@ -27,6 +27,7 @@ import (
 	"encoding/json"
 	"net/http"
 
+	"github.com/cs3org/reva/v3/pkg/admin"
 	"github.com/cs3org/reva/v3/pkg/admin/adminpb"
 	"github.com/cs3org/reva/v3/pkg/appctx"
 	"github.com/cs3org/reva/v3/pkg/rhttp/global"
@@ -129,6 +130,10 @@ func (s *svc) handleImpersonate(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		writeUnavailable(ctx, w, err)
 		return
+	}
+	if req.Reason != "" {
+		// As a header, the reason is also on the audit line of the step-up.
+		ctx = metadata.AppendToOutgoingContext(ctx, admin.ReasonHeader, req.Reason)
 	}
 	elevated, err := client.RequestAdmin(ctx, &adminpb.RequestAdminRequest{})
 	if err != nil {

@@ -51,7 +51,16 @@ func (s *svc) Impersonate(ctx context.Context, req *adminpb.ImpersonateRequest) 
 		return nil, status.Errorf(codes.Internal, "admin: minting user token: %v", err)
 	}
 
+	fields := map[string]string{}
+	reason := admin.Clean(req.Reason)
+	switch h := admin.Header(ctx, admin.ReasonHeader); {
+	case h == "":
+		fields["reason"] = reason
+	case reason != "" && reason != h:
+		// Audit writes the header as "reason".
+		fields["request_reason"] = reason
+	}
 	admin.Audit(ctx, admin.AuditEvent{Action: "impersonate", Actor: actorName(ctx), Target: req.User, Granted: true,
-		Fields: map[string]string{"reason": req.Reason}})
+		Fields: fields})
 	return &adminpb.ImpersonateResponse{Token: tkn}, nil
 }

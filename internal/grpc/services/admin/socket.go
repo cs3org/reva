@@ -198,8 +198,14 @@ func (s *svc) authorizeLocalRoot(ctx context.Context, method string) (context.Co
 		return nil, status.Error(codes.Unauthenticated, "admin: no peer credentials on the control socket")
 	}
 	who := osUserName(cred.uid)
+	fields := map[string]string{"method": method, "uid": strconv.Itoa(int(cred.uid)), "pid": strconv.Itoa(int(cred.pid))}
+	// Usually the OS user is root, so the sudo user is the only hint of the
+	// person. The client sends it, so it can be false.
+	if su := admin.Header(ctx, admin.SudoUserHeader); su != "" {
+		fields["sudo_user"] = su
+	}
 	if !s.socketAllowed(cred) {
-		admin.Audit(ctx, admin.AuditEvent{Action: "local_root", Actor: who, Granted: false,
+		admin.Audit(ctx, admin.AuditEvent{Action: "local_root", Actor: who, Granted: false, Fields: fields,
 			Err: fmt.Errorf("uid %d is not in group %q", cred.uid, s.socketGroup)})
 		return nil, status.Errorf(codes.PermissionDenied, "admin: uid %d is not permitted local root", cred.uid)
 	}
@@ -222,8 +228,7 @@ func (s *svc) authorizeLocalRoot(ctx context.Context, method string) (context.Co
 	ctx = appctx.ContextSetToken(ctx, tkn)
 	ctx = metadata.AppendToOutgoingContext(ctx, appctx.TokenHeader, tkn)
 
-	admin.Audit(ctx, admin.AuditEvent{Action: "local_root", Actor: who, Granted: true,
-		Fields: map[string]string{"method": method, "uid": strconv.Itoa(int(cred.uid))}})
+	admin.Audit(ctx, admin.AuditEvent{Action: "local_root", Actor: who, Granted: true, Fields: fields})
 	return ctx, nil
 }
 
