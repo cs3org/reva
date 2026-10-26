@@ -347,8 +347,7 @@ func shareReceivedListCommand(rt *cli.Runtime) *cobra.Command {
 				return err
 			}
 			return rt.Print(cmd.OutOrStdout(), received, func(w io.Writer) {
-				t := table.NewWriter()
-				t.SetOutputMirror(w)
+				t := cli.NewTable(w)
 				t.AppendHeader(table.Row{"#", "Owner.Idp", "Owner.OpaqueId", "ResourceId", "Permissions", "Type",
 					"Grantee.Idp", "Grantee.OpaqueId", "Created", "Updated", "State"})
 				for _, rs := range received {
@@ -805,8 +804,7 @@ var shareHeader = table.Row{"#", "Owner.Idp", "Owner.OpaqueId", "ResourceId", "P
 	"Grantee.Idp", "Grantee.OpaqueId", "Created", "Updated"}
 
 func renderShares(w io.Writer, shares []*collaboration.Share) {
-	t := table.NewWriter()
-	t.SetOutputMirror(w)
+	t := cli.NewTable(w)
 	t.AppendHeader(shareHeader)
 	for _, s := range shares {
 		t.AppendRow(shareRow(s))
@@ -829,8 +827,7 @@ func shareRow(s *collaboration.Share) table.Row {
 var linkHeader = table.Row{"#", "Owner.Idp", "Owner.OpaqueId", "ResourceId", "Permissions", "Token", "Expiration", "Created", "Updated", "Description"}
 
 func renderPublicShares(w io.Writer, shares []*link.PublicShare) {
-	t := table.NewWriter()
-	t.SetOutputMirror(w)
+	t := cli.NewTable(w)
 	t.AppendHeader(linkHeader)
 	for _, s := range shares {
 		t.AppendRow(linkRow(s))

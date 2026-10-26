@@ -414,8 +414,7 @@ func renderMoved(w io.Writer, items []*adminpb.MovedShare) {
 }
 
 func renderRows(w io.Writer, header table.Row, rows []table.Row) {
-	t := table.NewWriter()
-	t.SetOutputMirror(w)
+	t := cli.NewTable(w)
 	t.AppendHeader(header)
 	t.AppendRows(rows)
 	t.Render()

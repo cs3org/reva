@@ -512,8 +512,7 @@ func renderAppPasswords(w io.Writer, first string, pws []*authapp.AppPassword) {
 		}
 		return time.Unix(int64(t.Seconds), 0).String()
 	}
-	t := table.NewWriter()
-	t.SetOutputMirror(w)
+	t := cli.NewTable(w)
 	t.AppendHeader(table.Row{first, "Scope", "Label", "Expiration", "Creation Time", "Last Used Time"})
 	for _, pw := range pws {
 		var scopes []string

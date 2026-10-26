@@ -42,6 +42,7 @@ import (
 	"github.com/cs3org/reva/v3/pkg/cli/auth"
 	"github.com/cs3org/reva/v3/pkg/cli/backend"
 	"github.com/cs3org/reva/v3/pkg/cli/brand"
+	"github.com/cs3org/reva/v3/pkg/cli/output"
 	"github.com/cs3org/reva/v3/pkg/httpclient"
 	"github.com/spf13/pflag"
 	"golang.org/x/term"
@@ -150,7 +151,7 @@ func (r *Runtime) As() string { return r.as }
 // Reason returns the reason of --reason, for the audit.
 func (r *Runtime) Reason() string { return r.reason }
 
-// Output returns the output format: table or json.
+// Output returns the output format: table, json or csv.
 func (r *Runtime) Output() string { return r.output }
 
 // Debug reports whether --debug is set.
@@ -329,15 +330,24 @@ func (r *Runtime) ShowProgress() bool {
 }
 
 // Print writes v as JSON with -o json. Else it calls text. For a Table, a nil
-// text writes the table.
+// text writes the table, and -o csv writes its rows. text writes CSV for a
+// table of NewTable.
 func (r *Runtime) Print(w io.Writer, v any, text func(w io.Writer)) error {
 	if t, ok := v.(Table); ok {
+		if r.output == "csv" {
+			return output.New(w, output.FormatCSV).Render(output.Table{Headers: t.Headers, Rows: t.Rows})
+		}
 		if text == nil {
 			text = t.Write
 		}
 		v = t.items()
 	}
-	if r.output != "json" {
+	switch r.output {
+	case "csv":
+		text(csvWriter{w})
+		return nil
+	case "json":
+	default:
 		text(w)
 		return nil
 	}
