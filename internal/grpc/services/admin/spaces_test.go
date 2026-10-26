@@ -181,8 +181,12 @@ func spacesClient(t *testing.T) (adminpb.SpacesAdminClient, *fakeCatalogue) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	// The first registry set in the process stays, so add to that one.
+	// The first registry set in the process stays, so add to that one, after
+	// the nodes that another test left there.
 	service.SetGlobalRegistry(reg)
+	if err := service.GlobalRegistry().Remove(registry.NewService(spacesRegistry, nil)); err != nil {
+		t.Fatal(err)
+	}
 	if err := service.GlobalRegistry().Add(registry.NewService(spacesRegistry, nodes)); err != nil {
 		t.Fatal(err)
 	}

@@ -41,9 +41,8 @@ import (
 // of the publicshareprovider. They act as the identity that the share checks
 // accept, so the admin service needs no CS3 call of its own.
 const (
-	userShareService      = "usershareprovider"
-	publicShareService    = "publicshareprovider"
-	spacesRegistryService = "spacesregistry"
+	userShareService   = "usershareprovider"
+	publicShareService = "publicshareprovider"
 )
 
 func (a *sharesAdmin) ListShares(req *adminpb.ListSharesRequest, stream adminpb.SharesAdmin_ListSharesServer) error {
@@ -380,7 +379,7 @@ func (s *svc) invokeDecoded(ctx context.Context, service, invocation string, arg
 }
 
 // shareSpaceID returns the space id that the share tables keep for ref: the
-// part after the storage id. A path is refused: only a user can resolve it.
+// part after the storage id.
 func (s *svc) shareSpaceID(ctx context.Context, ref *adminpb.SpaceRef) (string, error) {
 	var id string
 	switch r := ref.GetRef().(type) {
@@ -395,7 +394,7 @@ func (s *svc) shareSpaceID(ctx context.Context, ref *adminpb.SpaceRef) (string, 
 		if r.Name == "" {
 			return "", shareArgRequired("a space name")
 		}
-		eps, err := s.serviceEndpoints(spacesRegistryService)
+		eps, err := s.serviceEndpoints(spacesRegistry)
 		if err != nil {
 			return "", err
 		}
@@ -415,7 +414,15 @@ func (s *svc) shareSpaceID(ctx context.Context, ref *adminpb.SpaceRef) (string, 
 		}
 		id = space.GetId().GetOpaqueId()
 	case *adminpb.SpaceRef_Path:
-		return "", status.Error(codes.InvalidArgument, "admin: give the space by id or by name: only a user can resolve a path")
+		eps, err := s.serviceEndpoints(spacesRegistry)
+		if err != nil {
+			return "", err
+		}
+		m, err := spaceAt(ctx, eps, r.Path)
+		if err != nil {
+			return "", err
+		}
+		id = m.GetSpace().GetId().GetOpaqueId()
 	}
 	if id == "" {
 		return "", shareArgRequired("a space id")

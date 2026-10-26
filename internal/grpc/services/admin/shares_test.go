@@ -55,12 +55,12 @@ import (
 // for a stream, and records the arguments.
 type fakeProvider struct {
 	mu      sync.Mutex
-	calls   []fakeCall
+	calls   []shareCall
 	handle  map[string]func(args map[string]any) (invoke.Result, error)
 	streams map[string][]invoke.Result
 }
 
-type fakeCall struct {
+type shareCall struct {
 	invocation string
 	args       map[string]any
 }
@@ -72,7 +72,7 @@ func (f *fakeProvider) Invocations() []invoke.InvocationSpec {
 func (f *fakeProvider) record(name string, args map[string]any) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
-	f.calls = append(f.calls, fakeCall{name, maps.Clone(args)})
+	f.calls = append(f.calls, shareCall{name, maps.Clone(args)})
 }
 
 func (f *fakeProvider) Invoke(_ context.Context, name string, args map[string]any) (invoke.Result, error) {
@@ -135,7 +135,7 @@ func startShareFleet(t *testing.T) *shareFleet {
 		controlpb.RegisterControlServer(ctrl, control.NewServer())
 		go func() { _ = ctrl.Serve(ln) }()
 		fleetCtrlAddr = ln.Addr().String()
-		for i, name := range []string{userShareService, publicShareService, spacesRegistryService} {
+		for i, name := range []string{userShareService, publicShareService, spacesRegistry} {
 			fleetFakes[i] = &fakeProvider{}
 			invoke.RegisterInstance(fleetCtrlAddr+"/"+name, name, nil, fleetFakes[i], nil)
 		}
@@ -147,7 +147,7 @@ func startShareFleet(t *testing.T) *shareFleet {
 	service.SetGlobalRegistry(reg)
 	// Another test can have added nodes of the same services, without a
 	// control channel.
-	for _, name := range []string{userShareService, publicShareService, spacesRegistryService} {
+	for _, name := range []string{userShareService, publicShareService, spacesRegistry} {
 		if err := service.GlobalRegistry().Remove(registry.NewService(name, nil)); err != nil {
 			t.Fatal(err)
 		}
@@ -370,16 +370,48 @@ func TestListPublicLinksOnlyExpired(t *testing.T) {
 	}
 }
 
-func TestSharesAdminRefusesBadRequests(t *testing.T) {
+// A space given by path is the catalogued space that holds it.
+func TestListSharesResolvesASpacePath(t *testing.T) {
 	f := startShareFleet(t)
-	ctx := context.Background()
-	stream, err := f.client.ListShares(ctx, &adminpb.ListSharesRequest{Space: &adminpb.SpaceRef{Ref: &adminpb.SpaceRef_Path{Path: "/eos/project/c"}}})
+	space := func(id, root string) invoke.Result {
+		sp, _ := invoke.ProtoResult(&provider.StorageSpace{
+			Id:       &provider.StorageSpaceId{OpaqueId: id},
+			RootInfo: &provider.ResourceInfo{Path: root},
+		})
+		return invoke.Result{"space": sp, "status": "active"}
+	}
+	f.spaces.streams["list"] = []invoke.Result{
+		space("eosproject$b3RoZXI", "/eos/project/o"),
+		space("eosproject$c3BhY2U", "/eos/project/c"),
+	}
+	stream, err := f.client.ListShares(context.Background(), &adminpb.ListSharesRequest{
+		Space: &adminpb.SpaceRef{Ref: &adminpb.SpaceRef_Path{Path: "/eos/project/c/docs"}},
+	})
 	if err == nil {
 		_, err = recv(t, stream)
 	}
-	if status.Code(err) != codes.InvalidArgument {
-		t.Errorf("ListShares by space path: got %v, want InvalidArgument", err)
+	if err != nil {
+		t.Fatal(err)
 	}
+	if calls := f.shares.callsOf("list"); len(calls) != 1 || calls[0]["space"] != "c3BhY2U" {
+		t.Errorf("list args %v, want space c3BhY2U", calls)
+	}
+
+	f.spaces.streams["list"] = nil
+	stream, err = f.client.ListShares(context.Background(), &adminpb.ListSharesRequest{
+		Space: &adminpb.SpaceRef{Ref: &adminpb.SpaceRef_Path{Path: "/eos/user/a"}},
+	})
+	if err == nil {
+		_, err = recv(t, stream)
+	}
+	if status.Code(err) != codes.NotFound {
+		t.Errorf("a path in no catalogued space: got %v, want NotFound", err)
+	}
+}
+
+func TestSharesAdminRefusesBadRequests(t *testing.T) {
+	f := startShareFleet(t)
+	ctx := context.Background()
 	move, err := f.client.MoveShares(ctx, &adminpb.MoveSharesRequest{FromPath: "/eos/a", ToPath: "/eos/b"})
 	if err == nil {
 		_, err = recv(t, move)

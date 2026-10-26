@@ -588,8 +588,8 @@ the typed facade over the share and link invocations. Each RPC runs one
 invocation, except:
 
 - `ListShares` and `ListPublicLinks` resolve a `SpaceRef` first: by id, or by
-  name through the `spacesregistry` `get` invocation. A path is refused, because
-  only a user can resolve it. The `ONLY` selections of `orphans` and `expired`
+  name through the `spacesregistry` `get` invocation, or by path as the
+  catalogued space that holds it (as in SpacesAdmin). The `ONLY` selections of `orphans` and `expired`
   are applied to what the provider streams.
 - `MoveShares` lists the shares and the links of `owner` and/or `space` with
   their paths, keeps those under `from_path` (by the current path, or by the
