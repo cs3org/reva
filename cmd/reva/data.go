@@ -91,6 +91,9 @@ func cpCommand(rt *cli.Runtime) *cobra.Command {
 				return fmt.Errorf("both %q and %q are local paths: mark the remote side with %q, for example %s%s",
 					args[0], args[1], remotePrefix, remotePrefix, args[1])
 			case dstRemote:
+				if err := rt.ConfirmMutation(cmd.CommandPath()); err != nil {
+					return err
+				}
 				return upload(cmd, rt, src, dst, force, xsFlag, protocol)
 			}
 			return download(cmd, rt, src, dst, force)

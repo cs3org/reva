@@ -60,6 +60,7 @@ func colorHelp(cmd *cobra.Command) {
 		"\nAdditional Commands:", "\n{{heading \"Additional Commands:\"}}",
 		"\nFlags:\n", "\n{{heading \"Flags:\"}}\n",
 		"\nGlobal Flags:\n", "\n{{heading \"Global Flags:\"}}\n",
+		"\n"+cli.OperatorOptions+"\n", "\n{{heading \""+cli.OperatorOptions+"\"}}\n",
 		"\nAdditional help topics:", "\n{{heading \"Additional help topics:\"}}",
 		"{{.UseLine}}", "{{bold .UseLine}}",
 		"  {{.CommandPath}} [command]{{end}}", `  {{bold .CommandPath " [command]"}}{{end}}`,

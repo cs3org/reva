@@ -41,7 +41,6 @@ import (
 	"github.com/cs3org/reva/v3/cmd/reva/internal/cli"
 	"github.com/cs3org/reva/v3/pkg/auth/scope"
 	"github.com/cs3org/reva/v3/pkg/utils"
-	"github.com/golang-jwt/jwt/v5"
 	"github.com/jedib0t/go-pretty/table"
 	"github.com/spf13/cobra"
 	"golang.org/x/term"
@@ -132,7 +131,7 @@ func logoutCommand(rt *cli.Runtime) *cobra.Command {
 	return &cobra.Command{
 		Use:   "logout",
 		Short: "Forget the stored tokens",
-		Long:  "Forget the stored login token and the admin token of 'reva admin elevate'.",
+		Long:  "Forget the stored login token and the admin token of 'reva elevate'.",
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if err := cli.ClearTokens(); err != nil {
@@ -197,9 +196,7 @@ func statusCommand(rt *cli.Runtime) *cobra.Command {
 	}
 }
 
-// whoami returns the user of the token and when the token expires. The
-// expiry comes from the exp claim, read without a check of the signature,
-// because only the server can check it.
+// whoami returns the user of the token and when the token expires.
 func whoami(ctx context.Context, rt *cli.Runtime) (*userpb.User, time.Time, error) {
 	client, err := rt.Client()
 	if err != nil {
@@ -216,12 +213,7 @@ func whoami(ctx context.Context, rt *cli.Runtime) (*userpb.User, time.Time, erro
 	if res.Status.Code != rpc.Code_CODE_OK {
 		return nil, time.Time{}, formatError(res.Status)
 	}
-	var exp time.Time
-	var claims jwt.RegisteredClaims
-	if _, _, err := jwt.NewParser().ParseUnverified(token, &claims); err == nil && claims.ExpiresAt != nil {
-		exp = claims.ExpiresAt.Time
-	}
-	return res.User, exp, nil
+	return res.User, cli.TokenExpiry(token), nil
 }
 
 // readCredentials asks for the missing user name and for the secret. The
@@ -259,14 +251,23 @@ func readCredentials(cmd *cobra.Command, username string) (string, string, error
 func whoamiCommand(rt *cli.Runtime) *cobra.Command {
 	return &cobra.Command{
 		Use:   "whoami",
-		Short: "Show who you are signed in as",
-		Args:  cobra.NoArgs,
+		Short: "Show who you are signed in as, and your admin rights",
+		Long: "Show who you are signed in as, and your admin rights: socket (the local\n" +
+			"admin socket), yes with the time left on the admin token, or no. With --as,\n" +
+			"show the user you impersonate.",
+		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			user, _, err := whoami(cmd.Context(), rt)
 			if err != nil {
 				return err
 			}
-			return rt.Print(cmd.OutOrStdout(), user, func(w io.Writer) { fmt.Fprintln(w, user) })
+			return rt.Print(cmd.OutOrStdout(), user, func(w io.Writer) {
+				fmt.Fprintln(w, user)
+				if rt.As != "" {
+					fmt.Fprintf(w, "as: %s (impersonated)\n", user.GetUsername())
+				}
+				fmt.Fprintf(w, "admin: %s\n", rt.AdminState(cmd.Context()))
+			})
 		},
 	}
 }

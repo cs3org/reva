@@ -16,8 +16,8 @@
 // granted to it by virtue of its status as an Intergovernmental Organization
 // or submit itself to any jurisdiction.
 
-// Package admin is the `reva admin` CLI: the operator surface for a running
-// reva fleet.
+// Package admin holds the fleet commands of the reva CLI: the operator
+// surface of a running reva fleet, through the Admin API.
 package admin
 
 import (
@@ -25,32 +25,26 @@ import (
 	"github.com/spf13/cobra"
 )
 
-// rt is set once by Command. The CLI runs one command per process, so a
+// rt is set once by Commands. The CLI runs one command per process, so a
 // package var is enough.
 var rt *cli.Runtime
 
-// Command returns the `admin` command tree.
-func Command(r *cli.Runtime) *cobra.Command {
+// Commands returns the fleet commands. They are operator commands: they
+// always use the admin plane.
+func Commands(r *cli.Runtime) []*cobra.Command {
 	rt = r
-	cmd := &cobra.Command{
-		Use:   "admin",
-		Short: "Administer the reva fleet",
-		Long: "Administer the reva fleet through the admin endpoint.\n\n" +
-			"Without --admin-host, the commands first try the local admin socket\n" +
-			"(/run/reva/admin.sock or $XDG_RUNTIME_DIR/reva/admin.sock), then the stored admin host.",
-	}
-	cmd.PersistentFlags().StringVar(&r.AdminHost, "admin-host", "", "address of the admin gRPC endpoint (env REVA_ADMIN_HOST)")
-	cmd.AddCommand(
-		elevateCommand(),
-		servicesCommand(),
-		configCommand(),
-		invocationsCommand(),
+	cmds := []*cobra.Command{
+		serviceCommand(),
+		invocationCommand(),
 		invokeCommand(),
 		logsCommand(),
-		jobsCommand(),
 		traceCommand(),
 		stackCommand(),
+		jobCommand(),
 		impersonateCommand(),
-	)
-	return cmd
+	}
+	for _, c := range cmds {
+		cli.AdminCommand(c)
+	}
+	return cmds
 }

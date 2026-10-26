@@ -52,7 +52,7 @@ func traceCommand() *cobra.Command {
 			if since != "" {
 				args["since"] = since
 			}
-			client, ctx, err := adminDial(cmd)
+			client, ctx, err := rt.Admin(cmd.Context())
 			if err != nil {
 				return err
 			}

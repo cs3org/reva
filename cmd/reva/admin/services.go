@@ -20,7 +20,6 @@ package admin
 
 import (
 	"encoding/json"
-	"errors"
 	"fmt"
 	"sort"
 	"strings"
@@ -30,23 +29,29 @@ import (
 	"github.com/spf13/cobra"
 )
 
-func servicesCommand() *cobra.Command {
-	var verbose, wide bool
-	var stateFilter string
+func serviceCommand() *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "services [service]",
-		Short: "List services with their nodes, state and health",
-		Long: "List services with their nodes, state and health, or operate on instances.\n\n" +
+		Use:   "service",
+		Short: "List the services of the fleet and operate on their instances",
+		Long: "List the services with their nodes, state and health, or operate on instances.\n\n" +
 			"A <selector> is a service name, a node id (host:port/svc), a host:port, a host, or *.\n" +
 			"svc[key=value,...] selects the instances of svc whose registry metadata has all the pairs,\n" +
 			"for example 'storageprovider[mount_id=eoshome-i01]'. Quote it for the shell.",
-		Example: "  reva admin services -v userprovider\n" +
-			"  reva admin services drain -y host1:9158\n" +
-			"  reva admin services activity --methods gateway\n" +
-			"  reva admin services activity --wait --idle 5s host1:9158    # then it is safe to restart",
-		Args: cobra.MaximumNArgs(1),
+		Example: "  reva service list -v userprovider\n" +
+			"  reva service config gateway\n" +
+			"  reva service drain -y host1:9158\n" +
+			"  reva service activity --methods gateway\n" +
+			"  reva service activity --wait --idle 5s host1:9158    # then it is safe to restart",
+	}
+
+	var verbose, wide bool
+	var stateFilter string
+	list := &cobra.Command{
+		Use:   "list [service]",
+		Short: "List the services with their nodes, state and health",
+		Args:  cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			client, ctx, err := adminDial(cmd)
+			client, ctx, err := rt.Admin(cmd.Context())
 			if err != nil {
 				return err
 			}
@@ -76,26 +81,24 @@ func servicesCommand() *cobra.Command {
 			return nil
 		},
 	}
-	cmd.Flags().BoolVarP(&verbose, "verbose", "v", false, "show every node instead of a per-service summary")
-	cmd.Flags().BoolVar(&wide, "wide", false, "show more columns")
-	cmd.Flags().StringVar(&stateFilter, "state", "", "only show nodes in these states (comma-separated, e.g. degraded,offline)")
+	list.Flags().BoolVarP(&verbose, "verbose", "v", false, "show every node instead of a per-service summary")
+	list.Flags().BoolVar(&wide, "wide", false, "show more columns")
+	list.Flags().StringVar(&stateFilter, "state", "", "only show nodes in these states (comma-separated, e.g. degraded,offline)")
 
-	var yes bool
 	drain := &cobra.Command{
 		Use:   "drain <selector>",
 		Short: "Take the matching instances out of rotation (no new traffic)",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return adminServicesRotation(cmd, args[0], true, yes)
+			return adminServicesRotation(cmd, args[0], true)
 		},
 	}
-	drain.Flags().BoolVarP(&yes, "yes", "y", false, "skip the confirmation prompt")
 	enable := &cobra.Command{
 		Use:   "enable <selector>",
 		Short: "Return the matching instances to rotation",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return adminServicesRotation(cmd, args[0], false, true)
+			return adminServicesRotation(cmd, args[0], false)
 		},
 	}
 
@@ -114,22 +117,22 @@ func servicesCommand() *cobra.Command {
 	activity.Flags().DurationVar(&waitTimeout, "wait-timeout", 2*time.Minute, "with --wait: give up after this long")
 	activity.Flags().DurationVar(&idle, "idle", 5*time.Second, "with --wait: required idle time on top of zero in-flight")
 
-	cmd.AddCommand(drain, enable, activity)
+	cmd.AddCommand(list, configCommand(), drain, enable, activity)
 	return cmd
 }
 
 // adminServicesRotation drains (out of rotation) or enables (back into
 // rotation) the selected instances by running the `rotation` invocation. Drain
-// confirms first unless yes, since it stops new traffic to the matched nodes.
-func adminServicesRotation(cmd *cobra.Command, selector string, drain, yes bool) error {
+// confirms first unless --yes, since it stops new traffic to the matched nodes.
+func adminServicesRotation(cmd *cobra.Command, selector string, drain bool) error {
 	state := "ready"
 	if drain {
 		state = "drain"
-		if !yes && !confirm(fmt.Sprintf("take %q out of rotation? new traffic to it will stop", selector)) {
-			return errors.New("aborted")
+		if err := rt.Confirm(fmt.Sprintf("take %q out of rotation? new traffic to it will stop", selector)); err != nil {
+			return err
 		}
 	}
-	client, ctx, err := adminDial(cmd)
+	client, ctx, err := rt.Admin(cmd.Context())
 	if err != nil {
 		return err
 	}
@@ -183,7 +186,7 @@ type activityMethod struct {
 // "wait until safe to restart". With methods it also prints the per-RPC-method
 // breakdown.
 func adminServicesActivity(cmd *cobra.Command, selector string, wait bool, timeout, idle time.Duration, methods bool) error {
-	client, ctx, err := adminDial(cmd)
+	client, ctx, err := rt.Admin(cmd.Context())
 	if err != nil {
 		return err
 	}

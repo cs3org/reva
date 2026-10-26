@@ -40,7 +40,7 @@ func stackCommand() *cobra.Command {
 		if grep != "" {
 			args["grep"] = grep
 		}
-		client, ctx, err := adminDial(cmd)
+		client, ctx, err := rt.Admin(cmd.Context())
 		if err != nil {
 			return err
 		}

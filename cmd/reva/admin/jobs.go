@@ -33,12 +33,12 @@ import (
 	"github.com/spf13/cobra"
 )
 
-func jobsCommand() *cobra.Command {
-	cmd := &cobra.Command{Use: "jobs", Short: "Inspect and drive the background jobs runner"}
+func jobCommand() *cobra.Command {
+	cmd := &cobra.Command{Use: "job", Short: "Inspect and drive the background jobs runner"}
 	// run wraps the subcommands that need only the client.
 	run := func(f func(ctx context.Context, client adminpb.AdminAPIClient, args []string) error) func(*cobra.Command, []string) error {
 		return func(cmd *cobra.Command, args []string) error {
-			client, ctx, err := adminDial(cmd)
+			client, ctx, err := rt.Admin(cmd.Context())
 			if err != nil {
 				return err
 			}

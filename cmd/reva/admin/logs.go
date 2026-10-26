@@ -56,7 +56,7 @@ func logsCommand() *cobra.Command {
 				args["grep"] = grep
 			}
 
-			client, ctx, err := adminDial(cmd)
+			client, ctx, err := rt.Admin(cmd.Context())
 			if err != nil {
 				return err
 			}
@@ -93,7 +93,7 @@ func adminLogsLevel(cmd *cobra.Command, args []string) error {
 	if len(args) >= 2 {
 		invArgs["level"] = args[1]
 	}
-	client, ctx, err := adminDial(cmd)
+	client, ctx, err := rt.Admin(cmd.Context())
 	if err != nil {
 		return err
 	}
