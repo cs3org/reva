@@ -33,7 +33,6 @@ import (
 	"net/http"
 	"os"
 	"reflect"
-	"strconv"
 	"strings"
 	"time"
 
@@ -42,6 +41,7 @@ import (
 	"github.com/cs3org/reva/v3/internal/cli/state"
 	"github.com/cs3org/reva/v3/pkg/appctx"
 	"github.com/cs3org/reva/v3/pkg/cli/backend"
+	"github.com/cs3org/reva/v3/pkg/cli/brand"
 	"github.com/cs3org/reva/v3/pkg/httpclient"
 	"github.com/spf13/pflag"
 	"golang.org/x/term"
@@ -54,22 +54,30 @@ import (
 	"google.golang.org/protobuf/proto"
 )
 
-// Runtime is built once per process from the flags, the environment and the
-// config file, in this order of precedence. It is the API of CLI plugins, so
-// its settings are read through accessors.
+// Runtime is built once per process. Its settings come from the flags, the
+// environment, the user config, the system config, the brand and the
+// built-in defaults, in this order of precedence. It is the API of CLI
+// plugins, so its settings are read through accessors.
 type Runtime struct {
-	gatewayAddr  string
-	adminHost    string
-	insecure     bool
-	skipVerify   bool
-	tokenValue   string
-	appTokenFile string
-	user         string
-	output       string
-	quiet        bool
-	debug        bool
-	noProgress   bool
-	timeout      time.Duration
+	brand            *brand.Brand
+	transport        string
+	gatewayAddr      string
+	adminHost        string
+	insecure         bool
+	skipVerify       bool
+	tokenValue       string
+	tokenCache       string
+	appToken         string
+	appTokenFile     string
+	user             string
+	password         string
+	kerberosSPN      string
+	output           string
+	operatorCommands string
+	quiet            bool
+	debug            bool
+	noProgress       bool
+	timeout          time.Duration
 	// as is the user of --as: the user plane runs with an impersonated token.
 	as string
 	// reason of --reason, sent with every admin-plane call for the audit.
@@ -81,6 +89,11 @@ type Runtime struct {
 	httpEndpoint string
 	config       state.Config
 
+	resolved     bool
+	values       map[string]value
+	resolveErr   error
+	legacyConfig string
+
 	conn              *grpc.ClientConn
 	admin             *AdminClient
 	adminHostExplicit bool
@@ -89,28 +102,17 @@ type Runtime struct {
 	plane             Plane
 	need              string
 	usedAdmin         bool
-	transport         string
 	backend           backend.Backend
 	data              backend.DataPlane
 }
 
 // AddFlags adds the global flags, which set the runtime, to fs.
 func (r *Runtime) AddFlags(fs *pflag.FlagSet) {
-	fs.StringVar(&r.gatewayAddr, "gateway", "", "address of the gateway, host:port (env REVA_GATEWAY)")
-	fs.StringVar(&r.httpEndpoint, "endpoint", "", "HTTPS endpoint of the deployment, https://host (env REVA_ENDPOINT)")
-	fs.StringVar(&r.transport, "transport", "", "transport of the user plane: grpc, http or auto (env REVA_TRANSPORT; default "+DefaultTransport+")")
-	fs.StringVar(&r.adminHost, "admin-host", "", "address of the Admin API, host:port or unix:///path (env REVA_ADMIN_HOST; default the gateway)")
-	fs.BoolVar(&r.insecure, "insecure", false, "allow plaintext, without TLS, on the selected transport (development only)")
-	fs.BoolVar(&r.skipVerify, "skip-verify", false, "do not verify the server certificate (development only)")
-	fs.StringVar(&r.tokenValue, "token", "", "use this token instead of signing in (env REVA_TOKEN)")
-	fs.StringVar(&r.appTokenFile, "app-token-file", "", "file holding an app token, to sign in with --user")
-	fs.StringVar(&r.user, "user", "", "user name, for app-token and basic sign-in")
+	r.addSettingFlags(fs)
 	fs.StringVar(&r.as, "as", "", "run the command as this user (impersonation, needs admin rights)")
 	fs.StringVar(&r.reason, "reason", "", "why you use admin rights, written to the audit log")
 	fs.BoolVarP(&r.yes, "yes", "y", false, "do not ask for confirmations")
-	fs.BoolVar(&r.noElevate, "no-elevate", false, "never get an admin token automatically (env REVA_NO_ELEVATE)")
 	fs.DurationVar(&r.timeout, "timeout", 0, "overall timeout for the command, for example 30s (0 for none)")
-	fs.StringVarP(&r.output, "output", "o", "table", "output format: table or json")
 	fs.BoolVarP(&r.quiet, "quiet", "q", false, "hide progress messages")
 	fs.BoolVar(&r.debug, "debug", false, "show the underlying error and request details")
 	fs.BoolVar(&r.noProgress, "no-progress", false, "hide the progress bar")
@@ -125,8 +127,15 @@ func (r *Runtime) AdminHost() string { return r.adminHost }
 // User returns the user name of --user.
 func (r *Runtime) User() string { return r.user }
 
+// Password returns the password of the basic sign-in from the environment.
+func (r *Runtime) Password() string { return r.password }
+
 // AppTokenFile returns the file of --app-token-file.
 func (r *Runtime) AppTokenFile() string { return r.appTokenFile }
+
+// KerberosSPN returns the configured service principal of the Kerberos
+// sign-in. Empty means HTTP/<host of the server>.
+func (r *Runtime) KerberosSPN() string { return r.kerberosSPN }
 
 // As returns the user of --as. Empty means no impersonation.
 func (r *Runtime) As() string { return r.as }
@@ -143,53 +152,12 @@ func (r *Runtime) Debug() bool { return r.debug }
 // Timeout returns the overall timeout of the command. Zero means none.
 func (r *Runtime) Timeout() time.Duration { return r.timeout }
 
-// Load fills the settings that are not given as flags from the environment,
-// then from the config file.
-func (r *Runtime) Load(flags *pflag.FlagSet) error {
-	c, err := state.ReadConfig()
-	if err != nil {
-		return err
-	}
-	r.config = c
-	fill := func(dst *string, flag, conf string, envs ...string) {
-		if flags.Changed(flag) {
-			return
-		}
-		for _, env := range envs {
-			if v := os.Getenv(env); v != "" {
-				*dst = v
-				return
-			}
-		}
-		*dst = conf
-	}
-	// REVA_HOST is the name from before --gateway, kept for old scripts.
-	fill(&r.gatewayAddr, "gateway", c.Connection.Gateway, "REVA_GATEWAY", "REVA_HOST")
-	fill(&r.adminHost, "admin-host", c.Connection.AdminHost, "REVA_ADMIN_HOST")
-	r.adminHostExplicit = flags.Changed("admin-host") || os.Getenv("REVA_ADMIN_HOST") != ""
-	if v, err := strconv.ParseBool(os.Getenv("REVA_NO_ELEVATE")); err == nil && !flags.Changed("no-elevate") {
-		r.noElevate = v
-	}
-	fill(&r.tokenValue, "token", "", "REVA_TOKEN")
-	if err := r.loadTransport(flags, c); err != nil {
-		return err
-	}
-	switch r.output {
-	case "table", "json":
-	case "csv":
-		return errors.New("csv output is not available yet: use table or json")
-	default:
-		return fmt.Errorf("unknown output %q: use table or json", r.output)
-	}
-	return nil
-}
-
 // Client returns a gateway client without credentials, for the calls that
 // do not need a login (for example Authenticate).
 func (r *Runtime) Client() (gateway.GatewayAPIClient, error) {
 	if r.conn == nil {
 		if r.gatewayAddr == "" {
-			return nil, errors.New("gateway not set: pass --gateway, set REVA_GATEWAY or run `reva config set gateway <host:port>`")
+			return nil, r.notSet("gateway", "gateway", "--gateway", "gateway <host:port>")
 		}
 		creds := credentials.NewTLS(&tls.Config{InsecureSkipVerify: r.skipVerify})
 		if r.insecure {
@@ -300,22 +268,26 @@ func (r *Runtime) Token(ctx context.Context) (string, error) {
 	return r.asTok, nil
 }
 
-// loginToken returns the token from --token or REVA_TOKEN. Else it signs in
-// with the app token of --app-token-file. Else it returns the token that
-// `reva login` stored.
+// loginToken returns the token from --token or its env. Else it signs in
+// with the app token of its env or of --app-token-file. Else it returns the
+// token that login stored.
 func (r *Runtime) loginToken(ctx context.Context) (string, error) {
 	if r.tokenValue != "" {
 		return r.tokenValue, nil
 	}
-	if r.appTokenFile != "" {
-		b, err := os.ReadFile(r.appTokenFile)
-		if err != nil {
-			return "", err
+	if r.appToken != "" || r.appTokenFile != "" {
+		secret := r.appToken
+		if secret == "" {
+			b, err := os.ReadFile(r.appTokenFile)
+			if err != nil {
+				return "", err
+			}
+			secret = string(b)
 		}
 		if r.user == "" {
 			return "", errors.New("an app token needs a user name: pass --user")
 		}
-		t, err := r.Authenticate(ctx, "appauth", r.user, strings.TrimSpace(string(b)))
+		t, err := r.Authenticate(ctx, r.AuthType("app-token"), r.user, strings.TrimSpace(secret))
 		if err != nil {
 			return "", err
 		}
@@ -324,7 +296,7 @@ func (r *Runtime) loginToken(ctx context.Context) (string, error) {
 	}
 	b, err := state.ReadToken()
 	if errors.Is(err, fs.ErrNotExist) {
-		return "", errors.New("no login token: run `reva login` first")
+		return "", fmt.Errorf("no login token: run `%s login` first", r.Name())
 	}
 	return strings.TrimSpace(string(b)), err
 }

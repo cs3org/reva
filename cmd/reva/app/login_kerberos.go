@@ -22,7 +22,7 @@ import (
 	"errors"
 	"fmt"
 	"net"
-	"os"
+	"net/url"
 	"strings"
 
 	"github.com/cs3org/reva/v3/internal/cli/state"
@@ -56,7 +56,7 @@ func kerberosLogin(cmd *cobra.Command, rt *cli.Runtime, spn, ccache string) erro
 	if err != nil {
 		return err
 	}
-	token, err := rt.Authenticate(cmd.Context(), "kerberos", ticket.Username(), secret)
+	token, err := rt.Authenticate(cmd.Context(), rt.AuthType("kerberos"), ticket.Username(), secret)
 	if err != nil {
 		return err
 	}
@@ -67,20 +67,18 @@ func kerberosLogin(cmd *cobra.Command, rt *cli.Runtime, spn, ccache string) erro
 	return nil
 }
 
-// kerberosSPN returns the service principal when --spn is not given: from
-// REVA_KERBEROS_SPN, then from the config file, then HTTP/<gateway host>.
+// kerberosSPN returns the service principal when --spn is not given: the
+// kerberos_spn setting, else HTTP/<gateway host>, else HTTP/<endpoint host>.
 func kerberosSPN(rt *cli.Runtime) (string, error) {
-	if v := os.Getenv("REVA_KERBEROS_SPN"); v != "" {
+	if v := rt.KerberosSPN(); v != "" {
 		return v, nil
 	}
-	c, err := state.ReadConfig()
-	if err != nil {
-		return "", err
-	}
-	if c.Auth.Kerberos.SPN != "" {
-		return c.Auth.Kerberos.SPN, nil
-	}
 	addr := rt.GatewayAddr()
+	if addr == "" {
+		if u, err := url.Parse(rt.HTTPEndpoint()); err == nil {
+			addr = u.Host
+		}
+	}
 	// A gRPC target can name a resolver, as in dns:///host:port.
 	if _, rest, ok := strings.Cut(addr, ":///"); ok {
 		addr = rest
@@ -91,7 +89,7 @@ func kerberosSPN(rt *cli.Runtime) (string, error) {
 	}
 	host = strings.Trim(host, "[]")
 	if host == "" {
-		return "", errors.New("no service principal for Kerberos: pass --spn HTTP/<host>, or set a gateway")
+		return "", errors.New("no service principal for Kerberos: pass --spn HTTP/<host>, or set a gateway or an endpoint")
 	}
 	return "HTTP/" + host, nil
 }

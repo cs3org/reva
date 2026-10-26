@@ -26,11 +26,9 @@ import (
 	"os"
 	"time"
 
-	"github.com/cs3org/reva/v3/internal/cli/state"
 	"github.com/cs3org/reva/v3/pkg/cli/backend"
 	grpcbackend "github.com/cs3org/reva/v3/pkg/cli/backend/grpc"
 	"github.com/cs3org/reva/v3/pkg/cli/data"
-	"github.com/spf13/pflag"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/backoff"
 )
@@ -38,8 +36,8 @@ import (
 // TransportAuto selects gRPC when a gateway is set, else HTTPS.
 const TransportAuto = "auto"
 
-// DefaultTransport is the transport of the user plane when no flag, env or
-// config sets one. A brand can change it before the flags are added.
+// DefaultTransport is the built-in transport of the user plane, below the
+// flag, the env, the config files and connection.transport of the brand.
 var DefaultTransport = backend.GRPC
 
 // gatewayConnectTimeout is short, so that in auto a gateway that cannot be
@@ -49,23 +47,6 @@ const gatewayConnectTimeout = 5 * time.Second
 var errHTTPNotBuilt = errors.New("the http transport is not available yet in this version of the CLI: use --transport grpc with --gateway")
 
 var _ backend.Backend = (*switcher)(nil)
-
-// loadTransport fills the transport and the endpoint that are not given as
-// flags from the environment, then from the config file.
-func (r *Runtime) loadTransport(flags *pflag.FlagSet, c state.Config) error {
-	if !flags.Changed("transport") {
-		r.transport = cmp.Or(os.Getenv("REVA_TRANSPORT"), c.Connection.Transport)
-	}
-	if !flags.Changed("endpoint") {
-		r.httpEndpoint = cmp.Or(os.Getenv("REVA_ENDPOINT"), c.Connection.Endpoint)
-	}
-	switch t := r.Transport(); t {
-	case backend.GRPC, backend.HTTP, TransportAuto:
-		return nil
-	default:
-		return fmt.Errorf("unknown transport %q: use grpc, http or auto", t)
-	}
-}
 
 // HTTPEndpoint returns the HTTPS endpoint of the deployment. Empty means
 // none is known.
@@ -95,7 +76,7 @@ func (r *Runtime) Backend(ctx context.Context) (backend.Backend, error) {
 	case t == backend.HTTP:
 		return nil, errHTTPNotBuilt
 	case t == TransportAuto:
-		return nil, errors.New("no gateway is set, and the http transport is not available yet in this version of the CLI: pass --gateway or set REVA_GATEWAY")
+		return nil, fmt.Errorf("no gateway is set, and the http transport is not available yet in this version of the CLI: pass --gateway%s", r.envHint("gateway"))
 	default:
 		return nil, fmt.Errorf("unknown transport %q: use grpc, http or auto", t)
 	}
@@ -105,7 +86,7 @@ func (r *Runtime) Backend(ctx context.Context) (backend.Backend, error) {
 			primary: b,
 			auto:    t == TransportAuto,
 			http:    r.httpBackend,
-			note:    func(format string, args ...any) { r.Msg(os.Stderr, "reva: "+format, args...) },
+			note:    func(format string, args ...any) { r.Msg(os.Stderr, r.Name()+": "+format, args...) },
 			warn:    r.Warnf,
 		}
 	}
@@ -159,7 +140,7 @@ func Ability[T any](ctx context.Context, r *Runtime, what string) (T, error) {
 	if !ok {
 		return zero, backend.NotAvailable(h.Transport(), what)
 	}
-	r.Msg(os.Stderr, "reva: %s is not available over %s: using https for it", what, b.Transport())
+	r.Msg(os.Stderr, r.Name()+": %s is not available over %s: using https for it", what, b.Transport())
 	return a, nil
 }
 

@@ -59,6 +59,22 @@ type PathResolver interface {
 	Resolve(ctx context.Context, arg string) (path string, ok bool, err error)
 }
 
+// builtinAuth are the sign-in methods of the core, for auth.chain of a
+// brand.
+//
+// TODO(T41): the credential chain adds device.
+var builtinAuth = []string{"token", "app-token", "basic", "kerberos"}
+
+// AuthProviders returns the names of the sign-in methods of this build: the
+// built-in ones and the cli.auth.* plugins.
+func AuthProviders() []string {
+	names := slices.Clone(builtinAuth)
+	for _, p := range reva.GetPlugins(AuthNamespace) {
+		names = append(names, strings.TrimPrefix(string(p.ID), AuthNamespace+"."))
+	}
+	return names
+}
+
 // RegisterCommand registers a command plugin. path names the parent and the
 // command, for example "otg" (a top-level command) or "user account" (the
 // command account under user). Call it in init().
@@ -98,11 +114,13 @@ func register(ns string, labels []string, newFn any) {
 	reva.RegisterPlugin(plugin{ID: id, New: newFn})
 }
 
-// PluginConfig decodes the section [plugins.<name>] of the config file into
-// v. A missing section leaves v as it is, and an unknown key is an error.
-// The settings are loaded when a command runs: in a completion function,
-// call Runtime.Load first.
+// PluginConfig decodes the section [plugins.<name>] of the config files into
+// v: the keys of the user config replace those of the system config. A
+// missing section leaves v as it is, and an unknown key is an error.
 func PluginConfig(rt *Runtime, name string, v any) error {
+	if !rt.resolved {
+		rt.resolve()
+	}
 	sec, ok := rt.config.Plugins[name]
 	if !ok {
 		return nil

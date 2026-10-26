@@ -22,11 +22,11 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"path/filepath"
 	"strings"
 	"testing"
 
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
-	"github.com/cs3org/reva/v3/internal/cli/state"
 	"github.com/cs3org/reva/v3/pkg/cli/backend"
 	"github.com/cs3org/reva/v3/pkg/cli/clitest"
 	"github.com/spf13/pflag"
@@ -58,17 +58,16 @@ func TestBackendSelection(t *testing.T) {
 }
 
 func TestLoadTransport(t *testing.T) {
+	dir := setup(t)
+	writeFile(t, filepath.Join(dir, ".config", "reva", "config.toml"), "[connection]\ntransport = \"http\"\nendpoint = \"https://config.example.org\"\n")
 	t.Setenv("REVA_TRANSPORT", "auto")
-	t.Setenv("REVA_ENDPOINT", "https://env.example.org")
-	r := &Runtime{}
+	r := NewRuntime(nil)
 	fs := pflag.NewFlagSet("t", pflag.ContinueOnError)
 	r.AddFlags(fs)
 	if err := fs.Parse([]string{"--endpoint", "https://flag.example.org"}); err != nil {
 		t.Fatal(err)
 	}
-	var c state.Config
-	c.Connection.Transport = "http"
-	if err := r.loadTransport(fs, c); err != nil {
+	if err := r.Load(fs); err != nil {
 		t.Fatal(err)
 	}
 	if r.Transport() != "auto" || r.httpEndpoint != "https://flag.example.org" {

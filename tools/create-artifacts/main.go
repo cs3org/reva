@@ -68,15 +68,9 @@ func main() {
 		os.Exit(1)
 	}
 
-	ldFlags := fmt.Sprintf("-s -X main.buildDate=%s -X main.gitCommit=%s -X main.version=%s -X main.goVersion=%s",
-		buildDate,
-		*commit,
-		*version,
-		*goVersion,
-	)
-	// The reva CLI reads its version from pkg/rversion.
+	// revad and the reva CLI read their version from pkg/rversion.
 	rv := "github.com/cs3org/reva/v3/pkg/rversion"
-	ldFlags += fmt.Sprintf(" -X %s.BuildDate=%s -X %s.GitCommit=%s -X %s.Version=%s -X %s.GoVersion=%s",
+	ldFlags := fmt.Sprintf("-s -X %s.BuildDate=%s -X %s.GitCommit=%s -X %s.Version=%s -X %s.GoVersion=%s",
 		rv, buildDate, rv, *commit, rv, *version, rv, *goVersion)
 
 	for _, bin := range binaries {

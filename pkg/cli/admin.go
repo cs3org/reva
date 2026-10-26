@@ -80,7 +80,7 @@ var socketPaths = func() []string {
 // the admin host with an admin token: the one in memory, the one that
 // `reva elevate` stored for the current login, or a new one from an
 // automatic step-up. The token of the step-up stays in memory only. An admin
-// host from --admin-host or REVA_ADMIN_HOST skips the socket.
+// host from --admin-host or from its env skips the socket.
 func (r *Runtime) Admin(ctx context.Context) (*AdminClient, context.Context, error) {
 	r.usedAdmin = true
 	c, err := r.adminClient(ctx)
@@ -162,7 +162,7 @@ func (r *Runtime) dialAdminHost() (*AdminClient, error) {
 		host = r.gatewayAddr
 	}
 	if host == "" {
-		return nil, errors.New("admin host not set: pass --admin-host, set REVA_ADMIN_HOST or run `reva config set admin-host <host:port>`")
+		return nil, r.notSet("admin host", "admin_host", "--admin-host", "admin-host <host:port>")
 	}
 	return r.dialAdmin(host)
 }
@@ -209,7 +209,7 @@ func (r *Runtime) adminToken(ctx context.Context, c *AdminClient) (string, error
 		need = "this command"
 	}
 	if r.noElevate {
-		return "", fmt.Errorf("%s needs admin rights: run `reva elevate` first, or do not pass --no-elevate", need)
+		return "", fmt.Errorf("%s needs admin rights: run `%s elevate` first, or do not pass --no-elevate", need, r.Name())
 	}
 	res, err := c.RequestAdmin(WithToken(ctx, login), &adminpb.RequestAdminRequest{})
 	if err != nil {
@@ -434,7 +434,7 @@ func (r *Runtime) Confirm(prompt string) error {
 // Warnf writes a line to stderr that -q does not hide, for the use of admin
 // rights that the person did not ask for by name.
 func (r *Runtime) Warnf(format string, args ...any) {
-	fmt.Fprintf(os.Stderr, "reva: "+format+"\n", args...)
+	fmt.Fprintf(os.Stderr, r.Name()+": "+format+"\n", args...)
 }
 
 // ConfirmMutation asks for a confirmation before a command that changes data

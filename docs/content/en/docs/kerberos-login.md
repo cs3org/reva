@@ -26,7 +26,8 @@ reva elevate
 - **Kerberos config:** `$KRB5_CONFIG`, else `/etc/krb5.conf`. The CLI needs it
   only when the cache has no ticket for the SPN yet.
 - **SPN:** `--spn`, else `$REVA_KERBEROS_SPN`, else
-  `reva config set kerberos-spn HTTP/<host>`, else `HTTP/<gateway host>`.
+  `reva config set kerberos-spn HTTP/<host>`, else `HTTP/<gateway host>`, else
+  `HTTP/<endpoint host>`.
 
 ## Server
 
