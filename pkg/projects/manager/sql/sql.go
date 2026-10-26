@@ -23,6 +23,7 @@ import (
 	"fmt"
 	"slices"
 	"strings"
+	"text/template"
 	"time"
 
 	"github.com/ReneKroon/ttlcache/v2"
@@ -56,12 +57,23 @@ type Config struct {
 	// CacheTTL (seconds) determines how long the list of projects will be stored in a cache
 	// before a new database query is executed. The default, 0, corresponds to 60 seconds.
 	CacheTTL int `mapstructure:"cache_ttl"`
+	// Templates of the values that the Admin API derives from the name of a
+	// new project. They are text/template with the sprig functions, and the
+	// fields .Name and .Initial (the first letter of the name). With an empty
+	// template, the value is a required argument.
+	PathTemplate         string `mapstructure:"path_template" docs:";Path of a new project"`
+	StorageIDTemplate    string `mapstructure:"storage_id_template" docs:";Storage id of a new project"`
+	ReadersGroupTemplate string `mapstructure:"readers_group_template" docs:";Readers group of a new project"`
+	WritersGroupTemplate string `mapstructure:"writers_group_template" docs:";Writers group of a new project"`
+	AdminsGroupTemplate  string `mapstructure:"admins_group_template" docs:";Admins group of a new project"`
 }
 
 type ProjectsManager struct {
 	c     *Config
 	db    *gorm.DB
 	cache *ttlcache.Cache
+	// templates holds the parsed templates, by the name of the value.
+	templates map[string]*template.Template
 }
 
 const cacheKey = "projects/projectsListCache"
@@ -150,10 +162,15 @@ func New(ctx context.Context, m map[string]any) (projects.Catalogue, error) {
 	cache.SetTTL(time.Duration(c.CacheTTL) * time.Second)
 	// Even if we get a hit, of course we just want to refresh every 60 seconds
 	cache.SkipTTLExtensionOnHit(true)
+	tpls, err := parseTemplates(&c)
+	if err != nil {
+		return nil, err
+	}
 	mgr := &ProjectsManager{
-		c:     &c,
-		db:    db,
-		cache: cache,
+		c:         &c,
+		db:        db,
+		cache:     cache,
+		templates: tpls,
 	}
 	return mgr, nil
 }
@@ -244,32 +261,46 @@ func (m *ProjectsManager) UpdateStorageSpace(ctx context.Context, req *provider.
 		}, errors.New("No field given to update")
 	}
 
-	var res *gorm.DB
-
+	var column, value string
 	switch req.Field.Field.(type) {
 	case *provider.UpdateStorageSpaceRequest_UpdateField_Description:
-		res = m.db.Model(&Project{}).
-			Where("name = ?", req.StorageSpace.Name).
-			Update("description", req.Field.GetDescription())
+		column, value = "description", req.Field.GetDescription()
 	case *provider.UpdateStorageSpaceRequest_UpdateField_Metadata:
 		switch req.Field.GetMetadata().Type {
 		case provider.SpaceMetadata_TYPE_README:
-			res = m.db.Model(&Project{}).
-				Where("name = ?", req.StorageSpace.Name).
-				Update("readme_path", req.Field.GetMetadata().Id)
+			column, value = "readme_path", req.Field.GetMetadata().Id
 		case provider.SpaceMetadata_TYPE_THUMBNAIL:
-			res = m.db.Model(&Project{}).
-				Where("name = ?", req.StorageSpace.Name).
-				Update("thumbnail_path", req.Field.GetMetadata().Id)
+			column, value = "thumbnail_path", req.Field.GetMetadata().Id
 		}
-	default:
+	}
+	if column == "" {
 		return nil, errors.New("Unsupported update type")
 	}
 
+	user, ok := appctx.ContextGetUser(ctx)
+	if !ok {
+		return &provider.UpdateStorageSpaceResponse{
+			Status: &rpcv1beta1.Status{Code: rpcv1beta1.Code_CODE_UNAUTHENTICATED, Message: "must provide a user for updating a storage space"},
+		}, nil
+	}
+	p, err := m.GetProject(ctx, req.StorageSpace.Name)
+	if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
+		return nil, err
+	}
+	// Only the owner and the admins may change a project. The others get
+	// not found, so that they cannot learn whether the project exists.
+	if err != nil || (user.GetId().GetOpaqueId() != p.Owner && !slices.Contains(user.Groups, p.Admins)) {
+		return &provider.UpdateStorageSpaceResponse{
+			Status: &rpcv1beta1.Status{Code: rpcv1beta1.Code_CODE_NOT_FOUND, Message: "project not found"},
+		}, nil
+	}
+
+	res := m.db.Model(&Project{}).Where("id = ?", p.ID).Update(column, value)
 	if res.Error != nil {
 		log.Error().Err(res.Error).Msg("UpdateStorageSpace: database error")
 		return nil, res.Error
 	}
+	m.InvalidateCache()
 
 	space, err := m.GetStorageSpace(ctx, req.StorageSpace.Name)
 	if err != nil {
@@ -345,6 +376,7 @@ func (m *ProjectsManager) UpdateProjectStatus(ctx context.Context, name string, 
 	if res.RowsAffected == 0 {
 		return fmt.Errorf("no project found with name %s", name)
 	}
+	m.InvalidateCache()
 
 	log.Info().Str("project", name).Str("status", status.AsString()).Msg("Updated project status")
 	return nil
@@ -368,6 +400,11 @@ func (m *ProjectsManager) ListAllProjects(ctx context.Context, status projects.P
 		return nil, res.Error
 	}
 	return fetchedProjects, nil
+}
+
+// InvalidateCache drops the project list that this process caches.
+func (m *ProjectsManager) InvalidateCache() {
+	_ = m.cache.Remove(cacheKey)
 }
 
 func projectBelongsToUser(user *userpb.User, p *Project) (*provider.ResourcePermissions, bool) {
