@@ -631,6 +631,37 @@ Every mutation logs an audit event `action=spacesregistry.<name>` with
 `target=project:<name or id>`. Only the `sql` driver has what these
 invocations need.
 
+## Routing
+
+The `dynamic` storage registry reads its routing table (the `routing` SQL
+table) into memory. Each instance (usually one per gateway) has its own copy.
+The `storageregistry` invocations change the table and load it again without a
+restart:
+
+```
+routes                              list the table
+resolve        path=                the mounts that serve a path, on each instance
+route_add      path= mount_id=      add or change a route (table only)
+route_remove   path=                remove a route (table only)
+route_reload                        load the table again into memory
+```
+
+`route_add` and `route_remove` change only the table, so they run on one
+instance (they are shared). They have no effect until you reload. `route_reload`
+is not shared: called by service name, it runs on every instance. The flow is
+always a change, then a reload:
+
+```
+reva admin invoke storageregistry route_add path=/eos/user/z mount_id=eoshome-i05
+reva admin invoke storageregistry route_reload
+reva admin invoke storageregistry resolve path=/eos/user/z/zed   # one line per instance
+```
+
+If a reload fails on an instance, that instance keeps its old routes. Run
+`route_reload` again. `route_add` refuses a mount that is not in the `rules` of
+the registry, because the reload would skip the route. The `static` driver has
+no routing table and answers "not supported".
+
 ## Adding an invocation to a service (for developers)
 
 A service exposes admin operations by building an [`invoke.Set`](../../../../pkg/invoke/set.go)
