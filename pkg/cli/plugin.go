@@ -27,6 +27,7 @@ import (
 
 	"github.com/BurntSushi/toml"
 	"github.com/cs3org/reva/v3"
+	"github.com/cs3org/reva/v3/pkg/cli/auth"
 	"github.com/spf13/cobra"
 )
 
@@ -38,18 +39,9 @@ const (
 	PathsNamespace    = "cli.paths"
 )
 
-// AuthProvider is a sign-in method of the credential chain.
-//
-// TODO(T41): this is provisional. The credential chain replaces it.
-type AuthProvider interface {
-	// Name identifies the provider in `status` and in `login --method`.
-	Name() string
-	// Available reports whether the provider has what it needs. It must not
-	// use the network.
-	Available(ctx context.Context) bool
-	// Token signs in and returns a credential.
-	Token(ctx context.Context) (string, error)
-}
+// AuthProvider is a sign-in method of the credential chain. A cli.auth.*
+// plugin gives one, and auth.chain of the brand names it.
+type AuthProvider = auth.Provider
 
 // PathResolver turns a path argument into a remote path.
 //
@@ -61,9 +53,7 @@ type PathResolver interface {
 
 // builtinAuth are the sign-in methods of the core, for auth.chain of a
 // brand.
-//
-// TODO(T41): the credential chain adds device.
-var builtinAuth = []string{"token", "app-token", "basic", "kerberos"}
+var builtinAuth = []string{auth.MethodToken, auth.MethodAppToken, auth.MethodBasic, auth.MethodKerberos, auth.MethodDevice}
 
 // AuthProviders returns the names of the sign-in methods of this build: the
 // built-in ones and the cli.auth.* plugins.

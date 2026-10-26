@@ -62,6 +62,8 @@ func isolate(t *testing.T) string {
 	t.Setenv("HOME", dir)
 	t.Setenv("XDG_CONFIG_HOME", filepath.Join(dir, ".config"))
 	t.Setenv("XDG_RUNTIME_DIR", dir)
+	// The Kerberos ticket of the machine must not sign the tests in.
+	t.Setenv("KRB5CCNAME", "FILE:"+filepath.Join(dir, "no-ccache"))
 	old := state.SystemDir
 	state.SystemDir = func() string { return filepath.Join(dir, "etc") }
 	t.Cleanup(func() { state.SystemDir = old })

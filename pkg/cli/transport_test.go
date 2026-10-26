@@ -36,21 +36,24 @@ import (
 
 func TestBackendSelection(t *testing.T) {
 	for _, tc := range []struct {
-		transport, gateway string
-		wantErr            string
+		transport, gateway, endpoint string
+		want, wantErr                string
 	}{
-		{"", "", ""},
-		{"grpc", "", ""},
-		{"auto", "gw:9142", ""},
-		{"auto", "", "no gateway is set"},
-		{"http", "gw:9142", "http transport is not available yet"},
-		{"bogus", "", "unknown transport"},
+		{"", "", "", backend.GRPC, ""},
+		{"grpc", "", "", backend.GRPC, ""},
+		{"auto", "gw:9142", "", backend.GRPC, ""},
+		{"auto", "", "", "", "no gateway and no endpoint are set"},
+		{"auto", "", "https://box.example.org", backend.HTTP, ""},
+		{"http", "gw:9142", "", "", "endpoint not set"},
+		{"http", "gw:9142", "https://box.example.org", backend.HTTP, ""},
+		{"http", "", "http://box.example.org", "", "has no TLS"},
+		{"bogus", "", "", "", "unknown transport"},
 	} {
-		r := &Runtime{transport: tc.transport, gatewayAddr: tc.gateway}
+		r := &Runtime{transport: tc.transport, gatewayAddr: tc.gateway, httpEndpoint: tc.endpoint}
 		b, err := r.Backend(context.Background())
 		switch {
-		case tc.wantErr == "" && (err != nil || b.Transport() != backend.GRPC):
-			t.Errorf("%q, gateway %q: %v, %v: want the grpc backend", tc.transport, tc.gateway, b, err)
+		case tc.wantErr == "" && (err != nil || b.Transport() != tc.want):
+			t.Errorf("%q, gateway %q: %v, %v: want the %s backend", tc.transport, tc.gateway, b, err, tc.want)
 		case tc.wantErr != "" && (err == nil || !strings.Contains(err.Error(), tc.wantErr)):
 			t.Errorf("%q, gateway %q: err = %v, want %q", tc.transport, tc.gateway, err, tc.wantErr)
 		}
@@ -146,7 +149,7 @@ func TestAbility(t *testing.T) {
 		t.Errorf("err = %v, want not available over fake", err)
 	}
 	r.httpEndpoint = "https://example.org"
-	if _, err := Ability[backend.PreferenceStore](context.Background(), r, "preferences"); !errors.Is(err, backend.ErrNotAvailable) || !errors.Is(err, errHTTPNotBuilt) {
-		t.Errorf("err = %v, want not available, and the https backend not built", err)
+	if _, err := Ability[backend.PreferenceStore](context.Background(), r, "preferences"); !errors.Is(err, backend.ErrNotAvailable) || err.Error() != "preferences is not available over http" {
+		t.Errorf("err = %v, want not available over http either", err)
 	}
 }
