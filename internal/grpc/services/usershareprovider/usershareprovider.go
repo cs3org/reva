@@ -23,6 +23,7 @@ import (
 	"regexp"
 
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
+	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	collaboration "github.com/cs3org/go-cs3apis/cs3/sharing/collaboration/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/cs3org/reva/v3/pkg/appctx"
@@ -174,9 +175,16 @@ func (s *service) RemoveShare(ctx context.Context, req *collaboration.RemoveShar
 func (s *service) GetShare(ctx context.Context, req *collaboration.GetShareRequest) (*collaboration.GetShareResponse, error) {
 	share, err := s.sm.GetShare(ctx, req.Ref)
 	if err != nil {
-		return &collaboration.GetShareResponse{
+		res := &collaboration.GetShareResponse{
 			Status: status.NewStatusFromErrType(ctx, "error getting share", err),
-		}, err
+		}
+		// A not found must reach the client as CODE_NOT_FOUND, not as a gRPC
+		// error, so that it can tell it from a failed call. Other errors stay
+		// gRPC errors, because some callers only check the error.
+		if res.Status.Code == rpc.Code_CODE_NOT_FOUND {
+			return res, nil
+		}
+		return res, err
 	}
 
 	return &collaboration.GetShareResponse{
