@@ -1,0 +1,27 @@
+# The brand of the stock reva CLI. It keeps the env names of the reva CLI.
+
+[program]
+name        = "reva"
+short       = "Command line client for the reva gateway"
+docs_url    = "https://reva.link"
+support_url = "https://github.com/cs3org/reva/issues"
+config_dir  = "reva"
+
+[connection]
+transport = "grpc"
+
+[auth]
+chain = ["token", "basic"]
+
+[env]
+transport    = ["REVA_TRANSPORT"]
+gateway      = ["REVA_GATEWAY", "REVA_HOST"]   # REVA_HOST is the name from before --gateway
+admin_host   = ["REVA_ADMIN_HOST"]
+token        = ["REVA_TOKEN"]
+token_cache  = ["REVA_TOKEN_FILE"]
+no_elevate   = ["REVA_NO_ELEVATE"]
+kerberos_spn = ["REVA_KERBEROS_SPN"]
+
+[ui]
+output            = "table"
+operator_commands = "show"
