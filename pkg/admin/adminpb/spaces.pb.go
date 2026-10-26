@@ -131,8 +131,9 @@ type ListSpacesRequest struct {
 	Owner string `protobuf:"bytes,2,opt,name=owner,proto3" json:"owner,omitempty"`
 	// member keeps the spaces that this user owns or can access through a
 	// role group.
-	Member          string                 `protobuf:"bytes,3,opt,name=member,proto3" json:"member,omitempty"`
-	Status          string                 `protobuf:"bytes,4,opt,name=status,proto3" json:"status,omitempty"`
+	Member string `protobuf:"bytes,3,opt,name=member,proto3" json:"member,omitempty"`
+	Status string `protobuf:"bytes,4,opt,name=status,proto3" json:"status,omitempty"`
+	// profile is Unimplemented until the catalogue stores profiles.
 	Profile         string                 `protobuf:"bytes,5,opt,name=profile,proto3" json:"profile,omitempty"`
 	CreatedAfter    *timestamppb.Timestamp `protobuf:"bytes,6,opt,name=created_after,json=createdAfter,proto3" json:"created_after,omitempty"`
 	CreatedBefore   *timestamppb.Timestamp `protobuf:"bytes,7,opt,name=created_before,json=createdBefore,proto3" json:"created_before,omitempty"`
