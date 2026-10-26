@@ -41,7 +41,6 @@ import (
 	"github.com/cs3org/reva/v3/cmd/reva/internal/cli"
 	"github.com/cs3org/reva/v3/pkg/auth/scope"
 	"github.com/cs3org/reva/v3/pkg/utils"
-	"github.com/golang-jwt/jwt/v5"
 	"github.com/jedib0t/go-pretty/table"
 	"github.com/spf13/cobra"
 	"golang.org/x/term"
@@ -49,7 +48,7 @@ import (
 
 func loginCommand(rt *cli.Runtime) *cobra.Command {
 	var list bool
-	var method string
+	var method, spn, ccache string
 	cmd := &cobra.Command{
 		Use:   "login",
 		Short: "Sign in to the gateway and store the token",
@@ -58,7 +57,12 @@ func loginCommand(rt *cli.Runtime) *cobra.Command {
 			"--app-token-file. 'reva login --list' shows the types. The password (or the\n" +
 			"API key for machine auth) is read from the terminal, or from stdin when\n" +
 			"stdin is not a terminal:\n\n" +
-			"  echo \"$PASSWORD\" | reva login --user alice",
+			"  echo \"$PASSWORD\" | reva login --user alice\n\n" +
+			"--method kerberos uses the ticket of kinit and asks for no password. The\n" +
+			"ticket is read from --ccache, else $KRB5CCNAME, else /tmp/krb5cc_<uid>; only\n" +
+			"FILE: caches can be read. The service principal is --spn, else\n" +
+			"$REVA_KERBEROS_SPN, else 'reva config set kerberos-spn', else HTTP/<gateway host>:\n\n" +
+			"  kinit && reva login --method kerberos --spn HTTP/cernbox.cern.ch",
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if list {
@@ -78,6 +82,13 @@ func loginCommand(rt *cli.Runtime) *cobra.Command {
 						fmt.Fprintln(w, t)
 					}
 				})
+			}
+
+			if method == "kerberos" {
+				return kerberosLogin(cmd, rt, spn, ccache)
+			}
+			if cmd.Flags().Changed("spn") || cmd.Flags().Changed("ccache") {
+				return errors.New("--spn and --ccache apply only to --method kerberos")
 			}
 
 			var user, secret string
@@ -110,6 +121,9 @@ func loginCommand(rt *cli.Runtime) *cobra.Command {
 	}
 	cmd.Flags().BoolVar(&list, "list", false, "list the auth types of the gateway")
 	cmd.Flags().StringVar(&method, "method", "basic", "auth type to sign in with")
+	cmd.Flags().StringVar(&spn, "spn", "", "service principal for --method kerberos, for example HTTP/cernbox.cern.ch")
+	cmd.Flags().StringVar(&ccache, "ccache", "", "Kerberos credential cache for --method kerberos (default $KRB5CCNAME, then /tmp/krb5cc_<uid>)")
+	_ = cmd.RegisterFlagCompletionFunc("spn", cobra.NoFileCompletions)
 	_ = cmd.RegisterFlagCompletionFunc("method", func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
 		none := cobra.ShellCompDirectiveNoFileComp
 		if err := rt.Load(cmd.Flags()); err != nil {
@@ -132,7 +146,7 @@ func logoutCommand(rt *cli.Runtime) *cobra.Command {
 	return &cobra.Command{
 		Use:   "logout",
 		Short: "Forget the stored tokens",
-		Long:  "Forget the stored login token and the admin token of 'reva admin elevate'.",
+		Long:  "Forget the stored login token and the admin token of 'reva elevate'.",
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if err := cli.ClearTokens(); err != nil {
@@ -197,9 +211,7 @@ func statusCommand(rt *cli.Runtime) *cobra.Command {
 	}
 }
 
-// whoami returns the user of the token and when the token expires. The
-// expiry comes from the exp claim, read without a check of the signature,
-// because only the server can check it.
+// whoami returns the user of the token and when the token expires.
 func whoami(ctx context.Context, rt *cli.Runtime) (*userpb.User, time.Time, error) {
 	client, err := rt.Client()
 	if err != nil {
@@ -216,12 +228,7 @@ func whoami(ctx context.Context, rt *cli.Runtime) (*userpb.User, time.Time, erro
 	if res.Status.Code != rpc.Code_CODE_OK {
 		return nil, time.Time{}, formatError(res.Status)
 	}
-	var exp time.Time
-	var claims jwt.RegisteredClaims
-	if _, _, err := jwt.NewParser().ParseUnverified(token, &claims); err == nil && claims.ExpiresAt != nil {
-		exp = claims.ExpiresAt.Time
-	}
-	return res.User, exp, nil
+	return res.User, cli.TokenExpiry(token), nil
 }
 
 // readCredentials asks for the missing user name and for the secret. The
@@ -259,20 +266,29 @@ func readCredentials(cmd *cobra.Command, username string) (string, string, error
 func whoamiCommand(rt *cli.Runtime) *cobra.Command {
 	return &cobra.Command{
 		Use:   "whoami",
-		Short: "Show who you are signed in as",
-		Args:  cobra.NoArgs,
+		Short: "Show who you are signed in as, and your admin rights",
+		Long: "Show who you are signed in as, and your admin rights: socket (the local\n" +
+			"admin socket), yes with the time left on the admin token, or no. With --as,\n" +
+			"show the user you impersonate.",
+		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			user, _, err := whoami(cmd.Context(), rt)
 			if err != nil {
 				return err
 			}
-			return rt.Print(cmd.OutOrStdout(), user, func(w io.Writer) { fmt.Fprintln(w, user) })
+			return rt.Print(cmd.OutOrStdout(), user, func(w io.Writer) {
+				fmt.Fprintln(w, user)
+				if rt.As != "" {
+					fmt.Fprintf(w, "as: %s (impersonated)\n", user.GetUsername())
+				}
+				fmt.Fprintf(w, "admin: %s\n", rt.AdminState(cmd.Context()))
+			})
 		},
 	}
 }
 
 func configCommand(rt *cli.Runtime) *cobra.Command {
-	keys := []string{"gateway", "admin-host"}
+	keys := []string{"gateway", "admin-host", "kerberos-spn"}
 	cmd := &cobra.Command{Use: "config", Short: "Show or change the stored settings"}
 	cmd.AddCommand(
 		&cobra.Command{
@@ -290,6 +306,8 @@ func configCommand(rt *cli.Runtime) *cobra.Command {
 					c.Connection.Gateway = args[1]
 				case "admin-host":
 					c.Connection.AdminHost = args[1]
+				case "kerberos-spn":
+					c.Auth.Kerberos.SPN = args[1]
 				default:
 					return fmt.Errorf("unknown key %q: use one of %s", args[0], strings.Join(keys, ", "))
 				}
@@ -310,7 +328,8 @@ func configCommand(rt *cli.Runtime) *cobra.Command {
 					return err
 				}
 				return rt.Print(cmd.OutOrStdout(), c, func(w io.Writer) {
-					fmt.Fprintf(w, "file:       %s\ngateway:    %s\nadmin-host: %s\n", p, c.Connection.Gateway, c.Connection.AdminHost)
+					fmt.Fprintf(w, "file:         %s\ngateway:      %s\nadmin-host:   %s\nkerberos-spn: %s\n",
+						p, c.Connection.Gateway, c.Connection.AdminHost, c.Auth.Kerberos.SPN)
 				})
 			},
 		},

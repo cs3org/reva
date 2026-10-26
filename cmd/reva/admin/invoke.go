@@ -20,54 +20,95 @@ package admin
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"io"
 	"os"
 	"os/signal"
+	"slices"
 	"strings"
 
 	"github.com/cs3org/reva/v3/pkg/admin/adminpb"
 	"github.com/spf13/cobra"
 )
 
-func invocationsCommand() *cobra.Command {
-	return &cobra.Command{
-		Use:   "invocations <service>",
-		Short: "List the invocations a service exposes",
-		Args:  cobra.ExactArgs(1),
-		RunE: func(cmd *cobra.Command, args []string) error {
-			client, ctx, err := adminDial(cmd)
-			if err != nil {
-				return err
-			}
-			res, err := client.ListInvocations(ctx, &adminpb.ListInvocationsRequest{Service: args[0]})
-			if err != nil {
-				return adminErr(err)
-			}
-			for _, inv := range res.Invocations {
-				kind := inv.Kind
-				if kind == "" {
-					kind = "?"
+func invocationCommand() *cobra.Command {
+	cmd := &cobra.Command{Use: "invocation", Short: "Show the invocations that the services expose"}
+	cmd.AddCommand(
+		&cobra.Command{
+			Use:   "list <service>",
+			Short: "List the invocations of a service",
+			Args:  cobra.ExactArgs(1),
+			RunE: func(cmd *cobra.Command, args []string) error {
+				client, ctx, err := rt.Admin(cmd.Context())
+				if err != nil {
+					return err
 				}
-				switch {
-				case inv.StreamOnly:
-					kind += ",stream-only"
-				case inv.Streaming:
-					kind += ",stream"
+				res, err := client.ListInvocations(ctx, &adminpb.ListInvocationsRequest{Service: args[0]})
+				if err != nil {
+					return adminErr(err)
 				}
-				if inv.Scope != "" {
-					kind += "," + inv.Scope
+				if rt.Output == "json" {
+					return rt.Print(cmd.OutOrStdout(), res.Invocations, nil)
 				}
-				fmt.Printf("%-20s [%s] %s\n", inv.Name, kind, inv.Description)
-			}
-			return nil
+				for _, inv := range res.Invocations {
+					fmt.Printf("%-20s [%s] %s\n", inv.Name, invocationKind(inv), inv.Description)
+				}
+				return nil
+			},
 		},
+		&cobra.Command{
+			Use:   "get <service> <invocation>",
+			Short: "Show one invocation of a service, with its arguments",
+			Args:  cobra.ExactArgs(2),
+			RunE: func(cmd *cobra.Command, args []string) error {
+				client, ctx, err := rt.Admin(cmd.Context())
+				if err != nil {
+					return err
+				}
+				res, err := client.ListInvocations(ctx, &adminpb.ListInvocationsRequest{Service: args[0]})
+				if err != nil {
+					return adminErr(err)
+				}
+				i := slices.IndexFunc(res.Invocations, func(inv *adminpb.InvocationSpec) bool { return inv.Name == args[1] })
+				if i < 0 {
+					return fmt.Errorf("service %s has no invocation %q", args[0], args[1])
+				}
+				inv := res.Invocations[i]
+				return rt.Print(cmd.OutOrStdout(), inv, func(w io.Writer) {
+					fmt.Fprintf(w, "%s [%s]\n%s\n", inv.Name, invocationKind(inv), inv.Description)
+					for _, a := range inv.Args {
+						req := ""
+						if a.Required {
+							req = " (required)"
+						}
+						fmt.Fprintf(w, "  %-16s %s%s\n", a.Name, a.Description, req)
+					}
+				})
+			},
+		},
+	)
+	return cmd
+}
+
+func invocationKind(inv *adminpb.InvocationSpec) string {
+	kind := inv.Kind
+	if kind == "" {
+		kind = "?"
 	}
+	switch {
+	case inv.StreamOnly:
+		kind += ",stream-only"
+	case inv.Streaming:
+		kind += ",stream"
+	}
+	if inv.Scope != "" {
+		kind += "," + inv.Scope
+	}
+	return kind
 }
 
 func invokeCommand() *cobra.Command {
-	var yes, stream bool
+	var stream bool
 	cmd := &cobra.Command{
 		Use:   "invoke <selector> <invocation> [key=val ...]",
 		Short: "Run a service invocation on one or all instances",
@@ -77,7 +118,7 @@ func invokeCommand() *cobra.Command {
 			selector, invocation := posArgs[0], posArgs[1]
 			args := parseKeyVals(posArgs[2:])
 
-			client, ctx, err := adminDial(cmd)
+			client, ctx, err := rt.Admin(cmd.Context())
 			if err != nil {
 				return err
 			}
@@ -85,9 +126,9 @@ func invokeCommand() *cobra.Command {
 			// Confirm dangerous invocations unless --yes. The kind comes from the
 			// service's own catalog.
 			spec := invocationSpec(ctx, client, selector, invocation)
-			if !yes && spec.GetKind() == "dangerous" {
-				if !confirm(fmt.Sprintf("invocation %q on %q is DANGEROUS; proceed?", invocation, selector)) {
-					return errors.New("aborted")
+			if spec.GetKind() == "dangerous" {
+				if err := rt.Confirm(fmt.Sprintf("invocation %q on %q is DANGEROUS; proceed?", invocation, selector)); err != nil {
+					return err
 				}
 			}
 
@@ -107,7 +148,6 @@ func invokeCommand() *cobra.Command {
 			return nil
 		},
 	}
-	cmd.Flags().BoolVarP(&yes, "yes", "y", false, "skip the confirmation prompt for dangerous invocations")
 	cmd.Flags().BoolVar(&stream, "stream", false, "run a streaming invocation, printing results as they arrive (Ctrl-C stops); implied for a stream-only invocation")
 	return cmd
 }

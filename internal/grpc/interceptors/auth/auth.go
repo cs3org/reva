@@ -214,7 +214,7 @@ func tokenError(ctx context.Context, err error) error {
 }
 
 // withUserLogger stamps the authenticated user onto the request logger, so a
-// request's logs are searchable by user (reva admin trace -user).
+// request's logs are searchable by user (reva trace --user).
 func withUserLogger(ctx context.Context, username string, scopes map[string]*authpb.Scope) context.Context {
 	if act := scope.Actor(scopes); act != "" {
 		// Update the request logger in place: the log interceptor holds it, and

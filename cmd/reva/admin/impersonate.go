@@ -19,7 +19,6 @@
 package admin
 
 import (
-	"errors"
 	"fmt"
 	"time"
 
@@ -29,25 +28,28 @@ import (
 
 func impersonateCommand() *cobra.Command {
 	var (
-		reason          string
 		allowPrivileged bool
 		ttl             time.Duration
-		yes             bool
 	)
 	cmd := &cobra.Command{
 		Use:   "impersonate <user>",
-		Short: "Mint a user-scoped token for a target user",
-		Args:  cobra.ExactArgs(1),
+		Short: "Print a user token for another user",
+		Long: "Print a user token for another user, for a script or another program.\n" +
+			"To run one reva command as another user, use --as instead.\n\n" +
+			"--reason goes to the audit log.",
+		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			if allowPrivileged && !yes && !confirm(fmt.Sprintf("impersonate %q even if it is an admin or a service account?", args[0])) {
-				return errors.New("aborted")
+			if allowPrivileged {
+				if err := rt.Confirm(fmt.Sprintf("impersonate %q even if it is an admin or a service account", args[0])); err != nil {
+					return err
+				}
 			}
-			client, ctx, err := adminDial(cmd)
+			client, ctx, err := rt.Admin(cmd.Context())
 			if err != nil {
 				return err
 			}
 			res, err := client.Impersonate(ctx, &adminpb.ImpersonateRequest{
-				User: args[0], Reason: reason, AllowPrivileged: allowPrivileged, TtlSeconds: int64(ttl.Seconds()),
+				User: args[0], Reason: rt.Reason, AllowPrivileged: allowPrivileged, TtlSeconds: int64(ttl.Seconds()),
 			})
 			if err != nil {
 				return adminErr(err)
@@ -56,9 +58,7 @@ func impersonateCommand() *cobra.Command {
 			return nil
 		},
 	}
-	cmd.Flags().StringVar(&reason, "reason", "", "reason recorded in the audit log")
 	cmd.Flags().BoolVar(&allowPrivileged, "allow-privileged", false, "allow a target in admin_group or a service account (audited)")
 	cmd.Flags().DurationVar(&ttl, "ttl", 0, "token lifetime, capped by the server at impersonation_ttl (default impersonation_ttl)")
-	cmd.Flags().BoolVarP(&yes, "yes", "y", false, "skip the confirmation prompt for --allow-privileged")
 	return cmd
 }

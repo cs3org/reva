@@ -41,6 +41,8 @@ import (
 	"github.com/cs3org/reva/v3/pkg/utils"
 	"github.com/jedib0t/go-pretty/table"
 	"github.com/spf13/cobra"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/types/known/fieldmaskpb"
 )
 
@@ -48,8 +50,48 @@ func shareCommand(rt *cli.Runtime) *cobra.Command {
 	cmd := &cobra.Command{Use: "share", Short: "Manage shares with users and groups"}
 	received := &cobra.Command{Use: "received", Short: "Manage the shares you received"}
 	received.AddCommand(shareReceivedListCommand(rt), shareReceivedUpdateCommand(rt))
-	cmd.AddCommand(shareCreateCommand(rt), shareListCommand(rt), shareUpdateCommand(rt), shareRemoveCommand(rt), received)
+	cmd.AddCommand(shareCreateCommand(rt), shareListCommand(rt), shareGetCommand(rt), shareUpdateCommand(rt), shareRemoveCommand(rt), received)
 	return cmd
+}
+
+// shareFallback returns the owner fallback of the share commands on id, and
+// the lookup of the share with the Admin API.
+func shareFallback(rt *cli.Runtime, id string) (cli.Fallback, func(context.Context) (*collaboration.Share, error)) {
+	return cli.Fallback{Gate: rt, What: "share " + id}, func(ctx context.Context) (*collaboration.Share, error) {
+		sa, err := rt.SharesAdmin(ctx)
+		if err != nil {
+			return nil, err
+		}
+		return sa.GetShare(ctx, shareRef(id))
+	}
+}
+
+func shareGetCommand(rt *cli.Runtime) *cobra.Command {
+	return &cobra.Command{
+		Use:               "get SHARE_ID",
+		Short:             "Show a share",
+		Long:              "Show a share.\n\n" + cli.FallbackHelp,
+		Args:              cobra.ExactArgs(1),
+		ValidArgsFunction: completeShareIDs(rt),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			client, ctx, err := rt.Gateway(cmd.Context())
+			if err != nil {
+				return err
+			}
+			fb, lookup := shareFallback(rt, args[0])
+			s, err := cli.OnNotFound(ctx, fb, func(ctx context.Context) (*collaboration.Share, error) {
+				res, err := client.GetShare(ctx, &collaboration.GetShareRequest{Ref: shareRef(args[0])})
+				if err != nil {
+					return nil, err
+				}
+				return res.Share, cli.Check(res.Status)
+			}, lookup, nil)
+			if err != nil {
+				return err
+			}
+			return rt.Print(cmd.OutOrStdout(), s, func(w io.Writer) { renderShares(w, []*collaboration.Share{s}) })
+		},
+	}
 }
 
 func shareCreateCommand(rt *cli.Runtime) *cobra.Command {
@@ -179,6 +221,7 @@ func shareUpdateCommand(rt *cli.Runtime) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:               "update SHARE_ID",
 		Short:             "Change the role of a share",
+		Long:              "Change the role of a share.\n\n" + cli.FallbackHelp,
 		Args:              cobra.ExactArgs(1),
 		ValidArgsFunction: completeShareIDs(rt),
 		RunE: func(cmd *cobra.Command, args []string) error {
@@ -193,19 +236,30 @@ func shareUpdateCommand(rt *cli.Runtime) *cobra.Command {
 			if err != nil {
 				return err
 			}
-			res, err := client.UpdateShare(ctx, &collaboration.UpdateShareRequest{
+			req := &collaboration.UpdateShareRequest{
 				Ref: shareRef(args[0]),
 				Field: &collaboration.UpdateShareRequest_UpdateField{
 					Field: &collaboration.UpdateShareRequest_UpdateField_Permissions{
 						Permissions: &collaboration.SharePermissions{Permissions: perm},
 					},
 				},
+			}
+			fb, lookup := shareFallback(rt, args[0])
+			_, err = cli.OnNotFound(ctx, fb, func(ctx context.Context) (*collaboration.Share, error) {
+				res, err := client.UpdateShare(ctx, req)
+				if err != nil {
+					return nil, err
+				}
+				return res.Share, cli.Check(res.Status)
+			}, lookup, func(ctx context.Context, _ *collaboration.Share) (*collaboration.Share, error) {
+				sa, err := rt.SharesAdmin(ctx)
+				if err != nil {
+					return nil, err
+				}
+				return sa.UpdateShare(ctx, req)
 			})
 			if err != nil {
 				return err
-			}
-			if res.Status.Code != rpc.Code_CODE_OK {
-				return formatError(res.Status)
 			}
 			rt.Msg(cmd.ErrOrStderr(), "OK")
 			return nil
@@ -219,6 +273,7 @@ func shareRemoveCommand(rt *cli.Runtime) *cobra.Command {
 	return &cobra.Command{
 		Use:               "remove SHARE_ID",
 		Short:             "Remove a share",
+		Long:              "Remove a share.\n\n" + cli.FallbackHelp,
 		Args:              cobra.ExactArgs(1),
 		ValidArgsFunction: completeShareIDs(rt),
 		RunE: func(cmd *cobra.Command, args []string) error {
@@ -226,12 +281,22 @@ func shareRemoveCommand(rt *cli.Runtime) *cobra.Command {
 			if err != nil {
 				return err
 			}
-			res, err := client.RemoveShare(ctx, &collaboration.RemoveShareRequest{Ref: shareRef(args[0])})
+			fb, lookup := shareFallback(rt, args[0])
+			_, err = cli.OnNotFound(ctx, fb, func(ctx context.Context) (*collaboration.Share, error) {
+				res, err := client.RemoveShare(ctx, &collaboration.RemoveShareRequest{Ref: shareRef(args[0])})
+				if err != nil {
+					return nil, err
+				}
+				return nil, cli.Check(res.Status)
+			}, lookup, func(ctx context.Context, s *collaboration.Share) (*collaboration.Share, error) {
+				sa, err := rt.SharesAdmin(ctx)
+				if err != nil {
+					return nil, err
+				}
+				return s, sa.RemoveShare(ctx, shareRef(args[0]))
+			})
 			if err != nil {
 				return err
-			}
-			if res.Status.Code != rpc.Code_CODE_OK {
-				return formatError(res.Status)
 			}
 			rt.Msg(cmd.ErrOrStderr(), "Removed share %s", args[0])
 			return nil
@@ -331,8 +396,81 @@ func shareReceivedUpdateCommand(rt *cli.Runtime) *cobra.Command {
 
 func linkCommand(rt *cli.Runtime) *cobra.Command {
 	cmd := &cobra.Command{Use: "link", Short: "Create and manage public links"}
-	cmd.AddCommand(linkCreateCommand(rt), linkListCommand(rt), linkUpdateCommand(rt), linkRemoveCommand(rt))
+	cmd.AddCommand(linkCreateCommand(rt), linkListCommand(rt), linkGetCommand(rt), linkUpdateCommand(rt), linkRemoveCommand(rt))
 	return cmd
+}
+
+// linkFallback returns the owner fallback of the link commands on ref, and
+// the lookup of the link with the Admin API.
+func linkFallback(rt *cli.Runtime, arg string, ref *link.PublicShareReference) (cli.Fallback, func(context.Context) (*link.PublicShare, error)) {
+	return cli.Fallback{Gate: rt, What: "link " + arg}, func(ctx context.Context) (*link.PublicShare, error) {
+		sa, err := rt.SharesAdmin(ctx)
+		if err != nil {
+			return nil, err
+		}
+		return sa.GetPublicLink(ctx, ref)
+	}
+}
+
+func linkGetCommand(rt *cli.Runtime) *cobra.Command {
+	return &cobra.Command{
+		Use:               "get LINK_ID|TOKEN",
+		Short:             "Show a public link",
+		Long:              "Show a public link, by its id or by its token.\n\n" + cli.FallbackHelp,
+		Args:              cobra.ExactArgs(1),
+		ValidArgsFunction: completePublicShareIDs(rt),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			client, ctx, err := rt.Gateway(cmd.Context())
+			if err != nil {
+				return err
+			}
+			refs := linkRefs(args[0])
+			fb := cli.Fallback{Gate: rt, What: "link " + args[0]}
+			s, err := cli.OnNotFound(ctx, fb, func(ctx context.Context) (*link.PublicShare, error) {
+				return firstFound(refs, func(ref *link.PublicShareReference) (*link.PublicShare, error) {
+					res, err := client.GetPublicShare(ctx, &link.GetPublicShareRequest{Ref: ref})
+					if err != nil {
+						return nil, err
+					}
+					return res.Share, cli.Check(res.Status)
+				})
+			}, func(ctx context.Context) (*link.PublicShare, error) {
+				sa, err := rt.SharesAdmin(ctx)
+				if err != nil {
+					return nil, err
+				}
+				return firstFound(refs, func(ref *link.PublicShareReference) (*link.PublicShare, error) {
+					return sa.GetPublicLink(ctx, ref)
+				})
+			}, nil)
+			if err != nil {
+				return err
+			}
+			return rt.Print(cmd.OutOrStdout(), s, func(w io.Writer) { renderPublicShares(w, []*link.PublicShare{s}) })
+		},
+	}
+}
+
+// linkRefs returns the references that arg can be: a link id, or a link
+// token. The sql manager uses numbers as ids, so a number is only an id.
+func linkRefs(arg string) []*link.PublicShareReference {
+	refs := []*link.PublicShareReference{publicShareRef(arg)}
+	if strings.Trim(arg, "0123456789") != "" {
+		refs = append(refs, &link.PublicShareReference{Spec: &link.PublicShareReference_Token{Token: arg}})
+	}
+	return refs
+}
+
+// firstFound returns the answer of get for the first reference that is found.
+func firstFound(refs []*link.PublicShareReference, get func(*link.PublicShareReference) (*link.PublicShare, error)) (*link.PublicShare, error) {
+	var err error
+	for _, ref := range refs {
+		var s *link.PublicShare
+		if s, err = get(ref); err == nil || !(cli.IsNotFound(err) || status.Code(err) == codes.NotFound) {
+			return s, err
+		}
+	}
+	return nil, err
 }
 
 func linkCreateCommand(rt *cli.Runtime) *cobra.Command {
@@ -414,6 +552,7 @@ func linkUpdateCommand(rt *cli.Runtime) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:               "update LINK_ID",
 		Short:             "Change the role or the description of a public link",
+		Long:              "Change the role or the description of a public link.\n\n" + cli.FallbackHelp,
 		Args:              cobra.ExactArgs(1),
 		ValidArgsFunction: completePublicShareIDs(rt),
 		RunE: func(cmd *cobra.Command, args []string) error {
@@ -438,14 +577,35 @@ func linkUpdateCommand(rt *cli.Runtime) *cobra.Command {
 			if err != nil {
 				return err
 			}
-			for _, u := range updates {
-				res, err := client.UpdatePublicShare(ctx, &link.UpdatePublicShareRequest{Ref: publicShareRef(args[0]), Update: u})
+			ref := publicShareRef(args[0])
+			fb, lookup := linkFallback(rt, args[0], ref)
+			_, err = cli.OnNotFound(ctx, fb, func(ctx context.Context) (*link.PublicShare, error) {
+				var s *link.PublicShare
+				for _, u := range updates {
+					res, err := client.UpdatePublicShare(ctx, &link.UpdatePublicShareRequest{Ref: ref, Update: u})
+					if err != nil {
+						return nil, err
+					}
+					if err := cli.Check(res.Status); err != nil {
+						return nil, err
+					}
+					s = res.Share
+				}
+				return s, nil
+			}, lookup, func(ctx context.Context, s *link.PublicShare) (*link.PublicShare, error) {
+				sa, err := rt.SharesAdmin(ctx)
 				if err != nil {
-					return err
+					return nil, err
 				}
-				if res.Status.Code != rpc.Code_CODE_OK {
-					return formatError(res.Status)
+				for _, u := range updates {
+					if s, err = sa.UpdatePublicLink(ctx, &link.UpdatePublicShareRequest{Ref: ref, Update: u}); err != nil {
+						return nil, err
+					}
 				}
+				return s, nil
+			})
+			if err != nil {
+				return err
 			}
 			rt.Msg(cmd.ErrOrStderr(), "OK")
 			return nil
@@ -460,6 +620,7 @@ func linkRemoveCommand(rt *cli.Runtime) *cobra.Command {
 	return &cobra.Command{
 		Use:               "remove LINK_ID",
 		Short:             "Remove a public link",
+		Long:              "Remove a public link.\n\n" + cli.FallbackHelp,
 		Args:              cobra.ExactArgs(1),
 		ValidArgsFunction: completePublicShareIDs(rt),
 		RunE: func(cmd *cobra.Command, args []string) error {
@@ -467,12 +628,23 @@ func linkRemoveCommand(rt *cli.Runtime) *cobra.Command {
 			if err != nil {
 				return err
 			}
-			res, err := client.RemovePublicShare(ctx, &link.RemovePublicShareRequest{Ref: publicShareRef(args[0])})
+			ref := publicShareRef(args[0])
+			fb, lookup := linkFallback(rt, args[0], ref)
+			_, err = cli.OnNotFound(ctx, fb, func(ctx context.Context) (*link.PublicShare, error) {
+				res, err := client.RemovePublicShare(ctx, &link.RemovePublicShareRequest{Ref: ref})
+				if err != nil {
+					return nil, err
+				}
+				return nil, cli.Check(res.Status)
+			}, lookup, func(ctx context.Context, s *link.PublicShare) (*link.PublicShare, error) {
+				sa, err := rt.SharesAdmin(ctx)
+				if err != nil {
+					return nil, err
+				}
+				return s, sa.RemovePublicLink(ctx, ref)
+			})
 			if err != nil {
 				return err
-			}
-			if res.Status.Code != rpc.Code_CODE_OK {
-				return formatError(res.Status)
 			}
 			rt.Msg(cmd.ErrOrStderr(), "Removed link %s", args[0])
 			return nil

@@ -33,6 +33,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"strconv"
 	"strings"
 	"time"
 
@@ -67,8 +68,24 @@ type Runtime struct {
 	Debug        bool
 	NoProgress   bool
 	Timeout      time.Duration
+	// As is the user of --as: the user plane runs with an impersonated token.
+	As string
+	// Reason of --reason, sent with every admin-plane call for the audit.
+	Reason    string
+	Yes       bool
+	NoElevate bool
+	// HTTPEndpoint is the HTTPS endpoint of the deployment, used by --as when
+	// the Admin API cannot be reached. The HTTPS transport sets it.
+	HTTPEndpoint string
 
-	conn *grpc.ClientConn
+	conn              *grpc.ClientConn
+	admin             *AdminClient
+	adminHostExplicit bool
+	adminTok          string
+	asTok             string
+	plane             Plane
+	need              string
+	usedAdmin         bool
 }
 
 // Config is the config file, $XDG_CONFIG_HOME/reva/config.toml. The sections
@@ -78,6 +95,11 @@ type Config struct {
 		Gateway   string `toml:"gateway,omitempty" json:"gateway,omitempty"`
 		AdminHost string `toml:"admin_host,omitempty" json:"admin_host,omitempty"`
 	} `toml:"connection" json:"connection"`
+	Auth struct {
+		Kerberos struct {
+			SPN string `toml:"spn,omitempty" json:"spn,omitempty"`
+		} `toml:"kerberos,omitempty" json:"kerberos,omitzero"`
+	} `toml:"auth,omitempty" json:"auth,omitzero"`
 }
 
 // Load fills the settings that are not given as flags from the environment,
@@ -102,6 +124,10 @@ func (r *Runtime) Load(flags *pflag.FlagSet) error {
 	// REVA_HOST is the name from before --gateway, kept for old scripts.
 	fill(&r.GatewayAddr, "gateway", c.Connection.Gateway, "REVA_GATEWAY", "REVA_HOST")
 	fill(&r.AdminHost, "admin-host", c.Connection.AdminHost, "REVA_ADMIN_HOST")
+	r.adminHostExplicit = flags.Changed("admin-host") || os.Getenv("REVA_ADMIN_HOST") != ""
+	if v, err := strconv.ParseBool(os.Getenv("REVA_NO_ELEVATE")); err == nil && !flags.Changed("no-elevate") {
+		r.NoElevate = v
+	}
 	fill(&r.TokenValue, "token", "", "REVA_TOKEN")
 	switch r.Output {
 	case "table", "json":
@@ -184,9 +210,14 @@ func (r *Runtime) Authenticate(ctx context.Context, authType, user, secret strin
 }
 
 // WithToken attaches a reva token to ctx and to the outgoing gRPC metadata.
+// It replaces a token that ctx already has, so that a user-plane context can
+// become an admin-plane one.
 func WithToken(ctx context.Context, t string) context.Context {
 	ctx = appctx.ContextSetToken(ctx, t)
-	return metadata.AppendToOutgoingContext(ctx, appctx.TokenHeader, t)
+	md, _ := metadata.FromOutgoingContext(ctx)
+	md = md.Copy()
+	md.Set(appctx.TokenHeader, t)
+	return metadata.NewOutgoingContext(ctx, md)
 }
 
 // HTTPClient returns the client for the data transfers. It sends the token
@@ -198,17 +229,36 @@ func (r *Runtime) HTTPClient() *httpclient.Client {
 	return httpclient.New(httpclient.RoundTripper(tr))
 }
 
-// Close releases the gateway connection.
+// Close releases the gateway and the admin connections.
 func (r *Runtime) Close() {
 	if r.conn != nil {
 		_ = r.conn.Close()
 	}
+	if r.admin != nil {
+		_ = r.admin.Conn.Close()
+	}
 }
 
-// Token returns the token from --token or REVA_TOKEN. Else it signs in with
-// the app token of --app-token-file. Else it returns the token that
-// `reva login` stored.
+// Token returns the token of the user plane: the impersonated token of --as,
+// else the login token. The impersonated token stays in memory.
 func (r *Runtime) Token(ctx context.Context) (string, error) {
+	if r.As == "" {
+		return r.LoginToken(ctx)
+	}
+	if r.asTok == "" {
+		t, err := r.impersonate(ctx)
+		if err != nil {
+			return "", err
+		}
+		r.asTok = t
+	}
+	return r.asTok, nil
+}
+
+// LoginToken returns the token from --token or REVA_TOKEN. Else it signs in
+// with the app token of --app-token-file. Else it returns the token that
+// `reva login` stored.
+func (r *Runtime) LoginToken(ctx context.Context) (string, error) {
 	if r.TokenValue != "" {
 		return r.TokenValue, nil
 	}
@@ -276,20 +326,6 @@ func ClearTokens() error {
 		}
 	}
 	return nil
-}
-
-// AdminToken returns the short-TTL token that `reva admin elevate` stored.
-func (r *Runtime) AdminToken() (string, error) {
-	b, err := readState("admin-token", ".reva-admin-token")
-	if errors.Is(err, fs.ErrNotExist) || (err == nil && len(b) == 0) {
-		return "", errors.New("no admin token: run `reva admin elevate` first")
-	}
-	return strings.TrimSpace(string(b)), err
-}
-
-// SetAdminToken stores the admin token.
-func (r *Runtime) SetAdminToken(t string) error {
-	return writeState("admin-token", []byte(t))
 }
 
 // ReadConfig returns the stored config. A missing file gives an empty config.

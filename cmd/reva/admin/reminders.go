@@ -37,7 +37,7 @@ func remindersCommand() *cobra.Command {
 	// run wraps the subcommands that need only the client and the output.
 	run := func(f func(ctx context.Context, client adminpb.AdminAPIClient, w io.Writer, args []string) error) func(*cobra.Command, []string) error {
 		return func(cmd *cobra.Command, args []string) error {
-			client, ctx, err := adminDial(cmd)
+			client, ctx, err := rt.Admin(cmd.Context())
 			if err != nil {
 				return err
 			}
@@ -51,12 +51,12 @@ func remindersCommand() *cobra.Command {
 		Long: "Show the state of the reminder kinds: one row per kind, or with a\n" +
 			"subcommand the open episodes, the reminders sent, a dry scan of a kind,\n" +
 			"or forget a subject.\n\n" +
-			"To run a kind now: reva admin jobs run reminders.<kind>",
-		Example: "  reva admin reminders\n" +
-			"  reva admin reminders state --kind linkexpiry --recipient alice\n" +
-			"  reva admin reminders history --since 7d\n" +
-			"  reva admin reminders check linkexpiry\n" +
-			"  reva admin reminders forget linkexpiry <subject>",
+			"To run a kind now: reva job run reminders.<kind>",
+		Example: "  reva reminders\n" +
+			"  reva reminders state --kind linkexpiry --recipient alice\n" +
+			"  reva reminders history --since 7d\n" +
+			"  reva reminders check linkexpiry\n" +
+			"  reva reminders forget linkexpiry <subject>",
 		Args: cobra.NoArgs,
 		RunE: run(func(ctx context.Context, client adminpb.AdminAPIClient, w io.Writer, _ []string) error {
 			return remindersKinds(ctx, client, w)
