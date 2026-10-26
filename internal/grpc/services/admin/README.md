@@ -438,6 +438,66 @@ reva admin invoke usershareprovider update id=4711 expires_at=2026-12-31
 reva admin invoke usershareprovider remove id=4711 db_only=true
 ```
 
+## Projects
+
+The `spacesregistry` exposes the catalogue of project spaces to operators. The
+CS3 calls show a project only to its members; these show every project.
+
+```
+list         [type=project] [status=] [owner=] [member=] [created_after=] [created_before=] [include_archived=]   (stream)
+get          id= | name=
+update       id= | name=  [description=] [readme=<path>] [thumbnail=<path>] [fallback=]
+set_status   id= | name=  status=creating|active|archiving|archived
+set_owner    id= | name=  owner=
+create       name= owner= [path=] [storage_id=] [space_id=] [readers=] [writers=] [admins=] [description=] [status=]   (dangerous)
+delete       id= | name=  [hard=]   (dangerous)
+check        [status=] [owner=]   (stream)
+flush_cache
+```
+
+A project is selected by its space id (`<storage id>$<space id>` or the space
+id alone) or by its name. A name selects the project that is not archived, or
+else the one archived last. Each result is the JSON form of the `AdminSpace`
+message of the typed Admin API: `space` (the CS3 storage space, in protojson),
+`status` and `extra`, with the columns that CS3 cannot carry. `member` matches
+the owner and the role groups against the groups that the gateway gives for
+the user, and sets the permissions of that user in `space.rootInfo`.
+
+`create` records a space that the storage already serves. A value that is not
+given comes from a template of the `sql` driver, with the fields `.Name` and
+`.Initial` (the first letter of the name) and the sprig functions. Without a
+template, the value is required:
+
+```toml
+[grpc.services.spacesregistry.drivers.sql]
+path_template = "/eos/project/{{ .Initial }}/{{ .Name }}"
+storage_id_template = "newproject-{{ .Initial }}"
+readers_group_template = "cernbox-project-{{ .Name }}-readers"
+writers_group_template = "cernbox-project-{{ .Name }}-writers"
+admins_group_template = "cernbox-project-{{ .Name }}-admins"
+```
+
+`update` is the server side of the owner fallback: it makes the change as the
+owner of the project, through the same check as a user call, which lets only
+the owner and the admins group change a project. `check` reports, for each
+project with a problem, findings of these kinds: `owner_missing`,
+`owner_expiring`, `owner_blocked`, `path_missing` (the path does not stat as the
+owner), `group_unset`, `group_missing` and `no_members`, or `*_error` when a
+call failed.
+
+Each instance caches the project list, and a mutation drops only the cache of
+the instance that ran it. `flush_cache` is not shared, so it runs on every
+instance:
+
+```
+reva admin invoke spacesregistry set_status name=cernbox status=archiving
+reva admin invoke spacesregistry flush_cache
+```
+
+Every mutation logs an audit event `action=spacesregistry.<name>` with
+`target=project:<name or id>`. Only the `sql` driver has what these
+invocations need.
+
 ## Adding an invocation to a service (for developers)
 
 A service exposes admin operations by building an [`invoke.Set`](../../../../pkg/invoke/set.go)
