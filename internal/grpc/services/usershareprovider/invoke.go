@@ -27,7 +27,6 @@ import (
 	"maps"
 	"slices"
 	"strconv"
-	"sync"
 	"time"
 
 	grouppb "github.com/cs3org/go-cs3apis/cs3/identity/group/v1beta1"
@@ -36,7 +35,6 @@ import (
 	collaboration "github.com/cs3org/go-cs3apis/cs3/sharing/collaboration/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	registrypb "github.com/cs3org/go-cs3apis/cs3/storage/registry/v1beta1"
-	typespb "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
 	"github.com/cs3org/reva/v3/pkg/admin"
 	"github.com/cs3org/reva/v3/pkg/appctx"
 	"github.com/cs3org/reva/v3/pkg/errtypes"
@@ -160,7 +158,7 @@ func (s *service) list(ctx context.Context, a listArgs, emit invoke.StreamEmit) 
 	}
 	slices.SortFunc(shares, func(x, y model.Share) int { return cmp.Compare(x.Id, y.Id) })
 
-	users := &userContexts{ctx: ctx, ctxs: map[string]context.Context{}}
+	users := &admin.Users{Ctx: ctx}
 	for chunk := range slices.Chunk(shares, listChunk) {
 		paths := make([]string, len(chunk))
 		if a.ResolvePaths {
@@ -222,7 +220,7 @@ func (s *service) selectShares(ctx context.Context, m adminManager, a listArgs) 
 			return nil, errtypes.BadRequest("path needs as, owner or initiator: the path is resolved as that user")
 		}
 		var info *provider.ResourceInfo
-		_, err := actAs(ctx, as, func(uctx context.Context) (*rpc.Status, error) {
+		_, err := admin.ActAsFirst(ctx, as, func(uctx context.Context) (*rpc.Status, error) {
 			res, err := statAs(uctx, &provider.Reference{Path: a.Path})
 			info = res.GetInfo()
 			return res.GetStatus(), err
@@ -248,7 +246,7 @@ func (s *service) get(ctx context.Context, a idArgs) (invoke.Result, error) {
 	if err != nil {
 		return nil, fmt.Errorf("share %s: %w", a.ID, err)
 	}
-	users := &userContexts{ctx: ctx, ctxs: map[string]context.Context{}}
+	users := &admin.Users{Ctx: ctx}
 	return adminShare(sh, resolvePath(users, sh, ""))
 }
 
@@ -268,7 +266,7 @@ func (s *service) update(ctx context.Context, a updateArgs) (invoke.Result, erro
 		}})
 	}
 	if a.ExpiresAt != "" {
-		exp, err := parseExpiry(a.ExpiresAt)
+		exp, err := admin.ParseExpiry(a.ExpiresAt)
 		if err != nil {
 			return nil, err
 		}
@@ -285,7 +283,7 @@ func (s *service) update(ctx context.Context, a updateArgs) (invoke.Result, erro
 		return nil, errtypes.BadRequest(fmt.Sprintf("share %s is orphaned: its resource is gone", a.ID))
 	}
 
-	actor, err := actAs(ctx, shareUsers(sh), func(uctx context.Context) (*rpc.Status, error) {
+	actor, err := admin.ActAsFirst(ctx, shareUsers(sh), func(uctx context.Context) (*rpc.Status, error) {
 		gw, err := revaservice.Gateway(uctx)
 		if err != nil {
 			return nil, err
@@ -322,7 +320,7 @@ func (s *service) remove(ctx context.Context, a removeArgs) (invoke.Result, erro
 	if a.DBOnly || sh.IsOrphan() {
 		err = s.sm.Unshare(ctx, shareRef(a.ID))
 	} else {
-		actor, err = actAs(ctx, shareUsers(sh), func(uctx context.Context) (*rpc.Status, error) {
+		actor, err = admin.ActAsFirst(ctx, shareUsers(sh), func(uctx context.Context) (*rpc.Status, error) {
 			gw, err := revaservice.Gateway(uctx)
 			if err != nil {
 				return nil, err
@@ -433,7 +431,7 @@ func (s *service) move(ctx context.Context, a moveArgs) (invoke.Result, error) {
 	}
 	var info *provider.ResourceInfo
 	var actor string
-	actor, err = actAs(ctx, as, func(uctx context.Context) (*rpc.Status, error) {
+	actor, err = admin.ActAsFirst(ctx, as, func(uctx context.Context) (*rpc.Status, error) {
 		res, err := statAs(uctx, &provider.Reference{Path: a.Path})
 		info = res.GetInfo()
 		return res.GetStatus(), err
@@ -511,35 +509,6 @@ func (s *service) markOrphan(ctx context.Context, a idArgs) (invoke.Result, erro
 	return adminShare(sh, "")
 }
 
-// actAs calls fn as each user in turn, until fn returns an OK status. A user
-// that cannot be looked up, or that the call refuses with not found or
-// permission denied, is skipped: the initiator can have lost the right on the
-// resource, and the owner can be a deleted account. actAs returns the user
-// that fn was called as for the last time.
-func actAs(ctx context.Context, users []string, fn func(uctx context.Context) (*rpc.Status, error)) (string, error) {
-	var err error = errtypes.BadRequest("no user to act as")
-	for _, u := range users {
-		uctx, _, lerr := admin.ActAs(ctx, u)
-		if lerr != nil {
-			err = lerr
-			continue
-		}
-		st, cerr := fn(uctx)
-		if cerr != nil {
-			return u, cerr
-		}
-		switch st.GetCode() {
-		case rpc.Code_CODE_OK:
-			return u, nil
-		case rpc.Code_CODE_NOT_FOUND, rpc.Code_CODE_PERMISSION_DENIED:
-			err = fmt.Errorf("as %s: %w", u, status.NewErrtypeFromStatus(st))
-		default:
-			return u, fmt.Errorf("as %s: %w", u, status.NewErrtypeFromStatus(st))
-		}
-	}
-	return "", err
-}
-
 func statAs(uctx context.Context, ref *provider.Reference) (*provider.StatResponse, error) {
 	gw, err := revaservice.Gateway(uctx)
 	if err != nil {
@@ -548,39 +517,15 @@ func statAs(uctx context.Context, ref *provider.Reference) (*provider.StatRespon
 	return gw.Stat(uctx, &provider.StatRequest{Ref: ref})
 }
 
-// userContexts keeps one context per user for the length of one invocation,
-// because a list often acts as the same few users many times.
-type userContexts struct {
-	ctx  context.Context
-	mu   sync.Mutex
-	ctxs map[string]context.Context
-}
-
-// as returns the context acting as username, or nil if that user cannot be
-// looked up.
-func (c *userContexts) as(username string) context.Context {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	if uctx, ok := c.ctxs[username]; ok {
-		return uctx
-	}
-	uctx, _, err := admin.ActAs(c.ctx, username)
-	if err != nil {
-		uctx = nil
-	}
-	c.ctxs[username] = uctx
-	return uctx
-}
-
 // resolvePath returns the current path of the resource of sh, or "" if no
 // user can resolve it.
-func resolvePath(users *userContexts, sh *model.Share, as string) string {
+func resolvePath(users *admin.Users, sh *model.Share, as string) string {
 	candidates := nonEmpty(as)
 	if len(candidates) == 0 {
 		candidates = shareUsers(sh)
 	}
 	for _, u := range candidates {
-		uctx := users.as(u)
+		uctx := users.As(u)
 		if uctx == nil {
 			continue
 		}
@@ -669,21 +614,6 @@ func adminShare(sh *model.Share, path string) (invoke.Result, error) {
 		r["extra"] = extra
 	}
 	return r, nil
-}
-
-// parseExpiry parses an expiration: a date at midnight local time, an RFC 3339
-// time, or none, which the share manager reads as no expiration.
-func parseExpiry(v string) (*typespb.Timestamp, error) {
-	if v == "none" {
-		return &typespb.Timestamp{}, nil
-	}
-	t, err := time.Parse(time.RFC3339, v)
-	if err != nil {
-		if t, err = time.ParseInLocation(time.DateOnly, v, time.Local); err != nil {
-			return nil, errtypes.BadRequest(fmt.Sprintf("expires_at %q is not a date (2006-01-02), an RFC 3339 time or none", v))
-		}
-	}
-	return &typespb.Timestamp{Seconds: uint64(t.Unix())}, nil
 }
 
 func isNotFound(err error) bool {

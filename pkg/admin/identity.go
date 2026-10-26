@@ -22,13 +22,16 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"sync"
 	"time"
 
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
+	typespb "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
 	"github.com/cs3org/reva/v3/pkg/appctx"
 	"github.com/cs3org/reva/v3/pkg/auth/scope"
 	"github.com/cs3org/reva/v3/pkg/errtypes"
+	"github.com/cs3org/reva/v3/pkg/rgrpc/status"
 	"github.com/cs3org/reva/v3/pkg/service"
 	"github.com/cs3org/reva/v3/pkg/sharedconf"
 	"github.com/cs3org/reva/v3/pkg/token/manager/jwt"
@@ -97,4 +100,76 @@ func ActAs(ctx context.Context, username string) (context.Context, *userpb.User,
 		return nil, nil, err
 	}
 	return uctx, u, nil
+}
+
+// ActAsFirst calls fn as each user in turn, until fn returns an OK status. A
+// user that cannot be looked up, or that the call refuses with not found or
+// permission denied, is skipped: the initiator of a share can have lost the
+// right on the resource, and the owner can be a deleted account. ActAsFirst
+// returns the user that fn was called as for the last time.
+func ActAsFirst(ctx context.Context, users []string, fn func(uctx context.Context) (*rpc.Status, error)) (string, error) {
+	var err error = errtypes.BadRequest("no user to act as")
+	for _, u := range users {
+		uctx, _, lerr := ActAs(ctx, u)
+		if lerr != nil {
+			err = lerr
+			continue
+		}
+		st, cerr := fn(uctx)
+		if cerr != nil {
+			return u, cerr
+		}
+		switch st.GetCode() {
+		case rpc.Code_CODE_OK:
+			return u, nil
+		case rpc.Code_CODE_NOT_FOUND, rpc.Code_CODE_PERMISSION_DENIED:
+			err = fmt.Errorf("as %s: %w", u, status.NewErrtypeFromStatus(st))
+		default:
+			return u, fmt.Errorf("as %s: %w", u, status.NewErrtypeFromStatus(st))
+		}
+	}
+	return "", err
+}
+
+// Users keeps one context per user for the length of one invocation, because
+// a list often acts as the same few users many times. Ctx is the context of
+// the invocation.
+type Users struct {
+	Ctx  context.Context
+	mu   sync.Mutex
+	ctxs map[string]context.Context
+}
+
+// As returns Ctx acting as username, or nil if that user cannot be looked up.
+func (c *Users) As(username string) context.Context {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if uctx, ok := c.ctxs[username]; ok {
+		return uctx
+	}
+	if c.ctxs == nil {
+		c.ctxs = map[string]context.Context{}
+	}
+	uctx, _, err := ActAs(c.Ctx, username)
+	if err != nil {
+		uctx = nil
+	}
+	c.ctxs[username] = uctx
+	return uctx
+}
+
+// ParseExpiry parses the expiration argument of an invocation: a date at
+// midnight local time, an RFC 3339 time, or none, which is returned as a zero
+// timestamp.
+func ParseExpiry(v string) (*typespb.Timestamp, error) {
+	if v == "none" {
+		return &typespb.Timestamp{}, nil
+	}
+	t, err := time.Parse(time.RFC3339, v)
+	if err != nil {
+		if t, err = time.ParseInLocation(time.DateOnly, v, time.Local); err != nil {
+			return nil, errtypes.BadRequest(fmt.Sprintf("expires_at %q is not a date (2006-01-02), an RFC 3339 time or none", v))
+		}
+	}
+	return &typespb.Timestamp{Seconds: uint64(t.Unix())}, nil
 }
