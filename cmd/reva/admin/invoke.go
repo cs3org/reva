@@ -22,12 +22,15 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"maps"
 	"os"
 	"os/signal"
 	"slices"
 	"strings"
 
 	"github.com/cs3org/reva/v3/pkg/admin/adminpb"
+	"github.com/cs3org/reva/v3/pkg/cli"
+	"github.com/cs3org/reva/v3/pkg/invoke"
 	"github.com/spf13/cobra"
 )
 
@@ -35,10 +38,14 @@ func invocationCommand() *cobra.Command {
 	cmd := &cobra.Command{Use: "invocation", Short: "Show the invocations that the services expose"}
 	cmd.AddCommand(
 		&cobra.Command{
-			Use:   "list <service>",
-			Short: "List the invocations of a service",
-			Args:  cobra.ExactArgs(1),
+			Use:               "list <service> [invocation]",
+			Short:             "List the invocations of a service, or show one with its arguments",
+			Args:              cobra.RangeArgs(1, 2),
+			ValidArgsFunction: completeCatalogue(false),
 			RunE: func(cmd *cobra.Command, args []string) error {
+				if len(args) == 2 {
+					return showInvocation(cmd, args[0], args[1])
+				}
 				client, ctx, err := rt.Admin(cmd.Context())
 				if err != nil {
 					return err
@@ -47,47 +54,97 @@ func invocationCommand() *cobra.Command {
 				if err != nil {
 					return adminErr(err)
 				}
-				if rt.Output() == "json" {
-					return rt.Print(cmd.OutOrStdout(), res.Invocations, nil)
-				}
+				t := cli.Table{Headers: []string{"Name", "Kind", "Arguments", "Description"}, Items: res.Invocations}
 				for _, inv := range res.Invocations {
-					fmt.Printf("%-20s [%s] %s\n", inv.Name, invocationKind(inv), inv.Description)
+					t.Rows = append(t.Rows, []string{inv.Name, invocationKind(inv), compactArgs(inv), inv.Description})
 				}
-				return nil
+				return rt.Print(cmd.OutOrStdout(), t, nil)
 			},
 		},
 		&cobra.Command{
-			Use:   "get <service> <invocation>",
-			Short: "Show one invocation of a service, with its arguments",
-			Args:  cobra.ExactArgs(2),
+			Use:               "get <service> <invocation>",
+			Short:             "Show one invocation of a service, with its arguments",
+			Args:              cobra.ExactArgs(2),
+			ValidArgsFunction: completeCatalogue(false),
 			RunE: func(cmd *cobra.Command, args []string) error {
-				client, ctx, err := rt.Admin(cmd.Context())
-				if err != nil {
-					return err
-				}
-				res, err := client.ListInvocations(ctx, &adminpb.ListInvocationsRequest{Service: args[0]})
-				if err != nil {
-					return adminErr(err)
-				}
-				i := slices.IndexFunc(res.Invocations, func(inv *adminpb.InvocationSpec) bool { return inv.Name == args[1] })
-				if i < 0 {
-					return fmt.Errorf("service %s has no invocation %q", args[0], args[1])
-				}
-				inv := res.Invocations[i]
-				return rt.Print(cmd.OutOrStdout(), inv, func(w io.Writer) {
-					fmt.Fprintf(w, "%s [%s]\n%s\n", inv.Name, invocationKind(inv), inv.Description)
-					for _, a := range inv.Args {
-						req := ""
-						if a.Required {
-							req = " (required)"
-						}
-						fmt.Fprintf(w, "  %-16s %s%s\n", a.Name, a.Description, req)
-					}
-				})
+				return showInvocation(cmd, args[0], args[1])
 			},
 		},
 	)
 	return cmd
+}
+
+func showInvocation(cmd *cobra.Command, service, name string) error {
+	client, ctx, err := rt.Admin(cmd.Context())
+	if err != nil {
+		return err
+	}
+	res, err := client.ListInvocations(ctx, &adminpb.ListInvocationsRequest{Service: service})
+	if err != nil {
+		return adminErr(err)
+	}
+	i := slices.IndexFunc(res.Invocations, func(inv *adminpb.InvocationSpec) bool { return inv.Name == name })
+	if i < 0 {
+		return fmt.Errorf("service %s has no invocation %q", service, name)
+	}
+	inv := res.Invocations[i]
+	return rt.Print(cmd.OutOrStdout(), inv, func(w io.Writer) {
+		if inv.Description != "" {
+			fmt.Fprintf(w, "%s: %s\n", inv.Name, inv.Description)
+		} else {
+			fmt.Fprintln(w, inv.Name)
+		}
+		if inv.Kind == "" {
+			fmt.Fprintln(w, "No instance answered: the kind and the arguments are not known.")
+			return
+		}
+		scope := "every instance"
+		if inv.Scope == string(invoke.ScopeShared) {
+			scope = "one instance (shared)"
+		}
+		streaming := "no"
+		switch {
+		case inv.StreamOnly:
+			streaming = "only"
+		case inv.Streaming:
+			streaming = "yes, with --stream"
+		}
+		fmt.Fprintf(w, "kind: %s\nruns on: %s\nstreaming: %s\n", inv.Kind, scope, streaming)
+		if len(inv.Args) == 0 {
+			fmt.Fprintln(w, "no arguments")
+			return
+		}
+		t := cli.Table{Headers: []string{"Argument", "Type", "Required", "Default", "Values", "Description"}}
+		for _, a := range inv.Args {
+			typ := a.Type
+			if a.Repeated {
+				typ = "list of " + typ
+			}
+			req := ""
+			if a.Required {
+				req = "yes"
+			}
+			t.Rows = append(t.Rows, []string{a.Name, typ, req, a.Default, strings.Join(a.Enum, ", "), a.Description})
+		}
+		t.Write(w)
+	})
+}
+
+// compactArgs lists the arguments of an invocation on one line, with the
+// optional ones in brackets.
+func compactArgs(inv *adminpb.InvocationSpec) string {
+	if inv.Kind == "" {
+		return "?"
+	}
+	parts := make([]string, 0, len(inv.Args))
+	for _, a := range inv.Args {
+		if a.Required {
+			parts = append(parts, a.Name)
+		} else {
+			parts = append(parts, "["+a.Name+"]")
+		}
+	}
+	return strings.Join(parts, " ")
 }
 
 func invocationKind(inv *adminpb.InvocationSpec) string {
@@ -110,22 +167,30 @@ func invocationKind(inv *adminpb.InvocationSpec) string {
 func invokeCommand() *cobra.Command {
 	var stream bool
 	cmd := &cobra.Command{
-		Use:   "invoke <selector> <invocation> [key=val ...]",
+		Use:   "invoke <selector> <invocation> [key=value ...]",
 		Short: "Run a service invocation on one or all instances",
-		Long:  "Run a service invocation. The selector is a service name (every instance) or a node id (one instance).",
-		Args:  cobra.MinimumNArgs(2),
+		Long: "Run a service invocation. The selector is a service name (every instance) or a node id (one instance).\n\n" +
+			"The arguments are key=value pairs, and a list is comma-separated. `reva invocation get <service> <invocation>`\n" +
+			"shows the arguments of an invocation. They are checked against the catalogue before the call.",
+		Args:              cobra.MinimumNArgs(2),
+		ValidArgsFunction: completeCatalogue(true),
 		RunE: func(cmd *cobra.Command, posArgs []string) error {
 			selector, invocation := posArgs[0], posArgs[1]
-			args := parseKeyVals(posArgs[2:])
+			args, err := parseKeyVals(posArgs[2:])
+			if err != nil {
+				return err
+			}
 
 			client, ctx, err := rt.Admin(cmd.Context())
 			if err != nil {
 				return err
 			}
 
-			// Confirm dangerous invocations unless --yes. The kind comes from the
-			// service's own catalog.
+			// The kind and the arguments come from the service's own catalog.
 			spec := invocationSpec(ctx, client, selector, invocation)
+			if err := checkArgs(spec, args); err != nil {
+				return err
+			}
 			if spec.GetKind() == "dangerous" {
 				if err := rt.Confirm(fmt.Sprintf("invocation %q on %q is DANGEROUS; proceed?", invocation, selector)); err != nil {
 					return err
@@ -150,6 +215,119 @@ func invokeCommand() *cobra.Command {
 	}
 	cmd.Flags().BoolVar(&stream, "stream", false, "run a streaming invocation, printing results as they arrive (Ctrl-C stops); implied for a stream-only invocation")
 	return cmd
+}
+
+// checkArgs checks args against the catalog, so that a typo fails before the
+// call goes to every instance. The server checks them again.
+func checkArgs(spec *adminpb.InvocationSpec, args map[string]string) error {
+	// A spec without a kind comes from the registry metadata, which has only
+	// the names: there is nothing to check against.
+	if spec.GetKind() == "" {
+		return nil
+	}
+	names := make([]string, 0, len(spec.Args))
+	for _, a := range spec.Args {
+		names = append(names, a.Name)
+	}
+	for _, k := range slices.Sorted(maps.Keys(args)) {
+		if !slices.Contains(names, k) {
+			if len(names) == 0 {
+				return fmt.Errorf("invocation %s takes no arguments, got %q", spec.Name, k)
+			}
+			return fmt.Errorf("invocation %s has no argument %q: use %s", spec.Name, k, strings.Join(names, ", "))
+		}
+	}
+	for _, a := range spec.Args {
+		v, ok := args[a.Name]
+		if !ok {
+			if a.Required {
+				return fmt.Errorf("invocation %s needs the argument %s=<%s>", spec.Name, a.Name, a.Type)
+			}
+			continue
+		}
+		if len(a.Enum) == 0 {
+			continue
+		}
+		values := []string{v}
+		if a.Repeated {
+			values = strings.Split(v, ",")
+		}
+		for _, e := range values {
+			if e = strings.TrimSpace(e); (e != "" || !a.Repeated) && !slices.Contains(a.Enum, e) {
+				return fmt.Errorf("argument %s: %q is not one of %s", a.Name, e, strings.Join(a.Enum, ", "))
+			}
+		}
+	}
+	return nil
+}
+
+// completeCatalogue completes a service name, then one of its invocations
+// and, with keyVals, the key= of an argument and the values of its enum.
+func completeCatalogue(keyVals bool) cobra.CompletionFunc {
+	return func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
+		none := cobra.ShellCompDirectiveNoFileComp
+		if len(args) >= 2 && !keyVals {
+			return nil, none
+		}
+		// Completion does not run the PersistentPreRunE, so load the settings here.
+		if err := rt.Load(cmd.Flags()); err != nil {
+			return nil, none
+		}
+		client, ctx, err := rt.Admin(cmd.Context())
+		if err != nil {
+			return nil, none
+		}
+		if len(args) == 0 {
+			res, err := client.ListServices(ctx, &adminpb.ListServicesRequest{})
+			if err != nil {
+				return nil, none
+			}
+			var out []string
+			for _, s := range res.Services {
+				if !slices.Contains(out, s.Name) {
+					out = append(out, s.Name)
+				}
+			}
+			return out, none
+		}
+		if len(args) == 1 {
+			res, err := client.ListInvocations(ctx, &adminpb.ListInvocationsRequest{Service: args[0]})
+			if err != nil {
+				return nil, none
+			}
+			out := make([]string, 0, len(res.Invocations))
+			for _, inv := range res.Invocations {
+				out = append(out, inv.Name+"\t"+inv.Description)
+			}
+			return out, none
+		}
+		spec := invocationSpec(ctx, client, args[0], args[1])
+		if spec == nil {
+			return nil, none
+		}
+		if k, _, ok := strings.Cut(toComplete, "="); ok {
+			i := slices.IndexFunc(spec.Args, func(a *adminpb.ArgSpec) bool { return a.Name == k })
+			if i < 0 {
+				return nil, none
+			}
+			values := spec.Args[i].Enum
+			if len(values) == 0 && spec.Args[i].Type == "bool" {
+				values = []string{"true", "false"}
+			}
+			out := make([]string, 0, len(values))
+			for _, v := range values {
+				out = append(out, k+"="+v)
+			}
+			return out, none
+		}
+		var out []string
+		for _, a := range spec.Args {
+			if !slices.ContainsFunc(args[2:], func(kv string) bool { return strings.HasPrefix(kv, a.Name+"=") }) {
+				out = append(out, a.Name+"=\t"+a.Description)
+			}
+		}
+		return out, none | cobra.ShellCompDirectiveNoSpace
+	}
 }
 
 // runInvokeStream drives a streaming invocation, printing node-labelled results
@@ -197,12 +375,14 @@ func invocationSpec(ctx context.Context, client adminpb.AdminAPIClient, svcName,
 }
 
 // parseKeyVals turns ["k=v", "a=b"] into a map for invocation arguments.
-func parseKeyVals(pairs []string) map[string]string {
+func parseKeyVals(pairs []string) (map[string]string, error) {
 	out := make(map[string]string, len(pairs))
 	for _, p := range pairs {
-		if k, v, ok := strings.Cut(p, "="); ok {
-			out[k] = v
+		k, v, ok := strings.Cut(p, "=")
+		if !ok || k == "" {
+			return nil, fmt.Errorf("argument %q is not key=value", p)
 		}
+		out[k] = v
 	}
-	return out
+	return out, nil
 }

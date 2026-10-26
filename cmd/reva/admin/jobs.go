@@ -308,10 +308,14 @@ func stopWhenRunEnds(ctx context.Context, cancel context.CancelFunc, client admi
 }
 
 func jobsRun(ctx context.Context, client adminpb.AdminAPIClient, args []string, owner string) error {
+	params, err := parseKeyVals(args[1:])
+	if err != nil {
+		return err
+	}
 	resp, err := client.EnqueueJob(ctx, &adminpb.EnqueueJobRequest{
 		Job:    args[0],
 		Owner:  owner,
-		Params: parseKeyVals(args[1:]),
+		Params: params,
 	})
 	if err != nil {
 		return adminErr(err)
