@@ -132,6 +132,7 @@ func versionCommand() *cobra.Command {
 	}
 }
 
+// formatError returns the error of a CS3 status that is not OK.
 func formatError(status *rpc.Status) error {
-	return fmt.Errorf("error: code=%+v msg=%q support_trace=%q", status.Code, status.Message, status.Trace)
+	return cli.Check(status)
 }
