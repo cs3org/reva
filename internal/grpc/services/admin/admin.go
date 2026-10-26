@@ -210,7 +210,7 @@ func (s *svc) UnprotectedEndpoints() []string {
 }
 
 func (s *svc) Register(ss *grpc.Server) {
-	adminpb.RegisterAdminAPIServer(ss, s)
+	s.register(ss)
 	// Invocations are not served here; they live on the per-process control
 	// channel.
 }

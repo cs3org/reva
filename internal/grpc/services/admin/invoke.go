@@ -99,7 +99,7 @@ func fanOutInvoke(ctx context.Context, eps []client.Endpoint, invocation string,
 	rs := client.FanOut(ctx, eps, invocation, args)
 	results := make([]*adminpb.NodeResult, len(rs))
 	for i, r := range rs {
-		results[i] = &adminpb.NodeResult{Node: r.Node, ResultJson: r.ResultJSON, Error: r.Error}
+		results[i] = &adminpb.NodeResult{Node: r.Node, ResultJson: r.ResultJSON, Error: r.Error, Code: int32(r.Code)}
 	}
 	return results
 }
