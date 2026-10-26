@@ -83,6 +83,10 @@ func (c *Config) ApplyDefaults() {
 		c.QuotaNode = c.Namespace
 	}
 
+	if c.QuotaReplicaFactor == 0 {
+		c.QuotaReplicaFactor = 1
+	}
+
 	if c.EosBinary == "" {
 		c.EosBinary = "/usr/bin/eos"
 	}
