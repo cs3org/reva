@@ -124,6 +124,9 @@ type Links interface {
 // Spaces are the storage spaces of the caller.
 type Spaces interface {
 	List(ctx context.Context) ([]*provider.StorageSpace, error)
+	// Update changes one field of a space. A space that the caller may not
+	// change is not found.
+	Update(ctx context.Context, req *provider.UpdateStorageSpaceRequest) (*provider.StorageSpace, error)
 	// Quota returns the quota of the space of ref.
 	Quota(ctx context.Context, ref *provider.Reference) (*Quota, error)
 }

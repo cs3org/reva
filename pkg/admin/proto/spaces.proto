@@ -98,6 +98,7 @@ message ListSpacesRequest {
   // role group.
   string member = 3;
   string status = 4;
+  // profile is Unimplemented until the catalogue stores profiles.
   string profile = 5;
   google.protobuf.Timestamp created_after = 6;
   google.protobuf.Timestamp created_before = 7;

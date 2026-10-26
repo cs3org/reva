@@ -45,7 +45,7 @@ var gitCommit, buildDate, version, goVersion = rversion.GitCommit, rversion.Buil
 var mutating = []string{
 	"mkdir", "mv", "rm", "touch", "trash restore", "trash purge", "lock set", "lock remove",
 	"share create", "share update", "share remove", "share received update",
-	"link create", "link update", "link remove",
+	"link create", "link update", "link remove", "space update",
 	"ocm invite create", "ocm invite accept", "ocm share create", "ocm share update", "ocm share remove",
 	"ocm received update", "ocm transfer cancel", "ocm transfer retry",
 	"token create", "token revoke", "preferences set",
@@ -188,7 +188,7 @@ func rootCommand(rt *cli.Runtime, started *bool) *cobra.Command {
 	)
 	add("sharing", shareCommand(rt), linkCommand(rt), ocmCommand(rt))
 	add("users", userCommand(rt))
-	add("spaces", spaceParentCommand(rt))
+	add("spaces", spaceCommand(rt))
 	add("storage", admin.RouteCommand(rt))
 	add("fleet", admin.Commands(rt)...)
 	add("session",

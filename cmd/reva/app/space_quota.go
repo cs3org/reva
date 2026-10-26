@@ -34,16 +34,6 @@ import (
 	"github.com/spf13/cobra"
 )
 
-// spaceParentCommand is a minimal `space`, for `space quota`.
-//
-// TODO(T28): attach spaceQuotaCommand to the space command of T28, and
-// remove this one.
-func spaceParentCommand(rt *cli.Runtime) *cobra.Command {
-	cmd := &cobra.Command{Use: "space", Short: "Work with storage spaces"}
-	cmd.AddCommand(spaceQuotaCommand(rt))
-	return cmd
-}
-
 const spaceRefHelp = "A space is a path, a space id (storage$id) or the name of a project."
 
 func spaceQuotaCommand(rt *cli.Runtime) *cobra.Command {

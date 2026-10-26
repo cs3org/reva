@@ -350,13 +350,13 @@ func TestListSpaces(t *testing.T) {
 		t.Errorf("list args: %v", a)
 	}
 
-	// No space has a profile yet.
+	// The catalogue does not store profiles yet.
 	st, err = c.ListSpaces(ctx, &adminpb.ListSpacesRequest{Profile: "hpc"})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got, err := drain(t, st.Recv); err != nil || len(got) != 0 {
-		t.Fatalf("ListSpaces with a profile: %v, %v", got, err)
+	if _, err := drain(t, st.Recv); status.Code(err) != codes.Unimplemented {
+		t.Fatalf("ListSpaces with a profile: %v, want Unimplemented", err)
 	}
 }
 
