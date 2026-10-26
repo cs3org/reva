@@ -534,6 +534,43 @@ reva admin invoke usershareprovider update id=4711 expires_at=2026-12-31
 reva admin invoke usershareprovider remove id=4711 db_only=true
 ```
 
+## Public links
+
+The `publicshareprovider` has the same operations on the public links of any
+user, all shared too. A link is given by `id=` or by `token=`.
+
+```
+expiring     from= to= [after_expiration=] [after_id=] [limit=]   the links that expire in a window, by page
+list         id= token= owner= initiator= space= [include_orphans=] [include_expired=] [resolve_paths=]   (stream)
+get          id= | token=
+update       id= | token= [role=viewer|uploader|editor] [expires_at=<date|RFC 3339|none>] [password=] [fallback=]
+remove       id= | token= [db_only=] [fallback=]
+transfer     id= | token= initiator=   the new initiator must be allowed to add a grant on the resource
+move         id= | token= path= [as=]   (dangerous) point the link at a new path; its owner becomes the owner of the link
+mark_orphan  id= | token=
+```
+
+Each result of `list`, `get` and the mutations is the JSON form of the
+`AdminPublicShare` message: `public_share` (the CS3 link, token included),
+`orphan`, `path`, `password_protected` and `extra` (`initial_path`,
+`orphaned_at`, and `url` when `public_link_base_url` is set). The password and
+its hash are never in a result. An empty `password=` removes the password.
+
+`update` and `remove` act as the initiator of the link, then as its owner,
+through the gateway, like the share invocations. `remove` of an orphan, or with
+`db_only`, deletes the record only. With `pub_rw_link_max_expiration` set (the
+option of the OCS and Graph services, in seconds after the end of today), a
+change of the role or of the expiration of an editor link must give it an
+expiration within that limit. The audit events are
+`action=publicshareprovider.<name>`, with `target=link:<id>`.
+
+```toml
+[grpc.services.publicshareprovider]
+driver = "sql"
+pub_rw_link_max_expiration = 2592000              # 0 or unset: no rule
+public_link_base_url = "https://example.org/s/"   # unset: no url in the results
+```
+
 ## Adding an invocation to a service (for developers)
 
 A service exposes admin operations by building an [`invoke.Set`](../../../../pkg/invoke/set.go)

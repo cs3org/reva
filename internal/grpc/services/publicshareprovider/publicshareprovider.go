@@ -52,6 +52,13 @@ type config struct {
 	Driver                string                    `mapstructure:"driver"`
 	Drivers               map[string]map[string]any `mapstructure:"drivers"`
 	AllowedPathsForShares []string                  `mapstructure:"allowed_paths_for_shares"`
+	// PubRWLinkMaxExpiration has the key and the meaning of the option of
+	// the OCS and Graph services, so that one value applies everywhere: the
+	// admin update of an editor link must keep it within that limit.
+	PubRWLinkMaxExpiration int64 `mapstructure:"pub_rw_link_max_expiration"`
+	// PublicLinkBaseURL has the key of the link expiry reminder. The admin
+	// results show the url of a link only when it is set.
+	PublicLinkBaseURL string `mapstructure:"public_link_base_url"`
 }
 
 func (c *config) ApplyDefaults() {
@@ -65,8 +72,6 @@ type service struct {
 	conf                  *config
 	sm                    publicshare.Manager
 	allowedPathsForShares []*regexp.Regexp
-	// set holds the operator invocations, served through the Admin API.
-	set *invoke.Set
 }
 
 func getShareManager(ctx context.Context, c *config) (publicshare.Manager, error) {
