@@ -391,6 +391,53 @@ channel — the admin↔runner transport, never a user-facing surface. Caveats:
 but *do* show in `list`/`active`; and `failed` is not terminal — the framework
 retries.
 
+## Shares
+
+The `usershareprovider` exposes the operations an operator needs on the shares
+of any user. All of them read or change the share database, so they are
+shared: one instance of the service runs each call.
+
+```
+list         owner= initiator= sharee= id= space= path= [as=] [include_orphans=] [include_expired=] [resolve_paths=]   (stream)
+get          id=
+update       id= [role=] [expires_at=<date|RFC 3339|none>] [fallback=]
+remove       id= [db_only=] [fallback=]
+sync_expiry  id=          remove the storage grant of an expired share now, keep the record
+transfer     id= initiator=   the new initiator must be allowed to add a grant on the resource
+move         id= path= [as=] [apply_grant=]   (dangerous) point the share at a new path; its owner becomes the owner of the share
+mark_orphan  id=
+```
+
+`list` needs at least one of `owner`, `initiator`, `sharee`, `id`, `space` or
+`path`: the share table is too large to read without a filter. Each result,
+streamed or not, is the JSON form of the `AdminShare` message of the typed
+Admin API: `share` (the CS3 share, in protojson), `orphan`, `path` and
+`extra` (`initial_path`, `orphaned_at`, `expired_at`).
+
+An invocation runs with the admin token of the operator, and no CS3 endpoint
+accepts that token. So a call that needs the storage (a stat, a grant, the
+gateway's `UpdateShare` and `RemoveShare`) is made as a user, with
+[`admin.ActAs`](../../../../pkg/admin/identity.go): a short-lived token with
+the owner scope, signed with the shared JWT secret, that never leaves the
+server. `update` and `remove` act as the share's initiator, then as its owner
+if the initiator is refused or does not exist anymore, so that the gateway
+applies its usual checks and changes the storage grant. A path is resolved as
+the user in `as` (or `owner`, `initiator` for `list`).
+
+Every mutation logs an audit event `action=usershareprovider.<name>`, with
+the operator as actor, `target=share:<id>`, the user acted as, and
+`fallback=true` when the Admin API calls it for a user command that fell back
+to admin rights.
+
+Only the `sql` driver has what these invocations need. With another driver
+they are listed, and answer that the driver does not support them.
+
+```
+reva admin invoke usershareprovider list owner=einstein resolve_paths=true
+reva admin invoke usershareprovider update id=4711 expires_at=2026-12-31
+reva admin invoke usershareprovider remove id=4711 db_only=true
+```
+
 ## Adding an invocation to a service (for developers)
 
 A service exposes admin operations by building an [`invoke.Set`](../../../../pkg/invoke/set.go)

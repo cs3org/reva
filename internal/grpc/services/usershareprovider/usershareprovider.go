@@ -66,6 +66,8 @@ type service struct {
 	conf                  *config
 	sm                    share.Manager
 	allowedPathsForShares []*regexp.Regexp
+	// grantsAt is a field so that the tests can replace the storage provider.
+	grantsAt func(ctx context.Context, storageID string) (provider.ProviderAPIClient, error)
 }
 
 func getShareManager(ctx context.Context, c *config) (share.Manager, error) {
@@ -114,7 +116,9 @@ func New(ctx context.Context, m map[string]any) (rgrpc.Service, error) {
 		conf:                  &c,
 		sm:                    sm,
 		allowedPathsForShares: allowedPathsForShares,
+		grantsAt:              grantsAtStorage,
 	}
+	service.registerInvocations()
 
 	return service, nil
 }
