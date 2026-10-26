@@ -53,6 +53,16 @@ service SpacesAdmin {
   rpc UnregisterSpace(UnregisterSpaceRequest) returns (AdminSpace);
   // CheckSpaces streams the spaces that have a problem, with their findings.
   rpc CheckSpaces(CheckSpacesRequest) returns (stream SpaceCheck);
+  // GetSpaceQuota reads the quota of a space on the storage provider that
+  // serves it. A space that is not in the catalogue is found by its root
+  // path or by its id, which encodes the root path.
+  rpc GetSpaceQuota(GetSpaceQuotaRequest) returns (SpaceQuota);
+  // SetSpaceQuota sets the quota of a space, on its root. The storage
+  // chooses how it keeps the quota, from the type of the space.
+  rpc SetSpaceQuota(SetSpaceQuotaRequest) returns (SpaceQuota);
+  // ListSpaceQuotas streams the quotas that the storage providers keep, one
+  // instance for each mount.
+  rpc ListSpaceQuotas(ListSpaceQuotasRequest) returns (stream SpaceQuota);
 
   // Reserved for the profiles of heterogeneous spaces (phase 2):
   //   rpc ListProfiles(ListProfilesRequest) returns (stream Profile);
@@ -170,4 +180,44 @@ message SpaceFinding {
   // when a call failed.
   string kind = 1;
   string detail = 2;
+}
+
+// SpaceQuota is the quota of a space. The bytes are logical: the size of the
+// data that users see.
+message SpaceQuota {
+  // space is the id of the space when the catalogue has it.
+  SpaceRef space = 1;
+  // root is the root path of the space.
+  string root = 2;
+  // mount_id is the mount of the storage provider that keeps the quota.
+  string mount_id = 3;
+  uint64 max_bytes = 4;
+  uint64 used_bytes = 5;
+  uint64 max_files = 6;
+  uint64 used_files = 7;
+  // physical_max_bytes is max_bytes with the copies that the storage keeps of
+  // each byte.
+  uint64 physical_max_bytes = 8;
+  // form tells how the storage keeps the quota, for example project or user.
+  string form = 9;
+  string space_type = 10;
+  // owner is the user id of the owner, when it is known.
+  string owner = 11;
+}
+
+message GetSpaceQuotaRequest {
+  SpaceRef ref = 1;
+}
+
+// SetSpaceQuotaRequest changes only the values that are set.
+message SetSpaceQuotaRequest {
+  SpaceRef ref = 1;
+  // max_bytes is in logical bytes.
+  optional uint64 max_bytes = 2;
+  optional uint64 max_files = 3;
+}
+
+message ListSpaceQuotasRequest {
+  // min_bytes keeps the quotas of at least this many logical bytes.
+  uint64 min_bytes = 1;
 }

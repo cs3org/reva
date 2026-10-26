@@ -41,6 +41,16 @@ type SpacesAdminClient interface {
 	UnregisterSpace(ctx context.Context, in *UnregisterSpaceRequest, opts ...grpc.CallOption) (*AdminSpace, error)
 	// CheckSpaces streams the spaces that have a problem, with their findings.
 	CheckSpaces(ctx context.Context, in *CheckSpacesRequest, opts ...grpc.CallOption) (SpacesAdmin_CheckSpacesClient, error)
+	// GetSpaceQuota reads the quota of a space on the storage provider that
+	// serves it. A space that is not in the catalogue is found by its root
+	// path or by its id, which encodes the root path.
+	GetSpaceQuota(ctx context.Context, in *GetSpaceQuotaRequest, opts ...grpc.CallOption) (*SpaceQuota, error)
+	// SetSpaceQuota sets the quota of a space, on its root. The storage
+	// chooses how it keeps the quota, from the type of the space.
+	SetSpaceQuota(ctx context.Context, in *SetSpaceQuotaRequest, opts ...grpc.CallOption) (*SpaceQuota, error)
+	// ListSpaceQuotas streams the quotas that the storage providers keep, one
+	// instance for each mount.
+	ListSpaceQuotas(ctx context.Context, in *ListSpaceQuotasRequest, opts ...grpc.CallOption) (SpacesAdmin_ListSpaceQuotasClient, error)
 }
 
 type spacesAdminClient struct {
@@ -169,6 +179,56 @@ func (x *spacesAdminCheckSpacesClient) Recv() (*SpaceCheck, error) {
 	return m, nil
 }
 
+func (c *spacesAdminClient) GetSpaceQuota(ctx context.Context, in *GetSpaceQuotaRequest, opts ...grpc.CallOption) (*SpaceQuota, error) {
+	out := new(SpaceQuota)
+	err := c.cc.Invoke(ctx, "/reva.admin.v1beta1.SpacesAdmin/GetSpaceQuota", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *spacesAdminClient) SetSpaceQuota(ctx context.Context, in *SetSpaceQuotaRequest, opts ...grpc.CallOption) (*SpaceQuota, error) {
+	out := new(SpaceQuota)
+	err := c.cc.Invoke(ctx, "/reva.admin.v1beta1.SpacesAdmin/SetSpaceQuota", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *spacesAdminClient) ListSpaceQuotas(ctx context.Context, in *ListSpaceQuotasRequest, opts ...grpc.CallOption) (SpacesAdmin_ListSpaceQuotasClient, error) {
+	stream, err := c.cc.NewStream(ctx, &SpacesAdmin_ServiceDesc.Streams[2], "/reva.admin.v1beta1.SpacesAdmin/ListSpaceQuotas", opts...)
+	if err != nil {
+		return nil, err
+	}
+	x := &spacesAdminListSpaceQuotasClient{stream}
+	if err := x.ClientStream.SendMsg(in); err != nil {
+		return nil, err
+	}
+	if err := x.ClientStream.CloseSend(); err != nil {
+		return nil, err
+	}
+	return x, nil
+}
+
+type SpacesAdmin_ListSpaceQuotasClient interface {
+	Recv() (*SpaceQuota, error)
+	grpc.ClientStream
+}
+
+type spacesAdminListSpaceQuotasClient struct {
+	grpc.ClientStream
+}
+
+func (x *spacesAdminListSpaceQuotasClient) Recv() (*SpaceQuota, error) {
+	m := new(SpaceQuota)
+	if err := x.ClientStream.RecvMsg(m); err != nil {
+		return nil, err
+	}
+	return m, nil
+}
+
 // SpacesAdminServer is the server API for SpacesAdmin service.
 // All implementations must embed UnimplementedSpacesAdminServer
 // for forward compatibility
@@ -192,6 +252,16 @@ type SpacesAdminServer interface {
 	UnregisterSpace(context.Context, *UnregisterSpaceRequest) (*AdminSpace, error)
 	// CheckSpaces streams the spaces that have a problem, with their findings.
 	CheckSpaces(*CheckSpacesRequest, SpacesAdmin_CheckSpacesServer) error
+	// GetSpaceQuota reads the quota of a space on the storage provider that
+	// serves it. A space that is not in the catalogue is found by its root
+	// path or by its id, which encodes the root path.
+	GetSpaceQuota(context.Context, *GetSpaceQuotaRequest) (*SpaceQuota, error)
+	// SetSpaceQuota sets the quota of a space, on its root. The storage
+	// chooses how it keeps the quota, from the type of the space.
+	SetSpaceQuota(context.Context, *SetSpaceQuotaRequest) (*SpaceQuota, error)
+	// ListSpaceQuotas streams the quotas that the storage providers keep, one
+	// instance for each mount.
+	ListSpaceQuotas(*ListSpaceQuotasRequest, SpacesAdmin_ListSpaceQuotasServer) error
 	mustEmbedUnimplementedSpacesAdminServer()
 }
 
@@ -222,6 +292,15 @@ func (UnimplementedSpacesAdminServer) UnregisterSpace(context.Context, *Unregist
 }
 func (UnimplementedSpacesAdminServer) CheckSpaces(*CheckSpacesRequest, SpacesAdmin_CheckSpacesServer) error {
 	return status.Errorf(codes.Unimplemented, "method CheckSpaces not implemented")
+}
+func (UnimplementedSpacesAdminServer) GetSpaceQuota(context.Context, *GetSpaceQuotaRequest) (*SpaceQuota, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method GetSpaceQuota not implemented")
+}
+func (UnimplementedSpacesAdminServer) SetSpaceQuota(context.Context, *SetSpaceQuotaRequest) (*SpaceQuota, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method SetSpaceQuota not implemented")
+}
+func (UnimplementedSpacesAdminServer) ListSpaceQuotas(*ListSpaceQuotasRequest, SpacesAdmin_ListSpaceQuotasServer) error {
+	return status.Errorf(codes.Unimplemented, "method ListSpaceQuotas not implemented")
 }
 func (UnimplementedSpacesAdminServer) mustEmbedUnimplementedSpacesAdminServer() {}
 
@@ -386,6 +465,63 @@ func (x *spacesAdminCheckSpacesServer) Send(m *SpaceCheck) error {
 	return x.ServerStream.SendMsg(m)
 }
 
+func _SpacesAdmin_GetSpaceQuota_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetSpaceQuotaRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(SpacesAdminServer).GetSpaceQuota(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/reva.admin.v1beta1.SpacesAdmin/GetSpaceQuota",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(SpacesAdminServer).GetSpaceQuota(ctx, req.(*GetSpaceQuotaRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _SpacesAdmin_SetSpaceQuota_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(SetSpaceQuotaRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(SpacesAdminServer).SetSpaceQuota(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/reva.admin.v1beta1.SpacesAdmin/SetSpaceQuota",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(SpacesAdminServer).SetSpaceQuota(ctx, req.(*SetSpaceQuotaRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _SpacesAdmin_ListSpaceQuotas_Handler(srv interface{}, stream grpc.ServerStream) error {
+	m := new(ListSpaceQuotasRequest)
+	if err := stream.RecvMsg(m); err != nil {
+		return err
+	}
+	return srv.(SpacesAdminServer).ListSpaceQuotas(m, &spacesAdminListSpaceQuotasServer{stream})
+}
+
+type SpacesAdmin_ListSpaceQuotasServer interface {
+	Send(*SpaceQuota) error
+	grpc.ServerStream
+}
+
+type spacesAdminListSpaceQuotasServer struct {
+	grpc.ServerStream
+}
+
+func (x *spacesAdminListSpaceQuotasServer) Send(m *SpaceQuota) error {
+	return x.ServerStream.SendMsg(m)
+}
+
 // SpacesAdmin_ServiceDesc is the grpc.ServiceDesc for SpacesAdmin service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -417,6 +553,14 @@ var SpacesAdmin_ServiceDesc = grpc.ServiceDesc{
 			MethodName: "UnregisterSpace",
 			Handler:    _SpacesAdmin_UnregisterSpace_Handler,
 		},
+		{
+			MethodName: "GetSpaceQuota",
+			Handler:    _SpacesAdmin_GetSpaceQuota_Handler,
+		},
+		{
+			MethodName: "SetSpaceQuota",
+			Handler:    _SpacesAdmin_SetSpaceQuota_Handler,
+		},
 	},
 	Streams: []grpc.StreamDesc{
 		{
@@ -427,6 +571,11 @@ var SpacesAdmin_ServiceDesc = grpc.ServiceDesc{
 		{
 			StreamName:    "CheckSpaces",
 			Handler:       _SpacesAdmin_CheckSpaces_Handler,
+			ServerStreams: true,
+		},
+		{
+			StreamName:    "ListSpaceQuotas",
+			Handler:       _SpacesAdmin_ListSpaceQuotas_Handler,
 			ServerStreams: true,
 		},
 	},
