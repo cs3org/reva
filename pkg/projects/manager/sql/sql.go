@@ -23,6 +23,7 @@ import (
 	"fmt"
 	"slices"
 	"strings"
+	"text/template"
 	"time"
 
 	"github.com/ReneKroon/ttlcache/v2"
@@ -56,12 +57,23 @@ type Config struct {
 	// CacheTTL (seconds) determines how long the list of projects will be stored in a cache
 	// before a new database query is executed. The default, 0, corresponds to 60 seconds.
 	CacheTTL int `mapstructure:"cache_ttl"`
+	// Templates of the values that the Admin API derives from the name of a
+	// new project. They are text/template with the sprig functions, and the
+	// fields .Name and .Initial (the first letter of the name). With an empty
+	// template, the value is a required argument.
+	PathTemplate         string `mapstructure:"path_template" docs:";Path of a new project"`
+	StorageIDTemplate    string `mapstructure:"storage_id_template" docs:";Storage id of a new project"`
+	ReadersGroupTemplate string `mapstructure:"readers_group_template" docs:";Readers group of a new project"`
+	WritersGroupTemplate string `mapstructure:"writers_group_template" docs:";Writers group of a new project"`
+	AdminsGroupTemplate  string `mapstructure:"admins_group_template" docs:";Admins group of a new project"`
 }
 
 type ProjectsManager struct {
 	c     *Config
 	db    *gorm.DB
 	cache *ttlcache.Cache
+	// templates holds the parsed templates, by the name of the value.
+	templates map[string]*template.Template
 }
 
 const cacheKey = "projects/projectsListCache"
@@ -150,10 +162,15 @@ func New(ctx context.Context, m map[string]any) (projects.Catalogue, error) {
 	cache.SetTTL(time.Duration(c.CacheTTL) * time.Second)
 	// Even if we get a hit, of course we just want to refresh every 60 seconds
 	cache.SkipTTLExtensionOnHit(true)
+	tpls, err := parseTemplates(&c)
+	if err != nil {
+		return nil, err
+	}
 	mgr := &ProjectsManager{
-		c:     &c,
-		db:    db,
-		cache: cache,
+		c:         &c,
+		db:        db,
+		cache:     cache,
+		templates: tpls,
 	}
 	return mgr, nil
 }
