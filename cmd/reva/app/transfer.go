@@ -23,11 +23,9 @@ import (
 	"io"
 	"time"
 
-	gateway "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
-	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
-	ocm "github.com/cs3org/go-cs3apis/cs3/sharing/ocm/v1beta1"
 	datatx "github.com/cs3org/go-cs3apis/cs3/tx/v1beta1"
 	"github.com/cs3org/reva/v3/pkg/cli"
+	"github.com/cs3org/reva/v3/pkg/cli/backend"
 	"github.com/jedib0t/go-pretty/table"
 	"github.com/spf13/cobra"
 )
@@ -36,21 +34,9 @@ func transferCommand(rt *cli.Runtime) *cobra.Command {
 	cmd := &cobra.Command{Use: "transfer", Short: "Manage data transfers of OCM shares"}
 	cmd.AddCommand(
 		transferListCommand(rt),
-		transferTxCommand(rt, "status", "Show the status of a transfer",
-			func(ctx context.Context, c gateway.GatewayAPIClient, id *datatx.TxId) (*rpc.Status, *datatx.TxInfo, error) {
-				res, err := c.GetTransferStatus(ctx, &datatx.GetTransferStatusRequest{TxId: id})
-				return res.GetStatus(), res.GetTxInfo(), err
-			}),
-		transferTxCommand(rt, "cancel", "Cancel a running transfer",
-			func(ctx context.Context, c gateway.GatewayAPIClient, id *datatx.TxId) (*rpc.Status, *datatx.TxInfo, error) {
-				res, err := c.CancelTransfer(ctx, &datatx.CancelTransferRequest{TxId: id})
-				return res.GetStatus(), res.GetTxInfo(), err
-			}),
-		transferTxCommand(rt, "retry", "Retry a transfer",
-			func(ctx context.Context, c gateway.GatewayAPIClient, id *datatx.TxId) (*rpc.Status, *datatx.TxInfo, error) {
-				res, err := c.RetryTransfer(ctx, &datatx.RetryTransferRequest{TxId: id})
-				return res.GetStatus(), res.GetTxInfo(), err
-			}),
+		transferTxCommand(rt, "status", "Show the status of a transfer", backend.TransferManager.TransferStatus),
+		transferTxCommand(rt, "cancel", "Cancel a running transfer", backend.TransferManager.CancelTransfer),
+		transferTxCommand(rt, "retry", "Retry a transfer", backend.TransferManager.RetryTransfer),
 	)
 	return cmd
 }
@@ -58,22 +44,19 @@ func transferCommand(rt *cli.Runtime) *cobra.Command {
 // transferTxCommand builds the commands that act on one transfer. They differ
 // only in the call, and all print the transfer info that the call returns.
 func transferTxCommand(rt *cli.Runtime, name, short string,
-	call func(context.Context, gateway.GatewayAPIClient, *datatx.TxId) (*rpc.Status, *datatx.TxInfo, error)) *cobra.Command {
+	call func(backend.TransferManager, context.Context, string) (*datatx.TxInfo, error)) *cobra.Command {
 	return &cobra.Command{
 		Use:   name + " TRANSFER_ID",
 		Short: short,
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			client, ctx, err := rt.Gateway(cmd.Context())
+			tm, err := cli.Ability[backend.TransferManager](cmd.Context(), rt, "OCM transfers")
 			if err != nil {
 				return err
 			}
-			status, info, err := call(ctx, client, &datatx.TxId{OpaqueId: args[0]})
+			info, err := call(tm, cmd.Context(), args[0])
 			if err != nil {
 				return err
-			}
-			if status.Code != rpc.Code_CODE_OK {
-				return formatError(status)
 			}
 			return rt.Print(cmd.OutOrStdout(), info, func(w io.Writer) {
 				t := table.NewWriter()
@@ -94,29 +77,19 @@ func transferListCommand(rt *cli.Runtime) *cobra.Command {
 		Short: "List the transfers",
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			req := &datatx.ListTransfersRequest{}
-			if shareID != "" {
-				req.Filters = []*datatx.ListTransfersRequest_Filter{{
-					Type: datatx.ListTransfersRequest_Filter_TYPE_SHARE_ID,
-					Term: &datatx.ListTransfersRequest_Filter_ShareId{ShareId: &ocm.ShareId{OpaqueId: shareID}},
-				}}
-			}
-			client, ctx, err := rt.Gateway(cmd.Context())
+			tm, err := cli.Ability[backend.TransferManager](cmd.Context(), rt, "OCM transfers")
 			if err != nil {
 				return err
 			}
-			res, err := client.ListTransfers(ctx, req)
+			transfers, err := tm.ListTransfers(cmd.Context(), shareID)
 			if err != nil {
 				return err
 			}
-			if res.Status.Code != rpc.Code_CODE_OK {
-				return formatError(res.Status)
-			}
-			return rt.Print(cmd.OutOrStdout(), res.Transfers, func(w io.Writer) {
+			return rt.Print(cmd.OutOrStdout(), transfers, func(w io.Writer) {
 				t := table.NewWriter()
 				t.SetOutputMirror(w)
 				t.AppendHeader(table.Row{"ShareId.OpaqueId", "Id.OpaqueId"})
-				for _, tx := range res.Transfers {
+				for _, tx := range transfers {
 					t.AppendRow(table.Row{tx.ShareId.GetOpaqueId(), tx.Id.GetOpaqueId()})
 				}
 				t.Render()

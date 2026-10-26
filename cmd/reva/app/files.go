@@ -24,7 +24,6 @@ import (
 	"path"
 	"strings"
 
-	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/cs3org/reva/v3/pkg/cli"
 	"github.com/spf13/cobra"
@@ -38,19 +37,16 @@ func lsCommand(rt *cli.Runtime) *cobra.Command {
 		Args:              cobra.ExactArgs(1),
 		ValidArgsFunction: completeRemotePath(rt, 1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			client, ctx, err := rt.Gateway(cmd.Context())
+			b, err := rt.Backend(cmd.Context())
 			if err != nil {
 				return err
 			}
-			res, err := client.ListContainer(ctx, &provider.ListContainerRequest{Ref: &provider.Reference{Path: args[0]}})
+			infos, err := b.Files().List(cmd.Context(), pathRef(args[0]))
 			if err != nil {
 				return err
 			}
-			if res.Status.Code != rpc.Code_CODE_OK {
-				return formatError(res.Status)
-			}
-			return rt.Print(cmd.OutOrStdout(), res.Infos, func(w io.Writer) {
-				for _, info := range res.Infos {
+			return rt.Print(cmd.OutOrStdout(), infos, func(w io.Writer) {
+				for _, info := range infos {
 					p := info.Path
 					if !full {
 						p = path.Base(info.Path)
@@ -76,18 +72,15 @@ func statCommand(rt *cli.Runtime) *cobra.Command {
 		Args:              cobra.ExactArgs(1),
 		ValidArgsFunction: completeRemotePath(rt, 1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			client, ctx, err := rt.Gateway(cmd.Context())
+			b, err := rt.Backend(cmd.Context())
 			if err != nil {
 				return err
 			}
-			res, err := client.Stat(ctx, &provider.StatRequest{Ref: &provider.Reference{Path: args[0]}})
+			info, err := b.Files().Stat(cmd.Context(), pathRef(args[0]))
 			if err != nil {
 				return err
 			}
-			if res.Status.Code != rpc.Code_CODE_OK {
-				return formatError(res.Status)
-			}
-			return rt.Print(cmd.OutOrStdout(), res.Info, func(w io.Writer) { fmt.Fprintln(w, res.Info) })
+			return rt.Print(cmd.OutOrStdout(), info, func(w io.Writer) { fmt.Fprintln(w, info) })
 		},
 	}
 }
@@ -99,18 +92,11 @@ func mkdirCommand(rt *cli.Runtime) *cobra.Command {
 		Args:              cobra.ExactArgs(1),
 		ValidArgsFunction: completeRemotePath(rt, 1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			client, ctx, err := rt.Gateway(cmd.Context())
+			b, err := rt.Backend(cmd.Context())
 			if err != nil {
 				return err
 			}
-			res, err := client.CreateContainer(ctx, &provider.CreateContainerRequest{Ref: &provider.Reference{Path: args[0]}})
-			if err != nil {
-				return err
-			}
-			if res.Status.Code != rpc.Code_CODE_OK {
-				return formatError(res.Status)
-			}
-			return nil
+			return b.Files().Mkdir(cmd.Context(), pathRef(args[0]), false)
 		},
 	}
 }
@@ -122,21 +108,11 @@ func mvCommand(rt *cli.Runtime) *cobra.Command {
 		Args:              cobra.ExactArgs(2),
 		ValidArgsFunction: completeRemotePath(rt, 2),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			client, ctx, err := rt.Gateway(cmd.Context())
+			b, err := rt.Backend(cmd.Context())
 			if err != nil {
 				return err
 			}
-			res, err := client.Move(ctx, &provider.MoveRequest{
-				Source:      &provider.Reference{Path: args[0]},
-				Destination: &provider.Reference{Path: args[1]},
-			})
-			if err != nil {
-				return err
-			}
-			if res.Status.Code != rpc.Code_CODE_OK {
-				return formatError(res.Status)
-			}
-			return nil
+			return b.Files().Move(cmd.Context(), pathRef(args[0]), pathRef(args[1]), false)
 		},
 	}
 }
@@ -148,18 +124,11 @@ func rmCommand(rt *cli.Runtime) *cobra.Command {
 		Args:              cobra.ExactArgs(1),
 		ValidArgsFunction: completeRemotePath(rt, 1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			client, ctx, err := rt.Gateway(cmd.Context())
+			b, err := rt.Backend(cmd.Context())
 			if err != nil {
 				return err
 			}
-			res, err := client.Delete(ctx, &provider.DeleteRequest{Ref: &provider.Reference{Path: args[0]}})
-			if err != nil {
-				return err
-			}
-			if res.Status.Code != rpc.Code_CODE_OK {
-				return formatError(res.Status)
-			}
-			return nil
+			return b.Files().Remove(cmd.Context(), pathRef(args[0]))
 		},
 	}
 }
@@ -171,18 +140,11 @@ func touchCommand(rt *cli.Runtime) *cobra.Command {
 		Args:              cobra.ExactArgs(1),
 		ValidArgsFunction: completeRemotePath(rt, 1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			client, ctx, err := rt.Gateway(cmd.Context())
+			b, err := rt.Backend(cmd.Context())
 			if err != nil {
 				return err
 			}
-			res, err := client.TouchFile(ctx, &provider.TouchFileRequest{Ref: &provider.Reference{Path: args[0]}})
-			if err != nil {
-				return err
-			}
-			if res.Status.Code != rpc.Code_CODE_OK {
-				return formatError(res.Status)
-			}
-			return nil
+			return b.Files().Touch(cmd.Context(), pathRef(args[0]))
 		},
 	}
 }
@@ -211,16 +173,16 @@ func listRemote(cmd *cobra.Command, rt *cli.Runtime, toComplete string) ([]strin
 	if err := rt.Load(cmd.Flags()); err != nil {
 		return nil, none
 	}
-	client, ctx, err := rt.Gateway(cmd.Context())
+	b, err := rt.Backend(cmd.Context())
 	if err != nil {
 		return nil, none
 	}
-	res, err := client.ListContainer(ctx, &provider.ListContainerRequest{Ref: &provider.Reference{Path: dir}})
-	if err != nil || res.Status.Code != rpc.Code_CODE_OK {
+	infos, err := b.Files().List(cmd.Context(), pathRef(dir))
+	if err != nil {
 		return nil, none
 	}
-	out := make([]string, 0, len(res.Infos))
-	for _, info := range res.Infos {
+	out := make([]string, 0, len(infos))
+	for _, info := range infos {
 		p := path.Join(dir, path.Base(info.Path))
 		if info.Type == provider.ResourceType_RESOURCE_TYPE_CONTAINER {
 			p += "/"
@@ -228,4 +190,8 @@ func listRemote(cmd *cobra.Command, rt *cli.Runtime, toComplete string) ([]strin
 		out = append(out, p)
 	}
 	return out, none | cobra.ShellCompDirectiveNoSpace
+}
+
+func pathRef(p string) *provider.Reference {
+	return &provider.Reference{Path: p}
 }

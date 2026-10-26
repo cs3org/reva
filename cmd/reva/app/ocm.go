@@ -29,22 +29,16 @@ import (
 	"strings"
 	"time"
 
-	gateway "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	invitepb "github.com/cs3org/go-cs3apis/cs3/ocm/invite/v1beta1"
-	ocmprovider "github.com/cs3org/go-cs3apis/cs3/ocm/provider/v1beta1"
-	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	ocm "github.com/cs3org/go-cs3apis/cs3/sharing/ocm/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
-	types "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
-	"github.com/cs3org/reva/v3/pkg/appctx"
 	"github.com/cs3org/reva/v3/pkg/cli"
+	"github.com/cs3org/reva/v3/pkg/cli/backend"
 	ocmshare "github.com/cs3org/reva/v3/pkg/ocm/share"
-	"github.com/cs3org/reva/v3/pkg/utils"
 	"github.com/jedib0t/go-pretty/table"
 	"github.com/spf13/cobra"
 	"google.golang.org/protobuf/encoding/protojson"
-	"google.golang.org/protobuf/types/known/fieldmaskpb"
 )
 
 func ocmCommand(rt *cli.Runtime) *cobra.Command {
@@ -80,18 +74,15 @@ func ocmInviteCreateCommand(rt *cli.Runtime) *cobra.Command {
 			"with. They accept it on their own provider.",
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			client, ctx, err := rt.Gateway(cmd.Context())
+			b, err := rt.Backend(cmd.Context())
 			if err != nil {
 				return err
 			}
-			res, err := client.GenerateInviteToken(ctx, &invitepb.GenerateInviteTokenRequest{Description: description})
+			inv, err := b.OCM().CreateInvite(cmd.Context(), description)
 			if err != nil {
 				return err
 			}
-			if res.Status.Code != rpc.Code_CODE_OK {
-				return formatError(res.Status)
-			}
-			return rt.Print(cmd.OutOrStdout(), res.InviteToken, func(w io.Writer) { renderInvites(w, []*invitepb.InviteToken{res.InviteToken}) })
+			return rt.Print(cmd.OutOrStdout(), inv, func(w io.Writer) { renderInvites(w, []*invitepb.InviteToken{inv}) })
 		},
 	}
 	cmd.Flags().StringVar(&description, "description", "", "note to remind you who this invitation was for")
@@ -104,21 +95,18 @@ func ocmInviteListCommand(rt *cli.Runtime) *cobra.Command {
 		Short: "List the invitations you have created",
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			client, ctx, err := rt.Gateway(cmd.Context())
+			b, err := rt.Backend(cmd.Context())
 			if err != nil {
 				return err
 			}
-			res, err := client.ListInviteTokens(ctx, &invitepb.ListInviteTokensRequest{})
+			invites, err := b.OCM().Invites(cmd.Context())
 			if err != nil {
 				return err
 			}
-			if res.Status.Code != rpc.Code_CODE_OK {
-				return formatError(res.Status)
-			}
-			if len(res.InviteTokens) == 0 {
+			if len(invites) == 0 {
 				rt.Msg(cmd.ErrOrStderr(), "You have no open invitations.")
 			}
-			return rt.Print(cmd.OutOrStdout(), res.InviteTokens, func(w io.Writer) { renderInvites(w, res.InviteTokens) })
+			return rt.Print(cmd.OutOrStdout(), invites, func(w io.Writer) { renderInvites(w, invites) })
 		},
 	}
 }
@@ -159,26 +147,12 @@ func ocmInviteAcceptCommand(rt *cli.Runtime) *cobra.Command {
 			if domain == "" {
 				return errors.New("pass --provider with the domain the invitation came from, or give the whole invitation link instead of just the token")
 			}
-			client, ctx, err := rt.Gateway(cmd.Context())
+			b, err := rt.Backend(cmd.Context())
 			if err != nil {
 				return err
 			}
-			providerInfo, err := client.GetInfoByDomain(ctx, &ocmprovider.GetInfoByDomainRequest{Domain: domain})
-			if err != nil {
+			if err := b.OCM().AcceptInvite(cmd.Context(), token, domain); err != nil {
 				return err
-			}
-			if providerInfo.Status.Code != rpc.Code_CODE_OK {
-				return formatError(providerInfo.Status)
-			}
-			res, err := client.ForwardInvite(ctx, &invitepb.ForwardInviteRequest{
-				InviteToken:          &invitepb.InviteToken{Token: token},
-				OriginSystemProvider: providerInfo.ProviderInfo,
-			})
-			if err != nil {
-				return err
-			}
-			if res.Status.Code != rpc.Code_CODE_OK {
-				return formatError(res.Status)
 			}
 			rt.Msg(cmd.ErrOrStderr(), "Accepted the invitation from %s. You can now share with them.", domain)
 			return nil
@@ -217,28 +191,25 @@ func ocmContactsCommand(rt *cli.Runtime) *cobra.Command {
 			if len(args) == 1 {
 				filter = args[0]
 			}
-			client, ctx, err := rt.Gateway(cmd.Context())
+			b, err := rt.Backend(cmd.Context())
 			if err != nil {
 				return err
 			}
-			res, err := client.FindAcceptedUsers(ctx, &invitepb.FindAcceptedUsersRequest{Filter: filter})
+			contacts, err := b.OCM().Contacts(cmd.Context(), filter)
 			if err != nil {
 				return err
-			}
-			if res.Status.Code != rpc.Code_CODE_OK {
-				return formatError(res.Status)
 			}
 			if remove != "" {
-				return removeContact(cmd, rt, client, ctx, res.AcceptedUsers, remove)
+				return removeContact(cmd, rt, b, contacts, remove)
 			}
-			if len(res.AcceptedUsers) == 0 {
+			if len(contacts) == 0 {
 				rt.Msg(cmd.ErrOrStderr(), "No contacts yet. Start with 'reva ocm invite create'.")
 			}
-			return rt.Print(cmd.OutOrStdout(), res.AcceptedUsers, func(w io.Writer) {
+			return rt.Print(cmd.OutOrStdout(), contacts, func(w io.Writer) {
 				t := table.NewWriter()
 				t.SetOutputMirror(w)
 				t.AppendHeader(table.Row{"Address", "OpaqueId", "Idp", "Mail", "DisplayName"})
-				for _, u := range res.AcceptedUsers {
+				for _, u := range contacts {
 					t.AppendRow(table.Row{u.Id.OpaqueId + "@" + u.Id.Idp, u.Id.OpaqueId, u.Id.Idp, u.Mail, u.DisplayName})
 				}
 				t.Render()
@@ -252,7 +223,7 @@ func ocmContactsCommand(rt *cli.Runtime) *cobra.Command {
 // removeContact removes the contact with the address that a person types.
 // The remote provider assigns the user id, which is often not the name in
 // the address, so it also matches the mail.
-func removeContact(cmd *cobra.Command, rt *cli.Runtime, client gateway.GatewayAPIClient, ctx context.Context, contacts []*userpb.User, address string) error {
+func removeContact(cmd *cobra.Command, rt *cli.Runtime, b backend.Backend, contacts []*userpb.User, address string) error {
 	if !strings.Contains(address, "@") {
 		return errors.New("--remove takes an address like user@their-provider.org")
 	}
@@ -262,12 +233,8 @@ func removeContact(cmd *cobra.Command, rt *cli.Runtime, client gateway.GatewayAP
 	if i < 0 {
 		return fmt.Errorf("no contact with the address %s: 'reva ocm contacts' lists them", address)
 	}
-	res, err := client.DeleteAcceptedUser(ctx, &invitepb.DeleteAcceptedUserRequest{RemoteUserId: contacts[i].Id})
-	if err != nil {
+	if err := b.OCM().RemoveContact(cmd.Context(), contacts[i].Id); err != nil {
 		return err
-	}
-	if res.Status.Code != rpc.Code_CODE_OK {
-		return formatError(res.Status)
 	}
 	rt.Msg(cmd.ErrOrStderr(), "Removed %s.", address)
 	return nil
@@ -279,22 +246,19 @@ func ocmProvidersCommand(rt *cli.Runtime) *cobra.Command {
 		Short: "List the other servers you can share with",
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			client, ctx, err := rt.Gateway(cmd.Context())
+			b, err := rt.Backend(cmd.Context())
 			if err != nil {
 				return err
 			}
-			res, err := client.ListAllProviders(ctx, &ocmprovider.ListAllProvidersRequest{})
+			providers, err := b.OCM().Providers(cmd.Context())
 			if err != nil {
 				return err
 			}
-			if res.Status.Code != rpc.Code_CODE_OK {
-				return formatError(res.Status)
-			}
-			return rt.Print(cmd.OutOrStdout(), res.Providers, func(w io.Writer) {
+			return rt.Print(cmd.OutOrStdout(), providers, func(w io.Writer) {
 				t := table.NewWriter()
 				t.SetOutputMirror(w)
 				t.AppendHeader(table.Row{"Domain", "Name", "Homepage"})
-				for _, p := range res.Providers {
+				for _, p := range providers {
 					t.AppendRow(table.Row{p.Domain, cmp.Or(p.FullName, p.Name), p.Homepage})
 				}
 				t.Render()
@@ -327,63 +291,15 @@ func ocmShareCreateCommand(rt *cli.Runtime) *cobra.Command {
 				methods = append(methods, ocmshare.NewWebappAccessMethod(perm, ocmshare.DefaultWebappRequirements, ""))
 			}
 
-			client, ctx, err := rt.Gateway(cmd.Context())
+			b, err := rt.Backend(cmd.Context())
 			if err != nil {
 				return err
 			}
-			providerInfo, err := client.GetInfoByDomain(ctx, &ocmprovider.GetInfoByDomainRequest{Domain: idp})
+			share, err := b.OCM().CreateShare(cmd.Context(), pathRef(args[0]), &userpb.UserId{OpaqueId: grantee, Idp: idp}, methods)
 			if err != nil {
 				return err
 			}
-			if providerInfo.Status.Code != rpc.Code_CODE_OK {
-				return formatError(providerInfo.Status)
-			}
-			token, _ := appctx.ContextGetToken(ctx)
-			who, err := client.WhoAmI(ctx, &gateway.WhoAmIRequest{Token: token})
-			if err != nil {
-				return err
-			}
-			if who.Status.Code != rpc.Code_CODE_OK {
-				return formatError(who.Status)
-			}
-			userFilter, err := utils.MarshalProtoV1ToJSON(who.User.Id)
-			if err != nil {
-				return err
-			}
-			remoteUser, err := client.GetAcceptedUser(ctx, &invitepb.GetAcceptedUserRequest{
-				RemoteUserId: &userpb.UserId{OpaqueId: grantee, Idp: idp, Type: userpb.UserType_USER_TYPE_FEDERATED},
-				Opaque:       &types.Opaque{Map: map[string]*types.OpaqueEntry{"user-filter": {Decoder: "json", Value: userFilter}}},
-			})
-			if err != nil {
-				return err
-			}
-			if remoteUser.Status.Code != rpc.Code_CODE_OK {
-				return formatError(remoteUser.Status)
-			}
-			stat, err := client.Stat(ctx, &provider.StatRequest{Ref: &provider.Reference{Path: args[0]}})
-			if err != nil {
-				return err
-			}
-			if stat.Status.Code != rpc.Code_CODE_OK {
-				return formatError(stat.Status)
-			}
-			res, err := client.CreateOCMShare(ctx, &ocm.CreateOCMShareRequest{
-				ResourceId: stat.Info.Id,
-				// Only user grantees are supported for now.
-				Grantee: &provider.Grantee{
-					Type: provider.GranteeType_GRANTEE_TYPE_USER,
-					Id:   &provider.Grantee_UserId{UserId: remoteUser.RemoteUser.Id},
-				},
-				RecipientMeshProvider: providerInfo.ProviderInfo,
-				AccessMethods:         methods,
-			})
-			if err != nil {
-				return err
-			}
-			if res.Status.Code != rpc.Code_CODE_OK {
-				return formatError(res.Status)
-			}
-			return rt.Print(cmd.OutOrStdout(), res.Share, func(w io.Writer) { renderOCMShares(w, []*ocm.Share{res.Share}) })
+			return rt.Print(cmd.OutOrStdout(), share, func(w io.Writer) { renderOCMShares(w, []*ocm.Share{share}) })
 		},
 	}
 	cmd.Flags().StringVar(&grantee, "grantee", "", "the id of the remote user")
@@ -403,26 +319,22 @@ func ocmShareListCommand(rt *cli.Runtime) *cobra.Command {
 		Short: "List the OCM shares you manage",
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			req := &ocm.ListOCMSharesRequest{}
+			var id *provider.ResourceId
 			if resID != "" {
-				id, err := parseResourceID(resID)
-				if err != nil {
+				var err error
+				if id, err = parseResourceID(resID); err != nil {
 					return err
 				}
-				req.Filters = []*ocm.ListOCMSharesRequest_Filter{ocmshare.ResourceIDFilter(id)}
 			}
-			client, ctx, err := rt.Gateway(cmd.Context())
+			b, err := rt.Backend(cmd.Context())
 			if err != nil {
 				return err
 			}
-			res, err := client.ListOCMShares(ctx, req)
+			shares, err := b.OCM().Shares(cmd.Context(), id)
 			if err != nil {
 				return err
 			}
-			if res.Status.Code != rpc.Code_CODE_OK {
-				return formatError(res.Status)
-			}
-			return rt.Print(cmd.OutOrStdout(), res.Shares, func(w io.Writer) { renderOCMShares(w, res.Shares) })
+			return rt.Print(cmd.OutOrStdout(), shares, func(w io.Writer) { renderOCMShares(w, shares) })
 		},
 	}
 	cmd.Flags().StringVar(&resID, "by-resource-id", "", "only the shares of this resource (storage_id:opaque_id)")
@@ -436,18 +348,15 @@ func ocmShareGetCommand(rt *cli.Runtime) *cobra.Command {
 		Args:              cobra.ExactArgs(1),
 		ValidArgsFunction: completeOCMShareIDs(rt),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			client, ctx, err := rt.Gateway(cmd.Context())
+			b, err := rt.Backend(cmd.Context())
 			if err != nil {
 				return err
 			}
-			res, err := client.GetOCMShare(ctx, &ocm.GetOCMShareRequest{Ref: ocmShareRef(args[0])})
+			share, err := b.OCM().GetShare(cmd.Context(), args[0])
 			if err != nil {
 				return err
 			}
-			if res.Status.Code != rpc.Code_CODE_OK {
-				return formatError(res.Status)
-			}
-			return rt.Print(cmd.OutOrStdout(), res.Share, func(w io.Writer) { fmt.Fprintln(w, protojson.Format(res.Share)) })
+			return rt.Print(cmd.OutOrStdout(), share, func(w io.Writer) { fmt.Fprintln(w, protojson.Format(share)) })
 		},
 	}
 }
@@ -490,16 +399,12 @@ func ocmShareUpdateCommand(rt *cli.Runtime) *cobra.Command {
 					},
 				})
 			}
-			client, ctx, err := rt.Gateway(cmd.Context())
+			b, err := rt.Backend(cmd.Context())
 			if err != nil {
 				return err
 			}
-			res, err := client.UpdateOCMShare(ctx, req)
-			if err != nil {
+			if err := b.OCM().UpdateShare(cmd.Context(), req); err != nil {
 				return err
-			}
-			if res.Status.Code != rpc.Code_CODE_OK {
-				return formatError(res.Status)
 			}
 			rt.Msg(cmd.ErrOrStderr(), "OK")
 			return nil
@@ -517,16 +422,12 @@ func ocmShareRemoveCommand(rt *cli.Runtime) *cobra.Command {
 		Args:              cobra.ExactArgs(1),
 		ValidArgsFunction: completeOCMShareIDs(rt),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			client, ctx, err := rt.Gateway(cmd.Context())
+			b, err := rt.Backend(cmd.Context())
 			if err != nil {
 				return err
 			}
-			res, err := client.RemoveOCMShare(ctx, &ocm.RemoveOCMShareRequest{Ref: ocmShareRef(args[0])})
-			if err != nil {
+			if err := b.OCM().RemoveShare(cmd.Context(), args[0]); err != nil {
 				return err
-			}
-			if res.Status.Code != rpc.Code_CODE_OK {
-				return formatError(res.Status)
 			}
 			rt.Msg(cmd.ErrOrStderr(), "OK")
 			return nil
@@ -540,23 +441,20 @@ func ocmReceivedCommand(rt *cli.Runtime) *cobra.Command {
 		Short: "List shares you have received from another server",
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			client, ctx, err := rt.Gateway(cmd.Context())
+			b, err := rt.Backend(cmd.Context())
 			if err != nil {
 				return err
 			}
-			res, err := client.ListReceivedOCMShares(ctx, &ocm.ListReceivedOCMSharesRequest{})
+			received, err := b.OCM().Received(cmd.Context())
 			if err != nil {
 				return err
 			}
-			if res.Status.Code != rpc.Code_CODE_OK {
-				return formatError(res.Status)
-			}
-			return rt.Print(cmd.OutOrStdout(), res.Shares, func(w io.Writer) {
+			return rt.Print(cmd.OutOrStdout(), received, func(w io.Writer) {
 				t := table.NewWriter()
 				t.SetOutputMirror(w)
 				t.AppendHeader(table.Row{"#", "Owner.Idp", "Owner.OpaqueId", "RemoteShareId", "Type",
 					"Grantee.Idp", "Grantee.OpaqueId", "Created", "Updated", "State", "ShareType"})
-				for _, s := range res.Shares {
+				for _, s := range received {
 					t.AppendRow(table.Row{s.Id.OpaqueId, s.Owner.Idp, s.Owner.OpaqueId, s.RemoteShareId,
 						s.Grantee.Type.String(), s.Grantee.GetUserId().Idp, s.Grantee.GetUserId().OpaqueId,
 						time.Unix(int64(s.Ctime.Seconds), 0), time.Unix(int64(s.Mtime.Seconds), 0), s.State.String(), s.ShareType.String()})
@@ -574,18 +472,15 @@ func ocmShareReceivedGetCommand(rt *cli.Runtime) *cobra.Command {
 		Args:              cobra.ExactArgs(1),
 		ValidArgsFunction: completeReceivedOCMShareIDs(rt),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			client, ctx, err := rt.Gateway(cmd.Context())
+			b, err := rt.Backend(cmd.Context())
 			if err != nil {
 				return err
 			}
-			res, err := client.GetReceivedOCMShare(ctx, &ocm.GetReceivedOCMShareRequest{Ref: ocmShareRef(args[0])})
+			share, err := b.OCM().GetReceived(cmd.Context(), args[0])
 			if err != nil {
 				return err
 			}
-			if res.Status.Code != rpc.Code_CODE_OK {
-				return formatError(res.Status)
-			}
-			return rt.Print(cmd.OutOrStdout(), res.Share, func(w io.Writer) { fmt.Fprintln(w, protojson.Format(res.Share)) })
+			return rt.Print(cmd.OutOrStdout(), share, func(w io.Writer) { fmt.Fprintln(w, protojson.Format(share)) })
 		},
 	}
 }
@@ -609,27 +504,12 @@ func ocmShareReceivedUpdateCommand(rt *cli.Runtime) *cobra.Command {
 			default:
 				return fmt.Errorf("unknown state %q: use pending, accepted or rejected", state)
 			}
-			client, ctx, err := rt.Gateway(cmd.Context())
+			b, err := rt.Backend(cmd.Context())
 			if err != nil {
 				return err
 			}
-			res, err := client.GetReceivedOCMShare(ctx, &ocm.GetReceivedOCMShareRequest{Ref: ocmShareRef(args[0])})
-			if err != nil {
+			if err := b.OCM().UpdateReceived(cmd.Context(), args[0], s); err != nil {
 				return err
-			}
-			if res.Status.Code != rpc.Code_CODE_OK {
-				return formatError(res.Status)
-			}
-			res.Share.State = s
-			updateRes, err := client.UpdateReceivedOCMShare(ctx, &ocm.UpdateReceivedOCMShareRequest{
-				Share:      res.Share,
-				UpdateMask: &fieldmaskpb.FieldMask{Paths: []string{"state"}},
-			})
-			if err != nil {
-				return err
-			}
-			if updateRes.Status.Code != rpc.Code_CODE_OK {
-				return formatError(updateRes.Status)
 			}
 			rt.Msg(cmd.ErrOrStderr(), "OK")
 			return nil
@@ -664,13 +544,13 @@ func renderOCMShares(w io.Writer, shares []*ocm.Share) {
 }
 
 func completeOCMShareIDs(rt *cli.Runtime) cobra.CompletionFunc {
-	return completeIDs(rt, func(ctx context.Context, client gateway.GatewayAPIClient) ([]string, error) {
-		res, err := client.ListOCMShares(ctx, &ocm.ListOCMSharesRequest{})
+	return completeIDs(rt, func(ctx context.Context, b backend.Backend) ([]string, error) {
+		shares, err := b.OCM().Shares(ctx, nil)
 		if err != nil {
 			return nil, err
 		}
-		ids := make([]string, 0, len(res.Shares))
-		for _, s := range res.Shares {
+		ids := make([]string, 0, len(shares))
+		for _, s := range shares {
 			ids = append(ids, s.Id.OpaqueId+"\t"+s.Grantee.GetUserId().GetOpaqueId())
 		}
 		return ids, nil
@@ -678,13 +558,13 @@ func completeOCMShareIDs(rt *cli.Runtime) cobra.CompletionFunc {
 }
 
 func completeReceivedOCMShareIDs(rt *cli.Runtime) cobra.CompletionFunc {
-	return completeIDs(rt, func(ctx context.Context, client gateway.GatewayAPIClient) ([]string, error) {
-		res, err := client.ListReceivedOCMShares(ctx, &ocm.ListReceivedOCMSharesRequest{})
+	return completeIDs(rt, func(ctx context.Context, b backend.Backend) ([]string, error) {
+		received, err := b.OCM().Received(ctx)
 		if err != nil {
 			return nil, err
 		}
-		ids := make([]string, 0, len(res.Shares))
-		for _, s := range res.Shares {
+		ids := make([]string, 0, len(received))
+		for _, s := range received {
 			ids = append(ids, s.Id.OpaqueId+"\t"+s.State.String())
 		}
 		return ids, nil
