@@ -48,7 +48,7 @@ import (
 
 func loginCommand(rt *cli.Runtime) *cobra.Command {
 	var list bool
-	var method string
+	var method, spn, ccache string
 	cmd := &cobra.Command{
 		Use:   "login",
 		Short: "Sign in to the gateway and store the token",
@@ -57,7 +57,12 @@ func loginCommand(rt *cli.Runtime) *cobra.Command {
 			"--app-token-file. 'reva login --list' shows the types. The password (or the\n" +
 			"API key for machine auth) is read from the terminal, or from stdin when\n" +
 			"stdin is not a terminal:\n\n" +
-			"  echo \"$PASSWORD\" | reva login --user alice",
+			"  echo \"$PASSWORD\" | reva login --user alice\n\n" +
+			"--method kerberos uses the ticket of kinit and asks for no password. The\n" +
+			"ticket is read from --ccache, else $KRB5CCNAME, else /tmp/krb5cc_<uid>; only\n" +
+			"FILE: caches can be read. The service principal is --spn, else\n" +
+			"$REVA_KERBEROS_SPN, else 'reva config set kerberos-spn', else HTTP/<gateway host>:\n\n" +
+			"  kinit && reva login --method kerberos --spn HTTP/cernbox.cern.ch",
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if list {
@@ -77,6 +82,13 @@ func loginCommand(rt *cli.Runtime) *cobra.Command {
 						fmt.Fprintln(w, t)
 					}
 				})
+			}
+
+			if method == "kerberos" {
+				return kerberosLogin(cmd, rt, spn, ccache)
+			}
+			if cmd.Flags().Changed("spn") || cmd.Flags().Changed("ccache") {
+				return errors.New("--spn and --ccache apply only to --method kerberos")
 			}
 
 			var user, secret string
@@ -109,6 +121,9 @@ func loginCommand(rt *cli.Runtime) *cobra.Command {
 	}
 	cmd.Flags().BoolVar(&list, "list", false, "list the auth types of the gateway")
 	cmd.Flags().StringVar(&method, "method", "basic", "auth type to sign in with")
+	cmd.Flags().StringVar(&spn, "spn", "", "service principal for --method kerberos, for example HTTP/cernbox.cern.ch")
+	cmd.Flags().StringVar(&ccache, "ccache", "", "Kerberos credential cache for --method kerberos (default $KRB5CCNAME, then /tmp/krb5cc_<uid>)")
+	_ = cmd.RegisterFlagCompletionFunc("spn", cobra.NoFileCompletions)
 	_ = cmd.RegisterFlagCompletionFunc("method", func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
 		none := cobra.ShellCompDirectiveNoFileComp
 		if err := rt.Load(cmd.Flags()); err != nil {
@@ -273,7 +288,7 @@ func whoamiCommand(rt *cli.Runtime) *cobra.Command {
 }
 
 func configCommand(rt *cli.Runtime) *cobra.Command {
-	keys := []string{"gateway", "admin-host"}
+	keys := []string{"gateway", "admin-host", "kerberos-spn"}
 	cmd := &cobra.Command{Use: "config", Short: "Show or change the stored settings"}
 	cmd.AddCommand(
 		&cobra.Command{
@@ -291,6 +306,8 @@ func configCommand(rt *cli.Runtime) *cobra.Command {
 					c.Connection.Gateway = args[1]
 				case "admin-host":
 					c.Connection.AdminHost = args[1]
+				case "kerberos-spn":
+					c.Auth.Kerberos.SPN = args[1]
 				default:
 					return fmt.Errorf("unknown key %q: use one of %s", args[0], strings.Join(keys, ", "))
 				}
@@ -311,7 +328,8 @@ func configCommand(rt *cli.Runtime) *cobra.Command {
 					return err
 				}
 				return rt.Print(cmd.OutOrStdout(), c, func(w io.Writer) {
-					fmt.Fprintf(w, "file:       %s\ngateway:    %s\nadmin-host: %s\n", p, c.Connection.Gateway, c.Connection.AdminHost)
+					fmt.Fprintf(w, "file:         %s\ngateway:      %s\nadmin-host:   %s\nkerberos-spn: %s\n",
+						p, c.Connection.Gateway, c.Connection.AdminHost, c.Auth.Kerberos.SPN)
 				})
 			},
 		},
