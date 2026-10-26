@@ -171,7 +171,9 @@ func invokeCommand() *cobra.Command {
 		Short: "Run a service invocation on one or all instances",
 		Long: "Run a service invocation. The selector is a service name (every instance) or a node id (one instance).\n\n" +
 			"The arguments are key=value pairs, and a list is comma-separated. `reva invocation get <service> <invocation>`\n" +
-			"shows the arguments of an invocation. They are checked against the catalogue before the call.",
+			"shows the arguments of an invocation. They are checked against the catalogue before the call.\n\n" +
+			"A list result prints as a table, anything else as key: value lines. -o json prints one document,\n" +
+			"[{node, result, error}], or one per line for a stream. The exit code is 1 if an instance failed.",
 		Args:              cobra.MinimumNArgs(2),
 		ValidArgsFunction: completeCatalogue(true),
 		RunE: func(cmd *cobra.Command, posArgs []string) error {
@@ -191,6 +193,9 @@ func invokeCommand() *cobra.Command {
 			if err := checkArgs(spec, args); err != nil {
 				return err
 			}
+			if stream && spec.GetKind() != "" && !spec.Streaming {
+				return fmt.Errorf("invocation %s does not stream", invocation)
+			}
 			if spec.GetKind() == "dangerous" {
 				if err := rt.Confirm(fmt.Sprintf("invocation %q on %q is DANGEROUS; proceed?", invocation, selector)); err != nil {
 					return err
@@ -198,7 +203,10 @@ func invokeCommand() *cobra.Command {
 			}
 
 			if stream || spec.GetStreamOnly() {
-				return runInvokeStream(ctx, client, selector, invocation, args)
+				// A shared invocation runs on one instance, and so does a node id.
+				s := &streamWriter{w: cmd.OutOrStdout(), errW: cmd.ErrOrStderr(),
+					node: !strings.Contains(selector, "/") && spec.GetScope() != string(invoke.ScopeShared)}
+				return runInvokeStream(ctx, client, &adminpb.InvokeRequest{Service: selector, Invocation: invocation, Args: args}, s)
 			}
 
 			res, err := client.Invoke(ctx, &adminpb.InvokeRequest{
@@ -209,11 +217,10 @@ func invokeCommand() *cobra.Command {
 			if err != nil {
 				return adminErr(err)
 			}
-			printNodeResults(res.Results)
-			return nil
+			return writeResults(cmd.OutOrStdout(), cmd.ErrOrStderr(), res.Results)
 		},
 	}
-	cmd.Flags().BoolVar(&stream, "stream", false, "run a streaming invocation, printing results as they arrive (Ctrl-C stops); implied for a stream-only invocation")
+	cmd.Flags().BoolVar(&stream, "stream", false, "use the streaming form of an invocation that also has a single result, for example to follow logs (Ctrl-C stops); a stream-only invocation always streams")
 	return cmd
 }
 
@@ -330,31 +337,29 @@ func completeCatalogue(keyVals bool) cobra.CompletionFunc {
 	}
 }
 
-// runInvokeStream drives a streaming invocation, printing node-labelled results
-// as they arrive until every instance's stream ends or the user interrupts.
-func runInvokeStream(ctx context.Context, client adminpb.AdminAPIClient, selector, invocation string, args map[string]string) error {
+// runInvokeStream writes the results of a streaming invocation as they
+// arrive, until every instance's stream ends or the user interrupts.
+func runInvokeStream(ctx context.Context, client adminpb.AdminAPIClient, req *adminpb.InvokeRequest, s *streamWriter) error {
 	ctx, stop := signal.NotifyContext(ctx, os.Interrupt)
 	defer stop()
-	stream, err := client.InvokeStream(ctx, &adminpb.InvokeRequest{Service: selector, Invocation: invocation, Args: args})
+	stream, err := client.InvokeStream(ctx, req)
 	if err != nil {
 		return adminErr(err)
 	}
 	for {
 		msg, err := stream.Recv()
 		if err == io.EOF {
-			return nil
+			return s.err()
 		}
 		if err != nil {
 			if ctx.Err() != nil { // interrupted: a clean stop
-				return nil
+				return s.err()
 			}
 			return adminErr(err)
 		}
-		if msg.Error != "" {
-			fmt.Printf("  %s: ERROR %s\n", msg.Node, msg.Error)
-			continue
+		if err := s.write(msg); err != nil {
+			return err
 		}
-		fmt.Printf("  %s: %s\n", msg.Node, msg.ResultJson)
 	}
 }
 
