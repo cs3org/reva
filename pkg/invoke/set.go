@@ -43,6 +43,11 @@ type StreamHandler struct {
 // slice of one of these takes comma-separated values, and a pointer to one is
 // nil when the argument is absent. A time is RFC3339, or a duration that means
 // that long ago. Use struct{} for no arguments.
+//
+// A `default` tag gives the value of an absent argument. An `enum` tag
+// ("a,b,c"), or a field type that implements Enumerated, gives the only
+// values that the argument accepts. The catalog shows all of this, so that
+// the CLI can check and complete the arguments.
 func Typed[A any](fn func(ctx context.Context, args A) (Result, error)) Handler {
 	fields := argFields[A]()
 	return Handler{
