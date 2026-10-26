@@ -41,6 +41,7 @@ import (
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	"github.com/cs3org/reva/v3/internal/cli/state"
 	"github.com/cs3org/reva/v3/pkg/appctx"
+	"github.com/cs3org/reva/v3/pkg/cli/backend"
 	"github.com/cs3org/reva/v3/pkg/httpclient"
 	"github.com/spf13/pflag"
 	"golang.org/x/term"
@@ -56,9 +57,6 @@ import (
 // Runtime is built once per process from the flags, the environment and the
 // config file, in this order of precedence. It is the API of CLI plugins, so
 // its settings are read through accessors.
-//
-// TODO(T39): Backend(ctx) and Data(ctx), the metadata backend and the data
-// plane of pkg/cli/backend and pkg/cli/data.
 type Runtime struct {
 	gatewayAddr  string
 	adminHost    string
@@ -78,8 +76,8 @@ type Runtime struct {
 	reason    string
 	yes       bool
 	noElevate bool
-	// httpEndpoint is the HTTPS endpoint of the deployment, used by --as when
-	// the Admin API cannot be reached. The HTTPS transport sets it.
+	// httpEndpoint is the HTTPS endpoint of the deployment (--endpoint), for
+	// the HTTPS transport, and for --as when the Admin API cannot be reached.
 	httpEndpoint string
 	config       state.Config
 
@@ -91,11 +89,16 @@ type Runtime struct {
 	plane             Plane
 	need              string
 	usedAdmin         bool
+	transport         string
+	backend           backend.Backend
+	data              backend.DataPlane
 }
 
 // AddFlags adds the global flags, which set the runtime, to fs.
 func (r *Runtime) AddFlags(fs *pflag.FlagSet) {
 	fs.StringVar(&r.gatewayAddr, "gateway", "", "address of the gateway, host:port (env REVA_GATEWAY)")
+	fs.StringVar(&r.httpEndpoint, "endpoint", "", "HTTPS endpoint of the deployment, https://host (env REVA_ENDPOINT)")
+	fs.StringVar(&r.transport, "transport", "", "transport of the user plane: grpc, http or auto (env REVA_TRANSPORT; default "+DefaultTransport+")")
 	fs.StringVar(&r.adminHost, "admin-host", "", "address of the Admin API, host:port or unix:///path (env REVA_ADMIN_HOST; default the gateway)")
 	fs.BoolVar(&r.insecure, "insecure", false, "allow plaintext, without TLS, on the selected transport (development only)")
 	fs.BoolVar(&r.skipVerify, "skip-verify", false, "do not verify the server certificate (development only)")
@@ -168,6 +171,9 @@ func (r *Runtime) Load(flags *pflag.FlagSet) error {
 		r.noElevate = v
 	}
 	fill(&r.tokenValue, "token", "", "REVA_TOKEN")
+	if err := r.loadTransport(flags, c); err != nil {
+		return err
+	}
 	switch r.output {
 	case "table", "json":
 	case "csv":
@@ -189,7 +195,7 @@ func (r *Runtime) Client() (gateway.GatewayAPIClient, error) {
 		if r.insecure {
 			creds = insecure.NewCredentials()
 		}
-		opts := append(r.DialOptions(), grpc.WithTransportCredentials(creds))
+		opts := append(r.DialOptions(), grpc.WithTransportCredentials(creds), gatewayDialOption())
 		conn, err := grpc.NewClient(r.gatewayAddr, opts...)
 		if err != nil {
 			return nil, err

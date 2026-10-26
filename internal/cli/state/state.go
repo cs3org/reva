@@ -38,6 +38,8 @@ type Config struct {
 	Connection struct {
 		Gateway   string `toml:"gateway,omitempty" json:"gateway,omitempty"`
 		AdminHost string `toml:"admin_host,omitempty" json:"admin_host,omitempty"`
+		Transport string `toml:"transport,omitempty" json:"transport,omitempty"`
+		Endpoint  string `toml:"endpoint,omitempty" json:"endpoint,omitempty"`
 	} `toml:"connection" json:"connection"`
 	Auth struct {
 		Kerberos struct {
