@@ -19,43 +19,16 @@
 package cli
 
 import (
-	"errors"
-	"fmt"
-	"strings"
-
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
-	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/status"
+	"github.com/cs3org/reva/v3/pkg/cli/backend"
 )
 
-// StatusError is a CS3 response status that is not OK. Commands return it
-// so that a caller can read the code, not only the text.
-type StatusError struct {
-	Code  rpc.Code
-	Msg   string
-	Trace string
-}
-
-func (e *StatusError) Error() string {
-	return fmt.Sprintf("code=%s msg=%q support_trace=%q", e.Code, e.Msg, e.Trace)
-}
+// StatusError is a CS3 response status that is not OK. It is defined in
+// package backend, so that the backends can return it.
+type StatusError = backend.StatusError
 
 // Check returns nil for an OK status, else a *StatusError.
-func Check(s *rpc.Status) error {
-	if s.GetCode() == rpc.Code_CODE_OK {
-		return nil
-	}
-	return &StatusError{Code: s.GetCode(), Msg: s.GetMessage(), Trace: s.GetTrace()}
-}
+func Check(s *rpc.Status) error { return backend.Check(s) }
 
-// IsNotFound reports whether err is a not-found answer of a CS3 call. Some
-// providers still return their not-found as a Go error, which arrives as
-// gRPC Unknown with the text "not found", so that form counts too. Other
-// gRPC errors (a bad token, a scope failure) never count.
-func IsNotFound(err error) bool {
-	if se, ok := errors.AsType[*StatusError](err); ok {
-		return se.Code == rpc.Code_CODE_NOT_FOUND
-	}
-	s, ok := status.FromError(err)
-	return ok && s.Code() == codes.Unknown && strings.Contains(strings.ToLower(s.Message()), "not found")
-}
+// IsNotFound reports whether err is a not-found answer of a CS3 call.
+func IsNotFound(err error) bool { return backend.IsNotFound(err) }
