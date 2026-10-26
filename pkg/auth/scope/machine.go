@@ -39,14 +39,15 @@ import (
 // verify that the caller is a reva daemon holding the machine secret.
 const MachineScope = "machine"
 
-// machineScope authorizes any request carried by a machine-scoped token. A
+// machineScope authorizes any request carried by a machine-scoped token,
+// except an admin call: the admin plane needs the admin scope. A
 // machine scope can only be minted by a holder of the shared JWT secret (a reva
 // daemon), so, like the owner (user) scope, it grants access to all resources.
 // This is what lets an internal service re-sign a non-owner token (for example
 // a public-link user's) and still pass scope verification on a daemon-only RPC;
 // the RPC handler separately checks that the machine scope is present.
-func machineScope(_ context.Context, _ *authpb.Scope, _ any, _ *zerolog.Logger) (bool, error) {
-	return true, nil
+func machineScope(_ context.Context, _ *authpb.Scope, resource any, _ *zerolog.Logger) (bool, error) {
+	return !isAdminResource(resource), nil
 }
 
 // AddMachineScope adds the machine-auth marker scope. It only records that the
