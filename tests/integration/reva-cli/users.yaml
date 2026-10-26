@@ -1,0 +1,47 @@
+# This test covers the following operations, with the token of a normal user:
+# GetUserByClaim, FindUsers, GetUserGroups
+
+vars:
+  REVANODE: "localhost:9142"
+  TESTUSER: "testuser"
+  TESTPASS: "testpass"
+  OTHERUSER: "testreceivinguser"
+
+run:
+  login:
+    command: 'bash -c "echo {{TESTPASS}} | cmd/reva/reva --insecure --gateway={{REVANODE}} login --user={{TESTUSER}}"'
+    expectCode: 0
+
+  getUser:
+    command: "cmd/reva/reva --insecure --gateway={{REVANODE}} user get {{OTHERUSER}}"
+    expectCode: 0
+    outputContains:
+      - "test2@example.com"
+      - "1256"
+
+  getUserByMail:
+    command: "cmd/reva/reva --insecure --gateway={{REVANODE}} user get --claim mail test2@example.com -o json"
+    expectCode: 0
+    outputContains:
+      - '"username": "{{OTHERUSER}}"'
+
+  findUsers:
+    command: "cmd/reva/reva --insecure --gateway={{REVANODE}} user find example.com"
+    expectCode: 0
+    outputContains:
+      - "{{TESTUSER}}"
+      - "{{OTHERUSER}}"
+
+  getUserGroups:
+    command: "cmd/reva/reva --insecure --gateway={{REVANODE}} user groups {{OTHERUSER}}"
+    expectCode: 0
+    outputContains:
+      - "myusers"
+
+  unknownUser:
+    command: "cmd/reva/reva --insecure --gateway={{REVANODE}} user get nobody"
+    expectCode: 1
+
+  shortQuery:
+    command: "cmd/reva/reva --insecure --gateway={{REVANODE}} user find te"
+    expectCode: 2

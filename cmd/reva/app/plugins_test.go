@@ -39,7 +39,7 @@ func fake(use string) func(*cli.Runtime) *cobra.Command {
 }
 
 func init() {
-	cli.RegisterCommand("user", fake("user"))
+	cli.RegisterCommand("toolprobe", fake("toolprobe"))
 	cli.RegisterCommand("user account", fake("account"))
 	cli.RegisterCommand("share probe", fake("probe"))
 	cli.RegisterCommand("fleetprobe", func(rt *cli.Runtime) *cobra.Command {
@@ -78,16 +78,29 @@ func find(t *testing.T, root *cobra.Command, path string) *cobra.Command {
 
 func TestPluginsAreAttached(t *testing.T) {
 	root := revacmd.NewRoot()
-	if c := find(t, root, "user"); c.GroupID != "plugins" || !root.ContainsGroup("plugins") {
+	if c := find(t, root, "toolprobe"); c.GroupID != "plugins" || !root.ContainsGroup("plugins") {
 		t.Errorf("a plugin without a group is in the group %q, want plugins", c.GroupID)
 	}
-	find(t, root, "user account")
 	find(t, root, "share probe")
 	if c := find(t, root, "fleetprobe"); c.GroupID != "fleet" {
 		t.Errorf("the group of the plugin changed to %q", c.GroupID)
 	}
 	if c := find(t, root, "ls"); c.Short == "" {
 		t.Error("a plugin replaced the core command ls")
+	}
+}
+
+// The CERN plugin user account (reva-plugins) attaches under the core
+// command user.
+func TestPluginAttachesUnderUser(t *testing.T) {
+	root := revacmd.NewRoot()
+	user := find(t, root, "user")
+	if user.GroupID != "users" || user.Short == "" {
+		t.Errorf("`reva user` is not the core command: group %q", user.GroupID)
+	}
+	find(t, root, "user account")
+	for _, core := range []string{"get", "find", "groups"} {
+		find(t, root, "user "+core)
 	}
 }
 
@@ -110,7 +123,7 @@ func TestCheckPlugins(t *testing.T) {
 			t.Errorf("missing defect %q in:\n%v", want, err)
 		}
 	}
-	for _, ok := range []string{"cli.commands.user ", "cli.commands.user.account", "cli.commands.share.probe", "cli.commands.fleetprobe"} {
+	for _, ok := range []string{"cli.commands.toolprobe", "cli.commands.user.account", "cli.commands.share.probe", "cli.commands.fleetprobe"} {
 		if strings.Contains(err.Error()+" ", ok) {
 			t.Errorf("a good plugin is reported: %s", ok)
 		}
@@ -121,7 +134,7 @@ func TestCheckPlugins(t *testing.T) {
 }
 
 func TestRegisterCommandPanics(t *testing.T) {
-	for name, path := range map[string]string{"duplicate": "user", "dot": "otg.set", "empty": " "} {
+	for name, path := range map[string]string{"duplicate": "user account", "dot": "otg.set", "empty": " "} {
 		t.Run(name, func(t *testing.T) {
 			defer func() {
 				if recover() == nil {

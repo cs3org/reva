@@ -238,6 +238,7 @@ test-reva-cli: ## Run the reva CLI tests with judo (needs a running revad)
 	REVA_TOKEN_FILE=token judo tests/integration/reva-cli/file-operations.yaml
 	REVA_TOKEN_FILE=token judo tests/integration/reva-cli/versions-recycle.yaml
 	REVA_TOKEN_FILE=token judo tests/integration/reva-cli/grants.yaml
+	REVA_TOKEN_FILE=token judo tests/integration/reva-cli/users.yaml
 
 # Check that the unreleased changelog has an entry that links the pull
 # request. CI runs it on every pull request.
