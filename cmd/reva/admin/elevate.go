@@ -41,7 +41,7 @@ func elevateCommand() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			userTok, err := rt.Token()
+			userTok, err := rt.Token(cmd.Context())
 			if err != nil {
 				return err
 			}

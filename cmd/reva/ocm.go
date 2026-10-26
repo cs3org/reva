@@ -19,10 +19,14 @@
 package main
 
 import (
+	"cmp"
 	"context"
 	"errors"
 	"fmt"
 	"io"
+	"net/url"
+	"slices"
+	"strings"
 	"time"
 
 	gateway "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
@@ -44,58 +48,122 @@ import (
 )
 
 func ocmCommand(rt *cli.Runtime) *cobra.Command {
-	cmd := &cobra.Command{Use: "ocm", Short: "Manage Open Cloud Mesh invites, users and shares"}
+	cmd := &cobra.Command{
+		Use:   "ocm",
+		Short: "Share with people on another server",
+		Long: "Share with people whose files are on another server, with Open Cloud Mesh.\n\n" +
+			"It takes two steps. First you exchange an invitation, then you share.\n" +
+			"Start with 'ocm invite create'. 'ocm contacts' shows who you can already\n" +
+			"share with, and 'ocm share create' shares with them.",
+	}
 
-	invite := &cobra.Command{Use: "invite", Short: "Manage OCM invites"}
-	invite.AddCommand(ocmInviteGenerateCommand(rt), ocmInviteForwardCommand(rt))
+	invite := &cobra.Command{Use: "invite", Short: "Create, list and accept sharing invitations"}
+	invite.AddCommand(ocmInviteCreateCommand(rt), ocmInviteListCommand(rt), ocmInviteAcceptCommand(rt))
 
-	users := &cobra.Command{Use: "user", Short: "Manage the remote users that accepted your invites"}
-	users.AddCommand(ocmUserFindCommand(rt), ocmUserRemoveCommand(rt))
+	received := ocmReceivedCommand(rt)
+	received.AddCommand(ocmShareReceivedGetCommand(rt), ocmShareReceivedUpdateCommand(rt))
 
 	shares := &cobra.Command{Use: "share", Short: "Manage OCM shares"}
-	received := &cobra.Command{Use: "received", Short: "Manage the OCM shares you received"}
-	received.AddCommand(ocmShareReceivedListCommand(rt), ocmShareReceivedGetCommand(rt), ocmShareReceivedUpdateCommand(rt))
 	shares.AddCommand(ocmShareCreateCommand(rt), ocmShareListCommand(rt), ocmShareGetCommand(rt),
-		ocmShareUpdateCommand(rt), ocmShareRemoveCommand(rt), received)
+		ocmShareUpdateCommand(rt), ocmShareRemoveCommand(rt))
 
-	cmd.AddCommand(invite, users, shares)
+	cmd.AddCommand(invite, ocmContactsCommand(rt), ocmProvidersCommand(rt), received, shares, transferCommand(rt))
 	return cmd
 }
 
-func ocmInviteGenerateCommand(rt *cli.Runtime) *cobra.Command {
-	return &cobra.Command{
-		Use:   "generate",
-		Short: "Generate an invite token",
-		Args:  cobra.NoArgs,
+func ocmInviteCreateCommand(rt *cli.Runtime) *cobra.Command {
+	var description string
+	cmd := &cobra.Command{
+		Use:   "create",
+		Short: "Create an invitation to send to someone",
+		Long: "Create an invitation. Send the token to the person you want to share\n" +
+			"with. They accept it on their own provider.",
+		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			client, ctx, err := rt.Gateway(cmd.Context())
 			if err != nil {
 				return err
 			}
-			res, err := client.GenerateInviteToken(ctx, &invitepb.GenerateInviteTokenRequest{})
+			res, err := client.GenerateInviteToken(ctx, &invitepb.GenerateInviteTokenRequest{Description: description})
 			if err != nil {
 				return err
 			}
 			if res.Status.Code != rpc.Code_CODE_OK {
 				return formatError(res.Status)
 			}
-			return rt.Print(cmd.OutOrStdout(), res.InviteToken, func(w io.Writer) { fmt.Fprintln(w, res.InviteToken) })
+			return rt.Print(cmd.OutOrStdout(), res.InviteToken, func(w io.Writer) { renderInvites(w, []*invitepb.InviteToken{res.InviteToken}) })
 		},
 	}
+	cmd.Flags().StringVar(&description, "description", "", "note to remind you who this invitation was for")
+	return cmd
 }
 
-func ocmInviteForwardCommand(rt *cli.Runtime) *cobra.Command {
-	var token, idp string
-	cmd := &cobra.Command{
-		Use:   "forward",
-		Short: "Accept an invite token from another provider",
+func ocmInviteListCommand(rt *cli.Runtime) *cobra.Command {
+	return &cobra.Command{
+		Use:   "list",
+		Short: "List the invitations you have created",
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			client, ctx, err := rt.Gateway(cmd.Context())
 			if err != nil {
 				return err
 			}
-			providerInfo, err := client.GetInfoByDomain(ctx, &ocmprovider.GetInfoByDomainRequest{Domain: idp})
+			res, err := client.ListInviteTokens(ctx, &invitepb.ListInviteTokensRequest{})
+			if err != nil {
+				return err
+			}
+			if res.Status.Code != rpc.Code_CODE_OK {
+				return formatError(res.Status)
+			}
+			if len(res.InviteTokens) == 0 {
+				rt.Msg(cmd.ErrOrStderr(), "You have no open invitations.")
+			}
+			return rt.Print(cmd.OutOrStdout(), res.InviteTokens, func(w io.Writer) { renderInvites(w, res.InviteTokens) })
+		},
+	}
+}
+
+func renderInvites(w io.Writer, invites []*invitepb.InviteToken) {
+	t := table.NewWriter()
+	t.SetOutputMirror(w)
+	t.AppendHeader(table.Row{"Token", "Description", "Expires"})
+	for _, inv := range invites {
+		exp := "-"
+		if inv.Expiration != nil {
+			exp = time.Unix(int64(inv.Expiration.Seconds), 0).Format(time.RFC3339)
+		}
+		t.AppendRow(table.Row{inv.Token, inv.Description, exp})
+	}
+	t.Render()
+}
+
+func ocmInviteAcceptCommand(rt *cli.Runtime) *cobra.Command {
+	var providerDomain string
+	cmd := &cobra.Command{
+		Use:   "accept TOKEN",
+		Short: "Accept an invitation you were sent",
+		Long: "Accept an invitation.\n\n" +
+			"You need the token and the provider it came from. If you were sent a link,\n" +
+			"pass the link instead and the CLI reads both from it.",
+		Example: "  reva ocm invite accept abc123 --provider other-lab.org\n" +
+			"  reva ocm invite accept 'https://other-lab.org/ocm/invite?token=abc123'",
+		Args: cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			token, domain := splitInvite(args[0])
+			if token == "" {
+				return errors.New("the invitation link has no token")
+			}
+			if providerDomain != "" {
+				domain = providerDomain
+			}
+			if domain == "" {
+				return errors.New("pass --provider with the domain the invitation came from, or give the whole invitation link instead of just the token")
+			}
+			client, ctx, err := rt.Gateway(cmd.Context())
+			if err != nil {
+				return err
+			}
+			providerInfo, err := client.GetInfoByDomain(ctx, &ocmprovider.GetInfoByDomainRequest{Domain: domain})
 			if err != nil {
 				return err
 			}
@@ -112,22 +180,38 @@ func ocmInviteForwardCommand(rt *cli.Runtime) *cobra.Command {
 			if res.Status.Code != rpc.Code_CODE_OK {
 				return formatError(res.Status)
 			}
-			fmt.Fprintln(cmd.OutOrStdout(), res)
+			rt.Msg(cmd.ErrOrStderr(), "Accepted the invitation from %s. You can now share with them.", domain)
 			return nil
 		},
 	}
-	cmd.Flags().StringVar(&token, "token", "", "the invite token")
-	cmd.Flags().StringVar(&idp, "idp", "", "the domain of the provider that generated the token")
-	_ = cmd.MarkFlagRequired("token")
-	_ = cmd.MarkFlagRequired("idp")
+	cmd.Flags().StringVar(&providerDomain, "provider", "", "domain of the provider the invitation came from")
 	return cmd
 }
 
-func ocmUserFindCommand(rt *cli.Runtime) *cobra.Command {
-	return &cobra.Command{
-		Use:   "find [filter]",
-		Short: "Find the remote users that accepted your invites",
-		Args:  cobra.MaximumNArgs(1),
+// splitInvite reads the token and the provider domain from an invitation
+// link. A plain token gives an empty domain.
+func splitInvite(arg string) (token, domain string) {
+	u, err := url.Parse(arg)
+	if err != nil || u.Host == "" {
+		return arg, ""
+	}
+	q := u.Query()
+	domain = u.Host
+	if d := cmp.Or(q.Get("providerDomain"), q.Get("provider")); d != "" {
+		domain = d
+	}
+	return q.Get("token"), domain
+}
+
+func ocmContactsCommand(rt *cli.Runtime) *cobra.Command {
+	var remove string
+	cmd := &cobra.Command{
+		Use:     "contacts [FILTER]",
+		Aliases: []string{"users"},
+		Short:   "List the people you can share with",
+		Long: "List the remote users that accepted your invitations, or that you accepted\n" +
+			"an invitation from. --remove takes one off the list.",
+		Args: cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			var filter string
 			if len(args) == 1 {
@@ -144,12 +228,74 @@ func ocmUserFindCommand(rt *cli.Runtime) *cobra.Command {
 			if res.Status.Code != rpc.Code_CODE_OK {
 				return formatError(res.Status)
 			}
+			if remove != "" {
+				return removeContact(cmd, rt, client, ctx, res.AcceptedUsers, remove)
+			}
+			if len(res.AcceptedUsers) == 0 {
+				rt.Msg(cmd.ErrOrStderr(), "No contacts yet. Start with 'reva ocm invite create'.")
+			}
 			return rt.Print(cmd.OutOrStdout(), res.AcceptedUsers, func(w io.Writer) {
 				t := table.NewWriter()
 				t.SetOutputMirror(w)
-				t.AppendHeader(table.Row{"OpaqueId", "Idp", "Mail", "DisplayName"})
+				t.AppendHeader(table.Row{"Address", "OpaqueId", "Idp", "Mail", "DisplayName"})
 				for _, u := range res.AcceptedUsers {
-					t.AppendRow(table.Row{u.Id.OpaqueId, u.Id.Idp, u.Mail, u.DisplayName})
+					t.AppendRow(table.Row{u.Id.OpaqueId + "@" + u.Id.Idp, u.Id.OpaqueId, u.Id.Idp, u.Mail, u.DisplayName})
+				}
+				t.Render()
+			})
+		},
+	}
+	cmd.Flags().StringVar(&remove, "remove", "", "remove this contact, given as user@their-provider.org")
+	return cmd
+}
+
+// removeContact removes the contact with the address that a person types.
+// The remote provider assigns the user id, which is often not the name in
+// the address, so it also matches the mail.
+func removeContact(cmd *cobra.Command, rt *cli.Runtime, client gateway.GatewayAPIClient, ctx context.Context, contacts []*userpb.User, address string) error {
+	if !strings.Contains(address, "@") {
+		return errors.New("--remove takes an address like user@their-provider.org")
+	}
+	i := slices.IndexFunc(contacts, func(u *userpb.User) bool {
+		return strings.EqualFold(u.Id.OpaqueId+"@"+u.Id.Idp, address) || strings.EqualFold(u.Mail, address)
+	})
+	if i < 0 {
+		return fmt.Errorf("no contact with the address %s: 'reva ocm contacts' lists them", address)
+	}
+	res, err := client.DeleteAcceptedUser(ctx, &invitepb.DeleteAcceptedUserRequest{RemoteUserId: contacts[i].Id})
+	if err != nil {
+		return err
+	}
+	if res.Status.Code != rpc.Code_CODE_OK {
+		return formatError(res.Status)
+	}
+	rt.Msg(cmd.ErrOrStderr(), "Removed %s.", address)
+	return nil
+}
+
+func ocmProvidersCommand(rt *cli.Runtime) *cobra.Command {
+	return &cobra.Command{
+		Use:   "providers",
+		Short: "List the other servers you can share with",
+		Args:  cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			client, ctx, err := rt.Gateway(cmd.Context())
+			if err != nil {
+				return err
+			}
+			res, err := client.ListAllProviders(ctx, &ocmprovider.ListAllProvidersRequest{})
+			if err != nil {
+				return err
+			}
+			if res.Status.Code != rpc.Code_CODE_OK {
+				return formatError(res.Status)
+			}
+			return rt.Print(cmd.OutOrStdout(), res.Providers, func(w io.Writer) {
+				t := table.NewWriter()
+				t.SetOutputMirror(w)
+				t.AppendHeader(table.Row{"Domain", "Name", "Homepage"})
+				for _, p := range res.Providers {
+					t.AppendRow(table.Row{p.Domain, cmp.Or(p.FullName, p.Name), p.Homepage})
 				}
 				t.Render()
 			})
@@ -157,42 +303,11 @@ func ocmUserFindCommand(rt *cli.Runtime) *cobra.Command {
 	}
 }
 
-func ocmUserRemoveCommand(rt *cli.Runtime) *cobra.Command {
-	var user, idp string
-	cmd := &cobra.Command{
-		Use:   "remove",
-		Short: "Remove a remote user from your list",
-		Args:  cobra.NoArgs,
-		RunE: func(cmd *cobra.Command, args []string) error {
-			client, ctx, err := rt.Gateway(cmd.Context())
-			if err != nil {
-				return err
-			}
-			res, err := client.DeleteAcceptedUser(ctx, &invitepb.DeleteAcceptedUserRequest{
-				RemoteUserId: &userpb.UserId{Type: userpb.UserType_USER_TYPE_FEDERATED, Idp: idp, OpaqueId: user},
-			})
-			if err != nil {
-				return err
-			}
-			if res.Status.Code != rpc.Code_CODE_OK {
-				return formatError(res.Status)
-			}
-			fmt.Fprintln(cmd.OutOrStdout(), "OK")
-			return nil
-		},
-	}
-	cmd.Flags().StringVar(&user, "user", "", "the id of the remote user")
-	cmd.Flags().StringVar(&idp, "idp", "", "the idp of the remote user")
-	_ = cmd.MarkFlagRequired("user")
-	_ = cmd.MarkFlagRequired("idp")
-	return cmd
-}
-
 func ocmShareCreateCommand(rt *cli.Runtime) *cobra.Command {
 	var grantee, idp, role string
 	var webdav, webapp bool
 	cmd := &cobra.Command{
-		Use:               "create <path>",
+		Use:               "create PATH",
 		Short:             "Share a file or folder with a remote user",
 		Args:              cobra.ExactArgs(1),
 		ValidArgsFunction: completeRemotePath(rt, 1),
@@ -316,7 +431,7 @@ func ocmShareListCommand(rt *cli.Runtime) *cobra.Command {
 
 func ocmShareGetCommand(rt *cli.Runtime) *cobra.Command {
 	return &cobra.Command{
-		Use:               "get <share_id>",
+		Use:               "get SHARE_ID",
 		Short:             "Show an OCM share",
 		Args:              cobra.ExactArgs(1),
 		ValidArgsFunction: completeOCMShareIDs(rt),
@@ -340,7 +455,7 @@ func ocmShareGetCommand(rt *cli.Runtime) *cobra.Command {
 func ocmShareUpdateCommand(rt *cli.Runtime) *cobra.Command {
 	var webdavRole, webappRole string
 	cmd := &cobra.Command{
-		Use:               "update <share_id>",
+		Use:               "update SHARE_ID",
 		Short:             "Change the access of an OCM share",
 		Args:              cobra.ExactArgs(1),
 		ValidArgsFunction: completeOCMShareIDs(rt),
@@ -386,7 +501,7 @@ func ocmShareUpdateCommand(rt *cli.Runtime) *cobra.Command {
 			if res.Status.Code != rpc.Code_CODE_OK {
 				return formatError(res.Status)
 			}
-			fmt.Fprintln(cmd.OutOrStdout(), "OK")
+			rt.Msg(cmd.ErrOrStderr(), "OK")
 			return nil
 		},
 	}
@@ -397,7 +512,7 @@ func ocmShareUpdateCommand(rt *cli.Runtime) *cobra.Command {
 
 func ocmShareRemoveCommand(rt *cli.Runtime) *cobra.Command {
 	return &cobra.Command{
-		Use:               "remove <share_id>",
+		Use:               "remove SHARE_ID",
 		Short:             "Remove an OCM share",
 		Args:              cobra.ExactArgs(1),
 		ValidArgsFunction: completeOCMShareIDs(rt),
@@ -413,16 +528,16 @@ func ocmShareRemoveCommand(rt *cli.Runtime) *cobra.Command {
 			if res.Status.Code != rpc.Code_CODE_OK {
 				return formatError(res.Status)
 			}
-			fmt.Fprintln(cmd.OutOrStdout(), "OK")
+			rt.Msg(cmd.ErrOrStderr(), "OK")
 			return nil
 		},
 	}
 }
 
-func ocmShareReceivedListCommand(rt *cli.Runtime) *cobra.Command {
+func ocmReceivedCommand(rt *cli.Runtime) *cobra.Command {
 	return &cobra.Command{
-		Use:   "list",
-		Short: "List the OCM shares you received",
+		Use:   "received",
+		Short: "List shares you have received from another server",
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			client, ctx, err := rt.Gateway(cmd.Context())
@@ -454,7 +569,7 @@ func ocmShareReceivedListCommand(rt *cli.Runtime) *cobra.Command {
 
 func ocmShareReceivedGetCommand(rt *cli.Runtime) *cobra.Command {
 	return &cobra.Command{
-		Use:               "get <share_id>",
+		Use:               "get SHARE_ID",
 		Short:             "Show an OCM share you received",
 		Args:              cobra.ExactArgs(1),
 		ValidArgsFunction: completeReceivedOCMShareIDs(rt),
@@ -478,7 +593,7 @@ func ocmShareReceivedGetCommand(rt *cli.Runtime) *cobra.Command {
 func ocmShareReceivedUpdateCommand(rt *cli.Runtime) *cobra.Command {
 	var state string
 	cmd := &cobra.Command{
-		Use:               "update <share_id>",
+		Use:               "update SHARE_ID",
 		Short:             "Accept or reject an OCM share you received",
 		Args:              cobra.ExactArgs(1),
 		ValidArgsFunction: completeReceivedOCMShareIDs(rt),
@@ -516,7 +631,7 @@ func ocmShareReceivedUpdateCommand(rt *cli.Runtime) *cobra.Command {
 			if updateRes.Status.Code != rpc.Code_CODE_OK {
 				return formatError(updateRes.Status)
 			}
-			fmt.Fprintln(cmd.OutOrStdout(), "OK")
+			rt.Msg(cmd.ErrOrStderr(), "OK")
 			return nil
 		},
 	}

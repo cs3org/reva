@@ -20,6 +20,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"strings"
@@ -52,30 +53,34 @@ func shareCommand(rt *cli.Runtime) *cobra.Command {
 }
 
 func shareCreateCommand(rt *cli.Runtime) *cobra.Command {
-	var grantType, grantee, idp, role, userType string
+	var users, groups []string
+	var idp, role, userType string
 	cmd := &cobra.Command{
-		Use:               "create <path>",
-		Short:             "Share a file or folder with a user or a group",
+		Use:               "create PATH",
+		Short:             "Share a file or folder with users and groups",
+		Example:           "  reva share create /home/Documents --with marie --role editor",
 		Args:              cobra.ExactArgs(1),
 		ValidArgsFunction: completeRemotePath(rt, 1),
 		RunE: func(cmd *cobra.Command, args []string) error {
+			if len(users) == 0 && len(groups) == 0 {
+				return errors.New("pass --with USER or --with-group GROUP")
+			}
 			perm, err := getSharePerm(role)
 			if err != nil {
 				return err
 			}
-			grant := &collaboration.ShareGrant{
-				Permissions: &collaboration.SharePermissions{Permissions: perm},
-				Grantee:     &provider.Grantee{},
+			var grantees []*provider.Grantee
+			for _, u := range users {
+				grantees = append(grantees, &provider.Grantee{
+					Type: provider.GranteeType_GRANTEE_TYPE_USER,
+					Id:   &provider.Grantee_UserId{UserId: &userpb.UserId{Idp: idp, OpaqueId: u, Type: utils.UserTypeMap(userType)}},
+				})
 			}
-			switch grantType {
-			case "user":
-				grant.Grantee.Type = provider.GranteeType_GRANTEE_TYPE_USER
-				grant.Grantee.Id = &provider.Grantee_UserId{UserId: &userpb.UserId{Idp: idp, OpaqueId: grantee, Type: utils.UserTypeMap(userType)}}
-			case "group":
-				grant.Grantee.Type = provider.GranteeType_GRANTEE_TYPE_GROUP
-				grant.Grantee.Id = &provider.Grantee_GroupId{GroupId: &grouppb.GroupId{Idp: idp, OpaqueId: grantee}}
-			default:
-				return fmt.Errorf("unknown grantee type %q: use user or group", grantType)
+			for _, g := range groups {
+				grantees = append(grantees, &provider.Grantee{
+					Type: provider.GranteeType_GRANTEE_TYPE_GROUP,
+					Id:   &provider.Grantee_GroupId{GroupId: &grouppb.GroupId{Idp: idp, OpaqueId: g}},
+				})
 			}
 
 			client, ctx, err := rt.Gateway(cmd.Context())
@@ -89,45 +94,50 @@ func shareCreateCommand(rt *cli.Runtime) *cobra.Command {
 			if res.Status.Code != rpc.Code_CODE_OK {
 				return formatError(res.Status)
 			}
-			shareRes, err := client.CreateShare(ctx, &collaboration.CreateShareRequest{ResourceInfo: res.Info, Grant: grant})
-			if err != nil {
-				return err
+			shares := make([]*collaboration.Share, 0, len(grantees))
+			for _, g := range grantees {
+				shareRes, err := client.CreateShare(ctx, &collaboration.CreateShareRequest{
+					ResourceInfo: res.Info,
+					Grant:        &collaboration.ShareGrant{Permissions: &collaboration.SharePermissions{Permissions: perm}, Grantee: g},
+				})
+				if err != nil {
+					return err
+				}
+				if shareRes.Status.Code != rpc.Code_CODE_OK {
+					return formatError(shareRes.Status)
+				}
+				shares = append(shares, shareRes.Share)
 			}
-			if shareRes.Status.Code != rpc.Code_CODE_OK {
-				return formatError(shareRes.Status)
-			}
-			return rt.Print(cmd.OutOrStdout(), shareRes.Share, func(w io.Writer) {
-				renderShares(w, []*collaboration.Share{shareRes.Share})
-			})
+			return rt.Print(cmd.OutOrStdout(), shares, func(w io.Writer) { renderShares(w, shares) })
 		},
 	}
-	cmd.Flags().StringVar(&grantType, "type", "user", "grantee type: user or group")
-	cmd.Flags().StringVar(&grantee, "grantee", "", "the user or group to share with")
-	cmd.Flags().StringVar(&idp, "idp", "", "the idp of the grantee (default: the idp of the caller)")
-	cmd.Flags().StringVar(&role, "role", "viewer", "role of the grantee: viewer, editor, collab or denied")
-	cmd.Flags().StringVar(&userType, "user-type", "primary", "the account type of the grantee")
-	_ = cmd.MarkFlagRequired("grantee")
+	cmd.Flags().StringArrayVar(&users, "with", nil, "user name to share with (repeatable)")
+	cmd.Flags().StringArrayVar(&groups, "with-group", nil, "group to share with (repeatable)")
+	cmd.Flags().StringVar(&idp, "idp", "", "the idp of the grantees (default: the idp of the caller)")
+	cmd.Flags().StringVar(&role, "role", "viewer", "viewer, editor, manager, or denied")
+	cmd.Flags().StringVar(&userType, "user-type", "primary", "the account type of the users")
 	return cmd
 }
 
 func shareListCommand(rt *cli.Runtime) *cobra.Command {
 	var resID string
 	cmd := &cobra.Command{
-		Use:   "list",
-		Short: "List the shares you manage",
-		Args:  cobra.NoArgs,
+		Use:               "list [PATH]",
+		Short:             "List the shares on a path, or all the shares you manage",
+		Args:              cobra.MaximumNArgs(1),
+		ValidArgsFunction: completeRemotePath(rt, 1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			req := &collaboration.ListSharesRequest{}
-			if resID != "" {
-				id, err := parseResourceID(resID)
-				if err != nil {
-					return err
-				}
-				req.Filters = []*collaboration.Filter{share.ResourceIDFilter(id)}
-			}
 			client, ctx, err := rt.Gateway(cmd.Context())
 			if err != nil {
 				return err
+			}
+			id, err := resourceFilter(ctx, client, args, resID)
+			if err != nil {
+				return err
+			}
+			req := &collaboration.ListSharesRequest{}
+			if id != nil {
+				req.Filters = []*collaboration.Filter{share.ResourceIDFilter(id)}
 			}
 			res, err := client.ListShares(ctx, req)
 			if err != nil {
@@ -143,10 +153,31 @@ func shareListCommand(rt *cli.Runtime) *cobra.Command {
 	return cmd
 }
 
+// resourceFilter returns the resource that a list command filters on: the
+// PATH argument or --by-resource-id. nil means no filter.
+func resourceFilter(ctx context.Context, client gateway.GatewayAPIClient, args []string, resID string) (*provider.ResourceId, error) {
+	switch {
+	case len(args) == 1 && resID != "":
+		return nil, errors.New("pass either PATH or --by-resource-id, not both")
+	case resID != "":
+		return parseResourceID(resID)
+	case len(args) == 1:
+		res, err := client.Stat(ctx, &provider.StatRequest{Ref: &provider.Reference{Path: args[0]}})
+		if err != nil {
+			return nil, err
+		}
+		if res.Status.Code != rpc.Code_CODE_OK {
+			return nil, formatError(res.Status)
+		}
+		return res.Info.Id, nil
+	}
+	return nil, nil
+}
+
 func shareUpdateCommand(rt *cli.Runtime) *cobra.Command {
 	var role string
 	cmd := &cobra.Command{
-		Use:               "update <share_id>",
+		Use:               "update SHARE_ID",
 		Short:             "Change the role of a share",
 		Args:              cobra.ExactArgs(1),
 		ValidArgsFunction: completeShareIDs(rt),
@@ -176,7 +207,7 @@ func shareUpdateCommand(rt *cli.Runtime) *cobra.Command {
 			if res.Status.Code != rpc.Code_CODE_OK {
 				return formatError(res.Status)
 			}
-			fmt.Fprintln(cmd.OutOrStdout(), "OK")
+			rt.Msg(cmd.ErrOrStderr(), "OK")
 			return nil
 		},
 	}
@@ -186,7 +217,7 @@ func shareUpdateCommand(rt *cli.Runtime) *cobra.Command {
 
 func shareRemoveCommand(rt *cli.Runtime) *cobra.Command {
 	return &cobra.Command{
-		Use:               "remove <share_id>",
+		Use:               "remove SHARE_ID",
 		Short:             "Remove a share",
 		Args:              cobra.ExactArgs(1),
 		ValidArgsFunction: completeShareIDs(rt),
@@ -202,7 +233,7 @@ func shareRemoveCommand(rt *cli.Runtime) *cobra.Command {
 			if res.Status.Code != rpc.Code_CODE_OK {
 				return formatError(res.Status)
 			}
-			fmt.Fprintln(cmd.OutOrStdout(), "OK")
+			rt.Msg(cmd.ErrOrStderr(), "Removed share %s", args[0])
 			return nil
 		},
 	}
@@ -242,7 +273,7 @@ func shareReceivedListCommand(rt *cli.Runtime) *cobra.Command {
 func shareReceivedUpdateCommand(rt *cli.Runtime) *cobra.Command {
 	var state string
 	cmd := &cobra.Command{
-		Use:   "update <share_id>",
+		Use:   "update SHARE_ID",
 		Short: "Accept or reject a share you received",
 		Args:  cobra.ExactArgs(1),
 		ValidArgsFunction: completeIDs(rt, func(ctx context.Context, client gateway.GatewayAPIClient) ([]string, error) {
@@ -290,7 +321,7 @@ func shareReceivedUpdateCommand(rt *cli.Runtime) *cobra.Command {
 			if updateRes.Status.Code != rpc.Code_CODE_OK {
 				return formatError(updateRes.Status)
 			}
-			fmt.Fprintln(cmd.OutOrStdout(), "OK")
+			rt.Msg(cmd.ErrOrStderr(), "OK")
 			return nil
 		},
 	}
@@ -298,18 +329,18 @@ func shareReceivedUpdateCommand(rt *cli.Runtime) *cobra.Command {
 	return cmd
 }
 
-func publicShareCommand(rt *cli.Runtime) *cobra.Command {
-	cmd := &cobra.Command{Use: "public-share", Short: "Manage public links"}
-	cmd.AddCommand(publicShareCreateCommand(rt), publicShareListCommand(rt), publicShareUpdateCommand(rt), publicShareRemoveCommand(rt))
+func linkCommand(rt *cli.Runtime) *cobra.Command {
+	cmd := &cobra.Command{Use: "link", Short: "Create and manage public links"}
+	cmd.AddCommand(linkCreateCommand(rt), linkListCommand(rt), linkUpdateCommand(rt), linkRemoveCommand(rt))
 	return cmd
 }
 
-func publicShareCreateCommand(rt *cli.Runtime) *cobra.Command {
+func linkCreateCommand(rt *cli.Runtime) *cobra.Command {
 	var role, description string
 	var internal bool
 	cmd := &cobra.Command{
-		Use:               "create <path>",
-		Short:             "Create a public link to a file or folder",
+		Use:               "create PATH",
+		Short:             "Create a public link",
 		Args:              cobra.ExactArgs(1),
 		ValidArgsFunction: completeRemotePath(rt, 1),
 		RunE: func(cmd *cobra.Command, args []string) error {
@@ -351,18 +382,23 @@ func publicShareCreateCommand(rt *cli.Runtime) *cobra.Command {
 	return cmd
 }
 
-func publicShareListCommand(rt *cli.Runtime) *cobra.Command {
+func linkListCommand(rt *cli.Runtime) *cobra.Command {
 	var resID string
 	cmd := &cobra.Command{
-		Use:   "list",
-		Short: "List the public links you created",
-		Args:  cobra.NoArgs,
+		Use:               "list [PATH]",
+		Short:             "List the public links on a path, or all the links you created",
+		Args:              cobra.MaximumNArgs(1),
+		ValidArgsFunction: completeRemotePath(rt, 1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			client, ctx, err := rt.Gateway(cmd.Context())
 			if err != nil {
 				return err
 			}
-			shares, err := listPublicShares(ctx, client, resID)
+			id, err := resourceFilter(ctx, client, args, resID)
+			if err != nil {
+				return err
+			}
+			shares, err := listPublicShares(ctx, client, id)
 			if err != nil {
 				return err
 			}
@@ -373,10 +409,10 @@ func publicShareListCommand(rt *cli.Runtime) *cobra.Command {
 	return cmd
 }
 
-func publicShareUpdateCommand(rt *cli.Runtime) *cobra.Command {
+func linkUpdateCommand(rt *cli.Runtime) *cobra.Command {
 	var role, description string
 	cmd := &cobra.Command{
-		Use:               "update <share_id>",
+		Use:               "update LINK_ID",
 		Short:             "Change the role or the description of a public link",
 		Args:              cobra.ExactArgs(1),
 		ValidArgsFunction: completePublicShareIDs(rt),
@@ -411,7 +447,7 @@ func publicShareUpdateCommand(rt *cli.Runtime) *cobra.Command {
 					return formatError(res.Status)
 				}
 			}
-			fmt.Fprintln(cmd.OutOrStdout(), "OK")
+			rt.Msg(cmd.ErrOrStderr(), "OK")
 			return nil
 		},
 	}
@@ -420,9 +456,9 @@ func publicShareUpdateCommand(rt *cli.Runtime) *cobra.Command {
 	return cmd
 }
 
-func publicShareRemoveCommand(rt *cli.Runtime) *cobra.Command {
+func linkRemoveCommand(rt *cli.Runtime) *cobra.Command {
 	return &cobra.Command{
-		Use:               "remove <share_id>",
+		Use:               "remove LINK_ID",
 		Short:             "Remove a public link",
 		Args:              cobra.ExactArgs(1),
 		ValidArgsFunction: completePublicShareIDs(rt),
@@ -438,7 +474,7 @@ func publicShareRemoveCommand(rt *cli.Runtime) *cobra.Command {
 			if res.Status.Code != rpc.Code_CODE_OK {
 				return formatError(res.Status)
 			}
-			fmt.Fprintln(cmd.OutOrStdout(), "OK")
+			rt.Msg(cmd.ErrOrStderr(), "Removed link %s", args[0])
 			return nil
 		},
 	}
@@ -446,7 +482,7 @@ func publicShareRemoveCommand(rt *cli.Runtime) *cobra.Command {
 
 // listPublicShares lists the links that the caller created. The creator
 // filter needs the user id, so it asks the gateway who the token belongs to.
-func listPublicShares(ctx context.Context, client gateway.GatewayAPIClient, resID string) ([]*link.PublicShare, error) {
+func listPublicShares(ctx context.Context, client gateway.GatewayAPIClient, resID *provider.ResourceId) ([]*link.PublicShare, error) {
 	token, _ := appctx.ContextGetToken(ctx)
 	who, err := client.WhoAmI(ctx, &gateway.WhoAmIRequest{Token: token})
 	if err != nil {
@@ -459,12 +495,8 @@ func listPublicShares(ctx context.Context, client gateway.GatewayAPIClient, resI
 		Type: link.ListPublicSharesRequest_Filter_TYPE_CREATOR,
 		Term: &link.ListPublicSharesRequest_Filter_Creator{Creator: who.User.Id},
 	}}
-	if resID != "" {
-		id, err := parseResourceID(resID)
-		if err != nil {
-			return nil, err
-		}
-		filters = append(filters, publicshare.ResourceIDFilter(id))
+	if resID != nil {
+		filters = append(filters, publicshare.ResourceIDFilter(resID))
 	}
 	res, err := client.ListPublicShares(ctx, &link.ListPublicSharesRequest{Filters: filters})
 	if err != nil {
@@ -492,7 +524,7 @@ func completeShareIDs(rt *cli.Runtime) cobra.CompletionFunc {
 
 func completePublicShareIDs(rt *cli.Runtime) cobra.CompletionFunc {
 	return completeIDs(rt, func(ctx context.Context, client gateway.GatewayAPIClient) ([]string, error) {
-		shares, err := listPublicShares(ctx, client, "")
+		shares, err := listPublicShares(ctx, client, nil)
 		if err != nil {
 			return nil, err
 		}
@@ -534,7 +566,7 @@ func getSharePerm(role string) (*provider.ResourcePermissions, error) {
 		return permissions.NewViewerRole().CS3ResourcePermissions(), nil
 	case "editor":
 		return permissions.NewEditorRole().CS3ResourcePermissions(), nil
-	case "collab":
+	case "manager":
 		return permissions.NewManagerRole().CS3ResourcePermissions(), nil
 	case "denied":
 		return &provider.ResourcePermissions{}, nil

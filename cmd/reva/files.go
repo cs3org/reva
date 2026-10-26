@@ -33,7 +33,7 @@ import (
 func lsCommand(rt *cli.Runtime) *cobra.Command {
 	var long, full bool
 	cmd := &cobra.Command{
-		Use:               "ls <path>",
+		Use:               "ls PATH",
 		Short:             "List the contents of a folder",
 		Args:              cobra.ExactArgs(1),
 		ValidArgsFunction: completeRemotePath(rt, 1),
@@ -71,7 +71,7 @@ func lsCommand(rt *cli.Runtime) *cobra.Command {
 
 func statCommand(rt *cli.Runtime) *cobra.Command {
 	return &cobra.Command{
-		Use:               "stat <path>",
+		Use:               "stat PATH",
 		Short:             "Show the metadata of a file or folder",
 		Args:              cobra.ExactArgs(1),
 		ValidArgsFunction: completeRemotePath(rt, 1),
@@ -94,7 +94,7 @@ func statCommand(rt *cli.Runtime) *cobra.Command {
 
 func mkdirCommand(rt *cli.Runtime) *cobra.Command {
 	return &cobra.Command{
-		Use:               "mkdir <path>",
+		Use:               "mkdir PATH",
 		Short:             "Create a folder",
 		Args:              cobra.ExactArgs(1),
 		ValidArgsFunction: completeRemotePath(rt, 1),
@@ -117,7 +117,7 @@ func mkdirCommand(rt *cli.Runtime) *cobra.Command {
 
 func mvCommand(rt *cli.Runtime) *cobra.Command {
 	return &cobra.Command{
-		Use:               "mv <source> <destination>",
+		Use:               "mv SOURCE DEST",
 		Short:             "Move or rename a file or folder",
 		Args:              cobra.ExactArgs(2),
 		ValidArgsFunction: completeRemotePath(rt, 2),
@@ -143,7 +143,7 @@ func mvCommand(rt *cli.Runtime) *cobra.Command {
 
 func rmCommand(rt *cli.Runtime) *cobra.Command {
 	return &cobra.Command{
-		Use:               "rm <path>",
+		Use:               "rm PATH",
 		Short:             "Remove a file or folder",
 		Args:              cobra.ExactArgs(1),
 		ValidArgsFunction: completeRemotePath(rt, 1),
@@ -166,7 +166,7 @@ func rmCommand(rt *cli.Runtime) *cobra.Command {
 
 func touchCommand(rt *cli.Runtime) *cobra.Command {
 	return &cobra.Command{
-		Use:               "touch <path>",
+		Use:               "touch PATH",
 		Short:             "Create an empty file",
 		Args:              cobra.ExactArgs(1),
 		ValidArgsFunction: completeRemotePath(rt, 1),

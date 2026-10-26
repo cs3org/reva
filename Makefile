@@ -209,7 +209,8 @@ test-integration: revad ## Run the integration tests (needs Redis and MySQL)
 	go test -race ./tests/integration/...
 
 # Run the reva CLI tests in tests/integration/reva-cli with judo
-# (npm install -g @intuit/judo). Build reva first and start revad with
+# (npm install -g @intuit/judo). REVA_TOKEN_FILE keeps the login token of the
+# tests out of the user's config dir. Build reva first and start revad with
 # tests/integration/reva-cli/config/revad-localfs.toml: see
 # .github/workflows/test-reva-cli.yml for the setup.
 .PHONY: test-reva-cli
@@ -218,9 +219,9 @@ test-reva-cli: ## Run the reva CLI tests with judo (needs a running revad)
 		echo "Error: judo not found. Install with: npm install -g @intuit/judo"; \
 		exit 1; \
 	fi
-	judo tests/integration/reva-cli/file-operations.yaml
-	judo tests/integration/reva-cli/versions-recycle.yaml
-	judo tests/integration/reva-cli/grants.yaml
+	REVA_TOKEN_FILE=token judo tests/integration/reva-cli/file-operations.yaml
+	REVA_TOKEN_FILE=token judo tests/integration/reva-cli/versions-recycle.yaml
+	REVA_TOKEN_FILE=token judo tests/integration/reva-cli/grants.yaml
 
 # Check that the unreleased changelog has an entry that links the pull
 # request. CI runs it on every pull request.

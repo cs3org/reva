@@ -60,7 +60,7 @@ func transferCommand(rt *cli.Runtime) *cobra.Command {
 func transferTxCommand(rt *cli.Runtime, name, short string,
 	call func(context.Context, gateway.GatewayAPIClient, *datatx.TxId) (*rpc.Status, *datatx.TxInfo, error)) *cobra.Command {
 	return &cobra.Command{
-		Use:   name + " <transfer_id>",
+		Use:   name + " TRANSFER_ID",
 		Short: short,
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {

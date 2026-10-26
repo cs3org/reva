@@ -58,7 +58,7 @@ func isSocketHost(host string) bool { return strings.HasPrefix(host, "unix:") }
 const adminMaxRecvMsgSize = 64 << 20
 
 func adminConn(host string) (*grpc.ClientConn, error) {
-	opts := []grpc.DialOption{grpc.WithDefaultCallOptions(grpc.MaxCallRecvMsgSize(adminMaxRecvMsgSize))}
+	opts := append(rt.DialOptions(), grpc.WithDefaultCallOptions(grpc.MaxCallRecvMsgSize(adminMaxRecvMsgSize)))
 	if rt.Insecure || isSocketHost(host) {
 		opts = append(opts, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	} else {

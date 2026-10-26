@@ -10,15 +10,15 @@ vars:
 
 run:
   login:
-    command: 'bash -c "echo {{TESTPASS}} | cmd/reva/reva --insecure --host={{REVANODE}} --token-file=token login --username={{TESTUSER}} basic"'
+    command: 'bash -c "echo {{TESTPASS}} | cmd/reva/reva --insecure --gateway={{REVANODE}} login --user={{TESTUSER}}"'
     expectCode: 0
 
   makeDir:
-    command: "cmd/reva/reva --insecure --host={{REVANODE}} --token-file=token mkdir {{BASEDIR}}/versions-recycle-tests"
+    command: "cmd/reva/reva --insecure --gateway={{REVANODE}} mkdir {{BASEDIR}}/versions-recycle-tests"
     expectCode: 0
 
   checkFolder:
-    command: "cmd/reva/reva --insecure --host={{REVANODE}} --token-file=token ls {{BASEDIR}}/"
+    command: "cmd/reva/reva --insecure --gateway={{REVANODE}} ls {{BASEDIR}}/"
     expectCode: 0
     outputContains:
       - "versions-recycle-tests"
@@ -27,13 +27,13 @@ run:
   purgeRecycleInitial:
     command: |
       bash -c "
-        KEY=$(cmd/reva/reva --insecure --host={{REVANODE}} --token-file=token recycle list 2>&1 | grep -o 'key:\"[^\"]*\"' | head -1 | sed 's/key:\"//;s/\"//' | tr -d '[:space:]')
+        KEY=$(cmd/reva/reva --insecure --gateway={{REVANODE}} trash list 2>&1 | grep -o 'key:\"[^\"]*\"' | head -1 | sed 's/key:\"//;s/\"//' | tr -d '[:space:]')
         if [ -n \"$KEY\" ] && [ \"$KEY\" != \"\" ]; then
-          cmd/reva/reva --insecure --host={{REVANODE}} --token-file=token recycle purge \"$KEY\"
+          cmd/reva/reva --insecure --gateway={{REVANODE}} trash purge \"$KEY\"
         else
           echo \"Error: Could not extract recycle key from output\"
-          echo \"Debug - recycle list output:\"
-          cmd/reva/reva --insecure --host={{REVANODE}} --token-file=token recycle list 2>&1 || true
+          echo \"Debug - trash list output:\"
+          cmd/reva/reva --insecure --gateway={{REVANODE}} trash list 2>&1 || true
           echo \"Extracted key was: [\"$KEY\"]\"
           exit 1
         fi
@@ -43,11 +43,11 @@ run:
   verifyEmptyAfterPurge:
     command: |
       bash -c "
-        KEY=$(cmd/reva/reva --insecure --host={{REVANODE}} --token-file=token recycle list 2>&1 | grep -o 'key:\"[^\"]*\"' | head -1 | sed 's/key:\"//;s/\"//' | tr -d '[:space:]')
+        KEY=$(cmd/reva/reva --insecure --gateway={{REVANODE}} trash list 2>&1 | grep -o 'key:\"[^\"]*\"' | head -1 | sed 's/key:\"//;s/\"//' | tr -d '[:space:]')
         if [ -n \"$KEY\" ] && [ \"$KEY\" != \"\" ]; then
           echo \"Error: Recycle does not seem to be empty\"
-          echo \"Debug - recycle list output:\"
-          cmd/reva/reva --insecure --host={{REVANODE}} --token-file=token recycle list 2>&1 || true
+          echo \"Debug - trash list output:\"
+          cmd/reva/reva --insecure --gateway={{REVANODE}} trash list 2>&1 || true
           exit 1
         else
           exit 0
@@ -60,12 +60,12 @@ run:
     prerequisiteCwd: .
     prerequisites:
       - 'echo "Initial content" > versioned-file.txt'
-    command: "cmd/reva/reva --insecure --host={{REVANODE}} --token-file=token upload versioned-file.txt {{BASEDIR}}/versions-recycle-tests/versioned-file.txt"
+    command: "cmd/reva/reva --insecure --gateway={{REVANODE}} cp -f versioned-file.txt cb:{{BASEDIR}}/versions-recycle-tests/versioned-file.txt"
     expectCode: 0
 
   # List versions after initial upload (should be empty or no versions yet)
   listVersionsAfterInitial:
-    command: "cmd/reva/reva --insecure --host={{REVANODE}} --token-file=token versions list {{BASEDIR}}/versions-recycle-tests/versioned-file.txt"
+    command: "cmd/reva/reva --insecure --gateway={{REVANODE}} versions list {{BASEDIR}}/versions-recycle-tests/versioned-file.txt"
     expectCode: 0
 
   # Upload second version (overwriting the file - this creates version 1)
@@ -73,12 +73,12 @@ run:
     prerequisiteCwd: .
     prerequisites:
       - 'echo "Version 1 content" > versioned-file.txt'
-    command: "cmd/reva/reva --insecure --host={{REVANODE}} --token-file=token upload versioned-file.txt {{BASEDIR}}/versions-recycle-tests/versioned-file.txt"
+    command: "cmd/reva/reva --insecure --gateway={{REVANODE}} cp -f versioned-file.txt cb:{{BASEDIR}}/versions-recycle-tests/versioned-file.txt"
     expectCode: 0
 
   # List versions (should now have at least one version)
   listVersionsAfterV1:
-    command: "cmd/reva/reva --insecure --host={{REVANODE}} --token-file=token versions list {{BASEDIR}}/versions-recycle-tests/versioned-file.txt"
+    command: "cmd/reva/reva --insecure --gateway={{REVANODE}} versions list {{BASEDIR}}/versions-recycle-tests/versioned-file.txt"
     expectCode: 0
     outputContains:
       - "Key:"
@@ -88,60 +88,60 @@ run:
     prerequisiteCwd: .
     prerequisites:
       - 'echo "Version 2 content" > versioned-file.txt'
-    command: "cmd/reva/reva --insecure --host={{REVANODE}} --token-file=token upload versioned-file.txt {{BASEDIR}}/versions-recycle-tests/versioned-file.txt"
+    command: "cmd/reva/reva --insecure --gateway={{REVANODE}} cp -f versioned-file.txt cb:{{BASEDIR}}/versions-recycle-tests/versioned-file.txt"
     expectCode: 0
 
   # List versions (should now have at least two versions)
   listVersionsAfterV2:
-    command: "cmd/reva/reva --insecure --host={{REVANODE}} --token-file=token versions list {{BASEDIR}}/versions-recycle-tests/versioned-file.txt"
+    command: "cmd/reva/reva --insecure --gateway={{REVANODE}} versions list {{BASEDIR}}/versions-recycle-tests/versioned-file.txt"
     expectCode: 0
     outputContains:
       - "Key:"
 
   # Create a file to delete and test recycle bin
   createFileForRecycle:
-    command: "cmd/reva/reva --insecure --host={{REVANODE}} --token-file=token touch {{BASEDIR}}/versions-recycle-tests/recycle-test-file.txt"
+    command: "cmd/reva/reva --insecure --gateway={{REVANODE}} touch {{BASEDIR}}/versions-recycle-tests/recycle-test-file.txt"
     expectCode: 0
 
   # Verify file exists
   verifyFileExists:
-    command: "cmd/reva/reva --insecure --host={{REVANODE}} --token-file=token ls {{BASEDIR}}/versions-recycle-tests/"
+    command: "cmd/reva/reva --insecure --gateway={{REVANODE}} ls {{BASEDIR}}/versions-recycle-tests/"
     expectCode: 0
     outputContains:
       - "recycle-test-file.txt"
 
   # Delete the file (should go to recycle bin)
   deleteFile:
-    command: "cmd/reva/reva --insecure --host={{REVANODE}} --token-file=token rm {{BASEDIR}}/versions-recycle-tests/recycle-test-file.txt"
+    command: "cmd/reva/reva --insecure --gateway={{REVANODE}} rm {{BASEDIR}}/versions-recycle-tests/recycle-test-file.txt"
     expectCode: 0
 
   # Verify file is deleted
   verifyFileDeleted:
-    command: "cmd/reva/reva --insecure --host={{REVANODE}} --token-file=token ls {{BASEDIR}}/versions-recycle-tests/"
+    command: "cmd/reva/reva --insecure --gateway={{REVANODE}} ls {{BASEDIR}}/versions-recycle-tests/"
     expectCode: 0
     outputDoesntContain:
       - "recycle-test-file.txt"
 
   # List recycle bin (should contain the deleted file)
   listRecycle:
-    command: "cmd/reva/reva --insecure --host={{REVANODE}} --token-file=token recycle list"
+    command: "cmd/reva/reva --insecure --gateway={{REVANODE}} trash list"
     expectCode: 0
     outputContains:
       - "recycle-test-file.txt"
 
-  # Restore recycle item (extract key from recycle-list output and restore in one step)
-  # The recycle-list output format is: key:"filename.d1234567890" ...
+  # Restore recycle item (extract key from the trash list output and restore in one step)
+  # The trash list output format is: key:"filename.d1234567890" ...
   # We extract the key value (everything between key:" and the next ")
   restoreRecycleItem:
     command: |
       bash -c "
-        KEY=$(cmd/reva/reva --insecure --host={{REVANODE}} --token-file=token recycle list 2>&1 | grep -o 'key:\"[^\"]*\"' | head -1 | sed 's/key:\"//;s/\"//' | tr -d '[:space:]')
+        KEY=$(cmd/reva/reva --insecure --gateway={{REVANODE}} trash list 2>&1 | grep -o 'key:\"[^\"]*\"' | head -1 | sed 's/key:\"//;s/\"//' | tr -d '[:space:]')
         if [ -n \"$KEY\" ] && [ \"$KEY\" != \"\" ]; then
-          cmd/reva/reva --insecure --host={{REVANODE}} --token-file=token recycle restore \"$KEY\"
+          cmd/reva/reva --insecure --gateway={{REVANODE}} trash restore \"$KEY\"
         else
           echo \"Error: Could not extract recycle key from output\"
-          echo \"Debug - recycle list output:\"
-          cmd/reva/reva --insecure --host={{REVANODE}} --token-file=token recycle list 2>&1 || true
+          echo \"Debug - trash list output:\"
+          cmd/reva/reva --insecure --gateway={{REVANODE}} trash list 2>&1 || true
           echo \"Extracted key was: [\"$KEY\"]\"
           exit 1
         fi
@@ -150,27 +150,27 @@ run:
 
   # Verify file is restored
   verifyFileRestored:
-    command: "cmd/reva/reva --insecure --host={{REVANODE}} --token-file=token ls {{BASEDIR}}/versions-recycle-tests/"
+    command: "cmd/reva/reva --insecure --gateway={{REVANODE}} ls {{BASEDIR}}/versions-recycle-tests/"
     expectCode: 0
     outputContains:
       - "recycle-test-file.txt"
 
   # Delete file again for purge test
   deleteFileAgain:
-    command: "cmd/reva/reva --insecure --host={{REVANODE}} --token-file=token rm {{BASEDIR}}/versions-recycle-tests/recycle-test-file.txt"
+    command: "cmd/reva/reva --insecure --gateway={{REVANODE}} rm {{BASEDIR}}/versions-recycle-tests/recycle-test-file.txt"
     expectCode: 0
 
   # Purge recycle bin (EmptyRecycle)
   purgeRecycle:
     command: |
       bash -c "
-        KEY=$(cmd/reva/reva --insecure --host={{REVANODE}} --token-file=token recycle list 2>&1 | grep -o 'key:\"[^\"]*\"' | head -1 | sed 's/key:\"//;s/\"//' | tr -d '[:space:]')
+        KEY=$(cmd/reva/reva --insecure --gateway={{REVANODE}} trash list 2>&1 | grep -o 'key:\"[^\"]*\"' | head -1 | sed 's/key:\"//;s/\"//' | tr -d '[:space:]')
         if [ -n \"$KEY\" ] && [ \"$KEY\" != \"\" ]; then
-          cmd/reva/reva --insecure --host={{REVANODE}} --token-file=token recycle purge \"$KEY\"
+          cmd/reva/reva --insecure --gateway={{REVANODE}} trash purge \"$KEY\"
         else
           echo \"Error: Could not extract recycle key from output\"
-          echo \"Debug - recycle list output:\"
-          cmd/reva/reva --insecure --host={{REVANODE}} --token-file=token recycle list 2>&1 || true
+          echo \"Debug - trash list output:\"
+          cmd/reva/reva --insecure --gateway={{REVANODE}} trash list 2>&1 || true
           echo \"Extracted key was: [\"$KEY\"]\"
           exit 1
         fi
@@ -179,7 +179,7 @@ run:
 
   # Verify recycle bin is empty
   verifyRecycleEmpty:
-    command: "cmd/reva/reva --insecure --host={{REVANODE}} --token-file=token recycle list"
+    command: "cmd/reva/reva --insecure --gateway={{REVANODE}} trash list"
     expectCode: 0
     outputDoesntContain:
       - "recycle-test-file.txt"
