@@ -21,9 +21,11 @@ package control
 import (
 	"context"
 	"errors"
+	"fmt"
 	"testing"
 
 	"github.com/cs3org/reva/v3/pkg/control/controlpb"
+	"github.com/cs3org/reva/v3/pkg/errtypes"
 	"github.com/cs3org/reva/v3/pkg/invoke"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -89,5 +91,26 @@ func TestControlRouting(t *testing.T) {
 	}
 	if res.Error == "" {
 		t.Fatal("expected soft error for unknown invocation")
+	}
+}
+
+func TestErrCode(t *testing.T) {
+	for _, tc := range []struct {
+		err  error
+		want codes.Code
+	}{
+		{errtypes.NotFound("x"), codes.NotFound},
+		{fmt.Errorf("wrapped: %w", errtypes.NotFound("x")), codes.NotFound},
+		{errtypes.BadRequest("x"), codes.InvalidArgument},
+		{errtypes.PermissionDenied("x"), codes.PermissionDenied},
+		{errtypes.NotSupported("x"), codes.Unimplemented},
+		{errtypes.AlreadyExists("x"), codes.AlreadyExists},
+		{status.Error(codes.FailedPrecondition, "x"), codes.FailedPrecondition},
+		{invoke.Error{Code: codes.ResourceExhausted, Message: "x"}, codes.ResourceExhausted},
+		{errors.New("x"), codes.Unknown},
+	} {
+		if got := errCode(tc.err); got != tc.want {
+			t.Errorf("errCode(%v) = %v, want %v", tc.err, got, tc.want)
+		}
 	}
 }
