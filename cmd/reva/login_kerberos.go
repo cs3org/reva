@@ -25,8 +25,8 @@ import (
 	"os"
 	"strings"
 
-	"github.com/cs3org/reva/v3/cmd/reva/internal/cli"
-	"github.com/cs3org/reva/v3/cmd/reva/internal/cli/kerberos"
+	"github.com/cs3org/reva/v3/pkg/cli"
+	"github.com/cs3org/reva/v3/pkg/cli/kerberos"
 	"github.com/spf13/cobra"
 )
 

@@ -26,7 +26,7 @@ import (
 
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	"github.com/cs3org/reva/v3/cmd/reva/admin"
-	"github.com/cs3org/reva/v3/cmd/reva/internal/cli"
+	"github.com/cs3org/reva/v3/pkg/cli"
 	"github.com/spf13/cobra"
 	"google.golang.org/grpc/status"
 )
