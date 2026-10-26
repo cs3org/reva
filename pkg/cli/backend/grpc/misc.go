@@ -241,6 +241,33 @@ func (u users) ByClaim(ctx context.Context, claim, value string) (*userpb.User, 
 	return res.User, nil
 }
 
+func (u users) Find(ctx context.Context, query string) ([]*userpb.User, error) {
+	c, ctx, err := u.b.gw(ctx)
+	if err != nil {
+		return nil, err
+	}
+	res, err := check(c.FindUsers(ctx, &userpb.FindUsersRequest{
+		Filters:                []*userpb.Filter{{Type: userpb.Filter_TYPE_QUERY, Term: &userpb.Filter_Query{Query: query}}},
+		SkipFetchingUserGroups: true,
+	}))
+	if err != nil {
+		return nil, err
+	}
+	return res.Users, nil
+}
+
+func (u users) Groups(ctx context.Context, id *userpb.UserId) ([]string, error) {
+	c, ctx, err := u.b.gw(ctx)
+	if err != nil {
+		return nil, err
+	}
+	res, err := check(c.GetUserGroups(ctx, &userpb.GetUserGroupsRequest{UserId: id}))
+	if err != nil {
+		return nil, err
+	}
+	return res.Groups, nil
+}
+
 func (b *Backend) GetPreference(ctx context.Context, namespace, key string) (string, error) {
 	c, ctx, err := b.gw(ctx)
 	if err != nil {

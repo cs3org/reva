@@ -199,6 +199,11 @@ type Users interface {
 	Me(ctx context.Context) (*userpb.User, error)
 	// ByClaim finds a user by a claim, for example username or mail.
 	ByClaim(ctx context.Context, claim, value string) (*userpb.User, error)
+	// Find returns the users of every type whose username, name or mail
+	// matches query, without their groups.
+	Find(ctx context.Context, query string) ([]*userpb.User, error)
+	// Groups returns the names of the groups of the user id.
+	Groups(ctx context.Context, id *userpb.UserId) ([]string, error)
 }
 
 // Locator gives the data plane the targets of the transfers. Over gRPC they

@@ -22,8 +22,9 @@
 //	b := clitest.New("alice")
 //	rt.UseBackend(b, b.Data())
 //
-// It keeps files, trash, versions, locks, shares, links and app tokens. The
-// other calls answer that they are not available over the transport "fake".
+// It keeps files, trash, versions, locks, shares, links, app tokens and
+// users. The other calls answer that they are not available over the
+// transport "fake".
 package clitest
 
 import (
@@ -50,6 +51,7 @@ import (
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	types "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
 	"github.com/cs3org/reva/v3/pkg/cli/backend"
+	"google.golang.org/protobuf/proto"
 )
 
 // Transport is the name of the transport of the fake.
@@ -69,6 +71,7 @@ type Backend struct {
 	recvd  []*collaboration.ReceivedShare
 	links  []*link.PublicShare
 	tokens []*authapp.AppPassword
+	users  []*userpb.User
 }
 
 type file struct {
@@ -117,6 +120,13 @@ func (b *Backend) Content(p string) ([]byte, bool) {
 		return nil, false
 	}
 	return bytes.Clone(f.data), true
+}
+
+// AddUser adds a user to the directory, with u.Groups as its groups.
+func (b *Backend) AddUser(u *userpb.User) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	b.users = append(b.users, u)
 }
 
 // AddReceived adds a share that the caller received.
@@ -757,10 +767,51 @@ type users struct{ b *Backend }
 func (u users) Me(ctx context.Context) (*userpb.User, error) { return u.b.me, nil }
 
 func (u users) ByClaim(ctx context.Context, claim, value string) (*userpb.User, error) {
-	if claim == "username" && value == u.b.me.Username {
-		return u.b.me, nil
+	u.b.mu.Lock()
+	defer u.b.mu.Unlock()
+	for _, usr := range append([]*userpb.User{u.b.me}, u.b.users...) {
+		var v string
+		switch claim {
+		case "username":
+			v = usr.Username
+		case "mail":
+			v = usr.Mail
+		case "uid":
+			v = strconv.FormatInt(usr.UidNumber, 10)
+		default:
+			return nil, &backend.StatusError{Code: rpc.Code_CODE_INVALID_ARGUMENT, Msg: "invalid claim " + claim}
+		}
+		if v == value {
+			return usr, nil
+		}
 	}
 	return nil, notFound("user " + value)
+}
+
+func (u users) Find(ctx context.Context, query string) ([]*userpb.User, error) {
+	u.b.mu.Lock()
+	defer u.b.mu.Unlock()
+	q := strings.ToLower(query)
+	var out []*userpb.User
+	for _, usr := range append([]*userpb.User{u.b.me}, u.b.users...) {
+		if strings.Contains(strings.ToLower(usr.Username+"\n"+usr.DisplayName+"\n"+usr.Mail), q) {
+			found := proto.Clone(usr).(*userpb.User)
+			found.Groups = nil
+			out = append(out, found)
+		}
+	}
+	return out, nil
+}
+
+func (u users) Groups(ctx context.Context, id *userpb.UserId) ([]string, error) {
+	u.b.mu.Lock()
+	defer u.b.mu.Unlock()
+	for _, usr := range append([]*userpb.User{u.b.me}, u.b.users...) {
+		if usr.Id.GetOpaqueId() == id.GetOpaqueId() {
+			return slices.Clone(usr.Groups), nil
+		}
+	}
+	return nil, notFound("user " + id.GetOpaqueId())
 }
 
 type spaces struct{}
