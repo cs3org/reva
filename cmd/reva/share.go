@@ -26,24 +26,19 @@ import (
 	"strings"
 	"time"
 
-	gateway "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
 	grouppb "github.com/cs3org/go-cs3apis/cs3/identity/group/v1beta1"
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
-	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	collaboration "github.com/cs3org/go-cs3apis/cs3/sharing/collaboration/v1beta1"
 	link "github.com/cs3org/go-cs3apis/cs3/sharing/link/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
-	"github.com/cs3org/reva/v3/pkg/appctx"
 	"github.com/cs3org/reva/v3/pkg/cli"
+	"github.com/cs3org/reva/v3/pkg/cli/backend"
 	"github.com/cs3org/reva/v3/pkg/permissions"
-	"github.com/cs3org/reva/v3/pkg/publicshare"
-	"github.com/cs3org/reva/v3/pkg/share"
 	"github.com/cs3org/reva/v3/pkg/utils"
 	"github.com/jedib0t/go-pretty/table"
 	"github.com/spf13/cobra"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
-	"google.golang.org/protobuf/types/known/fieldmaskpb"
 )
 
 func shareCommand(rt *cli.Runtime) *cobra.Command {
@@ -74,17 +69,13 @@ func shareGetCommand(rt *cli.Runtime) *cobra.Command {
 		Args:              cobra.ExactArgs(1),
 		ValidArgsFunction: completeShareIDs(rt),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			client, ctx, err := rt.Gateway(cmd.Context())
+			b, err := rt.Backend(cmd.Context())
 			if err != nil {
 				return err
 			}
 			fb, lookup := shareFallback(rt, args[0])
-			s, err := cli.OnNotFound(ctx, fb, func(ctx context.Context) (*collaboration.Share, error) {
-				res, err := client.GetShare(ctx, &collaboration.GetShareRequest{Ref: shareRef(args[0])})
-				if err != nil {
-					return nil, err
-				}
-				return res.Share, cli.Check(res.Status)
+			s, err := cli.OnNotFound(cmd.Context(), fb, func(ctx context.Context) (*collaboration.Share, error) {
+				return b.Shares().Get(ctx, args[0])
 			}, lookup, nil)
 			if err != nil {
 				return err
@@ -125,30 +116,25 @@ func shareCreateCommand(rt *cli.Runtime) *cobra.Command {
 				})
 			}
 
-			client, ctx, err := rt.Gateway(cmd.Context())
+			ctx := cmd.Context()
+			b, err := rt.Backend(ctx)
 			if err != nil {
 				return err
 			}
-			res, err := client.Stat(ctx, &provider.StatRequest{Ref: &provider.Reference{Path: args[0]}})
+			info, err := b.Files().Stat(ctx, pathRef(args[0]))
 			if err != nil {
 				return err
-			}
-			if res.Status.Code != rpc.Code_CODE_OK {
-				return formatError(res.Status)
 			}
 			shares := make([]*collaboration.Share, 0, len(grantees))
 			for _, g := range grantees {
-				shareRes, err := client.CreateShare(ctx, &collaboration.CreateShareRequest{
-					ResourceInfo: res.Info,
+				s, err := b.Shares().Create(ctx, &collaboration.CreateShareRequest{
+					ResourceInfo: info,
 					Grant:        &collaboration.ShareGrant{Permissions: &collaboration.SharePermissions{Permissions: perm}, Grantee: g},
 				})
 				if err != nil {
 					return err
 				}
-				if shareRes.Status.Code != rpc.Code_CODE_OK {
-					return formatError(shareRes.Status)
-				}
-				shares = append(shares, shareRes.Share)
+				shares = append(shares, s)
 			}
 			return rt.Print(cmd.OutOrStdout(), shares, func(w io.Writer) { renderShares(w, shares) })
 		},
@@ -169,26 +155,19 @@ func shareListCommand(rt *cli.Runtime) *cobra.Command {
 		Args:              cobra.MaximumNArgs(1),
 		ValidArgsFunction: completeRemotePath(rt, 1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			client, ctx, err := rt.Gateway(cmd.Context())
+			b, err := rt.Backend(cmd.Context())
 			if err != nil {
 				return err
 			}
-			id, err := resourceFilter(ctx, client, args, resID)
+			id, err := resourceFilter(cmd.Context(), b, args, resID)
 			if err != nil {
 				return err
 			}
-			req := &collaboration.ListSharesRequest{}
-			if id != nil {
-				req.Filters = []*collaboration.Filter{share.ResourceIDFilter(id)}
-			}
-			res, err := client.ListShares(ctx, req)
+			shares, err := b.Shares().List(cmd.Context(), id)
 			if err != nil {
 				return err
 			}
-			if res.Status.Code != rpc.Code_CODE_OK {
-				return formatError(res.Status)
-			}
-			return rt.Print(cmd.OutOrStdout(), res.Shares, func(w io.Writer) { renderShares(w, res.Shares) })
+			return rt.Print(cmd.OutOrStdout(), shares, func(w io.Writer) { renderShares(w, shares) })
 		},
 	}
 	cmd.Flags().StringVar(&resID, "by-resource-id", "", "only the shares of this resource (storage_id:opaque_id)")
@@ -197,21 +176,18 @@ func shareListCommand(rt *cli.Runtime) *cobra.Command {
 
 // resourceFilter returns the resource that a list command filters on: the
 // PATH argument or --by-resource-id. nil means no filter.
-func resourceFilter(ctx context.Context, client gateway.GatewayAPIClient, args []string, resID string) (*provider.ResourceId, error) {
+func resourceFilter(ctx context.Context, b backend.Backend, args []string, resID string) (*provider.ResourceId, error) {
 	switch {
 	case len(args) == 1 && resID != "":
 		return nil, errors.New("pass either PATH or --by-resource-id, not both")
 	case resID != "":
 		return parseResourceID(resID)
 	case len(args) == 1:
-		res, err := client.Stat(ctx, &provider.StatRequest{Ref: &provider.Reference{Path: args[0]}})
+		info, err := b.Files().Stat(ctx, pathRef(args[0]))
 		if err != nil {
 			return nil, err
 		}
-		if res.Status.Code != rpc.Code_CODE_OK {
-			return nil, formatError(res.Status)
-		}
-		return res.Info.Id, nil
+		return info.Id, nil
 	}
 	return nil, nil
 }
@@ -232,7 +208,7 @@ func shareUpdateCommand(rt *cli.Runtime) *cobra.Command {
 			if err != nil {
 				return err
 			}
-			client, ctx, err := rt.Gateway(cmd.Context())
+			b, err := rt.Backend(cmd.Context())
 			if err != nil {
 				return err
 			}
@@ -245,12 +221,8 @@ func shareUpdateCommand(rt *cli.Runtime) *cobra.Command {
 				},
 			}
 			fb, lookup := shareFallback(rt, args[0])
-			_, err = cli.OnNotFound(ctx, fb, func(ctx context.Context) (*collaboration.Share, error) {
-				res, err := client.UpdateShare(ctx, req)
-				if err != nil {
-					return nil, err
-				}
-				return res.Share, cli.Check(res.Status)
+			_, err = cli.OnNotFound(cmd.Context(), fb, func(ctx context.Context) (*collaboration.Share, error) {
+				return b.Shares().Update(ctx, req)
 			}, lookup, func(ctx context.Context, _ *collaboration.Share) (*collaboration.Share, error) {
 				sa, err := rt.SharesAdmin(ctx)
 				if err != nil {
@@ -277,17 +249,13 @@ func shareRemoveCommand(rt *cli.Runtime) *cobra.Command {
 		Args:              cobra.ExactArgs(1),
 		ValidArgsFunction: completeShareIDs(rt),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			client, ctx, err := rt.Gateway(cmd.Context())
+			b, err := rt.Backend(cmd.Context())
 			if err != nil {
 				return err
 			}
 			fb, lookup := shareFallback(rt, args[0])
-			_, err = cli.OnNotFound(ctx, fb, func(ctx context.Context) (*collaboration.Share, error) {
-				res, err := client.RemoveShare(ctx, &collaboration.RemoveShareRequest{Ref: shareRef(args[0])})
-				if err != nil {
-					return nil, err
-				}
-				return nil, cli.Check(res.Status)
+			_, err = cli.OnNotFound(cmd.Context(), fb, func(ctx context.Context) (*collaboration.Share, error) {
+				return nil, b.Shares().Remove(ctx, args[0])
 			}, lookup, func(ctx context.Context, s *collaboration.Share) (*collaboration.Share, error) {
 				sa, err := rt.SharesAdmin(ctx)
 				if err != nil {
@@ -310,23 +278,20 @@ func shareReceivedListCommand(rt *cli.Runtime) *cobra.Command {
 		Short: "List the shares you received",
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			client, ctx, err := rt.Gateway(cmd.Context())
+			b, err := rt.Backend(cmd.Context())
 			if err != nil {
 				return err
 			}
-			res, err := client.ListReceivedShares(ctx, &collaboration.ListReceivedSharesRequest{})
+			received, err := b.Shares().Received(cmd.Context())
 			if err != nil {
 				return err
 			}
-			if res.Status.Code != rpc.Code_CODE_OK {
-				return formatError(res.Status)
-			}
-			return rt.Print(cmd.OutOrStdout(), res.Shares, func(w io.Writer) {
+			return rt.Print(cmd.OutOrStdout(), received, func(w io.Writer) {
 				t := table.NewWriter()
 				t.SetOutputMirror(w)
 				t.AppendHeader(table.Row{"#", "Owner.Idp", "Owner.OpaqueId", "ResourceId", "Permissions", "Type",
 					"Grantee.Idp", "Grantee.OpaqueId", "Created", "Updated", "State"})
-				for _, rs := range res.Shares {
+				for _, rs := range received {
 					t.AppendRow(append(shareRow(rs.Share), rs.State.String()))
 				}
 				t.Render()
@@ -341,13 +306,13 @@ func shareReceivedUpdateCommand(rt *cli.Runtime) *cobra.Command {
 		Use:   "update SHARE_ID",
 		Short: "Accept or reject a share you received",
 		Args:  cobra.ExactArgs(1),
-		ValidArgsFunction: completeIDs(rt, func(ctx context.Context, client gateway.GatewayAPIClient) ([]string, error) {
-			res, err := client.ListReceivedShares(ctx, &collaboration.ListReceivedSharesRequest{})
+		ValidArgsFunction: completeIDs(rt, func(ctx context.Context, b backend.Backend) ([]string, error) {
+			received, err := b.Shares().Received(ctx)
 			if err != nil {
 				return nil, err
 			}
-			ids := make([]string, 0, len(res.Shares))
-			for _, rs := range res.Shares {
+			ids := make([]string, 0, len(received))
+			for _, rs := range received {
 				ids = append(ids, rs.Share.Id.OpaqueId+"\t"+rs.State.String())
 			}
 			return ids, nil
@@ -364,27 +329,12 @@ func shareReceivedUpdateCommand(rt *cli.Runtime) *cobra.Command {
 			default:
 				return fmt.Errorf("unknown state %q: use pending, accepted or rejected", state)
 			}
-			client, ctx, err := rt.Gateway(cmd.Context())
+			b, err := rt.Backend(cmd.Context())
 			if err != nil {
 				return err
 			}
-			res, err := client.GetReceivedShare(ctx, &collaboration.GetReceivedShareRequest{Ref: shareRef(args[0])})
-			if err != nil {
+			if _, err := b.Shares().UpdateReceived(cmd.Context(), args[0], s); err != nil {
 				return err
-			}
-			if res.Status.Code != rpc.Code_CODE_OK {
-				return formatError(res.Status)
-			}
-			res.Share.State = s
-			updateRes, err := client.UpdateReceivedShare(ctx, &collaboration.UpdateReceivedShareRequest{
-				Share:      res.Share,
-				UpdateMask: &fieldmaskpb.FieldMask{Paths: []string{"state"}},
-			})
-			if err != nil {
-				return err
-			}
-			if updateRes.Status.Code != rpc.Code_CODE_OK {
-				return formatError(updateRes.Status)
 			}
 			rt.Msg(cmd.ErrOrStderr(), "OK")
 			return nil
@@ -420,19 +370,15 @@ func linkGetCommand(rt *cli.Runtime) *cobra.Command {
 		Args:              cobra.ExactArgs(1),
 		ValidArgsFunction: completePublicShareIDs(rt),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			client, ctx, err := rt.Gateway(cmd.Context())
+			b, err := rt.Backend(cmd.Context())
 			if err != nil {
 				return err
 			}
 			refs := linkRefs(args[0])
 			fb := cli.Fallback{Gate: rt, What: "link " + args[0]}
-			s, err := cli.OnNotFound(ctx, fb, func(ctx context.Context) (*link.PublicShare, error) {
+			s, err := cli.OnNotFound(cmd.Context(), fb, func(ctx context.Context) (*link.PublicShare, error) {
 				return firstFound(refs, func(ref *link.PublicShareReference) (*link.PublicShare, error) {
-					res, err := client.GetPublicShare(ctx, &link.GetPublicShareRequest{Ref: ref})
-					if err != nil {
-						return nil, err
-					}
-					return res.Share, cli.Check(res.Status)
+					return b.Links().Get(ctx, ref)
 				})
 			}, func(ctx context.Context) (*link.PublicShare, error) {
 				sa, err := rt.SharesAdmin(ctx)
@@ -486,19 +432,17 @@ func linkCreateCommand(rt *cli.Runtime) *cobra.Command {
 			if err != nil {
 				return err
 			}
-			client, ctx, err := rt.Gateway(cmd.Context())
+			ctx := cmd.Context()
+			b, err := rt.Backend(ctx)
 			if err != nil {
 				return err
 			}
-			res, err := client.Stat(ctx, &provider.StatRequest{Ref: &provider.Reference{Path: args[0]}})
+			info, err := b.Files().Stat(ctx, pathRef(args[0]))
 			if err != nil {
 				return err
 			}
-			if res.Status.Code != rpc.Code_CODE_OK {
-				return formatError(res.Status)
-			}
-			shareRes, err := client.CreatePublicShare(ctx, &link.CreatePublicShareRequest{
-				ResourceInfo: res.Info,
+			s, err := b.Links().Create(ctx, &link.CreatePublicShareRequest{
+				ResourceInfo: info,
 				Grant:        &link.Grant{Permissions: &link.PublicSharePermissions{Permissions: perm}},
 				Description:  description,
 				Internal:     internal,
@@ -506,11 +450,8 @@ func linkCreateCommand(rt *cli.Runtime) *cobra.Command {
 			if err != nil {
 				return err
 			}
-			if shareRes.Status.Code != rpc.Code_CODE_OK {
-				return formatError(shareRes.Status)
-			}
-			return rt.Print(cmd.OutOrStdout(), shareRes.Share, func(w io.Writer) {
-				renderPublicShares(w, []*link.PublicShare{shareRes.Share})
+			return rt.Print(cmd.OutOrStdout(), s, func(w io.Writer) {
+				renderPublicShares(w, []*link.PublicShare{s})
 			})
 		},
 	}
@@ -528,15 +469,15 @@ func linkListCommand(rt *cli.Runtime) *cobra.Command {
 		Args:              cobra.MaximumNArgs(1),
 		ValidArgsFunction: completeRemotePath(rt, 1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			client, ctx, err := rt.Gateway(cmd.Context())
+			b, err := rt.Backend(cmd.Context())
 			if err != nil {
 				return err
 			}
-			id, err := resourceFilter(ctx, client, args, resID)
+			id, err := resourceFilter(cmd.Context(), b, args, resID)
 			if err != nil {
 				return err
 			}
-			shares, err := listPublicShares(ctx, client, id)
+			shares, err := b.Links().List(cmd.Context(), id)
 			if err != nil {
 				return err
 			}
@@ -573,23 +514,18 @@ func linkUpdateCommand(rt *cli.Runtime) *cobra.Command {
 					Description: description,
 				})
 			}
-			client, ctx, err := rt.Gateway(cmd.Context())
+			b, err := rt.Backend(cmd.Context())
 			if err != nil {
 				return err
 			}
 			ref := publicShareRef(args[0])
 			fb, lookup := linkFallback(rt, args[0], ref)
-			_, err = cli.OnNotFound(ctx, fb, func(ctx context.Context) (*link.PublicShare, error) {
+			_, err = cli.OnNotFound(cmd.Context(), fb, func(ctx context.Context) (*link.PublicShare, error) {
 				var s *link.PublicShare
 				for _, u := range updates {
-					res, err := client.UpdatePublicShare(ctx, &link.UpdatePublicShareRequest{Ref: ref, Update: u})
-					if err != nil {
+					if s, err = b.Links().Update(ctx, &link.UpdatePublicShareRequest{Ref: ref, Update: u}); err != nil {
 						return nil, err
 					}
-					if err := cli.Check(res.Status); err != nil {
-						return nil, err
-					}
-					s = res.Share
 				}
 				return s, nil
 			}, lookup, func(ctx context.Context, s *link.PublicShare) (*link.PublicShare, error) {
@@ -624,18 +560,14 @@ func linkRemoveCommand(rt *cli.Runtime) *cobra.Command {
 		Args:              cobra.ExactArgs(1),
 		ValidArgsFunction: completePublicShareIDs(rt),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			client, ctx, err := rt.Gateway(cmd.Context())
+			b, err := rt.Backend(cmd.Context())
 			if err != nil {
 				return err
 			}
 			ref := publicShareRef(args[0])
 			fb, lookup := linkFallback(rt, args[0], ref)
-			_, err = cli.OnNotFound(ctx, fb, func(ctx context.Context) (*link.PublicShare, error) {
-				res, err := client.RemovePublicShare(ctx, &link.RemovePublicShareRequest{Ref: ref})
-				if err != nil {
-					return nil, err
-				}
-				return nil, cli.Check(res.Status)
+			_, err = cli.OnNotFound(cmd.Context(), fb, func(ctx context.Context) (*link.PublicShare, error) {
+				return nil, b.Links().Remove(ctx, ref)
 			}, lookup, func(ctx context.Context, s *link.PublicShare) (*link.PublicShare, error) {
 				sa, err := rt.SharesAdmin(ctx)
 				if err != nil {
@@ -652,42 +584,14 @@ func linkRemoveCommand(rt *cli.Runtime) *cobra.Command {
 	}
 }
 
-// listPublicShares lists the links that the caller created. The creator
-// filter needs the user id, so it asks the gateway who the token belongs to.
-func listPublicShares(ctx context.Context, client gateway.GatewayAPIClient, resID *provider.ResourceId) ([]*link.PublicShare, error) {
-	token, _ := appctx.ContextGetToken(ctx)
-	who, err := client.WhoAmI(ctx, &gateway.WhoAmIRequest{Token: token})
-	if err != nil {
-		return nil, err
-	}
-	if who.Status.Code != rpc.Code_CODE_OK {
-		return nil, formatError(who.Status)
-	}
-	filters := []*link.ListPublicSharesRequest_Filter{{
-		Type: link.ListPublicSharesRequest_Filter_TYPE_CREATOR,
-		Term: &link.ListPublicSharesRequest_Filter_Creator{Creator: who.User.Id},
-	}}
-	if resID != nil {
-		filters = append(filters, publicshare.ResourceIDFilter(resID))
-	}
-	res, err := client.ListPublicShares(ctx, &link.ListPublicSharesRequest{Filters: filters})
-	if err != nil {
-		return nil, err
-	}
-	if res.Status.Code != rpc.Code_CODE_OK {
-		return nil, formatError(res.Status)
-	}
-	return res.Share, nil
-}
-
 func completeShareIDs(rt *cli.Runtime) cobra.CompletionFunc {
-	return completeIDs(rt, func(ctx context.Context, client gateway.GatewayAPIClient) ([]string, error) {
-		res, err := client.ListShares(ctx, &collaboration.ListSharesRequest{})
+	return completeIDs(rt, func(ctx context.Context, b backend.Backend) ([]string, error) {
+		shares, err := b.Shares().List(ctx, nil)
 		if err != nil {
 			return nil, err
 		}
-		ids := make([]string, 0, len(res.Shares))
-		for _, s := range res.Shares {
+		ids := make([]string, 0, len(shares))
+		for _, s := range shares {
 			ids = append(ids, s.Id.OpaqueId+"\t"+s.Grantee.GetUserId().GetOpaqueId()+s.Grantee.GetGroupId().GetOpaqueId())
 		}
 		return ids, nil
@@ -695,8 +599,8 @@ func completeShareIDs(rt *cli.Runtime) cobra.CompletionFunc {
 }
 
 func completePublicShareIDs(rt *cli.Runtime) cobra.CompletionFunc {
-	return completeIDs(rt, func(ctx context.Context, client gateway.GatewayAPIClient) ([]string, error) {
-		shares, err := listPublicShares(ctx, client, nil)
+	return completeIDs(rt, func(ctx context.Context, b backend.Backend) ([]string, error) {
+		shares, err := b.Links().List(ctx, nil)
 		if err != nil {
 			return nil, err
 		}
@@ -710,7 +614,7 @@ func completePublicShareIDs(rt *cli.Runtime) cobra.CompletionFunc {
 
 // completeIDs completes the first argument with the ids that list returns.
 // An id can have a description after a tab.
-func completeIDs(rt *cli.Runtime, list func(ctx context.Context, client gateway.GatewayAPIClient) ([]string, error)) cobra.CompletionFunc {
+func completeIDs(rt *cli.Runtime, list func(ctx context.Context, b backend.Backend) ([]string, error)) cobra.CompletionFunc {
 	return func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
 		none := cobra.ShellCompDirectiveNoFileComp
 		if len(args) > 0 {
@@ -720,11 +624,11 @@ func completeIDs(rt *cli.Runtime, list func(ctx context.Context, client gateway.
 		if err := rt.Load(cmd.Flags()); err != nil {
 			return nil, none
 		}
-		client, ctx, err := rt.Gateway(cmd.Context())
+		b, err := rt.Backend(cmd.Context())
 		if err != nil {
 			return nil, none
 		}
-		ids, err := list(ctx, client)
+		ids, err := list(cmd.Context(), b)
 		if err != nil {
 			return nil, none
 		}

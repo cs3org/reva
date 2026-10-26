@@ -116,6 +116,7 @@ func rootCommand(rt *cli.Runtime, started *bool) *cobra.Command {
 	}
 	pf := root.PersistentFlags()
 	pf.StringVar(&rt.GatewayAddr, "gateway", "", "address of the gateway, host:port (env REVA_GATEWAY)")
+	rt.TransportFlags(pf)
 	pf.StringVar(&rt.AdminHost, "admin-host", "", "address of the Admin API, host:port or unix:///path (env REVA_ADMIN_HOST; default the gateway)")
 	pf.BoolVar(&rt.Insecure, "insecure", false, "allow plaintext, without TLS, on the selected transport (development only)")
 	pf.BoolVar(&rt.SkipVerify, "skip-verify", false, "do not verify the server certificate (development only)")
