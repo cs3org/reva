@@ -30,6 +30,7 @@ import (
 	"github.com/cs3org/reva/v3/pkg/admin/adminpb"
 	"github.com/cs3org/reva/v3/pkg/appctx"
 	"github.com/cs3org/reva/v3/pkg/auth/scope"
+	"github.com/cs3org/reva/v3/pkg/rhttp/router"
 	"github.com/cs3org/reva/v3/pkg/service"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
@@ -109,7 +110,9 @@ func newTestService(t *testing.T) http.Handler {
 	if err != nil {
 		t.Fatalf("New: %v", err)
 	}
-	return s.Handler()
+	r := router.New()
+	s.Routes(r.Service("admin"))
+	return r
 }
 
 func serve(t *testing.T, h http.Handler, method, path, body string) *httptest.ResponseRecorder {
@@ -126,7 +129,7 @@ func TestStatus(t *testing.T) {
 	h := newTestService(t)
 	for _, want := range []bool{true, false} {
 		stampAdmin(&fakeAdmin{isAdmin: want})
-		w := serve(t, h, http.MethodGet, "/status", "")
+		w := serve(t, h, http.MethodGet, mount+"/status", "")
 		if w.Code != http.StatusOK {
 			t.Fatalf("status: code %d, body %s", w.Code, w.Body)
 		}
@@ -145,7 +148,7 @@ func TestImpersonateUsesAdminToken(t *testing.T) {
 	fake := &fakeAdmin{}
 	stampAdmin(fake)
 
-	w := serve(t, h, http.MethodPost, "/impersonate", `{"user":"marie","reason":"INC42"}`)
+	w := serve(t, h, http.MethodPost, mount+"/impersonate", `{"user":"marie","reason":"INC42"}`)
 	if w.Code != http.StatusOK {
 		t.Fatalf("code %d, body %s", w.Code, w.Body)
 	}
@@ -172,7 +175,7 @@ func TestImpersonateWithoutReason(t *testing.T) {
 	fake := &fakeAdmin{}
 	stampAdmin(fake)
 
-	w := serve(t, h, http.MethodPost, "/impersonate", `{"user":"marie"}`)
+	w := serve(t, h, http.MethodPost, mount+"/impersonate", `{"user":"marie"}`)
 	if w.Code != http.StatusOK {
 		t.Fatalf("code %d, body %s", w.Code, w.Body)
 	}
@@ -203,7 +206,7 @@ func TestImpersonateErrors(t *testing.T) {
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			stampAdmin(tc.fake)
-			w := serve(t, h, http.MethodPost, "/impersonate", tc.body)
+			w := serve(t, h, http.MethodPost, mount+"/impersonate", tc.body)
 			if w.Code != tc.want {
 				t.Fatalf("code %d, want %d (body %s)", w.Code, tc.want, w.Body)
 			}
@@ -219,7 +222,7 @@ func TestImpersonateForwardsTheOptions(t *testing.T) {
 	fake := &fakeAdmin{}
 	stampAdmin(fake)
 
-	w := serve(t, h, http.MethodPost, "/impersonate", `{"user":"boss","allow_privileged":true,"ttl_seconds":3600}`)
+	w := serve(t, h, http.MethodPost, mount+"/impersonate", `{"user":"boss","allow_privileged":true,"ttl_seconds":3600}`)
 	if w.Code != http.StatusOK {
 		t.Fatalf("code %d, body %s", w.Code, w.Body)
 	}
@@ -239,7 +242,7 @@ func TestImpersonateRefusedTarget(t *testing.T) {
 	h := newTestService(t)
 	stampAdmin(&fakeAdmin{impersonateErr: status.Error(codes.PermissionDenied, "admin: \"boss\" is a member of admins; set allow_privileged to impersonate it")})
 
-	w := serve(t, h, http.MethodPost, "/impersonate", `{"user":"boss"}`)
+	w := serve(t, h, http.MethodPost, mount+"/impersonate", `{"user":"boss"}`)
 	if w.Code != http.StatusForbidden || !strings.Contains(w.Body.String(), "allow_privileged") {
 		t.Fatalf("code %d, body %s", w.Code, w.Body)
 	}
@@ -254,7 +257,7 @@ func TestImpersonateRefusesAnImpersonatedSession(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	r := httptest.NewRequest(http.MethodPost, "/impersonate", strings.NewReader(`{"user":"marie"}`))
+	r := httptest.NewRequest(http.MethodPost, mount+"/impersonate", strings.NewReader(`{"user":"marie"}`))
 	ctx := appctx.ContextSetScopes(r.Context(), scope.AddActorScope("gdelmont", owner))
 	w := httptest.NewRecorder()
 	h.ServeHTTP(w, r.WithContext(ctx))

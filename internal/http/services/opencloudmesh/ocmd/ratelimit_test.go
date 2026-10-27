@@ -23,6 +23,8 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+
+	"github.com/cs3org/reva/v3/pkg/rhttp/router"
 )
 
 func TestIngressRoutesAreRateLimited(t *testing.T) {
@@ -37,17 +39,20 @@ func TestIngressRoutesAreRateLimited(t *testing.T) {
 	}
 	t.Cleanup(func() { _ = s.Close() })
 
+	r := router.New()
+	s.Routes(r.Service("ocmd"))
+
 	// The limiter runs before the handlers, so a rejected request never
 	// reaches them; every ingress route shares the client's bucket.
 	post := func(path string) int {
-		req := httptest.NewRequest(http.MethodPost, path, nil)
+		req := httptest.NewRequest(http.MethodPost, mount+path, nil)
 		req.RemoteAddr = "203.0.113.7:1000"
 		rec := httptest.NewRecorder()
-		s.Handler().ServeHTTP(rec, req)
+		r.ServeHTTP(rec, req)
 		return rec.Code
 	}
-	if got := post("/no-such-route"); got != http.StatusNotFound {
-		t.Fatalf("first request: got %d, want 404", got)
+	if got := post(sharesPath); got == http.StatusTooManyRequests {
+		t.Fatal("first request: got 429, want the bucket to allow it through")
 	}
 	for _, p := range []string{sharesPath, inviteAcceptedPath, notificationsPath, tokenPath} {
 		if got := post(p); got != http.StatusTooManyRequests {

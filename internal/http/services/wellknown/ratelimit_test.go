@@ -23,6 +23,8 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+
+	"github.com/cs3org/reva/v3/pkg/rhttp/router"
 )
 
 func TestDiscoveryIsRateLimited(t *testing.T) {
@@ -35,11 +37,14 @@ func TestDiscoveryIsRateLimited(t *testing.T) {
 	}
 	t.Cleanup(func() { _ = s.Close() })
 
+	r := router.New()
+	s.Routes(r.Service("wellknown"))
+
 	get := func() int {
-		req := httptest.NewRequest(http.MethodGet, "/ocm", nil)
+		req := httptest.NewRequest(http.MethodGet, mount+"/ocm", nil)
 		req.RemoteAddr = "203.0.113.7:1000"
 		rec := httptest.NewRecorder()
-		s.Handler().ServeHTTP(rec, req)
+		r.ServeHTTP(rec, req)
 		return rec.Code
 	}
 	if got := get(); got != http.StatusOK {
