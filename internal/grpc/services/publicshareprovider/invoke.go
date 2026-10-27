@@ -27,6 +27,7 @@ import (
 	"maps"
 	"slices"
 	"strconv"
+	"strings"
 	"time"
 
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
@@ -84,6 +85,7 @@ type listArgs struct {
 	Owner          string `arg:"owner" help:"links on resources owned by this user"`
 	Initiator      string `arg:"initiator" help:"links created by this user"`
 	Space          string `arg:"space" help:"links in this space, by space id"`
+	ResourceID     string `arg:"resource_id" help:"links of this resource, by id: storage_id!opaque_id"`
 	IncludeOrphans bool   `arg:"include_orphans" help:"include orphaned links"`
 	IncludeExpired *bool  `arg:"include_expired" help:"include expired links (default true)"`
 	ResolvePaths   bool   `arg:"resolve_paths" help:"add the current path of each link"`
@@ -127,7 +129,7 @@ func (s *service) registerInvocations() {
 	s.Set.Add("expiring", "List the public links of all users that expire in a window, by expiration and id, orphans excluded.").
 		Shared().
 		Handle(invoke.Typed(s.expiring))
-	s.Set.Add("list", "Stream the public links of any user. Give at least one of id, token, owner, initiator or space.").
+	s.Set.Add("list", "Stream the public links of any user. Give at least one of id, token, owner, initiator, resource_id or space.").
 		Shared().
 		HandleStream(invoke.TypedStream(s.list))
 	s.Set.Add("get", "Show one public link, also when it is orphaned or expired.").
@@ -271,12 +273,19 @@ func selectLinks(ctx context.Context, m adminManager, a listArgs) ([]model.Publi
 	if a.Initiator != "" {
 		filters = append(filters, &link.ListPublicSharesRequest_Filter{Type: link.ListPublicSharesRequest_Filter_TYPE_CREATOR, Term: &link.ListPublicSharesRequest_Filter_Creator{Creator: &userpb.UserId{OpaqueId: a.Initiator}}})
 	}
+	if a.ResourceID != "" {
+		id, err := parseResourceID(a.ResourceID)
+		if err != nil {
+			return nil, err
+		}
+		filters = append(filters, &link.ListPublicSharesRequest_Filter{Type: link.ListPublicSharesRequest_Filter_TYPE_RESOURCE_ID, Term: &link.ListPublicSharesRequest_Filter_ResourceId{ResourceId: id}})
+	}
 	if a.Space != "" {
 		return m.ListPublicLinksInSpace(a.Space, filters, a.IncludeOrphans)
 	}
 	// The table is too large to read without a filter.
 	if len(filters) == 0 {
-		return nil, errtypes.BadRequest("list needs at least one of id, token, owner, initiator or space")
+		return nil, errtypes.BadRequest("list needs at least one of id, token, owner, initiator, resource_id or space")
 	}
 	return m.ListPublicLinks(nil, filters, nil, !a.IncludeOrphans)
 }
@@ -620,6 +629,17 @@ func linkRef(id, token string) (*link.PublicShareReference, error) {
 		return &link.PublicShareReference{Spec: &link.PublicShareReference_Token{Token: token}}, nil
 	}
 	return nil, errtypes.BadRequest("give the id or the token of the link")
+}
+
+// parseResourceID reads storage_id!opaque_id, or the storage_id$space_id!opaque_id
+// of the spaces. The link table matches the storage id and the opaque id only.
+func parseResourceID(s string) (*provider.ResourceId, error) {
+	storage, opaque, ok := strings.Cut(s, "!")
+	if !ok || storage == "" || opaque == "" {
+		return nil, errtypes.BadRequest(fmt.Sprintf("invalid resource id %q: use storage_id!opaque_id", s))
+	}
+	storage, space, _ := strings.Cut(storage, "$")
+	return &provider.ResourceId{StorageId: storage, SpaceId: space, OpaqueId: opaque}, nil
 }
 
 func linkRefID(id uint) *link.PublicShareReference {
