@@ -19,8 +19,12 @@
 package cephmount
 
 import (
+	"context"
+	"io"
 	"os"
+	"path/filepath"
 	"testing"
+	"time"
 
 	userv1beta1 "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
@@ -119,4 +123,37 @@ func TestCephMount_BasicOperations(t *testing.T) {
 	// Test Shutdown
 	err = fs.Shutdown(ctx)
 	assert.NoError(t, err)
+}
+
+func TestUploadDoesNotBlockOtherRequestsOfUser(t *testing.T) {
+	tmpDir := t.TempDir()
+	t.Setenv("CEPHMOUNT_TEST_CHROOT_DIR", tmpDir)
+	ctx := appctx.ContextSetUser(ContextWithTestLogger(t), GetCurrentTestUser(t))
+	fs, err := New(ctx, map[string]any{"testing_allow_local_mode": true})
+	require.NoError(t, err)
+	defer fs.Shutdown(ctx)
+
+	body, client := io.Pipe()
+	done := make(chan error, 1)
+	go func() {
+		done <- fs.Upload(ctx, &provider.Reference{Path: "/file.txt"}, body, nil)
+	}()
+	// The write returns when the upload reads the data, thus the upload has started
+	_, err = client.Write([]byte("hello "))
+	require.NoError(t, err)
+
+	// The client sends no more data for now, but the other requests of the user must still run
+	statCtx, cancel := context.WithTimeout(ctx, time.Second)
+	defer cancel()
+	_, err = fs.GetMD(statCtx, &provider.Reference{Path: "."}, nil)
+	require.NoError(t, err)
+
+	_, err = client.Write([]byte("world"))
+	require.NoError(t, err)
+	require.NoError(t, client.Close())
+	require.NoError(t, <-done)
+
+	data, err := os.ReadFile(filepath.Join(tmpDir, "file.txt"))
+	require.NoError(t, err)
+	assert.Equal(t, "hello world", string(data))
 }
