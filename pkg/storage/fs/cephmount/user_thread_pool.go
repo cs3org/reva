@@ -227,13 +227,14 @@ type UserThread struct {
 	uid         int
 	gid         int
 	username    string
-	threadID    int
 	requestChan chan *ThreadRequest
 	quit        chan struct{}
 	lastUsed    time.Time
 	mu          sync.RWMutex
 	// Callers that hold this thread. Cleanup must not stop the thread while a caller waits on it.
 	callers atomic.Int32
+	// The thread sets its own ID after it starts, and the logging code reads it from other goroutines
+	threadID atomic.Int32
 }
 
 // ThreadRequest represents a request to execute on a user thread
@@ -476,7 +477,7 @@ func (ut *UserThread) run() {
 	defer runtime.UnlockOSThread()
 
 	// Get current thread ID
-	ut.threadID = getTID()
+	ut.threadID.Store(int32(getTID()))
 
 	// Set the filesystem UID for this thread
 	originalFsuid := setfsuidSafe(-1)
@@ -590,7 +591,7 @@ func (ut *UserThread) GetStats() map[string]any {
 		"uid":        ut.uid,
 		"gid":        ut.gid,
 		"username":   ut.username,
-		"thread_id":  ut.threadID,
+		"thread_id":  int(ut.threadID.Load()),
 		"last_used":  ut.lastUsed,
 		"queue_size": len(ut.requestChan),
 	}
