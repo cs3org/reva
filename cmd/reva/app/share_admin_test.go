@@ -262,8 +262,21 @@ func TestOwnerFallbackKeepsTheNotFound(t *testing.T) {
 	}
 }
 
+// directoryUser is a user whose opaque id is not its username, so that a
+// test tells the id that the user plane resolves from the name typed.
+func directoryUser(name string) *userpb.User {
+	return &userpb.User{Id: &userpb.UserId{Idp: "cernbox", OpaqueId: "id-" + name, Type: userpb.UserType_USER_TYPE_PRIMARY}, Username: name}
+}
+
+func addDirectoryUsers(b *clitest.Backend, names ...string) {
+	for _, n := range names {
+		b.AddUser(directoryUser(n))
+	}
+}
+
 func TestShareOperatorOptions(t *testing.T) {
 	b := clitest.New("alice")
+	addDirectoryUsers(b, "bob", "carol")
 	f := &sharesFleet{admin: true}
 
 	out, err := runAdmin(t, b, f, "", "share", "list", "--owner", "bob", "--orphans", "--expired", "--space", "cernbox")
@@ -275,7 +288,7 @@ func TestShareOperatorOptions(t *testing.T) {
 	}
 	l := sent[*adminpb.ListSharesRequest](f)
 	want := &adminpb.ListSharesRequest{
-		Filters: []*collaboration.Filter{{Type: collaboration.Filter_TYPE_OWNER, Term: &collaboration.Filter_Owner{Owner: &userpb.UserId{OpaqueId: "bob"}}}},
+		Filters: []*collaboration.Filter{{Type: collaboration.Filter_TYPE_OWNER, Term: &collaboration.Filter_Owner{Owner: directoryUser("bob").Id}}},
 		Space:   &adminpb.SpaceRef{Ref: &adminpb.SpaceRef_Name{Name: "cernbox"}},
 		Orphans: adminpb.ShareSelection_SHARE_SELECTION_ONLY, Expired: adminpb.ShareSelection_SHARE_SELECTION_ONLY, ResolvePaths: true,
 	}
@@ -302,7 +315,7 @@ func TestShareOperatorOptions(t *testing.T) {
 		t.Fatal(err)
 	}
 	if l := sent[*adminpb.ListPublicLinksRequest](f); len(l) != 2 || len(l[1].Filters) != 2 ||
-		l[1].Filters[0].GetOwner().GetOpaqueId() != "bob" || !proto.Equal(l[1].Filters[1].GetResourceId(), resource) {
+		!proto.Equal(l[1].Filters[0].GetOwner(), directoryUser("bob").Id) || !proto.Equal(l[1].Filters[1].GetResourceId(), resource) {
 		t.Errorf("ListPublicLinks requests %v, want OWNER and RESOURCE_ID filters", l)
 	}
 
@@ -319,12 +332,20 @@ func TestShareOperatorOptions(t *testing.T) {
 
 func TestShareOperatorVerbs(t *testing.T) {
 	b := clitest.New("alice")
+	addDirectoryUsers(b, "bob", "carol")
 	f := &sharesFleet{admin: true}
 	if _, err := runAdmin(t, b, f, "", "share", "transfer", "4711", "carol"); err != nil {
 		t.Fatal(err)
 	}
-	if r := sent[*adminpb.TransferShareRequest](f); len(r) != 1 || r[0].GetInitiator().GetOpaqueId() != "carol" || r[0].GetRef().GetId().GetOpaqueId() != "4711" {
+	if r := sent[*adminpb.TransferShareRequest](f); len(r) != 1 || !proto.Equal(r[0].GetInitiator(), directoryUser("carol").Id) || r[0].GetRef().GetId().GetOpaqueId() != "4711" {
 		t.Errorf("TransferShare requests %v", r)
+	}
+	// A name that the user plane does not know stops before the Admin API.
+	if _, err := runAdmin(t, b, f, "", "link", "transfer", "42", "nobody"); err == nil || err.Error() != "no user nobody" {
+		t.Errorf("link transfer to nobody: err = %v, want no user nobody", err)
+	}
+	if r := sent[*adminpb.TransferPublicLinkRequest](f); len(r) != 0 {
+		t.Errorf("TransferPublicLink requests %v, want none", r)
 	}
 	if _, err := runAdmin(t, b, f, "", "link", "mark-orphan", "tok"); err != nil {
 		t.Fatal(err)
@@ -338,7 +359,7 @@ func TestShareOperatorVerbs(t *testing.T) {
 		t.Fatalf("share move = %q, %v", out, err)
 	}
 	// The plan first, then the move.
-	if m := sent[*adminpb.MoveSharesRequest](f); len(m) != 2 || !m[0].DryRun || m[1].DryRun || m[1].GetOwner().GetOpaqueId() != "bob" || m[1].As != nil {
+	if m := sent[*adminpb.MoveSharesRequest](f); len(m) != 2 || !m[0].DryRun || m[1].DryRun || !proto.Equal(m[1].GetOwner(), directoryUser("bob").Id) || m[1].As != nil {
 		t.Errorf("MoveShares requests %v", m)
 	}
 	if _, err := runAdmin(t, b, f, "", "share", "move", "/eos/a", "/eos/b"); err == nil {

@@ -69,17 +69,17 @@ const (
 )
 
 type listArgs struct {
-	Owner          string `arg:"owner" help:"shares owned by this user"`
-	Initiator      string `arg:"initiator" help:"shares created by this user"`
-	Sharee         string `arg:"sharee" help:"shares received by this user or group"`
-	ID             string `arg:"id" help:"one share, by id; the other selectors are ignored"`
-	Space          string `arg:"space" help:"shares in this space, by space id"`
-	ResourceID     string `arg:"resource_id" help:"shares of this resource, by id: storage_id!opaque_id"`
-	Path           string `arg:"path" help:"shares of this path, which is resolved as the user in as, owner or initiator"`
-	As             string `arg:"as" help:"the user to resolve path and the share paths as; by default the initiator, then the owner of each share"`
-	IncludeOrphans bool   `arg:"include_orphans" help:"include orphaned shares"`
-	IncludeExpired *bool  `arg:"include_expired" help:"include expired shares (default true)"`
-	ResolvePaths   bool   `arg:"resolve_paths" help:"add the current path of each share"`
+	Owner          admin.UserID  `arg:"owner" help:"shares owned by this user: the protojson of a UserId, or its opaque id"`
+	Initiator      admin.UserID  `arg:"initiator" help:"shares created by this user: the protojson of a UserId, or its opaque id"`
+	Sharee         admin.Grantee `arg:"sharee" help:"shares received by this user or group: the protojson of a Grantee, or its opaque id"`
+	ID             string        `arg:"id" help:"one share, by id; the other selectors are ignored"`
+	Space          string        `arg:"space" help:"shares in this space, by space id"`
+	ResourceID     string        `arg:"resource_id" help:"shares of this resource, by id: storage_id!opaque_id"`
+	Path           string        `arg:"path" help:"shares of this path, which is resolved as the user in as, owner or initiator"`
+	As             admin.UserID  `arg:"as" help:"the user to resolve path and the share paths as; by default the initiator, then the owner of each share"`
+	IncludeOrphans bool          `arg:"include_orphans" help:"include orphaned shares"`
+	IncludeExpired *bool         `arg:"include_expired" help:"include expired shares (default true)"`
+	ResolvePaths   bool          `arg:"resolve_paths" help:"add the current path of each share"`
 }
 
 type idArgs struct {
@@ -105,15 +105,15 @@ type removeArgs struct {
 }
 
 type transferArgs struct {
-	ID        string `arg:"id,required" help:"the share id"`
-	Initiator string `arg:"initiator,required" help:"the new initiator, who must be allowed to share the resource"`
+	ID        string       `arg:"id,required" help:"the share id"`
+	Initiator admin.UserID `arg:"initiator,required" help:"the new initiator, who must be allowed to share the resource: the protojson of a UserId, or its opaque id"`
 }
 
 type moveArgs struct {
-	ID         string `arg:"id,required" help:"the share id"`
-	Path       string `arg:"path,required" help:"the new path of the shared resource"`
-	As         string `arg:"as" help:"the user to resolve path as; by default the owner, then the initiator of the share"`
-	ApplyGrant bool   `arg:"apply_grant" help:"also add the grant of the share on the new resource"`
+	ID         string       `arg:"id,required" help:"the share id"`
+	Path       string       `arg:"path,required" help:"the new path of the shared resource"`
+	As         admin.UserID `arg:"as" help:"the user to resolve path as; by default the owner, then the initiator of the share"`
+	ApplyGrant bool         `arg:"apply_grant" help:"also add the grant of the share on the new resource"`
 }
 
 func (s *service) registerInvocations() {
@@ -173,7 +173,7 @@ func (s *service) list(ctx context.Context, a listArgs, emit invoke.StreamEmit) 
 			g.SetLimit(resolveWorkers)
 			for i := range chunk {
 				g.Go(func() error {
-					paths[i] = resolvePath(users, &chunk[i], a.As)
+					paths[i] = resolvePath(users, &chunk[i], a.As.ID())
 					return nil
 				})
 			}
@@ -205,15 +205,16 @@ func (s *service) selectShares(ctx context.Context, m adminManager, a listArgs) 
 	}
 
 	var filters []*collaboration.Filter
-	if a.Owner != "" {
-		filters = append(filters, &collaboration.Filter{Type: collaboration.Filter_TYPE_OWNER, Term: &collaboration.Filter_Owner{Owner: &userpb.UserId{OpaqueId: a.Owner}}})
+	if id := a.Owner.ID(); id != nil {
+		filters = append(filters, &collaboration.Filter{Type: collaboration.Filter_TYPE_OWNER, Term: &collaboration.Filter_Owner{Owner: id}})
 	}
-	if a.Initiator != "" {
-		filters = append(filters, &collaboration.Filter{Type: collaboration.Filter_TYPE_CREATOR, Term: &collaboration.Filter_Creator{Creator: &userpb.UserId{OpaqueId: a.Initiator}}})
+	if id := a.Initiator.ID(); id != nil {
+		filters = append(filters, &collaboration.Filter{Type: collaboration.Filter_TYPE_CREATOR, Term: &collaboration.Filter_Creator{Creator: id}})
 	}
-	if a.Sharee != "" {
-		// share_with holds the name of a user or of a group alike.
-		filters = append(filters, revashare.GranteeFilter(userGrantee(&userpb.UserId{OpaqueId: a.Sharee})))
+	if g := a.Sharee.Get(); g != nil {
+		// share_with holds the opaque id of a user or of a group alike, so
+		// the type of the grantee is not matched.
+		filters = append(filters, revashare.GranteeFilter(g))
 	}
 	if a.Space != "" {
 		filters = append(filters, revashare.SpaceIDFilter(a.Space))
@@ -226,9 +227,9 @@ func (s *service) selectShares(ctx context.Context, m adminManager, a listArgs) 
 		filters = append(filters, revashare.ResourceIDFilter(id))
 	}
 	if a.Path != "" {
-		as := nonEmpty(a.As)
+		as := admin.Candidates(a.As.ID())
 		if len(as) == 0 {
-			as = nonEmpty(a.Owner, a.Initiator)
+			as = admin.Candidates(a.Owner.ID(), a.Initiator.ID())
 		}
 		if len(as) == 0 {
 			return nil, errtypes.BadRequest("path needs as, owner or initiator: the path is resolved as that user")
@@ -265,7 +266,7 @@ func (s *service) get(ctx context.Context, a getArgs) (invoke.Result, error) {
 		return nil, fmt.Errorf("share %s: %w", cmp.Or(a.ID, a.Key), err)
 	}
 	users := &admin.Users{Ctx: ctx}
-	return adminShare(sh, resolvePath(users, sh, ""))
+	return adminShare(sh, resolvePath(users, sh, nil))
 }
 
 func (s *service) update(ctx context.Context, a updateArgs) (invoke.Result, error) {
@@ -314,7 +315,7 @@ func (s *service) update(ctx context.Context, a updateArgs) (invoke.Result, erro
 		}
 		return status.NewOK(uctx), nil
 	})
-	audit(ctx, "update", sh, err, a.Fallback, map[string]string{"acted_as": actor, "role": a.Role, "expires_at": a.ExpiresAt})
+	audit(ctx, "update", sh, err, a.Fallback, map[string]string{"acted_as": actor.GetId().GetOpaqueId(), "role": a.Role, "expires_at": a.ExpiresAt})
 	if err != nil {
 		return nil, fmt.Errorf("updating share %s: %w", a.ID, err)
 	}
@@ -333,7 +334,7 @@ func (s *service) remove(ctx context.Context, a removeArgs) (invoke.Result, erro
 	if err != nil {
 		return nil, fmt.Errorf("share %s: %w", a.ID, err)
 	}
-	var actor string
+	var actor *userpb.User
 	// An orphan has no resource left, so the gateway cannot remove it.
 	if a.DBOnly || sh.IsOrphan() {
 		err = s.sm.Unshare(ctx, shareRef(a.ID))
@@ -347,7 +348,7 @@ func (s *service) remove(ctx context.Context, a removeArgs) (invoke.Result, erro
 			return res.GetStatus(), err
 		})
 	}
-	audit(ctx, "remove", sh, err, a.Fallback, map[string]string{"acted_as": actor, "db_only": strconv.FormatBool(a.DBOnly || sh.IsOrphan())})
+	audit(ctx, "remove", sh, err, a.Fallback, map[string]string{"acted_as": actor.GetId().GetOpaqueId(), "db_only": strconv.FormatBool(a.DBOnly || sh.IsOrphan())})
 	if err != nil {
 		return nil, fmt.Errorf("removing share %s: %w", a.ID, err)
 	}
@@ -379,13 +380,13 @@ func (s *service) syncExpiry(ctx context.Context, a idArgs) (invoke.Result, erro
 	// first user that can be looked up is tried.
 	var actor string
 	err = errtypes.BadRequest("no user to act as")
-	for _, u := range shareUsers(sh) {
-		uctx, _, lerr := admin.ActAs(ctx, u)
+	for _, id := range shareUsers(sh) {
+		uctx, _, lerr := admin.ActAs(ctx, id)
 		if lerr != nil {
 			err = lerr
 			continue
 		}
-		actor, err = u, job.SyncShare(uctx, sh.AsCS3Share(granteeOf(sh)))
+		actor, err = id.GetOpaqueId(), job.SyncShare(uctx, sh.AsCS3Share(granteeOf(sh)))
 		break
 	}
 	audit(ctx, "sync_expiry", sh, err, false, map[string]string{"acted_as": actor})
@@ -409,7 +410,7 @@ func (s *service) transfer(ctx context.Context, a transferArgs) (invoke.Result, 
 	}
 	// The storage decides who may hold a share: the new initiator must be
 	// allowed to add a grant on the resource.
-	uctx, u, err := admin.ActAs(ctx, a.Initiator)
+	uctx, u, err := admin.ActAs(ctx, a.Initiator.ID())
 	if err == nil {
 		var res *provider.StatResponse
 		res, err = statAs(uctx, &provider.Reference{ResourceId: resourceOf(sh)})
@@ -418,13 +419,14 @@ func (s *service) transfer(ctx context.Context, a transferArgs) (invoke.Result, 
 		case res.GetStatus().GetCode() != rpc.Code_CODE_OK:
 			err = status.NewErrtypeFromStatus(res.GetStatus())
 		case !res.GetInfo().GetPermissionSet().GetAddGrant():
-			err = errtypes.PermissionDenied(a.Initiator + " is not allowed to share the resource")
+			err = errtypes.PermissionDenied(a.Initiator.String() + " is not allowed to share the resource")
 		}
 	}
+	// The table keeps the opaque id of the initiator.
 	if err == nil {
 		err = m.TransferShare(ctx, shareRef(a.ID), u.GetId().GetOpaqueId())
 	}
-	audit(ctx, "transfer", sh, err, false, map[string]string{"from": sh.UIDInitiator, "to": a.Initiator})
+	audit(ctx, "transfer", sh, err, false, map[string]string{"from": sh.UIDInitiator, "to": a.Initiator.String()})
 	if err != nil {
 		return nil, fmt.Errorf("transferring share %s: %w", a.ID, err)
 	}
@@ -443,13 +445,13 @@ func (s *service) move(ctx context.Context, a moveArgs) (invoke.Result, error) {
 	if err != nil {
 		return nil, fmt.Errorf("share %s: %w", a.ID, err)
 	}
-	as := nonEmpty(a.As)
+	as := admin.Candidates(a.As.ID())
 	if len(as) == 0 {
-		as = nonEmpty(sh.UIDOwner, sh.UIDInitiator)
+		cs3 := sh.AsCS3Share(nil)
+		as = admin.Candidates(cs3.GetOwner(), cs3.GetCreator())
 	}
 	var info *provider.ResourceInfo
-	var actor string
-	actor, err = admin.ActAsFirst(ctx, as, func(uctx context.Context) (*rpc.Status, error) {
+	actor, err := admin.ActAsFirst(ctx, as, func(uctx context.Context) (*rpc.Status, error) {
 		res, err := statAs(uctx, &provider.Reference{Path: a.Path})
 		info = res.GetInfo()
 		return res.GetStatus(), err
@@ -464,7 +466,7 @@ func (s *service) move(ctx context.Context, a moveArgs) (invoke.Result, error) {
 	if err == nil && a.ApplyGrant {
 		err = s.applyGrant(ctx, actor, info.GetId(), sh)
 	}
-	audit(ctx, "move", sh, err, false, map[string]string{"acted_as": actor, "path": a.Path, "new_owner": owner, "apply_grant": strconv.FormatBool(a.ApplyGrant)})
+	audit(ctx, "move", sh, err, false, map[string]string{"acted_as": actor.GetId().GetOpaqueId(), "path": a.Path, "new_owner": owner, "apply_grant": strconv.FormatBool(a.ApplyGrant)})
 	if err != nil {
 		return nil, fmt.Errorf("moving share %s: %w", a.ID, err)
 	}
@@ -474,17 +476,18 @@ func (s *service) move(ctx context.Context, a moveArgs) (invoke.Result, error) {
 	return adminShare(sh, info.GetPath())
 }
 
-// applyGrant adds the grant of sh on id as username, on the storage provider
+// applyGrant adds the grant of sh on id as actor, on the storage provider
 // directly, as the gateway does: the gateway has no grant API.
-func (s *service) applyGrant(ctx context.Context, username string, id *provider.ResourceId, sh *model.Share) error {
-	uctx, _, err := admin.ActAs(ctx, username)
+func (s *service) applyGrant(ctx context.Context, actor *userpb.User, id *provider.ResourceId, sh *model.Share) error {
+	uctx, err := admin.As(ctx, actor)
 	if err != nil {
 		return err
 	}
 	grantee := granteeOf(sh)
 	if !sh.SharedWithIsGroup {
-		// The storage needs the type of the user, for example lightweight.
-		u, err := admin.Lookup(uctx, sh.ShareWith)
+		// The storage needs the type of the user, for example lightweight,
+		// and the table keeps only the opaque id.
+		u, err := admin.Lookup(uctx, grantee.GetUserId())
 		if err != nil {
 			return err
 		}
@@ -537,13 +540,13 @@ func statAs(uctx context.Context, ref *provider.Reference) (*provider.StatRespon
 
 // resolvePath returns the current path of the resource of sh, or "" if no
 // user can resolve it.
-func resolvePath(users *admin.Users, sh *model.Share, as string) string {
-	candidates := nonEmpty(as)
+func resolvePath(users *admin.Users, sh *model.Share, as *userpb.UserId) string {
+	candidates := admin.Candidates(as)
 	if len(candidates) == 0 {
 		candidates = shareUsers(sh)
 	}
-	for _, u := range candidates {
-		uctx := users.As(u)
+	for _, id := range candidates {
+		uctx := users.As(id)
 		if uctx == nil {
 			continue
 		}
@@ -645,12 +648,9 @@ func isExpired(sh *model.Share) bool {
 
 // shareUsers returns the users a share is acted on as, in order: the initiator
 // manages the share, and on a project the owner is a service account.
-func shareUsers(sh *model.Share) []string {
-	return slices.Compact(nonEmpty(sh.UIDInitiator, sh.UIDOwner))
-}
-
-func nonEmpty(vs ...string) []string {
-	return slices.DeleteFunc(vs, func(v string) bool { return v == "" })
+func shareUsers(sh *model.Share) []*userpb.UserId {
+	cs3 := sh.AsCS3Share(nil)
+	return admin.Candidates(cs3.GetCreator(), cs3.GetOwner())
 }
 
 // getRef returns the reference of the get invocation. The sql manager reads

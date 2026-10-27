@@ -35,6 +35,7 @@ import (
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	typespb "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
 	"github.com/cs3org/reva/v3/internal/grpc/control"
+	"github.com/cs3org/reva/v3/pkg/admin"
 	"github.com/cs3org/reva/v3/pkg/admin/adminpb"
 	"github.com/cs3org/reva/v3/pkg/control/controlpb"
 	"github.com/cs3org/reva/v3/pkg/errtypes"
@@ -364,7 +365,8 @@ func TestListSpaces(t *testing.T) {
 	c, f := spacesClient(t)
 	ctx := context.Background()
 	after := time.Date(2026, 1, 2, 3, 4, 5, 0, time.UTC)
-	filters := spaces.ListStorageSpaceFilter{}.ByOwner(&userpb.UserId{OpaqueId: "alice"}).ByUser(&userpb.UserId{OpaqueId: "bob"}).BySpaceType(spaces.SpaceTypeProject).List()
+	alice, bob := &userpb.UserId{Idp: "cernbox", OpaqueId: "alice"}, &userpb.UserId{Idp: "cernbox", OpaqueId: "bob"}
+	filters := spaces.ListStorageSpaceFilter{}.ByOwner(alice).ByUser(bob).BySpaceType(spaces.SpaceTypeProject).List()
 	st, err := c.ListSpaces(ctx, &adminpb.ListSpacesRequest{Filters: filters, Status: "active", CreatedAfter: &typespb.Timestamp{Seconds: uint64(after.Unix())}})
 	if err != nil {
 		t.Fatal(err)
@@ -378,7 +380,7 @@ func TestListSpaces(t *testing.T) {
 	if len(list) != 1 {
 		t.Fatalf("list ran %d times", len(list))
 	}
-	want := map[string]any{"owner": "alice", "member": "bob", "type": "project", "status": "active", "created_after": "2026-01-02T03:04:05Z"}
+	want := map[string]any{"owner": admin.UserArg(alice), "member": admin.UserArg(bob), "type": "project", "status": "active", "created_after": "2026-01-02T03:04:05Z"}
 	if a := list[0].args; !maps.Equal(a, want) {
 		t.Errorf("list args: %v, want %v", a, want)
 	}
@@ -453,11 +455,12 @@ func group(role, gid string) *provider.SpaceRole {
 func TestRegisterSpace(t *testing.T) {
 	c, f := spacesClient(t)
 	ctx := context.Background()
+	atlassvc := &userpb.UserId{Idp: "cernbox", OpaqueId: "atlassvc", Type: userpb.UserType_USER_TYPE_SERVICE}
 	space := &provider.StorageSpace{
 		Id:          &provider.StorageSpaceId{OpaqueId: "eosproject-a$atlas"},
 		Name:        "atlas",
 		SpaceType:   "project",
-		Owner:       &userpb.User{Id: &userpb.UserId{OpaqueId: "atlassvc"}},
+		Owner:       &userpb.User{Id: atlassvc},
 		RootInfo:    &provider.ResourceInfo{Path: "/eos/project/a/atlas"},
 		Description: "ATLAS",
 		Roles:       []*provider.SpaceRole{group("reader", "atlas-readers"), group("writer", "atlas-writers"), group("admin", "atlas-admins")},
@@ -466,7 +469,7 @@ func TestRegisterSpace(t *testing.T) {
 		t.Fatal(err)
 	}
 	want := map[string]any{
-		"name": "atlas", "owner": "atlassvc", "path": "/eos/project/a/atlas", "storage_id": "eosproject-a", "space_id": "atlas",
+		"name": "atlas", "owner": admin.UserArg(atlassvc), "path": "/eos/project/a/atlas", "storage_id": "eosproject-a", "space_id": "atlas",
 		"description": "ATLAS", "readers": "atlas-readers", "writers": "atlas-writers", "admins": "atlas-admins", "status": "creating",
 	}
 	if c := f.callsOf("create"); len(c) != 1 || !maps.Equal(c[0].args, want) {
@@ -475,11 +478,13 @@ func TestRegisterSpace(t *testing.T) {
 
 	// The root gives the storage, the username wins over the id, and the
 	// catalogue fills what is empty.
-	minimal := &provider.StorageSpace{Name: "cms", Owner: &userpb.User{Id: &userpb.UserId{OpaqueId: "1234"}, Username: "cmssvc"}, Root: &provider.ResourceId{StorageId: "eosproject-c"}}
+	// The owner travels as its id, never as its username.
+	cmssvc := &userpb.UserId{OpaqueId: "1234"}
+	minimal := &provider.StorageSpace{Name: "cms", Owner: &userpb.User{Id: cmssvc, Username: "cmssvc"}, Root: &provider.ResourceId{StorageId: "eosproject-c"}}
 	if _, err := c.RegisterSpace(ctx, &adminpb.RegisterSpaceRequest{Space: minimal}); err != nil {
 		t.Fatal(err)
 	}
-	if c := f.callsOf("create"); len(c) != 2 || !maps.Equal(c[1].args, map[string]any{"name": "cms", "owner": "cmssvc", "storage_id": "eosproject-c"}) {
+	if c := f.callsOf("create"); len(c) != 2 || !maps.Equal(c[1].args, map[string]any{"name": "cms", "owner": admin.UserArg(cmssvc), "storage_id": "eosproject-c"}) {
 		t.Fatalf("create calls: %+v", c)
 	}
 
@@ -509,7 +514,8 @@ func TestRegisterSpace(t *testing.T) {
 
 func TestCheckSpaces(t *testing.T) {
 	c, f := spacesClient(t)
-	st, err := c.CheckSpaces(context.Background(), &adminpb.CheckSpacesRequest{Owner: &userpb.UserId{OpaqueId: "alice"}})
+	alice := &userpb.UserId{Idp: "cernbox", OpaqueId: "alice"}
+	st, err := c.CheckSpaces(context.Background(), &adminpb.CheckSpacesRequest{Owner: alice})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -520,7 +526,7 @@ func TestCheckSpaces(t *testing.T) {
 	if got[0].Space.Space.Name != "cernbox" || got[0].Findings[0].Kind != "no_members" {
 		t.Fatalf("unexpected check %v", got[0])
 	}
-	if c := f.callsOf("check"); len(c) != 1 || !maps.Equal(c[0].args, map[string]any{"owner": "alice"}) {
+	if c := f.callsOf("check"); len(c) != 1 || !maps.Equal(c[0].args, map[string]any{"owner": admin.UserArg(alice)}) {
 		t.Errorf("check calls: %+v", c)
 	}
 }

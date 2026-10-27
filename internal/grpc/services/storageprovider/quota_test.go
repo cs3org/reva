@@ -22,6 +22,8 @@ import (
 	"context"
 	"testing"
 
+	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
+	"github.com/cs3org/reva/v3/pkg/admin"
 	"github.com/cs3org/reva/v3/pkg/invoke"
 	"github.com/cs3org/reva/v3/pkg/storage"
 )
@@ -73,11 +75,12 @@ func TestQuotaInvocations(t *testing.T) {
 		t.Fatalf("metadata: %v", m)
 	}
 
-	res, err := s.Invoke(ctx, "quota_get", map[string]any{"root": "/eos/user/e/einstein", "space_type": "personal", "owner": "einstein"})
-	if err != nil || res["root"] != "/eos/user/e/einstein" || res["max_bytes"] != uint64(10) || res["form"] != "project" || res["owner"] != "einstein" {
+	owner := admin.UserArg(&userpb.UserId{Idp: "cernbox", OpaqueId: "einstein"})
+	res, err := s.Invoke(ctx, "quota_get", map[string]any{"root": "/eos/user/e/einstein", "space_type": "personal", "owner": owner})
+	if err != nil || res["root"] != "/eos/user/e/einstein" || res["max_bytes"] != uint64(10) || res["form"] != "project" || res["owner"].(map[string]any)["opaqueId"] != "einstein" {
 		t.Fatalf("quota_get: %v %v", res, err)
 	}
-	if ref := fs.refs[0]; ref.Root != "/e/einstein" || ref.Type != "personal" || ref.Owner.GetOpaqueId() != "einstein" {
+	if ref := fs.refs[0]; ref.Root != "/e/einstein" || ref.Type != "personal" || ref.Owner.GetOpaqueId() != "einstein" || ref.Owner.GetIdp() != "cernbox" {
 		t.Fatalf("ref: %+v", ref)
 	}
 

@@ -37,6 +37,7 @@ import (
 	"github.com/cs3org/reva/v3/pkg/spaces"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
+	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/types/known/fieldmaskpb"
 )
 
@@ -226,7 +227,7 @@ func (a *spacesAdmin) spaceForQuota(ctx context.Context, ref *adminpb.SpaceRef) 
 }
 
 func (sp quotaSpace) args() map[string]string {
-	args := map[string]string{"root": sp.root, "space_type": sp.spaceType, "owner": sp.owner.GetOpaqueId()}
+	args := map[string]string{"root": sp.root, "space_type": sp.spaceType, "owner": admin.UserArg(sp.owner)}
 	maps.DeleteFunc(args, func(_, v string) bool { return v == "" })
 	return args
 }
@@ -244,20 +245,20 @@ func invokeQuota(ctx context.Context, eps []client.Endpoint, invocation string, 
 // provider. It has what is used, and CS3 has what remains, so SpaceQuota
 // carries both.
 type quotaResult struct {
-	Root             string `json:"root"`
-	MountID          string `json:"mount_id"`
-	MaxBytes         uint64 `json:"max_bytes"`
-	UsedBytes        uint64 `json:"used_bytes"`
-	MaxFiles         uint64 `json:"max_files"`
-	UsedFiles        uint64 `json:"used_files"`
-	PhysicalMaxBytes uint64 `json:"physical_max_bytes"`
-	Form             string `json:"form"`
-	SpaceType        string `json:"space_type"`
-	Owner            string `json:"owner"`
+	Root             string          `json:"root"`
+	MountID          string          `json:"mount_id"`
+	MaxBytes         uint64          `json:"max_bytes"`
+	UsedBytes        uint64          `json:"used_bytes"`
+	MaxFiles         uint64          `json:"max_files"`
+	UsedFiles        uint64          `json:"used_files"`
+	PhysicalMaxBytes uint64          `json:"physical_max_bytes"`
+	Form             string          `json:"form"`
+	SpaceType        string          `json:"space_type"`
+	Owner            json.RawMessage `json:"owner"`
 }
 
-// decodeQuota reads a quota invocation result about sp. The catalogue knows
-// the owner better than the result, which has only its opaque id.
+// decodeQuota reads a quota invocation result about sp. The owner of the
+// catalogue is kept over the owner that the result echoes.
 func decodeQuota(resultJSON string, sp quotaSpace) (*adminpb.SpaceQuota, error) {
 	var r quotaResult
 	if err := json.Unmarshal([]byte(resultJSON), &r); err != nil {
@@ -279,8 +280,12 @@ func decodeQuota(resultJSON string, sp quotaSpace) (*adminpb.SpaceQuota, error) 
 		UsedBytes:        r.UsedBytes,
 		UsedFiles:        r.UsedFiles,
 	}
-	if q.Owner == nil && r.Owner != "" {
-		q.Owner = &userpb.UserId{OpaqueId: r.Owner}
+	if q.Owner == nil && len(r.Owner) > 0 {
+		owner := &userpb.UserId{}
+		if err := protojson.Unmarshal(r.Owner, owner); err != nil {
+			return nil, status.Errorf(codes.Internal, "admin: decoding the owner of a quota: %v", err)
+		}
+		q.Owner = owner
 	}
 	if sp.id != nil {
 		q.Space = &adminpb.SpaceRef{Ref: &adminpb.SpaceRef_Id{Id: sp.id}}

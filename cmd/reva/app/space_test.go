@@ -56,6 +56,7 @@ func spacesBackend() *clitest.Backend {
 	b.AddSpace(testSpace("eoshome-a$alice", "alice", "personal", "alice", "/eos/user/a/alice"))
 	b.AddSpace(testSpace("eosproject-c$cernbox", "cernbox", "project", "alice", "/eos/project/c/cernbox"))
 	b.AddSpace(testSpace("eosproject-a$atlas", "atlas", "project", "bob", "/eos/project/a/atlas"))
+	addDirectoryUsers(b, "bob", "carol", "lhcbsvc")
 	return b
 }
 
@@ -221,7 +222,7 @@ func TestSpaceOperatorOptions(t *testing.T) {
 		t.Errorf("space list --owner = %q, want the catalogue with a status column", out)
 	}
 	req := f.calls["ListSpaces"].(*adminpb.ListSpacesRequest)
-	if fs := req.GetFilters(); len(fs) != 1 || fs[0].GetType() != provider.ListStorageSpacesRequest_Filter_TYPE_OWNER || fs[0].GetOwner().GetOpaqueId() != "bob" || !req.IncludeArchived {
+	if fs := req.GetFilters(); len(fs) != 1 || fs[0].GetType() != provider.ListStorageSpacesRequest_Filter_TYPE_OWNER || !proto.Equal(fs[0].GetOwner(), directoryUser("bob").Id) || !req.IncludeArchived {
 		t.Errorf("ListSpaces request = %v", req)
 	}
 	// The catalogue record is the AdminSpace.
@@ -264,13 +265,13 @@ func TestSpaceOperatorCommands(t *testing.T) {
 	if out := mustRun(t, spacesBackend(), append(flags, "space", "check", "--owner", "bob")...); !strings.Contains(out, "owner_missing") {
 		t.Errorf("space check = %q", out)
 	}
-	if req := f.calls["CheckSpaces"].(*adminpb.CheckSpacesRequest); req.GetOwner().GetOpaqueId() != "bob" {
+	if req := f.calls["CheckSpaces"].(*adminpb.CheckSpacesRequest); !proto.Equal(req.GetOwner(), directoryUser("bob").Id) {
 		t.Errorf("CheckSpaces request = %v", req)
 	}
 	if out := mustRun(t, spacesBackend(), append(flags, "space", "set-owner", "atlas", "carol")...); !strings.Contains(out, "carol") {
 		t.Errorf("space set-owner = %q", out)
 	}
-	if req := f.calls["SetSpaceOwner"].(*adminpb.SetSpaceOwnerRequest); req.GetOwner().GetOpaqueId() != "carol" {
+	if req := f.calls["SetSpaceOwner"].(*adminpb.SetSpaceOwnerRequest); !proto.Equal(req.GetOwner(), directoryUser("carol").Id) {
 		t.Errorf("SetSpaceOwner request = %v", req)
 	}
 }
@@ -283,7 +284,7 @@ func TestSpaceRegister(t *testing.T) {
 		"--storage-id", "eosproject-l", "--readers", "lhcb-readers", "--admins", "lhcb-admins", "--status", "creating")...)
 	req := f.calls["RegisterSpace"].(*adminpb.RegisterSpaceRequest)
 	s := req.GetSpace()
-	if s.GetName() != "lhcb" || s.GetOwner().GetId().GetOpaqueId() != "lhcbsvc" || s.GetRootInfo().GetPath() != "/eos/project/l/lhcb" ||
+	if s.GetName() != "lhcb" || !proto.Equal(s.GetOwner().GetId(), directoryUser("lhcbsvc").Id) || s.GetRootInfo().GetPath() != "/eos/project/l/lhcb" ||
 		s.GetRoot().GetStorageId() != "eosproject-l" || s.GetId() != nil || req.Status != "creating" {
 		t.Fatalf("RegisterSpace request = %v", req)
 	}
