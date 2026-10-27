@@ -103,3 +103,36 @@ func TestUserThreadParallelRequests(t *testing.T) {
 	}
 	wg.Wait()
 }
+
+func TestUserThreadSkipsCancelledRequest(t *testing.T) {
+	pool, _, err := NewUserThreadPool(UserThreadPoolConfig{})
+	require.NoError(t, err)
+	defer pool.Shutdown()
+	user := &userv1beta1.User{Id: &userv1beta1.UserId{OpaqueId: "einstein"}, Username: "einstein", UidNumber: 4242, GidNumber: 4242}
+
+	// Keep the thread busy, so that the next request stays in the queue
+	started, release := make(chan struct{}), make(chan struct{})
+	go pool.ExecuteOnUserThread(context.Background(), user, func() (any, error) {
+		close(started)
+		<-release
+		return nil, nil
+	})
+	<-started
+
+	ran := false
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Millisecond)
+	defer cancel()
+	_, err = pool.ExecuteOnUserThread(ctx, user, func() (any, error) {
+		ran = true
+		return nil, nil
+	})
+	require.ErrorIs(t, err, context.DeadlineExceeded)
+	close(release)
+
+	// Requests run in order, so when this request returns, the thread has handled the cancelled request
+	_, err = pool.ExecuteOnUserThread(context.Background(), user, func() (any, error) {
+		return nil, nil
+	})
+	require.NoError(t, err)
+	assert.False(t, ran)
+}
