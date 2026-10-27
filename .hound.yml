@@ -1,4 +1,0 @@
-scss:
-  enabled: false
-jshint:
-  ignore_file: .hound_js_ignore
