@@ -9,7 +9,7 @@ description: >
 # _struct: OcmProviderConfig_
 
 {{% dir name="ocm_prefix" type="string" default="ocm" %}}
-The prefix URL where the OCM API is served. [[Ref]](https://github.com/cs3org/reva/tree/master/internal/http/services/wellknown/ocm.go#L33)
+The prefix URL where the OCM API is served. [[Ref]](https://github.com/cs3org/reva/tree/master/internal/http/services/wellknown/ocm.go#L34)
 {{< highlight toml >}}
 [http.services.wellknown]
 ocm_prefix = "ocm"
@@ -17,7 +17,7 @@ ocm_prefix = "ocm"
 {{% /dir %}}
 
 {{% dir name="endpoint" type="string" default="This host's full URL. If it's not configured, it is assumed OCM is not available." %}}
- [[Ref]](https://github.com/cs3org/reva/tree/master/internal/http/services/wellknown/ocm.go#L34)
+ [[Ref]](https://github.com/cs3org/reva/tree/master/internal/http/services/wellknown/ocm.go#L35)
 {{< highlight toml >}}
 [http.services.wellknown]
 endpoint = "This host's full URL. If it's not configured, it is assumed OCM is not available."
@@ -25,7 +25,7 @@ endpoint = "This host's full URL. If it's not configured, it is assumed OCM is n
 {{% /dir %}}
 
 {{% dir name="provider" type="string" default="reva" %}}
-A friendly name that defines this service. [[Ref]](https://github.com/cs3org/reva/tree/master/internal/http/services/wellknown/ocm.go#L35)
+A friendly name that defines this service. [[Ref]](https://github.com/cs3org/reva/tree/master/internal/http/services/wellknown/ocm.go#L36)
 {{< highlight toml >}}
 [http.services.wellknown]
 provider = "reva"
@@ -33,7 +33,7 @@ provider = "reva"
 {{% /dir %}}
 
 {{% dir name="webdav_root" type="string" default="/remote.php/dav/ocm" %}}
-The root URL of the WebDAV endpoint to serve OCM shares. [[Ref]](https://github.com/cs3org/reva/tree/master/internal/http/services/wellknown/ocm.go#L36)
+The root URL of the WebDAV endpoint to serve OCM shares. [[Ref]](https://github.com/cs3org/reva/tree/master/internal/http/services/wellknown/ocm.go#L37)
 {{< highlight toml >}}
 [http.services.wellknown]
 webdav_root = "/remote.php/dav/ocm"
@@ -41,7 +41,7 @@ webdav_root = "/remote.php/dav/ocm"
 {{% /dir %}}
 
 {{% dir name="invite_accept_dialog" type="string" default="/open-cloud-mesh/accept-invite" %}}
-The frontend URL where to land when receiving an invitation [[Ref]](https://github.com/cs3org/reva/tree/master/internal/http/services/wellknown/ocm.go#L37)
+The frontend URL where to land when receiving an invitation [[Ref]](https://github.com/cs3org/reva/tree/master/internal/http/services/wellknown/ocm.go#L38)
 {{< highlight toml >}}
 [http.services.wellknown]
 invite_accept_dialog = "/open-cloud-mesh/accept-invite"
@@ -49,7 +49,7 @@ invite_accept_dialog = "/open-cloud-mesh/accept-invite"
 {{% /dir %}}
 
 {{% dir name="enable_webapp" type="bool" default=false %}}
-Whether web apps are enabled in OCM shares. [[Ref]](https://github.com/cs3org/reva/tree/master/internal/http/services/wellknown/ocm.go#L38)
+Whether web apps are enabled in OCM shares. [[Ref]](https://github.com/cs3org/reva/tree/master/internal/http/services/wellknown/ocm.go#L39)
 {{< highlight toml >}}
 [http.services.wellknown]
 enable_webapp = false
@@ -57,7 +57,7 @@ enable_webapp = false
 {{% /dir %}}
 
 {{% dir name="enable_embedded" type="bool" default=false %}}
-Whether embedded shares are enabled in OCM shares. [[Ref]](https://github.com/cs3org/reva/tree/master/internal/http/services/wellknown/ocm.go#L39)
+Whether embedded shares are enabled in OCM shares. [[Ref]](https://github.com/cs3org/reva/tree/master/internal/http/services/wellknown/ocm.go#L40)
 {{< highlight toml >}}
 [http.services.wellknown]
 enable_embedded = false
@@ -65,10 +65,18 @@ enable_embedded = false
 {{% /dir %}}
 
 {{% dir name="enable_code_flow" type="bool" default=false %}}
-Whether code-flow token exchange is enabled in OCM shares. [[Ref]](https://github.com/cs3org/reva/tree/master/internal/http/services/wellknown/ocm.go#L40)
+Whether code-flow token exchange is enabled in OCM shares. [[Ref]](https://github.com/cs3org/reva/tree/master/internal/http/services/wellknown/ocm.go#L41)
 {{< highlight toml >}}
 [http.services.wellknown]
 enable_code_flow = false
+{{< /highlight >}}
+{{% /dir %}}
+
+{{% dir name="signing_key" type="string" default="" %}}
+Path to the PEM file of the Ed25519 private key for OCM HTTP signatures. If it's not configured, no public key is published. [[Ref]](https://github.com/cs3org/reva/tree/master/internal/http/services/wellknown/ocm.go#L42)
+{{< highlight toml >}}
+[http.services.wellknown]
+signing_key = ""
 {{< /highlight >}}
 {{% /dir %}}
 

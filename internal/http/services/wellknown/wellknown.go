@@ -80,8 +80,13 @@ func (s *svc) routerInit(log *zerolog.Logger) error {
 	s.router.Use(limiter.Middleware)
 
 	wkocmHandler := new(wkocmHandler)
-	wkocmHandler.init(&s.Conf.OCMProvider)
+	if err := wkocmHandler.init(&s.Conf.OCMProvider); err != nil {
+		return err
+	}
 	s.router.Get("/ocm", wkocmHandler.Ocm)
+	if wkocmHandler.jwks != nil {
+		s.router.Get("/jwks.json", wkocmHandler.Jwks)
+	}
 	return nil
 }
 

@@ -19,10 +19,12 @@
 package ocmd
 
 import (
+	"bytes"
 	"context"
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	"io"
 	"mime"
 	"net/http"
 	"net/url"
@@ -142,6 +144,13 @@ func (h *sharesHandler) isAcceptedUser(ctx context.Context, recipient *userpb.Us
 func (h *sharesHandler) CreateShare(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	log := appctx.GetLogger(ctx)
+	// The signature covers the exact body bytes, thus keep a copy to verify it.
+	body, err := io.ReadAll(r.Body)
+	if err != nil {
+		reqres.WriteError(w, r, reqres.APIErrorInvalidParameter, "error reading the request body", err)
+		return
+	}
+	r.Body = io.NopCloser(bytes.NewReader(body))
 	req, err := getCreateShareRequest(r)
 	// Log whitelist metadata only; incoming OCM share requests carry shared secrets in protocol options.
 	logEvent := log.Info().Str("remote", r.RemoteAddr).Err(err)
@@ -227,7 +236,17 @@ func (h *sharesHandler) CreateShare(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	protocols, legacy, err := h.getAndResolveProtocols(ctx, req.Protocols, req.ResourceType, sender.Idp)
+	disco, err := h.ocmClient.Discover(ctx, sender.Idp)
+	if err != nil {
+		reqres.WriteError(w, r, reqres.APIErrorInvalidParameter, "error discovering the remote OCM server", err)
+		return
+	}
+	if err := verifySignature(ctx, h.ocmClient, r, body, disco); err != nil {
+		reqres.WriteError(w, r, reqres.APIErrorUnauthenticated, "invalid HTTP signature", err)
+		return
+	}
+
+	protocols, legacy, err := h.getAndResolveProtocols(req.Protocols, req.ResourceType, disco)
 	if err != nil || len(protocols) == 0 {
 		reqres.WriteError(w, r, reqres.APIErrorInvalidParameter, "error with protocols payload", err)
 		return
@@ -445,15 +464,10 @@ func getOCMShareType(st string) ocm.RecipientType {
 	}
 }
 
-func (h *sharesHandler) getAndResolveProtocols(ctx context.Context, p Protocols, resType string, ownerServer string) (protos []*ocm.Protocol, legacy bool, err error) {
+func (h *sharesHandler) getAndResolveProtocols(p Protocols, resType string, disco *wellknown.OcmDiscoveryData) (protos []*ocm.Protocol, legacy bool, err error) {
 	protos = make([]*ocm.Protocol, 0, len(p))
 	legacy = false
-
-	// discover remote resource types
-	ocmRTs, ocmEndpoint, err := h.discoverOcmResourceTypes(ctx, ownerServer)
-	if err != nil {
-		return nil, false, errors.Wrap(err, "error discovering remote OCM resource types")
-	}
+	ocmRTs, ocmEndpoint := disco.ResourceTypes, disco.Endpoint
 
 	for _, data := range p {
 		var uri string
@@ -530,13 +544,4 @@ func (h *sharesHandler) getAndResolveProtocols(ctx context.Context, p Protocols,
 	}
 
 	return protos, legacy, nil
-}
-
-func (h *sharesHandler) discoverOcmResourceTypes(ctx context.Context, ownerServer string) ([]wellknown.ResourceTypes, string, error) {
-	ocmCaps, err := h.ocmClient.Discover(ctx, ownerServer)
-	if err != nil {
-		return nil, "", err
-	}
-
-	return ocmCaps.ResourceTypes, ocmCaps.Endpoint, nil
 }

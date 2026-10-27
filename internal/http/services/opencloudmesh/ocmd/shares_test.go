@@ -131,12 +131,12 @@ func initSharesHandler(t *testing.T, c *config) *sharesHandler {
 // --- tests ---
 
 func TestCreateShareReturnsServerErrorForNonOKCreateStatus(t *testing.T) {
-	// Start a local OCM discovery server so discoverOcmResourceTypes succeeds.
+	// Start a local OCM discovery server so the discovery succeeds.
 	disco := ocmDiscoveryServer(t, "webdav", "file")
 	defer disco.Close()
 
 	// The sender's Idp must equal the host:port of our local discovery server
-	// so that discoverOcmResourceTypes calls it instead of the real internet.
+	// so that the discovery calls it instead of the real internet.
 	senderAddr := disco.Listener.Addr().String() // e.g. "127.0.0.1:54321"
 
 	stampGateway(&sharesMockGW{
@@ -317,9 +317,9 @@ func TestDiscoverVerifiesTLSUnlessInsecure(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			h := initSharesHandler(t, &tt.conf)
-			_, _, err := h.discoverOcmResourceTypes(context.Background(), srv.URL)
+			_, err := h.ocmClient.Discover(context.Background(), srv.URL)
 			if (err != nil) != tt.wantErr {
-				t.Errorf("discoverOcmResourceTypes() error = %v, wantErr %v", err, tt.wantErr)
+				t.Errorf("Discover() error = %v, wantErr %v", err, tt.wantErr)
 			}
 		})
 	}
@@ -527,7 +527,7 @@ func runSharesProxyChild(t *testing.T, scenario string) {
 	h := initSharesHandler(t, conf)
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancel()
-	_, _, err := h.discoverOcmResourceTypes(ctx, sharesProxyTarget)
+	_, err := h.ocmClient.Discover(ctx, sharesProxyTarget)
 	if scenario == "direct" && !errors.Is(err, client.ErrPolicyViolation) {
 		t.Fatalf("zero config error = %v, want ErrPolicyViolation", err)
 	}
@@ -555,23 +555,23 @@ func TestDiscoverOcmResourceTypesLoopbackPolicy(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			h := initSharesHandler(t, &tt.conf)
-			rts, endpoint, err := h.discoverOcmResourceTypes(context.Background(), disco.URL)
+			d, err := h.ocmClient.Discover(context.Background(), disco.URL)
 			if (err != nil) != tt.wantErr {
-				t.Errorf("discoverOcmResourceTypes() error = %v, wantErr %v", err, tt.wantErr)
+				t.Errorf("Discover() error = %v, wantErr %v", err, tt.wantErr)
 			}
 			if tt.wantErr {
 				if !errors.Is(err, client.ErrPolicyViolation) {
-					t.Errorf("discoverOcmResourceTypes() error = %v, want ErrPolicyViolation", err)
+					t.Errorf("Discover() error = %v, want ErrPolicyViolation", err)
 				}
 				return
 			}
 			if err != nil {
 				return
 			}
-			if len(rts) == 0 {
+			if len(d.ResourceTypes) == 0 {
 				t.Fatal("expected advertised resource types")
 			}
-			if endpoint == "" {
+			if d.Endpoint == "" {
 				t.Fatal("expected discovery endpoint")
 			}
 		})
@@ -586,7 +586,7 @@ func TestDiscoverOcmResourceTypesMalformedReturnsDecodeError(t *testing.T) {
 	defer srv.Close()
 
 	h := initSharesHandler(t, &config{AllowLoopbackFederation: true})
-	_, _, err := h.discoverOcmResourceTypes(context.Background(), srv.URL)
+	_, err := h.ocmClient.Discover(context.Background(), srv.URL)
 	if err == nil {
 		t.Fatal("expected discovery decode error")
 	}
@@ -1238,4 +1238,44 @@ func mustSharesRequest(t *testing.T, rawURL string) *http.Request {
 		t.Fatalf("NewRequest(%q): %v", rawURL, err)
 	}
 	return req
+}
+
+func TestCreateShareRejectsUnsignedFromSigningServer(t *testing.T) {
+	remote := signingServer(t, newSigningKey(t))
+	defer remote.Close()
+	senderAddr := remote.Listener.Addr().String()
+
+	stampGateway(&sharesMockGW{
+		createResp: &ocmincoming.CreateOCMIncomingShareResponse{
+			Status: &rpc.Status{Code: rpc.Code_CODE_OK},
+		},
+	})
+	h := initSharesHandler(t, &config{AllowLoopbackFederation: true})
+
+	body, _ := json.Marshal(map[string]any{
+		"shareWith":    "marie@local.example.org",
+		"name":         "test.txt",
+		"providerId":   "provider-id",
+		"owner":        fmt.Sprintf("einstein@%s", senderAddr),
+		"sender":       fmt.Sprintf("einstein@%s", senderAddr),
+		"shareType":    "user",
+		"resourceType": "file",
+		"protocol": map[string]any{
+			"webdav": map[string]any{
+				"sharedSecret": "secret",
+				"permissions":  []string{"read"},
+				"uri":          fmt.Sprintf("http://%s/remote.php/dav/files/einstein/test.txt", senderAddr),
+			},
+		},
+	})
+	req := httptest.NewRequest(http.MethodPost, "/ocm/shares", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	req.RemoteAddr = "192.0.2.15:12345"
+
+	rr := httptest.NewRecorder()
+	h.CreateShare(rr, req)
+
+	if rr.Code != http.StatusUnauthorized {
+		t.Fatalf("CreateShare() status = %d, want %d", rr.Code, http.StatusUnauthorized)
+	}
 }

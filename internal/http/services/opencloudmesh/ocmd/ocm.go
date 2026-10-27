@@ -147,6 +147,8 @@ func (s *svc) routerInit(log *zerolog.Logger) error {
 	if err := notifHandler.init(s.Conf); err != nil {
 		return err
 	}
+	// Both handlers discover a remote server that the request names, thus they use the same public-only client.
+	invitesHandler.ocmClient = sharesHandler.ocmClient
 
 	tokenHandler := new(tokenHandler)
 	if err := tokenHandler.init(s.Conf); err != nil {
