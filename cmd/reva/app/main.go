@@ -41,9 +41,9 @@ import (
 var gitCommit, buildDate, version, goVersion = rversion.GitCommit, rversion.BuildDate, rversion.Version, rversion.GoVersion
 
 // mutating are the commands that change data. Under --as they ask for a
-// confirmation. cp asks only for an upload, in the command itself.
+// confirmation. cp and sync ask only for an upload, in the command itself.
 var mutating = []string{
-	"mkdir", "mv", "rm", "touch", "trash restore", "trash purge", "lock set", "lock remove",
+	"mkdir", "mv", "rm", "touch", "edit", "versions restore", "trash restore", "trash purge", "lock set", "lock remove",
 	"share create", "share update", "share remove", "share received update",
 	"link create", "link update", "link remove", "space update",
 	"ocm invite create", "ocm invite accept", "ocm share create", "ocm share update", "ocm share remove",
@@ -184,7 +184,8 @@ func rootCommand(rt *cli.Runtime, started *bool) *cobra.Command {
 	}
 	add("files",
 		lsCommand(rt), statCommand(rt), mkdirCommand(rt), mvCommand(rt), rmCommand(rt), touchCommand(rt),
-		cpCommand(rt), versionsCommand(rt), trashCommand(rt), lockCommand(rt),
+		cpCommand(rt), syncCommand(rt), archiveCommand(rt), catCommand(rt), tailCommand(rt), editCommand(rt),
+		findCommand(rt), duCommand(rt), versionsCommand(rt), trashCommand(rt), lockCommand(rt),
 	)
 	add("sharing", shareCommand(rt), linkCommand(rt), ocmCommand(rt))
 	add("users", userCommand(rt))
@@ -193,7 +194,7 @@ func rootCommand(rt *cli.Runtime, started *bool) *cobra.Command {
 	add("fleet", admin.Commands(rt)...)
 	add("session",
 		loginCommand(rt), logoutCommand(rt), statusCommand(rt), whoamiCommand(rt), configCommand(rt),
-		admin.ElevateCommand(rt), openCommand(rt), tokenCommand(rt), preferencesCommand(rt), versionCommand(rt),
+		admin.ElevateCommand(rt), openCommand(rt), tokenCommand(rt), preferencesCommand(rt), doctorCommand(rt), versionCommand(rt),
 		completionCommand(),
 	)
 	for _, p := range mutating {

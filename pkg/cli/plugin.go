@@ -43,9 +43,9 @@ const (
 // plugin gives one, and auth.chain of the brand names it.
 type AuthProvider = auth.Provider
 
-// PathResolver turns a path argument into a remote path.
-//
-// TODO(T41): this is provisional. The path resolver replaces it.
+// PathResolver turns a path argument into a remote path. A cli.paths.*
+// plugin gives one. Runtime.RemotePath asks the plugins before its own
+// rules.
 type PathResolver interface {
 	// Resolve returns ok false for an argument that is not for this resolver.
 	Resolve(ctx context.Context, arg string) (path string, ok bool, err error)

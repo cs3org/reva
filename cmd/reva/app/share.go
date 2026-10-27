@@ -46,7 +46,7 @@ func shareCommand(rt *cli.Runtime) *cobra.Command {
 	cmd := &cobra.Command{Use: "share", Short: "Manage shares with users and groups"}
 	received := &cobra.Command{Use: "received", Short: "Manage the shares you received"}
 	received.AddCommand(shareReceivedListCommand(rt), shareReceivedUpdateCommand(rt))
-	cmd.AddCommand(shareCreateCommand(rt), shareListCommand(rt), shareGetCommand(rt), shareUpdateCommand(rt), shareRemoveCommand(rt), received,
+	cmd.AddCommand(shareCreateCommand(rt), shareListCommand(rt), shareGetCommand(rt), shareUpdateCommand(rt), shareRemoveCommand(rt), received, shareAuditCommand(rt),
 		shareSyncExpiryCommand(rt), shareTransferCommand(rt), shareMarkOrphanCommand(rt), shareMoveCommand(rt))
 	return cmd
 }
