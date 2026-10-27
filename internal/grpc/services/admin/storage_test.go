@@ -20,13 +20,14 @@ package admin
 
 import (
 	"context"
-	"errors"
 	"maps"
 	"slices"
 	"strings"
 	"sync"
 	"testing"
 
+	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
+	registrypb "github.com/cs3org/go-cs3apis/cs3/storage/registry/v1beta1"
 	"github.com/cs3org/reva/v3/internal/grpc/control"
 	"github.com/cs3org/reva/v3/pkg/admin/adminpb"
 	"github.com/cs3org/reva/v3/pkg/control/controlpb"
@@ -110,7 +111,7 @@ func (f *fakeStorageRegistry) set() *invoke.Set {
 	}))
 	set.Add("route_reload", "").Handle(invoke.Typed(func(context.Context, struct{}) (invoke.Result, error) {
 		if f.failLoad {
-			return nil, errors.New("the routing table is not reachable")
+			return nil, status.Error(codes.Unavailable, "the routing table is not reachable")
 		}
 		f.table.mu.Lock()
 		defer f.table.mu.Unlock()
@@ -173,24 +174,31 @@ func storageFleet(t *testing.T) (*storageAdmin, *routeTable, []*fakeStorageRegis
 	return &storageAdmin{s: &svc{}}, table, regs
 }
 
+func route(path, mountID string) *registrypb.ProviderInfo {
+	return &registrypb.ProviderInfo{ProviderPath: path, ProviderId: mountID}
+}
+
 // A route is written once, every registry reloads it, and the one that
 // cannot reload is reported as stale.
 func TestAddRouteReportsTheStaleRegistries(t *testing.T) {
 	a, table, regs := storageFleet(t)
 	ctx := context.Background()
 
-	res, err := a.AddRoute(ctx, &adminpb.AddRouteRequest{Path: "/eos/user/b", MountId: "eoshome-b"})
+	res, err := a.AddRoute(ctx, &adminpb.AddRouteRequest{Route: route("/eos/user/b", "eoshome-b")})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if res.Route.GetPath() != "/eos/user/b" || res.Route.GetMountId() != "eoshome-b" {
+	if res.Route.GetProviderPath() != "/eos/user/b" || res.Route.GetProviderId() != "eoshome-b" {
 		t.Errorf("route = %v", res.Route)
 	}
 	if table.writes != 1 {
 		t.Errorf("the route was written %d times, want once", table.writes)
 	}
-	if len(res.Stale) != 1 || res.Stale[0].Node != "reg3:9999/storageregistry" || res.Stale[0].Error == "" {
+	if len(res.Stale) != 1 || res.Stale[0].Node != "reg3:9999/storageregistry" || res.Stale[0].GetStatus().GetMessage() == "" {
 		t.Fatalf("stale = %v, want only reg3", res.Stale)
+	}
+	if c := res.Stale[0].GetStatus().GetCode(); c != rpc.Code_CODE_UNAVAILABLE {
+		t.Errorf("stale code = %v, want the code of the failed reload", c)
 	}
 	for i, want := range []string{"eoshome-b", "eoshome-b", ""} {
 		if got := regs[i].resolves("/eos/user/b"); got != want {
@@ -204,7 +212,7 @@ func TestAddRouteReportsTheStaleRegistries(t *testing.T) {
 	}
 	var got []string
 	for _, r := range routes.Routes {
-		got = append(got, r.Path+"="+r.MountId)
+		got = append(got, r.ProviderPath+"="+r.ProviderId)
 	}
 	if want := []string{"/eos/user/a=eoshome-a", "/eos/user/b=eoshome-b"}; !slices.Equal(got, want) {
 		t.Errorf("routes = %v, want %v", got, want)
@@ -228,12 +236,12 @@ func TestResolvePathGivesTheProviderNodes(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(res.Mounts) != 1 {
-		t.Fatalf("mounts = %v", res.Mounts)
+	if len(res.Providers) != 1 {
+		t.Fatalf("providers = %v", res.Providers)
 	}
-	m := res.Mounts[0]
-	if m.MountId != "eoshome-a" || m.MountPath != "/eos/user/a" || m.Address != "lb-eoshome-a:9000" {
-		t.Errorf("mount = %v", m)
+	m := res.Providers[0]
+	if p := m.GetProvider(); p.GetProviderId() != "eoshome-a" || p.GetProviderPath() != "/eos/user/a" || p.GetAddress() != "lb-eoshome-a:9000" {
+		t.Errorf("provider = %v", m)
 	}
 	slices.Sort(m.ProviderNodes)
 	if want := []string{"sp1:9001/storageprovider", "sp2:9001/storageprovider"}; !slices.Equal(m.ProviderNodes, want) {
@@ -250,11 +258,21 @@ func TestRouteErrorCodes(t *testing.T) {
 		want codes.Code
 	}{
 		"unknown mount": {func() error {
-			_, err := a.AddRoute(ctx, &adminpb.AddRouteRequest{Path: "/eos/user/c", MountId: "nowhere"})
+			_, err := a.AddRoute(ctx, &adminpb.AddRouteRequest{Route: route("/eos/user/c", "nowhere")})
 			return err
 		}, codes.InvalidArgument},
 		"no mount": {func() error {
-			_, err := a.AddRoute(ctx, &adminpb.AddRouteRequest{Path: "/eos/user/c"})
+			_, err := a.AddRoute(ctx, &adminpb.AddRouteRequest{Route: route("/eos/user/c", "")})
+			return err
+		}, codes.InvalidArgument},
+		"no route": {func() error {
+			_, err := a.AddRoute(ctx, &adminpb.AddRouteRequest{})
+			return err
+		}, codes.InvalidArgument},
+		"an address": {func() error {
+			r := route("/eos/user/c", "eoshome-c")
+			r.Address = "lb:9000"
+			_, err := a.AddRoute(ctx, &adminpb.AddRouteRequest{Route: r})
 			return err
 		}, codes.InvalidArgument},
 		"remove a missing route": {func() error {
@@ -276,5 +294,27 @@ func TestRouteErrorCodes(t *testing.T) {
 	}
 	if table.writes != 0 {
 		t.Errorf("a failed call wrote the table %d times", table.writes)
+	}
+}
+
+// A stale instance keeps the code of its failure, so that the operator can
+// tell an instance that is down from one that failed to load the table.
+func TestRPCCodeKeepsTheGRPCCode(t *testing.T) {
+	for in, want := range map[codes.Code]rpc.Code{
+		codes.OK:               rpc.Code_CODE_UNKNOWN,
+		codes.Unknown:          rpc.Code_CODE_UNKNOWN,
+		codes.InvalidArgument:  rpc.Code_CODE_INVALID_ARGUMENT,
+		codes.DeadlineExceeded: rpc.Code_CODE_DEADLINE_EXCEEDED,
+		codes.NotFound:         rpc.Code_CODE_NOT_FOUND,
+		codes.Unimplemented:    rpc.Code_CODE_UNIMPLEMENTED,
+		codes.Internal:         rpc.Code_CODE_INTERNAL,
+		codes.Unavailable:      rpc.Code_CODE_UNAVAILABLE,
+		codes.DataLoss:         rpc.Code_CODE_DATA_LOSS,
+		codes.Unauthenticated:  rpc.Code_CODE_UNAUTHENTICATED,
+		codes.Code(99):         rpc.Code_CODE_UNKNOWN,
+	} {
+		if got := rpcCode(in); got != want {
+			t.Errorf("rpcCode(%v) = %v, want %v", in, got, want)
+		}
 	}
 }

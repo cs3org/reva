@@ -26,6 +26,8 @@ import (
 	"strings"
 	"testing"
 
+	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
+	registrypb "github.com/cs3org/go-cs3apis/cs3/storage/registry/v1beta1"
 	"github.com/cs3org/reva/v3/pkg/admin/adminpb"
 	"github.com/cs3org/reva/v3/pkg/cli"
 	"github.com/spf13/cobra"
@@ -40,18 +42,19 @@ type fakeStorage struct {
 }
 
 func (f *fakeStorage) ListRoutes(context.Context, *adminpb.ListRoutesRequest) (*adminpb.ListRoutesResponse, error) {
-	return &adminpb.ListRoutesResponse{Routes: []*adminpb.Route{{Path: "/eos/user/a", MountId: "eoshome-i01"}}}, nil
+	return &adminpb.ListRoutesResponse{Routes: []*registrypb.ProviderInfo{{ProviderPath: "/eos/user/a", ProviderId: "eoshome-i01"}}}, nil
 }
 
 func (f *fakeStorage) ResolvePath(_ context.Context, req *adminpb.ResolvePathRequest) (*adminpb.ResolvePathResponse, error) {
-	return &adminpb.ResolvePathResponse{Path: req.Path, Mounts: []*adminpb.Mount{
-		{MountId: "eoshome-i01", MountPath: "/eos/user/a", Address: "lb:9000", ProviderNodes: []string{"sp1:9001/storageprovider", "sp2:9001/storageprovider"}},
-	}}, nil
+	return &adminpb.ResolvePathResponse{Path: req.Path, Providers: []*adminpb.ResolvedProvider{{
+		Provider:      &registrypb.ProviderInfo{ProviderId: "eoshome-i01", ProviderPath: "/eos/user/a", Address: "lb:9000"},
+		ProviderNodes: []string{"sp1:9001/storageprovider", "sp2:9001/storageprovider"},
+	}}}, nil
 }
 
 func (f *fakeStorage) AddRoute(_ context.Context, req *adminpb.AddRouteRequest) (*adminpb.AddRouteResponse, error) {
 	f.added = append(f.added, req)
-	return &adminpb.AddRouteResponse{Route: &adminpb.Route{Path: req.Path, MountId: req.MountId}, Stale: f.stale}, nil
+	return &adminpb.AddRouteResponse{Route: &registrypb.ProviderInfo{ProviderPath: req.GetRoute().GetProviderPath(), ProviderId: req.GetRoute().GetProviderId()}, Stale: f.stale}, nil
 }
 
 func runRoute(t *testing.T, f *fakeStorage, args ...string) (stdout, stderr string, err error) {
@@ -91,17 +94,20 @@ func TestRouteAdd(t *testing.T) {
 	if err != nil || !strings.Contains(out, "/eos/user/z is routed to eoshome-i05") || len(f.added) != 1 {
 		t.Fatalf("route add: %v, %q, %v", err, out, f.added)
 	}
+	if r := f.added[0].GetRoute(); r.GetProviderPath() != "/eos/user/z" || r.GetProviderId() != "eoshome-i05" || r.GetAddress() != "" {
+		t.Errorf("route add sent %v", r)
+	}
 }
 
 // An instance that did not reload serves the old table, so the command
 // fails after it reports the change and the stale instance.
 func TestRouteAddWithAStaleInstanceFails(t *testing.T) {
-	f := &fakeStorage{stale: []*adminpb.StaleInstance{{Node: "reg3:9999/storageregistry", Error: "db unreachable"}}}
+	f := &fakeStorage{stale: []*adminpb.StaleInstance{{Node: "reg3:9999/storageregistry", Status: &rpc.Status{Code: rpc.Code_CODE_UNAVAILABLE, Message: "db unreachable"}}}}
 	out, errOut, err := runRoute(t, f, "route", "add", "/eos/user/z", "eoshome-i05")
 	if err == nil || !strings.Contains(err.Error(), "1 storage registry instances did not reload") {
 		t.Fatalf("err = %v, want the stale instances", err)
 	}
-	if !strings.Contains(out, "routed to eoshome-i05") || !strings.Contains(errOut, "stale: reg3:9999/storageregistry: db unreachable") {
+	if !strings.Contains(out, "routed to eoshome-i05") || !strings.Contains(errOut, "stale: reg3:9999/storageregistry: db unreachable (CODE_UNAVAILABLE)") {
 		t.Errorf("stdout %q, stderr %q", out, errOut)
 	}
 }

@@ -25,6 +25,7 @@ import (
 	"slices"
 	"strings"
 
+	registrypb "github.com/cs3org/go-cs3apis/cs3/storage/registry/v1beta1"
 	"github.com/cs3org/reva/v3/pkg/admin/adminpb"
 	"github.com/cs3org/reva/v3/pkg/cli"
 	"github.com/spf13/cobra"
@@ -41,7 +42,7 @@ func RouteCommand(r *cli.Runtime) *cobra.Command {
 		}
 		return adminpb.NewStorageAdminClient(c.Conn), ctx, nil
 	}
-	routes := func(ctx context.Context) ([]*adminpb.Route, error) {
+	routes := func(ctx context.Context) ([]*registrypb.ProviderInfo, error) {
 		c, ctx, err := storage(ctx)
 		if err != nil {
 			return nil, err
@@ -53,7 +54,7 @@ func RouteCommand(r *cli.Runtime) *cobra.Command {
 		rs, err := routes(ctx)
 		var paths []string
 		for _, rt := range rs {
-			paths = append(paths, rt.Path+"\t"+rt.MountId)
+			paths = append(paths, rt.ProviderPath+"\t"+rt.ProviderId)
 		}
 		return paths, err
 	})
@@ -77,7 +78,7 @@ func RouteCommand(r *cli.Runtime) *cobra.Command {
 			}
 			t := cli.Table{Headers: []string{"PATH", "MOUNT ID"}, Items: rs}
 			for _, rt := range rs {
-				t.Rows = append(t.Rows, []string{rt.Path, rt.MountId})
+				t.Rows = append(t.Rows, []string{rt.ProviderPath, rt.ProviderId})
 			}
 			return r.Print(cmd.OutOrStdout(), t, nil)
 		},
@@ -97,8 +98,9 @@ func RouteCommand(r *cli.Runtime) *cobra.Command {
 				return adminErr(err)
 			}
 			t := cli.Table{Headers: []string{"MOUNT ID", "MOUNT PATH", "ADDRESS", "PROVIDERS"}, Items: res}
-			for _, m := range res.Mounts {
-				t.Rows = append(t.Rows, []string{m.MountId, m.MountPath, m.Address, strings.Join(m.ProviderNodes, ",")})
+			for _, m := range res.Providers {
+				p := m.GetProvider()
+				t.Rows = append(t.Rows, []string{p.GetProviderId(), p.GetProviderPath(), p.GetAddress(), strings.Join(m.ProviderNodes, ",")})
 			}
 			return r.Print(cmd.OutOrStdout(), t, nil)
 		},
@@ -118,7 +120,7 @@ func RouteCommand(r *cli.Runtime) *cobra.Command {
 				rs, err := routes(ctx)
 				var ids []string
 				for _, rt := range rs {
-					ids = append(ids, rt.MountId)
+					ids = append(ids, rt.ProviderId)
 				}
 				slices.Sort(ids)
 				return slices.Compact(ids), err
@@ -132,12 +134,12 @@ func RouteCommand(r *cli.Runtime) *cobra.Command {
 			if err != nil {
 				return err
 			}
-			res, err := c.AddRoute(ctx, &adminpb.AddRouteRequest{Path: args[0], MountId: args[1]})
+			res, err := c.AddRoute(ctx, &adminpb.AddRouteRequest{Route: &registrypb.ProviderInfo{ProviderPath: args[0], ProviderId: args[1]}})
 			if err != nil {
 				return adminErr(err)
 			}
 			if err := r.Print(cmd.OutOrStdout(), res, func(w io.Writer) {
-				fmt.Fprintf(w, "%s is routed to %s\n", res.Route.GetPath(), res.Route.GetMountId())
+				fmt.Fprintf(w, "%s is routed to %s\n", res.Route.GetProviderPath(), res.Route.GetProviderId())
 			}); err != nil {
 				return err
 			}
@@ -181,7 +183,7 @@ func staleErr(w io.Writer, stale []*adminpb.StaleInstance) error {
 		return nil
 	}
 	for _, s := range stale {
-		fmt.Fprintf(w, "stale: %s: %s\n", s.Node, s.Error)
+		fmt.Fprintf(w, "stale: %s: %s (%s)\n", s.Node, s.GetStatus().GetMessage(), s.GetStatus().GetCode())
 	}
 	return fmt.Errorf("the change is written, but %d storage registry instances did not reload it: run `reva invoke <instance> route_reload` for each one", len(stale))
 }

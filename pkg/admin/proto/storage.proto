@@ -20,6 +20,9 @@ syntax = "proto3";
 
 package reva.admin.v1beta1;
 
+import "cs3/rpc/v1beta1/status.proto";
+import "cs3/storage/registry/v1beta1/resources.proto";
+
 option go_package = "github.com/cs3org/reva/v3/pkg/admin/adminpb";
 
 // StorageAdmin is the operator surface for storage routes: it lists, resolves,
@@ -40,38 +43,32 @@ service StorageAdmin {
   rpc RemoveRoute(RemoveRouteRequest) returns (RemoveRouteResponse);
 }
 
-// Route sends the paths under path to a mount.
-message Route {
-  string path = 1;
-  string mount_id = 2;
-}
-
-// Mount is a mount that serves a path.
-message Mount {
-  string mount_id = 1;
-  // mount_path is the namespace path that the mount serves.
-  string mount_path = 2;
-  // address is the provider address in the storage registry configuration.
-  string address = 3;
+// ResolvedProvider is a mount that serves a path. provider has the mount id,
+// the mount path and the provider address in the storage registry
+// configuration.
+message ResolvedProvider {
+  cs3.storage.registry.v1beta1.ProviderInfo provider = 1;
   // provider_nodes are the ids of the live storage provider instances that
-  // advertise this mount_id. The registry knows only address, and an address
-  // can be a load balancer in front of several instances.
-  repeated string provider_nodes = 4;
+  // advertise this provider_id. The registry knows only address, and an
+  // address can be a load balancer in front of several instances.
+  repeated string provider_nodes = 2;
 }
 
 // StaleInstance is a storage registry instance that did not reload the
 // routing table after a change. It serves the old table until it reloads.
 message StaleInstance {
   string node = 1;
-  string error = 2;
-  // code is the gRPC code of error.
-  int32 code = 3;
+  // status is why the reload failed.
+  cs3.rpc.v1beta1.Status status = 2;
 }
 
 message ListRoutesRequest {}
 
+// A route is a ProviderInfo with provider_path (the routed path) and
+// provider_id (the mount id). The routing table has no address: the rules of
+// the registry give it.
 message ListRoutesResponse {
-  repeated Route routes = 1;
+  repeated cs3.storage.registry.v1beta1.ProviderInfo routes = 1;
 }
 
 message ResolvePathRequest {
@@ -80,21 +77,24 @@ message ResolvePathRequest {
 
 message ResolvePathResponse {
   string path = 1;
-  repeated Mount mounts = 2;
+  repeated ResolvedProvider providers = 2;
 }
 
+// AddRouteRequest routes route.provider_path to route.provider_id. The
+// address must be empty, because the rules of the registry give it.
 message AddRouteRequest {
-  string path = 1;
-  string mount_id = 2;
+  cs3.storage.registry.v1beta1.ProviderInfo route = 1;
 }
 
 // AddRouteResponse is sent when the change is written. If stale is not
 // empty, these instances did not apply it.
 message AddRouteResponse {
-  Route route = 1;
+  cs3.storage.registry.v1beta1.ProviderInfo route = 1;
   repeated StaleInstance stale = 2;
 }
 
+// RemoveRouteRequest names the route by its path only, because the path is
+// the key of the routing table.
 message RemoveRouteRequest {
   string path = 1;
 }

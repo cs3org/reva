@@ -131,10 +131,10 @@ func (a *spacesAdmin) quotaTarget(ctx context.Context, ref *adminpb.SpaceRef) (q
 	}
 	// The registry also gives the mounts below a path, so keep the deepest
 	// mount that holds the root.
-	var mount *adminpb.Mount
+	var mount *adminpb.ResolvedProvider
 	depth := -1
-	for _, m := range mounts.Mounts {
-		mp := path.Clean(m.MountPath)
+	for _, m := range mounts.Providers {
+		mp := path.Clean(m.GetProvider().GetProviderPath())
 		if (sp.root == mp || strings.HasPrefix(sp.root, strings.TrimSuffix(mp, "/")+"/")) && len(mp) > depth {
 			mount, depth = m, len(mp)
 		}
@@ -146,7 +146,7 @@ func (a *spacesAdmin) quotaTarget(ctx context.Context, ref *adminpb.SpaceRef) (q
 	if err != nil {
 		return quotaSpace{}, nil, err
 	}
-	eps, err := client.ResolveMetadata(reg, storageProviderService, map[string]string{registry.MetaMountID: mount.MountId})
+	eps, err := client.ResolveMetadata(reg, storageProviderService, map[string]string{registry.MetaMountID: mount.GetProvider().GetProviderId()})
 	if err != nil {
 		return quotaSpace{}, nil, status.Errorf(codes.Unavailable, "admin: %v", err)
 	}
