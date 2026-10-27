@@ -223,28 +223,28 @@ type UserThreadPool struct {
 
 // UserThread represents a dedicated thread for a user with persistent UID
 type UserThread struct {
-	uid          int
-	gid          int
-	username     string
-	threadID     int
-	requestChan  chan *ThreadRequest
-	responseChan chan *ThreadResponse
-	quit         chan struct{}
-	lastUsed     time.Time
-	mu           sync.RWMutex
-	active       bool
+	uid         int
+	gid         int
+	username    string
+	threadID    int
+	requestChan chan *ThreadRequest
+	quit        chan struct{}
+	lastUsed    time.Time
+	mu          sync.RWMutex
+	active      bool
 }
 
 // ThreadRequest represents a request to execute on a user thread
 type ThreadRequest struct {
-	ID       string
 	Function func() (any, error)
 	Context  context.Context
+	// One channel per request, so a caller cannot get the response of a different request.
+	// It has a buffer of 1, so the thread does not block when the caller has stopped waiting.
+	Response chan *ThreadResponse
 }
 
 // ThreadResponse represents the response from a user thread
 type ThreadResponse struct {
-	ID     string
 	Result any
 	Error  error
 }
@@ -318,14 +318,13 @@ func (p *UserThreadPool) GetOrCreateUserThread(ctx context.Context, user *userv1
 
 	// Create new user thread
 	thread = &UserThread{
-		uid:          uid,
-		gid:          gid,
-		username:     user.Username,
-		requestChan:  make(chan *ThreadRequest, 100),
-		responseChan: make(chan *ThreadResponse, 100),
-		quit:         make(chan struct{}),
-		lastUsed:     time.Now(),
-		active:       true,
+		uid:         uid,
+		gid:         gid,
+		username:    user.Username,
+		requestChan: make(chan *ThreadRequest, 100),
+		quit:        make(chan struct{}),
+		lastUsed:    time.Now(),
+		active:      true,
 	}
 
 	p.threads[uid] = thread
@@ -509,7 +508,6 @@ func (ut *UserThread) run() {
 		// Restore original filesystem UID/GID when thread exits
 		setfsuidSafe(originalFsuid)
 		setfsgidSafe(originalFsgid)
-		ut.active = false
 	}()
 
 	for {
@@ -519,16 +517,9 @@ func (ut *UserThread) run() {
 			result, err := request.Function()
 
 			// Send response
-			response := &ThreadResponse{
-				ID:     request.ID,
+			request.Response <- &ThreadResponse{
 				Result: result,
 				Error:  err,
-			}
-
-			select {
-			case ut.responseChan <- response:
-			case <-ut.quit:
-				return
 			}
 
 			ut.updateLastUsed()
@@ -545,11 +536,10 @@ func (ut *UserThread) Execute(ctx context.Context, fn func() (any, error)) (any,
 		return nil, syscall.EINVAL
 	}
 
-	requestID := "req-" + time.Now().Format("20060102150405.000000")
 	request := &ThreadRequest{
-		ID:       requestID,
 		Function: fn,
 		Context:  ctx,
+		Response: make(chan *ThreadResponse, 1),
 	}
 
 	// Send request
@@ -561,13 +551,8 @@ func (ut *UserThread) Execute(ctx context.Context, fn func() (any, error)) (any,
 
 	// Wait for response
 	select {
-	case response := <-ut.responseChan:
-		if response.ID == requestID {
-			return response.Result, response.Error
-		}
-		// Wrong response ID - this shouldn't happen
-		return nil, syscall.EIO
-
+	case response := <-request.Response:
+		return response.Result, response.Error
 	case <-ctx.Done():
 		return nil, ctx.Err()
 	}
