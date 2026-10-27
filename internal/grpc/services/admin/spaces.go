@@ -23,12 +23,16 @@ import (
 	"context"
 	"maps"
 	"path"
+	"slices"
 	"strings"
 	"time"
 
+	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
+	typespb "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
 	"github.com/cs3org/reva/v3/pkg/admin"
 	"github.com/cs3org/reva/v3/pkg/admin/adminpb"
 	"github.com/cs3org/reva/v3/pkg/invoke/client"
+	"github.com/cs3org/reva/v3/pkg/spaces"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 )
@@ -40,22 +44,100 @@ func (a *spacesAdmin) ListSpaces(req *adminpb.ListSpacesRequest, stream adminpb.
 	if req.Profile != "" {
 		return status.Error(codes.Unimplemented, "admin: the profile filter is not implemented yet: the catalogue does not store profiles")
 	}
+	args, keep, err := listArgs(req.Filters)
+	if err != nil {
+		return err
+	}
 	eps, err := a.s.serviceEndpoints(spacesRegistry)
 	if err != nil {
 		return err
 	}
-	args := map[string]string{"type": req.Type, "owner": req.Owner, "member": req.Member, "status": req.Status}
-	maps.DeleteFunc(args, func(_, v string) bool { return v == "" })
+	if req.Status != "" {
+		args["status"] = req.Status
+	}
 	if t := req.CreatedAfter; t != nil {
-		args["created_after"] = t.AsTime().Format(time.RFC3339Nano)
+		args["created_after"] = timestamp(t).Format(time.RFC3339Nano)
 	}
 	if t := req.CreatedBefore; t != nil {
-		args["created_before"] = t.AsTime().Format(time.RFC3339Nano)
+		args["created_before"] = timestamp(t).Format(time.RFC3339Nano)
 	}
 	if req.IncludeArchived {
 		args["include_archived"] = "true"
 	}
-	return relayStream(stream.Context(), eps, "list", args, stream.Send)
+	return relayStream(stream.Context(), eps, "list", args, func(m *adminpb.AdminSpace) error {
+		if !keep(m.GetSpace()) {
+			return nil
+		}
+		return stream.Send(m)
+	})
+}
+
+// listArgs maps the CS3 filters onto the arguments of the list invocation.
+// The invocation selects by one type, one owner and one member, so the
+// filters by id and by path, which it does not take, are kept here.
+func listArgs(filters []*provider.ListStorageSpacesRequest_Filter) (map[string]string, func(*provider.StorageSpace) bool, error) {
+	args := map[string]string{}
+	var ids, paths []string
+	one := func(key, value string, t provider.ListStorageSpacesRequest_Filter_Type) error {
+		if value == "" {
+			return status.Errorf(codes.InvalidArgument, "admin: the filter %s has no value", t)
+		}
+		if _, ok := args[key]; ok {
+			return status.Errorf(codes.InvalidArgument, "admin: the catalogue takes at most one filter %s", t)
+		}
+		args[key] = value
+		return nil
+	}
+	for _, f := range filters {
+		var err error
+		switch f.GetType() {
+		case provider.ListStorageSpacesRequest_Filter_TYPE_SPACE_TYPE:
+			err = one("type", f.GetSpaceType(), f.GetType())
+		case provider.ListStorageSpacesRequest_Filter_TYPE_OWNER:
+			err = one("owner", f.GetOwner().GetOpaqueId(), f.GetType())
+		case provider.ListStorageSpacesRequest_Filter_TYPE_USER:
+			// The invocations take the opaque id of a user as its username,
+			// as the catalogue does when it acts as the owner.
+			err = one("member", f.GetUser().GetOpaqueId(), f.GetType())
+		case provider.ListStorageSpacesRequest_Filter_TYPE_ID:
+			if f.GetId().GetOpaqueId() == "" {
+				return nil, nil, status.Errorf(codes.InvalidArgument, "admin: the filter %s has no value", f.GetType())
+			}
+			ids = append(ids, f.GetId().GetOpaqueId())
+		case provider.ListStorageSpacesRequest_Filter_TYPE_PATH:
+			if !path.IsAbs(f.GetPath()) {
+				return nil, nil, status.Errorf(codes.InvalidArgument, "admin: the filter %s needs an absolute path, not %q", f.GetType(), f.GetPath())
+			}
+			paths = append(paths, path.Clean(f.GetPath()))
+		default:
+			return nil, nil, status.Errorf(codes.InvalidArgument, "admin: the catalogue cannot filter by %s", f.GetType())
+		}
+		if err != nil {
+			return nil, nil, err
+		}
+	}
+	keep := func(s *provider.StorageSpace) bool {
+		if len(ids) > 0 && !slices.ContainsFunc(ids, func(id string) bool { return sameSpaceID(id, s.GetId().GetOpaqueId()) }) {
+			return false
+		}
+		root := s.GetRootInfo().GetPath()
+		return len(paths) == 0 || root != "" && slices.Contains(paths, path.Clean(root))
+	}
+	return args, keep, nil
+}
+
+// sameSpaceID matches a <storage id>$<space id>, or a space id alone, as the
+// catalogue selects by id.
+func sameSpaceID(want, id string) bool {
+	if want == id {
+		return true
+	}
+	_, spaceID, ok := strings.Cut(id, "$")
+	return ok && !strings.Contains(want, "$") && want == spaceID
+}
+
+func timestamp(t *typespb.Timestamp) time.Time {
+	return time.Unix(int64(t.GetSeconds()), int64(t.GetNanos())).UTC()
 }
 
 func (a *spacesAdmin) GetSpace(ctx context.Context, req *adminpb.GetSpaceRequest) (*adminpb.AdminSpace, error) {
@@ -79,8 +161,9 @@ func (a *spacesAdmin) GetSpace(ctx context.Context, req *adminpb.GetSpaceRequest
 }
 
 func (a *spacesAdmin) UpdateSpace(ctx context.Context, req *adminpb.UpdateSpaceRequest) (*adminpb.AdminSpace, error) {
-	if req.Description == nil && req.Readme == nil && req.Thumbnail == nil {
-		return nil, status.Error(codes.InvalidArgument, "admin: update needs a description, a readme or a thumbnail")
+	fields, err := updateArgs(req.Fields)
+	if err != nil {
+		return nil, err
 	}
 	eps, err := a.s.serviceEndpoints(spacesRegistry)
 	if err != nil {
@@ -90,16 +173,51 @@ func (a *spacesAdmin) UpdateSpace(ctx context.Context, req *adminpb.UpdateSpaceR
 	if err != nil {
 		return nil, err
 	}
-	// An empty value is a change: it clears the field.
-	for k, v := range map[string]*string{"description": req.Description, "readme": req.Readme, "thumbnail": req.Thumbnail} {
-		if v != nil {
-			args[k] = *v
-		}
-	}
+	maps.Copy(args, fields)
 	if req.Fallback {
 		args["fallback"] = "true"
 	}
 	return mutateSpace(ctx, eps, "update", cmp.Or(req.Ref.GetId().GetOpaqueId(), req.Ref.GetName(), req.Ref.GetPath()), args)
+}
+
+// updateArgs maps the CS3 update fields onto the arguments of the update
+// invocation, which changes only what the catalogue stores.
+func updateArgs(fields []*provider.UpdateStorageSpaceRequest_UpdateField) (map[string]string, error) {
+	if len(fields) == 0 {
+		return nil, status.Error(codes.InvalidArgument, "admin: update needs a description, a readme or a thumbnail")
+	}
+	args := map[string]string{}
+	for _, f := range fields {
+		var key, value string
+		switch f.GetField().(type) {
+		case *provider.UpdateStorageSpaceRequest_UpdateField_Description:
+			key, value = "description", f.GetDescription()
+		case *provider.UpdateStorageSpaceRequest_UpdateField_Metadata:
+			switch t := f.GetMetadata().GetType(); t {
+			case provider.SpaceMetadata_TYPE_README:
+				key = "readme"
+			case provider.SpaceMetadata_TYPE_THUMBNAIL:
+				key = "thumbnail"
+			default:
+				return nil, status.Errorf(codes.InvalidArgument, "admin: the catalogue has no metadata %s", t)
+			}
+			value = f.GetMetadata().GetId()
+		case *provider.UpdateStorageSpaceRequest_UpdateField_Quota:
+			return nil, status.Error(codes.InvalidArgument, "admin: update does not set a quota: use SetSpaceQuota")
+		case *provider.UpdateStorageSpaceRequest_UpdateField_Name:
+			return nil, status.Error(codes.InvalidArgument, "admin: the catalogue cannot rename a space")
+		case *provider.UpdateStorageSpaceRequest_UpdateField_Alias:
+			return nil, status.Error(codes.InvalidArgument, "admin: the catalogue has no alias of a space")
+		default:
+			return nil, status.Error(codes.InvalidArgument, "admin: an update field has no value")
+		}
+		if _, ok := args[key]; ok {
+			return nil, status.Errorf(codes.InvalidArgument, "admin: update has the %s twice", key)
+		}
+		// An empty value is a change: it clears the field.
+		args[key] = value
+	}
+	return args, nil
 }
 
 func (a *spacesAdmin) SetSpaceStatus(ctx context.Context, req *adminpb.SetSpaceStatusRequest) (*adminpb.AdminSpace, error) {
@@ -119,7 +237,7 @@ func (a *spacesAdmin) SetSpaceStatus(ctx context.Context, req *adminpb.SetSpaceS
 }
 
 func (a *spacesAdmin) SetSpaceOwner(ctx context.Context, req *adminpb.SetSpaceOwnerRequest) (*adminpb.AdminSpace, error) {
-	if req.Owner == "" {
+	if req.GetOwner().GetOpaqueId() == "" {
 		return nil, status.Error(codes.InvalidArgument, "admin: owner is required")
 	}
 	eps, err := a.s.serviceEndpoints(spacesRegistry)
@@ -130,33 +248,85 @@ func (a *spacesAdmin) SetSpaceOwner(ctx context.Context, req *adminpb.SetSpaceOw
 	if err != nil {
 		return nil, err
 	}
-	args["owner"] = req.Owner
+	args["owner"] = req.GetOwner().GetOpaqueId()
 	return mutateSpace(ctx, eps, "set_owner", cmp.Or(req.Ref.GetId().GetOpaqueId(), req.Ref.GetName(), req.Ref.GetPath()), args)
 }
 
 func (a *spacesAdmin) RegisterSpace(ctx context.Context, req *adminpb.RegisterSpaceRequest) (*adminpb.AdminSpace, error) {
-	if req.Name == "" || req.Owner == "" {
-		return nil, status.Error(codes.InvalidArgument, "admin: name and owner are required")
+	args, err := registerArgs(req.GetSpace())
+	if err != nil {
+		return nil, err
+	}
+	if req.Status != "" {
+		args["status"] = req.Status
 	}
 	eps, err := a.s.serviceEndpoints(spacesRegistry)
 	if err != nil {
 		return nil, err
 	}
+	return mutateSpace(ctx, eps, "create", args["name"], args)
+}
+
+// registerArgs maps a CS3 space onto the arguments of the create
+// invocation. A value that the catalogue would not store is refused, so that
+// a registration never drops it.
+func registerArgs(s *provider.StorageSpace) (map[string]string, error) {
+	invalid := func(format string, a ...any) error {
+		return status.Errorf(codes.InvalidArgument, "admin: register: "+format, a...)
+	}
+	// The create invocation looks the owner up by username.
+	owner := cmp.Or(s.GetOwner().GetUsername(), s.GetOwner().GetId().GetOpaqueId())
+	if s.GetName() == "" || owner == "" {
+		return nil, invalid("name and owner are required")
+	}
+	if t := s.GetSpaceType(); t != "" && t != spaces.SpaceTypeProject.AsString() {
+		return nil, invalid("the catalogue has only spaces of type %s, not %s", spaces.SpaceTypeProject, t)
+	}
+	switch {
+	case s.GetQuota() != nil:
+		return nil, invalid("a quota is set with SetSpaceQuota")
+	case s.GetReadmeId() != "" || s.GetThumbnailId() != "":
+		return nil, invalid("a readme or a thumbnail is set with UpdateSpace")
+	}
 	args := map[string]string{
-		"name":        req.Name,
-		"owner":       req.Owner,
-		"path":        req.Path,
-		"storage_id":  req.StorageId,
-		"space_id":    req.SpaceId,
-		"readers":     req.Readers,
-		"writers":     req.Writers,
-		"admins":      req.Admins,
-		"description": req.Description,
-		"status":      req.Status,
+		"name":        s.GetName(),
+		"owner":       owner,
+		"path":        s.GetRootInfo().GetPath(),
+		"description": s.GetDescription(),
+	}
+	storageID, spaceID := s.GetRoot().GetStorageId(), s.GetRoot().GetSpaceId()
+	if id := s.GetId().GetOpaqueId(); id != "" {
+		st, sp, ok := strings.Cut(id, "$")
+		if !ok {
+			st, sp = "", id
+		}
+		if storageID != "" && st != "" && storageID != st || spaceID != "" && spaceID != sp {
+			return nil, invalid("the id %s and the root %s/%s differ", id, storageID, spaceID)
+		}
+		storageID, spaceID = cmp.Or(st, storageID), sp
+	}
+	args["storage_id"], args["space_id"] = storageID, spaceID
+	for _, r := range s.GetRoles() {
+		key, ok := roleArgs[r.GetRoleName()]
+		if !ok {
+			return nil, invalid("the catalogue has no role %q: use reader, writer or admin", r.GetRoleName())
+		}
+		if _, ok := args[key]; ok {
+			return nil, invalid("the role %s is given twice", r.GetRoleName())
+		}
+		rs := r.GetRecipients()
+		if len(rs) != 1 || rs[0].GetGroupId().GetOpaqueId() == "" {
+			return nil, invalid("the role %s needs one group as its recipient", r.GetRoleName())
+		}
+		args[key] = rs[0].GetGroupId().GetOpaqueId()
 	}
 	maps.DeleteFunc(args, func(_, v string) bool { return v == "" })
-	return mutateSpace(ctx, eps, "create", req.Name, args)
+	return args, nil
 }
+
+// roleArgs are the role names of the catalogue, as AdminSpace returns them,
+// and the arguments of create that take their groups.
+var roleArgs = map[string]string{"reader": "readers", "writer": "writers", "admin": "admins"}
 
 func (a *spacesAdmin) UnregisterSpace(ctx context.Context, req *adminpb.UnregisterSpaceRequest) (*adminpb.AdminSpace, error) {
 	eps, err := a.s.serviceEndpoints(spacesRegistry)
@@ -178,7 +348,7 @@ func (a *spacesAdmin) CheckSpaces(req *adminpb.CheckSpacesRequest, stream adminp
 	if err != nil {
 		return err
 	}
-	args := map[string]string{"status": req.Status, "owner": req.Owner}
+	args := map[string]string{"status": req.Status, "owner": req.GetOwner().GetOpaqueId()}
 	maps.DeleteFunc(args, func(_, v string) bool { return v == "" })
 	return relayStream(stream.Context(), eps, "check", args, stream.Send)
 }

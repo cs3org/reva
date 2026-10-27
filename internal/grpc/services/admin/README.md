@@ -695,6 +695,46 @@ expires. A `SpaceRef` by path selects the space with the deepest root that holds
 the path. The catalogue has no index on the path, so this reads the whole list.
 A space that is not in the catalogue, a personal space for example, is NotFound.
 
+### SpacesAdmin
+
+The requests and the responses of `SpacesAdmin` use the CS3 messages, and add
+only what CS3 has no field for. A user is a `UserId`, and a time is a
+`cs3.types.v1beta1.Timestamp`. The facade maps them onto the invocations:
+
+| RPC | CS3 in the request | Invocation arguments |
+|---|---|---|
+| `ListSpaces` | `ListStorageSpacesRequest.Filter`: `TYPE_SPACE_TYPE`, `TYPE_OWNER`, `TYPE_USER`, `TYPE_ID`, `TYPE_PATH` | `list type= owner= member=`; the facade keeps the spaces that match an id or a root path |
+| `UpdateSpace` | `UpdateStorageSpaceRequest.UpdateField`: `description`, `metadata` (`TYPE_README`, `TYPE_THUMBNAIL`, the path of the file) | `update description= readme= thumbnail=` |
+| `SetSpaceOwner`, `CheckSpaces` | `owner` is a `UserId` | `owner=` its opaque id |
+| `RegisterSpace` | a `StorageSpace` | `create`, see below |
+| `GetSpaceQuota`, `ListSpaceQuotas` | `SpaceQuota.quota` is a `Quota` | `quota_get`, `quota_list` |
+| `SetSpaceQuota` | a `Quota` and an `update_mask` | `quota_set max_bytes= max_files=` |
+
+As in `ListStorageSpaces`, filters of one type match any of their values, and
+filters of different types must all match. The catalogue takes at most one
+filter of type `SPACE_TYPE`, `OWNER` and `USER`. A filter of another type, an
+update of a name, an alias or a quota, and a second update of one field are
+InvalidArgument. The invocations take the opaque id of a user as its username,
+as the catalogue does when it acts as the owner.
+
+`RegisterSpace` reads the space in the form that `AdminSpace` returns: `name`
+and `owner` (its username, else the opaque id of its id) are required; `id`
+(`<storage id>$<space id>`) or `root.storage_id` and `root.space_id`;
+`root_info.path`; `description`; and the `roles` named `reader`, `writer` and
+`admin`, each with one group as its recipient, which become `readers`,
+`writers` and `admins`. The catalogue gives each role its permissions. A quota,
+a readme, a thumbnail, or a space type that is not `project` is
+InvalidArgument, so that a registration never drops a value.
+
+The quota invocations report what is used, and CS3 has what remains, so the
+facade computes `remaining = max - used`, and 0 over the limit. A limit of 0 is
+no limit, and then its remaining value is 0 too. Because what remains says
+nothing without a limit or over it, the `SpaceQuota` wrapper also carries
+`used_bytes` and `used_files`. `SetSpaceQuota` needs an
+`update_mask` with `quota_max_bytes`, `quota_max_files` or both, because 0 is
+a limit too. The owner of a quota is the one of the catalogue, with its idp,
+when the catalogue has the space. The CLI shows `used_bytes` and `used_files`.
+
 ## Routing
 
 The `dynamic` storage registry reads its routing table (the `routing` SQL
@@ -725,6 +765,33 @@ If a reload fails on an instance, that instance keeps its old routes. Run
 `route_reload` again. `route_add` refuses a mount that is not in the `rules` of
 the registry, because the reload would skip the route. The `static` driver has
 no routing table and answers "not supported".
+
+### StorageAdmin
+
+`StorageAdmin` ([`storage.proto`](../../../../pkg/admin/proto/storage.proto))
+is the typed facade over these invocations, behind `reva route`. A route is a
+CS3 `storage.registry.v1beta1.ProviderInfo`: `provider_path` is the routed path
+and `provider_id` the mount id.
+
+- `ListRoutes` runs `routes`. The routes have no `address`: the routing table
+  does not store it, the `rules` of the registry give it.
+- `ResolvePath` takes a CS3 `provider.v1beta1.Reference`, as
+  `GetStorageProvidersRequest` does, and runs `resolve` on one instance. Only
+  an absolute path is supported: a reference with a resource id is
+  InvalidArgument, because `resolve` takes only a path. Each
+  `ResolvedProvider` has the `ProviderInfo` of the mount (with its address)
+  and `provider_nodes`, the live storage provider instances that advertise its
+  `mount_id`, which CS3 cannot carry.
+- `AddRoute` takes a `ProviderInfo` with `provider_path` and `provider_id`, and
+  refuses an `address`, which the table would drop. `RemoveRoute` takes the
+  path only: it is the key of the table.
+- Both run `route_add` or `route_remove` once, then `route_reload` on every
+  instance. The change is written even if a reload fails, so the RPC succeeds
+  and lists each instance that did not reload in `stale`, with a CS3
+  `rpc.v1beta1.Status`: the code is the gRPC code of the failed reload in its
+  CS3 form, by `status.CodeFromGRPC` of `pkg/rgrpc/status` (`Unavailable`
+  becomes `CODE_UNAVAILABLE`, a failure without a code `CODE_UNKNOWN`). The
+  CLI prints them and fails.
 
 ## Adding an invocation to a service (for developers)
 

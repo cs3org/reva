@@ -28,8 +28,9 @@ type SpacesAdminClient interface {
 	// if a space that the user plane did not find exists.
 	GetSpace(ctx context.Context, in *GetSpaceRequest, opts ...grpc.CallOption) (*AdminSpace, error)
 	// UpdateSpace changes the description, the readme or the thumbnail of a
-	// space. The change is made on the server as the owner of the space, with
-	// the checks of a user call. It is the server side of the owner fallback.
+	// space, with the update fields of UpdateStorageSpace. The change is made
+	// on the server as the owner of the space, with the checks of a user call.
+	// It is the server side of the owner fallback.
 	UpdateSpace(ctx context.Context, in *UpdateSpaceRequest, opts ...grpc.CallOption) (*AdminSpace, error)
 	SetSpaceStatus(ctx context.Context, in *SetSpaceStatusRequest, opts ...grpc.CallOption) (*AdminSpace, error)
 	SetSpaceOwner(ctx context.Context, in *SetSpaceOwnerRequest, opts ...grpc.CallOption) (*AdminSpace, error)
@@ -239,8 +240,9 @@ type SpacesAdminServer interface {
 	// if a space that the user plane did not find exists.
 	GetSpace(context.Context, *GetSpaceRequest) (*AdminSpace, error)
 	// UpdateSpace changes the description, the readme or the thumbnail of a
-	// space. The change is made on the server as the owner of the space, with
-	// the checks of a user call. It is the server side of the owner fallback.
+	// space, with the update fields of UpdateStorageSpace. The change is made
+	// on the server as the owner of the space, with the checks of a user call.
+	// It is the server side of the owner fallback.
 	UpdateSpace(context.Context, *UpdateSpaceRequest) (*AdminSpace, error)
 	SetSpaceStatus(context.Context, *SetSpaceStatusRequest) (*AdminSpace, error)
 	SetSpaceOwner(context.Context, *SetSpaceOwnerRequest) (*AdminSpace, error)

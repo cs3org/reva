@@ -19,9 +19,11 @@
 package revacmd
 
 import (
+	"cmp"
 	"context"
 	"encoding/json"
 	"net"
+	"slices"
 	"strings"
 	"sync"
 	"testing"
@@ -150,7 +152,11 @@ func (f *fakeSpacesAdmin) UpdateSpace(_ context.Context, req *adminpb.UpdateSpac
 	if err != nil {
 		return nil, err
 	}
-	m.Space.Description = req.GetDescription()
+	for _, field := range req.Fields {
+		if d, ok := field.GetField().(*provider.UpdateStorageSpaceRequest_UpdateField_Description); ok {
+			m.Space.Description = d.Description
+		}
+	}
 	return m, nil
 }
 
@@ -162,6 +168,21 @@ func (f *fakeSpacesAdmin) SetSpaceStatus(_ context.Context, req *adminpb.SetSpac
 	}
 	m.Status = req.Status
 	return m, nil
+}
+
+func (f *fakeSpacesAdmin) SetSpaceOwner(_ context.Context, req *adminpb.SetSpaceOwnerRequest) (*adminpb.AdminSpace, error) {
+	f.record("SetSpaceOwner", req)
+	m, err := f.find(req.Ref)
+	if err != nil {
+		return nil, err
+	}
+	m.Space.Owner = &userpb.User{Id: req.Owner}
+	return m, nil
+}
+
+func (f *fakeSpacesAdmin) RegisterSpace(_ context.Context, req *adminpb.RegisterSpaceRequest) (*adminpb.AdminSpace, error) {
+	f.record("RegisterSpace", req)
+	return &adminpb.AdminSpace{Space: req.Space, Status: cmp.Or(req.Status, "active")}, nil
 }
 
 func (f *fakeSpacesAdmin) CheckSpaces(req *adminpb.CheckSpacesRequest, st adminpb.SpacesAdmin_CheckSpacesServer) error {
@@ -199,7 +220,8 @@ func TestSpaceOperatorOptions(t *testing.T) {
 	if !strings.Contains(out, "archived") || !strings.Contains(out, "cms") {
 		t.Errorf("space list --owner = %q, want the catalogue with a status column", out)
 	}
-	if req := f.calls["ListSpaces"].(*adminpb.ListSpacesRequest); req.Owner != "bob" || !req.IncludeArchived {
+	req := f.calls["ListSpaces"].(*adminpb.ListSpacesRequest)
+	if fs := req.GetFilters(); len(fs) != 1 || fs[0].GetType() != provider.ListStorageSpacesRequest_Filter_TYPE_OWNER || fs[0].GetOwner().GetOpaqueId() != "bob" || !req.IncludeArchived {
 		t.Errorf("ListSpaces request = %v", req)
 	}
 	// The catalogue record is the AdminSpace.
@@ -219,7 +241,7 @@ func TestSpaceOwnerFallback(t *testing.T) {
 	}
 	mustRun(t, spacesBackend(), append(flags, "space", "update", "atlas", "--description", "")...)
 	req := f.calls["UpdateSpace"].(*adminpb.UpdateSpaceRequest)
-	if req.GetRef().GetId().GetOpaqueId() != "eosproject-a$atlas" || req.Description == nil || *req.Description != "" || req.Readme != nil || !req.Fallback {
+	if fs := req.GetFields(); req.GetRef().GetId().GetOpaqueId() != "eosproject-a$atlas" || len(fs) != 1 || fs[0].GetField() == nil || fs[0].GetDescription() != "" || !req.Fallback {
 		t.Errorf("UpdateSpace request = %v", req)
 	}
 	// A space that the catalogue does not have either: the original answer.
@@ -239,7 +261,40 @@ func TestSpaceOperatorCommands(t *testing.T) {
 	if _, err := runFake(t, spacesBackend(), append(flags, "space", "set-status", "atlas", "gone")...); err == nil {
 		t.Error("an unknown status: no error")
 	}
-	if out := mustRun(t, spacesBackend(), append(flags, "space", "check")...); !strings.Contains(out, "owner_missing") {
+	if out := mustRun(t, spacesBackend(), append(flags, "space", "check", "--owner", "bob")...); !strings.Contains(out, "owner_missing") {
 		t.Errorf("space check = %q", out)
+	}
+	if req := f.calls["CheckSpaces"].(*adminpb.CheckSpacesRequest); req.GetOwner().GetOpaqueId() != "bob" {
+		t.Errorf("CheckSpaces request = %v", req)
+	}
+	if out := mustRun(t, spacesBackend(), append(flags, "space", "set-owner", "atlas", "carol")...); !strings.Contains(out, "carol") {
+		t.Errorf("space set-owner = %q", out)
+	}
+	if req := f.calls["SetSpaceOwner"].(*adminpb.SetSpaceOwnerRequest); req.GetOwner().GetOpaqueId() != "carol" {
+		t.Errorf("SetSpaceOwner request = %v", req)
+	}
+}
+
+// register sends the space in the form that AdminSpace has: the roles are
+// the groups of reader, writer and admin, with their permissions.
+func TestSpaceRegister(t *testing.T) {
+	f, flags := adminArgs(t)
+	mustRun(t, spacesBackend(), append(flags, "space", "register", "lhcb", "--owner", "lhcbsvc", "--path", "/eos/project/l/lhcb",
+		"--storage-id", "eosproject-l", "--readers", "lhcb-readers", "--admins", "lhcb-admins", "--status", "creating")...)
+	req := f.calls["RegisterSpace"].(*adminpb.RegisterSpaceRequest)
+	s := req.GetSpace()
+	if s.GetName() != "lhcb" || s.GetOwner().GetId().GetOpaqueId() != "lhcbsvc" || s.GetRootInfo().GetPath() != "/eos/project/l/lhcb" ||
+		s.GetRoot().GetStorageId() != "eosproject-l" || s.GetId() != nil || req.Status != "creating" {
+		t.Fatalf("RegisterSpace request = %v", req)
+	}
+	var roles []string
+	for _, r := range s.GetRoles() {
+		roles = append(roles, r.GetRoleName()+"="+r.GetRecipients()[0].GetGroupId().GetOpaqueId())
+		if r.GetPermissionSet() == nil {
+			t.Errorf("role %s has no permissions", r.GetRoleName())
+		}
+	}
+	if want := []string{"reader=lhcb-readers", "admin=lhcb-admins"}; !slices.Equal(roles, want) {
+		t.Errorf("roles = %v, want %v", roles, want)
 	}
 }
