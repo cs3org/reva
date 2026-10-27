@@ -89,9 +89,7 @@ func impersonationService(t *testing.T) *svc {
 	return s.(*svc)
 }
 
-// adminContext is the context of an Impersonate call on the gRPC listener: the
-// admin token of the caller, already checked by the auth interceptor. The
-// audit lines go to the returned buffer.
+// adminContext is the context of an admin caller. The audit lines go to the returned buffer.
 func adminContext(t *testing.T, opaqueID string) (context.Context, *bytes.Buffer) {
 	t.Helper()
 	scopes, err := scope.AddAdminScope(nil)
@@ -158,8 +156,6 @@ func TestImpersonateOverTheSocketRecordsTheUID(t *testing.T) {
 	}
 }
 
-// TestImpersonatedTokenCannotLaunder asserts that admin A, impersonating admin
-// B, can neither step up as B nor impersonate a third user as B.
 func TestImpersonatedTokenCannotLaunder(t *testing.T) {
 	s := impersonationService(t)
 	ctx, _ := adminContext(t, "gdelmont")
@@ -253,9 +249,6 @@ func TestImpersonateMissingUser(t *testing.T) {
 	}
 }
 
-// TestImpersonateTTL asserts that a requested lifetime is honoured below
-// impersonation_ttl (12h here) and capped above it, and that expires_at is the
-// expiry of the token itself.
 func TestImpersonateTTL(t *testing.T) {
 	s := impersonationService(t)
 	ctx, _ := adminContext(t, "gdelmont")

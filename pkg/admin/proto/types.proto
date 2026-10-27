@@ -24,23 +24,14 @@ import "cs3/storage/provider/v1beta1/resources.proto";
 
 option go_package = "github.com/cs3org/reva/v3/pkg/admin/adminpb";
 
-// The typed admin services (SpacesAdmin, SharesAdmin, StorageAdmin) share
-// these messages and these rules:
+// The typed admin services share these messages and these rules:
 //  - A resource message wraps the CS3 message of the same resource and adds
-//    only what CS3 cannot carry, for example
-//    AdminShare{share, orphan, path, extra}. Thus the CLI shows the same
-//    columns on the user plane and on the admin plane.
-//  - A wrapper can have `map<string, string> extra`: the attributes that a
-//    driver or a deployment adds (for example the catalogue columns of a CERN
-//    project). Reva core does not interpret them.
-//  - A list is a server stream of resource messages, so there is no paging.
-//  - A message never carries a secret (no password hash, no token).
-//  - The owning service computes a resource message in an invocation, and the
-//    invocation result is its protojson.
-//
-// The generated Go stubs are exported from pkg/admin/adminpb. Regenerate from
-// the repo root with `make protobuf`. The CS3 imports need a checkout of
-// github.com/cs3org/cs3apis in CS3APIS_DIR (default ../cs3apis).
+//    only what CS3 cannot carry.
+//  - A wrapper can have `map<string, string> extra` for the attributes that a
+//    driver or a deployment adds. Reva core does not interpret them.
+//  - A list is a server stream, so there is no paging.
+//  - A message never carries a secret.
+//  - The invocation of the owning service returns the protojson of the message.
 
 // SpaceRef identifies a storage space.
 message SpaceRef {

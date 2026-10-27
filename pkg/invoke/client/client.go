@@ -57,7 +57,7 @@ type Endpoint struct {
 }
 
 // NodeResult is the outcome of one peer invocation. Code is the gRPC code of
-// Error, 0 if the node did not send one.
+// Error, or 0 if the node sent none.
 type NodeResult struct {
 	Node       string
 	ResultJSON string
@@ -158,8 +158,7 @@ func Resolve(reg registry.Registry, selector string) (string, []Endpoint, error)
 }
 
 // ResolveMetadata returns the live instances of a service whose registry
-// metadata has every key and value in meta. Shared invocations then go to one
-// of them, other invocations to all of them.
+// metadata has every pair in meta.
 func ResolveMetadata(reg registry.Registry, svcName string, meta map[string]string) ([]Endpoint, error) {
 	sv, err := reg.GetService(svcName)
 	if err != nil {

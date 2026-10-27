@@ -27,29 +27,25 @@ import (
 )
 
 const (
-	// ReasonHeader is the gRPC metadata header that carries why an operator
-	// makes an admin call. Audit writes it to every audit line.
+	// ReasonHeader carries why an operator makes an admin call. Audit writes
+	// it to every audit line.
 	ReasonHeader = "x-reva-admin-reason"
-	// SudoUserHeader carries the SUDO_USER of a local socket caller, as the
-	// CLI reports it. The client sets it, so it is not trusted.
+	// SudoUserHeader carries the SUDO_USER of a local socket caller. The client
+	// sets it, so do not trust it.
 	SudoUserHeader = "x-reva-sudo-user"
 
 	maxHeaderLen = 512
 )
 
-// Header returns an incoming gRPC metadata header, cleaned by Clean. The value
-// comes from the caller, so it is only for logs, never for a decision.
+// Header returns an incoming gRPC metadata header, cleaned by Clean. The caller
+// sets the value, so use it only for logs, never for a decision.
 func Header(ctx context.Context, key string) string {
-	md, ok := metadata.FromIncomingContext(ctx)
-	if !ok {
-		return ""
-	}
-	return Clean(strings.Join(md.Get(key), "; "))
+	return Clean(strings.Join(metadata.ValueFromIncomingContext(ctx, key), "; "))
 }
 
-// Clean makes free text from a client safe for one log line: it removes
-// control and format characters (bidi overrides can disguise a line), and
-// cuts the text to a bounded length.
+// Clean makes free text from a client safe for one log line. It removes control
+// and format characters (bidi overrides can disguise a line) and cuts the text
+// to maxHeaderLen bytes.
 func Clean(s string) string {
 	s = strings.Map(func(r rune) rune {
 		if unicode.In(r, unicode.Cc, unicode.Cf) {
@@ -59,21 +55,21 @@ func Clean(s string) string {
 	}, strings.ToValidUTF8(s, ""))
 	s = strings.TrimSpace(s)
 	if len(s) > maxHeaderLen {
-		// The cut can split the last rune; ToValidUTF8 drops the part.
+		// The cut can split the last rune. ToValidUTF8 drops the part.
 		s = strings.ToValidUTF8(s[:maxHeaderLen], "")
 	}
 	return s
 }
 
 // ForwardReason adds the reason of the incoming call to the outgoing metadata,
-// so that the owning service audits it too. Call it before an admin handler
-// dials the control channel.
+// so that the owning service audits it too. Call it before dialing the control
+// channel.
 func ForwardReason(ctx context.Context) context.Context {
 	r := Header(ctx, ReasonHeader)
 	if r == "" {
 		return ctx
 	}
-	if md, ok := metadata.FromOutgoingContext(ctx); ok && len(md.Get(ReasonHeader)) > 0 {
+	if md, _ := metadata.FromOutgoingContext(ctx); len(md.Get(ReasonHeader)) > 0 {
 		return ctx
 	}
 	return metadata.AppendToOutgoingContext(ctx, ReasonHeader, r)

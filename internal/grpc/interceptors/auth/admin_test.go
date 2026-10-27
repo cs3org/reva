@@ -45,8 +45,6 @@ type fakeServerStream struct {
 
 func (f fakeServerStream) Context() context.Context { return f.ctx }
 
-// adminTestTokens returns the unary and stream interceptors, and a token for
-// each kind of scope.
 func adminTestTokens(t *testing.T) (grpc.UnaryServerInterceptor, grpc.StreamServerInterceptor, map[string]string) {
 	t.Helper()
 	unary, _, u := setup(t)
@@ -88,8 +86,6 @@ func adminTestTokens(t *testing.T) (grpc.UnaryServerInterceptor, grpc.StreamServ
 	return unary, stream, tokens
 }
 
-// callMethod runs a call to the method descriptor through the interceptor that
-// matches its kind, with a request message of its input type.
 func callMethod(unary grpc.UnaryServerInterceptor, stream grpc.StreamServerInterceptor, md protoreflect.MethodDescriptor, tkn string) error {
 	ctx := appctx.ContextSetToken(context.Background(), tkn)
 	method := "/" + string(md.Parent().FullName()) + "/" + string(md.Name())
@@ -121,8 +117,6 @@ func rangeMethods(match func(pkg string) bool, f func(protoreflect.MethodDescrip
 	})
 }
 
-// Every admin and control method, unary and streaming, through the
-// interceptors: only the admin token passes, except for the step-up methods.
 func TestOnlyAnAdminTokenCallsAdminMethods(t *testing.T) {
 	unary, stream, tokens := adminTestTokens(t)
 	stepUp := []string{"RequestAdmin", "CheckAdmin"}
@@ -147,8 +141,8 @@ func TestOnlyAnAdminTokenCallsAdminMethods(t *testing.T) {
 	}
 }
 
-// A typed admin RPC that takes a CS3 request is still an admin method: the
-// lightweight scope accepts a ListSharesRequest, and must not reach it.
+// The lightweight scope accepts a ListSharesRequest, but an admin RPC that takes
+// one must not be reachable with it.
 func TestAnAdminMethodWithACS3RequestNeedsTheAdminScope(t *testing.T) {
 	unary, _, tokens := adminTestTokens(t)
 	for name, tkn := range tokens {
@@ -165,7 +159,6 @@ func TestAnAdminMethodWithACS3RequestNeedsTheAdminScope(t *testing.T) {
 	}
 }
 
-// Every CS3 method through the interceptors, with an admin token.
 func TestAnAdminTokenCallsNoCS3Method(t *testing.T) {
 	unary, stream, tokens := adminTestTokens(t)
 	var n int

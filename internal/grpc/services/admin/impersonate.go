@@ -42,10 +42,8 @@ import (
 )
 
 // Impersonate mints an ordinary user token for a target user, so an admin can
-// act as (or inspect the view of) that user. It reuses the machine auth manager
-// to resolve the user, gives the user the scopes of its own login (never
-// admin+user), and records the caller in the actor scope of the token. Every
-// impersonation is audited (who, whom, why).
+// act as that user. The token has the scopes of the login of the user (never
+// admin+user) and the caller in its actor scope. Every impersonation is audited.
 func (s *svc) Impersonate(ctx context.Context, req *adminpb.ImpersonateRequest) (*adminpb.ImpersonateResponse, error) {
 	if req.User == "" {
 		return nil, status.Error(codes.InvalidArgument, "admin: user is required")
@@ -64,8 +62,8 @@ func (s *svc) Impersonate(ctx context.Context, req *adminpb.ImpersonateRequest) 
 	}
 	ev := admin.AuditEvent{Action: "impersonate", Actor: actorName(ctx), Target: req.User, Fields: fields}
 
-	// An admin token never carries an actor, but a token that does must not
-	// start a second impersonation, because the audit would lose the first.
+	// A token with an actor must not start a second impersonation: the audit
+	// would lose the first.
 	callerScopes, _ := appctx.ContextGetScopes(ctx)
 	if scope.Actor(callerScopes) != "" {
 		ev.Err = errtypes.PermissionDenied("an impersonated session cannot impersonate")
@@ -141,9 +139,8 @@ func impersonator(ctx context.Context) string {
 	return ""
 }
 
-// loginScopes returns the scopes that the login of u gives (the auth managers
-// oidc, ldap and json). Machine auth gives the owner scope to every user, which
-// is too much for a lightweight account.
+// loginScopes returns the scopes that the login of u gives. Machine auth gives
+// the owner scope to every user, which is too much for a lightweight account.
 func loginScopes(u *userpb.User) (map[string]*authpb.Scope, error) {
 	switch t := u.GetId().GetType(); t {
 	case userpb.UserType_USER_TYPE_PRIMARY, userpb.UserType_USER_TYPE_SECONDARY, userpb.UserType_USER_TYPE_SERVICE:
@@ -183,8 +180,8 @@ func (s *svc) privilege(ctx context.Context, u *userpb.User) (string, error) {
 }
 
 // mintImpersonation mints a token that lives for impersonation_ttl, or for ttl
-// if that is shorter. The first token gives the cap, because the expires of the
-// token manager config wins over impersonation_ttl.
+// if that is shorter. The first token gives the cap, because the "expires" of
+// the token manager config wins over impersonation_ttl.
 func (s *svc) mintImpersonation(ctx context.Context, u *userpb.User, scopes map[string]*authpb.Scope, ttl time.Duration) (string, time.Time, error) {
 	expiry := func(tm token.Manager, tkn string) time.Time {
 		if v, ok := tm.(token.ValidatedExpiry); ok {
@@ -207,7 +204,7 @@ func (s *svc) mintImpersonation(ctx context.Context, u *userpb.User, scopes map[
 	tmConf := map[string]any{}
 	maps.Copy(tmConf, s.conf.TokenManagers[s.conf.TokenManager])
 	tmConf["expires"] = int64(ttl.Seconds())
-	// The manager mints one token and dismantles none, so it needs no cache.
+	// This manager only mints, so it needs no cache.
 	tmConf["cache_ttl"] = -1
 	c := *s.conf
 	c.TokenManagers = map[string]map[string]any{c.TokenManager: tmConf}

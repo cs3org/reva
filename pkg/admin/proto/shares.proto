@@ -22,8 +22,6 @@ package reva.admin.v1beta1;
 
 option go_package = "github.com/cs3org/reva/v3/pkg/admin/adminpb";
 
-// SharesAdmin is the operator surface for the shares and public links of any
-// owner: fleet-wide lists, orphans, transfers, and the operations of the owner
-// fallback. Every method needs the admin scope.
+// SharesAdmin is the operator API for the shares and public links of any owner.
 service SharesAdmin {
 }
