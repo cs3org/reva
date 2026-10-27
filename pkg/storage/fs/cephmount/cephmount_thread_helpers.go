@@ -44,7 +44,7 @@ func (fs *cephmountfs) getUserInfo(ctx context.Context) (username string, uid in
 	// Get thread ID from the thread pool
 	thread, err := fs.threadPool.getExistingUserThread(uid)
 	if err == nil && thread != nil {
-		threadID = thread.threadID
+		threadID = int(thread.threadID.Load())
 	}
 
 	return username, uid, threadID
