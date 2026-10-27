@@ -522,6 +522,11 @@ func (ut *UserThread) run() {
 	for {
 		select {
 		case request := <-ut.requestChan:
+			// The caller returns the context error, thus the request must not run
+			if request.Context.Err() != nil {
+				continue
+			}
+
 			// Execute the request on this thread with the correct UID
 			result, err := request.Function()
 
