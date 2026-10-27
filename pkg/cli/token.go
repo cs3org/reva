@@ -74,6 +74,34 @@ func (r *Runtime) serverKey() string {
 	return "endpoint=" + r.httpEndpoint + " gateway=" + r.gatewayAddr
 }
 
+// cachedToken returns the reva token of the cache for this server: the one
+// of the same endpoint and gateway, else one of the same endpoint or the
+// same gateway where the other is not set on one side. A login over HTTPS
+// thus also serves a command that sets the gateway of the same deployment.
+// A server that refuses it makes the runtime sign in again.
+func (r *Runtime) cachedToken(c *auth.Cache) (*auth.Token, bool) {
+	if t, ok := c.Get(auth.Reva, r.serverKey()); ok && t.Valid() {
+		return t, true
+	}
+	match := func(a, b string) int {
+		switch {
+		case a == b && a != "":
+			return 1
+		case a == "" || b == "":
+			return 0
+		}
+		return -1
+	}
+	for key, t := range c.Entries(auth.Reva) {
+		ep, gw, _ := strings.Cut(strings.TrimPrefix(key, "endpoint="), " gateway=")
+		e, g := match(ep, r.httpEndpoint), match(gw, r.gatewayAddr)
+		if e >= 0 && g >= 0 && e+g > 0 && t.Valid() {
+			return t, true
+		}
+	}
+	return nil, false
+}
+
 func (r *Runtime) tokenCacheFile() *auth.Cache {
 	p, _ := state.TokenPath()
 	return auth.NewCache(p)
@@ -95,7 +123,7 @@ func (r *Runtime) loginToken(ctx context.Context) (string, error) {
 	c := r.tokenCacheFile()
 	// An app token that is set names its user: a cached token of another
 	// user does not do.
-	if t, ok := c.Get(auth.Reva, r.serverKey()); ok && t.Valid() && (!r.hasAppToken() || t.Subject == r.user) {
+	if t, ok := r.cachedToken(c); ok && (!r.hasAppToken() || t.Subject == r.user) {
 		r.revaTok = t
 		return t.Value, nil
 	}
@@ -130,7 +158,7 @@ func (r *Runtime) Login(ctx context.Context, opts LoginOptions) (*SignIn, error)
 
 // SignedIn returns the stored sign-in for this server, nil if there is none.
 func (r *Runtime) SignedIn() *SignIn {
-	if t, ok := r.tokenCacheFile().Get(auth.Reva, r.serverKey()); ok && t.Valid() {
+	if t, ok := r.cachedToken(r.tokenCacheFile()); ok {
 		return &SignIn{Provider: t.Provider, Subject: t.Subject, Expires: t.Expiry}
 	}
 	return nil
@@ -156,7 +184,11 @@ func (r *Runtime) renew(ctx context.Context, refused string) error {
 	}
 	r.revaTok = nil
 	c := r.tokenCacheFile()
-	_ = c.Delete(auth.Reva, r.serverKey())
+	for key, t := range c.Entries(auth.Reva) {
+		if t.Value == refused {
+			_ = c.Delete(auth.Reva, key)
+		}
+	}
 	if c.Legacy() == refused {
 		_ = c.Clear()
 	}

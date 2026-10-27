@@ -156,6 +156,10 @@ type Permission struct {
 	// Path is the resource the permission applies to, when the server reports
 	// it. Listings fill it in so the user can tell shares apart.
 	Path string `json:"path,omitempty"`
+	// Created and InvitedBy are when and by whom the share was made, when
+	// the server says it.
+	Created   *time.Time `json:"created,omitempty"`
+	InvitedBy *Identity  `json:"invited_by,omitempty"`
 }
 
 // -- identity -----------------------------------------------------------------
@@ -502,6 +506,15 @@ type graphPermission struct {
 		DisplayName      *string `json:"@libre.graph.displayName"`
 	} `json:"link"`
 	ExpirationDateTime *time.Time `json:"expirationDateTime"`
+	CreatedDateTime    *time.Time `json:"createdDateTime"`
+	// HasPassword is where reva puts the password flag of a link, outside
+	// the link object.
+	HasPassword *bool `json:"hasPassword"`
+	Invitation  *struct {
+		InvitedBy *struct {
+			User *graphIdentity `json:"user"`
+		} `json:"invitedBy"`
+	} `json:"invitation"`
 }
 
 type graphIdentity struct {
@@ -539,6 +552,8 @@ func (p graphPermission) toPermission() Permission {
 		}
 		if p.Link.HasPassword != nil {
 			l.HasPassword = *p.Link.HasPassword
+		} else if p.HasPassword != nil {
+			l.HasPassword = *p.HasPassword
 		}
 		if p.Link.DisplayName != nil {
 			l.Name = *p.Link.DisplayName
@@ -546,6 +561,10 @@ func (p graphPermission) toPermission() Permission {
 		out.Link = l
 	}
 	out.ExpiresAt = p.ExpirationDateTime
+	out.Created = p.CreatedDateTime
+	if p.Invitation != nil && p.Invitation.InvitedBy != nil && p.Invitation.InvitedBy.User != nil {
+		out.InvitedBy = identityOf(p.Invitation.InvitedBy.User, "user")
+	}
 	return out
 }
 

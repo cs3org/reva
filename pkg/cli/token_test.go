@@ -100,9 +100,13 @@ func TestTokenExchangeAndCache(t *testing.T) {
 	if s := r.SignedIn(); s == nil || s.Provider != auth.MethodAppToken || s.Subject != "alice" {
 		t.Errorf("SignedIn() = %+v", s)
 	}
-	if _, err := newTokenRuntime(t, "--endpoint", ts.URL, "--gateway", "other:9142").Token(context.Background()); err == nil ||
+	// The gateway of the same deployment can use it, another endpoint not.
+	if again, err := newTokenRuntime(t, "--endpoint", ts.URL, "--gateway", "gw:9142").Token(context.Background()); err != nil || again != got {
+		t.Errorf("the endpoint with a gateway: %q, %v: want the cached token", again, err)
+	}
+	if _, err := newTokenRuntime(t, "--endpoint", "https://other.example.org").Token(context.Background()); err == nil ||
 		!strings.Contains(err.Error(), "no login token") {
-		t.Errorf("another gateway: %v, want no login token", err)
+		t.Errorf("another endpoint: %v, want no login token", err)
 	}
 
 	// A refused token makes the next call sign in again.

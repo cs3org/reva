@@ -49,9 +49,52 @@ func resourceIDString(id *provider.ResourceId) string {
 	return spaces.EncodeToStringifiedResourceID(id)
 }
 
+// parseID reads a resource id with its space (storage$space!item), or
+// without one (storage!item), which OCS gives without spaces.
 func parseID(s string) *provider.ResourceId {
-	id, _ := spaces.ParseResourceID(s)
+	if id, ok := spaces.ParseResourceID(s); ok {
+		return id
+	}
+	id, err := spaces.ResourceIdFromString(s)
+	if err != nil {
+		return nil
+	}
 	return id
+}
+
+// sharedByMe returns the items that the caller shared, each with its
+// permissions. The listing of sharedByMe has no permission ids in reva, so
+// they come from the permissions of each item.
+func (b *Backend) sharedByMe(ctx context.Context) ([]client.DriveItem, error) {
+	items, err := b.c.SharedByMe(ctx)
+	if err != nil {
+		return nil, conv(err)
+	}
+	for i := range items {
+		if perms, err := b.c.ListPermissions(ctx, items[i].ID); err == nil {
+			items[i].Permissions = perms
+		}
+	}
+	return items, nil
+}
+
+// itemOf returns the Graph id of the item that the OCS share o is on: OCS
+// gives it without its space when spaces are off.
+func (b *Backend) itemOf(ctx context.Context, o *client.OCSShare) (string, error) {
+	if _, ok := spaces.ParseResourceID(o.ItemSource); ok {
+		return o.ItemSource, nil
+	}
+	want := parseID(o.ItemSource)
+	items, err := b.c.SharedByMe(ctx)
+	if err != nil {
+		return "", conv(err)
+	}
+	for _, it := range items {
+		if id := parseID(it.ID); id != nil && want != nil && id.StorageId == want.StorageId && id.OpaqueId == want.OpaqueId {
+			return it.ID, nil
+		}
+	}
+	return "", notFound("the item of share %s not found", o.ID)
 }
 
 func (s shares) List(ctx context.Context, resource *provider.ResourceId) ([]*collaboration.Share, error) {
@@ -71,9 +114,9 @@ func (s shares) List(ctx context.Context, resource *provider.ResourceId) ([]*col
 		add(resource, perms)
 		return out, nil
 	}
-	items, err := s.b.c.SharedByMe(ctx)
+	items, err := s.b.sharedByMe(ctx)
 	if err != nil {
-		return nil, conv(err)
+		return nil, err
 	}
 	for _, it := range items {
 		add(parseID(it.ID), it.Permissions)
@@ -81,9 +124,9 @@ func (s shares) List(ctx context.Context, resource *provider.ResourceId) ([]*col
 	return out, nil
 }
 
-// graphShare converts a Graph permission. Graph gives no ctime, mtime,
-// creator or owner, and of the grantee only its id and its type: the idp
-// and the user type stay empty. The permissions are those of the role.
+// graphShare converts a Graph permission. Graph gives no mtime and no
+// owner, and of the grantee only its id and its type: the idp and the user
+// type stay empty. The permissions are those of the role.
 func graphShare(p client.Permission, rid *provider.ResourceId) *collaboration.Share {
 	s := &collaboration.Share{
 		Id:          &collaboration.ShareId{OpaqueId: p.ID},
@@ -93,6 +136,12 @@ func graphShare(p client.Permission, rid *provider.ResourceId) *collaboration.Sh
 	}
 	if p.ExpiresAt != nil {
 		s.Expiration = timestamp(*p.ExpiresAt)
+	}
+	if p.Created != nil {
+		s.Ctime = timestamp(*p.Created)
+	}
+	if p.InvitedBy != nil {
+		s.Creator = userID(p.InvitedBy.ID)
 	}
 	return s
 }
@@ -221,42 +270,41 @@ func (s shares) Create(ctx context.Context, req *collaboration.CreateShareReques
 	return nil, invalid("the server created no share")
 }
 
-// Update finds the item of the share with OCS, because the Graph route of a
-// permission needs it.
+// Update changes the permissions with OCS, by the id alone. OCS cannot set
+// an expiration, so that goes to the Graph route of the item, which OCS
+// tells.
 func (s shares) Update(ctx context.Context, req *collaboration.UpdateShareRequest) (*collaboration.Share, error) {
 	id := req.GetRef().GetId().GetOpaqueId()
 	if id == "" {
 		return nil, notAvailable("a share reference by key")
 	}
-	o, err := s.b.c.GetShare(ctx, id)
-	if err != nil {
-		return nil, conv(err)
-	}
-	var role string
-	var exp *time.Time
 	switch f := req.GetField().GetField().(type) {
 	case *collaboration.UpdateShareRequest_UpdateField_Permissions:
-		if role, err = unifiedRole(f.Permissions.GetPermissions()); err != nil {
-			return nil, err
+		p := f.Permissions.GetPermissions()
+		form := url.Values{"permissions": {strconv.Itoa(int(permissions.RoleFromResourcePermissions(p).OCSPermissions()))}}
+		if _, err := s.b.c.UpdateShare(ctx, id, form); err != nil {
+			return nil, conv(err)
 		}
 	case *collaboration.UpdateShareRequest_UpdateField_Expiration:
 		if f.Expiration == nil {
 			return nil, notAvailable("removing the expiration of a share")
 		}
+		o, err := s.b.c.GetShare(ctx, id)
+		if err != nil {
+			return nil, conv(err)
+		}
+		item, err := s.b.itemOf(ctx, o)
+		if err != nil {
+			return nil, err
+		}
 		t := time.Unix(int64(f.Expiration.Seconds), 0)
-		exp = &t
+		if _, err := s.b.c.UpdatePermission(ctx, item, id, "", &t); err != nil {
+			return nil, conv(err)
+		}
 	default:
 		return nil, notAvailable("this share update")
 	}
-	p, err := s.b.c.UpdatePermission(ctx, o.ItemSource, id, role, exp)
-	if err != nil {
-		return nil, conv(err)
-	}
-	if p.GrantedTo == nil {
-		// Some servers answer without the grantee.
-		return s.Get(ctx, id)
-	}
-	return graphShare(*p, parseID(o.ItemSource)), nil
+	return s.Get(ctx, id)
 }
 
 func (s shares) Remove(ctx context.Context, id string) error {
@@ -347,9 +395,9 @@ func (l links) List(ctx context.Context, resource *provider.ResourceId) ([]*link
 		add(resource, perms)
 		return out, nil
 	}
-	items, err := l.b.c.SharedByMe(ctx)
+	items, err := l.b.sharedByMe(ctx)
 	if err != nil {
-		return nil, conv(err)
+		return nil, err
 	}
 	for _, it := range items {
 		add(parseID(it.ID), it.Permissions)
@@ -358,7 +406,7 @@ func (l links) List(ctx context.Context, resource *provider.ResourceId) ([]*link
 }
 
 // graphLink converts a link permission of Graph. The token is the last part
-// of the web URL. Graph gives no ctime, mtime, creator or owner, and the
+// of the web URL. Graph gives no mtime, creator or owner, and the
 // permissions are those of the link type.
 func graphLink(p client.Permission, rid *provider.ResourceId) *link.PublicShare {
 	s := &link.PublicShare{
@@ -371,6 +419,9 @@ func graphLink(p client.Permission, rid *provider.ResourceId) *link.PublicShare 
 	}
 	if p.ExpiresAt != nil {
 		s.Expiration = timestamp(*p.ExpiresAt)
+	}
+	if p.Created != nil {
+		s.Ctime = timestamp(*p.Created)
 	}
 	return s
 }

@@ -24,9 +24,11 @@ import (
 	"io"
 	nethttp "net/http"
 	"net/http/httptest"
+	"slices"
 	"strings"
 	"sync"
 	"testing"
+	"time"
 
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	collaboration "github.com/cs3org/go-cs3apis/cs3/sharing/collaboration/v1beta1"
@@ -60,7 +62,8 @@ func (s *server) handle(w nethttp.ResponseWriter, r *nethttp.Request) {
 		io.WriteString(w, `{"id":"uid-1","displayName":"Alice","mail":"alice@example.org","onPremisesSamAccountName":"alice"}`)
 	case r.URL.Path == "/graph/v1beta1/me/drive/sharedByMe":
 		io.WriteString(w, `{"value":[{"id":"`+fileID+`","name":"report.pdf","permissions":[
-			{"id":"`+shareID+`","roles":["fb6c3e19-e378-47e5-b277-9732f9de6e21"],"grantedToV2":{"user":{"id":"bob","displayName":"Bob"}},"expirationDateTime":"2026-12-31T00:00:00Z"},
+			{"id":"`+shareID+`","roles":["fb6c3e19-e378-47e5-b277-9732f9de6e21"],"grantedToV2":{"user":{"id":"bob","displayName":"Bob"}},"expirationDateTime":"2026-12-31T00:00:00Z",
+			 "createdDateTime":"2026-10-01T10:00:00Z","invitation":{"invitedBy":{"user":{"id":"alice"}}}},
 			{"id":"`+linkID+`","link":{"type":"view","webUrl":"https://box.example.org/s/AbCdEf","@libre.graph.permissions.link.hasPassword":true,"@libre.graph.displayName":"for the team"}}]}]}`)
 	case r.URL.Path == "/graph/v1beta1/me/drive/sharedWithMe":
 		io.WriteString(w, `{"value":[{"id":"a0ca6a90-a365-4782-871e-d44447bbc668$a0ca6a90-a365-4782-871e-d44447bbc668!99","name":"data",
@@ -68,6 +71,8 @@ func (s *server) handle(w nethttp.ResponseWriter, r *nethttp.Request) {
 			"remoteItem":{"id":"eosproject$L2VvcwB!12","name":"data","permissions":[{"id":"99","roles":["b1e2218d-eef8-4d4c-b82d-0f1a1b48f3b5"],"grantedToV2":{"group":{"id":"cern-users"}}}]}}]}`)
 	case strings.HasPrefix(r.URL.Path, "/graph/v1beta1/drives/") && r.Method == nethttp.MethodPatch:
 		io.WriteString(w, `{"id":"`+shareID+`","roles":["b1e2218d-eef8-4d4c-b82d-0f1a1b48f3b5"],"grantedToV2":{"user":{"id":"bob"}}}`)
+	case r.URL.Path == "/ocs/v2.php/apps/files_sharing/api/v1/shares/"+shareID && r.Method == nethttp.MethodPut:
+		io.WriteString(w, `{"ocs":{"meta":{"statuscode":200},"data":{"id":"`+shareID+`"}}}`)
 	case r.URL.Path == "/ocs/v2.php/apps/files_sharing/api/v1/shares/"+shareID && r.Method == nethttp.MethodGet:
 		io.WriteString(w, `{"ocs":{"meta":{"statuscode":200},"data":[{"id":"`+shareID+`","share_type":0,"uid_owner":"alice","uid_file_owner":"alice",
 			"permissions":15,"stime":1767225600,"expiration":"2026-12-31 00:00:00","item_source":"`+fileID+`","share_with":"bob","file_target":"/report.pdf"}]}}`)
@@ -154,12 +159,13 @@ func TestSharesFromGraph(t *testing.T) {
 	if permissions.RoleFromResourcePermissions(s.Permissions.Permissions).Name != permissions.RoleEditor {
 		t.Errorf("permissions = %v, want those of the editor role", s.Permissions)
 	}
+	if s.Ctime.GetSeconds() == 0 || s.Creator.GetOpaqueId() != "alice" {
+		t.Errorf("share = %v, want the ctime and the creator of createdDateTime and invitedBy", s)
+	}
 	for name, empty := range map[string]bool{
 		"grantee idp":       s.Grantee.GetUserId().GetIdp() == "",
 		"grantee user type": s.Grantee.GetUserId().GetType() == 0,
-		"ctime":             s.Ctime == nil,
 		"mtime":             s.Mtime == nil,
-		"creator":           s.Creator == nil,
 		"owner":             s.Owner == nil,
 	} {
 		if !empty {
@@ -189,20 +195,33 @@ func TestShareGetFromOCS(t *testing.T) {
 	}
 }
 
-func TestShareUpdateUsesTheItemOfOCS(t *testing.T) {
+func TestShareUpdate(t *testing.T) {
 	s, b := newServer(t)
-	_, err := b.Shares().Update(context.Background(), &collaboration.UpdateShareRequest{
-		Ref: &collaboration.ShareReference{Spec: &collaboration.ShareReference_Id{Id: &collaboration.ShareId{OpaqueId: shareID}}},
+	ref := &collaboration.ShareReference{Spec: &collaboration.ShareReference_Id{Id: &collaboration.ShareId{OpaqueId: shareID}}}
+	_, err := b.Shares().Update(context.Background(), &collaboration.UpdateShareRequest{Ref: ref,
 		Field: &collaboration.UpdateShareRequest_UpdateField{Field: &collaboration.UpdateShareRequest_UpdateField_Permissions{
 			Permissions: &collaboration.SharePermissions{Permissions: permissions.NewViewerRole().CS3ResourcePermissions()}}},
 	})
 	if err != nil {
 		t.Fatal(err)
 	}
-	last := s.reqs[len(s.reqs)-1]
+	if !slices.ContainsFunc(s.reqs, func(r string) bool {
+		return strings.HasPrefix(r, "PUT /ocs/v2.php/apps/files_sharing/api/v1/shares/"+shareID) && strings.HasSuffix(r, " permissions=1")
+	}) {
+		t.Errorf("requests %q, want an OCS PUT of the viewer permissions", s.reqs)
+	}
+
+	// OCS has no expiration for a share: Graph has, on the item that OCS gives.
+	_, err = b.Shares().Update(context.Background(), &collaboration.UpdateShareRequest{Ref: ref,
+		Field: &collaboration.UpdateShareRequest_UpdateField{Field: &collaboration.UpdateShareRequest_UpdateField_Expiration{
+			Expiration: timestamp(time.Date(2027, 1, 31, 0, 0, 0, 0, time.UTC))}},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
 	want := "PATCH /graph/v1beta1/drives/eoshome-i01$L2VvcwB/items/" + fileID + "/permissions/" + shareID
-	if !strings.HasPrefix(last, want) || !strings.Contains(last, permissions.UnifiedRoleViewerID) {
-		t.Errorf("request %q, want %s with the viewer role", last, want)
+	if !slices.ContainsFunc(s.reqs, func(r string) bool { return strings.HasPrefix(r, want) && strings.Contains(r, "2027-01-31") }) {
+		t.Errorf("requests %q, want %s with the expiration", s.reqs, want)
 	}
 }
 

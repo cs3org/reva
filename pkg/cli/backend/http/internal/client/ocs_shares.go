@@ -120,9 +120,9 @@ type GraphUser struct {
 }
 
 // FindUsers searches the users by name or mail. The server wants at least
-// three characters.
+// three characters, and an order.
 func (c *Client) FindUsers(ctx context.Context, query string) ([]GraphUser, error) {
-	q := url.Values{"$search": {`"` + strings.ReplaceAll(query, `"`, "") + `"`}}
+	q := url.Values{"$search": {`"` + strings.ReplaceAll(query, `"`, "") + `"`}, "$orderby": {"displayName"}}
 	var coll graphCollection[GraphUser]
 	if err := c.getJSON(ctx, c.URL(graphV1+"/users")+"?"+q.Encode(), "find users", query, &coll); err != nil {
 		return nil, err

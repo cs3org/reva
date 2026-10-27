@@ -254,6 +254,7 @@ func runDoctor(ctx context.Context, rt *cli.Runtime, skipWrite bool) doctorRepor
 			rep.add("clock", "ok", "in step with the server", "")
 		}
 	case errors.Is(err, backend.ErrNotAvailable):
+		rep.add("server", "ok", strings.TrimSpace(b.Transport()+" "+server), "")
 		rep.add("clock", "skipped", "the "+b.Transport()+" transport gives no server time", "")
 	default:
 		rep.add("server", "problem", server+": "+err.Error(), cmp.Or(msgs.NetworkHint, "check the address, and the network of this machine"))
