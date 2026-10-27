@@ -31,6 +31,32 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+func TestUserThreadCleanupKeepsBusyThread(t *testing.T) {
+	pool, _, err := NewUserThreadPool(UserThreadPoolConfig{ThreadTTL: time.Nanosecond})
+	require.NoError(t, err)
+	defer pool.Shutdown()
+	user := &userv1beta1.User{Id: &userv1beta1.UserId{OpaqueId: "einstein"}, Username: "einstein", UidNumber: 4242, GidNumber: 4242}
+
+	// The request runs for longer than the TTL, as a large upload can
+	started, release := make(chan struct{}), make(chan struct{})
+	done := make(chan error, 1)
+	go func() {
+		ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+		defer cancel()
+		_, err := pool.ExecuteOnUserThread(ctx, user, func() (any, error) {
+			close(started)
+			<-release
+			return nil, nil
+		})
+		done <- err
+	}()
+	<-started
+
+	pool.cleanupExpiredThreads()
+	close(release)
+	require.NoError(t, <-done)
+}
+
 func TestUserThreadAfterCancelledRequest(t *testing.T) {
 	pool, _, err := NewUserThreadPool(UserThreadPoolConfig{})
 	require.NoError(t, err)
