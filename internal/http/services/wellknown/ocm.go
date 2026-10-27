@@ -28,6 +28,7 @@ import (
 	"sync"
 
 	"github.com/cs3org/reva/v3/pkg/appctx"
+	"github.com/cs3org/reva/v3/pkg/ocm/httpsig"
 )
 
 const webappReceiveTargetBlank = "blank"
@@ -59,6 +60,7 @@ type OcmProviderConfig struct {
 	EnableEmbedded     bool   `docs:"false;Whether embedded shares are enabled in OCM shares."                                   mapstructure:"enable_embedded"`
 	EnableCodeFlow     bool   `docs:"false;Whether code-flow token exchange is enabled in OCM shares."                           mapstructure:"enable_code_flow"`
 	MFAPolicy          string `docs:"reject;Admission of received webapp must-use-mfa offers: reject or off. Off skips the check; nothing is advertised." mapstructure:"mfa_policy"`
+	SigningKey         string `docs:";Path to the PEM file of the Ed25519 private key for OCM HTTP signatures. If it's not configured, no public key is published." mapstructure:"signing_key"`
 }
 
 type OcmDiscoveryData struct {
@@ -71,6 +73,7 @@ type OcmDiscoveryData struct {
 	Criteria           []string        `json:"criteria"           xml:"criteria"`
 	InviteAcceptDialog string          `json:"inviteAcceptDialog" xml:"inviteAcceptDialog"`
 	TokenEndPoint      string          `json:"tokenEndPoint,omitempty" xml:"tokenEndPoint,omitempty"`
+	JwksURI            string          `json:"jwksUri,omitempty"       xml:"jwksUri,omitempty"`
 }
 
 type ResourceTypes struct {
@@ -82,6 +85,7 @@ type ResourceTypes struct {
 type wkocmHandler struct {
 	data               *OcmDiscoveryData
 	payload, payloadNC []byte
+	jwks               []byte
 }
 
 // WebappReceiveTargets returns advertised receive targets; the only usable target is "blank".
@@ -203,8 +207,18 @@ func (c *OcmProviderConfig) validateMFAPolicy() error {
 	return nil
 }
 
-func (h *wkocmHandler) init(c *OcmProviderConfig) {
+func (h *wkocmHandler) init(c *OcmProviderConfig) error {
+	if c.SigningKey != "" {
+		key, err := httpsig.LoadKey(c.SigningKey)
+		if err != nil {
+			return err
+		}
+		if h.jwks, err = key.JWKS(); err != nil {
+			return err
+		}
+	}
 	h.setData(h.buildData(c))
+	return nil
 }
 
 // setData stores d and encodes the responses once, the second one for the
@@ -295,6 +309,10 @@ func (h *wkocmHandler) buildData(c *OcmProviderConfig) *OcmDiscoveryData {
 		d.TokenEndPoint, _ = TokenEndpoint(c.Endpoint, c.OCMPrefix)
 		d.Capabilities = append(d.Capabilities, "exchange-token")
 	}
+	if h.jwks != nil {
+		d.JwksURI, _ = url.JoinPath(c.Endpoint, "/.well-known/jwks.json")
+		d.Capabilities = append(d.Capabilities, "http-sig")
+	}
 	return d
 }
 
@@ -315,5 +333,13 @@ func (h *wkocmHandler) Ocm(w http.ResponseWriter, r *http.Request) {
 	}
 	if _, err := w.Write(payload); err != nil {
 		log.Err(err).Msg("Error writing to ResponseWriter")
+	}
+}
+
+// Jwks serves the JWK Set with the public key for OCM HTTP signatures.
+func (h *wkocmHandler) Jwks(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	if _, err := w.Write(h.jwks); err != nil {
+		appctx.GetLogger(r.Context()).Err(err).Msg("Error writing to ResponseWriter")
 	}
 }

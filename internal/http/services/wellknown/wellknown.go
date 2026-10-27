@@ -69,7 +69,10 @@ func New(ctx context.Context, m map[string]any) (global.Service, error) {
 
 	s := &svc{Conf: &c, limiter: limiter}
 	s.ocm = new(wkocmHandler)
-	s.ocm.init(&s.Conf.OCMProvider)
+	if err := s.ocm.init(&s.Conf.OCMProvider); err != nil {
+		_ = s.Close()
+		return nil, err
+	}
 
 	return s, nil
 }
@@ -85,5 +88,8 @@ func (s *svc) Close() error {
 func (s *svc) Routes(r *router.Router) {
 	r.Group(mount, func(r *router.Router) {
 		r.Get("/ocm", s.ocm.Ocm, router.Unprotected())
+		if s.ocm.jwks != nil {
+			r.Get("/jwks.json", s.ocm.Jwks, router.Unprotected())
+		}
 	}, s.limiter.Middleware)
 }
