@@ -740,6 +740,33 @@ If a reload fails on an instance, that instance keeps its old routes. Run
 the registry, because the reload would skip the route. The `static` driver has
 no routing table and answers "not supported".
 
+### StorageAdmin
+
+`StorageAdmin` ([`storage.proto`](../../../../pkg/admin/proto/storage.proto))
+is the typed facade over these invocations, behind `reva route`. A route is a
+CS3 `storage.registry.v1beta1.ProviderInfo`: `provider_path` is the routed path
+and `provider_id` the mount id.
+
+- `ListRoutes` runs `routes`. The routes have no `address`: the routing table
+  does not store it, the `rules` of the registry give it.
+- `ResolvePath` takes a CS3 `provider.v1beta1.Reference`, as
+  `GetStorageProvidersRequest` does, and runs `resolve` on one instance. Only
+  an absolute path is supported: a reference with a resource id is
+  InvalidArgument, because `resolve` takes only a path. Each
+  `ResolvedProvider` has the `ProviderInfo` of the mount (with its address)
+  and `provider_nodes`, the live storage provider instances that advertise its
+  `mount_id`, which CS3 cannot carry.
+- `AddRoute` takes a `ProviderInfo` with `provider_path` and `provider_id`, and
+  refuses an `address`, which the table would drop. `RemoveRoute` takes the
+  path only: it is the key of the table.
+- Both run `route_add` or `route_remove` once, then `route_reload` on every
+  instance. The change is written even if a reload fails, so the RPC succeeds
+  and lists each instance that did not reload in `stale`, with a CS3
+  `rpc.v1beta1.Status`: the code is the gRPC code of the failed reload in its
+  CS3 form, by `status.CodeFromGRPC` of `pkg/rgrpc/status` (`Unavailable`
+  becomes `CODE_UNAVAILABLE`, a failure without a code `CODE_UNKNOWN`). The
+  CLI prints them and fails.
+
 ## Adding an invocation to a service (for developers)
 
 A service exposes admin operations by building an [`invoke.Set`](../../../../pkg/invoke/set.go)
