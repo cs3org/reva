@@ -29,6 +29,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"syscall"
 	"time"
 
@@ -231,7 +232,8 @@ type UserThread struct {
 	quit        chan struct{}
 	lastUsed    time.Time
 	mu          sync.RWMutex
-	active      bool
+	// Callers that hold this thread. Cleanup must not stop the thread while a caller waits on it.
+	callers atomic.Int32
 }
 
 // ThreadRequest represents a request to execute on a user thread
@@ -292,16 +294,21 @@ func NewUserThreadPool(config UserThreadPoolConfig) (*UserThreadPool, *Privilege
 	return pool, privResult, nil
 }
 
-// GetOrCreateUserThread gets an existing user thread or creates a new one
+// GetOrCreateUserThread gets an existing user thread or creates a new one.
+// The caller must decrement thread.callers when it does not use the thread anymore.
 func (p *UserThreadPool) GetOrCreateUserThread(ctx context.Context, user *userv1beta1.User) (*UserThread, error) {
 	// Map user to UID/GID
 	uid, gid := p.mapUserToUIDGID(user)
 
+	// Count the caller under the pool lock, so that cleanup cannot stop the thread before the caller uses it
 	p.mu.RLock()
 	thread, exists := p.threads[uid]
+	if exists {
+		thread.callers.Add(1)
+	}
 	p.mu.RUnlock()
 
-	if exists && thread.active {
+	if exists {
 		thread.updateLastUsed()
 		return thread, nil
 	}
@@ -311,7 +318,8 @@ func (p *UserThreadPool) GetOrCreateUserThread(ctx context.Context, user *userv1
 	defer p.mu.Unlock()
 
 	// Double-check after acquiring write lock
-	if thread, exists := p.threads[uid]; exists && thread.active {
+	if thread, exists := p.threads[uid]; exists {
+		thread.callers.Add(1)
 		thread.updateLastUsed()
 		return thread, nil
 	}
@@ -324,8 +332,8 @@ func (p *UserThreadPool) GetOrCreateUserThread(ctx context.Context, user *userv1
 		requestChan: make(chan *ThreadRequest, 100),
 		quit:        make(chan struct{}),
 		lastUsed:    time.Now(),
-		active:      true,
 	}
+	thread.callers.Add(1)
 
 	p.threads[uid] = thread
 
@@ -379,6 +387,7 @@ func (p *UserThreadPool) ExecuteOnUserThread(ctx context.Context, user *userv1be
 	if err != nil {
 		return nil, err
 	}
+	defer thread.callers.Add(-1)
 
 	return thread.Execute(ctx, fn)
 }
@@ -430,7 +439,7 @@ func (p *UserThreadPool) cleanupExpiredThreads() {
 		expired := now.Sub(thread.lastUsed) > p.threadTTL
 		thread.mu.RUnlock()
 
-		if expired {
+		if expired && thread.callers.Load() == 0 {
 			thread.shutdown()
 			delete(p.threads, uid)
 		}
@@ -532,10 +541,6 @@ func (ut *UserThread) run() {
 
 // Execute executes a function on this user thread
 func (ut *UserThread) Execute(ctx context.Context, fn func() (any, error)) (any, error) {
-	if !ut.active {
-		return nil, syscall.EINVAL
-	}
-
 	request := &ThreadRequest{
 		Function: fn,
 		Context:  ctx,
@@ -567,13 +572,8 @@ func (ut *UserThread) updateLastUsed() {
 
 // shutdown gracefully shuts down the user thread
 func (ut *UserThread) shutdown() {
-	ut.mu.Lock()
-	defer ut.mu.Unlock()
-
-	if ut.active {
-		close(ut.quit)
-		ut.active = false
-	}
+	// Runs only once per thread, because the pool removes the thread from its map under the same lock
+	close(ut.quit)
 }
 
 // GetStats returns statistics about the thread
@@ -587,7 +587,6 @@ func (ut *UserThread) GetStats() map[string]any {
 		"username":   ut.username,
 		"thread_id":  ut.threadID,
 		"last_used":  ut.lastUsed,
-		"active":     ut.active,
 		"queue_size": len(ut.requestChan),
 	}
 }
