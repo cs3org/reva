@@ -238,10 +238,8 @@ func TestSetStreamOnly(t *testing.T) {
 	}
 }
 
-// fakeDriver is a driver that exposes its invocations with an embedded Set.
 type fakeDriver struct{ *Set }
 
-// unaryDriver is Invokable but not StreamInvokable.
 type unaryDriver struct{ specs []InvocationSpec }
 
 func (d unaryDriver) Invocations() []InvocationSpec { return d.specs }

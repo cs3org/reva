@@ -46,8 +46,7 @@ import (
 	"google.golang.org/grpc/metadata"
 )
 
-// logBuffer collects the log lines of the servers, which write from their own
-// goroutines.
+// logBuffer is safe for the servers, which write from their own goroutines.
 type logBuffer struct {
 	mu  sync.Mutex
 	buf bytes.Buffer
@@ -59,7 +58,6 @@ func (b *logBuffer) Write(p []byte) (int, error) {
 	return b.buf.Write(p)
 }
 
-// audits returns the audit lines with the given action.
 func (b *logBuffer) audits(t *testing.T, action string) []map[string]any {
 	t.Helper()
 	b.mu.Lock()
@@ -77,8 +75,6 @@ func (b *logBuffer) audits(t *testing.T, action string) []map[string]any {
 	return out
 }
 
-// auditingInvokable audits from inside its handler, like an invocation that
-// changes state.
 type auditingInvokable struct{}
 
 func (auditingInvokable) Invocations() []invoke.InvocationSpec {
@@ -107,8 +103,6 @@ func serveGRPC(t *testing.T, network, addr string, srv *grpc.Server) string {
 	return ln.Addr().String()
 }
 
-// startReasonFleet starts a control channel with one auditing instance of the
-// service t.Name(), and returns the admin service that reaches it.
 func startReasonFleet(t *testing.T, log *zerolog.Logger) *svc {
 	t.Helper()
 	ctrl := grpc.NewServer(grpc.UnaryInterceptor(withLogger(log)))
@@ -166,9 +160,6 @@ func assertReason(t *testing.T, logs *logBuffer, action, reason string) {
 	}
 }
 
-// TestInvokeReasonOverListener checks that the reason header of an Invoke is
-// on the audit line of the admin service and on the audit line that the
-// invocation handler writes in the owning service.
 func TestInvokeReasonOverListener(t *testing.T) {
 	logs := &logBuffer{}
 	log := zerolog.New(logs)
@@ -183,8 +174,6 @@ func TestInvokeReasonOverListener(t *testing.T) {
 	assertReason(t, logs, "handler_change", "INC0042 fix quota")
 }
 
-// TestInvokeReasonOverSocket checks the same over the local socket, which has
-// its own interceptors, and that its audit names the peer pid and the sudo user.
 func TestInvokeReasonOverSocket(t *testing.T) {
 	if !localRootSupported() {
 		t.Skip("local root needs SO_PEERCRED")
@@ -225,8 +214,6 @@ func (fakeMachineAuth) Authenticate(_ context.Context, user, _ string) (*userpb.
 	return &userpb.User{Id: &userpb.UserId{OpaqueId: user}, Username: user}, scopes, err
 }
 
-// TestImpersonateAuditReason checks that the request reason of Impersonate
-// still works, and that the header is logged when both are set.
 func TestImpersonateAuditReason(t *testing.T) {
 	for _, c := range []struct {
 		name, header, field string
@@ -242,7 +229,6 @@ func TestImpersonateAuditReason(t *testing.T) {
 			log := zerolog.New(logs)
 			s := impersonationService(t)
 
-			// An admin caller, as the auth interceptor leaves it.
 			scopes, err := scope.AddAdminScope(nil)
 			if err != nil {
 				t.Fatal(err)

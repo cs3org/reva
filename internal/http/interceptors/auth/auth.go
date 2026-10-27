@@ -416,10 +416,8 @@ func ctxWithUserInfo(ctx context.Context, r *http.Request, user *userpb.User, to
 	ctx = metadata.AppendToOutgoingContext(ctx, appctx.TokenHeader, token)
 	ctx = metadata.AppendToOutgoingContext(ctx, appctx.UserAgentHeader, r.UserAgent())
 	if act := scope.Actor(scopes); act != "" {
-		// Update the request logger in place: the log middleware holds it, and
-		// writes the request line with it when the call ends. The appctx
-		// middleware makes one logger for each request, so no other request
-		// sees this.
+		// Update the logger in place: the log middleware writes the request
+		// line with it when the call ends. Each request has its own logger.
 		appctx.GetLogger(ctx).UpdateContext(func(c zerolog.Context) zerolog.Context { return c.Str("act", act) })
 	}
 	// Stamp the user onto the request logger, so a request's logs are

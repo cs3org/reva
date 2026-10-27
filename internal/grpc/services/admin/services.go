@@ -23,8 +23,8 @@ import (
 	"google.golang.org/grpc"
 )
 
-// The typed services are separate types, so that a method name of one service
-// cannot collide with a method of another.
+// Each typed service is its own type, so that two services can have a method
+// with the same name.
 type spacesAdmin struct {
 	adminpb.UnimplementedSpacesAdminServer
 	s *svc
@@ -40,8 +40,8 @@ type storageAdmin struct {
 	s *svc
 }
 
-// register registers every Admin API service on one server. The gRPC listener
-// and the local socket must serve the same services.
+// register registers every Admin API service. The gRPC listener and the local
+// socket must serve the same services.
 func (s *svc) register(ss grpc.ServiceRegistrar) {
 	adminpb.RegisterAdminAPIServer(ss, s)
 	adminpb.RegisterSpacesAdminServer(ss, &spacesAdmin{s: s})

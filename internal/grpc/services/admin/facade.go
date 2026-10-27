@@ -22,17 +22,12 @@ import (
 	"context"
 
 	"github.com/cs3org/reva/v3/pkg/admin"
-
 	"github.com/cs3org/reva/v3/pkg/invoke/client"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/proto"
 )
-
-// The typed admin services are a facade over the invocations of the owning
-// services: each RPC resolves the instances, runs the invocation over the
-// control channel and decodes the result into its adminpb message.
 
 // serviceEndpoints resolves every live instance of a service. A service that is
 // not live is Unavailable, not NotFound: the CLI reads NotFound as "the resource
@@ -49,16 +44,16 @@ func (s *svc) serviceEndpoints(service string) ([]client.Endpoint, error) {
 	return eps, nil
 }
 
-// invokeOne runs a single-target invocation on one picked instance. It picks
-// the instance itself, not through the Shared scope, so that an instance that
-// does not advertise the scope yet does not run the call more than once.
+// invokeOne runs an invocation on one picked instance. It picks the instance
+// itself, not through the Shared scope: an instance that does not advertise
+// the scope yet would run the call more than once.
 func invokeOne(ctx context.Context, eps []client.Endpoint, invocation string, args map[string]string) (client.NodeResult, error) {
 	res := client.InvokeOne(admin.ForwardReason(ctx), client.Pick(ctx, eps), invocation, args)
 	return res, nodeStatus(invocation, res.Code, res.Error)
 }
 
-// invokeAll runs an invocation on every instance. The error is the status of
-// the first instance that failed. The results are for a caller that accepts a
+// invokeAll runs an invocation on every instance. It returns the results with
+// the status of the first instance that failed, for a caller that accepts a
 // partial failure.
 func invokeAll(ctx context.Context, eps []client.Endpoint, invocation string, args map[string]string) ([]client.NodeResult, error) {
 	rs := client.FanOut(admin.ForwardReason(ctx), eps, invocation, args)
@@ -70,9 +65,9 @@ func invokeAll(ctx context.Context, eps []client.Endpoint, invocation string, ar
 	return rs, nil
 }
 
-// relayStream runs a streaming invocation, as InvokeStream does, and sends each
-// result decoded into an M. The first instance that fails ends the relay with
-// its status, because a partial list must not look complete.
+// relayStream sends each result of a streaming invocation, decoded into an M.
+// The first instance that fails ends the relay, so that a partial list does not
+// look complete.
 func relayStream[M proto.Message](ctx context.Context, eps []client.Endpoint, invocation string, args map[string]string, send func(M) error) error {
 	ctx, cancel := context.WithCancel(admin.ForwardReason(ctx))
 	defer cancel()
@@ -92,8 +87,8 @@ func relayStream[M proto.Message](ctx context.Context, eps []client.Endpoint, in
 	return nil
 }
 
-// decode reads an invocation result into m. It discards unknown fields, so
-// that a node with a newer version can add fields during an upgrade.
+// decode reads an invocation result into m. It discards unknown fields, so a
+// newer node can add fields during an upgrade.
 func decode(resultJSON string, m proto.Message) error {
 	if err := (protojson.UnmarshalOptions{DiscardUnknown: true}).Unmarshal([]byte(resultJSON), m); err != nil {
 		return status.Errorf(codes.Internal, "admin: decoding %s: %v", m.ProtoReflect().Descriptor().FullName(), err)
@@ -101,8 +96,8 @@ func decode(resultJSON string, m proto.Message) error {
 	return nil
 }
 
-// nodeStatus is the gRPC status of a failed invocation, or nil if msg is
-// empty. A node without codes sends 0, which becomes Unknown.
+// nodeStatus is the gRPC status of a failed invocation, or nil if msg is empty.
+// A node that sends no code sends 0, which becomes Unknown.
 func nodeStatus(invocation string, code codes.Code, msg string) error {
 	if msg == "" {
 		return nil

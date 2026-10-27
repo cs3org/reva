@@ -33,8 +33,6 @@ import (
 	"github.com/rs/zerolog"
 )
 
-// TestRequestLogShowsTheActor runs a request through the middlewares in the
-// order of revad, with authentication as the middleware does it.
 func TestRequestLogShowsTheActor(t *testing.T) {
 	user := &userpb.User{Id: &userpb.UserId{OpaqueId: "einstein", Idp: "example.org"}, Username: "einstein"}
 	run := func(scopes map[string]*authpb.Scope) string {

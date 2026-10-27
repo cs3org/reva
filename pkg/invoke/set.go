@@ -167,13 +167,12 @@ func (s *Set) InvokeStream(ctx context.Context, name string, args map[string]any
 	return m.stream.fn(ctx, args, emit)
 }
 
-// DriverPrefix is put in front of the invocations that a service takes from
-// its driver, so that they cannot hide the invocations of the service.
+// DriverPrefix is put in front of the invocations that a service takes from its
+// driver, so that they cannot hide the invocations of the service.
 const DriverPrefix = "driver."
 
 // MergeDriver adds the invocations of driver under DriverPrefix, if driver is
-// Invokable. Each one keeps its spec and goes to the driver with its own
-// name. A name that s has already is an error, so the service does not start.
+// Invokable. A name that s has already is an error.
 func (s *Set) MergeDriver(driver any) error {
 	inv, ok := driver.(Invokable)
 	if !ok {

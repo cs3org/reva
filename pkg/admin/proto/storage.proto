@@ -22,8 +22,7 @@ package reva.admin.v1beta1;
 
 option go_package = "github.com/cs3org/reva/v3/pkg/admin/adminpb";
 
-// StorageAdmin is the operator surface for storage routes: it lists, resolves,
-// adds and removes them. A space quota is a property of the space, so it is on
-// SpacesAdmin. Every method needs the admin scope.
+// StorageAdmin is the operator API for storage routes. Space quotas are on
+// SpacesAdmin.
 service StorageAdmin {
 }
