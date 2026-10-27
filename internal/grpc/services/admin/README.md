@@ -704,10 +704,12 @@ InvalidArgument, so that a registration never drops a value.
 
 The quota invocations report what is used, and CS3 has what remains, so the
 facade computes `remaining = max - used`, and 0 over the limit. A limit of 0 is
-no limit, and then its remaining value is 0 too. `SetSpaceQuota` needs an
+no limit, and then its remaining value is 0 too. Because what remains says
+nothing without a limit or over it, the `SpaceQuota` wrapper also carries
+`used_bytes` and `used_files`. `SetSpaceQuota` needs an
 `update_mask` with `quota_max_bytes`, `quota_max_files` or both, because 0 is
 a limit too. The owner of a quota is the one of the catalogue, with its idp,
-when the catalogue has the space. The CLI shows what is used, `max - remaining`.
+when the catalogue has the space. The CLI shows `used_bytes` and `used_files`.
 
 ## Routing
 

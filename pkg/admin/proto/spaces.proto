@@ -208,6 +208,10 @@ message SpaceQuota {
   string space_type = 7;
   // owner is the owner of the space, when it is known.
   cs3.identity.user.v1beta1.UserId owner = 8;
+  // used_bytes and used_files are what the space uses. CS3 has only what
+  // remains, which says nothing without a limit or over it.
+  uint64 used_bytes = 9;
+  uint64 used_files = 10;
 }
 
 message GetSpaceQuotaRequest {

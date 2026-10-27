@@ -56,7 +56,7 @@ func (f *fakeQuotaAdmin) GetSpaceQuota(_ context.Context, req *adminpb.GetSpaceQ
 	if req.Ref.GetName() != "cernbox" {
 		return nil, status.Error(codes.NotFound, "no such space")
 	}
-	return &adminpb.SpaceQuota{Root: "/eos/project/c/cernbox", Quota: &provider.Quota{QuotaMaxBytes: 1e12, RemainingBytes: 6e11, QuotaMaxFiles: 1e6, RemainingFiles: 999_000}, PhysicalMaxBytes: 2e12, Form: "project", MountId: "eosproject-c"}, nil
+	return &adminpb.SpaceQuota{Root: "/eos/project/c/cernbox", Quota: &provider.Quota{QuotaMaxBytes: 1e12, RemainingBytes: 6e11, QuotaMaxFiles: 1e6, RemainingFiles: 999_000}, UsedBytes: 4e11, UsedFiles: 1000, PhysicalMaxBytes: 2e12, Form: "project", MountId: "eosproject-c"}, nil
 }
 
 func (f *fakeQuotaAdmin) SetSpaceQuota(_ context.Context, req *adminpb.SetSpaceQuotaRequest) (*adminpb.SpaceQuota, error) {
@@ -76,7 +76,8 @@ func (f *fakeQuotaAdmin) ListSpaceQuotas(req *adminpb.ListSpaceQuotasRequest, s 
 			return err
 		}
 	}
-	return nil
+	// Without a limit, the usage is still known.
+	return s.Send(&adminpb.SpaceQuota{Root: "/eos/user/c/carol", Quota: &provider.Quota{}, UsedBytes: 3e9, MountId: "eoshome-c"})
 }
 
 func runQuota(t *testing.T, f *fakeQuotaAdmin, args ...string) (string, error) {
@@ -100,7 +101,6 @@ func TestSpaceQuotaGetFallsBackToTheAdminPlane(t *testing.T) {
 	if err != nil {
 		t.Fatalf("%v\n%s", err, out)
 	}
-	// What is used is max - remaining.
 	for _, want := range []string{"/eos/project/c/cernbox", "400 GB", "1.0 TB", "2.0 TB", "1000/1000000", "project"} {
 		if !strings.Contains(out, want) {
 			t.Errorf("output has no %q:\n%s", want, out)
@@ -143,5 +143,8 @@ func TestSpaceQuotaList(t *testing.T) {
 	}
 	if a, b := strings.Index(out, "/eos/user/a/alice"), strings.Index(out, "/eos/user/b/bob"); a < 0 || b < a {
 		t.Errorf("want the quotas sorted by root:\n%s", out)
+	}
+	if !strings.Contains(out, "3.0 GB") {
+		t.Errorf("want the usage of a space without a limit:\n%s", out)
 	}
 }

@@ -75,7 +75,7 @@ func spaceQuotaCommand(rt *cli.Runtime) *cobra.Command {
 				if err != nil {
 					return nil, err
 				}
-				return &adminpb.SpaceQuota{Root: arg, Quota: &provider.Quota{QuotaMaxBytes: q.Total, RemainingBytes: q.Total - min(q.Used, q.Total)}}, nil
+				return &adminpb.SpaceQuota{Root: arg, Quota: &provider.Quota{QuotaMaxBytes: q.Total, RemainingBytes: q.Total - min(q.Used, q.Total)}, UsedBytes: q.Used}, nil
 			}
 			// The lookup is the read itself: GetSpaceQuota also finds the
 			// spaces that are not in the catalogue, such as homes.
@@ -196,8 +196,6 @@ func spaceRefArg(s string) *adminpb.SpaceRef {
 	return &adminpb.SpaceRef{Ref: &adminpb.SpaceRef_Name{Name: s}}
 }
 
-// quotaTable shows what is used, max - remaining, because operators reason
-// in usage. Without a limit, the usage is not known.
 func quotaTable(qs []*adminpb.SpaceQuota) cli.Table {
 	t := cli.Table{Headers: []string{"ROOT", "USED", "MAX", "PHYSICAL MAX", "FILES", "FORM", "MOUNT ID"}}
 	size := func(b uint64) string {
@@ -208,15 +206,11 @@ func quotaTable(qs []*adminpb.SpaceQuota) cli.Table {
 	}
 	for _, q := range qs {
 		l := q.GetQuota()
-		used := "-"
-		if l.GetQuotaMaxBytes() > 0 {
-			used = humanize.Bytes(l.GetQuotaMaxBytes() - min(l.GetRemainingBytes(), l.GetQuotaMaxBytes()))
-		}
 		files := "-"
-		if l.GetQuotaMaxFiles() > 0 {
-			files = strconv.FormatUint(l.GetQuotaMaxFiles()-min(l.GetRemainingFiles(), l.GetQuotaMaxFiles()), 10) + "/" + strconv.FormatUint(l.GetQuotaMaxFiles(), 10)
+		if l.GetQuotaMaxFiles() > 0 || q.UsedFiles > 0 {
+			files = strconv.FormatUint(q.UsedFiles, 10) + "/" + strconv.FormatUint(l.GetQuotaMaxFiles(), 10)
 		}
-		t.Rows = append(t.Rows, []string{q.Root, used, size(l.GetQuotaMaxBytes()), size(q.PhysicalMaxBytes), files, dash(q.Form), dash(q.MountId)})
+		t.Rows = append(t.Rows, []string{q.Root, humanize.Bytes(q.UsedBytes), size(l.GetQuotaMaxBytes()), size(q.PhysicalMaxBytes), files, dash(q.Form), dash(q.MountId)})
 	}
 	return t
 }

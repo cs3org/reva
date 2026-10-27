@@ -241,7 +241,8 @@ func invokeQuota(ctx context.Context, eps []client.Endpoint, invocation string, 
 }
 
 // quotaResult is the result of the quota invocations of the storage
-// provider. It has what is used, and CS3 has what remains.
+// provider. It has what is used, and CS3 has what remains, so SpaceQuota
+// carries both.
 type quotaResult struct {
 	Root             string `json:"root"`
 	MountID          string `json:"mount_id"`
@@ -275,6 +276,8 @@ func decodeQuota(resultJSON string, sp quotaSpace) (*adminpb.SpaceQuota, error) 
 		Form:             r.Form,
 		SpaceType:        r.SpaceType,
 		Owner:            sp.owner,
+		UsedBytes:        r.UsedBytes,
+		UsedFiles:        r.UsedFiles,
 	}
 	if q.Owner == nil && r.Owner != "" {
 		q.Owner = &userpb.UserId{OpaqueId: r.Owner}

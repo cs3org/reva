@@ -193,7 +193,7 @@ func TestGetSpaceQuotaFindsTheSpaceAndItsInstance(t *testing.T) {
 		t.Errorf("project quota = %v", q)
 	}
 	// The storage gives what is used, and CS3 has what remains.
-	if q.Quota.GetQuotaMaxBytes() != 1000 || q.Quota.GetRemainingBytes() != 600 {
+	if q.Quota.GetQuotaMaxBytes() != 1000 || q.Quota.GetRemainingBytes() != 600 || q.UsedBytes != 400 {
 		t.Errorf("quota = %v, want 600 of 1000 bytes remaining", q.Quota)
 	}
 	want := quotaCall{node: "proj-c1:9001/storageprovider", invocation: "quota_get",
@@ -266,8 +266,8 @@ func TestListSpaceQuotasAsksOneInstanceOfEachMount(t *testing.T) {
 	var got []string
 	for _, q := range qs {
 		got = append(got, q.MountId+":"+q.Root)
-		// Over the limit, nothing remains.
-		if q.Quota.GetRemainingBytes() != 0 || q.Quota.GetRemainingFiles() != 3 {
+		// Over the limit, nothing remains, and the usage is still known.
+		if q.Quota.GetRemainingBytes() != 0 || q.Quota.GetRemainingFiles() != 3 || q.UsedBytes != 30 || q.UsedFiles != 2 {
 			t.Errorf("%s: quota = %v", q.Root, q.Quota)
 		}
 	}
