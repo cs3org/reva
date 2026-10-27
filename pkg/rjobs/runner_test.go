@@ -762,6 +762,44 @@ func TestProgressFinalSnapshot(t *testing.T) {
 	}
 }
 
+func TestPeriodicProgress(t *testing.T) {
+	resetRegistry()
+	if err := RegisterPeriodic(Periodic{
+		Name: "test.periodic", Schedule: "@every 1h", Scope: ScopeLeader,
+		RunWithProgress: func(_ context.Context, r Reporter) error {
+			r.Report(Progress{Phase: "scan", Done: 5, Total: 10})
+			return nil
+		},
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	status := newFakeStatus()
+	store := &periodicStore{run: Run{ID: "run-1", Job: "test.periodic", Attempt: 1}}
+	_ = status.Put(context.Background(), Status{RunID: "run-1", Job: "test.periodic", State: StateQueued})
+
+	r, err := NewRunner(context.Background(), Options{Workers: 1, Store: store, Status: status, ProgressInterval: time.Hour})
+	if err != nil {
+		t.Fatal(err)
+	}
+	r.Start()
+	defer r.Stop(context.Background())
+
+	deadline := time.After(2 * time.Second)
+	for !store.completed.Load() {
+		select {
+		case <-deadline:
+			t.Fatal("run did not complete")
+		case <-time.After(5 * time.Millisecond):
+		}
+	}
+
+	got, _ := status.Get(context.Background(), "run-1")
+	if got.Progress == nil || got.Progress.Phase != "scan" || got.Progress.Done != 5 {
+		t.Fatalf("periodic progress not recorded: %+v", got.Progress)
+	}
+}
+
 // runOnce runs a single on-demand run of job through a runner and returns its
 // final status once the store acked or naked it.
 func runOnce(t *testing.T, job Job, run Run) (Status, *oneRunStore) {

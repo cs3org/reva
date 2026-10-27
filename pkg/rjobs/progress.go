@@ -47,6 +47,12 @@ type Reporter interface {
 	Report(Progress)
 }
 
+// NopReporter drops every report. Use it to call a job's progress code outside
+// a run, e.g. in tests.
+type NopReporter struct{}
+
+func (NopReporter) Report(Progress) {}
+
 // ProgressJob is an optional interface: the runner calls RunWithProgress
 // instead of Run on a job that implements it.
 type ProgressJob interface {

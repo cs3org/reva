@@ -86,6 +86,10 @@ type ExpiredReport struct {
 }
 
 func (j *ExpiredJob) Run(ctx context.Context) (ExpiredReport, error) {
+	return j.run(ctx, rjobs.NopReporter{})
+}
+
+func (j *ExpiredJob) run(ctx context.Context, rep rjobs.Reporter) (ExpiredReport, error) {
 	base := j.Log
 	if base == nil {
 		base = appctx.GetLogger(ctx)
@@ -109,6 +113,7 @@ func (j *ExpiredJob) Run(ctx context.Context) (ExpiredReport, error) {
 		}
 	}
 
+	rep.Report(rjobs.Progress{Phase: "list"})
 	expired, err := j.ShareStore.ListExpiredShares(ctx)
 	if err != nil {
 		return ExpiredReport{}, errors.Wrap(err, "reconciliation: listing expired shares")
@@ -122,7 +127,8 @@ func (j *ExpiredJob) Run(ctx context.Context) (ExpiredReport, error) {
 
 	report := ExpiredReport{RunID: runID, Expired: len(expired), DryRun: j.DryRun}
 	grantees := map[string]*provider.Grantee{}
-	for _, s := range expired {
+	for i, s := range expired {
+		report.progress(rep, i)
 		traceID := trace.Generate()
 		sharee, granteeType := sharehierarchy.ShareeInfo(s.GetGrantee())
 		e := log.Info()
@@ -144,6 +150,7 @@ func (j *ExpiredJob) Run(ctx context.Context) (ExpiredReport, error) {
 			Msg("reconciliation: expired share processed")
 	}
 
+	report.progress(rep, len(expired))
 	log.Info().
 		Str("event", EventExpiredEnd).
 		Bool("dry_run", j.DryRun).
@@ -165,6 +172,13 @@ func (j *ExpiredJob) SyncShare(ctx context.Context, s *collaboration.Share) erro
 		}
 	}
 	return j.dropAclForExpiredShare(ctx, gw, map[string]*provider.Grantee{}, s)
+}
+
+func (r *ExpiredReport) progress(rep rjobs.Reporter, done int) {
+	rep.Report(rjobs.Progress{Phase: "remove", Done: int64(done), Total: int64(r.Expired), Unit: "shares", Details: rjobs.Params{
+		"removed": len(r.Removed),
+		"failed":  r.Failed,
+	}})
 }
 
 func (j *ExpiredJob) dropAclForExpiredShare(ctx context.Context, gw gateway.GatewayAPIClient, grantees map[string]*provider.Grantee, s *collaboration.Share) error {
@@ -292,8 +306,8 @@ func (j *ExpiredJob) Periodic(schedule string) rjobs.Periodic {
 		Scope:      rjobs.ScopeLeader,
 		Overlap:    rjobs.Skip,
 		RunOnStart: j.RunOnStart,
-		Run: func(ctx context.Context) error {
-			_, err := j.Run(ctx)
+		RunWithProgress: func(ctx context.Context, rep rjobs.Reporter) error {
+			_, err := j.run(ctx, rep)
 			return err
 		},
 	}
