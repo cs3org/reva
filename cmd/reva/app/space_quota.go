@@ -32,6 +32,7 @@ import (
 	"github.com/cs3org/reva/v3/pkg/cli"
 	"github.com/dustin/go-humanize"
 	"github.com/spf13/cobra"
+	"google.golang.org/protobuf/types/known/fieldmaskpb"
 )
 
 const spaceRefHelp = "A space is a path, a space id (storage$id) or the name of a project."
@@ -74,7 +75,7 @@ func spaceQuotaCommand(rt *cli.Runtime) *cobra.Command {
 				if err != nil {
 					return nil, err
 				}
-				return &adminpb.SpaceQuota{Root: arg, MaxBytes: q.Total, UsedBytes: q.Used}, nil
+				return &adminpb.SpaceQuota{Root: arg, Quota: &provider.Quota{QuotaMaxBytes: q.Total, RemainingBytes: q.Total - min(q.Used, q.Total)}}, nil
 			}
 			// The lookup is the read itself: GetSpaceQuota also finds the
 			// spaces that are not in the catalogue, such as homes.
@@ -121,18 +122,22 @@ func spaceQuotaCommand(rt *cli.Runtime) *cobra.Command {
 			if err != nil {
 				return err
 			}
-			newBytes := uint64(size)
+			newBytes, oldBytes := uint64(size), old.GetQuota().GetQuotaMaxBytes()
 			var newPhysical uint64
 			// The storage reports the copies only as physical bytes, so the
 			// new physical size comes from the current ratio.
-			if old.MaxBytes > 0 && old.PhysicalMaxBytes%old.MaxBytes == 0 {
-				newPhysical = newBytes * (old.PhysicalMaxBytes / old.MaxBytes)
+			if oldBytes > 0 && old.PhysicalMaxBytes%oldBytes == 0 {
+				newPhysical = newBytes * (old.PhysicalMaxBytes / oldBytes)
 			}
-			prompt := fmt.Sprintf("set the quota of %s from %s to %s", old.Root, sizes(old.MaxBytes, old.PhysicalMaxBytes), sizes(newBytes, newPhysical))
+			prompt := fmt.Sprintf("set the quota of %s from %s to %s", old.Root, sizes(oldBytes, old.PhysicalMaxBytes), sizes(newBytes, newPhysical))
 			if err := rt.Confirm(prompt); err != nil {
 				return err
 			}
-			q, err := c.SetSpaceQuota(ctx, &adminpb.SetSpaceQuotaRequest{Ref: ref, MaxBytes: &newBytes})
+			q, err := c.SetSpaceQuota(ctx, &adminpb.SetSpaceQuotaRequest{
+				Ref:        ref,
+				Quota:      &provider.Quota{QuotaMaxBytes: newBytes},
+				UpdateMask: &fieldmaskpb.FieldMask{Paths: []string{"quota_max_bytes"}},
+			})
 			if err != nil {
 				return err
 			}
@@ -191,6 +196,8 @@ func spaceRefArg(s string) *adminpb.SpaceRef {
 	return &adminpb.SpaceRef{Ref: &adminpb.SpaceRef_Name{Name: s}}
 }
 
+// quotaTable shows what is used, max - remaining, because operators reason
+// in usage. Without a limit, the usage is not known.
 func quotaTable(qs []*adminpb.SpaceQuota) cli.Table {
 	t := cli.Table{Headers: []string{"ROOT", "USED", "MAX", "PHYSICAL MAX", "FILES", "FORM", "MOUNT ID"}}
 	size := func(b uint64) string {
@@ -200,11 +207,16 @@ func quotaTable(qs []*adminpb.SpaceQuota) cli.Table {
 		return humanize.Bytes(b)
 	}
 	for _, q := range qs {
-		files := "-"
-		if q.MaxFiles > 0 || q.UsedFiles > 0 {
-			files = strconv.FormatUint(q.UsedFiles, 10) + "/" + strconv.FormatUint(q.MaxFiles, 10)
+		l := q.GetQuota()
+		used := "-"
+		if l.GetQuotaMaxBytes() > 0 {
+			used = humanize.Bytes(l.GetQuotaMaxBytes() - min(l.GetRemainingBytes(), l.GetQuotaMaxBytes()))
 		}
-		t.Rows = append(t.Rows, []string{q.Root, humanize.Bytes(q.UsedBytes), size(q.MaxBytes), size(q.PhysicalMaxBytes), files, dash(q.Form), dash(q.MountId)})
+		files := "-"
+		if l.GetQuotaMaxFiles() > 0 {
+			files = strconv.FormatUint(l.GetQuotaMaxFiles()-min(l.GetRemainingFiles(), l.GetQuotaMaxFiles()), 10) + "/" + strconv.FormatUint(l.GetQuotaMaxFiles(), 10)
+		}
+		t.Rows = append(t.Rows, []string{q.Root, used, size(l.GetQuotaMaxBytes()), size(q.PhysicalMaxBytes), files, dash(q.Form), dash(q.MountId)})
 	}
 	return t
 }

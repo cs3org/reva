@@ -20,8 +20,11 @@ syntax = "proto3";
 
 package reva.admin.v1beta1;
 
+import "cs3/identity/user/v1beta1/resources.proto";
 import "cs3/storage/provider/v1beta1/resources.proto";
-import "google/protobuf/timestamp.proto";
+import "cs3/storage/provider/v1beta1/spaces_api.proto";
+import "cs3/types/v1beta1/types.proto";
+import "google/protobuf/field_mask.proto";
 import "types.proto";
 
 option go_package = "github.com/cs3org/reva/v3/pkg/admin/adminpb";
@@ -40,8 +43,9 @@ service SpacesAdmin {
   // if a space that the user plane did not find exists.
   rpc GetSpace(GetSpaceRequest) returns (AdminSpace);
   // UpdateSpace changes the description, the readme or the thumbnail of a
-  // space. The change is made on the server as the owner of the space, with
-  // the checks of a user call. It is the server side of the owner fallback.
+  // space, with the update fields of UpdateStorageSpace. The change is made
+  // on the server as the owner of the space, with the checks of a user call.
+  // It is the server side of the owner fallback.
   rpc UpdateSpace(UpdateSpaceRequest) returns (AdminSpace);
   rpc SetSpaceStatus(SetSpaceStatusRequest) returns (AdminSpace);
   rpc SetSpaceOwner(SetSpaceOwnerRequest) returns (AdminSpace);
@@ -88,38 +92,42 @@ message AdminSpace {
   map<string, string> extra = 4;
 }
 
-// ListSpacesRequest selects spaces. An empty field does not filter.
+// ListSpacesRequest selects spaces. As in ListStorageSpaces, filters of one
+// type match any of their values, and filters of different types must all
+// match. An empty field does not filter.
 message ListSpacesRequest {
-  // type is the space type, for example project.
-  string type = 1;
-  // owner is the username of the owner.
-  string owner = 2;
-  // member keeps the spaces that this user owns or can access through a
-  // role group.
-  string member = 3;
-  string status = 4;
+  // filters are CS3 filters of these types:
+  //  - TYPE_SPACE_TYPE, TYPE_OWNER and TYPE_USER, at most one of each. USER
+  //    keeps the spaces that the user owns or can access through a role
+  //    group.
+  //  - TYPE_ID and TYPE_PATH, the root path of the space.
+  // Another type is InvalidArgument.
+  repeated cs3.storage.provider.v1beta1.ListStorageSpacesRequest.Filter filters = 1;
+  // status is the status of the space in the catalogue.
+  string status = 2;
   // profile is Unimplemented until the catalogue stores profiles.
-  string profile = 5;
-  google.protobuf.Timestamp created_after = 6;
-  google.protobuf.Timestamp created_before = 7;
-  bool include_archived = 8;
+  string profile = 3;
+  cs3.types.v1beta1.Timestamp created_after = 4;
+  cs3.types.v1beta1.Timestamp created_before = 5;
+  bool include_archived = 6;
 }
 
 message GetSpaceRequest {
   SpaceRef ref = 1;
 }
 
-// UpdateSpaceRequest changes only the fields that are set.
+// UpdateSpaceRequest changes the fields that it lists, in order. An empty
+// value clears the field.
 message UpdateSpaceRequest {
   SpaceRef ref = 1;
-  optional string description = 2;
-  // readme is the path of the readme.
-  optional string readme = 3;
-  // thumbnail is the path of the thumbnail.
-  optional string thumbnail = 4;
+  // fields can be the description and the metadata of type TYPE_README or
+  // TYPE_THUMBNAIL, whose id is the path of the file. At most one of each.
+  // The catalogue cannot change an alias or a name, so they are
+  // InvalidArgument, and so is a quota, which SetSpaceQuota sets.
+  repeated cs3.storage.provider.v1beta1.UpdateStorageSpaceRequest.UpdateField fields = 2;
   // fallback tells the audit that the CLI used admin rights after the user
   // plane did not find the space.
-  bool fallback = 5;
+  bool fallback = 3;
 }
 
 message SetSpaceStatusRequest {
@@ -130,27 +138,25 @@ message SetSpaceStatusRequest {
 
 message SetSpaceOwnerRequest {
   SpaceRef ref = 1;
-  // owner is the username of the new owner.
-  string owner = 2;
+  cs3.identity.user.v1beta1.UserId owner = 2;
 }
 
 // RegisterSpaceRequest is a space to add to the catalogue. The catalogue can
 // fill an empty field from its configuration, or refuse the request.
 message RegisterSpaceRequest {
-  string name = 1;
-  // owner is the username of the owner.
-  string owner = 2;
-  string path = 3;
-  string storage_id = 4;
-  // space_id is derived from the path if it is empty.
-  string space_id = 5;
-  // readers, writers and admins are the groups of the roles.
-  string readers = 6;
-  string writers = 7;
-  string admins = 8;
-  string description = 9;
+  // space is read in the form that AdminSpace returns:
+  //  - name and owner, which are required. The owner is its username, else
+  //    the opaque id of its id.
+  //  - id, <storage id>$<space id>, or root.storage_id and root.space_id. The
+  //    space id is derived from the path if it is empty.
+  //  - root_info.path and description.
+  //  - roles named reader, writer and admin, each with one group as its
+  //    recipient. The catalogue gives each role its permissions.
+  // The space type, if it is set, must be project. A quota, a readme or a
+  // thumbnail is InvalidArgument: SetSpaceQuota and UpdateSpace set them.
+  cs3.storage.provider.v1beta1.StorageSpace space = 1;
   // status is active if it is empty.
-  string status = 10;
+  string status = 2;
 }
 
 message UnregisterSpaceRequest {
@@ -164,8 +170,7 @@ message UnregisterSpaceRequest {
 // filter.
 message CheckSpacesRequest {
   string status = 1;
-  // owner is the username of the owner.
-  string owner = 2;
+  cs3.identity.user.v1beta1.UserId owner = 2;
 }
 
 // SpaceCheck is a space that has a problem.
@@ -192,30 +197,33 @@ message SpaceQuota {
   string root = 2;
   // mount_id is the mount of the storage provider that keeps the quota.
   string mount_id = 3;
-  uint64 max_bytes = 4;
-  uint64 used_bytes = 5;
-  uint64 max_files = 6;
-  uint64 used_files = 7;
-  // physical_max_bytes is max_bytes with the copies that the storage keeps of
-  // each byte.
-  uint64 physical_max_bytes = 8;
+  // quota has the limits and what remains of them. A limit of 0 is no limit,
+  // and then its remaining value is 0 too.
+  cs3.storage.provider.v1beta1.Quota quota = 4;
+  // physical_max_bytes is quota.quota_max_bytes with the copies that the
+  // storage keeps of each byte.
+  uint64 physical_max_bytes = 5;
   // form tells how the storage keeps the quota, for example project or user.
-  string form = 9;
-  string space_type = 10;
-  // owner is the user id of the owner, when it is known.
-  string owner = 11;
+  string form = 6;
+  string space_type = 7;
+  // owner is the owner of the space, when it is known.
+  cs3.identity.user.v1beta1.UserId owner = 8;
 }
 
 message GetSpaceQuotaRequest {
   SpaceRef ref = 1;
 }
 
-// SetSpaceQuotaRequest changes only the values that are set.
+// SetSpaceQuotaRequest sets the limits that update_mask names. A limit of 0
+// is no limit.
 message SetSpaceQuotaRequest {
   SpaceRef ref = 1;
-  // max_bytes is in logical bytes.
-  optional uint64 max_bytes = 2;
-  optional uint64 max_files = 3;
+  // quota has the new limits: quota_max_bytes, in logical bytes, and
+  // quota_max_files.
+  cs3.storage.provider.v1beta1.Quota quota = 2;
+  // update_mask is quota_max_bytes, quota_max_files or both. It is required,
+  // because 0 is a limit too.
+  google.protobuf.FieldMask update_mask = 3;
 }
 
 message ListSpaceQuotasRequest {

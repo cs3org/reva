@@ -20,12 +20,14 @@ package admin
 
 import (
 	"context"
+	"encoding/json"
 	"maps"
 	"path"
 	"slices"
 	"strconv"
 	"strings"
 
+	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/cs3org/reva/v3/pkg/admin"
 	"github.com/cs3org/reva/v3/pkg/admin/adminpb"
@@ -35,14 +37,16 @@ import (
 	"github.com/cs3org/reva/v3/pkg/spaces"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
+	"google.golang.org/protobuf/types/known/fieldmaskpb"
 )
 
 // quotaSpace is a space as the quota invocations of the storage provider
 // take it. An empty spaceType lets the storage provider use the type of its
 // spaces.
 type quotaSpace struct {
-	id                     *provider.StorageSpaceId
-	root, spaceType, owner string
+	id              *provider.StorageSpaceId
+	root, spaceType string
+	owner           *userpb.UserId
 }
 
 func (a *spacesAdmin) GetSpaceQuota(ctx context.Context, req *adminpb.GetSpaceQuotaRequest) (*adminpb.SpaceQuota, error) {
@@ -54,20 +58,16 @@ func (a *spacesAdmin) GetSpaceQuota(ctx context.Context, req *adminpb.GetSpaceQu
 }
 
 func (a *spacesAdmin) SetSpaceQuota(ctx context.Context, req *adminpb.SetSpaceQuotaRequest) (*adminpb.SpaceQuota, error) {
-	if req.MaxBytes == nil && req.MaxFiles == nil {
-		return nil, status.Error(codes.InvalidArgument, "admin: set needs max_bytes, max_files or both")
+	limits, err := quotaLimits(req.Quota, req.UpdateMask)
+	if err != nil {
+		return nil, err
 	}
 	sp, eps, err := a.quotaTarget(ctx, req.Ref)
 	if err != nil {
 		return nil, err
 	}
 	args := sp.args()
-	if req.MaxBytes != nil {
-		args["max_bytes"] = strconv.FormatUint(*req.MaxBytes, 10)
-	}
-	if req.MaxFiles != nil {
-		args["max_files"] = strconv.FormatUint(*req.MaxFiles, 10)
-	}
+	maps.Copy(args, limits)
 	q, err := invokeQuota(ctx, eps, "quota_set", sp, args)
 	admin.Audit(ctx, admin.AuditEvent{
 		Action:  "spaces.set_quota",
@@ -78,6 +78,27 @@ func (a *spacesAdmin) SetSpaceQuota(ctx context.Context, req *adminpb.SetSpaceQu
 		Fields:  args,
 	})
 	return q, err
+}
+
+// quotaLimits maps the limits that mask names onto the arguments of the
+// quota_set invocation. The mask is required, because a limit of 0 is a
+// value: no limit.
+func quotaLimits(q *provider.Quota, mask *fieldmaskpb.FieldMask) (map[string]string, error) {
+	if len(mask.GetPaths()) == 0 {
+		return nil, status.Error(codes.InvalidArgument, "admin: set needs an update_mask with quota_max_bytes, quota_max_files or both")
+	}
+	args := map[string]string{}
+	for _, p := range mask.GetPaths() {
+		switch p {
+		case "quota_max_bytes":
+			args["max_bytes"] = strconv.FormatUint(q.GetQuotaMaxBytes(), 10)
+		case "quota_max_files":
+			args["max_files"] = strconv.FormatUint(q.GetQuotaMaxFiles(), 10)
+		default:
+			return nil, status.Errorf(codes.InvalidArgument, "admin: set cannot change %q: use quota_max_bytes or quota_max_files", p)
+		}
+	}
+	return args, nil
 }
 
 // ListSpaceQuotas asks one instance of each mount: the instances of a mount
@@ -115,7 +136,23 @@ func (a *spacesAdmin) ListSpaceQuotas(req *adminpb.ListSpaceQuotasRequest, strea
 	if req.MinBytes > 0 {
 		args["min_bytes"] = strconv.FormatUint(req.MinBytes, 10)
 	}
-	return relayStream(ctx, eps, "quota_list", args, stream.Send)
+	ctx, cancel := context.WithCancel(admin.ForwardReason(ctx))
+	defer cancel()
+	// The first instance that fails ends the list, as in relayStream, because
+	// a partial list must not look complete.
+	for it := range streamAll(ctx, client.Route(eps, "quota_list"), "quota_list", args) {
+		if err := nodeStatus("quota_list", codes.Code(it.Code), it.Error); err != nil {
+			return err
+		}
+		q, err := decodeQuota(it.ResultJson, quotaSpace{})
+		if err != nil {
+			return err
+		}
+		if err := stream.Send(q); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // quotaTarget resolves ref to its space, and the space to the storage
@@ -168,7 +205,7 @@ func (a *spacesAdmin) spaceForQuota(ctx context.Context, ref *adminpb.SpaceRef) 
 			id:        s.GetId(),
 			root:      path.Clean(s.GetRootInfo().GetPath()),
 			spaceType: s.GetSpaceType(),
-			owner:     s.GetOwner().GetId().GetOpaqueId(),
+			owner:     s.GetOwner().GetId(),
 		}, nil
 	}
 	if status.Code(err) != codes.NotFound {
@@ -189,7 +226,7 @@ func (a *spacesAdmin) spaceForQuota(ctx context.Context, ref *adminpb.SpaceRef) 
 }
 
 func (sp quotaSpace) args() map[string]string {
-	args := map[string]string{"root": sp.root, "space_type": sp.spaceType, "owner": sp.owner}
+	args := map[string]string{"root": sp.root, "space_type": sp.spaceType, "owner": sp.owner.GetOpaqueId()}
 	maps.DeleteFunc(args, func(_, v string) bool { return v == "" })
 	return args
 }
@@ -200,12 +237,56 @@ func invokeQuota(ctx context.Context, eps []client.Endpoint, invocation string, 
 	if err != nil {
 		return nil, err
 	}
-	q := &adminpb.SpaceQuota{}
-	if err := decode(res.ResultJSON, q); err != nil {
-		return nil, err
+	return decodeQuota(res.ResultJSON, sp)
+}
+
+// quotaResult is the result of the quota invocations of the storage
+// provider. It has what is used, and CS3 has what remains.
+type quotaResult struct {
+	Root             string `json:"root"`
+	MountID          string `json:"mount_id"`
+	MaxBytes         uint64 `json:"max_bytes"`
+	UsedBytes        uint64 `json:"used_bytes"`
+	MaxFiles         uint64 `json:"max_files"`
+	UsedFiles        uint64 `json:"used_files"`
+	PhysicalMaxBytes uint64 `json:"physical_max_bytes"`
+	Form             string `json:"form"`
+	SpaceType        string `json:"space_type"`
+	Owner            string `json:"owner"`
+}
+
+// decodeQuota reads a quota invocation result about sp. The catalogue knows
+// the owner better than the result, which has only its opaque id.
+func decodeQuota(resultJSON string, sp quotaSpace) (*adminpb.SpaceQuota, error) {
+	var r quotaResult
+	if err := json.Unmarshal([]byte(resultJSON), &r); err != nil {
+		return nil, status.Errorf(codes.Internal, "admin: decoding a quota: %v", err)
+	}
+	q := &adminpb.SpaceQuota{
+		Root:    r.Root,
+		MountId: r.MountID,
+		Quota: &provider.Quota{
+			QuotaMaxBytes:  r.MaxBytes,
+			QuotaMaxFiles:  r.MaxFiles,
+			RemainingBytes: remaining(r.MaxBytes, r.UsedBytes),
+			RemainingFiles: remaining(r.MaxFiles, r.UsedFiles),
+		},
+		PhysicalMaxBytes: r.PhysicalMaxBytes,
+		Form:             r.Form,
+		SpaceType:        r.SpaceType,
+		Owner:            sp.owner,
+	}
+	if q.Owner == nil && r.Owner != "" {
+		q.Owner = &userpb.UserId{OpaqueId: r.Owner}
 	}
 	if sp.id != nil {
 		q.Space = &adminpb.SpaceRef{Ref: &adminpb.SpaceRef_Id{Id: sp.id}}
 	}
 	return q, nil
+}
+
+// remaining is 0 without a limit, and 0 over the limit, because CS3 has no
+// negative remainder.
+func remaining(limit, used uint64) uint64 {
+	return limit - min(used, limit)
 }

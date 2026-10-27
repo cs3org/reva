@@ -671,6 +671,44 @@ expires. A `SpaceRef` by path selects the space with the deepest root that holds
 the path. The catalogue has no index on the path, so this reads the whole list.
 A space that is not in the catalogue, a personal space for example, is NotFound.
 
+### SpacesAdmin
+
+The requests and the responses of `SpacesAdmin` use the CS3 messages, and add
+only what CS3 has no field for. A user is a `UserId`, and a time is a
+`cs3.types.v1beta1.Timestamp`. The facade maps them onto the invocations:
+
+| RPC | CS3 in the request | Invocation arguments |
+|---|---|---|
+| `ListSpaces` | `ListStorageSpacesRequest.Filter`: `TYPE_SPACE_TYPE`, `TYPE_OWNER`, `TYPE_USER`, `TYPE_ID`, `TYPE_PATH` | `list type= owner= member=`; the facade keeps the spaces that match an id or a root path |
+| `UpdateSpace` | `UpdateStorageSpaceRequest.UpdateField`: `description`, `metadata` (`TYPE_README`, `TYPE_THUMBNAIL`, the path of the file) | `update description= readme= thumbnail=` |
+| `SetSpaceOwner`, `CheckSpaces` | `owner` is a `UserId` | `owner=` its opaque id |
+| `RegisterSpace` | a `StorageSpace` | `create`, see below |
+| `GetSpaceQuota`, `ListSpaceQuotas` | `SpaceQuota.quota` is a `Quota` | `quota_get`, `quota_list` |
+| `SetSpaceQuota` | a `Quota` and an `update_mask` | `quota_set max_bytes= max_files=` |
+
+As in `ListStorageSpaces`, filters of one type match any of their values, and
+filters of different types must all match. The catalogue takes at most one
+filter of type `SPACE_TYPE`, `OWNER` and `USER`. A filter of another type, an
+update of a name, an alias or a quota, and a second update of one field are
+InvalidArgument. The invocations take the opaque id of a user as its username,
+as the catalogue does when it acts as the owner.
+
+`RegisterSpace` reads the space in the form that `AdminSpace` returns: `name`
+and `owner` (its username, else the opaque id of its id) are required; `id`
+(`<storage id>$<space id>`) or `root.storage_id` and `root.space_id`;
+`root_info.path`; `description`; and the `roles` named `reader`, `writer` and
+`admin`, each with one group as its recipient, which become `readers`,
+`writers` and `admins`. The catalogue gives each role its permissions. A quota,
+a readme, a thumbnail, or a space type that is not `project` is
+InvalidArgument, so that a registration never drops a value.
+
+The quota invocations report what is used, and CS3 has what remains, so the
+facade computes `remaining = max - used`, and 0 over the limit. A limit of 0 is
+no limit, and then its remaining value is 0 too. `SetSpaceQuota` needs an
+`update_mask` with `quota_max_bytes`, `quota_max_files` or both, because 0 is
+a limit too. The owner of a quota is the one of the catalogue, with its idp,
+when the catalogue has the space. The CLI shows what is used, `max - remaining`.
+
 ## Routing
 
 The `dynamic` storage registry reads its routing table (the `routing` SQL
