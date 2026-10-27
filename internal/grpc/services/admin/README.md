@@ -504,8 +504,8 @@ of any user. All of them read or change the share database, so they are
 shared: one instance of the service runs each call.
 
 ```
-list         owner= initiator= sharee= id= space= path= [as=] [include_orphans=] [include_expired=] [resolve_paths=]   (stream)
-get          id=
+list         owner= initiator= sharee= id= space= resource_id= path= [as=] [include_orphans=] [include_expired=] [resolve_paths=]   (stream)
+get          id= | key=
 update       id= [role=] [expires_at=<date|RFC 3339|none>] [fallback=]
 remove       id= [db_only=] [fallback=]
 sync_expiry  id=          remove the storage grant of an expired share now, keep the record
@@ -514,8 +514,10 @@ move         id= path= [as=] [apply_grant=]   (dangerous) point the share at a n
 mark_orphan  id=
 ```
 
-`list` needs at least one of `owner`, `initiator`, `sharee`, `id`, `space` or
-`path`: the share table is too large to read without a filter. Each result,
+`list` needs at least one of `owner`, `initiator`, `sharee`, `id`, `space`,
+`resource_id` (`storage_id!opaque_id`) or `path`: the share table is too large
+to read without a filter. `get` takes the id of the share, or its key as the
+protojson of a CS3 `ShareKey` (owner, resource id and grantee). Each result,
 streamed or not, is the JSON form of the `AdminShare` message of the typed
 Admin API: `share` (the CS3 share, in protojson), `orphan`, `path` and
 `extra` (`initial_path`, `orphaned_at`, `expired_at`).
@@ -551,7 +553,7 @@ user, all shared too. A link is given by `id=` or by `token=`.
 
 ```
 expiring     from= to= [after_expiration=] [after_id=] [limit=]   the links that expire in a window, by page
-list         id= token= owner= initiator= space= [include_orphans=] [include_expired=] [resolve_paths=]   (stream)
+list         id= token= owner= initiator= space= resource_id= [include_orphans=] [include_expired=] [resolve_paths=]   (stream)
 get          id= | token=
 update       id= | token= [role=viewer|uploader|editor] [expires_at=<date|RFC 3339|none>] [password=] [fallback=]
 remove       id= | token= [db_only=] [fallback=]
@@ -584,13 +586,35 @@ public_link_base_url = "https://example.org/s/"   # unset: no url in the results
 ### SharesAdmin
 
 `SharesAdmin` ([`shares.proto`](../../../../pkg/admin/proto/shares.proto)) is
-the typed facade over the share and link invocations. Each RPC runs one
-invocation, except:
+the typed facade over the share and link invocations. Its requests use the CS3
+messages: a share is a `ShareReference` (id or key), a link a
+`PublicShareReference` (id or token), a user a `UserId` (the opaque id is what
+the invocations take), and the filters and updates are those of the CS3
+`ListShares`, `ListPublicShares`, `UpdateShare` and `UpdatePublicShare`. The
+facade maps them onto the invocation arguments, and answers InvalidArgument for
+what the invocations cannot do:
 
+| CS3 | invocation argument |
+|---|---|
+| share filter `OWNER`, `CREATOR`, `GRANTEE` | `owner`, `initiator`, `sharee` (the name of the user or group) |
+| share filter `RESOURCE_ID`, `SPACE_ID` | `resource_id`, `space` (the part after `storage$`) |
+| share filter `NO`, `GRANTEE_TYPE`, `EXCLUDE_DENIALS`, `STATE`, `SPACE_ROOT` | refused |
+| link filter `OWNER`, `CREATOR`, `RESOURCE_ID` | `owner`, `initiator`, `resource_id` |
+| share field `permissions`, link update `PERMISSIONS` | `role`: the role of the permissions; permissions of no role are refused |
+| share field `expiration`, link update `EXPIRATION` | `expires_at`; no value, or zero, is `none` |
+| link update `PASSWORD` | `password`; empty removes it |
+| share field `display_name`, link updates `DISPLAYNAME`, `DESCRIPTION`, `NOTIFYUPLOADS`, `NOTIFYUPLOADSEXTRARECIPIENTS` | refused |
+
+The invocations take one value of each argument, so a request with two filters
+or two updates of a type is refused rather than read as the OR of CS3. Each RPC
+runs one invocation, except:
+
+- A mutation of a share given by its key runs `get` first, for its id.
 - `ListShares` and `ListPublicLinks` resolve a `SpaceRef` first: by id, or by
   name through the `spacesregistry` `get` invocation, or by path as the
-  catalogued space that holds it (as in SpacesAdmin). The `ONLY` selections of `orphans` and `expired`
-  are applied to what the provider streams.
+  catalogued space that holds it (as in SpacesAdmin). A `SPACE_ID` filter and
+  `space` together are refused. The `ONLY` selections of `orphans` and
+  `expired` are applied to what the provider streams.
 - `MoveShares` lists the shares and the links of `owner` and/or `space` with
   their paths, keeps those under `from_path` (by the current path, or by the
   path at creation when the resource cannot be found), and runs `move` on each

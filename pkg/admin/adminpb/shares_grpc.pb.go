@@ -26,7 +26,7 @@ type SharesAdminClient interface {
 	ListShares(ctx context.Context, in *ListSharesRequest, opts ...grpc.CallOption) (SharesAdmin_ListSharesClient, error)
 	// GetShare returns one share, also when it is orphaned or expired.
 	GetShare(ctx context.Context, in *GetShareRequest, opts ...grpc.CallOption) (*AdminShare, error)
-	// UpdateShare changes the role or the expiration of a share.
+	// UpdateShare changes the permissions or the expiration of a share.
 	UpdateShare(ctx context.Context, in *UpdateShareRequest, opts ...grpc.CallOption) (*AdminShare, error)
 	// RemoveShare removes a share and its storage grant, and returns the share
 	// as it was.
@@ -47,8 +47,8 @@ type SharesAdminClient interface {
 	// GetPublicLink returns one public link, also when it is orphaned or
 	// expired.
 	GetPublicLink(ctx context.Context, in *GetPublicLinkRequest, opts ...grpc.CallOption) (*AdminPublicShare, error)
-	// UpdatePublicLink changes the role, the expiration or the password of a
-	// public link.
+	// UpdatePublicLink changes the permissions, the expiration or the password
+	// of a public link.
 	UpdatePublicLink(ctx context.Context, in *UpdatePublicLinkRequest, opts ...grpc.CallOption) (*AdminPublicShare, error)
 	// RemovePublicLink removes a public link, and returns the link as it was.
 	RemovePublicLink(ctx context.Context, in *RemovePublicLinkRequest, opts ...grpc.CallOption) (*AdminPublicShare, error)
@@ -270,7 +270,7 @@ type SharesAdminServer interface {
 	ListShares(*ListSharesRequest, SharesAdmin_ListSharesServer) error
 	// GetShare returns one share, also when it is orphaned or expired.
 	GetShare(context.Context, *GetShareRequest) (*AdminShare, error)
-	// UpdateShare changes the role or the expiration of a share.
+	// UpdateShare changes the permissions or the expiration of a share.
 	UpdateShare(context.Context, *UpdateShareRequest) (*AdminShare, error)
 	// RemoveShare removes a share and its storage grant, and returns the share
 	// as it was.
@@ -291,8 +291,8 @@ type SharesAdminServer interface {
 	// GetPublicLink returns one public link, also when it is orphaned or
 	// expired.
 	GetPublicLink(context.Context, *GetPublicLinkRequest) (*AdminPublicShare, error)
-	// UpdatePublicLink changes the role, the expiration or the password of a
-	// public link.
+	// UpdatePublicLink changes the permissions, the expiration or the password
+	// of a public link.
 	UpdatePublicLink(context.Context, *UpdatePublicLinkRequest) (*AdminPublicShare, error)
 	// RemovePublicLink removes a public link, and returns the link as it was.
 	RemovePublicLink(context.Context, *RemovePublicLinkRequest) (*AdminPublicShare, error)

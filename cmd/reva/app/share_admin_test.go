@@ -31,10 +31,12 @@ import (
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	collaboration "github.com/cs3org/go-cs3apis/cs3/sharing/collaboration/v1beta1"
 	link "github.com/cs3org/go-cs3apis/cs3/sharing/link/v1beta1"
+	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/cs3org/reva/v3/pkg/admin/adminpb"
 	"github.com/cs3org/reva/v3/pkg/cli"
 	"github.com/cs3org/reva/v3/pkg/cli/backend"
 	"github.com/cs3org/reva/v3/pkg/cli/clitest"
+	"github.com/cs3org/reva/v3/pkg/permissions"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -87,15 +89,15 @@ func (f *sharesFleet) RequestAdmin(context.Context, *adminpb.RequestAdminRequest
 	return &adminpb.RequestAdminResponse{Token: "admin"}, nil
 }
 
-func (f *sharesFleet) share(id string) (*adminpb.AdminShare, error) {
-	if id != "4711" {
+func (f *sharesFleet) share(ref *collaboration.ShareReference) (*adminpb.AdminShare, error) {
+	if ref.GetId().GetOpaqueId() != "4711" {
 		return nil, status.Error(codes.NotFound, "share not found")
 	}
 	return bobShare, nil
 }
 
-func (f *sharesFleet) link(ref *adminpb.PublicLinkRef) (*adminpb.AdminPublicShare, error) {
-	if ref.GetId() != "42" && ref.GetToken() != "tok" {
+func (f *sharesFleet) link(ref *link.PublicShareReference) (*adminpb.AdminPublicShare, error) {
+	if ref.GetId().GetOpaqueId() != "42" && ref.GetToken() != "tok" {
 		return nil, status.Error(codes.NotFound, "link not found")
 	}
 	return bobLink, nil
@@ -103,22 +105,22 @@ func (f *sharesFleet) link(ref *adminpb.PublicLinkRef) (*adminpb.AdminPublicShar
 
 func (f *sharesFleet) GetShare(_ context.Context, r *adminpb.GetShareRequest) (*adminpb.AdminShare, error) {
 	f.record(r)
-	return f.share(r.Id)
+	return f.share(r.Ref)
 }
 
 func (f *sharesFleet) UpdateShare(_ context.Context, r *adminpb.UpdateShareRequest) (*adminpb.AdminShare, error) {
 	f.record(r)
-	return f.share(r.Id)
+	return f.share(r.Ref)
 }
 
 func (f *sharesFleet) RemoveShare(_ context.Context, r *adminpb.RemoveShareRequest) (*adminpb.AdminShare, error) {
 	f.record(r)
-	return f.share(r.Id)
+	return f.share(r.Ref)
 }
 
 func (f *sharesFleet) TransferShare(_ context.Context, r *adminpb.TransferShareRequest) (*adminpb.AdminShare, error) {
 	f.record(r)
-	return f.share(r.Id)
+	return f.share(r.Ref)
 }
 
 func (f *sharesFleet) ListShares(r *adminpb.ListSharesRequest, s adminpb.SharesAdmin_ListSharesServer) error {
@@ -199,7 +201,14 @@ func TestOwnerFallback(t *testing.T) {
 	if _, err := runAdmin(t, b, f, "", "share", "update", "4711", "--role", "editor", "--expires", "none"); err != nil {
 		t.Fatal(err)
 	}
-	if u := sent[*adminpb.UpdateShareRequest](f); len(u) != 1 || u[0].Role != "editor" || !u[0].RemoveExpiration || !u[0].Fallback {
+	// The admin plane gets the CS3 fields of the user plane: the permissions
+	// of the role, and an expiration that removes it.
+	editor := &collaboration.UpdateShareRequest_UpdateField{Field: &collaboration.UpdateShareRequest_UpdateField_Permissions{
+		Permissions: &collaboration.SharePermissions{Permissions: permissions.NewEditorRole().CS3ResourcePermissions()},
+	}}
+	u := sent[*adminpb.UpdateShareRequest](f)
+	if len(u) != 1 || u[0].GetRef().GetId().GetOpaqueId() != "4711" || len(u[0].Fields) != 2 || !proto.Equal(u[0].Fields[0], editor) ||
+		u[0].Fields[1].GetExpiration().GetSeconds() != 0 || !u[0].Fallback {
 		t.Errorf("UpdateShare requests %v", u)
 	}
 	if _, err := runAdmin(t, b, f, "", "share", "remove", "4711"); err != nil {
@@ -212,9 +221,11 @@ func TestOwnerFallback(t *testing.T) {
 	if _, err := runAdmin(t, b, f, "s3cret\n", "link", "update", "42", "--password", "--expires", "2026-12-31"); err != nil {
 		t.Fatal(err)
 	}
-	u := sent[*adminpb.UpdatePublicLinkRequest](f)
-	if len(u) != 1 || u[0].GetRef().GetId() != "42" || u[0].GetPassword() != "s3cret" || u[0].GetExpiration().GetSeconds() == 0 || !u[0].Fallback {
-		t.Errorf("UpdatePublicLink requests %v", u)
+	lu := sent[*adminpb.UpdatePublicLinkRequest](f)
+	if len(lu) != 1 || lu[0].GetRef().GetId().GetOpaqueId() != "42" || len(lu[0].Updates) != 2 || !lu[0].Fallback ||
+		lu[0].Updates[0].GetType() != link.UpdatePublicShareRequest_Update_TYPE_EXPIRATION || lu[0].Updates[0].GetGrant().GetExpiration().GetSeconds() == 0 ||
+		lu[0].Updates[1].GetType() != link.UpdatePublicShareRequest_Update_TYPE_PASSWORD || lu[0].Updates[1].GetGrant().GetPassword() != "s3cret" {
+		t.Errorf("UpdatePublicLink requests %v", lu)
 	}
 	if _, err := runAdmin(t, b, f, "", "link", "update", "42", "--description", "x"); err == nil {
 		t.Error("link update --description of another user's link: want an error")
@@ -264,7 +275,8 @@ func TestShareOperatorOptions(t *testing.T) {
 	}
 	l := sent[*adminpb.ListSharesRequest](f)
 	want := &adminpb.ListSharesRequest{
-		Owner: "bob", Space: &adminpb.SpaceRef{Ref: &adminpb.SpaceRef_Name{Name: "cernbox"}},
+		Filters: []*collaboration.Filter{{Type: collaboration.Filter_TYPE_OWNER, Term: &collaboration.Filter_Owner{Owner: &userpb.UserId{OpaqueId: "bob"}}}},
+		Space:   &adminpb.SpaceRef{Ref: &adminpb.SpaceRef_Name{Name: "cernbox"}},
 		Orphans: adminpb.ShareSelection_SHARE_SELECTION_ONLY, Expired: adminpb.ShareSelection_SHARE_SELECTION_ONLY, ResolvePaths: true,
 	}
 	if len(l) != 1 || !proto.Equal(l[0], want) {
@@ -273,11 +285,25 @@ func TestShareOperatorOptions(t *testing.T) {
 	if _, err := runAdmin(t, b, f, "", "share", "list", "--all"); err == nil {
 		t.Error("share list --all without a filter: want an error")
 	}
+	if _, err := runAdmin(t, b, f, "", "share", "list", "--all", "--by-resource-id", "eoshome:100"); err != nil {
+		t.Fatal(err)
+	}
+	resource := &provider.ResourceId{StorageId: "eoshome", OpaqueId: "100"}
+	if l := sent[*adminpb.ListSharesRequest](f); len(l) != 2 || len(l[1].Filters) != 1 || !proto.Equal(l[1].Filters[0].GetResourceId(), resource) {
+		t.Errorf("ListShares requests %v, want a RESOURCE_ID filter", l)
+	}
 	if _, err := runAdmin(t, b, f, "", "link", "list", "--space", "eosproject$c3BhY2U"); err != nil {
 		t.Fatal(err)
 	}
-	if l := sent[*adminpb.ListPublicLinksRequest](f); len(l) != 1 || l[0].GetSpace().GetId().GetOpaqueId() != "eosproject$c3BhY2U" {
+	if l := sent[*adminpb.ListPublicLinksRequest](f); len(l) != 1 || l[0].GetSpace().GetId().GetOpaqueId() != "eosproject$c3BhY2U" || len(l[0].Filters) != 0 {
 		t.Errorf("ListPublicLinks requests %v", l)
+	}
+	if _, err := runAdmin(t, b, f, "", "link", "list", "--owner", "bob", "--by-resource-id", "eoshome:100"); err != nil {
+		t.Fatal(err)
+	}
+	if l := sent[*adminpb.ListPublicLinksRequest](f); len(l) != 2 || len(l[1].Filters) != 2 ||
+		l[1].Filters[0].GetOwner().GetOpaqueId() != "bob" || !proto.Equal(l[1].Filters[1].GetResourceId(), resource) {
+		t.Errorf("ListPublicLinks requests %v, want OWNER and RESOURCE_ID filters", l)
 	}
 
 	if _, err := runAdmin(t, b, f, "", "share", "remove", "4711", "--db-only"); err != nil {
@@ -297,7 +323,7 @@ func TestShareOperatorVerbs(t *testing.T) {
 	if _, err := runAdmin(t, b, f, "", "share", "transfer", "4711", "carol"); err != nil {
 		t.Fatal(err)
 	}
-	if r := sent[*adminpb.TransferShareRequest](f); len(r) != 1 || r[0].Initiator != "carol" {
+	if r := sent[*adminpb.TransferShareRequest](f); len(r) != 1 || r[0].GetInitiator().GetOpaqueId() != "carol" || r[0].GetRef().GetId().GetOpaqueId() != "4711" {
 		t.Errorf("TransferShare requests %v", r)
 	}
 	if _, err := runAdmin(t, b, f, "", "link", "mark-orphan", "tok"); err != nil {
@@ -312,7 +338,7 @@ func TestShareOperatorVerbs(t *testing.T) {
 		t.Fatalf("share move = %q, %v", out, err)
 	}
 	// The plan first, then the move.
-	if m := sent[*adminpb.MoveSharesRequest](f); len(m) != 2 || !m[0].DryRun || m[1].DryRun || m[1].Owner != "bob" {
+	if m := sent[*adminpb.MoveSharesRequest](f); len(m) != 2 || !m[0].DryRun || m[1].DryRun || m[1].GetOwner().GetOpaqueId() != "bob" || m[1].As != nil {
 		t.Errorf("MoveShares requests %v", m)
 	}
 	if _, err := runAdmin(t, b, f, "", "share", "move", "/eos/a", "/eos/b"); err == nil {

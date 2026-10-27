@@ -59,7 +59,7 @@ func shareFallback(rt *cli.Runtime, id string) (cli.Fallback, func(context.Conte
 		if err != nil {
 			return nil, err
 		}
-		return sa.GetShare(ctx, id)
+		return sa.GetShare(ctx, shareRef(id))
 	}
 }
 
@@ -221,7 +221,6 @@ func shareUpdateCommand(rt *cli.Runtime) *cobra.Command {
 			if role == "" && expires == "" {
 				return errors.New("pass --role, --expires or both")
 			}
-			u := cli.ShareUpdate{Role: role}
 			var fields []*collaboration.UpdateShareRequest_UpdateField
 			if role != "" {
 				if role != "viewer" && role != "editor" {
@@ -242,7 +241,6 @@ func shareUpdateCommand(rt *cli.Runtime) *cobra.Command {
 				if err != nil {
 					return err
 				}
-				u.Expiration = exp
 				fields = append(fields, &collaboration.UpdateShareRequest_UpdateField{
 					Field: &collaboration.UpdateShareRequest_UpdateField_Expiration{Expiration: exp},
 				})
@@ -265,7 +263,7 @@ func shareUpdateCommand(rt *cli.Runtime) *cobra.Command {
 				if err != nil {
 					return nil, err
 				}
-				return sa.UpdateShare(ctx, args[0], u)
+				return sa.UpdateShare(ctx, shareRef(args[0]), fields)
 			})
 			if err != nil {
 				return err
@@ -300,7 +298,7 @@ func shareRemoveCommand(rt *cli.Runtime) *cobra.Command {
 				if err != nil {
 					return err
 				}
-				if err := sa.RemoveShare(ctx, args[0], true); err != nil {
+				if err := sa.RemoveShare(ctx, shareRef(args[0]), true); err != nil {
 					return err
 				}
 				rt.Msg(cmd.ErrOrStderr(), "Removed the record of share %s", args[0])
@@ -318,7 +316,7 @@ func shareRemoveCommand(rt *cli.Runtime) *cobra.Command {
 				if err != nil {
 					return nil, err
 				}
-				return s, sa.RemoveShare(ctx, args[0], false)
+				return s, sa.RemoveShare(ctx, shareRef(args[0]), false)
 			})
 			if err != nil {
 				return err
@@ -569,7 +567,6 @@ func linkUpdateCommand(rt *cli.Runtime) *cobra.Command {
 			if role == "" && description == "" && expires == "" && !password && !noPassword {
 				return errors.New("pass --role, --expires, --password, --no-password or --description")
 			}
-			u := cli.ShareUpdate{Role: role}
 			var updates []*link.UpdatePublicShareRequest_Update
 			if role != "" {
 				if role != "viewer" && role != "uploader" && role != "editor" {
@@ -589,7 +586,6 @@ func linkUpdateCommand(rt *cli.Runtime) *cobra.Command {
 				if err != nil {
 					return err
 				}
-				u.Expiration = exp
 				// The link manager removes the expiration only for a nil timestamp.
 				if exp.GetSeconds() == 0 {
 					exp = nil
@@ -610,7 +606,6 @@ func linkUpdateCommand(rt *cli.Runtime) *cobra.Command {
 						return errors.New("the password is empty: use --no-password to remove the password")
 					}
 				}
-				u.Password = &pw
 				updates = append(updates, &link.UpdatePublicShareRequest_Update{
 					Type:  link.UpdatePublicShareRequest_Update_TYPE_PASSWORD,
 					Grant: &link.Grant{Password: pw},
@@ -644,7 +639,7 @@ func linkUpdateCommand(rt *cli.Runtime) *cobra.Command {
 				if err != nil {
 					return nil, err
 				}
-				return sa.UpdatePublicLink(ctx, ref, u)
+				return sa.UpdatePublicLink(ctx, ref, updates)
 			})
 			if err != nil {
 				return err

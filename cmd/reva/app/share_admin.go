@@ -25,8 +25,10 @@ import (
 	"io"
 	"strings"
 
+	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	collaboration "github.com/cs3org/go-cs3apis/cs3/sharing/collaboration/v1beta1"
+	link "github.com/cs3org/go-cs3apis/cs3/sharing/link/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/cs3org/reva/v3/pkg/admin/adminpb"
 	"github.com/cs3org/reva/v3/pkg/cli"
@@ -65,25 +67,36 @@ func (o *shareListOptions) addFlags(cmd *cobra.Command, noun string, withPath bo
 func adminListShares(cmd *cobra.Command, rt *cli.Runtime, args []string, resID string, o shareListOptions) error {
 	p := o.path
 	switch {
-	case resID != "":
-		return errors.New("--by-resource-id cannot be used with an operator option")
 	case len(args) == 1 && p != "":
 		return errors.New("pass either PATH or --path, not both")
 	case len(args) == 1:
 		p = args[0]
 	}
-	if o.owner == "" && o.space == "" && p == "" {
-		return errors.New("pass --owner, --space or a path: the share table is too large to list without a filter")
-	}
-	if p != "" && o.owner == "" {
+	switch {
+	case p != "" && resID != "":
+		return errors.New("pass either a path or --by-resource-id, not both")
+	case o.owner == "" && o.space == "" && p == "" && resID == "":
+		return errors.New("pass --owner, --space, --by-resource-id or a path: the share table is too large to list without a filter")
+	case p != "" && o.owner == "":
 		return errors.New("a path needs --owner: the path is resolved as that user")
+	}
+	var filters []*collaboration.Filter
+	if o.owner != "" {
+		filters = append(filters, &collaboration.Filter{Type: collaboration.Filter_TYPE_OWNER, Term: &collaboration.Filter_Owner{Owner: userID(o.owner)}})
+	}
+	if resID != "" {
+		id, err := parseResourceID(resID)
+		if err != nil {
+			return err
+		}
+		filters = append(filters, &collaboration.Filter{Type: collaboration.Filter_TYPE_RESOURCE_ID, Term: &collaboration.Filter_ResourceId{ResourceId: id}})
 	}
 	sa, ctx, err := sharesAdmin(cmd.Context(), rt)
 	if err != nil {
 		return err
 	}
 	stream, err := sa.ListShares(ctx, &adminpb.ListSharesRequest{
-		Owner: o.owner, Space: adminSpaceRef(o.space), Path: p,
+		Filters: filters, Space: adminSpaceRef(o.space), Path: p,
 		Orphans: only(o.orphans), Expired: only(o.expired), ResolvePaths: true,
 	})
 	if err != nil {
@@ -98,17 +111,32 @@ func adminListShares(cmd *cobra.Command, rt *cli.Runtime, args []string, resID s
 
 func adminListLinks(cmd *cobra.Command, rt *cli.Runtime, args []string, resID string, o shareListOptions) error {
 	switch {
-	case resID != "" || len(args) == 1:
-		return errors.New("the admin plane cannot list the links of a path: use --owner or --space")
-	case o.owner == "" && o.space == "":
-		return errors.New("pass --owner or --space: the link table is too large to list without a filter")
+	case len(args) == 1:
+		return errors.New("the admin plane cannot list the links of a path: use --owner, --space or --by-resource-id")
+	case o.owner == "" && o.space == "" && resID == "":
+		return errors.New("pass --owner, --space or --by-resource-id: the link table is too large to list without a filter")
+	}
+	var filters []*link.ListPublicSharesRequest_Filter
+	if o.owner != "" {
+		filters = append(filters, &link.ListPublicSharesRequest_Filter{
+			Type: link.ListPublicSharesRequest_Filter_TYPE_OWNER, Term: &link.ListPublicSharesRequest_Filter_Owner{Owner: userID(o.owner)},
+		})
+	}
+	if resID != "" {
+		id, err := parseResourceID(resID)
+		if err != nil {
+			return err
+		}
+		filters = append(filters, &link.ListPublicSharesRequest_Filter{
+			Type: link.ListPublicSharesRequest_Filter_TYPE_RESOURCE_ID, Term: &link.ListPublicSharesRequest_Filter_ResourceId{ResourceId: id},
+		})
 	}
 	sa, ctx, err := sharesAdmin(cmd.Context(), rt)
 	if err != nil {
 		return err
 	}
 	stream, err := sa.ListPublicLinks(ctx, &adminpb.ListPublicLinksRequest{
-		Owner: o.owner, Space: adminSpaceRef(o.space),
+		Filters: filters, Space: adminSpaceRef(o.space),
 		Orphans: only(o.orphans), Expired: only(o.expired), ResolvePaths: true,
 	})
 	if err != nil {
@@ -130,7 +158,7 @@ func shareSyncExpiryCommand(rt *cli.Runtime) *cobra.Command {
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return shareOperation(cmd, rt, fmt.Sprintf("remove the storage grant of share %s", args[0]),
 				func(ctx context.Context, sa adminpb.SharesAdminClient) (*adminpb.AdminShare, error) {
-					return sa.SyncShareExpiration(ctx, &adminpb.SyncShareExpirationRequest{Id: args[0]})
+					return sa.SyncShareExpiration(ctx, &adminpb.SyncShareExpirationRequest{Ref: shareRef(args[0])})
 				})
 		},
 	})
@@ -145,7 +173,7 @@ func shareTransferCommand(rt *cli.Runtime) *cobra.Command {
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return shareOperation(cmd, rt, fmt.Sprintf("give share %s to %s", args[0], args[1]),
 				func(ctx context.Context, sa adminpb.SharesAdminClient) (*adminpb.AdminShare, error) {
-					return sa.TransferShare(ctx, &adminpb.TransferShareRequest{Id: args[0], Initiator: args[1]})
+					return sa.TransferShare(ctx, &adminpb.TransferShareRequest{Ref: shareRef(args[0]), Initiator: userID(args[1])})
 				})
 		},
 	})
@@ -160,7 +188,7 @@ func shareMarkOrphanCommand(rt *cli.Runtime) *cobra.Command {
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return shareOperation(cmd, rt, fmt.Sprintf("mark share %s orphaned", args[0]),
 				func(ctx context.Context, sa adminpb.SharesAdminClient) (*adminpb.AdminShare, error) {
-					return sa.MarkShareOrphan(ctx, &adminpb.MarkShareOrphanRequest{Id: args[0]})
+					return sa.MarkShareOrphan(ctx, &adminpb.MarkShareOrphanRequest{Ref: shareRef(args[0])})
 				})
 		},
 	})
@@ -175,7 +203,7 @@ func linkTransferCommand(rt *cli.Runtime) *cobra.Command {
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return linkOperation(cmd, rt, fmt.Sprintf("give link %s to %s", args[0], args[1]),
 				func(ctx context.Context, sa adminpb.SharesAdminClient) (*adminpb.AdminPublicShare, error) {
-					return sa.TransferPublicLink(ctx, &adminpb.TransferPublicLinkRequest{Ref: adminLinkRef(args[0]), Initiator: args[1]})
+					return sa.TransferPublicLink(ctx, &adminpb.TransferPublicLinkRequest{Ref: adminLinkRef(args[0]), Initiator: userID(args[1])})
 				})
 		},
 	})
@@ -248,8 +276,8 @@ func shareMoveCommand(rt *cli.Runtime) *cobra.Command {
 				return err
 			}
 			req := &adminpb.MoveSharesRequest{
-				FromPath: args[0], ToPath: args[1], Owner: owner, Space: adminSpaceRef(space),
-				As: resolveAs, ApplyGrant: applyGrant, DryRun: true,
+				FromPath: args[0], ToPath: args[1], Owner: userID(owner), Space: adminSpaceRef(space),
+				As: userID(resolveAs), ApplyGrant: applyGrant, DryRun: true,
 			}
 			move := func() ([]*adminpb.MovedShare, error) {
 				stream, err := sa.MoveShares(ctx, req)
@@ -330,11 +358,20 @@ func adminSpaceRef(v string) *adminpb.SpaceRef {
 
 // adminLinkRef reads a link argument of an operator verb. The sql manager,
 // which the admin operations need, uses numbers as ids.
-func adminLinkRef(arg string) *adminpb.PublicLinkRef {
+func adminLinkRef(arg string) *link.PublicShareReference {
 	if strings.Trim(arg, "0123456789") == "" {
-		return &adminpb.PublicLinkRef{Ref: &adminpb.PublicLinkRef_Id{Id: arg}}
+		return publicShareRef(arg)
 	}
-	return &adminpb.PublicLinkRef{Ref: &adminpb.PublicLinkRef_Token{Token: arg}}
+	return &link.PublicShareReference{Spec: &link.PublicShareReference_Token{Token: arg}}
+}
+
+// userID is the CS3 id of a user named on the command line, or nil for no
+// name. The admin services identify a user by the opaque id alone.
+func userID(name string) *userpb.UserId {
+	if name == "" {
+		return nil
+	}
+	return &userpb.UserId{OpaqueId: name}
 }
 
 func only(b bool) adminpb.ShareSelection {

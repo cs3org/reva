@@ -31,6 +31,8 @@ import (
 	"testing"
 	"time"
 
+	grouppb "github.com/cs3org/go-cs3apis/cs3/identity/group/v1beta1"
+	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	collaboration "github.com/cs3org/go-cs3apis/cs3/sharing/collaboration/v1beta1"
 	link "github.com/cs3org/go-cs3apis/cs3/sharing/link/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
@@ -41,6 +43,7 @@ import (
 	"github.com/cs3org/reva/v3/pkg/control/controlpb"
 	"github.com/cs3org/reva/v3/pkg/errtypes"
 	"github.com/cs3org/reva/v3/pkg/invoke"
+	"github.com/cs3org/reva/v3/pkg/permissions"
 	"github.com/cs3org/reva/v3/pkg/registry"
 	"github.com/cs3org/reva/v3/pkg/service"
 	"github.com/rs/zerolog"
@@ -48,6 +51,8 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/status"
+	"google.golang.org/protobuf/encoding/protojson"
+	"google.golang.org/protobuf/proto"
 )
 
 // fakeProvider stands for a share provider, a link provider or the spaces
@@ -235,16 +240,38 @@ func TestSharesAdminNotFound(t *testing.T) {
 		return nil, fmt.Errorf("public link: %w", errtypes.NotFound("link"))
 	}
 	ctx := context.Background()
-	if _, err := f.client.GetShare(ctx, &adminpb.GetShareRequest{Id: "4711"}); status.Code(err) != codes.NotFound {
+	if _, err := f.client.GetShare(ctx, &adminpb.GetShareRequest{Ref: shareIDRef("4711")}); status.Code(err) != codes.NotFound {
 		t.Errorf("GetShare: got %v, want NotFound", err)
 	}
-	ref := &adminpb.PublicLinkRef{Ref: &adminpb.PublicLinkRef_Token{Token: "tok"}}
+	ref := &link.PublicShareReference{Spec: &link.PublicShareReference_Token{Token: "tok"}}
 	if _, err := f.client.GetPublicLink(ctx, &adminpb.GetPublicLinkRequest{Ref: ref}); status.Code(err) != codes.NotFound {
 		t.Errorf("GetPublicLink: got %v, want NotFound", err)
 	}
 	if _, err := f.client.GetShare(ctx, &adminpb.GetShareRequest{}); status.Code(err) != codes.InvalidArgument {
 		t.Errorf("GetShare without id: got %v, want InvalidArgument", err)
 	}
+	// A key resolves to an id before a mutation, so a key of no share is
+	// NotFound too, and nothing is changed.
+	if _, err := f.client.RemoveShare(ctx, &adminpb.RemoveShareRequest{Ref: aliceKey}); status.Code(err) != codes.NotFound {
+		t.Errorf("RemoveShare by key: got %v, want NotFound", err)
+	}
+	if n := len(f.shares.callsOf("remove")); n != 0 {
+		t.Errorf("%d remove calls, want none", n)
+	}
+}
+
+func shareIDRef(id string) *collaboration.ShareReference {
+	return &collaboration.ShareReference{Spec: &collaboration.ShareReference_Id{Id: &collaboration.ShareId{OpaqueId: id}}}
+}
+
+var aliceKey = &collaboration.ShareReference{Spec: &collaboration.ShareReference_Key{Key: &collaboration.ShareKey{
+	Owner:      &userpb.UserId{OpaqueId: "alice"},
+	ResourceId: &provider.ResourceId{StorageId: "eoshome", OpaqueId: "100"},
+	Grantee:    userGrantee("bob"),
+}}}
+
+func userGrantee(name string) *provider.Grantee {
+	return &provider.Grantee{Type: provider.GranteeType_GRANTEE_TYPE_USER, Id: &provider.Grantee_UserId{UserId: &userpb.UserId{OpaqueId: name}}}
 }
 
 func TestGetShareDecodesTheResult(t *testing.T) {
@@ -252,7 +279,7 @@ func TestGetShareDecodesTheResult(t *testing.T) {
 	f.shares.handle["get"] = func(map[string]any) (invoke.Result, error) {
 		return share("4711", "/eos/user/a/alice/doc", true, map[string]string{"initial_path": "/eos/old"}, nil), nil
 	}
-	got, err := f.client.GetShare(context.Background(), &adminpb.GetShareRequest{Id: "4711"})
+	got, err := f.client.GetShare(context.Background(), &adminpb.GetShareRequest{Ref: shareIDRef("4711")})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -271,10 +298,14 @@ func TestUpdatePublicLinkKeepsSecretsOutOfTheAudit(t *testing.T) {
 	}
 	password := "s3cret-pass"
 	got, err := f.client.UpdatePublicLink(context.Background(), &adminpb.UpdatePublicLinkRequest{
-		Ref:        &adminpb.PublicLinkRef{Ref: &adminpb.PublicLinkRef_Token{Token: "tok-abc"}},
-		Expiration: &typespb.Timestamp{Seconds: uint64(time.Date(2027, 1, 2, 0, 0, 0, 0, time.UTC).Unix())},
-		Password:   &password,
-		Fallback:   true,
+		Ref: &link.PublicShareReference{Spec: &link.PublicShareReference_Token{Token: "tok-abc"}},
+		Updates: []*link.UpdatePublicShareRequest_Update{
+			{Type: link.UpdatePublicShareRequest_Update_TYPE_EXPIRATION, Grant: &link.Grant{
+				Expiration: &typespb.Timestamp{Seconds: uint64(time.Date(2027, 1, 2, 0, 0, 0, 0, time.UTC).Unix())},
+			}},
+			{Type: link.UpdatePublicShareRequest_Update_TYPE_PASSWORD, Grant: &link.Grant{Password: password}},
+		},
+		Fallback: true,
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -356,7 +387,10 @@ func TestListPublicLinksOnlyExpired(t *testing.T) {
 	future := &typespb.Timestamp{Seconds: uint64(time.Now().Add(time.Hour).Unix())}
 	f.links.streams["list"] = []invoke.Result{publicLink("1", "", past), publicLink("2", "", future), publicLink("3", "", nil)}
 	stream, err := f.client.ListPublicLinks(context.Background(), &adminpb.ListPublicLinksRequest{
-		Owner: "alice", Expired: adminpb.ShareSelection_SHARE_SELECTION_ONLY,
+		Filters: []*link.ListPublicSharesRequest_Filter{{
+			Type: link.ListPublicSharesRequest_Filter_TYPE_OWNER, Term: &link.ListPublicSharesRequest_Filter_Owner{Owner: &userpb.UserId{OpaqueId: "alice"}},
+		}},
+		Expired: adminpb.ShareSelection_SHARE_SELECTION_ONLY,
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -419,9 +453,6 @@ func TestSharesAdminRefusesBadRequests(t *testing.T) {
 	if status.Code(err) != codes.InvalidArgument {
 		t.Errorf("MoveShares without owner or space: got %v, want InvalidArgument", err)
 	}
-	if _, err := f.client.UpdateShare(ctx, &adminpb.UpdateShareRequest{Id: "1", Expiration: &typespb.Timestamp{Seconds: 1}, RemoveExpiration: true}); status.Code(err) != codes.InvalidArgument {
-		t.Errorf("UpdateShare with two expirations: got %v, want InvalidArgument", err)
-	}
 	if n := len(f.shares.callsOf("list")) + len(f.shares.callsOf("update")); n != 0 {
 		t.Errorf("the provider was called %d times", n)
 	}
@@ -448,7 +479,9 @@ func TestMoveShares(t *testing.T) {
 		return publicLink(args["id"].(string), args["path"].(string), nil), nil
 	}
 
-	req := &adminpb.MoveSharesRequest{FromPath: "/eos/a/", ToPath: "/eos/b", Owner: "alice", As: "bob", ApplyGrant: true, DryRun: true}
+	req := &adminpb.MoveSharesRequest{
+		FromPath: "/eos/a/", ToPath: "/eos/b", Owner: &userpb.UserId{OpaqueId: "alice"}, As: &userpb.UserId{OpaqueId: "bob"}, ApplyGrant: true, DryRun: true,
+	}
 	type moved struct{ id, from, to, err string }
 	run := func() ([]moved, error) {
 		stream, err := f.client.MoveShares(context.Background(), req)
@@ -496,5 +529,181 @@ func TestMoveShares(t *testing.T) {
 	}
 	if lines := f.logs.audits(t, "move_shares"); len(lines) != 1 || lines[0]["moved"] != "2" || lines[0]["failed"] != "1" {
 		t.Errorf("move audit %v", lines)
+	}
+}
+
+// The CS3 filters become the arguments of the list invocations, at most one
+// of each type. The types that the invocations cannot apply are refused
+// before any call.
+func TestListMapsTheCS3Filters(t *testing.T) {
+	f := startShareFleet(t)
+	ctx := context.Background()
+	owner := &collaboration.Filter{Type: collaboration.Filter_TYPE_OWNER, Term: &collaboration.Filter_Owner{Owner: &userpb.UserId{OpaqueId: "alice"}}}
+	listShares := func(req *adminpb.ListSharesRequest) error {
+		stream, err := f.client.ListShares(ctx, req)
+		if err == nil {
+			_, err = recv(t, stream)
+		}
+		return err
+	}
+	err := listShares(&adminpb.ListSharesRequest{
+		Filters: []*collaboration.Filter{
+			owner,
+			{Type: collaboration.Filter_TYPE_CREATOR, Term: &collaboration.Filter_Creator{Creator: &userpb.UserId{OpaqueId: "carol"}}},
+			{Type: collaboration.Filter_TYPE_GRANTEE, Term: &collaboration.Filter_Grantee{Grantee: &provider.Grantee{
+				Type: provider.GranteeType_GRANTEE_TYPE_GROUP, Id: &provider.Grantee_GroupId{GroupId: &grouppb.GroupId{OpaqueId: "physicists"}},
+			}}},
+			{Type: collaboration.Filter_TYPE_RESOURCE_ID, Term: &collaboration.Filter_ResourceId{ResourceId: &provider.ResourceId{StorageId: "eoshome", SpaceId: "c3BhY2U", OpaqueId: "100"}}},
+			{Type: collaboration.Filter_TYPE_SPACE_ID, Term: &collaboration.Filter_SpaceId{SpaceId: "eoshome$c3BhY2U"}},
+		},
+		Path: "/eos/user/a/alice/doc", As: &userpb.UserId{OpaqueId: "dave"}, ResolvePaths: true,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := map[string]any{
+		"owner": "alice", "initiator": "carol", "sharee": "physicists", "resource_id": "eoshome!100", "space": "c3BhY2U",
+		"path": "/eos/user/a/alice/doc", "as": "dave", "resolve_paths": "true",
+	}
+	if calls := f.shares.callsOf("list"); len(calls) != 1 || !maps.Equal(calls[0], want) {
+		t.Errorf("list args %v, want %v", calls, want)
+	}
+
+	for name, req := range map[string]*adminpb.ListSharesRequest{
+		"GRANTEE_TYPE": {Filters: []*collaboration.Filter{{Type: collaboration.Filter_TYPE_GRANTEE_TYPE, Term: &collaboration.Filter_GranteeType{GranteeType: provider.GranteeType_GRANTEE_TYPE_USER}}}},
+		"two owners":   {Filters: []*collaboration.Filter{owner, owner}},
+		"no value":     {Filters: []*collaboration.Filter{{Type: collaboration.Filter_TYPE_OWNER}}},
+		"two spaces": {
+			Filters: []*collaboration.Filter{{Type: collaboration.Filter_TYPE_SPACE_ID, Term: &collaboration.Filter_SpaceId{SpaceId: "c3BhY2U"}}},
+			Space:   &adminpb.SpaceRef{Ref: &adminpb.SpaceRef_Id{Id: &provider.StorageSpaceId{OpaqueId: "eoshome$c3BhY2U"}}},
+		},
+	} {
+		if err := listShares(req); status.Code(err) != codes.InvalidArgument {
+			t.Errorf("%s: got %v, want InvalidArgument", name, err)
+		}
+	}
+
+	stream, err := f.client.ListPublicLinks(ctx, &adminpb.ListPublicLinksRequest{Filters: []*link.ListPublicSharesRequest_Filter{
+		{Type: link.ListPublicSharesRequest_Filter_TYPE_CREATOR, Term: &link.ListPublicSharesRequest_Filter_Creator{Creator: &userpb.UserId{OpaqueId: "carol"}}},
+		{Type: link.ListPublicSharesRequest_Filter_TYPE_RESOURCE_ID, Term: &link.ListPublicSharesRequest_Filter_ResourceId{ResourceId: &provider.ResourceId{StorageId: "eoshome", OpaqueId: "100"}}},
+	}})
+	if err == nil {
+		_, err = recv(t, stream)
+	}
+	if err != nil {
+		t.Fatal(err)
+	}
+	if calls, want := f.links.callsOf("list"), map[string]any{"initiator": "carol", "resource_id": "eoshome!100"}; len(calls) != 1 || !maps.Equal(calls[0], want) {
+		t.Errorf("link list args %v, want %v", calls, want)
+	}
+	stream, err = f.client.ListPublicLinks(ctx, &adminpb.ListPublicLinksRequest{Filters: []*link.ListPublicSharesRequest_Filter{{}}})
+	if err == nil {
+		_, err = recv(t, stream)
+	}
+	if status.Code(err) != codes.InvalidArgument {
+		t.Errorf("a link filter of no type: got %v, want InvalidArgument", err)
+	}
+	if n := len(f.shares.callsOf("list")) + len(f.links.callsOf("list")); n != 2 {
+		t.Errorf("%d list calls, want the 2 valid ones", n)
+	}
+}
+
+// The permissions of an update are sent as the name of their role, and an
+// expiration without a value removes it. A share given by its key is resolved
+// to its id first.
+func TestUpdateShareMapsTheCS3Fields(t *testing.T) {
+	f := startShareFleet(t)
+	ctx := context.Background()
+	f.shares.handle["get"] = func(map[string]any) (invoke.Result, error) { return share("4711", "", false, nil, nil), nil }
+	f.shares.handle["update"] = func(args map[string]any) (invoke.Result, error) {
+		return share(args["id"].(string), "", false, nil, nil), nil
+	}
+	perms := func(r *permissions.Role) *collaboration.UpdateShareRequest_UpdateField {
+		return &collaboration.UpdateShareRequest_UpdateField{Field: &collaboration.UpdateShareRequest_UpdateField_Permissions{
+			Permissions: &collaboration.SharePermissions{Permissions: r.CS3ResourcePermissions()},
+		}}
+	}
+	noExpiration := &collaboration.UpdateShareRequest_UpdateField{Field: &collaboration.UpdateShareRequest_UpdateField_Expiration{}}
+
+	got, err := f.client.UpdateShare(ctx, &adminpb.UpdateShareRequest{
+		Ref: aliceKey, Fields: []*collaboration.UpdateShareRequest_UpdateField{perms(permissions.NewEditorRole()), noExpiration}, Fallback: true,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.GetShare().GetId().GetOpaqueId() != "4711" {
+		t.Errorf("unexpected share %v", got)
+	}
+	gets := f.shares.callsOf("get")
+	if len(gets) != 1 {
+		t.Fatalf("%d get calls, want 1", len(gets))
+	}
+	key := &collaboration.ShareKey{}
+	if err := protojson.Unmarshal([]byte(gets[0]["key"].(string)), key); err != nil || !proto.Equal(key, aliceKey.GetKey()) {
+		t.Errorf("get args %v, want the key", gets[0])
+	}
+	want := map[string]any{"id": "4711", "role": "editor", "expires_at": "none", "fallback": "true"}
+	if calls := f.shares.callsOf("update"); len(calls) != 1 || !maps.Equal(calls[0], want) {
+		t.Errorf("update args %v, want %v", calls, want)
+	}
+
+	for name, fields := range map[string][]*collaboration.UpdateShareRequest_UpdateField{
+		"none":           nil,
+		"display name":   {{Field: &collaboration.UpdateShareRequest_UpdateField_DisplayName{DisplayName: "x"}}},
+		"no role":        {{Field: &collaboration.UpdateShareRequest_UpdateField_Permissions{Permissions: &collaboration.SharePermissions{Permissions: &provider.ResourcePermissions{Stat: true}}}}},
+		"two expiration": {noExpiration, noExpiration},
+		"empty":          {{}},
+	} {
+		if _, err := f.client.UpdateShare(ctx, &adminpb.UpdateShareRequest{Ref: shareIDRef("4711"), Fields: fields}); status.Code(err) != codes.InvalidArgument {
+			t.Errorf("%s: got %v, want InvalidArgument", name, err)
+		}
+	}
+	if n := len(f.shares.callsOf("update")); n != 1 {
+		t.Errorf("%d update calls, want 1", n)
+	}
+}
+
+func TestUpdatePublicLinkMapsTheCS3Updates(t *testing.T) {
+	f := startShareFleet(t)
+	ctx := context.Background()
+	f.links.handle["update"] = func(args map[string]any) (invoke.Result, error) { return publicLink(args["id"].(string), "", nil), nil }
+	ref := &link.PublicShareReference{Spec: &link.PublicShareReference_Id{Id: &link.PublicShareId{OpaqueId: "42"}}}
+	update := func(typ link.UpdatePublicShareRequest_Update_Type, g *link.Grant) *link.UpdatePublicShareRequest_Update {
+		return &link.UpdatePublicShareRequest_Update{Type: typ, Grant: g}
+	}
+	uploader := &link.Grant{Permissions: &link.PublicSharePermissions{Permissions: permissions.NewUploaderRole().CS3ResourcePermissions()}}
+	if _, err := f.client.UpdatePublicLink(ctx, &adminpb.UpdatePublicLinkRequest{Ref: ref, Updates: []*link.UpdatePublicShareRequest_Update{
+		update(link.UpdatePublicShareRequest_Update_TYPE_PERMISSIONS, uploader),
+		update(link.UpdatePublicShareRequest_Update_TYPE_EXPIRATION, &link.Grant{}),
+		update(link.UpdatePublicShareRequest_Update_TYPE_PASSWORD, &link.Grant{}),
+	}}); err != nil {
+		t.Fatal(err)
+	}
+	want := map[string]any{"id": "42", "role": "uploader", "expires_at": "none", "password": ""}
+	if calls := f.links.callsOf("update"); len(calls) != 1 || !maps.Equal(calls[0], want) {
+		t.Errorf("update args %v, want %v", calls, want)
+	}
+	if lines := f.logs.audits(t, "update_public_link"); len(lines) != 1 || lines[0]["password"] != "removed" {
+		t.Errorf("audit %v", lines)
+	}
+
+	for name, updates := range map[string][]*link.UpdatePublicShareRequest_Update{
+		"none":         nil,
+		"description":  {{Type: link.UpdatePublicShareRequest_Update_TYPE_DESCRIPTION, Description: "x"}},
+		"display name": {{Type: link.UpdatePublicShareRequest_Update_TYPE_DISPLAYNAME, DisplayName: "x"}},
+		"notify":       {{Type: link.UpdatePublicShareRequest_Update_TYPE_NOTIFYUPLOADS, NotifyUploads: true}},
+		"invalid":      {{}},
+		"two passwords": {
+			update(link.UpdatePublicShareRequest_Update_TYPE_PASSWORD, &link.Grant{Password: "a"}),
+			update(link.UpdatePublicShareRequest_Update_TYPE_PASSWORD, &link.Grant{Password: "b"}),
+		},
+		"no permissions": {update(link.UpdatePublicShareRequest_Update_TYPE_PERMISSIONS, nil)},
+	} {
+		if _, err := f.client.UpdatePublicLink(ctx, &adminpb.UpdatePublicLinkRequest{Ref: ref, Updates: updates}); status.Code(err) != codes.InvalidArgument {
+			t.Errorf("%s: got %v, want InvalidArgument", name, err)
+		}
+	}
+	if n := len(f.links.callsOf("update")); n != 1 {
+		t.Errorf("%d update calls, want 1", n)
 	}
 }
