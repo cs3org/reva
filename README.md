@@ -80,4 +80,5 @@ Reva's logo has been designed and contributed to the project by Eamonn Maguire.
 This project was initially conceived and brought to life by Hugo Gonzalez Labrador (@labkode) in 2017.
 Since its roots, Reva has evolved and expanded thanks to the passion and commitment of 
 dozens of remarkable individual contributors. [Learn more](https://reva.link/about/).
+See the [list of contributors](https://github.com/cs3org/reva/graphs/contributors) on GitHub.
 

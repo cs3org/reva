@@ -57,7 +57,7 @@ Reva at CERN is deployed via puppet on dedicated machines, not on the local mach
 - `make revad` builds `cmd/revad/revad`. The integration tests run this binary, so build it before `make test-integration`.
 - `make test-go` runs unit tests with `-race` and excludes `tests/integration`.
 - `make test-integration` needs Redis and MySQL. Set `REDIS_ADDRESS`, `SQL_USERNAME`, `SQL_PASSWORD`, `SQL_ADDRESS` and `SQL_DBNAME` (see `.github/workflows/test-integration.yml`).
-- `make lint` is only `go vet ./...`. `.golangci.yaml` enables only govet.
+- `make lint` is only `go vet ./...`.
 - `make cernbox-revad` builds with the external `cernbox/reva-plugins` through gaia. The `*-local` variants use `../reva-plugins`.
 - The only `go:generate` is in `pkg/share/share.go` (mockery v1). Gateway mocks come from `github.com/cs3org/go-cs3apis/mocks`.
 - `tmp/` is gitignored. Integration tests write their temp roots there.
