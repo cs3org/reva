@@ -89,11 +89,11 @@ func (f *fakeQuotaProviders) set(node, mountID, provides string) *invoke.Set {
 	}
 	set := invoke.NewSet()
 	set.Add("quota_get", "").Handle(invoke.Typed(func(_ context.Context, a quotaArgs) (invoke.Result, error) {
-		record("quota_get", map[string]string{"root": a.Root, "space_type": a.SpaceType, "owner": a.Owner.String()})
+		record("quota_get", map[string]string{"root": a.Root, "space_type": a.SpaceType, "owner": admin.UserArg(a.Owner.ID())})
 		return result(a, 1000), nil
 	}))
 	set.Add("quota_set", "").Mutating().Handle(invoke.Typed(func(_ context.Context, a quotaArgs) (invoke.Result, error) {
-		args := map[string]string{"root": a.Root, "space_type": a.SpaceType, "owner": a.Owner.String()}
+		args := map[string]string{"root": a.Root, "space_type": a.SpaceType, "owner": admin.UserArg(a.Owner.ID())}
 		if a.MaxBytes != nil {
 			args["max_bytes"] = strconv.FormatUint(*a.MaxBytes, 10)
 		}
@@ -203,7 +203,7 @@ func TestGetSpaceQuotaFindsTheSpaceAndItsInstance(t *testing.T) {
 		t.Errorf("quota = %v, want 600 of 1000 bytes remaining", q.Quota)
 	}
 	want := quotaCall{node: "proj-c1:9001/storageprovider", invocation: "quota_get",
-		args: map[string]string{"root": "/eos/project/c/cms", "space_type": "project", "owner": "cmsadm"}}
+		args: map[string]string{"root": "/eos/project/c/cms", "space_type": "project", "owner": admin.UserArg(&userpb.UserId{Idp: "cern", OpaqueId: "cmsadm"})}}
 	if calls := f.callsOf("quota_get"); len(calls) != 1 || calls[0].node != want.node || !maps.Equal(calls[0].args, want.args) {
 		t.Fatalf("calls = %v, want %v", calls, want)
 	}

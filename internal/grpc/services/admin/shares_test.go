@@ -38,6 +38,7 @@ import (
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	typespb "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
 	"github.com/cs3org/reva/v3/internal/grpc/control"
+	"github.com/cs3org/reva/v3/pkg/admin"
 	"github.com/cs3org/reva/v3/pkg/admin/adminpb"
 	"github.com/cs3org/reva/v3/pkg/appctx"
 	"github.com/cs3org/reva/v3/pkg/control/controlpb"
@@ -479,8 +480,9 @@ func TestMoveShares(t *testing.T) {
 		return publicLink(args["id"].(string), args["path"].(string), nil), nil
 	}
 
+	alice, bob := &userpb.UserId{Idp: "cernbox", OpaqueId: "alice"}, &userpb.UserId{Idp: "cernbox", OpaqueId: "bob", Type: userpb.UserType_USER_TYPE_PRIMARY}
 	req := &adminpb.MoveSharesRequest{
-		FromPath: "/eos/a/", ToPath: "/eos/b", Owner: &userpb.UserId{OpaqueId: "alice"}, As: &userpb.UserId{OpaqueId: "bob"}, ApplyGrant: true, DryRun: true,
+		FromPath: "/eos/a/", ToPath: "/eos/b", Owner: alice, As: bob, ApplyGrant: true, DryRun: true,
 	}
 	type moved struct{ id, from, to, err string }
 	run := func() ([]moved, error) {
@@ -508,7 +510,7 @@ func TestMoveShares(t *testing.T) {
 	if n := len(f.shares.callsOf("move")) + len(f.links.callsOf("move")); n != 0 {
 		t.Fatalf("the dry run moved %d items", n)
 	}
-	if calls := f.shares.callsOf("list"); calls[0]["as"] != "bob" || calls[0]["owner"] != "alice" || calls[0]["resolve_paths"] != "true" {
+	if calls := f.shares.callsOf("list"); calls[0]["as"] != admin.UserArg(bob) || calls[0]["owner"] != admin.UserArg(alice) || calls[0]["resolve_paths"] != "true" {
 		t.Errorf("share list args %v", calls[0])
 	}
 
@@ -521,10 +523,10 @@ func TestMoveShares(t *testing.T) {
 		t.Errorf("unexpected items %v", got)
 	}
 	shareMoves := f.shares.callsOf("move")
-	if len(shareMoves) != 2 || !maps.Equal(shareMoves[0], map[string]any{"id": "1", "path": "/eos/b/x", "as": "bob", "apply_grant": "true"}) {
+	if len(shareMoves) != 2 || !maps.Equal(shareMoves[0], map[string]any{"id": "1", "path": "/eos/b/x", "as": admin.UserArg(bob), "apply_grant": "true"}) {
 		t.Errorf("share moves %v", shareMoves)
 	}
-	if linkMoves := f.links.callsOf("move"); len(linkMoves) != 1 || !maps.Equal(linkMoves[0], map[string]any{"id": "9", "path": "/eos/b", "as": "bob"}) {
+	if linkMoves := f.links.callsOf("move"); len(linkMoves) != 1 || !maps.Equal(linkMoves[0], map[string]any{"id": "9", "path": "/eos/b", "as": admin.UserArg(bob)}) {
 		t.Errorf("link moves %v", linkMoves)
 	}
 	if lines := f.logs.audits(t, "move_shares"); len(lines) != 1 || lines[0]["moved"] != "2" || lines[0]["failed"] != "1" {
@@ -538,7 +540,9 @@ func TestMoveShares(t *testing.T) {
 func TestListMapsTheCS3Filters(t *testing.T) {
 	f := startShareFleet(t)
 	ctx := context.Background()
-	owner := &collaboration.Filter{Type: collaboration.Filter_TYPE_OWNER, Term: &collaboration.Filter_Owner{Owner: &userpb.UserId{OpaqueId: "alice"}}}
+	alice, carol, dave := &userpb.UserId{Idp: "cernbox", OpaqueId: "alice"}, &userpb.UserId{Idp: "cernbox", OpaqueId: "carol"}, &userpb.UserId{OpaqueId: "dave"}
+	physicists := &provider.Grantee{Type: provider.GranteeType_GRANTEE_TYPE_GROUP, Id: &provider.Grantee_GroupId{GroupId: &grouppb.GroupId{OpaqueId: "physicists"}}}
+	owner := &collaboration.Filter{Type: collaboration.Filter_TYPE_OWNER, Term: &collaboration.Filter_Owner{Owner: alice}}
 	listShares := func(req *adminpb.ListSharesRequest) error {
 		stream, err := f.client.ListShares(ctx, req)
 		if err == nil {
@@ -549,21 +553,19 @@ func TestListMapsTheCS3Filters(t *testing.T) {
 	err := listShares(&adminpb.ListSharesRequest{
 		Filters: []*collaboration.Filter{
 			owner,
-			{Type: collaboration.Filter_TYPE_CREATOR, Term: &collaboration.Filter_Creator{Creator: &userpb.UserId{OpaqueId: "carol"}}},
-			{Type: collaboration.Filter_TYPE_GRANTEE, Term: &collaboration.Filter_Grantee{Grantee: &provider.Grantee{
-				Type: provider.GranteeType_GRANTEE_TYPE_GROUP, Id: &provider.Grantee_GroupId{GroupId: &grouppb.GroupId{OpaqueId: "physicists"}},
-			}}},
+			{Type: collaboration.Filter_TYPE_CREATOR, Term: &collaboration.Filter_Creator{Creator: carol}},
+			{Type: collaboration.Filter_TYPE_GRANTEE, Term: &collaboration.Filter_Grantee{Grantee: physicists}},
 			{Type: collaboration.Filter_TYPE_RESOURCE_ID, Term: &collaboration.Filter_ResourceId{ResourceId: &provider.ResourceId{StorageId: "eoshome", SpaceId: "c3BhY2U", OpaqueId: "100"}}},
 			{Type: collaboration.Filter_TYPE_SPACE_ID, Term: &collaboration.Filter_SpaceId{SpaceId: "eoshome$c3BhY2U"}},
 		},
-		Path: "/eos/user/a/alice/doc", As: &userpb.UserId{OpaqueId: "dave"}, ResolvePaths: true,
+		Path: "/eos/user/a/alice/doc", As: dave, ResolvePaths: true,
 	})
 	if err != nil {
 		t.Fatal(err)
 	}
 	want := map[string]any{
-		"owner": "alice", "initiator": "carol", "sharee": "physicists", "resource_id": "eoshome!100", "space": "c3BhY2U",
-		"path": "/eos/user/a/alice/doc", "as": "dave", "resolve_paths": "true",
+		"owner": admin.UserArg(alice), "initiator": admin.UserArg(carol), "sharee": admin.GranteeArg(physicists), "resource_id": "eoshome!100", "space": "c3BhY2U",
+		"path": "/eos/user/a/alice/doc", "as": admin.UserArg(dave), "resolve_paths": "true",
 	}
 	if calls := f.shares.callsOf("list"); len(calls) != 1 || !maps.Equal(calls[0], want) {
 		t.Errorf("list args %v, want %v", calls, want)
@@ -584,7 +586,7 @@ func TestListMapsTheCS3Filters(t *testing.T) {
 	}
 
 	stream, err := f.client.ListPublicLinks(ctx, &adminpb.ListPublicLinksRequest{Filters: []*link.ListPublicSharesRequest_Filter{
-		{Type: link.ListPublicSharesRequest_Filter_TYPE_CREATOR, Term: &link.ListPublicSharesRequest_Filter_Creator{Creator: &userpb.UserId{OpaqueId: "carol"}}},
+		{Type: link.ListPublicSharesRequest_Filter_TYPE_CREATOR, Term: &link.ListPublicSharesRequest_Filter_Creator{Creator: carol}},
 		{Type: link.ListPublicSharesRequest_Filter_TYPE_RESOURCE_ID, Term: &link.ListPublicSharesRequest_Filter_ResourceId{ResourceId: &provider.ResourceId{StorageId: "eoshome", OpaqueId: "100"}}},
 	}})
 	if err == nil {
@@ -593,7 +595,7 @@ func TestListMapsTheCS3Filters(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if calls, want := f.links.callsOf("list"), map[string]any{"initiator": "carol", "resource_id": "eoshome!100"}; len(calls) != 1 || !maps.Equal(calls[0], want) {
+	if calls, want := f.links.callsOf("list"), map[string]any{"initiator": admin.UserArg(carol), "resource_id": "eoshome!100"}; len(calls) != 1 || !maps.Equal(calls[0], want) {
 		t.Errorf("link list args %v, want %v", calls, want)
 	}
 	stream, err = f.client.ListPublicLinks(ctx, &adminpb.ListPublicLinksRequest{Filters: []*link.ListPublicSharesRequest_Filter{{}}})

@@ -227,7 +227,7 @@ func (a *spacesAdmin) spaceForQuota(ctx context.Context, ref *adminpb.SpaceRef) 
 }
 
 func (sp quotaSpace) args() map[string]string {
-	args := map[string]string{"root": sp.root, "space_type": sp.spaceType, "owner": sp.owner.GetOpaqueId()}
+	args := map[string]string{"root": sp.root, "space_type": sp.spaceType, "owner": admin.UserArg(sp.owner)}
 	maps.DeleteFunc(args, func(_, v string) bool { return v == "" })
 	return args
 }

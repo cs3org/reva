@@ -94,11 +94,9 @@ func listArgs(filters []*provider.ListStorageSpacesRequest_Filter) (map[string]s
 		case provider.ListStorageSpacesRequest_Filter_TYPE_SPACE_TYPE:
 			err = one("type", f.GetSpaceType(), f.GetType())
 		case provider.ListStorageSpacesRequest_Filter_TYPE_OWNER:
-			err = one("owner", f.GetOwner().GetOpaqueId(), f.GetType())
+			err = one("owner", admin.UserArg(f.GetOwner()), f.GetType())
 		case provider.ListStorageSpacesRequest_Filter_TYPE_USER:
-			// The invocations take the opaque id of a user as its username,
-			// as the catalogue does when it acts as the owner.
-			err = one("member", f.GetUser().GetOpaqueId(), f.GetType())
+			err = one("member", admin.UserArg(f.GetUser()), f.GetType())
 		case provider.ListStorageSpacesRequest_Filter_TYPE_ID:
 			if f.GetId().GetOpaqueId() == "" {
 				return nil, nil, status.Errorf(codes.InvalidArgument, "admin: the filter %s has no value", f.GetType())
@@ -248,7 +246,7 @@ func (a *spacesAdmin) SetSpaceOwner(ctx context.Context, req *adminpb.SetSpaceOw
 	if err != nil {
 		return nil, err
 	}
-	args["owner"] = req.GetOwner().GetOpaqueId()
+	args["owner"] = admin.UserArg(req.GetOwner())
 	return mutateSpace(ctx, eps, "set_owner", cmp.Or(req.Ref.GetId().GetOpaqueId(), req.Ref.GetName(), req.Ref.GetPath()), args)
 }
 
@@ -274,8 +272,7 @@ func registerArgs(s *provider.StorageSpace) (map[string]string, error) {
 	invalid := func(format string, a ...any) error {
 		return status.Errorf(codes.InvalidArgument, "admin: register: "+format, a...)
 	}
-	// The create invocation looks the owner up by username.
-	owner := cmp.Or(s.GetOwner().GetUsername(), s.GetOwner().GetId().GetOpaqueId())
+	owner := admin.UserArg(s.GetOwner().GetId())
 	if s.GetName() == "" || owner == "" {
 		return nil, invalid("name and owner are required")
 	}
@@ -348,7 +345,7 @@ func (a *spacesAdmin) CheckSpaces(req *adminpb.CheckSpacesRequest, stream adminp
 	if err != nil {
 		return err
 	}
-	args := map[string]string{"status": req.Status, "owner": req.GetOwner().GetOpaqueId()}
+	args := map[string]string{"status": req.Status, "owner": admin.UserArg(req.GetOwner())}
 	maps.DeleteFunc(args, func(_, v string) bool { return v == "" })
 	return relayStream(stream.Context(), eps, "check", args, stream.Send)
 }

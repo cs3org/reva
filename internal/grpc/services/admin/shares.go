@@ -59,7 +59,7 @@ func (a *sharesAdmin) ListShares(req *adminpb.ListSharesRequest, stream adminpb.
 		return err
 	}
 	maps.Copy(args, shareArgs(map[string]string{
-		"path": req.GetPath(), "as": req.GetAs().GetOpaqueId(), "resolve_paths": shareBool(req.GetResolvePaths()),
+		"path": req.GetPath(), "as": admin.UserArg(req.GetAs()), "resolve_paths": shareBool(req.GetResolvePaths()),
 	}))
 	addSelection(args, req.GetOrphans(), req.GetExpired())
 	eps, err := a.s.serviceEndpoints(userShareService)
@@ -136,7 +136,7 @@ func (a *sharesAdmin) SyncShareExpiration(ctx context.Context, req *adminpb.Sync
 }
 
 func (a *sharesAdmin) TransferShare(ctx context.Context, req *adminpb.TransferShareRequest) (*adminpb.AdminShare, error) {
-	initiator := req.GetInitiator().GetOpaqueId()
+	initiator := admin.UserArg(req.GetInitiator())
 	if initiator == "" {
 		return nil, shareArgRequired("initiator")
 	}
@@ -145,7 +145,7 @@ func (a *sharesAdmin) TransferShare(ctx context.Context, req *adminpb.TransferSh
 		return nil, err
 	}
 	return a.shareMutation(ctx, "transfer_share", id, false, "transfer",
-		map[string]string{"id": id, "initiator": initiator}, map[string]string{"to": initiator})
+		map[string]string{"id": id, "initiator": initiator}, map[string]string{"to": req.GetInitiator().GetOpaqueId()})
 }
 
 func (a *sharesAdmin) MarkShareOrphan(ctx context.Context, req *adminpb.MarkShareOrphanRequest) (*adminpb.AdminShare, error) {
@@ -247,12 +247,12 @@ func (a *sharesAdmin) TransferPublicLink(ctx context.Context, req *adminpb.Trans
 	if err != nil {
 		return nil, err
 	}
-	initiator := req.GetInitiator().GetOpaqueId()
+	initiator := admin.UserArg(req.GetInitiator())
 	if initiator == "" {
 		return nil, shareArgRequired("initiator")
 	}
 	args["initiator"] = initiator
-	return a.linkMutation(ctx, "transfer_public_link", req.GetRef(), false, "transfer", args, map[string]string{"to": initiator})
+	return a.linkMutation(ctx, "transfer_public_link", req.GetRef(), false, "transfer", args, map[string]string{"to": req.GetInitiator().GetOpaqueId()})
 }
 
 func (a *sharesAdmin) MarkPublicLinkOrphan(ctx context.Context, req *adminpb.MarkPublicLinkOrphanRequest) (*adminpb.AdminPublicShare, error) {
@@ -297,7 +297,7 @@ func (a *sharesAdmin) MoveShares(req *adminpb.MoveSharesRequest, stream adminpb.
 	case req.GetOwner().GetOpaqueId() == "" && req.GetSpace() == nil:
 		return shareArgRequired("owner or space")
 	}
-	listArgs := shareArgs(map[string]string{"owner": req.GetOwner().GetOpaqueId(), "resolve_paths": "true"})
+	listArgs := shareArgs(map[string]string{"owner": admin.UserArg(req.GetOwner()), "resolve_paths": "true"})
 	if err := a.s.addSpace(ctx, listArgs, req.GetSpace()); err != nil {
 		return err
 	}
@@ -317,7 +317,7 @@ func (a *sharesAdmin) MoveShares(req *adminpb.MoveSharesRequest, stream adminpb.
 	if err != nil {
 		return err
 	}
-	shareListArgs := shareArgs(map[string]string{"as": req.GetAs().GetOpaqueId()})
+	shareListArgs := shareArgs(map[string]string{"as": admin.UserArg(req.GetAs())})
 	maps.Copy(shareListArgs, listArgs)
 	if err := relayStream(ctx, shareEps, "list", shareListArgs, func(m *adminpb.AdminShare) error {
 		if p, np, ok := newPath(m.GetPath(), m.GetExtra()); ok {
@@ -372,7 +372,7 @@ func (a *sharesAdmin) MoveShares(req *adminpb.MoveSharesRequest, stream adminpb.
 // moveOne moves one item of MoveShares, and puts the moved share or link in
 // it.
 func (a *sharesAdmin) moveOne(ctx context.Context, it *adminpb.MovedShare, req *adminpb.MoveSharesRequest) error {
-	args := shareArgs(map[string]string{"path": it.GetToPath(), "as": req.GetAs().GetOpaqueId()})
+	args := shareArgs(map[string]string{"path": it.GetToPath(), "as": admin.UserArg(req.GetAs())})
 	var service string
 	var out proto.Message
 	switch {
@@ -571,11 +571,11 @@ func shareFilterArgs(filters []*collaboration.Filter) (map[string]string, error)
 		var err error
 		switch t := f.GetType(); t {
 		case collaboration.Filter_TYPE_OWNER:
-			err = args.set(t, "owner", f.GetOwner().GetOpaqueId())
+			err = args.set(t, "owner", admin.UserArg(f.GetOwner()))
 		case collaboration.Filter_TYPE_CREATOR:
-			err = args.set(t, "initiator", f.GetCreator().GetOpaqueId())
+			err = args.set(t, "initiator", admin.UserArg(f.GetCreator()))
 		case collaboration.Filter_TYPE_GRANTEE:
-			err = args.set(t, "sharee", granteeName(f.GetGrantee()))
+			err = args.set(t, "sharee", admin.GranteeArg(f.GetGrantee()))
 		case collaboration.Filter_TYPE_RESOURCE_ID:
 			err = args.set(t, "resource_id", resourceIDArg(f.GetResourceId()))
 		case collaboration.Filter_TYPE_SPACE_ID:
@@ -598,9 +598,9 @@ func linkFilterArgs(filters []*link.ListPublicSharesRequest_Filter) (map[string]
 		var err error
 		switch t := f.GetType(); t {
 		case link.ListPublicSharesRequest_Filter_TYPE_OWNER:
-			err = args.set(t, "owner", f.GetOwner().GetOpaqueId())
+			err = args.set(t, "owner", admin.UserArg(f.GetOwner()))
 		case link.ListPublicSharesRequest_Filter_TYPE_CREATOR:
-			err = args.set(t, "initiator", f.GetCreator().GetOpaqueId())
+			err = args.set(t, "initiator", admin.UserArg(f.GetCreator()))
 		case link.ListPublicSharesRequest_Filter_TYPE_RESOURCE_ID:
 			err = args.set(t, "resource_id", resourceIDArg(f.GetResourceId()))
 		default:
@@ -611,18 +611,6 @@ func linkFilterArgs(filters []*link.ListPublicSharesRequest_Filter) (map[string]
 		}
 	}
 	return args, nil
-}
-
-// granteeName is the share_with of the share table, which keeps the name of
-// a user and of a group alike.
-func granteeName(g *provider.Grantee) string {
-	switch g.GetType() {
-	case provider.GranteeType_GRANTEE_TYPE_USER:
-		return g.GetUserId().GetOpaqueId()
-	case provider.GranteeType_GRANTEE_TYPE_GROUP:
-		return g.GetGroupId().GetOpaqueId()
-	}
-	return ""
 }
 
 func resourceIDArg(id *provider.ResourceId) string {
