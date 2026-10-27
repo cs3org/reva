@@ -68,6 +68,13 @@ const (
 	Allow
 )
 
+func (p Periodic) run(ctx context.Context, r Reporter) error {
+	if p.RunWithProgress != nil {
+		return p.RunWithProgress(ctx, r)
+	}
+	return p.Run(ctx)
+}
+
 // Params is the payload of an on-demand job. It must be JSON serialisable so
 // that it survives a round trip through the durable store. Periodic jobs
 // receive an empty Params.
@@ -118,6 +125,10 @@ type Periodic struct {
 	// Run is the work to perform. The same idempotency contract as Job.Run
 	// applies.
 	Run func(ctx context.Context) error
+	// RunWithProgress is Run for a job that reports its progress. Set either
+	// Run or RunWithProgress. The progress of a ScopeAllNodes run is dropped,
+	// because such a run has no status.
+	RunWithProgress func(ctx context.Context, r Reporter) error
 	// RunOnStart fires the job once immediately when the runner starts,
 	// instead of waiting for the first interval to elapse.
 	RunOnStart bool

@@ -44,6 +44,7 @@ import (
 	"github.com/cs3org/reva/v3/pkg/rgrpc"
 	"github.com/cs3org/reva/v3/pkg/rgrpc/mtls"
 	"github.com/cs3org/reva/v3/pkg/rhttp"
+	"github.com/cs3org/reva/v3/pkg/rhttp/router"
 	"github.com/cs3org/reva/v3/pkg/service"
 	"github.com/cs3org/reva/v3/pkg/trace"
 
@@ -92,6 +93,10 @@ type Server struct {
 	// internal marks a server not advertised as a registry service (the
 	// per-process control channel).
 	internal bool
+
+	// routes are the routes declared on this server, empty for grpc. They are
+	// advertised per service, so a gateway can mirror what each one serves.
+	routes []router.Route
 
 	services map[string]any
 }
@@ -610,16 +615,17 @@ func newServers(ctx context.Context, certs config.MTLS, grpc []*config.GRPC, htt
 		ln := listenerFromAddress(lns, cfg.Network, cfg.Address)
 		counters := newActivityCounters(services)
 		captureInstances(services, cfg.Services, hostPort(hostname, ln.Addr().String()), counters)
-		middlewares, err := initHTTPMiddlewares(cfg.Middlewares, httpUnprotected(services), &logger)
+		routes := rhttp.Routes(services, counters, &logger)
+		middlewares, err := initHTTPMiddlewares(cfg.Middlewares, &logger)
 		if err != nil {
 			return nil, err
 		}
 		s, err := rhttp.New(
 			rhttp.WithServices(services),
+			rhttp.WithRouter(routes),
 			rhttp.WithLogger(logger),
 			rhttp.WithCertAndKeyFiles(cfg.CertFile, cfg.KeyFile),
 			rhttp.WithMiddlewares(middlewares),
-			rhttp.WithActivityCounters(counters),
 		)
 		if err != nil {
 			return nil, err
@@ -633,6 +639,7 @@ func newServers(ctx context.Context, certs config.MTLS, grpc []*config.GRPC, htt
 			listener:  ln,
 			transport: registry.TransportHTTP,
 			scheme:    scheme,
+			routes:    routes.Routes(),
 			services:  maps.MapValues(services, func(s global.Service) any { return s }),
 		}
 		log.Debug().

@@ -20,23 +20,24 @@ package ocmd
 
 import (
 	"context"
-	"net/http"
 
 	"github.com/cs3org/reva/v3/pkg/appctx"
 	"github.com/cs3org/reva/v3/pkg/rhttp/global"
 	"github.com/cs3org/reva/v3/pkg/rhttp/ratelimit"
+	"github.com/cs3org/reva/v3/pkg/rhttp/router"
 	"github.com/cs3org/reva/v3/pkg/sharedconf"
 	"github.com/cs3org/reva/v3/pkg/utils/cfg"
-	"github.com/go-chi/chi/v5"
 	"github.com/rs/zerolog"
 )
+
+// mount is where the OCM API is served.
+const mount = "/ocm"
 
 func init() {
 	global.Register("ocm", New)
 }
 
 type config struct {
-	Prefix                     string                    `mapstructure:"prefix"`
 	GatewaySvc                 string                    `mapstructure:"gatewaysvc"                    validate:"required"`
 	ExposeRecipientDisplayName bool                      `mapstructure:"expose_recipient_display_name"`
 	TokenManager               string                    `mapstructure:"token_manager"`
@@ -78,9 +79,6 @@ type config struct {
 
 func (c *config) ApplyDefaults() {
 	c.GatewaySvc = sharedconf.GetGatewaySVC(c.GatewaySvc)
-	if c.Prefix == "" {
-		c.Prefix = "ocm"
-	}
 	if c.TokenManager == "" {
 		c.TokenManager = "jwt"
 	}
@@ -92,8 +90,12 @@ func (c *config) ApplyDefaults() {
 
 type svc struct {
 	Conf    *config
-	router  chi.Router
 	limiter *ratelimit.Limiter
+
+	shares        *sharesHandler
+	invites       *invitesHandler
+	notifications *notifHandler
+	token         *tokenHandler
 }
 
 // New returns a new ocmd object, that implements
@@ -104,13 +106,9 @@ func New(ctx context.Context, m map[string]any) (global.Service, error) {
 		return nil, err
 	}
 
-	r := chi.NewRouter()
-	s := &svc{
-		Conf:   &c,
-		router: r,
-	}
+	s := &svc{Conf: &c}
 
-	if err := s.routerInit(appctx.GetLogger(ctx)); err != nil {
+	if err := s.handlersInit(appctx.GetLogger(ctx)); err != nil {
 		_ = s.Close()
 		return nil, err
 	}
@@ -118,7 +116,7 @@ func New(ctx context.Context, m map[string]any) (global.Service, error) {
 	return s, nil
 }
 
-func (s *svc) routerInit(log *zerolog.Logger) error {
+func (s *svc) handlersInit(log *zerolog.Logger) error {
 	// Build the limiter before any handler startup work, so that an invalid
 	// trusted_proxy_cidrs entry fails fast, like allowed_federation_cidrs.
 	limiter, err := s.Conf.RateLimit.NewLimiter(log)
@@ -130,9 +128,6 @@ func (s *svc) routerInit(log *zerolog.Logger) error {
 		log.Warn().Msg("trust_forwarded_for is set but trusted_proxy_cidrs is empty: " +
 			"all remote providers behind the proxy share a single rate limit bucket")
 	}
-	// All the routes below are unauthenticated (see Unprotected), so the
-	// limiter applies to the whole router, unmatched paths included.
-	s.router.Use(limiter.Middleware)
 
 	sharesHandler := new(sharesHandler)
 	invitesHandler := new(invitesHandler)
@@ -153,10 +148,10 @@ func (s *svc) routerInit(log *zerolog.Logger) error {
 		return err
 	}
 
-	s.router.Post(sharesPath, sharesHandler.CreateShare)
-	s.router.Post(inviteAcceptedPath, invitesHandler.AcceptInvite)
-	s.router.Post(notificationsPath, notifHandler.Notifications)
-	s.router.Post(tokenPath, tokenHandler.ExchangeToken)
+	s.shares = sharesHandler
+	s.invites = invitesHandler
+	s.notifications = notifHandler
+	s.token = tokenHandler
 	return nil
 }
 
@@ -166,23 +161,13 @@ func (s *svc) Close() error {
 	return nil
 }
 
-func (s *svc) Prefix() string {
-	return s.Conf.Prefix
-}
-
-func (s *svc) Unprotected() []string {
-	// These OCM ingress routes authenticate at the protocol layer, so they stay
-	// reachable without the outer auth middleware.
-	return []string{inviteAcceptedPath, sharesPath, notificationsPath, tokenPath}
-}
-
-func (s *svc) Handler() http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		log := appctx.GetLogger(r.Context())
-		log.Debug().Str("path", r.URL.Path).Msg("ocm routing")
-
-		// unset raw path, otherwise chi uses it to route and then fails to match percent encoded path segments
-		r.URL.RawPath = ""
-		s.router.ServeHTTP(w, r)
-	})
+// Routes declares the OCM ingress endpoints. They authenticate at the protocol
+// layer, so they stay reachable without the outer auth middleware.
+func (s *svc) Routes(r *router.Router) {
+	r.Group(mount, func(r *router.Router) {
+		r.Post(sharesPath, s.shares.CreateShare, router.Unprotected())
+		r.Post(inviteAcceptedPath, s.invites.AcceptInvite, router.Unprotected())
+		r.Post(notificationsPath, s.notifications.Notifications, router.Unprotected())
+		r.Post(tokenPath, s.token.ExchangeToken, router.Unprotected())
+	}, s.limiter.Middleware)
 }

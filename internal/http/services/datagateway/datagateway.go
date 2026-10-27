@@ -33,6 +33,7 @@ import (
 	"github.com/cs3org/reva/v3/pkg/httpclient"
 	"github.com/cs3org/reva/v3/pkg/registry"
 	"github.com/cs3org/reva/v3/pkg/rhttp/global"
+	"github.com/cs3org/reva/v3/pkg/rhttp/router"
 	"github.com/cs3org/reva/v3/pkg/sharedconf"
 	"github.com/cs3org/reva/v3/pkg/utils/cfg"
 	"github.com/golang-jwt/jwt/v5"
@@ -46,6 +47,9 @@ const (
 	UploadExpiresHeader = "Upload-Expires"
 )
 
+// mount is where the service is served.
+const mount = "/datagateway"
+
 func init() {
 	global.Register("datagateway", New)
 }
@@ -57,7 +61,6 @@ type transferClaims struct {
 	VersionKey string `json:"version_key,omitempty"`
 }
 type config struct {
-	Prefix               string `mapstructure:"prefix"`
 	TransferSharedSecret string `mapstructure:"transfer_shared_secret"                                  validate:"required"`
 	Timeout              int64  `mapstructure:"timeout"`
 	Insecure             bool   `docs:"false;Whether to skip certificate checks when sending requests." mapstructure:"insecure"`
@@ -67,17 +70,13 @@ type config struct {
 }
 
 func (c *config) ApplyDefaults() {
-	if c.Prefix == "" {
-		c.Prefix = "datagateway"
-	}
 
 	c.TransferSharedSecret = sharedconf.GetJWTSecret(c.TransferSharedSecret)
 }
 
 type svc struct {
-	conf    *config
-	handler http.Handler
-	client  *httpclient.Client
+	conf   *config
+	client *httpclient.Client
 }
 
 // New returns a new datagateway.
@@ -98,16 +97,18 @@ func New(ctx context.Context, m map[string]any) (global.Service, error) {
 			httpclient.RoundTripper(tr),
 		),
 	}
-	s.setHandler()
 	return s, nil
 }
 
-// RegistryMetadata advertises the externally reachable URL, if configured.
+// RegistryMetadata advertises where to reach the service: the externally
+// reachable URL when one is configured, and in either case the path it is
+// served under, which is what a peer falls back to building a URL from.
 func (s *svc) RegistryMetadata() map[string]string {
-	if s.conf.PublicURL == "" {
-		return nil
+	m := map[string]string{registry.MetaPrefix: mount}
+	if s.conf.PublicURL != "" {
+		m[registry.MetaPublicURL] = s.conf.PublicURL
 	}
-	return map[string]string{registry.MetaPublicURL: s.conf.PublicURL}
+	return m
 }
 
 // Close performs cleanup.
@@ -115,41 +116,22 @@ func (s *svc) Close() error {
 	return nil
 }
 
-func (s *svc) Prefix() string {
-	return s.conf.Prefix
-}
-
-func (s *svc) Handler() http.Handler {
-	return s.handler
-}
-
-func (s *svc) Unprotected() []string {
-	return []string{
-		"/",
+// Routes declares the byte transfer endpoints. The transfer token travels
+// either in a header or as the last path segment, so every method is declared
+// both at the mount and under it. They carry their own authentication, the
+// token, and so are exempt from the auth middleware.
+func (s *svc) Routes(r *router.Router) {
+	for _, p := range []string{mount, mount + "/{token...}"} {
+		r.Head(p, s.doHeadCors, router.Unprotected())
+		r.Get(p, s.doGet, router.Unprotected())
+		r.Put(p, s.doPut, router.Unprotected())
+		r.Patch(p, s.doPatch, router.Unprotected())
 	}
 }
 
-func (s *svc) setHandler() {
-	s.handler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		switch r.Method {
-		case http.MethodHead:
-			addCorsHeader(w)
-			s.doHead(w, r)
-			return
-		case http.MethodGet:
-			s.doGet(w, r)
-			return
-		case http.MethodPut:
-			s.doPut(w, r)
-			return
-		case http.MethodPatch:
-			s.doPatch(w, r)
-			return
-		default:
-			w.WriteHeader(http.StatusNotImplemented)
-			return
-		}
-	})
+func (s *svc) doHeadCors(w http.ResponseWriter, r *http.Request) {
+	addCorsHeader(w)
+	s.doHead(w, r)
 }
 
 func addCorsHeader(res http.ResponseWriter) {
