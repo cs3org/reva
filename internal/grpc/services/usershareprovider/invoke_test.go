@@ -64,7 +64,6 @@ var (
 		{Id: &provider.ResourceId{StorageId: "project", OpaqueId: "200", SpaceId: "project-x"}, Path: "/project/data", Owner: user("cbox").Id},
 		{Id: &provider.ResourceId{StorageId: "home2", OpaqueId: "300", SpaceId: "home-feynman"}, Path: "/home/feynman/doc", Owner: user("feynman").Id},
 	}
-	// granters tells who may change the grants of a resource, by storage.
 	granters = map[string][]string{"home": {"einstein"}, "project": {"cbox", "admin1", "admin2"}, "home2": {"feynman"}}
 )
 
@@ -87,9 +86,8 @@ var gw = &fakeGateway{}
 // return the share, and the caller must be allowed to change the grants.
 type fakeGateway struct {
 	gateway.GatewayAPIClient
-	svc *service
-	mu  sync.Mutex
-	// actedAs records the callers whose share update or removal was done.
+	svc     *service
+	mu      sync.Mutex
 	actedAs []string
 }
 
@@ -205,8 +203,6 @@ func as(name string) context.Context {
 	return appctx.ContextSetUser(context.Background(), users[name])
 }
 
-// createShare creates a share of path for sharee as owner, with initiator as its
-// initiator, and returns its id.
 func createShare(t *testing.T, s *service, path, owner, initiator, sharee string, exp *typespb.Timestamp) string {
 	t.Helper()
 	info := fileOf(&provider.Reference{Path: path})
@@ -351,8 +347,7 @@ func TestGet(t *testing.T) {
 	}
 }
 
-// The CS3 GetShare answers a share the caller may not see exactly like a share
-// that does not exist, with a status and no gRPC error.
+// A share that the caller may not see looks like a share that does not exist.
 func TestGetShareNotFoundStatus(t *testing.T) {
 	s, _ := newService(t)
 	id := createShare(t, s, "/home/einstein/doc", "einstein", "richard", "marie", nil)
@@ -373,8 +368,7 @@ func TestGetShareNotFoundStatus(t *testing.T) {
 
 func TestUpdate(t *testing.T) {
 	s, _ := newService(t)
-	// richard initiated the share and has lost the right to change it, so
-	// the update is done as einstein, the owner.
+	// richard cannot change the share anymore, so the owner does it.
 	id := createShare(t, s, "/home/einstein/doc", "einstein", "richard", "marie", nil)
 
 	res := mustInvoke(t, s, "update", map[string]any{"id": id, "role": "editor", "expires_at": "2099-01-01", "fallback": "true"})

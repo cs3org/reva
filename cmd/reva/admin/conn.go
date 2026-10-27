@@ -25,7 +25,6 @@ import (
 	"google.golang.org/grpc/status"
 )
 
-// adminErr adds a hint to the authentication and authorization failures.
 func adminErr(err error) error {
 	if err == nil {
 		return nil

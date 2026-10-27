@@ -26,10 +26,8 @@ import (
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 )
 
-// FindSpace returns the space of spaces that ref names, or a not-found
-// *StatusError. ref is a path in the space (the space with the deepest root
-// that holds it), a space id with or without its storage id, a name, or home
-// for the personal space.
+// FindSpace returns the space that ref names, or a not-found *StatusError. ref
+// is a path (the deepest space root wins), a space id, a name, or home.
 func FindSpace(spaces []*provider.StorageSpace, ref string) (*provider.StorageSpace, error) {
 	var found *provider.StorageSpace
 	if strings.HasPrefix(ref, "/") {

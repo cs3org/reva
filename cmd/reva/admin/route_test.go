@@ -34,7 +34,6 @@ import (
 	"google.golang.org/grpc"
 )
 
-// fakeStorage is a StorageAdmin whose reloads fail on the instances in stale.
 type fakeStorage struct {
 	adminpb.UnimplementedStorageAdminServer
 	stale    []*adminpb.StaleInstance
@@ -101,8 +100,6 @@ func TestRouteAdd(t *testing.T) {
 	}
 }
 
-// An instance that did not reload serves the old table, so the command
-// fails after it reports the change and the stale instance.
 func TestRouteAddWithAStaleInstanceFails(t *testing.T) {
 	f := &fakeStorage{stale: []*adminpb.StaleInstance{{Node: "reg3:9999/storageregistry", Status: &rpc.Status{Code: rpc.Code_CODE_UNAVAILABLE, Message: "db unreachable"}}}}
 	out, errOut, err := runRoute(t, f, "route", "add", "/eos/user/z", "eoshome-i05")

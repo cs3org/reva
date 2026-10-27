@@ -32,8 +32,7 @@ import (
 	"github.com/cs3org/reva/v3/pkg/cli/clitest"
 )
 
-// runFake runs args on the fake backend b and returns stdout and stderr
-// together.
+// runFake returns stdout and stderr together.
 func runFake(t *testing.T, b *clitest.Backend, args ...string) (string, error) {
 	t.Helper()
 	t.Setenv("XDG_CONFIG_HOME", t.TempDir())

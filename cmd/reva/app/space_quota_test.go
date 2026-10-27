@@ -34,22 +34,13 @@ import (
 	"google.golang.org/grpc/status"
 )
 
-// fakeQuotaAdmin knows one project, cernbox, with a replica factor of 2.
 type fakeQuotaAdmin struct {
-	adminpb.UnimplementedAdminAPIServer
+	fakeAdminAPI
 	adminpb.UnimplementedSpacesAdminServer
 
 	mu   sync.Mutex
 	sets []*adminpb.SetSpaceQuotaRequest
 	min  uint64
-}
-
-func (f *fakeQuotaAdmin) CheckAdmin(context.Context, *adminpb.CheckAdminRequest) (*adminpb.CheckAdminResponse, error) {
-	return &adminpb.CheckAdminResponse{Admin: true}, nil
-}
-
-func (f *fakeQuotaAdmin) RequestAdmin(context.Context, *adminpb.RequestAdminRequest) (*adminpb.RequestAdminResponse, error) {
-	return &adminpb.RequestAdminResponse{Token: "admin"}, nil
 }
 
 func (f *fakeQuotaAdmin) GetSpaceQuota(_ context.Context, req *adminpb.GetSpaceQuotaRequest) (*adminpb.SpaceQuota, error) {
@@ -76,7 +67,6 @@ func (f *fakeQuotaAdmin) ListSpaceQuotas(req *adminpb.ListSpaceQuotasRequest, s 
 			return err
 		}
 	}
-	// Without a limit, the usage is still known.
 	return s.Send(&adminpb.SpaceQuota{Root: "/eos/user/c/carol", Quota: &provider.Quota{}, UsedBytes: 3e9, MountId: "eoshome-c"})
 }
 
@@ -95,7 +85,6 @@ func runQuota(t *testing.T, f *fakeQuotaAdmin, args ...string) (string, error) {
 	return runFake(t, clitest.New("alice"), append(global, args...)...)
 }
 
-// A space the user plane does not find is read with admin rights.
 func TestSpaceQuotaGetFallsBackToTheAdminPlane(t *testing.T) {
 	out, err := runQuota(t, &fakeQuotaAdmin{}, "space", "quota", "get", "cernbox")
 	if err != nil {

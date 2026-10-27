@@ -96,8 +96,6 @@ func TestControlRouting(t *testing.T) {
 	}
 }
 
-// TestListInvocationsDescribesArgs checks that the argument types of a typed
-// invocation reach the wire, so that the CLI can check and complete them.
 func TestListInvocationsDescribesArgs(t *testing.T) {
 	const id = "127.0.0.1:9002/typed"
 	set := invoke.NewSet()

@@ -105,8 +105,6 @@ func (s *switcher) ServerTime(ctx context.Context) (time.Time, error) {
 	return via(s, func(b backend.Backend) (time.Time, error) { return b.ServerTime(ctx) })
 }
 
-// The forwarders of the areas follow.
-
 type sFiles struct{ s *switcher }
 
 func (a sFiles) Stat(ctx context.Context, ref *provider.Reference) (*provider.ResourceInfo, error) {

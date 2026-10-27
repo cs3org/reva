@@ -23,13 +23,12 @@ import (
 	types "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
 )
 
-// ActorScope carries who impersonates the user of a token. It has no verifier,
-// so it authorizes nothing. It is a scope and not a JWT claim because the auth
-// cache and the token re-mints keep only the user and the scopes.
+// ActorScope carries who impersonates the user of a token. It authorizes
+// nothing. It is a scope, not a JWT claim, because the auth cache and the token
+// re-mints keep only the user and the scopes.
 const ActorScope = "actor"
 
-// AddActorScope records actor as the impersonator: a user id, or
-// "socket:<uid>" for a caller on the local-root socket.
+// AddActorScope records actor (a user id, or "socket:<uid>") as the impersonator.
 func AddActorScope(actor string, scopes map[string]*authpb.Scope) map[string]*authpb.Scope {
 	if scopes == nil {
 		scopes = make(map[string]*authpb.Scope)
@@ -40,8 +39,7 @@ func AddActorScope(actor string, scopes map[string]*authpb.Scope) map[string]*au
 	return scopes
 }
 
-// Actor returns the impersonator recorded in scopes, or "" for a token that
-// is not impersonated.
+// Actor returns the impersonator recorded in scopes, or "" if there is none.
 func Actor(scopes map[string]*authpb.Scope) string {
 	return string(scopes[ActorScope].GetResource().GetValue())
 }

@@ -44,7 +44,7 @@ import (
 // DefaultChunkSize is the size of a TUS part when nothing sets another one.
 const DefaultChunkSize = 8 << 20
 
-// Plane implements backend.DataPlane.
+// Plane implements backend.DataPlane over HTTP.
 type Plane struct {
 	client *http.Client
 	loc    backend.Locator

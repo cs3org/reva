@@ -32,7 +32,6 @@ import (
 	"github.com/cs3org/reva/v3/pkg/cli"
 )
 
-// nodeResult is the -o json form of the result of one node.
 type nodeResult struct {
 	Node   string          `json:"node"`
 	Result json.RawMessage `json:"result,omitempty"`
@@ -167,11 +166,9 @@ func writeResults(w, errW io.Writer, results []*adminpb.NodeResult) error {
 	return failedErr(failed, len(results))
 }
 
-// nodeColumn is the column of the node when the results come from several.
 const nodeColumn = "node"
 
-// withNode puts the node in the first column. It replaces a node field of
-// the result, which has the same value.
+// withNode replaces a node field of the result, which has the same value.
 func withNode(row *object, node string) {
 	row.keys = append([]string{nodeColumn}, slices.DeleteFunc(row.keys, func(k string) bool { return k == nodeColumn })...)
 	row.vals[nodeColumn] = node
@@ -184,9 +181,8 @@ func failedErr(failed, total int) error {
 	return fmt.Errorf("the invocation failed on %d of %d instances", failed, total)
 }
 
-// streamWriter writes the results of a streaming invocation as they come.
-// With -o table the columns are fixed by the first row, because the rows
-// above are already printed: a key that comes later is not shown.
+// streamWriter fixes the columns with the first row, because the rows above
+// are already printed. A key that comes later is not shown.
 type streamWriter struct {
 	w, errW io.Writer
 	node    bool
@@ -272,8 +268,7 @@ func (s *streamWriter) line(cells []string) {
 
 func (s *streamWriter) err() error { return failedErr(s.failed, s.total) }
 
-// object is a JSON object that keeps the order of its keys, so that the
-// columns follow the result and not the alphabet.
+// object keeps the order of its keys, so that the columns follow the result.
 type object struct {
 	keys []string
 	vals map[string]any
@@ -302,8 +297,7 @@ func (o *object) MarshalJSON() ([]byte, error) {
 	return b.Bytes(), nil
 }
 
-// decodeOrdered decodes one JSON value. An object is an *object, an array is
-// a []any and a number is a json.Number, so that it prints as it came.
+// decodeOrdered keeps numbers as json.Number, so that they print as they came.
 func decodeOrdered(b []byte) (any, error) {
 	dec := json.NewDecoder(bytes.NewReader(b))
 	dec.UseNumber()
@@ -350,9 +344,6 @@ func decodeValue(dec *json.Decoder) (any, error) {
 	return tok, nil
 }
 
-// rowsOf returns the rows of a list result: an array of objects, or an
-// object with exactly one array of objects. rest is the other fields of that
-// object.
 func rowsOf(v any) (rows []*object, rest *object, ok bool) {
 	if a, isArray := v.([]any); isArray {
 		rows, ok = objects(a)
@@ -386,7 +377,6 @@ func rowsOf(v any) (rows []*object, rest *object, ok bool) {
 	return rows, rest, true
 }
 
-// objects returns the elements of a, if they are all objects.
 func objects(a []any) ([]*object, bool) {
 	out := make([]*object, 0, len(a))
 	for _, e := range a {
@@ -399,8 +389,6 @@ func objects(a []any) ([]*object, bool) {
 	return out, true
 }
 
-// asObject makes a scalar result an object with one field, so that it
-// prints as a key/value line.
 func asObject(v any) *object {
 	if o, ok := v.(*object); ok {
 		return o
@@ -408,8 +396,6 @@ func asObject(v any) *object {
 	return &object{keys: []string{"result"}, vals: map[string]any{"result": v}}
 }
 
-// flatten returns the cells of o as strings. A nested object becomes keys
-// joined with dots.
 func flatten(o *object) *object {
 	out := &object{vals: map[string]any{}}
 	var walk func(prefix string, o *object)
@@ -428,8 +414,6 @@ func flatten(o *object) *object {
 	return out
 }
 
-// cell is a value as a person reads it: a list of scalars is joined with
-// commas, and a list of objects is compact JSON.
 func cell(v any) string {
 	switch v := v.(type) {
 	case nil:

@@ -28,8 +28,8 @@ import (
 
 var logsSpec = &adminpb.InvocationSpec{Name: "logs", Kind: "readonly", Streaming: true}
 
-// lines returns the non-empty lines of s, with the spaces of each one
-// squeezed, so that a test does not depend on the column widths.
+// lines squeezes the spaces of each line, so that a test does not depend on
+// the column widths.
 func lines(s string) []string {
 	var out []string
 	for l := range strings.SplitSeq(s, "\n") {
@@ -50,7 +50,6 @@ func TestInvokeListIsATable(t *testing.T) {
 		t.Fatal(err)
 	}
 	got := strings.Join(lines(out), "\n")
-	// The columns are in the order of the result, with the node first.
 	for _, want := range []string{
 		"| NODE | TIME | LEVEL | CTX.USER | EXTRA |",
 		"| a:1/svc | t1 | info | alice | |",

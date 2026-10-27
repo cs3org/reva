@@ -31,8 +31,7 @@ import (
 	"github.com/spf13/cobra"
 )
 
-// minQuery is the shortest query of find and of the completion, because a
-// short query can match a large part of about 1M users.
+// minQuery is the shortest query, because a short query can match a large part of about 1M users.
 const minQuery = 3
 
 func userCommand(rt *cli.Runtime) *cobra.Command {

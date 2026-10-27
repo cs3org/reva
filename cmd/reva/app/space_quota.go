@@ -19,10 +19,9 @@
 package revacmd
 
 import (
+	"cmp"
 	"context"
-	"errors"
 	"fmt"
-	"io"
 	"slices"
 	"strconv"
 	"strings"
@@ -39,13 +38,6 @@ const spaceRefHelp = "A space is a path, a space id (storage$id) or the name of 
 
 func spaceQuotaCommand(rt *cli.Runtime) *cobra.Command {
 	cmd := &cobra.Command{Use: "quota", Short: "Show and set the quota of spaces"}
-	spaces := func(ctx context.Context) (adminpb.SpacesAdminClient, context.Context, error) {
-		c, ctx, err := rt.Admin(ctx)
-		if err != nil {
-			return nil, nil, err
-		}
-		return adminpb.NewSpacesAdminClient(c.Conn), ctx, nil
-	}
 
 	get := &cobra.Command{
 		Use:   "get [<space>]",
@@ -77,14 +69,13 @@ func spaceQuotaCommand(rt *cli.Runtime) *cobra.Command {
 				}
 				return &adminpb.SpaceQuota{Root: arg, Quota: &provider.Quota{QuotaMaxBytes: q.Total, RemainingBytes: q.Total - min(q.Used, q.Total)}, UsedBytes: q.Used}, nil
 			}
-			// The lookup is the read itself: GetSpaceQuota also finds the
-			// spaces that are not in the catalogue, such as homes.
+			// GetSpaceQuota also finds the spaces that are not in the catalogue, such as homes.
 			lookup := func(ctx context.Context) (*adminpb.SpaceQuota, error) {
-				c, ctx, err := spaces(ctx)
+				c, ctx, err := spacesAdmin(ctx, rt)
 				if err != nil {
 					return nil, err
 				}
-				return c.GetSpaceQuota(ctx, &adminpb.GetSpaceQuotaRequest{Ref: spaceRefArg(arg)})
+				return c.GetSpaceQuota(ctx, &adminpb.GetSpaceQuotaRequest{Ref: spaceRef(arg)})
 			}
 			q, err := cli.OnNotFound(cmd.Context(), cli.Fallback{Gate: rt, What: "space " + arg}, userCall, lookup, nil)
 			if err != nil {
@@ -113,11 +104,11 @@ func spaceQuotaCommand(rt *cli.Runtime) *cobra.Command {
 		RunE: func(cmd *cobra.Command, args []string) error {
 			var size byteSize
 			_ = size.Set(args[1])
-			c, ctx, err := spaces(cmd.Context())
+			c, ctx, err := spacesAdmin(cmd.Context(), rt)
 			if err != nil {
 				return err
 			}
-			ref := spaceRefArg(args[0])
+			ref := spaceRef(args[0])
 			old, err := c.GetSpaceQuota(ctx, &adminpb.GetSpaceQuotaRequest{Ref: ref})
 			if err != nil {
 				return err
@@ -153,7 +144,7 @@ func spaceQuotaCommand(rt *cli.Runtime) *cobra.Command {
 		Short: "List the quotas of the spaces that the storage keeps",
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			c, ctx, err := spaces(cmd.Context())
+			c, ctx, err := spacesAdmin(cmd.Context(), rt)
 			if err != nil {
 				return err
 			}
@@ -161,16 +152,9 @@ func spaceQuotaCommand(rt *cli.Runtime) *cobra.Command {
 			if err != nil {
 				return err
 			}
-			var qs []*adminpb.SpaceQuota
-			for {
-				q, err := stream.Recv()
-				if errors.Is(err, io.EOF) {
-					break
-				}
-				if err != nil {
-					return err
-				}
-				qs = append(qs, q)
+			qs, err := recvAll(stream)
+			if err != nil {
+				return err
 			}
 			slices.SortFunc(qs, func(a, b *adminpb.SpaceQuota) int { return strings.Compare(a.Root, b.Root) })
 			t := quotaTable(qs)
@@ -182,18 +166,6 @@ func spaceQuotaCommand(rt *cli.Runtime) *cobra.Command {
 
 	cmd.AddCommand(get, cli.AdminCommand(set), cli.AdminCommand(list))
 	return cmd
-}
-
-// spaceRefArg reads the space argument: a path, a space id, which has a $,
-// or a project name.
-func spaceRefArg(s string) *adminpb.SpaceRef {
-	switch {
-	case strings.HasPrefix(s, "/"):
-		return &adminpb.SpaceRef{Ref: &adminpb.SpaceRef_Path{Path: s}}
-	case strings.Contains(s, "$"):
-		return &adminpb.SpaceRef{Ref: &adminpb.SpaceRef_Id{Id: &provider.StorageSpaceId{OpaqueId: s}}}
-	}
-	return &adminpb.SpaceRef{Ref: &adminpb.SpaceRef_Name{Name: s}}
 }
 
 func quotaTable(qs []*adminpb.SpaceQuota) cli.Table {
@@ -210,12 +182,11 @@ func quotaTable(qs []*adminpb.SpaceQuota) cli.Table {
 		if l.GetQuotaMaxFiles() > 0 || q.UsedFiles > 0 {
 			files = strconv.FormatUint(q.UsedFiles, 10) + "/" + strconv.FormatUint(l.GetQuotaMaxFiles(), 10)
 		}
-		t.Rows = append(t.Rows, []string{q.Root, humanize.Bytes(q.UsedBytes), size(l.GetQuotaMaxBytes()), size(q.PhysicalMaxBytes), files, dash(q.Form), dash(q.MountId)})
+		t.Rows = append(t.Rows, []string{q.Root, humanize.Bytes(q.UsedBytes), size(l.GetQuotaMaxBytes()), size(q.PhysicalMaxBytes), files, cmp.Or(q.Form, "-"), cmp.Or(q.MountId, "-")})
 	}
 	return t
 }
 
-// sizes shows logical bytes, and physical bytes when they are known.
 func sizes(logical, physical uint64) string {
 	s := fmt.Sprintf("%s (%d bytes)", humanize.Bytes(logical), logical)
 	if physical > 0 {
@@ -224,14 +195,7 @@ func sizes(logical, physical uint64) string {
 	return s
 }
 
-func dash(s string) string {
-	if s == "" {
-		return "-"
-	}
-	return s
-}
-
-// byteSize is a flag value in bytes that takes human sizes, such as 10G.
+// byteSize is a flag value that takes sizes such as 10G.
 type byteSize uint64
 
 func (b *byteSize) String() string { return strconv.FormatUint(uint64(*b), 10) }

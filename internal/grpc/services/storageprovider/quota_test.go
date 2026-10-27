@@ -28,7 +28,6 @@ import (
 	"github.com/cs3org/reva/v3/pkg/storage"
 )
 
-// quotaFS keeps quotas by space root and records the refs it is given.
 type quotaFS struct {
 	storage.FS
 	quotas map[string]*storage.SpaceQuota
@@ -93,7 +92,6 @@ func TestQuotaInvocations(t *testing.T) {
 		t.Error("quota_set without a value must be refused")
 	}
 
-	// the value that is not given does not change
 	res, err = s.Invoke(ctx, "quota_set", map[string]any{"root": "/eos/user/e/einstein", "space_type": "personal", "max_bytes": "2000"})
 	if err != nil || res["max_bytes"] != uint64(2000) || res["max_files"] != uint64(100) || res["physical_max_bytes"] != uint64(4000) {
 		t.Fatalf("quota_set: %v %v", res, err)

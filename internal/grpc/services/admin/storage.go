@@ -61,8 +61,7 @@ func (a *storageAdmin) ListRoutes(ctx context.Context, _ *adminpb.ListRoutesRequ
 
 func (a *storageAdmin) ResolvePath(ctx context.Context, req *adminpb.ResolvePathRequest) (*adminpb.ResolvePathResponse, error) {
 	ref := req.GetRef()
-	// A path under a resource id, or an id alone, would need the registry to
-	// resolve the id first, and its resolve invocation takes only a path.
+	// The resolve invocation of the registry takes only a path.
 	if ref.GetResourceId() != nil {
 		return nil, status.Error(codes.InvalidArgument, "admin: only a path reference can be resolved, not a resource id")
 	}
@@ -91,8 +90,7 @@ func (a *storageAdmin) ResolvePath(ctx context.Context, req *adminpb.ResolvePath
 			ProviderPath: m.MountPath,
 			Address:      m.Address,
 		}}
-		// A mount with no live instance keeps no nodes: its address still
-		// shows where the registry sends the calls.
+		// A mount with no live instance has no nodes, but its address still shows where the registry sends calls.
 		if peps, err := client.ResolveMetadata(reg, storageProviderService, map[string]string{registry.MetaMountID: m.MountID}); err == nil {
 			for _, ep := range peps {
 				p.ProviderNodes = append(p.ProviderNodes, ep.Node)
@@ -108,8 +106,7 @@ func (a *storageAdmin) AddRoute(ctx context.Context, req *adminpb.AddRouteReques
 	if in.GetProviderPath() == "" || in.GetProviderId() == "" {
 		return nil, status.Error(codes.InvalidArgument, "admin: provider_path and provider_id are required")
 	}
-	// The routing table keeps only the mount id, so an address would be
-	// dropped without a word.
+	// The routing table keeps only the mount id: an address would be dropped silently.
 	if in.GetAddress() != "" {
 		return nil, status.Error(codes.InvalidArgument, "admin: a route has no address: the rules of the storage registry give it")
 	}
@@ -149,9 +146,7 @@ func routeInfo(r storage.Route) *registrypb.ProviderInfo {
 	return &registrypb.ProviderInfo{ProviderPath: r.Path, ProviderId: r.MountID}
 }
 
-// invokeRegistry runs an invocation on one storage registry instance and
-// decodes its JSON result into out. The results are the plain JSON of the
-// storage package, not protojson, so they are not decoded into a message.
+// The results are the plain JSON of the storage package, not protojson.
 func invokeRegistry(ctx context.Context, eps []client.Endpoint, invocation string, args map[string]string, out any) error {
 	res, err := invokeOne(ctx, eps, invocation, args)
 	if err != nil {
@@ -163,13 +158,10 @@ func invokeRegistry(ctx context.Context, eps []client.Endpoint, invocation strin
 	return nil
 }
 
-// reloadRoutes runs route_reload on every storage registry instance and
-// returns the instances that failed. The change is written already, thus a
-// failure is not an error of the RPC: the CLI must tell the operator which
-// instances still serve the old table.
+// reloadRoutes returns the instances that failed to reload. The change is already written,
+// so a failure is not an error of the RPC: the operator must know which instances are stale.
 func reloadRoutes(ctx context.Context, eps []client.Endpoint) []*adminpb.StaleInstance {
-	// A caller that goes away after the write must not leave every instance
-	// stale. PerNodeTimeout still bounds each reload.
+	// A caller that leaves after the write must not leave every instance stale.
 	rs, _ := invokeAll(context.WithoutCancel(ctx), eps, "route_reload", nil)
 	var stale []*adminpb.StaleInstance
 	for _, r := range rs {
@@ -177,7 +169,7 @@ func reloadRoutes(ctx context.Context, eps []client.Endpoint) []*adminpb.StaleIn
 			continue
 		}
 		code := r.Code
-		// A node that fails without a code sends 0, as in nodeStatus.
+		// A node that fails without a code sends 0.
 		if code == codes.OK {
 			code = codes.Unknown
 		}
@@ -186,8 +178,7 @@ func reloadRoutes(ctx context.Context, eps []client.Endpoint) []*adminpb.StaleIn
 	return stale
 }
 
-// auditRoute records the stale instances, which the audit of the storage
-// registry cannot show.
+// The audit of the storage registry cannot show the stale instances.
 func auditRoute(ctx context.Context, action, path string, stale []*adminpb.StaleInstance, fields map[string]string) {
 	ev := admin.AuditEvent{Action: action, Actor: actorName(ctx), Target: path, Fields: fields}
 	if len(stale) > 0 {

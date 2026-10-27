@@ -42,16 +42,13 @@ import (
 	"google.golang.org/grpc/status"
 )
 
-// routeTable is the shared routing table of the fake storage registries.
 type routeTable struct {
 	mu     sync.Mutex
 	routes map[string]string
 	writes int
 }
 
-// fakeStorageRegistry is one storage registry instance: it resolves with its
-// own copy of the table, which changes only on route_reload, as in the
-// dynamic driver.
+// An instance resolves with its own copy of the table, which changes only on route_reload.
 type fakeStorageRegistry struct {
 	table    *routeTable
 	mu       sync.Mutex
@@ -130,9 +127,7 @@ func (f *fakeStorageRegistry) resolves(p string) string {
 	return f.live[p]
 }
 
-// storageFleet starts three storage registry instances on one control
-// channel, the third of which fails to reload, and registers storage
-// providers for the mounts eoshome-a (two instances) and eoshome-b.
+// The third registry instance fails to reload.
 func storageFleet(t *testing.T) (*storageAdmin, *routeTable, []*fakeStorageRegistry) {
 	t.Helper()
 	srv := grpc.NewServer()
@@ -143,7 +138,7 @@ func storageFleet(t *testing.T) (*storageAdmin, *routeTable, []*fakeStorageRegis
 	if err != nil {
 		t.Fatal(err)
 	}
-	// The first registry set in the process stays, so add to that one.
+	// The first registry set in the process stays.
 	service.SetGlobalRegistry(reg)
 	reg = service.GlobalRegistry()
 
@@ -179,8 +174,6 @@ func route(path, mountID string) *registrypb.ProviderInfo {
 	return &registrypb.ProviderInfo{ProviderPath: path, ProviderId: mountID}
 }
 
-// A route is written once, every registry reloads it, and the one that
-// cannot reload is reported as stale.
 func TestAddRouteReportsTheStaleRegistries(t *testing.T) {
 	a, table, regs := storageFleet(t)
 	ctx := context.Background()
@@ -253,7 +246,6 @@ func TestResolvePathGivesTheProviderNodes(t *testing.T) {
 	}
 }
 
-// The errtypes errors of the registry reach the caller with their gRPC code.
 func TestRouteErrorCodes(t *testing.T) {
 	a, table, _ := storageFleet(t)
 	ctx := context.Background()

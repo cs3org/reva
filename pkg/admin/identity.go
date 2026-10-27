@@ -37,14 +37,13 @@ import (
 	"github.com/cs3org/reva/v3/pkg/token/manager/jwt"
 )
 
-// actAsTokenLifetime is short because the token is used only for the calls of
-// one invocation, on the server, and is never given to a client.
+// The token is used only on the server, for the calls of one invocation.
 const actAsTokenLifetime = 5 * time.Minute
 
 // Lookup finds a user by id through the gateway. The groups are included,
 // because a storage can use them to decide, for example whether the user
-// administers a project. An id without an idp is what the share and project
-// tables keep, and the user providers match it on the opaque id alone.
+// administers a project. The share and project tables keep ids without an idp: the user
+// providers match them on the opaque id alone.
 func Lookup(ctx context.Context, id *userpb.UserId) (*userpb.User, error) {
 	if id.GetOpaqueId() == "" {
 		return nil, errtypes.BadRequest("admin: no user id given")
@@ -67,9 +66,8 @@ func Lookup(ctx context.Context, id *userpb.UserId) (*userpb.User, error) {
 	}
 }
 
-// As returns ctx acting as u: a call made with it is a call by u. An admin
-// invocation needs it because no CS3 endpoint accepts the admin token. The
-// token has the owner scope and is signed with the shared JWT secret.
+// As returns ctx acting as u. No CS3 endpoint accepts the admin token, so an
+// invocation mints a short token with the owner scope for u.
 func As(ctx context.Context, u *userpb.User) (context.Context, error) {
 	secret := sharedconf.GetJWTSecret("")
 	if secret == "" {
@@ -132,8 +130,7 @@ func ActAsFirst(ctx context.Context, users []*userpb.UserId, fn func(uctx contex
 	return nil, err
 }
 
-// Users keeps one context per user for the length of one invocation, because
-// a list often acts as the same few users many times. Ctx is the context of
+// Users caches one context per user for one invocation. Ctx is the context of
 // the invocation.
 type Users struct {
 	Ctx  context.Context
@@ -163,9 +160,8 @@ func (c *Users) As(id *userpb.UserId) context.Context {
 	return uctx
 }
 
-// ParseExpiry parses the expiration argument of an invocation: a date at
-// midnight local time, an RFC 3339 time, or none, which is returned as a zero
-// timestamp.
+// ParseExpiry parses a date (midnight local time), an RFC 3339 time, or "none"
+// (a zero timestamp).
 func ParseExpiry(v string) (*typespb.Timestamp, error) {
 	if v == "none" {
 		return &typespb.Timestamp{}, nil

@@ -26,20 +26,17 @@ import (
 
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
+	"github.com/cs3org/reva/v3/pkg/errtypes"
 	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/proto"
 )
 
-// UserID is an invocation argument that names a user by its CS3 id, because
-// a username can be reused and only the id with its idp names one account.
-// It takes the protojson of a UserId. A plain string is the opaque id, so
-// that reva invoke can be typed by hand. An empty value names no user.
+// UserID is an invocation argument that names a user by its CS3 id, because a username
+// can be reused. It takes the protojson of a UserId, or a plain opaque id so that
+// "reva invoke" can be typed by hand. An empty value names no user.
 type UserID struct {
 	id *userpb.UserId
 }
-
-// NewUserID returns the argument of id.
-func NewUserID(id *userpb.UserId) UserID { return UserID{id: id} }
 
 // ID returns the CS3 id, or nil for no user.
 func (u UserID) ID() *userpb.UserId {
@@ -52,10 +49,8 @@ func (u UserID) ID() *userpb.UserId {
 // IsZero reports whether u names no user.
 func (u UserID) IsZero() bool { return u.ID() == nil }
 
-// String returns the opaque id, for messages and the audit.
 func (u UserID) String() string { return u.id.GetOpaqueId() }
 
-// UnmarshalText implements encoding.TextUnmarshaler.
 func (u *UserID) UnmarshalText(b []byte) error {
 	s := strings.TrimSpace(string(b))
 	if !strings.HasPrefix(s, "{") {
@@ -76,8 +71,6 @@ func (u *UserID) UnmarshalText(b []byte) error {
 	return nil
 }
 
-// MarshalText implements encoding.TextMarshaler, as the protojson of the
-// UserId.
 func (u UserID) MarshalText() ([]byte, error) {
 	if u.IsZero() {
 		return nil, nil
@@ -85,16 +78,14 @@ func (u UserID) MarshalText() ([]byte, error) {
 	return protojson.Marshal(u.id)
 }
 
-// UserArg returns the invocation argument that names id, or "" for no user,
-// which the callers leave out of the arguments.
+// UserArg returns the invocation argument that names id, or "" for no user.
 func UserArg(id *userpb.UserId) string {
-	b, _ := NewUserID(id).MarshalText()
+	b, _ := UserID{id: id}.MarshalText()
 	return string(b)
 }
 
-// Grantee is an invocation argument that names the grantee of a share. It
-// takes the protojson of a CS3 Grantee. A plain string is the opaque id of a
-// user. An empty value names no grantee.
+// Grantee is an invocation argument that names the grantee of a share. It takes the
+// protojson of a CS3 Grantee, or a plain opaque id of a user. An empty value names no grantee.
 type Grantee struct {
 	g *provider.Grantee
 }
@@ -110,10 +101,8 @@ func (g Grantee) Get() *provider.Grantee {
 // IsZero reports whether g names no grantee.
 func (g Grantee) IsZero() bool { return g.Get() == nil }
 
-// String returns the opaque id of the user or of the group.
 func (g Grantee) String() string { return granteeOpaqueID(g.g) }
 
-// UnmarshalText implements encoding.TextUnmarshaler.
 func (g *Grantee) UnmarshalText(b []byte) error {
 	s := strings.TrimSpace(string(b))
 	if !strings.HasPrefix(s, "{") {
@@ -134,8 +123,6 @@ func (g *Grantee) UnmarshalText(b []byte) error {
 	return nil
 }
 
-// MarshalText implements encoding.TextMarshaler, as the protojson of the
-// Grantee.
 func (g Grantee) MarshalText() ([]byte, error) {
 	if g.IsZero() {
 		return nil, nil
@@ -159,8 +146,8 @@ func granteeOpaqueID(g *provider.Grantee) string {
 	return ""
 }
 
-// Candidates returns the users to act as, in order, without the empty and the
-// repeated ones: the stored owner and initiator of a share are often the same.
+// Candidates returns the users to act as, in order, without the empty and the repeated
+// ones: the owner and the initiator of a share are often the same.
 func Candidates(ids ...*userpb.UserId) []*userpb.UserId {
 	out := make([]*userpb.UserId, 0, len(ids))
 	for _, id := range ids {
@@ -169,4 +156,15 @@ func Candidates(ids ...*userpb.UserId) []*userpb.UserId {
 		}
 	}
 	return out
+}
+
+// ParseResourceID reads "storage_id!opaque_id", or "storage_id$space_id!opaque_id" for the
+// spaces. The share tables match the storage id and the opaque id only.
+func ParseResourceID(s string) (*provider.ResourceId, error) {
+	storage, opaque, ok := strings.Cut(s, "!")
+	if !ok || storage == "" || opaque == "" {
+		return nil, errtypes.BadRequest(fmt.Sprintf("invalid resource id %q: use storage_id!opaque_id", s))
+	}
+	storage, space, _ := strings.Cut(storage, "$")
+	return &provider.ResourceId{StorageId: storage, SpaceId: space, OpaqueId: opaque}, nil
 }

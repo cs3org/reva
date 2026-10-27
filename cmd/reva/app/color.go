@@ -36,13 +36,11 @@ var (
 	errorColor   = text.Colors{text.Bold, text.FgRed}
 )
 
-// flagLine matches a line of pflag's FlagUsages: the flag names, the value
-// type if any, and the description after a gap of two or more spaces.
+// flagLine matches a line of the flag usages of pflag.
 var flagLine = regexp.MustCompile(`^(\s+)((?:-\w, )?--[\w-]+)( \w+)?(\s{2,}.*)$`)
 
-// colorHelp colors the help of cmd and of all its children: the headings,
-// the command names and the flags. It edits the default cobra template
-// instead of a copy, so a template change in cobra only loses some colors.
+// colorHelp edits the default cobra template instead of a copy, so a template
+// change in cobra only loses some colors.
 func colorHelp(cmd *cobra.Command) {
 	if !cli.UseColor(os.Stdout) {
 		return

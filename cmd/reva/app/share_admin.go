@@ -41,7 +41,6 @@ import (
 	"google.golang.org/protobuf/proto"
 )
 
-// shareListOptions are the operator options of `share list` and `link list`.
 type shareListOptions struct {
 	owner, space, path    string
 	all, orphans, expired bool
@@ -240,8 +239,6 @@ func linkMarkOrphanCommand(rt *cli.Runtime) *cobra.Command {
 	})
 }
 
-// shareOperation runs an operator verb on one share, after a confirmation,
-// and prints the share.
 func shareOperation(cmd *cobra.Command, rt *cli.Runtime, prompt string, call func(context.Context, adminpb.SharesAdminClient) (*adminpb.AdminShare, error)) error {
 	s, err := operation(cmd, rt, prompt, call)
 	if err != nil {
@@ -342,8 +339,6 @@ func shareMoveCommand(rt *cli.Runtime) *cobra.Command {
 	return cli.AdminCommand(cmd)
 }
 
-// sharesAdmin returns a client of the SharesAdmin service and ctx for an
-// admin-plane call.
 func sharesAdmin(ctx context.Context, rt *cli.Runtime) (adminpb.SharesAdminClient, context.Context, error) {
 	c, ctx, err := rt.Admin(ctx)
 	if err != nil {
@@ -366,22 +361,14 @@ func recvAll[M any](stream grpc.ServerStreamingClient[M]) ([]*M, error) {
 	}
 }
 
-// adminSpaceRef reads --space: a path, a space id (storage$space) or a
-// project name.
 func adminSpaceRef(v string) *adminpb.SpaceRef {
-	switch {
-	case v == "":
+	if v == "" {
 		return nil
-	case strings.HasPrefix(v, "/"):
-		return &adminpb.SpaceRef{Ref: &adminpb.SpaceRef_Path{Path: v}}
-	case strings.Contains(v, "$"):
-		return &adminpb.SpaceRef{Ref: &adminpb.SpaceRef_Id{Id: &provider.StorageSpaceId{OpaqueId: v}}}
 	}
-	return &adminpb.SpaceRef{Ref: &adminpb.SpaceRef_Name{Name: v}}
+	return spaceRef(v)
 }
 
-// adminLinkRef reads a link argument of an operator verb. The sql manager,
-// which the admin operations need, uses numbers as ids.
+// The sql manager, which the admin operations need, uses numbers as ids.
 func adminLinkRef(arg string) *link.PublicShareReference {
 	if strings.Trim(arg, "0123456789") == "" {
 		return publicShareRef(arg)
@@ -389,10 +376,8 @@ func adminLinkRef(arg string) *link.PublicShareReference {
 	return &link.PublicShareReference{Spec: &link.PublicShareReference_Token{Token: arg}}
 }
 
-// resolveUser returns the CS3 id of the user that the operator names, or nil
-// for no name. The admin services take the full id, with its idp and type,
-// because a username does not name one account; the user plane resolves it
-// over either transport.
+// resolveUser returns the CS3 id of the named user, or nil for no name. The
+// admin services need the full id because a username does not name one account.
 func resolveUser(ctx context.Context, rt *cli.Runtime, name string) (*userpb.UserId, error) {
 	if name == "" {
 		return nil, nil
@@ -418,8 +403,6 @@ func only(b bool) adminpb.ShareSelection {
 	return adminpb.ShareSelection_SHARE_SELECTION_DEFAULT
 }
 
-// renderAdminShares writes the table of the user plane, with the ORPHAN and
-// PATH columns when a share has them.
 func renderAdminShares(w io.Writer, shares []*adminpb.AdminShare) {
 	var orphan, path bool
 	for _, s := range shares {
@@ -444,8 +427,6 @@ func renderAdminLinks(w io.Writer, links []*adminpb.AdminPublicShare) {
 	renderRows(w, withAdminColumns(linkHeader, orphan, path, "Orphan", "Path"), rows)
 }
 
-// withAdminColumns adds to r the cells of the ORPHAN and PATH columns, when
-// the table has them.
 func withAdminColumns(r table.Row, orphan, path bool, orphanCell, pathCell string) table.Row {
 	r = append(table.Row{}, r...)
 	if orphan {
@@ -501,8 +482,7 @@ func isAlreadyExists(err error) bool {
 	return status.Code(err) == codes.AlreadyExists
 }
 
-// existingShare returns the share of grantee on the resource id, or nil if
-// the caller cannot see it.
+// existingShare returns nil if the caller cannot see a share of grantee.
 func existingShare(ctx context.Context, b backend.Backend, id *provider.ResourceId, grantee *provider.Grantee) (*collaboration.Share, error) {
 	shares, err := b.Shares().List(ctx, id)
 	if err != nil {

@@ -51,7 +51,6 @@ func (g *fakeGate) Warnf(format string, args ...any) {
 
 type share struct{ id, owner string }
 
-// shares is the fake share store of the admin plane.
 var shares = map[string]share{"4711": {"4711", "bob"}}
 
 func userUpdate(err error) func(context.Context) (*share, error) {
@@ -75,12 +74,11 @@ func TestOnNotFound(t *testing.T) {
 	authErr := status.Error(codes.Unauthenticated, "token expired")
 
 	for _, tc := range []struct {
-		name       string
-		id         string
-		userErr    error
-		admin      bool
-		confirmErr error
-		// want* describe the expected outcome.
+		name        string
+		id          string
+		userErr     error
+		admin       bool
+		confirmErr  error
 		wantErr     error
 		wantAdmin   bool
 		wantLookup  bool

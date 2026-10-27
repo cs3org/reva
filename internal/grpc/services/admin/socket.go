@@ -198,7 +198,7 @@ func (s *svc) authorizeLocalRoot(ctx context.Context, method string) (context.Co
 	}
 	who := osUserName(cred.uid)
 	fields := map[string]string{"method": method, "uid": strconv.Itoa(int(cred.uid)), "pid": strconv.Itoa(int(cred.pid))}
-	// Usually the OS user is root, so the sudo user is the only hint of the
+	// The OS user is usually root, so the sudo user is the only hint of the
 	// person. The client sends it, so it can be false.
 	if su := admin.Header(ctx, admin.SudoUserHeader); su != "" {
 		fields["sudo_user"] = su

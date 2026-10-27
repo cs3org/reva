@@ -235,7 +235,6 @@ func TestOnlyElevatePersists(t *testing.T) {
 		t.Fatalf("elevate did not store the admin token: %v", err)
 	}
 
-	// The same login uses the stored token.
 	rt = &Runtime{adminHost: host, insecure: true, tokenValue: login}
 	if _, _, err := rt.Admin(context.Background()); err != nil {
 		t.Fatal(err)
@@ -245,7 +244,6 @@ func TestOnlyElevatePersists(t *testing.T) {
 		t.Errorf("step-ups = %d, want only the one of elevate", f.requestAdmin)
 	}
 
-	// Another login does not.
 	rt = &Runtime{adminHost: host, insecure: true, tokenValue: token(t, "bob", time.Now().Add(2*time.Hour))}
 	if _, _, err := rt.Admin(context.Background()); err != nil {
 		t.Fatal(err)

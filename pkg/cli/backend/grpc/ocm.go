@@ -21,6 +21,7 @@ package grpc
 import (
 	"context"
 
+	gateway "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	invitepb "github.com/cs3org/go-cs3apis/cs3/ocm/invite/v1beta1"
 	ocmprovider "github.com/cs3org/go-cs3apis/cs3/ocm/provider/v1beta1"
@@ -40,11 +41,7 @@ func ocmShareRef(id string) *ocm.ShareReference {
 }
 
 func (o ocmArea) CreateInvite(ctx context.Context, description string) (*invitepb.InviteToken, error) {
-	c, ctx, err := o.b.gw(ctx)
-	if err != nil {
-		return nil, err
-	}
-	res, err := check(c.GenerateInviteToken(ctx, &invitepb.GenerateInviteTokenRequest{Description: description}))
+	res, err := call(ctx, o.b, gateway.GatewayAPIClient.GenerateInviteToken, &invitepb.GenerateInviteTokenRequest{Description: description})
 	if err != nil {
 		return nil, err
 	}
@@ -52,11 +49,7 @@ func (o ocmArea) CreateInvite(ctx context.Context, description string) (*invitep
 }
 
 func (o ocmArea) Invites(ctx context.Context) ([]*invitepb.InviteToken, error) {
-	c, ctx, err := o.b.gw(ctx)
-	if err != nil {
-		return nil, err
-	}
-	res, err := check(c.ListInviteTokens(ctx, &invitepb.ListInviteTokensRequest{}))
+	res, err := call(ctx, o.b, gateway.GatewayAPIClient.ListInviteTokens, &invitepb.ListInviteTokensRequest{})
 	if err != nil {
 		return nil, err
 	}
@@ -80,11 +73,7 @@ func (o ocmArea) AcceptInvite(ctx context.Context, token, domain string) error {
 }
 
 func (o ocmArea) Contacts(ctx context.Context, filter string) ([]*userpb.User, error) {
-	c, ctx, err := o.b.gw(ctx)
-	if err != nil {
-		return nil, err
-	}
-	res, err := check(c.FindAcceptedUsers(ctx, &invitepb.FindAcceptedUsersRequest{Filter: filter}))
+	res, err := call(ctx, o.b, gateway.GatewayAPIClient.FindAcceptedUsers, &invitepb.FindAcceptedUsersRequest{Filter: filter})
 	if err != nil {
 		return nil, err
 	}
@@ -92,20 +81,12 @@ func (o ocmArea) Contacts(ctx context.Context, filter string) ([]*userpb.User, e
 }
 
 func (o ocmArea) RemoveContact(ctx context.Context, id *userpb.UserId) error {
-	c, ctx, err := o.b.gw(ctx)
-	if err != nil {
-		return err
-	}
-	_, err = check(c.DeleteAcceptedUser(ctx, &invitepb.DeleteAcceptedUserRequest{RemoteUserId: id}))
+	_, err := call(ctx, o.b, gateway.GatewayAPIClient.DeleteAcceptedUser, &invitepb.DeleteAcceptedUserRequest{RemoteUserId: id})
 	return err
 }
 
 func (o ocmArea) Providers(ctx context.Context) ([]*ocmprovider.ProviderInfo, error) {
-	c, ctx, err := o.b.gw(ctx)
-	if err != nil {
-		return nil, err
-	}
-	res, err := check(c.ListAllProviders(ctx, &ocmprovider.ListAllProvidersRequest{}))
+	res, err := call(ctx, o.b, gateway.GatewayAPIClient.ListAllProviders, &ocmprovider.ListAllProvidersRequest{})
 	if err != nil {
 		return nil, err
 	}
@@ -142,7 +123,7 @@ func (o ocmArea) CreateShare(ctx context.Context, ref *provider.Reference, grant
 	}
 	res, err := check(c.CreateOCMShare(ctx, &ocm.CreateOCMShareRequest{
 		ResourceId: stat.Info.Id,
-		// Only user grantees are supported for now.
+		// Only user grantees are supported.
 		Grantee: &provider.Grantee{
 			Type: provider.GranteeType_GRANTEE_TYPE_USER,
 			Id:   &provider.Grantee_UserId{UserId: remote.RemoteUser.Id},
@@ -157,15 +138,11 @@ func (o ocmArea) CreateShare(ctx context.Context, ref *provider.Reference, grant
 }
 
 func (o ocmArea) Shares(ctx context.Context, resource *provider.ResourceId) ([]*ocm.Share, error) {
-	c, ctx, err := o.b.gw(ctx)
-	if err != nil {
-		return nil, err
-	}
 	req := &ocm.ListOCMSharesRequest{}
 	if resource != nil {
 		req.Filters = []*ocm.ListOCMSharesRequest_Filter{ocmshare.ResourceIDFilter(resource)}
 	}
-	res, err := check(c.ListOCMShares(ctx, req))
+	res, err := call(ctx, o.b, gateway.GatewayAPIClient.ListOCMShares, req)
 	if err != nil {
 		return nil, err
 	}
@@ -173,11 +150,7 @@ func (o ocmArea) Shares(ctx context.Context, resource *provider.ResourceId) ([]*
 }
 
 func (o ocmArea) GetShare(ctx context.Context, id string) (*ocm.Share, error) {
-	c, ctx, err := o.b.gw(ctx)
-	if err != nil {
-		return nil, err
-	}
-	res, err := check(c.GetOCMShare(ctx, &ocm.GetOCMShareRequest{Ref: ocmShareRef(id)}))
+	res, err := call(ctx, o.b, gateway.GatewayAPIClient.GetOCMShare, &ocm.GetOCMShareRequest{Ref: ocmShareRef(id)})
 	if err != nil {
 		return nil, err
 	}
@@ -185,29 +158,17 @@ func (o ocmArea) GetShare(ctx context.Context, id string) (*ocm.Share, error) {
 }
 
 func (o ocmArea) UpdateShare(ctx context.Context, req *ocm.UpdateOCMShareRequest) error {
-	c, ctx, err := o.b.gw(ctx)
-	if err != nil {
-		return err
-	}
-	_, err = check(c.UpdateOCMShare(ctx, req))
+	_, err := call(ctx, o.b, gateway.GatewayAPIClient.UpdateOCMShare, req)
 	return err
 }
 
 func (o ocmArea) RemoveShare(ctx context.Context, id string) error {
-	c, ctx, err := o.b.gw(ctx)
-	if err != nil {
-		return err
-	}
-	_, err = check(c.RemoveOCMShare(ctx, &ocm.RemoveOCMShareRequest{Ref: ocmShareRef(id)}))
+	_, err := call(ctx, o.b, gateway.GatewayAPIClient.RemoveOCMShare, &ocm.RemoveOCMShareRequest{Ref: ocmShareRef(id)})
 	return err
 }
 
 func (o ocmArea) Received(ctx context.Context) ([]*ocm.ReceivedShare, error) {
-	c, ctx, err := o.b.gw(ctx)
-	if err != nil {
-		return nil, err
-	}
-	res, err := check(c.ListReceivedOCMShares(ctx, &ocm.ListReceivedOCMSharesRequest{}))
+	res, err := call(ctx, o.b, gateway.GatewayAPIClient.ListReceivedOCMShares, &ocm.ListReceivedOCMSharesRequest{})
 	if err != nil {
 		return nil, err
 	}
@@ -215,11 +176,7 @@ func (o ocmArea) Received(ctx context.Context) ([]*ocm.ReceivedShare, error) {
 }
 
 func (o ocmArea) GetReceived(ctx context.Context, id string) (*ocm.ReceivedShare, error) {
-	c, ctx, err := o.b.gw(ctx)
-	if err != nil {
-		return nil, err
-	}
-	res, err := check(c.GetReceivedOCMShare(ctx, &ocm.GetReceivedOCMShareRequest{Ref: ocmShareRef(id)}))
+	res, err := call(ctx, o.b, gateway.GatewayAPIClient.GetReceivedOCMShare, &ocm.GetReceivedOCMShareRequest{Ref: ocmShareRef(id)})
 	if err != nil {
 		return nil, err
 	}
@@ -245,10 +202,6 @@ func (o ocmArea) UpdateReceived(ctx context.Context, id string, state ocm.ShareS
 }
 
 func (b *Backend) ListTransfers(ctx context.Context, shareID string) ([]*datatx.TxInfo, error) {
-	c, ctx, err := b.gw(ctx)
-	if err != nil {
-		return nil, err
-	}
 	req := &datatx.ListTransfersRequest{}
 	if shareID != "" {
 		req.Filters = []*datatx.ListTransfersRequest_Filter{{
@@ -256,7 +209,7 @@ func (b *Backend) ListTransfers(ctx context.Context, shareID string) ([]*datatx.
 			Term: &datatx.ListTransfersRequest_Filter_ShareId{ShareId: &ocm.ShareId{OpaqueId: shareID}},
 		}}
 	}
-	res, err := check(c.ListTransfers(ctx, req))
+	res, err := call(ctx, b, gateway.GatewayAPIClient.ListTransfers, req)
 	if err != nil {
 		return nil, err
 	}
@@ -264,11 +217,7 @@ func (b *Backend) ListTransfers(ctx context.Context, shareID string) ([]*datatx.
 }
 
 func (b *Backend) TransferStatus(ctx context.Context, id string) (*datatx.TxInfo, error) {
-	c, ctx, err := b.gw(ctx)
-	if err != nil {
-		return nil, err
-	}
-	res, err := check(c.GetTransferStatus(ctx, &datatx.GetTransferStatusRequest{TxId: &datatx.TxId{OpaqueId: id}}))
+	res, err := call(ctx, b, gateway.GatewayAPIClient.GetTransferStatus, &datatx.GetTransferStatusRequest{TxId: &datatx.TxId{OpaqueId: id}})
 	if err != nil {
 		return nil, err
 	}
@@ -276,11 +225,7 @@ func (b *Backend) TransferStatus(ctx context.Context, id string) (*datatx.TxInfo
 }
 
 func (b *Backend) CancelTransfer(ctx context.Context, id string) (*datatx.TxInfo, error) {
-	c, ctx, err := b.gw(ctx)
-	if err != nil {
-		return nil, err
-	}
-	res, err := check(c.CancelTransfer(ctx, &datatx.CancelTransferRequest{TxId: &datatx.TxId{OpaqueId: id}}))
+	res, err := call(ctx, b, gateway.GatewayAPIClient.CancelTransfer, &datatx.CancelTransferRequest{TxId: &datatx.TxId{OpaqueId: id}})
 	if err != nil {
 		return nil, err
 	}
@@ -288,11 +233,7 @@ func (b *Backend) CancelTransfer(ctx context.Context, id string) (*datatx.TxInfo
 }
 
 func (b *Backend) RetryTransfer(ctx context.Context, id string) (*datatx.TxInfo, error) {
-	c, ctx, err := b.gw(ctx)
-	if err != nil {
-		return nil, err
-	}
-	res, err := check(c.RetryTransfer(ctx, &datatx.RetryTransferRequest{TxId: &datatx.TxId{OpaqueId: id}}))
+	res, err := call(ctx, b, gateway.GatewayAPIClient.RetryTransfer, &datatx.RetryTransferRequest{TxId: &datatx.TxId{OpaqueId: id}})
 	if err != nil {
 		return nil, err
 	}

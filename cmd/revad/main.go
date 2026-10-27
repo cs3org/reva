@@ -118,9 +118,8 @@ func initPlugins() {
 	}
 }
 
-// revadPlugins returns the registered plugins without the ones of the reva
-// CLI. A CLI plugin linked into revad by mistake would make
-// plugin.RegisterPlugin panic on its unknown namespace.
+// revadPlugins skips the CLI plugins: plugin.RegisterPlugin panics on their
+// unknown namespace.
 func revadPlugins() []reva.PluginInfo {
 	return slices.DeleteFunc(reva.GetPlugins(""), func(p reva.PluginInfo) bool {
 		return strings.HasPrefix(string(p.ID), "cli.")

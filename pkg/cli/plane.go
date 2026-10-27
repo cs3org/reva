@@ -136,17 +136,6 @@ func (r *Runtime) SelectPlane(cmd *cobra.Command) error {
 // Plane returns the plane that SelectPlane chose for the command.
 func (r *Runtime) Plane() Plane { return r.plane }
 
-// OperatorFlagUsages returns the help of the operator options of cmd.
-func OperatorFlagUsages(cmd *cobra.Command) string {
-	return flagUsages(cmd, true)
-}
-
-// UserFlagUsages returns the help of the local flags of cmd that are not
-// operator options.
-func UserFlagUsages(cmd *cobra.Command) string {
-	return flagUsages(cmd, false)
-}
-
 func flagUsages(cmd *cobra.Command, operator bool) string {
 	fs := pflag.NewFlagSet(cmd.Name(), pflag.ContinueOnError)
 	cmd.LocalFlags().VisitAll(func(f *pflag.Flag) {
@@ -160,8 +149,8 @@ func flagUsages(cmd *cobra.Command, operator bool) string {
 // OperatorHelp puts the operator options of every command in their own
 // group of the help. It edits the usage template of cmd.
 func OperatorHelp(cmd *cobra.Command) {
-	cobra.AddTemplateFunc("userFlagUsages", UserFlagUsages)
-	cobra.AddTemplateFunc("operatorFlagUsages", OperatorFlagUsages)
+	cobra.AddTemplateFunc("userFlagUsages", func(c *cobra.Command) string { return flagUsages(c, false) })
+	cobra.AddTemplateFunc("operatorFlagUsages", func(c *cobra.Command) string { return flagUsages(c, true) })
 	t := strings.Replace(cmd.UsageTemplate(),
 		"{{.LocalFlags.FlagUsages | trimTrailingWhitespaces}}{{end}}",
 		"{{userFlagUsages . | trimTrailingWhitespaces}}{{end}}{{with operatorFlagUsages .}}\n\n"+OperatorOptions+"\n{{. | trimTrailingWhitespaces}}{{end}}",

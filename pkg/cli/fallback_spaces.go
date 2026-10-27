@@ -24,10 +24,7 @@ import (
 	"github.com/cs3org/reva/v3/pkg/admin/adminpb"
 )
 
-// SpacesAdmin returns the client of the SpacesAdmin service on the admin
-// connection. Its calls need the ctx of Admin or AdminContext, which the
-// lookup and the call of an owner fallback get. UpdateSpace sets fallback
-// from InFallback(ctx), for the audit.
+// SpacesAdmin returns the client of the SpacesAdmin service. Its calls need a ctx from Admin or AdminContext.
 func (r *Runtime) SpacesAdmin(ctx context.Context) (adminpb.SpacesAdminClient, error) {
 	c, err := r.adminClient(ctx)
 	if err != nil {

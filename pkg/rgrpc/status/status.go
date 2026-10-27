@@ -255,10 +255,8 @@ func NewErrorFromCode(code rpc.Code, pkgname string) error {
 	return errors.New(pkgname + ": grpc failed with code " + code.String())
 }
 
-// CodeFromGRPC returns the CS3 code of a gRPC code. The two enums have the
-// same names but not the same numbers. Unlike NewStatusFromErrType, it keeps
-// every code, so that a caller that relays a gRPC failure can still tell
-// Unavailable from DeadlineExceeded or Internal.
+// CodeFromGRPC returns the CS3 code of a gRPC code. The two enums have the same names but
+// not the same numbers. Unlike NewStatusFromErrType, it keeps every code.
 func CodeFromGRPC(c codes.Code) rpc.Code {
 	switch c {
 	case codes.OK:

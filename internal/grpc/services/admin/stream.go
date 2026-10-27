@@ -70,8 +70,8 @@ func (s *svc) InvokeStream(req *adminpb.InvokeRequest, stream adminpb.AdminAPI_I
 	}
 }
 
-// streamAll opens a stream to one endpoint of each routed group and merges
-// their items into one channel, closed when every upstream has ended.
+// streamAll merges the streams of one endpoint of each group into one channel.
+// It closes the channel when every upstream has ended.
 func streamAll(ctx context.Context, groups [][]client.Endpoint, invocation string, args map[string]string) <-chan *adminpb.InvokeStreamResponse {
 	items := make(chan *adminpb.InvokeStreamResponse)
 	var wg sync.WaitGroup

@@ -28,7 +28,6 @@ import (
 	"os"
 	"strings"
 
-	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	"github.com/cs3org/reva/v3/cmd/reva/admin"
 	"github.com/cs3org/reva/v3/pkg/cli"
 	"github.com/cs3org/reva/v3/pkg/cli/brand"
@@ -71,8 +70,7 @@ func Main(opts ...Option) {
 	os.Exit(run(os.Args[1:], opts...))
 }
 
-// NewRoot returns the command tree: the core commands and the command
-// plugins that are compiled in. CheckPlugins tells which plugins it refused.
+// NewRoot returns the command tree. CheckPlugins tells which plugins it refused.
 func NewRoot(opts ...Option) *cobra.Command {
 	return rootCommand(cli.NewRuntime(newOptions(opts).brand), new(bool))
 }
@@ -256,9 +254,4 @@ func versionCommand(rt *cli.Runtime) *cobra.Command {
 	}
 	cmd.Flags().BoolVar(&plugins, "plugins", false, "also list the CLI plugins that are compiled in, and the brand")
 	return cmd
-}
-
-// formatError returns the error of a CS3 status that is not OK.
-func formatError(status *rpc.Status) error {
-	return cli.Check(status)
 }

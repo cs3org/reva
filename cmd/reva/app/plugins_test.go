@@ -28,8 +28,7 @@ import (
 	"github.com/spf13/cobra"
 )
 
-// The fake plugins. The registry is global, so every test of this package
-// sees all of them.
+// The registry is global, so every test of this package sees all the fake plugins.
 var preRunRan bool
 
 func fake(use string) func(*cli.Runtime) *cobra.Command {
@@ -90,8 +89,7 @@ func TestPluginsAreAttached(t *testing.T) {
 	}
 }
 
-// The CERN plugin user account (reva-plugins) attaches under the core
-// command user.
+// reva-plugins attaches `user account` under the core `user`.
 func TestPluginAttachesUnderUser(t *testing.T) {
 	root := revacmd.NewRoot()
 	user := find(t, root, "user")

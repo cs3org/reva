@@ -51,8 +51,6 @@ func shareCommand(rt *cli.Runtime) *cobra.Command {
 	return cmd
 }
 
-// shareFallback returns the owner fallback of the share commands on id, and
-// the lookup of the share with the Admin API.
 func shareFallback(rt *cli.Runtime, id string) (cli.Fallback, func(context.Context) (*collaboration.Share, error)) {
 	return cli.Fallback{Gate: rt, What: "share " + id}, func(ctx context.Context) (*collaboration.Share, error) {
 		sa, err := rt.SharesAdmin(ctx)
@@ -190,8 +188,7 @@ func shareListCommand(rt *cli.Runtime) *cobra.Command {
 	return cmd
 }
 
-// resourceFilter returns the resource that a list command filters on: the
-// PATH argument or --by-resource-id. nil means no filter.
+// resourceFilter returns nil when there is no filter.
 func resourceFilter(ctx context.Context, b backend.Backend, args []string, resID string) (*provider.ResourceId, error) {
 	switch {
 	case len(args) == 1 && resID != "":
@@ -408,8 +405,6 @@ func linkCommand(rt *cli.Runtime) *cobra.Command {
 	return cmd
 }
 
-// linkFallback returns the owner fallback of the link commands on ref, and
-// the lookup of the link with the Admin API.
 func linkFallback(rt *cli.Runtime, arg string, ref *link.PublicShareReference) (cli.Fallback, func(context.Context) (*link.PublicShare, error)) {
 	return cli.Fallback{Gate: rt, What: "link " + arg}, func(ctx context.Context) (*link.PublicShare, error) {
 		sa, err := rt.SharesAdmin(ctx)
@@ -455,8 +450,8 @@ func linkGetCommand(rt *cli.Runtime) *cobra.Command {
 	}
 }
 
-// linkRefs returns the references that arg can be: a link id, or a link
-// token. The sql manager uses numbers as ids, so a number is only an id.
+// linkRefs treats a number only as an id, because the sql manager uses numbers
+// as ids.
 func linkRefs(arg string) []*link.PublicShareReference {
 	refs := []*link.PublicShareReference{publicShareRef(arg)}
 	if strings.Trim(arg, "0123456789") != "" {
@@ -465,7 +460,6 @@ func linkRefs(arg string) []*link.PublicShareReference {
 	return refs
 }
 
-// firstFound returns the answer of get for the first reference that is found.
 func firstFound(refs []*link.PublicShareReference, get func(*link.PublicShareReference) (*link.PublicShare, error)) (*link.PublicShare, error) {
 	var err error
 	for _, ref := range refs {
@@ -738,7 +732,6 @@ func completePublicShareIDs(rt *cli.Runtime) cobra.CompletionFunc {
 	})
 }
 
-// completeIDs completes the first argument with the ids that list returns.
 // An id can have a description after a tab.
 func completeIDs(rt *cli.Runtime, list func(ctx context.Context, b backend.Backend) ([]string, error)) cobra.CompletionFunc {
 	return func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {

@@ -76,10 +76,9 @@ message ImpersonateRequest {
   // reason is recorded in the audit log.
   string reason = 2;
   // allow_privileged permits a target in admin_group or a service account.
-  // Without it, such a target is refused.
   bool allow_privileged = 3;
-  // ttl_seconds asks for a shorter token lifetime. The server caps it at
-  // impersonation_ttl. Zero uses impersonation_ttl.
+  // ttl_seconds asks for a shorter token lifetime, capped at impersonation_ttl.
+  // Zero means impersonation_ttl.
   int64 ttl_seconds = 4;
 }
 
@@ -87,8 +86,7 @@ message ImpersonateResponse {
   // token is an ordinary user-scoped token for the target user (never
   // admin+user). It carries the impersonator in its actor scope.
   string token = 1;
-  // expires_at is the token expiry, in seconds since the Unix epoch. It is 0
-  // when the token manager cannot tell.
+  // expires_at is the token expiry as a Unix time. It is 0 if unknown.
   int64 expires_at = 2;
 }
 

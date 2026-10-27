@@ -65,8 +65,7 @@ type AdminClient struct {
 	Socket bool
 }
 
-// socketPaths are the well-known locations of the admin socket. They are
-// never rebranded. Tests replace them.
+// socketPaths are the well-known locations of the admin socket. Tests replace it.
 var socketPaths = func() []string {
 	paths := []string{"/run/reva/admin.sock"}
 	if xdg := os.Getenv("XDG_RUNTIME_DIR"); xdg != "" {
@@ -349,9 +348,8 @@ func (r *Runtime) CanAdmin(ctx context.Context) bool {
 	return res.Admin
 }
 
-// impersonate returns a user token for --as. Over gRPC it calls Impersonate
-// with admin rights. When the Admin API cannot be reached and an HTTPS
-// endpoint is known, it uses POST /admin/impersonate of that endpoint.
+// impersonate returns a user token for --as. When the Admin API cannot be
+// reached and an HTTPS endpoint is known, it uses POST /admin/impersonate.
 func (r *Runtime) impersonate(ctx context.Context) (string, error) {
 	c, actx, err := r.Admin(ctx)
 	if err == nil {

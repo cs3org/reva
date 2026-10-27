@@ -34,9 +34,7 @@ import (
 
 type spaces struct{ b *Backend }
 
-// List returns the spaces that the caller can see: without a filter, the
-// spaces registry gives the personal space, the projects and the explorer
-// spaces.
+// Without a filter, the spaces registry lists the personal, project and explorer spaces.
 func (s spaces) List(ctx context.Context) ([]*provider.StorageSpace, error) {
 	c, ctx, err := s.b.gw(ctx)
 	if err != nil {
@@ -62,11 +60,7 @@ func (s spaces) Update(ctx context.Context, req *provider.UpdateStorageSpaceRequ
 }
 
 func (s spaces) Quota(ctx context.Context, ref *provider.Reference) (*backend.Quota, error) {
-	c, ctx, err := s.b.gw(ctx)
-	if err != nil {
-		return nil, err
-	}
-	res, err := check(c.GetQuota(ctx, &gateway.GetQuotaRequest{Ref: ref}))
+	res, err := call(ctx, s.b, gateway.GatewayAPIClient.GetQuota, &gateway.GetQuotaRequest{Ref: ref})
 	if err != nil {
 		return nil, err
 	}
@@ -141,11 +135,7 @@ func (t trash) Purge(ctx context.Context, ref *provider.Reference, key string) e
 type versions struct{ b *Backend }
 
 func (v versions) List(ctx context.Context, ref *provider.Reference) ([]*provider.FileVersion, error) {
-	c, ctx, err := v.b.gw(ctx)
-	if err != nil {
-		return nil, err
-	}
-	res, err := check(c.ListFileVersions(ctx, &provider.ListFileVersionsRequest{Ref: ref}))
+	res, err := call(ctx, v.b, gateway.GatewayAPIClient.ListFileVersions, &provider.ListFileVersionsRequest{Ref: ref})
 	if err != nil {
 		return nil, err
 	}
@@ -153,22 +143,14 @@ func (v versions) List(ctx context.Context, ref *provider.Reference) ([]*provide
 }
 
 func (v versions) Restore(ctx context.Context, ref *provider.Reference, key string) error {
-	c, ctx, err := v.b.gw(ctx)
-	if err != nil {
-		return err
-	}
-	_, err = check(c.RestoreFileVersion(ctx, &provider.RestoreFileVersionRequest{Ref: ref, Key: key}))
+	_, err := call(ctx, v.b, gateway.GatewayAPIClient.RestoreFileVersion, &provider.RestoreFileVersionRequest{Ref: ref, Key: key})
 	return err
 }
 
 type locks struct{ b *Backend }
 
 func (l locks) Get(ctx context.Context, ref *provider.Reference) (*provider.Lock, error) {
-	c, ctx, err := l.b.gw(ctx)
-	if err != nil {
-		return nil, err
-	}
-	res, err := check(c.GetLock(ctx, &provider.GetLockRequest{Ref: ref}))
+	res, err := call(ctx, l.b, gateway.GatewayAPIClient.GetLock, &provider.GetLockRequest{Ref: ref})
 	if err != nil {
 		return nil, err
 	}
@@ -176,40 +158,24 @@ func (l locks) Get(ctx context.Context, ref *provider.Reference) (*provider.Lock
 }
 
 func (l locks) Set(ctx context.Context, ref *provider.Reference, lock *provider.Lock) error {
-	c, ctx, err := l.b.gw(ctx)
-	if err != nil {
-		return err
-	}
-	_, err = check(c.SetLock(ctx, &provider.SetLockRequest{Ref: ref, Lock: lock}))
+	_, err := call(ctx, l.b, gateway.GatewayAPIClient.SetLock, &provider.SetLockRequest{Ref: ref, Lock: lock})
 	return err
 }
 
 func (l locks) Refresh(ctx context.Context, ref *provider.Reference, lock *provider.Lock) error {
-	c, ctx, err := l.b.gw(ctx)
-	if err != nil {
-		return err
-	}
-	_, err = check(c.RefreshLock(ctx, &provider.RefreshLockRequest{Ref: ref, Lock: lock}))
+	_, err := call(ctx, l.b, gateway.GatewayAPIClient.RefreshLock, &provider.RefreshLockRequest{Ref: ref, Lock: lock})
 	return err
 }
 
 func (l locks) Unlock(ctx context.Context, ref *provider.Reference, lock *provider.Lock) error {
-	c, ctx, err := l.b.gw(ctx)
-	if err != nil {
-		return err
-	}
-	_, err = check(c.Unlock(ctx, &provider.UnlockRequest{Ref: ref, Lock: lock}))
+	_, err := call(ctx, l.b, gateway.GatewayAPIClient.Unlock, &provider.UnlockRequest{Ref: ref, Lock: lock})
 	return err
 }
 
 type tokens struct{ b *Backend }
 
 func (t tokens) List(ctx context.Context) ([]*authapp.AppPassword, error) {
-	c, ctx, err := t.b.gw(ctx)
-	if err != nil {
-		return nil, err
-	}
-	res, err := check(c.ListAppPasswords(ctx, &authapp.ListAppPasswordsRequest{}))
+	res, err := call(ctx, t.b, gateway.GatewayAPIClient.ListAppPasswords, &authapp.ListAppPasswordsRequest{})
 	if err != nil {
 		return nil, err
 	}
@@ -217,11 +183,7 @@ func (t tokens) List(ctx context.Context) ([]*authapp.AppPassword, error) {
 }
 
 func (t tokens) Create(ctx context.Context, req *authapp.GenerateAppPasswordRequest) (*authapp.AppPassword, error) {
-	c, ctx, err := t.b.gw(ctx)
-	if err != nil {
-		return nil, err
-	}
-	res, err := check(c.GenerateAppPassword(ctx, req))
+	res, err := call(ctx, t.b, gateway.GatewayAPIClient.GenerateAppPassword, req)
 	if err != nil {
 		return nil, err
 	}
@@ -229,11 +191,7 @@ func (t tokens) Create(ctx context.Context, req *authapp.GenerateAppPasswordRequ
 }
 
 func (t tokens) Revoke(ctx context.Context, id string) error {
-	c, ctx, err := t.b.gw(ctx)
-	if err != nil {
-		return err
-	}
-	_, err = check(c.InvalidateAppPassword(ctx, &authapp.InvalidateAppPasswordRequest{Password: id}))
+	_, err := call(ctx, t.b, gateway.GatewayAPIClient.InvalidateAppPassword, &authapp.InvalidateAppPasswordRequest{Password: id})
 	return err
 }
 
@@ -253,11 +211,7 @@ func (u users) Me(ctx context.Context) (*userpb.User, error) {
 }
 
 func (u users) ByClaim(ctx context.Context, claim, value string) (*userpb.User, error) {
-	c, ctx, err := u.b.gw(ctx)
-	if err != nil {
-		return nil, err
-	}
-	res, err := check(c.GetUserByClaim(ctx, &userpb.GetUserByClaimRequest{Claim: claim, Value: value}))
+	res, err := call(ctx, u.b, gateway.GatewayAPIClient.GetUserByClaim, &userpb.GetUserByClaimRequest{Claim: claim, Value: value})
 	if err != nil {
 		return nil, err
 	}
@@ -292,11 +246,7 @@ func (u users) Groups(ctx context.Context, id *userpb.UserId) ([]string, error) 
 }
 
 func (b *Backend) GetPreference(ctx context.Context, namespace, key string) (string, error) {
-	c, ctx, err := b.gw(ctx)
-	if err != nil {
-		return "", err
-	}
-	res, err := check(c.GetKey(ctx, &preferences.GetKeyRequest{Key: &preferences.PreferenceKey{Namespace: namespace, Key: key}}))
+	res, err := call(ctx, b, gateway.GatewayAPIClient.GetKey, &preferences.GetKeyRequest{Key: &preferences.PreferenceKey{Namespace: namespace, Key: key}})
 	if err != nil {
 		return "", err
 	}
@@ -304,10 +254,6 @@ func (b *Backend) GetPreference(ctx context.Context, namespace, key string) (str
 }
 
 func (b *Backend) SetPreference(ctx context.Context, namespace, key, value string) error {
-	c, ctx, err := b.gw(ctx)
-	if err != nil {
-		return err
-	}
-	_, err = check(c.SetKey(ctx, &preferences.SetKeyRequest{Key: &preferences.PreferenceKey{Namespace: namespace, Key: key}, Val: value}))
+	_, err := call(ctx, b, gateway.GatewayAPIClient.SetKey, &preferences.SetKeyRequest{Key: &preferences.PreferenceKey{Namespace: namespace, Key: key}, Val: value})
 	return err
 }

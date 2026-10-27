@@ -33,7 +33,7 @@ func TestListServicesByInvocation(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	// The first registry set in the process stays, so add to that one.
+	// The first registry set in the process stays.
 	service.SetGlobalRegistry(reg)
 	reg = service.GlobalRegistry()
 	for name, invocations := range map[string]string{

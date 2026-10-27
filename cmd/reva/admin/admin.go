@@ -25,12 +25,10 @@ import (
 	"github.com/spf13/cobra"
 )
 
-// rt is set once by Commands. The CLI runs one command per process, so a
-// package var is enough.
+// rt is set once by Commands. The CLI runs one command per process.
 var rt *cli.Runtime
 
-// Commands returns the fleet commands. They are operator commands: they
-// always use the admin plane.
+// Commands returns the fleet commands. They always use the admin plane.
 func Commands(r *cli.Runtime) []*cobra.Command {
 	rt = r
 	cmds := []*cobra.Command{

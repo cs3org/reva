@@ -99,7 +99,6 @@ func (r *Runtime) Backend(ctx context.Context) (backend.Backend, error) {
 	return b, nil
 }
 
-// httpBackend returns the backend of the HTTPS endpoint.
 func (r *Runtime) httpBackend() (backend.Backend, error) {
 	if r.httpB != nil {
 		return r.httpB, nil
@@ -199,7 +198,6 @@ func Ability[T any](ctx context.Context, r *Runtime, what string) (T, error) {
 	return a, nil
 }
 
-// gatewayDialOption gives the connection to the gateway a short deadline.
 func gatewayDialOption() grpc.DialOption {
 	return grpc.WithConnectParams(grpc.ConnectParams{Backoff: backoff.DefaultConfig, MinConnectTimeout: gatewayConnectTimeout})
 }
