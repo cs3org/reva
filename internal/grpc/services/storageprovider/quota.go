@@ -38,13 +38,13 @@ import (
 type spaceQuotaArgs struct {
 	Root      string           `arg:"root,required"       help:"the root path of the space"`
 	SpaceType spaces.SpaceType `arg:"space_type"          help:"the type of the space, e.g. personal or project; if absent, the type of the spaces of this instance"`
-	Owner     string           `arg:"owner"               help:"the user id of the owner of the space"`
+	Owner     admin.UserID     `arg:"owner"               help:"the owner of the space: the protojson of a UserId, or its opaque id"`
 }
 
 type setSpaceQuotaArgs struct {
 	Root      string           `arg:"root,required"       help:"the root path of the space"`
 	SpaceType spaces.SpaceType `arg:"space_type"          help:"the type of the space, e.g. personal or project; if absent, the type of the spaces of this instance"`
-	Owner     string           `arg:"owner"               help:"the user id of the owner of the space"`
+	Owner     admin.UserID     `arg:"owner"               help:"the owner of the space: the protojson of a UserId, or its opaque id"`
 	MaxBytes  *uint64          `arg:"max_bytes"           help:"the quota in logical bytes, the size of the data users see; if absent, it does not change"`
 	MaxFiles  *uint64          `arg:"max_files"           help:"the quota in files; if absent, it does not change"`
 }
@@ -72,7 +72,7 @@ func (s *service) quotaGet(ctx context.Context, a spaceQuotaArgs) (invoke.Result
 	if err != nil {
 		return nil, err
 	}
-	return s.quotaResult(q, ref.Type, a.Owner), nil
+	return s.quotaResult(q, ref.Type, ref.Owner), nil
 }
 
 func (s *service) quotaSet(ctx context.Context, a setSpaceQuotaArgs) (invoke.Result, error) {
@@ -115,7 +115,7 @@ func (s *service) quotaSet(ctx context.Context, a setSpaceQuotaArgs) (invoke.Res
 	if err != nil {
 		return nil, err
 	}
-	return s.quotaResult(q, ref.Type, a.Owner), nil
+	return s.quotaResult(q, ref.Type, ref.Owner), nil
 }
 
 func (s *service) quotaList(ctx context.Context, a listSpaceQuotasArgs, emit invoke.StreamEmit) error {
@@ -131,7 +131,7 @@ func (s *service) quotaList(ctx context.Context, a listSpaceQuotasArgs, emit inv
 		if q.MaxBytes < a.MinBytes {
 			continue
 		}
-		if err := emit(s.quotaResult(q, "", "")); err != nil {
+		if err := emit(s.quotaResult(q, "", nil)); err != nil {
 			return err
 		}
 	}
@@ -140,7 +140,7 @@ func (s *service) quotaList(ctx context.Context, a listSpaceQuotasArgs, emit inv
 
 // spaceQuotaRef refuses a root that is not the root of a space served here,
 // so that a quota never goes on a parent of many spaces.
-func (s *service) spaceQuotaRef(root string, spaceType spaces.SpaceType, owner string) (storage.QuotaAdmin, storage.SpaceQuotaRef, error) {
+func (s *service) spaceQuotaRef(root string, spaceType spaces.SpaceType, owner admin.UserID) (storage.QuotaAdmin, storage.SpaceQuotaRef, error) {
 	qa, ok := s.storage.(storage.QuotaAdmin)
 	if !ok {
 		return nil, storage.SpaceQuotaRef{}, errtypes.NotSupported("the " + s.conf.Driver + " driver cannot administer quotas")
@@ -160,14 +160,11 @@ func (s *service) spaceQuotaRef(root string, spaceType spaces.SpaceType, owner s
 	if err != nil {
 		return nil, storage.SpaceQuotaRef{}, err
 	}
-	ref := storage.SpaceQuotaRef{Root: rel, Type: cmp.Or(spaceType, spaces.SpaceType(s.conf.ProvidesSpaceType))}
-	if owner != "" {
-		ref.Owner = &userpb.UserId{OpaqueId: owner}
-	}
+	ref := storage.SpaceQuotaRef{Root: rel, Type: cmp.Or(spaceType, spaces.SpaceType(s.conf.ProvidesSpaceType)), Owner: owner.ID()}
 	return qa, ref, nil
 }
 
-func (s *service) quotaResult(q *storage.SpaceQuota, spaceType spaces.SpaceType, owner string) invoke.Result {
+func (s *service) quotaResult(q *storage.SpaceQuota, spaceType spaces.SpaceType, owner *userpb.UserId) invoke.Result {
 	r := invoke.Result{
 		"root":               path.Join(s.mountPath, q.Root),
 		"mount_id":           s.mountID,
@@ -181,8 +178,10 @@ func (s *service) quotaResult(q *storage.SpaceQuota, spaceType spaces.SpaceType,
 	if spaceType != "" {
 		r["space_type"] = string(spaceType)
 	}
-	if owner != "" {
-		r["owner"] = owner
+	if owner != nil {
+		if o, err := invoke.ProtoResult(owner); err == nil {
+			r["owner"] = map[string]any(o)
+		}
 	}
 	return r
 }

@@ -36,6 +36,7 @@ import (
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	typespb "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
 	revaconfig "github.com/cs3org/reva/v3/cmd/revad/pkg/config"
+	"github.com/cs3org/reva/v3/pkg/admin"
 	"github.com/cs3org/reva/v3/pkg/appctx"
 	"github.com/cs3org/reva/v3/pkg/errtypes"
 	"github.com/cs3org/reva/v3/pkg/invoke"
@@ -172,11 +173,14 @@ type fakeGateway struct {
 	actedAs []string
 }
 
-func (*fakeGateway) GetUserByClaim(_ context.Context, req *userpb.GetUserByClaimRequest, _ ...grpc.CallOption) (*userpb.GetUserByClaimResponse, error) {
-	if u, ok := users[req.GetValue()]; ok && req.GetClaim() == "username" {
-		return &userpb.GetUserByClaimResponse{Status: &rpc.Status{Code: rpc.Code_CODE_OK}, User: u}, nil
+// GetUser matches the opaque id, and the idp if one is given, as the user
+// providers do: the share tables keep no idp.
+func (*fakeGateway) GetUser(_ context.Context, req *userpb.GetUserRequest, _ ...grpc.CallOption) (*userpb.GetUserResponse, error) {
+	id := req.GetUserId()
+	if u, ok := users[id.GetOpaqueId()]; ok && (id.GetIdp() == "" || id.GetIdp() == u.GetId().GetIdp()) {
+		return &userpb.GetUserResponse{Status: &rpc.Status{Code: rpc.Code_CODE_OK}, User: u}, nil
 	}
-	return &userpb.GetUserByClaimResponse{Status: &rpc.Status{Code: rpc.Code_CODE_NOT_FOUND}}, nil
+	return &userpb.GetUserResponse{Status: &rpc.Status{Code: rpc.Code_CODE_NOT_FOUND}}, nil
 }
 
 func fileOf(ref *provider.Reference) *provider.ResourceInfo {
@@ -335,6 +339,7 @@ func TestList(t *testing.T) {
 		{map[string]any{"owner": "einstein"}, []string{doc, other}},
 		{map[string]any{"owner": "einstein", "include_expired": "false"}, []string{doc}},
 		{map[string]any{"initiator": "admin1"}, []string{project}},
+		{map[string]any{"owner": admin.UserArg(user("einstein").Id)}, []string{doc, other}},
 		{map[string]any{"space": "home-einstein"}, []string{doc, other}},
 		{map[string]any{"space": "project-x", "owner": "einstein"}, []string{}},
 		{map[string]any{"resource_id": "home!101"}, []string{other}},
@@ -562,7 +567,7 @@ func TestTransfer(t *testing.T) {
 	if _, err := s.Invoke(as("operator"), "transfer", map[string]any{"id": id, "initiator": "bob"}); err == nil {
 		t.Fatal("expected an error for a user who cannot share the resource")
 	}
-	res := mustInvoke(t, s, "transfer", map[string]any{"id": id, "initiator": "admin2"})
+	res := mustInvoke(t, s, "transfer", map[string]any{"id": id, "initiator": admin.UserArg(user("admin2").Id)})
 	if c := cs3(res); c["creator"].(map[string]any)["opaqueId"] != "admin2" || c["owner"].(map[string]any)["opaqueId"] != "cbox" {
 		t.Fatalf("unexpected link %v", c)
 	}

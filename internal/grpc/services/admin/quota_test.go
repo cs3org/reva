@@ -30,6 +30,7 @@ import (
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/cs3org/reva/v3/internal/grpc/control"
+	"github.com/cs3org/reva/v3/pkg/admin"
 	"github.com/cs3org/reva/v3/pkg/admin/adminpb"
 	"github.com/cs3org/reva/v3/pkg/control/controlpb"
 	"github.com/cs3org/reva/v3/pkg/invoke"
@@ -58,11 +59,11 @@ type fakeQuotaProviders struct {
 
 func (f *fakeQuotaProviders) set(node, mountID, provides string) *invoke.Set {
 	type quotaArgs struct {
-		Root      string  `arg:"root,required"`
-		SpaceType string  `arg:"space_type"`
-		Owner     string  `arg:"owner"`
-		MaxBytes  *uint64 `arg:"max_bytes"`
-		MaxFiles  *uint64 `arg:"max_files"`
+		Root      string       `arg:"root,required"`
+		SpaceType string       `arg:"space_type"`
+		Owner     admin.UserID `arg:"owner"`
+		MaxBytes  *uint64      `arg:"max_bytes"`
+		MaxFiles  *uint64      `arg:"max_files"`
 	}
 	type listArgs struct {
 		MinBytes string `arg:"min_bytes"`
@@ -79,15 +80,20 @@ func (f *fakeQuotaProviders) set(node, mountID, provides string) *invoke.Set {
 		if t == string(spaces.SpaceTypeProject) {
 			form = "project"
 		}
-		return invoke.Result{"root": a.Root, "mount_id": mountID, "max_bytes": maxBytes, "used_bytes": 400, "physical_max_bytes": 2 * maxBytes, "form": form, "space_type": t, "owner": a.Owner}
+		r := invoke.Result{"root": a.Root, "mount_id": mountID, "max_bytes": maxBytes, "used_bytes": 400, "physical_max_bytes": 2 * maxBytes, "form": form, "space_type": t}
+		if id := a.Owner.ID(); id != nil {
+			owner, _ := invoke.ProtoResult(id)
+			r["owner"] = map[string]any(owner)
+		}
+		return r
 	}
 	set := invoke.NewSet()
 	set.Add("quota_get", "").Handle(invoke.Typed(func(_ context.Context, a quotaArgs) (invoke.Result, error) {
-		record("quota_get", map[string]string{"root": a.Root, "space_type": a.SpaceType, "owner": a.Owner})
+		record("quota_get", map[string]string{"root": a.Root, "space_type": a.SpaceType, "owner": a.Owner.String()})
 		return result(a, 1000), nil
 	}))
 	set.Add("quota_set", "").Mutating().Handle(invoke.Typed(func(_ context.Context, a quotaArgs) (invoke.Result, error) {
-		args := map[string]string{"root": a.Root, "space_type": a.SpaceType, "owner": a.Owner}
+		args := map[string]string{"root": a.Root, "space_type": a.SpaceType, "owner": a.Owner.String()}
 		if a.MaxBytes != nil {
 			args["max_bytes"] = strconv.FormatUint(*a.MaxBytes, 10)
 		}
