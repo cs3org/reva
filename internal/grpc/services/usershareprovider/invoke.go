@@ -27,6 +27,7 @@ import (
 	"maps"
 	"slices"
 	"strconv"
+	"strings"
 	"time"
 
 	grouppb "github.com/cs3org/go-cs3apis/cs3/identity/group/v1beta1"
@@ -73,6 +74,7 @@ type listArgs struct {
 	Sharee         string `arg:"sharee" help:"shares received by this user or group"`
 	ID             string `arg:"id" help:"one share, by id; the other selectors are ignored"`
 	Space          string `arg:"space" help:"shares in this space, by space id"`
+	ResourceID     string `arg:"resource_id" help:"shares of this resource, by id: storage_id!opaque_id"`
 	Path           string `arg:"path" help:"shares of this path, which is resolved as the user in as, owner or initiator"`
 	As             string `arg:"as" help:"the user to resolve path and the share paths as; by default the initiator, then the owner of each share"`
 	IncludeOrphans bool   `arg:"include_orphans" help:"include orphaned shares"`
@@ -82,6 +84,11 @@ type listArgs struct {
 
 type idArgs struct {
 	ID string `arg:"id,required" help:"the share id"`
+}
+
+type getArgs struct {
+	ID  string `arg:"id" help:"the share id; give id or key"`
+	Key string `arg:"key" help:"the share key, as the protojson of a CS3 ShareKey; give id or key"`
 }
 
 type updateArgs struct {
@@ -110,10 +117,10 @@ type moveArgs struct {
 }
 
 func (s *service) registerInvocations() {
-	s.Set.Add("list", "Stream the shares of any user. Give at least one of owner, initiator, sharee, id, space or path.").
+	s.Set.Add("list", "Stream the shares of any user. Give at least one of owner, initiator, sharee, id, space, resource_id or path.").
 		Shared().
 		HandleStream(invoke.TypedStream(s.list))
-	s.Set.Add("get", "Show one share, also when it is orphaned or expired.").
+	s.Set.Add("get", "Show one share, by id or by key, also when it is orphaned or expired.").
 		Shared().
 		Handle(invoke.Typed(s.get))
 	s.Set.Add("update", "Change the role or the expiration of a share through the gateway, as its initiator or owner.").
@@ -211,6 +218,13 @@ func (s *service) selectShares(ctx context.Context, m adminManager, a listArgs) 
 	if a.Space != "" {
 		filters = append(filters, revashare.SpaceIDFilter(a.Space))
 	}
+	if a.ResourceID != "" {
+		id, err := parseResourceID(a.ResourceID)
+		if err != nil {
+			return nil, err
+		}
+		filters = append(filters, revashare.ResourceIDFilter(id))
+	}
 	if a.Path != "" {
 		as := nonEmpty(a.As)
 		if len(as) == 0 {
@@ -232,19 +246,23 @@ func (s *service) selectShares(ctx context.Context, m adminManager, a listArgs) 
 	}
 	// The table is too large to read without a filter.
 	if len(filters) == 0 {
-		return nil, errtypes.BadRequest("list needs at least one of owner, initiator, sharee, id, space or path")
+		return nil, errtypes.BadRequest("list needs at least one of owner, initiator, sharee, id, space, resource_id or path")
 	}
 	return m.ListModelShares(nil, filters, !a.IncludeOrphans)
 }
 
-func (s *service) get(ctx context.Context, a idArgs) (invoke.Result, error) {
+func (s *service) get(ctx context.Context, a getArgs) (invoke.Result, error) {
 	m, err := s.adminManager()
 	if err != nil {
 		return nil, err
 	}
-	sh, err := m.GetShareUnfiltered(ctx, shareRef(a.ID))
+	ref, err := getRef(a)
 	if err != nil {
-		return nil, fmt.Errorf("share %s: %w", a.ID, err)
+		return nil, err
+	}
+	sh, err := m.GetShareUnfiltered(ctx, ref)
+	if err != nil {
+		return nil, fmt.Errorf("share %s: %w", cmp.Or(a.ID, a.Key), err)
 	}
 	users := &admin.Users{Ctx: ctx}
 	return adminShare(sh, resolvePath(users, sh, ""))
@@ -633,6 +651,43 @@ func shareUsers(sh *model.Share) []string {
 
 func nonEmpty(vs ...string) []string {
 	return slices.DeleteFunc(vs, func(v string) bool { return v == "" })
+}
+
+// getRef returns the reference of the get invocation. The sql manager reads
+// every field of a key without a nil check, so a partial key is refused here.
+func getRef(a getArgs) (*collaboration.ShareReference, error) {
+	switch {
+	case (a.ID == "") == (a.Key == ""):
+		return nil, errtypes.BadRequest("give the id or the key of the share")
+	case a.ID != "":
+		return shareRef(a.ID), nil
+	}
+	key := &collaboration.ShareKey{}
+	if err := protojson.Unmarshal([]byte(a.Key), key); err != nil {
+		return nil, errtypes.BadRequest(fmt.Sprintf("the key is not the protojson of a ShareKey: %v", err))
+	}
+	var grantee string
+	switch g := key.GetGrantee(); g.GetType() {
+	case provider.GranteeType_GRANTEE_TYPE_USER:
+		grantee = g.GetUserId().GetOpaqueId()
+	case provider.GranteeType_GRANTEE_TYPE_GROUP:
+		grantee = g.GetGroupId().GetOpaqueId()
+	}
+	if key.GetOwner().GetOpaqueId() == "" || key.GetResourceId().GetStorageId() == "" || key.GetResourceId().GetOpaqueId() == "" || grantee == "" {
+		return nil, errtypes.BadRequest("a share key needs an owner, a resource id and a grantee")
+	}
+	return &collaboration.ShareReference{Spec: &collaboration.ShareReference_Key{Key: key}}, nil
+}
+
+// parseResourceID reads storage_id!opaque_id, or the storage_id$space_id!opaque_id
+// of the spaces. The share table matches the storage id and the opaque id only.
+func parseResourceID(s string) (*provider.ResourceId, error) {
+	storage, opaque, ok := strings.Cut(s, "!")
+	if !ok || storage == "" || opaque == "" {
+		return nil, errtypes.BadRequest(fmt.Sprintf("invalid resource id %q: use storage_id!opaque_id", s))
+	}
+	storage, space, _ := strings.Cut(storage, "$")
+	return &provider.ResourceId{StorageId: storage, SpaceId: space, OpaqueId: opaque}, nil
 }
 
 func shareRef(id string) *collaboration.ShareReference {

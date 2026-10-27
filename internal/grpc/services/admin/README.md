@@ -504,8 +504,8 @@ of any user. All of them read or change the share database, so they are
 shared: one instance of the service runs each call.
 
 ```
-list         owner= initiator= sharee= id= space= path= [as=] [include_orphans=] [include_expired=] [resolve_paths=]   (stream)
-get          id=
+list         owner= initiator= sharee= id= space= resource_id= path= [as=] [include_orphans=] [include_expired=] [resolve_paths=]   (stream)
+get          id= | key=
 update       id= [role=] [expires_at=<date|RFC 3339|none>] [fallback=]
 remove       id= [db_only=] [fallback=]
 sync_expiry  id=          remove the storage grant of an expired share now, keep the record
@@ -514,8 +514,10 @@ move         id= path= [as=] [apply_grant=]   (dangerous) point the share at a n
 mark_orphan  id=
 ```
 
-`list` needs at least one of `owner`, `initiator`, `sharee`, `id`, `space` or
-`path`: the share table is too large to read without a filter. Each result,
+`list` needs at least one of `owner`, `initiator`, `sharee`, `id`, `space`,
+`resource_id` (`storage_id!opaque_id`) or `path`: the share table is too large
+to read without a filter. `get` takes the id of the share, or its key as the
+protojson of a CS3 `ShareKey` (owner, resource id and grantee). Each result,
 streamed or not, is the JSON form of the `AdminShare` message of the typed
 Admin API: `share` (the CS3 share, in protojson), `orphan`, `path` and
 `extra` (`initial_path`, `orphaned_at`, `expired_at`).
@@ -551,7 +553,7 @@ user, all shared too. A link is given by `id=` or by `token=`.
 
 ```
 expiring     from= to= [after_expiration=] [after_id=] [limit=]   the links that expire in a window, by page
-list         id= token= owner= initiator= space= [include_orphans=] [include_expired=] [resolve_paths=]   (stream)
+list         id= token= owner= initiator= space= resource_id= [include_orphans=] [include_expired=] [resolve_paths=]   (stream)
 get          id= | token=
 update       id= | token= [role=viewer|uploader|editor] [expires_at=<date|RFC 3339|none>] [password=] [fallback=]
 remove       id= | token= [db_only=] [fallback=]
@@ -584,13 +586,35 @@ public_link_base_url = "https://example.org/s/"   # unset: no url in the results
 ### SharesAdmin
 
 `SharesAdmin` ([`shares.proto`](../../../../pkg/admin/proto/shares.proto)) is
-the typed facade over the share and link invocations. Each RPC runs one
-invocation, except:
+the typed facade over the share and link invocations. Its requests use the CS3
+messages: a share is a `ShareReference` (id or key), a link a
+`PublicShareReference` (id or token), a user a `UserId` (the opaque id is what
+the invocations take), and the filters and updates are those of the CS3
+`ListShares`, `ListPublicShares`, `UpdateShare` and `UpdatePublicShare`. The
+facade maps them onto the invocation arguments, and answers InvalidArgument for
+what the invocations cannot do:
 
+| CS3 | invocation argument |
+|---|---|
+| share filter `OWNER`, `CREATOR`, `GRANTEE` | `owner`, `initiator`, `sharee` (the name of the user or group) |
+| share filter `RESOURCE_ID`, `SPACE_ID` | `resource_id`, `space` (the part after `storage$`) |
+| share filter `NO`, `GRANTEE_TYPE`, `EXCLUDE_DENIALS`, `STATE`, `SPACE_ROOT` | refused |
+| link filter `OWNER`, `CREATOR`, `RESOURCE_ID` | `owner`, `initiator`, `resource_id` |
+| share field `permissions`, link update `PERMISSIONS` | `role`: the role of the permissions; permissions of no role are refused |
+| share field `expiration`, link update `EXPIRATION` | `expires_at`; no value, or zero, is `none` |
+| link update `PASSWORD` | `password`; empty removes it |
+| share field `display_name`, link updates `DISPLAYNAME`, `DESCRIPTION`, `NOTIFYUPLOADS`, `NOTIFYUPLOADSEXTRARECIPIENTS` | refused |
+
+The invocations take one value of each argument, so a request with two filters
+or two updates of a type is refused rather than read as the OR of CS3. Each RPC
+runs one invocation, except:
+
+- A mutation of a share given by its key runs `get` first, for its id.
 - `ListShares` and `ListPublicLinks` resolve a `SpaceRef` first: by id, or by
   name through the `spacesregistry` `get` invocation, or by path as the
-  catalogued space that holds it (as in SpacesAdmin). The `ONLY` selections of `orphans` and `expired`
-  are applied to what the provider streams.
+  catalogued space that holds it (as in SpacesAdmin). A `SPACE_ID` filter and
+  `space` together are refused. The `ONLY` selections of `orphans` and
+  `expired` are applied to what the provider streams.
 - `MoveShares` lists the shares and the links of `owner` and/or `space` with
   their paths, keeps those under `from_path` (by the current path, or by the
   path at creation when the resource cannot be found), and runs `move` on each
@@ -671,6 +695,46 @@ expires. A `SpaceRef` by path selects the space with the deepest root that holds
 the path. The catalogue has no index on the path, so this reads the whole list.
 A space that is not in the catalogue, a personal space for example, is NotFound.
 
+### SpacesAdmin
+
+The requests and the responses of `SpacesAdmin` use the CS3 messages, and add
+only what CS3 has no field for. A user is a `UserId`, and a time is a
+`cs3.types.v1beta1.Timestamp`. The facade maps them onto the invocations:
+
+| RPC | CS3 in the request | Invocation arguments |
+|---|---|---|
+| `ListSpaces` | `ListStorageSpacesRequest.Filter`: `TYPE_SPACE_TYPE`, `TYPE_OWNER`, `TYPE_USER`, `TYPE_ID`, `TYPE_PATH` | `list type= owner= member=`; the facade keeps the spaces that match an id or a root path |
+| `UpdateSpace` | `UpdateStorageSpaceRequest.UpdateField`: `description`, `metadata` (`TYPE_README`, `TYPE_THUMBNAIL`, the path of the file) | `update description= readme= thumbnail=` |
+| `SetSpaceOwner`, `CheckSpaces` | `owner` is a `UserId` | `owner=` its opaque id |
+| `RegisterSpace` | a `StorageSpace` | `create`, see below |
+| `GetSpaceQuota`, `ListSpaceQuotas` | `SpaceQuota.quota` is a `Quota` | `quota_get`, `quota_list` |
+| `SetSpaceQuota` | a `Quota` and an `update_mask` | `quota_set max_bytes= max_files=` |
+
+As in `ListStorageSpaces`, filters of one type match any of their values, and
+filters of different types must all match. The catalogue takes at most one
+filter of type `SPACE_TYPE`, `OWNER` and `USER`. A filter of another type, an
+update of a name, an alias or a quota, and a second update of one field are
+InvalidArgument. The invocations take the opaque id of a user as its username,
+as the catalogue does when it acts as the owner.
+
+`RegisterSpace` reads the space in the form that `AdminSpace` returns: `name`
+and `owner` (its username, else the opaque id of its id) are required; `id`
+(`<storage id>$<space id>`) or `root.storage_id` and `root.space_id`;
+`root_info.path`; `description`; and the `roles` named `reader`, `writer` and
+`admin`, each with one group as its recipient, which become `readers`,
+`writers` and `admins`. The catalogue gives each role its permissions. A quota,
+a readme, a thumbnail, or a space type that is not `project` is
+InvalidArgument, so that a registration never drops a value.
+
+The quota invocations report what is used, and CS3 has what remains, so the
+facade computes `remaining = max - used`, and 0 over the limit. A limit of 0 is
+no limit, and then its remaining value is 0 too. Because what remains says
+nothing without a limit or over it, the `SpaceQuota` wrapper also carries
+`used_bytes` and `used_files`. `SetSpaceQuota` needs an
+`update_mask` with `quota_max_bytes`, `quota_max_files` or both, because 0 is
+a limit too. The owner of a quota is the one of the catalogue, with its idp,
+when the catalogue has the space. The CLI shows `used_bytes` and `used_files`.
+
 ## Routing
 
 The `dynamic` storage registry reads its routing table (the `routing` SQL
@@ -701,6 +765,33 @@ If a reload fails on an instance, that instance keeps its old routes. Run
 `route_reload` again. `route_add` refuses a mount that is not in the `rules` of
 the registry, because the reload would skip the route. The `static` driver has
 no routing table and answers "not supported".
+
+### StorageAdmin
+
+`StorageAdmin` ([`storage.proto`](../../../../pkg/admin/proto/storage.proto))
+is the typed facade over these invocations, behind `reva route`. A route is a
+CS3 `storage.registry.v1beta1.ProviderInfo`: `provider_path` is the routed path
+and `provider_id` the mount id.
+
+- `ListRoutes` runs `routes`. The routes have no `address`: the routing table
+  does not store it, the `rules` of the registry give it.
+- `ResolvePath` takes a CS3 `provider.v1beta1.Reference`, as
+  `GetStorageProvidersRequest` does, and runs `resolve` on one instance. Only
+  an absolute path is supported: a reference with a resource id is
+  InvalidArgument, because `resolve` takes only a path. Each
+  `ResolvedProvider` has the `ProviderInfo` of the mount (with its address)
+  and `provider_nodes`, the live storage provider instances that advertise its
+  `mount_id`, which CS3 cannot carry.
+- `AddRoute` takes a `ProviderInfo` with `provider_path` and `provider_id`, and
+  refuses an `address`, which the table would drop. `RemoveRoute` takes the
+  path only: it is the key of the table.
+- Both run `route_add` or `route_remove` once, then `route_reload` on every
+  instance. The change is written even if a reload fails, so the RPC succeeds
+  and lists each instance that did not reload in `stale`, with a CS3
+  `rpc.v1beta1.Status`: the code is the gRPC code of the failed reload in its
+  CS3 form, by `status.CodeFromGRPC` of `pkg/rgrpc/status` (`Unavailable`
+  becomes `CODE_UNAVAILABLE`, a failure without a code `CODE_UNKNOWN`). The
+  CLI prints them and fails.
 
 ## Adding an invocation to a service (for developers)
 

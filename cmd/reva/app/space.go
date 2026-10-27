@@ -27,10 +27,14 @@ import (
 	"slices"
 	"strings"
 
+	grouppb "github.com/cs3org/go-cs3apis/cs3/identity/group/v1beta1"
+	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/cs3org/reva/v3/pkg/admin/adminpb"
 	"github.com/cs3org/reva/v3/pkg/cli"
 	"github.com/cs3org/reva/v3/pkg/cli/backend"
+	"github.com/cs3org/reva/v3/pkg/permissions"
+	"github.com/cs3org/reva/v3/pkg/spaces"
 	"github.com/spf13/cobra"
 )
 
@@ -96,7 +100,7 @@ func spaceFallback(rt *cli.Runtime, ref string) (cli.Fallback, func(context.Cont
 }
 
 func spaceListCommand(rt *cli.Runtime) *cobra.Command {
-	var typ string
+	var typ, owner, member string
 	var all bool
 	var req adminpb.ListSpacesRequest
 	cmd := &cobra.Command{
@@ -110,7 +114,17 @@ func spaceListCommand(rt *cli.Runtime) *cobra.Command {
 				if err != nil {
 					return err
 				}
-				req.Type = typ
+				var f spaces.ListStorageSpaceFilter
+				if typ != "" {
+					f = f.BySpaceType(spaces.SpaceType(typ))
+				}
+				if owner != "" {
+					f = f.ByOwner(&userpb.UserId{OpaqueId: owner})
+				}
+				if member != "" {
+					f = f.ByUser(&userpb.UserId{OpaqueId: member})
+				}
+				req.Filters = f.List()
 				st, err := sa.ListSpaces(ctx, &req)
 				if err != nil {
 					return err
@@ -137,8 +151,8 @@ func spaceListCommand(rt *cli.Runtime) *cobra.Command {
 	}
 	cmd.Flags().StringVar(&typ, "type", "", "only the spaces of this type: personal, project or explorer")
 	cmd.Flags().BoolVar(&all, "all", false, "list the spaces of the catalogue, of every owner")
-	cmd.Flags().StringVar(&req.Owner, "owner", "", "only the spaces of this owner")
-	cmd.Flags().StringVar(&req.Member, "member", "", "only the spaces that this user owns or can access through a role")
+	cmd.Flags().StringVar(&owner, "owner", "", "only the spaces of this owner")
+	cmd.Flags().StringVar(&member, "member", "", "only the spaces that this user owns or can access through a role")
 	cmd.Flags().StringVar(&req.Status, "status", "", "only the spaces in this status: "+strings.Join(spaceStatuses, ", "))
 	cmd.Flags().StringVar(&req.Profile, "profile", "", "only the spaces of this profile (not implemented yet)")
 	cmd.Flags().BoolVar(&req.IncludeArchived, "include-archived", false, "include the archived spaces")
@@ -239,20 +253,11 @@ func spaceUpdateCommand(rt *cli.Runtime) *cobra.Command {
 				if err != nil {
 					return nil, err
 				}
-				req := &adminpb.UpdateSpaceRequest{
+				return sa.UpdateSpace(ctx, &adminpb.UpdateSpaceRequest{
 					Ref:      &adminpb.SpaceRef{Ref: &adminpb.SpaceRef_Id{Id: found.GetSpace().GetId()}},
+					Fields:   fields,
 					Fallback: cli.InFallback(ctx),
-				}
-				if changed("description") {
-					req.Description = &description
-				}
-				if changed("readme") {
-					req.Readme = &readme
-				}
-				if changed("thumbnail") {
-					req.Thumbnail = &thumbnail
-				}
-				return sa.UpdateSpace(ctx, req)
+				})
 			})
 			if err != nil {
 				return err
@@ -269,6 +274,7 @@ func spaceUpdateCommand(rt *cli.Runtime) *cobra.Command {
 
 func spaceCheckCommand(rt *cli.Runtime) *cobra.Command {
 	var req adminpb.CheckSpacesRequest
+	var owner string
 	cmd := &cobra.Command{
 		Use:   "check",
 		Short: "List the spaces of the catalogue that have a problem",
@@ -280,6 +286,9 @@ func spaceCheckCommand(rt *cli.Runtime) *cobra.Command {
 			sa, ctx, err := spacesAdmin(cmd.Context(), rt)
 			if err != nil {
 				return err
+			}
+			if owner != "" {
+				req.Owner = &userpb.UserId{OpaqueId: owner}
 			}
 			st, err := sa.CheckSpaces(ctx, &req)
 			if err != nil {
@@ -299,7 +308,7 @@ func spaceCheckCommand(rt *cli.Runtime) *cobra.Command {
 		},
 	}
 	cmd.Flags().StringVar(&req.Status, "status", "", "only the spaces in this status: "+strings.Join(spaceStatuses, ", "))
-	cmd.Flags().StringVar(&req.Owner, "owner", "", "only the spaces of this owner")
+	cmd.Flags().StringVar(&owner, "owner", "", "only the spaces of this owner")
 	_ = cmd.RegisterFlagCompletionFunc("status", cobra.FixedCompletions(spaceStatuses, cobra.ShellCompDirectiveNoFileComp))
 	return cmd
 }
@@ -355,14 +364,14 @@ func spaceSetOwnerCommand(rt *cli.Runtime) *cobra.Command {
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return spaceChange(cmd, rt, fmt.Sprintf("make %s the owner of space %s", args[1], args[0]),
 				func(ctx context.Context, sa adminpb.SpacesAdminClient) (*adminpb.AdminSpace, error) {
-					return sa.SetSpaceOwner(ctx, &adminpb.SetSpaceOwnerRequest{Ref: spaceRef(args[0]), Owner: args[1]})
+					return sa.SetSpaceOwner(ctx, &adminpb.SetSpaceOwnerRequest{Ref: spaceRef(args[0]), Owner: &userpb.UserId{OpaqueId: args[1]}})
 				})
 		},
 	}
 }
 
 func spaceRegisterCommand(rt *cli.Runtime) *cobra.Command {
-	var req adminpb.RegisterSpaceRequest
+	var owner, path, storageID, spaceID, readers, writers, admins, description, status string
 	cmd := &cobra.Command{
 		Use:   "register NAME --owner USER",
 		Short: "Add a space that the storage already serves to the catalogue",
@@ -371,23 +380,50 @@ func spaceRegisterCommand(rt *cli.Runtime) *cobra.Command {
 			"configuration of the catalogue, or is required.",
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			req.Name = args[0]
-			return spaceChange(cmd, rt, fmt.Sprintf("register space %s, owned by %s, in the catalogue", req.Name, req.Owner),
+			space := &provider.StorageSpace{
+				Name:        args[0],
+				Owner:       &userpb.User{Id: &userpb.UserId{OpaqueId: owner}},
+				Description: description,
+			}
+			if storageID != "" || spaceID != "" {
+				space.Root = &provider.ResourceId{StorageId: storageID, SpaceId: spaceID}
+			}
+			if path != "" {
+				space.RootInfo = &provider.ResourceInfo{Path: path}
+			}
+			for _, r := range []struct {
+				name, group string
+				perms       *permissions.Role
+			}{{"reader", readers, permissions.NewViewerRole()}, {"writer", writers, permissions.NewEditorRole()}, {"admin", admins, permissions.NewManagerRole()}} {
+				if r.group == "" {
+					continue
+				}
+				// The roles as the catalogue returns them in AdminSpace.
+				space.Roles = append(space.Roles, &provider.SpaceRole{
+					RoleName:      r.name,
+					PermissionSet: r.perms.CS3ResourcePermissions(),
+					Recipients: []*provider.Grantee{{
+						Type: provider.GranteeType_GRANTEE_TYPE_GROUP,
+						Id:   &provider.Grantee_GroupId{GroupId: &grouppb.GroupId{OpaqueId: r.group}},
+					}},
+				})
+			}
+			return spaceChange(cmd, rt, fmt.Sprintf("register space %s, owned by %s, in the catalogue", args[0], owner),
 				func(ctx context.Context, sa adminpb.SpacesAdminClient) (*adminpb.AdminSpace, error) {
-					return sa.RegisterSpace(ctx, &req)
+					return sa.RegisterSpace(ctx, &adminpb.RegisterSpaceRequest{Space: space, Status: status})
 				})
 		},
 	}
 	f := cmd.Flags()
-	f.StringVar(&req.Owner, "owner", "", "the owner")
-	f.StringVar(&req.Path, "path", "", "the path of the space")
-	f.StringVar(&req.StorageId, "storage-id", "", "the storage that serves the space")
-	f.StringVar(&req.SpaceId, "space-id", "", "the space id (default: from the path)")
-	f.StringVar(&req.Readers, "readers", "", "the group of the readers")
-	f.StringVar(&req.Writers, "writers", "", "the group of the writers")
-	f.StringVar(&req.Admins, "admins", "", "the group of the admins")
-	f.StringVar(&req.Description, "description", "", "the description that users see")
-	f.StringVar(&req.Status, "status", "", "the status (default active)")
+	f.StringVar(&owner, "owner", "", "the owner")
+	f.StringVar(&path, "path", "", "the path of the space")
+	f.StringVar(&storageID, "storage-id", "", "the storage that serves the space")
+	f.StringVar(&spaceID, "space-id", "", "the space id (default: from the path)")
+	f.StringVar(&readers, "readers", "", "the group of the readers")
+	f.StringVar(&writers, "writers", "", "the group of the writers")
+	f.StringVar(&admins, "admins", "", "the group of the admins")
+	f.StringVar(&description, "description", "", "the description that users see")
+	f.StringVar(&status, "status", "", "the status (default active)")
 	_ = cmd.MarkFlagRequired("owner")
 	_ = cmd.RegisterFlagCompletionFunc("status", cobra.FixedCompletions(spaceStatuses, cobra.ShellCompDirectiveNoFileComp))
 	return cmd

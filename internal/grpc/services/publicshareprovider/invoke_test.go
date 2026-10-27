@@ -337,6 +337,8 @@ func TestList(t *testing.T) {
 		{map[string]any{"initiator": "admin1"}, []string{project}},
 		{map[string]any{"space": "home-einstein"}, []string{doc, other}},
 		{map[string]any{"space": "project-x", "owner": "einstein"}, []string{}},
+		{map[string]any{"resource_id": "home!101"}, []string{other}},
+		{map[string]any{"resource_id": "home$home-einstein!100", "space": "home-einstein"}, []string{doc}},
 		{map[string]any{"id": project}, []string{project}},
 		{map[string]any{"token": docToken}, []string{doc}},
 		{map[string]any{"id": "999"}, []string{}},
@@ -347,7 +349,7 @@ func TestList(t *testing.T) {
 		}
 	}
 
-	for _, args := range []map[string]any{{}, {"include_orphans": "true"}} {
+	for _, args := range []map[string]any{{}, {"include_orphans": "true"}, {"resource_id": "home"}} {
 		if err := s.InvokeStream(as("operator"), "list", args, func(invoke.Result) error { return nil }); err == nil {
 			t.Errorf("list %v: expected an error", args)
 		}

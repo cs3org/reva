@@ -23,6 +23,7 @@ import (
 	"context"
 	"maps"
 	"slices"
+	"strconv"
 	"sync"
 	"testing"
 
@@ -38,6 +39,7 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
+	"google.golang.org/protobuf/types/known/fieldmaskpb"
 )
 
 type quotaCall struct {
@@ -60,6 +62,7 @@ func (f *fakeQuotaProviders) set(node, mountID, provides string) *invoke.Set {
 		SpaceType string  `arg:"space_type"`
 		Owner     string  `arg:"owner"`
 		MaxBytes  *uint64 `arg:"max_bytes"`
+		MaxFiles  *uint64 `arg:"max_files"`
 	}
 	type listArgs struct {
 		MinBytes string `arg:"min_bytes"`
@@ -76,7 +79,7 @@ func (f *fakeQuotaProviders) set(node, mountID, provides string) *invoke.Set {
 		if t == string(spaces.SpaceTypeProject) {
 			form = "project"
 		}
-		return invoke.Result{"root": a.Root, "mount_id": mountID, "max_bytes": maxBytes, "physical_max_bytes": 2 * maxBytes, "form": form, "space_type": t, "owner": a.Owner}
+		return invoke.Result{"root": a.Root, "mount_id": mountID, "max_bytes": maxBytes, "used_bytes": 400, "physical_max_bytes": 2 * maxBytes, "form": form, "space_type": t, "owner": a.Owner}
 	}
 	set := invoke.NewSet()
 	set.Add("quota_get", "").Handle(invoke.Typed(func(_ context.Context, a quotaArgs) (invoke.Result, error) {
@@ -84,13 +87,20 @@ func (f *fakeQuotaProviders) set(node, mountID, provides string) *invoke.Set {
 		return result(a, 1000), nil
 	}))
 	set.Add("quota_set", "").Mutating().Handle(invoke.Typed(func(_ context.Context, a quotaArgs) (invoke.Result, error) {
-		record("quota_set", map[string]string{"root": a.Root, "space_type": a.SpaceType, "owner": a.Owner})
+		args := map[string]string{"root": a.Root, "space_type": a.SpaceType, "owner": a.Owner}
+		if a.MaxBytes != nil {
+			args["max_bytes"] = strconv.FormatUint(*a.MaxBytes, 10)
+		}
+		if a.MaxFiles != nil {
+			args["max_files"] = strconv.FormatUint(*a.MaxFiles, 10)
+		}
+		record("quota_set", args)
 		return result(a, *a.MaxBytes), nil
 	}))
 	set.Add("quota_list", "").HandleStream(invoke.TypedStream(func(_ context.Context, a listArgs, emit invoke.StreamEmit) error {
 		record("quota_list", map[string]string{"min_bytes": a.MinBytes})
 		for _, r := range []string{"x", "y"} {
-			if err := emit(invoke.Result{"root": "/" + mountID + "/" + r, "mount_id": mountID, "max_bytes": 10}); err != nil {
+			if err := emit(invoke.Result{"root": "/" + mountID + "/" + r, "mount_id": mountID, "max_bytes": 10, "used_bytes": 30, "max_files": 5, "used_files": 2}); err != nil {
 				return err
 			}
 		}
@@ -122,7 +132,7 @@ func quotaFleet(t *testing.T) (adminpb.SpacesAdminClient, *fakeQuotaProviders) {
 		Id:        &provider.StorageSpaceId{OpaqueId: "eosproject-c$cms"},
 		Name:      "cms",
 		SpaceType: string(spaces.SpaceTypeProject),
-		Owner:     &userpb.User{Id: &userpb.UserId{OpaqueId: "cmsadm"}},
+		Owner:     &userpb.User{Id: &userpb.UserId{Idp: "cern", OpaqueId: "cmsadm"}},
 		RootInfo:  &provider.ResourceInfo{Path: "/eos/project/c/cms"},
 	}})
 
@@ -179,8 +189,12 @@ func TestGetSpaceQuotaFindsTheSpaceAndItsInstance(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if q.Form != "project" || q.MountId != "eosproject-c" || q.Space.GetId().GetOpaqueId() != "eosproject-c$cms" || q.PhysicalMaxBytes != 2000 {
+	if q.Form != "project" || q.MountId != "eosproject-c" || q.Space.GetId().GetOpaqueId() != "eosproject-c$cms" || q.PhysicalMaxBytes != 2000 || q.Owner.GetIdp() != "cern" {
 		t.Errorf("project quota = %v", q)
+	}
+	// The storage gives what is used, and CS3 has what remains.
+	if q.Quota.GetQuotaMaxBytes() != 1000 || q.Quota.GetRemainingBytes() != 600 || q.UsedBytes != 400 {
+		t.Errorf("quota = %v, want 600 of 1000 bytes remaining", q.Quota)
 	}
 	want := quotaCall{node: "proj-c1:9001/storageprovider", invocation: "quota_get",
 		args: map[string]string{"root": "/eos/project/c/cms", "space_type": "project", "owner": "cmsadm"}}
@@ -194,7 +208,7 @@ func TestGetSpaceQuotaFindsTheSpaceAndItsInstance(t *testing.T) {
 		if err != nil {
 			t.Fatalf("%v: %v", ref, err)
 		}
-		if q.Root != home || q.Form != "user" || q.SpaceType != "personal" || q.MountId != "eoshome-a" || q.Space != nil {
+		if q.Root != home || q.Form != "user" || q.SpaceType != "personal" || q.MountId != "eoshome-a" || q.Space != nil || q.Owner != nil {
 			t.Errorf("%v: home quota = %v", ref, q)
 		}
 	}
@@ -214,20 +228,27 @@ func TestGetSpaceQuotaFindsTheSpaceAndItsInstance(t *testing.T) {
 func TestSetSpaceQuota(t *testing.T) {
 	c, f := quotaFleet(t)
 	ctx := context.Background()
-	if _, err := c.SetSpaceQuota(ctx, &adminpb.SetSpaceQuotaRequest{Ref: byName("cms")}); status.Code(err) != codes.InvalidArgument {
-		t.Fatalf("a set without values: got %v, want InvalidArgument", err)
+	limits := &provider.Quota{QuotaMaxBytes: 5000}
+	for _, mask := range []*fieldmaskpb.FieldMask{nil, {Paths: []string{"remaining_bytes"}}} {
+		if _, err := c.SetSpaceQuota(ctx, &adminpb.SetSpaceQuotaRequest{Ref: byName("cms"), Quota: limits, UpdateMask: mask}); status.Code(err) != codes.InvalidArgument {
+			t.Fatalf("mask %v: got %v, want InvalidArgument", mask, err)
+		}
 	}
-	maxBytes := uint64(5000)
-	q, err := c.SetSpaceQuota(ctx, &adminpb.SetSpaceQuotaRequest{Ref: byPath("/eos/project/c/cms/some/folder"), MaxBytes: &maxBytes})
+	q, err := c.SetSpaceQuota(ctx, &adminpb.SetSpaceQuotaRequest{Ref: byPath("/eos/project/c/cms/some/folder"), Quota: limits, UpdateMask: &fieldmaskpb.FieldMask{Paths: []string{"quota_max_bytes"}}})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if q.MaxBytes != 5000 || q.Root != "/eos/project/c/cms" {
+	if q.Quota.GetQuotaMaxBytes() != 5000 || q.Quota.GetRemainingBytes() != 4600 || q.Root != "/eos/project/c/cms" {
 		t.Errorf("quota = %v", q)
 	}
-	// The quota goes on the root of the space, never on a folder in it.
-	if calls := f.callsOf("quota_set"); len(calls) != 1 || calls[0].args["root"] != "/eos/project/c/cms" {
-		t.Errorf("calls = %v", calls)
+	// The quota goes on the root of the space, never on a folder in it, and
+	// a limit that the mask does not name is not sent.
+	calls := f.callsOf("quota_set")
+	if len(calls) != 1 || calls[0].args["root"] != "/eos/project/c/cms" {
+		t.Fatalf("calls = %v", calls)
+	}
+	if _, ok := calls[0].args["max_files"]; ok || calls[0].args["max_bytes"] != "5000" {
+		t.Errorf("quota_set args = %v", calls[0].args)
 	}
 }
 
@@ -245,6 +266,10 @@ func TestListSpaceQuotasAsksOneInstanceOfEachMount(t *testing.T) {
 	var got []string
 	for _, q := range qs {
 		got = append(got, q.MountId+":"+q.Root)
+		// Over the limit, nothing remains, and the usage is still known.
+		if q.Quota.GetRemainingBytes() != 0 || q.Quota.GetRemainingFiles() != 3 || q.UsedBytes != 30 || q.UsedFiles != 2 {
+			t.Errorf("%s: quota = %v", q.Root, q.Quota)
+		}
 	}
 	slices.Sort(got)
 	want := []string{"eoshome-a:/eoshome-a/x", "eoshome-a:/eoshome-a/y", "eosproject-c:/eosproject-c/x", "eosproject-c:/eosproject-c/y"}

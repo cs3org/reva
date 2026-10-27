@@ -42,6 +42,7 @@ import (
 	sqlmgr "github.com/cs3org/reva/v3/pkg/share/manager/sql"
 	"github.com/cs3org/reva/v3/pkg/sharedconf"
 	"google.golang.org/grpc"
+	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/proto"
 )
 
@@ -260,6 +261,8 @@ func TestList(t *testing.T) {
 		{map[string]any{"sharee": "marie"}, []string{doc, project}},
 		{map[string]any{"sharee": "marie", "owner": "cbox"}, []string{project}},
 		{map[string]any{"space": "home-einstein"}, []string{doc, other}},
+		{map[string]any{"resource_id": "home!100"}, []string{doc}},
+		{map[string]any{"resource_id": "home$home-einstein!101", "owner": "einstein"}, []string{other}},
 		{map[string]any{"id": project}, []string{project}},
 		{map[string]any{"id": "999"}, []string{}},
 		{map[string]any{"path": "/home/einstein/doc", "owner": "einstein"}, []string{doc}},
@@ -270,7 +273,7 @@ func TestList(t *testing.T) {
 		}
 	}
 
-	for _, args := range []map[string]any{{}, {"include_orphans": "true"}, {"path": "/home/einstein/doc"}} {
+	for _, args := range []map[string]any{{}, {"include_orphans": "true"}, {"path": "/home/einstein/doc"}, {"resource_id": "100"}} {
 		if err := s.InvokeStream(as("operator"), "list", args, func(invoke.Result) error { return nil }); err == nil {
 			t.Errorf("list %v: expected an error", args)
 		}
@@ -304,6 +307,29 @@ func TestGet(t *testing.T) {
 	}
 	if _, err := s.Invoke(as("operator"), "get", map[string]any{"id": "999"}); !isNotFound(err) {
 		t.Fatalf("expected not found, got %v", err)
+	}
+
+	key := func(owner, storage, opaque, sharee string) string {
+		b, err := protojson.Marshal(&collaboration.ShareKey{
+			Owner:      &userpb.UserId{OpaqueId: owner},
+			ResourceId: &provider.ResourceId{StorageId: storage, OpaqueId: opaque},
+			Grantee:    userGrantee(&userpb.UserId{OpaqueId: sharee}),
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		return string(b)
+	}
+	if res := mustInvoke(t, s, "get", map[string]any{"key": key("einstein", "home", "100", "marie")}); idOf(res) != id {
+		t.Fatalf("get by key: unexpected result %v", res)
+	}
+	if _, err := s.Invoke(as("operator"), "get", map[string]any{"key": key("einstein", "home", "100", "bob")}); !isNotFound(err) {
+		t.Fatalf("get by the key of no share: expected not found, got %v", err)
+	}
+	for _, args := range []map[string]any{{}, {"id": id, "key": key("einstein", "home", "100", "marie")}, {"key": `{"owner":{"opaqueId":"einstein"}}`}, {"key": "{"}} {
+		if _, err := s.Invoke(as("operator"), "get", args); err == nil || isNotFound(err) {
+			t.Errorf("get %v: got %v, want a bad request", args, err)
+		}
 	}
 }
 

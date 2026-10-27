@@ -28,12 +28,16 @@ import (
 	"strings"
 	"time"
 
+	collaboration "github.com/cs3org/go-cs3apis/cs3/sharing/collaboration/v1beta1"
+	link "github.com/cs3org/go-cs3apis/cs3/sharing/link/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	typespb "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
 	"github.com/cs3org/reva/v3/pkg/admin"
 	"github.com/cs3org/reva/v3/pkg/admin/adminpb"
+	"github.com/cs3org/reva/v3/pkg/permissions"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
+	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/proto"
 )
 
@@ -47,14 +51,16 @@ const (
 
 func (a *sharesAdmin) ListShares(req *adminpb.ListSharesRequest, stream adminpb.SharesAdmin_ListSharesServer) error {
 	ctx := stream.Context()
-	spaceID, err := a.s.shareSpaceID(ctx, req.GetSpace())
+	args, err := shareFilterArgs(req.GetFilters())
 	if err != nil {
 		return err
 	}
-	args := shareArgs(map[string]string{
-		"owner": req.GetOwner(), "initiator": req.GetInitiator(), "sharee": req.GetSharee(), "id": req.GetId(),
-		"space": spaceID, "path": req.GetPath(), "as": req.GetAs(), "resolve_paths": shareBool(req.GetResolvePaths()),
-	})
+	if err := a.s.addSpace(ctx, args, req.GetSpace()); err != nil {
+		return err
+	}
+	maps.Copy(args, shareArgs(map[string]string{
+		"path": req.GetPath(), "as": req.GetAs().GetOpaqueId(), "resolve_paths": shareBool(req.GetResolvePaths()),
+	}))
 	addSelection(args, req.GetOrphans(), req.GetExpired())
 	eps, err := a.s.serviceEndpoints(userShareService)
 	if err != nil {
@@ -70,58 +76,84 @@ func (a *sharesAdmin) ListShares(req *adminpb.ListSharesRequest, stream adminpb.
 }
 
 func (a *sharesAdmin) GetShare(ctx context.Context, req *adminpb.GetShareRequest) (*adminpb.AdminShare, error) {
-	if req.GetId() == "" {
-		return nil, shareArgRequired("id")
+	args, err := shareRefArgs(req.GetRef())
+	if err != nil {
+		return nil, err
 	}
 	out := &adminpb.AdminShare{}
-	if err := a.s.invokeDecoded(ctx, userShareService, "get", map[string]string{"id": req.GetId()}, out); err != nil {
+	if err := a.s.invokeDecoded(ctx, userShareService, "get", args, out); err != nil {
 		return nil, err
 	}
 	return out, nil
 }
 
-func (a *sharesAdmin) UpdateShare(ctx context.Context, req *adminpb.UpdateShareRequest) (*adminpb.AdminShare, error) {
-	if req.GetId() == "" {
-		return nil, shareArgRequired("id")
+// shareID returns the id of the share of ref. The mutations of the share
+// provider take an id, so a key is resolved with get first.
+func (a *sharesAdmin) shareID(ctx context.Context, ref *collaboration.ShareReference) (string, error) {
+	if id := ref.GetId().GetOpaqueId(); id != "" {
+		return id, nil
 	}
-	exp, err := expiresArg(req.GetExpiration(), req.GetRemoveExpiration())
+	s, err := a.GetShare(ctx, &adminpb.GetShareRequest{Ref: ref})
+	if err != nil {
+		return "", err
+	}
+	if id := s.GetShare().GetId().GetOpaqueId(); id != "" {
+		return id, nil
+	}
+	return "", status.Error(codes.Internal, "admin: the share provider returned a share without an id")
+}
+
+func (a *sharesAdmin) UpdateShare(ctx context.Context, req *adminpb.UpdateShareRequest) (*adminpb.AdminShare, error) {
+	role, exp, err := shareUpdateArgs(req.GetFields())
 	if err != nil {
 		return nil, err
 	}
-	args := shareArgs(map[string]string{"id": req.GetId(), "role": req.GetRole(), "expires_at": exp, "fallback": shareBool(req.GetFallback())})
-	return a.shareMutation(ctx, "update_share", req.GetId(), req.GetFallback(), "update", args,
-		map[string]string{"role": req.GetRole(), "expires_at": exp})
+	id, err := a.shareID(ctx, req.GetRef())
+	if err != nil {
+		return nil, err
+	}
+	args := shareArgs(map[string]string{"id": id, "role": role, "expires_at": exp, "fallback": shareBool(req.GetFallback())})
+	return a.shareMutation(ctx, "update_share", id, req.GetFallback(), "update", args,
+		map[string]string{"role": role, "expires_at": exp})
 }
 
 func (a *sharesAdmin) RemoveShare(ctx context.Context, req *adminpb.RemoveShareRequest) (*adminpb.AdminShare, error) {
-	if req.GetId() == "" {
-		return nil, shareArgRequired("id")
+	id, err := a.shareID(ctx, req.GetRef())
+	if err != nil {
+		return nil, err
 	}
-	args := shareArgs(map[string]string{"id": req.GetId(), "db_only": shareBool(req.GetDbOnly()), "fallback": shareBool(req.GetFallback())})
-	return a.shareMutation(ctx, "remove_share", req.GetId(), req.GetFallback(), "remove", args,
+	args := shareArgs(map[string]string{"id": id, "db_only": shareBool(req.GetDbOnly()), "fallback": shareBool(req.GetFallback())})
+	return a.shareMutation(ctx, "remove_share", id, req.GetFallback(), "remove", args,
 		map[string]string{"db_only": shareBool(req.GetDbOnly())})
 }
 
 func (a *sharesAdmin) SyncShareExpiration(ctx context.Context, req *adminpb.SyncShareExpirationRequest) (*adminpb.AdminShare, error) {
-	if req.GetId() == "" {
-		return nil, shareArgRequired("id")
+	id, err := a.shareID(ctx, req.GetRef())
+	if err != nil {
+		return nil, err
 	}
-	return a.shareMutation(ctx, "sync_share_expiration", req.GetId(), false, "sync_expiry", map[string]string{"id": req.GetId()}, nil)
+	return a.shareMutation(ctx, "sync_share_expiration", id, false, "sync_expiry", map[string]string{"id": id}, nil)
 }
 
 func (a *sharesAdmin) TransferShare(ctx context.Context, req *adminpb.TransferShareRequest) (*adminpb.AdminShare, error) {
-	if req.GetId() == "" || req.GetInitiator() == "" {
-		return nil, shareArgRequired("id and initiator")
+	initiator := req.GetInitiator().GetOpaqueId()
+	if initiator == "" {
+		return nil, shareArgRequired("initiator")
 	}
-	return a.shareMutation(ctx, "transfer_share", req.GetId(), false, "transfer",
-		map[string]string{"id": req.GetId(), "initiator": req.GetInitiator()}, map[string]string{"to": req.GetInitiator()})
+	id, err := a.shareID(ctx, req.GetRef())
+	if err != nil {
+		return nil, err
+	}
+	return a.shareMutation(ctx, "transfer_share", id, false, "transfer",
+		map[string]string{"id": id, "initiator": initiator}, map[string]string{"to": initiator})
 }
 
 func (a *sharesAdmin) MarkShareOrphan(ctx context.Context, req *adminpb.MarkShareOrphanRequest) (*adminpb.AdminShare, error) {
-	if req.GetId() == "" {
-		return nil, shareArgRequired("id")
+	id, err := a.shareID(ctx, req.GetRef())
+	if err != nil {
+		return nil, err
 	}
-	return a.shareMutation(ctx, "mark_share_orphan", req.GetId(), false, "mark_orphan", map[string]string{"id": req.GetId()}, nil)
+	return a.shareMutation(ctx, "mark_share_orphan", id, false, "mark_orphan", map[string]string{"id": id}, nil)
 }
 
 // shareMutation runs a mutating share invocation and audits it.
@@ -137,14 +169,16 @@ func (a *sharesAdmin) shareMutation(ctx context.Context, action, id string, fall
 
 func (a *sharesAdmin) ListPublicLinks(req *adminpb.ListPublicLinksRequest, stream adminpb.SharesAdmin_ListPublicLinksServer) error {
 	ctx := stream.Context()
-	spaceID, err := a.s.shareSpaceID(ctx, req.GetSpace())
+	args, err := linkFilterArgs(req.GetFilters())
 	if err != nil {
 		return err
 	}
-	args := shareArgs(map[string]string{
-		"id": req.GetRef().GetId(), "token": req.GetRef().GetToken(), "owner": req.GetOwner(), "initiator": req.GetInitiator(),
-		"space": spaceID, "resolve_paths": shareBool(req.GetResolvePaths()),
-	})
+	if err := a.s.addSpace(ctx, args, req.GetSpace()); err != nil {
+		return err
+	}
+	if req.GetResolvePaths() {
+		args["resolve_paths"] = "true"
+	}
 	addSelection(args, req.GetOrphans(), req.GetExpired())
 	eps, err := a.s.serviceEndpoints(publicShareService)
 	if err != nil {
@@ -176,17 +210,17 @@ func (a *sharesAdmin) UpdatePublicLink(ctx context.Context, req *adminpb.UpdateP
 	if err != nil {
 		return nil, err
 	}
-	exp, err := expiresArg(req.GetExpiration(), req.GetRemoveExpiration())
+	role, exp, password, err := linkUpdateArgs(req.GetUpdates())
 	if err != nil {
 		return nil, err
 	}
-	maps.Copy(args, shareArgs(map[string]string{"role": req.GetRole(), "expires_at": exp, "fallback": shareBool(req.GetFallback())}))
+	maps.Copy(args, shareArgs(map[string]string{"role": role, "expires_at": exp, "fallback": shareBool(req.GetFallback())}))
 	// The audit tells only whether the password changed.
-	fields := map[string]string{"role": req.GetRole(), "expires_at": exp}
-	if req.Password != nil {
-		args["password"] = req.GetPassword()
+	fields := map[string]string{"role": role, "expires_at": exp}
+	if password != nil {
+		args["password"] = *password
 		fields["password"] = "set"
-		if req.GetPassword() == "" {
+		if *password == "" {
 			fields["password"] = "removed"
 		}
 	}
@@ -213,11 +247,12 @@ func (a *sharesAdmin) TransferPublicLink(ctx context.Context, req *adminpb.Trans
 	if err != nil {
 		return nil, err
 	}
-	if req.GetInitiator() == "" {
+	initiator := req.GetInitiator().GetOpaqueId()
+	if initiator == "" {
 		return nil, shareArgRequired("initiator")
 	}
-	args["initiator"] = req.GetInitiator()
-	return a.linkMutation(ctx, "transfer_public_link", req.GetRef(), false, "transfer", args, map[string]string{"to": req.GetInitiator()})
+	args["initiator"] = initiator
+	return a.linkMutation(ctx, "transfer_public_link", req.GetRef(), false, "transfer", args, map[string]string{"to": initiator})
 }
 
 func (a *sharesAdmin) MarkPublicLinkOrphan(ctx context.Context, req *adminpb.MarkPublicLinkOrphanRequest) (*adminpb.AdminPublicShare, error) {
@@ -229,14 +264,14 @@ func (a *sharesAdmin) MarkPublicLinkOrphan(ctx context.Context, req *adminpb.Mar
 }
 
 // linkMutation runs a mutating link invocation and audits it.
-func (a *sharesAdmin) linkMutation(ctx context.Context, action string, ref *adminpb.PublicLinkRef, fallback bool, invocation string, args, fields map[string]string) (*adminpb.AdminPublicShare, error) {
+func (a *sharesAdmin) linkMutation(ctx context.Context, action string, ref *link.PublicShareReference, fallback bool, invocation string, args, fields map[string]string) (*adminpb.AdminPublicShare, error) {
 	out := &adminpb.AdminPublicShare{}
 	err := a.s.invokeDecoded(ctx, publicShareService, invocation, args, out)
 	// The token of a link opens it, so the audit names the link by id only.
-	target := "link:" + ref.GetId()
+	target := "link:" + ref.GetId().GetOpaqueId()
 	if id := out.GetPublicShare().GetId().GetOpaqueId(); id != "" {
 		target = "link:" + id
-	} else if ref.GetId() == "" {
+	} else if ref.GetId().GetOpaqueId() == "" {
 		target = "link:<token>"
 	}
 	auditShares(ctx, action, target, fallback, err, fields)
@@ -259,14 +294,13 @@ func (a *sharesAdmin) MoveShares(req *adminpb.MoveSharesRequest, stream adminpb.
 		return status.Error(codes.InvalidArgument, "admin: from_path and to_path must be absolute, and from_path must not be /")
 	case from == to:
 		return status.Error(codes.InvalidArgument, "admin: from_path and to_path are the same")
-	case req.GetOwner() == "" && req.GetSpace() == nil:
+	case req.GetOwner().GetOpaqueId() == "" && req.GetSpace() == nil:
 		return shareArgRequired("owner or space")
 	}
-	spaceID, err := a.s.shareSpaceID(ctx, req.GetSpace())
-	if err != nil {
+	listArgs := shareArgs(map[string]string{"owner": req.GetOwner().GetOpaqueId(), "resolve_paths": "true"})
+	if err := a.s.addSpace(ctx, listArgs, req.GetSpace()); err != nil {
 		return err
 	}
-	listArgs := shareArgs(map[string]string{"owner": req.GetOwner(), "space": spaceID, "resolve_paths": "true"})
 	newPath := func(current string, extra map[string]string) (string, string, bool) {
 		p := current
 		if p == "" {
@@ -283,7 +317,7 @@ func (a *sharesAdmin) MoveShares(req *adminpb.MoveSharesRequest, stream adminpb.
 	if err != nil {
 		return err
 	}
-	shareListArgs := shareArgs(map[string]string{"as": req.GetAs()})
+	shareListArgs := shareArgs(map[string]string{"as": req.GetAs().GetOpaqueId()})
 	maps.Copy(shareListArgs, listArgs)
 	if err := relayStream(ctx, shareEps, "list", shareListArgs, func(m *adminpb.AdminShare) error {
 		if p, np, ok := newPath(m.GetPath(), m.GetExtra()); ok {
@@ -338,7 +372,7 @@ func (a *sharesAdmin) MoveShares(req *adminpb.MoveSharesRequest, stream adminpb.
 // moveOne moves one item of MoveShares, and puts the moved share or link in
 // it.
 func (a *sharesAdmin) moveOne(ctx context.Context, it *adminpb.MovedShare, req *adminpb.MoveSharesRequest) error {
-	args := shareArgs(map[string]string{"path": it.GetToPath(), "as": req.GetAs()})
+	args := shareArgs(map[string]string{"path": it.GetToPath(), "as": req.GetAs().GetOpaqueId()})
 	var service string
 	var out proto.Message
 	switch {
@@ -376,6 +410,24 @@ func (s *svc) invokeDecoded(ctx context.Context, service, invocation string, arg
 		return err
 	}
 	return decode(res.ResultJSON, m)
+}
+
+// addSpace sets the space argument of a list invocation for ref, unless ref
+// is nil. A SPACE_ID filter has set it already, and the two are refused
+// together rather than combined, because a space has one id.
+func (s *svc) addSpace(ctx context.Context, args map[string]string, ref *adminpb.SpaceRef) error {
+	if ref == nil {
+		return nil
+	}
+	if _, ok := args["space"]; ok {
+		return status.Error(codes.InvalidArgument, "admin: give the space in a SPACE_ID filter or in space, not both")
+	}
+	id, err := s.shareSpaceID(ctx, ref)
+	if err != nil {
+		return err
+	}
+	args["space"] = id
+	return nil
 }
 
 // shareSpaceID returns the space id that the share tables keep for ref: the
@@ -427,10 +479,14 @@ func (s *svc) shareSpaceID(ctx context.Context, ref *adminpb.SpaceRef) (string, 
 	if id == "" {
 		return "", shareArgRequired("a space id")
 	}
+	return tableSpaceID(id), nil
+}
+
+func tableSpaceID(id string) string {
 	if _, spaceID, ok := strings.Cut(id, "$"); ok {
-		return spaceID, nil
+		return spaceID
 	}
-	return id, nil
+	return id
 }
 
 // addSelection sets the list arguments of the share invocations for the
@@ -458,31 +514,205 @@ func keepSelected(orphans, expired adminpb.ShareSelection) func(orphan bool, exp
 	}
 }
 
-// expiresArg returns the expires_at argument of the update invocations.
-func expiresArg(exp *typespb.Timestamp, remove bool) (string, error) {
-	switch {
-	case exp != nil && remove:
-		return "", status.Error(codes.InvalidArgument, "admin: give expiration or remove_expiration, not both")
-	case remove:
-		return "none", nil
-	case exp != nil:
-		return time.Unix(int64(exp.GetSeconds()), 0).UTC().Format(time.RFC3339), nil
+// shareRefArgs returns the arguments of the get invocation for ref.
+func shareRefArgs(ref *collaboration.ShareReference) (map[string]string, error) {
+	switch r := ref.GetSpec().(type) {
+	case *collaboration.ShareReference_Id:
+		if id := r.Id.GetOpaqueId(); id != "" {
+			return map[string]string{"id": id}, nil
+		}
+	case *collaboration.ShareReference_Key:
+		if r.Key != nil {
+			b, err := protojson.Marshal(r.Key)
+			if err != nil {
+				return nil, status.Errorf(codes.InvalidArgument, "admin: the share key: %v", err)
+			}
+			return map[string]string{"key": string(b)}, nil
+		}
 	}
-	return "", nil
+	return nil, shareArgRequired("the id or the key of the share")
 }
 
-func linkArgs(ref *adminpb.PublicLinkRef) (map[string]string, error) {
-	switch r := ref.GetRef().(type) {
-	case *adminpb.PublicLinkRef_Id:
-		if r.Id != "" {
-			return map[string]string{"id": r.Id}, nil
+func linkArgs(ref *link.PublicShareReference) (map[string]string, error) {
+	switch r := ref.GetSpec().(type) {
+	case *link.PublicShareReference_Id:
+		if id := r.Id.GetOpaqueId(); id != "" {
+			return map[string]string{"id": id}, nil
 		}
-	case *adminpb.PublicLinkRef_Token:
+	case *link.PublicShareReference_Token:
 		if r.Token != "" {
 			return map[string]string{"token": r.Token}, nil
 		}
 	}
 	return nil, shareArgRequired("the id or the token of the link")
+}
+
+// filterArgs collects the list arguments of the CS3 filters. The invocations
+// take one value of each argument, so a second filter of a type is refused
+// rather than read as the OR of CS3.
+type filterArgs map[string]string
+
+func (f filterArgs) set(typ fmt.Stringer, name, value string) error {
+	if value == "" {
+		return status.Errorf(codes.InvalidArgument, "admin: the %s filter has no value", typ)
+	}
+	if _, ok := f[name]; ok {
+		return status.Errorf(codes.InvalidArgument, "admin: give at most one %s filter", typ)
+	}
+	f[name] = value
+	return nil
+}
+
+// shareFilterArgs maps the CS3 share filters onto the arguments of the list
+// invocation of the usershareprovider.
+func shareFilterArgs(filters []*collaboration.Filter) (map[string]string, error) {
+	args := filterArgs{}
+	for _, f := range filters {
+		var err error
+		switch t := f.GetType(); t {
+		case collaboration.Filter_TYPE_OWNER:
+			err = args.set(t, "owner", f.GetOwner().GetOpaqueId())
+		case collaboration.Filter_TYPE_CREATOR:
+			err = args.set(t, "initiator", f.GetCreator().GetOpaqueId())
+		case collaboration.Filter_TYPE_GRANTEE:
+			err = args.set(t, "sharee", granteeName(f.GetGrantee()))
+		case collaboration.Filter_TYPE_RESOURCE_ID:
+			err = args.set(t, "resource_id", resourceIDArg(f.GetResourceId()))
+		case collaboration.Filter_TYPE_SPACE_ID:
+			err = args.set(t, "space", tableSpaceID(f.GetSpaceId()))
+		default:
+			err = status.Errorf(codes.InvalidArgument, "admin: the share provider cannot filter by %s", t)
+		}
+		if err != nil {
+			return nil, err
+		}
+	}
+	return args, nil
+}
+
+// linkFilterArgs maps the CS3 link filters onto the arguments of the list
+// invocation of the publicshareprovider.
+func linkFilterArgs(filters []*link.ListPublicSharesRequest_Filter) (map[string]string, error) {
+	args := filterArgs{}
+	for _, f := range filters {
+		var err error
+		switch t := f.GetType(); t {
+		case link.ListPublicSharesRequest_Filter_TYPE_OWNER:
+			err = args.set(t, "owner", f.GetOwner().GetOpaqueId())
+		case link.ListPublicSharesRequest_Filter_TYPE_CREATOR:
+			err = args.set(t, "initiator", f.GetCreator().GetOpaqueId())
+		case link.ListPublicSharesRequest_Filter_TYPE_RESOURCE_ID:
+			err = args.set(t, "resource_id", resourceIDArg(f.GetResourceId()))
+		default:
+			err = status.Errorf(codes.InvalidArgument, "admin: the link provider cannot filter by %s", t)
+		}
+		if err != nil {
+			return nil, err
+		}
+	}
+	return args, nil
+}
+
+// granteeName is the share_with of the share table, which keeps the name of
+// a user and of a group alike.
+func granteeName(g *provider.Grantee) string {
+	switch g.GetType() {
+	case provider.GranteeType_GRANTEE_TYPE_USER:
+		return g.GetUserId().GetOpaqueId()
+	case provider.GranteeType_GRANTEE_TYPE_GROUP:
+		return g.GetGroupId().GetOpaqueId()
+	}
+	return ""
+}
+
+func resourceIDArg(id *provider.ResourceId) string {
+	if id.GetStorageId() == "" || id.GetOpaqueId() == "" {
+		return ""
+	}
+	return id.GetStorageId() + "!" + id.GetOpaqueId()
+}
+
+// shareUpdateArgs maps the CS3 share updates onto the role and expires_at
+// arguments of the update invocation of the usershareprovider.
+func shareUpdateArgs(fields []*collaboration.UpdateShareRequest_UpdateField) (role, expiresAt string, err error) {
+	for _, f := range fields {
+		switch v := f.GetField().(type) {
+		case *collaboration.UpdateShareRequest_UpdateField_Permissions:
+			if role != "" {
+				return "", "", status.Error(codes.InvalidArgument, "admin: give the permissions once")
+			}
+			if role, err = roleName(v.Permissions.GetPermissions()); err != nil {
+				return "", "", err
+			}
+		case *collaboration.UpdateShareRequest_UpdateField_Expiration:
+			if expiresAt != "" {
+				return "", "", status.Error(codes.InvalidArgument, "admin: give the expiration once")
+			}
+			expiresAt = expiresArg(v.Expiration)
+		case *collaboration.UpdateShareRequest_UpdateField_DisplayName:
+			return "", "", status.Error(codes.InvalidArgument, "admin: the display name of a share cannot be changed")
+		default:
+			return "", "", status.Error(codes.InvalidArgument, "admin: an update field has no value")
+		}
+	}
+	if role == "" && expiresAt == "" {
+		return "", "", shareArgRequired("a change of the permissions or of the expiration")
+	}
+	return role, expiresAt, nil
+}
+
+// linkUpdateArgs maps the CS3 link updates onto the role, expires_at and
+// password arguments of the update invocation of the publicshareprovider.
+func linkUpdateArgs(updates []*link.UpdatePublicShareRequest_Update) (role, expiresAt string, password *string, err error) {
+	seen := map[link.UpdatePublicShareRequest_Update_Type]bool{}
+	for _, u := range updates {
+		t := u.GetType()
+		if seen[t] {
+			return "", "", nil, status.Errorf(codes.InvalidArgument, "admin: give at most one %s update", t)
+		}
+		seen[t] = true
+		switch t {
+		case link.UpdatePublicShareRequest_Update_TYPE_PERMISSIONS:
+			if role, err = roleName(u.GetGrant().GetPermissions().GetPermissions()); err != nil {
+				return "", "", nil, err
+			}
+		case link.UpdatePublicShareRequest_Update_TYPE_EXPIRATION:
+			expiresAt = expiresArg(u.GetGrant().GetExpiration())
+		case link.UpdatePublicShareRequest_Update_TYPE_PASSWORD:
+			pw := u.GetGrant().GetPassword()
+			password = &pw
+		default:
+			return "", "", nil, status.Errorf(codes.InvalidArgument, "admin: the link provider cannot apply a %s update", t)
+		}
+	}
+	if len(seen) == 0 {
+		return "", "", nil, shareArgRequired("a change of the permissions, of the expiration or of the password")
+	}
+	return role, expiresAt, password, nil
+}
+
+// roleName returns the name of the role with the permissions p, which the
+// update invocations take. The providers give a role its own permissions, so
+// permissions that are of no role cannot be set.
+func roleName(p *provider.ResourcePermissions) (string, error) {
+	if p == nil {
+		return "", status.Error(codes.InvalidArgument, "admin: the permissions update has no permissions")
+	}
+	switch r := permissions.RoleFromResourcePermissions(p); r.Name {
+	case permissions.RoleUnknown, permissions.RoleLegacy:
+		return "", status.Error(codes.InvalidArgument, "admin: the permissions are not those of a role")
+	default:
+		return r.Name, nil
+	}
+}
+
+// expiresArg returns the expires_at argument of the update invocations. CS3
+// removes an expiration with an empty one.
+func expiresArg(exp *typespb.Timestamp) string {
+	if exp.GetSeconds() == 0 {
+		return "none"
+	}
+	return time.Unix(int64(exp.GetSeconds()), 0).UTC().Format(time.RFC3339)
 }
 
 // auditShares records a mutation that the admin service asked for. The

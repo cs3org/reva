@@ -21,10 +21,12 @@ package revacmd
 import (
 	"context"
 	"net"
+	"slices"
 	"strings"
 	"sync"
 	"testing"
 
+	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/cs3org/reva/v3/pkg/admin/adminpb"
 	"github.com/cs3org/reva/v3/pkg/cli/clitest"
 	"google.golang.org/grpc"
@@ -54,14 +56,15 @@ func (f *fakeQuotaAdmin) GetSpaceQuota(_ context.Context, req *adminpb.GetSpaceQ
 	if req.Ref.GetName() != "cernbox" {
 		return nil, status.Error(codes.NotFound, "no such space")
 	}
-	return &adminpb.SpaceQuota{Root: "/eos/project/c/cernbox", MaxBytes: 1e12, PhysicalMaxBytes: 2e12, UsedBytes: 4e11, Form: "project", MountId: "eosproject-c"}, nil
+	return &adminpb.SpaceQuota{Root: "/eos/project/c/cernbox", Quota: &provider.Quota{QuotaMaxBytes: 1e12, RemainingBytes: 6e11, QuotaMaxFiles: 1e6, RemainingFiles: 999_000}, UsedBytes: 4e11, UsedFiles: 1000, PhysicalMaxBytes: 2e12, Form: "project", MountId: "eosproject-c"}, nil
 }
 
 func (f *fakeQuotaAdmin) SetSpaceQuota(_ context.Context, req *adminpb.SetSpaceQuotaRequest) (*adminpb.SpaceQuota, error) {
 	f.mu.Lock()
 	f.sets = append(f.sets, req)
 	f.mu.Unlock()
-	return &adminpb.SpaceQuota{Root: "/eos/project/c/cernbox", MaxBytes: req.GetMaxBytes(), PhysicalMaxBytes: 2 * req.GetMaxBytes(), Form: "project"}, nil
+	limit := req.GetQuota().GetQuotaMaxBytes()
+	return &adminpb.SpaceQuota{Root: "/eos/project/c/cernbox", Quota: &provider.Quota{QuotaMaxBytes: limit, RemainingBytes: limit}, PhysicalMaxBytes: 2 * limit, Form: "project"}, nil
 }
 
 func (f *fakeQuotaAdmin) ListSpaceQuotas(req *adminpb.ListSpaceQuotasRequest, s adminpb.SpacesAdmin_ListSpaceQuotasServer) error {
@@ -69,11 +72,12 @@ func (f *fakeQuotaAdmin) ListSpaceQuotas(req *adminpb.ListSpaceQuotasRequest, s 
 	f.min = req.MinBytes
 	f.mu.Unlock()
 	for _, root := range []string{"/eos/user/b/bob", "/eos/user/a/alice"} {
-		if err := s.Send(&adminpb.SpaceQuota{Root: root, MaxBytes: 1e12, MountId: "eoshome-a"}); err != nil {
+		if err := s.Send(&adminpb.SpaceQuota{Root: root, Quota: &provider.Quota{QuotaMaxBytes: 1e12, RemainingBytes: 1e12}, MountId: "eoshome-a"}); err != nil {
 			return err
 		}
 	}
-	return nil
+	// Without a limit, the usage is still known.
+	return s.Send(&adminpb.SpaceQuota{Root: "/eos/user/c/carol", Quota: &provider.Quota{}, UsedBytes: 3e9, MountId: "eoshome-c"})
 }
 
 func runQuota(t *testing.T, f *fakeQuotaAdmin, args ...string) (string, error) {
@@ -97,7 +101,7 @@ func TestSpaceQuotaGetFallsBackToTheAdminPlane(t *testing.T) {
 	if err != nil {
 		t.Fatalf("%v\n%s", err, out)
 	}
-	for _, want := range []string{"/eos/project/c/cernbox", "1.0 TB", "2.0 TB", "project"} {
+	for _, want := range []string{"/eos/project/c/cernbox", "400 GB", "1.0 TB", "2.0 TB", "1000/1000000", "project"} {
 		if !strings.Contains(out, want) {
 			t.Errorf("output has no %q:\n%s", want, out)
 		}
@@ -113,7 +117,7 @@ func TestSpaceQuotaSet(t *testing.T) {
 	if err != nil {
 		t.Fatalf("%v\n%s", err, out)
 	}
-	if len(f.sets) != 1 || f.sets[0].GetMaxBytes() != 2e12 || f.sets[0].Ref.GetName() != "cernbox" {
+	if len(f.sets) != 1 || f.sets[0].GetQuota().GetQuotaMaxBytes() != 2e12 || f.sets[0].Ref.GetName() != "cernbox" || !slices.Equal(f.sets[0].GetUpdateMask().GetPaths(), []string{"quota_max_bytes"}) {
 		t.Fatalf("sets = %v", f.sets)
 	}
 	if !strings.Contains(out, `"physicalMaxBytes": "4000000000000"`) {
@@ -139,5 +143,8 @@ func TestSpaceQuotaList(t *testing.T) {
 	}
 	if a, b := strings.Index(out, "/eos/user/a/alice"), strings.Index(out, "/eos/user/b/bob"); a < 0 || b < a {
 		t.Errorf("want the quotas sorted by root:\n%s", out)
+	}
+	if !strings.Contains(out, "3.0 GB") {
+		t.Errorf("want the usage of a space without a limit:\n%s", out)
 	}
 }
