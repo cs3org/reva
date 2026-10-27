@@ -1,0 +1,72 @@
+baseURL = "https://reva.link/"
+title = "Reva"
+enableRobotsTXT = true
+enableGitInfo = true
+contentDir = "content/en"
+defaultContentLanguage = "en"
+disableKinds = ["taxonomy", "term", "rss"]
+
+[markup.goldmark.renderer]
+unsafe = true
+
+[markup.highlight]
+noClasses = false
+
+[markup.tableOfContents]
+startLevel = 2
+endLevel = 3
+
+[outputs]
+home = ["HTML", "SearchIndex"]
+
+[outputFormats.SearchIndex]
+mediaType = "application/json"
+baseName = "search"
+isPlainText = true
+notAlternative = true
+
+
+[params]
+description = "Reva connects cloud storage and applications through the CS3 APIs."
+github_repo = "https://github.com/cs3org/reva"
+github_subdir = "docs"
+# The deployment whose OpenAPI document the HTTP API page shows. Hugo fetches
+# it at build time; the build continues without it if it cannot be reached.
+openapi = "https://cernbox.cern.ch/openapi.json"
+swaggerui = "https://cdn.jsdelivr.net/npm/swagger-ui-dist@5.17.14"
+
+[[params.links]]
+name = "GitHub"
+url = "https://github.com/cs3org/reva"
+[[params.links]]
+name = "Gitter"
+url = "https://gitter.im/cs3org/reva"
+[[params.links]]
+name = "CS3 APIs"
+url = "https://buf.build/cs3org-buf/cs3apis"
+
+[menus]
+[[menus.main]]
+name = "Docs"
+pageRef = "/docs"
+weight = 10
+[[menus.main]]
+name = "Components"
+pageRef = "/docs/components"
+weight = 20
+[[menus.main]]
+name = "API"
+pageRef = "/docs/api"
+weight = 30
+[[menus.main]]
+name = "History"
+pageRef = "/history"
+weight = 40
+[[menus.main]]
+name = "Deployments"
+pageRef = "/deployments"
+weight = 50
+[[menus.main]]
+name = "Community"
+pageRef = "/community"
+weight = 60

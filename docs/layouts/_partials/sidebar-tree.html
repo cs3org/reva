@@ -1,0 +1,24 @@
+{{- /* A section's pages and subsections. Children with a category other than
+       the section's own are grouped under it; the others follow. A group is
+       collapsed unless it holds the current page. */ -}}
+{{- $current := .current }}
+{{- $children := slice }}
+{{- range .section.RegularPages.ByWeight }}{{ $children = $children | append . }}{{ end }}
+{{- range .section.Sections.ByWeight }}{{ $children = $children | append . }}{{ end }}
+{{- $groups := partial "category-groups.html" (dict "pages" $children "parent" (.section.Params.category | default "")) }}
+<ul>
+  {{- range $groups.categories }}
+  {{- $in := false }}{{ $n := 0 }}
+  {{- range .pages }}
+    {{- if or (eq . $current) ($current.IsDescendant .) }}{{ $in = true }}{{ end }}
+    {{- $n = add $n (cond .IsSection (len .RegularPagesRecursive) 1) }}
+  {{- end }}
+  <li>
+    <details{{ if $in }} open{{ end }}>
+      <summary><span>{{ .title }}</span><span class="count">{{ $n }}</span></summary>
+      <ul>{{ partial "sidebar-items.html" (dict "pages" .pages "current" $current) }}</ul>
+    </details>
+  </li>
+  {{- end }}
+  {{- partial "sidebar-items.html" (dict "pages" $groups.rest "current" $current) }}
+</ul>

@@ -1,0 +1,14 @@
+# Organisations that run reva in production. To add yours, open a pull
+# request that adds an entry. Only `id`, `name`, `organisation`, and
+# `summary` are required.
+deployments:
+  - id: cernbox
+    name: CERNBox
+    organisation: CERN
+    country: Switzerland
+    url: https://cernbox.web.cern.ch
+    summary: CERN's cloud storage, sync, and sharing service. Reva is its back end, on top of the EOS storage system.
+    users: "more than 32,000"
+    data: "more than 10 PB"
+    storage: EOS
+    uses: [WebDAV, OCS, Graph API, OCM, web apps, project spaces]

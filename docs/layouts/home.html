@@ -1,0 +1,68 @@
+{{ define "main" }}
+{{- $stats := hugo.Data.generated.stats }}
+{{- $act := hugo.Data.generated.activity }}
+{{- $people := hugo.Data.generated.contributors }}
+<section class="hero">
+  <div class="wrap">
+    <img class="logo" src="/logo.svg" alt="" width="177" height="72">
+    <h1>{{ .Params.headline }}</h1>
+    <p>{{ .Params.subline }}</p>
+    <div class="actions">
+      <a class="btn btn-primary" href="/docs/getting-started/">Get started</a>
+      <a class="btn btn-ghost" href="/docs/components/">Browse components</a>
+      <a class="btn btn-ghost" href="{{ site.Params.github_repo }}">GitHub</a>
+    </div>
+  </div>
+</section>
+
+<div class="wrap">
+  <div class="stats">
+    <a class="stat" href="/docs/changelog/{{ $stats.version }}/"><div class="num">v{{ $stats.version }}</div><div class="lbl">Released {{ time.Format "2 Jan 2006" $stats.release_date }}</div></a>
+    <a class="stat" href="/docs/components/"><div class="num">{{ $stats.components }}</div><div class="lbl">Components</div></a>
+    <a class="stat" href="/docs/components/drivers/"><div class="num">{{ index $stats.by_kind "drivers" }}</div><div class="lbl">Drivers in {{ $stats.families }} families</div></a>
+    {{- with $people }}<a class="stat" href="/community/#contributors"><div class="num">{{ len . }}</div><div class="lbl">Contributors</div></a>{{ end }}
+    {{- with $act }}<a class="stat" href="/history/"><div class="num">{{ lang.FormatNumber 0 .commits }}</div><div class="lbl">Commits since {{ substr .first_commit 0 4 }}</div></a>{{ end }}
+  </div>
+</div>
+
+<section class="section">
+  <div class="wrap">
+    <h2>How it fits together</h2>
+    <p class="lead">Clients speak HTTP. Reva turns each request into CS3 API calls, and plugins connect those calls to your storage, users, and databases. Select a box to open its documentation.</p>
+    {{ partial "diagram.html" . }}
+  </div>
+</section>
+
+<section class="section section-soft">
+  <div class="wrap">
+    <h2>Why reva</h2>
+    <div class="cards">
+      {{- range .Params.features }}
+      <a class="card" href="{{ .url }}"><h3>{{ .title }}</h3><p>{{ .text }}</p></a>
+      {{- end }}
+    </div>
+  </div>
+</section>
+
+<section class="section">
+  <div class="wrap">
+    <h2>Try it in ten minutes</h2>
+    <p class="lead">Save the <a href="/quickstart/revad.toml">configuration</a> and <a href="/quickstart/users.json">user list</a> from the <a href="/docs/getting-started/">quick start</a>, start the published image, and upload a file over WebDAV.</p>
+    {{ transform.Highlight (printf "docker run --rm -p 19000:19000 -p 19001:19001 \\\n  -v \"$PWD/revad.toml:/etc/revad/revad.toml:ro\" \\\n  -v \"$PWD/users.json:/etc/revad/users.json:ro\" \\\n  cs3org/revad:v%s\n\ncurl -u einstein:relativity -T hello.txt http://localhost:19001/remote.php/webdav/hello.txt" $stats.version) "shell" }}
+  </div>
+</section>
+
+{{- with hugo.Data.deployments }}
+<section class="section section-soft">
+  <div class="wrap">
+    <h2>In production</h2>
+    <div class="cards">
+      {{- range first 3 .deployments }}
+      <a class="card" href="/deployments/#{{ .id }}"><h3>{{ .name }}</h3><p>{{ .summary }}</p><div class="meta">{{ .organisation }}</div></a>
+      {{- end }}
+    </div>
+    <p><a href="/deployments/">All deployments →</a></p>
+  </div>
+</section>
+{{- end }}
+{{ end }}

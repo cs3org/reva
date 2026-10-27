@@ -1,0 +1,8 @@
+{{- $pages := .Pages.ByWeight }}
+{{- if $pages }}
+<div class="comp-list">
+  {{- range $pages }}
+  <a href="{{ .RelPermalink }}"><span class="n">{{ .LinkTitle }}</span>{{ with .Description }}<span class="d">{{ . | plainify | truncate 110 }}</span>{{ end }}</a>
+  {{- end }}
+</div>
+{{- end }}

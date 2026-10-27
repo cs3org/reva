@@ -1,0 +1,15 @@
+{{- $docs := slice }}
+{{- range site.Pages }}
+  {{- if or (not .Title) .Params.robots }}{{ continue }}{{ end }}
+  {{- $section := "" }}
+  {{- $boost := 0 }}
+  {{- if .Params.kind_title }}{{ $section = .Params.kind_title }}{{ with .Params.family }}{{ $section = printf "%s · %s" $section . }}{{ end }}{{ $boost = 2 }}
+  {{- else if hasPrefix .RelPermalink "/docs/changelog/" }}{{ $section = "Changelog" }}{{ $boost = -3 }}
+  {{- else if hasPrefix .RelPermalink "/docs/" }}{{ $section = "Docs" }}{{ $boost = 3 }}
+  {{- else }}{{ $section = "Site" }}{{ $boost = 1 }}{{ end }}
+  {{- $text := .Plain }}
+  {{- with .Description }}{{ $text = printf "%s %s" . $text }}{{ end }}
+  {{- with .Params.config }}{{ range . }}{{ range .fields }}{{ $text = printf "%s %s" $text .key }}{{ end }}{{ end }}{{ end }}
+  {{- $docs = $docs | append (dict "title" .Title "url" .RelPermalink "section" $section "boost" $boost "text" ($text | strings.TrimSpace | truncate 3000 "")) }}
+{{- end }}
+{{- $docs | jsonify }}

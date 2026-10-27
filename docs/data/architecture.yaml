@@ -1,0 +1,160 @@
+# The architecture diagram on the home page and on /docs/concepts/architecture/.
+# Coordinates are in a 1200 x 710 view box. A node with a `page` links to it,
+# and the build fails if that page does not exist.
+
+width: 1200
+height: 668
+
+layers:
+  - { label: "Clients", y: 16, h: 84 }
+  - { label: "HTTP services", y: 116, h: 140 }
+  - { label: "Gateway", y: 272, h: 84 }
+  - { label: "gRPC services", y: 372, h: 84 }
+  - { label: "Drivers", y: 472, h: 84 }
+  - { label: "Back ends", y: 572, h: 84 }
+
+nodes:
+  # Clients
+  - { id: web, label: "Web UI", sub: "browser", x: 60, y: 38, w: 170, external: true,
+      desc: "Web front ends such as the CERNBox web app talk to reva over WebDAV, OCS, and the Graph API." }
+  - { id: sync, label: "Desktop & mobile", sub: "WebDAV clients", x: 280, y: 38, w: 190, external: true,
+      desc: "Sync clients use WebDAV to list, download, and upload files." }
+  - { id: peers, label: "Other clouds", sub: "via OCM", x: 520, y: 38, w: 190, external: true,
+      desc: "Other sites send and accept shares with the Open Cloud Mesh (OCM) protocol." }
+  - { id: cli, label: "reva CLI", sub: "gRPC", x: 760, y: 38, w: 150, page: "/docs/getting-started",
+      desc: "The reva command line client calls the CS3 APIs on the gateway directly." }
+
+  # HTTP
+  - { id: mw, label: "HTTP middlewares", sub: "auth · cors · log · trace", x: 20, y: 140, w: 640, h: 30, band: true,
+      page: "/docs/components/http-middlewares",
+      desc: "Every HTTP request passes through the middlewares. The auth middleware turns credentials into a reva token." }
+  - { id: ocdav, label: "WebDAV", sub: "ocdav", x: 20, y: 186, w: 120, page: "/docs/components/http-services/ocdav",
+      desc: "The WebDAV API that sync clients and the web UI use for files." }
+  - { id: ocs, label: "OCS API", sub: "ocs", x: 150, y: 186, w: 120, page: "/docs/components/http-services/ocs",
+      desc: "The ownCloud OCS API, used for shares, users, and capabilities." }
+  - { id: ocgraph, label: "Graph API", sub: "ocgraph", x: 280, y: 186, w: 120, page: "/docs/components/http-services/ocgraph",
+      desc: "A Graph-style API for drives, shares, and users." }
+  - { id: ocm, label: "OCM API", sub: "ocm", x: 410, y: 186, w: 120, page: "/docs/components/http-services/ocm",
+      desc: "The Open Cloud Mesh endpoints that other clouds call." }
+  - { id: apps, label: "App launcher", sub: "appprovider", x: 540, y: 186, w: 120, page: "/docs/components/http-services/appprovider",
+      desc: "Opens files in office and other web apps." }
+  - { id: datagateway, label: "Data gateway", sub: "datagateway", x: 1040, y: 186, w: 140, page: "/docs/components/http-services/datagateway",
+      desc: "Checks the transfer token of an upload or download and forwards it to the right data provider." }
+
+  # Gateway
+  - { id: gateway, label: "Gateway", sub: "gateway · one entry point for all CS3 API calls", x: 20, y: 294, w: 900,
+      page: "/docs/components/grpc-services/gateway",
+      desc: "The gateway receives every CS3 API call. It checks the token, asks the registries where to go, and routes the call to a provider." }
+
+  # gRPC services
+  - { id: authregistry, label: "Auth registry", sub: "authregistry", x: 20, y: 394, w: 120, page: "/docs/components/grpc-services/authregistry",
+      desc: "Knows which auth provider handles each kind of credential." }
+  - { id: authprovider, label: "Auth provider", sub: "authprovider", x: 150, y: 394, w: 120, page: "/docs/components/grpc-services/authprovider",
+      desc: "Checks credentials with its auth manager." }
+  - { id: userprovider, label: "Users", sub: "userprovider", x: 280, y: 394, w: 120, page: "/docs/components/grpc-services/userprovider",
+      desc: "Looks up users and their groups." }
+  - { id: storageregistry, label: "Storage registry", sub: "storageregistry", x: 410, y: 394, w: 120, page: "/docs/components/grpc-services/storageregistry",
+      desc: "Maps a path or space to the storage provider that holds it." }
+  - { id: storageprovider, label: "Storage provider", sub: "storageprovider", x: 540, y: 394, w: 120, page: "/docs/components/grpc-services/storageprovider",
+      desc: "Serves file metadata, permissions, and upload and download requests for one storage." }
+  - { id: shares, label: "User shares", sub: "usershareprovider", x: 670, y: 394, w: 120, page: "/docs/components/grpc-services/usershareprovider",
+      desc: "Stores shares between users and groups." }
+  - { id: ocmshares, label: "OCM shares", sub: "ocmshareprovider", x: 800, y: 394, w: 120, page: "/docs/components/grpc-services/ocmshareprovider",
+      desc: "Stores shares sent to and received from other clouds." }
+  - { id: dataprovider, label: "Data provider", sub: "dataprovider (HTTP)", x: 1040, y: 394, w: 140, page: "/docs/components/http-services/dataprovider",
+      desc: "An HTTP service next to the storage provider. It moves the file bytes in and out of the storage driver." }
+
+  # Drivers
+  - { id: authmgr, label: "Auth managers", sub: "ldap · oidc · json", x: 150, y: 494, w: 120, page: "/docs/components/drivers/auth-managers",
+      desc: "Pluggable credential checks: LDAP, OIDC, Kerberos, app passwords, and more." }
+  - { id: usermgr, label: "User managers", sub: "ldap · json", x: 280, y: 494, w: 120, page: "/docs/components/drivers/user-managers",
+      desc: "Pluggable user directories." }
+  - { id: storagedrv, label: "Storage drivers", sub: "eos · cephfs", x: 540, y: 494, w: 120, page: "/docs/components/drivers/storage-drivers",
+      desc: "Pluggable storage back ends: EOS, CephFS, local disk, and OCM." }
+  - { id: sharemgr, label: "Share managers", sub: "sql · json", x: 670, y: 494, w: 120, page: "/docs/components/drivers/share-managers",
+      desc: "Pluggable share stores." }
+  - { id: ocmrepo, label: "OCM share repos", sub: "sql · json", x: 800, y: 494, w: 120, page: "/docs/components/drivers/ocm-share-repositories",
+      desc: "Pluggable stores for OCM shares." }
+
+  # Back ends
+  - { id: idp, label: "Identity", sub: "LDAP · OIDC · Kerberos", x: 150, y: 594, w: 250, external: true,
+      desc: "Your identity provider and user directory." }
+  - { id: storage, label: "Storage", sub: "EOS · CephFS · local disk", x: 500, y: 594, w: 200, external: true,
+      desc: "The file system that holds the data. Reva does not copy it; it serves it in place." }
+  - { id: db, label: "Database", sub: "SQL", x: 720, y: 594, w: 200, external: true,
+      desc: "Holds shares and other state that is not in the storage." }
+
+links:
+  - { label: "All gRPC services →", x: 950, y: 330, page: "/docs/components/grpc-services" }
+  - { label: "All drivers →", x: 950, y: 530, page: "/docs/components/drivers" }
+
+edges:
+  - [web, ocdav]
+  - [web, ocs]
+  - [web, ocgraph]
+  - [web, apps]
+  - [sync, ocdav]
+  - [peers, ocm]
+  - [cli, gateway]
+  - [ocdav, gateway]
+  - [ocs, gateway]
+  - [ocgraph, gateway]
+  - [ocm, gateway]
+  - [apps, gateway]
+  - [ocdav, datagateway]
+  - [datagateway, dataprovider]
+  - [gateway, authregistry]
+  - [gateway, authprovider]
+  - [gateway, userprovider]
+  - [gateway, storageregistry]
+  - [gateway, storageprovider]
+  - [gateway, shares]
+  - [gateway, ocmshares]
+  - [authprovider, authmgr]
+  - [userprovider, usermgr]
+  - [storageprovider, storagedrv]
+  - [dataprovider, storagedrv]
+  - [shares, sharemgr]
+  - [ocmshares, ocmrepo]
+  - [authmgr, idp]
+  - [usermgr, idp]
+  - [storagedrv, storage]
+  - [sharemgr, db]
+  - [ocmrepo, db]
+
+scenarios:
+  - id: login
+    title: Log in
+    intro: "A sync client sends a user name and password with a WebDAV request."
+    steps:
+      - { from: sync, to: ocdav, text: "The client sends a request with HTTP basic credentials." }
+      - { from: ocdav, to: gateway, text: "The auth middleware calls Authenticate on the gateway." }
+      - { from: gateway, to: authregistry, text: "The gateway asks the auth registry which auth provider handles basic credentials." }
+      - { from: gateway, to: authprovider, text: "The gateway sends the credentials to that auth provider." }
+      - { from: authprovider, to: authmgr, text: "The auth provider passes them to its auth manager, for example LDAP." }
+      - { from: authmgr, to: idp, text: "The auth manager checks them against the directory." }
+      - { from: gateway, to: ocdav, text: "The gateway mints a reva token for the user. Later calls carry the token, not the password." }
+  - id: upload
+    title: Upload a file
+    intro: "A sync client uploads a file with a WebDAV PUT."
+    steps:
+      - { from: sync, to: ocdav, text: "The client sends PUT with the file to the WebDAV service." }
+      - { from: ocdav, to: gateway, text: "WebDAV calls InitiateFileUpload on the gateway." }
+      - { from: gateway, to: storageregistry, text: "The gateway asks the storage registry which storage provider holds the target path." }
+      - { from: gateway, to: storageprovider, text: "The storage provider prepares the upload and returns an endpoint and a transfer token." }
+      - { from: ocdav, to: datagateway, text: "WebDAV streams the file to the data gateway, with the transfer token." }
+      - { from: datagateway, to: dataprovider, text: "The data gateway checks the token and forwards the bytes to the data provider." }
+      - { from: dataprovider, to: storagedrv, text: "The data provider writes the file through the storage driver." }
+      - { from: storagedrv, to: storage, text: "The driver stores the file on the back end, for example EOS." }
+  - id: share
+    title: Share a folder
+    intro: "A user shares a folder with a colleague in the web UI."
+    steps:
+      - { from: web, to: ocs, text: "The web UI posts the new share to the OCS sharing API." }
+      - { from: ocs, to: gateway, text: "OCS calls CreateShare on the gateway." }
+      - { from: gateway, to: storageprovider, text: "The gateway checks that the user may share this folder." }
+      - { from: gateway, to: shares, text: "The gateway sends the share to the user share provider." }
+      - { from: shares, to: sharemgr, text: "The share provider stores it through its share manager." }
+      - { from: sharemgr, to: db, text: "The share manager writes it to the database." }
+      - { from: gateway, to: storageprovider, text: "If commit_share_to_storage_grant is set, the gateway also adds a grant on the storage." }
+      - { from: storageprovider, to: storagedrv, text: "The storage driver sets the access control entry, for example an EOS ACL." }
