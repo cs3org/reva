@@ -27,6 +27,7 @@ import (
 	"testing"
 
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
+	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	registrypb "github.com/cs3org/go-cs3apis/cs3/storage/registry/v1beta1"
 	"github.com/cs3org/reva/v3/internal/grpc/control"
 	"github.com/cs3org/reva/v3/pkg/admin/adminpb"
@@ -232,9 +233,12 @@ func TestAddRouteReportsTheStaleRegistries(t *testing.T) {
 
 func TestResolvePathGivesTheProviderNodes(t *testing.T) {
 	a, _, _ := storageFleet(t)
-	res, err := a.ResolvePath(context.Background(), &adminpb.ResolvePathRequest{Path: "/eos/user/a/alice"})
+	res, err := a.ResolvePath(context.Background(), &adminpb.ResolvePathRequest{Ref: &provider.Reference{Path: "/eos/user/a/alice"}})
 	if err != nil {
 		t.Fatal(err)
+	}
+	if res.Path != "/eos/user/a/alice" {
+		t.Errorf("path = %q", res.Path)
 	}
 	if len(res.Providers) != 1 {
 		t.Fatalf("providers = %v", res.Providers)
@@ -280,11 +284,23 @@ func TestRouteErrorCodes(t *testing.T) {
 			return err
 		}, codes.NotFound},
 		"resolve an unrouted path": {func() error {
-			_, err := a.ResolvePath(ctx, &adminpb.ResolvePathRequest{Path: "/eos/project/x"})
+			_, err := a.ResolvePath(ctx, &adminpb.ResolvePathRequest{Ref: &provider.Reference{Path: "/eos/project/x"}})
 			return err
 		}, codes.NotFound},
 		"resolve a relative path": {func() error {
-			_, err := a.ResolvePath(ctx, &adminpb.ResolvePathRequest{Path: "eos"})
+			_, err := a.ResolvePath(ctx, &adminpb.ResolvePathRequest{Ref: &provider.Reference{Path: "eos"}})
+			return err
+		}, codes.InvalidArgument},
+		"resolve without a reference": {func() error {
+			_, err := a.ResolvePath(ctx, &adminpb.ResolvePathRequest{})
+			return err
+		}, codes.InvalidArgument},
+		"resolve a resource id": {func() error {
+			_, err := a.ResolvePath(ctx, &adminpb.ResolvePathRequest{Ref: &provider.Reference{ResourceId: &provider.ResourceId{StorageId: "eoshome-a", OpaqueId: "42"}}})
+			return err
+		}, codes.InvalidArgument},
+		"resolve a path under a resource id": {func() error {
+			_, err := a.ResolvePath(ctx, &adminpb.ResolvePathRequest{Ref: &provider.Reference{ResourceId: &provider.ResourceId{StorageId: "eoshome-a", OpaqueId: "42"}, Path: "./alice"}})
 			return err
 		}, codes.InvalidArgument},
 	} {
@@ -294,27 +310,5 @@ func TestRouteErrorCodes(t *testing.T) {
 	}
 	if table.writes != 0 {
 		t.Errorf("a failed call wrote the table %d times", table.writes)
-	}
-}
-
-// A stale instance keeps the code of its failure, so that the operator can
-// tell an instance that is down from one that failed to load the table.
-func TestRPCCodeKeepsTheGRPCCode(t *testing.T) {
-	for in, want := range map[codes.Code]rpc.Code{
-		codes.OK:               rpc.Code_CODE_UNKNOWN,
-		codes.Unknown:          rpc.Code_CODE_UNKNOWN,
-		codes.InvalidArgument:  rpc.Code_CODE_INVALID_ARGUMENT,
-		codes.DeadlineExceeded: rpc.Code_CODE_DEADLINE_EXCEEDED,
-		codes.NotFound:         rpc.Code_CODE_NOT_FOUND,
-		codes.Unimplemented:    rpc.Code_CODE_UNIMPLEMENTED,
-		codes.Internal:         rpc.Code_CODE_INTERNAL,
-		codes.Unavailable:      rpc.Code_CODE_UNAVAILABLE,
-		codes.DataLoss:         rpc.Code_CODE_DATA_LOSS,
-		codes.Unauthenticated:  rpc.Code_CODE_UNAUTHENTICATED,
-		codes.Code(99):         rpc.Code_CODE_UNKNOWN,
-	} {
-		if got := rpcCode(in); got != want {
-			t.Errorf("rpcCode(%v) = %v, want %v", in, got, want)
-		}
 	}
 }

@@ -25,6 +25,7 @@ import (
 	"slices"
 	"strings"
 
+	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	registrypb "github.com/cs3org/go-cs3apis/cs3/storage/registry/v1beta1"
 	"github.com/cs3org/reva/v3/pkg/admin/adminpb"
 	"github.com/cs3org/reva/v3/pkg/cli"
@@ -93,7 +94,7 @@ func RouteCommand(r *cli.Runtime) *cobra.Command {
 			if err != nil {
 				return err
 			}
-			res, err := c.ResolvePath(ctx, &adminpb.ResolvePathRequest{Path: args[0]})
+			res, err := c.ResolvePath(ctx, &adminpb.ResolvePathRequest{Ref: &provider.Reference{Path: args[0]}})
 			if err != nil {
 				return adminErr(err)
 			}

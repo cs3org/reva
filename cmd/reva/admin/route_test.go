@@ -37,8 +37,9 @@ import (
 // fakeStorage is a StorageAdmin whose reloads fail on the instances in stale.
 type fakeStorage struct {
 	adminpb.UnimplementedStorageAdminServer
-	stale []*adminpb.StaleInstance
-	added []*adminpb.AddRouteRequest
+	stale    []*adminpb.StaleInstance
+	added    []*adminpb.AddRouteRequest
+	resolved []*adminpb.ResolvePathRequest
 }
 
 func (f *fakeStorage) ListRoutes(context.Context, *adminpb.ListRoutesRequest) (*adminpb.ListRoutesResponse, error) {
@@ -46,7 +47,8 @@ func (f *fakeStorage) ListRoutes(context.Context, *adminpb.ListRoutesRequest) (*
 }
 
 func (f *fakeStorage) ResolvePath(_ context.Context, req *adminpb.ResolvePathRequest) (*adminpb.ResolvePathResponse, error) {
-	return &adminpb.ResolvePathResponse{Path: req.Path, Providers: []*adminpb.ResolvedProvider{{
+	f.resolved = append(f.resolved, req)
+	return &adminpb.ResolvePathResponse{Path: req.GetRef().GetPath(), Providers: []*adminpb.ResolvedProvider{{
 		Provider:      &registrypb.ProviderInfo{ProviderId: "eoshome-i01", ProviderPath: "/eos/user/a", Address: "lb:9000"},
 		ProviderNodes: []string{"sp1:9001/storageprovider", "sp2:9001/storageprovider"},
 	}}}, nil
@@ -117,8 +119,12 @@ func TestRouteListAndResolve(t *testing.T) {
 	if err != nil || !strings.Contains(out, "/eos/user/a") || !strings.Contains(out, "eoshome-i01") {
 		t.Fatalf("route list: %v\n%s", err, out)
 	}
-	out, _, err = runRoute(t, &fakeStorage{}, "route", "resolve", "/eos/user/a/alice")
+	f := &fakeStorage{}
+	out, _, err = runRoute(t, f, "route", "resolve", "/eos/user/a/alice")
 	if err != nil || !strings.Contains(out, "sp1:9001/storageprovider,sp2:9001/storageprovider") || !strings.Contains(out, "lb:9000") {
 		t.Fatalf("route resolve: %v\n%s", err, out)
+	}
+	if len(f.resolved) != 1 || f.resolved[0].GetRef().GetPath() != "/eos/user/a/alice" || f.resolved[0].GetRef().GetResourceId() != nil {
+		t.Errorf("route resolve sent %v, want a path reference", f.resolved)
 	}
 }

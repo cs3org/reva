@@ -30,6 +30,7 @@ import (
 	"github.com/cs3org/reva/v3/pkg/admin/adminpb"
 	"github.com/cs3org/reva/v3/pkg/invoke/client"
 	"github.com/cs3org/reva/v3/pkg/registry"
+	rstatus "github.com/cs3org/reva/v3/pkg/rgrpc/status"
 	"github.com/cs3org/reva/v3/pkg/storage"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -59,8 +60,14 @@ func (a *storageAdmin) ListRoutes(ctx context.Context, _ *adminpb.ListRoutesRequ
 }
 
 func (a *storageAdmin) ResolvePath(ctx context.Context, req *adminpb.ResolvePathRequest) (*adminpb.ResolvePathResponse, error) {
-	if req.Path == "" {
-		return nil, status.Error(codes.InvalidArgument, "admin: path is required")
+	ref := req.GetRef()
+	// A path under a resource id, or an id alone, would need the registry to
+	// resolve the id first, and its resolve invocation takes only a path.
+	if ref.GetResourceId() != nil {
+		return nil, status.Error(codes.InvalidArgument, "admin: only a path reference can be resolved, not a resource id")
+	}
+	if ref.GetPath() == "" {
+		return nil, status.Error(codes.InvalidArgument, "admin: a reference with a path is required")
 	}
 	eps, err := a.s.serviceEndpoints(storageRegistryService)
 	if err != nil {
@@ -70,7 +77,7 @@ func (a *storageAdmin) ResolvePath(ctx context.Context, req *adminpb.ResolvePath
 		Path   string          `json:"path"`
 		Mounts []storage.Mount `json:"mounts"`
 	}
-	if err := invokeRegistry(ctx, eps, "resolve", map[string]string{"path": req.Path}, &out); err != nil {
+	if err := invokeRegistry(ctx, eps, "resolve", map[string]string{"path": ref.Path}, &out); err != nil {
 		return nil, err
 	}
 	reg, err := a.s.registryHandle()
@@ -166,55 +173,17 @@ func reloadRoutes(ctx context.Context, eps []client.Endpoint) []*adminpb.StaleIn
 	rs, _ := invokeAll(context.WithoutCancel(ctx), eps, "route_reload", nil)
 	var stale []*adminpb.StaleInstance
 	for _, r := range rs {
-		if r.Error != "" {
-			stale = append(stale, &adminpb.StaleInstance{Node: r.Node, Status: &rpc.Status{Code: rpcCode(r.Code), Message: r.Error}})
+		if r.Error == "" {
+			continue
 		}
+		code := r.Code
+		// A node that fails without a code sends 0, as in nodeStatus.
+		if code == codes.OK {
+			code = codes.Unknown
+		}
+		stale = append(stale, &adminpb.StaleInstance{Node: r.Node, Status: &rpc.Status{Code: rstatus.CodeFromGRPC(code), Message: r.Error}})
 	}
 	return stale
-}
-
-// rpcCode is the CS3 code of a gRPC code. The two enums have the same names
-// but not the same numbers. pkg/rgrpc/status maps only errors, and turns most
-// codes into CODE_INTERNAL, which would hide an instance that is down
-// (Unavailable) or slow (DeadlineExceeded).
-func rpcCode(c codes.Code) rpc.Code {
-	switch c {
-	case codes.OK:
-		// A node that fails without a code sends 0, as in nodeStatus.
-		return rpc.Code_CODE_UNKNOWN
-	case codes.Canceled:
-		return rpc.Code_CODE_CANCELLED
-	case codes.InvalidArgument:
-		return rpc.Code_CODE_INVALID_ARGUMENT
-	case codes.DeadlineExceeded:
-		return rpc.Code_CODE_DEADLINE_EXCEEDED
-	case codes.NotFound:
-		return rpc.Code_CODE_NOT_FOUND
-	case codes.AlreadyExists:
-		return rpc.Code_CODE_ALREADY_EXISTS
-	case codes.PermissionDenied:
-		return rpc.Code_CODE_PERMISSION_DENIED
-	case codes.ResourceExhausted:
-		return rpc.Code_CODE_RESOURCE_EXHAUSTED
-	case codes.FailedPrecondition:
-		return rpc.Code_CODE_FAILED_PRECONDITION
-	case codes.Aborted:
-		return rpc.Code_CODE_ABORTED
-	case codes.OutOfRange:
-		return rpc.Code_CODE_OUT_OF_RANGE
-	case codes.Unimplemented:
-		return rpc.Code_CODE_UNIMPLEMENTED
-	case codes.Internal:
-		return rpc.Code_CODE_INTERNAL
-	case codes.Unavailable:
-		return rpc.Code_CODE_UNAVAILABLE
-	case codes.DataLoss:
-		return rpc.Code_CODE_DATA_LOSS
-	case codes.Unauthenticated:
-		return rpc.Code_CODE_UNAUTHENTICATED
-	default:
-		return rpc.Code_CODE_UNKNOWN
-	}
 }
 
 // auditRoute records the stale instances, which the audit of the storage
