@@ -1,0 +1,17 @@
+{{- $current := .current }}
+{{- range .pages }}
+  {{- if and .IsSection .Pages }}
+  {{- $in := or (eq . $current) ($current.IsDescendant .) }}
+  <li>
+    <details{{ if $in }} open{{ end }}>
+      <summary><span>{{ .LinkTitle }}</span><span class="count">{{ len .RegularPagesRecursive }}</span></summary>
+      <ul>
+        <li><a href="{{ .RelPermalink }}"{{ if eq . $current }} class="active" aria-current="page"{{ end }}>Overview</a></li>
+      </ul>
+      {{- partial "sidebar-tree.html" (dict "section" . "current" $current) }}
+    </details>
+  </li>
+  {{- else }}
+  <li><a href="{{ .RelPermalink }}"{{ if eq . $current }} class="active" aria-current="page"{{ end }}>{{ .LinkTitle }}</a></li>
+  {{- end }}
+{{- end }}

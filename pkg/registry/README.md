@@ -1,3 +1,8 @@
+---
+subsystem_name: Service registries
+subsystem_category: Core
+---
+
 # Service registry
 
 For most of its life reva knew where its peers were because somebody had written

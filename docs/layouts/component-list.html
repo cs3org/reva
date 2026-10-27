@@ -1,0 +1,9 @@
+{{ define "main" }}
+{{- $body := .Content }}
+{{- if eq .Params.kind "drivers" }}
+  {{- $body = print $body (partial "grouped-list.html" (dict "pages" .Sections.ByTitle "level" 2 "families" true)) }}
+{{- else }}
+  {{- $body = print $body (partial "grouped-list.html" (dict "pages" .Pages.ByTitle "level" 2)) }}
+{{- end }}
+{{- partial "docs-shell.html" (dict "page" . "body" ($body | safeHTML)) }}
+{{ end }}
