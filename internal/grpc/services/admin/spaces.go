@@ -37,7 +37,6 @@ import (
 	"google.golang.org/grpc/status"
 )
 
-// spacesRegistry is the service that holds the space catalogue.
 const spacesRegistry = "spacesregistry"
 
 func (a *spacesAdmin) ListSpaces(req *adminpb.ListSpacesRequest, stream adminpb.SpacesAdmin_ListSpacesServer) error {
@@ -72,9 +71,8 @@ func (a *spacesAdmin) ListSpaces(req *adminpb.ListSpacesRequest, stream adminpb.
 	})
 }
 
-// listArgs maps the CS3 filters onto the arguments of the list invocation.
-// The invocation selects by one type, one owner and one member, so the
-// filters by id and by path, which it does not take, are kept here.
+// The list invocation takes one type, one owner and one member. The filters by id and
+// by path are applied here.
 func listArgs(filters []*provider.ListStorageSpacesRequest_Filter) (map[string]string, func(*provider.StorageSpace) bool, error) {
 	args := map[string]string{}
 	var ids, paths []string
@@ -124,8 +122,7 @@ func listArgs(filters []*provider.ListStorageSpacesRequest_Filter) (map[string]s
 	return args, keep, nil
 }
 
-// sameSpaceID matches a <storage id>$<space id>, or a space id alone, as the
-// catalogue selects by id.
+// sameSpaceID accepts "<storage id>$<space id>" or a space id alone, as the catalogue does.
 func sameSpaceID(want, id string) bool {
 	if want == id {
 		return true
@@ -178,8 +175,6 @@ func (a *spacesAdmin) UpdateSpace(ctx context.Context, req *adminpb.UpdateSpaceR
 	return mutateSpace(ctx, eps, "update", cmp.Or(req.Ref.GetId().GetOpaqueId(), req.Ref.GetName(), req.Ref.GetPath()), args)
 }
 
-// updateArgs maps the CS3 update fields onto the arguments of the update
-// invocation, which changes only what the catalogue stores.
 func updateArgs(fields []*provider.UpdateStorageSpaceRequest_UpdateField) (map[string]string, error) {
 	if len(fields) == 0 {
 		return nil, status.Error(codes.InvalidArgument, "admin: update needs a description, a readme or a thumbnail")
@@ -265,9 +260,7 @@ func (a *spacesAdmin) RegisterSpace(ctx context.Context, req *adminpb.RegisterSp
 	return mutateSpace(ctx, eps, "create", args["name"], args)
 }
 
-// registerArgs maps a CS3 space onto the arguments of the create
-// invocation. A value that the catalogue would not store is refused, so that
-// a registration never drops it.
+// A value that the catalogue would not store is refused, so that a registration never drops it.
 func registerArgs(s *provider.StorageSpace) (map[string]string, error) {
 	invalid := func(format string, a ...any) error {
 		return status.Errorf(codes.InvalidArgument, "admin: register: "+format, a...)
@@ -321,8 +314,7 @@ func registerArgs(s *provider.StorageSpace) (map[string]string, error) {
 	return args, nil
 }
 
-// roleArgs are the role names of the catalogue, as AdminSpace returns them,
-// and the arguments of create that take their groups.
+// roleArgs maps the role names of AdminSpace to the arguments of create that take their groups.
 var roleArgs = map[string]string{"reader": "readers", "writer": "writers", "admin": "admins"}
 
 func (a *spacesAdmin) UnregisterSpace(ctx context.Context, req *adminpb.UnregisterSpaceRequest) (*adminpb.AdminSpace, error) {
@@ -350,12 +342,11 @@ func (a *spacesAdmin) CheckSpaces(req *adminpb.CheckSpacesRequest, stream adminp
 	return relayStream(stream.Context(), eps, "check", args, stream.Send)
 }
 
-// mutateSpace runs a change of the catalogue on one instance, and then
-// flush_cache on every instance, because each one caches the project list.
+// Each instance caches the project list, so mutateSpace flushes the cache on all of them.
 func mutateSpace(ctx context.Context, eps []client.Endpoint, invocation, target string, args map[string]string) (*adminpb.AdminSpace, error) {
 	res, err := invokeOne(ctx, eps, invocation, args)
 	fields := maps.Clone(args)
-	// The audit names a user by its id, as everywhere else, not by its protojson.
+	// The audit names a user by its id, not by its protojson.
 	if v, ok := fields["owner"]; ok {
 		var u admin.UserID
 		if u.UnmarshalText([]byte(v)) == nil {
@@ -363,8 +354,8 @@ func mutateSpace(ctx context.Context, eps []client.Endpoint, invocation, target 
 		}
 	}
 	if err == nil {
-		// The change is made, so it is not an error. An instance that keeps
-		// its cache shows the old value until the cache expires (cache_ttl).
+		// The change is made, so a flush failure is not an error. That instance shows
+		// the old value until cache_ttl.
 		if _, ferr := invokeAll(ctx, eps, "flush_cache", nil); ferr != nil {
 			fields["flush_cache"] = ferr.Error()
 		}
@@ -387,8 +378,7 @@ func mutateSpace(ctx context.Context, eps []client.Endpoint, invocation, target 
 	return &m, nil
 }
 
-// refArgs returns the arguments that select ref in the catalogue. The
-// catalogue selects by id or by name only, so a path is resolved here.
+// The catalogue selects by id or by name only, so refArgs resolves a path.
 func refArgs(ctx context.Context, eps []client.Endpoint, ref *adminpb.SpaceRef) (map[string]string, error) {
 	switch {
 	case ref.GetId().GetOpaqueId() != "":
@@ -405,9 +395,8 @@ func refArgs(ctx context.Context, eps []client.Endpoint, ref *adminpb.SpaceRef) 
 	return nil, status.Error(codes.InvalidArgument, "admin: a space id, path or name is required")
 }
 
-// spaceAt returns the space that holds p: the one with the deepest root, and
-// one that is not archived before one that is. The catalogue has no index on
-// the path, so this reads the whole list.
+// spaceAt returns the space with the deepest root that holds p, and prefers a space that is
+// not archived. The catalogue has no index on the path, so this reads the whole list.
 func spaceAt(ctx context.Context, eps []client.Endpoint, p string) (*adminpb.AdminSpace, error) {
 	p = path.Clean(p)
 	var found *adminpb.AdminSpace

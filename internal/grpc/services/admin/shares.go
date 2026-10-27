@@ -41,9 +41,6 @@ import (
 	"google.golang.org/protobuf/proto"
 )
 
-// SharesAdmin is a facade over the invocations of the usershareprovider and
-// of the publicshareprovider. They act as the identity that the share checks
-// accept, so the admin service needs no CS3 call of its own.
 const (
 	userShareService   = "usershareprovider"
 	publicShareService = "publicshareprovider"
@@ -87,8 +84,7 @@ func (a *sharesAdmin) GetShare(ctx context.Context, req *adminpb.GetShareRequest
 	return out, nil
 }
 
-// shareID returns the id of the share of ref. The mutations of the share
-// provider take an id, so a key is resolved with get first.
+// The mutations of the share provider take an id, so shareID resolves a key with get first.
 func (a *sharesAdmin) shareID(ctx context.Context, ref *collaboration.ShareReference) (string, error) {
 	if id := ref.GetId().GetOpaqueId(); id != "" {
 		return id, nil
@@ -156,7 +152,6 @@ func (a *sharesAdmin) MarkShareOrphan(ctx context.Context, req *adminpb.MarkShar
 	return a.shareMutation(ctx, "mark_share_orphan", id, false, "mark_orphan", map[string]string{"id": id}, nil)
 }
 
-// shareMutation runs a mutating share invocation and audits it.
 func (a *sharesAdmin) shareMutation(ctx context.Context, action, id string, fallback bool, invocation string, args, fields map[string]string) (*adminpb.AdminShare, error) {
 	out := &adminpb.AdminShare{}
 	err := a.s.invokeDecoded(ctx, userShareService, invocation, args, out)
@@ -215,7 +210,7 @@ func (a *sharesAdmin) UpdatePublicLink(ctx context.Context, req *adminpb.UpdateP
 		return nil, err
 	}
 	maps.Copy(args, shareArgs(map[string]string{"role": role, "expires_at": exp, "fallback": shareBool(req.GetFallback())}))
-	// The audit tells only whether the password changed.
+	// The audit says only whether the password changed.
 	fields := map[string]string{"role": role, "expires_at": exp}
 	if password != nil {
 		args["password"] = *password
@@ -232,12 +227,7 @@ func (a *sharesAdmin) RemovePublicLink(ctx context.Context, req *adminpb.RemoveP
 	if err != nil {
 		return nil, err
 	}
-	if req.GetDbOnly() {
-		args["db_only"] = "true"
-	}
-	if req.GetFallback() {
-		args["fallback"] = "true"
-	}
+	maps.Copy(args, shareArgs(map[string]string{"db_only": shareBool(req.GetDbOnly()), "fallback": shareBool(req.GetFallback())}))
 	return a.linkMutation(ctx, "remove_public_link", req.GetRef(), req.GetFallback(), "remove", args,
 		map[string]string{"db_only": shareBool(req.GetDbOnly())})
 }
@@ -263,7 +253,6 @@ func (a *sharesAdmin) MarkPublicLinkOrphan(ctx context.Context, req *adminpb.Mar
 	return a.linkMutation(ctx, "mark_public_link_orphan", req.GetRef(), false, "mark_orphan", args, nil)
 }
 
-// linkMutation runs a mutating link invocation and audits it.
 func (a *sharesAdmin) linkMutation(ctx context.Context, action string, ref *link.PublicShareReference, fallback bool, invocation string, args, fields map[string]string) (*adminpb.AdminPublicShare, error) {
 	out := &adminpb.AdminPublicShare{}
 	err := a.s.invokeDecoded(ctx, publicShareService, invocation, args, out)
@@ -281,9 +270,8 @@ func (a *sharesAdmin) linkMutation(ctx context.Context, action string, ref *link
 	return out, nil
 }
 
-// MoveShares finds its candidates with the list invocations, because the
-// share tables keep the resource id and not the path. It moves each one with
-// the move invocation, which resolves the new path as a user.
+// MoveShares finds the candidates with the list invocations, because the share tables keep
+// the resource id and not the path.
 func (a *sharesAdmin) MoveShares(req *adminpb.MoveSharesRequest, stream adminpb.SharesAdmin_MoveSharesServer) error {
 	ctx := stream.Context()
 	from, to := path.Clean(req.GetFromPath()), path.Clean(req.GetToPath())
@@ -340,8 +328,7 @@ func (a *sharesAdmin) MoveShares(req *adminpb.MoveSharesRequest, stream adminpb.
 		return err
 	}
 
-	// One failure does not stop the others: a half-done move is easier to
-	// finish when the operator sees every item that failed.
+	// One failure does not stop the others: the operator sees every item that failed.
 	var firstErr error
 	failed := 0
 	for _, it := range items {
@@ -369,8 +356,6 @@ func (a *sharesAdmin) MoveShares(req *adminpb.MoveSharesRequest, stream adminpb.
 	return nil
 }
 
-// moveOne moves one item of MoveShares, and puts the moved share or link in
-// it.
 func (a *sharesAdmin) moveOne(ctx context.Context, it *adminpb.MovedShare, req *adminpb.MoveSharesRequest) error {
 	args := shareArgs(map[string]string{"path": it.GetToPath(), "as": admin.UserArg(req.GetAs())})
 	var service string
@@ -398,8 +383,6 @@ func (a *sharesAdmin) moveOne(ctx context.Context, it *adminpb.MovedShare, req *
 	return nil
 }
 
-// invokeDecoded runs a single-target invocation of service and decodes its
-// result into m.
 func (s *svc) invokeDecoded(ctx context.Context, service, invocation string, args map[string]string, m proto.Message) error {
 	eps, err := s.serviceEndpoints(service)
 	if err != nil {
@@ -412,9 +395,7 @@ func (s *svc) invokeDecoded(ctx context.Context, service, invocation string, arg
 	return decode(res.ResultJSON, m)
 }
 
-// addSpace sets the space argument of a list invocation for ref, unless ref
-// is nil. A SPACE_ID filter has set it already, and the two are refused
-// together rather than combined, because a space has one id.
+// A SPACE_ID filter sets the space argument too. Both together are refused, because a space has one id.
 func (s *svc) addSpace(ctx context.Context, args map[string]string, ref *adminpb.SpaceRef) error {
 	if ref == nil {
 		return nil
@@ -430,8 +411,7 @@ func (s *svc) addSpace(ctx context.Context, args map[string]string, ref *adminpb
 	return nil
 }
 
-// shareSpaceID returns the space id that the share tables keep for ref: the
-// part after the storage id.
+// shareSpaceID returns the space id that the share tables keep: the part after the storage id.
 func (s *svc) shareSpaceID(ctx context.Context, ref *adminpb.SpaceRef) (string, error) {
 	var id string
 	switch r := ref.GetRef().(type) {
@@ -489,9 +469,7 @@ func tableSpaceID(id string) string {
 	return id
 }
 
-// addSelection sets the list arguments of the share invocations for the
-// selections. keepSelected applies the ONLY selections, which the invocations
-// do not have.
+// The invocations have no ONLY selection: keepSelected applies it.
 func addSelection(args map[string]string, orphans, expired adminpb.ShareSelection) {
 	if orphans == adminpb.ShareSelection_SHARE_SELECTION_INCLUDE || orphans == adminpb.ShareSelection_SHARE_SELECTION_ONLY {
 		args["include_orphans"] = "true"
@@ -514,7 +492,6 @@ func keepSelected(orphans, expired adminpb.ShareSelection) func(orphan bool, exp
 	}
 }
 
-// shareRefArgs returns the arguments of the get invocation for ref.
 func shareRefArgs(ref *collaboration.ShareReference) (map[string]string, error) {
 	switch r := ref.GetSpec().(type) {
 	case *collaboration.ShareReference_Id:
@@ -547,9 +524,8 @@ func linkArgs(ref *link.PublicShareReference) (map[string]string, error) {
 	return nil, shareArgRequired("the id or the token of the link")
 }
 
-// filterArgs collects the list arguments of the CS3 filters. The invocations
-// take one value of each argument, so a second filter of a type is refused
-// rather than read as the OR of CS3.
+// The invocations take one value of each argument, so a second filter of a type is
+// refused instead of read as the OR of CS3.
 type filterArgs map[string]string
 
 func (f filterArgs) set(typ fmt.Stringer, name, value string) error {
@@ -563,8 +539,6 @@ func (f filterArgs) set(typ fmt.Stringer, name, value string) error {
 	return nil
 }
 
-// shareFilterArgs maps the CS3 share filters onto the arguments of the list
-// invocation of the usershareprovider.
 func shareFilterArgs(filters []*collaboration.Filter) (map[string]string, error) {
 	args := filterArgs{}
 	for _, f := range filters {
@@ -590,8 +564,6 @@ func shareFilterArgs(filters []*collaboration.Filter) (map[string]string, error)
 	return args, nil
 }
 
-// linkFilterArgs maps the CS3 link filters onto the arguments of the list
-// invocation of the publicshareprovider.
 func linkFilterArgs(filters []*link.ListPublicSharesRequest_Filter) (map[string]string, error) {
 	args := filterArgs{}
 	for _, f := range filters {
@@ -620,8 +592,6 @@ func resourceIDArg(id *provider.ResourceId) string {
 	return id.GetStorageId() + "!" + id.GetOpaqueId()
 }
 
-// shareUpdateArgs maps the CS3 share updates onto the role and expires_at
-// arguments of the update invocation of the usershareprovider.
 func shareUpdateArgs(fields []*collaboration.UpdateShareRequest_UpdateField) (role, expiresAt string, err error) {
 	for _, f := range fields {
 		switch v := f.GetField().(type) {
@@ -649,8 +619,6 @@ func shareUpdateArgs(fields []*collaboration.UpdateShareRequest_UpdateField) (ro
 	return role, expiresAt, nil
 }
 
-// linkUpdateArgs maps the CS3 link updates onto the role, expires_at and
-// password arguments of the update invocation of the publicshareprovider.
 func linkUpdateArgs(updates []*link.UpdatePublicShareRequest_Update) (role, expiresAt string, password *string, err error) {
 	seen := map[link.UpdatePublicShareRequest_Update_Type]bool{}
 	for _, u := range updates {
@@ -679,9 +647,7 @@ func linkUpdateArgs(updates []*link.UpdatePublicShareRequest_Update) (role, expi
 	return role, expiresAt, password, nil
 }
 
-// roleName returns the name of the role with the permissions p, which the
-// update invocations take. The providers give a role its own permissions, so
-// permissions that are of no role cannot be set.
+// The providers give a role its own permissions, so permissions of no role cannot be set.
 func roleName(p *provider.ResourcePermissions) (string, error) {
 	if p == nil {
 		return "", status.Error(codes.InvalidArgument, "admin: the permissions update has no permissions")
@@ -694,8 +660,7 @@ func roleName(p *provider.ResourcePermissions) (string, error) {
 	}
 }
 
-// expiresArg returns the expires_at argument of the update invocations. CS3
-// removes an expiration with an empty one.
+// CS3 removes an expiration with an empty one.
 func expiresArg(exp *typespb.Timestamp) string {
 	if exp.GetSeconds() == 0 {
 		return "none"
@@ -703,8 +668,7 @@ func expiresArg(exp *typespb.Timestamp) string {
 	return time.Unix(int64(exp.GetSeconds()), 0).UTC().Format(time.RFC3339)
 }
 
-// auditShares records a mutation that the admin service asked for. The
-// owning service audits it too, with the user it acted as.
+// The owning service audits the mutation too, with the user it acted as.
 func auditShares(ctx context.Context, action, target string, fallback bool, err error, fields map[string]string) {
 	out := shareArgs(fields)
 	if fallback {
@@ -713,8 +677,7 @@ func auditShares(ctx context.Context, action, target string, fallback bool, err 
 	admin.Audit(ctx, admin.AuditEvent{Action: action, Actor: actorName(ctx), Target: target, Granted: err == nil, Err: err, Fields: out})
 }
 
-// shareArgs drops the empty values, so that the invocation applies its
-// defaults.
+// shareArgs drops the empty values, so that the invocation uses its defaults.
 func shareArgs(m map[string]string) map[string]string {
 	out := make(map[string]string, len(m))
 	for k, v := range m {

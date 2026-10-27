@@ -39,13 +39,10 @@ option go_package = "github.com/cs3org/reva/v3/pkg/admin/adminpb";
 service SpacesAdmin {
   // ListSpaces streams the spaces of the catalogue, of every owner.
   rpc ListSpaces(ListSpacesRequest) returns (stream AdminSpace);
-  // GetSpace returns one space, archived or not. The CLI uses it to find out
-  // if a space that the user plane did not find exists.
+  // GetSpace returns one space, archived or not.
   rpc GetSpace(GetSpaceRequest) returns (AdminSpace);
-  // UpdateSpace changes the description, the readme or the thumbnail of a
-  // space, with the update fields of UpdateStorageSpace. The change is made
-  // on the server as the owner of the space, with the checks of a user call.
-  // It is the server side of the owner fallback.
+  // UpdateSpace changes the description, the readme or the thumbnail of a space.
+  // It acts as the owner of the space, with the checks of a user call.
   rpc UpdateSpace(UpdateSpaceRequest) returns (AdminSpace);
   rpc SetSpaceStatus(SetSpaceStatusRequest) returns (AdminSpace);
   rpc SetSpaceOwner(SetSpaceOwnerRequest) returns (AdminSpace);
@@ -67,14 +64,6 @@ service SpacesAdmin {
   // ListSpaceQuotas streams the quotas that the storage providers keep, one
   // instance for each mount.
   rpc ListSpaceQuotas(ListSpaceQuotasRequest) returns (stream SpaceQuota);
-
-  // Reserved for the profiles of heterogeneous spaces (phase 2):
-  //   rpc ListProfiles(ListProfilesRequest) returns (stream Profile);
-  //   rpc GetProfile(GetProfileRequest) returns (Profile);
-  //   rpc ValidateProfiles(ValidateProfilesRequest) returns (ValidateProfilesResponse);
-  //   rpc GetProfileUsage(GetProfileUsageRequest) returns (GetProfileUsageResponse);
-  //   rpc ExplainCapabilities(ExplainCapabilitiesRequest) returns (ExplainCapabilitiesResponse);
-  //   rpc SetSpaceProfile(SetSpaceProfileRequest) returns (AdminSpace);
 }
 
 // AdminSpace is a space as an operator sees it. The path is in

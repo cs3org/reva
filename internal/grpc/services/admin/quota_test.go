@@ -48,10 +48,7 @@ type quotaCall struct {
 	args             map[string]string
 }
 
-// fakeQuotaProviders records the quota invocations of the storage provider
-// instances. Like the storage provider, an instance uses the type of its
-// spaces when the call gives none, and the fake driver keeps a project
-// quota for project spaces and a user quota for the other ones.
+// Like the storage provider, an instance uses the type of its spaces when the call gives none.
 type fakeQuotaProviders struct {
 	mu    sync.Mutex
 	calls []quotaCall
@@ -127,10 +124,7 @@ func (f *fakeQuotaProviders) callsOf(invocation string) []quotaCall {
 	return out
 }
 
-// quotaFleet adds to the catalogue of spacesClient a project with an owner,
-// and starts a storage registry that routes /eos/user/a to two instances of
-// eoshome-a and /eos/project/c to one instance of eosproject-c. An OCM
-// storage provider has no quota invocations, and one instance is offline.
+// An OCM storage provider has no quota invocations, and one instance is offline.
 func quotaFleet(t *testing.T) (adminpb.SpacesAdminClient, *fakeQuotaProviders) {
 	t.Helper()
 	c, cat := spacesClient(t)
@@ -184,9 +178,7 @@ func byID(id string) *adminpb.SpaceRef {
 	return &adminpb.SpaceRef{Ref: &adminpb.SpaceRef_Id{Id: &provider.StorageSpaceId{OpaqueId: id}}}
 }
 
-// A project space takes its root, type and owner from the catalogue; a home,
-// which is not in the catalogue, is known by its root, and its instance
-// chooses the type.
+// A home is not in the catalogue: it is known by its root, and its instance chooses the type.
 func TestGetSpaceQuotaFindsTheSpaceAndItsInstance(t *testing.T) {
 	c, f := quotaFleet(t)
 	ctx := context.Background()
@@ -198,7 +190,6 @@ func TestGetSpaceQuotaFindsTheSpaceAndItsInstance(t *testing.T) {
 	if q.Form != "project" || q.MountId != "eosproject-c" || q.Space.GetId().GetOpaqueId() != "eosproject-c$cms" || q.PhysicalMaxBytes != 2000 || q.Owner.GetIdp() != "cern" {
 		t.Errorf("project quota = %v", q)
 	}
-	// The storage gives what is used, and CS3 has what remains.
 	if q.Quota.GetQuotaMaxBytes() != 1000 || q.Quota.GetRemainingBytes() != 600 || q.UsedBytes != 400 {
 		t.Errorf("quota = %v, want 600 of 1000 bytes remaining", q.Quota)
 	}
@@ -247,8 +238,7 @@ func TestSetSpaceQuota(t *testing.T) {
 	if q.Quota.GetQuotaMaxBytes() != 5000 || q.Quota.GetRemainingBytes() != 4600 || q.Root != "/eos/project/c/cms" {
 		t.Errorf("quota = %v", q)
 	}
-	// The quota goes on the root of the space, never on a folder in it, and
-	// a limit that the mask does not name is not sent.
+	// A limit that the mask does not name is not sent.
 	calls := f.callsOf("quota_set")
 	if len(calls) != 1 || calls[0].args["root"] != "/eos/project/c/cms" {
 		t.Fatalf("calls = %v", calls)
@@ -258,7 +248,6 @@ func TestSetSpaceQuota(t *testing.T) {
 	}
 }
 
-// The instances of a mount share the storage, so only one of them lists.
 func TestListSpaceQuotasAsksOneInstanceOfEachMount(t *testing.T) {
 	c, f := quotaFleet(t)
 	stream, err := c.ListSpaceQuotas(context.Background(), &adminpb.ListSpaceQuotasRequest{MinBytes: 5})

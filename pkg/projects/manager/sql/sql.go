@@ -402,8 +402,7 @@ func (m *ProjectsManager) ListAllProjects(ctx context.Context, status projects.P
 	return fetchedProjects, nil
 }
 
-// DB returns the database of the catalogue, for a driver that embeds this
-// one and keeps its own columns in the same table.
+// DB returns the database, for a driver that embeds this one and keeps its own columns in the same table.
 func (m *ProjectsManager) DB() *gorm.DB {
 	return m.db
 }

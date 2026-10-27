@@ -56,9 +56,7 @@ import (
 	"google.golang.org/protobuf/proto"
 )
 
-// fakeProvider stands for a share provider, a link provider or the spaces
-// registry: it answers each invocation with its handler, or with its list
-// for a stream, and records the arguments.
+// fakeProvider stands for a share provider, a link provider or the spaces registry.
 type fakeProvider struct {
 	mu      sync.Mutex
 	calls   []shareCall
@@ -100,7 +98,6 @@ func (f *fakeProvider) InvokeStream(_ context.Context, name string, args map[str
 	return nil
 }
 
-// callsOf returns the arguments of each call of the invocation.
 func (f *fakeProvider) callsOf(invocation string) []map[string]any {
 	f.mu.Lock()
 	defer f.mu.Unlock()
@@ -125,14 +122,11 @@ var (
 	fleetCtrlAddr string
 )
 
-// startShareFleet serves the fake providers over a real control channel, and
-// the SharesAdmin service on a gRPC listener. The providers are registered
-// once in the process, and each test resets them.
+// The providers are registered once in the process, and each test resets them.
 func startShareFleet(t *testing.T) *shareFleet {
 	t.Helper()
 	fleetOnce.Do(func() {
-		// The control channel outlives the test that starts it, as the
-		// registry does.
+		// The control channel outlives the test, as the registry does.
 		ln, err := net.Listen("tcp", "127.0.0.1:0")
 		if err != nil {
 			t.Fatal(err)
@@ -151,8 +145,7 @@ func startShareFleet(t *testing.T) *shareFleet {
 		t.Fatal(err)
 	}
 	service.SetGlobalRegistry(reg)
-	// Another test can have added nodes of the same services, without a
-	// control channel.
+	// Another test can have added nodes of the same services without a control channel.
 	for _, name := range []string{userShareService, publicShareService, spacesRegistry} {
 		if err := service.GlobalRegistry().Remove(registry.NewService(name, nil)); err != nil {
 			t.Fatal(err)
@@ -230,8 +223,7 @@ func recv[M any](t *testing.T, stream grpc.ServerStreamingClient[M]) ([]*M, erro
 	}
 }
 
-// A share or a link that does not exist is NotFound for the client, so that
-// the owner fallback of the CLI can tell it from a failure.
+// The owner fallback of the CLI needs NotFound to tell a missing share from a failure.
 func TestSharesAdminNotFound(t *testing.T) {
 	f := startShareFleet(t)
 	f.shares.handle["get"] = func(args map[string]any) (invoke.Result, error) {
@@ -251,8 +243,7 @@ func TestSharesAdminNotFound(t *testing.T) {
 	if _, err := f.client.GetShare(ctx, &adminpb.GetShareRequest{}); status.Code(err) != codes.InvalidArgument {
 		t.Errorf("GetShare without id: got %v, want InvalidArgument", err)
 	}
-	// A key resolves to an id before a mutation, so a key of no share is
-	// NotFound too, and nothing is changed.
+	// A key resolves to an id before a mutation: a key of no share is NotFound, and nothing changes.
 	if _, err := f.client.RemoveShare(ctx, &adminpb.RemoveShareRequest{Ref: aliceKey}); status.Code(err) != codes.NotFound {
 		t.Errorf("RemoveShare by key: got %v, want NotFound", err)
 	}
@@ -289,8 +280,7 @@ func TestGetShareDecodesTheResult(t *testing.T) {
 	}
 }
 
-// The password goes to the link provider, and never to the audit. The token of
-// a link opens it, so the audit does not have it either.
+// The audit has neither the password nor the token, which opens the link.
 func TestUpdatePublicLinkKeepsSecretsOutOfTheAudit(t *testing.T) {
 	f := startShareFleet(t)
 	// The link provider writes the snake_case names of AdminPublicShare.
@@ -340,8 +330,6 @@ func TestUpdatePublicLinkKeepsSecretsOutOfTheAudit(t *testing.T) {
 	}
 }
 
-// A space given by name is resolved to the space id that the share table
-// keeps, and the ONLY selections are applied to what the provider sends.
 func TestListSharesResolvesTheSpaceAndSelects(t *testing.T) {
 	f := startShareFleet(t)
 	f.spaces.handle["get"] = func(map[string]any) (invoke.Result, error) {
@@ -405,7 +393,6 @@ func TestListPublicLinksOnlyExpired(t *testing.T) {
 	}
 }
 
-// A space given by path is the catalogued space that holds it.
 func TestListSharesResolvesASpacePath(t *testing.T) {
 	f := startShareFleet(t)
 	space := func(id, root string) invoke.Result {
@@ -459,8 +446,6 @@ func TestSharesAdminRefusesBadRequests(t *testing.T) {
 	}
 }
 
-// MoveShares moves the shares and the links under from_path, found by their
-// current path or by their path at creation, and keeps going after a failure.
 func TestMoveShares(t *testing.T) {
 	f := startShareFleet(t)
 	f.shares.streams["list"] = []invoke.Result{
@@ -534,9 +519,6 @@ func TestMoveShares(t *testing.T) {
 	}
 }
 
-// The CS3 filters become the arguments of the list invocations, at most one
-// of each type. The types that the invocations cannot apply are refused
-// before any call.
 func TestListMapsTheCS3Filters(t *testing.T) {
 	f := startShareFleet(t)
 	ctx := context.Background()
@@ -610,9 +592,6 @@ func TestListMapsTheCS3Filters(t *testing.T) {
 	}
 }
 
-// The permissions of an update are sent as the name of their role, and an
-// expiration without a value removes it. A share given by its key is resolved
-// to its id first.
 func TestUpdateShareMapsTheCS3Fields(t *testing.T) {
 	f := startShareFleet(t)
 	ctx := context.Background()

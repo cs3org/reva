@@ -49,8 +49,6 @@ func testSpace(id, name, typ, owner, path string) *provider.StorageSpace {
 	}
 }
 
-// spacesBackend has the home of alice, a project of alice, and a project of
-// bob that alice can read but not change.
 func spacesBackend() *clitest.Backend {
 	b := clitest.New("alice")
 	b.AddSpace(testSpace("eoshome-a$alice", "alice", "personal", "alice", "/eos/user/a/alice"))
@@ -66,7 +64,6 @@ func TestSpaceUserPlane(t *testing.T) {
 	if !strings.Contains(out, "cernbox") || !strings.Contains(out, "atlas") || strings.Contains(out, "personal") {
 		t.Errorf("space list --type project = %q", out)
 	}
-	// The user plane prints the CS3 message.
 	var listed []map[string]any
 	if err := json.Unmarshal([]byte(mustRun(t, b, "space", "list", "-o", "json")), &listed); err != nil || len(listed) != 3 || listed[0]["spaceType"] != "personal" {
 		t.Errorf("space list -o json = %v, %v", listed, err)
@@ -80,8 +77,7 @@ func TestSpaceUserPlane(t *testing.T) {
 	}
 }
 
-// Without admin rights, a space that the caller may not change stays not
-// found, and nothing tells that it exists.
+// Without admin rights, a space that the caller may not change stays not found.
 func TestSpaceUpdateOfAnotherOwner(t *testing.T) {
 	_, err := runFake(t, spacesBackend(), "--no-elevate", "space", "update", "atlas", "--description", "x")
 	if !cli.IsNotFound(err) {
@@ -98,8 +94,24 @@ func TestSpaceUpdateNeedsAField(t *testing.T) {
 	}
 }
 
-type fakeSpacesAdmin struct {
+type fakeAdminAPI struct {
 	adminpb.UnimplementedAdminAPIServer
+	notAdmin bool
+}
+
+func (f *fakeAdminAPI) CheckAdmin(context.Context, *adminpb.CheckAdminRequest) (*adminpb.CheckAdminResponse, error) {
+	return &adminpb.CheckAdminResponse{Admin: !f.notAdmin}, nil
+}
+
+func (f *fakeAdminAPI) RequestAdmin(context.Context, *adminpb.RequestAdminRequest) (*adminpb.RequestAdminResponse, error) {
+	if f.notAdmin {
+		return nil, status.Error(codes.PermissionDenied, "not an admin")
+	}
+	return &adminpb.RequestAdminResponse{Token: "admin"}, nil
+}
+
+type fakeSpacesAdmin struct {
+	fakeAdminAPI
 	adminpb.UnimplementedSpacesAdminServer
 
 	mu     sync.Mutex
@@ -122,14 +134,6 @@ func (f *fakeSpacesAdmin) find(ref *adminpb.SpaceRef) (*adminpb.AdminSpace, erro
 		}
 	}
 	return nil, status.Error(codes.NotFound, "space not found")
-}
-
-func (f *fakeSpacesAdmin) CheckAdmin(context.Context, *adminpb.CheckAdminRequest) (*adminpb.CheckAdminResponse, error) {
-	return &adminpb.CheckAdminResponse{Admin: true}, nil
-}
-
-func (f *fakeSpacesAdmin) RequestAdmin(context.Context, *adminpb.RequestAdminRequest) (*adminpb.RequestAdminResponse, error) {
-	return &adminpb.RequestAdminResponse{Token: "admin-token"}, nil
 }
 
 func (f *fakeSpacesAdmin) ListSpaces(req *adminpb.ListSpacesRequest, st adminpb.SpacesAdmin_ListSpacesServer) error {
@@ -191,8 +195,6 @@ func (f *fakeSpacesAdmin) CheckSpaces(req *adminpb.CheckSpacesRequest, st adminp
 	return st.Send(&adminpb.SpaceCheck{Space: f.spaces["atlas"], Findings: []*adminpb.SpaceFinding{{Kind: "owner_missing", Detail: "bob"}}})
 }
 
-// adminArgs serves a fake Admin API with SpacesAdmin, and returns the
-// global flags that point the CLI to it.
 func adminArgs(t *testing.T) (*fakeSpacesAdmin, []string) {
 	t.Helper()
 	f := &fakeSpacesAdmin{
@@ -225,16 +227,12 @@ func TestSpaceOperatorOptions(t *testing.T) {
 	if fs := req.GetFilters(); len(fs) != 1 || fs[0].GetType() != provider.ListStorageSpacesRequest_Filter_TYPE_OWNER || !proto.Equal(fs[0].GetOwner(), directoryUser("bob").Id) || !req.IncludeArchived {
 		t.Errorf("ListSpaces request = %v", req)
 	}
-	// The catalogue record is the AdminSpace.
 	var m map[string]any
 	if err := json.Unmarshal([]byte(mustRun(t, spacesBackend(), append(flags, "space", "info", "atlas", "--catalogue", "-o", "json")...)), &m); err != nil || m["status"] != "active" {
 		t.Errorf("space info --catalogue = %v, %v", m, err)
 	}
 }
 
-// The owner fallback: an admin finds with GetSpace a space that the user
-// plane does not show (cms), or does not let the caller change (atlas), and
-// changes it with UpdateSpace.
 func TestSpaceOwnerFallback(t *testing.T) {
 	f, flags := adminArgs(t)
 	if out := mustRun(t, spacesBackend(), append(flags, "space", "info", "cms")...); !strings.Contains(out, "archived") {
@@ -245,7 +243,6 @@ func TestSpaceOwnerFallback(t *testing.T) {
 	if fs := req.GetFields(); req.GetRef().GetId().GetOpaqueId() != "eosproject-a$atlas" || len(fs) != 1 || fs[0].GetField() == nil || fs[0].GetDescription() != "" || !req.Fallback {
 		t.Errorf("UpdateSpace request = %v", req)
 	}
-	// A space that the catalogue does not have either: the original answer.
 	if _, err := runFake(t, spacesBackend(), append(flags, "space", "info", "nope")...); !cli.IsNotFound(err) {
 		t.Errorf("space info nope: err = %v, want not found", err)
 	}
@@ -276,8 +273,6 @@ func TestSpaceOperatorCommands(t *testing.T) {
 	}
 }
 
-// register sends the space in the form that AdminSpace has: the roles are
-// the groups of reader, writer and admin, with their permissions.
 func TestSpaceRegister(t *testing.T) {
 	f, flags := adminArgs(t)
 	mustRun(t, spacesBackend(), append(flags, "space", "register", "lhcb", "--owner", "lhcbsvc", "--path", "/eos/project/l/lhcb",

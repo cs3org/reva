@@ -32,9 +32,7 @@ import (
 	"github.com/spf13/cobra"
 )
 
-// RouteCommand returns `route`, the operator command for the routing table
-// of the storage registry. It is in the storage group, not the fleet group,
-// so it is not in Commands.
+// RouteCommand returns the `route` command, which is not in Commands.
 func RouteCommand(r *cli.Runtime) *cobra.Command {
 	storage := func(ctx context.Context) (adminpb.StorageAdminClient, context.Context, error) {
 		c, ctx, err := r.Admin(ctx)
@@ -115,8 +113,7 @@ func RouteCommand(r *cli.Runtime) *cobra.Command {
 			if len(args) != 1 {
 				return nil, cobra.ShellCompDirectiveNoFileComp
 			}
-			// The routing table has no list of mounts, so offer the mounts
-			// that it uses already.
+			// The routing table has no list of mounts, so offer the ones in use.
 			return cli.Complete(r, -1, func(ctx context.Context, _ string) ([]string, error) {
 				rs, err := routes(ctx)
 				var ids []string
@@ -176,9 +173,7 @@ func RouteCommand(r *cli.Runtime) *cobra.Command {
 	return cli.AdminCommand(cmd)
 }
 
-// staleErr reports the storage registry instances that did not reload the
-// routing table. The change is written, but these instances serve the old
-// table until they reload, so the command must fail.
+// staleErr fails because a stale instance serves the old table until it reloads.
 func staleErr(w io.Writer, stale []*adminpb.StaleInstance) error {
 	if len(stale) == 0 {
 		return nil

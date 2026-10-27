@@ -232,8 +232,8 @@ func New(ctx context.Context, m map[string]any) (rgrpc.Service, error) {
 		return nil, err
 	}
 
-	// A driver without quota administration does not advertise the quota
-	// invocations, so that a fleet-wide quota list skips its instances.
+	// Without quota administration the instance does not advertise the quota invocations,
+	// so that a fleet-wide quota list skips it.
 	if _, ok := fs.(storage.QuotaAdmin); ok {
 		service.addQuotaInvocations()
 	}

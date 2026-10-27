@@ -50,8 +50,7 @@ import (
 	"google.golang.org/protobuf/proto"
 )
 
-// fakeCatalogue is a spacesregistry with two instances over one store, as in
-// production. It records each call with the instance that ran it.
+// fakeCatalogue is a spacesregistry with two instances over one store.
 type fakeCatalogue struct {
 	mu     sync.Mutex
 	spaces []*adminpb.AdminSpace
@@ -90,8 +89,6 @@ func (f *fakeCatalogue) find(args map[string]any) (*adminpb.AdminSpace, error) {
 	return nil, errtypes.NotFound("project")
 }
 
-// fakeInvokable lets the fake see the raw arguments, as the real typed
-// handlers would get them.
 type fakeInvokable struct {
 	node string
 	f    *fakeCatalogue
@@ -153,7 +150,6 @@ func project(id, name, path, st string) *adminpb.AdminSpace {
 	}
 }
 
-// spacesClient serves SpacesAdmin over a fake catalogue with two instances.
 func spacesClient(t *testing.T) (adminpb.SpacesAdminClient, *fakeCatalogue) {
 	t.Helper()
 	f := &fakeCatalogue{spaces: []*adminpb.AdminSpace{
@@ -186,8 +182,7 @@ func spacesClient(t *testing.T) (adminpb.SpacesAdminClient, *fakeCatalogue) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	// The first registry set in the process stays, so add to that one, after
-	// the nodes that another test left there.
+	// The first registry set in the process stays: add to it, after the nodes of other tests.
 	service.SetGlobalRegistry(reg)
 	if err := service.GlobalRegistry().Remove(registry.NewService(spacesRegistry, nil)); err != nil {
 		t.Fatal(err)
@@ -236,8 +231,7 @@ func drain[M any](t *testing.T, recv func() (M, error)) ([]M, error) {
 	}
 }
 
-// The CLI owner fallback reads NotFound as "the space does not exist", so an
-// errtypes.NotFound of the catalogue must arrive as NotFound.
+// The CLI owner fallback reads NotFound as "the space does not exist".
 func TestGetSpaceNotFound(t *testing.T) {
 	c, _ := spacesClient(t)
 	ctx := context.Background()
@@ -254,8 +248,6 @@ func TestGetSpaceNotFound(t *testing.T) {
 	}
 }
 
-// A path selects the space with the deepest root that holds it, and a space
-// that is not archived before an archived one.
 func TestSpaceRefByPath(t *testing.T) {
 	c, _ := spacesClient(t)
 	for p, want := range map[string]string{
@@ -274,7 +266,6 @@ func TestSpaceRefByPath(t *testing.T) {
 	}
 }
 
-// A change runs on one instance, and then every instance drops its cache.
 func TestMutationFlushesEveryInstance(t *testing.T) {
 	c, f := spacesClient(t)
 	m, err := c.SetSpaceStatus(context.Background(), &adminpb.SetSpaceStatusRequest{Ref: byPath("/eos/project/c/cernbox/docs"), Status: "archiving"})
@@ -317,7 +308,6 @@ func updateMetadata(t provider.SpaceMetadata_Type, id string) *provider.UpdateSt
 	return &provider.UpdateStorageSpaceRequest_UpdateField{Field: &provider.UpdateStorageSpaceRequest_UpdateField_Metadata{Metadata: &provider.SpaceMetadata{Type: t, Id: id}}}
 }
 
-// An empty value clears a field, so it is sent; a field that is not set is not.
 func TestUpdateSpaceSendsTheSetFields(t *testing.T) {
 	c, f := spacesClient(t)
 	ctx := context.Background()
@@ -339,8 +329,6 @@ func TestUpdateSpaceSendsTheSetFields(t *testing.T) {
 	}
 }
 
-// The catalogue changes only what it stores, so the other CS3 fields are
-// refused before any call.
 func TestUpdateSpaceRefusesWhatTheCatalogueCannotChange(t *testing.T) {
 	c, f := spacesClient(t)
 	for name, fields := range map[string][]*provider.UpdateStorageSpaceRequest_UpdateField{
@@ -395,8 +383,7 @@ func TestListSpaces(t *testing.T) {
 	}
 }
 
-// The list invocation does not take an id or a path, so the facade keeps the
-// spaces that match them: any id, or any path, as in ListStorageSpaces.
+// The list invocation does not take an id or a path: the facade applies them.
 func TestListSpacesByIDAndPath(t *testing.T) {
 	c, _ := spacesClient(t)
 	ctx := context.Background()
@@ -476,9 +463,7 @@ func TestRegisterSpace(t *testing.T) {
 		t.Fatalf("create calls: %+v, want %v", c, want)
 	}
 
-	// The root gives the storage, the username wins over the id, and the
-	// catalogue fills what is empty.
-	// The owner travels as its id, never as its username.
+	// The root gives the storage. The owner travels as its id, never as its username.
 	cmssvc := &userpb.UserId{OpaqueId: "1234"}
 	minimal := &provider.StorageSpace{Name: "cms", Owner: &userpb.User{Id: cmssvc, Username: "cmssvc"}, Root: &provider.ResourceId{StorageId: "eosproject-c"}}
 	if _, err := c.RegisterSpace(ctx, &adminpb.RegisterSpaceRequest{Space: minimal}); err != nil {

@@ -41,9 +41,7 @@ import (
 	"google.golang.org/protobuf/types/known/fieldmaskpb"
 )
 
-// quotaSpace is a space as the quota invocations of the storage provider
-// take it. An empty spaceType lets the storage provider use the type of its
-// spaces.
+// An empty spaceType lets the storage provider use the type of its spaces.
 type quotaSpace struct {
 	id              *provider.StorageSpaceId
 	root, spaceType string
@@ -81,9 +79,7 @@ func (a *spacesAdmin) SetSpaceQuota(ctx context.Context, req *adminpb.SetSpaceQu
 	return q, err
 }
 
-// quotaLimits maps the limits that mask names onto the arguments of the
-// quota_set invocation. The mask is required, because a limit of 0 is a
-// value: no limit.
+// The mask is required, because a limit of 0 is a value: no limit.
 func quotaLimits(q *provider.Quota, mask *fieldmaskpb.FieldMask) (map[string]string, error) {
 	if len(mask.GetPaths()) == 0 {
 		return nil, status.Error(codes.InvalidArgument, "admin: set needs an update_mask with quota_max_bytes, quota_max_files or both")
@@ -102,8 +98,7 @@ func quotaLimits(q *provider.Quota, mask *fieldmaskpb.FieldMask) (map[string]str
 	return args, nil
 }
 
-// ListSpaceQuotas asks one instance of each mount: the instances of a mount
-// share the storage, so each one lists the same quotas.
+// The instances of a mount share the storage, so ListSpaceQuotas asks one per mount.
 func (a *spacesAdmin) ListSpaceQuotas(req *adminpb.ListSpaceQuotasRequest, stream adminpb.SpacesAdmin_ListSpaceQuotasServer) error {
 	ctx := stream.Context()
 	reg, err := a.s.registryHandle()
@@ -139,8 +134,7 @@ func (a *spacesAdmin) ListSpaceQuotas(req *adminpb.ListSpaceQuotasRequest, strea
 	}
 	ctx, cancel := context.WithCancel(admin.ForwardReason(ctx))
 	defer cancel()
-	// The first instance that fails ends the list, as in relayStream, because
-	// a partial list must not look complete.
+	// A partial list must not look complete: the first failure ends it.
 	for it := range streamAll(ctx, client.Route(eps, "quota_list"), "quota_list", args) {
 		if err := nodeStatus("quota_list", codes.Code(it.Code), it.Error); err != nil {
 			return err
@@ -156,8 +150,6 @@ func (a *spacesAdmin) ListSpaceQuotas(req *adminpb.ListSpaceQuotasRequest, strea
 	return nil
 }
 
-// quotaTarget resolves ref to its space, and the space to the storage
-// provider instances of the mount that serves its root.
 func (a *spacesAdmin) quotaTarget(ctx context.Context, ref *adminpb.SpaceRef) (quotaSpace, []client.Endpoint, error) {
 	sp, err := a.spaceForQuota(ctx, ref)
 	if err != nil {
@@ -167,8 +159,7 @@ func (a *spacesAdmin) quotaTarget(ctx context.Context, ref *adminpb.SpaceRef) (q
 	if err != nil {
 		return quotaSpace{}, nil, err
 	}
-	// The registry also gives the mounts below a path, so keep the deepest
-	// mount that holds the root.
+	// The registry also returns the mounts below a path: keep the deepest one that holds the root.
 	var mount *adminpb.ResolvedProvider
 	depth := -1
 	for _, m := range mounts.Providers {
@@ -191,10 +182,9 @@ func (a *spacesAdmin) quotaTarget(ctx context.Context, ref *adminpb.SpaceRef) (q
 	return sp, eps, nil
 }
 
-// spaceForQuota finds the space of ref in the catalogue. The catalogue has only
-// project spaces, so a space that is not in it is known by its root: the path
-// of ref, or the path that its id encodes. The storage provider refuses a
-// path that is not the root of a space.
+// The catalogue has only project spaces. A space that is not in it is known by its root:
+// the path of ref, or the path that its id encodes. The storage provider refuses a path
+// that is not a space root.
 func (a *spacesAdmin) spaceForQuota(ctx context.Context, ref *adminpb.SpaceRef) (quotaSpace, error) {
 	m, err := a.GetSpace(ctx, &adminpb.GetSpaceRequest{Ref: ref})
 	if err == nil {
@@ -232,7 +222,6 @@ func (sp quotaSpace) args() map[string]string {
 	return args
 }
 
-// invokeQuota runs a quota invocation on one instance of the mount.
 func invokeQuota(ctx context.Context, eps []client.Endpoint, invocation string, sp quotaSpace, args map[string]string) (*adminpb.SpaceQuota, error) {
 	res, err := invokeOne(ctx, eps, invocation, args)
 	if err != nil {
@@ -241,9 +230,7 @@ func invokeQuota(ctx context.Context, eps []client.Endpoint, invocation string, 
 	return decodeQuota(res.ResultJSON, sp)
 }
 
-// quotaResult is the result of the quota invocations of the storage
-// provider. It has what is used, and CS3 has what remains, so SpaceQuota
-// carries both.
+// quotaResult has what is used. CS3 has what remains, so SpaceQuota carries both.
 type quotaResult struct {
 	Root             string          `json:"root"`
 	MountID          string          `json:"mount_id"`
@@ -257,8 +244,7 @@ type quotaResult struct {
 	Owner            json.RawMessage `json:"owner"`
 }
 
-// decodeQuota reads a quota invocation result about sp. The owner of the
-// catalogue is kept over the owner that the result echoes.
+// The owner from the catalogue wins over the owner that the result echoes.
 func decodeQuota(resultJSON string, sp quotaSpace) (*adminpb.SpaceQuota, error) {
 	var r quotaResult
 	if err := json.Unmarshal([]byte(resultJSON), &r); err != nil {
@@ -293,8 +279,7 @@ func decodeQuota(resultJSON string, sp quotaSpace) (*adminpb.SpaceQuota, error) 
 	return q, nil
 }
 
-// remaining is 0 without a limit, and 0 over the limit, because CS3 has no
-// negative remainder.
+// CS3 has no negative remainder: remaining is 0 without a limit and over the limit.
 func remaining(limit, used uint64) uint64 {
 	return limit - min(used, limit)
 }

@@ -72,8 +72,6 @@ func TestNewRedactedStatusFromErrType(t *testing.T) {
 	}
 }
 
-// Every gRPC code keeps its meaning, so that a relayed failure can still tell
-// an instance that is down from one that failed.
 func TestCodeFromGRPC(t *testing.T) {
 	for in, want := range map[codes.Code]rpc.Code{
 		codes.OK:                 rpc.Code_CODE_OK,

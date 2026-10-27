@@ -90,8 +90,7 @@ func TestPluginsAreAttached(t *testing.T) {
 	}
 }
 
-// The CERN plugin user account (reva-plugins) attaches under the core
-// command user.
+// reva-plugins attaches `user account` under the core `user`.
 func TestPluginAttachesUnderUser(t *testing.T) {
 	root := revacmd.NewRoot()
 	user := find(t, root, "user")

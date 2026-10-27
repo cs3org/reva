@@ -43,8 +43,8 @@ const actAsTokenLifetime = 5 * time.Minute
 
 // Lookup finds a user by id through the gateway. The groups are included,
 // because a storage can use them to decide, for example whether the user
-// administers a project. An id without an idp is what the share and project
-// tables keep, and the user providers match it on the opaque id alone.
+// administers a project. The share and project tables keep ids without an idp: the user
+// providers match them on the opaque id alone.
 func Lookup(ctx context.Context, id *userpb.UserId) (*userpb.User, error) {
 	if id.GetOpaqueId() == "" {
 		return nil, errtypes.BadRequest("admin: no user id given")

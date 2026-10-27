@@ -27,7 +27,6 @@ import (
 	"maps"
 	"slices"
 	"strconv"
-	"strings"
 	"time"
 
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
@@ -274,7 +273,7 @@ func selectLinks(ctx context.Context, m adminManager, a listArgs) ([]model.Publi
 		filters = append(filters, &link.ListPublicSharesRequest_Filter{Type: link.ListPublicSharesRequest_Filter_TYPE_CREATOR, Term: &link.ListPublicSharesRequest_Filter_Creator{Creator: id}})
 	}
 	if a.ResourceID != "" {
-		id, err := parseResourceID(a.ResourceID)
+		id, err := admin.ParseResourceID(a.ResourceID)
 		if err != nil {
 			return nil, err
 		}
@@ -632,17 +631,6 @@ func linkRef(id, token string) (*link.PublicShareReference, error) {
 		return &link.PublicShareReference{Spec: &link.PublicShareReference_Token{Token: token}}, nil
 	}
 	return nil, errtypes.BadRequest("give the id or the token of the link")
-}
-
-// parseResourceID reads storage_id!opaque_id, or the storage_id$space_id!opaque_id
-// of the spaces. The link table matches the storage id and the opaque id only.
-func parseResourceID(s string) (*provider.ResourceId, error) {
-	storage, opaque, ok := strings.Cut(s, "!")
-	if !ok || storage == "" || opaque == "" {
-		return nil, errtypes.BadRequest(fmt.Sprintf("invalid resource id %q: use storage_id!opaque_id", s))
-	}
-	storage, space, _ := strings.Cut(storage, "$")
-	return &provider.ResourceId{StorageId: storage, SpaceId: space, OpaqueId: opaque}, nil
 }
 
 func linkRefID(id uint) *link.PublicShareReference {

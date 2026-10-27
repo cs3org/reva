@@ -24,13 +24,10 @@ const _ = grpc.SupportPackageIsVersion7
 type SpacesAdminClient interface {
 	// ListSpaces streams the spaces of the catalogue, of every owner.
 	ListSpaces(ctx context.Context, in *ListSpacesRequest, opts ...grpc.CallOption) (SpacesAdmin_ListSpacesClient, error)
-	// GetSpace returns one space, archived or not. The CLI uses it to find out
-	// if a space that the user plane did not find exists.
+	// GetSpace returns one space, archived or not.
 	GetSpace(ctx context.Context, in *GetSpaceRequest, opts ...grpc.CallOption) (*AdminSpace, error)
-	// UpdateSpace changes the description, the readme or the thumbnail of a
-	// space, with the update fields of UpdateStorageSpace. The change is made
-	// on the server as the owner of the space, with the checks of a user call.
-	// It is the server side of the owner fallback.
+	// UpdateSpace changes the description, the readme or the thumbnail of a space.
+	// It acts as the owner of the space, with the checks of a user call.
 	UpdateSpace(ctx context.Context, in *UpdateSpaceRequest, opts ...grpc.CallOption) (*AdminSpace, error)
 	SetSpaceStatus(ctx context.Context, in *SetSpaceStatusRequest, opts ...grpc.CallOption) (*AdminSpace, error)
 	SetSpaceOwner(ctx context.Context, in *SetSpaceOwnerRequest, opts ...grpc.CallOption) (*AdminSpace, error)
@@ -236,13 +233,10 @@ func (x *spacesAdminListSpaceQuotasClient) Recv() (*SpaceQuota, error) {
 type SpacesAdminServer interface {
 	// ListSpaces streams the spaces of the catalogue, of every owner.
 	ListSpaces(*ListSpacesRequest, SpacesAdmin_ListSpacesServer) error
-	// GetSpace returns one space, archived or not. The CLI uses it to find out
-	// if a space that the user plane did not find exists.
+	// GetSpace returns one space, archived or not.
 	GetSpace(context.Context, *GetSpaceRequest) (*AdminSpace, error)
-	// UpdateSpace changes the description, the readme or the thumbnail of a
-	// space, with the update fields of UpdateStorageSpace. The change is made
-	// on the server as the owner of the space, with the checks of a user call.
-	// It is the server side of the owner fallback.
+	// UpdateSpace changes the description, the readme or the thumbnail of a space.
+	// It acts as the owner of the space, with the checks of a user call.
 	UpdateSpace(context.Context, *UpdateSpaceRequest) (*AdminSpace, error)
 	SetSpaceStatus(context.Context, *SetSpaceStatusRequest) (*AdminSpace, error)
 	SetSpaceOwner(context.Context, *SetSpaceOwnerRequest) (*AdminSpace, error)

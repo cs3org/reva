@@ -34,9 +34,7 @@ import (
 
 type spaces struct{ b *Backend }
 
-// List returns the spaces that the caller can see: without a filter, the
-// spaces registry gives the personal space, the projects and the explorer
-// spaces.
+// Without a filter, the spaces registry lists the personal, project and explorer spaces.
 func (s spaces) List(ctx context.Context) ([]*provider.StorageSpace, error) {
 	c, ctx, err := s.b.gw(ctx)
 	if err != nil {

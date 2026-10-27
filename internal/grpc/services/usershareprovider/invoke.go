@@ -27,7 +27,6 @@ import (
 	"maps"
 	"slices"
 	"strconv"
-	"strings"
 	"time"
 
 	grouppb "github.com/cs3org/go-cs3apis/cs3/identity/group/v1beta1"
@@ -220,7 +219,7 @@ func (s *service) selectShares(ctx context.Context, m adminManager, a listArgs) 
 		filters = append(filters, revashare.SpaceIDFilter(a.Space))
 	}
 	if a.ResourceID != "" {
-		id, err := parseResourceID(a.ResourceID)
+		id, err := admin.ParseResourceID(a.ResourceID)
 		if err != nil {
 			return nil, err
 		}
@@ -677,17 +676,6 @@ func getRef(a getArgs) (*collaboration.ShareReference, error) {
 		return nil, errtypes.BadRequest("a share key needs an owner, a resource id and a grantee")
 	}
 	return &collaboration.ShareReference{Spec: &collaboration.ShareReference_Key{Key: key}}, nil
-}
-
-// parseResourceID reads storage_id!opaque_id, or the storage_id$space_id!opaque_id
-// of the spaces. The share table matches the storage id and the opaque id only.
-func parseResourceID(s string) (*provider.ResourceId, error) {
-	storage, opaque, ok := strings.Cut(s, "!")
-	if !ok || storage == "" || opaque == "" {
-		return nil, errtypes.BadRequest(fmt.Sprintf("invalid resource id %q: use storage_id!opaque_id", s))
-	}
-	storage, space, _ := strings.Cut(storage, "$")
-	return &provider.ResourceId{StorageId: storage, SpaceId: space, OpaqueId: opaque}, nil
 }
 
 func shareRef(id string) *collaboration.ShareReference {

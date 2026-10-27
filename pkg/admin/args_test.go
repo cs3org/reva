@@ -73,8 +73,6 @@ func TestGranteeArg(t *testing.T) {
 	}
 }
 
-// TestUserIDInvocation checks that an invocation takes a UserID, and that the
-// catalogue names its type.
 func TestUserIDInvocation(t *testing.T) {
 	type args struct {
 		Owner UserID `arg:"owner,required" help:"the owner"`

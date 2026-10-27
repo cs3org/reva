@@ -43,12 +43,9 @@ import (
 	"google.golang.org/protobuf/proto"
 )
 
-// sharesFleet is an Admin API whose SharesAdmin has share 4711 and link 42,
-// both of bob, and records each request.
 type sharesFleet struct {
-	adminpb.UnimplementedAdminAPIServer
+	fakeAdminAPI
 	adminpb.UnimplementedSharesAdminServer
-	admin bool
 
 	mu       sync.Mutex
 	requests []proto.Message
@@ -60,7 +57,6 @@ func (f *sharesFleet) record(m proto.Message) {
 	f.requests = append(f.requests, m)
 }
 
-// sent returns the requests of type M.
 func sent[M proto.Message](f *sharesFleet) []M {
 	f.mu.Lock()
 	defer f.mu.Unlock()
@@ -77,17 +73,6 @@ var (
 	bobShare = &adminpb.AdminShare{Share: &collaboration.Share{Id: &collaboration.ShareId{OpaqueId: "4711"}, Owner: &userpb.UserId{OpaqueId: "bob"}}}
 	bobLink  = &adminpb.AdminPublicShare{PublicShare: &link.PublicShare{Id: &link.PublicShareId{OpaqueId: "42"}, Token: "tok", Owner: &userpb.UserId{OpaqueId: "bob"}}}
 )
-
-func (f *sharesFleet) CheckAdmin(context.Context, *adminpb.CheckAdminRequest) (*adminpb.CheckAdminResponse, error) {
-	return &adminpb.CheckAdminResponse{Admin: f.admin}, nil
-}
-
-func (f *sharesFleet) RequestAdmin(context.Context, *adminpb.RequestAdminRequest) (*adminpb.RequestAdminResponse, error) {
-	if !f.admin {
-		return nil, status.Error(codes.PermissionDenied, "not an admin")
-	}
-	return &adminpb.RequestAdminResponse{Token: "admin"}, nil
-}
 
 func (f *sharesFleet) share(ref *collaboration.ShareReference) (*adminpb.AdminShare, error) {
 	if ref.GetId().GetOpaqueId() != "4711" {
@@ -158,8 +143,6 @@ func (f *sharesFleet) ListPublicLinks(r *adminpb.ListPublicLinksRequest, s admin
 	return s.Send(bobLink)
 }
 
-// runAdmin runs args as alice on b, with f as the Admin API, and stdin as the
-// standard input.
 func runAdmin(t *testing.T, b backend.Backend, f *sharesFleet, stdin string, args ...string) (string, error) {
 	t.Helper()
 	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
@@ -187,12 +170,9 @@ func runAdmin(t *testing.T, b backend.Backend, f *sharesFleet, stdin string, arg
 	return out.String(), err
 }
 
-// A share or a link of another user is not found on the user plane. An
-// admin finds it with the Admin API and changes it on the server: the
-// request says that it is a fallback, for the audit.
 func TestOwnerFallback(t *testing.T) {
 	b := clitest.New("alice")
-	f := &sharesFleet{admin: true}
+	f := &sharesFleet{}
 
 	out, err := runAdmin(t, b, f, "", "share", "get", "4711")
 	if err != nil || !strings.Contains(out, "bob") {
@@ -201,8 +181,6 @@ func TestOwnerFallback(t *testing.T) {
 	if _, err := runAdmin(t, b, f, "", "share", "update", "4711", "--role", "editor", "--expires", "none"); err != nil {
 		t.Fatal(err)
 	}
-	// The admin plane gets the CS3 fields of the user plane: the permissions
-	// of the role, and an expiration that removes it.
 	editor := &collaboration.UpdateShareRequest_UpdateField{Field: &collaboration.UpdateShareRequest_UpdateField_Permissions{
 		Permissions: &collaboration.SharePermissions{Permissions: permissions.NewEditorRole().CS3ResourcePermissions()},
 	}}
@@ -239,10 +217,10 @@ func TestOwnerFallback(t *testing.T) {
 }
 
 // A caller who cannot be an admin gets the not-found of the user plane, and
-// the Admin API is not asked. A mistyped id stays not found for an admin.
+// the Admin API is not asked.
 func TestOwnerFallbackKeepsTheNotFound(t *testing.T) {
 	b := clitest.New("alice")
-	f := &sharesFleet{}
+	f := &sharesFleet{notAdmin: true}
 	if _, err := runAdmin(t, b, f, "", "share", "update", "4711", "--role", "editor"); !cli.IsNotFound(err) {
 		t.Errorf("non-admin: err = %v, want not found", err)
 	}
@@ -253,7 +231,7 @@ func TestOwnerFallbackKeepsTheNotFound(t *testing.T) {
 		t.Errorf("a non-admin sent %d SharesAdmin requests", n)
 	}
 
-	f.admin = true
+	f.notAdmin = false
 	if _, err := runAdmin(t, b, f, "", "share", "remove", "4712"); !cli.IsNotFound(err) {
 		t.Errorf("mistyped id: err = %v, want not found", err)
 	}
@@ -262,8 +240,7 @@ func TestOwnerFallbackKeepsTheNotFound(t *testing.T) {
 	}
 }
 
-// directoryUser is a user whose opaque id is not its username, so that a
-// test tells the id that the user plane resolves from the name typed.
+// directoryUser has an opaque id that differs from its username.
 func directoryUser(name string) *userpb.User {
 	return &userpb.User{Id: &userpb.UserId{Idp: "cernbox", OpaqueId: "id-" + name, Type: userpb.UserType_USER_TYPE_PRIMARY}, Username: name}
 }
@@ -277,7 +254,7 @@ func addDirectoryUsers(b *clitest.Backend, names ...string) {
 func TestShareOperatorOptions(t *testing.T) {
 	b := clitest.New("alice")
 	addDirectoryUsers(b, "bob", "carol")
-	f := &sharesFleet{admin: true}
+	f := &sharesFleet{}
 
 	out, err := runAdmin(t, b, f, "", "share", "list", "--owner", "bob", "--orphans", "--expired", "--space", "cernbox")
 	if err != nil {
@@ -333,14 +310,13 @@ func TestShareOperatorOptions(t *testing.T) {
 func TestShareOperatorVerbs(t *testing.T) {
 	b := clitest.New("alice")
 	addDirectoryUsers(b, "bob", "carol")
-	f := &sharesFleet{admin: true}
+	f := &sharesFleet{}
 	if _, err := runAdmin(t, b, f, "", "share", "transfer", "4711", "carol"); err != nil {
 		t.Fatal(err)
 	}
 	if r := sent[*adminpb.TransferShareRequest](f); len(r) != 1 || !proto.Equal(r[0].GetInitiator(), directoryUser("carol").Id) || r[0].GetRef().GetId().GetOpaqueId() != "4711" {
 		t.Errorf("TransferShare requests %v", r)
 	}
-	// A name that the user plane does not know stops before the Admin API.
 	if _, err := runAdmin(t, b, f, "", "link", "transfer", "42", "nobody"); err == nil || err.Error() != "no user nobody" {
 		t.Errorf("link transfer to nobody: err = %v, want no user nobody", err)
 	}
@@ -358,7 +334,6 @@ func TestShareOperatorVerbs(t *testing.T) {
 	if err != nil || !strings.Contains(out, "/eos/b/x") {
 		t.Fatalf("share move = %q, %v", out, err)
 	}
-	// The plan first, then the move.
 	if m := sent[*adminpb.MoveSharesRequest](f); len(m) != 2 || !m[0].DryRun || m[1].DryRun || !proto.Equal(m[1].GetOwner(), directoryUser("bob").Id) || m[1].As != nil {
 		t.Errorf("MoveShares requests %v", m)
 	}
@@ -367,8 +342,6 @@ func TestShareOperatorVerbs(t *testing.T) {
 	}
 }
 
-// existsShares answers AlreadyExists for a second share with the same
-// grantee on a resource, like the share manager.
 type existsBackend struct{ *clitest.Backend }
 
 func (b existsBackend) Shares() backend.Shares { return existsShares{b.Backend.Shares()} }

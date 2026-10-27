@@ -27,10 +27,8 @@ import (
 )
 
 // SharesAdmin is the part of the SharesAdmin service that the owner fallback
-// of `share` and `link` uses. It takes and answers CS3 messages, like the
-// user plane, so that a command sends the same references and updates on both
-// planes and prints the same table. The errors are gRPC errors, with NotFound
-// for a resource that does not exist.
+// of `share` and `link` uses. It takes and answers CS3 messages, like the user
+// plane. The errors are gRPC errors.
 type SharesAdmin interface {
 	GetShare(ctx context.Context, ref *collaboration.ShareReference) (*collaboration.Share, error)
 	UpdateShare(ctx context.Context, ref *collaboration.ShareReference, fields []*collaboration.UpdateShareRequest_UpdateField) (*collaboration.Share, error)
@@ -40,9 +38,8 @@ type SharesAdmin interface {
 	RemovePublicLink(ctx context.Context, ref *link.PublicShareReference, dbOnly bool) error
 }
 
-// SharesAdmin returns the client of the SharesAdmin service. ctx is a
-// context of AdminContext. The update and remove calls tell the server that
-// they run in an owner fallback when InFallback(ctx) is true, for the audit.
+// SharesAdmin returns the client of the SharesAdmin service. ctx must come from
+// AdminContext. The update and remove calls set Fallback from InFallback(ctx).
 func (r *Runtime) SharesAdmin(ctx context.Context) (SharesAdmin, error) {
 	c, err := r.adminClient(ctx)
 	if err != nil {

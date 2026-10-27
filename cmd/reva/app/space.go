@@ -42,7 +42,6 @@ const spaceArgHelp = "SPACE is a path in the space, its id or its name."
 
 var spaceStatuses = []string{"creating", "active", "archiving", "archived"}
 
-// spaceCommand is the space noun. `space quota` adds its subcommand here.
 func spaceCommand(rt *cli.Runtime) *cobra.Command {
 	cmd := &cobra.Command{Use: "space", Short: "Manage storage spaces"}
 	cmd.AddCommand(
@@ -57,8 +56,7 @@ func spaceCommand(rt *cli.Runtime) *cobra.Command {
 	return cmd
 }
 
-// spaceRef is the SpacesAdmin reference of arg. A space id has a $
-// between the storage id and the space id.
+// spaceRef treats an argument with a $ as a space id (storage id$space id).
 func spaceRef(arg string) *adminpb.SpaceRef {
 	switch {
 	case strings.HasPrefix(arg, "/"):
@@ -78,7 +76,6 @@ func spacesAdmin(ctx context.Context, rt *cli.Runtime) (adminpb.SpacesAdminClien
 	return sa, ctx, err
 }
 
-// userSpace finds the space ref among the spaces of the caller.
 func userSpace(ctx context.Context, b backend.Backend, ref string) (*provider.StorageSpace, error) {
 	list, err := b.Spaces().List(ctx)
 	if err != nil {
@@ -87,8 +84,6 @@ func userSpace(ctx context.Context, b backend.Backend, ref string) (*provider.St
 	return backend.FindSpace(list, ref)
 }
 
-// spaceFallback returns the owner fallback of the space commands on ref, and
-// the lookup of the space with the Admin API.
 func spaceFallback(rt *cli.Runtime, ref string) (cli.Fallback, func(context.Context) (*adminpb.AdminSpace, error)) {
 	return cli.Fallback{Gate: rt, What: "space " + ref}, func(ctx context.Context) (*adminpb.AdminSpace, error) {
 		sa, err := rt.SpacesAdmin(ctx)
@@ -101,7 +96,6 @@ func spaceFallback(rt *cli.Runtime, ref string) (cli.Fallback, func(context.Cont
 
 func spaceListCommand(rt *cli.Runtime) *cobra.Command {
 	var typ, owner, member string
-	var all bool
 	var req adminpb.ListSpacesRequest
 	cmd := &cobra.Command{
 		Use:   "list",
@@ -158,7 +152,7 @@ func spaceListCommand(rt *cli.Runtime) *cobra.Command {
 		},
 	}
 	cmd.Flags().StringVar(&typ, "type", "", "only the spaces of this type: personal, project or explorer")
-	cmd.Flags().BoolVar(&all, "all", false, "list the spaces of the catalogue, of every owner")
+	cmd.Flags().Bool("all", false, "list the spaces of the catalogue, of every owner")
 	cmd.Flags().StringVar(&owner, "owner", "", "only the spaces of this owner")
 	cmd.Flags().StringVar(&member, "member", "", "only the spaces that this user owns or can access through a role")
 	cmd.Flags().StringVar(&req.Status, "status", "", "only the spaces in this status: "+strings.Join(spaceStatuses, ", "))
@@ -322,8 +316,6 @@ func spaceCheckCommand(rt *cli.Runtime) *cobra.Command {
 	return cmd
 }
 
-// spaceChange runs a change of the catalogue after a confirmation, and
-// prints the space.
 func spaceChange(cmd *cobra.Command, rt *cli.Runtime, prompt string, call func(context.Context, adminpb.SpacesAdminClient) (*adminpb.AdminSpace, error)) error {
 	if err := rt.Confirm(prompt); err != nil {
 		return err
@@ -415,7 +407,6 @@ func spaceRegisterCommand(rt *cli.Runtime) *cobra.Command {
 				if r.group == "" {
 					continue
 				}
-				// The roles as the catalogue returns them in AdminSpace.
 				space.Roles = append(space.Roles, &provider.SpaceRole{
 					RoleName:      r.name,
 					PermissionSet: r.perms.CS3ResourcePermissions(),
@@ -470,8 +461,6 @@ func spaceUnregisterCommand(rt *cli.Runtime) *cobra.Command {
 	return cmd
 }
 
-// completeSpaces completes the first argument with the names and the paths
-// of the spaces of the caller.
 func completeSpaces(rt *cli.Runtime) cobra.CompletionFunc {
 	return completeIDs(rt, func(ctx context.Context, b backend.Backend) ([]string, error) {
 		list, err := b.Spaces().List(ctx)
@@ -503,8 +492,6 @@ func spaceOwner(s *provider.StorageSpace) string {
 	return cmp.Or(s.GetOwner().GetUsername(), s.GetOwner().GetId().GetOpaqueId())
 }
 
-// renderSpaces writes the same columns on both planes. Status and profile
-// appear only when a space has them.
 func renderSpaces(w io.Writer, list []*adminpb.AdminSpace) {
 	withStatus := slices.ContainsFunc(list, func(m *adminpb.AdminSpace) bool { return m.Status != "" })
 	withProfile := slices.ContainsFunc(list, func(m *adminpb.AdminSpace) bool { return m.Profile != "" })
@@ -530,8 +517,7 @@ func renderSpaces(w io.Writer, list []*adminpb.AdminSpace) {
 	t.Write(w)
 }
 
-// printSpace prints m. With -o json, a space of the user plane is the CS3
-// message, and a space of the catalogue, which has a status, is AdminSpace.
+// printSpace prints the CS3 space with -o json, or AdminSpace if it has a status.
 func printSpace(cmd *cobra.Command, rt *cli.Runtime, m *adminpb.AdminSpace) error {
 	var v any = m
 	if m.Status == "" {
