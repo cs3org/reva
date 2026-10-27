@@ -1,0 +1,13 @@
+<footer class="site-footer">
+  <div class="wrap">
+    <div>
+      © {{ now.Year }} The Reva Authors. Apache 2.0 license.<br>
+      Started at <a href="https://home.cern">CERN</a>. Part of the <a href="https://github.com/cs3org">CS3 organisation</a>.
+    </div>
+    <nav aria-label="Footer">
+      {{- range site.Params.links }}<a href="{{ .url }}">{{ .name }}</a>{{ end }}
+      <a href="https://github.com/cs3org/reva/wiki">Wiki</a>
+      <a href="https://github.com/cs3org/reva/releases">Releases</a>
+    </nav>
+  </div>
+</footer>

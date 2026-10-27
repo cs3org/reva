@@ -1,0 +1,78 @@
+{{- /* The clickable architecture diagram, from data/architecture.yaml. */ -}}
+{{- $a := hugo.Data.architecture }}
+{{- $nodes := dict }}
+{{- range $a.nodes }}{{ $nodes = merge $nodes (dict .id .) }}{{ end }}
+<div class="diagram-card" data-diagram>
+  <div class="diagram-toolbar" role="group" aria-label="Trace a request">
+    <span class="label">Trace a request:</span>
+    {{- range $a.scenarios }}
+    <button class="chip" type="button" aria-pressed="false" data-scenario="{{ .id }}">{{ .title }}</button>
+    {{- end }}
+  </div>
+  <div class="diagram-body">
+    <div class="diagram-scroll">
+      <svg class="arch" viewBox="0 0 {{ $a.width }} {{ $a.height }}" role="img" aria-labelledby="arch-title">
+        <title id="arch-title">Reva architecture: clients, HTTP services, gateway, gRPC services, drivers, and back ends</title>
+        <g class="layers">
+          {{- range $a.layers }}
+          <g class="layer"><rect x="4" y="{{ .y }}" width="{{ sub $a.width 8 }}" height="{{ .h }}" rx="12"/><text x="20" y="{{ add .y 16 }}">{{ .label }}</text></g>
+          {{- end }}
+        </g>
+        <g class="edges">
+          {{- range $a.edges }}
+          {{- $f := index $nodes (index . 0) }}{{ $t := index $nodes (index . 1) }}
+          {{- if or (not $f) (not $t) }}{{ errorf "architecture: edge %v names an unknown node" . }}{{ end }}
+          {{- $fh := $f.h | default 52 }}{{ $th := $t.h | default 52 }}
+          {{- $d := "" }}
+          {{- if eq $f.y $t.y }}
+            {{- $sx := add $f.x (div $f.w 2.0) }}{{ $ex := add $t.x (div $t.w 2.0) }}{{ $y := add $f.y $fh }}
+            {{- $d = printf "M%.1f %d C%.1f %d %.1f %d %.1f %d" $sx $y $sx (add $y 34) $ex (add $y 34) $ex $y }}
+          {{- else }}
+            {{- $top := $f }}{{ $bot := $t }}{{ $toph := $fh }}
+            {{- if gt $f.y $t.y }}{{ $top = $t }}{{ $bot = $f }}{{ $toph = $th }}{{ end }}
+            {{- $sx := add $top.x (div $top.w 2.0) }}{{ $ex := add $bot.x (div $bot.w 2.0) }}
+            {{- if ge $top.w 400 }}{{ $sx = math.Max (add $top.x 30) (math.Min $ex (sub (add $top.x $top.w) 30)) }}{{ end }}
+            {{- if ge $bot.w 400 }}{{ $ex = math.Max (add $bot.x 30) (math.Min $sx (sub (add $bot.x $bot.w) 30)) }}{{ end }}
+            {{- $sy := add $top.y $toph }}{{ $ey := $bot.y }}{{ $my := div (add $sy $ey) 2.0 }}
+            {{- $d = printf "M%.1f %d C%.1f %.1f %.1f %.1f %.1f %d" $sx $sy $sx $my $ex $my $ex $ey }}
+          {{- end }}
+          <path class="edge" id="edge-{{ index . 0 }}-{{ index . 1 }}" data-from="{{ index . 0 }}" data-to="{{ index . 1 }}" d="{{ $d }}"/>
+          {{- end }}
+        </g>
+        <g class="nodes">
+          {{- range $a.nodes }}
+          {{- $h := .h | default 52 }}{{ $cx := add .x (div .w 2.0) }}
+          {{- $cls := "node" }}{{ if .external }}{{ $cls = print $cls " external" }}{{ end }}{{ if .band }}{{ $cls = print $cls " band" }}{{ end }}
+          {{- $href := "" }}
+          {{- with .page }}
+            {{- with site.GetPage . }}{{ $href = .RelPermalink }}{{ else }}{{ errorf "architecture: node page %q does not exist" . }}{{ end }}
+          {{- end }}
+          {{- if $href }}<a class="{{ $cls }}" href="{{ $href }}" id="node-{{ .id }}" data-id="{{ .id }}" data-title="{{ .label }}" data-desc="{{ .desc }}">
+          {{- else }}<g class="{{ $cls }}" id="node-{{ .id }}" data-id="{{ .id }}" data-title="{{ .label }}" data-desc="{{ .desc }}" tabindex="0">{{ end }}
+            <rect x="{{ .x }}" y="{{ .y }}" width="{{ .w }}" height="{{ $h }}" rx="8"/>
+            {{- if .band }}
+            <text class="t" x="{{ $cx }}" y="{{ add .y 20 }}" text-anchor="middle">{{ .label }} <tspan class="s">{{ .sub }}</tspan></text>
+            {{- else }}
+            <text class="t" x="{{ $cx }}" y="{{ add .y 23 }}" text-anchor="middle">{{ .label }}</text>
+            <text class="s" x="{{ $cx }}" y="{{ add .y 40 }}" text-anchor="middle">{{ .sub }}</text>
+            {{- end }}
+          {{- if $href }}</a>{{ else }}</g>{{ end }}
+          {{- end }}
+          {{- range $a.links }}
+          <a href="{{ (site.GetPage .page).RelPermalink }}"><text class="more" x="{{ .x }}" y="{{ .y }}">{{ .label }}</text></a>
+          {{- end }}
+        </g>
+        <circle class="pulse" r="6" cx="-20" cy="-20"/>
+      </svg>
+    </div>
+    <div class="diagram-side" aria-live="polite">
+      <div data-diagram-info>
+        <h3>How reva fits together</h3>
+        <p>Clients speak HTTP. The HTTP services turn requests into CS3 API calls to the gateway. The gateway routes each call to a gRPC service, which uses a driver for the actual back end.</p>
+        <p>Select a component to open its page, or trace a request above.</p>
+      </div>
+    </div>
+  </div>
+  <p class="diagram-hint">Scroll sideways to see the whole diagram.</p>
+  <script type="application/json" data-scenarios>{{ $a.scenarios | jsonify | safeJS }}</script>
+</div>

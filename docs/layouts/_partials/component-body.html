@@ -1,0 +1,84 @@
+{{- $p := .Params }}
+{{- $kindPage := site.GetPage (printf "/docs/components/%s" $p.kind) }}
+<div class="badges">
+  {{- with $kindPage }}<a class="badge kind" href="{{ .RelPermalink }}">{{ $p.kind_title }}</a>{{ end }}
+  {{- with $p.category }}<span class="badge">{{ . }}</span>{{ end }}
+  {{- with $p.family }}<a class="badge" href="{{ $p.family_url }}">{{ . }}</a>{{ end }}
+  {{- if $p.builtin }}<span class="badge" title="Always present; configured but not registered as a plugin">built in</span>{{ end }}
+  {{- range $p.build_tags }}<span class="badge" title="Only in binaries built with this Go build tag">build tag: {{ . }}</span>{{ end }}
+</div>
+
+<dl class="facts">
+  <dt>Package</dt><dd><code>{{ $p.import_path }}</code></dd>
+  <dt>Source</dt><dd><a href="{{ $p.source }}">{{ $p.dir }}</a> · <a href="{{ $p.godoc }}">Go reference</a></dd>
+  {{- with $p.used_by }}
+  <dt>Used by</dt><dd>{{ range $i, $l := . }}{{ if $i }}, {{ end }}<a href="{{ $l.url }}">{{ $l.title }}</a>{{ end }}</dd>
+  {{- end }}
+  {{- with $p.also_registers }}
+  <dt>Also registers</dt><dd>{{ delimit . ", " }}</dd>
+  {{- end }}
+  {{- if eq $p.kind "http-services" }}
+    {{- $spec := partialCached "openapi.html" . }}
+    {{- if and $spec (in $spec.tags $p.name) }}
+  <dt>API</dt><dd><a href="/docs/api/http/#/{{ $p.name }}">Endpoints in the HTTP API reference</a></dd>
+    {{- end }}
+  {{- end }}
+</dl>
+
+{{- with $p.tables }}
+{{- $toml := "" }}
+{{- if eq $p.kind "drivers" }}
+  {{- range . }}
+    {{- $svc := replaceRE `\.(drivers|embedded_drivers)\.[^.]+$` "" . }}
+    {{- $field := cond (strings.Contains . ".embedded_drivers.") "embedded_driver" "driver" }}
+    {{- $toml = printf "%s[%s]\n%s = %q\n\n[%s]\n# settings below\n\n" $toml $svc $field $p.name . }}
+  {{- end }}
+{{- else }}
+  {{- range . }}{{ $toml = printf "%s[%s]\n# settings below\n" $toml . }}{{ end }}
+{{- end }}
+<h2 id="enable">Enable it</h2>
+{{- if eq $p.kind "drivers" }}
+<p>Select the driver in the service that uses it, and put its settings in the driver's own table:</p>
+{{- else if $p.builtin }}
+<p>It is always active. Its settings go in:</p>
+{{- else }}
+<p>Add this table to the revad configuration file:</p>
+{{- end }}
+{{ transform.Highlight (strings.TrimSpace $toml) "toml" }}
+{{- end }}
+
+{{- if .Content }}
+<h2 id="overview">Overview</h2>
+{{ .Content }}
+{{- else }}
+<div class="empty-doc">This package has no documentation yet. Add a package doc comment or a <code>README.md</code> in <a href="{{ $p.source }}"><code>{{ $p.dir }}</code></a>, then run <code>make gen-doc</code>.</div>
+{{- end }}
+
+{{- with $p.config }}
+<h2 id="configuration">Configuration</h2>
+{{- $total := 0 }}{{ range . }}{{ $total = add $total (len .fields) }}{{ end }}
+{{- if gt $total 8 }}
+<input class="config-filter" type="search" placeholder="Filter {{ $total }} settings" aria-label="Filter settings" data-config-filter>
+{{- end }}
+{{- $multi := gt (len .) 1 }}
+{{- range . }}
+{{- if $multi }}<h3 id="config-{{ .name | anchorize }}"><code>{{ .name }}</code></h3>{{ end }}
+<div class="config-scroll"><table class="config-table">
+  <thead><tr><th>Key</th><th>Type</th><th>Default</th><th>Description</th></tr></thead>
+  <tbody>
+  {{- range .fields }}
+  {{- if .embeds }}
+  <tr><td colspan="4" class="muted">Includes the settings of <code>{{ .embeds }}</code>.</td></tr>
+  {{- else }}
+  <tr data-key="{{ .key }} {{ .description }}">
+    <td><code>{{ .key }}</code></td>
+    <td><code>{{ .type }}</code></td>
+    <td>{{ with .default }}<code>{{ . }}</code>{{ else }}<span class="muted">-</span>{{ end }}</td>
+    <td class="desc">{{ with .description }}{{ . | markdownify }}{{ end }} <a class="src" href="{{ $.Site.Params.github_repo }}/blob/master/{{ .source }}" title="Declared in {{ .source }}">source</a></td>
+  </tr>
+  {{- end }}
+  {{- end }}
+  </tbody>
+</table></div>
+{{- end }}
+{{- end }}

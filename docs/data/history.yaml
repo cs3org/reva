@@ -1,0 +1,35 @@
+# The timeline on the history page. The text is Markdown.
+milestones:
+  - year: "2017"
+    title: ClawIO
+    text: >-
+      Reva has its origins in 2017, when [@labkode](https://github.com/labkode)
+      decided to create a cloud benchmarking framework in the Go programming
+      language while he was studying at university. This led to the creation of
+      [ClawIO](https://github.com/clawio). The knowledge from this project, and
+      the operational experience of the team that runs the CERNBox service at
+      CERN, led to the first version of Reva: CERN-specific software to power
+      the back end of the CERNBox cloud, used by more than 17,000 users to sync
+      and share 7 petabytes of data.
+  - year: "2018"
+    title: The CS3 APIs
+    text: >-
+      During 2018, the fragmentation of cloud services in Europe became a major
+      concern for many institutions, because collaboration between clouds was
+      difficult and done ad hoc. Many institutions of the
+      [CS3 Community](https://www.cs3community.org) acknowledged this problem.
+      In early 2018, a team at CERN met to analyse the problem and to define an
+      initial set of APIs that could make collaboration between clouds easier.
+      The first version of the [CS3 APIs](https://cs3org.github.io/cs3apis) was
+      born. Some months later, the CERN-specific version of Reva was adapted to
+      use the CS3 APIs.
+  - year: "2019"
+    title: Open source at the CS3 Conference
+    text: >-
+      On the rainy 30th of January 2019, during the
+      [CS3 Conference](https://indico.cern.ch/event/726040/timetable/#20190128)
+      in Rome, CERN moved the Reva project and the CS3 APIs to the
+      [CS3 GitHub organisation](https://github.com/cs3org/). This makes sure
+      that the needs of the education and research community drive the future
+      of the software. CERN released the code under the permissive Apache 2.0
+      license, to promote free and unrestricted adoption.

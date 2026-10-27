@@ -1,0 +1,46 @@
+{
+  "first_commit": "2019-01-30",
+  "commits": 2672,
+  "years": [
+    {
+      "year": "2019",
+      "commits": 333,
+      "authors": 15
+    },
+    {
+      "year": "2020",
+      "commits": 455,
+      "authors": 35
+    },
+    {
+      "year": "2021",
+      "commits": 506,
+      "authors": 43
+    },
+    {
+      "year": "2022",
+      "commits": 278,
+      "authors": 38
+    },
+    {
+      "year": "2023",
+      "commits": 272,
+      "authors": 32
+    },
+    {
+      "year": "2024",
+      "commits": 182,
+      "authors": 12
+    },
+    {
+      "year": "2025",
+      "commits": 295,
+      "authors": 14
+    },
+    {
+      "year": "2026",
+      "commits": 351,
+      "authors": 20
+    }
+  ]
+}

@@ -1,0 +1,27 @@
+{{- $stats := hugo.Data.generated.stats }}
+<p>Reva is a set of plugins compiled into one binary, <code>revad</code>. A configuration file picks which services run in a process and which driver each one uses. These pages are generated from the source code, so they list exactly what a build contains.</p>
+<div class="stats">
+  {{- range .Sections.ByWeight }}
+  {{- $n := len .RegularPagesRecursive }}
+  <a class="stat" href="{{ .RelPermalink }}"><div class="num">{{ $n }}</div><div class="lbl">{{ .Title }}</div></a>
+  {{- end }}
+</div>
+<input class="config-filter" type="search" placeholder="Filter components by name" aria-label="Filter components" data-list-filter>
+{{- range .Sections.ByWeight }}
+<h2 id="{{ .Params.kind }}"><a href="{{ .RelPermalink }}">{{ .Title }}</a></h2>
+<p class="muted">{{ .Description }}</p>
+{{- if eq .Params.kind "drivers" }}
+{{ partial "grouped-list.html" (dict "pages" .Sections.ByTitle "level" 3 "families" true) }}
+{{- else }}
+{{ partial "grouped-list.html" (dict "pages" .Pages.ByTitle "level" 3) }}
+{{- end }}
+{{- end }}
+{{- with .Params.libraries }}
+<h2 id="other-packages">Other documented packages</h2>
+<p class="muted">Packages with a doc comment but no settings. Their documentation is on the Go reference.</p>
+<div class="comp-list" data-filterable>
+  {{- range . }}
+  <a href="{{ .godoc }}"><span class="n">{{ .title }}</span>{{ with .description }}<span class="d">{{ . | truncate 90 }}</span>{{ end }}</a>
+  {{- end }}
+</div>
+{{- end }}

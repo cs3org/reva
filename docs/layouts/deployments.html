@@ -1,0 +1,23 @@
+{{ define "main" }}
+<div class="wrap" style="max-width: 960px">
+  <article class="content">
+    <h1>{{ .Title }}</h1>
+    <p class="page-lead">{{ .Description }}</p>
+    {{- range hugo.Data.deployments.deployments }}
+    <section class="card" id="{{ .id }}" style="margin-bottom: 16px">
+      <h2 style="margin: 0 0 4px">{{ with .url }}<a href="{{ . }}">{{ end }}{{ .name }}{{ with .url }}</a>{{ end }}</h2>
+      <p class="muted" style="margin: 0 0 12px">{{ .organisation }}{{ with .country }}, {{ . }}{{ end }}</p>
+      <p style="color: var(--text)">{{ .summary }}</p>
+      <dl class="facts" style="margin: 12px 0 0">
+        {{- with .users }}<dt>Users</dt><dd>{{ . }}</dd>{{ end }}
+        {{- with .data }}<dt>Data</dt><dd>{{ . }}</dd>{{ end }}
+        {{- with .storage }}<dt>Storage</dt><dd>{{ . }}</dd>{{ end }}
+        {{- with .uses }}<dt>Uses</dt><dd>{{ delimit . ", " }}</dd>{{ end }}
+      </dl>
+    </section>
+    {{- end }}
+    {{ .Content }}
+    {{- partial "page-meta.html" . }}
+  </article>
+</div>
+{{ end }}

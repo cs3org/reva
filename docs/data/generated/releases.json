@@ -1,0 +1,326 @@
+[
+  {
+    "version": "0.0.1",
+    "date": "2019-10-24"
+  },
+  {
+    "version": "0.1.0",
+    "date": "2020-03-18"
+  },
+  {
+    "version": "1.0.0",
+    "date": "2020-07-28"
+  },
+  {
+    "version": "1.1.0",
+    "date": "2020-08-11"
+  },
+  {
+    "version": "1.2.0",
+    "date": "2020-08-25"
+  },
+  {
+    "version": "1.2.1",
+    "date": "2020-09-15"
+  },
+  {
+    "version": "1.3.0",
+    "date": "2020-10-08"
+  },
+  {
+    "version": "1.4.0",
+    "date": "2020-11-17"
+  },
+  {
+    "version": "1.5.0",
+    "date": "2021-01-12"
+  },
+  {
+    "version": "1.5.1",
+    "date": "2021-01-19"
+  },
+  {
+    "version": "1.6.0",
+    "date": "2021-02-16"
+  },
+  {
+    "version": "1.7.0",
+    "date": "2021-04-19"
+  },
+  {
+    "version": "1.8.0",
+    "date": "2021-06-09"
+  },
+  {
+    "version": "1.9.0",
+    "date": "2021-06-23"
+  },
+  {
+    "version": "1.9.1",
+    "date": "2021-07-09"
+  },
+  {
+    "version": "1.10.0",
+    "date": "2021-07-13"
+  },
+  {
+    "version": "1.11.0",
+    "date": "2021-08-03"
+  },
+  {
+    "version": "1.12.0",
+    "date": "2021-08-24"
+  },
+  {
+    "version": "1.13.0",
+    "date": "2021-09-14"
+  },
+  {
+    "version": "1.14.0",
+    "date": "2021-10-12"
+  },
+  {
+    "version": "1.15.0",
+    "date": "2021-10-26"
+  },
+  {
+    "version": "1.16.0",
+    "date": "2021-11-19"
+  },
+  {
+    "version": "1.17.0",
+    "date": "2021-12-09"
+  },
+  {
+    "version": "1.18.0",
+    "date": "2022-02-11"
+  },
+  {
+    "version": "1.19.0",
+    "date": "2022-06-16"
+  },
+  {
+    "version": "1.20.0",
+    "date": "2022-11-24"
+  },
+  {
+    "version": "1.21.0",
+    "date": "2022-12-07"
+  },
+  {
+    "version": "1.22.0",
+    "date": "2022-12-31"
+  },
+  {
+    "version": "1.23.0",
+    "date": "2023-03-09"
+  },
+  {
+    "version": "1.24.0",
+    "date": "2023-05-11"
+  },
+  {
+    "version": "1.25.0",
+    "date": "2023-08-14"
+  },
+  {
+    "version": "1.26.0",
+    "date": "2023-09-08"
+  },
+  {
+    "version": "1.27.0",
+    "date": "2023-10-19"
+  },
+  {
+    "version": "1.28.0",
+    "date": "2024-02-27"
+  },
+  {
+    "version": "1.29.0",
+    "date": "2025-01-07"
+  },
+  {
+    "version": "3.0.0",
+    "date": "2025-06-03",
+    "notes": "/docs/changelog/3.0.0/"
+  },
+  {
+    "version": "3.0.1",
+    "date": "2025-07-04",
+    "notes": "/docs/changelog/3.0.1/"
+  },
+  {
+    "version": "3.1.0",
+    "date": "2025-08-26",
+    "notes": "/docs/changelog/3.1.0/"
+  },
+  {
+    "version": "3.2.1",
+    "date": "2025-10-13",
+    "notes": "/docs/changelog/3.2.1/"
+  },
+  {
+    "version": "3.2.2",
+    "date": "2025-10-15",
+    "notes": "/docs/changelog/3.2.2/"
+  },
+  {
+    "version": "3.3.0",
+    "date": "2025-10-20",
+    "notes": "/docs/changelog/3.3.0/"
+  },
+  {
+    "version": "3.3.1",
+    "date": "2025-10-21"
+  },
+  {
+    "version": "3.3.3",
+    "date": "2025-11-07",
+    "notes": "/docs/changelog/3.3.3/"
+  },
+  {
+    "version": "3.4.0",
+    "date": "2025-12-12",
+    "notes": "/docs/changelog/3.4.0/"
+  },
+  {
+    "version": "3.4.1",
+    "date": "2025-12-16",
+    "notes": "/docs/changelog/3.4.1/"
+  },
+  {
+    "version": "3.4.2",
+    "date": "2025-12-17",
+    "notes": "/docs/changelog/3.4.2/"
+  },
+  {
+    "version": "3.5.0",
+    "date": "2026-01-09",
+    "notes": "/docs/changelog/3.5.0/"
+  },
+  {
+    "version": "3.5.1",
+    "date": "2026-02-12",
+    "notes": "/docs/changelog/3.5.1/"
+  },
+  {
+    "version": "3.6.0",
+    "date": "2026-02-20",
+    "notes": "/docs/changelog/3.6.0/"
+  },
+  {
+    "version": "3.6.1",
+    "date": "2026-03-10",
+    "notes": "/docs/changelog/3.6.1/"
+  },
+  {
+    "version": "3.6.2",
+    "date": "2026-03-29",
+    "notes": "/docs/changelog/3.6.2/"
+  },
+  {
+    "version": "3.6.3",
+    "date": "2026-04-07",
+    "notes": "/docs/changelog/3.6.3/"
+  },
+  {
+    "version": "3.7.0",
+    "date": "2026-04-14",
+    "notes": "/docs/changelog/3.7.0/"
+  },
+  {
+    "version": "3.7.1",
+    "date": "2026-04-16",
+    "notes": "/docs/changelog/3.7.1/"
+  },
+  {
+    "version": "3.7.2",
+    "date": "2026-04-17",
+    "notes": "/docs/changelog/3.7.2/"
+  },
+  {
+    "version": "3.8.0",
+    "date": "2026-04-29",
+    "notes": "/docs/changelog/3.8.0/"
+  },
+  {
+    "version": "3.8.1",
+    "date": "2026-05-05",
+    "notes": "/docs/changelog/3.8.1/"
+  },
+  {
+    "version": "3.9.0",
+    "date": "2026-05-21",
+    "notes": "/docs/changelog/3.9.0/"
+  },
+  {
+    "version": "3.10.0",
+    "date": "2026-06-03",
+    "notes": "/docs/changelog/3.10.0/"
+  },
+  {
+    "version": "3.10.1",
+    "date": "2026-06-05",
+    "notes": "/docs/changelog/3.10.1/"
+  },
+  {
+    "version": "3.10.2",
+    "date": "2026-06-29",
+    "notes": "/docs/changelog/3.10.2/"
+  },
+  {
+    "version": "3.10.3",
+    "date": "2026-06-30",
+    "notes": "/docs/changelog/3.10.3/"
+  },
+  {
+    "version": "3.10.4",
+    "date": "2026-07-01",
+    "notes": "/docs/changelog/3.10.4/"
+  },
+  {
+    "version": "3.11.0",
+    "date": "2026-07-07",
+    "notes": "/docs/changelog/3.11.0/"
+  },
+  {
+    "version": "3.11.1",
+    "date": "2026-07-09",
+    "notes": "/docs/changelog/3.11.1/"
+  },
+  {
+    "version": "3.12.0",
+    "date": "2026-07-30",
+    "notes": "/docs/changelog/3.12.0/"
+  },
+  {
+    "version": "3.12.1",
+    "date": "2026-07-31",
+    "notes": "/docs/changelog/3.12.1/"
+  },
+  {
+    "version": "3.12.2",
+    "date": "2026-08-14",
+    "notes": "/docs/changelog/3.12.2/"
+  },
+  {
+    "version": "3.13.0",
+    "date": "2026-10-06",
+    "notes": "/docs/changelog/3.13.0/"
+  },
+  {
+    "version": "3.13.1",
+    "date": "2026-10-07",
+    "notes": "/docs/changelog/3.13.1/"
+  },
+  {
+    "version": "3.13.2",
+    "date": "2026-10-14",
+    "notes": "/docs/changelog/3.13.2/"
+  },
+  {
+    "version": "3.14.0",
+    "date": "2026-10-23",
+    "notes": "/docs/changelog/3.14.0/"
+  }
+]

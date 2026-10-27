@@ -1,0 +1,7 @@
+{{- $crumbs := slice }}
+{{- range .Ancestors.Reverse }}{{ if not .IsHome }}{{ $crumbs = $crumbs | append . }}{{ end }}{{ end }}
+{{- if $crumbs }}
+<nav class="breadcrumb" aria-label="Breadcrumb">
+  {{- range $crumbs }}<span><a href="{{ .RelPermalink }}">{{ .LinkTitle }}</a></span>{{ end }}
+</nav>
+{{- end }}

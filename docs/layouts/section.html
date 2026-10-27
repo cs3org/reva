@@ -1,0 +1,14 @@
+{{ define "main" }}
+{{- $body := .Content }}
+{{- if hasPrefix .RelPermalink "/docs/changelog/" }}
+  {{- /* The release tool writes "#1234" for the pull request of each entry.
+         GitHub redirects /pull/ to the issue for the few issue numbers. */ -}}
+  {{- $body = replaceRE `(^|[\s(])#(\d+)\b` `${1}<a href="https://github.com/cs3org/reva/pull/${2}">#${2}</a>` $body }}
+{{- end }}
+{{- if hasPrefix .RelPermalink "/docs/" }}
+{{- if not .Params.nolist }}{{ $body = print $body (partial "section-list.html" .) }}{{ end }}
+{{- partial "docs-shell.html" (dict "page" . "body" ($body | safeHTML)) }}
+{{- else }}
+{{- partial "plain-shell.html" (dict "page" . "body" $body) }}
+{{- end }}
+{{ end }}

@@ -1,0 +1,30 @@
+{{- $p := .Params }}
+<dl class="facts">
+  {{- with $p.category }}<dt>Category</dt><dd>{{ . }}</dd>{{ end }}
+  <dt>Registry</dt><dd><a href="{{ $p.source }}"><code>{{ $p.registry }}</code></a></dd>
+  {{- with $p.used_by }}
+  <dt>Used by</dt><dd>{{ range $i, $l := . }}{{ if $i }}, {{ end }}<a href="{{ $l.url }}">{{ $l.title }}</a>{{ end }}</dd>
+  {{- end }}
+  {{- with $p.namespaces }}
+  <dt>Plugin namespace</dt><dd>{{ range $i, $n := . }}{{ if $i }}, {{ end }}<code>{{ $n }}</code>{{ end }}</dd>
+  {{- end }}
+</dl>
+{{- with $p.namespaces }}
+<p>A service in this family picks one driver by name. External <a href="https://github.com/cs3org/reva/wiki">plugins</a> can add drivers under the namespace above.</p>
+{{- end }}
+
+<h2 id="drivers">Drivers</h2>
+<table>
+  <thead><tr><th>Driver</th><th>Description</th><th>Settings</th></tr></thead>
+  <tbody>
+  {{- range $.Pages.ByTitle }}
+  {{- $n := 0 }}{{ range .Params.config }}{{ $n = add $n (len .fields) }}{{ end }}
+  <tr>
+    <td><a href="{{ .RelPermalink }}"><code>{{ .Params.name }}</code></a></td>
+    <td>{{ with .Description }}{{ . }}{{ else }}<span class="muted">No package documentation.</span>{{ end }}</td>
+    <td>{{ $n }}</td>
+  </tr>
+  {{- end }}
+  </tbody>
+</table>
+{{ .Content }}

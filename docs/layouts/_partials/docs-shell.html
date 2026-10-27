@@ -1,0 +1,23 @@
+{{- /* The documentation frame: sidebar, article, table of contents.
+       Takes the page and its rendered body. */ -}}
+{{- $p := .page }}
+{{- $toc := and (not $p.Params.notoc) (gt (len $p.Fragments.Headings) 0) (strings.Contains $p.TableOfContents "<li>") }}
+<div class="docs{{ if not $toc }} no-toc{{ end }}">
+  <div>
+    <button class="icon-btn sidebar-toggle" type="button" data-sidebar-toggle aria-controls="sidebar" aria-expanded="false">Browse the docs</button>
+    {{- partial "sidebar.html" $p }}
+  </div>
+  <article class="content">
+    {{- partial "breadcrumb.html" $p }}
+    <h1>{{ $p.Title }}</h1>
+    {{- with $p.Description }}<p class="page-lead">{{ . | markdownify }}</p>{{ end }}
+    {{ .body }}
+    {{- partial "page-meta.html" $p }}
+  </article>
+  {{- if $toc }}
+  <nav class="toc" aria-label="On this page">
+    <h4>On this page</h4>
+    {{ $p.TableOfContents }}
+  </nav>
+  {{- end }}
+</div>
