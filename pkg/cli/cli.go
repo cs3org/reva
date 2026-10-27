@@ -29,23 +29,25 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"io/fs"
 	"net/http"
 	"os"
 	"reflect"
-	"strings"
+	"sync"
 	"time"
 
 	gateway "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	"github.com/cs3org/reva/v3/internal/cli/state"
 	"github.com/cs3org/reva/v3/pkg/appctx"
+	"github.com/cs3org/reva/v3/pkg/cli/auth"
 	"github.com/cs3org/reva/v3/pkg/cli/backend"
 	"github.com/cs3org/reva/v3/pkg/cli/brand"
+	"github.com/cs3org/reva/v3/pkg/cli/output"
 	"github.com/cs3org/reva/v3/pkg/httpclient"
 	"github.com/spf13/pflag"
 	"golang.org/x/term"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/metadata"
@@ -104,7 +106,13 @@ type Runtime struct {
 	usedAdmin         bool
 	backend           backend.Backend
 	data              backend.DataPlane
+	httpB             backend.Backend
+	revaTok           *auth.Token
 }
+
+// tokMu guards the reva token of the runtimes, which parallel transfers
+// share. It is not in Runtime, which tests copy.
+var tokMu sync.Mutex
 
 // AddFlags adds the global flags, which set the runtime, to fs.
 func (r *Runtime) AddFlags(fs *pflag.FlagSet) {
@@ -143,7 +151,7 @@ func (r *Runtime) As() string { return r.as }
 // Reason returns the reason of --reason, for the audit.
 func (r *Runtime) Reason() string { return r.reason }
 
-// Output returns the output format: table or json.
+// Output returns the output format: table, json or csv.
 func (r *Runtime) Output() string { return r.output }
 
 // Debug reports whether --debug is set.
@@ -163,7 +171,7 @@ func (r *Runtime) Client() (gateway.GatewayAPIClient, error) {
 		if r.insecure {
 			creds = insecure.NewCredentials()
 		}
-		opts := append(r.DialOptions(), grpc.WithTransportCredentials(creds), gatewayDialOption())
+		opts := append(r.DialOptions(), grpc.WithTransportCredentials(creds), gatewayDialOption(), grpc.WithChainUnaryInterceptor(r.renewInterceptor))
 		conn, err := grpc.NewClient(r.gatewayAddr, opts...)
 		if err != nil {
 			return nil, err
@@ -190,6 +198,31 @@ func (r *Runtime) DialOptions() []grpc.DialOption {
 			return streamer(ctx, desc, cc, method, opts...)
 		}),
 	}
+}
+
+// renewInterceptor signs in again once when the gateway refuses the login
+// token, which can expire during a long run.
+func (r *Runtime) renewInterceptor(ctx context.Context, method string, req, reply any, cc *grpc.ClientConn, invoker grpc.UnaryInvoker, opts ...grpc.CallOption) error {
+	err := invoker(ctx, method, req, reply, cc, opts...)
+	if status.Code(err) != codes.Unauthenticated || r.tokenValue != "" || r.as != "" {
+		return err
+	}
+	md, _ := metadata.FromOutgoingContext(ctx)
+	sent := md.Get(appctx.TokenHeader)
+	tokMu.Lock()
+	login := r.revaTok != nil && len(sent) == 1 && sent[0] == r.revaTok.Value
+	tokMu.Unlock()
+	if !login {
+		return err
+	}
+	if rerr := r.renew(ctx, sent[0]); rerr != nil {
+		return errors.Join(err, rerr)
+	}
+	t, terr := r.loginToken(ctx)
+	if terr != nil {
+		return errors.Join(err, terr)
+	}
+	return invoker(WithToken(ctx, t), method, req, reply, cc, opts...)
 }
 
 // Gateway returns a gateway client and ctx with the login token attached.
@@ -268,39 +301,6 @@ func (r *Runtime) Token(ctx context.Context) (string, error) {
 	return r.asTok, nil
 }
 
-// loginToken returns the token from --token or its env. Else it signs in
-// with the app token of its env or of --app-token-file. Else it returns the
-// token that login stored.
-func (r *Runtime) loginToken(ctx context.Context) (string, error) {
-	if r.tokenValue != "" {
-		return r.tokenValue, nil
-	}
-	if r.appToken != "" || r.appTokenFile != "" {
-		secret := r.appToken
-		if secret == "" {
-			b, err := os.ReadFile(r.appTokenFile)
-			if err != nil {
-				return "", err
-			}
-			secret = string(b)
-		}
-		if r.user == "" {
-			return "", errors.New("an app token needs a user name: pass --user")
-		}
-		t, err := r.Authenticate(ctx, r.AuthType("app-token"), r.user, strings.TrimSpace(secret))
-		if err != nil {
-			return "", err
-		}
-		r.tokenValue = t
-		return t, nil
-	}
-	b, err := state.ReadToken()
-	if errors.Is(err, fs.ErrNotExist) {
-		return "", fmt.Errorf("no login token: run `%s login` first", r.Name())
-	}
-	return strings.TrimSpace(string(b)), err
-}
-
 // UseColor reports whether to color the output written to f: only for a
 // terminal, and never when NO_COLOR is set (https://no-color.org).
 func UseColor(f *os.File) bool {
@@ -330,15 +330,24 @@ func (r *Runtime) ShowProgress() bool {
 }
 
 // Print writes v as JSON with -o json. Else it calls text. For a Table, a nil
-// text writes the table.
+// text writes the table, and -o csv writes its rows. text writes CSV for a
+// table of NewTable.
 func (r *Runtime) Print(w io.Writer, v any, text func(w io.Writer)) error {
 	if t, ok := v.(Table); ok {
+		if r.output == "csv" {
+			return output.New(w, output.FormatCSV).Render(output.Table{Headers: t.Headers, Rows: t.Rows})
+		}
 		if text == nil {
 			text = t.Write
 		}
 		v = t.items()
 	}
-	if r.output != "json" {
+	switch r.output {
+	case "csv":
+		text(csvWriter{w})
+		return nil
+	case "json":
+	default:
 		text(w)
 		return nil
 	}

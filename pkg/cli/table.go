@@ -32,10 +32,10 @@ type Table struct {
 	Items   any
 }
 
-// Write writes the table for a person.
+// Write writes the table for a person, or CSV to the writer of Print under
+// -o csv.
 func (t Table) Write(w io.Writer) {
-	tw := table.NewWriter()
-	tw.SetOutputMirror(w)
+	tw := NewTable(w)
 	tw.AppendHeader(row(t.Headers))
 	for _, r := range t.Rows {
 		tw.AppendRow(row(r))
@@ -66,4 +66,28 @@ func row(cells []string) table.Row {
 		r[i] = c
 	}
 	return r
+}
+
+// csvWriter is the writer that Print gives to text under -o csv.
+type csvWriter struct{ io.Writer }
+
+// NewTable returns a table of go-pretty that writes to w. When w comes from
+// Print under -o csv, Render writes CSV.
+func NewTable(w io.Writer) table.Writer {
+	t := table.NewWriter()
+	t.SetOutputMirror(w)
+	if _, ok := w.(csvWriter); ok {
+		return csvTable{t}
+	}
+	return t
+}
+
+type csvTable struct{ table.Writer }
+
+func (t csvTable) Render() string { return t.RenderCSV() }
+
+// IsCSV reports whether w is the writer of Print under -o csv.
+func IsCSV(w io.Writer) bool {
+	_, ok := w.(csvWriter)
+	return ok
 }

@@ -24,11 +24,15 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"strings"
 	"time"
 
+	"github.com/cs3org/reva/v3/pkg/appctx"
 	"github.com/cs3org/reva/v3/pkg/cli/backend"
 	grpcbackend "github.com/cs3org/reva/v3/pkg/cli/backend/grpc"
+	httpbackend "github.com/cs3org/reva/v3/pkg/cli/backend/http"
 	"github.com/cs3org/reva/v3/pkg/cli/data"
+	"github.com/cs3org/reva/v3/pkg/rversion"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/backoff"
 )
@@ -43,8 +47,6 @@ var DefaultTransport = backend.GRPC
 // gatewayConnectTimeout is short, so that in auto a gateway that cannot be
 // reached gives Unavailable soon, and the command continues over HTTPS.
 const gatewayConnectTimeout = 5 * time.Second
-
-var errHTTPNotBuilt = errors.New("the http transport is not available yet in this version of the CLI: use --transport grpc with --gateway")
 
 var _ backend.Backend = (*switcher)(nil)
 
@@ -73,10 +75,13 @@ func (r *Runtime) Backend(ctx context.Context) (backend.Backend, error) {
 	t := r.Transport()
 	switch {
 	case t == backend.GRPC, t == TransportAuto && r.gatewayAddr != "":
-	case t == backend.HTTP:
-		return nil, errHTTPNotBuilt
-	case t == TransportAuto:
-		return nil, fmt.Errorf("no gateway is set, and the http transport is not available yet in this version of the CLI: pass --gateway%s", r.envHint("gateway"))
+	case t == backend.HTTP, t == TransportAuto:
+		b, err := r.httpBackend()
+		if err != nil {
+			return nil, err
+		}
+		r.backend = b
+		return b, nil
 	default:
 		return nil, fmt.Errorf("unknown transport %q: use grpc, http or auto", t)
 	}
@@ -96,7 +101,49 @@ func (r *Runtime) Backend(ctx context.Context) (backend.Backend, error) {
 
 // httpBackend returns the backend of the HTTPS endpoint.
 func (r *Runtime) httpBackend() (backend.Backend, error) {
-	return nil, errHTTPNotBuilt
+	if r.httpB != nil {
+		return r.httpB, nil
+	}
+	if r.httpEndpoint == "" {
+		if r.Transport() == TransportAuto {
+			return nil, fmt.Errorf("no gateway and no endpoint are set: pass --endpoint https://<host>%s, or --gateway%s", r.envHint("endpoint"), r.envHint("gateway"))
+		}
+		return nil, r.notSet("endpoint", "endpoint", "--endpoint", "endpoint https://<host>")
+	}
+	if strings.HasPrefix(r.httpEndpoint, "http://") && !r.insecure {
+		return nil, fmt.Errorf("the endpoint %s has no TLS: pass --insecure to allow it (development only)", r.httpEndpoint)
+	}
+	b, err := httpbackend.New(r.httpEndpoint, httpbackend.Options{
+		HTTPClient:  r.HTTPClient().GetNativeHTTP(),
+		Credentials: revaCredentials{r},
+		UserAgent:   r.Name() + "-cli/" + rversion.Version,
+		MaxRetries:  -1,
+	})
+	if err != nil {
+		return nil, err
+	}
+	r.httpB = b
+	return b, nil
+}
+
+// revaCredentials sends the reva token as x-access-token, which every reva
+// deployment takes. Authorization: Bearer works only where the bearer
+// strategy is configured.
+type revaCredentials struct{ r *Runtime }
+
+func (c revaCredentials) Credential(ctx context.Context) (httpbackend.Credential, error) {
+	t, err := c.r.Token(ctx)
+	if err != nil {
+		return httpbackend.Credential{}, err
+	}
+	return httpbackend.Credential{Header: appctx.TokenHeader, Value: t}, nil
+}
+
+func (c revaCredentials) Renew(ctx context.Context, refused httpbackend.Credential) error {
+	if c.r.as != "" {
+		return errors.New("the server refused the token of --as")
+	}
+	return c.r.renew(ctx, refused.Value)
 }
 
 // Data returns the data plane, on the Locator of the backend.
@@ -108,7 +155,16 @@ func (r *Runtime) Data(ctx context.Context) (backend.DataPlane, error) {
 	if err != nil {
 		return nil, err
 	}
-	r.data = data.New(r.HTTPClient().GetNativeHTTP(), b.Locator())
+	p := data.New(r.HTTPClient().GetNativeHTTP(), b.Locator())
+	p.ChunkSize = r.chunkSize()
+	p.Renew = func(ctx context.Context) error {
+		t, err := r.Token(ctx)
+		if err != nil || r.as != "" {
+			return errors.Join(err, errors.New("the server refused the token"))
+		}
+		return r.renew(ctx, t)
+	}
+	r.data = p
 	return r.data, nil
 }
 

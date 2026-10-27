@@ -112,8 +112,7 @@ func ocmInviteListCommand(rt *cli.Runtime) *cobra.Command {
 }
 
 func renderInvites(w io.Writer, invites []*invitepb.InviteToken) {
-	t := table.NewWriter()
-	t.SetOutputMirror(w)
+	t := cli.NewTable(w)
 	t.AppendHeader(table.Row{"Token", "Description", "Expires"})
 	for _, inv := range invites {
 		exp := "-"
@@ -206,8 +205,7 @@ func ocmContactsCommand(rt *cli.Runtime) *cobra.Command {
 				rt.Msg(cmd.ErrOrStderr(), "No contacts yet. Start with 'reva ocm invite create'.")
 			}
 			return rt.Print(cmd.OutOrStdout(), contacts, func(w io.Writer) {
-				t := table.NewWriter()
-				t.SetOutputMirror(w)
+				t := cli.NewTable(w)
 				t.AppendHeader(table.Row{"Address", "OpaqueId", "Idp", "Mail", "DisplayName"})
 				for _, u := range contacts {
 					t.AppendRow(table.Row{u.Id.OpaqueId + "@" + u.Id.Idp, u.Id.OpaqueId, u.Id.Idp, u.Mail, u.DisplayName})
@@ -255,8 +253,7 @@ func ocmProvidersCommand(rt *cli.Runtime) *cobra.Command {
 				return err
 			}
 			return rt.Print(cmd.OutOrStdout(), providers, func(w io.Writer) {
-				t := table.NewWriter()
-				t.SetOutputMirror(w)
+				t := cli.NewTable(w)
 				t.AppendHeader(table.Row{"Domain", "Name", "Homepage"})
 				for _, p := range providers {
 					t.AppendRow(table.Row{p.Domain, cmp.Or(p.FullName, p.Name), p.Homepage})
@@ -450,8 +447,7 @@ func ocmReceivedCommand(rt *cli.Runtime) *cobra.Command {
 				return err
 			}
 			return rt.Print(cmd.OutOrStdout(), received, func(w io.Writer) {
-				t := table.NewWriter()
-				t.SetOutputMirror(w)
+				t := cli.NewTable(w)
 				t.AppendHeader(table.Row{"#", "Owner.Idp", "Owner.OpaqueId", "RemoteShareId", "Type",
 					"Grantee.Idp", "Grantee.OpaqueId", "Created", "Updated", "State", "ShareType"})
 				for _, s := range received {
@@ -531,8 +527,7 @@ func ocmShareRef(id string) *ocm.ShareReference {
 }
 
 func renderOCMShares(w io.Writer, shares []*ocm.Share) {
-	t := table.NewWriter()
-	t.SetOutputMirror(w)
+	t := cli.NewTable(w)
 	t.AppendHeader(table.Row{"#", "Owner.Idp", "Owner.OpaqueId", "ResourceId", "Type",
 		"ShareType", "Grantee.Idp", "Grantee.OpaqueId", "Created", "Updated"})
 	for _, s := range shares {

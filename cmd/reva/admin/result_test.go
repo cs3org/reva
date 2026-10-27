@@ -64,6 +64,20 @@ func TestInvokeListIsATable(t *testing.T) {
 	}
 }
 
+func TestInvokeCSV(t *testing.T) {
+	f := &fakeAdmin{specs: []*adminpb.InvocationSpec{logsSpec}, results: []*adminpb.NodeResult{
+		{Node: "a:1/svc", ResultJson: `{"truncated":false,"entries":[{"time":"t1","level":"info","ctx":{"user":"alice, bob"}}]}`},
+	}}
+	out, _, err := run(t, f, "-o", "csv", "invoke", "svc", "logs")
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := "time,level,ctx.user\nt1,info,\"alice, bob\"\nkey,value\ntruncated,false\n"
+	if out != want {
+		t.Errorf("csv:\n%s\nwant:\n%s", out, want)
+	}
+}
+
 func TestInvokeOneNodeAndATopLevelArray(t *testing.T) {
 	f := &fakeAdmin{results: []*adminpb.NodeResult{{Node: "a:1/svc", ResultJson: `[{"b":1},{"a":2}]`}}}
 	out, _, err := run(t, f, "invoke", "a:1/svc", "op")

@@ -106,7 +106,7 @@ var settings = []setting{
 		brand:  func(b *brand.Brand) string { return b.Auth.Kerberos.SPN }},
 	{key: "no_elevate", flag: "no-elevate", usage: "never get an admin token automatically",
 		field: func(r *Runtime) any { return &r.noElevate }},
-	{key: "output", flag: "output", short: "o", usage: "output format: table or json", builtin: "table",
+	{key: "output", flag: "output", short: "o", usage: "output format: table, json or csv", builtin: "table",
 		field:  func(r *Runtime) any { return &r.output },
 		config: func(c *state.Config) string { return c.UI.Output },
 		brand:  func(b *brand.Brand) string { return b.UI.Output }},
@@ -315,12 +315,8 @@ func (r *Runtime) Load(flags *pflag.FlagSet) error {
 	if !slices.Contains(brand.OperatorModes, r.operatorCommands) {
 		return fmt.Errorf("unknown operator_commands %q (%s): use %s", r.operatorCommands, r.values["operator_commands"].from, strings.Join(brand.OperatorModes, ", "))
 	}
-	switch r.output {
-	case "table", "json":
-	case "csv":
-		return errors.New("csv output is not available yet: use table or json")
-	default:
-		return fmt.Errorf("unknown output %q: use table or json", r.output)
+	if !slices.Contains(brand.Outputs, r.output) {
+		return fmt.Errorf("unknown output %q: use %s", r.output, strings.Join(brand.Outputs, ", "))
 	}
 	return nil
 }

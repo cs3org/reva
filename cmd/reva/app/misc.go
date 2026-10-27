@@ -19,7 +19,6 @@
 package revacmd
 
 import (
-	"bufio"
 	"context"
 	"errors"
 	"fmt"
@@ -38,6 +37,7 @@ import (
 	"github.com/cs3org/reva/v3/internal/cli/state"
 	"github.com/cs3org/reva/v3/pkg/auth/scope"
 	"github.com/cs3org/reva/v3/pkg/cli"
+	"github.com/cs3org/reva/v3/pkg/cli/auth"
 	"github.com/cs3org/reva/v3/pkg/cli/backend"
 	"github.com/cs3org/reva/v3/pkg/cli/brand"
 	"github.com/cs3org/reva/v3/pkg/utils"
@@ -51,18 +51,22 @@ func loginCommand(rt *cli.Runtime) *cobra.Command {
 	var method, spn, ccache string
 	cmd := &cobra.Command{
 		Use:   "login",
-		Short: "Sign in to the gateway and store the token",
-		Long: "Sign in to the gateway and store the token.\n\n" +
-			"--method is the auth type of the gateway: basic by default, appauth with\n" +
-			"--app-token-file. 'reva login --list' shows the types. The password (or the\n" +
-			"API key for machine auth) is read from the terminal, or from stdin when\n" +
-			"stdin is not a terminal:\n\n" +
-			"  echo \"$PASSWORD\" | reva login --user alice\n\n" +
+		Short: "Sign in and store the token",
+		Long: "Sign in and store the reva token for the endpoint and the gateway.\n\n" +
+			"Without --method, the sign-in methods of the build are tried in their order\n" +
+			"(" + strings.Join(rt.Brand().Auth.Chain, ", ") + "). --method takes one of " + strings.Join(cli.AuthProviders(), ", ") + ",\n" +
+			"or an auth type of the gateway ('login --list' shows them), for a user name and\n" +
+			"a secret, for example machine with an API key.\n\n" +
+			"The password is read from the terminal, or from stdin when stdin is not a\n" +
+			"terminal:\n\n" +
+			"  echo \"$PASSWORD\" | " + rt.Name() + " login --method basic --user alice\n\n" +
 			"--method kerberos uses the ticket of kinit and asks for no password. The\n" +
 			"ticket is read from --ccache, else $KRB5CCNAME, else /tmp/krb5cc_<uid>; only\n" +
 			"FILE: caches can be read. The service principal is --spn, else the kerberos_spn\n" +
-			"setting ('reva config set kerberos-spn'), else HTTP/<gateway host>:\n\n" +
-			"  kinit && reva login --method kerberos --spn HTTP/cernbox.cern.ch",
+			"setting, else HTTP/<endpoint host>, else HTTP/<gateway host>:\n\n" +
+			"  kinit && " + rt.Name() + " login --method kerberos --spn HTTP/cernbox.cern.ch\n\n" +
+			"Commands sign in by themselves when a method needs no question (a Kerberos\n" +
+			"ticket, an app token), so login is needed only for the others.",
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if list {
@@ -83,66 +87,32 @@ func loginCommand(rt *cli.Runtime) *cobra.Command {
 					}
 				})
 			}
-
-			if method == "kerberos" {
-				return kerberosLogin(cmd, rt, spn, ccache)
-			}
-			if cmd.Flags().Changed("spn") || cmd.Flags().Changed("ccache") {
+			if (cmd.Flags().Changed("spn") || cmd.Flags().Changed("ccache")) && method != auth.MethodKerberos {
 				return errors.New("--spn and --ccache apply only to --method kerberos")
 			}
-
-			var user, secret string
-			var err error
-			if rt.AppTokenFile() != "" {
-				if !cmd.Flags().Changed("method") {
-					method = rt.AuthType("app-token")
-				}
-				b, err := os.ReadFile(rt.AppTokenFile())
-				if err != nil {
-					return err
-				}
-				if rt.User() == "" {
-					return errors.New("an app token needs a user name: pass --user")
-				}
-				user, secret = rt.User(), strings.TrimSpace(string(b))
-			} else if rt.Password() != "" {
-				if rt.User() == "" {
-					return errors.New("a password from the environment needs a user name: pass --user")
-				}
-				user, secret = rt.User(), rt.Password()
-			} else if user, secret, err = readCredentials(cmd, rt.User()); err != nil {
-				return err
+			if method == auth.MethodKerberos && rt.AppTokenFile() != "" {
+				return errors.New("--app-token-file does not apply to --method kerberos")
 			}
-			token, err := rt.Authenticate(cmd.Context(), method, user, secret)
+			f, isFile := cmd.InOrStdin().(*os.File)
+			s, err := rt.Login(cmd.Context(), cli.LoginOptions{
+				Method: method, SPN: spn, CCache: ccache,
+				In: cmd.InOrStdin(), Out: cmd.ErrOrStderr(),
+				Terminal: isFile && term.IsTerminal(int(f.Fd())),
+			})
 			if err != nil {
 				return err
 			}
-			if err := state.SetToken(token); err != nil {
-				return err
-			}
-			rt.Msg(cmd.ErrOrStderr(), "Signed in as %s using %s.", user, method)
+			rt.Msg(cmd.ErrOrStderr(), "Signed in as %s using %s.", s.Subject, s.Provider)
 			return nil
 		},
 	}
 	cmd.Flags().BoolVar(&list, "list", false, "list the auth types of the gateway")
-	cmd.Flags().StringVar(&method, "method", "basic", "auth type to sign in with")
+	cmd.Flags().StringVar(&method, "method", "", "sign-in method, or auth type of the gateway")
 	cmd.Flags().StringVar(&spn, "spn", "", "service principal for --method kerberos, for example HTTP/cernbox.cern.ch")
 	cmd.Flags().StringVar(&ccache, "ccache", "", "Kerberos credential cache for --method kerberos (default $KRB5CCNAME, then /tmp/krb5cc_<uid>)")
 	_ = cmd.RegisterFlagCompletionFunc("spn", cobra.NoFileCompletions)
 	_ = cmd.RegisterFlagCompletionFunc("method", func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
-		none := cobra.ShellCompDirectiveNoFileComp
-		if err := rt.Load(cmd.Flags()); err != nil {
-			return nil, none
-		}
-		client, err := rt.Client()
-		if err != nil {
-			return nil, none
-		}
-		res, err := client.ListAuthProviders(cmd.Context(), &registry.ListAuthProvidersRequest{})
-		if err != nil {
-			return nil, none
-		}
-		return res.Types, none
+		return cli.AuthProviders(), cobra.ShellCompDirectiveNoFileComp
 	})
 	return cmd
 }
@@ -151,10 +121,10 @@ func logoutCommand(rt *cli.Runtime) *cobra.Command {
 	return &cobra.Command{
 		Use:   "logout",
 		Short: "Forget the stored tokens",
-		Long:  "Forget the stored login token and the admin token of 'reva elevate'.",
+		Long:  "Forget the stored reva tokens, the credentials that they came from, and the admin token of elevate.",
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			if err := state.ClearTokens(); err != nil {
+			if err := rt.Logout(); err != nil {
 				return err
 			}
 			rt.Msg(cmd.ErrOrStderr(), "Signed out.")
@@ -170,6 +140,7 @@ type statusResult struct {
 	AdminHost string `json:"admin_host,omitempty"`
 	Config    string `json:"config"`
 	TokenFile string `json:"token_file"`
+	SignedIn  string `json:"signed_in_with,omitempty"`
 	User      string `json:"user,omitempty"`
 	Expires   string `json:"expires,omitempty"`
 	Version   string `json:"client_version"`
@@ -180,8 +151,8 @@ func statusCommand(rt *cli.Runtime) *cobra.Command {
 	return &cobra.Command{
 		Use:   "status",
 		Short: "Show how you are signed in",
-		Long: "Show the gateway, how you are signed in, and where the settings and the\n" +
-			"token are kept. Run this first when something does not work.",
+		Long: "Show the endpoint, the gateway, how you are signed in, and where the settings\n" +
+			"and the token are kept. Run this first when something does not work.",
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			st := statusResult{Transport: rt.Transport(), Gateway: rt.GatewayAddr(), Endpoint: rt.HTTPEndpoint(), AdminHost: rt.AdminHost(), Version: version}
@@ -192,6 +163,9 @@ func statusCommand(rt *cli.Runtime) *cobra.Command {
 				st.Error = err.Error()
 			} else {
 				st.User = user.GetUsername()
+				if s := rt.SignedIn(); s != nil {
+					st.SignedIn = s.Provider
+				}
 				if !exp.IsZero() {
 					st.Expires = exp.Local().Format(time.RFC3339) + " (in " + time.Until(exp).Round(time.Second).String() + ")"
 				}
@@ -208,6 +182,7 @@ func statusCommand(rt *cli.Runtime) *cobra.Command {
 				fmt.Fprintf(w, "Endpoint:    %s\n", dash(st.Endpoint))
 				fmt.Fprintf(w, "Admin host:  %s\n", dash(st.AdminHost))
 				fmt.Fprintf(w, "User:        %s\n", dash(st.User))
+				fmt.Fprintf(w, "Signed in:   %s\n", dash(st.SignedIn))
 				fmt.Fprintf(w, "Expires:     %s\n", dash(st.Expires))
 				fmt.Fprintf(w, "Config:      %s\n", st.Config)
 				fmt.Fprintf(w, "Token file:  %s\n", st.TokenFile)
@@ -235,38 +210,6 @@ func whoami(ctx context.Context, rt *cli.Runtime) (*userpb.User, time.Time, erro
 		return nil, time.Time{}, err
 	}
 	return user, cli.TokenExpiry(token), nil
-}
-
-// readCredentials asks for the missing user name and for the secret. The
-// secret is never a flag, so it does not show in ps or in the shell history.
-func readCredentials(cmd *cobra.Command, username string) (string, string, error) {
-	r := bufio.NewReader(cmd.InOrStdin())
-	f, isFile := cmd.InOrStdin().(*os.File)
-	tty := isFile && term.IsTerminal(int(f.Fd()))
-	readLine := func(prompt string) (string, error) {
-		if tty {
-			fmt.Fprint(cmd.ErrOrStderr(), prompt)
-		}
-		line, err := r.ReadString('\n')
-		if err != nil && (!errors.Is(err, io.EOF) || line == "") {
-			return "", fmt.Errorf("reading %s: %w", strings.TrimSuffix(prompt, ": "), err)
-		}
-		return strings.TrimSpace(line), nil
-	}
-	var err error
-	if username == "" {
-		if username, err = readLine("username: "); err != nil {
-			return "", "", err
-		}
-	}
-	if !tty {
-		secret, err := readLine("password: ")
-		return username, secret, err
-	}
-	fmt.Fprint(cmd.ErrOrStderr(), "password: ")
-	b, err := term.ReadPassword(int(f.Fd()))
-	fmt.Fprintln(cmd.ErrOrStderr())
-	return username, strings.TrimSpace(string(b)), err
 }
 
 func whoamiCommand(rt *cli.Runtime) *cobra.Command {
@@ -569,8 +512,7 @@ func renderAppPasswords(w io.Writer, first string, pws []*authapp.AppPassword) {
 		}
 		return time.Unix(int64(t.Seconds), 0).String()
 	}
-	t := table.NewWriter()
-	t.SetOutputMirror(w)
+	t := cli.NewTable(w)
 	t.AppendHeader(table.Row{first, "Scope", "Label", "Expiration", "Creation Time", "Last Used Time"})
 	for _, pw := range pws {
 		var scopes []string
