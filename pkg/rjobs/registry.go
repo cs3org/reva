@@ -89,8 +89,8 @@ func validatePeriodic(p Periodic) error {
 	if p.Name == "" {
 		return errors.New("rjobs: periodic job name must not be empty")
 	}
-	if p.Run == nil {
-		return errors.Errorf("rjobs: periodic job %q has nil Run", p.Name)
+	if (p.Run == nil) == (p.RunWithProgress == nil) {
+		return errors.Errorf("rjobs: periodic job %q must set one of Run and RunWithProgress", p.Name)
 	}
 	if p.Scope != ScopeAllNodes && p.Scope != ScopeLeader {
 		return errors.Errorf("rjobs: periodic job %q must declare a valid Scope", p.Name)

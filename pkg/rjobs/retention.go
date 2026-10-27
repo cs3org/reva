@@ -27,9 +27,9 @@ import (
 const pruneBatch = 10000
 
 // PruneRuns deletes the terminal runs that finished before before, in batches,
-// and returns how many it deleted. It is a no-op when the status store cannot
-// prune.
-func (r *Runner) PruneRuns(ctx context.Context, before time.Time) (int, error) {
+// and returns how many it deleted. It reports the count after every batch. It is
+// a no-op when the status store cannot prune.
+func (r *Runner) PruneRuns(ctx context.Context, before time.Time, rep Reporter) (int, error) {
 	p, ok := r.status.(RunPruner)
 	if !ok {
 		return 0, nil
@@ -38,6 +38,7 @@ func (r *Runner) PruneRuns(ctx context.Context, before time.Time) (int, error) {
 	for {
 		n, err := p.Prune(ctx, before, pruneBatch)
 		total += n
+		rep.Report(Progress{Phase: "prune", Done: int64(total), Unit: "runs"})
 		if err != nil || n < pruneBatch {
 			return total, err
 		}

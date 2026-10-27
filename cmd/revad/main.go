@@ -73,10 +73,6 @@ func init() {
 	}
 }
 
-var (
-	revaProcs []*runtime.Reva
-)
-
 func Main() {
 	flag.Parse()
 
@@ -324,10 +320,6 @@ func runConfigs(confs []*config.Config) {
 	runMultiple(confs)
 }
 
-func registerReva(r *runtime.Reva) {
-	revaProcs = append(revaProcs, r)
-}
-
 func runSingle(conf *config.Config, pidfile string) {
 	log := initLogger(conf.Log)
 	reva, err := runtime.New(conf,
@@ -337,7 +329,6 @@ func runSingle(conf *config.Config, pidfile string) {
 	if err != nil {
 		abort(log, "error creating reva runtime: %v", err)
 	}
-	registerReva(reva)
 	if err := reva.Start(); err != nil {
 		abort(log, "error starting reva: %v", err)
 	}

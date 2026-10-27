@@ -178,6 +178,11 @@ type OrphanReport struct {
 // pass the check are logged at debug level only, since there is normally one
 // per row in the database.
 func (j *OrphanJob) Run(ctx context.Context) (OrphanReport, error) {
+	return j.run(ctx, rjobs.NopReporter{})
+}
+
+// run is Run, reporting how far it has got.
+func (j *OrphanJob) run(ctx context.Context, rep rjobs.Reporter) (OrphanReport, error) {
 	base := j.Log
 	if base == nil {
 		base = appctx.GetLogger(ctx)
@@ -201,6 +206,7 @@ func (j *OrphanJob) Run(ctx context.Context) (OrphanReport, error) {
 		return OrphanReport{}, err
 	}
 
+	rep.Report(rjobs.Progress{Phase: "list"})
 	size := j.SpacesPerBatch
 	var spaceIDs []string
 	if size > 0 {
@@ -221,6 +227,9 @@ func (j *OrphanJob) Run(ctx context.Context) (OrphanReport, error) {
 	start.Msg("reconciliation: run started")
 
 	report := OrphanReport{RunID: runID, DryRun: j.DryRun}
+	// the total grows as each batch is listed, since a batch is only counted
+	// when it is listed.
+	listed := 0
 	var cancelled error
 	for _, batch := range batches {
 		if cancelled = ctx.Err(); cancelled != nil {
@@ -231,12 +240,15 @@ func (j *OrphanJob) Run(ctx context.Context) (OrphanReport, error) {
 		if err != nil {
 			return OrphanReport{}, err
 		}
+		listed += len(entries)
 
 		for _, e := range entries {
+			report.progress(rep, listed)
 			j.check(ctx, log, &report, gw, e)
 		}
 	}
 
+	report.progress(rep, listed)
 	log.Info().
 		Str("event", EventOrphanEnd).
 		Bool("dry_run", j.DryRun).
@@ -390,6 +402,15 @@ func (j *OrphanJob) entries(ctx context.Context, spaceIDs []string) ([]entry, er
 	return entries, nil
 }
 
+// progress reports the items checked so far, with the totals of the report.
+func (r *OrphanReport) progress(rep rjobs.Reporter, total int) {
+	rep.Report(rjobs.Progress{Phase: "check", Done: int64(r.Checked), Total: int64(total), Unit: "items", Details: rjobs.Params{
+		"orphaned": len(r.Orphaned),
+		"skipped":  r.Skipped,
+		"failed":   r.Failed,
+	}})
+}
+
 // gateway returns the client the run checks existence with: the injected one
 // when set, otherwise the one the service registry resolves right now.
 func (j *OrphanJob) gateway(ctx context.Context) (gateway.GatewayAPIClient, error) {
@@ -490,8 +511,8 @@ func (j *OrphanJob) Periodic(schedule string) rjobs.Periodic {
 		Scope:      rjobs.ScopeLeader,
 		Overlap:    rjobs.Skip,
 		RunOnStart: j.RunOnStart,
-		Run: func(ctx context.Context) error {
-			_, err := j.Run(ctx)
+		RunWithProgress: func(ctx context.Context, rep rjobs.Reporter) error {
+			_, err := j.run(ctx, rep)
 			return err
 		},
 	}
