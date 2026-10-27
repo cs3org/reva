@@ -57,15 +57,13 @@ func init() {
 type config struct {
 	Database  revadcfg.Database `mapstructure:",squash"`
 	JWTSecret string            `mapstructure:"jwt_secret"`
-	// The service user is the identity of the runs. It has to be known to
-	// the storage, with its real ids, because a kind can read resources as
-	// this user.
-	ServiceUserName string `mapstructure:"service_user_name" validate:"required"`
-	ServiceUserUID  int64  `mapstructure:"service_user_uid"  validate:"required"`
-	ServiceUserGID  int64  `mapstructure:"service_user_gid"  validate:"required"`
-	RetentionDays   int    `mapstructure:"retention_days"`
-	// Kinds are the configured kinds, by registered name.
-	Kinds map[string]map[string]any `mapstructure:"kinds"`
+	// The service user is the identity of the runs. The storage must know it,
+	// with its real ids, because a kind reads resources as this user.
+	ServiceUserName string                    `mapstructure:"service_user_name" validate:"required"`
+	ServiceUserUID  int64                     `mapstructure:"service_user_uid"  validate:"required"`
+	ServiceUserGID  int64                     `mapstructure:"service_user_gid"  validate:"required"`
+	RetentionDays   int                       `mapstructure:"retention_days"`
+	Kinds           map[string]map[string]any `mapstructure:"kinds"`
 }
 
 func (c *config) ApplyDefaults() {
@@ -86,8 +84,7 @@ type svc struct {
 	set     *invoke.Set
 }
 
-// New builds the configured kinds and registers each one as the job
-// reminders.<name>: on demand always, on its schedule when it has one.
+// New registers each configured kind as the job reminders.<name>.
 func New(ctx context.Context, m map[string]any) (rserverless.Service, error) {
 	var c config
 	if err := cfg.Decode(m, &c); err != nil {
@@ -177,8 +174,7 @@ func (j onDemand) Run(ctx context.Context, _ rjobs.Params) (rjobs.Params, error)
 	return rjobs.Params{"scanned": report.Scanned, "due": report.Due, "recipients": report.Recipients, "published": report.Published, "closed": report.Closed, "failures": report.Failures, "dry_run": report.DryRun}, err
 }
 
-// authenticator returns the function that gives a run the service user and a
-// token for it. The token is minted per run because runs can be a day apart.
+// authenticator mints a token for each run, because runs can be a day apart.
 func (s *svc) authenticator() (func(context.Context) (context.Context, error), error) {
 	tokens, err := jwt.New(map[string]any{"secret": s.conf.JWTSecret})
 	if err != nil {
@@ -199,15 +195,12 @@ func (s *svc) authenticator() (func(context.Context) (context.Context, error), e
 		if err != nil {
 			return nil, errors.Wrap(err, "reminders: minting the service token")
 		}
-		// scope.ContextWithMachineScope, used to publish, needs the user in
-		// the context.
+		// scope.ContextWithMachineScope, used to publish, needs the user.
 		ctx = appctx.ContextSetUser(ctx, user)
 		return metadata.AppendToOutgoingContext(ctx, appctx.TokenHeader, tkn), nil
 	}, nil
 }
 
-// publish sends a notification through the gateway, as a reva daemon, to the
-// mail that the directory has for the user or the e-group.
 func (s *svc) publish(ctx context.Context, event string, to reminders.Recipient, data map[string]any) error {
 	gw, err := service.Gateway(ctx)
 	if err != nil {

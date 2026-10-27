@@ -84,7 +84,6 @@ func (f *fakeAdmin) InvokeStream(req *adminpb.InvokeRequest, s adminpb.AdminAPI_
 	return nil
 }
 
-// run runs the fleet commands with args against f, in process.
 func run(t *testing.T, f *fakeAdmin, args ...string) (stdout, stderr string, err error) {
 	t.Helper()
 	dir := t.TempDir()
@@ -156,7 +155,7 @@ func TestInvokeChecksTheArguments(t *testing.T) {
 	}
 }
 
-// The check is best effort: without a full catalogue, the server decides.
+// Without a full catalogue, the server decides.
 func TestInvokeSendsWithoutTheCatalogue(t *testing.T) {
 	for name, f := range map[string]*fakeAdmin{
 		"no catalogue":       {listErr: status.Error(codes.Unavailable, "down")},

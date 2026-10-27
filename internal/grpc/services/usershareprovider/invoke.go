@@ -49,8 +49,8 @@ import (
 	"google.golang.org/protobuf/encoding/protojson"
 )
 
-// adminManager is what the admin invocations need from the share manager, in
-// addition to share.Manager. Only the sql driver has it.
+// adminManager is what the admin invocations need from the share manager.
+// Only the sql driver has it.
 type adminManager interface {
 	reconciliation.ExpiredShareStore
 	ListModelShares(u *userpb.User, filters []*collaboration.Filter, hideOrphans bool) ([]model.Share, error)
@@ -148,6 +148,26 @@ func (s *service) adminManager() (adminManager, error) {
 		return nil, errtypes.NotSupported(fmt.Sprintf("the %s driver does not support admin invocations", s.conf.Driver))
 	}
 	return m, nil
+}
+
+func (s *service) lookup(ctx context.Context, id string) (adminManager, *model.Share, error) {
+	m, err := s.adminManager()
+	if err != nil {
+		return nil, nil, err
+	}
+	sh, err := m.GetShareUnfiltered(ctx, shareRef(id))
+	if err != nil {
+		return nil, nil, fmt.Errorf("share %s: %w", id, err)
+	}
+	return m, sh, nil
+}
+
+func reload(ctx context.Context, m adminManager, id, path string) (invoke.Result, error) {
+	sh, err := m.GetShareUnfiltered(ctx, shareRef(id))
+	if err != nil {
+		return nil, err
+	}
+	return adminShare(sh, path)
 }
 
 func (s *service) list(ctx context.Context, a listArgs, emit invoke.StreamEmit) error {
@@ -318,20 +338,13 @@ func (s *service) update(ctx context.Context, a updateArgs) (invoke.Result, erro
 	if err != nil {
 		return nil, fmt.Errorf("updating share %s: %w", a.ID, err)
 	}
-	if sh, err = m.GetShareUnfiltered(ctx, shareRef(a.ID)); err != nil {
-		return nil, err
-	}
-	return adminShare(sh, "")
+	return reload(ctx, m, a.ID, "")
 }
 
 func (s *service) remove(ctx context.Context, a removeArgs) (invoke.Result, error) {
-	m, err := s.adminManager()
+	_, sh, err := s.lookup(ctx, a.ID)
 	if err != nil {
 		return nil, err
-	}
-	sh, err := m.GetShareUnfiltered(ctx, shareRef(a.ID))
-	if err != nil {
-		return nil, fmt.Errorf("share %s: %w", a.ID, err)
 	}
 	var actor *userpb.User
 	// An orphan has no resource left, so the gateway cannot remove it.
@@ -355,13 +368,9 @@ func (s *service) remove(ctx context.Context, a removeArgs) (invoke.Result, erro
 }
 
 func (s *service) syncExpiry(ctx context.Context, a idArgs) (invoke.Result, error) {
-	m, err := s.adminManager()
+	m, sh, err := s.lookup(ctx, a.ID)
 	if err != nil {
 		return nil, err
-	}
-	sh, err := m.GetShareUnfiltered(ctx, shareRef(a.ID))
-	if err != nil {
-		return nil, fmt.Errorf("share %s: %w", a.ID, err)
 	}
 	if sh.IsOrphan() {
 		return nil, errtypes.BadRequest(fmt.Sprintf("share %s is orphaned: its resource is gone", a.ID))
@@ -392,20 +401,13 @@ func (s *service) syncExpiry(ctx context.Context, a idArgs) (invoke.Result, erro
 	if err != nil {
 		return nil, fmt.Errorf("syncing share %s: %w", a.ID, err)
 	}
-	if sh, err = m.GetShareUnfiltered(ctx, shareRef(a.ID)); err != nil {
-		return nil, err
-	}
-	return adminShare(sh, "")
+	return reload(ctx, m, a.ID, "")
 }
 
 func (s *service) transfer(ctx context.Context, a transferArgs) (invoke.Result, error) {
-	m, err := s.adminManager()
+	m, sh, err := s.lookup(ctx, a.ID)
 	if err != nil {
 		return nil, err
-	}
-	sh, err := m.GetShareUnfiltered(ctx, shareRef(a.ID))
-	if err != nil {
-		return nil, fmt.Errorf("share %s: %w", a.ID, err)
 	}
 	// The storage decides who may hold a share: the new initiator must be
 	// allowed to add a grant on the resource.
@@ -429,20 +431,13 @@ func (s *service) transfer(ctx context.Context, a transferArgs) (invoke.Result, 
 	if err != nil {
 		return nil, fmt.Errorf("transferring share %s: %w", a.ID, err)
 	}
-	if sh, err = m.GetShareUnfiltered(ctx, shareRef(a.ID)); err != nil {
-		return nil, err
-	}
-	return adminShare(sh, "")
+	return reload(ctx, m, a.ID, "")
 }
 
 func (s *service) move(ctx context.Context, a moveArgs) (invoke.Result, error) {
-	m, err := s.adminManager()
+	m, sh, err := s.lookup(ctx, a.ID)
 	if err != nil {
 		return nil, err
-	}
-	sh, err := m.GetShareUnfiltered(ctx, shareRef(a.ID))
-	if err != nil {
-		return nil, fmt.Errorf("share %s: %w", a.ID, err)
 	}
 	as := admin.Candidates(a.As.ID())
 	if len(as) == 0 {
@@ -469,10 +464,7 @@ func (s *service) move(ctx context.Context, a moveArgs) (invoke.Result, error) {
 	if err != nil {
 		return nil, fmt.Errorf("moving share %s: %w", a.ID, err)
 	}
-	if sh, err = m.GetShareUnfiltered(ctx, shareRef(a.ID)); err != nil {
-		return nil, err
-	}
-	return adminShare(sh, info.GetPath())
+	return reload(ctx, m, a.ID, info.GetPath())
 }
 
 // applyGrant adds the grant of sh on id as actor, on the storage provider
@@ -510,23 +502,16 @@ func (s *service) applyGrant(ctx context.Context, actor *userpb.User, id *provid
 }
 
 func (s *service) markOrphan(ctx context.Context, a idArgs) (invoke.Result, error) {
-	m, err := s.adminManager()
+	m, sh, err := s.lookup(ctx, a.ID)
 	if err != nil {
 		return nil, err
-	}
-	sh, err := m.GetShareUnfiltered(ctx, shareRef(a.ID))
-	if err != nil {
-		return nil, fmt.Errorf("share %s: %w", a.ID, err)
 	}
 	err = m.MarkAsOrphaned(ctx, shareRef(a.ID))
 	audit(ctx, "mark_orphan", sh, err, false, map[string]string{})
 	if err != nil {
 		return nil, fmt.Errorf("marking share %s orphaned: %w", a.ID, err)
 	}
-	if sh, err = m.GetShareUnfiltered(ctx, shareRef(a.ID)); err != nil {
-		return nil, err
-	}
-	return adminShare(sh, "")
+	return reload(ctx, m, a.ID, "")
 }
 
 func statAs(uctx context.Context, ref *provider.Reference) (*provider.StatResponse, error) {
@@ -561,7 +546,6 @@ func resolvePath(users *admin.Users, sh *model.Share, as *userpb.UserId) string 
 	return ""
 }
 
-// grantsAtStorage returns the grant API of the storage provider of storageID.
 func grantsAtStorage(ctx context.Context, storageID string) (provider.ProviderAPIClient, error) {
 	reg, err := revaservice.StorageRegistry(ctx)
 	if err != nil {
@@ -582,8 +566,8 @@ func grantsAtStorage(ctx context.Context, storageID string) (provider.ProviderAP
 	return revaservice.StorageProviderAt(res.GetProviders()[0].GetAddress())
 }
 
-// audit records a mutation of sh. fallback tells that a user command fell back
-// to admin rights on a share of another user.
+// audit records a mutation. fallback tells that a user command fell back to
+// admin rights.
 func audit(ctx context.Context, action string, sh *model.Share, err error, fallback bool, fields map[string]string) {
 	maps.DeleteFunc(fields, func(_, v string) bool { return v == "" })
 	fields["owner"] = sh.UIDOwner
@@ -602,8 +586,6 @@ func audit(ctx context.Context, action string, sh *model.Share, err error, fallb
 	})
 }
 
-// adminShare returns sh as the protojson of the AdminShare message of the
-// typed Admin API: the CS3 share, and what CS3 cannot carry.
 func adminShare(sh *model.Share, path string) (invoke.Result, error) {
 	b, err := protojson.Marshal(sh.AsCS3Share(granteeOf(sh)))
 	if err != nil {
@@ -686,8 +668,7 @@ func resourceOf(sh *model.Share) *provider.ResourceId {
 	return &provider.ResourceId{StorageId: sh.Instance, OpaqueId: sh.Inode, SpaceId: sh.SpaceID}
 }
 
-// granteeOf returns the grantee of sh without its user type, which only a
-// lookup can tell.
+// granteeOf leaves the user type empty, because only a lookup can tell it.
 func granteeOf(sh *model.Share) *provider.Grantee {
 	if sh.SharedWithIsGroup {
 		return &provider.Grantee{Type: provider.GranteeType_GRANTEE_TYPE_GROUP, Id: &provider.Grantee_GroupId{GroupId: &grouppb.GroupId{OpaqueId: sh.ShareWith}}}

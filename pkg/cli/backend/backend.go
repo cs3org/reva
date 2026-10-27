@@ -53,7 +53,6 @@ const (
 // Backend is the metadata plane. The runtime gives it the reva token, so a
 // backend never reads token files.
 type Backend interface {
-	// Transport is the name of the transport, for the messages.
 	Transport() string
 	Files() Files
 	Shares() Shares
@@ -65,10 +64,8 @@ type Backend interface {
 	OCM() OCM
 	Tokens() Tokens
 	Users() Users
-	// Locator tells the data plane where the transfers go.
 	Locator() Locator
-	// ServerTime is the clock of the server, to find the skew of the local
-	// clock.
+	// ServerTime returns the clock of the server, to find the clock skew.
 	ServerTime(ctx context.Context) (time.Time, error)
 }
 
@@ -104,7 +101,6 @@ type Shares interface {
 	Create(ctx context.Context, req *collaboration.CreateShareRequest) (*collaboration.Share, error)
 	Update(ctx context.Context, req *collaboration.UpdateShareRequest) (*collaboration.Share, error)
 	Remove(ctx context.Context, id string) error
-	// Received returns the shares that the caller received.
 	Received(ctx context.Context) ([]*collaboration.ReceivedShare, error)
 	UpdateReceived(ctx context.Context, id string, state collaboration.ShareState) (*collaboration.ReceivedShare, error)
 	HideReceived(ctx context.Context, id string) error
@@ -142,7 +138,6 @@ type Quota struct {
 type Trash interface {
 	// List returns the deleted items. A zero from or to is no limit.
 	List(ctx context.Context, ref *provider.Reference, from, to time.Time) ([]*provider.RecycleItem, error)
-	// Restore puts the item key back where it was.
 	Restore(ctx context.Context, ref *provider.Reference, key string) error
 	Purge(ctx context.Context, ref *provider.Reference, key string) error
 }
@@ -198,7 +193,6 @@ type Tokens interface {
 
 // Users are the user lookups.
 type Users interface {
-	// Me returns the user of the token.
 	Me(ctx context.Context) (*userpb.User, error)
 	// ByClaim finds a user by a claim, for example username or mail.
 	ByClaim(ctx context.Context, claim, value string) (*userpb.User, error)
@@ -275,7 +269,6 @@ type Searcher interface {
 
 // SearchOptions are the options of Search.
 type SearchOptions struct {
-	// Pattern is a part of the name.
 	Pattern string
 	// Limit is the maximum number of results. Zero is the server default.
 	Limit int

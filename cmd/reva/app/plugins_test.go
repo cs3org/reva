@@ -28,8 +28,7 @@ import (
 	"github.com/spf13/cobra"
 )
 
-// The fake plugins. The registry is global, so every test of this package
-// sees all of them.
+// The registry is global, so every test of this package sees all the fake plugins.
 var preRunRan bool
 
 func fake(use string) func(*cli.Runtime) *cobra.Command {

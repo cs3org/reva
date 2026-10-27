@@ -25,8 +25,7 @@ import (
 	"github.com/spf13/cobra"
 )
 
-// ElevateCommand returns `elevate`. It is in the session group: it changes
-// how the next commands get their admin rights.
+// ElevateCommand returns the elevate command.
 func ElevateCommand(r *cli.Runtime) *cobra.Command {
 	return &cobra.Command{
 		Use:   "elevate",

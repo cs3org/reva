@@ -71,9 +71,7 @@ func TestActorScopeGrantsNothing(t *testing.T) {
 	}
 }
 
-// TestActorSurvivesCacheAndReMint asserts that the actor is kept where a JWT
-// claim would be lost: on a hit in the auth cache of the token manager, and
-// when a service re-signs the token with the machine scope.
+// A JWT claim would be lost on a cache hit and on a machine re-mint. The scope is not.
 func TestActorSurvivesCacheAndReMint(t *testing.T) {
 	sharedconf.Init(&revaconfig.Shared{JWTSecret: testSecret})
 	if sharedconf.GetJWTSecret("") != testSecret {

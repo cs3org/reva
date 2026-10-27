@@ -26,8 +26,6 @@ import (
 	"github.com/spf13/cobra"
 )
 
-// tree builds `reva route add` (an operator command) and `reva share list`
-// with the operator option --owner.
 func tree() (root, routeAdd, shareList *cobra.Command) {
 	root = &cobra.Command{Use: "reva"}
 	route := AdminCommand(&cobra.Command{Use: "route", Short: "Manage the storage routes"})

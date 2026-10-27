@@ -42,8 +42,6 @@ func spaceRef(name string) *adminpb.SpaceRef {
 	return &adminpb.SpaceRef{Ref: &adminpb.SpaceRef_Name{Name: name}}
 }
 
-// facadeEndpoints serves a fake service over a real control channel, and
-// returns its endpoints.
 func facadeEndpoints(t *testing.T) []client.Endpoint {
 	t.Helper()
 	ln, err := net.Listen("tcp", "127.0.0.1:0")
@@ -120,7 +118,6 @@ func TestInvokeOneDecodesTheResult(t *testing.T) {
 	}
 }
 
-// The code of an invocation error reaches the caller of the typed RPC.
 func TestInvocationErrorCodes(t *testing.T) {
 	eps := facadeEndpoints(t)
 	for invocation, want := range map[string]codes.Code{"missing": codes.NotFound, "plain": codes.Unknown} {
@@ -132,7 +129,6 @@ func TestInvocationErrorCodes(t *testing.T) {
 			t.Errorf("%s on every instance: got %v, want %v", invocation, err, want)
 		}
 	}
-	// The generic Invoke reports the code too.
 	if rs := fanOutInvoke(context.Background(), eps, "missing", nil); codes.Code(rs[0].Code) != codes.NotFound {
 		t.Errorf("Invoke: got code %v, want NotFound", rs[0].Code)
 	}
@@ -156,7 +152,6 @@ func TestRelayStream(t *testing.T) {
 	}
 }
 
-// The gRPC listener and the local socket serve the same services.
 func TestTheSocketServesEveryService(t *testing.T) {
 	if !localRootSupported() {
 		t.Skip("local root needs Linux")

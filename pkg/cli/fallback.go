@@ -41,9 +41,7 @@ var ErrNotAvailable = errors.New("not available yet in this version of the CLI")
 // Gate is what the owner fallback needs from the runtime. *Runtime
 // implements it.
 type Gate interface {
-	// CanAdmin reports whether the caller can be an admin, without a step-up.
 	CanAdmin(ctx context.Context) bool
-	// AdminContext returns ctx for an admin-plane call.
 	AdminContext(ctx context.Context) (context.Context, error)
 	Confirm(prompt string) error
 	Warnf(format string, args ...any)
@@ -66,13 +64,12 @@ func InFallback(ctx context.Context) bool {
 	return v
 }
 
-// OnNotFound runs userCall on the user plane. The servers answer not found
-// for a resource that the caller may not see, so on a not-found answer, and
-// only for a caller who can be an admin, it looks the resource up with
-// adminLookup. If the resource exists, adminCall does the operation with the
-// typed admin RPC, after a confirmation. A nil adminCall means a read: the
-// lookup result is the answer. In all other cases the original answer is
-// returned unchanged, so that a non-admin learns nothing and pays nothing.
+// OnNotFound runs userCall on the user plane. Servers answer not found for a
+// resource that the caller may not see. So on not found, and only for a caller
+// who can be an admin, it looks the resource up with adminLookup. If it exists,
+// adminCall does the operation after a confirmation. A nil adminCall means a
+// read: the lookup result is the answer. In all other cases the original answer
+// is returned unchanged, so that a non-admin learns nothing.
 func OnNotFound[T any](ctx context.Context, f Fallback, userCall func(context.Context) (T, error),
 	adminLookup func(context.Context) (T, error), adminCall func(context.Context, T) (T, error)) (T, error) {
 	res, err := userCall(ctx)

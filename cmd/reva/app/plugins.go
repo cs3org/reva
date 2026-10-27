@@ -33,17 +33,15 @@ import (
 )
 
 const (
-	// pluginAnnotation marks the top command of a plugin with its id.
 	pluginAnnotation = "reva.plugin"
-	// refusedAnnotation on the root holds one line per refused plugin, for
-	// run and CheckPlugins.
+	// refusedAnnotation on the root holds one line per refused plugin.
 	refusedAnnotation = "reva.plugins.refused"
 	pluginsGroup      = "plugins"
 )
 
-// attachPlugins adds the command plugins to the core tree, parents before
-// children (GetPlugins sorts by id). A refused plugin is a defect of the
-// build: the CLI tells it and goes on, and CheckPlugins fails the build.
+// attachPlugins needs parents before children: GetPlugins sorts by id. A
+// refused plugin is a defect of the build. The CLI tells it and goes on, and
+// CheckPlugins fails the build.
 func attachPlugins(rt *cli.Runtime, root *cobra.Command) {
 	var lines, refused []string
 	for _, p := range reva.GetPlugins(cli.CommandsNamespace) {
@@ -114,8 +112,6 @@ func attachPlugin(rt *cli.Runtime, root *cobra.Command, p reva.PluginInfo, refus
 	return nil
 }
 
-// subcommand returns the subcommand of parent with the name n, or also with
-// the alias n.
 func subcommand(parent *cobra.Command, n string, alias bool) *cobra.Command {
 	for _, c := range parent.Commands() {
 		if c.Name() == n || (alias && slices.Contains(c.Aliases, n)) {
@@ -133,10 +129,8 @@ func refusedPlugins(root *cobra.Command) []string {
 }
 
 // CheckPlugins returns the defects of the command plugins in root, a tree
-// from NewRoot: the plugins it refused (a duplicate, a collision with a name
-// or an alias, a missing parent), the plugins that set a persistent pre-run
-// hook, and two subcommands of a plugin with one name. The CI of a plugin
-// module calls it, so that a defect fails the build and not the users.
+// from NewRoot. The CI of a plugin module calls it, so that a defect fails the
+// build and not the users.
 func CheckPlugins(root *cobra.Command) error {
 	var errs []error
 	for _, l := range refusedPlugins(root) {
@@ -175,8 +169,6 @@ type pluginRow struct {
 	Version string `json:"version"`
 }
 
-// compiledPlugins returns the CLI plugins of every kind, with the version of
-// the module of each.
 func compiledPlugins() []pluginRow {
 	bi, _ := debug.ReadBuildInfo()
 	var rows []pluginRow
@@ -187,9 +179,7 @@ func compiledPlugins() []pluginRow {
 	return rows
 }
 
-// packageOf returns the package of the function f. A function name is the
-// package path, a dot and the name, and the last element of the path can
-// have no dot.
+// packageOf cuts the name of f at the first dot after the last slash.
 func packageOf(f any) string {
 	name := runtime.FuncForPC(reflect.ValueOf(f).Pointer()).Name()
 	slash := strings.LastIndex(name, "/")

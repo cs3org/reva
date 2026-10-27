@@ -26,9 +26,8 @@ import "cs3/storage/registry/v1beta1/resources.proto";
 
 option go_package = "github.com/cs3org/reva/v3/pkg/admin/adminpb";
 
-// StorageAdmin is the operator surface for storage routes: it lists, resolves,
-// adds and removes them. A space quota is a property of the space, so it is on
-// SpacesAdmin. Every method needs the admin scope.
+// StorageAdmin is the operator API for storage routes. Space quotas are on
+// SpacesAdmin.
 service StorageAdmin {
   // ListRoutes lists the routing table of the storage registry.
   rpc ListRoutes(ListRoutesRequest) returns (ListRoutesResponse);

@@ -182,9 +182,9 @@ func (s *service) GetShare(ctx context.Context, req *collaboration.GetShareReque
 		res := &collaboration.GetShareResponse{
 			Status: status.NewStatusFromErrType(ctx, "error getting share", err),
 		}
-		// A not found must reach the client as CODE_NOT_FOUND, not as a gRPC
-		// error, so that it can tell it from a failed call. Other errors stay
-		// gRPC errors, because some callers only check the error.
+		// A not found is a status, so that clients can tell it from a failed
+		// call. Other errors stay gRPC errors, because some callers check only
+		// the error.
 		if res.Status.Code == rpc.Code_CODE_NOT_FOUND {
 			return res, nil
 		}

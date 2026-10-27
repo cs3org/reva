@@ -76,7 +76,6 @@ func TestLoadTransport(t *testing.T) {
 	}
 }
 
-// down is a backend whose gateway is unavailable for Stat.
 type down struct{ *clitest.Backend }
 
 type downFiles struct{ backend.Files }
@@ -105,8 +104,6 @@ func TestSwitcherNotAvailable(t *testing.T) {
 	var rec recorder
 	s := rec.switcher(clitest.New("alice"), https, false)
 
-	// The fake answers not available for the quota: the call goes to https,
-	// with a note, and the next calls stay on the primary backend.
 	if _, err := s.Spaces().Quota(context.Background(), &provider.Reference{Path: "/"}); !errors.Is(err, backend.ErrNotAvailable) {
 		t.Fatalf("quota: %v, want not available from the second backend too", err)
 	}

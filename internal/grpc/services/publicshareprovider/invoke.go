@@ -60,7 +60,7 @@ type expiryLister interface {
 }
 
 // adminManager is what the admin invocations need from the public share
-// manager, in addition to publicshare.Manager. Only the sql driver has it.
+// manager. Only the sql driver has it.
 type adminManager interface {
 	ListPublicLinks(u *userpb.User, filters []*link.ListPublicSharesRequest_Filter, expiry *sqlmgr.ExpiryRange, removeOrphan bool) ([]model.PublicLink, error)
 	ListPublicLinksInSpace(spaceID string, filters []*link.ListPublicSharesRequest_Filter, includeOrphans bool) ([]model.PublicLink, error)
@@ -193,8 +193,6 @@ func (s *service) adminManager() (adminManager, error) {
 	return m, nil
 }
 
-// lookup returns the link of id or token, also when it is orphaned or
-// expired.
 func (s *service) lookup(ctx context.Context, id, token string) (adminManager, *model.PublicLink, error) {
 	m, err := s.adminManager()
 	if err != nil {
@@ -209,6 +207,14 @@ func (s *service) lookup(ctx context.Context, id, token string) (adminManager, *
 		return nil, nil, fmt.Errorf("public link %s: %w", cmp.Or(id, token), err)
 	}
 	return m, l, nil
+}
+
+func (s *service) reload(ctx context.Context, m adminManager, ref *link.PublicShareReference, path string) (invoke.Result, error) {
+	l, err := m.GetPublicLink(ctx, ref, false)
+	if err != nil {
+		return nil, err
+	}
+	return s.adminLink(l, path)
 }
 
 func (s *service) list(ctx context.Context, a listArgs, emit invoke.StreamEmit) error {
@@ -375,15 +381,11 @@ func (s *service) update(ctx context.Context, a updateArgs) (invoke.Result, erro
 	if err != nil {
 		return nil, fmt.Errorf("updating public link %d: %w", l.Id, err)
 	}
-	if l, err = m.GetPublicLink(ctx, ref, false); err != nil {
-		return nil, err
-	}
-	return s.adminLink(l, "")
+	return s.reload(ctx, m, ref, "")
 }
 
-// checkRWExpiration applies to an editor link the rule of the OCS and Graph
-// services: with a maximum set, the link must expire at the latest that many
-// seconds after the end of today.
+// checkRWExpiration applies the rule of the OCS and Graph services: an editor
+// link expires at most pub_rw_link_max_expiration seconds after today.
 func (s *service) checkRWExpiration(perms *provider.ResourcePermissions, exp *typespb.Timestamp) error {
 	if s.conf.PubRWLinkMaxExpiration <= 0 || permissions.RoleFromResourcePermissions(perms).Name != permissions.RoleEditor {
 		return nil
@@ -452,10 +454,7 @@ func (s *service) transfer(ctx context.Context, a transferArgs) (invoke.Result, 
 	if err != nil {
 		return nil, fmt.Errorf("transferring public link %d: %w", l.Id, err)
 	}
-	if l, err = m.GetPublicLink(ctx, ref, false); err != nil {
-		return nil, err
-	}
-	return s.adminLink(l, "")
+	return s.reload(ctx, m, ref, "")
 }
 
 func (s *service) move(ctx context.Context, a moveArgs) (invoke.Result, error) {
@@ -486,10 +485,7 @@ func (s *service) move(ctx context.Context, a moveArgs) (invoke.Result, error) {
 	if err != nil {
 		return nil, fmt.Errorf("moving public link %d: %w", l.Id, err)
 	}
-	if l, err = m.GetPublicLink(ctx, ref, false); err != nil {
-		return nil, err
-	}
-	return s.adminLink(l, info.GetPath())
+	return s.reload(ctx, m, ref, info.GetPath())
 }
 
 func (s *service) markOrphan(ctx context.Context, a refArgs) (invoke.Result, error) {
@@ -503,15 +499,10 @@ func (s *service) markOrphan(ctx context.Context, a refArgs) (invoke.Result, err
 	if err != nil {
 		return nil, fmt.Errorf("marking public link %d orphaned: %w", l.Id, err)
 	}
-	if l, err = m.GetPublicLink(ctx, ref, false); err != nil {
-		return nil, err
-	}
-	return s.adminLink(l, "")
+	return s.reload(ctx, m, ref, "")
 }
 
-// adminLink returns l as the protojson of the AdminPublicShare message of the
-// typed Admin API: the CS3 link, and what CS3 cannot carry. The password and
-// its hash never leave the server.
+// adminLink never returns the password or its hash.
 func (s *service) adminLink(l *model.PublicLink, path string) (invoke.Result, error) {
 	ps := l.AsCS3PublicShare()
 	ps.ResourceId.SpaceId = l.SpaceID
@@ -549,8 +540,6 @@ func (s *service) adminLink(l *model.PublicLink, path string) (invoke.Result, er
 	return r, nil
 }
 
-// resolvePath returns the current path of the resource of l, or "" if no user
-// can resolve it.
 func resolvePath(users *admin.Users, l *model.PublicLink) string {
 	for _, id := range linkUsers(l) {
 		uctx := users.As(id)
@@ -569,8 +558,8 @@ func resolvePath(users *admin.Users, l *model.PublicLink) string {
 	return ""
 }
 
-// audit records a mutation of l. fallback tells that a user command fell back
-// to admin rights on a link of another user.
+// audit records a mutation. fallback tells that a user command fell back to
+// admin rights.
 func audit(ctx context.Context, action string, l *model.PublicLink, err error, fallback bool, fields map[string]string) {
 	maps.DeleteFunc(fields, func(_, v string) bool { return v == "" })
 	fields["owner"] = l.UIDOwner
@@ -589,8 +578,6 @@ func audit(ctx context.Context, action string, l *model.PublicLink, err error, f
 	})
 }
 
-// linkRole returns the role of a public link with the name given. A link
-// cannot have the other roles.
 func linkRole(name string) (*permissions.Role, error) {
 	switch role := permissions.RoleFromName(name); role.Name {
 	case permissions.RoleViewer, permissions.RoleUploader, permissions.RoleEditor:

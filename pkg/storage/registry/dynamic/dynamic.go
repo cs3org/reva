@@ -110,7 +110,6 @@ func New(ctx context.Context, m map[string]any) (storage.Registry, error) {
 	return d, nil
 }
 
-// Reload rebuilds the routing tree from the routing table.
 func (d *dynamic) Reload(ctx context.Context) error {
 	log := appctx.GetLogger(ctx).With().Str("storageregistry", "dynamic").Logger()
 
@@ -140,7 +139,6 @@ func (d *dynamic) Reload(ctx context.Context) error {
 	return nil
 }
 
-// ListRoutes returns the routing table, sorted by path.
 func (d *dynamic) ListRoutes(ctx context.Context) ([]storage.Route, error) {
 	results, err := d.db.QueryContext(ctx, "SELECT path, mount_id FROM routing ORDER BY path")
 	if err != nil {
@@ -159,9 +157,8 @@ func (d *dynamic) ListRoutes(ctx context.Context) ([]storage.Route, error) {
 	return routes, results.Err()
 }
 
-// ResolvePath returns the mounts of the routing tree that serve p. Unlike
-// FindProviders, it does not apply the rewrites, because these depend on the
-// user in the context and an operator resolves the paths of the table.
+// ResolvePath returns the mounts that serve p. Unlike FindProviders, it does
+// not apply the rewrites, because these depend on the user of the context.
 func (d *dynamic) ResolvePath(ctx context.Context, p string) ([]storage.Mount, error) {
 	if !path.IsAbs(p) {
 		return nil, errtypes.BadRequest(fmt.Sprintf("path %q is not absolute", p))
@@ -185,13 +182,11 @@ func (d *dynamic) ResolvePath(ctx context.Context, p string) ([]storage.Mount, e
 	return mounts, nil
 }
 
-// AddRoute adds the route of p to mountID, or changes it if p has a route.
 func (d *dynamic) AddRoute(ctx context.Context, p, mountID string) error {
 	if !path.IsAbs(p) {
 		return errtypes.BadRequest(fmt.Sprintf("path %q is not absolute", p))
 	}
-	// Reload skips a route to a mount that is not in the rules, so the route
-	// would have no effect.
+	// Reload skips a route to a mount that is not in the rules.
 	if _, ok := d.r[mountID]; !ok {
 		return errtypes.BadRequest(fmt.Sprintf("mount %q is not in the rules of this registry", mountID))
 	}
@@ -201,7 +196,6 @@ func (d *dynamic) AddRoute(ctx context.Context, p, mountID string) error {
 	return nil
 }
 
-// RemoveRoute removes the route of p.
 func (d *dynamic) RemoveRoute(ctx context.Context, p string) error {
 	if !path.IsAbs(p) {
 		return errtypes.BadRequest(fmt.Sprintf("path %q is not absolute", p))

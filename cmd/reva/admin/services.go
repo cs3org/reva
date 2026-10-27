@@ -121,9 +121,8 @@ func serviceCommand() *cobra.Command {
 	return cmd
 }
 
-// adminServicesRotation drains (out of rotation) or enables (back into
-// rotation) the selected instances by running the `rotation` invocation. Drain
-// confirms first unless --yes, since it stops new traffic to the matched nodes.
+// adminServicesRotation runs the `rotation` invocation. Drain asks for a
+// confirmation, since it stops new traffic to the matched nodes.
 func adminServicesRotation(cmd *cobra.Command, selector string, drain bool) error {
 	state := "ready"
 	if drain {

@@ -23,6 +23,7 @@ import (
 	"errors"
 	"path"
 
+	gateway "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/cs3org/reva/v3/pkg/cli/backend"
@@ -31,11 +32,7 @@ import (
 type files struct{ b *Backend }
 
 func (f files) Stat(ctx context.Context, ref *provider.Reference) (*provider.ResourceInfo, error) {
-	c, ctx, err := f.b.gw(ctx)
-	if err != nil {
-		return nil, err
-	}
-	res, err := check(c.Stat(ctx, &provider.StatRequest{Ref: ref}))
+	res, err := call(ctx, f.b, gateway.GatewayAPIClient.Stat, &provider.StatRequest{Ref: ref})
 	if err != nil {
 		return nil, err
 	}
@@ -43,11 +40,7 @@ func (f files) Stat(ctx context.Context, ref *provider.Reference) (*provider.Res
 }
 
 func (f files) List(ctx context.Context, ref *provider.Reference) ([]*provider.ResourceInfo, error) {
-	c, ctx, err := f.b.gw(ctx)
-	if err != nil {
-		return nil, err
-	}
-	res, err := check(c.ListContainer(ctx, &provider.ListContainerRequest{Ref: ref}))
+	res, err := call(ctx, f.b, gateway.GatewayAPIClient.ListContainer, &provider.ListContainerRequest{Ref: ref})
 	if err != nil {
 		return nil, err
 	}
@@ -133,20 +126,12 @@ func (f files) Copy(ctx context.Context, src, dst *provider.Reference, overwrite
 }
 
 func (f files) Remove(ctx context.Context, ref *provider.Reference) error {
-	c, ctx, err := f.b.gw(ctx)
-	if err != nil {
-		return err
-	}
-	_, err = check(c.Delete(ctx, &provider.DeleteRequest{Ref: ref}))
+	_, err := call(ctx, f.b, gateway.GatewayAPIClient.Delete, &provider.DeleteRequest{Ref: ref})
 	return err
 }
 
 func (f files) Touch(ctx context.Context, ref *provider.Reference) error {
-	c, ctx, err := f.b.gw(ctx)
-	if err != nil {
-		return err
-	}
-	_, err = check(c.TouchFile(ctx, &provider.TouchFileRequest{Ref: ref}))
+	_, err := call(ctx, f.b, gateway.GatewayAPIClient.TouchFile, &provider.TouchFileRequest{Ref: ref})
 	return err
 }
 

@@ -31,13 +31,10 @@ import (
 	"github.com/pkg/errors"
 )
 
-// The quota forms of a space in EOS.
 const (
-	// A group quota of eosclient.ProjectQuotaGID on the root of the space,
-	// which counts all the files of the space.
+	// A group quota of eosclient.ProjectQuotaGID on the root of the space.
 	quotaFormProject = "project"
-	// The user quota of the owner on the quota node of the storage. Spaces
-	// made before the project quota still have it.
+	// The user quota of the owner on the quota node. Old spaces have it.
 	quotaFormUser = "user"
 )
 
@@ -67,9 +64,9 @@ func (fs *Eosfs) GetSpaceQuota(ctx context.Context, ref storage.SpaceQuotaRef) (
 	return fs.spaceQuota(ref.Root, quotaFormUser, qi), nil
 }
 
-// SetSpaceQuota implements storage.QuotaAdmin. It always sets the project
-// quota, also on a space that has the user quota of its owner: EOS counts a
-// file on the nearest quota node above it, so the root of the space wins.
+// SetSpaceQuota implements storage.QuotaAdmin. It always sets the project quota,
+// also on a space with a user quota: EOS counts a file on the nearest quota
+// node above it, so the root of the space wins.
 func (fs *Eosfs) SetSpaceQuota(ctx context.Context, ref storage.SpaceQuotaRef, maxBytes, maxFiles uint64) (*storage.SpaceQuota, error) {
 	node, err := fs.spaceQuotaNode(ctx, ref)
 	if err != nil {
@@ -93,9 +90,8 @@ func (fs *Eosfs) SetSpaceQuota(ctx context.Context, ref storage.SpaceQuotaRef, m
 	return fs.spaceQuota(ref.Root, quotaFormProject, qi), nil
 }
 
-// ListSpaceQuotas implements storage.QuotaAdmin with the project quotas. The
-// quota nodes of the instance outside the namespace of this storage belong
-// to other storages, so they are skipped.
+// ListSpaceQuotas implements storage.QuotaAdmin with the project quotas. It
+// skips the quota nodes outside the namespace of this storage.
 func (fs *Eosfs) ListSpaceQuotas(ctx context.Context) ([]*storage.SpaceQuota, error) {
 	nodes, err := fs.c.ListAllQuota(ctx, getSystemAuth())
 	if err != nil {

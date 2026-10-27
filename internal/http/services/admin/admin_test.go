@@ -112,8 +112,6 @@ func newTestService(t *testing.T) http.Handler {
 	return s.Handler()
 }
 
-// serve runs a request as the HTTP auth middleware would leave it: the
-// caller's own token already set for outgoing calls.
 func serve(t *testing.T, h http.Handler, method, path, body string) *httptest.ResponseRecorder {
 	t.Helper()
 	r := httptest.NewRequest(method, path, strings.NewReader(body))
@@ -142,8 +140,6 @@ func TestStatus(t *testing.T) {
 	}
 }
 
-// TestImpersonateUsesAdminToken asserts that Impersonate carries the freshly
-// minted admin token, not the caller's user token the middleware set first.
 func TestImpersonateUsesAdminToken(t *testing.T) {
 	h := newTestService(t)
 	fake := &fakeAdmin{}
@@ -171,7 +167,6 @@ func TestImpersonateUsesAdminToken(t *testing.T) {
 	}
 }
 
-// TestImpersonateWithoutReason asserts the reason is optional.
 func TestImpersonateWithoutReason(t *testing.T) {
 	h := newTestService(t)
 	fake := &fakeAdmin{}
@@ -240,8 +235,6 @@ func TestImpersonateForwardsTheOptions(t *testing.T) {
 	}
 }
 
-// TestImpersonateRefusedTarget asserts that a refused target is not reported
-// as "not an admin": the caller is one, and the message tells why.
 func TestImpersonateRefusedTarget(t *testing.T) {
 	h := newTestService(t)
 	stampAdmin(&fakeAdmin{impersonateErr: status.Error(codes.PermissionDenied, "admin: \"boss\" is a member of admins; set allow_privileged to impersonate it")})

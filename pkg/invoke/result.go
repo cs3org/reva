@@ -27,10 +27,8 @@ import (
 	"google.golang.org/protobuf/proto"
 )
 
-// Error is an invocation error with a gRPC code. The control channel sends
-// the code to the caller, so that a typed admin RPC can answer with it (for
-// example NotFound) and not with Unknown. A status error from
-// google.golang.org/grpc/status gives its code in the same way.
+// Error is an invocation error with a gRPC code. The control channel sends the
+// code, so that a typed admin RPC can answer with it and not with Unknown.
 type Error struct {
 	Code    codes.Code
 	Message string
@@ -41,8 +39,7 @@ func (e Error) Error() string { return e.Message }
 // GRPCStatus lets status.Code and status.FromError read the code.
 func (e Error) GRPCStatus() *status.Status { return status.New(e.Code, e.Message) }
 
-// ProtoResult returns m as a Result: its protojson. A typed admin RPC decodes
-// the result back into the type of m.
+// ProtoResult returns the protojson of m as a Result.
 func ProtoResult(m proto.Message) (Result, error) {
 	b, err := protojson.Marshal(m)
 	if err != nil {

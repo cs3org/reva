@@ -155,8 +155,7 @@ func (j *ExpiredJob) Run(ctx context.Context) (ExpiredReport, error) {
 	return report, nil
 }
 
-// SyncShare removes the ACL entry of one expired share as Run does, with the
-// identity of ctx.
+// SyncShare removes the ACL entry of one expired share, as the user of ctx.
 func (j *ExpiredJob) SyncShare(ctx context.Context, s *collaboration.Share) error {
 	gw := j.Gateway
 	if gw == nil {

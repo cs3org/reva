@@ -130,9 +130,8 @@ reva: ## Build the reva CLI
 	go build -ldflags "-extldflags=-static $(CLI_BUILD_FLAGS)" -o ./cmd/reva/reva ./cmd/reva
 
 # The CERNBox build of the CLI: reva with the CLI plugins of
-# github.com/cernbox/reva-plugins/cli and the CERNBox brand. It needs gaia
-# with --binary, --brand and a subpackage in --with (T35), and the brand
-# file (T40). Until then these targets fail.
+# github.com/cernbox/reva-plugins/cli and the CERNBox brand. It needs a gaia
+# that supports --binary, --brand and a subpackage in --with.
 CERNBOX_BRAND ?= $(shell pwd)/../reva-plugins/cli/cernbox.toml
 
 .PHONY: cernbox

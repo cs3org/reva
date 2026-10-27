@@ -55,9 +55,9 @@ func init() {
 }
 
 type config struct {
-	// DaysBefore are the reminder points: a link is reminded when it has
-	// that many days left or less. The level of a link is the rank of the
-	// nearest point that it reached, the furthest point being 1.
+	// DaysBefore are the reminder points. A link is reminded when it has that
+	// many days left or less. The level is the rank of the nearest point that
+	// the link reached, the furthest point being 1.
 	DaysBefore []int  `mapstructure:"days_before"`
 	BaseURL    string `mapstructure:"base_url"`
 	// PublicLinkBaseURL defaults to BaseURL followed by /s/.
@@ -109,8 +109,6 @@ func New(_ context.Context, m map[string]any) (reminders.Reminder, error) {
 
 func (k *kind) Event() string { return model.EventLinkExpiry }
 
-// link is a link as the expiring invocation of the public share provider
-// returns it.
 type link struct {
 	ID        uint      `json:"id"`
 	Token     string    `json:"token"`
@@ -123,7 +121,6 @@ type link struct {
 	UpdatedAt time.Time `json:"updated_at"`
 }
 
-// data is what the ledger keeps of a link for the notification.
 type data struct {
 	Token     string    `json:"token"`
 	Name      string    `json:"name"`
@@ -134,8 +131,6 @@ type data struct {
 	DaysLeft  int       `json:"days_left"`
 }
 
-// Scan yields the links that expire before the furthest reminder point has
-// passed, except the links whose resource does not exist any more.
 func (k *kind) Scan(ctx context.Context) iter.Seq2[reminders.Item, error] {
 	return func(yield func(reminders.Item, error) bool) {
 		gw, adm, err := k.clients(ctx)
@@ -196,7 +191,6 @@ func (k *kind) clients(ctx context.Context) (gateway.GatewayAPIClient, adminpb.A
 	return gw, adm, nil
 }
 
-// expiring reads one page of links from the public share provider.
 func expiring(ctx context.Context, adm adminpb.AdminAPIClient, args map[string]string) ([]link, error) {
 	var page struct {
 		Links []link `json:"links"`
@@ -207,8 +201,6 @@ func expiring(ctx context.Context, adm adminpb.AdminAPIClient, args map[string]s
 	return page.Links, nil
 }
 
-// project is a project space as the space invocation of the spaces registry
-// returns it.
 type project struct {
 	Name  string `json:"name"`
 	Roles []struct {
@@ -218,9 +210,8 @@ type project struct {
 	} `json:"roles"`
 }
 
-// invoke calls an invocation of a service through the Admin API as the
-// reminders service. Every instance reads the same database, so the first
-// answer is enough.
+// invoke calls an invocation through the Admin API as the reminders service.
+// Every instance reads the same database, so the first answer is enough.
 func invoke(ctx context.Context, adm adminpb.AdminAPIClient, svc, invocation string, args map[string]string, out any) error {
 	ctx, err := admin.AsService(ctx, "reminders")
 	if err != nil {
@@ -241,9 +232,6 @@ func invoke(ctx context.Context, adm adminpb.AdminAPIClient, svc, invocation str
 	return fmt.Errorf("no %s answered: %w", svc, errors.Join(failures...))
 }
 
-// items returns the link once for each recipient: the initiator for a link in
-// a home, the users and groups of RecipientRole for a link in a project. A
-// link whose resource is gone has no items.
 func (k *kind) items(ctx context.Context, gw gateway.GatewayAPIClient, adm adminpb.AdminAPIClient, projects map[string]*project, l link, today time.Time) ([]reminders.Item, error) {
 	res, err := gw.Stat(ctx, &provider.StatRequest{Ref: &provider.Reference{ResourceId: &provider.ResourceId{StorageId: l.Instance, OpaqueId: l.Inode}}})
 	if err != nil {
@@ -283,8 +271,7 @@ func (k *kind) items(ctx context.Context, gw gateway.GatewayAPIClient, adm admin
 	items := make([]reminders.Item, 0, len(to))
 	for _, r := range to {
 		items = append(items, reminders.Item{
-			// The date comes first, so that the soonest link is first in a
-			// level.
+			// The date comes first, so that the soonest link is first in a level.
 			Subject:   fmt.Sprintf("link:%s:%d:%s", expires.Format(time.DateOnly), l.ID, r.Name),
 			Level:     k.level(daysLeft, midnight(expires), l.UpdatedAt),
 			Recipient: r,
@@ -391,7 +378,6 @@ func daysText(days int) string {
 	return fmt.Sprintf("in %d days", days)
 }
 
-// displayPath shortens a path for the mail, and keeps both ends.
 func displayPath(p string, maxChars int) string {
 	if len(p) < maxChars {
 		return p

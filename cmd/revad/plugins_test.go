@@ -31,7 +31,6 @@ func (cliPlugin) RevaPlugin() reva.PluginInfo {
 	return reva.PluginInfo{ID: "cli.commands.revadtest", New: func() {}}
 }
 
-// A CLI plugin linked into revad must not stop it at start-up.
 func TestCLIPluginsAreSkipped(t *testing.T) {
 	reva.RegisterPlugin(cliPlugin{})
 	initPlugins()

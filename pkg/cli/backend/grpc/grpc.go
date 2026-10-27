@@ -26,6 +26,7 @@ import (
 	gateway "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	"github.com/cs3org/reva/v3/pkg/cli/backend"
+	"google.golang.org/grpc"
 )
 
 // GatewayFunc returns the gateway client, and ctx with the reva token of the
@@ -39,8 +40,8 @@ type Backend struct {
 	gw GatewayFunc
 }
 
-// New returns the backend. gw is called for each call, so that the runtime
-// dials the gateway and gets the token only when a command needs them.
+// New returns the backend. gw runs at each call, so the gateway is dialed
+// only when a command needs it.
 func New(gw GatewayFunc) *Backend { return &Backend{gw: gw} }
 
 var (
@@ -69,13 +70,21 @@ func (b *Backend) ServerTime(ctx context.Context) (time.Time, error) {
 
 type response interface{ GetStatus() *rpc.Status }
 
-// check turns the answer of a call into one error: the gRPC error, else
-// the CS3 status.
 func check[R response](res R, err error) (R, error) {
 	if err != nil {
 		return res, err
 	}
 	return res, backend.Check(res.GetStatus())
+}
+
+// call runs one gateway RPC with the user token, and checks the CS3 status.
+func call[Req any, R response](ctx context.Context, b *Backend, rpc func(gateway.GatewayAPIClient, context.Context, Req, ...grpc.CallOption) (R, error), req Req) (R, error) {
+	c, ctx, err := b.gw(ctx)
+	if err != nil {
+		var zero R
+		return zero, err
+	}
+	return check(rpc(c, ctx, req))
 }
 
 func notAvailable(what string) error { return backend.NotAvailable(backend.GRPC, what) }

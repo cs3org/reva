@@ -32,7 +32,6 @@ import (
 	authpb "github.com/cs3org/go-cs3apis/cs3/auth/provider/v1beta1"
 	registry "github.com/cs3org/go-cs3apis/cs3/auth/registry/v1beta1"
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
-	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	types "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
 	"github.com/cs3org/reva/v3/internal/cli/state"
 	"github.com/cs3org/reva/v3/pkg/auth/scope"
@@ -72,8 +71,8 @@ func loginCommand(rt *cli.Runtime) *cobra.Command {
 				if err != nil {
 					return err
 				}
-				if res.Status.Code != rpc.Code_CODE_OK {
-					return formatError(res.Status)
+				if err := cli.Check(res.Status); err != nil {
+					return err
 				}
 				return rt.Print(cmd.OutOrStdout(), res.Types, func(w io.Writer) {
 					for _, t := range res.Types {
@@ -213,7 +212,6 @@ func statusCommand(rt *cli.Runtime) *cobra.Command {
 	}
 }
 
-// whoami returns the user of the token and when the token expires.
 func whoami(ctx context.Context, rt *cli.Runtime) (*userpb.User, time.Time, error) {
 	b, err := rt.Backend(ctx)
 	if err != nil {
@@ -230,8 +228,7 @@ func whoami(ctx context.Context, rt *cli.Runtime) (*userpb.User, time.Time, erro
 	return user, cli.TokenExpiry(token), nil
 }
 
-// readCredentials asks for the missing user name and for the secret. The
-// secret is never a flag, so it does not show in ps or in the shell history.
+// The secret is never a flag, so it does not show in ps or in the shell history.
 func readCredentials(cmd *cobra.Command, username string) (string, string, error) {
 	r := bufio.NewReader(cmd.InOrStdin())
 	f, isFile := cmd.InOrStdin().(*os.File)
@@ -523,9 +520,8 @@ func tokenRevokeCommand(rt *cli.Runtime) *cobra.Command {
 	}
 }
 
-// renderAppPasswords prints the tokens. The first column is the id in a
-// listing, and the secret right after create, the only time the server
-// returns it.
+// The first column is the id in a listing, and the secret right after create,
+// the only time the server returns it.
 func renderAppPasswords(w io.Writer, first string, pws []*authapp.AppPassword) {
 	formatTime := func(t *types.Timestamp) string {
 		if t == nil {
