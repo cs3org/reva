@@ -355,6 +355,13 @@ func (a *spacesAdmin) CheckSpaces(req *adminpb.CheckSpacesRequest, stream adminp
 func mutateSpace(ctx context.Context, eps []client.Endpoint, invocation, target string, args map[string]string) (*adminpb.AdminSpace, error) {
 	res, err := invokeOne(ctx, eps, invocation, args)
 	fields := maps.Clone(args)
+	// The audit names a user by its id, as everywhere else, not by its protojson.
+	if v, ok := fields["owner"]; ok {
+		var u admin.UserID
+		if u.UnmarshalText([]byte(v)) == nil {
+			fields["owner"] = u.String()
+		}
+	}
 	if err == nil {
 		// The change is made, so it is not an error. An instance that keeps
 		// its cache shows the old value until the cache expires (cache_ttl).
