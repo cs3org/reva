@@ -24,6 +24,7 @@ import (
 	"testing"
 
 	"github.com/cs3org/reva/v3/pkg/rhttp/ratelimit"
+	"github.com/cs3org/reva/v3/pkg/rhttp/router"
 )
 
 func TestOnlyUnprotectedRoutesAreRateLimited(t *testing.T) {
@@ -34,29 +35,35 @@ func TestOnlyUnprotectedRoutesAreRateLimited(t *testing.T) {
 	s := &svc{c: &Config{}, limiter: l}
 	t.Cleanup(func() { _ = s.Close() })
 
-	h := s.limitUnprotected(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		w.WriteHeader(http.StatusOK)
-	}))
-	get := func(p string) int {
-		req := httptest.NewRequest(http.MethodGet, p, nil)
+	r := router.New()
+	s.Routes(r.Service("ocdav"))
+
+	do := func(method, p string) int {
+		req := httptest.NewRequest(method, p, nil)
 		req.RemoteAddr = "203.0.113.7:1000"
 		rec := httptest.NewRecorder()
-		h.ServeHTTP(rec, req)
+		r.ServeHTTP(rec, req)
 		return rec.Code
 	}
 
-	if got := get("/remote.php/dav/public-files/tok/a.txt"); got != http.StatusOK {
-		t.Fatalf("first public request: got %d, want 200", got)
+	// status.php answers from its own configuration, so this spends the
+	// client's only token without reaching any storage.
+	if got := do(http.MethodGet, "/status.php"); got != http.StatusOK {
+		t.Fatalf("first unauthenticated request: got %d, want 200", got)
 	}
-	if got := get("/s/tok/download"); got != http.StatusTooManyRequests {
-		t.Fatalf("second public request: got %d, want 429", got)
+	// The bucket is shared by the unauthenticated entry points, so the next
+	// one is refused before its handler runs.
+	if got := do(http.MethodGet, "/ocm-provider"); got != http.StatusTooManyRequests {
+		t.Fatalf("second unauthenticated request: got %d, want 429", got)
 	}
-	// Authenticated routes and OCM WebDAV, which authenticates by share
-	// secret or token, are not limited.
+
+	// The authenticated subtrees, and OCM's which authenticates by share
+	// secret or token, are not limited: an unserved method reaches their
+	// dispatch and is refused as one, never as a rate limit.
 	for _, p := range []string{"/remote.php/dav/files/einstein/a.txt", "/remote.php/dav/ocm/secret/a.txt"} {
-		for i := 0; i < 3; i++ {
-			if got := get(p); got != http.StatusOK {
-				t.Fatalf("%s, request %d: got %d, want 200", p, i, got)
+		for i := range 3 {
+			if got := do("FROBNICATE", p); got != http.StatusMethodNotAllowed {
+				t.Fatalf("%s, request %d: got %d, want 405", p, i, got)
 			}
 		}
 	}

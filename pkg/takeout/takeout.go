@@ -84,8 +84,9 @@ type job struct {
 // not turn into a startup failure
 type run struct {
 	*job
-	gtw     gateway.GatewayAPIClient
-	bundler *bundler.Bundler
+	gtw      gateway.GatewayAPIClient
+	bundler  *bundler.Bundler
+	progress *archiveProgress
 }
 
 // New sets the potential custom job config and builds the job's deps
@@ -107,16 +108,18 @@ func New(ctx context.Context, m map[string]any) (rjobs.Job, error) {
 }
 
 // newRun resolves the gateway and builds the deps needed for a single run
-func (j *job) newRun(ctx context.Context) (*run, error) {
+func (j *job) newRun(ctx context.Context, rep rjobs.Reporter) (*run, error) {
 	gtw, err := service.Gateway(ctx)
 	if err != nil {
 		return nil, errors.Wrap(err, "takeout: gateway could not be resolved")
 	}
 
-	// Setup the bundler with a walker and a downloader
-	b := bundler.New(walker.NewWalker(gtw), downloader.NewDownloader(gtw, j.hc))
+	// Setup the bundler with a walker and a downloader counting the bytes it reads
+	progress := &archiveProgress{Reporter: rep, phase: "archive", details: rjobs.Params{}}
+	d := progressDownloader{Downloader: downloader.NewDownloader(gtw, j.hc), progress: progress}
+	b := bundler.New(walker.NewWalker(gtw), d)
 
-	return &run{job: j, gtw: gtw, bundler: b}, nil
+	return &run{job: j, gtw: gtw, bundler: b, progress: progress}, nil
 }
 
 // The per-run takeout parameters
@@ -136,7 +139,12 @@ type archive struct {
 }
 
 // Run archives the user's userspace and shares it through a public link
-func (j *job) Run(ctx context.Context, p rjobs.Params) (res rjobs.Params, err error) {
+func (j *job) Run(ctx context.Context, p rjobs.Params) (rjobs.Params, error) {
+	return j.RunWithProgress(ctx, p, rjobs.NopReporter{})
+}
+
+// RunWithProgress is Run, reporting the bytes archived so far
+func (j *job) RunWithProgress(ctx context.Context, p rjobs.Params, rep rjobs.Reporter) (res rjobs.Params, err error) {
 	// Decode run parameters
 	var pp params
 	if err := mapstructure.Decode(map[string]any(p), &pp); err != nil {
@@ -158,7 +166,7 @@ func (j *job) Run(ctx context.Context, p rjobs.Params) (res rjobs.Params, err er
 	j.log.Info().Msgf("takeout: using parameters %+v", pp)
 
 	// Resolve the gateway and build the per-run deps
-	r, err := j.newRun(ctx)
+	r, err := j.newRun(ctx, rep)
 	if err != nil {
 		return nil, err
 	}
@@ -186,12 +194,19 @@ func (j *job) Run(ctx context.Context, p rjobs.Params) (res rjobs.Params, err er
 		}
 	}()
 
+	// The size of a folder is the size of its tree on EOS, other storages leave the total unknown
+	if statRes, err := r.gtw.Stat(userCtx, &provider.StatRequest{Ref: &provider.Reference{Path: pp.RootPath}}); err == nil && statRes.Status.GetCode() == rpc.Code_CODE_OK {
+		r.progress.total = int64(statRes.Info.GetSize())
+	}
+	r.progress.report()
+
 	// Create the archives, dropping the entries that cannot be read rather than failing the whole takeout
 	var skipped []string
 	opts := j.bundleOpts(pp)
 	opts.OnEntryError = func(path string, err error) error {
 		j.log.Warn().Err(err).Msgf("takeout: skipping unreadable entry %s", path)
 		skipped = append(skipped, path)
+		r.progress.details["skipped"] = len(skipped)
 		return nil
 	}
 	err = r.bundler.Create(userCtx, opts, r.newPartFunc(adminCtx, archPath, string(pp.ArchiveFormat)))
@@ -205,6 +220,8 @@ func (j *job) Run(ctx context.Context, p rjobs.Params) (res rjobs.Params, err er
 	}
 
 	// Share the folder containing the archives through a public link
+	r.progress.phase = "share"
+	r.progress.report()
 	expiration := time.Now().Add(time.Duration(j.conf.ExpirationDelay) * time.Hour)
 	token, err := r.createPublicShare(adminCtx, archPath, expiration)
 	if err != nil {
@@ -218,6 +235,8 @@ func (j *job) Run(ctx context.Context, p rjobs.Params) (res rjobs.Params, err er
 	}
 
 	// Notify the user that their takeout is ready
+	r.progress.phase = "notify"
+	r.progress.report()
 	r.notifyCompletion(userCtx, archives, expiration)
 
 	// Return the public link to the archives and their location
@@ -354,6 +373,7 @@ func (u *uploadPart) Abort(err error) error {
 // newPartFunc returns the part factory used by the bundler
 func (r *run) newPartFunc(adminCtx context.Context, archPath, ext string) bundler.PartFunc {
 	return func(index int) (bundler.Part, error) {
+		r.progress.details["parts"] = index + 1
 		pr, pw := io.Pipe()
 		done := make(chan error, 1)
 		go func() {
@@ -364,6 +384,50 @@ func (r *run) newPartFunc(adminCtx context.Context, archPath, ext string) bundle
 		}()
 		return &uploadPart{pw: pw, done: done}, nil
 	}
+}
+
+// archiveProgress reports the bytes read into the archives, the bundler walks and
+// downloads sequentially so it needs no lock
+type archiveProgress struct {
+	rjobs.Reporter
+	phase       string
+	done, total int64
+	details     rjobs.Params
+}
+
+func (a *archiveProgress) report() {
+	total := a.total
+	// The folder size was not the size of its tree
+	if a.done > total {
+		total = 0
+	}
+	a.Report(rjobs.Progress{Phase: a.phase, Done: a.done, Total: total, Unit: "bytes", Details: a.details})
+}
+
+// progressDownloader counts the bytes read from every download
+type progressDownloader struct {
+	downloader.Downloader
+	progress *archiveProgress
+}
+
+func (d progressDownloader) Download(ctx context.Context, path, versionKey string) (io.ReadCloser, error) {
+	rc, err := d.Downloader.Download(ctx, path, versionKey)
+	if err != nil {
+		return nil, err
+	}
+	return countingReader{ReadCloser: rc, progress: d.progress}, nil
+}
+
+type countingReader struct {
+	io.ReadCloser
+	progress *archiveProgress
+}
+
+func (c countingReader) Read(p []byte) (int, error) {
+	n, err := c.ReadCloser.Read(p)
+	c.progress.done += int64(n)
+	c.progress.report()
+	return n, err
 }
 
 // authenticate performs a machine authentication as the given user and returns an appropriate context
