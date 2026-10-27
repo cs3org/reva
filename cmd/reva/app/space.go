@@ -110,6 +110,14 @@ func spaceListCommand(rt *cli.Runtime) *cobra.Command {
 		RunE: func(cmd *cobra.Command, args []string) error {
 			ctx := cmd.Context()
 			if rt.Plane() == cli.AdminPlane {
+				ownerID, err := resolveUser(ctx, rt, owner)
+				if err != nil {
+					return err
+				}
+				memberID, err := resolveUser(ctx, rt, member)
+				if err != nil {
+					return err
+				}
 				sa, ctx, err := spacesAdmin(ctx, rt)
 				if err != nil {
 					return err
@@ -118,11 +126,11 @@ func spaceListCommand(rt *cli.Runtime) *cobra.Command {
 				if typ != "" {
 					f = f.BySpaceType(spaces.SpaceType(typ))
 				}
-				if owner != "" {
-					f = f.ByOwner(&userpb.UserId{OpaqueId: owner})
+				if ownerID != nil {
+					f = f.ByOwner(ownerID)
 				}
-				if member != "" {
-					f = f.ByUser(&userpb.UserId{OpaqueId: member})
+				if memberID != nil {
+					f = f.ByUser(memberID)
 				}
 				req.Filters = f.List()
 				st, err := sa.ListSpaces(ctx, &req)
@@ -283,12 +291,13 @@ func spaceCheckCommand(rt *cli.Runtime) *cobra.Command {
 			"that is not set, does not exist or has no members.",
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
+			var err error
+			if req.Owner, err = resolveUser(cmd.Context(), rt, owner); err != nil {
+				return err
+			}
 			sa, ctx, err := spacesAdmin(cmd.Context(), rt)
 			if err != nil {
 				return err
-			}
-			if owner != "" {
-				req.Owner = &userpb.UserId{OpaqueId: owner}
 			}
 			st, err := sa.CheckSpaces(ctx, &req)
 			if err != nil {
@@ -362,9 +371,13 @@ func spaceSetOwnerCommand(rt *cli.Runtime) *cobra.Command {
 		Args:              cobra.ExactArgs(2),
 		ValidArgsFunction: completeSpaces(rt),
 		RunE: func(cmd *cobra.Command, args []string) error {
+			owner, err := resolveUser(cmd.Context(), rt, args[1])
+			if err != nil {
+				return err
+			}
 			return spaceChange(cmd, rt, fmt.Sprintf("make %s the owner of space %s", args[1], args[0]),
 				func(ctx context.Context, sa adminpb.SpacesAdminClient) (*adminpb.AdminSpace, error) {
-					return sa.SetSpaceOwner(ctx, &adminpb.SetSpaceOwnerRequest{Ref: spaceRef(args[0]), Owner: &userpb.UserId{OpaqueId: args[1]}})
+					return sa.SetSpaceOwner(ctx, &adminpb.SetSpaceOwnerRequest{Ref: spaceRef(args[0]), Owner: owner})
 				})
 		},
 	}
@@ -380,9 +393,13 @@ func spaceRegisterCommand(rt *cli.Runtime) *cobra.Command {
 			"configuration of the catalogue, or is required.",
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
+			ownerID, err := resolveUser(cmd.Context(), rt, owner)
+			if err != nil {
+				return err
+			}
 			space := &provider.StorageSpace{
 				Name:        args[0],
-				Owner:       &userpb.User{Id: &userpb.UserId{OpaqueId: owner}},
+				Owner:       &userpb.User{Id: ownerID},
 				Description: description,
 			}
 			if storageID != "" || spaceID != "" {
