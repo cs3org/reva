@@ -65,8 +65,7 @@ type AdminClient struct {
 	Socket bool
 }
 
-// socketPaths are the well-known locations of the admin socket. They are
-// never rebranded. Tests replace them.
+// socketPaths are the well-known locations of the admin socket. Tests replace it.
 var socketPaths = func() []string {
 	paths := []string{"/run/reva/admin.sock"}
 	if xdg := os.Getenv("XDG_RUNTIME_DIR"); xdg != "" {
@@ -78,9 +77,8 @@ var socketPaths = func() []string {
 // Admin returns an Admin API client and ctx for an admin-plane call. It
 // uses the local socket if one answers, which needs no token. Else it uses
 // the admin host with an admin token: the one in memory, the one that
-// `reva elevate` stored for the current login, or a new one from an
-// automatic step-up. The token of the step-up stays in memory only. An admin
-// host from --admin-host or REVA_ADMIN_HOST skips the socket.
+// `reva elevate` stored for this login, or a new one from a step-up that
+// stays in memory. An explicit admin host skips the socket.
 func (r *Runtime) Admin(ctx context.Context) (*AdminClient, context.Context, error) {
 	r.usedAdmin = true
 	c, err := r.adminClient(ctx)
@@ -349,9 +347,8 @@ func (r *Runtime) CanAdmin(ctx context.Context) bool {
 	return res.Admin
 }
 
-// impersonate returns a user token for --as. Over gRPC it calls Impersonate
-// with admin rights. When the Admin API cannot be reached and an HTTPS
-// endpoint is known, it uses POST /admin/impersonate of that endpoint.
+// impersonate returns a user token for --as. When the Admin API cannot be
+// reached and an HTTPS endpoint is known, it uses POST /admin/impersonate.
 func (r *Runtime) impersonate(ctx context.Context) (string, error) {
 	c, actx, err := r.Admin(ctx)
 	if err == nil {

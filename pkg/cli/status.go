@@ -23,8 +23,7 @@ import (
 	"github.com/cs3org/reva/v3/pkg/cli/backend"
 )
 
-// StatusError is a CS3 response status that is not OK. It is defined in
-// package backend, so that the backends can return it.
+// StatusError is a CS3 response status that is not OK.
 type StatusError = backend.StatusError
 
 // Check returns nil for an OK status, else a *StatusError.

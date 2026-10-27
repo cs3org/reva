@@ -35,8 +35,6 @@ import (
 	"github.com/cs3org/reva/v3/pkg/cli/backend"
 )
 
-// The data plane uses only the simple protocol for now: TUS comes with the
-// transfer engine.
 const simpleProtocol = "simple"
 
 type locator struct{ b *Backend }
@@ -96,8 +94,8 @@ func (l locator) UploadTarget(ctx context.Context, ref *provider.Reference, size
 	return nil, fmt.Errorf("upload: the server offers no %s protocol", simpleProtocol)
 }
 
-// target is the data gateway with the transfer token, or the WebDAV path
-// that some storage providers put in the opaque map instead.
+// target returns the data gateway, or the WebDAV path that some storage
+// providers put in the opaque map instead.
 func target(ctx context.Context, endpoint, token string, o *types.Opaque) (t *backend.Target, dav bool, err error) {
 	davToken, davPath, dav, err := webdavRef(o)
 	if err != nil {
@@ -118,8 +116,6 @@ func target(ctx context.Context, endpoint, token string, o *types.Opaque) (t *ba
 	return &backend.Target{URL: endpoint, Header: h}, false, nil
 }
 
-// webdavRef returns the WebDAV token and file path that some storage
-// providers put in the opaque map of the simple protocol.
 func webdavRef(o *types.Opaque) (token, filePath string, ok bool, err error) {
 	if o == nil {
 		return "", "", false, nil
@@ -138,10 +134,6 @@ func webdavRef(o *types.Opaque) (token, filePath string, ok bool, err error) {
 }
 
 func (l locator) OpenInApp(ctx context.Context, ref *provider.Reference, opts backend.AppOptions) (*appprovider.OpenInAppURL, error) {
-	c, ctx, err := l.b.gw(ctx)
-	if err != nil {
-		return nil, err
-	}
 	opaque := &types.Opaque{Map: map[string]*types.OpaqueEntry{}}
 	if opts.Insecure {
 		opaque.Map["insecure"] = &types.OpaqueEntry{}
@@ -149,7 +141,7 @@ func (l locator) OpenInApp(ctx context.Context, ref *provider.Reference, opts ba
 	if opts.SkipVerify {
 		opaque.Map["skip-verify"] = &types.OpaqueEntry{}
 	}
-	res, err := check(c.OpenInApp(ctx, &gateway.OpenInAppRequest{Ref: ref, ViewMode: opts.ViewMode, App: opts.App, Opaque: opaque}))
+	res, err := call(ctx, l.b, gateway.GatewayAPIClient.OpenInApp, &gateway.OpenInAppRequest{Ref: ref, ViewMode: opts.ViewMode, App: opts.App, Opaque: opaque})
 	if err != nil {
 		return nil, err
 	}

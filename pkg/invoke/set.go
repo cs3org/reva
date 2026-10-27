@@ -46,8 +46,7 @@ type StreamHandler struct {
 //
 // A `default` tag gives the value of an absent argument. An `enum` tag
 // ("a,b,c"), or a field type that implements Enumerated, gives the only
-// values that the argument accepts. The catalog shows all of this, so that
-// the CLI can check and complete the arguments.
+// values that the argument accepts.
 func Typed[A any](fn func(ctx context.Context, args A) (Result, error)) Handler {
 	fields := argFields[A]()
 	return Handler{

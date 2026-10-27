@@ -41,8 +41,6 @@ func transferCommand(rt *cli.Runtime) *cobra.Command {
 	return cmd
 }
 
-// transferTxCommand builds the commands that act on one transfer. They differ
-// only in the call, and all print the transfer info that the call returns.
 func transferTxCommand(rt *cli.Runtime, name, short string,
 	call func(backend.TransferManager, context.Context, string) (*datatx.TxInfo, error)) *cobra.Command {
 	return &cobra.Command{

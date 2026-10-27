@@ -130,8 +130,6 @@ func showInvocation(cmd *cobra.Command, service, name string) error {
 	})
 }
 
-// compactArgs lists the arguments of an invocation on one line, with the
-// optional ones in brackets.
 func compactArgs(inv *adminpb.InvocationSpec) string {
 	if inv.Kind == "" {
 		return "?"
@@ -188,7 +186,6 @@ func invokeCommand() *cobra.Command {
 				return err
 			}
 
-			// The kind and the arguments come from the service's own catalog.
 			spec := invocationSpec(ctx, client, selector, invocation)
 			if err := checkArgs(spec, args); err != nil {
 				return err
@@ -224,11 +221,10 @@ func invokeCommand() *cobra.Command {
 	return cmd
 }
 
-// checkArgs checks args against the catalog, so that a typo fails before the
-// call goes to every instance. The server checks them again.
+// checkArgs makes a typo fail before the call goes to every instance. The
+// server checks the arguments again.
 func checkArgs(spec *adminpb.InvocationSpec, args map[string]string) error {
-	// A spec without a kind comes from the registry metadata, which has only
-	// the names: there is nothing to check against.
+	// A spec without a kind has only the names: there is nothing to check.
 	if spec.GetKind() == "" {
 		return nil
 	}
@@ -268,8 +264,6 @@ func checkArgs(spec *adminpb.InvocationSpec, args map[string]string) error {
 	return nil
 }
 
-// completeCatalogue completes a service name, then one of its invocations
-// and, with keyVals, the key= of an argument and the values of its enum.
 func completeCatalogue(keyVals bool) cobra.CompletionFunc {
 	return func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
 		none := cobra.ShellCompDirectiveNoFileComp
@@ -337,8 +331,6 @@ func completeCatalogue(keyVals bool) cobra.CompletionFunc {
 	}
 }
 
-// runInvokeStream writes the results of a streaming invocation as they
-// arrive, until every instance's stream ends or the user interrupts.
 func runInvokeStream(ctx context.Context, client adminpb.AdminAPIClient, req *adminpb.InvokeRequest, s *streamWriter) error {
 	ctx, stop := signal.NotifyContext(ctx, os.Interrupt)
 	defer stop()
@@ -363,9 +355,8 @@ func runInvokeStream(ctx context.Context, client adminpb.AdminAPIClient, req *ad
 	}
 }
 
-// invocationSpec best-effort resolves an invocation's catalog entry, for the
-// confirmation gate and the choice of a stream; on any error it returns nil
-// (no prompt, no stream).
+// invocationSpec returns nil on any error, so that the call goes on without a
+// confirmation and without a stream.
 func invocationSpec(ctx context.Context, client adminpb.AdminAPIClient, svcName, invocation string) *adminpb.InvocationSpec {
 	res, err := client.ListInvocations(ctx, &adminpb.ListInvocationsRequest{Service: svcName})
 	if err != nil {
@@ -379,7 +370,6 @@ func invocationSpec(ctx context.Context, client adminpb.AdminAPIClient, svcName,
 	return nil
 }
 
-// parseKeyVals turns ["k=v", "a=b"] into a map for invocation arguments.
 func parseKeyVals(pairs []string) (map[string]string, error) {
 	out := make(map[string]string, len(pairs))
 	for _, p := range pairs {

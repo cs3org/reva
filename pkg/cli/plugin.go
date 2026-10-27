@@ -38,9 +38,7 @@ const (
 	PathsNamespace    = "cli.paths"
 )
 
-// AuthProvider is a sign-in method of the credential chain.
-//
-// TODO(T41): this is provisional. The credential chain replaces it.
+// AuthProvider is a sign-in method.
 type AuthProvider interface {
 	// Name identifies the provider in `status` and in `login --method`.
 	Name() string
@@ -52,8 +50,6 @@ type AuthProvider interface {
 }
 
 // PathResolver turns a path argument into a remote path.
-//
-// TODO(T41): this is provisional. The path resolver replaces it.
 type PathResolver interface {
 	// Resolve returns ok false for an argument that is not for this resolver.
 	Resolve(ctx context.Context, arg string) (path string, ok bool, err error)

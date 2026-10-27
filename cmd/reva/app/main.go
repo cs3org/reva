@@ -27,7 +27,6 @@ import (
 	"os"
 	"strings"
 
-	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	"github.com/cs3org/reva/v3/cmd/reva/admin"
 	"github.com/cs3org/reva/v3/pkg/cli"
 	"github.com/cs3org/reva/v3/pkg/rversion"
@@ -50,8 +49,6 @@ var mutating = []string{
 }
 
 // Option changes the program that Main and NewRoot build.
-//
-// TODO(T40): WithBrand.
 type Option func(*options)
 
 type options struct{}
@@ -61,14 +58,12 @@ func Main(opts ...Option) {
 	os.Exit(run(os.Args[1:], opts...))
 }
 
-// NewRoot returns the command tree: the core commands and the command
-// plugins that are compiled in. CheckPlugins tells which plugins it refused.
+// NewRoot returns the command tree. CheckPlugins tells which plugins it refused.
 func NewRoot(opts ...Option) *cobra.Command {
 	return rootCommand(&cli.Runtime{}, new(bool), opts...)
 }
 
-// run runs the command line args and returns the exit code: 2 for a usage
-// error, 1 for any other error.
+// run returns the exit code: 2 for a usage error, 1 for any other error.
 func run(args []string, opts ...Option) int {
 	rt := &cli.Runtime{}
 	// started is set when the command itself runs. An error before that comes
@@ -201,7 +196,6 @@ func versionCommand(rt *cli.Runtime) *cobra.Command {
 		RunE: func(cmd *cobra.Command, args []string) error {
 			v := versionResult{Version: version, Commit: gitCommit, GoVersion: goVersion, BuildDate: buildDate}
 			if plugins {
-				// TODO(T40): the name of the brand file.
 				v.Brand = cmd.Root().Name()
 				v.Plugins = compiledPlugins()
 			}
@@ -225,9 +219,4 @@ func versionCommand(rt *cli.Runtime) *cobra.Command {
 	}
 	cmd.Flags().BoolVar(&plugins, "plugins", false, "also list the CLI plugins that are compiled in, and the brand")
 	return cmd
-}
-
-// formatError returns the error of a CS3 status that is not OK.
-func formatError(status *rpc.Status) error {
-	return cli.Check(status)
 }

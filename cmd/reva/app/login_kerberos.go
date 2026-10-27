@@ -31,8 +31,7 @@ import (
 	"github.com/spf13/cobra"
 )
 
-// kerberosLogin signs in with the ticket that kinit stored, so it asks for
-// no password. The server takes the user from the ticket.
+// kerberosLogin asks for no password. The server takes the user from the ticket.
 func kerberosLogin(cmd *cobra.Command, rt *cli.Runtime, spn, ccache string) error {
 	if rt.AppTokenFile() != "" {
 		return errors.New("--app-token-file does not apply to --method kerberos")
@@ -67,8 +66,6 @@ func kerberosLogin(cmd *cobra.Command, rt *cli.Runtime, spn, ccache string) erro
 	return nil
 }
 
-// kerberosSPN returns the service principal when --spn is not given: from
-// REVA_KERBEROS_SPN, then from the config file, then HTTP/<gateway host>.
 func kerberosSPN(rt *cli.Runtime) (string, error) {
 	if v := os.Getenv("REVA_KERBEROS_SPN"); v != "" {
 		return v, nil
