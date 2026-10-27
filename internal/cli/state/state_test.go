@@ -163,7 +163,7 @@ func TestConfigIsStrict(t *testing.T) {
 	if _, err := ReadConfig(); err == nil || !strings.Contains(err.Error(), "connection.gatway") {
 		t.Errorf("err = %v, want the unknown key", err)
 	}
-	if err := Write("config.toml", []byte("[plugins.any]\nkey = 1\n")); err != nil {
+	if err := Write("config.toml", []byte("[plugins.any]\nkey = 1\n[[plugins.outbox.folders]]\nafter = \"7d\"\n")); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := ReadConfig(); err != nil {

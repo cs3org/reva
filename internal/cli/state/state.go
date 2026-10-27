@@ -178,8 +178,14 @@ func decodeFile(p string) (Config, error) {
 	var c Config
 	md, err := toml.DecodeFile(p, &c)
 	if err == nil {
-		if und := md.Undecoded(); len(und) > 0 {
-			err = fmt.Errorf("unknown key %s", und[0])
+		// The keys of [plugins] are checked by each plugin's PluginConfig, but
+		// the decoder still reports the keys of an array of tables in them.
+		for _, k := range md.Undecoded() {
+			if len(k) > 0 && k[0] == "plugins" {
+				continue
+			}
+			err = fmt.Errorf("unknown key %s", k)
+			break
 		}
 	}
 	if err != nil && !errors.Is(err, fs.ErrNotExist) {
