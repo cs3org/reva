@@ -76,7 +76,7 @@ func (s *svc) CreateShare(ctx context.Context, req *collaboration.CreateShareReq
 	// First we ping the db
 	// --------------------
 	// See ADR-REVA-003
-	_, err = shareClient.GetShare(ctx, &collaboration.GetShareRequest{
+	pingRes, err := shareClient.GetShare(ctx, &collaboration.GetShareRequest{
 		Ref: &collaboration.ShareReference{
 			Spec: &collaboration.ShareReference_Id{
 				Id: &collaboration.ShareId{
@@ -86,9 +86,11 @@ func (s *svc) CreateShare(ctx context.Context, req *collaboration.CreateShareReq
 		},
 	})
 
-	// We expect a "not found" error when querying ID 0
-	// error checking is kind of ugly, because we lose the original error object over grpc
-	if !strings.HasSuffix(err.Error(), errtypes.NotFound("0").Error()) {
+	// We expect a "not found" when querying ID 0: a CODE_NOT_FOUND status,
+	// or from an older provider an error, which loses its type over grpc.
+	notFound := err == nil && pingRes.GetStatus().GetCode() == rpc.Code_CODE_NOT_FOUND ||
+		err != nil && strings.HasSuffix(err.Error(), errtypes.NotFound("0").Error())
+	if !notFound {
 		return nil, errtypes.InternalError("ShareManager is not online")
 	}
 
