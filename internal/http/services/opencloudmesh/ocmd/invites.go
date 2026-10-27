@@ -19,9 +19,11 @@
 package ocmd
 
 import (
+	"bytes"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"mime"
 	"net/http"
 
@@ -37,6 +39,7 @@ import (
 
 type invitesHandler struct {
 	trustForwardedFor bool
+	ocmClient         *OCMClient
 }
 
 func (h *invitesHandler) init(c *config) error {
@@ -50,6 +53,13 @@ func (h *invitesHandler) AcceptInvite(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	log := appctx.GetLogger(ctx)
 
+	// The signature covers the exact body bytes, thus keep a copy to verify it.
+	body, err := io.ReadAll(r.Body)
+	if err != nil {
+		reqres.WriteError(w, r, reqres.APIErrorInvalidParameter, "error reading the request body", err)
+		return
+	}
+	r.Body = io.NopCloser(bytes.NewReader(body))
 	req, err := getAcceptInviteRequest(r)
 	// Log whitelist metadata only; invite-accepted requests carry invite tokens.
 	logEvent := log.Info().Str("remote", r.RemoteAddr).Err(err)
@@ -96,6 +106,16 @@ func (h *invitesHandler) AcceptInvite(w http.ResponseWriter, r *http.Request) {
 	}
 	if providerAllowedResp.Status.Code != rpc.Code_CODE_OK {
 		reqres.WriteError(w, r, reqres.APIErrorUntrustedService, "provider not trusted", errors.New(providerAllowedResp.Status.Message))
+		return
+	}
+
+	disco, err := h.ocmClient.Discover(ctx, req.RecipientProvider)
+	if err != nil {
+		reqres.WriteError(w, r, reqres.APIErrorUntrustedService, "error discovering the remote OCM server", err)
+		return
+	}
+	if err := verifySignature(ctx, h.ocmClient, r, body, disco); err != nil {
+		reqres.WriteError(w, r, reqres.APIErrorUntrustedService, "invalid HTTP signature", err)
 		return
 	}
 
