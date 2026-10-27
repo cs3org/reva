@@ -27,13 +27,10 @@ import (
 	"time"
 )
 
-// shade is an argument type with a fixed set of values.
 type shade string
 
 func (shade) Values() []string { return []string{"light", "dark"} }
 
-// TestTypedCatalog checks that the catalog describes each argument from its
-// struct field: type, list, default and enum.
 func TestTypedCatalog(t *testing.T) {
 	type runID string
 	h := Typed(func(context.Context, struct {
@@ -70,8 +67,6 @@ func TestTypedCatalog(t *testing.T) {
 	}
 }
 
-// TestTypedDefaultAndEnum checks that an absent argument takes its default
-// and that a value outside the enum is refused before the handler runs.
 func TestTypedDefaultAndEnum(t *testing.T) {
 	type args struct {
 		Limit  int     `arg:"limit" default:"10"`
@@ -102,8 +97,6 @@ func TestTypedDefaultAndEnum(t *testing.T) {
 	}
 }
 
-// TestTypedRejectsBadDefault checks that a wrong default fails when the
-// handler is made, not at the first call.
 func TestTypedRejectsBadDefault(t *testing.T) {
 	for name, fn := range map[string]func(){
 		"unparsable": func() {

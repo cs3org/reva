@@ -39,11 +39,10 @@ import (
 	"github.com/cs3org/reva/v3/pkg/crypto"
 )
 
-// ErrNotBuilt is the answer of the parts of the data plane that come with
-// the transfer engine of the HTTPS transport.
+// ErrNotBuilt is the answer of the parts of the data plane that are not built yet.
 var ErrNotBuilt = errors.New("not available yet in this version of the CLI")
 
-// Plane implements backend.DataPlane.
+// Plane implements backend.DataPlane over HTTP.
 type Plane struct {
 	client *http.Client
 	loc    backend.Locator

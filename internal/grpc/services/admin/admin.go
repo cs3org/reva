@@ -225,8 +225,8 @@ func (s *svc) RequestAdmin(ctx context.Context, _ *adminpb.RequestAdminRequest) 
 		return nil, status.Errorf(codes.Unauthenticated, "admin: cannot identify caller: %v", err)
 	}
 
-	// Else an admin who impersonates another admin steps up as that admin,
-	// and the audit loses who did it.
+	// Else an admin who impersonates another admin could step up as that
+	// admin, and the audit would lose who did it.
 	if scope.Actor(callerScopes) != "" {
 		denied := errtypes.PermissionDenied("an impersonated session cannot step up")
 		admin.Audit(ctx, admin.AuditEvent{Action: "request_admin", Actor: u.Username, Granted: false, Err: denied})

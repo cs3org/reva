@@ -75,10 +75,11 @@ func argFields[A any]() []argField {
 			if spec.Required {
 				panic(fmt.Sprintf("invoke: argument %q: a required argument cannot have a default", name))
 			}
-			if err := checkEnum(spec, spec.Default); err != nil {
-				panic(fmt.Sprintf("invoke: argument %q: default: %v", name, err))
+			err := checkEnum(spec, spec.Default)
+			if err == nil {
+				_, err = parseArg(t, spec.Default)
 			}
-			if _, err := parseArg(t, spec.Default); err != nil {
+			if err != nil {
 				panic(fmt.Sprintf("invoke: argument %q: default: %v", name, err))
 			}
 		}
@@ -87,8 +88,6 @@ func argFields[A any]() []argField {
 	return fields
 }
 
-// argType returns the catalog type of a parsable type that is not a pointer,
-// whether it is a list, and the type of one value.
 func argType(t reflect.Type) (name string, repeated bool, elem reflect.Type) {
 	elem = t
 	if !scalar(elem) {
@@ -117,8 +116,6 @@ func argType(t reflect.Type) (name string, repeated bool, elem reflect.Type) {
 	return name, repeated, elem
 }
 
-// checkEnum checks a wire value, or each value of a list, against the enum
-// of spec.
 func checkEnum(spec ArgSpec, s string) error {
 	if len(spec.Enum) == 0 {
 		return nil
@@ -184,8 +181,8 @@ func bind[A any](fields []argField, raw map[string]any) (A, error) {
 			if f.spec.Default == "" {
 				continue
 			}
-			// The default is parsed at each call: a time default such as 1h
-			// means that long before the call.
+			// A time default such as 1h means that long before the call, so
+			// it is parsed at each call.
 			r = f.spec.Default
 		}
 		if s, ok := r.(string); ok {

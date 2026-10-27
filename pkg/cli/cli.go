@@ -70,14 +70,10 @@ type Runtime struct {
 	debug        bool
 	noProgress   bool
 	timeout      time.Duration
-	// as is the user of --as: the user plane runs with an impersonated token.
-	as string
-	// reason of --reason, sent with every admin-plane call for the audit.
-	reason    string
-	yes       bool
-	noElevate bool
-	// httpEndpoint is the HTTPS endpoint of the deployment (--endpoint), for
-	// the HTTPS transport, and for --as when the Admin API cannot be reached.
+	as           string
+	reason       string
+	yes          bool
+	noElevate    bool
 	httpEndpoint string
 	config       state.Config
 
@@ -163,7 +159,7 @@ func (r *Runtime) Load(flags *pflag.FlagSet) error {
 		}
 		*dst = conf
 	}
-	// REVA_HOST is the name from before --gateway, kept for old scripts.
+	// REVA_HOST is still read for old scripts.
 	fill(&r.gatewayAddr, "gateway", c.Connection.Gateway, "REVA_GATEWAY", "REVA_HOST")
 	fill(&r.adminHost, "admin-host", c.Connection.AdminHost, "REVA_ADMIN_HOST")
 	r.adminHostExplicit = flags.Changed("admin-host") || os.Getenv("REVA_ADMIN_HOST") != ""

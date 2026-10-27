@@ -148,10 +148,9 @@ type ImpersonateRequest struct {
 	// reason is recorded in the audit log.
 	Reason string `protobuf:"bytes,2,opt,name=reason,proto3" json:"reason,omitempty"`
 	// allow_privileged permits a target in admin_group or a service account.
-	// Without it, such a target is refused.
 	AllowPrivileged bool `protobuf:"varint,3,opt,name=allow_privileged,json=allowPrivileged,proto3" json:"allow_privileged,omitempty"`
-	// ttl_seconds asks for a shorter token lifetime. The server caps it at
-	// impersonation_ttl. Zero uses impersonation_ttl.
+	// ttl_seconds asks for a shorter token lifetime, capped at impersonation_ttl.
+	// Zero means impersonation_ttl.
 	TtlSeconds int64 `protobuf:"varint,4,opt,name=ttl_seconds,json=ttlSeconds,proto3" json:"ttl_seconds,omitempty"`
 }
 
@@ -223,8 +222,7 @@ type ImpersonateResponse struct {
 	// token is an ordinary user-scoped token for the target user (never
 	// admin+user). It carries the impersonator in its actor scope.
 	Token string `protobuf:"bytes,1,opt,name=token,proto3" json:"token,omitempty"`
-	// expires_at is the token expiry, in seconds since the Unix epoch. It is 0
-	// when the token manager cannot tell.
+	// expires_at is the token expiry as a Unix time. It is 0 if unknown.
 	ExpiresAt int64 `protobuf:"varint,2,opt,name=expires_at,json=expiresAt,proto3" json:"expires_at,omitempty"`
 }
 

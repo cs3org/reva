@@ -162,8 +162,7 @@ func ocmInviteAcceptCommand(rt *cli.Runtime) *cobra.Command {
 	return cmd
 }
 
-// splitInvite reads the token and the provider domain from an invitation
-// link. A plain token gives an empty domain.
+// splitInvite returns an empty domain for a plain token.
 func splitInvite(arg string) (token, domain string) {
 	u, err := url.Parse(arg)
 	if err != nil || u.Host == "" {
@@ -220,9 +219,8 @@ func ocmContactsCommand(rt *cli.Runtime) *cobra.Command {
 	return cmd
 }
 
-// removeContact removes the contact with the address that a person types.
-// The remote provider assigns the user id, which is often not the name in
-// the address, so it also matches the mail.
+// The remote provider assigns the user id, which is often not the name in the
+// address, so removeContact also matches the mail.
 func removeContact(cmd *cobra.Command, rt *cli.Runtime, b backend.Backend, contacts []*userpb.User, address string) error {
 	if !strings.Contains(address, "@") {
 		return errors.New("--remove takes an address like user@their-provider.org")

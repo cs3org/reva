@@ -63,8 +63,8 @@ type ArgSpec struct {
 	Enum []string
 }
 
-// Enumerated is an optional interface of an argument type that has a fixed
-// set of values. The catalog lists them, and bind refuses other values.
+// Enumerated is implemented by an argument type that has a fixed set of
+// values.
 type Enumerated interface {
 	Values() []string
 }

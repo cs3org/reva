@@ -139,8 +139,8 @@ func (i *interceptor) unary(unprotected []string) grpc.UnaryServerInterceptor {
 			return nil, status.Errorf(codes.Unauthenticated, "auth: core access token not found")
 		}
 
-		// An admin method is scoped by its name, not by its request message: a
-		// typed admin RPC can take a CS3 request, which user scopes accept.
+		// Scope an admin method by its name: a typed admin RPC can take a CS3
+		// request, which user scopes accept.
 		resource := req
 		if scope.IsAdminMethod(info.FullMethod) {
 			resource = scope.MethodResource(info.FullMethod)
@@ -217,10 +217,8 @@ func tokenError(ctx context.Context, err error) error {
 // request's logs are searchable by user (reva trace --user).
 func withUserLogger(ctx context.Context, username string, scopes map[string]*authpb.Scope) context.Context {
 	if act := scope.Actor(scopes); act != "" {
-		// Update the request logger in place: the log interceptor holds it, and
-		// writes the request line with it when the call ends. The appctx
-		// interceptor makes one logger for each request, so no other request
-		// sees this.
+		// Update the logger in place: the log interceptor writes the request
+		// line with it when the call ends. Each request has its own logger.
 		appctx.GetLogger(ctx).UpdateContext(func(c zerolog.Context) zerolog.Context { return c.Str("act", act) })
 	}
 	l := appctx.GetLogger(ctx).With().Str("user", username).Logger()

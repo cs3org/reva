@@ -154,7 +154,6 @@ func notFound(p string) error {
 
 func notAvailable(what string) error { return backend.NotAvailable(Transport, what) }
 
-// lookup returns the file of ref, which has a path or a resource id.
 func (b *Backend) lookup(ref *provider.Reference) (string, *file, error) {
 	if ref.GetResourceId() != nil {
 		for p, f := range b.files {
@@ -183,7 +182,6 @@ func (b *Backend) children(dir string) []string {
 	return out
 }
 
-// subtree returns p and all that is below it.
 func (b *Backend) subtree(p string) []string {
 	var out []string
 	for q := range b.files {

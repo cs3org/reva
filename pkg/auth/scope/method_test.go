@@ -32,8 +32,6 @@ import (
 	"google.golang.org/protobuf/reflect/protoregistry"
 )
 
-// methods returns the full gRPC method names of every service in the proto
-// packages that match.
 func methods(match func(pkg string) bool) []string {
 	var out []string
 	protoregistry.GlobalFiles.RangeFiles(func(f protoreflect.FileDescriptor) bool {
@@ -63,9 +61,7 @@ func mustScopes(t *testing.T, add ...func(map[string]*authpb.Scope) (map[string]
 	return scopes
 }
 
-// TestEveryAdminMethodNeedsTheAdminScope walks every service of the admin and
-// control packages, so that a new typed admin service is covered without a
-// change to the scopes.
+// This walks every service, so a new typed admin service needs no change here.
 func TestEveryAdminMethodNeedsTheAdminScope(t *testing.T) {
 	ctx := context.Background()
 	lightweight := func(s map[string]*authpb.Scope) (map[string]*authpb.Scope, error) {
@@ -102,8 +98,7 @@ func TestEveryAdminMethodNeedsTheAdminScope(t *testing.T) {
 	}
 }
 
-// protoServices lists the full names of every registered service, also the
-// services that have no methods yet.
+// protoServices lists every registered service, also those without methods.
 func protoServices() []string {
 	var out []string
 	protoregistry.GlobalFiles.RangeFiles(func(f protoreflect.FileDescriptor) bool {
@@ -115,8 +110,6 @@ func protoServices() []string {
 	return out
 }
 
-// TestAdminTokenSatisfiesNoCS3Request walks every registered CS3 request
-// message and CS3 method.
 func TestAdminTokenSatisfiesNoCS3Request(t *testing.T) {
 	ctx := context.Background()
 	admin := mustScopes(t, AddAdminScope)

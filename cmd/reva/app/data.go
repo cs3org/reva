@@ -100,8 +100,6 @@ func cpCommand(rt *cli.Runtime) *cobra.Command {
 	return cmd
 }
 
-// splitTransferArg removes the prefix of a cp argument and reports whether
-// the argument is remote.
 func splitTransferArg(arg string) (string, bool) {
 	if rest, ok := strings.CutPrefix(arg, localPrefix); ok {
 		return rest, false

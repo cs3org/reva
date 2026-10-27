@@ -149,8 +149,6 @@ func touchCommand(rt *cli.Runtime) *cobra.Command {
 	}
 }
 
-// completeRemotePath completes the first n arguments as remote paths, by
-// listing the folder of the word under the cursor.
 func completeRemotePath(rt *cli.Runtime, n int) cobra.CompletionFunc {
 	return func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
 		if len(args) >= n {

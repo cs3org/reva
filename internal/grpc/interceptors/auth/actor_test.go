@@ -36,9 +36,6 @@ import (
 	"google.golang.org/grpc"
 )
 
-// TestLogsShowTheActor runs a call through the interceptors in the order of
-// revad, and asserts that the request log line and the audit events of an
-// impersonated token show the actor, and that those of a login token do not.
 func TestLogsShowTheActor(t *testing.T) {
 	interceptor, login, u := setup(t)
 	_ = userGroupsCache.Set(u.Id.OpaqueId, []string{"physicists"})

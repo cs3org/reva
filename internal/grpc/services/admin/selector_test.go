@@ -84,8 +84,6 @@ func TestResolveSelectorByMetadata(t *testing.T) {
 	}
 }
 
-// A shared invocation goes to one of the matching instances, any other
-// invocation to each of them.
 func TestResolveSelectorByMetadataRoutesShared(t *testing.T) {
 	_, eps, err := client.Resolve(mountRegistry(t), "storageprovider[mount_id=eoshome-i01]")
 	if err != nil {

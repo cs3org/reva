@@ -16,11 +16,10 @@
 // granted to it by virtue of its status as an Intergovernmental Organization
 // or submit itself to any jurisdiction.
 
-// Package kerberos is the kerberos credential provider of the CLI. It reads
-// the ticket that kinit stored in a FILE: credential cache and builds the
-// SPNEGO token that the kerberos auth manager of reva accepts
-// (pkg/auth/manager/kerberos). The same token goes in the ClientSecret of a
-// gRPC Authenticate call, or after "Negotiate " in an HTTP Authorization header.
+// Package kerberos reads the ticket that kinit stored in a FILE: credential
+// cache and builds the SPNEGO token that the kerberos auth manager accepts.
+// The token goes in the ClientSecret of a gRPC Authenticate call, or after
+// "Negotiate " in an HTTP Authorization header.
 package kerberos
 
 import (
@@ -47,8 +46,6 @@ type Ticket struct {
 	Principal string
 	Realm     string
 	CachePath string
-	// Expires is the end time of the ticket-granting ticket.
-	Expires time.Time
 }
 
 // Username is the principal without its realm.
@@ -166,7 +163,6 @@ func (p *Provider) load() (cc *credentials.CCache, t *Ticket, err error) {
 	if !ok {
 		return nil, nil, fmt.Errorf("no ticket-granting ticket for %s in %s: run kinit", t.Principal, path)
 	}
-	t.Expires = tgt.EndTime
 	// gokrb5 can only renew an expired ticket with the password, so refuse it here
 	// with a clear message.
 	if !time.Now().Before(tgt.EndTime) {

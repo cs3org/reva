@@ -25,8 +25,8 @@ import (
 	"github.com/spf13/cobra"
 )
 
-// completionCommand replaces the completion command of cobra. Its bash
-// script also works without the bash-completion package.
+// completionCommand replaces the one of cobra, so that the bash script works
+// without the bash-completion package.
 func completionCommand() *cobra.Command {
 	return &cobra.Command{
 		Use:   "completion [bash|zsh|fish]",
@@ -57,9 +57,8 @@ func completionCommand() *cobra.Command {
 	}
 }
 
-// bashCompletionShims define the two functions of the bash-completion package
-// that the cobra script calls, only when they are missing. A real
-// bash-completion, loaded before or after, always wins.
+// bashCompletionShims define the two functions of bash-completion that the
+// cobra script calls, only when they are missing.
 const bashCompletionShims = `# Stand-ins for the bash-completion package, used only where it is not installed.
 if ! declare -F _get_comp_words_by_ref >/dev/null 2>&1; then
 _get_comp_words_by_ref()

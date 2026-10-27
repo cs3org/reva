@@ -32,8 +32,7 @@ import (
 	"github.com/BurntSushi/toml"
 )
 
-// Config is the config file, $XDG_CONFIG_HOME/reva/config.toml. The sections
-// follow the brand file of the CLI, so that one file format serves both.
+// Config is the config file, $XDG_CONFIG_HOME/reva/config.toml.
 type Config struct {
 	Connection struct {
 		Gateway   string `toml:"gateway,omitempty" json:"gateway,omitempty"`
@@ -46,14 +45,13 @@ type Config struct {
 			SPN string `toml:"spn,omitempty" json:"spn,omitempty"`
 		} `toml:"kerberos,omitempty" json:"kerberos,omitzero"`
 	} `toml:"auth,omitempty" json:"auth,omitzero"`
-	// Plugins are the [plugins.<name>] sections. They are kept as they are,
-	// so that WriteConfig does not drop them, and each plugin decodes its own.
+	// Plugins keeps the [plugins.<name>] sections undecoded, so that
+	// WriteConfig does not drop them.
 	Plugins map[string]map[string]any `toml:"plugins,omitempty" json:"plugins,omitempty"`
 }
 
 // ReadConfig returns the stored config. A missing file gives an empty config.
-// When the file is missing but the legacy ~/.reva.config exists, ReadConfig
-// copies it to the new file, so it reads the legacy file only once.
+// It copies a legacy ~/.reva.config to the new file once.
 func ReadConfig() (Config, error) {
 	var c Config
 	p, err := ConfigPath()

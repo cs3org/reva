@@ -22,8 +22,6 @@ package reva.admin.v1beta1;
 
 option go_package = "github.com/cs3org/reva/v3/pkg/admin/adminpb";
 
-// SpacesAdmin is the operator surface for storage spaces of any owner: the
-// fleet-wide list, the space catalogue, the status and the owner of a space,
-// and space quotas. Every method needs the admin scope.
+// SpacesAdmin is the operator API for the storage spaces of any owner.
 service SpacesAdmin {
 }

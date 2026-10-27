@@ -21,6 +21,7 @@ package grpc
 import (
 	"context"
 
+	gateway "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
 	collaboration "github.com/cs3org/go-cs3apis/cs3/sharing/collaboration/v1beta1"
 	link "github.com/cs3org/go-cs3apis/cs3/sharing/link/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
@@ -36,15 +37,11 @@ func shareRef(id string) *collaboration.ShareReference {
 }
 
 func (s shares) List(ctx context.Context, resource *provider.ResourceId) ([]*collaboration.Share, error) {
-	c, ctx, err := s.b.gw(ctx)
-	if err != nil {
-		return nil, err
-	}
 	req := &collaboration.ListSharesRequest{}
 	if resource != nil {
 		req.Filters = []*collaboration.Filter{share.ResourceIDFilter(resource)}
 	}
-	res, err := check(c.ListShares(ctx, req))
+	res, err := call(ctx, s.b, gateway.GatewayAPIClient.ListShares, req)
 	if err != nil {
 		return nil, err
 	}
@@ -52,11 +49,7 @@ func (s shares) List(ctx context.Context, resource *provider.ResourceId) ([]*col
 }
 
 func (s shares) Get(ctx context.Context, id string) (*collaboration.Share, error) {
-	c, ctx, err := s.b.gw(ctx)
-	if err != nil {
-		return nil, err
-	}
-	res, err := check(c.GetShare(ctx, &collaboration.GetShareRequest{Ref: shareRef(id)}))
+	res, err := call(ctx, s.b, gateway.GatewayAPIClient.GetShare, &collaboration.GetShareRequest{Ref: shareRef(id)})
 	if err != nil {
 		return nil, err
 	}
@@ -64,11 +57,7 @@ func (s shares) Get(ctx context.Context, id string) (*collaboration.Share, error
 }
 
 func (s shares) Create(ctx context.Context, req *collaboration.CreateShareRequest) (*collaboration.Share, error) {
-	c, ctx, err := s.b.gw(ctx)
-	if err != nil {
-		return nil, err
-	}
-	res, err := check(c.CreateShare(ctx, req))
+	res, err := call(ctx, s.b, gateway.GatewayAPIClient.CreateShare, req)
 	if err != nil {
 		return nil, err
 	}
@@ -76,11 +65,7 @@ func (s shares) Create(ctx context.Context, req *collaboration.CreateShareReques
 }
 
 func (s shares) Update(ctx context.Context, req *collaboration.UpdateShareRequest) (*collaboration.Share, error) {
-	c, ctx, err := s.b.gw(ctx)
-	if err != nil {
-		return nil, err
-	}
-	res, err := check(c.UpdateShare(ctx, req))
+	res, err := call(ctx, s.b, gateway.GatewayAPIClient.UpdateShare, req)
 	if err != nil {
 		return nil, err
 	}
@@ -88,20 +73,12 @@ func (s shares) Update(ctx context.Context, req *collaboration.UpdateShareReques
 }
 
 func (s shares) Remove(ctx context.Context, id string) error {
-	c, ctx, err := s.b.gw(ctx)
-	if err != nil {
-		return err
-	}
-	_, err = check(c.RemoveShare(ctx, &collaboration.RemoveShareRequest{Ref: shareRef(id)}))
+	_, err := call(ctx, s.b, gateway.GatewayAPIClient.RemoveShare, &collaboration.RemoveShareRequest{Ref: shareRef(id)})
 	return err
 }
 
 func (s shares) Received(ctx context.Context) ([]*collaboration.ReceivedShare, error) {
-	c, ctx, err := s.b.gw(ctx)
-	if err != nil {
-		return nil, err
-	}
-	res, err := check(c.ListReceivedShares(ctx, &collaboration.ListReceivedSharesRequest{}))
+	res, err := call(ctx, s.b, gateway.GatewayAPIClient.ListReceivedShares, &collaboration.ListReceivedSharesRequest{})
 	if err != nil {
 		return nil, err
 	}
@@ -166,11 +143,7 @@ func (l links) List(ctx context.Context, resource *provider.ResourceId) ([]*link
 }
 
 func (l links) Get(ctx context.Context, ref *link.PublicShareReference) (*link.PublicShare, error) {
-	c, ctx, err := l.b.gw(ctx)
-	if err != nil {
-		return nil, err
-	}
-	res, err := check(c.GetPublicShare(ctx, &link.GetPublicShareRequest{Ref: ref}))
+	res, err := call(ctx, l.b, gateway.GatewayAPIClient.GetPublicShare, &link.GetPublicShareRequest{Ref: ref})
 	if err != nil {
 		return nil, err
 	}
@@ -178,11 +151,7 @@ func (l links) Get(ctx context.Context, ref *link.PublicShareReference) (*link.P
 }
 
 func (l links) Create(ctx context.Context, req *link.CreatePublicShareRequest) (*link.PublicShare, error) {
-	c, ctx, err := l.b.gw(ctx)
-	if err != nil {
-		return nil, err
-	}
-	res, err := check(c.CreatePublicShare(ctx, req))
+	res, err := call(ctx, l.b, gateway.GatewayAPIClient.CreatePublicShare, req)
 	if err != nil {
 		return nil, err
 	}
@@ -190,11 +159,7 @@ func (l links) Create(ctx context.Context, req *link.CreatePublicShareRequest) (
 }
 
 func (l links) Update(ctx context.Context, req *link.UpdatePublicShareRequest) (*link.PublicShare, error) {
-	c, ctx, err := l.b.gw(ctx)
-	if err != nil {
-		return nil, err
-	}
-	res, err := check(c.UpdatePublicShare(ctx, req))
+	res, err := call(ctx, l.b, gateway.GatewayAPIClient.UpdatePublicShare, req)
 	if err != nil {
 		return nil, err
 	}
@@ -202,10 +167,6 @@ func (l links) Update(ctx context.Context, req *link.UpdatePublicShareRequest) (
 }
 
 func (l links) Remove(ctx context.Context, ref *link.PublicShareReference) error {
-	c, ctx, err := l.b.gw(ctx)
-	if err != nil {
-		return err
-	}
-	_, err = check(c.RemovePublicShare(ctx, &link.RemovePublicShareRequest{Ref: ref}))
+	_, err := call(ctx, l.b, gateway.GatewayAPIClient.RemovePublicShare, &link.RemovePublicShareRequest{Ref: ref})
 	return err
 }

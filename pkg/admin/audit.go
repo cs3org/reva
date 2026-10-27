@@ -48,8 +48,7 @@ type AuditEvent struct {
 
 // Audit emits a structured audit event (audit=true) on the context logger.
 // Denials and failures are logged at error level, successes at info. It reads
-// the ReasonHeader of the incoming call itself, so that each audit line has
-// the reason, also when no interceptor ran (the local socket).
+// the reason header itself, because no interceptor runs on the local socket.
 func Audit(ctx context.Context, ev AuditEvent) {
 	log := appctx.GetLogger(ctx)
 	e := log.Info()
