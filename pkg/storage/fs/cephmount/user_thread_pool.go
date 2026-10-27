@@ -30,7 +30,6 @@ import (
 	"strings"
 	"sync"
 	"sync/atomic"
-	"syscall"
 	"time"
 
 	userv1beta1 "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
@@ -477,7 +476,7 @@ func (ut *UserThread) run() {
 	defer runtime.UnlockOSThread()
 
 	// Get current thread ID
-	ut.threadID.Store(int32(getTID()))
+	ut.threadID.Store(int32(unix.Gettid()))
 
 	// Set the filesystem UID for this thread
 	originalFsuid := setfsuidSafe(-1)
@@ -597,23 +596,14 @@ func (ut *UserThread) GetStats() map[string]any {
 	}
 }
 
-// getTID gets the Linux thread ID
-func getTID() int {
-	const SYS_GETTID = 186
-	tid, _, _ := syscall.Syscall(SYS_GETTID, 0, 0, 0)
-	return int(tid)
-}
-
 // setfsuidSafe wraps the setfsuid syscall with error handling
 func setfsuidSafe(uid int) int {
-	const SYS_SETFSUID = 122
-	prevUID, _, _ := syscall.Syscall(SYS_SETFSUID, uintptr(uid), 0, 0)
-	return int(prevUID)
+	prevUID, _ := unix.SetfsuidRetUid(uid)
+	return prevUID
 }
 
 // setfsgidSafe wraps the setfsgid syscall with error handling
 func setfsgidSafe(gid int) int {
-	const SYS_SETFSGID = 123
-	prevGID, _, _ := syscall.Syscall(SYS_SETFSGID, uintptr(gid), 0, 0)
-	return int(prevGID)
+	prevGID, _ := unix.SetfsgidRetGid(gid)
+	return prevGID
 }
