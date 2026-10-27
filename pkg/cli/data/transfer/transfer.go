@@ -16,13 +16,9 @@
 // granted to it by virtue of its status as an Intergovernmental Organization
 // or submit itself to any jurisdiction.
 
-// Package transfer moves data between the local filesystem and the server, on
-// the metadata calls of a backend and the data plane.
-//
-// It exists to make three things routine rather than exceptional: an
-// interrupted transfer resumes instead of restarting, many small files go in
-// parallel instead of one round trip at a time, and what arrives is verified
-// against what was sent.
+// Package transfer moves files and trees between the local disk and the server.
+// Interrupted transfers resume, small files go in parallel, and the data can be
+// checked with checksums.
 package transfer
 
 import (
@@ -39,7 +35,7 @@ import (
 	"path"
 	"path/filepath"
 	"runtime"
-	"sort"
+	"slices"
 	"strings"
 	"sync"
 	"time"
@@ -48,67 +44,43 @@ import (
 	"github.com/cs3org/reva/v3/pkg/cli/backend"
 )
 
-// defaultChunkSize is the upload chunk used when the server advertises no
-// limit. Large enough that per-chunk overhead is negligible, small enough that
-// an interrupted transfer loses little.
-const defaultChunkSize = 8 << 20
-
-// defaultPutThreshold is the size below which a plain PUT beats TUS: setting up
-// a resumable upload costs two extra round trips, which dominates for a small
-// file.
+// defaultPutThreshold is the size below which a plain PUT is faster than TUS,
+// which costs two extra round trips.
 const defaultPutThreshold = 4 << 20
 
 // Event reports transfer progress.
 type Event struct {
-	// Path is the resource being transferred, as the user named it.
-	Path string
-	// Transferred is how many bytes have moved so far.
+	Path        string
 	Transferred int64
-	// Total is the size of the resource, or -1 when unknown.
+	// Total is -1 when the size is unknown.
 	Total int64
-	// Done reports whether this resource has finished.
-	Done bool
-	// Err is set when this resource failed.
-	Err error
+	Done  bool
+	Err   error
 }
 
-// ProgressFunc receives progress events. It may be called from several
-// goroutines at once, so implementations must be safe for concurrent use.
+// ProgressFunc receives progress events. It can be called from several
+// goroutines at once.
 type ProgressFunc func(Event)
 
 // Options configures an Engine.
 type Options struct {
-	// Jobs is the number of resources transferred concurrently.
-	Jobs int
-	// ChunkSize is the preferred upload chunk, clamped to what the server
-	// advertises.
+	Jobs      int
 	ChunkSize int64
-	// PutThreshold is the size at or above which an upload becomes resumable.
-	// Below it a plain PUT is faster, because setting up a TUS upload costs two
-	// extra round trips.
+	// PutThreshold is the size from which an upload is resumable.
 	PutThreshold int64
-	// DryRun reports what would happen without transferring anything.
-	DryRun bool
-	// Overwrite allows replacing an existing destination. Without it, an
-	// existing destination is skipped rather than clobbered.
+	DryRun       bool
+	// Overwrite replaces an existing destination. Without it, the engine skips it.
 	Overwrite bool
-	// Verify computes a checksum and asks the server to verify it.
-	Verify bool
-	// Archive allows a recursive download to be served by the archiver as a
-	// single stream, instead of one request per file.
-	Archive bool
-	// StateDir holds resumable-upload state between invocations.
+	Verify    bool
+	// Archive lets a recursive download use the archiver of the server.
+	Archive  bool
 	StateDir string
-	// Progress receives events.
 	Progress ProgressFunc
 }
 
 func (o *Options) applyDefaults() {
 	if o.Jobs <= 0 {
 		o.Jobs = min(8, max(2, runtime.NumCPU()))
-	}
-	if o.ChunkSize <= 0 {
-		o.ChunkSize = defaultChunkSize
 	}
 	if o.PutThreshold <= 0 {
 		o.PutThreshold = defaultPutThreshold
@@ -118,8 +90,8 @@ func (o *Options) applyDefaults() {
 	}
 }
 
-// DefaultStateDir returns where resumable-upload state is kept, for the
-// program with the config dir name.
+// DefaultStateDir returns the directory of the upload state of the program
+// called name.
 func DefaultStateDir(name string) string {
 	if dir, err := os.UserCacheDir(); err == nil {
 		return filepath.Join(dir, name, "uploads")
@@ -142,15 +114,11 @@ type Engine struct {
 	opts Options
 }
 
-// New returns an Engine on the metadata calls f and the data plane d of the
-// same server.
+// New returns an Engine on the files f and the data plane d of one server.
 func New(f backend.Files, d backend.DataPlane, opts Options) *Engine {
 	opts.applyDefaults()
 	return &Engine{c: remote{f: f, d: d}, opts: opts}
 }
-
-// Options returns the effective options, after defaults.
-func (e *Engine) Options() Options { return e.opts }
 
 func (e *Engine) emit(ev Event) {
 	if e.opts.Progress != nil {
@@ -158,9 +126,7 @@ func (e *Engine) emit(ev Event) {
 	}
 }
 
-// -- upload -------------------------------------------------------------------
-
-// UploadFile sends one local file to a the server path.
+// UploadFile sends one local file to remotePath.
 func (e *Engine) UploadFile(ctx context.Context, localPath, remotePath string) (int64, error) {
 	info, err := os.Stat(localPath)
 	if err != nil {
@@ -204,12 +170,11 @@ func (e *Engine) UploadFile(ctx context.Context, localPath, remotePath string) (
 	return e.resumableUpload(ctx, localPath, remotePath, info, checksum)
 }
 
-// errSkipped signals that a resource was intentionally not transferred. It is
-// handled inside the engine and never reaches a caller.
+// errSkipped is the error of UploadFile and DownloadFile for a skipped file.
 var errSkipped = errors.New("skipped")
 
-// simpleUpload lets the data plane compute the checksum of the type that
-// the server prefers, when checksum says to verify.
+// simpleUpload asks the data plane to use the checksum type that the server
+// prefers.
 func (e *Engine) simpleUpload(ctx context.Context, localPath, remotePath string, size int64, checksum string) error {
 	body := func() (io.ReadCloser, error) { return os.Open(localPath) }
 	xs := ""
@@ -219,27 +184,23 @@ func (e *Engine) simpleUpload(ctx context.Context, localPath, remotePath string,
 	return e.c.Upload(ctx, remotePath, body, size, xs)
 }
 
-// resumableUpload transfers a large file with TUS, continuing a previous
-// attempt when one is recorded. The state is saved after each part, so
-// that an interrupted transfer continues on the next run.
+// resumableUpload uses TUS and continues the recorded attempt, if there is one.
 func (e *Engine) resumableUpload(ctx context.Context, localPath, remotePath string, info os.FileInfo, checksum string) (int64, error) {
 	open := func() (io.ReadCloser, error) { return os.Open(localPath) }
 	var last backend.Upload
 	progress := func(up backend.Upload) {
 		last = up
-		e.saveState(localPath, remotePath, &up, up.Offset)
+		e.saveState(localPath, remotePath, &up)
 		e.emit(Event{Path: remotePath, Transferred: up.Offset, Total: info.Size()})
 	}
 	start := int64(0)
 	var err error
 	if up, ok := e.loadState(localPath, remotePath, info); ok {
 		start = up.Offset
-		// The offset of the server is the only one to trust: the recorded
-		// progress can be ahead of what it committed.
+		// The recorded offset can be ahead of the server, so ResumeUpload asks it.
 		err = e.c.d.ResumeUpload(ctx, *up, open, progress)
 		if backend.IsNotFound(err) {
-			// The upload that the server knew is gone: start a new one rather
-			// than fail with a state file that the user does not know of.
+			// The server forgot the upload: start a new one.
 			e.clearState(localPath, remotePath)
 			start = 0
 			err = e.c.d.UploadResumable(ctx, ref(remotePath), open, info.Size(), checksum, progress)
@@ -273,16 +234,10 @@ func (e *Engine) UploadTree(ctx context.Context, localRoot, remoteRoot string) (
 		return nil, cberr.Wrap(cberr.KindNotFound, "read", localRoot, err)
 	}
 	if !info.IsDir() {
-		n, err := e.UploadFile(ctx, localRoot, remoteRoot)
-		if errors.Is(err, errSkipped) {
-			stats.Skipped++
-			stats.Duration = time.Since(start)
-			return stats, nil
-		}
-		if err != nil {
+		if err := stats.add(e.UploadFile(ctx, localRoot, remoteRoot)); err != nil {
 			return nil, err
 		}
-		stats.Files, stats.Bytes, stats.Duration = 1, n, time.Since(start)
+		stats.Duration = time.Since(start)
 		return stats, nil
 	}
 
@@ -291,21 +246,15 @@ func (e *Engine) UploadTree(ctx context.Context, localRoot, remoteRoot string) (
 		return nil, err
 	}
 
-	// Directories first, shallowest to deepest, so every file has a parent by
-	// the time it is uploaded.
 	for _, rel := range dirs {
-		remote := path.Join(remoteRoot, filepath.ToSlash(rel))
-		if e.opts.DryRun {
-			stats.Dirs++
-			continue
-		}
-		if err := e.c.Mkdir(ctx, remote, true); err != nil {
-			return nil, err
+		if !e.opts.DryRun {
+			if err := e.c.Mkdir(ctx, path.Join(remoteRoot, rel), true); err != nil {
+				return nil, err
+			}
 		}
 		stats.Dirs++
 	}
 	if e.opts.DryRun {
-		// A dry run still needs the root itself counted.
 		stats.Dirs++
 	} else if err := e.c.Mkdir(ctx, remoteRoot, true); err != nil {
 		return nil, err
@@ -313,36 +262,31 @@ func (e *Engine) UploadTree(ctx context.Context, localRoot, remoteRoot string) (
 
 	var mu sync.Mutex
 	err = e.eachParallel(ctx, len(files), func(ctx context.Context, i int) error {
-		rel := files[i]
-		local := filepath.Join(localRoot, rel)
-		remote := path.Join(remoteRoot, filepath.ToSlash(rel))
-
-		n, err := e.UploadFile(ctx, local, remote)
+		n, err := e.UploadFile(ctx, filepath.Join(localRoot, files[i]), path.Join(remoteRoot, files[i]))
 		mu.Lock()
 		defer mu.Unlock()
-		switch {
-		case errors.Is(err, errSkipped):
-			stats.Skipped++
-			return nil
-		case err != nil:
-			return err
-		default:
-			stats.Files++
-			stats.Bytes += n
-			return nil
-		}
+		return stats.add(n, err)
 	})
 	stats.Duration = time.Since(start)
-	if err != nil {
-		return stats, err
-	}
-	return stats, nil
+	return stats, err
 }
 
-// -- download -----------------------------------------------------------------
+// add counts the result of one file and returns its error, unless it was skipped.
+func (s *Stats) add(n int64, err error) error {
+	switch {
+	case errors.Is(err, errSkipped):
+		s.Skipped++
+	case err != nil:
+		return err
+	default:
+		s.Files++
+		s.Bytes += n
+	}
+	return nil
+}
 
-// DownloadFile fetches one the server file to a local path, resuming a partial
-// transfer when one is present.
+// DownloadFile fetches one server file to localPath. It resumes a partial
+// transfer.
 func (e *Engine) DownloadFile(ctx context.Context, remotePath, localPath string) (int64, error) {
 	info, err := e.c.Stat(ctx, remotePath)
 	if err != nil {
@@ -367,9 +311,8 @@ func (e *Engine) DownloadFile(ctx context.Context, remotePath, localPath string)
 		return 0, cberr.Wrap(cberr.KindOther, "create", filepath.Dir(localPath), err)
 	}
 
-	// Download into a sibling .part file. A consumer watching the destination
-	// never sees a truncated file, and an interrupted transfer leaves something
-	// to resume from.
+	// Readers of the destination never see a truncated file, and an interrupted
+	// transfer leaves a .part file to resume from.
 	partPath := localPath + ".part"
 	offset := int64(0)
 	if st, err := os.Stat(partPath); err == nil && st.Size() < info.Size {
@@ -416,12 +359,8 @@ func (e *Engine) DownloadFile(ctx context.Context, remotePath, localPath string)
 	return written, nil
 }
 
-// DownloadTree fetches a the server directory tree.
-//
-// When the server has an archiver and the tree fits its limits, the whole tree
-// comes down as one stream. The alternative: PROPFIND the tree, then one GET
-// per file: costs a round trip per file, which is what dominates the time for
-// a directory of many small files.
+// DownloadTree fetches a server directory tree. When the archiver can serve it,
+// the tree comes as one stream, which saves a round trip per file.
 func (e *Engine) DownloadTree(ctx context.Context, remoteRoot, localRoot string) (*Stats, error) {
 	start := time.Now()
 
@@ -431,16 +370,10 @@ func (e *Engine) DownloadTree(ctx context.Context, remoteRoot, localRoot string)
 	}
 	if !info.IsDir {
 		stats := &Stats{}
-		n, err := e.DownloadFile(ctx, remoteRoot, localRoot)
-		if errors.Is(err, errSkipped) {
-			stats.Skipped++
-			stats.Duration = time.Since(start)
-			return stats, nil
-		}
-		if err != nil {
+		if err := stats.add(e.DownloadFile(ctx, remoteRoot, localRoot)); err != nil {
 			return nil, err
 		}
-		stats.Files, stats.Bytes, stats.Duration = 1, n, time.Since(start)
+		stats.Duration = time.Since(start)
 		return stats, nil
 	}
 
@@ -450,8 +383,7 @@ func (e *Engine) DownloadTree(ctx context.Context, remoteRoot, localRoot string)
 			stats.Duration = time.Since(start)
 			return stats, nil
 		}
-		// Falling back is the right move: the archiver may be absent, or the
-		// tree may exceed its limits, and neither should fail the command.
+		// The archiver may be absent, or the tree too big for it: fall back.
 		e.emit(Event{Path: remoteRoot, Err: err})
 	}
 
@@ -490,26 +422,12 @@ func (e *Engine) walkDownload(ctx context.Context, remoteRoot, localRoot string,
 		n, err := e.DownloadFile(ctx, jobs[i].remote, jobs[i].local)
 		mu.Lock()
 		defer mu.Unlock()
-		switch {
-		case errors.Is(err, errSkipped):
-			stats.Skipped++
-			return nil
-		case err != nil:
-			return err
-		default:
-			stats.Files++
-			stats.Bytes += n
-			return nil
-		}
+		return stats.add(n, err)
 	})
 	stats.Duration = time.Since(start)
 	return stats, err
 }
 
-// -- helpers ------------------------------------------------------------------
-
-// eachParallel runs fn for each index with at most Jobs in flight, stopping
-// early on the first error.
 func (e *Engine) eachParallel(ctx context.Context, n int, fn func(context.Context, int) error) error {
 	if n == 0 {
 		return nil
@@ -570,8 +488,7 @@ func (e *Engine) copyWithProgress(ctx context.Context, dst io.Writer, src io.Rea
 				return written, cberr.Wrap(cberr.KindOther, "write", name, err)
 			}
 			written += int64(n)
-			// Rate-limit events: a progress bar redrawn per 256 KiB read is
-			// wasted work on a fast link.
+			// A redraw per read is wasted work on a fast link.
 			if time.Since(lastEmit) > 100*time.Millisecond {
 				e.emit(Event{Path: name, Transferred: offset + written, Total: total})
 				lastEmit = time.Now()
@@ -586,8 +503,8 @@ func (e *Engine) copyWithProgress(ctx context.Context, dst io.Writer, src io.Rea
 	}
 }
 
-// walkLocal returns directories shallowest-first and files, both relative to
-// root.
+// walkLocal returns the directories, shallowest first, and the files, as slash
+// paths relative to root.
 func walkLocal(root string) (dirs, files []string, err error) {
 	err = filepath.WalkDir(root, func(p string, d os.DirEntry, err error) error {
 		if err != nil {
@@ -600,12 +517,12 @@ func walkLocal(root string) (dirs, files []string, err error) {
 		if rel == "." {
 			return nil
 		}
+		rel = filepath.ToSlash(rel)
 		if d.IsDir() {
 			dirs = append(dirs, rel)
 			return nil
 		}
-		// Symlinks are not followed: copying the target under the link's name
-		// silently changes the shape of what the user asked to transfer.
+		// Copying the target of a link under its name would change the tree.
 		if d.Type()&os.ModeSymlink != 0 {
 			return nil
 		}
@@ -615,19 +532,13 @@ func walkLocal(root string) (dirs, files []string, err error) {
 	if err != nil {
 		return nil, nil, cberr.Wrap(cberr.KindOther, "read", root, err)
 	}
-	sort.Slice(dirs, func(i, j int) bool {
-		di, dj := strings.Count(dirs[i], string(os.PathSeparator)), strings.Count(dirs[j], string(os.PathSeparator))
-		if di != dj {
-			return di < dj
-		}
-		return dirs[i] < dirs[j]
-	})
-	sort.Strings(files)
+	slices.SortFunc(dirs, byDepth)
+	slices.Sort(files)
 	return dirs, files, nil
 }
 
-// fileChecksum computes a checksum in the algorithm the server prefers,
-// formatted the way OC-Checksum expects.
+// fileChecksum returns the checksum in the first algorithm of the server, in
+// the OC-Checksum format.
 func (e *Engine) fileChecksum(ctx context.Context, localPath string) (string, error) {
 	caps := e.c.caps(ctx)
 	if len(caps.Checksums) == 0 {
@@ -671,9 +582,8 @@ func checksumFile(localPath, algo string) (string, error) {
 	return hex.EncodeToString(h.Sum(nil)), nil
 }
 
-// verifyLocalChecksum checks a downloaded file against the server's checksums.
-// Only algorithms both sides know are compared; a server that reports none
-// leaves the file unverified rather than failing.
+// verifyLocalChecksum compares a file with the checksums of the server. A
+// server without a known checksum leaves the file unverified.
 func verifyLocalChecksum(localPath string, serverSums map[string]string) error {
 	for _, algo := range []string{"sha1", "md5", "adler32"} {
 		want, ok := serverSums[algo]

@@ -32,30 +32,22 @@ import (
 )
 
 const (
-	// hiddenAnnotation marks what help hides because of the brand: "operator"
-	// or "group". help --all shows it again.
+	// hiddenAnnotation marks what help hides. help --all shows it again.
 	hiddenAnnotation = "reva.hidden"
 	helpAnnotation   = "reva.help"
-	// brandCheckArg makes Main check the brand and the plugins of the build
-	// and exit, so that gaia can check a build with plugins before it ships:
-	// go run . __brandcheck.
+	// brandCheckArg makes Main check the brand and the plugins, then exit. Gaia
+	// runs it on a build with plugins.
 	brandCheckArg = "__brandcheck"
 )
 
-// WithBrand builds the program of the brand b: its name, its defaults, its
-// env names and its texts. A build embeds the brand file:
-//
-//	//go:embed brand.toml
-//	var embedded []byte
-//
-//	func main() { revacmd.Main(revacmd.WithBrand(brand.MustParse(embedded))) }
+// WithBrand sets the brand of the program: its name, defaults, env names and
+// texts.
 func WithBrand(b *brand.Brand) Option {
 	return func(o *options) { o.brand = b }
 }
 
-// CheckBrand checks b against the build it runs in: every provider of
-// auth.chain is built in or a cli.auth.* plugin, and every group of ui.hide
-// is a help group of the root.
+// CheckBrand checks that every provider of auth.chain is in the build, and that
+// every group of ui.hide is a help group.
 func CheckBrand(b *brand.Brand) error {
 	var errs []error
 	providers := cli.AuthProviders()
@@ -80,11 +72,8 @@ func CheckBrand(b *brand.Brand) error {
 	return errors.Join(errs...)
 }
 
-// commandName matches the program name where a text shows a command line.
 var commandName = regexp.MustCompile("(^|[\\s'\"`(])reva ")
 
-// applyBrand gives the tree of the core and the plugins the name and the
-// texts of the brand, and hides what the brand keeps out of help.
 func applyBrand(rt *cli.Runtime, root *cobra.Command) {
 	b := rt.Brand()
 	root.Short = b.Program.Short
@@ -107,8 +96,7 @@ func applyBrand(rt *cli.Runtime, root *cobra.Command) {
 		}
 	})
 	if !rt.ShowOperators() {
-		// Only auto tells how many it hides: hide is for a build whose users
-		// never need them.
+		// Only auto tells how many it hides. A build with hide has no use for them.
 		why := "operator"
 		if mode, _ := rt.Setting("operator_commands"); mode == "hide" {
 			why = "operator-quiet"
@@ -149,7 +137,6 @@ func hide(c *cobra.Command, why string) {
 	c.Annotations[hiddenAnnotation] = why
 }
 
-// showAll shows again what applyBrand hid, for help --all.
 func showAll(root *cobra.Command) {
 	walk(root, func(c *cobra.Command) {
 		if c.Annotations[hiddenAnnotation] != "" {
@@ -163,7 +150,6 @@ func showAll(root *cobra.Command) {
 	})
 }
 
-// helpCommand replaces the help command of cobra, to add --all.
 func helpCommand() *cobra.Command {
 	var all bool
 	cmd := &cobra.Command{
@@ -202,9 +188,8 @@ func helpCommand() *cobra.Command {
 	return cmd
 }
 
-// helpTemplate edits the usage template of root: a help group with no
-// command to show has no title, and a command with hidden operator
-// subcommands says how many there are.
+// helpTemplate hides the title of a help group with no command, and adds the
+// number of hidden operator commands.
 func helpTemplate(root *cobra.Command) {
 	cobra.AddTemplateFunc("groupHasCommands", func(c *cobra.Command, id string) bool {
 		return slices.ContainsFunc(c.Commands(), func(s *cobra.Command) bool {

@@ -37,19 +37,16 @@ import (
 	"github.com/spf13/pflag"
 )
 
-// setting is one setting of the runtime. Its value comes from the first
-// layer that has a value that is not empty: the flag, the env names of the
-// brand, the user config, the system config, the brand, the built-in
-// default.
+// setting is one setting of the runtime. The first layer with a value that
+// is not empty wins.
 type setting struct {
-	key     string // the key in [env] of the brand
-	flag    string
-	short   string
-	usage   string
-	builtin string
-	// builtinFn is for a built-in default that a variable holds.
+	key       string // the key in [env] of the brand
+	flag      string
+	short     string
+	usage     string
+	builtin   string
 	builtinFn func() string
-	// secret keeps the value out of the flag default that help shows.
+	// secret keeps the value out of the flag default in help.
 	secret bool
 	field  func(r *Runtime) any // *string or *bool
 	config func(c *state.Config) string
@@ -116,15 +113,13 @@ var settings = []setting{
 		brand:  func(b *brand.Brand) string { return b.UI.OperatorCommands }},
 }
 
-// value is the resolved value of a setting, and where it comes from.
 type value struct {
 	v, from string
 }
 
 // NewRuntime returns a runtime for the brand b, nil for the reva brand. It
-// resolves the settings from the environment, the config files and the
-// brand at once, before the command tree is built, so that help and
-// completion see them too. The flags override them when they are parsed.
+// resolves the settings before the command tree is built, so that help and
+// completion see them.
 func NewRuntime(b *brand.Brand) *Runtime {
 	r := &Runtime{brand: b}
 	r.resolve()
@@ -254,8 +249,7 @@ func (s setting) get(r *Runtime) string {
 	return ""
 }
 
-// addSettingFlags adds the flags of the settings. The default of a flag is
-// the resolved value, so that help shows it.
+// addSettingFlags uses the resolved value as the default, so that help shows it.
 func (r *Runtime) addSettingFlags(fs *pflag.FlagSet) {
 	if !r.resolved {
 		r.resolve()
@@ -286,9 +280,8 @@ func (r *Runtime) envHint(key string) string {
 	return ""
 }
 
-// Load runs when the flags are parsed. It reports the errors of the
-// settings, and records which ones the flags set. A command runs it in the
-// hook of the root; a completion function calls it itself.
+// Load reports the errors of the settings, and records which ones the flags
+// set. Run it after the flags are parsed.
 func (r *Runtime) Load(flags *pflag.FlagSet) error {
 	if !r.resolved {
 		r.resolve()
@@ -322,8 +315,7 @@ func (r *Runtime) Load(flags *pflag.FlagSet) error {
 }
 
 // Setting returns the value of a setting, a key of [env] of the brand, and
-// where it comes from: a flag, an env name, a config file, the brand or
-// built-in.
+// where it comes from.
 func (r *Runtime) Setting(key string) (v, from string) {
 	if !r.resolved {
 		r.resolve()
@@ -337,9 +329,9 @@ var stderr io.Writer = os.Stderr
 
 var foreignEnvOnce sync.Once
 
-// warnForeignEnv warns once when a build that is not reva sees a REVA_*
-// variable, so that a script written for reva does not reach the wrong
-// deployment without a sign.
+// warnForeignEnv warns once about REVA_* variables in a build that is not
+// reva, so that a script for reva does not reach the wrong deployment
+// silently.
 func warnForeignEnv(b *brand.Brand) {
 	if b.Name() == "reva" {
 		return
@@ -366,7 +358,6 @@ func warnForeignEnv(b *brand.Brand) {
 	})
 }
 
-// notSet is the error for a missing address, with the ways to set it.
 func (r *Runtime) notSet(what, key, flag, example string) error {
 	hint := "pass " + flag
 	if names := r.Brand().Env.Names(key); len(names) > 0 {
@@ -375,12 +366,10 @@ func (r *Runtime) notSet(what, key, flag, example string) error {
 	return fmt.Errorf("%s not set: %s or run `%s config set %s`", what, hint, r.Name(), example)
 }
 
-// defaultAuthTypes are the auth types of a stock reva gateway.
 var defaultAuthTypes = map[string]string{"app-token": "appauth", "basic": "basic", "kerberos": "kerberos", "bearer": "bearer"}
 
-// AuthType returns the auth type of the gateway for a kind of credential
-// (app-token, basic, kerberos, bearer): from auth.types of the brand, else
-// the name of a stock reva gateway.
+// AuthType returns the auth type of the gateway for a kind of credential.
+// Without auth.types in the brand, it uses the names of a stock reva gateway.
 func (r *Runtime) AuthType(kind string) string {
 	if t := r.Brand().Auth.Types[kind]; t != "" {
 		return t
@@ -392,10 +381,9 @@ func (r *Runtime) AuthType(kind string) string {
 }
 
 // ShowOperators reports whether help shows the operator commands and
-// options, from ui.operator_commands: always with show, never with hide.
-// With auto, only for an operator: when the local admin socket answers, an
-// admin host is configured, or an admin token of elevate exists. It makes no
-// network call, and hidden commands still run.
+// options, from ui.operator_commands. With auto, it shows them only if a
+// local admin socket answers, an admin host is set, or an admin token
+// exists. It makes no network call.
 func (r *Runtime) ShowOperators() bool {
 	switch r.operatorCommands {
 	case "hide":

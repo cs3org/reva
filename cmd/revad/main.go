@@ -61,8 +61,7 @@ var (
 	dirFlag     = flag.String("dev-dir", "", "runs any toml file in the specified directory. Intended for development use only")
 	pluginsFlag = flag.Bool("plugins", false, "list all the plugins and exit")
 
-	// The build sets the version in pkg/rversion. These are the variables of
-	// the older builds, which set them here.
+	// Older builds set these with -X main.*. When set, they override rversion.
 	gitCommit, buildDate, version, goVersion string
 )
 

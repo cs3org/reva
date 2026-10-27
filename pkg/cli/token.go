@@ -41,25 +41,19 @@ import (
 	"golang.org/x/term"
 )
 
-// The reva token comes from the credential chain (package auth): its
-// upstream credential is exchanged for a reva token, over HTTPS when an
-// endpoint is known, else over gRPC Authenticate with the auth types of the
-// brand. Both are cached in the token file, keyed by the endpoint and the
-// gateway, because a reva token is valid only where the JWT secret is
-// shared.
+// The cache is keyed by the endpoint and the gateway, because a reva token is
+// valid only where the JWT secret is shared.
 
 // LoginOptions select how Login signs in.
 type LoginOptions struct {
 	// Method is a provider of the chain. Empty means the chain of the brand,
 	// in its order. A name that is no provider is a gateway auth type, for a
 	// user name and a secret over gRPC (for example machine).
-	Method string
-	// SPN and CCache are for the kerberos provider.
+	Method      string
 	SPN, CCache string
-	// In and Out are for the prompts.
-	In       io.Reader
-	Out      io.Writer
-	Terminal bool
+	In          io.Reader
+	Out         io.Writer
+	Terminal    bool
 }
 
 // SignIn is the result of a sign-in.
@@ -69,16 +63,13 @@ type SignIn struct {
 	Expires  time.Time `json:"expires,omitzero"`
 }
 
-// serverKey names the server of the reva token in the cache.
 func (r *Runtime) serverKey() string {
 	return "endpoint=" + r.httpEndpoint + " gateway=" + r.gatewayAddr
 }
 
-// cachedToken returns the reva token of the cache for this server: the one
-// of the same endpoint and gateway, else one of the same endpoint or the
-// same gateway where the other is not set on one side. A login over HTTPS
-// thus also serves a command that sets the gateway of the same deployment.
-// A server that refuses it makes the runtime sign in again.
+// cachedToken returns the cached reva token of the same endpoint and
+// gateway. It also accepts one where only one of the two is known on one
+// side, so that a login over HTTPS serves a command that sets the gateway.
 func (r *Runtime) cachedToken(c *auth.Cache) (*auth.Token, bool) {
 	if t, ok := c.Get(auth.Reva, r.serverKey()); ok && t.Valid() {
 		return t, true
@@ -107,10 +98,9 @@ func (r *Runtime) tokenCacheFile() *auth.Cache {
 	return auth.NewCache(p)
 }
 
-// loginToken returns the token from --token or its env. Else the reva token
-// of the cache for this server, else the token that an older login stored.
-// Else it signs in with the chain, without asking anything unless a
-// provider can (the device flow on a terminal).
+// loginToken returns the token of --token, else the cached one, else it
+// signs in with the chain. It asks nothing unless a provider can (the device
+// flow on a terminal).
 func (r *Runtime) loginToken(ctx context.Context) (string, error) {
 	if r.tokenValue != "" {
 		return r.tokenValue, nil
@@ -196,8 +186,7 @@ func (r *Runtime) renew(ctx context.Context, refused string) error {
 	return err
 }
 
-// signIn runs the chain, exchanges its credential and stores the reva
-// token. tokMu is held.
+// signIn runs with tokMu held.
 func (r *Runtime) signIn(ctx context.Context, opts LoginOptions, login bool) (*auth.Token, error) {
 	if opts.Method != "" && !slices.Contains(AuthProviders(), opts.Method) {
 		return r.gatewayLogin(ctx, opts)
@@ -211,7 +200,7 @@ func (r *Runtime) signIn(ctx context.Context, opts LoginOptions, login bool) (*a
 	ch := auth.NewChain(r.serverKey(), providers, chainOpts...)
 	up, err := ch.Token(ctx)
 	if err != nil {
-		if !login && !hasAvailable(ctx, providers) {
+		if !login && !slices.ContainsFunc(providers, func(p auth.Provider) bool { return p.Available(ctx) }) {
 			return nil, fmt.Errorf("no login token: run `%s login` first", r.Name())
 		}
 		return nil, err
@@ -234,19 +223,13 @@ func (r *Runtime) signIn(ctx context.Context, opts LoginOptions, login bool) (*a
 	return t, nil
 }
 
-func hasAvailable(ctx context.Context, ps []auth.Provider) bool {
-	return slices.ContainsFunc(ps, func(p auth.Provider) bool { return p.Available(ctx) })
-}
-
-// providers returns the providers of the chain. A login gets every
-// provider, so that --method can name one that the brand leaves out, and
-// the prompts. Without a login, basic is left out: it would ask for a
-// password on every command.
+// providers returns the providers of the chain. A login gets every provider,
+// so that --method can name one that the brand leaves out. Without a login,
+// basic is left out: it would ask for a password on every command.
 func (r *Runtime) providers(opts LoginOptions, login bool) []auth.Provider {
 	terminal := opts.Terminal || term.IsTerminal(int(os.Stdin.Fd())) && term.IsTerminal(int(os.Stderr.Fd()))
 	order := slices.Clone(r.Brand().Auth.Chain)
 	if r.hasAppToken() {
-		// An app token that is set is meant to be used.
 		order = append([]string{auth.MethodAppToken}, order...)
 	}
 	if login {
@@ -315,8 +298,6 @@ func (r *Runtime) provider(name string, opts LoginOptions, login, terminal bool)
 	return nil
 }
 
-// exchange turns the upstream credential up into a reva token: over HTTPS
-// when an endpoint is known, else over gRPC Authenticate.
 func (r *Runtime) exchange(ctx context.Context, up *auth.Token) (string, error) {
 	if up.Kind == auth.KindReva {
 		return up.Value, nil
@@ -335,9 +316,9 @@ func (r *Runtime) exchange(ctx context.Context, up *auth.Token) (string, error) 
 	return r.Authenticate(ctx, r.AuthType(up.Kind), up.User, up.Value)
 }
 
-// exchangeHTTP sends the credential to an authenticated path of the
-// endpoint. The auth interceptor of reva writes the reva token that it
-// made in the x-access-token header of the answer.
+// exchangeHTTP sends the credential to an authenticated path. The auth
+// interceptor of reva writes the reva token in the x-access-token header of
+// the answer.
 func (r *Runtime) exchangeHTTP(ctx context.Context, up *auth.Token) (string, error) {
 	u, err := url.JoinPath(r.httpEndpoint, cmp.Or(r.Brand().Auth.Kerberos.Path, "/ocs/v1.php/cloud/user"))
 	if err != nil {
@@ -369,8 +350,7 @@ func (r *Runtime) exchangeHTTP(ctx context.Context, up *auth.Token) (string, err
 }
 
 // gatewayLogin signs in with a gateway auth type that is no provider of the
-// chain, with a user name and a secret, as the reva CLI did before the
-// chain: for example machine with an API key.
+// chain, for example machine with an API key.
 func (r *Runtime) gatewayLogin(ctx context.Context, opts LoginOptions) (*auth.Token, error) {
 	user, secret := r.user, r.password
 	if secret == "" {
@@ -391,8 +371,7 @@ func (r *Runtime) gatewayLogin(ctx context.Context, opts LoginOptions) (*auth.To
 	return t, nil
 }
 
-// defaultSPN is HTTP/<host> of the server that takes the token: the
-// endpoint, which exchange prefers, else the gateway.
+// defaultSPN is HTTP/<host> of the endpoint, else of the gateway.
 func (r *Runtime) defaultSPN() (string, error) {
 	addr := r.gatewayAddr
 	if u, err := url.Parse(r.httpEndpoint); err == nil && u.Host != "" {

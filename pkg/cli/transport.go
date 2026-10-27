@@ -40,8 +40,8 @@ import (
 // TransportAuto selects gRPC when a gateway is set, else HTTPS.
 const TransportAuto = "auto"
 
-// DefaultTransport is the built-in transport of the user plane, below the
-// flag, the env, the config files and connection.transport of the brand.
+// DefaultTransport is the built-in transport of the user plane, used when
+// no other layer sets one.
 var DefaultTransport = backend.GRPC
 
 // gatewayConnectTimeout is short, so that in auto a gateway that cannot be
@@ -126,9 +126,8 @@ func (r *Runtime) httpBackend() (backend.Backend, error) {
 	return b, nil
 }
 
-// revaCredentials sends the reva token as x-access-token, which every reva
-// deployment takes. Authorization: Bearer works only where the bearer
-// strategy is configured.
+// revaCredentials sends the reva token as x-access-token. Authorization:
+// Bearer works only where the bearer strategy is configured.
 type revaCredentials struct{ r *Runtime }
 
 func (c revaCredentials) Credential(ctx context.Context) (httpbackend.Credential, error) {

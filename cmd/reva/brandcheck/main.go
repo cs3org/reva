@@ -16,14 +16,13 @@
 // granted to it by virtue of its status as an Intergovernmental Organization
 // or submit itself to any jurisdiction.
 
-// Command brandcheck checks a brand file of the CLI: it parses it strictly,
-// and checks it against the build it runs in (revacmd.CheckBrand).
+// Command brandcheck parses brand files strictly and checks them against the
+// build it runs in (revacmd.CheckBrand).
 //
 //	go run github.com/cs3org/reva/v3/cmd/reva/brandcheck brand.toml
 //
-// It sees only the sign-in methods of the core. A build with cli.auth.*
-// plugins checks its own brand with `go run . __brandcheck`, or with
-// revacmd.CheckBrand in a test that imports the plugins.
+// It knows only the sign-in methods of the core. A build with cli.auth.*
+// plugins checks its brand with `go run . __brandcheck`.
 package main
 
 import (

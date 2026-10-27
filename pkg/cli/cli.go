@@ -25,6 +25,7 @@ import (
 	"bytes"
 	"context"
 	"crypto/tls"
+	"encoding/csv"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -42,7 +43,6 @@ import (
 	"github.com/cs3org/reva/v3/pkg/cli/auth"
 	"github.com/cs3org/reva/v3/pkg/cli/backend"
 	"github.com/cs3org/reva/v3/pkg/cli/brand"
-	"github.com/cs3org/reva/v3/pkg/cli/output"
 	"github.com/cs3org/reva/v3/pkg/httpclient"
 	"github.com/spf13/pflag"
 	"golang.org/x/term"
@@ -57,9 +57,9 @@ import (
 )
 
 // Runtime is built once per process. Its settings come from the flags, the
-// environment, the user config, the system config, the brand and the
-// built-in defaults, in this order of precedence. It is the API of CLI
-// plugins, so its settings are read through accessors.
+// environment, the config files, the brand and the built-in defaults, in
+// this order. It is the API of CLI plugins, so its settings are read through
+// accessors.
 type Runtime struct {
 	brand            *brand.Brand
 	transport        string
@@ -135,14 +135,14 @@ func (r *Runtime) AdminHost() string { return r.adminHost }
 // User returns the user name of --user.
 func (r *Runtime) User() string { return r.user }
 
-// Password returns the password of the basic sign-in from the environment.
+// Password returns the password of the basic sign-in.
 func (r *Runtime) Password() string { return r.password }
 
 // AppTokenFile returns the file of --app-token-file.
 func (r *Runtime) AppTokenFile() string { return r.appTokenFile }
 
-// KerberosSPN returns the configured service principal of the Kerberos
-// sign-in. Empty means HTTP/<host of the server>.
+// KerberosSPN returns the service principal of the Kerberos sign-in. Empty
+// means HTTP/<host of the server>.
 func (r *Runtime) KerberosSPN() string { return r.kerberosSPN }
 
 // As returns the user of --as. Empty means no impersonation.
@@ -201,7 +201,7 @@ func (r *Runtime) DialOptions() []grpc.DialOption {
 }
 
 // renewInterceptor signs in again once when the gateway refuses the login
-// token, which can expire during a long run.
+// token, which can expire in a long run.
 func (r *Runtime) renewInterceptor(ctx context.Context, method string, req, reply any, cc *grpc.ClientConn, invoker grpc.UnaryInvoker, opts ...grpc.CallOption) error {
 	err := invoker(ctx, method, req, reply, cc, opts...)
 	if status.Code(err) != codes.Unauthenticated || r.tokenValue != "" || r.as != "" {
@@ -335,7 +335,11 @@ func (r *Runtime) ShowProgress() bool {
 func (r *Runtime) Print(w io.Writer, v any, text func(w io.Writer)) error {
 	if t, ok := v.(Table); ok {
 		if r.output == "csv" {
-			return output.New(w, output.FormatCSV).Render(output.Table{Headers: t.Headers, Rows: t.Rows})
+			rows := t.Rows
+			if len(t.Headers) > 0 {
+				rows = append([][]string{t.Headers}, rows...)
+			}
+			return csv.NewWriter(w).WriteAll(rows)
 		}
 		if text == nil {
 			text = t.Write

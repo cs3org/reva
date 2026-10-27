@@ -45,8 +45,6 @@ token_cache = ["ACME_TOKEN_CACHE"]
 no_elevate = ["ACME_NO_ELEVATE"]
 `
 
-// acme returns the runtime of the test brand after the flags args, and
-// the dir of the test.
 func acme(t *testing.T, args ...string) (*Runtime, error) {
 	t.Helper()
 	rt := NewRuntime(brand.MustParse([]byte(acmeBrand)))
@@ -158,8 +156,6 @@ func TestSettingFlag(t *testing.T) {
 	}
 }
 
-// The env names come from the brand only: acme does not read the names of
-// reva, and warns once that it ignores them.
 func TestSettingForeignEnv(t *testing.T) {
 	setup(t)
 	t.Setenv("REVA_GATEWAY", "reva:9142")

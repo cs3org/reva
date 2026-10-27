@@ -27,8 +27,7 @@ import (
 	"time"
 )
 
-// clockServer answers every request with the given status and Date, so a test
-// can check that neither the status nor the absence of a body gets in the way.
+// clockServer answers every request with the given status and Date.
 func clockServer(t *testing.T, status int, date string) *Client {
 	t.Helper()
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -49,8 +48,7 @@ func clockServer(t *testing.T, status int, date string) *Client {
 	}))
 	t.Cleanup(ts.Close)
 
-	// No credential source at all: a request that tried to authenticate would
-	// fail here rather than quietly succeed.
+	// No credential source: a request that tries to authenticate fails.
 	c, err := New(ts.URL, WithMaxRetries(0))
 	if err != nil {
 		t.Fatal(err)
@@ -61,9 +59,6 @@ func clockServer(t *testing.T, status int, date string) *Client {
 func TestServerTime(t *testing.T) {
 	want := time.Date(2026, 9, 30, 12, 0, 0, 0, time.UTC)
 
-	// 401 and 404 are the interesting statuses: they are what an endpoint
-	// answers when the credential is the problem, or when nothing is served at
-	// the root, and the clock is readable in both cases.
 	for _, status := range []int{http.StatusOK, http.StatusUnauthorized, http.StatusNotFound} {
 		got, err := clockServer(t, status, want.Format(http.TimeFormat)).ServerTime(context.Background())
 		if err != nil {

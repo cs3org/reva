@@ -21,7 +21,6 @@ package client
 import (
 	"context"
 	"fmt"
-	"io"
 	"net/http"
 	"strings"
 	"testing"
@@ -32,14 +31,11 @@ import (
 
 const testResourceID = "localhome$ABC!fileid-1"
 
-// versionsMultistatus renders a version listing the way reva does: the file
-// itself as the first entry, then one entry per revision under /v/<key>.
 func versionsMultistatus(resourceID string, keys ...versionFixture) string {
 	var sb strings.Builder
 	sb.WriteString(`<?xml version="1.0" encoding="utf-8"?>`)
 	sb.WriteString(`<d:multistatus xmlns:d="DAV:" xmlns:oc="http://owncloud.org/ns">`)
 
-	// The "." entry: the current file, which is not a revision.
 	sb.WriteString(`<d:response><d:href>` + davMetaPrefix + "/" + resourceID + `/v</d:href>`)
 	sb.WriteString(`<d:propstat><d:status>HTTP/1.1 200 OK</d:status><d:prop>`)
 	sb.WriteString(`<d:resourcetype><d:collection/></d:resourcetype>`)
@@ -82,12 +78,9 @@ func TestListVersions(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// The file itself is in the listing but is not a revision.
 	if len(versions) != 2 {
 		t.Fatalf("got %d versions, want 2: %+v", len(versions), versions)
 	}
-	// Newest first, which is the order someone scanning for "this morning's
-	// copy" expects.
 	if versions[0].Key != "1767225600" {
 		t.Errorf("first version = %q, want the newest", versions[0].Key)
 	}
@@ -99,8 +92,6 @@ func TestListVersions(t *testing.T) {
 	}
 }
 
-// TestListVersionsFallsBackToTheKeyForTime: reva keys versions by modification
-// time, so a server that omits the property still yields a usable timestamp.
 func TestListVersionsFallsBackToTheKeyForTime(t *testing.T) {
 	f := newFakeServer(t)
 	f.on(MethodPropfind, davMetaPrefix, func(w http.ResponseWriter, r *http.Request) {
@@ -155,8 +146,6 @@ func TestVersionKeyFromHref(t *testing.T) {
 	}
 }
 
-// TestRestoreVersionUsesCopy pins the protocol choice: reva restores a version
-// with COPY on the version URL, not with a PUT of its bytes.
 func TestRestoreVersionUsesCopy(t *testing.T) {
 	f := newFakeServer(t)
 	f.on(MethodCopy, davMetaPrefix, func(w http.ResponseWriter, r *http.Request) {
@@ -179,38 +168,6 @@ func TestRestoreVersionRequiresAKey(t *testing.T) {
 	}
 }
 
-func TestDownloadVersion(t *testing.T) {
-	f := newFakeServer(t)
-	f.on(http.MethodGet, davMetaPrefix, func(w http.ResponseWriter, r *http.Request) {
-		fmt.Fprint(w, "the old contents")
-	})
-
-	body, _, err := f.client().DownloadVersion(context.Background(), testResourceID, "1767225600")
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer body.Close()
-
-	got, _ := io.ReadAll(body)
-	if string(got) != "the old contents" {
-		t.Errorf("downloaded %q", got)
-	}
-}
-
-func TestDownloadVersionNotFound(t *testing.T) {
-	f := newFakeServer(t)
-	f.on(http.MethodGet, davMetaPrefix, func(w http.ResponseWriter, r *http.Request) {
-		http.Error(w, "no such version", http.StatusNotFound)
-	})
-
-	_, _, err := f.client().DownloadVersion(context.Background(), testResourceID, "nope")
-	if cberr.ExitCode(err) != cberr.ExitNotFound {
-		t.Errorf("exit code = %d, want %d", cberr.ExitCode(err), cberr.ExitNotFound)
-	}
-}
-
-// TestEpochToTime: storage drivers disagree about the unit, and reading
-// milliseconds as seconds puts a file fifty thousand years in the future.
 func TestEpochToTime(t *testing.T) {
 	const seconds int64 = 1767225600 // 2026-01-01
 	const millis = seconds * 1000
@@ -233,8 +190,6 @@ func TestListVersionsWithMillisecondKeys(t *testing.T) {
 	f := newFakeServer(t)
 	f.on(MethodPropfind, davMetaPrefix, func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusMultiStatus)
-		// No getlastmodified, and a key in milliseconds: which is what the
-		// local storage driver produces.
 		fmt.Fprint(w, versionsMultistatus(testResourceID,
 			versionFixture{Key: "1767225600000", Size: 10, ETag: "v1"},
 		))

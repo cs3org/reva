@@ -36,8 +36,8 @@ const (
 	MethodDevice   = "device"
 )
 
-// TokenProvider presents a reva token that the caller supplied, through
-// --token or its env. It is the escape hatch for CI and for debugging.
+// TokenProvider presents a reva token that the caller supplied, for CI and for
+// debugging.
 type TokenProvider struct {
 	Value string
 }
@@ -48,8 +48,7 @@ func (p *TokenProvider) Name() string { return MethodToken }
 // Available implements Provider.
 func (p *TokenProvider) Available(context.Context) bool { return p.Value != "" }
 
-// Token implements Provider. No expiry is asserted: the runtime reads it
-// from the token.
+// Token implements Provider. The runtime reads the expiry from the token.
 func (p *TokenProvider) Token(context.Context) (*Token, error) {
 	if p.Value == "" {
 		return nil, cberr.Authf("no token supplied")
@@ -57,16 +56,12 @@ func (p *TokenProvider) Token(context.Context) (*Token, error) {
 	return &Token{Kind: KindReva, Value: p.Value, Provider: MethodToken}, nil
 }
 
-// AppTokenProvider presents an app token (app password). This is the
-// credential for batch jobs and cron, where no Kerberos ticket is
-// forwarded.
+// AppTokenProvider presents an app token, the credential of batch jobs and cron.
 type AppTokenProvider struct {
-	// Username is the account the token belongs to.
 	Username string
-	// Secret is the app token. When empty, the file TokenFile is read.
+	// Secret is the app token. When empty, TokenFile is read.
 	Secret string
-	// TokenFile keeps the secret out of the environment, and so out of
-	// /proc and of process listings.
+	// TokenFile keeps the secret out of the environment.
 	TokenFile string
 }
 
@@ -104,14 +99,13 @@ func (p *AppTokenProvider) credentials() (user, token string) {
 	return p.Username, token
 }
 
-// BasicProvider presents a user name and a password. It exists for
-// development instances, which have no Kerberos and no SSO.
+// BasicProvider presents a user name and a password, for development
+// instances.
 type BasicProvider struct {
 	Username string
 	Password string
-	// Prompt asks for what is missing: the user name when it is empty, and
-	// the password. It is nil in non-interactive contexts, which makes the
-	// provider unavailable rather than hanging.
+	// Prompt asks for what is missing. It is nil when no user is present: the
+	// provider is then unavailable, and does not hang.
 	Prompt func(user string) (string, string, error)
 }
 

@@ -21,7 +21,6 @@ package transfer
 import (
 	"context"
 	"io"
-	"slices"
 	"strings"
 	"time"
 
@@ -30,7 +29,7 @@ import (
 	"github.com/cs3org/reva/v3/pkg/cli/backend"
 )
 
-// ResourceInfo is what the engine needs to know of a remote file.
+// ResourceInfo describes a remote file.
 type ResourceInfo struct {
 	Path     string
 	IsDir    bool
@@ -41,8 +40,6 @@ type ResourceInfo struct {
 	Checksums map[string]string
 }
 
-// remote is the server of the engine: the metadata of one backend and the
-// data plane, on paths.
 type remote struct {
 	f backend.Files
 	d backend.DataPlane
@@ -93,16 +90,11 @@ func (r remote) Download(ctx context.Context, p string, offset int64) (io.ReadCl
 	return r.d.Download(ctx, ref(p), offset)
 }
 
-// caps returns the capabilities of the server. Without an answer, the
-// engine uses the simple protocol and no archiver.
+// caps returns empty capabilities when the server gives none: no TUS, no archiver.
 func (r remote) caps(ctx context.Context) *backend.Capabilities {
 	c, err := r.d.Capabilities(ctx)
 	if err != nil || c == nil {
 		return &backend.Capabilities{}
 	}
 	return c
-}
-
-func supportsArchive(c *backend.Capabilities, format string) bool {
-	return slices.Contains(c.ArchiveFormats, format)
 }

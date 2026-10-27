@@ -16,11 +16,7 @@
 // granted to it by virtue of its status as an Intergovernmental Organization
 // or submit itself to any jurisdiction.
 
-// Package textdiff produces a unified diff of two texts.
-//
-// It exists so that "cernbox versions diff" can show what changed between two
-// versions of a file without shelling out to diff(1), which is not guaranteed to
-// be present and would make the output depend on which implementation is.
+// Package textdiff makes a unified diff of two texts, without diff(1).
 package textdiff
 
 import (
@@ -30,18 +26,16 @@ import (
 	"strings"
 )
 
-// Options control the shape of the output.
+// Options set the output of Unified.
 type Options struct {
-	// Context is how many unchanged lines to show around each change.
+	// Context is the number of unchanged lines around each change.
 	Context int
-	// OldLabel and NewLabel head the two sides.
+	// OldLabel and NewLabel are the names in the header.
 	OldLabel, NewLabel string
-	// Colour wraps additions and removals in ANSI colour.
+	// Colour adds ANSI colours.
 	Colour bool
 }
 
-// ANSI colours, matching what diff tools have used for decades: red for what
-// left, green for what arrived.
 const (
 	red   = "\033[31m"
 	green = "\033[32m"
@@ -49,8 +43,7 @@ const (
 	reset = "\033[0m"
 )
 
-// Unified returns a unified diff of old and new, or the empty string when they
-// are identical.
+// Unified returns a unified diff of old and new. It returns "" if they are equal.
 func Unified(old, new string, opts Options) string {
 	if opts.Context < 0 {
 		opts.Context = 0
@@ -85,9 +78,7 @@ func Unified(old, new string, opts Options) string {
 	return header + out.String()
 }
 
-// IsBinary reports whether content looks like something a line diff would
-// mangle. A NUL byte is the same test diff(1) and git use, and it is enough:
-// text does not contain one, and every format that does is unreadable as lines.
+// IsBinary reports whether content has a NUL byte, as diff(1) and git test it.
 func IsBinary(content []byte) bool {
 	limit := min(len(content), 8000)
 	return bytes.IndexByte(content[:limit], 0) >= 0
@@ -100,8 +91,7 @@ func colour(on bool, code string) string {
 	return code
 }
 
-// splitLines breaks text into lines, dropping the trailing empty element a final
-// newline produces so that "a\n" is one line rather than two.
+// splitLines drops the empty last element of a text that ends with a newline.
 func splitLines(s string) []string {
 	if s == "" {
 		return nil
@@ -126,12 +116,8 @@ type op struct {
 	text string
 }
 
-// diff returns the edit script turning a into b.
-//
-// Common leading and trailing lines are removed first, which is what makes this
-// fast on the case it is for: a version of a file differs from the next one in a
-// few places, however long the file is. Only the part that actually differs
-// reaches the quadratic-in-the-difference algorithm below.
+// diff returns the edit script from a to b. It removes the common first and last
+// lines first, so that a long file with a few changes is fast.
 func diff(a, b []string) []op {
 	var ops []op
 
@@ -155,12 +141,8 @@ func diff(a, b []string) []op {
 	return ops
 }
 
-// myers is the greedy algorithm from Myers' 1986 paper, which finds a shortest
-// edit script in O(ND) time where D is the size of the difference.
-//
-// Each forward pass is recorded so the path can be walked back afterwards; that
-// costs O(D²) memory, which is the usual trade and is bounded in practice because
-// the caller has already stripped everything the two sides have in common.
+// myers is the greedy algorithm of Myers (1986). It uses O(D²) memory for the
+// trace, where D is the size of the difference.
 func myers(a, b []string) []op {
 	n, m := len(a), len(b)
 	switch {
@@ -180,8 +162,6 @@ func myers(a, b []string) []op {
 	for d := 0; d <= maxD; d++ {
 		trace = append(trace, append([]int(nil), v...))
 		for k := -d; k <= d; k += 2 {
-			// Step down when that is the only option or the better one, which is
-			// what makes the walk greedy.
 			var x int
 			if k == -d || (k != d && v[offset+k-1] < v[offset+k+1]) {
 				x = v[offset+k+1]
@@ -204,7 +184,6 @@ func myers(a, b []string) []op {
 	return append(allOf(opDelete, a), allOf(opInsert, b)...)
 }
 
-// walkBack turns the recorded passes into an edit script, from the end backwards.
 func walkBack(a, b []string, trace [][]int, offset int) []op {
 	var reversed []op
 	x, y := len(a), len(b)
@@ -236,7 +215,6 @@ func walkBack(a, b []string, trace [][]int, offset int) []op {
 		x, y = prevX, prevY
 	}
 
-	// Whatever is left at the start is common to both.
 	for x > 0 {
 		x, y = x-1, y-1
 		reversed = append(reversed, op{opEqual, a[x]})
@@ -257,17 +235,14 @@ func allOf(kind opKind, lines []string) []op {
 	return ops
 }
 
-// hunk is one run of changes with its surrounding context.
 type hunk struct {
 	oldStart, oldLines int
 	newStart, newLines int
 	ops                []op
 }
 
-// hunks groups the edit script into the blocks a unified diff prints, so that an
-// unchanged stretch between two changes is skipped rather than printed.
 func hunks(ops []op, context int) []hunk {
-	// Where each op sits on both sides, needed for the @@ header.
+	// The line numbers for the @@ header.
 	oldNo := make([]int, len(ops))
 	newNo := make([]int, len(ops))
 	o, n := 1, 1
@@ -290,9 +265,7 @@ func hunks(ops []op, context int) []hunk {
 			continue
 		}
 
-		// Reach back over the context, then forward to the end of this run of
-		// changes plus its context: merging runs that are close enough that their
-		// context would overlap.
+		// Changes whose context would overlap go in one hunk.
 		start := max(0, i-context)
 		end := i
 		for end < len(ops) {
@@ -326,7 +299,7 @@ func hunks(ops []op, context int) []hunk {
 				h.newLines++
 			}
 		}
-		// A hunk that adds to an empty side starts at 0, as diff(1) prints it.
+		// As in diff(1), a hunk on an empty side starts at 0.
 		if h.oldLines == 0 {
 			h.oldStart = oldNo[start] - 1
 		}

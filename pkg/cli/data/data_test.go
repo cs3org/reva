@@ -196,7 +196,7 @@ func TestRenewAfterUnauthorized(t *testing.T) {
 	}))
 	defer srv.Close()
 	renewed := 0
-	loc := renewLocator{locator: locator{url: srv.URL}, token: &token}
+	loc := renewLocator{url: srv.URL, token: &token}
 	p := New(srv.Client(), loc)
 	p.Renew = func(context.Context) error { renewed++; token = "new"; return nil }
 	body, _, err := p.DownloadVersion(context.Background(), &provider.Reference{Path: "/f"}, "v1")

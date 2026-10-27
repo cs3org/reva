@@ -18,9 +18,6 @@
 
 package revacmd
 
-// The commands that come from cernbox-cli and look through trees or follow
-// files: find, du, tail and edit.
-
 import (
 	"bytes"
 	"cmp"
@@ -99,7 +96,7 @@ func newFindFilter(name, size, newer, older, kind string) (findFilter, error) {
 	return f, nil
 }
 
-// parseWhen reads a date, or a span back from now: 7d, 2w, 36h.
+// parseWhen reads a date, or a span back from now, such as 7d, 2w or 36h.
 func parseWhen(s string) (time.Time, error) {
 	if t, err := time.Parse(time.DateOnly, s); err == nil {
 		return t, nil
@@ -124,7 +121,7 @@ func parseWhen(s string) (time.Time, error) {
 	return time.Now().Add(-time.Duration(n * float64(unit))), nil
 }
 
-// nameOnly tells that the server search (the WebDAV REPORT) can answer.
+// nameOnly reports whether the search of the server can answer.
 func (f findFilter) nameOnly() bool {
 	return f.name != "" && !f.glob && f.sizeOp == 0 && f.newerThan.IsZero() && f.olderThan.IsZero() && !f.dirs && !f.files
 }
@@ -345,10 +342,9 @@ func duCommand(rt *cli.Runtime) *cobra.Command {
 	return cmd
 }
 
-// usage returns the size of root, and of the entries below it to depth.
-// The size of a folder comes from the server (the tree size), so only the
-// levels that are shown are listed. A ranking walks the whole tree, up to
-// depth when it is set.
+// usage returns the size of root and of the entries below it, to depth. The
+// server gives the size of a folder, so only the levels that show are listed.
+// A ranking walks the whole tree.
 func usage(ctx context.Context, b backend.Backend, root string, depth int, rank bool) ([]duEntry, error) {
 	info, err := b.Files().Stat(ctx, pathRef(root))
 	if err != nil {
@@ -431,8 +427,7 @@ func tailCommand(rt *cli.Runtime) *cobra.Command {
 				return cli.Usagef("%s: is a folder", p)
 			}
 			size := int64(info.Size)
-			// The last lines are in the last bytes: read a window that grows
-			// until it holds enough of them.
+			// Read a window from the end. It grows until it holds enough lines.
 			start := size
 			for window := int64(64 << 10); ; window *= 4 {
 				from := max(size-window, 0)
@@ -502,8 +497,8 @@ func tailCommand(rt *cli.Runtime) *cobra.Command {
 	return cmd
 }
 
-// lastLines returns where the last n lines of data start, or -1 when data
-// holds fewer than n complete lines.
+// lastLines returns where the last n lines of data start, or -1 if there are
+// fewer.
 func lastLines(data []byte, n int) int {
 	end := len(data)
 	if end > 0 && data[end-1] == '\n' {

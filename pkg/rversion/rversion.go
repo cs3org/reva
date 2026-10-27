@@ -16,10 +16,8 @@
 // granted to it by virtue of its status as an Intergovernmental Organization
 // or submit itself to any jurisdiction.
 
-// Package rversion holds the version of the build, for revad and for the
-// CLI. The build sets it with -X (the Makefile, tools/create-artifacts and
-// gaia), so that any package can report it without an import of a main
-// package. The fields are empty in a build without those flags.
+// Package rversion holds the version of the build, for revad and for the CLI.
+// The build sets it with -X. The fields are empty without those flags.
 package rversion
 
 var (

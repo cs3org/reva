@@ -17,15 +17,13 @@
 // or submit itself to any jurisdiction.
 
 // Package auth is the credential chain of the CLI: the sign-in methods
-// (Provider) that give an upstream credential, in the order of the brand,
-// and the cache of the credentials. The runtime exchanges the upstream
-// credential for a reva token. The cli.auth.* plugins implement Provider.
+// (Provider), in the order of the brand, and the cache of the credentials.
+// The cli.auth.* plugins implement Provider.
 package auth
 
 import (
 	"context"
 	"encoding/base64"
-	"errors"
 	"fmt"
 	"strings"
 	"sync"
@@ -34,49 +32,38 @@ import (
 	"github.com/cs3org/reva/v3/internal/cli/cberr"
 )
 
-// refreshWindow is how long before expiry a token is treated as already
-// expired. It covers clock skew and the round trip of the request the token is
-// about to be used for.
+// refreshWindow is how long before expiry a token counts as expired. It covers
+// clock skew and the round trip of the request.
 const refreshWindow = 60 * time.Second
 
-// The kinds of credential. Each one but KindReva is also a key of
-// auth.types of the brand: the gateway auth type of a gRPC Authenticate.
+// The kinds of credential. Each one but KindReva is a key of auth.types of the
+// brand.
 const (
-	// KindReva is a reva token, used as it is.
-	KindReva = "reva"
-	// KindBearer is an OIDC access token.
-	KindBearer = "bearer"
-	// KindBasic is a user name and a password.
-	KindBasic = "basic"
-	// KindAppToken is a user name and an app token.
-	KindAppToken = "app-token"
-	// KindKerberos is a SPNEGO token, base64.
-	KindKerberos = "kerberos"
+	KindReva     = "reva"      // a reva token, used as it is
+	KindBearer   = "bearer"    // an OIDC access token
+	KindBasic    = "basic"     // a user name and a password
+	KindAppToken = "app-token" // a user name and an app token
+	KindKerberos = "kerberos"  // a SPNEGO token, base64
 )
 
 // Token is a credential together with what is needed to manage its lifetime.
 type Token struct {
-	// Kind is one of the Kind constants.
 	Kind string `json:"kind"`
 	// Value is the secret: the token, the password or the SPNEGO token.
 	Value string `json:"value"`
 	// User is the user name of a basic or an app-token credential.
 	User string `json:"user,omitempty"`
-	// Expiry is when the token stops being valid. A zero value means unknown,
-	// which is treated as "does not expire": an app password, for instance.
-	Expiry time.Time `json:"expiry,omitzero"`
-	// RefreshToken renews Value without re-authenticating, when the issuer
-	// supplied one.
-	RefreshToken string `json:"refresh_token,omitempty"`
-	// Provider names the provider that produced this token, for "status"
-	// and for deciding how to refresh it.
+	// Expiry is when the token stops being valid. Zero means it does not
+	// expire, like an app password.
+	Expiry       time.Time `json:"expiry,omitzero"`
+	RefreshToken string    `json:"refresh_token,omitempty"`
+	// Provider names the provider that made the token, to refresh it.
 	Provider string `json:"provider"`
-	// Subject is the identity the token represents, for display.
+	// Subject is the identity of the token, for display.
 	Subject string `json:"subject,omitempty"`
 }
 
-// Valid reports whether the token can still be used, leaving a margin for the
-// request it is about to authenticate.
+// Valid reports whether the token can still be used.
 func (t *Token) Valid() bool {
 	if t == nil || t.Value == "" {
 		return false
@@ -104,61 +91,49 @@ func (t *Token) Header() (name, value string) {
 type Provider interface {
 	// Name identifies the provider in "status" and in login --method.
 	Name() string
-	// Available reports whether this provider has what it needs to be tried.
-	// It must be cheap and must not touch the network: the chain calls it on
-	// every provider to decide what to attempt.
+	// Available must be cheap and must not touch the network: the chain calls
+	// it on every provider.
 	Available(ctx context.Context) bool
-	// Token authenticates and returns a token.
 	Token(ctx context.Context) (*Token, error)
 }
 
 // Refresher is implemented by providers that can renew a token without
-// re-authenticating from scratch.
+// signing in again.
 type Refresher interface {
 	Refresh(ctx context.Context, tok *Token) (*Token, error)
 }
 
-// IdentityHinter is implemented by providers that can name the identity they
-// would authenticate as without actually authenticating. The chain uses it to
-// key the token cache, so that a user who runs kinit as a different principal
-// gets a different cache entry instead of silently reusing the previous
-// identity's token.
+// IdentityHinter is implemented by providers that know their identity without
+// signing in. The chain puts it in the cache key, so that kinit as another
+// principal does not reuse the token of the first one.
 type IdentityHinter interface {
 	IdentityHint() string
 }
 
 // Chain resolves a credential by trying providers in order. It is safe for
-// concurrent use, which matters because the transfer engine asks for a
-// credential from many goroutines at once.
+// concurrent use: the transfer engine asks for a credential from many
+// goroutines.
 type Chain struct {
 	providers []Provider
 	cache     *Cache
 	key       string
-	advice    string
 
 	mu      sync.Mutex
 	current *Token
-	// forced restricts the chain to a single provider, set by --method.
-	forced string
+	forced  string
 }
 
 // ChainOption configures a Chain.
 type ChainOption func(*Chain)
 
-// WithCache attaches a token cache. Without one, every invocation
-// re-authenticates, which is correct but slow in a shell loop.
+// WithCache attaches a token cache.
 func WithCache(c *Cache) ChainOption { return func(ch *Chain) { ch.cache = c } }
 
-// WithMethod restricts the chain to the named provider. An unknown name is
-// reported when the chain is first used rather than at construction, so that
-// "--method" errors come out through the normal error path.
+// WithMethod restricts the chain to the named provider. An unknown name is an
+// error at the first use of the chain, not here.
 func WithMethod(name string) ChainOption {
 	return func(ch *Chain) { ch.forced = strings.ToLower(strings.TrimSpace(name)) }
 }
-
-// WithAdvice sets the text that tells how to sign in, for the error when no
-// provider has a credential.
-func WithAdvice(s string) ChainOption { return func(ch *Chain) { ch.advice = s } }
 
 // NewChain builds a chain. key names the server in the cache: a credential
 // is valid only where it was issued.
@@ -169,9 +144,6 @@ func NewChain(key string, providers []Provider, opts ...ChainOption) *Chain {
 	}
 	return ch
 }
-
-// Providers returns the configured providers, in order.
-func (ch *Chain) Providers() []Provider { return ch.providers }
 
 // Token returns a usable token, obtaining or refreshing one if needed.
 func (ch *Chain) Token(ctx context.Context) (*Token, error) {
@@ -187,15 +159,11 @@ func (ch *Chain) Token(ctx context.Context) (*Token, error) {
 		return nil, err
 	}
 
-	// A cached token from a previous invocation avoids re-authenticating on
-	// every command in a shell loop.
-	if tok := ch.fromCache(ctx, candidates); tok != nil {
+	if tok := ch.fromCache(candidates); tok != nil {
 		ch.current = tok
 		return tok, nil
 	}
 
-	// An expired token with a refresh token is cheaper to renew than to
-	// replace, and it avoids a round trip to the issuer.
 	if refreshed := ch.refresh(ctx, candidates); refreshed != nil {
 		ch.store(refreshed)
 		return refreshed, nil
@@ -221,15 +189,13 @@ func (ch *Chain) Token(ctx context.Context) (*Token, error) {
 	}
 
 	if firstErr != nil {
-		// At least one provider was available and failed. That error is far
-		// more useful than a generic "no credentials", because it names the
-		// thing that went wrong.
+		// The error of a provider that failed is more useful than "no
+		// credentials".
 		return nil, cberr.Authf("%v", firstErr)
 	}
 	return nil, ch.noCredentialsError(attempted)
 }
 
-// candidates returns the providers to try, honouring --method.
 func (ch *Chain) candidates() ([]Provider, error) {
 	if ch.forced == "" {
 		return ch.providers, nil
@@ -247,7 +213,7 @@ func (ch *Chain) candidates() ([]Provider, error) {
 		ch.forced, strings.Join(names, ", "))
 }
 
-func (ch *Chain) fromCache(ctx context.Context, candidates []Provider) *Token {
+func (ch *Chain) fromCache(candidates []Provider) *Token {
 	if ch.cache == nil {
 		return nil
 	}
@@ -255,16 +221,13 @@ func (ch *Chain) fromCache(ctx context.Context, candidates []Provider) *Token {
 	if !ok || !tok.Valid() {
 		return nil
 	}
-	// A cached token from a provider that --method excluded must not be used,
-	// or "--method device" would silently reuse a Kerberos session.
+	// "--method device" must not reuse a Kerberos session.
 	if ch.forced != "" && tok.Provider != ch.forced {
 		return nil
 	}
 	return tok
 }
 
-// refresh tries to renew an expired cached token rather than authenticating
-// again.
 func (ch *Chain) refresh(ctx context.Context, candidates []Provider) *Token {
 	if ch.cache == nil {
 		return nil
@@ -283,9 +246,7 @@ func (ch *Chain) refresh(ctx context.Context, candidates []Provider) *Token {
 		}
 		refreshed, err := r.Refresh(ctx, tok)
 		if err != nil {
-			// A refresh token that the issuer has expired is not an error
-			// worth reporting: fall through and authenticate normally, which
-			// with Kerberos is silent anyway.
+			// An expired refresh token is not an error: sign in again.
 			return nil
 		}
 		refreshed.Provider = p.Name()
@@ -294,24 +255,21 @@ func (ch *Chain) refresh(ctx context.Context, candidates []Provider) *Token {
 	return nil
 }
 
-// store keeps only bearer tokens: the other kinds are secrets that the
-// provider has anyway, or SPNEGO tokens that the server takes only once.
+// store keeps only bearer tokens: the other kinds are secrets that the provider
+// has anyway, or SPNEGO tokens that the server takes only once.
 func (ch *Chain) store(tok *Token) {
 	if tok.Kind != KindBearer {
 		return
 	}
 	ch.current = tok
 	if ch.cache != nil {
-		// A cache write failure must not fail the command: the token in hand
-		// is still good, the next invocation will just re-authenticate.
+		// A cache write failure must not fail the command: the token is good.
 		_ = ch.cache.Put(Upstream, ch.cacheKey(ch.providers), tok)
 	}
 }
 
-// cacheKey identifies the cache entry for this endpoint and identity.
-//
-// The identity component is what stops a user with both a personal and a
-// service principal from picking up the wrong session after kinit.
+// cacheKey names the cache entry of the server and of the identity, so that a
+// user with two principals does not get the session of the other one.
 func (ch *Chain) cacheKey(candidates []Provider) string {
 	hint := ""
 	for _, p := range candidates {
@@ -328,18 +286,13 @@ func (ch *Chain) cacheKey(candidates []Provider) string {
 }
 
 func (ch *Chain) noCredentialsError(attempted []string) error {
-	var advice strings.Builder
-	advice.WriteString("no usable credentials found")
-	if len(attempted) > 0 {
-		advice.WriteString(" (tried: " + strings.Join(attempted, ", ") + ")")
+	if len(attempted) == 0 {
+		return cberr.Authf("no usable credentials found")
 	}
-	if ch.advice != "" {
-		advice.WriteString(": " + ch.advice)
-	}
-	return cberr.Authf("%s", advice.String())
+	return cberr.Authf("no usable credentials found (tried: %s)", strings.Join(attempted, ", "))
 }
 
-// Forget clears the in-memory and cached tokens for this server.
+// Forget drops the token and the cached tokens of this server.
 func (ch *Chain) Forget() error {
 	ch.mu.Lock()
 	defer ch.mu.Unlock()
@@ -350,8 +303,7 @@ func (ch *Chain) Forget() error {
 	return ch.cache.DeletePrefix(Upstream, ch.key+"\x00")
 }
 
-// Invalidate drops the token in memory and its cache entry, after the
-// server refused it.
+// Invalidate drops the token and its cache entry, after the server refused it.
 func (ch *Chain) Invalidate(tok *Token) {
 	ch.mu.Lock()
 	defer ch.mu.Unlock()
@@ -361,8 +313,7 @@ func (ch *Chain) Invalidate(tok *Token) {
 	if ch.cache == nil || tok == nil || tok.Kind != KindBearer {
 		return
 	}
-	// A refresh token can still work when the server refused the access
-	// token, so the entry stays, as expired.
+	// The refresh token can still work, so the entry stays, as expired.
 	key := ch.cacheKey(ch.providers)
 	if c, ok := ch.cache.Get(Upstream, key); ok && c.RefreshToken != "" {
 		c.Expiry = time.Unix(1, 0)
@@ -371,6 +322,3 @@ func (ch *Chain) Invalidate(tok *Token) {
 	}
 	_ = ch.cache.Delete(Upstream, key)
 }
-
-// ErrNoProvider is returned when a chain is built with no providers at all.
-var ErrNoProvider = errors.New("no authentication providers configured")

@@ -40,23 +40,19 @@ const (
 )
 
 // AuthProvider is a sign-in method of the credential chain. A cli.auth.*
-// plugin gives one, and auth.chain of the brand names it.
+// plugin gives one.
 type AuthProvider = auth.Provider
 
 // PathResolver turns a path argument into a remote path. A cli.paths.*
-// plugin gives one. Runtime.RemotePath asks the plugins before its own
-// rules.
+// plugin gives one.
 type PathResolver interface {
 	// Resolve returns ok false for an argument that is not for this resolver.
 	Resolve(ctx context.Context, arg string) (path string, ok bool, err error)
 }
 
-// builtinAuth are the sign-in methods of the core, for auth.chain of a
-// brand.
 var builtinAuth = []string{auth.MethodToken, auth.MethodAppToken, auth.MethodBasic, auth.MethodKerberos, auth.MethodDevice}
 
-// AuthProviders returns the names of the sign-in methods of this build: the
-// built-in ones and the cli.auth.* plugins.
+// AuthProviders returns the names of the sign-in methods of this build.
 func AuthProviders() []string {
 	names := slices.Clone(builtinAuth)
 	for _, p := range reva.GetPlugins(AuthNamespace) {
@@ -105,7 +101,7 @@ func register(ns string, labels []string, newFn any) {
 }
 
 // PluginConfig decodes the section [plugins.<name>] of the config files into
-// v: the keys of the user config replace those of the system config. A
+// v. The keys of the user config replace those of the system config. A
 // missing section leaves v as it is, and an unknown key is an error.
 func PluginConfig(rt *Runtime, name string, v any) error {
 	if !rt.resolved {

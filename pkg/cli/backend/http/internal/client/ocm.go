@@ -27,9 +27,7 @@ import (
 	"github.com/cs3org/reva/v3/internal/cli/cberr"
 )
 
-// Sciencemesh endpoints. These are the user-facing side of OCM: the
-// provider-to-provider protocol lives at /ocm and is not something a person
-// calls.
+// The user-facing Sciencemesh endpoints.
 const (
 	ocmGenerateInvite = "/sciencemesh/generate-invite"
 	ocmListInvite     = "/sciencemesh/list-invite"
@@ -48,20 +46,16 @@ type Invite struct {
 	Token       string     `json:"token"`
 	Description string     `json:"description,omitempty"`
 	Expiration  *time.Time `json:"expiration,omitempty"`
-	// Link is what you send to the other person. It carries the token and the
-	// provider, so they do not have to assemble either by hand.
-	Link string `json:"link,omitempty"`
 }
 
 type rawInvite struct {
 	Token       string `json:"token"`
 	Description string `json:"description"`
 	Expiration  uint64 `json:"expiration"`
-	InviteLink  string `json:"invite_link"`
 }
 
 func (r rawInvite) toInvite() Invite {
-	inv := Invite{Token: r.Token, Description: r.Description, Link: r.InviteLink}
+	inv := Invite{Token: r.Token, Description: r.Description}
 	if r.Expiration > 0 {
 		t := time.Unix(int64(r.Expiration), 0)
 		inv.Expiration = &t
@@ -72,15 +66,13 @@ func (r rawInvite) toInvite() Invite {
 // RemoteUser is a user at another OCM provider who has accepted an invitation.
 type RemoteUser struct {
 	DisplayName string `json:"display_name,omitempty"`
-	// IDP is the remote provider's identity provider.
-	IDP string `json:"idp"`
-	// UserID identifies the user at that provider.
-	UserID string `json:"user_id"`
-	Mail   string `json:"mail,omitempty"`
+	IDP         string `json:"idp"`
+	UserID      string `json:"user_id"`
+	Mail        string `json:"mail,omitempty"`
 }
 
-// Address renders the user in the "user@provider" form that share recipients
-// take.
+// Address renders the user as "user@provider", the form that share
+// recipients take.
 func (u RemoteUser) Address() string {
 	if u.UserID == "" || u.IDP == "" {
 		return u.UserID
@@ -88,15 +80,11 @@ func (u RemoteUser) Address() string {
 	return u.UserID + "@" + strings.TrimPrefix(strings.TrimPrefix(u.IDP, "https://"), "http://")
 }
 
-// GenerateInvite creates an invitation token. When recipient is a mail address
-// and the server is configured to send mail, it is also mailed to them.
-func (c *Client) GenerateInvite(ctx context.Context, description, recipient string) (*Invite, error) {
+// GenerateInvite creates an invitation token.
+func (c *Client) GenerateInvite(ctx context.Context, description string) (*Invite, error) {
 	body := map[string]string{}
 	if description != "" {
 		body["description"] = description
-	}
-	if recipient != "" {
-		body["recipient"] = recipient
 	}
 
 	var raw rawInvite
@@ -175,64 +163,12 @@ func (c *Client) ListProviders(ctx context.Context) ([]OCMProvider, error) {
 	return providers, nil
 }
 
-// OCMReceivedPrefix marks a received federated share. reva encodes the id of
-// an OCM share this way, and it is the only reliable way to tell a federated
-// received share from a local one in a listing that holds both.
+// OCMReceivedPrefix starts the id of a received federated share. It is the
+// only way to tell a federated share from a local one in a mixed listing.
 const OCMReceivedPrefix = "ocm-received$"
 
-// FederatedShare is a share received from another provider.
-type FederatedShare struct {
-	ID   string `json:"id"`
-	Name string `json:"name"`
-	// Owner is who shared it, as "user@provider".
-	Owner string `json:"owner,omitempty"`
-	// Provider is the domain it came from.
-	Provider string `json:"provider,omitempty"`
-	// Role is the role held on the shared resource.
-	Role string `json:"role,omitempty"`
-	// Accepted reports whether the share has been accepted locally.
-	Accepted bool `json:"accepted"`
-}
-
-// ReceivedFederatedShares lists shares other providers have made with the
-// caller.
-//
-// This reads the graph sharedWithMe endpoint, not the OCS remote_shares one.
-// OCS has a route for it, but reva's handler is an empty stub that writes
-// nothing, so a client built on it would report "no federated shares" however
-// many there were. The graph endpoint returns them for real, provided the
-// server has ocm_enabled set on its graph service.
-func (c *Client) ReceivedFederatedShares(ctx context.Context) ([]FederatedShare, error) {
-	items, err := c.SharedWithMe(ctx)
-	if err != nil {
-		return nil, err
-	}
-
-	out := make([]FederatedShare, 0)
-	for _, item := range items {
-		if !item.Federated {
-			continue
-		}
-		share := FederatedShare{
-			ID:       item.ID,
-			Name:     item.Name,
-			Role:     item.Role,
-			Accepted: item.Accepted,
-		}
-		if item.SharedBy != nil {
-			share.Owner = firstNonEmptyString(item.SharedBy.ID, item.SharedBy.DisplayName)
-			if _, domain, ok := strings.Cut(share.Owner, "@"); ok {
-				share.Provider = domain
-			}
-		}
-		out = append(out, share)
-	}
-	return out, nil
-}
-
-// ocmUnavailable turns a 404 into an explanation. The sciencemesh service is
-// optional, and a bare "not found" would read as "no invitations" rather than
-// "this deployment does not do federated sharing".
+// ocmUnavailable explains a 404. The sciencemesh service is optional, and a
+// bare "not found" would read as "no invitations".
 func ocmUnavailable(err error, op string) error {
 	if cberr.KindOf(err) != cberr.KindNotFound {
 		return err

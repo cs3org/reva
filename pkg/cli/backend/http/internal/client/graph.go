@@ -45,40 +45,28 @@ type User struct {
 type Space struct {
 	ID   string `json:"id"`
 	Name string `json:"name"`
-	// Type is "personal", "project", or another server-defined type.
 	Type string `json:"type"`
-	// Alias is the server's drive alias, which at CERN is the space root path
-	// without its leading slash, for example "eos/user/g/gdelmont".
-	Alias string `json:"alias,omitempty"`
-	// Path is the absolute CERNBox path of the space root.
-	Path string `json:"path"`
-	// WebDavURL addresses the space root directly.
+	// Alias is the drive alias. At CERN it is the space root path without the
+	// leading slash.
+	Alias     string `json:"alias,omitempty"`
+	Path      string `json:"path"`
 	WebDavURL string `json:"webdav_url,omitempty"`
 
 	QuotaTotal     int64 `json:"quota_total,omitempty"`
 	QuotaUsed      int64 `json:"quota_used,omitempty"`
 	QuotaRemaining int64 `json:"quota_remaining,omitempty"`
 
-	// Owner is the account the space belongs to, which for a project is the
-	// account it was created for rather than anybody who can write to it.
+	// Owner is the account the space was created for. For a project, this is not
+	// everybody who can write to it.
 	Owner string `json:"owner,omitempty"`
-	// YourRole is the caller's own role on the space root, as a short name.
-	//
-	// The server computes it from the caller's group membership and does not
-	// disclose the groups themselves, so this says what you may do and never who
-	// else may do it.
+	// YourRole is the caller's own role on the space root. The server does not
+	// say which groups give it.
 	YourRole string `json:"your_role,omitempty"`
-	// RootPermissions is every permission the server reported on the space root.
-	//
-	// Kept whole rather than reduced to YourRole, because when a role is not the
-	// one somebody expected, the only way to tell a mis-read from a server that
-	// really said that is to look at what arrived.
+	// RootPermissions is what the server sent, kept whole to debug a wrong role.
 	RootPermissions []Permission `json:"root_permissions,omitempty"`
 }
 
-// Unified role identifiers, as defined by libregraph and accepted by ocgraph.
-// The CLI exposes short names and translates here, so that users type
-// --role editor rather than a UUID.
+// Unified role ids, as defined by libregraph and accepted by ocgraph.
 const (
 	RoleViewer      = "b1e2218d-eef8-4d4c-b82d-0f1a1b48f3b5"
 	RoleSpaceViewer = "a8d5fe5e-96e3-418d-825b-534dbdf22b99"
@@ -89,15 +77,13 @@ const (
 	RoleDenied      = "5d3754fa-a6a6-4985-b0af-dd1359e5d616"
 )
 
-// roleNames maps the CLI's short role names to unified role ids.
 var roleNames = map[string]string{
 	"viewer":  RoleViewer,
 	"reader":  RoleViewer,
 	"editor":  RoleEditor,
 	"writer":  RoleEditor,
 	"manager": RoleManager,
-	// Kept so that anything already passing --role collab keeps working; it is
-	// no longer what the role is called back.
+	// Name that scripts may still pass for manager.
 	"collab": RoleManager,
 	"denied": RoleDenied,
 }
@@ -110,8 +96,8 @@ func RoleID(name string) (string, error) {
 	return "", cberr.Usagef("unknown role %q: want viewer, editor, manager, or denied", name)
 }
 
-// RoleName translates a unified role id back to the CLI's short name, falling
-// back to the raw id so an unknown role is still displayed rather than hidden.
+// RoleName translates a unified role id to the CLI's short name. An unknown id
+// is returned as it is.
 func RoleName(id string) string {
 	switch id {
 	case RoleViewer, RoleSpaceViewer:
@@ -131,19 +117,15 @@ func RoleName(id string) string {
 type Identity struct {
 	ID          string `json:"id,omitempty"`
 	DisplayName string `json:"display_name,omitempty"`
-	// Type is "user" or "group".
-	Type string `json:"type,omitempty"`
+	Type        string `json:"type,omitempty"` // "user" or "group"
 }
 
 // Link describes a public link permission.
 type Link struct {
-	// Type is the libregraph link type, "view" or "edit".
-	Type string `json:"type,omitempty"`
-	URL  string `json:"url,omitempty"`
-	// HasPassword reports whether the link is password protected.
-	HasPassword bool `json:"has_password,omitempty"`
-	// Name is the label the link was given, for telling several apart.
-	Name string `json:"name,omitempty"`
+	Type        string `json:"type,omitempty"` // "view" or "edit"
+	URL         string `json:"url,omitempty"`
+	HasPassword bool   `json:"has_password,omitempty"`
+	Name        string `json:"name,omitempty"`
 }
 
 // Permission is a share or a public link on a resource.
@@ -153,16 +135,10 @@ type Permission struct {
 	GrantedTo *Identity  `json:"granted_to,omitempty"`
 	Link      *Link      `json:"link,omitempty"`
 	ExpiresAt *time.Time `json:"expires_at,omitempty"`
-	// Path is the resource the permission applies to, when the server reports
-	// it. Listings fill it in so the user can tell shares apart.
-	Path string `json:"path,omitempty"`
-	// Created and InvitedBy are when and by whom the share was made, when
-	// the server says it.
+	Path      string     `json:"path,omitempty"`
 	Created   *time.Time `json:"created,omitempty"`
 	InvitedBy *Identity  `json:"invited_by,omitempty"`
 }
-
-// -- identity -----------------------------------------------------------------
 
 type graphUser struct {
 	ID                       *string `json:"id"`
@@ -171,9 +147,8 @@ type graphUser struct {
 	OnPremisesSamAccountName string  `json:"onPremisesSamAccountName"`
 }
 
-// Me returns the authenticated user, fetching it at most once per process. The
-// username is needed to build every path-addressed WebDAV URL, so this runs
-// before almost any other call.
+// Me returns the authenticated user. It fetches the user once, because every
+// WebDAV URL needs the username.
 func (c *Client) Me(ctx context.Context) (*User, error) {
 	c.meOnce.Do(func() {
 		c.me, c.meErr = c.fetchMe(ctx)
@@ -184,9 +159,7 @@ func (c *Client) Me(ctx context.Context) (*User, error) {
 func (c *Client) fetchMe(ctx context.Context) (*User, error) {
 	var gu graphUser
 	if err := c.getJSON(ctx, c.URL(graphV1+"/me"), "identify the current user", "", &gu); err != nil {
-		// A 404 here is not a missing file, it is a missing API. The default
-		// "no such file or directory" sends whoever hits it looking for a path
-		// that was never involved.
+		// A 404 here is a missing API, not a missing file.
 		if cberr.KindOf(err) == cberr.KindNotFound {
 			return nil, cberr.New(cberr.KindOther, "identify the current user", "",
 				"this server does not expose the graph API at "+graphV1+"/me")
@@ -209,8 +182,6 @@ func (c *Client) fetchMe(ctx context.Context) (*User, error) {
 	}
 	return u, nil
 }
-
-// -- spaces -------------------------------------------------------------------
 
 type graphDrive struct {
 	ID         *string `json:"id"`
@@ -237,13 +208,9 @@ type graphCollection[T any] struct {
 	Value []T `json:"value"`
 }
 
-// roleOfCaller picks the permission that belongs to the asking user.
-//
-// Taking the first one with a role was wrong the moment a space reported more
-// than one: the answer would depend on the order the server happened to send
-// them, and would silently be somebody else's role. A single unattributed grant
-// is still read as the caller's, because that is the shape a project root has
-// when the server names nobody.
+// roleOfCaller picks the role of the asking user. A single unattributed grant
+// counts as the caller's: a project root has that shape when the server names
+// nobody.
 func roleOfCaller(perms []Permission, me *User) string {
 	if me != nil {
 		for _, p := range perms {
@@ -262,21 +229,17 @@ func roleOfCaller(perms []Permission, me *User) string {
 			continue
 		}
 		if p.GrantedTo != nil && me != nil {
-			// Attributed to somebody, and not to us.
 			continue
 		}
 		if only != "" {
-			// More than one unattributed role: no way to tell which is ours.
-			return ""
+			return "" // cannot tell which one is ours
 		}
 		only = p.Role
 	}
 	return only
 }
 
-// Spaces returns the caller's spaces, cached for the configured TTL. The
-// listing backs both "cernbox space list" and every space-alias resolution, so
-// caching it keeps a shell loop from re-fetching it on each invocation.
+// Spaces returns the caller's spaces, cached for the configured TTL.
 func (c *Client) Spaces(ctx context.Context) ([]Space, error) {
 	c.spacesMu.Lock()
 	defer c.spacesMu.Unlock()
@@ -285,9 +248,7 @@ func (c *Client) Spaces(ctx context.Context) ([]Space, error) {
 		return c.spaces, c.spacesErr
 	}
 
-	// Who is asking, so that a space reporting several grants can be read for the
-	// caller's own rather than for whichever came first. Cached, and a failure
-	// here only costs the role, so it is not worth failing the listing over.
+	// A failure here only costs the role, so do not fail the listing.
 	var me *User
 	if u, err := c.Me(ctx); err == nil {
 		me = u
@@ -341,13 +302,8 @@ func (c *Client) Spaces(ctx context.Context) ([]Space, error) {
 	return spaces, nil
 }
 
-// ResolveSpace maps a space alias to the absolute path of that space's root,
-// implementing pathspec.SpaceResolver.
-//
-// Several spellings are accepted, because users arrive from different places:
-// "home" for the personal space, "project/<name>" or just "<name>" for a
-// project, the server's own drive alias, and the raw space id that a script
-// might have stored.
+// ResolveSpace maps a space alias to the absolute path of the space root. It
+// accepts "home", "project/<name>", "<name>", the drive alias and the space id.
 func (c *Client) ResolveSpace(ctx context.Context, alias string) (string, error) {
 	spaces, err := c.Spaces(ctx)
 	if err != nil {
@@ -393,36 +349,13 @@ func spaceRoot(s *Space) (string, error) {
 	return s.Path, nil
 }
 
-// SpaceAlias returns the alias the CLI displays for a space.
-func SpaceAlias(s Space) string {
-	switch s.Type {
-	case "personal":
-		return "home"
-	case "project":
-		return "project/" + s.Name
-	default:
-		if s.Alias != "" {
-			return s.Alias
-		}
-		return s.Name
-	}
-}
-
-// -- shares and links ---------------------------------------------------------
-
-// SpacePathOfID recovers the path of the space a resource belongs to, from the
-// resource id the graph reports.
+// SpacePathOfID returns the path of the space that a resource belongs to.
 //
-// The id is "storage$space!item", and the space part is the base32 of the
-// space's path: "localhome$F5SW64ZPOVZWK4RPMUXWK2LOON2GK2LO!3857" is an item in
-// the space rooted at /eos/user/e/einstein. That encoding is reva's, not
-// something this client invented, and the alternative is worse: a received share
-// carries no path of its own, so without decoding this there is no way to reach
-// what somebody has shared with you except by guessing at the layout of their
-// home directory.
-//
-// A path that does not decode is reported rather than guessed at, since acting
-// on a wrong one would mean reading somebody else's directory.
+// A resource id is "storage$space!item", and the space part is the base32 of
+// the space path. So "localhome$F5SW64ZPOVZWK4RPMUXWK2LOON2GK2LO!3857" is in
+// the space /eos/user/e/einstein. A received share has no path of its own, so
+// this is the only way to find it. An id that does not decode gives false,
+// because a guessed path could point at somebody else's directory.
 func SpacePathOfID(resourceID string) (string, bool) {
 	spaceID, _, ok := splitResourceID(resourceID)
 	if !ok {
@@ -432,8 +365,7 @@ func SpacePathOfID(resourceID string) (string, bool) {
 	if !ok || encoded == "" {
 		return "", false
 	}
-	// reva writes the padding sometimes and omits it elsewhere, so decode
-	// without it and trim whatever is there.
+	// reva writes the padding in some ids and not in others.
 	raw, err := base32.StdEncoding.WithPadding(base32.NoPadding).
 		DecodeString(strings.TrimRight(encoded, "="))
 	if err != nil {
@@ -446,8 +378,7 @@ func SpacePathOfID(resourceID string) (string, bool) {
 	return path.Clean(p), true
 }
 
-// splitResourceID splits a stringified resource id, "storage$space!item", into
-// the space id the Graph route needs and the item id.
+// splitResourceID splits "storage$space!item" into the space id and the full id.
 func splitResourceID(id string) (spaceID, itemID string, ok bool) {
 	spaceID, itemID, ok = strings.Cut(id, "!")
 	if !ok || spaceID == "" || itemID == "" {
@@ -468,17 +399,14 @@ func (c *Client) itemURL(resourceID, suffix string) (string, error) {
 
 // Recipient names a share target.
 type Recipient struct {
-	// ID is the username or group name.
-	ID string
-	// Type is "user" or "group".
-	Type string
+	ID   string // username or group name
+	Type string // "user" or "group"
 }
 
 type inviteRequest struct {
 	Recipients []inviteRecipient `json:"recipients"`
 	Roles      []string          `json:"roles"`
-	// Expiration is omitted entirely when unset, because ocgraph decodes the
-	// body with DisallowUnknownFields and a null would be rejected.
+	// Omitted when unset: ocgraph rejects a null.
 	Expiration *time.Time `json:"expirationDateTime,omitempty"`
 }
 
@@ -488,8 +416,8 @@ type inviteRecipient struct {
 }
 
 type graphPermission struct {
-	ID          *string `json:"id"`
-	Roles       []string
+	ID          *string  `json:"id"`
+	Roles       []string `json:"roles"`
 	GrantedToV2 *struct {
 		User  *graphIdentity `json:"user"`
 		Group *graphIdentity `json:"group"`
@@ -507,8 +435,7 @@ type graphPermission struct {
 	} `json:"link"`
 	ExpirationDateTime *time.Time `json:"expirationDateTime"`
 	CreatedDateTime    *time.Time `json:"createdDateTime"`
-	// HasPassword is where reva puts the password flag of a link, outside
-	// the link object.
+	// reva puts the password flag of a link here, outside the link object.
 	HasPassword *bool `json:"hasPassword"`
 	Invitation  *struct {
 		InvitedBy *struct {
@@ -579,21 +506,6 @@ func identityOf(id *graphIdentity, kind string) *Identity {
 	return out
 }
 
-// UnmarshalJSON decodes the roles array, which libregraph names "roles".
-func (p *graphPermission) UnmarshalJSON(b []byte) error {
-	type alias graphPermission
-	var raw struct {
-		alias
-		Roles []string `json:"roles"`
-	}
-	if err := json.Unmarshal(b, &raw); err != nil {
-		return err
-	}
-	*p = graphPermission(raw.alias)
-	p.Roles = raw.Roles
-	return nil
-}
-
 // Share grants recipients a role on a resource.
 func (c *Client) Share(ctx context.Context, resourceID string, recipients []Recipient, role string, expiry *time.Time) ([]Permission, error) {
 	u, err := c.itemURL(resourceID, "/invite")
@@ -650,30 +562,9 @@ func (c *Client) UpdatePermission(ctx context.Context, resourceID, permissionID,
 	return &p, nil
 }
 
-// RemovePermission deletes a share or link.
-func (c *Client) RemovePermission(ctx context.Context, resourceID, permissionID string) error {
-	u, err := c.itemURL(resourceID, "/permissions/"+url.PathEscape(permissionID))
-	if err != nil {
-		return err
-	}
-	resp, err := c.do(ctx, request{
-		method:  http.MethodDelete,
-		url:     u,
-		op:      "remove share",
-		path:    permissionID,
-		expects: []int{http.StatusNoContent, http.StatusOK},
-	})
-	if err != nil {
-		return err
-	}
-	drain(resp)
-	return nil
-}
-
 // LinkOptions configures a public link.
 type LinkOptions struct {
-	// Type is "view" or "edit".
-	Type        string
+	Type        string // "view" or "edit"
 	DisplayName string
 	Password    string
 	Expiry      *time.Time
@@ -704,112 +595,27 @@ func (c *Client) CreateLink(ctx context.Context, resourceID string, opts LinkOpt
 	return &p, nil
 }
 
-// LinkUpdate is what can be changed on a public link that already exists. An
-// empty field leaves that part of the link alone.
-type LinkUpdate struct {
-	// Type is "view" or "edit".
-	Type        string
-	DisplayName string
-	Expiry      *time.Time
-	// ClearExpiry removes the expiry, which is a different request from not
-	// mentioning it: the server distinguishes an absent field from an explicit
-	// null, and only the null takes an expiry away.
-	ClearExpiry bool
-}
-
-// Empty reports whether the update would change nothing.
-func (u LinkUpdate) Empty() bool {
-	return u.Type == "" && u.DisplayName == "" && u.Expiry == nil && !u.ClearExpiry
-}
-
-// UpdateLink changes the type, name or expiry of an existing public link.
-//
-// A link is a permission, but it is not updated like one: a share carries its
-// role in "roles", whereas a link carries it in the link type, and the server
-// rejects a body that mixes the two. It also refuses unknown fields outright,
-// so each key here has to be one libregraph names.
-func (c *Client) UpdateLink(ctx context.Context, resourceID, permissionID string, u LinkUpdate) (*Permission, error) {
-	if u.Empty() {
-		return nil, cberr.Usagef("nothing to update: pass --role, --name, --expiry or --no-expiry")
-	}
-	if u.Expiry != nil && u.ClearExpiry {
-		return nil, cberr.Usagef("--expiry and --no-expiry ask for opposite things")
-	}
-
-	endpoint, err := c.itemURL(resourceID, "/permissions/"+url.PathEscape(permissionID))
-	if err != nil {
-		return nil, err
-	}
-
-	body := map[string]any{}
-	link := map[string]any{}
-	if u.Type != "" {
-		link["type"] = u.Type
-	}
-	if u.DisplayName != "" {
-		link["@libre.graph.displayName"] = u.DisplayName
-	}
-	if len(link) > 0 {
-		body["link"] = link
-	}
-	switch {
-	case u.Expiry != nil:
-		body["expirationDateTime"] = u.Expiry
-	case u.ClearExpiry:
-		body["expirationDateTime"] = nil
-	}
-
-	var out graphPermission
-	if err := c.sendJSON(ctx, http.MethodPatch, endpoint, "update link", permissionID, body, &out); err != nil {
-		return nil, err
-	}
-	p := out.toPermission()
-	return &p, nil
-}
-
-// SetLinkPassword sets or clears the password on an existing link.
-func (c *Client) SetLinkPassword(ctx context.Context, resourceID, permissionID, password string) error {
-	u, err := c.itemURL(resourceID, "/permissions/"+url.PathEscape(permissionID)+"/setPassword")
-	if err != nil {
-		return err
-	}
-	return c.postJSON(ctx, u, "set link password", permissionID,
-		map[string]any{"password": password}, nil)
-}
-
 // DriveItem is an entry in a shared-with-me or shared-by-me listing.
 type DriveItem struct {
 	ID   string `json:"id"`
 	Name string `json:"name"`
 	Size int64  `json:"size,omitempty"`
-	// Path is the CERNBox path when the server reports one.
 	Path string `json:"path,omitempty"`
-	// SharedBy is who granted the share, for received shares.
+	// SharedBy is who granted a received share.
 	SharedBy *Identity `json:"shared_by,omitempty"`
-	// SharedWith is who it was granted to, for shares you made. A resource is
-	// listed once however many shares it carries, so there can be several: and
-	// a public link has no grantee at all, which is why this can be empty on a
-	// row that is nonetheless shared.
+	// SharedWith is who a share you made went to. It is empty for a public link,
+	// which has no grantee.
 	SharedWith []Identity `json:"shared_with,omitempty"`
-	// Links counts the public links on the resource, for the same listing: a row
-	// with no grantee and a link is shared with whoever has the address.
-	Links int `json:"links,omitempty"`
-	// Role is the role the caller holds on the item.
-	Role string `json:"role,omitempty"`
-	// Accepted reports whether a received share has been accepted.
-	Accepted bool `json:"accepted"`
-	// ShareID identifies the caller's own copy of a received share, in the form
-	// the graph calls a share jail id. It is not the same as ID, which names the
-	// resource that was shared, and only this one can be used to update the
-	// share: reva's handler refuses anything else.
+	// Links counts the public links on the resource.
+	Links    int    `json:"links,omitempty"`
+	Role     string `json:"role,omitempty"`
+	Accepted bool   `json:"accepted"`
+	// ShareID identifies the caller's copy of a received share (a share jail id).
+	// ID is the shared resource. Only ShareID works for an update.
 	ShareID string `json:"share_id,omitempty"`
-	// Hidden reports whether the caller has taken this received share out of
-	// their own listings. It hides nothing else: the grant is untouched and the
-	// resource stays readable.
-	Hidden bool `json:"hidden,omitempty"`
-	// Federated reports whether the share came from another OCM provider.
-	Federated bool `json:"federated,omitempty"`
-	// Permissions are the shares and the links of the item, with their ids.
+	// Hidden reports whether the caller hid this received share. The grant stays.
+	Hidden      bool         `json:"hidden,omitempty"`
+	Federated   bool         `json:"federated,omitempty"`
 	Permissions []Permission `json:"-"`
 }
 
@@ -818,20 +624,17 @@ type graphDriveItem struct {
 	Name            *string `json:"name"`
 	Size            *int64  `json:"size"`
 	ParentReference *struct {
-		// Path is the parent's path relative to the space root, so the resource's
-		// own path is this plus its name.
+		// Relative to the space root.
 		Path *string `json:"path"`
 	} `json:"parentReference"`
 	RemoteItem *struct {
 		ID   *string `json:"id"`
 		Name *string `json:"name"`
 		Size *int64  `json:"size"`
-		// Path is where the resource sits in the space it belongs to, relative to
-		// that space's root. It is the only path a received share reports.
+		// Relative to the root of the space of the owner. It is the only path a
+		// received share reports.
 		Path *string `json:"path"`
-		// The grant lives here for a received share: the top-level item is the
-		// entry in the caller's own virtual drive, and the permission belongs
-		// to the resource it points at.
+		// A received share carries its grant here.
 		Permissions []graphPermission `json:"permissions"`
 	} `json:"remoteItem"`
 	UIHidden          *bool             `json:"@UI.Hidden"`
@@ -846,9 +649,8 @@ func (d graphDriveItem) toDriveItem() DriveItem {
 	out := DriveItem{}
 	if d.ID != nil {
 		out.ID = *d.ID
-		// Kept before the remote item overwrites ID below. A received share has
-		// two ids and they are not interchangeable: this one addresses the
-		// caller's copy of the share, which is the only thing an update accepts.
+		// A received share has two ids. This one is the caller's copy, which an
+		// update needs. The remote item overwrites ID below.
 		out.ShareID = *d.ID
 	}
 	if d.Name != nil {
@@ -866,21 +668,14 @@ func (d graphDriveItem) toDriveItem() DriveItem {
 		}
 		if d.RemoteItem.ID != nil {
 			out.ID = *d.RemoteItem.ID
-			// reva encodes the id of a received OCM share with this prefix, so
-			// it is what distinguishes a federated share from a local one in a
-			// listing that holds both.
+			// The id of a received OCM share has this prefix.
 			out.Federated = strings.HasPrefix(*d.RemoteItem.ID, OCMReceivedPrefix)
 		}
 	}
 
-	// The absolute path, which is the only kind worth showing: it is what can be
-	// typed into another command. Neither listing reports one.
-	//
-	// A received share reports a path relative to the space it lives in, which is
-	// somebody else's. A share you made reports no path for the resource at all ,
-	// only its parent's, again relative to a space root: so the two are put
-	// together from different pieces. The space root itself is recoverable from
-	// the resource id in both cases.
+	// Neither listing reports an absolute path. A received share has a path
+	// relative to the space of its owner. A share you made has only the path of
+	// the parent. The space root comes from the resource id.
 	switch {
 	case d.RemoteItem != nil && d.RemoteItem.Path != nil && *d.RemoteItem.Path != "":
 		out.Path = *d.RemoteItem.Path
@@ -904,8 +699,7 @@ func (d graphDriveItem) toDriveItem() DriveItem {
 	if d.CreatedBy != nil && d.CreatedBy.User != nil {
 		out.SharedBy = identityOf(d.CreatedBy.User, "user")
 	}
-	// Prefer the top-level permissions, and fall back to the remote item's,
-	// which is where a received share actually carries its grant.
+	// A received share carries its grant on the remote item.
 	perms := d.Permissions
 	if len(perms) == 0 && d.RemoteItem != nil {
 		perms = d.RemoteItem.Permissions
@@ -913,9 +707,8 @@ func (d graphDriveItem) toDriveItem() DriveItem {
 	if len(perms) > 0 && len(perms[0].Roles) > 0 {
 		out.Role = RoleName(perms[0].Roles[0])
 	}
-	// Who it went to. A share you made carries this and nothing else: there is
-	// no createdBy on it, since you are the one who created it: so without
-	// reading the permissions the recipient column has nothing in it at all.
+	// A share you made has no createdBy, so the recipients come from the
+	// permissions.
 	out.Permissions = toPermissions(perms)
 	for _, p := range perms {
 		switch converted := p.toPermission(); {
@@ -925,7 +718,6 @@ func (d graphDriveItem) toDriveItem() DriveItem {
 			out.Links++
 		}
 	}
-	// A received share that has been accepted is synchronised and not hidden.
 	out.Accepted = d.ClientSynchronize != nil && *d.ClientSynchronize
 	out.Hidden = d.UIHidden != nil && *d.UIHidden
 	return out
@@ -953,16 +745,10 @@ func (c *Client) driveItems(ctx context.Context, u, op string) ([]DriveItem, err
 	return out, nil
 }
 
-// HideReceivedShare takes a received share out of the caller's own listings,
-// and out of the web interface's.
+// HideReceivedShare hides a received share from the caller's listings. The
+// grant stays, and the share stays in sharedWithMe with the flag set.
 //
-// It hides and nothing more: the grant is untouched, so the resource stays
-// readable and stays in the sharedWithMe listing with the flag set: which is
-// what lets the clipboard keep finding a handover it has hidden.
-//
-// shareID must be DriveItem.ShareID rather than DriveItem.ID. reva's handler
-// insists on the share jail form and answers 404 for a resource id, which is the
-// same thing the listing reports as the item's id.
+// shareID must be DriveItem.ShareID. reva answers 404 for a resource id.
 func (c *Client) HideReceivedShare(ctx context.Context, shareID string) error {
 	u, err := c.itemURL(shareID, "")
 	if err != nil {
@@ -974,16 +760,10 @@ func (c *Client) HideReceivedShare(ctx context.Context, shareID string) error {
 
 // SetReceivedShareState accepts or declines a received share.
 //
-// In reva's model these are the same field as hidden: accepting sets the share's
-// state to accepted and declining sets it to rejected, which is what the graph
-// reports as @UI.Hidden. Declining therefore takes the share out of the caller's
-// listings; on a deployment where sharing is done with storage ACLs it does not
-// necessarily take away their access.
+// In reva this is the same field as hidden, so a decline hides the share. With
+// storage ACLs it does not necessarily remove the access.
 //
-// id may be either of the two ids a received share has. The listing reports the
-// resource that was shared, reva's handler accepts only the caller's own copy of
-// the share, and resolving between them is not something to make the user's
-// problem: before this, every accept and decline answered 404.
+// id may be the share id or the resource id.
 func (c *Client) SetReceivedShareState(ctx context.Context, id string, accept bool) error {
 	shareID, err := c.receivedShareID(ctx, id)
 	if err != nil {
@@ -1000,10 +780,7 @@ func (c *Client) SetReceivedShareState(ctx context.Context, id string, accept bo
 	return c.sendJSON(ctx, http.MethodPatch, u, "update received share", id, body, nil)
 }
 
-// receivedShareID maps whichever id the caller has onto the one an update takes.
-//
-// An id that is already a share's own id is returned untouched, so a caller that
-// has the right one costs nothing but the listing it takes to confirm it.
+// receivedShareID maps either id of a received share to the one an update takes.
 func (c *Client) receivedShareID(ctx context.Context, id string) (string, error) {
 	items, err := c.SharedWithMe(ctx)
 	if err != nil {
@@ -1033,8 +810,6 @@ func toPermissions(in []graphPermission) []Permission {
 	}
 	return out
 }
-
-// -- JSON helpers -------------------------------------------------------------
 
 func (c *Client) getJSON(ctx context.Context, u, op, path string, out any) error {
 	resp, err := c.do(ctx, request{
@@ -1067,7 +842,7 @@ func (c *Client) sendJSON(ctx context.Context, method, u, op, path string, in, o
 			"Content-Type": []string{"application/json"},
 			"Accept":       []string{"application/json"},
 		},
-		body: bytesBody(payload),
+		body: stringBody(string(payload)),
 		op:   op,
 		path: path,
 	})
@@ -1083,9 +858,6 @@ func (c *Client) sendJSON(ctx context.Context, method, u, op, path string, in, o
 }
 
 func decodeJSON(r io.Reader, out any, op, path string) error {
-	if out == nil {
-		return nil
-	}
 	if err := json.NewDecoder(r).Decode(out); err != nil {
 		return cberr.Wrap(cberr.KindOther, op, path, fmt.Errorf("malformed server response: %w", err))
 	}

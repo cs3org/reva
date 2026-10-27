@@ -25,20 +25,13 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"golang.org/x/term"
 )
 
-// Meter draws a transfer's progress on a single line, rewriting it in place.
-//
-// It is deliberately separate from the transfer engine's event stream, because
-// the same bar has to be driven two different ways. A download through the engine
-// reports its progress as events; a stream joined or handed over by the clipboard
-// is a plain io.Copy, with nothing to report anything. Meter accepts both: Add
-// for the first, Writer for the second.
-//
-// Everything about the rendering is a pure function of the meter's state and the
-// terminal width, so the layout can be tested without a terminal: which matters,
-// because the one thing a progress bar must never do is be wider than the window
-// and wrap, turning one line into a screenful of debris.
+// Meter draws the progress of a transfer on one line, rewriting it in place.
+// Add and Set take events of the transfer engine. Writer wraps a plain
+// io.Copy.
 type Meter struct {
 	out io.Writer
 
@@ -56,60 +49,48 @@ type Meter struct {
 }
 
 const (
-	// The bar is drawn with block characters rather than ASCII. Every terminal
-	// this runs in is UTF-8, and the CLI already emits ANSI colour, so the bar may
-	// as well look like the decade it was written in. They are constants so that
-	// swapping them for "=" and "-" is a one-line change if that turns out wrong.
 	meterFilled = "█"
 	meterEmpty  = "░"
 
-	// meterRedraw bounds how often the line is rewritten. A bar redrawn per read
-	// on a fast link is pure waste, and on a slow terminal it is worse than waste.
 	meterRedraw = 100 * time.Millisecond
 
-	// meterMinBar is the narrowest bar worth drawing. Below it the bar is dropped
-	// and the numbers keep the line, which is the useful half anyway.
+	// Below meterMinBar the bar is dropped and the numbers keep the line.
 	meterMinBar = 8
 
-	// meterMaxLabel bounds the name so that a deep path cannot crowd out the
-	// numbers entirely.
+	// meterMaxLabel keeps a deep path from crowding out the numbers.
 	meterMaxLabel = 28
 )
 
-// MeterOption configures a Meter.
 type MeterOption func(*Meter)
 
-// MeterWidth fixes the width the bar lays itself out in. Without it the meter
-// asks the terminal on every draw, which is what makes it survive a resize.
+// MeterWidth fixes the width of the bar. Without it, the meter asks the
+// terminal on every draw, so that it follows a resize.
 func MeterWidth(n int) MeterOption { return func(m *Meter) { m.width = n } }
 
-// MeterClock replaces the clock, so that rates and ETAs are testable.
+// MeterClock replaces the clock, for tests.
 func MeterClock(f func() time.Time) MeterOption { return func(m *Meter) { m.now = f } }
 
-// NewMeter returns a Meter drawing to out. A total of -1 means the size is not
-// known, which is the normal case for a stream: the bar becomes a byte count and
-// a rate, with no percentage it would have to invent.
+// NewMeter returns a Meter drawing to out. A total of -1 means the size is
+// not known: the meter shows a byte count and a rate, without a bar.
 func NewMeter(out io.Writer, label string, total int64, opts ...MeterOption) *Meter {
 	m := &Meter{out: out, label: label, total: total, now: time.Now}
 	for _, o := range opts {
 		o(m)
 	}
 	m.start = m.now()
-	// Backdated so the first update draws immediately rather than after a tenth of
-	// a second of apparently nothing happening.
+	// Backdated, so that the first update draws at once.
 	m.lastDraw = m.start.Add(-meterRedraw)
 	return m
 }
 
-// SetLabel names what is being transferred now, for a paste that covers several
-// items.
+// SetLabel names the item that is being transferred now.
 func (m *Meter) SetLabel(label string) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	m.label = label
 }
 
-// Add records bytes transferred and redraws if it is time to.
+// Add records transferred bytes.
 func (m *Meter) Add(n int64) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -117,8 +98,7 @@ func (m *Meter) Add(n int64) {
 	m.draw(false)
 }
 
-// Set records an absolute position, for a caller whose progress arrives as a
-// running total rather than as increments: the transfer engine's events do.
+// Set records an absolute position. A total of zero keeps the known total.
 func (m *Meter) Set(done, total int64) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -129,8 +109,7 @@ func (m *Meter) Set(done, total int64) {
 	m.draw(false)
 }
 
-// Stop erases the line. The command's own summary follows it, so leaving a
-// finished bar on screen would only say the same thing twice.
+// Stop erases the line.
 func (m *Meter) Stop() {
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -144,8 +123,8 @@ func (m *Meter) Stop() {
 	}
 }
 
-// Writer returns dst wrapped so that everything written through it counts
-// towards the meter. This is how a plain io.Copy gets a progress bar.
+// Writer returns dst wrapped so that what is written through it counts
+// towards the meter.
 func (m *Meter) Writer(dst io.Writer) io.Writer { return &meterWriter{m: m, dst: dst} }
 
 type meterWriter struct {
@@ -161,8 +140,7 @@ func (w *meterWriter) Write(p []byte) (int, error) {
 	return n, err
 }
 
-// draw rewrites the line, subject to the redraw interval. The caller holds the
-// lock.
+// draw runs with the lock held.
 func (m *Meter) draw(force bool) {
 	if m.stopped {
 		return
@@ -175,9 +153,8 @@ func (m *Meter) draw(force bool) {
 
 	line := m.render(m.widthNow(), now.Sub(m.start))
 
-	// Padded to the previous length rather than cleared with an escape sequence:
-	// the result is the same, and it keeps the output something a test can assert
-	// on character for character.
+	// Pad over the previous line instead of using an escape sequence, so that
+	// tests can compare the output.
 	pad := ""
 	if n := m.lastLen - len([]rune(line)); n > 0 {
 		pad = strings.Repeat(" ", n)
@@ -190,16 +167,15 @@ func (m *Meter) widthNow() int {
 	if m.width > 0 {
 		return m.width
 	}
-	return TerminalWidth(stderrFile())
+	// The width of stderr, not of stdout: stdout can be a pipe with the payload.
+	if w, _, err := term.GetSize(int(os.Stderr.Fd())); err == nil && w > 0 {
+		return w
+	}
+	return 80
 }
 
-// render lays the line out within width. It is a pure function of the arguments
-// and the meter's counters, which is the whole reason the layout is testable.
-//
-// A narrow window drops whole fields rather than slicing characters off the end.
-// Cutting mid-number leaves "40.0M/12" or a dangling "et", which is worse than
-// not showing the rate at all: a number you cannot trust is more misleading than
-// a number that is absent.
+// render lays the line out within width. A narrow window drops whole fields
+// instead of cutting a number in the middle.
 func (m *Meter) render(width int, elapsed time.Duration) string {
 	const gap = 2
 	label := truncateLabel(m.label, meterMaxLabel)
@@ -211,8 +187,7 @@ func (m *Meter) render(width int, elapsed time.Duration) string {
 		if rightWidth > room {
 			continue
 		}
-		// The widest set of fields that fits wins, and the bar takes whatever is
-		// left: the numbers carry more than a longer bar would.
+		// The widest set of fields that fits wins. The bar takes the rest.
 		if barWidth := room - rightWidth - gap; m.total > 0 && barWidth >= meterMinBar {
 			filled := max(min(int(int64(barWidth)*m.done/m.total), barWidth), 0)
 			bar := strings.Repeat(meterFilled, filled) + strings.Repeat(meterEmpty, barWidth-filled)
@@ -225,15 +200,9 @@ func (m *Meter) render(width int, elapsed time.Duration) string {
 	return trimToWidth(label, width)
 }
 
-// fields returns the candidate right-hand sides, widest first, so that render can
-// take the most informative one that fits.
-//
-// The order is a judgement about what a watcher needs: how far along, then how
-// much of how much, then how fast, then how long is left. The estimate goes first
-// because it is the one that can be recomputed by eye from the others.
+// fields returns the candidate right-hand sides, widest first.
 func (m *Meter) fields(rate int64) []string {
 	if m.total <= 0 {
-		// No total, so no percentage that would not be invented, and no bar.
 		return []string{
 			fmt.Sprintf("%s  %s/s", HumanSize(m.done), HumanSize(rate)),
 			HumanSize(m.done),
@@ -258,8 +227,7 @@ func (m *Meter) fields(rate int64) []string {
 	)
 }
 
-// truncateLabel shortens a name that would crowd out the numbers, keeping the
-// end: the distinguishing part of "data/run3/2026/histograms.root" is the tail.
+// truncateLabel keeps the end of a name, which tells paths apart.
 func truncateLabel(label string, maxLen int) string {
 	r := []rune(label)
 	if len(r) <= maxLen {
@@ -268,8 +236,8 @@ func truncateLabel(label string, maxLen int) string {
 	return "…" + string(r[len(r)-maxLen+1:])
 }
 
-// trimToWidth cuts a line that cannot fit. A bar that wraps turns one line into
-// a screenful, which is much worse than one that is cut short.
+// trimToWidth cuts a line that cannot fit, because a line that wraps breaks
+// the in-place redraw.
 func trimToWidth(s string, width int) string {
 	if width <= 0 {
 		return ""
@@ -281,9 +249,8 @@ func trimToWidth(s string, width int) string {
 	return string(r[:width])
 }
 
-// ratePerSecond is the average rate so far. The average rather than a recent
-// window: it is steadier to read, and for a transfer that is about to finish the
-// average is the number that predicts the ETA correctly.
+// ratePerSecond is the average rate so far, which is steadier to read than a
+// recent window.
 func ratePerSecond(done int64, elapsed time.Duration) int64 {
 	if elapsed <= 0 || done <= 0 {
 		return 0
@@ -291,8 +258,7 @@ func ratePerSecond(done int64, elapsed time.Duration) int64 {
 	return int64(float64(done) / elapsed.Seconds())
 }
 
-// etaOf estimates the time remaining, reporting false when there is nothing
-// useful to say: no rate yet, or already finished.
+// etaOf estimates the time left. It reports false with no rate or when done.
 func etaOf(done, total, rate int64) (string, bool) {
 	if rate <= 0 || done >= total {
 		return "", false
@@ -303,8 +269,3 @@ func etaOf(done, total, rate int64) (string, bool) {
 	}
 	return left.Round(time.Second).String(), true
 }
-
-// stderrFile is where the meter measures its width. It is stderr rather than
-// stdout on purpose: a command such as "cat" writes the payload to stdout, which may be
-// a pipe, and the bar has to lay itself out for the window a person is watching.
-func stderrFile() *os.File { return os.Stderr }

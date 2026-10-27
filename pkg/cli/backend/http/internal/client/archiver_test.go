@@ -20,8 +20,6 @@ package client
 
 import (
 	"context"
-	"io"
-	"net/http"
 	"net/url"
 	"strings"
 	"testing"
@@ -29,41 +27,38 @@ import (
 	"github.com/cs3org/reva/v3/internal/cli/cberr"
 )
 
-func TestArchive(t *testing.T) {
-	f := newFakeServer(t)
-	var gotQuery url.Values
-	f.on(http.MethodGet, "/archiver", func(w http.ResponseWriter, r *http.Request) {
-		gotQuery = r.URL.Query()
-		w.Write([]byte("tar-bytes"))
-	})
-
-	rc, err := f.client().Archive(context.Background(),
-		[]string{"/eos/user/e/einstein/Documents", "/eos/user/e/einstein/notes.txt"}, ArchiveTar)
+func archiveQuery(t *testing.T, f *fakeServer, paths []string, format string) url.Values {
+	t.Helper()
+	u, err := f.client().ArchiveURL(context.Background(), paths, format)
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer rc.Close()
-
-	body, _ := io.ReadAll(rc)
-	if string(body) != "tar-bytes" {
-		t.Errorf("archive body = %q", body)
+	parsed, err := url.Parse(u)
+	if err != nil {
+		t.Fatal(err)
 	}
+	return parsed.Query()
+}
 
-	paths := gotQuery["path"]
+func TestArchiveURL(t *testing.T) {
+	q := archiveQuery(t, newFakeServer(t),
+		[]string{"/eos/user/e/einstein/Documents", "/eos/user/e/einstein/notes.txt"}, "tar")
+
+	paths := q["path"]
 	if len(paths) != 2 {
 		t.Fatalf("query paths = %v, want both paths as repeated parameters", paths)
 	}
 	if paths[0] != "/eos/user/e/einstein/Documents" {
 		t.Errorf("first path = %q", paths[0])
 	}
-	if gotQuery.Get("arch_type") != "tar" {
-		t.Errorf("arch_type = %q", gotQuery.Get("arch_type"))
+	if q.Get("arch_type") != "tar" {
+		t.Errorf("arch_type = %q", q.Get("arch_type"))
 	}
 }
 
-func TestArchiveRejectsUnsupportedFormat(t *testing.T) {
+func TestArchiveURLRejectsUnsupportedFormat(t *testing.T) {
 	f := newFakeServer(t)
-	_, err := f.client().Archive(context.Background(), []string{"/eos/x"}, "7z")
+	_, err := f.client().ArchiveURL(context.Background(), []string{"/eos/x"}, "7z")
 	if err == nil {
 		t.Fatal("expected an error for an unsupported format")
 	}
@@ -75,46 +70,33 @@ func TestArchiveRejectsUnsupportedFormat(t *testing.T) {
 	}
 }
 
-// TestArchiveWhenDisabled: the caller needs to know to fall back to a
-// file-by-file walk rather than failing the whole download.
-func TestArchiveWhenDisabled(t *testing.T) {
+func TestArchiveURLWhenDisabled(t *testing.T) {
 	f := newFakeServer(t)
 	f.capabilitiesJSON = `{"ocs":{"data":{"capabilities":{"core":{}}}}}`
 
-	_, err := f.client().Archive(context.Background(), []string{"/eos/x"}, ArchiveTar)
+	_, err := f.client().ArchiveURL(context.Background(), []string{"/eos/x"}, "tar")
 	if err == nil || !strings.Contains(err.Error(), "no archiver service") {
 		t.Errorf("got %v, want a clear 'no archiver' error", err)
 	}
 }
 
-func TestArchiveRejectsEmptyPathList(t *testing.T) {
+func TestArchiveURLRejectsEmptyPathList(t *testing.T) {
 	f := newFakeServer(t)
-	if _, err := f.client().Archive(context.Background(), nil, ArchiveTar); err == nil {
+	if _, err := f.client().ArchiveURL(context.Background(), nil, "tar"); err == nil {
 		t.Error("expected an error for an empty path list")
 	}
 }
 
-func TestArchiveAppendsToExistingQuery(t *testing.T) {
+func TestArchiveURLKeepsExistingQuery(t *testing.T) {
 	f := newFakeServer(t)
 	f.capabilitiesJSON = strings.Replace(defaultCapabilities,
 		`"archiver_url": "/archiver"`, `"archiver_url": "/archiver?v=2"`, 1)
 
-	var gotQuery url.Values
-	f.on(http.MethodGet, "/archiver", func(w http.ResponseWriter, r *http.Request) {
-		gotQuery = r.URL.Query()
-		w.Write([]byte("ok"))
-	})
-
-	rc, err := f.client().Archive(context.Background(), []string{"/eos/x"}, ArchiveZip)
-	if err != nil {
-		t.Fatal(err)
+	q := archiveQuery(t, f, []string{"/eos/x"}, "zip")
+	if q.Get("v") != "2" {
+		t.Errorf("the archiver URL's own query was dropped: %v", q)
 	}
-	rc.Close()
-
-	if gotQuery.Get("v") != "2" {
-		t.Errorf("the archiver URL's own query was dropped: %v", gotQuery)
-	}
-	if gotQuery.Get("arch_type") != "zip" {
-		t.Errorf("arch_type = %q", gotQuery.Get("arch_type"))
+	if q.Get("arch_type") != "zip" {
+		t.Errorf("arch_type = %q", q.Get("arch_type"))
 	}
 }

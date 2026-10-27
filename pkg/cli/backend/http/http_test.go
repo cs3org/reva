@@ -126,7 +126,6 @@ func TestStat(t *testing.T) {
 	if info.Id.GetOpaqueId() != "4711" || info.Etag != "e1" || info.Size != 5 || info.Checksum.GetSum() != "062c0215" {
 		t.Errorf("info = %v", info)
 	}
-	// Not over HTTPS: the owner.
 	if info.Owner != nil {
 		t.Errorf("owner = %v, want none: PROPFIND does not give it", info.Owner)
 	}
@@ -141,8 +140,6 @@ func TestStat(t *testing.T) {
 	}
 }
 
-// TestSharesFromGraph checks the fields that Graph cannot fill: they stay
-// empty.
 func TestSharesFromGraph(t *testing.T) {
 	_, b := newServer(t)
 	list, err := b.Shares().List(context.Background(), nil)
@@ -211,7 +208,6 @@ func TestShareUpdate(t *testing.T) {
 		t.Errorf("requests %q, want an OCS PUT of the viewer permissions", s.reqs)
 	}
 
-	// OCS has no expiration for a share: Graph has, on the item that OCS gives.
 	_, err = b.Shares().Update(context.Background(), &collaboration.UpdateShareRequest{Ref: ref,
 		Field: &collaboration.UpdateShareRequest_UpdateField{Field: &collaboration.UpdateShareRequest_UpdateField_Expiration{
 			Expiration: timestamp(time.Date(2027, 1, 31, 0, 0, 0, 0, time.UTC))}},

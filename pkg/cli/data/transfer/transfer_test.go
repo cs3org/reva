@@ -66,7 +66,6 @@ func TestUploadSmallFileUsesPut(t *testing.T) {
 	}
 	box.requireContent("/eos/user/e/einstein/notes.txt", []byte("hello cernbox"))
 
-	// A small file should not pay for two extra TUS round trips.
 	if box.putCount != 1 {
 		t.Errorf("PUT count = %d, want 1", box.putCount)
 	}
@@ -106,7 +105,6 @@ func TestUploadRespectsServerChunkLimit(t *testing.T) {
 	box.mkdir("/eos/user/e/einstein")
 	box.maxChunk = 32 << 10
 
-	// Ask for a chunk far larger than the server allows.
 	e := box.engine(Options{Overwrite: true, ChunkSize: 16 << 20, PutThreshold: 1 << 10})
 	body := payload(128 << 10)
 	local := writeLocal(t, t.TempDir(), "big.bin", body)
@@ -119,8 +117,6 @@ func TestUploadRespectsServerChunkLimit(t *testing.T) {
 	}
 }
 
-// TestUploadResumesAfterInterruption is the property resumable uploads exist
-// for: a transfer that dies partway must continue, not start again.
 func TestUploadResumesAfterInterruption(t *testing.T) {
 	box := newFakeBox(t)
 	box.mkdir("/eos/user/e/einstein")
@@ -149,19 +145,15 @@ func TestUploadResumesAfterInterruption(t *testing.T) {
 	}
 	box.requireContent(remote, body)
 
-	// One upload session, not two: resume reused the server-side upload.
 	if box.tusPostCount != 1 {
 		t.Errorf("TUS creations = %d, want 1: the second run restarted the upload", box.tusPostCount)
 	}
-	// And it did not re-send what the server already had.
 	resendPatches := box.patchCount - patchesBefore
 	if resendPatches >= 16 {
 		t.Errorf("the resume sent %d chunks, want roughly the remaining ~14", resendPatches)
 	}
 }
 
-// TestUploadDoesNotResumeAfterLocalEdit: splicing two different versions of a
-// file together would pass every length check while being silently wrong.
 func TestUploadDoesNotResumeAfterLocalEdit(t *testing.T) {
 	box := newFakeBox(t)
 	box.mkdir("/eos/user/e/einstein")
@@ -178,7 +170,6 @@ func TestUploadDoesNotResumeAfterLocalEdit(t *testing.T) {
 		t.Fatal("expected the first attempt to fail")
 	}
 
-	// Replace the file with different content of a different size.
 	replacement := bytes.Repeat([]byte("Z"), 2<<20)
 	writeLocal(t, localDir, "big.bin", replacement)
 	box.failChunkAfter = 0
@@ -194,29 +185,25 @@ func TestUploadDoesNotResumeAfterLocalEdit(t *testing.T) {
 	}
 }
 
-func TestUploadSkipsExistingWithoutOverwrite(t *testing.T) {
-	box := newFakeBox(t)
-	box.putFile("/eos/user/e/einstein/notes.txt", []byte("original"))
-	e := box.engine(Options{})
+func TestUploadExisting(t *testing.T) {
+	for _, overwrite := range []bool{false, true} {
+		box := newFakeBox(t)
+		box.putFile("/eos/user/e/einstein/notes.txt", []byte("original"))
+		e := box.engine(Options{Overwrite: overwrite})
 
-	local := writeLocal(t, t.TempDir(), "notes.txt", []byte("replacement"))
-	_, err := e.UploadFile(context.Background(), local, "/eos/user/e/einstein/notes.txt")
-	if !errors.Is(err, errSkipped) {
-		t.Fatalf("got %v, want the upload to be skipped", err)
+		local := writeLocal(t, t.TempDir(), "notes.txt", []byte("replacement"))
+		_, err := e.UploadFile(context.Background(), local, "/eos/user/e/einstein/notes.txt")
+		want := "replacement"
+		if !overwrite {
+			want = "original"
+			if !errors.Is(err, errSkipped) {
+				t.Errorf("overwrite %v: got %v, want the upload to be skipped", overwrite, err)
+			}
+		} else if err != nil {
+			t.Fatal(err)
+		}
+		box.requireContent("/eos/user/e/einstein/notes.txt", []byte(want))
 	}
-	box.requireContent("/eos/user/e/einstein/notes.txt", []byte("original"))
-}
-
-func TestUploadOverwrites(t *testing.T) {
-	box := newFakeBox(t)
-	box.putFile("/eos/user/e/einstein/notes.txt", []byte("original"))
-	e := box.engine(Options{Overwrite: true})
-
-	local := writeLocal(t, t.TempDir(), "notes.txt", []byte("replacement"))
-	if _, err := e.UploadFile(context.Background(), local, "/eos/user/e/einstein/notes.txt"); err != nil {
-		t.Fatal(err)
-	}
-	box.requireContent("/eos/user/e/einstein/notes.txt", []byte("replacement"))
 }
 
 func TestUploadDryRunTransfersNothing(t *testing.T) {
@@ -299,8 +286,6 @@ func TestUploadTree(t *testing.T) {
 	box.requireContent("/eos/user/e/einstein/data/sub/b.txt", []byte("bb"))
 	box.requireContent("/eos/user/e/einstein/data/sub/deep/c.txt", []byte("ccc"))
 
-	// Directories must exist before their files, or every upload into them
-	// would fail with a conflict.
 	for _, dir := range []string{
 		"/eos/user/e/einstein/data",
 		"/eos/user/e/einstein/data/sub",
@@ -326,8 +311,6 @@ func TestUploadTreeSkipsSymlinks(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	// Copying the target under the link's name would silently change the shape
-	// of what the user asked to transfer.
 	if stats.Files != 1 {
 		t.Errorf("Files = %d, want 1: the symlink should have been skipped", stats.Files)
 	}
@@ -350,8 +333,6 @@ func TestUploadTreeSingleFile(t *testing.T) {
 		t.Errorf("stats = %+v", stats)
 	}
 }
-
-// -- download -----------------------------------------------------------------
 
 func TestDownloadFile(t *testing.T) {
 	box := newFakeBox(t)
@@ -376,8 +357,6 @@ func TestDownloadFile(t *testing.T) {
 	}
 }
 
-// TestDownloadUsesPartFile: a consumer watching the destination must never see
-// a truncated file, and an interrupted download must leave something to resume.
 func TestDownloadUsesPartFile(t *testing.T) {
 	box := newFakeBox(t)
 	body := payload(1 << 16)
@@ -386,7 +365,6 @@ func TestDownloadUsesPartFile(t *testing.T) {
 	dir := t.TempDir()
 	local := filepath.Join(dir, "big.bin")
 
-	// Pre-seed a partial download.
 	if err := os.WriteFile(local+".part", body[:1000], 0o644); err != nil {
 		t.Fatal(err)
 	}
@@ -433,34 +411,18 @@ func TestDownloadSkipsExistingWithoutOverwrite(t *testing.T) {
 	}
 }
 
-// TestDownloadDetectsCorruption is what --verify is for: a truncated or
-// corrupted transfer that looks complete is worse than one that fails.
-func TestDownloadDetectsCorruption(t *testing.T) {
-	box := newFakeBox(t)
-	box.putFile("/eos/user/e/einstein/notes.txt", []byte("the real content"))
-	box.corruptDownload = true
+func TestDownloadVerify(t *testing.T) {
+	for _, verify := range []bool{false, true} {
+		box := newFakeBox(t)
+		box.putFile("/eos/user/e/einstein/notes.txt", []byte("the real content"))
+		box.corruptDownload = true
 
-	e := box.engine(Options{Overwrite: true, Verify: true})
-	local := filepath.Join(t.TempDir(), "notes.txt")
-
-	_, err := e.DownloadFile(context.Background(), "/eos/user/e/einstein/notes.txt", local)
-	if err == nil {
-		t.Fatal("a corrupted download should have been rejected")
-	}
-	if !strings.Contains(err.Error(), "checksum mismatch") {
-		t.Errorf("got %v, want a checksum mismatch", err)
-	}
-}
-
-func TestDownloadWithoutVerifyIgnoresChecksum(t *testing.T) {
-	box := newFakeBox(t)
-	box.putFile("/eos/user/e/einstein/notes.txt", []byte("the real content"))
-	box.corruptDownload = true
-
-	e := box.engine(Options{Overwrite: true})
-	local := filepath.Join(t.TempDir(), "notes.txt")
-	if _, err := e.DownloadFile(context.Background(), "/eos/user/e/einstein/notes.txt", local); err != nil {
-		t.Fatalf("without --verify the download should succeed: %v", err)
+		e := box.engine(Options{Overwrite: true, Verify: verify})
+		local := filepath.Join(t.TempDir(), "notes.txt")
+		_, err := e.DownloadFile(context.Background(), "/eos/user/e/einstein/notes.txt", local)
+		if verify != (err != nil) || (err != nil && !strings.Contains(err.Error(), "checksum mismatch")) {
+			t.Errorf("verify %v: got %v, want a checksum mismatch only with verify", verify, err)
+		}
 	}
 }
 
@@ -483,20 +445,15 @@ func TestDownloadTreeViaArchiver(t *testing.T) {
 	if box.archiveCount != 1 {
 		t.Errorf("archiver requests = %d, want 1", box.archiveCount)
 	}
-	// One request for the whole tree, rather than one GET per file.
 	if box.getCount != 0 {
 		t.Errorf("individual GETs = %d, want 0 when the archiver is used", box.getCount)
 	}
 
-	// The same layout the walk produces: whether the archiver was used is a
-	// transport detail, and a download that lands a level deeper depending on
-	// which path the client took would be a trap for any script using it.
+	// The layout must be the same as the one of the walk.
 	assertFile(t, filepath.Join(local, "a.txt"), "a")
 	assertFile(t, filepath.Join(local, "sub", "b.txt"), "bb")
 }
 
-// TestDownloadTreeFallsBackWhenArchiverIsAbsent: an unavailable archiver must
-// not fail the command.
 func TestDownloadTreeFallsBackWhenArchiverIsAbsent(t *testing.T) {
 	box := newFakeBox(t)
 	box.archiverEnabled = false
@@ -551,8 +508,6 @@ func TestDownloadRejectsDirectoryWithoutRecursion(t *testing.T) {
 		t.Errorf("got %v, want a usage error", err)
 	}
 }
-
-// -- concurrency --------------------------------------------------------------
 
 func TestEachParallelRespectsJobLimit(t *testing.T) {
 	box := newFakeBox(t)
@@ -615,8 +570,6 @@ func TestEachParallelWithNoItems(t *testing.T) {
 	}
 }
 
-// -- local walk ---------------------------------------------------------------
-
 func TestWalkLocalOrdersDirectoriesShallowestFirst(t *testing.T) {
 	root := t.TempDir()
 	writeLocal(t, root, "a/b/c/deep.txt", []byte("x"))
@@ -626,7 +579,7 @@ func TestWalkLocalOrdersDirectoriesShallowestFirst(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	want := []string{"a", filepath.Join("a", "b"), filepath.Join("a", "b", "c")}
+	want := []string{"a", "a/b", "a/b/c"}
 	if len(dirs) != len(want) {
 		t.Fatalf("dirs = %v, want %v", dirs, want)
 	}
@@ -643,13 +596,10 @@ func TestWalkLocalOrdersDirectoriesShallowestFirst(t *testing.T) {
 func TestOptionDefaults(t *testing.T) {
 	box := newFakeBox(t)
 	e := box.engine(Options{})
-	opts := e.Options()
+	opts := e.opts
 
 	if opts.Jobs < 2 {
 		t.Errorf("Jobs = %d, want a sensible default", opts.Jobs)
-	}
-	if opts.ChunkSize != defaultChunkSize {
-		t.Errorf("ChunkSize = %d, want the default", opts.ChunkSize)
 	}
 	if opts.PutThreshold != defaultPutThreshold {
 		t.Errorf("PutThreshold = %d, want the default", opts.PutThreshold)

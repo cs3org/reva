@@ -26,16 +26,13 @@ import (
 )
 
 // KerberosProvider turns the Kerberos ticket of kinit into a SPNEGO token.
-// It reads the ticket with package kerberos, the same code as the gRPC
-// sign-in.
 type KerberosProvider struct {
-	// Ticket reads the credential cache.
 	Ticket kerberos.Provider
-	// SPN returns the service principal of the server that takes the
-	// token, for example HTTP/cernbox.cern.ch.
+	// SPN returns the service principal of the server, for example
+	// HTTP/cernbox.cern.ch.
 	SPN func() (string, error)
-	// Negotiate builds the SPNEGO token. Nil means Ticket.Negotiate. Tests
-	// set it, because a real token needs a KDC.
+	// Negotiate builds the SPNEGO token. Nil means Ticket.Negotiate. Tests set
+	// it, because a real token needs a KDC.
 	Negotiate func(spn string) (string, error)
 
 	once   sync.Once
@@ -46,14 +43,13 @@ type KerberosProvider struct {
 // Name implements Provider.
 func (p *KerberosProvider) Name() string { return MethodKerberos }
 
-// Available implements Provider. It only reads the local credential cache.
+// Available implements Provider.
 func (p *KerberosProvider) Available(context.Context) bool {
 	_, err := p.load()
 	return err == nil
 }
 
-// IdentityHint implements IdentityHinter, so that kinit as another
-// principal selects another cache entry.
+// IdentityHint implements IdentityHinter.
 func (p *KerberosProvider) IdentityHint() string {
 	t, err := p.load()
 	if err != nil {

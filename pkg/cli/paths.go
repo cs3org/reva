@@ -28,9 +28,7 @@ import (
 	"github.com/cs3org/reva/v3/pkg/cli/data/transfer"
 )
 
-// RemotePath resolves a remote path argument: by a cli.paths.* plugin
-// first, else an absolute path, a space alias with a path in it
-// (home:Documents), or a path relative to the home space.
+// RemotePath resolves a remote path argument. A cli.paths.* plugin goes first.
 func (r *Runtime) RemotePath(ctx context.Context, arg string) (string, error) {
 	for _, p := range reva.GetPlugins(PathsNamespace) {
 		newFn, ok := p.New.(func(*Runtime) PathResolver)
@@ -48,8 +46,7 @@ func (r *Runtime) RemotePath(ctx context.Context, arg string) (string, error) {
 	return r.resolveSpec(ctx, spec)
 }
 
-// TransferPaths splits the two arguments of a transfer: the remote side has
-// cb: or a space alias. It returns the resolved remote paths.
+// TransferPaths resolves the two arguments of a transfer.
 func (r *Runtime) TransferPaths(ctx context.Context, src, dst string) (from, to string, fromRemote, toRemote, intoDir bool, err error) {
 	s, d, err := pathspec.ParseTransferPair(src, dst)
 	if err != nil {
@@ -94,8 +91,7 @@ type TransferOptions struct {
 	Progress                             transfer.ProgressFunc
 }
 
-// Engine returns the transfer engine on the user plane, with the transfer
-// settings of the config and of the brand.
+// Engine returns the transfer engine on the user plane.
 func (r *Runtime) Engine(ctx context.Context, o TransferOptions) (*transfer.Engine, error) {
 	b, err := r.Backend(ctx)
 	if err != nil {

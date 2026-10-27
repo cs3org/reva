@@ -20,9 +20,7 @@ package client
 
 import "testing"
 
-// TestRoleOfCallerPicksTheCallersOwnGrant: taking the first permission with a
-// role was wrong as soon as a space reported more than one: the answer then
-// depended on the order the server sent them, and could be somebody else's role.
+// The role must not depend on the order in which the server sends the grants.
 func TestRoleOfCallerPicksTheCallersOwnGrant(t *testing.T) {
 	me := &User{ID: "u-123", Username: "gdelmont"}
 
@@ -35,29 +33,24 @@ func TestRoleOfCallerPicksTheCallersOwnGrant(t *testing.T) {
 		t.Errorf("got %q, want manager: the caller's own grant is not the first one", got)
 	}
 
-	// Matching on the opaque id works too, since a server may identify a user
-	// either way.
+	// A server may identify a user by name or by id.
 	byID := []Permission{{Role: "manager", GrantedTo: &Identity{ID: "u-123"}}}
 	if got := roleOfCaller(byID, me); got != "manager" {
 		t.Errorf("got %q, want manager when identified by id", got)
 	}
 }
 
-// TestRoleOfCallerReadsALoneUnattributedGrant is the shape a project root has
-// when the server names nobody, which is what the dev instance returns.
+// A project root has this shape when the server names nobody.
 func TestRoleOfCallerReadsALoneUnattributedGrant(t *testing.T) {
 	perms := []Permission{{Role: "editor"}}
 	if got := roleOfCaller(perms, &User{Username: "gdelmont"}); got != "editor" {
 		t.Errorf("got %q, want editor", got)
 	}
-	// And with no idea who is asking, a single grant is still the only candidate.
 	if got := roleOfCaller(perms, nil); got != "editor" {
 		t.Errorf("got %q with no caller, want editor", got)
 	}
 }
 
-// TestRoleOfCallerSaysNothingRatherThanGuess: several grants, none of them ours,
-// is not an invitation to report the first.
 func TestRoleOfCallerSaysNothingRatherThanGuess(t *testing.T) {
 	me := &User{Username: "gdelmont"}
 	perms := []Permission{
@@ -68,14 +61,11 @@ func TestRoleOfCallerSaysNothingRatherThanGuess(t *testing.T) {
 		t.Errorf("got %q, want nothing: none of these grants are ours", got)
 	}
 
-	// Two unattributed roles are equally unidentifiable.
 	if got := roleOfCaller([]Permission{{Role: "viewer"}, {Role: "editor"}}, nil); got != "" {
 		t.Errorf("got %q, want nothing when two grants name nobody", got)
 	}
 }
 
-// TestRoleOfCallerIgnoresLinksAndRolelessGrants: a public link on a space root
-// carries no role of ours and must not be mistaken for one.
 func TestRoleOfCallerIgnoresLinksAndRolelessGrants(t *testing.T) {
 	me := &User{Username: "gdelmont"}
 	perms := []Permission{

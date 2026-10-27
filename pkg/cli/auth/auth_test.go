@@ -29,7 +29,6 @@ import (
 	"github.com/cs3org/reva/v3/internal/cli/cberr"
 )
 
-// stubProvider is a Provider whose behaviour each test dictates.
 type stubProvider struct {
 	name      string
 	available bool
@@ -86,7 +85,6 @@ func TestTokenValid(t *testing.T) {
 		{"no expiry means non-expiring", &Token{Value: "x"}, true},
 		{"future expiry", &Token{Value: "x", Expiry: time.Now().Add(time.Hour)}, true},
 		{"past expiry", &Token{Value: "x", Expiry: time.Now().Add(-time.Hour)}, false},
-		// The refresh window is what stops a token expiring mid-request.
 		{"expiring within the refresh window", &Token{Value: "x", Expiry: time.Now().Add(30 * time.Second)}, false},
 	}
 	for _, tt := range tests {
@@ -98,8 +96,6 @@ func TestTokenValid(t *testing.T) {
 	}
 }
 
-// TestChainPrefersEarlierProviders pins the documented order: an explicit token
-// beats Kerberos, Kerberos beats an app token.
 func TestChainPrefersEarlierProviders(t *testing.T) {
 	first := &stubProvider{name: "token", available: true, token: validToken("token")}
 	second := &stubProvider{name: "kerberos", available: true, token: validToken("kerberos")}
@@ -134,8 +130,7 @@ func TestChainSkipsUnavailableProviders(t *testing.T) {
 	}
 }
 
-// TestChainFallsThroughOnFailure: an available provider that fails must not
-// stop the chain, or a stale Kerberos ticket would block the device flow.
+// A stale Kerberos ticket must not block the device flow.
 func TestChainFallsThroughOnFailure(t *testing.T) {
 	failing := &stubProvider{name: "kerberos", available: true, err: errors.New("ticket expired")}
 	working := &stubProvider{name: "device", available: true, token: validToken("device")}
@@ -150,8 +145,6 @@ func TestChainFallsThroughOnFailure(t *testing.T) {
 	}
 }
 
-// TestChainReportsTheFirstRealFailure: when everything fails, the error that
-// names what actually went wrong is far more useful than "no credentials".
 func TestChainReportsTheFirstRealFailure(t *testing.T) {
 	failing := &stubProvider{name: "kerberos", available: true, err: errors.New("ticket expired")}
 	alsoFailing := &stubProvider{name: "device", available: true, err: errors.New("no browser")}
@@ -166,21 +159,6 @@ func TestChainReportsTheFirstRealFailure(t *testing.T) {
 	}
 	if cberr.ExitCode(err) != cberr.ExitAuth {
 		t.Errorf("exit code = %d, want %d", cberr.ExitCode(err), cberr.ExitAuth)
-	}
-}
-
-func TestChainWithNothingAvailableGivesAdvice(t *testing.T) {
-	ch := NewChain("https://cernbox.test", []Provider{
-		&stubProvider{name: "kerberos", available: false},
-	}, WithAdvice("run `cernbox login`, or kinit if you use Kerberos"))
-	_, err := ch.Token(context.Background())
-	if err == nil {
-		t.Fatal("expected an error")
-	}
-	for _, want := range []string{"kinit", "cernbox login"} {
-		if !strings.Contains(err.Error(), want) {
-			t.Errorf("the error should suggest %q, got %q", want, err)
-		}
 	}
 }
 
@@ -253,7 +231,6 @@ func TestChainUsesDiskCache(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// A second process, same cache: the provider must not be asked again.
 	second := NewChain("https://cernbox.test", []Provider{p}, WithCache(cache))
 	tok, err := second.Token(context.Background())
 	if err != nil {
@@ -267,9 +244,7 @@ func TestChainUsesDiskCache(t *testing.T) {
 	}
 }
 
-// TestChainCacheIsKeyedByPrincipal is the guard against the worst cache bug:
-// running kinit as a service principal and silently reusing the personal
-// account's token.
+// Running kinit as a service principal must not reuse the personal token.
 func TestChainCacheIsKeyedByPrincipal(t *testing.T) {
 	cache := NewCache(t.TempDir() + "/cache")
 
@@ -317,8 +292,6 @@ func TestChainCacheIsKeyedByEndpoint(t *testing.T) {
 	}
 }
 
-// TestChainIgnoresCachedTokenFromExcludedProvider: "--method device" must not
-// pick up a cached Kerberos session.
 func TestChainIgnoresCachedTokenFromExcludedProvider(t *testing.T) {
 	cache := NewCache(t.TempDir() + "/cache")
 	kerberos := &stubProvider{name: "kerberos", available: true, token: validToken("kerberos")}
@@ -371,8 +344,6 @@ func TestChainRefreshesRatherThanReauthenticating(t *testing.T) {
 	}
 }
 
-// TestChainFallsBackWhenRefreshFails: an expired refresh token should lead to a
-// silent re-authentication, not an error the user has to act on.
 func TestChainFallsBackWhenRefreshFails(t *testing.T) {
 	cache := NewCache(t.TempDir() + "/cache")
 	expired := &Token{

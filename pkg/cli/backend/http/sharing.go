@@ -45,10 +45,6 @@ func jailID(id string) string { return shareJail + "$" + shareJail + "!" + id }
 
 type shares struct{ b *Backend }
 
-func resourceIDString(id *provider.ResourceId) string {
-	return spaces.EncodeToStringifiedResourceID(id)
-}
-
 // parseID reads a resource id with its space (storage$space!item), or
 // without one (storage!item), which OCS gives without spaces.
 func parseID(s string) *provider.ResourceId {
@@ -107,7 +103,7 @@ func (s shares) List(ctx context.Context, resource *provider.ResourceId) ([]*col
 		}
 	}
 	if resource != nil {
-		perms, err := s.b.c.ListPermissions(ctx, resourceIDString(resource))
+		perms, err := s.b.c.ListPermissions(ctx, spaces.EncodeToStringifiedResourceID(resource))
 		if err != nil {
 			return nil, conv(err)
 		}
@@ -258,7 +254,7 @@ func (s shares) Create(ctx context.Context, req *collaboration.CreateShareReques
 		t := time.Unix(int64(e.Seconds), 0)
 		exp = &t
 	}
-	perms, err := s.b.c.Share(ctx, resourceIDString(info.Id), []client.Recipient{r}, role, exp)
+	perms, err := s.b.c.Share(ctx, spaces.EncodeToStringifiedResourceID(info.Id), []client.Recipient{r}, role, exp)
 	if err != nil {
 		return nil, conv(err)
 	}
@@ -388,7 +384,7 @@ func (l links) List(ctx context.Context, resource *provider.ResourceId) ([]*link
 		}
 	}
 	if resource != nil {
-		perms, err := l.b.c.ListPermissions(ctx, resourceIDString(resource))
+		perms, err := l.b.c.ListPermissions(ctx, spaces.EncodeToStringifiedResourceID(resource))
 		if err != nil {
 			return nil, conv(err)
 		}
@@ -527,7 +523,7 @@ func (l links) Create(ctx context.Context, req *link.CreatePublicShareRequest) (
 		t := time.Unix(int64(e.Seconds), 0)
 		opts.Expiry = &t
 	}
-	p, err := l.b.c.CreateLink(ctx, resourceIDString(info.Id), opts)
+	p, err := l.b.c.CreateLink(ctx, spaces.EncodeToStringifiedResourceID(info.Id), opts)
 	if err != nil {
 		return nil, conv(err)
 	}

@@ -86,8 +86,6 @@ func TestTokenExchangeAndCache(t *testing.T) {
 		t.Fatalf("token %q after %d sign-ins, want a reva token after one", got, signIns.Load())
 	}
 
-	// The cache layer of the reva token is keyed by the endpoint and the
-	// gateway: another gateway signs in again.
 	c := auth.NewCache(filepath.Join(dir, ".config", "reva", "token"))
 	key := "endpoint=" + ts.URL + " gateway="
 	if tok, ok := c.Get(auth.Reva, key); !ok || tok.Value != got || tok.Provider != auth.MethodAppToken {
@@ -100,7 +98,6 @@ func TestTokenExchangeAndCache(t *testing.T) {
 	if s := r.SignedIn(); s == nil || s.Provider != auth.MethodAppToken || s.Subject != "alice" {
 		t.Errorf("SignedIn() = %+v", s)
 	}
-	// The gateway of the same deployment can use it, another endpoint not.
 	if again, err := newTokenRuntime(t, "--endpoint", ts.URL, "--gateway", "gw:9142").Token(context.Background()); err != nil || again != got {
 		t.Errorf("the endpoint with a gateway: %q, %v: want the cached token", again, err)
 	}
@@ -109,7 +106,6 @@ func TestTokenExchangeAndCache(t *testing.T) {
 		t.Errorf("another endpoint: %v, want no login token", err)
 	}
 
-	// A refused token makes the next call sign in again.
 	r = newTokenRuntime(t, args...)
 	if _, err := r.Token(context.Background()); err != nil {
 		t.Fatal(err)

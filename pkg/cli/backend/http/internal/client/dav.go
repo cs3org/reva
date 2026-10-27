@@ -35,46 +35,32 @@ import (
 	"github.com/cs3org/reva/v3/internal/cli/cberr"
 )
 
-// WebDAV methods not in the net/http constant set.
+// WebDAV methods that net/http does not define.
 const (
 	MethodPropfind = "PROPFIND"
 	MethodMkcol    = "MKCOL"
 	MethodMove     = "MOVE"
 	MethodCopy     = "COPY"
 	MethodReport   = "REPORT"
-	MethodLock     = "LOCK"
-	MethodUnlock   = "UNLOCK"
 )
 
 // ResourceInfo describes one file or directory.
 type ResourceInfo struct {
 	// Path is the absolute CERNBox path.
-	Path string `json:"path"`
-	// Name is the final path element.
-	Name string `json:"name"`
-	// IsDir reports whether this is a collection.
-	IsDir bool `json:"is_dir"`
-	// Size is the byte count for a file, or the recursive size for a directory
-	// when the server reports one.
-	Size int64 `json:"size"`
-	// Modified is the last modification time.
+	Path     string    `json:"path"`
+	Name     string    `json:"name"`
+	IsDir    bool      `json:"is_dir"`
+	Size     int64     `json:"size"`
 	Modified time.Time `json:"modified"`
-	// ETag identifies this version of the resource.
-	ETag string `json:"etag,omitempty"`
-	// ID is the persistent resource id, stable across renames.
-	ID string `json:"id,omitempty"`
-	// MimeType is the content type reported for files.
-	MimeType string `json:"mime_type,omitempty"`
-	// Permissions is the ownCloud permission string ("RDNVCK" and friends).
-	Permissions string `json:"permissions,omitempty"`
-	// Checksums holds the server-side checksums, keyed by algorithm.
-	Checksums map[string]string `json:"checksums,omitempty"`
-	// WebURL is the link that opens this resource in the web interface, when
-	// the server reports one.
-	WebURL string `json:"web_url,omitempty"`
+	ETag     string    `json:"etag,omitempty"`
+	// ID is the resource id. It stays the same across renames.
+	ID          string            `json:"id,omitempty"`
+	MimeType    string            `json:"mime_type,omitempty"`
+	Permissions string            `json:"permissions,omitempty"`
+	Checksums   map[string]string `json:"checksums,omitempty"`
+	WebURL      string            `json:"web_url,omitempty"`
 }
 
-// multistatus is the PROPFIND response envelope.
 type multistatus struct {
 	XMLName   xml.Name           `xml:"DAV: multistatus"`
 	Responses []multistatusEntry `xml:"DAV: response"`
@@ -103,7 +89,6 @@ type propsRaw struct {
 	OCLink       string        `xml:"http://owncloud.org/ns privatelink"`
 	OCChecksums  *checksumsRaw `xml:"http://owncloud.org/ns checksums"`
 
-	// Trash-bin properties, present only in a trash listing.
 	TrashFilename  string `xml:"http://owncloud.org/ns trashbin-original-filename"`
 	TrashLocation  string `xml:"http://owncloud.org/ns trashbin-original-location"`
 	TrashTimestamp string `xml:"http://owncloud.org/ns trashbin-delete-timestamp"`
@@ -118,9 +103,8 @@ type checksumsRaw struct {
 	Checksum []string `xml:"http://owncloud.org/ns checksum"`
 }
 
-// propfindBody requests exactly the properties the CLI uses. Asking for a
-// named set rather than allprop keeps the response small on directories with
-// many entries, which matters for a listing that may be piped.
+// propfindBody asks for a named set of properties instead of allprop, to keep
+// the response of a large directory small.
 const propfindBody = `<?xml version="1.0" encoding="UTF-8"?>
 <d:propfind xmlns:d="DAV:" xmlns:oc="http://owncloud.org/ns">
   <d:prop>
@@ -138,9 +122,8 @@ const propfindBody = `<?xml version="1.0" encoding="UTF-8"?>
   </d:prop>
 </d:propfind>`
 
-// davURL builds the WebDAV URL for an absolute CERNBox path. Path-addressed
-// operations go through /remote.php/dav/files/{user}, which accepts absolute
-// CS3 paths directly at CERN.
+// davURL builds the WebDAV URL of an absolute CERNBox path. At CERN,
+// /remote.php/dav/files/{user} accepts absolute CS3 paths.
 func (c *Client) davURL(ctx context.Context, p string) (string, error) {
 	me, err := c.Me(ctx)
 	if err != nil {
@@ -149,10 +132,8 @@ func (c *Client) davURL(ctx context.Context, p string) (string, error) {
 	return c.URL(davFilesPrefix + "/" + escapePath(me.Username) + escapePath(p)), nil
 }
 
-// escapePath percent-encodes each segment of a path, keeping the separators and
-// preserving whether the path was absolute. Callers join the result onto a
-// prefix, so adding a leading slash that was not there would produce a double
-// separator.
+// escapePath percent-encodes each segment of a path. It adds no leading slash,
+// because callers join the result onto a prefix.
 func escapePath(p string) string {
 	if p == "" {
 		return ""
@@ -181,8 +162,7 @@ func (c *Client) Stat(ctx context.Context, p string) (*ResourceInfo, error) {
 	return &infos[0], nil
 }
 
-// List returns the direct children of a directory. The directory itself, which
-// PROPFIND Depth:1 includes, is filtered out.
+// List returns the direct children of a directory.
 func (c *Client) List(ctx context.Context, p string) ([]ResourceInfo, error) {
 	infos, err := c.propfind(ctx, p, 1, "list")
 	if err != nil {
@@ -224,8 +204,6 @@ func (c *Client) propfind(ctx context.Context, p string, depth int, op string) (
 	return parseMultistatus(resp.Body, op, p)
 }
 
-// decodeXML parses an XML response body, reporting a malformed one in terms a
-// user can act on rather than as a raw parse error.
 func decodeXML(r io.Reader, v any, op, p string) error {
 	if err := xml.NewDecoder(r).Decode(v); err != nil {
 		return cberr.Wrap(cberr.KindOther, op, p, fmt.Errorf("malformed PROPFIND response: %w", err))
@@ -256,17 +234,14 @@ func entryToInfo(entry multistatusEntry) (ResourceInfo, bool) {
 		href = entry.Href
 	}
 
-	// A propstat block carries its own status; the 404 block lists properties
-	// the server does not have and must not be merged in.
+	// The 404 propstat block lists properties the server does not have.
 	props, found := okProps(entry)
 	if !found {
 		return ResourceInfo{}, false
 	}
 
-	// WebDAV hrefs for collections carry a trailing slash. Normalising it away
-	// here means every path the rest of the CLI handles has one spelling, which
-	// is what keeps the self-entry filter in List and the recursion in Walk
-	// from comparing "/root/" against "/root".
+	// Collection hrefs end in a slash. Drop it, so that List and Walk compare
+	// one spelling.
 	p := strings.TrimSuffix(davHrefToPath(href), "/")
 	if p == "" {
 		p = "/"
@@ -287,9 +262,8 @@ func entryToInfo(entry multistatusEntry) (ResourceInfo, bool) {
 	if t, err := http.ParseTime(props.GetLastMod); err == nil {
 		info.Modified = t
 	}
-	// oc:size is the recursive size on a collection and the plain size on a
-	// file; d:getcontentlength is absent on collections. Prefer oc:size so a
-	// directory listing shows real sizes.
+	// oc:size is the recursive size of a collection. getcontentlength is absent
+	// on collections.
 	if n, err := strconv.ParseInt(props.OCSize, 10, 64); err == nil {
 		info.Size = n
 	} else if n, err := strconv.ParseInt(props.GetLength, 10, 64); err == nil {
@@ -301,8 +275,8 @@ func entryToInfo(entry multistatusEntry) (ResourceInfo, bool) {
 	return info, true
 }
 
-// parseChecksums turns "SHA1:abc MD5:def" into a map. reva emits them
-// space-separated inside a single element, sometimes one per element.
+// parseChecksums reads "SHA1:abc MD5:def". reva sends them space-separated in
+// one element, or one per element.
 func parseChecksums(raw []string) map[string]string {
 	out := map[string]string{}
 	for _, chunk := range raw {
@@ -320,25 +294,17 @@ func parseChecksums(raw []string) map[string]string {
 	return out
 }
 
-// davHrefToPath strips the WebDAV prefix from an href, leaving the absolute
-// CERNBox path. The href is server-absolute and shaped like
-// /remote.php/dav/files/{user}/eos/user/g/gdelmont/x.
+// davHrefToPath turns an href such as /remote.php/dav/files/{user}/eos/x into
+// the absolute CERNBox path.
 func davHrefToPath(href string) string {
-	if _, after, ok := strings.Cut(href, davFilesPrefix); ok {
-		rest := after
-		rest = strings.TrimPrefix(rest, "/")
-		// Drop the {user} segment.
-		if _, after, ok := strings.Cut(rest, "/"); ok {
-			return cleanPath("/" + after)
+	for _, prefix := range []string{davFilesPrefix, davSpacesPrefix} {
+		if _, after, ok := strings.Cut(href, prefix); ok {
+			// Drop the {user} or {space} segment.
+			if _, after, ok := strings.Cut(strings.TrimPrefix(after, "/"), "/"); ok {
+				return cleanPath("/" + after)
+			}
+			return "/"
 		}
-		return "/"
-	}
-	if _, after, ok := strings.Cut(href, davSpacesPrefix); ok {
-		rest := strings.TrimPrefix(after, "/")
-		if _, after, ok := strings.Cut(rest, "/"); ok {
-			return cleanPath("/" + after)
-		}
-		return "/"
 	}
 	return cleanPath(href)
 }
@@ -355,9 +321,8 @@ func cleanPath(p string) string {
 	return cleaned
 }
 
-// Download opens a file for reading. The caller must close the returned
-// ReadCloser. offset skips the first offset bytes, which is how an interrupted
-// download resumes.
+// Download opens a file for reading, starting at offset. The caller must close
+// the returned ReadCloser.
 func (c *Client) Download(ctx context.Context, p string, offset int64) (io.ReadCloser, int64, error) {
 	u, err := c.davURL(ctx, p)
 	if err != nil {
@@ -381,8 +346,8 @@ func (c *Client) Download(ctx context.Context, p string, offset int64) (io.ReadC
 	if err != nil {
 		return nil, 0, err
 	}
-	// A server that ignores Range and replies 200 would silently duplicate the
-	// prefix the caller already has, so refuse rather than corrupt the file.
+	// A 200 means the server ignored Range. Refuse, or the caller gets a
+	// duplicated prefix.
 	if offset > 0 && resp.StatusCode == http.StatusOK {
 		drain(resp)
 		return nil, 0, cberr.New(cberr.KindOther, "resume download", p,
@@ -399,34 +364,22 @@ func (c *Client) Download(ctx context.Context, p string, offset int64) (io.ReadC
 	return resp.Body, resp.ContentLength, nil
 }
 
-// guardChunkedRange refuses a ranged response whose body carries chunked
-// framing inside it.
+// guardChunkedRange refuses a ranged response that has chunked framing inside
+// its body.
 //
-// EOS does this, measured against XRootD through reva: a request for
-// bytes=136- of a 191-byte file came back 206, Content-Length 55,
-// Content-Range bytes 136-190/191, no Transfer-Encoding: and a body beginning
-// "37\r\n", 0x37 being 55. The framing is counted in the length, so four bytes
-// of the file are lost off the end and four bytes of hex appear at the front.
-// reva forwards it faithfully and so would this client.
-//
-// Nothing about the length gives it away, since the framing is inside a body
-// whose length is what it claims. What does give it away is that the framing
-// spells out the body's own length: a response of n bytes starting with the
-// hexadecimal of n followed by CRLF is this bug and essentially nothing else,
-// because real content would have to begin by stating its own size in hex.
-//
-// Turning it into an error matters beyond any one command. A resumed download
-// restarts a .part file with a range, so without this a transfer interrupted
-// and resumed produces a file of exactly the right length with the wrong bytes
-// in it, and nothing says a word.
+// EOS does this: bytes=136- of a 191-byte file came back 206 with
+// Content-Length 55 and a body that began "37\r\n" (0x37 is 55). The framing
+// counts in the length, so four bytes of the file are lost at the end. reva
+// forwards it as it is. The only sign is a body that starts with its own length
+// in hex and CRLF. Without this check, a resumed download has the right size
+// and the wrong bytes.
 func guardChunkedRange(resp *http.Response, p string) (io.ReadCloser, error) {
 	if resp.ContentLength <= 0 {
 		return resp.Body, nil
 	}
 	marker := fmt.Sprintf("%x\r\n", resp.ContentLength)
 
-	// Only as much as the marker, kept and put back in front of the body so
-	// that a sound response is passed through unread.
+	// Read only the marker length, and put it back in front of the body.
 	head := make([]byte, len(marker))
 	n, err := io.ReadFull(resp.Body, head)
 	head = head[:n]
@@ -444,99 +397,12 @@ func guardChunkedRange(resp *http.Response, p string) (io.ReadCloser, error) {
 	return &joinedBody{Reader: body, closer: resp.Body}, nil
 }
 
-// joinedBody reads the peeked head and then the rest, and closes the original
-// body rather than the wrapper.
 type joinedBody struct {
 	io.Reader
 	closer io.Closer
 }
 
 func (b *joinedBody) Close() error { return b.closer.Close() }
-
-// Upload writes a file in a single PUT. Large files should go through
-// UploadResumable instead.
-func (c *Client) Upload(ctx context.Context, p string, open func() (io.ReadCloser, error), size int64, checksum string) error {
-	return c.put(ctx, p, open, size, checksum, "")
-}
-
-// UploadIfUnchanged writes a file only while its current ETag is still etag,
-// failing with KindConflict otherwise.
-//
-// This is how two clients writing the same small file detect that they raced,
-// rather than one silently overwriting the other. reva does honour If-Match on
-// PUT: unlike If-None-Match, which it ignores, so there is no equivalent way to
-// make *creating* a file exclusive.
-func (c *Client) UploadIfUnchanged(ctx context.Context, p string, open func() (io.ReadCloser, error), size int64, etag string) error {
-	return c.put(ctx, p, open, size, "", etag)
-}
-
-// UploadStream writes a file of known length from a reader that can only be read
-// once. It is what lets a stream be moved through the client without ever landing
-// on local disk.
-//
-// The length is still required: reva's PUT handler parses the Content-Length
-// header and answers 400 without one, and its TUS endpoint does not implement
-// creation-defer-length, so there is no way to send a body of unknown size. The
-// caller has to know how many bytes are coming; it just does not have to have
-// them all in hand.
-//
-// Unlike Upload this is never retried. A retry re-reads the body, and a reader
-// that has already been drained would send a shorter one, quietly truncating the
-// file.
-func (c *Client) UploadStream(ctx context.Context, p string, r io.Reader, size int64) error {
-	u, err := c.davURL(ctx, p)
-	if err != nil {
-		return err
-	}
-	resp, err := c.do(ctx, request{
-		method: http.MethodPut,
-		url:    u,
-		header: http.Header{"Content-Type": []string{"application/octet-stream"}},
-		body: readerBody(func() (io.ReadCloser, error) {
-			return io.NopCloser(r), nil
-		}, size),
-		op:      "upload",
-		path:    p,
-		noRetry: true,
-		expects: []int{http.StatusOK, http.StatusCreated, http.StatusNoContent},
-	})
-	if err != nil {
-		return err
-	}
-	drain(resp)
-	return nil
-}
-
-func (c *Client) put(ctx context.Context, p string, open func() (io.ReadCloser, error), size int64, checksum, ifMatch string) error {
-	u, err := c.davURL(ctx, p)
-	if err != nil {
-		return err
-	}
-	header := http.Header{"Content-Type": []string{"application/octet-stream"}}
-	if checksum != "" {
-		header.Set("OC-Checksum", checksum)
-	}
-	if ifMatch != "" {
-		// The ETag travels quoted, as PROPFIND reports it and as RFC 9110 wants
-		// it; the parsed form the rest of the CLI carries has the quotes stripped.
-		header.Set("If-Match", `"`+strings.Trim(ifMatch, `"`)+`"`)
-	}
-
-	resp, err := c.do(ctx, request{
-		method:  http.MethodPut,
-		url:     u,
-		header:  header,
-		body:    readerBody(open, size),
-		op:      "upload",
-		path:    p,
-		expects: []int{http.StatusOK, http.StatusCreated, http.StatusNoContent},
-	})
-	if err != nil {
-		return err
-	}
-	drain(resp)
-	return nil
-}
 
 // Mkdir creates a directory. With parents, missing ancestors are created too.
 func (c *Client) Mkdir(ctx context.Context, p string, parents bool) error {
@@ -567,16 +433,10 @@ func (c *Client) mkcol(ctx context.Context, p string) error {
 
 // mkdirAll creates a directory and any missing ancestor.
 //
-// It works downwards from the target rather than upwards from the root: it
-// tries to create the directory, and only if that fails for want of a parent
-// does it go up a level. Walking from the root instead would mean creating
-// every prefix of the path, and the leading segments of a CERNBox path are not
-// real directories: "/eos" is the namespace root, which cannot be created and
-// cannot be stat'ed, so "mkdir -p /eos/user/g/gdelmont/x" failed at the very
-// first step even though everything above the leaf already existed.
-//
-// "Already exists" is tolerated at every level, which also makes this safe to
-// run concurrently with another client creating the same tree.
+// It works down from the target. Creating every prefix from the root would fail
+// at once, because the first segments are not real directories: "/eos" cannot
+// be created or stat'ed. An existing directory at any level is not an error, so
+// this is safe next to a client that creates the same tree.
 func (c *Client) mkdirAll(ctx context.Context, p string) error {
 	p = cleanPath(p)
 	if p == "/" {
@@ -591,8 +451,7 @@ func (c *Client) mkdirAll(ctx context.Context, p string) error {
 		return nil
 	}
 
-	// The parent may simply not be there yet. Create it, then try once more;
-	// any other failure is the caller's to see.
+	// The parent may be missing. Create it and try again.
 	parent := cleanPath(path.Dir(p))
 	if parent == p || parent == "/" {
 		return err
@@ -609,16 +468,13 @@ func (c *Client) mkdirAll(ctx context.Context, p string) error {
 	return nil
 }
 
-// isExistingDir reports whether p is already a directory, which is the one case
-// where failing to create it is not a failure at all.
 func (c *Client) isExistingDir(ctx context.Context, p string) bool {
 	info, err := c.Stat(ctx, p)
 	return err == nil && info.IsDir
 }
 
-// Remove deletes a file or directory. WebDAV DELETE on a collection is always
-// recursive, so the caller is responsible for refusing to delete a non-empty
-// directory without -r.
+// Remove deletes a file or directory. DELETE on a collection is recursive, so
+// the caller must refuse a non-empty directory without -r.
 func (c *Client) Remove(ctx context.Context, p string) error {
 	u, err := c.davURL(ctx, p)
 	if err != nil {
@@ -643,8 +499,7 @@ func (c *Client) Move(ctx context.Context, src, dst string, overwrite bool) erro
 	return c.moveOrCopy(ctx, MethodMove, "move", src, dst, overwrite)
 }
 
-// Copy duplicates a resource server-side, without moving the bytes through the
-// client.
+// Copy duplicates a resource on the server.
 func (c *Client) Copy(ctx context.Context, src, dst string, overwrite bool) error {
 	return c.moveOrCopy(ctx, MethodCopy, "copy", src, dst, overwrite)
 }
@@ -682,11 +537,8 @@ func (c *Client) moveOrCopy(ctx context.Context, method, op, src, dst string, ov
 
 // Touch creates an empty file, failing if it already exists.
 func (c *Client) Touch(ctx context.Context, p string) error {
-	// Look before writing. The request below carries If-None-Match: *, which
-	// should make the server refuse to overwrite, but reva's WebDAV does not
-	// implement that precondition: it accepts the PUT and truncates the file.
-	// Relying on it silently destroyed content, so existence is checked here
-	// instead. The header stays, so this becomes atomic if reva ever honours it.
+	// reva ignores If-None-Match: * and truncates an existing file, so look
+	// first.
 	if info, statErr := c.Stat(ctx, p); statErr == nil {
 		if info.IsDir {
 			return cberr.New(cberr.KindConflict, "create file", p, "is a directory")
@@ -714,8 +566,8 @@ func (c *Client) Touch(ctx context.Context, p string) error {
 	return nil
 }
 
-// Walk visits p and everything beneath it, depth first, calling fn for each
-// resource. A directory is visited before its children.
+// Walk calls fn for p and everything beneath it, depth first. A directory comes
+// before its children.
 func (c *Client) Walk(ctx context.Context, p string, fn func(ResourceInfo) error) error {
 	info, err := c.Stat(ctx, p)
 	if err != nil {
@@ -748,11 +600,8 @@ func (c *Client) walk(ctx context.Context, info ResourceInfo, fn func(ResourceIn
 
 // SearchOptions constrains a REPORT search.
 type SearchOptions struct {
-	// Pattern is matched against file names. The server treats it as a
-	// substring match.
 	Pattern string
-	// Limit caps the number of results; zero means the server default.
-	Limit int
+	Limit   int
 }
 
 const searchReportBody = `<?xml version="1.0" encoding="UTF-8"?>
@@ -774,16 +623,12 @@ const searchReportBody = `<?xml version="1.0" encoding="UTF-8"?>
   </oc:search>
 </oc:search-files>`
 
-// ErrSearchUnsupported reports that the server cannot search, so the caller
-// should walk the tree instead.
+// ErrSearchUnsupported means the server cannot search. The caller should walk
+// the tree instead.
 var ErrSearchUnsupported = errors.New("the server does not support search")
 
-// Search runs a server-side search rooted at p.
-//
-// reva's search-files REPORT handler is a stub that answers 501, so this
-// returns ErrSearchUnsupported there and the caller falls back to walking. The
-// request is still worth making: a deployment that implements it answers in one
-// round trip instead of one per directory.
+// Search runs a server-side search under p. reva's search-files handler answers
+// 501, so this returns ErrSearchUnsupported there.
 func (c *Client) Search(ctx context.Context, p string, opts SearchOptions) ([]ResourceInfo, error) {
 	u, err := c.davURL(ctx, p)
 	if err != nil {

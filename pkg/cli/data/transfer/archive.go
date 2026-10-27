@@ -21,24 +21,21 @@ package transfer
 import (
 	"archive/tar"
 	"context"
-	"fmt"
 	"io"
 	"os"
 	"path"
 	"path/filepath"
+	"slices"
 	"strings"
 
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/cs3org/reva/v3/internal/cli/cberr"
 )
 
-// archiveDownload fetches a whole tree as one tar stream and extracts it.
 func (e *Engine) archiveDownload(ctx context.Context, remoteRoot, localRoot string) (*Stats, error) {
-	// zip needs random access to its central directory, so it cannot be
-	// extracted from a stream without buffering the whole archive. tar can.
-	// Capabilities without formats are unknown: the archiver may still be
-	// there (over gRPC with an endpoint).
-	if caps := e.c.caps(ctx); len(caps.ArchiveFormats) > 0 && !supportsArchive(caps, "tar") {
+	// Only tar can be extracted from a stream: zip needs random access. An empty
+	// list means unknown formats, and the archiver may still be there.
+	if caps := e.c.caps(ctx); len(caps.ArchiveFormats) > 0 && !slices.Contains(caps.ArchiveFormats, "tar") {
 		return nil, cberr.New(cberr.KindOther, "download archive", remoteRoot,
 			"the server's archiver cannot produce a tar stream")
 	}
@@ -49,18 +46,11 @@ func (e *Engine) archiveDownload(ctx context.Context, remoteRoot, localRoot stri
 	}
 	defer body.Close()
 
-	// The archiver wraps everything in a directory named after what was asked
-	// for, so entries arrive as "tree/a.txt". localRoot already stands for that
-	// directory, so the wrapper is stripped; otherwise the same download would
-	// land at dest/tree/a.txt via the archiver and dest/a.txt via the walk.
 	return e.extractTar(ctx, body, localRoot, path.Base(remoteRoot))
 }
 
-// extractTar unpacks a tar stream into localRoot.
-//
-// stripRoot names a leading directory to drop from each entry, empty for none.
-// Only that exact name is stripped: an archive whose entries are already
-// relative to localRoot must not lose its first directory.
+// extractTar unpacks a tar stream into localRoot. It drops the leading
+// directory stripRoot from each entry, if it is not empty.
 func (e *Engine) extractTar(ctx context.Context, r io.Reader, localRoot, stripRoot string) (*Stats, error) {
 	stats := &Stats{}
 
@@ -85,19 +75,12 @@ func (e *Engine) extractTar(ctx context.Context, r io.Reader, localRoot, stripRo
 			return stats, cberr.Wrap(cberr.KindOther, "read archive", localRoot, err)
 		}
 
-		// The archiver wraps everything in a directory named after what was
-		// asked for, so entries arrive as "tree/a.txt". The caller already
-		// named the directory it wants the contents in, and keeping the wrapper
-		// would put them at dest/tree/a.txt instead of dest/a.txt: one level
-		// deeper than the same download served by walking the tree.
 		name := stripArchiveRoot(hdr.Name, stripRoot)
 		if name == "" {
 			continue
 		}
 
-		// The archive comes from the server, but a client that trusts entry
-		// names is one malformed entry away from writing outside the directory
-		// the user asked for. Resolve and check every one.
+		// Do not trust the entry names: they must stay inside the destination.
 		target, err := safeJoin(absRoot, name)
 		if err != nil {
 			return stats, err
@@ -109,7 +92,6 @@ func (e *Engine) extractTar(ctx context.Context, r io.Reader, localRoot, stripRo
 				return stats, cberr.Wrap(cberr.KindOther, "create", target, err)
 			}
 			stats.Dirs++
-
 		case tar.TypeReg:
 			if err := os.MkdirAll(filepath.Dir(target), 0o755); err != nil {
 				return stats, cberr.Wrap(cberr.KindOther, "create", filepath.Dir(target), err)
@@ -131,13 +113,9 @@ func (e *Engine) extractTar(ctx context.Context, r io.Reader, localRoot, stripRo
 			stats.Bytes += n
 			e.emit(Event{Path: target, Transferred: n, Total: hdr.Size, Done: true})
 
-		case tar.TypeSymlink, tar.TypeLink:
-			// A link in the archive could point anywhere, including outside the
-			// destination. Skipping is the conservative choice, and the server
-			// does not store symlinks anyway.
-			stats.Skipped++
-
 		default:
+			// A link could point outside the destination, so skip links and
+			// every other type.
 			stats.Skipped++
 		}
 	}
@@ -157,38 +135,22 @@ func writeArchiveFile(target string, r io.Reader) (int64, error) {
 	return n, nil
 }
 
-// safeJoin resolves name against root and refuses anything that escapes it.
-//
-// IsLocal rather than a check for ".." and an absolute path, because on Windows
-// that is not all there is: "C:x" is relative to another drive's working
-// directory, "a:b" writes an alternate data stream, and "NUL" or "con.txt" open
-// a device.
+// safeJoin resolves name against root and refuses a name that escapes it.
+// It uses IsLocal because on Windows more names than ".." and absolute paths
+// escape: "C:x", "a:b" (a data stream) and "NUL" (a device).
 func safeJoin(root, name string) (string, error) {
 	cleaned := filepath.Clean(filepath.FromSlash(name))
 	if !filepath.IsLocal(cleaned) {
 		return "", cberr.New(cberr.KindOther, "extract archive", name,
 			"the archive contains an entry that would be written outside the destination")
 	}
-
-	target := filepath.Join(root, cleaned)
-	// Join cleans the result, so a relative escape is already gone; this check
-	// catches the remaining cases, such as a name that resolves to the parent
-	// through repeated separators.
-	rel, err := filepath.Rel(root, target)
-	if err != nil {
-		return "", cberr.Wrap(cberr.KindOther, "extract archive", name, err)
-	}
-	if rel == ".." || strings.HasPrefix(rel, ".."+string(os.PathSeparator)) {
-		return "", cberr.New(cberr.KindOther, "extract archive", name,
-			fmt.Sprintf("the archive entry %q would be written outside the destination", name))
-	}
-	return target, nil
+	return filepath.Join(root, cleaned), nil
 }
 
-// stripArchiveRoot normalises an entry name and removes the wrapper directory,
-// when the entry actually is inside one by that name. An entry that is the
-// wrapper itself becomes empty, and the caller skips it: the destination
-// directory already stands for it.
+// stripArchiveRoot normalises an entry name and removes the wrapper directory.
+// The archiver wraps the entries in a directory named after the request
+// ("tree/a.txt"), but localRoot already stands for it. The wrapper itself
+// becomes empty.
 func stripArchiveRoot(name, stripRoot string) string {
 	name = strings.TrimPrefix(path.Clean("/"+strings.ReplaceAll(name, "\\", "/")), "/")
 	if name == "." {

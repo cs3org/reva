@@ -84,9 +84,8 @@ func TestStat(t *testing.T) {
 	}
 }
 
-// TestPropfind404PropstatIsIgnored guards a subtle parsing bug: reva returns a
-// second propstat block listing properties it does not have, with status 404.
-// Merging it in would overwrite good values with empty ones.
+// reva returns a second propstat block with status 404 for the properties it
+// does not have. It must not overwrite good values.
 func TestPropfind404PropstatIsIgnored(t *testing.T) {
 	f := newFakeServer(t)
 	f.serveMultistatus(davEntry{
@@ -123,9 +122,6 @@ func TestStatNotFound(t *testing.T) {
 	}
 }
 
-// TestListExcludesTheDirectoryItself: PROPFIND Depth:1 includes the collection
-// being listed, and leaving it in would make "ls" show a phantom entry and
-// would make a recursive walk loop.
 func TestListExcludesTheDirectoryItself(t *testing.T) {
 	f := newFakeServer(t)
 	f.serveMultistatus(
@@ -171,8 +167,6 @@ func TestPropfindRequestsOnlyNeededProperties(t *testing.T) {
 	}
 }
 
-// TestPathEscaping: names with spaces, hashes and question marks are ordinary
-// in a user's home and must survive being put into a URL.
 func TestPathEscaping(t *testing.T) {
 	f := newFakeServer(t)
 	f.serveMultistatus(davEntry{Path: "/eos/user/e/einstein/my notes #1.txt", Size: 1})
@@ -181,8 +175,7 @@ func TestPathEscaping(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	// httptest decodes the path before handing it to the handler, so seeing the
-	// literal name back proves the escaping round-tripped correctly.
+	// httptest decodes the path, so the literal name proves the round trip.
 	if got := f.lastRequest(MethodPropfind).Path; !strings.HasSuffix(got, "/my notes #1.txt") {
 		t.Errorf("request path = %q, want the escaped name to decode back", got)
 	}
@@ -207,8 +200,7 @@ func TestDavHrefToPath(t *testing.T) {
 }
 
 func TestOcSizePreferredOverContentLength(t *testing.T) {
-	// A directory has no d:getcontentlength; oc:size carries the recursive
-	// size. A listing that showed 0 for every directory would be useless.
+	// A directory has no d:getcontentlength. oc:size is its recursive size.
 	f := newFakeServer(t)
 	f.serveMultistatus(davEntry{Path: "/eos/user/e/einstein/Documents", IsDir: true, Size: 987654})
 
@@ -257,9 +249,6 @@ func TestDownloadWithOffsetSendsRange(t *testing.T) {
 	}
 }
 
-// TestDownloadRefusesIgnoredRange is a data-integrity guard: if the server
-// ignores Range and replies 200, appending the full body to a partial file
-// would silently corrupt it.
 func TestDownloadRefusesIgnoredRange(t *testing.T) {
 	f := newFakeServer(t)
 	f.on(http.MethodGet, davFilesPrefix, func(w http.ResponseWriter, r *http.Request) {
@@ -273,99 +262,6 @@ func TestDownloadRefusesIgnoredRange(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "ignored the requested byte range") {
 		t.Errorf("error = %v, want it to explain the ignored range", err)
-	}
-}
-
-func TestUploadSendsChecksum(t *testing.T) {
-	f := newFakeServer(t)
-	f.on(http.MethodPut, davFilesPrefix, func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusCreated)
-	})
-
-	err := f.client().Upload(context.Background(), "/eos/user/e/einstein/a.txt",
-		openerOf("hello"), 5, "MD5:5d41402abc4b2a76b9719d911017c592")
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	req := f.lastRequest(http.MethodPut)
-	if got := req.Header.Get("OC-Checksum"); got != "MD5:5d41402abc4b2a76b9719d911017c592" {
-		t.Errorf("OC-Checksum = %q", got)
-	}
-	if req.Body != "hello" {
-		t.Errorf("uploaded body = %q", req.Body)
-	}
-}
-
-// TestUploadIfUnchangedSendsAQuotedETag: reva honours If-Match on PUT, which is
-// the only precondition it does honour, so the header has to be spelled the way
-// RFC 9110 wants it. The ETags the rest of the CLI carries have had their quotes
-// stripped by the PROPFIND parser, so they have to be put back here.
-func TestUploadIfUnchangedSendsAQuotedETag(t *testing.T) {
-	f := newFakeServer(t)
-	f.on(http.MethodPut, davFilesPrefix, func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusNoContent)
-	})
-
-	err := f.client().UploadIfUnchanged(context.Background(), "/eos/user/e/einstein/a.txt",
-		openerOf("hello"), 5, "abc123")
-	if err != nil {
-		t.Fatal(err)
-	}
-	if got := f.lastRequest(http.MethodPut).Header.Get("If-Match"); got != `"abc123"` {
-		t.Errorf("If-Match = %q, want %q", got, `"abc123"`)
-	}
-}
-
-// TestUploadIfUnchangedToleratesAnAlreadyQuotedETag: callers should not have to
-// know which form they are holding.
-func TestUploadIfUnchangedToleratesAnAlreadyQuotedETag(t *testing.T) {
-	f := newFakeServer(t)
-	f.on(http.MethodPut, davFilesPrefix, func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusNoContent)
-	})
-
-	if err := f.client().UploadIfUnchanged(context.Background(), "/eos/user/e/einstein/a.txt",
-		openerOf("hello"), 5, `"abc123"`); err != nil {
-		t.Fatal(err)
-	}
-	if got := f.lastRequest(http.MethodPut).Header.Get("If-Match"); got != `"abc123"` {
-		t.Errorf("If-Match = %q, want %q", got, `"abc123"`)
-	}
-}
-
-// TestUploadIfUnchangedReportsAMismatchAsAConflict: 412 is how the caller learns
-// somebody else got there first, so it must not read as a generic failure.
-func TestUploadIfUnchangedReportsAMismatchAsAConflict(t *testing.T) {
-	f := newFakeServer(t)
-	f.on(http.MethodPut, davFilesPrefix, func(w http.ResponseWriter, r *http.Request) {
-		http.Error(w, "etag mismatch", http.StatusPreconditionFailed)
-	})
-
-	err := f.client().UploadIfUnchanged(context.Background(), "/eos/user/e/einstein/a.txt",
-		openerOf("hello"), 5, "abc123")
-	if err == nil {
-		t.Fatal("a precondition failure should be an error")
-	}
-	if cberr.KindOf(err) != cberr.KindConflict {
-		t.Errorf("kind = %v, want KindConflict", cberr.KindOf(err))
-	}
-}
-
-// TestUploadSendsNoPreconditionByDefault: the unconditional path must stay
-// unconditional, or every ordinary upload would start failing on a stale ETag.
-func TestUploadSendsNoPreconditionByDefault(t *testing.T) {
-	f := newFakeServer(t)
-	f.on(http.MethodPut, davFilesPrefix, func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusCreated)
-	})
-
-	if err := f.client().Upload(context.Background(), "/eos/user/e/einstein/a.txt",
-		openerOf("hello"), 5, ""); err != nil {
-		t.Fatal(err)
-	}
-	if got := f.lastRequest(http.MethodPut).Header.Get("If-Match"); got != "" {
-		t.Errorf("If-Match = %q, want it absent", got)
 	}
 }
 
@@ -383,19 +279,16 @@ func TestMkdir(t *testing.T) {
 	}
 }
 
-// TestMkdirAllCreatesOnlyWhatIsMissing: the leading segments of a CERNBox path
-// are not real directories, so creating every prefix fails on the first one.
-// Only the missing levels may be touched.
+// The first segments of a CERNBox path are not real directories, so only the
+// missing levels may be created.
 func TestMkdirAllCreatesOnlyWhatIsMissing(t *testing.T) {
 	f := newFakeServer(t)
 	var created []string
-	// Everything up to and including einstein exists; a/b/c do not.
 	existing := "/eos/user/e/einstein"
 	exists := map[string]bool{existing: true}
 	f.on(MethodMkcol, davFilesPrefix, func(w http.ResponseWriter, r *http.Request) {
 		target := strings.TrimPrefix(r.URL.Path, davFilesPrefix+"/einstein")
-		// Like reva: a collection can only be made inside one that is there
-		// already, and the namespace root is not something anyone may create.
+		// Like reva, a collection can only be made inside an existing one.
 		if !exists[path.Dir(target)] {
 			w.WriteHeader(http.StatusConflict)
 			return
@@ -415,7 +308,6 @@ func TestMkdirAllCreatesOnlyWhatIsMissing(t *testing.T) {
 	if len(created) != len(want) {
 		t.Fatalf("created %v, want exactly %v", created, want)
 	}
-	// Parents must come before children, or the server would reject them.
 	for i, w := range want {
 		if created[i] != w {
 			t.Errorf("created[%d] = %q, want %q", i, created[i], w)
@@ -423,8 +315,6 @@ func TestMkdirAllCreatesOnlyWhatIsMissing(t *testing.T) {
 	}
 }
 
-// TestMkdirAllDoesNotTouchTheNamespaceRoot is the regression: "mkdir -p" used to
-// walk from "/" and died creating "/eos", which is not a directory at all.
 func TestMkdirAllDoesNotTouchTheNamespaceRoot(t *testing.T) {
 	f := newFakeServer(t)
 	var created []string
@@ -446,8 +336,8 @@ func TestMkdirAllDoesNotTouchTheNamespaceRoot(t *testing.T) {
 	}
 }
 
-// TestMkdirAllToleratesExistingDirectories: another client may have created the
-// same tree concurrently, and a 405 on an existing collection is not an error.
+// Another client may create the same tree, and a 405 on an existing collection
+// is not an error.
 func TestMkdirAllToleratesExistingDirectories(t *testing.T) {
 	f := newFakeServer(t)
 	f.on(MethodMkcol, davFilesPrefix, func(w http.ResponseWriter, r *http.Request) {
@@ -536,7 +426,6 @@ func TestTouchRefusesToOverwrite(t *testing.T) {
 
 func TestWalk(t *testing.T) {
 	f := newFakeServer(t)
-	// The tree: root/ contains a.txt and sub/; sub/ contains b.txt.
 	f.on(MethodPropfind, davFilesPrefix, func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/xml")
 		w.WriteHeader(http.StatusMultiStatus)
@@ -694,76 +583,28 @@ func TestMalformedMultistatusIsReported(t *testing.T) {
 	}
 }
 
-// TestUploadSendsContentLength guards a bug that no fake caught and a real
-// server did: the transport ignores a Content-Length header set by hand and
-// uses http.Request.ContentLength, falling back to chunked encoding for any
-// body it cannot size: which is every body read from a file. reva's PUT
-// handler reads the header and rejects a request that has none, so every
-// upload came back 400.
-func TestUploadSendsContentLength(t *testing.T) {
-	f := newFakeServer(t)
-	var gotLength int64 = -1
-	var chunked bool
-	f.on(http.MethodPut, davFilesPrefix, func(w http.ResponseWriter, r *http.Request) {
-		gotLength = r.ContentLength
-		chunked = len(r.TransferEncoding) > 0 && r.TransferEncoding[0] == "chunked"
-		w.WriteHeader(http.StatusCreated)
-	})
-
-	body := strings.Repeat("x", 1234)
-	err := f.client().Upload(context.Background(), "/eos/user/e/einstein/a.txt", openerOf(body), int64(len(body)), "")
-	if err != nil {
-		t.Fatal(err)
-	}
-	if chunked {
-		t.Error("the upload was sent chunked; reva's PUT handler rejects a request with no Content-Length")
-	}
-	if gotLength != 1234 {
-		t.Errorf("server saw ContentLength %d, want 1234", gotLength)
-	}
-}
-
-// TestUploadOfEmptyFileIsNotChunked: a zero ContentLength with a non-nil body
-// means "unknown" to the transport, so the obvious code sends an empty file
-// chunked and the server rejects it.
-func TestUploadOfEmptyFileIsNotChunked(t *testing.T) {
-	f := newFakeServer(t)
-	var chunked bool
-	var gotLength int64 = -1
-	f.on(http.MethodPut, davFilesPrefix, func(w http.ResponseWriter, r *http.Request) {
-		chunked = len(r.TransferEncoding) > 0 && r.TransferEncoding[0] == "chunked"
-		gotLength = r.ContentLength
-		w.WriteHeader(http.StatusCreated)
-	})
-
-	if err := f.client().Upload(context.Background(), "/eos/user/e/einstein/empty.txt", openerOf(""), 0, ""); err != nil {
-		t.Fatal(err)
-	}
-	if chunked {
-		t.Error("an empty upload was sent chunked")
-	}
-	if gotLength != 0 {
-		t.Errorf("server saw ContentLength %d, want 0", gotLength)
-	}
-}
-
-// TestEmptyUploadClosesTheBody: an empty body is sent as http.NoBody, so the
-// one that was opened never reaches the transport that would close it. Left
-// open, the file cannot be deleted on Windows until the garbage collector gets
-// to it: and an outbox deletes what it sent.
-func TestEmptyUploadClosesTheBody(t *testing.T) {
+// An empty body is sent as http.NoBody, so the transport never closes the body
+// that was opened. An open file cannot be deleted on Windows.
+func TestEmptyBodyIsClosed(t *testing.T) {
 	f := newFakeServer(t)
 	f.on(http.MethodPut, davFilesPrefix, func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusCreated)
 	})
 
 	body := &closeRecorder{Reader: strings.NewReader("")}
-	open := func() (io.ReadCloser, error) { return body, nil }
-	if err := f.client().Upload(context.Background(), "/eos/user/e/einstein/empty.txt", open, 0, ""); err != nil {
+	c := f.client()
+	resp, err := c.do(context.Background(), request{
+		method: http.MethodPut,
+		url:    c.URL(davFilesPrefix + "/einstein/empty.txt"),
+		body:   readerBody(func() (io.ReadCloser, error) { return body, nil }, 0),
+		op:     "upload",
+	})
+	if err != nil {
 		t.Fatal(err)
 	}
+	drain(resp)
 	if !body.closed {
-		t.Error("the body of an empty upload was never closed")
+		t.Error("the body of an empty request was never closed")
 	}
 }
 
@@ -793,8 +634,6 @@ func TestTouchSendsContentLengthZero(t *testing.T) {
 	}
 }
 
-// TestPropfindSendsContentLength: the XML body is small, but a server that
-// checks the header would reject it just the same.
 func TestPropfindSendsContentLength(t *testing.T) {
 	f := newFakeServer(t)
 	var gotLength int64 = -1

@@ -73,8 +73,7 @@ func Mutates(cmd *cobra.Command) *cobra.Command {
 	return cmd
 }
 
-// IsOperator reports whether cmd itself is marked with AdminCommand. Its
-// subcommands are operator commands too.
+// IsOperator reports whether cmd itself is marked with AdminCommand.
 func IsOperator(cmd *cobra.Command) bool {
 	return cmd.Annotations[planeAnnotation] == adminValue
 }

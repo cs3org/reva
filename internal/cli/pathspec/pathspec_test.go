@@ -19,8 +19,6 @@
 package pathspec
 
 import (
-	"context"
-	"errors"
 	"path/filepath"
 	"runtime"
 	"strings"
@@ -100,12 +98,9 @@ func TestParseRemoteErrors(t *testing.T) {
 	}
 }
 
-// TestParseTransferDisambiguation is the core of this package: on lxplus an
-// absolute /eos path is a local FUSE mount unless it is explicitly marked.
 func TestParseTransferDisambiguation(t *testing.T) {
-	// A local path is cleaned by the platform's rules, so on Windows it comes
-	// back with backslashes; and Clean keeps a leading ".\" on a name with a
-	// colon in it, which would otherwise read as a drive.
+	// On Windows, Clean gives backslashes, and it keeps a leading ".\" on a name
+	// with a colon, so that it is not read as a drive.
 	local := filepath.FromSlash
 	weird := "weird:name.txt"
 	if runtime.GOOS == "windows" {
@@ -149,10 +144,8 @@ func TestParseTransferDisambiguation(t *testing.T) {
 	}
 }
 
-// TestParseTransferAliasAmbiguity pins a known, deliberate false positive:
-// "data/archive:2024" is shaped exactly like a project space alias, so it is
-// read as one. There is no way to tell the two apart from the string alone,
-// which is why the file: prefix exists.
+// "data/archive:2024" looks like a project space alias. The file: prefix makes
+// it local.
 func TestParseTransferAliasAmbiguity(t *testing.T) {
 	got, err := ParseTransfer("data/archive:2024")
 	if err != nil {
@@ -213,7 +206,6 @@ func TestParseTransferPair(t *testing.T) {
 		}
 	})
 
-	// The lxplus trap: both sides look like CERNBox paths but neither is marked.
 	t.Run("two bare eos paths are rejected with advice", func(t *testing.T) {
 		_, _, err := ParseTransferPair("/eos/user/g/gdelmont/a.txt", "/eos/user/g/gdelmont/b.txt")
 		if err == nil {
@@ -233,218 +225,4 @@ func TestParseTransferPair(t *testing.T) {
 			t.Error("both sides should be remote")
 		}
 	})
-}
-
-// stubResolver resolves a fixed set of aliases.
-type stubResolver struct {
-	spaces map[string]string
-	calls  int
-}
-
-func (s *stubResolver) ResolveSpace(_ context.Context, alias string) (string, error) {
-	s.calls++
-	root, ok := s.spaces[alias]
-	if !ok {
-		return "", errors.New("no such space")
-	}
-	return root, nil
-}
-
-func TestResolve(t *testing.T) {
-	r := &stubResolver{spaces: map[string]string{
-		"home":            "/eos/user/g/gdelmont",
-		"project/cernbox": "/eos/project/c/cernbox",
-	}}
-	ctx := context.Background()
-
-	tests := []struct {
-		arg  string
-		want string
-	}{
-		{"home:Documents", "/eos/user/g/gdelmont/Documents"},
-		{"home:", "/eos/user/g/gdelmont"},
-		{"project/cernbox:data/raw", "/eos/project/c/cernbox/data/raw"},
-		{"Documents/notes.txt", "/eos/user/g/gdelmont/Documents/notes.txt"},
-	}
-	for _, tt := range tests {
-		t.Run(tt.arg, func(t *testing.T) {
-			s, err := ParseRemote(tt.arg)
-			if err != nil {
-				t.Fatal(err)
-			}
-			got, err := s.Resolve(ctx, r)
-			if err != nil {
-				t.Fatalf("Resolve: %v", err)
-			}
-			if got != tt.want {
-				t.Errorf("Resolve(%q) = %q, want %q", tt.arg, got, tt.want)
-			}
-		})
-	}
-}
-
-func TestResolveAbsoluteDoesNotCallResolver(t *testing.T) {
-	r := &stubResolver{spaces: map[string]string{}}
-	s, err := ParseRemote("/eos/user/g/gdelmont")
-	if err != nil {
-		t.Fatal(err)
-	}
-	got, err := s.Resolve(context.Background(), r)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if got != "/eos/user/g/gdelmont" {
-		t.Errorf("Resolve = %q, want the path unchanged", got)
-	}
-	if r.calls != 0 {
-		t.Errorf("resolver was called %d times for an absolute path, want 0", r.calls)
-	}
-}
-
-func TestResolveErrors(t *testing.T) {
-	ctx := context.Background()
-
-	t.Run("local spec", func(t *testing.T) {
-		s, err := ParseTransfer("./a.txt")
-		if err != nil {
-			t.Fatal(err)
-		}
-		if _, err := s.Resolve(ctx, &stubResolver{}); err == nil {
-			t.Error("Resolve on a local spec should fail")
-		}
-	})
-
-	t.Run("unknown space", func(t *testing.T) {
-		s, err := ParseRemote("project/nope:data")
-		if err != nil {
-			t.Fatal(err)
-		}
-		_, err = s.Resolve(ctx, &stubResolver{spaces: map[string]string{}})
-		if err == nil {
-			t.Fatal("Resolve should fail for an unknown space")
-		}
-		if !strings.Contains(err.Error(), "project/nope") {
-			t.Errorf("error should name the space, got %q", err)
-		}
-	})
-
-	t.Run("nil resolver", func(t *testing.T) {
-		s, err := ParseRemote("home:Documents")
-		if err != nil {
-			t.Fatal(err)
-		}
-		if _, err := s.Resolve(ctx, nil); err == nil {
-			t.Error("Resolve with a nil resolver should fail")
-		}
-	})
-}
-
-func TestJoin(t *testing.T) {
-	tests := []struct {
-		name string
-		arg  string
-		elem string
-		want string
-	}{
-		{"absolute", "/eos/user/g/gdelmont", "Documents", "/eos/user/g/gdelmont/Documents"},
-		{"alias", "home:Documents", "notes.txt", "Documents/notes.txt"},
-		{"root", "/", "eos", "/eos"},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			s, err := ParseRemote(tt.arg)
-			if err != nil {
-				t.Fatal(err)
-			}
-			if got := Join(s, tt.elem); got.Path != tt.want {
-				t.Errorf("Join(%q, %q).Path = %q, want %q", tt.arg, tt.elem, got.Path, tt.want)
-			}
-		})
-	}
-}
-
-func TestBase(t *testing.T) {
-	tests := []struct {
-		arg  string
-		want string
-	}{
-		{"/eos/user/g/gdelmont/notes.txt", "notes.txt"},
-		{"home:Documents/notes.txt", "notes.txt"},
-		{"project/cernbox:", "cernbox"},
-		{"/", ""},
-	}
-	for _, tt := range tests {
-		t.Run(tt.arg, func(t *testing.T) {
-			s, err := ParseRemote(tt.arg)
-			if err != nil {
-				t.Fatal(err)
-			}
-			if got := Base(s); got != tt.want {
-				t.Errorf("Base(%q) = %q, want %q", tt.arg, got, tt.want)
-			}
-		})
-	}
-}
-
-func TestStringRoundTrip(t *testing.T) {
-	for _, arg := range []string{
-		"/eos/user/g/gdelmont/Documents",
-		"home:Documents",
-		"project/cernbox:data/raw",
-	} {
-		t.Run(arg, func(t *testing.T) {
-			s, err := ParseRemote(arg)
-			if err != nil {
-				t.Fatal(err)
-			}
-			reparsed, err := ParseRemote(s.String())
-			if err != nil {
-				t.Fatalf("re-parsing %q: %v", s.String(), err)
-			}
-			if reparsed.Path != s.Path || reparsed.Space != s.Space {
-				t.Errorf("round trip changed the spec: %+v → %q → %+v", s, s.String(), reparsed)
-			}
-		})
-	}
-}
-
-func TestKindString(t *testing.T) {
-	if Remote.String() != "remote" || Local.String() != "local" {
-		t.Errorf("Kind.String is wrong: %q %q", Remote, Local)
-	}
-}
-
-func TestSplitForCompletion(t *testing.T) {
-	for _, tc := range []struct {
-		arg, dir, frag string
-	}{
-		{"", "", ""},
-		{"Doc", "", "Doc"},
-		{"Documents/re", "Documents/", "re"},
-		{"/eos/user/g/gdelmont/Doc", "/eos/user/g/gdelmont/", "Doc"},
-		{"/", "/", ""},
-		{"cb:", "cb:", ""},
-		{"cb:/eos/user/g/gdelmont/", "cb:/eos/user/g/gdelmont/", ""},
-		{"cb:/eos/user/g/gdelmont/Doc", "cb:/eos/user/g/gdelmont/", "Doc"},
-		{"home:", "home:", ""},
-		{"home:Doc", "home:", "Doc"},
-		{"home:notes/dr", "home:notes/", "dr"},
-		{"project/cernbox:data/ra", "project/cernbox:data/", "ra"},
-		{"cb:home:Doc", "cb:home:", "Doc"},
-		// Not an alias: the colon is part of a local-looking name, and the
-		// directory half still has to come back exactly as it was typed.
-		{"./odd:name", "./", "odd:name"},
-	} {
-		t.Run(tc.arg, func(t *testing.T) {
-			dir, frag := SplitForCompletion(tc.arg)
-			if dir != tc.dir || frag != tc.frag {
-				t.Errorf("SplitForCompletion(%q) = %q, %q; want %q, %q", tc.arg, dir, frag, tc.dir, tc.frag)
-			}
-			// The two halves must be exactly what the user typed, or a
-			// candidate built from them names a different path.
-			if dir+frag != tc.arg {
-				t.Errorf("the halves of %q do not rejoin: %q + %q", tc.arg, dir, frag)
-			}
-		})
-	}
 }

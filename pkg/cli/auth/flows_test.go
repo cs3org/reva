@@ -24,40 +24,24 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
-	"net/url"
 	"path/filepath"
 	"strings"
 	"sync/atomic"
 	"testing"
+	"time"
 
 	"github.com/cs3org/reva/v3/pkg/cli/kerberos"
-	"time"
 )
 
-// fakeIDP is a stand-in CERN OIDC:        a discovery document, an authorization
-// endpoint that accepts a SPNEGO header, a token endpoint that enforces PKCE,
-// and a device flow.
+// fakeIDP is an OIDC provider with a discovery document, a token endpoint and
+// a device flow.
 type fakeIDP struct {
 	ts *httptest.Server
 
-	// Behaviour switches.
-	rejectNegotiate  bool
-	noRedirect       bool
-	mismatchedState  bool
-	authError        string
-	expiresIn        int64
-	noDeviceEndpoint bool
-	devicePendingFor int32
-	// noNewRefreshToken makes the issuer omit a rotated refresh token, which
-	// not every provider sends.
+	noDeviceEndpoint  bool
+	devicePendingFor  int32
 	noNewRefreshToken bool
 
-	// Captured for assertions.
-	gotNegotiate   string
-	gotChallenge   string
-	gotVerifier    string
-	gotAudience    string
-	gotScope       string
 	gotGrantType   string
 	gotRefreshWith string
 
@@ -67,14 +51,13 @@ type fakeIDP struct {
 
 func newFakeIDP(t *testing.T) *fakeIDP {
 	t.Helper()
-	idp := &fakeIDP{expiresIn: 1200}
+	idp := &fakeIDP{}
 	mux := http.NewServeMux()
 
 	mux.HandleFunc("/.well-known/openid-configuration", func(w http.ResponseWriter, r *http.Request) {
 		meta := map[string]string{
-			"issuer":                 idp.ts.URL,
-			"authorization_endpoint": idp.ts.URL + "/authorize",
-			"token_endpoint":         idp.ts.URL + "/token",
+			"issuer":         idp.ts.URL,
+			"token_endpoint": idp.ts.URL + "/token",
 		}
 		if !idp.noDeviceEndpoint {
 			meta["device_authorization_endpoint"] = idp.ts.URL + "/device"
@@ -82,58 +65,11 @@ func newFakeIDP(t *testing.T) *fakeIDP {
 		json.NewEncoder(w).Encode(meta)
 	})
 
-	mux.HandleFunc("/authorize", func(w http.ResponseWriter, r *http.Request) {
-		idp.gotNegotiate = r.Header.Get("Authorization")
-		q := r.URL.Query()
-		idp.gotChallenge = q.Get("code_challenge")
-		idp.gotAudience = q.Get("audience")
-		idp.gotScope = q.Get("scope")
-
-		if idp.rejectNegotiate || !strings.HasPrefix(idp.gotNegotiate, "Negotiate ") {
-			w.WriteHeader(http.StatusUnauthorized)
-			return
-		}
-		if idp.noRedirect {
-			w.WriteHeader(http.StatusOK)
-			return
-		}
-
-		redirect, _ := url.Parse(q.Get("redirect_uri"))
-		if redirect == nil {
-			redirect = &url.URL{Path: "/cb"}
-		}
-		params := url.Values{}
-		if idp.authError != "" {
-			params.Set("error", idp.authError)
-			params.Set("error_description", "the client is not allowed to do that")
-		} else {
-			params.Set("code", "auth-code-123")
-			state := q.Get("state")
-			if idp.mismatchedState {
-				state = "not-the-state-you-sent"
-			}
-			params.Set("state", state)
-		}
-		redirect.RawQuery = params.Encode()
-		w.Header().Set("Location", redirect.String())
-		w.WriteHeader(http.StatusFound)
-	})
-
 	mux.HandleFunc("/token", func(w http.ResponseWriter, r *http.Request) {
 		r.ParseForm()
 		idp.gotGrantType = r.Form.Get("grant_type")
 
 		switch idp.gotGrantType {
-		case "authorization_code":
-			idp.gotVerifier = r.Form.Get("code_verifier")
-			if idp.gotVerifier == "" {
-				writeOAuthError(w, http.StatusBadRequest, "invalid_request", "PKCE verifier missing")
-				return
-			}
-			if r.Form.Get("code") != "auth-code-123" {
-				writeOAuthError(w, http.StatusBadRequest, "invalid_grant", "unknown code")
-				return
-			}
 		case "refresh_token":
 			idp.gotRefreshWith = r.Form.Get("refresh_token")
 			if idp.gotRefreshWith != "refresh-me" {
@@ -158,7 +94,7 @@ func newFakeIDP(t *testing.T) *fakeIDP {
 		json.NewEncoder(w).Encode(map[string]any{
 			"access_token":  fmt.Sprintf("access-token-%d", n),
 			"token_type":    "Bearer",
-			"expires_in":    idp.expiresIn,
+			"expires_in":    1200,
 			"refresh_token": refreshed,
 		})
 	})
@@ -169,7 +105,7 @@ func newFakeIDP(t *testing.T) *fakeIDP {
 			"user_code":        "WDJB-MJHT",
 			"verification_uri": idp.ts.URL + "/activate",
 			"expires_in":       600,
-			"interval":         0, // no server-side rate limit; the client floor still applies
+			"interval":         0,
 		})
 	})
 
@@ -190,8 +126,6 @@ func ssoConfig(idp *fakeIDP) *OIDCConfig {
 	}
 }
 
-// -- Kerberos provider --------------------------------------------------------
-
 func TestKerberosProvider(t *testing.T) {
 	p := &KerberosProvider{
 		Ticket: kerberos.Provider{CCache: filepath.Join(t.TempDir(), "none")},
@@ -210,8 +144,10 @@ func TestKerberosProviderToken(t *testing.T) {
 		SPN:       func() (string, error) { return "HTTP/box.example.org", nil },
 		Negotiate: func(spn string) (string, error) { return "token-for-" + spn, nil },
 	}
-	ctx := withStubTicket(t, p)
-	tok, err := p.Token(ctx)
+	p.once.Do(func() {
+		p.ticket = &kerberos.Ticket{Principal: "einstein@CERN.CH", Realm: "CERN.CH", CachePath: "/tmp/stub"}
+	})
+	tok, err := p.Token(context.Background())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -219,8 +155,6 @@ func TestKerberosProviderToken(t *testing.T) {
 		t.Errorf("token %+v, hint %q", tok, p.IdentityHint())
 	}
 }
-
-// -- device flow --------------------------------------------------------------
 
 func TestDeviceFlow(t *testing.T) {
 	idp := newFakeIDP(t)
@@ -247,8 +181,6 @@ func TestDeviceFlow(t *testing.T) {
 	}
 }
 
-// TestDeviceFlowPolls checks the authorization_pending loop: the CLI must keep
-// waiting while the user completes the login in a browser.
 func TestDeviceFlowPolls(t *testing.T) {
 	idp := newFakeIDP(t)
 	idp.devicePendingFor = 2
@@ -266,8 +198,6 @@ func TestDeviceFlowPolls(t *testing.T) {
 	}
 }
 
-// TestDeviceFlowUnavailableWithoutATTY: a cron job must fail fast rather than
-// wait fifteen minutes for a login nobody is performing.
 func TestDeviceFlowUnavailableWithoutATTY(t *testing.T) {
 	idp := newFakeIDP(t)
 	p := &DeviceProvider{OIDC: ssoConfig(idp), HTTPClient: idp.ts.Client(), Interactive: false}
@@ -301,23 +231,6 @@ func TestDeviceFlowTimesOut(t *testing.T) {
 	}
 }
 
-// -- helpers ------------------------------------------------------------------
-
-// withStubTicket installs a Kerberos ticket on the provider without needing a
-// KDC, and returns a context for the call.
-func withStubTicket(t *testing.T, p *KerberosProvider) context.Context {
-	t.Helper()
-	p.once.Do(func() {
-		p.ticket = &kerberos.Ticket{Principal: "einstein@CERN.CH", Realm: "CERN.CH", CachePath: "/tmp/stub"}
-	})
-	return context.Background()
-}
-
-// -- refresh ------------------------------------------------------------------
-
-// TestDeviceRefresh: a CERN SSO access token lives twenty minutes. Without
-// honouring the refresh token that offline_access yields, the user is sent back
-// to the browser every twenty minutes for no reason.
 func TestDeviceRefresh(t *testing.T) {
 	idp := newFakeIDP(t)
 	p := &DeviceProvider{OIDC: ssoConfig(idp), HTTPClient: idp.ts.Client()}
@@ -342,8 +255,7 @@ func TestDeviceRefresh(t *testing.T) {
 	}
 }
 
-// TestDeviceRefreshKeepsTheRefreshToken: not every issuer rotates it, and
-// dropping it costs the ability to refresh a second time.
+// Not every issuer rotates the refresh token.
 func TestDeviceRefreshKeepsTheRefreshToken(t *testing.T) {
 	idp := newFakeIDP(t)
 	idp.noNewRefreshToken = true
@@ -358,8 +270,6 @@ func TestDeviceRefreshKeepsTheRefreshToken(t *testing.T) {
 	}
 }
 
-// TestDeviceRefreshRejected: an expired refresh token is an error here, and the
-// chain then falls through to authenticating normally.
 func TestDeviceRefreshRejected(t *testing.T) {
 	idp := newFakeIDP(t)
 	p := &DeviceProvider{OIDC: ssoConfig(idp), HTTPClient: idp.ts.Client()}
@@ -369,7 +279,6 @@ func TestDeviceRefreshRejected(t *testing.T) {
 	}
 }
 
-// TestDeviceRefreshWithoutAToken needs no network at all.
 func TestDeviceRefreshWithoutAToken(t *testing.T) {
 	p := &DeviceProvider{}
 	if _, err := p.Refresh(context.Background(), &Token{}); err == nil {
@@ -380,9 +289,7 @@ func TestDeviceRefreshWithoutAToken(t *testing.T) {
 	}
 }
 
-// TestDeviceProviderIsARefresher pins the wiring: the chain only refreshes a
-// provider that implements the interface, so losing it silently reinstates the
-// twenty-minute re-login.
+// The chain refreshes only a provider that implements Refresher.
 func TestDeviceProviderIsARefresher(t *testing.T) {
 	var p any = &DeviceProvider{}
 	if _, ok := p.(Refresher); !ok {

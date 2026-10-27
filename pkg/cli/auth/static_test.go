@@ -35,8 +35,6 @@ func TestTokenProvider(t *testing.T) {
 	if err != nil || !p.Available(ctx) {
 		t.Fatal(err)
 	}
-	// An opaque token carries no expiry claim we can trust here: the runtime
-	// reads exp from the reva token.
 	if tok.Kind != KindReva || tok.Value != "abc" || !tok.Expiry.IsZero() {
 		t.Errorf("token = %+v", tok)
 	}
@@ -65,7 +63,6 @@ func TestAppTokenProvider(t *testing.T) {
 		}
 	})
 
-	// A token in a file stays out of /proc and out of process listings.
 	t.Run("from file", func(t *testing.T) {
 		path := filepath.Join(t.TempDir(), "token")
 		if err := os.WriteFile(path, []byte("  file-password\n"), 0o600); err != nil {
@@ -125,8 +122,6 @@ func TestBasicProvider(t *testing.T) {
 		}
 	})
 
-	// Without a prompt and without a password there is no way to proceed,
-	// and hanging would be worse than failing.
 	t.Run("unavailable without a password or a prompt", func(t *testing.T) {
 		if (&BasicProvider{Username: "einstein"}).Available(ctx) {
 			t.Error("should be unavailable with no way to obtain a password")
@@ -157,7 +152,6 @@ func TestProviderNames(t *testing.T) {
 }
 
 func TestJWTExpiry(t *testing.T) {
-	// {"exp":1767225600}: a real JWT payload, unsigned parts elided.
 	payload := base64.RawURLEncoding.EncodeToString([]byte(`{"exp":1767225600}`))
 	token := "header." + payload + ".signature"
 
@@ -169,9 +163,7 @@ func TestJWTExpiry(t *testing.T) {
 		t.Errorf("jwtExpiry should tolerate the Bearer prefix, got %v", got)
 	}
 
-	// An unparseable token reads as non-expiring, which is the safe direction:
-	// it gets used until the server says otherwise, and the 401 path
-	// re-authenticates.
+	// A token that does not parse has no expiry.
 	for _, bad := range []string{"", "not-a-jwt", "a.b", "a.!!!.c", "a." + base64.RawURLEncoding.EncodeToString([]byte(`{}`)) + ".c"} {
 		if got := JWTExpiry(bad); !got.IsZero() {
 			t.Errorf("JWTExpiry(%q) = %v, want zero", bad, got)

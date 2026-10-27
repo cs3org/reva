@@ -32,18 +32,13 @@ import (
 
 // OIDCConfig describes the OIDC client of the CLI.
 type OIDCConfig struct {
-	// Issuer is the OIDC issuer URL, for example
-	// https://auth.example.org/realms/main.
-	Issuer string
-	// ClientID is the public client registered for the CLI.
+	Issuer   string
 	ClientID string
-	// Scopes requested. offline_access is what yields a refresh token, which is
-	// what lets a shell loop avoid a round trip to the SSO server on every
-	// command.
+	// Scopes defaults to openid, profile and offline_access, which gives a
+	// refresh token.
 	Scopes []string
 }
 
-// scopes returns the scopes to request, with sensible defaults.
 func (c *OIDCConfig) scopes() []string {
 	if len(c.Scopes) > 0 {
 		return c.Scopes
@@ -97,7 +92,7 @@ type TokenResponse struct {
 	ErrorDescription string `json:"error_description"`
 }
 
-// Token returns the token of the answer, from provider.
+// Token returns the token of the answer.
 func (r *TokenResponse) Token(provider string) *Token {
 	tok := &Token{
 		Kind:         KindBearer,
@@ -109,16 +104,14 @@ func (r *TokenResponse) Token(provider string) *Token {
 	case r.ExpiresIn > 0:
 		tok.Expiry = time.Now().Add(time.Duration(r.ExpiresIn) * time.Second)
 	default:
-		// Fall back to the token's own claim so a provider that omits
-		// expires_in still gets correct refresh behaviour.
+		// The issuer left out expires_in.
 		tok.Expiry = JWTExpiry(r.AccessToken)
 	}
 	return tok
 }
 
-// PostForm sends a form-encoded request to a token endpoint and decodes the
-// response. OAuth errors arrive with a non-2xx status and a JSON body, so the
-// body is decoded either way.
+// PostForm sends a form to a token endpoint and decodes the response. It
+// decodes the body also for an error status: OAuth errors come as JSON.
 func PostForm(ctx context.Context, hc *http.Client, endpoint string, form url.Values) (*TokenResponse, error) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, endpoint, strings.NewReader(form.Encode()))
 	if err != nil {
@@ -161,12 +154,9 @@ func OAuthErrorMessage(tr *TokenResponse) string {
 	return tr.Error
 }
 
-// JWTExpiry reads the exp claim from a JWT without verifying it.
-//
-// Verification is the server's job; the client only needs to know when to stop
-// using the token. A token it cannot parse is treated as non-expiring, which is
-// the safe direction: it gets used until the server rejects it, and the 401
-// path re-authenticates.
+// JWTExpiry reads the exp claim of a JWT without verifying it. The server
+// verifies. A token that does not parse gets no expiry: the client uses it until
+// the server answers 401.
 func JWTExpiry(raw string) time.Time {
 	raw = strings.TrimPrefix(raw, "Bearer ")
 	parts := strings.Split(raw, ".")

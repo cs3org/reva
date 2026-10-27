@@ -41,8 +41,7 @@ import (
 	"github.com/cs3org/reva/v3/pkg/crypto"
 )
 
-// DefaultChunkSize is the size of a TUS part when neither the caller nor
-// the server sets one.
+// DefaultChunkSize is the size of a TUS part when nothing sets another one.
 const DefaultChunkSize = 8 << 20
 
 // Plane implements backend.DataPlane.
@@ -51,8 +50,7 @@ type Plane struct {
 	loc    backend.Locator
 	// ChunkSize is the size of a TUS part. The server can make it smaller.
 	ChunkSize int64
-	// Renew, when it is set, replaces the credentials after a 401. The
-	// request is then sent again once, with a new target.
+	// Renew, when set, replaces the credentials after a 401.
 	Renew func(ctx context.Context) error
 }
 
@@ -64,8 +62,7 @@ func New(client *http.Client, loc backend.Locator) *Plane {
 	return &Plane{client: client, loc: loc}
 }
 
-// send gets a target and sends the request that build makes for it. After a
-// 401 it renews the credentials and sends it again, with a new target.
+// send retries once after a 401, with renewed credentials and a new target.
 func (p *Plane) send(ctx context.Context, target func() (*backend.Target, error), build func(*backend.Target) (*http.Request, error)) (*http.Response, error) {
 	for attempt := 0; ; attempt++ {
 		t, err := target()
@@ -192,6 +189,7 @@ func (p *Plane) put(ctx context.Context, ref *provider.Reference, open func() (i
 			}
 			req.ContentLength = size
 			if size == 0 {
+				// A zero length with a body would make net/http send it chunked.
 				body.Close()
 				req.Body = http.NoBody
 			}
@@ -252,7 +250,6 @@ func (p *Plane) ResumeUpload(ctx context.Context, up backend.Upload, open func()
 
 const tusVersion = "1.0.0"
 
-// sendParts sends the file from up.Offset in parts of the chunk size.
 func (p *Plane) sendParts(ctx context.Context, up backend.Upload, h http.Header, open func() (io.ReadCloser, error), progress func(backend.Upload)) error {
 	if progress == nil {
 		progress = func(backend.Upload) {}
@@ -274,7 +271,10 @@ func (p *Plane) sendParts(ctx context.Context, up backend.Upload, h http.Header,
 	if err != nil {
 		return err
 	}
-	chunk := p.chunkSize(ctx)
+	chunk := cmp.Or(p.ChunkSize, DefaultChunkSize)
+	if c, err := p.loc.Capabilities(ctx); err == nil && c.MaxChunkSize > 0 {
+		chunk = min(chunk, c.MaxChunkSize)
+	}
 	for up.Offset < up.Size {
 		n := min(chunk, up.Size-up.Offset)
 		req, err := http.NewRequestWithContext(ctx, http.MethodPatch, up.URL, io.NopCloser(io.LimitReader(r, n)))
@@ -307,14 +307,6 @@ func (p *Plane) sendParts(ctx context.Context, up backend.Upload, h http.Header,
 	return nil
 }
 
-func (p *Plane) chunkSize(ctx context.Context) int64 {
-	chunk := cmp.Or(p.ChunkSize, DefaultChunkSize)
-	if c, err := p.loc.Capabilities(ctx); err == nil && c.MaxChunkSize > 0 {
-		chunk = min(chunk, c.MaxChunkSize)
-	}
-	return chunk
-}
-
 func (p *Plane) Archive(ctx context.Context, refs []*provider.Reference, format string) (io.ReadCloser, error) {
 	body, _, err := p.get(ctx, "archive", func() (*backend.Target, error) { return p.loc.ArchiveTarget(ctx, refs, format) }, 0)
 	return body, err
@@ -328,7 +320,7 @@ func (p *Plane) OpenInApp(ctx context.Context, ref *provider.Reference, opts bac
 	return p.loc.OpenInApp(ctx, ref, opts)
 }
 
-// statusCodes are the HTTP answers that a command tests by their CS3 code.
+// statusCodes maps the HTTP answers that commands test by CS3 code.
 var statusCodes = map[int]rpc.Code{
 	http.StatusUnauthorized:        rpc.Code_CODE_UNAUTHENTICATED,
 	http.StatusForbidden:           rpc.Code_CODE_PERMISSION_DENIED,

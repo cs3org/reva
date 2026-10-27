@@ -28,11 +28,10 @@ import (
 	"github.com/cs3org/reva/v3/internal/cli/cberr"
 )
 
-// The OCS share API addresses a share or a link by its id alone, which the
-// Graph routes cannot do: they need the item in the URL.
+// OCS addresses a share or a link by its id alone. The Graph routes need the
+// item in the URL too.
 const ocsShares = "/ocs/v2.php/apps/files_sharing/api/v1/shares"
 
-// The OCS share types.
 const (
 	OCSShareUser   = 0
 	OCSShareGroup  = 1
@@ -50,12 +49,8 @@ type OCSShare struct {
 	Expiration   string `json:"expiration"`
 	Token        string `json:"token"`
 	Name         string `json:"name"`
-	Path         string `json:"path"`
-	ItemType     string `json:"item_type"`
 	ItemSource   string `json:"item_source"`
-	FileTarget   string `json:"file_target"`
 	ShareWith    string `json:"share_with"`
-	State        int    `json:"state"`
 	Description  string `json:"description"`
 }
 
@@ -65,7 +60,7 @@ func (c *Client) ocsShareURL(id string) string {
 
 var ocsHeader = http.Header{"OCS-APIREQUEST": {"true"}, "Accept": {"application/json"}}
 
-// GetShare returns the share or the link id.
+// GetShare returns the share or the link with the given id.
 func (c *Client) GetShare(ctx context.Context, id string) (*OCSShare, error) {
 	resp, err := c.do(ctx, request{method: http.MethodGet, url: c.ocsShareURL(id), header: ocsHeader, op: "get share", path: id})
 	if err != nil {
@@ -82,8 +77,8 @@ func (c *Client) GetShare(ctx context.Context, id string) (*OCSShare, error) {
 	return &env.OCS.Data[0], nil
 }
 
-// UpdateShare sets the form fields of the share or the link id. A field
-// with an empty value is sent empty, which for a password removes it.
+// UpdateShare sets the form fields of a share or a link. An empty value is
+// sent as it is, and removes a password.
 func (c *Client) UpdateShare(ctx context.Context, id string, fields url.Values) (*OCSShare, error) {
 	h := ocsHeader.Clone()
 	h.Set("Content-Type", "application/x-www-form-urlencoded")
@@ -100,7 +95,7 @@ func (c *Client) UpdateShare(ctx context.Context, id string, fields url.Values) 
 	return &env.OCS.Data, nil
 }
 
-// RemoveShare removes the share or the link id.
+// RemoveShare removes a share or a link.
 func (c *Client) RemoveShare(ctx context.Context, id string) error {
 	resp, err := c.do(ctx, request{method: http.MethodDelete, url: c.ocsShareURL(id), header: ocsHeader, op: "remove share", path: id})
 	if err != nil {
@@ -116,11 +111,10 @@ type GraphUser struct {
 	Username    string `json:"onPremisesSamAccountName"`
 	DisplayName string `json:"displayName"`
 	Mail        string `json:"mail"`
-	UserType    string `json:"userType"`
 }
 
 // FindUsers searches the users by name or mail. The server wants at least
-// three characters, and an order.
+// three characters and an $orderby.
 func (c *Client) FindUsers(ctx context.Context, query string) ([]GraphUser, error) {
 	q := url.Values{"$search": {`"` + strings.ReplaceAll(query, `"`, "") + `"`}, "$orderby": {"displayName"}}
 	var coll graphCollection[GraphUser]

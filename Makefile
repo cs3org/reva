@@ -130,7 +130,7 @@ reva: ## Build the reva CLI
 # The CERNBox build of the CLI: reva with the CLI plugins of
 # github.com/cernbox/reva-plugins/cli and the CERNBox brand. It needs gaia
 # with --binary, --brand and a subpackage in --with (T35), and the brand
-# file of reva-plugins (T42). Until then these targets fail.
+# file of reva-plugins. Until then these targets fail.
 CERNBOX_BRAND ?= $(shell pwd)/../reva-plugins/cli/cernbox.toml
 
 .PHONY: cernbox

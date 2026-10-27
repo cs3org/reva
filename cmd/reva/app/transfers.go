@@ -18,9 +18,6 @@
 
 package revacmd
 
-// The commands that come from cernbox-cli and move content: sync, archive,
-// cat, and versions restore, download and diff.
-
 import (
 	"errors"
 	"fmt"
@@ -337,7 +334,7 @@ func versionsDownloadCommand(rt *cli.Runtime) *cobra.Command {
 	return cmd
 }
 
-// maxDiffSize keeps a diff in memory.
+// maxDiffSize is the size above which versions diff gives up.
 const maxDiffSize = 16 << 20
 
 func versionsDiffCommand(rt *cli.Runtime) *cobra.Command {

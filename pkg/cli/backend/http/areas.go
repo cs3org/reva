@@ -34,6 +34,7 @@ import (
 	types "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
 	"github.com/cs3org/reva/v3/pkg/cli/backend"
 	"github.com/cs3org/reva/v3/pkg/cli/backend/http/internal/client"
+	"github.com/cs3org/reva/v3/pkg/spaces"
 )
 
 type spaceArea struct{ b *Backend }
@@ -146,7 +147,7 @@ type versions struct{ b *Backend }
 // fileID returns the resource id of ref as Graph and the meta URLs want it.
 func (b *Backend) fileID(ctx context.Context, ref *provider.Reference) (string, error) {
 	if id := ref.GetResourceId(); id != nil && ref.GetPath() == "" {
-		return resourceIDString(id), nil
+		return spaces.EncodeToStringifiedResourceID(id), nil
 	}
 	info, err := files{b}.Stat(ctx, ref)
 	if err != nil {
@@ -155,7 +156,7 @@ func (b *Backend) fileID(ctx context.Context, ref *provider.Reference) (string, 
 	if info.Id == nil {
 		return "", invalid("the server gives no id for %s", info.Path)
 	}
-	return resourceIDString(info.Id), nil
+	return spaces.EncodeToStringifiedResourceID(info.Id), nil
 }
 
 func (v versions) List(ctx context.Context, ref *provider.Reference) ([]*provider.FileVersion, error) {
@@ -209,7 +210,7 @@ func invite(i client.Invite) *invitepb.InviteToken {
 }
 
 func (o ocmArea) CreateInvite(ctx context.Context, description string) (*invitepb.InviteToken, error) {
-	i, err := o.b.c.GenerateInvite(ctx, description, "")
+	i, err := o.b.c.GenerateInvite(ctx, description)
 	if err != nil {
 		return nil, conv(err)
 	}

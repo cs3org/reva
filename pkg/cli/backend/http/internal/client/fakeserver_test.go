@@ -20,7 +20,6 @@ package client
 
 import (
 	"context"
-	"encoding/xml"
 	"fmt"
 	"io"
 	"net/http"
@@ -31,9 +30,7 @@ import (
 	"testing"
 )
 
-// fakeServer is a stand-in CERNBox, shaped like the real one: OCS capabilities,
-// the Graph identity and drive endpoints, and a WebDAV tree. Handlers can be
-// overridden per test to inject failures.
+// fakeServer is a stand-in CERNBox. A test can override any route.
 type fakeServer struct {
 	t  *testing.T
 	ts *httptest.Server
@@ -41,8 +38,7 @@ type fakeServer struct {
 	mu       sync.Mutex
 	requests []recordedRequest
 
-	// Handlers, keyed by "METHOD /path-prefix". A test installs one to take
-	// over a route entirely.
+	// Handlers, keyed by "METHOD /path-prefix".
 	overrides map[string]http.HandlerFunc
 
 	capabilitiesJSON string
@@ -122,16 +118,15 @@ func newFakeServer(t *testing.T) *fakeServer {
 	return f
 }
 
-// on installs a handler for a method and path prefix, replacing the default.
 func (f *fakeServer) on(method, prefix string, h http.HandlerFunc) {
 	f.overrides[method+" "+prefix] = h
 }
 
 func (f *fakeServer) route(w http.ResponseWriter, r *http.Request) {
-	body := readAll(r)
+	body, _ := io.ReadAll(r.Body)
 	f.mu.Lock()
 	f.requests = append(f.requests, recordedRequest{
-		Method: r.Method, Path: r.URL.Path, Header: r.Header.Clone(), Body: body,
+		Method: r.Method, Path: r.URL.Path, Header: r.Header.Clone(), Body: string(body),
 	})
 	f.mu.Unlock()
 
@@ -158,23 +153,6 @@ func (f *fakeServer) route(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func readAll(r *http.Request) string {
-	if r.Body == nil {
-		return ""
-	}
-	var sb strings.Builder
-	buf := make([]byte, 4096)
-	for {
-		n, err := r.Body.Read(buf)
-		sb.Write(buf[:n])
-		if err != nil {
-			break
-		}
-	}
-	return sb.String()
-}
-
-// client returns a Client pointed at the fake server with a static credential.
 func (f *fakeServer) client(opts ...Option) *Client {
 	f.t.Helper()
 	base := append([]Option{
@@ -193,12 +171,9 @@ func (f *fakeServer) client(opts ...Option) *Client {
 func (f *fakeServer) recorded() []recordedRequest {
 	f.mu.Lock()
 	defer f.mu.Unlock()
-	out := make([]recordedRequest, len(f.requests))
-	copy(out, f.requests)
-	return out
+	return slices.Clone(f.requests)
 }
 
-// lastRequest returns the most recent request matching method, or fails.
 func (f *fakeServer) lastRequest(method string) recordedRequest {
 	f.t.Helper()
 	reqs := f.recorded()
@@ -229,8 +204,6 @@ func methodsOf(reqs []recordedRequest) []string {
 	return out
 }
 
-// -- multistatus builders -----------------------------------------------------
-
 // davEntry describes one resource for the multistatus builder.
 type davEntry struct {
 	Path      string
@@ -242,13 +215,12 @@ type davEntry struct {
 	MimeType  string
 	Perms     string
 	Checksums string
-	// Missing lists properties the server reports as 404, exercising the
-	// multi-propstat handling.
+	// Missing lists properties that the server reports as 404.
 	Missing []string
 }
 
-// multistatusXML renders a PROPFIND response the way reva does, including the
-// separate 200 and 404 propstat blocks.
+// multistatusXML renders a PROPFIND response with separate 200 and 404
+// propstat blocks, like reva.
 func multistatusXML(user string, entries ...davEntry) string {
 	var sb strings.Builder
 	sb.WriteString(`<?xml version="1.0" encoding="utf-8"?>`)
@@ -258,9 +230,9 @@ func multistatusXML(user string, entries ...davEntry) string {
 		if e.IsDir && !strings.HasSuffix(href, "/") {
 			href += "/"
 		}
-		sb.WriteString("<d:response><d:href>" + escapeXML(href) + "</d:href>")
+		sb.WriteString("<d:response><d:href>" + xmlEscape(href) + "</d:href>")
 		sb.WriteString("<d:propstat><d:status>HTTP/1.1 200 OK</d:status><d:prop>")
-		sb.WriteString("<d:displayname>" + escapeXML(baseName(e.Path)) + "</d:displayname>")
+		sb.WriteString("<d:displayname>" + xmlEscape(baseName(e.Path)) + "</d:displayname>")
 		if e.IsDir {
 			sb.WriteString("<d:resourcetype><d:collection/></d:resourcetype>")
 		} else {
@@ -275,7 +247,7 @@ func multistatusXML(user string, entries ...davEntry) string {
 			sb.WriteString(`<d:getetag>&quot;` + e.ETag + `&quot;</d:getetag>`)
 		}
 		if e.FileID != "" {
-			sb.WriteString("<oc:fileid>" + escapeXML(e.FileID) + "</oc:fileid>")
+			sb.WriteString("<oc:fileid>" + xmlEscape(e.FileID) + "</oc:fileid>")
 		}
 		if e.MimeType != "" {
 			sb.WriteString("<d:getcontenttype>" + e.MimeType + "</d:getcontenttype>")
@@ -301,12 +273,6 @@ func multistatusXML(user string, entries ...davEntry) string {
 	return sb.String()
 }
 
-func escapeXML(s string) string {
-	var b strings.Builder
-	xml.EscapeText(&b, []byte(s))
-	return b.String()
-}
-
 func baseName(p string) string {
 	p = strings.TrimSuffix(p, "/")
 	if i := strings.LastIndex(p, "/"); i >= 0 {
@@ -315,7 +281,6 @@ func baseName(p string) string {
 	return p
 }
 
-// serveMultistatus installs a PROPFIND handler returning the given entries.
 func (f *fakeServer) serveMultistatus(entries ...davEntry) {
 	f.on(MethodPropfind, davFilesPrefix, func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/xml")
@@ -324,7 +289,6 @@ func (f *fakeServer) serveMultistatus(entries ...davEntry) {
 	})
 }
 
-// openerOf adapts a string to the body opener Upload and UploadChunk take.
 func openerOf(s string) func() (io.ReadCloser, error) {
 	return func() (io.ReadCloser, error) { return io.NopCloser(strings.NewReader(s)), nil }
 }

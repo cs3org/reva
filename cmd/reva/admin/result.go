@@ -40,8 +40,8 @@ type nodeResult struct {
 }
 
 // writeResults writes the results of a unary invocation. A list result is a
-// table, anything else is key/value lines (with -o csv, rows of key and
-// value). It returns an error if a node failed, so that the exit code is 1.
+// table, anything else is key/value lines (rows of key and value with -o csv).
+// It returns an error if a node failed, so that the exit code is 1.
 func writeResults(w, errW io.Writer, results []*adminpb.NodeResult) error {
 	failed := 0
 	if rt.Output() == "json" {

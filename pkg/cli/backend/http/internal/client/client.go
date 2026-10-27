@@ -16,14 +16,11 @@
 // granted to it by virtue of its status as an Intergovernmental Organization
 // or submit itself to any jurisdiction.
 
-// Package client is the HTTP layer of the CLI. It talks to the same public
-// CERNBox surface the web UI uses: WebDAV and TUS through ocdav, spaces and
-// shares through ocgraph, feature discovery through OCS: and never speaks CS3
-// gRPC, so it works from anywhere the service is reachable over HTTPS.
+// Package client talks to CERNBox over HTTPS only: WebDAV and TUS (ocdav),
+// Graph (ocgraph) and OCS. It never uses CS3 gRPC.
 package client
 
 import (
-	"bytes"
 	"context"
 	"errors"
 	"fmt"
@@ -39,26 +36,20 @@ import (
 	"github.com/cs3org/reva/v3/internal/cli/cberr"
 )
 
-// Credential is a ready-to-send authentication header. The auth layer produces
-// it; the client only copies it onto the request, so that nothing here needs to
-// know whether the token came from Kerberos, OIDC, or an app password.
+// Credential is a ready-to-send authentication header.
 type Credential struct {
-	// Header is the header name, usually "Authorization".
 	Header string
-	// Value is the complete header value, for example "Bearer eyJ...".
-	Value string
+	Value  string
 }
 
-// CredentialSource supplies a credential for each request. Implementations are
-// expected to refresh transparently and to be safe for concurrent use, since
-// the transfer engine issues requests in parallel.
+// CredentialSource supplies a credential for each request. It must be safe for
+// concurrent use, because the transfer engine sends requests in parallel.
 type CredentialSource interface {
 	Credential(ctx context.Context) (Credential, error)
 }
 
-// Renewer is a CredentialSource that can replace a credential that the
-// server refused. The client asks for it once on a 401, because a reva token
-// can expire during a long run, or the server can refuse a cached one.
+// Renewer is a CredentialSource that can replace a credential the server
+// refused. The client calls it once on a 401.
 type Renewer interface {
 	Renew(ctx context.Context, refused Credential) error
 }
@@ -69,7 +60,6 @@ type CredentialFunc func(ctx context.Context) (Credential, error)
 // Credential implements CredentialSource.
 func (f CredentialFunc) Credential(ctx context.Context) (Credential, error) { return f(ctx) }
 
-// Endpoint path prefixes on a CERNBox server.
 const (
 	davFilesPrefix  = "/remote.php/dav/files"
 	davSpacesPrefix = "/remote.php/dav/spaces"
@@ -80,9 +70,8 @@ const (
 	ocsCapabilities = "/ocs/v1.php/cloud/capabilities"
 )
 
-// DefaultUserAgent identifies the CLI to the server. The version is stamped in
-// by cmd/cernbox so server-side telemetry can see the client version
-// distribution, which is what makes it possible to time a deprecation.
+// DefaultUserAgent identifies the CLI to the server. The build stamps the
+// version in.
 var DefaultUserAgent = "reva-cli/dev"
 
 // Client is a CERNBox HTTP client. It is safe for concurrent use.
@@ -112,8 +101,7 @@ type Client struct {
 // Option configures a Client.
 type Option func(*Client)
 
-// WithHTTPClient replaces the underlying HTTP client. Tests use it to inject a
-// recording transport; the CLI uses it to set timeouts and TLS options.
+// WithHTTPClient replaces the underlying HTTP client.
 func WithHTTPClient(hc *http.Client) Option { return func(c *Client) { c.hc = hc } }
 
 // WithCredentials sets the credential source.
@@ -122,8 +110,7 @@ func WithCredentials(cs CredentialSource) Option { return func(c *Client) { c.cr
 // WithUserAgent sets the User-Agent header.
 func WithUserAgent(ua string) Option { return func(c *Client) { c.userAgent = ua } }
 
-// WithMaxRetries sets how many times an idempotent request is retried on a
-// transient failure. Zero disables retrying.
+// WithMaxRetries sets how often a request is retried after a transient failure.
 func WithMaxRetries(n int) Option { return func(c *Client) { c.maxRetry = n } }
 
 // WithSpacesTTL sets how long the spaces listing is cached.
@@ -162,21 +149,17 @@ func New(endpoint string, opts ...Option) (*Client, error) {
 // Endpoint returns the base URL the client was built with.
 func (c *Client) Endpoint() string { return c.base.String() }
 
-// URL builds an absolute URL from a server-absolute path whose segments are
-// already percent-encoded.
+// URL builds an absolute URL from a server-absolute path that is already
+// percent-encoded.
 //
-// Both Path and RawPath are set, and that is not redundant: url.URL.String
-// renders RawPath only when it is a valid encoding of Path, and otherwise
-// re-escapes Path. Setting Path alone to already-escaped text would send
-// "%2520" for a space, which the server then decodes to a literal "%20" in the
-// file name.
+// Both Path and RawPath are set on purpose. With Path alone, url.URL.String
+// escapes it again, and a space goes out as "%2520".
 func (c *Client) URL(p string) string {
 	u := *c.base
 	raw := c.base.EscapedPath() + "/" + strings.TrimPrefix(p, "/")
 	unescaped, err := url.PathUnescape(raw)
 	if err != nil {
-		// Not valid escaping, so treat the input as a literal path and let
-		// String do the encoding.
+		// Invalid escaping: treat the input as a literal path.
 		u.Path = raw
 		u.RawPath = ""
 		return u.String()
@@ -186,26 +169,19 @@ func (c *Client) URL(p string) string {
 	return u.String()
 }
 
-// request is one HTTP call, described declaratively so that retry can replay it.
+// request is one HTTP call, described so that a retry can replay it.
 type request struct {
 	method  string
 	url     string
 	header  http.Header
-	body    *requestBody // nil for bodyless requests
-	op      string       // verb used in error messages
-	path    string       // resource used in error messages
+	body    *requestBody
+	op      string // verb used in error messages
+	path    string // resource used in error messages
 	noAuth  bool
 	expects []int // acceptable status codes; empty means any 2xx
 
-	// noRetry marks a request that must not be replayed. The body field is a
-	// factory precisely so that most requests can be, but a caller streaming
-	// from a pipe or a non-seekable source cannot produce the bytes twice and
-	// sets this.
-	noRetry bool
-
-	// anyStatus accepts whatever the server answers. It is for a request made
-	// for its headers rather than its result, where a 401 or a 404 carries what
-	// the caller came for just as a 200 does.
+	// anyStatus accepts any answer. It is for a request made for its headers,
+	// where a 401 or a 404 carries the answer too.
 	anyStatus bool
 
 	// used receives the credential of the last attempt, so that a renewal
@@ -213,24 +189,16 @@ type request struct {
 	used *Credential
 }
 
-// requestBody is a body together with its length.
-//
-// The two travel together because they must not be separated. The transport
-// ignores a Content-Length header set by hand and uses http.Request.
-// ContentLength, falling back to chunked encoding for any body it cannot size
-// itself: which is every body read from a file. reva's PUT handler reads the
-// Content-Length header and rejects a request that has none, so a body without
-// a length turns every upload into a 400. Making the length part of the body
-// means a caller cannot supply one without the other.
+// requestBody is a body with its length. The transport ignores a hand-set
+// Content-Length header and sends a body of unknown size chunked. reva's PUT
+// handler rejects that with a 400.
 type requestBody struct {
-	// open returns a fresh reader. It is called once per attempt, which is what
-	// makes a request replayable.
+	// open is called once per attempt, so that a request can be replayed.
 	open func() (io.ReadCloser, error)
-	// length is the number of bytes open will produce, or -1 when unknown.
+	// length is -1 when unknown.
 	length int64
 }
 
-// stringBody returns a body holding a string.
 func stringBody(s string) *requestBody {
 	return &requestBody{
 		open:   func() (io.ReadCloser, error) { return io.NopCloser(strings.NewReader(s)), nil },
@@ -238,24 +206,15 @@ func stringBody(s string) *requestBody {
 	}
 }
 
-// bytesBody returns a body holding a byte slice.
-func bytesBody(b []byte) *requestBody {
-	return &requestBody{
-		open:   func() (io.ReadCloser, error) { return io.NopCloser(bytes.NewReader(b)), nil },
-		length: int64(len(b)),
-	}
-}
-
-// readerBody returns a body of known length produced by open.
 func readerBody(open func() (io.ReadCloser, error), length int64) *requestBody {
 	return &requestBody{open: open, length: length}
 }
 
-// do issues a request, attaching credentials and retrying transient failures.
-// The caller owns the response body.
+// do sends a request with credentials and retries. The caller must close the
+// response body.
 func (c *Client) do(ctx context.Context, r request) (*http.Response, error) {
 	rn, ok := c.creds.(Renewer)
-	if !ok || r.noAuth || r.noRetry {
+	if !ok || r.noAuth {
 		return c.send(ctx, r)
 	}
 	var used Credential
@@ -284,7 +243,7 @@ func (c *Client) send(ctx context.Context, r request) (*http.Response, error) {
 
 		resp, err := c.attempt(ctx, r)
 		if err != nil {
-			if !retryable(err) || r.noRetry {
+			if !retryable(err) {
 				return nil, err
 			}
 			lastErr = err
@@ -295,9 +254,8 @@ func (c *Client) send(ctx context.Context, r request) (*http.Response, error) {
 			return resp, nil
 		}
 
-		// A 5xx or 429 is worth another attempt; anything else is the server's
-		// final answer and retrying would only delay the error.
-		if isTransientStatus(resp.StatusCode) && !r.noRetry && attempt < attempts-1 {
+		// Retry 5xx and 429 only. Other statuses are final.
+		if isTransientStatus(resp.StatusCode) && attempt < attempts-1 {
 			lastErr = c.statusError(r, resp)
 			resp.Body.Close()
 			continue
@@ -320,9 +278,8 @@ func (c *Client) attempt(ctx context.Context, r request) (*http.Response, error)
 		}
 		body = b
 	}
-	// The body is ours to close until the transport takes it, which it does only
-	// in Do. Left open, a file being uploaded cannot be deleted on Windows, so
-	// an outbox that removes what it sent would fail on an empty file.
+	// Close the body ourselves until Do takes it. An open file cannot be
+	// deleted on Windows.
 	handedOver := false
 	defer func() {
 		if body != nil && !handedOver {
@@ -337,9 +294,8 @@ func (c *Client) attempt(ctx context.Context, r request) (*http.Response, error)
 	if r.body != nil && r.body.length >= 0 {
 		req.ContentLength = r.body.length
 		if r.body.length == 0 {
-			// A zero ContentLength with a non-nil body means "unknown" to the
-			// transport, which then sends it chunked. http.NoBody is how an
-			// empty body is stated explicitly.
+			// Zero length with a non-nil body means unknown, so the transport
+			// would send it chunked.
 			req.Body = http.NoBody
 		}
 	}
@@ -366,8 +322,7 @@ func (c *Client) attempt(ctx context.Context, r request) (*http.Response, error)
 		}
 	}
 
-	// Do closes the request body whatever happens, but an empty one was swapped
-	// for http.NoBody and never reaches it.
+	// Do closes the body, except the http.NoBody that we swapped in.
 	handedOver = req.Body != http.NoBody
 	resp, err := c.hc.Do(req)
 	if err != nil {
@@ -386,17 +341,12 @@ func (c *Client) acceptable(r request, status int) bool {
 	return slices.Contains(r.expects, status)
 }
 
-// statusError turns a rejected response into a classified error, preferring any
-// message the server supplied over the generic one.
 func (c *Client) statusError(r request, resp *http.Response) error {
-	msg := serverMessage(resp)
-	return cberr.FromStatus(resp.StatusCode, r.op, r.path, msg)
+	return cberr.FromStatus(resp.StatusCode, r.op, r.path, serverMessage(resp))
 }
 
-// serverMessage extracts a short human message from an error response body.
-// reva returns either an OCS JSON envelope or a DAV XML error; both carry a
-// message worth showing, and neither is large, so reading a bounded prefix is
-// cheap.
+// serverMessage reads the message of an OCS JSON or DAV XML error body. It
+// reads only a bounded prefix.
 func serverMessage(resp *http.Response) string {
 	const maxBody = 8 << 10
 	b, err := io.ReadAll(io.LimitReader(resp.Body, maxBody))
@@ -412,9 +362,7 @@ func serverMessage(resp *http.Response) string {
 		return m
 	}
 	if strings.HasPrefix(strings.TrimSpace(s), "{") {
-		if m := extractJSONField(s, "message"); m != "" {
-			return m
-		}
+		return extractJSONField(s, "message")
 	}
 	return ""
 }
@@ -450,9 +398,6 @@ func extractJSONField(s, field string) string {
 	return rest[:j]
 }
 
-// transportError distinguishes a failure to reach the server from a failure of
-// the request itself, because the advice differs: one is a network or DNS
-// problem, the other is something the user can fix.
 func transportError(r request, err error) error {
 	if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
 		return err
@@ -468,8 +413,7 @@ func retryable(err error) bool {
 	if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
 		return false
 	}
-	// An authentication failure will not fix itself by being retried; the
-	// credential source is responsible for refreshing.
+	// A retry does not fix an auth failure.
 	if cberr.KindOf(err) == cberr.KindAuth {
 		return false
 	}
@@ -488,11 +432,9 @@ func isTransientStatus(status int) bool {
 }
 
 func backoff(attempt int) time.Duration {
-	d := min(time.Duration(1<<uint(attempt-1))*250*time.Millisecond, 5*time.Second)
-	return d
+	return min(time.Duration(1<<uint(attempt-1))*250*time.Millisecond, 5*time.Second)
 }
 
-// drain consumes and closes a response body so the connection can be reused.
 func drain(resp *http.Response) {
 	if resp == nil || resp.Body == nil {
 		return

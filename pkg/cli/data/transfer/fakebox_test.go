@@ -22,13 +22,14 @@ import (
 	"archive/tar"
 	"bytes"
 	"context"
+	"crypto/md5"
 	"encoding/base64"
+	"encoding/hex"
 	"encoding/xml"
 	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
-	"net/url"
 	"path"
 	"sort"
 	"strconv"
@@ -41,9 +42,8 @@ import (
 	"github.com/cs3org/reva/v3/pkg/cli/data"
 )
 
-// fakeBox is an in-memory the server: a WebDAV tree with TUS uploads, ranged
-// downloads and a tar archiver. It is enough to exercise the transfer engine
-// end to end without Docker.
+// fakeBox is an in-memory server with WebDAV, TUS, ranged downloads and a tar
+// archiver.
 type fakeBox struct {
 	t  *testing.T
 	ts *httptest.Server
@@ -54,12 +54,10 @@ type fakeBox struct {
 	mtimes  map[string]time.Time
 	uploads map[string]*fakeUpload
 
-	// Behaviour switches.
 	tusEnabled      bool
 	archiverEnabled bool
 	maxChunk        int64
-	// failChunkAfter aborts the connection once this many bytes have been
-	// accepted for a single upload, simulating an interrupted transfer.
+	// failChunkAfter makes an upload fail once it has this many bytes.
 	failChunkAfter int64
 	// corruptDownload makes GET return bytes that do not match the checksum.
 	corruptDownload bool
@@ -95,8 +93,6 @@ func newFakeBox(t *testing.T) *fakeBox {
 	return b
 }
 
-// engine returns an Engine wired to this fake through the HTTP backend and
-// the data plane, with a per-test state directory.
 func (b *fakeBox) engine(opts Options) *Engine {
 	b.t.Helper()
 	if opts.StateDir == "" {
@@ -117,8 +113,6 @@ type creds struct{}
 func (creds) Credential(context.Context) (httpbackend.Credential, error) {
 	return httpbackend.Credential{Header: "x-access-token", Value: "test"}, nil
 }
-
-// -- server -------------------------------------------------------------------
 
 const davPrefix = "/remote.php/dav/files/einstein"
 
@@ -184,7 +178,6 @@ func (b *fakeBox) serveDav(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// davPath maps a request URL back to a the server path.
 func (b *fakeBox) davPath(r *http.Request) string {
 	p := strings.TrimPrefix(r.URL.Path, davPrefix)
 	if p == "" {
@@ -293,8 +286,8 @@ func (b *fakeBox) serveMkcol(w http.ResponseWriter, p string) {
 	w.WriteHeader(http.StatusCreated)
 }
 
-// serveTusCreate handles the TUS creation POST, which addresses the parent
-// directory and names the file in Upload-Metadata.
+// serveTusCreate handles the POST of TUS. It addresses the parent directory and
+// names the file in Upload-Metadata.
 func (b *fakeBox) serveTusCreate(w http.ResponseWriter, r *http.Request, dir string) {
 	meta := parseTusMetadata(r.Header.Get("Upload-Metadata"))
 	name := meta["filename"]
@@ -339,9 +332,6 @@ func (b *fakeBox) serveTus(w http.ResponseWriter, r *http.Request) {
 		chunk, _ := io.ReadAll(r.Body)
 		b.mu.Lock()
 		b.patchCount++
-		// Simulate a mid-transfer failure once the configured amount has been
-		// accepted, so a test can check that resume picks up where the server
-		// actually stopped.
 		if b.failChunkAfter > 0 && int64(len(up.buf))+int64(len(chunk)) > b.failChunkAfter && !up.failed {
 			accept := b.failChunkAfter - int64(len(up.buf))
 			if accept > 0 {
@@ -417,8 +407,6 @@ func relTo(base, p string) string {
 	return strings.TrimPrefix(rel, "/")
 }
 
-// -- helpers ------------------------------------------------------------------
-
 type davEntry struct {
 	Path     string
 	IsDir    bool
@@ -480,8 +468,6 @@ func parseTusMetadata(header string) map[string]string {
 	return out
 }
 
-// -- assertions ---------------------------------------------------------------
-
 func (b *fakeBox) putFile(p string, body []byte) {
 	b.mu.Lock()
 	defer b.mu.Unlock()
@@ -520,33 +506,11 @@ func (b *fakeBox) requireContent(p string, want []byte) {
 		b.t.Fatalf("%s was not uploaded", p)
 	}
 	if !bytes.Equal(got, want) {
-		b.t.Fatalf("%s: uploaded %d bytes, want %d (content %s)", p, len(got), len(want),
-			map[bool]string{true: "differs", false: "matches"}[!bytes.Equal(got, want)])
+		b.t.Fatalf("%s: uploaded %d bytes, want %d with other content", p, len(got), len(want))
 	}
 }
 
 func md5hex(b []byte) string {
-	sum, _ := checksumBytes(b, "md5")
-	return sum
+	sum := md5.Sum(b)
+	return hex.EncodeToString(sum[:])
 }
-
-func checksumBytes(data []byte, algo string) (string, error) {
-	h, err := newHash(algo)
-	if err != nil {
-		return "", err
-	}
-	h.Write(data)
-	return hexEncode(h.Sum(nil)), nil
-}
-
-func hexEncode(b []byte) string {
-	const hexits = "0123456789abcdef"
-	out := make([]byte, len(b)*2)
-	for i, c := range b {
-		out[i*2] = hexits[c>>4]
-		out[i*2+1] = hexits[c&0x0f]
-	}
-	return string(out)
-}
-
-var _ = url.Values{}

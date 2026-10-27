@@ -37,9 +37,8 @@ import (
 	"github.com/BurntSushi/toml"
 )
 
-// Brand is a parsed brand file. Its values are defaults: the flags, the
-// environment and the config files override them. Do not change a Brand
-// after Parse.
+// Brand is a parsed brand file. Its values are defaults: flags, env and config
+// files override them. Do not change a Brand after Parse.
 type Brand struct {
 	Program    Program    `toml:"program"`
 	Connection Connection `toml:"connection"`
@@ -58,7 +57,7 @@ type Program struct {
 	Short      string `toml:"short"`
 	SupportURL string `toml:"support_url"`
 	DocsURL    string `toml:"docs_url"`
-	// ConfigDir is the directory of the config files under the user config
+	// ConfigDir is the directory of the config files, under the user config
 	// dir and under /etc. Empty means Name.
 	ConfigDir string `toml:"config_dir"`
 }
@@ -70,7 +69,7 @@ type Connection struct {
 	Endpoint string `toml:"endpoint"`
 	// Gateway is the gRPC user plane.
 	Gateway string `toml:"gateway"`
-	// AdminHost is the Admin API. The local admin socket is tried first.
+	// AdminHost is the Admin API. The local admin socket comes first.
 	AdminHost string `toml:"admin_host"`
 }
 
@@ -102,31 +101,29 @@ type OIDC struct {
 	Scopes   []string `toml:"scopes"`
 }
 
-// Env lists the env names of each setting, first one first. A setting with
-// no names has no env layer. There is no prefix rule, so that the names of
-// older programs keep working.
+// Env lists the env names of each setting, first one first. There is no prefix
+// rule, so that the names of older programs keep working.
 type Env struct {
-	Config       []string `toml:"config"`
-	Transport    []string `toml:"transport"`
-	Endpoint     []string `toml:"endpoint"`
-	Gateway      []string `toml:"gateway"`
-	AdminHost    []string `toml:"admin_host"`
-	Insecure     []string `toml:"insecure"`
-	SkipVerify   []string `toml:"skip_verify"`
-	Token        []string `toml:"token"`
-	TokenCache   []string `toml:"token_cache"`
-	AppToken     []string `toml:"app_token"`
-	AppTokenFile []string `toml:"app_token_file"`
-	User         []string `toml:"user"`
-	Password     []string `toml:"password"`
-	KerberosSPN  []string `toml:"kerberos_spn"`
-	NoElevate    []string `toml:"no_elevate"`
-	Output       []string `toml:"output"`
-	// OperatorCommands is ui.operator_commands.
+	Config           []string `toml:"config"`
+	Transport        []string `toml:"transport"`
+	Endpoint         []string `toml:"endpoint"`
+	Gateway          []string `toml:"gateway"`
+	AdminHost        []string `toml:"admin_host"`
+	Insecure         []string `toml:"insecure"`
+	SkipVerify       []string `toml:"skip_verify"`
+	Token            []string `toml:"token"`
+	TokenCache       []string `toml:"token_cache"`
+	AppToken         []string `toml:"app_token"`
+	AppTokenFile     []string `toml:"app_token_file"`
+	User             []string `toml:"user"`
+	Password         []string `toml:"password"`
+	KerberosSPN      []string `toml:"kerberos_spn"`
+	NoElevate        []string `toml:"no_elevate"`
+	Output           []string `toml:"output"`
 	OperatorCommands []string `toml:"operator_commands"`
 }
 
-// Names returns the env names of the setting key, a key of [env].
+// Names returns the env names of the setting key.
 func (e Env) Names(key string) []string {
 	for f, v := range reflect.ValueOf(e).Fields() {
 		if f.Tag.Get("toml") == key {
@@ -136,7 +133,7 @@ func (e Env) Names(key string) []string {
 	return nil
 }
 
-// EnvKeys returns the keys of [env], which are the names of the settings.
+// EnvKeys returns the keys of [env].
 func EnvKeys() []string {
 	var keys []string
 	for f := range reflect.TypeFor[Env]().Fields() {
@@ -181,8 +178,8 @@ var (
 	sizeRE = regexp.MustCompile(`^[0-9]+[kKmMgG]?$`)
 )
 
-// Parse parses a brand file. It is strict: an unknown key or a value out of
-// range is an error, so that a typo fails the build and not the users.
+// Parse parses a brand file. It is strict, so that a typo fails the build and
+// not the users.
 func Parse(data []byte) (*Brand, error) {
 	var b Brand
 	md, err := toml.NewDecoder(bytes.NewReader(data)).Decode(&b)
@@ -204,8 +201,7 @@ func Parse(data []byte) (*Brand, error) {
 	return &b, nil
 }
 
-// MustParse is Parse for a brand that the build embeds. It panics on an
-// error.
+// MustParse is Parse for a brand that the build embeds. It panics on error.
 func MustParse(data []byte) *Brand {
 	b, err := Parse(data)
 	if err != nil {
@@ -272,8 +268,7 @@ func (b *Brand) ConfigDir() string {
 	return b.Program.Name
 }
 
-// Sum returns the SHA-256 of the brand file, to tell which file a build
-// embeds.
+// Sum returns the SHA-256 of the brand file.
 func (b *Brand) Sum() string { return b.sum }
 
 //go:embed reva.toml

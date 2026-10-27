@@ -26,14 +26,10 @@ import (
 	"github.com/cs3org/reva/v3/internal/cli/cberr"
 )
 
-// ServerTime returns the time the server believes it is, read from the Date
-// header that every HTTP response carries.
-//
-// The request is unauthenticated and accepts any status code, both on purpose.
-// A clock is what a credential depends on: Kerberos refuses a ticket more than
-// five minutes out of step, and every bearer token has an expiry: so the clock
-// has to be readable before a credential is, and a 401 answers this question as
-// well as a 200 does.
+// ServerTime returns the time of the server, from the Date header. The
+// request has no credentials and accepts any status: a credential depends on
+// the clock (Kerberos refuses a ticket that is 5 minutes off), so the clock
+// must be readable first, and a 401 has a Date too.
 func (c *Client) ServerTime(ctx context.Context) (time.Time, error) {
 	resp, err := c.do(ctx, request{
 		method:    http.MethodHead,

@@ -27,9 +27,8 @@ import (
 	"testing"
 )
 
-// framedRange writes a ranged response the way EOS does when it goes wrong:
-// the chunked framing goes inside the body and is counted in the length, so
-// the end of the file falls off and hexadecimal appears at the front.
+// framedRange writes a ranged response like EOS does when it fails: the
+// chunked framing is inside the body and counts in the length.
 func framedRange(w http.ResponseWriter, part string) {
 	body := (fmt.Sprintf("%x\r\n", len(part)) + part)[:len(part)]
 	w.Header().Set("Content-Length", fmt.Sprint(len(body)))
@@ -37,10 +36,8 @@ func framedRange(w http.ResponseWriter, part string) {
 	fmt.Fprint(w, body)
 }
 
-// TestDownloadRefusesAChunkFramedRange is the guard against silent corruption.
-// A resumed download restarts a .part file with a range, so without this the
-// transfer finishes with a file of exactly the right length and the wrong bytes
-// in it, and nothing anywhere says so.
+// Without this guard a resumed download ends with a file of the right length
+// and wrong bytes.
 func TestDownloadRefusesAChunkFramedRange(t *testing.T) {
 	f := newFakeServer(t)
 	f.on(http.MethodGet, davFilesPrefix, func(w http.ResponseWriter, r *http.Request) {
@@ -59,8 +56,7 @@ func TestDownloadRefusesAChunkFramedRange(t *testing.T) {
 	}
 }
 
-// TestDownloadPassesASoundRangeThrough guards the check above from refusing
-// everything: the bytes it peeks at have to come back in front of the rest.
+// The bytes that the check peeks at must come back in front of the rest.
 func TestDownloadPassesASoundRangeThrough(t *testing.T) {
 	want := strings.Repeat("line of log\n", 10)
 	f := newFakeServer(t)
@@ -84,9 +80,6 @@ func TestDownloadPassesASoundRangeThrough(t *testing.T) {
 	}
 }
 
-// TestDownloadPassesARangeShorterThanTheMarker: a range of one or two bytes is
-// shorter than the framing it is compared against, and must neither trip the
-// check nor lose anything.
 func TestDownloadPassesARangeShorterThanTheMarker(t *testing.T) {
 	f := newFakeServer(t)
 	f.on(http.MethodGet, davFilesPrefix, func(w http.ResponseWriter, r *http.Request) {
@@ -106,11 +99,9 @@ func TestDownloadPassesARangeShorterThanTheMarker(t *testing.T) {
 	}
 }
 
-// TestDownloadWithoutAnOffsetIsNotGuarded: a whole-file download carries no
-// Range and cannot have this problem, so it must not pay for a check either.
+// A download without a Range is not checked.
 func TestDownloadWithoutAnOffsetIsNotGuarded(t *testing.T) {
-	// A body that happens to begin with its own length in hex, which the check
-	// would reject if it ran on an unranged download.
+	// This body starts with its own length in hex. The check would refuse it.
 	want := "7\r\nabcdef"
 	f := newFakeServer(t)
 	f.on(http.MethodGet, davFilesPrefix, func(w http.ResponseWriter, r *http.Request) {

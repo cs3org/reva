@@ -29,14 +29,13 @@ import (
 	"time"
 )
 
-// trashMultistatus renders a trash listing the way reva does: the bin itself
-// first, then one entry per deleted item, each keyed in its href.
+// trashMultistatus renders a trash listing like reva: the bin first, then one
+// entry per item, keyed in its href.
 func trashMultistatus(user string, items ...trashFixture) string {
 	var sb strings.Builder
 	sb.WriteString(`<?xml version="1.0" encoding="utf-8"?>`)
 	sb.WriteString(`<d:multistatus xmlns:d="DAV:" xmlns:oc="http://owncloud.org/ns">`)
 
-	// The bin itself, which a Depth:1 listing always includes.
 	sb.WriteString(`<d:response><d:href>` + davTrashPrefix + "/" + user + `/</d:href>`)
 	sb.WriteString(`<d:propstat><d:status>HTTP/1.1 200 OK</d:status><d:prop>`)
 	sb.WriteString(`<d:resourcetype><d:collection/></d:resourcetype>`)
@@ -49,7 +48,7 @@ func trashMultistatus(user string, items ...trashFixture) string {
 		}
 		sb.WriteString(`<d:response><d:href>` + href + `</d:href>`)
 		sb.WriteString(`<d:propstat><d:status>HTTP/1.1 200 OK</d:status><d:prop>`)
-		sb.WriteString(`<d:displayname>` + escapeXML(it.Name) + `</d:displayname>`)
+		sb.WriteString(`<d:displayname>` + xmlEscape(it.Name) + `</d:displayname>`)
 		if it.IsDir {
 			sb.WriteString(`<d:resourcetype><d:collection/></d:resourcetype>`)
 		} else {
@@ -57,8 +56,8 @@ func trashMultistatus(user string, items ...trashFixture) string {
 			fmt.Fprintf(&sb, "<d:getcontentlength>%d</d:getcontentlength>", it.Size)
 		}
 		fmt.Fprintf(&sb, "<oc:size>%d</oc:size>", it.Size)
-		sb.WriteString(`<oc:trashbin-original-filename>` + escapeXML(it.Name) + `</oc:trashbin-original-filename>`)
-		sb.WriteString(`<oc:trashbin-original-location>` + escapeXML(it.Location) + `</oc:trashbin-original-location>`)
+		sb.WriteString(`<oc:trashbin-original-filename>` + xmlEscape(it.Name) + `</oc:trashbin-original-filename>`)
+		sb.WriteString(`<oc:trashbin-original-location>` + xmlEscape(it.Location) + `</oc:trashbin-original-location>`)
 		fmt.Fprintf(&sb, "<oc:trashbin-delete-timestamp>%d</oc:trashbin-delete-timestamp>", it.Deleted)
 		sb.WriteString(`</d:prop></d:propstat></d:response>`)
 	}
@@ -90,7 +89,6 @@ func TestListTrash(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// The bin itself must not appear as a restorable item.
 	if len(listing.Items) != 2 {
 		t.Fatalf("got %d items, want 2 (the bin itself must be excluded): %+v", len(listing.Items), listing.Items)
 	}
@@ -102,8 +100,6 @@ func TestListTrash(t *testing.T) {
 	if first.Name != "notes.txt" {
 		t.Errorf("Name = %q", first.Name)
 	}
-	// The original location is what lets a user tell two deleted "notes.txt"
-	// apart, so it must survive the round trip.
 	if first.OriginalPath != "Documents/notes.txt" {
 		t.Errorf("OriginalPath = %q", first.OriginalPath)
 	}
@@ -159,9 +155,6 @@ func TestTrashKeyFromHref(t *testing.T) {
 	}
 }
 
-// TestRestoreTrashToOriginalLocation: the server has no "put it back": a
-// restore is a MOVE, and a MOVE with no Destination is a 400. Restoring in
-// place therefore means looking the original location up in the bin first.
 func TestRestoreTrashToOriginalLocation(t *testing.T) {
 	f := newFakeServer(t)
 	f.on(MethodPropfind, davTrashPrefix, func(w http.ResponseWriter, r *http.Request) {
@@ -179,22 +172,18 @@ func TestRestoreTrashToOriginalLocation(t *testing.T) {
 	}
 
 	req := f.lastRequest(MethodMove)
-	// Rooted at the space, not at "/": the server reports the location
-	// relative to the space the bin belongs to.
+	// The location is relative to the space, not to "/".
 	if got := req.Header.Get("Destination"); !strings.HasSuffix(got, "/eos/user/e/einstein/Documents/notes.txt") {
 		t.Errorf("Destination = %q, want the location rooted at the personal space", got)
 	}
 	if !strings.HasSuffix(req.Path, "/key-1") {
 		t.Errorf("request path = %q", req.Path)
 	}
-	// Restoring must not silently clobber whatever is at that path now.
 	if got := req.Header.Get("Overwrite"); got != "F" {
 		t.Errorf("Overwrite = %q, want F", got)
 	}
 }
 
-// TestRestoreTrashUnknownKey: without the listing there is no destination to
-// send, and a blind MOVE would just be a 400 from the server.
 func TestRestoreTrashUnknownKey(t *testing.T) {
 	f := newFakeServer(t)
 	f.on(MethodPropfind, davTrashPrefix, func(w http.ResponseWriter, r *http.Request) {
@@ -225,10 +214,8 @@ func TestPurgeTrashItem(t *testing.T) {
 	}
 }
 
-// TestPurgeTrashRefusesAnEmptyKey: a DELETE with no key is a request to empty
-// the bin, which reaches EmptyRecycle: unimplemented in the EOS driver, so it
-// answers with an internal error rather than emptying anything. Refusing here
-// keeps that request from ever being sent.
+// A DELETE with no key reaches EmptyRecycle, which the EOS driver does not
+// implement.
 func TestPurgeTrashRefusesAnEmptyKey(t *testing.T) {
 	f := newFakeServer(t)
 	var reached bool
@@ -245,11 +232,8 @@ func TestPurgeTrashRefusesAnEmptyKey(t *testing.T) {
 	}
 }
 
-// TestListTrashSendsARangeTheServerCanParse guards the whole feature against
-// the way it would fail silently. ocdav discards a range it cannot parse and
-// substitutes its own two days, so a wrong layout: or a '+' offset arriving as
-// a space: does not produce an error anybody would notice: it produces a
-// listing that ignores --since.
+// ocdav ignores a range it cannot parse, so a wrong layout, or a '+' that
+// arrives as a space, gives no error. It gives a listing that ignores --since.
 func TestListTrashSendsARangeTheServerCanParse(t *testing.T) {
 	f := newFakeServer(t)
 	var gotFrom, gotTo string
@@ -265,7 +249,6 @@ func TestListTrashSendsARangeTheServerCanParse(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// The layouts are reva's own, from ocs/conversions.ParseTimestamp.
 	for name, got := range map[string]string{"from": gotFrom, "to": gotTo} {
 		if got == "" {
 			t.Fatalf("%s was not sent at all", name)
@@ -279,10 +262,8 @@ func TestListTrashSendsARangeTheServerCanParse(t *testing.T) {
 	}
 }
 
-// TestListTrashSplitsARangeTheServerRefuses: the storage rejects a range wider
-// than max_days_in_recycle_list outright, and the width it will accept is a
-// deployment's choice. Asking for less on refusal is what makes --since 90d work
-// without the client having to know that number.
+// The width that the storage accepts is a deployment choice, so the client
+// splits a range on refusal.
 func TestListTrashSplitsARangeTheServerRefuses(t *testing.T) {
 	f := newFakeServer(t)
 	var requests int
@@ -326,10 +307,8 @@ func TestListTrashSplitsARangeTheServerRefuses(t *testing.T) {
 	}
 }
 
-// TestListTrashReportsADayItCannotList: one day holding more deletions than the
-// storage will return fails that day and no more. The rest of the window is
-// still worth showing: as long as the hole is declared, because a listing that
-// quietly omits a day is worse than one that fails.
+// One day with too many deletions is reported as a gap. The rest of the window
+// is still listed.
 func TestListTrashReportsADayItCannotList(t *testing.T) {
 	f := newFakeServer(t)
 	busy := time.Now().AddDate(0, 0, -3).Format("2006-01-02")
@@ -364,9 +343,7 @@ func TestListTrashReportsADayItCannotList(t *testing.T) {
 	}
 }
 
-// TestListTrashPropagatesRealFailures: only the too-much refusal is worth
-// splitting. Halving a rejected credential would turn one 401 into a burst of
-// them and still fail.
+// Only the too-much refusal is split.
 func TestListTrashPropagatesRealFailures(t *testing.T) {
 	f := newFakeServer(t)
 	var requests int
@@ -385,11 +362,8 @@ func TestListTrashPropagatesRealFailures(t *testing.T) {
 	}
 }
 
-// TestRestoreTrashFindsAnItemOlderThanTheDefaultWindow is the bug this window
-// work exists to fix. A restore needs the original location, which is only in
-// the listing, and the listing only reaches two days back: so restoring a
-// week-old file failed with "no item with this key", which reads as a bad key
-// rather than a window too narrow to contain it.
+// The original location is only in the listing, which reaches back two days by
+// default.
 func TestRestoreTrashFindsAnItemOlderThanTheDefaultWindow(t *testing.T) {
 	f := newFakeServer(t)
 	deleted := time.Now().AddDate(0, 0, -20)

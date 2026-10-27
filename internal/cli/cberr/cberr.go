@@ -16,14 +16,12 @@
 // granted to it by virtue of its status as an Intergovernmental Organization
 // or submit itself to any jurisdiction.
 
-// Package cberr models errors in the terms the CLI's callers care about: a
-// short human sentence, and a category that maps to a stable exit code.
+// Package cberr holds the errors of the CLI: a short sentence and a kind that
+// maps to a stable exit code.
 //
-// The category is not decoration. Scripts branch on it: exit 3 means the
-// credentials need refreshing and the command is worth retrying after kinit,
-// exit 4 means the user simply does not have access and retrying will never
-// help. Keeping that distinction accurate is the reason errors are classified
-// at the point they are produced rather than pattern-matched later.
+// Scripts branch on the exit code. Exit 3 means a new login can help, exit 4
+// means it cannot. So code must set the kind where it makes the error, and
+// must not guess it later from the message.
 package cberr
 
 import (
@@ -46,13 +44,12 @@ const (
 	KindPermission
 	// KindNotFound means the resource does not exist.
 	KindNotFound
-	// KindConflict covers locks, etag mismatches, quota, and non-empty
-	// directories: states where the request was understood but the target is
-	// not in a shape that allows it.
+	// KindConflict means the target is in a state that does not allow the
+	// request: a lock, a changed etag, a full quota, a non-empty directory.
 	KindConflict
 )
 
-// Exit codes, documented in the README and depended on by scripts.
+// Exit codes. Scripts depend on them.
 const (
 	ExitOK         = 0
 	ExitFailure    = 1
@@ -80,20 +77,18 @@ func (k Kind) String() string {
 	}
 }
 
-// Error is a classified failure. Op and Path are optional context used to build
-// the message, so that the user sees "cannot stat /eos/user/g/x: not found"
-// rather than a bare status code.
+// Error is an error with a kind. Op and Path build the message, for example
+// "cannot stat /eos/user/g/x: not found".
 type Error struct {
 	Kind Kind
-	// Op is what was being attempted, phrased as a verb: "stat", "upload".
-	Op string
-	// Path is the resource involved, if any.
+	// Op is a verb: "stat", "upload".
+	Op   string
 	Path string
-	// Status is the HTTP status that produced this error, or 0.
+	// Status is the HTTP status of the response, or 0.
 	Status int
-	// Msg is the human sentence. When empty, Kind supplies a default.
+	// Msg is the sentence. When empty, Kind gives a default.
 	Msg string
-	// Err is the underlying cause, kept for --debug and errors.Is/As.
+	// Err is the cause, kept for --debug and errors.Is/As.
 	Err error
 }
 
@@ -114,7 +109,7 @@ func (e *Error) Error() string {
 
 func (e *Error) Unwrap() error { return e.Err }
 
-// Is supports errors.Is(err, &Error{Kind: KindAuth}) as a category test.
+// Is makes errors.Is(err, ErrAuth) a test on the kind.
 func (e *Error) Is(target error) bool {
 	t, ok := target.(*Error)
 	if !ok {
@@ -123,21 +118,18 @@ func (e *Error) Is(target error) bool {
 	return t.Kind == e.Kind && t.Op == "" && t.Path == "" && t.Msg == ""
 }
 
-// Sentinels for errors.Is category tests.
+// Sentinels for errors.Is.
 var (
-	ErrAuth       = &Error{Kind: KindAuth}
-	ErrPermission = &Error{Kind: KindPermission}
-	ErrNotFound   = &Error{Kind: KindNotFound}
-	ErrConflict   = &Error{Kind: KindConflict}
-	ErrUsage      = &Error{Kind: KindUsage}
+	ErrAuth     = &Error{Kind: KindAuth}
+	ErrNotFound = &Error{Kind: KindNotFound}
 )
 
-// New builds a classified error.
+// New returns an Error.
 func New(kind Kind, op, path, msg string) *Error {
 	return &Error{Kind: kind, Op: op, Path: path, Msg: msg}
 }
 
-// Wrap builds a classified error around an existing one.
+// Wrap returns an Error with err as the cause.
 func Wrap(kind Kind, op, path string, err error) *Error {
 	if err == nil {
 		return nil
@@ -145,22 +137,19 @@ func Wrap(kind Kind, op, path string, err error) *Error {
 	return &Error{Kind: kind, Op: op, Path: path, Msg: err.Error(), Err: err}
 }
 
-// Usagef builds a usage error.
+// Usagef returns a usage Error.
 func Usagef(format string, args ...any) *Error {
 	return &Error{Kind: KindUsage, Msg: fmt.Sprintf(format, args...)}
 }
 
-// Authf builds an authentication error.
+// Authf returns an authentication Error.
 func Authf(format string, args ...any) *Error {
 	return &Error{Kind: KindAuth, Msg: fmt.Sprintf(format, args...)}
 }
 
-// FromStatus classifies an HTTP status code.
-//
-// 405, 412, 423 and 507 land in KindConflict because in WebDAV they all mean
-// the same thing to a user: the request was understood, but the target is not
-// in a state that allows it: a non-empty collection, a changed etag, a lock,
-// or a full quota.
+// FromStatus returns an Error for an HTTP status. In WebDAV, 405, 412, 423 and
+// 507 all mean that the target does not allow the request, so they are
+// conflicts.
 func FromStatus(status int, op, path, msg string) *Error {
 	var kind Kind
 	switch status {
@@ -188,12 +177,10 @@ func FromStatus(status int, op, path, msg string) *Error {
 func defaultMessage(status int) string {
 	switch status {
 	case http.StatusUnauthorized:
-		// Deliberately not "log in again". Having no credential at all fails
-		// earlier, with its own message; by the time a request comes back 401
-		// the CLI did send one and the server refused it. Telling the user to
-		// authenticate again sends them round a loop that cannot help: and a
-		// token the server rejects can be perfectly valid, with the deployment
-		// unable to map it to an account.
+		// Not "log in again". A missing credential fails earlier. A 401 means
+		// the server refused the credential that was sent. A new login does not
+		// help: the token can be valid and the server still not map it to an
+		// account.
 		return "the server rejected the credentials: 'status' shows which one was used; --debug shows the detail"
 	case http.StatusForbidden:
 		return "permission denied"
@@ -214,7 +201,7 @@ func defaultMessage(status int) string {
 	}
 }
 
-// KindOf extracts the category of an error, defaulting to KindOther.
+// KindOf returns the kind of err, or KindOther.
 func KindOf(err error) Kind {
 	if e, ok := errors.AsType[*Error](err); ok {
 		return e.Kind
@@ -222,7 +209,7 @@ func KindOf(err error) Kind {
 	return KindOther
 }
 
-// ExitCode maps an error to the process exit code.
+// ExitCode returns the exit code for err.
 func ExitCode(err error) int {
 	if err == nil {
 		return ExitOK

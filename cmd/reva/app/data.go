@@ -36,11 +36,8 @@ import (
 	"github.com/spf13/cobra"
 )
 
-// remotePrefix marks the remote side of a cp argument, because an absolute
-// path like /eos/... can exist on the local machine too.
 const remotePrefix = "cb:"
 
-// transferFlags are the flags of the commands that move trees.
 type transferFlags struct {
 	recursive, force, dryRun, verify, noArchive bool
 	jobs                                        int
@@ -237,7 +234,6 @@ func upload(cmd *cobra.Command, rt *cli.Runtime, local, target string, force boo
 }
 
 func download(cmd *cobra.Command, rt *cli.Runtime, flags *transferFlags, remote, local string) error {
-	force := flags.force
 	ctx := cmd.Context()
 	b, err := rt.Backend(ctx)
 	if err != nil {
@@ -276,7 +272,7 @@ func download(cmd *cobra.Command, rt *cli.Runtime, flags *transferFlags, remote,
 	if st, err := os.Stat(absPath); err == nil && st.IsDir() {
 		absPath = filepath.Join(absPath, path.Base(info.Path))
 	}
-	if _, err := os.Stat(absPath); err == nil && !force {
+	if _, err := os.Stat(absPath); err == nil && !flags.force {
 		rt.Msg(cmd.ErrOrStderr(), "Skipped %s: it exists, pass -f to overwrite it", absPath)
 		return nil
 	}

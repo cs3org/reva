@@ -31,21 +31,18 @@ import (
 	"time"
 )
 
-// cacheVersion 2 holds two layers. Version 1 was the cache of cernbox-cli,
-// and a file that is not JSON is the raw token of an older reva login.
+// A file that is not JSON is the raw token of an older reva login.
 const cacheVersion = 2
 
-// The layers of the cache. A reva token cannot be refreshed, but the
-// upstream credential that it came from can be, when it has a refresh
-// token. Both are keyed by the server, because a reva token is valid only
-// where the JWT secret is shared.
+// The layers of the cache, both keyed by the server. A reva token cannot be
+// refreshed, but the upstream credential that it came from can.
 const (
 	Upstream = "upstream"
 	Reva     = "reva"
 )
 
-// Cache stores tokens between invocations so that a shell loop does not
-// re-authenticate on every command. It is a file readable only by the user.
+// Cache stores tokens between invocations. It is a file readable only by the
+// user.
 type Cache struct {
 	path string
 	mu   sync.Mutex
@@ -55,8 +52,7 @@ type cacheFile struct {
 	Version  int               `json:"version"`
 	Upstream map[string]*Token `json:"upstream,omitempty"`
 	Reva     map[string]*Token `json:"reva,omitempty"`
-	// legacy is the raw token of a file in the old format.
-	legacy string
+	legacy   string
 }
 
 func (f *cacheFile) layer(name string) map[string]*Token {
@@ -77,13 +73,8 @@ func NewCache(path string) *Cache {
 	return &Cache{path: path}
 }
 
-// Path returns the file backing the cache.
-func (c *Cache) Path() string { return c.path }
-
-// Get returns the token stored under key. A missing file, a malformed file, or
-// a file with permissions wider than 0600 all read as "no entry": a cache is an
-// optimisation, and failing the command because of one would be worse than
-// re-authenticating.
+// Get returns the token stored under key. A bad cache file reads as "no entry":
+// signing in again is better than failing the command.
 func (c *Cache) Get(layer, key string) (*Token, bool) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
@@ -99,8 +90,8 @@ func (c *Cache) Get(layer, key string) (*Token, bool) {
 	return tok, true
 }
 
-// Legacy returns the token of a file that an older reva login wrote, which
-// holds only the token. It is not keyed, so it is for any server.
+// Legacy returns the token of a file in the old format. It has no key, so it
+// is for any server.
 func (c *Cache) Legacy() string {
 	c.mu.Lock()
 	defer c.mu.Unlock()
@@ -111,8 +102,8 @@ func (c *Cache) Legacy() string {
 	return f.legacy
 }
 
-// Put stores a token under key and prunes any entries that have expired.
-// It replaces a file in the old format.
+// Put stores a token under key and prunes the expired entries. It replaces a
+// file in the old format.
 func (c *Cache) Put(layer, key string, tok *Token) error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
@@ -141,7 +132,6 @@ func (c *Cache) Delete(layer, key string) error {
 }
 
 // DeletePrefix removes every entry of layer whose key starts with prefix.
-// Logout uses it to drop all identities for one server.
 func (c *Cache) DeletePrefix(layer, prefix string) error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
@@ -171,7 +161,7 @@ func (c *Cache) Clear() error {
 	return err
 }
 
-// Entries returns every cached token of layer, for "status".
+// Entries returns every cached token of layer.
 func (c *Cache) Entries(layer string) map[string]*Token {
 	c.mu.Lock()
 	defer c.mu.Unlock()
@@ -188,9 +178,7 @@ func (c *Cache) read() (*cacheFile, error) {
 	if err != nil {
 		return nil, err
 	}
-	// A cache readable by anyone else is not a cache we are willing to trust:
-	// its contents may have been replaced, and using a token from it would mean
-	// authenticating as whoever wrote it.
+	// Another user may have written the file: do not trust it.
 	if !privateMode(info.Mode()) {
 		return nil, fmt.Errorf("token cache %s has permissions %o, refusing to read it", c.path, info.Mode().Perm())
 	}
@@ -213,8 +201,7 @@ func (c *Cache) read() (*cacheFile, error) {
 	return &f, nil
 }
 
-// write replaces the cache atomically, so a concurrent reader never sees a
-// half-written file and a crash cannot leave a truncated one.
+// write replaces the file atomically, so a reader never sees a half-written one.
 func (c *Cache) write(f *cacheFile) error {
 	f.Version = cacheVersion
 	data, err := json.Marshal(f)
@@ -247,9 +234,8 @@ func (c *Cache) write(f *cacheFile) error {
 	return os.Rename(tmpName, c.path)
 }
 
-// pruneExpired drops entries that can no longer be used. A token with a refresh
-// token is kept even when its access token has expired, because the refresh is
-// the whole point.
+// pruneExpired drops the entries that can no longer be used. A token with a
+// refresh token stays, because it can be renewed.
 func pruneExpired(entries map[string]*Token) {
 	now := time.Now()
 	for k, t := range entries {

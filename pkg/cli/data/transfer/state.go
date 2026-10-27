@@ -29,21 +29,15 @@ import (
 	"github.com/cs3org/reva/v3/pkg/cli/backend"
 )
 
-// uploadState is what makes a resumable upload survive the CLI exiting. Without
-// it, an upload interrupted at 48 GB of 50 would start again from zero on the
-// next invocation, which is the difference between resumable uploads being a
-// feature and being a detail of one process's lifetime.
 type uploadState struct {
 	Upload     *backend.Upload `json:"upload"`
 	LocalSize  int64           `json:"local_size"`
 	LocalMtime time.Time       `json:"local_mtime"`
-	Offset     int64           `json:"offset"`
 	SavedAt    time.Time       `json:"saved_at"`
 }
 
-// stateTTL bounds how long a partial upload is worth resuming. Servers expire
-// abandoned uploads, so a very old record is more likely to waste a round trip
-// than to save one.
+// stateTTL is how long a partial upload is worth resuming. Servers expire
+// abandoned uploads.
 const stateTTL = 7 * 24 * time.Hour
 
 func (e *Engine) statePath(localPath, remotePath string) string {
@@ -51,8 +45,6 @@ func (e *Engine) statePath(localPath, remotePath string) string {
 	return filepath.Join(e.opts.StateDir, hex.EncodeToString(sum[:])+".json")
 }
 
-// loadState returns a previously recorded upload, if it is still applicable to
-// this local file.
 func (e *Engine) loadState(localPath, remotePath string, info os.FileInfo) (*backend.Upload, bool) {
 	data, err := os.ReadFile(e.statePath(localPath, remotePath))
 	if err != nil {
@@ -63,21 +55,17 @@ func (e *Engine) loadState(localPath, remotePath string, info os.FileInfo) (*bac
 		return nil, false
 	}
 
-	// The local file must be the same one the upload was started for.
-	// Resuming after an edit would splice two different files together, and
-	// the result would pass every length check while being silently wrong.
+	// After an edit, resuming would splice two files and pass every length check.
 	if st.LocalSize != info.Size() || !st.LocalMtime.Equal(info.ModTime()) {
 		return nil, false
 	}
 	if time.Since(st.SavedAt) > stateTTL {
 		return nil, false
 	}
-
-	st.Upload.Offset = st.Offset
 	return st.Upload, true
 }
 
-func (e *Engine) saveState(localPath, remotePath string, up *backend.Upload, offset int64) {
+func (e *Engine) saveState(localPath, remotePath string, up *backend.Upload) {
 	info, err := os.Stat(localPath)
 	if err != nil {
 		return
@@ -86,7 +74,6 @@ func (e *Engine) saveState(localPath, remotePath string, up *backend.Upload, off
 		Upload:     up,
 		LocalSize:  info.Size(),
 		LocalMtime: info.ModTime(),
-		Offset:     offset,
 		SavedAt:    time.Now(),
 	}
 	data, err := json.Marshal(st)
@@ -96,10 +83,8 @@ func (e *Engine) saveState(localPath, remotePath string, up *backend.Upload, off
 	if err := os.MkdirAll(e.opts.StateDir, 0o700); err != nil {
 		return
 	}
-	// The state file records an upload URL, which is a capability: anyone
-	// holding it can append to the upload. 0600 keeps it to the owner.
-	// A failure here is not worth failing the transfer over: the upload
-	// simply will not be resumable.
+	// The upload URL lets anyone append to the upload: keep the file private.
+	// A failure only makes the upload not resumable.
 	_ = os.WriteFile(e.statePath(localPath, remotePath), data, 0o600)
 }
 

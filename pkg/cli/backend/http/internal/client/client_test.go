@@ -118,8 +118,6 @@ func TestCredentialErrorPropagates(t *testing.T) {
 	}
 }
 
-// TestRetryOnTransientStatus checks that a 503 is retried and the eventual
-// success is returned.
 func TestRetryOnTransientStatus(t *testing.T) {
 	f := newFakeServer(t)
 	var calls atomic.Int32
@@ -145,8 +143,6 @@ func TestRetryOnTransientStatus(t *testing.T) {
 	}
 }
 
-// TestNoRetryOnClientError is the other half: a 404 is the server's final
-// answer, and retrying only delays the error the user needs to see.
 func TestNoRetryOnClientError(t *testing.T) {
 	f := newFakeServer(t)
 	var calls atomic.Int32
@@ -253,8 +249,6 @@ func TestRetryGivesUpAndReportsTheStatus(t *testing.T) {
 	}
 }
 
-// TestServerMessageIsSurfaced matters for support: reva returns a sentence
-// explaining the refusal, and swallowing it leaves the user with a bare code.
 func TestServerMessageIsSurfaced(t *testing.T) {
 	t.Run("DAV XML", func(t *testing.T) {
 		f := newFakeServer(t)
@@ -298,45 +292,29 @@ func TestContextCancellationIsNotRetried(t *testing.T) {
 	}
 }
 
-func TestURLBuilding(t *testing.T) {
-	c, err := New("https://cernbox.cern.ch")
-	if err != nil {
-		t.Fatal(err)
+func TestURL(t *testing.T) {
+	tests := []struct {
+		name, base, in, want string
+	}{
+		{"absolute path", "https://cernbox.cern.ch", "/graph/v1.0/me", "https://cernbox.cern.ch/graph/v1.0/me"},
+		{"no leading slash", "https://cernbox.cern.ch", "graph/v1.0/me", "https://cernbox.cern.ch/graph/v1.0/me"},
+		{"base path", "https://example.org/cernbox", "/graph/v1.0/me", "https://example.org/cernbox/graph/v1.0/me"},
+		// A second escaping would send "%2520" for a space, and the server would
+		// create a file named "my%20notes.txt".
+		{"already escaped", "https://cernbox.cern.ch",
+			"/remote.php/dav/files/einstein/my%20notes%20%231.txt",
+			"https://cernbox.cern.ch/remote.php/dav/files/einstein/my%20notes%20%231.txt"},
 	}
-	if got := c.URL("/graph/v1.0/me"); got != "https://cernbox.cern.ch/graph/v1.0/me" {
-		t.Errorf("URL = %q", got)
-	}
-	if got := c.URL("graph/v1.0/me"); got != "https://cernbox.cern.ch/graph/v1.0/me" {
-		t.Errorf("URL without leading slash = %q", got)
-	}
-}
-
-// TestURLDoesNotDoubleEscape pins a bug that is easy to reintroduce: assigning
-// an already-escaped string to url.URL.Path makes String re-escape it, so a
-// space goes out as %2520 and the server creates a file literally named
-// "my%20notes.txt".
-func TestURLDoesNotDoubleEscape(t *testing.T) {
-	c, err := New("https://cernbox.cern.ch")
-	if err != nil {
-		t.Fatal(err)
-	}
-	got := c.URL("/remote.php/dav/files/einstein/my%20notes%20%231.txt")
-	want := "https://cernbox.cern.ch/remote.php/dav/files/einstein/my%20notes%20%231.txt"
-	if got != want {
-		t.Errorf("URL = %q, want %q", got, want)
-	}
-	if strings.Contains(got, "%25") {
-		t.Error("the percent sign was escaped again")
-	}
-}
-
-func TestURLRespectsBasePath(t *testing.T) {
-	c, err := New("https://example.org/cernbox")
-	if err != nil {
-		t.Fatal(err)
-	}
-	if got := c.URL("/graph/v1.0/me"); got != "https://example.org/cernbox/graph/v1.0/me" {
-		t.Errorf("URL = %q, want the base path preserved", got)
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			c, err := New(tt.base)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if got := c.URL(tt.in); got != tt.want {
+				t.Errorf("URL(%q) = %q, want %q", tt.in, got, tt.want)
+			}
+		})
 	}
 }
 

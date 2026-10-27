@@ -88,11 +88,11 @@ func (l locator) ResumableTarget(ctx context.Context, ref *provider.Reference, s
 	if err != nil {
 		return nil, err
 	}
-	up, err := l.b.c.CreateUpload(ctx, p, size, checksum)
+	u, err := l.b.c.CreateUpload(ctx, p, size, checksum)
 	if err != nil {
 		return nil, conv(err)
 	}
-	return l.target(ctx, up.URL)
+	return l.target(ctx, u)
 }
 
 func (l locator) VersionTarget(ctx context.Context, ref *provider.Reference, key string) (*backend.Target, error) {
@@ -131,11 +131,12 @@ func (l locator) Capabilities(ctx context.Context) (*backend.Capabilities, error
 		ServerVersion: c.ServerVersion,
 		ServerProduct: c.ProductName,
 	}
-	if best := c.BestChecksum(); best != "" {
+	best := c.BestChecksum()
+	if best != "" {
 		caps.Checksums = append(caps.Checksums, strings.ToLower(best))
 	}
 	for _, t := range c.ChecksumTypes {
-		if !strings.EqualFold(t, c.BestChecksum()) {
+		if !strings.EqualFold(t, best) {
 			caps.Checksums = append(caps.Checksums, strings.ToLower(t))
 		}
 	}
@@ -145,6 +146,8 @@ func (l locator) Capabilities(ctx context.Context) (*backend.Capabilities, error
 	return caps, nil
 }
 
+// viewModes are the words that /app/open parses. It answers 401 for any other
+// word.
 var viewModes = map[gateway.OpenInAppRequest_ViewMode]string{
 	gateway.OpenInAppRequest_VIEW_MODE_VIEW_ONLY:  "view",
 	gateway.OpenInAppRequest_VIEW_MODE_READ_ONLY:  "read",

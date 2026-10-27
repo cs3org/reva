@@ -33,7 +33,7 @@ import (
 	"github.com/spf13/cobra"
 )
 
-// acme is a test brand. mode is ui.operator_commands.
+// acme returns a brand with ui.operator_commands set to mode.
 func acme(mode string) *brand.Brand {
 	return brand.MustParse(fmt.Appendf(nil, `
 [program]
@@ -54,8 +54,7 @@ operator_commands = %q
 `, mode))
 }
 
-// isolate gives the test its own config dirs. It returns the user config
-// dir.
+// isolate returns the user config dir, which is private to the test.
 func isolate(t *testing.T) string {
 	t.Helper()
 	dir := t.TempDir()
@@ -122,7 +121,6 @@ func TestBrandChangesTheProgram(t *testing.T) {
 	}
 }
 
-// A group of ui.hide is out of help, with its title, and its commands run.
 func TestBrandHidesGroups(t *testing.T) {
 	isolate(t)
 	root := revacmd.NewRoot(revacmd.WithBrand(acme("show")))
@@ -179,8 +177,7 @@ func TestOperatorCommands(t *testing.T) {
 			if tc.shown && !strings.Contains(help, "(admin)") {
 				t.Errorf("an operator command is not marked:\n%s", help)
 			}
-			// The count changes with every operator command, so only the
-			// presence of a count is checked.
+			// Check for a count, not its value.
 			if got := regexp.MustCompile(`\n[1-9][0-9]* ` + regexp.QuoteMeta(hint)).MatchString(help); got != tc.hint {
 				t.Errorf("hint = %v, want %v:\n%s", got, tc.hint, help)
 			}
@@ -191,8 +188,7 @@ func TestOperatorCommands(t *testing.T) {
 			if !strings.Contains(all, "  service ") || strings.Contains(all, hint) {
 				t.Errorf("help --all:\n%s", all)
 			}
-			// A hidden command still runs: it fails for the missing login, not
-			// as an unknown command.
+			// A hidden command runs. It fails for the missing login.
 			_, err = execute(t, revacmd.NewRoot(revacmd.WithBrand(acme(tc.mode))), "service", "list")
 			if err == nil || !strings.Contains(err.Error(), "no login token: run `acme login` first") {
 				t.Errorf("err = %v, want the missing login", err)

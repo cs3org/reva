@@ -22,5 +22,4 @@ package auth
 
 import "io/fs"
 
-// privateMode reports whether a cache file is closed to everyone but its owner.
 func privateMode(m fs.FileMode) bool { return m.Perm()&0o077 == 0 }

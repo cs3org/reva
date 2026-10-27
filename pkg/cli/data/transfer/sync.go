@@ -19,11 +19,13 @@
 package transfer
 
 import (
+	"cmp"
 	"context"
+	"maps"
 	"os"
 	"path"
 	"path/filepath"
-	"sort"
+	"slices"
 	"strings"
 	"sync"
 	"time"
@@ -32,13 +34,11 @@ import (
 	"github.com/cs3org/reva/v3/pkg/cli/backend"
 )
 
-// Direction selects which side of a sync is authoritative.
+// Direction selects the side of a sync that the other side must match.
 type Direction int
 
 const (
-	// Push makes the local tree authoritative: the server is made to match it.
 	Push Direction = iota
-	// Pull makes the server authoritative: the local tree is made to match it.
 	Pull
 )
 
@@ -51,26 +51,18 @@ func (d Direction) String() string {
 
 // SyncOptions configures a mirror.
 type SyncOptions struct {
-	// Direction selects the authoritative side.
 	Direction Direction
-	// Delete removes entries from the destination that the source does not
-	// have. Without it, sync only adds and updates.
-	Delete bool
-	// IncludeHidden syncs entries whose name begins with a dot.
+	// Delete removes what the destination has and the source does not.
+	Delete        bool
 	IncludeHidden bool
-	// Exclude holds glob patterns for entries to leave out of the mirror
-	// altogether. See Excluded for how a pattern is matched.
+	// Exclude holds glob patterns, see Excluded.
 	Exclude []string
 }
 
-// Excluded reports whether rel, a slash-separated path relative to the sync
-// root, matches any of the exclude patterns.
-//
-// A pattern containing a slash is matched against the whole relative path, and
-// one without against each component, so "*.tmp" excludes a temporary file
-// wherever it appears while "build/*" excludes only what is directly under a
-// top-level build directory. Matching a component also excludes everything
-// below it: a pattern that names a directory means the directory.
+// Excluded reports whether rel, a slash path relative to the sync root, matches
+// an exclude pattern. A pattern with a slash is matched against the whole path,
+// and one without against each component, so "*.tmp" matches in any directory
+// and an excluded directory excludes everything below it.
 func (o SyncOptions) Excluded(rel string) bool {
 	for _, pattern := range o.Exclude {
 		if pattern == "" {
@@ -91,10 +83,8 @@ func (o SyncOptions) Excluded(rel string) bool {
 	return false
 }
 
-// skip reports whether an entry is not part of the mirror at all, in either
-// direction. An excluded entry is invisible rather than merely not copied: were
-// it visible on the destination side, --delete would remove it for not being in
-// the source, which is the opposite of what excluding something means.
+// skip hides an entry on both sides, otherwise --delete would remove an
+// excluded entry from the destination.
 func (o SyncOptions) skip(rel string) bool {
 	return (!o.IncludeHidden && hasHiddenComponent(rel)) || o.Excluded(rel)
 }
@@ -110,7 +100,6 @@ type SyncStats struct {
 	Duration time.Duration `json:"duration_ns"`
 }
 
-// syncEntry is one file on one side of the comparison.
 type syncEntry struct {
 	rel      string
 	isDir    bool
@@ -118,22 +107,15 @@ type syncEntry struct {
 	modified time.Time
 }
 
-// Sync mirrors one side onto the other.
-//
-// This is deliberately a one-way mirror, not two-way synchronisation. Genuine
-// bidirectional sync needs persistent per-file state to tell "changed here"
-// from "deleted there", and without it the two cases are indistinguishable ,
-// which is how a sync tool deletes data it should have uploaded. That state is
-// the desktop client's job; this command answers "make the far side look like
-// this one", which is what a script wants.
+// Sync mirrors one side onto the other. It is one-way on purpose: two-way sync
+// needs per-file state to tell "changed here" from "deleted there", or it
+// deletes data that it should upload.
 func (e *Engine) Sync(ctx context.Context, localRoot, remoteRoot string, opts SyncOptions) (*SyncStats, error) {
 	start := time.Now()
 	stats := &SyncStats{}
 
-	// Pulling into a directory that is not there yet is the ordinary way to
-	// take a first copy of something, so create it rather than refusing. Push
-	// keeps the stricter reading: a missing source is a mistake, and creating
-	// it would mirror an empty tree over whatever is on the far side.
+	// A pull creates its target. A push does not create its source: an empty
+	// source would mirror an empty tree over the server.
 	if opts.Direction == Pull {
 		if _, err := os.Stat(localRoot); os.IsNotExist(err) {
 			if err := os.MkdirAll(localRoot, 0o755); err != nil {
@@ -161,16 +143,13 @@ func (e *Engine) Sync(ctx context.Context, localRoot, remoteRoot string, opts Sy
 }
 
 func (e *Engine) syncPush(ctx context.Context, localRoot, remoteRoot string, local, remote map[string]syncEntry, opts SyncOptions, stats *SyncStats) error {
-	// The destination root may not exist yet, and a flat source tree has no
-	// subdirectories to create it as a side effect. Without this, uploading
-	// into a fresh destination fails with a conflict on the first file.
+	// A flat source has no subdirectory that creates the root as a side effect.
 	if !e.opts.DryRun {
 		if err := e.c.Mkdir(ctx, remoteRoot, true); err != nil {
 			return err
 		}
 	}
 
-	// Then the rest, shallowest to deepest, so every file has a parent.
 	for _, rel := range sortedDirs(local) {
 		if _, exists := remote[rel]; exists {
 			continue
@@ -180,7 +159,7 @@ func (e *Engine) syncPush(ctx context.Context, localRoot, remoteRoot string, loc
 			e.emit(Event{Path: path.Join(remoteRoot, rel), Done: true})
 			continue
 		}
-		if err := e.c.Mkdir(ctx, path.Join(remoteRoot, filepath.ToSlash(rel)), true); err != nil {
+		if err := e.c.Mkdir(ctx, path.Join(remoteRoot, rel), true); err != nil {
 			return err
 		}
 	}
@@ -193,11 +172,7 @@ func (e *Engine) syncPush(ctx context.Context, localRoot, remoteRoot string, loc
 		localPath := filepath.Join(localRoot, filepath.FromSlash(rel))
 		remotePath := path.Join(remoteRoot, rel)
 
-		// Sync is an explicit "make it match", so an existing destination is
-		// replaced rather than skipped: unlike cp, where skipping is the safe
-		// default.
-		engine := e.withOverwrite()
-		n, err := engine.UploadFile(ctx, localPath, remotePath)
+		n, err := e.withOverwrite().UploadFile(ctx, localPath, remotePath)
 		mu.Lock()
 		defer mu.Unlock()
 		if err != nil {
@@ -243,8 +218,7 @@ func (e *Engine) syncPull(ctx context.Context, localRoot, remoteRoot string, loc
 		localPath := filepath.Join(localRoot, filepath.FromSlash(rel))
 		remotePath := path.Join(remoteRoot, rel)
 
-		engine := e.withOverwrite()
-		n, err := engine.DownloadFile(ctx, remotePath, localPath)
+		n, err := e.withOverwrite().DownloadFile(ctx, remotePath, localPath)
 		mu.Lock()
 		defer mu.Unlock()
 		if err != nil {
@@ -268,18 +242,14 @@ func (e *Engine) syncPull(ctx context.Context, localRoot, remoteRoot string, loc
 	return e.deleteLocalExtras(localRoot, remote, local, stats)
 }
 
-// transferItem is a file the comparison decided to move.
 type transferItem struct {
 	rel     string
 	existed bool
 }
 
-// filesNeedingTransfer compares the two sides and returns what must move.
-//
-// A file is transferred when it is missing on the destination, or when its size
-// differs, or when the source is newer. Comparing content would be correct but
-// would mean reading every byte on both sides, which defeats the purpose; size
-// plus mtime is the same trade rsync makes.
+// filesNeedingTransfer returns the files that are missing on the destination,
+// of another size, or newer on the source. Like rsync, it does not read the
+// content.
 func filesNeedingTransfer(source, dest map[string]syncEntry, stats *SyncStats) []transferItem {
 	var out []transferItem
 	for rel, src := range source {
@@ -291,9 +261,7 @@ func filesNeedingTransfer(source, dest map[string]syncEntry, stats *SyncStats) [
 		case !exists:
 			out = append(out, transferItem{rel: rel})
 		case dst.isDir:
-			// The name is a directory on the other side. Replacing it would
-			// mean deleting a subtree, which a sync that only adds and updates
-			// must not do silently.
+			// Replacing a directory would delete a subtree.
 			stats.Skipped++
 		case src.size != dst.size || src.modified.After(dst.modified.Add(time.Second)):
 			out = append(out, transferItem{rel: rel, existed: true})
@@ -301,7 +269,7 @@ func filesNeedingTransfer(source, dest map[string]syncEntry, stats *SyncStats) [
 			stats.Skipped++
 		}
 	}
-	sort.Slice(out, func(i, j int) bool { return out[i].rel < out[j].rel })
+	slices.SortFunc(out, func(a, b transferItem) int { return strings.Compare(a.rel, b.rel) })
 	return out
 }
 
@@ -316,8 +284,7 @@ func (e *Engine) deleteRemoteExtras(ctx context.Context, remoteRoot string, loca
 			continue
 		}
 		if err := e.c.Remove(ctx, path.Join(remoteRoot, rel)); err != nil {
-			// A parent directory removed a moment ago takes its children with
-			// it, so a missing child here is expected, not a failure.
+			// The parent was removed before, with its children.
 			if backend.IsNotFound(err) {
 				continue
 			}
@@ -344,7 +311,6 @@ func (e *Engine) deleteLocalExtras(localRoot string, remote, local map[string]sy
 	return nil
 }
 
-// scanLocal indexes the local tree by path relative to the root.
 func (e *Engine) scanLocal(root string, opts SyncOptions) (map[string]syncEntry, error) {
 	out := map[string]syncEntry{}
 	info, err := os.Stat(root)
@@ -373,9 +339,7 @@ func (e *Engine) scanLocal(root string, opts SyncOptions) (map[string]syncEntry,
 			}
 			return nil
 		}
-		// Symlinks are not followed, for the same reason as in a plain upload:
-		// copying the target under the link's name changes the shape of the
-		// tree the user asked to mirror.
+		// Same as in walkLocal: skip links.
 		if d.Type()&os.ModeSymlink != 0 {
 			return nil
 		}
@@ -393,9 +357,7 @@ func (e *Engine) scanLocal(root string, opts SyncOptions) (map[string]syncEntry,
 	return out, nil
 }
 
-// scanRemote indexes the the server tree by path relative to the root. A root that
-// does not exist yet is an empty tree, so a first push works without a
-// preparatory mkdir.
+// scanRemote treats a missing root as an empty tree, so that a first push works.
 func (e *Engine) scanRemote(ctx context.Context, root string, opts SyncOptions) (map[string]syncEntry, error) {
 	out := map[string]syncEntry{}
 
@@ -430,9 +392,8 @@ func (e *Engine) scanRemote(ctx context.Context, root string, opts SyncOptions) 
 	return out, nil
 }
 
-// withOverwrite returns an engine that replaces existing destinations. Sync
-// means "make it match", so skipping would leave the sides different and report
-// success.
+// withOverwrite returns an engine that replaces existing files, because a sync
+// that skips them would report success with different sides.
 func (e *Engine) withOverwrite() *Engine {
 	if e.opts.Overwrite {
 		return e
@@ -458,27 +419,17 @@ func sortedDirs(entries map[string]syncEntry) []string {
 			dirs = append(dirs, rel)
 		}
 	}
-	sort.Slice(dirs, func(i, j int) bool {
-		di, dj := strings.Count(dirs[i], "/"), strings.Count(dirs[j], "/")
-		if di != dj {
-			return di < dj
-		}
-		return dirs[i] < dirs[j]
-	})
+	slices.SortFunc(dirs, byDepth)
 	return dirs
 }
 
 func deepestFirst(entries map[string]syncEntry) []string {
-	all := make([]string, 0, len(entries))
-	for rel := range entries {
-		all = append(all, rel)
-	}
-	sort.Slice(all, func(i, j int) bool {
-		di, dj := strings.Count(all[i], "/"), strings.Count(all[j], "/")
-		if di != dj {
-			return di > dj
-		}
-		return all[i] > all[j]
-	})
+	all := slices.SortedFunc(maps.Keys(entries), byDepth)
+	slices.Reverse(all)
 	return all
+}
+
+// byDepth sorts slash paths shallowest first, then by name.
+func byDepth(a, b string) int {
+	return cmp.Or(cmp.Compare(strings.Count(a, "/"), strings.Count(b, "/")), strings.Compare(a, b))
 }

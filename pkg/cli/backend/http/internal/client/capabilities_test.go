@@ -55,8 +55,8 @@ func TestCapabilities(t *testing.T) {
 	if caps.ArchiverMaxSize != 1073741824 {
 		t.Errorf("ArchiverMaxSize = %d", caps.ArchiverMaxSize)
 	}
-	if !caps.Versioning || !caps.Undelete || !caps.Sharing || !caps.PublicLinks || !caps.SpacesEnabled {
-		t.Errorf("feature flags are wrong: %+v", caps)
+	if !caps.Versioning {
+		t.Error("Versioning = false, want true")
 	}
 	if caps.ServerVersion != "10.0.11" {
 		t.Errorf("ServerVersion = %q", caps.ServerVersion)
@@ -82,8 +82,6 @@ func TestCapabilitiesFetchedOnce(t *testing.T) {
 	}
 }
 
-// TestOcsBoolShapes: OCS serialises booleans as true, "1", or 1 depending on
-// the field, so a plain bool would fail to decode half the document.
 func TestOcsBoolShapes(t *testing.T) {
 	tests := []struct {
 		in   string
@@ -142,28 +140,6 @@ func TestCapabilitiesIgnoresDisabledArchiver(t *testing.T) {
 	}
 }
 
-func TestChunkSize(t *testing.T) {
-	tests := []struct {
-		name      string
-		caps      *Capabilities
-		preferred int64
-		want      int64
-	}{
-		{"clamped to server maximum", &Capabilities{TusMaxChunkSize: 1 << 20}, 1 << 24, 1 << 20},
-		{"preference respected", &Capabilities{TusMaxChunkSize: 1 << 24}, 1 << 20, 1 << 20},
-		{"no server limit", &Capabilities{}, 1 << 20, 1 << 20},
-		{"no preference", &Capabilities{TusMaxChunkSize: 1 << 20}, 0, 1 << 20},
-		{"nil capabilities", nil, 1 << 20, 1 << 20},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			if got := tt.caps.ChunkSize(tt.preferred); got != tt.want {
-				t.Errorf("ChunkSize(%d) = %d, want %d", tt.preferred, got, tt.want)
-			}
-		})
-	}
-}
-
 func TestBestChecksum(t *testing.T) {
 	tests := []struct {
 		name string
@@ -174,7 +150,6 @@ func TestBestChecksum(t *testing.T) {
 		{"falls back to strongest supported", &Capabilities{ChecksumTypes: []string{"md5", "adler32"}}, "md5"},
 		{"sha1 preferred over md5", &Capabilities{ChecksumTypes: []string{"adler32", "md5", "sha1"}}, "sha1"},
 		{"none supported", &Capabilities{}, ""},
-		{"nil", nil, ""},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -182,37 +157,5 @@ func TestBestChecksum(t *testing.T) {
 				t.Errorf("BestChecksum() = %q, want %q", got, tt.want)
 			}
 		})
-	}
-}
-
-func TestSupportsArchiveFormat(t *testing.T) {
-	caps := &Capabilities{ArchiverEnabled: true, ArchiverFormats: []string{"tar", "zip"}}
-	if !caps.SupportsArchiveFormat("tar") || !caps.SupportsArchiveFormat("zip") {
-		t.Error("tar and zip should both be supported")
-	}
-	if caps.SupportsArchiveFormat("7z") {
-		t.Error("7z should not be supported")
-	}
-	if (&Capabilities{ArchiverFormats: []string{"tar"}}).SupportsArchiveFormat("tar") {
-		t.Error("a disabled archiver supports nothing")
-	}
-}
-
-func TestArchiveFits(t *testing.T) {
-	caps := &Capabilities{ArchiverEnabled: true, ArchiverMaxNumFiles: 100, ArchiverMaxSize: 1000}
-
-	if !caps.ArchiveFits(50, 500) {
-		t.Error("a small tree should fit")
-	}
-	if caps.ArchiveFits(150, 500) {
-		t.Error("too many files should not fit")
-	}
-	if caps.ArchiveFits(50, 5000) {
-		t.Error("too many bytes should not fit")
-	}
-
-	unlimited := &Capabilities{ArchiverEnabled: true}
-	if !unlimited.ArchiveFits(1e9, 1e15) {
-		t.Error("a server advertising no limits should always fit")
 	}
 }

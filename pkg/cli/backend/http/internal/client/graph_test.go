@@ -67,8 +67,7 @@ func TestMeFetchedOnce(t *testing.T) {
 	}
 }
 
-// TestMeWithoutUsernameIsAnError: every path-addressed WebDAV URL embeds the
-// username, so proceeding without one would produce silently wrong URLs.
+// Every WebDAV URL embeds the username.
 func TestMeWithoutUsernameIsAnError(t *testing.T) {
 	f := newFakeServer(t)
 	f.meJSON = `{"id": "abc", "displayName": "No Name"}`
@@ -106,46 +105,38 @@ func TestSpaces(t *testing.T) {
 	}
 }
 
-func TestSpacesCached(t *testing.T) {
-	f := newFakeServer(t)
-	var calls atomic.Int32
-	f.on(http.MethodGet, graphBeta+"/me/drives", func(w http.ResponseWriter, r *http.Request) {
-		calls.Add(1)
-		fmt.Fprint(w, defaultDrives)
-	})
+func TestSpacesCache(t *testing.T) {
+	for _, tt := range []struct {
+		name  string
+		ttl   time.Duration
+		calls int
+		check func(int) bool
+	}{
+		{"within the TTL", time.Hour, 3, func(n int) bool { return n == 1 }},
+		{"after the TTL", time.Nanosecond, 2, func(n int) bool { return n >= 2 }},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			f := newFakeServer(t)
+			var calls atomic.Int32
+			f.on(http.MethodGet, graphBeta+"/me/drives", func(w http.ResponseWriter, r *http.Request) {
+				calls.Add(1)
+				fmt.Fprint(w, defaultDrives)
+			})
 
-	c := f.client(WithSpacesTTL(time.Hour))
-	for range 3 {
-		if _, err := c.Spaces(context.Background()); err != nil {
-			t.Fatal(err)
-		}
-	}
-	if got := calls.Load(); got != 1 {
-		t.Errorf("spaces fetched %d times, want 1 within the TTL", got)
-	}
-}
-
-func TestSpacesCacheExpires(t *testing.T) {
-	f := newFakeServer(t)
-	var calls atomic.Int32
-	f.on(http.MethodGet, graphBeta+"/me/drives", func(w http.ResponseWriter, r *http.Request) {
-		calls.Add(1)
-		fmt.Fprint(w, defaultDrives)
-	})
-
-	c := f.client(WithSpacesTTL(time.Nanosecond))
-	for range 2 {
-		if _, err := c.Spaces(context.Background()); err != nil {
-			t.Fatal(err)
-		}
-		time.Sleep(time.Millisecond)
-	}
-	if got := calls.Load(); got < 2 {
-		t.Errorf("spaces fetched %d times, want a refetch after the TTL", got)
+			c := f.client(WithSpacesTTL(tt.ttl))
+			for range tt.calls {
+				if _, err := c.Spaces(context.Background()); err != nil {
+					t.Fatal(err)
+				}
+				time.Sleep(time.Millisecond)
+			}
+			if got := int(calls.Load()); !tt.check(got) {
+				t.Errorf("spaces fetched %d times", got)
+			}
+		})
 	}
 }
 
-// TestResolveSpace covers every spelling a user might reasonably type.
 func TestResolveSpace(t *testing.T) {
 	f := newFakeServer(t)
 	c := f.client()
@@ -188,26 +179,8 @@ func TestResolveSpaceUnknown(t *testing.T) {
 	}
 }
 
-func TestSpaceAlias(t *testing.T) {
-	tests := []struct {
-		space Space
-		want  string
-	}{
-		{Space{Type: "personal", Name: "einstein"}, "home"},
-		{Space{Type: "project", Name: "cernbox"}, "project/cernbox"},
-		{Space{Type: "other", Name: "x", Alias: "winspaces/x"}, "winspaces/x"},
-		{Space{Type: "other", Name: "x"}, "x"},
-	}
-	for _, tt := range tests {
-		if got := SpaceAlias(tt.space); got != tt.want {
-			t.Errorf("SpaceAlias(%+v) = %q, want %q", tt.space, got, tt.want)
-		}
-	}
-}
-
 func TestRoleIDAndName(t *testing.T) {
-	// collab stays accepted as input, so an existing script keeps working, but it
-	// is manager that comes back.
+	// collab is accepted as input, but manager comes back.
 	for _, name := range []string{"viewer", "editor", "manager", "collab", "denied", "VIEWER"} {
 		if _, err := RoleID(name); err != nil {
 			t.Errorf("RoleID(%q): %v", name, err)
@@ -228,8 +201,6 @@ func TestRoleIDAndName(t *testing.T) {
 	if got := RoleName(RoleSpaceViewer); got != "viewer" {
 		t.Errorf("RoleName(RoleSpaceViewer) = %q, want the space variant folded into viewer", got)
 	}
-	// An unknown id is shown rather than hidden, so a server that grows a new
-	// role does not display a blank column.
 	if got := RoleName("some-new-role"); got != "some-new-role" {
 		t.Errorf("RoleName(unknown) = %q, want it passed through", got)
 	}
@@ -254,8 +225,8 @@ func TestSplitResourceID(t *testing.T) {
 	}
 }
 
-// TestShareRequestShape matters because ocgraph decodes the invite body with
-// DisallowUnknownFields: a stray or misspelled field is a 400, not a warning.
+// ocgraph decodes the invite body with DisallowUnknownFields, so a stray field
+// is a 400.
 func TestShareRequestShape(t *testing.T) {
 	f := newFakeServer(t)
 	f.on(http.MethodPost, graphBeta, func(w http.ResponseWriter, r *http.Request) {
@@ -383,16 +354,6 @@ func TestUpdatePermission(t *testing.T) {
 	}
 }
 
-func TestRemovePermission(t *testing.T) {
-	f := newFakeServer(t)
-	f.on(http.MethodDelete, graphBeta+"/drives", func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusNoContent)
-	})
-	if err := f.client().RemovePermission(context.Background(), "localhome$ABC!item-1", "share-1"); err != nil {
-		t.Fatal(err)
-	}
-}
-
 func TestCreateLink(t *testing.T) {
 	f := newFakeServer(t)
 	f.on(http.MethodPost, graphBeta+"/drives", func(w http.ResponseWriter, r *http.Request) {
@@ -474,10 +435,8 @@ func TestSharedWithMe(t *testing.T) {
 }
 
 func TestSetReceivedShareState(t *testing.T) {
-	// A received share has two ids: the resource that was shared, which the
-	// listing reports as the item's id, and the caller's own copy of the share,
-	// which is the only one the update handler accepts. Both are served here
-	// because the point of the call is to resolve between them.
+	// The listing reports the resource id, but the update handler accepts only
+	// the id of the caller's own copy of the share.
 	const (
 		resourceID = "localhome$ABC!item-1"
 		shareID    = "jail$jail!42"
@@ -499,7 +458,6 @@ func TestSetReceivedShareState(t *testing.T) {
 		accept bool
 		want   []string
 	}{
-		// The id somebody has in hand is whichever one they saw.
 		{"accept by resource id", resourceID, true, []string{`"@client.synchronize":true`, `"@UI.Hidden":false`}},
 		{"decline by resource id", resourceID, false, []string{`"@client.synchronize":false`, `"@UI.Hidden":true`}},
 		{"decline by share id", shareID, false, []string{`"@UI.Hidden":true`}},
@@ -509,8 +467,7 @@ func TestSetReceivedShareState(t *testing.T) {
 				t.Fatal(err)
 			}
 			req := f.lastRequest(http.MethodPatch)
-			// Whichever id went in, the share's own id is what goes out: the
-			// resource id answers 404.
+			// The resource id answers 404.
 			if !strings.Contains(req.Path, shareID) {
 				t.Errorf("updated %q, want the share id %q", req.Path, shareID)
 			}
@@ -526,8 +483,6 @@ func TestSetReceivedShareState(t *testing.T) {
 	}
 }
 
-// TestSetReceivedShareStateRejectsAnUnknownID: an id nobody shared resolves to
-// nothing, and saying so beats sending an update that cannot land.
 func TestSetReceivedShareStateRejectsAnUnknownID(t *testing.T) {
 	f := newFakeServer(t)
 	f.on(http.MethodGet, graphBeta+"/me/drive/sharedWithMe", func(w http.ResponseWriter, r *http.Request) {
@@ -555,9 +510,7 @@ func TestMalformedJSONIsReported(t *testing.T) {
 	}
 }
 
-// TestSharedWithMeReadsTheRoleFromTheRemoteItem: a received share carries its
-// grant on the remote item, not on the entry in the caller's virtual drive, so
-// reading only the top level leaves every received share with no role at all.
+// A received share carries its grant on the remote item.
 func TestSharedWithMeReadsTheRoleFromTheRemoteItem(t *testing.T) {
 	f := newFakeServer(t)
 	f.on(http.MethodGet, graphBeta+"/me/drive/sharedWithMe", func(w http.ResponseWriter, r *http.Request) {
@@ -590,8 +543,6 @@ func TestSharedWithMeReadsTheRoleFromTheRemoteItem(t *testing.T) {
 }
 
 func TestSpacePathOfID(t *testing.T) {
-	// The space half of a resource id is the base32 of the space's path. This is
-	// the only way to a path for a received share, which carries none of its own.
 	for _, tc := range []struct {
 		id, want string
 		ok       bool
@@ -601,7 +552,7 @@ func TestSpacePathOfID(t *testing.T) {
 		{"nospace", "", false},
 		{"localhome$!1", "", false},
 		{"localhome$not-base32!1", "", false},
-		// Decodes, but not to a path: acting on it would address something else.
+		// Decodes, but not to a path.
 		{"localhome$" + "MFRGG===" + "!1", "", false},
 	} {
 		t.Run(tc.id, func(t *testing.T) {

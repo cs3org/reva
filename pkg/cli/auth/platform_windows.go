@@ -20,9 +20,6 @@ package auth
 
 import "io/fs"
 
-// privateMode always holds. Windows does not keep Unix permission bits: a
-// file reports 0666, or 0444 when read-only, so checking them would reject
-// every cache and force a login on every command. What keeps the cache private
-// there is the ACL on the user's profile, which only the user and
-// administrators can read.
+// privateMode always holds: Windows has no Unix permission bits, and a file
+// reports 0666. The ACL on the user's profile keeps the cache private.
 func privateMode(fs.FileMode) bool { return true }

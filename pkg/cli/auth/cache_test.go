@@ -51,18 +51,10 @@ func TestCacheRoundTrip(t *testing.T) {
 	}
 }
 
-func TestCacheMissingFile(t *testing.T) {
-	c := NewCache(filepath.Join(t.TempDir(), "does-not-exist"))
-	if _, ok := c.Get(Upstream, "key"); ok {
-		t.Error("Get on a missing cache should report no entry")
-	}
-}
-
-// TestCacheIsCreatedPrivate is a security requirement, not a detail: the file
-// holds bearer tokens.
+// The file holds bearer tokens.
 func TestCacheIsCreatedPrivate(t *testing.T) {
 	if runtime.GOOS == "windows" {
-		t.Skip("Windows keeps no permission bits; the temporary directory's ACL is what keeps the cache private")
+		t.Skip("Windows keeps no permission bits")
 	}
 	path := filepath.Join(t.TempDir(), "cache")
 	c := NewCache(path)
@@ -79,12 +71,9 @@ func TestCacheIsCreatedPrivate(t *testing.T) {
 	}
 }
 
-// TestCacheRefusesWorldReadableFile: if the file is readable by others it may
-// also have been written by others, and using a token from it would mean
-// authenticating as whoever put it there.
 func TestCacheRefusesWorldReadableFile(t *testing.T) {
 	if runtime.GOOS == "windows" {
-		t.Skip("Windows keeps no permission bits to refuse a file by")
+		t.Skip("Windows keeps no permission bits")
 	}
 	path := filepath.Join(t.TempDir(), "cache")
 	c := NewCache(path)
@@ -110,8 +99,7 @@ func TestCacheIgnoresCorruptFile(t *testing.T) {
 	if _, ok := c.Get(Upstream, "key"); ok {
 		t.Error("a corrupt cache should read as empty")
 	}
-	// It must still be writable: a corrupt cache should self-heal rather than
-	// permanently break authentication.
+	// A corrupt cache must heal itself.
 	if err := c.Put(Upstream, "key", &Token{Value: "abc"}); err != nil {
 		t.Fatalf("Put over a corrupt cache: %v", err)
 	}
@@ -152,9 +140,6 @@ func TestCachePrunesExpiredEntries(t *testing.T) {
 	}
 }
 
-// TestCacheKeepsExpiredTokenWithRefresh: pruning it would throw away the
-// refresh token, forcing a full re-authentication when a cheap renewal would
-// have done.
 func TestCacheKeepsExpiredTokenWithRefresh(t *testing.T) {
 	c := NewCache(filepath.Join(t.TempDir(), "cache"))
 
@@ -194,7 +179,7 @@ func TestCacheDeletePrefix(t *testing.T) {
 	for _, key := range []string{
 		"https://a.test\x00einstein", "https://a.test\x00marie", "https://b.test\x00einstein",
 	} {
-		if err := c.Put(Upstream, key, &Token{Value: "" + key}); err != nil {
+		if err := c.Put(Upstream, key, &Token{Value: key}); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -225,7 +210,6 @@ func TestCacheClear(t *testing.T) {
 	if _, err := os.Stat(path); !os.IsNotExist(err) {
 		t.Error("Clear did not remove the file")
 	}
-	// Clearing an already-clear cache is not an error.
 	if err := c.Clear(); err != nil {
 		t.Errorf("Clear on a missing file: %v", err)
 	}

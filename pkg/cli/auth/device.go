@@ -31,30 +31,20 @@ import (
 	"github.com/cs3org/reva/v3/internal/cli/cberr"
 )
 
-// DeviceProvider authenticates through the OAuth device authorization grant
-// (RFC 8628): the CLI prints a URL and a short code, the user completes the
-// login in a browser, and the CLI polls until it succeeds.
-//
-// This is the path for laptops, and for accounts that have no Kerberos
-// principal at all, lightweight and external accounts, which is why it stays
-// in the chain even where Kerberos works.
+// DeviceProvider signs in with the OAuth device authorization grant (RFC 8628):
+// the user completes the login in a browser while the CLI polls.
 type DeviceProvider struct {
-	// OIDC configures the OIDC client.
-	OIDC *OIDCConfig
-	// HTTPClient is used for discovery and polling.
+	OIDC       *OIDCConfig
 	HTTPClient *http.Client
-	// Interactive reports whether a user is present to complete the flow. The
-	// CLI wires it to a TTY check, so a script does not hang for fifteen
-	// minutes waiting for a login nobody is performing.
+	// Interactive says that a user can complete the flow. A script must not
+	// wait for a login that nobody performs.
 	Interactive bool
-	// Prompt displays the verification URL and user code.
+	// Prompt shows the verification URL and the user code.
 	Prompt func(verificationURI, userCode string, expiresIn time.Duration)
-	// MaxWait bounds the polling. Zero uses the interval the server advertises.
+	// MaxWait bounds the polling. Zero means the lifetime of the device code.
 	MaxWait time.Duration
 }
 
-// Polling pace. The floor applies even when the server advertises no interval
-// at all.
 const (
 	defaultPollInterval = 5 * time.Second
 	minPollInterval     = 10 * time.Millisecond
@@ -63,8 +53,7 @@ const (
 // Name implements Provider.
 func (p *DeviceProvider) Name() string { return MethodDevice }
 
-// Available implements Provider. A device flow needs someone to complete it, so
-// it is unavailable in a non-interactive context.
+// Available implements Provider.
 func (p *DeviceProvider) Available(context.Context) bool {
 	return p.Interactive && p.OIDC != nil && p.OIDC.Issuer != "" && p.OIDC.ClientID != ""
 }
@@ -75,9 +64,8 @@ type deviceAuthResponse struct {
 	VerificationURI         string `json:"verification_uri"`
 	VerificationURIComplete string `json:"verification_uri_complete"`
 	ExpiresIn               int64  `json:"expires_in"`
-	// Interval is a pointer so that "absent" and "explicitly zero" stay
-	// distinguishable: RFC 8628 says an absent interval means five seconds,
-	// while a server that sends zero is saying it has no rate limit.
+	// Interval is a pointer: RFC 8628 says that an absent interval is five
+	// seconds, and that zero means no rate limit.
 	Interval *int64 `json:"interval"`
 
 	Error            string `json:"error"`
@@ -116,17 +104,8 @@ func (p *DeviceProvider) Token(ctx context.Context) (*Token, error) {
 	return p.poll(ctx, hc, meta, auth)
 }
 
-// Refresh implements Refresher, renewing the access token from the refresh
-// token that offline_access yielded.
-//
-// This is what keeps an SSO session usable: the access token can live twenty
-// minutes, and without this the user is sent back to the browser every twenty
-// minutes even though the issuer handed over a refresh token specifically so
-// that they would not be.
-//
-// It needs no terminal, so a cron job with a cached refresh token renews
-// silently: the chain offers every provider a chance to refresh regardless of
-// whether it could start a fresh login.
+// Refresh implements Refresher. It needs no terminal, so a cron job with a
+// cached refresh token renews silently.
 func (p *DeviceProvider) Refresh(ctx context.Context, tok *Token) (*Token, error) {
 	if tok == nil || tok.RefreshToken == "" {
 		return nil, fmt.Errorf("no refresh token to renew with")
@@ -155,8 +134,7 @@ func (p *DeviceProvider) Refresh(ctx context.Context, tok *Token) (*Token, error
 
 	out := tr.Token(MethodDevice)
 	if out.RefreshToken == "" {
-		// Not every issuer rotates the refresh token; keep the one that still
-		// works rather than losing the ability to refresh again.
+		// Not every issuer rotates the refresh token.
 		out.RefreshToken = tok.RefreshToken
 	}
 	out.Subject = tok.Subject
@@ -203,18 +181,12 @@ func (p *DeviceProvider) startDeviceAuth(ctx context.Context, hc *http.Client, m
 	return &auth, nil
 }
 
-// poll waits for the user to complete the login.
-//
-// The two OAuth "keep waiting" codes are handled distinctly: authorization_pending
-// means carry on at the current rate, slow_down means the server wants a longer
-// interval and ignoring it gets the client rate-limited.
 func (p *DeviceProvider) poll(ctx context.Context, hc *http.Client, meta *ProviderMetadata, auth *deviceAuthResponse) (*Token, error) {
 	interval := defaultPollInterval
 	if auth.Interval != nil {
 		interval = time.Duration(*auth.Interval) * time.Second
 	}
-	// Never poll faster than the floor, even if the server says zero: a tight
-	// loop against the token endpoint is how a client gets rate-limited.
+	// A tight loop gets the client rate-limited, even if the server says zero.
 	interval = max(interval, minPollInterval)
 
 	deadline := time.Now().Add(time.Duration(auth.ExpiresIn) * time.Second)
@@ -233,9 +205,7 @@ func (p *DeviceProvider) poll(ctx context.Context, hc *http.Client, meta *Provid
 		"client_id":   {p.OIDC.ClientID},
 	}
 
-	// The first poll happens immediately: the user may have completed the
-	// login while the prompt was still being printed, and making them wait a
-	// full interval for a login that already succeeded feels broken.
+	// The first poll is immediate: the login may be done already.
 	first := true
 	for {
 		if !first {

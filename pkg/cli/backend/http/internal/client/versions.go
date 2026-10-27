@@ -20,9 +20,9 @@ package client
 
 import (
 	"context"
-	"io"
 	"net/http"
 	"net/url"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -30,21 +30,15 @@ import (
 	"github.com/cs3org/reva/v3/internal/cli/cberr"
 )
 
-// Version is one historical revision of a file.
+// Version is one revision of a file.
 type Version struct {
-	// Key identifies the version. reva uses the modification timestamp, but the
-	// CLI treats it as opaque so a storage that numbers versions differently
-	// still works.
-	Key string `json:"key"`
-	// Size is the byte count of that revision.
-	Size int64 `json:"size"`
-	// Modified is when that revision was current.
+	// Key identifies the version. The CLI treats it as opaque.
+	Key      string    `json:"key"`
+	Size     int64     `json:"size"`
 	Modified time.Time `json:"modified"`
-	// ETag identifies the revision's content.
-	ETag string `json:"etag,omitempty"`
+	ETag     string    `json:"etag,omitempty"`
 }
 
-// versionsURL builds the meta URL for a resource's version list.
 func (c *Client) versionsURL(resourceID, key string) string {
 	u := c.URL(davMetaPrefix + "/" + url.PathEscape(resourceID) + "/v")
 	if key != "" {
@@ -53,11 +47,8 @@ func (c *Client) versionsURL(resourceID, key string) string {
 	return u
 }
 
-// ListVersions returns the historical revisions of a file, newest first.
-//
-// resourceID is the persistent id from Stat, not a path: versions survive a
-// rename, so addressing them by path would lose the history the moment a file
-// moved.
+// ListVersions returns the revisions of a file, newest first. resourceID is
+// the persistent id from Stat, not a path: the versions follow a rename.
 func (c *Client) ListVersions(ctx context.Context, resourceID string) ([]Version, error) {
 	resp, err := c.do(ctx, request{
 		method: MethodPropfind,
@@ -93,8 +84,7 @@ func (c *Client) ListVersions(ctx context.Context, resourceID string) ([]Version
 		}
 		key := versionKeyFromHref(href)
 		if key == "" {
-			// The listing includes the file itself as the "." entry; it has no
-			// version key and is not a revision.
+			// The "." entry is the file itself, not a revision.
 			continue
 		}
 
@@ -107,29 +97,17 @@ func (c *Client) ListVersions(ctx context.Context, resourceID string) ([]Version
 		if t, err := http.ParseTime(props.GetLastMod); err == nil {
 			v.Modified = t
 		} else if n, err := strconv.ParseInt(key, 10, 64); err == nil {
-			// reva keys versions by the modification time, so the key itself is
-			// a usable fallback when the property is absent.
+			// reva keys a version by its modification time.
 			v.Modified = epochToTime(n)
 		}
 		versions = append(versions, v)
 	}
 
-	// Newest first: that is the order a user scanning for "the one from this
-	// morning" wants, and it matches how the web UI presents them.
-	sortVersionsNewestFirst(versions)
+	slices.SortStableFunc(versions, func(a, b Version) int { return b.Modified.Compare(a.Modified) })
 	return versions, nil
 }
 
-func sortVersionsNewestFirst(versions []Version) {
-	for i := 1; i < len(versions); i++ {
-		for j := i; j > 0 && versions[j].Modified.After(versions[j-1].Modified); j-- {
-			versions[j], versions[j-1] = versions[j-1], versions[j]
-		}
-	}
-}
-
-// versionKeyFromHref extracts the version key, which the server places after
-// the "/v/" segment.
+// versionKeyFromHref returns the part after the "/v/" segment.
 func versionKeyFromHref(href string) string {
 	_, after, ok := strings.Cut(href, "/v/")
 	if !ok {
@@ -138,8 +116,8 @@ func versionKeyFromHref(href string) string {
 	return strings.Trim(after, "/")
 }
 
-// RestoreVersion makes a historical revision current. The revision being
-// replaced becomes a version in its own right, so this is not destructive.
+// RestoreVersion makes a revision current. The revision that it replaces
+// becomes a version itself.
 func (c *Client) RestoreVersion(ctx context.Context, resourceID, key string) error {
 	if key == "" {
 		return cberr.Usagef("no version key given")
@@ -158,39 +136,13 @@ func (c *Client) RestoreVersion(ctx context.Context, resourceID, key string) err
 	return nil
 }
 
-// DownloadVersion opens a historical revision for reading, leaving the current
-// one untouched. The caller must close the returned ReadCloser.
-func (c *Client) DownloadVersion(ctx context.Context, resourceID, key string) (io.ReadCloser, int64, error) {
-	if key == "" {
-		return nil, 0, cberr.Usagef("no version key given")
-	}
-	resp, err := c.do(ctx, request{
-		method:  http.MethodGet,
-		url:     c.versionsURL(resourceID, key),
-		op:      "download a version",
-		path:    key,
-		expects: []int{http.StatusOK},
-	})
-	if err != nil {
-		return nil, 0, err
-	}
-	return resp.Body, resp.ContentLength, nil
-}
-
-// msThreshold is where a plausible epoch in seconds stops. Seconds past this
-// would be the year 5138, so a larger number is milliseconds.
-const msThreshold = 1e11
-
-// epochToTime converts an epoch that may be in seconds or in milliseconds.
-//
-// Storage drivers disagree: reva's trash keys and some version keys are in
-// milliseconds while the CS3 timestamps are in seconds, and reading one as the
-// other puts the file fifty thousand years in the future.
+// epochToTime reads an epoch in seconds or in milliseconds. Storage drivers
+// differ, and a value past 1e11 seconds would be the year 5138.
 func epochToTime(n int64) time.Time {
 	if n <= 0 {
 		return time.Time{}
 	}
-	if n >= msThreshold {
+	if n >= 1e11 {
 		return time.UnixMilli(n)
 	}
 	return time.Unix(n, 0)

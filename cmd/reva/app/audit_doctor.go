@@ -166,7 +166,6 @@ func day(s uint64) string {
 	return time.Unix(int64(s), 0).UTC().Format(time.DateOnly)
 }
 
-// The checks of doctor, in the order in which they depend on each other.
 type doctorCheck struct {
 	Name   string `json:"name"`
 	Status string `json:"status"`

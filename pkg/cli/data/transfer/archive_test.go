@@ -29,7 +29,6 @@ import (
 	"testing"
 )
 
-// tarball builds a tar stream from a list of entries.
 func tarball(t *testing.T, entries []tar.Header, bodies map[string]string) []byte {
 	t.Helper()
 	var buf bytes.Buffer
@@ -83,9 +82,6 @@ func TestExtractTar(t *testing.T) {
 	assertFile(t, filepath.Join(dir, "data", "sub", "b.txt"), "beta")
 }
 
-// TestExtractTarRejectsPathTraversal is the archive equivalent of zip-slip: an
-// entry named ../../etc/x must not be written outside the destination, no
-// matter what the server sends.
 func TestExtractTarRejectsPathTraversal(t *testing.T) {
 	box := newFakeBox(t)
 	e := box.engine(Options{Overwrite: true})
@@ -106,16 +102,9 @@ func TestExtractTarRejectsPathTraversal(t *testing.T) {
 			dest := filepath.Join(parent, "dest")
 
 			_, err := e.extractTar(context.Background(), bytes.NewReader(data), dest, "")
-			if err == nil {
-				// An absolute path is neutralised by Join rather than rejected,
-				// so accept either outcome as long as nothing escaped.
-				if _, statErr := os.Stat(filepath.Join(parent, "escaped.txt")); statErr == nil {
-					t.Fatal("an entry was written outside the destination")
-				}
-				return
-			}
-			if !strings.Contains(err.Error(), "outside the destination") {
-				t.Errorf("got %v, want a clear traversal rejection", err)
+			// stripArchiveRoot may neutralise a name instead of rejecting it.
+			if err != nil && !strings.Contains(err.Error(), "outside the destination") {
+				t.Errorf("got %v, want a traversal rejection", err)
 			}
 			if _, statErr := os.Stat(filepath.Join(parent, "escaped.txt")); statErr == nil {
 				t.Error("an entry was written outside the destination")
@@ -124,8 +113,6 @@ func TestExtractTarRejectsPathTraversal(t *testing.T) {
 	}
 }
 
-// TestExtractTarSkipsLinks: a link entry could point anywhere, and the server does
-// not store symlinks anyway.
 func TestExtractTarSkipsLinks(t *testing.T) {
 	box := newFakeBox(t)
 	e := box.engine(Options{Overwrite: true})
@@ -182,9 +169,7 @@ func TestExtractTarTruncatedStream(t *testing.T) {
 	box := newFakeBox(t)
 	e := box.engine(Options{Overwrite: true})
 
-	// The body must be large enough that the cut lands inside the file
-	// content: a tar stream truncated exactly at a block boundary after a
-	// complete entry is indistinguishable from a short archive.
+	// The cut must land inside the file content, not at a block boundary.
 	body := strings.Repeat("x", 8<<10)
 	data := tarball(t,
 		[]tar.Header{{Name: "a.txt", Typeflag: tar.TypeReg, Mode: 0o644}},
@@ -197,7 +182,6 @@ func TestExtractTarTruncatedStream(t *testing.T) {
 		t.Fatal("a truncated archive should be reported, not silently accepted")
 	}
 
-	// Whatever was written must not be presented as a complete file.
 	if got, readErr := os.ReadFile(filepath.Join(dir, "a.txt")); readErr == nil && len(got) == len(body) {
 		t.Error("a truncated entry was written out at full length")
 	}
@@ -227,7 +211,6 @@ func TestSafeJoin(t *testing.T) {
 
 	bad := []string{"../escape", "../../escape", "sub/../../escape", ".."}
 	if runtime.GOOS == "windows" {
-		// A drive, an alternate data stream, or a device rather than a file.
 		bad = append(bad, `C:\escape`, "C:escape", "a:stream", "NUL", "sub/con")
 	}
 	for _, name := range bad {
@@ -248,8 +231,6 @@ func TestArchiveDownloadNeedsTar(t *testing.T) {
 	}
 }
 
-// TestExtractTarStripsTheArchiverWrapper: the archiver names its top directory
-// after the request, and the destination already stands for it.
 func TestExtractTarStripsTheArchiverWrapper(t *testing.T) {
 	box := newFakeBox(t)
 	e := box.engine(Options{Overwrite: true})
@@ -274,9 +255,7 @@ func TestExtractTarStripsTheArchiverWrapper(t *testing.T) {
 	}
 }
 
-// TestStripArchiveRootOnlyRemovesTheNamedWrapper guards the obvious wrong fix:
-// stripping the first component of every entry regardless of what it is.
-func TestStripArchiveRootOnlyRemovesTheNamedWrapper(t *testing.T) {
+func TestStripArchiveRoot(t *testing.T) {
 	tests := []struct {
 		name, strip, want string
 	}{
@@ -284,12 +263,9 @@ func TestStripArchiveRootOnlyRemovesTheNamedWrapper(t *testing.T) {
 		{"tree/sub/b.txt", "tree", "sub/b.txt"},
 		{"tree", "tree", ""},
 		{"tree/", "tree", ""},
-		// Not the wrapper: a real directory that must survive.
 		{"other/a.txt", "tree", "other/a.txt"},
-		// No wrapper expected at all, as when a test builds a flat archive.
 		{"a.txt", "", "a.txt"},
 		{"sub/b.txt", "", "sub/b.txt"},
-		// A prefix that merely looks similar is not the wrapper.
 		{"treehouse/a.txt", "tree", "treehouse/a.txt"},
 	}
 	for _, tt := range tests {

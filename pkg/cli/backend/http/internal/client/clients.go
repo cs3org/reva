@@ -29,8 +29,7 @@ import (
 
 const ocsClients = "/ocs/v1.php/cloud/user/clients"
 
-// ConnectedClient is one app password: a long-lived credential belonging to a
-// sync client, a script, or a batch job.
+// ConnectedClient is one app password.
 type ConnectedClient struct {
 	ID          string `json:"id"`
 	Name        string `json:"name,omitempty"`
@@ -39,7 +38,6 @@ type ConnectedClient struct {
 	LastSeenAt  string `json:"last_seen_at,omitempty"`
 }
 
-// ocsEnvelope is the OCS response wrapper.
 type ocsEnvelope[T any] struct {
 	OCS struct {
 		Meta struct {
@@ -77,8 +75,8 @@ func (c *Client) ListConnectedClients(ctx context.Context) ([]ConnectedClient, e
 	return env.OCS.Data, nil
 }
 
-// RevokeConnectedClient deletes an app password. It is idempotent server side,
-// so revoking an id that is already gone is not an error.
+// RevokeConnectedClient deletes an app password. Revoking an id that is already
+// gone is not an error.
 func (c *Client) RevokeConnectedClient(ctx context.Context, id string) error {
 	resp, err := c.do(ctx, request{
 		method: http.MethodDelete,

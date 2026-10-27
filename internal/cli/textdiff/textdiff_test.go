@@ -54,7 +54,6 @@ func TestOneLineChanged(t *testing.T) {
 }
 
 func TestAddedAndRemoved(t *testing.T) {
-	// Added to an empty file.
 	got := Unified("", "one\ntwo\n", opts())
 	if !strings.Contains(got, "+one") || !strings.Contains(got, "+two") {
 		t.Errorf("additions missing:\n%s", got)
@@ -63,15 +62,12 @@ func TestAddedAndRemoved(t *testing.T) {
 		t.Errorf("nothing was removed, so nothing should be marked so:\n%s", got)
 	}
 
-	// Emptied.
 	got = Unified("one\ntwo\n", "", opts())
 	if !strings.Contains(got, "-one") || !strings.Contains(got, "-two") {
 		t.Errorf("removals missing:\n%s", got)
 	}
 }
 
-// TestUnchangedStretchIsSkipped is the point of hunks: a change at each end of a
-// long file must not print the whole file.
 func TestUnchangedStretchIsSkipped(t *testing.T) {
 	var a, b []string
 	a = append(a, "first")
@@ -86,11 +82,10 @@ func TestUnchangedStretchIsSkipped(t *testing.T) {
 
 	got := Unified(strings.Join(a, "\n")+"\n", strings.Join(b, "\n")+"\n", opts())
 
-	// Counted on the opening marker: each header contains "@@" twice.
+	// The header has "@@" twice, so count the opening marker.
 	if n := strings.Count(got, "@@ -"); n != 2 {
 		t.Errorf("want two hunks, got %d:\n%s", n, got)
 	}
-	// The middle is untouched and must not be printed.
 	if strings.Contains(got, "line 50") {
 		t.Errorf("the unchanged middle was printed:\n%s", got)
 	}
@@ -101,8 +96,6 @@ func TestUnchangedStretchIsSkipped(t *testing.T) {
 	}
 }
 
-// TestNearbyChangesShareAHunk: two changes closer together than twice the
-// context belong in one hunk, or the output repeats the lines between them.
 func TestNearbyChangesShareAHunk(t *testing.T) {
 	old := "a\nb\nc\nd\ne\nf\ng\n"
 	new := "A\nb\nc\nd\ne\nf\nG\n"
@@ -112,8 +105,6 @@ func TestNearbyChangesShareAHunk(t *testing.T) {
 	}
 }
 
-// TestHunkHeaderCountsLines: the @@ header has to describe the hunk, because
-// tools that consume a diff rely on it and a human reads it to find the place.
 func TestHunkHeaderCountsLines(t *testing.T) {
 	got := Unified("a\nb\nc\n", "a\nx\ny\nc\n", opts())
 	if !strings.Contains(got, "@@ -1,3 +1,4 @@") {
@@ -149,8 +140,6 @@ func TestColour(t *testing.T) {
 }
 
 func TestNoTrailingNewline(t *testing.T) {
-	// "a" and "a\n" are one line either way, so this is about not inventing a
-	// second, empty one.
 	if got := Unified("a", "a\n", opts()); got != "" {
 		t.Errorf("a missing final newline should not read as a change:\n%q", got)
 	}
@@ -169,16 +158,13 @@ func TestIsBinary(t *testing.T) {
 	if IsBinary(nil) {
 		t.Error("nothing is not binary")
 	}
-	// Only the start is examined, which is what keeps this cheap on a large file.
+	// Only the start is examined.
 	long := append([]byte(strings.Repeat("text\n", 4000)), 0)
 	if IsBinary(long) {
 		t.Error("a NUL past the sniffed prefix should not count")
 	}
 }
 
-// TestDiffIsMinimalAndReconstructs is the property that matters: applying the
-// edit script to the old text has to produce the new one, and adding a line
-// should cost one line rather than rewriting the file.
 func TestDiffIsMinimalAndReconstructs(t *testing.T) {
 	rng := rand.New(rand.NewSource(7))
 	for range 200 {
@@ -187,7 +173,6 @@ func TestDiffIsMinimalAndReconstructs(t *testing.T) {
 
 		ops := diff(a, b)
 
-		// Reconstruct both sides from the script.
 		var gotOld, gotNew []string
 		for _, op := range ops {
 			switch op.kind {
@@ -236,7 +221,6 @@ func randomLines(rng *rand.Rand, n int) []string {
 	return out
 }
 
-// mutate makes a plausible edit: a few insertions, deletions and changes.
 func mutate(rng *rand.Rand, a []string) []string {
 	b := append([]string{}, a...)
 	for range rng.Intn(6) {

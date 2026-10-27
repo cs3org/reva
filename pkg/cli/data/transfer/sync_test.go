@@ -26,7 +26,6 @@ import (
 	"time"
 )
 
-// syncFixture sets up a fake the server and a local tree for one sync test.
 type syncFixture struct {
 	t     *testing.T
 	box   *fakeBox
@@ -48,7 +47,6 @@ func (f *syncFixture) writeLocal(rel, body string) {
 	writeLocal(f.t, f.local, rel, []byte(body))
 }
 
-// touchLocal sets an mtime, so a test can express "the local copy is newer".
 func (f *syncFixture) touchLocal(rel string, at time.Time) {
 	f.t.Helper()
 	p := filepath.Join(f.local, filepath.FromSlash(rel))
@@ -93,8 +91,6 @@ func (f *syncFixture) pull(opts SyncOptions) *SyncStats {
 	return stats
 }
 
-// -- push ---------------------------------------------------------------------
-
 func TestSyncPushCreatesTree(t *testing.T) {
 	f := newSyncFixture(t, Options{})
 	f.writeLocal("a.txt", "alpha")
@@ -111,8 +107,6 @@ func TestSyncPushCreatesTree(t *testing.T) {
 	}
 }
 
-// TestSyncPushSkipsUnchanged is the property that makes sync usable on a large
-// tree: a second run must move nothing.
 func TestSyncPushSkipsUnchanged(t *testing.T) {
 	f := newSyncFixture(t, Options{})
 	f.writeLocal("a.txt", "alpha")
@@ -138,7 +132,6 @@ func TestSyncPushUpdatesChangedFile(t *testing.T) {
 	f.writeLocal("a.txt", "alpha")
 	f.push(SyncOptions{})
 
-	// Different size: unambiguously changed.
 	f.writeLocal("a.txt", "alpha and more")
 	stats := f.push(SyncOptions{})
 
@@ -148,8 +141,6 @@ func TestSyncPushUpdatesChangedFile(t *testing.T) {
 	f.box.requireContent(syncRemote+"/a.txt", []byte("alpha and more"))
 }
 
-// TestSyncPushUpdatesOnNewerMtime covers the same-size edit, where only the
-// timestamp distinguishes the two.
 func TestSyncPushUpdatesOnNewerMtime(t *testing.T) {
 	f := newSyncFixture(t, Options{})
 	f.writeLocal("a.txt", "alpha")
@@ -165,8 +156,6 @@ func TestSyncPushUpdatesOnNewerMtime(t *testing.T) {
 	f.box.requireContent(syncRemote+"/a.txt", []byte("AAAAA"))
 }
 
-// TestSyncPushWithoutDeleteKeepsExtras: without --delete, sync only adds and
-// updates, so a file that exists only on the destination survives.
 func TestSyncPushWithoutDeleteKeepsExtras(t *testing.T) {
 	f := newSyncFixture(t, Options{})
 	f.box.putFile(syncRemote+"/orphan.txt", []byte("keep me"))
@@ -237,8 +226,6 @@ func TestSyncIncludesHiddenWhenAsked(t *testing.T) {
 	f.box.requireContent(syncRemote+"/.hidden", []byte("secret"))
 }
 
-// -- pull ---------------------------------------------------------------------
-
 func TestSyncPullCreatesTree(t *testing.T) {
 	f := newSyncFixture(t, Options{})
 	f.box.mkdir(syncRemote + "/sub")
@@ -290,10 +277,6 @@ func TestSyncPullSkipsUnchanged(t *testing.T) {
 	}
 }
 
-// -- edge cases ---------------------------------------------------------------
-
-// TestSyncPushToMissingRemoteRoot: a first push must work without a
-// preparatory mkdir, so a missing root reads as an empty tree.
 func TestSyncPushToMissingRemoteRoot(t *testing.T) {
 	f := newSyncFixture(t, Options{})
 	f.writeLocal("a.txt", "alpha")
@@ -305,8 +288,6 @@ func TestSyncPushToMissingRemoteRoot(t *testing.T) {
 	f.box.requireContent(syncRemote+"/a.txt", []byte("alpha"))
 }
 
-// TestSyncDoesNotReplaceDirectoryWithFile: replacing a directory means deleting
-// a subtree, which a run without --delete must never do silently.
 func TestSyncDoesNotReplaceDirectoryWithFile(t *testing.T) {
 	f := newSyncFixture(t, Options{})
 	f.box.mkdir(syncRemote + "/collision")
@@ -371,8 +352,6 @@ func TestHasHiddenComponent(t *testing.T) {
 	}
 }
 
-// TestSyncPullCreatesTheDestination: taking a first copy of something is the
-// ordinary reason to pull, and the destination does not exist yet then.
 func TestSyncPullCreatesTheDestination(t *testing.T) {
 	box := newFakeBox(t)
 	box.mkdir("/eos/user/e/einstein/data")
@@ -392,8 +371,6 @@ func TestSyncPullCreatesTheDestination(t *testing.T) {
 	assertFile(t, filepath.Join(dest, "a.txt"), "a")
 }
 
-// TestSyncPushStillRequiresTheSource: the same leniency would be wrong here,
-// since an absent source would mirror an empty tree over the remote.
 func TestSyncPushStillRequiresTheSource(t *testing.T) {
 	box := newFakeBox(t)
 	box.mkdir("/eos/user/e/einstein/data")
@@ -407,14 +384,11 @@ func TestSyncPushStillRequiresTheSource(t *testing.T) {
 	}
 }
 
-// -- exclude ------------------------------------------------------------------
-
 func TestExcludedMatching(t *testing.T) {
 	for _, tc := range []struct {
 		pattern, rel string
 		want         bool
 	}{
-		// A pattern without a slash matches any component, at any depth.
 		{"*.o", "main.o", true},
 		{"*.o", "sub/main.o", true},
 		{"*.o", "main.c", false},
@@ -422,13 +396,11 @@ func TestExcludedMatching(t *testing.T) {
 		{"build", "build/app", true},
 		{"build", "sub/build/app", true},
 		{"build", "rebuild", false},
-		// A pattern with a slash matches the whole relative path.
 		{"build/*", "build/app", true},
 		{"build/*", "sub/build/app", false},
 		{"build/*", "build", false},
 		{"sub/*.o", "sub/main.o", true},
-		// A malformed pattern excludes nothing rather than everything: the
-		// alternative is a sync that silently copies no files at all.
+		// A malformed pattern excludes nothing.
 		{"[", "anything", false},
 	} {
 		t.Run(tc.pattern+" vs "+tc.rel, func(t *testing.T) {
@@ -458,10 +430,6 @@ func TestSyncExcludeLeavesFilesOut(t *testing.T) {
 	}
 }
 
-// TestSyncExcludeProtectsFromDelete is the property that makes --exclude safe
-// to combine with --delete: an excluded entry is invisible on both sides, so it
-// is neither copied nor removed. Were it invisible only on the source side,
-// --delete would take it as an entry the source does not have.
 func TestSyncExcludeProtectsFromDelete(t *testing.T) {
 	f := newSyncFixture(t, Options{})
 	f.box.putFile(syncRemote+"/notes.o", []byte("not mine to delete"))

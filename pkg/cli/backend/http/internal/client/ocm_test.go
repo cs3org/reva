@@ -33,42 +33,34 @@ import (
 func TestGenerateInvite(t *testing.T) {
 	f := newFakeServer(t)
 	f.on(http.MethodPost, ocmGenerateInvite, func(w http.ResponseWriter, r *http.Request) {
-		fmt.Fprint(w, `{"token":"abc123","description":"joint analysis","expiration":1767225600,
-		  "invite_link":"https://cernbox.test/ocm/invite?token=abc123"}`)
+		fmt.Fprint(w, `{"token":"abc123","description":"joint analysis","expiration":1767225600}`)
 	})
 
-	invite, err := f.client().GenerateInvite(context.Background(), "joint analysis", "")
+	invite, err := f.client().GenerateInvite(context.Background(), "joint analysis")
 	if err != nil {
 		t.Fatal(err)
 	}
 	if invite.Token != "abc123" {
 		t.Errorf("Token = %q", invite.Token)
 	}
-	if invite.Link == "" {
-		t.Error("the invite link is what the user has to pass on, and it was dropped")
-	}
 	if invite.Expiration == nil || !invite.Expiration.Equal(time.Unix(1767225600, 0)) {
 		t.Errorf("Expiration = %v", invite.Expiration)
 	}
 }
 
-func TestGenerateInviteOmitsEmptyFields(t *testing.T) {
+func TestGenerateInviteOmitsEmptyDescription(t *testing.T) {
 	f := newFakeServer(t)
 	f.on(http.MethodPost, ocmGenerateInvite, func(w http.ResponseWriter, r *http.Request) {
 		fmt.Fprint(w, `{"token":"abc123"}`)
 	})
 
-	if _, err := f.client().GenerateInvite(context.Background(), "", ""); err != nil {
+	if _, err := f.client().GenerateInvite(context.Background(), ""); err != nil {
 		t.Fatal(err)
 	}
 	body := f.lastRequest(http.MethodPost).Body
 	var sent map[string]string
 	if err := json.Unmarshal([]byte(body), &sent); err != nil {
 		t.Fatalf("body is not JSON: %v\n%s", err, body)
-	}
-	// Sending an empty recipient would ask the server to mail nobody.
-	if _, present := sent["recipient"]; present {
-		t.Errorf("recipient should be omitted when unset: %s", body)
 	}
 	if _, present := sent["description"]; present {
 		t.Errorf("description should be omitted when unset: %s", body)
@@ -81,22 +73,19 @@ func TestGenerateInviteWithoutToken(t *testing.T) {
 		fmt.Fprint(w, `{}`)
 	})
 
-	_, err := f.client().GenerateInvite(context.Background(), "", "")
+	_, err := f.client().GenerateInvite(context.Background(), "")
 	if err == nil || !strings.Contains(err.Error(), "no invitation token") {
 		t.Errorf("got %v, want a clear error", err)
 	}
 }
 
-// TestOCMUnavailableIsExplained: the sciencemesh service is optional, and a
-// bare 404 reads as "you have no invitations" rather than "this deployment does
-// not do federated sharing".
 func TestOCMUnavailableIsExplained(t *testing.T) {
 	f := newFakeServer(t)
 	f.on(http.MethodPost, ocmGenerateInvite, func(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "not found", http.StatusNotFound)
 	})
 
-	_, err := f.client().GenerateInvite(context.Background(), "", "")
+	_, err := f.client().GenerateInvite(context.Background(), "")
 	if err == nil {
 		t.Fatal("expected an error")
 	}
@@ -168,8 +157,6 @@ func TestAcceptedUsers(t *testing.T) {
 	if len(users) != 1 {
 		t.Fatalf("got %d users", len(users))
 	}
-	// The address is what gets passed to --with-remote, so the scheme must be
-	// stripped: "alice@https://other-lab.org" is not a recipient.
 	if got := users[0].Address(); got != "alice@other-lab.org" {
 		t.Errorf("Address() = %q, want alice@other-lab.org", got)
 	}
@@ -231,61 +218,23 @@ func TestListProviders(t *testing.T) {
 	}
 }
 
-// TestReceivedFederatedSharesFiltersOnTheOCMPrefix: sharedWithMe returns local
-// and federated shares in one listing, and only the id prefix tells them apart.
-func TestReceivedFederatedSharesFiltersOnTheOCMPrefix(t *testing.T) {
+func TestSharedWithMeMarksFederatedShares(t *testing.T) {
 	f := newFakeServer(t)
 	f.on(http.MethodGet, graphBeta+"/me/drive/sharedWithMe", func(w http.ResponseWriter, r *http.Request) {
 		fmt.Fprint(w, `{"value":[
 		  {"id":"local-1","name":"local-folder","@client.synchronize":true,
-		   "createdBy":{"user":{"id":"marie","displayName":"Marie Curie"}},
 		   "permissions":[{"id":"p1","roles":["`+RoleViewer+`"]}]},
 		  {"id":"ocm-1","name":"shared-data","@client.synchronize":true,
 		   "remoteItem":{"id":"`+OCMReceivedPrefix+`ABC","name":"shared-data"},
-		   "createdBy":{"user":{"id":"alice@other-lab.org","displayName":"Alice"}},
 		   "permissions":[{"id":"p2","roles":["`+RoleEditor+`"]}]}
 		]}`)
 	})
 
-	shares, err := f.client().ReceivedFederatedShares(context.Background())
+	items, err := f.client().SharedWithMe(context.Background())
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(shares) != 1 {
-		t.Fatalf("got %d federated shares, want only the OCM one: %+v", len(shares), shares)
-	}
-
-	s := shares[0]
-	if s.Name != "shared-data" {
-		t.Errorf("name = %q", s.Name)
-	}
-	if s.Owner != "alice@other-lab.org" {
-		t.Errorf("owner = %q", s.Owner)
-	}
-	// The provider is split out of the address, so a listing can show where a
-	// share came from without the reader parsing it.
-	if s.Provider != "other-lab.org" {
-		t.Errorf("provider = %q", s.Provider)
-	}
-	if s.Role != "editor" {
-		t.Errorf("role = %q", s.Role)
-	}
-	if !s.Accepted {
-		t.Error("the share should read as accepted")
-	}
-}
-
-func TestReceivedFederatedSharesWithNoneAtAll(t *testing.T) {
-	f := newFakeServer(t)
-	f.on(http.MethodGet, graphBeta+"/me/drive/sharedWithMe", func(w http.ResponseWriter, r *http.Request) {
-		fmt.Fprint(w, `{"value":[]}`)
-	})
-
-	shares, err := f.client().ReceivedFederatedShares(context.Background())
-	if err != nil {
-		t.Fatal(err)
-	}
-	if len(shares) != 0 {
-		t.Errorf("got %d shares, want none", len(shares))
+	if len(items) != 2 || items[0].Federated || !items[1].Federated {
+		t.Errorf("items = %+v, want only the second one federated", items)
 	}
 }

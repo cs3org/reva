@@ -50,8 +50,7 @@ func TestErrorMessage(t *testing.T) {
 	}
 }
 
-// TestExitCodes pins the codes documented in the README. Scripts depend on
-// them, so a change here is a breaking change.
+// Scripts depend on the exit codes.
 func TestExitCodes(t *testing.T) {
 	tests := []struct {
 		err  error
@@ -81,8 +80,6 @@ func TestExitCodeThroughWrapping(t *testing.T) {
 	}
 }
 
-// TestAuthAndPermissionStayDistinct guards the distinction scripts rely on:
-// 401 is worth retrying after kinit, 403 never is.
 func TestAuthAndPermissionStayDistinct(t *testing.T) {
 	unauth := FromStatus(http.StatusUnauthorized, "stat", "/eos/x", "")
 	forbidden := FromStatus(http.StatusForbidden, "stat", "/eos/x", "")
@@ -96,9 +93,6 @@ func TestAuthAndPermissionStayDistinct(t *testing.T) {
 	if ExitCode(unauth) == ExitCode(forbidden) {
 		t.Fatal("401 and 403 must not collapse to the same exit code")
 	}
-	// A 401 means a credential was sent and refused: having none fails
-	// earlier, with its own message. So the advice must not be "log in again",
-	// which is a loop, but where to look: which credential was used, and why.
 	if strings.Contains(unauth.Error(), "kinit") {
 		t.Errorf("the 401 message should not advise re-authenticating, got %q", unauth)
 	}

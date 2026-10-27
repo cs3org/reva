@@ -20,22 +20,18 @@ package output
 
 import (
 	"bytes"
+	"errors"
 	"strings"
 	"testing"
 	"time"
 )
 
-// clockFrom returns a clock a test can advance by hand, so rates and ETAs are
-// deterministic.
 func clockFrom(start time.Time, step *time.Duration) func() time.Time {
 	return func() time.Time { return start.Add(*step) }
 }
 
 var meterEpoch = time.Date(2026, 9, 23, 12, 0, 0, 0, time.UTC)
 
-// TestMeterNeverExceedsTheWidth is the property that matters most. A bar wider
-// than the window wraps, and one line of progress becomes a screenful of debris
-// that scrolls the useful output away.
 func TestMeterNeverExceedsTheWidth(t *testing.T) {
 	for _, width := range []int{200, 120, 80, 60, 40, 30, 20, 10, 5, 1} {
 		for _, done := range []int64{0, 1, 5 << 20, 100 << 20, 199 << 20, 200 << 20} {
@@ -48,8 +44,6 @@ func TestMeterNeverExceedsTheWidth(t *testing.T) {
 	}
 }
 
-// TestMeterLongLabelDoesNotCrowdOutTheNumbers: a deep path must not push the
-// figures off the line, because the figures are the point.
 func TestMeterLongLabelDoesNotCrowdOutTheNumbers(t *testing.T) {
 	m := &Meter{
 		label: "data/run3/2026/calibration/histograms-with-a-very-long-name.root",
@@ -67,14 +61,11 @@ func TestMeterLongLabelDoesNotCrowdOutTheNumbers(t *testing.T) {
 	if !strings.Contains(line, " 50%") {
 		t.Errorf("the percentage was crowded out:\n%q", line)
 	}
-	// Truncated from the front: the tail of a path is what distinguishes it.
 	if !strings.Contains(line, "histograms-with-a-very-long") && !strings.Contains(line, ".root") {
 		t.Errorf("the label lost its distinguishing end:\n%q", line)
 	}
 }
 
-// TestMeterWithoutATotalShowsNoPercentage: a live handover of a pipe has no length
-// until it ends, and a bar that guessed one would be making it up.
 func TestMeterWithoutATotalShowsNoPercentage(t *testing.T) {
 	m := &Meter{label: "stdin", total: -1, done: 5 << 20}
 	line := m.render(80, 2*time.Second)
@@ -102,8 +93,7 @@ func TestMeterPercentageAndBarTrackProgress(t *testing.T) {
 		{50, " 50%"},
 		{99, " 99%"},
 		{100, "100%"},
-		// More than the total, which a server reporting a stale size can produce.
-		// Claiming 143% would look like a bug in the transfer.
+		// A stale size on the server can give more than the total.
 		{143, "100%"},
 	}
 	for _, c := range cases {
@@ -115,8 +105,6 @@ func TestMeterPercentageAndBarTrackProgress(t *testing.T) {
 	}
 }
 
-// TestMeterBarIsNeverOverfilled: the filled portion has to stay inside the bar
-// even when the reported total is wrong.
 func TestMeterBarIsNeverOverfilled(t *testing.T) {
 	m := &Meter{label: "f", total: 100, done: 500}
 	line := m.render(80, time.Second)
@@ -129,7 +117,6 @@ func TestMeterBarIsNeverOverfilled(t *testing.T) {
 }
 
 func TestMeterRateAndETA(t *testing.T) {
-	// 100 MiB in 10 seconds is 10 MiB/s, with 100 MiB left, so ten seconds to go.
 	m := &Meter{label: "f", total: 200 << 20, done: 100 << 20}
 	line := m.render(100, 10*time.Second)
 
@@ -141,8 +128,6 @@ func TestMeterRateAndETA(t *testing.T) {
 	}
 }
 
-// TestMeterNoETAWhenItWouldBeMeaningless: before anything has moved there is no
-// rate, so an ETA would be a fabrication or a division by zero.
 func TestMeterNoETAWhenItWouldBeMeaningless(t *testing.T) {
 	fresh := &Meter{label: "f", total: 100, done: 0}
 	if line := fresh.render(80, 0); strings.Contains(line, "eta") {
@@ -154,21 +139,17 @@ func TestMeterNoETAWhenItWouldBeMeaningless(t *testing.T) {
 	}
 }
 
-// TestMeterRedrawIsThrottled: a bar rewritten on every read is wasted work on a
-// fast link and visibly worse on a slow terminal.
 func TestMeterRedrawIsThrottled(t *testing.T) {
 	var buf bytes.Buffer
 	step := time.Duration(0)
 	m := NewMeter(&buf, "f", 1000, MeterWidth(80), MeterClock(clockFrom(meterEpoch, &step)))
 
-	// The first update draws.
 	m.Add(100)
 	first := strings.Count(buf.String(), "\r")
 	if first != 1 {
 		t.Fatalf("the first update should draw once, got %d", first)
 	}
 
-	// Ten more within the interval draw nothing.
 	for range 10 {
 		step += 5 * time.Millisecond
 		m.Add(10)
@@ -177,7 +158,6 @@ func TestMeterRedrawIsThrottled(t *testing.T) {
 		t.Errorf("updates inside the interval should not redraw, got %d draws", got)
 	}
 
-	// Past the interval, one more draw.
 	step += meterRedraw
 	m.Add(10)
 	if got := strings.Count(buf.String(), "\r"); got != 2 {
@@ -185,8 +165,6 @@ func TestMeterRedrawIsThrottled(t *testing.T) {
 	}
 }
 
-// TestMeterStopErasesItsLine: the command prints its own summary afterwards, and a
-// half-overwritten bar above it is the mess this avoids.
 func TestMeterStopErasesItsLine(t *testing.T) {
 	var buf bytes.Buffer
 	step := time.Duration(0)
@@ -208,22 +186,17 @@ func TestMeterStopErasesItsLine(t *testing.T) {
 		t.Errorf("the erase should write only blanks:\n%q", erased)
 	}
 
-	// Stopping twice must not write again, since the line is already gone.
 	buf.Reset()
 	m.Stop()
 	if buf.Len() != 0 {
 		t.Errorf("a second Stop wrote %q", buf.String())
 	}
-	// And nothing draws after a stop.
 	m.Add(100)
 	if buf.Len() != 0 {
 		t.Errorf("an update after Stop wrote %q", buf.String())
 	}
 }
 
-// TestMeterWithABarFillsTheWidthExactly: the bar takes whatever the numbers do
-// not, so the line is the full width whatever the state. That is why the padding
-// below only has to cover the case where there is no bar to absorb the slack.
 func TestMeterWithABarFillsTheWidthExactly(t *testing.T) {
 	for _, done := range []int64{1, 40, 99, 100} {
 		m := &Meter{label: "f", total: 100, done: done}
@@ -234,9 +207,6 @@ func TestMeterWithABarFillsTheWidthExactly(t *testing.T) {
 	}
 }
 
-// TestMeterShrinkingLineIsPaddedOver: without a total there is no bar to absorb
-// the slack, so a line that gets shorter has to be wiped or its tail lingers as
-// nonsense left over from the previous draw.
 func TestMeterShrinkingLineIsPaddedOver(t *testing.T) {
 	var buf bytes.Buffer
 	step := time.Duration(0)
@@ -258,16 +228,12 @@ func TestMeterShrinkingLineIsPaddedOver(t *testing.T) {
 		t.Errorf("the shorter line was not padded over the longer one:\nlong:  %q\nshort: %q",
 			longLine, shortDraw)
 	}
-	// The padding has to cover exactly what the previous line occupied, so nothing
-	// of it survives.
 	if got := len([]rune(shortDraw)) - 1; got < len([]rune(longLine)) {
 		t.Errorf("the redraw covers %d columns, the previous line used %d:\n%q",
 			got, len([]rune(longLine)), shortDraw)
 	}
 }
 
-// TestMeterWriterCountsWhatPasses: this is how a plain io.Copy gets a bar, so the
-// bytes have to reach the destination unchanged as well as be counted.
 func TestMeterWriterCountsWhatPasses(t *testing.T) {
 	var bar, sink bytes.Buffer
 	step := time.Duration(0)
@@ -290,7 +256,6 @@ func TestMeterWriterCountsWhatPasses(t *testing.T) {
 	}
 }
 
-// TestMeterWriterPropagatesErrors: a bar must not swallow a failed write.
 func TestMeterWriterPropagatesErrors(t *testing.T) {
 	var bar bytes.Buffer
 	m := NewMeter(&bar, "f", 10, MeterWidth(80))
@@ -303,27 +268,18 @@ func TestMeterWriterPropagatesErrors(t *testing.T) {
 
 type failingWriter struct{}
 
-func (failingWriter) Write([]byte) (int, error) { return 0, errWriteFailed }
-
-var errWriteFailed = errTest("write failed")
-
-type errTest string
-
-func (e errTest) Error() string { return string(e) }
+func (failingWriter) Write([]byte) (int, error) { return 0, errors.New("write failed") }
 
 func TestMeterSetTakesAnAbsolutePosition(t *testing.T) {
 	var buf bytes.Buffer
 	step := time.Duration(0)
 	m := NewMeter(&buf, "f", -1, MeterWidth(80), MeterClock(clockFrom(meterEpoch, &step)))
 
-	// A total learned late, as the transfer engine reports it.
 	m.Set(25, 100)
 	if !strings.Contains(buf.String(), " 25%") {
 		t.Errorf("Set should have supplied both position and total:\n%q", buf.String())
 	}
 
-	// A zero total must not erase one already known, or the bar would lose its
-	// scale partway through.
 	step += meterRedraw
 	buf.Reset()
 	m.Set(50, 0)
@@ -395,7 +351,6 @@ func TestTrimToWidth(t *testing.T) {
 	if got := trimToWidth("hello", 0); got != "" {
 		t.Errorf("got %q", got)
 	}
-	// Runes, not bytes: cutting a multi-byte character in half produces mojibake.
 	if got := trimToWidth("héllo, world", 4); len([]rune(got)) != 4 {
 		t.Errorf("got %q (%d runes)", got, len([]rune(got)))
 	}
