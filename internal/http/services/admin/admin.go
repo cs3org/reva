@@ -30,31 +30,25 @@ import (
 	"github.com/cs3org/reva/v3/pkg/admin/adminpb"
 	"github.com/cs3org/reva/v3/pkg/appctx"
 	"github.com/cs3org/reva/v3/pkg/rhttp/global"
+	"github.com/cs3org/reva/v3/pkg/rhttp/router"
 	"github.com/cs3org/reva/v3/pkg/service"
 	"github.com/cs3org/reva/v3/pkg/utils/cfg"
-	"github.com/go-chi/chi/v5"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
 )
 
+// mount is where the service is served.
+const mount = "/admin"
+
 func init() {
 	global.Register("admin", New)
 }
 
-type config struct {
-	Prefix string `mapstructure:"prefix"`
-}
-
-func (c *config) ApplyDefaults() {
-	if c.Prefix == "" {
-		c.Prefix = "admin"
-	}
-}
+type config struct{}
 
 type svc struct {
-	conf   *config
-	router *chi.Mux
+	conf *config
 }
 
 // New returns the HTTP admin service.
@@ -63,19 +57,19 @@ func New(ctx context.Context, m map[string]any) (global.Service, error) {
 	if err := cfg.Decode(m, &c); err != nil {
 		return nil, err
 	}
-	s := &svc{conf: &c, router: chi.NewRouter()}
-	s.router.Get("/status", s.handleStatus)
-	s.router.Post("/impersonate", s.handleImpersonate)
-	return s, nil
+	return &svc{conf: &c}, nil
 }
 
 func (s *svc) Close() error { return nil }
 
-func (s *svc) Prefix() string { return s.conf.Prefix }
-
-func (s *svc) Unprotected() []string { return nil }
-
-func (s *svc) Handler() http.Handler { return s.router }
+// Routes declares the admin endpoints. Both identify the caller, so both are
+// behind the auth middleware.
+func (s *svc) Routes(r *router.Router) {
+	r.Group(mount, func(r *router.Router) {
+		r.Get("/status", s.handleStatus)
+		r.Post("/impersonate", s.handleImpersonate)
+	})
+}
 
 type statusResponse struct {
 	Admin bool `json:"admin"`

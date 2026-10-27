@@ -62,7 +62,6 @@ import (
 	"github.com/cs3org/reva/v3/pkg/sharehierarchy"
 	"github.com/cs3org/reva/v3/pkg/utils"
 	"github.com/cs3org/reva/v3/pkg/utils/resourceid"
-	"github.com/go-chi/chi/v5"
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog"
 )
@@ -269,7 +268,7 @@ func (h *Handler) CreateShare(w http.ResponseWriter, r *http.Request) {
 // NotifyShare handles POST requests on /apps/files_sharing/api/v1/shares/(shareid)/notify.
 func (h *Handler) NotifyShare(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
-	opaqueID := strings.TrimSpace(chi.URLParam(r, "shareid"))
+	opaqueID := strings.TrimSpace(r.PathValue("shareid"))
 	if opaqueID == "" {
 		opaqueID = strings.TrimSpace(r.FormValue("share_id"))
 	}
@@ -520,7 +519,7 @@ type PublicShareContextName string
 func (h *Handler) GetShare(w http.ResponseWriter, r *http.Request) {
 	var share *conversions.ShareData
 	var resourceID *provider.ResourceId
-	shareID := chi.URLParam(r, "shareid")
+	shareID := r.PathValue("shareid")
 	ctx := r.Context()
 	log := appctx.GetLogger(r.Context())
 	log.Debug().Str("shareID", shareID).Msg("get share by id")
@@ -633,7 +632,7 @@ func (h *Handler) GetShare(w http.ResponseWriter, r *http.Request) {
 
 // UpdateShare handles PUT requests on /apps/files_sharing/api/v1/shares/(shareid).
 func (h *Handler) UpdateShare(w http.ResponseWriter, r *http.Request) {
-	shareID := chi.URLParam(r, "shareid")
+	shareID := r.PathValue("shareid")
 	// FIXME: isPublicShare is already doing a GetShare and GetPublicShare,
 	// we should just reuse that object when doing updates
 	if h.isPublicShare(r, shareID) {
@@ -821,7 +820,7 @@ func (h *Handler) updateFederatedShare(w http.ResponseWriter, r *http.Request, s
 
 // RemoveShare handles DELETE requests on /apps/files_sharing/api/v1/shares/(shareid).
 func (h *Handler) RemoveShare(w http.ResponseWriter, r *http.Request) {
-	shareID := chi.URLParam(r, "shareid")
+	shareID := r.PathValue("shareid")
 	switch {
 	case h.isPublicShare(r, shareID):
 		h.removePublicShare(w, r, shareID)
