@@ -34,8 +34,7 @@ import (
 type fakeKind struct {
 	items []Item
 	err   error
-	// seen collects what Notice got, by recipient.
-	seen map[string][]string
+	seen  map[string][]string
 }
 
 func (k *fakeKind) Event() string { return "fake" }

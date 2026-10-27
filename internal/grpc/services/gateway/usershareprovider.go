@@ -86,8 +86,8 @@ func (s *svc) CreateShare(ctx context.Context, req *collaboration.CreateShareReq
 		},
 	})
 
-	// We expect a "not found" when querying ID 0: a CODE_NOT_FOUND status,
-	// or from an older provider an error, which loses its type over grpc.
+	// Share 0 must be not found, as a status or as an error. An error loses
+	// its type over grpc, so we match its text.
 	notFound := err == nil && pingRes.GetStatus().GetCode() == rpc.Code_CODE_NOT_FOUND ||
 		err != nil && strings.HasSuffix(err.Error(), errtypes.NotFound("0").Error())
 	if !notFound {

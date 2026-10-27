@@ -87,7 +87,6 @@ func TestSpaceQuota(t *testing.T) {
 		t.Fatalf("project quota: %+v %v", q, err)
 	}
 
-	// a space with no project quota falls back to the user quota of its owner
 	q, err = fs.GetSpaceQuota(ctx, storage.SpaceQuotaRef{Root: "/b/bob", Type: spaces.SpaceTypeHome, Owner: bob})
 	if err != nil || q.Form != quotaFormUser || q.MaxBytes != 20 {
 		t.Fatalf("user quota: %+v %v", q, err)

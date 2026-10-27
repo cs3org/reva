@@ -82,7 +82,6 @@ func TestExpiringPagesByExpirationAndID(t *testing.T) {
 	want := []string{seed(t, s, "a", now.Add(3*day)), seed(t, s, "b", now.Add(3*day)), seed(t, s, "c", now.Add(5*day))}
 	seed(t, s, "d", now.Add(10*day))
 
-	// the arguments arrive as strings over the control channel
 	args := map[string]any{"from": now.Format(time.RFC3339), "to": now.Add(7 * day).Format(time.RFC3339), "limit": "2"}
 	var got []string
 	for range 3 {
@@ -139,7 +138,6 @@ var (
 		{Id: &provider.ResourceId{StorageId: "project", OpaqueId: "200", SpaceId: "project-x"}, Path: "/eos/project/x/xproj/data", Owner: user("cbox").Id, Type: provider.ResourceType_RESOURCE_TYPE_CONTAINER},
 		{Id: &provider.ResourceId{StorageId: "home2", OpaqueId: "300", SpaceId: "home-feynman"}, Path: "/home/feynman/doc", Owner: user("feynman").Id, Type: provider.ResourceType_RESOURCE_TYPE_FILE},
 	}
-	// granters tells who may change the grants of a resource, by storage.
 	granters = map[string][]string{"home": {"einstein"}, "project": {"cbox", "admin1", "admin2"}, "home2": {"feynman"}}
 )
 
@@ -166,9 +164,8 @@ var gw = &fakeGateway{}
 // grants of the resource.
 type fakeGateway struct {
 	gateway.GatewayAPIClient
-	svc *service
-	mu  sync.Mutex
-	// actedAs records the callers whose link update or removal was done.
+	svc     *service
+	mu      sync.Mutex
 	actedAs []string
 }
 
@@ -257,8 +254,6 @@ func as(name string) context.Context {
 	return appctx.ContextSetUser(context.Background(), users[name])
 }
 
-// createLink creates a link on path as owner, with initiator as its initiator,
-// and returns its id and its token.
 func createLink(t *testing.T, s *service, path, owner, initiator string, exp time.Time, password string) (string, string) {
 	t.Helper()
 	grant := &link.Grant{
@@ -410,8 +405,6 @@ func TestGet(t *testing.T) {
 	}
 }
 
-// The CS3 GetPublicShare answers a link that does not exist with a status
-// and no gRPC error.
 func TestGetPublicShareNotFoundStatus(t *testing.T) {
 	s := newService(t, &config{})
 	id, token := createLink(t, s, "/home/einstein/doc", "einstein", "richard", time.Time{}, "")
@@ -440,8 +433,7 @@ func TestGetPublicShareNotFoundStatus(t *testing.T) {
 
 func TestUpdate(t *testing.T) {
 	s := newService(t, &config{})
-	// richard initiated the link and has lost the right to change it, so
-	// the update is done as einstein, the owner.
+	// richard cannot change the link anymore, so the owner does it.
 	id, _ := createLink(t, s, "/home/einstein/doc", "einstein", "richard", time.Time{}, "")
 	ref, _ := linkRef(id, "")
 

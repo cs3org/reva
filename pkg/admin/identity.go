@@ -37,13 +37,11 @@ import (
 	"github.com/cs3org/reva/v3/pkg/token/manager/jwt"
 )
 
-// actAsTokenLifetime is short because the token is used only for the calls of
-// one invocation, on the server, and is never given to a client.
+// The token is used only on the server, for the calls of one invocation.
 const actAsTokenLifetime = 5 * time.Minute
 
-// Lookup finds a user by username through the gateway. The groups are
-// included, because a storage can use them to decide, for example whether
-// the user administers a project.
+// Lookup returns the user with the given username, with the groups. A storage
+// can need the groups, for example to know who administers a project.
 func Lookup(ctx context.Context, username string) (*userpb.User, error) {
 	if username == "" {
 		return nil, errors.New("admin: no username given")
@@ -66,9 +64,8 @@ func Lookup(ctx context.Context, username string) (*userpb.User, error) {
 	}
 }
 
-// As returns ctx acting as u: a call made with it is a call by u. An admin
-// invocation needs it because no CS3 endpoint accepts the admin token. The
-// token has the owner scope and is signed with the shared JWT secret.
+// As returns ctx acting as u. No CS3 endpoint accepts the admin token, so an
+// invocation mints a short token with the owner scope for u.
 func As(ctx context.Context, u *userpb.User) (context.Context, error) {
 	secret := sharedconf.GetJWTSecret("")
 	if secret == "" {
@@ -89,7 +86,7 @@ func As(ctx context.Context, u *userpb.User) (context.Context, error) {
 	return withToken(appctx.ContextSetUser(ctx, u), tkn), nil
 }
 
-// ActAs looks username up and returns ctx acting as that user.
+// ActAs returns ctx acting as the user with the given username.
 func ActAs(ctx context.Context, username string) (context.Context, *userpb.User, error) {
 	u, err := Lookup(ctx, username)
 	if err != nil {
@@ -102,11 +99,10 @@ func ActAs(ctx context.Context, username string) (context.Context, *userpb.User,
 	return uctx, u, nil
 }
 
-// ActAsFirst calls fn as each user in turn, until fn returns an OK status. A
-// user that cannot be looked up, or that the call refuses with not found or
-// permission denied, is skipped: the initiator of a share can have lost the
-// right on the resource, and the owner can be a deleted account. ActAsFirst
-// returns the user that fn was called as for the last time.
+// ActAsFirst calls fn as each user in turn, until fn returns an OK status. It
+// skips a user that is not found or is refused, because the initiator of a
+// share can have lost the right and the owner can be a deleted account. It
+// returns the last user that it called fn as.
 func ActAsFirst(ctx context.Context, users []string, fn func(uctx context.Context) (*rpc.Status, error)) (string, error) {
 	var err error = errtypes.BadRequest("no user to act as")
 	for _, u := range users {
@@ -131,8 +127,7 @@ func ActAsFirst(ctx context.Context, users []string, fn func(uctx context.Contex
 	return "", err
 }
 
-// Users keeps one context per user for the length of one invocation, because
-// a list often acts as the same few users many times. Ctx is the context of
+// Users caches one context per user for one invocation. Ctx is the context of
 // the invocation.
 type Users struct {
 	Ctx  context.Context
@@ -158,9 +153,8 @@ func (c *Users) As(username string) context.Context {
 	return uctx
 }
 
-// ParseExpiry parses the expiration argument of an invocation: a date at
-// midnight local time, an RFC 3339 time, or none, which is returned as a zero
-// timestamp.
+// ParseExpiry parses a date (midnight local time), an RFC 3339 time, or "none"
+// (a zero timestamp).
 func ParseExpiry(v string) (*typespb.Timestamp, error) {
 	if v == "none" {
 		return &typespb.Timestamp{}, nil

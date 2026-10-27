@@ -58,16 +58,13 @@ type Report struct {
 	DryRun     bool  `json:"dry_run"`
 }
 
-// Due is an item that a run sends, with the level already sent in its
-// episode.
+// Due is an item that a run sends, with the level already sent.
 type Due struct {
 	Item
 	LevelSent int
 }
 
-// Run scans the kind, claims the items that are due, sends one notification
-// for each recipient and closes the episodes that the scan did not see. It
-// keeps the report as the last run of the kind.
+// Run sends the reminders that are due and records the report as the last run.
 func (r *Runner) Run(ctx context.Context) (Report, error) {
 	start := r.Now().UTC()
 	report, err := r.run(ctx, start, r.DryRun, nil)
@@ -82,8 +79,7 @@ func (r *Runner) Run(ctx context.Context) (Report, error) {
 	return report, err
 }
 
-// Check scans the kind like a dry run and returns at most limit of the items
-// that are due.
+// Check scans like a dry run and returns at most limit due items.
 func (r *Runner) Check(ctx context.Context, limit int) (Report, []Due, error) {
 	var due []Due
 	report, err := r.run(ctx, r.Now().UTC(), true, func(d Due) {

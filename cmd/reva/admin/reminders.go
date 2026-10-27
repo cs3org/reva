@@ -34,7 +34,6 @@ import (
 )
 
 func remindersCommand() *cobra.Command {
-	// run wraps the subcommands that need only the client and the output.
 	run := func(f func(ctx context.Context, client adminpb.AdminAPIClient, w io.Writer, args []string) error) func(*cobra.Command, []string) error {
 		return func(cmd *cobra.Command, args []string) error {
 			client, ctx, err := rt.Admin(cmd.Context())
@@ -63,7 +62,6 @@ func remindersCommand() *cobra.Command {
 		}),
 	}
 
-	// filterFlags adds the filters that state and history share.
 	type filterOpts struct {
 		kind, recipient, subject string
 		limit                    int
@@ -140,8 +138,7 @@ func remindersCommand() *cobra.Command {
 	return cmd
 }
 
-// remindersInvoke runs an invocation and decodes the first answer. Every
-// instance reads the same database.
+// remindersInvoke decodes the first answer, because every instance reads the same database.
 func remindersInvoke(ctx context.Context, client adminpb.AdminAPIClient, selector, invocation string, args map[string]string, out any) error {
 	res, err := client.Invoke(ctx, &adminpb.InvokeRequest{Service: selector, Invocation: invocation, Args: args})
 	if err != nil {
@@ -161,7 +158,6 @@ func remindersInvoke(ctx context.Context, client adminpb.AdminAPIClient, selecto
 	return errors.Join(failures...)
 }
 
-// remindersTab is a tabwriter on w, laid out like newTab.
 func remindersTab(w io.Writer) *tabwriter.Writer { return tabwriter.NewWriter(w, 0, 2, 2, ' ', 0) }
 
 func remindersKinds(ctx context.Context, client adminpb.AdminAPIClient, w io.Writer) error {
@@ -268,7 +264,7 @@ func remindersHistory(ctx context.Context, client adminpb.AdminAPIClient, w io.W
 	})
 }
 
-// remindersCheck runs check on one instance only: it scans the source.
+// remindersCheck asks one instance only, because the scan reads the source.
 func remindersCheck(ctx context.Context, client adminpb.AdminAPIClient, w io.Writer, kind string, n int) error {
 	svcs, err := client.ListServices(ctx, &adminpb.ListServicesRequest{Service: "reminders"})
 	if err != nil {
@@ -321,8 +317,6 @@ func remindersCheck(ctx context.Context, client adminpb.AdminAPIClient, w io.Wri
 	})
 }
 
-// parseSince reads a number of days ("7d"), a Go duration ("12h") or an
-// RFC 3339 time.
 func parseSince(s string) (time.Time, error) {
 	if days, ok := strings.CutSuffix(s, "d"); ok {
 		if n, err := strconv.Atoi(days); err == nil {

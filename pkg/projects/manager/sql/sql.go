@@ -57,10 +57,10 @@ type Config struct {
 	// CacheTTL (seconds) determines how long the list of projects will be stored in a cache
 	// before a new database query is executed. The default, 0, corresponds to 60 seconds.
 	CacheTTL int `mapstructure:"cache_ttl"`
-	// Templates of the values that the Admin API derives from the name of a
-	// new project. They are text/template with the sprig functions, and the
-	// fields .Name and .Initial (the first letter of the name). With an empty
-	// template, the value is a required argument.
+	// Templates for the values of a new project, from its name. They use
+	// text/template with the sprig functions, and the fields .Name and .Initial
+	// (the first letter of the name). With an empty template, the Admin API
+	// requires the value.
 	PathTemplate         string `mapstructure:"path_template" docs:";Path of a new project"`
 	StorageIDTemplate    string `mapstructure:"storage_id_template" docs:";Storage id of a new project"`
 	ReadersGroupTemplate string `mapstructure:"readers_group_template" docs:";Readers group of a new project"`
@@ -69,10 +69,9 @@ type Config struct {
 }
 
 type ProjectsManager struct {
-	c     *Config
-	db    *gorm.DB
-	cache *ttlcache.Cache
-	// templates holds the parsed templates, by the name of the value.
+	c         *Config
+	db        *gorm.DB
+	cache     *ttlcache.Cache
 	templates map[string]*template.Template
 }
 
@@ -338,9 +337,8 @@ func (m *ProjectsManager) GetProject(ctx context.Context, name string) (*Project
 	return fetchedProject, nil
 }
 
-// SpaceByID returns the active project with the given space ID, with its
-// roles, whoever the caller is. It is for operators and services that act on
-// all projects; the CS3 calls only show a project to its members.
+// SpaceByID returns the active project with the given space ID, whoever the
+// caller is. The CS3 calls only show a project to its members.
 func (m *ProjectsManager) SpaceByID(ctx context.Context, spaceID string) (*provider.StorageSpace, error) {
 	if _, id, ok := strings.Cut(spaceID, "$"); ok {
 		spaceID = id
@@ -402,7 +400,7 @@ func (m *ProjectsManager) ListAllProjects(ctx context.Context, status projects.P
 	return fetchedProjects, nil
 }
 
-// InvalidateCache drops the project list that this process caches.
+// InvalidateCache drops the cached project list of this process.
 func (m *ProjectsManager) InvalidateCache() {
 	_ = m.cache.Remove(cacheKey)
 }

@@ -134,9 +134,8 @@ func (Service) Register(ss *grpc.Server)       { controlpb.RegisterControlServer
 func (Service) Close() error                   { return nil }
 func (Service) UnprotectedEndpoints() []string { return nil }
 
-// errCode is the gRPC code of an invocation error. errtypes errors carry no
-// gRPC status, so status.Code would make them all Unknown and every caller
-// would have to match the message text.
+// errCode returns the gRPC code of err. An errtypes error has no gRPC status,
+// so status.Code gives Unknown for it.
 func errCode(err error) codes.Code {
 	if c := status.Code(err); c != codes.Unknown {
 		return c

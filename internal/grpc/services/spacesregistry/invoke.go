@@ -124,7 +124,6 @@ type checkArgs struct {
 	Owner  string                 `arg:"owner" help:"only projects owned by this user"`
 }
 
-// finding is one problem that check found in a project.
 type finding struct {
 	Kind   string `json:"kind"`
 	Detail string `json:"detail,omitempty"`
@@ -523,7 +522,6 @@ func (s *service) flushCache(_ context.Context, _ struct{}) (invoke.Result, erro
 	return invoke.Result{"flushed": true}, nil
 }
 
-// audit records a mutation of the project target, a name or a space id.
 func audit(ctx context.Context, action, target string, err error, fields map[string]string) {
 	maps.DeleteFunc(fields, func(_, v string) bool { return v == "" })
 	u, _ := appctx.ContextGetUser(ctx)
@@ -537,8 +535,6 @@ func audit(ctx context.Context, action, target string, err error, fields map[str
 	})
 }
 
-// adminSpace returns r as the protojson of the AdminSpace message of the
-// typed Admin API: the CS3 space, and what CS3 cannot carry.
 func adminSpace(r *projects.Record) (invoke.Result, error) {
 	b, err := protojson.Marshal(r.Space)
 	if err != nil {

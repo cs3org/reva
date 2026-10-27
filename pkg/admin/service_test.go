@@ -43,8 +43,8 @@ import (
 
 const testSecret = "admin-service-test-secret"
 
-// fakeGateway lets the interceptor resolve a gateway when it refuses a token,
-// and knows the user marie; any other call on it panics.
+// fakeGateway lets the interceptor resolve a gateway when it refuses a token;
+// it knows only the user marie and any other call panics.
 type fakeGateway struct{ service.Clients }
 
 func (fakeGateway) Gateway(context.Context) (gateway.GatewayAPIClient, error) {

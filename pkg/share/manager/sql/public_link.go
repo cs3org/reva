@@ -383,8 +383,7 @@ func (m *PublicShareMgr) ListPublicLinks(u *user.User, filters []*link.ListPubli
 	return links, nil
 }
 
-// ListPublicLinksInSpace returns the public links of one space that match the
-// filters, orphans included on request. The CS3 filters have no space type.
+// ListPublicLinksInSpace returns the public links of one space that match the filters.
 func (m *PublicShareMgr) ListPublicLinksInSpace(spaceID string, filters []*link.ListPublicSharesRequest_Filter, includeOrphans bool) ([]model.PublicLink, error) {
 	if spaceID == "" {
 		return nil, errtypes.BadRequest("no space id given")
@@ -402,9 +401,9 @@ func (m *PublicShareMgr) ListPublicLinksInSpace(spaceID string, filters []*link.
 	return links, nil
 }
 
-// ExpiringPublicLinks returns at most limit public links, not orphans, that
-// expire in [from, to), ordered by expiration and id, after the link with
-// afterExpiration and afterID. An afterID of 0 starts from the first link.
+// ExpiringPublicLinks returns at most limit links that are not orphans and
+// expire in [from, to), ordered by expiration and id, after the link at
+// (afterExpiration, afterID). An afterID of 0 starts from the first link.
 func (m *PublicShareMgr) ExpiringPublicLinks(from, to, afterExpiration time.Time, afterID uint, limit int) ([]model.PublicLink, error) {
 	// sqlite compares times as text, and the links are stored in local time.
 	from, to, afterExpiration = from.Local(), to.Local(), afterExpiration.Local()

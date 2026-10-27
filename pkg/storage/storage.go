@@ -98,22 +98,22 @@ type Registry interface {
 	GetHome(ctx context.Context) (*registry.ProviderInfo, error)
 }
 
-// Route is one entry of a routing table: the mount that serves a path.
+// Route maps a path to the mount that serves it.
 type Route struct {
 	Path    string `json:"path"`
 	MountID string `json:"mount_id"`
 }
 
-// Mount is a mount that serves a path, with the address of its provider.
+// Mount is a mount with the address of its provider.
 type Mount struct {
 	MountID   string `json:"mount_id"`
 	MountPath string `json:"mount_path"`
 	Address   string `json:"address"`
 }
 
-// RouteAdmin is implemented by a Registry that has a routing table an
-// operator can change at run time. AddRoute and RemoveRoute change only the
-// table: Reload applies it, and each instance must reload.
+// RouteAdmin is implemented by a Registry with a routing table that an operator
+// can change. AddRoute and RemoveRoute change only the table. Reload applies it,
+// and each instance must reload.
 type RouteAdmin interface {
 	ListRoutes(ctx context.Context) ([]Route, error)
 	ResolvePath(ctx context.Context, path string) ([]Mount, error)
@@ -128,8 +128,7 @@ type PathWrapper interface {
 	Wrap(ctx context.Context, rp string) (string, error)
 }
 
-// SpaceQuotaRef identifies the space of a quota. The driver chooses from the
-// space how its storage keeps the quota.
+// SpaceQuotaRef identifies the space of a quota.
 type SpaceQuotaRef struct {
 	// Root is the root of the space, relative to the storage.
 	Root  string
@@ -137,24 +136,20 @@ type SpaceQuotaRef struct {
 	Owner *userpb.UserId
 }
 
-// SpaceQuota is the quota of a space. The bytes are logical: the size of the
-// data that users see.
+// SpaceQuota is the quota of a space. The bytes are logical, as users see them.
 type SpaceQuota struct {
 	// Root is relative to the storage.
 	Root                string
 	MaxBytes, UsedBytes uint64
 	MaxFiles, UsedFiles uint64
-	// PhysicalMaxBytes is MaxBytes with the copies the storage keeps of each
-	// byte.
+	// PhysicalMaxBytes is MaxBytes with the copies that the storage keeps.
 	PhysicalMaxBytes uint64
-	// Form tells operators how the storage keeps this quota.
+	// Form tells how the storage keeps this quota.
 	Form string
 }
 
-// QuotaAdmin is the optional interface of a storage that lets administrators
-// read and set the quota of any space it serves, whoever the user of the
-// context is. It is not part of FS: users read their own quota with GetQuota
-// and never set one.
+// QuotaAdmin is implemented by a storage that lets administrators read and set
+// the quota of any space it serves, whoever the user of the context is.
 type QuotaAdmin interface {
 	GetSpaceQuota(ctx context.Context, ref SpaceQuotaRef) (*SpaceQuota, error)
 	// SetSpaceQuota returns the quota as the storage reports it after the
