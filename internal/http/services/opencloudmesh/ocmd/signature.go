@@ -29,9 +29,9 @@ import (
 )
 
 // verifySignature checks the OCM signature of r against the keys of the remote
-// server that disco describes.
-func verifySignature(ctx context.Context, c *OCMClient, r *http.Request, body []byte, disco *wellknown.OcmDiscoveryData) error {
-	err := httpsig.Verify(r, body, func() ([]byte, error) {
+// server that disco describes. endpoint is the public URL of this server.
+func verifySignature(ctx context.Context, c *OCMClient, r *http.Request, body []byte, endpoint string, disco *wellknown.OcmDiscoveryData) error {
+	err := httpsig.Verify(r, body, endpoint, func() ([]byte, error) {
 		if disco.JwksURI == "" {
 			return nil, errors.New("the remote OCM server publishes no jwksUri")
 		}

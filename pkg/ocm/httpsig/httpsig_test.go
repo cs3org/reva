@@ -143,11 +143,11 @@ func TestVerifyAppendixB(t *testing.T) {
 		r.Header.Set("Signature", "sig1=:Epax4XFqvbrrDzQUAaNl+uECasEKbArgz8AlEkXspvYX2fSkQFlCkaXImZnYU898C2t0IdmbFhjR8bkN0hZgCg==:")
 		jwks := func() ([]byte, error) { return []byte(appendixBJWKS), nil }
 
-		if err := Verify(r, []byte(appendixBBody), jwks); err != nil {
+		if err := Verify(r, []byte(appendixBBody), "", jwks); err != nil {
 			t.Fatalf("Verify() error = %v", err)
 		}
 		time.Sleep(maxAge + time.Second)
-		if err := Verify(r, []byte(appendixBBody), jwks); err == nil {
+		if err := Verify(r, []byte(appendixBBody), "", jwks); err == nil {
 			t.Error("expected an error for a signature older than maxAge")
 		}
 	})
@@ -177,30 +177,51 @@ func TestVerify(t *testing.T) {
 	}
 
 	t.Run("valid signature", func(t *testing.T) {
-		if err := Verify(signed(t), body, jwks); err != nil {
+		if err := Verify(signed(t), body, "", jwks); err != nil {
 			t.Fatalf("Verify() error = %v", err)
 		}
 	})
 	t.Run("no signature", func(t *testing.T) {
 		r := httptest.NewRequest(http.MethodPost, "https://cernbox.example.org/ocm/shares", bytes.NewReader(body))
-		if err := Verify(r, body, jwks); !errors.Is(err, ErrUnsigned) {
+		if err := Verify(r, body, "", jwks); !errors.Is(err, ErrUnsigned) {
 			t.Fatalf("Verify() error = %v, want ErrUnsigned", err)
 		}
 	})
 	t.Run("changed body", func(t *testing.T) {
-		if err := Verify(signed(t), []byte(`{"shareWith":"eve@cernbox.example.org"}`), jwks); err == nil {
+		if err := Verify(signed(t), []byte(`{"shareWith":"eve@cernbox.example.org"}`), "", jwks); err == nil {
 			t.Fatal("expected an error")
 		}
 	})
 	t.Run("other endpoint", func(t *testing.T) {
 		r := httptest.NewRequest(http.MethodPost, "https://cernbox.example.org/ocm/notifications", bytes.NewReader(body))
 		r.Header = signed(t).Header
-		if err := Verify(r, body, jwks); err == nil {
+		if err := Verify(r, body, "", jwks); err == nil {
+			t.Fatal("expected an error")
+		}
+	})
+	t.Run("endpoint behind a proxy", func(t *testing.T) {
+		r := signed(t)
+		r.RequestURI, r.Host = "/ocm/shares", "localhost:9143"
+		if err := Verify(r, body, "https://cernbox.example.org", jwks); err != nil {
+			t.Fatalf("Verify() error = %v", err)
+		}
+	})
+	t.Run("replay with the Host of the server that got the request", func(t *testing.T) {
+		r := httptest.NewRequest(http.MethodPost, "https://other.example.org/ocm/shares", bytes.NewReader(body))
+		if err := key.Sign(r, body); err != nil {
+			t.Fatal(err)
+		}
+		r.RequestURI = "/ocm/shares"
+		r.Header.Set("X-Forwarded-Proto", "https")
+		if err := Verify(r, body, "", jwks); err != nil {
+			t.Fatalf("without an endpoint, Verify() error = %v", err)
+		}
+		if err := Verify(r, body, "https://cernbox.example.org", jwks); err == nil {
 			t.Fatal("expected an error")
 		}
 	})
 	t.Run("unknown kid", func(t *testing.T) {
-		if err := Verify(signed(t), body, func() ([]byte, error) { return other.JWKS() }); err == nil {
+		if err := Verify(signed(t), body, "", func() ([]byte, error) { return other.JWKS() }); err == nil {
 			t.Fatal("expected an error")
 		}
 	})
@@ -210,7 +231,7 @@ func TestVerify(t *testing.T) {
 			v := r.Header.Get(h)
 			r.Header.Set(h, v+", "+strings.Replace(v, tag+"=", "second=", 1))
 		}
-		if err := Verify(r, body, jwks); err == nil || errors.Is(err, ErrUnsigned) {
+		if err := Verify(r, body, "", jwks); err == nil || errors.Is(err, ErrUnsigned) {
 			t.Fatalf("Verify() error = %v, want a rejection", err)
 		}
 	})

@@ -39,11 +39,13 @@ import (
 
 type invitesHandler struct {
 	trustForwardedFor bool
+	endpoint          string
 	ocmClient         *OCMClient
 }
 
 func (h *invitesHandler) init(c *config) error {
 	h.trustForwardedFor = c.TrustForwardedFor
+	h.endpoint = c.Endpoint
 	return nil
 }
 
@@ -114,7 +116,7 @@ func (h *invitesHandler) AcceptInvite(w http.ResponseWriter, r *http.Request) {
 		reqres.WriteError(w, r, reqres.APIErrorUntrustedService, "error discovering the remote OCM server", err)
 		return
 	}
-	if err := verifySignature(ctx, h.ocmClient, r, body, disco); err != nil {
+	if err := verifySignature(ctx, h.ocmClient, r, body, h.endpoint, disco); err != nil {
 		reqres.WriteError(w, r, reqres.APIErrorUntrustedService, "invalid HTTP signature", err)
 		return
 	}

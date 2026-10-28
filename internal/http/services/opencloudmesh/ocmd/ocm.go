@@ -51,6 +51,10 @@ type config struct {
 	// TrustForwardedFor reads the sender IP from X-Forwarded-For. Enable it only
 	// behind a reverse proxy that sets the header, else peers can spoof it.
 	TrustForwardedFor bool `mapstructure:"trust_forwarded_for"`
+	// Endpoint is the public URL of this server, the same as the endpoint of the
+	// wellknown ocmprovider. Set it to stop the replay of signed requests through a
+	// false Host header. If it is empty, the scheme and host come from the request.
+	Endpoint string `mapstructure:"endpoint" validate:"omitempty,http_url"`
 	// OCMClientInsecure skips TLS verification when probing a remote provider's
 	// discovery endpoint. Off by default; turning it on exposes discovery to MITM.
 	OCMClientInsecure bool `mapstructure:"ocm_client_insecure"`
