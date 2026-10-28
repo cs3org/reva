@@ -19,6 +19,7 @@
 package ocmd
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -35,6 +36,7 @@ import (
 	ocmv1beta1 "github.com/cs3org/go-cs3apis/cs3/sharing/ocm/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/cs3org/reva/v3/pkg/auth/scope"
+	"github.com/cs3org/reva/v3/pkg/ocm/client"
 	jwt "github.com/cs3org/reva/v3/pkg/token/manager/jwt"
 	"google.golang.org/grpc"
 )
@@ -64,6 +66,13 @@ func (m *tokenMockGW) Authenticate(_ context.Context, req *gateway.AuthenticateR
 	}, nil
 }
 
+// noOCMServer answers every request with 404, like a client_id that names no OCM server.
+type noOCMServer struct{}
+
+func (noOCMServer) RoundTrip(*http.Request) (*http.Response, error) {
+	return &http.Response{StatusCode: http.StatusNotFound, Body: http.NoBody}, nil
+}
+
 func setupTokenHandler(t *testing.T, statusCode rpc.Code, gwErr error) (*tokenHandler, *tokenMockGW) {
 	t.Helper()
 	tokenmgr, err := jwt.New(map[string]any{"secret": "test-secret-for-token-handler", "expires": int64(3600)})
@@ -90,7 +99,8 @@ func setupTokenHandler(t *testing.T, statusCode rpc.Code, gwErr error) (*tokenHa
 
 	stampGateway(mockGW)
 	return &tokenHandler{
-		tokenmgr: tokenmgr,
+		tokenmgr:  tokenmgr,
+		ocmClient: &OCMClient{client: &http.Client{Transport: noOCMServer{}}},
 	}, mockGW
 }
 
@@ -264,4 +274,44 @@ func TestExchangeTokenMalformedForm(t *testing.T) {
 	if errResp.Error != "invalid_request" {
 		t.Errorf("error: got %q, want invalid_request", errResp.Error)
 	}
+}
+
+func TestExchangeTokenStrictRejectsUnsigned(t *testing.T) {
+	h, _ := setupTokenHandler(t, rpc.Code_CODE_OK, nil)
+	h.strictHTTPSig = true
+
+	rr := postTokenForm(h, "authorization_code", "code123", "nextcloud1.docker")
+	if rr.Code != http.StatusUnauthorized || !strings.Contains(rr.Body.String(), "invalid_client") {
+		t.Fatalf("got %d %s, want 401 invalid_client", rr.Code, rr.Body)
+	}
+}
+
+func TestExchangeTokenFromSigningServer(t *testing.T) {
+	h, _ := setupTokenHandler(t, rpc.Code_CODE_OK, nil)
+	key := newSigningKey(t)
+	remote := signingServer(t, key)
+	defer remote.Close()
+	h.ocmClient = NewPublicOnlyClientWithConfig(client.TransportConfig{AllowLoopback: true})
+	clientID := remote.Listener.Addr().String()
+
+	t.Run("signed", func(t *testing.T) {
+		body := []byte(url.Values{"grant_type": {"authorization_code"}, "code": {"code123"}, "client_id": {clientID}}.Encode())
+		req := httptest.NewRequest(http.MethodPost, "/ocm/token", bytes.NewReader(body))
+		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+		if err := key.Sign(req, body); err != nil {
+			t.Fatal(err)
+		}
+		rr := httptest.NewRecorder()
+		h.ExchangeToken(rr, req)
+		if rr.Code != http.StatusOK {
+			t.Fatalf("got %d %s, want 200", rr.Code, rr.Body)
+		}
+	})
+
+	t.Run("unsigned", func(t *testing.T) {
+		rr := postTokenForm(h, "authorization_code", "code123", clientID)
+		if rr.Code != http.StatusUnauthorized {
+			t.Fatalf("got %d %s, want 401", rr.Code, rr.Body)
+		}
+	})
 }

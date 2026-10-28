@@ -43,6 +43,7 @@ import (
 	"github.com/cs3org/reva/v3/pkg/errtypes"
 	"github.com/cs3org/reva/v3/pkg/mime"
 	"github.com/cs3org/reva/v3/pkg/ocm/client"
+	"github.com/cs3org/reva/v3/pkg/ocm/httpsig"
 	"github.com/cs3org/reva/v3/pkg/ocm/providerdomain"
 	"github.com/cs3org/reva/v3/pkg/rhttp/router"
 	"github.com/cs3org/reva/v3/pkg/service"
@@ -71,6 +72,7 @@ type driver struct {
 	discoveryCache  *ttlcache.Cache
 	ocmClient       *ocmd.OCMClient
 	webdavTransport http.RoundTripper
+	signingKey      *httpsig.Key
 }
 
 type config struct {
@@ -85,6 +87,9 @@ type config struct {
 	// allowed_federation_cidrs key on both the storage provider and the data
 	// provider; configuring one does not authorize the other.
 	AllowedFederationCIDRs []string `mapstructure:"allowed_federation_cidrs"`
+	// SigningKey is the PEM file of the Ed25519 key that signs the token requests of the
+	// code flow. It needs ProviderDomain: the token endpoint finds the key through client_id.
+	SigningKey string `mapstructure:"signing_key"`
 }
 
 func (c *config) ApplyDefaults() {
@@ -112,6 +117,13 @@ func New(ctx context.Context, m map[string]any) (storage.FS, error) {
 		return nil, errors.Wrapf(err, "ocmreceived: invalid allowed_federation_cidrs")
 	}
 
+	var key *httpsig.Key
+	if c.SigningKey != "" {
+		if key, err = httpsig.LoadKey(c.SigningKey); err != nil {
+			return nil, err
+		}
+	}
+
 	disco := ttlcache.NewCache()
 	_ = disco.SetTTL(5 * time.Minute)
 
@@ -135,6 +147,7 @@ func New(ctx context.Context, m map[string]any) (storage.FS, error) {
 		discoveryCache:  disco,
 		ocmClient:       ocmd.NewPublicOnlyClientWithConfig(tcfg),
 		webdavTransport: client.NewPublicOnlyRoundTripper(tcfg),
+		signingKey:      key,
 	}
 	return d, nil
 }
@@ -272,7 +285,7 @@ func (d *driver) exchangeAccessToken(ctx context.Context, tokenEndpoint, secret 
 	if err := providerdomain.Validate(d.providerDomain); err != nil {
 		return "", err
 	}
-	accessToken, _, err := d.ocmClient.ExchangeToken(ctx, tokenEndpoint, secret, d.providerDomain)
+	accessToken, _, err := d.ocmClient.ExchangeToken(ctx, tokenEndpoint, secret, d.providerDomain, d.signingKey)
 	if err != nil {
 		return "", err
 	}
