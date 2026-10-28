@@ -34,6 +34,7 @@ import (
 
 	userv1beta1 "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	"github.com/cs3org/reva/v3/pkg/appctx"
+	"github.com/cs3org/reva/v3/pkg/errtypes"
 	"github.com/cs3org/reva/v3/pkg/utils"
 	"golang.org/x/sys/unix"
 )
@@ -219,6 +220,10 @@ type UserThreadPool struct {
 	nobodyGID    int // GID for nobody group (fallback)
 	externalUID  int // UID of the service account used for external accounts
 	externalGID  int // GID of the service account used for external accounts
+	maxThreads   int // Go stops the process above 10000 OS threads
+	// Threads that have not exited yet. It includes threads that cleanup removed from the map
+	// while they hang in a syscall. Guarded by mu.
+	liveThreads int
 }
 
 // UserThread represents a dedicated thread for a user with persistent UID
@@ -234,6 +239,9 @@ type UserThread struct {
 	callers atomic.Int32
 	// The thread sets its own ID after it starts, and the logging code reads it from other goroutines
 	threadID atomic.Int32
+	// Set while a request runs, also when its caller has stopped waiting. The pool does not stop
+	// a running thread to make room for a new one, because the thread counts until the request ends.
+	running atomic.Bool
 }
 
 // ThreadRequest represents a request to execute on a user thread
@@ -259,6 +267,7 @@ type UserThreadPoolConfig struct {
 	NobodyGID     int           // GID for nobody group (fallback)
 	ExternalUID   int           // UID of the service account used for external accounts
 	ExternalGID   int           // GID of the service account used for external accounts
+	MaxThreads    int           // Maximum number of live user threads
 }
 
 // NewUserThreadPool creates a new thread pool for managing per-user threads
@@ -275,6 +284,9 @@ func NewUserThreadPool(config UserThreadPoolConfig) (*UserThreadPool, *Privilege
 	if config.NobodyGID == 0 {
 		config.NobodyGID = 65534 // Default nobody GID
 	}
+	if config.MaxThreads == 0 {
+		config.MaxThreads = 1000
+	}
 
 	// Verify privileges before creating the thread pool
 	privResult := VerifyPrivileges(config.NobodyUID, config.NobodyGID)
@@ -286,6 +298,7 @@ func NewUserThreadPool(config UserThreadPoolConfig) (*UserThreadPool, *Privilege
 		nobodyGID:   config.NobodyGID,
 		externalUID: config.ExternalUID,
 		externalGID: config.ExternalGID,
+		maxThreads:  config.MaxThreads,
 	}
 
 	// Start cleanup routine
@@ -324,6 +337,13 @@ func (p *UserThreadPool) GetOrCreateUserThread(ctx context.Context, user *userv1
 		return thread, nil
 	}
 
+	// A stopped thread is idle and exits at once, thus the count is above the limit only for a moment
+	if p.liveThreads >= p.maxThreads && !p.stopOldestIdleThread() {
+		appctx.GetLogger(ctx).Warn().Int("uid", uid).Int("max_user_threads", p.maxThreads).Msg("cephmount: all user threads are busy, request refused")
+		return nil, errtypes.InternalError("cephmount: all user threads are busy")
+	}
+	p.liveThreads++
+
 	// Create new user thread
 	thread = &UserThread{
 		uid:         uid,
@@ -338,12 +358,41 @@ func (p *UserThreadPool) GetOrCreateUserThread(ctx context.Context, user *userv1
 	p.threads[uid] = thread
 
 	// Start the thread
-	go thread.run()
+	go func() {
+		thread.run()
+		p.mu.Lock()
+		p.liveThreads--
+		p.mu.Unlock()
+	}()
 
 	log := appctx.GetLogger(ctx)
 	log.Debug().Int("uid", uid).Str("username", user.Username).Msg("Created new user thread")
 
 	return thread, nil
+}
+
+// stopOldestIdleThread stops the idle thread that was used longest ago, and returns false if no thread is idle.
+// The caller must hold p.mu.
+func (p *UserThreadPool) stopOldestIdleThread() bool {
+	var oldest *UserThread
+	var oldestUsed time.Time
+	for _, thread := range p.threads {
+		if thread.callers.Load() > 0 || thread.running.Load() {
+			continue
+		}
+		thread.mu.RLock()
+		lastUsed := thread.lastUsed
+		thread.mu.RUnlock()
+		if oldest == nil || lastUsed.Before(oldestUsed) {
+			oldest, oldestUsed = thread, lastUsed
+		}
+	}
+	if oldest == nil {
+		return false
+	}
+	oldest.shutdown()
+	delete(p.threads, oldest.uid)
+	return true
 }
 
 // mapUserToUIDGID maps a user to UID/GID, with special handling for nobody user
@@ -528,7 +577,9 @@ func (ut *UserThread) run() {
 			}
 
 			// Execute the request on this thread with the correct UID
+			ut.running.Store(true)
 			result, err := request.Function()
+			ut.running.Store(false)
 
 			// Send response
 			request.Response <- &ThreadResponse{
