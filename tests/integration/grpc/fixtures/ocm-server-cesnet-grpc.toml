@@ -33,6 +33,7 @@ driver = "static"
 basic = "{{grpc_address}}"
 
 [grpc.services.ocminvitemanager]
+signing_key = "{{cesnet_signing_key}}"
 driver = "json"
 provider_domain = "127.0.0.1:54321"
 
@@ -46,6 +47,7 @@ driver = "json"
 providers = "{{file_providers}}"
 
 [grpc.services.ocmshareprovider]
+signing_key = "{{cesnet_signing_key}}"
 driver = "json"
 webdav_endpoint = "http://127.0.0.1:54321"
 webapp_endpoint = "http://127.0.0.1:54321/external/sciencemesh"
@@ -94,6 +96,7 @@ allow_loopback_federation = true
 address = "127.0.0.1:54321"
 
 [http.services.ocm]
+endpoint = "http://127.0.0.1:54321"
 allow_loopback_federation = true
 
 [http.services.sciencemesh]
@@ -122,6 +125,7 @@ allow_loopback_federation = true
 
 [http.services.wellknown]
 [http.services.wellknown.ocmprovider]
+signing_key = "{{cesnet_signing_key}}"
 ocm_prefix = "ocm"
 provider = "Reva for CESNET"
 endpoint = "http://127.0.0.1:54321"

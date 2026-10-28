@@ -70,6 +70,7 @@ auth_manager = "ocmshares"
 [grpc.services.authprovider.auth_managers.ocmshares]
 
 [grpc.services.ocminvitemanager]
+signing_key = "{{cernbox_signing_key}}"
 driver = "json"
 provider_domain = "127.0.0.1:12345"
 
@@ -83,6 +84,7 @@ driver = "json"
 providers = "{{file_providers}}"
 
 [grpc.services.ocmshareprovider]
+signing_key = "{{cernbox_signing_key}}"
 driver = "json"
 webdav_endpoint = "http://127.0.0.1:12345"
 webapp_endpoint = "http://127.0.0.1:12345/external/sciencemesh"
@@ -109,6 +111,7 @@ users = "fixtures/ocm-users.demo.json"
 address = "127.0.0.1:12345"
 
 [http.services.ocm]
+endpoint = "http://127.0.0.1:12345"
 allow_loopback_federation = true
 
 [http.services.sciencemesh]
@@ -146,6 +149,7 @@ spaces_enabled = true
 
 [http.services.wellknown]
 [http.services.wellknown.ocmprovider]
+signing_key = "{{cernbox_signing_key}}"
 ocm_prefix = "ocm"
 provider = "Reva for CERNBox"
 endpoint = "http://127.0.0.1:12345"

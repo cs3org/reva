@@ -39,6 +39,7 @@ import (
 	"github.com/cs3org/reva/v3/pkg/appctx"
 	"github.com/cs3org/reva/v3/pkg/errtypes"
 	"github.com/cs3org/reva/v3/pkg/ocm/embedded"
+	"github.com/cs3org/reva/v3/pkg/ocm/httpsig"
 	"github.com/cs3org/reva/v3/pkg/ocm/share"
 	"github.com/cs3org/reva/v3/pkg/ocm/share/repository/registry"
 	"github.com/cs3org/reva/v3/pkg/plugin"
@@ -79,6 +80,7 @@ type config struct {
 	ProviderDomain  string                    `docs:"The same domain registered in the provider authorizer" mapstructure:"provider_domain" validate:"required"`
 	WebDAVEndpoint  string                    `mapstructure:"webdav_endpoint"                               validate:"required"`
 	WebAppEndpoint  string                    `mapstructure:"webapp_endpoint"                               validate:"required"`
+	SigningKey      string                    `docs:";Path to the PEM file of the Ed25519 private key that signs the shares sent to OCM servers that list http-sig. Use the key of the wellknown ocmprovider." mapstructure:"signing_key"`
 }
 
 type service struct {
@@ -86,6 +88,7 @@ type service struct {
 	repo        share.Repository
 	client      *ocmd.OCMClient
 	transferrer embedded.Transferrer
+	signingKey  *httpsig.Key
 }
 
 func (c *config) ApplyDefaults() {
@@ -137,12 +140,20 @@ func New(ctx context.Context, m map[string]any) (rgrpc.Service, error) {
 		return nil, err
 	}
 
+	var key *httpsig.Key
+	if c.SigningKey != "" {
+		if key, err = httpsig.LoadKey(c.SigningKey); err != nil {
+			return nil, err
+		}
+	}
+
 	ocmcl := ocmd.NewClient(time.Duration(c.ClientTimeout)*time.Second, c.ClientInsecure)
 	service := &service{
 		conf:        &c,
 		repo:        repo,
 		client:      ocmcl,
 		transferrer: transferrer,
+		signingKey:  key,
 	}
 
 	return service, nil
@@ -431,7 +442,13 @@ func (s *service) CreateOCMShare(ctx context.Context, req *ocm.CreateOCMShareReq
 		newShareReq.Expiration = req.Expiration.Seconds
 	}
 
-	newShareRes, err := s.client.NewShare(ctx, ocmEndpoint, newShareReq)
+	// Some servers reject a request with a Signature header that they cannot parse,
+	// thus sign only for servers that list http-sig.
+	var key *httpsig.Key
+	if slices.Contains(ocmDisco.Capabilities, "http-sig") {
+		key = s.signingKey
+	}
+	newShareRes, err := s.client.NewShare(ctx, ocmEndpoint, newShareReq, key)
 	if err != nil {
 		switch {
 		case errors.Is(err, ocmd.ErrInvalidParameters):

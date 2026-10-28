@@ -65,7 +65,11 @@ var (
 	}
 )
 
-var _ = Describe("ocm share", func() {
+var _ = Describe("ocm share", func() { ocmShareSpecs(false) })
+
+var _ = Describe("ocm share with signed requests", func() { ocmShareSpecs(true) })
+
+func ocmShareSpecs(signed bool) {
 	var (
 		revads = map[string]*Revad{}
 
@@ -125,6 +129,13 @@ var _ = Describe("ocm share", func() {
 		Expect(err).ToNot(HaveOccurred())
 		ctxEinstein = ctxWithAuthToken(tokenManager, einstein)
 		ctxMarie = ctxWithAuthToken(tokenManager, marie)
+		resources := map[string]Resource{
+			"ocm_share_cernbox_file": File{Content: "{}"},
+			"ocm_share_cesnet_file":  File{Content: "{}"},
+			"invite_token_file":      File{Content: "{}"},
+			"localhome_root":         Folder{},
+		}
+		addSigningKeys(signed, resources, variables)
 		revads, err = startRevads(map[string]string{
 			"cernboxgw":          "ocm-server-cernbox-grpc.toml",
 			"cernboxhome":        "cernbox-home-server.toml",
@@ -132,12 +143,7 @@ var _ = Describe("ocm share", func() {
 			"cernboxmachineauth": "cernbox-machine-authprovider.toml",
 		}, map[string]string{
 			"providers": "ocm-providers.demo.json",
-		}, map[string]Resource{
-			"ocm_share_cernbox_file": File{Content: "{}"},
-			"ocm_share_cesnet_file":  File{Content: "{}"},
-			"invite_token_file":      File{Content: "{}"},
-			"localhome_root":         Folder{},
-		}, variables)
+		}, resources, variables)
 		Expect(err).ToNot(HaveOccurred())
 		cernboxgw, err = service.GatewayAt(revads["cernboxgw"].GrpcAddress)
 		Expect(err).ToNot(HaveOccurred())
@@ -723,7 +729,7 @@ var _ = Describe("ocm share", func() {
 			})
 		})
 	})
-})
+}
 
 func stat(ctx context.Context, gw gatewaypb.GatewayAPIClient, ref *provider.Reference) (*provider.ResourceInfo, error) {
 	statRes, err := gw.Stat(ctx, &provider.StatRequest{Ref: ref})

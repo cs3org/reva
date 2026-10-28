@@ -21,6 +21,8 @@ package ocminvitemanager
 import (
 	"context"
 	"fmt"
+	"net/url"
+	"slices"
 	"time"
 
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
@@ -33,6 +35,7 @@ import (
 	"github.com/cs3org/reva/v3/internal/http/services/opencloudmesh/ocmd"
 	"github.com/cs3org/reva/v3/pkg/appctx"
 	"github.com/cs3org/reva/v3/pkg/errtypes"
+	"github.com/cs3org/reva/v3/pkg/ocm/httpsig"
 	"github.com/cs3org/reva/v3/pkg/ocm/invite"
 	"github.com/cs3org/reva/v3/pkg/ocm/invite/repository/registry"
 	"github.com/cs3org/reva/v3/pkg/plugin"
@@ -61,14 +64,16 @@ type config struct {
 	OCMClientInsecure bool                      `mapstructure:"ocm_insecure"`
 	GatewaySVC        string                    `mapstructure:"gatewaysvc"                                    validate:"required"`
 	ProviderDomain    string                    `docs:"The same domain registered in the provider authorizer" mapstructure:"provider_domain" validate:"required"`
+	SigningKey        string                    `docs:";Path to the PEM file of the Ed25519 private key that signs the accepted invites sent to OCM servers that list http-sig. Use the key of the wellknown ocmprovider." mapstructure:"signing_key"`
 
 	tokenExpiration time.Duration
 }
 
 type service struct {
-	conf      *config
-	repo      invite.Repository
-	ocmClient *ocmd.OCMClient
+	conf       *config
+	repo       invite.Repository
+	ocmClient  *ocmd.OCMClient
+	signingKey *httpsig.Key
 }
 
 func (c *config) ApplyDefaults() {
@@ -111,10 +116,18 @@ func New(ctx context.Context, m map[string]any) (rgrpc.Service, error) {
 		return nil, err
 	}
 
+	var key *httpsig.Key
+	if c.SigningKey != "" {
+		if key, err = httpsig.LoadKey(c.SigningKey); err != nil {
+			return nil, err
+		}
+	}
+
 	service := &service{
-		conf:      &c,
-		repo:      repo,
-		ocmClient: ocmd.NewClient(time.Duration(c.OCMClientTimeout)*time.Second, c.OCMClientInsecure),
+		conf:       &c,
+		repo:       repo,
+		ocmClient:  ocmd.NewClient(time.Duration(c.OCMClientTimeout)*time.Second, c.OCMClientInsecure),
+		signingKey: key,
 	}
 	return service, nil
 }
@@ -165,13 +178,29 @@ func (s *service) ForwardInvite(ctx context.Context, req *invitepb.ForwardInvite
 		return nil, err
 	}
 
+	// Some servers reject a request with a Signature header that they cannot parse,
+	// thus sign only for servers that list http-sig. Without a key, discovery is not necessary.
+	var key *httpsig.Key
+	if s.signingKey != nil {
+		ocmURL, _ := url.Parse(ocmEndpoint)
+		disco, err := s.ocmClient.Discover(ctx, ocmURL.Scheme+"://"+ocmURL.Host)
+		if err != nil {
+			return &invitepb.ForwardInviteResponse{
+				Status: status.NewInternal(ctx, err, "error discovering the remote OCM server"),
+			}, nil
+		}
+		if slices.Contains(disco.Capabilities, "http-sig") {
+			key = s.signingKey
+		}
+	}
+
 	remoteUser, err := s.ocmClient.InviteAccepted(ctx, ocmEndpoint, &ocmd.InviteAcceptedRequest{
 		Token:             req.InviteToken.GetToken(),
 		RecipientProvider: s.conf.ProviderDomain,
 		UserID:            user.GetId().GetOpaqueId(),
 		Email:             user.GetMail(),
 		Name:              user.GetDisplayName(),
-	})
+	}, key)
 	if err != nil {
 		switch {
 		case errors.Is(err, ocmd.ErrTokenInvalid):
