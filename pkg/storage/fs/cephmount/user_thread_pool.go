@@ -210,6 +210,9 @@ func (r *PrivilegeVerificationResult) String() string {
 	return summary.String()
 }
 
+// An extra worker stops when it has no request for this time. The first worker of a user stops only at cleanup.
+const extraWorkerIdleTime = 30 * time.Second
+
 // UserThreadPool manages a pool of threads, each dedicated to a specific user UID
 type UserThreadPool struct {
 	mu           sync.RWMutex
@@ -221,13 +224,17 @@ type UserThreadPool struct {
 	externalUID  int // UID of the service account used for external accounts
 	externalGID  int // GID of the service account used for external accounts
 	maxThreads   int // Go stops the process above 10000 OS threads
+	// Maximum number of worker threads of one uid. All external accounts share one uid, thus they have a separate limit.
+	maxThreadsPerUser  int
+	maxThreadsExternal int
 	// Threads that have not exited yet. It includes threads that cleanup removed from the map
 	// while they hang in a syscall. Guarded by mu.
 	liveThreads int
 }
 
-// UserThread represents a dedicated thread for a user with persistent UID
+// UserThread represents the dedicated worker threads for a user with persistent UID. They take requests from one queue.
 type UserThread struct {
+	pool        *UserThreadPool
 	uid         int
 	gid         int
 	username    string
@@ -237,11 +244,17 @@ type UserThread struct {
 	mu          sync.RWMutex
 	// Callers that hold this thread. Cleanup must not stop the thread while a caller waits on it.
 	callers atomic.Int32
-	// The thread sets its own ID after it starts, and the logging code reads it from other goroutines
+	// The first worker sets its own ID after it starts, and the logging code reads it from other goroutines
 	threadID atomic.Int32
-	// Set while a request runs, also when its caller has stopped waiting. The pool does not stop
-	// a running thread to make room for a new one, because the thread counts until the request ends.
-	running atomic.Bool
+	// Requests in the queue or running, also when their caller has stopped waiting. The pool does not stop
+	// a thread with requests to make room for a new one, because the thread counts until its requests end.
+	pending atomic.Int32
+	// Live workers. It changes only under the pool lock, so that the user does not get more than maxWorkers.
+	workers    atomic.Int32
+	maxWorkers int32
+	// The workers of a user share the group list, so that a new worker does not look it up again
+	groupsOnce sync.Once
+	groups     []int
 }
 
 // ThreadRequest represents a request to execute on a user thread
@@ -268,6 +281,9 @@ type UserThreadPoolConfig struct {
 	ExternalUID   int           // UID of the service account used for external accounts
 	ExternalGID   int           // GID of the service account used for external accounts
 	MaxThreads    int           // Maximum number of live user threads
+	// Maximum number of worker threads of one uid, and of the uid of the external accounts
+	MaxThreadsPerUser  int
+	MaxThreadsExternal int
 }
 
 // NewUserThreadPool creates a new thread pool for managing per-user threads
@@ -287,6 +303,12 @@ func NewUserThreadPool(config UserThreadPoolConfig) (*UserThreadPool, *Privilege
 	if config.MaxThreads == 0 {
 		config.MaxThreads = 1000
 	}
+	if config.MaxThreadsPerUser == 0 {
+		config.MaxThreadsPerUser = 4
+	}
+	if config.MaxThreadsExternal == 0 {
+		config.MaxThreadsExternal = 32
+	}
 
 	// Verify privileges before creating the thread pool
 	privResult := VerifyPrivileges(config.NobodyUID, config.NobodyGID)
@@ -299,6 +321,9 @@ func NewUserThreadPool(config UserThreadPoolConfig) (*UserThreadPool, *Privilege
 		externalUID: config.ExternalUID,
 		externalGID: config.ExternalGID,
 		maxThreads:  config.MaxThreads,
+
+		maxThreadsPerUser:  config.MaxThreadsPerUser,
+		maxThreadsExternal: config.MaxThreadsExternal,
 	}
 
 	// Start cleanup routine
@@ -342,10 +367,16 @@ func (p *UserThreadPool) GetOrCreateUserThread(ctx context.Context, user *userv1
 		appctx.GetLogger(ctx).Warn().Int("uid", uid).Int("max_user_threads", p.maxThreads).Msg("cephmount: all user threads are busy, request refused")
 		return nil, errtypes.InternalError("cephmount: all user threads are busy")
 	}
-	p.liveThreads++
+
+	maxWorkers := p.maxThreadsPerUser
+	if uid == p.externalUID {
+		maxWorkers = p.maxThreadsExternal
+	}
 
 	// Create new user thread
 	thread = &UserThread{
+		pool:        p,
+		maxWorkers:  int32(maxWorkers),
 		uid:         uid,
 		gid:         gid,
 		username:    user.Username,
@@ -358,17 +389,25 @@ func (p *UserThreadPool) GetOrCreateUserThread(ctx context.Context, user *userv1
 	p.threads[uid] = thread
 
 	// Start the thread
-	go func() {
-		thread.run()
-		p.mu.Lock()
-		p.liveThreads--
-		p.mu.Unlock()
-	}()
+	p.startWorker(thread, false)
 
 	log := appctx.GetLogger(ctx)
 	log.Debug().Int("uid", uid).Str("username", user.Username).Msg("Created new user thread")
 
 	return thread, nil
+}
+
+// startWorker starts a worker thread for the user. The caller must hold p.mu.
+func (p *UserThreadPool) startWorker(thread *UserThread, extra bool) {
+	p.liveThreads++
+	thread.workers.Add(1)
+	go func() {
+		thread.run(extra)
+		p.mu.Lock()
+		p.liveThreads--
+		thread.workers.Add(-1)
+		p.mu.Unlock()
+	}()
 }
 
 // stopOldestIdleThread stops the idle thread that was used longest ago, and returns false if no thread is idle.
@@ -377,7 +416,7 @@ func (p *UserThreadPool) stopOldestIdleThread() bool {
 	var oldest *UserThread
 	var oldestUsed time.Time
 	for _, thread := range p.threads {
-		if thread.callers.Load() > 0 || thread.running.Load() {
+		if thread.callers.Load() > 0 || thread.pending.Load() > 0 {
 			continue
 		}
 		thread.mu.RLock()
@@ -519,13 +558,15 @@ func (ut *UserThread) getUserAdditionalGroupIDs(username string) ([]int, error) 
 }
 
 // run is the main loop for a user thread
-func (ut *UserThread) run() {
+func (ut *UserThread) run(extra bool) {
 	// Lock this goroutine to the current OS thread
 	runtime.LockOSThread()
 	defer runtime.UnlockOSThread()
 
 	// Get current thread ID
-	ut.threadID.Store(int32(unix.Gettid()))
+	if !extra {
+		ut.threadID.Store(int32(unix.Gettid()))
+	}
 
 	// Set the filesystem UID for this thread
 	originalFsuid := setfsuidSafe(-1)
@@ -539,15 +580,18 @@ func (ut *UserThread) run() {
 
 	// We need to set additional groups before setting uid/gid.
 	// we assume uid/gid/username have been validated before creating the user thread.
-	gids, err := ut.getUserAdditionalGroupIDs(ut.username)
-	if err != nil {
-		appctx.GetLogger(context.Background()).Error().Err(err).Str("username", ut.username).Msg("failed to get additional group IDs")
-		gids = nil
-	}
+	ut.groupsOnce.Do(func() {
+		gids, err := ut.getUserAdditionalGroupIDs(ut.username)
+		if err != nil {
+			appctx.GetLogger(context.Background()).Error().Err(err).Str("username", ut.username).Msg("failed to get additional group IDs")
+			return
+		}
+		ut.groups = gids
+	})
 
 	// unix.Setgroups only affects this thread, unlike syscall.Setgroups which changes every thread
-	if gids != nil {
-		if err := unix.Setgroups(gids); err != nil {
+	if ut.groups != nil {
+		if err := unix.Setgroups(ut.groups); err != nil {
 			appctx.GetLogger(context.Background()).Error().Err(err).Str("username", ut.username).Msg("failed to set additional groups")
 		}
 	}
@@ -569,17 +613,22 @@ func (ut *UserThread) run() {
 	}()
 
 	for {
+		var idle <-chan time.Time
+		if extra {
+			idle = time.After(extraWorkerIdleTime)
+		}
+
 		select {
 		case request := <-ut.requestChan:
 			// The caller returns the context error, thus the request must not run
 			if request.Context.Err() != nil {
+				ut.pending.Add(-1)
 				continue
 			}
 
 			// Execute the request on this thread with the correct UID
-			ut.running.Store(true)
 			result, err := request.Function()
-			ut.running.Store(false)
+			ut.pending.Add(-1)
 
 			// Send response
 			request.Response <- &ThreadResponse{
@@ -588,6 +637,9 @@ func (ut *UserThread) run() {
 			}
 
 			ut.updateLastUsed()
+
+		case <-idle:
+			return
 
 		case <-ut.quit:
 			return
@@ -603,10 +655,20 @@ func (ut *UserThread) Execute(ctx context.Context, fn func() (any, error)) (any,
 		Response: make(chan *ThreadResponse, 1),
 	}
 
+	// Every worker has a request, thus this request would wait in the queue
+	if ut.pending.Add(1) > ut.workers.Load() {
+		ut.pool.mu.Lock()
+		if ut.workers.Load() < ut.maxWorkers && ut.pool.liveThreads < ut.pool.maxThreads {
+			ut.pool.startWorker(ut, true)
+		}
+		ut.pool.mu.Unlock()
+	}
+
 	// Send request
 	select {
 	case ut.requestChan <- request:
 	case <-ctx.Done():
+		ut.pending.Add(-1)
 		return nil, ctx.Err()
 	}
 
