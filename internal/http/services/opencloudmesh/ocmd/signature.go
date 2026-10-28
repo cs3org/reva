@@ -30,7 +30,8 @@ import (
 
 // verifySignature checks the OCM signature of r against the keys of the remote
 // server that disco describes. endpoint is the public URL of this server.
-func verifySignature(ctx context.Context, c *OCMClient, r *http.Request, body []byte, endpoint string, disco *wellknown.OcmDiscoveryData) error {
+// If strict is true, an unsigned request is always rejected.
+func verifySignature(ctx context.Context, c *OCMClient, r *http.Request, body []byte, endpoint string, strict bool, disco *wellknown.OcmDiscoveryData) error {
 	err := httpsig.Verify(r, body, endpoint, func() ([]byte, error) {
 		if disco.JwksURI == "" {
 			return nil, errors.New("the remote OCM server publishes no jwksUri")
@@ -39,7 +40,7 @@ func verifySignature(ctx context.Context, c *OCMClient, r *http.Request, body []
 	})
 	// A server that signs its requests must not be accepted without a signature,
 	// else an attacker can send unsigned requests in its name.
-	if errors.Is(err, httpsig.ErrUnsigned) && !slices.Contains(disco.Capabilities, "http-sig") {
+	if errors.Is(err, httpsig.ErrUnsigned) && !strict && !slices.Contains(disco.Capabilities, "http-sig") {
 		return nil
 	}
 	return err

@@ -37,6 +37,7 @@ import (
 	"github.com/cs3org/reva/v3/internal/http/services/opencloudmesh/ocmd"
 	"github.com/cs3org/reva/v3/internal/http/services/wellknown"
 	"github.com/cs3org/reva/v3/pkg/appctx"
+	"github.com/cs3org/reva/v3/pkg/ocm/httpsig"
 	"github.com/cs3org/reva/v3/pkg/service"
 	"github.com/rs/zerolog"
 	"google.golang.org/grpc"
@@ -115,6 +116,7 @@ func (c *observeClient) Discover(ctx context.Context, endpoint string) (*wellkno
 func (c *observeClient) ExchangeToken(
 	ctx context.Context,
 	tokenEndpoint, code, clientID string,
+	_ *httpsig.Key,
 ) (string, int64, error) {
 	c.exchangeCalls++
 	c.tokenURLs = append(c.tokenURLs, tokenEndpoint)
@@ -162,9 +164,10 @@ func (p *publicOnlyScript) Discover(ctx context.Context, endpoint string) (*well
 func (p *publicOnlyScript) ExchangeToken(
 	ctx context.Context,
 	tokenEndpoint, code, clientID string,
+	key *httpsig.Key,
 ) (string, int64, error) {
 	p.exchangeCalls++
-	return p.real.ExchangeToken(ctx, tokenEndpoint, code, clientID)
+	return p.real.ExchangeToken(ctx, tokenEndpoint, code, clientID, key)
 }
 
 func endpointIsNonPublic(endpoint string) bool {

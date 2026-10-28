@@ -34,6 +34,7 @@ import (
 	"github.com/cs3org/reva/v3/internal/http/services/wellknown"
 	"github.com/cs3org/reva/v3/pkg/appctx"
 	"github.com/cs3org/reva/v3/pkg/errtypes"
+	"github.com/cs3org/reva/v3/pkg/ocm/httpsig"
 	"github.com/cs3org/reva/v3/pkg/ocm/providerdomain"
 	"github.com/cs3org/reva/v3/pkg/service"
 	"github.com/cs3org/reva/v3/pkg/spaces"
@@ -42,7 +43,7 @@ import (
 // launchClient serves discovery and token exchange.
 type launchClient interface {
 	Discover(ctx context.Context, endpoint string) (*wellknown.OcmDiscoveryData, error)
-	ExchangeToken(ctx context.Context, tokenEndpoint, code, clientID string) (string, int64, error)
+	ExchangeToken(ctx context.Context, tokenEndpoint, code, clientID string, key *httpsig.Key) (string, int64, error)
 }
 
 var _ launchClient = (*ocmd.OCMClient)(nil)
@@ -263,11 +264,13 @@ func (h *appsHandler) buildLaunch(ctx context.Context, shareID *ocmpb.ShareId, r
 	if err != nil {
 		return fail(err, "")
 	}
+	// The sciencemesh service has no signing_key yet, thus this token request is not signed.
 	accessToken, _, err := client.ExchangeToken(
 		ctx,
 		tokenURL,
 		secret,
 		h.receiverDomain,
+		nil,
 	)
 	if err != nil {
 		return fail(err, accessToken)

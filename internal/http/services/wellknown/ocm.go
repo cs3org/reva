@@ -20,6 +20,7 @@ package wellknown
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/url"
@@ -61,6 +62,7 @@ type OcmProviderConfig struct {
 	EnableCodeFlow     bool   `docs:"false;Whether code-flow token exchange is enabled in OCM shares."                           mapstructure:"enable_code_flow"`
 	MFAPolicy          string `docs:"reject;Admission of received webapp must-use-mfa offers: reject or off. Off skips the check; nothing is advertised." mapstructure:"mfa_policy"`
 	SigningKey         string `docs:";Path to the PEM file of the Ed25519 private key for OCM HTTP signatures. If it's not configured, no public key is published." mapstructure:"signing_key"`
+	HTTPSigMode        string `docs:"permissive;permissive or strict. Strict lists the must-use-http-sig criterion and needs signing_key. Use the same mode in the ocm service." mapstructure:"http_sig_mode" validate:"omitempty,oneof=permissive strict"`
 }
 
 type OcmDiscoveryData struct {
@@ -208,6 +210,10 @@ func (c *OcmProviderConfig) validateMFAPolicy() error {
 }
 
 func (h *wkocmHandler) init(c *OcmProviderConfig) error {
+	// Without a key, discovery does not list http-sig, thus peers would not sign and strict would reject all.
+	if c.HTTPSigMode == "strict" && c.SigningKey == "" {
+		return errors.New("http_sig_mode strict needs signing_key")
+	}
 	if c.SigningKey != "" {
 		key, err := httpsig.LoadKey(c.SigningKey)
 		if err != nil {
@@ -312,6 +318,9 @@ func (h *wkocmHandler) buildData(c *OcmProviderConfig) *OcmDiscoveryData {
 	if h.jwks != nil {
 		d.JwksURI, _ = url.JoinPath(c.Endpoint, "/.well-known/jwks.json")
 		d.Capabilities = append(d.Capabilities, "http-sig")
+	}
+	if c.HTTPSigMode == "strict" {
+		d.Criteria = append(d.Criteria, "must-use-http-sig")
 	}
 	return d
 }

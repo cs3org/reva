@@ -281,7 +281,7 @@ func callRetainedExchange(t *testing.T, c *ocmd.OCMClient, endpoint string) erro
 	t.Helper()
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 	t.Cleanup(cancel)
-	_, _, err := c.ExchangeToken(ctx, endpoint, "code", "receiver.example")
+	_, _, err := c.ExchangeToken(ctx, endpoint, "code", "receiver.example", nil)
 	return err
 }
 
