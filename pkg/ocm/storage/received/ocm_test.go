@@ -4,9 +4,13 @@ import (
 	"bufio"
 	"bytes"
 	"context"
+	"crypto/ed25519"
+	"crypto/rand"
 	"crypto/tls"
+	"crypto/x509"
 	"encoding/base64"
 	"encoding/json"
+	"encoding/pem"
 	"errors"
 	"fmt"
 	"io"
@@ -14,6 +18,7 @@ import (
 	"net"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"os"
 	"os/exec"
 	"strings"
@@ -30,6 +35,7 @@ import (
 	"github.com/cs3org/reva/v3/pkg/appctx"
 	"github.com/cs3org/reva/v3/pkg/errtypes"
 	"github.com/cs3org/reva/v3/pkg/ocm/client"
+	"github.com/cs3org/reva/v3/pkg/ocm/httpsig"
 	"github.com/studio-b12/gowebdav"
 	"google.golang.org/grpc"
 )
@@ -548,6 +554,75 @@ func TestUploadAuthCodeFlowExchangesBearerToken(t *testing.T) {
 	}
 	if unexpectedPath != "" {
 		t.Fatalf("unexpected path: %q", unexpectedPath)
+	}
+}
+
+func TestUploadAuthCodeFlowSignsTokenRequest(t *testing.T) {
+	_, private, err := ed25519.GenerateKey(rand.Reader)
+	if err != nil {
+		t.Fatal(err)
+	}
+	der, err := x509.MarshalPKCS8PrivateKey(private)
+	if err != nil {
+		t.Fatal(err)
+	}
+	keyFile := t.TempDir() + "/ocm.pem"
+	if err := os.WriteFile(keyFile, pem.EncodeToMemory(&pem.Block{Type: "PRIVATE KEY", Bytes: der}), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	key, err := httpsig.LoadKey(keyFile)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	verifyErr := errors.New("no token request")
+	var gotClientID string
+	var srv *httptest.Server
+	srv = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/.well-known/ocm":
+			w.Header().Set("Content-Type", "application/json")
+			_ = json.NewEncoder(w).Encode(map[string]any{
+				"enabled":       true,
+				"endPoint":      srv.URL + "/ocm",
+				"capabilities":  []string{"exchange-token"},
+				"tokenEndPoint": srv.URL + "/ocm/token",
+			})
+		case "/ocm/token":
+			body, _ := io.ReadAll(r.Body)
+			verifyErr = httpsig.Verify(r, body, "", func() ([]byte, error) { return key.JWKS() })
+			form, _ := url.ParseQuery(string(body))
+			gotClientID = form.Get("client_id")
+			w.Header().Set("Content-Type", "application/json")
+			_ = json.NewEncoder(w).Encode(map[string]any{"access_token": "jwt-tok", "token_type": "Bearer", "expires_in": 3600})
+		default:
+			http.Error(w, "unexpected path", http.StatusInternalServerError)
+		}
+	}))
+	defer srv.Close()
+
+	d := newReceivedDriver(t, map[string]any{
+		"ocm_insecure":              true,
+		"allow_loopback_federation": true,
+		"signing_key":               keyFile,
+		"provider_domain":           "cernbox.example.org",
+	})
+	share := testCodeFlowReceivedShare(srv.Listener.Addr().String(), srv.URL)
+	if _, err := d.uploadAuth(context.Background(), share, share.Protocols[0].GetWebdavOptions().Uri, "exchange-secret", share.GetId()); err != nil {
+		t.Fatalf("uploadAuth returned error: %v", err)
+	}
+	if verifyErr != nil {
+		t.Fatalf("token request signature: %v", verifyErr)
+	}
+	// The OCM spec names the receiving server in client_id, not the IdP of the user.
+	if gotClientID != "cernbox.example.org" {
+		t.Fatalf("client_id: got %q, want cernbox.example.org", gotClientID)
+	}
+}
+
+func TestNewRejectsSigningKeyWithoutProviderDomain(t *testing.T) {
+	if _, err := New(context.Background(), map[string]any{"signing_key": "/nonexistent.pem"}); err == nil {
+		t.Fatal("expected an error for signing_key without provider_domain")
 	}
 }
 

@@ -33,6 +33,7 @@ import (
 	"github.com/cs3org/reva/v3/internal/http/services/opencloudmesh/ocmd"
 	"github.com/cs3org/reva/v3/pkg/appctx"
 	"github.com/cs3org/reva/v3/pkg/errtypes"
+	"github.com/cs3org/reva/v3/pkg/ocm/httpsig"
 	"github.com/cs3org/reva/v3/pkg/ocm/invite"
 	"github.com/cs3org/reva/v3/pkg/ocm/invite/repository/registry"
 	"github.com/cs3org/reva/v3/pkg/plugin"
@@ -61,14 +62,16 @@ type config struct {
 	OCMClientInsecure bool                      `mapstructure:"ocm_insecure"`
 	GatewaySVC        string                    `mapstructure:"gatewaysvc"                                    validate:"required"`
 	ProviderDomain    string                    `docs:"The same domain registered in the provider authorizer" mapstructure:"provider_domain" validate:"required"`
+	SigningKey        string                    `docs:";Path to the PEM file of the Ed25519 private key that signs the accepted invites that this server sends. Use the key of the wellknown ocmprovider." mapstructure:"signing_key"`
 
 	tokenExpiration time.Duration
 }
 
 type service struct {
-	conf      *config
-	repo      invite.Repository
-	ocmClient *ocmd.OCMClient
+	conf       *config
+	repo       invite.Repository
+	ocmClient  *ocmd.OCMClient
+	signingKey *httpsig.Key
 }
 
 func (c *config) ApplyDefaults() {
@@ -111,10 +114,18 @@ func New(ctx context.Context, m map[string]any) (rgrpc.Service, error) {
 		return nil, err
 	}
 
+	var key *httpsig.Key
+	if c.SigningKey != "" {
+		if key, err = httpsig.LoadKey(c.SigningKey); err != nil {
+			return nil, err
+		}
+	}
+
 	service := &service{
-		conf:      &c,
-		repo:      repo,
-		ocmClient: ocmd.NewClient(time.Duration(c.OCMClientTimeout)*time.Second, c.OCMClientInsecure),
+		conf:       &c,
+		repo:       repo,
+		ocmClient:  ocmd.NewClient(time.Duration(c.OCMClientTimeout)*time.Second, c.OCMClientInsecure),
+		signingKey: key,
 	}
 	return service, nil
 }
@@ -171,7 +182,7 @@ func (s *service) ForwardInvite(ctx context.Context, req *invitepb.ForwardInvite
 		UserID:            user.GetId().GetOpaqueId(),
 		Email:             user.GetMail(),
 		Name:              user.GetDisplayName(),
-	})
+	}, s.signingKey)
 	if err != nil {
 		switch {
 		case errors.Is(err, ocmd.ErrTokenInvalid):

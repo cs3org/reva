@@ -53,7 +53,11 @@ func ocmUserEqual(u1, u2 *userpb.User) bool {
 	return utils.UserEqual(u1.Id, u2.Id) && u1.DisplayName == u2.DisplayName && u1.Mail == u2.Mail
 }
 
-var _ = Describe("ocm invitation workflow", func() {
+var _ = Describe("ocm invitation workflow", func() { ocmInvitationSpecs(false) })
+
+var _ = Describe("ocm invitation workflow with signed requests", func() { ocmInvitationSpecs(true) })
+
+func ocmInvitationSpecs(signed bool) {
 	var (
 		err    error
 		revads = map[string]*Revad{}
@@ -118,6 +122,12 @@ var _ = Describe("ocm invitation workflow", func() {
 			ctxEinstein = ctxWithAuthToken(tokenManager, einstein)
 			ctxMarie = ctxWithAuthToken(tokenManager, marie)
 			variables["ocm_driver"] = driver
+			resources := map[string]Resource{
+				"ocm_share_cernbox_file": File{Content: "{}"},
+				"ocm_share_cesnet_file":  File{Content: "{}"},
+				"localhome_root":         Folder{},
+			}
+			addSigningKeys(signed, resources, variables)
 			revads, err = startRevads(map[string]string{
 				"cernboxgw":          "ocm-server-cernbox-grpc.toml",
 				"cernboxhome":        "cernbox-home-server.toml",
@@ -125,11 +135,7 @@ var _ = Describe("ocm invitation workflow", func() {
 				"cernboxmachineauth": "cernbox-machine-authprovider.toml",
 			}, map[string]string{
 				"providers": "ocm-providers.demo.json",
-			}, map[string]Resource{
-				"ocm_share_cernbox_file": File{Content: "{}"},
-				"ocm_share_cesnet_file":  File{Content: "{}"},
-				"localhome_root":         Folder{},
-			}, variables)
+			}, resources, variables)
 			Expect(err).ToNot(HaveOccurred())
 			cernboxgw, err = service.GatewayAt(revads["cernboxgw"].GrpcAddress)
 			Expect(err).ToNot(HaveOccurred())
@@ -491,7 +497,7 @@ var _ = Describe("ocm invitation workflow", func() {
 
 	}
 
-})
+}
 
 func ocmUsersEqual(u1, u2 []*userpb.User) bool {
 	if len(u1) != len(u2) {

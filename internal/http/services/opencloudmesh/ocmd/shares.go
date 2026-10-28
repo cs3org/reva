@@ -63,6 +63,7 @@ type sharesHandler struct {
 	autoAcceptProviders        []*regexp.Regexp
 	trustForwardedFor          bool
 	endpoint                   string
+	strictHTTPSig              bool
 	ocmClient                  *OCMClient
 	webdavTransport            http.RoundTripper
 }
@@ -72,6 +73,7 @@ func (h *sharesHandler) init(c *config) error {
 	h.machineSecret = c.MachineSecret
 	h.trustForwardedFor = c.TrustForwardedFor
 	h.endpoint = c.Endpoint
+	h.strictHTTPSig = c.HTTPSigMode == "strict"
 	// Parse the explicit private-network exception list before any client or
 	// network is constructed: an invalid element must fail init, not start a
 	// partially accepted policy or run discovery first. The typed value is
@@ -243,7 +245,7 @@ func (h *sharesHandler) CreateShare(w http.ResponseWriter, r *http.Request) {
 		reqres.WriteError(w, r, reqres.APIErrorInvalidParameter, "error discovering the remote OCM server", err)
 		return
 	}
-	if err := verifySignature(ctx, h.ocmClient, r, body, h.endpoint, disco); err != nil {
+	if err := verifySignature(ctx, h.ocmClient, r, body, h.endpoint, h.strictHTTPSig, disco); err != nil {
 		reqres.WriteError(w, r, reqres.APIErrorUnauthenticated, "invalid HTTP signature", err)
 		return
 	}

@@ -19,7 +19,11 @@
 package grpc_test
 
 import (
+	"crypto/ed25519"
+	"crypto/rand"
+	"crypto/x509"
 	"database/sql"
+	"encoding/pem"
 	"fmt"
 	"os"
 	"time"
@@ -35,6 +39,26 @@ import (
 
 	_ "github.com/go-sql-driver/mysql"
 )
+
+// addSigningKeys gives the cernbox and cesnet servers each a key and strict mode when signed is true.
+// Else the key paths are empty, the servers do not sign, and they accept unsigned requests.
+func addSigningKeys(signed bool, resources map[string]Resource, variables map[string]string) {
+	variables["http_sig_mode"] = ""
+	if signed {
+		variables["http_sig_mode"] = "strict"
+	}
+	for _, server := range []string{"cernbox", "cesnet"} {
+		name := server + "_signing_key"
+		variables[name] = ""
+		if signed {
+			_, private, err := ed25519.GenerateKey(rand.Reader)
+			Expect(err).ToNot(HaveOccurred())
+			der, err := x509.MarshalPKCS8PrivateKey(private)
+			Expect(err).ToNot(HaveOccurred())
+			resources[name] = File{Content: string(pem.EncodeToMemory(&pem.Block{Type: "PRIVATE KEY", Bytes: der}))}
+		}
+	}
+}
 
 func initData(driver string, tokens []*invitepb.InviteToken, acceptedUsers map[string][]*userpb.User) (map[string]string, func(), error) {
 	variables := map[string]string{

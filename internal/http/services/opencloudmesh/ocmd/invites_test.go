@@ -210,3 +210,25 @@ func TestAcceptInviteFromSigningServer(t *testing.T) {
 		}
 	})
 }
+
+func TestAcceptInviteStrictRejectsUnsigned(t *testing.T) {
+	stampGateway(&invitesMockGW{
+		acceptResp: &invitepb.AcceptInviteResponse{
+			Status: &rpc.Status{Code: rpc.Code_CODE_OK},
+			UserId: &userpb.UserId{OpaqueId: "local-user"},
+		},
+	})
+	disco := ocmDiscoveryServer(t, "webdav", "file")
+	defer disco.Close()
+	h := new(invitesHandler)
+	if err := h.init(&config{HTTPSigMode: "strict"}); err != nil {
+		t.Fatal(err)
+	}
+	h.ocmClient = NewPublicOnlyClientWithConfig(client.TransportConfig{AllowLoopback: true})
+
+	rr := httptest.NewRecorder()
+	h.AcceptInvite(rr, newInviteRequest(disco.Listener.Addr().String()))
+	if rr.Code != http.StatusForbidden {
+		t.Fatalf("AcceptInvite() status = %d, want %d", rr.Code, http.StatusForbidden)
+	}
+}

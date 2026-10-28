@@ -56,6 +56,9 @@ type config struct {
 	// wellknown ocmprovider. Set it to stop the replay of signed requests through a
 	// false Host header. If it is empty, the scheme and host come from the request.
 	Endpoint string `mapstructure:"endpoint" validate:"omitempty,http_url"`
+	// HTTPSigMode is permissive (the default) or strict. Strict rejects every unsigned
+	// request. Permissive rejects an unsigned request only from a server that lists http-sig.
+	HTTPSigMode string `mapstructure:"http_sig_mode" validate:"omitempty,oneof=permissive strict"`
 	// OCMClientInsecure skips TLS verification when probing a remote provider's
 	// discovery endpoint. Off by default; turning it on exposes discovery to MITM.
 	OCMClientInsecure bool `mapstructure:"ocm_client_insecure"`
@@ -146,13 +149,13 @@ func (s *svc) handlersInit(log *zerolog.Logger) error {
 	if err := notifHandler.init(s.Conf); err != nil {
 		return err
 	}
-	// Both handlers discover a remote server that the request names, thus they use the same public-only client.
-	invitesHandler.ocmClient = sharesHandler.ocmClient
-
 	tokenHandler := new(tokenHandler)
 	if err := tokenHandler.init(s.Conf); err != nil {
 		return err
 	}
+	// These handlers discover a remote server that the request names, thus they use the same public-only client.
+	invitesHandler.ocmClient = sharesHandler.ocmClient
+	tokenHandler.ocmClient = sharesHandler.ocmClient
 
 	s.shares = sharesHandler
 	s.invites = invitesHandler

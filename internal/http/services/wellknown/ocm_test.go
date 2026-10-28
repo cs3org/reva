@@ -109,7 +109,8 @@ func TestInitCapabilitiesDoNotDuplicateExchangeToken(t *testing.T) {
 	}
 }
 
-func TestInitWithSigningKey(t *testing.T) {
+func writeKeyFile(t *testing.T) string {
+	t.Helper()
 	_, private, err := ed25519.GenerateKey(rand.Reader)
 	if err != nil {
 		t.Fatal(err)
@@ -122,6 +123,11 @@ func TestInitWithSigningKey(t *testing.T) {
 	if err := os.WriteFile(keyFile, pem.EncodeToMemory(&pem.Block{Type: "PRIVATE KEY", Bytes: der}), 0o600); err != nil {
 		t.Fatal(err)
 	}
+	return keyFile
+}
+
+func TestInitWithSigningKey(t *testing.T) {
+	keyFile := writeKeyFile(t)
 
 	s, err := New(context.Background(), map[string]any{
 		"ocmprovider": map[string]any{
@@ -161,6 +167,21 @@ func TestInitWithSigningKey(t *testing.T) {
 	}
 	if rec.Code != http.StatusOK || len(set.Keys) != 1 || set.Keys[0].Kid == "" {
 		t.Errorf("expected one key with a kid, got %d: %s", rec.Code, rec.Body)
+	}
+}
+
+func TestInitStrictHTTPSig(t *testing.T) {
+	h := &wkocmHandler{}
+	if err := h.init(&OcmProviderConfig{Endpoint: "https://cernbox.cern.ch", HTTPSigMode: "strict"}); err == nil {
+		t.Error("expected an error for strict mode without signing_key")
+	}
+
+	h = &wkocmHandler{}
+	if err := h.init(&OcmProviderConfig{Endpoint: "https://cernbox.cern.ch", HTTPSigMode: "strict", SigningKey: writeKeyFile(t)}); err != nil {
+		t.Fatal(err)
+	}
+	if !slices.Contains(h.data.Criteria, "must-use-http-sig") {
+		t.Errorf("expected must-use-http-sig criterion, got %v", h.data.Criteria)
 	}
 }
 
