@@ -214,6 +214,7 @@ func New(ctx context.Context, m map[string]any) (storage.FS, error) {
 		NobodyGID:     o.NobodyGID,     // Use configured nobody GID
 		ExternalUID:   o.ExternalAccountsUserUID,
 		ExternalGID:   o.ExternalAccountsUserGID,
+		MaxThreads:    o.MaxUserThreads,
 	})
 	if err != nil {
 		return nil, errors.Wrap(err, "cephmount: failed to initialize user thread pool")
