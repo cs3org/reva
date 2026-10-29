@@ -108,9 +108,9 @@ func (c *Config) ApplyDefaults() {
 	c.GatewaySvc = sharedconf.GetGatewaySVC(c.GatewaySvc)
 }
 
-func (s *svc) getFiles(ctx context.Context, files, ids []string) ([]string, error) {
-	if len(files) == 0 && len(ids) == 0 {
-		return nil, errtypes.BadRequest("file and id lists are both empty")
+func (s *svc) getFiles(ctx context.Context, ids []string) ([]string, error) {
+	if len(ids) == 0 {
+		return nil, errtypes.BadRequest("id list is empty")
 	}
 
 	gtw, err := service.Gateway(ctx)
@@ -118,7 +118,7 @@ func (s *svc) getFiles(ctx context.Context, files, ids []string) ([]string, erro
 		return nil, err
 	}
 
-	f := make([]string, 0, len(files)+len(ids))
+	f := make([]string, 0, len(ids))
 
 	for _, id := range ids {
 		// id is base64 encoded and after decoding has the form <storage_id>!<resource_id>
@@ -152,8 +152,6 @@ func (s *svc) getFiles(ctx context.Context, files, ids []string) ([]string, erro
 
 		f = append(f, resp.Info.Path)
 	}
-
-	f = append(f, files...)
 
 	// check if all the folders are allowed to be archived
 	err = s.allAllowed(f)
@@ -208,22 +206,14 @@ func (s *svc) writeHTTPError(ctx context.Context, w http.ResponseWriter, err err
 
 func (s *svc) Handler() http.Handler {
 	return http.HandlerFunc(func(rw http.ResponseWriter, r *http.Request) {
-		// get the paths and/or the resources id from the query
 		ctx := r.Context()
 
 		log := appctx.GetLogger(ctx)
 		v := r.URL.Query()
 
-		paths, ok := v["path"]
-		if !ok {
-			paths = []string{}
-		}
-		ids, ok := v["id"]
-		if !ok {
-			ids = []string{}
-		}
-
-		files, err := s.getFiles(ctx, paths, ids)
+		// Only resource IDs are accepted. A client path is not clean, and the
+		// paths that storage returns for the IDs are.
+		files, err := s.getFiles(ctx, v["id"])
 		if err != nil {
 			s.writeHTTPError(ctx, rw, err)
 			return
