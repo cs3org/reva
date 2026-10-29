@@ -57,8 +57,7 @@ func transferTxCommand(rt *cli.Runtime, name, short string,
 				return err
 			}
 			return rt.Print(cmd.OutOrStdout(), info, func(w io.Writer) {
-				t := table.NewWriter()
-				t.SetOutputMirror(w)
+				t := cli.NewTable(w)
 				t.AppendHeader(table.Row{"ShareId.OpaqueId", "Id.OpaqueId", "Status", "Ctime"})
 				ctime := time.Unix(int64(info.Ctime.GetSeconds()), int64(info.Ctime.GetNanos()))
 				t.AppendRow(table.Row{info.ShareId.GetOpaqueId(), info.Id.GetOpaqueId(), info.Status, ctime.Format(time.UnixDate)})
@@ -84,8 +83,7 @@ func transferListCommand(rt *cli.Runtime) *cobra.Command {
 				return err
 			}
 			return rt.Print(cmd.OutOrStdout(), transfers, func(w io.Writer) {
-				t := table.NewWriter()
-				t.SetOutputMirror(w)
+				t := cli.NewTable(w)
 				t.AppendHeader(table.Row{"ShareId.OpaqueId", "Id.OpaqueId"})
 				for _, tx := range transfers {
 					t.AppendRow(table.Row{tx.ShareId.GetOpaqueId(), tx.Id.GetOpaqueId()})

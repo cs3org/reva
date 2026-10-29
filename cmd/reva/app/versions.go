@@ -53,7 +53,7 @@ func versionsCommand(rt *cli.Runtime) *cobra.Command {
 				}
 			})
 		},
-	})
+	}, versionsRestoreCommand(rt), versionsDownloadCommand(rt), versionsDiffCommand(rt))
 	return cmd
 }
 

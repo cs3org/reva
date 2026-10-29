@@ -22,11 +22,11 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"path/filepath"
 	"strings"
 	"testing"
 
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
-	"github.com/cs3org/reva/v3/internal/cli/state"
 	"github.com/cs3org/reva/v3/pkg/cli/backend"
 	"github.com/cs3org/reva/v3/pkg/cli/clitest"
 	"github.com/spf13/pflag"
@@ -36,21 +36,24 @@ import (
 
 func TestBackendSelection(t *testing.T) {
 	for _, tc := range []struct {
-		transport, gateway string
-		wantErr            string
+		transport, gateway, endpoint string
+		want, wantErr                string
 	}{
-		{"", "", ""},
-		{"grpc", "", ""},
-		{"auto", "gw:9142", ""},
-		{"auto", "", "no gateway is set"},
-		{"http", "gw:9142", "http transport is not available yet"},
-		{"bogus", "", "unknown transport"},
+		{"", "", "", backend.GRPC, ""},
+		{"grpc", "", "", backend.GRPC, ""},
+		{"auto", "gw:9142", "", backend.GRPC, ""},
+		{"auto", "", "", "", "no gateway and no endpoint are set"},
+		{"auto", "", "https://box.example.org", backend.HTTP, ""},
+		{"http", "gw:9142", "", "", "endpoint not set"},
+		{"http", "gw:9142", "https://box.example.org", backend.HTTP, ""},
+		{"http", "", "http://box.example.org", "", "has no TLS"},
+		{"bogus", "", "", "", "unknown transport"},
 	} {
-		r := &Runtime{transport: tc.transport, gatewayAddr: tc.gateway}
+		r := &Runtime{transport: tc.transport, gatewayAddr: tc.gateway, httpEndpoint: tc.endpoint}
 		b, err := r.Backend(context.Background())
 		switch {
-		case tc.wantErr == "" && (err != nil || b.Transport() != backend.GRPC):
-			t.Errorf("%q, gateway %q: %v, %v: want the grpc backend", tc.transport, tc.gateway, b, err)
+		case tc.wantErr == "" && (err != nil || b.Transport() != tc.want):
+			t.Errorf("%q, gateway %q: %v, %v: want the %s backend", tc.transport, tc.gateway, b, err, tc.want)
 		case tc.wantErr != "" && (err == nil || !strings.Contains(err.Error(), tc.wantErr)):
 			t.Errorf("%q, gateway %q: err = %v, want %q", tc.transport, tc.gateway, err, tc.wantErr)
 		}
@@ -58,17 +61,16 @@ func TestBackendSelection(t *testing.T) {
 }
 
 func TestLoadTransport(t *testing.T) {
+	dir := setup(t)
+	writeFile(t, filepath.Join(dir, ".config", "reva", "config.toml"), "[connection]\ntransport = \"http\"\nendpoint = \"https://config.example.org\"\n")
 	t.Setenv("REVA_TRANSPORT", "auto")
-	t.Setenv("REVA_ENDPOINT", "https://env.example.org")
-	r := &Runtime{}
+	r := NewRuntime(nil)
 	fs := pflag.NewFlagSet("t", pflag.ContinueOnError)
 	r.AddFlags(fs)
 	if err := fs.Parse([]string{"--endpoint", "https://flag.example.org"}); err != nil {
 		t.Fatal(err)
 	}
-	var c state.Config
-	c.Connection.Transport = "http"
-	if err := r.loadTransport(fs, c); err != nil {
+	if err := r.Load(fs); err != nil {
 		t.Fatal(err)
 	}
 	if r.Transport() != "auto" || r.httpEndpoint != "https://flag.example.org" {
@@ -144,7 +146,7 @@ func TestAbility(t *testing.T) {
 		t.Errorf("err = %v, want not available over fake", err)
 	}
 	r.httpEndpoint = "https://example.org"
-	if _, err := Ability[backend.PreferenceStore](context.Background(), r, "preferences"); !errors.Is(err, backend.ErrNotAvailable) || !errors.Is(err, errHTTPNotBuilt) {
-		t.Errorf("err = %v, want not available, and the https backend not built", err)
+	if _, err := Ability[backend.PreferenceStore](context.Background(), r, "preferences"); !errors.Is(err, backend.ErrNotAvailable) || err.Error() != "preferences is not available over http" {
+		t.Errorf("err = %v, want not available over http either", err)
 	}
 }

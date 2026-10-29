@@ -23,6 +23,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -52,6 +53,26 @@ func (l locator) UploadTarget(_ context.Context, _ *provider.Reference, _ int64,
 
 func (locator) OpenInApp(context.Context, *provider.Reference, backend.AppOptions) (*appprovider.OpenInAppURL, error) {
 	return nil, nil
+}
+
+func (l locator) ResumableTarget(context.Context, *provider.Reference, int64, string) (*backend.Target, error) {
+	return &backend.Target{URL: l.url + "/tus/1", Header: http.Header{"X-Reva-Transfer": {"tx"}}}, nil
+}
+
+func (l locator) VersionTarget(_ context.Context, _ *provider.Reference, key string) (*backend.Target, error) {
+	return &backend.Target{URL: l.url + "/v/" + key, Header: http.Header{"X-Reva-Transfer": {"tx"}}}, nil
+}
+
+func (l locator) ArchiveTarget(context.Context, []*provider.Reference, string) (*backend.Target, error) {
+	return nil, backend.NotAvailable("test", "archive")
+}
+
+func (l locator) Capabilities(context.Context) (*backend.Capabilities, error) {
+	return &backend.Capabilities{TUS: true, MaxChunkSize: 4}, nil
+}
+
+func (l locator) AuthHeader(context.Context) (http.Header, error) {
+	return http.Header{"X-Reva-Transfer": {"tx"}}, nil
 }
 
 func TestDownloadOffset(t *testing.T) {
@@ -110,4 +131,119 @@ func TestUpload(t *testing.T) {
 	if se, ok := err.(*backend.StatusError); !ok || se.Code != rpc.Code_CODE_FAILED_PRECONDITION {
 		t.Errorf("upload with a stale etag: %v, want CODE_FAILED_PRECONDITION", err)
 	}
+}
+
+// tusServer keeps one upload, and refuses a part at the offset failAt once.
+type tusServer struct {
+	data   []byte
+	failAt int64
+}
+
+func (ts *tusServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	if r.Header.Get("X-Reva-Transfer") != "tx" || r.Header.Get("Tus-Resumable") == "" {
+		http.Error(w, "bad request", http.StatusBadRequest)
+		return
+	}
+	switch r.Method {
+	case http.MethodHead:
+		w.Header().Set("Upload-Offset", strconv.Itoa(len(ts.data)))
+	case http.MethodPatch:
+		off, _ := strconv.ParseInt(r.Header.Get("Upload-Offset"), 10, 64)
+		if off != int64(len(ts.data)) {
+			http.Error(w, "wrong offset", http.StatusConflict)
+			return
+		}
+		if off == ts.failAt {
+			ts.failAt = -1
+			http.Error(w, "down", http.StatusServiceUnavailable)
+			return
+		}
+		b, _ := io.ReadAll(r.Body)
+		ts.data = append(ts.data, b...)
+		w.Header().Set("Upload-Offset", strconv.Itoa(len(ts.data)))
+		w.WriteHeader(http.StatusNoContent)
+	}
+}
+
+func TestUploadResumable(t *testing.T) {
+	ts := &tusServer{failAt: 8}
+	srv := httptest.NewServer(ts)
+	defer srv.Close()
+	p := New(srv.Client(), locator{url: srv.URL})
+	open := func() (io.ReadCloser, error) { return io.NopCloser(strings.NewReader("0123456789")), nil }
+	ref := &provider.Reference{Path: "/f"}
+	var last backend.Upload
+	err := p.UploadResumable(context.Background(), ref, open, 10, "", func(u backend.Upload) { last = u })
+	if err == nil || string(ts.data) != "01234567" || last.Offset != 8 {
+		t.Fatalf("first run: err %v, server has %q, state %+v: want a failure after 8 bytes", err, ts.data, last)
+	}
+	if err := p.ResumeUpload(context.Background(), last, open, func(u backend.Upload) { last = u }); err != nil {
+		t.Fatal(err)
+	}
+	if string(ts.data) != "0123456789" || last.Offset != 10 {
+		t.Errorf("after resume the server has %q, state %+v: want the whole file", ts.data, last)
+	}
+}
+
+func TestRenewAfterUnauthorized(t *testing.T) {
+	token := "old"
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Query().Get("t") != "new" {
+			http.Error(w, "expired", http.StatusUnauthorized)
+			return
+		}
+		io.WriteString(w, "content of "+r.URL.Path)
+	}))
+	defer srv.Close()
+	renewed := 0
+	loc := renewLocator{url: srv.URL, token: &token}
+	p := New(srv.Client(), loc)
+	p.Renew = func(context.Context) error { renewed++; token = "new"; return nil }
+	body, _, err := p.DownloadVersion(context.Background(), &provider.Reference{Path: "/f"}, "v1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	got, _ := io.ReadAll(body)
+	body.Close()
+	if string(got) != "content of /v/v1" || renewed != 1 {
+		t.Errorf("got %q after %d renewals, want the version after one", got, renewed)
+	}
+}
+
+type renewLocator struct {
+	locator
+	token *string
+}
+
+func (l renewLocator) VersionTarget(ctx context.Context, ref *provider.Reference, key string) (*backend.Target, error) {
+	t, _ := l.locator.VersionTarget(ctx, ref, key)
+	t.URL += "?t=" + *l.token
+	return t, nil
+}
+
+func TestUploadChecksumHeader(t *testing.T) {
+	var header, query string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		header, query = r.Header.Get("OC-Checksum"), r.URL.RawQuery
+		w.WriteHeader(http.StatusCreated)
+	}))
+	defer srv.Close()
+	p := New(srv.Client(), davLocator{locator{url: srv.URL, checksums: []*provider.ResourceChecksumPriority{
+		{Type: provider.ResourceChecksumType_RESOURCE_CHECKSUM_TYPE_ADLER32},
+	}}})
+	open := func() (io.ReadCloser, error) { return io.NopCloser(strings.NewReader("hello")), nil }
+	if err := p.Upload(context.Background(), &provider.Reference{Path: "/f"}, open, 5, "negotiate"); err != nil {
+		t.Fatal(err)
+	}
+	if header != "ADLER32:062c0215" || query != "" {
+		t.Errorf("OC-Checksum %q, query %q: want the adler32 in the header only", header, query)
+	}
+}
+
+type davLocator struct{ locator }
+
+func (l davLocator) UploadTarget(ctx context.Context, ref *provider.Reference, size int64, ifMatch string) (*backend.Target, error) {
+	t, err := l.locator.UploadTarget(ctx, ref, size, ifMatch)
+	t.ChecksumHeader = true
+	return t, err
 }

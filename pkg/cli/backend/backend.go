@@ -209,7 +209,38 @@ type Locator interface {
 	// UploadTarget returns where to send size bytes for ref. An ifMatch that
 	// is not empty is the etag that ref must still have.
 	UploadTarget(ctx context.Context, ref *provider.Reference, size int64, ifMatch string) (*Target, error)
+	// ResumableTarget starts a TUS upload of size bytes to ref. The URL of
+	// the target takes the parts (PATCH) and tells the offset (HEAD). A
+	// checksum that is not empty, TYPE:value, is what the file must have.
+	ResumableTarget(ctx context.Context, ref *provider.Reference, size int64, checksum string) (*Target, error)
+	// VersionTarget returns where to read the version key of ref.
+	VersionTarget(ctx context.Context, ref *provider.Reference, key string) (*Target, error)
+	// ArchiveTarget returns where to read refs as one archive in format.
+	ArchiveTarget(ctx context.Context, refs []*provider.Reference, format string) (*Target, error)
+	// Capabilities tells what the data services of the server can do.
+	Capabilities(ctx context.Context) (*Capabilities, error)
+	// AuthHeader returns the credentials for a URL of a target, to continue
+	// a transfer that an earlier call started.
+	AuthHeader(ctx context.Context) (http.Header, error)
 	OpenInApp(ctx context.Context, ref *provider.Reference, opts AppOptions) (*appprovider.OpenInAppURL, error)
+}
+
+// Capabilities are the abilities of the data services of a server.
+type Capabilities struct {
+	// TUS tells that uploads can be resumable. MaxChunkSize is the largest
+	// part that the server takes, zero for no limit.
+	TUS          bool
+	MaxChunkSize int64
+	// Checksums are the checksum types of the server, the preferred one
+	// first.
+	Checksums []string
+	// ArchiveFormats is empty when the server has no archiver.
+	ArchiveFormats  []string
+	ArchiveMaxFiles int64
+	ArchiveMaxSize  int64
+	Versioning      bool
+	ServerVersion   string
+	ServerProduct   string
 }
 
 // Target is one HTTP transfer.
@@ -221,6 +252,9 @@ type Target struct {
 	// upload, in the xs and xs_type query parameters. nil means that the
 	// target takes no checksum.
 	Checksums []*provider.ResourceChecksumPriority
+	// ChecksumHeader is set for a WebDAV target: the checksum goes in the
+	// OC-Checksum header, as TYPE:value.
+	ChecksumHeader bool
 }
 
 // AppOptions select how OpenInApp opens a file.
@@ -239,6 +273,8 @@ type DataPlane interface {
 	// Download returns the content of ref from offset, and the number of
 	// bytes that it has, or -1 if that is not known.
 	Download(ctx context.Context, ref *provider.Reference, offset int64) (io.ReadCloser, int64, error)
+	// DownloadVersion returns the content of the version key of ref.
+	DownloadVersion(ctx context.Context, ref *provider.Reference, key string) (io.ReadCloser, int64, error)
 	// Upload writes ref in one request. open can be called more than once,
 	// because a checksum reads the content before the transfer. checksum is
 	// the type to send: adler32, md5, sha1, negotiate for the preference of
@@ -250,12 +286,27 @@ type DataPlane interface {
 	// UploadStream writes size bytes from r, which can be read only once. It
 	// is never retried.
 	UploadStream(ctx context.Context, ref *provider.Reference, r io.Reader, size int64) error
-	// UploadResumable writes ref with TUS, in parts that a new call can
-	// continue.
-	UploadResumable(ctx context.Context, ref *provider.Reference, open func() (io.ReadCloser, error), size int64, checksum string) error
+	// UploadResumable writes ref with TUS, in parts. A transfer that stops
+	// can continue with ResumeUpload, from the state that progress gets
+	// after each part. progress can be nil.
+	UploadResumable(ctx context.Context, ref *provider.Reference, open func() (io.ReadCloser, error), size int64, checksum string, progress func(Upload)) error
+	// ResumeUpload continues the TUS upload up from the offset that the
+	// server has. An upload that the server does not know any more fails
+	// with CODE_NOT_FOUND.
+	ResumeUpload(ctx context.Context, up Upload, open func() (io.ReadCloser, error), progress func(Upload)) error
+	// Capabilities tells what the data services of the server can do.
+	Capabilities(ctx context.Context) (*Capabilities, error)
 	// Archive returns refs as one archive, in format zip or tar.
 	Archive(ctx context.Context, refs []*provider.Reference, format string) (io.ReadCloser, error)
 	OpenInApp(ctx context.Context, ref *provider.Reference, opts AppOptions) (*appprovider.OpenInAppURL, error)
+}
+
+// Upload is the state of a TUS upload, enough to continue it.
+type Upload struct {
+	URL    string `json:"url"`
+	Path   string `json:"path"`
+	Size   int64  `json:"size"`
+	Offset int64  `json:"offset"`
 }
 
 // The optional abilities: a backend that has one implements its interface.

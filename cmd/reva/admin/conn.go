@@ -31,7 +31,7 @@ func adminErr(err error) error {
 	}
 	switch status.Code(err) {
 	case codes.Unauthenticated, codes.PermissionDenied:
-		return fmt.Errorf("%w (the admin token may be expired or missing: run `reva elevate`)", err)
+		return fmt.Errorf("%w (the admin token may be expired or missing: run `%s elevate`)", err, rt.Name())
 	default:
 		return err
 	}

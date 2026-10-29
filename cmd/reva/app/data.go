@@ -19,41 +19,86 @@
 package revacmd
 
 import (
-	"errors"
 	"fmt"
 	"io"
 	"os"
 	"path"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/cheggaaa/pb"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/cs3org/reva/v3/pkg/cli"
+	"github.com/cs3org/reva/v3/pkg/cli/data/transfer"
+	"github.com/cs3org/reva/v3/pkg/cli/output"
 	"github.com/cs3org/reva/v3/pkg/utils"
 	"github.com/spf13/cobra"
 )
 
-// The prefixes of a cp argument. A path is local unless it starts with cb:,
-// because an absolute path like /eos/... can exist on the local machine too.
-// file: marks a local path whose name starts with cb:.
-const (
-	remotePrefix = "cb:"
-	localPrefix  = "file:"
-)
+const remotePrefix = "cb:"
+
+type transferFlags struct {
+	recursive, force, dryRun, verify, noArchive bool
+	jobs                                        int
+}
+
+func (t *transferFlags) register(cmd *cobra.Command) {
+	f := cmd.Flags()
+	f.BoolVarP(&t.recursive, "recursive", "r", false, "copy folders and their contents")
+	f.BoolVarP(&t.recursive, "recursive-upper", "R", false, "same as --recursive")
+	_ = f.MarkHidden("recursive-upper")
+	f.BoolVarP(&t.force, "force", "f", false, "overwrite existing destinations")
+	f.BoolVar(&t.dryRun, "dry-run", false, "report what would be transferred without doing it")
+	f.BoolVar(&t.verify, "verify", false, "compute and check checksums")
+	f.BoolVar(&t.noArchive, "no-archive", false, "download a folder file by file instead of as one archive")
+	f.IntVarP(&t.jobs, "jobs", "j", 0, "number of files to transfer at once")
+}
+
+func (t *transferFlags) engine(cmd *cobra.Command, rt *cli.Runtime) (*transfer.Engine, error) {
+	var progress transfer.ProgressFunc
+	if rt.ShowProgress() {
+		progress = func(ev transfer.Event) {
+			switch {
+			case !ev.Done:
+			case ev.Err != nil:
+				fmt.Fprintf(cmd.ErrOrStderr(), "  ! %s: %v\n", ev.Path, ev.Err)
+			default:
+				fmt.Fprintf(cmd.ErrOrStderr(), "  %s (%s)\n", ev.Path, output.HumanSize(ev.Transferred))
+			}
+		}
+	}
+	return rt.Engine(cmd.Context(), cli.TransferOptions{
+		DryRun: t.dryRun, Overwrite: t.force, Verify: t.verify, NoArchive: t.noArchive, Jobs: t.jobs, Progress: progress,
+	})
+}
+
+func reportTransfer(cmd *cobra.Command, rt *cli.Runtime, stats *transfer.Stats, verb string) error {
+	rt.Msg(cmd.ErrOrStderr(), "%s %d files (%s) in %s, %d skipped", verb, stats.Files, output.HumanSize(stats.Bytes),
+		stats.Duration.Round(time.Millisecond), stats.Skipped)
+	if rt.Output() == "json" {
+		return rt.Print(cmd.OutOrStdout(), stats, nil)
+	}
+	return nil
+}
 
 func cpCommand(rt *cli.Runtime) *cobra.Command {
-	var force bool
+	var flags transferFlags
 	var xsFlag, protocol string
 	cmd := &cobra.Command{
 		Use:   "cp SOURCE DEST",
 		Short: "Copy between your computer and reva",
-		Long: "Copy a file between your computer and reva.\n\n" +
+		Long: "Copy files between your computer and reva.\n\n" +
 			"Mark the remote side with cb:, because a path like /eos/... can exist on your\n" +
-			"computer too. A destination that is a folder, or that ends with /, gets the\n" +
-			"name of the source. An existing destination is skipped unless you pass -f.",
+			"computer too, or write it with a space alias (home:Documents). A destination\n" +
+			"that is a folder, or that ends with /, gets the name of the source. An\n" +
+			"existing destination is skipped unless you pass -f.\n\n" +
+			"A folder needs -r. Large uploads go up in parts, and an interrupted transfer\n" +
+			"carries on where it stopped. A folder comes down as one archive when the\n" +
+			"server has an archiver.",
 		Example: "  reva cp ./report.pdf cb:/home/Documents/\n" +
-			"  reva cp cb:/home/Documents/report.pdf ./report.pdf",
+			"  reva cp cb:/home/Documents/report.pdf ./report.pdf\n" +
+			"  reva cp -r ./data home:data",
 		Args: cobra.ExactArgs(2),
 		ValidArgsFunction: func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
 			if len(args) >= 2 {
@@ -70,49 +115,75 @@ func cpCommand(rt *cli.Runtime) *cobra.Command {
 			return paths, directive
 		},
 		RunE: func(cmd *cobra.Command, args []string) error {
-			src, srcRemote := splitTransferArg(args[0])
-			dst, dstRemote := splitTransferArg(args[1])
+			ctx := cmd.Context()
+			src, dst, srcRemote, dstRemote, intoDir, err := rt.TransferPaths(ctx, args[0], args[1])
+			if err != nil {
+				return err
+			}
+			if intoDir {
+				dst += "/"
+			}
 			switch {
 			case srcRemote && dstRemote:
 				if err := rt.ConfirmMutation(cmd.CommandPath()); err != nil {
 					return err
 				}
-				b, err := rt.Backend(cmd.Context())
+				b, err := rt.Backend(ctx)
 				if err != nil {
 					return err
 				}
-				return b.Files().Copy(cmd.Context(), pathRef(src), pathRef(dst), force)
-			case !srcRemote && !dstRemote:
-				return fmt.Errorf("both %q and %q are local paths: mark the remote side with %q, for example %s%s",
-					args[0], args[1], remotePrefix, remotePrefix, args[1])
+				if info, err := b.Files().Stat(ctx, pathRef(dst)); intoDir || err == nil && info.Type == provider.ResourceType_RESOURCE_TYPE_CONTAINER {
+					dst = path.Join(dst, path.Base(src))
+				}
+				if flags.dryRun {
+					rt.Msg(cmd.ErrOrStderr(), "Would copy %s to %s", src, dst)
+					return nil
+				}
+				return b.Files().Copy(ctx, pathRef(src), pathRef(path.Clean(dst)), flags.force)
 			case dstRemote:
 				if err := rt.ConfirmMutation(cmd.CommandPath()); err != nil {
 					return err
 				}
-				return upload(cmd, rt, src, dst, force, xsFlag, protocol)
+				if st, err := os.Stat(src); err == nil && st.IsDir() {
+					return uploadTree(cmd, rt, &flags, src, dst)
+				}
+				return upload(cmd, rt, src, dst, flags.force, xsFlag, protocol)
 			}
-			return download(cmd, rt, src, dst, force)
+			return download(cmd, rt, &flags, src, dst)
 		},
 	}
-	cmd.Flags().BoolVarP(&force, "force", "f", false, "overwrite existing destinations")
+	flags.register(cmd)
 	cmd.Flags().StringVar(&xsFlag, "xs", "negotiate", "checksum type of an upload, or negotiate to use the server preference")
-	cmd.Flags().StringVar(&protocol, "protocol", "simple", "upload protocol")
+	cmd.Flags().StringVar(&protocol, "protocol", "simple", "upload protocol of a file: simple or tus (resumable)")
 	return cmd
 }
 
-func splitTransferArg(arg string) (string, bool) {
-	if rest, ok := strings.CutPrefix(arg, localPrefix); ok {
-		return rest, false
+func uploadTree(cmd *cobra.Command, rt *cli.Runtime, flags *transferFlags, local, remote string) error {
+	if !flags.recursive {
+		return cli.Usagef("%s is a folder: pass -r to upload it", local)
 	}
-	if rest, ok := strings.CutPrefix(arg, remotePrefix); ok {
-		return rest, true
+	b, err := rt.Backend(cmd.Context())
+	if err != nil {
+		return err
 	}
-	return arg, false
+	if info, err := b.Files().Stat(cmd.Context(), pathRef(remote)); strings.HasSuffix(remote, "/") ||
+		err == nil && info.Type == provider.ResourceType_RESOURCE_TYPE_CONTAINER {
+		remote = path.Join(remote, filepath.Base(filepath.Clean(local)))
+	}
+	e, err := flags.engine(cmd, rt)
+	if err != nil {
+		return err
+	}
+	stats, err := e.UploadTree(cmd.Context(), local, path.Clean(remote))
+	if err != nil {
+		return err
+	}
+	return reportTransfer(cmd, rt, stats, "Uploaded")
 }
 
 func upload(cmd *cobra.Command, rt *cli.Runtime, local, target string, force bool, xsFlag, protocol string) error {
-	if protocol != "simple" {
-		return errors.New("upload: protocol not supported: " + protocol)
+	if protocol != "simple" && protocol != "tus" {
+		return cli.Usagef("upload: protocol not supported: %s: use simple or tus", protocol)
 	}
 	absPath, err := utils.ResolvePath(local)
 	if err != nil {
@@ -121,9 +192,6 @@ func upload(cmd *cobra.Command, rt *cli.Runtime, local, target string, force boo
 	md, err := os.Stat(absPath)
 	if err != nil {
 		return err
-	}
-	if md.IsDir() {
-		return fmt.Errorf("%s is a folder: cp copies only files for now", local)
 	}
 
 	ctx := cmd.Context()
@@ -153,14 +221,19 @@ func upload(cmd *cobra.Command, rt *cli.Runtime, local, target string, force boo
 	rt.Debugf("local file size: %d bytes", md.Size())
 
 	open := func() (io.ReadCloser, error) { return os.Open(absPath) }
-	if err := d.Upload(ctx, pathRef(target), open, md.Size(), xsFlag); err != nil {
+	if protocol == "tus" {
+		err = d.UploadResumable(ctx, pathRef(target), open, md.Size(), "", nil)
+	} else {
+		err = d.Upload(ctx, pathRef(target), open, md.Size(), xsFlag)
+	}
+	if err != nil {
 		return err
 	}
 	rt.Msg(cmd.ErrOrStderr(), "Uploaded %s to %s (%d bytes)", local, target, md.Size())
 	return nil
 }
 
-func download(cmd *cobra.Command, rt *cli.Runtime, remote, local string, force bool) error {
+func download(cmd *cobra.Command, rt *cli.Runtime, flags *transferFlags, remote, local string) error {
 	ctx := cmd.Context()
 	b, err := rt.Backend(ctx)
 	if err != nil {
@@ -175,7 +248,21 @@ func download(cmd *cobra.Command, rt *cli.Runtime, remote, local string, force b
 		return err
 	}
 	if info.Type == provider.ResourceType_RESOURCE_TYPE_CONTAINER {
-		return fmt.Errorf("%s is a folder: cp copies only files for now", remote)
+		if !flags.recursive {
+			return cli.Usagef("%s is a folder: pass -r to download it", remote)
+		}
+		if st, err := os.Stat(local); err == nil && st.IsDir() {
+			local = filepath.Join(local, path.Base(remote))
+		}
+		e, err := flags.engine(cmd, rt)
+		if err != nil {
+			return err
+		}
+		stats, err := e.DownloadTree(ctx, remote, local)
+		if err != nil {
+			return err
+		}
+		return reportTransfer(cmd, rt, stats, "Downloaded")
 	}
 
 	absPath, err := utils.ResolvePath(local)
@@ -185,7 +272,7 @@ func download(cmd *cobra.Command, rt *cli.Runtime, remote, local string, force b
 	if st, err := os.Stat(absPath); err == nil && st.IsDir() {
 		absPath = filepath.Join(absPath, path.Base(info.Path))
 	}
-	if _, err := os.Stat(absPath); err == nil && !force {
+	if _, err := os.Stat(absPath); err == nil && !flags.force {
 		rt.Msg(cmd.ErrOrStderr(), "Skipped %s: it exists, pass -f to overwrite it", absPath)
 		return nil
 	}

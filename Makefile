@@ -75,7 +75,7 @@ GIT_COMMIT	?= `git rev-parse --short HEAD`
 VERSION		?= `git describe --always`
 GO_VERSION	?= `go version | awk '{print $$3}'`
 BUILD_DATE	= `date +%FT%T%z`
-BUILD_FLAGS     = -X github.com/cs3org/reva/v3/cmd/revad.gitCommit=$(GIT_COMMIT) -X github.com/cs3org/reva/v3/cmd/revad.version=$(VERSION) -X github.com/cs3org/reva/v3/cmd/revad.goVersion=$(GO_VERSION) -X github.com/cs3org/reva/v3/cmd/revad.buildDate=$(BUILD_DATE)
+BUILD_FLAGS     = -X github.com/cs3org/reva/v3/pkg/rversion.GitCommit=$(GIT_COMMIT) -X github.com/cs3org/reva/v3/pkg/rversion.Version=$(VERSION) -X github.com/cs3org/reva/v3/pkg/rversion.GoVersion=$(GO_VERSION) -X github.com/cs3org/reva/v3/pkg/rversion.BuildDate=$(BUILD_DATE)
 
 .PHONY: revad
 revad: ## Build revad
@@ -123,15 +123,14 @@ cernbox-revad-ceph-local: gaia ## Build revad with the CERNBox plugins from ../r
 revad-ceph: ## Build revad with Ceph
 	go build -ldflags "$(BUILD_FLAGS)" -tags ceph -o ./cmd/revad/revad ./cmd/revad/main
 
-CLI_BUILD_FLAGS = -X github.com/cs3org/reva/v3/pkg/rversion.GitCommit=$(GIT_COMMIT) -X github.com/cs3org/reva/v3/pkg/rversion.Version=$(VERSION) -X github.com/cs3org/reva/v3/pkg/rversion.GoVersion=$(GO_VERSION) -X github.com/cs3org/reva/v3/pkg/rversion.BuildDate=$(BUILD_DATE)
-
 .PHONY: reva
 reva: ## Build the reva CLI
-	go build -ldflags "-extldflags=-static $(CLI_BUILD_FLAGS)" -o ./cmd/reva/reva ./cmd/reva
+	go build -ldflags "-extldflags=-static $(BUILD_FLAGS)" -o ./cmd/reva/reva ./cmd/reva
 
 # The CERNBox build of the CLI: reva with the CLI plugins of
-# github.com/cernbox/reva-plugins/cli and the CERNBox brand. It needs a gaia
-# that supports --binary, --brand and a subpackage in --with.
+# github.com/cernbox/reva-plugins/cli and the CERNBox brand. It needs gaia
+# with --binary, --brand and a subpackage in --with (T35), and the brand
+# file of reva-plugins. Until then these targets fail.
 CERNBOX_BRAND ?= $(shell pwd)/../reva-plugins/cli/cernbox.toml
 
 .PHONY: cernbox

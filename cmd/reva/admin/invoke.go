@@ -188,7 +188,7 @@ func invokeCommand() *cobra.Command {
 
 			spec := invocationSpec(ctx, client, selector, invocation)
 			if err := checkArgs(spec, args); err != nil {
-				return err
+				return &cli.UsageError{Err: err}
 			}
 			if stream && spec.GetKind() != "" && !spec.Streaming {
 				return fmt.Errorf("invocation %s does not stream", invocation)

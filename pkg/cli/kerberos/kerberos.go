@@ -194,7 +194,7 @@ func (p *Provider) krb5Config() (*krb5config.Config, error) {
 func advice(err error, spn string) error {
 	msg := err.Error()
 	switch {
-	case strings.Contains(msg, "KDC_ERR_S_PRINCIPAL_UNKNOWN"):
+	case strings.Contains(msg, "KDC_ERR_S_PRINCIPAL_UNKNOWN"), strings.Contains(msg, "Server not found in Kerberos database"):
 		return fmt.Errorf("the KDC does not know the service principal %s: check --spn. If the host is a DNS "+
 			"alias, set 'rdns = false' in [libdefaults] of krb5.conf: %w", spn, err)
 	case strings.Contains(msg, "KRB_AP_ERR_TKT_EXPIRED"):

@@ -25,27 +25,29 @@ import (
 	"bytes"
 	"context"
 	"crypto/tls"
+	"encoding/csv"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
-	"io/fs"
 	"net/http"
 	"os"
 	"reflect"
-	"strconv"
-	"strings"
+	"sync"
 	"time"
 
 	gateway "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	"github.com/cs3org/reva/v3/internal/cli/state"
 	"github.com/cs3org/reva/v3/pkg/appctx"
+	"github.com/cs3org/reva/v3/pkg/cli/auth"
 	"github.com/cs3org/reva/v3/pkg/cli/backend"
+	"github.com/cs3org/reva/v3/pkg/cli/brand"
 	"github.com/cs3org/reva/v3/pkg/httpclient"
 	"github.com/spf13/pflag"
 	"golang.org/x/term"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/metadata"
@@ -54,28 +56,45 @@ import (
 	"google.golang.org/protobuf/proto"
 )
 
-// Runtime is built once per process from the flags, the environment and the
-// config file, in this order of precedence. It is the API of CLI plugins, so
-// its settings are read through accessors.
+// Runtime is built once per process. Its settings come from the flags, the
+// environment, the config files, the brand and the built-in defaults, in
+// this order. It is the API of CLI plugins, so its settings are read through
+// accessors.
 type Runtime struct {
-	gatewayAddr  string
-	adminHost    string
-	insecure     bool
-	skipVerify   bool
-	tokenValue   string
-	appTokenFile string
-	user         string
-	output       string
-	quiet        bool
-	debug        bool
-	noProgress   bool
-	timeout      time.Duration
-	as           string
-	reason       string
-	yes          bool
-	noElevate    bool
+	brand            *brand.Brand
+	transport        string
+	gatewayAddr      string
+	adminHost        string
+	insecure         bool
+	skipVerify       bool
+	tokenValue       string
+	tokenCache       string
+	appToken         string
+	appTokenFile     string
+	user             string
+	password         string
+	kerberosSPN      string
+	output           string
+	operatorCommands string
+	quiet            bool
+	debug            bool
+	noProgress       bool
+	timeout          time.Duration
+	// as is the user of --as: the user plane runs with an impersonated token.
+	as string
+	// reason of --reason, sent with every admin-plane call for the audit.
+	reason    string
+	yes       bool
+	noElevate bool
+	// httpEndpoint is the HTTPS endpoint of the deployment (--endpoint), for
+	// the HTTPS transport, and for --as when the Admin API cannot be reached.
 	httpEndpoint string
 	config       state.Config
+
+	resolved     bool
+	values       map[string]value
+	resolveErr   error
+	legacyConfig string
 
 	conn              *grpc.ClientConn
 	admin             *AdminClient
@@ -85,28 +104,23 @@ type Runtime struct {
 	plane             Plane
 	need              string
 	usedAdmin         bool
-	transport         string
 	backend           backend.Backend
 	data              backend.DataPlane
+	httpB             backend.Backend
+	revaTok           *auth.Token
 }
+
+// tokMu guards the reva token of the runtimes, which parallel transfers
+// share. It is not in Runtime, which tests copy.
+var tokMu sync.Mutex
 
 // AddFlags adds the global flags, which set the runtime, to fs.
 func (r *Runtime) AddFlags(fs *pflag.FlagSet) {
-	fs.StringVar(&r.gatewayAddr, "gateway", "", "address of the gateway, host:port (env REVA_GATEWAY)")
-	fs.StringVar(&r.httpEndpoint, "endpoint", "", "HTTPS endpoint of the deployment, https://host (env REVA_ENDPOINT)")
-	fs.StringVar(&r.transport, "transport", "", "transport of the user plane: grpc, http or auto (env REVA_TRANSPORT; default "+DefaultTransport+")")
-	fs.StringVar(&r.adminHost, "admin-host", "", "address of the Admin API, host:port or unix:///path (env REVA_ADMIN_HOST; default the gateway)")
-	fs.BoolVar(&r.insecure, "insecure", false, "allow plaintext, without TLS, on the selected transport (development only)")
-	fs.BoolVar(&r.skipVerify, "skip-verify", false, "do not verify the server certificate (development only)")
-	fs.StringVar(&r.tokenValue, "token", "", "use this token instead of signing in (env REVA_TOKEN)")
-	fs.StringVar(&r.appTokenFile, "app-token-file", "", "file holding an app token, to sign in with --user")
-	fs.StringVar(&r.user, "user", "", "user name, for app-token and basic sign-in")
+	r.addSettingFlags(fs)
 	fs.StringVar(&r.as, "as", "", "run the command as this user (impersonation, needs admin rights)")
 	fs.StringVar(&r.reason, "reason", "", "why you use admin rights, written to the audit log")
 	fs.BoolVarP(&r.yes, "yes", "y", false, "do not ask for confirmations")
-	fs.BoolVar(&r.noElevate, "no-elevate", false, "never get an admin token automatically (env REVA_NO_ELEVATE)")
 	fs.DurationVar(&r.timeout, "timeout", 0, "overall timeout for the command, for example 30s (0 for none)")
-	fs.StringVarP(&r.output, "output", "o", "table", "output format: table or json")
 	fs.BoolVarP(&r.quiet, "quiet", "q", false, "hide progress messages")
 	fs.BoolVar(&r.debug, "debug", false, "show the underlying error and request details")
 	fs.BoolVar(&r.noProgress, "no-progress", false, "hide the progress bar")
@@ -121,8 +135,15 @@ func (r *Runtime) AdminHost() string { return r.adminHost }
 // User returns the user name of --user.
 func (r *Runtime) User() string { return r.user }
 
+// Password returns the password of the basic sign-in.
+func (r *Runtime) Password() string { return r.password }
+
 // AppTokenFile returns the file of --app-token-file.
 func (r *Runtime) AppTokenFile() string { return r.appTokenFile }
+
+// KerberosSPN returns the service principal of the Kerberos sign-in. Empty
+// means HTTP/<host of the server>.
+func (r *Runtime) KerberosSPN() string { return r.kerberosSPN }
 
 // As returns the user of --as. Empty means no impersonation.
 func (r *Runtime) As() string { return r.as }
@@ -130,7 +151,7 @@ func (r *Runtime) As() string { return r.as }
 // Reason returns the reason of --reason, for the audit.
 func (r *Runtime) Reason() string { return r.reason }
 
-// Output returns the output format: table or json.
+// Output returns the output format: table, json or csv.
 func (r *Runtime) Output() string { return r.output }
 
 // Debug reports whether --debug is set.
@@ -139,59 +160,18 @@ func (r *Runtime) Debug() bool { return r.debug }
 // Timeout returns the overall timeout of the command. Zero means none.
 func (r *Runtime) Timeout() time.Duration { return r.timeout }
 
-// Load fills the settings that are not given as flags from the environment,
-// then from the config file.
-func (r *Runtime) Load(flags *pflag.FlagSet) error {
-	c, err := state.ReadConfig()
-	if err != nil {
-		return err
-	}
-	r.config = c
-	fill := func(dst *string, flag, conf string, envs ...string) {
-		if flags.Changed(flag) {
-			return
-		}
-		for _, env := range envs {
-			if v := os.Getenv(env); v != "" {
-				*dst = v
-				return
-			}
-		}
-		*dst = conf
-	}
-	// REVA_HOST is still read for old scripts.
-	fill(&r.gatewayAddr, "gateway", c.Connection.Gateway, "REVA_GATEWAY", "REVA_HOST")
-	fill(&r.adminHost, "admin-host", c.Connection.AdminHost, "REVA_ADMIN_HOST")
-	r.adminHostExplicit = flags.Changed("admin-host") || os.Getenv("REVA_ADMIN_HOST") != ""
-	if v, err := strconv.ParseBool(os.Getenv("REVA_NO_ELEVATE")); err == nil && !flags.Changed("no-elevate") {
-		r.noElevate = v
-	}
-	fill(&r.tokenValue, "token", "", "REVA_TOKEN")
-	if err := r.loadTransport(flags, c); err != nil {
-		return err
-	}
-	switch r.output {
-	case "table", "json":
-	case "csv":
-		return errors.New("csv output is not available yet: use table or json")
-	default:
-		return fmt.Errorf("unknown output %q: use table or json", r.output)
-	}
-	return nil
-}
-
 // Client returns a gateway client without credentials, for the calls that
 // do not need a login (for example Authenticate).
 func (r *Runtime) Client() (gateway.GatewayAPIClient, error) {
 	if r.conn == nil {
 		if r.gatewayAddr == "" {
-			return nil, errors.New("gateway not set: pass --gateway, set REVA_GATEWAY or run `reva config set gateway <host:port>`")
+			return nil, r.notSet("gateway", "gateway", "--gateway", "gateway <host:port>")
 		}
 		creds := credentials.NewTLS(&tls.Config{InsecureSkipVerify: r.skipVerify})
 		if r.insecure {
 			creds = insecure.NewCredentials()
 		}
-		opts := append(r.DialOptions(), grpc.WithTransportCredentials(creds), gatewayDialOption())
+		opts := append(r.DialOptions(), grpc.WithTransportCredentials(creds), gatewayDialOption(), grpc.WithChainUnaryInterceptor(r.renewInterceptor))
 		conn, err := grpc.NewClient(r.gatewayAddr, opts...)
 		if err != nil {
 			return nil, err
@@ -218,6 +198,31 @@ func (r *Runtime) DialOptions() []grpc.DialOption {
 			return streamer(ctx, desc, cc, method, opts...)
 		}),
 	}
+}
+
+// renewInterceptor signs in again once when the gateway refuses the login
+// token, which can expire in a long run.
+func (r *Runtime) renewInterceptor(ctx context.Context, method string, req, reply any, cc *grpc.ClientConn, invoker grpc.UnaryInvoker, opts ...grpc.CallOption) error {
+	err := invoker(ctx, method, req, reply, cc, opts...)
+	if status.Code(err) != codes.Unauthenticated || r.tokenValue != "" || r.as != "" {
+		return err
+	}
+	md, _ := metadata.FromOutgoingContext(ctx)
+	sent := md.Get(appctx.TokenHeader)
+	tokMu.Lock()
+	login := r.revaTok != nil && len(sent) == 1 && sent[0] == r.revaTok.Value
+	tokMu.Unlock()
+	if !login {
+		return err
+	}
+	if rerr := r.renew(ctx, sent[0]); rerr != nil {
+		return errors.Join(err, rerr)
+	}
+	t, terr := r.loginToken(ctx)
+	if terr != nil {
+		return errors.Join(err, terr)
+	}
+	return invoker(WithToken(ctx, t), method, req, reply, cc, opts...)
 }
 
 // Gateway returns a gateway client and ctx with the login token attached.
@@ -296,35 +301,6 @@ func (r *Runtime) Token(ctx context.Context) (string, error) {
 	return r.asTok, nil
 }
 
-// loginToken returns the token from --token or REVA_TOKEN. Else it signs in
-// with the app token of --app-token-file. Else it returns the token that
-// `reva login` stored.
-func (r *Runtime) loginToken(ctx context.Context) (string, error) {
-	if r.tokenValue != "" {
-		return r.tokenValue, nil
-	}
-	if r.appTokenFile != "" {
-		b, err := os.ReadFile(r.appTokenFile)
-		if err != nil {
-			return "", err
-		}
-		if r.user == "" {
-			return "", errors.New("an app token needs a user name: pass --user")
-		}
-		t, err := r.Authenticate(ctx, "appauth", r.user, strings.TrimSpace(string(b)))
-		if err != nil {
-			return "", err
-		}
-		r.tokenValue = t
-		return t, nil
-	}
-	b, err := state.ReadToken()
-	if errors.Is(err, fs.ErrNotExist) {
-		return "", errors.New("no login token: run `reva login` first")
-	}
-	return strings.TrimSpace(string(b)), err
-}
-
 // UseColor reports whether to color the output written to f: only for a
 // terminal, and never when NO_COLOR is set (https://no-color.org).
 func UseColor(f *os.File) bool {
@@ -354,15 +330,28 @@ func (r *Runtime) ShowProgress() bool {
 }
 
 // Print writes v as JSON with -o json. Else it calls text. For a Table, a nil
-// text writes the table.
+// text writes the table, and -o csv writes its rows. text writes CSV for a
+// table of NewTable.
 func (r *Runtime) Print(w io.Writer, v any, text func(w io.Writer)) error {
 	if t, ok := v.(Table); ok {
+		if r.output == "csv" {
+			rows := t.Rows
+			if len(t.Headers) > 0 {
+				rows = append([][]string{t.Headers}, rows...)
+			}
+			return csv.NewWriter(w).WriteAll(rows)
+		}
 		if text == nil {
 			text = t.Write
 		}
 		v = t.items()
 	}
-	if r.output != "json" {
+	switch r.output {
+	case "csv":
+		text(csvWriter{w})
+		return nil
+	case "json":
+	default:
 		text(w)
 		return nil
 	}

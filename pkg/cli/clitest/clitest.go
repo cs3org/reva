@@ -32,6 +32,7 @@ import (
 	"context"
 	"io"
 	"maps"
+	"net/http"
 	"path"
 	"slices"
 	"strconv"
@@ -925,6 +926,26 @@ func (locator) OpenInApp(ctx context.Context, ref *provider.Reference, opts back
 	return nil, notAvailable("app open")
 }
 
+func (locator) ResumableTarget(ctx context.Context, ref *provider.Reference, size int64, checksum string) (*backend.Target, error) {
+	return nil, notAvailable("a TUS target")
+}
+
+func (locator) VersionTarget(ctx context.Context, ref *provider.Reference, key string) (*backend.Target, error) {
+	return nil, notAvailable("a version target")
+}
+
+func (locator) ArchiveTarget(ctx context.Context, refs []*provider.Reference, format string) (*backend.Target, error) {
+	return nil, notAvailable("an archive target")
+}
+
+func (locator) Capabilities(ctx context.Context) (*backend.Capabilities, error) {
+	return &backend.Capabilities{}, nil
+}
+
+func (locator) AuthHeader(ctx context.Context) (http.Header, error) {
+	return http.Header{}, nil
+}
+
 // Data implements backend.DataPlane on the files of a Backend.
 type Data struct{ b *Backend }
 
@@ -956,8 +977,37 @@ func (d *Data) UploadStream(ctx context.Context, ref *provider.Reference, r io.R
 	return d.put(ref, func() (io.ReadCloser, error) { return io.NopCloser(r), nil }, "")
 }
 
-func (d *Data) UploadResumable(ctx context.Context, ref *provider.Reference, open func() (io.ReadCloser, error), size int64, checksum string) error {
-	return d.put(ref, open, "")
+func (d *Data) DownloadVersion(ctx context.Context, ref *provider.Reference, key string) (io.ReadCloser, int64, error) {
+	d.b.mu.Lock()
+	defer d.b.mu.Unlock()
+	_, f, err := d.b.lookup(ref)
+	if err != nil {
+		return nil, 0, err
+	}
+	data, ok := f.old[key]
+	if !ok {
+		return nil, 0, notFound("version " + key)
+	}
+	return io.NopCloser(bytes.NewReader(bytes.Clone(data))), int64(len(data)), nil
+}
+
+// UploadResumable writes the file at once: the fake has no parts.
+func (d *Data) UploadResumable(ctx context.Context, ref *provider.Reference, open func() (io.ReadCloser, error), size int64, checksum string, progress func(backend.Upload)) error {
+	if err := d.put(ref, open, ""); err != nil {
+		return err
+	}
+	if progress != nil {
+		progress(backend.Upload{Path: ref.GetPath(), Size: size, Offset: size})
+	}
+	return nil
+}
+
+func (d *Data) ResumeUpload(ctx context.Context, up backend.Upload, open func() (io.ReadCloser, error), progress func(backend.Upload)) error {
+	return notFound("upload " + up.URL)
+}
+
+func (d *Data) Capabilities(ctx context.Context) (*backend.Capabilities, error) {
+	return &backend.Capabilities{}, nil
 }
 
 func (d *Data) put(ref *provider.Reference, open func() (io.ReadCloser, error), etag string) error {

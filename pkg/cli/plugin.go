@@ -27,6 +27,7 @@ import (
 
 	"github.com/BurntSushi/toml"
 	"github.com/cs3org/reva/v3"
+	"github.com/cs3org/reva/v3/pkg/cli/auth"
 	"github.com/spf13/cobra"
 )
 
@@ -38,21 +39,26 @@ const (
 	PathsNamespace    = "cli.paths"
 )
 
-// AuthProvider is a sign-in method.
-type AuthProvider interface {
-	// Name identifies the provider in `status` and in `login --method`.
-	Name() string
-	// Available reports whether the provider has what it needs. It must not
-	// use the network.
-	Available(ctx context.Context) bool
-	// Token signs in and returns a credential.
-	Token(ctx context.Context) (string, error)
-}
+// AuthProvider is a sign-in method of the credential chain. A cli.auth.*
+// plugin gives one.
+type AuthProvider = auth.Provider
 
-// PathResolver turns a path argument into a remote path.
+// PathResolver turns a path argument into a remote path. A cli.paths.*
+// plugin gives one.
 type PathResolver interface {
 	// Resolve returns ok false for an argument that is not for this resolver.
 	Resolve(ctx context.Context, arg string) (path string, ok bool, err error)
+}
+
+var builtinAuth = []string{auth.MethodToken, auth.MethodAppToken, auth.MethodBasic, auth.MethodKerberos, auth.MethodDevice}
+
+// AuthProviders returns the names of the sign-in methods of this build.
+func AuthProviders() []string {
+	names := slices.Clone(builtinAuth)
+	for _, p := range reva.GetPlugins(AuthNamespace) {
+		names = append(names, strings.TrimPrefix(string(p.ID), AuthNamespace+"."))
+	}
+	return names
 }
 
 // RegisterCommand registers a command plugin. path names the parent and the
@@ -94,11 +100,13 @@ func register(ns string, labels []string, newFn any) {
 	reva.RegisterPlugin(plugin{ID: id, New: newFn})
 }
 
-// PluginConfig decodes the section [plugins.<name>] of the config file into
-// v. A missing section leaves v as it is, and an unknown key is an error.
-// The settings are loaded when a command runs: in a completion function,
-// call Runtime.Load first.
+// PluginConfig decodes the section [plugins.<name>] of the config files into
+// v. The keys of the user config replace those of the system config. A
+// missing section leaves v as it is, and an unknown key is an error.
 func PluginConfig(rt *Runtime, name string, v any) error {
+	if !rt.resolved {
+		rt.resolve()
+	}
 	sec, ok := rt.config.Plugins[name]
 	if !ok {
 		return nil

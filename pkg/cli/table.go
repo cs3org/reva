@@ -32,10 +32,9 @@ type Table struct {
 	Items   any
 }
 
-// Write writes the table for a person.
+// Write writes the table for a person, or CSV under -o csv.
 func (t Table) Write(w io.Writer) {
-	tw := table.NewWriter()
-	tw.SetOutputMirror(w)
+	tw := NewTable(w)
 	tw.AppendHeader(row(t.Headers))
 	for _, r := range t.Rows {
 		tw.AppendRow(row(r))
@@ -67,3 +66,20 @@ func row(cells []string) table.Row {
 	}
 	return r
 }
+
+type csvWriter struct{ io.Writer }
+
+// NewTable returns a go-pretty table that writes to w. Under -o csv, Render
+// writes CSV.
+func NewTable(w io.Writer) table.Writer {
+	t := table.NewWriter()
+	t.SetOutputMirror(w)
+	if _, ok := w.(csvWriter); ok {
+		return csvTable{t}
+	}
+	return t
+}
+
+type csvTable struct{ table.Writer }
+
+func (t csvTable) Render() string { return t.RenderCSV() }

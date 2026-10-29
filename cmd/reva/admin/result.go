@@ -20,6 +20,7 @@ package admin
 
 import (
 	"bytes"
+	"encoding/csv"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -37,7 +38,9 @@ type nodeResult struct {
 	Error  string          `json:"error,omitempty"`
 }
 
-// writeResults returns an error if a node failed, so that the exit code is 1.
+// writeResults writes the results of a unary invocation. A list result is a
+// table, anything else is key/value lines (rows of key and value with -o csv).
+// It returns an error if a node failed, so that the exit code is 1.
 func writeResults(w, errW io.Writer, results []*adminpb.NodeResult) error {
 	failed := 0
 	if rt.Output() == "json" {
@@ -112,8 +115,32 @@ func writeResults(w, errW io.Writer, results []*adminpb.NodeResult) error {
 				}
 				t.Rows = append(t.Rows, cells)
 			}
-			t.Write(w)
+			if err := rt.Print(w, t, nil); err != nil {
+				return err
+			}
 		}
+	}
+	if rt.Output() == "csv" && len(records) > 0 {
+		t := cli.Table{Headers: []string{"key", "value"}}
+		if multi {
+			t.Headers = append([]string{nodeColumn}, t.Headers...)
+		}
+		for _, rec := range records {
+			if rec.obj == nil {
+				continue
+			}
+			for _, k := range rec.obj.keys {
+				row := []string{k, fmt.Sprint(rec.obj.vals[k])}
+				if multi {
+					row = append([]string{rec.node}, row...)
+				}
+				t.Rows = append(t.Rows, row)
+			}
+		}
+		if err := rt.Print(w, t, nil); err != nil {
+			return err
+		}
+		return failedErr(failed, len(results))
 	}
 	nodeWidth := 0
 	for _, rec := range records {
@@ -204,7 +231,10 @@ func (s *streamWriter) write(msg *adminpb.InvokeStreamResponse) error {
 			s.cols = row.keys
 			cells := make([]string, len(s.cols))
 			for i, c := range s.cols {
-				cells[i] = strings.ToUpper(c)
+				cells[i] = c
+				if rt.Output() != "csv" {
+					cells[i] = strings.ToUpper(c)
+				}
 				s.widths = append(s.widths, max(len(c), len(row.vals[c].(string))))
 			}
 			s.line(cells)
@@ -219,6 +249,12 @@ func (s *streamWriter) write(msg *adminpb.InvokeStreamResponse) error {
 }
 
 func (s *streamWriter) line(cells []string) {
+	if rt.Output() == "csv" {
+		cw := csv.NewWriter(s.w)
+		_ = cw.Write(cells)
+		cw.Flush()
+		return
+	}
 	var b strings.Builder
 	for i, c := range cells {
 		if i == len(cells)-1 {

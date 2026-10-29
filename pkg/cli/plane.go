@@ -73,6 +73,11 @@ func Mutates(cmd *cobra.Command) *cobra.Command {
 	return cmd
 }
 
+// IsOperator reports whether cmd itself is marked with AdminCommand.
+func IsOperator(cmd *cobra.Command) bool {
+	return cmd.Annotations[planeAnnotation] == adminValue
+}
+
 // IsMutating reports whether cmd is marked with Mutates.
 func IsMutating(cmd *cobra.Command) bool {
 	return cmd.Annotations[mutatesAnnotation] == "true"
@@ -85,7 +90,8 @@ func setAnnotation(m *map[string]string, k, v string) {
 	(*m)[k] = v
 }
 
-func isOperatorFlag(f *pflag.Flag) bool {
+// IsOperatorFlag reports whether f is marked with AdminFlag.
+func IsOperatorFlag(f *pflag.Flag) bool {
 	v := f.Annotations[planeAnnotation]
 	return len(v) == 1 && v[0] == adminValue
 }
@@ -100,7 +106,7 @@ func PlaneOf(cmd *cobra.Command) (Plane, string) {
 	}
 	var why string
 	cmd.Flags().Visit(func(f *pflag.Flag) {
-		if why == "" && isOperatorFlag(f) {
+		if why == "" && IsOperatorFlag(f) {
 			why = "--" + f.Name
 		}
 	})
@@ -133,7 +139,7 @@ func (r *Runtime) Plane() Plane { return r.plane }
 func flagUsages(cmd *cobra.Command, operator bool) string {
 	fs := pflag.NewFlagSet(cmd.Name(), pflag.ContinueOnError)
 	cmd.LocalFlags().VisitAll(func(f *pflag.Flag) {
-		if isOperatorFlag(f) == operator {
+		if IsOperatorFlag(f) == operator {
 			fs.AddFlag(f)
 		}
 	})
