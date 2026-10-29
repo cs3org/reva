@@ -27,6 +27,8 @@ jobs:
           node-version: "18"
       - name: Install judo
         run: npm install -g @intuit/judo
+        env:
+          npm_config_cache: ${{ runner.temp }}/.npm
       - name: Build reva
         run: make reva
       - name: Build revad
