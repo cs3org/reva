@@ -20,6 +20,7 @@ package main
 
 import (
 	"encoding/gob"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -29,6 +30,7 @@ import (
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	collaboration "github.com/cs3org/go-cs3apis/cs3/sharing/collaboration/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
+	"github.com/cs3org/reva/v3/pkg/appctx"
 	"github.com/cs3org/reva/v3/pkg/share"
 	"github.com/jedib0t/go-pretty/table"
 )
@@ -49,8 +51,22 @@ func shareListCommand() *command {
 		if err != nil {
 			return err
 		}
+		user, ok := appctx.ContextGetUser(ctx)
+		if !ok {
+			return errors.New("Must be authenticated to list shares")
+		}
 
-		shareRequest := &collaboration.ListSharesRequest{}
+		// The gateway rejects a listing without a resource or a creator filter.
+		shareRequest := &collaboration.ListSharesRequest{
+			Filters: []*collaboration.Filter{
+				{
+					Type: collaboration.Filter_TYPE_CREATOR,
+					Term: &collaboration.Filter_Creator{
+						Creator: user.Id,
+					},
+				},
+			},
+		}
 		if *resID != "" {
 			// check split by colon (:)
 			tokens := strings.Split(*resID, ":")
