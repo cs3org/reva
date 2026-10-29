@@ -22,12 +22,14 @@ import (
 	"testing"
 
 	credentialregistry "github.com/cs3org/reva/v3/internal/http/interceptors/auth/credential/registry"
+	signedurlregistry "github.com/cs3org/reva/v3/internal/http/interceptors/auth/signed_url/registry"
 	tokenregistry "github.com/cs3org/reva/v3/internal/http/interceptors/auth/token/registry"
 	"github.com/cs3org/reva/v3/pkg/auth"
 
 	// Register the strategies a deployment can name, so that
 	// TestEveryStrategyIsDescribed sees all of them.
 	_ "github.com/cs3org/reva/v3/internal/http/interceptors/auth/credential/loader"
+	_ "github.com/cs3org/reva/v3/internal/http/interceptors/auth/signed_url/loader"
 	_ "github.com/cs3org/reva/v3/internal/http/interceptors/auth/token/loader"
 )
 
@@ -107,7 +109,7 @@ func TestSchemesResolveTheSameDefaults(t *testing.T) {
 func TestEveryStrategyIsDescribed(t *testing.T) {
 	// The loaders above are what populates the registries; without them this
 	// would pass by having nothing to check.
-	if len(credentialregistry.NewCredentialFuncs) == 0 || len(tokenregistry.NewTokenFuncs) == 0 {
+	if len(credentialregistry.NewCredentialFuncs) == 0 || len(tokenregistry.NewTokenFuncs) == 0 || len(signedurlregistry.NewSignedURLFuncs) == 0 {
 		t.Fatal("no strategies are registered, so nothing here is being checked")
 	}
 
@@ -120,6 +122,43 @@ func TestEveryStrategyIsDescribed(t *testing.T) {
 		if _, ok := tokenSchemes[name]; !ok {
 			t.Errorf("token strategy %q has no description in tokenSchemes", name)
 		}
+	}
+	for name := range signedurlregistry.NewSignedURLFuncs {
+		if _, ok := signedURLSchemes[name]; !ok {
+			t.Errorf("signed URL strategy %q has no description in signedURLSchemes", name)
+		}
+	}
+}
+
+// Signed URLs come first, as the middleware tries them first, and only when
+// the strategy is enabled: one that is not ignores every request.
+func TestSignedURLsAreReportedWhenEnabled(t *testing.T) {
+	conf := func(enabled bool) map[string]any {
+		return map[string]any{
+			"signed_url_chain":      []any{"signed_url"},
+			"signed_url_strategies": map[string]any{"signed_url": map[string]any{"enabled": enabled}},
+		}
+	}
+
+	schemes, err := Schemes(conf(true))
+	if err != nil {
+		t.Fatalf("Schemes returned error: %v", err)
+	}
+	want := []string{"signedURL", "basic", "bearer", "publicshares", "revaToken"}
+	if got := names(schemes); !equal(got, want) {
+		t.Errorf("got schemes %v, want %v", got, want)
+	}
+	if s := schemes[0]; s.Kind != auth.SchemeQuery || s.Param != "OC-Signature" {
+		t.Errorf("got %q in %q, want the OC-Signature query parameter", s.Kind, s.Param)
+	}
+
+	schemes, err = Schemes(conf(false))
+	if err != nil {
+		t.Fatalf("Schemes returned error: %v", err)
+	}
+	want = []string{"basic", "bearer", "publicshares", "revaToken"}
+	if got := names(schemes); !equal(got, want) {
+		t.Errorf("got schemes %v with signed URLs disabled, want %v", got, want)
 	}
 }
 
@@ -134,5 +173,11 @@ func TestSchemeNamesAreDistinct(t *testing.T) {
 			t.Errorf("token strategy %q and %s both publish the name %q", strategy, other, s.Name)
 		}
 		seen[s.Name] = "token " + strategy
+	}
+	for strategy, s := range signedURLSchemes {
+		if other, ok := seen[s.Name]; ok {
+			t.Errorf("signed URL strategy %q and %s both publish the name %q", strategy, other, s.Name)
+		}
+		seen[s.Name] = "signed URL " + strategy
 	}
 }

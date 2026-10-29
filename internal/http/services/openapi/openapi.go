@@ -61,27 +61,50 @@ type config struct {
 	// URL is the deployment's external base URL, which the page uses as the
 	// server to send requests to. Empty leaves it to the browser's origin.
 	URL string `mapstructure:"url"`
-	// Public serves the documentation without authentication. It is off by
+	// Public serves the document without authentication. It is off by
 	// default: the document is an inventory of everything the deployment
-	// serves, which is not something to publish without meaning to.
+	// serves, which is not something to publish without meaning to. The page
+	// that browses it is always public, as it holds nothing of the
+	// deployment's own and asks for credentials when the document needs them.
 	Public bool `mapstructure:"public"`
 	// UIBundle is where the page loads its viewer from. It defaults to a
-	// public CDN, and a deployment without egress should point it at its own
-	// copy of swagger-ui-dist.
+	// fixed release on a public CDN, and a deployment without egress should
+	// point it at its own copy of swagger-ui-dist.
 	UIBundle string `mapstructure:"ui_bundle"`
+	// UIBundleIntegrity is the subresource integrity hash of UIBundle. The
+	// viewer runs in the deployment's origin, next to the credentials of
+	// whoever opens it, so the browser refuses a bundle that does not match.
+	// It defaults to the hash of the default bundle, and only to that.
+	UIBundleIntegrity string `mapstructure:"ui_bundle_integrity"`
 	// UIStylesheet is the viewer's stylesheet, alongside UIBundle.
 	UIStylesheet string `mapstructure:"ui_stylesheet"`
+	// UIStylesheetIntegrity is the subresource integrity hash of
+	// UIStylesheet, as UIBundleIntegrity is of UIBundle.
+	UIStylesheetIntegrity string `mapstructure:"ui_stylesheet_integrity"`
 }
+
+// The viewer a page loads unless configured otherwise: an exact release, with
+// the hashes of its files as published to npm.
+const (
+	defaultUIBundle              = "https://cdn.jsdelivr.net/npm/swagger-ui-dist@5.33.1/swagger-ui-bundle.js"
+	defaultUIBundleIntegrity     = "sha384-ZPehFMQommnnuaZ4rpxgkgTT2DKFVp4hZC/7pLit+9Lek9T1YGSo23eHFbvNkXkw"
+	defaultUIStylesheet          = "https://cdn.jsdelivr.net/npm/swagger-ui-dist@5.33.1/swagger-ui.css"
+	defaultUIStylesheetIntegrity = "sha384-Ov4/wv3j2bmct8cDc5X4ngJZohVPzEmc6uDPH8WeljUxO5vtoykvMEfbu9Vh6RaW"
+)
 
 func (c *config) ApplyDefaults() {
 	if c.Title == "" {
 		c.Title = "reva"
 	}
+	// A hash is defaulted only with the file it belongs to: it would refuse
+	// any other.
 	if c.UIBundle == "" {
-		c.UIBundle = "https://cdn.jsdelivr.net/npm/swagger-ui-dist@5/swagger-ui-bundle.js"
+		c.UIBundle = defaultUIBundle
+		c.UIBundleIntegrity = defaultUIBundleIntegrity
 	}
 	if c.UIStylesheet == "" {
-		c.UIStylesheet = "https://cdn.jsdelivr.net/npm/swagger-ui-dist@5/swagger-ui.css"
+		c.UIStylesheet = defaultUIStylesheet
+		c.UIStylesheetIntegrity = defaultUIStylesheetIntegrity
 	}
 }
 
@@ -129,9 +152,11 @@ func (s *svc) Routes(r *router.Router) {
 		Description: "Built from the routes the services declared, so it cannot drift from what is served.",
 	}))...)
 
-	r.Get(mount, s.page, append(opts, router.Describe(router.Doc{
+	// The page is public whatever the document is: a client that
+	// authenticates with a token has no other place to enter it.
+	r.Get(mount, s.page, router.Unprotected(), router.Describe(router.Doc{
 		Summary: "Browse the API",
-	}))...)
+	}))
 }
 
 // document renders the OpenAPI document, once: the routes cannot change after
@@ -170,7 +195,9 @@ func (s *svc) page(w http.ResponseWriter, r *http.Request) {
 		"{{.Title}}", template(s.conf.Title),
 		"{{.Spec}}", template(mount+".json"),
 		"{{.Bundle}}", template(s.conf.UIBundle),
+		"{{.BundleIntegrity}}", template(s.conf.UIBundleIntegrity),
 		"{{.Stylesheet}}", template(s.conf.UIStylesheet),
+		"{{.StylesheetIntegrity}}", template(s.conf.UIStylesheetIntegrity),
 	).Replace(uiPage)
 
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")

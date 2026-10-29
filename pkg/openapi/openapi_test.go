@@ -27,6 +27,7 @@ import (
 
 	"github.com/cs3org/reva/v3/pkg/auth"
 	"github.com/cs3org/reva/v3/pkg/rhttp/router"
+	libregraph "github.com/owncloud/libre-graph-api-go"
 )
 
 // noop stands in for the handlers, which the document does not look at.
@@ -146,6 +147,42 @@ func TestWebDAVMethodsAreReported(t *testing.T) {
 	}
 	if strings.Join(item.WebDAVMethods, ",") != "MKCOL,PROPFIND" {
 		t.Errorf("got %v, expected the methods OpenAPI cannot name, sorted", item.WebDAVMethods)
+	}
+}
+
+// A route that matches every method may answer methods OpenAPI cannot list,
+// so its path says so rather than passing for one that serves only these.
+func TestAnyMethodIsReported(t *testing.T) {
+	doc := render(t, func(r *router.Router) {
+		r.Service("gateway").Mount("/remote.php/dav", noop)
+		r.Service("ocs").Get("/ocs/v1.php/config", noop)
+	})
+
+	item := doc.Paths["/remote.php/dav/{path}"]
+	if item == nil || item.Get == nil {
+		t.Fatalf("the mount is missing: %+v", doc.Paths)
+	}
+	if !item.AnyMethod {
+		t.Error("a mount without methods should say it matches every method")
+	}
+	if doc.Paths["/ocs/v1.php/config"].AnyMethod {
+		t.Error("a route with a method matches only that method")
+	}
+}
+
+// The auth middleware lets every OPTIONS request through, so the document
+// does not ask for credentials there.
+func TestOptionsNeedsNoCredentials(t *testing.T) {
+	doc := render(t, func(r *router.Router) {
+		r.Service("ocdav").Any("/remote.php/webdav", noop)
+	})
+
+	item := doc.Paths["/remote.php/webdav"]
+	if len(item.Options.Security) != 0 {
+		t.Errorf("got requirement %+v on OPTIONS, want none", item.Options.Security)
+	}
+	if len(item.Get.Security) == 0 {
+		t.Error("GET on the same path still needs credentials")
 	}
 }
 
@@ -329,5 +366,85 @@ func TestNoSchemesLeavesSecurityOut(t *testing.T) {
 	}
 	if got := doc.Paths["/ocs/v1.php/cloud/user"].Get.Security; got != nil {
 		t.Errorf("got requirement %+v, want none", got)
+	}
+}
+
+// Scheme has the name of auth.Scheme, which another route below replies with.
+type Scheme struct {
+	Kind int `json:"kind"`
+}
+
+// Two types of the same name are two schemas: neither may replace the other,
+// or the references to it describe the wrong type.
+func TestSameNamedTypesStayApart(t *testing.T) {
+	doc := render(t, func(r *router.Router) {
+		r.Service("a").Get("/a", noop, router.Describe(router.Doc{Responses: map[int]any{200: Scheme{}}}))
+		r.Service("b").Get("/b", noop, router.Describe(router.Doc{Responses: map[int]any{200: auth.Scheme{}}}))
+		r.Service("c").Get("/c", noop, router.Describe(router.Doc{Responses: map[int]any{200: shareOwner{}}}))
+	})
+
+	refs := map[string]string{}
+	for _, path := range []string{"/a", "/b", "/c"} {
+		ref := doc.Paths[path].Get.Responses["200"].Content[jsonMedia].Schema.Ref
+		name := strings.TrimPrefix(ref, componentsRef)
+		if doc.Components.Schemas[name] == nil {
+			t.Fatalf("%s refers to %q, which is not in the components", path, ref)
+		}
+		refs[path] = name
+	}
+
+	if refs["/a"] == refs["/b"] {
+		t.Fatalf("both types are named %q, so one replaced the other", refs["/a"])
+	}
+	if _, ok := doc.Components.Schemas[refs["/a"]].Properties.Get("kind"); !ok {
+		t.Errorf("%q does not describe the test's Scheme", refs["/a"])
+	}
+	if _, ok := doc.Components.Schemas[refs["/b"]].Properties.Get("Kind"); !ok {
+		t.Errorf("%q does not describe auth.Scheme", refs["/b"])
+	}
+	// A name nothing else shares is left as it is.
+	if refs["/c"] != "shareOwner" {
+		t.Errorf("got %q, want the type's own name", refs["/c"])
+	}
+}
+
+// A libregraph field that may be null marshals as its value or as null, which
+// is what the schema says rather than describing the wrapper's empty struct.
+func TestNullableFieldsDescribeTheirValue(t *testing.T) {
+	doc := render(t, func(r *router.Router) {
+		r.Service("ocgraph").Get("/graph/permission", noop, router.Describe(router.Doc{
+			Responses: map[int]any{200: libregraph.Permission{}},
+		}))
+	})
+
+	perm := doc.Components.Schemas["Permission"]
+	if perm == nil {
+		t.Fatal("the Permission schema is missing")
+	}
+	expiry, ok := perm.Properties.Get("expirationDateTime")
+	if !ok {
+		t.Fatal("expirationDateTime is missing")
+	}
+	if len(expiry.AnyOf) != 2 || expiry.AnyOf[0].Type != "string" || expiry.AnyOf[0].Format != "date-time" || expiry.AnyOf[1].Type != "null" {
+		encoded, _ := json.Marshal(expiry)
+		t.Errorf("got %s, want a date-time string or null", encoded)
+	}
+	if _, ok := doc.Components.Schemas["NullableTime"]; ok {
+		t.Error("the wrapper itself should not be a schema")
+	}
+}
+
+// A server that adds a field to a reply has not broken its clients.
+func TestSchemasAllowAdditionalFields(t *testing.T) {
+	doc := render(t, func(r *router.Router) {
+		r.Service("ocs").Get("/ocs/v1.php/shares", noop, router.Describe(router.Doc{
+			Responses: map[int]any{200: shareResponse{}},
+		}))
+	})
+
+	for name, s := range doc.Components.Schemas {
+		if s.AdditionalProperties != nil {
+			t.Errorf("%s: got additionalProperties %+v, want it left open", name, s.AdditionalProperties)
+		}
 	}
 }

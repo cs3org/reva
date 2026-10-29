@@ -19,6 +19,8 @@
 package openapi
 
 import (
+	"encoding/json"
+	"reflect"
 	"strings"
 
 	"github.com/invopop/jsonschema"
@@ -42,18 +44,92 @@ type reflector struct {
 	defs map[string]*Schema
 }
 
-func newReflector() *reflector {
+// newReflector returns a reflector for values, which are all the values the
+// document describes the types of.
+//
+// It needs every one of them up front to name the schemas. A type is named
+// after itself, unless a type of another package has the same name: then both
+// are also named after their package, so that neither replaces the other in
+// the components and every reference still finds the type it means. Deciding
+// this from the whole set, not from the order types are met in, keeps the
+// names the same from one start to the next.
+func newReflector(values []any) *reflector {
+	byName := map[string]map[reflect.Type]bool{}
+	survey := jsonReflector(func(t reflect.Type) string {
+		if byName[t.Name()] == nil {
+			byName[t.Name()] = map[reflect.Type]bool{}
+		}
+		byName[t.Name()][t] = true
+		// Distinct names, so that the survey reaches into every type rather
+		// than stopping at one it takes for a type it has already seen.
+		return qualifiedName(t)
+	})
+	for _, v := range values {
+		if v != nil {
+			survey.Reflect(v)
+		}
+	}
+
 	return &reflector{
-		r: &jsonschema.Reflector{
-			// Without this every schema carries an $id naming invopop.com.
-			Anonymous: true,
-			// Describe a field as absent when it may be, rather than
-			// declaring every field required.
-			RequiredFromJSONSchemaTags: false,
-			ExpandedStruct:             false,
-		},
+		r: jsonReflector(func(t reflect.Type) string {
+			if len(byName[t.Name()]) > 1 {
+				return qualifiedName(t)
+			}
+			return t.Name()
+		}),
 		defs: map[string]*Schema{},
 	}
+}
+
+func jsonReflector(namer func(reflect.Type) string) *jsonschema.Reflector {
+	// A field is required unless it is tagged omitempty, since encoding/json
+	// then always writes it. That is the library's default.
+	return &jsonschema.Reflector{
+		// Without this every schema carries an $id naming invopop.com.
+		Anonymous: true,
+		// A server that adds a field to a reply has not broken its clients,
+		// so a client that validates the reply should not reject it.
+		AllowAdditionalProperties: true,
+		Mapper:                    nullable,
+		Namer:                     namer,
+	}
+}
+
+// qualifiedName names a type after its package path as well, in the
+// characters a component name may hold.
+func qualifiedName(t reflect.Type) string {
+	if t.Name() == "" {
+		return ""
+	}
+	return strings.ReplaceAll(t.PkgPath(), "/", ".") + "." + t.Name()
+}
+
+var jsonMarshaler = reflect.TypeFor[json.Marshaler]()
+
+// nullable describes the wrappers openapi-generator emits for a field that may
+// be null, such as libregraph's NullableTime. They marshal as the value they
+// hold or as null, but keep that value in unexported fields, so reflecting
+// their struct would describe an empty object.
+func nullable(t reflect.Type) *Schema {
+	if !strings.HasPrefix(t.Name(), "Nullable") || !t.Implements(jsonMarshaler) {
+		return nil
+	}
+	get, ok := t.MethodByName("Get")
+	if !ok || get.Type.NumIn() != 1 || get.Type.NumOut() != 1 || get.Type.Out(0).Kind() != reflect.Pointer {
+		return nil
+	}
+	if _, ok := t.MethodByName("IsSet"); !ok {
+		return nil
+	}
+
+	value := (&jsonschema.Reflector{
+		Anonymous:                 true,
+		DoNotReference:            true,
+		AllowAdditionalProperties: true,
+		Mapper:                    nullable,
+	}).ReflectFromType(get.Type.Out(0).Elem())
+	value.Version = ""
+	return &Schema{AnyOf: []*Schema{value, {Type: "null"}}}
 }
 
 // schemaFor returns the schema describing v's type, or nil for an untyped nil,
@@ -67,6 +143,8 @@ func (f *reflector) schemaFor(v any) *Schema {
 	if s == nil {
 		return nil
 	}
+	// A schema inside the document takes the dialect the document declares.
+	s.Version = ""
 
 	// The reflected schema holds its definitions; an OpenAPI document holds
 	// them centrally, so they are moved over and the references repointed.

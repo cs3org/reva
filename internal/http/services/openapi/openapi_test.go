@@ -124,24 +124,63 @@ func TestConfiguredValuesAreEscaped(t *testing.T) {
 }
 
 // The document is an inventory of everything the deployment serves, so it is
-// behind the auth middleware unless an operator opens it.
-func TestDocumentationIsProtectedByDefault(t *testing.T) {
-	r := serve(t, map[string]any{})
-
-	for _, target := range []string{"/openapi.json", "/openapi"} {
+// behind the auth middleware unless an operator opens it. The page holds
+// nothing of the deployment's own, and is where a client without a browser
+// session enters its token, so it is always open.
+func TestDocumentIsProtectedByDefault(t *testing.T) {
+	match := func(r *router.Router, target string) router.Route {
+		t.Helper()
 		rt, ok := r.Match(httptest.NewRequest(http.MethodGet, target, nil))
 		if !ok {
 			t.Fatalf("%s resolves to no route", target)
 		}
-		if rt.Unprotected {
-			t.Errorf("%s is unprotected by default", target)
-		}
+		return rt
+	}
+
+	r := serve(t, map[string]any{})
+	if match(r, "/openapi.json").Unprotected {
+		t.Error("the document is unprotected by default")
+	}
+	if !match(r, "/openapi").Unprotected {
+		t.Error("the page should be open, or a token cannot be entered anywhere")
 	}
 
 	public := serve(t, map[string]any{"public": true})
-	rt, _ := public.Match(httptest.NewRequest(http.MethodGet, "/openapi.json", nil))
-	if !rt.Unprotected {
-		t.Error("public = true should open the documentation")
+	if !match(public, "/openapi.json").Unprotected {
+		t.Error("public = true should open the document")
+	}
+}
+
+// The viewer runs next to the credentials of whoever opens the page, so the
+// default one is a fixed release the browser checks against its hash.
+func TestDefaultViewerIsPinned(t *testing.T) {
+	body := get(serve(t, map[string]any{}), "/openapi").Body.String()
+	for _, want := range []string{
+		defaultUIBundle, `integrity="` + defaultUIBundleIntegrity + `"`,
+		defaultUIStylesheet, `integrity="` + defaultUIStylesheetIntegrity + `"`,
+	} {
+		if !strings.Contains(body, want) {
+			t.Errorf("the page does not carry %q", want)
+		}
+	}
+}
+
+// The default hash belongs to the default file: it would refuse any other.
+func TestOwnViewerTakesItsOwnHash(t *testing.T) {
+	body := get(serve(t, map[string]any{
+		"ui_bundle":           "/static/swagger-ui-bundle.js",
+		"ui_bundle_integrity": "sha384-own",
+		"ui_stylesheet":       "/static/swagger-ui.css",
+	}), "/openapi").Body.String()
+
+	if !strings.Contains(body, `src="/static/swagger-ui-bundle.js" integrity="sha384-own"`) {
+		t.Error("the configured bundle should carry the configured hash")
+	}
+	if !strings.Contains(body, `href="/static/swagger-ui.css" integrity=""`) {
+		t.Error("a stylesheet configured without a hash should carry none")
+	}
+	if strings.Contains(body, defaultUIBundleIntegrity) || strings.Contains(body, defaultUIStylesheetIntegrity) {
+		t.Error("a default hash was applied to a file it does not belong to")
 	}
 }
 

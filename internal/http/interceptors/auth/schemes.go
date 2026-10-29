@@ -19,6 +19,8 @@
 package auth
 
 import (
+	"github.com/mitchellh/mapstructure"
+
 	"github.com/cs3org/reva/v3/pkg/appctx"
 	"github.com/cs3org/reva/v3/pkg/auth"
 )
@@ -80,12 +82,24 @@ var tokenSchemes = map[string]auth.Scheme{
 	},
 }
 
+// signedURLSchemes says what each signed URL strategy reads from a request,
+// keyed by the name a signed_url_chain entry gives it.
+var signedURLSchemes = map[string]auth.Scheme{
+	"signed_url": {
+		Name:        "signedURL",
+		Kind:        auth.SchemeQuery,
+		Param:       "OC-Signature",
+		Description: "A URL the server signed for one method and a limited time. Besides OC-Signature it carries OC-Credential, OC-Date, OC-Expires and OC-Verb as query parameters, all covered by the signature.",
+	},
+}
+
 // Schemes describes how clients authenticate against a server whose auth
 // middleware is configured by m.
 //
-// Both chains are reported: the credential chain is what a client presents to
-// authenticate, the token strategy chain is how it carries the resulting
-// token on later requests. Two schemes can land in the same place on the wire
+// The chains are reported in the order the middleware tries them: signed URLs,
+// then the credential chain, which is what a client presents to authenticate,
+// then the token strategy chain, which is how it carries the resulting token
+// on later requests. Two schemes can land in the same place on the wire
 // - an app password and a password are both HTTP basic - and are still
 // reported apart, because they are different credentials to hold.
 func Schemes(m map[string]any) ([]auth.Scheme, error) {
@@ -95,7 +109,12 @@ func Schemes(m map[string]any) ([]auth.Scheme, error) {
 	}
 	conf.applyDefaults()
 
-	schemes := make([]auth.Scheme, 0, len(conf.CredentialChain)+len(conf.TokenStrategyChain))
+	schemes := make([]auth.Scheme, 0, len(conf.SignedURLChain)+len(conf.CredentialChain)+len(conf.TokenStrategyChain))
+	for _, name := range conf.SignedURLChain {
+		if s, ok := signedURLSchemes[name]; ok && signedURLsEnabled(conf.SignedURLStrategies[name]) {
+			schemes = append(schemes, s)
+		}
+	}
 	for _, name := range conf.CredentialChain {
 		if s, ok := credentialSchemes[name]; ok {
 			schemes = append(schemes, s)
@@ -107,4 +126,17 @@ func Schemes(m map[string]any) ([]auth.Scheme, error) {
 		}
 	}
 	return schemes, nil
+}
+
+// signedURLsEnabled reports whether a signed URL strategy accepts anything. A
+// strategy in the chain that is not enabled ignores every request, so it is
+// not something a client can use.
+func signedURLsEnabled(m map[string]any) bool {
+	var c struct {
+		Enabled bool `mapstructure:"enabled"`
+	}
+	if err := mapstructure.Decode(m, &c); err != nil {
+		return false
+	}
+	return c.Enabled
 }

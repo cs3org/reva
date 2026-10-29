@@ -27,7 +27,9 @@
 // WebDAV is the one part that does not fit. OpenAPI names its operations in a
 // fixed set of fields, and PROPFIND, PROPPATCH, MKCOL, COPY, MOVE, REPORT,
 // LOCK and UNLOCK are not among them, so those are reported on the path item
-// as an extension rather than silently dropped.
+// as an extension rather than silently dropped. A route that matches every
+// method cannot say which of them it serves, so its path item says that it
+// matches every method instead.
 package openapi
 
 import (
@@ -97,8 +99,12 @@ type PathItem struct {
 	// Parameters shared by every operation of the path.
 	Parameters []*Parameter `json:"parameters,omitempty"`
 	// WebDAVMethods are the methods the path answers that OpenAPI has no field
-	// for. They are reported so that nothing a service declared is lost.
+	// for. They are reported so that no method a service named is lost.
 	WebDAVMethods []string `json:"x-webdav-methods,omitempty"`
+	// AnyMethod is set when a route at the path matches every method. Its
+	// operations are then the usual ones OpenAPI names, and the path may
+	// answer others, WebDAV's among them, that are listed nowhere.
+	AnyMethod bool `json:"x-any-method,omitempty"`
 }
 
 type Operation struct {
@@ -158,7 +164,7 @@ var operationField = map[string]func(*PathItem) **Operation{
 // server reads. Passing none leaves the document silent about authentication
 // rather than guessing at it.
 func From(routes []router.Route, info Info, servers []Server, schemes []auth.Scheme) *Document {
-	f := newReflector()
+	f := newReflector(described(routes))
 	doc := &Document{
 		OpenAPI:    Version,
 		Info:       info,
@@ -179,11 +185,10 @@ func From(routes []router.Route, info Info, servers []Server, schemes []auth.Sch
 			doc.Paths[path] = item
 		}
 
-		// A route matching every method describes every operation the path
-		// has; OpenAPI has no way to say that, so it is reported as such.
 		methods := []string{rt.Method}
 		if rt.Method == "" {
 			methods = anyMethods
+			item.AnyMethod = true
 		}
 
 		for _, m := range methods {
@@ -225,6 +230,21 @@ var anyMethods = []string{
 	http.MethodPatch, http.MethodDelete, http.MethodOptions,
 }
 
+// described returns every value the routes describe a body or a response with.
+func described(routes []router.Route) []any {
+	var values []any
+	for _, rt := range routes {
+		if rt.Doc == nil {
+			continue
+		}
+		values = append(values, rt.Doc.Body)
+		for _, v := range rt.Doc.Responses {
+			values = append(values, v)
+		}
+	}
+	return values
+}
+
 func operationFor(f *reflector, rt router.Route, method, path string, security []map[string][]string) *Operation {
 	op := &Operation{
 		OperationID: operationID(rt.Owner, method, path),
@@ -233,7 +253,9 @@ func operationFor(f *reflector, rt router.Route, method, path string, security [
 	if rt.Owner != "" {
 		op.Tags = []string{rt.Owner}
 	}
-	if !rt.Unprotected {
+	// The auth middleware lets every OPTIONS request through, as CORS
+	// preflights carry no credentials.
+	if !rt.Unprotected && method != http.MethodOptions {
 		op.Security = security
 	}
 
