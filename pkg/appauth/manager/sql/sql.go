@@ -28,9 +28,10 @@ import (
 	"crypto/sha256"
 	"encoding/base64"
 	"encoding/hex"
-	"encoding/json"
 	"errors"
 	"fmt"
+	"slices"
+	"strings"
 	"sync"
 	"time"
 
@@ -43,9 +44,11 @@ import (
 	"github.com/cs3org/reva/v3/pkg/appauth/manager/registry"
 	"github.com/cs3org/reva/v3/pkg/appauth/manager/sql/model"
 	"github.com/cs3org/reva/v3/pkg/appctx"
+	"github.com/cs3org/reva/v3/pkg/auth/scope"
 	"github.com/cs3org/reva/v3/pkg/errtypes"
 	"github.com/cs3org/reva/v3/pkg/sharedconf"
 	"github.com/cs3org/reva/v3/pkg/utils/cfg"
+	"github.com/google/uuid"
 	"gorm.io/driver/mysql"
 	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
@@ -58,7 +61,18 @@ func init() {
 // Config holds the store configuration.
 type Config struct {
 	config.Database   `mapstructure:",squash"`
-	UtimeFlushSeconds int `mapstructure:"utime_flush_seconds"` // buffer window for last_seen
+	UtimeFlushSeconds int    `mapstructure:"utime_flush_seconds"` // buffer window for last_seen
+	DefaultExpiryDays int    `mapstructure:"default_expiry_days" docs:"90;Expiry of an app password created without one, for the kinds of client that need one (all but sync)."`
+	MaxExpiryDays     int    `mapstructure:"max_expiry_days" docs:"365;Longest expiry an app password can be created with."`
+	Policy            Policy `mapstructure:"policy"`
+}
+
+// Policy says who can create app passwords.
+type Policy struct {
+	// UserTypes lists, per user type (primary, secondary, service, lightweight,
+	// guest, federated, ...), the kinds of client its accounts can create app
+	// passwords for. A type that is not listed can create none.
+	UserTypes map[string][]string `mapstructure:"user_types"`
 }
 
 func (c *Config) ApplyDefaults() {
@@ -66,9 +80,24 @@ func (c *Config) ApplyDefaults() {
 	if c.UtimeFlushSeconds == 0 {
 		c.UtimeFlushSeconds = 300
 	}
+	if c.DefaultExpiryDays == 0 {
+		c.DefaultExpiryDays = 90
+	}
+	if c.MaxExpiryDays == 0 {
+		c.MaxExpiryDays = 365
+	}
+	if c.Policy.UserTypes == nil {
+		c.Policy.UserTypes = map[string][]string{}
+	}
+	for _, t := range []string{"primary", "secondary", "service"} {
+		if _, ok := c.Policy.UserTypes[t]; !ok {
+			c.Policy.UserTypes[t] = scope.ClientKinds()
+		}
+	}
 }
 
 type mgr struct {
+	c     Config
 	db    *gorm.DB
 	flush time.Duration
 
@@ -82,6 +111,9 @@ func New(ctx context.Context, m map[string]any) (appauth.Manager, error) {
 	if err := cfg.Decode(m, &c); err != nil {
 		return nil, err
 	}
+	if c.DefaultExpiryDays > c.MaxExpiryDays {
+		return nil, fmt.Errorf("appauth sql: default_expiry_days exceeds max_expiry_days")
+	}
 
 	db, err := getDB(c)
 	if err != nil {
@@ -92,6 +124,7 @@ func New(ctx context.Context, m map[string]any) (appauth.Manager, error) {
 	}
 
 	return &mgr{
+		c:        c,
 		db:       db,
 		flush:    time.Duration(c.UtimeFlushSeconds) * time.Second,
 		lastSeen: make(map[string]time.Time),
@@ -112,35 +145,89 @@ func getDB(c Config) (*gorm.DB, error) {
 	}
 }
 
-func (m *mgr) GenerateAppPassword(ctx context.Context, scope map[string]*authpb.Scope, label string, expiration *typespb.Timestamp) (*apppb.AppPassword, error) {
+func (m *mgr) GenerateAppPassword(ctx context.Context, scopes map[string]*authpb.Scope, label string, expiration *typespb.Timestamp) (*apppb.AppPassword, error) {
+	owner := appctx.ContextMustGetUser(ctx)
+
+	ap, ok := scope.GetAppAuthScope(scopes)
+	if !ok || len(scopes) != 1 {
+		return nil, errtypes.BadRequest("an app password carries exactly one appauth scope")
+	}
+	if err := ap.Validate(); err != nil {
+		return nil, err
+	}
+	// A consumer that lists shares or spaces has to filter them against the
+	// roots, and none does yet.
+	if len(ap.Roots) > 0 {
+		return nil, errtypes.BadRequest("roots are not supported yet")
+	}
+	createdBy := owner.GetId().GetOpaqueId()
+	admin, byAdmin := appauth.AdministratorFromContext(ctx)
+	if byAdmin {
+		createdBy = admin.GetOpaqueId()
+	} else if err := m.c.Policy.check(owner.GetId().GetType(), ap.Client); err != nil {
+		return nil, err
+	}
+	expires, err := m.expiry(ap.Client, expiration, byAdmin)
+	if err != nil {
+		return nil, err
+	}
+
 	token, err := generateToken()
 	if err != nil {
 		return nil, err
 	}
-	userID := appctx.ContextMustGetUser(ctx).GetId()
-
-	scopeJSON, err := json.Marshal(scope)
-	if err != nil {
-		return nil, fmt.Errorf("appauth sql: encoding scope: %w", err)
-	}
-
 	now := time.Now()
 	row := &model.AppPassword{
-		UserID:     userID.GetOpaqueId(),
-		TokenHash:  hashToken(token),
-		Label:      label,
-		ScopeJSON:  scopeJSON,
-		Ctime:      now,
-		Utime:      now,
-		Expiration: toTime(expiration),
+		PasswordID:  uuid.NewString(),
+		UserID:      owner.GetId().GetOpaqueId(),
+		TokenHash:   hashToken(token),
+		Label:       label,
+		Client:      ap.Client,
+		Permissions: ap.Permissions,
+		Roots:       ap.Roots,
+		CreatedBy:   createdBy,
+		Ctime:       now,
+		Utime:       now,
+		Expiration:  expires,
 	}
 	if err := m.db.WithContext(ctx).Create(row).Error; err != nil {
 		return nil, err
 	}
 
-	pw := toAppPassword(row, userID)
+	pw, err := toAppPassword(row, owner.GetId())
+	if err != nil {
+		return nil, err
+	}
 	pw.Password = token // return the plaintext exactly once
 	return pw, nil
+}
+
+func (p Policy) check(t userpb.UserType, client string) error {
+	name := strings.ToLower(strings.TrimPrefix(t.String(), "USER_TYPE_"))
+	if !slices.Contains(p.UserTypes[name], client) {
+		return errtypes.PermissionDenied(fmt.Sprintf("%s accounts cannot create app passwords for %s", name, client))
+	}
+	return nil
+}
+
+// expiry applies the default expiry and checks the maximum, which does not
+// bind an administrator. Only sync clients, enrolled through the login flow,
+// may have none.
+func (m *mgr) expiry(client string, expiration *typespb.Timestamp, byAdmin bool) (*time.Time, error) {
+	now := time.Now()
+	t := toTime(expiration)
+	switch {
+	case t == nil && client == scope.ClientSync:
+		return nil, nil
+	case t == nil:
+		d := now.AddDate(0, 0, m.c.DefaultExpiryDays)
+		return &d, nil
+	case !t.After(now):
+		return nil, errtypes.BadRequest("the expiration is in the past")
+	case !byAdmin && t.After(now.AddDate(0, 0, m.c.MaxExpiryDays)):
+		return nil, errtypes.BadRequest(fmt.Sprintf("the expiration is more than %d days away", m.c.MaxExpiryDays))
+	}
+	return t, nil
 }
 
 func (m *mgr) ListAppPasswords(ctx context.Context) ([]*apppb.AppPassword, error) {
@@ -153,24 +240,31 @@ func (m *mgr) ListAppPasswords(ctx context.Context) ([]*apppb.AppPassword, error
 
 	out := make([]*apppb.AppPassword, 0, len(rows))
 	for i := range rows {
-		out = append(out, toAppPassword(&rows[i], userID))
+		pw, err := toAppPassword(&rows[i], userID)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, pw)
 	}
 	return out, nil
 }
 
+// InvalidateAppPassword revokes an app password of the user in the context,
+// named by its password id or by the hash handle returned by ListAppPasswords
+// (hex of the token hash), never by the plaintext.
 func (m *mgr) InvalidateAppPassword(ctx context.Context, secret string) error {
 	userID := appctx.ContextMustGetUser(ctx).GetId()
 
-	// The management API and self-revocation pass the hash handle returned by
-	// ListAppPasswords (hex of the token hash), not the plaintext.
-	hash, err := hex.DecodeString(secret)
-	if err != nil {
+	q := m.db.WithContext(ctx).Where("user_id = ?", userID.GetOpaqueId())
+	if _, err := uuid.Parse(secret); err == nil {
+		q = q.Where("password_id = ?", secret)
+	} else if hash, err := hex.DecodeString(secret); err == nil {
+		q = q.Where("token_hash = ?", hash)
+	} else {
 		return errtypes.NotFound("password not found")
 	}
 
-	res := m.db.WithContext(ctx).
-		Where("user_id = ? AND token_hash = ?", userID.GetOpaqueId(), hash).
-		Delete(&model.AppPassword{})
+	res := q.Delete(&model.AppPassword{})
 	if res.Error != nil {
 		return res.Error
 	}
@@ -180,13 +274,32 @@ func (m *mgr) InvalidateAppPassword(ctx context.Context, secret string) error {
 	return nil
 }
 
+func (m *mgr) ListAppPasswordCreators(ctx context.Context) (map[string]string, error) {
+	userID := appctx.ContextMustGetUser(ctx).GetId()
+
+	var rows []model.AppPassword
+	if err := m.db.WithContext(ctx).Select("password_id", "created_by").
+		Where("user_id = ?", userID.GetOpaqueId()).Find(&rows).Error; err != nil {
+		return nil, err
+	}
+	creators := make(map[string]string, len(rows))
+	for _, r := range rows {
+		creators[r.PasswordID] = r.CreatedBy
+	}
+	return creators, nil
+}
+
+// GetAppPassword looks an app password up by its secret. Without a user, the
+// secret alone identifies it, and the result names its owner.
 func (m *mgr) GetAppPassword(ctx context.Context, userID *userpb.UserId, secret string) (*apppb.AppPassword, error) {
 	hash := hashToken(secret)
 
+	q := m.db.WithContext(ctx).Where("token_hash = ?", hash)
+	if userID != nil {
+		q = q.Where("user_id = ?", userID.GetOpaqueId())
+	}
 	var row model.AppPassword
-	err := m.db.WithContext(ctx).
-		Where("user_id = ? AND token_hash = ?", userID.GetOpaqueId(), hash).
-		First(&row).Error
+	err := q.First(&row).Error
 	if errors.Is(err, gorm.ErrRecordNotFound) {
 		return nil, errtypes.NotFound("password not found")
 	}
@@ -201,7 +314,10 @@ func (m *mgr) GetAppPassword(ctx context.Context, userID *userpb.UserId, secret 
 	now := time.Now()
 	m.touch(ctx, hash, now)
 
-	pw := toAppPassword(&row, userID)
+	pw, err := toAppPassword(&row, userID)
+	if err != nil {
+		return nil, err
+	}
 	pw.Utime = &typespb.Timestamp{Seconds: uint64(now.Unix())} // report accurate last-seen
 	return pw, nil
 }
@@ -242,14 +358,27 @@ func hashToken(token string) []byte {
 	return h[:]
 }
 
-func toAppPassword(row *model.AppPassword, userID *userpb.UserId) *apppb.AppPassword {
-	var scope map[string]*authpb.Scope
-	if len(row.ScopeJSON) > 0 {
-		_ = json.Unmarshal(row.ScopeJSON, &scope)
+// toAppPassword builds the scope of the app password from its columns.
+func toAppPassword(row *model.AppPassword, userID *userpb.UserId) (*apppb.AppPassword, error) {
+	if userID == nil {
+		userID = &userpb.UserId{OpaqueId: row.UserID}
+	}
+	ap := &scope.AppAuthScope{
+		PasswordID:  row.PasswordID,
+		Client:      row.Client,
+		Permissions: row.Permissions,
+		Roots:       row.Roots,
+	}
+	if row.Expiration != nil {
+		ap.ExpiresAt = row.Expiration.Unix()
+	}
+	scopes, err := scope.AddAppAuthScope(ap, nil)
+	if err != nil {
+		return nil, err
 	}
 	pw := &apppb.AppPassword{
 		Password:   hex.EncodeToString(row.TokenHash), // stable handle, not the secret
-		TokenScope: scope,
+		TokenScope: scopes,
 		Label:      row.Label,
 		Ctime:      &typespb.Timestamp{Seconds: uint64(row.Ctime.Unix())},
 		Utime:      &typespb.Timestamp{Seconds: uint64(row.Utime.Unix())},
@@ -258,7 +387,7 @@ func toAppPassword(row *model.AppPassword, userID *userpb.UserId) *apppb.AppPass
 	if row.Expiration != nil {
 		pw.Expiration = &typespb.Timestamp{Seconds: uint64(row.Expiration.Unix())}
 	}
-	return pw
+	return pw, nil
 }
 
 func toTime(ts *typespb.Timestamp) *time.Time {

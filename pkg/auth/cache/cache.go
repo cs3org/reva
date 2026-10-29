@@ -27,6 +27,8 @@ package cache
 import (
 	"crypto/sha256"
 	"encoding/hex"
+	"slices"
+	"sync"
 	"time"
 
 	"github.com/bluele/gcache"
@@ -82,10 +84,36 @@ func New(c Config) *Cache {
 	if c.NegativeTTL == 0 {
 		c.NegativeTTL = defaultNegativeTTL
 	}
-	return &Cache{
+	cache := &Cache{
 		entries: gcache.New(c.Size).LRU().Build(),
 		ttl:     time.Duration(c.TTL) * time.Second,
 		negTTL:  time.Duration(c.NegativeTTL) * time.Second,
+	}
+	allMu.Lock()
+	all = append(all, cache)
+	allMu.Unlock()
+	return cache
+}
+
+// all holds every cache of the process, for Forget.
+var (
+	allMu sync.Mutex
+	all   []*Cache
+)
+
+// Forget drops, from every cache of the process, the accepted identities that
+// match, so that a credential revoked here stops working at once instead of
+// when its entry expires.
+func Forget(match func(*Identity) bool) {
+	allMu.Lock()
+	caches := slices.Clone(all)
+	allMu.Unlock()
+	for _, c := range caches {
+		for k, v := range c.entries.GetALL(false) {
+			if o, ok := v.(outcome); ok && o.id != nil && match(o.id) {
+				c.entries.Remove(k)
+			}
+		}
 	}
 }
 

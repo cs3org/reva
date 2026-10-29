@@ -29,16 +29,17 @@ import (
 
 	"github.com/cs3org/reva/v3/pkg/appauth/loginflow"
 	"github.com/cs3org/reva/v3/pkg/appctx"
+	"github.com/cs3org/reva/v3/pkg/auth/scope"
 	"github.com/cs3org/reva/v3/pkg/errtypes"
 )
 
 // These handlers implement the authenticated, user-facing side of the login
 // flow. The anonymous side (init, poll, browser redirect) lives in the
 // standalone loginflow service; these run inside OCS so the auth middleware
-// establishes the user. They require an authenticated user but apply no
-// authorization check. The responses are plain JSON, not the OCS envelope,
-// because the web UI codes against that shape and branches on the HTTP status
-// (404 unknown, 410 expired, 409 lost race).
+// establishes the user. They require an authenticated user, and granting
+// refuses one authenticated with an app password. The responses are plain
+// JSON, not the OCS envelope, because the web UI codes against that shape and
+// branches on the HTTP status (404 unknown, 410 expired, 409 lost race).
 //
 // No CSRF Origin check is needed: the auth middleware authenticates these via
 // the Authorization/token headers, which browsers never auto-attach on
@@ -93,6 +94,13 @@ func (h *Handler) LoginFlowGrant(w http.ResponseWriter, r *http.Request) {
 	log := appctx.GetLogger(r.Context())
 
 	user := appctx.ContextMustGetUser(r.Context())
+
+	// The login flow mints in process, out of reach of the gateway's rule that
+	// an app password cannot create another, so it is applied here.
+	if _, ok := scope.AppAuthFromContext(r.Context()); ok {
+		http.Error(w, "an app password cannot approve a client", http.StatusForbidden)
+		return
+	}
 
 	name, err := parseDeviceName(r)
 	if err != nil {

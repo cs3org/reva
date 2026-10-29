@@ -56,6 +56,11 @@ const (
 )
 
 func (i *interceptor) expandAndVerifyScope(ctx context.Context, req any, tokenScope map[string]*authpb.Scope, user *userpb.User, mgr token.Manager) error {
+	// An app password carries no other scope, and nothing below may widen it.
+	if ap, ok := scope.GetAppAuthScope(tokenScope); ok {
+		return verifyAppAuthScope(ctx, req, ap, user, mgr, service.Gateway)
+	}
+
 	log := appctx.GetLogger(ctx)
 	client, err := service.Gateway(ctx)
 	if err != nil {

@@ -23,12 +23,16 @@ import (
 	"fmt"
 	"net/http"
 
+	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
+	"github.com/cs3org/reva/v3/pkg/appctx"
+	"github.com/cs3org/reva/v3/pkg/auth/scope"
 	svcregistry "github.com/cs3org/reva/v3/pkg/registry"
 	datatxregistry "github.com/cs3org/reva/v3/pkg/rhttp/datatx/manager/registry"
 	"github.com/cs3org/reva/v3/pkg/rhttp/global"
 	"github.com/cs3org/reva/v3/pkg/rhttp/router"
 	"github.com/cs3org/reva/v3/pkg/storage"
 	"github.com/cs3org/reva/v3/pkg/storage/fs/registry"
+	"github.com/cs3org/reva/v3/pkg/utils"
 	"github.com/cs3org/reva/v3/pkg/utils/cfg"
 )
 
@@ -105,6 +109,35 @@ func (s *svc) RegistryMetadata() map[string]string {
 	return m
 }
 
+// appAuthAllowed checks a request made with an app password as the gateway
+// checks the download or the upload it stands for: here the storage is reached
+// without the gRPC interceptor.
+func appAuthAllowed(r *http.Request, protocol, p string) bool {
+	scopes, ok := appctx.ContextGetScopes(r.Context())
+	if !ok {
+		return true
+	}
+	if _, ok := scope.GetAppAuthScope(scopes); !ok {
+		return true
+	}
+
+	ref := &provider.Reference{Path: p}
+	if protocol == "spaces" {
+		spaceID, rel := router.ShiftPath(p)
+		storageID, opaqueID, err := utils.SplitStorageSpaceID(spaceID)
+		if err != nil {
+			return false
+		}
+		ref = &provider.Reference{ResourceId: &provider.ResourceId{StorageId: storageID, OpaqueId: opaqueID}, Path: "." + rel}
+	}
+	var req any = &provider.InitiateFileUploadRequest{Ref: ref}
+	if r.Method == http.MethodGet || r.Method == http.MethodHead {
+		req = &provider.InitiateFileDownloadRequest{Ref: ref}
+	}
+	ok, err := scope.VerifyScope(r.Context(), scopes, req)
+	return err == nil && ok
+}
+
 func getFS(ctx context.Context, c *config) (storage.FS, error) {
 	if f, ok := registry.NewFuncs[c.Driver]; ok {
 		return f(ctx, c.Drivers[c.Driver])
@@ -152,10 +185,20 @@ func (s *svc) Routes(r *router.Router) {
 			// tus authenticates with the transfer token it was handed.
 			opts = append(opts, router.Unprotected())
 		}
-		r.Mount(prefix, http.StripPrefix(prefix, h), opts...)
+		r.Mount(prefix, http.StripPrefix(prefix, appAuthGuard(name, h)), opts...)
 	}
 
 	if h, ok := s.dataTXs["simple"]; ok {
-		r.Mount(mount, http.StripPrefix(mount, h))
+		r.Mount(mount, http.StripPrefix(mount, appAuthGuard("simple", h)))
 	}
+}
+
+func appAuthGuard(protocol string, h http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if !appAuthAllowed(r, protocol, r.URL.Path) {
+			w.WriteHeader(http.StatusForbidden)
+			return
+		}
+		h.ServeHTTP(w, r)
+	})
 }
