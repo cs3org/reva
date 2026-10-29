@@ -251,18 +251,20 @@ func TestGetResourceInfosDepthOneOnFile(t *testing.T) {
 		name       string
 		file       *provider.ResourceInfo
 		parent     *provider.ResourceInfo
+		parentCode rpc.Code
 		wantParent *provider.ResourceInfo
 		wantInfos  int
 		wantHref   string
 	}{
-		{name: "file in a folder", file: inFolder, parent: folder, wantParent: folder, wantInfos: 2, wantHref: "/dav/spaces/sp"},
-		{name: "single-file share root", file: shareRoot, parent: shareRoot, wantParent: shareRoot, wantInfos: 1, wantHref: "/dav/spaces/sp/report.odt"},
+		{name: "file in a folder", file: inFolder, parent: folder, parentCode: rpc.Code_CODE_OK, wantParent: folder, wantInfos: 2, wantHref: "/dav/spaces/sp"},
+		{name: "single-file share root", file: shareRoot, parent: shareRoot, parentCode: rpc.Code_CODE_OK, wantParent: shareRoot, wantInfos: 1, wantHref: "/dav/spaces/sp/report.odt"},
+		{name: "file in a folder the user cannot read", file: inFolder, parentCode: rpc.Code_CODE_PERMISSION_DENIED, wantParent: inFolder, wantInfos: 1, wantHref: "/dav/spaces/sp/report.odt"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			gw := mockgateway.NewMockGatewayAPIClient(t)
 			gw.On("Stat", mock.Anything, mock.Anything).Return(&provider.StatResponse{Status: &rpc.Status{Code: rpc.Code_CODE_OK}, Info: tt.file}, nil).Once()
-			gw.On("Stat", mock.Anything, mock.Anything).Return(&provider.StatResponse{Status: &rpc.Status{Code: rpc.Code_CODE_OK}, Info: tt.parent}, nil).Once()
+			gw.On("Stat", mock.Anything, mock.Anything).Return(&provider.StatResponse{Status: &rpc.Status{Code: tt.parentCode}, Info: tt.parent}, nil).Once()
 			stampGateway(gw)
 
 			r := httptest.NewRequest("PROPFIND", "/dav/spaces/sp/report.odt", nil)
