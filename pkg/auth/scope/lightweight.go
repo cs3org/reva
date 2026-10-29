@@ -31,7 +31,6 @@ import (
 	ocmprovider "github.com/cs3org/go-cs3apis/cs3/ocm/provider/v1beta1"
 	prefpb "github.com/cs3org/go-cs3apis/cs3/preferences/v1beta1"
 	collaboration "github.com/cs3org/go-cs3apis/cs3/sharing/collaboration/v1beta1"
-	link "github.com/cs3org/go-cs3apis/cs3/sharing/link/v1beta1"
 	ocm "github.com/cs3org/go-cs3apis/cs3/sharing/ocm/v1beta1"
 	sp "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	stregistry "github.com/cs3org/go-cs3apis/cs3/storage/registry/v1beta1"
@@ -93,8 +92,6 @@ func lightweightAccountScope(_ context.Context, scope *authpb.Scope, resource an
 	case *invitepb.ListInviteTokensRequest:
 		return true, nil
 	case *prefpb.GetKeyRequest:
-		return true, nil
-	case *link.ListPublicSharesRequest:
 		return true, nil
 	case *stregistry.GetStorageProvidersRequest:
 		return true, nil

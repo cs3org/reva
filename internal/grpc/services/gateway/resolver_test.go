@@ -23,6 +23,7 @@ import (
 	"sync"
 
 	collaboration "github.com/cs3org/go-cs3apis/cs3/sharing/collaboration/v1beta1"
+	link "github.com/cs3org/go-cs3apis/cs3/sharing/link/v1beta1"
 	storageregistry "github.com/cs3org/go-cs3apis/cs3/storage/registry/v1beta1"
 	revaservice "github.com/cs3org/reva/v3/pkg/service"
 )
@@ -36,6 +37,7 @@ type testResolver struct {
 	mu       sync.Mutex
 	registry storageregistry.RegistryAPIClient
 	shares   collaboration.CollaborationAPIClient
+	links    link.LinkAPIClient
 }
 
 func (r *testResolver) StorageRegistry(context.Context) (storageregistry.RegistryAPIClient, error) {
@@ -48,6 +50,12 @@ func (r *testResolver) UserShareProvider(context.Context) (collaboration.Collabo
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	return r.shares, nil
+}
+
+func (r *testResolver) PublicShareProvider(context.Context) (link.LinkAPIClient, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return r.links, nil
 }
 
 var (
@@ -65,5 +73,15 @@ func stampGatewayPeers(reg storageregistry.RegistryAPIClient, shares collaborati
 	globalTestResolver.mu.Lock()
 	globalTestResolver.registry = reg
 	globalTestResolver.shares = shares
+	globalTestResolver.mu.Unlock()
+}
+
+// stampPublicShareProvider points the test resolver at the given public share provider.
+func stampPublicShareProvider(links link.LinkAPIClient) {
+	globalTestResolverOnce.Do(func() {
+		revaservice.SetGlobal(globalTestResolver)
+	})
+	globalTestResolver.mu.Lock()
+	globalTestResolver.links = links
 	globalTestResolver.mu.Unlock()
 }

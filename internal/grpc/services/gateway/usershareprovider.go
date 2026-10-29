@@ -253,6 +253,33 @@ func (s *svc) getShare(ctx context.Context, req *collaboration.GetShareRequest) 
 
 // TODO(labkode): read GetShare comment.
 func (s *svc) ListShares(ctx context.Context, req *collaboration.ListSharesRequest) (*collaboration.ListSharesResponse, error) {
+	user, ok := appctx.ContextGetUser(ctx)
+	if !ok {
+		return &collaboration.ListSharesResponse{
+			Status: status.NewUnauthenticated(ctx, nil, "no user in context"),
+		}, nil
+	}
+
+	// Without a resource or an own creator filter, the query would return the shares of the whole instance.
+	var byResource, byMe, byOthers bool
+	for _, f := range req.GetFilters() {
+		switch f.GetType() {
+		case collaboration.Filter_TYPE_RESOURCE_ID:
+			byResource = true
+		case collaboration.Filter_TYPE_CREATOR:
+			if f.GetCreator().GetOpaqueId() == user.GetId().GetOpaqueId() {
+				byMe = true
+			} else {
+				byOthers = true
+			}
+		}
+	}
+	if !byResource && (!byMe || byOthers) {
+		return &collaboration.ListSharesResponse{
+			Status: status.NewInvalidArg(ctx, "a resource filter or a creator filter for the user is required"),
+		}, nil
+	}
+
 	c, err := service.UserShareProvider(ctx)
 	if err != nil {
 		err = errors.Wrap(err, "gateway: error calling GetUserShareProviderClient")
@@ -266,7 +293,11 @@ func (s *svc) ListShares(ctx context.Context, req *collaboration.ListSharesReque
 	if err != nil {
 		return nil, errors.Wrap(err, "gateway: error calling ListShares")
 	}
+	if res.Status.Code != rpc.Code_CODE_OK {
+		return res, nil
+	}
 
+	res.Shares = keepManageable(ctx, s, user, res.Shares)
 	return res, nil
 }
 
