@@ -435,11 +435,17 @@ func (fs *Eosfs) permissionSet(ctx context.Context, eosFileInfo *eosclient.FileI
 	// through the sys.acl rather than the unix group bits, and write access
 	// is never granted through the mode bits.
 	// EOS checks access on the mode after it applies sys.mask.
+	// For a file, EOS ignores the mode of the file and checks the parent folder.
+	// External users get access only through a share: EOS does not check
+	// their access, because they act as the external account system user.
 	mode := eosFileInfo.Mode
+	if !eosFileInfo.IsDir {
+		mode = eosFileInfo.ParentMode
+	}
 	if mask, err := strconv.ParseUint(eosFileInfo.Attrs["sys.mask"], 8, 64); err == nil {
 		mode &= mask
 	}
-	if mode&worldRead != 0 {
+	if !utils.IsExternalUser(u) && mode&worldRead != 0 {
 		mergePermissions(&perm, permissions.NewViewerRole().CS3ResourcePermissions())
 	}
 
