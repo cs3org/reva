@@ -20,6 +20,7 @@ package gateway
 
 import (
 	"context"
+	"slices"
 
 	"github.com/alitto/pond/v2"
 	gateway "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
@@ -29,6 +30,7 @@ import (
 	"github.com/pkg/errors"
 
 	"github.com/cs3org/reva/v3/pkg/appctx"
+	"github.com/cs3org/reva/v3/pkg/auth/scope"
 	"github.com/cs3org/reva/v3/pkg/errtypes"
 	"github.com/cs3org/reva/v3/pkg/rgrpc/status"
 	"github.com/cs3org/reva/v3/pkg/service"
@@ -133,7 +135,28 @@ func (s *svc) GetPublicShare(ctx context.Context, req *link.GetPublicShareReques
 		}, nil
 	}
 
-	return pClient.GetPublicShare(ctx, req)
+	res, err := pClient.GetPublicShare(ctx, req)
+	if err != nil || res.Status.Code != rpc.Code_CODE_OK {
+		return res, err
+	}
+
+	// A public link session resolves its own link by token, and it has no grant permissions.
+	if isOwnPublicLink(ctx, req.GetRef().GetToken()) {
+		return res, nil
+	}
+
+	// The response holds the token, so only a user who can manage the link may read it.
+	perms, st := s.permissionsOnResource(ctx, res.GetShare().GetResourceId())
+	if st != nil {
+		return &link.GetPublicShareResponse{Status: st}, nil
+	}
+	if !perms.GetUpdateGrant() && !perms.GetRemoveGrant() {
+		return &link.GetPublicShareResponse{
+			Status: status.NewPermissionDenied(ctx, nil, "no permission to get public links on this resource"),
+		}, nil
+	}
+
+	return res, nil
 }
 
 func (s *svc) ListPublicShares(ctx context.Context, req *link.ListPublicSharesRequest) (*link.ListPublicSharesResponse, error) {
@@ -282,4 +305,20 @@ func (s *svc) permissionsOnResource(ctx context.Context, id *provider.ResourceId
 	}
 
 	return statRes.GetInfo().GetPermissionSet(), nil
+}
+
+// isOwnPublicLink tells if the caller authenticated with the public link of this token.
+func isOwnPublicLink(ctx context.Context, token string) bool {
+	if token == "" {
+		return false
+	}
+	scopes, ok := appctx.ContextGetScopes(ctx)
+	if !ok {
+		return false
+	}
+	shares, err := scope.GetPublicSharesFromScopes(scopes)
+	if err != nil {
+		return false
+	}
+	return slices.ContainsFunc(shares, func(sh *link.PublicShare) bool { return sh.GetToken() == token })
 }
