@@ -179,6 +179,12 @@ func (fs *Eosfs) getExternalAccountAuth(ctx context.Context, fn string) (eosclie
 		return invalidAuth(), err
 	}
 
+	// EOS does not check the access of the external user, only of the system
+	// user. Thus check the access before we give the system user an ACL here.
+	if perm := fs.permissionSet(ctx, info, nil); !perm.Stat {
+		return invalidAuth(), errtypes.PermissionDenied(fmt.Sprintf("eosfs: external user has no access to %s", fn))
+	}
+
 	hasAcl := false
 	for _, acl := range info.SysACL.Entries {
 		if acl.Qualifier == fs.conf.ExternalAccountsUserUID {
