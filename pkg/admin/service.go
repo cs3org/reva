@@ -55,7 +55,10 @@ func AsService(ctx context.Context, name string) (context.Context, error) {
 	if err != nil {
 		return nil, err
 	}
+	return withToken(ctx, tkn), nil
+}
 
+func withToken(ctx context.Context, tkn string) context.Context {
 	// Replace, do not append: the server reads the first token, and ctx can
 	// already carry the caller's user token.
 	md, ok := metadata.FromOutgoingContext(ctx)
@@ -67,7 +70,7 @@ func AsService(ctx context.Context, name string) (context.Context, error) {
 	md.Set(appctx.TokenHeader, tkn)
 
 	ctx = appctx.ContextSetToken(ctx, tkn)
-	return metadata.NewOutgoingContext(ctx, md), nil
+	return metadata.NewOutgoingContext(ctx, md)
 }
 
 func serviceTokenFor(ctx context.Context, name string) (string, error) {

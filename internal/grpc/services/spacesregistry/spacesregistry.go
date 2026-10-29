@@ -46,7 +46,6 @@ import (
 	revaservice "github.com/cs3org/reva/v3/pkg/service"
 	"github.com/cs3org/reva/v3/pkg/share/cache"
 	"github.com/cs3org/reva/v3/pkg/spaces"
-	"github.com/cs3org/reva/v3/pkg/stats"
 	"github.com/cs3org/reva/v3/pkg/storage/utils/templates"
 	"github.com/cs3org/reva/v3/pkg/utils"
 	"github.com/cs3org/reva/v3/pkg/utils/cfg"
@@ -106,12 +105,8 @@ func New(ctx context.Context, m map[string]any) (rgrpc.Service, error) {
 	}
 
 	svc := service{
-		Set:      invoke.NewSet(),
 		c:        &c,
 		projects: s,
-	}
-	if _, ok := s.(stats.Reporter); ok {
-		svc.Set = stats.NewInvokeSet(&svc)
 	}
 
 	ricache, err := getCacheManager(&c)
@@ -125,6 +120,7 @@ func New(ctx context.Context, m map[string]any) (rgrpc.Service, error) {
 	if svc.timeoutSkipSpaces == 0 {
 		svc.timeoutSkipSpaces = time.Second * time.Duration(3) // 3 seconds.
 	}
+	svc.Set = svc.invocations()
 
 	return &svc, nil
 }

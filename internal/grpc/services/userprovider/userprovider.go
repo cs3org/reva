@@ -84,6 +84,7 @@ func New(ctx context.Context, m map[string]any) (rgrpc.Service, error) {
 		return nil, err
 	}
 
+	svc.registerInvocations()
 	return svc, nil
 }
 

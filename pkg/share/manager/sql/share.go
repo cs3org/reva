@@ -489,7 +489,13 @@ func (m *ShareMgr) MoveShare(ctx context.Context, ref *collaboration.ShareRefere
 		return err
 	}
 
-	res := m.db.Model(&share).Update("uid_owner", newOwner).Update("inode", newLocation.OpaqueId).Update("instance", newLocation.StorageId)
+	updates := map[string]any{"uid_owner": newOwner, "inode": newLocation.OpaqueId, "instance": newLocation.StorageId}
+	// The hierarchy checks list the shares of one space, so a share moved to
+	// another space must carry the new space id.
+	if newLocation.SpaceId != "" {
+		updates["space_id"] = newLocation.SpaceId
+	}
+	res := m.db.Model(&share).Updates(updates)
 	if res.Error != nil {
 		return res.Error
 	}
@@ -539,7 +545,7 @@ func (m *ShareMgr) getShare(ctx context.Context, ref *collaboration.ShareReferen
 	}
 
 	user := appctx.ContextMustGetUser(ctx)
-	if s.UIDOwner == user.Id.OpaqueId && s.UIDInitiator == user.Id.OpaqueId {
+	if s.UIDOwner == user.Id.OpaqueId || s.UIDInitiator == user.Id.OpaqueId {
 		return s, nil
 	}
 
@@ -548,7 +554,9 @@ func (m *ShareMgr) getShare(ctx context.Context, ref *collaboration.ShareReferen
 		OpaqueId:  s.Inode,
 	})
 	if err != nil {
-		return nil, err
+		// Any other answer would tell the caller that the share exists.
+		appctx.GetLogger(ctx).Debug().Err(err).Str("share", ref.String()).Msg("sql: path of a share not owned by the caller")
+		return nil, errtypes.NotFound(ref.String())
 	}
 
 	if m.isProjectAdmin(user, path) {
@@ -777,6 +785,16 @@ func (m *ShareMgr) appendShareFiltersToQuery(query *gorm.DB, filters []*collabor
 					innerQuery = innerQuery.Where("uid_initiator = ?", filter.GetCreator().OpaqueId)
 				} else {
 					innerQuery = innerQuery.Or("uid_initiator = ?", filter.GetCreator().OpaqueId)
+				}
+			}
+			query = query.Where(innerQuery)
+		case collaboration.Filter_TYPE_OWNER:
+			innerQuery := m.db
+			for i, filter := range filters {
+				if i == 0 {
+					innerQuery = innerQuery.Where("uid_owner = ?", filter.GetOwner().OpaqueId)
+				} else {
+					innerQuery = innerQuery.Or("uid_owner = ?", filter.GetOwner().OpaqueId)
 				}
 			}
 			query = query.Where(innerQuery)

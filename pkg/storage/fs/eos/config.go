@@ -26,6 +26,10 @@ type Config struct {
 	// QuotaNode for storing quota information
 	QuotaNode string `mapstructure:"quota_node"`
 
+	// QuotaReplicaFactor is the number of copies EOS keeps of each byte.
+	// Default is 1.
+	QuotaReplicaFactor uint64 `mapstructure:"quota_replica_factor"`
+
 	// Location of the eos binary.
 	// Default is /usr/bin/eos.
 	EosBinary string `mapstructure:"eos_binary"`

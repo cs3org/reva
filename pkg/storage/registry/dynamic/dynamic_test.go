@@ -409,4 +409,94 @@ var _ = Describe("Dynamic storage provider", func() {
 			})
 		})
 	})
+
+	Context("administering the routing table", func() {
+		var ra storage.RouteAdmin
+
+		JustBeforeEach(func() {
+			d, err = New(context.Background(), map[string]any{
+				"rules":       rules,
+				"rewrites":    rewrites,
+				"home_path":   homePath,
+				"db_username": "test",
+				"db_password": "test",
+				"db_host":     dbHost,
+				"db_port":     dbPort,
+				"db_name":     dbName,
+			})
+			Expect(err).ToNot(HaveOccurred())
+			ra = d.(storage.RouteAdmin)
+		})
+
+		resolve := func(p string) []string {
+			ps, err := d.FindProviders(context.Background(), &provider.Reference{Path: p})
+			if err != nil {
+				return nil
+			}
+			addrs := []string{}
+			for _, p := range ps {
+				addrs = append(addrs, p.Address)
+			}
+			return addrs
+		}
+
+		It("should list the routes by path", func() {
+			rs, err := ra.ListRoutes(context.Background())
+			Expect(err).ToNot(HaveOccurred())
+			Expect(rs).To(HaveLen(len(routes)))
+			Expect(rs[0]).To(Equal(storage.Route{Path: "/cephfs/project/c/cephbox", MountID: "cephfs"}))
+		})
+
+		It("should resolve a path to its mount", func() {
+			ms, err := ra.ResolvePath(context.Background(), "/eos/user/a/alice/folder")
+			Expect(err).ToNot(HaveOccurred())
+			Expect(ms).To(Equal([]storage.Mount{{MountID: "eosuser-i01", MountPath: "/eos/user/a", Address: "eosuser-i01:1234"}}))
+
+			ms, err = ra.ResolvePath(context.Background(), "/eos/project")
+			Expect(err).ToNot(HaveOccurred())
+			Expect(ms).To(HaveLen(2))
+			Expect(ms[0].MountPath).To(Equal("/eos/project/a"))
+
+			_, err = ra.ResolvePath(context.Background(), "/non/existent")
+			Expect(err).To(BeAssignableToTypeOf(errtypes.NotFound("")))
+			_, err = ra.ResolvePath(context.Background(), "eos/user")
+			Expect(err).To(BeAssignableToTypeOf(errtypes.BadRequest("")))
+		})
+
+		It("should apply an added route only after a reload", func() {
+			Expect(ra.AddRoute(context.Background(), "/admin/x/", "eoshome-i01")).To(Succeed())
+			defer func() { _ = ra.RemoveRoute(context.Background(), "/admin/x") }()
+			Expect(resolve("/admin/x/folder")).To(BeEmpty())
+
+			Expect(ra.Reload(context.Background())).To(Succeed())
+			Expect(resolve("/admin/x/folder")).To(Equal([]string{"eoshome-i01:1234"}))
+
+			Expect(ra.AddRoute(context.Background(), "/admin/x", "eoshome-i02")).To(Succeed())
+			Expect(ra.Reload(context.Background())).To(Succeed())
+			Expect(resolve("/admin/x/folder")).To(Equal([]string{"eoshome-i02:1234"}))
+		})
+
+		It("should refuse a route to a mount that is not in the rules", func() {
+			err := ra.AddRoute(context.Background(), "/admin/y", "nope")
+			Expect(err).To(BeAssignableToTypeOf(errtypes.BadRequest("")))
+			err = ra.AddRoute(context.Background(), "admin/y", "eoshome-i01")
+			Expect(err).To(BeAssignableToTypeOf(errtypes.BadRequest("")))
+			rs, err := ra.ListRoutes(context.Background())
+			Expect(err).ToNot(HaveOccurred())
+			Expect(rs).To(HaveLen(len(routes)))
+		})
+
+		It("should apply a removed route only after a reload", func() {
+			Expect(ra.AddRoute(context.Background(), "/admin/z", "eoshome-i01")).To(Succeed())
+			Expect(ra.Reload(context.Background())).To(Succeed())
+
+			Expect(ra.RemoveRoute(context.Background(), "/admin/z/")).To(Succeed())
+			Expect(resolve("/admin/z/folder")).To(Equal([]string{"eoshome-i01:1234"}))
+			Expect(ra.Reload(context.Background())).To(Succeed())
+			Expect(resolve("/admin/z/folder")).To(BeEmpty())
+
+			err := ra.RemoveRoute(context.Background(), "/admin/z")
+			Expect(err).To(BeAssignableToTypeOf(errtypes.NotFound("")))
+		})
+	})
 })
