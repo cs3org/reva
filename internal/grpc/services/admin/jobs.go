@@ -52,19 +52,17 @@ func (s *svc) jobsEndpoints() ([]client.Endpoint, error) {
 	return eps, nil
 }
 
-// invokeJobsOne runs a single-target jobs invocation on one ready runner. It
-// picks the runner itself, not through the Shared scope, so that a runner that
-// does not advertise the scope yet does not run the call more than once.
+// invokeJobsOne runs a single-target jobs invocation on one ready runner.
 func (s *svc) invokeJobsOne(ctx context.Context, invocation string, args map[string]string) (*adminpb.NodeResult, error) {
 	eps, err := s.jobsEndpoints()
 	if err != nil {
 		return nil, err
 	}
-	res := client.InvokeOne(ctx, client.Pick(ctx, eps), invocation, args)
-	if res.Error != "" {
-		return nil, status.Errorf(codes.Internal, "admin: jobs %s: %s", invocation, res.Error)
+	res, err := invokeOne(ctx, eps, invocation, args)
+	if err != nil {
+		return nil, err
 	}
-	return &adminpb.NodeResult{Node: res.Node, ResultJson: res.ResultJSON, Error: res.Error}, nil
+	return &adminpb.NodeResult{Node: res.Node, ResultJson: res.ResultJSON}, nil
 }
 
 func (s *svc) InspectJobs(ctx context.Context, _ *adminpb.InspectJobsRequest) (*adminpb.InspectJobsResponse, error) {

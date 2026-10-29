@@ -42,8 +42,10 @@ import (
 
 	"github.com/cs3org/reva/v3/pkg/appctx"
 	"github.com/cs3org/reva/v3/pkg/errtypes"
+	"github.com/cs3org/reva/v3/pkg/invoke"
 	"github.com/cs3org/reva/v3/pkg/mime"
 	"github.com/cs3org/reva/v3/pkg/plugin"
+	svcregistry "github.com/cs3org/reva/v3/pkg/registry"
 	"github.com/cs3org/reva/v3/pkg/rgrpc"
 	"github.com/cs3org/reva/v3/pkg/rgrpc/status"
 	"github.com/cs3org/reva/v3/pkg/rhttp/router"
@@ -104,6 +106,7 @@ type FSWithListRegexSuport interface {
 }
 
 type service struct {
+	*invoke.Set
 	conf               *config
 	storage            storage.FS
 	mountPath, mountID string
@@ -121,6 +124,15 @@ func (s *service) dataServerURL(ctx context.Context) (*url.URL, error) {
 		return nil, err
 	}
 	return url.Parse(ep.URL())
+}
+
+// RegistryMetadata advertises the mount, so that the Admin API can select the
+// instance that serves a given storage.
+func (s *service) RegistryMetadata() map[string]string {
+	return map[string]string{
+		svcregistry.MetaMountID:   s.mountID,
+		svcregistry.MetaMountPath: s.mountPath,
+	}
 }
 
 func (s *service) Close() error {
@@ -209,11 +221,15 @@ func New(ctx context.Context, m map[string]any) (rgrpc.Service, error) {
 	}
 
 	service := &service{
+		Set:         invoke.NewSet(),
 		conf:        &c,
 		storage:     fs,
 		mountPath:   mountPath,
 		mountID:     mountID,
 		availableXS: xsTypes,
+	}
+	if err := service.MergeDriver(fs); err != nil {
+		return nil, err
 	}
 
 	return service, nil

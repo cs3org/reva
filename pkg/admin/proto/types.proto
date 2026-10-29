@@ -1,0 +1,45 @@
+// Copyright 2018-2026 CERN
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+//
+// In applying this license, CERN does not waive the privileges and immunities
+// granted to it by virtue of its status as an Intergovernmental Organization
+// or submit itself to any jurisdiction.
+
+syntax = "proto3";
+
+package reva.admin.v1beta1;
+
+import "cs3/storage/provider/v1beta1/resources.proto";
+
+option go_package = "github.com/cs3org/reva/v3/pkg/admin/adminpb";
+
+// The typed admin services share these messages and these rules:
+//  - A resource message wraps the CS3 message of the same resource and adds
+//    only what CS3 cannot carry.
+//  - A wrapper can have `map<string, string> extra` for the attributes that a
+//    driver or a deployment adds. Reva core does not interpret them.
+//  - A list is a server stream, so there is no paging.
+//  - A message never carries a secret.
+//  - The invocation of the owning service returns the protojson of the message.
+
+// SpaceRef identifies a storage space.
+message SpaceRef {
+  oneof ref {
+    cs3.storage.provider.v1beta1.StorageSpaceId id = 1;
+    // path is a path in the space: the space is the one that holds it.
+    string path = 2;
+    // name is the name of the space, for example the name of a project.
+    string name = 3;
+  }
+}
