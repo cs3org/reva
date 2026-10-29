@@ -19,6 +19,7 @@
 package invoke
 
 import (
+	"context"
 	"sync"
 
 	"github.com/cs3org/reva/v3/pkg/activity"
@@ -36,13 +37,15 @@ const MetaSharedInvocations = "shared_invocations"
 // instance is one service instance in this process, addressed by its registry
 // node id. inv holds the service's own operations, or is nil; activity is the
 // instance's request counter, shared with the server's interceptor (nil if none
-// is wired, e.g. serverless).
+// is wired, e.g. serverless). api answers the APIInvocation, or is nil when the
+// instance serves no HTTP routes.
 type instance struct {
 	id       string
 	service  string
 	config   map[string]any // redacted
 	inv      Invokable
 	activity *activity.Counter
+	api      func(context.Context) (Result, error)
 }
 
 var (

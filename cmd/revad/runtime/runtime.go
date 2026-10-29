@@ -610,7 +610,7 @@ func newServers(ctx context.Context, certs config.MTLS, grpc []*config.GRPC, htt
 		ctx := appctx.WithLogger(ctx, &logger)
 		// A service describing this server's API reports how it
 		// authenticates, which the auth middleware's configuration decides.
-		ctx, err := withAuthSchemes(ctx, cfg.Middlewares)
+		ctx, schemes, err := withAuthSchemes(ctx, cfg.Middlewares)
 		if err != nil {
 			return nil, err
 		}
@@ -619,9 +619,11 @@ func newServers(ctx context.Context, certs config.MTLS, grpc []*config.GRPC, htt
 			return nil, err
 		}
 		ln := listenerFromAddress(lns, cfg.Network, cfg.Address)
+		addr := hostPort(hostname, ln.Addr().String())
 		counters := newActivityCounters(services)
-		captureInstances(services, cfg.Services, hostPort(hostname, ln.Addr().String()), counters)
+		captureInstances(services, cfg.Services, addr, counters)
 		routes := rhttp.Routes(services, counters, &logger)
+		describeAPIs(services, routes.Routes(), schemes, addr)
 		middlewares, err := initHTTPMiddlewares(cfg.Middlewares, &logger)
 		if err != nil {
 			return nil, err

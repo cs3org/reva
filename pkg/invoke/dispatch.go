@@ -32,6 +32,9 @@ func Invocations(target string) ([]InvocationSpec, bool) {
 		return nil, false
 	}
 	specs := defaultSpecs()
+	if inst.api != nil {
+		specs = append(specs, apiSpec)
+	}
 	if inst.inv != nil {
 		specs = append(specs, inst.inv.Invocations()...)
 	}
@@ -50,6 +53,9 @@ func Invoke(ctx context.Context, target, name string, args map[string]any) (Resu
 			return nil, fmt.Errorf("invoke: %q is streaming-only (use InvokeStream)", name)
 		}
 		return d.fn(ctx, inst, args)
+	}
+	if name == APIInvocation && inst.api != nil {
+		return inst.api(ctx)
 	}
 	if inst.inv == nil {
 		return nil, fmt.Errorf("invoke: %q exposes no invocation %q on this node", target, name)

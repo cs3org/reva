@@ -19,15 +19,23 @@
 package runtime
 
 import (
+	"cmp"
 	"context"
+	"encoding/json"
 	"sort"
+	"sync"
 
 	"github.com/cs3org/reva/v3/internal/http/interceptors/appctx"
 	authmw "github.com/cs3org/reva/v3/internal/http/interceptors/auth"
 	"github.com/cs3org/reva/v3/internal/http/interceptors/log"
 	"github.com/cs3org/reva/v3/internal/http/interceptors/trace"
 	"github.com/cs3org/reva/v3/pkg/auth"
+	"github.com/cs3org/reva/v3/pkg/invoke"
+	"github.com/cs3org/reva/v3/pkg/openapi"
 	"github.com/cs3org/reva/v3/pkg/rhttp/global"
+	"github.com/cs3org/reva/v3/pkg/rhttp/router"
+	"github.com/cs3org/reva/v3/pkg/rversion"
+	"github.com/getkin/kin-openapi/openapi3"
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog"
 )
@@ -83,15 +91,51 @@ func initHTTPMiddlewares(conf map[string]map[string]any, logger *zerolog.Logger)
 }
 
 // withAuthSchemes carries how a server authenticates into the context its
-// services are built with.
+// services are built with, and returns it.
 //
 // It is the same configuration the auth middleware reads, resolved a second
 // time rather than restated: a service that publishes the server's API, such
 // as openapi, then describes what the middleware actually accepts.
-func withAuthSchemes(ctx context.Context, conf map[string]map[string]any) (context.Context, error) {
+func withAuthSchemes(ctx context.Context, conf map[string]map[string]any) (context.Context, []auth.Scheme, error) {
 	schemes, err := authmw.Schemes(conf["auth"])
 	if err != nil {
-		return nil, errors.Wrap(err, "rhttp: error describing the authentication")
+		return nil, nil, errors.Wrap(err, "rhttp: error describing the authentication")
 	}
-	return auth.WithSchemes(ctx, schemes), nil
+	return auth.WithSchemes(ctx, schemes), schemes, nil
+}
+
+// describeAPIs gives each HTTP service instance the API invocation, so that
+// the openapi service can describe a whole fleet. A document is built only
+// when first asked for, because most processes are never asked, and the
+// routes do not change after startup.
+func describeAPIs(services map[string]global.Service, routes []router.Route, schemes []auth.Scheme, addr string) {
+	for name := range services {
+		var owned []router.Route
+		for _, rt := range routes {
+			if rt.Owner == name {
+				owned = append(owned, rt)
+			}
+		}
+		if len(owned) == 0 {
+			continue
+		}
+
+		describe := sync.OnceValues(func() (invoke.Result, error) {
+			doc, err := openapi.From(owned, &openapi3.Info{
+				Title:   name,
+				Version: cmp.Or(rversion.Version, "unknown"),
+			}, schemes)
+			if err != nil {
+				return nil, err
+			}
+			encoded, err := json.Marshal(doc)
+			if err != nil {
+				return nil, err
+			}
+			return invoke.Result{"document": json.RawMessage(encoded)}, nil
+		})
+		invoke.DescribeAPI(nodeID(addr, name), func(context.Context) (invoke.Result, error) {
+			return describe()
+		})
+	}
 }

@@ -4,7 +4,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>{{.Title}} API</title>
-    <link rel="stylesheet" href="{{.Stylesheet}}" />
+    <link rel="stylesheet" href="{{.Stylesheet}}"{{with .StylesheetIntegrity}} integrity="{{.}}"{{end}} crossorigin="anonymous" />
     <style>
       body { margin: 0; background: #fafafa; }
       .swagger-ui .topbar { display: none; }
@@ -17,18 +17,19 @@
       <a href="{{.Spec}}">{{.Spec}}</a>.
     </noscript>
     <div id="ui"></div>
-    <script src="{{.Bundle}}" crossorigin="anonymous"></script>
+    <script src="{{.Bundle}}"{{with .BundleIntegrity}} integrity="{{.}}"{{end}} crossorigin="anonymous"></script>
     <script>
       window.onload = function () {
         if (typeof SwaggerUIBundle === "undefined") {
-          document.getElementById("ui").innerHTML =
-            '<p style="padding:2rem;font-family:system-ui,sans-serif">' +
-            "The viewer could not be loaded. Point <code>ui_bundle</code> at a " +
-            'local copy of swagger-ui-dist, or read <a href="{{.Spec}}">{{.Spec}}</a> directly.</p>';
+          var p = document.createElement("p");
+          p.style.cssText = "padding:2rem;font-family:system-ui,sans-serif";
+          p.textContent = "The viewer could not be loaded, or did not match its integrity hash. " +
+            "Check ui_bundle and ui_bundle_integrity, or read " + {{.Spec}} + " directly.";
+          document.getElementById("ui").appendChild(p);
           return;
         }
         SwaggerUIBundle({
-          url: "{{.Spec}}",
+          url: {{.Spec}},
           dom_id: "#ui",
           deepLinking: true,
           docExpansion: "none",

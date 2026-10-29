@@ -152,3 +152,34 @@ func TestMetadataAdvertisesSharedInvocations(t *testing.T) {
 		t.Fatalf("expected all invocations advertised, got %q", meta[MetaInvocations])
 	}
 }
+
+// Only an instance that serves HTTP routes is given the API invocation: it is
+// advertised, shared, and answered for that instance alone.
+func TestAPIInvocationIsPerInstance(t *testing.T) {
+	withAPI, without := "127.0.0.1:9101/svc-api", "127.0.0.1:9102/svc-noapi"
+	RegisterInstance(withAPI, "svc-api", nil, nil, nil)
+	RegisterInstance(without, "svc-noapi", nil, nil, nil)
+	DescribeAPI(withAPI, func(context.Context) (Result, error) {
+		return Result{"document": "described"}, nil
+	})
+
+	specs, _ := Invocations(withAPI)
+	if !hasSpec(specs, APIInvocation) {
+		t.Fatalf("got %v, want the API invocation listed", specs)
+	}
+	if meta := Metadata(withAPI); !strings.Contains(meta[MetaSharedInvocations], APIInvocation) {
+		t.Errorf("got shared invocations %q, want the API invocation among them", meta[MetaSharedInvocations])
+	}
+	res, err := Invoke(context.Background(), withAPI, APIInvocation, nil)
+	if err != nil || res["document"] != "described" {
+		t.Errorf("got %v, %v, want the instance's description", res, err)
+	}
+
+	specs, _ = Invocations(without)
+	if hasSpec(specs, APIInvocation) {
+		t.Error("an instance without routes should not list the API invocation")
+	}
+	if _, err := Invoke(context.Background(), without, APIInvocation, nil); err == nil {
+		t.Error("an instance without routes should refuse the API invocation")
+	}
+}

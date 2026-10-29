@@ -19,11 +19,15 @@
 package ocgraph
 
 import (
+	"context"
+	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"testing"
 
+	"github.com/cs3org/reva/v3/pkg/openapi"
 	"github.com/cs3org/reva/v3/pkg/rhttp/router"
+	"github.com/getkin/kin-openapi/openapi3"
 )
 
 // Declaring the routes must not panic: ServeMux rejects overlapping patterns
@@ -55,5 +59,28 @@ func TestRoutesRegister(t *testing.T) {
 				t.Errorf("%s %s resolves to no route", tt.method, tt.target)
 			}
 		})
+	}
+}
+
+// The routes describe their bodies with the libregraph types, which must give
+// a valid OpenAPI document.
+func TestRoutesMakeAValidDocument(t *testing.T) {
+	r := router.New()
+	(&svc{}).Routes(r.Service("ocgraph"))
+
+	doc, err := openapi.From(r.Routes(), &openapi3.Info{Title: "ocgraph", Version: "test"}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	encoded, err := json.Marshal(doc)
+	if err != nil {
+		t.Fatal(err)
+	}
+	loaded, err := openapi3.NewLoader().LoadFromData(encoded)
+	if err != nil {
+		t.Fatalf("the document does not load: %v", err)
+	}
+	if err := loaded.Validate(context.Background()); err != nil {
+		t.Fatalf("the document is not valid OpenAPI: %v", err)
 	}
 }

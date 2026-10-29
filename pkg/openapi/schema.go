@@ -19,106 +19,115 @@
 package openapi
 
 import (
+	"reflect"
 	"strings"
 
-	"github.com/invopop/jsonschema"
+	"github.com/getkin/kin-openapi/openapi3"
+	"github.com/getkin/kin-openapi/openapi3gen"
 )
 
-// Schema is a JSON Schema. OpenAPI 3.1 embeds JSON Schema as it is, so the
-// schemas reflected out of Go types need no translation.
-type Schema = jsonschema.Schema
-
-// componentsRef is where an OpenAPI document keeps its schemas, which is not
-// where JSON Schema keeps its definitions.
-const componentsRef = "#/components/schemas/"
-
-const defsRef = "#/$defs/"
-
-// reflector turns Go types into schemas, collecting the named types it meets
-// so that a type used twice is described once and a type that refers to itself
-// terminates.
-type reflector struct {
-	r    *jsonschema.Reflector
-	defs map[string]*Schema
+// schemas turns Go types into schemas, keeping every named struct in the
+// document's components, so a type used twice is described once and a type
+// that refers to itself terminates.
+type schemas struct {
+	gen        *openapi3gen.Generator
+	components openapi3.Schemas
 }
 
-func newReflector() *reflector {
-	return &reflector{
-		r: &jsonschema.Reflector{
-			// Without this every schema carries an $id naming invopop.com.
-			Anonymous: true,
-			// Describe a field as absent when it may be, rather than
-			// declaring every field required.
-			RequiredFromJSONSchemaTags: false,
-			ExpandedStruct:             false,
-		},
-		defs: map[string]*Schema{},
+func newSchemas(components openapi3.Schemas) *schemas {
+	return &schemas{
+		components: components,
+		gen: openapi3gen.NewGenerator(
+			openapi3gen.CreateComponentSchemas(openapi3gen.ExportComponentSchemasOptions{
+				ExportComponentSchemas: true,
+				ExportTopLevelSchema:   true,
+			}),
+			openapi3gen.CreateTypeNameGenerator(schemaName),
+			openapi3gen.SchemaCustomizer(absentIsNotNull),
+		),
 	}
 }
 
-// schemaFor returns the schema describing v's type, or nil for an untyped nil,
-// which is how a response without a body is spelled.
-func (f *reflector) schemaFor(v any) *Schema {
-	if v == nil {
-		return nil
+// of returns the schema describing v's type.
+func (s *schemas) of(v any) (*openapi3.SchemaRef, error) {
+	ref, err := s.gen.NewSchemaRefForValue(v, s.components)
+	if err != nil {
+		return nil, err
 	}
-
-	s := f.r.Reflect(v)
-	if s == nil {
-		return nil
-	}
-
-	// The reflected schema holds its definitions; an OpenAPI document holds
-	// them centrally, so they are moved over and the references repointed.
-	for name, def := range s.Definitions {
-		repoint(def)
-		f.defs[name] = def
-	}
-	s.Definitions = nil
-	repoint(s)
-
-	// A struct comes back as a reference to its own definition, which is what
-	// should be used wherever the type appears.
-	if s.Ref != "" {
-		return &Schema{Ref: s.Ref}
-	}
-	return s
+	s.addOpaque(ref)
+	return ref, nil
 }
 
-// repoint rewrites every reference in a schema from where JSON Schema keeps
-// its definitions to where an OpenAPI document keeps its schemas.
-func repoint(s *Schema) {
-	if s == nil {
-		return
-	}
+const componentsPrefix = "#/components/schemas/"
 
-	s.Ref = strings.Replace(s.Ref, defsRef, componentsRef, 1)
-
-	repoint(s.Items)
-	repoint(s.AdditionalProperties)
-	repoint(s.Contains)
-	repoint(s.Not)
-	repoint(s.If)
-	repoint(s.Then)
-	repoint(s.Else)
-
-	if s.Properties != nil {
-		for pair := s.Properties.Oldest(); pair != nil; pair = pair.Next() {
-			repoint(pair.Value)
+// addOpaque adds a component for each struct that is referred to but has no
+// JSON fields, such as libregraph's NullableTime. Such a type writes its own
+// JSON, which reflection cannot see, and the generator leaves its reference
+// dangling.
+func (s *schemas) addOpaque(root *openapi3.SchemaRef) {
+	missing := map[string]bool{}
+	seen := map[*openapi3.Schema]bool{}
+	var walk func(*openapi3.SchemaRef)
+	walk = func(r *openapi3.SchemaRef) {
+		if r == nil {
+			return
+		}
+		if name, ok := strings.CutPrefix(r.Ref, componentsPrefix); ok {
+			if _, have := s.components[name]; !have {
+				missing[name] = true
+			}
+			// A component is walked from the components themselves.
+			return
+		}
+		v := r.Value
+		if v == nil || seen[v] {
+			return
+		}
+		seen[v] = true
+		for _, p := range v.Properties {
+			walk(p)
+		}
+		walk(v.Items)
+		walk(v.AdditionalProperties.Schema)
+		walk(v.Not)
+		for _, group := range []openapi3.SchemaRefs{v.AllOf, v.AnyOf, v.OneOf} {
+			for _, sub := range group {
+				walk(sub)
+			}
 		}
 	}
-	for _, group := range [][]*Schema{s.AllOf, s.AnyOf, s.OneOf, s.PrefixItems} {
-		for _, sub := range group {
-			repoint(sub)
-		}
+
+	walk(root)
+	for _, c := range s.components {
+		walk(c)
 	}
-	for _, sub := range s.PatternProperties {
-		repoint(sub)
-	}
-	for _, sub := range s.Definitions {
-		repoint(sub)
+	for name := range missing {
+		s.components[name] = &openapi3.SchemaRef{Value: &openapi3.Schema{
+			Description: "Not described: the type writes its own JSON.",
+		}}
 	}
 }
 
-// stringSchema describes a parameter, all of which arrive as text.
-func stringSchema() *Schema { return &Schema{Type: "string"} }
+// schemaName names a struct's component after its full import path. The
+// documents of several services are merged into one, each reflected on its
+// own, so a name has to mean the same type whichever service produced it: a
+// name made unique within one document only is not enough.
+func schemaName(t reflect.Type) string {
+	if t.Name() == "" {
+		// Anonymous structs are inlined, which an empty name asks for.
+		return ""
+	}
+	if t.PkgPath() == "" {
+		return t.Name()
+	}
+	return strings.ReplaceAll(t.PkgPath(), "/", ".") + "." + t.Name()
+}
+
+// absentIsNotNull drops the nullable flag the generator puts on every pointer.
+// A pointer field is how a Go type says a value may be left out, which its
+// omitempty tag already tells, not that it may be sent as null. The flag is
+// also an OpenAPI 3.0 keyword that 3.1 and later no longer know.
+func absentIsNotNull(_ string, _ reflect.Type, _ reflect.StructTag, schema *openapi3.Schema) error {
+	schema.Nullable = false
+	return nil
+}

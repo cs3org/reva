@@ -18,17 +18,17 @@
 
 package openapi
 
-import "github.com/cs3org/reva/v3/pkg/auth"
+import (
+	"github.com/cs3org/reva/v3/pkg/auth"
+	"github.com/getkin/kin-openapi/openapi3"
+)
 
 // securitySchemes describes each scheme the way OpenAPI names it.
-func securitySchemes(schemes []auth.Scheme) map[string]*SecurityScheme {
-	if len(schemes) == 0 {
-		return nil
-	}
-	out := make(map[string]*SecurityScheme, len(schemes))
+func securitySchemes(schemes []auth.Scheme) openapi3.SecuritySchemes {
+	out := openapi3.SecuritySchemes{}
 	for _, s := range schemes {
 		if scheme := securityScheme(s); scheme != nil {
-			out[s.Name] = scheme
+			out[s.Name] = &openapi3.SecuritySchemeRef{Value: scheme}
 		}
 	}
 	if len(out) == 0 {
@@ -37,19 +37,20 @@ func securitySchemes(schemes []auth.Scheme) map[string]*SecurityScheme {
 	return out
 }
 
-func securityScheme(s auth.Scheme) *SecurityScheme {
+func securityScheme(s auth.Scheme) *openapi3.SecurityScheme {
+	scheme := openapi3.NewSecurityScheme().WithDescription(s.Description)
 	switch s.Kind {
 	case auth.SchemeBasic:
-		return &SecurityScheme{Type: "http", Scheme: "basic", Description: s.Description}
+		return scheme.WithType("http").WithScheme("basic")
 	case auth.SchemeBearer:
-		return &SecurityScheme{Type: "http", Scheme: "bearer", Description: s.Description}
+		return scheme.WithType("http").WithScheme("bearer")
 	case auth.SchemeNegotiate:
 		// Registered with IANA, so it names an http scheme like the others.
-		return &SecurityScheme{Type: "http", Scheme: "negotiate", Description: s.Description}
+		return scheme.WithType("http").WithScheme("negotiate")
 	case auth.SchemeHeader:
-		return &SecurityScheme{Type: "apiKey", In: "header", Name: s.Param, Description: s.Description}
+		return scheme.WithType("apiKey").WithIn("header").WithName(s.Param)
 	case auth.SchemeQuery:
-		return &SecurityScheme{Type: "apiKey", In: "query", Name: s.Param, Description: s.Description}
+		return scheme.WithType("apiKey").WithIn("query").WithName(s.Param)
 	}
 	return nil
 }
@@ -57,13 +58,16 @@ func securityScheme(s auth.Scheme) *SecurityScheme {
 // requirement is what a protected operation asks for: any one of the schemes,
 // in the order the deployment tries them. Every protected operation is given
 // the same one, which the document is built and written without changing.
-func requirement(schemes []auth.Scheme) []map[string][]string {
-	var req []map[string][]string
+func requirement(schemes []auth.Scheme) *openapi3.SecurityRequirements {
+	req := openapi3.NewSecurityRequirements()
 	for _, s := range schemes {
 		if securityScheme(s) == nil {
 			continue
 		}
-		req = append(req, map[string][]string{s.Name: {}})
+		req.With(openapi3.NewSecurityRequirement().Authenticate(s.Name))
+	}
+	if len(*req) == 0 {
+		return nil
 	}
 	return req
 }
