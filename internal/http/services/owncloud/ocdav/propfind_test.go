@@ -20,6 +20,7 @@ package ocdav
 
 import (
 	"context"
+	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
@@ -27,6 +28,8 @@ import (
 
 	userv1beta1 "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
+	collaboration "github.com/cs3org/go-cs3apis/cs3/sharing/collaboration/v1beta1"
+	link "github.com/cs3org/go-cs3apis/cs3/sharing/link/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	types "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
 	mockgateway "github.com/cs3org/go-cs3apis/mocks/github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
@@ -240,11 +243,10 @@ func TestGetResourceInfosDepthOneOnFile(t *testing.T) {
 		Type: provider.ResourceType_RESOURCE_TYPE_CONTAINER,
 		Path: "/eos/user/a/alice",
 	}
-	// the parent path of a single-file share resolves to the shared file itself
 	shareRoot := &provider.ResourceInfo{
-		Id:   &provider.ResourceId{StorageId: "ocm-received", OpaqueId: "70:/"},
+		Id:   &provider.ResourceId{StorageId: "eos", OpaqueId: "3"},
 		Type: provider.ResourceType_RESOURCE_TYPE_FILE,
-		Path: "/ocm-received/70/report.odt",
+		Path: "/report.odt",
 	}
 
 	tests := []struct {
@@ -257,8 +259,8 @@ func TestGetResourceInfosDepthOneOnFile(t *testing.T) {
 		wantHref   string
 	}{
 		{name: "file in a folder", file: inFolder, parent: folder, parentCode: rpc.Code_CODE_OK, wantParent: folder, wantInfos: 2, wantHref: "/dav/spaces/sp"},
-		{name: "single-file share root", file: shareRoot, parent: shareRoot, parentCode: rpc.Code_CODE_OK, wantParent: shareRoot, wantInfos: 1, wantHref: "/dav/spaces/sp/report.odt"},
-		{name: "file in a folder the user cannot read", file: inFolder, parentCode: rpc.Code_CODE_PERMISSION_DENIED, wantParent: inFolder, wantInfos: 1, wantHref: "/dav/spaces/sp/report.odt"},
+		{name: "single-file share root", file: shareRoot, parent: shareRoot, parentCode: rpc.Code_CODE_OK, wantParent: shareRoot, wantInfos: 2, wantHref: "/dav/spaces/sp/report.odt"},
+		{name: "file in a folder the user cannot read", file: inFolder, parentCode: rpc.Code_CODE_PERMISSION_DENIED, wantParent: inFolder, wantInfos: 2, wantHref: "/dav/spaces/sp/report.odt"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -278,5 +280,83 @@ func TestGetResourceInfosDepthOneOnFile(t *testing.T) {
 				t.Errorf("got parent %s, %d infos, href %q; want parent %s, %d infos, href %q", parent.Path, len(infos), href, tt.wantParent.Path, tt.wantInfos, tt.wantHref)
 			}
 		})
+	}
+}
+
+// Web expects a depth 1 PROPFIND on a file to return the file two times. This must
+// also be true when the user cannot access the parent folder, as on a single-file share.
+func TestPropfindDepthOneOnFileReturnsFileTwice(t *testing.T) {
+	perms := &provider.ResourcePermissions{Stat: true, InitiateFileDownload: true}
+	file := &provider.ResourceInfo{
+		Id:            &provider.ResourceId{StorageId: "eos", OpaqueId: "2"},
+		Type:          provider.ResourceType_RESOURCE_TYPE_FILE,
+		Path:          "/eos/user/a/alice/report.odt",
+		PermissionSet: perms,
+	}
+	folder := &provider.ResourceInfo{
+		Id:            &provider.ResourceId{StorageId: "eos", OpaqueId: "1"},
+		Type:          provider.ResourceType_RESOURCE_TYPE_CONTAINER,
+		Path:          "/eos/user/a/alice",
+		PermissionSet: perms,
+	}
+
+	tests := []struct {
+		name      string
+		parentRes *provider.StatResponse
+	}{
+		{name: "file in a folder", parentRes: &provider.StatResponse{Status: &rpc.Status{Code: rpc.Code_CODE_OK}, Info: folder}},
+		// the parent path of a single-file share root resolves to the shared file itself
+		{name: "single-file share root", parentRes: &provider.StatResponse{Status: &rpc.Status{Code: rpc.Code_CODE_OK}, Info: file}},
+		{name: "parent stat denied", parentRes: &provider.StatResponse{Status: &rpc.Status{Code: rpc.Code_CODE_PERMISSION_DENIED}}},
+		{name: "parent not found", parentRes: &provider.StatResponse{Status: &rpc.Status{Code: rpc.Code_CODE_NOT_FOUND}}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			gw := mockgateway.NewMockGatewayAPIClient(t)
+			gw.On("Stat", mock.Anything, mock.Anything).Return(&provider.StatResponse{Status: &rpc.Status{Code: rpc.Code_CODE_OK}, Info: file}, nil).Once()
+			gw.On("Stat", mock.Anything, mock.Anything).Return(tt.parentRes, nil).Once()
+			gw.On("ListPublicShares", mock.Anything, mock.Anything).Return(&link.ListPublicSharesResponse{Status: &rpc.Status{Code: rpc.Code_CODE_OK}}, nil)
+			gw.On("ListShares", mock.Anything, mock.Anything).Return(&collaboration.ListSharesResponse{Status: &rpc.Status{Code: rpc.Code_CODE_OK}}, nil)
+			stampGateway(gw)
+
+			body := `<?xml version="1.0"?><d:propfind xmlns:d="DAV:"><d:prop><d:lockdiscovery/></d:prop></d:propfind>`
+			r := httptest.NewRequest(MethodPropfind, "/eos/user/a/alice/report.odt", strings.NewReader(body))
+			r.Header.Set(HeaderDepth, "1")
+			r = r.WithContext(appctx.ContextSetUser(r.Context(), &userv1beta1.User{
+				Id:       &userv1beta1.UserId{OpaqueId: "alice", Idp: "cern.ch"},
+				Username: "alice",
+			}))
+			w := httptest.NewRecorder()
+			s := &svc{c: &Config{}}
+			s.handlePathPropfind(w, r, "")
+
+			if w.Code != http.StatusMultiStatus {
+				t.Fatalf("got status %d, want %d; body: %s", w.Code, http.StatusMultiStatus, w.Body.String())
+			}
+			if n := strings.Count(w.Body.String(), "<d:href>/eos/user/a/alice/report.odt</d:href>"); n != 2 {
+				t.Errorf("got the file %d times, want 2; body: %s", n, w.Body.String())
+			}
+		})
+	}
+}
+
+// Only the parent of the file may be inaccessible: a denied stat on the file itself must still give a 403.
+func TestPropfindDepthOneOnInaccessibleFileIsForbidden(t *testing.T) {
+	gw := mockgateway.NewMockGatewayAPIClient(t)
+	gw.On("Stat", mock.Anything, mock.Anything).Return(&provider.StatResponse{Status: &rpc.Status{Code: rpc.Code_CODE_PERMISSION_DENIED}}, nil).Once()
+	stampGateway(gw)
+
+	r := httptest.NewRequest(MethodPropfind, "/eos/user/b/bob/report.odt", nil)
+	r.Header.Set(HeaderDepth, "1")
+	r = r.WithContext(appctx.ContextSetUser(r.Context(), &userv1beta1.User{
+		Id:       &userv1beta1.UserId{OpaqueId: "alice", Idp: "cern.ch"},
+		Username: "alice",
+	}))
+	w := httptest.NewRecorder()
+	s := &svc{c: &Config{}}
+	s.handlePathPropfind(w, r, "")
+
+	if w.Code != http.StatusForbidden {
+		t.Errorf("got status %d, want %d; body: %s", w.Code, http.StatusForbidden, w.Body.String())
 	}
 }
