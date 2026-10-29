@@ -76,7 +76,7 @@ selects a peer:
 - a plain **service name** (`userprovider`) fans out to **every** live instance,
   returning one result per instance;
 - a **node id** (`10.0.0.4:19003/userprovider`, as shown by
-  `reva admin services -o wide/json`) targets **exactly that** instance;
+  `reva service list -v --wide` or `-o json`) targets **exactly that** instance;
 - a **metadata selector** (`storageprovider[mount_id=eoshome-i01,mount_path=/eos/user]`)
   targets the live instances of the service whose registry metadata has all the
   pairs. A shared invocation goes to one of them. A storage provider advertises
@@ -107,16 +107,16 @@ Every reva process keeps its most recent log lines in a bounded in-memory ring
 ([`pkg/logtail`](../../../../pkg/logtail)) that the logger tees into — the real
 sink (stdout, a file) is unchanged. That buffer is exposed as a built-in `logs`
 invocation on every service (like `config`), so it needs no per-service code and
-rides the same selector + control fan-out as any invocation. `reva admin logs`
+rides the same selector + control fan-out as any invocation. `reva logs`
 drives it:
 
 ```
-reva admin logs userprovider              # recent lines from every userprovider, merged
-reva admin logs 10.0.0.4:19003/userprovider   # one instance
-reva admin logs 10.0.0.4:19003            # every service at that address
-reva admin logs 10.0.0.4                  # every service on that machine
-reva admin logs userprovider -f           # follow (InvokeStream) until Ctrl-C
-reva admin logs userprovider -level warn -since 5m -grep timeout -n 500
+reva logs userprovider              # recent lines from every userprovider, merged
+reva logs 10.0.0.4:19003/userprovider   # one instance
+reva logs 10.0.0.4:19003            # every service at that address
+reva logs 10.0.0.4                  # every service on that machine
+reva logs userprovider -f           # follow (InvokeStream) until Ctrl-C
+reva logs userprovider -level warn -since 5m -grep timeout -n 500
 ```
 
 Because the buffer is process-wide, lines are attributed to a service by their
@@ -131,7 +131,7 @@ is bounded (`[log] tail`, default 2000 lines); there is no deeper history.
 
 ## Draining instances
 
-`reva admin services drain <selector>` takes the matched instances **out of
+`reva service drain <selector>` takes the matched instances **out of
 rotation**: the process starts advertising them as `draining` in the registry,
 and the shared [service selector](../../../../pkg/service/selector.go) already
 excludes draining nodes from every `Pick`, so no new traffic is routed to them.
@@ -146,21 +146,21 @@ heartbeat reads (like `logs level`): it is **not persisted** — a restart or
 config reload re-registers the node `ready`. A drained node stays alive and
 control-reachable, so `logs`, `stack`, `config` and `enable` still work against
 it; only offline nodes are hidden from the admin fan-out. The current state is
-visible in `admin services` (the STATE column).
+visible in `reva service list` (the STATE column).
 
 ## Request activity (is it safe to restart?)
 
-`reva admin services activity <selector>` reports, per instance, how many
+`reva service activity <selector>` reports, per instance, how many
 requests it is **currently serving** (`in-flight`), how many it has served
 (`total`), and how long it has been **idle**. This is the companion to `drain`:
 drain stops new traffic, and activity tells you when the in-flight traffic has
 finished, so you know when a node has quiesced and is safe to restart.
 
 ```
-admin services drain 10.0.0.4:19003            # out of rotation
-admin services -wait -idle 5s activity 10.0.0.4:19003   # block until quiesced
+reva service drain 10.0.0.4:19003                        # out of rotation
+reva service activity --wait --idle 5s 10.0.0.4:19003    # block until quiesced
 # ... restart the process ...
-admin services enable 10.0.0.4:19003
+reva service enable 10.0.0.4:19003
 ```
 
 `-wait` polls until **every** matched instance has zero in-flight requests and
@@ -273,7 +273,7 @@ The step-up above answers "who are you?" with a token, which is right for remote
 access. For an operator working **on the box**, the Admin API can also be served
 on a **Unix socket** where the transport itself is the authentication — like
 `sudo`, `docker.sock`, or PostgreSQL `peer`. There is no token and no login: a
-permitted local user runs `reva admin …` and it just works.
+permitted local user runs a fleet command (`reva service list`, …) and it just works.
 
 On each connection the socket reads the peer's OS credentials via `SO_PEERCRED`
 (the kernel reports the connecting process's uid/gid, so it cannot be forged). If
@@ -298,10 +298,10 @@ Local root is full admin. A member of `socket_group` can also impersonate any
 user (`Impersonate`) without a Kerberos ticket or a password. Give the group
 only to the persons who may do that.
 
-It is **on by default** (Linux): the server binds a well-known path —
+It is **on by default** (Linux): the server binds a well-known path,
 `/run/reva/admin.sock`, or `$XDG_RUNTIME_DIR/reva/admin.sock` when the former is
-not writable (rootless) — and the CLI probes the same list, so `reva admin …`
-just works locally with no flag and no login. Because the default is `0600`, that
+not writable (rootless). The CLI probes the same list, so the fleet commands
+just work locally with no flag and no login. Because the default is `0600`, that
 means only the reva process owner and root until a `socket_group` opens it.
 Binding the default is best-effort (a missing runtime dir simply disables it);
 set `socket = "off"` to turn it off, or an explicit path to override.
@@ -339,36 +339,46 @@ A process that hosts an invokable service but not the `admin` service still
 stands up its control channel (so a remote admin can reach it); it just reads the
 same `[grpc] control_address` key.
 
-The in-memory log buffer that backs `reva admin logs` is sized in the `[log]`
+The in-memory log buffer that backs `reva logs` is sized in the `[log]`
 section:
 
 ```toml
 [log]
-tail = 2000   # recent lines kept in memory for `admin logs` (0 disables it)
+tail = 2000   # recent lines kept in memory for `reva logs` (0 disables it)
 ```
 
 ### Using the CLI
 
-```
-reva -insecure -host <gateway> login -username <u> -password <p> basic
-reva admin elevate -admin-host <admin:port>     # step up, stores a short-TTL admin token
-reva admin services [-v] [-o wide|json] [service]
-reva admin services drain  <selector> [-y]   # take instances out of rotation
-reva admin services enable <selector>        # return them to rotation
-reva admin services [-wait [-idle D] [-timeout D]] activity <selector>  # in-flight/idle
-reva admin config   <service|node-id> [-o toml|json] [-diff]
-reva admin invocations <service|node-id>
-reva admin invoke   [-stream] <selector> <invocation> [key=val ...]
-reva admin logs     <selector> [-f] [-n N] [-level L] [-since D] [-grep P] [-o text|json]
-reva admin logs level <selector> [trace|debug|info|warn|error]   # report/set runtime level
-reva admin trace    <traceid> | -user <username>   # one request/user across the fleet
-reva admin stack    <selector> [-grep P]           # goroutine dumps, e.g. of a hung process
-reva admin jobs     list | active | runs | status <id> | run <job> [k=v] | trigger <job> | cancel <id> | stop <job>
-reva admin impersonate <user> [--reason R] [--ttl D] [--allow-privileged [-y]]
+The fleet commands are at the top level of the `reva` CLI, marked "(admin)" in
+its help. A command that needs admin rights gets them itself: it uses the local
+socket if one answers, else an admin token from `reva elevate`, else it steps up
+with the login token (`RequestAdmin`) and keeps that token in memory for the one
+command. `--no-elevate` turns the automatic step-up off. `--reason` goes with
+every admin call to the audit log, and `--yes` skips the confirmations.
 
-# Local root: on the box, no login/elevate/flag — the CLI finds the socket. Only
-# if it is absent (or denies you) does it need the network host + elevate above.
-reva admin services
+```
+reva --insecure --gateway <gateway> login --user <u>
+reva elevate --admin-host <admin:port>      # optional: stores a short-TTL admin token for this login
+reva whoami                                 # admin: socket | yes, 12m left | no
+reva service list [-v] [--wide] [--state S] [service]
+reva service config <service|node-id> [-o json] [--diff]
+reva service drain  <selector> [-y]         # take instances out of rotation
+reva service enable <selector>              # return them to rotation
+reva service activity <selector> [--methods] [--wait [--idle D] [--wait-timeout D]]  # in-flight/idle
+reva invocation list <service|node-id>
+reva invocation get  <service|node-id> <invocation>
+reva invoke [--stream] <selector> <invocation> [key=val ...]
+reva logs <selector> [-f] [-n N] [--level L] [--since D] [--grep P] [-o json]
+reva logs level <selector> [trace|debug|info|warn|error|reset]   # report/set runtime level
+reva trace <traceid> | --user <username>    # one request/user across the fleet
+reva stack <selector> [--grep P]            # goroutine dumps, e.g. of a hung process
+reva job list | active | runs | status <id> | logs <id> | run <job> [k=v] | trigger <job> | cancel <id> | stop <job> | forget <job>
+reva impersonate <user> [--reason R] [--ttl D] [--allow-privileged [-y]]
+reva ls /home --as <user> --reason R        # any user command, as another user
+
+# Local root: on the box, no login, no elevate, no flag: the CLI finds the socket.
+# Only if it is absent (or denies you) does it need the network host.
+reva service list
 ```
 
 ### Over HTTP
@@ -398,7 +408,7 @@ refused target, or an impersonated caller), 404 (no such user), 501
 
 ## Jobs
 
-`reva admin jobs` drives the background jobs runner ([`pkg/rjobs`](../../../../pkg/rjobs)),
+`reva job` drives the background jobs runner ([`pkg/rjobs`](../../../../pkg/rjobs)),
 and shows the general shape for adding **typed Admin API methods to interact with
 a service**: the surface is typed RPCs on the `AdminAPI`, and each method's body
 reuses the **invoke** channel to reach the service — fanning out or targeting one
@@ -537,11 +547,11 @@ func (s *service) invokeIsMember(ctx context.Context, a invoke.Args) (invoke.Res
 ```
 
 That is the whole thing. `is_member` now shows up in
-`reva admin invocations groupprovider`, its required `group`/`user` args are
+`reva invocation list groupprovider`, its required `group`/`user` args are
 checked before the handler runs, and:
 
 ```
-reva admin invoke groupprovider is_member group=sailing-lovers user=einstein idp=cernbox
+reva invoke groupprovider is_member group=sailing-lovers user=einstein idp=cernbox
   # → 127.0.0.1:19004/groupprovider: {"member":true}   (one line per instance)
 ```
 

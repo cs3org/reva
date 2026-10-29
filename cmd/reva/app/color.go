@@ -16,14 +16,14 @@
 // granted to it by virtue of its status as an Intergovernmental Organization
 // or submit itself to any jurisdiction.
 
-package main
+package revacmd
 
 import (
 	"os"
 	"regexp"
 	"strings"
 
-	"github.com/cs3org/reva/v3/cmd/reva/internal/cli"
+	"github.com/cs3org/reva/v3/pkg/cli"
 	"github.com/jedib0t/go-pretty/text"
 	"github.com/spf13/cobra"
 )
@@ -36,13 +36,11 @@ var (
 	errorColor   = text.Colors{text.Bold, text.FgRed}
 )
 
-// flagLine matches a line of pflag's FlagUsages: the flag names, the value
-// type if any, and the description after a gap of two or more spaces.
+// flagLine matches a line of the flag usages of pflag.
 var flagLine = regexp.MustCompile(`^(\s+)((?:-\w, )?--[\w-]+)( \w+)?(\s{2,}.*)$`)
 
-// colorHelp colors the help of cmd and of all its children: the headings,
-// the command names and the flags. It edits the default cobra template
-// instead of a copy, so a template change in cobra only loses some colors.
+// colorHelp edits the default cobra template instead of a copy, so a template
+// change in cobra only loses some colors.
 func colorHelp(cmd *cobra.Command) {
 	if !cli.UseColor(os.Stdout) {
 		return
@@ -60,6 +58,7 @@ func colorHelp(cmd *cobra.Command) {
 		"\nAdditional Commands:", "\n{{heading \"Additional Commands:\"}}",
 		"\nFlags:\n", "\n{{heading \"Flags:\"}}\n",
 		"\nGlobal Flags:\n", "\n{{heading \"Global Flags:\"}}\n",
+		"\n"+cli.OperatorOptions+"\n", "\n{{heading \""+cli.OperatorOptions+"\"}}\n",
 		"\nAdditional help topics:", "\n{{heading \"Additional help topics:\"}}",
 		"{{.UseLine}}", "{{bold .UseLine}}",
 		"  {{.CommandPath}} [command]{{end}}", `  {{bold .CommandPath " [command]"}}{{end}}`,

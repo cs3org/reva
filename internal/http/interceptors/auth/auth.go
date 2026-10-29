@@ -423,7 +423,7 @@ func ctxWithUserInfo(ctx context.Context, r *http.Request, user *userpb.User, to
 		appctx.GetLogger(ctx).UpdateContext(func(c zerolog.Context) zerolog.Context { return c.Str("act", act) })
 	}
 	// Stamp the user onto the request logger, so a request's logs are
-	// searchable by user (reva admin trace -user).
+	// searchable by user (reva trace --user).
 	l := appctx.GetLogger(ctx).With().Str("user", user.Username).Logger()
 	ctx = appctx.WithLogger(ctx, &l)
 

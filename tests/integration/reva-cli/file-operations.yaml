@@ -9,15 +9,15 @@ vars:
 
 run:
   login:
-    command: 'bash -c "echo {{TESTPASS}} | cmd/reva/reva --insecure --host={{REVANODE}} --token-file=token login --username={{TESTUSER}} basic"'
+    command: 'bash -c "echo {{TESTPASS}} | cmd/reva/reva --insecure --gateway={{REVANODE}} login --user={{TESTUSER}}"'
     expectCode: 0
   
   makeDir:
-    command: 'cmd/reva/reva --insecure --host={{REVANODE}} --token-file=token mkdir {{BASEDIR}}/tests'
+    command: 'cmd/reva/reva --insecure --gateway={{REVANODE}} mkdir {{BASEDIR}}/tests'
     expectCode: 0
     
   checkFolder:
-    command: 'cmd/reva/reva --insecure --host={{REVANODE}} --token-file=token ls {{BASEDIR}}/'
+    command: 'cmd/reva/reva --insecure --gateway={{REVANODE}} ls {{BASEDIR}}/'
     expectCode: 0
     outputContains:
     - 'tests'
@@ -26,33 +26,33 @@ run:
     prerequisiteCwd: .
     prerequisites:
       - 'echo "Hello World" > local-test-file.txt'
-    command:  'cmd/reva/reva --insecure --host={{REVANODE}} --token-file=token upload local-test-file.txt  {{BASEDIR}}/tests/my-test-file.txt'
+    command:  'cmd/reva/reva --insecure --gateway={{REVANODE}} cp local-test-file.txt cb:{{BASEDIR}}/tests/my-test-file.txt'
     expectCode: 0
   
   createFile:
-    command:  'cmd/reva/reva --insecure --host={{REVANODE}} --token-file=token touch {{BASEDIR}}/tests/created-test-file.txt'
+    command:  'cmd/reva/reva --insecure --gateway={{REVANODE}} touch {{BASEDIR}}/tests/created-test-file.txt'
     expectCode: 0
 
   checkFileAfterUploadAndCreate:
-    command: 'cmd/reva/reva --insecure --host={{REVANODE}} --token-file=token ls {{BASEDIR}}/tests/'
+    command: 'cmd/reva/reva --insecure --gateway={{REVANODE}} ls {{BASEDIR}}/tests/'
     expectCode: 0
     outputContains:
     - 'my-test-file.txt'
     - 'created-test-file.txt'
 
   statUploadedFile:
-    command: 'cmd/reva/reva --insecure --host={{REVANODE}} --token-file=token stat {{BASEDIR}}/tests/my-test-file.txt'
+    command: 'cmd/reva/reva --insecure --gateway={{REVANODE}} stat {{BASEDIR}}/tests/my-test-file.txt'
     expectCode: 0
     outputContains:
     - 'my-test-file.txt'
     - 'testuser'
   
   moveFile:
-    command:  'cmd/reva/reva --insecure --host={{REVANODE}} --token-file=token mv {{BASEDIR}}/tests/my-test-file.txt {{BASEDIR}}/tests/my-test-file-moved.txt'
+    command:  'cmd/reva/reva --insecure --gateway={{REVANODE}} mv {{BASEDIR}}/tests/my-test-file.txt {{BASEDIR}}/tests/my-test-file-moved.txt'
     expectCode: 0
     
   checkFileAfterMove:
-    command: 'cmd/reva/reva --insecure --host={{REVANODE}} --token-file=token ls {{BASEDIR}}/tests/'
+    command: 'cmd/reva/reva --insecure --gateway={{REVANODE}} ls {{BASEDIR}}/tests/'
     expectCode: 0
     outputContains:
     - 'my-test-file-moved.txt'
@@ -60,7 +60,7 @@ run:
     - 'my-test-file.txt'
   
   downloadFile:
-    command:  'cmd/reva/reva --insecure --host={{REVANODE}} --token-file=token download {{BASEDIR}}/tests/my-test-file-moved.txt local-test-file-copy.txt'
+    command:  'cmd/reva/reva --insecure --gateway={{REVANODE}} cp -f cb:{{BASEDIR}}/tests/my-test-file-moved.txt local-test-file-copy.txt'
     expectCode: 0
 
   verifyFileHash:
@@ -78,11 +78,11 @@ run:
     expectCode: 0
 
   deleteFile:
-    command: 'cmd/reva/reva --insecure --host={{REVANODE}} --token-file=token rm {{BASEDIR}}/tests/my-test-file-moved.txt'
+    command: 'cmd/reva/reva --insecure --gateway={{REVANODE}} rm {{BASEDIR}}/tests/my-test-file-moved.txt'
     expectCode: 0
 
   verifyDeleted:
-    command: 'cmd/reva/reva --insecure --host={{REVANODE}} --token-file=token ls {{BASEDIR}}/tests/'
+    command: 'cmd/reva/reva --insecure --gateway={{REVANODE}} ls {{BASEDIR}}/tests/'
     expectCode: 0
     outputDoesntContain:
       - 'my-test-file.txt'
