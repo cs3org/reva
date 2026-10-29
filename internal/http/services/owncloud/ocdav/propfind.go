@@ -295,27 +295,11 @@ func (s *svc) getResourceInfos(ctx context.Context, w http.ResponseWriter, r *ht
 			log.Error().Err(err).Interface("req", req).Msg("error sending a grpc stat request")
 			w.WriteHeader(http.StatusInternalServerError)
 			return nil, nil, "", false
-		} else if parentRes.Status.Code == rpc.Code_CODE_PERMISSION_DENIED {
-			// An ACL on the file can give access to a file in a folder that the user cannot read.
-			// So failing to access the parent folder should not result in a 403 on the file.
-			return parentInfo, resourceInfos[:1], hrefBase, true
-		} else if parentRes.Status.Code != rpc.Code_CODE_OK {
-			if parentRes.Status.Code == rpc.Code_CODE_NOT_FOUND {
-				w.WriteHeader(http.StatusNotFound)
-				m := fmt.Sprintf("Resource %v not found", parentPath)
-				b, err := Marshal(exception{
-					code:    SabredavNotFound,
-					message: m,
-				}, "")
-				HandleWebdavError(&log, w, b, err)
-				return nil, nil, "", false
-			}
-			HandleErrorStatus(&log, w, parentRes.Status)
-			return nil, nil, "", false
 		}
-		if utils.ResourceIDEqual(parentRes.Info.Id, parentInfo.Id) {
-			// the file is the root of a single-file share and has no parent to list
-			return parentInfo, resourceInfos[:1], hrefBase, true
+		// The user can have access to the file but not to its parent (single-file share),
+		// or the parent of a share root resolves to the file itself. Then the file is its own parent.
+		if parentRes.Status.Code != rpc.Code_CODE_OK || utils.ResourceIDEqual(parentRes.Info.Id, parentInfo.Id) {
+			return parentInfo, resourceInfos, hrefBase, true
 		}
 		parentInfo = parentRes.Info
 		// The incoming URL was not to a folder, but to the file itself.
