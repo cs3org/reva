@@ -22,6 +22,8 @@ import (
 	"context"
 	"testing"
 
+	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
+	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/cs3org/reva/v3/internal/grpc/interceptors/auth"
 	"github.com/cs3org/reva/v3/pkg/admin/adminpb"
@@ -38,7 +40,7 @@ func TestActAs(t *testing.T) {
 	ctx := appctx.ContextSetToken(context.Background(), "admin-token")
 	ctx = metadata.AppendToOutgoingContext(ctx, appctx.TokenHeader, "admin-token")
 
-	uctx, u, err := ActAs(ctx, "marie")
+	uctx, u, err := ActAs(ctx, &userpb.UserId{Idp: "cernbox", OpaqueId: "marie"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -80,9 +82,24 @@ func TestActAs(t *testing.T) {
 
 func TestActAsUnknownUser(t *testing.T) {
 	setup(t)
-	if _, _, err := ActAs(context.Background(), "nobody"); err == nil {
+	if _, _, err := ActAs(context.Background(), &userpb.UserId{OpaqueId: "nobody"}); err == nil {
 		t.Fatal("expected an error")
 	} else if _, ok := err.(errtypes.IsNotFound); !ok {
 		t.Fatalf("expected not found, got %v", err)
+	}
+}
+
+func TestActAsFirstSkipsUnknownUsers(t *testing.T) {
+	setup(t)
+	calls := 0
+	u, err := ActAsFirst(context.Background(), []*userpb.UserId{{OpaqueId: "nobody"}, {OpaqueId: "marie"}}, func(context.Context) (*rpc.Status, error) {
+		calls++
+		return &rpc.Status{Code: rpc.Code_CODE_OK}, nil
+	})
+	if err != nil || calls != 1 || u.GetId().GetIdp() != "cernbox" {
+		t.Fatalf("got %v, %v after %d calls", u, err, calls)
+	}
+	if u, err := ActAsFirst(context.Background(), []*userpb.UserId{{OpaqueId: "nobody"}}, nil); u != nil || err == nil {
+		t.Fatalf("expected no user and an error, got %v, %v", u, err)
 	}
 }

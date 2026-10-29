@@ -32,6 +32,7 @@ import (
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	revaconfig "github.com/cs3org/reva/v3/cmd/revad/pkg/config"
+	"github.com/cs3org/reva/v3/pkg/admin"
 	"github.com/cs3org/reva/v3/pkg/appctx"
 	"github.com/cs3org/reva/v3/pkg/errtypes"
 	"github.com/cs3org/reva/v3/pkg/invoke"
@@ -71,11 +72,14 @@ func (resolver) Gateway(context.Context) (gateway.GatewayAPIClient, error) { ret
 
 type fakeGateway struct{ gateway.GatewayAPIClient }
 
-func (fakeGateway) GetUserByClaim(_ context.Context, req *userpb.GetUserByClaimRequest, _ ...grpc.CallOption) (*userpb.GetUserByClaimResponse, error) {
-	if u, ok := users[req.GetValue()]; ok && req.GetClaim() == "username" {
-		return &userpb.GetUserByClaimResponse{Status: &rpc.Status{Code: rpc.Code_CODE_OK}, User: u}, nil
+// GetUser matches the opaque id, and the idp if one is given, as the user
+// providers do: the catalogue keeps no idp.
+func (fakeGateway) GetUser(_ context.Context, req *userpb.GetUserRequest, _ ...grpc.CallOption) (*userpb.GetUserResponse, error) {
+	id := req.GetUserId()
+	if u, ok := users[id.GetOpaqueId()]; ok && (id.GetIdp() == "" || id.GetIdp() == u.GetId().GetIdp()) {
+		return &userpb.GetUserResponse{Status: &rpc.Status{Code: rpc.Code_CODE_OK}, User: u}, nil
 	}
-	return &userpb.GetUserByClaimResponse{Status: &rpc.Status{Code: rpc.Code_CODE_NOT_FOUND}}, nil
+	return &userpb.GetUserResponse{Status: &rpc.Status{Code: rpc.Code_CODE_NOT_FOUND}}, nil
 }
 
 func (fakeGateway) GetUserGroups(_ context.Context, req *userpb.GetUserGroupsRequest, _ ...grpc.CallOption) (*userpb.GetUserGroupsResponse, error) {
@@ -233,7 +237,7 @@ func TestCreateListGet(t *testing.T) {
 	}
 	// einstein reaches atlas through its writers group, which the gateway
 	// gives.
-	rs := stream(t, s, "list", map[string]any{"member": "einstein", "type": "project"})
+	rs := stream(t, s, "list", map[string]any{"member": admin.UserArg(users["einstein"].Id), "type": "project"})
 	if got := names(rs); !slices.Equal(got, []string{"atlas"}) {
 		t.Fatalf("list by member: %v", got)
 	}
@@ -293,7 +297,11 @@ func TestStatusOwnerDelete(t *testing.T) {
 	if _, err := s.Invoke(adminContext(), "set_owner", map[string]any{"name": "cernbox", "owner": "nobody"}); err == nil {
 		t.Fatal("an unknown owner must be rejected")
 	}
-	if r := mustInvoke(t, s, "set_owner", map[string]any{"name": "cernbox", "owner": "einstein"}); spaceOf(r)["owner"].(map[string]any)["id"].(map[string]any)["opaqueId"] != "einstein" {
+	elsewhere := admin.UserArg(&userpb.UserId{Idp: "elsewhere", OpaqueId: "einstein"})
+	if _, err := s.Invoke(adminContext(), "set_owner", map[string]any{"name": "cernbox", "owner": elsewhere}); err == nil {
+		t.Fatal("a user of another idp must be rejected")
+	}
+	if r := mustInvoke(t, s, "set_owner", map[string]any{"name": "cernbox", "owner": admin.UserArg(users["einstein"].Id)}); spaceOf(r)["owner"].(map[string]any)["id"].(map[string]any)["opaqueId"] != "einstein" {
 		t.Fatalf("set_owner: %v", r)
 	}
 	if r := mustInvoke(t, s, "set_status", map[string]any{"name": "cernbox", "status": "archived"}); r["extra"].(map[string]any)["archived_at"] == nil {

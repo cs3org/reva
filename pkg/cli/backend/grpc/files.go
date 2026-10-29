@@ -136,5 +136,16 @@ func (f files) Touch(ctx context.Context, ref *provider.Reference) error {
 }
 
 func (f files) ResolveSpace(ctx context.Context, alias string) (*provider.Reference, error) {
-	return nil, notAvailable("space lookup")
+	list, err := spaces(f).List(ctx)
+	if err != nil {
+		return nil, err
+	}
+	s, err := backend.FindSpace(list, alias)
+	if err != nil {
+		return nil, err
+	}
+	if p := s.GetRootInfo().GetPath(); p != "" {
+		return &provider.Reference{Path: p}, nil
+	}
+	return &provider.Reference{ResourceId: s.GetRoot()}, nil
 }

@@ -255,6 +255,47 @@ func NewErrorFromCode(code rpc.Code, pkgname string) error {
 	return errors.New(pkgname + ": grpc failed with code " + code.String())
 }
 
+// CodeFromGRPC returns the CS3 code of a gRPC code. The two enums have the same names but
+// not the same numbers. Unlike NewStatusFromErrType, it keeps every code.
+func CodeFromGRPC(c codes.Code) rpc.Code {
+	switch c {
+	case codes.OK:
+		return rpc.Code_CODE_OK
+	case codes.Canceled:
+		return rpc.Code_CODE_CANCELLED
+	case codes.InvalidArgument:
+		return rpc.Code_CODE_INVALID_ARGUMENT
+	case codes.DeadlineExceeded:
+		return rpc.Code_CODE_DEADLINE_EXCEEDED
+	case codes.NotFound:
+		return rpc.Code_CODE_NOT_FOUND
+	case codes.AlreadyExists:
+		return rpc.Code_CODE_ALREADY_EXISTS
+	case codes.PermissionDenied:
+		return rpc.Code_CODE_PERMISSION_DENIED
+	case codes.ResourceExhausted:
+		return rpc.Code_CODE_RESOURCE_EXHAUSTED
+	case codes.FailedPrecondition:
+		return rpc.Code_CODE_FAILED_PRECONDITION
+	case codes.Aborted:
+		return rpc.Code_CODE_ABORTED
+	case codes.OutOfRange:
+		return rpc.Code_CODE_OUT_OF_RANGE
+	case codes.Unimplemented:
+		return rpc.Code_CODE_UNIMPLEMENTED
+	case codes.Internal:
+		return rpc.Code_CODE_INTERNAL
+	case codes.Unavailable:
+		return rpc.Code_CODE_UNAVAILABLE
+	case codes.DataLoss:
+		return rpc.Code_CODE_DATA_LOSS
+	case codes.Unauthenticated:
+		return rpc.Code_CODE_UNAUTHENTICATED
+	default:
+		return rpc.Code_CODE_UNKNOWN
+	}
+}
+
 // internal function to attach the trace to a context.
 func getTrace(ctx context.Context) string {
 	return trace.Get(ctx)

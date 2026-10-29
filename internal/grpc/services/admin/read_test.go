@@ -33,6 +33,9 @@ func TestListServicesByInvocation(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	// The first registry set in the process stays.
+	service.SetGlobalRegistry(reg)
+	reg = service.GlobalRegistry()
 	for name, invocations := range map[string]string{
 		"usershareprovider": "config,stats",
 		"gateway":           "config",
@@ -41,8 +44,8 @@ func TestListServicesByInvocation(t *testing.T) {
 		if err := reg.Add(registry.NewService(name, []registry.Node{node})); err != nil {
 			t.Fatal(err)
 		}
+		t.Cleanup(func() { _ = reg.Remove(registry.NewService(name, nil)) })
 	}
-	service.SetGlobalRegistry(reg)
 
 	res, err := (&svc{}).ListServices(context.Background(), &adminpb.ListServicesRequest{Invocation: "stats"})
 	if err != nil {
