@@ -295,6 +295,10 @@ func (s *svc) getResourceInfos(ctx context.Context, w http.ResponseWriter, r *ht
 			log.Error().Err(err).Interface("req", req).Msg("error sending a grpc stat request")
 			w.WriteHeader(http.StatusInternalServerError)
 			return nil, nil, "", false
+		} else if parentRes.Status.Code == rpc.Code_CODE_PERMISSION_DENIED {
+			// An ACL on the file can give access to a file in a folder that the user cannot read.
+			// So failing to access the parent folder should not result in a 403 on the file.
+			return parentInfo, resourceInfos[:1], hrefBase, true
 		} else if parentRes.Status.Code != rpc.Code_CODE_OK {
 			if parentRes.Status.Code == rpc.Code_CODE_NOT_FOUND {
 				w.WriteHeader(http.StatusNotFound)
