@@ -105,21 +105,10 @@ func ocmShareScope(_ context.Context, scope *authpb.Scope, resource any, _ *zero
 	return false, nil
 }
 
-// pathUnderOCMPrefix reports whether path is the namespace prefix or a child under it.
-// We require a path segment after the prefix (path == prefix or path starts with prefix+"/")
-// so that names that merely start with the prefix string do not match. Example: /ocm-m6-proof.txt
-// must not match prefix /ocm; only /ocm or /ocm/... may match.
-func pathUnderOCMPrefix(path, prefix string) bool {
-	if path == prefix {
-		return true
-	}
-	return strings.HasPrefix(path, prefix+"/")
-}
-
 // checkStorageRefForOCMShare reports whether ref refers to a resource inside this OCM share.
 // Flow: ref is either by ResourceId (storage opaque id) or by path. We allow only when the
 // ref clearly belongs to this share. Used at gRPC (storage) scope check; for path refs at
-// space root we get ref.Path = "/<filename>", so pathUnderOCMPrefix avoids matching "/ocm-*.txt".
+// space root we get ref.Path = "/<filename>", so utils.Skip avoids matching "/ocm-*.txt".
 func checkStorageRefForOCMShare(s *ocmv1beta1.Share, r *provider.Reference, ns string) bool {
 	shareID := s.Id.GetOpaqueId()
 
@@ -147,9 +136,14 @@ func checkStorageRefForOCMShare(s *ocmv1beta1.Share, r *provider.Reference, ns s
 	if refPath == ns {
 		return true
 	}
-	underShareID := shareID != "" && pathUnderOCMPrefix(refPath, filepath.Join(ns, shareID))
-	underToken := s.Token != "" && pathUnderOCMPrefix(refPath, filepath.Join(ns, s.Token))
-	return underShareID || underToken
+	var prefixes []string
+	if shareID != "" {
+		prefixes = append(prefixes, filepath.Join(ns, shareID))
+	}
+	if s.Token != "" {
+		prefixes = append(prefixes, filepath.Join(ns, s.Token))
+	}
+	return utils.Skip(refPath, prefixes)
 }
 
 // checkDAVOCMPath authorizes HTTP path strings for OCM DAV requests scoped to
