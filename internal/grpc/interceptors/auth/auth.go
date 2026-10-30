@@ -27,6 +27,7 @@ import (
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	"github.com/mitchellh/mapstructure"
 	"github.com/pkg/errors"
+	"github.com/rs/zerolog"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -138,8 +139,15 @@ func (i *interceptor) unary(unprotected []string) grpc.UnaryServerInterceptor {
 			return nil, status.Errorf(codes.Unauthenticated, "auth: core access token not found")
 		}
 
+		// Scope an admin method by its name: a typed admin RPC can take a CS3
+		// request, which user scopes accept.
+		resource := req
+		if scope.IsAdminMethod(info.FullMethod) {
+			resource = scope.MethodResource(info.FullMethod)
+		}
+
 		// scopes, validate the token and ensure access to the resource is allowed
-		u, scopes, err := i.dismantleToken(ctx, tkn, req, false)
+		u, scopes, err := i.dismantleToken(ctx, tkn, resource, false)
 		if err != nil {
 			return nil, tokenError(ctx, err)
 		}
@@ -150,7 +158,7 @@ func (i *interceptor) unary(unprotected []string) grpc.UnaryServerInterceptor {
 
 		ctx = appctx.ContextSetUser(ctx, u)
 		ctx = appctx.ContextSetScopes(ctx, scopes)
-		ctx = withUserLogger(ctx, u.Username)
+		ctx = withUserLogger(ctx, u.Username, scopes)
 		return handler(ctx, req)
 	}
 }
@@ -182,7 +190,7 @@ func (i *interceptor) stream(unprotected []string) grpc.StreamServerInterceptor 
 		// store user and core access token in context.
 		ctx = appctx.ContextSetUser(ctx, u)
 		ctx = appctx.ContextSetScopes(ctx, scopes)
-		ctx = withUserLogger(ctx, u.Username)
+		ctx = withUserLogger(ctx, u.Username, scopes)
 		wrapped := newWrappedServerStream(ctx, ss)
 		return handler(srv, wrapped)
 	}
@@ -207,7 +215,12 @@ func tokenError(ctx context.Context, err error) error {
 
 // withUserLogger stamps the authenticated user onto the request logger, so a
 // request's logs are searchable by user (reva admin trace -user).
-func withUserLogger(ctx context.Context, username string) context.Context {
+func withUserLogger(ctx context.Context, username string, scopes map[string]*authpb.Scope) context.Context {
+	if act := scope.Actor(scopes); act != "" {
+		// Update the logger in place: the log interceptor writes the request
+		// line with it when the call ends. Each request has its own logger.
+		appctx.GetLogger(ctx).UpdateContext(func(c zerolog.Context) zerolog.Context { return c.Str("act", act) })
+	}
 	l := appctx.GetLogger(ctx).With().Str("user", username).Logger()
 	return appctx.WithLogger(ctx, &l)
 }

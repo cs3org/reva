@@ -37,7 +37,9 @@ import (
 	"github.com/cs3org/reva/v3/pkg/registry"
 	"github.com/cs3org/reva/v3/pkg/service"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/connectivity"
+	"google.golang.org/grpc/status"
 )
 
 // Endpoint is one resolved invocation target: the node id to report, the
@@ -54,11 +56,13 @@ type Endpoint struct {
 	Shared   []string
 }
 
-// NodeResult is the outcome of one peer invocation.
+// NodeResult is the outcome of one peer invocation. Code is the gRPC code of
+// Error, or 0 if the node sent none.
 type NodeResult struct {
 	Node       string
 	ResultJSON string
 	Error      string
+	Code       codes.Code
 }
 
 // PerNodeTimeout bounds a single peer invocation so one slow or offline
@@ -74,8 +78,9 @@ const readyTimeout = 2 * time.Second
 // "host:port/service"; the fleet is every instance of every service in the
 // registry. A node id targets one instance, a service name every live one, a
 // partial id ("host:port" or a bare host) every instance at that address or on
-// that machine, and "*" every live instance in the fleet. It returns the
-// resolved service name when the selector was one.
+// that machine, "service[key=value,...]" every live instance of the service
+// whose registry metadata has all the pairs, and "*" every live instance in
+// the fleet. It returns the resolved service name when the selector was one.
 func Resolve(reg registry.Registry, selector string) (string, []Endpoint, error) {
 	// "*": every live instance in the fleet.
 	if selector == "*" {
@@ -84,6 +89,27 @@ func Resolve(reg registry.Registry, selector string) (string, []Endpoint, error)
 			return "", nil, fmt.Errorf("no live instances in the fleet")
 		}
 		return selector, eps, nil
+	}
+
+	// Before the node id, because a value such as a mount path can contain "/".
+	if svcName, pairs, ok := strings.Cut(selector, "["); ok {
+		pairs, ok = strings.CutSuffix(pairs, "]")
+		if !ok || svcName == "" {
+			return "", nil, fmt.Errorf("invalid selector %q: want service[key=value,...]", selector)
+		}
+		meta := map[string]string{}
+		for pair := range strings.SplitSeq(pairs, ",") {
+			k, v, ok := strings.Cut(pair, "=")
+			if k = strings.TrimSpace(k); !ok || k == "" {
+				return "", nil, fmt.Errorf("invalid selector %q: %q is not key=value", selector, pair)
+			}
+			meta[k] = strings.TrimSpace(v)
+		}
+		eps, err := ResolveMetadata(reg, svcName, meta)
+		if err != nil {
+			return "", nil, err
+		}
+		return svcName, eps, nil
 	}
 
 	// Node id "host:port/service": one exact instance.
@@ -129,6 +155,25 @@ func Resolve(reg registry.Registry, selector string) (string, []Endpoint, error)
 	}
 
 	return "", nil, fmt.Errorf("%q matches no service, instance, address or host", selector)
+}
+
+// ResolveMetadata returns the live instances of a service whose registry
+// metadata has every pair in meta.
+func ResolveMetadata(reg registry.Registry, svcName string, meta map[string]string) ([]Endpoint, error) {
+	sv, err := reg.GetService(svcName)
+	if err != nil {
+		return nil, fmt.Errorf("service %q not found", svcName)
+	}
+	var eps []Endpoint
+	for _, n := range service.FilterByMetadata(sv.Nodes(), meta) {
+		if nodeState(n) != registry.StateOffline {
+			eps = append(eps, EndpointFor(n))
+		}
+	}
+	if len(eps) == 0 {
+		return nil, fmt.Errorf("service %q has no live instance with metadata %v", svcName, meta)
+	}
+	return eps, nil
 }
 
 // FanOut invokes every routed group in parallel, one result per group. An
@@ -218,19 +263,19 @@ func connReady(ctx context.Context, addr string) bool {
 // InvokeOne runs a single peer invocation with a bounded timeout.
 func InvokeOne(ctx context.Context, ep Endpoint, invocation string, args map[string]string) NodeResult {
 	if ep.Err != "" {
-		return NodeResult{Node: ep.Node, Error: ep.Err}
+		return NodeResult{Node: ep.Node, Error: ep.Err, Code: codes.Unavailable}
 	}
 	cli, err := ControlClientAt(ep.Addr)
 	if err != nil {
-		return NodeResult{Node: ep.Node, Error: err.Error()}
+		return NodeResult{Node: ep.Node, Error: err.Error(), Code: codes.Unavailable}
 	}
 	cctx, cancel := context.WithTimeout(ctx, PerNodeTimeout)
 	defer cancel()
 	resp, err := cli.Invoke(cctx, &controlpb.InvokeRequest{Target: ep.Target, Invocation: invocation, Args: args})
 	if err != nil {
-		return NodeResult{Node: ep.Node, Error: err.Error()}
+		return NodeResult{Node: ep.Node, Error: err.Error(), Code: status.Code(err)}
 	}
-	return NodeResult{Node: ep.Node, ResultJSON: resp.ResultJson, Error: resp.Error}
+	return NodeResult{Node: ep.Node, ResultJSON: resp.ResultJson, Error: resp.Error, Code: codes.Code(resp.Code)}
 }
 
 // EndpointFor builds the endpoint dialing a node's control channel,

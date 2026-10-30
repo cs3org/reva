@@ -87,7 +87,7 @@ func (s *svc) Invoke(ctx context.Context, req *adminpb.InvokeRequest) (*adminpb.
 	if err != nil {
 		return nil, status.Errorf(codes.NotFound, "admin: resolving %q: %v", req.Service, err)
 	}
-	results := fanOutInvoke(ctx, eps, req.Invocation, req.Args)
+	results := fanOutInvoke(admin.ForwardReason(ctx), eps, req.Invocation, req.Args)
 	admin.Audit(ctx, admin.AuditEvent{Action: "invoke", Actor: actor, Target: req.Service,
 		Fields: map[string]string{"invocation": req.Invocation, "selector": req.Service, "instances": strconv.Itoa(len(results))}})
 	return &adminpb.InvokeResponse{Results: results}, nil
@@ -99,7 +99,7 @@ func fanOutInvoke(ctx context.Context, eps []client.Endpoint, invocation string,
 	rs := client.FanOut(ctx, eps, invocation, args)
 	results := make([]*adminpb.NodeResult, len(rs))
 	for i, r := range rs {
-		results[i] = &adminpb.NodeResult{Node: r.Node, ResultJson: r.ResultJSON, Error: r.Error}
+		results[i] = &adminpb.NodeResult{Node: r.Node, ResultJson: r.ResultJSON, Error: r.Error, Code: int32(r.Code)}
 	}
 	return results
 }

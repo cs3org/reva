@@ -27,6 +27,7 @@ import (
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	"github.com/cs3org/reva/v3/pkg/appctx"
 	"github.com/cs3org/reva/v3/pkg/errtypes"
+	"github.com/cs3org/reva/v3/pkg/invoke"
 	"github.com/cs3org/reva/v3/pkg/plugin"
 	"github.com/cs3org/reva/v3/pkg/rgrpc"
 	"github.com/cs3org/reva/v3/pkg/rgrpc/status"
@@ -76,13 +77,18 @@ func New(ctx context.Context, m map[string]any) (rgrpc.Service, error) {
 		return nil, err
 	}
 	svc := &service{
+		Set:     invoke.NewSet(),
 		usermgr: userManager,
+	}
+	if err := svc.MergeDriver(userManager); err != nil {
+		return nil, err
 	}
 
 	return svc, nil
 }
 
 type service struct {
+	*invoke.Set
 	usermgr user.Manager
 }
 

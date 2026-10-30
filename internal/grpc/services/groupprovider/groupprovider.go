@@ -28,6 +28,7 @@ import (
 	"github.com/cs3org/reva/v3/pkg/errtypes"
 	"github.com/cs3org/reva/v3/pkg/group"
 	"github.com/cs3org/reva/v3/pkg/group/manager/registry"
+	"github.com/cs3org/reva/v3/pkg/invoke"
 	"github.com/cs3org/reva/v3/pkg/plugin"
 	"github.com/cs3org/reva/v3/pkg/rgrpc"
 	"github.com/cs3org/reva/v3/pkg/rgrpc/status"
@@ -76,12 +77,16 @@ func New(ctx context.Context, m map[string]any) (rgrpc.Service, error) {
 		return nil, err
 	}
 
-	svc := &service{groupmgr: groupManager}
+	svc := &service{Set: invoke.NewSet(), groupmgr: groupManager}
+	if err := svc.MergeDriver(groupManager); err != nil {
+		return nil, err
+	}
 
 	return svc, nil
 }
 
 type service struct {
+	*invoke.Set
 	groupmgr group.Manager
 }
 

@@ -37,7 +37,9 @@ func servicesCommand() *cobra.Command {
 		Use:   "services [service]",
 		Short: "List services with their nodes, state and health",
 		Long: "List services with their nodes, state and health, or operate on instances.\n\n" +
-			"A <selector> is a service name, a node id (host:port/svc), a host:port, a host, or *.",
+			"A <selector> is a service name, a node id (host:port/svc), a host:port, a host, or *.\n" +
+			"svc[key=value,...] selects the instances of svc whose registry metadata has all the pairs,\n" +
+			"for example 'storageprovider[mount_id=eoshome-i01]'. Quote it for the shell.",
 		Example: "  reva admin services -v userprovider\n" +
 			"  reva admin services drain -y host1:9158\n" +
 			"  reva admin services activity --methods gateway\n" +
