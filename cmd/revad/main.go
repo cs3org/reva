@@ -109,10 +109,18 @@ func Main() {
 }
 
 func initPlugins() {
-	plugins := reva.GetPlugins("")
+	plugins := revadPlugins()
 	for _, p := range plugins {
 		plugin.RegisterPlugin(p.ID.Namespace(), p.ID.Name(), p.New)
 	}
+}
+
+// revadPlugins skips the CLI plugins: plugin.RegisterPlugin panics on their
+// unknown namespace.
+func revadPlugins() []reva.PluginInfo {
+	return slices.DeleteFunc(reva.GetPlugins(""), func(p reva.PluginInfo) bool {
+		return strings.HasPrefix(string(p.ID), "cli.")
+	})
 }
 
 func handleVersionFlag() {
@@ -130,7 +138,7 @@ func handlePluginsFlag() {
 	// TODO (gdelmont): maybe in future if needed we can filter
 	// by namespace (for example for getting all the http plugins).
 	// For now we just list all the plugins.
-	plugins := reva.GetPlugins("")
+	plugins := revadPlugins()
 	grouped := groupByNamespace(plugins)
 	bi, ok := debug.ReadBuildInfo()
 	if !ok {
@@ -381,7 +389,7 @@ func newLogger(conf *config.Log) (*zerolog.Logger, error) {
 		return nil, err
 	}
 
-	// Tee recent events into the in-memory ring `reva admin logs` reads.
+	// Tee recent events into the in-memory ring `reva logs` reads.
 	buf := logtail.New(conf.Tail)
 	logtail.SetDefault(buf)
 	var tap io.Writer

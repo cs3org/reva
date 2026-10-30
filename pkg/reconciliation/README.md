@@ -94,13 +94,13 @@ not deleted, so the owner still sees the share. A share with `expired_at` set
 is not picked up again. If a step fails, `expired_at` stays empty and the next
 run tries again.
 
-Start a run with `reva admin jobs run reconciliation.shallow [space=<space-id>]`.
+Start a run with `reva job run reconciliation.shallow [space=<space-id>]`.
 Leave the space out to cover every space. This needs the admin API enabled. The
-command prints a run id: `reva admin jobs status <run-id>` shows the state and
-the totals, `reva admin jobs cancel <run-id>` stops the run.
+command prints a run id: `reva job status <run-id>` shows the state and
+the totals, `reva job cancel <run-id>` stops the run.
 
 With a `schedule`, the job also runs on a cadence over every space. That run has
-its own name, so `reva admin jobs trigger reconciliation.shallow.scheduled`
+its own name, so `reva job trigger reconciliation.shallow.scheduled`
 starts it before its next fire.
 
 With a `spaces_per_batch`, a full run asks the database which spaces hold a share
