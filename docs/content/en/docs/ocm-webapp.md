@@ -90,11 +90,14 @@ Operator notes:
   refused before any token exchange. The reverse-proxy edge must not
   stamp its own CSP on this path, or the inline submit script and the form
   post will be blocked.
-- Reva's default token chain is `["header"]` only. Deployments must set both
-  chains with `bearer`, as the checked CI and CERN `gateway.toml` configs do.
-  Inbound, the launcher request fields are read by two strategies: the token
-  strategy bearer reads `access-token` and the credential strategy bearer
-  reads `access_token`. Outbound, the served launcher form posts a different
+- Inbound, the launcher request fields are read by two strategies. The
+  credential strategy bearer reads `access_token` and authenticates it with
+  the gateway as an IdP token; it is in the default `credential_chain`, so a
+  web OIDC token works as long as a deployment that sets its own chain keeps
+  `bearer` in it. The token strategy bearer reads `access-token` and accepts
+  it only if it is already a Reva token; it is not in the default
+  `token_strategy_chain` (`["header"]`), so add it only for clients that send
+  Reva tokens. Outbound, the served launcher form posts a different
   `access_token`, the exchanged token, to the validated app URL. The inbound
   and outbound `access_token` fields are separate and unrelated.
 
