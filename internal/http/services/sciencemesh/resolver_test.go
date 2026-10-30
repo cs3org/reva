@@ -34,6 +34,7 @@ import (
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	rpcv1beta1 "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	ocmpb "github.com/cs3org/go-cs3apis/cs3/sharing/ocm/v1beta1"
+	providerv1beta1 "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/cs3org/reva/v3/internal/http/services/opencloudmesh/ocmd"
 	"github.com/cs3org/reva/v3/internal/http/services/wellknown"
 	"github.com/cs3org/reva/v3/pkg/appctx"
@@ -379,14 +380,25 @@ func webdavProtocol(uri string) *ocmpb.Protocol {
 	}
 }
 
+// sunetReadPermissions is the CS3 image of a stored Nextcloud/SUNET ["read"] grant.
+func sunetReadPermissions() *providerv1beta1.ResourcePermissions {
+	return &providerv1beta1.ResourcePermissions{
+		GetPath:              true,
+		ListContainer:        true,
+		Stat:                 true,
+		InitiateFileDownload: true,
+	}
+}
+
 func webappProtocol(uri, secret string, reqs []string) *ocmpb.Protocol {
 	return &ocmpb.Protocol{
 		Term: &ocmpb.Protocol_WebappOptions{
 			WebappOptions: &ocmpb.WebappProtocol{
-				Uri:          uri,
-				SharedSecret: secret,
-				Requirements: reqs,
-				Targets:      []string{"blank"},
+				Uri:              uri,
+				SharedSecret:     secret,
+				SharePermissions: sunetReadPermissions(),
+				Requirements:     reqs,
+				Targets:          []string{"blank"},
 			},
 		},
 	}
