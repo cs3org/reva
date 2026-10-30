@@ -136,3 +136,48 @@ func TestUserThreadSkipsCancelledRequest(t *testing.T) {
 	require.NoError(t, err)
 	assert.False(t, ran)
 }
+
+func TestUserThreadCapStopsIdleThread(t *testing.T) {
+	pool, _, err := NewUserThreadPool(UserThreadPoolConfig{MaxThreads: 1})
+	require.NoError(t, err)
+	defer pool.Shutdown()
+	einstein := &userv1beta1.User{Id: &userv1beta1.UserId{OpaqueId: "einstein"}, Username: "einstein", UidNumber: 4242, GidNumber: 4242}
+	marie := &userv1beta1.User{Id: &userv1beta1.UserId{OpaqueId: "marie"}, Username: "marie", UidNumber: 4243, GidNumber: 4243}
+	noop := func() (any, error) { return nil, nil }
+
+	_, err = pool.ExecuteOnUserThread(context.Background(), einstein, noop)
+	require.NoError(t, err)
+
+	// The thread of einstein is idle, thus marie gets its place
+	_, err = pool.ExecuteOnUserThread(context.Background(), marie, noop)
+	require.NoError(t, err)
+}
+
+func TestUserThreadCapRefusesWhenAllThreadsRun(t *testing.T) {
+	pool, _, err := NewUserThreadPool(UserThreadPoolConfig{MaxThreads: 1})
+	require.NoError(t, err)
+	defer pool.Shutdown()
+	einstein := &userv1beta1.User{Id: &userv1beta1.UserId{OpaqueId: "einstein"}, Username: "einstein", UidNumber: 4242, GidNumber: 4242}
+	marie := &userv1beta1.User{Id: &userv1beta1.UserId{OpaqueId: "marie"}, Username: "marie", UidNumber: 4243, GidNumber: 4243}
+	noop := func() (any, error) { return nil, nil }
+
+	// The caller stops waiting, but the request continues to run on the thread
+	ctx, cancel := context.WithCancel(context.Background())
+	release := make(chan struct{})
+	_, err = pool.ExecuteOnUserThread(ctx, einstein, func() (any, error) {
+		cancel()
+		<-release
+		return nil, nil
+	})
+	require.ErrorIs(t, err, context.Canceled)
+
+	_, err = pool.ExecuteOnUserThread(context.Background(), marie, noop)
+	require.Error(t, err)
+
+	// The thread becomes idle shortly after the request ends
+	close(release)
+	require.Eventually(t, func() bool {
+		_, err := pool.ExecuteOnUserThread(context.Background(), marie, noop)
+		return err == nil
+	}, time.Second, time.Millisecond)
+}
