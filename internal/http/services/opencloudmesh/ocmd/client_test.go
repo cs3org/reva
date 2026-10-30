@@ -1470,7 +1470,7 @@ func TestOutgoingRequestSigning(t *testing.T) {
 	}
 }
 
-func TestNewShareLogsOmitSecretMarker(t *testing.T) {
+func TestNewShareLogsMaskSecrets(t *testing.T) {
 	const marker = "synthetic-secret-marker"
 	newReq := func() *NewShareRequest {
 		return &NewShareRequest{
@@ -1516,8 +1516,16 @@ func TestNewShareLogsOmitSecretMarker(t *testing.T) {
 		if strings.Contains(logs, marker) {
 			t.Fatalf("logs contain secret marker: %s", logs)
 		}
-		if !strings.Contains(logs, "Sending OCM share") || !strings.Contains(logs, "provider-1") {
-			t.Fatalf("logs missing outcome diagnostic: %s", logs)
+		if !strings.Contains(logs, "Sending OCM share") {
+			t.Fatalf("logs missing send line: %s", logs)
+		}
+		if !strings.Contains(logs, "/shares") {
+			t.Fatalf("logs missing url: %s", logs)
+		}
+		for _, want := range []string{"notes.txt", "marie@remote.example", "share-opaque", secretLogPlaceholder, "Marie"} {
+			if !strings.Contains(logs, want) {
+				t.Fatalf("logs missing %q: %s", want, logs)
+			}
 		}
 		if !strings.Contains(logs, "remote OCM server responded") {
 			t.Fatalf("logs missing response diagnostic: %s", logs)
@@ -1549,6 +1557,9 @@ func TestNewShareLogsOmitSecretMarker(t *testing.T) {
 		}
 		if !strings.Contains(logs, "error in remote OCM server response") {
 			t.Fatalf("logs missing error diagnostic: %s", logs)
+		}
+		if !strings.Contains(logs, secretLogPlaceholder) {
+			t.Fatalf("error logs missing masked placeholder: %s", logs)
 		}
 	})
 }
