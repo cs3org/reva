@@ -19,6 +19,7 @@
 package loader
 
 import (
-// Load the reminder kinds.
-// Add your own here.
+	// Load the reminder kinds.
+	_ "github.com/cs3org/reva/v3/pkg/reminders/linkexpiry"
+	// Add your own here.
 )
