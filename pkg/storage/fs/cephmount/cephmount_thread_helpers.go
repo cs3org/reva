@@ -44,7 +44,7 @@ func (fs *cephmountfs) getUserInfo(ctx context.Context) (username string, uid in
 	// Get thread ID from the thread pool
 	thread, err := fs.threadPool.getExistingUserThread(uid)
 	if err == nil && thread != nil {
-		threadID = thread.threadID
+		threadID = int(thread.threadID.Load())
 	}
 
 	return username, uid, threadID
@@ -214,18 +214,24 @@ func (fs *cephmountfs) openFileAsUser(ctx context.Context, path string) (*os.Fil
 	return result.(*os.File), nil
 }
 
-// uploadFileAsUser creates and uploads a file on the user's thread with correct UID
+// uploadFileAsUser creates a file on the user's thread with correct UID, then writes the data outside that thread
 func (fs *cephmountfs) uploadFileAsUser(ctx context.Context, path string, r io.ReadCloser, perm os.FileMode) error {
-	return fs.executeOnUserThread(ctx, func() error {
-		file, err := fs.rootFS.OpenFile(path, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, perm)
-		if err != nil {
-			return err
-		}
-		defer file.Close()
-
-		_, err = io.Copy(file, r)
-		return err
+	result, err := fs.executeAsUser(ctx, func() (any, error) {
+		return fs.rootFS.OpenFile(path, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, perm)
 	})
+	if err != nil {
+		return err
+	}
+	file := result.(*os.File)
+
+	// The kernel checks the permissions at open, so the copy can run outside the user's thread.
+	// Thus a slow client does not block the other requests of the user.
+	if _, err := io.Copy(file, r); err != nil {
+		file.Close()
+		return err
+	}
+	// CephFS can report write errors only when it flushes the data at close
+	return file.Close()
 }
 
 // permissionsAsUser reports what the kernel lets the user do on path; sharing comes from the space roles

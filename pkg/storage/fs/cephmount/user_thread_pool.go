@@ -29,7 +29,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
-	"syscall"
+	"sync/atomic"
 	"time"
 
 	userv1beta1 "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
@@ -226,12 +226,14 @@ type UserThread struct {
 	uid         int
 	gid         int
 	username    string
-	threadID    int
 	requestChan chan *ThreadRequest
 	quit        chan struct{}
 	lastUsed    time.Time
 	mu          sync.RWMutex
-	active      bool
+	// Callers that hold this thread. Cleanup must not stop the thread while a caller waits on it.
+	callers atomic.Int32
+	// The thread sets its own ID after it starts, and the logging code reads it from other goroutines
+	threadID atomic.Int32
 }
 
 // ThreadRequest represents a request to execute on a user thread
@@ -292,16 +294,21 @@ func NewUserThreadPool(config UserThreadPoolConfig) (*UserThreadPool, *Privilege
 	return pool, privResult, nil
 }
 
-// GetOrCreateUserThread gets an existing user thread or creates a new one
+// GetOrCreateUserThread gets an existing user thread or creates a new one.
+// The caller must decrement thread.callers when it does not use the thread anymore.
 func (p *UserThreadPool) GetOrCreateUserThread(ctx context.Context, user *userv1beta1.User) (*UserThread, error) {
 	// Map user to UID/GID
 	uid, gid := p.mapUserToUIDGID(user)
 
+	// Count the caller under the pool lock, so that cleanup cannot stop the thread before the caller uses it
 	p.mu.RLock()
 	thread, exists := p.threads[uid]
+	if exists {
+		thread.callers.Add(1)
+	}
 	p.mu.RUnlock()
 
-	if exists && thread.active {
+	if exists {
 		thread.updateLastUsed()
 		return thread, nil
 	}
@@ -311,7 +318,8 @@ func (p *UserThreadPool) GetOrCreateUserThread(ctx context.Context, user *userv1
 	defer p.mu.Unlock()
 
 	// Double-check after acquiring write lock
-	if thread, exists := p.threads[uid]; exists && thread.active {
+	if thread, exists := p.threads[uid]; exists {
+		thread.callers.Add(1)
 		thread.updateLastUsed()
 		return thread, nil
 	}
@@ -324,8 +332,8 @@ func (p *UserThreadPool) GetOrCreateUserThread(ctx context.Context, user *userv1
 		requestChan: make(chan *ThreadRequest, 100),
 		quit:        make(chan struct{}),
 		lastUsed:    time.Now(),
-		active:      true,
 	}
+	thread.callers.Add(1)
 
 	p.threads[uid] = thread
 
@@ -379,6 +387,7 @@ func (p *UserThreadPool) ExecuteOnUserThread(ctx context.Context, user *userv1be
 	if err != nil {
 		return nil, err
 	}
+	defer thread.callers.Add(-1)
 
 	return thread.Execute(ctx, fn)
 }
@@ -430,7 +439,7 @@ func (p *UserThreadPool) cleanupExpiredThreads() {
 		expired := now.Sub(thread.lastUsed) > p.threadTTL
 		thread.mu.RUnlock()
 
-		if expired {
+		if expired && thread.callers.Load() == 0 {
 			thread.shutdown()
 			delete(p.threads, uid)
 		}
@@ -467,7 +476,7 @@ func (ut *UserThread) run() {
 	defer runtime.UnlockOSThread()
 
 	// Get current thread ID
-	ut.threadID = getTID()
+	ut.threadID.Store(int32(unix.Gettid()))
 
 	// Set the filesystem UID for this thread
 	originalFsuid := setfsuidSafe(-1)
@@ -513,6 +522,11 @@ func (ut *UserThread) run() {
 	for {
 		select {
 		case request := <-ut.requestChan:
+			// The caller returns the context error, thus the request must not run
+			if request.Context.Err() != nil {
+				continue
+			}
+
 			// Execute the request on this thread with the correct UID
 			result, err := request.Function()
 
@@ -532,10 +546,6 @@ func (ut *UserThread) run() {
 
 // Execute executes a function on this user thread
 func (ut *UserThread) Execute(ctx context.Context, fn func() (any, error)) (any, error) {
-	if !ut.active {
-		return nil, syscall.EINVAL
-	}
-
 	request := &ThreadRequest{
 		Function: fn,
 		Context:  ctx,
@@ -567,13 +577,8 @@ func (ut *UserThread) updateLastUsed() {
 
 // shutdown gracefully shuts down the user thread
 func (ut *UserThread) shutdown() {
-	ut.mu.Lock()
-	defer ut.mu.Unlock()
-
-	if ut.active {
-		close(ut.quit)
-		ut.active = false
-	}
+	// Runs only once per thread, because the pool removes the thread from its map under the same lock
+	close(ut.quit)
 }
 
 // GetStats returns statistics about the thread
@@ -585,30 +590,20 @@ func (ut *UserThread) GetStats() map[string]any {
 		"uid":        ut.uid,
 		"gid":        ut.gid,
 		"username":   ut.username,
-		"thread_id":  ut.threadID,
+		"thread_id":  int(ut.threadID.Load()),
 		"last_used":  ut.lastUsed,
-		"active":     ut.active,
 		"queue_size": len(ut.requestChan),
 	}
 }
 
-// getTID gets the Linux thread ID
-func getTID() int {
-	const SYS_GETTID = 186
-	tid, _, _ := syscall.Syscall(SYS_GETTID, 0, 0, 0)
-	return int(tid)
-}
-
 // setfsuidSafe wraps the setfsuid syscall with error handling
 func setfsuidSafe(uid int) int {
-	const SYS_SETFSUID = 122
-	prevUID, _, _ := syscall.Syscall(SYS_SETFSUID, uintptr(uid), 0, 0)
-	return int(prevUID)
+	prevUID, _ := unix.SetfsuidRetUid(uid)
+	return prevUID
 }
 
 // setfsgidSafe wraps the setfsgid syscall with error handling
 func setfsgidSafe(gid int) int {
-	const SYS_SETFSGID = 123
-	prevGID, _, _ := syscall.Syscall(SYS_SETFSGID, uintptr(gid), 0, 0)
-	return int(prevGID)
+	prevGID, _ := unix.SetfsgidRetGid(gid)
+	return prevGID
 }
