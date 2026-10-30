@@ -162,6 +162,18 @@ func (j *ExpiredJob) run(ctx context.Context, rep rjobs.Reporter) (ExpiredReport
 	return report, nil
 }
 
+// SyncShare removes the ACL entry of one expired share, as the user of ctx.
+func (j *ExpiredJob) SyncShare(ctx context.Context, s *collaboration.Share) error {
+	gw := j.Gateway
+	if gw == nil {
+		var err error
+		if gw, err = service.Gateway(ctx); err != nil {
+			return err
+		}
+	}
+	return j.dropAclForExpiredShare(ctx, gw, map[string]*provider.Grantee{}, s)
+}
+
 func (r *ExpiredReport) progress(rep rjobs.Reporter, done int) {
 	rep.Report(rjobs.Progress{Phase: "remove", Done: int64(done), Total: int64(r.Expired), Unit: "shares", Details: rjobs.Params{
 		"removed": len(r.Removed),

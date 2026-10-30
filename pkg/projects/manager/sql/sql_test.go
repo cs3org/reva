@@ -22,11 +22,13 @@ import (
 	"context"
 	"log"
 	"os"
+	"path/filepath"
 	"reflect"
 	"testing"
 
 	groupv1beta1 "github.com/cs3org/go-cs3apis/cs3/identity/group/v1beta1"
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
+	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/cs3org/reva/v3/pkg/appctx"
 	"github.com/cs3org/reva/v3/pkg/permissions"
@@ -340,5 +342,80 @@ func TestListProjects(t *testing.T) {
 				t.Fatalf("projects' list do not match. got=%+v expected=%+v", got.StorageSpaces, tt.expected)
 			}
 		})
+	}
+}
+
+func TestSpaceByIDIgnoresMembership(t *testing.T) {
+	catalogue, err, teardown := setupSuite(t)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer teardown(t)
+	mgr := catalogue.(*ProjectsManager)
+	spaceID := spaces.EncodeSpaceID("/eos/project/c/cernbox")
+	mgr.db.Create(&Project{StorageID: "eosproject", SpaceID: spaceID, Path: "/eos/project/c/cernbox", Name: "cernbox", Owner: "owner", Admins: "cernbox-admins"})
+
+	space, err := mgr.SpaceByID(context.Background(), spaces.EncodeStorageSpaceID("eosproject", spaceID))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if space.GetName() != "cernbox" || space.GetRoles()[2].GetRoleName() != "admin" || space.GetRoles()[2].GetRecipients()[0].GetGroupId().GetOpaqueId() != "cernbox-admins" {
+		t.Fatalf("space %+v", space)
+	}
+}
+
+// Only the owner and the admins of a project may change it. For anyone
+// else, the project is not found and stays as it was.
+func TestUpdateStorageSpaceNeedsAManager(t *testing.T) {
+	mgr, err := New(context.Background(), map[string]any{"db_engine": "sqlite", "db_name": filepath.Join(t.TempDir(), "projects.db")})
+	if err != nil {
+		t.Fatal(err)
+	}
+	m := mgr.(*ProjectsManager)
+	p := &Project{Name: "atlas", Owner: "atlassvc", SpaceID: "atlas", StorageID: "s", Path: "/p/atlas", Admins: "cernbox-project-atlas-admins", Writers: "cernbox-project-atlas-writers", Description: "before"}
+	if err := m.db.Create(p).Error; err != nil {
+		t.Fatal(err)
+	}
+	id := projectToStorageSpace(p, nil).GetId()
+	update := func(u *userpb.User, name, desc string) *provider.UpdateStorageSpaceResponse {
+		t.Helper()
+		res, err := m.UpdateStorageSpace(appctx.ContextSetUser(context.Background(), u), &provider.UpdateStorageSpaceRequest{
+			StorageSpace: &provider.StorageSpace{Id: id, Name: name},
+			Field:        &provider.UpdateStorageSpaceRequest_UpdateField{Field: &provider.UpdateStorageSpaceRequest_UpdateField_Description{Description: desc}},
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		return res
+	}
+	description := func() string {
+		p, err := m.GetProject(context.Background(), "atlas")
+		if err != nil {
+			t.Fatal(err)
+		}
+		return p.Description
+	}
+
+	writer := &userpb.User{Id: &userpb.UserId{OpaqueId: "einstein"}, Groups: []string{"cernbox-project-atlas-writers"}}
+	stranger := &userpb.User{Id: &userpb.UserId{OpaqueId: "mallory"}}
+	for _, u := range []*userpb.User{writer, stranger} {
+		if res := update(u, "atlas", "changed"); res.GetStatus().GetCode() != rpc.Code_CODE_NOT_FOUND {
+			t.Fatalf("%s: %v", u.GetId().GetOpaqueId(), res.GetStatus())
+		}
+	}
+	if res := update(stranger, "nope", "changed"); res.GetStatus().GetCode() != rpc.Code_CODE_NOT_FOUND {
+		t.Fatalf("a missing project: %v", res.GetStatus())
+	}
+	if d := description(); d != "before" {
+		t.Fatalf("a refused update changed the description to %q", d)
+	}
+
+	admin := &userpb.User{Id: &userpb.UserId{OpaqueId: "marie"}, Groups: []string{"cernbox-project-atlas-admins"}}
+	if res := update(admin, "atlas", "by an admin"); res.GetStatus().GetCode() != rpc.Code_CODE_OK || res.GetStorageSpace().GetDescription() != "by an admin" {
+		t.Fatalf("admin: %v", res)
+	}
+	owner := &userpb.User{Id: &userpb.UserId{OpaqueId: "atlassvc"}}
+	if res := update(owner, "atlas", "by the owner"); res.GetStatus().GetCode() != rpc.Code_CODE_OK || description() != "by the owner" {
+		t.Fatalf("owner: %v", res)
 	}
 }

@@ -24,8 +24,10 @@ package control
 import (
 	"context"
 	"encoding/json"
+	"errors"
 
 	"github.com/cs3org/reva/v3/pkg/control/controlpb"
+	"github.com/cs3org/reva/v3/pkg/errtypes"
 	"github.com/cs3org/reva/v3/pkg/invoke"
 	"github.com/cs3org/reva/v3/pkg/rgrpc"
 	"google.golang.org/grpc"
@@ -64,7 +66,7 @@ func (s *server) Invoke(ctx context.Context, req *controlpb.InvokeRequest) (*con
 	}
 	res, err := invoke.Invoke(ctx, req.Target, req.Invocation, ArgsToAny(req.Args))
 	if err != nil {
-		return &controlpb.InvokeResponse{Error: err.Error(), Code: int32(status.Code(err))}, nil
+		return &controlpb.InvokeResponse{Error: err.Error(), Code: int32(errCode(err))}, nil
 	}
 	b, err := json.Marshal(res)
 	if err != nil {
@@ -89,7 +91,7 @@ func (s *server) InvokeStream(req *controlpb.InvokeRequest, stream controlpb.Con
 	if err := invoke.InvokeStream(stream.Context(), req.Target, req.Invocation, ArgsToAny(req.Args), emit); err != nil {
 		// Report as a final soft message, like unary Invoke. Best-effort: the
 		// send fails if the client is gone.
-		_ = stream.Send(&controlpb.InvokeResponse{Error: err.Error(), Code: int32(status.Code(err))})
+		_ = stream.Send(&controlpb.InvokeResponse{Error: err.Error(), Code: int32(errCode(err))})
 	}
 	return nil
 }
@@ -131,3 +133,38 @@ func New() rgrpc.Service { return &Service{} }
 func (Service) Register(ss *grpc.Server)       { controlpb.RegisterControlServer(ss, NewServer()) }
 func (Service) Close() error                   { return nil }
 func (Service) UnprotectedEndpoints() []string { return nil }
+
+// errCode returns the gRPC code of err. An errtypes error has no gRPC status,
+// so status.Code gives Unknown for it.
+func errCode(err error) codes.Code {
+	if c := status.Code(err); c != codes.Unknown {
+		return c
+	}
+	var (
+		notFound     errtypes.IsNotFound
+		badRequest   errtypes.IsBadRequest
+		denied       errtypes.IsPermissionDenied
+		unsupported  errtypes.IsNotSupported
+		exists       errtypes.IsAlreadyExists
+		conflict     errtypes.IsConflict
+		invalidCreds errtypes.IsInvalidCredentials
+		userRequired errtypes.IsUserRequired
+	)
+	switch {
+	case errors.As(err, &notFound):
+		return codes.NotFound
+	case errors.As(err, &badRequest):
+		return codes.InvalidArgument
+	case errors.As(err, &denied):
+		return codes.PermissionDenied
+	case errors.As(err, &unsupported):
+		return codes.Unimplemented
+	case errors.As(err, &exists):
+		return codes.AlreadyExists
+	case errors.As(err, &conflict):
+		return codes.Aborted
+	case errors.As(err, &invalidCreds), errors.As(err, &userRequired):
+		return codes.Unauthenticated
+	}
+	return codes.Unknown
+}

@@ -232,6 +232,7 @@ func New(ctx context.Context, m map[string]any) (rgrpc.Service, error) {
 		return nil, err
 	}
 
+	service.addQuotaInvocations()
 	return service, nil
 }
 
