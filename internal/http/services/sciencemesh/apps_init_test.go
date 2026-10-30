@@ -180,7 +180,7 @@ func TestDecodeOCMClientUseEnvProxy(t *testing.T) {
 	}
 }
 
-// TestAppsInitUseEnvProxyWiring checks the open-in-app client. Discover and
+// TestAppsInitUseEnvProxyWiring checks the webapp launch client. Discover and
 // ExchangeToken share that one public-only client.
 func TestAppsInitUseEnvProxyWiring(t *testing.T) {
 	t.Parallel()
