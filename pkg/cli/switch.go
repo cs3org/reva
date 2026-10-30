@@ -206,6 +206,10 @@ func (a sSpaces) List(ctx context.Context) ([]*provider.StorageSpace, error) {
 	return via(a.s, func(b backend.Backend) ([]*provider.StorageSpace, error) { return b.Spaces().List(ctx) })
 }
 
+func (a sSpaces) Update(ctx context.Context, req *provider.UpdateStorageSpaceRequest) (*provider.StorageSpace, error) {
+	return via(a.s, func(b backend.Backend) (*provider.StorageSpace, error) { return b.Spaces().Update(ctx, req) })
+}
+
 func (a sSpaces) Quota(ctx context.Context, ref *provider.Reference) (*backend.Quota, error) {
 	return via(a.s, func(b backend.Backend) (*backend.Quota, error) { return b.Spaces().Quota(ctx, ref) })
 }
@@ -332,6 +336,14 @@ func (a sUsers) Me(ctx context.Context) (*userpb.User, error) {
 
 func (a sUsers) ByClaim(ctx context.Context, claim, value string) (*userpb.User, error) {
 	return via(a.s, func(b backend.Backend) (*userpb.User, error) { return b.Users().ByClaim(ctx, claim, value) })
+}
+
+func (a sUsers) Find(ctx context.Context, query string) ([]*userpb.User, error) {
+	return via(a.s, func(b backend.Backend) ([]*userpb.User, error) { return b.Users().Find(ctx, query) })
+}
+
+func (a sUsers) Groups(ctx context.Context, id *userpb.UserId) ([]string, error) {
+	return via(a.s, func(b backend.Backend) ([]string, error) { return b.Users().Groups(ctx, id) })
 }
 
 type sLocator struct{ s *switcher }

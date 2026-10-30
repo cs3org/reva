@@ -40,27 +40,29 @@ import (
 // The token is used only on the server, for the calls of one invocation.
 const actAsTokenLifetime = 5 * time.Minute
 
-// Lookup returns the user with the given username, with the groups. A storage
-// can need the groups, for example to know who administers a project.
-func Lookup(ctx context.Context, username string) (*userpb.User, error) {
-	if username == "" {
-		return nil, errors.New("admin: no username given")
+// Lookup finds a user by id through the gateway. The groups are included,
+// because a storage can use them to decide, for example whether the user
+// administers a project. The share and project tables keep ids without an idp: the user
+// providers match them on the opaque id alone.
+func Lookup(ctx context.Context, id *userpb.UserId) (*userpb.User, error) {
+	if id.GetOpaqueId() == "" {
+		return nil, errtypes.BadRequest("admin: no user id given")
 	}
 	gw, err := service.Gateway(ctx)
 	if err != nil {
 		return nil, err
 	}
-	res, err := gw.GetUserByClaim(ctx, &userpb.GetUserByClaimRequest{Claim: "username", Value: username})
+	res, err := gw.GetUser(ctx, &userpb.GetUserRequest{UserId: id})
 	if err != nil {
-		return nil, fmt.Errorf("admin: looking up user %q: %w", username, err)
+		return nil, fmt.Errorf("admin: looking up user %q: %w", id.GetOpaqueId(), err)
 	}
 	switch res.GetStatus().GetCode() {
 	case rpc.Code_CODE_OK:
 		return res.GetUser(), nil
 	case rpc.Code_CODE_NOT_FOUND:
-		return nil, errtypes.NotFound("user " + username)
+		return nil, errtypes.NotFound("user " + id.GetOpaqueId())
 	default:
-		return nil, fmt.Errorf("admin: looking up user %q: %s: %s", username, res.GetStatus().GetCode(), res.GetStatus().GetMessage())
+		return nil, fmt.Errorf("admin: looking up user %q: %s: %s", id.GetOpaqueId(), res.GetStatus().GetCode(), res.GetStatus().GetMessage())
 	}
 }
 
@@ -86,9 +88,9 @@ func As(ctx context.Context, u *userpb.User) (context.Context, error) {
 	return withToken(appctx.ContextSetUser(ctx, u), tkn), nil
 }
 
-// ActAs returns ctx acting as the user with the given username.
-func ActAs(ctx context.Context, username string) (context.Context, *userpb.User, error) {
-	u, err := Lookup(ctx, username)
+// ActAs looks id up and returns ctx acting as that user.
+func ActAs(ctx context.Context, id *userpb.UserId) (context.Context, *userpb.User, error) {
+	u, err := Lookup(ctx, id)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -99,14 +101,15 @@ func ActAs(ctx context.Context, username string) (context.Context, *userpb.User,
 	return uctx, u, nil
 }
 
-// ActAsFirst calls fn as each user in turn, until fn returns an OK status. It
-// skips a user that is not found or is refused, because the initiator of a
-// share can have lost the right and the owner can be a deleted account. It
-// returns the last user that it called fn as.
-func ActAsFirst(ctx context.Context, users []string, fn func(uctx context.Context) (*rpc.Status, error)) (string, error) {
+// ActAsFirst calls fn as each user in turn, until fn returns an OK status. A
+// user that cannot be looked up, or that the call refuses with not found or
+// permission denied, is skipped: the initiator of a share can have lost the
+// right on the resource, and the owner can be a deleted account. ActAsFirst
+// returns the user that fn returned for, or nil if every user was skipped.
+func ActAsFirst(ctx context.Context, users []*userpb.UserId, fn func(uctx context.Context) (*rpc.Status, error)) (*userpb.User, error) {
 	var err error = errtypes.BadRequest("no user to act as")
-	for _, u := range users {
-		uctx, _, lerr := ActAs(ctx, u)
+	for _, id := range users {
+		uctx, u, lerr := ActAs(ctx, id)
 		if lerr != nil {
 			err = lerr
 			continue
@@ -119,12 +122,12 @@ func ActAsFirst(ctx context.Context, users []string, fn func(uctx context.Contex
 		case rpc.Code_CODE_OK:
 			return u, nil
 		case rpc.Code_CODE_NOT_FOUND, rpc.Code_CODE_PERMISSION_DENIED:
-			err = fmt.Errorf("as %s: %w", u, status.NewErrtypeFromStatus(st))
+			err = fmt.Errorf("as %s: %w", id.GetOpaqueId(), status.NewErrtypeFromStatus(st))
 		default:
-			return u, fmt.Errorf("as %s: %w", u, status.NewErrtypeFromStatus(st))
+			return u, fmt.Errorf("as %s: %w", id.GetOpaqueId(), status.NewErrtypeFromStatus(st))
 		}
 	}
-	return "", err
+	return nil, err
 }
 
 // Users caches one context per user for one invocation. Ctx is the context of
@@ -132,24 +135,28 @@ func ActAsFirst(ctx context.Context, users []string, fn func(uctx context.Contex
 type Users struct {
 	Ctx  context.Context
 	mu   sync.Mutex
-	ctxs map[string]context.Context
+	ctxs map[userKey]context.Context
 }
 
-// As returns Ctx acting as username, or nil if that user cannot be looked up.
-func (c *Users) As(username string) context.Context {
+type userKey struct{ idp, opaqueID string }
+
+// As returns Ctx acting as the user of id, or nil if that user cannot be
+// looked up.
+func (c *Users) As(id *userpb.UserId) context.Context {
+	k := userKey{id.GetIdp(), id.GetOpaqueId()}
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	if uctx, ok := c.ctxs[username]; ok {
+	if uctx, ok := c.ctxs[k]; ok {
 		return uctx
 	}
 	if c.ctxs == nil {
-		c.ctxs = map[string]context.Context{}
+		c.ctxs = map[userKey]context.Context{}
 	}
-	uctx, _, err := ActAs(c.Ctx, username)
+	uctx, _, err := ActAs(c.Ctx, id)
 	if err != nil {
 		uctx = nil
 	}
-	c.ctxs[username] = uctx
+	c.ctxs[k] = uctx
 	return uctx
 }
 
