@@ -90,7 +90,7 @@ func TestPathTranslation(t *testing.T) {
 			if !tt.shouldExist {
 				// Create directory or file
 				if tt.externalPath == "/subdir" {
-					err = fs.CreateDir(ctx, ref)
+					_, err = fs.CreateDir(ctx, ref)
 					assert.NoError(t, err)
 				} else if tt.externalPath == "/subdir/file.txt" {
 					err = fs.TouchFile(ctx, ref)
