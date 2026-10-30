@@ -43,8 +43,10 @@ import (
 	ocmprovider "github.com/cs3org/go-cs3apis/cs3/ocm/provider/v1beta1"
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	"github.com/cs3org/reva/v3/internal/http/services/wellknown"
+	"github.com/cs3org/reva/v3/pkg/appctx"
 	"github.com/cs3org/reva/v3/pkg/errtypes"
 	"github.com/cs3org/reva/v3/pkg/ocm/client"
+	"github.com/rs/zerolog"
 	"github.com/studio-b12/gowebdav"
 	"google.golang.org/grpc"
 )
@@ -1020,6 +1022,7 @@ func TestCreateShareLegacyWebDAVStatUsesStoredTransport(t *testing.T) {
 	})
 
 	t.Run("allow_loopback_federation stats the remote resource", func(t *testing.T) {
+		const incomingSecret = "incoming-create-share-secret"
 		var davHits int
 		srv := discoveryAndDAVServer(t, nil, &davHits, true)
 		defer srv.Close()
@@ -1031,9 +1034,31 @@ func TestCreateShareLegacyWebDAVStatUsesStoredTransport(t *testing.T) {
 			},
 		})
 
-		req := httptest.NewRequest(http.MethodPost, "/ocm/shares", bytes.NewReader(legacyCreateShareBody(srv.Listener.Addr().String())))
+		body, err := json.Marshal(map[string]any{
+			"shareWith":    "marie@local.example.org",
+			"name":         "test.txt",
+			"providerId":   "provider-id",
+			"owner":        fmt.Sprintf("einstein@%s", srv.Listener.Addr().String()),
+			"sender":       fmt.Sprintf("einstein@%s", srv.Listener.Addr().String()),
+			"shareType":    "user",
+			"resourceType": "file",
+			"protocol": map[string]any{
+				"name": "ocm10format",
+				"options": map[string]any{
+					"sharedSecret": incomingSecret,
+				},
+			},
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		var logBuf bytes.Buffer
+		logger := zerolog.New(&logBuf)
+		req := httptest.NewRequest(http.MethodPost, "/ocm/shares", bytes.NewReader(body))
 		req.Header.Set("Content-Type", "application/json")
 		req.RemoteAddr = "192.0.2.15:12345"
+		req = req.WithContext(appctx.WithLogger(req.Context(), &logger))
 		rr := httptest.NewRecorder()
 		h.CreateShare(rr, req)
 
@@ -1042,6 +1067,16 @@ func TestCreateShareLegacyWebDAVStatUsesStoredTransport(t *testing.T) {
 		}
 		if davHits == 0 {
 			t.Fatal("expected the legacy WebDAV Stat probe to reach the server")
+		}
+		logs := logBuf.String()
+		if strings.Contains(logs, incomingSecret) {
+			t.Fatalf("CreateOCMIncomingShare logs contain secret: %s", logs)
+		}
+		if !strings.Contains(logs, "CreateOCMIncomingShare payload") || !strings.Contains(logs, "provider-id") {
+			t.Fatalf("CreateOCMIncomingShare logs missing payload fields: %s", logs)
+		}
+		if !strings.Contains(logs, secretLogPlaceholder) {
+			t.Fatalf("CreateOCMIncomingShare logs missing placeholder: %s", logs)
 		}
 	})
 }

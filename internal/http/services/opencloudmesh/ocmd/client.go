@@ -35,6 +35,7 @@ import (
 	"github.com/cs3org/reva/v3/pkg/errtypes"
 	"github.com/cs3org/reva/v3/pkg/ocm/client"
 	"github.com/pkg/errors"
+	"github.com/rs/zerolog"
 )
 
 // DefaultResponseLimit is the maximum OCM control-plane response body size.
@@ -202,7 +203,7 @@ func (c *OCMClient) NewShare(ctx context.Context, endpoint string, r *NewShareRe
 	}
 
 	log := appctx.GetLogger(ctx)
-	log.Info().Str("url", url).Str("payload", string(body)).Msg("Sending OCM share")
+	log.Info().Str("url", url).Str("payload", maskNewShareSecrets(r, string(body))).Msg("Sending OCM share")
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewReader(body))
 	if err != nil {
 		return nil, errors.Wrap(err, "error creating request")
@@ -219,7 +220,11 @@ func (c *OCMClient) NewShare(ctx context.Context, endpoint string, r *NewShareRe
 	if sresp != nil {
 		log.Info().Any("status", resp.Status).Any("shareResponse", sresp).Msg("remote OCM server responded")
 	} else {
-		log.Info().Err(err).Str("status", resp.Status).Msg("error in remote OCM server response")
+		errText := ""
+		if err != nil {
+			errText = maskNewShareSecrets(r, err.Error())
+		}
+		log.Info().Str(zerolog.ErrorFieldName, errText).Str("status", resp.Status).Msg("error in remote OCM server response")
 	}
 	return sresp, err
 }
