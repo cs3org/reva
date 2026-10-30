@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>{{.Title}} API</title>
+    <link rel="stylesheet" href="{{.Stylesheet}}" integrity="{{.StylesheetIntegrity}}" crossorigin="anonymous" />
+    <style>
+      body { margin: 0; background: #fafafa; }
+      .swagger-ui .topbar { display: none; }
+      noscript, .notice { display: block; max-width: 40rem; padding: 2rem; font-family: system-ui, sans-serif; line-height: 1.5; }
+      .notice form { display: flex; gap: 0.5rem; margin-top: 1rem; }
+      .notice input { flex: 1; min-width: 0; padding: 0.5rem; font: inherit; }
+      .notice button { padding: 0.5rem 1rem; font: inherit; }
+      .notice .error { color: #b00020; }
+    </style>
+  </head>
+  <body>
+    <noscript>
+      This page needs JavaScript to render. The document itself is at
+      <a href="{{.Spec}}">{{.Spec}}</a>.
+    </noscript>
+    <div id="ui"></div>
+    <template id="sign-in">
+      <div class="notice">
+        <p>This deployment shows its API only to signed-in users. Paste an access token to continue.</p>
+        <p class="error" hidden></p>
+        <form>
+          <input type="password" name="token" placeholder="Access token" autocomplete="off" required />
+          <button type="submit">Show the API</button>
+        </form>
+      </div>
+    </template>
+    <script src="{{.Bundle}}" integrity="{{.BundleIntegrity}}" crossorigin="anonymous"></script>
+    <script>
+      window.onload = function () {
+        var root = document.getElementById("ui");
+
+        function notice(text) {
+          root.innerHTML = "";
+          var p = document.createElement("p");
+          p.className = "notice";
+          p.textContent = text;
+          root.appendChild(p);
+        }
+
+        if (typeof SwaggerUIBundle === "undefined") {
+          notice("The viewer could not be loaded, or it did not match ui_bundle_integrity. " +
+            "Point ui_bundle at a local copy of swagger-ui-dist, or read {{.Spec}} directly.");
+          return;
+        }
+
+        function show(spec) {
+          SwaggerUIBundle({
+            spec: spec,
+            dom_id: "#ui",
+            deepLinking: true,
+            docExpansion: "none",
+            filter: true,
+            tryItOutEnabled: true,
+          });
+        }
+
+        // The document can need credentials the browser does not hold, such
+        // as a bearer token, so the page asks for one when it is refused.
+        function signIn(error) {
+          root.innerHTML = "";
+          root.appendChild(document.getElementById("sign-in").content.cloneNode(true));
+          if (error) {
+            var p = root.querySelector(".error");
+            p.textContent = error;
+            p.hidden = false;
+          }
+          root.querySelector("form").onsubmit = function (e) {
+            e.preventDefault();
+            load("Bearer " + root.querySelector("input").value.trim());
+          };
+        }
+
+        function load(authorization) {
+          var headers = authorization ? { Authorization: authorization } : {};
+          fetch("{{.Spec}}", { headers: headers, credentials: "same-origin" })
+            .then(function (res) {
+              if (res.status === 401 || res.status === 403) {
+                signIn(authorization ? "The token was refused." : "");
+                return;
+              }
+              if (!res.ok) {
+                notice("The document could not be loaded: HTTP " + res.status + ".");
+                return;
+              }
+              return res.json().then(show);
+            })
+            .catch(function (err) {
+              notice("The document could not be loaded: " + err.message);
+            });
+        }
+
+        load();
+      };
+    </script>
+  </body>
+</html>
