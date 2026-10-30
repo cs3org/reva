@@ -192,7 +192,7 @@ func (h *appsHandler) OpenInApp(w http.ResponseWriter, r *http.Request) {
 		writeLaunchError(w, r, err)
 		return
 	}
-	payload, err := h.buildLaunch(ctx, shareID, rel)
+	payload, err := h.buildLaunch(ctx, shareID, rel, nil)
 	if err != nil {
 		writeLaunchError(w, r, err)
 		return
@@ -223,7 +223,14 @@ func storedWebappPermissions(perms *providerv1beta1.ResourcePermissions) []strin
 	return names
 }
 
-func (h *appsHandler) buildLaunch(ctx context.Context, shareID *ocmpb.ShareId, rel string) (openInAppResponse, error) {
+// buildLaunch validates the stored offer and exchanges the token. checkAppURL,
+// when set, runs on the joined app URL before any discovery or exchange.
+func (h *appsHandler) buildLaunch(
+	ctx context.Context,
+	shareID *ocmpb.ShareId,
+	rel string,
+	checkAppURL func(appURL string) error,
+) (openInAppResponse, error) {
 	var none openInAppResponse
 	if err := providerdomain.Validate(h.receiverDomain); err != nil {
 		return none, redactLaunchError(errtypes.BadRequest(err.Error()), "", "")
@@ -269,6 +276,11 @@ func (h *appsHandler) buildLaunch(ctx context.Context, shareID *ocmpb.ShareId, r
 	launched, err := joinShareRelativePath(appURI, rel)
 	if err != nil {
 		return fail(err, "")
+	}
+	if checkAppURL != nil {
+		if err := checkAppURL(launched); err != nil {
+			return fail(err, "")
+		}
 	}
 
 	origin, err := senderDiscoveryOrigin(share.GetCreator().GetIdp())
