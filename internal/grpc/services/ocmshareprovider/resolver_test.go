@@ -422,6 +422,7 @@ func (f shareFixture) run(
 		if posts != 1 {
 			t.Fatalf("remote posts = %d, want 1 body=%s", posts, body)
 		}
+		f.assertNoPostedSecrets(t, logs, body, resp)
 		if repo.storeN != 0 || repo.stored != nil {
 			t.Fatalf("store count = %d, stored set = %t, want 0 and unset", repo.storeN, repo.stored != nil)
 		}
@@ -434,6 +435,7 @@ func (f shareFixture) run(
 	if posts != 1 {
 		t.Fatalf("remote posts = %d, want 1", posts)
 	}
+	f.assertNoPostedSecrets(t, logs, body, resp)
 	var wire ocmd.NewShareRequest
 	if err := json.Unmarshal(body, &wire); err != nil {
 		t.Fatalf("unmarshal wire share: %v body=%s", err, body)
@@ -454,6 +456,42 @@ func (f shareFixture) assertNoMarker(t *testing.T, logs *bytes.Buffer, resp *ocm
 	}
 	if resp != nil && resp.Status != nil && strings.Contains(resp.Status.Message, f.marker) {
 		t.Fatalf("status message leaked marker: %s", resp.Status.Message)
+	}
+}
+
+func (f shareFixture) assertNoPostedSecrets(
+	t *testing.T,
+	logs *bytes.Buffer,
+	body []byte,
+	resp *ocm.CreateOCMShareResponse,
+) {
+	t.Helper()
+	var wire ocmd.NewShareRequest
+	if err := json.Unmarshal(body, &wire); err != nil {
+		t.Fatalf("unmarshal posted share: %v body=%s", err, body)
+	}
+	var secrets []string
+	for _, w := range webdavs(wire.Protocols) {
+		if s := strings.TrimSpace(w.SharedSecret); s != "" {
+			secrets = append(secrets, w.SharedSecret)
+		}
+	}
+	for _, w := range webapps(wire.Protocols) {
+		if s := strings.TrimSpace(w.SharedSecret); s != "" {
+			secrets = append(secrets, w.SharedSecret)
+		}
+	}
+	if len(secrets) == 0 {
+		t.Fatalf("posted body carries no shared secret: %s", body)
+	}
+	logText := logs.String()
+	for _, secret := range secrets {
+		if strings.Contains(logText, secret) {
+			t.Fatalf("logs contain posted sharedSecret: %s", logText)
+		}
+		if resp != nil && resp.Status != nil && strings.Contains(resp.Status.Message, secret) {
+			t.Fatalf("status message leaked sharedSecret: %s", resp.Status.Message)
+		}
 	}
 }
 

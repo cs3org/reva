@@ -19,7 +19,6 @@
 package ocmshareprovider
 
 import (
-	"bytes"
 	"encoding/json"
 	"net/http"
 	"strings"
@@ -82,8 +81,6 @@ func TestCreateOCMShareRemoteFailureDoesNotStore(t *testing.T) {
 	t.Run("rejection", func(t *testing.T) {
 		shareFixture{
 			offer:      true,
-			name:       secretMarker,
-			marker:     secretMarker,
 			methods:    []*ocm.AccessMethod{webdavMethod(), webappMethod("")},
 			disco:      capableDiscovery(),
 			postStatus: http.StatusBadRequest,
@@ -92,8 +89,6 @@ func TestCreateOCMShareRemoteFailureDoesNotStore(t *testing.T) {
 	t.Run("transport", func(t *testing.T) {
 		shareFixture{
 			offer:    true,
-			name:     secretMarker,
-			marker:   secretMarker,
 			methods:  []*ocm.AccessMethod{webdavMethod(), webappMethod("")},
 			disco:    capableDiscovery(),
 			dropPost: true,
@@ -102,12 +97,9 @@ func TestCreateOCMShareRemoteFailureDoesNotStore(t *testing.T) {
 }
 
 func TestCreateOCMShareConfiguredNameEscapesOnWire(t *testing.T) {
-	logs := &bytes.Buffer{}
 	wire, stored, _, _ := shareFixture{
 		offer:   true,
 		name:    testQuotedName,
-		marker:  testQuotedName,
-		logs:    logs,
 		methods: []*ocm.AccessMethod{webdavMethod(), webappMethod("")},
 		disco:   capableDiscovery(),
 	}.run(t)
@@ -117,9 +109,6 @@ func TestCreateOCMShareConfiguredNameEscapesOnWire(t *testing.T) {
 	}
 	if storedWebapp(t, stored).AppName != testQuotedName {
 		t.Fatalf("stored appName = %q", storedWebapp(t, stored).AppName)
-	}
-	if strings.Contains(logs.String(), testQuotedName) {
-		t.Fatalf("logs contain configured name: %s", logs.String())
 	}
 }
 
