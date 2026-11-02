@@ -1616,6 +1616,50 @@ func TestUploadOnFreshClientUsesGuardedTransport(t *testing.T) {
 	})
 }
 
+// A repeated PUT overwrites the file that the first PUT created, and an EOS owner fails that overwrite.
+func TestNewWebDAVClientSendsEachRequestOnce(t *testing.T) {
+	var puts, propfinds int
+	var auths []string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		auths = append(auths, r.Header.Get("Authorization"))
+		switch r.Method {
+		case http.MethodPut:
+			puts++
+			if got := r.Header.Get("Upload-Length"); got != "-1" {
+				t.Errorf("Upload-Length = %q, want -1", got)
+			}
+			w.WriteHeader(http.StatusCreated)
+		case "PROPFIND":
+			propfinds++
+			writeReceivedWebDAVPropfind(w, false)
+		default:
+			t.Errorf("unexpected request %s %s", r.Method, r.URL.Path)
+		}
+	}))
+	defer srv.Close()
+
+	d := newTestReceivedDriver(t)
+	if err := d.uploadOnFreshClient(srv.URL, "Bearer tok", "file.txt", bytes.NewReader([]byte("hi"))); err != nil {
+		t.Fatalf("uploadOnFreshClient returned error: %v", err)
+	}
+	if puts != 1 {
+		t.Fatalf("puts = %d, want 1", puts)
+	}
+
+	if _, err := d.newWebDAVClient(srv.URL, map[string]string{"Authorization": "Bearer tok"}).Stat("file.txt"); err != nil {
+		t.Fatalf("Stat returned error: %v", err)
+	}
+	if propfinds != 1 {
+		t.Fatalf("propfinds = %d, want 1", propfinds)
+	}
+
+	for _, a := range auths {
+		if a != "Bearer tok" {
+			t.Fatalf("Authorization = %q, want %q", a, "Bearer tok")
+		}
+	}
+}
+
 func TestReceivedExplicitLoopbackAllowsDiscoveryAndWebDAV(t *testing.T) {
 	var discoHits, davHits int
 	var srv *httptest.Server

@@ -153,10 +153,14 @@ func New(ctx context.Context, m map[string]any) (storage.FS, error) {
 }
 
 func (d *driver) newWebDAVClient(endpoint string, headers map[string]string) *gowebdav.Client {
-	c := gowebdav.NewClient(endpoint, "", "")
-	for key, value := range headers {
-		c.SetHeader(key, value)
-	}
+	// The default gowebdav auth sends the first request of a new client two times, so an upload writes the file two times.
+	// The interceptor runs after BasicAuth, so these headers replace its empty Basic header.
+	c := gowebdav.NewAuthClient(endpoint, gowebdav.NewPreemptiveAuth(&gowebdav.BasicAuth{}))
+	c.SetInterceptor(func(_ string, rq *http.Request) {
+		for key, value := range headers {
+			rq.Header.Set(key, value)
+		}
+	})
 	c.SetTransport(d.webdavTransport)
 	return c
 }
