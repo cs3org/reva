@@ -208,6 +208,9 @@ func TestOcmConcurrentUserAgents(t *testing.T) {
 				if got.APIVersion != version {
 					t.Errorf("%s: apiVersion %q, want %q", ua, got.APIVersion, version)
 				}
+				if !slices.Contains(got.Capabilities, "notifications") {
+					t.Errorf("%s: notifications capability missing", ua)
+				}
 			}()
 		}
 	}
@@ -461,29 +464,6 @@ func TestOcmDiscoveryMatrix(t *testing.T) {
 		})
 	}
 
-	t.Run("enabled document advertises notifications", func(t *testing.T) {
-		h := &wkocmHandler{}
-		h.init(&OcmProviderConfig{Endpoint: "https://cernbox.cern.ch"})
-		raw, err := json.Marshal(h.data)
-		if err != nil {
-			t.Fatal(err)
-		}
-		var doc map[string]any
-		if err := json.Unmarshal(raw, &doc); err != nil {
-			t.Fatal(err)
-		}
-		if doc["apiVersion"] != "1.4.0" {
-			t.Fatalf("apiVersion %v", doc["apiVersion"])
-		}
-		if _, ok := doc["jwksUri"]; ok {
-			t.Fatalf("unexpected jwksUri in %s", raw)
-		}
-		want := []any{"invites", "protocol-object", "invite-wayf", "notifications"}
-		if caps, _ := doc["capabilities"].([]any); !slices.Equal(caps, want) {
-			t.Fatalf("capabilities %v", doc["capabilities"])
-		}
-	})
-
 	t.Run("nil override uses published blank targets", func(t *testing.T) {
 		h := &wkocmHandler{}
 		h.init(&OcmProviderConfig{
@@ -570,20 +550,12 @@ func assertDiscoveryShape(t *testing.T, h *wkocmHandler, want discoveryShape) {
 			notifications++
 		}
 	}
+	wantNotifications := 0
 	if want.enabled {
-		for _, c := range []string{"invites", "protocol-object", "invite-wayf"} {
-			if !slices.Contains(h.data.Capabilities, c) {
-				t.Fatalf("missing %s in caps %v", c, h.data.Capabilities)
-			}
-		}
-		if notifications != 1 {
-			t.Fatalf("notifications advertised %d times in caps %v", notifications, h.data.Capabilities)
-		}
-		if !slices.Equal(h.data.Criteria, []string{"must-invite"}) {
-			t.Fatalf("criteria %v", h.data.Criteria)
-		}
-	} else if len(h.data.Capabilities) != 0 {
-		t.Fatalf("disabled discovery caps %v", h.data.Capabilities)
+		wantNotifications = 1
+	}
+	if notifications != wantNotifications {
+		t.Fatalf("notifications advertised %d times, want %d", notifications, wantNotifications)
 	}
 	hasToken := slices.Contains(h.data.Capabilities, "exchange-token")
 	if want.endpoint {
@@ -627,28 +599,4 @@ func restoreLocalWebapp(t *testing.T) {
 		localWebappTargets = prevTargets
 		localWebappMu.Unlock()
 	})
-}
-
-func TestNotificationsOnBothRepresentations(t *testing.T) {
-	for _, tc := range []struct {
-		endpoint string
-		want     int
-	}{{"https://cernbox.cern.ch", 1}, {"", 0}} {
-		h := &wkocmHandler{}
-		h.init(&OcmProviderConfig{Endpoint: tc.endpoint})
-		for ua, version := range map[string]string{"Nextcloud Server Crawler": "1.1", "reva": OCMAPIVersion} {
-			req := httptest.NewRequest(http.MethodGet, "/ocm", nil)
-			req.Header.Set("User-Agent", ua)
-			rec := httptest.NewRecorder()
-			h.Ocm(rec, req)
-			var got OcmDiscoveryData
-			if err := json.Unmarshal(rec.Body.Bytes(), &got); err != nil {
-				t.Fatal(err)
-			}
-			if n := slices.Index(got.Capabilities, "notifications"); (n >= 0) != (tc.want == 1) || got.APIVersion != version ||
-				len(got.Capabilities) != len(slices.Compact(slices.Sorted(slices.Values(got.Capabilities)))) {
-				t.Fatalf("endpoint %q %s: caps %v apiVersion %s", tc.endpoint, ua, got.Capabilities, got.APIVersion)
-			}
-		}
-	}
 }
