@@ -628,3 +628,27 @@ func restoreLocalWebapp(t *testing.T) {
 		localWebappMu.Unlock()
 	})
 }
+
+func TestNotificationsOnBothRepresentations(t *testing.T) {
+	for _, tc := range []struct {
+		endpoint string
+		want     int
+	}{{"https://cernbox.cern.ch", 1}, {"", 0}} {
+		h := &wkocmHandler{}
+		h.init(&OcmProviderConfig{Endpoint: tc.endpoint})
+		for ua, version := range map[string]string{"Nextcloud Server Crawler": "1.1", "reva": OCMAPIVersion} {
+			req := httptest.NewRequest(http.MethodGet, "/ocm", nil)
+			req.Header.Set("User-Agent", ua)
+			rec := httptest.NewRecorder()
+			h.Ocm(rec, req)
+			var got OcmDiscoveryData
+			if err := json.Unmarshal(rec.Body.Bytes(), &got); err != nil {
+				t.Fatal(err)
+			}
+			if n := slices.Index(got.Capabilities, "notifications"); (n >= 0) != (tc.want == 1) || got.APIVersion != version ||
+				len(got.Capabilities) != len(slices.Compact(slices.Sorted(slices.Values(got.Capabilities)))) {
+				t.Fatalf("endpoint %q %s: caps %v apiVersion %s", tc.endpoint, ua, got.Capabilities, got.APIVersion)
+			}
+		}
+	}
+}
