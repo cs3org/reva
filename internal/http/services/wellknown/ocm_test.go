@@ -461,6 +461,29 @@ func TestOcmDiscoveryMatrix(t *testing.T) {
 		})
 	}
 
+	t.Run("enabled document advertises notifications", func(t *testing.T) {
+		h := &wkocmHandler{}
+		h.init(&OcmProviderConfig{Endpoint: "https://cernbox.cern.ch"})
+		raw, err := json.Marshal(h.data)
+		if err != nil {
+			t.Fatal(err)
+		}
+		var doc map[string]any
+		if err := json.Unmarshal(raw, &doc); err != nil {
+			t.Fatal(err)
+		}
+		if doc["apiVersion"] != "1.4.0" {
+			t.Fatalf("apiVersion %v", doc["apiVersion"])
+		}
+		if _, ok := doc["jwksUri"]; ok {
+			t.Fatalf("unexpected jwksUri in %s", raw)
+		}
+		want := []any{"invites", "protocol-object", "invite-wayf", "notifications"}
+		if caps, _ := doc["capabilities"].([]any); !slices.Equal(caps, want) {
+			t.Fatalf("capabilities %v", doc["capabilities"])
+		}
+	})
+
 	t.Run("nil override uses published blank targets", func(t *testing.T) {
 		h := &wkocmHandler{}
 		h.init(&OcmProviderConfig{
@@ -540,6 +563,27 @@ func assertDiscoveryShape(t *testing.T, h *wkocmHandler, want discoveryShape) {
 		} else if receive {
 			t.Fatalf("%s receive present %#v", name, protocols["webapp-receive"])
 		}
+	}
+	notifications := 0
+	for _, c := range h.data.Capabilities {
+		if c == "notifications" {
+			notifications++
+		}
+	}
+	if want.enabled {
+		for _, c := range []string{"invites", "protocol-object", "invite-wayf"} {
+			if !slices.Contains(h.data.Capabilities, c) {
+				t.Fatalf("missing %s in caps %v", c, h.data.Capabilities)
+			}
+		}
+		if notifications != 1 {
+			t.Fatalf("notifications advertised %d times in caps %v", notifications, h.data.Capabilities)
+		}
+		if !slices.Equal(h.data.Criteria, []string{"must-invite"}) {
+			t.Fatalf("criteria %v", h.data.Criteria)
+		}
+	} else if len(h.data.Capabilities) != 0 {
+		t.Fatalf("disabled discovery caps %v", h.data.Capabilities)
 	}
 	hasToken := slices.Contains(h.data.Capabilities, "exchange-token")
 	if want.endpoint {

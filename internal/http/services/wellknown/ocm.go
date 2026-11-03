@@ -317,7 +317,7 @@ func (h *wkocmHandler) buildData(c *OcmProviderConfig) *OcmDiscoveryData {
 	}
 
 	// expose the enabled capabilities
-	d.Capabilities = []string{"invites", "protocol-object", "invite-wayf"}
+	d.Capabilities = []string{"invites", "protocol-object", "invite-wayf", "notifications"}
 	d.Criteria = []string{"must-invite"}
 	d.InviteAcceptDialog, _ = url.JoinPath(c.Endpoint, c.InviteAcceptDialog)
 	if tokenOK {
