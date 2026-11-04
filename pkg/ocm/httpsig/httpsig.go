@@ -185,7 +185,7 @@ func Verify(r *http.Request, body []byte, endpoint string, jwks func() ([]byte, 
 	if sig.Alg != "" && sig.Alg != httpSigAlgs[alg.String()] {
 		return fmt.Errorf("the alg parameter %q does not agree with the key algorithm %s", sig.Alg, alg)
 	}
-	// The OCM spec forbids none and the symmetric algorithms.
+	// The OCM spec forbids an empty algorithm and the symmetric ones.
 	allowed, err := httpsign.NewJWSAlgAllowlist(
 		jwa.EdDSAEd25519(), jwa.EdDSA(),
 		jwa.ES256(), jwa.ES384(), jwa.ES512(),
