@@ -54,7 +54,9 @@ type Log struct {
 
 // Shared holds the shared configuration.
 type Shared struct {
-	JWTSecret             string   `default:"changemeplease"                   key:"jwt_secret"                         mapstructure:"jwt_secret"`
+	// JWTSecret must be explicitly configured with a high-entropy value shared by
+	// all Reva services in a deployment. There is intentionally no insecure default.
+	JWTSecret             string   `key:"jwt_secret" mapstructure:"jwt_secret"`
 	GatewaySVC            string   `default:"0.0.0.0:19000"                    key:"gatewaysvc"                         mapstructure:"gatewaysvc"`
 	DataGateway           string   `default:"http://0.0.0.0:19001/datagateway" key:"datagateway"                        mapstructure:"datagateway"`
 	SkipUserGroupsInToken bool     `key:"skip_user_groups_in_token"            mapstructure:"skip_user_groups_in_token"`

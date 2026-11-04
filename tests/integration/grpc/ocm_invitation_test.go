@@ -113,7 +113,7 @@ var _ = Describe("ocm invitation workflow", func() {
 	for _, driver := range []string{"json"} {
 
 		JustBeforeEach(func() {
-			tokenManager, err := jwt.New(map[string]any{"secret": "changemeplease"})
+			tokenManager, err := jwt.New(map[string]any{"secret": testJWTSecret})
 			Expect(err).ToNot(HaveOccurred())
 			ctxEinstein = ctxWithAuthToken(tokenManager, einstein)
 			ctxMarie = ctxWithAuthToken(tokenManager, marie)
