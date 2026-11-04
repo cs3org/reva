@@ -320,21 +320,22 @@ func TestAcceptInviteAlreadyAccepted(t *testing.T) {
 }
 
 // TestAcceptInviteGetUserInfoFailures covers the gateway lookup of the
-// initiator: every failure must surface as CODE_INTERNAL and must never reach
-// the repository write.
+// initiator: every failure must surface with the code of its error type and
+// must never reach the repository write.
 func TestAcceptInviteGetUserInfoFailures(t *testing.T) {
 	for _, tc := range []struct {
 		name string
 		res  *userpb.GetUserResponse
 		err  error
+		code rpcv1beta1.Code
 	}{
-		{"transport error", nil, errors.New("gateway unreachable")},
-		{"nil response", nil, nil},
-		{"nil status", &userpb.GetUserResponse{}, nil},
-		{"non ok status", &userpb.GetUserResponse{Status: &rpcv1beta1.Status{Code: rpcv1beta1.Code_CODE_NOT_FOUND, Message: "user missing"}}, nil},
-		{"nil user payload", &userpb.GetUserResponse{Status: &rpcv1beta1.Status{Code: rpcv1beta1.Code_CODE_OK}}, nil},
-		{"user payload without id", &userpb.GetUserResponse{Status: &rpcv1beta1.Status{Code: rpcv1beta1.Code_CODE_OK}, User: &userpb.User{}}, nil},
-		{"user payload with blank id", &userpb.GetUserResponse{Status: &rpcv1beta1.Status{Code: rpcv1beta1.Code_CODE_OK}, User: &userpb.User{Id: &userpb.UserId{OpaqueId: "  "}}}, nil},
+		{"transport error", nil, errors.New("gateway unreachable"), rpcv1beta1.Code_CODE_INTERNAL},
+		{"nil response", nil, nil, rpcv1beta1.Code_CODE_INTERNAL},
+		{"nil status", &userpb.GetUserResponse{}, nil, rpcv1beta1.Code_CODE_INTERNAL},
+		{"non ok status", &userpb.GetUserResponse{Status: &rpcv1beta1.Status{Code: rpcv1beta1.Code_CODE_NOT_FOUND, Message: "user missing"}}, nil, rpcv1beta1.Code_CODE_NOT_FOUND},
+		{"nil user payload", &userpb.GetUserResponse{Status: &rpcv1beta1.Status{Code: rpcv1beta1.Code_CODE_OK}}, nil, rpcv1beta1.Code_CODE_INVALID_ARGUMENT},
+		{"user payload without id", &userpb.GetUserResponse{Status: &rpcv1beta1.Status{Code: rpcv1beta1.Code_CODE_OK}, User: &userpb.User{}}, nil, rpcv1beta1.Code_CODE_INVALID_ARGUMENT},
+		{"user payload with blank id", &userpb.GetUserResponse{Status: &rpcv1beta1.Status{Code: rpcv1beta1.Code_CODE_OK}, User: &userpb.User{Id: &userpb.UserId{OpaqueId: "  "}}}, nil, rpcv1beta1.Code_CODE_INVALID_ARGUMENT},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			repo := &fakeRepo{getTokenStubbed: true, getTokenStub: validStoredToken()}
@@ -343,8 +344,8 @@ func TestAcceptInviteGetUserInfoFailures(t *testing.T) {
 
 			resp, err := svc.AcceptInvite(context.Background(), acceptInviteReq())
 			status := mustStatus(t, err, resp.GetStatus())
-			if status.Code != rpcv1beta1.Code_CODE_INTERNAL {
-				t.Fatalf("expected CODE_INTERNAL, got %v: %q", status.Code, status.Message)
+			if status.Code != tc.code {
+				t.Fatalf("expected %v, got %v: %q", tc.code, status.Code, status.Message)
 			}
 			if repo.addRemoteUserCalls != 0 {
 				t.Fatalf("expected no AddRemoteUser call, got %d", repo.addRemoteUserCalls)
