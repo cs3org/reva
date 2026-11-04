@@ -7,7 +7,10 @@
 package adminpb
 
 import (
+	context "context"
 	grpc "google.golang.org/grpc"
+	codes "google.golang.org/grpc/codes"
+	status "google.golang.org/grpc/status"
 )
 
 // This is a compile-time assertion to ensure that this generated file
@@ -19,6 +22,18 @@ const _ = grpc.SupportPackageIsVersion7
 //
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
 type StorageAdminClient interface {
+	// ListRoutes lists the routing table of the storage registry.
+	ListRoutes(ctx context.Context, in *ListRoutesRequest, opts ...grpc.CallOption) (*ListRoutesResponse, error)
+	// ResolvePath shows the mounts that serve a path, as one storage registry
+	// instance resolves it, and the storage provider instances of each mount.
+	ResolvePath(ctx context.Context, in *ResolvePathRequest, opts ...grpc.CallOption) (*ResolvePathResponse, error)
+	// AddRoute routes a path to a mount, or changes the mount of a routed path.
+	// The change is written once, then every storage registry instance reloads
+	// the table.
+	AddRoute(ctx context.Context, in *AddRouteRequest, opts ...grpc.CallOption) (*AddRouteResponse, error)
+	// RemoveRoute removes the route of a path, then every storage registry
+	// instance reloads the table.
+	RemoveRoute(ctx context.Context, in *RemoveRouteRequest, opts ...grpc.CallOption) (*RemoveRouteResponse, error)
 }
 
 type storageAdminClient struct {
@@ -29,10 +44,58 @@ func NewStorageAdminClient(cc grpc.ClientConnInterface) StorageAdminClient {
 	return &storageAdminClient{cc}
 }
 
+func (c *storageAdminClient) ListRoutes(ctx context.Context, in *ListRoutesRequest, opts ...grpc.CallOption) (*ListRoutesResponse, error) {
+	out := new(ListRoutesResponse)
+	err := c.cc.Invoke(ctx, "/reva.admin.v1beta1.StorageAdmin/ListRoutes", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *storageAdminClient) ResolvePath(ctx context.Context, in *ResolvePathRequest, opts ...grpc.CallOption) (*ResolvePathResponse, error) {
+	out := new(ResolvePathResponse)
+	err := c.cc.Invoke(ctx, "/reva.admin.v1beta1.StorageAdmin/ResolvePath", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *storageAdminClient) AddRoute(ctx context.Context, in *AddRouteRequest, opts ...grpc.CallOption) (*AddRouteResponse, error) {
+	out := new(AddRouteResponse)
+	err := c.cc.Invoke(ctx, "/reva.admin.v1beta1.StorageAdmin/AddRoute", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *storageAdminClient) RemoveRoute(ctx context.Context, in *RemoveRouteRequest, opts ...grpc.CallOption) (*RemoveRouteResponse, error) {
+	out := new(RemoveRouteResponse)
+	err := c.cc.Invoke(ctx, "/reva.admin.v1beta1.StorageAdmin/RemoveRoute", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // StorageAdminServer is the server API for StorageAdmin service.
 // All implementations must embed UnimplementedStorageAdminServer
 // for forward compatibility
 type StorageAdminServer interface {
+	// ListRoutes lists the routing table of the storage registry.
+	ListRoutes(context.Context, *ListRoutesRequest) (*ListRoutesResponse, error)
+	// ResolvePath shows the mounts that serve a path, as one storage registry
+	// instance resolves it, and the storage provider instances of each mount.
+	ResolvePath(context.Context, *ResolvePathRequest) (*ResolvePathResponse, error)
+	// AddRoute routes a path to a mount, or changes the mount of a routed path.
+	// The change is written once, then every storage registry instance reloads
+	// the table.
+	AddRoute(context.Context, *AddRouteRequest) (*AddRouteResponse, error)
+	// RemoveRoute removes the route of a path, then every storage registry
+	// instance reloads the table.
+	RemoveRoute(context.Context, *RemoveRouteRequest) (*RemoveRouteResponse, error)
 	mustEmbedUnimplementedStorageAdminServer()
 }
 
@@ -40,6 +103,18 @@ type StorageAdminServer interface {
 type UnimplementedStorageAdminServer struct {
 }
 
+func (UnimplementedStorageAdminServer) ListRoutes(context.Context, *ListRoutesRequest) (*ListRoutesResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method ListRoutes not implemented")
+}
+func (UnimplementedStorageAdminServer) ResolvePath(context.Context, *ResolvePathRequest) (*ResolvePathResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method ResolvePath not implemented")
+}
+func (UnimplementedStorageAdminServer) AddRoute(context.Context, *AddRouteRequest) (*AddRouteResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method AddRoute not implemented")
+}
+func (UnimplementedStorageAdminServer) RemoveRoute(context.Context, *RemoveRouteRequest) (*RemoveRouteResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method RemoveRoute not implemented")
+}
 func (UnimplementedStorageAdminServer) mustEmbedUnimplementedStorageAdminServer() {}
 
 // UnsafeStorageAdminServer may be embedded to opt out of forward compatibility for this service.
@@ -53,13 +128,102 @@ func RegisterStorageAdminServer(s grpc.ServiceRegistrar, srv StorageAdminServer)
 	s.RegisterService(&StorageAdmin_ServiceDesc, srv)
 }
 
+func _StorageAdmin_ListRoutes_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ListRoutesRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(StorageAdminServer).ListRoutes(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/reva.admin.v1beta1.StorageAdmin/ListRoutes",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(StorageAdminServer).ListRoutes(ctx, req.(*ListRoutesRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _StorageAdmin_ResolvePath_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ResolvePathRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(StorageAdminServer).ResolvePath(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/reva.admin.v1beta1.StorageAdmin/ResolvePath",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(StorageAdminServer).ResolvePath(ctx, req.(*ResolvePathRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _StorageAdmin_AddRoute_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(AddRouteRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(StorageAdminServer).AddRoute(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/reva.admin.v1beta1.StorageAdmin/AddRoute",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(StorageAdminServer).AddRoute(ctx, req.(*AddRouteRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _StorageAdmin_RemoveRoute_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(RemoveRouteRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(StorageAdminServer).RemoveRoute(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/reva.admin.v1beta1.StorageAdmin/RemoveRoute",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(StorageAdminServer).RemoveRoute(ctx, req.(*RemoveRouteRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // StorageAdmin_ServiceDesc is the grpc.ServiceDesc for StorageAdmin service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
 var StorageAdmin_ServiceDesc = grpc.ServiceDesc{
 	ServiceName: "reva.admin.v1beta1.StorageAdmin",
 	HandlerType: (*StorageAdminServer)(nil),
-	Methods:     []grpc.MethodDesc{},
-	Streams:     []grpc.StreamDesc{},
-	Metadata:    "storage.proto",
+	Methods: []grpc.MethodDesc{
+		{
+			MethodName: "ListRoutes",
+			Handler:    _StorageAdmin_ListRoutes_Handler,
+		},
+		{
+			MethodName: "ResolvePath",
+			Handler:    _StorageAdmin_ResolvePath_Handler,
+		},
+		{
+			MethodName: "AddRoute",
+			Handler:    _StorageAdmin_AddRoute_Handler,
+		},
+		{
+			MethodName: "RemoveRoute",
+			Handler:    _StorageAdmin_RemoveRoute_Handler,
+		},
+	},
+	Streams:  []grpc.StreamDesc{},
+	Metadata: "storage.proto",
 }

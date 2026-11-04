@@ -25,6 +25,7 @@ import (
 
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	"github.com/cs3org/reva/v3/pkg/errtypes"
+	"google.golang.org/grpc/codes"
 )
 
 func TestNewStatusFromErrType(t *testing.T) {
@@ -68,5 +69,32 @@ func TestNewRedactedStatusFromErrType(t *testing.T) {
 	got = NewRedactedStatusFromErrType(context.Background(), "op", errors.New("db unreachable"))
 	if got.Code != rpc.Code_CODE_INTERNAL || got.Message != "op" {
 		t.Fatalf("got %v %q, want INTERNAL %q", got.Code, got.Message, "op")
+	}
+}
+
+func TestCodeFromGRPC(t *testing.T) {
+	for in, want := range map[codes.Code]rpc.Code{
+		codes.OK:                 rpc.Code_CODE_OK,
+		codes.Canceled:           rpc.Code_CODE_CANCELLED,
+		codes.Unknown:            rpc.Code_CODE_UNKNOWN,
+		codes.InvalidArgument:    rpc.Code_CODE_INVALID_ARGUMENT,
+		codes.DeadlineExceeded:   rpc.Code_CODE_DEADLINE_EXCEEDED,
+		codes.NotFound:           rpc.Code_CODE_NOT_FOUND,
+		codes.AlreadyExists:      rpc.Code_CODE_ALREADY_EXISTS,
+		codes.PermissionDenied:   rpc.Code_CODE_PERMISSION_DENIED,
+		codes.ResourceExhausted:  rpc.Code_CODE_RESOURCE_EXHAUSTED,
+		codes.FailedPrecondition: rpc.Code_CODE_FAILED_PRECONDITION,
+		codes.Aborted:            rpc.Code_CODE_ABORTED,
+		codes.OutOfRange:         rpc.Code_CODE_OUT_OF_RANGE,
+		codes.Unimplemented:      rpc.Code_CODE_UNIMPLEMENTED,
+		codes.Internal:           rpc.Code_CODE_INTERNAL,
+		codes.Unavailable:        rpc.Code_CODE_UNAVAILABLE,
+		codes.DataLoss:           rpc.Code_CODE_DATA_LOSS,
+		codes.Unauthenticated:    rpc.Code_CODE_UNAUTHENTICATED,
+		codes.Code(99):           rpc.Code_CODE_UNKNOWN,
+	} {
+		if got := CodeFromGRPC(in); got != want {
+			t.Errorf("CodeFromGRPC(%v) = %v, want %v", in, got, want)
+		}
 	}
 }

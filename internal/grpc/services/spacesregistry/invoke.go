@@ -72,8 +72,8 @@ type refArgs struct {
 type listArgs struct {
 	Type            string                 `arg:"type" help:"only spaces of this type; the catalogue has only project spaces"`
 	Status          projects.ProjectStatus `arg:"status" help:"only projects in this status: creating, active, archiving or archived"`
-	Owner           string                 `arg:"owner" help:"only projects owned by this user"`
-	Member          string                 `arg:"member" help:"only projects that this user owns or can access through a role group"`
+	Owner           admin.UserID           `arg:"owner" help:"only projects owned by this user: the protojson of a UserId, or its opaque id"`
+	Member          admin.UserID           `arg:"member" help:"only projects that this user owns or can access through a role group: the protojson of a UserId, or its opaque id"`
 	CreatedAfter    time.Time              `arg:"created_after" help:"only projects created at or after this RFC 3339 time, or this long ago (e.g. 720h)"`
 	CreatedBefore   time.Time              `arg:"created_before" help:"only projects created at or before this RFC 3339 time, or this long ago"`
 	IncludeArchived bool                   `arg:"include_archived" help:"include archived projects"`
@@ -95,14 +95,14 @@ type setStatusArgs struct {
 }
 
 type setOwnerArgs struct {
-	ID    string `arg:"id" help:"the space id; give id or name"`
-	Name  string `arg:"name" help:"the project name; give id or name"`
-	Owner string `arg:"owner,required" help:"the new owner"`
+	ID    string       `arg:"id" help:"the space id; give id or name"`
+	Name  string       `arg:"name" help:"the project name; give id or name"`
+	Owner admin.UserID `arg:"owner,required" help:"the new owner: the protojson of a UserId, or its opaque id"`
 }
 
 type createArgs struct {
 	Name        string                 `arg:"name,required" help:"the project name"`
-	Owner       string                 `arg:"owner,required" help:"the owner"`
+	Owner       admin.UserID           `arg:"owner,required" help:"the owner: the protojson of a UserId, or its opaque id"`
 	Path        string                 `arg:"path" help:"the path of the space; required if the catalogue has no path template"`
 	StorageID   string                 `arg:"storage_id" help:"the storage that serves the space; required if the catalogue has no storage id template"`
 	SpaceID     string                 `arg:"space_id" help:"the space id (default: derived from the path)"`
@@ -121,7 +121,7 @@ type deleteArgs struct {
 
 type checkArgs struct {
 	Status projects.ProjectStatus `arg:"status" help:"only projects in this status"`
-	Owner  string                 `arg:"owner" help:"only projects owned by this user"`
+	Owner  admin.UserID           `arg:"owner" help:"only projects owned by this user: the protojson of a UserId, or its opaque id"`
 }
 
 type finding struct {
@@ -209,15 +209,16 @@ func (s *service) list(ctx context.Context, a listArgs, emit invoke.StreamEmit) 
 	if a.Type != "" && a.Type != spaces.SpaceTypeProject.AsString() {
 		return errtypes.BadRequest(fmt.Sprintf("the catalogue has only spaces of type %s, not %s", spaces.SpaceTypeProject, a.Type))
 	}
+	// The catalogue keeps the opaque id of the owner.
 	f := projects.Filter{
 		Status:          a.Status,
-		Owner:           a.Owner,
+		Owner:           a.Owner.ID().GetOpaqueId(),
 		CreatedAfter:    a.CreatedAfter,
 		CreatedBefore:   a.CreatedBefore,
 		IncludeArchived: a.IncludeArchived,
 	}
-	if a.Member != "" {
-		if f.Member, err = member(ctx, a.Member); err != nil {
+	if !a.Member.IsZero() {
+		if f.Member, err = member(ctx, a.Member.ID()); err != nil {
 			return err
 		}
 	}
@@ -238,8 +239,8 @@ func (s *service) list(ctx context.Context, a listArgs, emit invoke.StreamEmit) 
 }
 
 // member returns the user with the groups that the userprovider gives.
-func member(ctx context.Context, username string) (*userpb.User, error) {
-	u, err := admin.Lookup(ctx, username)
+func member(ctx context.Context, id *userpb.UserId) (*userpb.User, error) {
+	u, err := admin.Lookup(ctx, id)
 	if err != nil {
 		return nil, err
 	}
@@ -252,7 +253,7 @@ func member(ctx context.Context, username string) (*userpb.User, error) {
 		return nil, err
 	}
 	if res.GetStatus().GetCode() != rpc.Code_CODE_OK {
-		return nil, fmt.Errorf("the groups of %s: %w", username, status.NewErrtypeFromStatus(res.GetStatus()))
+		return nil, fmt.Errorf("the groups of %s: %w", id.GetOpaqueId(), status.NewErrtypeFromStatus(res.GetStatus()))
 	}
 	return &userpb.User{Id: u.GetId(), Username: u.GetUsername(), Groups: res.GetGroups()}, nil
 }
@@ -300,7 +301,7 @@ func (s *service) update(ctx context.Context, a updateArgs) (invoke.Result, erro
 	// The catalogue lets the owner change a project, so the change is made
 	// as the owner, with the checks of a user call.
 	owner := r.Space.GetOwner().GetId().GetOpaqueId()
-	uctx, _, err := admin.ActAs(ctx, owner)
+	uctx, _, err := admin.ActAs(ctx, r.Space.GetOwner().GetId())
 	for _, f := range fields {
 		if err != nil {
 			break
@@ -358,11 +359,12 @@ func (s *service) setOwner(ctx context.Context, a setOwnerArgs) (invoke.Result, 
 		return nil, err
 	}
 	from := r.Space.GetOwner().GetId().GetOpaqueId()
-	u, err := admin.Lookup(ctx, a.Owner)
+	u, err := admin.Lookup(ctx, a.Owner.ID())
+	// The catalogue keeps the opaque id of the owner.
 	if err == nil {
 		r, err = c.SetProjectOwner(ctx, ref, u.GetId().GetOpaqueId())
 	}
-	audit(ctx, "set_owner", cmp.Or(a.Name, a.ID), err, map[string]string{"owner": a.Owner, "from": from})
+	audit(ctx, "set_owner", cmp.Or(a.Name, a.ID), err, map[string]string{"owner": a.Owner.String(), "from": from})
 	if err != nil {
 		return nil, err
 	}
@@ -375,7 +377,7 @@ func (s *service) create(ctx context.Context, a createArgs) (invoke.Result, erro
 		return nil, err
 	}
 	var r *projects.Record
-	u, err := admin.Lookup(ctx, a.Owner)
+	u, err := admin.Lookup(ctx, a.Owner.ID())
 	if err == nil {
 		r, err = c.RegisterProject(ctx, projects.Registration{
 			Name:        a.Name,
@@ -391,10 +393,10 @@ func (s *service) create(ctx context.Context, a createArgs) (invoke.Result, erro
 		})
 	}
 	if err != nil {
-		audit(ctx, "create", a.Name, err, map[string]string{"owner": a.Owner})
+		audit(ctx, "create", a.Name, err, map[string]string{"owner": a.Owner.String()})
 		return nil, err
 	}
-	audit(ctx, "create", a.Name, nil, map[string]string{"owner": a.Owner, "path": r.Space.GetRootInfo().GetPath(), "space_id": r.Space.GetId().GetOpaqueId()})
+	audit(ctx, "create", a.Name, nil, map[string]string{"owner": a.Owner.String(), "path": r.Space.GetRootInfo().GetPath(), "space_id": r.Space.GetId().GetOpaqueId()})
 	return adminSpace(r)
 }
 
@@ -416,7 +418,7 @@ func (s *service) check(ctx context.Context, a checkArgs, emit invoke.StreamEmit
 	if err != nil {
 		return err
 	}
-	recs, err := c.ListProjectRecords(ctx, projects.Filter{Status: a.Status, Owner: a.Owner})
+	recs, err := c.ListProjectRecords(ctx, projects.Filter{Status: a.Status, Owner: a.Owner.ID().GetOpaqueId()})
 	if err != nil {
 		return err
 	}
@@ -454,7 +456,7 @@ func (s *service) check(ctx context.Context, a checkArgs, emit invoke.StreamEmit
 func checkProject(ctx context.Context, gw gateway.GatewayAPIClient, r *projects.Record) []finding {
 	var out []finding
 	owner := r.Space.GetOwner().GetId().GetOpaqueId()
-	u, err := admin.Lookup(ctx, owner)
+	u, err := admin.Lookup(ctx, r.Space.GetOwner().GetId())
 	var nf errtypes.IsNotFound
 	switch {
 	case errors.As(err, &nf):

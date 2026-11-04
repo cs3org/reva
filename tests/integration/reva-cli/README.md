@@ -22,6 +22,7 @@ This test suite aims covers the following methods:
 * ListRevisions, DownloadRevision, RestoreRevision
 * ListRecycle, RestoreRecycleItem, PurgeRecycleItem, EmptyRecycle
 * AddGrant, RemoveGrant, UpdateGrant, ListGrants
+* GetUserByClaim, FindUsers, GetUserGroups
 
 In the future, it would be nice to also test the following:
 * GetHome, CreateHome

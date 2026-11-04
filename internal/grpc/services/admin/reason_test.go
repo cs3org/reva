@@ -126,6 +126,8 @@ func startReasonFleet(t *testing.T, log *zerolog.Logger) *svc {
 	})); err != nil {
 		t.Fatal(err)
 	}
+	// A rerun with -count would find this node, and its listener closed.
+	t.Cleanup(func() { _ = service.GlobalRegistry().Remove(registry.NewService(t.Name(), nil)) })
 
 	s, _ := testService(t)
 	s.logger = log

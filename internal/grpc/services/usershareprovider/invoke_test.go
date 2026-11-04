@@ -20,6 +20,7 @@ package usershareprovider
 
 import (
 	"context"
+	"errors"
 	"path/filepath"
 	"slices"
 	"sync"
@@ -33,6 +34,7 @@ import (
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	typespb "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
 	revaconfig "github.com/cs3org/reva/v3/cmd/revad/pkg/config"
+	"github.com/cs3org/reva/v3/pkg/admin"
 	"github.com/cs3org/reva/v3/pkg/appctx"
 	"github.com/cs3org/reva/v3/pkg/errtypes"
 	"github.com/cs3org/reva/v3/pkg/invoke"
@@ -42,6 +44,7 @@ import (
 	sqlmgr "github.com/cs3org/reva/v3/pkg/share/manager/sql"
 	"github.com/cs3org/reva/v3/pkg/sharedconf"
 	"google.golang.org/grpc"
+	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/proto"
 )
 
@@ -88,6 +91,18 @@ type fakeGateway struct {
 	actedAs []string
 }
 
+// GetUser matches the opaque id, and the idp if one is given, as the user
+// providers do: the share tables keep no idp.
+func (*fakeGateway) GetUser(_ context.Context, req *userpb.GetUserRequest, _ ...grpc.CallOption) (*userpb.GetUserResponse, error) {
+	id := req.GetUserId()
+	if u, ok := users[id.GetOpaqueId()]; ok && (id.GetIdp() == "" || id.GetIdp() == u.GetId().GetIdp()) {
+		return &userpb.GetUserResponse{Status: &rpc.Status{Code: rpc.Code_CODE_OK}, User: u}, nil
+	}
+	return &userpb.GetUserResponse{Status: &rpc.Status{Code: rpc.Code_CODE_NOT_FOUND}}, nil
+}
+
+// GetUserByClaim serves the sql manager, which looks the type of a grantee
+// up by username when it creates a share; the invocations never call it.
 func (*fakeGateway) GetUserByClaim(_ context.Context, req *userpb.GetUserByClaimRequest, _ ...grpc.CallOption) (*userpb.GetUserByClaimResponse, error) {
 	if u, ok := users[req.GetValue()]; ok && req.GetClaim() == "username" {
 		return &userpb.GetUserByClaimResponse{Status: &rpc.Status{Code: rpc.Code_CODE_OK}, User: u}, nil
@@ -256,17 +271,23 @@ func TestList(t *testing.T) {
 		{map[string]any{"sharee": "marie"}, []string{doc, project}},
 		{map[string]any{"sharee": "marie", "owner": "cbox"}, []string{project}},
 		{map[string]any{"space": "home-einstein"}, []string{doc, other}},
+		{map[string]any{"resource_id": "home!100"}, []string{doc}},
+		{map[string]any{"resource_id": "home$home-einstein!101", "owner": "einstein"}, []string{other}},
 		{map[string]any{"id": project}, []string{project}},
 		{map[string]any{"id": "999"}, []string{}},
 		{map[string]any{"path": "/home/einstein/doc", "owner": "einstein"}, []string{doc}},
 		{map[string]any{"path": "/project/data", "as": "admin2"}, []string{project}},
+		// The admin facade sends the full UserId and Grantee.
+		{map[string]any{"owner": admin.UserArg(user("einstein").Id)}, []string{doc, other}},
+		{map[string]any{"sharee": admin.GranteeArg(userGrantee(user("marie").Id)), "initiator": admin.UserArg(user("admin1").Id)}, []string{project}},
+		{map[string]any{"path": "/project/data", "as": admin.UserArg(user("admin2").Id)}, []string{project}},
 	} {
 		if got := ids(list(t, s, tc.args)); !slices.Equal(got, tc.want) {
 			t.Errorf("list %v: got %v, want %v", tc.args, got, tc.want)
 		}
 	}
 
-	for _, args := range []map[string]any{{}, {"include_orphans": "true"}, {"path": "/home/einstein/doc"}} {
+	for _, args := range []map[string]any{{}, {"include_orphans": "true"}, {"path": "/home/einstein/doc"}, {"resource_id": "100"}} {
 		if err := s.InvokeStream(as("operator"), "list", args, func(invoke.Result) error { return nil }); err == nil {
 			t.Errorf("list %v: expected an error", args)
 		}
@@ -300,6 +321,29 @@ func TestGet(t *testing.T) {
 	}
 	if _, err := s.Invoke(as("operator"), "get", map[string]any{"id": "999"}); !isNotFound(err) {
 		t.Fatalf("expected not found, got %v", err)
+	}
+
+	key := func(owner, storage, opaque, sharee string) string {
+		b, err := protojson.Marshal(&collaboration.ShareKey{
+			Owner:      &userpb.UserId{OpaqueId: owner},
+			ResourceId: &provider.ResourceId{StorageId: storage, OpaqueId: opaque},
+			Grantee:    userGrantee(&userpb.UserId{OpaqueId: sharee}),
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		return string(b)
+	}
+	if res := mustInvoke(t, s, "get", map[string]any{"key": key("einstein", "home", "100", "marie")}); idOf(res) != id {
+		t.Fatalf("get by key: unexpected result %v", res)
+	}
+	if _, err := s.Invoke(as("operator"), "get", map[string]any{"key": key("einstein", "home", "100", "bob")}); !isNotFound(err) {
+		t.Fatalf("get by the key of no share: expected not found, got %v", err)
+	}
+	for _, args := range []map[string]any{{}, {"id": id, "key": key("einstein", "home", "100", "marie")}, {"key": `{"owner":{"opaqueId":"einstein"}}`}, {"key": "{"}} {
+		if _, err := s.Invoke(as("operator"), "get", args); err == nil || isNotFound(err) {
+			t.Errorf("get %v: got %v, want a bad request", args, err)
+		}
 	}
 }
 
@@ -420,7 +464,11 @@ func TestTransfer(t *testing.T) {
 	if _, err := s.Invoke(as("operator"), "transfer", map[string]any{"id": id, "initiator": "bob"}); err == nil {
 		t.Fatal("expected an error for a user who cannot share the resource")
 	}
-	res := mustInvoke(t, s, "transfer", map[string]any{"id": id, "initiator": "admin2"})
+	other := admin.UserArg(&userpb.UserId{Idp: "elsewhere", OpaqueId: "admin2"})
+	if _, err := s.Invoke(as("operator"), "transfer", map[string]any{"id": id, "initiator": other}); !errors.As(err, new(errtypes.IsNotFound)) {
+		t.Fatalf("expected the user of another idp not found, got %v", err)
+	}
+	res := mustInvoke(t, s, "transfer", map[string]any{"id": id, "initiator": admin.UserArg(user("admin2").Id)})
 	if c := cs3(res); c["creator"].(map[string]any)["opaqueId"] != "admin2" || c["owner"].(map[string]any)["opaqueId"] != "cbox" {
 		t.Fatalf("unexpected share %v", c)
 	}

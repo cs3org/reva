@@ -53,14 +53,14 @@ func (fakeGateway) Gateway(context.Context) (gateway.GatewayAPIClient, error) {
 
 type userGateway struct{ gateway.GatewayAPIClient }
 
-func (userGateway) GetUserByClaim(_ context.Context, req *userpb.GetUserByClaimRequest, _ ...grpc.CallOption) (*userpb.GetUserByClaimResponse, error) {
-	if req.GetClaim() == "username" && req.GetValue() == "marie" {
-		return &userpb.GetUserByClaimResponse{
+func (userGateway) GetUser(_ context.Context, req *userpb.GetUserRequest, _ ...grpc.CallOption) (*userpb.GetUserResponse, error) {
+	if id := req.GetUserId(); id.GetOpaqueId() == "marie" && (id.GetIdp() == "" || id.GetIdp() == "cernbox") {
+		return &userpb.GetUserResponse{
 			Status: &rpc.Status{Code: rpc.Code_CODE_OK},
 			User:   &userpb.User{Id: &userpb.UserId{Idp: "cernbox", OpaqueId: "marie"}, Username: "marie", Groups: []string{"physics"}},
 		}, nil
 	}
-	return &userpb.GetUserByClaimResponse{Status: &rpc.Status{Code: rpc.Code_CODE_NOT_FOUND}}, nil
+	return &userpb.GetUserResponse{Status: &rpc.Status{Code: rpc.Code_CODE_NOT_FOUND}}, nil
 }
 
 func (userGateway) GetUserGroups(context.Context, *userpb.GetUserGroupsRequest, ...grpc.CallOption) (*userpb.GetUserGroupsResponse, error) {

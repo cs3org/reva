@@ -79,14 +79,15 @@ type expiringArgs struct {
 }
 
 type listArgs struct {
-	ID             string `arg:"id" help:"one link, by id; the other selectors are ignored"`
-	Token          string `arg:"token" help:"one link, by token; the other selectors are ignored"`
-	Owner          string `arg:"owner" help:"links on resources owned by this user"`
-	Initiator      string `arg:"initiator" help:"links created by this user"`
-	Space          string `arg:"space" help:"links in this space, by space id"`
-	IncludeOrphans bool   `arg:"include_orphans" help:"include orphaned links"`
-	IncludeExpired *bool  `arg:"include_expired" help:"include expired links (default true)"`
-	ResolvePaths   bool   `arg:"resolve_paths" help:"add the current path of each link"`
+	ID             string       `arg:"id" help:"one link, by id; the other selectors are ignored"`
+	Token          string       `arg:"token" help:"one link, by token; the other selectors are ignored"`
+	Owner          admin.UserID `arg:"owner" help:"links on resources owned by this user: the protojson of a UserId, or its opaque id"`
+	Initiator      admin.UserID `arg:"initiator" help:"links created by this user: the protojson of a UserId, or its opaque id"`
+	Space          string       `arg:"space" help:"links in this space, by space id"`
+	ResourceID     string       `arg:"resource_id" help:"links of this resource, by id: storage_id!opaque_id"`
+	IncludeOrphans bool         `arg:"include_orphans" help:"include orphaned links"`
+	IncludeExpired *bool        `arg:"include_expired" help:"include expired links (default true)"`
+	ResolvePaths   bool         `arg:"resolve_paths" help:"add the current path of each link"`
 }
 
 type refArgs struct {
@@ -111,23 +112,23 @@ type removeArgs struct {
 }
 
 type transferArgs struct {
-	ID        string `arg:"id" help:"the link id; give id or token"`
-	Token     string `arg:"token" help:"the link token; give id or token"`
-	Initiator string `arg:"initiator,required" help:"the new initiator, who must be allowed to share the resource"`
+	ID        string       `arg:"id" help:"the link id; give id or token"`
+	Token     string       `arg:"token" help:"the link token; give id or token"`
+	Initiator admin.UserID `arg:"initiator,required" help:"the new initiator, who must be allowed to share the resource: the protojson of a UserId, or its opaque id"`
 }
 
 type moveArgs struct {
-	ID    string `arg:"id" help:"the link id; give id or token"`
-	Token string `arg:"token" help:"the link token; give id or token"`
-	Path  string `arg:"path,required" help:"the new path of the linked resource"`
-	As    string `arg:"as" help:"the user to resolve path as; by default the owner, then the initiator of the link"`
+	ID    string       `arg:"id" help:"the link id; give id or token"`
+	Token string       `arg:"token" help:"the link token; give id or token"`
+	Path  string       `arg:"path,required" help:"the new path of the linked resource"`
+	As    admin.UserID `arg:"as" help:"the user to resolve path as; by default the owner, then the initiator of the link"`
 }
 
 func (s *service) registerInvocations() {
 	s.Set.Add("expiring", "List the public links of all users that expire in a window, by expiration and id, orphans excluded.").
 		Shared().
 		Handle(invoke.Typed(s.expiring))
-	s.Set.Add("list", "Stream the public links of any user. Give at least one of id, token, owner, initiator or space.").
+	s.Set.Add("list", "Stream the public links of any user. Give at least one of id, token, owner, initiator, resource_id or space.").
 		Shared().
 		HandleStream(invoke.TypedStream(s.list))
 	s.Set.Add("get", "Show one public link, also when it is orphaned or expired.").
@@ -271,18 +272,25 @@ func selectLinks(ctx context.Context, m adminManager, a listArgs) ([]model.Publi
 	}
 
 	var filters []*link.ListPublicSharesRequest_Filter
-	if a.Owner != "" {
-		filters = append(filters, &link.ListPublicSharesRequest_Filter{Type: link.ListPublicSharesRequest_Filter_TYPE_OWNER, Term: &link.ListPublicSharesRequest_Filter_Owner{Owner: &userpb.UserId{OpaqueId: a.Owner}}})
+	if id := a.Owner.ID(); id != nil {
+		filters = append(filters, &link.ListPublicSharesRequest_Filter{Type: link.ListPublicSharesRequest_Filter_TYPE_OWNER, Term: &link.ListPublicSharesRequest_Filter_Owner{Owner: id}})
 	}
-	if a.Initiator != "" {
-		filters = append(filters, &link.ListPublicSharesRequest_Filter{Type: link.ListPublicSharesRequest_Filter_TYPE_CREATOR, Term: &link.ListPublicSharesRequest_Filter_Creator{Creator: &userpb.UserId{OpaqueId: a.Initiator}}})
+	if id := a.Initiator.ID(); id != nil {
+		filters = append(filters, &link.ListPublicSharesRequest_Filter{Type: link.ListPublicSharesRequest_Filter_TYPE_CREATOR, Term: &link.ListPublicSharesRequest_Filter_Creator{Creator: id}})
+	}
+	if a.ResourceID != "" {
+		id, err := admin.ParseResourceID(a.ResourceID)
+		if err != nil {
+			return nil, err
+		}
+		filters = append(filters, &link.ListPublicSharesRequest_Filter{Type: link.ListPublicSharesRequest_Filter_TYPE_RESOURCE_ID, Term: &link.ListPublicSharesRequest_Filter_ResourceId{ResourceId: id}})
 	}
 	if a.Space != "" {
 		return m.ListPublicLinksInSpace(a.Space, filters, a.IncludeOrphans)
 	}
 	// The table is too large to read without a filter.
 	if len(filters) == 0 {
-		return nil, errtypes.BadRequest("list needs at least one of id, token, owner, initiator or space")
+		return nil, errtypes.BadRequest("list needs at least one of id, token, owner, initiator, resource_id or space")
 	}
 	return m.ListPublicLinks(nil, filters, nil, !a.IncludeOrphans)
 }
@@ -361,7 +369,7 @@ func (s *service) update(ctx context.Context, a updateArgs) (invoke.Result, erro
 		}
 		return status.NewOK(uctx), nil
 	})
-	fields := map[string]string{"acted_as": actor, "role": a.Role, "expires_at": a.ExpiresAt}
+	fields := map[string]string{"acted_as": actor.GetId().GetOpaqueId(), "role": a.Role, "expires_at": a.ExpiresAt}
 	switch {
 	case a.Password == nil:
 	case *a.Password == "":
@@ -397,7 +405,7 @@ func (s *service) remove(ctx context.Context, a removeArgs) (invoke.Result, erro
 		return nil, err
 	}
 	ref := linkRefID(l.Id)
-	var actor string
+	var actor *userpb.User
 	// The gateway stats the resource of the link, and an orphan has none.
 	if a.DBOnly || l.IsOrphan() {
 		err = s.sm.RevokePublicShare(ctx, nil, ref)
@@ -411,7 +419,7 @@ func (s *service) remove(ctx context.Context, a removeArgs) (invoke.Result, erro
 			return res.GetStatus(), err
 		})
 	}
-	audit(ctx, "remove", l, err, a.Fallback, map[string]string{"acted_as": actor, "db_only": strconv.FormatBool(a.DBOnly || l.IsOrphan())})
+	audit(ctx, "remove", l, err, a.Fallback, map[string]string{"acted_as": actor.GetId().GetOpaqueId(), "db_only": strconv.FormatBool(a.DBOnly || l.IsOrphan())})
 	if err != nil {
 		return nil, fmt.Errorf("removing public link %d: %w", l.Id, err)
 	}
@@ -425,7 +433,7 @@ func (s *service) transfer(ctx context.Context, a transferArgs) (invoke.Result, 
 	}
 	// The storage decides who may hold a link: the new initiator must be
 	// allowed to add a grant on the resource, as to create the link.
-	uctx, u, err := admin.ActAs(ctx, a.Initiator)
+	uctx, u, err := admin.ActAs(ctx, a.Initiator.ID())
 	if err == nil {
 		var res *provider.StatResponse
 		res, err = stat(uctx, &provider.Reference{ResourceId: resourceOf(l)})
@@ -434,14 +442,15 @@ func (s *service) transfer(ctx context.Context, a transferArgs) (invoke.Result, 
 		case res.GetStatus().GetCode() != rpc.Code_CODE_OK:
 			err = status.NewErrtypeFromStatus(res.GetStatus())
 		case !res.GetInfo().GetPermissionSet().GetAddGrant():
-			err = errtypes.PermissionDenied(a.Initiator + " is not allowed to share the resource")
+			err = errtypes.PermissionDenied(a.Initiator.String() + " is not allowed to share the resource")
 		}
 	}
 	ref := linkRefID(l.Id)
+	// The table keeps the opaque id of the initiator.
 	if err == nil {
 		err = m.TransferPublicShare(ctx, ref, u.GetId().GetOpaqueId())
 	}
-	audit(ctx, "transfer", l, err, false, map[string]string{"from": l.UIDInitiator, "to": a.Initiator})
+	audit(ctx, "transfer", l, err, false, map[string]string{"from": l.UIDInitiator, "to": a.Initiator.String()})
 	if err != nil {
 		return nil, fmt.Errorf("transferring public link %d: %w", l.Id, err)
 	}
@@ -453,9 +462,10 @@ func (s *service) move(ctx context.Context, a moveArgs) (invoke.Result, error) {
 	if err != nil {
 		return nil, err
 	}
-	as := slices.Compact([]string{l.UIDOwner, l.UIDInitiator})
-	if a.As != "" {
-		as = []string{a.As}
+	as := admin.Candidates(a.As.ID())
+	if len(as) == 0 {
+		ps := l.AsCS3PublicShare()
+		as = admin.Candidates(ps.GetOwner(), ps.GetCreator())
 	}
 	var info *provider.ResourceInfo
 	actor, err := admin.ActAsFirst(ctx, as, func(uctx context.Context) (*rpc.Status, error) {
@@ -471,7 +481,7 @@ func (s *service) move(ctx context.Context, a moveArgs) (invoke.Result, error) {
 	if err == nil {
 		err = m.MovePublicShare(ctx, ref, info.GetId(), owner)
 	}
-	audit(ctx, "move", l, err, false, map[string]string{"acted_as": actor, "path": a.Path, "new_owner": owner})
+	audit(ctx, "move", l, err, false, map[string]string{"acted_as": actor.GetId().GetOpaqueId(), "path": a.Path, "new_owner": owner})
 	if err != nil {
 		return nil, fmt.Errorf("moving public link %d: %w", l.Id, err)
 	}
@@ -531,8 +541,8 @@ func (s *service) adminLink(l *model.PublicLink, path string) (invoke.Result, er
 }
 
 func resolvePath(users *admin.Users, l *model.PublicLink) string {
-	for _, u := range linkUsers(l) {
-		uctx := users.As(u)
+	for _, id := range linkUsers(l) {
+		uctx := users.As(id)
 		if uctx == nil {
 			continue
 		}
@@ -595,8 +605,9 @@ func isExpired(l *model.PublicLink) bool {
 
 // linkUsers returns the users a link is acted on as, in order: the initiator
 // manages the link, and the owner of a project can be a service account.
-func linkUsers(l *model.PublicLink) []string {
-	return slices.Compact(slices.DeleteFunc([]string{l.UIDInitiator, l.UIDOwner}, func(v string) bool { return v == "" }))
+func linkUsers(l *model.PublicLink) []*userpb.UserId {
+	ps := l.AsCS3PublicShare()
+	return admin.Candidates(ps.GetCreator(), ps.GetOwner())
 }
 
 func linkRef(id, token string) (*link.PublicShareReference, error) {
