@@ -476,6 +476,10 @@ func (s *svc) OCMReceivedShareToDriveItem(ctx context.Context, receivedOCMShare 
 	return converter.OCMReceivedShareToDriveItem(ctx, receivedOCMShare, roleConverter)
 }
 
+func receivedShareWebappMetadata(ctx context.Context, received *ocm.ReceivedShare) *receivedWebappMetadata {
+	return ocmconversions.WebappMetadataForReceivedShare(ctx, received)
+}
+
 func (s *svc) cs3sharesToPermissions(ctx context.Context, shares []*GenericShare) ([]libregraph.Permission, error) {
 	log := appctx.GetLogger(ctx)
 	permissions := make([]libregraph.Permission, 0, len(shares))

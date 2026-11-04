@@ -32,13 +32,21 @@ import (
 // once and swap the returned client per test.
 type testResolver struct {
 	service.Clients
-	mu sync.Mutex
-	gw gateway.GatewayAPIClient
+	mu               sync.Mutex
+	gw               gateway.GatewayAPIClient
+	gatewayFailAfter int
+	gatewayErr       error
 }
 
 func (r *testResolver) Gateway(context.Context) (gateway.GatewayAPIClient, error) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
+	if r.gatewayFailAfter > 0 {
+		r.gatewayFailAfter--
+		if r.gatewayFailAfter == 0 {
+			return nil, r.gatewayErr
+		}
+	}
 	return r.gw, nil
 }
 
@@ -55,5 +63,19 @@ func stampGateway(gw gateway.GatewayAPIClient) {
 	})
 	globalTestResolver.mu.Lock()
 	globalTestResolver.gw = gw
+	globalTestResolver.gatewayFailAfter = 0
+	globalTestResolver.gatewayErr = nil
+	globalTestResolver.mu.Unlock()
+}
+
+// stampGatewayErrorAfter fails the nth Gateway call (1-based). Earlier calls
+// still return the stamped client. stampGateway clears the countdown.
+func stampGatewayErrorAfter(n int, err error) {
+	globalTestResolverOnce.Do(func() {
+		service.SetGlobal(globalTestResolver)
+	})
+	globalTestResolver.mu.Lock()
+	globalTestResolver.gatewayFailAfter = n
+	globalTestResolver.gatewayErr = err
 	globalTestResolver.mu.Unlock()
 }
