@@ -27,6 +27,7 @@ import (
 
 	gateway "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
+	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	revaconfig "github.com/cs3org/reva/v3/cmd/revad/pkg/config"
 	"github.com/cs3org/reva/v3/internal/grpc/interceptors/auth"
 	"github.com/cs3org/reva/v3/pkg/admin/adminpb"
@@ -43,11 +44,27 @@ import (
 const testSecret = "admin-service-test-secret"
 
 // fakeGateway lets the interceptor resolve a gateway when it refuses a token;
-// any call on it panics.
+// it knows only the user marie and any other call panics.
 type fakeGateway struct{ service.Clients }
 
 func (fakeGateway) Gateway(context.Context) (gateway.GatewayAPIClient, error) {
-	return struct{ gateway.GatewayAPIClient }{}, nil
+	return userGateway{}, nil
+}
+
+type userGateway struct{ gateway.GatewayAPIClient }
+
+func (userGateway) GetUserByClaim(_ context.Context, req *userpb.GetUserByClaimRequest, _ ...grpc.CallOption) (*userpb.GetUserByClaimResponse, error) {
+	if req.GetClaim() == "username" && req.GetValue() == "marie" {
+		return &userpb.GetUserByClaimResponse{
+			Status: &rpc.Status{Code: rpc.Code_CODE_OK},
+			User:   &userpb.User{Id: &userpb.UserId{Idp: "cernbox", OpaqueId: "marie"}, Username: "marie", Groups: []string{"physics"}},
+		}, nil
+	}
+	return &userpb.GetUserByClaimResponse{Status: &rpc.Status{Code: rpc.Code_CODE_NOT_FOUND}}, nil
+}
+
+func (userGateway) GetUserGroups(context.Context, *userpb.GetUserGroupsRequest, ...grpc.CallOption) (*userpb.GetUserGroupsResponse, error) {
+	return &userpb.GetUserGroupsResponse{Status: &rpc.Status{Code: rpc.Code_CODE_OK}, Groups: []string{"physics"}}, nil
 }
 
 func setup(t *testing.T) {

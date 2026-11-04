@@ -14,6 +14,7 @@ import (
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	typesv1beta1 "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
 	"github.com/cs3org/reva/v3/pkg/appctx"
+	"github.com/cs3org/reva/v3/pkg/errtypes"
 	"github.com/cs3org/reva/v3/pkg/permissions"
 	revashare "github.com/cs3org/reva/v3/pkg/share"
 	"google.golang.org/genproto/protobuf/field_mask"
@@ -877,5 +878,111 @@ func TestListShareSpaces(t *testing.T) {
 	}
 	if len(spaces) != 1 || spaces[0] != "space-a" {
 		t.Errorf("Expected [space-a], got %v", spaces)
+	}
+}
+
+func shareRefByID(id string) *collaboration.ShareReference {
+	return &collaboration.ShareReference{Spec: &collaboration.ShareReference_Id{Id: &collaboration.ShareId{OpaqueId: id}}}
+}
+
+// A legacy row can have an initiator that is not the owner: both of them see
+// the share, and any other user gets not found, never permission denied.
+func TestGetShareOfOwnerOrInitiator(t *testing.T) {
+	mgr, err, teardown := setupSuiteShares(t)
+	defer teardown(t)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	ownerctx := getUserContext("owner")
+	owner, _ := appctx.ContextGetUser(ownerctx)
+	share, err := mgr.Share(ownerctx, getRandomFile(owner), getUserShareGrant("sharee", "file"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	ref := shareRefByID(share.Id.OpaqueId)
+	if err := mgr.(*ShareMgr).TransferShare(ownerctx, ref, "initiator"); err != nil {
+		t.Fatal(err)
+	}
+
+	for _, u := range []string{"owner", "initiator"} {
+		got, err := mgr.GetShare(getUserContext(u), ref)
+		if err != nil {
+			t.Fatalf("%s: %v", u, err)
+		}
+		if got.Owner.OpaqueId != "owner" || got.Creator.OpaqueId != "initiator" {
+			t.Fatalf("%s: got owner %s and creator %s", u, got.Owner.OpaqueId, got.Creator.OpaqueId)
+		}
+	}
+
+	// No gateway is configured, so the path of the share cannot be resolved:
+	// that also answers not found.
+	_, err = mgr.GetShare(getUserContext("other"), ref)
+	if _, ok := err.(errtypes.IsNotFound); !ok {
+		t.Fatalf("another user: got %v, want not found", err)
+	}
+}
+
+func TestListSharesByOwner(t *testing.T) {
+	mgr, err, teardown := setupSuiteShares(t)
+	defer teardown(t)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	for _, owner := range []string{"alice", "bob"} {
+		userctx := getUserContext(owner)
+		user, _ := appctx.ContextGetUser(userctx)
+		file := getRandomFile(user)
+		file.Id.OpaqueId = owner
+		if _, err := mgr.Share(userctx, file, getUserShareGrant("sharee", "file")); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	ownerFilter := func(u string) *collaboration.Filter {
+		return &collaboration.Filter{Type: collaboration.Filter_TYPE_OWNER, Term: &collaboration.Filter_Owner{Owner: &userpb.UserId{OpaqueId: u}}}
+	}
+	shares, err := mgr.(*ShareMgr).ListModelShares(nil, []*collaboration.Filter{ownerFilter("alice")}, true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(shares) != 1 || shares[0].UIDOwner != "alice" {
+		t.Fatalf("got %v, want the share of alice", shares)
+	}
+	shares, err = mgr.(*ShareMgr).ListModelShares(nil, []*collaboration.Filter{ownerFilter("alice"), ownerFilter("bob")}, true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(shares) != 2 {
+		t.Fatalf("got %d shares, want 2", len(shares))
+	}
+}
+
+func TestMoveShareToAnotherSpace(t *testing.T) {
+	mgr, err, teardown := setupSuiteShares(t)
+	defer teardown(t)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	userctx := getUserContext("owner")
+	user, _ := appctx.ContextGetUser(userctx)
+	file := getRandomFile(user)
+	file.Id.SpaceId = "space-a"
+	share, err := mgr.Share(userctx, file, getUserShareGrant("sharee", "file"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	ref := shareRefByID(share.Id.OpaqueId)
+	if err := mgr.(*ShareMgr).MoveShare(userctx, ref, &provider.ResourceId{StorageId: "store-b", OpaqueId: "200", SpaceId: "space-b"}, "newowner"); err != nil {
+		t.Fatal(err)
+	}
+	got, err := mgr.(*ShareMgr).GetShareUnfiltered(userctx, ref)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.UIDOwner != "newowner" || got.Instance != "store-b" || got.Inode != "200" || got.SpaceID != "space-b" {
+		t.Fatalf("got %+v", got.ProtoShare)
 	}
 }

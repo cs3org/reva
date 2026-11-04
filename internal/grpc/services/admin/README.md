@@ -497,6 +497,181 @@ The protos import CS3 messages. `make protobuf` needs a checkout of
 [cs3apis](https://github.com/cs3org/cs3apis) in `CS3APIS_DIR` (default
 `../cs3apis`).
 
+## Shares
+
+The `usershareprovider` exposes the operations an operator needs on the shares
+of any user. All of them read or change the share database, so they are
+shared: one instance of the service runs each call.
+
+```
+list         owner= initiator= sharee= id= space= path= [as=] [include_orphans=] [include_expired=] [resolve_paths=]   (stream)
+get          id=
+update       id= [role=] [expires_at=<date|RFC 3339|none>] [fallback=]
+remove       id= [db_only=] [fallback=]
+sync_expiry  id=          remove the storage grant of an expired share now, keep the record
+transfer     id= initiator=   the new initiator must be allowed to add a grant on the resource
+move         id= path= [as=] [apply_grant=]   (dangerous) point the share at a new path; its owner becomes the owner of the share
+mark_orphan  id=
+```
+
+`list` needs at least one of `owner`, `initiator`, `sharee`, `id`, `space` or
+`path`: the share table is too large to read without a filter. Each result,
+streamed or not, is the JSON form of the `AdminShare` message of the typed
+Admin API: `share` (the CS3 share, in protojson), `orphan`, `path` and
+`extra` (`initial_path`, `orphaned_at`, `expired_at`).
+
+An invocation runs with the admin token of the operator, and no CS3 endpoint
+accepts that token. So a call that needs the storage (a stat, a grant, the
+gateway's `UpdateShare` and `RemoveShare`) is made as a user, with
+[`admin.ActAs`](../../../../pkg/admin/identity.go): a short-lived token with
+the owner scope, signed with the shared JWT secret, that never leaves the
+server. `update` and `remove` act as the share's initiator, then as its owner
+if the initiator is refused or does not exist anymore, so that the gateway
+applies its usual checks and changes the storage grant. A path is resolved as
+the user in `as` (or `owner`, `initiator` for `list`).
+
+Every mutation logs an audit event `action=usershareprovider.<name>`, with
+the operator as actor, `target=share:<id>`, the user acted as, and
+`fallback=true` when the Admin API calls it for a user command that fell back
+to admin rights.
+
+Only the `sql` driver has what these invocations need. With another driver
+they are listed, and answer that the driver does not support them.
+
+```
+reva admin invoke usershareprovider list owner=einstein resolve_paths=true
+reva admin invoke usershareprovider update id=4711 expires_at=2026-12-31
+reva admin invoke usershareprovider remove id=4711 db_only=true
+```
+
+## Public links
+
+The `publicshareprovider` has the same operations on the public links of any
+user, all shared too. A link is given by `id=` or by `token=`.
+
+```
+expiring     from= to= [after_expiration=] [after_id=] [limit=]   the links that expire in a window, by page
+list         id= token= owner= initiator= space= [include_orphans=] [include_expired=] [resolve_paths=]   (stream)
+get          id= | token=
+update       id= | token= [role=viewer|uploader|editor] [expires_at=<date|RFC 3339|none>] [password=] [fallback=]
+remove       id= | token= [db_only=] [fallback=]
+transfer     id= | token= initiator=   the new initiator must be allowed to add a grant on the resource
+move         id= | token= path= [as=]   (dangerous) point the link at a new path; its owner becomes the owner of the link
+mark_orphan  id= | token=
+```
+
+Each result of `list`, `get` and the mutations is the JSON form of the
+`AdminPublicShare` message: `public_share` (the CS3 link, token included),
+`orphan`, `path`, `password_protected` and `extra` (`initial_path`,
+`orphaned_at`, and `url` when `public_link_base_url` is set). The password and
+its hash are never in a result. An empty `password=` removes the password.
+
+`update` and `remove` act as the initiator of the link, then as its owner,
+through the gateway, like the share invocations. `remove` of an orphan, or with
+`db_only`, deletes the record only. With `pub_rw_link_max_expiration` set (the
+option of the OCS and Graph services, in seconds after the end of today), a
+change of the role or of the expiration of an editor link must give it an
+expiration within that limit. The audit events are
+`action=publicshareprovider.<name>`, with `target=link:<id>`.
+
+```toml
+[grpc.services.publicshareprovider]
+driver = "sql"
+pub_rw_link_max_expiration = 2592000              # 0 or unset: no rule
+public_link_base_url = "https://example.org/s/"   # unset: no url in the results
+```
+
+## Projects
+
+The `spacesregistry` exposes the catalogue of project spaces to operators. The
+CS3 calls show a project only to its members; these show every project.
+
+```
+list         [type=project] [status=] [owner=] [member=] [created_after=] [created_before=] [include_archived=]   (stream)
+get          id= | name=
+update       id= | name=  [description=] [readme=<path>] [thumbnail=<path>] [fallback=]
+set_status   id= | name=  status=creating|active|archiving|archived
+set_owner    id= | name=  owner=
+create       name= owner= [path=] [storage_id=] [space_id=] [readers=] [writers=] [admins=] [description=] [status=]   (dangerous)
+delete       id= | name=  [hard=]   (dangerous)
+check        [status=] [owner=]   (stream)
+flush_cache
+```
+
+A project is selected by its space id (`<storage id>$<space id>` or the space
+id alone) or by its name. A name selects the project that is not archived, or
+else the one archived last. Each result is the JSON form of the `AdminSpace`
+message of the typed Admin API: `space` (the CS3 storage space, in protojson),
+`status` and `extra`, with the columns that CS3 cannot carry. `member` matches
+the owner and the role groups against the groups that the gateway gives for
+the user, and sets the permissions of that user in `space.rootInfo`.
+
+`create` records a space that the storage already serves. A value that is not
+given comes from a template of the `sql` driver, with the fields `.Name` and
+`.Initial` (the first letter of the name) and the sprig functions. Without a
+template, the value is required:
+
+```toml
+[grpc.services.spacesregistry.drivers.sql]
+path_template = "/eos/project/{{ .Initial }}/{{ .Name }}"
+storage_id_template = "newproject-{{ .Initial }}"
+readers_group_template = "cernbox-project-{{ .Name }}-readers"
+writers_group_template = "cernbox-project-{{ .Name }}-writers"
+admins_group_template = "cernbox-project-{{ .Name }}-admins"
+```
+
+`update` is the server side of the owner fallback: it makes the change as the
+owner of the project, through the same check as a user call, which lets only
+the owner and the admins group change a project. `check` reports, for each
+project with a problem, findings of these kinds: `owner_missing`,
+`owner_expiring`, `owner_blocked`, `path_missing` (the path does not stat as the
+owner), `group_unset`, `group_missing` and `no_members`, or `*_error` when a
+call failed.
+
+Each instance caches the project list, and a mutation drops only the cache of
+the instance that ran it. `flush_cache` is not shared, so it runs on every
+instance:
+
+```
+reva admin invoke spacesregistry set_status name=cernbox status=archiving
+reva admin invoke spacesregistry flush_cache
+```
+
+Every mutation logs an audit event `action=spacesregistry.<name>` with
+`target=project:<name or id>`. Only the `sql` driver has what these
+invocations need.
+
+## Routing
+
+The `dynamic` storage registry reads its routing table (the `routing` SQL
+table) into memory. Each instance (usually one per gateway) has its own copy.
+The `storageregistry` invocations change the table and load it again without a
+restart:
+
+```
+routes                              list the table
+resolve        path=                the mounts that serve a path, on each instance
+route_add      path= mount_id=      add or change a route (table only)
+route_remove   path=                remove a route (table only)
+route_reload                        load the table again into memory
+```
+
+`route_add` and `route_remove` change only the table, so they run on one
+instance (they are shared). They have no effect until you reload. `route_reload`
+is not shared: called by service name, it runs on every instance. The flow is
+always a change, then a reload:
+
+```
+reva admin invoke storageregistry route_add path=/eos/user/z mount_id=eoshome-i05
+reva admin invoke storageregistry route_reload
+reva admin invoke storageregistry resolve path=/eos/user/z/zed   # one line per instance
+```
+
+If a reload fails on an instance, that instance keeps its old routes. Run
+`route_reload` again. `route_add` refuses a mount that is not in the `rules` of
+the registry, because the reload would skip the route. The `static` driver has
+no routing table and answers "not supported".
+
 ## Adding an invocation to a service (for developers)
 
 A service exposes admin operations by building an [`invoke.Set`](../../../../pkg/invoke/set.go)

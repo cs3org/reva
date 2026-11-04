@@ -168,10 +168,6 @@ func (c *Client) SetQuota(ctx context.Context, user eosclient.Authorization, roo
 	msg := new(erpc.NSRequest_QuotaRequest)
 	msg.Path = []byte(info.QuotaNode)
 	msg.Id = new(erpc.RoleId)
-	uidInt, err := strconv.ParseUint(info.UID, 10, 64)
-	if err != nil {
-		return err
-	}
 
 	if user.Role.GID == eosclient.ProjectQuotaGID {
 		// new style project quota: we set a group quota on the space itself
@@ -179,6 +175,10 @@ func (c *Client) SetQuota(ctx context.Context, user eosclient.Authorization, roo
 		projectGID, _ := strconv.ParseUint(eosclient.ProjectQuotaGID, 10, 64)
 		msg.Id.Gid = projectGID
 	} else {
+		uidInt, err := strconv.ParseUint(info.UID, 10, 64)
+		if err != nil {
+			return err
+		}
 		// We set a quota for a user, not a group!
 		msg.Id.Uid = uidInt
 		msg.Id.Gid = 0

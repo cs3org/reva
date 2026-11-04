@@ -24,4 +24,5 @@ const (
 	EventFeedback      = "feedback"
 	EventOfficeMention = "office-mention"
 	EventTakeout       = "takeout"
+	EventLinkExpiry    = "link-expiry"
 )

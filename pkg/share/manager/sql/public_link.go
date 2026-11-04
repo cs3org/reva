@@ -383,6 +383,41 @@ func (m *PublicShareMgr) ListPublicLinks(u *user.User, filters []*link.ListPubli
 	return links, nil
 }
 
+// ListPublicLinksInSpace returns the public links of one space that match the filters.
+func (m *PublicShareMgr) ListPublicLinksInSpace(spaceID string, filters []*link.ListPublicSharesRequest_Filter, includeOrphans bool) ([]model.PublicLink, error) {
+	if spaceID == "" {
+		return nil, errtypes.BadRequest("no space id given")
+	}
+	query := m.db.Model(&model.PublicLink{}).Where("space_id = ?", spaceID)
+	if !includeOrphans {
+		query = query.Where("orphan = ?", false).Where("orphaned_at IS NULL")
+	}
+	m.appendLinkFiltersToQuery(query, filters)
+
+	var links []model.PublicLink
+	if err := query.Find(&links).Error; err != nil {
+		return nil, err
+	}
+	return links, nil
+}
+
+// ExpiringPublicLinks returns at most limit links that are not orphans and
+// expire in [from, to), ordered by expiration and id, after the link at
+// (afterExpiration, afterID). An afterID of 0 starts from the first link.
+func (m *PublicShareMgr) ExpiringPublicLinks(from, to, afterExpiration time.Time, afterID uint, limit int) ([]model.PublicLink, error) {
+	// sqlite compares times as text, and the links are stored in local time.
+	from, to, afterExpiration = from.Local(), to.Local(), afterExpiration.Local()
+	query := m.db.Model(&model.PublicLink{}).
+		Where("orphan = ? AND orphaned_at IS NULL", false).
+		Where("expiration >= ? AND expiration < ?", from, to)
+	if afterID != 0 {
+		query = query.Where("(expiration > ? OR (expiration = ? AND id > ?))", afterExpiration, afterExpiration, afterID)
+	}
+	var links []model.PublicLink
+	err := query.Order("expiration, id").Limit(limit).Find(&links).Error
+	return links, err
+}
+
 // TransferPublicShare transfers a publicshare to a new initiator. Only to be used for shares in projects.
 func (m *PublicShareMgr) TransferPublicShare(ctx context.Context, ref *link.PublicShareReference, newInitiator string) error {
 	if newInitiator == "" {
@@ -417,12 +452,13 @@ func (m *PublicShareMgr) MovePublicShare(ctx context.Context, ref *link.PublicSh
 		return err
 	}
 
-	res := m.db.Model(&link).Update("uid_owner", newOwner).Update("inode", newLocation.OpaqueId).Update("instance", newLocation.StorageId)
-	if res.Error != nil {
-		return res.Error
+	updates := map[string]any{"uid_owner": newOwner, "inode": newLocation.OpaqueId, "instance": newLocation.StorageId}
+	// The reconciliation jobs list the links of one space, so a link moved
+	// to another space must carry the new space id.
+	if newLocation.SpaceId != "" {
+		updates["space_id"] = newLocation.SpaceId
 	}
-
-	return nil
+	return m.db.Model(&link).Updates(updates).Error
 }
 
 func (m *PublicShareMgr) GetPublicLink(ctx context.Context, ref *link.PublicShareReference, filter bool) (*model.PublicLink, error) {
