@@ -75,6 +75,9 @@ message InvokeRequest {
 message InvokeResponse {
   string result_json = 1;
   string error = 2;
+  // code is the google.golang.org/grpc/codes value of error. A node that does
+  // not report a code sends 0 with an error: read it as Unknown.
+  int32 code = 3;
 }
 
 // The generated Go stubs are exported from pkg/control/controlpb. Regenerate
