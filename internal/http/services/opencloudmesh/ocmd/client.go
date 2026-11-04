@@ -34,6 +34,7 @@ import (
 	"github.com/cs3org/reva/v3/pkg/appctx"
 	"github.com/cs3org/reva/v3/pkg/errtypes"
 	"github.com/cs3org/reva/v3/pkg/ocm/client"
+	"github.com/cs3org/reva/v3/pkg/ocm/httpsig"
 	"github.com/pkg/errors"
 )
 
@@ -184,9 +185,9 @@ func (c *OCMClient) httpget(ctx context.Context, url string, limit int64) ([]byt
 	return body, nil
 }
 
-// NewShare sends a new OCM share to the remote system.
+// NewShare sends a new OCM share to the remote system. If key is not nil, it signs the request.
 // https://cs3org.github.io/OCM-API/docs.html?branch=develop&repo=OCM-API&user=cs3org#/paths/~1shares/post
-func (c *OCMClient) NewShare(ctx context.Context, endpoint string, r *NewShareRequest) (*NewShareResponse, error) {
+func (c *OCMClient) NewShare(ctx context.Context, endpoint string, r *NewShareRequest, key *httpsig.Key) (*NewShareResponse, error) {
 	url, err := url.JoinPath(endpoint, "shares")
 	if err != nil {
 		return nil, err
@@ -203,6 +204,11 @@ func (c *OCMClient) NewShare(ctx context.Context, endpoint string, r *NewShareRe
 		return nil, errors.Wrap(err, "error creating request")
 	}
 	req.Header.Set("Content-Type", "application/json")
+	if key != nil {
+		if err := key.Sign(req, body); err != nil {
+			return nil, errors.Wrap(err, "error signing request")
+		}
+	}
 
 	resp, err := c.client.Do(req)
 	if err != nil {
@@ -241,9 +247,9 @@ func (c *OCMClient) parseNewShareResponse(r *http.Response) (*NewShareResponse, 
 	return nil, errtypes.InternalError(string(body))
 }
 
-// InviteAccepted informs the remote end that the invitation was accepted
+// InviteAccepted informs the remote end that the invitation was accepted. If key is not nil, it signs the request.
 // https://cs3org.github.io/OCM-API/docs.html?branch=develop&repo=OCM-API&user=cs3org#/paths/~1invite-accepted/post
-func (c *OCMClient) InviteAccepted(ctx context.Context, endpoint string, r *InviteAcceptedRequest) (*RemoteUser, error) {
+func (c *OCMClient) InviteAccepted(ctx context.Context, endpoint string, r *InviteAcceptedRequest, key *httpsig.Key) (*RemoteUser, error) {
 	url, err := url.JoinPath(endpoint, "invite-accepted")
 	if err != nil {
 		return nil, err
@@ -260,6 +266,11 @@ func (c *OCMClient) InviteAccepted(ctx context.Context, endpoint string, r *Invi
 		return nil, errors.Wrap(err, "error creating request")
 	}
 	req.Header.Set("Content-Type", "application/json")
+	if key != nil {
+		if err := key.Sign(req, body); err != nil {
+			return nil, errors.Wrap(err, "error signing request")
+		}
+	}
 
 	resp, err := c.client.Do(req)
 	if err != nil {
@@ -313,7 +324,8 @@ func (c *OCMClient) NewNotification(ctx context.Context, endpoint string, r *Inv
 
 // ExchangeToken performs an OAuth2 authorization_code exchange against the
 // sender's token endpoint, returning the short-lived access token and its TTL.
-func (c *OCMClient) ExchangeToken(ctx context.Context, tokenEndpoint, code, clientID string) (string, int64, error) {
+// If key is not nil, it signs the request.
+func (c *OCMClient) ExchangeToken(ctx context.Context, tokenEndpoint, code, clientID string, key *httpsig.Key) (string, int64, error) {
 	values := url.Values{}
 	values.Set("grant_type", "authorization_code")
 	values.Set("code", code)
@@ -321,11 +333,17 @@ func (c *OCMClient) ExchangeToken(ctx context.Context, tokenEndpoint, code, clie
 		values.Set("client_id", clientID)
 	}
 
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, tokenEndpoint, strings.NewReader(values.Encode()))
+	body := []byte(values.Encode())
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, tokenEndpoint, bytes.NewReader(body))
 	if err != nil {
 		return "", 0, errors.Wrap(err, "error creating token exchange request")
 	}
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	if key != nil {
+		if err := key.Sign(req, body); err != nil {
+			return "", 0, errors.Wrap(err, "error signing token exchange request")
+		}
+	}
 
 	resp, err := c.client.Do(req)
 	if err != nil {

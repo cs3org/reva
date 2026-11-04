@@ -44,6 +44,7 @@ import (
 	"github.com/cs3org/reva/v3/pkg/errtypes"
 	"github.com/cs3org/reva/v3/pkg/mime"
 	"github.com/cs3org/reva/v3/pkg/ocm/client"
+	"github.com/cs3org/reva/v3/pkg/ocm/httpsig"
 	"github.com/cs3org/reva/v3/pkg/rhttp/router"
 	"github.com/cs3org/reva/v3/pkg/service"
 	"github.com/cs3org/reva/v3/pkg/sharedconf"
@@ -70,6 +71,7 @@ type driver struct {
 	discoveryCache  *ttlcache.Cache
 	ocmClient       *ocmd.OCMClient
 	webdavTransport http.RoundTripper
+	signingKey      *httpsig.Key
 }
 
 type config struct {
@@ -83,6 +85,12 @@ type config struct {
 	// allowed_federation_cidrs key on both the storage provider and the data
 	// provider; configuring one does not authorize the other.
 	AllowedFederationCIDRs []string `mapstructure:"allowed_federation_cidrs"`
+	// SigningKey is the PEM file of the Ed25519 key that signs the token requests of the
+	// code flow. It needs ProviderDomain: the token endpoint finds the key through client_id.
+	SigningKey string `mapstructure:"signing_key"`
+	// ProviderDomain is the domain of this server. If set, it is the client_id of token
+	// requests, as the OCM spec requires. Else the client_id is the IdP of the receiving user.
+	ProviderDomain string `mapstructure:"provider_domain"`
 }
 
 func (c *config) ApplyDefaults() {
@@ -107,6 +115,16 @@ func New(ctx context.Context, m map[string]any) (storage.FS, error) {
 		return nil, errors.Wrapf(err, "ocmreceived: invalid allowed_federation_cidrs")
 	}
 
+	var key *httpsig.Key
+	if c.SigningKey != "" {
+		if c.ProviderDomain == "" {
+			return nil, errors.New("ocmreceived: signing_key needs provider_domain")
+		}
+		if key, err = httpsig.LoadKey(c.SigningKey); err != nil {
+			return nil, err
+		}
+	}
+
 	disco := ttlcache.NewCache()
 	_ = disco.SetTTL(5 * time.Minute)
 
@@ -129,15 +147,20 @@ func New(ctx context.Context, m map[string]any) (storage.FS, error) {
 		discoveryCache:  disco,
 		ocmClient:       ocmd.NewPublicOnlyClientWithConfig(tcfg),
 		webdavTransport: client.NewPublicOnlyRoundTripper(tcfg),
+		signingKey:      key,
 	}
 	return d, nil
 }
 
 func (d *driver) newWebDAVClient(endpoint string, headers map[string]string) *gowebdav.Client {
-	c := gowebdav.NewClient(endpoint, "", "")
-	for key, value := range headers {
-		c.SetHeader(key, value)
-	}
+	// The default gowebdav auth sends the first request of a new client two times, so an upload writes the file two times.
+	// The interceptor runs after BasicAuth, so these headers replace its empty Basic header.
+	c := gowebdav.NewAuthClient(endpoint, gowebdav.NewPreemptiveAuth(&gowebdav.BasicAuth{}))
+	c.SetInterceptor(func(_ string, rq *http.Request) {
+		for key, value := range headers {
+			rq.Header.Set(key, value)
+		}
+	})
 	c.SetTransport(d.webdavTransport)
 	return c
 }
@@ -307,8 +330,11 @@ func (d *driver) lookupReceiverUserIDP(ctx context.Context, userID *userpb.UserI
 }
 
 func (d *driver) exchangeAccessToken(ctx context.Context, share *ocmpb.ReceivedShare, tokenEndpoint, secret string) (string, error) {
-	clientID := receiverClientIDWithLookup(ctx, share, d.lookupReceiverUserIDP)
-	accessToken, _, err := d.ocmClient.ExchangeToken(ctx, tokenEndpoint, secret, clientID)
+	clientID := d.c.ProviderDomain
+	if clientID == "" {
+		clientID = receiverClientIDWithLookup(ctx, share, d.lookupReceiverUserIDP)
+	}
+	accessToken, _, err := d.ocmClient.ExchangeToken(ctx, tokenEndpoint, secret, clientID, d.signingKey)
 	if err != nil {
 		return "", err
 	}

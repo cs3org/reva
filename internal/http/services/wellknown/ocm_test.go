@@ -19,13 +19,22 @@
 package wellknown
 
 import (
+	"context"
+	"crypto/ed25519"
+	"crypto/rand"
+	"crypto/x509"
 	"encoding/json"
+	"encoding/pem"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
 	"slices"
 	"strings"
 	"sync"
 	"testing"
+
+	"github.com/cs3org/reva/v3/pkg/rhttp/router"
 )
 
 func TestInitWithCodeFlowEnabled(t *testing.T) {
@@ -97,6 +106,82 @@ func TestInitCapabilitiesDoNotDuplicateExchangeToken(t *testing.T) {
 	}
 	if count != 1 {
 		t.Errorf("expected exactly 1 exchange-token capability, got %d in %v", count, h.data.Capabilities)
+	}
+}
+
+func writeKeyFile(t *testing.T) string {
+	t.Helper()
+	_, private, err := ed25519.GenerateKey(rand.Reader)
+	if err != nil {
+		t.Fatal(err)
+	}
+	der, err := x509.MarshalPKCS8PrivateKey(private)
+	if err != nil {
+		t.Fatal(err)
+	}
+	keyFile := filepath.Join(t.TempDir(), "ocm.pem")
+	if err := os.WriteFile(keyFile, pem.EncodeToMemory(&pem.Block{Type: "PRIVATE KEY", Bytes: der}), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	return keyFile
+}
+
+func TestInitWithSigningKey(t *testing.T) {
+	keyFile := writeKeyFile(t)
+
+	s, err := New(context.Background(), map[string]any{
+		"ocmprovider": map[string]any{
+			"endpoint":    "https://cernbox.cern.ch",
+			"signing_key": keyFile,
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = s.Close() })
+	r := router.New()
+	s.Routes(r.Service("wellknown"))
+
+	rec := httptest.NewRecorder()
+	r.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, mount+"/ocm", nil))
+	var disco OcmDiscoveryData
+	if err := json.Unmarshal(rec.Body.Bytes(), &disco); err != nil {
+		t.Fatal(err)
+	}
+	if !slices.Contains(disco.Capabilities, "http-sig") {
+		t.Errorf("expected http-sig capability, got %v", disco.Capabilities)
+	}
+	if want := "https://cernbox.cern.ch/.well-known/jwks.json"; disco.JwksURI != want {
+		t.Errorf("jwksUri: got %s, want %s", disco.JwksURI, want)
+	}
+
+	rec = httptest.NewRecorder()
+	r.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, mount+"/jwks.json", nil))
+	var set struct {
+		Keys []struct {
+			Kid string `json:"kid"`
+		} `json:"keys"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &set); err != nil {
+		t.Fatal(err)
+	}
+	if rec.Code != http.StatusOK || len(set.Keys) != 1 || set.Keys[0].Kid == "" {
+		t.Errorf("expected one key with a kid, got %d: %s", rec.Code, rec.Body)
+	}
+}
+
+func TestInitStrictHTTPSig(t *testing.T) {
+	h := &wkocmHandler{}
+	if err := h.init(&OcmProviderConfig{Endpoint: "https://cernbox.cern.ch", HTTPSigMode: "strict"}); err == nil {
+		t.Error("expected an error for strict mode without signing_key")
+	}
+
+	h = &wkocmHandler{}
+	if err := h.init(&OcmProviderConfig{Endpoint: "https://cernbox.cern.ch", HTTPSigMode: "strict", SigningKey: writeKeyFile(t)}); err != nil {
+		t.Fatal(err)
+	}
+	if !slices.Contains(h.data.Criteria, "must-use-http-sig") {
+		t.Errorf("expected must-use-http-sig criterion, got %v", h.data.Criteria)
 	}
 }
 
