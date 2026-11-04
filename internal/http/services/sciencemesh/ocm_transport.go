@@ -27,9 +27,11 @@ import (
 
 // publicOCMTransportConfig builds the runtime transport config for the
 // public-only OCM discovery client. It copies the existing integer timeout
-// (scaled to a duration) and insecure bool, parses the shared CIDR exception
-// list, and leaves AllowLoopback and UseEnvProxy false: ScienceMesh public
-// discovery has no loopback topology and stays in direct mode.
+// (scaled to a duration), insecure bool, and ocm_client_use_env_proxy flag,
+// parses the shared CIDR exception list, and leaves AllowLoopback false:
+// ScienceMesh public discovery has no loopback topology. UseEnvProxy false
+// (the default) leaves the proxy unset. True installs
+// http.ProxyFromEnvironment and keeps the policy dialer.
 //
 // The address parser stays in the shared package; this helper only copies
 // validated service config into the runtime transport config. It must run
@@ -43,6 +45,7 @@ func (c *config) publicOCMTransportConfig() (client.TransportConfig, error) {
 	return client.TransportConfig{
 		Timeout:                time.Duration(c.OCMClientTimeout) * time.Second,
 		Insecure:               c.OCMClientInsecure,
+		UseEnvProxy:            c.OCMClientUseEnvProxy,
 		AllowedFederationCIDRs: cidrs,
 	}, nil
 }
