@@ -58,10 +58,10 @@ This means each process must register the jobs it is expected to run. Any
 process can still enqueue a job it does not run: the runners tag the queue
 consumer of each job they register, so `Enqueue` accepts a job some runner has
 registered, even if it is down right now, and refuses a job nobody registered.
-`reva admin jobs forget <job>` drops a job that was removed from the code, once
+`reva job forget <job>` drops a job that was removed from the code, once
 it has no pending runs.
 
-Draining a node with `reva admin services drain` also pauses its runner: it
+Draining a node with `reva service drain` also pauses its runner: it
 stops claiming runs, and running jobs that implement `rjobs.HandOffJob` get
 `HandOff` called, so they can wrap up and return `rjobs.RetryAfter(0, err)` to
 continue on another node. Other running jobs finish normally.
@@ -209,7 +209,7 @@ A job that implements `rjobs.ProgressJob` gets `RunWithProgress` called instead
 of `Run`, with a `Reporter` to report how far it has got. `Report` never blocks;
 the runner persists the latest snapshot every `progress_interval_seconds` and
 once more when the job returns. It shows up in `Status.Progress` and in
-`reva admin jobs status` and `active`.
+`reva job status` and `active`.
 
 ```go
 func (j *exportJob) RunWithProgress(ctx context.Context, p rjobs.Params, r rjobs.Reporter) (rjobs.Params, error) {

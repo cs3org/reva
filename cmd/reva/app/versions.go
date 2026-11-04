@@ -16,45 +16,39 @@
 // granted to it by virtue of its status as an Intergovernmental Organization
 // or submit itself to any jurisdiction.
 
-package main
+package revacmd
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"io"
 	"time"
 
-	gateway "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
-	user "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
-	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	types "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
-	"github.com/cs3org/reva/v3/cmd/reva/internal/cli"
+	"github.com/cs3org/reva/v3/pkg/cli"
+	"github.com/cs3org/reva/v3/pkg/cli/backend"
 	"github.com/spf13/cobra"
 )
 
 func versionsCommand(rt *cli.Runtime) *cobra.Command {
 	cmd := &cobra.Command{Use: "versions", Short: "Manage the versions of a file"}
 	cmd.AddCommand(&cobra.Command{
-		Use:               "list <path>",
+		Use:               "list PATH",
 		Short:             "List the versions of a file",
 		Args:              cobra.ExactArgs(1),
 		ValidArgsFunction: completeRemotePath(rt, 1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			client, ctx, err := rt.Gateway(cmd.Context())
+			b, err := rt.Backend(cmd.Context())
 			if err != nil {
 				return err
 			}
-			res, err := client.ListFileVersions(ctx, &provider.ListFileVersionsRequest{Ref: &provider.Reference{Path: args[0]}})
+			vs, err := b.Versions().List(cmd.Context(), pathRef(args[0]))
 			if err != nil {
 				return err
 			}
-			if res.Status.Code != rpc.Code_CODE_OK {
-				return formatError(res.Status)
-			}
-			return rt.Print(cmd.OutOrStdout(), res.Versions, func(w io.Writer) {
-				for _, v := range res.Versions {
+			return rt.Print(cmd.OutOrStdout(), vs, func(w io.Writer) {
+				for _, v := range vs {
 					fmt.Fprintf(w, "Key: %s Size: %d mtime:%d\n", v.Key, v.Size, v.Mtime)
 				}
 			})
@@ -63,91 +57,74 @@ func versionsCommand(rt *cli.Runtime) *cobra.Command {
 	return cmd
 }
 
-func recycleCommand(rt *cli.Runtime) *cobra.Command {
-	cmd := &cobra.Command{Use: "recycle", Short: "Manage the recycle bin of your home"}
+func trashCommand(rt *cli.Runtime) *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "trash",
+		Short: "Work with deleted files",
+		Long:  "Work with the deleted files of your home space.",
+	}
 	cmd.AddCommand(
 		&cobra.Command{
 			Use:   "list",
-			Short: "List the recycle bin",
+			Short: "List deleted files",
 			Args:  cobra.NoArgs,
 			RunE: func(cmd *cobra.Command, args []string) error {
-				client, ctx, home, err := recycleHome(cmd.Context(), rt)
+				b, err := rt.Backend(cmd.Context())
 				if err != nil {
 					return err
 				}
-				res, err := client.ListRecycle(ctx, &provider.ListRecycleRequest{Ref: home})
+				items, err := b.Trash().List(cmd.Context(), nil, time.Time{}, time.Time{})
 				if err != nil {
 					return err
 				}
-				if res.Status.Code != rpc.Code_CODE_OK {
-					return formatError(res.Status)
-				}
-				return rt.Print(cmd.OutOrStdout(), res.RecycleItems, func(w io.Writer) {
-					for _, item := range res.RecycleItems {
+				return rt.Print(cmd.OutOrStdout(), items, func(w io.Writer) {
+					for _, item := range items {
 						fmt.Fprintf(w, "%+v\n", item)
 					}
 				})
 			},
 		},
 		&cobra.Command{
-			Use:   "restore <key>",
-			Short: "Restore an item of the recycle bin",
-			Args:  cobra.ExactArgs(1),
+			Use:   "restore KEY...",
+			Short: "Restore deleted files",
+			Long: "Restore deleted files. They go back where they were, which is the path\n" +
+				"shown by 'reva trash list'.",
+			Args: cobra.MinimumNArgs(1),
 			RunE: func(cmd *cobra.Command, args []string) error {
-				client, ctx, home, err := recycleHome(cmd.Context(), rt)
+				b, err := rt.Backend(cmd.Context())
 				if err != nil {
 					return err
 				}
-				res, err := client.RestoreRecycleItem(ctx, &provider.RestoreRecycleItemRequest{Ref: home, Key: args[0]})
-				if err != nil {
-					return err
+				for _, key := range args {
+					if err := b.Trash().Restore(cmd.Context(), nil, key); err != nil {
+						return err
+					}
+					rt.Msg(cmd.ErrOrStderr(), "Restored %s", key)
 				}
-				if res.Status.Code != rpc.Code_CODE_OK {
-					return formatError(res.Status)
-				}
-				fmt.Fprintf(cmd.OutOrStdout(), "Restored recycle item %s\n", args[0])
 				return nil
 			},
 		},
 		&cobra.Command{
-			Use:   "purge <key>",
-			Short: "Remove an item of the recycle bin permanently",
-			Args:  cobra.ExactArgs(1),
+			Use:   "purge KEY...",
+			Short: "Delete items from the trash for good",
+			Long:  "Delete trash items for good. This cannot be undone.",
+			Args:  cobra.MinimumNArgs(1),
 			RunE: func(cmd *cobra.Command, args []string) error {
-				client, ctx, home, err := recycleHome(cmd.Context(), rt)
+				b, err := rt.Backend(cmd.Context())
 				if err != nil {
 					return err
 				}
-				res, err := client.PurgeRecycle(ctx, &provider.PurgeRecycleRequest{Ref: home, Key: args[0]})
-				if err != nil {
-					return err
+				for _, key := range args {
+					if err := b.Trash().Purge(cmd.Context(), nil, key); err != nil {
+						return err
+					}
+					rt.Msg(cmd.ErrOrStderr(), "Purged %s", key)
 				}
-				if res.Status.Code != rpc.Code_CODE_OK {
-					return formatError(res.Status)
-				}
-				fmt.Fprintf(cmd.OutOrStdout(), "Purged recycle item %s\n", args[0])
 				return nil
 			},
 		},
 	)
 	return cmd
-}
-
-// recycleHome returns the client and a reference to the home of the user,
-// because the recycle calls need a space to act on.
-func recycleHome(ctx context.Context, rt *cli.Runtime) (gateway.GatewayAPIClient, context.Context, *provider.Reference, error) {
-	client, ctx, err := rt.Gateway(ctx)
-	if err != nil {
-		return nil, nil, nil, err
-	}
-	res, err := client.GetHome(ctx, &provider.GetHomeRequest{})
-	if err != nil {
-		return nil, nil, nil, err
-	}
-	if res.Status.Code != rpc.Code_CODE_OK {
-		return nil, nil, nil, formatError(res.Status)
-	}
-	return client, ctx, &provider.Reference{Path: res.Path}, nil
 }
 
 func lockCommand(rt *cli.Runtime) *cobra.Command {
@@ -158,23 +135,20 @@ func lockCommand(rt *cli.Runtime) *cobra.Command {
 
 func lockGetCommand(rt *cli.Runtime) *cobra.Command {
 	return &cobra.Command{
-		Use:               "get <path>",
+		Use:               "get PATH",
 		Short:             "Show the lock of a file",
 		Args:              cobra.ExactArgs(1),
 		ValidArgsFunction: completeRemotePath(rt, 1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			client, ctx, err := rt.Gateway(cmd.Context())
+			b, err := rt.Backend(cmd.Context())
 			if err != nil {
 				return err
 			}
-			res, err := client.GetLock(ctx, &provider.GetLockRequest{Ref: &provider.Reference{Path: args[0]}})
+			lock, err := b.Locks().Get(cmd.Context(), pathRef(args[0]))
 			if err != nil {
 				return err
 			}
-			if res.Status.Code != rpc.Code_CODE_OK {
-				return formatError(res.Status)
-			}
-			return rt.Print(cmd.OutOrStdout(), res.Lock, func(w io.Writer) { fmt.Fprintln(w, res.Lock) })
+			return rt.Print(cmd.OutOrStdout(), lock, func(w io.Writer) { fmt.Fprintln(w, lock) })
 		},
 	}
 }
@@ -183,38 +157,28 @@ func lockSetCommand(rt *cli.Runtime) *cobra.Command {
 	var lockType, id, username, app, exp string
 	var refresh bool
 	cmd := &cobra.Command{
-		Use:               "set <path>",
+		Use:               "set PATH",
 		Short:             "Set or refresh the lock of a file",
 		Args:              cobra.ExactArgs(1),
 		ValidArgsFunction: completeRemotePath(rt, 1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			client, ctx, err := rt.Gateway(cmd.Context())
+			ctx := cmd.Context()
+			b, err := rt.Backend(ctx)
 			if err != nil {
 				return err
 			}
-			lock, err := createLock(ctx, client, lockType, id, username, app, exp)
+			lock, err := createLock(ctx, b, lockType, id, username, app, exp)
 			if err != nil {
 				return err
 			}
-			ref := &provider.Reference{Path: args[0]}
-			var status *rpc.Status
+			set := b.Locks().Set
 			if refresh {
-				res, err := client.RefreshLock(ctx, &provider.RefreshLockRequest{Ref: ref, Lock: lock})
-				if err != nil {
-					return err
-				}
-				status = res.Status
-			} else {
-				res, err := client.SetLock(ctx, &provider.SetLockRequest{Ref: ref, Lock: lock})
-				if err != nil {
-					return err
-				}
-				status = res.Status
+				set = b.Locks().Refresh
 			}
-			if status.Code != rpc.Code_CODE_OK {
-				return formatError(status)
+			if err := set(ctx, pathRef(args[0]), lock); err != nil {
+				return err
 			}
-			fmt.Fprintln(cmd.OutOrStdout(), "OK")
+			rt.Msg(cmd.ErrOrStderr(), "OK")
 			return nil
 		},
 	}
@@ -230,35 +194,27 @@ func lockSetCommand(rt *cli.Runtime) *cobra.Command {
 func lockRemoveCommand(rt *cli.Runtime) *cobra.Command {
 	var id string
 	cmd := &cobra.Command{
-		Use:               "remove <path>",
+		Use:               "remove PATH",
 		Short:             "Remove the lock of a file",
 		Args:              cobra.ExactArgs(1),
 		ValidArgsFunction: completeRemotePath(rt, 1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			client, ctx, err := rt.Gateway(cmd.Context())
+			ctx := cmd.Context()
+			b, err := rt.Backend(ctx)
 			if err != nil {
 				return err
 			}
-			ref := &provider.Reference{Path: args[0]}
+			ref := pathRef(args[0])
 			lock := &provider.Lock{LockId: id}
 			if id == "" {
-				res, err := client.GetLock(ctx, &provider.GetLockRequest{Ref: ref})
-				if err != nil {
+				if lock, err = b.Locks().Get(ctx, ref); err != nil {
 					return err
 				}
-				if res.Status.Code != rpc.Code_CODE_OK {
-					return formatError(res.Status)
-				}
-				lock = res.Lock
 			}
-			res, err := client.Unlock(ctx, &provider.UnlockRequest{Ref: ref, Lock: lock})
-			if err != nil {
+			if err := b.Locks().Unlock(ctx, ref, lock); err != nil {
 				return err
 			}
-			if res.Status.Code != rpc.Code_CODE_OK {
-				return formatError(res.Status)
-			}
-			fmt.Fprintln(cmd.OutOrStdout(), "OK")
+			rt.Msg(cmd.ErrOrStderr(), "OK")
 			return nil
 		},
 	}
@@ -266,7 +222,7 @@ func lockRemoveCommand(rt *cli.Runtime) *cobra.Command {
 	return cmd
 }
 
-func createLock(ctx context.Context, client gateway.GatewayAPIClient, t, id, u, app, exp string) (*provider.Lock, error) {
+func createLock(ctx context.Context, b backend.Backend, t, id, u, app, exp string) (*provider.Lock, error) {
 	lock := &provider.Lock{LockId: id, AppName: app}
 	switch t {
 	case "shared":
@@ -279,14 +235,11 @@ func createLock(ctx context.Context, client gateway.GatewayAPIClient, t, id, u, 
 		return nil, fmt.Errorf("unknown lock type %q: use shared, write or exclusive", t)
 	}
 	if u != "" {
-		res, err := client.GetUserByClaim(ctx, &user.GetUserByClaimRequest{Claim: "username", Value: u})
+		user, err := b.Users().ByClaim(ctx, "username", u)
 		if err != nil {
 			return nil, err
 		}
-		if res.Status.Code != rpc.Code_CODE_OK {
-			return nil, errors.New(res.Status.Message)
-		}
-		lock.User = res.User.GetId()
+		lock.User = user.GetId()
 	}
 	if exp != "" {
 		t, err := time.Parse(time.DateOnly, exp)

@@ -97,7 +97,8 @@ func (s *server) InvokeStream(req *controlpb.InvokeRequest, stream controlpb.Con
 func toPBSpec(spec invoke.InvocationSpec) *controlpb.InvocationSpec {
 	args := make([]*controlpb.ArgSpec, 0, len(spec.Args))
 	for _, a := range spec.Args {
-		args = append(args, &controlpb.ArgSpec{Name: a.Name, Description: a.Description, Required: a.Required})
+		args = append(args, &controlpb.ArgSpec{Name: a.Name, Description: a.Description, Required: a.Required,
+			Type: a.Type, Repeated: a.Repeated, Default: a.Default, Enum: a.Enum})
 	}
 	return &controlpb.InvocationSpec{
 		Name:        spec.Name,

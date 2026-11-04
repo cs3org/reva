@@ -107,7 +107,7 @@ func Routes(services map[string]global.Service, counters map[string]*activity.Co
 
 // serviceContext stamps the owning service onto the request's context logger,
 // so its logs are attributable, and records the request against the service's
-// activity counter, feeding `admin services activity`.
+// activity counter, feeding `reva service activity`.
 func serviceContext(name string, counter *activity.Counter) router.Middleware {
 	return func(h http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

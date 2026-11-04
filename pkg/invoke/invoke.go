@@ -52,6 +52,21 @@ type ArgSpec struct {
 	Name        string
 	Description string
 	Required    bool
+	// Type is string, int, uint, bool, float, duration or time, or the Go
+	// name of a type that parses itself (an encoding.TextUnmarshaler).
+	Type string
+	// Repeated is set for a list: one argument with comma-separated values.
+	Repeated bool
+	// Default is the value of an absent argument. Empty means none.
+	Default string
+	// Enum lists the only values that the argument accepts. Empty means any.
+	Enum []string
+}
+
+// Enumerated is implemented by an argument type that has a fixed set of
+// values.
+type Enumerated interface {
+	Values() []string
 }
 
 // InvocationSpec describes one invocation: its name, arguments and kind.

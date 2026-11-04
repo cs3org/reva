@@ -30,8 +30,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/cs3org/reva/v3/cmd/reva/internal/cli"
 	"github.com/cs3org/reva/v3/pkg/admin/adminpb"
+	"github.com/cs3org/reva/v3/pkg/cli"
 	"github.com/spf13/cobra"
 )
 
@@ -56,7 +56,7 @@ func logsCommand() *cobra.Command {
 				args["grep"] = grep
 			}
 
-			client, ctx, err := adminDial(cmd)
+			client, ctx, err := rt.Admin(cmd.Context())
 			if err != nil {
 				return err
 			}
@@ -64,9 +64,9 @@ func logsCommand() *cobra.Command {
 			// so label lines with their node in that case.
 			multi := !strings.Contains(selector, "/") || strings.Contains(selector, "[")
 			if follow {
-				return followLogs(ctx, client, selector, args, rt.Output, multi)
+				return followLogs(ctx, client, selector, args, rt.Output(), multi)
 			}
-			return snapshotLogs(ctx, client, selector, args, rt.Output, multi)
+			return snapshotLogs(ctx, client, selector, args, rt.Output(), multi)
 		},
 	}
 	cmd.Flags().BoolVarP(&follow, "follow", "f", false, "stream new lines until interrupted")
@@ -93,7 +93,7 @@ func adminLogsLevel(cmd *cobra.Command, args []string) error {
 	if len(args) >= 2 {
 		invArgs["level"] = args[1]
 	}
-	client, ctx, err := adminDial(cmd)
+	client, ctx, err := rt.Admin(cmd.Context())
 	if err != nil {
 		return err
 	}
@@ -177,7 +177,7 @@ func snapshotLogs(ctx context.Context, client adminpb.AdminAPIClient, selector s
 	for _, e := range merged {
 		fmt.Println(formatLogLine(e.node, nodeWidth, e.line, multi, color, output))
 	}
-	if anyTruncated && output == "text" {
+	if anyTruncated && output != "json" {
 		fmt.Printf("# more lines matched than shown; raise -n to see more\n")
 	}
 	return nil

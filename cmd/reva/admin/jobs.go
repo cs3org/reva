@@ -33,12 +33,12 @@ import (
 	"github.com/spf13/cobra"
 )
 
-func jobsCommand() *cobra.Command {
-	cmd := &cobra.Command{Use: "jobs", Short: "Inspect and drive the background jobs runner"}
+func jobCommand() *cobra.Command {
+	cmd := &cobra.Command{Use: "job", Short: "Inspect and drive the background jobs runner"}
 	// run wraps the subcommands that need only the client.
 	run := func(f func(ctx context.Context, client adminpb.AdminAPIClient, args []string) error) func(*cobra.Command, []string) error {
 		return func(cmd *cobra.Command, args []string) error {
-			client, ctx, err := adminDial(cmd)
+			client, ctx, err := rt.Admin(cmd.Context())
 			if err != nil {
 				return err
 			}
@@ -73,7 +73,7 @@ func jobsCommand() *cobra.Command {
 			"With --job, show the lines of every run of that job.",
 		Args: cobra.MaximumNArgs(1),
 		RunE: run(func(ctx context.Context, client adminpb.AdminAPIClient, args []string) error {
-			return jobsLogs(ctx, client, args, logsJob, logsLines, logsFollow, rt.Output)
+			return jobsLogs(ctx, client, args, logsJob, logsLines, logsFollow, rt.Output())
 		}),
 	}
 	logs.Flags().StringVar(&logsJob, "job", "", "show the runs of this job")
@@ -308,10 +308,14 @@ func stopWhenRunEnds(ctx context.Context, cancel context.CancelFunc, client admi
 }
 
 func jobsRun(ctx context.Context, client adminpb.AdminAPIClient, args []string, owner string) error {
+	params, err := parseKeyVals(args[1:])
+	if err != nil {
+		return err
+	}
 	resp, err := client.EnqueueJob(ctx, &adminpb.EnqueueJobRequest{
 		Job:    args[0],
 		Owner:  owner,
-		Params: parseKeyVals(args[1:]),
+		Params: params,
 	})
 	if err != nil {
 		return adminErr(err)

@@ -26,8 +26,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/cs3org/reva/v3/cmd/reva/internal/cli"
 	"github.com/cs3org/reva/v3/pkg/admin/adminpb"
+	"github.com/cs3org/reva/v3/pkg/cli"
 	"github.com/jedib0t/go-pretty/table"
 	"github.com/jedib0t/go-pretty/text"
 )
@@ -297,21 +297,6 @@ func humanizeSince(ts string) string {
 		return fmt.Sprintf("%dm%ds ago", int(d.Minutes()), int(d.Seconds())%60)
 	default:
 		return fmt.Sprintf("%dh%dm ago", int(d.Hours()), int(d.Minutes())%60)
-	}
-}
-
-// printNodeResults renders the per-node results of a fan-out operation.
-func printNodeResults(results []*adminpb.NodeResult) {
-	for _, r := range results {
-		if r.Error != "" {
-			fmt.Printf("  %s: ERROR %s\n", r.Node, r.Error)
-			continue
-		}
-		if r.ResultJson != "" {
-			fmt.Printf("  %s: %s\n", r.Node, r.ResultJson)
-		} else {
-			fmt.Printf("  %s: ok\n", r.Node)
-		}
 	}
 }
 

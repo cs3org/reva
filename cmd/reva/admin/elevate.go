@@ -19,40 +19,34 @@
 package admin
 
 import (
-	"fmt"
 	"time"
 
-	"github.com/cs3org/reva/v3/cmd/reva/internal/cli"
-	"github.com/cs3org/reva/v3/pkg/admin/adminpb"
+	"github.com/cs3org/reva/v3/pkg/cli"
 	"github.com/spf13/cobra"
 )
 
-func elevateCommand() *cobra.Command {
+// ElevateCommand returns the elevate command.
+func ElevateCommand(r *cli.Runtime) *cobra.Command {
 	return &cobra.Command{
 		Use:   "elevate",
-		Short: "Exchange the login token for a short-TTL admin token",
-		Args:  cobra.NoArgs,
+		Short: "Get an admin token for the next commands",
+		Long: "Exchange the login token for a short-lived admin token, and store it.\n\n" +
+			"Without elevate, a command that needs admin rights asks for an admin token\n" +
+			"itself, and keeps it in memory for that command only. The stored token is\n" +
+			"used only while the same login is current. On a host with the local admin\n" +
+			"socket, no token is needed.",
+		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			host, err := resolveAdminHost()
+			exp, err := r.Elevate(cmd.Context())
 			if err != nil {
-				return err
+				return adminErr(err)
 			}
-			client, err := adminClientAt(host)
-			if err != nil {
-				return err
+			if exp.IsZero() {
+				r.Msg(cmd.ErrOrStderr(), "Elevated.")
+				return nil
 			}
-			userTok, err := rt.Token()
-			if err != nil {
-				return err
-			}
-			res, err := client.RequestAdmin(cli.WithToken(cmd.Context(), userTok), &adminpb.RequestAdminRequest{})
-			if err != nil {
-				return err
-			}
-			if err := rt.SetAdminToken(res.Token); err != nil {
-				return err
-			}
-			fmt.Printf("elevated; admin token valid until %s\n", time.Unix(res.ExpiresAt, 0).Format(time.RFC3339))
+			r.Msg(cmd.ErrOrStderr(), "Elevated: the admin token is valid until %s (%s).",
+				exp.Local().Format(time.RFC3339), cli.Left(exp))
 			return nil
 		},
 	}

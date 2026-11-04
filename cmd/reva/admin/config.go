@@ -37,7 +37,7 @@ func configCommand() *cobra.Command {
 		Short: "Show the effective (redacted) config of a service, as TOML (or JSON with -o json)",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			client, ctx, err := adminDial(cmd)
+			client, ctx, err := rt.Admin(cmd.Context())
 			if err != nil {
 				return err
 			}
@@ -64,7 +64,7 @@ func configCommand() *cobra.Command {
 					fmt.Printf("# error: %s\n", r.Error)
 					continue
 				}
-				if err := renderConfig(r.ResultJson, rt.Output); err != nil {
+				if err := renderConfig(r.ResultJson, rt.Output()); err != nil {
 					return err
 				}
 			}

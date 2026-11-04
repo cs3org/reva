@@ -62,7 +62,7 @@ func NewStream(log zerolog.Logger, counters map[string]*activity.Counter) grpc.S
 }
 
 // trackActivity records the request against its reva service's counter for the
-// duration of the call, so `admin services activity` can tell when an instance
+// duration of the call, so `reva service activity` can tell when an instance
 // has quiesced. It returns the matching completion func (a no-op when the method
 // is unattributed or belongs to the Admin API / control channel — those
 // operational RPCs, including the activity query itself and long-lived admin

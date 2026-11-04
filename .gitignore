@@ -25,6 +25,7 @@ cmd/revad/revad
 cmd/revad/revad-ceph
 cmd/revad/revad.pid
 cmd/reva/reva
+cmd/reva/cernbox
 cmd/revad/main/main
 tools/release/release
 

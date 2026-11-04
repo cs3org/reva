@@ -52,16 +52,16 @@ func traceCommand() *cobra.Command {
 			if since != "" {
 				args["since"] = since
 			}
-			client, ctx, err := adminDial(cmd)
+			client, ctx, err := rt.Admin(cmd.Context())
 			if err != nil {
 				return err
 			}
 			// Fan out to every instance in the fleet; each returns its own service's
 			// matching lines, so the merged result is the request's full path.
 			if follow {
-				return followLogs(ctx, client, "*", args, rt.Output, true)
+				return followLogs(ctx, client, "*", args, rt.Output(), true)
 			}
-			return snapshotLogs(ctx, client, "*", args, rt.Output, true)
+			return snapshotLogs(ctx, client, "*", args, rt.Output(), true)
 		},
 	}
 	cmd.Flags().StringVar(&user, "user", "", "trace by username instead of trace id")
