@@ -191,6 +191,7 @@ var _ = Describe("ocm share", func() {
 				createShareRes, err := cernboxgw.CreateOCMShare(ctxEinstein, &ocmv1beta1.CreateOCMShareRequest{
 					ResourceId: info.Id,
 					Grantee: &provider.Grantee{
+						Type: provider.GranteeType_GRANTEE_TYPE_USER,
 						Id: &provider.Grantee_UserId{
 							UserId: marie.Id,
 						},
@@ -284,6 +285,7 @@ var _ = Describe("ocm share", func() {
 				createShareRes, err := cernboxgw.CreateOCMShare(ctxEinstein, &ocmv1beta1.CreateOCMShareRequest{
 					ResourceId: info.Id,
 					Grantee: &provider.Grantee{
+						Type: provider.GranteeType_GRANTEE_TYPE_USER,
 						Id: &provider.Grantee_UserId{
 							UserId: marie.Id,
 						},
@@ -380,6 +382,7 @@ var _ = Describe("ocm share", func() {
 				createShareRes, err := cernboxgw.CreateOCMShare(ctxEinstein, &ocmv1beta1.CreateOCMShareRequest{
 					ResourceId: info.Id,
 					Grantee: &provider.Grantee{
+						Type: provider.GranteeType_GRANTEE_TYPE_USER,
 						Id: &provider.Grantee_UserId{
 							UserId: marie.Id,
 						},
@@ -483,6 +486,7 @@ var _ = Describe("ocm share", func() {
 				createShareRes, err := cernboxgw.CreateOCMShare(ctxEinstein, &ocmv1beta1.CreateOCMShareRequest{
 					ResourceId: info.Id,
 					Grantee: &provider.Grantee{
+						Type: provider.GranteeType_GRANTEE_TYPE_USER,
 						Id: &provider.Grantee_UserId{
 							UserId: marie.Id,
 						},
@@ -632,6 +636,7 @@ var _ = Describe("ocm share", func() {
 				createShareRes, err := cernboxgw.CreateOCMShare(ctxEinstein, &ocmv1beta1.CreateOCMShareRequest{
 					ResourceId: info.Id,
 					Grantee: &provider.Grantee{
+						Type: provider.GranteeType_GRANTEE_TYPE_USER,
 						Id: &provider.Grantee_UserId{
 							UserId: marie.Id,
 						},
@@ -649,6 +654,7 @@ var _ = Describe("ocm share", func() {
 				createShareRes2, err := cernboxgw.CreateOCMShare(ctxEinstein, &ocmv1beta1.CreateOCMShareRequest{
 					ResourceId: info.Id,
 					Grantee: &provider.Grantee{
+						Type: provider.GranteeType_GRANTEE_TYPE_USER,
 						Id: &provider.Grantee_UserId{
 							UserId: marie.Id,
 						},
@@ -674,6 +680,7 @@ var _ = Describe("ocm share", func() {
 				createShareRes, err := cernboxgw.CreateOCMShare(ctxEinstein, &ocmv1beta1.CreateOCMShareRequest{
 					ResourceId: &provider.ResourceId{StorageId: "123e4567-e89b-12d3-a456-426655440000", OpaqueId: "NON_EXISTING_FILE"},
 					Grantee: &provider.Grantee{
+						Type: provider.GranteeType_GRANTEE_TYPE_USER,
 						Id: &provider.Grantee_UserId{
 							UserId: marie.Id,
 						},
@@ -709,6 +716,7 @@ var _ = Describe("ocm share", func() {
 				createShareRes, err := cernboxgw.CreateOCMShare(ctxEinstein, &ocmv1beta1.CreateOCMShareRequest{
 					ResourceId: info.Id,
 					Grantee: &provider.Grantee{
+						Type: provider.GranteeType_GRANTEE_TYPE_USER,
 						Id: &provider.Grantee_UserId{
 							UserId: marie.Id,
 						},
