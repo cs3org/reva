@@ -20,15 +20,19 @@ package gateway
 
 import (
 	"context"
+	"slices"
+	"sync"
 
 	"github.com/alitto/pond/v2"
 	gateway "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
+	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	link "github.com/cs3org/go-cs3apis/cs3/sharing/link/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/pkg/errors"
 
 	"github.com/cs3org/reva/v3/pkg/appctx"
+	"github.com/cs3org/reva/v3/pkg/auth/scope"
 	"github.com/cs3org/reva/v3/pkg/errtypes"
 	"github.com/cs3org/reva/v3/pkg/rgrpc/status"
 	"github.com/cs3org/reva/v3/pkg/service"
@@ -133,12 +137,60 @@ func (s *svc) GetPublicShare(ctx context.Context, req *link.GetPublicShareReques
 		}, nil
 	}
 
-	return pClient.GetPublicShare(ctx, req)
+	res, err := pClient.GetPublicShare(ctx, req)
+	if err != nil || res.Status.Code != rpc.Code_CODE_OK {
+		return res, err
+	}
+
+	// A public link session resolves its own link by token, and it has no grant permissions.
+	if isOwnPublicLink(ctx, req.GetRef().GetToken()) {
+		return res, nil
+	}
+
+	// The response holds the token, so only a user who can manage the link may read it.
+	perms, st := s.permissionsOnResource(ctx, res.GetShare().GetResourceId())
+	if st != nil {
+		return &link.GetPublicShareResponse{Status: st}, nil
+	}
+	if !perms.GetUpdateGrant() && !perms.GetRemoveGrant() {
+		return &link.GetPublicShareResponse{
+			Status: status.NewPermissionDenied(ctx, nil, "no permission to get public links on this resource"),
+		}, nil
+	}
+
+	return res, nil
 }
 
 func (s *svc) ListPublicShares(ctx context.Context, req *link.ListPublicSharesRequest) (*link.ListPublicSharesResponse, error) {
 	log := appctx.GetLogger(ctx)
 	log.Info().Msg("listing public shares")
+
+	user, ok := appctx.ContextGetUser(ctx)
+	if !ok {
+		return &link.ListPublicSharesResponse{
+			Status: status.NewUnauthenticated(ctx, nil, "no user in context"),
+		}, nil
+	}
+
+	// Without a resource or an own creator filter, the query would return the links of the whole instance.
+	var byResource, byMe, byOthers bool
+	for _, f := range req.GetFilters() {
+		switch f.GetType() {
+		case link.ListPublicSharesRequest_Filter_TYPE_RESOURCE_ID:
+			byResource = true
+		case link.ListPublicSharesRequest_Filter_TYPE_CREATOR:
+			if f.GetCreator().GetOpaqueId() == user.GetId().GetOpaqueId() {
+				byMe = true
+			} else {
+				byOthers = true
+			}
+		}
+	}
+	if !byResource && (!byMe || byOthers) {
+		return &link.ListPublicSharesResponse{
+			Status: status.NewInvalidArg(ctx, "a resource filter or a creator filter for the user is required"),
+		}, nil
+	}
 
 	pClient, err := service.PublicShareProvider(ctx)
 	if err != nil {
@@ -154,7 +206,11 @@ func (s *svc) ListPublicShares(ctx context.Context, req *link.ListPublicSharesRe
 	if err != nil {
 		return nil, errors.Wrap(err, "error listing shares")
 	}
+	if res.Status.Code != rpc.Code_CODE_OK {
+		return res, nil
+	}
 
+	res.Share = keepManageable(ctx, s, user, res.Share)
 	return res, nil
 }
 
@@ -282,4 +338,54 @@ func (s *svc) permissionsOnResource(ctx context.Context, id *provider.ResourceId
 	}
 
 	return statRes.GetInfo().GetPermissionSet(), nil
+}
+
+// isOwnPublicLink tells if the caller authenticated with the public link of this token.
+func isOwnPublicLink(ctx context.Context, token string) bool {
+	if token == "" {
+		return false
+	}
+	scopes, ok := appctx.ContextGetScopes(ctx)
+	if !ok {
+		return false
+	}
+	shares, err := scope.GetPublicSharesFromScopes(scopes)
+	if err != nil {
+		return false
+	}
+	return slices.ContainsFunc(shares, func(sh *link.PublicShare) bool { return sh.GetToken() == token })
+}
+
+// keepManageable removes the shares that the user cannot manage. The owner keeps their shares.
+// For other shares, the user needs UpdateGrant or RemoveGrant on the resource. The creator
+// gives no access, because in a project the creator can be anyone.
+// The shares are statted once per resource, so that a listing on a large folder stays cheap.
+func keepManageable[T interface {
+	GetOwner() *userpb.UserId
+	GetResourceId() *provider.ResourceId
+}](ctx context.Context, s *svc, user *userpb.User, shares []T) []T {
+	isOwner := func(sh T) bool { return sh.GetOwner().GetOpaqueId() == user.GetId().GetOpaqueId() }
+
+	var mu sync.Mutex
+	allowed := make(map[string]bool)
+	seen := make(map[string]bool)
+	pool := pond.NewPool(50)
+	for _, sh := range shares {
+		key := resourceid.OwnCloudResourceIDWrap(sh.GetResourceId())
+		if isOwner(sh) || seen[key] {
+			continue
+		}
+		seen[key] = true
+		pool.Submit(func() {
+			perms, st := s.permissionsOnResource(ctx, sh.GetResourceId())
+			mu.Lock()
+			allowed[key] = st == nil && (perms.GetUpdateGrant() || perms.GetRemoveGrant())
+			mu.Unlock()
+		})
+	}
+	pool.StopAndWait()
+
+	return slices.DeleteFunc(shares, func(sh T) bool {
+		return !isOwner(sh) && !allowed[resourceid.OwnCloudResourceIDWrap(sh.GetResourceId())]
+	})
 }

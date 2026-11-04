@@ -117,26 +117,15 @@ func shareListCommand(rt *cli.Runtime) *cobra.Command {
 		Short: "List the shares you manage",
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			req := &collaboration.ListSharesRequest{}
-			if resID != "" {
-				id, err := parseResourceID(resID)
-				if err != nil {
-					return err
-				}
-				req.Filters = []*collaboration.Filter{share.ResourceIDFilter(id)}
-			}
 			client, ctx, err := rt.Gateway(cmd.Context())
 			if err != nil {
 				return err
 			}
-			res, err := client.ListShares(ctx, req)
+			shares, err := listShares(ctx, client, resID)
 			if err != nil {
 				return err
 			}
-			if res.Status.Code != rpc.Code_CODE_OK {
-				return formatError(res.Status)
-			}
-			return rt.Print(cmd.OutOrStdout(), res.Shares, func(w io.Writer) { renderShares(w, res.Shares) })
+			return rt.Print(cmd.OutOrStdout(), shares, func(w io.Writer) { renderShares(w, shares) })
 		},
 	}
 	cmd.Flags().StringVar(&resID, "by-resource-id", "", "only the shares of this resource (storage_id:opaque_id)")
@@ -444,6 +433,40 @@ func publicShareRemoveCommand(rt *cli.Runtime) *cobra.Command {
 	}
 }
 
+// listShares lists the shares of a resource, or else the shares that the caller created.
+// The gateway rejects a listing without one of these filters.
+func listShares(ctx context.Context, client gateway.GatewayAPIClient, resID string) ([]*collaboration.Share, error) {
+	req := &collaboration.ListSharesRequest{}
+	if resID != "" {
+		id, err := parseResourceID(resID)
+		if err != nil {
+			return nil, err
+		}
+		req.Filters = []*collaboration.Filter{share.ResourceIDFilter(id)}
+	} else {
+		token, _ := appctx.ContextGetToken(ctx)
+		who, err := client.WhoAmI(ctx, &gateway.WhoAmIRequest{Token: token})
+		if err != nil {
+			return nil, err
+		}
+		if who.Status.Code != rpc.Code_CODE_OK {
+			return nil, formatError(who.Status)
+		}
+		req.Filters = []*collaboration.Filter{{
+			Type: collaboration.Filter_TYPE_CREATOR,
+			Term: &collaboration.Filter_Creator{Creator: who.User.Id},
+		}}
+	}
+	res, err := client.ListShares(ctx, req)
+	if err != nil {
+		return nil, err
+	}
+	if res.Status.Code != rpc.Code_CODE_OK {
+		return nil, formatError(res.Status)
+	}
+	return res.Shares, nil
+}
+
 // listPublicShares lists the links that the caller created. The creator
 // filter needs the user id, so it asks the gateway who the token belongs to.
 func listPublicShares(ctx context.Context, client gateway.GatewayAPIClient, resID string) ([]*link.PublicShare, error) {
@@ -478,12 +501,12 @@ func listPublicShares(ctx context.Context, client gateway.GatewayAPIClient, resI
 
 func completeShareIDs(rt *cli.Runtime) cobra.CompletionFunc {
 	return completeIDs(rt, func(ctx context.Context, client gateway.GatewayAPIClient) ([]string, error) {
-		res, err := client.ListShares(ctx, &collaboration.ListSharesRequest{})
+		shares, err := listShares(ctx, client, "")
 		if err != nil {
 			return nil, err
 		}
-		ids := make([]string, 0, len(res.Shares))
-		for _, s := range res.Shares {
+		ids := make([]string, 0, len(shares))
+		for _, s := range shares {
 			ids = append(ids, s.Id.OpaqueId+"\t"+s.Grantee.GetUserId().GetOpaqueId()+s.Grantee.GetGroupId().GetOpaqueId())
 		}
 		return ids, nil
