@@ -34,6 +34,7 @@ import (
 	"github.com/cs3org/reva/v3/internal/http/services/wellknown"
 	"github.com/cs3org/reva/v3/pkg/appctx"
 	"github.com/cs3org/reva/v3/pkg/errtypes"
+	"github.com/cs3org/reva/v3/pkg/ocm/providerdomain"
 	"github.com/cs3org/reva/v3/pkg/service"
 	"github.com/cs3org/reva/v3/pkg/spaces"
 )
@@ -62,6 +63,9 @@ type openInAppResponse struct {
 }
 
 func (h *appsHandler) init(c *config) error {
+	if err := providerdomain.Validate(c.ProviderDomain); err != nil {
+		return err
+	}
 	transportConfig, err := c.publicOCMTransportConfig()
 	if err != nil {
 		return err
@@ -197,6 +201,9 @@ func (h *appsHandler) OpenInApp(w http.ResponseWriter, r *http.Request) {
 
 func (h *appsHandler) buildLaunch(ctx context.Context, shareID *ocmpb.ShareId, rel string) (openInAppResponse, error) {
 	var none openInAppResponse
+	if err := providerdomain.Validate(h.receiverDomain); err != nil {
+		return none, redactLaunchError(errtypes.BadRequest(err.Error()), "", "")
+	}
 	share, webapp, err := h.receivedWebapp(ctx, shareID)
 	if err != nil {
 		return none, redactLaunchError(err, "", "")
@@ -233,16 +240,13 @@ func (h *appsHandler) buildLaunch(ctx context.Context, shareID *ocmpb.ShareId, r
 	if err != nil {
 		return fail(err, "")
 	}
-	if strings.TrimSpace(h.receiverDomain) == "" {
-		return fail(errtypes.BadRequest("provider domain is not configured"), "")
-	}
 
 	launched, err := joinShareRelativePath(appURI, rel)
 	if err != nil {
 		return fail(err, "")
 	}
 
-	origin, err := senderDiscoveryOrigin(share.GetProtocols())
+	origin, err := senderDiscoveryOrigin(share.GetCreator().GetIdp())
 	if err != nil {
 		return fail(err, "")
 	}
@@ -278,72 +282,13 @@ func (h *appsHandler) buildLaunch(ctx context.Context, shareID *ocmpb.ShareId, r
 	}, nil
 }
 
-// senderDiscoveryOrigin prefers WebDAV; an invalid absolute WebDAV URL must not fall back to webapp.
-func senderDiscoveryOrigin(protocols []*ocmpb.Protocol) (string, error) {
-	if origin, err := firstAbsoluteOrigin(protocolURIs(protocols, "webdav")); err != nil || origin != "" {
-		return origin, err
+// senderDiscoveryOrigin is the share sender's idp. WebDAV and webapp URIs are not origins.
+func senderDiscoveryOrigin(idp string) (string, error) {
+	idp = strings.TrimSpace(idp)
+	if idp == "" {
+		return "", errtypes.NotFound("share has no sender idp")
 	}
-	if origin, err := firstAbsoluteOrigin(protocolURIs(protocols, "webapp")); err != nil || origin != "" {
-		return origin, err
-	}
-	return "", errtypes.NotFound("share has no absolute sender origin")
-}
-
-func protocolURIs(protocols []*ocmpb.Protocol, kind string) []string {
-	uris := []string{}
-	for _, p := range protocols {
-		if p == nil {
-			continue
-		}
-		switch kind {
-		case "webdav":
-			opts, ok := p.Term.(*ocmpb.Protocol_WebdavOptions)
-			if !ok || opts == nil || opts.WebdavOptions == nil {
-				continue
-			}
-			uris = append(uris, opts.WebdavOptions.Uri)
-		case "webapp":
-			opts, ok := p.Term.(*ocmpb.Protocol_WebappOptions)
-			if !ok || opts == nil || opts.WebappOptions == nil {
-				continue
-			}
-			uris = append(uris, opts.WebappOptions.Uri)
-		}
-	}
-	return uris
-}
-
-func firstAbsoluteOrigin(raws []string) (string, error) {
-	for _, raw := range raws {
-		origin, ok, err := absoluteOrigin(raw)
-		if err != nil {
-			return "", err
-		}
-		if ok {
-			return origin, nil
-		}
-	}
-	return "", nil
-}
-
-func absoluteOrigin(raw string) (string, bool, error) {
-	if strings.TrimSpace(raw) == "" {
-		return "", false, nil
-	}
-	if strings.TrimSpace(raw) != raw {
-		return "", false, errtypes.BadRequest("malformed remote URL")
-	}
-	parsed, err := url.Parse(raw)
-	if err != nil {
-		return "", false, errtypes.BadRequest("malformed remote URL")
-	}
-	if pathRelativeURL(parsed) {
-		return "", false, nil
-	}
-	if err := validateLaunchURL(parsed); err != nil {
-		return "", false, err
-	}
-	return parsed.Scheme + "://" + parsed.Host, true, nil
+	return idp, nil
 }
 
 func validateShareFilePath(filePath string) error {
@@ -464,10 +409,6 @@ func resolveTokenEndpoint(disco *wellknown.OcmDiscoveryData) (string, error) {
 		return "", err
 	}
 	return tokenURL, nil
-}
-
-func pathRelativeURL(u *url.URL) bool {
-	return u != nil && u.Scheme == "" && u.Host == "" && u.User == nil && u.Opaque == ""
 }
 
 func validateLaunchURL(u *url.URL) error {

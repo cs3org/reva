@@ -57,7 +57,7 @@ func TestOpenInAppRelativeTokenEndpoint(t *testing.T) {
 	if len(obs.tokenURLs) != 1 || obs.tokenURLs[0] != "https://sender.example/ocm/token" {
 		t.Fatalf("token url %v", obs.tokenURLs)
 	}
-	if len(obs.origins) != 1 || obs.origins[0] != "https://dav.example" {
+	if len(obs.origins) != 1 || obs.origins[0] != "dav.example" {
 		t.Fatalf("origin %v", obs.origins)
 	}
 }

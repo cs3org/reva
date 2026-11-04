@@ -19,98 +19,48 @@
 package sciencemesh
 
 import (
+	"encoding/json"
+	"net/http"
+	"net/http/httptest"
 	"strings"
 	"testing"
-
-	ocmpb "github.com/cs3org/go-cs3apis/cs3/sharing/ocm/v1beta1"
 )
 
 func TestSenderDiscoveryOrigin(t *testing.T) {
 	tests := []struct {
 		name    string
-		protos  []*ocmpb.Protocol
+		idp     string
 		want    string
 		wantErr string
 	}{
 		{
-			name: "webdav preferred",
-			protos: []*ocmpb.Protocol{
-				webdavProtocol("https://dav.example/remote.php/dav"),
-				webappProtocol("https://app.example/hub", launchSecret, []string{"must-exchange-token"}),
-			},
-			want: "https://dav.example",
+			name: "bare sender",
+			idp:  "sender.example",
+			want: "sender.example",
 		},
 		{
-			name: "webapp fallback",
-			protos: []*ocmpb.Protocol{
-				webdavProtocol("files/share"),
-				webappProtocol("https://app.example:8443/hub", launchSecret, []string{"must-exchange-token"}),
-			},
-			want: "https://app.example:8443",
+			name: "host and port",
+			idp:  "127.0.0.1:443",
+			want: "127.0.0.1:443",
 		},
 		{
-			name: "relative webdav does not hide absolute webapp",
-			protos: []*ocmpb.Protocol{
-				webdavProtocol("/remote.php/dav"),
-				webappProtocol("https://app.example/hub", launchSecret, nil),
-			},
-			want: "https://app.example",
+			name: "padded sender",
+			idp:  " sender.example\t",
+			want: "sender.example",
 		},
 		{
-			name:    "missing",
-			protos:  nil,
-			wantErr: "absolute sender origin",
+			name:    "empty",
+			wantErr: "sender idp",
 		},
 		{
-			name: "http webdav is rejected",
-			protos: []*ocmpb.Protocol{
-				webdavProtocol("http://dav.example/dav"),
-				webappProtocol("https://app.example/hub", launchSecret, nil),
-			},
-			wantErr: "https",
-		},
-		{
-			name: "userinfo rejected",
-			protos: []*ocmpb.Protocol{
-				webdavProtocol("https://user:pass@dav.example/dav"),
-			},
-			wantErr: "userinfo",
-		},
-		{
-			name: "malformed",
-			protos: []*ocmpb.Protocol{
-				webdavProtocol("https://["),
-			},
-			wantErr: "malformed",
-		},
-		{
-			name: "padded webdav is rejected",
-			protos: []*ocmpb.Protocol{
-				webdavProtocol(" https://dav.example/dav"),
-				webappProtocol("https://app.example/hub", launchSecret, nil),
-			},
-			wantErr: "malformed",
-		},
-		{
-			name: "missing host is not skipped",
-			protos: []*ocmpb.Protocol{
-				webdavProtocol("https:///remote.php/dav"),
-				webappProtocol("https://app.example/hub", launchSecret, nil),
-			},
-			wantErr: "must be absolute",
-		},
-		{
-			name: "network path is not skipped",
-			protos: []*ocmpb.Protocol{
-				webdavProtocol("//dav.example/remote.php/dav"),
-				webappProtocol("https://app.example/hub", launchSecret, nil),
-			},
-			wantErr: "must be absolute",
+			name:    "whitespace",
+			idp:     " \t",
+			wantErr: "sender idp",
 		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := senderDiscoveryOrigin(tt.protos)
+			got, err := senderDiscoveryOrigin(tt.idp)
 			if tt.wantErr != "" {
 				if err == nil || !strings.Contains(err.Error(), tt.wantErr) {
 					t.Fatalf("err = %v", err)
@@ -127,5 +77,65 @@ func TestSenderDiscoveryOrigin(t *testing.T) {
 				t.Fatalf("origin %q want %q", got, tt.want)
 			}
 		})
+	}
+}
+
+func TestOpenInAppDiscoversAtSenderIdp(t *testing.T) {
+	obs := &observeClient{token: launchToken}
+	share := receivedWebappShare(
+		"https://dav.example/remote.php/dav",
+		"https://app.example/hub/open",
+		launchSecret,
+		[]string{"must-exchange-token"},
+	)
+	share.Creator.Idp = " sender.example "
+	h := newTestHandler(t, &fakeReceivedGateway{resp: okShareResponse(share)}, obs)
+
+	req, _ := newLaunchRequest(t, "/ocm/share-1")
+	rec := httptest.NewRecorder()
+	h.OpenInApp(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status %d body %s", rec.Code, rec.Body.String())
+	}
+	if obs.discoverCalls != 1 || len(obs.origins) != 1 || obs.origins[0] != "sender.example" {
+		t.Fatalf("discover %d origins %v", obs.discoverCalls, obs.origins)
+	}
+}
+
+func TestOpenInAppSenderDiscoveryWithoutTokenEndpoint(t *testing.T) {
+	obs := &observeClient{
+		token:          launchToken,
+		endpointByCall: []string{""},
+	}
+	share := receivedWebappShare(
+		"https://dav.example/remote.php/dav",
+		"https://app.example/hub",
+		launchSecret,
+		[]string{"must-exchange-token"},
+	)
+	share.Creator.Idp = "sender.example"
+	h := newTestHandler(t, &fakeReceivedGateway{resp: okShareResponse(share)}, obs)
+
+	req, _ := newLaunchRequest(t, "/ocm/share-1")
+	rec := httptest.NewRecorder()
+	h.OpenInApp(rec, req)
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("status %d body %s", rec.Code, rec.Body.String())
+	}
+	if !strings.Contains(rec.Body.String(), "tokenEndPoint") {
+		t.Fatalf("body %s", rec.Body.String())
+	}
+	if obs.discoverCalls != 1 || obs.exchangeCalls != 0 {
+		t.Fatalf("discover %d exchange %d", obs.discoverCalls, obs.exchangeCalls)
+	}
+	if len(obs.origins) != 1 || obs.origins[0] != "sender.example" {
+		t.Fatalf("origins %v", obs.origins)
+	}
+	var payload map[string]any
+	if err := json.Unmarshal(rec.Body.Bytes(), &payload); err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := payload["app_url"]; ok {
+		t.Fatalf("payload %v", payload)
 	}
 }
