@@ -83,7 +83,7 @@ func (s *svc) getSharedWithMe(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	shares := make([]*libregraph.DriveItem, 0)
+	shares := make([]any, 0)
 	for _, share := range recvSharesResp.ShareInfos {
 		role := CS3ResourcePermissionsToUnifiedRole(ctx, share.ResourceInfo.PermissionSet)
 		if role != nil && *role.Id == permissions.UnifiedRoleDenyAccessID {
@@ -129,16 +129,14 @@ func (s *svc) getSharedWithMe(w http.ResponseWriter, r *http.Request) {
 				if err != nil {
 					log.Error().Err(err).Any("share", share).Msg("error parsing received share, ignoring")
 				} else {
-					shares = append(shares, drive)
+					shares = append(shares, newReceivedShareDriveItem(drive, nil))
 				}
 				log.Debug().Any("share", share).Msg("processing received ocm share")
 			}
 		}
 	}
 
-	if err := json.NewEncoder(w).Encode(map[string]any{
-		"value": shares,
-	}); err != nil {
+	if err := encodeSharedWithMe(w, shares); err != nil {
 		log.Error().Err(err).Msg("error marshalling shares as json")
 		handleError(ctx, err, w)
 		return
