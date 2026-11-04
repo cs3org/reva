@@ -52,6 +52,7 @@ type appsHandler struct {
 	ocmMountPoint  string
 	receiverDomain string
 	launchClient   launchClient
+	signingKey     *httpsig.Key
 	// Nil uses the published targets; an explicit empty set disables receipt.
 	webappReceiveTargets *[]string
 	// Nil uses the published MFA policy; tests may pin reject or off.
@@ -74,6 +75,11 @@ func (h *appsHandler) init(c *config) error {
 	h.ocmMountPoint = c.OCMMountPoint
 	h.receiverDomain = c.ProviderDomain
 	h.launchClient = ocmd.NewPublicOnlyClientWithConfig(transportConfig)
+	if c.SigningKey != "" {
+		if h.signingKey, err = httpsig.LoadKey(c.SigningKey); err != nil {
+			return err
+		}
+	}
 	return nil
 }
 
@@ -264,13 +270,12 @@ func (h *appsHandler) buildLaunch(ctx context.Context, shareID *ocmpb.ShareId, r
 	if err != nil {
 		return fail(err, "")
 	}
-	// The sciencemesh service has no signing_key yet, thus this token request is not signed.
 	accessToken, _, err := client.ExchangeToken(
 		ctx,
 		tokenURL,
 		secret,
 		h.receiverDomain,
-		nil,
+		h.signingKey,
 	)
 	if err != nil {
 		return fail(err, accessToken)
