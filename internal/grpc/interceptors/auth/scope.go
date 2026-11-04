@@ -349,6 +349,8 @@ func checkIfNestedResource(ctx context.Context, ref *provider.Reference, parent 
 		childPath = childStat.Info.Path
 	}
 
+	// Storage cleans the path after this check, so ".." must not get past the prefix match.
+	childPath = path.Clean(childPath)
 	return childPath == parentPath || strings.HasPrefix(childPath, parentPath+"/"), nil
 }
 
