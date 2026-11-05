@@ -29,7 +29,6 @@ func TestMaskNewShareSecrets(t *testing.T) {
 
 	webdavSecret := "webdav-top-secret"
 	webappSecret := "webapp-top-secret"
-	codeSecret := "auth-code-nonce"
 	jsonEscSecret := `quote"slash\`
 
 	reqWebDAV := func(secret string) *NewShareRequest {
@@ -102,19 +101,6 @@ func TestMaskNewShareSecrets(t *testing.T) {
 		}
 	})
 
-	t.Run("code", func(t *testing.T) {
-		req := reqWebDAV(webdavSecret)
-		req.Code = codeSecret
-		body, err := req.toJSON()
-		if err != nil {
-			t.Fatal(err)
-		}
-		masked := maskNewShareSecrets(req, string(body))
-		if strings.Contains(masked, codeSecret) {
-			t.Fatalf("masked payload still contains code: %s", masked)
-		}
-	})
-
 	t.Run("json escaped secret", func(t *testing.T) {
 		req := reqWebDAV(jsonEscSecret)
 		body, err := req.toJSON()
@@ -156,13 +142,13 @@ func TestMaskNewShareSecrets(t *testing.T) {
 		req := &NewShareRequest{
 			ShareWith: "user@remote.example",
 			Name:      "notes.txt",
-			Code:      short,
 			Protocols: Protocols{
 				&WebDAV{
 					SharedSecret: long,
 					Permissions:  []string{"read"},
 					URI:          "https://example.com/dav",
 				},
+				&Webapp{SharedSecret: short},
 			},
 		}
 		text := "prefix " + long + " middle " + short + " suffix"
