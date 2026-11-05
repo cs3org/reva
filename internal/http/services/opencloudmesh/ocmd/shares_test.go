@@ -86,6 +86,8 @@ type sharesMockGW struct {
 	gateway.GatewayAPIClient
 	createResp     *ocmincoming.CreateOCMIncomingShareResponse
 	rejectAccepted bool
+	createCalls    int
+	created        *ocmincoming.CreateOCMIncomingShareRequest
 }
 
 func (m *sharesMockGW) IsProviderAllowed(context.Context, *ocmprovider.IsProviderAllowedRequest, ...grpc.CallOption) (*ocmprovider.IsProviderAllowedResponse, error) {
@@ -103,7 +105,9 @@ func (m *sharesMockGW) GetUser(context.Context, *userpb.GetUserRequest, ...grpc.
 	}, nil
 }
 
-func (m *sharesMockGW) CreateOCMIncomingShare(context.Context, *ocmincoming.CreateOCMIncomingShareRequest, ...grpc.CallOption) (*ocmincoming.CreateOCMIncomingShareResponse, error) {
+func (m *sharesMockGW) CreateOCMIncomingShare(_ context.Context, req *ocmincoming.CreateOCMIncomingShareRequest, _ ...grpc.CallOption) (*ocmincoming.CreateOCMIncomingShareResponse, error) {
+	m.createCalls++
+	m.created = req
 	return m.createResp, nil
 }
 
@@ -538,9 +542,9 @@ func runSharesProxyChild(t *testing.T, scenario string) {
 	}
 }
 
-func TestDiscoverOcmResourceTypesLoopbackPolicy(t *testing.T) {
-	disco := ocmDiscoveryServer(t, "webdav", "file")
-	defer disco.Close()
+func TestDiscoverOcmLoopbackPolicy(t *testing.T) {
+	srv := ocmDiscoveryServer(t, "webdav", "file")
+	defer srv.Close()
 
 	tests := []struct {
 		name    string
@@ -557,7 +561,7 @@ func TestDiscoverOcmResourceTypesLoopbackPolicy(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			h := initSharesHandler(t, &tt.conf)
-			d, err := h.ocmClient.Discover(context.Background(), disco.URL)
+			d, err := h.ocmClient.Discover(context.Background(), srv.URL)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("Discover() error = %v, wantErr %v", err, tt.wantErr)
 			}
@@ -580,7 +584,7 @@ func TestDiscoverOcmResourceTypesLoopbackPolicy(t *testing.T) {
 	}
 }
 
-func TestDiscoverOcmResourceTypesMalformedReturnsDecodeError(t *testing.T) {
+func TestDiscoverOcmMalformedReturnsDecodeError(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		_, _ = w.Write([]byte("not json"))

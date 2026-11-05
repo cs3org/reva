@@ -32,7 +32,6 @@ import (
 	"github.com/cs3org/reva/v3/pkg/appctx"
 	"github.com/cs3org/reva/v3/pkg/errtypes"
 	"github.com/cs3org/reva/v3/pkg/ocm/share"
-	"github.com/cs3org/reva/v3/pkg/permissions"
 	model "github.com/cs3org/reva/v3/pkg/share/manager/sql/model"
 	"github.com/cs3org/reva/v3/pkg/utils/cfg"
 	"github.com/pkg/errors"
@@ -146,7 +145,7 @@ func storeWebDAVAccessMethod(tx *gorm.DB, shareID uint, o *ocm.AccessMethod_Webd
 	accessMethod := &model.OcmShareProtocol{
 		OcmShareID:   uint(shareID),
 		Type:         model.WebDAVProtocol,
-		Permissions:  int(permissions.OCSFromCS3Permission(o.WebdavOptions.Permissions)),
+		Permissions:  webdavPermissionsToModel(o.WebdavOptions.Permissions),
 		AccessTypes:  accessTypesToInt(o.WebdavOptions.AccessTypes),
 		Requirements: stringsToJSON(o.WebdavOptions.Requirements),
 	}
@@ -162,7 +161,7 @@ func storeWebappAccessMethod(tx *gorm.DB, shareID uint, o *ocm.AccessMethod_Weba
 	accessMethod := &model.OcmShareProtocol{
 		OcmShareID:   uint(shareID),
 		Type:         model.WebappProtocol,
-		Permissions:  int(permissions.OCSFromCS3Permission(o.WebappOptions.GetPermissions())),
+		Permissions:  webappPermissionsToModel(o.WebappOptions.GetPermissions()),
 		Requirements: stringsToJSON(o.WebappOptions.Requirements),
 		AppName:      o.WebappOptions.AppName,
 	}
@@ -342,7 +341,7 @@ func storeWebDAVProtocol(tx *gorm.DB, shareID int64, o *ocm.Protocol_WebdavOptio
 		Type:               model.WebDAVProtocol,
 		Uri:                o.WebdavOptions.Uri,
 		SharedSecret:       o.WebdavOptions.SharedSecret,
-		Permissions:        int(permissions.OCSFromCS3Permission(o.WebdavOptions.Permissions.Permissions)),
+		Permissions:        webdavPermissionsToModel(o.WebdavOptions.Permissions.Permissions),
 		AccessTypes:        accessTypesToInt(o.WebdavOptions.AccessTypes),
 		Requirements:       stringsToJSON(o.WebdavOptions.Requirements),
 	}
@@ -359,7 +358,7 @@ func storeWebappProtocol(tx *gorm.DB, shareID int64, o *ocm.Protocol_WebappOptio
 		Type:               model.WebappProtocol,
 		Uri:                o.WebappOptions.Uri,
 		SharedSecret:       o.WebappOptions.SharedSecret,
-		Permissions:        int(permissions.OCSFromCS3Permission(o.WebappOptions.GetSharePermissions())),
+		Permissions:        webappPermissionsToModel(o.WebappOptions.GetSharePermissions()),
 		Requirements:       stringsToJSON(o.WebappOptions.Requirements),
 		Targets:            stringsToJSON(o.WebappOptions.Targets),
 		AppName:            o.WebappOptions.AppName,
@@ -656,13 +655,13 @@ func (m *mgr) queriesUpdatesOnShare(ctx context.Context, id *ocm.ShareId, f ...*
 				accessMethodUpdates = append(accessMethodUpdates, func(tx *gorm.DB) error {
 					return tx.Model(&model.OcmShareProtocol{}).
 						Where("ocm_share_id = ? AND type = ?", id.OpaqueId, model.WebDAVProtocol).
-						Update("permissions", int(permissions.RoleFromResourcePermissions(t.WebdavOptions.Permissions).OCSPermissions())).Error
+						Update("permissions", webdavPermissionsToModel(t.WebdavOptions.Permissions)).Error
 				})
 			case *ocm.AccessMethod_WebappOptions:
 				accessMethodUpdates = append(accessMethodUpdates, func(tx *gorm.DB) error {
 					// omitted fields mean "preserve stored value", as for webdav
 					u := map[string]any{
-						"permissions": int(permissions.RoleFromResourcePermissions(t.WebappOptions.GetPermissions()).OCSPermissions()),
+						"permissions": webappPermissionsToModel(t.WebappOptions.GetPermissions()),
 					}
 					if t.WebappOptions.AppName != "" {
 						u["app_name"] = t.WebappOptions.AppName
