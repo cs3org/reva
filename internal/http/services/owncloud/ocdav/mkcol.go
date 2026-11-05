@@ -28,7 +28,9 @@ import (
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/rs/zerolog"
+	gstatus "google.golang.org/grpc/status"
 
+	"github.com/cs3org/reva/v3/internal/http/services/owncloud/ocgraph"
 	"github.com/cs3org/reva/v3/pkg/appctx"
 	"github.com/cs3org/reva/v3/pkg/service"
 )
@@ -101,7 +103,7 @@ func (s *svc) handleMkcol(ctx context.Context, w http.ResponseWriter, r *http.Re
 	parentStatRes, err := client.Stat(ctx, parentStatReq)
 	if err != nil {
 		log.Error().Err(err).Msg("error sending a grpc stat request")
-		w.WriteHeader(http.StatusInternalServerError)
+		w.WriteHeader(ocgraph.GrpcCodeToHTTPStatus(gstatus.Code(err)))
 		return
 	}
 
@@ -128,7 +130,7 @@ func (s *svc) handleMkcol(ctx context.Context, w http.ResponseWriter, r *http.Re
 	statRes, err := client.Stat(ctx, statReq)
 	if err != nil {
 		log.Error().Err(err).Msg("error sending a grpc stat request")
-		w.WriteHeader(http.StatusInternalServerError)
+		w.WriteHeader(ocgraph.GrpcCodeToHTTPStatus(gstatus.Code(err)))
 		return
 	}
 
@@ -150,7 +152,7 @@ func (s *svc) handleMkcol(ctx context.Context, w http.ResponseWriter, r *http.Re
 	res, err := client.CreateContainer(ctx, req)
 	if err != nil {
 		log.Error().Err(err).Msg("error sending create container grpc request")
-		w.WriteHeader(http.StatusInternalServerError)
+		w.WriteHeader(ocgraph.GrpcCodeToHTTPStatus(gstatus.Code(err)))
 		return
 	}
 	switch res.Status.Code {

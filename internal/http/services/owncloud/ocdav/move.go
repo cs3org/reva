@@ -28,7 +28,9 @@ import (
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/rs/zerolog"
+	gstatus "google.golang.org/grpc/status"
 
+	"github.com/cs3org/reva/v3/internal/http/services/owncloud/ocgraph"
 	"github.com/cs3org/reva/v3/pkg/appctx"
 	"github.com/cs3org/reva/v3/pkg/service"
 	"github.com/cs3org/reva/v3/pkg/utils/resourceid"
@@ -89,7 +91,7 @@ func (s *svc) handleMove(ctx context.Context, w http.ResponseWriter, r *http.Req
 	srcStatRes, err := client.Stat(ctx, srcStatReq)
 	if err != nil {
 		log.Error().Err(err).Msg("error sending grpc stat request")
-		w.WriteHeader(http.StatusInternalServerError)
+		w.WriteHeader(ocgraph.GrpcCodeToHTTPStatus(gstatus.Code(err)))
 		return
 	}
 	if srcStatRes.Status.Code != rpc.Code_CODE_OK {
@@ -111,7 +113,7 @@ func (s *svc) handleMove(ctx context.Context, w http.ResponseWriter, r *http.Req
 	dstStatRes, err := client.Stat(ctx, dstStatReq)
 	if err != nil {
 		log.Error().Err(err).Msg("error getting grpc client")
-		w.WriteHeader(http.StatusInternalServerError)
+		w.WriteHeader(ocgraph.GrpcCodeToHTTPStatus(gstatus.Code(err)))
 		return
 	}
 	if dstStatRes.Status.Code != rpc.Code_CODE_OK && dstStatRes.Status.Code != rpc.Code_CODE_NOT_FOUND {
@@ -134,7 +136,7 @@ func (s *svc) handleMove(ctx context.Context, w http.ResponseWriter, r *http.Req
 		delRes, err := client.Delete(ctx, delReq)
 		if err != nil {
 			log.Error().Err(err).Msg("error sending grpc delete request")
-			w.WriteHeader(http.StatusInternalServerError)
+			w.WriteHeader(ocgraph.GrpcCodeToHTTPStatus(gstatus.Code(err)))
 			return
 		}
 
@@ -158,7 +160,7 @@ func (s *svc) handleMove(ctx context.Context, w http.ResponseWriter, r *http.Req
 		intStatRes, err := client.Stat(ctx, intStatReq)
 		if err != nil {
 			log.Error().Err(err).Msg("error sending grpc stat request")
-			w.WriteHeader(http.StatusInternalServerError)
+			w.WriteHeader(ocgraph.GrpcCodeToHTTPStatus(gstatus.Code(err)))
 			return
 		}
 		if intStatRes.Status.Code != rpc.Code_CODE_OK {
@@ -178,7 +180,7 @@ func (s *svc) handleMove(ctx context.Context, w http.ResponseWriter, r *http.Req
 	mRes, err := client.Move(ctx, mReq)
 	if err != nil {
 		log.Error().Err(err).Msg("error sending move grpc request")
-		w.WriteHeader(http.StatusInternalServerError)
+		w.WriteHeader(ocgraph.GrpcCodeToHTTPStatus(gstatus.Code(err)))
 		return
 	}
 
@@ -199,7 +201,7 @@ func (s *svc) handleMove(ctx context.Context, w http.ResponseWriter, r *http.Req
 	dstStatRes, err = client.Stat(ctx, dstStatReq)
 	if err != nil {
 		log.Error().Err(err).Msg("error sending grpc stat request")
-		w.WriteHeader(http.StatusInternalServerError)
+		w.WriteHeader(ocgraph.GrpcCodeToHTTPStatus(gstatus.Code(err)))
 		return
 	}
 

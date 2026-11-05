@@ -33,7 +33,9 @@ import (
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
+	gstatus "google.golang.org/grpc/status"
 
+	"github.com/cs3org/reva/v3/internal/http/services/owncloud/ocgraph"
 	"github.com/cs3org/reva/v3/internal/http/services/owncloud/ocs/conversions"
 	"github.com/cs3org/reva/v3/pkg/appctx"
 	"github.com/cs3org/reva/v3/pkg/spaces"
@@ -185,7 +187,7 @@ func (h *TrashbinHandler) Handler(s *svc) http.Handler {
 			getHomeRes, err := gc.GetHome(ctx, &provider.GetHomeRequest{})
 			if err != nil {
 				log.Error().Err(err).Msg("error calling GetHome")
-				w.WriteHeader(http.StatusInternalServerError)
+				w.WriteHeader(ocgraph.GrpcCodeToHTTPStatus(gstatus.Code(err)))
 				return
 			}
 			if getHomeRes.Status.Code != rpc.Code_CODE_OK {
@@ -301,7 +303,7 @@ func (h *TrashbinHandler) listTrashbin(w http.ResponseWriter, r *http.Request, s
 	})
 	if err != nil {
 		sublog.Error().Err(err).Msg("error calling ListRecycle")
-		w.WriteHeader(http.StatusInternalServerError)
+		w.WriteHeader(ocgraph.GrpcCodeToHTTPStatus(gstatus.Code(err)))
 		return
 	}
 
@@ -332,7 +334,7 @@ func (h *TrashbinHandler) listTrashbin(w http.ResponseWriter, r *http.Request, s
 			getRecycleRes, err := gc.ListRecycle(ctx, &provider.ListRecycleRequest{Ref: &provider.Reference{Path: basePath}, Key: key})
 			if err != nil {
 				sublog.Error().Err(err).Msg("error calling ListRecycle")
-				w.WriteHeader(http.StatusInternalServerError)
+				w.WriteHeader(ocgraph.GrpcCodeToHTTPStatus(gstatus.Code(err)))
 				return
 			}
 
@@ -557,7 +559,7 @@ func (h *TrashbinHandler) restore(w http.ResponseWriter, r *http.Request, s *svc
 	dstStatRes, err := client.Stat(ctx, dstStatReq)
 	if err != nil {
 		sublog.Error().Err(err).Msg("error sending grpc stat request")
-		w.WriteHeader(http.StatusInternalServerError)
+		w.WriteHeader(ocgraph.GrpcCodeToHTTPStatus(gstatus.Code(err)))
 		return
 	}
 
@@ -576,7 +578,7 @@ func (h *TrashbinHandler) restore(w http.ResponseWriter, r *http.Request, s *svc
 		parentStatResponse, err := client.Stat(ctx, parentStatReq)
 		if err != nil {
 			sublog.Error().Err(err).Msg("error sending grpc stat request")
-			w.WriteHeader(http.StatusInternalServerError)
+			w.WriteHeader(ocgraph.GrpcCodeToHTTPStatus(gstatus.Code(err)))
 			return
 		}
 
@@ -606,7 +608,7 @@ func (h *TrashbinHandler) restore(w http.ResponseWriter, r *http.Request, s *svc
 		delRes, err := client.Delete(ctx, delReq)
 		if err != nil {
 			sublog.Error().Err(err).Msg("error sending grpc delete request")
-			w.WriteHeader(http.StatusInternalServerError)
+			w.WriteHeader(ocgraph.GrpcCodeToHTTPStatus(gstatus.Code(err)))
 			return
 		}
 
@@ -631,7 +633,7 @@ func (h *TrashbinHandler) restore(w http.ResponseWriter, r *http.Request, s *svc
 	res, err := client.RestoreRecycleItem(ctx, req)
 	if err != nil {
 		sublog.Error().Err(err).Msg("error sending a grpc restore recycle item request")
-		w.WriteHeader(http.StatusInternalServerError)
+		w.WriteHeader(ocgraph.GrpcCodeToHTTPStatus(gstatus.Code(err)))
 		return
 	}
 
@@ -651,7 +653,7 @@ func (h *TrashbinHandler) restore(w http.ResponseWriter, r *http.Request, s *svc
 	dstStatRes, err = client.Stat(ctx, dstStatReq)
 	if err != nil {
 		sublog.Error().Err(err).Msg("error sending grpc stat request")
-		w.WriteHeader(http.StatusInternalServerError)
+		w.WriteHeader(ocgraph.GrpcCodeToHTTPStatus(gstatus.Code(err)))
 		return
 	}
 	if dstStatRes.Status.Code != rpc.Code_CODE_OK {
@@ -693,7 +695,7 @@ func (h *TrashbinHandler) delete(w http.ResponseWriter, r *http.Request, s *svc,
 	res, err := client.PurgeRecycle(ctx, req)
 	if err != nil {
 		sublog.Error().Err(err).Msg("error sending a grpc restore recycle item request")
-		w.WriteHeader(http.StatusInternalServerError)
+		w.WriteHeader(ocgraph.GrpcCodeToHTTPStatus(gstatus.Code(err)))
 		return
 	}
 	switch res.Status.Code {
