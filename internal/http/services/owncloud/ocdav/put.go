@@ -175,6 +175,11 @@ func (s *svc) handlePut(ctx context.Context, w http.ResponseWriter, r *http.Requ
 			w.WriteHeader(http.StatusConflict)
 			return
 		}
+		if r.Header.Get(HeaderIfNoneMatch) == "*" {
+			log.Debug().Msg("resource exists and If-None-Match is *")
+			w.WriteHeader(http.StatusPreconditionFailed)
+			return
+		}
 		clientETag := r.Header.Get(HeaderIfMatch)
 		serverETag := info.Etag
 		if clientETag != "" {
