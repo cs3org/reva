@@ -81,7 +81,6 @@ type NewShareRequest struct {
 	Sender            string    `json:"sender"            validate:"required"`                             // unique indentifier of the user who wants to share the resource at provider side
 	OwnerDisplayName  string    `json:"ownerDisplayName"`                                                  // display name of the owner of the resource
 	SenderDisplayName string    `json:"senderDisplayName"`                                                 // dispay name of the user who wants to share the resource
-	Code              string    `json:"code"`                                                              // nonce to be exchanged for a bearer token (not implemented for now)
 	ShareType         string    `json:"shareType"         validate:"required,oneof=user group federation"` // recipient share type (user or group)
 	ResourceType      string    `json:"resourceType"      validate:"required"`
 	Expiration        uint64    `json:"expiration"`
