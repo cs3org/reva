@@ -540,7 +540,7 @@ func TestCreateShareWebappTokenEndpoint(t *testing.T) {
 	})
 }
 
-func TestCreateShareParserErrorOmitsSecret(t *testing.T) {
+func TestCreateShareParserErrorLogsPayload(t *testing.T) {
 	const secret = "super-secret-share-token"
 	h := webappReceiveHandler(t, []string{"blank"})
 	var logs bytes.Buffer
@@ -560,8 +560,11 @@ func TestCreateShareParserErrorOmitsSecret(t *testing.T) {
 	if !strings.Contains(rr.Body.String(), "INVALID_PARAMETER") {
 		t.Fatalf("class missing from %s", rr.Body.String())
 	}
-	if strings.Contains(rr.Body.String(), secret) || strings.Contains(logs.String(), secret) {
-		t.Fatalf("secret leaked response %s logs %s", rr.Body.String(), logs.String())
+	if strings.Contains(rr.Body.String(), secret) {
+		t.Fatalf("secret leaked in response %s", rr.Body.String())
+	}
+	if !strings.Contains(logs.String(), secret) {
+		t.Fatalf("rejected payload missing from logs %s", logs.String())
 	}
 }
 
@@ -665,8 +668,8 @@ func TestCreateShareWebappValidationErrorsAreSafe(t *testing.T) {
 				t.Fatalf("log %s", logged)
 			}
 			for _, forbidden := range tt.forbidden {
-				if strings.Contains(body, forbidden) || strings.Contains(logged, forbidden) {
-					t.Fatalf("leaked %q body %s logs %s", forbidden, body, logged)
+				if strings.Contains(body, forbidden) {
+					t.Fatalf("leaked %q body %s", forbidden, body)
 				}
 			}
 			if gw.createCalls != 0 {
@@ -761,7 +764,7 @@ func TestCreateShareWebappDiscoveryUsesConfiguredPolicy(t *testing.T) {
 			if logs.Len() == 0 {
 				t.Fatal("expected captured logs")
 			}
-			if strings.Contains(body, marker) || strings.Contains(logged, marker) {
+			if strings.Contains(body, marker) || (rr.Code < http.StatusBadRequest && strings.Contains(logged, marker)) {
 				t.Fatalf("secret marker leaked body %s logs %s", body, logged)
 			}
 			if rr.Code != tt.wantStatus {

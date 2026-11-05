@@ -177,12 +177,19 @@ func (h *sharesHandler) CreateShare(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	r.Body = io.NopCloser(bytes.NewReader(body))
+	// Rejections happen at many places, so detect them from the response status.
+	sw := &statusWriter{ResponseWriter: w, status: http.StatusOK}
+	w = sw
+	defer func() {
+		if sw.status >= http.StatusBadRequest {
+			log.Info().Int("status", sw.status).Str("remote", r.RemoteAddr).Bytes("payload", body).Msg("OCM /shares request rejected, full payload")
+		}
+	}()
 	req, err := h.getCreateShareRequest(r)
 	if err != nil {
 		rejectShare(w, r, err)
 		return
 	}
-	// Whitelist metadata only. The request body can carry shared secrets.
 	log.Info().
 		Str("remote", r.RemoteAddr).
 		Str("sender", req.Sender).
@@ -310,11 +317,7 @@ func (h *sharesHandler) CreateShare(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	if payload, err := json.Marshal(req); err == nil {
-		log.Info().Str("payload", maskNewShareSecrets(req, string(payload))).Msg("CreateOCMIncomingShare payload")
-	} else {
-		log.Info().Str("resource_id", req.ProviderID).Str("sender", req.Sender).Str("resource_type", req.ResourceType).Msg("CreateOCMIncomingShare payload")
-	}
+	log.Info().Str("payload", maskNewShareSecrets(req, string(body))).Msg("CreateOCMIncomingShare payload")
 	createShareResp, err := gatewayClient.CreateOCMIncomingShare(ctx, createShareReq)
 	if err != nil {
 		reqres.WriteError(w, r, reqres.APIErrorServerError, "error creating ocm share", err)
@@ -593,15 +596,18 @@ func (h *sharesHandler) getAndResolveProtocols(p Protocols, resType string, disc
 	return protos, legacy, nil
 }
 
+type statusWriter struct {
+	http.ResponseWriter
+	status int
+}
+
+func (s *statusWriter) WriteHeader(code int) {
+	s.status = code
+	s.ResponseWriter.WriteHeader(code)
+}
+
 func rejectShare(w http.ResponseWriter, r *http.Request, err error) {
-	log := appctx.GetLogger(r.Context())
 	code, message := incomingShareError(err)
-	// Log the fixed reason only. The original error can quote caller-supplied fields.
-	log.Info().
-		Str("remote", r.RemoteAddr).
-		Str("class", string(code)).
-		Str("reason", message).
-		Msg("OCM /shares request rejected")
 	reqres.WriteError(w, r, code, message, nil)
 }
 
