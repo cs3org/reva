@@ -19,7 +19,6 @@
 package sciencemesh
 
 import (
-	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -80,7 +79,7 @@ func TestSenderDiscoveryOrigin(t *testing.T) {
 	}
 }
 
-func TestOpenInAppDiscoversAtSenderIdp(t *testing.T) {
+func TestWebappLaunchDiscoversAtSenderIdp(t *testing.T) {
 	obs := &observeClient{token: launchToken}
 	share := receivedWebappShare(
 		"https://dav.example/remote.php/dav",
@@ -93,16 +92,14 @@ func TestOpenInAppDiscoversAtSenderIdp(t *testing.T) {
 
 	req, _ := newLaunchRequest(t, "/ocm/share-1")
 	rec := httptest.NewRecorder()
-	h.OpenInApp(rec, req)
-	if rec.Code != http.StatusOK {
-		t.Fatalf("status %d body %s", rec.Code, rec.Body.String())
-	}
+	h.WebappLaunch(rec, req)
+	launchedForm(t, rec)
 	if obs.discoverCalls != 1 || len(obs.origins) != 1 || obs.origins[0] != "sender.example" {
 		t.Fatalf("discover %d origins %v", obs.discoverCalls, obs.origins)
 	}
 }
 
-func TestOpenInAppSenderDiscoveryWithoutTokenEndpoint(t *testing.T) {
+func TestWebappLaunchSenderDiscoveryWithoutTokenEndpoint(t *testing.T) {
 	obs := &observeClient{
 		token:          launchToken,
 		endpointByCall: []string{""},
@@ -116,26 +113,14 @@ func TestOpenInAppSenderDiscoveryWithoutTokenEndpoint(t *testing.T) {
 	share.Creator.Idp = "sender.example"
 	h := newTestHandler(t, &fakeReceivedGateway{resp: okShareResponse(share)}, obs)
 
-	req, _ := newLaunchRequest(t, "/ocm/share-1")
+	req, logs := newLaunchRequest(t, "/ocm/share-1")
 	rec := httptest.NewRecorder()
-	h.OpenInApp(rec, req)
-	if rec.Code != http.StatusBadRequest {
-		t.Fatalf("status %d body %s", rec.Code, rec.Body.String())
-	}
-	if !strings.Contains(rec.Body.String(), "tokenEndPoint") {
-		t.Fatalf("body %s", rec.Body.String())
-	}
+	h.WebappLaunch(rec, req)
+	assertLaunchRefused(t, rec, logs.String(), http.StatusBadRequest, "tokenEndPoint")
 	if obs.discoverCalls != 1 || obs.exchangeCalls != 0 {
 		t.Fatalf("discover %d exchange %d", obs.discoverCalls, obs.exchangeCalls)
 	}
 	if len(obs.origins) != 1 || obs.origins[0] != "sender.example" {
 		t.Fatalf("origins %v", obs.origins)
-	}
-	var payload map[string]any
-	if err := json.Unmarshal(rec.Body.Bytes(), &payload); err != nil {
-		t.Fatal(err)
-	}
-	if _, ok := payload["app_url"]; ok {
-		t.Fatalf("payload %v", payload)
 	}
 }
