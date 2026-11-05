@@ -559,6 +559,11 @@ func checksumFromEOS(xs *eosclient.Checksum) *provider.ResourceChecksum {
 	switch strings.ToLower(xs.XSType) {
 	case "adler", "adler32":
 		out.Type = provider.ResourceChecksumType_RESOURCE_CHECKSUM_TYPE_ADLER32
+		// EOS writes adler32 with leading zeros. The desktop clients write it
+		// without leading zeros, and they compare the two strings exactly.
+		if v, err := strconv.ParseUint(xs.XSSum, 16, 32); err == nil {
+			out.Sum = strconv.FormatUint(v, 16)
+		}
 	case "md5":
 		out.Type = provider.ResourceChecksumType_RESOURCE_CHECKSUM_TYPE_MD5
 	case "sha1":
