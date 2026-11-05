@@ -23,6 +23,7 @@ package ocmsharecode
 
 import (
 	"context"
+	"strings"
 
 	authpb "github.com/cs3org/go-cs3apis/cs3/auth/provider/v1beta1"
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
@@ -35,6 +36,7 @@ import (
 	"github.com/cs3org/reva/v3/pkg/auth/manager/registry"
 	"github.com/cs3org/reva/v3/pkg/auth/scope"
 	"github.com/cs3org/reva/v3/pkg/errtypes"
+	"github.com/cs3org/reva/v3/pkg/ocm/providerdomain"
 	ocmshareutil "github.com/cs3org/reva/v3/pkg/ocm/share"
 	"github.com/cs3org/reva/v3/pkg/service"
 	"github.com/cs3org/reva/v3/pkg/sharedconf"
@@ -77,13 +79,16 @@ func (m *manager) Configure(ml map[string]any) error {
 	return nil
 }
 
-// Authenticate validates an exchange code (the existing long-lived OCM WebDAV shared secret)
-// and returns the accepted user with a shareId/resource-only scope for JWT minting.
-// The generic auth interface passes OAuth client_id as the first argument. In OCM code flow
-// that identifies the receiving server, so share lookup must come from the exchanged code.
-// TODO(lopresti) here we could also enforce that the domain of the remote request matches
-// the domain recorded in `shareRes`, taking into account forwarded host headers etc.
-func (m *manager) Authenticate(ctx context.Context, clientID, code string) (*userpb.User, map[string]*authpb.Scope, error) {
+// Authenticate checks that clientID is the receiving provider. The code is the only share lookup key.
+func (m *manager) Authenticate(
+	ctx context.Context,
+	clientID string,
+	code string,
+) (*userpb.User, map[string]*authpb.Scope, error) {
+	if err := providerdomain.Validate(clientID); err != nil {
+		return nil, nil, errtypes.InvalidCredentials("invalid ocm client_id")
+	}
+
 	log := appctx.GetLogger(ctx).With().Str("client_id", clientID).Logger()
 
 	gw, err := service.Gateway(ctx)
@@ -94,21 +99,43 @@ func (m *manager) Authenticate(ctx context.Context, clientID, code string) (*use
 	shareRes, err := gw.GetOCMShareByToken(ctx, &ocm.GetOCMShareByTokenRequest{
 		Token: code,
 	})
-
-	switch {
-	case err != nil:
+	if err != nil {
 		log.Error().Err(err).Msg("error getting ocm share by code")
 		return nil, nil, err
-	case shareRes.Status.Code == rpc.Code_CODE_NOT_FOUND:
+	}
+	if shareRes == nil || shareRes.Status == nil {
+		return nil, nil, errtypes.InternalError("missing ocm share response")
+	}
+
+	switch shareRes.Status.Code {
+	case rpc.Code_CODE_NOT_FOUND:
 		return nil, nil, errtypes.NotFound(shareRes.Status.Message)
-	case shareRes.Status.Code == rpc.Code_CODE_PERMISSION_DENIED:
+	case rpc.Code_CODE_PERMISSION_DENIED:
 		return nil, nil, errtypes.InvalidCredentials(shareRes.Status.Message)
-	case shareRes.Status.Code != rpc.Code_CODE_OK:
+	case rpc.Code_CODE_OK:
+	default:
 		return nil, nil, errtypes.InternalError(shareRes.Status.Message)
 	}
 
+	share := shareRes.GetShare()
+	if strings.TrimSpace(share.GetId().GetOpaqueId()) == "" {
+		return nil, nil, errtypes.InvalidCredentials("ocm share is missing provider id")
+	}
+
+	// The stored recipient must match clientID; sender and creator are not compared.
+	grantee := share.GetGrantee().GetUserId()
+	if grantee == nil {
+		return nil, nil, errtypes.InvalidCredentials("ocm share is missing grantee")
+	}
+	recipient := grantee.GetIdp()
+	recipientInvalid := providerdomain.Validate(recipient) != nil
+	recipientMismatch := !strings.EqualFold(clientID, recipient)
+	if recipientInvalid || recipientMismatch {
+		return nil, nil, errtypes.InvalidCredentials("ocm share receiver does not match client_id")
+	}
+
 	// Resolve the accepted user (same pattern as ocmshares)
-	u := shareRes.Share.Grantee.GetUserId()
+	u := grantee
 	d, err := utils.MarshalProtoV1ToJSON(shareRes.GetShare().Creator)
 	if err != nil {
 		return nil, nil, err
@@ -131,10 +158,14 @@ func (m *manager) Authenticate(ctx context.Context, clientID, code string) (*use
 	switch {
 	case err != nil:
 		return nil, nil, err
+	case userRes == nil || userRes.Status == nil:
+		return nil, nil, errtypes.InternalError("missing accepted user response")
 	case userRes.Status.Code == rpc.Code_CODE_NOT_FOUND:
 		return nil, nil, errtypes.NotFound(userRes.Status.Message)
 	case userRes.Status.Code != rpc.Code_CODE_OK:
 		return nil, nil, errtypes.InternalError(userRes.Status.Message)
+	case userRes.RemoteUser == nil:
+		return nil, nil, errtypes.InvalidCredentials("ocm share is missing grantee")
 	}
 
 	role, roleStr := ocmshareutil.GetRole(shareRes.Share)
