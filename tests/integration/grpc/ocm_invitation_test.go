@@ -482,7 +482,7 @@ func ocmInvitationSpecs(signed bool) {
 					Expect(ocmUsersEqual(list.Map(users, remoteToCs3User), []*userpb.User{})).To(BeTrue())
 
 					ocmToken, code := generateToken(tknEinstein, cernboxURL)
-					Expect(code).To(Equal(http.StatusOK))
+					Expect(code).To(Equal(http.StatusCreated))
 
 					code = acceptInvite(tknMarie, cesnetURL, "127.0.0.1:12345", ocmToken.Token)
 					Expect(code).To(Equal(http.StatusOK))
