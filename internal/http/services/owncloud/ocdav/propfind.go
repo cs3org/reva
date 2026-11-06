@@ -39,8 +39,10 @@ import (
 	link "github.com/cs3org/go-cs3apis/cs3/sharing/link/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	types "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
+	gstatus "google.golang.org/grpc/status"
 
 	"github.com/cs3org/reva/v3/internal/grpc/services/storageprovider"
+	"github.com/cs3org/reva/v3/internal/http/services/owncloud/ocgraph"
 	"github.com/cs3org/reva/v3/pkg/appctx"
 	"github.com/cs3org/reva/v3/pkg/permissions"
 	"github.com/cs3org/reva/v3/pkg/service"
@@ -252,7 +254,7 @@ func (s *svc) getResourceInfos(ctx context.Context, w http.ResponseWriter, r *ht
 	res, err := client.Stat(ctx, req)
 	if err != nil {
 		log.Error().Err(err).Interface("req", req).Msg("error sending a stat request to the gateway")
-		w.WriteHeader(http.StatusInternalServerError)
+		w.WriteHeader(ocgraph.GrpcCodeToHTTPStatus(gstatus.Code(err)))
 		return nil, nil, "", false
 	} else if res.Status.Code != rpc.Code_CODE_OK {
 		if res.Status.Code == rpc.Code_CODE_NOT_FOUND {
@@ -339,7 +341,7 @@ func (s *svc) getResourceInfos(ctx context.Context, w http.ResponseWriter, r *ht
 			res, err := client.ListContainer(ctx, req)
 			if err != nil {
 				log.Error().Err(err).Str("path", path).Msg("error sending list container grpc request")
-				w.WriteHeader(http.StatusInternalServerError)
+				w.WriteHeader(ocgraph.GrpcCodeToHTTPStatus(gstatus.Code(err)))
 				return nil, nil, "", false
 			}
 			if res.Status.Code != rpc.Code_CODE_OK {

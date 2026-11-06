@@ -30,7 +30,9 @@ import (
 	labelsv1beta1 "github.com/cs3org/go-cs3apis/cs3/labels/v1beta1"
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
+	gstatus "google.golang.org/grpc/status"
 
+	"github.com/cs3org/reva/v3/internal/http/services/owncloud/ocgraph"
 	"github.com/cs3org/reva/v3/pkg/appctx"
 	"github.com/cs3org/reva/v3/pkg/service"
 
@@ -70,7 +72,7 @@ func (s *svc) handlePathProppatch(w http.ResponseWriter, r *http.Request, ns str
 	statRes, err := c.Stat(ctx, statReq)
 	if err != nil {
 		sublog.Error().Err(err).Msg("error sending a grpc stat request")
-		w.WriteHeader(http.StatusInternalServerError)
+		w.WriteHeader(ocgraph.GrpcCodeToHTTPStatus(gstatus.Code(err)))
 		return
 	}
 
@@ -140,7 +142,7 @@ func (s *svc) handleSpacesProppatch(w http.ResponseWriter, r *http.Request, spac
 	statRes, err := c.Stat(ctx, statReq)
 	if err != nil {
 		sublog.Error().Err(err).Msg("error sending a grpc stat request")
-		w.WriteHeader(http.StatusInternalServerError)
+		w.WriteHeader(ocgraph.GrpcCodeToHTTPStatus(gstatus.Code(err)))
 		return
 	}
 
@@ -215,7 +217,7 @@ func (s *svc) handleProppatch(ctx context.Context, w http.ResponseWriter, r *htt
 					})
 					if err != nil {
 						log.Error().Err(err).Msg("error calling RemoveLabel")
-						w.WriteHeader(http.StatusInternalServerError)
+						w.WriteHeader(ocgraph.GrpcCodeToHTTPStatus(gstatus.Code(err)))
 						return nil, nil, false
 					}
 					if res.Status.Code != rpc.Code_CODE_OK {
@@ -230,7 +232,7 @@ func (s *svc) handleProppatch(ctx context.Context, w http.ResponseWriter, r *htt
 					})
 					if err != nil {
 						log.Error().Err(err).Msg("error calling AddLabel")
-						w.WriteHeader(http.StatusInternalServerError)
+						w.WriteHeader(ocgraph.GrpcCodeToHTTPStatus(gstatus.Code(err)))
 						return nil, nil, false
 					}
 					if res.Status.Code != rpc.Code_CODE_OK {
@@ -244,7 +246,7 @@ func (s *svc) handleProppatch(ctx context.Context, w http.ResponseWriter, r *htt
 				res, err := c.UnsetArbitraryMetadata(ctx, rreq)
 				if err != nil {
 					log.Error().Err(err).Msg("error sending a grpc UnsetArbitraryMetadata request")
-					w.WriteHeader(http.StatusInternalServerError)
+					w.WriteHeader(ocgraph.GrpcCodeToHTTPStatus(gstatus.Code(err)))
 					return nil, nil, false
 				}
 
@@ -268,7 +270,7 @@ func (s *svc) handleProppatch(ctx context.Context, w http.ResponseWriter, r *htt
 				res, err := c.SetArbitraryMetadata(ctx, sreq)
 				if err != nil {
 					log.Error().Err(err).Str("key", key).Str("value", value).Msg("error sending a grpc SetArbitraryMetadata request")
-					w.WriteHeader(http.StatusInternalServerError)
+					w.WriteHeader(ocgraph.GrpcCodeToHTTPStatus(gstatus.Code(err)))
 					return nil, nil, false
 				}
 

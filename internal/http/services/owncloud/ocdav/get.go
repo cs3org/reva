@@ -32,9 +32,11 @@ import (
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/rs/zerolog"
+	gstatus "google.golang.org/grpc/status"
 
 	"github.com/cs3org/reva/v3/internal/grpc/services/storageprovider"
 	"github.com/cs3org/reva/v3/internal/http/services/datagateway"
+	"github.com/cs3org/reva/v3/internal/http/services/owncloud/ocgraph"
 	"github.com/cs3org/reva/v3/pkg/appctx"
 	"github.com/cs3org/reva/v3/pkg/service"
 	"github.com/cs3org/reva/v3/pkg/spaces"
@@ -81,7 +83,7 @@ func (s *svc) handleGet(ctx context.Context, w http.ResponseWriter, r *http.Requ
 	dRes, err := client.InitiateFileDownload(ctx, dReq)
 	if err != nil {
 		log.Error().Err(err).Msg("error initiating file download")
-		w.WriteHeader(http.StatusInternalServerError)
+		w.WriteHeader(ocgraph.GrpcCodeToHTTPStatus(gstatus.Code(err)))
 		return
 	} else if dRes.Status.Code != rpc.Code_CODE_OK {
 		HandleErrorStatus(&log, w, dRes.Status)

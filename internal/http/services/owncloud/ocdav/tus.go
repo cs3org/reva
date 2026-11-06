@@ -33,7 +33,9 @@ import (
 	typespb "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
 	"github.com/rs/zerolog"
 	tusd "github.com/tus/tusd/pkg/handler"
+	gstatus "google.golang.org/grpc/status"
 
+	"github.com/cs3org/reva/v3/internal/http/services/owncloud/ocgraph"
 	"github.com/cs3org/reva/v3/pkg/appctx"
 	"github.com/cs3org/reva/v3/pkg/permissions"
 	"github.com/cs3org/reva/v3/pkg/service"
@@ -125,7 +127,7 @@ func (s *svc) handleTusPost(ctx context.Context, w http.ResponseWriter, r *http.
 	sRes, err := client.Stat(ctx, sReq)
 	if err != nil {
 		log.Error().Err(err).Msg("error sending grpc stat request")
-		w.WriteHeader(http.StatusInternalServerError)
+		w.WriteHeader(ocgraph.GrpcCodeToHTTPStatus(gstatus.Code(err)))
 		return
 	}
 
@@ -179,7 +181,7 @@ func (s *svc) handleTusPost(ctx context.Context, w http.ResponseWriter, r *http.
 	uRes, err := client.InitiateFileUpload(ctx, uReq)
 	if err != nil {
 		log.Error().Err(err).Msg("error initiating file upload")
-		w.WriteHeader(http.StatusInternalServerError)
+		w.WriteHeader(ocgraph.GrpcCodeToHTTPStatus(gstatus.Code(err)))
 		return
 	}
 
@@ -261,7 +263,7 @@ func (s *svc) handleTusPost(ctx context.Context, w http.ResponseWriter, r *http.
 			sRes, err := client.Stat(ctx, sReq)
 			if err != nil {
 				log.Error().Err(err).Msg("error sending grpc stat request")
-				w.WriteHeader(http.StatusInternalServerError)
+				w.WriteHeader(ocgraph.GrpcCodeToHTTPStatus(gstatus.Code(err)))
 				return
 			}
 
