@@ -48,6 +48,7 @@ func Command(r *cli.Runtime) *cobra.Command {
 		invokeCommand(),
 		logsCommand(),
 		jobsCommand(),
+		remindersCommand(),
 		traceCommand(),
 		stackCommand(),
 		impersonateCommand(),
