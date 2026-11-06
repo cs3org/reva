@@ -24,8 +24,8 @@ import (
 
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	"github.com/cs3org/reva/v3/pkg/appctx"
+	"github.com/cs3org/reva/v3/pkg/storage/fs/eos/acl"
 	eosclient "github.com/cs3org/reva/v3/pkg/storage/fs/eos/client"
-	"github.com/cs3org/reva/v3/pkg/storage/utils/acl"
 )
 
 // EOS applies sys.mask before it checks the mode of the parent folder, so a

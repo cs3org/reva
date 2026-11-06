@@ -7,8 +7,8 @@ import (
 
 	erpc "github.com/cern-eos/go-eosgrpc"
 	"github.com/cs3org/reva/v3/pkg/errtypes"
+	"github.com/cs3org/reva/v3/pkg/storage/fs/eos/acl"
 	eosclient "github.com/cs3org/reva/v3/pkg/storage/fs/eos/client"
-	"github.com/cs3org/reva/v3/pkg/storage/utils/acl"
 )
 
 // If the error is not nil, take that

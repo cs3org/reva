@@ -34,6 +34,7 @@ import (
 	registry "github.com/cs3org/go-cs3apis/cs3/storage/registry/v1beta1"
 	"github.com/cs3org/reva/v3/pkg/appctx"
 	"github.com/cs3org/reva/v3/pkg/auth/scope"
+	projectsregistry "github.com/cs3org/reva/v3/pkg/projects/manager/registry"
 	publicshareregistry "github.com/cs3org/reva/v3/pkg/publicshare/manager/registry"
 	"github.com/cs3org/reva/v3/pkg/reconciliation"
 	"github.com/cs3org/reva/v3/pkg/rjobs"
@@ -57,6 +58,7 @@ const (
 	jobOrphan  = "orphan"
 	jobShallow = "shallow"
 	jobExpired = "expired"
+	jobDeep    = "deep"
 )
 
 // scheduleNever is the schedule of a job that only runs when it is asked for.
@@ -86,11 +88,14 @@ type config struct {
 	ShareDrivers       map[string]map[string]any `mapstructure:"share_drivers"`
 	PublicShareDriver  string                    `mapstructure:"publicshare_driver"`
 	PublicShareDrivers map[string]map[string]any `mapstructure:"publicshare_drivers"`
-	// Orphan configures the orphan job.
-	Orphan reconciliation.Config `mapstructure:"orphan"`
-	// Shallow configures the shallow job.
-	Shallow reconciliation.Config `mapstructure:"shallow"`
-	Expired reconciliation.Config `mapstructure:"expired"`
+	// ProjectsDriver names the project catalogue the deep job reads the
+	// project roles from, the same driver the spaces registry runs on.
+	ProjectsDriver  string                    `mapstructure:"projects_driver"`
+	ProjectsDrivers map[string]map[string]any `mapstructure:"projects_drivers"`
+	Orphan          reconciliation.Config     `mapstructure:"orphan"`
+	Shallow         reconciliation.Config     `mapstructure:"shallow"`
+	Expired         reconciliation.Config     `mapstructure:"expired"`
+	Deep            reconciliation.DeepConfig `mapstructure:"deep"`
 }
 
 func (c *config) ApplyDefaults() {
@@ -103,6 +108,9 @@ func (c *config) ApplyDefaults() {
 	if c.PublicShareDriver == "" {
 		c.PublicShareDriver = "sql"
 	}
+	if c.ProjectsDriver == "" {
+		c.ProjectsDriver = "sql"
+	}
 	// a file per job, so a run of one is never interleaved with a run of
 	// another and either can be pointed somewhere else on its own.
 	if c.Orphan.LogFile == "" {
@@ -113,6 +121,9 @@ func (c *config) ApplyDefaults() {
 	}
 	if c.Expired.LogFile == "" {
 		c.Expired.LogFile = "/var/log/revad/reconciliation-expired.log"
+	}
+	if c.Deep.LogFile == "" {
+		c.Deep.LogFile = "/var/log/revad/reconciliation-deep.log"
 	}
 }
 
@@ -131,7 +142,7 @@ func New(ctx context.Context, m map[string]any) (_ rserverless.Service, err erro
 		return nil, err
 	}
 	if len(c.Jobs) == 0 {
-		return nil, errors.Errorf("reconciliation: no jobs enabled, set jobs to any of %q, %q, %q", jobOrphan, jobShallow, jobExpired)
+		return nil, errors.Errorf("reconciliation: no jobs enabled, set jobs to any of %q, %q, %q, %q", jobOrphan, jobShallow, jobExpired, jobDeep)
 	}
 
 	shares, err := getShareStore(ctx, &c)
@@ -195,8 +206,10 @@ func New(ctx context.Context, m map[string]any) (_ rserverless.Service, err erro
 			if jc.Schedule == scheduleNever {
 				jc.Schedule = ""
 			}
+		case jobDeep:
+			jc = c.Deep.Config
 		default:
-			return nil, errors.Errorf("reconciliation: unknown job %q, want %q, %q or %q", name, jobOrphan, jobShallow, jobExpired)
+			return nil, errors.Errorf("reconciliation: unknown job %q, want %q, %q, %q or %q", name, jobOrphan, jobShallow, jobExpired, jobDeep)
 		}
 
 		jobLog, logFile, err := reconciliation.OpenLog(jc.LogFile)
@@ -273,6 +286,25 @@ func New(ctx context.Context, m map[string]any) (_ rserverless.Service, err erro
 			if err := rjobs.RegisterPeriodic(periodic); err != nil {
 				return nil, errors.Wrapf(err, "reconciliation: registering %s", periodic.Name)
 			}
+		case jobDeep:
+			projects, err := getProjectStore(ctx, &c)
+			if err != nil {
+				return nil, err
+			}
+			// Gateway is left nil for the same reason as the orphan job's.
+			job := &reconciliation.DeepJob{
+				ShareStore: shares,
+				Auth:       identity.authenticate,
+				Instance:   providers.instance,
+				Project:    projects.GetProjectBySpaceID,
+				Eos:        c.Deep.Eos,
+				Log:        jobLog,
+				DryRun:     jc.DryRun,
+			}
+			jobName = reconciliation.DeepJobName
+			if err := rjobs.RegisterOnDemand(jobName, job.OnDemand); err != nil {
+				return nil, errors.Wrapf(err, "reconciliation: registering %s", jobName)
+			}
 		}
 
 		entry := log.Info().
@@ -282,7 +314,7 @@ func New(ctx context.Context, m map[string]any) (_ rserverless.Service, err erro
 			Bool("dry_run", jc.DryRun).
 			Bool("run_on_start", jc.RunOnStart).
 			Int("spaces_per_batch", jc.SpacesPerBatch)
-		if name == jobShallow {
+		if name == jobShallow || name == jobDeep {
 			entry = entry.Bool("on_demand", true)
 		}
 		entry.Msg("reconciliation: job registered")
@@ -323,6 +355,30 @@ func getPublicLinkStore(ctx context.Context, c *config) (reconciliation.PublicLi
 	store, ok := pm.(reconciliation.PublicLinkStore)
 	if !ok {
 		return nil, errors.Errorf("reconciliation: public share driver %s cannot be reconciled, it has to mark a link orphaned and to list links by space", c.PublicShareDriver)
+	}
+	return store, nil
+}
+
+// projectStore is what the deep job needs from a project catalogue. The CS3
+// listing only returns the projects of the caller, and the service user is a
+// member of none.
+type projectStore interface {
+	GetProjectBySpaceID(ctx context.Context, spaceID string) (*provider.StorageSpace, error)
+}
+
+// getProjectStore is getShareStore for the project catalogue.
+func getProjectStore(ctx context.Context, c *config) (projectStore, error) {
+	f, ok := projectsregistry.NewFuncs[c.ProjectsDriver]
+	if !ok {
+		return nil, errors.Errorf("reconciliation: projects driver not found: %s", c.ProjectsDriver)
+	}
+	pm, err := f(ctx, c.ProjectsDrivers[c.ProjectsDriver])
+	if err != nil {
+		return nil, errors.Wrapf(err, "reconciliation: opening projects driver %s", c.ProjectsDriver)
+	}
+	store, ok := pm.(projectStore)
+	if !ok {
+		return nil, errors.Errorf("reconciliation: projects driver %s cannot look up a project by space id", c.ProjectsDriver)
 	}
 	return store, nil
 }
@@ -393,6 +449,29 @@ func (p *storageProviders) grants(ctx context.Context, storageID string) (provid
 	}
 	p.clients[storageID] = c
 	return c, nil
+}
+
+// instance returns the EOS instance that holds storageID. The registry
+// resolves the alias of a storage id (eoshome-a) into the id of its provider
+// (eoshome-i01), which is the name of the instance.
+func (p *storageProviders) instance(ctx context.Context, storageID string) (string, error) {
+	reg, err := service.StorageRegistry(ctx)
+	if err != nil {
+		return "", errors.Wrap(err, "reconciliation: getting the storage registry client")
+	}
+	res, err := reg.GetStorageProviders(ctx, &registry.GetStorageProvidersRequest{
+		Ref: &provider.Reference{ResourceId: &provider.ResourceId{StorageId: storageID}},
+	})
+	if err != nil {
+		return "", errors.Wrap(err, "reconciliation: looking up the storage provider")
+	}
+	if code := res.GetStatus().GetCode(); code != rpc.Code_CODE_OK {
+		return "", errors.Errorf("reconciliation: looking up the storage provider: %s: %s", code, res.GetStatus().GetMessage())
+	}
+	if len(res.GetProviders()) == 0 || res.GetProviders()[0].GetProviderId() == "" {
+		return "", errors.Errorf("reconciliation: no storage provider for %q", storageID)
+	}
+	return res.GetProviders()[0].GetProviderId(), nil
 }
 
 // Start is a no-op: the jobs service owns the runner that fires the jobs.

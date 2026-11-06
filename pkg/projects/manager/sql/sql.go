@@ -307,6 +307,25 @@ func (m *ProjectsManager) GetProject(ctx context.Context, name string) (*Project
 	return fetchedProject, nil
 }
 
+// GetProjectBySpaceID returns the active project space with the given space id,
+// or nil when there is none. It does not check who the caller is: it is for
+// the reconciliation jobs, whose service user is a member of no project.
+func (m *ProjectsManager) GetProjectBySpaceID(ctx context.Context, spaceID string) (*provider.StorageSpace, error) {
+	var p Project
+	res := m.db.Model(&Project{}).
+		Where("space_id = ?", spaceID).
+		Where("status = ?", projects.ProjectStatusActive).
+		Limit(1).
+		Find(&p)
+	if res.Error != nil {
+		return nil, res.Error
+	}
+	if res.RowsAffected == 0 {
+		return nil, nil
+	}
+	return projectToStorageSpace(&p, nil), nil
+}
+
 // To be used only by cernboxcop.
 func (m *ProjectsManager) UpdateProjectStatus(ctx context.Context, name string, status projects.ProjectStatus) error {
 	log := appctx.GetLogger(ctx)

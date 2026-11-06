@@ -152,29 +152,6 @@ type ShallowJob struct {
 	SpacesPerBatch int
 }
 
-// ActionKind is what the job did to an ACL entry. There is no remove: the job
-// only ever adds one that is missing or corrects one that is wrong.
-type ActionKind int
-
-const (
-	// ActionAdd adds an entry that is missing.
-	ActionAdd ActionKind = iota
-	// ActionUpdate changes the permissions of an entry that is present.
-	ActionUpdate
-)
-
-// String returns a human readable name for the action kind.
-func (k ActionKind) String() string {
-	switch k {
-	case ActionAdd:
-		return "add"
-	case ActionUpdate:
-		return "update"
-	default:
-		return "unknown"
-	}
-}
-
 // WrittenGrant records one grant the job wrote, or, in dry-run, would have.
 type WrittenGrant struct {
 	ShareID string
@@ -539,7 +516,7 @@ func (j *ShallowJob) reconcileSpaces(ctx context.Context, log *zerolog.Logger, r
 
 	for i, space := range pending {
 		report.progress(rep, "apply", i, len(pending), "spaces")
-		fresh, err := j.appeared(ctx, space, seen[space])
+		fresh, err := appeared(ctx, j.ShareStore, space, seen[space])
 		if err != nil {
 			report.SkippedSpaces = append(report.SkippedSpaces, space)
 			log.Error().Err(err).
@@ -742,8 +719,8 @@ func (j *ShallowJob) applyRemovals(ctx context.Context, log *zerolog.Logger, rep
 // was checking is not in what the check compared, and it may be exactly what an
 // ancestor of it needs, or what stops a share the run wants to remove from being
 // redundant, so the caller leaves the whole space to the next run.
-func (j *ShallowJob) appeared(ctx context.Context, spaceID string, seen map[string]struct{}) (string, error) {
-	shares, err := j.ShareStore.ListShares(ctx, spaceFilters([]string{spaceID}))
+func appeared(ctx context.Context, store ShareStore, spaceID string, seen map[string]struct{}) (string, error) {
+	shares, err := store.ListShares(ctx, spaceFilters([]string{spaceID}))
 	if err != nil {
 		return "", errors.Wrapf(err, "reconciliation: listing the shares of space %q again", spaceID)
 	}
