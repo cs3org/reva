@@ -516,7 +516,7 @@ func (j *ShallowJob) reconcileSpaces(ctx context.Context, log *zerolog.Logger, r
 
 	for i, space := range pending {
 		report.progress(rep, "apply", i, len(pending), "spaces")
-		fresh, err := j.appeared(ctx, space, seen[space])
+		fresh, err := appeared(ctx, j.ShareStore, space, seen[space])
 		if err != nil {
 			report.SkippedSpaces = append(report.SkippedSpaces, space)
 			log.Error().Err(err).
@@ -719,8 +719,8 @@ func (j *ShallowJob) applyRemovals(ctx context.Context, log *zerolog.Logger, rep
 // was checking is not in what the check compared, and it may be exactly what an
 // ancestor of it needs, or what stops a share the run wants to remove from being
 // redundant, so the caller leaves the whole space to the next run.
-func (j *ShallowJob) appeared(ctx context.Context, spaceID string, seen map[string]struct{}) (string, error) {
-	shares, err := j.ShareStore.ListShares(ctx, spaceFilters([]string{spaceID}))
+func appeared(ctx context.Context, store ShareStore, spaceID string, seen map[string]struct{}) (string, error) {
+	shares, err := store.ListShares(ctx, spaceFilters([]string{spaceID}))
 	if err != nil {
 		return "", errors.Wrapf(err, "reconciliation: listing the shares of space %q again", spaceID)
 	}

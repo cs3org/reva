@@ -426,9 +426,9 @@ func TestRunAnalysis(t *testing.T) {
 	}
 
 	dumper := &recordingDumper{NSDumpClient: fileDumper(t)}
-	j := &DeepJob{shareMgr: store, gw: gw}
+	j := &DeepJob{ShareStore: store}
 
-	got, err := j.runAnalysis(context.Background(), spaceID, dumper)
+	got, _, err := j.runAnalysis(context.Background(), gw, RunParameters{SpaceID: spaceID}, dumper)
 	if err != nil {
 		t.Fatalf("runAnalysis: %v", err)
 	}
@@ -465,28 +465,28 @@ func TestRunAnalysis(t *testing.T) {
 
 func TestRunAnalysisReportsAFailedListing(t *testing.T) {
 	store := &fakeStore{listErr: errors.New("the share database is down")}
-	j := &DeepJob{shareMgr: store, gw: &fakeGateway{}}
+	j := &DeepJob{ShareStore: store}
 
-	_, err := j.runAnalysis(context.Background(), spaces.EncodeSpaceID(testSpaceRoot), fileDumper(t))
+	_, _, err := j.runAnalysis(context.Background(), &fakeGateway{}, RunParameters{SpaceID: spaces.EncodeSpaceID(testSpaceRoot)}, fileDumper(t))
 	if err == nil {
 		t.Fatal("runAnalysis: no error, want the listing error")
 	}
 }
 
 func TestRunAnalysisReportsAFailedDump(t *testing.T) {
-	j := &DeepJob{shareMgr: &fakeStore{}, gw: &fakeGateway{}}
+	j := &DeepJob{ShareStore: &fakeStore{}}
 
 	dumper := &failingDumper{err: errors.New("eos-ns-inspect failed")}
-	_, err := j.runAnalysis(context.Background(), spaces.EncodeSpaceID(testSpaceRoot), dumper)
+	_, _, err := j.runAnalysis(context.Background(), &fakeGateway{}, RunParameters{SpaceID: spaces.EncodeSpaceID(testSpaceRoot)}, dumper)
 	if err == nil {
 		t.Fatal("runAnalysis: no error, want the dump error")
 	}
 }
 
 func TestRunAnalysisRejectsABadSpaceID(t *testing.T) {
-	j := &DeepJob{shareMgr: &fakeStore{}, gw: &fakeGateway{}}
+	j := &DeepJob{ShareStore: &fakeStore{}}
 
-	_, err := j.runAnalysis(context.Background(), "this is not a space id", fileDumper(t))
+	_, _, err := j.runAnalysis(context.Background(), &fakeGateway{}, RunParameters{SpaceID: "this is not a space id"}, fileDumper(t))
 	if err == nil {
 		t.Fatal("runAnalysis: no error, want the decoding error")
 	}
@@ -724,10 +724,8 @@ func BenchmarkCompare(b *testing.B) {
 func BenchmarkRunAnalysis(b *testing.B) {
 	f := buildBenchFixture(benchEntries, benchShares)
 
-	j := &DeepJob{
-		shareMgr: &fakeStore{shares: f.shares},
-		gw:       &fakeGateway{resources: f.resources, paths: f.paths},
-	}
+	j := &DeepJob{ShareStore: &fakeStore{shares: f.shares}}
+	gw := &fakeGateway{resources: f.resources, paths: f.paths}
 	dumper := &memoryDumper{dump: f.dump}
 	spaceID := spaces.EncodeSpaceID(testSpaceRoot)
 	ctx := context.Background()
@@ -735,7 +733,7 @@ func BenchmarkRunAnalysis(b *testing.B) {
 	b.Run(fmt.Sprintf("%d entries/%d shares", len(f.dump.Entries), len(f.shares)), func(b *testing.B) {
 		b.ReportAllocs()
 		for b.Loop() {
-			if _, err := j.runAnalysis(ctx, spaceID, dumper); err != nil {
+			if _, _, err := j.runAnalysis(ctx, gw, RunParameters{SpaceID: spaceID}, dumper); err != nil {
 				b.Fatalf("runAnalysis: %v", err)
 			}
 		}

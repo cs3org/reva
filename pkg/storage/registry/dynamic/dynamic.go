@@ -196,7 +196,7 @@ func (d *dynamic) FindProviders(ctx context.Context, ref *provider.Reference) ([
 
 		if address, ok := d.r[storageID]; ok {
 			return []*registrypb.ProviderInfo{{
-				ProviderId: ref.ResourceId.StorageId,
+				ProviderId: storageID,
 				Address:    address,
 			}}, nil
 		}
