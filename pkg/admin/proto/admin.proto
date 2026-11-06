@@ -75,12 +75,19 @@ message ImpersonateRequest {
   string user = 1;
   // reason is recorded in the audit log.
   string reason = 2;
+  // allow_privileged permits a target in admin_group or a service account.
+  bool allow_privileged = 3;
+  // ttl_seconds asks for a shorter token lifetime, capped at impersonation_ttl.
+  // Zero means impersonation_ttl.
+  int64 ttl_seconds = 4;
 }
 
 message ImpersonateResponse {
   // token is an ordinary user-scoped token for the target user (never
-  // admin+user).
+  // admin+user). It carries the impersonator in its actor scope.
   string token = 1;
+  // expires_at is the token expiry as a Unix time. It is 0 if unknown.
+  int64 expires_at = 2;
 }
 
 // CheckAdminRequest asks whether the caller may step up, without stepping up:
@@ -208,6 +215,8 @@ message NodeResult {
   string result_json = 2;
   // error is set (per node) when the invocation failed on that node.
   string error = 3;
+  // code is the gRPC code of error, as in reva.control.v1beta1.InvokeResponse.
+  int32 code = 4;
 }
 
 message InvokeResponse {
@@ -219,6 +228,8 @@ message InvokeStreamResponse {
   string node = 1;
   string result_json = 2;
   string error = 3;
+  // code is the gRPC code of error, as in reva.control.v1beta1.InvokeResponse.
+  int32 code = 4;
 }
 
 // ----- Jobs -----
