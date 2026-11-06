@@ -1289,7 +1289,7 @@ func (fs *localfs) ListRevisions(ctx context.Context, ref *provider.Reference) (
 		// versions resemble v12345678
 		version := mds[i].Name()[1:]
 
-		mtime, err := strconv.Atoi(version)
+		mtime, err := strconv.ParseInt(version, 10, 64)
 		if err != nil {
 			continue
 		}
@@ -1394,7 +1394,7 @@ func (fs *localfs) convertToRecycleItem(ctx context.Context, rp string, md os.Fi
 	}
 
 	trashtime := suffix[2:]
-	ttime, err := strconv.Atoi(trashtime)
+	ttime, err := strconv.ParseInt(trashtime, 10, 64)
 	if err != nil {
 		return nil
 	}
