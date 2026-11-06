@@ -52,6 +52,7 @@ const (
 	HeaderLocation                   = "Location"
 	HeaderRange                      = "Range"
 	HeaderIfMatch                    = "If-Match"
+	HeaderIfNoneMatch                = "If-None-Match"
 	HeaderChecksum                   = "Digest"
 )
 
