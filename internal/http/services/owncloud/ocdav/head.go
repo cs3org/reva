@@ -75,7 +75,12 @@ func (s *svc) handleHead(ctx context.Context, w http.ResponseWriter, r *http.Req
 	w.Header().Set(HeaderOCFileID, spaces.EncodeToStringifiedResourceID((info.Id)))
 	w.Header().Set(HeaderOCETag, info.Etag)
 	if info.Checksum != nil {
-		w.Header().Set(HeaderOCChecksum, fmt.Sprintf("%s:%s", strings.ToUpper(string(storageprovider.GRPC2PKGXS(info.Checksum.Type))), info.Checksum.Sum))
+		// the Nextcloud client only accepts "Adler32", the ownCloud client accepts any case
+		checksumType := strings.ToUpper(string(storageprovider.GRPC2PKGXS(info.Checksum.Type)))
+		if info.Checksum.Type == provider.ResourceChecksumType_RESOURCE_CHECKSUM_TYPE_ADLER32 {
+			checksumType = "Adler32"
+		}
+		w.Header().Set(HeaderOCChecksum, fmt.Sprintf("%s:%s", checksumType, info.Checksum.Sum))
 		w.Header().Set(HeaderChecksum, fmt.Sprintf("%s=%s", strings.ToLower(string(storageprovider.GRPC2PKGXS(info.Checksum.Type))), info.Checksum.Sum))
 	}
 	t := utils.TSToTime(info.Mtime).UTC()
