@@ -142,7 +142,12 @@ func (s *svc) handleGet(ctx context.Context, w http.ResponseWriter, r *http.Requ
 		w.Header().Set(HeaderContentLength, strconv.FormatUint(info.Size, 10))
 	}
 	if info.Checksum != nil && info.Checksum.Type != provider.ResourceChecksumType_RESOURCE_CHECKSUM_TYPE_INVALID && info.Checksum.Type != provider.ResourceChecksumType_RESOURCE_CHECKSUM_TYPE_UNSET {
-		w.Header().Set(HeaderOCChecksum, fmt.Sprintf("%s:%s", strings.ToUpper(string(storageprovider.GRPC2PKGXS(info.Checksum.Type))), info.Checksum.Sum))
+		// the Nextcloud client only accepts "Adler32", the ownCloud client accepts any case
+		checksumType := strings.ToUpper(string(storageprovider.GRPC2PKGXS(info.Checksum.Type)))
+		if info.Checksum.Type == provider.ResourceChecksumType_RESOURCE_CHECKSUM_TYPE_ADLER32 {
+			checksumType = "Adler32"
+		}
+		w.Header().Set(HeaderOCChecksum, fmt.Sprintf("%s:%s", checksumType, info.Checksum.Sum))
 	}
 	var c int64
 	if c, err = io.Copy(w, httpRes.Body); err != nil {
