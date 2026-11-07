@@ -44,10 +44,10 @@ type envelopeCase struct {
 	HandlerCalls int             `json:"handlerCalls"`
 }
 
-// Unregistered types are ignored, so these rows expect 201 without dispatch.
+// The old counterpart-only payload no longer identifies a contact target.
 var deferredEnvelopes = map[string]envelopeCase{
-	"ENV-039": {HTTP: 201},
-	"ENV-040": {HTTP: 201},
+	"ENV-039": {HTTP: 400},
+	"ENV-040": {HTTP: 400},
 }
 
 func TestParseNotificationEnvelopeCorpus(t *testing.T) {

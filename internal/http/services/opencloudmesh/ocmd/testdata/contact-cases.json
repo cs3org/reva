@@ -1,0 +1,311 @@
+{
+ "schema_pointers": {
+  "notification": "#/components/schemas/NewNotification"
+ },
+ "cases": [
+  {
+   "id": "contact-valid",
+   "valid": true,
+   "payload": {
+    "notificationType": "CONTACT_REMOVED",
+    "shareType": "user",
+    "senderDomain": "alice.example.org",
+    "notification": {
+     "message": "Alice removed Bob from her contacts",
+     "user": {
+      "userId": "alice@alice.example.org",
+      "targetUserId": "bob@bob.example.org"
+     }
+    }
+   }
+  },
+  {
+   "id": "contact-missing-target",
+   "valid": false,
+   "payload": {
+    "notificationType": "CONTACT_REMOVED",
+    "shareType": "user",
+    "senderDomain": "alice.example.org",
+    "notification": {
+     "user": {
+      "userId": "alice@alice.example.org"
+     }
+    }
+   }
+  },
+  {
+   "id": "contact-null-target",
+   "valid": false,
+   "payload": {
+    "notificationType": "CONTACT_REMOVED",
+    "shareType": "user",
+    "senderDomain": "alice.example.org",
+    "notification": {
+     "user": {
+      "userId": "alice@alice.example.org",
+      "targetUserId": null
+     }
+    }
+   }
+  },
+  {
+   "id": "contact-empty-target",
+   "valid": false,
+   "payload": {
+    "notificationType": "CONTACT_REMOVED",
+    "shareType": "user",
+    "senderDomain": "alice.example.org",
+    "notification": {
+     "user": {
+      "userId": "alice@alice.example.org",
+      "targetUserId": ""
+     }
+    }
+   }
+  },
+  {
+   "id": "contact-wrong-sharetype",
+   "valid": false,
+   "payload": {
+    "notificationType": "CONTACT_REMOVED",
+    "shareType": "group",
+    "senderDomain": "alice.example.org",
+    "notification": {
+     "user": {
+      "userId": "alice@alice.example.org",
+      "targetUserId": "bob@bob.example.org"
+     }
+    }
+   }
+  },
+  {
+   "id": "contact-resourceType-present",
+   "valid": false,
+   "payload": {
+    "notificationType": "CONTACT_REMOVED",
+    "shareType": "user",
+    "resourceType": "file",
+    "senderDomain": "alice.example.org",
+    "notification": {
+     "user": {
+      "userId": "alice@alice.example.org",
+      "targetUserId": "bob@bob.example.org"
+     }
+    }
+   }
+  },
+  {
+   "id": "contact-resourceType-null",
+   "valid": false,
+   "payload": {
+    "notificationType": "CONTACT_REMOVED",
+    "shareType": "user",
+    "resourceType": null,
+    "senderDomain": "alice.example.org",
+    "notification": {
+     "user": {
+      "userId": "alice@alice.example.org",
+      "targetUserId": "bob@bob.example.org"
+     }
+    }
+   }
+  },
+  {
+   "id": "contact-old-counterpart-only",
+   "valid": false,
+   "payload": {
+    "notificationType": "CONTACT_REMOVED",
+    "shareType": "user",
+    "senderDomain": "alice.example.org",
+    "notification": {
+     "user": {
+      "userId": "alice@alice.example.org",
+      "counterpartUserId": "bob@bob.example.org"
+     }
+    }
+   }
+  },
+  {
+   "id": "contact-port-host-addresses",
+   "valid": true,
+   "payload": {
+    "notificationType": "CONTACT_REMOVED",
+    "shareType": "user",
+    "senderDomain": "cloud.example.org:8443",
+    "notification": {
+     "user": {
+      "userId": "alice@cloud.example.org:8443",
+      "targetUserId": "bob@[2001:db8::1]:8443"
+     }
+    }
+   }
+  },
+  {
+   "id": "contact-actor-port-mismatch-host",
+   "valid": true,
+   "payload": {
+    "notificationType": "CONTACT_REMOVED",
+    "shareType": "user",
+    "senderDomain": "cloud.example.org",
+    "notification": {
+     "user": {
+      "userId": "alice@cloud.example.org:8443",
+      "targetUserId": "bob@bob.example.org"
+     }
+    }
+   }
+  },
+  {
+   "id": "contact-target-with-spaces-opaque",
+   "valid": true,
+   "payload": {
+    "notificationType": "CONTACT_REMOVED",
+    "shareType": "user",
+    "senderDomain": "alice.example.org",
+    "notification": {
+     "user": {
+      "userId": "alice@alice.example.org",
+      "targetUserId": "bob smith@bob.example.org"
+     }
+    }
+   }
+  },
+  {
+   "id": "contact-target-not-address",
+   "valid": false,
+   "payload": {
+    "notificationType": "CONTACT_REMOVED",
+    "shareType": "user",
+    "senderDomain": "alice.example.org",
+    "notification": {
+     "user": {
+      "userId": "alice@alice.example.org",
+      "targetUserId": "not-an-address"
+     }
+    }
+   }
+  },
+  {
+   "id": "user-removed-valid",
+   "valid": true,
+   "payload": {
+    "notificationType": "USER_REMOVED",
+    "shareType": "user",
+    "senderDomain": "alice.example.org",
+    "notification": {
+     "user": {
+      "userId": "alice@alice.example.org"
+     }
+    }
+   }
+  },
+  {
+   "id": "user-removed-wrong-sharetype",
+   "valid": false,
+   "payload": {
+    "notificationType": "USER_REMOVED",
+    "shareType": "group",
+    "senderDomain": "alice.example.org",
+    "notification": {
+     "user": {
+      "userId": "alice@alice.example.org"
+     }
+    }
+   }
+  },
+  {
+   "id": "user-removed-with-target",
+   "valid": false,
+   "payload": {
+    "notificationType": "USER_REMOVED",
+    "shareType": "user",
+    "senderDomain": "alice.example.org",
+    "notification": {
+     "user": {
+      "userId": "alice@alice.example.org",
+      "targetUserId": "bob@bob.example.org"
+     }
+    }
+   }
+  },
+  {
+   "id": "group-removed-valid",
+   "valid": true,
+   "payload": {
+    "notificationType": "GROUP_REMOVED",
+    "shareType": "group",
+    "senderDomain": "alice.example.org",
+    "notification": {
+     "group": {
+      "groupId": "fencing-club"
+     }
+    }
+   }
+  },
+  {
+   "id": "group-removed-wrong-sharetype",
+   "valid": false,
+   "payload": {
+    "notificationType": "GROUP_REMOVED",
+    "shareType": "user",
+    "senderDomain": "alice.example.org",
+    "notification": {
+     "group": {
+      "groupId": "fencing-club"
+     }
+    }
+   }
+  },
+  {
+   "id": "unknown-type-extension-valid",
+   "valid": true,
+   "payload": {
+    "notificationType": "EXAMPLE_CUSTOM_EVENT",
+    "resourceType": "file",
+    "senderDomain": "sender.example.org",
+    "notification": {
+     "message": "Something happened"
+    }
+   }
+  },
+  {
+   "id": "unknown-type-blank-tab",
+   "valid": false,
+   "payload": {
+    "notificationType": "\t",
+    "resourceType": "file",
+    "senderDomain": "sender.example.org",
+    "notification": {
+     "message": "x"
+    }
+   }
+  },
+  {
+   "id": "unknown-type-blank-nbsp",
+   "valid": false,
+   "payload": {
+    "notificationType": "\u00a0",
+    "resourceType": "file",
+    "senderDomain": "sender.example.org",
+    "notification": {
+     "message": "x"
+    }
+   }
+  },
+  {
+   "id": "contact-localuserid-only",
+   "valid": false,
+   "payload": {
+    "notificationType": "CONTACT_REMOVED",
+    "shareType": "user",
+    "senderDomain": "alice.example.org",
+    "notification": {
+     "user": {
+      "userId": "alice@alice.example.org",
+      "localUserId": "bob@bob.example.org"
+     }
+    }
+   }
+  }
+ ]
+}
