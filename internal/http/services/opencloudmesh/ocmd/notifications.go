@@ -154,7 +154,10 @@ func (h *notifHandler) authenticate(ctx context.Context, w http.ResponseWriter, 
 		reqres.WriteError(w, r, reqres.APIErrorUnauthenticated, "provider not authorized", nil)
 		return errors.New("rejected")
 	}
-	disco, err := h.ocmClient.Discover(ctx, n.SenderDomain)
+	// Discovery may log peer-supplied response data; this route reports only
+	// fixed categories for untrusted notification senders.
+	discard := zerolog.Nop()
+	disco, err := h.ocmClient.Discover(appctx.WithLogger(ctx, &discard), n.SenderDomain)
 	if err != nil {
 		notificationLog(log.Info(), n).Str("outcome", "rejected").Msg("notification sender discovery failed")
 		reqres.WriteError(w, r, reqres.APIErrorServerError, "error discovering the sending OCM server", nil)
