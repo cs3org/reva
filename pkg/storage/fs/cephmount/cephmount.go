@@ -453,7 +453,14 @@ func (fs *cephmountfs) fileAsResourceInfo(ctx context.Context, path string, info
 		OpaqueId: strconv.FormatUint(stat.Ino, 10),
 	}
 
-	owner, _ := user.LookupId(fmt.Sprint(stat.Uid))
+	// A uid without an account on this node, such as a deleted user, can still
+	// own files. Like the eos driver, leave the owner empty, so the listing works.
+	var owner *userv1beta1.UserId
+	if u, err := user.LookupId(fmt.Sprint(stat.Uid)); err == nil {
+		owner = &userv1beta1.UserId{OpaqueId: u.Username}
+	} else {
+		appctx.GetLogger(ctx).Debug().Uint32("uid", stat.Uid).Err(err).Msg("cephmount: cannot find the owner, leaving it empty")
+	}
 
 	externalPath := fs.fromChroot(path)
 
@@ -495,7 +502,7 @@ func (fs *cephmountfs) fileAsResourceInfo(ctx context.Context, path string, info
 		// even though the resource itself is addressed by path or id.
 		Name:              filepath.Base(externalPath),
 		Etag:              calcEtag(info, stat, rctime),
-		Owner:             &userv1beta1.UserId{OpaqueId: owner.Username},
+		Owner:             owner,
 		PermissionSet:     perms,
 		ArbitraryMetadata: &provider.ArbitraryMetadata{Metadata: map[string]string{}},
 	}
