@@ -39,6 +39,7 @@ const (
 	NotificationShareChangePermission = "SHARE_CHANGE_PERMISSION"
 	NotificationRequestReshare        = "REQUEST_RESHARE"
 	NotificationRequestShare          = "REQUEST_SHARE"
+	NotificationContactRemoved        = "CONTACT_REMOVED"
 	NotificationUserRemoved           = "USER_REMOVED"
 	NotificationGroupRemoved          = "GROUP_REMOVED"
 )
@@ -89,7 +90,8 @@ type NotificationFile struct {
 
 // NotificationUser is the user object of recipient notifications.
 type NotificationUser struct {
-	UserID string `json:"userId"`
+	UserID       string `json:"userId"`
+	TargetUserID string `json:"targetUserId,omitempty"`
 }
 
 // NotificationGroup is the group object of recipient notifications.
@@ -485,11 +487,37 @@ func validateUserRemoved(n *Notification) error {
 	if err != nil {
 		return err
 	}
+	if _, ok := user["targetUserId"]; ok {
+		return invalidField("notification.user.targetUserId")
+	}
 	id, err := payloadAddress(user, "user", "userId")
 	if err != nil {
 		return err
 	}
 	n.User = &NotificationUser{UserID: id}
+	return nil
+}
+
+func validateContactRemoved(n *Notification) error {
+	if n.ShareType != "user" {
+		return invalidField("shareType")
+	}
+	if err := n.forbid("resourceType"); err != nil {
+		return err
+	}
+	user, err := n.payloadObject("user")
+	if err != nil {
+		return err
+	}
+	id, err := payloadAddress(user, "user", "userId")
+	if err != nil {
+		return err
+	}
+	target, err := payloadAddress(user, "user", "targetUserId")
+	if err != nil {
+		return err
+	}
+	n.User = &NotificationUser{UserID: id, TargetUserID: target}
 	return nil
 }
 
@@ -523,6 +551,7 @@ var builtinContracts = map[string]ValidateNotificationFunc{
 	NotificationShareDeclined:         validateShareState,
 	NotificationShareUnshared:         validateShareState,
 	NotificationShareChangePermission: validateShareState,
+	NotificationContactRemoved:        validateContactRemoved,
 	NotificationUserRemoved:           validateUserRemoved,
 	NotificationGroupRemoved:          validateGroupRemoved,
 }
