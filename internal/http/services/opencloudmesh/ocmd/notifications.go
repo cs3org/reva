@@ -25,8 +25,12 @@ import (
 	"mime"
 	"net/http"
 
+	ocmprovider "github.com/cs3org/go-cs3apis/cs3/ocm/provider/v1beta1"
+	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	"github.com/cs3org/reva/v3/internal/http/services/reqres"
 	"github.com/cs3org/reva/v3/pkg/appctx"
+	"github.com/cs3org/reva/v3/pkg/service"
+	"github.com/cs3org/reva/v3/pkg/utils"
 	"github.com/rs/zerolog"
 )
 
@@ -39,10 +43,19 @@ const maxLoggedTypeLength = 64
 
 type notifHandler struct {
 	registry *NotificationRegistry
+	endpoint string
+	// strictHTTPSig mirrors the shares handler: a peer that did not sign is
+	// only accepted in permissive mode and when it does not advertise http-sig.
+	strictHTTPSig     bool
+	trustForwardedFor bool
+	ocmClient         *OCMClient
 }
 
 func (h *notifHandler) init(c *config) error {
 	h.registry = NewNotificationRegistry()
+	h.endpoint = c.Endpoint
+	h.strictHTTPSig = c.HTTPSigMode == "strict"
+	h.trustForwardedFor = c.TrustForwardedFor
 	// No effect is wired at this layer: valid notifications are only logged.
 	for _, t := range []string{
 		NotificationShareAccepted,
@@ -76,13 +89,20 @@ func (h *notifHandler) Notifications(w http.ResponseWriter, r *http.Request) {
 	n, err := h.registry.Parse(body)
 	switch ReceiverStatus(err) {
 	case NotificationStatusNotImplemented:
-		notificationLog(log.Info(), n).Str("outcome", "not_implemented").Msg("OCM notification type not implemented")
-		reqres.WriteError(w, r, reqres.APIErrorUnimplemented, NotificationReason(err), nil)
-		return
+		// A valid request of an unimplemented type still authenticates first:
+		// its refusal is deferred until policy and signature checks have run.
 	case NotificationStatusBadRequest:
 		reason := NotificationReason(err)
 		notificationLog(log.Info(), n).Str("outcome", "rejected").Str("reason", reason).Msg("invalid OCM notification")
 		reqres.WriteError(w, r, reqres.APIErrorInvalidParameter, reason, nil)
+		return
+	}
+	if err := h.authenticate(ctx, w, r, body, n); err != nil {
+		return
+	}
+	if ReceiverStatus(err) == NotificationStatusNotImplemented {
+		notificationLog(log.Info(), n).Str("outcome", "not_implemented").Msg("OCM notification type not implemented")
+		reqres.WriteError(w, r, reqres.APIErrorUnimplemented, NotificationReason(err), nil)
 		return
 	}
 
@@ -94,6 +114,58 @@ func (h *notifHandler) Notifications(w http.ResponseWriter, r *http.Request) {
 		notificationLog(log.Info(), n).Str("outcome", string(outcome)).Msg("OCM notification of unknown type ignored")
 	}
 	w.WriteHeader(http.StatusCreated)
+}
+
+// authenticate applies the provider policy of the sender domain, discovers
+// that canonical origin through the guarded public-only client and verifies
+// the request signature before any effect or accepted response. Fixed
+// messages only: a remote keyid, algorithm or transport error is not trusted
+// input and never reaches the response or the log.
+func (h *notifHandler) authenticate(ctx context.Context, w http.ResponseWriter, r *http.Request, body []byte, n *Notification) error {
+	log := appctx.GetLogger(ctx)
+	if n == nil || n.SenderDomain == "" {
+		reqres.WriteError(w, r, reqres.APIErrorInvalidParameter, "notification senderDomain is required", nil)
+		return errors.New("rejected")
+	}
+	senderIP, err := utils.GetClientIP(r, h.trustForwardedFor)
+	if err != nil {
+		reqres.WriteError(w, r, reqres.APIErrorServerError, "error retrieving client IP from request", err)
+		return err
+	}
+	gatewayClient, err := service.Gateway(ctx)
+	if err != nil {
+		reqres.WriteError(w, r, reqres.APIErrorServerError, "error getting gateway client", err)
+		return err
+	}
+	providerAllowedResp, err := gatewayClient.IsProviderAllowed(ctx, &ocmprovider.IsProviderAllowedRequest{
+		Provider: &ocmprovider.ProviderInfo{
+			Domain: n.SenderDomain,
+			Services: []*ocmprovider.Service{
+				{Host: senderIP},
+			},
+		},
+	})
+	if err != nil {
+		reqres.WriteError(w, r, reqres.APIErrorServerError, "error sending a grpc isProviderAllowed request", err)
+		return err
+	}
+	if providerAllowedResp.Status.Code != rpc.Code_CODE_OK {
+		notificationLog(log.Info(), n).Str("outcome", "rejected").Msg("notification sender provider not authorized")
+		reqres.WriteError(w, r, reqres.APIErrorUnauthenticated, "provider not authorized", nil)
+		return errors.New("rejected")
+	}
+	disco, err := h.ocmClient.Discover(ctx, n.SenderDomain)
+	if err != nil {
+		notificationLog(log.Info(), n).Str("outcome", "rejected").Msg("notification sender discovery failed")
+		reqres.WriteError(w, r, reqres.APIErrorServerError, "error discovering the sending OCM server", nil)
+		return err
+	}
+	if err := verifySignature(ctx, h.ocmClient, r, body, h.endpoint, h.strictHTTPSig, disco); err != nil {
+		notificationLog(log.Info(), n).Str("outcome", "rejected").Msg("notification signature verification failed")
+		reqres.WriteError(w, r, reqres.APIErrorUnauthenticated, "invalid HTTP signature", nil)
+		return err
+	}
+	return nil
 }
 
 // readNotificationBody accepts JSON bodies up to maxNotificationBody.

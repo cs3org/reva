@@ -54,11 +54,13 @@ func TestUnprotectedIncludesTokenPath(t *testing.T) {
 
 func TestUnprotectedIncludesNotificationsPath(t *testing.T) {
 	s := &svc{}
-	paths := s.Unprotected()
+	r := router.New()
+	s.Routes(r)
+	paths := r.Unprotected()
 
 	count := 0
 	for _, p := range paths {
-		if p == notificationsPath {
+		if p == mount+notificationsPath {
 			count++
 		}
 	}
