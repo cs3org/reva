@@ -37,7 +37,6 @@ import (
 	"github.com/cs3org/reva/v3/pkg/appctx"
 	ocmshare "github.com/cs3org/reva/v3/pkg/ocm/share"
 	"github.com/cs3org/reva/v3/pkg/service"
-	"github.com/go-chi/chi/v5"
 	"google.golang.org/grpc"
 )
 
@@ -109,13 +108,10 @@ func ocsAccept(t *testing.T, version string, update *rpc.Status) (*httptest.Resp
 	t.Helper()
 	stampOCSGateway(&withdrawnGateway{share: ocsShare("7", ocmpb.ShareState_SHARE_STATE_INVALID), update: update})
 	h := &Handler{}
-	r := chi.NewRouter()
-	r.Route("/v{version:(1|2)}.php", func(r chi.Router) {
-		r.Use(response.VersionCtx)
-		r.Post("/shares/pending/{id}", func(w http.ResponseWriter, req *http.Request) {
-			h.updateReceivedFederatedShare(w, req, chi.URLParam(req, "id"), false)
-		})
-	})
+	r := http.NewServeMux()
+	r.Handle("POST /v"+version+".php/shares/pending/{id}", response.VersionCtx(version)(http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+		h.updateReceivedFederatedShare(w, req, req.PathValue("id"), false)
+	})))
 	rec := httptest.NewRecorder()
 	r.ServeHTTP(rec, httptest.NewRequest(http.MethodPost, "/v"+version+".php/shares/pending/7?format=json", nil))
 	var body struct {
