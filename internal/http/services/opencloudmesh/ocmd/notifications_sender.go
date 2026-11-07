@@ -27,11 +27,13 @@ import (
 	"net"
 	"net/http"
 	"net/url"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
 
 	"github.com/cs3org/reva/v3/pkg/appctx"
+	"github.com/cs3org/reva/v3/pkg/ocm/httpsig"
 	"github.com/cs3org/reva/v3/pkg/ocm/providerdomain"
 )
 
@@ -135,11 +137,17 @@ func (s ShareStateNotification) Build() (*OutgoingNotification, error) {
 // ocmNotificationTransport adapts OCMClient to the portable transitions.
 type ocmNotificationTransport struct {
 	c *OCMClient
+	// key is the sending service's own notification signing key. It may be
+	// nil; a peer that requires signed notifications is then failed before
+	// any request.
+	key *httpsig.Key
 }
 
 var (
 	errInvalidPeer     = errors.New("peer is not an OCM host")
 	errUnsupportedPeer = errors.New("peer host cannot be reached over HTTP as written")
+	errNoSigningKey    = errors.New("peer requires signed notifications but no signing key is configured")
+	errSigningFailed   = errors.New("notification signing failed")
 )
 
 // notificationDiscoveryBase is the URL of the peer identity, or false when
@@ -232,14 +240,29 @@ func parseRetryAfter(v string) time.Duration {
 	return time.Duration(n) * time.Second
 }
 
-// PostNotification sends the body once, without following redirects. The
-// response body is ignored and read only up to the control-plane limit.
-func (t ocmNotificationTransport) PostNotification(ctx context.Context, endpoint string, body []byte) (NotificationResponse, error) {
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, endpoint, bytes.NewReader(body))
+// PostNotification sends the body once, without following redirects. A
+// configured key signs exactly the bytes that are sent, even for a peer that
+// does not advertise http-sig; a peer that requires signatures without a
+// local key fails before anything is sent. The response body is ignored and
+// read only up to the control-plane limit.
+func (t ocmNotificationTransport) PostNotification(ctx context.Context, peer *NotificationPeer, body []byte) (NotificationResponse, error) {
+	if peer == nil || peer.Endpoint == "" {
+		return NotificationResponse{}, errInvalidPeer
+	}
+	if t.key == nil && slices.Contains(peer.Capabilities, "http-sig") {
+		return NotificationResponse{}, errNoSigningKey
+	}
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, peer.Endpoint, bytes.NewReader(body))
 	if err != nil {
 		return NotificationResponse{}, errPostFailed
 	}
 	req.Header.Set("Content-Type", "application/json")
+	req.ContentLength = int64(len(body))
+	if t.key != nil {
+		if err := t.key.Sign(req, body); err != nil {
+			return NotificationResponse{}, errSigningFailed
+		}
+	}
 	// Never follow a redirect: a 307/308 would re-send the body, including
 	// the optional secret, to another URL. A 3xx is an unclassified rejection.
 	noRedirect := *t.c.client
@@ -256,7 +279,7 @@ func (t ocmNotificationTransport) PostNotification(ctx context.Context, endpoint
 // NewNotification sends a notification to the OCM server at domain if it
 // advertises the notifications capability. It is attempted at most once.
 // https://cs3org.github.io/OCM-API/docs.html?branch=develop&repo=OCM-API&user=cs3org#/paths/~1notifications/post
-func (c *OCMClient) NewNotification(ctx context.Context, domain string, n *OutgoingNotification) SendResult {
+func (c *OCMClient) NewNotification(ctx context.Context, domain string, n *OutgoingNotification, key *httpsig.Key) SendResult {
 	log := appctx.GetLogger(ctx)
 	if n == nil {
 		return SendResult{Outcome: SendPostFailed, Failure: FailureError}
@@ -265,7 +288,7 @@ func (c *OCMClient) NewNotification(ctx context.Context, domain string, n *Outgo
 	if err != nil {
 		return SendResult{Outcome: SendPostFailed, Failure: FailureError}
 	}
-	res := SendNotification(ctx, ocmNotificationTransport{c: c}, domain, body)
+	res := SendNotification(ctx, ocmNotificationTransport{c: c, key: key}, domain, body)
 	event := log.Info()
 	if res.Outcome != SendDelivered {
 		event = log.Warn()
