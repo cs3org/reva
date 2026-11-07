@@ -26,39 +26,94 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"regexp"
 	"strings"
 	"sync/atomic"
 	"testing"
 
+	gateway "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
+	ocmprovider "github.com/cs3org/go-cs3apis/cs3/ocm/provider/v1beta1"
+	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	"github.com/cs3org/reva/v3/internal/http/services/reqres"
 	"github.com/cs3org/reva/v3/pkg/appctx"
+	"github.com/cs3org/reva/v3/pkg/ocm/client"
+	"github.com/cs3org/reva/v3/pkg/rhttp/router"
 	"github.com/rs/zerolog"
+	"google.golang.org/grpc"
 )
 
 const receiverSecret = "receiver-secret-0f8a7c"
 
+// notifFixtureHost is the loopback address of the per-test discovery server
+// the corpus bodies' senderDomain is dialled against. Receiver tests in this
+// file are sequential, so one var is safe.
+var notifFixtureHost string
+
 // newNotificationsService builds the real ocmd service, inherited ingress
-// limiter included, and closes it when the test ends.
+// limiter included, with an authorized provider policy and a reachable
+// discovery origin, and closes them when the test ends.
 func newNotificationsService(t *testing.T) *svc {
 	t.Helper()
+	stampGateway(&notificationsMockGW{})
+	disco := ocmDiscoveryServer(t, "webdav", "file")
+	t.Cleanup(disco.Close)
 	s, err := New(context.Background(), map[string]any{
 		"gatewaysvc":     "localhost:0",
 		"token_managers": map[string]any{"jwt": map[string]any{"secret": "test-only-jwt-secret"}},
+		"endpoint":       fmt.Sprintf("http://%s", disco.Listener.Addr().String()),
 	})
 	if err != nil {
 		t.Fatalf("ocmd service: %v", err)
 	}
 	t.Cleanup(func() { _ = s.Close() })
-	return s.(*svc)
+	sv := s.(*svc)
+	sv.notifications.ocmClient = NewPublicOnlyClientWithConfig(client.TransportConfig{AllowLoopback: true})
+	notifFixtureHost = disco.Listener.Addr().String()
+	return sv
+}
+
+// notificationsMockGW authorizes every sending provider, the fixture origin
+// policy the signature matrix runs behind.
+type notificationsMockGW struct {
+	gateway.GatewayAPIClient
+}
+
+func (m *notificationsMockGW) IsProviderAllowed(context.Context, *ocmprovider.IsProviderAllowedRequest, ...grpc.CallOption) (*ocmprovider.IsProviderAllowedResponse, error) {
+	return &ocmprovider.IsProviderAllowedResponse{
+		Status: &rpc.Status{Code: rpc.Code_CODE_OK},
+	}, nil
+}
+
+// handlerFor mounts the service routes the way revad does, so receiver tests
+// exercise the real ingress path including its middleware.
+func handlerFor(s *svc) http.Handler {
+	r := router.New()
+	s.Routes(r.Service("ocmd"))
+	return r
 }
 
 var clientSeq atomic.Uint32
 
+// postNotification posts body to the mounted route. dial swaps an accepted
+// request's example sender hosts for the reachable fixture origin: the
+// grammar corpus asserts parse admission for hosts that have no real network,
+// while a request that the test expects to be rejected stays byte-exact so
+// parse rejection remains provable. The port suffix is dropped for dialing;
+// the parser still sees the original spelling.
+var fixtureSenderDomain = regexp.MustCompile(`"senderDomain":\s*"[^"]*"`)
+
 func postNotification(t *testing.T, h http.Handler, contentType, body string) (*httptest.ResponseRecorder, string) {
+	return postNotificationDial(t, h, contentType, body, false)
+}
+
+func postNotificationDial(t *testing.T, h http.Handler, contentType, body string, dial bool) (*httptest.ResponseRecorder, string) {
 	t.Helper()
+	if dial && notifFixtureHost != "" {
+		body = fixtureSenderDomain.ReplaceAllString(body, `"senderDomain":"`+notifFixtureHost+`"`)
+	}
 	var logs bytes.Buffer
 	logger := zerolog.New(&logs).Level(zerolog.DebugLevel)
-	req := httptest.NewRequest(http.MethodPost, notificationsPath, strings.NewReader(body))
+	req := httptest.NewRequest(http.MethodPost, mount+notificationsPath, strings.NewReader(body))
 	// Each request comes from its own client, so that the contract tests
 	// never drain one bucket of the shared ingress limiter.
 	req.RemoteAddr = fmt.Sprintf("[2001:db8:%x::1]:1000", clientSeq.Add(1))
@@ -110,12 +165,13 @@ func TestNotificationsEnvelopeCorpusThroughRouter(t *testing.T) {
 			h := &recordingHandler{}
 			for typ := range builtinContracts {
 				if !IsRequestNotification(typ) {
-					if err := s.notif.registry.SetHandler(typ, h); err != nil {
+					if err := s.notifications.registry.SetHandler(typ, h); err != nil {
 						t.Fatal(err)
 					}
 				}
 			}
-			rr, _ := postNotification(t, s.Handler(), "application/json", string(tc.Body))
+			dial := want.HTTP == http.StatusCreated || want.HTTP == http.StatusNotImplemented
+			rr, _ := postNotificationDial(t, handlerFor(s), "application/json", string(tc.Body), dial)
 			checkResponse(t, rr, want.HTTP, codes[want.HTTP])
 			if len(h.seen) != want.HandlerCalls {
 				t.Fatalf("%s: handler calls %d, want %d", tc.Purpose, len(h.seen), want.HandlerCalls)
@@ -125,7 +181,7 @@ func TestNotificationsEnvelopeCorpusThroughRouter(t *testing.T) {
 }
 
 func TestNotificationsReceiverMatrix(t *testing.T) {
-	h := newNotificationsService(t).Handler()
+	h := handlerFor(newNotificationsService(t))
 	cases := []struct {
 		name        string
 		contentType string
@@ -158,7 +214,8 @@ func TestNotificationsReceiverMatrix(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			rr, logs := postNotification(t, h, tc.contentType, tc.body)
+			dial := tc.status == http.StatusCreated || tc.status == http.StatusNotImplemented
+			rr, logs := postNotificationDial(t, h, tc.contentType, tc.body, dial)
 			if strings.Contains(logs, receiverSecret) || strings.Contains(rr.Body.String(), receiverSecret) {
 				t.Fatalf("shared secret leaked: %s", logs)
 			}
@@ -168,15 +225,15 @@ func TestNotificationsReceiverMatrix(t *testing.T) {
 }
 
 func TestNotificationsSuccessResponseBytes(t *testing.T) {
-	h := newNotificationsService(t).Handler()
-	rr, _ := postNotification(t, h, "application/json", `{"notificationType":"SHARE_UNSHARED","senderDomain":"a.example.org","resourceType":"file","notification":{"file":{"providerId":"42"}}}`)
+	h := handlerFor(newNotificationsService(t))
+	rr, _ := postNotificationDial(t, h, "application/json", `{"notificationType":"SHARE_UNSHARED","senderDomain":"a.example.org","resourceType":"file","notification":{"file":{"providerId":"42"}}}`, true)
 	if rr.Code != http.StatusCreated || rr.Body.Len() != 0 || rr.Header().Get("Content-Type") != "" {
 		t.Fatalf("status %d body %q content-type %q", rr.Code, rr.Body.String(), rr.Header().Get("Content-Type"))
 	}
 }
 
 func TestNotificationsLogsStructuredFieldsWithoutPayload(t *testing.T) {
-	h := newNotificationsService(t).Handler()
+	h := handlerFor(newNotificationsService(t))
 	paths := map[string]string{
 		"success": `{"notificationType":"SHARE_ACCEPTED","senderDomain":"b.example.org","resourceType":"file","notification":{"sharedSecret":"` + receiverSecret + `","message":"payload-text","file":{"providerId":"42"}}}`,
 		"schema":  `{"notificationType":"SHARE_ACCEPTED","senderDomain":"b.example.org","resourceType":"file","notification":{"sharedSecret":"` + receiverSecret + `","message":"payload-text"}}`,
@@ -186,7 +243,8 @@ func TestNotificationsLogsStructuredFieldsWithoutPayload(t *testing.T) {
 	}
 	for name, body := range paths {
 		t.Run(name, func(t *testing.T) {
-			_, logs := postNotification(t, h, "application/json", body)
+			dial := name != "decode"
+			_, logs := postNotificationDial(t, h, "application/json", body, dial)
 			if strings.Contains(logs, receiverSecret) || strings.Contains(logs, "payload-text") {
 				t.Fatalf("raw payload logged: %s", logs)
 			}
@@ -195,8 +253,8 @@ func TestNotificationsLogsStructuredFieldsWithoutPayload(t *testing.T) {
 			}
 		})
 	}
-	_, logs := postNotification(t, h, "application/json", paths["success"])
-	for _, want := range []string{`"type":"SHARE_ACCEPTED"`, `"class":"A"`, `"has_shared_secret":true`, `"provider_id":"42"`, `"sender_domain":"b.example.org"`} {
+	_, logs := postNotificationDial(t, h, "application/json", paths["success"], true)
+	for _, want := range []string{`"type":"SHARE_ACCEPTED"`, `"class":"A"`, `"has_shared_secret":true`, `"provider_id":"42"`, `"sender_domain":"` + notifFixtureHost + `"`} {
 		if !strings.Contains(logs, want) {
 			t.Fatalf("log lacks %s: %s", want, logs)
 		}
@@ -210,20 +268,38 @@ func TestNotificationsLogsStructuredFieldsWithoutPayload(t *testing.T) {
 
 // The core log tier performs no mutation, outbound call or delivery: the
 // receiver works without any reachable gateway or peer.
-func TestNotificationsLogTierNeedsNoGatewayOrPeer(t *testing.T) {
-	peer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+// The log tier stays dispatch-free: after the required policy, discovery and
+// signature authentication, an accepted notification only logs. It never
+// calls a share-affecting gateway operation or a further peer endpoint.
+func TestNotificationsLogTierNeedsNoPeer(t *testing.T) {
+	unrelatedPeer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		t.Errorf("unexpected outbound request %s %s", r.Method, r.URL)
 	}))
-	defer peer.Close()
-	h := newNotificationsService(t).Handler()
-	host := strings.TrimPrefix(peer.URL, "http://")
+	defer unrelatedPeer.Close()
+	stampGateway(&notificationsMockGW{})
+	disco := ocmDiscoveryServer(t, "webdav", "file")
+	defer disco.Close()
+	s, err := New(context.Background(), map[string]any{
+		"gatewaysvc":     "localhost:0",
+		"token_managers": map[string]any{"jwt": map[string]any{"secret": "test-only-jwt-secret"}},
+		"endpoint":       fmt.Sprintf("http://%s", disco.Listener.Addr().String()),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = s.Close() })
+	sv := s.(*svc)
+	sv.notifications.ocmClient = NewPublicOnlyClientWithConfig(client.TransportConfig{AllowLoopback: true})
+	notifFixtureHost = disco.Listener.Addr().String()
+	h := handlerFor(sv)
+	host := strings.TrimPrefix(unrelatedPeer.URL, "http://")
 	for _, typ := range []string{"SHARE_ACCEPTED", "SHARE_DECLINED", "SHARE_UNSHARED", "SHARE_CHANGE_PERMISSION"} {
-		rr, _ := postNotification(t, h, "application/json", `{"notificationType":"`+typ+`","senderDomain":"peer.example.org","resourceType":"file","notification":{"file":{"providerId":"42"}}}`)
+		rr, _ := postNotificationDial(t, h, "application/json", `{"notificationType":"`+typ+`","senderDomain":"peer.example.org","resourceType":"file","notification":{"file":{"providerId":"42"}}}`, true)
 		if rr.Code != http.StatusCreated {
 			t.Fatalf("%s: %d", typ, rr.Code)
 		}
 	}
-	rr, _ := postNotification(t, h, "application/json", `{"notificationType":"USER_REMOVED","senderDomain":"peer.example.org","shareType":"user","notification":{"user":{"userId":"alice@`+host+`"}}}`)
+	rr, _ := postNotificationDial(t, h, "application/json", `{"notificationType":"USER_REMOVED","senderDomain":"peer.example.org","shareType":"user","notification":{"user":{"userId":"alice@`+host+`"}}}`, true)
 	if rr.Code != http.StatusCreated {
 		t.Fatalf("USER_REMOVED: %d", rr.Code)
 	}
@@ -234,7 +310,7 @@ func TestNotificationsRejectedKnownTypeReachesNoHandler(t *testing.T) {
 	calls := 0
 	count := TypeHandlerFunc(func(context.Context, *Notification) error { calls++; return nil })
 	for _, typ := range []string{NotificationUserRemoved, NotificationShareUnshared, NotificationShareChangePermission} {
-		if err := s.notif.registry.SetHandler(typ, count); err != nil {
+		if err := s.notifications.registry.SetHandler(typ, count); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -244,7 +320,7 @@ func TestNotificationsRejectedKnownTypeReachesNoHandler(t *testing.T) {
 		`{"notificationType":"SHARE_CHANGE_PERMISSION","senderDomain":"a.example.org","resourceType":"file","notification":{"file":{"providerId":"42","permissions":["leaky-value"]}}}`,
 		`{"notificationType":"SHARE_UNSHARED","senderDomain":"leaky-value.example.org:bad","resourceType":"file","notification":{"file":{"providerId":"42"}}}`,
 	} {
-		rr, logs := postNotification(t, s.Handler(), "application/json", body)
+		rr, logs := postNotification(t, handlerFor(s), "application/json", body)
 		if rr.Code != http.StatusBadRequest || strings.Contains(rr.Body.String(), "leaky-value") || strings.Contains(logs, "leaky-value") {
 			t.Fatalf("status %d body %s logs %s", rr.Code, rr.Body.String(), logs)
 		}
@@ -252,7 +328,7 @@ func TestNotificationsRejectedKnownTypeReachesNoHandler(t *testing.T) {
 	if calls != 0 {
 		t.Fatalf("handler ran %d times for invalid notifications", calls)
 	}
-	rr, _ := postNotification(t, s.Handler(), "application/json", `{"notificationType":"USER_REMOVED","senderDomain":"a.example.org","shareType":"user","notification":{"user":{"userId":"alice@a.example.org"}}}`)
+	rr, _ := postNotificationDial(t, handlerFor(s), "application/json", `{"notificationType":"USER_REMOVED","senderDomain":"a.example.org","shareType":"user","notification":{"user":{"userId":"alice@a.example.org"}}}`, true)
 	if rr.Code != http.StatusCreated || calls != 1 {
 		t.Fatalf("valid notification: status %d calls %d", rr.Code, calls)
 	}
@@ -265,7 +341,7 @@ func TestNotificationsTypeBlanknessThroughRouter(t *testing.T) {
 	h := &recordingHandler{}
 	for typ := range builtinContracts {
 		if !IsRequestNotification(typ) {
-			if err := s.notif.registry.SetHandler(typ, h); err != nil {
+			if err := s.notifications.registry.SetHandler(typ, h); err != nil {
 				t.Fatal(err)
 			}
 		}
@@ -280,8 +356,9 @@ func TestNotificationsTypeBlanknessThroughRouter(t *testing.T) {
 		{`\u0085EXT\u2003`, http.StatusCreated},
 		{" SHARE_UNSHARED ", http.StatusCreated},
 	} {
-		rr, logs := postNotification(t, s.Handler(), "application/json",
-			`{"notificationType":"`+tc.typ+`","senderDomain":"a.example.org","resourceType":"file","notification":{"file":{"providerId":"42"}}}`)
+		dial := tc.status == http.StatusCreated
+		rr, logs := postNotificationDial(t, handlerFor(s), "application/json",
+			`{"notificationType":"`+tc.typ+`","senderDomain":"a.example.org","resourceType":"file","notification":{"file":{"providerId":"42"}}}`, dial)
 		code := reqres.APIErrorCode("")
 		if tc.status == http.StatusBadRequest {
 			code = reqres.APIErrorInvalidParameter
@@ -322,10 +399,10 @@ func TestNotificationsDiagnosticsCarryNoCallerText(t *testing.T) {
 	const value = "secret-value-marker-0b5e"
 	s := newNotificationsService(t)
 	h := &recordingHandler{}
-	if err := s.notif.registry.SetHandler(NotificationShareUnshared, h); err != nil {
+	if err := s.notifications.registry.SetHandler(NotificationShareUnshared, h); err != nil {
 		t.Fatal(err)
 	}
-	if err := s.notif.registry.RegisterExtension(NotificationExtension{
+	if err := s.notifications.registry.RegisterExtension(NotificationExtension{
 		Type:     "EXAMPLE_WRAP",
 		Validate: func(*Notification) error { return fmt.Errorf("%s: %w", key, invalidField("notification")) },
 		Handler:  h,
@@ -336,7 +413,7 @@ func TestNotificationsDiagnosticsCarryNoCallerText(t *testing.T) {
 		`{"notificationType":"SHARE_UNSHARED","senderDomain":"a.example.org","resourceType":"file","notification":{"sharedSecret":"` + value + `","` + key + `":"x","file":{"providerId":"42"}}}`,
 		`{"notificationType":"EXAMPLE_WRAP","senderDomain":"a.example.org","shareType":"user","notification":{"sharedSecret":"` + value + `"}}`,
 	} {
-		rr, logs := postNotification(t, s.Handler(), "application/json", body)
+		rr, logs := postNotification(t, handlerFor(s), "application/json", body)
 		checkResponse(t, rr, http.StatusBadRequest, reqres.APIErrorInvalidParameter)
 		out := rr.Body.String() + logs
 		if strings.Contains(out, key) || strings.Contains(out, value) || !strings.Contains(out, "invalid notification") {
@@ -346,4 +423,182 @@ func TestNotificationsDiagnosticsCarryNoCallerText(t *testing.T) {
 	if len(h.seen) != 0 {
 		t.Fatalf("handlers ran: %v", h.seen)
 	}
+}
+
+type notificationsDenyGW struct {
+	gateway.GatewayAPIClient
+}
+
+func (m *notificationsDenyGW) IsProviderAllowed(context.Context, *ocmprovider.IsProviderAllowedRequest, ...grpc.CallOption) (*ocmprovider.IsProviderAllowedResponse, error) {
+	return &ocmprovider.IsProviderAllowedResponse{
+		Status: &rpc.Status{Code: rpc.Code_CODE_PERMISSION_DENIED, Message: "policy denial"},
+	}, nil
+}
+
+// TestNotificationsSignatureModeMatrix covers the ingress authentication
+// table: an unsigned peer only passes in permissive mode without an
+// advertised http-sig capability, any present signature must verify, and a
+// policy-denied or undiscoverable sender never reaches a dispatch.
+func TestNotificationsSignatureModeMatrix(t *testing.T) {
+	body := func(domain string) string {
+		return `{"notificationType":"SHARE_UNSHARED","senderDomain":"` + domain + `","resourceType":"file","notification":{"file":{"providerId":"42"}}}`
+	}
+	newService := func(t *testing.T, mode string, disco *httptest.Server, gw gateway.GatewayAPIClient) http.Handler {
+		t.Helper()
+		stampGateway(gw)
+		// No endpoint override: the signer derives the URI from the request,
+		// so the verifier must reconstruct it the same way.
+		s, err := New(context.Background(), map[string]any{
+			"gatewaysvc":     "localhost:0",
+			"token_managers": map[string]any{"jwt": map[string]any{"secret": "test-only-jwt-secret"}},
+			"http_sig_mode":  mode,
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		t.Cleanup(func() { _ = s.Close() })
+		sv := s.(*svc)
+		sv.notifications.ocmClient = NewPublicOnlyClientWithConfig(client.TransportConfig{AllowLoopback: true})
+		notifFixtureHost = disco.Listener.Addr().String()
+		return handlerFor(sv)
+	}
+
+	t.Run("permissive unsigned advertiser rejected", func(t *testing.T) {
+		key := newSigningKey(t)
+		peer := signingServer(t, key)
+		defer peer.Close()
+		h := newService(t, "permissive", peer, &notificationsMockGW{})
+		rr, _ := postNotificationDial(t, h, "application/json", body("a.example.org"), true)
+		checkResponse(t, rr, http.StatusUnauthorized, reqres.APIErrorUnauthenticated)
+	})
+
+	t.Run("strict unsigned nonadvertiser rejected", func(t *testing.T) {
+		peer := ocmDiscoveryServer(t, "webdav", "file")
+		defer peer.Close()
+		h := newService(t, "strict", peer, &notificationsMockGW{})
+		rr, _ := postNotificationDial(t, h, "application/json", body("a.example.org"), true)
+		checkResponse(t, rr, http.StatusUnauthorized, reqres.APIErrorUnauthenticated)
+	})
+
+	t.Run("permissive unsigned nonadvertiser accepted", func(t *testing.T) {
+		peer := ocmDiscoveryServer(t, "webdav", "file")
+		defer peer.Close()
+		h := newService(t, "permissive", peer, &notificationsMockGW{})
+		rr, _ := postNotificationDial(t, h, "application/json", body("a.example.org"), true)
+		checkResponse(t, rr, http.StatusCreated, "")
+	})
+
+	t.Run("valid signature accepted in strict mode", func(t *testing.T) {
+		key := newSigningKey(t)
+		peer := signingServer(t, key)
+		defer peer.Close()
+		h := newService(t, "strict", peer, &notificationsMockGW{})
+		payload := body(notifFixtureHost)
+		req := httptest.NewRequest(http.MethodPost, mount+notificationsPath, strings.NewReader(payload))
+		req.Header.Set("Content-Type", "application/json")
+		if err := key.Sign(req, []byte(payload)); err != nil {
+			t.Fatal(err)
+		}
+		rr := httptest.NewRecorder()
+		h.ServeHTTP(rr, req)
+		if rr.Code != http.StatusCreated {
+			t.Fatalf("signed request: status %d, want 201", rr.Code)
+		}
+	})
+
+	t.Run("tampered body rejected in both modes", func(t *testing.T) {
+		for _, mode := range []string{"permissive", "strict"} {
+			t.Run(mode, func(t *testing.T) {
+				key := newSigningKey(t)
+				peer := signingServer(t, key)
+				defer peer.Close()
+				h := newService(t, mode, peer, &notificationsMockGW{})
+				payload := body(notifFixtureHost)
+				req := httptest.NewRequest(http.MethodPost, mount+notificationsPath, strings.NewReader(payload))
+				req.Header.Set("Content-Type", "application/json")
+				if err := key.Sign(req, []byte(payload)); err != nil {
+					t.Fatal(err)
+				}
+				// Re-sign over a different body, then send the signed headers with the original one.
+				other := strings.Replace(payload, `"42"`, `"43"`, 1)
+				if err := key.Sign(req, []byte(other)); err != nil {
+					t.Fatal(err)
+				}
+				tampered := httptest.NewRequest(http.MethodPost, mount+notificationsPath, strings.NewReader(payload))
+				tampered.Header = req.Header
+				rr := httptest.NewRecorder()
+				h.ServeHTTP(rr, tampered)
+				if rr.Code != http.StatusUnauthorized {
+					t.Fatalf("tampered body: status %d, want 401", rr.Code)
+				}
+			})
+		}
+	})
+
+	t.Run("policy denial rejects before any effect", func(t *testing.T) {
+		peer := signingServer(t, newSigningKey(t))
+		defer peer.Close()
+		h := newService(t, "permissive", peer, &notificationsDenyGW{})
+		payload := body(notifFixtureHost)
+		req := httptest.NewRequest(http.MethodPost, mount+notificationsPath, strings.NewReader(payload))
+		req.Header.Set("Content-Type", "application/json")
+		if err := newSigningKey(t).Sign(req, []byte(payload)); err != nil {
+			t.Fatal(err)
+		}
+		rr := httptest.NewRecorder()
+		h.ServeHTTP(rr, req)
+		if rr.Code != http.StatusUnauthorized {
+			t.Fatalf("policy denial: status %d, want 401", rr.Code)
+		}
+	})
+
+	t.Run("unknown valid type authenticates first", func(t *testing.T) {
+		key := newSigningKey(t)
+		peer := signingServer(t, key)
+		defer peer.Close()
+		h := newService(t, "strict", peer, &notificationsMockGW{})
+		payload := `{"notificationType":"EXAMPLE_FUTURE","senderDomain":"` + notifFixtureHost + `","resourceType":"file"}`
+		req := httptest.NewRequest(http.MethodPost, mount+notificationsPath, strings.NewReader(payload))
+		req.Header.Set("Content-Type", "application/json")
+		if err := key.Sign(req, []byte(payload)); err != nil {
+			t.Fatal(err)
+		}
+		rr := httptest.NewRecorder()
+		h.ServeHTTP(rr, req)
+		if rr.Code != http.StatusCreated {
+			t.Fatalf("valid unknown type: status %d, want bodyless 201", rr.Code)
+		}
+		if rr.Body.Len() != 0 {
+			t.Fatalf("unknown type: body %q", rr.Body.String())
+		}
+	})
+
+	t.Run("malformed known type stays 400 with a valid signature", func(t *testing.T) {
+		key := newSigningKey(t)
+		peer := signingServer(t, key)
+		defer peer.Close()
+		h := newService(t, "strict", peer, &notificationsMockGW{})
+		payload := `{"notificationType":"USER_REMOVED","senderDomain":"` + notifFixtureHost + `","shareType":"group","notification":{"user":{"userId":"alice@` + notifFixtureHost + `"}}}`
+		req := httptest.NewRequest(http.MethodPost, mount+notificationsPath, strings.NewReader(payload))
+		req.Header.Set("Content-Type", "application/json")
+		if err := key.Sign(req, []byte(payload)); err != nil {
+			t.Fatal(err)
+		}
+		rr := httptest.NewRecorder()
+		h.ServeHTTP(rr, req)
+		checkResponse(t, rr, http.StatusBadRequest, reqres.APIErrorInvalidParameter)
+	})
+
+	t.Run("undiscoverable sender is a fixed dependency error", func(t *testing.T) {
+		peer := ocmDiscoveryServer(t, "webdav", "file")
+		defer peer.Close()
+		h := newService(t, "permissive", peer, &notificationsMockGW{})
+		// An authorized-looking sender whose discovery endpoint does not exist.
+		payload := strings.Replace(body(notifFixtureHost), `"senderDomain":"`+notifFixtureHost+`"`, `"senderDomain":"192.0.2.1"`, 1)
+		rr, _ := postNotificationDial(t, h, "application/json", payload, false)
+		checkResponse(t, rr, http.StatusInternalServerError, reqres.APIErrorServerError)
+		if strings.Contains(rr.Body.String(), "192.0.2.1") {
+			t.Fatalf("untrusted sender value leaked into the response")
+		}
+	})
 }
