@@ -628,6 +628,20 @@ func notificationPeerServer(t *testing.T, caps []string, jwks []byte, seen func(
 // configured, and a configured key signs exactly the sent bytes even for a
 // peer that does not advertise http-sig.
 func TestNotificationSigningBehavior(t *testing.T) {
+	t.Run("signing failure sends zero posts", func(t *testing.T) {
+		var posts atomic.Int32
+		peer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+			posts.Add(1)
+			w.WriteHeader(http.StatusCreated)
+		}))
+		t.Cleanup(peer.Close)
+		transport := ocmNotificationTransport{c: NewClient(5*time.Second, false), key: &httpsig.Key{}}
+		_, err := transport.PostNotification(context.Background(), &NotificationPeer{Endpoint: peer.URL}, []byte(`{}`))
+		if !errors.Is(err, errSigningFailed) || posts.Load() != 0 {
+			t.Fatalf("signing error %v, posts %d", err, posts.Load())
+		}
+	})
+
 	t.Run("advertising peer without key sends zero posts", func(t *testing.T) {
 		key := newSigningKey(t)
 		jwks, err := key.JWKS()
