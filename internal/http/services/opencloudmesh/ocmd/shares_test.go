@@ -1314,7 +1314,7 @@ func TestRoutedCreateShareRefusesMalformedAddresses(t *testing.T) {
 		req.Header.Set("Content-Type", "application/json")
 		req.RemoteAddr = fmt.Sprintf("[2001:db8:%x::1]:1000", clientSeq.Add(1))
 		rr := httptest.NewRecorder()
-		h.ServeHTTP(rr, req)
+		h.CreateShare(rr, req)
 		var apiErr reqres.APIError
 		if rr.Code != http.StatusBadRequest || json.Unmarshal(rr.Body.Bytes(), &apiErr) != nil || apiErr.Message != tc.message {
 			t.Fatalf("%s %q: %d %s", tc.field, tc.sender, rr.Code, rr.Body.String())
