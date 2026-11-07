@@ -155,7 +155,7 @@ var notificationFields = map[string]bool{
 	"notification.sharedSecret": true, "notification.file": true, "notification.file.providerId": true,
 	"notification.file.permissions": true, "notification.file.owner": true, "notification.file.shareWith": true,
 	"notification.file.shareId": true, "notification.user": true, "notification.user.userId": true,
-	"notification.user.counterpartUserId": true, "notification.group": true, "notification.group.groupId": true,
+	"notification.user.targetUserId": true, "notification.group": true, "notification.group.groupId": true,
 }
 
 func (e *NotificationError) field() string {
@@ -475,8 +475,8 @@ func validateRequestShare(n *Notification) error {
 // validateUserRemoved is the contract of USER_REMOVED. The userId belongs to
 // the sending server and names no counterpart, so this type stays log-only.
 func validateUserRemoved(n *Notification) error {
-	if n.ShareType == "" {
-		return missingField("shareType")
+	if n.ShareType != "user" {
+		return invalidField("shareType")
 	}
 	if err := n.forbid("resourceType"); err != nil {
 		return err
@@ -495,8 +495,8 @@ func validateUserRemoved(n *Notification) error {
 
 // validateGroupRemoved is the contract of GROUP_REMOVED.
 func validateGroupRemoved(n *Notification) error {
-	if n.ShareType == "" {
-		return missingField("shareType")
+	if n.ShareType != "group" {
+		return invalidField("shareType")
 	}
 	if err := n.forbid("resourceType"); err != nil {
 		return err
