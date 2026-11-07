@@ -37,10 +37,13 @@ import (
 
 	"github.com/cs3org/reva/v3/internal/http/services/wellknown"
 	"github.com/cs3org/reva/v3/pkg/appctx"
+	"github.com/cs3org/reva/v3/pkg/ocm/httpsig"
 	"github.com/rs/zerolog"
 )
 
 const senderSecret = "outgoing-token-9c1e"
+
+var nopLogger = zerolog.Nop()
 
 type notificationPeer struct {
 	srv           *httptest.Server
@@ -150,7 +153,7 @@ func sendWithLogs(t *testing.T, peer *notificationPeer, n *OutgoingNotification)
 	var logs bytes.Buffer
 	logger := zerolog.New(&logs)
 	ctx := appctx.WithLogger(context.Background(), &logger)
-	res := NewClient(5*time.Second, false).NewNotification(ctx, peer.host(), n)
+	res := NewClient(5*time.Second, false).NewNotification(ctx, peer.host(), n, nil)
 	return res, logs.String()
 }
 
@@ -332,10 +335,10 @@ func TestOutgoingNotificationFormsRedactSecret(t *testing.T) {
 
 func TestNewNotificationNilAndUnreachable(t *testing.T) {
 	c := NewClient(time.Second, false)
-	if res := c.NewNotification(context.Background(), "127.0.0.1:1", nil); res.Outcome != SendPostFailed {
+	if res := c.NewNotification(context.Background(), "127.0.0.1:1", nil, nil); res.Outcome != SendPostFailed {
 		t.Fatalf("nil: %+v", res)
 	}
-	if res := c.NewNotification(context.Background(), "127.0.0.1:1", unsharedNotification(t)); res.Outcome != SendDiscoveryFailed {
+	if res := c.NewNotification(context.Background(), "127.0.0.1:1", unsharedNotification(t), nil); res.Outcome != SendDiscoveryFailed {
 		t.Fatalf("unreachable: %+v", res)
 	}
 }
@@ -447,7 +450,7 @@ func TestNewNotificationMalformedDiscoveryOverTCP(t *testing.T) {
 			var logs bytes.Buffer
 			logger := zerolog.New(&logs).Level(zerolog.DebugLevel)
 			ctx := appctx.WithLogger(context.Background(), &logger)
-			res := NewClient(5*time.Second, false).NewNotification(ctx, raw.ln.Addr().String(), unsharedNotification(t))
+			res := NewClient(5*time.Second, false).NewNotification(ctx, raw.ln.Addr().String(), unsharedNotification(t), nil)
 			if res.Outcome != SendDiscoveryFailed || res.Failure != FailureError {
 				t.Fatalf("result %+v", res)
 			}
@@ -489,7 +492,7 @@ func TestNewNotificationTimeoutAndCancel(t *testing.T) {
 	raw.hang = true
 	peer := newNotificationPeer(t)
 	peer.endpoint = raw.url() + "/ocm"
-	res := NewClient(300*time.Millisecond, false).NewNotification(context.Background(), peer.host(), unsharedNotification(t))
+	res := NewClient(300*time.Millisecond, false).NewNotification(context.Background(), peer.host(), unsharedNotification(t), nil)
 	if res.Outcome != SendPostFailed || res.Failure != FailureTimeout {
 		t.Fatalf("timeout: %+v", res)
 	}
@@ -500,7 +503,7 @@ func TestNewNotificationTimeoutAndCancel(t *testing.T) {
 		<-raw.got
 		cancel()
 	}()
-	res = NewClient(5*time.Second, false).NewNotification(ctx, peer.host(), unsharedNotification(t))
+	res = NewClient(5*time.Second, false).NewNotification(ctx, peer.host(), unsharedNotification(t), nil)
 	if res.Outcome != SendPostFailed || res.Failure != FailureCanceled {
 		t.Fatalf("cancel: %+v", res)
 	}
@@ -539,7 +542,7 @@ func TestPostNotificationErrorQuotesNoPeerBytes(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			raw := newRawPeer(t, response)
 			tr := ocmNotificationTransport{c: NewClient(5*time.Second, false)}
-			resp, err := tr.PostNotification(context.Background(), raw.url()+"/ocm/notifications", []byte(`{}`))
+			resp, err := tr.PostNotification(context.Background(), &NotificationPeer{Endpoint: raw.url() + "/ocm/notifications"}, []byte(`{}`))
 			if err == nil || resp != (NotificationResponse{}) {
 				t.Fatalf("response %+v error %v", resp, err)
 			}
@@ -587,9 +590,105 @@ func TestNotificationToUnusableHostMakesNoRequest(t *testing.T) {
 		c := NewClient(time.Second, false)
 		rt := &countingTransport{}
 		c.client.Transport = rt
-		res := c.NewNotification(context.Background(), domain, unsharedNotification(t))
+		res := c.NewNotification(context.Background(), domain, unsharedNotification(t), nil)
 		if res.Outcome != SendDiscoveryFailed || res.Failure != FailureError || rt.n.Load() != 0 {
 			t.Fatalf("%q: %+v requests %d", domain, res, rt.n.Load())
 		}
 	}
+}
+
+// notificationPeerServer is a remote peer whose discovery doc is enabled with
+// caps and whose /notifications endpoint counts every POST through seen. The
+// route also serves the published jwks.
+func notificationPeerServer(t *testing.T, caps []string, jwks []byte, seen func(int64)) *httptest.Server {
+	t.Helper()
+	mux := http.NewServeMux()
+	mux.HandleFunc("/jwks", func(w http.ResponseWriter, r *http.Request) {
+		_, _ = w.Write(jwks)
+	})
+	mux.HandleFunc("/.well-known/ocm", func(w http.ResponseWriter, r *http.Request) {
+		_ = json.NewEncoder(w).Encode(wellknown.OcmDiscoveryData{
+			Enabled:      true,
+			Endpoint:     "http://" + r.Host,
+			Capabilities: caps,
+			ResourceTypes: []wellknown.ResourceTypes{{
+				Name: "file", Protocols: map[string]any{"webdav": "/remote.php/dav/ocm"},
+			}},
+		})
+	})
+	mux.HandleFunc("/notifications", func(w http.ResponseWriter, r *http.Request) {
+		seen(r.ContentLength)
+		w.WriteHeader(http.StatusCreated)
+	})
+	return httptest.NewServer(mux)
+}
+
+// TestNotificationSigningBehavior covers the explicit-key egress contract:
+// a peer that advertises http-sig fails before any POST when no key is
+// configured, and a configured key signs exactly the sent bytes even for a
+// peer that does not advertise http-sig.
+func TestNotificationSigningBehavior(t *testing.T) {
+	t.Run("advertising peer without key sends zero posts", func(t *testing.T) {
+		key := newSigningKey(t)
+		jwks, err := key.JWKS()
+		if err != nil {
+			t.Fatal(err)
+		}
+		var posts int32
+		peer := notificationPeerServer(t, []string{"notifications", "http-sig"}, jwks, func(int64) { atomic.AddInt32(&posts, 1) })
+		defer peer.Close()
+		ctx := appctx.WithLogger(context.Background(), &nopLogger)
+		res := NewClient(5*time.Second, false).NewNotification(ctx, strings.TrimPrefix(peer.URL, "http://"), unsharedNotification(t), nil)
+		if res.Outcome != SendPostFailed || res.Failure != FailureNoSigningKey {
+			t.Fatalf("outcome %+v, want post_failed/no_signing_key", res)
+		}
+		if atomic.LoadInt32(&posts) != 0 {
+			t.Fatalf("peer received %d posts, want zero", posts)
+		}
+	})
+
+	t.Run("configured key signs the exact sent bytes", func(t *testing.T) {
+		key := newSigningKey(t)
+		jwks, err := key.JWKS()
+		if err != nil {
+			t.Fatal(err)
+		}
+		var gotBody []byte
+		var gotReq *http.Request
+		mux := http.NewServeMux()
+		mux.HandleFunc("/notifications", func(w http.ResponseWriter, r *http.Request) {
+			body, _ := io.ReadAll(io.LimitReader(r.Body, DefaultResponseLimit))
+			gotBody = body
+			gotReq = r.Clone(r.Context())
+			w.WriteHeader(http.StatusCreated)
+		})
+		// The peer does not advertise http-sig: a configured key may still
+		// sign, and the receiver must verify the signature.
+		peer := notificationPeerServer(t, []string{"notifications"}, jwks, func(int64) {})
+		inner := peer.Config.Handler
+		peer.Config.Handler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if r.URL.Path == "/notifications" {
+				mux.ServeHTTP(w, r)
+				return
+			}
+			inner.ServeHTTP(w, r)
+		})
+
+		ctx := appctx.WithLogger(context.Background(), &nopLogger)
+		res := NewClient(5*time.Second, false).NewNotification(ctx, strings.TrimPrefix(peer.URL, "http://"), unsharedNotification(t), key)
+		if res.Outcome != SendDelivered {
+			t.Fatalf("outcome %+v, want delivered", res)
+		}
+		if gotReq == nil {
+			t.Fatal("no notification POST reached the peer")
+		}
+		// Verify with the peer's actual published key over the exact bytes.
+		if err := httpsig.Verify(gotReq, gotBody, "", func() ([]byte, error) { return jwks, nil }); err != nil {
+			t.Fatalf("sent bytes do not verify against the peer JWKS: %v", err)
+		}
+		var n map[string]any
+		if err := json.Unmarshal(gotBody, &n); err != nil || n["notificationType"] != "SHARE_UNSHARED" {
+			t.Fatalf("sent body is not the canonical wire body: %s", gotBody)
+		}
+	})
 }
