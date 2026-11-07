@@ -1289,5 +1289,69 @@
   },
   "http": 400,
   "handlerCalls": 0
+ },
+ {
+  "id": "ENV-105",
+  "purpose": "USER_REMOVED must pair shareType user (R08 runtime subtype pairing)",
+  "body": {
+   "notificationType": "USER_REMOVED",
+   "senderDomain": "a.example.org",
+   "shareType": "group",
+   "notification": {
+    "user": {
+     "userId": "alice@a.example.org"
+    }
+   }
+  },
+  "http": 400,
+  "handlerCalls": 0
+ },
+ {
+  "id": "ENV-106",
+  "purpose": "GROUP_REMOVED must pair shareType group (R08 runtime subtype pairing)",
+  "body": {
+   "notificationType": "GROUP_REMOVED",
+   "senderDomain": "a.example.org",
+   "shareType": "user",
+   "notification": {
+    "group": {
+     "groupId": "fencing-club"
+    }
+   }
+  },
+  "http": 400,
+  "handlerCalls": 0
+ },
+ {
+  "id": "ENV-107",
+  "purpose": "USER_REMOVED with shareType user stays a valid departure",
+  "body": {
+   "notificationType": "USER_REMOVED",
+   "senderDomain": "a.example.org",
+   "shareType": "user",
+   "notification": {
+    "user": {
+     "userId": "alice@a.example.org"
+    }
+   }
+  },
+  "http": 201,
+  "handlerCalls": 1
+ },
+ {
+  "id": "ENV-108",
+  "purpose": "GROUP_REMOVED with shareType group stays a valid departure",
+  "body": {
+   "notificationType": "GROUP_REMOVED",
+   "senderDomain": "a.example.org",
+   "shareType": "group",
+   "notification": {
+    "group": {
+     "groupId": "fencing-club"
+    }
+   }
+  },
+  "http": 201,
+  "handlerCalls": 1
  }
 ]
