@@ -23,12 +23,17 @@ import (
 	"sync"
 
 	"github.com/cs3org/reva/v3/pkg/appctx"
+	"github.com/cs3org/reva/v3/pkg/ocm/httpsig"
 )
 
 // AsyncNotifier sends notifications in the background, so that a slow peer
 // does not delay the caller. The service that owns it must Close it.
 type AsyncNotifier struct {
 	Client *OCMClient
+	// Key is the owning service's notification signing key. It is passed to
+	// every attempt explicitly; the notifier never stores credentials in a
+	// notification payload or appctx.
+	Key *httpsig.Key
 
 	mu       sync.Mutex
 	closed   bool
@@ -57,7 +62,7 @@ func (a *AsyncNotifier) NewNotification(ctx context.Context, domain string, n *O
 		defer a.wg.Done()
 		defer cancel()
 		defer stop()
-		a.Client.NewNotification(sendCtx, domain, n)
+		a.Client.NewNotification(sendCtx, domain, n, a.Key)
 	}()
 	return SendResult{}
 }

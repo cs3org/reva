@@ -41,6 +41,7 @@ import (
 	"github.com/cs3org/reva/v3/internal/http/services/opencloudmesh/ocmd"
 	"github.com/cs3org/reva/v3/internal/http/services/wellknown"
 	"github.com/cs3org/reva/v3/pkg/appctx"
+	"github.com/cs3org/reva/v3/pkg/ocm/httpsig"
 	"github.com/cs3org/reva/v3/pkg/ocm/share"
 	"github.com/cs3org/reva/v3/pkg/permissions"
 	sqlmgr "github.com/cs3org/reva/v3/pkg/share/manager/sql"
@@ -104,10 +105,12 @@ type syncNotifier struct {
 	c       *ocmd.OCMClient
 	mu      sync.Mutex
 	results []ocmd.SendResult
+
+	key *httpsig.Key
 }
 
 func (n *syncNotifier) NewNotification(ctx context.Context, domain string, out *ocmd.OutgoingNotification) ocmd.SendResult {
-	res := n.c.NewNotification(ctx, domain, out)
+	res := n.c.NewNotification(ctx, domain, out, n.key)
 	n.mu.Lock()
 	n.results = append(n.results, res)
 	n.mu.Unlock()

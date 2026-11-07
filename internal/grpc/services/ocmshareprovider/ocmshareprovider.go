@@ -95,8 +95,8 @@ type service struct {
 	repo        share.Repository
 	client      *ocmd.OCMClient
 	transferrer embedded.Transferrer
-	signingKey *httpsig.Key
-	notifier   notifier
+	signingKey  *httpsig.Key
+	notifier    notifier
 }
 
 func (c *config) ApplyDefaults() {
@@ -171,8 +171,8 @@ func New(ctx context.Context, m map[string]any) (rgrpc.Service, error) {
 		repo:        repo,
 		client:      ocmcl,
 		transferrer: transferrer,
-		signingKey: key,
-		notifier:   &ocmd.AsyncNotifier{Client: ocmcl},
+		signingKey:  key,
+		notifier:    &ocmd.AsyncNotifier{Client: ocmcl, Key: key},
 	}
 
 	return service, nil
