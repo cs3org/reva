@@ -125,6 +125,9 @@ func (c *config) ApplyDefaults() {
 	if c.Deep.LogFile == "" {
 		c.Deep.LogFile = "/var/log/revad/reconciliation-deep.log"
 	}
+	if c.Deep.NSDumpDriver == "" {
+		c.Deep.NSDumpDriver = "chunked"
+	}
 }
 
 type svc struct {
@@ -293,13 +296,15 @@ func New(ctx context.Context, m map[string]any) (_ rserverless.Service, err erro
 			}
 			// Gateway is left nil for the same reason as the orphan job's.
 			job := &reconciliation.DeepJob{
-				ShareStore: shares,
-				Auth:       identity.authenticate,
-				Instance:   providers.instance,
-				Project:    projects.GetProjectBySpaceID,
-				Eos:        c.Deep.Eos,
-				Log:        jobLog,
-				DryRun:     jc.DryRun,
+				ShareStore:   shares,
+				Auth:         identity.authenticate,
+				Instance:     providers.instance,
+				Project:      projects.GetProjectBySpaceID,
+				Eos:          c.Deep.Eos,
+				NSDumpDriver: c.Deep.NSDumpDriver,
+				TmpDir:       c.Deep.TmpDir,
+				Log:          jobLog,
+				DryRun:       jc.DryRun,
 			}
 			jobName = reconciliation.DeepJobName
 			if err := rjobs.RegisterOnDemand(jobName, job.OnDemand); err != nil {
@@ -451,9 +456,8 @@ func (p *storageProviders) grants(ctx context.Context, storageID string) (provid
 	return c, nil
 }
 
-// instance returns the EOS instance that holds storageID. The registry
-// resolves the alias of a storage id (eoshome-a) into the id of its provider
-// (eoshome-i01), which is the name of the instance.
+// `instance` resolves an aliased storage id (e.g. eoshome-a) into the id of its provider
+// (e.g. eoshome-i01), which is the actual name of the instance.
 func (p *storageProviders) instance(ctx context.Context, storageID string) (string, error) {
 	reg, err := service.StorageRegistry(ctx)
 	if err != nil {

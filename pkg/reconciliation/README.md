@@ -172,8 +172,7 @@ means the entry was added and has to be removed.
 `ancestor_path`, `ancestor_role`, `dry_run`. Revert by clearing `deleted_at` on
 the row with id `share`.
 
-`reconciliation.shallow.skipspace` carries `skipped_space`, `new_share` (the
-share that appeared, absent when a listing failed), `grants` and `removals`, the
+`reconciliation.shallow.skipspace` carries `skipped_space`, `grants` and `removals`, the
 number of changes held back, and `dry_run`. The two counts are absent when the
 space could not be listed in the first place: the run never got as far as
 deciding. Nothing was applied, so there is nothing to revert. Run the job on that
