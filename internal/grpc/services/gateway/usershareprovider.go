@@ -28,6 +28,7 @@ import (
 
 	"github.com/alitto/pond/v2"
 	gateway "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
+	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	collaboration "github.com/cs3org/go-cs3apis/cs3/sharing/collaboration/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
@@ -71,6 +72,20 @@ func (s *svc) CreateShare(ctx context.Context, req *collaboration.CreateShareReq
 		return &collaboration.CreateShareResponse{
 			Status: status.NewPermissionDenied(ctx, nil, "no permission to create shares on this resource"),
 		}, nil
+	}
+
+	// The grantee also comes from the caller, who may leave out the user type. The storage
+	// needs it to apply the grant (a lightweight account has no uid for an ACL), so we take
+	// the user id from the user provider.
+	if req.Grant.GetGrantee().GetType() == provider.GranteeType_GRANTEE_TYPE_USER {
+		user, st, err := s.getGranteeUser(ctx, req.Grant.Grantee.GetUserId())
+		if err != nil {
+			return nil, errors.Wrap(err, "gateway: error getting the grantee")
+		}
+		if st.Code != rpc.Code_CODE_OK {
+			return &collaboration.CreateShareResponse{Status: st}, nil
+		}
+		req.Grant.Grantee.Id = &provider.Grantee_UserId{UserId: user.GetId()}
 	}
 
 	// First we ping the db
@@ -696,6 +711,34 @@ func (s *svc) getPathForResourceId(ctx context.Context, id *provider.ResourceId)
 		return "", status.NewErrtypeFromStatus(res.Status)
 	}
 	return res.Path, nil
+}
+
+// getGranteeUser looks up the user a share is for. We first try the opaque id as a username,
+// which is how the share manager looks the grantee up when it reads the share back, so both
+// agree on the user type. Unlike GetUser, this also fetches external accounts that are not
+// cached yet, and refuses accounts that cannot be shared with, such as linked accounts.
+// Where the username is not the opaque id, we fall back to GetUser.
+func (s *svc) getGranteeUser(ctx context.Context, id *userpb.UserId) (*userpb.User, *rpc.Status, error) {
+	claimRes, err := s.GetUserByClaim(ctx, &userpb.GetUserByClaimRequest{
+		Claim:                  "username",
+		Value:                  id.GetOpaqueId(),
+		SkipFetchingUserGroups: true,
+	})
+	if err != nil {
+		return nil, nil, err
+	}
+	if claimRes.Status.Code != rpc.Code_CODE_NOT_FOUND {
+		return claimRes.User, claimRes.Status, nil
+	}
+
+	userRes, err := s.GetUser(ctx, &userpb.GetUserRequest{
+		UserId:                 id,
+		SkipFetchingUserGroups: true,
+	})
+	if err != nil {
+		return nil, nil, err
+	}
+	return userRes.User, userRes.Status, nil
 }
 
 // listSharesForGranteeInSpace returns all active shares for the given grantee in the given space.
