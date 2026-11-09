@@ -35,7 +35,7 @@ require (
 	github.com/jcmturner/gokrb5/v8 v8.4.4
 	github.com/jedib0t/go-pretty v4.3.0+incompatible
 	github.com/juliangruber/go-intersect v1.1.0
-	github.com/lestrrat-go/jwx/v4 v4.5.0
+	github.com/lestrrat-go/jwx/v4 v4.6.0
 	github.com/mattn/go-sqlite3 v1.14.52
 	github.com/maxymania/go-system v0.0.0-20170110133659-647cc364bf0b
 	github.com/mileusna/useragent v1.3.5
@@ -155,7 +155,6 @@ require (
 	github.com/shopspring/decimal v1.4.0 // indirect
 	github.com/sirupsen/logrus v1.10.1 // indirect
 	github.com/stretchr/objx v0.5.3 // indirect
-	github.com/valyala/fastjson v1.6.10 // indirect
 	go.opentelemetry.io/auto/sdk v1.2.1 // indirect
 	go.opentelemetry.io/otel/exporters/otlp/otlptrace v1.47.0 // indirect
 	go.opentelemetry.io/otel/log v1.47.0 // indirect
