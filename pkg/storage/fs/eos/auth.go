@@ -113,7 +113,7 @@ func (fs *Eosfs) getUserIDGateway(ctx context.Context, uid string) (*userpb.User
 		return nil, status.NewErrorFromCode(getUserResp.Status.Code, "eosfs")
 	}
 
-	_ = fs.userIDCache.Set(uid, getUserResp.User.Id)
+	_ = fs.userIDCache.SetWithTTL(uid, getUserResp.User.Id, 12*time.Hour)
 	return getUserResp.User.Id, nil
 }
 
