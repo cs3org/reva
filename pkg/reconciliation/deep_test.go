@@ -21,8 +21,11 @@ package reconciliation
 import (
 	"cmp"
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
+	"iter"
+	"os"
 	"path"
 	"slices"
 	"strconv"
@@ -74,21 +77,20 @@ func daveEntry() *acl.Entry     { return aclEntry(acl.TypeUser, "dave", "rwx") }
 func frankEntry() *acl.Entry    { return aclEntry(acl.TypeUser, "frank", "rx") }
 func externalEntry() *acl.Entry { return aclEntry(acl.TypeUser, "cboxexternal", "rwx") }
 
-// loadTestDump reads the synthetic namespace through the file dumper, which is
-// the same parser the job uses on the output of eos-ns-inspect.
-func loadTestDump(t *testing.T) *nsdump.NamespaceDump {
+// loadTestDump reads the synthetic namespace with the JSON tags of
+// NameSpaceEntry, the same tags the job decodes the output of eos-ns-inspect with.
+func loadTestDump(t *testing.T) []nsdump.NameSpaceEntry {
 	t.Helper()
 
-	dumper := &nsdump.EOSFileNSInspect{}
-	if err := dumper.Setup(nsdump.EOSFileNSInspectConfig{File: "testdata/nsdump_cernbox.json"}); err != nil {
-		t.Fatalf("setting up the file dumper: %v", err)
-	}
-
-	dump, err := dumper.Dump(testSpaceRoot, 0)
+	data, err := os.ReadFile("testdata/nsdump_cernbox.json")
 	if err != nil {
 		t.Fatalf("reading the namespace dump: %v", err)
 	}
-	return dump
+	var entries []nsdump.NameSpaceEntry
+	if err := json.Unmarshal(data, &entries); err != nil {
+		t.Fatalf("decoding the namespace dump: %v", err)
+	}
+	return entries
 }
 
 // testTree is the ideal state of the synthetic namespace: four shares, plus one
@@ -152,14 +154,14 @@ func checkChanges(t *testing.T, got, want ChangeSet) {
 	}
 }
 
-// The fixture must stay what the tests assume: the parser must give every entry
+// The fixture must stay what the tests assume: decoding must give every entry
 // its kind, and folder paths keep the trailing separator eos-ns-inspect prints.
 func TestNamespaceDumpFixture(t *testing.T) {
 	dump := loadTestDump(t)
 
-	byPath := make(map[string]*nsdump.NameSpaceEntry, len(dump.Entries))
-	for i := range dump.Entries {
-		byPath[dump.Entries[i].Path] = &dump.Entries[i]
+	byPath := make(map[string]*nsdump.NameSpaceEntry, len(dump))
+	for i := range dump {
+		byPath[dump[i].Path] = &dump[i]
 	}
 
 	for _, p := range []string{nsRoot, nsShared, nsNotes, nsTodo, nsExternal, nsInner,
@@ -168,8 +170,8 @@ func TestNamespaceDumpFixture(t *testing.T) {
 			t.Errorf("the dump has no entry for %q", p)
 		}
 	}
-	if len(dump.Entries) != 13 {
-		t.Errorf("the dump holds %d entries, want 13", len(dump.Entries))
+	if len(dump) != 13 {
+		t.Errorf("the dump holds %d entries, want 13", len(dump))
 	}
 
 	if got := byPath[nsShared].EntryType(); got != nsdump.EntryTypeFolder {
@@ -188,8 +190,6 @@ func TestNamespaceDumpFixture(t *testing.T) {
 
 // The whole comparison, over a namespace that holds one of every case.
 func TestCompareAgainstNamespace(t *testing.T) {
-	dump := loadTestDump(t)
-
 	want := ChangeSet{
 		// the file below the share carries no entry at all
 		{Path: nsTodo, Action: ActionAdd, ACL: aliceEntry()},
@@ -208,7 +208,26 @@ func TestCompareAgainstNamespace(t *testing.T) {
 		{Path: nsPrivate, Action: ActionDelete, ACL: daveEntry()},
 	}
 
-	checkChanges(t, compare(testTree(), dump), want)
+	got, err := compare(testTree(), fileDumper(t).Dump(testSpaceRoot, 0))
+	if err != nil {
+		t.Fatalf("compare: %v", err)
+	}
+	checkChanges(t, got, want)
+}
+
+// A dump that fails part way gives no change set, because the entries after
+// the failure are not compared.
+func TestCompareRejectsABrokenDump(t *testing.T) {
+	entries := loadTestDump(t)
+	d := &failingDumper{before: entries[:len(entries)/2], err: errors.New("the dump stops here")}
+
+	got, err := compare(testTree(), d.Dump(testSpaceRoot, 0))
+	if err == nil {
+		t.Fatal("compare: no error, want the dump error")
+	}
+	if got != nil {
+		t.Errorf("compare gave %d changes, want none", len(got))
+	}
 }
 
 // The cases of one entry, without the namespace around them.
@@ -365,30 +384,35 @@ type recordingDumper struct {
 	rootPath string
 }
 
-func (d *recordingDumper) Dump(rootPath string, maxDepth int) (*nsdump.NamespaceDump, error) {
+func (d *recordingDumper) Dump(rootPath string, maxDepth int) iter.Seq2[nsdump.NameSpaceEntry, error] {
 	d.rootPath = rootPath
 	return d.NSDumpClient.Dump(rootPath, maxDepth)
 }
 
-// failingDumper stands for a namespace that cannot be read.
+// failingDumper stands for a namespace that cannot be read, or that fails after
+// the entries in before.
 type failingDumper struct {
-	err error
+	before []nsdump.NameSpaceEntry
+	err    error
 }
 
 func (d *failingDumper) Setup(config any) error { return nil }
 
-func (d *failingDumper) Dump(rootPath string, maxDepth int) (*nsdump.NamespaceDump, error) {
-	return nil, d.err
+func (d *failingDumper) Dump(rootPath string, maxDepth int) iter.Seq2[nsdump.NameSpaceEntry, error] {
+	return func(yield func(nsdump.NameSpaceEntry, error) bool) {
+		for _, e := range d.before {
+			if !yield(e, nil) {
+				return
+			}
+		}
+		yield(nsdump.NameSpaceEntry{}, d.err)
+	}
 }
 
 // fileDumper reads the synthetic namespace.
 func fileDumper(t *testing.T) nsdump.NSDumpClient {
 	t.Helper()
-	d := &nsdump.EOSFileNSInspect{}
-	if err := d.Setup(nsdump.EOSFileNSInspectConfig{File: "testdata/nsdump_cernbox.json"}); err != nil {
-		t.Fatalf("setting up the file dumper: %v", err)
-	}
-	return d
+	return &memoryDumper{dump: loadTestDump(t)}
 }
 
 // A whole run over the synthetic namespace, from the shares to the change set.
@@ -545,19 +569,25 @@ const (
 // memoryDumper hands out a namespace that is already in memory, so a benchmark
 // measures the run and not the reading of a file.
 type memoryDumper struct {
-	dump *nsdump.NamespaceDump
+	dump []nsdump.NameSpaceEntry
 }
 
 func (d *memoryDumper) Setup(config any) error { return nil }
 
-func (d *memoryDumper) Dump(rootPath string, maxDepth int) (*nsdump.NamespaceDump, error) {
-	return d.dump, nil
+func (d *memoryDumper) Dump(rootPath string, maxDepth int) iter.Seq2[nsdump.NameSpaceEntry, error] {
+	return func(yield func(nsdump.NameSpaceEntry, error) bool) {
+		for _, e := range d.dump {
+			if !yield(e, nil) {
+				return
+			}
+		}
+	}
 }
 
 // benchFixture is a generated space: its namespace, the shares on it, and what
 // the gateway answers for the resources those shares point at.
 type benchFixture struct {
-	dump      *nsdump.NamespaceDump
+	dump      []nsdump.NameSpaceEntry
 	shares    []storedShare
 	resources map[string]bool
 	paths     map[string]string
@@ -572,7 +602,6 @@ type benchFixture struct {
 func buildBenchFixture(entries, shares int) *benchFixture {
 	spaceID := spaces.EncodeSpaceID(testSpaceRoot)
 	f := &benchFixture{
-		dump:      &nsdump.NamespaceDump{},
 		resources: make(map[string]bool, shares),
 		paths:     make(map[string]string, shares),
 	}
@@ -630,7 +659,7 @@ func buildBenchFixture(entries, shares int) *benchFixture {
 			actual[len(actual)-1] = last
 		}
 
-		f.dump.Entries = append(f.dump.Entries, nsdump.NameSpaceEntry{
+		f.dump = append(f.dump, nsdump.NameSpaceEntry{
 			CID:         strconv.Itoa(100000 + i),
 			Name:        path.Base(folder),
 			Path:        folder + "/",
@@ -650,7 +679,7 @@ func buildBenchFixture(entries, shares int) *benchFixture {
 			actual = nil
 		}
 
-		f.dump.Entries = append(f.dump.Entries, nsdump.NameSpaceEntry{
+		f.dump = append(f.dump, nsdump.NameSpaceEntry{
 			FID:         strconv.Itoa(900000 + i),
 			Name:        fmt.Sprintf("file%d.txt", i),
 			Path:        fmt.Sprintf("%s/file%d.txt", folder, i),
@@ -687,22 +716,25 @@ func benchTree(f *benchFixture) *ACLTree {
 func TestBenchFixtureIsMostlyInOrder(t *testing.T) {
 	f := buildBenchFixture(benchEntries, benchShares)
 
-	if got := len(f.dump.Entries); got != benchEntries {
+	if got := len(f.dump); got != benchEntries {
 		t.Errorf("the namespace holds %d entries, want %d", got, benchEntries)
 	}
 	if got := len(f.shares); got != benchShares {
 		t.Errorf("the space holds %d shares, want %d", got, benchShares)
 	}
 
-	changes := compare(benchTree(f), f.dump)
+	changes, err := compare(benchTree(f), (&memoryDumper{dump: f.dump}).Dump(testSpaceRoot, 0))
+	if err != nil {
+		t.Fatalf("compare: %v", err)
+	}
 	if len(changes) == 0 {
 		t.Fatal("the namespace is in order everywhere, so the run has no work at all")
 	}
-	if share := float64(len(changes)) / float64(len(f.dump.Entries)); share > 0.1 {
+	if share := float64(len(changes)) / float64(len(f.dump)); share > 0.1 {
 		t.Errorf("%d of %d entries change (%.0f%%), want under 10%%",
-			len(changes), len(f.dump.Entries), share*100)
+			len(changes), len(f.dump), share*100)
 	} else {
-		t.Logf("%d of %d entries change (%.1f%%)", len(changes), len(f.dump.Entries), share*100)
+		t.Logf("%d of %d entries change (%.1f%%)", len(changes), len(f.dump), share*100)
 	}
 }
 
@@ -710,11 +742,14 @@ func TestBenchFixtureIsMostlyInOrder(t *testing.T) {
 func BenchmarkCompare(b *testing.B) {
 	f := buildBenchFixture(benchEntries, benchShares)
 	tree := benchTree(f)
+	dumper := &memoryDumper{dump: f.dump}
 
-	b.Run(fmt.Sprintf("%d entries/%d shares", len(f.dump.Entries), len(f.shares)), func(b *testing.B) {
+	b.Run(fmt.Sprintf("%d entries/%d shares", len(f.dump), len(f.shares)), func(b *testing.B) {
 		b.ReportAllocs()
 		for b.Loop() {
-			compare(tree, f.dump)
+			if _, err := compare(tree, dumper.Dump(testSpaceRoot, 0)); err != nil {
+				b.Fatalf("compare: %v", err)
+			}
 		}
 	})
 }
@@ -730,7 +765,7 @@ func BenchmarkRunAnalysis(b *testing.B) {
 	spaceID := spaces.EncodeSpaceID(testSpaceRoot)
 	ctx := context.Background()
 
-	b.Run(fmt.Sprintf("%d entries/%d shares", len(f.dump.Entries), len(f.shares)), func(b *testing.B) {
+	b.Run(fmt.Sprintf("%d entries/%d shares", len(f.dump), len(f.shares)), func(b *testing.B) {
 		b.ReportAllocs()
 		for b.Loop() {
 			if _, _, err := j.runAnalysis(ctx, gw, RunParameters{SpaceID: spaceID}, dumper); err != nil {
