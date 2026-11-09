@@ -21,6 +21,7 @@ package reconciliation
 import (
 	"cmp"
 	"context"
+	"iter"
 	"slices"
 	"time"
 
@@ -29,6 +30,7 @@ import (
 	collaborationv1beta1 "github.com/cs3org/go-cs3apis/cs3/sharing/collaboration/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/cs3org/reva/v3/pkg/appctx"
+	"github.com/cs3org/reva/v3/pkg/errtypes"
 	"github.com/cs3org/reva/v3/pkg/permissions"
 	"github.com/cs3org/reva/v3/pkg/reconciliation/nsdump"
 	"github.com/cs3org/reva/v3/pkg/rjobs"
@@ -66,14 +68,18 @@ type DeepJob struct {
 	// resource is a routing alias (eoshome-a), but the namespace dump and the
 	// EOS client need the instance itself (eoshome-i01).
 	Instance func(ctx context.Context, storageID string) (string, error)
-	// Project returns the project space with the given space id, or nil when
-	// the space is not a project.
+	// Project returns the project space with the given space id, or
+	// errtypes.NotFound when the space is not a project.
 	Project func(ctx context.Context, spaceID string) (*provider.StorageSpace, error)
 	// The changes are calculated per node, and the grant calls of the storage
 	// provider always apply an ACL recursively, so we talk to EOS ourselves.
 	// Eos holds the settings all instances share: each space gets its own
 	// client, pointed at the MGM of its instance.
-	Eos    eos.Config
+	Eos eos.Config
+	// NSDumpDriver is the nsdump client that reads the namespace of a space.
+	NSDumpDriver string
+	// TmpDir holds the namespace dump of a space while it is compared.
+	TmpDir string
 	Log    *zerolog.Logger
 	DryRun bool
 }
@@ -109,6 +115,11 @@ func (s *ShareWithPath) toTreeNode() *ACLNode {
 type DeepConfig struct {
 	Config `mapstructure:",squash"`
 	Eos    eos.Config `mapstructure:"eos"`
+	// NSDumpDriver is "chunked" or "memory", see nsdump/README.md.
+	NSDumpDriver string `mapstructure:"nsdump_driver" validate:"oneof=chunked memory"`
+	// TmpDir holds the namespace dump of a space while it is compared. It
+	// takes about 800 MB per million nodes. Empty means os.TempDir().
+	TmpDir string `mapstructure:"tmp_dir"`
 }
 
 // DeepReport summarises a run.
@@ -251,23 +262,31 @@ func (j *DeepJob) reconcileSpace(ctx context.Context, log *zerolog.Logger, repor
 
 	p := RunParameters{SpaceID: spaceID}
 	project, err := j.Project(ctx, spaceID)
-	if err != nil {
-		return errors.Wrapf(err, "reconciliation: looking up the project of space %q", spaceID)
-	}
-	if project != nil {
-		for _, role := range project.GetRoles() {
-			p.MandatoryACLs = append(p.MandatoryACLs, roleToAcls(role)...)
-		}
-	} else {
+	if _, ok := err.(errtypes.IsNotFound); ok {
 		p.MandatoryACLs = append(p.MandatoryACLs, &acl.Entry{
 			Type:        acl.TypeUser,
 			Qualifier:   statRes.GetInfo().GetOwner().GetOpaqueId(),
 			Permissions: "rwx",
 		})
+	} else if err != nil {
+		return errors.Wrapf(err, "reconciliation: looking up the project of space %q", spaceID)
+	} else {
+		for _, role := range project.GetRoles() {
+			p.MandatoryACLs = append(p.MandatoryACLs, roleToAcls(role)...)
+		}
 	}
 
-	namespaceDumper := &nsdump.EOSMemoryNSInspect{}
-	if err := namespaceDumper.Setup(nsdump.EOSMemoryNSInspectConfig{Instance: instance}); err != nil {
+	var namespaceDumper nsdump.NSDumpClient
+	var dumperConfig any
+	switch j.NSDumpDriver {
+	case "memory":
+		namespaceDumper = &nsdump.EOSMemoryNSInspect{}
+		dumperConfig = nsdump.EOSMemoryNSInspectConfig{Instance: instance}
+	default:
+		namespaceDumper = &nsdump.EOSChunkedNSInspect{}
+		dumperConfig = nsdump.EOSChunkedNSInspectConfig{Instance: instance, TmpDir: j.TmpDir}
+	}
+	if err := namespaceDumper.Setup(dumperConfig); err != nil {
 		return err
 	}
 
@@ -282,17 +301,18 @@ func (j *DeepJob) reconcileSpace(ctx context.Context, log *zerolog.Logger, repor
 		return nil
 	}
 
-	// a share created while the run was comparing is not in the tree, so the
-	// change set could delete the entry it needs.
-	fresh, err := appeared(ctx, j.ShareStore, spaceID, seen)
+	// It is possible a user has created a share after we started the run.
+	// That would mean that this new share's ACL is missing from our tree,
+	// and we would delete this valid ACLs even though it's a valid share.
+	// Therefore, we check if there have been any new shares and abort if so.
+	fresh, err := spaceHasFreshShares(ctx, j.ShareStore, spaceID, seen)
 	if err != nil {
 		return err
 	}
-	if fresh != "" {
+	if fresh {
 		report.SkippedSpaces = append(report.SkippedSpaces, spaceID)
 		log.Warn().
 			Str("event", EventDeepSkipSpace).
-			Str("new_share", fresh).
 			Int("changes", len(cs)).
 			Msg("reconciliation: a share was created while the run was comparing, space left untouched")
 		return nil
@@ -378,13 +398,11 @@ func (j *DeepJob) runAnalysis(ctx context.Context, gw gateway.GatewayAPIClient, 
 	// actual state of the namespace into something parsable.
 	// We start by taking a dump of the namespace, and then we
 	// parse this entry-by-entry
-	dump, err := nsdumper.Dump(path, 0)
+	// Now we do the diff and get the resulting ChangeSet
+	changeSet, err := compare(tree, nsdumper.Dump(path, 0))
 	if err != nil {
 		return nil, nil, err
 	}
-
-	// Now we do the diff and get the resulting ChangeSet
-	changeSet := compare(tree, dump)
 
 	return changeSet, seen, nil
 }
@@ -500,12 +518,17 @@ func roleToAcls(role *provider.SpaceRole) []*acl.Entry {
 	return entries
 }
 
-func compare(tree *ACLTree, ns *nsdump.NamespaceDump) ChangeSet {
+// compare gives no change set for a dump that fails part way: the entries
+// after the failure are not compared, so it would be incomplete.
+func compare(tree *ACLTree, entries iter.Seq2[nsdump.NameSpaceEntry, error]) (ChangeSet, error) {
 	changeSet := ChangeSet{}
-	for _, e := range ns.Entries {
+	for e, err := range entries {
+		if err != nil {
+			return nil, err
+		}
 		changeSet = append(changeSet, compareEntry(tree, e)...)
 	}
-	return changeSet
+	return changeSet, nil
 }
 
 func compareEntry(tree *ACLTree, entry nsdump.NameSpaceEntry) ChangeSet {

@@ -87,22 +87,64 @@ func BenchmarkParseNSInspectOutput(b *testing.B) {
 			data := benchDumpJSON(entries)
 
 			// a parser that gives up early would measure nothing
-			dump, err := parseNSInspectOutput(data)
+			parsed, err := countEntries(data)
 			if err != nil {
 				b.Fatalf("parsing %d entries: %v", entries, err)
 			}
-			if len(dump.Entries) != entries {
-				b.Fatalf("parsed %d entries, want %d", len(dump.Entries), entries)
+			if parsed != entries {
+				b.Fatalf("parsed %d entries, want %d", parsed, entries)
 			}
-			dump = nil
 
 			b.SetBytes(int64(len(data)))
 			b.ReportAllocs()
 			b.ResetTimer()
 			for b.Loop() {
-				if _, err := parseNSInspectOutput(data); err != nil {
+				if _, err := countEntries(data); err != nil {
 					b.Fatal(err)
 				}
+			}
+		})
+	}
+}
+
+func countEntries(data []byte) (int, error) {
+	n := 0
+	for _, err := range parseNSInspect(bytes.NewReader(data)) {
+		if err != nil {
+			return n, err
+		}
+		n++
+	}
+	return n, nil
+}
+
+// The parser reads the output one entry at a time, so it must also find the
+// cases where the output stops before the end of the array.
+func TestParseNSInspect(t *testing.T) {
+	const entry = `{"cid":"1","name":"a","path":"/eos/a/"}`
+
+	tests := []struct {
+		name    string
+		data    string
+		entries int
+		wantErr bool
+	}{
+		{name: "complete", data: "[" + entry + "," + entry + "]", entries: 2},
+		{name: "empty array", data: "[]", entries: 0},
+		{name: "cut inside an entry", data: "[" + entry + `,{"cid":"2","na`, entries: 1, wantErr: true},
+		{name: "cut after an entry", data: "[" + entry, entries: 1, wantErr: true},
+		{name: "not an array", data: entry, wantErr: true},
+		{name: "no output", data: "", wantErr: true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			n, err := countEntries([]byte(tt.data))
+			if (err != nil) != tt.wantErr {
+				t.Errorf("error = %v, want an error: %v", err, tt.wantErr)
+			}
+			if n != tt.entries {
+				t.Errorf("parsed %d entries before the end, want %d", n, tt.entries)
 			}
 		})
 	}

@@ -67,7 +67,7 @@ const (
 	EventShallowSkip = ShallowJobName + ".skip"
 	// EventShallowSkipSpace reports one space left untouched because a share was
 	// created in it while the run was checking, which makes what the run decided
-	// stale. It carries the share that appeared.
+	// stale.
 	EventShallowSkipSpace = ShallowJobName + ".skipspace"
 	// EventShallowFail reports one change, a grant or a removal, that had to be
 	// made but could not be.
@@ -516,7 +516,7 @@ func (j *ShallowJob) reconcileSpaces(ctx context.Context, log *zerolog.Logger, r
 
 	for i, space := range pending {
 		report.progress(rep, "apply", i, len(pending), "spaces")
-		fresh, err := appeared(ctx, j.ShareStore, space, seen[space])
+		fresh, err := spaceHasFreshShares(ctx, j.ShareStore, space, seen[space])
 		if err != nil {
 			report.SkippedSpaces = append(report.SkippedSpaces, space)
 			log.Error().Err(err).
@@ -528,12 +528,11 @@ func (j *ShallowJob) reconcileSpaces(ctx context.Context, log *zerolog.Logger, r
 				Msg("reconciliation: shares could not be listed again, space left untouched")
 			continue
 		}
-		if fresh != "" {
+		if fresh {
 			report.SkippedSpaces = append(report.SkippedSpaces, space)
 			log.Warn().
 				Str("event", EventShallowSkipSpace).
 				Str("skipped_space", space).
-				Str("new_share", fresh).
 				Int("grants", len(grants[space])).
 				Int("removals", len(removals[space])).
 				Bool("dry_run", j.DryRun).
@@ -714,23 +713,20 @@ func (j *ShallowJob) applyRemovals(ctx context.Context, log *zerolog.Logger, rep
 	}
 }
 
-// appeared lists the shares of a space again and returns the id of the first one
-// the run has not seen, empty when there is none. A share created while the run
+// spaceHasFreshShares lists the shares of a space again and tells if the run
+// has not seen one of them. A share created while the run
 // was checking is not in what the check compared, and it may be exactly what an
 // ancestor of it needs, or what stops a share the run wants to remove from being
 // redundant, so the caller leaves the whole space to the next run.
-func appeared(ctx context.Context, store ShareStore, spaceID string, seen map[string]struct{}) (string, error) {
+func spaceHasFreshShares(ctx context.Context, store ShareStore, spaceID string, seen map[string]struct{}) (bool, error) {
 	shares, err := store.ListShares(ctx, spaceFilters([]string{spaceID}))
 	if err != nil {
-		return "", errors.Wrapf(err, "reconciliation: listing the shares of space %q again", spaceID)
+		return false, errors.Wrapf(err, "reconciliation: listing the shares of space %q again", spaceID)
 	}
-	for _, s := range shares {
-		id := s.GetId().GetOpaqueId()
-		if _, ok := seen[id]; !ok {
-			return id, nil
-		}
-	}
-	return "", nil
+	return slices.ContainsFunc(shares, func(s *collaboration.Share) bool {
+		_, ok := seen[s.GetId().GetOpaqueId()]
+		return !ok
+	}), nil
 }
 
 // shadowed counts a share that gets no entry of its own because a share above
