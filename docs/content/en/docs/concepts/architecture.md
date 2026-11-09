@@ -10,7 +10,7 @@ weight: 10
 
 **HTTP services** speak the protocols that clients already use: [WebDAV](/docs/components/http-services/ocdav/), the [OCS API](/docs/components/http-services/ocs/), a [Graph API](/docs/components/http-services/ocgraph/), and [Open Cloud Mesh](/docs/components/http-services/ocm/). They do not hold state. Each request becomes one or more CS3 API calls to the gateway.
 
-**The [gateway](/docs/components/grpc-services/gateway/)** is the single entry point for CS3 API calls. It checks the caller's token, asks a registry where a resource or credential belongs, and forwards the call to the right provider. Clients such as the [reva CLI](/docs/getting-started/#4-use-the-reva-cli) call it directly.
+**The [gateway](/docs/components/grpc-services/gateway/)** is the single entry point for CS3 API calls. It checks the caller's token, asks a registry where a resource or credential belongs, and forwards the call to the right provider. Clients such as the [reva CLI](/docs/guides/getting-started/#4-use-the-reva-cli) call it directly.
 
 **gRPC services** each own one domain: authentication, users, groups, storage, shares, apps, and OCM. They implement the [CS3 APIs](/docs/api/grpc/).
 
@@ -24,7 +24,7 @@ The HTTP auth middleware turns a password, an OIDC token, or another credential 
 
 ## Processes
 
-All services are plugins in one binary, `revad`. One process can run every service, as in the [quick start](/docs/getting-started/). A large deployment runs many processes, each with some services, and scales them separately. The processes find each other through the service registry. See [configuration](/docs/concepts/configuration/).
+All services are plugins in one binary, `revad`. One process can run every service, as in the [quick start](/docs/guides/getting-started/). A large deployment runs many processes, each with some services, and scales them separately. The processes find each other through the service registry. See [configuration](/docs/concepts/configuration/).
 
 ## Extending reva
 

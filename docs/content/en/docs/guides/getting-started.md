@@ -1,7 +1,8 @@
 ---
 title: Quick start
 description: Run a single reva server with Docker, log in, and upload a file over WebDAV and with the reva CLI.
-weight: 10
+weight: 5
+aliases: ["/docs/getting-started/"]
 ---
 
 This guide starts one `revad` process that holds all the services for a small setup. It stores files on the local disk and reads users from a JSON file. Use it to learn reva, not in production.

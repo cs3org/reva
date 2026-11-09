@@ -8,10 +8,16 @@ nolist: true
 ## Start here
 
 <div class="cards">
-  <a class="card" href="/docs/getting-started/"><h3>Quick start</h3><p>Run reva with Docker, log in, and upload a file. About ten minutes.</p></a>
+  <a class="card" href="/docs/guides/getting-started/"><h3>Quick start</h3><p>Run reva with Docker, log in, and upload a file. About ten minutes.</p></a>
   <a class="card" href="/docs/concepts/architecture/"><h3>Architecture</h3><p>How requests flow from clients through the gateway to storage.</p></a>
   <a class="card" href="/docs/concepts/configuration/"><h3>Configuration</h3><p>The structure of <code>revad.toml</code>, and how to split services across processes.</p></a>
 </div>
+
+## How it fits together
+
+Clients speak HTTP. Reva turns each request into CS3 API calls, and plugins connect those calls to your storage, users, and databases. Select a box to open its documentation.
+
+{{< diagram >}}
 
 ## Reference
 

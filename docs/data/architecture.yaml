@@ -21,7 +21,7 @@ nodes:
       desc: "Sync clients use WebDAV to list, download, and upload files." }
   - { id: peers, label: "Other clouds", sub: "via OCM", x: 520, y: 38, w: 190, external: true,
       desc: "Other sites send and accept shares with the Open Cloud Mesh (OCM) protocol." }
-  - { id: cli, label: "reva CLI", sub: "gRPC", x: 760, y: 38, w: 150, page: "/docs/getting-started",
+  - { id: cli, label: "reva CLI", sub: "gRPC", x: 760, y: 38, w: 150, page: "/docs/guides/getting-started",
       desc: "The reva command line client calls the CS3 APIs on the gateway directly." }
 
   # HTTP

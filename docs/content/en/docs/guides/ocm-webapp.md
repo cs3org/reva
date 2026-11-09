@@ -2,6 +2,7 @@
 title: "OCM webapp offers"
 linkTitle: "OCM webapp offers"
 weight: 20
+category: OCM
 aliases: ["/docs/ocm-webapp/"]
 description: Operator controls for outbound OCM webapp offers
 ---

@@ -2,6 +2,7 @@
 title: "OCM Network Policy"
 linkTitle: "OCM Network Policy"
 weight: 10
+category: OCM
 aliases: ["/docs/ocm-network-policy/"]
 description: Operator controls for outbound OCM HTTP transports
 ---

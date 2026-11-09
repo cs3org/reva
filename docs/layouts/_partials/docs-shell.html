@@ -20,4 +20,10 @@
     {{ $p.TableOfContents }}
   </nav>
   {{- end }}
+  {{- with $p.Params.embed }}
+  <section class="wide-embed">
+    <h2 id="{{ anchorize .title }}">{{ .title }}</h2>
+    <iframe class="api-frame" src="{{ .url }}" title="{{ .title }}"></iframe>
+  </section>
+  {{- end }}
 </div>

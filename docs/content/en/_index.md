@@ -21,5 +21,5 @@ features:
     url: /docs/components/http-services/
   - title: Open source since 2019
     text: Apache 2.0 licensed and developed in the open on GitHub. New contributors are welcome.
-    url: /community/
+    url: /about/
 ---

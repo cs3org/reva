@@ -1,8 +1,13 @@
 ---
-title: Community
+title: About
 description: Reva is built in the open by CERN and contributors from many organisations. You are welcome to join.
-layout: community
+layout: about
+aliases: ["/history/", "/community/"]
 ---
+
+## What is Reva?
+
+Reva is an open source project that CERN started. It is an interoperability platform written in Go. It connects cloud storage and application providers in a compatible way through the CS3 APIs, and it is the first and reference implementation of those APIs.
 
 <div class="cards four">
   <a class="card" href="https://github.com/cs3org/reva/issues"><h3>Report a bug or ask for a feature</h3><p>Open an issue on GitHub. Search the existing issues first.</p></a>
@@ -11,15 +16,13 @@ layout: community
   <a class="card" href="https://www.cs3community.org"><h3>CS3 community</h3><p>The community of research and education clouds behind the CS3 APIs.</p></a>
 </div>
 
-## Contribute code
+## History
 
-1. Open an issue to discuss the change, unless it is small.
-2. Fork the repository and create a branch.
-3. Build and test with `make revad`, `make test-go`, and `make lint`.
-4. Add a changelog entry in `changelog/unreleased/`.
-5. Open a pull request.
+{{< timeline >}}
 
-The [contribution guide](https://github.com/cs3org/reva/blob/master/CONTRIBUTING.md) has the details. Please follow the [code of conduct](https://github.com/cs3org/.github/tree/master/CODE_OF_CONDUCT.md).
+Since that day, different organisations and individuals have joined the project to shape the future of collaboration.
+
+**The next chapter is written by you.**
 
 ## Improve these docs
 

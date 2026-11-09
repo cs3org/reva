@@ -277,3 +277,15 @@ document.querySelectorAll("[data-diagram]").forEach((root) => {
     btn.click();
   }
 });
+
+// Wide blocks extend under the table of contents, so it hides while one of them is next to it.
+const wide = document.querySelectorAll(".wide-embed, .docs .diagram-card");
+const toc = document.querySelector(".toc");
+if (wide.length && toc) {
+  const update = () => {
+    const top = parseFloat(getComputedStyle(toc).top), bottom = top + toc.offsetHeight;
+    toc.classList.toggle("covered", [...wide].some((el) => { const r = el.getBoundingClientRect(); return r.top < bottom && r.bottom > top; }));
+  };
+  addEventListener("scroll", update, { passive: true });
+  update();
+}
