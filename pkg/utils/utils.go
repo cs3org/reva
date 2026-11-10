@@ -433,9 +433,15 @@ func HasPermissions(target, toCheck *provider.ResourcePermissions) bool {
 // IsExternalUser returns true if the user is a lightweight
 // user, guest user or a federated user.
 func IsExternalUser(u *userpb.User) bool {
-	return u.Id.Type == userpb.UserType_USER_TYPE_FEDERATED ||
-		u.Id.Type == userpb.UserType_USER_TYPE_LIGHTWEIGHT ||
-		u.Id.Type == userpb.UserType_USER_TYPE_GUEST
+	return IsExternalUserId(u.GetId())
+}
+
+// IsExternalUserId returns true if the user id belgons to
+// a lightweight user, guest user or a federated user.
+func IsExternalUserId(uid *userpb.UserId) bool {
+	return uid.Type == userpb.UserType_USER_TYPE_FEDERATED ||
+		uid.Type == userpb.UserType_USER_TYPE_LIGHTWEIGHT ||
+		uid.Type == userpb.UserType_USER_TYPE_GUEST
 }
 
 // PrintOCMUserId returns a composed user id for federated users good for display purposes

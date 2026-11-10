@@ -211,6 +211,11 @@ type fakeGateway struct {
 	userErr     error
 	groupErr    error
 	pathErr     error
+
+	// uids are the uid numbers GetUser gives, by user name. uidLookups counts
+	// the GetUser calls.
+	uids       map[string]int64
+	uidLookups int
 }
 
 func status(present bool) *rpc.Status {

@@ -23,30 +23,27 @@ import (
 	"context"
 	"iter"
 	"slices"
+	"strconv"
+	"strings"
 	"time"
 
 	gateway "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
+	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	rpcv1beta1 "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	collaborationv1beta1 "github.com/cs3org/go-cs3apis/cs3/sharing/collaboration/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/cs3org/reva/v3/pkg/appctx"
 	"github.com/cs3org/reva/v3/pkg/errtypes"
-	"github.com/cs3org/reva/v3/pkg/permissions"
-	"github.com/cs3org/reva/v3/pkg/reconciliation/nsdump"
 	"github.com/cs3org/reva/v3/pkg/rjobs"
 	"github.com/cs3org/reva/v3/pkg/service"
+	"github.com/cs3org/reva/v3/pkg/sharehierarchy"
 	"github.com/cs3org/reva/v3/pkg/spaces"
-	"github.com/cs3org/reva/v3/pkg/storage/fs/eos"
-	"github.com/cs3org/reva/v3/pkg/storage/fs/eos/acl"
-	eosclient "github.com/cs3org/reva/v3/pkg/storage/fs/eos/client"
+	"github.com/cs3org/reva/v3/pkg/utils"
 	"github.com/google/uuid"
 	"github.com/mitchellh/mapstructure"
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog"
 )
-
-// TODO(jgeens):
-// - check what to do with version folders
 
 const DeepJobName = "reconciliation.deep"
 
@@ -64,24 +61,16 @@ type DeepJob struct {
 	Gateway gateway.GatewayAPIClient
 	// Auth returns ctx carrying the token the run calls the gateway with.
 	Auth func(ctx context.Context) (context.Context, error)
-	// Instance returns the EOS instance of a storage id. The storage id of a
-	// resource is a routing alias (eoshome-a), but the namespace dump and the
-	// EOS client need the instance itself (eoshome-i01).
-	Instance func(ctx context.Context, storageID string) (string, error)
+	// StorageProviderControlChannel returns the control channel of the storage
+	// provider that holds the resources of a storage id. The dump and the writes
+	// per node are not in the CS3 API, so the job cannot use the gateway for them.
+	StorageProviderControlChannel func(ctx context.Context, storageID string) (ReconcileMethods, error)
 	// Project returns the project space with the given space id, or
 	// errtypes.NotFound when the space is not a project.
-	Project func(ctx context.Context, spaceID string) (*provider.StorageSpace, error)
-	// The changes are calculated per node, and the grant calls of the storage
-	// provider always apply an ACL recursively, so we talk to EOS ourselves.
-	// Eos holds the settings all instances share: each space gets its own
-	// client, pointed at the MGM of its instance.
-	Eos eos.Config
-	// NSDumpDriver is the nsdump client that reads the namespace of a space.
-	NSDumpDriver string
-	// TmpDir holds the namespace dump of a space while it is compared.
-	TmpDir string
-	Log    *zerolog.Logger
-	DryRun bool
+	Project     func(ctx context.Context, spaceID string) (*provider.StorageSpace, error)
+	AllowedACLs []*ACLEntry
+	Log         *zerolog.Logger
+	DryRun      bool
 }
 
 type ChangeSet []*Change
@@ -89,37 +78,80 @@ type ChangeSet []*Change
 type Change struct {
 	Path   string
 	Action ActionKind
-	ACL    *acl.Entry
+	ACL    *ACLEntry
 }
 
 type RunParameters struct {
 	SpaceID       string
-	OptionalACLs  []*acl.Entry
-	MandatoryACLs []*acl.Entry
+	OptionalACLs  []*ACLEntry
+	MandatoryACLs []*ACLEntry
 }
 
 type ShareWithPath struct {
 	*collaborationv1beta1.Share
 	Path string
+	ACL  *ACLEntry
 }
 
 func (s *ShareWithPath) toTreeNode() *ACLNode {
 	return &ACLNode{
 		Path:          s.Path,
-		MandatoryACLs: []*acl.Entry{shareToACL(s.Share)},
+		MandatoryACLs: []*ACLEntry{s.ACL},
 	}
 }
 
-// DeepConfig configures the deep job. The EOS keys are the ones of the eos
-// storage driver, of which we only need the client
 type DeepConfig struct {
 	Config `mapstructure:",squash"`
-	Eos    eos.Config `mapstructure:"eos"`
-	// NSDumpDriver is "chunked" or "memory", see nsdump/README.md.
-	NSDumpDriver string `mapstructure:"nsdump_driver" validate:"oneof=chunked memory"`
-	// TmpDir holds the namespace dump of a space while it is compared. It
-	// takes about 800 MB per million nodes. Empty means os.TempDir().
-	TmpDir string `mapstructure:"tmp_dir"`
+	// AllowedACLs are "user:<name>:<level>" or "group:<name>:<level>", with a
+	// level of R, RW or D. See ParseAllowedACL.
+	AllowedACLs []string `mapstructure:"allowed_acls"`
+}
+
+func ParseAllowedACL(s string) (*ACLEntry, error) {
+	kind, rest, _ := strings.Cut(s, ":")
+	qualifier, level, ok := strings.Cut(rest, ":")
+	if !ok || qualifier == "" {
+		return nil, errors.Errorf("reconciliation: allowed acl %q is not <user|group>:<name>:<level>", s)
+	}
+	e := &ACLEntry{Qualifier: qualifier}
+	switch kind {
+	case "user":
+		e.Type = provider.GranteeType_GRANTEE_TYPE_USER
+	case "group":
+		e.Type = provider.GranteeType_GRANTEE_TYPE_GROUP
+	default:
+		return nil, errors.Errorf("reconciliation: allowed acl %q has type %q, want user or group", s, kind)
+	}
+	for _, l := range []sharehierarchy.PermLevel{sharehierarchy.PermRead, sharehierarchy.PermRW, sharehierarchy.PermDeny} {
+		if l.String() == level {
+			e.Permissions = l
+			return e, nil
+		}
+	}
+	return nil, errors.Errorf("reconciliation: allowed acl %q has level %q, want R, RW or D", s, level)
+}
+
+type uidCache map[string]string
+
+func (c uidCache) uid(ctx context.Context, gw gateway.GatewayAPIClient, id *userpb.UserId) (string, error) {
+	if uid, ok := c[id.GetOpaqueId()]; ok {
+		return uid, nil
+	}
+	res, err := gw.GetUser(ctx, &userpb.GetUserRequest{UserId: id, SkipFetchingUserGroups: true})
+	if err != nil {
+		return "", errors.Wrapf(err, "reconciliation: resolving user %q", id.GetOpaqueId())
+	}
+	if code := res.GetStatus().GetCode(); code != rpcv1beta1.Code_CODE_OK {
+		return "", errors.Errorf("reconciliation: resolving user %q: %s: %s", id.GetOpaqueId(), code, res.GetStatus().GetMessage())
+	}
+	// a user without a uid would give an entry that matches no node, and the
+	// run would then delete the entry the user really has.
+	if res.GetUser().GetUidNumber() == 0 {
+		return "", errors.Errorf("reconciliation: user %q has no uid", id.GetOpaqueId())
+	}
+	uid := strconv.FormatInt(res.GetUser().GetUidNumber(), 10)
+	c[id.GetOpaqueId()] = uid
+	return uid, nil
 }
 
 // DeepReport summarises a run.
@@ -182,6 +214,12 @@ func (j *DeepJob) run(ctx context.Context, spaceID string, rep rjobs.Reporter) (
 		return DeepReport{}, err
 	}
 
+	uids := uidCache{}
+	allowed, err := resolveEntries(ctx, gw, uids, j.AllowedACLs)
+	if err != nil {
+		return DeepReport{}, errors.Wrap(err, "reconciliation: resolving the allowed acls")
+	}
+
 	spaceIDs := []string{spaceID}
 	if spaceID == "" {
 		if spaceIDs, err = j.ShareStore.ListShareSpaces(ctx); err != nil {
@@ -206,7 +244,7 @@ func (j *DeepJob) run(ctx context.Context, spaceID string, rep rjobs.Reporter) (
 		report.progress(rep, i, len(spaceIDs))
 
 		spaceLog := log.With().Str("space", space).Logger()
-		err := j.reconcileSpace(ctx, &spaceLog, &report, gw, space)
+		err := j.reconcileSpace(ctx, &spaceLog, &report, gw, uids, allowed, space)
 		if err == nil {
 			continue
 		}
@@ -241,7 +279,7 @@ func (j *DeepJob) run(ctx context.Context, spaceID string, rep rjobs.Reporter) (
 // differences. The error is the space not being comparable at all; a failure
 // while applying is logged and counted instead, since part of the changes may
 // already be on the storage.
-func (j *DeepJob) reconcileSpace(ctx context.Context, log *zerolog.Logger, report *DeepReport, gw gateway.GatewayAPIClient, spaceID string) error {
+func (j *DeepJob) reconcileSpace(ctx context.Context, log *zerolog.Logger, report *DeepReport, gw gateway.GatewayAPIClient, uids uidCache, allowed []*ACLEntry, spaceID string) error {
 	root, err := spaces.DecodeSpaceID(spaceID)
 	if err != nil {
 		return errors.Wrapf(err, "reconciliation: decoding space %q", spaceID)
@@ -255,42 +293,36 @@ func (j *DeepJob) reconcileSpace(ctx context.Context, log *zerolog.Logger, repor
 		return errors.Errorf("reconciliation: stat of the space root %s: %s: %s", root, code, statRes.GetStatus().GetMessage())
 	}
 
-	instance, err := j.Instance(ctx, statRes.GetInfo().GetId().GetStorageId())
+	controlChannel, err := j.StorageProviderControlChannel(ctx, statRes.GetInfo().GetId().GetStorageId())
 	if err != nil {
 		return err
 	}
 
-	p := RunParameters{SpaceID: spaceID}
+	p := RunParameters{SpaceID: spaceID, OptionalACLs: allowed}
 	project, err := j.Project(ctx, spaceID)
 	if _, ok := err.(errtypes.IsNotFound); ok {
-		p.MandatoryACLs = append(p.MandatoryACLs, &acl.Entry{
-			Type:        acl.TypeUser,
-			Qualifier:   statRes.GetInfo().GetOwner().GetOpaqueId(),
-			Permissions: "rwx",
+		uid, err := uids.uid(ctx, gw, statRes.GetInfo().GetOwner())
+		if err != nil {
+			return err
+		}
+		p.MandatoryACLs = append(p.MandatoryACLs, &ACLEntry{
+			Type:        provider.GranteeType_GRANTEE_TYPE_USER,
+			Qualifier:   uid,
+			Permissions: sharehierarchy.PermRW,
 		})
 	} else if err != nil {
 		return errors.Wrapf(err, "reconciliation: looking up the project of space %q", spaceID)
 	} else {
 		for _, role := range project.GetRoles() {
-			p.MandatoryACLs = append(p.MandatoryACLs, roleToAcls(role)...)
+			entries, err := roleToAcls(ctx, gw, uids, role)
+			if err != nil {
+				return err
+			}
+			p.MandatoryACLs = append(p.MandatoryACLs, entries...)
 		}
 	}
 
-	var namespaceDumper nsdump.NSDumpClient
-	var dumperConfig any
-	switch j.NSDumpDriver {
-	case "memory":
-		namespaceDumper = &nsdump.EOSMemoryNSInspect{}
-		dumperConfig = nsdump.EOSMemoryNSInspectConfig{Instance: instance}
-	default:
-		namespaceDumper = &nsdump.EOSChunkedNSInspect{}
-		dumperConfig = nsdump.EOSChunkedNSInspectConfig{Instance: instance, TmpDir: j.TmpDir}
-	}
-	if err := namespaceDumper.Setup(dumperConfig); err != nil {
-		return err
-	}
-
-	cs, seen, err := j.runAnalysis(ctx, gw, p, namespaceDumper)
+	cs, seen, err := j.runAnalysis(ctx, gw, uids, p, controlChannel)
 	if err != nil {
 		return err
 	}
@@ -318,23 +350,15 @@ func (j *DeepJob) reconcileSpace(ctx context.Context, log *zerolog.Logger, repor
 		return nil
 	}
 
-	conf := j.Eos
-	conf.MasterURL = "root://" + instance
-	conf.GrpcURI = instance + ":50051"
-	client, err := eos.NewEOSClient(ctx, &conf)
-	if err != nil {
-		return errors.Wrapf(err, "reconciliation: building the eos client of %s", instance)
-	}
-
 	// Analysis happened without errors, so we can apply the changes and write to a journal
-	applyErr := j.applyChangeSet(ctx, client, cs)
+	applyErr := j.applyChangeSet(ctx, controlChannel, cs)
 	j.writeJournal(log, report, cs, applyErr)
 	return nil
 }
 
 // runAnalysis also returns the ids of the shares it compared, so the caller
 // can tell a share created after the listing.
-func (j *DeepJob) runAnalysis(ctx context.Context, gw gateway.GatewayAPIClient, p RunParameters, nsdumper nsdump.NSDumpClient) (ChangeSet, map[string]struct{}, error) {
+func (j *DeepJob) runAnalysis(ctx context.Context, gw gateway.GatewayAPIClient, uids uidCache, p RunParameters, storage ReconcileMethods) (ChangeSet, map[string]struct{}, error) {
 	path, err := spaces.DecodeSpaceID(p.SpaceID)
 	if err != nil {
 		return nil, nil, err
@@ -369,10 +393,19 @@ func (j *DeepJob) runAnalysis(ctx context.Context, gw gateway.GatewayAPIClient, 
 		if isExpired(s, now) {
 			continue
 		}
-		if sp, ok := getPath(ctx, gw, s.ResourceId); ok {
+		sp, ok := getPath(ctx, gw, s.ResourceId)
+		if !ok {
+			continue
+		}
+		e, err := shareToACL(ctx, gw, uids, s)
+		if err != nil {
+			return nil, nil, err
+		}
+		if e != nil {
 			sharesWithPaths = append(sharesWithPaths, &ShareWithPath{
 				Share: s,
 				Path:  sp,
+				ACL:   e,
 			})
 		}
 	}
@@ -399,7 +432,7 @@ func (j *DeepJob) runAnalysis(ctx context.Context, gw gateway.GatewayAPIClient, 
 	// We start by taking a dump of the namespace, and then we
 	// parse this entry-by-entry
 	// Now we do the diff and get the resulting ChangeSet
-	changeSet, err := compare(tree, nsdumper.Dump(path, 0))
+	changeSet, err := compare(tree, storage.DumpNamespace(ctx, path))
 	if err != nil {
 		return nil, nil, err
 	}
@@ -407,24 +440,19 @@ func (j *DeepJob) runAnalysis(ctx context.Context, gw gateway.GatewayAPIClient, 
 	return changeSet, seen, nil
 }
 
-func (j *DeepJob) applyChangeSet(ctx context.Context, client eosclient.EOSClient, cs ChangeSet) error {
-	// We are a sudo'er, so we don't set a role
-	auth := eosclient.Authorization{}
-
+func (j *DeepJob) applyChangeSet(ctx context.Context, storage ReconcileMethods, cs ChangeSet) error {
 	for _, c := range cs {
 		var err error
 		switch c.Action {
 		case ActionAdd, ActionUpdate:
-			err = client.AddACL(ctx, auth, c.Path, eosclient.StartPosition, c.ACL, false)
+			err = storage.AddNodeACL(ctx, c.Path, *c.ACL)
 		case ActionDelete:
-			// RemoveACL clears the permissions of the entry it is given, so we pass a copy
-			e := *c.ACL
-			err = client.RemoveACL(ctx, auth, c.Path, &e, false)
+			err = storage.RemoveNodeACL(ctx, c.Path, *c.ACL)
 		default:
 			return errors.Errorf("unknown action %s", c.Action)
 		}
 		if err != nil {
-			return errors.Wrapf(err, "failed to %s %s on %s", c.Action, c.ACL.CitrineSerialize(), c.Path)
+			return errors.Wrapf(err, "failed to %s %s:%s:%s on %s", c.Action, c.ACL.Type, c.ACL.Qualifier, c.ACL.Permissions, c.Path)
 		}
 	}
 
@@ -445,9 +473,9 @@ func (j *DeepJob) writeJournal(log *zerolog.Logger, report *DeepReport, cs Chang
 			Str("event", EventDeepChange).
 			Str("action", c.Action.String()).
 			Str("path", c.Path).
-			Str("type", c.ACL.Type).
+			Str("type", c.ACL.Type.String()).
 			Str("qualifier", c.ACL.Qualifier).
-			Str("permissions", c.ACL.Permissions).
+			Str("permissions", c.ACL.Permissions.String()).
 			Bool("dry_run", j.DryRun).
 			Msg("reconciliation: acl change")
 	}
@@ -495,32 +523,26 @@ func getPath(ctx context.Context, gw gateway.GatewayAPIClient, rid *provider.Res
 	return statRes.Info.Path, true
 }
 
-func roleToAcls(role *provider.SpaceRole) []*acl.Entry {
-	entries := []*acl.Entry{}
+func roleToAcls(ctx context.Context, gw gateway.GatewayAPIClient, uids uidCache, role *provider.SpaceRole) ([]*ACLEntry, error) {
+	entries := []*ACLEntry{}
 	for _, r := range role.Recipients {
-		e := &acl.Entry{}
-		e.Permissions = permissionsToACLPerms(role.PermissionSet)
-		switch r.Type {
-		case provider.GranteeType_GRANTEE_TYPE_GROUP:
-			e.Type = acl.TypeGroup
-			e.Qualifier = r.GetGroupId().OpaqueId
-		case provider.GranteeType_GRANTEE_TYPE_USER:
-			e.Type = acl.TypeUser
-			e.Qualifier = r.GetUserId().OpaqueId
+		e, err := granteeToACL(ctx, gw, uids, r, role.PermissionSet)
+		if err != nil {
+			return nil, err
 		}
 		// a project without a group for a role still has the role, with an
 		// empty recipient. That is not an entry EOS can hold.
-		if e.Qualifier == "" {
+		if e == nil {
 			continue
 		}
 		entries = append(entries, e)
 	}
-	return entries
+	return entries, nil
 }
 
 // compare gives no change set for a dump that fails part way: the entries
 // after the failure are not compared, so it would be incomplete.
-func compare(tree *ACLTree, entries iter.Seq2[nsdump.NameSpaceEntry, error]) (ChangeSet, error) {
+func compare(tree *ACLTree, entries iter.Seq2[NSDumpInfo, error]) (ChangeSet, error) {
 	changeSet := ChangeSet{}
 	for e, err := range entries {
 		if err != nil {
@@ -531,48 +553,49 @@ func compare(tree *ACLTree, entries iter.Seq2[nsdump.NameSpaceEntry, error]) (Ch
 	return changeSet, nil
 }
 
-func compareEntry(tree *ACLTree, entry nsdump.NameSpaceEntry) ChangeSet {
-	m, o, ok := tree.Find(entry.Path)
+func compareEntry(tree *ACLTree, entry NSDumpInfo) ChangeSet {
+	m, o, ok := tree.Find(cmp.Or(entry.ACLsOf, entry.Path))
 	if !ok {
 		return nil
 	}
 
-	actualACLs := parseACLs(entry.XattrSysAcl)
-	return calculateChangeSet(m, o, actualACLs, entry.Path)
+	return calculateChangeSet(m, o, entry.ACLs, entry.Path)
 
 }
 
-func parseACLs(sysattr string) []*acl.Entry {
-	acls, err := acl.Parse(sysattr, acl.ShortTextForm)
-	if err != nil {
-		return nil
-	}
-	return acls.Entries
-}
-
-func calculateChangeSet(mandatory, optional, actual []*acl.Entry, p string) ChangeSet {
+func calculateChangeSet(mandatory, optional, actual []*ACLEntry, p string) ChangeSet {
 	changeSet := ChangeSet{}
 
 	// First calculate missing entries on `actual`
 	for _, e := range mandatory {
-		if !aclSetContains(actual, e) {
-			changeSet = append(changeSet, &Change{
-				Path:   p,
-				Action: ActionAdd,
-				ACL:    e,
-			})
+		if aclSetContains(actual, e) {
+			continue
 		}
+		action := ActionAdd
+		if slices.ContainsFunc(actual, func(c *ACLEntry) bool { return c.Type == e.Type && c.Qualifier == e.Qualifier }) {
+			action = ActionUpdate
+		}
+		changeSet = append(changeSet, &Change{
+			Path:   p,
+			Action: action,
+			ACL:    e,
+		})
 	}
 
 	// Then calculate which entries should not be there
 	for _, e := range actual {
-		if !aclSetContains(mandatory, e) && !aclSetContains(optional, e) {
-			changeSet = append(changeSet, &Change{
-				Path:   p,
-				Action: ActionDelete,
-				ACL:    e,
-			})
+		if aclSetContains(mandatory, e) || aclSetContains(optional, e) {
+			continue
 		}
+		if slices.ContainsFunc(mandatory, func(c *ACLEntry) bool { return c.Type == e.Type && c.Qualifier == e.Qualifier }) {
+			// We've already added an `update` entry above
+			continue
+		}
+		changeSet = append(changeSet, &Change{
+			Path:   p,
+			Action: ActionDelete,
+			ACL:    e,
+		})
 	}
 
 	return changeSet
@@ -580,49 +603,61 @@ func calculateChangeSet(mandatory, optional, actual []*acl.Entry, p string) Chan
 
 // We cannot use slices.Contains, because we want to compare
 // the actual values, not the pointers
-func aclSetContains(set []*acl.Entry, entry *acl.Entry) bool {
-	return slices.ContainsFunc(set, func(c *acl.Entry) bool {
+func aclSetContains(set []*ACLEntry, entry *ACLEntry) bool {
+	return slices.ContainsFunc(set, func(c *ACLEntry) bool {
 		return *c == *entry
 	})
 }
 
-func shareToACL(s *collaborationv1beta1.Share) *acl.Entry {
-	var e acl.Entry
-	switch {
-	case s.Grantee.Type == provider.GranteeType_GRANTEE_TYPE_GROUP:
-		e.Type = "egroup"
-		e.Qualifier = s.Grantee.GetGroupId().GetOpaqueId()
-	case s.Grantee.Type == provider.GranteeType_GRANTEE_TYPE_USER:
-		e.Type = "u"
-		e.Qualifier = s.Grantee.GetUserId().GetOpaqueId()
+// shareToACL returns nil for a share whose access the storage does not keep in
+// its ACLs, and for a grantee without an id.
+func shareToACL(ctx context.Context, gw gateway.GatewayAPIClient, uids uidCache, s *collaborationv1beta1.Share) (*ACLEntry, error) {
+	return granteeToACL(ctx, gw, uids, s.GetGrantee(), s.GetPermissions().GetPermissions())
+}
+
+func granteeToACL(ctx context.Context, gw gateway.GatewayAPIClient, uids uidCache, g *provider.Grantee, perms *provider.ResourcePermissions) (*ACLEntry, error) {
+	e := &ACLEntry{Type: g.GetType(), Permissions: sharehierarchy.PermLevelFromCS3(perms)}
+	switch g.GetType() {
+	case provider.GranteeType_GRANTEE_TYPE_GROUP:
+		if g.GetGroupId().GetOpaqueId() == "" {
+			return nil, nil
+		}
+		e.Qualifier = g.GetGroupId().GetOpaqueId()
+	case provider.GranteeType_GRANTEE_TYPE_USER:
+		if utils.IsExternalUserId(g.GetUserId()) || g.GetUserId().GetOpaqueId() == "" {
+			return nil, nil
+		}
+		uid, err := uids.uid(ctx, gw, g.GetUserId())
+		if err != nil {
+			return nil, err
+		}
+		e.Qualifier = uid
 	default:
-		return &e
+		return nil, nil
 	}
-
-	e.Permissions = permissionsToACLPerms(s.Permissions.Permissions)
-	return &e
+	return e, nil
 }
 
-func permissionsToACLPerms(p *provider.ResourcePermissions) string {
-	// TODO(jgeens): we should define named constants for these int values
-	// TODO(jgeens): we should define named constants for the EOS perms
-	// TODO(jgeens): we should have some better error handling here
-	ocs := permissions.OCSFromCS3Permission(p)
-	switch ocs {
-	case 0:
-		return "!r!w!x"
-	case 1:
-		return "rx"
-	case 15:
-		return "rwx"
+// resolveEntries returns the passed `ACLEntry`s, but by uid instead of by username
+func resolveEntries(ctx context.Context, gw gateway.GatewayAPIClient, uids uidCache, entries []*ACLEntry) ([]*ACLEntry, error) {
+	out := make([]*ACLEntry, 0, len(entries))
+	for _, e := range entries {
+		if e.Type != provider.GranteeType_GRANTEE_TYPE_USER {
+			out = append(out, e)
+			continue
+		}
+		uid, err := uids.uid(ctx, gw, &userpb.UserId{OpaqueId: e.Qualifier})
+		if err != nil {
+			return nil, err
+		}
+		resolved := *e
+		resolved.Qualifier = uid
+		out = append(out, &resolved)
 	}
-	return ""
+	return out, nil
 }
 
-// DeepParams are the parameters of one on-demand run.
-type DeepParams struct {
-	// SpaceID limits the run to one space. Empty covers every space that holds
-	// a share.
+type OnDemandDeepJobParams struct {
 	SpaceID string `mapstructure:"space"`
 }
 
@@ -644,7 +679,7 @@ func (r *deepRun) Run(ctx context.Context, p rjobs.Params) (rjobs.Params, error)
 
 // RunWithProgress is Run, reporting how far the run has got.
 func (r *deepRun) RunWithProgress(ctx context.Context, p rjobs.Params, rep rjobs.Reporter) (rjobs.Params, error) {
-	var params DeepParams
+	var params OnDemandDeepJobParams
 	// a parameter that is not read is an error: a mistyped "space" would
 	// otherwise silently widen the run from one space to every space.
 	dec, err := mapstructure.NewDecoder(&mapstructure.DecoderConfig{
