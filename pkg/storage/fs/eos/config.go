@@ -189,4 +189,12 @@ type Config struct {
 	ExternalAccountsUserName string `mapstructure:"external_accounts_user_name" docs:"nil;Username of a user known to EOS on whose behalf accesses are done for external (lw, federated) users."  `
 	ExternalAccountsUserUID  string `mapstructure:"external_accounts_user_uid" docs:"nil;UID of a user known to EOS on whose behalf accesses are done for external (lw, federated) users."  `
 	ExternalAccountsUserGID  string `mapstructure:"external_accounts_user_gid" docs:"nil;GID of a user known to EOS on whose behalf accesses are done for external (lw, federated) users."  `
+
+	// The deep reconciliation job reads the namespace with eos-ns-inspect, which
+	// reads QuarkDB directly instead of asking the MGM for each node.
+	NSInspectBinary       string   `mapstructure:"ns_inspect_binary" docs:"/usr/bin/eos-ns-inspect;The eos-ns-inspect binary the deep reconciliation job dumps the namespace with."`
+	NSInspectQuarkDBNodes []string `mapstructure:"ns_inspect_quarkdb_nodes" docs:"nil;The QuarkDB nodes of the instance, e.g. [\"eoshome-i01-qdb.cern.ch:7777\"]."`
+	NSInspectPasswordFile string   `mapstructure:"ns_inspect_password_file" docs:"nil;The QuarkDB password file of the instance."`
+	NSDumpDriver          string   `mapstructure:"nsdump_driver" docs:"chunked;How a namespace dump is read: chunked writes it to a file first, memory keeps it in memory."`
+	NSDumpTmpDir          string   `mapstructure:"nsdump_tmp_dir" docs:"os.TempDir();Where the chunked driver writes a dump. It takes about 800 MB per million nodes."`
 }

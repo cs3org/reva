@@ -10,11 +10,10 @@ import (
 )
 
 type EOSChunkedNSInspectConfig struct {
-	IgnoreFiles bool   `mapstructure:"ignorefiles"`
-	Instance    string `mapstructure:"instance"`
+	NSInspectConfig
 	// TmpDir holds the dump while it is parsed. It takes about 800 MB per
 	// million nodes. Empty means os.TempDir().
-	TmpDir string `mapstructure:"tmp_dir"`
+	TmpDir string
 }
 
 // EOSChunkedNSInspect writes the scan to a file and parses it from there, so
@@ -43,7 +42,7 @@ func (e *EOSChunkedNSInspect) Dump(rootPath string, maxDepth int) iter.Seq2[Name
 		defer os.Remove(f.Name())
 		defer f.Close()
 
-		cmd := nsInspectCommand(e.cfg.Instance, rootPath, maxDepth, e.cfg.IgnoreFiles)
+		cmd := nsInspectCommand(e.cfg.NSInspectConfig, rootPath, maxDepth)
 		cmd.Stdout = f
 		if err := cmd.Run(); err != nil {
 			yield(NameSpaceEntry{}, errors.Wrap(err, "failed to run eos-ns-inspect"))

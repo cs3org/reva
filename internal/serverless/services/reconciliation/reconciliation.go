@@ -24,6 +24,9 @@ package reconciliation
 
 import (
 	"context"
+	"encoding/json"
+	"io"
+	"iter"
 	"os"
 	"sync"
 
@@ -32,11 +35,15 @@ import (
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	registry "github.com/cs3org/go-cs3apis/cs3/storage/registry/v1beta1"
+	"github.com/cs3org/reva/v3/pkg/admin"
 	"github.com/cs3org/reva/v3/pkg/appctx"
 	"github.com/cs3org/reva/v3/pkg/auth/scope"
+	"github.com/cs3org/reva/v3/pkg/control/controlpb"
+	invokeclient "github.com/cs3org/reva/v3/pkg/invoke/client"
 	projectsregistry "github.com/cs3org/reva/v3/pkg/projects/manager/registry"
 	publicshareregistry "github.com/cs3org/reva/v3/pkg/publicshare/manager/registry"
 	"github.com/cs3org/reva/v3/pkg/reconciliation"
+	svcregistry "github.com/cs3org/reva/v3/pkg/registry"
 	"github.com/cs3org/reva/v3/pkg/rjobs"
 	"github.com/cs3org/reva/v3/pkg/rserverless"
 	"github.com/cs3org/reva/v3/pkg/service"
@@ -124,9 +131,6 @@ func (c *config) ApplyDefaults() {
 	}
 	if c.Deep.LogFile == "" {
 		c.Deep.LogFile = "/var/log/revad/reconciliation-deep.log"
-	}
-	if c.Deep.NSDumpDriver == "" {
-		c.Deep.NSDumpDriver = "chunked"
 	}
 }
 
@@ -294,17 +298,23 @@ func New(ctx context.Context, m map[string]any) (_ rserverless.Service, err erro
 			if err != nil {
 				return nil, err
 			}
+			allowed := make([]*reconciliation.ACLEntry, 0, len(c.Deep.AllowedACLs))
+			for _, a := range c.Deep.AllowedACLs {
+				e, err := reconciliation.ParseAllowedACL(a)
+				if err != nil {
+					return nil, err
+				}
+				allowed = append(allowed, e)
+			}
 			// Gateway is left nil for the same reason as the orphan job's.
 			job := &reconciliation.DeepJob{
-				ShareStore:   shares,
-				Auth:         identity.authenticate,
-				Instance:     providers.instance,
-				Project:      projects.GetProjectBySpaceID,
-				Eos:          c.Deep.Eos,
-				NSDumpDriver: c.Deep.NSDumpDriver,
-				TmpDir:       c.Deep.TmpDir,
-				Log:          jobLog,
-				DryRun:       jc.DryRun,
+				ShareStore:                    shares,
+				Auth:                          identity.authenticate,
+				StorageProviderControlChannel: providers.controlChannelOfInstance,
+				Project:                       projects.GetProjectBySpaceID,
+				AllowedACLs:                   allowed,
+				Log:                           jobLog,
+				DryRun:                        jc.DryRun,
 			}
 			jobName = reconciliation.DeepJobName
 			if err := rjobs.RegisterOnDemand(jobName, job.OnDemand); err != nil {
@@ -476,6 +486,123 @@ func (p *storageProviders) instance(ctx context.Context, storageID string) (stri
 		return "", errors.Errorf("reconciliation: no storage provider for %q", storageID)
 	}
 	return res.GetProviders()[0].GetProviderId(), nil
+}
+
+// controlChannelOfInstance returns the control channel of the storage provider
+// of the instance that holds storageID. The provider advertises the instance
+// as its mount id.
+func (p *storageProviders) controlChannelOfInstance(ctx context.Context, storageID string) (reconciliation.ReconcileMethods, error) {
+	instance, err := p.instance(ctx, storageID)
+	if err != nil {
+		return nil, err
+	}
+
+	// HTTPEndpoint takes another transport when it is asked for one.
+	ep, err := service.HTTPEndpoint(ctx,
+		service.ByName(service.NameStorageProvider),
+		service.ByMetadata(svcregistry.MetaTransport, svcregistry.TransportGRPC),
+		service.ByMetadata(svcregistry.MetaMountID, instance),
+	)
+	if err != nil {
+		return nil, errors.Wrapf(err, "reconciliation: finding the storage provider of %s", instance)
+	}
+	control := ep.Meta(svcregistry.MetaControl)
+	if control == "" {
+		return nil, errors.Errorf("reconciliation: the storage provider of %s has no control channel", instance)
+	}
+	client, err := invokeclient.ControlClientAt(control)
+	if err != nil {
+		return nil, errors.Wrapf(err, "reconciliation: dialing the control channel of %s", instance)
+	}
+	return &storageProviderControlChannel{client: client, target: ep.Node().ID()}, nil
+}
+
+// storageProviderControlChannel is the storage of one provider, reached over its control
+// channel. The channel takes an admin token only, so each call replaces the
+// token of the run with one.
+type storageProviderControlChannel struct {
+	client controlpb.ControlClient
+	target string
+}
+
+func (s *storageProviderControlChannel) DumpNamespace(ctx context.Context, p string) iter.Seq2[reconciliation.NSDumpInfo, error] {
+	return func(yield func(reconciliation.NSDumpInfo, error) bool) {
+		ctx, err := admin.AsService(ctx, "reconciliation")
+		if err != nil {
+			yield(reconciliation.NSDumpInfo{}, err)
+			return
+		}
+		// a caller that exits early should not leave the dump running!
+		ctx, cancel := context.WithCancel(ctx)
+		defer cancel()
+
+		stream, err := s.client.InvokeStream(ctx, &controlpb.InvokeRequest{
+			Target:     s.target,
+			Invocation: reconciliation.InvocationDumpNamespace,
+			Args:       map[string]string{reconciliation.ArgPath: p},
+		})
+		if err != nil {
+			yield(reconciliation.NSDumpInfo{}, errors.Wrap(err, "reconciliation: starting the namespace dump"))
+			return
+		}
+		for {
+			res, err := stream.Recv()
+			if errors.Is(err, io.EOF) {
+				return
+			}
+			if err != nil {
+				yield(reconciliation.NSDumpInfo{}, errors.Wrap(err, "reconciliation: error reading the namespace dump"))
+				return
+			}
+			if res.GetError() != "" {
+				yield(reconciliation.NSDumpInfo{}, errors.Errorf("reconciliation: namespace dump: %s", res.GetError()))
+				return
+			}
+			var batch struct {
+				Nodes []reconciliation.NSDumpInfo `json:"nodes"`
+			}
+			if err := json.Unmarshal([]byte(res.GetResultJson()), &batch); err != nil {
+				yield(reconciliation.NSDumpInfo{}, errors.Wrap(err, "reconciliation: error decoding the namespace dump"))
+				return
+			}
+			for _, n := range batch.Nodes {
+				if !yield(n, nil) {
+					return
+				}
+			}
+		}
+	}
+}
+
+func (s *storageProviderControlChannel) AddNodeACL(ctx context.Context, p string, e reconciliation.ACLEntry) error {
+	return s.invokeACL(ctx, reconciliation.InvocationAddNodeACL, p, e)
+}
+
+func (s *storageProviderControlChannel) RemoveNodeACL(ctx context.Context, p string, e reconciliation.ACLEntry) error {
+	return s.invokeACL(ctx, reconciliation.InvocationRemoveNodeACL, p, e)
+}
+
+func (s *storageProviderControlChannel) invokeACL(ctx context.Context, invocation, p string, e reconciliation.ACLEntry) error {
+	entry, err := json.Marshal(e)
+	if err != nil {
+		return err
+	}
+	ctx, err = admin.AsService(ctx, "reconciliation")
+	if err != nil {
+		return err
+	}
+	res, err := s.client.Invoke(ctx, &controlpb.InvokeRequest{
+		Target:     s.target,
+		Invocation: invocation,
+		Args:       map[string]string{reconciliation.ArgPath: p, reconciliation.ArgEntry: string(entry)},
+	})
+	if err != nil {
+		return err
+	}
+	if res.GetError() != "" {
+		return errors.New(res.GetError())
+	}
+	return nil
 }
 
 // Start is a no-op: the jobs service owns the runner that fires the jobs.

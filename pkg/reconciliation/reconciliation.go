@@ -138,8 +138,7 @@ func OpenLog(path string) (*zerolog.Logger, *os.File, error) {
 	return &log, f, nil
 }
 
-// ActionKind is what the job did to an ACL entry. There is no remove: the job
-// only ever adds one that is missing or corrects one that is wrong.
+// ActionKind is what a job did to an ACL entry
 type ActionKind int
 
 const (

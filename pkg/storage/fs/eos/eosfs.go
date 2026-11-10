@@ -91,6 +91,14 @@ func (c *Config) ApplyDefaults() {
 		c.XrdcopyBinary = "/opt/eos/xrootd/bin/xrdcopy"
 	}
 
+	if c.NSInspectBinary == "" {
+		c.NSInspectBinary = "/usr/bin/eos-ns-inspect"
+	}
+
+	if c.NSDumpDriver == "" {
+		c.NSDumpDriver = "chunked"
+	}
+
 	if c.MasterURL == "" {
 		c.MasterURL = "root://eos-example.org"
 	}
@@ -150,9 +158,8 @@ type Eosfs struct {
 	quotaCache     *quotaCache
 }
 
-// NewEOSClient returns the client NewEOSFS talks to EOS with, for the callers
-// that need EOS itself and not a storage.FS
-func NewEOSClient(ctx context.Context, c *Config) (eosclient.EOSClient, error) {
+// NewEOSFS returns a storage.FS interface implementation that connects to an EOS instance.
+func NewEOSFS(ctx context.Context, c *Config) (storage.FS, error) {
 	c.ApplyDefaults()
 
 	// bail out if keytab is not found.
@@ -215,18 +222,6 @@ func NewEOSClient(ctx context.Context, c *Config) (eosclient.EOSClient, error) {
 
 	if err != nil {
 		return nil, errors.Wrap(err, "error initializing eosclient")
-	}
-
-	return eosClient, nil
-}
-
-// NewEOSFS returns a storage.FS interface implementation that connects to an EOS instance.
-func NewEOSFS(ctx context.Context, c *Config) (storage.FS, error) {
-	c.ApplyDefaults()
-
-	eosClient, err := NewEOSClient(ctx, c)
-	if err != nil {
-		return nil, err
 	}
 
 	eosfs := &Eosfs{
