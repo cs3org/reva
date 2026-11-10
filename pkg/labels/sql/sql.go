@@ -63,8 +63,8 @@ type Label struct {
 	UpdatedAt time.Time
 	DeletedAt gorm.DeletedAt `gorm:"uniqueIndex:u_label;index"`
 
-	Inode    string `gorm:"size:32;uniqueIndex:u_label;index"`
-	Instance string `gorm:"size:32;uniqueIndex:u_label;index"`
+	Inode    string `gorm:"size:255;uniqueIndex:u_label;index"`
+	Instance string `gorm:"size:255;uniqueIndex:u_label;index"`
 	UserId   string `gorm:"size:64;uniqueIndex:u_label;index"`
 	Label    string `gorm:"size:64;uniqueIndex:u_label;index"`
 }
