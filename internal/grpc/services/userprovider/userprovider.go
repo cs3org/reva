@@ -169,6 +169,11 @@ func (s *service) FindUsers(ctx context.Context, req *userpb.FindUsersRequest) (
 }
 
 func (s *service) GetUserGroups(ctx context.Context, req *userpb.GetUserGroupsRequest) (*userpb.GetUserGroupsResponse, error) {
+	// Public-link guests and OCM (federated) users are not local accounts, so no user backend knows them.
+	if t := req.UserId.GetType(); t == userpb.UserType_USER_TYPE_GUEST || t == userpb.UserType_USER_TYPE_FEDERATED {
+		return &userpb.GetUserGroupsResponse{Status: status.NewOK(ctx)}, nil
+	}
+
 	groups, err := s.usermgr.GetUserGroups(ctx, req.UserId)
 	if err != nil {
 		res := &userpb.GetUserGroupsResponse{
