@@ -5,7 +5,6 @@ import (
 	"slices"
 
 	"github.com/cs3org/reva/v3/pkg/spaces"
-	"github.com/cs3org/reva/v3/pkg/storage/fs/eos/acl"
 )
 
 // TODO(jgeens):
@@ -30,8 +29,8 @@ type ACLTree struct {
 
 type ACLNode struct {
 	Path          string
-	MandatoryACLs []*acl.Entry
-	AllowedACLs   []*acl.Entry
+	MandatoryACLs []*ACLEntry
+	AllowedACLs   []*ACLEntry
 	Children      []*ACLNode
 }
 
@@ -86,7 +85,9 @@ func (n *ACLNode) insert(i *ACLNode) bool {
 				stay = append(stay, c)
 			}
 		}
-		// We need to insert - not append - children, becaus
+		// We need to insert - not append - children, because i is now their
+		// parent. If we only appended them i's ACLs would not be propagated
+		// onto c and its children
 		for _, c := range move {
 			i.insert(c)
 		}
@@ -108,9 +109,9 @@ func (n *ACLNode) Matches(p string) bool {
 	return fastHasPrefix(p, n.Path)
 }
 
-// faster implementation of the previous check:
-//
-//	`_, ok := strings.CutPrefix(p, n.Path+"/")`
+// fastHasPrefix is equivalient to
+// `_, hasPrefix := strings.CutPrefix(p, n.Path+"/")`,
+// but it is faster
 func fastHasPrefix(s, prefix string) bool {
 	return len(s) > len(prefix) && s[len(prefix)] == '/' && s[:len(prefix)] == prefix
 }
@@ -120,13 +121,13 @@ func (n *ACLNode) MatchesExact(p string) bool {
 	return p == n.Path
 }
 
-func (n *ACLNode) Find(p string) (MandatoryACLs, AllowedACLs []*acl.Entry, ok bool) {
+func (n *ACLNode) Find(p string) (MandatoryACLs, AllowedACLs []*ACLEntry, ok bool) {
 	return n.find(path.Clean(p))
 }
 
 // The internal-only find does not clean the path p, so we only need to do this once
 // and not for every visited node
-func (n *ACLNode) find(p string) (MandatoryACLs, AllowedACLs []*acl.Entry, ok bool) {
+func (n *ACLNode) find(p string) (MandatoryACLs, AllowedACLs []*ACLEntry, ok bool) {
 	if !n.Matches(p) {
 		return nil, nil, false
 	}
@@ -141,7 +142,7 @@ func (n *ACLNode) find(p string) (MandatoryACLs, AllowedACLs []*acl.Entry, ok bo
 	return n.MandatoryACLs, n.AllowedACLs, true
 }
 
-func (n *ACLNode) ApplyACLs(mandatory, optional []*acl.Entry) {
+func (n *ACLNode) ApplyACLs(mandatory, optional []*ACLEntry) {
 	n.MandatoryACLs = mergeACLs(n.MandatoryACLs, mandatory)
 	n.AllowedACLs = mergeACLs(n.AllowedACLs, optional)
 	for _, c := range n.Children {
@@ -149,7 +150,7 @@ func (n *ACLNode) ApplyACLs(mandatory, optional []*acl.Entry) {
 	}
 }
 
-func mergeACLs(a, b []*acl.Entry) []*acl.Entry {
+func mergeACLs(a, b []*ACLEntry) []*ACLEntry {
 	resultSet := slices.Clone(a)
 	for _, e := range b {
 
@@ -162,7 +163,7 @@ func mergeACLs(a, b []*acl.Entry) []*acl.Entry {
 
 				// We don't want to override other references to this ACL, so we make a copy
 				merged := *c
-				merged.Permissions = highestPermission(e.Permissions, c.Permissions)
+				merged.Permissions = max(e.Permissions, c.Permissions)
 				resultSet[i] = &merged
 
 				foundMatch = true
@@ -178,32 +179,4 @@ func mergeACLs(a, b []*acl.Entry) []*acl.Entry {
 	}
 
 	return resultSet
-}
-
-type Permission int
-
-const (
-	permissionNone Permission = iota
-
-	permissionRead
-	permissionWrite
-	permissionDeny
-)
-
-var aclPermissions = map[string]Permission{
-	"rx":     permissionRead,
-	"rwx":    permissionWrite,
-	"!r!w!x": permissionDeny, // TODO: verify exact ACL for deny
-}
-
-func highestPermission(a, b string) string {
-	pa, pb := aclPermissions[a], aclPermissions[b]
-	switch {
-	case pa == permissionNone && pb == permissionNone:
-		return a
-	case pa >= pb:
-		return a
-	default:
-		return b
-	}
 }

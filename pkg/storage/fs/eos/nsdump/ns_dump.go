@@ -64,21 +64,34 @@ func (e *NameSpaceEntry) IsSysFile() bool {
 	return e.EntryType() == EntryTypeFile && strings.HasPrefix(path.Base(path.Dir(e.Path)), ".sys.")
 }
 
+// NSInspectConfig is how the memory and the chunked client reach the QuarkDB
+// of an instance.
+type NSInspectConfig struct {
+	// Binary is the eos-ns-inspect binary.
+	Binary string
+	// QuarkDBNodes are the QuarkDB nodes of the instance, e.g.
+	// eoshome-i01-qdb.cern.ch:7777.
+	QuarkDBNodes []string
+	PasswordFile string
+	// IgnoreFiles scans only the folders.
+	IgnoreFiles bool
+}
+
 // nsInspectCommand builds the scan that the memory and the chunked client run.
-func nsInspectCommand(instance, rootPath string, maxDepth int, ignoreFiles bool) *exec.Cmd {
+func nsInspectCommand(c NSInspectConfig, rootPath string, maxDepth int) *exec.Cmd {
 	args := []string{"scan", "--path", rootPath}
 	if maxDepth > 0 {
 		args = append(args, "--maxdepth", strconv.Itoa(maxDepth))
 	}
 	args = append(args,
-		"--members", instance+"-qdb:7777",
-		"--password-file", "/keytabs/"+instance+"_keytab",
+		"--members", strings.Join(c.QuarkDBNodes, ","),
+		"--password-file", c.PasswordFile,
 		"--json",
 	)
-	if ignoreFiles {
+	if c.IgnoreFiles {
 		args = append(args, "--no-files")
 	}
-	return exec.Command("/usr/bin/eos-ns-inspect", args...)
+	return exec.Command(c.Binary, args...)
 }
 
 // parseNSInspect decodes the JSON array that eos-ns-inspect prints one element

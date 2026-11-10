@@ -6,26 +6,21 @@ import (
 	"iter"
 )
 
-type EOSMemoryNSInspectConfig struct {
-	IgnoreFiles bool   `mapstructure:"ignorefiles"`
-	Instance    string `mapstructure:"instance"`
-}
-
 type EOSMemoryNSInspect struct {
-	cfg EOSMemoryNSInspectConfig
+	cfg NSInspectConfig
 }
 
 func (e *EOSMemoryNSInspect) Setup(config any) error {
-	if c, ok := config.(EOSMemoryNSInspectConfig); ok {
+	if c, ok := config.(NSInspectConfig); ok {
 		e.cfg = c
 		return nil
 	}
-	return fmt.Errorf("requires a config of type %T", EOSMemoryNSInspectConfig{})
+	return fmt.Errorf("requires a config of type %T", NSInspectConfig{})
 }
 
 func (e *EOSMemoryNSInspect) Dump(rootPath string, maxDepth int) iter.Seq2[NameSpaceEntry, error] {
 	return func(yield func(NameSpaceEntry, error) bool) {
-		cmd := nsInspectCommand(e.cfg.Instance, rootPath, maxDepth, e.cfg.IgnoreFiles)
+		cmd := nsInspectCommand(e.cfg, rootPath, maxDepth)
 
 		var stdout bytes.Buffer
 		cmd.Stdout = &stdout
