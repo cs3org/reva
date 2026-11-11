@@ -1,7 +1,7 @@
 ---
 title: Quick start
 description: Run a single reva server with Docker, log in, and upload a file over WebDAV and with the reva CLI.
-weight: 5
+weight: 1
 aliases: ["/docs/getting-started/"]
 ---
 

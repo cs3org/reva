@@ -42,6 +42,9 @@ url = "https://github.com/cs3org/reva"
 name = "Gitter"
 url = "https://gitter.im/cs3org/reva"
 [[params.links]]
+name = "Forum"
+url = "https://reva-community.web.cern.ch"
+[[params.links]]
 name = "CS3 APIs"
 url = "https://buf.build/cs3org-buf/cs3apis"
 

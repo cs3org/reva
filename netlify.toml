@@ -1,7 +1,10 @@
 [build]
   publish = "docs/public"
   command = "cd docs && hugo --gc --minify"
-  ignore = "git diff --quiet HEAD^ HEAD docs/"
+  # Exit 0 skips the build. Production builds only for a release commit
+  # (VERSION changed since the last production build), because only a release
+  # commits fresh generated docs. Previews build when docs/ changes.
+  ignore = "if [ \"$CONTEXT\" = production ]; then git diff --quiet \"$CACHED_COMMIT_REF\" \"$COMMIT_REF\" -- VERSION; else git diff --quiet HEAD^ HEAD -- docs/; fi"
 
 [build.environment]
   HUGO_VERSION = "0.160.1"

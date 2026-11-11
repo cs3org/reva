@@ -176,12 +176,18 @@ description: >
 		os.Exit(1)
 	}
 
+	// The docs show VERSION, RELEASE_DATE and the new changelog page, so
+	// generate them only after these are written.
+	cmd = exec.Command("make", "gen-doc-contributors")
+	run(cmd)
+
 	add(fmt.Sprintf("v%s", *version),
 		"changelog",
 		"CHANGELOG.md",
 		"VERSION",
 		"RELEASE_DATE",
 		"docs/content/",
+		"docs/data/generated/",
 	)
 
 	if *commit {

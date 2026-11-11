@@ -254,12 +254,12 @@ dist: gen-doc ## Build the release artifacts
 	go run tools/create-artifacts/main.go -version $(VERSION) -commit $(GIT_COMMIT) -goversion $(GO_VERSION)
 
 # Run make all, move changelog/unreleased into changelog/<version>_<date>,
-# regenerate CHANGELOG.md and write VERSION and RELEASE_DATE. Then commit
-# and tag the release.
+# regenerate CHANGELOG.md, write VERSION and RELEASE_DATE, and generate the
+# docs. Then commit and tag the release.
 #
 # Variables:
 #   NEWVER  the version to release, for example 3.14.1 (required)
-release: gen-doc ## Prepare a release (NEWVER=3.x.y)
+release: ## Prepare a release (NEWVER=3.x.y)
 	go run tools/prepare-release/main.go -version $(NEWVER) -commit -tag
 
 
