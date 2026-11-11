@@ -32,26 +32,26 @@ import (
 )
 
 func TestFreshAccessMethodsNilAndEmpty(t *testing.T) {
-	svc := &service{conf: &config{OfferWebapp: true, WebappName: testAppName}}
+	svc := &service{conf: &config{}}
 	var logs bytes.Buffer
 	logger := zerolog.New(&logs)
 	ctx := appctx.WithLogger(context.Background(), &logger)
 
-	got, err := svc.freshAccessMethods(ctx, nil, true, true)
+	got, err := svc.freshAccessMethods(ctx, nil, nil, true, true)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if got == nil || len(got) != 0 {
 		t.Fatalf("nil request methods -> %#v, want empty slice", got)
 	}
-	got, err = svc.freshAccessMethods(ctx, []*ocm.AccessMethod{}, true, true)
+	got, err = svc.freshAccessMethods(ctx, []*ocm.AccessMethod{}, nil, true, true)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if got == nil || len(got) != 0 {
 		t.Fatalf("empty request methods -> %#v, want empty slice", got)
 	}
-	got, err = svc.freshAccessMethods(ctx, []*ocm.AccessMethod{nil, nil}, true, true)
+	got, err = svc.freshAccessMethods(ctx, []*ocm.AccessMethod{nil, nil}, nil, true, true)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -92,7 +92,7 @@ func TestCreateOCMShareRejectsInvalidAccessMethods(t *testing.T) {
 		{
 			name:    "duplicate webapps",
 			offer:   true,
-			methods: []*ocm.AccessMethod{webdavMethod(), webappMethod("one"), webappMethod("two")},
+			methods: []*ocm.AccessMethod{webdavMethod(), webappMethod(), webappMethod()},
 			disco:   capableDiscovery(),
 		},
 		{
@@ -100,7 +100,7 @@ func TestCreateOCMShareRejectsInvalidAccessMethods(t *testing.T) {
 			offer: true,
 			methods: []*ocm.AccessMethod{
 				webdavMethod(),
-				webappMethodWith("", []string{reqMustExchangeToken, reqMustExchangeToken}),
+				webappMethodWith([]string{reqMustExchangeToken, reqMustExchangeToken}),
 			},
 			disco: capableDiscovery(),
 		},
@@ -109,7 +109,7 @@ func TestCreateOCMShareRejectsInvalidAccessMethods(t *testing.T) {
 			offer: true,
 			methods: []*ocm.AccessMethod{
 				webdavMethod(),
-				webappMethodWith("", []string{" " + reqMustExchangeToken}),
+				webappMethodWith([]string{" " + reqMustExchangeToken}),
 			},
 			disco: capableDiscovery(),
 		},
@@ -118,7 +118,7 @@ func TestCreateOCMShareRejectsInvalidAccessMethods(t *testing.T) {
 			offer: true,
 			methods: []*ocm.AccessMethod{
 				webdavMethod(),
-				webappMethodWith("", []string{reqMustExchangeToken, secretMarker}),
+				webappMethodWith([]string{reqMustExchangeToken, secretMarker}),
 			},
 			disco: capableDiscovery(),
 		},
@@ -127,7 +127,7 @@ func TestCreateOCMShareRejectsInvalidAccessMethods(t *testing.T) {
 			offer: true,
 			methods: []*ocm.AccessMethod{
 				webdavMethod(),
-				webappMethodWith("", []string{reqMustExchangeToken, " "}),
+				webappMethodWith([]string{reqMustExchangeToken, " "}),
 			},
 			disco: capableDiscovery(),
 		},
@@ -136,7 +136,7 @@ func TestCreateOCMShareRejectsInvalidAccessMethods(t *testing.T) {
 			offer: true,
 			methods: []*ocm.AccessMethod{
 				webdavMethod(),
-				webappMethodWith("", []string{reqMustUseMFA}),
+				webappMethodWith([]string{reqMustUseMFA}),
 			},
 			disco: capableDiscovery(),
 		},
@@ -145,7 +145,7 @@ func TestCreateOCMShareRejectsInvalidAccessMethods(t *testing.T) {
 			offer: true,
 			methods: []*ocm.AccessMethod{
 				webdavMethodWith([]string{reqMustExchangeToken}),
-				webappMethodWith("", []string{reqMustUseMFA, reqMustExchangeToken}),
+				webappMethodWith([]string{reqMustUseMFA, reqMustExchangeToken}),
 			},
 			disco: capableDiscovery(),
 		},
@@ -154,7 +154,7 @@ func TestCreateOCMShareRejectsInvalidAccessMethods(t *testing.T) {
 			offer: true,
 			methods: []*ocm.AccessMethod{
 				webdavMethod(),
-				webappMethodWith("", []string{reqMustExchangeToken, reqMustUseMFA}),
+				webappMethodWith([]string{reqMustExchangeToken, reqMustUseMFA}),
 			},
 			disco: capableDiscovery(),
 		},
@@ -163,7 +163,7 @@ func TestCreateOCMShareRejectsInvalidAccessMethods(t *testing.T) {
 			offer: true,
 			methods: []*ocm.AccessMethod{
 				{Term: &ocm.AccessMethod_WebdavOptions{}},
-				webappMethod(""),
+				webappMethod(),
 			},
 			disco: capableDiscovery(),
 		},
@@ -172,7 +172,7 @@ func TestCreateOCMShareRejectsInvalidAccessMethods(t *testing.T) {
 			offer: true,
 			methods: []*ocm.AccessMethod{
 				{Term: (*ocm.AccessMethod_WebdavOptions)(nil)},
-				webappMethod(""),
+				webappMethod(),
 			},
 			disco: capableDiscovery(),
 		},
@@ -185,7 +185,7 @@ func TestCreateOCMShareRejectsInvalidAccessMethods(t *testing.T) {
 						WebdavOptions: &ocm.WebDAVAccessMethod{},
 					},
 				},
-				webappMethod(""),
+				webappMethod(),
 			},
 			disco: capableDiscovery(),
 		},
@@ -223,7 +223,7 @@ func TestCreateOCMShareIgnoresInvalidWebappWhenGateIsFalse(t *testing.T) {
 		offer: false,
 		methods: []*ocm.AccessMethod{
 			webdavMethodWith([]string{"legacy-req"}),
-			{Term: &ocm.AccessMethod_WebappOptions{WebappOptions: &ocm.WebappAccessMethod{AppName: secretMarker}}},
+			{Term: &ocm.AccessMethod_WebappOptions{WebappOptions: &ocm.WebappAccessMethod{}}},
 			{Term: (*ocm.AccessMethod_WebappOptions)(nil)},
 		},
 		disco:  capableDiscovery(),
@@ -244,7 +244,7 @@ func TestCreateOCMShareIgnoresInvalidWebappWhenGateIsFalse(t *testing.T) {
 
 func TestCreateOCMShareDefaultAndExplicitRequirements(t *testing.T) {
 	t.Run("empty webapp requirements copy the default", func(t *testing.T) {
-		caller := webappMethodWith("incoming", nil)
+		caller := webappMethodWith(nil)
 		wire, stored, _, _ := shareFixture{
 			offer:   true,
 			methods: []*ocm.AccessMethod{webdavMethod(), caller},
@@ -291,7 +291,7 @@ func TestCreateOCMShareDefaultAndExplicitRequirements(t *testing.T) {
 
 	t.Run("explicit requirements keep order", func(t *testing.T) {
 		reqs := []string{reqMustUseMFA, reqMustExchangeToken}
-		caller := webappMethodWith("incoming", reqs)
+		caller := webappMethodWith(reqs)
 		wire, stored, _, _ := shareFixture{
 			offer:   true,
 			methods: []*ocm.AccessMethod{caller},
@@ -308,15 +308,12 @@ func TestCreateOCMShareDefaultAndExplicitRequirements(t *testing.T) {
 		if reqs[0] != reqMustUseMFA {
 			t.Fatal("stored requirements alias the caller slice")
 		}
-		if caller.GetWebappOptions().AppName != "incoming" {
-			t.Fatal("caller app name was overwritten")
-		}
 	})
 }
 
 func TestCreateOCMShareMixedRequirementsAgree(t *testing.T) {
 	callerReqs := []string{reqMustExchangeToken}
-	caller := webappMethodWith("incoming", callerReqs)
+	caller := webappMethodWith(callerReqs)
 	davCaller := webdavMethodWith([]string{reqMustExchangeToken})
 	wire, stored, _, _ := shareFixture{
 		offer:   true,
@@ -362,7 +359,7 @@ func TestCreateOCMShareWebDAVOnlyRequirementsStay(t *testing.T) {
 }
 
 func TestCreateOCMSharePaddedAppNameAndAlias(t *testing.T) {
-	shared := webappMethod("incoming-name")
+	shared := webappMethod()
 	before := proto.Clone(shared).(*ocm.AccessMethod)
 	methods := []*ocm.AccessMethod{webdavMethod(), shared}
 	wire, stored, _, _ := shareFixture{
@@ -374,17 +371,11 @@ func TestCreateOCMSharePaddedAppNameAndAlias(t *testing.T) {
 	if !proto.Equal(before, shared) {
 		t.Fatalf("caller method changed: before=%v after=%v", before, shared)
 	}
-	if shared.GetWebappOptions().AppName != "incoming-name" {
-		t.Fatal("caller app name changed")
-	}
 	got := webapps(wire.Protocols)
-	if len(got) != 1 || got[0].AppName != testPaddedName {
-		t.Fatalf("wire appName = %#v, want %q", got, testPaddedName)
+	if len(got) != 1 || len(got[0].Apps) != 1 || got[0].Apps[0].Name != testPaddedName {
+		t.Fatalf("wire apps = %#v, want %q", got, testPaddedName)
 	}
 	storedOpts := storedWebapp(t, stored)
-	if storedOpts.AppName != testPaddedName {
-		t.Fatalf("stored appName = %q", storedOpts.AppName)
-	}
 	if stored.AccessMethods[1] == shared || storedOpts == shared.GetWebappOptions() {
 		t.Fatal("stored webapp aliases the request method")
 	}

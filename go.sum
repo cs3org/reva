@@ -899,6 +899,8 @@ github.com/creasty/defaults v1.11.0 h1:lZ8c5bHZGtyIeumdTPXKOKkHtNL+qQWVrGhNPGqeF
 github.com/creasty/defaults v1.11.0/go.mod h1:TGHvg4OCP/fVv+yotLzg97i5PKrF+iZSvg6Kmm7Y12Y=
 github.com/cs3org/go-cs3apis v0.0.0-20260915133204-93f9871a72ef h1:qURHnj7/EXcV7CeNsEHD4fjGrYqpYf+1I2T3yK19TUM=
 github.com/cs3org/go-cs3apis v0.0.0-20260915133204-93f9871a72ef/go.mod h1:DedpcqXl193qF/08Y04IO0PpxyyMu8+GrkD6kWK2MEQ=
+github.com/cs3org/go-cs3apis v0.0.0-20261111120608-8780d2de79cc h1:6g3DdAPoKXkA3tr0/tBGsaZlj0E/mgeQhzVRZrEtD+c=
+github.com/cs3org/go-cs3apis v0.0.0-20261111120608-8780d2de79cc/go.mod h1:DedpcqXl193qF/08Y04IO0PpxyyMu8+GrkD6kWK2MEQ=
 github.com/davecgh/go-spew v1.1.0/go.mod h1:J7Y8YcW2NihsgmVo/mv3lAwl/skON4iLHjSsI+c5H38=
 github.com/davecgh/go-spew v1.1.1/go.mod h1:J7Y8YcW2NihsgmVo/mv3lAwl/skON4iLHjSsI+c5H38=
 github.com/denisenkom/go-mssqldb v0.10.0 h1:QykgLZBorFE95+gO3u9esLd0BmbvpWp0/waNNZfHBM8=

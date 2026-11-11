@@ -57,7 +57,7 @@ type OcmProviderConfig struct {
 	Provider           string `docs:"reva;A friendly name that defines this service."                                            mapstructure:"provider"`
 	WebdavRoot         string `docs:"/remote.php/dav/ocm;The root URL of the WebDAV endpoint to serve OCM shares."               mapstructure:"webdav_root"`
 	InviteAcceptDialog string `docs:"/open-cloud-mesh/accept-invite;The frontend URL where to land when receiving an invitation" mapstructure:"invite_accept_dialog"`
-	EnableWebapp       bool   `docs:"false;Advertise webapp receive in discovery only. Distinct from offer_webapp."              mapstructure:"enable_webapp"`
+	EnableWebapp       bool   `docs:"false;Advertise webapp receive in discovery only. Distinct from webapps."              mapstructure:"enable_webapp"`
 	EnableEmbedded     bool   `docs:"false;Whether embedded shares are enabled in OCM shares."                                   mapstructure:"enable_embedded"`
 	EnableCodeFlow     bool   `docs:"false;Whether code-flow token exchange is enabled in OCM shares."                           mapstructure:"enable_code_flow"`
 	MFAPolicy          string `docs:"reject;Admission of received webapp must-use-mfa offers: reject or off. Off skips the check; nothing is advertised." mapstructure:"mfa_policy"`

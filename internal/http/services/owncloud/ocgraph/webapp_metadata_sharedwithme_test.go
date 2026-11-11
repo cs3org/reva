@@ -162,7 +162,7 @@ func TestGetSharedWithMeExposesPersistedWebappName(t *testing.T) {
 	if bytes.Contains(body, []byte(receiverLocalConfig)) {
 		t.Fatalf("receiver local config name leaked into handler body %s", body)
 	}
-	if bytes.Contains(body, []byte("appIconHint")) || bytes.Contains(body, []byte("mediaTypes")) {
+	if bytes.Contains(body, []byte("appIconHint")) {
 		t.Fatalf("storage-only webapp fields leaked into handler body %s", body)
 	}
 
@@ -261,7 +261,7 @@ func TestGetSharedWithMeWebappNamesStayOnMatchingShare(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		assertWebappSibling(t, mustJSON(t, drive), values[i], share.Protocols[1].GetWebappOptions().GetAppName())
+		assertWebappSibling(t, mustJSON(t, drive), values[i], share.Protocols[1].GetWebappOptions().GetApps()[0].GetName())
 		assertPermissionCountAllowingWebapp(t, values[i], 1)
 	}
 
@@ -328,7 +328,7 @@ func TestReceivedWebappMetadataMissingRemoteItemPropagates(t *testing.T) {
 		t.Fatalf("partial bytes %s", buf.Bytes())
 	}
 
-	got, err := extendReceivedShareRemoteItem([]byte(`{"remoteItem":[]}`), meta.AppName)
+	got, err := extendReceivedShareRemoteItem([]byte(`{"remoteItem":[]}`), meta.AppName, meta.Apps)
 	if err == nil {
 		t.Fatal("expected error for non-object remoteItem")
 	}
@@ -380,7 +380,7 @@ func TestGetSharedWithMeDuplicateWebappProtocolsOmitExtension(t *testing.T) {
 			WebappOptions: &ocm.WebappProtocol{
 				Uri:          "https://remote.example/open/second",
 				SharedSecret: "secret-second-must-stay-in-storage",
-				AppName:      "Etherpad",
+				Apps:         []*ocm.WebappApp{{Name: "Etherpad", MediaTypes: []string{"text/plain"}}},
 			},
 		},
 	})
@@ -544,9 +544,8 @@ func receivedOCMShareWithWebapp(id, name, appName string) *ocm.ReceivedShare {
 			WebappOptions: &ocm.WebappProtocol{
 				Uri:          "https://remote.example/open/" + name,
 				SharedSecret: "secret-must-stay-in-storage",
-				AppName:      appName,
 				AppIconHint:  "image/png",
-				MediaTypes:   []string{"text/markdown"},
+				Apps:         []*ocm.WebappApp{{Name: appName, MediaTypes: []string{"text/markdown"}}},
 			},
 		},
 	})

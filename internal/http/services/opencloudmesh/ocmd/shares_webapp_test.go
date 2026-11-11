@@ -198,19 +198,19 @@ func TestCreateShareWebappIngest(t *testing.T) {
 		}
 	})
 
-	t.Run("empty and padded app names are preserved", func(t *testing.T) {
-		for _, appName := range []string{"", " Jupyter "} {
+	t.Run("padded app names are preserved", func(t *testing.T) {
+		for _, appName := range []string{" Jupyter "} {
 			gw := &sharesMockGW{createResp: okCreate}
 			stampGateway(gw)
 			offer := webappOffer("https://app.example/hub", []string{"must-exchange-token"}, []string{"blank"})
-			offer["webapp"].(map[string]any)["appName"] = appName
+			offer["webapp"].(map[string]any)["apps"] = []map[string]any{{"name": appName, "mediaTypes": []string{"text/plain"}}}
 			rr := postShare(t, webappReceiveHandler(t, []string{"blank"}), shareBody(sender, "file", offer))
 			if rr.Code != http.StatusCreated {
 				t.Fatalf("appName %q status %d body %s", appName, rr.Code, rr.Body.String())
 			}
 			opts := gw.created.Protocols[0].GetWebappOptions()
-			if opts == nil || opts.AppName != appName {
-				t.Fatalf("appName stored %#v want %q", opts, appName)
+			if opts == nil || len(opts.Apps) != 1 || opts.Apps[0].Name != appName {
+				t.Fatalf("apps stored %#v want %q", opts, appName)
 			}
 		}
 	})

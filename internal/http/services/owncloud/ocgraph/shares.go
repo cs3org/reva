@@ -210,7 +210,7 @@ func (s *svc) createOCMShare(ctx context.Context, gw gateway.GatewayAPIClient, r
 		RecipientMeshProvider: recipientProviderInfo.ProviderInfo,
 		AccessMethods: []*ocm.AccessMethod{
 			share.NewWebDavAccessMethod(perm, []ocm.AccessType{ocm.AccessType_ACCESS_TYPE_REMOTE}, []string{}),
-			share.NewWebappAccessMethod(perm, share.DefaultWebappRequirements, ""),
+			share.NewWebappAccessMethod(perm, share.DefaultWebappRequirements),
 		},
 	})
 

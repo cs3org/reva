@@ -120,8 +120,22 @@ func assertWebappSibling(t *testing.T, base, got []byte, appName string) {
 	}
 
 	webapp := decodeObject(t, rawWebapp)
-	if len(webapp) != 1 {
-		t.Fatalf("webapp keys = %d, want 1", len(webapp))
+	wantKeys := 1
+	if rawApps, ok := webapp["apps"]; ok {
+		wantKeys = 2
+		var apps []struct {
+			Name       string   `json:"name"`
+			MediaTypes []string `json:"mediaTypes"`
+		}
+		if err := json.Unmarshal(rawApps, &apps); err != nil {
+			t.Fatal(err)
+		}
+		if len(apps) == 0 || apps[0].Name != appName || len(apps[0].MediaTypes) == 0 {
+			t.Fatalf("apps = %s, want first app %q with media types", rawApps, appName)
+		}
+	}
+	if len(webapp) != wantKeys {
+		t.Fatalf("webapp keys = %d, want %d", len(webapp), wantKeys)
 	}
 	var decodedName string
 	if err := json.Unmarshal(webapp["appName"], &decodedName); err != nil {

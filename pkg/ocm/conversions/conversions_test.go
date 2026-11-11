@@ -217,9 +217,8 @@ func webappProtocol(appName string) *ocm.Protocol {
 			WebappOptions: &ocm.WebappProtocol{
 				Uri:          "https://remote.example/open",
 				SharedSecret: "secret-must-stay-in-storage",
-				AppName:      appName,
 				AppIconHint:  "image/png",
-				MediaTypes:   []string{"text/markdown"},
+				Apps:         []*ocm.WebappApp{{Name: appName, MediaTypes: []string{"text/markdown"}}},
 			},
 		},
 	}

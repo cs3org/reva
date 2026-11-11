@@ -20,18 +20,24 @@ Set these keys under `grpc.services.ocmshareprovider`:
 
 ```toml
 [grpc.services.ocmshareprovider]
-offer_webapp = true
-webapp_name = "JupyterLab"
 webapp_endpoint = "https://provider.example/services/ocm/open"
+webapps = [
+  {name = "Collabora", media_types = ["application/vnd.oasis.opendocument.text"]},
+  {name = "CodiMD", media_types = ["text/markdown", "text/plain"]}
+]
 ```
 
-`offer_webapp` defaults to `false`. When it is disabled, `webapp_name` and
+The webapp offer is enabled when `webapps` is not empty. When it is empty,
 `webapp_endpoint` may be omitted. When it is enabled:
 
-- `webapp_name` must not be empty or whitespace-only.
+- Each entry needs a unique, non-empty `name` and a non-empty `media_types`.
 - `webapp_endpoint` must be an absolute http or https URL with a non-empty
   host and no userinfo.
-- The configured application name is preserved exactly on offered shares.
+- The configured names are preserved exactly on offered shares.
+
+For a file share, only the first webapp whose `media_types` contains the media
+type of the file is offered in the `apps` array of the webapp protocol. If
+none matches, no webapp is offered. For a folder share, all webapps are offered.
 
 Invalid enabled configuration fails startup with a bad-request error rather
 than silently offering an incomplete webapp.
@@ -111,7 +117,7 @@ Operator notes:
 
 The provider offers a webapp method only when all four conditions hold:
 
-1. `offer_webapp` is enabled.
+1. `webapps` is not empty.
 2. The request includes a webapp access candidate.
 3. The remote resource advertises `webapp-receive` with the `blank` target.
 4. The remote provider advertises `exchange-token`.
@@ -236,7 +242,7 @@ OCM discovery advertises `apiVersion` 1.4.0. That version is the document
 this service publishes. It is not proof that every OCM 1.4 behavior is
 implemented. Every User-Agent receives that same document.
 
-`enable_webapp` is discovery-only and is distinct from `offer_webapp`.
+`enable_webapp` is discovery-only and is distinct from `webapps`.
 An invalid or empty discovery base leaves discovery disabled and publishes
 no receive targets. Otherwise:
 

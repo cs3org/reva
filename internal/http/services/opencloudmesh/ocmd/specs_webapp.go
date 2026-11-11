@@ -61,7 +61,7 @@ func ScreenIncomingWebapps(protocols Protocols, receiverTargets []string, admitM
 }
 
 // ValidateReceived checks a webapp offer against this receiver's targets.
-// Empty AppName is valid metadata and is not rewritten. The offer is not mutated.
+// Apps are optional. Their names are not rewritten. The offer is not mutated.
 // Absolute URI checks run again before persistence.
 func (w *Webapp) ValidateReceived(receiverTargets []string, admitMFA bool) error {
 	if w == nil {
@@ -85,6 +85,9 @@ func (w *Webapp) ValidateReceived(receiverTargets []string, admitMFA bool) error
 		validWebappRequirements,
 		"",
 	); err != nil {
+		return err
+	}
+	if err := validateWebappApps(w.Apps); err != nil {
 		return err
 	}
 	if err := validateReceivedWebappURI(w.URI); err != nil {
@@ -127,6 +130,25 @@ func validateRequirementValues(protocolName string, requirements []string, valid
 		}
 		if _, ok := valid[requirement]; !ok {
 			return fixedProtocolFieldError(protocolName, "requirement", "unsupported")
+		}
+	}
+	return nil
+}
+
+// validateWebappApps rejects blank and duplicate names and empty media type lists.
+// Errors omit the supplied values.
+func validateWebappApps(apps []WebappApp) error {
+	names := make(map[string]struct{}, len(apps))
+	for _, app := range apps {
+		if strings.TrimSpace(app.Name) == "" {
+			return fixedProtocolFieldError("webapp", "app name", "malformed")
+		}
+		if _, dup := names[app.Name]; dup {
+			return fixedProtocolFieldError("webapp", "app name", "duplicate")
+		}
+		names[app.Name] = struct{}{}
+		if len(app.MediaTypes) == 0 || slices.ContainsFunc(app.MediaTypes, func(m string) bool { return strings.TrimSpace(m) == "" }) {
+			return fixedProtocolFieldError("webapp", "app media type", "malformed")
 		}
 	}
 	return nil

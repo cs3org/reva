@@ -30,21 +30,25 @@ import (
 	"github.com/cs3org/reva/v3/pkg/utils/cfg"
 )
 
+func webappsCfg(name string) []any {
+	return []any{map[string]any{"name": name, "media_types": []any{testMediaType}}}
+}
+
 func TestOfferWebappConfigDecodeAndDisabledStartup(t *testing.T) {
 	var decoded config
 	err := cfg.Decode(map[string]any{
 		"gatewaysvc":      "127.0.0.1:9142",
 		"provider_domain": "sender.example",
 		"webdav_endpoint": testWebDAVRoot,
-		"offer_webapp":    true,
-		"webapp_name":     testPaddedName,
+		"webapps":         webappsCfg(testPaddedName),
 		"webapp_endpoint": testOpener,
 		"enable_webapp":   false,
 	}, &decoded)
 	if err != nil {
 		t.Fatalf("decode enabled offer: %v", err)
 	}
-	if !decoded.OfferWebapp || decoded.WebappName != testPaddedName || decoded.WebAppEndpoint != testOpener {
+	if len(decoded.Webapps) != 1 || decoded.Webapps[0].Name != testPaddedName ||
+		decoded.Webapps[0].MediaTypes[0] != testMediaType || decoded.WebAppEndpoint != testOpener {
 		t.Fatalf("decoded config = %#v", decoded)
 	}
 
@@ -58,7 +62,7 @@ func TestOfferWebappConfigDecodeAndDisabledStartup(t *testing.T) {
 	if err != nil {
 		t.Fatalf("decode disabled offer: %v", err)
 	}
-	if defaults.OfferWebapp || defaults.WebappName != "" || defaults.WebAppEndpoint != "" {
+	if len(defaults.Webapps) != 0 || defaults.WebAppEndpoint != "" {
 		t.Fatalf("disabled defaults = %#v, want false and empty fields", defaults)
 	}
 
@@ -69,14 +73,13 @@ func TestOfferWebappConfigDecodeAndDisabledStartup(t *testing.T) {
 		"provider_domain": "sender.example",
 		"webdav_endpoint": testWebDAVRoot,
 		"enable_webapp":   true,
-		"webapp_name":     "   ",
 		"webapp_endpoint": "http://[",
 	})
 	if err != nil {
 		t.Fatalf("disabled New: %v", err)
 	}
 	got := svc.(*service)
-	if got.conf.OfferWebapp || got.conf.WebappName != "   " || got.conf.WebAppEndpoint != "http://[" {
+	if len(got.conf.Webapps) != 0 || got.conf.WebAppEndpoint != "http://[" {
 		t.Fatalf("disabled service config = %#v", got.conf)
 	}
 }
@@ -88,8 +91,7 @@ func TestOfferWebappEnabledStartup(t *testing.T) {
 		"gatewaysvc":      "127.0.0.1:9142",
 		"provider_domain": "sender.example",
 		"webdav_endpoint": testWebDAVRoot,
-		"offer_webapp":    true,
-		"webapp_name":     testPaddedName,
+		"webapps":         webappsCfg(testPaddedName),
 		"webapp_endpoint": testOpener,
 	})
 	if err != nil {
@@ -99,7 +101,7 @@ func TestOfferWebappEnabledStartup(t *testing.T) {
 		t.Fatal("enabled New returned nil service")
 	}
 	got := svc.(*service)
-	if !got.conf.OfferWebapp || got.conf.WebappName != testPaddedName || got.conf.WebAppEndpoint != testOpener {
+	if len(got.conf.Webapps) != 1 || got.conf.Webapps[0].Name != testPaddedName || got.conf.WebAppEndpoint != testOpener {
 		t.Fatalf("enabled service config = %#v", got.conf)
 	}
 }
@@ -124,33 +126,46 @@ func TestOfferWebappInitializationRejectsInvalidConfig(t *testing.T) {
 		{
 			name: "missing name",
 			cfg: map[string]any{
-				"offer_webapp":    true,
+				"webapps":         []any{map[string]any{"media_types": []any{testMediaType}}},
 				"webapp_endpoint": testOpener,
 			},
-			substr: "webapp_name",
+			substr: "non-empty name",
 		},
 		{
 			name: "blank name",
 			cfg: map[string]any{
-				"offer_webapp":    true,
-				"webapp_name":     "   ",
+				"webapps":         webappsCfg("   "),
 				"webapp_endpoint": testOpener,
 			},
-			substr: "webapp_name",
+			substr: "non-empty name",
+		},
+		{
+			name: "missing media types",
+			cfg: map[string]any{
+				"webapps":         []any{map[string]any{"name": testAppName}},
+				"webapp_endpoint": testOpener,
+			},
+			substr: "media_types",
+		},
+		{
+			name: "duplicate name",
+			cfg: map[string]any{
+				"webapps":         append(webappsCfg(testAppName), webappsCfg(testAppName)...),
+				"webapp_endpoint": testOpener,
+			},
+			substr: "duplicate webapp name",
 		},
 		{
 			name: "missing endpoint",
 			cfg: map[string]any{
-				"offer_webapp": true,
-				"webapp_name":  testAppName,
+				"webapps": webappsCfg(testAppName),
 			},
 			substr: "webapp_endpoint",
 		},
 		{
 			name: "relative endpoint",
 			cfg: map[string]any{
-				"offer_webapp":    true,
-				"webapp_name":     testAppName,
+				"webapps":         webappsCfg(testAppName),
 				"webapp_endpoint": "/services/ocm/open",
 			},
 			substr: "webapp_endpoint",
@@ -158,8 +173,7 @@ func TestOfferWebappInitializationRejectsInvalidConfig(t *testing.T) {
 		{
 			name: "hostless endpoint",
 			cfg: map[string]any{
-				"offer_webapp":    true,
-				"webapp_name":     testAppName,
+				"webapps":         webappsCfg(testAppName),
 				"webapp_endpoint": "http:///open",
 			},
 			substr: "webapp_endpoint",
@@ -167,8 +181,7 @@ func TestOfferWebappInitializationRejectsInvalidConfig(t *testing.T) {
 		{
 			name: "endpoint without hostname",
 			cfg: map[string]any{
-				"offer_webapp":    true,
-				"webapp_name":     testAppName,
+				"webapps":         webappsCfg(testAppName),
 				"webapp_endpoint": "http://:8080/open",
 			},
 			substr: "webapp_endpoint",
@@ -176,8 +189,7 @@ func TestOfferWebappInitializationRejectsInvalidConfig(t *testing.T) {
 		{
 			name: "malformed endpoint",
 			cfg: map[string]any{
-				"offer_webapp":    true,
-				"webapp_name":     testAppName,
+				"webapps":         webappsCfg(testAppName),
 				"webapp_endpoint": "http://[",
 			},
 			substr: "webapp_endpoint",
@@ -185,8 +197,7 @@ func TestOfferWebappInitializationRejectsInvalidConfig(t *testing.T) {
 		{
 			name: "endpoint with userinfo",
 			cfg: map[string]any{
-				"offer_webapp":    true,
-				"webapp_name":     testAppName,
+				"webapps":         webappsCfg(testAppName),
 				"webapp_endpoint": "https://user:pass@provider.example/services/ocm/open",
 			},
 			substr: "http or https URL with a hostname and no userinfo",
@@ -194,8 +205,7 @@ func TestOfferWebappInitializationRejectsInvalidConfig(t *testing.T) {
 		{
 			name: "non-http endpoint",
 			cfg: map[string]any{
-				"offer_webapp":    true,
-				"webapp_name":     testAppName,
+				"webapps":         webappsCfg(testAppName),
 				"webapp_endpoint": "ftp://provider.example/services/ocm/open",
 			},
 			substr: "http or https",
@@ -203,8 +213,7 @@ func TestOfferWebappInitializationRejectsInvalidConfig(t *testing.T) {
 		{
 			name: "double-scheme http endpoint",
 			cfg: map[string]any{
-				"offer_webapp":    true,
-				"webapp_name":     testAppName,
+				"webapps":         webappsCfg(testAppName),
 				"webapp_endpoint": "http://http://evil.example/services/ocm/open",
 			},
 			substr: "http or https URL with a hostname and no userinfo",
@@ -212,8 +221,7 @@ func TestOfferWebappInitializationRejectsInvalidConfig(t *testing.T) {
 		{
 			name: "double-scheme https endpoint",
 			cfg: map[string]any{
-				"offer_webapp":    true,
-				"webapp_name":     testAppName,
+				"webapps":         webappsCfg(testAppName),
 				"webapp_endpoint": "https://https://evil.example/services/ocm/open",
 			},
 			substr: "http or https URL with a hostname and no userinfo",
