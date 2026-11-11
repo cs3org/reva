@@ -320,9 +320,8 @@ func TestWebappToOCMProtocol(t *testing.T) {
 		Requirements: []string{"must-exchange-token"},
 		Targets:      []string{"blank"},
 		URI:          "https://example.org/app",
-		AppName:      "Some App",
 		AppIconHint:  "text/plain",
-		MediaTypes:   []string{"text/plain"},
+		Apps:         []WebappApp{{Name: "Some App", MediaTypes: []string{"text/plain"}}},
 	}
 
 	proto := w.ToOCMProtocol()
@@ -330,7 +329,7 @@ func TestWebappToOCMProtocol(t *testing.T) {
 	if wapp == nil {
 		t.Fatal("expected Webapp protocol options")
 	}
-	if wapp.Uri != w.URI || wapp.SharedSecret != w.SharedSecret || wapp.AppName != w.AppName || wapp.AppIconHint != w.AppIconHint {
+	if wapp.Uri != w.URI || wapp.SharedSecret != w.SharedSecret || wapp.AppIconHint != w.AppIconHint {
 		t.Errorf("scalar fields lost in ToOCMProtocol: got %+v", wapp)
 	}
 	if len(wapp.Requirements) != 1 || wapp.Requirements[0] != "must-exchange-token" {
@@ -339,8 +338,8 @@ func TestWebappToOCMProtocol(t *testing.T) {
 	if len(wapp.Targets) != 1 || wapp.Targets[0] != "blank" {
 		t.Errorf("targets lost in ToOCMProtocol: got %v", wapp.Targets)
 	}
-	if len(wapp.MediaTypes) != 1 || wapp.MediaTypes[0] != "text/plain" {
-		t.Errorf("media types lost in ToOCMProtocol: got %v", wapp.MediaTypes)
+	if len(wapp.Apps) != 1 || wapp.Apps[0].Name != "Some App" || wapp.Apps[0].MediaTypes[0] != "text/plain" {
+		t.Errorf("apps lost in ToOCMProtocol: got %v", wapp.Apps)
 	}
 	p := wapp.GetSharePermissions()
 	if p == nil || !p.InitiateFileDownload || !p.InitiateFileUpload {

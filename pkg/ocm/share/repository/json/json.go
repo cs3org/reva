@@ -458,9 +458,6 @@ func mergeAccessMethod(s *ocm.Share, incoming *ocm.AccessMethod) error {
 					return err
 				}
 				existing.WebappOptions.Permissions = inc.WebappOptions.Permissions
-				if inc.WebappOptions.AppName != "" {
-					existing.WebappOptions.AppName = inc.WebappOptions.AppName
-				}
 				return nil
 			}
 		}

@@ -160,19 +160,21 @@ func WebappMetadataForReceivedShare(ctx context.Context, received *ocm.ReceivedS
 		if p.GetWebappOptions() == nil {
 			continue
 		}
+		// The first app is the default one when the receiver has to pick.
+		var appName string
+		if apps := p.GetWebappOptions().GetApps(); len(apps) > 0 {
+			appName = apps[0].GetName()
+		}
 		if meta != nil {
 			log.Warn().
 				Str("share_id", received.GetId().GetOpaqueId()).
 				Int("protocol_index", i).
 				Str("app_name", meta.AppName).
-				Str("duplicate_app_name", p.GetWebappOptions().GetAppName()).
+				Str("duplicate_app_name", appName).
 				Msg("dropping ambiguous received webapp protocols")
 			return nil
 		}
-		meta = &ReceivedWebappMetadata{
-			Present: true,
-			AppName: p.GetWebappOptions().GetAppName(),
-		}
+		meta = &ReceivedWebappMetadata{Present: true, AppName: appName, Apps: p.GetWebappOptions().GetApps()}
 	}
 	return meta
 }
@@ -240,8 +242,9 @@ type UnifiedRoleDefinition struct {
 	Id *string
 }
 
-// ReceivedWebappMetadata is presence and the exact persisted app name for one received share.
+// ReceivedWebappMetadata is presence, the default app name and the persisted apps for one received share.
 type ReceivedWebappMetadata struct {
 	Present bool
 	AppName string
+	Apps    []*ocm.WebappApp
 }

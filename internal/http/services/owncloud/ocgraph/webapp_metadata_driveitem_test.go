@@ -23,6 +23,7 @@ import (
 	"encoding/json"
 	"testing"
 
+	ocm "github.com/cs3org/go-cs3apis/cs3/sharing/ocm/v1beta1"
 	libregraph "github.com/owncloud/libre-graph-api-go"
 )
 
@@ -183,15 +184,19 @@ func TestSharedWithMeContractFixtures(t *testing.T) {
 			wantFixture: fixtures.WebDAVOnly,
 		},
 		{
-			name:        "present true CodiMD",
-			meta:        &receivedWebappMetadata{Present: true, AppName: "CodiMD"},
+			name: "present true CodiMD",
+			meta: &receivedWebappMetadata{Present: true, AppName: "CodiMD", Apps: []*ocm.WebappApp{
+				{Name: "CodiMD", MediaTypes: []string{"text/markdown"}},
+			}},
 			wantFixture: fixtures.Positive,
 			wantWebapp:  true,
 			appName:     "CodiMD",
 		},
 		{
-			name:        "present true empty name",
-			meta:        &receivedWebappMetadata{Present: true, AppName: ""},
+			name: "present true empty name",
+			meta: &receivedWebappMetadata{Present: true, AppName: "", Apps: []*ocm.WebappApp{
+				{Name: "", MediaTypes: []string{"text/markdown"}},
+			}},
 			wantFixture: fixtures.EmptyName,
 			wantWebapp:  true,
 		},
@@ -323,7 +328,7 @@ func TestReceivedShareDriveItemMetadataErrors(t *testing.T) {
 		// extension cannot be written back.
 		got, err := extendReceivedShareRemoteItem(
 			[]byte(`{"id":"item-1","remoteItem":{"id":"remote-1","bad":oops}}`),
-			"text",
+			"text", nil,
 		)
 		if err == nil {
 			t.Fatal("expected error")
@@ -345,7 +350,7 @@ func TestReceivedShareDriveItemMetadataErrors(t *testing.T) {
 	}
 	for _, tt := range cases {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := extendReceivedShareRemoteItem([]byte(tt.raw), "text")
+			got, err := extendReceivedShareRemoteItem([]byte(tt.raw), "text", nil)
 			if err == nil {
 				t.Fatal("expected error")
 			}
@@ -353,5 +358,23 @@ func TestReceivedShareDriveItemMetadataErrors(t *testing.T) {
 				t.Fatalf("partial bytes %s", got)
 			}
 		})
+	}
+}
+
+func TestExtendReceivedShareRemoteItemExposesAllApps(t *testing.T) {
+	apps := []*ocm.WebappApp{
+		{Name: "Collabora", MediaTypes: []string{"application/vnd.oasis.opendocument.text"}},
+		{Name: "CodiMD", MediaTypes: []string{"text/markdown", "text/plain"}},
+	}
+	got, err := extendReceivedShareRemoteItem([]byte(`{"id":"item-1","remoteItem":{"id":"remote-1"}}`), "Collabora", apps)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := `{"appName":"Collabora","apps":[` +
+		`{"name":"Collabora","mediaTypes":["application/vnd.oasis.opendocument.text"]},` +
+		`{"name":"CodiMD","mediaTypes":["text/markdown","text/plain"]}]}`
+	remote := decodeObject(t, decodeObject(t, got)["remoteItem"])
+	if string(remote[receivedWebappJSONKey]) != want {
+		t.Fatalf("webapp = %s\nwant %s", remote[receivedWebappJSONKey], want)
 	}
 }

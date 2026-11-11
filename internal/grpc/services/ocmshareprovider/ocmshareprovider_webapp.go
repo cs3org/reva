@@ -26,6 +26,7 @@ import (
 	"strings"
 
 	ocm "github.com/cs3org/go-cs3apis/cs3/sharing/ocm/v1beta1"
+	providerpb "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/cs3org/reva/v3/internal/http/services/opencloudmesh/ocmd"
 	"github.com/cs3org/reva/v3/pkg/appctx"
 	"github.com/cs3org/reva/v3/pkg/errtypes"
@@ -44,18 +45,25 @@ const (
 
 var errInvalidShareAccessMethods = errors.New(invalidShareAccessMethodsText)
 
-// validateWebappOffer keeps the configured name exactly, including padding.
+// validateWebappOffer keeps the configured names exactly, including padding.
 func (c *config) validateWebappOffer() error {
-	if c == nil || !c.OfferWebapp {
+	if c == nil || len(c.Webapps) == 0 {
 		return nil
 	}
-	if strings.TrimSpace(c.WebappName) == "" {
-		return errtypes.BadRequest("ocmshareprovider: webapp_name must be non-empty when offer_webapp is true")
+	names := make(map[string]struct{}, len(c.Webapps))
+	for _, a := range c.Webapps {
+		if strings.TrimSpace(a.Name) == "" || len(a.MediaTypes) == 0 {
+			return errtypes.BadRequest("ocmshareprovider: each webapp needs a non-empty name and media_types")
+		}
+		if _, dup := names[a.Name]; dup {
+			return errtypes.BadRequest("ocmshareprovider: duplicate webapp name " + a.Name)
+		}
+		names[a.Name] = struct{}{}
 	}
 	parsed, err := url.Parse(c.WebAppEndpoint)
 	if err != nil || !validOutboundWebappEndpoint(parsed) {
 		return errtypes.BadRequest("ocmshareprovider: webapp_endpoint must be an absolute " +
-			"http or https URL with a hostname and no userinfo when offer_webapp is true")
+			"http or https URL with a hostname and no userinfo when webapps is not empty")
 	}
 	return nil
 }
@@ -96,7 +104,21 @@ func (s *service) webappURL() string {
 	return s.conf.WebAppEndpoint
 }
 
-func (s *service) getWebappProtocol(ocmShare *ocm.Share, m *ocm.AccessMethod_WebappOptions) *ocmd.Webapp {
+// webappsFor returns the webapps that can open the resource. A folder gets all
+// of them. A file gets only the first one that handles its media type.
+func (s *service) webappsFor(info *providerpb.ResourceInfo) []webapp {
+	if info.GetType() == providerpb.ResourceType_RESOURCE_TYPE_CONTAINER {
+		return s.conf.Webapps
+	}
+	for _, a := range s.conf.Webapps {
+		if slices.Contains(a.MediaTypes, info.GetMimeType()) {
+			return []webapp{a}
+		}
+	}
+	return nil
+}
+
+func (s *service) getWebappProtocol(ocmShare *ocm.Share, m *ocm.AccessMethod_WebappOptions, apps []webapp) *ocmd.Webapp {
 	opts := m.WebappOptions
 	var perms []string
 	if opts.GetPermissions().GetInitiateFileDownload() {
@@ -111,20 +133,25 @@ func (s *service) getWebappProtocol(ocmShare *ocm.Share, m *ocm.AccessMethod_Web
 		perms = append(perms, "share")
 	}
 
-	return &ocmd.Webapp{
+	w := &ocmd.Webapp{
 		URI:          s.webappURL(),
 		SharedSecret: ocmShare.Token,
 		Permissions:  perms,
 		Requirements: cloneStrings(opts.GetRequirements()),
 		Targets:      cloneDefaultWebappTargets(),
-		AppName:      opts.GetAppName(),
+		Apps:         make([]ocmd.WebappApp, 0, len(apps)),
 	}
+	for _, a := range apps {
+		w.Apps = append(w.Apps, ocmd.WebappApp{Name: a.Name, MediaTypes: a.MediaTypes})
+	}
+	return w
 }
 
 // The offer gate runs before validation, so an omitted candidate cannot fail the share.
 func (s *service) freshAccessMethods(
 	ctx context.Context,
 	requested []*ocm.AccessMethod,
+	apps []webapp,
 	webappSupported bool,
 	tokenExchangeSupported bool,
 ) ([]*ocm.AccessMethod, error) {
@@ -136,7 +163,7 @@ func (s *service) freshAccessMethods(
 	if err != nil {
 		return nil, err
 	}
-	attach := s.conf.OfferWebapp && hasCandidate && webappSupported && tokenExchangeSupported &&
+	attach := len(apps) > 0 && hasCandidate && webappSupported && tokenExchangeSupported &&
 		s.outboundWebappEndpointConfigured()
 	if hasCandidate && !attach {
 		appctx.GetLogger(ctx).Info().Msg(webappOmissionReason)
@@ -292,7 +319,6 @@ func (s *service) normalizeAttachedWebapp(m *ocm.AccessMethod) (*ocm.AccessMetho
 	if err != nil {
 		return nil, err
 	}
-	opts.AppName = s.conf.WebappName
 	opts.Requirements = reqs
 	return cloned, nil
 }

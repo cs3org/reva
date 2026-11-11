@@ -111,7 +111,7 @@ func legacyMethods() []*ocm.AccessMethod {
 		share.NewWebDavAccessMethod(permissions.NewViewerRole().CS3ResourcePermissions(), []ocm.AccessType{}, []string{}),
 		share.NewWebappAccessMethod(
 			permissions.NewViewerRole().CS3ResourcePermissions(),
-			share.DefaultWebappRequirements, ""),
+			share.DefaultWebappRequirements),
 	}
 }
 
@@ -124,7 +124,7 @@ func codeFlowMethods() []*ocm.AccessMethod {
 		),
 		share.NewWebappAccessMethod(
 			permissions.NewViewerRole().CS3ResourcePermissions(),
-			share.DefaultWebappRequirements, ""),
+			share.DefaultWebappRequirements),
 	}
 }
 

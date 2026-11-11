@@ -33,7 +33,7 @@ func TestCreateOCMShareWireAndStoreMatch(t *testing.T) {
 		offer: false,
 		methods: []*ocm.AccessMethod{
 			webdavMethod(),
-			webappMethod(""),
+			webappMethod(),
 		},
 		disco: capableDiscovery(),
 	}.run(t)
@@ -54,7 +54,7 @@ func TestCreateOCMShareOpenerIgnoresOpaqueID(t *testing.T) {
 		wire, _, _, _ := shareFixture{
 			offer:   true,
 			shareID: id,
-			methods: []*ocm.AccessMethod{webdavMethod(), webappMethod("")},
+			methods: []*ocm.AccessMethod{webdavMethod(), webappMethod()},
 			disco:   capableDiscovery(),
 		}.run(t)
 		got := webapps(wire.Protocols)
@@ -81,7 +81,7 @@ func TestCreateOCMShareRemoteFailureDoesNotStore(t *testing.T) {
 	t.Run("rejection", func(t *testing.T) {
 		shareFixture{
 			offer:      true,
-			methods:    []*ocm.AccessMethod{webdavMethod(), webappMethod("")},
+			methods:    []*ocm.AccessMethod{webdavMethod(), webappMethod()},
 			disco:      capableDiscovery(),
 			postStatus: http.StatusBadRequest,
 		}.run(t)
@@ -89,7 +89,7 @@ func TestCreateOCMShareRemoteFailureDoesNotStore(t *testing.T) {
 	t.Run("transport", func(t *testing.T) {
 		shareFixture{
 			offer:    true,
-			methods:  []*ocm.AccessMethod{webdavMethod(), webappMethod("")},
+			methods:  []*ocm.AccessMethod{webdavMethod(), webappMethod()},
 			disco:    capableDiscovery(),
 			dropPost: true,
 		}.run(t)
@@ -100,20 +100,20 @@ func TestCreateOCMShareConfiguredNameEscapesOnWire(t *testing.T) {
 	wire, stored, _, _ := shareFixture{
 		offer:   true,
 		name:    testQuotedName,
-		methods: []*ocm.AccessMethod{webdavMethod(), webappMethod("")},
+		methods: []*ocm.AccessMethod{webdavMethod(), webappMethod()},
 		disco:   capableDiscovery(),
 	}.run(t)
 	got := webapps(wire.Protocols)
-	if len(got) != 1 || got[0].AppName != testQuotedName {
-		t.Fatalf("wire appName = %#v, want %q", got, testQuotedName)
+	if len(got) != 1 || len(got[0].Apps) != 1 || got[0].Apps[0].Name != testQuotedName {
+		t.Fatalf("wire apps = %#v, want %q", got, testQuotedName)
 	}
-	if storedWebapp(t, stored).AppName != testQuotedName {
-		t.Fatalf("stored appName = %q", storedWebapp(t, stored).AppName)
+	if storedWebapp(t, stored) == nil {
+		t.Fatal("stored share lost the webapp access method")
 	}
 }
 
 func TestCreateOCMShareRepeatedCreates(t *testing.T) {
-	methods := []*ocm.AccessMethod{webdavMethod(), webappMethod("")}
+	methods := []*ocm.AccessMethod{webdavMethod(), webappMethod()}
 	firstWire, firstStored, _, _ := shareFixture{
 		offer:   true,
 		methods: methods,
@@ -149,13 +149,13 @@ func TestWebappProtocolBuilderDoesNotDefaultRequirements(t *testing.T) {
 		WebappOptions: &ocm.WebappAccessMethod{
 			Permissions: viewerPerm(),
 		},
-	})
+	}, nil)
 	raw, err := json.Marshal(protocol)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if strings.Contains(string(raw), "appName") {
-		t.Fatalf("empty appName was serialized: %s", raw)
+	if strings.Contains(string(raw), "apps") {
+		t.Fatalf("empty apps were serialized: %s", raw)
 	}
 	if protocol.URI != testOpener {
 		t.Fatalf("uri = %q", protocol.URI)

@@ -79,10 +79,14 @@ type config struct {
 	GatewaySVC      string                    `mapstructure:"gatewaysvc"                                    validate:"required"`
 	ProviderDomain  string                    `docs:"The same domain registered in the provider authorizer" mapstructure:"provider_domain" validate:"required"`
 	WebDAVEndpoint  string                    `mapstructure:"webdav_endpoint" validate:"required"`
-	OfferWebapp     bool                      `docs:"false;Offer the webapp protocol on outbound OCM shares." mapstructure:"offer_webapp"`
-	WebappName      string                    `docs:";Name advertised for the webapp protocol when offer_webapp is true." mapstructure:"webapp_name" validate:"required_if=OfferWebapp true"`
-	WebAppEndpoint  string                    `docs:";Absolute URL of the webapp opener when offer_webapp is true." mapstructure:"webapp_endpoint" validate:"required_if=OfferWebapp true"`
+	Webapps         []webapp                  `docs:";Web applications offered on outbound OCM shares, each with a name and the media types it opens. The webapp protocol is offered only if this list is not empty." mapstructure:"webapps"`
+	WebAppEndpoint  string                    `docs:";Absolute URL of the webapp opener. Required when webapps is not empty." mapstructure:"webapp_endpoint" validate:"required_with=Webapps"`
 	SigningKey      string                    `docs:";Path to the PEM file of the Ed25519 private key that signs the shares that this server sends. Use the key of the wellknown ocmprovider." mapstructure:"signing_key"`
+}
+
+type webapp struct {
+	Name       string   `mapstructure:"name"`
+	MediaTypes []string `mapstructure:"media_types"`
 }
 
 type service struct {
@@ -227,14 +231,14 @@ func (s *service) walk(ctx context.Context, path string, fn walker.WalkFunc) err
 
 // return the protocols that can be used by remote users to access a local OCM share.
 // Access methods are already normalized.
-func (s *service) getProtocols(ctx context.Context, share *ocm.Share) ocmd.Protocols {
+func (s *service) getProtocols(share *ocm.Share, apps []webapp) ocmd.Protocols {
 	var p ocmd.Protocols
 	for _, m := range share.AccessMethods {
 		switch t := m.Term.(type) {
 		case *ocm.AccessMethod_WebdavOptions:
 			p = append(p, s.getWebdavProtocol(share, t))
 		case *ocm.AccessMethod_WebappOptions:
-			p = append(p, s.getWebappProtocol(share, t))
+			p = append(p, s.getWebappProtocol(share, t, apps))
 		}
 	}
 	return p
@@ -380,7 +384,8 @@ func (s *service) CreateOCMShare(ctx context.Context, req *ocm.CreateOCMShareReq
 		}
 	}
 
-	methods, err := s.freshAccessMethods(ctx, req.AccessMethods, webapp_supported, token_exchange_supported)
+	apps := s.webappsFor(info)
+	methods, err := s.freshAccessMethods(ctx, req.AccessMethods, apps, webapp_supported, token_exchange_supported)
 	if err != nil {
 		return &ocm.CreateOCMShareResponse{
 			Status: status.NewInvalidArg(ctx, invalidShareAccessMethodsText),
@@ -389,7 +394,7 @@ func (s *service) CreateOCMShare(ctx context.Context, req *ocm.CreateOCMShareReq
 	ocmshare.AccessMethods = methods
 
 	// An empty normalized protocol list fails before NewShare.
-	protocols := s.getProtocols(ctx, ocmshare)
+	protocols := s.getProtocols(ocmshare, apps)
 	if len(protocols) == 0 {
 		return &ocm.CreateOCMShareResponse{
 			Status: status.NewInvalidArg(ctx, webappOnlyNoProtocolText),

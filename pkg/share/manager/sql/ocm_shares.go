@@ -163,7 +163,6 @@ func storeWebappAccessMethod(tx *gorm.DB, shareID uint, o *ocm.AccessMethod_Weba
 		Type:         model.WebappProtocol,
 		Permissions:  webappPermissionsToModel(o.WebappOptions.GetPermissions()),
 		Requirements: stringsToJSON(o.WebappOptions.Requirements),
-		AppName:      o.WebappOptions.AppName,
 	}
 
 	err := tx.Create(accessMethod).Error
@@ -361,9 +360,8 @@ func storeWebappProtocol(tx *gorm.DB, shareID int64, o *ocm.Protocol_WebappOptio
 		Permissions:        webappPermissionsToModel(o.WebappOptions.GetSharePermissions()),
 		Requirements:       stringsToJSON(o.WebappOptions.Requirements),
 		Targets:            stringsToJSON(o.WebappOptions.Targets),
-		AppName:            o.WebappOptions.AppName,
 		AppIconHint:        o.WebappOptions.AppIconHint,
-		MediaTypes:         stringsToJSON(o.WebappOptions.MediaTypes),
+		Apps:               appsToJSON(o.WebappOptions.Apps),
 	}
 
 	if err := tx.Create(protocol).Error; err != nil {
@@ -381,6 +379,11 @@ func storeEmbeddedProtocol(tx *gorm.DB, shareID int64, o *ocm.Protocol_EmbeddedO
 		return err
 	}
 	return nil
+}
+
+func appsToJSON(apps []*ocm.WebappApp) datatypes.JSON {
+	b, _ := json.Marshal(apps)
+	return b
 }
 
 func stringsToJSON(reqs []string) datatypes.JSON {
@@ -662,9 +665,6 @@ func (m *mgr) queriesUpdatesOnShare(ctx context.Context, id *ocm.ShareId, f ...*
 					// omitted fields mean "preserve stored value", as for webdav
 					u := map[string]any{
 						"permissions": webappPermissionsToModel(t.WebappOptions.GetPermissions()),
-					}
-					if t.WebappOptions.AppName != "" {
-						u["app_name"] = t.WebappOptions.AppName
 					}
 					return tx.Model(&model.OcmShareProtocol{}).
 						Where("ocm_share_id = ? AND type = ?", id.OpaqueId, model.WebappProtocol).

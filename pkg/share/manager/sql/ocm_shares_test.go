@@ -101,7 +101,7 @@ func getWebAppProtocol(appURL string, role string) *ocm.Protocol {
 		return nil
 	}
 	return share.NewWebappProtocol(appURL, "sharedsecret", perms,
-		share.DefaultWebappRequirements, share.DefaultWebappTargets, "", "", nil)
+		share.DefaultWebappRequirements, share.DefaultWebappTargets, "", nil)
 }
 
 func getProtocols(ocsPermissions permissions.OcsPermissions, resource_type string, role string) []*ocm.Protocol {
@@ -161,14 +161,14 @@ func getOcmAccessMethods(role string) []*ocm.AccessMethod {
 			share.NewWebDavAccessMethod(permissions.NewViewerRole().CS3ResourcePermissions(), []ocm.AccessType{}, []string{}),
 			share.NewWebappAccessMethod(
 				permissions.NewViewerRole().CS3ResourcePermissions(),
-				share.DefaultWebappRequirements, ""),
+				share.DefaultWebappRequirements),
 		}
 	case "editor":
 		return []*ocm.AccessMethod{
 			share.NewWebDavAccessMethod(permissions.NewEditorRole().CS3ResourcePermissions(), []ocm.AccessType{}, []string{}),
 			share.NewWebappAccessMethod(
 				permissions.NewEditorRole().CS3ResourcePermissions(),
-				share.DefaultWebappRequirements, ""),
+				share.DefaultWebappRequirements),
 		}
 	}
 	return []*ocm.AccessMethod{}
@@ -190,14 +190,14 @@ func getOcmAccessMethodsWithCodeFlow(role string) []*ocm.AccessMethod {
 			share.NewWebDavAccessMethod(permissions.NewViewerRole().CS3ResourcePermissions(), ats, reqs),
 			share.NewWebappAccessMethod(
 				permissions.NewViewerRole().CS3ResourcePermissions(),
-				share.DefaultWebappRequirements, ""),
+				share.DefaultWebappRequirements),
 		}
 	case "editor":
 		return []*ocm.AccessMethod{
 			share.NewWebDavAccessMethod(permissions.NewEditorRole().CS3ResourcePermissions(), ats, reqs),
 			share.NewWebappAccessMethod(
 				permissions.NewEditorRole().CS3ResourcePermissions(),
-				share.DefaultWebappRequirements, ""),
+				share.DefaultWebappRequirements),
 		}
 	}
 	return []*ocm.AccessMethod{}
@@ -225,7 +225,7 @@ func getOCMReceivedShareWithCodeFlow(user *userpb.User, grantee *provider.Grante
 			share.NewWebDAVProtocol("https://webdav.example.com/remote.php/dav/shares/someid", "sharedsecret", perms, ats, reqs),
 			share.NewWebappProtocol("https://webapp.example.com/apps/files/?dir=/Shares/someid", "sharedsecret",
 				permissions.NewViewerRole().CS3ResourcePermissions(),
-				share.DefaultWebappRequirements, share.DefaultWebappTargets, "", "", nil),
+				share.DefaultWebappRequirements, share.DefaultWebappTargets, "", nil),
 		},
 	}
 }
@@ -932,7 +932,7 @@ func TestWebappPermissionsRoundTrip(t *testing.T) {
 			grantee := getUserOcmShareGrantee("sharee1")
 			sent := getOcmShare(
 				[]*ocm.AccessMethod{
-					share.NewWebappAccessMethod(want, share.DefaultWebappRequirements, "app"),
+					share.NewWebappAccessMethod(want, share.DefaultWebappRequirements),
 				},
 				grantee,
 				user.Id,
@@ -980,9 +980,8 @@ func TestWebappPermissionsRoundTrip(t *testing.T) {
 						want,
 						share.DefaultWebappRequirements,
 						share.DefaultWebappTargets,
-						"app",
 						"",
-						nil,
+						[]*ocm.WebappApp{{Name: "app", MediaTypes: []string{"text/plain"}}},
 					),
 				},
 			}
@@ -1026,7 +1025,6 @@ func TestUpdateWebappPermissionsRoundTrip(t *testing.T) {
 			share.NewWebappAccessMethod(
 				webappCS3Permissions([]string{"view"}),
 				share.DefaultWebappRequirements,
-				"app",
 			),
 		},
 		grantee,
@@ -1044,7 +1042,6 @@ func TestUpdateWebappPermissionsRoundTrip(t *testing.T) {
 			AccessMethods: share.NewWebappAccessMethod(
 				webappCS3Permissions([]string{"share"}),
 				share.DefaultWebappRequirements,
-				"",
 			),
 		},
 	})

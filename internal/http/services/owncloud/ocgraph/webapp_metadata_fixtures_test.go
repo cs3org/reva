@@ -44,7 +44,7 @@ import (
 
 const (
 	receivedWebappFixtureSubdir        = "testdata/received-webapp"
-	receivedWebappManifestSHA256       = "4777bb9bf281045e3033d86d9609b195b2648aad963428e04906454a7af7e851"
+	receivedWebappManifestSHA256       = "2fb80e85532de35b09e0daf37b04008245e7578d5baa96a23a801c925b5d9ce3"
 	receivedWebappExpectationsRevision = "received-webapp-v1-2026-09-28"
 )
 
@@ -394,9 +394,8 @@ func receivedWebappContractShare(present bool, appName string) *ocm.ReceivedShar
 			WebappOptions: &ocm.WebappProtocol{
 				Uri:          "https://remote.example/open",
 				SharedSecret: "secret-must-stay-in-storage",
-				AppName:      appName,
 				AppIconHint:  "image/png",
-				MediaTypes:   []string{"text/markdown"},
+				Apps:         []*ocm.WebappApp{{Name: appName, MediaTypes: []string{"text/markdown"}}},
 				Requirements: []string{"must-exchange-token"},
 				Targets:      []string{"blank"},
 			},
