@@ -1,5 +1,5 @@
 {{- /* A section's pages and subsections. Children with a category other than
-       the section's own are grouped under it; the others follow. A group is
+       the section's own are grouped under it; the others come first. A group is
        collapsed unless it holds the current page. */ -}}
 {{- $current := .current }}
 {{- $children := slice }}
@@ -7,6 +7,7 @@
 {{- range .section.Sections.ByWeight }}{{ $children = $children | append . }}{{ end }}
 {{- $groups := partial "category-groups.html" (dict "pages" $children "parent" (.section.Params.category | default "")) }}
 <ul>
+  {{- partial "sidebar-items.html" (dict "pages" $groups.rest "current" $current) }}
   {{- range $groups.categories }}
   {{- $in := false }}{{ $n := 0 }}
   {{- range .pages }}
@@ -20,5 +21,4 @@
     </details>
   </li>
   {{- end }}
-  {{- partial "sidebar-items.html" (dict "pages" $groups.rest "current" $current) }}
 </ul>

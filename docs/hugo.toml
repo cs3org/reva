@@ -32,7 +32,7 @@ github_repo = "https://github.com/cs3org/reva"
 github_subdir = "docs"
 # The deployment whose OpenAPI document the HTTP API page shows. Hugo fetches
 # it at build time; the build continues without it if it cannot be reached.
-openapi = "https://qa.cernbox.cern.ch/openapi.json"
+openapi = "https://cernbox.cern.ch/openapi.json"
 swaggerui = "https://cdn.jsdelivr.net/npm/swagger-ui-dist@5.17.14"
 
 [[params.links]]
@@ -41,6 +41,9 @@ url = "https://github.com/cs3org/reva"
 [[params.links]]
 name = "Gitter"
 url = "https://gitter.im/cs3org/reva"
+[[params.links]]
+name = "Forum"
+url = "https://reva-community.web.cern.ch"
 [[params.links]]
 name = "CS3 APIs"
 url = "https://buf.build/cs3org-buf/cs3apis"
