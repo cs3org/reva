@@ -1,4 +1,4 @@
-Enhancement: expose favorites over libregraph
+Enhancement: expose labels over libregraph
 
 This way, we can support adding spaces and shares to your favorites
 

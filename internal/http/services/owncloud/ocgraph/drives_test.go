@@ -25,27 +25,31 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"slices"
 	"testing"
 
 	gateway "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
-	labels "github.com/cs3org/go-cs3apis/cs3/labels/v1beta1"
+	labelspb "github.com/cs3org/go-cs3apis/cs3/labels/v1beta1"
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	collaboration "github.com/cs3org/go-cs3apis/cs3/sharing/collaboration/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
+	types "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
 	"google.golang.org/grpc"
 
 	"github.com/cs3org/reva/v3/pkg/appctx"
+	"github.com/cs3org/reva/v3/pkg/labels"
 )
 
-type favoritesGateway struct {
+type labelsGateway struct {
 	receivedSharesGateway
-	spaces    []*provider.StorageSpace
-	favorites []*provider.ResourceId
-	err       error
+	spaces []*provider.StorageSpace
+	// labels is keyed on <storage_id>!<opaque_id>.
+	labels map[string][]string
+	err    error
 }
 
-func (g *favoritesGateway) ListStorageSpaces(
+func (g *labelsGateway) ListStorageSpaces(
 	_ context.Context,
 	_ *provider.ListStorageSpacesRequest,
 	_ ...grpc.CallOption,
@@ -56,48 +60,70 @@ func (g *favoritesGateway) ListStorageSpaces(
 	}, nil
 }
 
-func (g *favoritesGateway) ListResourcesForLabel(
+func (g *labelsGateway) ListLabels(
 	_ context.Context,
-	req *labels.ListResourcesForLabelRequest,
+	req *labelspb.ListLabelsRequest,
 	_ ...grpc.CallOption,
-) (*labels.ListResourcesForLabelResponse, error) {
+) (*labelspb.ListLabelsResponse, error) {
 	if g.err != nil {
 		return nil, g.err
 	}
-	refs := []*provider.Reference{}
-	if req.Labels == "favorite" {
-		for _, id := range g.favorites {
-			refs = append(refs, &provider.Reference{ResourceId: id})
+	var keys []string
+	if err := json.Unmarshal(req.GetOpaque().GetMap()[labels.OpaqueResources].GetValue(), &keys); err != nil {
+		return nil, err
+	}
+	requested := map[string][]string{}
+	for _, key := range keys {
+		if l, ok := g.labels[key]; ok {
+			requested[key] = l
 		}
 	}
-	return &labels.ListResourcesForLabelResponse{
+	value, err := json.Marshal(requested)
+	if err != nil {
+		return nil, err
+	}
+	return &labelspb.ListLabelsResponse{
 		Status: &rpc.Status{Code: rpc.Code_CODE_OK},
-		Ref:    refs,
+		Opaque: &types.Opaque{Map: map[string]*types.OpaqueEntry{
+			labels.OpaqueLabels: {Decoder: "json", Value: value},
+		}},
 	}, nil
 }
 
-func TestListMountpointsReportsFavorite(t *testing.T) {
-	favorite := receivedShareInfo()
+type labeledDrivesBody struct {
+	Value []struct {
+		Name       string `json:"name"`
+		DriveAlias string `json:"driveAlias"`
+		DriveType  string `json:"driveType"`
+		Root       struct {
+			Labels *[]string `json:"@libre.graph.me.labels"`
+		} `json:"root"`
+	} `json:"value"`
+}
+
+func TestListMountpointsReportsLabels(t *testing.T) {
+	labeled := receivedShareInfo()
 	other := receivedShareInfo()
 	other.ReceivedShare.Share.Id = &collaboration.ShareId{OpaqueId: "share-2"}
-	other.ResourceInfo.Id = &provider.ResourceId{StorageId: "storage", OpaqueId: "other", SpaceId: favorite.ResourceInfo.Id.SpaceId}
+	other.ResourceInfo.Id = &provider.ResourceId{StorageId: "storage", OpaqueId: "other", SpaceId: labeled.ResourceInfo.Id.SpaceId}
 
 	for _, tc := range []struct {
 		name string
 		err  error
-		want map[string]bool
+		// A nil entry means that the drive root has no labels field.
+		want map[string][]string
 	}{
-		{name: "labels ok", want: map[string]bool{"share-1": true, "share-2": false}},
-		{name: "labels fail", err: errors.New("labels down"), want: map[string]bool{"share-1": false, "share-2": false}},
+		{name: "labels ok", want: map[string][]string{"share-1": {"favorite", "work"}, "share-2": {}}},
+		{name: "labels fail", err: errors.New("labels down"), want: map[string][]string{"share-1": nil, "share-2": nil}},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			stampGateway(&favoritesGateway{
+			stampGateway(&labelsGateway{
 				receivedSharesGateway: receivedSharesGateway{
-					shares: []*gateway.ReceivedShareResourceInfo{favorite, other},
+					shares: []*gateway.ReceivedShareResourceInfo{labeled, other},
 				},
 				// The label row has no space ID, so the match must ignore it.
-				favorites: []*provider.ResourceId{{StorageId: "storage", OpaqueId: "opaque"}},
-				err:       tc.err,
+				labels: map[string][]string{"storage!opaque": {"favorite", "work"}},
+				err:    tc.err,
 			})
 			s := &svc{c: &config{WebBase: "https://example.test/files/spaces"}}
 
@@ -110,13 +136,7 @@ func TestListMountpointsReportsFavorite(t *testing.T) {
 				t.Fatalf("status = %d, body %s", rec.Code, rec.Body.String())
 			}
 
-			var body struct {
-				Value []struct {
-					DriveAlias string `json:"driveAlias"`
-					DriveType  string `json:"driveType"`
-					Favorite   *bool  `json:"favorite"`
-				} `json:"value"`
-			}
+			var body labeledDrivesBody
 			if err := json.Unmarshal(rec.Body.Bytes(), &body); err != nil {
 				t.Fatal(err)
 			}
@@ -127,18 +147,25 @@ func TestListMountpointsReportsFavorite(t *testing.T) {
 				if d.DriveType != "mountpoint" {
 					t.Errorf("drive %s: driveType = %q, want mountpoint", d.DriveAlias, d.DriveType)
 				}
-				if d.Favorite == nil {
-					t.Fatalf("drive %s: no favorite key in %s", d.DriveAlias, rec.Body.String())
+				want := tc.want[d.DriveAlias]
+				if want == nil {
+					if d.Root.Labels != nil {
+						t.Errorf("drive %s: labels = %v, want no labels field", d.DriveAlias, *d.Root.Labels)
+					}
+					continue
 				}
-				if *d.Favorite != tc.want[d.DriveAlias] {
-					t.Errorf("drive %s: favorite = %v, want %v", d.DriveAlias, *d.Favorite, tc.want[d.DriveAlias])
+				if d.Root.Labels == nil {
+					t.Fatalf("drive %s: no labels field in %s", d.DriveAlias, rec.Body.String())
+				}
+				if !slices.Equal(*d.Root.Labels, want) {
+					t.Errorf("drive %s: labels = %v, want %v", d.DriveAlias, *d.Root.Labels, want)
 				}
 			}
 		})
 	}
 }
 
-func TestListProjectsReportsFavorite(t *testing.T) {
+func TestListProjectsReportsLabels(t *testing.T) {
 	project := func(name, inode string) *provider.StorageSpace {
 		return &provider.StorageSpace{
 			Id:        &provider.StorageSpaceId{OpaqueId: "eos$" + name},
@@ -151,9 +178,9 @@ func TestListProjectsReportsFavorite(t *testing.T) {
 			},
 		}
 	}
-	stampGateway(&favoritesGateway{
-		spaces:    []*provider.StorageSpace{project("fav", "100"), project("other", "200")},
-		favorites: []*provider.ResourceId{{StorageId: "eos", OpaqueId: "100"}},
+	stampGateway(&labelsGateway{
+		spaces: []*provider.StorageSpace{project("fav", "100"), project("other", "200")},
+		labels: map[string][]string{"eos!100": {"favorite"}},
 	})
 	s := &svc{c: &config{}}
 
@@ -166,22 +193,20 @@ func TestListProjectsReportsFavorite(t *testing.T) {
 		t.Fatalf("status = %d, body %s", rec.Code, rec.Body.String())
 	}
 
-	var body struct {
-		Value []struct {
-			Name     string `json:"name"`
-			Favorite bool   `json:"favorite"`
-		} `json:"value"`
-	}
+	var body labeledDrivesBody
 	if err := json.Unmarshal(rec.Body.Bytes(), &body); err != nil {
 		t.Fatal(err)
 	}
-	want := map[string]bool{"fav": true, "other": false}
+	want := map[string][]string{"fav": {"favorite"}, "other": {}}
 	if len(body.Value) != len(want) {
 		t.Fatalf("got %d drives, want %d: %s", len(body.Value), len(want), rec.Body.String())
 	}
 	for _, d := range body.Value {
-		if d.Favorite != want[d.Name] {
-			t.Errorf("drive %s: favorite = %v, want %v", d.Name, d.Favorite, want[d.Name])
+		if d.Root.Labels == nil {
+			t.Fatalf("drive %s: no labels field in %s", d.Name, rec.Body.String())
+		}
+		if !slices.Equal(*d.Root.Labels, want[d.Name]) {
+			t.Errorf("drive %s: labels = %v, want %v", d.Name, *d.Root.Labels, want[d.Name])
 		}
 	}
 }

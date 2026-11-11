@@ -35,6 +35,7 @@ import (
 	"github.com/cs3org/reva/v3/pkg/labels"
 	"github.com/cs3org/reva/v3/pkg/labels/registry"
 	"github.com/cs3org/reva/v3/pkg/sharedconf"
+	"github.com/cs3org/reva/v3/pkg/spaces"
 	"github.com/cs3org/reva/v3/pkg/utils/cfg"
 )
 
@@ -127,6 +128,43 @@ func (m *mgr) ListLabels(ctx context.Context) ([]string, error) {
 	}
 
 	return labelNames, nil
+}
+
+func (m *mgr) ListLabelsForResources(ctx context.Context, ids []*provider.ResourceId) (map[string][]string, error) {
+	log := appctx.GetLogger(ctx)
+
+	user, ok := appctx.ContextGetUser(ctx)
+	if !ok {
+		return nil, errtypes.UserRequired("ListLabelsForResources: error getting user from ctx")
+	}
+
+	labelsByResource := make(map[string][]string, len(ids))
+	if len(ids) == 0 {
+		return labelsByResource, nil
+	}
+
+	pairs := make([][]any, 0, len(ids))
+	for _, id := range ids {
+		pairs = append(pairs, []any{id.StorageId, id.OpaqueId})
+	}
+
+	var rows []Label
+	res := m.db.
+		Where("user_id = ?", user.Id.OpaqueId).
+		Where("(instance, inode) IN ?", pairs).
+		Find(&rows)
+
+	if res.Error != nil {
+		log.Error().Err(res.Error).Msg("ListLabelsForResources: database error")
+		return nil, res.Error
+	}
+
+	for _, row := range rows {
+		key := spaces.ResourceIdToString(&provider.ResourceId{StorageId: row.Instance, OpaqueId: row.Inode})
+		labelsByResource[key] = append(labelsByResource[key], row.Label)
+	}
+
+	return labelsByResource, nil
 }
 
 func (m *mgr) ListResourcesForLabel(ctx context.Context, label string) ([]*provider.ResourceId, error) {

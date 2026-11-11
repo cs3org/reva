@@ -38,10 +38,12 @@ import (
 	rpcv1beta1 "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	collaborationv1beta1 "github.com/cs3org/go-cs3apis/cs3/sharing/collaboration/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
+	typesv1beta1 "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
 	gomime "github.com/glpatcern/go-mime"
 	libregraph "github.com/owncloud/libre-graph-api-go"
 
 	"github.com/cs3org/reva/v3/pkg/appctx"
+	"github.com/cs3org/reva/v3/pkg/labels"
 	"github.com/cs3org/reva/v3/pkg/rhttp/router"
 	"github.com/cs3org/reva/v3/pkg/service"
 	"github.com/cs3org/reva/v3/pkg/spaces"
@@ -68,7 +70,7 @@ func (s *svc) listMySpaces(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var spaces []*FavoritableDrive
+	var spaces []*LabeledDrive
 	if isMountpointRequest(odataReq) {
 		spaces, err = s.getDrivesForShares(ctx, gw)
 		if err != nil {
@@ -97,15 +99,12 @@ func (s *svc) listMySpaces(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		var favorites map[[2]string]bool
-		if slices.ContainsFunc(res.StorageSpaces, func(space *provider.StorageSpace) bool { return space.GetRoot() != nil }) {
-			favorites = favoriteResources(ctx, gw)
-		}
+		labelsByRoot := resourceLabels(ctx, gw, list.Map(res.StorageSpaces, (*provider.StorageSpace).GetRoot))
 		me := appctx.ContextMustGetUser(ctx)
-		spaces = list.Map(res.StorageSpaces, func(space *provider.StorageSpace) *FavoritableDrive {
-			return &FavoritableDrive{
-				Drive:    *s.cs3StorageSpaceToDrive(ctx, me, space),
-				Favorite: favorites[[2]string{space.GetRoot().GetStorageId(), space.GetRoot().GetOpaqueId()}],
+		spaces = list.Map(res.StorageSpaces, func(space *provider.StorageSpace) *LabeledDrive {
+			return &LabeledDrive{
+				Drive:  *s.cs3StorageSpaceToDrive(ctx, me, space),
+				Labels: labelsByRoot[space.GetRoot()],
 			}
 		})
 	}
@@ -131,45 +130,79 @@ func isMountpointRequest(request *godata.GoDataRequest) bool {
 
 const ShareJailID = "a0ca6a90-a365-4782-871e-d44447bbc668"
 
-// FavoritableDrive adds the favorite flag of the current user, which libregraph.Drive does not have.
-type FavoritableDrive struct {
+// LabeledDrive adds the labels of the current user on the drive root. Our libregraph.DriveItem
+// does not have the opencloud @libre.graph.me.labels field yet.
+type LabeledDrive struct {
 	libregraph.Drive
-	Favorite bool `json:"favorite"`
+	// Labels is nil when the labels could not be read. Then the field is not sent.
+	Labels []string
 }
 
-// libregraph.Drive has its own MarshalJSON. Go promotes it to this type, and it drops Favorite.
-func (d FavoritableDrive) MarshalJSON() ([]byte, error) {
+// libregraph.Drive has its own MarshalJSON. Go promotes it to this type, and it drops Labels.
+func (d LabeledDrive) MarshalJSON() ([]byte, error) {
 	m, err := d.Drive.ToMap()
 	if err != nil {
 		return nil, err
 	}
-	m["favorite"] = d.Favorite
+	if d.Labels != nil && d.Root != nil {
+		root, err := d.Root.ToMap()
+		if err != nil {
+			return nil, err
+		}
+		root["@libre.graph.me.labels"] = d.Labels
+		m["root"] = root
+	}
 	return json.Marshal(m)
 }
 
-// favoriteResources reads the favorites from the labels database, because the stats
+// resourceLabels reads the labels from the labels database, because the stats
 // of the resources come from caches that are local to each host.
-// A label row has no space ID, so the key is (storage ID, opaque ID).
-func favoriteResources(ctx context.Context, gw gateway.GatewayAPIClient) map[[2]string]bool {
+// The result is keyed on the given pointers. It is nil when the labels cannot be read.
+func resourceLabels(ctx context.Context, gw gateway.GatewayAPIClient, ids []*provider.ResourceId) map[*provider.ResourceId][]string {
 	log := appctx.GetLogger(ctx)
-	res, err := gw.ListResourcesForLabel(ctx, &labelsv1beta1.ListResourcesForLabelRequest{Labels: "favorite"})
+
+	ids = slices.DeleteFunc(ids, func(id *provider.ResourceId) bool { return id == nil })
+	if len(ids) == 0 {
+		return nil
+	}
+	value, err := json.Marshal(list.Map(ids, spaces.ResourceIdToString))
 	if err != nil {
-		log.Error().Err(err).Msg("error listing favorites")
+		log.Error().Err(err).Msg("error encoding resource IDs for labels")
+		return nil
+	}
+
+	res, err := gw.ListLabels(ctx, &labelsv1beta1.ListLabelsRequest{
+		Opaque: &typesv1beta1.Opaque{
+			Map: map[string]*typesv1beta1.OpaqueEntry{
+				labels.OpaqueResources: {Decoder: "json", Value: value},
+			},
+		},
+	})
+	if err != nil {
+		log.Error().Err(err).Msg("error listing labels")
 		return nil
 	}
 	if res.Status.Code != rpcv1beta1.Code_CODE_OK {
-		log.Error().Any("status", res.Status).Msg("error listing favorites")
+		log.Error().Any("status", res.Status).Msg("error listing labels")
+		return nil
+	}
+	var labelsByKey map[string][]string
+	if err := json.Unmarshal(res.GetOpaque().GetMap()[labels.OpaqueLabels].GetValue(), &labelsByKey); err != nil {
+		log.Error().Err(err).Msg("error decoding labels")
 		return nil
 	}
 
-	favorites := make(map[[2]string]bool, len(res.Ref))
-	for _, ref := range res.Ref {
-		favorites[[2]string{ref.GetResourceId().GetStorageId(), ref.GetResourceId().GetOpaqueId()}] = true
+	labelsByID := make(map[*provider.ResourceId][]string, len(ids))
+	for _, id := range ids {
+		labelsByID[id] = labelsByKey[spaces.ResourceIdToString(id)]
+		if labelsByID[id] == nil {
+			labelsByID[id] = []string{}
+		}
 	}
-	return favorites
+	return labelsByID
 }
 
-func (s *svc) getDrivesForShares(ctx context.Context, gw gateway.GatewayAPIClient) ([]*FavoritableDrive, error) {
+func (s *svc) getDrivesForShares(ctx context.Context, gw gateway.GatewayAPIClient) ([]*LabeledDrive, error) {
 	res, err := gw.ListExistingReceivedShares(ctx, &collaborationv1beta1.ListReceivedSharesRequest{})
 	if err != nil {
 		return nil, err
@@ -178,13 +211,14 @@ func (s *svc) getDrivesForShares(ctx context.Context, gw gateway.GatewayAPIClien
 		return nil, errors.New(res.Status.Message)
 	}
 
-	favorites := favoriteResources(ctx, gw)
-	spacesRes := make([]*FavoritableDrive, 0, len(res.ShareInfos))
+	labelsByID := resourceLabels(ctx, gw, list.Map(res.ShareInfos, func(share *gateway.ReceivedShareResourceInfo) *provider.ResourceId {
+		return share.ResourceInfo.GetId()
+	}))
+	spacesRes := make([]*LabeledDrive, 0, len(res.ShareInfos))
 	for _, share := range res.ShareInfos {
-		id := share.ResourceInfo.GetId()
-		spacesRes = append(spacesRes, &FavoritableDrive{
-			Drive:    *s.convertShareToSpace(share),
-			Favorite: favorites[[2]string{id.GetStorageId(), id.GetOpaqueId()}],
+		spacesRes = append(spacesRes, &LabeledDrive{
+			Drive:  *s.convertShareToSpace(share),
+			Labels: labelsByID[share.ResourceInfo.GetId()],
 		})
 	}
 	return spacesRes, nil
@@ -360,10 +394,10 @@ func (s *svc) getSpace(w http.ResponseWriter, r *http.Request) {
 			ResourceInfo:  stat.Info,
 			ReceivedShare: shareRes.Share,
 		})
-		favorites := favoriteResources(ctx, gw)
-		_ = json.NewEncoder(w).Encode(&FavoritableDrive{
-			Drive:    *space,
-			Favorite: favorites[[2]string{stat.Info.GetId().GetStorageId(), stat.Info.GetId().GetOpaqueId()}],
+		id := stat.Info.GetId()
+		_ = json.NewEncoder(w).Encode(&LabeledDrive{
+			Drive:  *space,
+			Labels: resourceLabels(ctx, gw, []*provider.ResourceId{id})[id],
 		})
 		return
 	} else {
@@ -393,11 +427,11 @@ func (s *svc) getSpace(w http.ResponseWriter, r *http.Request) {
 		spaces := listRes.StorageSpaces
 		if len(spaces) == 1 {
 			user := appctx.ContextMustGetUser(ctx)
-			drive := &FavoritableDrive{Drive: *s.cs3StorageSpaceToDrive(ctx, user, spaces[0])}
-			if root := spaces[0].GetRoot(); root != nil {
-				drive.Favorite = favoriteResources(ctx, gw)[[2]string{root.GetStorageId(), root.GetOpaqueId()}]
-			}
-			_ = json.NewEncoder(w).Encode(drive)
+			root := spaces[0].GetRoot()
+			_ = json.NewEncoder(w).Encode(&LabeledDrive{
+				Drive:  *s.cs3StorageSpaceToDrive(ctx, user, spaces[0]),
+				Labels: resourceLabels(ctx, gw, []*provider.ResourceId{root})[root],
+			})
 			return
 		}
 	}
