@@ -476,8 +476,15 @@ func (s *svc) OCMReceivedShareToDriveItem(ctx context.Context, receivedOCMShare 
 	return converter.OCMReceivedShareToDriveItem(ctx, receivedOCMShare, roleConverter)
 }
 
-func receivedShareWebappMetadata(ctx context.Context, received *ocm.ReceivedShare) *receivedWebappMetadata {
-	return ocmconversions.WebappMetadataForReceivedShare(ctx, received)
+// receivedShareWebappMetadata returns the webapp protocol of a received share.
+// The OCM schema allows only one, and the receive path rejects more.
+func receivedShareWebappMetadata(received *ocm.ReceivedShare) *ocm.WebappProtocol {
+	for _, p := range received.GetProtocols() {
+		if w := p.GetWebappOptions(); w != nil {
+			return w
+		}
+	}
+	return nil
 }
 
 func (s *svc) cs3sharesToPermissions(ctx context.Context, shares []*GenericShare) ([]libregraph.Permission, error) {

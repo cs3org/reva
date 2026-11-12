@@ -190,8 +190,8 @@ func TestGetSharedWithMeExposesPersistedWebappName(t *testing.T) {
 	assertWebappSibling(t, base, values[0], appName)
 	assertPermissionCountAllowingWebapp(t, values[0], 1)
 
-	meta := receivedShareWebappMetadata(ctx, share)
-	if meta == nil || !meta.Present || meta.AppName != appName {
+	meta := receivedShareWebappMetadata(share)
+	if meta == nil || len(meta.GetApps()) == 0 || meta.GetApps()[0].GetName() != appName {
 		t.Fatalf("adapter metadata = %+v", meta)
 	}
 	var want bytes.Buffer
@@ -227,7 +227,7 @@ func TestGetSharedWithMeWebDAVOnlyOmitsWebapp(t *testing.T) {
 	if !bytes.Equal(body, want.Bytes()) {
 		t.Fatalf("webdav-only bytes differ from absent metadata\n got %s\nwant %s", body, want.Bytes())
 	}
-	if receivedShareWebappMetadata(ctx, share) != nil {
+	if receivedShareWebappMetadata(share) != nil {
 		t.Fatal("webdav-only adapter metadata is not nil")
 	}
 }
@@ -295,8 +295,8 @@ func TestGetSharedWithMeWebappNamesStayOnMatchingShare(t *testing.T) {
 
 func TestReceivedWebappMetadataMissingRemoteItemPropagates(t *testing.T) {
 	share := receivedOCMShareWithWebapp("ocm-share-missing", "remote.txt", "CodiMD")
-	meta := receivedShareWebappMetadata(context.Background(), share)
-	if meta == nil || meta.AppName != "CodiMD" {
+	meta := receivedShareWebappMetadata(share)
+	if meta == nil || meta.GetApps()[0].GetName() != "CodiMD" {
 		t.Fatalf("adapter metadata = %+v", meta)
 	}
 
@@ -328,7 +328,7 @@ func TestReceivedWebappMetadataMissingRemoteItemPropagates(t *testing.T) {
 		t.Fatalf("partial bytes %s", buf.Bytes())
 	}
 
-	got, err := extendReceivedShareRemoteItem([]byte(`{"remoteItem":[]}`), meta.AppName, meta.Apps)
+	got, err := extendReceivedShareRemoteItem([]byte(`{"remoteItem":[]}`), "CodiMD", meta.Apps)
 	if err == nil {
 		t.Fatal("expected error for non-object remoteItem")
 	}
@@ -373,32 +373,6 @@ func TestReceivedShareErrorLogOmitsSharedSecret(t *testing.T) {
 	}
 }
 
-func TestGetSharedWithMeDuplicateWebappProtocolsOmitExtension(t *testing.T) {
-	share := receivedOCMShareWithWebapp("ocm-share-dup", "remote.txt", "CodiMD")
-	share.Protocols = append(share.Protocols, &ocm.Protocol{
-		Term: &ocm.Protocol_WebappOptions{
-			WebappOptions: &ocm.WebappProtocol{
-				Uri:          "https://remote.example/open/second",
-				SharedSecret: "secret-second-must-stay-in-storage",
-				Apps:         []*ocm.WebappApp{{Name: "Etherpad", MediaTypes: []string{"text/plain"}}},
-			},
-		},
-	})
-	if receivedShareWebappMetadata(context.Background(), share) != nil {
-		t.Fatal("duplicate webapp protocols produced metadata")
-	}
-
-	body := sharedWithMeOCM(t, share)
-	if bytes.Contains(body, []byte(receivedWebappJSONKey)) {
-		t.Fatalf("duplicate webapp body contains %s: %s", receivedWebappJSONKey, body)
-	}
-	values := decodeSharedWithMeValues(t, body)
-	if len(values) != 1 {
-		t.Fatalf("value length = %d, want 1", len(values))
-	}
-	assertPermissionCount(t, values[0], 1)
-}
-
 func TestGetSharedWithMeMalformedWebappProtocolOmitsExtension(t *testing.T) {
 	share := receivedOCMShareInfo()
 	share.Id = &ocm.ShareId{OpaqueId: "ocm-share-malformed"}
@@ -406,7 +380,7 @@ func TestGetSharedWithMeMalformedWebappProtocolOmitsExtension(t *testing.T) {
 	share.Protocols = append(share.Protocols, &ocm.Protocol{
 		Term: &ocm.Protocol_WebappOptions{WebappOptions: nil},
 	})
-	if receivedShareWebappMetadata(context.Background(), share) != nil {
+	if receivedShareWebappMetadata(share) != nil {
 		t.Fatal("malformed webapp protocol produced metadata")
 	}
 
@@ -424,8 +398,8 @@ func TestGetSharedWithMeMalformedWebappProtocolOmitsExtension(t *testing.T) {
 func TestGetSharedWithMeEmptyAppNameExposesBlankSibling(t *testing.T) {
 	fixtures := loadReceivedWebappFixturesStrict(t)
 	share := receivedWebappContractShare(true, "")
-	meta := receivedShareWebappMetadata(context.Background(), share)
-	if meta == nil || !meta.Present || meta.AppName != "" {
+	meta := receivedShareWebappMetadata(share)
+	if meta == nil || len(meta.GetApps()) == 0 || meta.GetApps()[0].GetName() != "" {
 		t.Fatalf("adapter metadata = %+v", meta)
 	}
 
