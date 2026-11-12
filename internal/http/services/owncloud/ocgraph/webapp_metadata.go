@@ -25,17 +25,14 @@ import (
 	"io"
 
 	ocm "github.com/cs3org/go-cs3apis/cs3/sharing/ocm/v1beta1"
-	ocmconversions "github.com/cs3org/reva/v3/pkg/ocm/conversions"
 	libregraph "github.com/owncloud/libre-graph-api-go"
 )
 
 const receivedWebappJSONKey = "@ocm.webApp"
 
-type receivedWebappMetadata = ocmconversions.ReceivedWebappMetadata
-
 type receivedShareDriveItem struct {
 	*libregraph.DriveItem
-	webapp *receivedWebappMetadata
+	webapp *ocm.WebappProtocol
 }
 
 func encodeSharedWithMe(w io.Writer, shares []any) error {
@@ -44,7 +41,7 @@ func encodeSharedWithMe(w io.Writer, shares []any) error {
 	})
 }
 
-func newReceivedShareDriveItem(item *libregraph.DriveItem, webapp *receivedWebappMetadata) receivedShareDriveItem {
+func newReceivedShareDriveItem(item *libregraph.DriveItem, webapp *ocm.WebappProtocol) receivedShareDriveItem {
 	return receivedShareDriveItem{
 		DriveItem: item,
 		webapp:    webapp,
@@ -52,7 +49,7 @@ func newReceivedShareDriveItem(item *libregraph.DriveItem, webapp *receivedWebap
 }
 
 func (d receivedShareDriveItem) MarshalJSON() ([]byte, error) {
-	if d.webapp == nil || !d.webapp.Present {
+	if d.webapp == nil {
 		return json.Marshal(d.DriveItem)
 	}
 	if d.DriveItem == nil {
@@ -63,7 +60,12 @@ func (d receivedShareDriveItem) MarshalJSON() ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	return extendReceivedShareRemoteItem(base, d.webapp.AppName, d.webapp.Apps)
+	// The first app is the default one for clients that predate apps.
+	var appName string
+	if apps := d.webapp.GetApps(); len(apps) > 0 {
+		appName = apps[0].GetName()
+	}
+	return extendReceivedShareRemoteItem(base, appName, d.webapp.GetApps())
 }
 
 // extendReceivedShareRemoteItem adds @ocm.webApp as a sibling inside remoteItem.
