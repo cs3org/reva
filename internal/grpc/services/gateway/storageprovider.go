@@ -559,7 +559,7 @@ func (s *svc) Stat(ctx context.Context, req *provider.StatRequest) (*provider.St
 			Msg("gateway: Stat response from storage provider")
 		// the spaces registry stats project roots for their mtime only, resolving roles there would loop back here
 		if req.GetFieldMask() == nil || slices.Contains(req.FieldMask.GetPaths(), "permission_set") {
-			s.addSpaceRoles(ctx, rsp.Info)
+			s.addSpaceRoles(ctx, rsp.Info, nil)
 		}
 		return rsp, nil
 	}
@@ -692,8 +692,9 @@ func (s *svc) ListContainer(ctx context.Context, req *provider.ListContainerRequ
 		if err != nil || rsp.Status.Code != rpc.Code_CODE_OK {
 			return rsp, err
 		}
+		fetched := map[string]*provider.StorageSpace{}
 		for _, info := range rsp.Infos {
-			s.addSpaceRoles(ctx, info)
+			s.addSpaceRoles(ctx, info, fetched)
 		}
 		return rsp, nil
 	}

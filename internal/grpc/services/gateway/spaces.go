@@ -66,7 +66,10 @@ func (s *svc) ListStorageSpaces(ctx context.Context, req *provider.ListStorageSp
 
 // addSpaceRoles adds to info the permissions that the roles of its project
 // space give to the user in the context.
-func (s *svc) addSpaceRoles(ctx context.Context, info *provider.ResourceInfo) {
+// fetched keeps the spaces that this request looked up, also the ones that it
+// did not find. The user cannot see the project if not a member, and the shared
+// cache cannot keep a miss that depends on the user. It can be nil.
+func (s *svc) addSpaceRoles(ctx context.Context, info *provider.ResourceInfo, fetched map[string]*provider.StorageSpace) {
 	if info.GetSpace().GetSpaceType() != spaces.SpaceTypeProject.AsString() || info.GetSpace().GetId() == nil || info.GetPermissionSet() == nil {
 		return
 	}
@@ -75,9 +78,19 @@ func (s *svc) addSpaceRoles(ctx context.Context, info *provider.ResourceInfo) {
 		return
 	}
 
-	space, err := s.fetchSpace(ctx, info.Space.Id.OpaqueId)
-	if err != nil {
-		appctx.GetLogger(ctx).Error().Err(err).Str("space_id", info.Space.Id.OpaqueId).Msg("gateway: failed to fetch space, its roles are not applied")
+	spaceID := info.Space.Id.OpaqueId
+	space, ok := fetched[spaceID]
+	if !ok {
+		var err error
+		space, err = s.fetchSpace(ctx, spaceID)
+		if err != nil {
+			appctx.GetLogger(ctx).Error().Err(err).Str("space_id", spaceID).Msg("gateway: failed to fetch space, its roles are not applied")
+		}
+		if fetched != nil {
+			fetched[spaceID] = space
+		}
+	}
+	if space == nil {
 		return
 	}
 	spaces.MergeRolesWithPermissions(info.PermissionSet, space.GetRoles(), user)
