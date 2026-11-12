@@ -35,9 +35,9 @@ The webapp offer is enabled when `webapps` is not empty. When it is empty,
   host and no userinfo.
 - The configured names are preserved exactly on offered shares.
 
-For a file share, only the first webapp whose `media_types` contains the media
-type of the file is offered in the `apps` array of the webapp protocol. If
-none matches, no webapp is offered. For a folder share, all webapps are offered.
+For a file share, all webapps whose `media_types` contain the media type of the
+file are offered, in configured order, in the `apps` array of the webapp
+protocol. If none matches, no webapp is offered. For a folder share, all webapps are offered.
 
 Invalid enabled configuration fails startup with a bad-request error rather
 than silently offering an incomplete webapp.

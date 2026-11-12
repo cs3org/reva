@@ -427,11 +427,11 @@ func TestCreateOCMShareOffersWebappsByResource(t *testing.T) {
 			want:     []string{"CodiMD"},
 		},
 		{
-			name:     "file gets the first of several matching apps",
+			name:     "file gets all matching apps in configured order",
 			webapps:  []webapp{notes, plain},
 			resource: providerpb.ResourceType_RESOURCE_TYPE_FILE,
 			mimeType: "text/plain",
-			want:     []string{"CodiMD"},
+			want:     []string{"CodiMD", "Editor"},
 		},
 		{
 			name:     "file without a matching app gets no webapp",
