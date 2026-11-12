@@ -105,17 +105,14 @@ func (s *service) webappURL() string {
 }
 
 // webappsFor returns the webapps that can open the resource. A folder gets all
-// of them. A file gets only the first one that handles its media type.
+// of them. A file gets all the ones that handle its media type.
 func (s *service) webappsFor(info *providerpb.ResourceInfo) []webapp {
 	if info.GetType() == providerpb.ResourceType_RESOURCE_TYPE_CONTAINER {
 		return s.conf.Webapps
 	}
-	for _, a := range s.conf.Webapps {
-		if slices.Contains(a.MediaTypes, info.GetMimeType()) {
-			return []webapp{a}
-		}
-	}
-	return nil
+	return slices.DeleteFunc(slices.Clone(s.conf.Webapps), func(a webapp) bool {
+		return !slices.Contains(a.MediaTypes, info.GetMimeType())
+	})
 }
 
 func (s *service) getWebappProtocol(ocmShare *ocm.Share, m *ocm.AccessMethod_WebappOptions, apps []webapp) *ocmd.Webapp {
