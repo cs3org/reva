@@ -47,6 +47,21 @@ func (s *listStorage) ListContainer(context.Context, *provider.ListContainerRequ
 	return &provider.ListContainerResponse{Status: okStatus(), Infos: s.infos}, nil
 }
 
+// pathStorage answers a stat with the entry at the requested path.
+type pathStorage struct {
+	provider.ProviderAPIClient
+
+	infos map[string]*provider.ResourceInfo
+}
+
+func (s *pathStorage) Stat(_ context.Context, req *provider.StatRequest, _ ...grpc.CallOption) (*provider.StatResponse, error) {
+	info, ok := s.infos[req.Ref.GetPath()]
+	if !ok {
+		return &provider.StatResponse{Status: &rpc.Status{Code: rpc.Code_CODE_NOT_FOUND}}, nil
+	}
+	return &provider.StatResponse{Status: okStatus(), Info: info}, nil
+}
+
 // visibleSpaces finds only the spaces it holds, like the spaces registry
 // that hides the projects of which the user is not a member.
 type visibleSpaces struct {
@@ -107,5 +122,52 @@ func TestListContainerLooksUpEachSpaceOnce(t *testing.T) {
 	assert.EqualValues(t, 2, registry.lists.Load(), "one lookup for each space, also for the space that is not found")
 	for _, info := range res.Infos {
 		assert.Equal(t, info.Space.Id.OpaqueId == "member", info.PermissionSet.AddGrant, info.Space.Id.OpaqueId)
+	}
+}
+
+func TestSpaceRolesDoNotAllowSharingTheSpaceRoot(t *testing.T) {
+	admin := &userpb.User{Id: &userpb.UserId{Idp: "cern", OpaqueId: "admin"}}
+	ctx := appctx.ContextSetUser(context.Background(), admin)
+
+	root := "/eos/project/o/proj"
+	spaceID := spaces.EncodeSpaceID(root)
+	entry := func(p string) *provider.ResourceInfo {
+		return &provider.ResourceInfo{
+			Id:   &provider.ResourceId{StorageId: "project", SpaceId: spaceID, OpaqueId: p},
+			Path: p,
+			Space: &provider.StorageSpace{
+				Id:        &provider.StorageSpaceId{OpaqueId: spaceID},
+				SpaceType: spaces.SpaceTypeProject.AsString(),
+			},
+			// Like the storage provider for a space root: no share permissions.
+			PermissionSet: &provider.ResourcePermissions{Stat: true},
+		}
+	}
+	storage := &pathStorage{infos: map[string]*provider.ResourceInfo{
+		root:             entry(root),
+		root + "/folder": entry(root + "/folder"),
+	}}
+	endpoint := t.Name() + "/storage"
+	revaservice.SetClientAt(endpoint, storage)
+	t.Cleanup(func() { revaservice.SetClientAt(endpoint, nil) })
+	stampGatewayPeers(&fakeStorageRegistryServer{storageEndpoint: endpoint}, nil)
+
+	stampSpaces(&visibleSpaces{spaces: map[string]*provider.StorageSpace{
+		spaceID: {Roles: []*provider.SpaceRole{{
+			PermissionSet: &provider.ResourcePermissions{AddGrant: true},
+			Recipients:    []*provider.Grantee{{Type: provider.GranteeType_GRANTEE_TYPE_USER, Id: &provider.Grantee_UserId{UserId: admin.Id}}},
+		}}},
+	}})
+	t.Cleanup(func() { stampSpaces(nil) })
+
+	spaceCache, err := memory.New[*provider.StorageSpace](nil)
+	require.NoError(t, err)
+	gw := &svc{c: &config{}, spaceInfoCache: spaceCache, spaceInfoCacheTTL: time.Hour}
+
+	for p, canShare := range map[string]bool{root: false, root + "/folder": true} {
+		res, err := gw.Stat(ctx, &provider.StatRequest{Ref: &provider.Reference{Path: p}})
+		require.NoError(t, err, p)
+		require.Equal(t, rpc.Code_CODE_OK, res.Status.Code, p)
+		assert.Equal(t, canShare, res.Info.PermissionSet.AddGrant, p)
 	}
 }
