@@ -128,3 +128,22 @@ func TestAuthenticateBindsStoredRecipient(t *testing.T) {
 		})
 	}
 }
+
+func TestAuthenticateNamesShareInUserOpaque(t *testing.T) {
+	share := applyShareMutators(
+		testShare("share-alpha", "code-alpha"),
+		mutateRecipient("receiver-a.example"),
+		mutateCreator("sender-alpha.example"),
+		mutateOwner("owner-alpha.example"),
+	)
+	stampGateway(&mockGW{share: share, shareErr: rpc.Code_CODE_OK, remoteErr: rpc.Code_CODE_OK})
+
+	user, _, err := (&manager{c: &config{}}).Authenticate(context.Background(), "receiver-a.example", share.Token)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// The webapp launch request carries only the token and finds the share here.
+	if got := string(user.GetOpaque().GetMap()["ocm-share-id"].GetValue()); got != "share-alpha" {
+		t.Fatalf("ocm-share-id = %q, want share-alpha", got)
+	}
+}

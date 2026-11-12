@@ -237,6 +237,8 @@ type OcmShareProtocol struct {
 	Requirements datatypes.JSON `gorm:"type:json;default:null"`
 	// Webapp protocol fields
 	Targets datatypes.JSON `gorm:"type:json;default:null"`
+	// AppNames lists the apps offered on a webapp share.
+	AppNames datatypes.JSON `gorm:"type:json;default:null"`
 }
 
 // OcmReceivedShare represents an OCM share received from a remote user.

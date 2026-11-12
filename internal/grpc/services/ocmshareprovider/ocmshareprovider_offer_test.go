@@ -475,6 +475,19 @@ func TestCreateOCMShareOffersWebappsByResource(t *testing.T) {
 			if !slicesEqual(names, tt.want) {
 				t.Fatalf("wire apps = %v, want %v", names, tt.want)
 			}
+			// The launch endpoint trusts the stored names, so they must equal the offer.
+			if got := findStoredWebapp(stored.AccessMethods).GetAppNames(); !slicesEqual(got, tt.want) {
+				t.Fatalf("stored app names = %v, want %v", got, tt.want)
+			}
 		})
 	}
+}
+
+func findStoredWebapp(methods []*ocm.AccessMethod) *ocm.WebappAccessMethod {
+	for _, m := range methods {
+		if w := m.GetWebappOptions(); w != nil {
+			return w
+		}
+	}
+	return nil
 }

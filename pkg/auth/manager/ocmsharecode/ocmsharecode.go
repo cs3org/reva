@@ -183,6 +183,11 @@ func (m *manager) Authenticate(
 				Decoder: "plain",
 				Value:   []byte(roleStr),
 			},
+			// The webapp launch request carries only the token, so it finds the share here.
+			"ocm-share-id": {
+				Decoder: "plain",
+				Value:   []byte(share.GetId().GetOpaqueId()),
+			},
 		},
 	}
 

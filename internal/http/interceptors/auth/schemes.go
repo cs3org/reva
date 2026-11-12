@@ -62,7 +62,7 @@ var credentialSchemes = map[string]auth.Scheme{
 		Name:        "ocmshares",
 		Kind:        auth.SchemeHeader,
 		Param:       "ocm-token",
-		Description: "The token of a share received from another site, also read from the ocm-token query parameter.",
+		Description: "The token of a share received from another site.",
 	},
 }
 

@@ -116,7 +116,12 @@ func (s *svc) Routes(r *router.Router) {
 	r.Group(mount, func(r *router.Router) {
 		// The web UI asks for the list on every load, and does so without
 		// credentials, so it is rate limited per client.
-		r.Use(s.limiter.Middleware).Get("/list", s.handleList, router.Unprotected())
+		unauth := r.Use(s.limiter.Middleware)
+		unauth.Get("/list", s.handleList, router.Unprotected())
+		// The credential is the exchanged OCM token in the form body, and
+		// the handler authenticates it. The offered webapp URI points here.
+		unauth.Post("/ocm-open", s.handleOCMOpen, router.Unprotected())
+		unauth.Post("/ocm-open/{rel...}", s.handleOCMOpen, router.Unprotected())
 		r.Post("/new", s.handleNew)
 		r.Post("/open", s.handleOpen)
 		r.Post("/notify", s.handleNotify)
