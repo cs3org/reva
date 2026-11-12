@@ -726,8 +726,9 @@ func (m *ShareMgr) getUserType(ctx context.Context, username string) (userpb.Use
 		return userpb.UserType_USER_TYPE_PRIMARY, err
 	}
 	userRes, err := client.GetUserByClaim(ctx, &userpb.GetUserByClaimRequest{
-		Claim: "username",
-		Value: username,
+		Claim:                  "username",
+		Value:                  username,
+		SkipFetchingUserGroups: true,
 	})
 	if err != nil {
 		return userpb.UserType_USER_TYPE_PRIMARY, errors.Wrapf(err, "error getting user by username '%v'", username)
