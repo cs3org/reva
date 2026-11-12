@@ -22,6 +22,7 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"github.com/cs3org/reva/v3/pkg/ocm/launcher"
 	"html"
 	"net/http"
 	"net/http/httptest"
@@ -209,9 +210,9 @@ func TestWebappLaunchErrorMappingsUseFixedCopy(t *testing.T) {
 }
 
 func TestWebappLaunchNonceFailureRendersErrorPage(t *testing.T) {
-	old := randRead
-	randRead = func([]byte) (int, error) { return 0, errors.New("entropy " + launchSecret) }
-	t.Cleanup(func() { randRead = old })
+	old := launcher.RandRead
+	launcher.RandRead = func([]byte) (int, error) { return 0, errors.New("entropy " + launchSecret) }
+	t.Cleanup(func() { launcher.RandRead = old })
 
 	h, obs := launcherHandler(t, "https://app.example/open")
 	req, logs := newLauncherRequest(t, url.Values{"file": {"/ocm/share-1/f.txt"}})

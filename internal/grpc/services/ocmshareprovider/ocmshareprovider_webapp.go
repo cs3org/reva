@@ -193,7 +193,7 @@ func (s *service) freshAccessMethods(
 			if classErr != nil {
 				return nil, classErr
 			}
-			normalized, err := s.normalizeAttachedWebapp(m)
+			normalized, err := s.normalizeAttachedWebapp(m, apps)
 			if err != nil {
 				return nil, err
 			}
@@ -303,7 +303,9 @@ func validateRetainedWebDAV(m *ocm.AccessMethod) error {
 	return nil
 }
 
-func (s *service) normalizeAttachedWebapp(m *ocm.AccessMethod) (*ocm.AccessMethod, error) {
+// The offered app names are stored on the share. The exchanged token carries
+// them, and the launch endpoint accepts only these names.
+func (s *service) normalizeAttachedWebapp(m *ocm.AccessMethod, apps []webapp) (*ocm.AccessMethod, error) {
 	cloned, err := cloneAccessMethod(m)
 	if err != nil {
 		return nil, err
@@ -317,6 +319,10 @@ func (s *service) normalizeAttachedWebapp(m *ocm.AccessMethod) (*ocm.AccessMetho
 		return nil, err
 	}
 	opts.Requirements = reqs
+	opts.AppNames = make([]string, 0, len(apps))
+	for _, a := range apps {
+		opts.AppNames = append(opts.AppNames, a.Name)
+	}
 	return cloned, nil
 }
 

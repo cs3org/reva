@@ -20,64 +20,24 @@ package sciencemesh
 
 import (
 	"context"
-	"crypto/rand"
-	"encoding/base64"
 	"errors"
-	"html/template"
 	"net/http"
 	"net/url"
 	"strings"
 
 	"github.com/cs3org/reva/v3/pkg/appctx"
 	"github.com/cs3org/reva/v3/pkg/errtypes"
-	"golang.org/x/net/idna"
+	"github.com/cs3org/reva/v3/pkg/ocm/launcher"
 )
-
-var launcherPage = template.Must(template.New("launcher").Parse(`<!DOCTYPE html>
-<html lang="en">
-<head>
-<meta charset="utf-8">
-<meta name="referrer" content="no-referrer">
-<title>Opening application</title>
-</head>
-<body>
-<form id="launch" method="post" action="{{.Action}}">
-<input type="hidden" name="access_token" value="{{.AccessToken}}">
-{{if .ExpiredSessionRedirectURI}}<input type="hidden" name="expired_session_redirect_uri" value="{{.ExpiredSessionRedirectURI}}">
-{{end}}<noscript><button type="submit">Open application</button></noscript>
-</form>
-<script nonce="{{.Nonce}}">document.getElementById("launch").submit();</script>
-</body>
-</html>
-`))
-
-var launcherErrorPage = template.Must(template.New("launcher-error").Parse(`<!DOCTYPE html>
-<html lang="en">
-<head>
-<meta charset="utf-8">
-<title>Cannot open application</title>
-</head>
-<body>
-<p>{{.Message}}</p>
-</body>
-</html>
-`))
-
-type launcherData struct {
-	Action                    string
-	AccessToken               string
-	ExpiredSessionRedirectURI string
-	Nonce                     string
-}
 
 // WebappLaunch renders a page that posts the exchanged access token straight
 // to the validated app URL. Nothing is stored; the token lives only in this
 // response body.
 func (h *appsHandler) WebappLaunch(w http.ResponseWriter, r *http.Request) {
-	nonce, err := newCSPNonce()
+	nonce, err := launcher.NewNonce()
 	if err != nil {
 		appctx.GetLogger(r.Context()).Error().Msg("could not create launcher nonce")
-		renderLauncherError(w, "", http.StatusInternalServerError, "The launch failed.")
+		launcher.WriteError(w, "", http.StatusInternalServerError, "The launch failed.")
 		return
 	}
 
@@ -99,7 +59,7 @@ func (h *appsHandler) WebappLaunch(w http.ResponseWriter, r *http.Request) {
 	var action, formAction string
 	payload, err := h.buildLaunch(r.Context(), shareID, rel, func(appURL string) error {
 		var err error
-		action, formAction, err = launchFormTarget(appURL)
+		action, formAction, err = launcher.FormTarget(appURL)
 		return err
 	})
 	if err != nil {
@@ -107,16 +67,11 @@ func (h *appsHandler) WebappLaunch(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	data := launcherData{
-		Action:                    action,
-		AccessToken:               payload.AccessToken,
-		ExpiredSessionRedirectURI: h.allowedExpiredSessionRedirect(r.Form.Get("expired_session_redirect_uri")),
-		Nonce:                     nonce,
+	fields := []launcher.Field{{Name: "access_token", Value: payload.AccessToken}}
+	if redirect := h.allowedExpiredSessionRedirect(r.Form.Get("expired_session_redirect_uri")); redirect != "" {
+		fields = append(fields, launcher.Field{Name: "expired_session_redirect_uri", Value: redirect})
 	}
-	setLauncherHeaders(w, nonce, formAction)
-	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	w.WriteHeader(http.StatusOK)
-	if err := launcherPage.Execute(w, data); err != nil {
+	if err := launcher.WriteForm(w, nonce, action, formAction, fields); err != nil {
 		appctx.GetLogger(r.Context()).Error().Msg("error writing launcher page")
 	}
 }
@@ -140,100 +95,16 @@ func (h *appsHandler) allowedExpiredSessionRedirect(raw string) string {
 	return raw
 }
 
-// randRead is a seam so tests can force nonce generation to fail.
-var randRead = rand.Read
-
-func newCSPNonce() (string, error) {
-	b := make([]byte, 16)
-	if _, err := randRead(b); err != nil {
-		return "", err
-	}
-	return base64.RawURLEncoding.EncodeToString(b), nil
-}
-
-// launchFormTarget returns the URL the launcher form posts to and the exact
-// form-action origin for it. Internationalized hosts are posted to in their
-// ASCII form so the policy and the target name the same host; a host that a
-// CSP host source cannot name is refused rather than widening the policy.
-func launchFormTarget(appURL string) (action, origin string, err error) {
-	refused := errtypes.BadRequest("app host cannot be named in the launcher policy")
-	u, err := url.Parse(appURL)
-	if err != nil || u.Scheme != "https" || u.Host == "" {
-		return "", "", refused
-	}
-	host := u.Hostname()
-	ascii, err := idna.Lookup.ToASCII(host)
-	if err != nil || !cspHostSource(ascii) {
-		return "", "", refused
-	}
-	hostPort := ascii
-	if port := u.Port(); port != "" {
-		hostPort += ":" + port
-	}
-	origin = "https://" + hostPort
-	if ascii == strings.ToLower(host) {
-		return appURL, origin, nil
-	}
-	u.Host = hostPort
-	return u.String(), origin, nil
-}
-
-// cspHostSource reports whether host is a DNS name or IPv4 address made of
-// lowercase letters, digits and hyphens in non-empty dot-separated labels.
-func cspHostSource(host string) bool {
-	if host == "" {
-		return false
-	}
-	for _, label := range strings.Split(host, ".") {
-		if label == "" {
-			return false
-		}
-		for _, r := range label {
-			if !(r >= 'a' && r <= 'z' || r >= '0' && r <= '9' || r == '-') {
-				return false
-			}
-		}
-	}
-	return true
-}
-
-// setLauncherHeaders applies the security headers shared by success and error
-// pages. An empty origin means no form may be submitted.
-func setLauncherHeaders(w http.ResponseWriter, nonce, origin string) {
-	formAction := "'none'"
-	if origin != "" {
-		formAction = origin
-	}
-	csp := "default-src 'none'; base-uri 'none'; frame-ancestors 'none'; form-action " + formAction
-	if nonce != "" {
-		csp += "; script-src 'nonce-" + nonce + "'"
-	} else {
-		csp += "; script-src 'none'"
-	}
-	h := w.Header()
-	h.Set("Content-Security-Policy", csp)
-	h.Set("Cache-Control", "no-store")
-	h.Set("Referrer-Policy", "no-referrer")
-	h.Set("X-Content-Type-Options", "nosniff")
-}
-
 func writeLauncherLaunchError(w http.ResponseWriter, r *http.Request, nonce string, err error) {
 	sanitized := redactLaunchError(err, "", "")
 	status, msg := launcherErrorText(sanitized)
 	appctx.GetLogger(r.Context()).Error().Err(sanitized).Msg("webapp launch failed")
-	renderLauncherError(w, nonce, status, msg)
+	launcher.WriteError(w, nonce, status, msg)
 }
 
 func writeLauncherError(w http.ResponseWriter, r *http.Request, nonce string, status int, msg string) {
 	appctx.GetLogger(r.Context()).Error().Int("status", status).Msg("webapp launch rejected")
-	renderLauncherError(w, nonce, status, msg)
-}
-
-func renderLauncherError(w http.ResponseWriter, nonce string, status int, msg string) {
-	setLauncherHeaders(w, nonce, "")
-	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	w.WriteHeader(status)
-	_ = launcherErrorPage.Execute(w, struct{ Message string }{msg})
+	launcher.WriteError(w, nonce, status, msg)
 }
 
 // launcherErrorText maps a redacted launch error to a status and a fixed

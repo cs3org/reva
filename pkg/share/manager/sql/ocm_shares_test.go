@@ -4,6 +4,7 @@ import (
 	"context"
 	"log"
 	"os"
+	"slices"
 	"testing"
 	"time"
 
@@ -1195,5 +1196,52 @@ func TestUpdateReceivedOCMShareHidden(t *testing.T) {
 	}
 	if got.GetHidden() {
 		t.Fatal("expected share to not be hidden after unhide")
+	}
+}
+
+func TestWebappAppNamesSurviveStorageAndUpdate(t *testing.T) {
+	mgr, err, teardown := setupSuiteOcmShares(t)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer teardown(t)
+
+	userctx := getUserContext("123456")
+	user, _ := appctx.ContextGetUser(userctx)
+	method := share.NewWebappAccessMethod(
+		webappCS3Permissions([]string{"view"}),
+		share.DefaultWebappRequirements,
+	)
+	method.GetWebappOptions().AppNames = []string{"Collabora", "CodiMD"}
+	sent := getOcmShare(
+		[]*ocm.AccessMethod{method},
+		getUserOcmShareGrantee("sharee1"),
+		user.Id,
+		&provider.ResourceId{StorageId: "storageid", OpaqueId: "webapp-names"},
+		"webapp-names-token",
+	)
+	stored, err := storeOcmShareWithID(mgr, userctx, sent)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := []string{"Collabora", "CodiMD"}
+	if got := findWebappAccessMethod(stored.AccessMethods).GetAppNames(); !slices.Equal(got, want) {
+		t.Fatalf("stored app names = %v, want %v", got, want)
+	}
+
+	ref := &ocm.ShareReference{Spec: &ocm.ShareReference_Id{Id: stored.Id}}
+	updated, err := mgr.UpdateShare(userctx, user, ref, &ocm.UpdateOCMShareRequest_UpdateField{
+		Field: &ocm.UpdateOCMShareRequest_UpdateField_AccessMethods{
+			AccessMethods: share.NewWebappAccessMethod(
+				webappCS3Permissions([]string{"share"}),
+				share.DefaultWebappRequirements,
+			),
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := findWebappAccessMethod(updated.AccessMethods).GetAppNames(); !slices.Equal(got, want) {
+		t.Fatalf("app names after permission update = %v, want %v", got, want)
 	}
 }
