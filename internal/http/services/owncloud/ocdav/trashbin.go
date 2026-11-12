@@ -25,7 +25,6 @@ import (
 	"net/http"
 	"path"
 	"path/filepath"
-	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -240,8 +239,18 @@ func (h *TrashbinHandler) listTrashbin(w http.ResponseWriter, r *http.Request, s
 
 	sublog := appctx.GetLogger(ctx).With().Logger()
 
+	// Refused for the same reason as in getResourceInfos.
+	if depth == "infinity" {
+		w.WriteHeader(http.StatusForbidden)
+		b, err := Marshal(exception{
+			code:    SabredavPermissionDenied,
+			message: "PROPFIND with Depth: infinity is not supported",
+		}, "")
+		HandleWebdavError(&sublog, w, b, err)
+		return
+	}
 	// see https://tools.ietf.org/html/rfc4918#section-9.1
-	if depth != "0" && depth != "1" && depth != "infinity" {
+	if depth != "0" && depth != "1" {
 		sublog.Debug().Str("depth", depth).Msgf("invalid Depth header value")
 		w.WriteHeader(http.StatusBadRequest)
 		return
@@ -316,47 +325,7 @@ func (h *TrashbinHandler) listTrashbin(w http.ResponseWriter, r *http.Request, s
 		return
 	}
 
-	items := getRecycleRes.RecycleItems
-
-	if depth == "infinity" {
-		var stack []string
-		// check sub-containers in reverse order and add them to the stack
-		// the reversed order here will produce a more logical sorting of results
-		for _, item := range slices.Backward(items) {
-			// for i := range res.Infos {
-			if item.Type == provider.ResourceType_RESOURCE_TYPE_CONTAINER {
-				stack = append(stack, item.Key)
-			}
-		}
-
-		for len(stack) > 0 {
-			key := stack[len(stack)-1]
-			getRecycleRes, err := gc.ListRecycle(ctx, &provider.ListRecycleRequest{Ref: &provider.Reference{Path: basePath}, Key: key})
-			if err != nil {
-				sublog.Error().Err(err).Msg("error calling ListRecycle")
-				w.WriteHeader(ocgraph.GrpcCodeToHTTPStatus(gstatus.Code(err)))
-				return
-			}
-
-			if getRecycleRes.Status.Code != rpc.Code_CODE_OK {
-				HandleErrorStatus(&sublog, w, getRecycleRes.Status)
-				return
-			}
-			items = append(items, getRecycleRes.RecycleItems...)
-
-			stack = stack[:len(stack)-1]
-			// check sub-containers in reverse order and add them to the stack
-			// the reversed order here will produce a more logical sorting of results
-			for _, v := range slices.Backward(getRecycleRes.RecycleItems) {
-				// for i := range res.Infos {
-				if v.Type == provider.ResourceType_RESOURCE_TYPE_CONTAINER {
-					stack = append(stack, v.Key)
-				}
-			}
-		}
-	}
-
-	propRes, err := h.formatTrashPropfind(ctx, s, u, &pf, items, basePath)
+	propRes, err := h.formatTrashPropfind(ctx, s, u, &pf, getRecycleRes.RecycleItems, basePath)
 	if err != nil {
 		sublog.Error().Err(err).Msg("error formatting propfind")
 		w.WriteHeader(http.StatusInternalServerError)
