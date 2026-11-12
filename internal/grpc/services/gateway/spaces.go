@@ -73,12 +73,17 @@ func (s *svc) addSpaceRoles(ctx context.Context, info *provider.ResourceInfo, fe
 	if info.GetSpace().GetSpaceType() != spaces.SpaceTypeProject.AsString() || info.GetSpace().GetId() == nil || info.GetPermissionSet() == nil {
 		return
 	}
+	spaceID := info.Space.Id.OpaqueId
+	// The storage provider does not allow shares on a space root (see
+	// fixPermissions), and the roles must not give them back.
+	if root, err := spaces.DecodeSpaceID(spaceID); err == nil && root == info.Path {
+		return
+	}
 	user, ok := appctx.ContextGetUser(ctx)
 	if !ok {
 		return
 	}
 
-	spaceID := info.Space.Id.OpaqueId
 	space, ok := fetched[spaceID]
 	if !ok {
 		var err error
