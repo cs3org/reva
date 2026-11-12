@@ -360,3 +360,30 @@ func TestPropfindDepthOneOnInaccessibleFileIsForbidden(t *testing.T) {
 		t.Errorf("got status %d, want %d; body: %s", w.Code, http.StatusForbidden, w.Body.String())
 	}
 }
+
+// A Depth: infinity PROPFIND is refused before the gateway is called: the mock fails on any call.
+func TestPropfindDepthInfinityIsRefused(t *testing.T) {
+	user := &userv1beta1.User{Id: &userv1beta1.UserId{OpaqueId: "alice", Idp: "cern.ch"}, Username: "alice"}
+	for name, propfind := range map[string]func(*svc, http.ResponseWriter, *http.Request){
+		"files": func(s *svc, w http.ResponseWriter, r *http.Request) {
+			s.handlePathPropfind(w, r, "")
+		},
+		"trash bin": func(s *svc, w http.ResponseWriter, r *http.Request) {
+			(&TrashbinHandler{}).listTrashbin(w, r, s, user, "/eos/user/a/alice", "", "")
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			stampGateway(mockgateway.NewMockGatewayAPIClient(t))
+
+			r := httptest.NewRequest(MethodPropfind, "/eos/user/a/alice", nil)
+			r.Header.Set(HeaderDepth, "infinity")
+			r = r.WithContext(appctx.ContextSetUser(r.Context(), user))
+			w := httptest.NewRecorder()
+			propfind(&svc{c: &Config{}}, w, r)
+
+			if w.Code != http.StatusForbidden {
+				t.Errorf("got status %d, want %d; body: %s", w.Code, http.StatusForbidden, w.Body.String())
+			}
+		})
+	}
+}
