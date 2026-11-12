@@ -25,6 +25,7 @@ import (
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	collaboration "github.com/cs3org/go-cs3apis/cs3/sharing/collaboration/v1beta1"
 	link "github.com/cs3org/go-cs3apis/cs3/sharing/link/v1beta1"
+	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	storageregistry "github.com/cs3org/go-cs3apis/cs3/storage/registry/v1beta1"
 	revaservice "github.com/cs3org/reva/v3/pkg/service"
 )
@@ -40,6 +41,7 @@ type testResolver struct {
 	shares   collaboration.CollaborationAPIClient
 	links    link.LinkAPIClient
 	users    userpb.UserAPIClient
+	spaces   provider.SpacesAPIClient
 }
 
 func (r *testResolver) StorageRegistry(context.Context) (storageregistry.RegistryAPIClient, error) {
@@ -64,6 +66,12 @@ func (r *testResolver) UserProvider(context.Context) (userpb.UserAPIClient, erro
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	return r.users, nil
+}
+
+func (r *testResolver) Spaces(context.Context) (provider.SpacesAPIClient, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return r.spaces, nil
 }
 
 var (
@@ -101,5 +109,15 @@ func stampUserProvider(users userpb.UserAPIClient) {
 	})
 	globalTestResolver.mu.Lock()
 	globalTestResolver.users = users
+	globalTestResolver.mu.Unlock()
+}
+
+// stampSpaces points the test resolver at the given spaces registry.
+func stampSpaces(spaces provider.SpacesAPIClient) {
+	globalTestResolverOnce.Do(func() {
+		revaservice.SetGlobal(globalTestResolver)
+	})
+	globalTestResolver.mu.Lock()
+	globalTestResolver.spaces = spaces
 	globalTestResolver.mu.Unlock()
 }
