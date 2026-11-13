@@ -31,7 +31,6 @@ type TypeHandler interface {
 // TypeHandlerFunc adapts a function to TypeHandler.
 type TypeHandlerFunc func(ctx context.Context, n *Notification) error
 
-// HandleNotification implements TypeHandler.
 func (f TypeHandlerFunc) HandleNotification(ctx context.Context, n *Notification) error {
 	return f(ctx, n)
 }
@@ -40,11 +39,10 @@ func (f TypeHandlerFunc) HandleNotification(ctx context.Context, n *Notification
 type DispatchOutcome string
 
 const (
-	// DispatchHandled means the type handler ran (its error, if any, is returned alongside).
+	// DispatchHandled means a handler ran; its effect may have failed.
 	DispatchHandled DispatchOutcome = "handled"
-	// DispatchIgnored means no handler is registered: accept and ignore.
 	DispatchIgnored DispatchOutcome = "ignored"
-	// DispatchNotImplemented means a request type that is never fulfilled.
+	// DispatchNotImplemented identifies a valid unsupported request.
 	DispatchNotImplemented DispatchOutcome = "not_implemented"
 )
 
@@ -53,14 +51,12 @@ type typeEntry struct {
 	handler  TypeHandler
 }
 
-// NotificationRegistry holds built-in contracts and their handlers.
-// Complete registration before concurrent parsing or dispatch.
+// NotificationRegistry must be configured before concurrent use.
 type NotificationRegistry struct {
 	types map[string]*typeEntry
 }
 
-// NewNotificationRegistry returns a registry with the built-in contracts and
-// no handlers; notifications of known types without a handler are ignored.
+// NewNotificationRegistry loads built-in validators without handlers.
 func NewNotificationRegistry() *NotificationRegistry {
 	r := &NotificationRegistry{types: make(map[string]*typeEntry, len(builtinContracts))}
 	for t, validate := range builtinContracts {
@@ -102,7 +98,6 @@ func (r *NotificationRegistry) Parse(body []byte) (*Notification, error) {
 		n.Class = NotificationClassUnknown
 		return n, nil
 	}
-	// A known type with an invalid payload is never dispatched.
 	if err := e.validate(n); err != nil {
 		n.Class = NotificationClassMalformed
 		return n, err
