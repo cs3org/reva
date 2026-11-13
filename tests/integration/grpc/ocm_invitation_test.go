@@ -24,6 +24,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"net/http/httptest"
 	"os"
 
 	gatewaypb "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
@@ -59,8 +60,9 @@ var _ = Describe("ocm invitation workflow with signed requests", func() { ocmInv
 
 func ocmInvitationSpecs(signed bool) {
 	var (
-		err    error
-		revads = map[string]*Revad{}
+		err      error
+		revads   = map[string]*Revad{}
+		wopiStub *httptest.Server
 
 		variables = map[string]string{}
 
@@ -128,6 +130,7 @@ func ocmInvitationSpecs(signed bool) {
 				"localhome_root":         Folder{},
 			}
 			addSigningKeys(signed, resources, variables)
+			wopiStub = startWopiStub(variables)
 			revads, err = startRevads(map[string]string{
 				"cernboxgw":          "ocm-server-cernbox-grpc.toml",
 				"cernboxhome":        "cernbox-home-server.toml",
@@ -145,6 +148,7 @@ func ocmInvitationSpecs(signed bool) {
 		})
 
 		AfterEach(func() {
+			wopiStub.Close()
 			for _, r := range revads {
 				Expect(r.Cleanup(CurrentGinkgoTestDescription().Failed)).To(Succeed())
 			}
