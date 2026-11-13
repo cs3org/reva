@@ -18,17 +18,12 @@
 
 package ocmd
 
-// Like specs_notifications.go, this file imports no reva adapter, gateway or HTTP wiring.
-
 import (
 	"context"
 	"errors"
-	"fmt"
-	"sync"
 )
 
-// TypeHandler processes a validated notification of one type. Its error
-// never changes the response to a valid notification.
+// TypeHandler processes a validated notification and returns any effect error.
 type TypeHandler interface {
 	HandleNotification(ctx context.Context, n *Notification) error
 }
@@ -39,14 +34,6 @@ type TypeHandlerFunc func(ctx context.Context, n *Notification) error
 // HandleNotification implements TypeHandler.
 func (f TypeHandlerFunc) HandleNotification(ctx context.Context, n *Notification) error {
 	return f(ctx, n)
-}
-
-// NotificationExtension is the contract of a notification type that is not
-// built in, e.g. a scoped type defined by a later specification.
-type NotificationExtension struct {
-	Type     string
-	Validate ValidateNotificationFunc
-	Handler  TypeHandler
 }
 
 // DispatchOutcome is the result of dispatching a parsed notification.
@@ -66,9 +53,9 @@ type typeEntry struct {
 	handler  TypeHandler
 }
 
-// NotificationRegistry holds the known notification contracts and their handlers.
+// NotificationRegistry holds built-in contracts and their handlers.
+// Complete registration before concurrent parsing or dispatch.
 type NotificationRegistry struct {
-	mu    sync.RWMutex
 	types map[string]*typeEntry
 }
 
@@ -82,36 +69,16 @@ func NewNotificationRegistry() *NotificationRegistry {
 	return r
 }
 
-// SetHandler installs the handler of a built-in or registered type.
+// SetHandler installs or replaces a built-in handler during initialization.
 func (r *NotificationRegistry) SetHandler(notificationType string, h TypeHandler) error {
 	if h == nil {
-		return fmt.Errorf("nil handler for notification type %s", notificationType)
+		return errors.New("nil notification handler")
 	}
-	r.mu.Lock()
-	defer r.mu.Unlock()
 	e, ok := r.types[notificationType]
 	if !ok {
-		return fmt.Errorf("notification type %s has no contract", notificationType)
+		return errors.New("notification type has no handler contract")
 	}
 	e.handler = h
-	return nil
-}
-
-// RegisterExtension adds the contract and handler of a type that is not
-// built in. Built-in and request types cannot be redefined.
-func (r *NotificationRegistry) RegisterExtension(ext NotificationExtension) error {
-	if ext.Type == "" || ext.Validate == nil || ext.Handler == nil {
-		return errors.New("incomplete notification extension")
-	}
-	if IsRequestNotification(ext.Type) {
-		return fmt.Errorf("notification type %s is reserved", ext.Type)
-	}
-	r.mu.Lock()
-	defer r.mu.Unlock()
-	if _, ok := r.types[ext.Type]; ok {
-		return fmt.Errorf("notification type %s already registered", ext.Type)
-	}
-	r.types[ext.Type] = &typeEntry{validate: ext.Validate, handler: ext.Handler}
 	return nil
 }
 
@@ -123,15 +90,14 @@ func (r *NotificationRegistry) Parse(body []byte) (*Notification, error) {
 		return &Notification{Class: NotificationClassMalformed}, err
 	}
 	if validate, ok := requestContracts[n.Type]; ok {
-		n.Class = NotificationClassRequest
 		if err := validate(n); err != nil {
+			n.Class = NotificationClassMalformed
 			return n, err
 		}
+		n.Class = NotificationClassRequest
 		return n, &NotificationError{Code: NotificationErrNotImplemented}
 	}
-	r.mu.RLock()
 	e, ok := r.types[n.Type]
-	r.mu.RUnlock()
 	if !ok {
 		n.Class = NotificationClassUnknown
 		return n, nil
@@ -156,11 +122,9 @@ func (r *NotificationRegistry) Dispatch(ctx context.Context, n *Notification) (D
 		return DispatchIgnored, nil
 	}
 	var h TypeHandler
-	r.mu.RLock()
 	if e, ok := r.types[n.Type]; ok {
 		h = e.handler
 	}
-	r.mu.RUnlock()
 	if h == nil {
 		return DispatchIgnored, nil
 	}

@@ -1,6 +1,4 @@
-Enhancement: validate OCM notification payloads
+Enhancement: validate OCM notification contracts
 
-Add shared validation for canonical OCM notifications. Unknown
-notification types remain accepted after the envelope checks, request
-types answer 501 once valid, and shared secrets stay out of logs. The
-sender may include a port, and errors name only known fields.
+Validate notification envelopes and built-in payloads, preserve exact type
+identity, and dispatch known events through handlers installed at startup.
