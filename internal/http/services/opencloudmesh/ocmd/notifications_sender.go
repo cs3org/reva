@@ -153,7 +153,7 @@ func notificationDiscoveryBase(host string) (string, bool) {
 
 // DiscoverNotificationPeer uses only the canonical /.well-known/ocm document
 // of the peer identity. The endpoint it advertises is only used for routing.
-func (t ocmNotificationTransport) DiscoverNotificationPeer(ctx context.Context, domain string) (*NotificationPeer, error) {
+func (t ocmNotificationTransport) DiscoverNotificationPeer(ctx context.Context, domain string) (*notificationPeer, error) {
 	host, err := providerdomain.CanonicalOCMHost(domain)
 	if err != nil {
 		return nil, errInvalidPeer
@@ -162,11 +162,11 @@ func (t ocmNotificationTransport) DiscoverNotificationPeer(ctx context.Context, 
 	if !ok {
 		return nil, errUnsupportedPeer
 	}
-	disco, err := t.c.DiscoverCanonical(ctx, base)
+	disco, err := t.c.discoverCanonical(ctx, base)
 	if err != nil {
 		return nil, err
 	}
-	peer := &NotificationPeer{}
+	peer := &notificationPeer{}
 	if !disco.Enabled {
 		return peer, nil
 	}
@@ -225,22 +225,22 @@ func parseRetryAfter(v string) time.Duration {
 
 // PostNotification signs with the local service key when configured.
 // A peer advertising http-sig receives no unsigned notification POST.
-func (t ocmNotificationTransport) PostNotification(ctx context.Context, peer *NotificationPeer, body []byte) (NotificationResponse, error) {
+func (t ocmNotificationTransport) PostNotification(ctx context.Context, peer *notificationPeer, body []byte) (notificationResponse, error) {
 	if peer == nil || peer.Endpoint == "" {
-		return NotificationResponse{}, errInvalidPeer
+		return notificationResponse{}, errInvalidPeer
 	}
 	if t.key == nil && slices.Contains(peer.Capabilities, "http-sig") {
-		return NotificationResponse{}, errNoSigningKey
+		return notificationResponse{}, errNoSigningKey
 	}
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, peer.Endpoint, bytes.NewReader(body))
 	if err != nil {
-		return NotificationResponse{}, errPostFailed
+		return notificationResponse{}, errPostFailed
 	}
 	req.Header.Set("Content-Type", "application/json")
 	req.ContentLength = int64(len(body))
 	if t.key != nil {
 		if err := t.key.Sign(req, body); err != nil {
-			return NotificationResponse{}, errSigningFailed
+			return notificationResponse{}, errSigningFailed
 		}
 	}
 	// A 307/308 could disclose the payload to another destination.
@@ -248,11 +248,11 @@ func (t ocmNotificationTransport) PostNotification(ctx context.Context, peer *No
 	noRedirect.CheckRedirect = func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }
 	resp, err := noRedirect.Do(req)
 	if err != nil {
-		return NotificationResponse{}, safePostError(ctx, err)
+		return notificationResponse{}, safePostError(ctx, err)
 	}
 	defer resp.Body.Close()
 	_, _ = io.Copy(io.Discard, io.LimitReader(resp.Body, DefaultResponseLimit))
-	return NotificationResponse{Status: resp.StatusCode, RetryAfter: parseRetryAfter(resp.Header.Get("Retry-After"))}, nil
+	return notificationResponse{Status: resp.StatusCode, RetryAfter: parseRetryAfter(resp.Header.Get("Retry-After"))}, nil
 }
 
 // NewNotification sends a notification to the OCM server at domain if it
@@ -267,7 +267,7 @@ func (c *OCMClient) NewNotification(ctx context.Context, domain string, n *Outgo
 	if err != nil {
 		return SendResult{Outcome: SendPostFailed, Failure: FailureError}
 	}
-	res := SendNotification(ctx, ocmNotificationTransport{c: c, key: key}, domain, body)
+	res := sendNotification(ctx, ocmNotificationTransport{c: c, key: key}, domain, body)
 	event := log.Info()
 	if res.Outcome != SendDelivered {
 		event = log.Warn()

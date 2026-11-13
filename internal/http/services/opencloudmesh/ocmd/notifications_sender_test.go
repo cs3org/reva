@@ -47,7 +47,7 @@ const senderCanary = "private-payload-9c1e"
 
 var nopLogger = zerolog.Nop()
 
-type notificationPeer struct {
+type notificationServer struct {
 	srv           *httptest.Server
 	mu            sync.Mutex
 	posts         int
@@ -66,14 +66,14 @@ type notificationPeer struct {
 	endpoint      string
 }
 
-func newNotificationPeer(t *testing.T) *notificationPeer {
-	p := &notificationPeer{caps: []string{"invites", "notifications"}, enabled: true, status: http.StatusCreated}
+func newNotificationServer(t *testing.T) *notificationServer {
+	p := &notificationServer{caps: []string{"invites", "notifications"}, enabled: true, status: http.StatusCreated}
 	p.srv = httptest.NewServer(http.HandlerFunc(p.serve))
 	t.Cleanup(p.srv.Close)
 	return p
 }
 
-func (p *notificationPeer) serve(w http.ResponseWriter, r *http.Request) {
+func (p *notificationServer) serve(w http.ResponseWriter, r *http.Request) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	switch r.URL.Path {
@@ -118,16 +118,16 @@ func (p *notificationPeer) serve(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func (p *notificationPeer) discoveredEndpoint() string {
+func (p *notificationServer) discoveredEndpoint() string {
 	if p.endpoint != "" {
 		return p.endpoint
 	}
 	return p.srv.URL + "/ocm"
 }
 
-func (p *notificationPeer) host() string { return strings.TrimPrefix(p.srv.URL, "http://") }
+func (p *notificationServer) host() string { return strings.TrimPrefix(p.srv.URL, "http://") }
 
-func (p *notificationPeer) postCount() int {
+func (p *notificationServer) postCount() int {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	return p.posts
@@ -148,7 +148,7 @@ func unsharedNotification(t *testing.T) *OutgoingNotification {
 	return n
 }
 
-func sendWithLogs(t *testing.T, peer *notificationPeer, n *OutgoingNotification) (SendResult, string) {
+func sendWithLogs(t *testing.T, peer *notificationServer, n *OutgoingNotification) (SendResult, string) {
 	t.Helper()
 	var logs bytes.Buffer
 	logger := zerolog.New(&logs)
@@ -162,38 +162,38 @@ func TestNewNotificationTransportTable(t *testing.T) {
 	retry.Set("Retry-After", "60")
 	cases := []struct {
 		name    string
-		setup   func(p *notificationPeer)
+		setup   func(p *notificationServer)
 		outcome SendOutcome
-		class   NotificationStatusClass
+		class   int
 		posts   int
 		retry   time.Duration
 	}{
-		{name: "capability missing", setup: func(p *notificationPeer) { p.caps = []string{"invites", "exchange-token"} }, outcome: SendCapabilityMissing},
-		{name: "discovery disabled", setup: func(p *notificationPeer) { p.enabled = false }, outcome: SendCapabilityMissing},
-		{name: "oversized discovery", setup: func(p *notificationPeer) { p.hugeDiscovery = true }, outcome: SendDiscoveryFailed},
-		{name: "no legacy ocm-provider fallback", setup: func(p *notificationPeer) { p.wellKnownOff = true }, outcome: SendDiscoveryFailed},
-		{name: "201 bodyless", outcome: SendDelivered, class: NotificationStatusCreated, posts: 1},
-		{name: "200 with ignored body", setup: func(p *notificationPeer) { p.status, p.respBody = 200, []byte(`{"x":1}`) }, outcome: SendDelivered, class: NotificationStatusCreated, posts: 1},
-		{name: "oversized 201 body is bounded and ignored", setup: func(p *notificationPeer) {
+		{name: "capability missing", setup: func(p *notificationServer) { p.caps = []string{"invites", "exchange-token"} }, outcome: SendCapabilityMissing},
+		{name: "discovery disabled", setup: func(p *notificationServer) { p.enabled = false }, outcome: SendCapabilityMissing},
+		{name: "oversized discovery", setup: func(p *notificationServer) { p.hugeDiscovery = true }, outcome: SendDiscoveryFailed},
+		{name: "no legacy ocm-provider fallback", setup: func(p *notificationServer) { p.wellKnownOff = true }, outcome: SendDiscoveryFailed},
+		{name: "201 bodyless", outcome: SendDelivered, class: http.StatusCreated, posts: 1},
+		{name: "200 with ignored body", setup: func(p *notificationServer) { p.status, p.respBody = 200, []byte(`{"x":1}`) }, outcome: SendDelivered, class: http.StatusCreated, posts: 1},
+		{name: "oversized 201 body is bounded and ignored", setup: func(p *notificationServer) {
 			p.respBody = bytes.Repeat([]byte("a"), int(DefaultResponseLimit)*2)
-		}, outcome: SendDelivered, class: NotificationStatusCreated, posts: 1},
-		{name: "401 is not retried", setup: func(p *notificationPeer) { p.status = 401 }, outcome: SendRejected, class: NotificationStatusUnauthorized, posts: 1},
-		{name: "503 with Retry-After is not retried", setup: func(p *notificationPeer) { p.status, p.header = 503, retry }, outcome: SendRejected, class: NotificationStatusUnavailable, posts: 1, retry: time.Minute},
-		{name: "503 reflecting private data", setup: func(p *notificationPeer) {
+		}, outcome: SendDelivered, class: http.StatusCreated, posts: 1},
+		{name: "401 is not retried", setup: func(p *notificationServer) { p.status = 401 }, outcome: SendRejected, class: http.StatusUnauthorized, posts: 1},
+		{name: "503 with Retry-After is not retried", setup: func(p *notificationServer) { p.status, p.header = 503, retry }, outcome: SendRejected, class: http.StatusServiceUnavailable, posts: 1, retry: time.Minute},
+		{name: "503 reflecting private data", setup: func(p *notificationServer) {
 			p.status, p.respBody = 503, []byte(senderCanary)
 			p.header = http.Header{"Retry-After": []string{senderCanary}, "X-Echo": []string{senderCanary}}
-		}, outcome: SendRejected, class: NotificationStatusUnavailable, posts: 1},
-		{name: "307 redirect is not followed", setup: func(p *notificationPeer) {
+		}, outcome: SendRejected, class: http.StatusServiceUnavailable, posts: 1},
+		{name: "307 redirect is not followed", setup: func(p *notificationServer) {
 			p.status, p.header = 307, http.Header{"Location": []string{"/elsewhere"}}
 		}, outcome: SendRejected, posts: 1},
-		{name: "308 redirect is not followed", setup: func(p *notificationPeer) {
+		{name: "308 redirect is not followed", setup: func(p *notificationServer) {
 			p.status, p.header = 308, http.Header{"Location": []string{"/elsewhere"}}
 		}, outcome: SendRejected, posts: 1},
-		{name: "connection dropped", setup: func(p *notificationPeer) { p.hangup = true }, outcome: SendPostFailed, posts: 1},
+		{name: "connection dropped", setup: func(p *notificationServer) { p.hangup = true }, outcome: SendPostFailed, posts: 1},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			peer := newNotificationPeer(t)
+			peer := newNotificationServer(t)
 			if tc.setup != nil {
 				tc.setup(peer)
 			}
@@ -249,7 +249,7 @@ func TestShareStatePayloadFixtures(t *testing.T) {
 	reg := NewNotificationRegistry()
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			peer := newNotificationPeer(t)
+			peer := newNotificationServer(t)
 			n, err := tc.in.Build()
 			if err != nil {
 				t.Fatal(err)
@@ -413,7 +413,7 @@ func TestNewNotificationMalformedPostResponseOverTCP(t *testing.T) {
 	for name, response := range malformedResponses {
 		t.Run(name, func(t *testing.T) {
 			raw := newRawPeer(t, response)
-			peer := newNotificationPeer(t)
+			peer := newNotificationServer(t)
 			peer.endpoint = raw.url() + "/ocm"
 			res, logs := sendWithLogs(t, peer, unsharedNotification(t))
 			if res.Outcome != SendPostFailed || res.Failure != FailureError {
@@ -449,7 +449,7 @@ func TestNewNotificationMalformedDiscoveryOverTCP(t *testing.T) {
 func TestNewNotificationTimeoutAndCancel(t *testing.T) {
 	raw := newRawPeer(t, "")
 	raw.hang = true
-	peer := newNotificationPeer(t)
+	peer := newNotificationServer(t)
 	peer.endpoint = raw.url() + "/ocm"
 	res := NewClient(300*time.Millisecond, false).NewNotification(context.Background(), peer.host(), unsharedNotification(t), nil)
 	if res.Outcome != SendPostFailed || res.Failure != FailureTimeout {
@@ -509,8 +509,8 @@ func TestPostNotificationErrorQuotesNoPeerBytes(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			raw := newRawPeer(t, response)
 			tr := ocmNotificationTransport{c: NewClient(5*time.Second, false)}
-			resp, err := tr.PostNotification(context.Background(), &NotificationPeer{Endpoint: raw.url() + "/ocm/notifications"}, []byte(`{}`))
-			if err == nil || resp != (NotificationResponse{}) {
+			resp, err := tr.PostNotification(context.Background(), &notificationPeer{Endpoint: raw.url() + "/ocm/notifications"}, []byte(`{}`))
+			if err == nil || resp != (notificationResponse{}) {
 				t.Fatalf("response %+v error %v", resp, err)
 			}
 			if strings.Contains(fmt.Sprintf("%v %+v %#v", err, err, err), senderCanary) || errors.Unwrap(err) != nil {
@@ -573,14 +573,14 @@ func TestNotificationSigningBehavior(t *testing.T) {
 		}))
 		t.Cleanup(peer.Close)
 		transport := ocmNotificationTransport{c: NewClient(5*time.Second, false), key: &httpsig.Key{}}
-		_, err := transport.PostNotification(context.Background(), &NotificationPeer{Endpoint: peer.URL}, []byte(`{}`))
+		_, err := transport.PostNotification(context.Background(), &notificationPeer{Endpoint: peer.URL}, []byte(`{}`))
 		if !errors.Is(err, errSigningFailed) || posts.Load() != 0 {
 			t.Fatalf("signing error %v, posts %d", err, posts.Load())
 		}
 	})
 
 	t.Run("advertising peer without key sends zero posts", func(t *testing.T) {
-		peer := newNotificationPeer(t)
+		peer := newNotificationServer(t)
 		peer.caps = []string{"notifications", "http-sig"}
 		ctx := appctx.WithLogger(context.Background(), &nopLogger)
 		res := NewClient(5*time.Second, false).NewNotification(ctx, peer.host(), unsharedNotification(t), nil)
@@ -640,7 +640,7 @@ func TestNotificationGuardedTransport(t *testing.T) {
 		{name: "advertised destination denied", allowLoopback: true, endpoint: "https://192.0.2.1:8443/ocm", outcome: SendPostFailed, wantPolicy: true},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			peer := newNotificationPeer(t)
+			peer := newNotificationServer(t)
 			peer.endpoint = tc.endpoint
 			c := NewPublicOnlyClientWithConfig(ocmclient.TransportConfig{Timeout: time.Second, AllowLoopback: tc.allowLoopback})
 			base := c.Transport()
