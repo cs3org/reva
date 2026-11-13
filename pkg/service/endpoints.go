@@ -138,7 +138,7 @@ func (c *clients) HTTPEndpoints(ctx context.Context, opts ...EndpointOption) ([]
 		if err != nil {
 			return fmt.Errorf("service registry: resolving %q: %w", q.name, err)
 		}
-		nodes := filterByMetadata(svc.Nodes(), q.httpFilters())
+		nodes := FilterByMetadata(svc.Nodes(), q.httpFilters())
 		if len(nodes) == 0 {
 			return fmt.Errorf("service registry: no node for %q matching filters", q.name)
 		}
@@ -169,7 +169,7 @@ func (c *clients) HTTPEndpoint(ctx context.Context, opts ...EndpointOption) (End
 		if err != nil {
 			return fmt.Errorf("service registry: resolving %q: %w", q.name, err)
 		}
-		node, ok := c.selector.Pick(filterByMetadata(svc.Nodes(), q.httpFilters()))
+		node, ok := c.selector.Pick(FilterByMetadata(svc.Nodes(), q.httpFilters()))
 		if !ok {
 			return fmt.Errorf("service registry: no selectable node for %q matching filters", q.name)
 		}
@@ -182,7 +182,8 @@ func (c *clients) HTTPEndpoint(ctx context.Context, opts ...EndpointOption) (End
 	return ep, nil
 }
 
-func filterByMetadata(nodes []registry.Node, meta map[string]string) []registry.Node {
+// FilterByMetadata keeps the nodes whose metadata has every key and value in meta.
+func FilterByMetadata(nodes []registry.Node, meta map[string]string) []registry.Node {
 	if len(meta) == 0 {
 		return nodes
 	}

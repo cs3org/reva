@@ -56,15 +56,15 @@ func (s *server) ListInvocations(_ context.Context, req *controlpb.ListInvocatio
 }
 
 // Invoke runs a named invocation on the addressed target. An invocation error
-// surfaces as a soft error in the response; only an unknown target is a gRPC
-// error.
+// surfaces as a soft error in the response, with its gRPC code; only an
+// unknown target is a gRPC error.
 func (s *server) Invoke(ctx context.Context, req *controlpb.InvokeRequest) (*controlpb.InvokeResponse, error) {
 	if _, ok := invoke.Invocations(req.Target); !ok {
 		return nil, status.Errorf(codes.NotFound, "control: %q is not invokable on this node", req.Target)
 	}
 	res, err := invoke.Invoke(ctx, req.Target, req.Invocation, ArgsToAny(req.Args))
 	if err != nil {
-		return &controlpb.InvokeResponse{Error: err.Error()}, nil
+		return &controlpb.InvokeResponse{Error: err.Error(), Code: int32(status.Code(err))}, nil
 	}
 	b, err := json.Marshal(res)
 	if err != nil {
@@ -89,7 +89,7 @@ func (s *server) InvokeStream(req *controlpb.InvokeRequest, stream controlpb.Con
 	if err := invoke.InvokeStream(stream.Context(), req.Target, req.Invocation, ArgsToAny(req.Args), emit); err != nil {
 		// Report as a final soft message, like unary Invoke. Best-effort: the
 		// send fails if the client is gone.
-		_ = stream.Send(&controlpb.InvokeResponse{Error: err.Error()})
+		_ = stream.Send(&controlpb.InvokeResponse{Error: err.Error(), Code: int32(status.Code(err))})
 	}
 	return nil
 }

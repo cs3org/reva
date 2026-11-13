@@ -62,7 +62,7 @@ func logsCommand() *cobra.Command {
 			}
 			// A node id addresses one instance; a plain service name may span several,
 			// so label lines with their node in that case.
-			multi := !strings.Contains(selector, "/")
+			multi := !strings.Contains(selector, "/") || strings.Contains(selector, "[")
 			if follow {
 				return followLogs(ctx, client, selector, args, rt.Output, multi)
 			}
