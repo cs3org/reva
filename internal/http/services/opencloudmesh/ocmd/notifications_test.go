@@ -41,14 +41,14 @@ import (
 	"google.golang.org/grpc"
 )
 
-func newNotificationsService(t *testing.T) (*svc, string) {
+func newNotificationTestService(t *testing.T, mode, endpoint string, gw gateway.GatewayAPIClient) *svc {
 	t.Helper()
-	stampGateway(&notificationsMockGW{})
-	disco := ocmDiscoveryServer(t, "webdav", "file")
-	t.Cleanup(disco.Close)
+	stampGateway(gw)
 	s, err := New(context.Background(), map[string]any{
 		"gatewaysvc":     "localhost:0",
 		"token_managers": map[string]any{"jwt": map[string]any{"secret": "test-only-jwt-secret"}},
+		"http_sig_mode":  mode,
+		"endpoint":       endpoint,
 	})
 	if err != nil {
 		t.Fatalf("ocmd service: %v", err)
@@ -56,7 +56,14 @@ func newNotificationsService(t *testing.T) (*svc, string) {
 	t.Cleanup(func() { _ = s.Close() })
 	sv := s.(*svc)
 	sv.notifications.ocmClient = NewPublicOnlyClientWithConfig(client.TransportConfig{AllowLoopback: true})
-	return sv, disco.Listener.Addr().String()
+	return sv
+}
+
+func newNotificationsService(t *testing.T) (*svc, string) {
+	t.Helper()
+	disco := ocmDiscoveryServer(t, "webdav", "file")
+	t.Cleanup(disco.Close)
+	return newNotificationTestService(t, "permissive", "", &notificationsMockGW{}), disco.Listener.Addr().String()
 }
 
 type notificationsMockGW struct {
@@ -287,30 +294,12 @@ func TestNotificationsSignatureModeMatrix(t *testing.T) {
 	body := func(domain string) string {
 		return `{"notificationType":"SHARE_UNSHARED","senderDomain":"` + domain + `","resourceType":"file","notification":{"file":{"providerId":"42"}}}`
 	}
-	newService := func(t *testing.T, mode string, gw gateway.GatewayAPIClient) http.Handler {
-		t.Helper()
-		stampGateway(gw)
-		// No endpoint override: the signer derives the URI from the request,
-		// so the verifier must reconstruct it the same way.
-		s, err := New(context.Background(), map[string]any{
-			"gatewaysvc":     "localhost:0",
-			"token_managers": map[string]any{"jwt": map[string]any{"secret": "test-only-jwt-secret"}},
-			"http_sig_mode":  mode,
-		})
-		if err != nil {
-			t.Fatal(err)
-		}
-		t.Cleanup(func() { _ = s.Close() })
-		sv := s.(*svc)
-		sv.notifications.ocmClient = NewPublicOnlyClientWithConfig(client.TransportConfig{AllowLoopback: true})
-		return handlerFor(sv)
-	}
 
 	t.Run("permissive unsigned advertiser rejected", func(t *testing.T) {
 		key := newSigningKey(t)
 		peer := signingServer(t, key)
 		t.Cleanup(peer.Close)
-		h := newService(t, "permissive", &notificationsMockGW{})
+		h := handlerFor(newNotificationTestService(t, "permissive", "", &notificationsMockGW{}))
 		rr, _ := postNotification(t, h, "application/json", body(peer.Listener.Addr().String()))
 		checkResponse(t, rr, http.StatusUnauthorized, reqres.APIErrorUnauthenticated)
 	})
@@ -318,7 +307,7 @@ func TestNotificationsSignatureModeMatrix(t *testing.T) {
 	t.Run("strict unsigned nonadvertiser rejected", func(t *testing.T) {
 		peer := ocmDiscoveryServer(t, "webdav", "file")
 		t.Cleanup(peer.Close)
-		h := newService(t, "strict", &notificationsMockGW{})
+		h := handlerFor(newNotificationTestService(t, "strict", "", &notificationsMockGW{}))
 		rr, _ := postNotification(t, h, "application/json", body(peer.Listener.Addr().String()))
 		checkResponse(t, rr, http.StatusUnauthorized, reqres.APIErrorUnauthenticated)
 	})
@@ -326,7 +315,7 @@ func TestNotificationsSignatureModeMatrix(t *testing.T) {
 	t.Run("permissive unsigned nonadvertiser accepted", func(t *testing.T) {
 		peer := ocmDiscoveryServer(t, "webdav", "file")
 		t.Cleanup(peer.Close)
-		h := newService(t, "permissive", &notificationsMockGW{})
+		h := handlerFor(newNotificationTestService(t, "permissive", "", &notificationsMockGW{}))
 		rr, _ := postNotification(t, h, "application/json", body(peer.Listener.Addr().String()))
 		checkResponse(t, rr, http.StatusCreated, "")
 	})
@@ -335,7 +324,8 @@ func TestNotificationsSignatureModeMatrix(t *testing.T) {
 		key := newSigningKey(t)
 		peer := signingServer(t, key)
 		t.Cleanup(peer.Close)
-		h := newService(t, "strict", &notificationsMockGW{})
+		// An empty endpoint makes verification reconstruct the URI from the request.
+		h := handlerFor(newNotificationTestService(t, "strict", "", &notificationsMockGW{}))
 		payload := body(peer.Listener.Addr().String())
 		req := httptest.NewRequest(http.MethodPost, mount+notificationsPath, strings.NewReader(payload))
 		req.Header.Set("Content-Type", "application/json")
@@ -355,14 +345,11 @@ func TestNotificationsSignatureModeMatrix(t *testing.T) {
 				key := newSigningKey(t)
 				peer := signingServer(t, key)
 				t.Cleanup(peer.Close)
-				h := newService(t, mode, &notificationsMockGW{})
+				h := handlerFor(newNotificationTestService(t, mode, "", &notificationsMockGW{}))
 				payload := body(peer.Listener.Addr().String())
 				req := httptest.NewRequest(http.MethodPost, mount+notificationsPath, strings.NewReader(payload))
 				req.Header.Set("Content-Type", "application/json")
-				if err := key.Sign(req, []byte(payload)); err != nil {
-					t.Fatal(err)
-				}
-				// Re-sign over a different body, then send the signed headers with the original one.
+				// Sign altered bytes but send the original body.
 				other := strings.Replace(payload, `"42"`, `"43"`, 1)
 				if err := key.Sign(req, []byte(other)); err != nil {
 					t.Fatal(err)
@@ -379,27 +366,26 @@ func TestNotificationsSignatureModeMatrix(t *testing.T) {
 	})
 
 	t.Run("policy denial rejects before any effect", func(t *testing.T) {
-		peer := signingServer(t, newSigningKey(t))
+		key := newSigningKey(t)
+		peer := signingServer(t, key)
 		t.Cleanup(peer.Close)
-		h := newService(t, "permissive", &notificationsDenyGW{})
+		h := handlerFor(newNotificationTestService(t, "permissive", "", &notificationsDenyGW{}))
 		payload := body(peer.Listener.Addr().String())
 		req := httptest.NewRequest(http.MethodPost, mount+notificationsPath, strings.NewReader(payload))
 		req.Header.Set("Content-Type", "application/json")
-		if err := newSigningKey(t).Sign(req, []byte(payload)); err != nil {
+		if err := key.Sign(req, []byte(payload)); err != nil {
 			t.Fatal(err)
 		}
 		rr := httptest.NewRecorder()
 		h.ServeHTTP(rr, req)
-		if rr.Code != http.StatusUnauthorized {
-			t.Fatalf("policy denial: status %d, want 401", rr.Code)
-		}
+		checkResponse(t, rr, http.StatusUnauthorized, reqres.APIErrorUnauthenticated)
 	})
 
 	t.Run("unknown valid type authenticates first", func(t *testing.T) {
 		key := newSigningKey(t)
 		peer := signingServer(t, key)
 		t.Cleanup(peer.Close)
-		h := newService(t, "strict", &notificationsMockGW{})
+		h := handlerFor(newNotificationTestService(t, "strict", "", &notificationsMockGW{}))
 		payload := `{"notificationType":"EXAMPLE_FUTURE","senderDomain":"` + peer.Listener.Addr().String() + `","resourceType":"file"}`
 		req := httptest.NewRequest(http.MethodPost, mount+notificationsPath, strings.NewReader(payload))
 		req.Header.Set("Content-Type", "application/json")
@@ -420,7 +406,7 @@ func TestNotificationsSignatureModeMatrix(t *testing.T) {
 		key := newSigningKey(t)
 		peer := signingServer(t, key)
 		t.Cleanup(peer.Close)
-		h := newService(t, "strict", &notificationsMockGW{})
+		h := handlerFor(newNotificationTestService(t, "strict", "", &notificationsMockGW{}))
 		payload := `{"notificationType":"USER_REMOVED","senderDomain":"` + peer.Listener.Addr().String() + `","shareType":"group","notification":{"user":{"userId":"alice@` + peer.Listener.Addr().String() + `"}}}`
 		req := httptest.NewRequest(http.MethodPost, mount+notificationsPath, strings.NewReader(payload))
 		req.Header.Set("Content-Type", "application/json")
@@ -433,7 +419,7 @@ func TestNotificationsSignatureModeMatrix(t *testing.T) {
 	})
 
 	t.Run("undiscoverable sender is a fixed dependency error", func(t *testing.T) {
-		h := newService(t, "permissive", &notificationsMockGW{})
+		h := handlerFor(newNotificationTestService(t, "permissive", "", &notificationsMockGW{}))
 		rr, _ := postNotification(t, h, "application/json", body("192.0.2.1"))
 		checkResponse(t, rr, http.StatusInternalServerError, reqres.APIErrorServerError)
 		if strings.Contains(rr.Body.String(), "192.0.2.1") {
