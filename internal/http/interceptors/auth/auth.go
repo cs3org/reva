@@ -36,6 +36,7 @@ import (
 	signedurlregistry "github.com/cs3org/reva/v3/internal/http/interceptors/auth/signed_url/registry"
 	tokenregistry "github.com/cs3org/reva/v3/internal/http/interceptors/auth/token/registry"
 	tokenwriterregistry "github.com/cs3org/reva/v3/internal/http/interceptors/auth/tokenwriter/registry"
+	httplog "github.com/cs3org/reva/v3/internal/http/interceptors/log"
 	"github.com/cs3org/reva/v3/pkg/appctx"
 
 	"github.com/mitchellh/mapstructure"
@@ -427,6 +428,9 @@ func ctxWithUserInfo(ctx context.Context, r *http.Request, user *userpb.User, to
 	// searchable by user (reva admin trace -user).
 	l := appctx.GetLogger(ctx).With().Str("user", user.Username).Logger()
 	ctx = appctx.WithLogger(ctx, &l)
+	// And onto the request's own "processed http request" line, written
+	// by the logging middleware outside this one.
+	httplog.SetUser(ctx, user.Username)
 
 	return ctx
 }
