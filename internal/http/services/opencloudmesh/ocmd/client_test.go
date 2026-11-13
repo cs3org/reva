@@ -25,6 +25,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -1622,4 +1623,110 @@ func (s *statusCaptureTransport) RoundTrip(req *http.Request) (*http.Response, e
 		s.status = resp.StatusCode
 	}
 	return resp, err
+}
+
+func TestDiscoverSafeFallbackResults(t *testing.T) {
+	const marker = "private-discovery-error-marker"
+	timeout := &net.DNSError{Err: marker, Name: marker, IsTimeout: true}
+	policy := fmt.Errorf("%s: %w", marker, client.ErrPolicyViolation)
+	size := fmt.Errorf("%s: %w", marker, ErrResponseTooLarge)
+	ordinary := errors.New(marker)
+	valid := `{"enabled":true,"endPoint":"https://peer.example/` + marker + `","capabilities":["notifications"]}`
+	for _, tc := range []struct {
+		name        string
+		primary     string
+		primaryErr  error
+		legacy      string
+		legacyErr   error
+		cancelAt    string
+		deadlineAt  string
+		wantErr     error
+		wantTimeout bool
+		wantMessage string
+		calls       int
+	}{
+		{name: "decoded primary values stay out of logs", primary: valid, calls: 1},
+		{name: "primary timeout then successful fallback", primaryErr: timeout, legacy: valid, calls: 2},
+		{name: "primary policy then successful fallback", primaryErr: policy, legacy: valid, calls: 2},
+		{name: "final timeout", primaryErr: ordinary, legacyErr: timeout, wantTimeout: true, calls: 2},
+		{name: "final policy sentinel", primaryErr: ordinary, legacyErr: policy, wantErr: client.ErrPolicyViolation, calls: 2},
+		{name: "final size sentinel", primaryErr: ordinary, legacyErr: size, wantErr: ErrResponseTooLarge, calls: 2},
+		{name: "final ordinary error overrides primary timeout", primaryErr: timeout, legacyErr: ordinary, wantMessage: "Invalid response", calls: 2},
+		{name: "malformed primary is terminal", primary: marker, legacy: valid, wantMessage: "Invalid payload", calls: 1},
+		{name: "empty primary then malformed legacy", legacy: marker, wantMessage: "Invalid payload", calls: 2},
+		{name: "cancel primary before fallback", cancelAt: "/.well-known/ocm", primaryErr: timeout, wantErr: context.Canceled, calls: 1},
+		{name: "cancel fallback overrides policy", primaryErr: ordinary, cancelAt: "/ocm-provider", legacyErr: policy, wantErr: context.Canceled, calls: 2},
+		{name: "deadline during primary", deadlineAt: "/.well-known/ocm", primaryErr: ordinary, wantErr: context.DeadlineExceeded, calls: 1},
+		{name: "deadline during fallback", primaryErr: ordinary, deadlineAt: "/ocm-provider", legacyErr: ordinary, wantErr: context.DeadlineExceeded, calls: 2},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			duration := 2 * time.Second
+			if tc.deadlineAt != "" {
+				duration = time.Second
+			}
+			ctx, cancel := context.WithTimeout(context.Background(), duration)
+			defer cancel()
+			var logs bytes.Buffer
+			logger := zerolog.New(&logs).Level(zerolog.DebugLevel)
+			ctx = appctx.WithLogger(ctx, &logger)
+			var paths []string
+			responses := 0
+			c := NewClient(5*time.Second, false)
+			c.client.Transport = roundTripperFunc(func(r *http.Request) (*http.Response, error) {
+				paths = append(paths, r.URL.Path)
+				if r.URL.Host != "peer.example:0443" || r.URL.Scheme != "https" {
+					t.Errorf("discovery identity %s", r.URL)
+				}
+				if r.URL.Path == tc.cancelAt {
+					cancel()
+				}
+				if r.URL.Path == tc.deadlineAt {
+					<-r.Context().Done()
+				}
+				body, err := tc.primary, tc.primaryErr
+				if r.URL.Path == "/ocm-provider" {
+					body, err = tc.legacy, tc.legacyErr
+				}
+				if err != nil {
+					return nil, err
+				}
+				responses++
+				return &http.Response{StatusCode: http.StatusOK, Header: make(http.Header), Body: io.NopCloser(strings.NewReader(body))}, nil
+			})
+			tracker := trackClientBodies(c)
+			disco, err := c.Discover(ctx, "https://peer.example:0443")
+			switch {
+			case tc.wantErr != nil:
+				if err != tc.wantErr {
+					t.Fatalf("error %v, want fixed %v", err, tc.wantErr)
+				}
+			case tc.wantTimeout:
+				var timeout interface{ Timeout() bool }
+				if !errors.As(err, &timeout) || !timeout.Timeout() {
+					t.Fatalf("error %v, want safe timeout", err)
+				}
+			case tc.wantMessage != "":
+				if _, ok := err.(errtypes.InternalError); !ok || !strings.Contains(err.Error(), tc.wantMessage) {
+					t.Fatalf("error %v, want InternalError %s", err, tc.wantMessage)
+				}
+			default:
+				if err != nil || disco == nil || !disco.Enabled {
+					t.Fatalf("discovery %v error %v", disco, err)
+				}
+			}
+			wantPaths := []string{"/.well-known/ocm"}
+			if tc.calls == 2 {
+				wantPaths = append(wantPaths, "/ocm-provider")
+			}
+			if strings.Join(paths, ",") != strings.Join(wantPaths, ",") {
+				t.Fatalf("paths %v, want %v", paths, wantPaths)
+			}
+			if strings.Contains(logs.String()+fmt.Sprintf("%v %+v %#v", err, err, err), marker) || errors.Unwrap(err) != nil {
+				t.Fatalf("unsafe discovery diagnostic: %s %v", logs.String(), err)
+			}
+			if responses != 0 {
+				tracker.assertClosed(t)
+			}
+		})
+	}
 }

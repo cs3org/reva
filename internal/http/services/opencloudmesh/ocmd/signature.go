@@ -36,7 +36,8 @@ func verifySignature(ctx context.Context, c *OCMClient, r *http.Request, body []
 		if disco.JwksURI == "" {
 			return nil, errors.New("the remote OCM server publishes no jwksUri")
 		}
-		return c.httpget(ctx, disco.JwksURI, DefaultResponseLimit)
+		jwks, _, err := c.httpget(ctx, disco.JwksURI, DefaultResponseLimit)
+		return jwks, err
 	})
 	// A server that signs its requests must not be accepted without a signature,
 	// else an attacker can send unsigned requests in its name.
