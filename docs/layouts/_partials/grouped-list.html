@@ -1,0 +1,25 @@
+{{- /* Components grouped by category under headings of the given level.
+       With families, each family gets its own heading one level lower. */ -}}
+{{- $h := .level }}
+{{- $g := partial "category-groups.html" (dict "pages" .pages "parent" "") }}
+{{- $families := .families }}
+{{- range $g.categories }}
+<h{{ $h }} id="{{ .title | anchorize }}">{{ .title }}</h{{ $h }}>
+  {{- if $families }}
+    {{- range .pages }}
+<h{{ add $h 1 }}><a href="{{ .RelPermalink }}">{{ .Title }}</a></h{{ add $h 1 }}>
+{{ partial "comp-grid.html" .Pages.ByTitle }}
+    {{- end }}
+  {{- else }}
+{{ partial "comp-grid.html" .pages }}
+  {{- end }}
+{{- end }}
+{{- if $families }}
+  {{- range $g.rest }}
+<h{{ $h }}><a href="{{ .RelPermalink }}">{{ .Title }}</a></h{{ $h }}>
+{{ partial "comp-grid.html" .Pages.ByTitle }}
+  {{- end }}
+{{- else }}
+  {{- if and $g.categories $g.rest }}<h{{ $h }} id="other">Other</h{{ $h }}>{{ end }}
+{{ partial "comp-grid.html" $g.rest }}
+{{- end }}

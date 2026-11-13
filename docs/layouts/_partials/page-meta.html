@@ -1,0 +1,14 @@
+<footer class="page-meta">
+  {{- if .Params.generated }}
+    {{- with .Params.dir }}
+    <span>Generated from <a href="{{ $.Params.source }}"><code>{{ . }}</code></a>. Edit its package doc comment or <code>README.md</code> to change this page.</span>
+    {{- else }}
+    <span>Generated from the source code by <code>make gen-doc</code>.</span>
+    {{- end }}
+  {{- else }}
+    {{- with .File }}
+    <a href="{{ site.Params.github_repo }}/edit/master/{{ site.Params.github_subdir }}/content/en/{{ .Path }}">Edit this page</a>
+    {{- end }}
+    {{- if not .Lastmod.IsZero }}<span>Last updated {{ .Lastmod.Format "2 January 2006" }}</span>{{ end }}
+  {{- end }}
+</footer>

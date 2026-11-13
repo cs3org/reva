@@ -1,0 +1,23 @@
+{{- /* Splits .pages by params.category, ignoring case. Pages with the
+       .parent category count as having none. Returns the categories, sorted
+       by name, each with its title and pages, and the pages without a
+       category. */ -}}
+{{- $parent := lower .parent }}
+{{- $keyed := slice }}
+{{- range .pages }}
+  {{- $key := lower (.Params.category | default "") }}
+  {{- if eq $key $parent }}{{ $key = "" }}{{ end }}
+  {{- $keyed = $keyed | append (dict "key" $key "page" .) }}
+{{- end }}
+{{- $keys := slice }}
+{{- range $keyed }}{{ with .key }}{{ $keys = $keys | append . }}{{ end }}{{ end }}
+{{- $categories := slice }}
+{{- range ($keys | uniq | sort) }}
+  {{- $key := . }}
+  {{- $title := "" }}{{ $pages := slice }}
+  {{- range $keyed }}{{ if eq .key $key }}{{ $pages = $pages | append .page }}{{ $title = $title | default .page.Params.category }}{{ end }}{{ end }}
+  {{- $categories = $categories | append (dict "title" $title "pages" $pages) }}
+{{- end }}
+{{- $rest := slice }}
+{{- range $keyed }}{{ if not .key }}{{ $rest = $rest | append .page }}{{ end }}{{ end }}
+{{- return (dict "categories" $categories "rest" $rest) }}

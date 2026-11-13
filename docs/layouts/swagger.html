@@ -1,0 +1,31 @@
+{{ define "main" }}
+{{- $spec := partialCached "openapi.html" . }}
+{{- $body := .Content }}
+{{- if $spec.url }}
+  {{- $body = print $body (printf `<p class="muted">%s, version %s. %d paths. <a href="%s" download>Download openapi.json</a>. Source: <a href="%s">%s</a>.</p><div class="swagger-wrap"><div class="swagger-shell"><div id="swagger"></div></div></div>` $spec.title $spec.version $spec.paths $spec.url site.Params.openapi site.Params.openapi) }}
+{{- else }}
+  {{- $body = print $body (printf `<div class="callout warn"><p>The API document of <a href="%s">%s</a> was not available when this site was built.</p><p>To browse the API of your own deployment, enable the openapi service and open <code>/openapi</code> on it:</p></div>` site.Params.openapi site.Params.openapi) (transform.Highlight "[http.services.openapi]\npublic = true" "toml") }}
+{{- end }}
+{{- partial "docs-shell.html" (dict "page" . "body" ($body | safeHTML)) }}
+{{ end }}
+
+{{ define "scripts" }}
+{{- $spec := partialCached "openapi.html" . }}
+{{- with $spec.url }}
+<link rel="stylesheet" href="{{ site.Params.swaggerui }}/swagger-ui.css">
+<script src="{{ site.Params.swaggerui }}/swagger-ui-bundle.js" crossorigin="anonymous"></script>
+<script>
+  window.addEventListener("load", function () {
+    if (typeof SwaggerUIBundle === "undefined") return;
+    SwaggerUIBundle({
+      url: "{{ . }}",
+      dom_id: "#swagger",
+      deepLinking: true,
+      docExpansion: "none",
+      filter: true,
+      supportedSubmitMethods: [],
+    });
+  });
+</script>
+{{- end }}
+{{ end }}

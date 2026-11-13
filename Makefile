@@ -239,19 +239,27 @@ lint: ## Run go vet
 ################################################################################
 
 .PHONY: gen-doc
-gen-doc: ## Generate the config reference of the docs
-	go run tools/generate-documentation/main.go
+gen-doc: ## Generate the component reference and data of the website
+	go run ./tools/generate-documentation
+
+.PHONY: gen-doc-contributors
+gen-doc-contributors: ## Like gen-doc, and refresh the contributor list from GitHub
+	go run ./tools/generate-documentation -contributors
+
+.PHONY: docs-serve
+docs-serve: ## Serve the website on http://localhost:1313
+	cd docs && hugo server
 
 dist: gen-doc ## Build the release artifacts
 	go run tools/create-artifacts/main.go -version $(VERSION) -commit $(GIT_COMMIT) -goversion $(GO_VERSION)
 
 # Run make all, move changelog/unreleased into changelog/<version>_<date>,
-# regenerate CHANGELOG.md and write VERSION and RELEASE_DATE. Then commit
-# and tag the release.
+# regenerate CHANGELOG.md, write VERSION and RELEASE_DATE, and generate the
+# docs. Then commit and tag the release.
 #
 # Variables:
 #   NEWVER  the version to release, for example 3.14.1 (required)
-release: gen-doc ## Prepare a release (NEWVER=3.x.y)
+release: ## Prepare a release (NEWVER=3.x.y)
 	go run tools/prepare-release/main.go -version $(NEWVER) -commit -tag
 
 

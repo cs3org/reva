@@ -1,0 +1,19 @@
+{{- $root := site.GetPage "/docs" }}
+<aside class="sidebar" id="sidebar" aria-label="Documentation">
+  <div class="group">
+    <a class="head" href="{{ $root.RelPermalink }}"{{ if eq $root . }} aria-current="page"{{ end }}>Overview</a>
+    {{- with $root.RegularPages.ByWeight }}
+    <ul>
+      {{- range . }}
+      <li><a href="{{ .RelPermalink }}"{{ if eq . $ }} class="active"{{ end }}>{{ .LinkTitle }}</a></li>
+      {{- end }}
+    </ul>
+    {{- end }}
+  </div>
+  {{- range $root.Sections.ByWeight }}
+  <div class="group">
+    <a class="head" href="{{ .RelPermalink }}">{{ .LinkTitle }}</a>
+    {{- partial "sidebar-tree.html" (dict "section" . "current" $) }}
+  </div>
+  {{- end }}
+</aside>
