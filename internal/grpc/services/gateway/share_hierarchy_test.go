@@ -60,6 +60,7 @@ type shareHierarchyGatewayHarness struct {
 	svc     *svc
 	shares  *fakeCollaborationServer
 	storage *fakeStorageProviderServer
+	users   *fakeUserProviderServer
 }
 
 func newShareHierarchyGatewayHarness(t *testing.T) *shareHierarchyGatewayHarness {
@@ -78,6 +79,12 @@ func newShareHierarchyGatewayHarness(t *testing.T) *shareHierarchyGatewayHarness
 	shares := newFakeCollaborationServer()
 	stampGatewayPeers(&fakeStorageRegistryServer{storageEndpoint: storageEndpoint}, shares)
 
+	// The gateway takes the id of a user grantee from the user provider.
+	users := newFakeUserProviderServer(&userpb.User{
+		Id: &userpb.UserId{OpaqueId: userAOpaqueID, Type: userpb.UserType_USER_TYPE_PRIMARY},
+	})
+	stampUserProvider(users)
+
 	return &shareHierarchyGatewayHarness{
 		svc: &svc{
 			c: &config{
@@ -86,6 +93,7 @@ func newShareHierarchyGatewayHarness(t *testing.T) *shareHierarchyGatewayHarness
 		},
 		shares:  shares,
 		storage: storage,
+		users:   users,
 	}
 }
 
@@ -332,6 +340,56 @@ func TestShareExpiration(t *testing.T) {
 	})
 }
 
+func TestCreateShareTakesGranteeFromUserProvider(t *testing.T) {
+	t.Run("user type left out by the caller is filled in", func(t *testing.T) {
+		h := newShareHierarchyGatewayHarness(t)
+		lightweight := &userpb.UserId{Idp: "idp", OpaqueId: "lightweight@example.org", Type: userpb.UserType_USER_TYPE_LIGHTWEIGHT}
+		h.users.byID[lightweight.OpaqueId] = &userpb.User{Id: lightweight}
+
+		// Clients like the CS3 Python client send only the opaque id and the idp.
+		share := h.createShare(t, parentPath, userGrantee(&userpb.UserId{Idp: "idp", OpaqueId: lightweight.OpaqueId}), permissions.NewViewerRole().CS3ResourcePermissions(), false)
+
+		assert.True(t, proto.Equal(lightweight, share.Grantee.GetUserId()))
+	})
+
+	t.Run("user found only by username", func(t *testing.T) {
+		h := newShareHierarchyGatewayHarness(t)
+		external := &userpb.UserId{Idp: "idp", OpaqueId: "external@example.org", Type: userpb.UserType_USER_TYPE_LIGHTWEIGHT}
+		h.users.byUsername[external.OpaqueId] = &userpb.User{Id: external}
+
+		// Like ocgraph, which sends only the opaque id it got from a user search.
+		share := h.createShare(t, parentPath, userGrantee(&userpb.UserId{OpaqueId: external.OpaqueId}), permissions.NewViewerRole().CS3ResourcePermissions(), false)
+
+		assert.True(t, proto.Equal(external, share.Grantee.GetUserId()))
+	})
+
+	t.Run("user refused by username is not shared with", func(t *testing.T) {
+		h := newShareHierarchyGatewayHarness(t)
+		// GetUser finds a linked account, but reading the share back would not, so it could
+		// never be removed.
+		linked := &userpb.UserId{Idp: "idp", OpaqueId: "linked@example.org", Type: userpb.UserType_USER_TYPE_LIGHTWEIGHT}
+		h.users.byID[linked.OpaqueId] = &userpb.User{Id: linked}
+		h.users.refused[linked.OpaqueId] = true
+
+		res := h.createShareResponse(t, parentPath, userGrantee(&userpb.UserId{OpaqueId: linked.OpaqueId}), permissions.NewViewerRole().CS3ResourcePermissions(), false)
+
+		require.Equal(t, rpc.Code_CODE_ABORTED, res.Status.Code)
+		h.assertCannotRead(t, userGrantee(linked), parentPath)
+		assert.Empty(t, h.shares.pathsFor(userGrantee(linked)))
+	})
+
+	t.Run("unknown user is refused", func(t *testing.T) {
+		h := newShareHierarchyGatewayHarness(t)
+		unknown := userGrantee(&userpb.UserId{OpaqueId: "unknown"})
+
+		res := h.createShareResponse(t, parentPath, unknown, permissions.NewViewerRole().CS3ResourcePermissions(), false)
+
+		require.Equal(t, rpc.Code_CODE_NOT_FOUND, res.Status.Code)
+		h.assertCannotRead(t, unknown, parentPath)
+		assert.Empty(t, h.shares.pathsFor(unknown))
+	})
+}
+
 func (h *shareHierarchyGatewayHarness) createShare(t *testing.T, p string, grantee *provider.Grantee, perms *provider.ResourcePermissions, force bool) *collaboration.Share {
 	t.Helper()
 	res := h.createShareResponse(t, p, grantee, perms, force)
@@ -528,6 +586,43 @@ func (s *fakeCollaborationServer) pathsFor(grantee *provider.Grantee) []string {
 	return sortedStrings(paths)
 }
 
+type fakeUserProviderServer struct {
+	userpb.UserAPIClient
+
+	byID map[string]*userpb.User
+	// Users found only by username, like external accounts that are not cached yet.
+	byUsername map[string]*userpb.User
+	// Usernames the user provider refuses, like linked accounts.
+	refused map[string]bool
+}
+
+func newFakeUserProviderServer(users ...*userpb.User) *fakeUserProviderServer {
+	s := &fakeUserProviderServer{byID: map[string]*userpb.User{}, byUsername: map[string]*userpb.User{}, refused: map[string]bool{}}
+	for _, u := range users {
+		s.byID[u.Id.OpaqueId] = u
+	}
+	return s
+}
+
+func (s *fakeUserProviderServer) GetUser(_ context.Context, req *userpb.GetUserRequest, _ ...grpc.CallOption) (*userpb.GetUserResponse, error) {
+	u, ok := s.byID[req.GetUserId().GetOpaqueId()]
+	if !ok {
+		return &userpb.GetUserResponse{Status: &rpc.Status{Code: rpc.Code_CODE_NOT_FOUND, Message: "user not found"}}, nil
+	}
+	return &userpb.GetUserResponse{Status: okStatus(), User: proto.Clone(u).(*userpb.User)}, nil
+}
+
+func (s *fakeUserProviderServer) GetUserByClaim(_ context.Context, req *userpb.GetUserByClaimRequest, _ ...grpc.CallOption) (*userpb.GetUserByClaimResponse, error) {
+	if s.refused[req.GetValue()] {
+		return &userpb.GetUserByClaimResponse{Status: &rpc.Status{Code: rpc.Code_CODE_ABORTED, Message: "linked accounts are not supported"}}, nil
+	}
+	u, ok := s.byUsername[req.GetValue()]
+	if !ok || req.GetClaim() != "username" {
+		return &userpb.GetUserByClaimResponse{Status: &rpc.Status{Code: rpc.Code_CODE_NOT_FOUND, Message: "user not found"}}, nil
+	}
+	return &userpb.GetUserByClaimResponse{Status: okStatus(), User: proto.Clone(u).(*userpb.User)}, nil
+}
+
 type fakeStorageRegistryServer struct {
 	registry.RegistryAPIClient
 	storageEndpoint string
@@ -682,6 +777,13 @@ func userAGrantee() *provider.Grantee {
 		Id: &provider.Grantee_UserId{
 			UserId: &userpb.UserId{OpaqueId: userAOpaqueID},
 		},
+	}
+}
+
+func userGrantee(id *userpb.UserId) *provider.Grantee {
+	return &provider.Grantee{
+		Type: provider.GranteeType_GRANTEE_TYPE_USER,
+		Id:   &provider.Grantee_UserId{UserId: id},
 	}
 }
 
