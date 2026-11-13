@@ -50,7 +50,7 @@ providers = "{{file_providers}}"
 signing_key = "{{cesnet_signing_key}}"
 driver = "json"
 webdav_endpoint = "http://127.0.0.1:54321"
-webapp_endpoint = "http://127.0.0.1:54321/external/sciencemesh"
+webapp_endpoint = "http://127.0.0.1:54321/app/ocm-open"
 provider_domain = "127.0.0.1:54321"
 
 [grpc.services.ocmshareprovider.drivers.json]
@@ -134,3 +134,4 @@ ocm_prefix = "ocm"
 provider = "Reva for CESNET"
 endpoint = "http://127.0.0.1:54321"
 enable_webapp = true
+enable_code_flow = true

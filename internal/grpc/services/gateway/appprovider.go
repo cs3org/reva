@@ -23,6 +23,7 @@ import (
 	"crypto/tls"
 	"fmt"
 	"net/url"
+	"slices"
 	"strings"
 
 	providerpb "github.com/cs3org/go-cs3apis/cs3/app/provider/v1beta1"
@@ -39,6 +40,7 @@ import (
 	"google.golang.org/grpc/metadata"
 
 	"github.com/cs3org/reva/v3/pkg/appctx"
+	"github.com/cs3org/reva/v3/pkg/auth/scope"
 	"github.com/cs3org/reva/v3/pkg/errtypes"
 	"github.com/cs3org/reva/v3/pkg/rgrpc/status"
 	"github.com/cs3org/reva/v3/pkg/service"
@@ -175,7 +177,15 @@ func (s *svc) openLocalResources(ctx context.Context, ri *storageprovider.Resour
 		}, nil
 	}
 
-	provider, err := s.findAppProvider(ctx, ri, req.App)
+	app, err := s.offeredApp(ctx, ri, req.App)
+	if err != nil {
+		if _, ok := err.(errtypes.IsNotFound); ok {
+			return &providerpb.OpenInAppResponse{Status: status.NewNotFound(ctx, err.Error())}, nil
+		}
+		return &providerpb.OpenInAppResponse{Status: status.NewPermissionDenied(ctx, err, err.Error())}, nil
+	}
+
+	provider, err := s.findAppProvider(ctx, ri, app)
 	if err != nil {
 		err = errors.Wrap(err, "gateway: error calling findAppProvider")
 		if _, ok := err.(errtypes.IsNotFound); ok {
@@ -203,6 +213,46 @@ func (s *svc) openLocalResources(ctx context.Context, ri *storageprovider.Resour
 		return nil, errors.Wrap(err, "gateway: error calling OpenInApp")
 	}
 	return res, nil
+}
+
+// offeredApp restricts a caller that holds an OCM share with a webapp offer to
+// the apps offered on that share, which the share stores at creation time. The
+// first offered app that can open the resource is the default. Other callers,
+// and shares without a webapp offer, are not restricted.
+func (s *svc) offeredApp(ctx context.Context, ri *storageprovider.ResourceInfo, app string) (string, error) {
+	scopes, ok := appctx.ContextGetScopes(ctx)
+	if !ok {
+		return app, nil
+	}
+	shares, err := scope.GetOCMSharesFromScopes(scopes)
+	if err != nil {
+		return "", errtypes.PermissionDenied("gateway: invalid OCM share scope")
+	}
+	var offered []string
+	hasOffer := false
+	for _, sh := range shares {
+		for _, m := range sh.GetAccessMethods() {
+			if w := m.GetWebappOptions(); w != nil {
+				hasOffer = true
+				offered = append(offered, w.GetAppNames()...)
+			}
+		}
+	}
+	if !hasOffer {
+		return app, nil
+	}
+	if app != "" {
+		if !slices.Contains(offered, app) {
+			return "", errtypes.PermissionDenied("gateway: app not offered on this share")
+		}
+		return app, nil
+	}
+	for _, name := range offered {
+		if _, err := s.findAppProvider(ctx, ri, name); err == nil {
+			return name, nil
+		}
+	}
+	return "", errtypes.NotFound("gateway: no offered app can open this resource")
 }
 
 func (s *svc) findAppProvider(ctx context.Context, ri *storageprovider.ResourceInfo, app string) (*registry.ProviderInfo, error) {

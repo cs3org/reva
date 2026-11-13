@@ -202,10 +202,12 @@ func convertToCS3AccessMethod(m *model.OcmShareProtocol) *ocm.AccessMethod {
 			stringsFromJSON(m.Requirements),
 		)
 	case model.WebappProtocol:
-		return share.NewWebappAccessMethod(
+		method := share.NewWebappAccessMethod(
 			webappPermissionsFromModel(m.Permissions),
 			stringsFromJSON(m.Requirements),
 		)
+		method.GetWebappOptions().AppNames = stringsFromJSON(m.AppNames)
+		return method
 	}
 	return nil
 }

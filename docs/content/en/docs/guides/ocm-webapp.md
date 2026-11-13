@@ -20,7 +20,7 @@ Set these keys under `grpc.services.ocmshareprovider`:
 
 ```toml
 [grpc.services.ocmshareprovider]
-webapp_endpoint = "https://provider.example/services/ocm/open"
+webapp_endpoint = "https://provider.example/app/ocm-open"
 webapps = [
   {name = "Collabora", media_types = ["application/vnd.oasis.opendocument.text"]},
   {name = "CodiMD", media_types = ["text/markdown", "text/plain"]}
@@ -38,6 +38,25 @@ The webapp offer is enabled when `webapps` is not empty. When it is empty,
 For a file share, all webapps whose `media_types` contain the media type of the
 file are offered, in configured order, in the `apps` array of the webapp
 protocol. If none matches, no webapp is offered. For a folder share, all webapps are offered.
+
+## Launch endpoint
+
+The remote server exchanges the share secret at `/ocm/token`. Its user's browser
+then posts the token to `webapp_endpoint`, followed by the path inside the
+share, if any. The `appprovider` HTTP service serves this at `/app/ocm-open`,
+so set:
+
+```toml
+webapp_endpoint = "https://provider.example/app/ocm-open"
+```
+
+The form field `access_token` is required. The optional field `appname` selects
+one of the apps offered on the share. Without it, the first offered app that can
+open the resource is used. The names offered on a share are stored with it and
+travel in the exchanged token, so a later change of `webapps` does not widen an
+existing share. The names must equal the app names of the app registry. The
+`write` permission of the share gives edit access, otherwise the app opens
+read-only.
 
 Invalid enabled configuration fails startup with a bad-request error rather
 than silently offering an incomplete webapp.

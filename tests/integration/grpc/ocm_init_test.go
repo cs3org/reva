@@ -25,6 +25,8 @@ import (
 	"database/sql"
 	"encoding/pem"
 	"fmt"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"time"
 
@@ -58,6 +60,25 @@ func addSigningKeys(signed bool, resources map[string]Resource, variables map[st
 			resources[name] = File{Content: string(pem.EncodeToMemory(&pem.Block{Type: "PRIVATE KEY", Bytes: der}))}
 		}
 	}
+}
+
+// startWopiStub starts the application server that the cernbox app provider
+// talks to. The app provider contacts it at startup, so it must run before the
+// revads do. It answers the bridge-style probe and every open request.
+func startWopiStub(variables map[string]string) *httptest.Server {
+	var stub *httptest.Server
+	stub = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/wopi/iop/openinapp":
+			_, _ = w.Write([]byte(`{"app-url":"` + stub.URL + `/open"}`))
+		case "/":
+			_, _ = w.Write([]byte("TestApp"))
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	variables["wopi_url"] = stub.URL
+	return stub
 }
 
 func initData(driver string, tokens []*invitepb.InviteToken, acceptedUsers map[string][]*userpb.User) (map[string]string, func(), error) {

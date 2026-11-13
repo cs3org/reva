@@ -20,14 +20,23 @@ package wopi
 
 import (
 	"context"
+	"net/http"
+	"net/http/httptest"
+	"net/url"
 	"testing"
+	"time"
 
+	appprovider "github.com/cs3org/go-cs3apis/cs3/app/provider/v1beta1"
 	authpb "github.com/cs3org/go-cs3apis/cs3/auth/provider/v1beta1"
 	gateway "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
+	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	ocmv1beta1 "github.com/cs3org/go-cs3apis/cs3/sharing/ocm/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
+	typespb "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
 	"github.com/cs3org/reva/v3/pkg/appctx"
 	authscope "github.com/cs3org/reva/v3/pkg/auth/scope"
+	"github.com/cs3org/reva/v3/pkg/httpclient"
+	"github.com/golang-jwt/jwt/v5"
 	"google.golang.org/grpc"
 )
 
@@ -108,5 +117,62 @@ func TestGetPathForExternalLinkFallsBackToToken(t *testing.T) {
 	}
 	if got != ocmLinkURLPrefix+"legacy-token" {
 		t.Fatalf("getPathForExternalLink() = %q, want %q", got, ocmLinkURLPrefix+"legacy-token")
+	}
+}
+
+func TestGetAppURLForSingleFileOCMShare(t *testing.T) {
+	var query url.Values
+	wopiServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		query = r.URL.Query()
+		_, _ = w.Write([]byte(`{"app-url":"https://app.example/open"}`))
+	}))
+	defer wopiServer.Close()
+
+	stampGateway(&mockGateway{statResp: &provider.StatResponse{Info: &provider.ResourceInfo{
+		Path: "/ocm/share-123",
+		Id:   &provider.ResourceId{StorageId: "stor", OpaqueId: "res"},
+	}}})
+	share := &ocmv1beta1.Share{
+		Id:         &ocmv1beta1.ShareId{OpaqueId: "share-123"},
+		ResourceId: &provider.ResourceId{StorageId: "stor", OpaqueId: "res"},
+	}
+	scopes, err := authscope.AddCodeFlowOCMShareScope(share, authpb.Role_ROLE_VIEWER, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	user := &userpb.User{
+		Id:     &userpb.UserId{OpaqueId: "remote", Idp: "remote.example"},
+		Opaque: &typespb.Opaque{Map: map[string]*typespb.OpaqueEntry{"ocm-share-role": {Value: []byte("viewer")}}},
+	}
+	ctx := appctx.ContextSetUser(context.Background(), user)
+	ctx = appctx.ContextSetScopes(ctx, scopes)
+	tkn, err := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.RegisteredClaims{
+		ExpiresAt: jwt.NewNumericDate(time.Now().Add(time.Hour)),
+	}).SignedString([]byte("secret"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	ctx = appctx.ContextSetToken(ctx, tkn)
+
+	p := &wopiProvider{
+		conf:       &config{WopiURL: wopiServer.URL, FolderBaseURL: "https://box.example", JWTSecret: "secret"},
+		wopiClient: httpclient.New(),
+		appURLs:    map[string]map[string]string{"view": {".md": "https://app.example/view-md"}},
+	}
+	// A single-file share has no extension in its path, so it comes from the media type.
+	resource := &provider.ResourceInfo{
+		Path:     "/ocm/share-123",
+		MimeType: "text/markdown",
+		Id:       &provider.ResourceId{StorageId: "stor", OpaqueId: "res"},
+		Owner:    &userpb.UserId{OpaqueId: "owner", Idp: "box.example"},
+	}
+	if _, _, _, err := p.GetAppURL(ctx, resource, appprovider.ViewMode_VIEW_MODE_READ_ONLY, "token"); err != nil {
+		t.Fatal(err)
+	}
+	if got := query.Get("appurl"); got != "https://app.example/view-md" {
+		t.Fatalf("appurl = %q", got)
+	}
+	if got := query.Get("usertype"); got != "ocm" {
+		t.Fatalf("usertype = %q", got)
 	}
 }
