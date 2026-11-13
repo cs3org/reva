@@ -167,6 +167,9 @@ func (c *OCMClient) discoverCanonical(ctx context.Context, endpoint string) (*we
 		if stderrors.Is(err, ErrResponseTooLarge) || stderrors.Is(err, client.ErrPolicyViolation) {
 			return nil, err
 		}
+		if err != nil {
+			return nil, safeNotificationError(ctx, err)
+		}
 		return nil, errtypes.InternalError("Invalid response on OCM discovery")
 	}
 
