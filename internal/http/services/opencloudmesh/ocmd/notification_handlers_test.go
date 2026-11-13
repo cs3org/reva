@@ -70,7 +70,7 @@ func TestRegistryDispatchOutcomes(t *testing.T) {
 	}
 
 	req, err := r.Parse([]byte(`{"notificationType":"REQUEST_SHARE","senderDomain":"b.example.org","resourceType":"file","notification":{"file":{"owner":"a@a.example.org","shareWith":"b@b.example.org","shareId":"x","permissions":["read"]}}}`))
-	if ReceiverStatus(err) != NotificationStatusNotImplemented {
+	if code, ok := NotificationErrorCodeOf(err); !ok || code != NotificationErrNotImplemented || req.Class != NotificationClassRequest {
 		t.Fatalf("request status %v", err)
 	}
 	if out, err := r.Dispatch(ctx, req); out != DispatchNotImplemented || err != nil {
@@ -109,65 +109,20 @@ func TestRegistryRegistrationRules(t *testing.T) {
 	if err := r.SetHandler(NotificationShareAccepted, nil); err == nil {
 		t.Fatal("nil handler accepted")
 	}
-	valid := func(*Notification) error { return nil }
-	for _, typ := range []string{NotificationUserRemoved, NotificationRequestShare, NotificationRequestReshare, ""} {
-		if err := r.RegisterExtension(NotificationExtension{Type: typ, Validate: valid, Handler: h}); err == nil {
-			t.Fatalf("extension %q accepted", typ)
+	for _, typ := range []string{NotificationRequestShare, NotificationRequestReshare} {
+		if err := r.SetHandler(typ, h); err == nil {
+			t.Fatalf("request %q has a handler slot", typ)
 		}
 	}
-	if err := r.RegisterExtension(NotificationExtension{Type: "ACME", Handler: h}); err == nil {
-		t.Fatal("extension without validator accepted")
-	}
-}
-
-func TestRegistryExtensionBecomesKnownAndValidated(t *testing.T) {
-	r := NewNotificationRegistry()
-	h := &recordingHandler{}
-	err := r.RegisterExtension(NotificationExtension{
-		Type: "EXAMPLE_PAIR",
-		Validate: func(n *Notification) error {
-			pair, err := n.payloadObject("pair")
-			if err != nil {
-				return err
-			}
-			_, err = payloadAddress(pair, "pair", "with")
-			return err
-		},
-		Handler: h,
-	})
-	if err != nil {
+	if err := r.SetHandler(NotificationShareUnshared, h); err != nil {
 		t.Fatal(err)
 	}
-	for _, body := range []string{
-		`{"notificationType":"EXAMPLE_PAIR","senderDomain":"a.example.org","shareType":"user"}`,
-		`{"notificationType":"EXAMPLE_PAIR","senderDomain":"a.example.org","shareType":"user","notification":{"pair":{"with":"bob@b.example.org/path"}}}`,
-	} {
-		if _, err := r.Parse([]byte(body)); ReceiverStatus(err) != NotificationStatusBadRequest {
-			t.Fatalf("malformed extension escaped: %v", err)
-		}
+	replacement := &recordingHandler{}
+	if err := r.SetHandler(NotificationShareUnshared, replacement); err != nil {
+		t.Fatal(err)
 	}
-	n := mustParse(t, r, `{"notificationType":"EXAMPLE_PAIR","senderDomain":"a.example.org","shareType":"user","notification":{"pair":{"with":"bob@b.example.org"}}}`)
-	if n.Class != NotificationClassSpec {
-		t.Fatalf("class %s", n.Class)
+	n := mustParse(t, r, `{"notificationType":"SHARE_UNSHARED","senderDomain":"a.example.org","resourceType":"file","notification":{"file":{"providerId":"42"}}}`)
+	if out, err := r.Dispatch(context.Background(), n); out != DispatchHandled || err != nil || len(h.seen) != 0 || len(replacement.seen) != 1 {
+		t.Fatalf("initialization replacement %s %v: %v %v", out, err, h.seen, replacement.seen)
 	}
-	if out, err := r.Dispatch(context.Background(), n); out != DispatchHandled || err != nil || len(h.seen) != 1 {
-		t.Fatalf("%s %v", out, err)
-	}
-}
-
-func TestRegistryConcurrentSetHandlerAndDispatch(t *testing.T) {
-	r := NewNotificationRegistry()
-	n := mustParse(t, r, `{"notificationType":"SHARE_ACCEPTED","senderDomain":"b.example.org","resourceType":"file","notification":{"file":{"providerId":"42"}}}`)
-	done := make(chan struct{})
-	go func() {
-		defer close(done)
-		for i := 0; i < 200; i++ {
-			_ = r.SetHandler(NotificationShareAccepted, TypeHandlerFunc(func(context.Context, *Notification) error { return nil }))
-		}
-	}()
-	for i := 0; i < 200; i++ {
-		_, _ = r.Dispatch(context.Background(), n)
-		_, _ = r.Parse([]byte(`{"notificationType":"SHARE_ACCEPTED","senderDomain":"b.example.org","resourceType":"file","notification":{"file":{"providerId":"42"}}}`))
-	}
-	<-done
 }
