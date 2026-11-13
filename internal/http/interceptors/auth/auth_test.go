@@ -19,16 +19,20 @@
 package auth
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"reflect"
 	"testing"
 
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
+	httplog "github.com/cs3org/reva/v3/internal/http/interceptors/log"
 	"github.com/cs3org/reva/v3/pkg/appctx"
 	authscope "github.com/cs3org/reva/v3/pkg/auth/scope"
 	jwt "github.com/cs3org/reva/v3/pkg/token/manager/jwt"
+	"github.com/rs/zerolog"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/protobuf/proto"
 )
@@ -194,4 +198,26 @@ func match(a, b []string) bool {
 
 func fail(t *testing.T, got, expected []string) {
 	t.Fatalf("got: %+v expected: %+v", got, expected)
+}
+
+// The logging middleware wraps this one; the request line it writes must
+// name the user ctxWithUserInfo authenticated.
+func TestCtxWithUserInfoNamesUserInRequestLog(t *testing.T) {
+	var buf bytes.Buffer
+	l := zerolog.New(&buf)
+	user := &userpb.User{Id: &userpb.UserId{OpaqueId: "einstein"}, Username: "einstein"}
+	req := httptest.NewRequest(http.MethodGet, "/ocs/v1.php/cloud/user", nil)
+	req = req.WithContext(appctx.WithLogger(req.Context(), &l))
+	httplog.New()(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		ctxWithUserInfo(r.Context(), r, user, "token-123", nil)
+	})).ServeHTTP(httptest.NewRecorder(), req)
+
+	var line map[string]any
+	first, _, _ := bytes.Cut(buf.Bytes(), []byte("\n"))
+	if err := json.Unmarshal(first, &line); err != nil {
+		t.Fatalf("log output %q: %v", buf.String(), err)
+	}
+	if line["user"] != "einstein" {
+		t.Errorf("request line user = %v, want einstein", line["user"])
+	}
 }
