@@ -18,15 +18,11 @@
 
 package ocmd
 
-// The notification contract below imports no reva adapter, gateway or HTTP
-// wiring, so that other implementations can reuse it.
-
 import (
 	"bytes"
 	"encoding/json"
 	"errors"
-	"fmt"
-	"strings"
+	"unicode/utf8"
 
 	"github.com/cs3org/reva/v3/pkg/ocm/providerdomain"
 )
@@ -49,35 +45,15 @@ type NotificationClass string
 
 const (
 	// NotificationClassSpec is a known type with a valid payload.
-	NotificationClassSpec NotificationClass = "A"
+	NotificationClassSpec NotificationClass = "known"
 	// NotificationClassUnknown is a type without a registered contract.
-	NotificationClassUnknown NotificationClass = "C"
+	NotificationClassUnknown NotificationClass = "unknown"
 	// NotificationClassMalformed is an invalid envelope or the invalid payload
 	// of a registered type.
-	NotificationClassMalformed NotificationClass = "D"
+	NotificationClassMalformed NotificationClass = "malformed"
 	// NotificationClassRequest is a request type that is never fulfilled.
-	NotificationClassRequest NotificationClass = "R"
+	NotificationClassRequest NotificationClass = "unsupported"
 )
-
-// NotificationSecret holds notification.sharedSecret. Its string, Go-syntax,
-// JSON and text forms are redacted so that it never reaches a log by accident.
-type NotificationSecret string
-
-const redactedSecret = "[redacted]"
-
-// Reveal returns the secret itself. Do not format or log the result.
-func (s NotificationSecret) Reveal() string { return string(s) }
-
-func (s NotificationSecret) String() string {
-	if s == "" {
-		return ""
-	}
-	return redactedSecret
-}
-
-func (s NotificationSecret) GoString() string { return s.String() }
-
-func (s NotificationSecret) MarshalText() ([]byte, error) { return []byte(s.String()), nil }
 
 // NotificationFile is the file object of resource notifications.
 type NotificationFile struct {
@@ -99,8 +75,7 @@ type NotificationGroup struct {
 	GroupID string `json:"groupId"`
 }
 
-// Notification is the canonical form of a received notification that every
-// TypeHandler consumes. Formatting it prints fixed metadata only.
+// Notification is a validated envelope. Formatting omits received fields.
 type Notification struct {
 	Type  string
 	Class NotificationClass
@@ -109,16 +84,14 @@ type Notification struct {
 	ResourceType string
 	ShareType    string
 	// ProviderID is notification.file.providerId.
-	ProviderID   string
-	Message      string
-	SharedSecret NotificationSecret
+	ProviderID string
+	Message    string
 
 	File  *NotificationFile
 	User  *NotificationUser
 	Group *NotificationGroup
 
-	// Payload holds the raw members of the notification object, without the
-	// sharedSecret, for registered extensions. It is never logged.
+	// Payload holds opaque notification members. Do not log it.
 	Payload map[string]json.RawMessage `json:"-"`
 
 	// members are the raw envelope members, to tell an absent field from a null or empty one.
@@ -126,7 +99,7 @@ type Notification struct {
 }
 
 func (n Notification) String() string {
-	return fmt.Sprintf("notification{type=%q class=%s}", n.Type, n.Class)
+	return "notification{class=" + string(n.Class) + "}"
 }
 
 func (n Notification) GoString() string { return n.String() }
@@ -150,11 +123,11 @@ type NotificationError struct {
 }
 
 // notificationFields are the field paths a notification error may name.
-// Any other Field, e.g. one built by an extension, renders as notification.
+// Unrecognized paths render as notification to avoid reflecting caller input.
 var notificationFields = map[string]bool{
 	"senderDomain": true, "resourceType": true, "shareType": true, "resourceType or shareType": true,
 	"providerId": true, "notification": true, "notification.message": true,
-	"notification.sharedSecret": true, "notification.file": true, "notification.file.providerId": true,
+	"notification.file": true, "notification.file.providerId": true,
 	"notification.file.permissions": true, "notification.file.owner": true, "notification.file.shareWith": true,
 	"notification.file.shareId": true, "notification.user": true, "notification.user.userId": true,
 	"notification.user.targetUserId": true, "notification.group": true, "notification.group.groupId": true,
@@ -211,9 +184,11 @@ func NotificationErrorCodeOf(err error) (NotificationErrorCode, bool) {
 	return "", false
 }
 
-// decodeNotification decodes and validates the generic envelope, which every
-// type must satisfy, including types that are not known.
 func decodeNotification(body []byte) (*Notification, error) {
+	// encoding/json replaces invalid UTF-8, which would change opaque identities.
+	if !utf8.Valid(body) {
+		return nil, &NotificationError{Code: NotificationErrMalformed}
+	}
 	var members map[string]json.RawMessage
 	if err := json.Unmarshal(body, &members); err != nil || members == nil {
 		return nil, &NotificationError{Code: NotificationErrMalformed}
@@ -226,7 +201,7 @@ func decodeNotification(body []byte) (*Notification, error) {
 	if json.Unmarshal(rawType, &n.Type) != nil {
 		return nil, &NotificationError{Code: NotificationErrMalformed}
 	}
-	if strings.TrimSpace(n.Type) == "" {
+	if n.Type == "" {
 		return nil, &NotificationError{Code: NotificationErrMissingType}
 	}
 	sender, err := memberString(members, "senderDomain", "senderDomain", true)
@@ -261,8 +236,6 @@ func decodeNotification(body []byte) (*Notification, error) {
 	return n, nil
 }
 
-// decodePayload checks the generic notification object: message and
-// sharedSecret are strings, every other member is an object.
 func (n *Notification) decodePayload(raw json.RawMessage) error {
 	if isJSONNull(raw) || json.Unmarshal(raw, &n.Payload) != nil {
 		return invalidField("notification")
@@ -273,12 +246,6 @@ func (n *Notification) decodePayload(raw json.RawMessage) error {
 			if isJSONNull(value) || json.Unmarshal(value, &n.Message) != nil {
 				return invalidField("notification.message")
 			}
-		case "sharedSecret":
-			var secret string
-			if isJSONNull(value) || json.Unmarshal(value, &secret) != nil {
-				return invalidField("notification.sharedSecret")
-			}
-			n.SharedSecret = NotificationSecret(secret)
 		default:
 			// The member name is chosen by the sender, so it is not reported.
 			if !isJSONObject(value) {
@@ -286,8 +253,6 @@ func (n *Notification) decodePayload(raw json.RawMessage) error {
 			}
 		}
 	}
-	// Keep the secret out of the raw payload so that no raw view leaks it.
-	delete(n.Payload, "sharedSecret")
 	return nil
 }
 
@@ -317,14 +282,11 @@ func memberString(obj map[string]json.RawMessage, key, field string, required bo
 	return s, nil
 }
 
-// hasMember reports whether the envelope has the member, even if null or empty.
 func (n *Notification) hasMember(key string) bool {
 	_, ok := n.members[key]
 	return ok
 }
 
-// payloadObject returns the raw members of a required object of the
-// notification payload.
 func (n *Notification) payloadObject(key string) (map[string]json.RawMessage, error) {
 	field := "notification." + key
 	raw, ok := n.Payload[key]
@@ -338,12 +300,10 @@ func (n *Notification) payloadObject(key string) (map[string]json.RawMessage, er
 	return obj, nil
 }
 
-// payloadString reads a required non-empty string member of a payload object.
 func payloadString(obj map[string]json.RawMessage, object, key string) (string, error) {
 	return memberString(obj, key, "notification."+object+"."+key, true)
 }
 
-// payloadAddress reads a required OCM address member of a payload object.
 func payloadAddress(obj map[string]json.RawMessage, object, key string) (string, error) {
 	s, err := payloadString(obj, object, key)
 	if err != nil {
@@ -355,7 +315,6 @@ func payloadAddress(obj map[string]json.RawMessage, object, key string) (string,
 	return s, nil
 }
 
-// payloadPermissions reads file.permissions: an array of read, write and share.
 func payloadPermissions(file map[string]json.RawMessage, required bool) ([]string, error) {
 	const field = "notification.file.permissions"
 	raw, ok := file["permissions"]
@@ -400,7 +359,6 @@ func (n *Notification) forbid(key string) error {
 	return nil
 }
 
-// validateShareState is the contract of the share acceptance and updating notifications.
 func validateShareState(n *Notification) error {
 	if err := n.requireResourceType(); err != nil {
 		return err
@@ -420,8 +378,6 @@ func validateShareState(n *Notification) error {
 	return nil
 }
 
-// validateRequestReshare is the contract of REQUEST_RESHARE, checked before
-// the request is refused as not implemented.
 func validateRequestReshare(n *Notification) error {
 	if err := n.requireResourceType(); err != nil {
 		return err
@@ -474,8 +430,6 @@ func validateRequestShare(n *Notification) error {
 	return nil
 }
 
-// validateUserRemoved is the contract of USER_REMOVED. The userId belongs to
-// the sending server and names no counterpart, so this type stays log-only.
 func validateUserRemoved(n *Notification) error {
 	if n.ShareType != "user" {
 		return invalidField("shareType")
@@ -521,7 +475,6 @@ func validateContactRemoved(n *Notification) error {
 	return nil
 }
 
-// validateGroupRemoved is the contract of GROUP_REMOVED.
 func validateGroupRemoved(n *Notification) error {
 	if n.ShareType != "group" {
 		return invalidField("shareType")
@@ -545,7 +498,6 @@ func validateGroupRemoved(n *Notification) error {
 // envelope and fills its typed fields. It returns a *NotificationError.
 type ValidateNotificationFunc func(n *Notification) error
 
-// builtinContracts are the known types that can have a handler.
 var builtinContracts = map[string]ValidateNotificationFunc{
 	NotificationShareAccepted:         validateShareState,
 	NotificationShareDeclined:         validateShareState,
@@ -556,8 +508,6 @@ var builtinContracts = map[string]ValidateNotificationFunc{
 	NotificationGroupRemoved:          validateGroupRemoved,
 }
 
-// requestContracts are the known request types: valid requests are refused
-// as not implemented, malformed ones are rejected.
 var requestContracts = map[string]ValidateNotificationFunc{
 	NotificationRequestShare:   validateRequestShare,
 	NotificationRequestReshare: validateRequestReshare,

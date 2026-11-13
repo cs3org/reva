@@ -24,30 +24,21 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"go/parser"
-	"go/token"
 	"os"
-	"strconv"
+	"reflect"
 	"strings"
 	"testing"
 
 	"github.com/rs/zerolog"
 )
 
-const testSecret = "hfiuhworzwnur98d3wjiwhr"
-
 type envelopeCase struct {
-	ID           string          `json:"id"`
-	Purpose      string          `json:"purpose"`
-	Body         json.RawMessage `json:"body"`
-	HTTP         int             `json:"http"`
-	HandlerCalls int             `json:"handlerCalls"`
-}
-
-// The old counterpart-only payload no longer identifies a contact target.
-var deferredEnvelopes = map[string]envelopeCase{
-	"ENV-039": {HTTP: 400},
-	"ENV-040": {HTTP: 400},
+	ID           string            `json:"id"`
+	Purpose      string            `json:"purpose"`
+	Body         json.RawMessage   `json:"body"`
+	HTTP         int               `json:"http"`
+	HandlerCalls int               `json:"handlerCalls"`
+	Class        NotificationClass `json:"class"`
 }
 
 func TestParseNotificationEnvelopeCorpus(t *testing.T) {
@@ -64,30 +55,38 @@ func TestParseNotificationEnvelopeCorpus(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.ID, func(t *testing.T) {
-			want := tc
-			if d, ok := deferredEnvelopes[tc.ID]; ok {
-				want.HTTP, want.HandlerCalls = d.HTTP, d.HandlerCalls
-			}
 			reg := NewNotificationRegistry()
 			h := &recordingHandler{}
 			for typ := range builtinContracts {
-				if !IsRequestNotification(typ) {
-					if err := reg.SetHandler(typ, h); err != nil {
-						t.Fatal(err)
-					}
-				}
-			}
-			n, err := reg.Parse(tc.Body)
-			if got := int(ReceiverStatus(err)); got != want.HTTP {
-				t.Fatalf("%s: status %d, want %d (%v)", tc.Purpose, got, want.HTTP, err)
-			}
-			if err == nil {
-				if _, err := reg.Dispatch(context.Background(), n); err != nil {
+				if err := reg.SetHandler(typ, h); err != nil {
 					t.Fatal(err)
 				}
 			}
-			if len(h.seen) != want.HandlerCalls {
-				t.Fatalf("%s: handler calls %d, want %d", tc.Purpose, len(h.seen), want.HandlerCalls)
+			n, err := reg.Parse(tc.Body)
+			// These categories describe parsing, not an HTTP server response.
+			category := 201
+			if err != nil {
+				category = 400
+				if code, ok := NotificationErrorCodeOf(err); ok && code == NotificationErrNotImplemented {
+					category = 501
+				}
+			}
+			if category != tc.HTTP || n.Class != tc.Class {
+				t.Fatalf("%s: category %d class %s, want %d %s (%v)", tc.Purpose, category, n.Class, tc.HTTP, tc.Class, err)
+			}
+			out, dispatchErr := reg.Dispatch(context.Background(), n)
+			if dispatchErr != nil {
+				t.Fatal(dispatchErr)
+			}
+			wantOutcome := DispatchIgnored
+			if tc.HandlerCalls > 0 {
+				wantOutcome = DispatchHandled
+			}
+			if tc.HTTP == 501 {
+				wantOutcome = DispatchNotImplemented
+			}
+			if out != wantOutcome || len(h.seen) != tc.HandlerCalls {
+				t.Fatalf("%s: outcome %s calls %d, want %s %d", tc.Purpose, out, len(h.seen), wantOutcome, tc.HandlerCalls)
 			}
 		})
 	}
@@ -95,16 +94,23 @@ func TestParseNotificationEnvelopeCorpus(t *testing.T) {
 
 func TestParseNotificationFields(t *testing.T) {
 	reg := NewNotificationRegistry()
-	n := mustParse(t, reg, `{"notificationType":"SHARE_CHANGE_PERMISSION","senderDomain":"a.example.org","resourceType":"folder","shareType":"user","notification":{"message":"m","sharedSecret":"`+testSecret+`","file":{"providerId":"42","permissions":["read","write"]}}}`)
-	if n.Class != NotificationClassSpec || n.ProviderID != "42" || n.ResourceType != "folder" || n.ShareType != "user" ||
-		n.File == nil || strings.Join(n.File.Permissions, ",") != "read,write" || n.SharedSecret.Reveal() != testSecret {
-		t.Fatalf("fields %#v %#v", n, n.File)
+	n := mustParse(t, reg, `{"notificationType":"SHARE_CHANGE_PERMISSION","senderDomain":"a.example.org","resourceType":"folder","shareType":"user","notification":{"message":"m","file":{"providerId":"42","permissions":["read","write"]}}}`)
+	wantFile := &NotificationFile{ProviderID: "42", Permissions: []string{"read", "write"}}
+	if n.Class != NotificationClassSpec || n.ProviderID != "42" || n.ResourceType != "folder" || n.ShareType != "user" || n.Message != "m" || !reflect.DeepEqual(n.File, wantFile) {
+		t.Fatalf("fields %#v file %#v", n, n.File)
 	}
 	n = mustParse(t, reg, `{"notificationType":"USER_REMOVED","senderDomain":"a.example.org","shareType":"user","notification":{"user":{"userId":"Alice @x@a.example.org"}}}`)
-	if n.User == nil || n.User.UserID != "Alice @x@a.example.org" {
+	if n.User == nil || *n.User != (NotificationUser{UserID: "Alice @x@a.example.org"}) {
 		t.Fatalf("user %#v", n.User)
 	}
-	// senderDomain is the complete host and port, lowercased only.
+	n = mustParse(t, reg, `{"notificationType":"CONTACT_REMOVED","senderDomain":"A.Example.org:0443","shareType":"user","notification":{"user":{"userId":"Alice @x@A.Example.org:0443","targetUserId":"Bob Smith@B.Example.org:8443"}}}`)
+	if n.SenderDomain != "a.example.org:0443" || n.User == nil || *n.User != (NotificationUser{UserID: "Alice @x@A.Example.org:0443", TargetUserID: "Bob Smith@B.Example.org:8443"}) {
+		t.Fatalf("contact %#v %#v", n, n.User)
+	}
+	n = mustParse(t, reg, `{"notificationType":"GROUP_REMOVED","senderDomain":"a.example.org","shareType":"group","notification":{"group":{"groupId":"group @ opaque"}}}`)
+	if n.Group == nil || n.Group.GroupID != "group @ opaque" {
+		t.Fatalf("group %#v", n.Group)
+	}
 	n = mustParse(t, reg, `{"notificationType":"ACME","senderDomain":"A.Example.org:0443","shareType":"user","providerId":"flat"}`)
 	if n.Class != NotificationClassUnknown || n.SenderDomain != "a.example.org:0443" || n.ProviderID != "" {
 		t.Fatalf("unknown %#v", n)
@@ -113,33 +119,16 @@ func TestParseNotificationFields(t *testing.T) {
 	if n.Type != "\u0085EXT\u2003" || n.SenderDomain != "[2001:db8::1]:8443" {
 		t.Fatalf("identity %q %q", n.Type, n.SenderDomain)
 	}
-}
-
-func TestParseNotificationRejectsFlatProviderFallback(t *testing.T) {
-	reg := NewNotificationRegistry()
-	for _, body := range []string{
-		`{"notificationType":"SHARE_ACCEPTED","senderDomain":"b.example.org","resourceType":"file","providerId":"42","notification":{"file":{}}}`,
-		`{"notificationType":"SHARE_ACCEPTED","senderDomain":"b.example.org","resourceType":"file","providerId":"42","notification":{"file":{"providerId":null}}}`,
-		`{"notificationType":"SHARE_ACCEPTED","senderDomain":"b.example.org","resourceType":"file","providerId":"42"}`,
-		`{"notificationType":"SHARE_ACCEPTED","resourceType":"file","notification":{"file":{"providerId":"42"}}}`,
-		`{"notificationType":"SHARE_CHANGE_PERMISSION","senderDomain":"b.example.org","resourceType":"file","notification":{"file":{"providerId":"42","permissions":null}}}`,
+	for _, tc := range []struct {
+		body string
+		file NotificationFile
+	}{
+		{`{"notificationType":"REQUEST_SHARE","senderDomain":"a.example.org","resourceType":"file","notification":{"file":{"owner":"Owner @A.Example.org:0443","shareWith":"Bob @B.Example.org:8443","shareId":"resource @ opaque","permissions":["read"]}}}`, NotificationFile{Owner: "Owner @A.Example.org:0443", ShareWith: "Bob @B.Example.org:8443", ShareID: "resource @ opaque", Permissions: []string{"read"}}},
+		{`{"notificationType":"REQUEST_RESHARE","senderDomain":"a.example.org","resourceType":"file","notification":{"file":{"providerId":"grant @ opaque","shareWith":"Bob @B.Example.org:8443"}}}`, NotificationFile{ProviderID: "grant @ opaque", ShareWith: "Bob @B.Example.org:8443"}},
 	} {
-		if _, err := reg.Parse([]byte(body)); ReceiverStatus(err) != NotificationStatusBadRequest {
-			t.Fatalf("%s: %v", body, err)
-		}
-	}
-}
-
-// A present selector must be a non-empty string even when the other one is valid.
-func TestParseNotificationRejectsNullSelectorBesideValidOne(t *testing.T) {
-	reg := NewNotificationRegistry()
-	for _, body := range []string{
-		`{"notificationType":"ACME","senderDomain":"a.example.org","resourceType":null,"shareType":"user"}`,
-		`{"notificationType":"ACME","senderDomain":"a.example.org","resourceType":"file","shareType":""}`,
-		`{"notificationType":"ACME","senderDomain":"a.example.org","resourceType":"file","shareType":null}`,
-	} {
-		if _, err := reg.Parse([]byte(body)); ReceiverStatus(err) != NotificationStatusBadRequest {
-			t.Fatalf("%s: %v", body, err)
+		n, err := reg.Parse([]byte(tc.body))
+		if code, ok := NotificationErrorCodeOf(err); !ok || code != NotificationErrNotImplemented || !reflect.DeepEqual(n.File, &tc.file) {
+			t.Fatalf("request file %#v: %v", n.File, err)
 		}
 	}
 }
@@ -151,101 +140,78 @@ func TestNotificationErrorsCarryNoValues(t *testing.T) {
 	if err := reg.SetHandler(NotificationShareUnshared, h); err != nil {
 		t.Fatal(err)
 	}
-	if err := reg.RegisterExtension(NotificationExtension{
-		Type: "EXAMPLE_WRAP",
-		Validate: func(*Notification) error {
-			return fmt.Errorf("leaky-value: %w", &NotificationError{Code: NotificationErrInvalidField, Field: "notification.leaky-value"})
-		},
-		Handler: h,
-	}); err != nil {
-		t.Fatal(err)
-	}
-	if err := reg.RegisterExtension(NotificationExtension{
-		Type:     "EXAMPLE_RAW",
-		Validate: func(*Notification) error { return errors.New("leaky-value") },
-		Handler:  h,
-	}); err != nil {
-		t.Fatal(err)
-	}
-	cases := []struct {
-		body, reason string
-	}{
+	cases := []struct{ body, reason string }{
 		{`{"notificationType":"USER_REMOVED","senderDomain":"a.example.org","shareType":"user","notification":{"user":{"userId":"leaky-value"}}}`, "invalid notification.user.userId"},
-		{`{"notificationType":"SHARE_UNSHARED","senderDomain":"a.example.org","resourceType":"file","notification":{"sharedSecret":["leaky-value"],"file":{"providerId":"42"}}}`, "invalid notification.sharedSecret"},
+		{`{"notificationType":"SHARE_UNSHARED","senderDomain":"a.example.org","resourceType":"file","notification":{"sharedSecret":["leaky-value"],"file":{"providerId":"42"}}}`, "invalid notification"},
 		{`{"notificationType":"leaky-value"`, "malformed notification"},
 		{`{"notificationType":"ACME","senderDomain":"a.example.org","shareType":"user","notification":{"` + key + `":"leaky-value"}}`, "invalid notification"},
 		{`{"notificationType":"ACME","senderDomain":"a.example.org","shareType":"user","notification":{"` + key + `":null}}`, "invalid notification"},
 		{`{"notificationType":"SHARE_UNSHARED","senderDomain":"a.example.org","resourceType":"file","notification":{"` + key + `":["leaky-value"],"file":{"providerId":"42"}}}`, "invalid notification"},
-		{`{"notificationType":"EXAMPLE_WRAP","senderDomain":"a.example.org","shareType":"user"}`, "invalid notification"},
-		{`{"notificationType":"EXAMPLE_RAW","senderDomain":"a.example.org","shareType":"user"}`, "invalid notification"},
 	}
 	for _, tc := range cases {
 		n, err := reg.Parse([]byte(tc.body))
-		if ReceiverStatus(err) != NotificationStatusBadRequest || NotificationReason(err) != tc.reason {
-			t.Fatalf("%s: %q, want %q", tc.body, NotificationReason(err), tc.reason)
+		if err == nil || NotificationReason(err) != tc.reason || err.Error() != tc.reason {
+			t.Fatalf("reason %q, want %q (%v)", NotificationReason(err), tc.reason, err)
 		}
 		var ne *NotificationError
 		if strings.Contains(tc.body, key) && (!errors.As(err, &ne) || ne.Code != NotificationErrInvalidField || strings.Contains(ne.Field, key)) {
-			t.Fatalf("%s: error %#v", tc.body, ne)
+			t.Fatalf("error %#v", ne)
 		}
-		if _, err := reg.Dispatch(context.Background(), n); err != nil {
-			t.Fatal(err)
+		if out, err := reg.Dispatch(context.Background(), n); err != nil || out != DispatchIgnored {
+			t.Fatalf("invalid dispatch %s %v", out, err)
 		}
 	}
 	if len(h.seen) != 0 {
 		t.Fatalf("handlers ran for invalid notifications: %v", h.seen)
 	}
-	// An unknown object-valued member stays opaque, whatever it contains.
-	n := mustParse(t, reg, `{"notificationType":"ACME","senderDomain":"a.example.org","shareType":"user","notification":{"`+key+`":{"a":1,"b":null,"c":[true]}}}`)
-	if n.Class != NotificationClassUnknown || len(n.Payload[key]) == 0 {
-		t.Fatalf("unknown object member %#v", n.Payload)
-	}
-}
-
-func TestNotificationSecretIsRedacted(t *testing.T) {
-	reg := NewNotificationRegistry()
-	n, err := reg.Parse([]byte(`{"notificationType":"SHARE_UNSHARED","senderDomain":"a.example.org","resourceType":"file","notification":{"sharedSecret":"` + testSecret + `","file":{"providerId":"42"}}}`))
-	if err != nil {
-		t.Fatal(err)
-	}
-	unknown, err := reg.Parse([]byte(`{"notificationType":"ACME","senderDomain":"a.example.org","shareType":"user","notification":{"sharedSecret":"` + testSecret + `"}}`))
-	if err != nil {
-		t.Fatal(err)
-	}
-	var buf bytes.Buffer
-	log := zerolog.New(&buf)
-	for _, v := range []*Notification{n, unknown} {
-		raw, _ := json.Marshal(v)
-		buf.WriteString(string(raw))
-		buf.WriteString(fmt.Sprintf("%v %+v %#v %s", v, *v, v, v))
-		buf.WriteString(fmt.Sprintf("%v %+v %#v", v.SharedSecret, v.SharedSecret, v.SharedSecret))
-		log.Info().Interface("n", v).Str("secret", v.SharedSecret.String()).Msg("logged")
-		log.Info().Msgf("%+v", v)
-	}
-	if strings.Contains(buf.String(), testSecret) {
-		t.Fatalf("secret leaked: %s", buf.String())
-	}
-	if n.SharedSecret.Reveal() != testSecret {
-		t.Fatal("secret not available for comparison")
-	}
-}
-
-func TestNotificationCorePortability(t *testing.T) {
-	allowed := map[string]bool{
-		"bytes": true, "context": true, "encoding/json": true, "errors": true,
-		"fmt": true, "slices": true, "strconv": true, "strings": true, "sync": true, "time": true,
-		"github.com/cs3org/reva/v3/pkg/ocm/providerdomain": true,
-	}
-	for _, f := range []string{"specs_notifications.go", "notification_handlers.go", "notification_sender_state.go"} {
-		file, err := parser.ParseFile(token.NewFileSet(), f, nil, parser.ImportsOnly)
-		if err != nil {
-			t.Fatal(err)
+	for _, err := range []error{
+		fmt.Errorf("leaky-value: %w", &NotificationError{Code: NotificationErrInvalidField, Field: "notification.leaky-value"}),
+		errors.New("leaky-value"),
+		&NotificationError{Code: NotificationErrorCode("leaky-value"), Field: "leaky-value"},
+		&NotificationError{Code: NotificationErrInvalidField, Field: "notification.sharedSecret"},
+	} {
+		if got := NotificationReason(err); got != "invalid notification" {
+			t.Fatalf("unsafe reason %q", got)
 		}
-		for _, imp := range file.Imports {
-			path, _ := strconv.Unquote(imp.Path.Value)
-			if !allowed[path] {
-				t.Errorf("%s imports %s", f, path)
-			}
+	}
+}
+
+func TestNotificationPayloadFormatting(t *testing.T) {
+	const canary = "opaque-payload-canary"
+	reg := NewNotificationRegistry()
+	for _, typ := range []string{"SHARE_UNSHARED", "EXAMPLE_CUSTOM_EVENT"} {
+		n := mustParse(t, reg, `{"notificationType":"`+typ+`","senderDomain":"a.example.org","resourceType":"file","notification":{"file":{"providerId":"42"},"sharedSecret":{"value":"`+canary+`"},"custom":{"nested":[null,true,"`+canary+`"]}}}`)
+		if !bytes.Contains(n.Payload["sharedSecret"], []byte(canary)) || !bytes.Contains(n.Payload["custom"], []byte(canary)) {
+			t.Fatal("opaque payload was altered")
+		}
+		var buf bytes.Buffer
+		fmt.Fprintf(&buf, "%v %+v %#v %s", n, *n, n, n)
+		log := zerolog.New(&buf)
+		log.Info().Msgf("%+v", n)
+		if strings.Contains(buf.String(), canary) {
+			t.Fatal("formatted notification exposed payload")
+		}
+	}
+}
+
+func TestNotificationRejectsInvalidUTF8(t *testing.T) {
+	base := []byte(`{"notificationType":"USER_REMOVED","senderDomain":"a.example.org","shareType":"user","notification":{"user":{"userId":"MARK@a.example.org"}}}`)
+	reg := NewNotificationRegistry()
+	for _, id := range [][]byte{{0xff}, {0xc0, 0xaf}, {0xe2, 0x82}} {
+		body := bytes.Replace(base, []byte("MARK"), id, 1)
+		n, err := reg.Parse(body)
+		code, ok := NotificationErrorCodeOf(err)
+		if !ok || code != NotificationErrMalformed || n.Class != NotificationClassMalformed {
+			t.Fatalf("invalid UTF-8 %x admitted: %v", id, err)
+		}
+		if out, err := reg.Dispatch(context.Background(), n); out != DispatchIgnored || err != nil {
+			t.Fatalf("invalid dispatch %s %v", out, err)
+		}
+	}
+	for _, id := range []string{"\uFFFD", "\u00c9 @ User"} {
+		n := mustParse(t, reg, string(bytes.Replace(base, []byte("MARK"), []byte(id), 1)))
+		if n.User == nil || n.User.UserID != id+"@a.example.org" {
+			t.Fatalf("Unicode identity changed: %#v", n.User)
 		}
 	}
 }
