@@ -24,7 +24,6 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
-	"net"
 	"net/http"
 	"net/url"
 	"slices"
@@ -154,8 +153,7 @@ func notificationDiscoveryBase(host string) (string, bool) {
 	return u.String(), true
 }
 
-// DiscoverNotificationPeer uses only the canonical /.well-known/ocm document
-// of the peer identity. The endpoint it advertises is only used for routing.
+// Discovery uses the peer identity; the advertised endpoint only routes delivery.
 func (t ocmNotificationTransport) DiscoverNotificationPeer(ctx context.Context, domain string) (*notificationPeer, error) {
 	host, err := providerdomain.CanonicalOCMHost(domain)
 	if err != nil {
@@ -165,7 +163,7 @@ func (t ocmNotificationTransport) DiscoverNotificationPeer(ctx context.Context, 
 	if !ok {
 		return nil, errUnsupportedPeer
 	}
-	disco, err := t.c.discoverCanonical(ctx, base)
+	disco, err := t.c.Discover(ctx, base)
 	if err != nil {
 		return nil, err
 	}
@@ -184,26 +182,6 @@ func (t ocmNotificationTransport) DiscoverNotificationPeer(ctx context.Context, 
 	}
 	peer.Endpoint = endpoint
 	return peer, nil
-}
-
-// errNotificationFailed and notificationTimeoutError replace transport errors, whose text
-// can quote peer bytes from a malformed status line or header.
-var errNotificationFailed = errors.New("notification request failed")
-
-type notificationTimeoutError struct{}
-
-func (notificationTimeoutError) Error() string { return "notification request timed out" }
-func (notificationTimeoutError) Timeout() bool { return true }
-
-func safeNotificationError(ctx context.Context, err error) error {
-	if ctxErr := ctx.Err(); ctxErr != nil {
-		return ctxErr
-	}
-	var netErr net.Error
-	if errors.Is(err, context.DeadlineExceeded) || errors.As(err, &netErr) && netErr.Timeout() {
-		return notificationTimeoutError{}
-	}
-	return errNotificationFailed
 }
 
 const maxRetryAfterDigits = 9
@@ -237,7 +215,7 @@ func (t ocmNotificationTransport) PostNotification(ctx context.Context, peer *no
 	}
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, peer.Endpoint, bytes.NewReader(body))
 	if err != nil {
-		return notificationResponse{}, errNotificationFailed
+		return notificationResponse{}, errHTTPRequestFailed
 	}
 	req.Header.Set("Content-Type", "application/json")
 	req.ContentLength = int64(len(body))
@@ -251,7 +229,7 @@ func (t ocmNotificationTransport) PostNotification(ctx context.Context, peer *no
 	noRedirect.CheckRedirect = func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }
 	resp, err := noRedirect.Do(req)
 	if err != nil {
-		return notificationResponse{}, safeNotificationError(ctx, err)
+		return notificationResponse{}, safeHTTPError(ctx, err)
 	}
 	defer resp.Body.Close()
 	_, _ = io.Copy(io.Discard, io.LimitReader(resp.Body, DefaultResponseLimit))
