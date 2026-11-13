@@ -174,7 +174,7 @@ func TestNewNotificationTransportTable(t *testing.T) {
 		{name: "no legacy ocm-provider fallback", setup: func(p *notificationServer) { p.wellKnownOff = true }, outcome: SendDiscoveryFailed},
 		{name: "201 bodyless", outcome: SendDelivered, class: http.StatusCreated, posts: 1},
 		{name: "200 with ignored body", setup: func(p *notificationServer) { p.status, p.respBody = 200, []byte(`{"x":1}`) }, outcome: SendDelivered, class: http.StatusCreated, posts: 1},
-		{name: "oversized 201 body is bounded and ignored", setup: func(p *notificationServer) {
+		{name: "oversized 201 body is ignored", setup: func(p *notificationServer) {
 			p.respBody = bytes.Repeat([]byte("a"), int(DefaultResponseLimit)*2)
 		}, outcome: SendDelivered, class: http.StatusCreated, posts: 1},
 		{name: "401 is not retried", setup: func(p *notificationServer) { p.status = 401 }, outcome: SendRejected, class: http.StatusUnauthorized, posts: 1},
@@ -491,11 +491,11 @@ func TestParseRetryAfter(t *testing.T) {
 	}
 }
 
-func TestSafePostErrorKeepsNoCause(t *testing.T) {
+func TestSafeNotificationErrorKeepsNoCause(t *testing.T) {
 	cause := errors.New(senderCanary)
 	for _, err := range []error{
-		safePostError(context.Background(), cause),
-		safePostError(context.Background(), &net.OpError{Op: "read", Err: cause}),
+		safeNotificationError(context.Background(), cause),
+		safeNotificationError(context.Background(), &net.OpError{Op: "read", Err: cause}),
 	} {
 		if strings.Contains(fmt.Sprintf("%v %+v", err, err), senderCanary) || errors.Is(err, cause) || errors.Unwrap(err) != nil {
 			t.Fatalf("cause kept: %v", err)
@@ -658,5 +658,123 @@ func TestNotificationGuardedTransport(t *testing.T) {
 				t.Fatalf("result %+v, posts %d, policy refusal %v", res, peer.postCount(), policy.Load())
 			}
 		})
+	}
+}
+
+func TestNotificationDiscoveryFailureCategories(t *testing.T) {
+	for _, tc := range []struct {
+		name         string
+		canceled     bool
+		expired      bool
+		cancelDuring bool
+		err          error
+		want         SendFailure
+	}{
+		{name: "canceled context", canceled: true, want: FailureCanceled},
+		{name: "expired deadline", expired: true, want: FailureTimeout},
+		{name: "network timeout", err: &net.DNSError{Err: senderCanary, Name: senderCanary, IsTimeout: true}, want: FailureTimeout},
+		{name: "canceled during discovery", cancelDuring: true, want: FailureCanceled},
+		{name: "ordinary failure", err: errors.New(senderCanary), want: FailureError},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			deadline := time.Now().Add(2 * time.Second)
+			if tc.expired {
+				deadline = time.Now().Add(-time.Second)
+			}
+			ctx, cancel := context.WithDeadline(context.Background(), deadline)
+			defer cancel()
+			if tc.canceled {
+				cancel()
+			}
+			var logs bytes.Buffer
+			logger := zerolog.New(&logs).Level(zerolog.DebugLevel)
+			ctx = appctx.WithLogger(ctx, &logger)
+			var posts, discovers atomic.Int32
+			c := NewClient(time.Second, false)
+			c.client.Transport = roundTripperFunc(func(r *http.Request) (*http.Response, error) {
+				if r.Method == http.MethodPost {
+					posts.Add(1)
+				} else if r.Method == http.MethodGet {
+					discovers.Add(1)
+				}
+				if tc.cancelDuring {
+					if err := r.Context().Err(); err != nil {
+						t.Errorf("context already ended before discovery: %v", err)
+					}
+					cancel()
+				}
+				if err := r.Context().Err(); err != nil {
+					return nil, err
+				}
+				return nil, tc.err
+			})
+			res := c.NewNotification(ctx, "peer.example.org", unsharedNotification(t), nil)
+			if res.Outcome != SendDiscoveryFailed || res.Failure != tc.want || posts.Load() != 0 {
+				t.Fatalf("result %+v, want discovery_failed/%s, posts %d", res, tc.want, posts.Load())
+			}
+			if tc.cancelDuring && discovers.Load() != 1 {
+				t.Fatalf("discovery attempts %d, want 1", discovers.Load())
+			}
+			assertNoCanary(t, res, logs.String())
+		})
+	}
+}
+
+func TestNotificationDiscoveryScheme(t *testing.T) {
+	for _, tc := range []struct {
+		host string
+		url  string
+	}{
+		{"peer.example.org", "https://peer.example.org/.well-known/ocm"},
+		{"localhost-peer.example.org", "https://localhost-peer.example.org/.well-known/ocm"},
+		{"127.0.0.1.attacker.example", "https://127.0.0.1.attacker.example/.well-known/ocm"},
+		{"localhost:8080", "http://localhost:8080/.well-known/ocm"},
+		{"127.0.0.1:8080", "http://127.0.0.1:8080/.well-known/ocm"},
+		{"192.0.2.1", "https://192.0.2.1/.well-known/ocm"},
+		{"peer.example.org:0443", "https://peer.example.org:0443/.well-known/ocm"},
+		{"127.0.0.1:08080", "http://127.0.0.1:08080/.well-known/ocm"},
+		{"[2001:db8::1]:8443", "https://[2001:db8::1]:8443/.well-known/ocm"},
+		{"[::1]:8443", "https://[::1]:8443/.well-known/ocm"},
+		{"127.0.0.2", "https://127.0.0.2/.well-known/ocm"},
+	} {
+		t.Run(tc.host, func(t *testing.T) {
+			var gotURL, gotHost, gotAuthority string
+			var discovers, posts atomic.Int32
+			c := NewClient(time.Second, false)
+			c.client.Transport = roundTripperFunc(func(r *http.Request) (*http.Response, error) {
+				gotURL, gotHost, gotAuthority = r.URL.String(), r.URL.Host, r.Host
+				if r.Method == http.MethodPost {
+					posts.Add(1)
+				} else if r.Method == http.MethodGet {
+					discovers.Add(1)
+				}
+				return nil, errors.New("stop before DNS or network")
+			})
+			ctx := appctx.WithLogger(context.Background(), &nopLogger)
+			res := c.NewNotification(ctx, tc.host, unsharedNotification(t), nil)
+			if gotURL != tc.url || gotHost != tc.host || gotAuthority != tc.host {
+				t.Fatalf("URL %q host %q authority %q, want %q and %q", gotURL, gotHost, gotAuthority, tc.url, tc.host)
+			}
+			if res.Outcome != SendDiscoveryFailed || res.Failure != FailureError || discovers.Load() != 1 || posts.Load() != 0 {
+				t.Fatalf("result %+v, discovers %d, posts %d", res, discovers.Load(), posts.Load())
+			}
+		})
+	}
+}
+
+func TestPostNotificationResponseReadLimit(t *testing.T) {
+	body := &io.LimitedReader{R: strings.NewReader(strings.Repeat("x", int(2*DefaultResponseLimit))), N: 2 * DefaultResponseLimit}
+	c := NewClient(time.Second, false)
+	c.client.Transport = roundTripperFunc(func(*http.Request) (*http.Response, error) {
+		return &http.Response{StatusCode: http.StatusCreated, Header: make(http.Header), Body: io.NopCloser(body)}, nil
+	})
+	tr := ocmNotificationTransport{c: c}
+	resp, err := tr.PostNotification(context.Background(), &notificationPeer{Endpoint: "https://peer.example.org/ocm/notifications"}, []byte(`{}`))
+	res := classifyNotificationResponse(resp)
+	if err != nil || res.Outcome != SendDelivered || res.Status != http.StatusCreated || res.Class != http.StatusCreated {
+		t.Fatalf("result %+v, error %v", res, err)
+	}
+	if consumed := 2*DefaultResponseLimit - body.N; consumed > DefaultResponseLimit {
+		t.Fatalf("response consumed %d bytes, limit %d", consumed, DefaultResponseLimit)
 	}
 }

@@ -139,7 +139,7 @@ var (
 // Keep the exact identity: dropping an empty port or decoding escapes
 // could reach a different peer.
 func notificationDiscoveryBase(host string) (string, bool) {
-	u, err := url.Parse(discoveryBase(host))
+	u, err := url.Parse("https://" + host)
 	if err != nil || u.Host != host || strings.ContainsAny(u.Hostname(), "%[") || strings.HasSuffix(host, ":") {
 		return "", false
 	}
@@ -147,6 +147,9 @@ func notificationDiscoveryBase(host string) (string, bool) {
 		if n, err := strconv.Atoi(p); err != nil || n < 1 || n > 65535 {
 			return "", false
 		}
+	}
+	if u.Hostname() == "localhost" || u.Hostname() == "127.0.0.1" {
+		u.Scheme = "http"
 	}
 	return u.String(), true
 }
@@ -183,24 +186,24 @@ func (t ocmNotificationTransport) DiscoverNotificationPeer(ctx context.Context, 
 	return peer, nil
 }
 
-// errPostFailed and postTimeoutError replace transport errors, whose text
+// errNotificationFailed and notificationTimeoutError replace transport errors, whose text
 // can quote peer bytes from a malformed status line or header.
-var errPostFailed = errors.New("notification request failed")
+var errNotificationFailed = errors.New("notification request failed")
 
-type postTimeoutError struct{}
+type notificationTimeoutError struct{}
 
-func (postTimeoutError) Error() string { return "notification request timed out" }
-func (postTimeoutError) Timeout() bool { return true }
+func (notificationTimeoutError) Error() string { return "notification request timed out" }
+func (notificationTimeoutError) Timeout() bool { return true }
 
-func safePostError(ctx context.Context, err error) error {
+func safeNotificationError(ctx context.Context, err error) error {
 	if ctxErr := ctx.Err(); ctxErr != nil {
 		return ctxErr
 	}
 	var netErr net.Error
 	if errors.Is(err, context.DeadlineExceeded) || errors.As(err, &netErr) && netErr.Timeout() {
-		return postTimeoutError{}
+		return notificationTimeoutError{}
 	}
-	return errPostFailed
+	return errNotificationFailed
 }
 
 const maxRetryAfterDigits = 9
@@ -234,7 +237,7 @@ func (t ocmNotificationTransport) PostNotification(ctx context.Context, peer *no
 	}
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, peer.Endpoint, bytes.NewReader(body))
 	if err != nil {
-		return notificationResponse{}, errPostFailed
+		return notificationResponse{}, errNotificationFailed
 	}
 	req.Header.Set("Content-Type", "application/json")
 	req.ContentLength = int64(len(body))
@@ -248,7 +251,7 @@ func (t ocmNotificationTransport) PostNotification(ctx context.Context, peer *no
 	noRedirect.CheckRedirect = func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }
 	resp, err := noRedirect.Do(req)
 	if err != nil {
-		return notificationResponse{}, safePostError(ctx, err)
+		return notificationResponse{}, safeNotificationError(ctx, err)
 	}
 	defer resp.Body.Close()
 	_, _ = io.Copy(io.Discard, io.LimitReader(resp.Body, DefaultResponseLimit))
