@@ -30,6 +30,7 @@ import (
 	gateway "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
 	ocmprovider "github.com/cs3org/go-cs3apis/cs3/ocm/provider/v1beta1"
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
+	"github.com/cs3org/reva/v3/internal/http/services/reqres"
 	"github.com/cs3org/reva/v3/internal/http/services/wellknown"
 	"github.com/cs3org/reva/v3/pkg/appctx"
 	"github.com/cs3org/reva/v3/pkg/ocm/client"
@@ -39,12 +40,21 @@ import (
 
 type notificationPolicyTrace struct {
 	gateway.GatewayAPIClient
-	record func(string)
-	deny   bool
+	record  func(string)
+	deny    bool
+	missing string
+	sender  string
 }
 
-func (g *notificationPolicyTrace) IsProviderAllowed(context.Context, *ocmprovider.IsProviderAllowedRequest, ...grpc.CallOption) (*ocmprovider.IsProviderAllowedResponse, error) {
+func (g *notificationPolicyTrace) IsProviderAllowed(_ context.Context, req *ocmprovider.IsProviderAllowedRequest, _ ...grpc.CallOption) (*ocmprovider.IsProviderAllowedResponse, error) {
 	g.record("policy")
+	g.sender = req.Provider.Domain
+	if g.missing == "response" {
+		return nil, nil
+	}
+	if g.missing == "status" {
+		return &ocmprovider.IsProviderAllowedResponse{}, nil
+	}
 	code := rpc.Code_CODE_OK
 	if g.deny {
 		code = rpc.Code_CODE_PERMISSION_DENIED
@@ -60,6 +70,8 @@ func TestNotificationsIngressOrder(t *testing.T) {
 	}{
 		{"malformed", "malformed", http.StatusBadRequest, ""},
 		{"denied", "denied", http.StatusUnauthorized, "policy"},
+		{"nil response", "response", http.StatusInternalServerError, "policy"},
+		{"nil status", "status", http.StatusInternalServerError, "policy"},
 		{"unsigned", "unsigned", http.StatusUnauthorized, "policy,discovery"},
 		{"signed", "signed", http.StatusCreated, "policy,discovery,jwks,dispatch"},
 	} {
@@ -72,15 +84,25 @@ func TestNotificationsIngressOrder(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
+			var senderHost string
 			mux := http.NewServeMux()
 			mux.HandleFunc("/.well-known/ocm", func(w http.ResponseWriter, r *http.Request) {
+				if r.Host != senderHost {
+					t.Errorf("discovery host %q, want %q", r.Host, senderHost)
+				}
 				record("discovery")
 				_ = json.NewEncoder(w).Encode(wellknown.OcmDiscoveryData{Endpoint: "http://" + r.Host, Capabilities: []string{"http-sig"}, JwksURI: "http://" + r.Host + "/jwks"})
 			})
 			mux.HandleFunc("/jwks", func(w http.ResponseWriter, r *http.Request) { record("jwks"); _, _ = w.Write(jwks) })
 			peer := httptest.NewServer(mux)
 			t.Cleanup(peer.Close)
-			stampGateway(&notificationPolicyTrace{record: record, deny: tc.kind == "denied"})
+			sender := peer.Listener.Addr().String()
+			if tc.kind == "denied" {
+				sender = "PEER.EXAMPLE:8443"
+			}
+			senderHost = strings.ToLower(sender)
+			policy := &notificationPolicyTrace{record: record, deny: tc.kind == "denied", missing: tc.kind}
+			stampGateway(policy)
 			s, err := New(context.Background(), map[string]any{
 				"gatewaysvc": "localhost:0", "http_sig_mode": "strict",
 				"token_managers": map[string]any{"jwt": map[string]any{"secret": "test-only-jwt-secret"}},
@@ -94,7 +116,7 @@ func TestNotificationsIngressOrder(t *testing.T) {
 			if err := sv.notifications.registry.SetHandler(NotificationShareUnshared, TypeHandlerFunc(func(context.Context, *Notification) error { record("dispatch"); return nil })); err != nil {
 				t.Fatal(err)
 			}
-			body := `{"notificationType":"SHARE_UNSHARED","senderDomain":"` + peer.Listener.Addr().String() + `","resourceType":"file","notification":{"file":{"providerId":"42"}}}`
+			body := `{"notificationType":"SHARE_UNSHARED","senderDomain":"` + sender + `","resourceType":"file","notification":{"file":{"providerId":"42"}}}`
 			if tc.kind == "malformed" {
 				body = "{"
 			}
@@ -113,6 +135,16 @@ func TestNotificationsIngressOrder(t *testing.T) {
 			mu.Unlock()
 			if rr.Code != tc.want || got != tc.sequence {
 				t.Fatalf("status %d, sequence %q; want %d, %q", rr.Code, got, tc.want, tc.sequence)
+			}
+			if tc.kind != "malformed" && policy.sender != senderHost {
+				t.Fatalf("policy sender %q, want %q", policy.sender, senderHost)
+			}
+			if tc.kind == "response" || tc.kind == "status" {
+				checkResponse(t, rr, 500, reqres.APIErrorServerError)
+				var apiErr reqres.APIError
+				if err := json.Unmarshal(rr.Body.Bytes(), &apiErr); err != nil || apiErr.Message != "invalid provider policy response" {
+					t.Fatalf("unexpected dependency response: %s", rr.Body.String())
+				}
 			}
 		})
 	}
@@ -233,27 +265,35 @@ func TestNotificationsUnimplementedRequestAuthenticatesFirst(t *testing.T) {
 	t.Cleanup(func() { _ = s.Close() })
 	sv := s.(*svc)
 	sv.notifications.ocmClient = NewPublicOnlyClientWithConfig(client.TransportConfig{AllowLoopback: true})
-	body := `{"notificationType":"REQUEST_SHARE","senderDomain":"` + peer.Listener.Addr().String() + `","resourceType":"file","notification":{"file":{"owner":"a@a.example.org","shareWith":"b@b.example.org","shareId":"x","permissions":["read"]}}}`
-	for _, signed := range []bool{false, true} {
-		t.Run(fmt.Sprintf("signed=%t", signed), func(t *testing.T) {
-			req := httptest.NewRequest(http.MethodPost, mount+notificationsPath, strings.NewReader(body))
-			req.Header.Set("Content-Type", "application/json")
-			req.RemoteAddr = fmt.Sprintf("[2001:db8:%x::1]:1000", clientSeq.Add(1))
-			if signed {
-				if err := key.Sign(req, []byte(body)); err != nil {
-					t.Fatal(err)
+	for _, tc := range []struct {
+		typ, payload string
+	}{
+		{NotificationRequestShare, `"owner":"a@a.example.org","shareWith":"b@b.example.org","shareId":"x","permissions":["read"]`},
+		{NotificationRequestReshare, `"providerId":"42","shareWith":"b@b.example.org"`},
+	} {
+		for _, signature := range []string{"unsigned", "valid", "tampered"} {
+			t.Run(tc.typ+"/"+signature, func(t *testing.T) {
+				body := `{"notificationType":"` + tc.typ + `","senderDomain":"` + peer.Listener.Addr().String() + `","resourceType":"file","notification":{"file":{` + tc.payload + `}}}`
+				req := httptest.NewRequest(http.MethodPost, mount+notificationsPath, strings.NewReader(body))
+				req.Header.Set("Content-Type", "application/json")
+				req.RemoteAddr = fmt.Sprintf("[2001:db8:%x::1]:1000", clientSeq.Add(1))
+				if signature != "unsigned" {
+					if err := key.Sign(req, []byte(body)); err != nil {
+						t.Fatal(err)
+					}
 				}
-			}
-			rr := httptest.NewRecorder()
-			handlerFor(sv).ServeHTTP(rr, req)
-			want := http.StatusUnauthorized
-			if signed {
-				want = http.StatusNotImplemented
-			}
-			if rr.Code != want {
-				t.Fatalf("status %d, want %d: %s", rr.Code, want, rr.Body.String())
-			}
-		})
+				if signature == "tampered" {
+					req.Header.Set("Signature", "invalid-signature")
+				}
+				rr := httptest.NewRecorder()
+				handlerFor(sv).ServeHTTP(rr, req)
+				want, code := http.StatusUnauthorized, reqres.APIErrorUnauthenticated
+				if signature == "valid" {
+					want, code = http.StatusNotImplemented, reqres.APIErrorUnimplemented
+				}
+				checkResponse(t, rr, want, code)
+			})
+		}
 	}
 }
 

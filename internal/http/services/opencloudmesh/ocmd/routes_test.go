@@ -60,14 +60,11 @@ func TestUnprotectedIncludesNotificationsPath(t *testing.T) {
 
 	count := 0
 	for _, p := range paths {
-		if p == mount+notificationsPath {
+		if p == "/ocm/notifications" {
 			count++
 		}
 	}
 	if count != 1 {
-		t.Fatalf("expected %q exactly once in unprotected routes, got %d in %v", notificationsPath, count, paths)
-	}
-	if notificationsPath != "/notifications" {
-		t.Fatalf("notifications path %q", notificationsPath)
+		t.Fatalf("expected /ocm/notifications exactly once in unprotected routes, got %d in %v", count, paths)
 	}
 }
