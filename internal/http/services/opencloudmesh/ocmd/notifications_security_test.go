@@ -102,17 +102,7 @@ func TestNotificationsIngressOrder(t *testing.T) {
 			}
 			senderHost = strings.ToLower(sender)
 			policy := &notificationPolicyTrace{record: record, deny: tc.kind == "denied", missing: tc.kind}
-			stampGateway(policy)
-			s, err := New(context.Background(), map[string]any{
-				"gatewaysvc": "localhost:0", "http_sig_mode": "strict",
-				"token_managers": map[string]any{"jwt": map[string]any{"secret": "test-only-jwt-secret"}},
-			})
-			if err != nil {
-				t.Fatal(err)
-			}
-			t.Cleanup(func() { _ = s.Close() })
-			sv := s.(*svc)
-			sv.notifications.ocmClient = NewPublicOnlyClientWithConfig(client.TransportConfig{AllowLoopback: true})
+			sv := newNotificationTestService(t, "strict", "", policy)
 			if err := sv.notifications.registry.SetHandler(NotificationShareUnshared, TypeHandlerFunc(func(context.Context, *Notification) error { record("dispatch"); return nil })); err != nil {
 				t.Fatal(err)
 			}
@@ -172,18 +162,7 @@ func TestNotificationsSignatureRejectsTampering(t *testing.T) {
 			key := newSigningKey(t)
 			peer := signingServer(t, key)
 			t.Cleanup(peer.Close)
-			stampGateway(&notificationsMockGW{})
-			s, err := New(context.Background(), map[string]any{
-				"gatewaysvc": "localhost:0", "endpoint": endpoint,
-				"token_managers": map[string]any{"jwt": map[string]any{"secret": "test-only-jwt-secret"}},
-				"http_sig_mode":  "strict",
-			})
-			if err != nil {
-				t.Fatal(err)
-			}
-			t.Cleanup(func() { _ = s.Close() })
-			sv := s.(*svc)
-			sv.notifications.ocmClient = NewPublicOnlyClientWithConfig(client.TransportConfig{AllowLoopback: true})
+			sv := newNotificationTestService(t, "strict", endpoint, &notificationsMockGW{})
 			handled := &recordingHandler{}
 			if err := sv.notifications.registry.SetHandler(NotificationShareUnshared, handled); err != nil {
 				t.Fatal(err)
@@ -254,17 +233,7 @@ func TestNotificationsUnimplementedRequestAuthenticatesFirst(t *testing.T) {
 	key := newSigningKey(t)
 	peer := signingServer(t, key)
 	t.Cleanup(peer.Close)
-	stampGateway(&notificationsMockGW{})
-	s, err := New(context.Background(), map[string]any{
-		"gatewaysvc": "localhost:0", "http_sig_mode": "strict",
-		"token_managers": map[string]any{"jwt": map[string]any{"secret": "test-only-jwt-secret"}},
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() { _ = s.Close() })
-	sv := s.(*svc)
-	sv.notifications.ocmClient = NewPublicOnlyClientWithConfig(client.TransportConfig{AllowLoopback: true})
+	sv := newNotificationTestService(t, "strict", "", &notificationsMockGW{})
 	for _, tc := range []struct {
 		typ, payload string
 	}{
@@ -303,17 +272,7 @@ func TestNotificationDiscoveryDoesNotLogPeerResponse(t *testing.T) {
 		_, _ = w.Write([]byte(marker))
 	}))
 	t.Cleanup(peer.Close)
-	stampGateway(&notificationsMockGW{})
-	s, err := New(context.Background(), map[string]any{
-		"gatewaysvc": "localhost:0", "http_sig_mode": "strict",
-		"token_managers": map[string]any{"jwt": map[string]any{"secret": "test-only-jwt-secret"}},
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() { _ = s.Close() })
-	sv := s.(*svc)
-	sv.notifications.ocmClient = NewPublicOnlyClientWithConfig(client.TransportConfig{AllowLoopback: true})
+	sv := newNotificationTestService(t, "strict", "", &notificationsMockGW{})
 	body := `{"notificationType":"SHARE_UNSHARED","senderDomain":"` + peer.Listener.Addr().String() + `","resourceType":"file","notification":{"file":{"providerId":"42"}}}`
 	req := httptest.NewRequest(http.MethodPost, mount+notificationsPath, strings.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
@@ -334,16 +293,7 @@ func TestNotificationDiscoveryUsesNetworkPolicy(t *testing.T) {
 	key := newSigningKey(t)
 	peer := signingServer(t, key)
 	t.Cleanup(peer.Close)
-	stampGateway(&notificationsMockGW{})
-	s, err := New(context.Background(), map[string]any{
-		"gatewaysvc": "localhost:0", "http_sig_mode": "strict",
-		"token_managers": map[string]any{"jwt": map[string]any{"secret": "test-only-jwt-secret"}},
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() { _ = s.Close() })
-	sv := s.(*svc)
+	sv := newNotificationTestService(t, "strict", "", &notificationsMockGW{})
 	body := `{"notificationType":"SHARE_UNSHARED","senderDomain":"` + peer.Listener.Addr().String() + `","resourceType":"file","notification":{"file":{"providerId":"42"}}}`
 	for _, allow := range []bool{false, true} {
 		t.Run(fmt.Sprintf("allowLoopback=%t", allow), func(t *testing.T) {
