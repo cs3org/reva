@@ -24,10 +24,22 @@ import (
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 )
 
+// The CS3 labels API has no call yet for the labels of given resources. Until it has one,
+// ListLabels takes the resources in its request opaque and returns their labels in its response opaque.
+const (
+	// OpaqueResources is a JSON list of resource IDs, each in the form <storage_id>!<opaque_id>.
+	OpaqueResources = "resources"
+	// OpaqueLabels is a JSON object from each requested resource ID to its labels.
+	OpaqueLabels = "labels"
+)
+
 // Manager defines an interface for a labels manager.
 type Manager interface {
 	// List the unique labels that a user has attached to resources
 	ListLabels(ctx context.Context) ([]string, error)
+	// ListLabelsForResources returns the labels of the user for each given resource, keyed
+	// on <storage_id>!<opaque_id>. A resource without labels has no key.
+	ListLabelsForResources(ctx context.Context, ids []*provider.ResourceId) (map[string][]string, error)
 	// List the resources which have a given label attached for a given user
 	ListResourcesForLabel(ctx context.Context, label string) ([]*provider.ResourceId, error)
 	// SetLabel qttaches a label to a resource for a user..
