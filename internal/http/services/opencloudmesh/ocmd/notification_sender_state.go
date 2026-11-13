@@ -18,8 +18,6 @@
 
 package ocmd
 
-// A notification is attempted at most once: there is no retry or queue.
-
 import (
 	"context"
 	"errors"
@@ -27,12 +25,10 @@ import (
 	"time"
 )
 
-// NotificationsCapability is the discovery capability of a receiver that
-// handles notifications.
+// NotificationsCapability is the general notification discovery capability.
 const NotificationsCapability = "notifications"
 
-// NotificationStatusClass is the closed set of notification response
-// classes. Only senders use 503: the receiver never answers with it.
+// NotificationStatusClass identifies recognized delivery responses.
 type NotificationStatusClass int
 
 const (
@@ -44,17 +40,6 @@ const (
 	NotificationStatusNotImplemented NotificationStatusClass = 501
 	NotificationStatusUnavailable    NotificationStatusClass = 503
 )
-
-// ReceiverStatus returns the response class of a parsed notification.
-func ReceiverStatus(err error) NotificationStatusClass {
-	if err == nil {
-		return NotificationStatusCreated
-	}
-	if code, ok := NotificationErrorCodeOf(err); ok && code == NotificationErrNotImplemented {
-		return NotificationStatusNotImplemented
-	}
-	return NotificationStatusBadRequest
-}
 
 // NotificationPeer is the discovery outcome needed to send a notification.
 type NotificationPeer struct {
@@ -75,10 +60,8 @@ type NotificationResponse struct {
 	RetryAfter time.Duration
 }
 
-// NotificationTransport performs the discovery and the single POST. It
-// receives the discovered peer so the POST decision can use the peer's own
-// capabilities without a shared mutable discovery field. Its errors can
-// quote peer bytes, so they are only classified, never kept.
+// NotificationTransport uses each discovered peer's capabilities without shared
+// mutable state. Errors may contain peer bytes and must only be classified.
 type NotificationTransport interface {
 	DiscoverNotificationPeer(ctx context.Context, domain string) (*NotificationPeer, error)
 	PostNotification(ctx context.Context, peer *NotificationPeer, body []byte) (NotificationResponse, error)
@@ -102,10 +85,7 @@ const (
 	FailureCanceled SendFailure = "canceled"
 	FailureTimeout  SendFailure = "timeout"
 	FailureError    SendFailure = "error"
-	// FailureNoSigningKey is the fixed category for a peer that requires a
-	// signed notification while the sending service has no configured key.
-	// It is reported before any request is sent; there is no unsigned
-	// fallback.
+	// FailureNoSigningKey means required signing prevented a notification POST.
 	FailureNoSigningKey SendFailure = "no_signing_key"
 )
 
@@ -123,7 +103,6 @@ type SendResult struct {
 
 const maxRetryAfter = 24 * time.Hour
 
-// classifyFailure keeps only the category of a transport error.
 func classifyFailure(err error) SendFailure {
 	var timeout interface{ Timeout() bool }
 	switch {
@@ -155,8 +134,7 @@ func ClassifyNotificationResponse(r NotificationResponse) SendResult {
 	return res
 }
 
-// SendNotification runs Discover -> HasCapability -> Post -> classify once.
-// It never posts when the peer does not advertise notifications.
+// SendNotification makes one best-effort attempt for a capable peer.
 func SendNotification(ctx context.Context, t NotificationTransport, domain string, body []byte) SendResult {
 	peer, err := t.DiscoverNotificationPeer(ctx, domain)
 	if err != nil {

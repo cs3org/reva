@@ -155,9 +155,8 @@ func (c *OCMClient) Discover(ctx context.Context, endpoint string) (*wellknown.O
 	return &disco, nil
 }
 
-// DiscoverCanonical reads only /.well-known/ocm. It logs fixed outcomes with
-// the status and length: peer bytes, error causes and URLs can carry
-// reflected secrets.
+// DiscoverCanonical reads only /.well-known/ocm. Diagnostics omit peer bytes,
+// error causes and URLs because they can reflect payload values.
 func (c *OCMClient) DiscoverCanonical(ctx context.Context, endpoint string) (*wellknown.OcmDiscoveryData, error) {
 	log := appctx.GetLogger(ctx)
 

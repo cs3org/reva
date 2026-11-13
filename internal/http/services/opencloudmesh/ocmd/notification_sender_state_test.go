@@ -141,21 +141,3 @@ func TestSendResultKeepsNoTransportError(t *testing.T) {
 		}
 	}
 }
-
-func TestReceiverStatusNeverUnavailable(t *testing.T) {
-	errs := []error{
-		nil,
-		&NotificationError{Code: NotificationErrMalformed},
-		&NotificationError{Code: NotificationErrMissingType},
-		&NotificationError{Code: NotificationErrMissingField, Field: "x"},
-		&NotificationError{Code: NotificationErrInvalidField, Field: "x"},
-		&NotificationError{Code: NotificationErrNotImplemented},
-		errors.New("other"),
-	}
-	want := []NotificationStatusClass{201, 400, 400, 400, 400, 501, 400}
-	for i, err := range errs {
-		if got := ReceiverStatus(err); got != want[i] || got == NotificationStatusUnavailable {
-			t.Fatalf("%v -> %d, want %d", err, got, want[i])
-		}
-	}
-}

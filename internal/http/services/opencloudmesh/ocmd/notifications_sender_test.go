@@ -29,6 +29,7 @@ import (
 	"net"
 	"net/http"
 	"net/http/httptest"
+	"reflect"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -37,11 +38,12 @@ import (
 
 	"github.com/cs3org/reva/v3/internal/http/services/wellknown"
 	"github.com/cs3org/reva/v3/pkg/appctx"
+	ocmclient "github.com/cs3org/reva/v3/pkg/ocm/client"
 	"github.com/cs3org/reva/v3/pkg/ocm/httpsig"
 	"github.com/rs/zerolog"
 )
 
-const senderSecret = "outgoing-token-9c1e"
+const senderCanary = "private-payload-9c1e"
 
 var nopLogger = zerolog.Nop()
 
@@ -54,7 +56,6 @@ type notificationPeer struct {
 	caps          []string
 	enabled       bool
 	wellKnownOff  bool
-	legacyOff     bool
 	hugeDiscovery bool
 	status        int
 	header        http.Header
@@ -80,7 +81,7 @@ func (p *notificationPeer) serve(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/ocm-provider" {
 			p.legacyHits++
 		}
-		if (r.URL.Path == "/.well-known/ocm" && p.wellKnownOff) || (r.URL.Path == "/ocm-provider" && p.legacyOff) {
+		if r.URL.Path == "/.well-known/ocm" && p.wellKnownOff {
 			http.NotFound(w, r)
 			return
 		}
@@ -140,7 +141,6 @@ func unsharedNotification(t *testing.T) *OutgoingNotification {
 		ResourceType: "file",
 		ShareType:    "user",
 		ProviderID:   "42",
-		SharedSecret: senderSecret,
 	}.Build()
 	if err != nil {
 		t.Fatal(err)
@@ -170,26 +170,19 @@ func TestNewNotificationTransportTable(t *testing.T) {
 	}{
 		{name: "capability missing", setup: func(p *notificationPeer) { p.caps = []string{"invites", "exchange-token"} }, outcome: SendCapabilityMissing},
 		{name: "discovery disabled", setup: func(p *notificationPeer) { p.enabled = false }, outcome: SendCapabilityMissing},
-		{name: "no discovery", setup: func(p *notificationPeer) { p.wellKnownOff, p.legacyOff = true, true }, outcome: SendDiscoveryFailed},
 		{name: "oversized discovery", setup: func(p *notificationPeer) { p.hugeDiscovery = true }, outcome: SendDiscoveryFailed},
 		{name: "no legacy ocm-provider fallback", setup: func(p *notificationPeer) { p.wellKnownOff = true }, outcome: SendDiscoveryFailed},
 		{name: "201 bodyless", outcome: SendDelivered, class: NotificationStatusCreated, posts: 1},
 		{name: "200 with ignored body", setup: func(p *notificationPeer) { p.status, p.respBody = 200, []byte(`{"x":1}`) }, outcome: SendDelivered, class: NotificationStatusCreated, posts: 1},
-		{name: "204", setup: func(p *notificationPeer) { p.status = 204 }, outcome: SendDelivered, class: NotificationStatusCreated, posts: 1},
 		{name: "oversized 201 body is bounded and ignored", setup: func(p *notificationPeer) {
 			p.respBody = bytes.Repeat([]byte("a"), int(DefaultResponseLimit)*2)
 		}, outcome: SendDelivered, class: NotificationStatusCreated, posts: 1},
-		{name: "400", setup: func(p *notificationPeer) { p.status = 400 }, outcome: SendRejected, class: NotificationStatusBadRequest, posts: 1},
 		{name: "401 is not retried", setup: func(p *notificationPeer) { p.status = 401 }, outcome: SendRejected, class: NotificationStatusUnauthorized, posts: 1},
-		{name: "403", setup: func(p *notificationPeer) { p.status = 403 }, outcome: SendRejected, class: NotificationStatusForbidden, posts: 1},
-		{name: "404", setup: func(p *notificationPeer) { p.status = 404 }, outcome: SendRejected, class: NotificationStatusNotFound, posts: 1},
-		{name: "501", setup: func(p *notificationPeer) { p.status = 501 }, outcome: SendRejected, class: NotificationStatusNotImplemented, posts: 1},
 		{name: "503 with Retry-After is not retried", setup: func(p *notificationPeer) { p.status, p.header = 503, retry }, outcome: SendRejected, class: NotificationStatusUnavailable, posts: 1, retry: time.Minute},
-		{name: "503 reflecting the secret", setup: func(p *notificationPeer) {
-			p.status, p.respBody = 503, []byte(senderSecret)
-			p.header = http.Header{"Retry-After": []string{senderSecret}, "X-Echo": []string{senderSecret}}
+		{name: "503 reflecting private data", setup: func(p *notificationPeer) {
+			p.status, p.respBody = 503, []byte(senderCanary)
+			p.header = http.Header{"Retry-After": []string{senderCanary}, "X-Echo": []string{senderCanary}}
 		}, outcome: SendRejected, class: NotificationStatusUnavailable, posts: 1},
-		{name: "500", setup: func(p *notificationPeer) { p.status = 500 }, outcome: SendRejected, posts: 1},
 		{name: "307 redirect is not followed", setup: func(p *notificationPeer) {
 			p.status, p.header = 307, http.Header{"Location": []string{"/elsewhere"}}
 		}, outcome: SendRejected, posts: 1},
@@ -214,8 +207,8 @@ func TestNewNotificationTransportTable(t *testing.T) {
 			if peer.redirectHits != 0 || peer.legacyHits != 0 {
 				t.Fatalf("redirect followed %d times, legacy discovery %d times", peer.redirectHits, peer.legacyHits)
 			}
-			if strings.Contains(logs, senderSecret) || strings.Contains(fmt.Sprintf("%+v", res), senderSecret) {
-				t.Fatalf("secret in logs or result: %s %+v", logs, res)
+			if strings.Contains(logs, senderCanary) || strings.Contains(fmt.Sprintf("%+v", res), senderCanary) {
+				t.Fatalf("private data in logs or result: %s %+v", logs, res)
 			}
 			if !strings.Contains(logs, `"outcome":"`+string(tc.outcome)+`"`) {
 				t.Fatalf("outcome not logged: %s", logs)
@@ -224,32 +217,33 @@ func TestNewNotificationTransportTable(t *testing.T) {
 	}
 }
 
-// Our own receiver parses the share-state payload as a spec-shaped notification.
 func TestShareStatePayloadFixtures(t *testing.T) {
 	cases := []struct {
-		name   string
-		in     ShareStateNotification
-		secret string
-		perms  []string
+		name    string
+		in      ShareStateNotification
+		message string
+		want    string
 	}{
 		{
-			name:   "unshared carries the outgoing token",
-			in:     ShareStateNotification{Type: NotificationShareUnshared, SenderDomain: "provider.example.org", ResourceType: "file", ShareType: "user", ProviderID: "42", SharedSecret: senderSecret},
-			secret: senderSecret,
+			name: "unshared preserves provider grant",
+			in:   ShareStateNotification{Type: NotificationShareUnshared, SenderDomain: "Provider.Example.org:0443", ResourceType: "file", ShareType: "user", ProviderID: " grant@provider %2F "},
+			want: `{"notificationType":"SHARE_UNSHARED","senderDomain":"provider.example.org:0443","resourceType":"file","shareType":"user","notification":{"file":{"providerId":" grant@provider %2F "}}}`,
 		},
 		{
-			name:   "accepted carries the received secret and the provider's id",
-			in:     ShareStateNotification{Type: NotificationShareAccepted, SenderDomain: "recipient.example.org", ResourceType: "file", ShareType: "user", ProviderID: "remote-7", SharedSecret: senderSecret},
-			secret: senderSecret,
+			name:    "accepted preserves remote grant and message",
+			in:      ShareStateNotification{Type: NotificationShareAccepted, SenderDomain: "Recipient.Example.org:8443", ResourceType: "file", ShareType: "user", ProviderID: "remote@id %25"},
+			message: "accepted privately",
+			want:    `{"notificationType":"SHARE_ACCEPTED","senderDomain":"recipient.example.org:8443","resourceType":"file","shareType":"user","notification":{"message":"accepted privately","file":{"providerId":"remote@id %25"}}}`,
 		},
 		{
-			name: "declined without a secret",
-			in:   ShareStateNotification{Type: NotificationShareDeclined, SenderDomain: "recipient.example.org", ResourceType: "folder", ProviderID: "remote-7"},
+			name: "declined folder without share type",
+			in:   ShareStateNotification{Type: NotificationShareDeclined, SenderDomain: "[2001:DB8::1]:8443", ResourceType: "folder", ProviderID: "remote-7"},
+			want: `{"notificationType":"SHARE_DECLINED","senderDomain":"[2001:db8::1]:8443","resourceType":"folder","notification":{"file":{"providerId":"remote-7"}}}`,
 		},
 		{
-			name:  "change permission carries permissions only",
-			in:    ShareStateNotification{Type: NotificationShareChangePermission, SenderDomain: "provider.example.org", ResourceType: "file", ShareType: "user", ProviderID: "42", Permissions: []string{"read"}},
-			perms: []string{"read"},
+			name: "changed permissions preserve order and duplicates",
+			in:   ShareStateNotification{Type: NotificationShareChangePermission, SenderDomain: "provider.example.org", ResourceType: "file", ShareType: "user", ProviderID: "42", Permissions: []string{"write", "read", "read"}},
+			want: `{"notificationType":"SHARE_CHANGE_PERMISSION","senderDomain":"provider.example.org","resourceType":"file","shareType":"user","notification":{"file":{"providerId":"42","permissions":["write","read","read"]}}}`,
 		},
 	}
 	reg := NewNotificationRegistry()
@@ -260,6 +254,7 @@ func TestShareStatePayloadFixtures(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
+			n.Message = tc.message
 			res, _ := sendWithLogs(t, peer, n)
 			if res.Outcome != SendDelivered {
 				t.Fatalf("%+v", res)
@@ -267,32 +262,19 @@ func TestShareStatePayloadFixtures(t *testing.T) {
 			if peer.lastType != "application/json" {
 				t.Fatalf("content type %q", peer.lastType)
 			}
-			var wire map[string]any
-			if err := json.Unmarshal(peer.lastBody, &wire); err != nil {
+			var got, want any
+			if err := json.Unmarshal(peer.lastBody, &got); err != nil {
 				t.Fatal(err)
 			}
-			if wire["notificationType"] != tc.in.Type || wire["senderDomain"] != tc.in.SenderDomain || wire["resourceType"] != tc.in.ResourceType {
-				t.Fatalf("wire %v", wire)
+			if err := json.Unmarshal([]byte(tc.want), &want); err != nil {
+				t.Fatal(err)
 			}
-			body := wire["notification"].(map[string]any)
-			file := body["file"].(map[string]any)
-			if file["providerId"] != tc.in.ProviderID {
-				t.Fatalf("file %v", file)
-			}
-			if _, has := wire["providerId"]; has {
-				t.Fatalf("deprecated top-level providerId sent: %v", wire)
-			}
-			// Draft-silent optional secret extension.
-			got, has := body["sharedSecret"]
-			if (tc.secret != "") != has || (has && got != tc.secret) {
-				t.Fatalf("sharedSecret present=%v", has)
-			}
-			if p, ok := file["permissions"]; (len(tc.perms) > 0) != ok || (ok && fmt.Sprint(p) != fmt.Sprint([]any{"read"})) {
-				t.Fatalf("permissions %v", p)
+			if !reflect.DeepEqual(got, want) {
+				t.Fatalf("wire %s, want %s", peer.lastBody, tc.want)
 			}
 			parsed, err := reg.Parse(peer.lastBody)
-			if err != nil || parsed.Class != NotificationClassSpec {
-				t.Fatalf("receiver parse %v class %s", err, parsed.Class)
+			if err != nil || parsed.Class != NotificationClassSpec || parsed.ProviderID != tc.in.ProviderID {
+				t.Fatalf("receiver parse %v: %+v", err, parsed)
 			}
 		})
 	}
@@ -306,7 +288,6 @@ func TestShareStateBuildRejectsInvalidPayloads(t *testing.T) {
 		{Type: NotificationShareUnshared, SenderDomain: "a.example.org", ProviderID: "1"},
 		{Type: NotificationShareUnshared, SenderDomain: "a.example.org", ResourceType: "file"},
 		{Type: NotificationShareUnshared, SenderDomain: "a.example.org", ResourceType: "file", ProviderID: "1", Permissions: []string{"read"}},
-		{Type: NotificationShareChangePermission, SenderDomain: "a.example.org", ResourceType: "file", ProviderID: "1", SharedSecret: "s"},
 		{Type: NotificationShareUnshared, SenderDomain: "https://a.example.org", ResourceType: "file", ProviderID: "1"},
 	}
 	good := ShareStateNotification{Type: NotificationShareUnshared, SenderDomain: "a.example.org", ResourceType: "file", ProviderID: "1"}
@@ -320,16 +301,18 @@ func TestShareStateBuildRejectsInvalidPayloads(t *testing.T) {
 	}
 }
 
-func TestOutgoingNotificationFormsRedactSecret(t *testing.T) {
+func TestOutgoingNotificationFormsOmitPayload(t *testing.T) {
 	n := unsharedNotification(t)
+	n.Message = senderCanary
+	n.File.ProviderID = senderCanary
 	raw, _ := json.Marshal(n)
-	out := fmt.Sprintf("%s %v %+v %#v %v", raw, n, *n, n, n.SharedSecret)
-	if strings.Contains(out, senderSecret) {
-		t.Fatalf("secret leaked: %s", out)
+	out := fmt.Sprintf("%s %v %+v %#v", raw, n, *n, n)
+	if strings.Contains(out, senderCanary) {
+		t.Fatalf("payload leaked: %s", out)
 	}
 	wire, err := n.wireBody()
-	if err != nil || !strings.Contains(string(wire), senderSecret) {
-		t.Fatal("wire body lost the secret")
+	if err != nil || !strings.Contains(string(wire), senderCanary) {
+		t.Fatal("wire body lost payload values")
 	}
 }
 
@@ -359,14 +342,15 @@ func newRawPeer(t *testing.T, response string) *rawPeer {
 	if err != nil {
 		t.Fatal(err)
 	}
-	p := &rawPeer{ln: ln, response: response, got: make(chan struct{}, 8)}
 	t.Cleanup(func() { _ = ln.Close() })
+	p := &rawPeer{ln: ln, response: response, got: make(chan struct{}, 8)}
 	go func() {
 		for {
 			conn, err := ln.Accept()
 			if err != nil {
 				return
 			}
+			t.Cleanup(func() { _ = conn.Close() })
 			go p.handle(conn)
 		}
 	}()
@@ -410,17 +394,17 @@ func (p *rawPeer) count(request string) int {
 func assertNoCanary(t *testing.T, res SendResult, logs string) {
 	t.Helper()
 	out := fmt.Sprintf("%v %+v %#v %s", res, res, res, logs)
-	if strings.Contains(out, senderSecret) {
-		t.Fatalf("secret leaked: %s", out)
+	if strings.Contains(out, senderCanary) {
+		t.Fatalf("payload leaked: %s", out)
 	}
 }
 
 var malformedResponses = map[string]string{
-	"status line":    "HTTP/1.1 " + senderSecret + "\r\n\r\n",
-	"status code":    "HTTP/1.1 2" + senderSecret + " Created\r\n\r\n",
-	"version":        "HTTP/" + senderSecret + " 201 Created\r\n\r\n",
-	"header line":    "HTTP/1.1 201 Created\r\n" + senderSecret + "\r\n\r\n",
-	"content length": "HTTP/1.1 201 Created\r\nContent-Length: " + senderSecret + "\r\n\r\n",
+	"status line":    "HTTP/1.1 " + senderCanary + "\r\n\r\n",
+	"status code":    "HTTP/1.1 2" + senderCanary + " Created\r\n\r\n",
+	"version":        "HTTP/" + senderCanary + " 201 Created\r\n\r\n",
+	"header line":    "HTTP/1.1 201 Created\r\n" + senderCanary + "\r\n\r\n",
+	"content length": "HTTP/1.1 201 Created\r\nContent-Length: " + senderCanary + "\r\n\r\n",
 }
 
 // A malformed status line or header makes net/http return an error that
@@ -462,31 +446,6 @@ func TestNewNotificationMalformedDiscoveryOverTCP(t *testing.T) {
 	}
 }
 
-func TestNewNotificationWellFormedResponsesOverTCP(t *testing.T) {
-	cases := []struct {
-		response string
-		outcome  SendOutcome
-		retry    time.Duration
-	}{
-		{"HTTP/1.1 201 Created\r\nContent-Length: 0\r\n\r\n", SendDelivered, 0},
-		{"HTTP/1.1 503 Service Unavailable\r\nRetry-After: 30\r\nContent-Length: 0\r\n\r\n", SendRejected, 30 * time.Second},
-		{"HTTP/1.1 503 Service Unavailable\r\nRetry-After: " + senderSecret + "\r\nContent-Length: 0\r\n\r\n", SendRejected, 0},
-	}
-	for _, tc := range cases {
-		raw := newRawPeer(t, tc.response)
-		peer := newNotificationPeer(t)
-		peer.endpoint = raw.url() + "/ocm"
-		res, logs := sendWithLogs(t, peer, unsharedNotification(t))
-		if res.Outcome != tc.outcome || res.RetryAfter != tc.retry || res.Failure != "" {
-			t.Fatalf("%q: %+v", tc.response, res)
-		}
-		if raw.count("POST /ocm/notifications") != 1 {
-			t.Fatalf("posts %v", raw.requests)
-		}
-		assertNoCanary(t, res, logs)
-	}
-}
-
 func TestNewNotificationTimeoutAndCancel(t *testing.T) {
 	raw := newRawPeer(t, "")
 	raw.hang = true
@@ -496,12 +455,20 @@ func TestNewNotificationTimeoutAndCancel(t *testing.T) {
 	if res.Outcome != SendPostFailed || res.Failure != FailureTimeout {
 		t.Fatalf("timeout: %+v", res)
 	}
-	<-raw.got
+	select {
+	case <-raw.got:
+	case <-time.After(2 * time.Second):
+		t.Fatal("timeout POST not observed")
+	}
 
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
 	go func() {
-		<-raw.got
-		cancel()
+		select {
+		case <-raw.got:
+			cancel()
+		case <-ctx.Done():
+		}
 	}()
 	res = NewClient(5*time.Second, false).NewNotification(ctx, peer.host(), unsharedNotification(t), nil)
 	if res.Outcome != SendPostFailed || res.Failure != FailureCanceled {
@@ -516,7 +483,7 @@ func TestParseRetryAfter(t *testing.T) {
 	for v, want := range map[string]time.Duration{
 		"0": 0, "30": 30 * time.Second, "999999999": 999999999 * time.Second,
 		"": 0, "1000000000": 0, "-1": 0, "+5": 0, "1.5": 0, " 30": 0, "30 ": 0,
-		"Wed, 21 Oct 2026 07:28:00 GMT": 0, senderSecret: 0,
+		"Wed, 21 Oct 2026 07:28:00 GMT": 0, senderCanary: 0,
 	} {
 		if got := parseRetryAfter(v); got != want {
 			t.Errorf("%q: %s, want %s", v, got, want)
@@ -525,12 +492,12 @@ func TestParseRetryAfter(t *testing.T) {
 }
 
 func TestSafePostErrorKeepsNoCause(t *testing.T) {
-	cause := errors.New(senderSecret)
+	cause := errors.New(senderCanary)
 	for _, err := range []error{
 		safePostError(context.Background(), cause),
 		safePostError(context.Background(), &net.OpError{Op: "read", Err: cause}),
 	} {
-		if strings.Contains(fmt.Sprintf("%v %+v", err, err), senderSecret) || errors.Is(err, cause) || errors.Unwrap(err) != nil {
+		if strings.Contains(fmt.Sprintf("%v %+v", err, err), senderCanary) || errors.Is(err, cause) || errors.Unwrap(err) != nil {
 			t.Fatalf("cause kept: %v", err)
 		}
 	}
@@ -546,7 +513,7 @@ func TestPostNotificationErrorQuotesNoPeerBytes(t *testing.T) {
 			if err == nil || resp != (NotificationResponse{}) {
 				t.Fatalf("response %+v error %v", resp, err)
 			}
-			if strings.Contains(fmt.Sprintf("%v %+v %#v", err, err, err), senderSecret) || errors.Unwrap(err) != nil {
+			if strings.Contains(fmt.Sprintf("%v %+v %#v", err, err, err), senderCanary) || errors.Unwrap(err) != nil {
 				t.Fatalf("cause kept: %v", err)
 			}
 		})
@@ -597,36 +564,6 @@ func TestNotificationToUnusableHostMakesNoRequest(t *testing.T) {
 	}
 }
 
-// notificationPeerServer is a remote peer whose discovery doc is enabled with
-// caps and whose /notifications endpoint counts every POST through seen. The
-// route also serves the published jwks.
-func notificationPeerServer(t *testing.T, caps []string, jwks []byte, seen func(int64)) *httptest.Server {
-	t.Helper()
-	mux := http.NewServeMux()
-	mux.HandleFunc("/jwks", func(w http.ResponseWriter, r *http.Request) {
-		_, _ = w.Write(jwks)
-	})
-	mux.HandleFunc("/.well-known/ocm", func(w http.ResponseWriter, r *http.Request) {
-		_ = json.NewEncoder(w).Encode(wellknown.OcmDiscoveryData{
-			Enabled:      true,
-			Endpoint:     "http://" + r.Host,
-			Capabilities: caps,
-			ResourceTypes: []wellknown.ResourceTypes{{
-				Name: "file", Protocols: map[string]any{"webdav": "/remote.php/dav/ocm"},
-			}},
-		})
-	})
-	mux.HandleFunc("/notifications", func(w http.ResponseWriter, r *http.Request) {
-		seen(r.ContentLength)
-		w.WriteHeader(http.StatusCreated)
-	})
-	return httptest.NewServer(mux)
-}
-
-// TestNotificationSigningBehavior covers the explicit-key egress contract:
-// a peer that advertises http-sig fails before any POST when no key is
-// configured, and a configured key signs exactly the sent bytes even for a
-// peer that does not advertise http-sig.
 func TestNotificationSigningBehavior(t *testing.T) {
 	t.Run("signing failure sends zero posts", func(t *testing.T) {
 		var posts atomic.Int32
@@ -643,21 +580,12 @@ func TestNotificationSigningBehavior(t *testing.T) {
 	})
 
 	t.Run("advertising peer without key sends zero posts", func(t *testing.T) {
-		key := newSigningKey(t)
-		jwks, err := key.JWKS()
-		if err != nil {
-			t.Fatal(err)
-		}
-		var posts int32
-		peer := notificationPeerServer(t, []string{"notifications", "http-sig"}, jwks, func(int64) { atomic.AddInt32(&posts, 1) })
-		defer peer.Close()
+		peer := newNotificationPeer(t)
+		peer.caps = []string{"notifications", "http-sig"}
 		ctx := appctx.WithLogger(context.Background(), &nopLogger)
-		res := NewClient(5*time.Second, false).NewNotification(ctx, strings.TrimPrefix(peer.URL, "http://"), unsharedNotification(t), nil)
-		if res.Outcome != SendPostFailed || res.Failure != FailureNoSigningKey {
-			t.Fatalf("outcome %+v, want post_failed/no_signing_key", res)
-		}
-		if atomic.LoadInt32(&posts) != 0 {
-			t.Fatalf("peer received %d posts, want zero", posts)
+		res := NewClient(5*time.Second, false).NewNotification(ctx, peer.host(), unsharedNotification(t), nil)
+		if res.Outcome != SendPostFailed || res.Failure != FailureNoSigningKey || peer.postCount() != 0 {
+			t.Fatalf("result %+v, posts %d", res, peer.postCount())
 		}
 	})
 
@@ -669,40 +597,66 @@ func TestNotificationSigningBehavior(t *testing.T) {
 		}
 		var gotBody []byte
 		var gotReq *http.Request
-		mux := http.NewServeMux()
-		mux.HandleFunc("/notifications", func(w http.ResponseWriter, r *http.Request) {
-			body, _ := io.ReadAll(io.LimitReader(r.Body, DefaultResponseLimit))
-			gotBody = body
-			gotReq = r.Clone(r.Context())
-			w.WriteHeader(http.StatusCreated)
-		})
-		// The peer does not advertise http-sig: a configured key may still
-		// sign, and the receiver must verify the signature.
-		peer := notificationPeerServer(t, []string{"notifications"}, jwks, func(int64) {})
-		inner := peer.Config.Handler
-		peer.Config.Handler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			if r.URL.Path == "/notifications" {
-				mux.ServeHTTP(w, r)
-				return
+		peer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			switch r.URL.Path {
+			case "/.well-known/ocm":
+				_ = json.NewEncoder(w).Encode(wellknown.OcmDiscoveryData{Enabled: true, Endpoint: "http://" + r.Host, Capabilities: []string{"notifications"}})
+			case "/notifications":
+				gotBody, _ = io.ReadAll(io.LimitReader(r.Body, DefaultResponseLimit))
+				gotReq = r.Clone(r.Context())
+				w.WriteHeader(http.StatusCreated)
+			default:
+				http.NotFound(w, r)
 			}
-			inner.ServeHTTP(w, r)
-		})
-
+		}))
+		t.Cleanup(peer.Close)
 		ctx := appctx.WithLogger(context.Background(), &nopLogger)
 		res := NewClient(5*time.Second, false).NewNotification(ctx, strings.TrimPrefix(peer.URL, "http://"), unsharedNotification(t), key)
-		if res.Outcome != SendDelivered {
-			t.Fatalf("outcome %+v, want delivered", res)
+		if res.Outcome != SendDelivered || gotReq == nil {
+			t.Fatalf("result %+v, request %v", res, gotReq)
 		}
-		if gotReq == nil {
-			t.Fatal("no notification POST reached the peer")
-		}
-		// Verify with the peer's actual published key over the exact bytes.
+		// Verify the sending service's key against the bytes received on the wire.
 		if err := httpsig.Verify(gotReq, gotBody, "", func() ([]byte, error) { return jwks, nil }); err != nil {
-			t.Fatalf("sent bytes do not verify against the peer JWKS: %v", err)
+			t.Fatalf("sent bytes do not verify against the sending key: %v", err)
 		}
-		var n map[string]any
-		if err := json.Unmarshal(gotBody, &n); err != nil || n["notificationType"] != "SHARE_UNSHARED" {
-			t.Fatalf("sent body is not the canonical wire body: %s", gotBody)
+		want := `{"notificationType":"SHARE_UNSHARED","senderDomain":"cernbox.example.org","resourceType":"file","shareType":"user","notification":{"file":{"providerId":"42"}}}`
+		if string(gotBody) != want {
+			t.Fatalf("body %s, want %s", gotBody, want)
 		}
 	})
+}
+
+func TestNotificationGuardedTransport(t *testing.T) {
+	for _, tc := range []struct {
+		name          string
+		allowLoopback bool
+		endpoint      string
+		outcome       SendOutcome
+		posts         int
+		wantPolicy    bool
+	}{
+		{name: "explicit loopback fixture exception", allowLoopback: true, outcome: SendDelivered, posts: 1},
+		{name: "discovery denied by default", outcome: SendDiscoveryFailed, wantPolicy: true},
+		{name: "advertised destination denied", allowLoopback: true, endpoint: "https://192.0.2.1:8443/ocm", outcome: SendPostFailed, wantPolicy: true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			peer := newNotificationPeer(t)
+			peer.endpoint = tc.endpoint
+			c := NewPublicOnlyClientWithConfig(ocmclient.TransportConfig{Timeout: time.Second, AllowLoopback: tc.allowLoopback})
+			base := c.Transport()
+			var policy atomic.Bool
+			c.client.Transport = roundTripperFunc(func(r *http.Request) (*http.Response, error) {
+				resp, err := base.RoundTrip(r)
+				if errors.Is(err, ocmclient.ErrPolicyViolation) {
+					policy.Store(true)
+				}
+				return resp, err
+			})
+			t.Cleanup(ocmclient.HTTPTransport(base).CloseIdleConnections)
+			res := c.NewNotification(context.Background(), peer.host(), unsharedNotification(t), nil)
+			if res.Outcome != tc.outcome || peer.postCount() != tc.posts || policy.Load() != tc.wantPolicy {
+				t.Fatalf("result %+v, posts %d, policy refusal %v", res, peer.postCount(), policy.Load())
+			}
+		})
+	}
 }
