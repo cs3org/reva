@@ -65,6 +65,8 @@ type service struct {
 	conf                  *config
 	sm                    share.Manager
 	allowedPathsForShares []*regexp.Regexp
+	// set holds the operator invocations, served through the Admin API.
+	set *invoke.Set
 }
 
 func getShareManager(ctx context.Context, c *config) (share.Manager, error) {
@@ -114,6 +116,7 @@ func New(ctx context.Context, m map[string]any) (rgrpc.Service, error) {
 		sm:                    sm,
 		allowedPathsForShares: allowedPathsForShares,
 	}
+	service.registerInvocations()
 
 	return service, nil
 }
