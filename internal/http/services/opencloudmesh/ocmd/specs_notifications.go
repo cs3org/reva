@@ -40,19 +40,14 @@ const (
 	NotificationGroupRemoved          = "GROUP_REMOVED"
 )
 
-// NotificationClass is the triage class of a received notification.
+// NotificationClass describes the validation result.
 type NotificationClass string
 
 const (
-	// NotificationClassSpec is a known type with a valid payload.
-	NotificationClassSpec NotificationClass = "known"
-	// NotificationClassUnknown is a type without a registered contract.
-	NotificationClassUnknown NotificationClass = "unknown"
-	// NotificationClassMalformed is an invalid envelope or the invalid payload
-	// of a registered type.
+	NotificationClassSpec      NotificationClass = "known"
+	NotificationClassUnknown   NotificationClass = "unknown"
 	NotificationClassMalformed NotificationClass = "malformed"
-	// NotificationClassRequest is a request type that is never fulfilled.
-	NotificationClassRequest NotificationClass = "unsupported"
+	NotificationClassRequest   NotificationClass = "unsupported"
 )
 
 // NotificationFile is the file object of resource notifications.
@@ -75,7 +70,7 @@ type NotificationGroup struct {
 	GroupID string `json:"groupId"`
 }
 
-// Notification is a validated envelope. Formatting omits received fields.
+// Notification holds parsed fields; formatting omits received values.
 type Notification struct {
 	Type  string
 	Class NotificationClass
@@ -94,7 +89,7 @@ type Notification struct {
 	// Payload holds opaque notification members. Do not log it.
 	Payload map[string]json.RawMessage `json:"-"`
 
-	// members are the raw envelope members, to tell an absent field from a null or empty one.
+	// Retain presence so null and empty values are not treated as absent.
 	members map[string]json.RawMessage
 }
 
@@ -122,8 +117,7 @@ type NotificationError struct {
 	Field string
 }
 
-// notificationFields are the field paths a notification error may name.
-// Unrecognized paths render as notification to avoid reflecting caller input.
+// Restrict error paths to avoid reflecting payload member names.
 var notificationFields = map[string]bool{
 	"senderDomain": true, "resourceType": true, "shareType": true, "resourceType or shareType": true,
 	"providerId": true, "notification": true, "notification.message": true,
@@ -165,8 +159,7 @@ func invalidField(field string) error {
 	return &NotificationError{Code: NotificationErrInvalidField, Field: field}
 }
 
-// NotificationReason is the fixed text of a parse error for responses and
-// logs. It never formats the cause of an error that wraps a contract error.
+// NotificationReason returns safe text without wrapped error details.
 func NotificationReason(err error) string {
 	var ne *NotificationError
 	if errors.As(err, &ne) {
@@ -220,8 +213,7 @@ func decodeNotification(body []byte) (*Notification, error) {
 	if n.ResourceType == "" && n.ShareType == "" {
 		return nil, missingField("resourceType or shareType")
 	}
-	// The deprecated top-level providerId is only type-checked: it never
-	// stands in for notification.file.providerId.
+	// The deprecated envelope selector cannot replace file.providerId.
 	if raw, ok := members["providerId"]; ok {
 		var s string
 		if isJSONNull(raw) || json.Unmarshal(raw, &s) != nil {
@@ -265,8 +257,7 @@ func isJSONObject(raw json.RawMessage) bool {
 	return len(raw) > 0 && raw[0] == '{'
 }
 
-// memberString reads a string member of obj. A present member must be a
-// non-empty string: null and "" are invalid, not absent.
+// A supplied null or empty string is invalid, even for optional members.
 func memberString(obj map[string]json.RawMessage, key, field string, required bool) (string, error) {
 	raw, ok := obj[key]
 	if !ok {
@@ -400,8 +391,7 @@ func validateRequestReshare(n *Notification) error {
 	return nil
 }
 
-// validateRequestShare is the contract of REQUEST_SHARE. It names the
-// resource by shareId and has no providerId requirement.
+// REQUEST_SHARE uses shareId instead of the provider's grant identifier.
 func validateRequestShare(n *Notification) error {
 	if err := n.requireResourceType(); err != nil {
 		return err
@@ -494,8 +484,7 @@ func validateGroupRemoved(n *Notification) error {
 	return nil
 }
 
-// ValidateNotificationFunc validates a known notification after its generic
-// envelope and fills its typed fields. It returns a *NotificationError.
+// ValidateNotificationFunc fills typed fields or returns a NotificationError.
 type ValidateNotificationFunc func(n *Notification) error
 
 var builtinContracts = map[string]ValidateNotificationFunc{
@@ -511,10 +500,4 @@ var builtinContracts = map[string]ValidateNotificationFunc{
 var requestContracts = map[string]ValidateNotificationFunc{
 	NotificationRequestShare:   validateRequestShare,
 	NotificationRequestReshare: validateRequestReshare,
-}
-
-// IsRequestNotification reports the request types that are never fulfilled.
-func IsRequestNotification(notificationType string) bool {
-	_, ok := requestContracts[notificationType]
-	return ok
 }

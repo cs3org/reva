@@ -36,7 +36,6 @@ type envelopeCase struct {
 	ID           string            `json:"id"`
 	Purpose      string            `json:"purpose"`
 	Body         json.RawMessage   `json:"body"`
-	HTTP         int               `json:"http"`
 	HandlerCalls int               `json:"handlerCalls"`
 	Class        NotificationClass `json:"class"`
 }
@@ -63,16 +62,25 @@ func TestParseNotificationEnvelopeCorpus(t *testing.T) {
 				}
 			}
 			n, err := reg.Parse(tc.Body)
-			// These categories describe parsing, not an HTTP server response.
-			category := 201
-			if err != nil {
-				category = 400
-				if code, ok := NotificationErrorCodeOf(err); ok && code == NotificationErrNotImplemented {
-					category = 501
-				}
+			if n.Class != tc.Class {
+				t.Fatalf("%s: class %s, want %s", tc.Purpose, n.Class, tc.Class)
 			}
-			if category != tc.HTTP || n.Class != tc.Class {
-				t.Fatalf("%s: category %d class %s, want %d %s (%v)", tc.Purpose, category, n.Class, tc.HTTP, tc.Class, err)
+			code, contractError := NotificationErrorCodeOf(err)
+			switch tc.Class {
+			case NotificationClassSpec, NotificationClassUnknown:
+				if err != nil {
+					t.Fatalf("%s: unexpected parse error: %v", tc.Purpose, err)
+				}
+			case NotificationClassMalformed:
+				if err == nil || !contractError || code == NotificationErrNotImplemented {
+					t.Fatalf("%s: expected malformed contract error, got %v", tc.Purpose, err)
+				}
+			case NotificationClassRequest:
+				if !contractError || code != NotificationErrNotImplemented {
+					t.Fatalf("%s: expected not-implemented error, got %v", tc.Purpose, err)
+				}
+			default:
+				t.Fatalf("%s: invalid expected class %q", tc.Purpose, tc.Class)
 			}
 			out, dispatchErr := reg.Dispatch(context.Background(), n)
 			if dispatchErr != nil {
@@ -82,7 +90,7 @@ func TestParseNotificationEnvelopeCorpus(t *testing.T) {
 			if tc.HandlerCalls > 0 {
 				wantOutcome = DispatchHandled
 			}
-			if tc.HTTP == 501 {
+			if tc.Class == NotificationClassRequest {
 				wantOutcome = DispatchNotImplemented
 			}
 			if out != wantOutcome || len(h.seen) != tc.HandlerCalls {
