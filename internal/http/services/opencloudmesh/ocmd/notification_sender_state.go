@@ -21,50 +21,31 @@ package ocmd
 import (
 	"context"
 	"errors"
+	"net/http"
 	"slices"
 	"time"
 )
 
-// NotificationsCapability is the general notification discovery capability.
-const NotificationsCapability = "notifications"
+const notificationsCapability = "notifications"
 
-// NotificationStatusClass identifies recognized delivery responses.
-type NotificationStatusClass int
-
-const (
-	NotificationStatusCreated        NotificationStatusClass = 201
-	NotificationStatusBadRequest     NotificationStatusClass = 400
-	NotificationStatusUnauthorized   NotificationStatusClass = 401
-	NotificationStatusForbidden      NotificationStatusClass = 403
-	NotificationStatusNotFound       NotificationStatusClass = 404
-	NotificationStatusNotImplemented NotificationStatusClass = 501
-	NotificationStatusUnavailable    NotificationStatusClass = 503
-)
-
-// NotificationPeer is the discovery outcome needed to send a notification.
-type NotificationPeer struct {
+type notificationPeer struct {
 	// Endpoint is the absolute URL of the peer's notifications endpoint.
 	Endpoint     string
 	Capabilities []string
 }
 
-// HasNotificationsCapability reports whether the peer advertises notifications.
-func (p *NotificationPeer) HasNotificationsCapability() bool {
-	return p != nil && slices.Contains(p.Capabilities, NotificationsCapability)
-}
-
-// NotificationResponse is what the transport keeps of a peer response: the
+// notificationResponse is what the transport keeps of a peer response: the
 // status and an already parsed Retry-After delay, never raw peer bytes.
-type NotificationResponse struct {
+type notificationResponse struct {
 	Status     int
 	RetryAfter time.Duration
 }
 
-// NotificationTransport uses each discovered peer's capabilities without shared
+// notificationTransport uses each discovered peer's capabilities without shared
 // mutable state. Errors may contain peer bytes and must only be classified.
-type NotificationTransport interface {
-	DiscoverNotificationPeer(ctx context.Context, domain string) (*NotificationPeer, error)
-	PostNotification(ctx context.Context, peer *NotificationPeer, body []byte) (NotificationResponse, error)
+type notificationTransport interface {
+	DiscoverNotificationPeer(ctx context.Context, domain string) (*notificationPeer, error)
+	PostNotification(ctx context.Context, peer *notificationPeer, body []byte) (notificationResponse, error)
 }
 
 // SendOutcome is the terminal state of one notification attempt.
@@ -95,7 +76,7 @@ type SendResult struct {
 	// Status is the HTTP status received, if any.
 	Status int
 	// Class is 201 for any 2xx or a defined error class; zero otherwise.
-	Class NotificationStatusClass
+	Class int
 	// RetryAfter is the 503 delay, up to maxRetryAfter, for diagnostics only.
 	RetryAfter time.Duration
 	Failure    SendFailure
@@ -116,36 +97,34 @@ func classifyFailure(err error) SendFailure {
 	return FailureError
 }
 
-// ClassifyNotificationResponse maps a response to its outcome. Any 2xx is
-// a delivery.
-func ClassifyNotificationResponse(r NotificationResponse) SendResult {
+func classifyNotificationResponse(r notificationResponse) SendResult {
 	if r.Status >= 200 && r.Status < 300 {
-		return SendResult{Outcome: SendDelivered, Status: r.Status, Class: NotificationStatusCreated}
+		return SendResult{Outcome: SendDelivered, Status: r.Status, Class: http.StatusCreated}
 	}
 	res := SendResult{Outcome: SendRejected, Status: r.Status}
-	switch NotificationStatusClass(r.Status) {
-	case NotificationStatusBadRequest, NotificationStatusUnauthorized, NotificationStatusForbidden,
-		NotificationStatusNotFound, NotificationStatusNotImplemented:
-		res.Class = NotificationStatusClass(r.Status)
-	case NotificationStatusUnavailable:
-		res.Class = NotificationStatusUnavailable
+	switch r.Status {
+	case http.StatusBadRequest, http.StatusUnauthorized, http.StatusForbidden,
+		http.StatusNotFound, http.StatusNotImplemented:
+		res.Class = r.Status
+	case http.StatusServiceUnavailable:
+		res.Class = http.StatusServiceUnavailable
 		res.RetryAfter = min(max(r.RetryAfter, 0), maxRetryAfter)
 	}
 	return res
 }
 
-// SendNotification makes one best-effort attempt for a capable peer.
-func SendNotification(ctx context.Context, t NotificationTransport, domain string, body []byte) SendResult {
+// sendNotification makes one best-effort attempt for a capable peer.
+func sendNotification(ctx context.Context, t notificationTransport, domain string, body []byte) SendResult {
 	peer, err := t.DiscoverNotificationPeer(ctx, domain)
 	if err != nil {
 		return SendResult{Outcome: SendDiscoveryFailed, Failure: classifyFailure(err)}
 	}
-	if !peer.HasNotificationsCapability() || peer.Endpoint == "" {
+	if peer == nil || !slices.Contains(peer.Capabilities, notificationsCapability) || peer.Endpoint == "" {
 		return SendResult{Outcome: SendCapabilityMissing}
 	}
 	resp, err := t.PostNotification(ctx, peer, body)
 	if err != nil {
 		return SendResult{Outcome: SendPostFailed, Failure: classifyFailure(err)}
 	}
-	return ClassifyNotificationResponse(resp)
+	return classifyNotificationResponse(resp)
 }
