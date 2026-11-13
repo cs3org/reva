@@ -37,15 +37,13 @@ import (
 	"github.com/cs3org/reva/v3/pkg/ocm/providerdomain"
 )
 
-// OutgoingNotification is a notification this server sends. Its
-// SharedSecret is only written to the wire.
+// OutgoingNotification omits payload values from generic formatting and JSON.
 type OutgoingNotification struct {
 	Type         string
 	SenderDomain string
 	ResourceType string
 	ShareType    string
 	Message      string
-	SharedSecret NotificationSecret
 	File         *NotificationFile
 }
 
@@ -56,9 +54,8 @@ func (n OutgoingNotification) String() string {
 func (n OutgoingNotification) GoString() string { return n.String() }
 
 type wireNotificationBody struct {
-	Message      string            `json:"message,omitempty"`
-	SharedSecret string            `json:"sharedSecret,omitempty"`
-	File         *NotificationFile `json:"file,omitempty"`
+	Message string            `json:"message,omitempty"`
+	File    *NotificationFile `json:"file,omitempty"`
 }
 
 type wireNotification struct {
@@ -69,12 +66,11 @@ type wireNotification struct {
 	Notification     wireNotificationBody `json:"notification"`
 }
 
-// MarshalJSON keeps the secret out of generic JSON forms, e.g. structured logs.
+// MarshalJSON keeps payload values out of structured logs.
 func (n OutgoingNotification) MarshalJSON() ([]byte, error) {
 	return json.Marshal(map[string]string{"notificationType": n.Type})
 }
 
-// wireBody is the request body sent to the peer.
 func (n *OutgoingNotification) wireBody() ([]byte, error) {
 	w := wireNotification{
 		NotificationType: n.Type,
@@ -82,9 +78,8 @@ func (n *OutgoingNotification) wireBody() ([]byte, error) {
 		ResourceType:     n.ResourceType,
 		ShareType:        n.ShareType,
 		Notification: wireNotificationBody{
-			Message:      n.Message,
-			SharedSecret: n.SharedSecret.Reveal(),
-			File:         n.File,
+			Message: n.Message,
+			File:    n.File,
 		},
 	}
 	return json.Marshal(w)
@@ -98,9 +93,8 @@ type ShareStateNotification struct {
 	ShareType    string
 	// ProviderID is always the ID the provider assigned to the share: our own
 	// ID when we are the provider, the received remote ID otherwise.
-	ProviderID   string
-	SharedSecret string
-	Permissions  []string
+	ProviderID  string
+	Permissions []string
 }
 
 // Build validates the share-state payload and returns the notification.
@@ -111,9 +105,6 @@ func (s ShareStateNotification) Build() (*OutgoingNotification, error) {
 			return nil, errors.New("permissions are only sent with SHARE_CHANGE_PERMISSION")
 		}
 	case NotificationShareChangePermission:
-		if s.SharedSecret != "" {
-			return nil, errors.New("SHARE_CHANGE_PERMISSION carries no shared secret")
-		}
 	default:
 		return nil, errors.New("not a share-state notification type")
 	}
@@ -129,17 +120,12 @@ func (s ShareStateNotification) Build() (*OutgoingNotification, error) {
 		SenderDomain: sender,
 		ResourceType: s.ResourceType,
 		ShareType:    s.ShareType,
-		SharedSecret: NotificationSecret(s.SharedSecret),
 		File:         &NotificationFile{ProviderID: s.ProviderID, Permissions: s.Permissions},
 	}, nil
 }
 
-// ocmNotificationTransport adapts OCMClient to the portable transitions.
 type ocmNotificationTransport struct {
-	c *OCMClient
-	// key is the sending service's own notification signing key. It may be
-	// nil; a peer that requires signed notifications is then failed before
-	// any request.
+	c   *OCMClient
 	key *httpsig.Key
 }
 
@@ -150,9 +136,8 @@ var (
 	errSigningFailed   = errors.New("notification signing failed")
 )
 
-// notificationDiscoveryBase is the URL of the peer identity, or false when
-// HTTP cannot reach that exact host and port: the identity is never
-// rewritten, e.g. by dropping an empty port or decoding a percent triplet.
+// Keep the exact identity: dropping an empty port or decoding escapes
+// could reach a different peer.
 func notificationDiscoveryBase(host string) (string, bool) {
 	u, err := url.Parse(discoveryBase(host))
 	if err != nil || u.Host != host || strings.ContainsAny(u.Hostname(), "%[") || strings.HasSuffix(host, ":") {
@@ -207,7 +192,6 @@ type postTimeoutError struct{}
 func (postTimeoutError) Error() string { return "notification request timed out" }
 func (postTimeoutError) Timeout() bool { return true }
 
-// safePostError keeps only the category of a transport error.
 func safePostError(ctx context.Context, err error) error {
 	if ctxErr := ctx.Err(); ctxErr != nil {
 		return ctxErr
@@ -219,7 +203,6 @@ func safePostError(ctx context.Context, err error) error {
 	return errPostFailed
 }
 
-// maxRetryAfterDigits bounds the delay-seconds value that is parsed at all.
 const maxRetryAfterDigits = 9
 
 // parseRetryAfter reads a delay-seconds Retry-After. An HTTP date or any
@@ -240,11 +223,8 @@ func parseRetryAfter(v string) time.Duration {
 	return time.Duration(n) * time.Second
 }
 
-// PostNotification sends the body once, without following redirects. A
-// configured key signs exactly the bytes that are sent, even for a peer that
-// does not advertise http-sig; a peer that requires signatures without a
-// local key fails before anything is sent. The response body is ignored and
-// read only up to the control-plane limit.
+// PostNotification signs with the local service key when configured.
+// A peer advertising http-sig receives no unsigned notification POST.
 func (t ocmNotificationTransport) PostNotification(ctx context.Context, peer *NotificationPeer, body []byte) (NotificationResponse, error) {
 	if peer == nil || peer.Endpoint == "" {
 		return NotificationResponse{}, errInvalidPeer
@@ -263,8 +243,7 @@ func (t ocmNotificationTransport) PostNotification(ctx context.Context, peer *No
 			return NotificationResponse{}, errSigningFailed
 		}
 	}
-	// Never follow a redirect: a 307/308 would re-send the body, including
-	// the optional secret, to another URL. A 3xx is an unclassified rejection.
+	// A 307/308 could disclose the payload to another destination.
 	noRedirect := *t.c.client
 	noRedirect.CheckRedirect = func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }
 	resp, err := noRedirect.Do(req)
