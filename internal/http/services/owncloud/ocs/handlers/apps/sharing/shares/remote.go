@@ -111,7 +111,7 @@ func (h *Handler) createFederatedCloudShare(w http.ResponseWriter, r *http.Reque
 		RecipientMeshProvider: providerInfoResp.ProviderInfo,
 		AccessMethods: []*ocm.AccessMethod{
 			share.NewWebDavAccessMethod(role.CS3ResourcePermissions(), []ocm.AccessType{ocm.AccessType_ACCESS_TYPE_REMOTE}, []string{}),
-			share.NewWebappAccessMethod(role.CS3ResourcePermissions(), share.DefaultWebappRequirements, ""),
+			share.NewWebappAccessMethod(role.CS3ResourcePermissions(), share.DefaultWebappRequirements),
 		},
 	})
 	if err != nil {

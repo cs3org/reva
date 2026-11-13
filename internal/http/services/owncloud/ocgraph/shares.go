@@ -129,7 +129,7 @@ func (s *svc) getSharedWithMe(w http.ResponseWriter, r *http.Request) {
 				if err != nil {
 					log.Error().Err(err).Str("shareId", share.GetId().GetOpaqueId()).Msg("error parsing received share, ignoring")
 				} else {
-					shares = append(shares, newReceivedShareDriveItem(drive, receivedShareWebappMetadata(ctx, share)))
+					shares = append(shares, newReceivedShareDriveItem(drive, receivedShareWebappMetadata(share)))
 				}
 			}
 		}
@@ -210,7 +210,7 @@ func (s *svc) createOCMShare(ctx context.Context, gw gateway.GatewayAPIClient, r
 		RecipientMeshProvider: recipientProviderInfo.ProviderInfo,
 		AccessMethods: []*ocm.AccessMethod{
 			share.NewWebDavAccessMethod(perm, []ocm.AccessType{ocm.AccessType_ACCESS_TYPE_REMOTE}, []string{}),
-			share.NewWebappAccessMethod(perm, share.DefaultWebappRequirements, ""),
+			share.NewWebappAccessMethod(perm, share.DefaultWebappRequirements),
 		},
 	})
 

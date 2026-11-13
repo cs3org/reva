@@ -74,7 +74,7 @@ func NewWebDAVProtocol(uri, sharedSecret string, perms *ocm.SharePermissions, ac
 }
 
 // NewWebappProtocol is an abstraction for creating a Webapp protocol.
-func NewWebappProtocol(uri, sharedSecret string, perms *provider.ResourcePermissions, reqs, targets []string, appName, appIconHint string, mediaTypes []string) *ocm.Protocol {
+func NewWebappProtocol(uri, sharedSecret string, perms *provider.ResourcePermissions, reqs, targets []string, appIconHint string, apps []*ocm.WebappApp) *ocm.Protocol {
 	return &ocm.Protocol{
 		Term: &ocm.Protocol_WebappOptions{
 			WebappOptions: &ocm.WebappProtocol{
@@ -83,9 +83,8 @@ func NewWebappProtocol(uri, sharedSecret string, perms *provider.ResourcePermiss
 				SharePermissions: perms,
 				Requirements:     reqs,
 				Targets:          targets,
-				AppName:          appName,
 				AppIconHint:      appIconHint,
-				MediaTypes:       mediaTypes,
+				Apps:             apps,
 			},
 		},
 	}
@@ -118,13 +117,12 @@ func NewWebDavAccessMethod(perms *provider.ResourcePermissions, accTypes []ocm.A
 
 // NewWebappAccessMethod is an abstraction for creating a Webapp access method,
 // which is the protocol used by remote users to access an OCM share.
-func NewWebappAccessMethod(perms *provider.ResourcePermissions, reqs []string, appName string) *ocm.AccessMethod {
+func NewWebappAccessMethod(perms *provider.ResourcePermissions, reqs []string) *ocm.AccessMethod {
 	return &ocm.AccessMethod{
 		Term: &ocm.AccessMethod_WebappOptions{
 			WebappOptions: &ocm.WebappAccessMethod{
 				Permissions:  perms,
 				Requirements: reqs,
-				AppName:      appName,
 			},
 		},
 	}

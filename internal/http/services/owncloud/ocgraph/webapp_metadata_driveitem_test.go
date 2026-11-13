@@ -23,6 +23,7 @@ import (
 	"encoding/json"
 	"testing"
 
+	ocm "github.com/cs3org/go-cs3apis/cs3/sharing/ocm/v1beta1"
 	libregraph "github.com/owncloud/libre-graph-api-go"
 )
 
@@ -34,7 +35,7 @@ func TestReceivedShareDriveItemAbsenceMatchesDriveItem(t *testing.T) {
 	tests := []struct {
 		name string
 		item *libregraph.DriveItem
-		meta *receivedWebappMetadata
+		meta *ocm.WebappProtocol
 	}{
 		{
 			name: "nil metadata",
@@ -44,7 +45,7 @@ func TestReceivedShareDriveItemAbsenceMatchesDriveItem(t *testing.T) {
 		{
 			name: "present false",
 			item: item,
-			meta: &receivedWebappMetadata{Present: false, AppName: "ignored"},
+			meta: nil,
 		},
 		{
 			name: "multiple permissions",
@@ -54,7 +55,7 @@ func TestReceivedShareDriveItemAbsenceMatchesDriveItem(t *testing.T) {
 		{
 			name: "omitted optional drive fields",
 			item: sparseOptionalDriveItem(),
-			meta: &receivedWebappMetadata{Present: false, AppName: "dropped"},
+			meta: nil,
 		},
 	}
 
@@ -78,7 +79,7 @@ func TestReceivedShareDriveItemAbsenceMatchesDriveItem(t *testing.T) {
 
 	t.Run("nil item without metadata", func(t *testing.T) {
 		want := mustJSON(t, (*libregraph.DriveItem)(nil))
-		for _, meta := range []*receivedWebappMetadata{nil, {Present: false, AppName: "x"}} {
+		for _, meta := range []*ocm.WebappProtocol{nil} {
 			got, err := json.Marshal(newReceivedShareDriveItem(nil, meta))
 			if err != nil {
 				t.Fatalf("marshal nil item: %v", err)
@@ -118,7 +119,7 @@ func TestReceivedShareDriveItemAddsWebappSiblingOnly(t *testing.T) {
 	for _, name := range names {
 		t.Run(name, func(t *testing.T) {
 			item := webdavOnlyDriveItem()
-			meta := &receivedWebappMetadata{Present: true, AppName: name}
+			meta := &ocm.WebappProtocol{Apps: []*ocm.WebappApp{{Name: name, MediaTypes: []string{"text/markdown"}}}}
 			base := mustJSON(t, item)
 			got := mustJSON(t, newReceivedShareDriveItem(item, meta))
 
@@ -141,10 +142,7 @@ func TestReceivedShareDriveItemAddsWebappSiblingOnly(t *testing.T) {
 		item := webdavOnlyDriveItem()
 		item.RemoteItem.Permissions = append(item.RemoteItem.Permissions, secondGrant())
 		base := mustJSON(t, item)
-		got := mustJSON(t, newReceivedShareDriveItem(item, &receivedWebappMetadata{
-			Present: true,
-			AppName: "text",
-		}))
+		got := mustJSON(t, newReceivedShareDriveItem(item, &ocm.WebappProtocol{Apps: []*ocm.WebappApp{{Name: "text", MediaTypes: []string{"text/markdown"}}}}))
 		assertWebappSibling(t, base, got, "text")
 
 		var decoded struct {
@@ -167,7 +165,7 @@ func TestSharedWithMeContractFixtures(t *testing.T) {
 
 	tests := []struct {
 		name        string
-		meta        *receivedWebappMetadata
+		meta        *ocm.WebappProtocol
 		wantFixture []byte
 		wantWebapp  bool
 		appName     string
@@ -179,19 +177,23 @@ func TestSharedWithMeContractFixtures(t *testing.T) {
 		},
 		{
 			name:        "present false",
-			meta:        &receivedWebappMetadata{Present: false, AppName: "ignored"},
+			meta:        nil,
 			wantFixture: fixtures.WebDAVOnly,
 		},
 		{
-			name:        "present true CodiMD",
-			meta:        &receivedWebappMetadata{Present: true, AppName: "CodiMD"},
+			name: "present true CodiMD",
+			meta: &ocm.WebappProtocol{Apps: []*ocm.WebappApp{
+				{Name: "CodiMD", MediaTypes: []string{"text/markdown"}},
+			}},
 			wantFixture: fixtures.Positive,
 			wantWebapp:  true,
 			appName:     "CodiMD",
 		},
 		{
-			name:        "present true empty name",
-			meta:        &receivedWebappMetadata{Present: true, AppName: ""},
+			name: "present true empty name",
+			meta: &ocm.WebappProtocol{Apps: []*ocm.WebappApp{
+				{Name: "", MediaTypes: []string{"text/markdown"}},
+			}},
 			wantFixture: fixtures.EmptyName,
 			wantWebapp:  true,
 		},
@@ -199,7 +201,7 @@ func TestSharedWithMeContractFixtures(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if tt.meta == nil || !tt.meta.Present {
+			if tt.meta == nil {
 				want := mustJSON(t, item)
 				got := mustJSON(t, newReceivedShareDriveItem(item, tt.meta))
 				if !bytes.Equal(got, want) {
@@ -276,10 +278,7 @@ func TestReceivedWebappFixtureManifest(t *testing.T) {
 
 func TestReceivedShareDriveItemMetadataErrors(t *testing.T) {
 	t.Run("nil item", func(t *testing.T) {
-		got, err := newReceivedShareDriveItem(nil, &receivedWebappMetadata{
-			Present: true,
-			AppName: "text",
-		}).MarshalJSON()
+		got, err := newReceivedShareDriveItem(nil, &ocm.WebappProtocol{Apps: []*ocm.WebappApp{{Name: "text", MediaTypes: []string{"text/markdown"}}}}).MarshalJSON()
 		if err == nil {
 			t.Fatal("expected error")
 		}
@@ -291,10 +290,7 @@ func TestReceivedShareDriveItemMetadataErrors(t *testing.T) {
 	t.Run("missing remoteItem", func(t *testing.T) {
 		item := webdavOnlyDriveItem()
 		item.RemoteItem = nil
-		got, err := newReceivedShareDriveItem(item, &receivedWebappMetadata{
-			Present: true,
-			AppName: "text",
-		}).MarshalJSON()
+		got, err := newReceivedShareDriveItem(item, &ocm.WebappProtocol{Apps: []*ocm.WebappApp{{Name: "text", MediaTypes: []string{"text/markdown"}}}}).MarshalJSON()
 		if err == nil {
 			t.Fatal("expected error")
 		}
@@ -306,10 +302,7 @@ func TestReceivedShareDriveItemMetadataErrors(t *testing.T) {
 	t.Run("base marshal failure", func(t *testing.T) {
 		item := webdavOnlyDriveItem()
 		item.Root = map[string]any{"bad": failJSON{}}
-		got, err := newReceivedShareDriveItem(item, &receivedWebappMetadata{
-			Present: true,
-			AppName: "text",
-		}).MarshalJSON()
+		got, err := newReceivedShareDriveItem(item, &ocm.WebappProtocol{Apps: []*ocm.WebappApp{{Name: "text", MediaTypes: []string{"text/markdown"}}}}).MarshalJSON()
 		if err == nil {
 			t.Fatal("expected error")
 		}
@@ -323,7 +316,7 @@ func TestReceivedShareDriveItemMetadataErrors(t *testing.T) {
 		// extension cannot be written back.
 		got, err := extendReceivedShareRemoteItem(
 			[]byte(`{"id":"item-1","remoteItem":{"id":"remote-1","bad":oops}}`),
-			"text",
+			"text", nil,
 		)
 		if err == nil {
 			t.Fatal("expected error")
@@ -345,7 +338,7 @@ func TestReceivedShareDriveItemMetadataErrors(t *testing.T) {
 	}
 	for _, tt := range cases {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := extendReceivedShareRemoteItem([]byte(tt.raw), "text")
+			got, err := extendReceivedShareRemoteItem([]byte(tt.raw), "text", nil)
 			if err == nil {
 				t.Fatal("expected error")
 			}
@@ -353,5 +346,23 @@ func TestReceivedShareDriveItemMetadataErrors(t *testing.T) {
 				t.Fatalf("partial bytes %s", got)
 			}
 		})
+	}
+}
+
+func TestExtendReceivedShareRemoteItemExposesAllApps(t *testing.T) {
+	apps := []*ocm.WebappApp{
+		{Name: "Collabora", MediaTypes: []string{"application/vnd.oasis.opendocument.text"}},
+		{Name: "CodiMD", MediaTypes: []string{"text/markdown", "text/plain"}},
+	}
+	got, err := extendReceivedShareRemoteItem([]byte(`{"id":"item-1","remoteItem":{"id":"remote-1"}}`), "Collabora", apps)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := `{"appName":"Collabora","apps":[` +
+		`{"name":"Collabora","mediaTypes":["application/vnd.oasis.opendocument.text"]},` +
+		`{"name":"CodiMD","mediaTypes":["text/markdown","text/plain"]}]}`
+	remote := decodeObject(t, decodeObject(t, got)["remoteItem"])
+	if string(remote[receivedWebappJSONKey]) != want {
+		t.Fatalf("webapp = %s\nwant %s", remote[receivedWebappJSONKey], want)
 	}
 }

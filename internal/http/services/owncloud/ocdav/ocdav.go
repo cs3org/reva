@@ -243,7 +243,6 @@ func (s *svc) Routes(rt *router.Router) {
 	limited.Any("/s/{token}/download", s.handleLegacyPublicLinkDownload, router.Unprotected())
 	limited.Any("/apps/files/{path...}", s.handleLegacyPath, router.Unprotected())
 	limited.Get("/index.php/s/{token}", s.redirectPublicLink, router.Unprotected())
-	limited.Get("/ocm-provider", s.redirectOCMDiscovery, router.Unprotected())
 
 	// The WebDAV subtrees are mounted rather than matched against patterns:
 	// below each of them the path is a resource path, which has to reach the
@@ -316,11 +315,6 @@ func (s *svc) redirectPublicLink(w http.ResponseWriter, r *http.Request) {
 	target := s.c.PublicURL + path.Join("s", r.PathValue("token"))
 	r.URL.Path = "/" // reset old path for redirection
 	http.Redirect(w, r, target, http.StatusMovedPermanently)
-}
-
-// redirectOCMDiscovery supports the legacy OCM discovery endpoint.
-func (s *svc) redirectOCMDiscovery(w http.ResponseWriter, r *http.Request) {
-	http.Redirect(w, r, "/.well-known/ocm", http.StatusMovedPermanently)
 }
 
 func applyLayout(ctx context.Context, ns string, useLoggedInUserNS bool, requestPath string) string {

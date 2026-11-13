@@ -40,9 +40,9 @@ import (
 )
 
 func TestCreateOCMShareOfferGate(t *testing.T) {
-	graphMethods := []*ocm.AccessMethod{webdavMethod(), webappMethod("")}
-	ocsMethods := []*ocm.AccessMethod{webdavMethod(), webappMethod("")}
-	cliMethods := []*ocm.AccessMethod{webdavMethod(), webappMethod("not-configured")}
+	graphMethods := []*ocm.AccessMethod{webdavMethod(), webappMethod()}
+	ocsMethods := []*ocm.AccessMethod{webdavMethod(), webappMethod()}
+	cliMethods := []*ocm.AccessMethod{webdavMethod(), webappMethod()}
 
 	cases := []struct {
 		name       string
@@ -59,7 +59,7 @@ func TestCreateOCMShareOfferGate(t *testing.T) {
 		{
 			name:       "gate absent remote capable",
 			offer:      false,
-			methods:    []*ocm.AccessMethod{webdavMethod(), webappMethod(secretMarker)},
+			methods:    []*ocm.AccessMethod{webdavMethod(), webappMethod()},
 			disco:      capableDiscovery(),
 			wantWebapp: 0,
 			wantWebdav: 1,
@@ -68,7 +68,7 @@ func TestCreateOCMShareOfferGate(t *testing.T) {
 		{
 			name:       "gate false remote capable",
 			offer:      false,
-			methods:    []*ocm.AccessMethod{webdavMethod(), webappMethod("Other")},
+			methods:    []*ocm.AccessMethod{webdavMethod(), webappMethod()},
 			disco:      capableDiscovery(),
 			wantWebapp: 0,
 			wantWebdav: 1,
@@ -76,7 +76,7 @@ func TestCreateOCMShareOfferGate(t *testing.T) {
 		{
 			name:       "gate true both capabilities",
 			offer:      true,
-			methods:    []*ocm.AccessMethod{webdavMethod(), webappMethod("")},
+			methods:    []*ocm.AccessMethod{webdavMethod(), webappMethod()},
 			disco:      capableDiscovery(),
 			wantWebapp: 1,
 			wantWebdav: 1,
@@ -96,7 +96,7 @@ func TestCreateOCMShareOfferGate(t *testing.T) {
 			offer: true,
 			methods: []*ocm.AccessMethod{
 				webdavMethod(),
-				webappMethod(""),
+				webappMethod(),
 			},
 			disco: discoverySpec{
 				exchangeToken: true,
@@ -109,7 +109,7 @@ func TestCreateOCMShareOfferGate(t *testing.T) {
 			offer: true,
 			methods: []*ocm.AccessMethod{
 				webdavMethod(),
-				webappMethod(""),
+				webappMethod(),
 			},
 			disco: discoverySpec{
 				fileReceive:   true,
@@ -126,7 +126,7 @@ func TestCreateOCMShareOfferGate(t *testing.T) {
 			offer: true,
 			methods: []*ocm.AccessMethod{
 				webdavMethod(),
-				webappMethod(""),
+				webappMethod(),
 			},
 			disco: discoverySpec{
 				fileReceive:   true,
@@ -172,8 +172,8 @@ func TestCreateOCMShareOfferGate(t *testing.T) {
 			offer: true,
 			methods: []*ocm.AccessMethod{
 				webdavMethod(),
-				webappMethod("one"),
-				webappMethod("two"),
+				webappMethod(),
+				webappMethod(),
 			},
 			disco: discoverySpec{
 				fileReceive:   true,
@@ -187,7 +187,7 @@ func TestCreateOCMShareOfferGate(t *testing.T) {
 		{
 			name:       "file uses same predicate",
 			offer:      true,
-			methods:    []*ocm.AccessMethod{webdavMethod(), webappMethod("")},
+			methods:    []*ocm.AccessMethod{webdavMethod(), webappMethod()},
 			resource:   providerpb.ResourceType_RESOURCE_TYPE_FILE,
 			disco:      capableDiscovery(),
 			wantWebapp: 1,
@@ -198,7 +198,7 @@ func TestCreateOCMShareOfferGate(t *testing.T) {
 		{
 			name:       "folder uses same predicate",
 			offer:      true,
-			methods:    []*ocm.AccessMethod{webdavMethod(), webappMethod("")},
+			methods:    []*ocm.AccessMethod{webdavMethod(), webappMethod()},
 			resource:   providerpb.ResourceType_RESOURCE_TYPE_CONTAINER,
 			disco:      capableDiscovery(),
 			wantWebapp: 1,
@@ -209,7 +209,7 @@ func TestCreateOCMShareOfferGate(t *testing.T) {
 		{
 			name:     "file ignored when only folder can receive",
 			offer:    true,
-			methods:  []*ocm.AccessMethod{webdavMethod(), webappMethod("")},
+			methods:  []*ocm.AccessMethod{webdavMethod(), webappMethod()},
 			resource: providerpb.ResourceType_RESOURCE_TYPE_FILE,
 			disco: discoverySpec{
 				folderReceive: true,
@@ -222,7 +222,7 @@ func TestCreateOCMShareOfferGate(t *testing.T) {
 		{
 			name:     "folder ignored when only file can receive",
 			offer:    true,
-			methods:  []*ocm.AccessMethod{webdavMethod(), webappMethod("")},
+			methods:  []*ocm.AccessMethod{webdavMethod(), webappMethod()},
 			resource: providerpb.ResourceType_RESOURCE_TYPE_CONTAINER,
 			disco: discoverySpec{
 				fileReceive:   true,
@@ -235,7 +235,7 @@ func TestCreateOCMShareOfferGate(t *testing.T) {
 		{
 			name:       "gate true http endpoint",
 			offer:      true,
-			methods:    []*ocm.AccessMethod{webdavMethod(), webappMethod("")},
+			methods:    []*ocm.AccessMethod{webdavMethod(), webappMethod()},
 			disco:      capableDiscovery(),
 			wantWebapp: 1,
 			wantWebdav: 1,
@@ -245,7 +245,7 @@ func TestCreateOCMShareOfferGate(t *testing.T) {
 		{
 			name:       "gate true mixed case https scheme",
 			offer:      true,
-			methods:    []*ocm.AccessMethod{webdavMethod(), webappMethod("")},
+			methods:    []*ocm.AccessMethod{webdavMethod(), webappMethod()},
 			disco:      capableDiscovery(),
 			wantWebapp: 1,
 			wantWebdav: 1,
@@ -255,7 +255,7 @@ func TestCreateOCMShareOfferGate(t *testing.T) {
 		{
 			name:       "gate true scheme-less endpoint omitted",
 			offer:      true,
-			methods:    []*ocm.AccessMethod{webdavMethod(), webappMethod("")},
+			methods:    []*ocm.AccessMethod{webdavMethod(), webappMethod()},
 			disco:      capableDiscovery(),
 			wantWebapp: 0,
 			wantWebdav: 1,
@@ -308,8 +308,8 @@ func TestCreateOCMShareOfferGate(t *testing.T) {
 			if len(got) != 1 {
 				t.Fatalf("wire webapps = %d", len(got))
 			}
-			if got[0].AppName != tt.appName {
-				t.Fatalf("wire appName = %q, want %q", got[0].AppName, tt.appName)
+			if len(got[0].Apps) != 1 || got[0].Apps[0].Name != tt.appName {
+				t.Fatalf("wire apps = %#v, want %q", got[0].Apps, tt.appName)
 			}
 			if got[0].URI != tt.endpoint {
 				t.Fatalf("wire uri = %q, want %q", got[0].URI, tt.endpoint)
@@ -324,9 +324,6 @@ func TestCreateOCMShareOfferGate(t *testing.T) {
 				t.Fatalf("wire requirements = %#v", got[0].Requirements)
 			}
 			storedOpts := storedWebapp(t, stored)
-			if storedOpts.AppName != tt.appName {
-				t.Fatalf("stored appName = %q, want %q", storedOpts.AppName, tt.appName)
-			}
 			if !slicesEqual(storedOpts.Requirements, share.DefaultWebappRequirements) {
 				t.Fatalf("stored requirements = %#v", storedOpts.Requirements)
 			}
@@ -347,16 +344,16 @@ func TestCreateOCMShareWebappOnlyNoProtocol(t *testing.T) {
 		conf: &config{
 			ProviderDomain: "sender.example",
 			WebDAVEndpoint: testWebDAVRoot,
-			OfferWebapp:    true,
-			WebappName:     testAppName,
+			Webapps:        []webapp{{Name: testAppName, MediaTypes: []string{testMediaType}}},
 			WebAppEndpoint: testOpener,
 		},
 		repo:   repo,
 		client: ocmd.NewClient(2*time.Second, true),
 	}
 	stampGateway(&statGateway{info: &providerpb.ResourceInfo{
-		Path: "/files/notes.txt",
-		Type: providerpb.ResourceType_RESOURCE_TYPE_FILE,
+		Path:     "/files/notes.txt",
+		Type:     providerpb.ResourceType_RESOURCE_TYPE_FILE,
+		MimeType: testMediaType,
 		Owner: &userpb.UserId{
 			OpaqueId: "einstein",
 			Idp:      "sender.example",
@@ -390,7 +387,7 @@ func TestCreateOCMShareWebappOnlyNoProtocol(t *testing.T) {
 				},
 			},
 		},
-		AccessMethods: []*ocm.AccessMethod{webappMethod("")},
+		AccessMethods: []*ocm.AccessMethod{webappMethod()},
 	})
 	if err != nil {
 		t.Fatalf("CreateOCMShare returned transport error %v", err)
@@ -407,5 +404,77 @@ func TestCreateOCMShareWebappOnlyNoProtocol(t *testing.T) {
 	}
 	if repo.storeN != 0 || repo.stored != nil {
 		t.Fatalf("store count = %d, stored set = %t, want 0 and unset", repo.storeN, repo.stored != nil)
+	}
+}
+
+func TestCreateOCMShareOffersWebappsByResource(t *testing.T) {
+	writer := webapp{Name: "Collabora", MediaTypes: []string{"application/vnd.oasis.opendocument.text"}}
+	notes := webapp{Name: "CodiMD", MediaTypes: []string{"text/markdown", "text/plain"}}
+	plain := webapp{Name: "Editor", MediaTypes: []string{"text/plain"}}
+
+	cases := []struct {
+		name     string
+		webapps  []webapp
+		resource providerpb.ResourceType
+		mimeType string
+		want     []string
+	}{
+		{
+			name:     "file gets only the app matching its media type",
+			webapps:  []webapp{writer, notes},
+			resource: providerpb.ResourceType_RESOURCE_TYPE_FILE,
+			mimeType: "text/markdown",
+			want:     []string{"CodiMD"},
+		},
+		{
+			name:     "file gets all matching apps in configured order",
+			webapps:  []webapp{notes, plain},
+			resource: providerpb.ResourceType_RESOURCE_TYPE_FILE,
+			mimeType: "text/plain",
+			want:     []string{"CodiMD", "Editor"},
+		},
+		{
+			name:     "file without a matching app gets no webapp",
+			webapps:  []webapp{writer, notes},
+			resource: providerpb.ResourceType_RESOURCE_TYPE_FILE,
+			mimeType: "image/png",
+		},
+		{
+			name:     "folder gets all apps in configured order",
+			webapps:  []webapp{writer, notes},
+			resource: providerpb.ResourceType_RESOURCE_TYPE_CONTAINER,
+			mimeType: "httpd/unix-directory",
+			want:     []string{"Collabora", "CodiMD"},
+		},
+	}
+	for _, tt := range cases {
+		t.Run(tt.name, func(t *testing.T) {
+			wire, stored, _, _ := shareFixture{
+				offer:    true,
+				webapps:  tt.webapps,
+				resource: tt.resource,
+				mimeType: tt.mimeType,
+				methods:  []*ocm.AccessMethod{webdavMethod(), webappMethod()},
+				disco:    capableDiscovery(),
+			}.run(t)
+			if len(tt.want) == 0 {
+				assertNoWebapp(t, wire, stored)
+				return
+			}
+			got := webapps(wire.Protocols)
+			if len(got) != 1 {
+				t.Fatalf("wire webapps = %d, want 1", len(got))
+			}
+			var names []string
+			for _, a := range got[0].Apps {
+				names = append(names, a.Name)
+				if len(a.MediaTypes) == 0 {
+					t.Fatalf("app %q has no media types", a.Name)
+				}
+			}
+			if !slicesEqual(names, tt.want) {
+				t.Fatalf("wire apps = %v, want %v", names, tt.want)
+			}
+		})
 	}
 }

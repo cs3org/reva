@@ -57,6 +57,7 @@ const (
 	testSchemeLess  = "sender.example/services/ocm/open"
 	testWebDAVRoot  = "https://sender.example/webdav"
 	testAppName     = "SynthApp"
+	testMediaType   = "text/plain"
 	testQuotedName  = `Synth "Lab" & <tag>`
 	testPaddedName  = "  SynthApp  "
 	testDriverName  = "offer-gate-test"
@@ -292,6 +293,8 @@ func capableDiscovery() discoverySpec {
 
 type shareFixture struct {
 	offer         bool
+	webapps       []webapp
+	mimeType      string
 	name          string
 	endpoint      string
 	methods       []*ocm.AccessMethod
@@ -330,23 +333,31 @@ func (f shareFixture) run(
 		endpoint = testOpener
 	}
 	name := f.name
-	if f.offer && name == "" {
+	if name == "" {
 		name = testAppName
+	}
+	offered := f.webapps
+	if f.offer && offered == nil {
+		offered = []webapp{{Name: name, MediaTypes: []string{testMediaType}}}
 	}
 	svc := &service{
 		conf: &config{
 			ProviderDomain: "sender.example",
 			WebDAVEndpoint: testWebDAVRoot,
-			OfferWebapp:    f.offer,
-			WebappName:     name,
+			Webapps:        offered,
 			WebAppEndpoint: endpoint,
 		},
 		repo:   repo,
 		client: ocmd.NewClient(2*time.Second, true),
 	}
+	mimeType := f.mimeType
+	if mimeType == "" {
+		mimeType = testMediaType
+	}
 	info := &providerpb.ResourceInfo{
-		Path: "/files/notes.txt",
-		Type: f.resource,
+		Path:     "/files/notes.txt",
+		Type:     f.resource,
+		MimeType: mimeType,
 		Owner: &userpb.UserId{
 			OpaqueId: "einstein",
 			Idp:      "sender.example",
@@ -538,12 +549,12 @@ func webdavMethodWith(reqs []string) *ocm.AccessMethod {
 	)
 }
 
-func webappMethod(name string) *ocm.AccessMethod {
-	return webappMethodWith(name, share.DefaultWebappRequirements)
+func webappMethod() *ocm.AccessMethod {
+	return webappMethodWith(share.DefaultWebappRequirements)
 }
 
-func webappMethodWith(name string, reqs []string) *ocm.AccessMethod {
-	return share.NewWebappAccessMethod(viewerPerm(), reqs, name)
+func webappMethodWith(reqs []string) *ocm.AccessMethod {
+	return share.NewWebappAccessMethod(viewerPerm(), reqs)
 }
 
 func countWebappStored(methods []*ocm.AccessMethod) int {

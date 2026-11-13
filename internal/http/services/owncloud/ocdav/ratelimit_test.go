@@ -53,7 +53,7 @@ func TestOnlyUnprotectedRoutesAreRateLimited(t *testing.T) {
 	}
 	// The bucket is shared by the unauthenticated entry points, so the next
 	// one is refused before its handler runs.
-	if got := do(http.MethodGet, "/ocm-provider"); got != http.StatusTooManyRequests {
+	if got := do(http.MethodGet, "/index.php/s/token"); got != http.StatusTooManyRequests {
 		t.Fatalf("second unauthenticated request: got %d, want 429", got)
 	}
 
