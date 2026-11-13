@@ -172,8 +172,8 @@ type Share struct {
 	// Should you change the order of the fields, make sure to add an index to `deleted_at`, or
 	// you might encounter performance issues!
 	DeletedAt         gorm.DeletedAt `gorm:"uniqueIndex:u_share"`
-	Inode             string         `gorm:"size:32;uniqueIndex:u_share;index"`
-	Instance          string         `gorm:"size:32;uniqueIndex:u_share;index"`
+	Inode             string         `gorm:"size:255;uniqueIndex:u_share;index"`
+	Instance          string         `gorm:"size:255;uniqueIndex:u_share;index"`
 	ShareWith         string         `gorm:"size:255;uniqueIndex:u_share;index:idx_space_sharewith"` // 255 because this can be an external account, which has a long representation
 	SharedWithIsGroup bool
 	Description       string `gorm:"size:1024"`
@@ -186,8 +186,8 @@ type Share struct {
 type PublicLink struct {
 	ProtoShare
 	DeletedAt                    gorm.DeletedAt `gorm:"index"`
-	Inode                        string         `gorm:"size:32;index"`
-	Instance                     string         `gorm:"size:32;index"`
+	Inode                        string         `gorm:"size:255;index"`
+	Instance                     string         `gorm:"size:255;index"`
 	Token                        string         `gorm:"uniqueIndex:u_link_token;size:32;index"` // Current tokens are only 16 chars long, but old tokens used to be 32 characters
 	Quicklink                    bool
 	NotifyUploads                bool
