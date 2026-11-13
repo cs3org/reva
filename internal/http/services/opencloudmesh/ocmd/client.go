@@ -25,6 +25,7 @@ import (
 	stderrors "errors"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"net/url"
 	"strings"
@@ -127,48 +128,35 @@ func (c *OCMClient) Transport() http.RoundTripper {
 // https://cs3org.github.io/OCM-API/docs.html?branch=develop&repo=OCM-API&user=cs3org#/paths/~1.well-known~1ocm/get
 func (c *OCMClient) Discover(ctx context.Context, endpoint string) (*wellknown.OcmDiscoveryData, error) {
 	log := appctx.GetLogger(ctx)
-
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
 	endpoint = discoveryBase(endpoint)
 	remoteurl, _ := url.JoinPath(endpoint, "/.well-known/ocm")
-	body, _, err := c.httpget(ctx, remoteurl, DefaultResponseLimit)
-	if err != nil || len(body) == 0 {
-		log.Debug().Err(err).Any("remote", remoteurl).Str("response", string(body)).Msg("invalid or empty response, falling back to legacy discovery")
-		remoteurl, _ := url.JoinPath(endpoint, "/ocm-provider") // legacy discovery endpoint
-		body, _, err = c.httpget(ctx, remoteurl, DefaultResponseLimit)
-		if err != nil || len(body) == 0 {
-			log.Warn().Err(err).Any("remote", remoteurl).Str("response", string(body)).Msg("invalid or empty response")
-			if stderrors.Is(err, ErrResponseTooLarge) || stderrors.Is(err, client.ErrPolicyViolation) {
-				return nil, err
-			}
-			return nil, errtypes.InternalError("Invalid response on OCM discovery")
-		}
-	}
-
-	var disco wellknown.OcmDiscoveryData
-	err = json.Unmarshal(body, &disco)
-	if err != nil {
-		log.Warn().Err(err).Any("remote", remoteurl).Str("response", string(body)).Msg("malformed response")
-		return nil, errtypes.InternalError("Invalid payload on OCM discovery")
-	}
-
-	log.Debug().Any("remote", remoteurl).Any("response", disco).Msg("discovery response")
-	return &disco, nil
-}
-
-// discoverCanonical reads only /.well-known/ocm. Diagnostics omit peer bytes,
-// error causes and URLs because they can reflect payload values.
-func (c *OCMClient) discoverCanonical(ctx context.Context, endpoint string) (*wellknown.OcmDiscoveryData, error) {
-	log := appctx.GetLogger(ctx)
-
-	remoteurl, _ := url.JoinPath(discoveryBase(endpoint), "/.well-known/ocm")
 	body, status, err := c.httpget(ctx, remoteurl, DefaultResponseLimit)
+	if ctxErr := ctx.Err(); ctxErr != nil {
+		return nil, ctxErr
+	}
 	if err != nil || len(body) == 0 {
-		log.Warn().Int("status", status).Int("length", len(body)).Msg("invalid or empty OCM discovery response")
-		if stderrors.Is(err, ErrResponseTooLarge) || stderrors.Is(err, client.ErrPolicyViolation) {
+		log.Debug().Int("status", status).Int("length", len(body)).Msg("invalid or empty OCM discovery response, falling back to legacy discovery")
+		remoteurl, _ = url.JoinPath(endpoint, "/ocm-provider")
+		if err := ctx.Err(); err != nil {
 			return nil, err
 		}
+		body, status, err = c.httpget(ctx, remoteurl, DefaultResponseLimit)
+	}
+	if ctxErr := ctx.Err(); ctxErr != nil {
+		return nil, ctxErr
+	}
+	if err != nil || len(body) == 0 {
+		log.Warn().Int("status", status).Int("length", len(body)).Msg("invalid or empty OCM discovery response")
+		if stderrors.Is(err, ErrResponseTooLarge) {
+			return nil, ErrResponseTooLarge
+		}
 		if err != nil {
-			return nil, safeNotificationError(ctx, err)
+			if safe := safeHTTPError(ctx, err); safe != errHTTPRequestFailed {
+				return nil, safe
+			}
 		}
 		return nil, errtypes.InternalError("Invalid response on OCM discovery")
 	}
@@ -178,9 +166,30 @@ func (c *OCMClient) discoverCanonical(ctx context.Context, endpoint string) (*we
 		log.Warn().Int("status", status).Int("length", len(body)).Msg("malformed OCM discovery response")
 		return nil, errtypes.InternalError("Invalid payload on OCM discovery")
 	}
-
 	log.Debug().Int("status", status).Int("length", len(body)).Bool("enabled", disco.Enabled).Msg("OCM discovery response")
 	return &disco, nil
+}
+
+// Transport errors can quote peer bytes from malformed status lines or headers.
+var errHTTPRequestFailed = stderrors.New("OCM request failed")
+
+type httpTimeoutError struct{}
+
+func (httpTimeoutError) Error() string { return "OCM request timed out" }
+func (httpTimeoutError) Timeout() bool { return true }
+
+func safeHTTPError(ctx context.Context, err error) error {
+	if ctxErr := ctx.Err(); ctxErr != nil {
+		return ctxErr
+	}
+	if stderrors.Is(err, client.ErrPolicyViolation) {
+		return client.ErrPolicyViolation
+	}
+	var netErr net.Error
+	if stderrors.Is(err, context.DeadlineExceeded) || stderrors.As(err, &netErr) && netErr.Timeout() {
+		return httpTimeoutError{}
+	}
+	return errHTTPRequestFailed
 }
 
 func discoveryBase(endpoint string) string {

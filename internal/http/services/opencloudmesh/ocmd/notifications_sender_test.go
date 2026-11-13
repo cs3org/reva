@@ -48,22 +48,26 @@ const senderCanary = "private-payload-9c1e"
 var nopLogger = zerolog.Nop()
 
 type notificationServer struct {
-	srv           *httptest.Server
-	mu            sync.Mutex
-	posts         int
-	lastBody      []byte
-	lastType      string
-	caps          []string
-	enabled       bool
-	wellKnownOff  bool
-	hugeDiscovery bool
-	status        int
-	header        http.Header
-	respBody      []byte
-	hangup        bool
-	redirectHits  int
-	legacyHits    int
-	endpoint      string
+	srv                *httptest.Server
+	mu                 sync.Mutex
+	posts              int
+	lastBody           []byte
+	lastType           string
+	caps               []string
+	enabled            bool
+	requests           []string
+	lastRequest        *http.Request
+	emptyDiscovery     bool
+	malformedDiscovery bool
+	wellKnownOff       bool
+	hugeDiscovery      bool
+	status             int
+	header             http.Header
+	respBody           []byte
+	hangup             bool
+	redirectHits       int
+	legacyHits         int
+	endpoint           string
 }
 
 func newNotificationServer(t *testing.T) *notificationServer {
@@ -76,6 +80,7 @@ func newNotificationServer(t *testing.T) *notificationServer {
 func (p *notificationServer) serve(w http.ResponseWriter, r *http.Request) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
+	p.requests = append(p.requests, r.Method+" "+r.URL.Path)
 	switch r.URL.Path {
 	case "/.well-known/ocm", "/ocm-provider":
 		if r.URL.Path == "/ocm-provider" {
@@ -83,6 +88,13 @@ func (p *notificationServer) serve(w http.ResponseWriter, r *http.Request) {
 		}
 		if r.URL.Path == "/.well-known/ocm" && p.wellKnownOff {
 			http.NotFound(w, r)
+			return
+		}
+		if r.URL.Path == "/.well-known/ocm" && p.emptyDiscovery {
+			return
+		}
+		if r.URL.Path == "/.well-known/ocm" && p.malformedDiscovery {
+			_, _ = w.Write([]byte(senderCanary))
 			return
 		}
 		if p.hugeDiscovery {
@@ -100,6 +112,7 @@ func (p *notificationServer) serve(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusCreated)
 	case "/ocm/notifications":
 		p.posts++
+		p.lastRequest = r.Clone(r.Context())
 		p.lastBody, _ = io.ReadAll(r.Body)
 		p.lastType = r.Header.Get("Content-Type")
 		if p.hangup {
@@ -167,11 +180,14 @@ func TestNewNotificationTransportTable(t *testing.T) {
 		class   int
 		posts   int
 		retry   time.Duration
+		legacy  int
 	}{
 		{name: "capability missing", setup: func(p *notificationServer) { p.caps = []string{"invites", "exchange-token"} }, outcome: SendCapabilityMissing},
 		{name: "discovery disabled", setup: func(p *notificationServer) { p.enabled = false }, outcome: SendCapabilityMissing},
-		{name: "oversized discovery", setup: func(p *notificationServer) { p.hugeDiscovery = true }, outcome: SendDiscoveryFailed},
-		{name: "no legacy ocm-provider fallback", setup: func(p *notificationServer) { p.wellKnownOff = true }, outcome: SendDiscoveryFailed},
+		{name: "oversized discovery", setup: func(p *notificationServer) { p.hugeDiscovery = true }, outcome: SendDiscoveryFailed, legacy: 1},
+		{name: "404 falls back to capable legacy", setup: func(p *notificationServer) { p.wellKnownOff = true }, outcome: SendDelivered, class: http.StatusCreated, posts: 1, legacy: 1},
+		{name: "empty falls back to capable legacy", setup: func(p *notificationServer) { p.emptyDiscovery = true }, outcome: SendDelivered, class: http.StatusCreated, posts: 1, legacy: 1},
+		{name: "malformed nonempty discovery is terminal", setup: func(p *notificationServer) { p.malformedDiscovery = true }, outcome: SendDiscoveryFailed},
 		{name: "201 bodyless", outcome: SendDelivered, class: http.StatusCreated, posts: 1},
 		{name: "200 with ignored body", setup: func(p *notificationServer) { p.status, p.respBody = 200, []byte(`{"x":1}`) }, outcome: SendDelivered, class: http.StatusCreated, posts: 1},
 		{name: "oversized 201 body is ignored", setup: func(p *notificationServer) {
@@ -204,8 +220,18 @@ func TestNewNotificationTransportTable(t *testing.T) {
 			if got := peer.postCount(); got != tc.posts {
 				t.Fatalf("posts %d, want %d", got, tc.posts)
 			}
-			if peer.redirectHits != 0 || peer.legacyHits != 0 {
+			if peer.redirectHits != 0 || peer.legacyHits != tc.legacy {
 				t.Fatalf("redirect followed %d times, legacy discovery %d times", peer.redirectHits, peer.legacyHits)
+			}
+			wantRequests := []string{"GET /.well-known/ocm"}
+			if tc.legacy != 0 {
+				wantRequests = append(wantRequests, "GET /ocm-provider")
+			}
+			if tc.posts != 0 {
+				wantRequests = append(wantRequests, "POST /ocm/notifications")
+			}
+			if !reflect.DeepEqual(peer.requests, wantRequests) {
+				t.Fatalf("requests %v, want %v", peer.requests, wantRequests)
 			}
 			if strings.Contains(logs, senderCanary) || strings.Contains(fmt.Sprintf("%+v", res), senderCanary) {
 				t.Fatalf("private data in logs or result: %s %+v", logs, res)
@@ -438,7 +464,7 @@ func TestNewNotificationMalformedDiscoveryOverTCP(t *testing.T) {
 			if res.Outcome != SendDiscoveryFailed || res.Failure != FailureError {
 				t.Fatalf("result %+v", res)
 			}
-			if raw.count("GET /ocm-provider") != 0 || raw.count("POST /ocm/notifications") != 0 {
+			if raw.count("GET /.well-known/ocm") != 1 || raw.count("GET /ocm-provider") != 1 || raw.count("POST /ocm/notifications") != 0 {
 				t.Fatalf("requests %v", raw.requests)
 			}
 			assertNoCanary(t, res, logs.String())
@@ -491,11 +517,11 @@ func TestParseRetryAfter(t *testing.T) {
 	}
 }
 
-func TestSafeNotificationErrorKeepsNoCause(t *testing.T) {
+func TestSafeHTTPErrorKeepsNoCause(t *testing.T) {
 	cause := errors.New(senderCanary)
 	for _, err := range []error{
-		safeNotificationError(context.Background(), cause),
-		safeNotificationError(context.Background(), &net.OpError{Op: "read", Err: cause}),
+		safeHTTPError(context.Background(), cause),
+		safeHTTPError(context.Background(), &net.OpError{Op: "read", Err: cause}),
 	} {
 		if strings.Contains(fmt.Sprintf("%v %+v", err, err), senderCanary) || errors.Is(err, cause) || errors.Unwrap(err) != nil {
 			t.Fatalf("cause kept: %v", err)
@@ -634,18 +660,28 @@ func TestNotificationGuardedTransport(t *testing.T) {
 		outcome       SendOutcome
 		posts         int
 		wantPolicy    bool
+		legacy        bool
 	}{
 		{name: "explicit loopback fixture exception", allowLoopback: true, outcome: SendDelivered, posts: 1},
+		{name: "guarded legacy fallback", allowLoopback: true, legacy: true, outcome: SendDelivered, posts: 1},
 		{name: "discovery denied by default", outcome: SendDiscoveryFailed, wantPolicy: true},
 		{name: "advertised destination denied", allowLoopback: true, endpoint: "https://192.0.2.1:8443/ocm", outcome: SendPostFailed, wantPolicy: true},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			peer := newNotificationServer(t)
 			peer.endpoint = tc.endpoint
+			peer.wellKnownOff = tc.legacy
 			c := NewPublicOnlyClientWithConfig(ocmclient.TransportConfig{Timeout: time.Second, AllowLoopback: tc.allowLoopback})
 			base := c.Transport()
 			var policy atomic.Bool
+			var probes []string
 			c.client.Transport = roundTripperFunc(func(r *http.Request) (*http.Response, error) {
+				if r.Method == http.MethodGet {
+					probes = append(probes, r.URL.Path)
+					if r.URL.Host != peer.host() || r.URL.Scheme != "http" {
+						t.Errorf("guarded discovery identity %s", r.URL)
+					}
+				}
 				resp, err := base.RoundTrip(r)
 				if errors.Is(err, ocmclient.ErrPolicyViolation) {
 					policy.Store(true)
@@ -654,6 +690,13 @@ func TestNotificationGuardedTransport(t *testing.T) {
 			})
 			t.Cleanup(ocmclient.HTTPTransport(base).CloseIdleConnections)
 			res := c.NewNotification(context.Background(), peer.host(), unsharedNotification(t), nil)
+			wantProbes := []string{"/.well-known/ocm"}
+			if tc.legacy || !tc.allowLoopback {
+				wantProbes = append(wantProbes, "/ocm-provider")
+			}
+			if !reflect.DeepEqual(probes, wantProbes) {
+				t.Fatalf("guarded probes %v, want %v", probes, wantProbes)
+			}
 			if res.Outcome != tc.outcome || peer.postCount() != tc.posts || policy.Load() != tc.wantPolicy {
 				t.Fatalf("result %+v, posts %d, policy refusal %v", res, peer.postCount(), policy.Load())
 			}
@@ -738,11 +781,13 @@ func TestNotificationDiscoveryScheme(t *testing.T) {
 		{"127.0.0.2", "https://127.0.0.2/.well-known/ocm"},
 	} {
 		t.Run(tc.host, func(t *testing.T) {
-			var gotURL, gotHost, gotAuthority string
+			var gotURLs, gotHosts, gotAuthorities []string
 			var discovers, posts atomic.Int32
 			c := NewClient(time.Second, false)
 			c.client.Transport = roundTripperFunc(func(r *http.Request) (*http.Response, error) {
-				gotURL, gotHost, gotAuthority = r.URL.String(), r.URL.Host, r.Host
+				gotURLs = append(gotURLs, r.URL.String())
+				gotHosts = append(gotHosts, r.URL.Host)
+				gotAuthorities = append(gotAuthorities, r.Host)
 				if r.Method == http.MethodPost {
 					posts.Add(1)
 				} else if r.Method == http.MethodGet {
@@ -752,10 +797,11 @@ func TestNotificationDiscoveryScheme(t *testing.T) {
 			})
 			ctx := appctx.WithLogger(context.Background(), &nopLogger)
 			res := c.NewNotification(ctx, tc.host, unsharedNotification(t), nil)
-			if gotURL != tc.url || gotHost != tc.host || gotAuthority != tc.host {
-				t.Fatalf("URL %q host %q authority %q, want %q and %q", gotURL, gotHost, gotAuthority, tc.url, tc.host)
+			wantURLs := []string{tc.url, strings.TrimSuffix(tc.url, "/.well-known/ocm") + "/ocm-provider"}
+			if !reflect.DeepEqual(gotURLs, wantURLs) || !reflect.DeepEqual(gotHosts, []string{tc.host, tc.host}) || !reflect.DeepEqual(gotAuthorities, []string{tc.host, tc.host}) {
+				t.Fatalf("URLs %v hosts %v authorities %v, want %v and %q", gotURLs, gotHosts, gotAuthorities, wantURLs, tc.host)
 			}
-			if res.Outcome != SendDiscoveryFailed || res.Failure != FailureError || discovers.Load() != 1 || posts.Load() != 0 {
+			if res.Outcome != SendDiscoveryFailed || res.Failure != FailureError || discovers.Load() != 2 || posts.Load() != 0 {
 				t.Fatalf("result %+v, discovers %d, posts %d", res, discovers.Load(), posts.Load())
 			}
 		})
@@ -776,5 +822,39 @@ func TestPostNotificationResponseReadLimit(t *testing.T) {
 	}
 	if consumed := 2*DefaultResponseLimit - body.N; consumed > DefaultResponseLimit {
 		t.Fatalf("response consumed %d bytes, limit %d", consumed, DefaultResponseLimit)
+	}
+}
+
+func TestNewNotificationLegacySigning(t *testing.T) {
+	peer := newNotificationServer(t)
+	peer.wellKnownOff = true
+	peer.caps = []string{"notifications", "http-sig"}
+	c := NewClient(time.Second, false)
+	ctx := appctx.WithLogger(context.Background(), &nopLogger)
+	res := c.NewNotification(ctx, peer.host(), unsharedNotification(t), nil)
+	if res.Outcome != SendPostFailed || res.Failure != FailureNoSigningKey || peer.postCount() != 0 || peer.legacyHits != 1 {
+		t.Fatalf("missing key result %+v, posts %d, legacy %d", res, peer.postCount(), peer.legacyHits)
+	}
+	if !reflect.DeepEqual(peer.requests, []string{"GET /.well-known/ocm", "GET /ocm-provider"}) {
+		t.Fatalf("missing key requests %v", peer.requests)
+	}
+	key := newSigningKey(t)
+	jwks, err := key.JWKS()
+	if err != nil {
+		t.Fatal(err)
+	}
+	res = c.NewNotification(ctx, peer.host(), unsharedNotification(t), key)
+	if res.Outcome != SendDelivered || peer.postCount() != 1 || peer.legacyHits != 2 {
+		t.Fatalf("signed result %+v, posts %d, legacy %d", res, peer.postCount(), peer.legacyHits)
+	}
+	want := `{"notificationType":"SHARE_UNSHARED","senderDomain":"cernbox.example.org","resourceType":"file","shareType":"user","notification":{"file":{"providerId":"42"}}}`
+	if string(peer.lastBody) != want || peer.lastRequest == nil {
+		t.Fatalf("legacy body %s", peer.lastBody)
+	}
+	if err := httpsig.Verify(peer.lastRequest, peer.lastBody, "", func() ([]byte, error) { return jwks, nil }); err != nil {
+		t.Fatal(err)
+	}
+	if !reflect.DeepEqual(peer.requests, []string{"GET /.well-known/ocm", "GET /ocm-provider", "GET /.well-known/ocm", "GET /ocm-provider", "POST /ocm/notifications"}) {
+		t.Fatalf("requests %v", peer.requests)
 	}
 }

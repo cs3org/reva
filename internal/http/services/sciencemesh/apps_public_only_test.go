@@ -19,16 +19,33 @@
 package sciencemesh
 
 import (
+	"context"
+	"errors"
 	"fmt"
 	"net"
 	"net/http"
 	"net/http/httptest"
-	"strings"
+	"sync"
 	"sync/atomic"
 	"testing"
 
 	"github.com/cs3org/reva/v3/internal/http/services/opencloudmesh/ocmd"
+	"github.com/cs3org/reva/v3/internal/http/services/wellknown"
+	"github.com/cs3org/reva/v3/pkg/ocm/client"
 )
+
+type recordingLaunchDiscovery struct {
+	*ocmd.OCMClient
+	endpoint string
+	err      error
+}
+
+func (c *recordingLaunchDiscovery) Discover(ctx context.Context, endpoint string) (*wellknown.OcmDiscoveryData, error) {
+	c.endpoint = endpoint
+	disco, err := c.OCMClient.Discover(ctx, endpoint)
+	c.err = err
+	return disco, err
+}
 
 func TestWebappLaunchPublicOnlyRejectsBeforeContact(t *testing.T) {
 	ln, err := net.Listen("tcp", "127.0.0.1:0")
@@ -117,6 +134,12 @@ func TestWebappLaunchPublicOnlyRejectsBeforeContact(t *testing.T) {
 				OCMClientTimeout:  1,
 				OCMClientInsecure: tt.insecure,
 			}, nil)
+			real, ok := h.launchClient.(*ocmd.OCMClient)
+			if !ok {
+				t.Fatalf("launchClient = %T, want *ocmd.OCMClient", h.launchClient)
+			}
+			discovery := &recordingLaunchDiscovery{OCMClient: real}
+			h.launchClient = discovery
 			req, logs := newLaunchRequest(t, "/ocm/share-1")
 			rec := httptest.NewRecorder()
 			h.WebappLaunch(rec, req)
@@ -125,12 +148,11 @@ func TestWebappLaunchPublicOnlyRejectsBeforeContact(t *testing.T) {
 				t.Fatalf("non-public launch succeeded: %s", rec.Body.String())
 			}
 			body := rec.Body.String()
-			// Discover replaces a refused dial with a generic discovery error.
-			// The dial guard is visible in the request log, before any accept.
-			if tt.wantRefuse {
-				if !strings.Contains(logs.String(), "non-public") && !strings.Contains(logs.String(), "refusing") {
-					t.Fatalf("dial guard did not refuse: body %s log %s", body, logs.String())
-				}
+			if discovery.endpoint != webdavHost(tt.webdav) {
+				t.Fatalf("discovery input = %q, want %q", discovery.endpoint, webdavHost(tt.webdav))
+			}
+			if tt.wantRefuse && !errors.Is(discovery.err, client.ErrPolicyViolation) {
+				t.Fatalf("dial guard did not refuse: body %s log %s", body, logs.String())
 			}
 			if accepted.Load() != before {
 				t.Fatalf("destination accepted %d connections", accepted.Load()-before)
@@ -228,6 +250,22 @@ func TestWebappLaunchPublicOnlyIgnoresProxy(t *testing.T) {
 		OCMClientTimeout:  1,
 		OCMClientInsecure: true,
 	}, nil)
+	real, ok := h.launchClient.(*ocmd.OCMClient)
+	if !ok {
+		t.Fatalf("launchClient = %T, want *ocmd.OCMClient", h.launchClient)
+	}
+	discovery := &recordingLaunchDiscovery{OCMClient: real}
+	h.launchClient = discovery
+	tr := client.HTTPTransport(real.Transport())
+	if tr == nil || tr.DialContext == nil || tr.Proxy != nil {
+		t.Fatal("launch transport must retain its guarded dialer and nil proxy")
+	}
+	var addresses sync.Map
+	dial := tr.DialContext
+	tr.DialContext = func(ctx context.Context, network, address string) (net.Conn, error) {
+		addresses.Store(address, true)
+		return dial(ctx, network, address)
+	}
 	req, logs := newLaunchRequest(t, "/ocm/share-1")
 	rec := httptest.NewRecorder()
 	h.WebappLaunch(rec, req)
@@ -237,12 +275,13 @@ func TestWebappLaunchPublicOnlyIgnoresProxy(t *testing.T) {
 	if hits.Load() != 0 {
 		t.Fatalf("proxy received %d requests", hits.Load())
 	}
-	// A configured proxy would dial the proxy address. Proxy=nil dials the target.
-	// The request URL omits the default port, so ":443" is the dial address.
-	if !strings.Contains(logs.String(), "10.9.8.7:443") {
-		t.Fatalf("dial did not target the share host: %s", logs.String())
+	if discovery.endpoint != "10.9.8.7" || !errors.Is(discovery.err, client.ErrPolicyViolation) {
+		t.Fatalf("discovery did not report a policy refusal: %s", logs.String())
 	}
-	if strings.Contains(logs.String(), proxy.Listener.Addr().String()) {
-		t.Fatalf("dial targeted the proxy: %s", logs.String())
+	if _, ok := addresses.Load("10.9.8.7:443"); !ok {
+		t.Fatal("dial did not target the share host")
+	}
+	if _, ok := addresses.Load(proxy.Listener.Addr().String()); ok {
+		t.Fatal("dial targeted the proxy")
 	}
 }
