@@ -156,6 +156,7 @@ func (s *svc) handlersInit(log *zerolog.Logger) error {
 	// These handlers discover a remote server that the request names, thus they use the same public-only client.
 	invitesHandler.ocmClient = sharesHandler.ocmClient
 	tokenHandler.ocmClient = sharesHandler.ocmClient
+	notifHandler.ocmClient = sharesHandler.ocmClient
 
 	s.shares = sharesHandler
 	s.invites = invitesHandler
