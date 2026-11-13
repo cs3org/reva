@@ -208,6 +208,9 @@ func TestOcmConcurrentUserAgents(t *testing.T) {
 				if got.APIVersion != version {
 					t.Errorf("%s: apiVersion %q, want %q", ua, got.APIVersion, version)
 				}
+				if !slices.Contains(got.Capabilities, "notifications") {
+					t.Errorf("%s: notifications capability missing", ua)
+				}
 			}()
 		}
 	}
@@ -540,6 +543,19 @@ func assertDiscoveryShape(t *testing.T, h *wkocmHandler, want discoveryShape) {
 		} else if receive {
 			t.Fatalf("%s receive present %#v", name, protocols["webapp-receive"])
 		}
+	}
+	notifications := 0
+	for _, c := range h.data.Capabilities {
+		if c == "notifications" {
+			notifications++
+		}
+	}
+	wantNotifications := 0
+	if want.enabled {
+		wantNotifications = 1
+	}
+	if notifications != wantNotifications {
+		t.Fatalf("notifications advertised %d times, want %d", notifications, wantNotifications)
 	}
 	hasToken := slices.Contains(h.data.Capabilities, "exchange-token")
 	if want.endpoint {
