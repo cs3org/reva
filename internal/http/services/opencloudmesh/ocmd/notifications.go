@@ -34,18 +34,13 @@ import (
 	"github.com/rs/zerolog"
 )
 
-// maxNotificationBody bounds a received notification body. Larger bodies
-// are rejected as malformed before decoding.
 const maxNotificationBody = 1 << 20
 
-// maxLoggedTypeLength bounds the received notificationType in logs.
 const maxLoggedTypeLength = 64
 
 type notifHandler struct {
-	registry *NotificationRegistry
-	endpoint string
-	// strictHTTPSig mirrors the shares handler: a peer that did not sign is
-	// only accepted in permissive mode and when it does not advertise http-sig.
+	registry          *NotificationRegistry
+	endpoint          string
 	strictHTTPSig     bool
 	trustForwardedFor bool
 	ocmClient         *OCMClient
@@ -56,7 +51,6 @@ func (h *notifHandler) init(c *config) error {
 	h.endpoint = c.Endpoint
 	h.strictHTTPSig = c.HTTPSigMode == "strict"
 	h.trustForwardedFor = c.TrustForwardedFor
-	// No effect is wired at this layer: valid notifications are only logged.
 	for _, t := range []string{
 		NotificationShareAccepted,
 		NotificationShareDeclined,
@@ -72,9 +66,7 @@ func (h *notifHandler) init(c *config) error {
 	return nil
 }
 
-// Notifications receives notifications from remote OCM servers, see
-// https://cs3org.github.io/OCM-API/docs.html?branch=develop&repo=OCM-API&user=cs3org#/paths/~1notifications/post
-// A handler outcome never changes the bodyless 201 of a valid notification.
+// Notifications receives OCM notifications and returns an empty 201 on success.
 func (h *notifHandler) Notifications(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	log := appctx.GetLogger(ctx)
@@ -87,20 +79,18 @@ func (h *notifHandler) Notifications(w http.ResponseWriter, r *http.Request) {
 	}
 
 	n, err := h.registry.Parse(body)
-	switch ReceiverStatus(err) {
-	case NotificationStatusNotImplemented:
-		// A valid request of an unimplemented type still authenticates first:
-		// its refusal is deferred until policy and signature checks have run.
-	case NotificationStatusBadRequest:
+	code, _ := NotificationErrorCodeOf(err)
+	if err != nil && code != NotificationErrNotImplemented {
 		reason := NotificationReason(err)
 		notificationLog(log.Info(), n).Str("outcome", "rejected").Str("reason", reason).Msg("invalid OCM notification")
 		reqres.WriteError(w, r, reqres.APIErrorInvalidParameter, reason, nil)
 		return
 	}
+	// Valid unsupported requests must authenticate before returning 501.
 	if err := h.authenticate(ctx, w, r, body, n); err != nil {
 		return
 	}
-	if ReceiverStatus(err) == NotificationStatusNotImplemented {
+	if code == NotificationErrNotImplemented {
 		notificationLog(log.Info(), n).Str("outcome", "not_implemented").Msg("OCM notification type not implemented")
 		reqres.WriteError(w, r, reqres.APIErrorUnimplemented, NotificationReason(err), nil)
 		return
@@ -109,18 +99,16 @@ func (h *notifHandler) Notifications(w http.ResponseWriter, r *http.Request) {
 	outcome, err := h.registry.Dispatch(ctx, n)
 	switch {
 	case err != nil:
-		notificationLog(log.Warn(), n).Str("outcome", string(outcome)).Str("error", err.Error()).Msg("OCM notification handler failed")
+		notificationLog(log.Warn(), n).Str("outcome", "failed").Msg("OCM notification handler failed")
+		reqres.WriteError(w, r, reqres.APIErrorServerError, "error handling OCM notification", nil)
+		return
 	case outcome == DispatchIgnored:
-		notificationLog(log.Info(), n).Str("outcome", string(outcome)).Msg("OCM notification of unknown type ignored")
+		notificationLog(log.Info(), n).Str("outcome", string(outcome)).Msg("OCM notification ignored")
 	}
 	w.WriteHeader(http.StatusCreated)
 }
 
-// authenticate applies the provider policy of the sender domain, discovers
-// that canonical origin through the guarded public-only client and verifies
-// the request signature before any effect or accepted response. Fixed
-// messages only: a remote keyid, algorithm or transport error is not trusted
-// input and never reaches the response or the log.
+// Verify the original body bytes; re-encoding would change the signed content.
 func (h *notifHandler) authenticate(ctx context.Context, w http.ResponseWriter, r *http.Request, body []byte, n *Notification) error {
 	log := appctx.GetLogger(ctx)
 	if n == nil || n.SenderDomain == "" {
@@ -149,6 +137,10 @@ func (h *notifHandler) authenticate(ctx context.Context, w http.ResponseWriter, 
 		reqres.WriteError(w, r, reqres.APIErrorServerError, "error sending a grpc isProviderAllowed request", err)
 		return err
 	}
+	if providerAllowedResp == nil || providerAllowedResp.Status == nil {
+		reqres.WriteError(w, r, reqres.APIErrorServerError, "invalid provider policy response", nil)
+		return errors.New("missing provider policy status")
+	}
 	if providerAllowedResp.Status.Code != rpc.Code_CODE_OK {
 		notificationLog(log.Info(), n).Str("outcome", "rejected").Msg("notification sender provider not authorized")
 		reqres.WriteError(w, r, reqres.APIErrorUnauthenticated, "provider not authorized", nil)
@@ -171,7 +163,6 @@ func (h *notifHandler) authenticate(ctx context.Context, w http.ResponseWriter, 
 	return nil
 }
 
-// readNotificationBody accepts JSON bodies up to maxNotificationBody.
 func readNotificationBody(w http.ResponseWriter, r *http.Request) ([]byte, error) {
 	contentType, _, err := mime.ParseMediaType(r.Header.Get("Content-Type"))
 	if err != nil || contentType != "application/json" {
@@ -184,7 +175,6 @@ func readNotificationBody(w http.ResponseWriter, r *http.Request) ([]byte, error
 	return body, nil
 }
 
-// notificationLog adds fixed metadata fields, never the payload or the shared secret.
 func notificationLog(e *zerolog.Event, n *Notification) *zerolog.Event {
 	if n == nil {
 		return e
@@ -194,11 +184,9 @@ func notificationLog(e *zerolog.Event, n *Notification) *zerolog.Event {
 		typ = typ[:maxLoggedTypeLength]
 	}
 	return e.Str("type", typ).
-		Str("class", string(n.Class)).
-		Bool("has_shared_secret", n.SharedSecret != "")
+		Str("class", string(n.Class))
 }
 
-// logNotification records the identity fields of a valid notification and has no other effect.
 func logNotification(ctx context.Context, n *Notification) error {
 	e := notificationLog(appctx.GetLogger(ctx).Info(), n).
 		Str("sender_domain", n.SenderDomain).
