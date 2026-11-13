@@ -383,6 +383,23 @@ func (m *PublicShareMgr) ListPublicLinks(u *user.User, filters []*link.ListPubli
 	return links, nil
 }
 
+// ExpiringPublicLinks returns at most limit public links, not orphans, that
+// expire in [from, to), ordered by expiration and id, after the link with
+// afterExpiration and afterID. An afterID of 0 starts from the first link.
+func (m *PublicShareMgr) ExpiringPublicLinks(from, to, afterExpiration time.Time, afterID uint, limit int) ([]model.PublicLink, error) {
+	// sqlite compares times as text, and the links are stored in local time.
+	from, to, afterExpiration = from.Local(), to.Local(), afterExpiration.Local()
+	query := m.db.Model(&model.PublicLink{}).
+		Where("orphan = ? AND orphaned_at IS NULL", false).
+		Where("expiration >= ? AND expiration < ?", from, to)
+	if afterID != 0 {
+		query = query.Where("(expiration > ? OR (expiration = ? AND id > ?))", afterExpiration, afterExpiration, afterID)
+	}
+	var links []model.PublicLink
+	err := query.Order("expiration, id").Limit(limit).Find(&links).Error
+	return links, err
+}
+
 // TransferPublicShare transfers a publicshare to a new initiator. Only to be used for shares in projects.
 func (m *PublicShareMgr) TransferPublicShare(ctx context.Context, ref *link.PublicShareReference, newInitiator string) error {
 	if newInitiator == "" {
