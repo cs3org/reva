@@ -45,10 +45,10 @@ import (
 	"github.com/cs3org/reva/v3/pkg/sharedconf"
 	"github.com/cs3org/reva/v3/pkg/spaces"
 	"github.com/cs3org/reva/v3/pkg/storage"
+	"github.com/cs3org/reva/v3/pkg/storage/fs/eos/acl"
 	eosclient "github.com/cs3org/reva/v3/pkg/storage/fs/eos/client"
 	eosbinary "github.com/cs3org/reva/v3/pkg/storage/fs/eos/client/binary"
 	eosgrpc "github.com/cs3org/reva/v3/pkg/storage/fs/eos/client/grpc"
-	"github.com/cs3org/reva/v3/pkg/storage/utils/acl"
 	"github.com/cs3org/reva/v3/pkg/storage/utils/chunking"
 	"github.com/cs3org/reva/v3/pkg/storage/utils/grants"
 	"github.com/cs3org/reva/v3/pkg/utils"
@@ -89,6 +89,14 @@ func (c *Config) ApplyDefaults() {
 
 	if c.XrdcopyBinary == "" {
 		c.XrdcopyBinary = "/opt/eos/xrootd/bin/xrdcopy"
+	}
+
+	if c.NSInspectBinary == "" {
+		c.NSInspectBinary = "/usr/bin/eos-ns-inspect"
+	}
+
+	if c.NSDumpDriver == "" {
+		c.NSDumpDriver = "chunked"
 	}
 
 	if c.MasterURL == "" {

@@ -24,6 +24,9 @@ package reconciliation
 
 import (
 	"context"
+	"encoding/json"
+	"io"
+	"iter"
 	"os"
 	"sync"
 
@@ -32,10 +35,15 @@ import (
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	registry "github.com/cs3org/go-cs3apis/cs3/storage/registry/v1beta1"
+	"github.com/cs3org/reva/v3/pkg/admin"
 	"github.com/cs3org/reva/v3/pkg/appctx"
 	"github.com/cs3org/reva/v3/pkg/auth/scope"
+	"github.com/cs3org/reva/v3/pkg/control/controlpb"
+	invokeclient "github.com/cs3org/reva/v3/pkg/invoke/client"
+	projectsregistry "github.com/cs3org/reva/v3/pkg/projects/manager/registry"
 	publicshareregistry "github.com/cs3org/reva/v3/pkg/publicshare/manager/registry"
 	"github.com/cs3org/reva/v3/pkg/reconciliation"
+	svcregistry "github.com/cs3org/reva/v3/pkg/registry"
 	"github.com/cs3org/reva/v3/pkg/rjobs"
 	"github.com/cs3org/reva/v3/pkg/rserverless"
 	"github.com/cs3org/reva/v3/pkg/service"
@@ -57,6 +65,7 @@ const (
 	jobOrphan  = "orphan"
 	jobShallow = "shallow"
 	jobExpired = "expired"
+	jobDeep    = "deep"
 )
 
 // scheduleNever is the schedule of a job that only runs when it is asked for.
@@ -86,11 +95,14 @@ type config struct {
 	ShareDrivers       map[string]map[string]any `mapstructure:"share_drivers"`
 	PublicShareDriver  string                    `mapstructure:"publicshare_driver"`
 	PublicShareDrivers map[string]map[string]any `mapstructure:"publicshare_drivers"`
-	// Orphan configures the orphan job.
-	Orphan reconciliation.Config `mapstructure:"orphan"`
-	// Shallow configures the shallow job.
-	Shallow reconciliation.Config `mapstructure:"shallow"`
-	Expired reconciliation.Config `mapstructure:"expired"`
+	// ProjectsDriver names the project catalogue the deep job reads the
+	// project roles from, the same driver the spaces registry runs on.
+	ProjectsDriver  string                    `mapstructure:"projects_driver"`
+	ProjectsDrivers map[string]map[string]any `mapstructure:"projects_drivers"`
+	Orphan          reconciliation.Config     `mapstructure:"orphan"`
+	Shallow         reconciliation.Config     `mapstructure:"shallow"`
+	Expired         reconciliation.Config     `mapstructure:"expired"`
+	Deep            reconciliation.DeepConfig `mapstructure:"deep"`
 }
 
 func (c *config) ApplyDefaults() {
@@ -103,6 +115,9 @@ func (c *config) ApplyDefaults() {
 	if c.PublicShareDriver == "" {
 		c.PublicShareDriver = "sql"
 	}
+	if c.ProjectsDriver == "" {
+		c.ProjectsDriver = "sql"
+	}
 	// a file per job, so a run of one is never interleaved with a run of
 	// another and either can be pointed somewhere else on its own.
 	if c.Orphan.LogFile == "" {
@@ -113,6 +128,9 @@ func (c *config) ApplyDefaults() {
 	}
 	if c.Expired.LogFile == "" {
 		c.Expired.LogFile = "/var/log/revad/reconciliation-expired.log"
+	}
+	if c.Deep.LogFile == "" {
+		c.Deep.LogFile = "/var/log/revad/reconciliation-deep.log"
 	}
 }
 
@@ -131,7 +149,7 @@ func New(ctx context.Context, m map[string]any) (_ rserverless.Service, err erro
 		return nil, err
 	}
 	if len(c.Jobs) == 0 {
-		return nil, errors.Errorf("reconciliation: no jobs enabled, set jobs to any of %q, %q, %q", jobOrphan, jobShallow, jobExpired)
+		return nil, errors.Errorf("reconciliation: no jobs enabled, set jobs to any of %q, %q, %q, %q", jobOrphan, jobShallow, jobExpired, jobDeep)
 	}
 
 	shares, err := getShareStore(ctx, &c)
@@ -195,8 +213,10 @@ func New(ctx context.Context, m map[string]any) (_ rserverless.Service, err erro
 			if jc.Schedule == scheduleNever {
 				jc.Schedule = ""
 			}
+		case jobDeep:
+			jc = c.Deep.Config
 		default:
-			return nil, errors.Errorf("reconciliation: unknown job %q, want %q, %q or %q", name, jobOrphan, jobShallow, jobExpired)
+			return nil, errors.Errorf("reconciliation: unknown job %q, want %q, %q, %q or %q", name, jobOrphan, jobShallow, jobExpired, jobDeep)
 		}
 
 		jobLog, logFile, err := reconciliation.OpenLog(jc.LogFile)
@@ -273,6 +293,33 @@ func New(ctx context.Context, m map[string]any) (_ rserverless.Service, err erro
 			if err := rjobs.RegisterPeriodic(periodic); err != nil {
 				return nil, errors.Wrapf(err, "reconciliation: registering %s", periodic.Name)
 			}
+		case jobDeep:
+			projects, err := getProjectStore(ctx, &c)
+			if err != nil {
+				return nil, err
+			}
+			allowed := make([]*reconciliation.ACLEntry, 0, len(c.Deep.AllowedACLs))
+			for _, a := range c.Deep.AllowedACLs {
+				e, err := reconciliation.ParseAllowedACL(a)
+				if err != nil {
+					return nil, err
+				}
+				allowed = append(allowed, e)
+			}
+			// Gateway is left nil for the same reason as the orphan job's.
+			job := &reconciliation.DeepJob{
+				ShareStore:                    shares,
+				Auth:                          identity.authenticate,
+				StorageProviderControlChannel: providers.controlChannelOfInstance,
+				Project:                       projects.GetProjectBySpaceID,
+				AllowedACLs:                   allowed,
+				Log:                           jobLog,
+				DryRun:                        jc.DryRun,
+			}
+			jobName = reconciliation.DeepJobName
+			if err := rjobs.RegisterOnDemand(jobName, job.OnDemand); err != nil {
+				return nil, errors.Wrapf(err, "reconciliation: registering %s", jobName)
+			}
 		}
 
 		entry := log.Info().
@@ -282,7 +329,7 @@ func New(ctx context.Context, m map[string]any) (_ rserverless.Service, err erro
 			Bool("dry_run", jc.DryRun).
 			Bool("run_on_start", jc.RunOnStart).
 			Int("spaces_per_batch", jc.SpacesPerBatch)
-		if name == jobShallow {
+		if name == jobShallow || name == jobDeep {
 			entry = entry.Bool("on_demand", true)
 		}
 		entry.Msg("reconciliation: job registered")
@@ -323,6 +370,30 @@ func getPublicLinkStore(ctx context.Context, c *config) (reconciliation.PublicLi
 	store, ok := pm.(reconciliation.PublicLinkStore)
 	if !ok {
 		return nil, errors.Errorf("reconciliation: public share driver %s cannot be reconciled, it has to mark a link orphaned and to list links by space", c.PublicShareDriver)
+	}
+	return store, nil
+}
+
+// projectStore is what the deep job needs from a project catalogue. The CS3
+// listing only returns the projects of the caller, and the service user is a
+// member of none.
+type projectStore interface {
+	GetProjectBySpaceID(ctx context.Context, spaceID string) (*provider.StorageSpace, error)
+}
+
+// getProjectStore is getShareStore for the project catalogue.
+func getProjectStore(ctx context.Context, c *config) (projectStore, error) {
+	f, ok := projectsregistry.NewFuncs[c.ProjectsDriver]
+	if !ok {
+		return nil, errors.Errorf("reconciliation: projects driver not found: %s", c.ProjectsDriver)
+	}
+	pm, err := f(ctx, c.ProjectsDrivers[c.ProjectsDriver])
+	if err != nil {
+		return nil, errors.Wrapf(err, "reconciliation: opening projects driver %s", c.ProjectsDriver)
+	}
+	store, ok := pm.(projectStore)
+	if !ok {
+		return nil, errors.Errorf("reconciliation: projects driver %s cannot look up a project by space id", c.ProjectsDriver)
 	}
 	return store, nil
 }
@@ -393,6 +464,145 @@ func (p *storageProviders) grants(ctx context.Context, storageID string) (provid
 	}
 	p.clients[storageID] = c
 	return c, nil
+}
+
+// `instance` resolves an aliased storage id (e.g. eoshome-a) into the id of its provider
+// (e.g. eoshome-i01), which is the actual name of the instance.
+func (p *storageProviders) instance(ctx context.Context, storageID string) (string, error) {
+	reg, err := service.StorageRegistry(ctx)
+	if err != nil {
+		return "", errors.Wrap(err, "reconciliation: getting the storage registry client")
+	}
+	res, err := reg.GetStorageProviders(ctx, &registry.GetStorageProvidersRequest{
+		Ref: &provider.Reference{ResourceId: &provider.ResourceId{StorageId: storageID}},
+	})
+	if err != nil {
+		return "", errors.Wrap(err, "reconciliation: looking up the storage provider")
+	}
+	if code := res.GetStatus().GetCode(); code != rpc.Code_CODE_OK {
+		return "", errors.Errorf("reconciliation: looking up the storage provider: %s: %s", code, res.GetStatus().GetMessage())
+	}
+	if len(res.GetProviders()) == 0 || res.GetProviders()[0].GetProviderId() == "" {
+		return "", errors.Errorf("reconciliation: no storage provider for %q", storageID)
+	}
+	return res.GetProviders()[0].GetProviderId(), nil
+}
+
+// controlChannelOfInstance returns the control channel of the storage provider
+// of the instance that holds storageID. The provider advertises the instance
+// as its mount id.
+func (p *storageProviders) controlChannelOfInstance(ctx context.Context, storageID string) (reconciliation.ReconcileMethods, error) {
+	instance, err := p.instance(ctx, storageID)
+	if err != nil {
+		return nil, err
+	}
+
+	// HTTPEndpoint takes another transport when it is asked for one.
+	ep, err := service.HTTPEndpoint(ctx,
+		service.ByName(service.NameStorageProvider),
+		service.ByMetadata(svcregistry.MetaTransport, svcregistry.TransportGRPC),
+		service.ByMetadata(svcregistry.MetaMountID, instance),
+	)
+	if err != nil {
+		return nil, errors.Wrapf(err, "reconciliation: finding the storage provider of %s", instance)
+	}
+	control := ep.Meta(svcregistry.MetaControl)
+	if control == "" {
+		return nil, errors.Errorf("reconciliation: the storage provider of %s has no control channel", instance)
+	}
+	client, err := invokeclient.ControlClientAt(control)
+	if err != nil {
+		return nil, errors.Wrapf(err, "reconciliation: dialing the control channel of %s", instance)
+	}
+	return &storageProviderControlChannel{client: client, target: ep.Node().ID()}, nil
+}
+
+// storageProviderControlChannel is the storage of one provider, reached over its control
+// channel. The channel takes an admin token only, so each call replaces the
+// token of the run with one.
+type storageProviderControlChannel struct {
+	client controlpb.ControlClient
+	target string
+}
+
+func (s *storageProviderControlChannel) DumpNamespace(ctx context.Context, p string) iter.Seq2[reconciliation.NSDumpInfo, error] {
+	return func(yield func(reconciliation.NSDumpInfo, error) bool) {
+		ctx, err := admin.AsService(ctx, "reconciliation")
+		if err != nil {
+			yield(reconciliation.NSDumpInfo{}, err)
+			return
+		}
+		// a caller that exits early should not leave the dump running!
+		ctx, cancel := context.WithCancel(ctx)
+		defer cancel()
+
+		stream, err := s.client.InvokeStream(ctx, &controlpb.InvokeRequest{
+			Target:     s.target,
+			Invocation: reconciliation.InvocationDumpNamespace,
+			Args:       map[string]string{reconciliation.ArgPath: p},
+		})
+		if err != nil {
+			yield(reconciliation.NSDumpInfo{}, errors.Wrap(err, "reconciliation: starting the namespace dump"))
+			return
+		}
+		for {
+			res, err := stream.Recv()
+			if errors.Is(err, io.EOF) {
+				return
+			}
+			if err != nil {
+				yield(reconciliation.NSDumpInfo{}, errors.Wrap(err, "reconciliation: error reading the namespace dump"))
+				return
+			}
+			if res.GetError() != "" {
+				yield(reconciliation.NSDumpInfo{}, errors.Errorf("reconciliation: namespace dump: %s", res.GetError()))
+				return
+			}
+			var batch struct {
+				Nodes []reconciliation.NSDumpInfo `json:"nodes"`
+			}
+			if err := json.Unmarshal([]byte(res.GetResultJson()), &batch); err != nil {
+				yield(reconciliation.NSDumpInfo{}, errors.Wrap(err, "reconciliation: error decoding the namespace dump"))
+				return
+			}
+			for _, n := range batch.Nodes {
+				if !yield(n, nil) {
+					return
+				}
+			}
+		}
+	}
+}
+
+func (s *storageProviderControlChannel) AddNodeACL(ctx context.Context, p string, e reconciliation.ACLEntry) error {
+	return s.invokeACL(ctx, reconciliation.InvocationAddNodeACL, p, e)
+}
+
+func (s *storageProviderControlChannel) RemoveNodeACL(ctx context.Context, p string, e reconciliation.ACLEntry) error {
+	return s.invokeACL(ctx, reconciliation.InvocationRemoveNodeACL, p, e)
+}
+
+func (s *storageProviderControlChannel) invokeACL(ctx context.Context, invocation, p string, e reconciliation.ACLEntry) error {
+	entry, err := json.Marshal(e)
+	if err != nil {
+		return err
+	}
+	ctx, err = admin.AsService(ctx, "reconciliation")
+	if err != nil {
+		return err
+	}
+	res, err := s.client.Invoke(ctx, &controlpb.InvokeRequest{
+		Target:     s.target,
+		Invocation: invocation,
+		Args:       map[string]string{reconciliation.ArgPath: p, reconciliation.ArgEntry: string(entry)},
+	})
+	if err != nil {
+		return err
+	}
+	if res.GetError() != "" {
+		return errors.New(res.GetError())
+	}
+	return nil
 }
 
 // Start is a no-op: the jobs service owns the runner that fires the jobs.

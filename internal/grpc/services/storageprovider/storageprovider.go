@@ -42,6 +42,7 @@ import (
 
 	"github.com/cs3org/reva/v3/pkg/appctx"
 	"github.com/cs3org/reva/v3/pkg/errtypes"
+	"github.com/cs3org/reva/v3/pkg/invoke"
 	"github.com/cs3org/reva/v3/pkg/mime"
 	"github.com/cs3org/reva/v3/pkg/plugin"
 	"github.com/cs3org/reva/v3/pkg/rgrpc"
@@ -108,6 +109,7 @@ type service struct {
 	storage            storage.FS
 	mountPath, mountID string
 	availableXS        []*provider.ResourceChecksumPriority
+	invocations        *invoke.Set
 }
 
 // dataServerURL resolves this storage's data provider from the registry (by
@@ -215,6 +217,7 @@ func New(ctx context.Context, m map[string]any) (rgrpc.Service, error) {
 		mountID:     mountID,
 		availableXS: xsTypes,
 	}
+	service.invocations = service.reconcileInvocations()
 
 	return service, nil
 }

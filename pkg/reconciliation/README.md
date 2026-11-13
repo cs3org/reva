@@ -127,6 +127,31 @@ A share whose expiration date has passed is left out (`expired` in the totals).
 The job does not write its entry, and it does not make a share below it
 redundant. The share API ignores expired shares in the same way.
 
+`reconciliation.deep` compares the ACL of every node of a space with the shares
+and the project roles, and fixes each node on its own. It runs on demand only:
+`reva admin jobs run reconciliation.deep [space=<space-id>]`.
+
+The job does not talk to the storage itself. It finds the storage provider of
+the space through the storage registry and the service registry (the provider
+advertises its `mount_id`), and asks it for a dump and for the writes over the
+control channel. So the storage provider needs a driver that can be reconciled
+(today only `eos`, see `pkg/storage/fs/eos/nsdump/README.md` for its config),
+and the job sends an admin token there.
+
+EOS keeps users by uid, so the job resolves the users of the shares to uids
+through the gateway, with its own service user. A user that cannot be resolved
+fails the space: without the uid, the job would delete the entry the user has.
+
+An entry that no share and no project role asks for is removed, unless it is in
+`allowed_acls`. Each entry there is `user:<name>:<level>` or
+`group:<name>:<level>`, with a level of `R`, `RW` or `D`, and it may be on any
+node:
+
+```toml
+[serverless.services.reconciliation.deep]
+allowed_acls = ["user:cboxexternal:RW"]
+```
+
 ## Logs
 
 Each job writes its own log (well, in fact, more like a journal), separate from revad's.
@@ -172,8 +197,7 @@ means the entry was added and has to be removed.
 `ancestor_path`, `ancestor_role`, `dry_run`. Revert by clearing `deleted_at` on
 the row with id `share`.
 
-`reconciliation.shallow.skipspace` carries `skipped_space`, `new_share` (the
-share that appeared, absent when a listing failed), `grants` and `removals`, the
+`reconciliation.shallow.skipspace` carries `skipped_space`, `grants` and `removals`, the
 number of changes held back, and `dry_run`. The two counts are absent when the
 space could not be listed in the first place: the run never got as far as
 deciding. Nothing was applied, so there is nothing to revert. Run the job on that
