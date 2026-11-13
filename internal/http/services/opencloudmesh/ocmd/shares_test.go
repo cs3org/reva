@@ -1145,9 +1145,13 @@ func TestSharesHandlerOCMAndWebDAVSchemeAndRedirect(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancel()
 	_, err := h.ocmClient.Discover(ctx, "http://10.50.1.1:9")
-	assertSharesPolicyText(t, "discovery http in range", err, "refusing scheme")
+	if !errors.Is(err, client.ErrPolicyViolation) {
+		t.Fatalf("discovery http in range = %v, want ErrPolicyViolation", err)
+	}
 	_, err = h.ocmClient.Discover(ctx, "http://127.0.0.1:9")
-	assertSharesPolicyText(t, "discovery http loopback", err, "refusing scheme")
+	if !errors.Is(err, client.ErrPolicyViolation) {
+		t.Fatalf("discovery http loopback = %v, want ErrPolicyViolation", err)
+	}
 
 	dav := gowebdav.NewClient("http://10.50.1.1:9/", "", "")
 	dav.SetTransport(h.webdavTransport)

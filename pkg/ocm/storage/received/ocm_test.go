@@ -1455,9 +1455,25 @@ func runReceivedProxyChild(t *testing.T, scenario string) {
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancel()
 	if scenario != "proxy-stat" {
+		var addresses sync.Map
+		tr := client.HTTPTransport(d.ocmClient.Transport())
+		if tr == nil || tr.DialContext == nil {
+			t.Fatal("discovery transport is missing its guarded dialer")
+		}
+		dial := tr.DialContext
+		tr.DialContext = func(ctx context.Context, network, address string) (net.Conn, error) {
+			addresses.Store(address, true)
+			return dial(ctx, network, address)
+		}
 		_, discoErr := d.ocmClient.Discover(ctx, target)
 		if scenario == "direct" {
-			assertReceivedDirectPolicyError(t, "Discover", discoErr)
+			assertReceivedDenied(t, "Discover", discoErr)
+			if _, ok := addresses.Load("192.168.1.1:9"); !ok {
+				t.Fatal("discovery did not dial the direct destination")
+			}
+			if _, ok := addresses.Load(proxyAddr); ok {
+				t.Fatal("discovery dialed the proxy")
+			}
 		} else if errors.Is(discoErr, client.ErrPolicyViolation) {
 			t.Fatalf("true config denied the Discover proxy hop: %v", discoErr)
 		}
@@ -2115,9 +2131,9 @@ func TestReceivedCIDRDoesNotRelaxSchemeOrRedirect(t *testing.T) {
 			ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 			defer cancel()
 			_, err := d.ocmClient.Discover(ctx, "http://10.50.1.1:9")
-			assertReceivedPolicyText(t, "discovery http in range", err, "refusing scheme")
+			assertReceivedDenied(t, "discovery http in range", err)
 			_, err = d.ocmClient.Discover(ctx, "http://127.0.0.1:9")
-			assertReceivedPolicyText(t, "discovery http loopback", err, "refusing scheme")
+			assertReceivedDenied(t, "discovery http loopback", err)
 
 			_, err = d.newWebDAVClient("http://10.50.1.1:9/", nil).Stat("")
 			assertReceivedPolicyText(t, "webdav http in range", err, "refusing scheme")
@@ -2200,7 +2216,7 @@ func assertReceivedLiveRedirect(t *testing.T, d *driver, rawURL, text string) {
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancel()
 	_, err := d.ocmClient.Discover(ctx, rawURL)
-	assertReceivedPolicyText(t, "ocm redirect", err, text)
+	assertReceivedDenied(t, "ocm redirect", err)
 	_, err = d.newWebDAVClient(rawURL, nil).Stat("")
 	assertReceivedPolicyText(t, "webdav redirect", err, text)
 }
