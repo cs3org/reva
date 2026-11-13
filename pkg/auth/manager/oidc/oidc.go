@@ -28,6 +28,7 @@ import (
 	"net/http"
 	"os"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/coreos/go-oidc/v3/oidc"
@@ -48,6 +49,7 @@ import (
 	"github.com/juliangruber/go-intersect"
 	"github.com/pkg/errors"
 	"golang.org/x/oauth2"
+	"golang.org/x/sync/singleflight"
 )
 
 func init() {
@@ -55,7 +57,9 @@ func init() {
 }
 
 type mgr struct {
-	providers map[string]*oidc.Provider
+	providersMu sync.RWMutex
+	providers   map[string]*oidc.Provider
+	discovery   singleflight.Group
 
 	c                *config
 	oidcUsersMapping map[string]*oidcUserMapping
@@ -160,17 +164,32 @@ func extractIssuer(m jwt.MapClaims) (string, bool) {
 }
 
 func (am *mgr) getOIDCProviderForIssuer(ctx context.Context, issuer string) (*oidc.Provider, error) {
-	// FIXME: op not atomic TODO: fix message and make it more clear
-	if am.providers[issuer] == nil {
-		// TODO (gdelmont): the provider should be periodically recreated
-		// as the public key can change over time
-		provider, err := oidc.NewProvider(ctx, issuer)
-		if err != nil {
-			return nil, errors.Wrapf(err, "oidc: error creating a new oidc provider")
-		}
-		am.providers[issuer] = provider
+	am.providersMu.RLock()
+	provider := am.providers[issuer]
+	am.providersMu.RUnlock()
+	if provider != nil {
+		return provider, nil
 	}
-	return am.providers[issuer], nil
+
+	// TODO (gdelmont): the provider should be periodically recreated
+	// as the public key can change over time
+	// shared and outside the lock: a slow issuer must not block the other
+	// issuers, and one caller disconnecting must not fail the others
+	v, err, _ := am.discovery.Do(issuer, func() (any, error) {
+		return oidc.NewProvider(context.WithoutCancel(ctx), issuer)
+	})
+	if err != nil {
+		return nil, errors.Wrapf(err, "oidc: error creating a new oidc provider")
+	}
+
+	am.providersMu.Lock()
+	defer am.providersMu.Unlock()
+	if cached := am.providers[issuer]; cached != nil {
+		return cached, nil
+	}
+	provider = v.(*oidc.Provider)
+	am.providers[issuer] = provider
+	return provider, nil
 }
 
 func (am *mgr) isIssuerAllowed(issuer string) bool {
