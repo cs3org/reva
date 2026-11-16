@@ -74,6 +74,11 @@ func getFromBody(r *http.Request) (string, bool) {
 	if err = r.ParseForm(); err != nil {
 		return "", false
 	}
+	// RFC 6750 names the parameter "access_token"; "access-token" is kept for
+	// older frontend callers that already rely on the hyphenated form.
+	if tkn := r.Form.Get("access_token"); tkn != "" {
+		return tkn, true
+	}
 	tkn := r.Form.Get("access-token")
 	return tkn, tkn != ""
 }
