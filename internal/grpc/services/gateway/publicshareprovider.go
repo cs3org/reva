@@ -30,7 +30,6 @@ import (
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	link "github.com/cs3org/go-cs3apis/cs3/sharing/link/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
-	types "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
 	"github.com/pkg/errors"
 
 	"github.com/cs3org/reva/v3/pkg/appctx"
@@ -70,9 +69,7 @@ func (s *svc) CreatePublicShare(ctx context.Context, req *link.CreatePublicShare
 	if err != nil {
 		return nil, err
 	}
-	if res.GetStatus().GetCode() == rpc.Code_CODE_OK {
-		res.Opaque = s.addPublicLinkURL(res.Opaque, res.GetShare().GetToken())
-	}
+	s.setPublicLinkURL(res.GetShare())
 
 	return res, nil
 }
@@ -124,6 +121,7 @@ func (s *svc) GetPublicShareByToken(ctx context.Context, req *link.GetPublicShar
 	if err != nil {
 		return nil, err
 	}
+	s.setPublicLinkURL(res.GetShare())
 
 	return res, nil
 }
@@ -146,7 +144,7 @@ func (s *svc) GetPublicShare(ctx context.Context, req *link.GetPublicShareReques
 	if err != nil || res.Status.Code != rpc.Code_CODE_OK {
 		return res, err
 	}
-	res.Opaque = s.addPublicLinkURL(res.Opaque, res.GetShare().GetToken())
+	s.setPublicLinkURL(res.GetShare())
 
 	// A public link session resolves its own link by token, and it has no grant permissions.
 	if isOwnPublicLink(ctx, req.GetRef().GetToken()) {
@@ -217,6 +215,9 @@ func (s *svc) ListPublicShares(ctx context.Context, req *link.ListPublicSharesRe
 	}
 
 	res.Share = keepManageable(ctx, s, user, res.Share)
+	for _, share := range res.Share {
+		s.setPublicLinkURL(share)
+	}
 	return res, nil
 }
 
@@ -257,7 +258,6 @@ func (s *svc) ListExistingPublicShares(ctx context.Context, req *link.ListPublic
 			}
 
 			sharesCh <- &gateway.PublicShareResourceInfo{
-				Opaque:       s.addPublicLinkURL(nil, share.GetToken()),
 				ResourceInfo: resourceInfo,
 				PublicShare:  share,
 			}
@@ -321,33 +321,19 @@ func (s *svc) UpdatePublicShare(ctx context.Context, req *link.UpdatePublicShare
 	if err != nil {
 		return nil, errors.Wrap(err, "error updating share")
 	}
-	if res.GetStatus().GetCode() == rpc.Code_CODE_OK {
-		res.Opaque = s.addPublicLinkURL(res.Opaque, res.GetShare().GetToken())
-	}
+	s.setPublicLinkURL(res.GetShare())
 	return res, nil
 }
 
-// addPublicLinkURL puts the web address of the link in the opaque, because the CS3
-// PublicShare has no field for it. Other entries in the opaque are kept.
-func (s *svc) addPublicLinkURL(o *types.Opaque, token string) *types.Opaque {
-	if s.c.PublicLinkBaseURL == "" || token == "" {
-		return o
+// setPublicLinkURL fills the web address of the link in the gateway only, so that the
+// clients and the HTTP services do not each need the base URL to build it.
+func (s *svc) setPublicLinkURL(share *link.PublicShare) {
+	if s.c.PublicLinkBaseURL == "" || share.GetToken() == "" {
+		return
 	}
-	u, err := url.JoinPath(s.c.PublicLinkBaseURL, "/s", token)
-	if err != nil {
-		return o
+	if u, err := url.JoinPath(s.c.PublicLinkBaseURL, "/s", share.GetToken()); err == nil {
+		share.Url = u
 	}
-	if o == nil {
-		o = &types.Opaque{}
-	}
-	if o.Map == nil {
-		o.Map = map[string]*types.OpaqueEntry{}
-	}
-	o.Map["url"] = &types.OpaqueEntry{
-		Decoder: "plain",
-		Value:   []byte(u),
-	}
-	return o
 }
 
 // permissionsOnResource stats the resource a share points to and returns the

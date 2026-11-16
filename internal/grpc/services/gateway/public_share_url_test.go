@@ -26,7 +26,6 @@ import (
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	link "github.com/cs3org/go-cs3apis/cs3/sharing/link/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
-	types "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
 	"github.com/cs3org/reva/v3/pkg/appctx"
 	"github.com/cs3org/reva/v3/pkg/publicshare"
 	revaservice "github.com/cs3org/reva/v3/pkg/service"
@@ -34,30 +33,39 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/grpc"
+	"google.golang.org/protobuf/proto"
 )
 
-// urlLinkProvider answers each public link call with its share. Create and update
-// also return an opaque entry of the provider, which the gateway must keep.
+// urlLinkProvider answers each public link call with a copy of its share, like a
+// provider behind a gRPC connection does.
 type urlLinkProvider struct {
-	fakeLinkProvider
+	link.LinkAPIClient
+
+	share *link.PublicShare
 }
 
-func providerOpaque() *types.Opaque {
-	return &types.Opaque{Map: map[string]*types.OpaqueEntry{
-		"provider": {Decoder: "plain", Value: []byte("kept")},
-	}}
+func (p *urlLinkProvider) copy() *link.PublicShare {
+	return proto.Clone(p.share).(*link.PublicShare)
 }
 
 func (p *urlLinkProvider) CreatePublicShare(_ context.Context, _ *link.CreatePublicShareRequest, _ ...grpc.CallOption) (*link.CreatePublicShareResponse, error) {
-	return &link.CreatePublicShareResponse{Status: okStatus(), Share: p.share, Opaque: providerOpaque()}, nil
+	return &link.CreatePublicShareResponse{Status: okStatus(), Share: p.copy()}, nil
+}
+
+func (p *urlLinkProvider) GetPublicShare(_ context.Context, _ *link.GetPublicShareRequest, _ ...grpc.CallOption) (*link.GetPublicShareResponse, error) {
+	return &link.GetPublicShareResponse{Status: okStatus(), Share: p.copy()}, nil
+}
+
+func (p *urlLinkProvider) GetPublicShareByToken(_ context.Context, _ *link.GetPublicShareByTokenRequest, _ ...grpc.CallOption) (*link.GetPublicShareByTokenResponse, error) {
+	return &link.GetPublicShareByTokenResponse{Status: okStatus(), Share: p.copy()}, nil
 }
 
 func (p *urlLinkProvider) UpdatePublicShare(_ context.Context, _ *link.UpdatePublicShareRequest, _ ...grpc.CallOption) (*link.UpdatePublicShareResponse, error) {
-	return &link.UpdatePublicShareResponse{Status: okStatus(), Share: p.share, Opaque: providerOpaque()}, nil
+	return &link.UpdatePublicShareResponse{Status: okStatus(), Share: p.copy()}, nil
 }
 
 func (p *urlLinkProvider) ListPublicShares(_ context.Context, _ *link.ListPublicSharesRequest, _ ...grpc.CallOption) (*link.ListPublicSharesResponse, error) {
-	return &link.ListPublicSharesResponse{Status: okStatus(), Share: []*link.PublicShare{p.share}}, nil
+	return &link.ListPublicSharesResponse{Status: okStatus(), Share: []*link.PublicShare{p.copy()}}, nil
 }
 
 func TestPublicLinkURL(t *testing.T) {
@@ -77,15 +85,15 @@ func TestPublicLinkURL(t *testing.T) {
 	revaservice.SetClientAt(endpoint, storage)
 	t.Cleanup(func() { revaservice.SetClientAt(endpoint, nil) })
 	stampGatewayPeers(&fakeStorageRegistryServer{storageEndpoint: endpoint}, newFakeCollaborationServer())
-	stampPublicShareProvider(&urlLinkProvider{fakeLinkProvider{share: share}})
+	stampPublicShareProvider(&urlLinkProvider{share: share})
 	t.Cleanup(func() { stampPublicShareProvider(nil) })
 
 	ricache, err := memory.New[*provider.ResourceInfo](nil)
 	require.NoError(t, err)
 	ctx := appctx.ContextSetUser(context.Background(), &userpb.User{Id: owner})
 
-	// opaques makes each public link call and returns the opaque that holds the url.
-	opaques := func(t *testing.T, gw *svc) map[string]*types.Opaque {
+	// shares makes each public link call and returns the share of each response.
+	shares := func(t *testing.T, gw *svc) map[string]*link.PublicShare {
 		create, err := gw.CreatePublicShare(ctx, &link.CreatePublicShareRequest{
 			ResourceInfo: &provider.ResourceInfo{Id: share.ResourceId, Path: "/home/file"},
 		})
@@ -96,47 +104,46 @@ func TestPublicLinkURL(t *testing.T) {
 		require.NoError(t, err)
 		require.Equal(t, rpc.Code_CODE_OK, get.Status.Code)
 
+		byToken, err := gw.GetPublicShareByToken(ctx, &link.GetPublicShareByTokenRequest{Token: share.Token})
+		require.NoError(t, err)
+		require.Equal(t, rpc.Code_CODE_OK, byToken.Status.Code)
+
 		update, err := gw.UpdatePublicShare(ctx, &link.UpdatePublicShareRequest{Ref: ref})
 		require.NoError(t, err)
 		require.Equal(t, rpc.Code_CODE_OK, update.Status.Code)
 
-		list, err := gw.ListExistingPublicShares(ctx, &link.ListPublicSharesRequest{
-			Filters: []*link.ListPublicSharesRequest_Filter{publicshare.ResourceIDFilter(share.ResourceId)},
-		})
+		filters := []*link.ListPublicSharesRequest_Filter{publicshare.ResourceIDFilter(share.ResourceId)}
+		list, err := gw.ListPublicShares(ctx, &link.ListPublicSharesRequest{Filters: filters})
 		require.NoError(t, err)
 		require.Equal(t, rpc.Code_CODE_OK, list.Status.Code)
-		require.Len(t, list.ShareInfos, 1)
+		require.Len(t, list.Share, 1)
 
-		return map[string]*types.Opaque{
-			"create": create.Opaque,
-			"get":    get.Opaque,
-			"update": update.Opaque,
-			"list":   list.ShareInfos[0].Opaque,
+		existing, err := gw.ListExistingPublicShares(ctx, &link.ListPublicSharesRequest{Filters: filters})
+		require.NoError(t, err)
+		require.Equal(t, rpc.Code_CODE_OK, existing.Status.Code)
+		require.Len(t, existing.ShareInfos, 1)
+
+		return map[string]*link.PublicShare{
+			"create":   create.Share,
+			"get":      get.Share,
+			"byToken":  byToken.Share,
+			"update":   update.Share,
+			"list":     list.Share[0],
+			"existing": existing.ShareInfos[0].PublicShare,
 		}
 	}
 
-	t.Run("each response has the url of the link", func(t *testing.T) {
+	t.Run("each share has the url of the link", func(t *testing.T) {
 		gw := &svc{c: &config{PublicLinkBaseURL: "https://cernbox.cern.ch/"}, resourceInfoCache: ricache}
-		got := opaques(t, gw)
-		for name, o := range got {
-			entry := o.GetMap()["url"]
-			require.NotNil(t, entry, name)
-			assert.Equal(t, "plain", entry.Decoder, name)
-			assert.Equal(t, "https://cernbox.cern.ch/s/IHqwVca5jdPB3Ry", string(entry.Value), name)
+		for name, sh := range shares(t, gw) {
+			assert.Equal(t, "https://cernbox.cern.ch/s/IHqwVca5jdPB3Ry", sh.GetUrl(), name)
 		}
-		// The url is added next to the entries of the provider.
-		assert.Equal(t, "kept", string(got["create"].GetMap()["provider"].GetValue()))
-		assert.Equal(t, "kept", string(got["update"].GetMap()["provider"].GetValue()))
 	})
 
-	t.Run("without a base url no url is added", func(t *testing.T) {
+	t.Run("without a base url the url stays empty", func(t *testing.T) {
 		gw := &svc{c: &config{}, resourceInfoCache: ricache}
-		got := opaques(t, gw)
-		for name, o := range got {
-			assert.NotContains(t, o.GetMap(), "url", name)
+		for name, sh := range shares(t, gw) {
+			assert.Empty(t, sh.GetUrl(), name)
 		}
-		assert.Nil(t, got["get"])
-		assert.Nil(t, got["list"])
-		assert.Len(t, got["create"].GetMap(), 1)
 	})
 }

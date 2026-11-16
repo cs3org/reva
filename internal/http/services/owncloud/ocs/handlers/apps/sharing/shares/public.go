@@ -77,7 +77,7 @@ func (h *Handler) createPublicLinkShare(w http.ResponseWriter, r *http.Request, 
 
 		for _, l := range res.GetShare() {
 			if l.Quicklink {
-				s := conversions.PublicShare2ShareData(l, r, h.publicURL)
+				s := conversions.PublicShare2ShareData(l, r)
 				err = h.addFileInfo(ctx, s, statInfo)
 				if err != nil {
 					response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "error enhancing response with share data", err)
@@ -184,7 +184,7 @@ func (h *Handler) createPublicLinkShare(w http.ResponseWriter, r *http.Request, 
 		return
 	}
 
-	s := conversions.PublicShare2ShareData(createRes.Share, r, h.publicURL)
+	s := conversions.PublicShare2ShareData(createRes.Share, r)
 	err = h.addFileInfo(ctx, s, statInfo)
 	if err != nil {
 		response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "error enhancing response with share data", err)
@@ -234,7 +234,7 @@ func (h *Handler) listPublicShares(r *http.Request, filters []*link.ListPublicSh
 					return
 				}
 
-				sData := conversions.PublicShare2ShareData(share, r, h.publicURL)
+				sData := conversions.PublicShare2ShareData(share, r)
 
 				sData.Name = share.DisplayName
 
@@ -542,7 +542,7 @@ func (h *Handler) updatePublicShare(w http.ResponseWriter, r *http.Request, shar
 		return
 	}
 
-	s := conversions.PublicShare2ShareData(publicShare, r, h.publicURL)
+	s := conversions.PublicShare2ShareData(publicShare, r)
 	err = h.addFileInfo(r.Context(), s, statRes.Info)
 	if err != nil {
 		response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "error enhancing response with share data", err)

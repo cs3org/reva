@@ -73,7 +73,6 @@ const (
 
 // Handler implements the shares part of the ownCloud sharing API.
 type Handler struct {
-	publicURL                  string
 	sharePrefix                string
 	homeNamespace              string
 	ocmMountPoint              string
@@ -112,7 +111,6 @@ func getCacheManager(c *config.Config) (cache.ResourceInfoCache, error) {
 
 // Init initializes this and any contained handlers.
 func (h *Handler) Init(c *config.Config, l *zerolog.Logger) {
-	h.publicURL = c.Config.Host
 	h.sharePrefix = c.SharePrefix
 	h.homeNamespace = c.HomeNamespace
 	h.ocmMountPoint = c.OCMMountPoint
@@ -588,7 +586,7 @@ func (h *Handler) GetShare(w http.ResponseWriter, r *http.Request) {
 	*/
 
 	if err == nil && psRes.GetShare() != nil {
-		share = conversions.PublicShare2ShareData(psRes.Share, r, h.publicURL)
+		share = conversions.PublicShare2ShareData(psRes.Share, r)
 		resourceID = psRes.Share.ResourceId
 	}
 

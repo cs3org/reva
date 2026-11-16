@@ -23,7 +23,6 @@ import (
 	"context"
 	"fmt"
 	"net/http"
-	"path"
 	"time"
 
 	grouppb "github.com/cs3org/go-cs3apis/cs3/identity/group/v1beta1"
@@ -216,7 +215,7 @@ func CS3Share2ShareData(ctx context.Context, share *collaboration.Share) (*Share
 }
 
 // PublicShare2ShareData converts a cs3api public share into shareData data model.
-func PublicShare2ShareData(share *link.PublicShare, r *http.Request, publicURL string) *ShareData {
+func PublicShare2ShareData(share *link.PublicShare, r *http.Request) *ShareData {
 	sd := &ShareData{
 		// share.permissions are mapped below
 		// Displaynames are added later
@@ -224,7 +223,7 @@ func PublicShare2ShareData(share *link.PublicShare, r *http.Request, publicURL s
 		Token:                        share.Token,
 		Name:                         share.DisplayName,
 		MailSend:                     0,
-		URL:                          publicURL + path.Join("/", "s/"+share.Token),
+		URL:                          share.Url,
 		UIDOwner:                     LocalUserIDToString(share.Creator),
 		UIDFileOwner:                 LocalUserIDToString(share.Owner),
 		Quicklink:                    share.Quicklink,

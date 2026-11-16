@@ -73,8 +73,8 @@ type config struct {
 	// account as its home on login. Empty disables lightweight homes.
 	LightweightHomeLayout string `mapstructure:"lightweight_home_layout"`
 	// PublicLinkBaseURL is the web address that public links are opened at, for
-	// example https://cernbox.cern.ch. When set, the gateway returns the URL of
-	// each public link in the "url" opaque entry. Empty adds no URL.
+	// example https://cernbox.cern.ch. The gateway uses it to fill the url of each
+	// public link it returns. The ocs and ocgraph services show this url.
 	PublicLinkBaseURL string `mapstructure:"public_link_base_url"`
 }
 
