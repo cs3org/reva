@@ -72,6 +72,10 @@ type config struct {
 	// LightweightHomeLayout is the path of the folder shared with a lightweight
 	// account as its home on login. Empty disables lightweight homes.
 	LightweightHomeLayout string `mapstructure:"lightweight_home_layout"`
+	// PublicLinkBaseURL is the web address that public links are opened at, for
+	// example https://cernbox.cern.ch. When set, the gateway returns the URL of
+	// each public link in the "url" opaque entry. Empty adds no URL.
+	PublicLinkBaseURL string `mapstructure:"public_link_base_url"`
 }
 
 // sets defaults.
