@@ -1,0 +1,66 @@
+publiccodeYmlVersion: "0.8"
+
+name: Reva
+url: "https://github.com/cs3org/reva"
+landingURL: "https://reva.link"
+# softwareVersion and releaseDate are updated automatically
+softwareVersion: "3.15.2"
+releaseDate: "2026-11-12"
+logo: docs/static/logo.svg
+
+platforms:
+  - linux
+
+# the spec defines a fixed list!
+categories:
+  - cloud-management
+  - collaboration
+  - document-management
+  - web-collaboration
+
+developmentStatus: stable
+softwareType: standalone/backend
+
+description:
+  en:
+    shortDescription: >-
+      Interoperability platform that connects web, desktop and mobile clients
+      to storage systems such as EOS, CephFS and local file systems.
+    longDescription: >
+      Reva is the backend of CERNBox, the cloud storage service of CERN. It is
+      a set of daemons written in Go. Reva connects high-level clients (web,
+      desktop and mobile) to the storage below them (EOS, CephFS and local
+      file systems).
+
+      Reva exports well-known protocols, such as WebDAV, OCS and the Graph
+      API, so that existing clients can use it. It also exports a gRPC API,
+      the CS3 APIs, to integrate with other systems.
+
+      A configuration file selects the gRPC, HTTP and background services
+      that one process runs. Drivers for storage, users, groups, shares and
+      authentication are pluggable, which means the system is highly 
+      customizable. Reva also supports the Open Cloud Mesh (OCM) protocol
+      to share files between different sites.
+    documentation: "https://reva.link/docs/"
+    apiDocumentation: "https://buf.build/cs3org-buf/cs3apis"
+    features:
+      - WebDAV, OCS and Graph APIs for file sync and share clients
+      - CS3 APIs over gRPC
+      - Storage drivers for EOS, CephFS and local file systems
+      - User, group and public link shares
+      - Open Cloud Mesh (OCM) federated sharing
+      - Integration with office and other applications
+
+organisation:
+  uri: "https://www.cs3community.org"
+  name: CS3 Organization
+
+legal:
+  license: Apache-2.0
+  mainCopyrightOwner: CERN
+
+maintenance:
+  type: internal
+  contacts:
+    - name: Giuseppe Lo Presti
+      affiliation: CERN
