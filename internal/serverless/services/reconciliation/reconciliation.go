@@ -27,7 +27,9 @@ import (
 	"encoding/json"
 	"io"
 	"iter"
+	"maps"
 	"os"
+	"slices"
 	"sync"
 
 	authpb "github.com/cs3org/go-cs3apis/cs3/auth/provider/v1beta1"
@@ -319,6 +321,7 @@ func New(ctx context.Context, m map[string]any) (_ rserverless.Service, err erro
 				ShareStore:                    shares,
 				Auth:                          identity.authenticate,
 				StorageProviderControlChannel: providers.controlChannelOfInstance,
+				ListSpaces:                    providers.listSpaces,
 				Project:                       projects.GetProjectBySpaceID,
 				AllowedACLs:                   allowed,
 				PathACLs:                      pathACLs,
@@ -524,6 +527,91 @@ func (p *storageProviders) controlChannelOfInstance(ctx context.Context, storage
 		return nil, errors.Wrapf(err, "reconciliation: dialing the control channel of %s", instance)
 	}
 	return &storageProviderControlChannel{client: client, target: ep.Node().ID()}, nil
+}
+
+// listSpaces gives the spaces of every storage provider that provides a space
+// type. The replicas of an instance hold the same spaces, so it asks one node
+// per instance.
+func (p *storageProviders) listSpaces(ctx context.Context) iter.Seq2[string, error] {
+	return func(yield func(string, error) bool) {
+		eps, err := service.HTTPEndpoints(ctx,
+			service.ByName(service.NameStorageProvider),
+			service.ByMetadata(svcregistry.MetaTransport, svcregistry.TransportGRPC),
+		)
+		if err != nil {
+			yield("", errors.Wrap(err, "reconciliation: finding the storage providers"))
+			return
+		}
+		byInstance := map[string]service.Endpoint{}
+		for _, ep := range eps {
+			if ep.Meta(svcregistry.MetaSpaceType) == "" {
+				continue
+			}
+			if _, ok := byInstance[ep.Meta(svcregistry.MetaMountID)]; !ok {
+				byInstance[ep.Meta(svcregistry.MetaMountID)] = ep
+			}
+		}
+
+		for _, instance := range slices.Sorted(maps.Keys(byInstance)) {
+			// the job takes days over the spaces of one instance, so the listing
+			// is read completely before: a stream or a token would not live that long.
+			ids, err := listSpacesOf(ctx, instance, byInstance[instance])
+			if err != nil {
+				yield("", err)
+				return
+			}
+			for _, id := range ids {
+				if !yield(id, nil) {
+					return
+				}
+			}
+		}
+	}
+}
+
+func listSpacesOf(ctx context.Context, instance string, ep service.Endpoint) ([]string, error) {
+	control := ep.Meta(svcregistry.MetaControl)
+	if control == "" {
+		return nil, errors.Errorf("reconciliation: the storage provider of %s has no control channel", instance)
+	}
+	client, err := invokeclient.ControlClientAt(control)
+	if err != nil {
+		return nil, errors.Wrapf(err, "reconciliation: dialing the control channel of %s", instance)
+	}
+	ctx, err = admin.AsService(ctx, "reconciliation")
+	if err != nil {
+		return nil, err
+	}
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
+
+	stream, err := client.InvokeStream(ctx, &controlpb.InvokeRequest{
+		Target:     ep.Node().ID(),
+		Invocation: reconciliation.InvocationListSpaces,
+	})
+	if err != nil {
+		return nil, errors.Wrapf(err, "reconciliation: listing the spaces of %s", instance)
+	}
+	var ids []string
+	for {
+		res, err := stream.Recv()
+		if errors.Is(err, io.EOF) {
+			return ids, nil
+		}
+		if err != nil {
+			return nil, errors.Wrapf(err, "reconciliation: listing the spaces of %s", instance)
+		}
+		if res.GetError() != "" {
+			return nil, errors.Errorf("reconciliation: listing the spaces of %s: %s", instance, res.GetError())
+		}
+		var batch struct {
+			Spaces []string `json:"spaces"`
+		}
+		if err := json.Unmarshal([]byte(res.GetResultJson()), &batch); err != nil {
+			return nil, errors.Wrapf(err, "reconciliation: decoding the spaces of %s", instance)
+		}
+		ids = append(ids, batch.Spaces...)
+	}
 }
 
 // storageProviderControlChannel is the storage of one provider, reached over its control

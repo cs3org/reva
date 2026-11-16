@@ -43,10 +43,11 @@ type NSDumpInfo struct {
 	ID   string                `json:"id"`
 	Type provider.ResourceType `json:"type"`
 	ACLs []*ACLEntry           `json:"acls"`
-	// ACLsOf is the path of the node whose ACLs this node must carry, empty for
-	// the node itself. A storage that keeps a copy of the ACL of a file
-	// elsewhere reports that copy with the path of the file.
-	ACLsOf string `json:"acls_of,omitempty"`
+	// ExpectedACLPath is the path to look up the expected ACLs for. Empty means
+	// Path. EOS copies the ACL of a file to its version folder, because an
+	// overwrite removes the ACL from the file. The version folder must thus
+	// match the file, not its parent.
+	ExpectedACLPath string `json:"expected_acl_path,omitempty"`
 }
 
 // ReconcileMethods is what the deep job needs from a storage driver. The
@@ -69,6 +70,9 @@ type ReconcileMethods interface {
 type ReconcilableFS interface {
 	storage.FS
 	ReconcileMethods
+	// ListSpaceRoots gives the folders exactly depth levels below root, without
+	// a trailing separator.
+	ListSpaceRoots(ctx context.Context, root string, depth int) iter.Seq2[string, error]
 }
 
 // The invocations of a storage provider whose driver is a ReconcilableFS.
@@ -79,6 +83,9 @@ const (
 	// InvocationAddNodeACL and InvocationRemoveNodeACL take ArgPath and ArgEntry.
 	InvocationAddNodeACL    = "reconciliation.addacl"
 	InvocationRemoveNodeACL = "reconciliation.removeacl"
+	// InvocationListSpaces streams the ids of the spaces of the provider, with
+	// at most DumpBatchSize ids under "spaces" in each result.
+	InvocationListSpaces = "reconciliation.listspaces"
 
 	ArgPath = "path"
 	// ArgEntry holds an ACLEntry as JSON.

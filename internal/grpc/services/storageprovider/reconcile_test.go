@@ -23,12 +23,14 @@ import (
 	"encoding/json"
 	"fmt"
 	"iter"
+	"slices"
 	"testing"
 
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/cs3org/reva/v3/pkg/invoke"
 	"github.com/cs3org/reva/v3/pkg/reconciliation"
 	"github.com/cs3org/reva/v3/pkg/sharehierarchy"
+	"github.com/cs3org/reva/v3/pkg/spaces"
 	"github.com/cs3org/reva/v3/pkg/storage"
 )
 
@@ -39,6 +41,21 @@ type reconcilableFS struct {
 	nodes   int
 	added   []string
 	removed []string
+	// roots are the space roots ListSpaceRoots gives, and listedAt is what it
+	// was called with.
+	roots    []string
+	listedAt string
+}
+
+func (f *reconcilableFS) ListSpaceRoots(ctx context.Context, root string, depth int) iter.Seq2[string, error] {
+	f.listedAt = fmt.Sprintf("%s %d", root, depth)
+	return func(yield func(string, error) bool) {
+		for _, r := range f.roots {
+			if !yield(r, nil) {
+				return
+			}
+		}
+	}
 }
 
 func (f *reconcilableFS) DumpNamespace(ctx context.Context, p string) iter.Seq2[reconciliation.NSDumpInfo, error] {
@@ -70,8 +87,81 @@ func TestReconcileInvocationsNeedAReconcilableDriver(t *testing.T) {
 	}
 
 	s = &service{storage: &reconcilableFS{}}
-	if got := s.reconcileInvocations().Invocations(); len(got) != 3 {
-		t.Errorf("got %d invocations, want 3", len(got))
+	if got := s.reconcileInvocations().Invocations(); len(got) != 4 {
+		t.Errorf("got %d invocations, want 4", len(got))
+	}
+}
+
+// A provider gives the ids of its spaces, with the space_depth of the
+// production config. The roots are two levels below the mount path.
+func TestListSpacesInvocationGivesSpaceIDs(t *testing.T) {
+	tests := []struct {
+		name       string
+		mountPath  string
+		spaceDepth int
+		roots      []string
+		wantListed string
+		want       []string
+	}{
+		{
+			name:       "a home provider",
+			mountPath:  "/eos/user",
+			spaceDepth: 4,
+			roots:      []string{"/eos/user/n/name", "/eos/user/j/jdoe"},
+			wantListed: "/eos/user 2",
+			want:       []string{"/eos/user/n/name", "/eos/user/j/jdoe"},
+		},
+		{
+			name:       "a project provider",
+			mountPath:  "/eos/project",
+			spaceDepth: 4,
+			roots:      []string{"/eos/project/n/name"},
+			wantListed: "/eos/project 2",
+			want:       []string{"/eos/project/n/name"},
+		},
+		{
+			name:       "a provider whose mount is one space",
+			mountPath:  "/eos/atlas",
+			spaceDepth: 2,
+			want:       []string{"/eos/atlas"},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			fs := &reconcilableFS{roots: tt.roots}
+			s := &service{storage: fs, conf: &config{SpaceDepth: tt.spaceDepth}, mountPath: tt.mountPath}
+
+			var got []string
+			emit := func(r invoke.Result) error {
+				data, err := json.Marshal(r)
+				if err != nil {
+					return err
+				}
+				var batch struct {
+					Spaces []string `json:"spaces"`
+				}
+				if err := json.Unmarshal(data, &batch); err != nil {
+					return err
+				}
+				got = append(got, batch.Spaces...)
+				return nil
+			}
+			if err := s.reconcileInvocations().InvokeStream(context.Background(), reconciliation.InvocationListSpaces, map[string]any{}, emit); err != nil {
+				t.Fatalf("InvokeStream: %v", err)
+			}
+
+			if fs.listedAt != tt.wantListed {
+				t.Errorf("the driver listed %q, want %q", fs.listedAt, tt.wantListed)
+			}
+			want := make([]string, 0, len(tt.want))
+			for _, p := range tt.want {
+				want = append(want, spaces.EncodeSpaceID(p))
+			}
+			if !slices.Equal(got, want) {
+				t.Errorf("space ids = %v, want the ids of %v", got, tt.want)
+			}
+		})
 	}
 }
 

@@ -41,30 +41,8 @@ var _ reconciliation.ReconcilableFS = (*Eosfs)(nil)
 // EOS paths, so they are not wrapped.
 func (fs *Eosfs) DumpNamespace(ctx context.Context, p string) iter.Seq2[reconciliation.NSDumpInfo, error] {
 	return func(yield func(reconciliation.NSDumpInfo, error) bool) {
-		if len(fs.conf.NSInspectQuarkDBNodes) == 0 || fs.conf.NSInspectPasswordFile == "" {
-			yield(reconciliation.NSDumpInfo{}, errors.New("eosfs: set ns_inspect_quarkdb_nodes and ns_inspect_password_file to dump the namespace"))
-			return
-		}
-		inspect := nsdump.NSInspectConfig{
-			Binary:       fs.conf.NSInspectBinary,
-			QuarkDBNodes: fs.conf.NSInspectQuarkDBNodes,
-			PasswordFile: fs.conf.NSInspectPasswordFile,
-		}
-
-		var dumper nsdump.NSDumpClient
-		var conf any
-		switch fs.conf.NSDumpDriver {
-		case "chunked":
-			dumper = &nsdump.EOSChunkedNSInspect{}
-			conf = nsdump.EOSChunkedNSInspectConfig{NSInspectConfig: inspect, TmpDir: fs.conf.NSDumpTmpDir}
-		case "memory":
-			dumper = &nsdump.EOSMemoryNSInspect{}
-			conf = inspect
-		default:
-			yield(reconciliation.NSDumpInfo{}, errors.Errorf("eosfs: nsdump_driver %q is not chunked or memory", fs.conf.NSDumpDriver))
-			return
-		}
-		if err := dumper.Setup(conf); err != nil {
+		dumper, err := fs.nsDumper(false)
+		if err != nil {
 			yield(reconciliation.NSDumpInfo{}, err)
 			return
 		}
@@ -83,6 +61,69 @@ func (fs *Eosfs) DumpNamespace(ctx context.Context, p string) iter.Seq2[reconcil
 			}
 		}
 	}
+}
+
+// ListSpaceRoots scans only the folders down to the space roots, so the scan
+// does not read the content of the spaces.
+func (fs *Eosfs) ListSpaceRoots(ctx context.Context, root string, depth int) iter.Seq2[string, error] {
+	return func(yield func(string, error) bool) {
+		dumper, err := fs.nsDumper(true)
+		if err != nil {
+			yield("", err)
+			return
+		}
+		spaceRoots(dumper.Dump(root, depth), root, depth)(yield)
+	}
+}
+
+// spaceRoots keeps the folders exactly depth levels below root. The scan also
+// gives the folders above them, for example /eos/user/j.
+func spaceRoots(entries iter.Seq2[nsdump.NameSpaceEntry, error], root string, depth int) iter.Seq2[string, error] {
+	want := strings.Count(path.Clean(root), "/") + depth
+	return func(yield func(string, error) bool) {
+		for e, err := range entries {
+			if err != nil {
+				yield("", err)
+				return
+			}
+			p := path.Clean(e.Path)
+			if e.EntryType() != nsdump.EntryTypeFolder || strings.Count(p, "/") != want || strings.HasPrefix(path.Base(p), ".") {
+				continue
+			}
+			if !yield(p, nil) {
+				return
+			}
+		}
+	}
+}
+
+func (fs *Eosfs) nsDumper(ignoreFiles bool) (nsdump.NSDumpClient, error) {
+	if len(fs.conf.NSInspectQuarkDBNodes) == 0 || fs.conf.NSInspectPasswordFile == "" {
+		return nil, errors.New("eosfs: set ns_inspect_quarkdb_nodes and ns_inspect_password_file to dump the namespace")
+	}
+	inspect := nsdump.NSInspectConfig{
+		Binary:       fs.conf.NSInspectBinary,
+		QuarkDBNodes: fs.conf.NSInspectQuarkDBNodes,
+		PasswordFile: fs.conf.NSInspectPasswordFile,
+		IgnoreFiles:  ignoreFiles,
+	}
+
+	var dumper nsdump.NSDumpClient
+	var conf any
+	switch fs.conf.NSDumpDriver {
+	case "chunked":
+		dumper = &nsdump.EOSChunkedNSInspect{}
+		conf = nsdump.EOSChunkedNSInspectConfig{NSInspectConfig: inspect, TmpDir: fs.conf.NSDumpTmpDir}
+	case "memory":
+		dumper = &nsdump.EOSMemoryNSInspect{}
+		conf = inspect
+	default:
+		return nil, errors.Errorf("eosfs: nsdump_driver %q is not chunked or memory", fs.conf.NSDumpDriver)
+	}
+	if err := dumper.Setup(conf); err != nil {
+		return nil, err
+	}
+	return dumper, nil
 }
 
 // toNSDumpInfo converts one entry of eos-ns-inspect into the file or folder the
@@ -104,7 +145,7 @@ func toNSDumpInfo(e nsdump.NameSpaceEntry) (reconciliation.NSDumpInfo, bool) {
 		}
 		// AddGrant writes the ACL of a file on its version folder too, because
 		// an overwrite wipes the one on the file.
-		info.ACLsOf = file
+		info.ExpectedACLPath = file
 	} else if strings.HasPrefix(path.Base(clean), ".sys.") {
 		return info, false
 	}

@@ -22,6 +22,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"slices"
 	"testing"
 
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
@@ -111,17 +112,78 @@ func TestNSDumpInfoOfTheFixture(t *testing.T) {
 	}
 }
 
+// A scan down to the space roots also gives the folders above them. Only the
+// roots are spaces.
+func TestSpaceRoots(t *testing.T) {
+	folder := func(p string) nsdump.NameSpaceEntry { return nsdump.NameSpaceEntry{CID: "1", Path: p} }
+
+	tests := []struct {
+		name    string
+		root    string
+		entries []nsdump.NameSpaceEntry
+		want    []string
+	}{
+		{
+			name: "homes",
+			root: "/eos/user/",
+			entries: []nsdump.NameSpaceEntry{
+				folder("/eos/user/"),
+				folder("/eos/user/n/"),
+				folder("/eos/user/n/name/"),
+				folder("/eos/user/n/.sys.a#.name/"),
+				folder("/eos/user/j/"),
+				folder("/eos/user/j/jdoe/"),
+				{FID: "2", Path: "/eos/user/j/notes.txt"},
+			},
+			want: []string{"/eos/user/n/name", "/eos/user/j/jdoe"},
+		},
+		{
+			name: "projects",
+			root: "/eos/project",
+			entries: []nsdump.NameSpaceEntry{
+				folder("/eos/project/"),
+				folder("/eos/project/n/"),
+				folder("/eos/project/n/name/"),
+				folder("/eos/project/n/name/www/"),
+			},
+			want: []string{"/eos/project/n/name"},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			entries := func(yield func(nsdump.NameSpaceEntry, error) bool) {
+				for _, e := range tt.entries {
+					if !yield(e, nil) {
+						return
+					}
+				}
+			}
+			var got []string
+			for p, err := range spaceRoots(entries, tt.root, 2) {
+				if err != nil {
+					t.Fatalf("spaceRoots: %v", err)
+				}
+				got = append(got, p)
+			}
+			if !slices.Equal(got, tt.want) {
+				t.Errorf("roots = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
 // The cases of one node: the permission strings EOS really holds, the entries
 // the job must not see, and the nodes the job must not touch.
 func TestNSDumpInfo(t *testing.T) {
 	const dir = "/eos/user/j/jdoe"
 
 	tests := []struct {
-		name       string
-		entry      nsdump.NameSpaceEntry
-		wantKept   bool
-		wantACLs   []*reconciliation.ACLEntry
-		wantACLsOf string
+		name                string
+		entry               nsdump.NameSpaceEntry
+		wantKept            bool
+		wantACLs            []*reconciliation.ACLEntry
+		wantExpectedACLPath string
 	}{
 		{
 			name:     "the permissions AddGrant writes",
@@ -159,11 +221,11 @@ func TestNSDumpInfo(t *testing.T) {
 			entry: nsdump.NameSpaceEntry{CID: "1", Path: dir + "/a/", XattrSysAcl: "this is not an acl"},
 		},
 		{
-			name:       "a version folder carries the acl of its file",
-			entry:      nsdump.NameSpaceEntry{CID: "1", Path: dir + "/.sys.v#.notes.md/", XattrSysAcl: "u:173503:rwx"},
-			wantKept:   true,
-			wantACLs:   []*reconciliation.ACLEntry{user("173503", sharehierarchy.PermRW)},
-			wantACLsOf: dir + "/notes.md",
+			name:                "a version folder carries the acl of its file",
+			entry:               nsdump.NameSpaceEntry{CID: "1", Path: dir + "/.sys.v#.notes.md/", XattrSysAcl: "u:173503:rwx"},
+			wantKept:            true,
+			wantACLs:            []*reconciliation.ACLEntry{user("173503", sharehierarchy.PermRW)},
+			wantExpectedACLPath: dir + "/notes.md",
 		},
 		{
 			name:  "a version in a version folder",
@@ -187,8 +249,8 @@ func TestNSDumpInfo(t *testing.T) {
 			if !sameACLs(info.ACLs, tt.wantACLs) {
 				t.Errorf("acls = %s, want %s", formatACLs(info.ACLs), formatACLs(tt.wantACLs))
 			}
-			if info.ACLsOf != tt.wantACLsOf {
-				t.Errorf("acls of = %q, want %q", info.ACLsOf, tt.wantACLsOf)
+			if info.ExpectedACLPath != tt.wantExpectedACLPath {
+				t.Errorf("expected acl path = %q, want %q", info.ExpectedACLPath, tt.wantExpectedACLPath)
 			}
 		})
 	}
