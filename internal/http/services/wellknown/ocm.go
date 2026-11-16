@@ -59,6 +59,7 @@ type OcmProviderConfig struct {
 	InviteAcceptDialog string `docs:"/open-cloud-mesh/accept-invite;The frontend URL where to land when receiving an invitation" mapstructure:"invite_accept_dialog"`
 	EnableWebapp       bool   `docs:"false;Advertise webapp receive in discovery only. Distinct from offer_webapp."              mapstructure:"enable_webapp"`
 	EnableEmbedded     bool   `docs:"false;Whether embedded shares are enabled in OCM shares."                                   mapstructure:"enable_embedded"`
+	OfferEmbedded      bool   `docs:"false;Also list embedded for ro-crate, as a server that sends ro-crate shares. Reva does not send them: use this only in a test where this server poses as a sender, such as the EOSC Data Commons Dispatcher. Needs enable_embedded." mapstructure:"offer_embedded"`
 	EnableCodeFlow     bool   `docs:"false;Whether code-flow token exchange is enabled in OCM shares."                           mapstructure:"enable_code_flow"`
 	MFAPolicy          string `docs:"reject;Admission of received webapp must-use-mfa offers: reject or off. Off skips the check; nothing is advertised." mapstructure:"mfa_policy"`
 	SigningKey         string `docs:";Path to the PEM file of the Ed25519 private key for OCM HTTP signatures. If it's not configured, no public key is published." mapstructure:"signing_key"`
@@ -307,12 +308,16 @@ func (h *wkocmHandler) buildData(c *OcmProviderConfig) *OcmDiscoveryData {
 	}
 	if c.EnableEmbedded {
 		// declare that we are able to receive ro-crate shares (sending is not implemented)
+		protos := map[string]any{
+			"embedded-receive": map[string]any{},
+		}
+		if c.OfferEmbedded {
+			protos["embedded"] = map[string]any{}
+		}
 		d.ResourceTypes = append(d.ResourceTypes, ResourceTypes{
 			Name:       "ro-crate",
 			ShareTypes: []string{"user"},
-			Protocols: map[string]any{
-				"embedded-receive": map[string]any{},
-			},
+			Protocols:  protos,
 		})
 	}
 
