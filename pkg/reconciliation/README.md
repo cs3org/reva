@@ -152,6 +152,20 @@ node:
 allowed_acls = ["user:cboxexternal:RW"]
 ```
 
+`path_acls` sets entries on one folder, at the same path below the root of each
+space. The path is exact (no globs). `mandatory` entries are added when they
+are missing, `allowed` entries are kept when they are there. Both apply to the
+folder and to all nodes below it. `space_types` (`personal`, `project`) limits
+the rule to these spaces; without it, the rule applies to all spaces. A space
+without the folder is not changed.
+
+```toml
+[[serverless.services.reconciliation.deep.path_acls]]
+path        = "www"
+space_types = ["project"]
+mandatory   = ["user:wwweos:R"]   # or: allowed = ["user:wwweos:R"]
+```
+
 ## Logs
 
 Each job writes its own log (well, in fact, more like a journal), separate from revad's.

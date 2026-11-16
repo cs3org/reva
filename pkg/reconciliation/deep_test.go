@@ -75,6 +75,7 @@ var testUIDs = map[string]int64{
 	"frank":        10005,
 	"mallory":      10006,
 	"cboxexternal": 10007,
+	"wwweos":       10008,
 }
 
 func aclEntry(t provider.GranteeType, qualifier string, permissions sharehierarchy.PermLevel) *ACLEntry {
@@ -542,6 +543,132 @@ func TestRunAnalysis(t *testing.T) {
 	}
 
 	checkChanges(t, got, want)
+}
+
+// A path acl sets entries on one folder of a space and on the nodes below it,
+// only in the spaces of its types.
+func TestRunAnalysisPathACLs(t *testing.T) {
+	const (
+		www      = testSpaceRoot + "/www/"
+		wwwIndex = testSpaceRoot + "/www/index.html"
+		other    = testSpaceRoot + "/other/"
+	)
+	wwweos := userEntry("wwweos", sharehierarchy.PermRead)
+
+	tests := []struct {
+		name      string
+		spaceType spaces.SpaceType
+		rule      PathACL
+		dump      []NSDumpInfo
+		want      ChangeSet
+	}{
+		{
+			name:      "a mandatory entry is added to the folder and below it",
+			spaceType: spaces.SpaceTypeProject,
+			rule:      PathACL{Path: "www", SpaceTypes: []spaces.SpaceType{spaces.SpaceTypeProject}, MandatoryACLs: []*ACLEntry{wwweos}},
+			dump:      []NSDumpInfo{folderNode(nsRoot), folderNode(www), fileNode(wwwIndex), folderNode(other)},
+			want: ChangeSet{
+				{Path: www, Action: ActionAdd, ACL: wwweos},
+				{Path: wwwIndex, Action: ActionAdd, ACL: wwweos},
+			},
+		},
+		{
+			name:      "a mandatory entry that is there stays",
+			spaceType: spaces.SpaceTypeProject,
+			rule:      PathACL{Path: "www", MandatoryACLs: []*ACLEntry{wwweos}},
+			dump:      []NSDumpInfo{folderNode(nsRoot), folderNode(www, wwweos), fileNode(wwwIndex, wwweos)},
+		},
+		{
+			name:      "an allowed entry stays on the folder and is removed elsewhere",
+			spaceType: spaces.SpaceTypeProject,
+			rule:      PathACL{Path: "www", SpaceTypes: []spaces.SpaceType{spaces.SpaceTypeProject}, AllowedACLs: []*ACLEntry{wwweos}},
+			dump:      []NSDumpInfo{folderNode(nsRoot), folderNode(www, wwweos), fileNode(wwwIndex, wwweos), folderNode(other, wwweos)},
+			want:      ChangeSet{{Path: other, Action: ActionDelete, ACL: wwweos}},
+		},
+		{
+			name:      "an allowed entry that is not there is not added",
+			spaceType: spaces.SpaceTypeProject,
+			rule:      PathACL{Path: "www", AllowedACLs: []*ACLEntry{wwweos}},
+			dump:      []NSDumpInfo{folderNode(nsRoot), folderNode(www), fileNode(wwwIndex)},
+		},
+		{
+			name:      "a mandatory entry is not added in a space of another type",
+			spaceType: spaces.SpaceTypeHome,
+			rule:      PathACL{Path: "www", SpaceTypes: []spaces.SpaceType{spaces.SpaceTypeProject}, MandatoryACLs: []*ACLEntry{wwweos}},
+			dump:      []NSDumpInfo{folderNode(nsRoot), folderNode(www), fileNode(wwwIndex)},
+		},
+		{
+			name:      "an allowed entry is removed in a space of another type",
+			spaceType: spaces.SpaceTypeHome,
+			rule:      PathACL{Path: "www", SpaceTypes: []spaces.SpaceType{spaces.SpaceTypeProject}, AllowedACLs: []*ACLEntry{wwweos}},
+			dump:      []NSDumpInfo{folderNode(nsRoot), folderNode(www, wwweos)},
+			want:      ChangeSet{{Path: www, Action: ActionDelete, ACL: wwweos}},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			j := &DeepJob{ShareStore: &fakeStore{}}
+			p := RunParameters{
+				SpaceID:   spaces.EncodeSpaceID(testSpaceRoot),
+				SpaceType: tt.spaceType,
+				PathACLs:  []*PathACL{&tt.rule},
+			}
+
+			got, _, err := j.runAnalysis(context.Background(), &fakeGateway{}, uidCache{}, p, &memoryStorage{dump: tt.dump})
+			if err != nil {
+				t.Fatalf("runAnalysis: %v", err)
+			}
+			checkChanges(t, got, tt.want)
+		})
+	}
+}
+
+func TestParsePathACL(t *testing.T) {
+	tests := []struct {
+		name    string
+		in      PathACLConfig
+		want    *PathACL
+		wantErr bool
+	}{
+		{
+			name: "a mandatory entry in projects",
+			in:   PathACLConfig{Path: "www/", SpaceTypes: []string{"project"}, Mandatory: []string{"user:wwweos:R"}},
+			want: &PathACL{
+				Path:          "www",
+				SpaceTypes:    []spaces.SpaceType{spaces.SpaceTypeProject},
+				MandatoryACLs: []*ACLEntry{aclEntry(userType, "wwweos", sharehierarchy.PermRead)},
+			},
+		},
+		{
+			name: "an allowed entry in every space",
+			in:   PathACLConfig{Path: "a/b", Allowed: []string{"group:web:RW"}},
+			want: &PathACL{Path: "a/b", AllowedACLs: []*ACLEntry{aclEntry(groupType, "web", sharehierarchy.PermRW)}},
+		},
+		{name: "no path", in: PathACLConfig{Allowed: []string{"user:wwweos:R"}}, wantErr: true},
+		{name: "the space root", in: PathACLConfig{Path: ".", Allowed: []string{"user:wwweos:R"}}, wantErr: true},
+		{name: "an absolute path", in: PathACLConfig{Path: "/www", Allowed: []string{"user:wwweos:R"}}, wantErr: true},
+		{name: "a path above the root", in: PathACLConfig{Path: "../www", Allowed: []string{"user:wwweos:R"}}, wantErr: true},
+		{name: "no entries", in: PathACLConfig{Path: "www"}, wantErr: true},
+		{name: "an unknown space type", in: PathACLConfig{Path: "www", SpaceTypes: []string{"explorer"}, Allowed: []string{"user:wwweos:R"}}, wantErr: true},
+		{name: "a bad entry", in: PathACLConfig{Path: "www", Mandatory: []string{"user:wwweos"}}, wantErr: true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := ParsePathACL(tt.in)
+			if (err != nil) != tt.wantErr {
+				t.Fatalf("ParsePathACL error = %v, want an error: %v", err, tt.wantErr)
+			}
+			if tt.want == nil {
+				return
+			}
+			if got.Path != tt.want.Path || !slices.Equal(got.SpaceTypes, tt.want.SpaceTypes) ||
+				!sameEntries(got.MandatoryACLs, tt.want.MandatoryACLs) || !sameEntries(got.AllowedACLs, tt.want.AllowedACLs) {
+				t.Errorf("ParsePathACL = %+v, want %+v", *got, *tt.want)
+			}
+		})
+	}
 }
 
 func TestRunAnalysisReportsAFailedListing(t *testing.T) {

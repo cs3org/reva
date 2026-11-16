@@ -306,6 +306,14 @@ func New(ctx context.Context, m map[string]any) (_ rserverless.Service, err erro
 				}
 				allowed = append(allowed, e)
 			}
+			pathACLs := make([]*reconciliation.PathACL, 0, len(c.Deep.PathACLs))
+			for _, pc := range c.Deep.PathACLs {
+				r, err := reconciliation.ParsePathACL(pc)
+				if err != nil {
+					return nil, err
+				}
+				pathACLs = append(pathACLs, r)
+			}
 			// Gateway is left nil for the same reason as the orphan job's.
 			job := &reconciliation.DeepJob{
 				ShareStore:                    shares,
@@ -313,6 +321,7 @@ func New(ctx context.Context, m map[string]any) (_ rserverless.Service, err erro
 				StorageProviderControlChannel: providers.controlChannelOfInstance,
 				Project:                       projects.GetProjectBySpaceID,
 				AllowedACLs:                   allowed,
+				PathACLs:                      pathACLs,
 				Log:                           jobLog,
 				DryRun:                        jc.DryRun,
 			}
