@@ -196,6 +196,8 @@ func (s *svc) openLocalResources(ctx context.Context, ri *storageprovider.Resour
 		return nil, err
 	}
 
+	appctx.GetLogger(ctx).Info().Str("app", app).Str("address", provider.Address).Msg("gateway: resolved app provider for OpenInApp")
+
 	appProviderClient, err := service.AppProviderAt(provider.Address)
 	if err != nil {
 		return nil, errors.Wrap(err, "gateway: error calling GetAppProviderClient")
@@ -212,6 +214,7 @@ func (s *svc) openLocalResources(ctx context.Context, ri *storageprovider.Resour
 	if err != nil {
 		return nil, errors.Wrap(err, "gateway: error calling OpenInApp")
 	}
+	appctx.GetLogger(ctx).Info().Str("address", provider.Address).Str("status", res.GetStatus().GetCode().String()).Str("message", res.GetStatus().GetMessage()).Msg("gateway: app provider responded to OpenInApp")
 	return res, nil
 }
 

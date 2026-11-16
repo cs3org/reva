@@ -203,6 +203,7 @@ func getProvider(ctx context.Context, c *config) (app.Provider, error) {
 func (s *service) OpenInApp(ctx context.Context, req *providerpb.OpenInAppRequest) (*providerpb.OpenInAppResponse, error) {
 	appURL, forcedvm, appforedit, err := s.provider.GetAppURL(ctx, req.ResourceInfo, req.ViewMode, req.AccessToken)
 	if err != nil {
+		appctx.GetLogger(ctx).Error().Err(err).Msg("appprovider: error calling GetAppURL")
 		res := &providerpb.OpenInAppResponse{
 			Status: status.NewStatusFromErrType(ctx, "appprovider: error calling GetAppURL", err),
 		}
