@@ -33,6 +33,7 @@ import (
 	labelspb "github.com/cs3org/go-cs3apis/cs3/labels/v1beta1"
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	collaboration "github.com/cs3org/go-cs3apis/cs3/sharing/collaboration/v1beta1"
+	link "github.com/cs3org/go-cs3apis/cs3/sharing/link/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	types "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
 	"google.golang.org/grpc"
@@ -43,7 +44,9 @@ import (
 
 type labelsGateway struct {
 	receivedSharesGateway
-	spaces []*provider.StorageSpace
+	spaces       []*provider.StorageSpace
+	sentShares   []*gateway.ShareResourceInfo
+	publicShares []*gateway.PublicShareResourceInfo
 	// labels is keyed on <storage_id>!<opaque_id>.
 	labels map[string][]string
 	err    error
@@ -57,6 +60,28 @@ func (g *labelsGateway) ListStorageSpaces(
 	return &provider.ListStorageSpacesResponse{
 		Status:        &rpc.Status{Code: rpc.Code_CODE_OK},
 		StorageSpaces: g.spaces,
+	}, nil
+}
+
+func (g *labelsGateway) ListExistingShares(
+	_ context.Context,
+	_ *collaboration.ListSharesRequest,
+	_ ...grpc.CallOption,
+) (*gateway.ListExistingSharesResponse, error) {
+	return &gateway.ListExistingSharesResponse{
+		Status:     &rpc.Status{Code: rpc.Code_CODE_OK},
+		ShareInfos: g.sentShares,
+	}, nil
+}
+
+func (g *labelsGateway) ListExistingPublicShares(
+	_ context.Context,
+	_ *link.ListPublicSharesRequest,
+	_ ...grpc.CallOption,
+) (*gateway.ListExistingPublicSharesResponse, error) {
+	return &gateway.ListExistingPublicSharesResponse{
+		Status:     &rpc.Status{Code: rpc.Code_CODE_OK},
+		ShareInfos: g.publicShares,
 	}, nil
 }
 

@@ -155,6 +155,26 @@ func (d LabeledDrive) MarshalJSON() ([]byte, error) {
 	return json.Marshal(m)
 }
 
+// LabeledDriveItem adds the labels of the current user on a shared resource. Our
+// libregraph.DriveItem does not have the opencloud @libre.graph.me.labels field yet.
+type LabeledDriveItem struct {
+	libregraph.DriveItem
+	// Labels is nil when the labels could not be read. Then the field is not sent.
+	Labels []string
+}
+
+// libregraph.DriveItem has its own MarshalJSON. Go promotes it to this type, and it drops Labels.
+func (d LabeledDriveItem) MarshalJSON() ([]byte, error) {
+	m, err := d.DriveItem.ToMap()
+	if err != nil {
+		return nil, err
+	}
+	if d.Labels != nil {
+		m["@libre.graph.me.labels"] = d.Labels
+	}
+	return json.Marshal(m)
+}
+
 // resourceLabels reads the labels from the labels database, because the stats
 // of the resources come from caches that are local to each host.
 // The result is keyed on the given pointers. It is nil when the labels cannot be read.

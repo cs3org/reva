@@ -29,6 +29,7 @@ import (
 
 	gateway "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
+	labelspb "github.com/cs3org/go-cs3apis/cs3/labels/v1beta1"
 	invitepb "github.com/cs3org/go-cs3apis/cs3/ocm/invite/v1beta1"
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	collaboration "github.com/cs3org/go-cs3apis/cs3/sharing/collaboration/v1beta1"
@@ -503,6 +504,15 @@ func (g *receivedSharesGateway) ListExistingReceivedShares(
 		Status:     &rpc.Status{Code: rpc.Code_CODE_OK},
 		ShareInfos: g.shares,
 	}, nil
+}
+
+// The tests that use this gateway do not check labels. An error makes the handlers leave the labels field out.
+func (g *receivedSharesGateway) ListLabels(
+	_ context.Context,
+	_ *labelspb.ListLabelsRequest,
+	_ ...grpc.CallOption,
+) (*labelspb.ListLabelsResponse, error) {
+	return nil, errors.New("labels not used in this test")
 }
 
 func (g *receivedSharesGateway) GetUser(
