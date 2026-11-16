@@ -34,6 +34,7 @@ import (
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	collaboration "github.com/cs3org/go-cs3apis/cs3/sharing/collaboration/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
+	"github.com/cs3org/reva/v3/pkg/errtypes"
 	"github.com/cs3org/reva/v3/pkg/sharehierarchy"
 	"github.com/cs3org/reva/v3/pkg/spaces"
 	"google.golang.org/grpc"
@@ -621,6 +622,81 @@ func TestRunAnalysisPathACLs(t *testing.T) {
 			}
 			checkChanges(t, got, tt.want)
 		})
+	}
+}
+
+// spaceRootGateway answers a stat of a space root by path, with the space type
+// and the owner the storage provider gives.
+type spaceRootGateway struct {
+	*fakeGateway
+	spaceTypes map[string]spaces.SpaceType
+	owner      string
+}
+
+func (g *spaceRootGateway) Stat(ctx context.Context, in *provider.StatRequest, opts ...grpc.CallOption) (*provider.StatResponse, error) {
+	if in.GetRef().GetResourceId() != nil {
+		return g.fakeGateway.Stat(ctx, in, opts...)
+	}
+	p := in.GetRef().GetPath()
+	return &provider.StatResponse{Status: status(true), Info: &provider.ResourceInfo{
+		Path:  p,
+		Id:    &provider.ResourceId{StorageId: testStorageID},
+		Owner: &userpb.UserId{OpaqueId: g.owner},
+		Space: &provider.StorageSpace{SpaceType: g.spaceTypes[p].AsString()},
+	}}, nil
+}
+
+// A run goes over every space the storage lists, also a space without a
+// share. A project space that is not an active project is left untouched:
+// reconciled as a home, it would lose the entries of its roles.
+func TestRunOverTheListedSpaces(t *testing.T) {
+	const (
+		home     = "/eos/user/a/alice"
+		archived = "/eos/project/o/old"
+	)
+	storages := map[string]*memoryStorage{
+		home:     {dump: []NSDumpInfo{folderNode(home + "/")}},
+		archived: {dump: []NSDumpInfo{folderNode(archived+"/", adminsEntry())}},
+	}
+	var current string
+	j := &DeepJob{
+		ShareStore: &fakeStore{},
+		Gateway: &spaceRootGateway{
+			fakeGateway: &fakeGateway{uids: testUIDs},
+			spaceTypes:  map[string]spaces.SpaceType{home: spaces.SpaceTypeHome, archived: spaces.SpaceTypeProject},
+			owner:       "alice",
+		},
+		ListSpaces: func(ctx context.Context) iter.Seq2[string, error] {
+			return func(yield func(string, error) bool) {
+				for _, p := range []string{home, archived} {
+					current = p
+					if !yield(spaces.EncodeSpaceID(p), nil) {
+						return
+					}
+				}
+			}
+		},
+		Project: func(ctx context.Context, spaceID string) (*provider.StorageSpace, error) {
+			return nil, errtypes.NotFound(spaceID)
+		},
+		StorageProviderControlChannel: func(ctx context.Context, storageID string) (ReconcileMethods, error) {
+			return storages[current], nil
+		},
+	}
+
+	report, err := j.Run(context.Background())
+	if err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+
+	if report.Spaces != 1 || report.Added != 1 || report.Deleted != 0 || len(report.SkippedSpaces) != 0 {
+		t.Errorf("report = %+v, want one space compared and one entry added", report)
+	}
+	if got, want := storages[home].dump[0].ACLs, []*ACLEntry{userEntry("alice", sharehierarchy.PermRW)}; !sameEntries(got, want) {
+		t.Errorf("the home holds %v, want %v", formatEntries(got), formatEntries(want))
+	}
+	if got, want := storages[archived].dump[0].ACLs, []*ACLEntry{adminsEntry()}; !sameEntries(got, want) {
+		t.Errorf("the archived project holds %v, want %v", formatEntries(got), formatEntries(want))
 	}
 }
 

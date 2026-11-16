@@ -138,6 +138,12 @@ control channel. So the storage provider needs a driver that can be reconciled
 (today only `eos`, see `pkg/storage/fs/eos/nsdump/README.md` for its config),
 and the job sends an admin token there.
 
+A run over all spaces asks each storage provider with a `provides_space_type`
+for its spaces (`reconciliation.listspaces`), one node per `mount_id`. The
+provider gives the folders at its `space_depth`, so also the spaces without a
+share. A project space that is not an active project in the catalogue is
+skipped: the job does not know its roles.
+
 EOS keeps users by uid, so the job resolves the users of the shares to uids
 through the gateway, with its own service user. A user that cannot be resolved
 fails the space: without the uid, the job would delete the entry the user has.

@@ -25,6 +25,7 @@ import (
 	"github.com/cs3org/reva/v3/pkg/invoke"
 	"github.com/cs3org/reva/v3/pkg/reconciliation"
 	svcregistry "github.com/cs3org/reva/v3/pkg/registry"
+	"github.com/cs3org/reva/v3/pkg/spaces"
 	"github.com/pkg/errors"
 )
 
@@ -45,7 +46,12 @@ import (
 // RegistryMetadata lets the job find the provider of a storage id in the
 // service registry.
 func (s *service) RegistryMetadata() map[string]string {
-	return map[string]string{svcregistry.MetaMountID: s.mountID}
+	m := map[string]string{svcregistry.MetaMountID: s.mountID}
+	// the job lists the spaces of the providers with a space type only
+	if s.conf.ProvidesSpaceType != "" {
+		m[svcregistry.MetaSpaceType] = s.conf.ProvidesSpaceType
+	}
+	return m
 }
 
 func (s *service) Invocations() []invoke.InvocationSpec { return s.invocations.Invocations() }
@@ -95,6 +101,37 @@ func (s *service) reconcileInvocations() *invoke.Set {
 				return nil
 			}
 			return emit(invoke.Result{"nodes": batch})
+		}))
+
+	set.Add(reconciliation.InvocationListSpaces, "Stream the ids of the spaces of this provider, for the deep reconciliation job.").
+		HandleStream(invoke.TypedStream(func(ctx context.Context, _ struct{}, emit invoke.StreamEmit) error {
+			// the whole mount is one space, as in pathToSpaceID
+			depth := s.conf.SpaceDepth - pathLevels(s.mountPath)
+			if depth <= 0 {
+				return emit(invoke.Result{"spaces": []string{spaces.EncodeSpaceID(s.mountPath)}})
+			}
+			batch := make([]string, 0, reconciliation.DumpBatchSize)
+			for p, err := range fs.ListSpaceRoots(ctx, s.mountPath, depth) {
+				if err != nil {
+					return err
+				}
+				id, err := s.pathToSpaceID(p)
+				if err != nil {
+					return err
+				}
+				batch = append(batch, id)
+				if len(batch) < reconciliation.DumpBatchSize {
+					continue
+				}
+				if err := emit(invoke.Result{"spaces": batch}); err != nil {
+					return err
+				}
+				batch = make([]string, 0, reconciliation.DumpBatchSize)
+			}
+			if len(batch) == 0 {
+				return nil
+			}
+			return emit(invoke.Result{"spaces": batch})
 		}))
 
 	set.Add(reconciliation.InvocationAddNodeACL, "Set one ACL entry on one node, not on its children.").

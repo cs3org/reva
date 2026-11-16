@@ -66,6 +66,9 @@ type DeepJob struct {
 	// provider that holds the resources of a storage id. The dump and the writes
 	// per node are not in the CS3 API, so the job cannot use the gateway for them.
 	StorageProviderControlChannel func(ctx context.Context, storageID string) (ReconcileMethods, error)
+	// ListSpaces gives the id of every space on the storage, also the spaces
+	// that hold no share. A run over every space reads it.
+	ListSpaces func(ctx context.Context) iter.Seq2[string, error]
 	// Project returns the project space with the given space id, or
 	// errtypes.NotFound when the space is not a project.
 	Project     func(ctx context.Context, spaceID string) (*provider.StorageSpace, error)
@@ -232,7 +235,7 @@ type DeepReport struct {
 	DryRun bool
 }
 
-// Run reconciles every space that holds a share, one space at a time. A space
+// Run reconciles every space that ListSpaces gives, one space at a time. A space
 // that cannot be compared is logged and skipped, and the run goes on with the
 // next one. A cancelled run stops at the next space and gives back the
 // cancellation, with the report of what it did get through.
@@ -288,28 +291,33 @@ func (j *DeepJob) run(ctx context.Context, spaceID string, rep rjobs.Reporter) (
 		pathACLs = append(pathACLs, &resolved)
 	}
 
-	spaceIDs := []string{spaceID}
+	spaceIDs := func(yield func(string, error) bool) { yield(spaceID, nil) }
 	if spaceID == "" {
-		if spaceIDs, err = j.ShareStore.ListShareSpaces(ctx); err != nil {
-			return DeepReport{}, errors.Wrap(err, "reconciliation: listing the spaces that hold a share")
+		if j.ListSpaces == nil {
+			return DeepReport{}, errors.New("reconciliation: no space given and no way to list the spaces")
 		}
-		// a fixed order, so two runs over the same state read the same way.
-		slices.Sort(spaceIDs)
+		spaceIDs = j.ListSpaces(ctx)
 	}
 
 	log.Info().
 		Str("event", EventDeepStart).
 		Bool("dry_run", j.DryRun).
-		Int("spaces", len(spaceIDs)).
 		Msg("reconciliation: run started")
 
 	report := DeepReport{RunID: runID, SpaceID: spaceID, DryRun: j.DryRun}
-	var cancelled error
-	for i, space := range spaceIDs {
-		if cancelled = ctx.Err(); cancelled != nil {
+	// the total is not known before the listing ends, so the progress has none.
+	var done int
+	var stopped error
+	for space, err := range spaceIDs {
+		if err != nil {
+			stopped = errors.Wrap(err, "reconciliation: listing the spaces")
 			break
 		}
-		report.progress(rep, i, len(spaceIDs))
+		if stopped = ctx.Err(); stopped != nil {
+			break
+		}
+		report.progress(rep, done, 0)
+		done++
 
 		spaceLog := log.With().Str("space", space).Logger()
 		err := j.reconcileSpace(ctx, &spaceLog, &report, gw, uids, allowed, pathACLs, space)
@@ -318,7 +326,7 @@ func (j *DeepJob) run(ctx context.Context, spaceID string, rep rjobs.Reporter) (
 		}
 		// one space means nothing else to carry on with, so the failure is the
 		// run's rather than an empty success.
-		if len(spaceIDs) == 1 {
+		if spaceID != "" {
 			return DeepReport{}, err
 		}
 		report.SkippedSpaces = append(report.SkippedSpaces, space)
@@ -327,7 +335,7 @@ func (j *DeepJob) run(ctx context.Context, spaceID string, rep rjobs.Reporter) (
 			Bool("dry_run", j.DryRun).
 			Msg("reconciliation: space could not be compared, left untouched")
 	}
-	report.progress(rep, len(spaceIDs), len(spaceIDs))
+	report.progress(rep, done, done)
 
 	log.Info().
 		Str("event", EventDeepEnd).
@@ -340,7 +348,7 @@ func (j *DeepJob) run(ctx context.Context, spaceID string, rep rjobs.Reporter) (
 		Int("failed", report.Failed).
 		Msg("reconciliation: run finished")
 
-	return report, cancelled
+	return report, stopped
 }
 
 // reconcileSpace compares one space against its shares and applies the
@@ -369,6 +377,14 @@ func (j *DeepJob) reconcileSpace(ctx context.Context, log *zerolog.Logger, repor
 	p := RunParameters{SpaceID: spaceID, SpaceType: spaces.SpaceTypeProject, OptionalACLs: allowed, PathACLs: pathACLs}
 	project, err := j.Project(ctx, spaceID)
 	if _, ok := err.(errtypes.IsNotFound); ok {
+		// the catalogue holds the active projects only. Reconciled as a home, an
+		// archived project would lose the entries of its roles.
+		if statRes.GetInfo().GetSpace().GetSpaceType() == spaces.SpaceTypeProject.AsString() {
+			log.Info().
+				Str("event", EventDeepSkipSpace).
+				Msg("reconciliation: the project is not active, space left untouched")
+			return nil
+		}
 		p.SpaceType = spaces.SpaceTypeHome
 		uid, err := uids.uid(ctx, gw, statRes.GetInfo().GetOwner())
 		if err != nil {

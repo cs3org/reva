@@ -22,6 +22,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"slices"
 	"testing"
 
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
@@ -108,6 +109,67 @@ func TestNSDumpInfoOfTheFixture(t *testing.T) {
 		if !sameACLs(info.ACLs, tt.want) {
 			t.Errorf("%q holds %s, want %s", tt.path, formatACLs(info.ACLs), formatACLs(tt.want))
 		}
+	}
+}
+
+// A scan down to the space roots also gives the folders above them. Only the
+// roots are spaces.
+func TestSpaceRoots(t *testing.T) {
+	folder := func(p string) nsdump.NameSpaceEntry { return nsdump.NameSpaceEntry{CID: "1", Path: p} }
+
+	tests := []struct {
+		name    string
+		root    string
+		entries []nsdump.NameSpaceEntry
+		want    []string
+	}{
+		{
+			name: "homes",
+			root: "/eos/user/",
+			entries: []nsdump.NameSpaceEntry{
+				folder("/eos/user/"),
+				folder("/eos/user/n/"),
+				folder("/eos/user/n/name/"),
+				folder("/eos/user/n/.sys.a#.name/"),
+				folder("/eos/user/j/"),
+				folder("/eos/user/j/jdoe/"),
+				{FID: "2", Path: "/eos/user/j/notes.txt"},
+			},
+			want: []string{"/eos/user/n/name", "/eos/user/j/jdoe"},
+		},
+		{
+			name: "projects",
+			root: "/eos/project",
+			entries: []nsdump.NameSpaceEntry{
+				folder("/eos/project/"),
+				folder("/eos/project/n/"),
+				folder("/eos/project/n/name/"),
+				folder("/eos/project/n/name/www/"),
+			},
+			want: []string{"/eos/project/n/name"},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			entries := func(yield func(nsdump.NameSpaceEntry, error) bool) {
+				for _, e := range tt.entries {
+					if !yield(e, nil) {
+						return
+					}
+				}
+			}
+			var got []string
+			for p, err := range spaceRoots(entries, tt.root, 2) {
+				if err != nil {
+					t.Fatalf("spaceRoots: %v", err)
+				}
+				got = append(got, p)
+			}
+			if !slices.Equal(got, tt.want) {
+				t.Errorf("roots = %v, want %v", got, tt.want)
+			}
+		})
 	}
 }
 

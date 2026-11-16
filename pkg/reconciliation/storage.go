@@ -69,6 +69,9 @@ type ReconcileMethods interface {
 type ReconcilableFS interface {
 	storage.FS
 	ReconcileMethods
+	// ListSpaceRoots gives the folders exactly depth levels below root, without
+	// a trailing separator.
+	ListSpaceRoots(ctx context.Context, root string, depth int) iter.Seq2[string, error]
 }
 
 // The invocations of a storage provider whose driver is a ReconcilableFS.
@@ -79,6 +82,9 @@ const (
 	// InvocationAddNodeACL and InvocationRemoveNodeACL take ArgPath and ArgEntry.
 	InvocationAddNodeACL    = "reconciliation.addacl"
 	InvocationRemoveNodeACL = "reconciliation.removeacl"
+	// InvocationListSpaces streams the ids of the spaces of the provider, with
+	// at most DumpBatchSize ids under "spaces" in each result.
+	InvocationListSpaces = "reconciliation.listspaces"
 
 	ArgPath = "path"
 	// ArgEntry holds an ACLEntry as JSON.
