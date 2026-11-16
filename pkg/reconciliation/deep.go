@@ -22,6 +22,7 @@ import (
 	"cmp"
 	"context"
 	"iter"
+	"path"
 	"slices"
 	"strconv"
 	"strings"
@@ -69,8 +70,18 @@ type DeepJob struct {
 	// errtypes.NotFound when the space is not a project.
 	Project     func(ctx context.Context, spaceID string) (*provider.StorageSpace, error)
 	AllowedACLs []*ACLEntry
+	PathACLs    []*PathACL
 	Log         *zerolog.Logger
 	DryRun      bool
+}
+
+// PathACL holds the entries of one node, at the same path below the root of
+// every space of SpaceTypes. No SpaceTypes means every space.
+type PathACL struct {
+	Path          string
+	SpaceTypes    []spaces.SpaceType
+	MandatoryACLs []*ACLEntry
+	AllowedACLs   []*ACLEntry
 }
 
 type ChangeSet []*Change
@@ -83,8 +94,10 @@ type Change struct {
 
 type RunParameters struct {
 	SpaceID       string
+	SpaceType     spaces.SpaceType
 	OptionalACLs  []*ACLEntry
 	MandatoryACLs []*ACLEntry
+	PathACLs      []*PathACL
 }
 
 type ShareWithPath struct {
@@ -104,14 +117,58 @@ type DeepConfig struct {
 	Config `mapstructure:",squash"`
 	// AllowedACLs are "user:<name>:<level>" or "group:<name>:<level>", with a
 	// level of R, RW or D. See ParseAllowedACL.
-	AllowedACLs []string `mapstructure:"allowed_acls"`
+	AllowedACLs []string        `mapstructure:"allowed_acls"`
+	PathACLs    []PathACLConfig `mapstructure:"path_acls"`
+}
+
+// PathACLConfig is a PathACL as it is configured. Path is relative to the
+// space root, space types are "personal" or "project", and the entries have
+// the format of ParseAllowedACL.
+type PathACLConfig struct {
+	Path       string   `mapstructure:"path"`
+	SpaceTypes []string `mapstructure:"space_types"`
+	Mandatory  []string `mapstructure:"mandatory"`
+	Allowed    []string `mapstructure:"allowed"`
+}
+
+func ParsePathACL(c PathACLConfig) (*PathACL, error) {
+	p := path.Clean(c.Path)
+	if c.Path == "" || path.IsAbs(p) || p == "." || p == ".." || strings.HasPrefix(p, "../") {
+		return nil, errors.Errorf("reconciliation: path acl %q is not a path below the space root", c.Path)
+	}
+	if len(c.Mandatory)+len(c.Allowed) == 0 {
+		return nil, errors.Errorf("reconciliation: path acl %q has no entries", c.Path)
+	}
+	r := &PathACL{Path: p}
+	for _, t := range c.SpaceTypes {
+		st := spaces.SpaceType(t)
+		if st != spaces.SpaceTypeHome && st != spaces.SpaceTypeProject {
+			return nil, errors.Errorf("reconciliation: path acl %q has space type %q, want %q or %q", c.Path, t, spaces.SpaceTypeHome, spaces.SpaceTypeProject)
+		}
+		r.SpaceTypes = append(r.SpaceTypes, st)
+	}
+	for _, s := range c.Mandatory {
+		e, err := ParseAllowedACL(s)
+		if err != nil {
+			return nil, err
+		}
+		r.MandatoryACLs = append(r.MandatoryACLs, e)
+	}
+	for _, s := range c.Allowed {
+		e, err := ParseAllowedACL(s)
+		if err != nil {
+			return nil, err
+		}
+		r.AllowedACLs = append(r.AllowedACLs, e)
+	}
+	return r, nil
 }
 
 func ParseAllowedACL(s string) (*ACLEntry, error) {
 	kind, rest, _ := strings.Cut(s, ":")
 	qualifier, level, ok := strings.Cut(rest, ":")
 	if !ok || qualifier == "" {
-		return nil, errors.Errorf("reconciliation: allowed acl %q is not <user|group>:<name>:<level>", s)
+		return nil, errors.Errorf("reconciliation: acl %q is not <user|group>:<name>:<level>", s)
 	}
 	e := &ACLEntry{Qualifier: qualifier}
 	switch kind {
@@ -120,7 +177,7 @@ func ParseAllowedACL(s string) (*ACLEntry, error) {
 	case "group":
 		e.Type = provider.GranteeType_GRANTEE_TYPE_GROUP
 	default:
-		return nil, errors.Errorf("reconciliation: allowed acl %q has type %q, want user or group", s, kind)
+		return nil, errors.Errorf("reconciliation: acl %q has type %q, want user or group", s, kind)
 	}
 	for _, l := range []sharehierarchy.PermLevel{sharehierarchy.PermRead, sharehierarchy.PermRW, sharehierarchy.PermDeny} {
 		if l.String() == level {
@@ -128,7 +185,7 @@ func ParseAllowedACL(s string) (*ACLEntry, error) {
 			return e, nil
 		}
 	}
-	return nil, errors.Errorf("reconciliation: allowed acl %q has level %q, want R, RW or D", s, level)
+	return nil, errors.Errorf("reconciliation: acl %q has level %q, want R, RW or D", s, level)
 }
 
 type uidCache map[string]string
@@ -219,6 +276,17 @@ func (j *DeepJob) run(ctx context.Context, spaceID string, rep rjobs.Reporter) (
 	if err != nil {
 		return DeepReport{}, errors.Wrap(err, "reconciliation: resolving the allowed acls")
 	}
+	pathACLs := make([]*PathACL, 0, len(j.PathACLs))
+	for _, r := range j.PathACLs {
+		resolved := *r
+		if resolved.MandatoryACLs, err = resolveEntries(ctx, gw, uids, r.MandatoryACLs); err != nil {
+			return DeepReport{}, errors.Wrapf(err, "reconciliation: resolving the acls of path %q", r.Path)
+		}
+		if resolved.AllowedACLs, err = resolveEntries(ctx, gw, uids, r.AllowedACLs); err != nil {
+			return DeepReport{}, errors.Wrapf(err, "reconciliation: resolving the acls of path %q", r.Path)
+		}
+		pathACLs = append(pathACLs, &resolved)
+	}
 
 	spaceIDs := []string{spaceID}
 	if spaceID == "" {
@@ -244,7 +312,7 @@ func (j *DeepJob) run(ctx context.Context, spaceID string, rep rjobs.Reporter) (
 		report.progress(rep, i, len(spaceIDs))
 
 		spaceLog := log.With().Str("space", space).Logger()
-		err := j.reconcileSpace(ctx, &spaceLog, &report, gw, uids, allowed, space)
+		err := j.reconcileSpace(ctx, &spaceLog, &report, gw, uids, allowed, pathACLs, space)
 		if err == nil {
 			continue
 		}
@@ -279,7 +347,7 @@ func (j *DeepJob) run(ctx context.Context, spaceID string, rep rjobs.Reporter) (
 // differences. The error is the space not being comparable at all; a failure
 // while applying is logged and counted instead, since part of the changes may
 // already be on the storage.
-func (j *DeepJob) reconcileSpace(ctx context.Context, log *zerolog.Logger, report *DeepReport, gw gateway.GatewayAPIClient, uids uidCache, allowed []*ACLEntry, spaceID string) error {
+func (j *DeepJob) reconcileSpace(ctx context.Context, log *zerolog.Logger, report *DeepReport, gw gateway.GatewayAPIClient, uids uidCache, allowed []*ACLEntry, pathACLs []*PathACL, spaceID string) error {
 	root, err := spaces.DecodeSpaceID(spaceID)
 	if err != nil {
 		return errors.Wrapf(err, "reconciliation: decoding space %q", spaceID)
@@ -298,9 +366,10 @@ func (j *DeepJob) reconcileSpace(ctx context.Context, log *zerolog.Logger, repor
 		return err
 	}
 
-	p := RunParameters{SpaceID: spaceID, OptionalACLs: allowed}
+	p := RunParameters{SpaceID: spaceID, SpaceType: spaces.SpaceTypeProject, OptionalACLs: allowed, PathACLs: pathACLs}
 	project, err := j.Project(ctx, spaceID)
 	if _, ok := err.(errtypes.IsNotFound); ok {
+		p.SpaceType = spaces.SpaceTypeHome
 		uid, err := uids.uid(ctx, gw, statRes.GetInfo().GetOwner())
 		if err != nil {
 			return err
@@ -423,6 +492,16 @@ func (j *DeepJob) runAnalysis(ctx context.Context, gw gateway.GatewayAPIClient, 
 		MandatoryACLs: p.MandatoryACLs,
 		AllowedACLs:   p.OptionalACLs,
 	})
+	for _, r := range p.PathACLs {
+		if len(r.SpaceTypes) > 0 && !slices.Contains(r.SpaceTypes, p.SpaceType) {
+			continue
+		}
+		tree.Insert(&ACLNode{
+			Path:          path + "/" + r.Path,
+			MandatoryACLs: r.MandatoryACLs,
+			AllowedACLs:   r.AllowedACLs,
+		})
+	}
 	for _, s := range sharesWithPaths {
 		tree.Insert(s.toTreeNode())
 	}
@@ -530,8 +609,9 @@ func roleToAcls(ctx context.Context, gw gateway.GatewayAPIClient, uids uidCache,
 		if err != nil {
 			return nil, err
 		}
-		// a project without a group for a role still has the role, with an
-		// empty recipient. That is not an entry EOS can hold.
+		// if a project returns a role without any recipient,
+		// e.g. because the readers e-group is not set,
+		// we should skip generating an ACL entry for that
 		if e == nil {
 			continue
 		}
