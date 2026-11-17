@@ -96,7 +96,7 @@ func TestExchangeTokenSuccess(t *testing.T) {
 	defer srv.Close()
 
 	c := NewClient(10*time.Second, true)
-	tok, exp, err := c.ExchangeToken(context.Background(), srv.URL, "code123", "client1", nil)
+	tok, exp, err := c.ExchangeToken(context.Background(), srv.URL, "code123", "client1", newSigningKey(t))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -117,7 +117,7 @@ func TestExchangeTokenInvalidGrant(t *testing.T) {
 	defer srv.Close()
 
 	c := NewClient(10*time.Second, true)
-	_, _, err := c.ExchangeToken(context.Background(), srv.URL, "bad-code", "", nil)
+	_, _, err := c.ExchangeToken(context.Background(), srv.URL, "bad-code", "", newSigningKey(t))
 	if err == nil {
 		t.Fatal("expected error for invalid_grant")
 	}
@@ -135,7 +135,7 @@ func TestExchangeTokenUnsupportedGrantType(t *testing.T) {
 	defer srv.Close()
 
 	c := NewClient(10*time.Second, true)
-	_, _, err := c.ExchangeToken(context.Background(), srv.URL, "code", "", nil)
+	_, _, err := c.ExchangeToken(context.Background(), srv.URL, "code", "", newSigningKey(t))
 	if err == nil {
 		t.Fatal("expected error for unsupported_grant_type")
 	}
@@ -151,7 +151,7 @@ func TestExchangeTokenForbidden(t *testing.T) {
 	defer srv.Close()
 
 	c := NewClient(10*time.Second, true)
-	_, _, err := c.ExchangeToken(context.Background(), srv.URL, "code", "", nil)
+	_, _, err := c.ExchangeToken(context.Background(), srv.URL, "code", "", newSigningKey(t))
 	if err == nil {
 		t.Fatal("expected error for 403")
 	}
@@ -167,7 +167,7 @@ func TestExchangeTokenUnauthorized(t *testing.T) {
 	defer srv.Close()
 
 	c := NewClient(10*time.Second, true)
-	_, _, err := c.ExchangeToken(context.Background(), srv.URL, "code", "", nil)
+	_, _, err := c.ExchangeToken(context.Background(), srv.URL, "code", "", newSigningKey(t))
 	if err == nil {
 		t.Fatal("expected error for 401")
 	}
@@ -183,7 +183,7 @@ func TestExchangeTokenServerError(t *testing.T) {
 	defer srv.Close()
 
 	c := NewClient(10*time.Second, true)
-	_, _, err := c.ExchangeToken(context.Background(), srv.URL, "code", "", nil)
+	_, _, err := c.ExchangeToken(context.Background(), srv.URL, "code", "", newSigningKey(t))
 	if err == nil {
 		t.Fatal("expected error for 500")
 	}
@@ -203,7 +203,7 @@ func TestExchangeTokenMissingAccessToken(t *testing.T) {
 	defer srv.Close()
 
 	c := NewClient(10*time.Second, true)
-	_, _, err := c.ExchangeToken(context.Background(), srv.URL, "code", "", nil)
+	_, _, err := c.ExchangeToken(context.Background(), srv.URL, "code", "", newSigningKey(t))
 	if err == nil {
 		t.Fatal("expected error for missing access_token")
 	}
@@ -220,7 +220,7 @@ func TestExchangeTokenMalformedJSON(t *testing.T) {
 	defer srv.Close()
 
 	c := NewClient(10*time.Second, true)
-	_, _, err := c.ExchangeToken(context.Background(), srv.URL, "code", "", nil)
+	_, _, err := c.ExchangeToken(context.Background(), srv.URL, "code", "", newSigningKey(t))
 	if err == nil {
 		t.Fatal("expected error for malformed JSON response")
 	}
@@ -239,7 +239,7 @@ func TestExchangeTokenTransportAndConstructionOmitRemoteMaterial(t *testing.T) {
 	c := &OCMClient{client: &http.Client{Transport: roundTripperFunc(func(*http.Request) (*http.Response, error) {
 		return nil, errors.New("dial " + endpoint + " " + code)
 	})}}
-	_, _, err := c.ExchangeToken(context.Background(), endpoint, code, "client", nil)
+	_, _, err := c.ExchangeToken(context.Background(), endpoint, code, "client", newSigningKey(t))
 	if err == nil {
 		t.Fatal("expected transport error")
 	}
@@ -251,7 +251,7 @@ func TestExchangeTokenTransportAndConstructionOmitRemoteMaterial(t *testing.T) {
 		t.Fatalf("transport error leaked remote material: %v", err)
 	}
 
-	_, _, err = c.ExchangeToken(context.Background(), "http://[::1", code, "client", nil)
+	_, _, err = c.ExchangeToken(context.Background(), "http://[::1", code, "client", newSigningKey(t))
 	if err == nil {
 		t.Fatal("expected construction error")
 	}
@@ -279,7 +279,7 @@ func TestExchangeTokenPolicyFailureIsSafe(t *testing.T) {
 		endpoint,
 		code,
 		"client",
-		nil,
+		newSigningKey(t),
 	)
 	if err == nil {
 		t.Fatal("expected policy error")
@@ -360,7 +360,7 @@ func TestExchangeTokenReadErrorsAreSafe(t *testing.T) {
 				endpoint,
 				code,
 				"client",
-				nil,
+				newSigningKey(t),
 			)
 			if err == nil {
 				t.Fatal("expected read error")
@@ -403,7 +403,7 @@ func TestExchangeTokenContextFailuresRemainObservable(t *testing.T) {
 				endpoint,
 				code,
 				"client",
-				nil,
+				newSigningKey(t),
 			)
 			if tok != "" || ttl != 0 {
 				t.Fatalf("token %q ttl %d, want empty token and zero ttl", tok, ttl)
@@ -699,7 +699,7 @@ func writeChunkedBody(t *testing.T, w http.ResponseWriter, status int, body []by
 	}
 }
 
-func callOCMMethod(c *OCMClient, method, base string) error {
+func callOCMMethod(c *OCMClient, method, base string, key *httpsig.Key) error {
 	ctx := context.Background()
 	switch method {
 	case "discover":
@@ -709,13 +709,13 @@ func callOCMMethod(c *OCMClient, method, base string) error {
 		_, err := c.GetDirectoryService(ctx, base)
 		return err
 	case "newshare":
-		_, err := c.NewShare(ctx, base, testShareRequest(), nil)
+		_, err := c.NewShare(ctx, base, testShareRequest(), key)
 		return err
 	case "invite":
-		_, err := c.InviteAccepted(ctx, base, testInviteRequest(), nil)
+		_, err := c.InviteAccepted(ctx, base, testInviteRequest(), key)
 		return err
 	case "token":
-		_, _, err := c.ExchangeToken(ctx, base, "code", "client1", nil)
+		_, _, err := c.ExchangeToken(ctx, base, "code", "client1", key)
 		return err
 	default:
 		return errors.New("unknown OCM method " + method)
@@ -886,7 +886,7 @@ func TestOCMClientAcceptsValidControlPlaneJSON(t *testing.T) {
 			status: http.StatusOK,
 			body:   tokenJSON,
 			check: func(t *testing.T, c *OCMClient, base string) {
-				tok, exp, err := c.ExchangeToken(context.Background(), base, "code", "client1", nil)
+				tok, exp, err := c.ExchangeToken(context.Background(), base, "code", "client1", newSigningKey(t))
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -920,7 +920,7 @@ func TestOCMClientAcceptsValidControlPlaneJSON(t *testing.T) {
 			status: http.StatusCreated,
 			body:   padJSON(t, shareJSON, int(DefaultResponseLimit)),
 			check: func(t *testing.T, c *OCMClient, base string) {
-				if _, err := c.NewShare(context.Background(), base, testShareRequest(), nil); err != nil {
+				if _, err := c.NewShare(context.Background(), base, testShareRequest(), newSigningKey(t)); err != nil {
 					t.Fatal(err)
 				}
 			},
@@ -930,7 +930,7 @@ func TestOCMClientAcceptsValidControlPlaneJSON(t *testing.T) {
 			status: http.StatusOK,
 			body:   padJSON(t, inviteJSON, int(DefaultResponseLimit)),
 			check: func(t *testing.T, c *OCMClient, base string) {
-				if _, err := c.InviteAccepted(context.Background(), base, testInviteRequest(), nil); err != nil {
+				if _, err := c.InviteAccepted(context.Background(), base, testInviteRequest(), newSigningKey(t)); err != nil {
 					t.Fatal(err)
 				}
 			},
@@ -940,7 +940,7 @@ func TestOCMClientAcceptsValidControlPlaneJSON(t *testing.T) {
 			status: http.StatusOK,
 			body:   padJSON(t, tokenJSON, int(DefaultResponseLimit)),
 			check: func(t *testing.T, c *OCMClient, base string) {
-				if _, _, err := c.ExchangeToken(context.Background(), base, "code", "client1", nil); err != nil {
+				if _, _, err := c.ExchangeToken(context.Background(), base, "code", "client1", newSigningKey(t)); err != nil {
 					t.Fatal(err)
 				}
 			},
@@ -950,7 +950,7 @@ func TestOCMClientAcceptsValidControlPlaneJSON(t *testing.T) {
 			status: http.StatusBadRequest,
 			body:   padJSON(t, []byte(`{"error":"invalid_grant"}`), int(DefaultResponseLimit)),
 			check: func(t *testing.T, c *OCMClient, base string) {
-				_, _, err := c.ExchangeToken(context.Background(), base, "code", "client1", nil)
+				_, _, err := c.ExchangeToken(context.Background(), base, "code", "client1", newSigningKey(t))
 				if err == nil {
 					t.Fatal("expected error for invalid_grant")
 				}
@@ -981,7 +981,7 @@ func TestOCMClientAcceptsValidControlPlaneJSON(t *testing.T) {
 			status: http.StatusOK,
 			body:   []byte(`{"access_token":"jwt-tok","expires_in":9,"surprise":true}`),
 			check: func(t *testing.T, c *OCMClient, base string) {
-				tok, exp, err := c.ExchangeToken(context.Background(), base, "code", "client1", nil)
+				tok, exp, err := c.ExchangeToken(context.Background(), base, "code", "client1", newSigningKey(t))
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -995,7 +995,7 @@ func TestOCMClientAcceptsValidControlPlaneJSON(t *testing.T) {
 			status: http.StatusOK,
 			body:   []byte(`{"recipientDisplayName":"Ada","extra":true}`),
 			check: func(t *testing.T, c *OCMClient, base string) {
-				res, err := c.NewShare(context.Background(), base, testShareRequest(), nil)
+				res, err := c.NewShare(context.Background(), base, testShareRequest(), newSigningKey(t))
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -1009,7 +1009,7 @@ func TestOCMClientAcceptsValidControlPlaneJSON(t *testing.T) {
 			status: http.StatusOK,
 			body:   []byte(`{"userID":"ada","email":"ada@example.com","name":"Ada","extra":1}`),
 			check: func(t *testing.T, c *OCMClient, base string) {
-				u, err := c.InviteAccepted(context.Background(), base, testInviteRequest(), nil)
+				u, err := c.InviteAccepted(context.Background(), base, testInviteRequest(), newSigningKey(t))
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -1109,7 +1109,7 @@ func TestOCMClientRejectsOversizedAndMalformedBodies(t *testing.T) {
 
 			c := NewClient(10*time.Second, true)
 			tracker := trackClientBodies(c)
-			err := callOCMMethod(c, tt.method, srv.URL)
+			err := callOCMMethod(c, tt.method, srv.URL, newSigningKey(t))
 			if err == nil {
 				t.Fatal("expected error")
 			}
@@ -1368,7 +1368,7 @@ func TestOCMClientClosesResponseBodiesOnMappedErrors(t *testing.T) {
 
 			c := NewClient(10*time.Second, true)
 			tracker := trackClientBodies(c)
-			if err := callOCMMethod(c, tt.method, srv.URL); err == nil {
+			if err := callOCMMethod(c, tt.method, srv.URL, newSigningKey(t)); err == nil {
 				t.Fatal("expected error")
 			}
 			tracker.assertClosed(t)
@@ -1390,7 +1390,7 @@ func TestNewShareAndInviteAcceptedDecodeOnce(t *testing.T) {
 			path: "/shares",
 			body: []byte(`{"recipientDisplayName":"Ada"}`),
 			invoke: func(t *testing.T, c *OCMClient, base string) {
-				res, err := c.NewShare(context.Background(), base, testShareRequest(), nil)
+				res, err := c.NewShare(context.Background(), base, testShareRequest(), newSigningKey(t))
 				if errors.Is(err, io.EOF) {
 					t.Fatal("NewShare decoded the body more than once")
 				}
@@ -1407,7 +1407,7 @@ func TestNewShareAndInviteAcceptedDecodeOnce(t *testing.T) {
 			path: "/invite-accepted",
 			body: []byte(`{"userID":"ada","email":"ada@example.com","name":"Ada"}`),
 			invoke: func(t *testing.T, c *OCMClient, base string) {
-				u, err := c.InviteAccepted(context.Background(), base, testInviteRequest(), nil)
+				u, err := c.InviteAccepted(context.Background(), base, testInviteRequest(), newSigningKey(t))
 				if errors.Is(err, io.EOF) {
 					t.Fatal("InviteAccepted decoded the body more than once")
 				}
@@ -1453,35 +1453,27 @@ func TestOutgoingRequestSigning(t *testing.T) {
 	defer srv.Close()
 	c := NewClient(time.Second, false)
 
-	senders := map[string]func(*httpsig.Key) error{
-		"NewShare": func(k *httpsig.Key) error {
-			_, err := c.NewShare(context.Background(), srv.URL, testShareRequest(), k)
+	senders := map[string]func() error{
+		"NewShare": func() error {
+			_, err := c.NewShare(context.Background(), srv.URL, testShareRequest(), key)
 			return err
 		},
-		"InviteAccepted": func(k *httpsig.Key) error {
-			_, err := c.InviteAccepted(context.Background(), srv.URL, testInviteRequest(), k)
+		"InviteAccepted": func() error {
+			_, err := c.InviteAccepted(context.Background(), srv.URL, testInviteRequest(), key)
 			return err
 		},
-		"ExchangeToken": func(k *httpsig.Key) error {
-			_, _, err := c.ExchangeToken(context.Background(), srv.URL+"/ocm/token", "code", "cernbox.example.org", k)
+		"ExchangeToken": func() error {
+			_, _, err := c.ExchangeToken(context.Background(), srv.URL+"/ocm/token", "code", "cernbox.example.org", key)
 			return err
 		},
 	}
 	for name, send := range senders {
-		t.Run(name+" with a key", func(t *testing.T) {
-			if err := send(key); err != nil {
+		t.Run(name, func(t *testing.T) {
+			if err := send(); err != nil {
 				t.Fatal(err)
 			}
 			if err := <-verified; err != nil {
 				t.Fatalf("Verify() error = %v", err)
-			}
-		})
-		t.Run(name+" without a key", func(t *testing.T) {
-			if err := send(nil); err != nil {
-				t.Fatal(err)
-			}
-			if err := <-verified; !errors.Is(err, httpsig.ErrUnsigned) {
-				t.Fatalf("Verify() error = %v, want ErrUnsigned", err)
 			}
 		})
 	}
@@ -1607,7 +1599,7 @@ func observeNewShareLogs(t *testing.T, endpoint string, req *NewShareRequest) (s
 	client := NewClient(2*time.Second, true)
 	capture := &statusCaptureTransport{base: client.client.Transport}
 	client.client.Transport = capture
-	_, err := client.NewShare(ctx, endpoint, req, nil)
+	_, err := client.NewShare(ctx, endpoint, req, newSigningKey(t))
 	return buf.String(), capture.status, err
 }
 

@@ -80,7 +80,7 @@ type config struct {
 	AllowedFederationCIDRs []string `mapstructure:"allowed_federation_cidrs"`
 	// SigningKey is the PEM file of the Ed25519 key that signs the token request of a
 	// webapp launch. It must be the key that the wellknown service publishes.
-	SigningKey string `mapstructure:"signing_key"`
+	SigningKey string `mapstructure:"signing_key" validate:"required"`
 	// RateLimit guards the unauthenticated routes (see Unprotected), which a
 	// browser hits during the WAYF flow and which trigger outbound requests.
 	RateLimit ratelimit.ServiceConfig `mapstructure:",squash"`

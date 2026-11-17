@@ -81,7 +81,7 @@ type config struct {
 	WebDAVEndpoint  string                    `mapstructure:"webdav_endpoint" validate:"required"`
 	Webapps         []webapp                  `docs:";Web applications offered on outbound OCM shares, each with a name and the media types it opens. The webapp protocol is offered only if this list is not empty." mapstructure:"webapps"`
 	WebAppEndpoint  string                    `docs:";Absolute URL of the webapp opener. Required when webapps is not empty." mapstructure:"webapp_endpoint" validate:"required_with=Webapps"`
-	SigningKey      string                    `docs:";Path to the PEM file of the Ed25519 private key that signs the shares that this server sends. Use the key of the wellknown ocmprovider." mapstructure:"signing_key"`
+	SigningKey      string                    `docs:";Path to the PEM file of the Ed25519 private key that signs the shares that this server sends. Use the key of the wellknown ocmprovider." mapstructure:"signing_key" validate:"required"`
 }
 
 type webapp struct {
@@ -151,11 +151,9 @@ func New(ctx context.Context, m map[string]any) (rgrpc.Service, error) {
 		return nil, err
 	}
 
-	var key *httpsig.Key
-	if c.SigningKey != "" {
-		if key, err = httpsig.LoadKey(c.SigningKey); err != nil {
-			return nil, err
-		}
+	key, err := httpsig.LoadKey(c.SigningKey)
+	if err != nil {
+		return nil, err
 	}
 
 	ocmcl := ocmd.NewClient(time.Duration(c.ClientTimeout)*time.Second, c.ClientInsecure)

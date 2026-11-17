@@ -70,6 +70,7 @@ func TestNewWiresCreateOCMShare(t *testing.T) {
 		"webapp_endpoint": testOpener,
 		"client_insecure": true,
 		"client_timeout":  2,
+		"signing_key":     writeKeyFile(t),
 	})
 	if err != nil {
 		t.Fatalf("New: %v", err)
