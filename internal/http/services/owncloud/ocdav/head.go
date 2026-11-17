@@ -47,6 +47,9 @@ func (s *svc) handlePathHead(w http.ResponseWriter, r *http.Request, ns string) 
 	sublog := appctx.GetLogger(ctx).With().Str("path", fn).Logger()
 
 	ref := &provider.Reference{Path: fn}
+	if idRef, ok := requestWasMadeToResourceId(ctx, fn); ok {
+		ref = idRef
+	}
 	s.handleHead(ctx, w, r, ref, sublog)
 }
 
