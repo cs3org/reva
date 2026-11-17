@@ -547,6 +547,7 @@ func TestDump(t *testing.T) {
 				"server_name":   "",
 				"outgoing_mtls": false,
 			},
+			"public_url": "",
 			"Database": map[string]any{
 				"DBHost":     "",
 				"DBName":     "",

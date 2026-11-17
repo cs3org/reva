@@ -20,6 +20,7 @@ package gateway
 
 import (
 	"context"
+	"net/url"
 	"slices"
 	"sync"
 
@@ -68,6 +69,7 @@ func (s *svc) CreatePublicShare(ctx context.Context, req *link.CreatePublicShare
 	if err != nil {
 		return nil, err
 	}
+	s.setPublicLinkURL(res.GetShare())
 
 	return res, nil
 }
@@ -119,6 +121,7 @@ func (s *svc) GetPublicShareByToken(ctx context.Context, req *link.GetPublicShar
 	if err != nil {
 		return nil, err
 	}
+	s.setPublicLinkURL(res.GetShare())
 
 	return res, nil
 }
@@ -141,6 +144,7 @@ func (s *svc) GetPublicShare(ctx context.Context, req *link.GetPublicShareReques
 	if err != nil || res.Status.Code != rpc.Code_CODE_OK {
 		return res, err
 	}
+	s.setPublicLinkURL(res.GetShare())
 
 	// A public link session resolves its own link by token, and it has no grant permissions.
 	if isOwnPublicLink(ctx, req.GetRef().GetToken()) {
@@ -211,6 +215,9 @@ func (s *svc) ListPublicShares(ctx context.Context, req *link.ListPublicSharesRe
 	}
 
 	res.Share = keepManageable(ctx, s, user, res.Share)
+	for _, share := range res.Share {
+		s.setPublicLinkURL(share)
+	}
 	return res, nil
 }
 
@@ -314,7 +321,19 @@ func (s *svc) UpdatePublicShare(ctx context.Context, req *link.UpdatePublicShare
 	if err != nil {
 		return nil, errors.Wrap(err, "error updating share")
 	}
+	s.setPublicLinkURL(res.GetShare())
 	return res, nil
+}
+
+// setPublicLinkURL fills the web address of the link in the gateway only, so that the
+// clients and the HTTP services do not each need the base URL to build it.
+func (s *svc) setPublicLinkURL(share *link.PublicShare) {
+	if s.publicURL == "" || share.GetToken() == "" {
+		return
+	}
+	if u, err := url.JoinPath(s.publicURL, "/s", share.GetToken()); err == nil {
+		share.Url = u
+	}
 }
 
 // permissionsOnResource stats the resource a share points to and returns the

@@ -111,8 +111,6 @@ func (s *svc) handleLinkShare(ctx context.Context, share *GenericShare) (*libreg
 		expTime = *nilTime
 	}
 
-	webUrl, _ := url.JoinPath(s.c.BaseURL, "/s", share.link.GetToken())
-
 	perm := &libregraph.Permission{
 		Id:                 libregraph.PtrString(share.ID),
 		ExpirationDateTime: expTime,
@@ -122,7 +120,7 @@ func (s *svc) handleLinkShare(ctx context.Context, share *GenericShare) (*libreg
 			Type:                  lt,
 			LibreGraphDisplayName: libregraph.PtrString(share.link.GetDisplayName()),
 			LibreGraphQuickLink:   libregraph.PtrBool(share.link.GetQuicklink()),
-			WebUrl:                libregraph.PtrString(webUrl),
+			WebUrl:                libregraph.PtrString(share.link.GetUrl()),
 		},
 		LibreGraphPermissionsActions: actions,
 	}

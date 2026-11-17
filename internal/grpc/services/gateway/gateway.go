@@ -120,6 +120,8 @@ type svc struct {
 	spaceInfoCacheTTL    time.Duration
 	eventBackend         backends.Backend
 	eventLimiter         ratelimiters.Limiter
+	// publicURL is the shared public_url, used to fill the url of public links.
+	publicURL string
 	// Drains the NATS connection on service close
 	closeEventBackend func() error
 }
@@ -158,6 +160,7 @@ func New(ctx context.Context, m map[string]any) (rgrpc.Service, error) {
 		createHomeCache:   createHomeCache,
 		eventBackend:      eventBackend,
 		eventLimiter:      ratelimiters.Noop{},
+		publicURL:         sharedconf.GetPublicURL(),
 		closeEventBackend: closeEventBackend,
 	}
 
