@@ -44,9 +44,6 @@ func New(m map[string]any) (auth.CredentialStrategy, error) {
 func (s *strategy) GetCredentials(w http.ResponseWriter, r *http.Request) (*auth.Credentials, error) {
 	token := r.Header.Get(headerShareToken)
 	if token == "" {
-		token = r.URL.Query().Get(headerShareToken)
-	}
-	if token == "" {
 		return nil, fmt.Errorf("no ocm token provided")
 	}
 

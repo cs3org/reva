@@ -163,6 +163,7 @@ func storeWebappAccessMethod(tx *gorm.DB, shareID uint, o *ocm.AccessMethod_Weba
 		Type:         model.WebappProtocol,
 		Permissions:  webappPermissionsToModel(o.WebappOptions.GetPermissions()),
 		Requirements: stringsToJSON(o.WebappOptions.Requirements),
+		AppNames:     stringsToJSON(o.WebappOptions.AppNames),
 	}
 
 	err := tx.Create(accessMethod).Error

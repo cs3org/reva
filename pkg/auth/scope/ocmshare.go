@@ -97,7 +97,8 @@ func ocmShareScope(_ context.Context, scope *authpb.Scope, resource any, _ *zero
 	case *ocmv1beta1.GetOCMShareRequest:
 		return checkOCMShareRef(&share, v.GetRef()), nil
 	case string:
-		if checkResourcePath(v) {
+		// Apps are launched through /app/ocm-open, which authenticates by itself.
+		if !strings.HasPrefix(v, "/app/") && checkResourcePath(v) {
 			return true, nil
 		}
 		return checkDAVOCMPath(v, &share), nil

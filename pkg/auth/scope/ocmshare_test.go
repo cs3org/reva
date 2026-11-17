@@ -410,6 +410,9 @@ func TestVerifyScopeHTTPDAVPaths(t *testing.T) {
 		{"non-DAV OCM share-looking", codeFlowScope, "/ocm/share-abc/file.txt", false},
 		{"later-ocm rescue attempt", codeFlowScope, "/dav/ocm/other-id/dir/ocm/share-abc/file.txt", false},
 		{"double-slash injection", codeFlowScope, "/dav/ocm//file.txt", false},
+		{"app open is not reachable", codeFlowScope, "/app/open", false},
+		{"app new is not reachable", codeFlowScope, "/app/new", false},
+		{"data route stays reachable", codeFlowScope, "/data/some-token", true},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -421,5 +424,30 @@ func TestVerifyScopeHTTPDAVPaths(t *testing.T) {
 				t.Errorf("VerifyScope(%q) = %v, want %v", tt.path, ok, tt.allowed)
 			}
 		})
+	}
+}
+
+func TestCodeFlowOCMShareScopeCarriesOfferedApps(t *testing.T) {
+	webapp := &ocmv1beta1.AccessMethod{Term: &ocmv1beta1.AccessMethod_WebappOptions{
+		WebappOptions: &ocmv1beta1.WebappAccessMethod{AppNames: []string{"Collabora", "CodiMD"}},
+	}}
+	scopes, err := AddCodeFlowOCMShareScope(&ocmv1beta1.Share{
+		Id:            &ocmv1beta1.ShareId{OpaqueId: "share1"},
+		Token:         "long-lived-secret",
+		AccessMethods: []*ocmv1beta1.AccessMethod{webapp},
+	}, authpb.Role_ROLE_VIEWER, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	shares, err := GetOCMSharesFromScopes(scopes)
+	if err != nil || len(shares) != 1 {
+		t.Fatalf("shares = %v, err = %v", shares, err)
+	}
+	got := shares[0].GetAccessMethods()[0].GetWebappOptions().GetAppNames()
+	if len(got) != 2 || got[0] != "Collabora" || got[1] != "CodiMD" {
+		t.Fatalf("app names = %v", got)
+	}
+	if shares[0].GetToken() != "" {
+		t.Fatal("the shared secret must not be in the token scope")
 	}
 }

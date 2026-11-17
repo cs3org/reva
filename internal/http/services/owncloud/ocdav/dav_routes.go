@@ -371,7 +371,7 @@ func (s *svc) ocm(base string) enterFunc {
 		ctx = context.WithValue(ctx, ctxOCM, true)
 		ctx = context.WithValue(ctx, ctxKeyBaseURI, base)
 
-		log.Info().Str("token", token).Str("mode", mode).Str("ocmshare", ocmshare).Interface("user", authRes.User).Msg("remote OCM access authenticated")
+		log.Info().Str("mode", mode).Str("ocmshare", ocmshare).Interface("user", authRes.User).Msg("remote OCM access authenticated")
 
 		r = r.WithContext(ctx)
 		return r, s.davHandler.OCMSharesHandler.namespaceFor(r), true
