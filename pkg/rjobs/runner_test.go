@@ -449,7 +449,7 @@ func TestCancelBroadcastStopsRemoteRun(t *testing.T) {
 	}
 
 	status := newFakeStatus()
-	store := &busStore{run: Run{ID: "run-1", Job: "test.remote", Attempt: 1}}
+	store := &busStore{oneRunStore: oneRunStore{run: Run{ID: "run-1", Job: "test.remote", Attempt: 1}}}
 	_ = status.Put(context.Background(), Status{RunID: "run-1", Job: "test.remote", State: StateQueued})
 
 	r, err := NewRunner(context.Background(), Options{Workers: 1, Store: store, Status: status})

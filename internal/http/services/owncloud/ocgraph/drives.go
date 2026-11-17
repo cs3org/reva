@@ -102,9 +102,10 @@ func (s *svc) listMySpaces(w http.ResponseWriter, r *http.Request) {
 		labelsByRoot := resourceLabels(ctx, gw, list.Map(res.StorageSpaces, (*provider.StorageSpace).GetRoot))
 		me := appctx.ContextMustGetUser(ctx)
 		spaces = list.Map(res.StorageSpaces, func(space *provider.StorageSpace) *LabeledDrive {
+			drive := s.cs3StorageSpaceToDrive(ctx, me, space)
 			return &LabeledDrive{
-				Drive:  *s.cs3StorageSpaceToDrive(ctx, me, space),
-				Labels: labelsByRoot[space.GetRoot()],
+				Drive: *drive,
+				Root:  &LabeledDriveItem{DriveItem: *drive.Root, Labels: labelsByRoot[space.GetRoot()]},
 			}
 		})
 	}
@@ -130,33 +131,8 @@ func isMountpointRequest(request *godata.GoDataRequest) bool {
 
 const ShareJailID = "a0ca6a90-a365-4782-871e-d44447bbc668"
 
-// LabeledDrive adds the labels of the current user on the drive root. Our libregraph.DriveItem
-// does not have the opencloud @libre.graph.me.labels field yet.
-type LabeledDrive struct {
-	libregraph.Drive
-	// Labels is nil when the labels could not be read. Then the field is not sent.
-	Labels []string
-}
-
-// libregraph.Drive has its own MarshalJSON. Go promotes it to this type, and it drops Labels.
-func (d LabeledDrive) MarshalJSON() ([]byte, error) {
-	m, err := d.Drive.ToMap()
-	if err != nil {
-		return nil, err
-	}
-	if d.Labels != nil && d.Root != nil {
-		root, err := d.Root.ToMap()
-		if err != nil {
-			return nil, err
-		}
-		root["@libre.graph.me.labels"] = d.Labels
-		m["root"] = root
-	}
-	return json.Marshal(m)
-}
-
-// LabeledDriveItem adds the labels of the current user on a shared resource. Our
-// libregraph.DriveItem does not have the opencloud @libre.graph.me.labels field yet.
+// LabeledDriveItem adds the labels of the current user on a resource. Our
+// libregraph.DriveItem does not have the @libre.graph.me.labels field yet.
 type LabeledDriveItem struct {
 	libregraph.DriveItem
 	// Labels is nil when the labels could not be read. Then the field is not sent.
@@ -171,6 +147,25 @@ func (d LabeledDriveItem) MarshalJSON() ([]byte, error) {
 	}
 	if d.Labels != nil {
 		m["@libre.graph.me.labels"] = d.Labels
+	}
+	return json.Marshal(m)
+}
+
+// LabeledDrive is a libregraph.Drive with a labeled root.
+type LabeledDrive struct {
+	libregraph.Drive
+	// Root replaces Drive.Root in the JSON output.
+	Root *LabeledDriveItem
+}
+
+// libregraph.Drive has its own MarshalJSON. Go promotes it to this type, and it drops Root.
+func (d LabeledDrive) MarshalJSON() ([]byte, error) {
+	m, err := d.Drive.ToMap()
+	if err != nil {
+		return nil, err
+	}
+	if d.Root != nil {
+		m["root"] = d.Root
 	}
 	return json.Marshal(m)
 }
@@ -236,9 +231,10 @@ func (s *svc) getDrivesForShares(ctx context.Context, gw gateway.GatewayAPIClien
 	}))
 	spacesRes := make([]*LabeledDrive, 0, len(res.ShareInfos))
 	for _, share := range res.ShareInfos {
+		drive := s.convertShareToSpace(share)
 		spacesRes = append(spacesRes, &LabeledDrive{
-			Drive:  *s.convertShareToSpace(share),
-			Labels: labelsByID[share.ResourceInfo.GetId()],
+			Drive: *drive,
+			Root:  &LabeledDriveItem{DriveItem: *drive.Root, Labels: labelsByID[share.ResourceInfo.GetId()]},
 		})
 	}
 	return spacesRes, nil
@@ -416,8 +412,8 @@ func (s *svc) getSpace(w http.ResponseWriter, r *http.Request) {
 		})
 		id := stat.Info.GetId()
 		_ = json.NewEncoder(w).Encode(&LabeledDrive{
-			Drive:  *space,
-			Labels: resourceLabels(ctx, gw, []*provider.ResourceId{id})[id],
+			Drive: *space,
+			Root:  &LabeledDriveItem{DriveItem: *space.Root, Labels: resourceLabels(ctx, gw, []*provider.ResourceId{id})[id]},
 		})
 		return
 	} else {
@@ -448,9 +444,10 @@ func (s *svc) getSpace(w http.ResponseWriter, r *http.Request) {
 		if len(spaces) == 1 {
 			user := appctx.ContextMustGetUser(ctx)
 			root := spaces[0].GetRoot()
+			drive := s.cs3StorageSpaceToDrive(ctx, user, spaces[0])
 			_ = json.NewEncoder(w).Encode(&LabeledDrive{
-				Drive:  *s.cs3StorageSpaceToDrive(ctx, user, spaces[0]),
-				Labels: resourceLabels(ctx, gw, []*provider.ResourceId{root})[root],
+				Drive: *drive,
+				Root:  &LabeledDriveItem{DriveItem: *drive.Root, Labels: resourceLabels(ctx, gw, []*provider.ResourceId{root})[root]},
 			})
 			return
 		}
