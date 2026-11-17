@@ -81,7 +81,6 @@ type NewShareRequest struct {
 	Sender            string    `json:"sender"            validate:"required"`                             // unique indentifier of the user who wants to share the resource at provider side
 	OwnerDisplayName  string    `json:"ownerDisplayName"`                                                  // display name of the owner of the resource
 	SenderDisplayName string    `json:"senderDisplayName"`                                                 // dispay name of the user who wants to share the resource
-	Code              string    `json:"code"`                                                              // nonce to be exchanged for a bearer token (not implemented for now)
 	ShareType         string    `json:"shareType"         validate:"required,oneof=user group federation"` // recipient share type (user or group)
 	ResourceType      string    `json:"resourceType"      validate:"required"`
 	Expiration        uint64    `json:"expiration"`
@@ -180,14 +179,19 @@ func (w *WebDAV) ToOCMProtocol() *ocm.Protocol {
 
 // Webapp contains the parameters for the Webapp protocol.
 type Webapp struct {
-	URI          string   `json:"uri" validate:"required"`
-	SharedSecret string   `json:"sharedSecret" validate:"required"`
-	Permissions  []string `json:"permissions" validate:"required,min=1,dive,required,oneof=view read write share"`
-	Requirements []string `json:"requirements" validate:"required,min=1"`
-	Targets      []string `json:"targets" validate:"required,min=1,dive,required,oneof=blank iframe"`
-	AppName      string   `json:"appName,omitempty"`
-	AppIconHint  string   `json:"appIconHint,omitempty"`
-	MediaTypes   []string `json:"mediaTypes,omitempty"`
+	URI          string      `json:"uri" validate:"required"`
+	SharedSecret string      `json:"sharedSecret" validate:"required"`
+	Permissions  []string    `json:"permissions" validate:"required,min=1,dive,required,oneof=view read write share"`
+	Requirements []string    `json:"requirements" validate:"required,min=1"`
+	Targets      []string    `json:"targets" validate:"required,min=1,dive,required,oneof=blank iframe"`
+	AppIconHint  string      `json:"appIconHint,omitempty"`
+	Apps         []WebappApp `json:"apps,omitempty" validate:"omitempty,min=1,dive"`
+}
+
+// WebappApp is a web application offered in the Webapp protocol.
+type WebappApp struct {
+	Name       string   `json:"name" validate:"required"`
+	MediaTypes []string `json:"mediaTypes" validate:"required,min=1,dive,required"`
 }
 
 // ToOCMProtocol convert the protocol to a ocm Protocol struct.
@@ -210,7 +214,11 @@ func (w *Webapp) ToOCMProtocol() *ocm.Protocol {
 			perms.AddGrant = true
 		}
 	}
-	return ocmshare.NewWebappProtocol(w.URI, w.SharedSecret, perms, w.Requirements, w.Targets, w.AppName, w.AppIconHint, w.MediaTypes)
+	var apps []*ocm.WebappApp
+	for _, a := range w.Apps {
+		apps = append(apps, &ocm.WebappApp{Name: a.Name, MediaTypes: a.MediaTypes})
+	}
+	return ocmshare.NewWebappProtocol(w.URI, w.SharedSecret, perms, w.Requirements, w.Targets, w.AppIconHint, apps)
 }
 
 // Embedded contains the parameters for the Embedded protocol.
@@ -395,6 +403,8 @@ func (e *protocolFieldError) Error() string {
 		return "protocol " + e.protocol + " has malformed " + e.kind
 	case "unsupported":
 		return "protocol " + e.protocol + " has unsupported " + e.kind
+	case "duplicate":
+		return "protocol " + e.protocol + " has duplicate " + e.kind
 	default:
 		return errInvalidShareRequest.Error()
 	}
@@ -419,7 +429,7 @@ func safeProtocolToken(protocolName string) string {
 
 func safeFieldToken(kind string) string {
 	switch kind {
-	case "requirement", "permission", "target":
+	case "requirement", "permission", "target", "app name", "app media type":
 		return kind
 	default:
 		return "field"
@@ -428,7 +438,7 @@ func safeFieldToken(kind string) string {
 
 func safeClassToken(class string) string {
 	switch class {
-	case "malformed", "unsupported":
+	case "malformed", "unsupported", "duplicate":
 		return class
 	default:
 		return "unsupported"

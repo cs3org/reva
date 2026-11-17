@@ -209,7 +209,7 @@ func ocmShareCreateCommand(rt *cli.Runtime) *cobra.Command {
 				methods = append(methods, ocmshare.NewWebDavAccessMethod(perm, []ocm.AccessType{}, []string{}))
 			}
 			if webapp {
-				methods = append(methods, ocmshare.NewWebappAccessMethod(perm, ocmshare.DefaultWebappRequirements, ""))
+				methods = append(methods, ocmshare.NewWebappAccessMethod(perm, ocmshare.DefaultWebappRequirements))
 			}
 
 			client, ctx, err := rt.Gateway(cmd.Context())

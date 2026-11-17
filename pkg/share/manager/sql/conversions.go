@@ -185,6 +185,14 @@ func stringsFromJSON(r datatypes.JSON) []string {
 	return reqs
 }
 
+func appsFromJSON(r datatypes.JSON) []*ocm.WebappApp {
+	var apps []*ocm.WebappApp
+	if err := json.Unmarshal(r, &apps); err != nil {
+		return nil
+	}
+	return apps
+}
+
 func convertToCS3AccessMethod(m *model.OcmShareProtocol) *ocm.AccessMethod {
 	switch m.Type {
 	case model.WebDAVProtocol:
@@ -197,7 +205,6 @@ func convertToCS3AccessMethod(m *model.OcmShareProtocol) *ocm.AccessMethod {
 		return share.NewWebappAccessMethod(
 			webappPermissionsFromModel(m.Permissions),
 			stringsFromJSON(m.Requirements),
-			m.AppName,
 		)
 	}
 	return nil
@@ -218,9 +225,8 @@ func convertToCS3Protocol(p *model.OcmReceivedShareProtocol) *ocm.Protocol {
 			webappPermissionsFromModel(p.Permissions),
 			stringsFromJSON(p.Requirements),
 			stringsFromJSON(p.Targets),
-			p.AppName,
 			p.AppIconHint,
-			stringsFromJSON(p.MediaTypes),
+			appsFromJSON(p.Apps),
 		)
 	case model.EmbeddedProtocol:
 		return share.NewEmbeddedProtocol(string(p.Payload))

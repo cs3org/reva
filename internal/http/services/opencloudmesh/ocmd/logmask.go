@@ -42,7 +42,6 @@ func newShareRequestSecrets(r *NewShareRequest) []string {
 		seen[s] = struct{}{}
 		secrets = append(secrets, s)
 	}
-	add(r.Code)
 	for _, p := range r.Protocols {
 		switch v := p.(type) {
 		case *WebDAV:

@@ -66,8 +66,7 @@ func TestNewWiresCreateOCMShare(t *testing.T) {
 		"gatewaysvc":      "127.0.0.1:9142",
 		"provider_domain": "sender.example",
 		"webdav_endpoint": testWebDAVRoot,
-		"offer_webapp":    true,
-		"webapp_name":     testAppName,
+		"webapps":         webappsCfg(testAppName),
 		"webapp_endpoint": testOpener,
 		"client_insecure": true,
 		"client_timeout":  2,
@@ -79,7 +78,7 @@ func TestNewWiresCreateOCMShare(t *testing.T) {
 	if !ok || svc == nil || svc.client == nil {
 		t.Fatal("New did not return a service wired with an OCM client")
 	}
-	if !svc.conf.OfferWebapp || svc.conf.WebappName != testAppName || svc.conf.WebAppEndpoint != testOpener {
+	if len(svc.conf.Webapps) != 1 || svc.conf.Webapps[0].Name != testAppName || svc.conf.WebAppEndpoint != testOpener {
 		t.Fatalf("wired offer config = %#v", svc.conf)
 	}
 	if !svc.conf.ClientInsecure || svc.conf.ClientTimeout != 2 {
@@ -87,8 +86,9 @@ func TestNewWiresCreateOCMShare(t *testing.T) {
 	}
 
 	stampGateway(&statGateway{info: &providerpb.ResourceInfo{
-		Path: "/files/notes.txt",
-		Type: providerpb.ResourceType_RESOURCE_TYPE_FILE,
+		Path:     "/files/notes.txt",
+		Type:     providerpb.ResourceType_RESOURCE_TYPE_FILE,
+		MimeType: testMediaType,
 		Owner: &userpb.UserId{
 			OpaqueId: "einstein",
 			Idp:      "sender.example",
@@ -120,7 +120,7 @@ func TestNewWiresCreateOCMShare(t *testing.T) {
 				},
 			},
 		},
-		AccessMethods: []*ocm.AccessMethod{webdavMethod(), webappMethod("")},
+		AccessMethods: []*ocm.AccessMethod{webdavMethod(), webappMethod()},
 	})
 	if got := status.Code(err); got != codes.OK {
 		t.Fatalf("grpc status = %s, want %s", got, codes.OK)

@@ -23,6 +23,8 @@ import (
 	"reflect"
 	"strings"
 	"testing"
+
+	ocm "github.com/cs3org/go-cs3apis/cs3/sharing/ocm/v1beta1"
 )
 
 func TestValidateWebappLaunch(t *testing.T) {
@@ -303,15 +305,14 @@ func TestWebappToOCMProtocolPreservesDescriptor(t *testing.T) {
 		Permissions:  []string{"view"},
 		Requirements: []string{"must-exchange-token"},
 		Targets:      []string{"blank"},
-		AppName:      "",
-		MediaTypes:   []string{"text/plain"},
+		Apps:         []WebappApp{{Name: "Text", MediaTypes: []string{"text/plain"}}},
 	}
 	proto := w.ToOCMProtocol()
 	got := proto.GetWebappOptions()
 	if got == nil {
 		t.Fatal("missing webapp options")
 	}
-	if got.Uri != w.URI || got.SharedSecret != w.SharedSecret || got.AppName != "" {
+	if got.Uri != w.URI || got.SharedSecret != w.SharedSecret {
 		t.Fatalf("descriptor %+v", got)
 	}
 	if len(got.Requirements) != 1 || got.Requirements[0] != "must-exchange-token" {
@@ -320,8 +321,8 @@ func TestWebappToOCMProtocolPreservesDescriptor(t *testing.T) {
 	if len(got.Targets) != 1 || got.Targets[0] != "blank" {
 		t.Fatalf("targets %v", got.Targets)
 	}
-	if len(got.MediaTypes) != 1 || got.MediaTypes[0] != "text/plain" {
-		t.Fatalf("media %v", got.MediaTypes)
+	if len(got.Apps) != 1 || got.Apps[0].Name != "Text" || len(got.Apps[0].MediaTypes) != 1 || got.Apps[0].MediaTypes[0] != "text/plain" {
+		t.Fatalf("apps %v", got.Apps)
 	}
 }
 
@@ -345,9 +346,8 @@ func validCodeFlowWebapp() *Webapp {
 		Permissions:  []string{"read"},
 		Requirements: []string{"must-exchange-token"},
 		Targets:      []string{"blank"},
-		AppName:      "",
 		AppIconHint:  "https://app.example/icon.png",
-		MediaTypes:   []string{"text/plain"},
+		Apps:         []WebappApp{{Name: "Text", MediaTypes: []string{"text/plain"}}},
 	}
 }
 
@@ -361,10 +361,10 @@ func TestValidateReceivedWebapp(t *testing.T) {
 	}{
 		{name: "compatible code flow", webapp: validCodeFlowWebapp(), receiver: blank},
 		{
-			name: "empty app name stays optional",
+			name: "apps stay optional",
 			webapp: func() *Webapp {
 				w := validCodeFlowWebapp()
-				w.AppName = ""
+				w.Apps = nil
 				return w
 			}(),
 			receiver: blank,
@@ -373,10 +373,53 @@ func TestValidateReceivedWebapp(t *testing.T) {
 			name: "padded app name stays exact",
 			webapp: func() *Webapp {
 				w := validCodeFlowWebapp()
-				w.AppName = " Jupyter "
+				w.Apps = []WebappApp{{Name: " Jupyter ", MediaTypes: []string{"text/plain"}}}
 				return w
 			}(),
 			receiver: blank,
+		},
+		{
+			name: "blank app name",
+			webapp: func() *Webapp {
+				w := validCodeFlowWebapp()
+				w.Apps = []WebappApp{{Name: "  ", MediaTypes: []string{"text/plain"}}}
+				return w
+			}(),
+			receiver:  blank,
+			wantError: "malformed app name",
+		},
+		{
+			name: "duplicate app name",
+			webapp: func() *Webapp {
+				w := validCodeFlowWebapp()
+				w.Apps = []WebappApp{
+					{Name: "Text", MediaTypes: []string{"text/plain"}},
+					{Name: "Text", MediaTypes: []string{"text/markdown"}},
+				}
+				return w
+			}(),
+			receiver:  blank,
+			wantError: "duplicate app name",
+		},
+		{
+			name: "app without media types",
+			webapp: func() *Webapp {
+				w := validCodeFlowWebapp()
+				w.Apps = []WebappApp{{Name: "Text"}}
+				return w
+			}(),
+			receiver:  blank,
+			wantError: "malformed app media type",
+		},
+		{
+			name: "app with blank media type",
+			webapp: func() *Webapp {
+				w := validCodeFlowWebapp()
+				w.Apps = []WebappApp{{Name: "Text", MediaTypes: []string{"text/plain", " "}}}
+				return w
+			}(),
+			receiver:  blank,
+			wantError: "malformed app media type",
 		},
 		{
 			name:      "empty targets",
@@ -468,7 +511,7 @@ func TestValidateReceivedWebapp(t *testing.T) {
 			if opts := before.GetWebappOptions(); opts != nil {
 				opts.Requirements = append([]string(nil), opts.Requirements...)
 				opts.Targets = append([]string(nil), opts.Targets...)
-				opts.MediaTypes = append([]string(nil), opts.MediaTypes...)
+				opts.Apps = append([]*ocm.WebappApp(nil), opts.Apps...)
 			}
 			err := tt.webapp.ValidateReceived(tt.receiver, false)
 			after := tt.webapp.ToOCMProtocol()

@@ -22,7 +22,15 @@
       },
       "remoteItem": {
         "@ocm.webApp": {
-          "appName": "CodiMD"
+          "appName": "CodiMD",
+          "apps": [
+            {
+              "name": "CodiMD",
+              "mediaTypes": [
+                "text/markdown"
+              ]
+            }
+          ]
         },
         "createdBy": {
           "user": {

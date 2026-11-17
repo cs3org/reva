@@ -237,7 +237,6 @@ type OcmShareProtocol struct {
 	Requirements datatypes.JSON `gorm:"type:json;default:null"`
 	// Webapp protocol fields
 	Targets datatypes.JSON `gorm:"type:json;default:null"`
-	AppName string         `gorm:"size:255"`
 }
 
 // OcmReceivedShare represents an OCM share received from a remote user.
@@ -274,9 +273,8 @@ type OcmReceivedShareProtocol struct {
 	Requirements datatypes.JSON `gorm:"type:json;default:null"`
 	// Webapp protocol fields
 	Targets     datatypes.JSON `gorm:"type:json;default:null"`
-	AppName     string         `gorm:"size:255"`
 	AppIconHint string         `gorm:"size:255"`
-	MediaTypes  datatypes.JSON `gorm:"type:json;default:null"`
+	Apps        datatypes.JSON `gorm:"type:json;default:null"`
 }
 
 func (s *Share) AsCS3Share(grantee *provider.Grantee) *collaboration.Share {

@@ -22,7 +22,15 @@
       },
       "remoteItem": {
         "@ocm.webApp": {
-          "appName": ""
+          "appName": "",
+          "apps": [
+            {
+              "name": "",
+              "mediaTypes": [
+                "text/markdown"
+              ]
+            }
+          ]
         },
         "createdBy": {
           "user": {

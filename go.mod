@@ -13,7 +13,7 @@ require (
 	github.com/cheggaaa/pb v1.0.29
 	github.com/coreos/go-oidc/v3 v3.21.0
 	github.com/creasty/defaults v1.11.0
-	github.com/cs3org/go-cs3apis v0.0.0-20260915133204-93f9871a72ef
+	github.com/cs3org/go-cs3apis v0.0.0-20261111120608-8780d2de79cc
 	github.com/dgraph-io/ristretto v0.2.0
 	github.com/dolthub/go-mysql-server v0.14.0
 	github.com/dustin/go-humanize v1.1.0

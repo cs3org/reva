@@ -147,36 +147,6 @@ func (c *Converter) OCMReceivedShareToDriveItem(ctx context.Context, receivedOCM
 	return d, nil
 }
 
-// WebappMetadataForReceivedShare returns metadata for the single persisted
-// webapp protocol, or nil when there is not exactly one.
-func WebappMetadataForReceivedShare(ctx context.Context, received *ocm.ReceivedShare) *ReceivedWebappMetadata {
-	if received == nil {
-		return nil
-	}
-
-	log := appctx.GetLogger(ctx)
-	var meta *ReceivedWebappMetadata
-	for i, p := range received.Protocols {
-		if p.GetWebappOptions() == nil {
-			continue
-		}
-		if meta != nil {
-			log.Warn().
-				Str("share_id", received.GetId().GetOpaqueId()).
-				Int("protocol_index", i).
-				Str("app_name", meta.AppName).
-				Str("duplicate_app_name", p.GetWebappOptions().GetAppName()).
-				Msg("dropping ambiguous received webapp protocols")
-			return nil
-		}
-		meta = &ReceivedWebappMetadata{
-			Present: true,
-			AppName: p.GetWebappOptions().GetAppName(),
-		}
-	}
-	return meta
-}
-
 // CS3GranteeToSharePointIdentitySet converts a CS3 grantee to a SharePoint identity set for OCM users
 func (c *Converter) CS3GranteeToSharePointIdentitySet(ctx context.Context, grantee *provider.Grantee) (*libregraph.SharePointIdentitySet, error) {
 	p := &libregraph.SharePointIdentitySet{}
@@ -238,10 +208,4 @@ const ShareJailID = "a0ca6a90-a365-4782-871e-d44447bbc668"
 // This is a simplified version for the converter to avoid circular dependencies
 type UnifiedRoleDefinition struct {
 	Id *string
-}
-
-// ReceivedWebappMetadata is presence and the exact persisted app name for one received share.
-type ReceivedWebappMetadata struct {
-	Present bool
-	AppName string
 }
