@@ -29,7 +29,7 @@ func (s *svc) handleOCMOpen(w http.ResponseWriter, r *http.Request) {
 
 	nonce, err := launcher.NewNonce()
 	if err != nil {
-		launcher.WriteError(w, "", http.StatusInternalServerError, "The launch failed.")
+		launcher.WriteError(w, "", http.StatusInternalServerError, "Failed to open webapp.")
 		return
 	}
 	fail := func(code int, msg string) {
@@ -59,7 +59,7 @@ func (s *svc) handleOCMOpen(w http.ResponseWriter, r *http.Request) {
 	gw, err := service.Gateway(ctx)
 	if err != nil {
 		log.Error().Err(err).Msg("ocm open: error getting gateway client")
-		fail(http.StatusInternalServerError, "The launch failed.")
+		fail(http.StatusInternalServerError, "Failed to open webapp.")
 		return
 	}
 	// The share is not named in the request: the token scope selects it.
@@ -70,7 +70,7 @@ func (s *svc) handleOCMOpen(w http.ResponseWriter, r *http.Request) {
 	switch {
 	case err != nil:
 		log.Error().Err(err).Msg("ocm open: authentication error")
-		fail(http.StatusInternalServerError, "The launch failed.")
+		fail(http.StatusInternalServerError, "Failed to open webapp.")
 		return
 	case authRes.GetStatus().GetCode() != rpc.Code_CODE_OK:
 		log.Info().Str("status", authRes.GetStatus().GetCode().String()).Msg("ocm open: token refused")
@@ -94,7 +94,7 @@ func (s *svc) handleOCMOpen(w http.ResponseWriter, r *http.Request) {
 	})
 	if err != nil || shareRes.GetStatus().GetCode() != rpc.Code_CODE_OK {
 		log.Error().Err(err).Msg("ocm open: error getting the share")
-		fail(http.StatusInternalServerError, "The launch failed.")
+		fail(http.StatusInternalServerError, "Failed to open webapp.")
 		return
 	}
 	var perms *provider.ResourcePermissions
@@ -124,7 +124,7 @@ func (s *svc) handleOCMOpen(w http.ResponseWriter, r *http.Request) {
 	})
 	if err != nil {
 		log.Error().Err(err).Msg("ocm open: error calling OpenInApp")
-		fail(http.StatusInternalServerError, "The launch failed.")
+		fail(http.StatusInternalServerError, "Failed to open webapp.")
 		return
 	}
 	switch openRes.GetStatus().GetCode() {
@@ -137,7 +137,7 @@ func (s *svc) handleOCMOpen(w http.ResponseWriter, r *http.Request) {
 		return
 	default:
 		log.Error().Str("status", openRes.GetStatus().GetCode().String()).Msg("ocm open: OpenInApp failed")
-		fail(http.StatusInternalServerError, "The launch failed.")
+		fail(http.StatusInternalServerError, "Failed to open webapp.")
 		return
 	}
 

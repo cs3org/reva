@@ -179,8 +179,8 @@ func TestWebappLaunchErrorMappingsUseFixedCopy(t *testing.T) {
 		{"not found", errtypes.NotFound("share gone " + launchSecret), http.StatusNotFound, "The shared application was not found."},
 		{"permission denied", errtypes.PermissionDenied("denied " + launchSecret), http.StatusForbidden, "The sharing service is not trusted."},
 		{"invalid credentials", errtypes.InvalidCredentials("bad " + launchToken), http.StatusUnauthorized, "You are not signed in."},
-		{"internal", errtypes.InternalError("boom " + launchToken), http.StatusInternalServerError, "The launch failed."},
-		{"generic", errors.New("raw " + launchSecret + " " + launchToken), http.StatusInternalServerError, "The launch failed."},
+		{"internal", errtypes.InternalError("boom " + launchToken), http.StatusInternalServerError, "Failed to open webapp."},
+		{"generic", errors.New("raw " + launchSecret + " " + launchToken), http.StatusInternalServerError, "Failed to open webapp."},
 		{"timeout", context.DeadlineExceeded, http.StatusGatewayTimeout, "The launch did not complete in time."},
 	}
 	for _, tt := range tests {
@@ -244,7 +244,7 @@ func TestWebappLaunchNonceFailureRendersErrorPage(t *testing.T) {
 			t.Fatalf("%s = %q, want %q", k, got, v)
 		}
 	}
-	if !strings.Contains(rec.Body.String(), "<p>The launch failed.</p>") {
+	if !strings.Contains(rec.Body.String(), "<p>Failed to open webapp.</p>") {
 		t.Fatalf("body: %s", rec.Body.String())
 	}
 	if obs.exchangeCalls != 0 {

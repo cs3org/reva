@@ -37,7 +37,7 @@ func (h *appsHandler) WebappLaunch(w http.ResponseWriter, r *http.Request) {
 	nonce, err := launcher.NewNonce()
 	if err != nil {
 		appctx.GetLogger(r.Context()).Error().Msg("could not create launcher nonce")
-		launcher.WriteError(w, "", http.StatusInternalServerError, "The launch failed.")
+		launcher.WriteError(w, "", http.StatusInternalServerError, "Failed to open webapp.")
 		return
 	}
 
@@ -128,6 +128,6 @@ func launcherErrorText(err error) (int, string) {
 	case errors.As(err, &permissionDenied):
 		return http.StatusForbidden, "The sharing service is not trusted."
 	default:
-		return http.StatusInternalServerError, "The launch failed."
+		return http.StatusInternalServerError, "Failed to open webapp."
 	}
 }
