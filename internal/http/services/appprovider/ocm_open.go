@@ -9,11 +9,11 @@ import (
 
 	gateway "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
+	ocm "github.com/cs3org/go-cs3apis/cs3/sharing/ocm/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/cs3org/reva/v3/pkg/appctx"
 	"github.com/cs3org/reva/v3/pkg/ocm/launcher"
 	"github.com/cs3org/reva/v3/pkg/service"
-	"github.com/cs3org/reva/v3/pkg/utils"
 	"google.golang.org/grpc/metadata"
 )
 
@@ -87,11 +87,33 @@ func (s *svc) handleOCMOpen(w http.ResponseWriter, r *http.Request) {
 	ctx = appctx.ContextSetUser(ctx, authRes.User)
 	ctx = metadata.AppendToOutgoingContext(ctx, appctx.TokenHeader, authRes.Token)
 
-	// The share role, not the file permissions, decides: a view-only webapp
-	// share cannot download the file but can still open it in the app.
-	viewMode := gateway.OpenInAppRequest_VIEW_MODE_READ_ONLY
-	if role, _ := utils.HasOCMShareRole(authRes.User); role == "editor" {
+	// The webapp permissions of the share decide, not the file permissions: a
+	// view-only share cannot download the file but can still open it in the app.
+	shareRes, err := gw.GetOCMShare(ctx, &ocm.GetOCMShareRequest{
+		Ref: &ocm.ShareReference{Spec: &ocm.ShareReference_Id{Id: &ocm.ShareId{OpaqueId: shareID}}},
+	})
+	if err != nil || shareRes.GetStatus().GetCode() != rpc.Code_CODE_OK {
+		log.Error().Err(err).Msg("ocm open: error getting the share")
+		fail(http.StatusInternalServerError, "The launch failed.")
+		return
+	}
+	var perms *provider.ResourcePermissions
+	for _, m := range shareRes.GetShare().GetAccessMethods() {
+		if w := m.GetWebappOptions(); w != nil {
+			perms = w.GetPermissions()
+		}
+	}
+	var viewMode gateway.OpenInAppRequest_ViewMode
+	switch {
+	case perms.GetInitiateFileUpload():
 		viewMode = gateway.OpenInAppRequest_VIEW_MODE_READ_WRITE
+	case perms.GetInitiateFileDownload():
+		viewMode = gateway.OpenInAppRequest_VIEW_MODE_READ_ONLY
+	case perms.GetStat():
+		viewMode = gateway.OpenInAppRequest_VIEW_MODE_VIEW_ONLY
+	default:
+		fail(http.StatusForbidden, "This application is not offered on the share.")
+		return
 	}
 
 	// The gateway refuses an app that is not offered on the share.

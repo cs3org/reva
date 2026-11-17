@@ -12,13 +12,15 @@ import (
 	gateway "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
+	ocm "github.com/cs3org/go-cs3apis/cs3/sharing/ocm/v1beta1"
+	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	typespb "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
 	"google.golang.org/grpc"
 )
 
 type ocmOpenGateway struct {
 	gateway.GatewayAPIClient
-	role    string
+	perms   *provider.ResourcePermissions
 	open    *gateway.OpenInAppRequest
 	openRes *apppb.OpenInAppResponse
 }
@@ -31,9 +33,17 @@ func (g *ocmOpenGateway) Authenticate(_ context.Context, req *gateway.Authentica
 		Status: &rpc.Status{Code: rpc.Code_CODE_OK},
 		Token:  "gateway-token",
 		User: &userpb.User{Opaque: &typespb.Opaque{Map: map[string]*typespb.OpaqueEntry{
-			"ocm-share-role": {Decoder: "plain", Value: []byte(g.role)},
-			"ocm-share-id":   {Decoder: "plain", Value: []byte("share1")},
+			"ocm-share-id": {Decoder: "plain", Value: []byte("share1")},
 		}}},
+	}, nil
+}
+
+func (g *ocmOpenGateway) GetOCMShare(_ context.Context, _ *ocm.GetOCMShareRequest, _ ...grpc.CallOption) (*ocm.GetOCMShareResponse, error) {
+	return &ocm.GetOCMShareResponse{
+		Status: &rpc.Status{Code: rpc.Code_CODE_OK},
+		Share: &ocm.Share{AccessMethods: []*ocm.AccessMethod{
+			{Term: &ocm.AccessMethod_WebappOptions{WebappOptions: &ocm.WebappAccessMethod{Permissions: g.perms}}},
+		}},
 	}, nil
 }
 
@@ -67,12 +77,18 @@ func okOpen() *apppb.OpenInAppResponse {
 }
 
 func TestHandleOCMOpenLaunchesAppForShareRole(t *testing.T) {
-	for role, want := range map[string]gateway.OpenInAppRequest_ViewMode{
-		"editor": gateway.OpenInAppRequest_VIEW_MODE_READ_WRITE,
-		"viewer": gateway.OpenInAppRequest_VIEW_MODE_READ_ONLY,
+	view := &provider.ResourcePermissions{Stat: true, GetPath: true, ListContainer: true}
+	for name, tt := range map[string]struct {
+		perms *provider.ResourcePermissions
+		want  gateway.OpenInAppRequest_ViewMode
+	}{
+		"write": {&provider.ResourcePermissions{Stat: true, InitiateFileUpload: true}, gateway.OpenInAppRequest_VIEW_MODE_READ_WRITE},
+		"read":  {&provider.ResourcePermissions{Stat: true, InitiateFileDownload: true}, gateway.OpenInAppRequest_VIEW_MODE_READ_ONLY},
+		"view":  {view, gateway.OpenInAppRequest_VIEW_MODE_VIEW_ONLY},
 	} {
-		t.Run(role, func(t *testing.T) {
-			gw := &ocmOpenGateway{role: role, openRes: okOpen()}
+		want := tt.want
+		t.Run(name, func(t *testing.T) {
+			gw := &ocmOpenGateway{perms: tt.perms, openRes: okOpen()}
 			rec := postOCMOpen(t, gw, "/app/ocm-open/dir/notes.md", url.Values{
 				"access_token": {"exchanged.jwt.token"},
 				"appname":      {"CodiMD"},
@@ -106,8 +122,8 @@ func TestHandleOCMOpenRejectsBadRequests(t *testing.T) {
 	}{
 		{"missing token", "/app/ocm-open", url.Values{}, &ocmOpenGateway{}, http.StatusUnauthorized},
 		{"token refused", "/app/ocm-open", url.Values{"access_token": {"other"}}, &ocmOpenGateway{}, http.StatusUnauthorized},
-		{"path traversal", "/app/ocm-open/a/../b", good, &ocmOpenGateway{role: "viewer"}, http.StatusBadRequest},
-		{"app not offered", "/app/ocm-open", good, &ocmOpenGateway{role: "viewer", openRes: &apppb.OpenInAppResponse{Status: &rpc.Status{Code: rpc.Code_CODE_PERMISSION_DENIED}}}, http.StatusForbidden},
+		{"path traversal", "/app/ocm-open/a/../b", good, &ocmOpenGateway{perms: &provider.ResourcePermissions{Stat: true}}, http.StatusBadRequest},
+		{"app not offered", "/app/ocm-open", good, &ocmOpenGateway{perms: &provider.ResourcePermissions{Stat: true}, openRes: &apppb.OpenInAppResponse{Status: &rpc.Status{Code: rpc.Code_CODE_PERMISSION_DENIED}}}, http.StatusForbidden},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -123,7 +139,7 @@ func TestHandleOCMOpenRejectsBadRequests(t *testing.T) {
 }
 
 func TestHandleOCMOpenIgnoresTokenInQuery(t *testing.T) {
-	gw := &ocmOpenGateway{role: "viewer", openRes: okOpen()}
+	gw := &ocmOpenGateway{perms: &provider.ResourcePermissions{Stat: true}, openRes: okOpen()}
 	rec := postOCMOpen(t, gw, "/app/ocm-open?access_token=exchanged.jwt.token", url.Values{})
 	if rec.Code != http.StatusUnauthorized || gw.open != nil {
 		t.Fatalf("status = %d, open = %v", rec.Code, gw.open)
