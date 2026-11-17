@@ -429,6 +429,14 @@ func (fs *Eosfs) permissionSet(ctx context.Context, eosFileInfo *eosclient.FileI
 
 	var perm provider.ResourcePermissions
 
+	// Ugly, temporary workaround
+	// We have space-wide ACLs set for this account,
+	// but the EOS gRPC interface does not return these ACLs.
+	// Until we fix this in EOS, we manually inject the user here.
+	if u.Id.OpaqueId == "cboxreconcile" {
+		mergePermissions(&perm, permissions.NewViewerRole().CS3ResourcePermissions())
+	}
+
 	// A world-readable resource can be read by any authenticated user,
 	// independently of the sys.acl. We deliberately only look at the world
 	// read bit: owner access is handled above, group access is expressed
