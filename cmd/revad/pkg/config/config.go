@@ -63,7 +63,11 @@ type Shared struct {
 	BlockedUsers          []string `default:"[]"                               key:"blocked_users"                      mapstructure:"blocked_users"`
 	Registry              Registry `default:"{}"                               key:"registry"                           mapstructure:"registry"`
 	MTLS                  MTLS     `default:"{}"                               key:"mtls"                               mapstructure:"mtls"`
-	Database              `mapstructure:",squash"`
+	// PublicURL is the web address that users open the deployment at, for
+	// example https://cernbox.cern.ch. The gateway uses it to fill the url of
+	// each public link it returns.
+	PublicURL string `key:"public_url" mapstructure:"public_url"`
+	Database  `mapstructure:",squash"`
 }
 
 // MTLS holds the certificate reva presents to its gRPC peers and the CA it trusts them by.

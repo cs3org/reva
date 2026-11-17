@@ -10,7 +10,7 @@ weight: 20
 
 | Table | Contents |
 | --- | --- |
-| `[shared]` | Settings that many services read: `jwt_secret`, `gatewaysvc`, `datagateway`, `blocked_users`, the service `registry`, `mtls`, and the database connection. A service uses these values when it does not set its own. |
+| `[shared]` | Settings that many services read: `jwt_secret`, `gatewaysvc`, `datagateway`, `public_url`, `blocked_users`, the service `registry`, `mtls`, and the database connection. A service uses these values when it does not set its own. |
 | `[log]` | `output`, `mode` (`console` or `json`), `level`, and `tail`. |
 | `[grpc]` | The gRPC listener: `address`, `network`, TLS and mTLS settings. |
 | `[grpc.services.<name>]` | One table per [gRPC service](/docs/components/grpc-services/). |

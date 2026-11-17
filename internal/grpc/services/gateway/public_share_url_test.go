@@ -134,7 +134,7 @@ func TestPublicLinkURL(t *testing.T) {
 	}
 
 	t.Run("each share has the url of the link", func(t *testing.T) {
-		gw := &svc{c: &config{PublicLinkBaseURL: "https://cernbox.cern.ch/"}, resourceInfoCache: ricache}
+		gw := &svc{c: &config{}, publicURL: "https://cernbox.cern.ch/", resourceInfoCache: ricache}
 		for name, sh := range shares(t, gw) {
 			assert.Equal(t, "https://cernbox.cern.ch/s/IHqwVca5jdPB3Ry", sh.GetUrl(), name)
 		}

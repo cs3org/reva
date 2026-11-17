@@ -67,6 +67,11 @@ func GetBlockedUsers() []string {
 	return sharedConf.BlockedUsers
 }
 
+// GetPublicURL returns the web address that users open the deployment at.
+func GetPublicURL() string {
+	return sharedConf.PublicURL
+}
+
 // GetRegistry returns the process-level service registry configuration.
 func GetRegistry() config.Registry {
 	return sharedConf.Registry

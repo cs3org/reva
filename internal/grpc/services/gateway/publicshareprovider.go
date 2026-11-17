@@ -328,10 +328,10 @@ func (s *svc) UpdatePublicShare(ctx context.Context, req *link.UpdatePublicShare
 // setPublicLinkURL fills the web address of the link in the gateway only, so that the
 // clients and the HTTP services do not each need the base URL to build it.
 func (s *svc) setPublicLinkURL(share *link.PublicShare) {
-	if s.c.PublicLinkBaseURL == "" || share.GetToken() == "" {
+	if s.publicURL == "" || share.GetToken() == "" {
 		return
 	}
-	if u, err := url.JoinPath(s.c.PublicLinkBaseURL, "/s", share.GetToken()); err == nil {
+	if u, err := url.JoinPath(s.publicURL, "/s", share.GetToken()); err == nil {
 		share.Url = u
 	}
 }

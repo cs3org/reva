@@ -72,10 +72,6 @@ type config struct {
 	// LightweightHomeLayout is the path of the folder shared with a lightweight
 	// account as its home on login. Empty disables lightweight homes.
 	LightweightHomeLayout string `mapstructure:"lightweight_home_layout"`
-	// PublicLinkBaseURL is the web address that public links are opened at, for
-	// example https://cernbox.cern.ch. The gateway uses it to fill the url of each
-	// public link it returns. The ocs and ocgraph services show this url.
-	PublicLinkBaseURL string `mapstructure:"public_link_base_url"`
 }
 
 // sets defaults.
@@ -124,6 +120,8 @@ type svc struct {
 	spaceInfoCacheTTL    time.Duration
 	eventBackend         backends.Backend
 	eventLimiter         ratelimiters.Limiter
+	// publicURL is the shared public_url, used to fill the url of public links.
+	publicURL string
 	// Drains the NATS connection on service close
 	closeEventBackend func() error
 }
@@ -162,6 +160,7 @@ func New(ctx context.Context, m map[string]any) (rgrpc.Service, error) {
 		createHomeCache:   createHomeCache,
 		eventBackend:      eventBackend,
 		eventLimiter:      ratelimiters.Noop{},
+		publicURL:         sharedconf.GetPublicURL(),
 		closeEventBackend: closeEventBackend,
 	}
 
