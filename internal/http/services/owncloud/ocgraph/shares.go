@@ -24,8 +24,10 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"maps"
 	"net/http"
 	"net/url"
+	"slices"
 	"strings"
 	"time"
 
@@ -52,6 +54,7 @@ import (
 	"github.com/cs3org/reva/v3/pkg/sharehierarchy"
 	"github.com/cs3org/reva/v3/pkg/spaces"
 	"github.com/cs3org/reva/v3/pkg/utils"
+	"github.com/cs3org/reva/v3/pkg/utils/list"
 )
 
 func (s *svc) getSharedWithMe(w http.ResponseWriter, r *http.Request) {
@@ -83,6 +86,9 @@ func (s *svc) getSharedWithMe(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	labelsByID := resourceLabels(ctx, gw, list.Map(recvSharesResp.ShareInfos, func(share *gateway.ReceivedShareResourceInfo) *provider.ResourceId {
+		return share.ResourceInfo.GetId()
+	}))
 	shares := make([]any, 0)
 	for _, share := range recvSharesResp.ShareInfos {
 		role := CS3ResourcePermissionsToUnifiedRole(ctx, share.ResourceInfo.PermissionSet)
@@ -93,7 +99,10 @@ func (s *svc) getSharedWithMe(w http.ResponseWriter, r *http.Request) {
 		if err != nil {
 			log.Error().Err(err).Any("share", share).Msg("error parsing received share, ignoring")
 		} else {
-			shares = append(shares, drive)
+			shares = append(shares, &LabeledDriveItem{
+				DriveItem: *drive,
+				Labels:    labelsByID[share.ResourceInfo.GetId()],
+			})
 		}
 	}
 
@@ -669,8 +678,9 @@ func (s *svc) getSharedByMe(w http.ResponseWriter, r *http.Request) {
 			return OCMShares.ShareInfos
 		}())
 
+	labelsByID := resourceLabels(ctx, gw, list.Map(slices.Collect(maps.Values(infos)), (*provider.ResourceInfo).GetId))
 	// convert to libregraph share drives
-	shareDrives := make([]*libregraph.DriveItem, 0, len(grouped))
+	shareDrives := make([]*LabeledDriveItem, 0, len(grouped))
 	for id, shares := range grouped {
 		info := infos[id]
 		drive, err := s.cs3ShareToDriveItem(ctx, info, shares)
@@ -679,7 +689,10 @@ func (s *svc) getSharedByMe(w http.ResponseWriter, r *http.Request) {
 			handleError(ctx, err, w)
 			return
 		}
-		shareDrives = append(shareDrives, drive)
+		shareDrives = append(shareDrives, &LabeledDriveItem{
+			DriveItem: *drive,
+			Labels:    labelsByID[info.GetId()],
+		})
 	}
 
 	if err := json.NewEncoder(w).Encode(map[string]any{

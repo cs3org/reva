@@ -395,10 +395,11 @@ func (s *service) decorateProject(ctx context.Context, proj *provider.StorageSpa
 			return fmt.Errorf("failed to stat path %s for project %s", proj.RootInfo.Path, proj.Name)
 		}
 		resourceInfo = statRes.Info
-		s.resourceInfoCache.Set(proj.RootInfo.Path, resourceInfo)
+		s.resourceInfoCache.SetWithExpire(proj.RootInfo.Path, resourceInfo, s.resourceInfoCacheTTL)
 	}
 
 	proj.Mtime = resourceInfo.Mtime
+	proj.Root = resourceInfo.Id
 	return nil
 }
 
@@ -502,7 +503,7 @@ func (s *service) getAllPublicSpaces(ctx context.Context) ([]*provider.StorageSp
 				log.Error().Err(err).Any("statRes", statRes).Msgf("Failed to stat path %s for public space %s, ignoring this space", path, spaceName)
 			} else {
 				resourceInfo = statRes.Info
-				s.resourceInfoCache.Set(path, resourceInfo)
+				s.resourceInfoCache.SetWithExpire(path, resourceInfo, s.resourceInfoCacheTTL)
 			}
 		}
 
