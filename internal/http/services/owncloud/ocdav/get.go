@@ -50,7 +50,12 @@ func (s *svc) handlePathGet(w http.ResponseWriter, r *http.Request, ns string) {
 	sublog := appctx.GetLogger(ctx).With().Str("path", fn).Str("svc", "ocdav").Str("handler", "get").Logger()
 
 	ref := &provider.Reference{Path: fn}
-	s.handleGet(ctx, w, r, ref, "simple", sublog)
+	dlProtocol := "simple"
+	if idRef, ok := requestWasMadeToResourceId(ctx, fn); ok {
+		// The storage provider serves a relative reference only with the spaces protocol.
+		ref, dlProtocol = idRef, "spaces"
+	}
+	s.handleGet(ctx, w, r, ref, dlProtocol, sublog)
 }
 
 func (s *svc) handleGet(ctx context.Context, w http.ResponseWriter, r *http.Request, ref *provider.Reference, dlProtocol string, log zerolog.Logger) {
@@ -126,9 +131,15 @@ func (s *svc) handleGet(ctx context.Context, w http.ResponseWriter, r *http.Requ
 
 	info := sRes.Info
 
+	name := path.Base(r.URL.Path)
+	// A URL with only a resource id has no file name in its path.
+	if ref.ResourceId != nil {
+		name = path.Base(info.Path)
+	}
+
 	w.Header().Set(HeaderContentType, info.MimeType)
 	w.Header().Set(HeaderContentDisposistion, "attachment; filename*=UTF-8''"+
-		url.PathEscape(path.Base(r.URL.Path))+"; filename=\""+path.Base(r.URL.Path)+"\"")
+		url.PathEscape(name)+"; filename=\""+name+"\"")
 	w.Header().Set(HeaderETag, info.Etag)
 	w.Header().Set(HeaderOCFileID, spaces.EncodeToStringifiedResourceID(info.Id))
 	w.Header().Set(HeaderOCETag, info.Etag)

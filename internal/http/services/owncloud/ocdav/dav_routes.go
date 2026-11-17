@@ -256,8 +256,8 @@ func (s *svc) spaces(base string) enterFunc {
 			// at, so the existing WebDAV handlers can serve it.
 			ctx = context.WithValue(ctx, ctxSpaceID, head)
 			r.URL.Path = filepath.Join(spacePath, rest)
-		case r.Method == http.MethodPut || r.Method == MethodPropfind:
-			// PUT and PROPFIND also accept a resource id, e.g. eos$space!inode.
+		case r.Method == http.MethodPut || r.Method == MethodPropfind || r.Method == http.MethodHead || r.Method == http.MethodGet:
+			// PUT, PROPFIND, HEAD and GET also accept a resource id, e.g. eos$space!inode.
 			storageID, base, itemID, decoded := spaces.DecodeToResourceID(head)
 			if !decoded {
 				w.WriteHeader(http.StatusBadRequest)
