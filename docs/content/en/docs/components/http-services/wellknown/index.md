@@ -34,75 +34,76 @@
             "type": "string",
             "default": "\"ocm\"",
             "description": "The prefix URL where the OCM API is served.",
-            "source": "internal/http/services/wellknown/ocm.go#L54"
+            "source": "internal/http/services/wellknown/ocm.go#L55"
           },
           {
             "key": "endpoint",
             "type": "string",
-            "default": "This host's full URL. If it's not configured, it is assumed OCM is not available.",
-            "source": "internal/http/services/wellknown/ocm.go#L55"
+            "default": "sharedconf.GetPublicURL()",
+            "description": "This host's full URL. If it's empty, the shared public_url is used. If both are empty, OCM is not available.",
+            "source": "internal/http/services/wellknown/ocm.go#L56"
           },
           {
             "key": "provider",
             "type": "string",
             "default": "\"reva\"",
             "description": "A friendly name that defines this service.",
-            "source": "internal/http/services/wellknown/ocm.go#L56"
+            "source": "internal/http/services/wellknown/ocm.go#L57"
           },
           {
             "key": "webdav_root",
             "type": "string",
             "default": "\"/remote.php/dav/ocm/\"",
             "description": "The root URL of the WebDAV endpoint to serve OCM shares.",
-            "source": "internal/http/services/wellknown/ocm.go#L57"
+            "source": "internal/http/services/wellknown/ocm.go#L58"
           },
           {
             "key": "invite_accept_dialog",
             "type": "string",
             "default": "\"/open-cloud-mesh/accept-invite\"",
             "description": "The frontend URL where to land when receiving an invitation",
-            "source": "internal/http/services/wellknown/ocm.go#L58"
+            "source": "internal/http/services/wellknown/ocm.go#L59"
           },
           {
             "key": "enable_webapp",
             "type": "bool",
             "default": "false",
             "description": "Advertise webapp receive in discovery only. Distinct from webapps.",
-            "source": "internal/http/services/wellknown/ocm.go#L59"
+            "source": "internal/http/services/wellknown/ocm.go#L60"
           },
           {
             "key": "enable_embedded",
             "type": "bool",
             "default": "false",
             "description": "Whether embedded shares are enabled in OCM shares.",
-            "source": "internal/http/services/wellknown/ocm.go#L60"
+            "source": "internal/http/services/wellknown/ocm.go#L61"
           },
           {
             "key": "enable_code_flow",
             "type": "bool",
             "default": "false",
             "description": "Whether code-flow token exchange is enabled in OCM shares.",
-            "source": "internal/http/services/wellknown/ocm.go#L61"
+            "source": "internal/http/services/wellknown/ocm.go#L62"
           },
           {
             "key": "mfa_policy",
             "type": "string",
             "default": "MFAPolicyReject",
             "description": "Admission of received webapp must-use-mfa offers: reject or off. Off skips the check; nothing is advertised.",
-            "source": "internal/http/services/wellknown/ocm.go#L62"
+            "source": "internal/http/services/wellknown/ocm.go#L63"
           },
           {
             "key": "signing_key",
             "type": "string",
             "description": "Path to the PEM file of the Ed25519 private key for OCM HTTP signatures. Its public key is published at /.well-known/jwks.json.",
-            "source": "internal/http/services/wellknown/ocm.go#L63"
+            "source": "internal/http/services/wellknown/ocm.go#L64"
           },
           {
             "key": "http_sig_mode",
             "type": "string",
             "default": "permissive",
             "description": "permissive or strict. Strict lists the must-use-http-sig criterion. Use the same mode in the ocm service.",
-            "source": "internal/http/services/wellknown/ocm.go#L64"
+            "source": "internal/http/services/wellknown/ocm.go#L65"
           }
         ]
       }

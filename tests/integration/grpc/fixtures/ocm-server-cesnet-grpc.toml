@@ -2,6 +2,8 @@
 
 [shared]
 gatewaysvc = "{{grpc_address}}"
+# The ocm and wellknown services use it as their endpoint.
+public_url = "http://127.0.0.1:54321"
 
 # Single cesnet revad: the gRPC gateway and the cesnet HTTP services (ocm,
 # sciencemesh, wellknown, datagateway, dataprovider) run in one process, so they
@@ -99,7 +101,6 @@ address = "127.0.0.1:54321"
 
 [http.services.ocm]
 http_sig_mode = "strict"
-endpoint = "http://127.0.0.1:54321"
 allow_loopback_federation = true
 
 [http.services.sciencemesh]
@@ -135,6 +136,5 @@ http_sig_mode = "strict"
 signing_key = "{{cesnet_signing_key}}"
 ocm_prefix = "ocm"
 provider = "Reva for CESNET"
-endpoint = "http://127.0.0.1:54321"
 enable_webapp = true
 enable_code_flow = true

@@ -29,6 +29,7 @@ import (
 
 	"github.com/cs3org/reva/v3/pkg/appctx"
 	"github.com/cs3org/reva/v3/pkg/ocm/httpsig"
+	"github.com/cs3org/reva/v3/pkg/sharedconf"
 )
 
 const webappReceiveTargetBlank = "blank"
@@ -52,7 +53,7 @@ const OCMAPIVersion = "1.4.0"
 
 type OcmProviderConfig struct {
 	OCMPrefix          string `docs:"ocm;The prefix URL where the OCM API is served."                                            mapstructure:"ocm_prefix"`
-	Endpoint           string `docs:"This host's full URL. If it's not configured, it is assumed OCM is not available."          mapstructure:"endpoint"`
+	Endpoint           string `docs:";This host's full URL. If it's empty, the shared public_url is used. If both are empty, OCM is not available." mapstructure:"endpoint"`
 	Provider           string `docs:"reva;A friendly name that defines this service."                                            mapstructure:"provider"`
 	WebdavRoot         string `docs:"/remote.php/dav/ocm;The root URL of the WebDAV endpoint to serve OCM shares."               mapstructure:"webdav_root"`
 	InviteAcceptDialog string `docs:"/open-cloud-mesh/accept-invite;The frontend URL where to land when receiving an invitation" mapstructure:"invite_accept_dialog"`
@@ -181,6 +182,9 @@ func usableDiscoveryBase(raw string) bool {
 }
 
 func (c *OcmProviderConfig) ApplyDefaults() {
+	if c.Endpoint == "" {
+		c.Endpoint = sharedconf.GetPublicURL()
+	}
 	if c.OCMPrefix == "" {
 		c.OCMPrefix = "ocm"
 	}
