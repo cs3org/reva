@@ -262,6 +262,8 @@ type ShallowReport struct {
 	SkippedSpaces []string
 	// DryRun reports whether the run was a simulation.
 	DryRun bool
+	// current batch out of the total number of batches for the progress report
+	batch, totalNrOfBatches int
 }
 
 // Run reconciles every non-orphan, non-expired share against the storage. A per-share lookup
@@ -339,16 +341,17 @@ func (j *ShallowJob) run(ctx context.Context, spaceID string, rep rjobs.Reporter
 	}
 	start.Msg("reconciliation: run started")
 
-	report := ShallowReport{RunID: runID, SpaceID: spaceID, DryRun: j.DryRun}
+	report := ShallowReport{RunID: runID, SpaceID: spaceID, DryRun: j.DryRun, totalNrOfBatches: len(batches)}
 	// one gateway lookup per recipient instead of one per share: a recipient
 	// holds many shares, in many spaces, so the same names come back over and
 	// over. It holds an entry per name, not per share, so it spans the batches.
 	grantees := map[string]*provider.Grantee{}
 	var cancelled error
-	for _, batch := range batches {
+	for i, batch := range batches {
 		if cancelled = ctx.Err(); cancelled != nil {
 			break
 		}
+		report.batch = i + 1
 
 		err := j.reconcileSpaces(ctx, log, rep, &report, gw, grantees, batch)
 		if err == nil {
@@ -588,6 +591,8 @@ func (r *ShallowReport) progress(rep rjobs.Reporter, phase string, done, total i
 		"skipped":        r.Skipped,
 		"skipped_spaces": len(r.SkippedSpaces),
 		"failed":         r.Failed,
+		"batch":          r.batch,
+		"batches":        r.totalNrOfBatches,
 	}})
 }
 
