@@ -24,10 +24,11 @@ softwareType: standalone/backend
 description:
   en:
     shortDescription: >-
-      Interoperability platform that connects web, desktop and mobile clients
-      to storage systems such as EOS, CephFS and local file systems.
+      An interoperability platform powering CERNBox and connecting web,
+      desktop and mobile clients to storage systems such as EOS, CephFS
+      and local file systems.
     longDescription: >
-      Reva is the backend of CERNBox, the cloud storage service of CERN. It is
+      Reva is the backend of CERNBox, the CERN cloud storage service. It is
       a set of daemons written in Go. Reva connects high-level clients (web,
       desktop and mobile) to the storage below them (EOS, CephFS and local
       file systems).
@@ -63,4 +64,6 @@ maintenance:
   type: internal
   contacts:
     - name: Giuseppe Lo Presti
+      affiliation: CERN
+    - name: Diogo Castro
       affiliation: CERN
