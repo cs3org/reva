@@ -952,10 +952,6 @@ func (fs *cephmountfs) ListFolder(ctx context.Context, ref *provider.Reference, 
 }
 
 func (fs *cephmountfs) Download(ctx context.Context, ref *provider.Reference, ranges []storage.Range) (rc io.ReadCloser, err error) {
-	if len(ranges) > 0 {
-		return nil, errtypes.NotSupported("Download with ranges is not supported with this storage driver")
-	}
-
 	// Capture the original received path for logging
 	var receivedPath string
 	if ref != nil && ref.Path != "" {
@@ -986,7 +982,20 @@ func (fs *cephmountfs) Download(ctx context.Context, ref *provider.Reference, ra
 		return nil, wrappedErr
 	}
 
-	return file, nil
+	if len(ranges) == 0 {
+		return file, nil
+	}
+
+	// The download handler expects the ranges one after the other in a single stream.
+	// A section reads with ReadAt, so it does not depend on the offset of the file.
+	parts := make([]io.Reader, 0, len(ranges))
+	for _, r := range ranges {
+		parts = append(parts, io.NewSectionReader(file, r.Start, r.Length))
+	}
+	return struct {
+		io.Reader
+		io.Closer
+	}{io.MultiReader(parts...), file}, nil
 }
 
 // Upload handles file uploads to the local filesystem
