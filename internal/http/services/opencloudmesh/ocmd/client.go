@@ -191,7 +191,7 @@ func (c *OCMClient) httpget(ctx context.Context, url string, limit int64) ([]byt
 	return body, nil
 }
 
-// NewShare sends a new OCM share to the remote system. If key is not nil, it signs the request.
+// NewShare sends a new OCM share to the remote system, signed with key.
 // https://cs3org.github.io/OCM-API/docs.html?branch=develop&repo=OCM-API&user=cs3org#/paths/~1shares/post
 func (c *OCMClient) NewShare(ctx context.Context, endpoint string, r *NewShareRequest, key *httpsig.Key) (*NewShareResponse, error) {
 	url, err := url.JoinPath(endpoint, "shares")
@@ -210,10 +210,8 @@ func (c *OCMClient) NewShare(ctx context.Context, endpoint string, r *NewShareRe
 		return nil, errors.Wrap(err, "error creating request")
 	}
 	req.Header.Set("Content-Type", "application/json")
-	if key != nil {
-		if err := key.Sign(req, body); err != nil {
-			return nil, errors.Wrap(err, "error signing request")
-		}
+	if err := key.Sign(req, body); err != nil {
+		return nil, errors.Wrap(err, "error signing request")
 	}
 
 	resp, err := c.client.Do(req)
@@ -257,7 +255,7 @@ func (c *OCMClient) parseNewShareResponse(r *http.Response) (*NewShareResponse, 
 	return nil, errtypes.InternalError(string(body))
 }
 
-// InviteAccepted informs the remote end that the invitation was accepted. If key is not nil, it signs the request.
+// InviteAccepted informs the remote end, in a request signed with key, that the invitation was accepted.
 // https://cs3org.github.io/OCM-API/docs.html?branch=develop&repo=OCM-API&user=cs3org#/paths/~1invite-accepted/post
 func (c *OCMClient) InviteAccepted(ctx context.Context, endpoint string, r *InviteAcceptedRequest, key *httpsig.Key) (*RemoteUser, error) {
 	url, err := url.JoinPath(endpoint, "invite-accepted")
@@ -276,10 +274,8 @@ func (c *OCMClient) InviteAccepted(ctx context.Context, endpoint string, r *Invi
 		return nil, errors.Wrap(err, "error creating request")
 	}
 	req.Header.Set("Content-Type", "application/json")
-	if key != nil {
-		if err := key.Sign(req, body); err != nil {
-			return nil, errors.Wrap(err, "error signing request")
-		}
+	if err := key.Sign(req, body); err != nil {
+		return nil, errors.Wrap(err, "error signing request")
 	}
 
 	resp, err := c.client.Do(req)
@@ -333,8 +329,7 @@ func (c *OCMClient) NewNotification(ctx context.Context, endpoint string, r *Inv
 }
 
 // ExchangeToken performs an OAuth2 authorization_code exchange against the
-// sender's token endpoint, returning the short-lived access token and its TTL.
-// If key is not nil, it signs the request.
+// sender's token endpoint, signed with key, returning the short-lived access token and its TTL.
 func (c *OCMClient) ExchangeToken(ctx context.Context, tokenEndpoint, code, clientID string, key *httpsig.Key) (string, int64, error) {
 	values := url.Values{}
 	values.Set("grant_type", "authorization_code")
@@ -349,10 +344,8 @@ func (c *OCMClient) ExchangeToken(ctx context.Context, tokenEndpoint, code, clie
 		return "", 0, errtypes.InternalError("token exchange request could not be created")
 	}
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-	if key != nil {
-		if err := key.Sign(req, body); err != nil {
-			return "", 0, errors.Wrap(err, "error signing token exchange request")
-		}
+	if err := key.Sign(req, body); err != nil {
+		return "", 0, errors.Wrap(err, "error signing token exchange request")
 	}
 
 	resp, err := c.client.Do(req)

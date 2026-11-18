@@ -69,14 +69,12 @@ func (h *appsHandler) init(c *config) error {
 	if err != nil {
 		return err
 	}
+	if h.signingKey, err = httpsig.LoadKey(c.SigningKey); err != nil {
+		return err
+	}
 	h.ocmMountPoint = c.OCMMountPoint
 	h.receiverDomain = c.ProviderDomain
 	h.launchClient = ocmd.NewPublicOnlyClientWithConfig(transportConfig)
-	if c.SigningKey != "" {
-		if h.signingKey, err = httpsig.LoadKey(c.SigningKey); err != nil {
-			return err
-		}
-	}
 	return nil
 }
 

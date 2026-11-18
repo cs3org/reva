@@ -21,11 +21,17 @@ package sciencemesh
 import (
 	"bytes"
 	"context"
+	"crypto/ed25519"
+	"crypto/rand"
+	"crypto/x509"
+	"encoding/pem"
 	"errors"
 	"net"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"os"
+	"path/filepath"
 	"strings"
 	"sync"
 	"testing"
@@ -290,6 +296,9 @@ func newTestHandlerWithConfig(
 ) *appsHandler {
 	t.Helper()
 	installLaunchGateway(t, gw)
+	if conf.SigningKey == "" {
+		conf.SigningKey = writeKeyFile(t)
+	}
 	h := &appsHandler{}
 	if err := h.init(conf); err != nil {
 		t.Fatal(err)
@@ -300,6 +309,23 @@ func newTestHandlerWithConfig(
 		h.launchClient = client
 	}
 	return h
+}
+
+func writeKeyFile(t *testing.T) string {
+	t.Helper()
+	_, private, err := ed25519.GenerateKey(rand.Reader)
+	if err != nil {
+		t.Fatal(err)
+	}
+	der, err := x509.MarshalPKCS8PrivateKey(private)
+	if err != nil {
+		t.Fatal(err)
+	}
+	keyFile := filepath.Join(t.TempDir(), "ocm.pem")
+	if err := os.WriteFile(keyFile, pem.EncodeToMemory(&pem.Block{Type: "PRIVATE KEY", Bytes: der}), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	return keyFile
 }
 
 func newLaunchRequest(t *testing.T, filePath string) (*http.Request, *bytes.Buffer) {

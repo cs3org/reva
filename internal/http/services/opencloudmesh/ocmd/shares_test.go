@@ -736,6 +736,7 @@ func TestOcmServiceAllowedFederationCIDRs(t *testing.T) {
 			// runs first in routerInit.
 			m := map[string]any{
 				"gatewaysvc": "localhost:9100",
+				"endpoint":   "https://cernbox.example.org",
 				"token_managers": map[string]any{
 					"jwt": map[string]any{"secret": "ocm-test-jwt-secret"},
 				},

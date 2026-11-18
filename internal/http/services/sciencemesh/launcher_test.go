@@ -479,7 +479,7 @@ func TestWebappLaunchLogsDoNotLeakTokens(t *testing.T) {
 }
 
 func TestWebappLaunchRouteIsProtectedAndPostOnly(t *testing.T) {
-	svc, err := New(context.Background(), scienceMeshServiceConfig("receiver.example", true))
+	svc, err := New(context.Background(), scienceMeshServiceConfig(t, "receiver.example", true))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -500,7 +500,7 @@ func TestWebappLaunchRouteIsProtectedAndPostOnly(t *testing.T) {
 }
 
 func TestOpenInAppRouteIsRemoved(t *testing.T) {
-	svc, err := New(context.Background(), scienceMeshServiceConfig("receiver.example", true))
+	svc, err := New(context.Background(), scienceMeshServiceConfig(t, "receiver.example", true))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -532,7 +532,7 @@ func (g *authGateway) Authenticate(
 // reva resolves the route before the auth middleware runs, and the middleware
 // only lets through routes declared unprotected.
 func TestWebappLaunchUnauthenticatedFailsClosed(t *testing.T) {
-	svc, err := New(context.Background(), scienceMeshServiceConfig("receiver.example", true))
+	svc, err := New(context.Background(), scienceMeshServiceConfig(t, "receiver.example", true))
 	if err != nil {
 		t.Fatal(err)
 	}

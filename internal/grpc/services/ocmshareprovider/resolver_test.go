@@ -21,11 +21,16 @@ package ocmshareprovider
 import (
 	"bytes"
 	"context"
+	"crypto/ed25519"
+	"crypto/rand"
+	"crypto/x509"
 	"encoding/json"
+	"encoding/pem"
 	"io"
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"path/filepath"
 	"strings"
 	"sync"
 	"testing"
@@ -41,6 +46,7 @@ import (
 	"github.com/cs3org/reva/v3/internal/http/services/wellknown"
 	"github.com/cs3org/reva/v3/pkg/appctx"
 	"github.com/cs3org/reva/v3/pkg/ocm/embedded"
+	"github.com/cs3org/reva/v3/pkg/ocm/httpsig"
 	"github.com/cs3org/reva/v3/pkg/ocm/share"
 	"github.com/cs3org/reva/v3/pkg/ocm/share/repository/registry"
 	revaservice "github.com/cs3org/reva/v3/pkg/service"
@@ -308,6 +314,23 @@ type shareFixture struct {
 	logs          *bytes.Buffer
 }
 
+func writeKeyFile(t *testing.T) string {
+	t.Helper()
+	_, private, err := ed25519.GenerateKey(rand.Reader)
+	if err != nil {
+		t.Fatal(err)
+	}
+	der, err := x509.MarshalPKCS8PrivateKey(private)
+	if err != nil {
+		t.Fatal(err)
+	}
+	keyFile := filepath.Join(t.TempDir(), "ocm.pem")
+	if err := os.WriteFile(keyFile, pem.EncodeToMemory(&pem.Block{Type: "PRIVATE KEY", Bytes: der}), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	return keyFile
+}
+
 func (f shareFixture) run(
 	t *testing.T,
 ) (*ocmd.NewShareRequest, *ocm.Share, *capturingRepo, *ocm.CreateOCMShareResponse) {
@@ -340,6 +363,10 @@ func (f shareFixture) run(
 	if f.offer && offered == nil {
 		offered = []webapp{{Name: name, MediaTypes: []string{testMediaType}}}
 	}
+	key, err := httpsig.LoadKey(writeKeyFile(t))
+	if err != nil {
+		t.Fatal(err)
+	}
 	svc := &service{
 		conf: &config{
 			ProviderDomain: "sender.example",
@@ -347,8 +374,9 @@ func (f shareFixture) run(
 			Webapps:        offered,
 			WebAppEndpoint: endpoint,
 		},
-		repo:   repo,
-		client: ocmd.NewClient(2*time.Second, true),
+		repo:       repo,
+		client:     ocmd.NewClient(2*time.Second, true),
+		signingKey: key,
 	}
 	mimeType := f.mimeType
 	if mimeType == "" {

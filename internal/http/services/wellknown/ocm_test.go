@@ -40,6 +40,7 @@ import (
 func TestInitWithCodeFlowEnabled(t *testing.T) {
 	h := &wkocmHandler{}
 	h.init(&OcmProviderConfig{
+		SigningKey:     writeKeyFile(t),
 		Endpoint:       "https://cernbox.cern.ch",
 		OCMPrefix:      "ocm",
 		EnableCodeFlow: true,
@@ -61,6 +62,7 @@ func TestInitWithCodeFlowEnabled(t *testing.T) {
 func TestInitWithCodeFlowDisabled(t *testing.T) {
 	h := &wkocmHandler{}
 	h.init(&OcmProviderConfig{
+		SigningKey:     writeKeyFile(t),
 		Endpoint:       "https://cernbox.cern.ch",
 		OCMPrefix:      "ocm",
 		EnableCodeFlow: false,
@@ -80,6 +82,7 @@ func TestInitWithCodeFlowDisabled(t *testing.T) {
 func TestInitWithNoEndpoint(t *testing.T) {
 	h := &wkocmHandler{}
 	h.init(&OcmProviderConfig{
+		SigningKey:     writeKeyFile(t),
 		EnableCodeFlow: true,
 	})
 
@@ -94,6 +97,7 @@ func TestInitWithNoEndpoint(t *testing.T) {
 func TestInitCapabilitiesDoNotDuplicateExchangeToken(t *testing.T) {
 	h := &wkocmHandler{}
 	h.init(&OcmProviderConfig{
+		SigningKey:     writeKeyFile(t),
 		Endpoint:       "https://cernbox.cern.ch",
 		EnableCodeFlow: true,
 	})
@@ -172,11 +176,6 @@ func TestInitWithSigningKey(t *testing.T) {
 
 func TestInitStrictHTTPSig(t *testing.T) {
 	h := &wkocmHandler{}
-	if err := h.init(&OcmProviderConfig{Endpoint: "https://cernbox.cern.ch", HTTPSigMode: "strict"}); err == nil {
-		t.Error("expected an error for strict mode without signing_key")
-	}
-
-	h = &wkocmHandler{}
 	if err := h.init(&OcmProviderConfig{Endpoint: "https://cernbox.cern.ch", HTTPSigMode: "strict", SigningKey: writeKeyFile(t)}); err != nil {
 		t.Fatal(err)
 	}
@@ -187,7 +186,7 @@ func TestInitStrictHTTPSig(t *testing.T) {
 
 func TestOcmConcurrentUserAgents(t *testing.T) {
 	h := &wkocmHandler{}
-	h.init(&OcmProviderConfig{Endpoint: "https://cernbox.cern.ch"})
+	h.init(&OcmProviderConfig{Endpoint: "https://cernbox.cern.ch", SigningKey: writeKeyFile(t)})
 
 	want := map[string]string{"Nextcloud Server Crawler": "1.1", "reva": OCMAPIVersion}
 	var wg sync.WaitGroup
@@ -242,6 +241,7 @@ func TestWebappReceiveDiscoveryAndLocalTargets(t *testing.T) {
 	t.Run("valid base publishes blank", func(t *testing.T) {
 		h := &wkocmHandler{}
 		h.init(&OcmProviderConfig{
+			SigningKey:   writeKeyFile(t),
 			Endpoint:     "https://cernbox.cern.ch",
 			EnableWebapp: true,
 		})
@@ -271,7 +271,7 @@ func TestWebappReceiveDiscoveryAndLocalTargets(t *testing.T) {
 
 	t.Run("disabled webapp publishes no targets", func(t *testing.T) {
 		h := &wkocmHandler{}
-		h.init(&OcmProviderConfig{Endpoint: "https://cernbox.cern.ch"})
+		h.init(&OcmProviderConfig{Endpoint: "https://cernbox.cern.ch", SigningKey: writeKeyFile(t)})
 		if _, ok := h.data.ResourceTypes[0].Protocols["webapp-receive"]; ok {
 			t.Fatal("webapp-receive advertised without targets")
 		}
@@ -291,7 +291,7 @@ func TestWebappReceiveDiscoveryAndLocalTargets(t *testing.T) {
 			"https://:443",
 		} {
 			h := &wkocmHandler{}
-			h.init(&OcmProviderConfig{Endpoint: endpoint, EnableWebapp: true})
+			h.init(&OcmProviderConfig{Endpoint: endpoint, EnableWebapp: true, SigningKey: writeKeyFile(t)})
 			if _, ok := h.data.ResourceTypes[0].Protocols["webapp-receive"]; ok {
 				t.Fatalf("webapp-receive advertised for %q", endpoint)
 			}
@@ -305,6 +305,7 @@ func TestWebappReceiveDiscoveryAndLocalTargets(t *testing.T) {
 	t.Run("userinfo base publishes nothing", func(t *testing.T) {
 		h := &wkocmHandler{}
 		h.init(&OcmProviderConfig{
+			SigningKey:   writeKeyFile(t),
 			Endpoint:     "https://user:pass@cernbox.cern.ch",
 			EnableWebapp: true,
 		})
@@ -348,6 +349,7 @@ func TestNewMFAPolicy(t *testing.T) {
 				"endpoint":      "https://cernbox.cern.ch",
 				"mfa_policy":    MFAPolicyOff,
 				"enable_webapp": true,
+				"signing_key":   writeKeyFile(t),
 			},
 		})
 		if err != nil {
@@ -364,7 +366,7 @@ func TestNewMFAPolicy(t *testing.T) {
 
 	t.Run("unknown fails startup", func(t *testing.T) {
 		_, err := New(context.Background(), map[string]any{
-			"ocmprovider": map[string]any{"mfa_policy": "enforce"},
+			"ocmprovider": map[string]any{"mfa_policy": "enforce", "signing_key": writeKeyFile(t)},
 		})
 		if err == nil || !strings.Contains(err.Error(), "mfa_policy") {
 			t.Fatalf("err = %v", err)
@@ -409,6 +411,7 @@ func TestOcmDiscoveryMatrix(t *testing.T) {
 	for _, endpoint := range invalid {
 		h := &wkocmHandler{}
 		h.init(&OcmProviderConfig{
+			SigningKey:     writeKeyFile(t),
 			Endpoint:       endpoint,
 			EnableWebapp:   true,
 			EnableCodeFlow: true,
@@ -452,6 +455,7 @@ func TestOcmDiscoveryMatrix(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			h := &wkocmHandler{}
 			h.init(&OcmProviderConfig{
+				SigningKey:     writeKeyFile(t),
 				Endpoint:       "https://cernbox.cern.ch",
 				EnableWebapp:   tt.webapp,
 				EnableCodeFlow: tt.codeFlow,
@@ -464,6 +468,7 @@ func TestOcmDiscoveryMatrix(t *testing.T) {
 	t.Run("nil override uses published blank targets", func(t *testing.T) {
 		h := &wkocmHandler{}
 		h.init(&OcmProviderConfig{
+			SigningKey:   writeKeyFile(t),
 			Endpoint:     "https://cernbox.cern.ch",
 			EnableWebapp: true,
 		})

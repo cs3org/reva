@@ -54,11 +54,7 @@ func ocmUserEqual(u1, u2 *userpb.User) bool {
 	return utils.UserEqual(u1.Id, u2.Id) && u1.DisplayName == u2.DisplayName && u1.Mail == u2.Mail
 }
 
-var _ = Describe("ocm invitation workflow", func() { ocmInvitationSpecs(false) })
-
-var _ = Describe("ocm invitation workflow with signed requests", func() { ocmInvitationSpecs(true) })
-
-func ocmInvitationSpecs(signed bool) {
+var _ = Describe("ocm invitation workflow", func() {
 	var (
 		err      error
 		revads   = map[string]*Revad{}
@@ -129,7 +125,7 @@ func ocmInvitationSpecs(signed bool) {
 				"ocm_share_cesnet_file":  File{Content: "{}"},
 				"localhome_root":         Folder{},
 			}
-			addSigningKeys(signed, resources, variables)
+			addSigningKeys(resources)
 			wopiStub = startWopiStub(variables)
 			revads, err = startRevads(map[string]string{
 				"cernboxgw":          "ocm-server-cernbox-grpc.toml",
@@ -501,7 +497,7 @@ func ocmInvitationSpecs(signed bool) {
 
 	}
 
-}
+})
 
 func ocmUsersEqual(u1, u2 []*userpb.User) bool {
 	if len(u1) != len(u2) {

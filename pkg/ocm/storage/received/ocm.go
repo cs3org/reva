@@ -93,7 +93,7 @@ type config struct {
 	AllowedFederationCIDRs []string `mapstructure:"allowed_federation_cidrs"`
 	// SigningKey is the PEM file of the Ed25519 key that signs the token requests of the
 	// code flow. It needs ProviderDomain: the token endpoint finds the key through client_id.
-	SigningKey string `mapstructure:"signing_key"`
+	SigningKey string `mapstructure:"signing_key" validate:"required"`
 }
 
 func (c *config) ApplyDefaults() {
@@ -121,11 +121,9 @@ func New(ctx context.Context, m map[string]any) (storage.FS, error) {
 		return nil, errors.Wrapf(err, "ocmreceived: invalid allowed_federation_cidrs")
 	}
 
-	var key *httpsig.Key
-	if c.SigningKey != "" {
-		if key, err = httpsig.LoadKey(c.SigningKey); err != nil {
-			return nil, err
-		}
+	key, err := httpsig.LoadKey(c.SigningKey)
+	if err != nil {
+		return nil, err
 	}
 
 	disco := ttlcache.NewCache()

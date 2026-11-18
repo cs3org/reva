@@ -114,6 +114,7 @@ func TestWebappLaunchClientIDIsDecodedProviderDomain(t *testing.T) {
 		"ocm_mount_point":     "/ocm",
 		"ocm_client_timeout":  3,
 		"ocm_client_insecure": true,
+		"signing_key":         writeKeyFile(t),
 	}, &c)
 	if err != nil {
 		t.Fatal(err)
@@ -248,6 +249,7 @@ func TestWebappLaunchEncodedClientIDUsesProviderDomain(t *testing.T) {
 		"ocm_mount_point":     "/ocm",
 		"ocm_client_timeout":  3,
 		"ocm_client_insecure": true,
+		"signing_key":         writeKeyFile(t),
 	}, &c); err != nil {
 		t.Fatal(err)
 	}

@@ -326,6 +326,9 @@ func newReceivedDriver(t *testing.T, m map[string]any) *driver {
 	if _, ok := raw["provider_domain"]; !ok {
 		raw["provider_domain"] = testReceiverFQDN
 	}
+	if _, ok := raw["signing_key"]; !ok {
+		raw["signing_key"] = writeKeyFile(t)
+	}
 	fs, err := New(context.Background(), raw)
 	if err != nil {
 		t.Fatal(err)
@@ -381,6 +384,7 @@ func TestNewStoresConfiguredProviderDomain(t *testing.T) {
 	fs, err := New(context.Background(), map[string]any{
 		"provider_domain":           want,
 		"allow_loopback_federation": true,
+		"signing_key":               writeKeyFile(t),
 		"allowed_federation_cidrs": []any{
 			"10.50.0.0/16",
 			"fd42:8c6d:7a10:23::/64",
@@ -433,6 +437,7 @@ func TestNewRejectsInvalidProviderDomain(t *testing.T) {
 					"10.50.0.0/16",
 					"fd42:8c6d:7a10:23::/64",
 				},
+				"signing_key": writeKeyFile(t),
 			}
 			if !tt.omit {
 				raw["provider_domain"] = tt.domain
@@ -789,7 +794,8 @@ func TestUploadAuthCodeFlowExchangesBearerToken(t *testing.T) {
 	}
 }
 
-func TestUploadAuthCodeFlowSignsTokenRequest(t *testing.T) {
+func writeKeyFile(t *testing.T) string {
+	t.Helper()
 	_, private, err := ed25519.GenerateKey(rand.Reader)
 	if err != nil {
 		t.Fatal(err)
@@ -802,6 +808,11 @@ func TestUploadAuthCodeFlowSignsTokenRequest(t *testing.T) {
 	if err := os.WriteFile(keyFile, pem.EncodeToMemory(&pem.Block{Type: "PRIVATE KEY", Bytes: der}), 0o600); err != nil {
 		t.Fatal(err)
 	}
+	return keyFile
+}
+
+func TestUploadAuthCodeFlowSignsTokenRequest(t *testing.T) {
+	keyFile := writeKeyFile(t)
 	key, err := httpsig.LoadKey(keyFile)
 	if err != nil {
 		t.Fatal(err)
@@ -1904,6 +1915,7 @@ func TestReceivedAllowedFederationCIDRs(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			m := map[string]any{
 				"provider_domain": testReceiverFQDN,
+				"signing_key":     writeKeyFile(t),
 			}
 			if tt.setKey {
 				m["allowed_federation_cidrs"] = tt.cidrs
@@ -2394,8 +2406,9 @@ func TestCesnetFixtureProviderDomainReachesDriver(t *testing.T) {
 		t.Fatalf("data provider driver %q", fx.HTTP.Services.DataProvider.Driver)
 	}
 
+	keyFile := writeKeyFile(t)
 	var c config
-	if err := cfg.Decode(map[string]any{"provider_domain": got}, &c); err != nil {
+	if err := cfg.Decode(map[string]any{"provider_domain": got, "signing_key": keyFile}, &c); err != nil {
 		t.Fatal(err)
 	}
 	if c.ProviderDomain != want {
@@ -2403,6 +2416,7 @@ func TestCesnetFixtureProviderDomainReachesDriver(t *testing.T) {
 	}
 	fs, err := New(context.Background(), map[string]any{
 		"provider_domain": c.ProviderDomain,
+		"signing_key":     keyFile,
 	})
 	if err != nil {
 		t.Fatalf("New: %v", err)

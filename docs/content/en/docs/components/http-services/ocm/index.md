@@ -56,50 +56,51 @@
           {
             "key": "endpoint",
             "type": "string",
-            "description": "Endpoint is the public URL of this server, the same as the endpoint of the\nwellknown ocmprovider. Set it to stop the replay of signed requests through a\nfalse Host header. If it is empty, the scheme and host come from the request.",
-            "source": "internal/http/services/opencloudmesh/ocmd/ocm.go#L58"
+            "default": "sharedconf.GetPublicURL()",
+            "description": "Endpoint is the public URL of this server, the same as the endpoint of the\nwellknown ocmprovider. Signatures are verified against it, not against the Host\nheader that the client sets. This stops the replay of signed requests.\nIf it is empty, the shared public_url is used.",
+            "source": "internal/http/services/opencloudmesh/ocmd/ocm.go#L59"
           },
           {
             "key": "http_sig_mode",
             "type": "string",
             "description": "HTTPSigMode is permissive (the default) or strict. Strict rejects every unsigned\nrequest. Permissive rejects an unsigned request only from a server that lists http-sig.",
-            "source": "internal/http/services/opencloudmesh/ocmd/ocm.go#L61"
+            "source": "internal/http/services/opencloudmesh/ocmd/ocm.go#L62"
           },
           {
             "key": "ocm_client_insecure",
             "type": "bool",
             "description": "OCMClientInsecure skips TLS verification when probing a remote provider's\ndiscovery endpoint. Off by default; turning it on exposes discovery to MITM.",
-            "source": "internal/http/services/opencloudmesh/ocmd/ocm.go#L64"
+            "source": "internal/http/services/opencloudmesh/ocmd/ocm.go#L65"
           },
           {
             "key": "ocm_client_timeout",
             "type": "int",
             "default": "10",
             "description": "OCMClientTimeout is the per-request timeout, in seconds, for probing a\nremote provider's discovery endpoint. Defaults to 10 when unset or zero.",
-            "source": "internal/http/services/opencloudmesh/ocmd/ocm.go#L67"
+            "source": "internal/http/services/opencloudmesh/ocmd/ocm.go#L68"
           },
           {
             "key": "allow_loopback_federation",
             "type": "bool",
             "description": "AllowLoopbackFederation lets inbound share discovery dial loopback. Off\nby default; only local two-provider integration topologies should enable it.",
-            "source": "internal/http/services/opencloudmesh/ocmd/ocm.go#L70"
+            "source": "internal/http/services/opencloudmesh/ocmd/ocm.go#L71"
           },
           {
             "key": "ocm_client_use_env_proxy",
             "type": "bool",
             "description": "OCMClientUseEnvProxy lets inbound share discovery honor HTTP_PROXY,\nHTTPS_PROXY, and NO_PROXY. Off by default; public-only discovery stays\ndirect unless operators opt in.",
-            "source": "internal/http/services/opencloudmesh/ocmd/ocm.go#L74"
+            "source": "internal/http/services/opencloudmesh/ocmd/ocm.go#L75"
           },
           {
             "key": "allowed_federation_cidrs",
             "type": "[]string",
             "description": "AllowedFederationCIDRs is an explicit private-network exception list for\ninbound share discovery. Off by default; only controlled federation\ndeployments with private RFC 1918 / IPv6 ULA destinations should set it.\nEach entry must be a canonical CIDR wholly inside RFC 1918 or fc00::/7;\nany invalid element fails service startup before discovery runs.",
-            "source": "internal/http/services/opencloudmesh/ocmd/ocm.go#L80"
+            "source": "internal/http/services/opencloudmesh/ocmd/ocm.go#L81"
           },
           {
             "key": "",
             "type": "ratelimit.ServiceConfig",
-            "source": "internal/http/services/opencloudmesh/ocmd/ocm.go#L84",
+            "source": "internal/http/services/opencloudmesh/ocmd/ocm.go#L85",
             "embeds": "ratelimit.ServiceConfig"
           }
         ]
