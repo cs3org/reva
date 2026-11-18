@@ -24,13 +24,13 @@ import (
 	"path"
 
 	// Provides sqlite drivers.
-	_ "github.com/mattn/go-sqlite3"
+	_ "github.com/glebarez/go-sqlite"
 	"github.com/pkg/errors"
 )
 
 func initializeDB(root, dbName string) (*sql.DB, error) {
 	dbPath := path.Join(root, dbName)
-	db, err := sql.Open("sqlite3", dbPath)
+	db, err := sql.Open("sqlite", dbPath)
 	if err != nil {
 		return nil, errors.Wrap(err, "localfs: error opening DB connection")
 	}

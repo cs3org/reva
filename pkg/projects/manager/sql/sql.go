@@ -38,10 +38,10 @@ import (
 	"github.com/cs3org/reva/v3/pkg/sharedconf"
 	"github.com/cs3org/reva/v3/pkg/spaces"
 	"github.com/cs3org/reva/v3/pkg/utils/cfg"
+	"github.com/glebarez/sqlite"
 	"github.com/pkg/errors"
 	"gorm.io/datatypes"
 	"gorm.io/driver/mysql"
-	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
 )
 

@@ -28,7 +28,7 @@ import (
 	"github.com/cs3org/reva/v3/pkg/notifications/accumulation"
 	"github.com/cs3org/reva/v3/pkg/notifications/handlers"
 	"github.com/cs3org/reva/v3/pkg/notifications/model"
-	"gorm.io/driver/sqlite"
+	"github.com/glebarez/sqlite"
 	"gorm.io/gorm"
 )
 
