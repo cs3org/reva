@@ -28,10 +28,10 @@ description:
       desktop and mobile clients to storage systems such as EOS, CephFS
       and local file systems.
     longDescription: >
-      Reva is the backend of CERNBox, the CERN cloud storage service. It is
-      a set of daemons written in Go. Reva connects high-level clients (web,
-      desktop and mobile) to the storage below them (EOS, CephFS and local
-      file systems).
+      Reva is the backend of [CERNBox](https://cernbox.web.cern.ch),
+      the CERN cloud storage service. It is a set of daemons written in Go.
+      Reva connects high-level clients (web, desktop and mobile) to the storage
+      below them ([EOS](https://eos.web.cern.ch), CephFS and local file systems).
 
       Reva exports well-known protocols, such as WebDAV, OCS and the Graph
       API, so that existing clients can use it. It also exports a gRPC API,
@@ -40,8 +40,8 @@ description:
       A configuration file selects the gRPC, HTTP and background services
       that one process runs. Drivers for storage, users, groups, shares and
       authentication are pluggable, which means the system is highly 
-      customizable. Reva also supports the Open Cloud Mesh (OCM) protocol
-      to share files between different sites.
+      customizable. Reva also supports the [Open Cloud Mesh (OCM)](https://cs3community.org/ocm)
+      protocol to share files between different Organizations.
     documentation: "https://reva.link/docs/"
     apiDocumentation: "https://buf.build/cs3org-buf/cs3apis"
     features:
@@ -50,7 +50,7 @@ description:
       - Storage drivers for EOS, CephFS and local file systems
       - User, group and public link shares
       - Open Cloud Mesh (OCM) federated sharing
-      - Integration with office and other applications
+      - Integration with SWAN (Jupyter), Office and other applications
 
 organisation:
   uri: "https://www.cs3community.org"
