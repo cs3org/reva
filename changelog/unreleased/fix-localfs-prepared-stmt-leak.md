@@ -15,3 +15,5 @@ A restart clears it, which makes the failure look intermittent.
 Every successful Prepare is now followed by a deferred Close, and a
 regression test drives the DB helpers through a counting driver that wraps
 the real sqlite driver and fails if Prepare and Close counts diverge.
+
+https://github.com/cs3org/reva/pull/6035
