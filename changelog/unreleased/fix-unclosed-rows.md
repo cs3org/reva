@@ -15,6 +15,18 @@ keeps the underlying statement alive on the server.
 Both packages now also check Rows.Err, which was previously ignored and
 turned a mid-iteration error into a silently truncated result.
 
+This leak is not only about prepared statements. database/sql puts no
+finalizer on Rows, and only Rows.close calls releaseConn, so an abandoned
+result set holds its connection for the lifetime of the process. localfs
+opens the database with sql.Open and never caps the pool, so the leak
+exhausts connections before it exhausts statements. Observed on a build
+that had the statement fix but not this one: driving the Scan-error path
+in retrieveArbitraryMetadata 100 times left MariaDB answering
+"Error 1040 (08004): Too many connections" to every client, including
+the home-directory existence check, which turned every DAV and graph
+request into a 401. The 1461 error reported in the statement fix is the
+same leak observed further along when a statement limit is hit first.
+
 Found with sqlclosecheck and rowserrcheck, which report nothing left in the
 tree. TestResultSetsAreClosed covers the early-return path that actually
 leaks: iterating to completion closes the rows implicitly, so the test
