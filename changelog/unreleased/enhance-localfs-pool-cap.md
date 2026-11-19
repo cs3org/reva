@@ -25,4 +25,4 @@ This does not replace fixing leaks, and the leak paths themselves are fixed
 separately. It makes the failure mode bounded: a future leak now slows the
 service instead of taking down authentication for every user.
 
-https://github.com/cs3org/reva/pull/
+https://github.com/cs3org/reva/pull/6036
