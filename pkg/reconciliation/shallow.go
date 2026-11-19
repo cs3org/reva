@@ -213,6 +213,9 @@ type RemovedShare struct {
 	ResourceID  *provider.ResourceId
 	Grantee     string
 	GranteeType string
+	// Creator is the user who created the removed share, so that they can be
+	// told about the removal.
+	Creator string
 	// Level is the permission level the removed share granted.
 	Level  string
 	Reason RedundantReason
@@ -731,6 +734,7 @@ func (j *ShallowJob) applyRemovals(ctx context.Context, log *zerolog.Logger, rep
 			Str("opaque_id", r.ResourceID.GetOpaqueId()).
 			Str("grantee", r.Grantee).
 			Str("grantee_type", r.GranteeType).
+			Str("creator", r.Creator).
 			Str("level", r.Level).
 			Str("reason", string(r.Reason)).
 			Str("ancestor", r.AncestorID).
@@ -802,6 +806,7 @@ func (j *ShallowJob) shadowed(log *zerolog.Logger, report *ShallowReport, rs sha
 		ResourceID:   rs.Share.GetResourceId(),
 		Grantee:      sharee,
 		GranteeType:  granteeType,
+		Creator:      rs.Share.GetCreator().GetOpaqueId(),
 		Level:        level.String(),
 		Reason:       reason,
 		AncestorID:   ancestor.ID,
