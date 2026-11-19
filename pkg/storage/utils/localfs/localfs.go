@@ -504,6 +504,7 @@ func (fs *localfs) retrieveArbitraryMetadata(ctx context.Context, fn string, mdK
 	if err != nil {
 		return nil, errors.Wrap(err, "localfs: error listing metadata")
 	}
+	defer md.Close()
 	var mdKey, mdVal string
 	metadata := map[string]string{}
 
@@ -525,6 +526,9 @@ func (fs *localfs) retrieveArbitraryMetadata(ctx context.Context, fn string, mdK
 		if _, ok := mdKeysMap[mdKey]; returnAllKeys || ok {
 			metadata[mdKey] = mdVal
 		}
+	}
+	if err := md.Err(); err != nil {
+		return nil, errors.Wrap(err, "localfs: error iterating db rows")
 	}
 	return &provider.ArbitraryMetadata{
 		Metadata: metadata,
@@ -591,6 +595,7 @@ func (fs *localfs) ListGrants(ctx context.Context, ref *provider.Reference) ([]*
 	if err != nil {
 		return nil, errors.Wrap(err, "localfs: error listing grants")
 	}
+	defer g.Close()
 	var granteeID, role string
 	var grantList []*provider.Grant
 
@@ -613,6 +618,9 @@ func (fs *localfs) ListGrants(ctx context.Context, ref *provider.Reference) ([]*
 			Grantee:     grantee,
 			Permissions: permissions,
 		})
+	}
+	if err := g.Err(); err != nil {
+		return nil, errors.Wrap(err, "localfs: error iterating db rows")
 	}
 	return grantList, nil
 }

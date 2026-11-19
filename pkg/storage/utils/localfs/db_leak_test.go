@@ -23,6 +23,7 @@ import (
 	"sync"
 	"testing"
 
+	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	sqlite3 "github.com/mattn/go-sqlite3"
 )
 
@@ -40,6 +41,8 @@ type countingDriver struct {
 	mu       sync.Mutex
 	prepared int
 	closed   int
+	queried  int
+	rowsDone int
 }
 
 func (d *countingDriver) Open(name string) (driver.Conn, error) {
@@ -53,6 +56,33 @@ func (d *countingDriver) Open(name string) (driver.Conn, error) {
 type countingConn struct {
 	driver.Conn
 	d *countingDriver
+}
+
+func (c *countingConn) Query(q string, args []driver.Value) (driver.Rows, error) {
+	qc, ok := c.Conn.(driver.Queryer)
+	if !ok {
+		return nil, driver.ErrSkip
+	}
+	r, err := qc.Query(q, args)
+	if err != nil {
+		return nil, err
+	}
+	c.d.mu.Lock()
+	c.d.queried++
+	c.d.mu.Unlock()
+	return &countingRows{Rows: r, d: c.d}, nil
+}
+
+type countingRows struct {
+	driver.Rows
+	d *countingDriver
+}
+
+func (r *countingRows) Close() error {
+	r.d.mu.Lock()
+	r.d.rowsDone++
+	r.d.mu.Unlock()
+	return r.Rows.Close()
 }
 
 func (c *countingConn) Prepare(q string) (driver.Stmt, error) {
@@ -143,11 +173,21 @@ func TestPreparedStatementsAreClosed(t *testing.T) {
 			t.Fatal(err)
 		}
 		_ = rows.Close()
+		acls, err := fs.getACLs(ctx, res)
+		if err != nil {
+			t.Fatal(err)
+		}
+		_ = acls.Close()
 	}
 
 	d.mu.Lock()
 	prepared, closed := d.prepared, d.closed
+	queried, rowsDone := d.queried, d.rowsDone
 	d.mu.Unlock()
+
+	if queried != rowsDone {
+		t.Fatalf("result sets leaked: %d queried, %d closed (%d still open)", queried, rowsDone, queried-rowsDone)
+	}
 
 	if prepared != closed {
 		t.Fatalf("prepared statements leaked: %d prepared, %d closed (%d still open)",
@@ -155,5 +195,80 @@ func TestPreparedStatementsAreClosed(t *testing.T) {
 	}
 	if prepared == 0 {
 		t.Fatal("no prepared statements observed; the test did not exercise the DB path")
+	}
+}
+
+// TestResultSetsAreClosed covers the other half of the leak: helpers that
+// return *sql.Rows to their caller. Closing the statement is not enough,
+// because an open result set keeps the statement alive on the server. These
+// two paths are reached on every Stat (metadata) and every ListGrants call,
+// so a leak here grows with normal browsing traffic just like the statement
+// leak did.
+func TestResultSetsAreClosed(t *testing.T) {
+	d := &countingDriver{inner: &sqlite3.SQLiteDriver{}}
+	sql.Register("counting-sqlite3-rows", d)
+
+	db, err := sql.Open("counting-sqlite3-rows", path.Join(t.TempDir(), "rows.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+
+	for _, stmt := range []string{
+		"CREATE TABLE IF NOT EXISTS user_interaction (resource TEXT, grantee TEXT, role TEXT DEFAULT '', favorite INTEGER DEFAULT 0, PRIMARY KEY (resource, grantee))",
+		"CREATE TABLE IF NOT EXISTS metadata (resource TEXT, key TEXT, value TEXT, PRIMARY KEY (resource, key))",
+	} {
+		if _, err := db.Exec(stmt); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	fs := &localfs{db: db, conf: &Config{DisableHome: true, DataDirectory: t.TempDir()}}
+	ctx := context.Background()
+
+	for i := 0; i < 25; i++ {
+		res := fmt.Sprintf("/res%d", i)
+		if err := fs.addToMetadataDB(ctx, res, "key", "value"); err != nil {
+			t.Fatal(err)
+		}
+		if err := fs.addToACLDB(ctx, res, "einstein", "owner"); err != nil {
+			t.Fatal(err)
+		}
+
+		// retrieveArbitraryMetadata owns the rows it opens and must close them.
+		md, err := fs.retrieveArbitraryMetadata(ctx, res, nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if md.Metadata["key"] != "value" {
+			t.Fatalf("metadata not read back for %s: %v", res, md.Metadata)
+		}
+
+		// ListGrants does the same for the ACL result set.
+		if _, err := fs.ListGrants(ctx, &provider.Reference{Path: res}); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	// Full iteration closes the rows implicitly, so the case that actually
+	// leaks is the early return: a Scan failure abandons the result set and
+	// only a deferred Close releases it. A NULL in a string column fails
+	// Scan, which is the same path a real DB error takes.
+	if _, err := db.Exec("INSERT INTO metadata (resource, key, value) VALUES ('/null', 'k', NULL)"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := fs.retrieveArbitraryMetadata(ctx, "/null", nil); err == nil {
+		t.Fatal("expected a scan error for the NULL value")
+	}
+	d.mu.Lock()
+	queried, rowsDone := d.queried, d.rowsDone
+	d.mu.Unlock()
+
+	if queried != rowsDone {
+		t.Fatalf("result sets leaked: %d queried, %d closed (%d still open)",
+			queried, rowsDone, queried-rowsDone)
+	}
+	if queried == 0 {
+		t.Fatal("no result sets observed; the test did not exercise the DB path")
 	}
 }
