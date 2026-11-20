@@ -429,17 +429,31 @@ func (fs *Eosfs) permissionSet(ctx context.Context, eosFileInfo *eosclient.FileI
 
 	var perm provider.ResourcePermissions
 
+	// Ugly, temporary workaround
+	// We have space-wide ACLs set for this account,
+	// but the EOS gRPC interface does not return these ACLs.
+	// Until we fix this in EOS, we manually inject the user here.
+	if u.Id.OpaqueId == "cboxreconcile" {
+		mergePermissions(&perm, permissions.NewViewerRole().CS3ResourcePermissions())
+	}
+
 	// A world-readable resource can be read by any authenticated user,
 	// independently of the sys.acl. We deliberately only look at the world
 	// read bit: owner access is handled above, group access is expressed
 	// through the sys.acl rather than the unix group bits, and write access
 	// is never granted through the mode bits.
 	// EOS checks access on the mode after it applies sys.mask.
+	// For a file, EOS ignores the mode of the file and checks the parent folder.
+	// External users get access only through a share: EOS does not check
+	// their access, because they act as the external account system user.
 	mode := eosFileInfo.Mode
+	if !eosFileInfo.IsDir {
+		mode = eosFileInfo.ParentMode
+	}
 	if mask, err := strconv.ParseUint(eosFileInfo.Attrs["sys.mask"], 8, 64); err == nil {
 		mode &= mask
 	}
-	if mode&worldRead != 0 {
+	if !utils.IsExternalUser(u) && mode&worldRead != 0 {
 		mergePermissions(&perm, permissions.NewViewerRole().CS3ResourcePermissions())
 	}
 
@@ -553,6 +567,11 @@ func checksumFromEOS(xs *eosclient.Checksum) *provider.ResourceChecksum {
 	switch strings.ToLower(xs.XSType) {
 	case "adler", "adler32":
 		out.Type = provider.ResourceChecksumType_RESOURCE_CHECKSUM_TYPE_ADLER32
+		// EOS writes adler32 with leading zeros. The desktop clients write it
+		// without leading zeros, and they compare the two strings exactly.
+		if v, err := strconv.ParseUint(xs.XSSum, 16, 32); err == nil {
+			out.Sum = strconv.FormatUint(v, 16)
+		}
 	case "md5":
 		out.Type = provider.ResourceChecksumType_RESOURCE_CHECKSUM_TYPE_MD5
 	case "sha1":

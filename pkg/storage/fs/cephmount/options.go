@@ -37,6 +37,15 @@ type Options struct {
 	ExternalAccountsUserUID  int    `mapstructure:"external_accounts_user_uid"`
 	ExternalAccountsUserGID  int    `mapstructure:"external_accounts_user_gid"`
 
+	// Go stops the process above 10000 OS threads. One revad has two cephmount
+	// drivers (storageprovider and dataprovider), and each has its own user threads.
+	MaxUserThreads int `mapstructure:"max_user_threads"`
+
+	// The requests of one uid run in parallel on up to this number of threads.
+	// All external accounts share one uid, thus they have a separate limit.
+	MaxThreadsPerUser  int `mapstructure:"max_threads_per_user"`
+	MaxThreadsExternal int `mapstructure:"max_threads_external"`
+
 	// SpaceDepth defines how many levels below the chroot the space (project)
 	// roots sit: with roots at /winspaces/c/<project>, served by a provider
 	// mounted at /winspaces, it is 2. The service account is granted rwx on the

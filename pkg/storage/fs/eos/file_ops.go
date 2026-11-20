@@ -182,9 +182,12 @@ func (fs *Eosfs) Upload(ctx context.Context, ref *provider.Reference, r io.ReadC
 		r = fd
 	}
 
-	// We need the auth corresponding to the parent directory
-	// as the file might not exist at the moment
-	auth, err := fs.getUserOrExternalAuth(ctx, path.Dir(fn))
+	// Use the parent directory only if the file does not exist yet.
+	// A single-file share gives no access to the parent directory.
+	auth, err := fs.getUserOrExternalAuth(ctx, fn)
+	if _, ok := err.(errtypes.NotFound); ok {
+		auth, err = fs.getUserOrExternalAuth(ctx, path.Dir(fn))
+	}
 	if err != nil {
 		return err
 	}

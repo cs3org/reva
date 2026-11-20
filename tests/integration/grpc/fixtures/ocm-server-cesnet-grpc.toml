@@ -2,6 +2,8 @@
 
 [shared]
 gatewaysvc = "{{grpc_address}}"
+# The ocm and wellknown services use it as their endpoint.
+public_url = "http://127.0.0.1:54321"
 
 # Single cesnet revad: the gRPC gateway and the cesnet HTTP services (ocm,
 # sciencemesh, wellknown, datagateway, dataprovider) run in one process, so they
@@ -33,6 +35,7 @@ driver = "static"
 basic = "{{grpc_address}}"
 
 [grpc.services.ocminvitemanager]
+signing_key = "{{cesnet_signing_key}}"
 driver = "json"
 provider_domain = "127.0.0.1:54321"
 
@@ -46,9 +49,10 @@ driver = "json"
 providers = "{{file_providers}}"
 
 [grpc.services.ocmshareprovider]
+signing_key = "{{cesnet_signing_key}}"
 driver = "json"
 webdav_endpoint = "http://127.0.0.1:54321"
-webapp_endpoint = "http://127.0.0.1:54321/external/sciencemesh"
+webapp_endpoint = "http://127.0.0.1:54321/app/ocm-open"
 provider_domain = "127.0.0.1:54321"
 
 [grpc.services.ocmshareprovider.drivers.json]
@@ -86,6 +90,8 @@ mount_id = "984e7351-2729-4417-99b4-ab5e6d41fa97"
 data_server_url = "http://127.0.0.1:54321/data"
 
 [grpc.services.storageprovider.drivers.ocmreceived]
+signing_key = "{{cesnet_signing_key}}"
+provider_domain = "cesnet.example.test"
 allow_loopback_federation = true
 
 # All cesnet HTTP services run in this same process so they discover the
@@ -94,10 +100,12 @@ allow_loopback_federation = true
 address = "127.0.0.1:54321"
 
 [http.services.ocm]
+http_sig_mode = "strict"
 allow_loopback_federation = true
 
 [http.services.sciencemesh]
-provider_domain = "127.0.0.1:54321"
+signing_key = "{{cesnet_signing_key}}"
+provider_domain = "cesnet.example.test"
 mesh_directory_url = "http://meshdir"
 smtp_credentials = {}
 
@@ -118,11 +126,15 @@ mount_id = "984e7351-2729-4417-99b4-ab5e6d41fa97"
 public_url = "http://127.0.0.1:54321/data"
 
 [http.services.dataprovider.drivers.ocmreceived]
+signing_key = "{{cesnet_signing_key}}"
+provider_domain = "cesnet.example.test"
 allow_loopback_federation = true
 
 [http.services.wellknown]
 [http.services.wellknown.ocmprovider]
+http_sig_mode = "strict"
+signing_key = "{{cesnet_signing_key}}"
 ocm_prefix = "ocm"
 provider = "Reva for CESNET"
-endpoint = "http://127.0.0.1:54321"
 enable_webapp = true
+enable_code_flow = true

@@ -1,0 +1,632 @@
+// Copyright 2018-2024 CERN
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+//
+// In applying this license, CERN does not waive the privileges and immunities
+// granted to it by virtue of its status as an Intergovernmental Organization
+// or submit itself to any jurisdiction.
+
+package ocmd
+
+import (
+	"errors"
+	"reflect"
+	"strings"
+	"testing"
+
+	ocm "github.com/cs3org/go-cs3apis/cs3/sharing/ocm/v1beta1"
+)
+
+func TestValidateWebappLaunch(t *testing.T) {
+	blank := []string{"blank"}
+	view := []string{"view"}
+	read := []string{"read"}
+	tests := []struct {
+		name        string
+		uri         string
+		secret      string
+		permissions []string
+		reqs        []string
+		targets     []string
+		receiver    []string
+		want        string
+		mfa         bool
+		admitMFA    bool
+		invalidURI  bool
+	}{
+		{
+			name:        "absolute https",
+			uri:         "https://app.example/hub?x=1#y",
+			secret:      "secret",
+			permissions: view,
+			reqs:        []string{"must-exchange-token"},
+			targets:     blank,
+			receiver:    blank,
+		},
+		{
+			name:        "stored read permission",
+			uri:         "https://app.example/hub",
+			secret:      "secret",
+			permissions: read,
+			reqs:        []string{"must-exchange-token"},
+			targets:     blank,
+			receiver:    blank,
+		},
+		{
+			name:        "http endpoint",
+			uri:         "http://app.example/hub",
+			secret:      "secret",
+			permissions: view,
+			reqs:        []string{"must-exchange-token"},
+			targets:     blank,
+			receiver:    blank,
+		},
+		{
+			name:        "mixed-case HTTPS endpoint",
+			uri:         "HTTPS://app.example/hub",
+			secret:      "secret",
+			permissions: view,
+			reqs:        []string{"must-exchange-token"},
+			targets:     blank,
+			receiver:    blank,
+		},
+		{
+			name:        "scheme-less endpoint",
+			uri:         "app.example/hub",
+			secret:      "secret",
+			permissions: view,
+			reqs:        []string{"must-exchange-token"},
+			targets:     blank,
+			receiver:    blank,
+			invalidURI:  true,
+		},
+		{
+			name:        "empty app name is not required",
+			uri:         "https://app.example/hub",
+			secret:      "secret",
+			permissions: view,
+			reqs:        []string{"must-exchange-token"},
+			targets:     []string{"iframe", "blank"},
+			receiver:    blank,
+		},
+		{
+			name:        "missing secret",
+			uri:         "https://app.example/hub",
+			permissions: view,
+			reqs:        []string{"must-exchange-token"},
+			targets:     blank, receiver: blank,
+			want: "sharedSecret",
+		},
+		{
+			name:        "missing permissions",
+			uri:         "https://app.example/hub",
+			secret:      "secret",
+			permissions: []string{},
+			reqs:        []string{"must-exchange-token"},
+			targets:     blank, receiver: blank,
+			want: "missing permissions",
+		},
+		{
+			name:        "unsupported permission",
+			uri:         "https://app.example/hub",
+			secret:      "secret",
+			permissions: []string{"send"},
+			reqs:        []string{"must-exchange-token"},
+			targets:     blank, receiver: blank,
+			want: "unsupported permission",
+		},
+		{
+			name:        "padded requirement",
+			uri:         "https://app.example/hub",
+			secret:      "secret",
+			permissions: view,
+			reqs:        []string{" must-exchange-token"},
+			targets:     blank, receiver: blank,
+			want: "malformed requirement",
+		},
+		{
+			name:        "unknown requirement",
+			uri:         "https://app.example/hub",
+			secret:      "secret",
+			permissions: view,
+			reqs:        []string{"must-exchange-token", "must-sign"},
+			targets:     blank, receiver: blank,
+			want: "unsupported requirement",
+		},
+		{
+			name:        "unknown without exchange",
+			uri:         "https://app.example/hub",
+			secret:      "secret",
+			permissions: view,
+			reqs:        []string{"must-sign"},
+			targets:     blank, receiver: blank,
+			want: "unsupported requirement",
+		},
+		{
+			name:        "MFA only",
+			uri:         "https://app.example/hub",
+			secret:      "secret",
+			permissions: view,
+			reqs:        []string{"must-use-mfa"},
+			targets:     blank, receiver: blank,
+			want: "must-exchange-token",
+		},
+		{
+			name:        "missing token exchange",
+			uri:         "https://app.example/hub",
+			secret:      "secret",
+			permissions: view,
+			reqs:        []string{},
+			targets:     blank, receiver: blank,
+			want: "must-exchange-token",
+		},
+		{
+			name:        "permanent mfa rejection",
+			uri:         "https://app.example/hub",
+			secret:      "secret",
+			permissions: view,
+			reqs:        []string{"must-exchange-token", "must-use-mfa"},
+			targets:     blank,
+			receiver:    blank,
+			mfa:         true,
+		},
+		{
+			name:        "off policy admits mfa",
+			uri:         "https://app.example/hub",
+			secret:      "secret",
+			permissions: view,
+			reqs:        []string{"must-exchange-token", "must-use-mfa"},
+			targets:     blank,
+			receiver:    blank,
+			admitMFA:    true,
+		},
+		{
+			name:        "relative uri",
+			uri:         "/apps/open",
+			secret:      "secret",
+			permissions: view,
+			reqs:        []string{"must-exchange-token"},
+			targets:     blank, receiver: blank,
+			invalidURI: true,
+		},
+		{
+			name:        "iframe only",
+			uri:         "https://app.example/hub",
+			secret:      "secret",
+			permissions: view,
+			reqs:        []string{"must-exchange-token"},
+			targets:     []string{"iframe"}, receiver: blank,
+			want: "no compatible target",
+		},
+		{
+			name:        "receiver does not advertise blank",
+			uri:         "https://app.example/hub",
+			secret:      "secret",
+			permissions: view,
+			reqs:        []string{"must-exchange-token"},
+			targets:     blank, receiver: []string{},
+			want: "no compatible target",
+		},
+		{
+			name:        "MFA before a padded value",
+			uri:         "https://app.example/hub",
+			secret:      "secret",
+			permissions: view,
+			reqs:        []string{"must-use-mfa", " must-exchange-token"},
+			targets:     blank, receiver: blank,
+			want: "malformed requirement",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := ValidateWebappLaunch(
+				tt.uri,
+				tt.secret,
+				tt.permissions,
+				tt.reqs,
+				tt.targets,
+				tt.receiver,
+				tt.admitMFA,
+			)
+			if tt.mfa {
+				if !errors.Is(err, ErrWebappMFAUnproven) {
+					t.Fatalf("err = %v", err)
+				}
+				if err.Error() != ErrWebappMFAUnproven.Error() {
+					t.Fatalf("sentence = %q", err.Error())
+				}
+				return
+			}
+			if tt.invalidURI {
+				if !errors.Is(err, ErrInvalidProtocolURI) {
+					t.Fatalf("err = %v", err)
+				}
+				return
+			}
+			if tt.want == "" {
+				if err != nil {
+					t.Fatal(err)
+				}
+				return
+			}
+			if err == nil || !strings.Contains(err.Error(), tt.want) {
+				t.Fatalf("err = %v", err)
+			}
+			if tt.name == "unknown requirement" && strings.Contains(err.Error(), "must-sign") {
+				t.Fatalf("unsupported requirement echoed input: %v", err)
+			}
+		})
+	}
+}
+
+func TestDuplicateWebappRequirementsAccepted(t *testing.T) {
+	reqs := []string{"must-exchange-token", "must-exchange-token"}
+	offer := validCodeFlowWebapp()
+	offer.Requirements = append([]string{}, reqs...)
+	blank := []string{"blank"}
+	if err := offer.ValidateReceived(blank, false); err != nil {
+		t.Fatalf("received: %v", err)
+	}
+	if err := (Protocols{offer}).Validate(); err != nil {
+		t.Fatalf("validate: %v", err)
+	}
+	if err := ValidateWebappLaunch(
+		offer.URI,
+		offer.SharedSecret,
+		[]string{"read"},
+		reqs,
+		offer.Targets,
+		blank,
+		false,
+	); err != nil {
+		t.Fatalf("launch: %v", err)
+	}
+	if len(offer.Requirements) != 2 ||
+		offer.Requirements[0] != "must-exchange-token" ||
+		offer.Requirements[1] != "must-exchange-token" {
+		t.Fatalf("requirements rewritten: %v", offer.Requirements)
+	}
+}
+
+func TestWebappToOCMProtocolPreservesDescriptor(t *testing.T) {
+	w := &Webapp{
+		URI:          "https://app.example/hub",
+		SharedSecret: "secret",
+		Permissions:  []string{"view"},
+		Requirements: []string{"must-exchange-token"},
+		Targets:      []string{"blank"},
+		Apps:         []WebappApp{{Name: "Text", MediaTypes: []string{"text/plain"}}},
+	}
+	proto := w.ToOCMProtocol()
+	got := proto.GetWebappOptions()
+	if got == nil {
+		t.Fatal("missing webapp options")
+	}
+	if got.Uri != w.URI || got.SharedSecret != w.SharedSecret {
+		t.Fatalf("descriptor %+v", got)
+	}
+	if len(got.Requirements) != 1 || got.Requirements[0] != "must-exchange-token" {
+		t.Fatalf("requirements %v", got.Requirements)
+	}
+	if len(got.Targets) != 1 || got.Targets[0] != "blank" {
+		t.Fatalf("targets %v", got.Targets)
+	}
+	if len(got.Apps) != 1 || got.Apps[0].Name != "Text" || len(got.Apps[0].MediaTypes) != 1 || got.Apps[0].MediaTypes[0] != "text/plain" {
+		t.Fatalf("apps %v", got.Apps)
+	}
+}
+
+func TestValidateProtocolURISentinel(t *testing.T) {
+	err := validateProtocolURI("webapp", "https://https://app.example/hub")
+	if !errors.Is(err, ErrInvalidProtocolURI) {
+		t.Fatalf("err = %v", err)
+	}
+	if strings.Contains(err.Error(), "https://https://") {
+		t.Fatalf("sentinel leaked the uri: %v", err)
+	}
+	if err := validateProtocolURI("webdav", "https://dav.example/dav"); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func validCodeFlowWebapp() *Webapp {
+	return &Webapp{
+		URI:          "https://app.example/hub",
+		SharedSecret: "secret",
+		Permissions:  []string{"read"},
+		Requirements: []string{"must-exchange-token"},
+		Targets:      []string{"blank"},
+		AppIconHint:  "https://app.example/icon.png",
+		Apps:         []WebappApp{{Name: "Text", MediaTypes: []string{"text/plain"}}},
+	}
+}
+
+func TestValidateReceivedWebapp(t *testing.T) {
+	blank := []string{"blank"}
+	tests := []struct {
+		name      string
+		webapp    *Webapp
+		receiver  []string
+		wantError string
+	}{
+		{name: "compatible code flow", webapp: validCodeFlowWebapp(), receiver: blank},
+		{
+			name: "apps stay optional",
+			webapp: func() *Webapp {
+				w := validCodeFlowWebapp()
+				w.Apps = nil
+				return w
+			}(),
+			receiver: blank,
+		},
+		{
+			name: "padded app name stays exact",
+			webapp: func() *Webapp {
+				w := validCodeFlowWebapp()
+				w.Apps = []WebappApp{{Name: " Jupyter ", MediaTypes: []string{"text/plain"}}}
+				return w
+			}(),
+			receiver: blank,
+		},
+		{
+			name: "blank app name",
+			webapp: func() *Webapp {
+				w := validCodeFlowWebapp()
+				w.Apps = []WebappApp{{Name: "  ", MediaTypes: []string{"text/plain"}}}
+				return w
+			}(),
+			receiver:  blank,
+			wantError: "malformed app name",
+		},
+		{
+			name: "duplicate app name",
+			webapp: func() *Webapp {
+				w := validCodeFlowWebapp()
+				w.Apps = []WebappApp{
+					{Name: "Text", MediaTypes: []string{"text/plain"}},
+					{Name: "Text", MediaTypes: []string{"text/markdown"}},
+				}
+				return w
+			}(),
+			receiver:  blank,
+			wantError: "duplicate app name",
+		},
+		{
+			name: "app without media types",
+			webapp: func() *Webapp {
+				w := validCodeFlowWebapp()
+				w.Apps = []WebappApp{{Name: "Text"}}
+				return w
+			}(),
+			receiver:  blank,
+			wantError: "malformed app media type",
+		},
+		{
+			name: "app with blank media type",
+			webapp: func() *Webapp {
+				w := validCodeFlowWebapp()
+				w.Apps = []WebappApp{{Name: "Text", MediaTypes: []string{"text/plain", " "}}}
+				return w
+			}(),
+			receiver:  blank,
+			wantError: "malformed app media type",
+		},
+		{
+			name:      "empty targets",
+			webapp:    func() *Webapp { w := validCodeFlowWebapp(); w.Targets = nil; return w }(),
+			receiver:  blank,
+			wantError: "missing targets",
+		},
+		{
+			name:      "no intersection",
+			webapp:    func() *Webapp { w := validCodeFlowWebapp(); w.Targets = []string{"blank"}; return w }(),
+			receiver:  nil,
+			wantError: "no compatible target",
+		},
+		{
+			name:      "unsupported target only",
+			webapp:    func() *Webapp { w := validCodeFlowWebapp(); w.Targets = []string{"iframe"}; return w }(),
+			receiver:  []string{"iframe"},
+			wantError: "no compatible target",
+		},
+		{
+			name: "mixed offered targets stay intact",
+			webapp: func() *Webapp {
+				w := validCodeFlowWebapp()
+				w.Targets = []string{"iframe", "blank"}
+				return w
+			}(),
+			receiver: blank,
+		},
+		{
+			name:      "blank uri",
+			webapp:    func() *Webapp { w := validCodeFlowWebapp(); w.URI = "  "; return w }(),
+			receiver:  blank,
+			wantError: "missing uri",
+		},
+		{
+			name:      "malformed uri",
+			webapp:    func() *Webapp { w := validCodeFlowWebapp(); w.URI = "http://http://evil.example/hub"; return w }(),
+			receiver:  blank,
+			wantError: "malformed",
+		},
+		{
+			name:      "blank secret",
+			webapp:    func() *Webapp { w := validCodeFlowWebapp(); w.SharedSecret = " "; return w }(),
+			receiver:  blank,
+			wantError: "sharedSecret",
+		},
+		{
+			name: "malformed requirement",
+			webapp: func() *Webapp {
+				w := validCodeFlowWebapp()
+				w.Requirements = []string{" must-exchange-token"}
+				return w
+			}(),
+			receiver:  blank,
+			wantError: "malformed requirement",
+		},
+		{
+			name:      "absent must-exchange-token",
+			webapp:    func() *Webapp { w := validCodeFlowWebapp(); w.Requirements = []string{"must-use-mfa"}; return w }(),
+			receiver:  blank,
+			wantError: "must-exchange-token",
+		},
+		{
+			name: "unknown must requirement",
+			webapp: func() *Webapp {
+				w := validCodeFlowWebapp()
+				w.Requirements = []string{"must-exchange-token", "must-sign"}
+				return w
+			}(),
+			receiver:  blank,
+			wantError: "unsupported requirement",
+		},
+		{
+			name: "must-use-mfa",
+			webapp: func() *Webapp {
+				w := validCodeFlowWebapp()
+				w.Requirements = []string{"must-exchange-token", "must-use-mfa"}
+				return w
+			}(),
+			receiver:  blank,
+			wantError: "must-use-mfa",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Production conversion aliases requirement, target, and media
+			// slices. Copy them so an in-place rewrite still fails this check.
+			before := tt.webapp.ToOCMProtocol()
+			if opts := before.GetWebappOptions(); opts != nil {
+				opts.Requirements = append([]string(nil), opts.Requirements...)
+				opts.Targets = append([]string(nil), opts.Targets...)
+				opts.Apps = append([]*ocm.WebappApp(nil), opts.Apps...)
+			}
+			err := tt.webapp.ValidateReceived(tt.receiver, false)
+			after := tt.webapp.ToOCMProtocol()
+			if !reflect.DeepEqual(after, before) {
+				t.Fatalf("validation mutated the DTO: got %#v want %#v", after, before)
+			}
+			if tt.wantError == "" {
+				if err != nil {
+					t.Fatal(err)
+				}
+				return
+			}
+			if err == nil || !strings.Contains(err.Error(), tt.wantError) {
+				t.Fatalf("err %v", err)
+			}
+		})
+	}
+}
+
+func TestWebappValidatorsAgree(t *testing.T) {
+	blank := []string{"blank"}
+	tests := []struct {
+		name string
+		reqs []string
+		want string
+		mfa  bool
+		ok   bool
+	}{
+		{name: "exchange token", reqs: []string{"must-exchange-token"}, ok: true},
+		{name: "padded requirement", reqs: []string{" must-exchange-token"}, want: "malformed requirement"},
+		{name: "permanent mfa", reqs: []string{"must-exchange-token", "must-use-mfa"}, mfa: true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			offer := validCodeFlowWebapp()
+			offer.Requirements = tt.reqs
+			received := offer.ValidateReceived(blank, false)
+			validated := Protocols{offer}.Validate()
+			if tt.ok {
+				if received != nil || validated != nil {
+					t.Fatalf("received %v validate %v", received, validated)
+				}
+				return
+			}
+			if tt.mfa {
+				if !errors.Is(received, ErrWebappMFAUnproven) || received.Error() != ErrWebappMFAUnproven.Error() {
+					t.Fatalf("received %v", received)
+				}
+				if validated != nil {
+					t.Fatalf("validate should not enforce mfa policy: %v", validated)
+				}
+				return
+			}
+			if received == nil || validated == nil || !strings.Contains(received.Error(), tt.want) || !strings.Contains(validated.Error(), tt.want) {
+				t.Fatalf("received %v validate %v", received, validated)
+			}
+		})
+	}
+}
+
+func TestProtocolsValidateTypedNilWebapp(t *testing.T) {
+	err := Protocols{(*Webapp)(nil)}.Validate()
+	if err == nil || !strings.Contains(err.Error(), "nil webapp") {
+		t.Fatalf("err %v", err)
+	}
+}
+
+func TestValidateAbsoluteWebappURISyntax(t *testing.T) {
+	tests := []struct {
+		name    string
+		raw     string
+		want    string
+		wantErr string
+	}{
+		{name: "absolute https", raw: "https://app.example/hub?x=1#y", want: "https://app.example/hub?x=1#y"},
+		{name: "absolute http", raw: "http://app.example/hub", want: "http://app.example/hub"},
+		{name: "relative", raw: "/hub", wantErr: "invalid uri"},
+		{name: "network path", raw: "//evil.example/hub", wantErr: "invalid uri"},
+		{name: "userinfo", raw: "https://user:pass@app.example/hub", wantErr: "invalid uri"},
+		{name: "malformed", raw: "http://http://evil.example/hub", wantErr: "invalid uri"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := ValidateAbsoluteWebappURI(tt.raw)
+			if tt.wantErr != "" {
+				if err == nil || !strings.Contains(err.Error(), tt.wantErr) || got != "" {
+					t.Fatalf("got %q err %v", got, err)
+				}
+				if strings.Contains(err.Error(), "user:pass") || strings.Contains(err.Error(), "evil.example") {
+					t.Fatalf("error leaked uri material: %v", err)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatal(err)
+			}
+			if got != tt.want {
+				t.Fatalf("got %q want %q", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestScreenIncomingWebappsNilAndDuplicate(t *testing.T) {
+	offer := validCodeFlowWebapp()
+	if err := ScreenIncomingWebapps(Protocols{offer}, []string{"blank"}, false); err != nil {
+		t.Fatal(err)
+	}
+	if err := ScreenIncomingWebapps(Protocols{nil}, []string{"blank"}, false); err == nil {
+		t.Fatal("expected nil protocol error")
+	}
+	if err := ScreenIncomingWebapps(Protocols{(*Webapp)(nil)}, []string{"blank"}, false); err == nil {
+		t.Fatal("expected nil webapp error")
+	}
+	if err := ScreenIncomingWebapps(Protocols{offer, offer}, []string{"blank"}, false); err == nil {
+		t.Fatal("expected ambiguous webapp error")
+	}
+}

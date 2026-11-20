@@ -21,63 +21,57 @@ package admin
 import (
 	"bytes"
 	"encoding/json"
-	"errors"
 	"fmt"
-	"io"
 	"sort"
 	"strings"
 
 	"github.com/BurntSushi/toml"
 	"github.com/cs3org/reva/v3/pkg/admin/adminpb"
+	"github.com/spf13/cobra"
 )
 
-func adminConfigCommand() *command {
-	cmd := newCommand("config")
-	cmd.Description = func() string { return "show a service's effective (redacted) config (TOML by default)" }
-	cmd.Usage = func() string {
-		return "Usage: admin config [-admin-host h] [-o toml|json] [-diff] <service|node-id>"
-	}
-	adminHost := cmd.String("admin-host", "", "address of the admin gRPC endpoint (persisted)")
-	output := cmd.String("o", "toml", "output format: toml | json")
-	diff := cmd.Bool("diff", false, "show only the config keys that differ across a service's instances")
-	cmd.ResetFlags = func() { *adminHost, *output, *diff = "", "toml", false }
-	cmd.Action = func(w ...io.Writer) error {
-		if cmd.NArg() < 1 {
-			return errors.New(cmd.Usage())
-		}
-		client, ctx, err := adminDial(*adminHost)
-		if err != nil {
-			return err
-		}
-		res, err := client.GetServiceConfig(ctx, &adminpb.GetServiceConfigRequest{Service: cmd.Args()[0]})
-		if err != nil {
-			return adminErr(err)
-		}
-		if len(res.Results) == 0 {
-			fmt.Println("(no instances)")
-			return nil
-		}
-		if *diff {
-			return diffConfigs(res.Results)
-		}
-		// Header each instance only when there is more than one.
-		for i, r := range res.Results {
-			if len(res.Results) > 1 {
-				if i > 0 {
-					fmt.Println()
-				}
-				fmt.Printf("# %s\n", r.Node)
-			}
-			if r.Error != "" {
-				fmt.Printf("# error: %s\n", r.Error)
-				continue
-			}
-			if err := renderConfig(r.ResultJson, *output); err != nil {
+func configCommand() *cobra.Command {
+	var diff bool
+	cmd := &cobra.Command{
+		Use:   "config <service|node-id>",
+		Short: "Show the effective (redacted) config of a service, as TOML (or JSON with -o json)",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			client, ctx, err := adminDial(cmd)
+			if err != nil {
 				return err
 			}
-		}
-		return nil
+			res, err := client.GetServiceConfig(ctx, &adminpb.GetServiceConfigRequest{Service: args[0]})
+			if err != nil {
+				return adminErr(err)
+			}
+			if len(res.Results) == 0 {
+				fmt.Println("(no instances)")
+				return nil
+			}
+			if diff {
+				return diffConfigs(res.Results)
+			}
+			// Header each instance only when there is more than one.
+			for i, r := range res.Results {
+				if len(res.Results) > 1 {
+					if i > 0 {
+						fmt.Println()
+					}
+					fmt.Printf("# %s\n", r.Node)
+				}
+				if r.Error != "" {
+					fmt.Printf("# error: %s\n", r.Error)
+					continue
+				}
+				if err := renderConfig(r.ResultJson, rt.Output); err != nil {
+					return err
+				}
+			}
+			return nil
+		},
 	}
+	cmd.Flags().BoolVar(&diff, "diff", false, "show only the config keys that differ across a service's instances")
 	return cmd
 }
 
@@ -188,8 +182,8 @@ func flattenConfig(prefix string, v any, out map[string]string) {
 	out[prefix] = string(b)
 }
 
-// renderConfig prints one instance's config JSON as TOML (default) or indented
-// JSON.
+// renderConfig prints one instance's config JSON as TOML (text output) or
+// indented JSON.
 func renderConfig(configJSON, output string) error {
 	switch output {
 	case "json":
@@ -199,14 +193,12 @@ func renderConfig(configJSON, output string) error {
 		} else {
 			fmt.Println(configJSON)
 		}
-	case "toml", "":
+	default:
 		out, err := configToTOML(configJSON)
 		if err != nil {
 			return err
 		}
 		fmt.Print(out)
-	default:
-		return fmt.Errorf("unknown -o %q (use toml or json)", output)
 	}
 	return nil
 }

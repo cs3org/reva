@@ -78,7 +78,7 @@ var _ = Describe("service registry data-path discovery", func() {
 		var err error
 		ctx = context.Background()
 
-		tokenManager, err := jwt.New(map[string]any{"secret": "changemeplease"})
+		tokenManager, err := jwt.New(map[string]any{"secret": testJWTSecret})
 		Expect(err).ToNot(HaveOccurred())
 		s, err := scope.AddOwnerScope(nil)
 		Expect(err).ToNot(HaveOccurred())

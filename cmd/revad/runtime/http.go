@@ -19,13 +19,14 @@
 package runtime
 
 import (
-	"path"
+	"context"
 	"sort"
 
 	"github.com/cs3org/reva/v3/internal/http/interceptors/appctx"
-	"github.com/cs3org/reva/v3/internal/http/interceptors/auth"
+	authmw "github.com/cs3org/reva/v3/internal/http/interceptors/auth"
 	"github.com/cs3org/reva/v3/internal/http/interceptors/log"
 	"github.com/cs3org/reva/v3/internal/http/interceptors/trace"
+	"github.com/cs3org/reva/v3/pkg/auth"
 	"github.com/cs3org/reva/v3/pkg/rhttp/global"
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog"
@@ -39,7 +40,7 @@ type middlewareTriple struct {
 	Middleware global.Middleware
 }
 
-func initHTTPMiddlewares(conf map[string]map[string]any, unprotected []string, logger *zerolog.Logger) ([]global.Middleware, error) {
+func initHTTPMiddlewares(conf map[string]map[string]any, logger *zerolog.Logger) ([]global.Middleware, error) {
 	triples := []*middlewareTriple{}
 	for name, c := range conf {
 		new, ok := global.NewMiddlewares[name]
@@ -62,7 +63,7 @@ func initHTTPMiddlewares(conf map[string]map[string]any, unprotected []string, l
 		return triples[i].Priority > triples[j].Priority
 	})
 
-	authMiddle, err := auth.New(conf["auth"], unprotected)
+	authMiddle, err := authmw.New(conf["auth"])
 	if err != nil {
 		return nil, errors.Wrap(err, "rhttp: error creating auth middleware")
 	}
@@ -81,11 +82,16 @@ func initHTTPMiddlewares(conf map[string]map[string]any, unprotected []string, l
 	return middlewares, nil
 }
 
-func httpUnprotected(s map[string]global.Service) (unprotected []string) {
-	for _, svc := range s {
-		for _, url := range svc.Unprotected() {
-			unprotected = append(unprotected, path.Join("/", svc.Prefix(), url))
-		}
+// withAuthSchemes carries how a server authenticates into the context its
+// services are built with.
+//
+// It is the same configuration the auth middleware reads, resolved a second
+// time rather than restated: a service that publishes the server's API, such
+// as openapi, then describes what the middleware actually accepts.
+func withAuthSchemes(ctx context.Context, conf map[string]map[string]any) (context.Context, error) {
+	schemes, err := authmw.Schemes(conf["auth"])
+	if err != nil {
+		return nil, errors.Wrap(err, "rhttp: error describing the authentication")
 	}
-	return
+	return auth.WithSchemes(ctx, schemes), nil
 }

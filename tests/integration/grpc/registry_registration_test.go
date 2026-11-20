@@ -152,10 +152,11 @@ var _ = Describe("service self-registration", func() {
 	})
 
 	It("adds scheme and prefix for HTTP services only", func() {
-		// HTTP services advertise scheme + prefix.
+		// HTTP services advertise scheme + prefix. The prefix is the path
+		// the service declared its routes under, so it is rooted.
 		for name, prefix := range map[string]string{
-			"dataprovider": "data",
-			"datagateway":  "datagateway",
+			"dataprovider": "/data",
+			"datagateway":  "/datagateway",
 		} {
 			md := nodeFor(name).Metadata()
 			Expect(md[registry.MetaScheme]).To(Equal("http"), "%s: scheme", name)

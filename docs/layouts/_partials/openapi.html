@@ -1,0 +1,22 @@
+{{- /* The OpenAPI document of params.openapi, published on this site.
+       Returns a dict with its url, title, version, and tag names, or nothing
+       if it cannot be fetched or is not an OpenAPI document. */ -}}
+{{- $out := dict }}
+{{- with site.Params.openapi }}
+  {{- with try (resources.GetRemote . (dict "headers" (dict "Accept" "application/json"))) }}
+    {{- with .Err }}
+      {{- warnf "openapi: %s" . }}
+    {{- else with .Value }}
+      {{- $doc := dict }}
+      {{- with try (transform.Unmarshal (dict "format" "json") .Content) }}{{ with .Value }}{{ $doc = . }}{{ end }}{{ end }}
+      {{- if $doc.openapi }}
+        {{- $res := resources.FromString "openapi.json" .Content }}
+        {{- $tags := slice }}{{ range $doc.tags }}{{ $tags = $tags | append .name }}{{ end }}
+        {{- $out = dict "url" $res.RelPermalink "title" $doc.info.title "version" $doc.info.version "tags" $tags "paths" (len $doc.paths) }}
+      {{- else }}
+        {{- warnf "openapi: %s is not an OpenAPI document" site.Params.openapi }}
+      {{- end }}
+    {{- end }}
+  {{- end }}
+{{- end }}
+{{- return $out }}

@@ -235,11 +235,11 @@ func (s *svc) registerRetention() {
 			Name:     retentionJob,
 			Schedule: "@daily",
 			Scope:    rjobs.ScopeLeader,
-			Run: func(ctx context.Context) error {
+			RunWithProgress: func(ctx context.Context, rep rjobs.Reporter) error {
 				if s.runner == nil {
 					return nil
 				}
-				n, err := s.runner.PruneRuns(ctx, time.Now().Add(-retention))
+				n, err := s.runner.PruneRuns(ctx, time.Now().Add(-retention), rep)
 				appctx.GetLogger(ctx).Info().Int("deleted", n).Msg("jobs: pruned finished runs")
 				return err
 			},

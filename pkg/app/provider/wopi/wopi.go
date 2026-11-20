@@ -213,7 +213,7 @@ func (p *wopiProvider) GetAppURL(ctx context.Context, resource *provider.Resourc
 			log.Debug().Interface("mime", resource.MimeType).Interface("ext", ext).Msg("wopi: resolved extension for single-file OCM share")
 		}
 		if ext == "" {
-			return nil, "", "", errors.New("wopi: failed to resolve extension from OCM file's mime type %s" + resource.MimeType)
+			return nil, "", "", errors.New("wopi: failed to resolve extension from OCM file's mime type " + resource.MimeType)
 		}
 	default:
 		// in all other cases use the resource's path

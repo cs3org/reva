@@ -23,23 +23,29 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+
+	"github.com/cs3org/reva/v3/pkg/rhttp/router"
 )
 
 func TestDiscoveryIsRateLimited(t *testing.T) {
 	s, err := New(context.Background(), map[string]any{
 		"unauth_rate_limit":       1,
 		"unauth_rate_limit_burst": 1,
+		"ocmprovider":             map[string]any{"signing_key": writeKeyFile(t)},
 	})
 	if err != nil {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { _ = s.Close() })
 
+	r := router.New()
+	s.Routes(r.Service("wellknown"))
+
 	get := func() int {
-		req := httptest.NewRequest(http.MethodGet, "/ocm", nil)
+		req := httptest.NewRequest(http.MethodGet, mount+"/ocm", nil)
 		req.RemoteAddr = "203.0.113.7:1000"
 		rec := httptest.NewRecorder()
-		s.Handler().ServeHTTP(rec, req)
+		r.ServeHTTP(rec, req)
 		return rec.Code
 	}
 	if got := get(); got != http.StatusOK {
@@ -53,6 +59,7 @@ func TestDiscoveryIsRateLimited(t *testing.T) {
 func TestInvalidTrustedProxyFailsStartup(t *testing.T) {
 	if _, err := New(context.Background(), map[string]any{
 		"trusted_proxy_cidrs": []string{"10.0.0.0/33"},
+		"ocmprovider":         map[string]any{"signing_key": writeKeyFile(t)},
 	}); err == nil {
 		t.Fatal("invalid trusted_proxy_cidrs accepted")
 	}

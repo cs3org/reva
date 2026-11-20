@@ -19,21 +19,28 @@
 package ocmd
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"time"
 
 	gateway "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
+	"github.com/cs3org/reva/v3/internal/http/services/wellknown"
 	"github.com/cs3org/reva/v3/pkg/appctx"
+	"github.com/cs3org/reva/v3/pkg/ocm/providerdomain"
 	"github.com/cs3org/reva/v3/pkg/service"
 	"github.com/cs3org/reva/v3/pkg/token"
 	tokenregistry "github.com/cs3org/reva/v3/pkg/token/manager/registry"
 )
 
 type tokenHandler struct {
-	tokenmgr token.Manager
+	tokenmgr      token.Manager
+	endpoint      string
+	strictHTTPSig bool
+	ocmClient     *OCMClient
 }
 
 func (h *tokenHandler) init(c *config) error {
@@ -42,6 +49,8 @@ func (h *tokenHandler) init(c *config) error {
 		return err
 	}
 	h.tokenmgr = tokenmgr
+	h.endpoint = c.Endpoint
+	h.strictHTTPSig = c.HTTPSigMode == "strict"
 	return nil
 }
 
@@ -60,25 +69,48 @@ func (h *tokenHandler) ExchangeToken(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	log := appctx.GetLogger(ctx)
 
+	// The signature covers the exact body bytes, thus keep a copy to verify it.
+	body, err := io.ReadAll(r.Body)
+	if err != nil {
+		writeTokenError(w, http.StatusBadRequest, "invalid_request")
+		return
+	}
+	r.Body = io.NopCloser(bytes.NewReader(body))
 	if err := r.ParseForm(); err != nil {
 		writeTokenError(w, http.StatusBadRequest, "invalid_request")
 		return
 	}
 
-	grantType := r.FormValue("grant_type")
-	code := r.FormValue("code")
-	clientID := r.FormValue("client_id")
-
-	switch grantType {
-	case "authorization_code", "ocm_share":
-		// Keep the legacy OCM grant name alongside the OAuth2-standard one while
-		// partner stacks converge on the same token exchange contract.
+	switch r.FormValue("grant_type") {
+	case "authorization_code":
 	default:
 		writeTokenError(w, http.StatusBadRequest, "unsupported_grant_type")
 		return
 	}
+
+	clientID := r.FormValue("client_id")
+	if err := providerdomain.Validate(clientID); err != nil {
+		writeTokenError(w, http.StatusBadRequest, "invalid_request")
+		return
+	}
+
+	code := r.FormValue("code")
 	if code == "" {
 		writeTokenError(w, http.StatusBadRequest, "invalid_grant")
+		return
+	}
+
+	// The OCM spec names the receiving server in client_id. Older peers send a value that
+	// is not an OCM server: they do not sign, thus permissive mode still accepts them.
+	disco := &wellknown.OcmDiscoveryData{}
+	if clientID != "" {
+		if d, err := h.ocmClient.Discover(ctx, clientID); err == nil {
+			disco = d
+		}
+	}
+	if err := verifySignature(ctx, h.ocmClient, r, body, h.endpoint, h.strictHTTPSig, disco); err != nil {
+		log.Info().Err(err).Str("client_id", clientID).Msg("token exchange: invalid HTTP signature")
+		writeTokenError(w, http.StatusUnauthorized, "invalid_client")
 		return
 	}
 
@@ -89,9 +121,7 @@ func (h *tokenHandler) ExchangeToken(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// client_id identifies the receiving server, but the exchanged code remains
-	// the lookup key for the accepted share. Do not reinterpret client_id as a
-	// share identifier.
+	// client_id is the receiver FQDN; the exchanged code is the only share lookup key.
 	authRes, err := gw.Authenticate(ctx, &gateway.AuthenticateRequest{
 		Type:         "ocmsharecode",
 		ClientId:     clientID,

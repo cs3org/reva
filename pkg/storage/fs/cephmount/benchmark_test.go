@@ -62,6 +62,7 @@ import (
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/cs3org/reva/v3/pkg/appctx"
 	"github.com/stretchr/testify/require"
+	"golang.org/x/sys/unix"
 )
 
 // BenchmarkGetMD_SingleFile benchmarks GetMD operations on a single file
@@ -1062,7 +1063,7 @@ func benchmarkMultiUserThreadIsolationVerification(b *testing.B, userCount, thre
 						ExpectedGID: expectedGID,
 						ActualUID:   int64(setfsuidSafe(-1)), // Get current fsuid
 						ActualGID:   int64(setfsgidSafe(-1)), // Get current fsgid
-						OSThreadID:  getTID(),                // Get OS thread ID
+						OSThreadID:  unix.Gettid(),           // Get OS thread ID
 						GoroutineID: 0,                       // Simplified - not critical for verification
 					}
 

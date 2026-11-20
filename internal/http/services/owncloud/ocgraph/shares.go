@@ -24,8 +24,10 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"maps"
 	"net/http"
 	"net/url"
+	"slices"
 	"strings"
 	"time"
 
@@ -36,7 +38,6 @@ import (
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	ocm "github.com/cs3org/go-cs3apis/cs3/sharing/ocm/v1beta1"
 	types "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
-	"github.com/go-chi/chi/v5"
 	"github.com/pkg/errors"
 	"google.golang.org/protobuf/types/known/fieldmaskpb"
 
@@ -53,6 +54,7 @@ import (
 	"github.com/cs3org/reva/v3/pkg/sharehierarchy"
 	"github.com/cs3org/reva/v3/pkg/spaces"
 	"github.com/cs3org/reva/v3/pkg/utils"
+	"github.com/cs3org/reva/v3/pkg/utils/list"
 )
 
 func (s *svc) getSharedWithMe(w http.ResponseWriter, r *http.Request) {
@@ -84,7 +86,10 @@ func (s *svc) getSharedWithMe(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	shares := make([]*libregraph.DriveItem, 0)
+	labelsByID := resourceLabels(ctx, gw, list.Map(recvSharesResp.ShareInfos, func(share *gateway.ReceivedShareResourceInfo) *provider.ResourceId {
+		return share.ResourceInfo.GetId()
+	}))
+	shares := make([]any, 0)
 	for _, share := range recvSharesResp.ShareInfos {
 		role := CS3ResourcePermissionsToUnifiedRole(ctx, share.ResourceInfo.PermissionSet)
 		if role != nil && *role.Id == permissions.UnifiedRoleDenyAccessID {
@@ -94,7 +99,10 @@ func (s *svc) getSharedWithMe(w http.ResponseWriter, r *http.Request) {
 		if err != nil {
 			log.Error().Err(err).Any("share", share).Msg("error parsing received share, ignoring")
 		} else {
-			shares = append(shares, drive)
+			shares = append(shares, &LabeledDriveItem{
+				DriveItem: *drive,
+				Labels:    labelsByID[share.ResourceInfo.GetId()],
+			})
 		}
 	}
 
@@ -128,18 +136,15 @@ func (s *svc) getSharedWithMe(w http.ResponseWriter, r *http.Request) {
 				// remoteUser, err := gw.GetAcceptedUser(ctx, &ocm.GetAcceptedUserRequest{...})
 				drive, err := s.OCMReceivedShareToDriveItem(ctx, share)
 				if err != nil {
-					log.Error().Err(err).Any("share", share).Msg("error parsing received share, ignoring")
+					log.Error().Err(err).Str("shareId", share.GetId().GetOpaqueId()).Msg("error parsing received share, ignoring")
 				} else {
-					shares = append(shares, drive)
+					shares = append(shares, newReceivedShareDriveItem(drive, receivedShareWebappMetadata(share)))
 				}
-				log.Debug().Any("share", share).Msg("processing received ocm share")
 			}
 		}
 	}
 
-	if err := json.NewEncoder(w).Encode(map[string]any{
-		"value": shares,
-	}); err != nil {
+	if err := encodeSharedWithMe(w, shares); err != nil {
 		log.Error().Err(err).Msg("error marshalling shares as json")
 		handleError(ctx, err, w)
 		return
@@ -214,7 +219,7 @@ func (s *svc) createOCMShare(ctx context.Context, gw gateway.GatewayAPIClient, r
 		RecipientMeshProvider: recipientProviderInfo.ProviderInfo,
 		AccessMethods: []*ocm.AccessMethod{
 			share.NewWebDavAccessMethod(perm, []ocm.AccessType{ocm.AccessType_ACCESS_TYPE_REMOTE}, []string{}),
-			share.NewWebappAccessMethod(perm, share.DefaultWebappRequirements, ""),
+			share.NewWebappAccessMethod(perm, share.DefaultWebappRequirements),
 		},
 	})
 
@@ -240,7 +245,7 @@ func (s *svc) share(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// We extract the inode and storage ID from the request
-	resourceID := chi.URLParam(r, "resource-id")
+	resourceID := r.PathValue("resourceID")
 	resourceID, _ = url.QueryUnescape(resourceID)
 	storageID, _, itemID, ok := spaces.DecodeToResourceID(resourceID)
 	if !ok {
@@ -401,7 +406,7 @@ func (s *svc) createLink(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// We extract the inode and storage ID from the request
-	resourceID := chi.URLParam(r, "resource-id")
+	resourceID := r.PathValue("resourceID")
 	resourceID, _ = url.QueryUnescape(resourceID)
 	storageID, _, itemID, ok := spaces.DecodeToResourceID(resourceID)
 	if !ok {
@@ -673,8 +678,9 @@ func (s *svc) getSharedByMe(w http.ResponseWriter, r *http.Request) {
 			return OCMShares.ShareInfos
 		}())
 
+	labelsByID := resourceLabels(ctx, gw, list.Map(slices.Collect(maps.Values(infos)), (*provider.ResourceInfo).GetId))
 	// convert to libregraph share drives
-	shareDrives := make([]*libregraph.DriveItem, 0, len(grouped))
+	shareDrives := make([]*LabeledDriveItem, 0, len(grouped))
 	for id, shares := range grouped {
 		info := infos[id]
 		drive, err := s.cs3ShareToDriveItem(ctx, info, shares)
@@ -683,7 +689,10 @@ func (s *svc) getSharedByMe(w http.ResponseWriter, r *http.Request) {
 			handleError(ctx, err, w)
 			return
 		}
-		shareDrives = append(shareDrives, drive)
+		shareDrives = append(shareDrives, &LabeledDriveItem{
+			DriveItem: *drive,
+			Labels:    labelsByID[info.GetId()],
+		})
 	}
 
 	if err := json.NewEncoder(w).Encode(map[string]any{
@@ -710,7 +719,7 @@ func (s *svc) updateReceivedShare(w http.ResponseWriter, r *http.Request) {
 
 	// We extract the ShareID from the request
 	// Which is wrapped in some ugly form with the ShareJail unfortunately ...
-	spaceID := chi.URLParam(r, "space-id")
+	spaceID := r.PathValue("spaceID")
 	spaceID, _ = url.QueryUnescape(spaceID)
 
 	if spaceID != fmt.Sprintf("%s$%s", shareJailID, shareJailID) {
@@ -718,7 +727,7 @@ func (s *svc) updateReceivedShare(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	resourceID := chi.URLParam(r, "resource-id")
+	resourceID := r.PathValue("resourceID")
 	resourceID, _ = url.QueryUnescape(resourceID)
 
 	// Now we decode the request body

@@ -1,0 +1,11 @@
+<ul class="timeline">
+  {{- range hugo.Data.history.milestones }}
+  <li>
+    <div class="when">{{ .year }}</div>
+    <div>
+      <h3>{{ .title }}</h3>
+      {{ .text | $.Page.RenderString (dict "display" "block") }}
+    </div>
+  </li>
+  {{- end }}
+</ul>

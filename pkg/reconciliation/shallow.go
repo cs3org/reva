@@ -213,6 +213,9 @@ type RemovedShare struct {
 	ResourceID  *provider.ResourceId
 	Grantee     string
 	GranteeType string
+	// Creator is the user who created the removed share, so that they can be
+	// told about the removal.
+	Creator string
 	// Level is the permission level the removed share granted.
 	Level  string
 	Reason RedundantReason
@@ -262,6 +265,8 @@ type ShallowReport struct {
 	SkippedSpaces []string
 	// DryRun reports whether the run was a simulation.
 	DryRun bool
+	// current batch out of the total number of batches for the progress report
+	batch, totalNrOfBatches int
 }
 
 // Run reconciles every non-orphan, non-expired share against the storage. A per-share lookup
@@ -277,7 +282,7 @@ type ShallowReport struct {
 // Every write is logged with the permissions found and the permissions written,
 // so a run can be undone from its log alone.
 func (j *ShallowJob) Run(ctx context.Context) (ShallowReport, error) {
-	return j.run(ctx, "")
+	return j.run(ctx, "", rjobs.NopReporter{})
 }
 
 // RunSpace is Run over the shares of a single space.
@@ -285,11 +290,11 @@ func (j *ShallowJob) RunSpace(ctx context.Context, spaceID string) (ShallowRepor
 	if spaceID == "" {
 		return ShallowReport{}, errors.New("reconciliation: no space given")
 	}
-	return j.run(ctx, spaceID)
+	return j.run(ctx, spaceID, rjobs.NopReporter{})
 }
 
 // run does the work of both, over every space when spaceID is empty.
-func (j *ShallowJob) run(ctx context.Context, spaceID string) (ShallowReport, error) {
+func (j *ShallowJob) run(ctx context.Context, spaceID string, rep rjobs.Reporter) (ShallowReport, error) {
 	base := j.Log
 	if base == nil {
 		base = appctx.GetLogger(ctx)
@@ -339,18 +344,19 @@ func (j *ShallowJob) run(ctx context.Context, spaceID string) (ShallowReport, er
 	}
 	start.Msg("reconciliation: run started")
 
-	report := ShallowReport{RunID: runID, SpaceID: spaceID, DryRun: j.DryRun}
+	report := ShallowReport{RunID: runID, SpaceID: spaceID, DryRun: j.DryRun, totalNrOfBatches: len(batches)}
 	// one gateway lookup per recipient instead of one per share: a recipient
 	// holds many shares, in many spaces, so the same names come back over and
 	// over. It holds an entry per name, not per share, so it spans the batches.
 	grantees := map[string]*provider.Grantee{}
 	var cancelled error
-	for _, batch := range batches {
+	for i, batch := range batches {
 		if cancelled = ctx.Err(); cancelled != nil {
 			break
 		}
+		report.batch = i + 1
 
-		err := j.reconcileSpaces(ctx, log, &report, gw, grantees, batch)
+		err := j.reconcileSpaces(ctx, log, rep, &report, gw, grantees, batch)
 		if err == nil {
 			continue
 		}
@@ -391,7 +397,8 @@ func (j *ShallowJob) run(ctx context.Context, spaceID string) (ShallowReport, er
 // decided and applied is still one space, since spaces are disjoint.
 //
 // The error is the shares of the batch not being listable at all.
-func (j *ShallowJob) reconcileSpaces(ctx context.Context, log *zerolog.Logger, report *ShallowReport, gw gateway.GatewayAPIClient, grantees map[string]*provider.Grantee, spaceIDs []string) error {
+func (j *ShallowJob) reconcileSpaces(ctx context.Context, log *zerolog.Logger, rep rjobs.Reporter, report *ShallowReport, gw gateway.GatewayAPIClient, grantees map[string]*provider.Grantee, spaceIDs []string) error {
+	rep.Report(rjobs.Progress{Phase: "list"})
 	shares, err := j.ShareStore.ListShares(ctx, spaceFilters(spaceIDs))
 	if err != nil {
 		return errors.Wrapf(err, "reconciliation: listing the shares of %d space(s)", len(spaceIDs))
@@ -415,7 +422,8 @@ func (j *ShallowJob) reconcileSpaces(ctx context.Context, log *zerolog.Logger, r
 	// judge it.
 	seen := map[string]map[string]struct{}{}
 	now := time.Now()
-	for _, s := range shares {
+	for i, s := range shares {
+		report.progress(rep, "resolve", i, len(shares), "shares")
 		id := s.GetId().GetOpaqueId()
 		space := s.GetResourceId().GetSpaceId()
 		if seen[space] == nil {
@@ -507,7 +515,7 @@ func (j *ShallowJob) reconcileSpaces(ctx context.Context, log *zerolog.Logger, r
 	// what to write is decided against the storage before anything goes out, so
 	// that the changes of a space can be checked against the database as a whole
 	// and then applied in one go.
-	planned := j.plan(ctx, log, report, required, traces)
+	planned := j.plan(ctx, log, rep, report, required, traces)
 
 	// the changes are grouped per space, the unit a run applies or holds back.
 	grants := map[string][]plannedGrant{}
@@ -535,7 +543,8 @@ func (j *ShallowJob) reconcileSpaces(ctx context.Context, log *zerolog.Logger, r
 	}
 	slices.Sort(pending)
 
-	for _, space := range pending {
+	for i, space := range pending {
+		report.progress(rep, "apply", i, len(pending), "spaces")
 		fresh, err := j.appeared(ctx, space, seen[space])
 		if err != nil {
 			report.SkippedSpaces = append(report.SkippedSpaces, space)
@@ -569,7 +578,25 @@ func (j *ShallowJob) reconcileSpaces(ctx context.Context, log *zerolog.Logger, r
 		// anywhere else.
 		j.applyRemovals(ctx, log, report, removals[space], traces)
 	}
+	report.progress(rep, "apply", len(pending), len(pending), "spaces")
 	return nil
+}
+
+// progress reports the run in phase, with the totals so far.
+func (r *ShallowReport) progress(rep rjobs.Reporter, phase string, done, total int, unit string) {
+	rep.Report(rjobs.Progress{Phase: phase, Done: int64(done), Total: int64(total), Unit: unit, Details: rjobs.Params{
+		"checked":        r.Checked,
+		"expired":        r.Expired,
+		"covered":        r.Covered,
+		"conflicting":    r.Conflicting,
+		"written":        len(r.Written),
+		"removed":        len(r.Removed),
+		"skipped":        r.Skipped,
+		"skipped_spaces": len(r.SkippedSpaces),
+		"failed":         r.Failed,
+		"batch":          r.batch,
+		"batches":        r.totalNrOfBatches,
+	}})
 }
 
 // plannedGrant is one grant a run decided on, held until the space it belongs
@@ -582,9 +609,10 @@ type plannedGrant struct {
 // plan works out the grant each share needs from what the storage has now.
 // Nothing is written here. A share whose grants cannot be read is skipped, the
 // same as one that does not resolve.
-func (j *ShallowJob) plan(ctx context.Context, log *zerolog.Logger, report *ShallowReport, required []sharehierarchy.ResolvedShare, traces map[string]string) []plannedGrant {
+func (j *ShallowJob) plan(ctx context.Context, log *zerolog.Logger, rep rjobs.Reporter, report *ShallowReport, required []sharehierarchy.ResolvedShare, traces map[string]string) []plannedGrant {
 	planned := make([]plannedGrant, 0, len(required))
-	for _, rs := range required {
+	for i, rs := range required {
+		report.progress(rep, "plan", i, len(required), "shares")
 		id := rs.Share.GetResourceId()
 		sharee, granteeType := sharehierarchy.ShareeInfo(rs.Share.GetGrantee())
 		expected := sharehierarchy.PermLevelFromCS3(rs.Share.GetPermissions().GetPermissions())
@@ -706,6 +734,7 @@ func (j *ShallowJob) applyRemovals(ctx context.Context, log *zerolog.Logger, rep
 			Str("opaque_id", r.ResourceID.GetOpaqueId()).
 			Str("grantee", r.Grantee).
 			Str("grantee_type", r.GranteeType).
+			Str("creator", r.Creator).
 			Str("level", r.Level).
 			Str("reason", string(r.Reason)).
 			Str("ancestor", r.AncestorID).
@@ -777,6 +806,7 @@ func (j *ShallowJob) shadowed(log *zerolog.Logger, report *ShallowReport, rs sha
 		ResourceID:   rs.Share.GetResourceId(),
 		Grantee:      sharee,
 		GranteeType:  granteeType,
+		Creator:      rs.Share.GetCreator().GetOpaqueId(),
 		Level:        level.String(),
 		Reason:       reason,
 		AncestorID:   ancestor.ID,
@@ -930,8 +960,8 @@ func (j *ShallowJob) Periodic(schedule string) rjobs.Periodic {
 		Scope:      rjobs.ScopeLeader,
 		Overlap:    rjobs.Skip,
 		RunOnStart: j.RunOnStart,
-		Run: func(ctx context.Context) error {
-			_, err := j.Run(ctx)
+		RunWithProgress: func(ctx context.Context, rep rjobs.Reporter) error {
+			_, err := j.run(ctx, "", rep)
 			return err
 		},
 	}
@@ -956,6 +986,11 @@ type shallowRun struct {
 
 // Run performs one run and returns its totals as the run's result.
 func (r *shallowRun) Run(ctx context.Context, p rjobs.Params) (rjobs.Params, error) {
+	return r.RunWithProgress(ctx, p, rjobs.NopReporter{})
+}
+
+// RunWithProgress is Run, reporting how far the run has got.
+func (r *shallowRun) RunWithProgress(ctx context.Context, p rjobs.Params, rep rjobs.Reporter) (rjobs.Params, error) {
 	var params ShallowParams
 	// a parameter that is not read is an error: a mistyped "space" would
 	// otherwise silently widen the run from one space to every space.
@@ -970,7 +1005,7 @@ func (r *shallowRun) Run(ctx context.Context, p rjobs.Params) (rjobs.Params, err
 		return nil, errors.Wrap(err, "reconciliation: decoding the shallow parameters")
 	}
 
-	report, err := r.job.run(ctx, params.SpaceID)
+	report, err := r.job.run(ctx, params.SpaceID, rep)
 	if err != nil {
 		return nil, err
 	}

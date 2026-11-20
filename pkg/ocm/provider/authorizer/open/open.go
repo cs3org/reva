@@ -54,9 +54,12 @@ func New(ctx context.Context, m map[string]any) (provider.Authorizer, error) {
 
 	// Loopback stays off: open discovery has no local two-provider topology.
 	// The default timeout is supplied by the shared transport config.
+	// UseEnvProxy false leaves the proxy unset; true installs
+	// http.ProxyFromEnvironment and keeps the policy dialer.
 	a := &authorizer{
 		ocmClient: ocmd.NewPublicOnlyClientWithConfig(client.TransportConfig{
 			Insecure:               c.Insecure,
+			UseEnvProxy:            c.OCMClientUseEnvProxy,
 			AllowedFederationCIDRs: cidrs,
 		}),
 	}
@@ -69,6 +72,10 @@ type config struct {
 	// Insecure skips TLS verification when discovering an unknown provider. Off by
 	// default; turning it on exposes discovery to MITM.
 	Insecure bool `mapstructure:"insecure"`
+	// OCMClientUseEnvProxy lets open discovery honor HTTP_PROXY, HTTPS_PROXY,
+	// and NO_PROXY. Off by default; public-only discovery stays direct unless
+	// operators opt in. The policy dialer stays installed.
+	OCMClientUseEnvProxy bool `mapstructure:"ocm_client_use_env_proxy"`
 	// AllowedFederationCIDRs is an explicit private-network exception list for
 	// open discovery of peers in a controlled network. Empty by default; any
 	// invalid entry aborts initialization. Loopback is never admitted by this

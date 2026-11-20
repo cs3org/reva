@@ -1,0 +1,23 @@
+{{ define "main" }}
+{{- $people := hugo.Data.generated.contributors }}
+<div class="wrap" style="max-width: 1100px">
+  <article class="content">
+    <h1>{{ .Title }}</h1>
+    <p class="page-lead">{{ .Description }}</p>
+    {{ .Content }}
+    {{- with $people }}
+    <h2 id="contributors">Contributors</h2>
+    <p class="muted">{{ len . }} people have contributed code to reva, ordered by number of commits. Bots are not listed.</p>
+    <div class="people">
+      {{- range . }}
+      <a class="person" href="{{ .url }}" title="{{ .login }}: {{ .contributions }} commits">
+        <img src="{{ .avatar }}&s=72" alt="" width="36" height="36" loading="lazy">
+        <span class="who"><span class="login">{{ .login }}</span><span class="n">{{ .contributions }} commits</span></span>
+      </a>
+      {{- end }}
+    </div>
+    {{- end }}
+    {{- partial "page-meta.html" . }}
+  </article>
+</div>
+{{ end }}

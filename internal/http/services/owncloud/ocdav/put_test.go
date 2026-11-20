@@ -178,3 +178,61 @@ func TestUploaderRolePutReturnsFilename(t *testing.T) {
 		t.Errorf("expected a randomized filename, got %s", body.Filename)
 	}
 }
+
+// Test that a PUT with If-None-Match: * only creates new files: it must not
+// reach the upload when the file exists
+func TestPutIfNoneMatch(t *testing.T) {
+	tests := []struct {
+		name          string
+		stat          *provider.StatResponse
+		expectedCalls int
+	}{
+		{
+			name:          "new file is uploaded",
+			stat:          &provider.StatResponse{Status: &rpc.Status{Code: rpc.Code_CODE_NOT_FOUND}},
+			expectedCalls: 1,
+		},
+		{
+			name: "existing file is refused",
+			stat: &provider.StatResponse{
+				Status: &rpc.Status{Code: rpc.Code_CODE_OK},
+				Info:   &provider.ResourceInfo{Type: provider.ResourceType_RESOURCE_TYPE_FILE},
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			input := "Hello world!"
+			request := httptest.NewRequest(http.MethodPut, "http://my-reva.com/myfile.txt", strings.NewReader(input))
+			request.Header.Add(HeaderContentLength, strconv.Itoa(len(input)))
+			request.Header.Add(HeaderIfNoneMatch, "*")
+
+			calls := 0
+			mockServerUpload := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { calls++ }))
+			defer mockServerUpload.Close()
+
+			gatewayClient := mockgateway.NewMockGatewayAPIClient(t)
+			gatewayClient.On("Stat", mock.Anything, mock.Anything).Return(tt.stat, nil)
+			if tt.expectedCalls > 0 {
+				gatewayClient.On("InitiateFileUpload", mock.Anything, mock.Anything).Return(&gateway.InitiateFileUploadResponse{
+					Status: &rpc.Status{Code: rpc.Code_CODE_OK},
+					Protocols: []*gateway.FileUploadProtocol{
+						{Protocol: "simple", UploadEndpoint: mockServerUpload.URL, Token: "my-secret-token"},
+					}}, nil)
+			}
+			stampGateway(gatewayClient)
+
+			service := svc{c: &Config{GatewaySvc: "if-none-match-api-endpoint"}, client: httpclient.New()}
+			w := httptest.NewRecorder()
+			service.handlePut(context.Background(), w, request, &provider.Reference{}, zerolog.Logger{})
+
+			if calls != tt.expectedCalls {
+				t.Errorf("expected %d calls to the upload endpoint, got %d", tt.expectedCalls, calls)
+			}
+			if tt.expectedCalls == 0 && w.Code != http.StatusPreconditionFailed {
+				t.Errorf("expected status %d, got %d", http.StatusPreconditionFailed, w.Code)
+			}
+		})
+	}
+}

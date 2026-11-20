@@ -1,0 +1,7 @@
+{{ define "main" }}
+{{- if hasPrefix .RelPermalink "/docs/" }}
+{{- partial "docs-shell.html" (dict "page" . "body" .Content) }}
+{{- else }}
+{{- partial "plain-shell.html" (dict "page" . "body" .Content) }}
+{{- end }}
+{{ end }}

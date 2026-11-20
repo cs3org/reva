@@ -23,6 +23,7 @@ import (
 	"encoding/base64"
 	"io"
 	"net/http"
+	"net/http/httptest"
 	"net/url"
 	"path"
 	"path/filepath"
@@ -67,7 +68,8 @@ var (
 
 var _ = Describe("ocm share", func() {
 	var (
-		revads = map[string]*Revad{}
+		revads   = map[string]*Revad{}
+		wopiStub *httptest.Server
 
 		variables = map[string]string{}
 
@@ -121,10 +123,18 @@ var _ = Describe("ocm share", func() {
 	)
 
 	JustBeforeEach(func() {
-		tokenManager, err := jwt.New(map[string]any{"secret": "changemeplease"})
+		tokenManager, err := jwt.New(map[string]any{"secret": testJWTSecret})
 		Expect(err).ToNot(HaveOccurred())
 		ctxEinstein = ctxWithAuthToken(tokenManager, einstein)
 		ctxMarie = ctxWithAuthToken(tokenManager, marie)
+		resources := map[string]Resource{
+			"ocm_share_cernbox_file": File{Content: "{}"},
+			"ocm_share_cesnet_file":  File{Content: "{}"},
+			"invite_token_file":      File{Content: "{}"},
+			"localhome_root":         Folder{},
+		}
+		addSigningKeys(resources)
+		wopiStub = startWopiStub(variables)
 		revads, err = startRevads(map[string]string{
 			"cernboxgw":          "ocm-server-cernbox-grpc.toml",
 			"cernboxhome":        "cernbox-home-server.toml",
@@ -132,12 +142,7 @@ var _ = Describe("ocm share", func() {
 			"cernboxmachineauth": "cernbox-machine-authprovider.toml",
 		}, map[string]string{
 			"providers": "ocm-providers.demo.json",
-		}, map[string]Resource{
-			"ocm_share_cernbox_file": File{Content: "{}"},
-			"ocm_share_cesnet_file":  File{Content: "{}"},
-			"invite_token_file":      File{Content: "{}"},
-			"localhome_root":         Folder{},
-		}, variables)
+		}, resources, variables)
 		Expect(err).ToNot(HaveOccurred())
 		cernboxgw, err = service.GatewayAt(revads["cernboxgw"].GrpcAddress)
 		Expect(err).ToNot(HaveOccurred())
@@ -151,6 +156,7 @@ var _ = Describe("ocm share", func() {
 	})
 
 	AfterEach(func() {
+		wopiStub.Close()
 		for _, r := range revads {
 			Expect(r.Cleanup(CurrentGinkgoTestDescription().Failed)).To(Succeed())
 		}
@@ -191,6 +197,7 @@ var _ = Describe("ocm share", func() {
 				createShareRes, err := cernboxgw.CreateOCMShare(ctxEinstein, &ocmv1beta1.CreateOCMShareRequest{
 					ResourceId: info.Id,
 					Grantee: &provider.Grantee{
+						Type: provider.GranteeType_GRANTEE_TYPE_USER,
 						Id: &provider.Grantee_UserId{
 							UserId: marie.Id,
 						},
@@ -263,6 +270,66 @@ var _ = Describe("ocm share", func() {
 			})
 		})
 
+		Context("einstein shares a text file with an app offered", func() {
+			It("marie receives the webapp protocol and the launch endpoint rejects an invalid token", func() {
+				By("sharing a text file with the webdav and the webapp protocols")
+				filePath := "/home/notes.txt"
+				Expect(helpers.CreateFile(ctxEinstein, cernboxgw, filePath, []byte("test"))).To(Succeed())
+				info, err := stat(ctxEinstein, cernboxgw, &provider.Reference{Path: filePath})
+				Expect(err).ToNot(HaveOccurred())
+
+				cesnet, err := cernboxgw.GetInfoByDomain(ctxEinstein, &ocmproviderpb.GetInfoByDomainRequest{
+					Domain: "127.0.0.1:54321",
+				})
+				Expect(err).ToNot(HaveOccurred())
+				Expect(cesnet.Status.Code).To(Equal(rpcv1beta1.Code_CODE_OK))
+
+				perms := permissions.NewViewerRole().CS3ResourcePermissions()
+				createShareRes, err := cernboxgw.CreateOCMShare(ctxEinstein, &ocmv1beta1.CreateOCMShareRequest{
+					ResourceId: info.Id,
+					Grantee: &provider.Grantee{
+						Type: provider.GranteeType_GRANTEE_TYPE_USER,
+						Id:   &provider.Grantee_UserId{UserId: marie.Id},
+					},
+					AccessMethods: []*ocmv1beta1.AccessMethod{
+						share.NewWebDavAccessMethod(perms, []ocmv1beta1.AccessType{}, []string{}),
+						share.NewWebappAccessMethod(perms, share.DefaultWebappRequirements),
+					},
+					RecipientMeshProvider: cesnet.ProviderInfo,
+				})
+				Expect(err).ToNot(HaveOccurred())
+				Expect(createShareRes.Status.Code).To(Equal(rpcv1beta1.Code_CODE_OK))
+
+				By("finding the webapp protocol in the share marie received")
+				listRes, err := cesnetgw.ListReceivedOCMShares(ctxMarie, &ocmv1beta1.ListReceivedOCMSharesRequest{})
+				Expect(err).ToNot(HaveOccurred())
+				Expect(listRes.Status.Code).To(Equal(rpcv1beta1.Code_CODE_OK))
+				Expect(listRes.Shares).To(HaveLen(1))
+				var webapp *ocmv1beta1.WebappProtocol
+				for _, p := range listRes.Shares[0].Protocols {
+					if w, ok := p.Term.(*ocmv1beta1.Protocol_WebappOptions); ok {
+						webapp = w.WebappOptions
+					}
+				}
+				Expect(webapp).ToNot(BeNil())
+				Expect(webapp.Uri).To(Equal("http://127.0.0.1:12345/app/ocm-open"))
+				Expect(webapp.Apps).To(HaveLen(1))
+				Expect(webapp.Apps[0].Name).To(Equal("TestApp"))
+
+				// The fixtures have no ocmsharecode and ocmexchangedtoken auth providers,
+				// so a real token cannot be obtained. A refused token still shows that the
+				// route exists and authenticates by itself: a missing route answers 404.
+				By("posting a token that was never issued to the launch endpoint")
+				res, err := http.PostForm(webapp.Uri, url.Values{
+					"access_token": {"not-a-real-token"},
+					"appname":      {"TestApp"},
+				})
+				Expect(err).ToNot(HaveOccurred())
+				defer res.Body.Close()
+				Expect(res.StatusCode).To(Equal(http.StatusUnauthorized))
+			})
+		})
+
 		Context("einstein shares a file with editor permissions", func() {
 			It("marie is able to modify the content of the file", func() {
 				fileToShare := &provider.Reference{
@@ -284,6 +351,7 @@ var _ = Describe("ocm share", func() {
 				createShareRes, err := cernboxgw.CreateOCMShare(ctxEinstein, &ocmv1beta1.CreateOCMShareRequest{
 					ResourceId: info.Id,
 					Grantee: &provider.Grantee{
+						Type: provider.GranteeType_GRANTEE_TYPE_USER,
 						Id: &provider.Grantee_UserId{
 							UserId: marie.Id,
 						},
@@ -380,6 +448,7 @@ var _ = Describe("ocm share", func() {
 				createShareRes, err := cernboxgw.CreateOCMShare(ctxEinstein, &ocmv1beta1.CreateOCMShareRequest{
 					ResourceId: info.Id,
 					Grantee: &provider.Grantee{
+						Type: provider.GranteeType_GRANTEE_TYPE_USER,
 						Id: &provider.Grantee_UserId{
 							UserId: marie.Id,
 						},
@@ -483,6 +552,7 @@ var _ = Describe("ocm share", func() {
 				createShareRes, err := cernboxgw.CreateOCMShare(ctxEinstein, &ocmv1beta1.CreateOCMShareRequest{
 					ResourceId: info.Id,
 					Grantee: &provider.Grantee{
+						Type: provider.GranteeType_GRANTEE_TYPE_USER,
 						Id: &provider.Grantee_UserId{
 							UserId: marie.Id,
 						},
@@ -632,6 +702,7 @@ var _ = Describe("ocm share", func() {
 				createShareRes, err := cernboxgw.CreateOCMShare(ctxEinstein, &ocmv1beta1.CreateOCMShareRequest{
 					ResourceId: info.Id,
 					Grantee: &provider.Grantee{
+						Type: provider.GranteeType_GRANTEE_TYPE_USER,
 						Id: &provider.Grantee_UserId{
 							UserId: marie.Id,
 						},
@@ -649,6 +720,7 @@ var _ = Describe("ocm share", func() {
 				createShareRes2, err := cernboxgw.CreateOCMShare(ctxEinstein, &ocmv1beta1.CreateOCMShareRequest{
 					ResourceId: info.Id,
 					Grantee: &provider.Grantee{
+						Type: provider.GranteeType_GRANTEE_TYPE_USER,
 						Id: &provider.Grantee_UserId{
 							UserId: marie.Id,
 						},
@@ -674,6 +746,7 @@ var _ = Describe("ocm share", func() {
 				createShareRes, err := cernboxgw.CreateOCMShare(ctxEinstein, &ocmv1beta1.CreateOCMShareRequest{
 					ResourceId: &provider.ResourceId{StorageId: "123e4567-e89b-12d3-a456-426655440000", OpaqueId: "NON_EXISTING_FILE"},
 					Grantee: &provider.Grantee{
+						Type: provider.GranteeType_GRANTEE_TYPE_USER,
 						Id: &provider.Grantee_UserId{
 							UserId: marie.Id,
 						},
@@ -709,6 +782,7 @@ var _ = Describe("ocm share", func() {
 				createShareRes, err := cernboxgw.CreateOCMShare(ctxEinstein, &ocmv1beta1.CreateOCMShareRequest{
 					ResourceId: info.Id,
 					Grantee: &provider.Grantee{
+						Type: provider.GranteeType_GRANTEE_TYPE_USER,
 						Id: &provider.Grantee_UserId{
 							UserId: marie.Id,
 						},

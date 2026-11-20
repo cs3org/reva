@@ -27,6 +27,7 @@ import (
 	"github.com/cs3org/reva/v3/pkg/appctx"
 	"github.com/cs3org/reva/v3/pkg/labels"
 	"github.com/cs3org/reva/v3/pkg/labels/registry"
+	"github.com/cs3org/reva/v3/pkg/spaces"
 )
 
 func init() {
@@ -45,6 +46,23 @@ func New(m map[string]any) (labels.Manager, error) {
 
 func (m *mgr) ListLabels(ctx context.Context) ([]string, error) {
 	return []string{"favorite"}, nil
+}
+
+func (m *mgr) ListLabelsForResources(ctx context.Context, ids []*provider.ResourceId) (map[string][]string, error) {
+	user, ok := appctx.ContextGetUser(ctx)
+	if !ok {
+		return nil, errors.New("no valid user in context")
+	}
+
+	m.RLock()
+	defer m.RUnlock()
+	labelsByResource := make(map[string][]string, len(ids))
+	for _, id := range ids {
+		if _, ok := m.favorites[user.Id.OpaqueId][id.OpaqueId]; ok {
+			labelsByResource[spaces.ResourceIdToString(id)] = []string{"favorite"}
+		}
+	}
+	return labelsByResource, nil
 }
 
 func (m *mgr) ListResourcesForLabel(ctx context.Context, label string) ([]*provider.ResourceId, error) {

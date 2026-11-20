@@ -34,7 +34,9 @@ import (
 	"github.com/cs3org/reva/v3/pkg/appctx"
 	"github.com/cs3org/reva/v3/pkg/errtypes"
 	"github.com/cs3org/reva/v3/pkg/ocm/client"
+	"github.com/cs3org/reva/v3/pkg/ocm/httpsig"
 	"github.com/pkg/errors"
+	"github.com/rs/zerolog"
 )
 
 // DefaultResponseLimit is the maximum OCM control-plane response body size.
@@ -116,6 +118,11 @@ func NewPublicOnlyClientWithConfig(cfg client.TransportConfig) *OCMClient {
 	}
 }
 
+// Transport returns the HTTP round tripper used for OCM requests.
+func (c *OCMClient) Transport() http.RoundTripper {
+	return c.client.Transport
+}
+
 // Discover returns a number of properties used to discover the capabilities offered by a remote cloud storage.
 // https://cs3org.github.io/OCM-API/docs.html?branch=develop&repo=OCM-API&user=cs3org#/paths/~1.well-known~1ocm/get
 func (c *OCMClient) Discover(ctx context.Context, endpoint string) (*wellknown.OcmDiscoveryData, error) {
@@ -184,9 +191,9 @@ func (c *OCMClient) httpget(ctx context.Context, url string, limit int64) ([]byt
 	return body, nil
 }
 
-// NewShare sends a new OCM share to the remote system.
+// NewShare sends a new OCM share to the remote system, signed with key.
 // https://cs3org.github.io/OCM-API/docs.html?branch=develop&repo=OCM-API&user=cs3org#/paths/~1shares/post
-func (c *OCMClient) NewShare(ctx context.Context, endpoint string, r *NewShareRequest) (*NewShareResponse, error) {
+func (c *OCMClient) NewShare(ctx context.Context, endpoint string, r *NewShareRequest, key *httpsig.Key) (*NewShareResponse, error) {
 	url, err := url.JoinPath(endpoint, "shares")
 	if err != nil {
 		return nil, err
@@ -197,12 +204,15 @@ func (c *OCMClient) NewShare(ctx context.Context, endpoint string, r *NewShareRe
 	}
 
 	log := appctx.GetLogger(ctx)
-	log.Info().Str("url", url).Str("payload", string(body)).Msg("Sending OCM share")
+	log.Info().Str("url", url).Str("payload", maskNewShareSecrets(r, string(body))).Msg("Sending OCM share")
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewReader(body))
 	if err != nil {
 		return nil, errors.Wrap(err, "error creating request")
 	}
 	req.Header.Set("Content-Type", "application/json")
+	if err := key.Sign(req, body); err != nil {
+		return nil, errors.Wrap(err, "error signing request")
+	}
 
 	resp, err := c.client.Do(req)
 	if err != nil {
@@ -214,7 +224,11 @@ func (c *OCMClient) NewShare(ctx context.Context, endpoint string, r *NewShareRe
 	if sresp != nil {
 		log.Info().Any("status", resp.Status).Any("shareResponse", sresp).Msg("remote OCM server responded")
 	} else {
-		log.Info().Err(err).Str("status", resp.Status).Msg("error in remote OCM server response")
+		errText := ""
+		if err != nil {
+			errText = maskNewShareSecrets(r, err.Error())
+		}
+		log.Info().Str(zerolog.ErrorFieldName, errText).Str("status", resp.Status).Msg("error in remote OCM server response")
 	}
 	return sresp, err
 }
@@ -241,9 +255,9 @@ func (c *OCMClient) parseNewShareResponse(r *http.Response) (*NewShareResponse, 
 	return nil, errtypes.InternalError(string(body))
 }
 
-// InviteAccepted informs the remote end that the invitation was accepted
+// InviteAccepted informs the remote end, in a request signed with key, that the invitation was accepted.
 // https://cs3org.github.io/OCM-API/docs.html?branch=develop&repo=OCM-API&user=cs3org#/paths/~1invite-accepted/post
-func (c *OCMClient) InviteAccepted(ctx context.Context, endpoint string, r *InviteAcceptedRequest) (*RemoteUser, error) {
+func (c *OCMClient) InviteAccepted(ctx context.Context, endpoint string, r *InviteAcceptedRequest, key *httpsig.Key) (*RemoteUser, error) {
 	url, err := url.JoinPath(endpoint, "invite-accepted")
 	if err != nil {
 		return nil, err
@@ -260,6 +274,9 @@ func (c *OCMClient) InviteAccepted(ctx context.Context, endpoint string, r *Invi
 		return nil, errors.Wrap(err, "error creating request")
 	}
 	req.Header.Set("Content-Type", "application/json")
+	if err := key.Sign(req, body); err != nil {
+		return nil, errors.Wrap(err, "error signing request")
+	}
 
 	resp, err := c.client.Do(req)
 	if err != nil {
@@ -312,8 +329,8 @@ func (c *OCMClient) NewNotification(ctx context.Context, endpoint string, r *Inv
 }
 
 // ExchangeToken performs an OAuth2 authorization_code exchange against the
-// sender's token endpoint, returning the short-lived access token and its TTL.
-func (c *OCMClient) ExchangeToken(ctx context.Context, tokenEndpoint, code, clientID string) (string, int64, error) {
+// sender's token endpoint, signed with key, returning the short-lived access token and its TTL.
+func (c *OCMClient) ExchangeToken(ctx context.Context, tokenEndpoint, code, clientID string, key *httpsig.Key) (string, int64, error) {
 	values := url.Values{}
 	values.Set("grant_type", "authorization_code")
 	values.Set("code", code)
@@ -321,15 +338,19 @@ func (c *OCMClient) ExchangeToken(ctx context.Context, tokenEndpoint, code, clie
 		values.Set("client_id", clientID)
 	}
 
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, tokenEndpoint, strings.NewReader(values.Encode()))
+	body := []byte(values.Encode())
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, tokenEndpoint, bytes.NewReader(body))
 	if err != nil {
-		return "", 0, errors.Wrap(err, "error creating token exchange request")
+		return "", 0, errtypes.InternalError("token exchange request could not be created")
 	}
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	if err := key.Sign(req, body); err != nil {
+		return "", 0, errors.Wrap(err, "error signing token exchange request")
+	}
 
 	resp, err := c.client.Do(req)
 	if err != nil {
-		return "", 0, errors.Wrap(err, "error sending token exchange request")
+		return "", 0, tokenExchangeFailure(err, "token exchange request failed")
 	}
 	defer resp.Body.Close()
 
@@ -339,7 +360,7 @@ func (c *OCMClient) ExchangeToken(ctx context.Context, tokenEndpoint, code, clie
 	case http.StatusBadRequest:
 		data, err := readOCMBody(resp.Body, DefaultResponseLimit)
 		if err != nil {
-			return "", 0, err
+			return "", 0, tokenExchangeFailure(err, "token exchange response could not be read")
 		}
 		var errBody struct {
 			Error string `json:"error"`
@@ -352,7 +373,7 @@ func (c *OCMClient) ExchangeToken(ctx context.Context, tokenEndpoint, code, clie
 		return "", 0, errtypes.PermissionDenied("token exchange was rejected by the sender")
 	default:
 		if _, err := readOCMBody(resp.Body, DefaultResponseLimit); err != nil {
-			return "", 0, err
+			return "", 0, tokenExchangeFailure(err, "token exchange response could not be read")
 		}
 		return "", 0, errtypes.InternalError(fmt.Sprintf("token exchange returned HTTP %d", resp.StatusCode))
 	}
@@ -362,15 +383,27 @@ func (c *OCMClient) ExchangeToken(ctx context.Context, tokenEndpoint, code, clie
 		ExpiresIn   int64  `json:"expires_in"`
 	}
 	if err := decodeOCMJSON(resp.Body, DefaultResponseLimit, &result); err != nil {
-		if err == ErrResponseTooLarge {
-			return "", 0, err
-		}
-		return "", 0, errors.Wrap(err, "error decoding token exchange response")
+		return "", 0, tokenExchangeFailure(err, "token exchange response could not be decoded")
 	}
 	if result.AccessToken == "" {
 		return "", 0, errtypes.InternalError("token exchange response missing access_token")
 	}
 	return result.AccessToken, result.ExpiresIn, nil
+}
+
+func tokenExchangeFailure(err error, message string) error {
+	switch {
+	case stderrors.Is(err, context.Canceled):
+		return context.Canceled
+	case stderrors.Is(err, context.DeadlineExceeded):
+		return context.DeadlineExceeded
+	case stderrors.Is(err, ErrResponseTooLarge):
+		return ErrResponseTooLarge
+	case stderrors.Is(err, client.ErrPolicyViolation):
+		return stderrors.Join(errtypes.InternalError(message), client.ErrPolicyViolation)
+	default:
+		return errtypes.InternalError(message)
+	}
 }
 
 // GetDirectoryService fetches a directory service listing from the given URL per OCM spec Appendix C.

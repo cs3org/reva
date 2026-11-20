@@ -39,6 +39,7 @@ import (
 	"github.com/cs3org/reva/v3/pkg/appctx"
 	"github.com/cs3org/reva/v3/pkg/errtypes"
 	"github.com/cs3org/reva/v3/pkg/ocm/embedded"
+	"github.com/cs3org/reva/v3/pkg/ocm/httpsig"
 	"github.com/cs3org/reva/v3/pkg/ocm/share"
 	"github.com/cs3org/reva/v3/pkg/ocm/share/repository/registry"
 	"github.com/cs3org/reva/v3/pkg/plugin"
@@ -77,8 +78,15 @@ type config struct {
 	ClientInsecure  bool                      `mapstructure:"client_insecure"`
 	GatewaySVC      string                    `mapstructure:"gatewaysvc"                                    validate:"required"`
 	ProviderDomain  string                    `docs:"The same domain registered in the provider authorizer" mapstructure:"provider_domain" validate:"required"`
-	WebDAVEndpoint  string                    `mapstructure:"webdav_endpoint"                               validate:"required"`
-	WebAppEndpoint  string                    `mapstructure:"webapp_endpoint"                               validate:"required"`
+	WebDAVEndpoint  string                    `mapstructure:"webdav_endpoint" validate:"required"`
+	Webapps         []webapp                  `docs:";Web applications offered on outbound OCM shares, each with a name and the media types it opens. The webapp protocol is offered only if this list is not empty." mapstructure:"webapps"`
+	WebAppEndpoint  string                    `docs:";Absolute URL of the webapp opener. Required when webapps is not empty." mapstructure:"webapp_endpoint" validate:"required_with=Webapps"`
+	SigningKey      string                    `docs:";Path to the PEM file of the Ed25519 private key that signs the shares that this server sends. Use the key of the wellknown ocmprovider." mapstructure:"signing_key" validate:"required"`
+}
+
+type webapp struct {
+	Name       string   `mapstructure:"name"`
+	MediaTypes []string `mapstructure:"media_types"`
 }
 
 type service struct {
@@ -86,6 +94,7 @@ type service struct {
 	repo        share.Repository
 	client      *ocmd.OCMClient
 	transferrer embedded.Transferrer
+	signingKey  *httpsig.Key
 }
 
 func (c *config) ApplyDefaults() {
@@ -123,8 +132,13 @@ func getEmbeddedTransferrer(ctx context.Context, c *config) (embedded.Transferre
 // New creates a new ocm share provider svc.
 func New(ctx context.Context, m map[string]any) (rgrpc.Service, error) {
 	var c config
-	if err := cfg.Decode(m, &c); err != nil {
+	decodeErr := cfg.Decode(m, &c)
+	// Offer validation is ordered before the required_if decode error.
+	if err := c.validateWebappOffer(); err != nil {
 		return nil, err
+	}
+	if decodeErr != nil {
+		return nil, decodeErr
 	}
 
 	repo, err := getShareRepository(ctx, &c)
@@ -137,12 +151,18 @@ func New(ctx context.Context, m map[string]any) (rgrpc.Service, error) {
 		return nil, err
 	}
 
+	key, err := httpsig.LoadKey(c.SigningKey)
+	if err != nil {
+		return nil, err
+	}
+
 	ocmcl := ocmd.NewClient(time.Duration(c.ClientTimeout)*time.Second, c.ClientInsecure)
 	service := &service{
 		conf:        &c,
 		repo:        repo,
 		client:      ocmcl,
 		transferrer: transferrer,
+		signingKey:  key,
 	}
 
 	return service, nil
@@ -198,50 +218,6 @@ func (s *service) getWebdavProtocol(share *ocm.Share, m *ocm.AccessMethod_Webdav
 	}
 }
 
-// webappURL builds the webapp protocol URI advertised to the recipient.
-// Per the OCM spec the webapp `uri` MUST be absolute (including a hostname), so
-// WebAppEndpoint must be configured as an absolute URL (scheme + host). The
-// share token is deliberately NOT embedded here: the spec requires the
-// sharedSecret to be carried separately and MUST NOT appear in any URI; it is
-// exchanged via must-exchange-token instead.
-func (s *service) webappURL(share *ocm.Share) string {
-	p, _ := url.JoinPath(s.conf.WebAppEndpoint, share.Id.OpaqueId)
-	return p
-}
-
-func (s *service) getWebappProtocol(ocmShare *ocm.Share, m *ocm.AccessMethod_WebappOptions) *ocmd.Webapp {
-	var perms []string
-	if m.WebappOptions.GetPermissions().GetInitiateFileDownload() {
-		perms = append(perms, "read")
-	} else {
-		perms = append(perms, "view")
-	}
-	if m.WebappOptions.GetPermissions().GetInitiateFileUpload() {
-		perms = append(perms, "write")
-	}
-	if m.WebappOptions.GetPermissions().GetAddGrant() {
-		perms = append(perms, "share")
-	}
-
-	// requirements are required by the OCM specifications: fall back to the
-	// defaults for shares created before these were stored.
-	reqs := m.WebappOptions.Requirements
-	if len(reqs) == 0 {
-		reqs = share.DefaultWebappRequirements
-	}
-
-	targets := share.DefaultWebappTargets
-
-	return &ocmd.Webapp{
-		URI:          s.webappURL(ocmShare),
-		SharedSecret: ocmShare.Token,
-		Permissions:  perms,
-		Requirements: reqs,
-		Targets:      targets,
-		AppName:      m.WebappOptions.AppName,
-	}
-}
-
 // walk traverses the path recursively to discover all resources in the tree.
 func (s *service) walk(ctx context.Context, path string, fn walker.WalkFunc) error {
 	gw, err := revaservice.Gateway(ctx)
@@ -252,16 +228,15 @@ func (s *service) walk(ctx context.Context, path string, fn walker.WalkFunc) err
 }
 
 // return the protocols that can be used by remote users to access a local OCM share.
-func (s *service) getProtocols(ctx context.Context, share *ocm.Share, include_webapp bool) ocmd.Protocols {
+// Access methods are already normalized.
+func (s *service) getProtocols(share *ocm.Share, apps []webapp) ocmd.Protocols {
 	var p ocmd.Protocols
 	for _, m := range share.AccessMethods {
 		switch t := m.Term.(type) {
 		case *ocm.AccessMethod_WebdavOptions:
 			p = append(p, s.getWebdavProtocol(share, t))
 		case *ocm.AccessMethod_WebappOptions:
-			if include_webapp {
-				p = append(p, s.getWebappProtocol(share, t))
-			}
+			p = append(p, s.getWebappProtocol(share, t, apps))
 		}
 	}
 	return p
@@ -322,7 +297,6 @@ func (s *service) CreateOCMShare(ctx context.Context, req *ocm.CreateOCMShareReq
 		Ctime:         ts,
 		Mtime:         ts,
 		Expiration:    req.Expiration,
-		AccessMethods: req.AccessMethods,
 	}
 
 	// Since the share is persisted only after the remote server has accepted it,
@@ -408,6 +382,23 @@ func (s *service) CreateOCMShare(ctx context.Context, req *ocm.CreateOCMShareReq
 		}
 	}
 
+	apps := s.webappsFor(info)
+	methods, err := s.freshAccessMethods(ctx, req.AccessMethods, apps, webapp_supported, token_exchange_supported)
+	if err != nil {
+		return &ocm.CreateOCMShareResponse{
+			Status: status.NewInvalidArg(ctx, invalidShareAccessMethodsText),
+		}, nil
+	}
+	ocmshare.AccessMethods = methods
+
+	// An empty normalized protocol list fails before NewShare.
+	protocols := s.getProtocols(ocmshare, apps)
+	if len(protocols) == 0 {
+		return &ocm.CreateOCMShareResponse{
+			Status: status.NewInvalidArg(ctx, webappOnlyNoProtocolText),
+		}, nil
+	}
+
 	// prepare the request to be sent to the remote OCM server
 	newShareReq := &ocmd.NewShareRequest{
 		ShareWith:  formatOCMUser(req.Grantee.GetUserId()),
@@ -424,14 +415,14 @@ func (s *service) CreateOCMShare(ctx context.Context, req *ocm.CreateOCMShareReq
 		SenderDisplayName: user.DisplayName,
 		ShareType:         "user",
 		ResourceType:      resType,
-		Protocols:         s.getProtocols(ctx, ocmshare, webapp_supported && token_exchange_supported),
+		Protocols:         protocols,
 	}
 
 	if req.Expiration != nil {
 		newShareReq.Expiration = req.Expiration.Seconds
 	}
 
-	newShareRes, err := s.client.NewShare(ctx, ocmEndpoint, newShareReq)
+	newShareRes, err := s.client.NewShare(ctx, ocmEndpoint, newShareReq, s.signingKey)
 	if err != nil {
 		switch {
 		case errors.Is(err, ocmd.ErrInvalidParameters):

@@ -26,6 +26,7 @@ import (
 	"os"
 	"os/exec"
 	"path"
+	"regexp"
 	"strconv"
 	"strings"
 	"time"
@@ -121,6 +122,25 @@ func main() {
 		os.Exit(1)
 	}
 
+	publiccode, err := os.ReadFile("publiccode.yaml")
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "error reading publiccode.yaml: %s", err)
+		os.Exit(1)
+	}
+	// Replace only these lines: a YAML round trip would reformat the whole file.
+	for key, value := range map[string]string{"softwareVersion": *version, "releaseDate": date} {
+		re := regexp.MustCompile(`(?m)^` + key + `: .*$`)
+		if !re.Match(publiccode) {
+			fmt.Fprintf(os.Stderr, "publiccode.yaml has no %s key", key)
+			os.Exit(1)
+		}
+		publiccode = re.ReplaceAll(publiccode, []byte(fmt.Sprintf("%s: %q", key, value)))
+	}
+	if err := os.WriteFile("publiccode.yaml", publiccode, 0644); err != nil {
+		fmt.Fprintf(os.Stderr, "error writing to publiccode.yaml: %s", err)
+		os.Exit(1)
+	}
+
 	tmp, err := os.MkdirTemp("", "reva-changelog")
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "error creating tmp directory to store changelog: %s", err)
@@ -176,12 +196,19 @@ description: >
 		os.Exit(1)
 	}
 
+	// The docs show VERSION, RELEASE_DATE and the new changelog page, so
+	// generate them only after these are written.
+	cmd = exec.Command("make", "gen-doc-contributors")
+	run(cmd)
+
 	add(fmt.Sprintf("v%s", *version),
 		"changelog",
 		"CHANGELOG.md",
 		"VERSION",
 		"RELEASE_DATE",
+		"publiccode.yaml",
 		"docs/content/",
+		"docs/data/generated/",
 	)
 
 	if *commit {

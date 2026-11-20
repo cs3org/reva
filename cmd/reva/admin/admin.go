@@ -17,85 +17,40 @@
 // or submit itself to any jurisdiction.
 
 // Package admin is the `reva admin` CLI: the operator surface for a running
-// reva fleet. It is a self-contained sub-CLI — the top-level reva command hands
-// it the transport flags and access to the persisted admin/login state through
-// Options, and calls Dispatch.
+// reva fleet.
 package admin
 
 import (
-	"fmt"
-	"strings"
+	"github.com/cs3org/reva/v3/cmd/reva/internal/cli"
+	"github.com/spf13/cobra"
 )
 
-// Options carries what the admin CLI needs from the top-level reva command: the
-// transport flags and access to the persisted admin host and login token.
-type Options struct {
-	Insecure         bool
-	SkipVerify       bool
-	AdminHost        func() string          // the stored admin host, "" if unset
-	PersistAdminHost func(string)           // persist a new admin host
-	LoginToken       func() (string, error) // the caller's login token, for elevate
-}
+// rt is set once by Command. The CLI runs one command per process, so a
+// package var is enough.
+var rt *cli.Runtime
 
-// cliOpts is set once per Dispatch. The CLI runs one command per process, so a
-// package var mirrors the top-level command's own flag globals.
-var cliOpts Options
-
-// adminCommands is the sub-table dispatched by Dispatch.
-var adminCommands = []*command{
-	adminElevateCommand(),
-	adminServicesCommand(),
-	adminConfigCommand(),
-	adminInvocationsCommand(),
-	adminInvokeCommand(),
-	adminLogsCommand(),
-	adminJobsCommand(),
-	adminTraceCommand(),
-	adminStackCommand(),
-	adminImpersonateCommand(),
-}
-
-// Dispatch runs `admin <subcommand> [flags] [args]`; args is everything after
-// "admin". It is the single entry point the top-level reva command calls.
-func Dispatch(args []string, o Options) error {
-	cliOpts = o
-	if len(args) == 0 {
-		printUsage()
-		return nil
+// Command returns the `admin` command tree.
+func Command(r *cli.Runtime) *cobra.Command {
+	rt = r
+	cmd := &cobra.Command{
+		Use:   "admin",
+		Short: "Administer the reva fleet",
+		Long: "Administer the reva fleet through the admin endpoint.\n\n" +
+			"Without --admin-host, the commands first try the local admin socket\n" +
+			"(/run/reva/admin.sock or $XDG_RUNTIME_DIR/reva/admin.sock), then the stored admin host.",
 	}
-	name := args[0]
-	for _, sub := range adminCommands {
-		if sub.Name == name {
-			if err := sub.Parse(args[1:]); err != nil {
-				return err
-			}
-			defer sub.ResetFlags()
-			return sub.Action()
-		}
-	}
-	return fmt.Errorf("unknown admin subcommand %q; run `admin` to list them", name)
-}
-
-func printUsage() {
-	fmt.Println("Usage: admin <subcommand> [flags] [args]")
-	fmt.Println("Subcommands:")
-	n := 0
-	for _, sub := range adminCommands {
-		if len(sub.Name) > n {
-			n = len(sub.Name)
-		}
-	}
-	for _, sub := range adminCommands {
-		fmt.Printf("  %s%s%s\n", sub.Name, strings.Repeat(" ", 2+(n-len(sub.Name))), sub.Description())
-	}
-}
-
-// Subcommands returns the admin subcommands' names and descriptions, for the
-// top-level shell completer.
-func Subcommands() [][2]string {
-	out := make([][2]string, 0, len(adminCommands))
-	for _, c := range adminCommands {
-		out = append(out, [2]string{c.Name, c.Description()})
-	}
-	return out
+	cmd.PersistentFlags().StringVar(&r.AdminHost, "admin-host", "", "address of the admin gRPC endpoint (env REVA_ADMIN_HOST)")
+	cmd.AddCommand(
+		elevateCommand(),
+		servicesCommand(),
+		configCommand(),
+		invocationsCommand(),
+		invokeCommand(),
+		logsCommand(),
+		jobsCommand(),
+		traceCommand(),
+		stackCommand(),
+		impersonateCommand(),
+	)
+	return cmd
 }

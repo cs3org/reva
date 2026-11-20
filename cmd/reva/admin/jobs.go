@@ -22,7 +22,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"io"
 	"os"
 	"sort"
 	"strconv"
@@ -31,86 +30,114 @@ import (
 	"time"
 
 	"github.com/cs3org/reva/v3/pkg/admin/adminpb"
+	"github.com/spf13/cobra"
 )
 
-const jobsHelp = `admin jobs — inspect and drive the background jobs runner
-
-Subcommands:
-  jobs list                     registered jobs and their live status (fan-out)
-  jobs active                   the runs executing right now, per node (fan-out)
-  jobs runs                     durable run history from the store
-  jobs status <run-id>          one run's full status
-  jobs logs <run-id>            one run's recent log lines, from every service it called (fan-out)
-  jobs -job <name> logs         the recent log lines of every run of a job (fan-out)
-  jobs run <job> [k=v ...]      enqueue an on-demand run
-  jobs trigger <job>            run a periodic job now
-  jobs cancel <run-id>          cancel a run
-  jobs stop <job>               cancel a periodic job's in-flight run
-  jobs forget <job>             drop the queue state of a removed job
-
-Flags (before the subcommand):
-  -admin-host <addr>   admin gRPC endpoint, persisted
-  -owner <user>        runs: filter by owner; run: attribute the run to a user
-  -job <name>          runs: filter by job; logs: show this job
-  -state <s,...>       runs: filter by states (queued,running,succeeded,failed,cancelled,aborted)
-  -internal            runs: only internal (ownerless) runs
-  -n <N>               runs: max rows; logs: lines per instance (default 50)
-  -f                   logs: follow (a run until it succeeds or is cancelled, a job until interrupted)
-  -o <text|json>       logs: output format (default text)
-`
-
-func adminJobsCommand() *command {
-	cmd := newCommand("jobs")
-	cmd.Description = func() string { return "inspect and drive the background jobs runner" }
-	cmd.Usage = func() string { return "Usage: admin jobs <list|active|runs|status|logs|run|trigger|cancel|stop|forget> ..." }
-	cmd.FlagSet.Usage = func() { fmt.Fprint(cmd.Output(), jobsHelp) }
-	adminHost := cmd.String("admin-host", "", "address of the admin gRPC endpoint (persisted)")
-	owner := cmd.String("owner", "", "runs: filter by owner; run: attribute to a user")
-	jobFilter := cmd.String("job", "", "runs: filter by job; logs: show this job")
-	stateFilter := cmd.String("state", "", "runs: filter by states (comma-separated)")
-	internal := cmd.Bool("internal", false, "runs: only internal (ownerless) runs")
-	n := cmd.Int("n", 50, "runs: max rows; logs: lines per instance")
-	follow := cmd.Bool("f", false, "logs: follow until the run succeeds or is cancelled")
-	output := cmd.String("o", "text", "logs: output format: text | json")
-	cmd.ResetFlags = func() {
-		*adminHost, *owner, *jobFilter, *stateFilter, *internal, *n = "", "", "", "", false, 50
-		*follow, *output = false, "text"
-	}
-	cmd.Action = func(w ...io.Writer) error {
-		if cmd.NArg() < 1 {
-			fmt.Print(jobsHelp)
-			return nil
-		}
-		client, ctx, err := adminDial(*adminHost)
-		if err != nil {
-			return err
-		}
-		sub, rest := cmd.Args()[0], cmd.Args()[1:]
-		switch sub {
-		case "list":
-			return jobsList(ctx, client)
-		case "active":
-			return jobsActive(ctx, client)
-		case "runs":
-			return jobsRuns(ctx, client, *jobFilter, *owner, *stateFilter, *internal, int32(*n))
-		case "status":
-			return jobsStatus(ctx, client, rest)
-		case "logs":
-			return jobsLogs(ctx, client, rest, *jobFilter, *n, *follow, *output)
-		case "run":
-			return jobsRun(ctx, client, rest, *owner)
-		case "trigger":
-			return jobsSimple(ctx, client, "trigger", rest)
-		case "cancel":
-			return jobsCancel(ctx, client, rest)
-		case "stop":
-			return jobsSimple(ctx, client, "stop", rest)
-		case "forget":
-			return jobsSimple(ctx, client, "forget", rest)
-		default:
-			return fmt.Errorf("unknown jobs subcommand %q; run `admin jobs` for help", sub)
+func jobsCommand() *cobra.Command {
+	cmd := &cobra.Command{Use: "jobs", Short: "Inspect and drive the background jobs runner"}
+	// run wraps the subcommands that need only the client.
+	run := func(f func(ctx context.Context, client adminpb.AdminAPIClient, args []string) error) func(*cobra.Command, []string) error {
+		return func(cmd *cobra.Command, args []string) error {
+			client, ctx, err := adminDial(cmd)
+			if err != nil {
+				return err
+			}
+			return f(ctx, client, args)
 		}
 	}
+
+	var runsJob, runsOwner, runsState string
+	var runsInternal bool
+	var runsLimit int32
+	runs := &cobra.Command{
+		Use:   "runs",
+		Short: "Show the durable run history from the store",
+		Args:  cobra.NoArgs,
+		RunE: run(func(ctx context.Context, client adminpb.AdminAPIClient, _ []string) error {
+			return jobsRuns(ctx, client, runsJob, runsOwner, runsState, runsInternal, runsLimit)
+		}),
+	}
+	runs.Flags().StringVar(&runsJob, "job", "", "only the runs of this job")
+	runs.Flags().StringVar(&runsOwner, "owner", "", "only the runs of this owner")
+	runs.Flags().StringVar(&runsState, "state", "", "only these states, comma-separated (queued,running,succeeded,failed,cancelled,aborted)")
+	runs.Flags().BoolVar(&runsInternal, "internal", false, "only internal (ownerless) runs")
+	runs.Flags().Int32VarP(&runsLimit, "limit", "n", 50, "max rows")
+
+	var logsJob string
+	var logsLines int
+	var logsFollow bool
+	logs := &cobra.Command{
+		Use:   "logs [<run-id>]",
+		Short: "Show the recent log lines of a run, or of every run of a job with --job",
+		Long: "Show the recent log lines of a run, from every service it called.\n" +
+			"With --job, show the lines of every run of that job.",
+		Args: cobra.MaximumNArgs(1),
+		RunE: run(func(ctx context.Context, client adminpb.AdminAPIClient, args []string) error {
+			return jobsLogs(ctx, client, args, logsJob, logsLines, logsFollow, rt.Output)
+		}),
+	}
+	logs.Flags().StringVar(&logsJob, "job", "", "show the runs of this job")
+	logs.Flags().IntVarP(&logsLines, "lines", "n", 50, "lines per instance")
+	logs.Flags().BoolVarP(&logsFollow, "follow", "f", false, "follow (a run until it succeeds or is cancelled, a job until interrupted)")
+
+	var runOwner string
+	runJob := &cobra.Command{
+		Use:   "run <job> [key=val ...]",
+		Short: "Enqueue an on-demand run",
+		Args:  cobra.MinimumNArgs(1),
+		RunE: run(func(ctx context.Context, client adminpb.AdminAPIClient, args []string) error {
+			return jobsRun(ctx, client, args, runOwner)
+		}),
+	}
+	runJob.Flags().StringVar(&runOwner, "owner", "", "attribute the run to this user")
+
+	simple := func(op, use, short string) *cobra.Command {
+		return &cobra.Command{
+			Use:   op + " " + use,
+			Short: short,
+			Args:  cobra.ExactArgs(1),
+			RunE: run(func(ctx context.Context, client adminpb.AdminAPIClient, args []string) error {
+				return jobsSimple(ctx, client, op, args)
+			}),
+		}
+	}
+
+	cmd.AddCommand(
+		&cobra.Command{
+			Use:   "list",
+			Short: "List the registered jobs and their live status",
+			Args:  cobra.NoArgs,
+			RunE: run(func(ctx context.Context, client adminpb.AdminAPIClient, _ []string) error {
+				return jobsList(ctx, client)
+			}),
+		},
+		&cobra.Command{
+			Use:   "active",
+			Short: "Show the runs executing right now, per node",
+			Args:  cobra.NoArgs,
+			RunE: run(func(ctx context.Context, client adminpb.AdminAPIClient, _ []string) error {
+				return jobsActive(ctx, client)
+			}),
+		},
+		runs,
+		&cobra.Command{
+			Use:   "status <run-id>",
+			Short: "Show the full status of one run",
+			Args:  cobra.ExactArgs(1),
+			RunE:  run(jobsStatus),
+		},
+		logs,
+		runJob,
+		simple("trigger", "<job>", "Run a periodic job now"),
+		&cobra.Command{
+			Use:   "cancel <run-id>",
+			Short: "Cancel a run",
+			Args:  cobra.ExactArgs(1),
+			RunE:  run(jobsCancel),
+		},
+		simple("stop", "<job>", "Cancel the in-flight run of a periodic job"),
+		simple("forget", "<job>", "Drop the queue state of a removed job"),
+	)
 	return cmd
 }
 
@@ -207,9 +234,6 @@ func jobsRuns(ctx context.Context, client adminpb.AdminAPIClient, job, owner, st
 }
 
 func jobsStatus(ctx context.Context, client adminpb.AdminAPIClient, args []string) error {
-	if len(args) < 1 {
-		return errors.New("Usage: admin jobs status <run-id>")
-	}
 	r, err := client.GetJobRun(ctx, &adminpb.GetJobRunRequest{RunId: args[0]})
 	if err != nil {
 		return adminErr(err)
@@ -236,10 +260,7 @@ func jobsStatus(ctx context.Context, client adminpb.AdminAPIClient, args []strin
 
 func jobsLogs(ctx context.Context, client adminpb.AdminAPIClient, args []string, job string, limit int, follow bool, output string) error {
 	if (len(args) < 1) == (job == "") {
-		return errors.New("Usage: admin jobs [-f] [-n N] [-o text|json] logs <run-id>\n       admin jobs [-f] [-n N] [-o text|json] -job <name> logs")
-	}
-	if output != "text" && output != "json" {
-		return fmt.Errorf("unknown -o %q (use text or json)", output)
+		return errors.New("pass a run id or --job, not both")
 	}
 	if job != "" {
 		logArgs := map[string]string{"limit": strconv.Itoa(limit), "job": job}
@@ -287,9 +308,6 @@ func stopWhenRunEnds(ctx context.Context, cancel context.CancelFunc, client admi
 }
 
 func jobsRun(ctx context.Context, client adminpb.AdminAPIClient, args []string, owner string) error {
-	if len(args) < 1 {
-		return errors.New("Usage: admin jobs run [-owner U] <job> [key=val ...]")
-	}
 	resp, err := client.EnqueueJob(ctx, &adminpb.EnqueueJobRequest{
 		Job:    args[0],
 		Owner:  owner,
@@ -303,9 +321,6 @@ func jobsRun(ctx context.Context, client adminpb.AdminAPIClient, args []string, 
 }
 
 func jobsCancel(ctx context.Context, client adminpb.AdminAPIClient, args []string) error {
-	if len(args) < 1 {
-		return errors.New("Usage: admin jobs cancel <run-id>")
-	}
 	r, err := client.CancelJobRun(ctx, &adminpb.CancelJobRunRequest{RunId: args[0]})
 	if err != nil {
 		return adminErr(err)
@@ -317,9 +332,6 @@ func jobsCancel(ctx context.Context, client adminpb.AdminAPIClient, args []strin
 // jobsSimple handles the job-name mutations with no interesting result: trigger,
 // stop and forget.
 func jobsSimple(ctx context.Context, client adminpb.AdminAPIClient, op string, args []string) error {
-	if len(args) < 1 {
-		return fmt.Errorf("Usage: admin jobs %s <job>", op)
-	}
 	var err error
 	switch op {
 	case "trigger":

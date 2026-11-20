@@ -561,7 +561,7 @@ func (m *ShareMgr) getShare(ctx context.Context, ref *collaboration.ShareReferen
 // Get Share by ID. Does not return orphans if filter is set to true.
 func (m *ShareMgr) getShareByID(_ context.Context, id *collaboration.ShareId, filter bool) (*model.Share, error) {
 	var share model.Share
-	res := m.db.First(&share, id.OpaqueId)
+	res := m.db.First(&share, "id = ?", id.OpaqueId)
 
 	if res.RowsAffected == 0 {
 		return nil, errtypes.NotFound(id.OpaqueId)
@@ -726,8 +726,9 @@ func (m *ShareMgr) getUserType(ctx context.Context, username string) (userpb.Use
 		return userpb.UserType_USER_TYPE_PRIMARY, err
 	}
 	userRes, err := client.GetUserByClaim(ctx, &userpb.GetUserByClaimRequest{
-		Claim: "username",
-		Value: username,
+		Claim:                  "username",
+		Value:                  username,
+		SkipFetchingUserGroups: true,
 	})
 	if err != nil {
 		return userpb.UserType_USER_TYPE_PRIMARY, errors.Wrapf(err, "error getting user by username '%v'", username)

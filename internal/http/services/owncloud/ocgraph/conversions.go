@@ -111,8 +111,6 @@ func (s *svc) handleLinkShare(ctx context.Context, share *GenericShare) (*libreg
 		expTime = *nilTime
 	}
 
-	webUrl, _ := url.JoinPath(s.c.BaseURL, "/s", share.link.GetToken())
-
 	perm := &libregraph.Permission{
 		Id:                 libregraph.PtrString(share.ID),
 		ExpirationDateTime: expTime,
@@ -122,7 +120,7 @@ func (s *svc) handleLinkShare(ctx context.Context, share *GenericShare) (*libreg
 			Type:                  lt,
 			LibreGraphDisplayName: libregraph.PtrString(share.link.GetDisplayName()),
 			LibreGraphQuickLink:   libregraph.PtrBool(share.link.GetQuicklink()),
-			WebUrl:                libregraph.PtrString(webUrl),
+			WebUrl:                libregraph.PtrString(share.link.GetUrl()),
 		},
 		LibreGraphPermissionsActions: actions,
 	}
@@ -476,6 +474,17 @@ func (s *svc) OCMReceivedShareToDriveItem(ctx context.Context, receivedOCMShare 
 	return converter.OCMReceivedShareToDriveItem(ctx, receivedOCMShare, roleConverter)
 }
 
+// receivedShareWebappMetadata returns the webapp protocol of a received share.
+// The OCM schema allows only one, and the receive path rejects more.
+func receivedShareWebappMetadata(received *ocm.ReceivedShare) *ocm.WebappProtocol {
+	for _, p := range received.GetProtocols() {
+		if w := p.GetWebappOptions(); w != nil {
+			return w
+		}
+	}
+	return nil
+}
+
 func (s *svc) cs3sharesToPermissions(ctx context.Context, shares []*GenericShare) ([]libregraph.Permission, error) {
 	log := appctx.GetLogger(ctx)
 	permissions := make([]libregraph.Permission, 0, len(shares))
@@ -598,17 +607,10 @@ func (s *svc) toGrantee(ctx context.Context, recipientType string, id string) (*
 
 	switch recipientType {
 	case "user":
-		userRes, err := gw.GetUserByClaim(ctx, &user.GetUserByClaimRequest{
-			Claim:                  "username",
-			Value:                  id,
-			SkipFetchingUserGroups: true,
-		})
-		if err != nil || userRes.Status == nil || userRes.Status.Code != rpcv1beta1.Code_CODE_OK {
-			return nil, errors.New("failed to fetch sharee data")
-		}
+		// The gateway looks the user up when it creates the share and fills in the rest of the id.
 		return &provider.Grantee{
 			Type: provider.GranteeType_GRANTEE_TYPE_USER,
-			Id:   &provider.Grantee_UserId{UserId: userRes.User.GetId()},
+			Id:   &provider.Grantee_UserId{UserId: &user.UserId{OpaqueId: id}},
 		}, nil
 	case "group":
 		groupRes, err := gw.GetGroupByClaim(ctx, &group.GetGroupByClaimRequest{

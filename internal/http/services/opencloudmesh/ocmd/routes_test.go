@@ -22,6 +22,7 @@ import (
 	"testing"
 
 	"github.com/cs3org/reva/v3/internal/http/services/wellknown"
+	"github.com/cs3org/reva/v3/pkg/rhttp/router"
 )
 
 func TestDiscoveryTokenEndpointMatchesRoutePath(t *testing.T) {
@@ -36,11 +37,13 @@ func TestDiscoveryTokenEndpointMatchesRoutePath(t *testing.T) {
 
 func TestUnprotectedIncludesTokenPath(t *testing.T) {
 	s := &svc{}
-	paths := s.Unprotected()
+	r := router.New()
+	s.Routes(r)
+	paths := r.Unprotected()
 
 	count := 0
 	for _, p := range paths {
-		if p == tokenPath {
+		if p == mount+tokenPath {
 			count++
 		}
 	}

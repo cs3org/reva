@@ -37,6 +37,7 @@ import (
 	"github.com/cs3org/reva/v3/pkg/errtypes"
 	"github.com/cs3org/reva/v3/pkg/httpclient"
 	"github.com/cs3org/reva/v3/pkg/rhttp/global"
+	"github.com/cs3org/reva/v3/pkg/rhttp/router"
 	"github.com/cs3org/reva/v3/pkg/service"
 	"github.com/cs3org/reva/v3/pkg/sharedconf"
 	"github.com/cs3org/reva/v3/pkg/spaces"
@@ -55,7 +56,6 @@ type svc struct {
 
 // Config holds the config options that need to be passed down to all ocdav handlers.
 type Config struct {
-	Prefix         string   `mapstructure:"prefix"`
 	GatewaySvc     string   `mapstructure:"gatewaysvc"                                              validate:"required"`
 	Timeout        int64    `mapstructure:"timeout"`
 	Insecure       bool     `docs:"false;Whether to skip certificate checks when sending requests." mapstructure:"insecure"`
@@ -64,6 +64,9 @@ type Config struct {
 	MaxSize        int64    `mapstructure:"max_size"                                                validate:"required,gt=0"`
 	AllowedFolders []string `mapstructure:"allowed_folders"`
 }
+
+// mount is where the service is served.
+const mount = "/archiver"
 
 func init() {
 	global.Register("archiver", New)
@@ -97,9 +100,6 @@ func New(ctx context.Context, conf map[string]any) (global.Service, error) {
 }
 
 func (c *Config) ApplyDefaults() {
-	if c.Prefix == "" {
-		c.Prefix = "archiver"
-	}
 
 	if c.Name == "" {
 		c.Name = "download"
@@ -108,9 +108,9 @@ func (c *Config) ApplyDefaults() {
 	c.GatewaySvc = sharedconf.GetGatewaySVC(c.GatewaySvc)
 }
 
-func (s *svc) getFiles(ctx context.Context, files, ids []string) ([]string, error) {
-	if len(files) == 0 && len(ids) == 0 {
-		return nil, errtypes.BadRequest("file and id lists are both empty")
+func (s *svc) getFiles(ctx context.Context, ids []string) ([]string, error) {
+	if len(ids) == 0 {
+		return nil, errtypes.BadRequest("id list is empty")
 	}
 
 	gtw, err := service.Gateway(ctx)
@@ -118,7 +118,7 @@ func (s *svc) getFiles(ctx context.Context, files, ids []string) ([]string, erro
 		return nil, err
 	}
 
-	f := make([]string, 0, len(files)+len(ids))
+	f := make([]string, 0, len(ids))
 
 	for _, id := range ids {
 		// id is base64 encoded and after decoding has the form <storage_id>!<resource_id>
@@ -152,8 +152,6 @@ func (s *svc) getFiles(ctx context.Context, files, ids []string) ([]string, erro
 
 		f = append(f, resp.Info.Path)
 	}
-
-	f = append(f, files...)
 
 	// check if all the folders are allowed to be archived
 	err = s.allAllowed(f)
@@ -206,90 +204,78 @@ func (s *svc) writeHTTPError(ctx context.Context, w http.ResponseWriter, err err
 	_, _ = w.Write([]byte(err.Error()))
 }
 
-func (s *svc) Handler() http.Handler {
-	return http.HandlerFunc(func(rw http.ResponseWriter, r *http.Request) {
-		// get the paths and/or the resources id from the query
-		ctx := r.Context()
-
-		log := appctx.GetLogger(ctx)
-		v := r.URL.Query()
-
-		paths, ok := v["path"]
-		if !ok {
-			paths = []string{}
-		}
-		ids, ok := v["id"]
-		if !ok {
-			ids = []string{}
-		}
-
-		files, err := s.getFiles(ctx, paths, ids)
-		if err != nil {
-			s.writeHTTPError(ctx, rw, err)
-			return
-		}
-
-		gtw, err := service.Gateway(ctx)
-		if err != nil {
-			s.writeHTTPError(ctx, rw, err)
-			return
-		}
-
-		arch, err := manager.NewArchiver(files, walker.NewWalker(gtw), downloader.NewDownloader(gtw, s.httpClient), manager.Config{
-			MaxNumFiles: s.config.MaxNumFiles,
-			MaxSize:     s.config.MaxSize,
-		})
-		if err != nil {
-			s.writeHTTPError(ctx, rw, err)
-			return
-		}
-
-		archType := v.Get("arch_type") // optional, either "tar" or "zip"
-		if archType == "" || archType != "tar" && archType != "zip" {
-			// in case of missing or bogus arch_type, detect it via user-agent
-			userAgent := ua.Parse(r.Header.Get("User-Agent"))
-			if userAgent.OS == ua.Windows {
-				archType = "zip"
-			} else {
-				archType = "tar"
-			}
-		}
-
-		var archName string
-		if len(files) == 1 {
-			archName = strings.TrimSuffix(filepath.Base(files[0]), filepath.Ext(files[0])) + "." + archType
-		} else {
-			// TODO(lopresti) we may want to generate a meaningful name out of the list
-			archName = s.config.Name + "." + archType
-		}
-
-		log.Debug().Any("files", files).Msg("Requested files/folders to archive")
-
-		rw.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=\"%s\"", archName))
-		rw.Header().Set("Content-Transfer-Encoding", "binary")
-
-		// create the archive
-		if archType == "zip" {
-			err = arch.CreateZip(ctx, rw)
-		} else {
-			err = arch.CreateTar(ctx, rw)
-		}
-
-		if err != nil {
-			s.writeHTTPError(ctx, rw, err)
-			return
-		}
-	})
+// Routes declares the archiver endpoint. It takes the resources to bundle
+// from the query string, so the whole service is a single URL.
+func (s *svc) Routes(r *router.Router) {
+	r.Get(mount, s.handleGet)
 }
 
-func (s *svc) Prefix() string {
-	return s.config.Prefix
+func (s *svc) handleGet(rw http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+
+	log := appctx.GetLogger(ctx)
+	v := r.URL.Query()
+
+	// Only resource IDs are accepted. A client path is not clean, and the
+	// paths that storage returns for the IDs are.
+	files, err := s.getFiles(ctx, v["id"])
+	if err != nil {
+		s.writeHTTPError(ctx, rw, err)
+		return
+	}
+
+	gtw, err := service.Gateway(ctx)
+	if err != nil {
+		s.writeHTTPError(ctx, rw, err)
+		return
+	}
+
+	arch, err := manager.NewArchiver(files, walker.NewWalker(gtw), downloader.NewDownloader(gtw, s.httpClient), manager.Config{
+		MaxNumFiles: s.config.MaxNumFiles,
+		MaxSize:     s.config.MaxSize,
+	})
+	if err != nil {
+		s.writeHTTPError(ctx, rw, err)
+		return
+	}
+
+	archType := v.Get("arch_type") // optional, either "tar" or "zip"
+	if archType == "" || archType != "tar" && archType != "zip" {
+		// in case of missing or bogus arch_type, detect it via user-agent
+		userAgent := ua.Parse(r.Header.Get("User-Agent"))
+		if userAgent.OS == ua.Windows {
+			archType = "zip"
+		} else {
+			archType = "tar"
+		}
+	}
+
+	var archName string
+	if len(files) == 1 {
+		archName = strings.TrimSuffix(filepath.Base(files[0]), filepath.Ext(files[0])) + "." + archType
+	} else {
+		// TODO(lopresti) we may want to generate a meaningful name out of the list
+		archName = s.config.Name + "." + archType
+	}
+
+	log.Debug().Any("files", files).Msg("Requested files/folders to archive")
+
+	rw.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=\"%s\"", archName))
+	rw.Header().Set("Content-Transfer-Encoding", "binary")
+
+	// create the archive
+	if archType == "zip" {
+		err = arch.CreateZip(ctx, rw)
+	} else {
+		err = arch.CreateTar(ctx, rw)
+	}
+
+	if err != nil {
+		s.writeHTTPError(ctx, rw, err)
+		return
+	}
 }
 
 func (s *svc) Close() error {
-	return nil
-}
-
-func (s *svc) Unprotected() []string {
 	return nil
 }

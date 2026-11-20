@@ -34,10 +34,16 @@ import (
 	"github.com/cs3org/reva/v3/internal/http/services/owncloud/ocs/response"
 	"github.com/cs3org/reva/v3/pkg/appctx"
 	"github.com/cs3org/reva/v3/pkg/rhttp/global"
+	"github.com/cs3org/reva/v3/pkg/rhttp/router"
 	"github.com/cs3org/reva/v3/pkg/utils/cfg"
-	"github.com/go-chi/chi/v5"
 	"github.com/rs/zerolog"
 )
+
+// mount is where the OCS API is served.
+const mount = "/ocs"
+
+// apiVersions are the OCS api versions served, each under its own path.
+var apiVersions = []string{"1", "2"}
 
 func init() {
 	global.Register("ocs", New)
@@ -45,8 +51,14 @@ func init() {
 
 type svc struct {
 	c                  *config.Config
-	router             *chi.Mux
 	warmupCacheTracker *ttlcache.Cache
+
+	capabilities *capabilities.Handler
+	user         *user.Handler
+	users        *users.Handler
+	config       *configHandler.Handler
+	shares       *shares.Handler
+	sharees      *sharees.Handler
 }
 
 func New(ctx context.Context, m map[string]any) (global.Service, error) {
@@ -55,14 +67,10 @@ func New(ctx context.Context, m map[string]any) (global.Service, error) {
 		return nil, err
 	}
 
-	r := chi.NewRouter()
-	s := &svc{
-		c:      &c,
-		router: r,
-	}
+	s := &svc{c: &c}
 
 	log := appctx.GetLogger(ctx)
-	if err := s.routerInit(log); err != nil {
+	if err := s.handlersInit(log); err != nil {
 		return nil, err
 	}
 
@@ -74,90 +82,103 @@ func New(ctx context.Context, m map[string]any) (global.Service, error) {
 	return s, nil
 }
 
-func (s *svc) Prefix() string {
-	return s.c.Prefix
-}
-
 func (s *svc) Close() error {
 	return nil
 }
 
-func (s *svc) Unprotected() []string {
-	return []string{"/v1.php/cloud/capabilities", "/v2.php/cloud/capabilities"}
-}
+func (s *svc) handlersInit(l *zerolog.Logger) error {
+	s.capabilities = new(capabilities.Handler)
+	s.user = new(user.Handler)
+	s.users = new(users.Handler)
+	s.config = new(configHandler.Handler)
+	s.shares = new(shares.Handler)
+	s.sharees = new(sharees.Handler)
 
-func (s *svc) routerInit(l *zerolog.Logger) error {
-	capabilitiesHandler := new(capabilities.Handler)
-	userHandler := new(user.Handler)
-	usersHandler := new(users.Handler)
-	configHandler := new(configHandler.Handler)
-	sharesHandler := new(shares.Handler)
-	shareesHandler := new(sharees.Handler)
-	capabilitiesHandler.Init(s.c)
-	usersHandler.Init(s.c)
-	userHandler.Init(s.c)
-	configHandler.Init(s.c)
-	sharesHandler.Init(s.c, l)
-	shareesHandler.Init(s.c)
-
-	s.router.Route("/v{version:(1|2)}.php", func(r chi.Router) {
-		r.Use(response.VersionCtx)
-		r.Route("/apps/files_sharing/api/v1", func(r chi.Router) {
-			r.Route("/shares", func(r chi.Router) {
-				r.Get("/", sharesHandler.ListShares)
-				r.Options("/", func(w http.ResponseWriter, r *http.Request) {
-					w.WriteHeader(http.StatusOK)
-				})
-				r.Post("/", sharesHandler.CreateShare)
-				r.Route("/pending/{shareid}", func(r chi.Router) {
-					r.Post("/", sharesHandler.AcceptReceivedShare)
-					r.Delete("/", sharesHandler.RejectReceivedShare)
-				})
-				r.Route("/remote_shares", func(r chi.Router) {
-					r.Get("/", sharesHandler.ListFederatedShares)
-					r.Get("/{shareid}", sharesHandler.GetFederatedShare)
-				})
-				r.Get("/{shareid}", sharesHandler.GetShare)
-				r.Put("/{shareid}", sharesHandler.UpdateShare)
-				r.Post("/{shareid}/notify", sharesHandler.NotifyShare)
-				r.Delete("/{shareid}", sharesHandler.RemoveShare)
-			})
-			r.Get("/sharees", shareesHandler.FindSharees)
-		})
-
-		r.Get("/config", configHandler.GetConfig)
-
-		r.Route("/cloud", func(r chi.Router) {
-			r.Get("/capabilities", capabilitiesHandler.GetCapabilities)
-			r.Route("/user", func(r chi.Router) {
-				r.Get("/", userHandler.GetSelf)
-				r.Patch("/", userHandler.UpdateSelf)
-				r.Get("/signing-key", userHandler.SigningKey)
-				r.Get("/clients", userHandler.ListClients)
-				r.Delete("/clients/{cid}", userHandler.DeleteClient)
-				r.Get("/login-flow/{lt}", userHandler.LoginFlowInfo)
-				r.Post("/login-flow/{lt}/grant", userHandler.LoginFlowGrant)
-				r.Post("/login-flow/{lt}/deny", userHandler.LoginFlowDeny)
-			})
-			r.Route("/users", func(r chi.Router) {
-				r.Get("/{userid}", usersHandler.GetUsers)
-				r.Get("/{userid}/groups", usersHandler.GetGroups)
-			})
-		})
-	})
+	s.capabilities.Init(s.c)
+	s.users.Init(s.c)
+	s.user.Init(s.c)
+	s.config.Init(s.c)
+	s.shares.Init(s.c, l)
+	s.sharees.Init(s.c)
 	return nil
 }
 
-func (s *svc) Handler() http.Handler {
+// Routes declares the OCS API. The version is part of the path, so the tree is
+// declared once per supported version rather than matched with a wildcard.
+func (s *svc) Routes(r *router.Router) {
+	for _, version := range apiVersions {
+		r.Group(mount+"/v"+version+".php", func(r *router.Router) {
+			s.routes(r)
+		}, response.VersionCtx(version), s.warmup)
+	}
+}
+
+func (s *svc) routes(r *router.Router) {
+	r.Group("/apps/files_sharing/api/v1", func(r *router.Router) {
+		r.Group("/shares", func(r *router.Router) {
+			r.Get("/", s.shares.ListShares)
+			r.Options("/", func(w http.ResponseWriter, r *http.Request) {
+				w.WriteHeader(http.StatusOK)
+			})
+			r.Post("/", s.shares.CreateShare)
+
+			r.Get("/remote_shares", s.shares.ListFederatedShares)
+			r.Get("/remote_shares/{shareid}", s.shares.GetFederatedShare)
+
+			r.Get("/{shareid}", s.shares.GetShare)
+			r.Put("/{shareid}", s.shares.UpdateShare)
+			r.Delete("/{shareid}", s.shares.RemoveShare)
+			r.Post("/{shareid}/notify", s.shares.NotifyShare)
+
+			// /shares/pending/{shareid} and /shares/{shareid}/notify overlap on
+			// /shares/pending/notify, and neither is the more specific one, so
+			// ServeMux refuses to hold both. The pending subtree is therefore
+			// mounted: a mount is matched ahead of the patterns, which resolves
+			// the overlap the way it always resolved, with "pending" read as
+			// the literal it is.
+			r.Mount("/pending", s.pendingShares())
+		})
+		r.Get("/sharees", s.sharees.FindSharees)
+	})
+
+	r.Get("/config", s.config.GetConfig)
+
+	r.Group("/cloud", func(r *router.Router) {
+		r.Get("/capabilities", s.capabilities.GetCapabilities, router.Unprotected())
+		r.Group("/user", func(r *router.Router) {
+			r.Get("/", s.user.GetSelf)
+			r.Patch("/", s.user.UpdateSelf)
+			r.Get("/signing-key", s.user.SigningKey)
+			r.Get("/clients", s.user.ListClients)
+			r.Delete("/clients/{cid}", s.user.DeleteClient)
+			r.Get("/login-flow/{lt}", s.user.LoginFlowInfo)
+			r.Post("/login-flow/{lt}/grant", s.user.LoginFlowGrant)
+			r.Post("/login-flow/{lt}/deny", s.user.LoginFlowDeny)
+		})
+		r.Group("/users", func(r *router.Router) {
+			r.Get("/{userid}", s.users.GetUsers)
+			r.Get("/{userid}/groups", s.users.GetGroups)
+		})
+	})
+}
+
+// pendingShares serves the received share actions. Its patterns are absolute
+// because a mount hands the handler the request path as it arrived.
+func (s *svc) pendingShares() http.Handler {
+	m := http.NewServeMux()
+	for _, version := range apiVersions {
+		base := mount + "/v" + version + ".php/apps/files_sharing/api/v1/shares/pending/{shareid}"
+		m.HandleFunc(http.MethodPost+" "+base, s.shares.AcceptReceivedShare)
+		m.HandleFunc(http.MethodDelete+" "+base, s.shares.RejectReceivedShare)
+	}
+	return m
+}
+
+// warmup kicks off the share cache warmup for the user, which every OCS
+// request did before it was routed.
+func (s *svc) warmup(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		log := appctx.GetLogger(r.Context())
-		log.Debug().Str("path", r.URL.Path).Msg("ocs routing")
-
-		// Warmup the share cache for the user
 		go s.cacheWarmup(w, r)
-
-		// unset raw path, otherwise chi uses it to route and then fails to match percent encoded path segments
-		r.URL.RawPath = ""
-		s.router.ServeHTTP(w, r)
+		next.ServeHTTP(w, r)
 	})
 }

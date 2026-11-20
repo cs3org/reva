@@ -22,7 +22,10 @@ import (
 	"context"
 	"sync"
 
+	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	collaboration "github.com/cs3org/go-cs3apis/cs3/sharing/collaboration/v1beta1"
+	link "github.com/cs3org/go-cs3apis/cs3/sharing/link/v1beta1"
+	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	storageregistry "github.com/cs3org/go-cs3apis/cs3/storage/registry/v1beta1"
 	revaservice "github.com/cs3org/reva/v3/pkg/service"
 )
@@ -36,6 +39,9 @@ type testResolver struct {
 	mu       sync.Mutex
 	registry storageregistry.RegistryAPIClient
 	shares   collaboration.CollaborationAPIClient
+	links    link.LinkAPIClient
+	users    userpb.UserAPIClient
+	spaces   provider.SpacesAPIClient
 }
 
 func (r *testResolver) StorageRegistry(context.Context) (storageregistry.RegistryAPIClient, error) {
@@ -48,6 +54,24 @@ func (r *testResolver) UserShareProvider(context.Context) (collaboration.Collabo
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	return r.shares, nil
+}
+
+func (r *testResolver) PublicShareProvider(context.Context) (link.LinkAPIClient, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return r.links, nil
+}
+
+func (r *testResolver) UserProvider(context.Context) (userpb.UserAPIClient, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return r.users, nil
+}
+
+func (r *testResolver) Spaces(context.Context) (provider.SpacesAPIClient, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return r.spaces, nil
 }
 
 var (
@@ -65,5 +89,35 @@ func stampGatewayPeers(reg storageregistry.RegistryAPIClient, shares collaborati
 	globalTestResolver.mu.Lock()
 	globalTestResolver.registry = reg
 	globalTestResolver.shares = shares
+	globalTestResolver.mu.Unlock()
+}
+
+// stampPublicShareProvider points the test resolver at the given public share provider.
+func stampPublicShareProvider(links link.LinkAPIClient) {
+	globalTestResolverOnce.Do(func() {
+		revaservice.SetGlobal(globalTestResolver)
+	})
+	globalTestResolver.mu.Lock()
+	globalTestResolver.links = links
+	globalTestResolver.mu.Unlock()
+}
+
+// stampUserProvider points the test resolver at the given user provider.
+func stampUserProvider(users userpb.UserAPIClient) {
+	globalTestResolverOnce.Do(func() {
+		revaservice.SetGlobal(globalTestResolver)
+	})
+	globalTestResolver.mu.Lock()
+	globalTestResolver.users = users
+	globalTestResolver.mu.Unlock()
+}
+
+// stampSpaces points the test resolver at the given spaces registry.
+func stampSpaces(spaces provider.SpacesAPIClient) {
+	globalTestResolverOnce.Do(func() {
+		revaservice.SetGlobal(globalTestResolver)
+	})
+	globalTestResolver.mu.Lock()
+	globalTestResolver.spaces = spaces
 	globalTestResolver.mu.Unlock()
 }

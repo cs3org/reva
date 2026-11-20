@@ -1,0 +1,4 @@
+{{ define "main" }}
+{{- $body := partial "family-body.html" . }}
+{{- partial "docs-shell.html" (dict "page" . "body" $body) }}
+{{ end }}

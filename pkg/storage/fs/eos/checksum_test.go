@@ -53,11 +53,11 @@ func TestChecksumFromEOS(t *testing.T) {
 	}
 }
 
-// Leading zeros are part of the checksum: trimming them corrupted about one
-// adler32 in 256.
-func TestChecksumFromEOSKeepsLeadingZeros(t *testing.T) {
-	got := checksumFromEOS(&eosclient.Checksum{XSType: "adler32", XSSum: "0062d090"})
-	if got.Sum != "0062d090" {
-		t.Errorf("sum = %q, want 0062d090 with its leading zeros intact", got.Sum)
+// The desktop clients write adler32 without leading zeros and compare the
+// strings exactly.
+func TestChecksumFromEOSTrimsAdler32LeadingZeros(t *testing.T) {
+	got := checksumFromEOS(&eosclient.Checksum{XSType: "adler32", XSSum: "0b045ef6"})
+	if got.Sum != "b045ef6" {
+		t.Errorf("sum = %q, want b045ef6 without leading zeros", got.Sum)
 	}
 }

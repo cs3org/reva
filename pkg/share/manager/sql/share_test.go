@@ -14,6 +14,7 @@ import (
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	typesv1beta1 "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
 	"github.com/cs3org/reva/v3/pkg/appctx"
+	"github.com/cs3org/reva/v3/pkg/errtypes"
 	"github.com/cs3org/reva/v3/pkg/permissions"
 	revashare "github.com/cs3org/reva/v3/pkg/share"
 	"google.golang.org/genproto/protobuf/field_mask"
@@ -143,6 +144,34 @@ func TestGetShareById(t *testing.T) {
 
 	if retrievedshare.Id.OpaqueId != share.Id.OpaqueId {
 		t.Errorf("Retrieved share does not match created share, expected %s, got %s", share.Id.OpaqueId, retrievedshare.Id.OpaqueId)
+	}
+}
+
+func TestGetShareByIdRejectsSQL(t *testing.T) {
+	mgr, err, teardown := setupSuiteShares(t)
+	defer teardown(t)
+
+	if err != nil {
+		t.Error(err)
+	}
+
+	userctx := getUserContext("123456")
+	user, _ := appctx.ContextGetUser(userctx)
+	file := getRandomFile(user)
+	sharegrant := getUserShareGrant("1000", "file")
+
+	if _, err := mgr.Share(userctx, file, sharegrant); err != nil {
+		t.Error(err)
+		t.FailNow()
+	}
+
+	_, err = mgr.GetShare(userctx, &collaboration.ShareReference{
+		Spec: &collaboration.ShareReference_Id{
+			Id: &collaboration.ShareId{OpaqueId: "0 OR 1=1"},
+		},
+	})
+	if _, ok := err.(errtypes.NotFound); !ok {
+		t.Errorf("expected NotFound for injected share id, got %v", err)
 	}
 }
 

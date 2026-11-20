@@ -214,6 +214,10 @@ func New(ctx context.Context, m map[string]any) (storage.FS, error) {
 		NobodyGID:     o.NobodyGID,     // Use configured nobody GID
 		ExternalUID:   o.ExternalAccountsUserUID,
 		ExternalGID:   o.ExternalAccountsUserGID,
+		MaxThreads:    o.MaxUserThreads,
+
+		MaxThreadsPerUser:  o.MaxThreadsPerUser,
+		MaxThreadsExternal: o.MaxThreadsExternal,
 	})
 	if err != nil {
 		return nil, errors.Wrap(err, "cephmount: failed to initialize user thread pool")
@@ -449,7 +453,14 @@ func (fs *cephmountfs) fileAsResourceInfo(ctx context.Context, path string, info
 		OpaqueId: strconv.FormatUint(stat.Ino, 10),
 	}
 
-	owner, _ := user.LookupId(fmt.Sprint(stat.Uid))
+	// A uid without an account on this node, such as a deleted user, can still
+	// own files. Like the eos driver, leave the owner empty, so the listing works.
+	var owner *userv1beta1.UserId
+	if u, err := user.LookupId(fmt.Sprint(stat.Uid)); err == nil {
+		owner = &userv1beta1.UserId{OpaqueId: u.Username}
+	} else {
+		appctx.GetLogger(ctx).Debug().Uint32("uid", stat.Uid).Err(err).Msg("cephmount: cannot find the owner, leaving it empty")
+	}
 
 	externalPath := fs.fromChroot(path)
 
@@ -491,7 +502,7 @@ func (fs *cephmountfs) fileAsResourceInfo(ctx context.Context, path string, info
 		// even though the resource itself is addressed by path or id.
 		Name:              filepath.Base(externalPath),
 		Etag:              calcEtag(info, stat, rctime),
-		Owner:             &userv1beta1.UserId{OpaqueId: owner.Username},
+		Owner:             owner,
 		PermissionSet:     perms,
 		ArbitraryMetadata: &provider.ArbitraryMetadata{Metadata: map[string]string{}},
 	}
@@ -941,10 +952,6 @@ func (fs *cephmountfs) ListFolder(ctx context.Context, ref *provider.Reference, 
 }
 
 func (fs *cephmountfs) Download(ctx context.Context, ref *provider.Reference, ranges []storage.Range) (rc io.ReadCloser, err error) {
-	if len(ranges) > 0 {
-		return nil, errtypes.NotSupported("Download with ranges is not supported with this storage driver")
-	}
-
 	// Capture the original received path for logging
 	var receivedPath string
 	if ref != nil && ref.Path != "" {
@@ -975,7 +982,20 @@ func (fs *cephmountfs) Download(ctx context.Context, ref *provider.Reference, ra
 		return nil, wrappedErr
 	}
 
-	return file, nil
+	if len(ranges) == 0 {
+		return file, nil
+	}
+
+	// The download handler expects the ranges one after the other in a single stream.
+	// A section reads with ReadAt, so it does not depend on the offset of the file.
+	parts := make([]io.Reader, 0, len(ranges))
+	for _, r := range ranges {
+		parts = append(parts, io.NewSectionReader(file, r.Start, r.Length))
+	}
+	return struct {
+		io.Reader
+		io.Closer
+	}{io.MultiReader(parts...), file}, nil
 }
 
 // Upload handles file uploads to the local filesystem

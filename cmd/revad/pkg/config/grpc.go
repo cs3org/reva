@@ -78,7 +78,7 @@ func (c *Config) parseGRPC(raw map[string]any) error {
 	for _, svc := range c.GRPC.Services {
 		for _, cfg := range svc {
 			cfg.Address = addressForService(c.GRPC.Address, cfg.Config)
-			cfg.Network = networkForService(c.HTTP.Network, cfg.Config)
+			cfg.Network = networkForService(c.GRPC.Network, cfg.Config)
 		}
 	}
 	return nil

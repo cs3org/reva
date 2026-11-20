@@ -23,11 +23,14 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+
+	"github.com/cs3org/reva/v3/pkg/rhttp/router"
 )
 
 func TestIngressRoutesAreRateLimited(t *testing.T) {
 	s, err := New(context.Background(), map[string]any{
 		"gatewaysvc":              "localhost:19000",
+		"endpoint":                "https://cernbox.example.org",
 		"token_managers":          map[string]any{"jwt": map[string]any{"secret": "test-secret"}},
 		"unauth_rate_limit":       1,
 		"unauth_rate_limit_burst": 1,
@@ -37,17 +40,20 @@ func TestIngressRoutesAreRateLimited(t *testing.T) {
 	}
 	t.Cleanup(func() { _ = s.Close() })
 
+	r := router.New()
+	s.Routes(r.Service("ocmd"))
+
 	// The limiter runs before the handlers, so a rejected request never
 	// reaches them; every ingress route shares the client's bucket.
 	post := func(path string) int {
-		req := httptest.NewRequest(http.MethodPost, path, nil)
+		req := httptest.NewRequest(http.MethodPost, mount+path, nil)
 		req.RemoteAddr = "203.0.113.7:1000"
 		rec := httptest.NewRecorder()
-		s.Handler().ServeHTTP(rec, req)
+		r.ServeHTTP(rec, req)
 		return rec.Code
 	}
-	if got := post("/no-such-route"); got != http.StatusNotFound {
-		t.Fatalf("first request: got %d, want 404", got)
+	if got := post(sharesPath); got == http.StatusTooManyRequests {
+		t.Fatal("first request: got 429, want the bucket to allow it through")
 	}
 	for _, p := range []string{sharesPath, inviteAcceptedPath, notificationsPath, tokenPath} {
 		if got := post(p); got != http.StatusTooManyRequests {
@@ -59,6 +65,7 @@ func TestIngressRoutesAreRateLimited(t *testing.T) {
 func TestInvalidTrustedProxyFailsStartup(t *testing.T) {
 	if _, err := New(context.Background(), map[string]any{
 		"gatewaysvc":          "localhost:19000",
+		"endpoint":            "https://cernbox.example.org",
 		"trusted_proxy_cidrs": []string{"10.0.0.0/33"},
 	}); err == nil {
 		t.Fatal("invalid trusted_proxy_cidrs accepted")

@@ -70,6 +70,7 @@ auth_manager = "ocmshares"
 [grpc.services.authprovider.auth_managers.ocmshares]
 
 [grpc.services.ocminvitemanager]
+signing_key = "{{cernbox_signing_key}}"
 driver = "json"
 provider_domain = "127.0.0.1:12345"
 
@@ -83,13 +84,36 @@ driver = "json"
 providers = "{{file_providers}}"
 
 [grpc.services.ocmshareprovider]
+signing_key = "{{cernbox_signing_key}}"
 driver = "json"
 webdav_endpoint = "http://127.0.0.1:12345"
-webapp_endpoint = "http://127.0.0.1:12345/external/sciencemesh"
+webapp_endpoint = "http://127.0.0.1:12345/app/ocm-open"
+webapps = [{name = "TestApp", media_types = ["text/plain"]}]
 provider_domain = "127.0.0.1:12345"
 
 [grpc.services.ocmshareprovider.drivers.json]
 file = "{{ocm_share_cernbox_file}}"
+
+# The app provider joins the in-process service registry, where the app
+# registry discovers it. It talks to a stub WOPI server started by the test.
+[grpc.services.appregistry]
+
+[[grpc.services.appregistry.mime_types]]
+mime_type = "text/plain"
+extension = "txt"
+name = "Text file"
+default_app = "TestApp"
+
+[grpc.services.appprovider]
+driver = "wopi"
+mime_types = ["text/plain"]
+
+[grpc.services.appprovider.drivers.wopi]
+iop_secret = "iop-secret"
+wopi_url = "{{wopi_url}}"
+app_name = "TestApp"
+app_url = "{{wopi_url}}"
+folder_base_url = "http://127.0.0.1:12345"
 
 [grpc.services.ocmincoming]
 driver = "json"
@@ -109,10 +133,15 @@ users = "fixtures/ocm-users.demo.json"
 address = "127.0.0.1:12345"
 
 [http.services.ocm]
+http_sig_mode = "strict"
+endpoint = "http://127.0.0.1:12345"
 allow_loopback_federation = true
 
+[http.services.appprovider]
+
 [http.services.sciencemesh]
-provider_domain = "127.0.0.1:12345"
+signing_key = "{{cernbox_signing_key}}"
+provider_domain = "cernbox.example.test"
 mesh_directory_url = "http://meshdir"
 smtp_credentials = {}
 
@@ -146,7 +175,10 @@ spaces_enabled = true
 
 [http.services.wellknown]
 [http.services.wellknown.ocmprovider]
+http_sig_mode = "strict"
+signing_key = "{{cernbox_signing_key}}"
 ocm_prefix = "ocm"
 provider = "Reva for CERNBox"
 endpoint = "http://127.0.0.1:12345"
 enable_webapp = true
+enable_code_flow = true

@@ -19,18 +19,28 @@
 package wellknown
 
 import (
+	"context"
+	"crypto/ed25519"
+	"crypto/rand"
+	"crypto/x509"
 	"encoding/json"
+	"encoding/pem"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
 	"slices"
 	"strings"
 	"sync"
 	"testing"
+
+	"github.com/cs3org/reva/v3/pkg/rhttp/router"
 )
 
 func TestInitWithCodeFlowEnabled(t *testing.T) {
 	h := &wkocmHandler{}
 	h.init(&OcmProviderConfig{
+		SigningKey:     writeKeyFile(t),
 		Endpoint:       "https://cernbox.cern.ch",
 		OCMPrefix:      "ocm",
 		EnableCodeFlow: true,
@@ -52,6 +62,7 @@ func TestInitWithCodeFlowEnabled(t *testing.T) {
 func TestInitWithCodeFlowDisabled(t *testing.T) {
 	h := &wkocmHandler{}
 	h.init(&OcmProviderConfig{
+		SigningKey:     writeKeyFile(t),
 		Endpoint:       "https://cernbox.cern.ch",
 		OCMPrefix:      "ocm",
 		EnableCodeFlow: false,
@@ -71,6 +82,7 @@ func TestInitWithCodeFlowDisabled(t *testing.T) {
 func TestInitWithNoEndpoint(t *testing.T) {
 	h := &wkocmHandler{}
 	h.init(&OcmProviderConfig{
+		SigningKey:     writeKeyFile(t),
 		EnableCodeFlow: true,
 	})
 
@@ -85,6 +97,7 @@ func TestInitWithNoEndpoint(t *testing.T) {
 func TestInitCapabilitiesDoNotDuplicateExchangeToken(t *testing.T) {
 	h := &wkocmHandler{}
 	h.init(&OcmProviderConfig{
+		SigningKey:     writeKeyFile(t),
 		Endpoint:       "https://cernbox.cern.ch",
 		EnableCodeFlow: true,
 	})
@@ -100,9 +113,80 @@ func TestInitCapabilitiesDoNotDuplicateExchangeToken(t *testing.T) {
 	}
 }
 
+func writeKeyFile(t *testing.T) string {
+	t.Helper()
+	_, private, err := ed25519.GenerateKey(rand.Reader)
+	if err != nil {
+		t.Fatal(err)
+	}
+	der, err := x509.MarshalPKCS8PrivateKey(private)
+	if err != nil {
+		t.Fatal(err)
+	}
+	keyFile := filepath.Join(t.TempDir(), "ocm.pem")
+	if err := os.WriteFile(keyFile, pem.EncodeToMemory(&pem.Block{Type: "PRIVATE KEY", Bytes: der}), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	return keyFile
+}
+
+func TestInitWithSigningKey(t *testing.T) {
+	keyFile := writeKeyFile(t)
+
+	s, err := New(context.Background(), map[string]any{
+		"ocmprovider": map[string]any{
+			"endpoint":    "https://cernbox.cern.ch",
+			"signing_key": keyFile,
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = s.Close() })
+	r := router.New()
+	s.Routes(r.Service("wellknown"))
+
+	rec := httptest.NewRecorder()
+	r.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, mount+"/ocm", nil))
+	var disco OcmDiscoveryData
+	if err := json.Unmarshal(rec.Body.Bytes(), &disco); err != nil {
+		t.Fatal(err)
+	}
+	if !slices.Contains(disco.Capabilities, "http-sig") {
+		t.Errorf("expected http-sig capability, got %v", disco.Capabilities)
+	}
+	if want := "https://cernbox.cern.ch/.well-known/jwks.json"; disco.JwksURI != want {
+		t.Errorf("jwksUri: got %s, want %s", disco.JwksURI, want)
+	}
+
+	rec = httptest.NewRecorder()
+	r.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, mount+"/jwks.json", nil))
+	var set struct {
+		Keys []struct {
+			Kid string `json:"kid"`
+		} `json:"keys"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &set); err != nil {
+		t.Fatal(err)
+	}
+	if rec.Code != http.StatusOK || len(set.Keys) != 1 || set.Keys[0].Kid == "" {
+		t.Errorf("expected one key with a kid, got %d: %s", rec.Code, rec.Body)
+	}
+}
+
+func TestInitStrictHTTPSig(t *testing.T) {
+	h := &wkocmHandler{}
+	if err := h.init(&OcmProviderConfig{Endpoint: "https://cernbox.cern.ch", HTTPSigMode: "strict", SigningKey: writeKeyFile(t)}); err != nil {
+		t.Fatal(err)
+	}
+	if !slices.Contains(h.data.Criteria, "must-use-http-sig") {
+		t.Errorf("expected must-use-http-sig criterion, got %v", h.data.Criteria)
+	}
+}
+
 func TestOcmConcurrentUserAgents(t *testing.T) {
 	h := &wkocmHandler{}
-	h.init(&OcmProviderConfig{Endpoint: "https://cernbox.cern.ch"})
+	h.init(&OcmProviderConfig{Endpoint: "https://cernbox.cern.ch", SigningKey: writeKeyFile(t)})
 
 	want := map[string]string{"Nextcloud Server Crawler": "1.1", "reva": OCMAPIVersion}
 	var wg sync.WaitGroup
@@ -127,4 +211,381 @@ func TestOcmConcurrentUserAgents(t *testing.T) {
 		}
 	}
 	wg.Wait()
+}
+
+func resetLocalWebappAndMFAPolicy(t *testing.T) {
+	t.Helper()
+	localWebappMu.Lock()
+	prevWebappReady := localWebappReady
+	prevTargets := append([]string{}, localWebappTargets...)
+	localWebappMu.Unlock()
+	localMFAPolicyMu.Lock()
+	prevMFAReady := localMFAPolicyReady
+	prevMFA := localMFAPolicy
+	localMFAPolicyMu.Unlock()
+	t.Cleanup(func() {
+		localWebappMu.Lock()
+		localWebappReady = prevWebappReady
+		localWebappTargets = prevTargets
+		localWebappMu.Unlock()
+		localMFAPolicyMu.Lock()
+		localMFAPolicyReady = prevMFAReady
+		localMFAPolicy = prevMFA
+		localMFAPolicyMu.Unlock()
+	})
+}
+
+func TestWebappReceiveDiscoveryAndLocalTargets(t *testing.T) {
+	resetLocalWebappAndMFAPolicy(t)
+
+	t.Run("valid base publishes blank", func(t *testing.T) {
+		h := &wkocmHandler{}
+		h.init(&OcmProviderConfig{
+			SigningKey:   writeKeyFile(t),
+			Endpoint:     "https://cernbox.cern.ch",
+			EnableWebapp: true,
+		})
+		raw, ok := h.data.ResourceTypes[0].Protocols["webapp-receive"].(map[string]any)
+		if !ok {
+			t.Fatal("webapp-receive missing")
+		}
+		targets, ok := raw["targets"].([]string)
+		if !ok || !slices.Equal(targets, []string{"blank"}) {
+			t.Fatalf("advertised %#v", raw["targets"])
+		}
+		got, ready := LocalWebappReceiveTargets()
+		if !ready || !slices.Equal(got, []string{"blank"}) {
+			t.Fatalf("published %#v ready %v", got, ready)
+		}
+		if resolved := ResolveLocalWebappReceiveTargets(nil); !slices.Equal(resolved, []string{"blank"}) {
+			t.Fatalf("nil override %#v", resolved)
+		}
+	})
+
+	t.Run("explicit empty override disables receipt", func(t *testing.T) {
+		empty := []string{}
+		if resolved := ResolveLocalWebappReceiveTargets(&empty); len(resolved) != 0 {
+			t.Fatalf("empty override %#v", resolved)
+		}
+	})
+
+	t.Run("disabled webapp publishes no targets", func(t *testing.T) {
+		h := &wkocmHandler{}
+		h.init(&OcmProviderConfig{Endpoint: "https://cernbox.cern.ch", SigningKey: writeKeyFile(t)})
+		if _, ok := h.data.ResourceTypes[0].Protocols["webapp-receive"]; ok {
+			t.Fatal("webapp-receive advertised without targets")
+		}
+		if _, ok := h.data.ResourceTypes[0].Protocols["webdav"]; !ok {
+			t.Fatal("webdav missing")
+		}
+		got, ready := LocalWebappReceiveTargets()
+		if !ready || len(got) != 0 {
+			t.Fatalf("published %#v ready %v", got, ready)
+		}
+	})
+
+	t.Run("padded and double-scheme bases publish nothing", func(t *testing.T) {
+		for _, endpoint := range []string{
+			" https://cernbox.cern.ch",
+			"https://https://cernbox.cern.ch",
+			"https://:443",
+		} {
+			h := &wkocmHandler{}
+			h.init(&OcmProviderConfig{Endpoint: endpoint, EnableWebapp: true, SigningKey: writeKeyFile(t)})
+			if _, ok := h.data.ResourceTypes[0].Protocols["webapp-receive"]; ok {
+				t.Fatalf("webapp-receive advertised for %q", endpoint)
+			}
+			got, ready := LocalWebappReceiveTargets()
+			if !ready || len(got) != 0 {
+				t.Fatalf("published %#v ready %v for %q", got, ready, endpoint)
+			}
+		}
+	})
+
+	t.Run("userinfo base publishes nothing", func(t *testing.T) {
+		h := &wkocmHandler{}
+		h.init(&OcmProviderConfig{
+			SigningKey:   writeKeyFile(t),
+			Endpoint:     "https://user:pass@cernbox.cern.ch",
+			EnableWebapp: true,
+		})
+		if _, ok := h.data.ResourceTypes[0].Protocols["webapp-receive"]; ok {
+			t.Fatal("webapp-receive advertised for a userinfo base")
+		}
+		got, ready := LocalWebappReceiveTargets()
+		if !ready || len(got) != 0 {
+			t.Fatalf("published %#v ready %v", got, ready)
+		}
+	})
+
+	t.Run("unknown local targets return none", func(t *testing.T) {
+		localWebappMu.Lock()
+		localWebappReady = false
+		localWebappTargets = nil
+		localWebappMu.Unlock()
+		if _, ready := LocalWebappReceiveTargets(); ready {
+			t.Fatal("unknown targets reported ready")
+		}
+		if resolved := ResolveLocalWebappReceiveTargets(nil); len(resolved) != 0 {
+			t.Fatalf("resolved %#v", resolved)
+		}
+	})
+}
+
+func TestApplyDefaultsMFAPolicyReject(t *testing.T) {
+	c := &OcmProviderConfig{}
+	c.ApplyDefaults()
+	if c.MFAPolicy != MFAPolicyReject {
+		t.Fatalf("mfa_policy = %q", c.MFAPolicy)
+	}
+}
+
+func TestNewMFAPolicy(t *testing.T) {
+	resetLocalWebappAndMFAPolicy(t)
+
+	t.Run("off accepted", func(t *testing.T) {
+		svc, err := New(context.Background(), map[string]any{
+			"ocmprovider": map[string]any{
+				"endpoint":      "https://cernbox.cern.ch",
+				"mfa_policy":    MFAPolicyOff,
+				"enable_webapp": true,
+				"signing_key":   writeKeyFile(t),
+			},
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if got, ok := LocalMFAPolicy(); !ok || got != MFAPolicyOff {
+			t.Fatalf("published %q ready %v", got, ok)
+		}
+		if ResolveLocalMFAPolicy(nil) != MFAPolicyOff {
+			t.Fatal("nil override should resolve off")
+		}
+		_ = svc.Close()
+	})
+
+	t.Run("unknown fails startup", func(t *testing.T) {
+		_, err := New(context.Background(), map[string]any{
+			"ocmprovider": map[string]any{"mfa_policy": "enforce", "signing_key": writeKeyFile(t)},
+		})
+		if err == nil || !strings.Contains(err.Error(), "mfa_policy") {
+			t.Fatalf("err = %v", err)
+		}
+	})
+
+	t.Run("override wins", func(t *testing.T) {
+		off := MFAPolicyOff
+		if ResolveLocalMFAPolicy(&off) != MFAPolicyOff {
+			t.Fatal("off override")
+		}
+		reject := MFAPolicyReject
+		if ResolveLocalMFAPolicy(&reject) != MFAPolicyReject {
+			t.Fatal("reject override")
+		}
+		bogus := "enforce"
+		if ResolveLocalMFAPolicy(&bogus) != MFAPolicyReject {
+			t.Fatal("unknown override fails closed")
+		}
+	})
+
+	t.Run("unpublished resolves reject", func(t *testing.T) {
+		localMFAPolicyMu.Lock()
+		localMFAPolicyReady = false
+		localMFAPolicy = ""
+		localMFAPolicyMu.Unlock()
+		if ResolveLocalMFAPolicy(nil) != MFAPolicyReject {
+			t.Fatal("unpublished fails closed")
+		}
+	})
+}
+
+func TestOcmDiscoveryMatrix(t *testing.T) {
+	restoreLocalWebapp(t)
+
+	invalid := []string{
+		"",
+		" https://cernbox.cern.ch",
+		"https://user:pass@cernbox.cern.ch",
+		"https://https://cernbox.cern.ch",
+	}
+	for _, endpoint := range invalid {
+		h := &wkocmHandler{}
+		h.init(&OcmProviderConfig{
+			SigningKey:     writeKeyFile(t),
+			Endpoint:       endpoint,
+			EnableWebapp:   true,
+			EnableCodeFlow: true,
+		})
+		assertDiscoveryShape(t, h, discoveryShape{
+			enabled: false,
+		})
+		got, ready := LocalWebappReceiveTargets()
+		if !ready || len(got) != 0 {
+			t.Fatalf("published %#v ready %v for %q", got, ready, endpoint)
+		}
+	}
+
+	cases := []struct {
+		name     string
+		webapp   bool
+		codeFlow bool
+		shape    discoveryShape
+	}{
+		{
+			name: "webapp off code flow off",
+		},
+		{
+			name:   "webapp on code flow off",
+			webapp: true,
+			shape:  discoveryShape{receiveBlank: true},
+		},
+		{
+			name:     "webapp off code flow on",
+			codeFlow: true,
+			shape:    discoveryShape{endpoint: true},
+		},
+		{
+			name:     "webapp on code flow on",
+			webapp:   true,
+			codeFlow: true,
+			shape:    discoveryShape{send: true, receiveBlank: true, endpoint: true},
+		},
+	}
+	for _, tt := range cases {
+		t.Run(tt.name, func(t *testing.T) {
+			h := &wkocmHandler{}
+			h.init(&OcmProviderConfig{
+				SigningKey:     writeKeyFile(t),
+				Endpoint:       "https://cernbox.cern.ch",
+				EnableWebapp:   tt.webapp,
+				EnableCodeFlow: tt.codeFlow,
+			})
+			tt.shape.enabled = true
+			assertDiscoveryShape(t, h, tt.shape)
+		})
+	}
+
+	t.Run("nil override uses published blank targets", func(t *testing.T) {
+		h := &wkocmHandler{}
+		h.init(&OcmProviderConfig{
+			SigningKey:   writeKeyFile(t),
+			Endpoint:     "https://cernbox.cern.ch",
+			EnableWebapp: true,
+		})
+		if got := ResolveLocalWebappReceiveTargets(nil); !slices.Equal(got, []string{"blank"}) {
+			t.Fatalf("nil override %#v", got)
+		}
+	})
+
+	t.Run("explicit empty override disables receipt", func(t *testing.T) {
+		empty := []string{}
+		if got := ResolveLocalWebappReceiveTargets(&empty); len(got) != 0 {
+			t.Fatalf("empty override %#v", got)
+		}
+	})
+
+	t.Run("unpublished local targets resolve empty", func(t *testing.T) {
+		localWebappMu.Lock()
+		localWebappReady = false
+		localWebappTargets = nil
+		localWebappMu.Unlock()
+		if _, ready := LocalWebappReceiveTargets(); ready {
+			t.Fatal("disabled publication reported ready")
+		}
+		if got := ResolveLocalWebappReceiveTargets(nil); len(got) != 0 {
+			t.Fatalf("resolved %#v", got)
+		}
+	})
+}
+
+type discoveryShape struct {
+	enabled      bool
+	send         bool
+	receiveBlank bool
+	endpoint     bool
+}
+
+func assertDiscoveryShape(t *testing.T, h *wkocmHandler, want discoveryShape) {
+	t.Helper()
+	if h.data == nil {
+		t.Fatal("missing discovery document")
+	}
+	if h.data.Enabled != want.enabled {
+		t.Fatalf("enabled %v", h.data.Enabled)
+	}
+	if OCMAPIVersion != "1.4.0" {
+		t.Fatalf("constant %s", OCMAPIVersion)
+	}
+	if h.data.APIVersion != OCMAPIVersion {
+		t.Fatalf("apiVersion %s", h.data.APIVersion)
+	}
+	for _, name := range []string{"file", "folder"} {
+		protocols, ok := protocolsNamed(h, name)
+		if !want.enabled {
+			if name == "folder" && !ok {
+				continue
+			}
+			if ok && (hasKey(protocols, "webapp") || hasKey(protocols, "webapp-receive")) {
+				t.Fatalf("%s advertised webapp while disabled: %#v", name, protocols)
+			}
+			continue
+		}
+		if !ok {
+			t.Fatalf("missing %s", name)
+		}
+		if hasKey(protocols, "webapp") != want.send {
+			t.Fatalf("%s send present %v", name, hasKey(protocols, "webapp"))
+		}
+		raw, receive := protocols["webapp-receive"].(map[string]any)
+		if want.receiveBlank {
+			targets, ok := raw["targets"].([]string)
+			if !receive || !ok || !slices.Equal(targets, []string{"blank"}) {
+				t.Fatalf("%s receive %#v", name, protocols["webapp-receive"])
+			}
+		} else if receive {
+			t.Fatalf("%s receive present %#v", name, protocols["webapp-receive"])
+		}
+	}
+	hasToken := slices.Contains(h.data.Capabilities, "exchange-token")
+	if want.endpoint {
+		if h.data.TokenEndPoint != "https://cernbox.cern.ch/ocm/token" || !hasToken {
+			t.Fatalf("endpoint %q caps %v", h.data.TokenEndPoint, h.data.Capabilities)
+		}
+	} else if h.data.TokenEndPoint != "" || hasToken {
+		t.Fatalf("endpoint %q caps %v", h.data.TokenEndPoint, h.data.Capabilities)
+	}
+	if strings.Contains(h.data.TokenEndPoint, "user:pass") {
+		t.Fatalf("token endpoint leaked userinfo")
+	}
+}
+
+func protocolsNamed(h *wkocmHandler, name string) (map[string]any, bool) {
+	for _, rt := range h.data.ResourceTypes {
+		if rt.Name == name {
+			return rt.Protocols, true
+		}
+	}
+	return nil, false
+}
+
+func hasKey(protocols map[string]any, key string) bool {
+	if protocols == nil {
+		return false
+	}
+	_, ok := protocols[key]
+	return ok
+}
+
+func restoreLocalWebapp(t *testing.T) {
+	t.Helper()
+	localWebappMu.Lock()
+	prevReady := localWebappReady
+	prevTargets := append([]string{}, localWebappTargets...)
+	localWebappMu.Unlock()
+	t.Cleanup(func() {
+		localWebappMu.Lock()
+		localWebappReady = prevReady
+		localWebappTargets = prevTargets
+		localWebappMu.Unlock()
+	})
 }

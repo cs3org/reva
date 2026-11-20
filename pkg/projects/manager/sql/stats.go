@@ -53,5 +53,39 @@ func (m *ProjectsManager) Stats(ctx context.Context) (*stats.Payload, error) {
 		}
 		projs.OwnerSamples = append(projs.OwnerSamples, stats.OwnerSample{Owner: r.Owner, Labels: labels, Value: float64(r.Count)})
 	}
-	return &stats.Payload{Metrics: []stats.Metric{projs}}, nil
+
+	created, err := m.createdByStorage(ctx)
+	if err != nil {
+		return nil, err
+	}
+	return &stats.Payload{Metrics: []stats.Metric{projs, created}}, nil
+}
+
+// createdByStorage counts the projects ever created on each storage. It
+// includes soft-deleted rows so the counter stays monotonic.
+func (m *ProjectsManager) createdByStorage(ctx context.Context) (stats.Metric, error) {
+	type row struct {
+		StorageID string
+		Count     int64
+	}
+	var rows []row
+	err := m.db.WithContext(ctx).Model(&Project{}).Unscoped().
+		Select("storage_id, COUNT(*) AS count").
+		Group("storage_id").
+		Find(&rows).Error
+	if err != nil {
+		return stats.Metric{}, err
+	}
+	created := stats.Metric{
+		Name: "projects_created",
+		Help: "Projects created, by storage.",
+		Kind: stats.KindCounter,
+	}
+	for _, r := range rows {
+		created.Samples = append(created.Samples, stats.Sample{
+			Labels: map[string]string{"storage": r.StorageID},
+			Value:  float64(r.Count),
+		})
+	}
+	return created, nil
 }

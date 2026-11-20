@@ -19,45 +19,41 @@
 package admin
 
 import (
-	"context"
-	"errors"
 	"fmt"
-	"io"
 	"time"
 
+	"github.com/cs3org/reva/v3/cmd/reva/internal/cli"
 	"github.com/cs3org/reva/v3/pkg/admin/adminpb"
-	"github.com/cs3org/reva/v3/pkg/appctx"
-	"google.golang.org/grpc/metadata"
+	"github.com/spf13/cobra"
 )
 
-func adminElevateCommand() *command {
-	cmd := newCommand("elevate")
-	cmd.Description = func() string { return "step up: exchange the login token for a short-TTL admin token" }
-	adminHost := cmd.String("admin-host", "", "address of the admin gRPC endpoint (persisted)")
-	cmd.ResetFlags = func() { *adminHost = "" }
-	cmd.Action = func(w ...io.Writer) error {
-		host, err := resolveAdminHost(*adminHost)
-		if err != nil {
-			return err
-		}
-		client, err := adminClientAt(host)
-		if err != nil {
-			return err
-		}
-		userTok, err := cliOpts.LoginToken()
-		if err != nil {
-			return errors.New("no login token: run `login` first")
-		}
-		ctx := appctx.ContextSetToken(context.Background(), userTok)
-		ctx = metadata.AppendToOutgoingContext(ctx, appctx.TokenHeader, userTok)
-
-		res, err := client.RequestAdmin(ctx, &adminpb.RequestAdminRequest{})
-		if err != nil {
-			return err
-		}
-		writeAdminToken(res.Token)
-		fmt.Printf("elevated; admin token valid until %s\n", time.Unix(res.ExpiresAt, 0).Format(time.RFC3339))
-		return nil
+func elevateCommand() *cobra.Command {
+	return &cobra.Command{
+		Use:   "elevate",
+		Short: "Exchange the login token for a short-TTL admin token",
+		Args:  cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			host, err := resolveAdminHost()
+			if err != nil {
+				return err
+			}
+			client, err := adminClientAt(host)
+			if err != nil {
+				return err
+			}
+			userTok, err := rt.Token()
+			if err != nil {
+				return err
+			}
+			res, err := client.RequestAdmin(cli.WithToken(cmd.Context(), userTok), &adminpb.RequestAdminRequest{})
+			if err != nil {
+				return err
+			}
+			if err := rt.SetAdminToken(res.Token); err != nil {
+				return err
+			}
+			fmt.Printf("elevated; admin token valid until %s\n", time.Unix(res.ExpiresAt, 0).Format(time.RFC3339))
+			return nil
+		},
 	}
-	return cmd
 }

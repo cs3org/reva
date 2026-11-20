@@ -20,35 +20,33 @@ package admin
 
 import (
 	"encoding/json"
-	"errors"
 	"fmt"
 	"io"
 
 	"github.com/cs3org/reva/v3/pkg/admin/adminpb"
+	"github.com/spf13/cobra"
 )
 
-func adminStackCommand() *command {
-	cmd := newCommand("stack")
-	cmd.Description = func() string { return "dump the goroutine stacks of the selected instances" }
-	cmd.Usage = func() string { return "Usage: admin stack [-admin-host h] [-grep P] <selector>" }
-	adminHost := cmd.String("admin-host", "", "address of the admin gRPC endpoint (persisted)")
-	grep := cmd.String("grep", "", "keep only goroutines whose stack contains this substring")
-	cmd.ResetFlags = func() { *adminHost, *grep = "", "" }
-	cmd.Action = func(w ...io.Writer) error {
-		if cmd.NArg() < 1 {
-			return errors.New(cmd.Usage())
-		}
+func stackCommand() *cobra.Command {
+	var grep string
+	cmd := &cobra.Command{
+		Use:   "stack <selector>",
+		Short: "Dump the goroutine stacks of the selected instances",
+		Args:  cobra.ExactArgs(1),
+	}
+	cmd.Flags().StringVar(&grep, "grep", "", "keep only goroutines whose stack contains this substring")
+	cmd.RunE = func(cmd *cobra.Command, posArgs []string) error {
 		args := map[string]string{}
-		if *grep != "" {
-			args["grep"] = *grep
+		if grep != "" {
+			args["grep"] = grep
 		}
-		client, ctx, err := adminDial(*adminHost)
+		client, ctx, err := adminDial(cmd)
 		if err != nil {
 			return err
 		}
 		// Stream per instance: a dump is large, so one aggregate response could
 		// exceed the message limit on a wide fan-out.
-		stream, err := client.InvokeStream(ctx, &adminpb.InvokeRequest{Service: cmd.Args()[0], Invocation: "stack", Args: args})
+		stream, err := client.InvokeStream(ctx, &adminpb.InvokeRequest{Service: posArgs[0], Invocation: "stack", Args: args})
 		if err != nil {
 			return adminErr(err)
 		}

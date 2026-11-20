@@ -22,15 +22,17 @@ package ocgraph
 
 import (
 	"context"
-	"net/http"
 	"net/url"
 
-	"github.com/go-chi/chi/v5"
-
 	"github.com/cs3org/reva/v3/pkg/rhttp/global"
+	"github.com/cs3org/reva/v3/pkg/rhttp/router"
 	"github.com/cs3org/reva/v3/pkg/sharedconf"
 	"github.com/cs3org/reva/v3/pkg/utils/cfg"
+	libregraph "github.com/owncloud/libre-graph-api-go"
 )
+
+// mount is where the Graph API is served.
+const mount = "/graph"
 
 func init() {
 	global.Register("ocgraph", New)
@@ -64,8 +66,7 @@ type ListResponse struct {
 }
 
 type svc struct {
-	c      *config
-	router *chi.Mux
+	c *config
 }
 
 func New(ctx context.Context, m map[string]any) (global.Service, error) {
@@ -77,70 +78,104 @@ func New(ctx context.Context, m map[string]any) (global.Service, error) {
 	s := &svc{
 		c: &c,
 	}
-	s.initRouter()
-
 	return s, nil
 }
 
-func (s *svc) initRouter() {
-	s.router = chi.NewRouter()
-
-	s.router.NotFound(func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusNotFound)
+func (s *svc) Routes(r *router.Router) {
+	r.Group(mount+"/v1.0", func(r *router.Router) {
+		r.Get("/me", s.getMe, router.Describe(router.Doc{
+			Summary:   "The signed-in user",
+			Responses: map[int]any{200: libregraph.User{}},
+		}))
+		r.Patch("/me", s.patchMe, router.Describe(router.Doc{
+			Summary:   "Update the signed-in user",
+			Body:      libregraph.User{},
+			Responses: map[int]any{200: libregraph.User{}},
+		}))
+		r.Get("/drives/{spaceID}", s.getSpace, router.Describe(router.Doc{
+			Summary:   "A space",
+			Responses: map[int]any{200: libregraph.Drive{}},
+		}))
+		r.Patch("/drives/{spaceID}", s.patchSpace, router.Describe(router.Doc{
+			Summary:   "Update a space",
+			Body:      libregraph.DriveUpdate{},
+			Responses: map[int]any{200: libregraph.Drive{}},
+		}))
+		r.Get("/users", s.listUsers, router.Describe(router.Doc{
+			Summary: "Search users",
+			Params: []router.Param{
+				router.Query("$search", `A search term, quoted as "term"`).WithExample(`"einstein"`),
+			},
+			Responses: map[int]any{200: ListResponse{}},
+		}))
+		r.Get("/groups", s.listGroups, router.Describe(router.Doc{
+			Summary: "Search groups",
+			Params: []router.Param{
+				router.Query("$search", `A search term, quoted as "term"`),
+			},
+			Responses: map[int]any{200: ListResponse{}},
+		}))
 	})
-	s.router.MethodNotAllowed(func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusMethodNotAllowed)
-	})
 
-	s.router.Route("/v1.0", func(r chi.Router) {
-		r.Route("/me", func(r chi.Router) {
-			r.Get("/", s.getMe)
-			r.Patch("/", s.patchMe)
-		})
-		r.Route("/drives", func(r chi.Router) {
-			r.Get("/{space-id}", s.getSpace)
-			r.Patch("/{space-id}", s.patchSpace)
-		})
-		r.Route("/users", func(r chi.Router) {
-			r.Get("/", s.listUsers)
-		})
-		r.Route("/groups", func(r chi.Router) {
-			r.Get("/", s.listGroups)
-		})
-	})
-
-	s.router.Route("/v1beta1", func(r chi.Router) {
-		r.Route("/me", func(r chi.Router) {
-			r.Route("/drives", func(r chi.Router) {
-				r.Get("/", s.listMySpaces)
-			})
-		})
-		r.Route("/me/drive", func(r chi.Router) {
-			r.Get("/sharedWithMe", s.getSharedWithMe)
-			r.Get("/sharedByMe", s.getSharedByMe)
-		})
-		r.Get("/roleManagement/permissions/roleDefinitions", s.getRoleDefinitions)
-		r.Route("/drives/{space-id}", func(r chi.Router) {
-			r.Get("/root/permissions", s.getRootDrivePermissions)
-			r.Route("/items/{resource-id}", func(r chi.Router) {
-				r.Patch("/", s.updateReceivedShare)
-				r.Post("/invite", s.share)
-				r.Post("/createLink", s.createLink)
-				r.Route("/permissions", func(r chi.Router) {
-					r.Get("/", s.getDrivePermissions)
-					r.Patch("/{share-id}", s.updateDrivePermissions)
-					r.Delete("/{share-id}", s.deleteDrivePermissions)
-					r.Post("/{share-id}/setPassword", s.updateLinkPassword)
-				})
+	r.Group(mount+"/v1beta1", func(r *router.Router) {
+		r.Get("/me/drives", s.listMySpaces, router.Describe(router.Doc{
+			Summary:   "The spaces the signed-in user can reach",
+			Responses: map[int]any{200: ListResponse{}},
+		}))
+		r.Get("/me/drive/sharedWithMe", s.getSharedWithMe, router.Describe(router.Doc{
+			Summary:   "Shares received by the signed-in user",
+			Responses: map[int]any{200: ListResponse{}},
+		}))
+		r.Get("/me/drive/sharedByMe", s.getSharedByMe, router.Describe(router.Doc{
+			Summary:   "Shares created by the signed-in user",
+			Responses: map[int]any{200: ListResponse{}},
+		}))
+		r.Get("/roleManagement/permissions/roleDefinitions", s.getRoleDefinitions, router.Describe(router.Doc{
+			Summary:   "The roles a share can be given",
+			Responses: map[int]any{200: []libregraph.UnifiedRoleDefinition{}},
+		}))
+		r.Group("/drives/{spaceID}", func(r *router.Router) {
+			r.Get("/root/permissions", s.getRootDrivePermissions, router.Describe(router.Doc{
+				Summary:   "The permissions on a space's root",
+				Responses: map[int]any{200: ListResponse{}},
+			}))
+			r.Group("/items/{resourceID}", func(r *router.Router) {
+				r.Patch("/", s.updateReceivedShare, router.Describe(router.Doc{
+					Summary:   "Accept or decline a received share",
+					Body:      libregraph.DriveItem{},
+					Responses: map[int]any{200: libregraph.DriveItem{}},
+				}))
+				r.Post("/invite", s.share, router.Describe(router.Doc{
+					Summary:   "Share a resource with users or groups",
+					Body:      libregraph.DriveItemInvite{},
+					Responses: map[int]any{200: ListResponse{}},
+				}))
+				r.Post("/createLink", s.createLink, router.Describe(router.Doc{
+					Summary:   "Create a public link to a resource",
+					Body:      libregraph.DriveItemCreateLink{},
+					Responses: map[int]any{200: libregraph.Permission{}},
+				}))
+				r.Get("/permissions", s.getDrivePermissions, router.Describe(router.Doc{
+					Summary:   "The permissions on a resource",
+					Responses: map[int]any{200: ListResponse{}},
+				}))
+				r.Patch("/permissions/{shareID}", s.updateDrivePermissions, router.Describe(router.Doc{
+					Summary:   "Update a share or a link",
+					Body:      libregraph.Permission{},
+					Responses: map[int]any{200: libregraph.Permission{}},
+				}))
+				r.Delete("/permissions/{shareID}", s.deleteDrivePermissions, router.Describe(router.Doc{
+					Summary:   "Remove a share or a link",
+					Responses: map[int]any{204: nil},
+				}))
+				r.Post("/permissions/{shareID}/setPassword", s.updateLinkPassword, router.Describe(router.Doc{
+					Summary:   "Set or clear a public link's password",
+					Body:      libregraph.SharingLinkPassword{},
+					Responses: map[int]any{200: libregraph.Permission{}},
+				}))
 			})
 		})
 	})
 }
 
-func (s *svc) Handler() http.Handler { return s.router }
-
-func (s *svc) Prefix() string { return "graph" }
-
 func (s *svc) Close() error { return nil }
-
-func (s *svc) Unprotected() []string { return nil }

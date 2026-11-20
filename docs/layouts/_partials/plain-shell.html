@@ -1,0 +1,8 @@
+<div class="wrap" style="max-width: 960px">
+  <article class="content">
+    <h1>{{ .page.Title }}</h1>
+    {{- with .page.Description }}<p class="page-lead">{{ . | markdownify }}</p>{{ end }}
+    {{ .body }}
+    {{- partial "page-meta.html" .page }}
+  </article>
+</div>

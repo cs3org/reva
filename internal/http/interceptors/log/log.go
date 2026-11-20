@@ -20,6 +20,7 @@ package log
 
 import (
 	"bufio"
+	"context"
 	"fmt"
 	"net"
 	"net/http"
@@ -54,8 +55,28 @@ func (h loggingHandler) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	t := time.Now()
 	logger := makeLogger(w)
 	url := *req.URL
+	rec := &userRecorder{}
+	req = req.WithContext(context.WithValue(req.Context(), userRecorderKey{}, rec))
 	h.handler.ServeHTTP(logger, req)
-	writeLog(log, req, url, t, logger.Status(), logger.Size(), logger.Header())
+	writeLog(log, req, url, t, logger.Status(), logger.Size(), logger.Header(), rec.username)
+}
+
+// userRecorder carries the authenticated user back out to the logging
+// middleware, which runs outside the auth middleware and so never sees the
+// context the user is set in.
+type userRecorder struct {
+	username string
+}
+
+type userRecorderKey struct{}
+
+// SetUser records who made the request, for its "processed http request"
+// line. The auth middleware calls it once it has resolved the user; outside
+// the logging middleware it does nothing.
+func SetUser(ctx context.Context, username string) {
+	if rec, ok := ctx.Value(userRecorderKey{}).(*userRecorder); ok {
+		rec.username = username
+	}
 }
 
 func makeLogger(w http.ResponseWriter) loggingResponseWriter {
@@ -70,7 +91,7 @@ func makeLogger(w http.ResponseWriter) loggingResponseWriter {
 	return logger
 }
 
-func writeLog(log *zerolog.Logger, req *http.Request, url url.URL, ts time.Time, status, size int, resHeaders http.Header) {
+func writeLog(log *zerolog.Logger, req *http.Request, url url.URL, ts time.Time, status, size int, resHeaders http.Header, username string) {
 	end := time.Now()
 	host, _, err := net.SplitHostPort(req.RemoteAddr)
 
@@ -100,7 +121,11 @@ func writeLog(log *zerolog.Logger, req *http.Request, url url.URL, ts time.Time,
 		//nolint:zerologlint
 		event = log.Error()
 	}
+	if username != "" {
+		event = event.Str("user", username)
+	}
 	event.Str("host", host).Str("method", req.Method).Str("uri", uri).Int("status", status).
+		Str("user_agent", req.UserAgent()).
 		Msg("processed http request")
 
 	log.Trace().Str("host", host).Str("method", req.Method).

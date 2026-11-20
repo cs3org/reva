@@ -1,0 +1,4 @@
+{{ define "main" }}
+{{- $body := print .Content (partial "components-overview.html" .) }}
+{{- partial "docs-shell.html" (dict "page" . "body" ($body | safeHTML)) }}
+{{ end }}

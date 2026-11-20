@@ -1,0 +1,5 @@
+{{- /* Shows a file from static/ as a highlighted block with a download link. */ -}}
+{{- $path := .Get 0 }}
+{{- $lang := .Get 1 | default (strings.TrimPrefix "." (path.Ext $path)) }}
+<p class="muted" style="margin-bottom:4px"><a href="/{{ $path }}" download><code>{{ path.Base $path }}</code></a></p>
+{{ transform.Highlight (readFile (printf "static/%s" $path)) $lang }}

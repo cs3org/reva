@@ -39,8 +39,10 @@ import (
 	link "github.com/cs3org/go-cs3apis/cs3/sharing/link/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	types "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
+	gstatus "google.golang.org/grpc/status"
 
 	"github.com/cs3org/reva/v3/internal/grpc/services/storageprovider"
+	"github.com/cs3org/reva/v3/internal/http/services/owncloud/ocgraph"
 	"github.com/cs3org/reva/v3/pkg/appctx"
 	"github.com/cs3org/reva/v3/pkg/permissions"
 	"github.com/cs3org/reva/v3/pkg/service"
@@ -214,8 +216,19 @@ func (s *svc) getResourceInfos(ctx context.Context, w http.ResponseWriter, r *ht
 	if depth == "" {
 		depth = "1"
 	}
+	// Depth: infinity lists a whole tree in one request and keeps it in memory.
+	// RFC 4918 section 9.1 lets a server refuse it with 403.
+	if depth == "infinity" {
+		w.WriteHeader(http.StatusForbidden)
+		b, err := Marshal(exception{
+			code:    SabredavPermissionDenied,
+			message: "PROPFIND with Depth: infinity is not supported",
+		}, "")
+		HandleWebdavError(&log, w, b, err)
+		return nil, nil, "", false
+	}
 	// see https://tools.ietf.org/html/rfc4918#section-9.1
-	if depth != "0" && depth != "1" && depth != "infinity" {
+	if depth != "0" && depth != "1" {
 		log.Debug().Str("depth", depth).Msgf("invalid Depth header value")
 		w.WriteHeader(http.StatusBadRequest)
 		m := fmt.Sprintf("Invalid Depth header value: %v", depth)
@@ -258,7 +271,7 @@ func (s *svc) getResourceInfos(ctx context.Context, w http.ResponseWriter, r *ht
 	res, err := client.Stat(ctx, req)
 	if err != nil {
 		log.Error().Err(err).Interface("req", req).Msg("error sending a stat request to the gateway")
-		w.WriteHeader(http.StatusInternalServerError)
+		w.WriteHeader(ocgraph.GrpcCodeToHTTPStatus(gstatus.Code(err)))
 		return nil, nil, "", false
 	} else if res.Status.Code != rpc.Code_CODE_OK {
 		if res.Status.Code == rpc.Code_CODE_NOT_FOUND {
@@ -301,23 +314,11 @@ func (s *svc) getResourceInfos(ctx context.Context, w http.ResponseWriter, r *ht
 			log.Error().Err(err).Interface("req", req).Msg("error sending a grpc stat request")
 			w.WriteHeader(http.StatusInternalServerError)
 			return nil, nil, "", false
-		} else if parentRes.Status.Code != rpc.Code_CODE_OK {
-			if parentRes.Status.Code == rpc.Code_CODE_NOT_FOUND {
-				w.WriteHeader(http.StatusNotFound)
-				m := fmt.Sprintf("Resource %v not found", parentPath)
-				b, err := Marshal(exception{
-					code:    SabredavNotFound,
-					message: m,
-				}, "")
-				HandleWebdavError(&log, w, b, err)
-				return nil, nil, "", false
-			}
-			HandleErrorStatus(&log, w, parentRes.Status)
-			return nil, nil, "", false
 		}
-		if utils.ResourceIDEqual(parentRes.Info.Id, parentInfo.Id) {
-			// the file is the root of a single-file share and has no parent to list
-			return parentInfo, resourceInfos[:1], hrefBase, true
+		// The user can have access to the file but not to its parent (single-file share),
+		// or the parent of a share root resolves to the file itself. Then the file is its own parent.
+		if parentRes.Status.Code != rpc.Code_CODE_OK || utils.ResourceIDEqual(parentRes.Info.Id, parentInfo.Id) {
+			return parentInfo, resourceInfos, hrefBase, true
 		}
 		parentInfo = parentRes.Info
 		// The incoming URL was not to a folder, but to the file itself.
@@ -341,48 +342,6 @@ func (s *svc) getResourceInfos(ctx context.Context, w http.ResponseWriter, r *ht
 			return nil, nil, "", false
 		}
 		resourceInfos = append(resourceInfos, res.Infos...)
-
-	case depth == "infinity":
-		// FIXME: doesn't work cross-storage as the results will have the wrong paths!
-		// use a stack to explore sub-containers breadth-first
-		stack := []string{parentInfo.Path}
-		for len(stack) > 0 {
-			// retrieve path on top of stack
-			path := stack[len(stack)-1]
-
-			req := &provider.ListContainerRequest{
-				Ref:                   &provider.Reference{Path: path},
-				ArbitraryMetadataKeys: metadataKeys,
-			}
-			res, err := client.ListContainer(ctx, req)
-			if err != nil {
-				log.Error().Err(err).Str("path", path).Msg("error sending list container grpc request")
-				w.WriteHeader(http.StatusInternalServerError)
-				return nil, nil, "", false
-			}
-			if res.Status.Code != rpc.Code_CODE_OK {
-				HandleErrorStatus(&log, w, res.Status)
-				return nil, nil, "", false
-			}
-
-			stack = stack[:len(stack)-1]
-
-			// check sub-containers in reverse order and add them to the stack
-			// the reversed order here will produce a more logical sorting of results
-			for i := len(res.Infos) - 1; i >= 0; i-- {
-				if res.Infos[i].Type == provider.ResourceType_RESOURCE_TYPE_CONTAINER {
-					stack = append(stack, res.Infos[i].Path)
-				}
-			}
-
-			resourceInfos = append(resourceInfos, res.Infos...)
-
-			if depth != "infinity" {
-				break
-			}
-
-			// TODO: stream response to avoid storing too many results in memory
-		}
 	}
 
 	return parentInfo, resourceInfos, hrefBase, true
@@ -700,9 +659,9 @@ func (s *svc) mdToPropResponse(ctx context.Context, pf *propfindXML, md *provide
 			}
 			if e, ok := md.Opaque.Map["adler32"]; ok {
 				if checksums.Len() == 0 {
-					checksums.WriteString("<oc:checksum>ADLER32:")
+					checksums.WriteString("<oc:checksum>Adler32:")
 				} else {
-					checksums.WriteString(" ADLER32:")
+					checksums.WriteString(" Adler32:")
 				}
 				checksums.Write(e.Value)
 			}
@@ -871,9 +830,9 @@ func (s *svc) mdToPropResponse(ctx context.Context, pf *propfindXML, md *provide
 						}
 						if e, ok := md.Opaque.Map["adler32"]; ok {
 							if checksums.Len() == 0 {
-								checksums.WriteString("<oc:checksum>ADLER32:")
+								checksums.WriteString("<oc:checksum>Adler32:")
 							} else {
-								checksums.WriteString(" ADLER32:")
+								checksums.WriteString(" Adler32:")
 							}
 							checksums.Write(e.Value)
 						}

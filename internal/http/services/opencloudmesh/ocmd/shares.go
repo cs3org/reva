@@ -19,10 +19,12 @@
 package ocmd
 
 import (
+	"bytes"
 	"context"
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	"io"
 	"mime"
 	"net/http"
 	"net/url"
@@ -55,19 +57,31 @@ import (
 
 var validate = validator.New()
 
+// errInvalidShareRequest is the fixed parser failure for an incoming share.
+// It is not wrapped around the decoder error, which can quote the body.
+var errInvalidShareRequest = errors.New("invalid OCM share request")
+
 type sharesHandler struct {
 	exposeRecipientDisplayName bool
 	machineSecret              string
 	autoAcceptProviders        []*regexp.Regexp
 	trustForwardedFor          bool
+	endpoint                   string
+	strictHTTPSig              bool
 	ocmClient                  *OCMClient
 	webdavTransport            http.RoundTripper
+	// webappReceiveTargets overrides local discovery when non-nil.
+	webappReceiveTargets *[]string
+	// mfaPolicy overrides the published mfa_policy when non-nil.
+	mfaPolicy *string
 }
 
 func (h *sharesHandler) init(c *config) error {
 	h.exposeRecipientDisplayName = c.ExposeRecipientDisplayName
 	h.machineSecret = c.MachineSecret
 	h.trustForwardedFor = c.TrustForwardedFor
+	h.endpoint = c.Endpoint
+	h.strictHTTPSig = c.HTTPSigMode == "strict"
 	// Parse the explicit private-network exception list before any client or
 	// network is constructed: an invalid element must fail init, not start a
 	// partially accepted policy or run discovery first. The typed value is
@@ -100,6 +114,20 @@ func (h *sharesHandler) init(c *config) error {
 		h.autoAcceptProviders = append(h.autoAcceptProviders, re)
 	}
 	return nil
+}
+
+func (h *sharesHandler) receiverWebappTargets() []string {
+	if h == nil {
+		return wellknown.ResolveLocalWebappReceiveTargets(nil)
+	}
+	return wellknown.ResolveLocalWebappReceiveTargets(h.webappReceiveTargets)
+}
+
+func (h *sharesHandler) receiverAdmitMFA() bool {
+	if h == nil {
+		return wellknown.ResolveLocalMFAPolicy(nil) == wellknown.MFAPolicyOff
+	}
+	return wellknown.ResolveLocalMFAPolicy(h.mfaPolicy) == wellknown.MFAPolicyOff
 }
 
 // matchesAutoAccept reports whether the given sender provider domain matches any
@@ -142,17 +170,31 @@ func (h *sharesHandler) isAcceptedUser(ctx context.Context, recipient *userpb.Us
 func (h *sharesHandler) CreateShare(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	log := appctx.GetLogger(ctx)
-	req, err := getCreateShareRequest(r)
-	// Log whitelist metadata only; incoming OCM share requests carry shared secrets in protocol options.
-	logEvent := log.Info().Str("remote", r.RemoteAddr).Err(err)
-	if req != nil {
-		logEvent = logEvent.Str("sender", req.Sender).Str("resource_type", req.ResourceType)
-	}
-	logEvent.Msg("OCM /shares request received")
+	// The signature covers the exact body bytes, thus keep a copy to verify it.
+	body, err := io.ReadAll(r.Body)
 	if err != nil {
-		reqres.WriteError(w, r, reqres.APIErrorInvalidParameter, err.Error(), nil)
+		reqres.WriteError(w, r, reqres.APIErrorInvalidParameter, "error reading the request body", err)
 		return
 	}
+	r.Body = io.NopCloser(bytes.NewReader(body))
+	// Rejections happen at many places, so detect them from the response status.
+	sw := &statusWriter{ResponseWriter: w, status: http.StatusOK}
+	w = sw
+	defer func() {
+		if sw.status >= http.StatusBadRequest {
+			log.Info().Int("status", sw.status).Str("remote", r.RemoteAddr).Bytes("payload", body).Msg("OCM /shares request rejected, full payload")
+		}
+	}()
+	req, err := h.getCreateShareRequest(r)
+	if err != nil {
+		rejectShare(w, r, err)
+		return
+	}
+	log.Info().
+		Str("remote", r.RemoteAddr).
+		Str("sender", req.Sender).
+		Str("resource_type", req.ResourceType).
+		Msg("OCM /shares request received")
 
 	sender, err := parseOCMUser(req.Sender)
 	if err != nil {
@@ -227,9 +269,19 @@ func (h *sharesHandler) CreateShare(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	protocols, legacy, err := h.getAndResolveProtocols(ctx, req.Protocols, req.ResourceType, sender.Idp)
+	disco, err := h.ocmClient.Discover(ctx, sender.Idp)
+	if err != nil {
+		rejectShare(w, r, err)
+		return
+	}
+	if err := verifySignature(ctx, h.ocmClient, r, body, h.endpoint, h.strictHTTPSig, disco); err != nil {
+		reqres.WriteError(w, r, reqres.APIErrorUnauthenticated, "invalid HTTP signature", err)
+		return
+	}
+
+	protocols, legacy, err := h.getAndResolveProtocols(req.Protocols, req.ResourceType, disco)
 	if err != nil || len(protocols) == 0 {
-		reqres.WriteError(w, r, reqres.APIErrorInvalidParameter, "error with protocols payload", err)
+		rejectShare(w, r, err)
 		return
 	}
 
@@ -265,7 +317,7 @@ func (h *sharesHandler) CreateShare(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	log.Info().Str("resource_id", req.ProviderID).Str("sender", req.Sender).Str("resource_type", req.ResourceType).Msg("CreateOCMIncomingShare payload")
+	log.Info().Str("payload", maskNewShareSecrets(req, string(body))).Msg("CreateOCMIncomingShare payload")
 	createShareResp, err := gatewayClient.CreateOCMIncomingShare(ctx, createShareReq)
 	if err != nil {
 		reqres.WriteError(w, r, reqres.APIErrorServerError, "error creating ocm share", err)
@@ -394,15 +446,15 @@ func parseOCMUser(addr string) (*userpb.UserId, error) {
 	return u, nil
 }
 
-func getCreateShareRequest(r *http.Request) (*NewShareRequest, error) {
+func (h *sharesHandler) getCreateShareRequest(r *http.Request) (*NewShareRequest, error) {
 	var req NewShareRequest
 	contentType, _, err := mime.ParseMediaType(r.Header.Get("Content-Type"))
 	if err == nil && contentType == "application/json" {
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-			return nil, errors.Wrap(err, "malformed OCM /shares request")
+			return nil, errInvalidShareRequest
 		}
 	} else {
-		return nil, errors.New("malformed OCM /shares request payload")
+		return nil, errInvalidShareRequest
 	}
 	// validate the request
 	if err := validate.Struct(req); err != nil {
@@ -411,6 +463,9 @@ func getCreateShareRequest(r *http.Request) (*NewShareRequest, error) {
 	// Protocols are interface-backed, so validate the decoded protocol payloads
 	// explicitly before we create or persist a received share.
 	if err := req.Protocols.Validate(); err != nil {
+		return nil, err
+	}
+	if err := ScreenIncomingWebapps(req.Protocols, h.receiverWebappTargets(), h.receiverAdmitMFA()); err != nil {
 		return nil, err
 	}
 	return &req, nil
@@ -445,14 +500,12 @@ func getOCMShareType(st string) ocm.RecipientType {
 	}
 }
 
-func (h *sharesHandler) getAndResolveProtocols(ctx context.Context, p Protocols, resType string, ownerServer string) (protos []*ocm.Protocol, legacy bool, err error) {
+func (h *sharesHandler) getAndResolveProtocols(p Protocols, resType string, disco *wellknown.OcmDiscoveryData) (protos []*ocm.Protocol, legacy bool, err error) {
 	protos = make([]*ocm.Protocol, 0, len(p))
 	legacy = false
 
-	// discover remote resource types
-	ocmRTs, ocmEndpoint, err := h.discoverOcmResourceTypes(ctx, ownerServer)
-	if err != nil {
-		return nil, false, errors.Wrap(err, "error discovering remote OCM resource types")
+	if err := ScreenIncomingWebapps(p, h.receiverWebappTargets(), h.receiverAdmitMFA()); err != nil {
+		return nil, false, err
 	}
 
 	for _, data := range p {
@@ -461,7 +514,7 @@ func (h *sharesHandler) getAndResolveProtocols(ctx context.Context, p Protocols,
 		var ok bool
 		ocmProto := data.ToOCMProtocol()
 		protocolName := GetProtocolName(data)
-		for _, rt := range ocmRTs {
+		for _, rt := range disco.ResourceTypes {
 			if rt.Name == resType {
 				if protoInfo, ok = rt.Protocols[protocolName]; ok {
 					break
@@ -476,7 +529,18 @@ func (h *sharesHandler) getAndResolveProtocols(ctx context.Context, p Protocols,
 		case "webdav":
 			uri = ocmProto.GetWebdavOptions().Uri
 		case "webapp":
-			uri = ocmProto.GetWebappOptions().Uri
+			opts := ocmProto.GetWebappOptions()
+			if opts == nil {
+				return nil, false, errors.New("protocol webapp missing options")
+			}
+			if _, tokenErr := WebappTokenEndpoint(disco); tokenErr != nil {
+				return nil, false, tokenErr
+			}
+			if _, uriErr := ValidateAbsoluteWebappURI(opts.Uri); uriErr != nil {
+				return nil, false, uriErr
+			}
+			protos = append(protos, ocmProto)
+			continue
 		case "embedded":
 			protos = append(protos, ocmProto)
 			continue
@@ -511,9 +575,9 @@ func (h *sharesHandler) getAndResolveProtocols(ctx context.Context, p Protocols,
 			return nil, false, fmt.Errorf("missing host in URI '%s' and root webdav path not advertised by the remote OCM server", uri)
 		}
 
-		u, err = url.Parse(ocmEndpoint)
+		u, err = url.Parse(disco.Endpoint)
 		if err != nil {
-			return nil, false, errors.Wrapf(err, "error parsing remote OCM endpoint '%s'", ocmEndpoint)
+			return nil, false, errors.Wrapf(err, "error parsing remote OCM endpoint '%s'", disco.Endpoint)
 		}
 		if strings.HasPrefix(uri, "/") {
 			u.Path = uri
@@ -532,11 +596,25 @@ func (h *sharesHandler) getAndResolveProtocols(ctx context.Context, p Protocols,
 	return protos, legacy, nil
 }
 
-func (h *sharesHandler) discoverOcmResourceTypes(ctx context.Context, ownerServer string) ([]wellknown.ResourceTypes, string, error) {
-	ocmCaps, err := h.ocmClient.Discover(ctx, ownerServer)
-	if err != nil {
-		return nil, "", err
-	}
+type statusWriter struct {
+	http.ResponseWriter
+	status int
+}
 
-	return ocmCaps.ResourceTypes, ocmCaps.Endpoint, nil
+func (s *statusWriter) WriteHeader(code int) {
+	s.status = code
+	s.ResponseWriter.WriteHeader(code)
+}
+
+func rejectShare(w http.ResponseWriter, r *http.Request, err error) {
+	code, message := incomingShareError(err)
+	reqres.WriteError(w, r, code, message, nil)
+}
+
+func incomingShareError(err error) (reqres.APIErrorCode, string) {
+	if errors.Is(err, ErrWebappMFAUnproven) {
+		return reqres.APIErrorInvalidParameter, ErrWebappMFAUnproven.Error()
+	}
+	// Every other ingest failure uses one fixed reason. Do not echo err.Error().
+	return reqres.APIErrorInvalidParameter, errInvalidShareRequest.Error()
 }

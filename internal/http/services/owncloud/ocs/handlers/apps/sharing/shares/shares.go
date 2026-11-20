@@ -54,6 +54,7 @@ import (
 	"github.com/cs3org/reva/v3/pkg/spaces"
 
 	"github.com/cs3org/reva/v3/pkg/publicshare"
+	"github.com/cs3org/reva/v3/pkg/rhttp/router"
 	"github.com/cs3org/reva/v3/pkg/service"
 	"github.com/cs3org/reva/v3/pkg/share"
 	"github.com/cs3org/reva/v3/pkg/share/cache"
@@ -62,7 +63,6 @@ import (
 	"github.com/cs3org/reva/v3/pkg/sharehierarchy"
 	"github.com/cs3org/reva/v3/pkg/utils"
 	"github.com/cs3org/reva/v3/pkg/utils/resourceid"
-	"github.com/go-chi/chi/v5"
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog"
 )
@@ -73,7 +73,6 @@ const (
 
 // Handler implements the shares part of the ownCloud sharing API.
 type Handler struct {
-	publicURL                  string
 	sharePrefix                string
 	homeNamespace              string
 	ocmMountPoint              string
@@ -112,7 +111,6 @@ func getCacheManager(c *config.Config) (cache.ResourceInfoCache, error) {
 
 // Init initializes this and any contained handlers.
 func (h *Handler) Init(c *config.Config, l *zerolog.Logger) {
-	h.publicURL = c.Config.Host
 	h.sharePrefix = c.SharePrefix
 	h.homeNamespace = c.HomeNamespace
 	h.ocmMountPoint = c.OCMMountPoint
@@ -151,6 +149,27 @@ func (h *Handler) startCacheWarmup(c cache.WarmupResourceInfo) {
 	}
 }
 
+// fullPath maps a client path to a CS3 path. As in ocdav, a leading "home"
+// segment is the user's home, which is sharded per user and has no registry mount.
+func (h *Handler) fullPath(ctx context.Context, p string) (string, error) {
+	root, rest := router.ShiftPath(p)
+	if root != "home" {
+		return path.Join(h.homeNamespace, p), nil
+	}
+	client, err := service.Gateway(ctx)
+	if err != nil {
+		return "", err
+	}
+	res, err := client.GetHome(ctx, &provider.GetHomeRequest{})
+	if err != nil {
+		return "", err
+	}
+	if res.Status.Code != rpc.Code_CODE_OK {
+		return "", errors.New(res.Status.Message)
+	}
+	return path.Join(res.Path, rest), nil
+}
+
 func (h *Handler) extractReference(r *http.Request) (*provider.Reference, error) {
 	var ref provider.Reference
 	if h.EnableSpaces {
@@ -164,14 +183,22 @@ func (h *Handler) extractReference(r *http.Request) (*provider.Reference, error)
 		}
 		if p := r.FormValue("path"); p != "" {
 			if ref.Path == "" {
-				ref.Path = path.Join(h.homeNamespace, p)
+				fp, err := h.fullPath(r.Context(), p)
+				if err != nil {
+					return nil, err
+				}
+				ref.Path = fp
 			} else {
 				ref.Path = path.Join(ref.Path, p)
 			}
 		}
 	} else {
 		if p := r.FormValue("path"); p != "" {
-			ref = provider.Reference{Path: path.Join(h.homeNamespace, p)}
+			fp, err := h.fullPath(r.Context(), p)
+			if err != nil {
+				return nil, err
+			}
+			ref = provider.Reference{Path: fp}
 		} else if spaceRef := r.FormValue("space_ref"); spaceRef != "" {
 			var err error
 			ref, err = utils.ParseStorageSpaceReference(spaceRef)
@@ -269,7 +296,7 @@ func (h *Handler) CreateShare(w http.ResponseWriter, r *http.Request) {
 // NotifyShare handles POST requests on /apps/files_sharing/api/v1/shares/(shareid)/notify.
 func (h *Handler) NotifyShare(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
-	opaqueID := strings.TrimSpace(chi.URLParam(r, "shareid"))
+	opaqueID := strings.TrimSpace(r.PathValue("shareid"))
 	if opaqueID == "" {
 		opaqueID = strings.TrimSpace(r.FormValue("share_id"))
 	}
@@ -520,7 +547,7 @@ type PublicShareContextName string
 func (h *Handler) GetShare(w http.ResponseWriter, r *http.Request) {
 	var share *conversions.ShareData
 	var resourceID *provider.ResourceId
-	shareID := chi.URLParam(r, "shareid")
+	shareID := r.PathValue("shareid")
 	ctx := r.Context()
 	log := appctx.GetLogger(r.Context())
 	log.Debug().Str("shareID", shareID).Msg("get share by id")
@@ -559,7 +586,7 @@ func (h *Handler) GetShare(w http.ResponseWriter, r *http.Request) {
 	*/
 
 	if err == nil && psRes.GetShare() != nil {
-		share = conversions.PublicShare2ShareData(psRes.Share, r, h.publicURL)
+		share = conversions.PublicShare2ShareData(psRes.Share, r)
 		resourceID = psRes.Share.ResourceId
 	}
 
@@ -633,7 +660,7 @@ func (h *Handler) GetShare(w http.ResponseWriter, r *http.Request) {
 
 // UpdateShare handles PUT requests on /apps/files_sharing/api/v1/shares/(shareid).
 func (h *Handler) UpdateShare(w http.ResponseWriter, r *http.Request) {
-	shareID := chi.URLParam(r, "shareid")
+	shareID := r.PathValue("shareid")
 	// FIXME: isPublicShare is already doing a GetShare and GetPublicShare,
 	// we should just reuse that object when doing updates
 	if h.isPublicShare(r, shareID) {
@@ -821,7 +848,7 @@ func (h *Handler) updateFederatedShare(w http.ResponseWriter, r *http.Request, s
 
 // RemoveShare handles DELETE requests on /apps/files_sharing/api/v1/shares/(shareid).
 func (h *Handler) RemoveShare(w http.ResponseWriter, r *http.Request) {
-	shareID := chi.URLParam(r, "shareid")
+	shareID := r.PathValue("shareid")
 	switch {
 	case h.isPublicShare(r, shareID):
 		h.removePublicShare(w, r, shareID)
@@ -876,7 +903,11 @@ func (h *Handler) listSharesWithMe(w http.ResponseWriter, r *http.Request) {
 	// we need to lookup the resource id so we can filter the list of shares later
 	if p != "" {
 		// prefix the path with the owners home, because ocs share requests are relative to the home dir
-		target := path.Join(h.homeNamespace, r.FormValue("path"))
+		target, err := h.fullPath(ctx, r.FormValue("path"))
+		if err != nil {
+			response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "error resolving path", err)
+			return
+		}
 
 		var status *rpc.Status
 		pinfo, status, err = h.getResourceInfoByPath(ctx, client, target)

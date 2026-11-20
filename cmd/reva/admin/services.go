@@ -22,131 +22,104 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
 	"sort"
 	"strings"
 	"time"
 
 	"github.com/cs3org/reva/v3/pkg/admin/adminpb"
+	"github.com/spf13/cobra"
 )
 
-// servicesHelp is the `admin services -h` guide: the subcommands, then the flags
-// grouped by the subcommand each applies to. Flags must precede the subcommand
-// token and the selector (Go's flag parser stops at the first positional).
-const servicesHelp = `admin services — inspect and operate the fleet's services
-
-Subcommands (a bare "services" lists them):
-  services [service]        list services with their nodes, state and health
-  services drain  <sel>     take matching instances out of rotation (no new traffic)
-  services enable <sel>     return matching instances to rotation
-  services activity <sel>   report in-flight / idle request activity
-
-  <sel> is a service name, a node id (host:port/svc), a host:port, a host, or *.
-
-Flags (place them before the subcommand and selector):
-  -admin-host <addr>   admin gRPC endpoint, persisted   (all subcommands)
-
-  list:      -v                 show every node, not a per-service summary
-             -o wide|json       output format
-             -state <s,...>      only nodes in these states (e.g. degraded,offline)
-
-  drain:     -y                 skip the confirmation prompt
-
-  activity:  -methods           break the counts down per RPC method
-             -wait              block until every matched instance is quiescent
-             -idle <dur>        with -wait: required idle time on top of 0 in-flight (default 5s)
-             -timeout <dur>     with -wait: give up after this long (default 2m)
-
-Examples:
-  admin services -v userprovider
-  admin services -y drain host1:9158
-  admin services -methods activity gateway
-  admin services -wait -idle 5s activity host1:9158    # then it is safe to restart
-`
-
-func adminServicesCommand() *command {
-	cmd := newCommand("services")
-	cmd.Description = func() string {
-		return "list services, drain/enable instances, or report request activity (one <service>; -v for every node)"
-	}
-	cmd.Usage = func() string {
-		return "Usage: admin services [-v] [-o wide|json] [-state ...] [service]\n" +
-			"       admin services drain|enable [-admin-host h] [-y] <selector>\n" +
-			"       admin services [-methods] [-wait [-timeout D] [-idle D]] activity <selector>"
-	}
-	// `services` multiplexes several subcommands over one flag set, so `-h`
-	// needs a hand-written guide grouping the flags under the subcommand each
-	// belongs to (Go's default flag dump can't).
-	cmd.FlagSet.Usage = func() { fmt.Fprint(cmd.Output(), servicesHelp) }
-	adminHost := cmd.String("admin-host", "", "address of the admin gRPC endpoint (persisted)")
-	verbose := cmd.Bool("v", false, "show every node instead of a per-service summary")
-	output := cmd.String("o", "", "output format: wide | json")
-	stateFilter := cmd.String("state", "", "only show nodes in these states (comma-separated, e.g. degraded,offline)")
-	yes := cmd.Bool("y", false, "skip the confirmation prompt when draining")
-	wait := cmd.Bool("wait", false, "activity: block until every matched instance is quiescent")
-	timeout := cmd.Duration("timeout", 2*time.Minute, "activity -wait: give up after this long")
-	idle := cmd.Duration("idle", 5*time.Second, "activity -wait: require this much idle time on top of zero in-flight")
-	methods := cmd.Bool("methods", false, "activity: break the counts down per RPC method")
-	cmd.ResetFlags = func() {
-		*adminHost, *verbose, *output, *stateFilter, *yes = "", false, "", "", false
-		*wait, *timeout, *idle, *methods = false, 2*time.Minute, 5*time.Second, false
-	}
-	cmd.Action = func(w ...io.Writer) error {
-		// `services drain|enable|activity <selector>` are subcommands; no reva
-		// service is named "drain", "enable" or "activity".
-		if cmd.NArg() > 0 {
-			switch cmd.Args()[0] {
-			case "drain":
-				return adminServicesRotation(*adminHost, cmd.Args()[1:], true, *yes)
-			case "enable":
-				return adminServicesRotation(*adminHost, cmd.Args()[1:], false, *yes)
-			case "activity":
-				return adminServicesActivity(*adminHost, cmd.Args()[1:], *wait, *timeout, *idle, *methods)
+func servicesCommand() *cobra.Command {
+	var verbose, wide bool
+	var stateFilter string
+	cmd := &cobra.Command{
+		Use:   "services [service]",
+		Short: "List services with their nodes, state and health",
+		Long: "List services with their nodes, state and health, or operate on instances.\n\n" +
+			"A <selector> is a service name, a node id (host:port/svc), a host:port, a host, or *.",
+		Example: "  reva admin services -v userprovider\n" +
+			"  reva admin services drain -y host1:9158\n" +
+			"  reva admin services activity --methods gateway\n" +
+			"  reva admin services activity --wait --idle 5s host1:9158    # then it is safe to restart",
+		Args: cobra.MaximumNArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			client, ctx, err := adminDial(cmd)
+			if err != nil {
+				return err
 			}
-		}
-		if err := validateOutput(*output); err != nil {
-			return err
-		}
-		client, ctx, err := adminDial(*adminHost)
-		if err != nil {
-			return err
-		}
-		var svcFilter string
-		if cmd.NArg() > 0 {
-			svcFilter = cmd.Args()[0]
-		}
-		res, err := client.ListServices(ctx, &adminpb.ListServicesRequest{Service: svcFilter})
-		if err != nil {
-			return adminErr(err)
-		}
-		var rows []nodeRow
-		for _, sv := range res.Services {
-			for _, n := range sv.Nodes {
-				rows = append(rows, nodeRowFrom(sv.Name, n))
+			var svcFilter string
+			if len(args) > 0 {
+				svcFilter = args[0]
 			}
-		}
-		rows = filterByState(rows, *stateFilter)
-		switch {
-		case *output == "json":
-			return renderJSON(rows)
-		case *verbose:
-			renderNodeTable(rows, *output == "wide")
-		default:
-			renderServiceSummary(rows, *output == "wide")
-		}
-		return nil
+			res, err := client.ListServices(ctx, &adminpb.ListServicesRequest{Service: svcFilter})
+			if err != nil {
+				return adminErr(err)
+			}
+			var rows []nodeRow
+			for _, sv := range res.Services {
+				for _, n := range sv.Nodes {
+					rows = append(rows, nodeRowFrom(sv.Name, n))
+				}
+			}
+			rows = filterByState(rows, stateFilter)
+			switch {
+			case rt.Output == "json":
+				return renderJSON(rows)
+			case verbose:
+				renderNodeTable(rows, wide)
+			default:
+				renderServiceSummary(rows, wide)
+			}
+			return nil
+		},
 	}
+	cmd.Flags().BoolVarP(&verbose, "verbose", "v", false, "show every node instead of a per-service summary")
+	cmd.Flags().BoolVar(&wide, "wide", false, "show more columns")
+	cmd.Flags().StringVar(&stateFilter, "state", "", "only show nodes in these states (comma-separated, e.g. degraded,offline)")
+
+	var yes bool
+	drain := &cobra.Command{
+		Use:   "drain <selector>",
+		Short: "Take the matching instances out of rotation (no new traffic)",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return adminServicesRotation(cmd, args[0], true, yes)
+		},
+	}
+	drain.Flags().BoolVarP(&yes, "yes", "y", false, "skip the confirmation prompt")
+	enable := &cobra.Command{
+		Use:   "enable <selector>",
+		Short: "Return the matching instances to rotation",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return adminServicesRotation(cmd, args[0], false, true)
+		},
+	}
+
+	var wait, methods bool
+	var waitTimeout, idle time.Duration
+	activity := &cobra.Command{
+		Use:   "activity <selector>",
+		Short: "Report the in-flight and idle request activity of the matching instances",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return adminServicesActivity(cmd, args[0], wait, waitTimeout, idle, methods)
+		},
+	}
+	activity.Flags().BoolVar(&methods, "methods", false, "break the counts down per RPC method")
+	activity.Flags().BoolVar(&wait, "wait", false, "block until every matched instance is quiescent")
+	activity.Flags().DurationVar(&waitTimeout, "wait-timeout", 2*time.Minute, "with --wait: give up after this long")
+	activity.Flags().DurationVar(&idle, "idle", 5*time.Second, "with --wait: required idle time on top of zero in-flight")
+
+	cmd.AddCommand(drain, enable, activity)
 	return cmd
 }
 
 // adminServicesRotation drains (out of rotation) or enables (back into
 // rotation) the selected instances by running the `rotation` invocation. Drain
 // confirms first unless yes, since it stops new traffic to the matched nodes.
-func adminServicesRotation(adminHost string, args []string, drain, yes bool) error {
-	if len(args) < 1 {
-		return errors.New("Usage: admin services drain|enable [-admin-host h] [-y] <selector>")
-	}
-	selector := args[0]
+func adminServicesRotation(cmd *cobra.Command, selector string, drain, yes bool) error {
 	state := "ready"
 	if drain {
 		state = "drain"
@@ -154,7 +127,7 @@ func adminServicesRotation(adminHost string, args []string, drain, yes bool) err
 			return errors.New("aborted")
 		}
 	}
-	client, ctx, err := adminDial(adminHost)
+	client, ctx, err := adminDial(cmd)
 	if err != nil {
 		return err
 	}
@@ -203,16 +176,12 @@ type activityMethod struct {
 }
 
 // adminServicesActivity reports each matched instance's request activity. With
-// -wait it polls until every instance is quiescent — zero in-flight and idle for
+// --wait it polls until every instance is quiescent — zero in-flight and idle for
 // at least idle — or timeout elapses, so a drain can be followed by a scripted
 // "wait until safe to restart". With methods it also prints the per-RPC-method
 // breakdown.
-func adminServicesActivity(adminHost string, args []string, wait bool, timeout, idle time.Duration, methods bool) error {
-	if len(args) < 1 {
-		return errors.New("Usage: admin services activity [-admin-host h] [-methods] [-wait [-timeout D] [-idle D]] <selector>")
-	}
-	selector := args[0]
-	client, ctx, err := adminDial(adminHost)
+func adminServicesActivity(cmd *cobra.Command, selector string, wait bool, timeout, idle time.Duration, methods bool) error {
+	client, ctx, err := adminDial(cmd)
 	if err != nil {
 		return err
 	}
@@ -309,14 +278,4 @@ func idleLabel(sec float64) string {
 		return "-"
 	}
 	return time.Duration(sec * float64(time.Second)).Round(time.Second).String()
-}
-
-// validateOutput rejects an unknown -o value.
-func validateOutput(o string) error {
-	switch o {
-	case "", "wide", "json":
-		return nil
-	default:
-		return fmt.Errorf("unknown -o %q (use wide or json)", o)
-	}
 }

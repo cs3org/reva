@@ -32,9 +32,11 @@ import (
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/rs/zerolog"
+	gstatus "google.golang.org/grpc/status"
 
 	"github.com/cs3org/reva/v3/internal/grpc/services/storageprovider"
 	"github.com/cs3org/reva/v3/internal/http/services/datagateway"
+	"github.com/cs3org/reva/v3/internal/http/services/owncloud/ocgraph"
 	"github.com/cs3org/reva/v3/pkg/appctx"
 	"github.com/cs3org/reva/v3/pkg/service"
 	"github.com/cs3org/reva/v3/pkg/spaces"
@@ -48,7 +50,12 @@ func (s *svc) handlePathGet(w http.ResponseWriter, r *http.Request, ns string) {
 	sublog := appctx.GetLogger(ctx).With().Str("path", fn).Str("svc", "ocdav").Str("handler", "get").Logger()
 
 	ref := &provider.Reference{Path: fn}
-	s.handleGet(ctx, w, r, ref, "simple", sublog)
+	dlProtocol := "simple"
+	if idRef, ok := requestWasMadeToResourceId(ctx, fn); ok {
+		// The storage provider serves a relative reference only with the spaces protocol.
+		ref, dlProtocol = idRef, "spaces"
+	}
+	s.handleGet(ctx, w, r, ref, dlProtocol, sublog)
 }
 
 func (s *svc) handleGet(ctx context.Context, w http.ResponseWriter, r *http.Request, ref *provider.Reference, dlProtocol string, log zerolog.Logger) {
@@ -81,7 +88,7 @@ func (s *svc) handleGet(ctx context.Context, w http.ResponseWriter, r *http.Requ
 	dRes, err := client.InitiateFileDownload(ctx, dReq)
 	if err != nil {
 		log.Error().Err(err).Msg("error initiating file download")
-		w.WriteHeader(http.StatusInternalServerError)
+		w.WriteHeader(ocgraph.GrpcCodeToHTTPStatus(gstatus.Code(err)))
 		return
 	} else if dRes.Status.Code != rpc.Code_CODE_OK {
 		HandleErrorStatus(&log, w, dRes.Status)
@@ -124,9 +131,15 @@ func (s *svc) handleGet(ctx context.Context, w http.ResponseWriter, r *http.Requ
 
 	info := sRes.Info
 
+	name := path.Base(r.URL.Path)
+	// A URL with only a resource id has no file name in its path.
+	if ref.ResourceId != nil {
+		name = path.Base(info.Path)
+	}
+
 	w.Header().Set(HeaderContentType, info.MimeType)
 	w.Header().Set(HeaderContentDisposistion, "attachment; filename*=UTF-8''"+
-		url.PathEscape(path.Base(r.URL.Path))+"; filename=\""+path.Base(r.URL.Path)+"\"")
+		url.PathEscape(name)+"; filename=\""+name+"\"")
 	w.Header().Set(HeaderETag, info.Etag)
 	w.Header().Set(HeaderOCFileID, spaces.EncodeToStringifiedResourceID(info.Id))
 	w.Header().Set(HeaderOCETag, info.Etag)
@@ -142,7 +155,12 @@ func (s *svc) handleGet(ctx context.Context, w http.ResponseWriter, r *http.Requ
 		w.Header().Set(HeaderContentLength, strconv.FormatUint(info.Size, 10))
 	}
 	if info.Checksum != nil && info.Checksum.Type != provider.ResourceChecksumType_RESOURCE_CHECKSUM_TYPE_INVALID && info.Checksum.Type != provider.ResourceChecksumType_RESOURCE_CHECKSUM_TYPE_UNSET {
-		w.Header().Set(HeaderOCChecksum, fmt.Sprintf("%s:%s", strings.ToUpper(string(storageprovider.GRPC2PKGXS(info.Checksum.Type))), info.Checksum.Sum))
+		// the Nextcloud client only accepts "Adler32", the ownCloud client accepts any case
+		checksumType := strings.ToUpper(string(storageprovider.GRPC2PKGXS(info.Checksum.Type)))
+		if info.Checksum.Type == provider.ResourceChecksumType_RESOURCE_CHECKSUM_TYPE_ADLER32 {
+			checksumType = "Adler32"
+		}
+		w.Header().Set(HeaderOCChecksum, fmt.Sprintf("%s:%s", checksumType, info.Checksum.Sum))
 	}
 	var c int64
 	if c, err = io.Copy(w, httpRes.Body); err != nil {

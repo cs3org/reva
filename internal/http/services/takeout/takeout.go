@@ -5,13 +5,13 @@ import (
 	"encoding/json"
 	"io"
 	"net/http"
-	"strings"
 	"time"
 
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/cs3org/reva/v3/pkg/appctx"
 	"github.com/cs3org/reva/v3/pkg/rhttp/global"
+	"github.com/cs3org/reva/v3/pkg/rhttp/router"
 	"github.com/cs3org/reva/v3/pkg/rjobs"
 	"github.com/cs3org/reva/v3/pkg/service"
 	"github.com/cs3org/reva/v3/pkg/takeout"
@@ -20,6 +20,9 @@ import (
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog"
 )
+
+// mount is where the service is served.
+const mount = "/takeout"
 
 /* Service registration */
 
@@ -32,7 +35,6 @@ func init() {
 
 // The takeout service Config
 type Config struct {
-	Prefix               string `mapstructure:"prefix"`
 	MachineSecret        string `mapstructure:"machine_secret" validate:"required"`
 	TakeoutAdminUsername string `mapstructure:"takeout_admin_username" validate:"required"`
 	TakeoutPath          string `mapstructure:"takeout_path" validate:"required"`
@@ -68,9 +70,6 @@ func New(ctx context.Context, m map[string]any) (global.Service, error) {
 
 // ApplyDefaults sets the default service config
 func (c *Config) ApplyDefaults() {
-	if c.Prefix == "" {
-		c.Prefix = "takeout"
-	}
 	if c.CleanupSchedule == "" {
 		c.CleanupSchedule = "@daily"
 	}
@@ -104,41 +103,11 @@ func (s *svc) Close() error {
 	return nil
 }
 
-// Prefix sets the prefix
-func (s *svc) Prefix() string {
-	return s.conf.Prefix
-}
-
-// Unprotected sets the unprotected paths
-func (s *svc) Unprotected() []string {
-	return nil
-}
-
-// Handler propagates the request depending on the suffix
-func (s *svc) Handler() http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		// The only accepted suffix should be the conf one
-		url := strings.TrimSuffix(r.URL.Path, "/")
-		if url != "" {
-			s.log.Warn().Msgf("takeout: %s is not a supported suffix", url)
-			w.WriteHeader(http.StatusNotFound)
-			return
-		}
-
-		// Dispatch depending on request method
-		s.log.Debug().Msgf("takeout: handling method %s", r.Method)
-		switch r.Method {
-		case http.MethodPost:
-			s.handlePost(w, r)
-		case http.MethodGet:
-			s.handleGet(w, r)
-		case http.MethodDelete:
-			s.handleDelete(w, r)
-		default:
-			s.log.Warn().Msgf("takeout: %s is not a supported method", r.Method)
-			w.WriteHeader(http.StatusMethodNotAllowed)
-		}
-	})
+// Routes declares the takeout endpoints.
+func (s *svc) Routes(r *router.Router) {
+	r.Post(mount, s.handlePost)
+	r.Get(mount, s.handleGet)
+	r.Delete(mount, s.handleDelete)
 }
 
 func (s *svc) handlePost(w http.ResponseWriter, r *http.Request) {

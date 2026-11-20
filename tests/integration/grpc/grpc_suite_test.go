@@ -19,7 +19,10 @@
 package grpc_test
 
 import (
+	"bytes"
 	"context"
+	"crypto/rand"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"maps"
@@ -33,6 +36,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/BurntSushi/toml"
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	"github.com/cs3org/reva/v3/pkg/appctx"
 	"github.com/cs3org/reva/v3/pkg/auth/scope"
@@ -49,8 +53,14 @@ const timeoutMs = 30000
 
 var mutex = sync.Mutex{}
 var port = 25000
+var testJWTSecret string
 
 func TestGrpc(t *testing.T) {
+	key := make([]byte, 32)
+	if _, err := rand.Read(key); err != nil {
+		t.Fatal(err)
+	}
+	testJWTSecret = hex.EncodeToString(key)
 	RegisterFailHandler(Fail)
 	RunSpecs(t, "Grpc Suite")
 }
@@ -225,10 +235,24 @@ func startRevads(configs map[string]string, externalFiles map[string]string,
 			for name, address := range httpAddresses {
 				cfg = strings.ReplaceAll(cfg, "{{"+name+"_http_address}}", address)
 			}
+			var configValues map[string]any
+			if _, err := toml.Decode(cfg, &configValues); err != nil {
+				return errors.Wrap(err, "Could not decode test config")
+			}
+			shared, ok := configValues["shared"].(map[string]any)
+			if !ok {
+				shared = map[string]any{}
+				configValues["shared"] = shared
+			}
+			shared["jwt_secret"] = testJWTSecret
+			var encodedConfig bytes.Buffer
+			if err := toml.NewEncoder(&encodedConfig).Encode(configValues); err != nil {
+				return errors.Wrap(err, "Could not encode test config")
+			}
 			if err := os.MkdirAll(filepath.Dir(newCfgPath), 0755); err != nil {
 				return errors.Wrapf(err, "cannot create config folders")
 			}
-			err = os.WriteFile(newCfgPath, []byte(cfg), 0644)
+			err = os.WriteFile(newCfgPath, encodedConfig.Bytes(), 0644)
 			if err != nil {
 				return errors.Wrapf(err, "Could not write config file")
 			}

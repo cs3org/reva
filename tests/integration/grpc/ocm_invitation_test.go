@@ -24,6 +24,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"net/http/httptest"
 	"os"
 
 	gatewaypb "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
@@ -55,8 +56,9 @@ func ocmUserEqual(u1, u2 *userpb.User) bool {
 
 var _ = Describe("ocm invitation workflow", func() {
 	var (
-		err    error
-		revads = map[string]*Revad{}
+		err      error
+		revads   = map[string]*Revad{}
+		wopiStub *httptest.Server
 
 		variables = map[string]string{}
 
@@ -113,11 +115,18 @@ var _ = Describe("ocm invitation workflow", func() {
 	for _, driver := range []string{"json"} {
 
 		JustBeforeEach(func() {
-			tokenManager, err := jwt.New(map[string]any{"secret": "changemeplease"})
+			tokenManager, err := jwt.New(map[string]any{"secret": testJWTSecret})
 			Expect(err).ToNot(HaveOccurred())
 			ctxEinstein = ctxWithAuthToken(tokenManager, einstein)
 			ctxMarie = ctxWithAuthToken(tokenManager, marie)
 			variables["ocm_driver"] = driver
+			resources := map[string]Resource{
+				"ocm_share_cernbox_file": File{Content: "{}"},
+				"ocm_share_cesnet_file":  File{Content: "{}"},
+				"localhome_root":         Folder{},
+			}
+			addSigningKeys(resources)
+			wopiStub = startWopiStub(variables)
 			revads, err = startRevads(map[string]string{
 				"cernboxgw":          "ocm-server-cernbox-grpc.toml",
 				"cernboxhome":        "cernbox-home-server.toml",
@@ -125,11 +134,7 @@ var _ = Describe("ocm invitation workflow", func() {
 				"cernboxmachineauth": "cernbox-machine-authprovider.toml",
 			}, map[string]string{
 				"providers": "ocm-providers.demo.json",
-			}, map[string]Resource{
-				"ocm_share_cernbox_file": File{Content: "{}"},
-				"ocm_share_cesnet_file":  File{Content: "{}"},
-				"localhome_root":         Folder{},
-			}, variables)
+			}, resources, variables)
 			Expect(err).ToNot(HaveOccurred())
 			cernboxgw, err = service.GatewayAt(revads["cernboxgw"].GrpcAddress)
 			Expect(err).ToNot(HaveOccurred())
@@ -139,6 +144,7 @@ var _ = Describe("ocm invitation workflow", func() {
 		})
 
 		AfterEach(func() {
+			wopiStub.Close()
 			for _, r := range revads {
 				Expect(r.Cleanup(CurrentGinkgoTestDescription().Failed)).To(Succeed())
 			}

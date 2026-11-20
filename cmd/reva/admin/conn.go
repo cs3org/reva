@@ -29,27 +29,23 @@ import (
 	"strings"
 	"time"
 
+	"github.com/cs3org/reva/v3/cmd/reva/internal/cli"
 	"github.com/cs3org/reva/v3/pkg/admin/adminpb"
-	"github.com/cs3org/reva/v3/pkg/appctx"
+	"github.com/spf13/cobra"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/credentials/insecure"
-	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
 )
 
-// resolveAdminHost returns the admin endpoint, persisting a -admin-host flag via
-// the caller's callback when given so it need not be repeated.
-func resolveAdminHost(flagVal string) (string, error) {
-	if flagVal != "" {
-		cliOpts.PersistAdminHost(flagVal)
-		return flagVal, nil
+// resolveAdminHost returns the admin endpoint from the flag, the environment
+// or the config file.
+func resolveAdminHost() (string, error) {
+	if rt.AdminHost != "" {
+		return rt.AdminHost, nil
 	}
-	if h := cliOpts.AdminHost(); h != "" {
-		return h, nil
-	}
-	return "", errors.New("admin host not set: pass -admin-host <host:port> once (it is persisted for next time)")
+	return "", errors.New("admin host not set: pass --admin-host, set REVA_ADMIN_HOST or run `reva config set admin-host <host:port>`")
 }
 
 // isSocketHost reports whether the admin host is a local Unix socket
@@ -63,10 +59,10 @@ const adminMaxRecvMsgSize = 64 << 20
 
 func adminConn(host string) (*grpc.ClientConn, error) {
 	opts := []grpc.DialOption{grpc.WithDefaultCallOptions(grpc.MaxCallRecvMsgSize(adminMaxRecvMsgSize))}
-	if cliOpts.Insecure || isSocketHost(host) {
+	if rt.Insecure || isSocketHost(host) {
 		opts = append(opts, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	} else {
-		tlsconf := &tls.Config{InsecureSkipVerify: cliOpts.SkipVerify}
+		tlsconf := &tls.Config{InsecureSkipVerify: rt.SkipVerify}
 		opts = append(opts, grpc.WithTransportCredentials(credentials.NewTLS(tlsconf)))
 	}
 	return grpc.NewClient(host, opts...)
@@ -82,29 +78,22 @@ func adminClientAt(host string) (adminpb.AdminAPIClient, error) {
 
 // adminAuthContext attaches the stored short-TTL admin token. Every subcommand
 // except `elevate` uses it.
-func adminAuthContext() (context.Context, error) {
-	t, err := readAdminToken()
-	if err != nil || t == "" {
-		return nil, errors.New("no admin token found: run `admin elevate` first")
+func adminAuthContext(ctx context.Context) (context.Context, error) {
+	t, err := rt.AdminToken()
+	if err != nil {
+		return nil, err
 	}
-	ctx := appctx.ContextSetToken(context.Background(), t)
-	ctx = metadata.AppendToOutgoingContext(ctx, appctx.TokenHeader, t)
-	return ctx, nil
+	return cli.WithToken(ctx, t), nil
 }
 
-// adminDial builds a client and its auth context. With no -admin-host it
-// prefers a working local-root socket, then falls back to the stored network
-// host + admin token. An explicit -admin-host always wins.
-func adminDial(adminHostFlag string) (adminpb.AdminAPIClient, context.Context, error) {
-	if adminHostFlag != "" {
-		host, err := resolveAdminHost(adminHostFlag)
-		if err != nil {
-			return nil, nil, err
-		}
-		return adminDialHost(host)
+// adminDial builds a client and its auth context. An admin host from the flag
+// or the environment always wins. Else it prefers a working local-root socket,
+// then falls back to the stored network host and the admin token.
+func adminDial(cmd *cobra.Command) (adminpb.AdminAPIClient, context.Context, error) {
+	ctx := cmd.Context()
+	if cmd.Flags().Changed("admin-host") || os.Getenv("REVA_ADMIN_HOST") != "" {
+		return adminDialHost(ctx, rt.AdminHost)
 	}
-
-	// No flag: try the local-root socket(s) first.
 	for _, p := range defaultSocketPaths() {
 		if !isSocketFile(p) {
 			continue
@@ -113,30 +102,28 @@ func adminDial(adminHostFlag string) (adminpb.AdminAPIClient, context.Context, e
 		if err != nil {
 			continue
 		}
-		if adminSocketWorks(client) {
-			return client, context.Background(), nil
+		if adminSocketWorks(ctx, client) {
+			return client, ctx, nil
 		}
 	}
-
-	// Fall back to the stored network admin host + token.
-	host, err := resolveAdminHost("")
+	host, err := resolveAdminHost()
 	if err != nil {
 		return nil, nil, err
 	}
-	return adminDialHost(host)
+	return adminDialHost(ctx, host)
 }
 
 // adminDialHost dials one resolved host: a socket needs no token, a network
 // host uses the stored one.
-func adminDialHost(host string) (adminpb.AdminAPIClient, context.Context, error) {
+func adminDialHost(ctx context.Context, host string) (adminpb.AdminAPIClient, context.Context, error) {
 	client, err := adminClientAt(host)
 	if err != nil {
 		return nil, nil, err
 	}
 	if isSocketHost(host) {
-		return client, context.Background(), nil
+		return client, ctx, nil
 	}
-	ctx, err := adminAuthContext()
+	ctx, err = adminAuthContext(ctx)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -160,8 +147,8 @@ func isSocketFile(p string) bool {
 
 // adminSocketWorks probes the socket with a cheap call; a denied or stale
 // socket returns false so the caller falls back.
-func adminSocketWorks(client adminpb.AdminAPIClient) bool {
-	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+func adminSocketWorks(ctx context.Context, client adminpb.AdminAPIClient) bool {
+	ctx, cancel := context.WithTimeout(ctx, 2*time.Second)
 	defer cancel()
 	_, err := client.GetServerInfo(ctx, &adminpb.GetServerInfoRequest{})
 	return err == nil
@@ -174,7 +161,7 @@ func adminErr(err error) error {
 	}
 	switch status.Code(err) {
 	case codes.Unauthenticated, codes.PermissionDenied:
-		return fmt.Errorf("%w (admin token may be expired or missing; re-run `admin elevate`)", err)
+		return fmt.Errorf("%w (admin token may be expired or missing; re-run `reva admin elevate`)", err)
 	default:
 		return err
 	}

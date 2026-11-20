@@ -113,7 +113,7 @@ func (fs *Eosfs) getUserIDGateway(ctx context.Context, uid string) (*userpb.User
 		return nil, status.NewErrorFromCode(getUserResp.Status.Code, "eosfs")
 	}
 
-	_ = fs.userIDCache.Set(uid, getUserResp.User.Id)
+	_ = fs.userIDCache.SetWithTTL(uid, getUserResp.User.Id, 12*time.Hour)
 	return getUserResp.User.Id, nil
 }
 
@@ -177,6 +177,12 @@ func (fs *Eosfs) getExternalAccountAuth(ctx context.Context, fn string) (eosclie
 	info, err := fs.c.GetFileInfoByPath(ctx, daemonAuth, fn)
 	if err != nil {
 		return invalidAuth(), err
+	}
+
+	// EOS does not check the access of the external user, only of the system
+	// user. Thus check the access before we give the system user an ACL here.
+	if perm := fs.permissionSet(ctx, info, nil); !perm.Stat {
+		return invalidAuth(), errtypes.PermissionDenied(fmt.Sprintf("eosfs: external user has no access to %s", fn))
 	}
 
 	hasAcl := false

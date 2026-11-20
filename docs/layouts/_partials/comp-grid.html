@@ -1,0 +1,7 @@
+{{- with . }}
+<div class="comp-list" data-filterable>
+  {{- range . }}
+  <a href="{{ .RelPermalink }}"><span class="n">{{ .LinkTitle }}</span>{{ with .Description }}<span class="d">{{ . | plainify | truncate 100 }}</span>{{ end }}</a>
+  {{- end }}
+</div>
+{{- end }}

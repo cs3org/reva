@@ -149,140 +149,110 @@ func (s *service) CreateStorageSpace(ctx context.Context, req *provider.CreateSt
 	return nil, errors.New("not supportedd")
 }
 
-func countTypeFilters(filters []*provider.ListStorageSpacesRequest_Filter) (count int) {
-	for _, f := range filters {
-		if f.Type == provider.ListStorageSpacesRequest_Filter_TYPE_SPACE_TYPE {
-			count++
-		}
-	}
-	return
-}
-
 func (s *service) ListStorageSpaces(ctx context.Context, req *provider.ListStorageSpacesRequest) (*provider.ListStorageSpacesResponse, error) {
 	user := appctx.ContextMustGetUser(ctx)
-	filters := req.Filters
-	log := appctx.GetLogger(ctx)
 
-	sp := []*provider.StorageSpace{}
-	// List all spaces, or look for a specific space
-	// -> we go over all the types
-	if id, byId := isFilterByID(filters); countTypeFilters(filters) == 0 || countTypeFilters(filters) == 1 && byId {
-		log.Debug().Bool("filterByID", byId).Str("id", id).Msg("ListStorageSpaces: going over all possible space types")
-		homes, err := s.listSpacesByType(ctx, req, user, spaces.SpaceTypeHome)
+	if id, byId := isFilterByID(req.Filters); byId {
+		sp, err := s.spaceByID(ctx, user, req.Filters, id)
 		if err != nil {
 			return &provider.ListStorageSpacesResponse{Status: status.NewStatusFromErrType(ctx, "error listing storage spaces", err)}, nil
 		}
-		sp = append(sp, homes...)
-		if byId && len(homes) == 1 {
-			return &provider.ListStorageSpacesResponse{Status: status.NewOK(ctx), StorageSpaces: sp}, nil
-		}
+		return &provider.ListStorageSpacesResponse{Status: status.NewOK(ctx), StorageSpaces: sp}, nil
+	}
 
-		projects, err := s.listSpacesByType(ctx, req, user, spaces.SpaceTypeProject)
-		if projects != nil {
-			sp = append(sp, projects...)
+	var types []spaces.SpaceType
+	for _, f := range req.Filters {
+		if f.Type == provider.ListStorageSpacesRequest_Filter_TYPE_SPACE_TYPE {
+			types = append(types, spaces.SpaceType(f.GetSpaceType()))
 		}
+	}
+	if len(types) == 0 {
+		types = []spaces.SpaceType{spaces.SpaceTypeHome, spaces.SpaceTypeProject, spaces.SpaceTypePublic}
+	}
+
+	sp := []*provider.StorageSpace{}
+	for _, spaceType := range types {
+		found, err := s.listSpacesByType(ctx, req.Filters, user, spaceType)
+		sp = append(sp, found...)
 		if err != nil {
 			return &provider.ListStorageSpacesResponse{Status: status.NewStatusFromErrType(ctx, "error listing storage spaces", err), StorageSpaces: sp}, nil
 		}
-		if byId && len(projects) == 1 {
-			return &provider.ListStorageSpacesResponse{Status: status.NewOK(ctx), StorageSpaces: sp}, nil
-		}
-
-		publicSpaces, err := s.listSpacesByType(ctx, req, user, spaces.SpaceTypePublic)
-		if err != nil {
-			return &provider.ListStorageSpacesResponse{Status: status.NewStatusFromErrType(ctx, "error listing storage spaces", err)}, nil
-		}
-		sp = append(sp, publicSpaces...)
-	} else {
-		// Here, we only check for the SpaceType filter
-		// Other filters are handled at the driver level
-		for _, filter := range filters {
-			switch filter.Type {
-			case provider.ListStorageSpacesRequest_Filter_TYPE_SPACE_TYPE:
-				id, byId := isFilterByID(filters)
-				log.Debug().Bool("filterByID", byId).Str("id", id).Msgf("ListStorageSpaces: listing type %s", filter.Term.(*provider.ListStorageSpacesRequest_Filter_SpaceType).SpaceType)
-				spaces, err := s.listSpacesByType(ctx, req, user, spaces.SpaceType(filter.Term.(*provider.ListStorageSpacesRequest_Filter_SpaceType).SpaceType))
-				if err != nil {
-					return &provider.ListStorageSpacesResponse{Status: status.NewStatusFromErrType(ctx, "error listing storage spaces", err)}, nil
-				}
-				sp = append(sp, spaces...)
-			}
-		}
-
 	}
-
 	return &provider.ListStorageSpacesResponse{Status: status.NewOK(ctx), StorageSpaces: sp}, nil
 }
 
-func (s *service) listSpacesByType(ctx context.Context, req *provider.ListStorageSpacesRequest, user *userpb.User, spaceType spaces.SpaceType) ([]*provider.StorageSpace, error) {
-	sp := []*provider.StorageSpace{}
+// spaceByID returns the space with the given ID, or no space. The ID holds the
+// path of the space root, so only the home, the public space or the project at
+// that path is looked up: a failed stat is not cached, so it would run again.
+func (s *service) spaceByID(ctx context.Context, user *userpb.User, filters []*provider.ListStorageSpacesRequest_Filter, id string) ([]*provider.StorageSpace, error) {
+	var root string
+	if _, p, ok := spaces.DecodeStorageSpaceIDToPath(id); ok {
+		root = p
+	} else if p, err := spaces.DecodeSpaceID(id); err == nil {
+		root = p
+	}
 
+	if root == templates.WithUser(user, s.c.UserSpace) {
+		home, err := s.userSpace(ctx, user)
+		if err != nil || home == nil || home.Id.OpaqueId != id {
+			return nil, err
+		}
+		return []*provider.StorageSpace{home}, nil
+	}
+
+	public, err := s.getPublicSpaceAt(ctx, root)
+	if err != nil {
+		return nil, err
+	}
+	if public != nil && public.Id.OpaqueId == id {
+		return []*provider.StorageSpace{public}, nil
+	}
+
+	// The catalogue matches the ID itself, with or without the storage ID.
+	return s.listProjects(ctx, filters)
+}
+
+// listSpacesByType lists the spaces of the given type that the user can see.
+func (s *service) listSpacesByType(ctx context.Context, filters []*provider.ListStorageSpacesRequest_Filter, user *userpb.User, spaceType spaces.SpaceType) ([]*provider.StorageSpace, error) {
 	switch spaceType {
 	case spaces.SpaceTypeHome:
-		space, err := s.userSpace(ctx, user)
-		if err != nil {
+		home, err := s.userSpace(ctx, user)
+		if err != nil || home == nil {
 			return nil, err
 		}
-		if space != nil {
-			if id, byId := isFilterByID(req.Filters); byId {
-				if space.Id.OpaqueId == id {
-					sp = append(sp, space)
-				}
-			} else {
-				sp = append(sp, space)
-			}
-		}
+		return []*provider.StorageSpace{home}, nil
 	case spaces.SpaceTypeProject:
-		resp, err := s.projects.ListStorageSpaces(ctx, &provider.ListStorageSpacesRequest{
-			Filters: req.Filters,
-		}, projects.ProjectStatusActive)
+		sp, err := s.listProjects(ctx, filters)
 		if err != nil {
 			return nil, err
 		}
-		if resp.Status.Code != rpcv1beta1.Code_CODE_OK {
-			return nil, fmt.Errorf("%s: %s", resp.Status.Code.String(), resp.Status.Message)
-		}
-
-		projects := resp.StorageSpaces
-		if projects, err = s.decorateProjects(ctx, projects); err != nil {
-			return nil, err
-		}
-		sp = append(sp, projects...)
 
 		// For now, we also return public spaces when you query for projects
 		// as the front-end will filter these
-		// but only if the request was not made with an ID-filter,
-		// as that would mean the requestor is looking for a specific space
-		//
-		// Having a `fallthrough` here would've been nice, but Go does
-		// not allow conditional fallthroughs
-		if _, isFilterById := isFilterByID(req.Filters); !isFilterById {
-			publicSpaces, err := s.getAllPublicSpaces(ctx)
-			if err != nil {
-				log.Error().Err(err).Msgf("Failed to get public spaces in call to listSpacesByType with type project")
-				return sp, err
-			}
-
-			sp = append(sp, publicSpaces...)
-		}
-
-	case spaces.SpaceTypePublic:
 		publicSpaces, err := s.getAllPublicSpaces(ctx)
 		if err != nil {
-			return nil, err
+			log.Error().Err(err).Msgf("Failed to get public spaces in call to listSpacesByType with type project")
+			return sp, err
 		}
-		if id, byId := isFilterByID(req.Filters); byId {
-			for _, space := range publicSpaces {
-				if space.Id.OpaqueId == id {
-					sp = append(sp, space)
-				}
-			}
-		} else {
-			sp = append(sp, publicSpaces...)
-		}
+		return append(sp, publicSpaces...), nil
+	case spaces.SpaceTypePublic:
+		return s.getAllPublicSpaces(ctx)
 	}
+	return nil, nil
+}
 
-	return sp, nil
+// listProjects returns the active projects that match the filters and that the user can see.
+func (s *service) listProjects(ctx context.Context, filters []*provider.ListStorageSpacesRequest_Filter) ([]*provider.StorageSpace, error) {
+	resp, err := s.projects.ListStorageSpaces(ctx, &provider.ListStorageSpacesRequest{
+		Filters: filters,
+	}, projects.ProjectStatusActive)
+	if err != nil {
+		return nil, err
+	}
+	if resp.Status.Code != rpcv1beta1.Code_CODE_OK {
+		return nil, fmt.Errorf("%s: %s", resp.Status.Code.String(), resp.Status.Message)
+	}
+	return s.decorateProjects(ctx, resp.StorageSpaces)
 }
 
 // decorateProjects adds quota and mtime to each project.
@@ -395,10 +365,11 @@ func (s *service) decorateProject(ctx context.Context, proj *provider.StorageSpa
 			return fmt.Errorf("failed to stat path %s for project %s", proj.RootInfo.Path, proj.Name)
 		}
 		resourceInfo = statRes.Info
-		s.resourceInfoCache.Set(proj.RootInfo.Path, resourceInfo)
+		s.resourceInfoCache.SetWithExpire(proj.RootInfo.Path, resourceInfo, s.resourceInfoCacheTTL)
 	}
 
 	proj.Mtime = resourceInfo.Mtime
+	proj.Root = resourceInfo.Id
 	return nil
 }
 
@@ -471,6 +442,33 @@ func (s *service) userSpace(ctx context.Context, user *userpb.User) (*provider.S
 }
 
 func (s *service) getAllPublicSpaces(ctx context.Context) ([]*provider.StorageSpace, error) {
+	publicSpaces := make([]*provider.StorageSpace, 0)
+	for spaceName, content := range s.c.PublicSpaces {
+		space, err := s.publicSpace(ctx, spaceName, content)
+		if err != nil {
+			return nil, err
+		}
+		if space != nil {
+			publicSpaces = append(publicSpaces, space)
+		}
+	}
+	return publicSpaces, nil
+}
+
+// getPublicSpaceAt returns the public space at path, or nil when there is none
+// or when its root cannot be stat'ed.
+func (s *service) getPublicSpaceAt(ctx context.Context, path string) (*provider.StorageSpace, error) {
+	for spaceName, content := range s.c.PublicSpaces {
+		if content["path"] == path {
+			return s.publicSpace(ctx, spaceName, content)
+		}
+	}
+	return nil, nil
+}
+
+// publicSpace returns the public space with the given config, or nil when its
+// root cannot be stat'ed.
+func (s *service) publicSpace(ctx context.Context, spaceName string, content map[string]string) (*provider.StorageSpace, error) {
 	log := appctx.GetLogger(ctx)
 
 	gw, err := revaservice.Gateway(ctx)
@@ -483,75 +481,71 @@ func (s *service) getAllPublicSpaces(ctx context.Context) ([]*provider.StorageSp
 		return nil, errtypes.UserRequired("Must have a user to list public spaces")
 	}
 
-	publicSpaces := make([]*provider.StorageSpace, 0)
-	for spaceName, content := range s.c.PublicSpaces {
-		path, ok := content["path"]
-		if !ok {
-			log.Error().Msgf("No `path` found for public space %s, ignoring this space", spaceName)
-			continue
-		}
+	path, ok := content["path"]
+	if !ok {
+		log.Error().Msgf("No `path` found for public space %s, ignoring this space", spaceName)
+		return nil, nil
+	}
 
-		var resourceInfo *provider.ResourceInfo
-		if res, err := s.resourceInfoCache.Get(path); err == nil && res != nil {
-			resourceInfo = res
+	var resourceInfo *provider.ResourceInfo
+	if res, err := s.resourceInfoCache.Get(path); err == nil && res != nil {
+		resourceInfo = res
+	} else {
+		statRes, err := gw.Stat(ctx, &provider.StatRequest{Ref: &provider.Reference{
+			Path: path,
+		}})
+		if err != nil || statRes == nil || statRes.Status == nil || statRes.Status.Code != rpcv1beta1.Code_CODE_OK {
+			log.Error().Err(err).Any("statRes", statRes).Msgf("Failed to stat path %s for public space %s, ignoring this space", path, spaceName)
 		} else {
-			statRes, err := gw.Stat(ctx, &provider.StatRequest{Ref: &provider.Reference{
-				Path: path,
-			}})
-			if err != nil || statRes == nil || statRes.Status == nil || statRes.Status.Code != rpcv1beta1.Code_CODE_OK {
-				log.Error().Err(err).Any("statRes", statRes).Msgf("Failed to stat path %s for public space %s, ignoring this space", path, spaceName)
-			} else {
-				resourceInfo = statRes.Info
-				s.resourceInfoCache.Set(path, resourceInfo)
-			}
+			resourceInfo = statRes.Info
+			s.resourceInfoCache.SetWithExpire(path, resourceInfo, s.resourceInfoCacheTTL)
 		}
+	}
 
-		if resourceInfo == nil {
-			continue
-		}
+	if resourceInfo == nil {
+		return nil, nil
+	}
 
-		spaceID := spaces.EncodeStorageSpaceID(resourceInfo.Id.StorageId, resourceInfo.Id.SpaceId)
-		space := &provider.StorageSpace{
-			SpaceType: spaces.SpaceTypePublic.AsString(),
-			Root:      resourceInfo.Id,
-			Id: &provider.StorageSpaceId{
-				OpaqueId: spaceID,
-			},
-			RootInfo:        resourceInfo,
-			Mtime:           resourceInfo.Mtime,
-			Name:            spaceName,
-			HasTrashedItems: false,
-			Quota: &provider.Quota{
-				// 1 Exabyte
-				QuotaMaxBytes:  uint64(math.Pow10(18)),
-				RemainingBytes: uint64(math.Pow10(18)) - resourceInfo.Size,
-			},
-			Roles: []*provider.SpaceRole{
-				{
-					RoleName:      "user",
-					PermissionSet: resourceInfo.PermissionSet,
-					Recipients: []*provider.Grantee{
-						{
-							Type: provider.GranteeType_GRANTEE_TYPE_USER,
-							Id: &provider.Grantee_UserId{
-								UserId: user.Id,
-							},
+	spaceID := spaces.EncodeStorageSpaceID(resourceInfo.Id.StorageId, resourceInfo.Id.SpaceId)
+	space := &provider.StorageSpace{
+		SpaceType: spaces.SpaceTypePublic.AsString(),
+		Root:      resourceInfo.Id,
+		Id: &provider.StorageSpaceId{
+			OpaqueId: spaceID,
+		},
+		RootInfo:        resourceInfo,
+		Mtime:           resourceInfo.Mtime,
+		Name:            spaceName,
+		HasTrashedItems: false,
+		Quota: &provider.Quota{
+			// 1 Exabyte
+			QuotaMaxBytes:  uint64(math.Pow10(18)),
+			RemainingBytes: uint64(math.Pow10(18)) - resourceInfo.Size,
+		},
+		Roles: []*provider.SpaceRole{
+			{
+				RoleName:      "user",
+				PermissionSet: resourceInfo.PermissionSet,
+				Recipients: []*provider.Grantee{
+					{
+						Type: provider.GranteeType_GRANTEE_TYPE_USER,
+						Id: &provider.Grantee_UserId{
+							UserId: user.Id,
 						},
 					},
 				},
 			},
-		}
-
-		if description, ok := content["description"]; ok {
-			space.Description = description
-		}
-		if thumbnailPath, ok := content["thumbnail_path"]; ok {
-			space.ThumbnailId = thumbnailPath
-		}
-
-		publicSpaces = append(publicSpaces, space)
+		},
 	}
-	return publicSpaces, nil
+
+	if description, ok := content["description"]; ok {
+		space.Description = description
+	}
+	if thumbnailPath, ok := content["thumbnail_path"]; ok {
+		space.ThumbnailId = thumbnailPath
+	}
+
+	return space, nil
 }
 
 func (s *service) UpdateStorageSpace(ctx context.Context, req *provider.UpdateStorageSpaceRequest) (*provider.UpdateStorageSpaceResponse, error) {

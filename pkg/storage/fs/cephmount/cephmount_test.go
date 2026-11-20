@@ -19,12 +19,17 @@
 package cephmount
 
 import (
+	"context"
+	"io"
 	"os"
+	"path/filepath"
 	"testing"
+	"time"
 
 	userv1beta1 "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/cs3org/reva/v3/pkg/appctx"
+	"github.com/cs3org/reva/v3/pkg/storage"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -119,4 +124,67 @@ func TestCephMount_BasicOperations(t *testing.T) {
 	// Test Shutdown
 	err = fs.Shutdown(ctx)
 	assert.NoError(t, err)
+}
+
+func TestUploadDoesNotBlockOtherRequestsOfUser(t *testing.T) {
+	tmpDir := t.TempDir()
+	t.Setenv("CEPHMOUNT_TEST_CHROOT_DIR", tmpDir)
+	ctx := appctx.ContextSetUser(ContextWithTestLogger(t), GetCurrentTestUser(t))
+	fs, err := New(ctx, map[string]any{"testing_allow_local_mode": true})
+	require.NoError(t, err)
+	defer fs.Shutdown(ctx)
+
+	body, client := io.Pipe()
+	done := make(chan error, 1)
+	go func() {
+		done <- fs.Upload(ctx, &provider.Reference{Path: "/file.txt"}, body, nil)
+	}()
+	// The write returns when the upload reads the data, thus the upload has started
+	_, err = client.Write([]byte("hello "))
+	require.NoError(t, err)
+
+	// The client sends no more data for now, but the other requests of the user must still run
+	statCtx, cancel := context.WithTimeout(ctx, time.Second)
+	defer cancel()
+	_, err = fs.GetMD(statCtx, &provider.Reference{Path: "."}, nil)
+	require.NoError(t, err)
+
+	_, err = client.Write([]byte("world"))
+	require.NoError(t, err)
+	require.NoError(t, client.Close())
+	require.NoError(t, <-done)
+
+	data, err := os.ReadFile(filepath.Join(tmpDir, "file.txt"))
+	require.NoError(t, err)
+	assert.Equal(t, "hello world", string(data))
+}
+
+func TestDownloadRanges(t *testing.T) {
+	tmpDir := t.TempDir()
+	t.Setenv("CEPHMOUNT_TEST_CHROOT_DIR", tmpDir)
+	ctx := appctx.ContextSetUser(ContextWithTestLogger(t), GetCurrentTestUser(t))
+	fs, err := New(ctx, map[string]any{"testing_allow_local_mode": true})
+	require.NoError(t, err)
+	defer fs.Shutdown(ctx)
+	require.NoError(t, os.WriteFile(filepath.Join(tmpDir, "file.txt"), []byte("hello world"), 0o644))
+
+	for _, tc := range []struct {
+		name   string
+		ranges []storage.Range
+		want   string
+	}{
+		{"whole file", nil, "hello world"},
+		{"one range", []storage.Range{{Start: 6, Length: 5}}, "world"},
+		// The parts come in the order of the ranges, not of the file
+		{"several ranges", []storage.Range{{Start: 6, Length: 5}, {Start: 0, Length: 5}}, "worldhello"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			rc, err := fs.Download(ctx, &provider.Reference{Path: "/file.txt"}, tc.ranges)
+			require.NoError(t, err)
+			defer rc.Close()
+			data, err := io.ReadAll(rc)
+			require.NoError(t, err)
+			assert.Equal(t, tc.want, string(data))
+		})
+	}
 }

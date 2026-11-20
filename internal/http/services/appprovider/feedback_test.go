@@ -31,6 +31,7 @@ import (
 	"github.com/cs3org/reva/v3/pkg/appctx"
 	"github.com/cs3org/reva/v3/pkg/notifications"
 	"github.com/cs3org/reva/v3/pkg/notifications/model"
+	"github.com/cs3org/reva/v3/pkg/rhttp/router"
 	"github.com/cs3org/reva/v3/pkg/sharedconf"
 	"google.golang.org/grpc"
 )
@@ -138,8 +139,10 @@ func TestHandleFeedbackValidation(t *testing.T) {
 
 func TestFeedbackEndpointIsProtected(t *testing.T) {
 	s := &svc{}
-	for _, path := range s.Unprotected() {
-		if path == "/feedback" {
+	r := router.New()
+	s.Routes(r)
+	for _, path := range r.Unprotected() {
+		if path == mount+"/feedback" {
 			t.Fatalf("/feedback must not be listed as unprotected")
 		}
 	}

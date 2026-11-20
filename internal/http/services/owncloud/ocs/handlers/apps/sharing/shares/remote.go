@@ -39,7 +39,6 @@ import (
 	"github.com/cs3org/reva/v3/pkg/permissions"
 	"github.com/cs3org/reva/v3/pkg/service"
 	"github.com/cs3org/reva/v3/pkg/utils"
-	"github.com/go-chi/chi/v5"
 	"github.com/pkg/errors"
 )
 
@@ -112,7 +111,7 @@ func (h *Handler) createFederatedCloudShare(w http.ResponseWriter, r *http.Reque
 		RecipientMeshProvider: providerInfoResp.ProviderInfo,
 		AccessMethods: []*ocm.AccessMethod{
 			share.NewWebDavAccessMethod(role.CS3ResourcePermissions(), []ocm.AccessType{ocm.AccessType_ACCESS_TYPE_REMOTE}, []string{}),
-			share.NewWebappAccessMethod(role.CS3ResourcePermissions(), share.DefaultWebappRequirements, ""),
+			share.NewWebappAccessMethod(role.CS3ResourcePermissions(), share.DefaultWebappRequirements),
 		},
 	})
 	if err != nil {
@@ -160,7 +159,7 @@ func (h *Handler) GetFederatedShare(w http.ResponseWriter, r *http.Request) {
 	// TODO: Implement response with HAL schemating
 	ctx := r.Context()
 
-	shareID := chi.URLParam(r, "shareid")
+	shareID := r.PathValue("shareid")
 	gatewayClient, err := service.Gateway(ctx)
 	if err != nil {
 		response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "error getting grpc gateway client", err)

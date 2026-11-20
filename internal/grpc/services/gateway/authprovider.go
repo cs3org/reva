@@ -21,6 +21,7 @@ package gateway
 import (
 	"context"
 	"fmt"
+	"strings"
 
 	authpb "github.com/cs3org/go-cs3apis/cs3/auth/provider/v1beta1"
 	registry "github.com/cs3org/go-cs3apis/cs3/auth/registry/v1beta1"
@@ -144,6 +145,13 @@ func (s *svc) Authenticate(ctx context.Context, req *gateway.AuthenticateRequest
 		}
 		return res, nil
 	}
+
+	// One line per login, with the account type, for the usage metrics.
+	log.Info().
+		Str("username", res.User.Username).
+		Str("user_type", userTypeLabel(res.User.Id.Type)).
+		Str("auth_type", req.Type).
+		Msg(AuthenticatedMessage)
 
 	if res.User.Id.Type == userpb.UserType_USER_TYPE_LIGHTWEIGHT && s.c.LightweightHomeLayout != "" && !s.c.DisableHomeCreationOnLogin && req.Type != "machine" {
 		// Unlike a primary home, the account is usable without it: it still
@@ -341,3 +349,11 @@ func (s *svc) statAndAddResource(ctx context.Context, r *storageprovider.Resourc
 	return scope.AddResourceInfoScope(statResponse.Info, role, scopeMap)
 }
 */
+
+// AuthenticatedMessage is logged once per successful authentication.
+const AuthenticatedMessage = "user authenticated"
+
+// userTypeLabel turns USER_TYPE_PRIMARY into "primary".
+func userTypeLabel(t userpb.UserType) string {
+	return strings.ToLower(strings.TrimPrefix(t.String(), "USER_TYPE_"))
+}

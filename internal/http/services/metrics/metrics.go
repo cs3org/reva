@@ -30,6 +30,7 @@ import (
 	"github.com/cs3org/reva/v3/pkg/metrics"
 	"github.com/cs3org/reva/v3/pkg/metrics/config"
 	"github.com/cs3org/reva/v3/pkg/rhttp/global"
+	"github.com/cs3org/reva/v3/pkg/rhttp/router"
 	"github.com/cs3org/reva/v3/pkg/utils/cfg"
 )
 
@@ -39,6 +40,10 @@ func init() {
 
 const (
 	serviceName = "metrics"
+
+	// mount is a placeholder endpoint: the service is not meant to be reached
+	// directly, it only starts a background process.
+	mount = "/register_metrics"
 )
 
 // Close is called when this service is being stopped.
@@ -46,26 +51,17 @@ func (s *svc) Close() error {
 	return nil
 }
 
-// Prefix returns the main endpoint of this service.
-func (s *svc) Prefix() string {
-	// We use a dummy endpoint as the service is not expected to be exposed
-	// directly to the user, but just start a background process.
-	return "register_metrics"
+// Routes declares the single placeholder endpoint: the service exists to start
+// a background process, not to serve requests.
+func (s *svc) Routes(r *router.Router) {
+	r.Any(mount, s.describe)
 }
 
-// Unprotected returns all endpoints that can be queried without prior authorization.
-func (s *svc) Unprotected() []string {
-	return []string{}
-}
-
-// Handler serves all HTTP requests.
-func (s *svc) Handler() http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		log := logger.New().With().Int("pid", os.Getpid()).Logger()
-		if _, err := w.Write([]byte("This is the metrics service.\n")); err != nil {
-			log.Error().Err(err).Msg("error writing metrics response")
-		}
-	})
+func (s *svc) describe(w http.ResponseWriter, r *http.Request) {
+	log := logger.New().With().Int("pid", os.Getpid()).Logger()
+	if _, err := w.Write([]byte("This is the metrics service.\n")); err != nil {
+		log.Error().Err(err).Msg("error writing metrics response")
+	}
 }
 
 // New returns a new metrics service.

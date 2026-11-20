@@ -1,0 +1,61 @@
+# One revad process with everything needed to log in and manage files.
+
+[shared]
+jwt_secret = "change-me"
+gatewaysvc = "localhost:19000"
+
+[grpc]
+address = "0.0.0.0:19000"
+
+[grpc.services.gateway]
+authregistrysvc = "localhost:19000"
+storageregistrysvc = "localhost:19000"
+userprovidersvc = "localhost:19000"
+transfer_shared_secret = "change-me-too"
+
+[grpc.services.authregistry]
+driver = "static"
+[grpc.services.authregistry.drivers.static.rules]
+basic = "localhost:19000"
+
+[grpc.services.authprovider]
+auth_manager = "json"
+[grpc.services.authprovider.auth_managers.json]
+users = "/etc/revad/users.json"
+
+[grpc.services.userprovider]
+driver = "json"
+[grpc.services.userprovider.drivers.json]
+users = "/etc/revad/users.json"
+
+[grpc.services.storageregistry]
+driver = "static"
+[grpc.services.storageregistry.drivers.static]
+home_provider = "/home"
+[grpc.services.storageregistry.drivers.static.rules]
+"/home" = { address = "localhost:19000" }
+
+[grpc.services.storageprovider]
+driver = "localhome"
+mount_path = "/home"
+mount_id = "home"
+space_depth = 1
+[grpc.services.storageprovider.drivers.localhome]
+root = "/var/tmp/reva/data"
+
+[http]
+address = "0.0.0.0:19001"
+
+[http.services.datagateway]
+transfer_shared_secret = "change-me-too"
+# The address clients use to send and fetch file data.
+public_url = "http://localhost:19001/datagateway"
+
+[http.services.dataprovider]
+driver = "localhome"
+mount_id = "home"
+[http.services.dataprovider.drivers.localhome]
+root = "/var/tmp/reva/data"
+
+[http.services.ocdav]
+webdav_namespace = "/home"

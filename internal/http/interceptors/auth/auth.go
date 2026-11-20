@@ -36,6 +36,7 @@ import (
 	signedurlregistry "github.com/cs3org/reva/v3/internal/http/interceptors/auth/signed_url/registry"
 	tokenregistry "github.com/cs3org/reva/v3/internal/http/interceptors/auth/token/registry"
 	tokenwriterregistry "github.com/cs3org/reva/v3/internal/http/interceptors/auth/tokenwriter/registry"
+	httplog "github.com/cs3org/reva/v3/internal/http/interceptors/log"
 	"github.com/cs3org/reva/v3/pkg/appctx"
 
 	"github.com/mitchellh/mapstructure"
@@ -49,11 +50,11 @@ import (
 	"github.com/cs3org/reva/v3/pkg/errtypes"
 	"github.com/cs3org/reva/v3/pkg/rgrpc/status"
 	"github.com/cs3org/reva/v3/pkg/rhttp/global"
+	"github.com/cs3org/reva/v3/pkg/rhttp/router"
 	"github.com/cs3org/reva/v3/pkg/service"
 	"github.com/cs3org/reva/v3/pkg/sharedconf"
 	"github.com/cs3org/reva/v3/pkg/token"
 	tokenmgr "github.com/cs3org/reva/v3/pkg/token/manager/registry"
-	"github.com/cs3org/reva/v3/pkg/utils"
 )
 
 var userGroupsCache gcache.Cache
@@ -87,35 +88,41 @@ func parseConfig(m map[string]any) (*config, error) {
 	return c, nil
 }
 
+// applyDefaults fills in the chains the middleware falls back to when the
+// configuration leaves them out. Schemes resolves a configuration the same
+// way, so what a deployment tells its clients cannot drift from what it
+// accepts.
+func (c *config) applyDefaults() {
+	if len(c.TokenStrategyChain) == 0 {
+		c.TokenStrategyChain = []string{"header"}
+	}
+
+	if c.TokenWriter == "" {
+		c.TokenWriter = "header"
+	}
+
+	if c.TokenManager == "" {
+		c.TokenManager = "jwt"
+	}
+
+	if len(c.CredentialChain) == 0 {
+		c.CredentialChain = []string{"basic", "bearer", "publicshares"}
+	}
+
+	if c.CredentialsByUserAgent == nil {
+		c.CredentialsByUserAgent = map[string]string{}
+	}
+}
+
 // New returns a new auth middleware.
-func New(m map[string]any, unprotected []string) (global.Middleware, error) {
+func New(m map[string]any) (global.Middleware, error) {
 	conf, err := parseConfig(m)
 	if err != nil {
 		return nil, err
 	}
 
 	conf.GatewaySvc = sharedconf.GetGatewaySVC(conf.GatewaySvc)
-
-	// set defaults
-	if len(conf.TokenStrategyChain) == 0 {
-		conf.TokenStrategyChain = []string{"header"}
-	}
-
-	if conf.TokenWriter == "" {
-		conf.TokenWriter = "header"
-	}
-
-	if conf.TokenManager == "" {
-		conf.TokenManager = "jwt"
-	}
-
-	if len(conf.CredentialChain) == 0 {
-		conf.CredentialChain = []string{"basic", "bearer", "publicshares"}
-	}
-
-	if conf.CredentialsByUserAgent == nil {
-		conf.CredentialsByUserAgent = map[string]string{}
-	}
+	conf.applyDefaults()
 
 	userGroupsCache = gcache.New(1000000).LFU().Build()
 
@@ -182,7 +189,6 @@ func New(m map[string]any, unprotected []string) (global.Middleware, error) {
 
 	mw := &middleware{
 		conf:               conf,
-		unprotected:        unprotected,
 		signedURLChain:     signedUrlChain,
 		tokenStrategyChain: tokenStrategyChain,
 		tokenManager:       tokenManager,
@@ -195,7 +201,6 @@ func New(m map[string]any, unprotected []string) (global.Middleware, error) {
 
 type middleware struct {
 	conf               *config
-	unprotected        []string
 	signedURLChain     []auth.SignedURLStrategy
 	tokenStrategyChain []auth.TokenStrategy
 	tokenManager       token.Manager
@@ -216,8 +221,12 @@ func (m *middleware) handler(h http.Handler) http.Handler {
 
 		log := appctx.GetLogger(r.Context())
 
-		if utils.Skip(r.URL.Path, m.unprotected) {
-			log.Info().Interface("unprotected", m.unprotected).Msg("skipping auth check for: " + r.URL.Path)
+		// The route the request resolved to says whether it authenticates
+		// itself. A request no route claimed is treated as protected: it is
+		// about to be refused anyway, and guessing the other way would hand
+		// out an exemption nobody declared.
+		if rt, ok := router.RouteFromContext(r.Context()); ok && rt.Unprotected {
+			log.Info().Str("route", rt.Pattern).Msg("skipping auth check for: " + r.URL.Path)
 		} else {
 			ctx, err := m.authenticateUser(w, r, false)
 			if err != nil {
@@ -419,6 +428,9 @@ func ctxWithUserInfo(ctx context.Context, r *http.Request, user *userpb.User, to
 	// searchable by user (reva admin trace -user).
 	l := appctx.GetLogger(ctx).With().Str("user", user.Username).Logger()
 	ctx = appctx.WithLogger(ctx, &l)
+	// And onto the request's own "processed http request" line, written
+	// by the logging middleware outside this one.
+	httplog.SetUser(ctx, user.Username)
 
 	return ctx
 }

@@ -20,24 +20,49 @@ package wellknown
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/url"
 	"path/filepath"
+	"strings"
+	"sync"
 
 	"github.com/cs3org/reva/v3/pkg/appctx"
+	"github.com/cs3org/reva/v3/pkg/ocm/httpsig"
+	"github.com/cs3org/reva/v3/pkg/sharedconf"
 )
 
-const OCMAPIVersion = "1.3.0"
+const webappReceiveTargetBlank = "blank"
+
+const (
+	MFAPolicyReject = "reject"
+	MFAPolicyOff    = "off"
+)
+
+var (
+	localWebappMu      sync.RWMutex
+	localWebappTargets []string
+	localWebappReady   bool
+
+	localMFAPolicyMu    sync.RWMutex
+	localMFAPolicy      string
+	localMFAPolicyReady bool
+)
+
+const OCMAPIVersion = "1.4.0"
 
 type OcmProviderConfig struct {
 	OCMPrefix          string `docs:"ocm;The prefix URL where the OCM API is served."                                            mapstructure:"ocm_prefix"`
-	Endpoint           string `docs:"This host's full URL. If it's not configured, it is assumed OCM is not available."          mapstructure:"endpoint"`
+	Endpoint           string `docs:";This host's full URL. If it's empty, the shared public_url is used. If both are empty, OCM is not available." mapstructure:"endpoint"`
 	Provider           string `docs:"reva;A friendly name that defines this service."                                            mapstructure:"provider"`
 	WebdavRoot         string `docs:"/remote.php/dav/ocm;The root URL of the WebDAV endpoint to serve OCM shares."               mapstructure:"webdav_root"`
 	InviteAcceptDialog string `docs:"/open-cloud-mesh/accept-invite;The frontend URL where to land when receiving an invitation" mapstructure:"invite_accept_dialog"`
-	EnableWebapp       bool   `docs:"false;Whether web apps are enabled in OCM shares."                                          mapstructure:"enable_webapp"`
+	EnableWebapp       bool   `docs:"false;Advertise webapp receive in discovery only. Distinct from webapps."              mapstructure:"enable_webapp"`
 	EnableEmbedded     bool   `docs:"false;Whether embedded shares are enabled in OCM shares."                                   mapstructure:"enable_embedded"`
 	EnableCodeFlow     bool   `docs:"false;Whether code-flow token exchange is enabled in OCM shares."                           mapstructure:"enable_code_flow"`
+	MFAPolicy          string `docs:"reject;Admission of received webapp must-use-mfa offers: reject or off. Off skips the check; nothing is advertised." mapstructure:"mfa_policy"`
+	SigningKey         string `docs:";Path to the PEM file of the Ed25519 private key for OCM HTTP signatures. Its public key is published at /.well-known/jwks.json." mapstructure:"signing_key" validate:"required"`
+	HTTPSigMode        string `docs:"permissive;permissive or strict. Strict lists the must-use-http-sig criterion. Use the same mode in the ocm service." mapstructure:"http_sig_mode" validate:"omitempty,oneof=permissive strict"`
 }
 
 type OcmDiscoveryData struct {
@@ -50,6 +75,7 @@ type OcmDiscoveryData struct {
 	Criteria           []string        `json:"criteria"           xml:"criteria"`
 	InviteAcceptDialog string          `json:"inviteAcceptDialog" xml:"inviteAcceptDialog"`
 	TokenEndPoint      string          `json:"tokenEndPoint,omitempty" xml:"tokenEndPoint,omitempty"`
+	JwksURI            string          `json:"jwksUri,omitempty"       xml:"jwksUri,omitempty"`
 }
 
 type ResourceTypes struct {
@@ -61,9 +87,104 @@ type ResourceTypes struct {
 type wkocmHandler struct {
 	data               *OcmDiscoveryData
 	payload, payloadNC []byte
+	jwks               []byte
+}
+
+// WebappReceiveTargets returns advertised receive targets; the only usable target is "blank".
+func WebappReceiveTargets(c *OcmProviderConfig) []string {
+	if c == nil || !c.EnableWebapp || !usableDiscoveryBase(c.Endpoint) {
+		return []string{}
+	}
+	return []string{webappReceiveTargetBlank}
+}
+
+// LocalWebappReceiveTargets returns published targets and whether the handler has initialized.
+func LocalWebappReceiveTargets() ([]string, bool) {
+	localWebappMu.RLock()
+	defer localWebappMu.RUnlock()
+	if !localWebappReady {
+		return nil, false
+	}
+	return append([]string{}, localWebappTargets...), true
+}
+
+// ResolveLocalWebappReceiveTargets treats nil as the published targets, an explicit
+// empty override as disabled receipt, and an unknown local configuration as no targets.
+func ResolveLocalWebappReceiveTargets(override *[]string) []string {
+	if override != nil {
+		return append([]string{}, (*override)...)
+	}
+	if targets, ok := LocalWebappReceiveTargets(); ok {
+		return targets
+	}
+	return []string{}
+}
+
+func publishLocalWebappReceiveTargets(targets []string) {
+	localWebappMu.Lock()
+	defer localWebappMu.Unlock()
+	localWebappReady = true
+	localWebappTargets = append([]string{}, targets...)
+}
+
+// LocalMFAPolicy returns the published receive-side MFA policy and whether init ran.
+func LocalMFAPolicy() (string, bool) {
+	localMFAPolicyMu.RLock()
+	defer localMFAPolicyMu.RUnlock()
+	if !localMFAPolicyReady {
+		return "", false
+	}
+	return localMFAPolicy, true
+}
+
+// ResolveLocalMFAPolicy treats a non-nil override as authoritative; unpublished or unknown -> reject.
+func ResolveLocalMFAPolicy(override *string) string {
+	if override != nil {
+		if *override == MFAPolicyOff {
+			return MFAPolicyOff
+		}
+		return MFAPolicyReject
+	}
+	if policy, ok := LocalMFAPolicy(); ok && policy == MFAPolicyOff {
+		return MFAPolicyOff
+	}
+	return MFAPolicyReject
+}
+
+func publishLocalMFAPolicy(policy string) {
+	localMFAPolicyMu.Lock()
+	defer localMFAPolicyMu.Unlock()
+	localMFAPolicyReady = true
+	localMFAPolicy = policy
+}
+
+func usableDiscoveryBase(raw string) bool {
+	if strings.TrimSpace(raw) == "" || strings.TrimSpace(raw) != raw {
+		return false
+	}
+	parsed, err := url.Parse(raw)
+	if err != nil || parsed == nil || parsed.User != nil || parsed.Opaque != "" {
+		return false
+	}
+	if parsed.Scheme != "http" && parsed.Scheme != "https" {
+		return false
+	}
+	if !parsed.IsAbs() || parsed.Hostname() == "" {
+		return false
+	}
+	if parsed.Host == "http:" || parsed.Host == "https:" || strings.Contains(parsed.Host, "://") {
+		return false
+	}
+	if strings.HasPrefix(parsed.Path, "//http://") || strings.HasPrefix(parsed.Path, "//https://") {
+		return false
+	}
+	return true
 }
 
 func (c *OcmProviderConfig) ApplyDefaults() {
+	if c.Endpoint == "" {
+		c.Endpoint = sharedconf.GetPublicURL()
+	}
 	if c.OCMPrefix == "" {
 		c.OCMPrefix = "ocm"
 	}
@@ -79,10 +200,28 @@ func (c *OcmProviderConfig) ApplyDefaults() {
 	if c.InviteAcceptDialog == "" {
 		c.InviteAcceptDialog = "/open-cloud-mesh/accept-invite"
 	}
+	if c.MFAPolicy == "" {
+		c.MFAPolicy = MFAPolicyReject
+	}
 }
 
-func (h *wkocmHandler) init(c *OcmProviderConfig) {
+func (c *OcmProviderConfig) validateMFAPolicy() error {
+	if c.MFAPolicy != MFAPolicyReject && c.MFAPolicy != MFAPolicyOff {
+		return fmt.Errorf("invalid ocmprovider mfa_policy %q: want reject or off", c.MFAPolicy)
+	}
+	return nil
+}
+
+func (h *wkocmHandler) init(c *OcmProviderConfig) error {
+	key, err := httpsig.LoadKey(c.SigningKey)
+	if err != nil {
+		return err
+	}
+	if h.jwks, err = key.JWKS(); err != nil {
+		return err
+	}
 	h.setData(h.buildData(c))
+	return nil
 }
 
 // setData stores d and encodes the responses once, the second one for the
@@ -102,6 +241,9 @@ func (h *wkocmHandler) buildData(c *OcmProviderConfig) *OcmDiscoveryData {
 	// generates the (static) data structure to be exposed by /.well-known/ocm:
 	// first prepare an empty and disabled payload
 	c.ApplyDefaults()
+	receiveTargets := WebappReceiveTargets(c)
+	publishLocalWebappReceiveTargets(receiveTargets)
+	publishLocalMFAPolicy(c.MFAPolicy)
 	d := &OcmDiscoveryData{}
 	d.Enabled = false
 	d.Endpoint = ""
@@ -114,13 +256,19 @@ func (h *wkocmHandler) buildData(c *OcmProviderConfig) *OcmDiscoveryData {
 	}}
 	d.Capabilities = []string{}
 
-	if c.Endpoint == "" {
+	if !usableDiscoveryBase(c.Endpoint) {
 		return d
 	}
 
 	endpointURL, err := url.Parse(c.Endpoint)
 	if err != nil {
 		return d
+	}
+
+	tokenEndpoint, tokenOK := advertisedTokenEndpoint(c.Endpoint, c.OCMPrefix)
+	if !c.EnableCodeFlow {
+		tokenEndpoint = ""
+		tokenOK = false
 	}
 
 	// now prepare the enabled one
@@ -132,11 +280,14 @@ func (h *wkocmHandler) buildData(c *OcmProviderConfig) *OcmDiscoveryData {
 	rtProtos["webdav-receive"] = map[string]any{
 		"uri": "absolute",
 	}
-	if c.EnableWebapp {
-		// if webapps are enabled, we can both send and receive webapp shares
-		rtProtos["webapp"] = map[string]any{}
+	if len(receiveTargets) > 0 {
 		rtProtos["webapp-receive"] = map[string]any{
-			"targets": []string{"blank"},
+			"targets": receiveTargets,
+		}
+		// Sending a webapp requires a usable code-flow token endpoint.
+		// Receiving only requires the discovery base and enable_webapp.
+		if tokenOK {
+			rtProtos["webapp"] = map[string]any{}
 		}
 	}
 	d.ResourceTypes = []ResourceTypes{
@@ -166,11 +317,24 @@ func (h *wkocmHandler) buildData(c *OcmProviderConfig) *OcmDiscoveryData {
 	d.Capabilities = []string{"invites", "protocol-object", "invite-wayf"}
 	d.Criteria = []string{"must-invite"}
 	d.InviteAcceptDialog, _ = url.JoinPath(c.Endpoint, c.InviteAcceptDialog)
-	if c.EnableCodeFlow {
-		d.TokenEndPoint, _ = TokenEndpoint(c.Endpoint, c.OCMPrefix)
+	if tokenOK {
+		d.TokenEndPoint = tokenEndpoint
 		d.Capabilities = append(d.Capabilities, "exchange-token")
 	}
+	d.JwksURI, _ = url.JoinPath(c.Endpoint, "/.well-known/jwks.json")
+	d.Capabilities = append(d.Capabilities, "http-sig")
+	if c.HTTPSigMode == "strict" {
+		d.Criteria = append(d.Criteria, "must-use-http-sig")
+	}
 	return d
+}
+
+func advertisedTokenEndpoint(baseURL, prefix string) (string, bool) {
+	endpoint, err := TokenEndpoint(baseURL, prefix)
+	if err != nil || !usableDiscoveryBase(endpoint) {
+		return "", false
+	}
+	return endpoint, true
 }
 
 // TokenEndpoint builds the advertised code-flow token endpoint for OCM discovery.
@@ -190,5 +354,13 @@ func (h *wkocmHandler) Ocm(w http.ResponseWriter, r *http.Request) {
 	}
 	if _, err := w.Write(payload); err != nil {
 		log.Err(err).Msg("Error writing to ResponseWriter")
+	}
+}
+
+// Jwks serves the JWK Set with the public key for OCM HTTP signatures.
+func (h *wkocmHandler) Jwks(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	if _, err := w.Write(h.jwks); err != nil {
+		appctx.GetLogger(r.Context()).Err(err).Msg("Error writing to ResponseWriter")
 	}
 }

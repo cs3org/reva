@@ -24,7 +24,6 @@ import (
 	"io"
 	"net/http"
 	"path"
-	"strings"
 	"time"
 
 	gateway "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
@@ -46,9 +45,8 @@ import (
 )
 
 func (s *svc) handleLegacyPublicLinkDownload(w http.ResponseWriter, r *http.Request) {
-	token := strings.TrimPrefix(r.URL.Path, "/")
 	files := getFilesFromRequest(r)
-	s.downloadFiles(r.Context(), w, token, files)
+	s.downloadFiles(r.Context(), w, r.PathValue("token"), files)
 }
 
 func getFilesFromRequest(r *http.Request) []string {

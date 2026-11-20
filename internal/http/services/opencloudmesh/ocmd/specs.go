@@ -24,7 +24,6 @@ import (
 	"fmt"
 	"net/url"
 	"reflect"
-	"slices"
 	"strings"
 
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
@@ -82,7 +81,6 @@ type NewShareRequest struct {
 	Sender            string    `json:"sender"            validate:"required"`                             // unique indentifier of the user who wants to share the resource at provider side
 	OwnerDisplayName  string    `json:"ownerDisplayName"`                                                  // display name of the owner of the resource
 	SenderDisplayName string    `json:"senderDisplayName"`                                                 // dispay name of the user who wants to share the resource
-	Code              string    `json:"code"`                                                              // nonce to be exchanged for a bearer token (not implemented for now)
 	ShareType         string    `json:"shareType"         validate:"required,oneof=user group federation"` // recipient share type (user or group)
 	ResourceType      string    `json:"resourceType"      validate:"required"`
 	Expiration        uint64    `json:"expiration"`
@@ -181,14 +179,19 @@ func (w *WebDAV) ToOCMProtocol() *ocm.Protocol {
 
 // Webapp contains the parameters for the Webapp protocol.
 type Webapp struct {
-	URI          string   `json:"uri" validate:"required"`
-	SharedSecret string   `json:"sharedSecret" validate:"required"`
-	Permissions  []string `json:"permissions" validate:"required,min=1,dive,required,oneof=view read write share"`
-	Requirements []string `json:"requirements" validate:"required,min=1"`
-	Targets      []string `json:"targets" validate:"required,min=1,dive,required,oneof=blank iframe"`
-	AppName      string   `json:"appName,omitempty"`
-	AppIconHint  string   `json:"appIconHint,omitempty"`
-	MediaTypes   []string `json:"mediaTypes,omitempty"`
+	URI          string      `json:"uri" validate:"required"`
+	SharedSecret string      `json:"sharedSecret" validate:"required"`
+	Permissions  []string    `json:"permissions" validate:"required,min=1,dive,required,oneof=view read write share"`
+	Requirements []string    `json:"requirements" validate:"required,min=1"`
+	Targets      []string    `json:"targets" validate:"required,min=1,dive,required,oneof=blank iframe"`
+	AppIconHint  string      `json:"appIconHint,omitempty"`
+	Apps         []WebappApp `json:"apps,omitempty" validate:"omitempty,min=1,dive"`
+}
+
+// WebappApp is a web application offered in the Webapp protocol.
+type WebappApp struct {
+	Name       string   `json:"name" validate:"required"`
+	MediaTypes []string `json:"mediaTypes" validate:"required,min=1,dive,required"`
 }
 
 // ToOCMProtocol convert the protocol to a ocm Protocol struct.
@@ -211,7 +214,11 @@ func (w *Webapp) ToOCMProtocol() *ocm.Protocol {
 			perms.AddGrant = true
 		}
 	}
-	return ocmshare.NewWebappProtocol(w.URI, w.SharedSecret, perms, w.Requirements, w.Targets, w.AppName, w.AppIconHint, w.MediaTypes)
+	var apps []*ocm.WebappApp
+	for _, a := range w.Apps {
+		apps = append(apps, &ocm.WebappApp{Name: a.Name, MediaTypes: a.MediaTypes})
+	}
+	return ocmshare.NewWebappProtocol(w.URI, w.SharedSecret, perms, w.Requirements, w.Targets, w.AppIconHint, apps)
 }
 
 // Embedded contains the parameters for the Embedded protocol.
@@ -248,7 +255,7 @@ func (p *Protocols) UnmarshalJSON(data []byte) error {
 		if name == "options" {
 			var opt map[string]any
 			if err := json.Unmarshal(d, &opt); err != nil {
-				return fmt.Errorf("malformed protocol options %s", d)
+				return errors.New("malformed protocol options")
 			}
 			if len(opt) > 0 {
 				// This is an OCM 1.0 payload: parse the secret and assume max
@@ -258,7 +265,7 @@ func (p *Protocols) UnmarshalJSON(data []byte) error {
 				// discovery, see shares.go.
 				ss, ok := opt["sharedSecret"].(string)
 				if !ok {
-					return fmt.Errorf("missing sharedSecret from options %s", d)
+					return errors.New("missing sharedSecret from options")
 				}
 				res = &WebDAV{
 					SharedSecret: ss,
@@ -321,7 +328,26 @@ func (p Protocols) Validate() error {
 				return err
 			}
 		case *Webapp:
-			if err := validateSharedProtocolFields("webapp", data.SharedSecret, data.Permissions, validWebappPermissions, data.Requirements, validWebappRequirements, data.URI); err != nil {
+			if data == nil {
+				return errors.New("nil webapp protocol")
+			}
+			// Malformed and unknown requirements are classified before must-exchange-token.
+			// Shared fields stay ahead so a missing permission is reported on its own.
+			if err := validateRequirementValues("webapp", data.Requirements, validWebappRequirements); err != nil {
+				return err
+			}
+			if err := validateSharedProtocolFields(
+				"webapp",
+				data.SharedSecret,
+				data.Permissions,
+				validWebappPermissions,
+				data.Requirements,
+				validWebappRequirements,
+				"",
+			); err != nil {
+				return err
+			}
+			if err := validateReceivedWebappURI(data.URI); err != nil {
 				return err
 			}
 			if len(data.Targets) == 0 {
@@ -330,9 +356,8 @@ func (p Protocols) Validate() error {
 			if err := validateVocabulary("webapp", "target", data.Targets, validWebappTargets); err != nil {
 				return err
 			}
-			// The spec mandates that webapp requirements include `must-exchange-token`.
-			if !slices.Contains(data.Requirements, "must-exchange-token") {
-				return errors.New("protocol webapp requirements must include must-exchange-token")
+			if err := validateWebappExchangePolicy(data.Requirements, true); err != nil {
+				return err
 			}
 		}
 	}
@@ -362,12 +387,69 @@ func validateSharedProtocolFields(name, sharedSecret string, permissions []strin
 	return validateProtocolURI(name, uri)
 }
 
-// validateVocabulary checks that every value belongs to the allowed set,
-// reporting the first one that does not.
+// protocolFieldError is fixed text for a requirement, target, or permission and never includes the supplied value.
+type protocolFieldError struct {
+	protocol string
+	kind     string
+	class    string
+}
+
+func (e *protocolFieldError) Error() string {
+	if e == nil {
+		return errInvalidShareRequest.Error()
+	}
+	switch e.class {
+	case "malformed":
+		return "protocol " + e.protocol + " has malformed " + e.kind
+	case "unsupported":
+		return "protocol " + e.protocol + " has unsupported " + e.kind
+	case "duplicate":
+		return "protocol " + e.protocol + " has duplicate " + e.kind
+	default:
+		return errInvalidShareRequest.Error()
+	}
+}
+
+func fixedProtocolFieldError(protocolName, kind, class string) error {
+	return &protocolFieldError{
+		protocol: safeProtocolToken(protocolName),
+		kind:     safeFieldToken(kind),
+		class:    safeClassToken(class),
+	}
+}
+
+func safeProtocolToken(protocolName string) string {
+	switch protocolName {
+	case "webapp", "webdav":
+		return protocolName
+	default:
+		return "protocol"
+	}
+}
+
+func safeFieldToken(kind string) string {
+	switch kind {
+	case "requirement", "permission", "target", "app name", "app media type":
+		return kind
+	default:
+		return "field"
+	}
+}
+
+func safeClassToken(class string) string {
+	switch class {
+	case "malformed", "unsupported", "duplicate":
+		return class
+	default:
+		return "unsupported"
+	}
+}
+
+// validateVocabulary checks membership, then drops the value. The error text is fixed.
 func validateVocabulary(protocolName, kind string, values []string, valid map[string]struct{}) error {
 	for _, value := range values {
 		if _, ok := valid[value]; !ok {
-			return fmt.Errorf("protocol %s has unsupported %s %q", protocolName, kind, value)
+			return fixedProtocolFieldError(protocolName, kind, "unsupported")
 		}
 	}
 	return nil
@@ -375,6 +457,7 @@ func validateVocabulary(protocolName, kind string, values []string, valid map[st
 
 // Absolute protocol URIs should already be fully usable sender endpoints. Catch
 // malformed values such as double-scheme hosts before they are stored or resolved.
+// Relative values have no host and stay the caller's concern.
 func validateProtocolURI(protocolName, uri string) error {
 	if uri == "" {
 		return nil
@@ -382,21 +465,14 @@ func validateProtocolURI(protocolName, uri string) error {
 
 	parsedURI, err := url.Parse(uri)
 	if err != nil {
-		return fmt.Errorf("protocol %s has invalid uri %q: %w", protocolName, uri, err)
+		return invalidProtocolURI(protocolName)
 	}
-	if parsedURI.Host == "" {
+	if parsedURI.Host == "" && parsedURI.Opaque == "" {
 		return nil
 	}
-	if parsedURI.Scheme != "http" && parsedURI.Scheme != "https" {
-		return fmt.Errorf("protocol %s has unsupported absolute uri scheme %q", protocolName, parsedURI.Scheme)
+	if err := requireAbsoluteHTTPURL(parsedURI); err != nil {
+		return invalidProtocolURI(protocolName)
 	}
-	if parsedURI.Host == "http:" || parsedURI.Host == "https:" ||
-		strings.Contains(parsedURI.Host, "://") ||
-		strings.HasPrefix(parsedURI.Path, "//http://") ||
-		strings.HasPrefix(parsedURI.Path, "//https://") {
-		return fmt.Errorf("protocol %s has malformed absolute uri %q", protocolName, uri)
-	}
-
 	return nil
 }
 

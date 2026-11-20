@@ -20,15 +20,18 @@ package labelsprovider
 
 import (
 	"context"
+	"encoding/json"
 
 	labelsv1beta1 "github.com/cs3org/go-cs3apis/cs3/labels/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
+	typesv1beta1 "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
 	"github.com/cs3org/reva/v3/pkg/errtypes"
 	"github.com/cs3org/reva/v3/pkg/labels"
 	"github.com/cs3org/reva/v3/pkg/labels/registry"
 	"github.com/cs3org/reva/v3/pkg/plugin"
 	"github.com/cs3org/reva/v3/pkg/rgrpc"
 	"github.com/cs3org/reva/v3/pkg/rgrpc/status"
+	"github.com/cs3org/reva/v3/pkg/spaces"
 	"github.com/cs3org/reva/v3/pkg/utils"
 	"github.com/cs3org/reva/v3/pkg/utils/cfg"
 	"google.golang.org/grpc"
@@ -137,6 +140,10 @@ func (s *service) RemoveLabel(ctx context.Context, req *labelsv1beta1.RemoveLabe
 }
 
 func (s *service) ListLabels(ctx context.Context, req *labelsv1beta1.ListLabelsRequest) (*labelsv1beta1.ListLabelsResponse, error) {
+	if entry := req.GetOpaque().GetMap()[labels.OpaqueResources]; entry != nil {
+		return s.listLabelsForResources(ctx, entry)
+	}
+
 	lbls, err := s.mgr.ListLabels(ctx)
 	if err != nil {
 		return &labelsv1beta1.ListLabelsResponse{
@@ -147,6 +154,46 @@ func (s *service) ListLabels(ctx context.Context, req *labelsv1beta1.ListLabelsR
 	return &labelsv1beta1.ListLabelsResponse{
 		Status: status.NewOK(ctx),
 		Labels: lbls,
+	}, nil
+}
+
+func (s *service) listLabelsForResources(ctx context.Context, entry *typesv1beta1.OpaqueEntry) (*labelsv1beta1.ListLabelsResponse, error) {
+	var keys []string
+	if err := json.Unmarshal(entry.GetValue(), &keys); err != nil {
+		return &labelsv1beta1.ListLabelsResponse{
+			Status: status.NewInvalidArg(ctx, "opaque resources must be a JSON list of resource IDs"),
+		}, nil
+	}
+	ids := make([]*provider.ResourceId, 0, len(keys))
+	for _, key := range keys {
+		id, err := spaces.ResourceIdFromString(key)
+		if err != nil {
+			return &labelsv1beta1.ListLabelsResponse{
+				Status: status.NewInvalidArg(ctx, err.Error()),
+			}, nil
+		}
+		ids = append(ids, id)
+	}
+
+	labelsByResource, err := s.mgr.ListLabelsForResources(ctx, ids)
+	if err != nil {
+		return &labelsv1beta1.ListLabelsResponse{
+			Status: status.NewStatusFromErrType(ctx, "error listing labels for resources", err),
+		}, nil
+	}
+	value, err := json.Marshal(labelsByResource)
+	if err != nil {
+		return &labelsv1beta1.ListLabelsResponse{
+			Status: status.NewInternal(ctx, err, "error encoding labels"),
+		}, nil
+	}
+	return &labelsv1beta1.ListLabelsResponse{
+		Status: status.NewOK(ctx),
+		Opaque: &typesv1beta1.Opaque{
+			Map: map[string]*typesv1beta1.OpaqueEntry{
+				labels.OpaqueLabels: {Decoder: "json", Value: value},
+			},
+		},
 	}, nil
 }
 
