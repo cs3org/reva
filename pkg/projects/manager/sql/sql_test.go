@@ -342,3 +342,22 @@ func TestListProjects(t *testing.T) {
 		})
 	}
 }
+
+func TestSpaceByIDIgnoresMembership(t *testing.T) {
+	catalogue, err, teardown := setupSuite(t)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer teardown(t)
+	mgr := catalogue.(*ProjectsManager)
+	spaceID := spaces.EncodeSpaceID("/eos/project/c/cernbox")
+	mgr.db.Create(&Project{StorageID: "eosproject", SpaceID: spaceID, Path: "/eos/project/c/cernbox", Name: "cernbox", Owner: "owner", Admins: "cernbox-admins"})
+
+	space, err := mgr.SpaceByID(context.Background(), spaces.EncodeStorageSpaceID("eosproject", spaceID))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if space.GetName() != "cernbox" || space.GetRoles()[2].GetRoleName() != "admin" || space.GetRoles()[2].GetRecipients()[0].GetGroupId().GetOpaqueId() != "cernbox-admins" {
+		t.Fatalf("space %+v", space)
+	}
+}

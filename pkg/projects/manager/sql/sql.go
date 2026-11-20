@@ -307,6 +307,20 @@ func (m *ProjectsManager) GetProject(ctx context.Context, name string) (*Project
 	return fetchedProject, nil
 }
 
+// SpaceByID returns the active project with the given space ID, with its
+// roles, whoever the caller is. It is for operators and services that act on
+// all projects; the CS3 calls only show a project to its members.
+func (m *ProjectsManager) SpaceByID(ctx context.Context, spaceID string) (*provider.StorageSpace, error) {
+	if _, id, ok := strings.Cut(spaceID, "$"); ok {
+		spaceID = id
+	}
+	var p Project
+	if err := m.db.WithContext(ctx).Where("space_id = ? AND status = ?", spaceID, projects.ProjectStatusActive).First(&p).Error; err != nil {
+		return nil, err
+	}
+	return projectToStorageSpace(&p, nil), nil
+}
+
 // To be used only by cernboxcop.
 func (m *ProjectsManager) UpdateProjectStatus(ctx context.Context, name string, status projects.ProjectStatus) error {
 	log := appctx.GetLogger(ctx)
