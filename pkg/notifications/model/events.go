@@ -26,4 +26,7 @@ const (
 	EventTakeout       = "takeout"
 	// EventLinkExpiry warns the holder of public links that are about to expire.
 	EventLinkExpiry = "link-expiry"
+	// EventShareExpiry warns the sharer or the grantee of shares that are about
+	// to expire.
+	EventShareExpiry = "share-expiry"
 )
