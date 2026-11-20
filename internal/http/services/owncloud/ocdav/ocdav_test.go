@@ -31,8 +31,6 @@ import (
 	gatewayv1beta1 "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
 	userv1beta1 "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
-	collaborationv1beta1 "github.com/cs3org/go-cs3apis/cs3/sharing/collaboration/v1beta1"
-	linkv1beta1 "github.com/cs3org/go-cs3apis/cs3/sharing/link/v1beta1"
 	providerv1beta1 "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	mockgateway "github.com/cs3org/go-cs3apis/mocks/github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
 	"github.com/cs3org/reva/v3/pkg/appctx"
@@ -241,7 +239,6 @@ func newLocalFSGatewayClient(t *testing.T, fs storage.FS) *mockgateway.MockGatew
 				Infos:  infos,
 			}, nil
 		})
-	mockEmptyShareLookups(gatewayClient)
 	return gatewayClient
 }
 
@@ -277,15 +274,6 @@ func assertHrefs(t *testing.T, body []byte, want []string) {
 	if !slices.Equal(got, want) {
 		t.Fatalf("unexpected hrefs\nwant: %v\n got: %v\nbody: %s", want, got, body)
 	}
-}
-
-func mockEmptyShareLookups(gatewayClient *mockgateway.MockGatewayAPIClient) {
-	gatewayClient.On("ListPublicShares", mock.Anything, mock.Anything).Return(&linkv1beta1.ListPublicSharesResponse{
-		Status: &rpc.Status{Code: rpc.Code_CODE_OK},
-	}, nil)
-	gatewayClient.On("ListShares", mock.Anything, mock.Anything).Return(&collaborationv1beta1.ListSharesResponse{
-		Status: &rpc.Status{Code: rpc.Code_CODE_OK},
-	}, nil)
 }
 
 func TestPublicFilesSignatureAuthTakesPrecedenceOverBasicAuth(t *testing.T) {
