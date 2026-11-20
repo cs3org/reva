@@ -279,7 +279,7 @@ func createLock(ctx context.Context, client gateway.GatewayAPIClient, t, id, u, 
 		return nil, fmt.Errorf("unknown lock type %q: use shared, write or exclusive", t)
 	}
 	if u != "" {
-		res, err := client.GetUserByClaim(ctx, &user.GetUserByClaimRequest{Claim: "username", Value: u})
+		res, err := client.GetUserByClaim(ctx, &user.GetUserByClaimRequest{Claim: "username", Value: u, SkipFetchingUserGroups: true})
 		if err != nil {
 			return nil, err
 		}

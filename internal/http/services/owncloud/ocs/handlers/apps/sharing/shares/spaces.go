@@ -46,8 +46,9 @@ func (h *Handler) getGrantee(ctx context.Context, name string) (provider.Grantee
 		return provider.Grantee{}, err
 	}
 	userRes, err := client.GetUserByClaim(ctx, &userpb.GetUserByClaimRequest{
-		Claim: "username",
-		Value: name,
+		Claim:                  "username",
+		Value:                  name,
+		SkipFetchingUserGroups: true,
 	})
 	if err == nil && userRes.Status.Code == rpc.Code_CODE_OK {
 		return provider.Grantee{

@@ -238,8 +238,9 @@ func (fs *cephfs) getUserByID(ctx context.Context, uid string) (*userpb.User, er
 		return nil, errors.Wrap(err, "cephfs: error getting gateway grpc client")
 	}
 	getUserResp, err := client.GetUserByClaim(ctx, &userpb.GetUserByClaimRequest{
-		Claim: "uid",
-		Value: uid,
+		Claim:                  "uid",
+		Value:                  uid,
+		SkipFetchingUserGroups: true,
 	})
 
 	if err != nil {
@@ -266,6 +267,7 @@ func (fs *cephfs) getUserByOpaqueID(ctx context.Context, oid string) (*userpb.Us
 		UserId: &userpb.UserId{
 			OpaqueId: oid,
 		},
+		SkipFetchingUserGroups: true,
 	})
 
 	if err != nil {
