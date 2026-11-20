@@ -122,22 +122,22 @@ func main() {
 		os.Exit(1)
 	}
 
-	publiccode, err := os.ReadFile("publiccode.yaml")
+	publiccode, err := os.ReadFile("publiccode.yml")
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "error reading publiccode.yaml: %s", err)
+		fmt.Fprintf(os.Stderr, "error reading publiccode.yml: %s", err)
 		os.Exit(1)
 	}
 	// Replace only these lines: a YAML round trip would reformat the whole file.
 	for key, value := range map[string]string{"softwareVersion": *version, "releaseDate": date} {
 		re := regexp.MustCompile(`(?m)^` + key + `: .*$`)
 		if !re.Match(publiccode) {
-			fmt.Fprintf(os.Stderr, "publiccode.yaml has no %s key", key)
+			fmt.Fprintf(os.Stderr, "publiccode.yml has no %s key", key)
 			os.Exit(1)
 		}
 		publiccode = re.ReplaceAll(publiccode, []byte(fmt.Sprintf("%s: %q", key, value)))
 	}
-	if err := os.WriteFile("publiccode.yaml", publiccode, 0644); err != nil {
-		fmt.Fprintf(os.Stderr, "error writing to publiccode.yaml: %s", err)
+	if err := os.WriteFile("publiccode.yml", publiccode, 0644); err != nil {
+		fmt.Fprintf(os.Stderr, "error writing to publiccode.yml: %s", err)
 		os.Exit(1)
 	}
 
@@ -206,7 +206,7 @@ description: >
 		"CHANGELOG.md",
 		"VERSION",
 		"RELEASE_DATE",
-		"publiccode.yaml",
+		"publiccode.yml",
 		"docs/content/",
 		"docs/data/generated/",
 	)
