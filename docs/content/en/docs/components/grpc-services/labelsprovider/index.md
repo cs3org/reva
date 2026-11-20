@@ -17,12 +17,12 @@
             "key": "driver",
             "type": "string",
             "default": "\"memory\"",
-            "source": "internal/grpc/services/labelsprovider/labelsprovider.go#L47"
+            "source": "internal/grpc/services/labelsprovider/labelsprovider.go#L50"
           },
           {
             "key": "drivers",
             "type": "map[string]map[string]any",
-            "source": "internal/grpc/services/labelsprovider/labelsprovider.go#L48"
+            "source": "internal/grpc/services/labelsprovider/labelsprovider.go#L51"
           }
         ]
       }

@@ -1,6 +1,6 @@
 {
   "by_kind": {
-    "drivers": 77,
+    "drivers": 78,
     "grpc-interceptors": 11,
     "grpc-services": 25,
     "http-middlewares": 5,
@@ -8,9 +8,9 @@
     "libraries": 5,
     "serverless-services": 4
   },
-  "components": 149,
+  "components": 150,
   "families": 32,
-  "release_date": "2026-10-28",
-  "releases": 73,
-  "version": "3.15.0"
+  "release_date": "2026-11-20",
+  "releases": 76,
+  "version": "3.15.3"
 }

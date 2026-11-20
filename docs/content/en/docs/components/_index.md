@@ -117,6 +117,12 @@
         "title": "pkg/ocm/invite/repository/internal/contracttest"
       },
       {
+        "description": "Renders the page that hands a user over to a web application with a POST request.",
+        "godoc": "https://pkg.go.dev/github.com/cs3org/reva/v3/pkg/ocm/launcher",
+        "source": "https://github.com/cs3org/reva/tree/master/pkg/ocm/launcher",
+        "title": "pkg/ocm/launcher"
+      },
+      {
         "description": "Describes a reva deployment's HTTP surface as an OpenAPI document, built from the routes its services declared.",
         "godoc": "https://pkg.go.dev/github.com/cs3org/reva/v3/pkg/openapi",
         "source": "https://github.com/cs3org/reva/tree/master/pkg/openapi",

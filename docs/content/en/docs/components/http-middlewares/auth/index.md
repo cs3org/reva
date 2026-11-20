@@ -16,83 +16,83 @@
           {
             "key": "priority",
             "type": "int",
-            "source": "internal/http/interceptors/auth/auth.go#L62"
+            "source": "internal/http/interceptors/auth/auth.go#L63"
           },
           {
             "key": "gatewaysvc",
             "type": "string",
-            "source": "internal/http/interceptors/auth/auth.go#L63"
+            "source": "internal/http/interceptors/auth/auth.go#L64"
           },
           {
             "key": "realm",
             "type": "string",
-            "source": "internal/http/interceptors/auth/auth.go#L65"
+            "source": "internal/http/interceptors/auth/auth.go#L66"
           },
           {
             "key": "credentials_by_user_agent",
             "type": "map[string]string",
-            "source": "internal/http/interceptors/auth/auth.go#L66"
+            "source": "internal/http/interceptors/auth/auth.go#L67"
           },
           {
             "key": "credential_chain",
             "type": "[]string",
-            "source": "internal/http/interceptors/auth/auth.go#L67"
+            "source": "internal/http/interceptors/auth/auth.go#L68"
           },
           {
             "key": "credential_strategies",
             "type": "map[string]map[string]any",
-            "source": "internal/http/interceptors/auth/auth.go#L68"
+            "source": "internal/http/interceptors/auth/auth.go#L69"
           },
           {
             "key": "signed_url_chain",
             "type": "[]string",
-            "source": "internal/http/interceptors/auth/auth.go#L69"
+            "source": "internal/http/interceptors/auth/auth.go#L70"
           },
           {
             "key": "signed_url_strategies",
             "type": "map[string]map[string]any",
-            "source": "internal/http/interceptors/auth/auth.go#L70"
+            "source": "internal/http/interceptors/auth/auth.go#L71"
           },
           {
             "key": "token_strategy_chain",
             "type": "[]string",
-            "source": "internal/http/interceptors/auth/auth.go#L71"
+            "source": "internal/http/interceptors/auth/auth.go#L72"
           },
           {
             "key": "token_strategies",
             "type": "map[string]map[string]any",
-            "source": "internal/http/interceptors/auth/auth.go#L72"
+            "source": "internal/http/interceptors/auth/auth.go#L73"
           },
           {
             "key": "token_manager",
             "type": "string",
-            "source": "internal/http/interceptors/auth/auth.go#L73"
+            "source": "internal/http/interceptors/auth/auth.go#L74"
           },
           {
             "key": "token_managers",
             "type": "map[string]map[string]any",
-            "source": "internal/http/interceptors/auth/auth.go#L74"
+            "source": "internal/http/interceptors/auth/auth.go#L75"
           },
           {
             "key": "token_writer",
             "type": "string",
-            "source": "internal/http/interceptors/auth/auth.go#L75"
+            "source": "internal/http/interceptors/auth/auth.go#L76"
           },
           {
             "key": "token_writers",
             "type": "map[string]map[string]any",
-            "source": "internal/http/interceptors/auth/auth.go#L76"
+            "source": "internal/http/interceptors/auth/auth.go#L77"
           },
           {
             "key": "machine_secret",
             "type": "string",
             "description": "Secret used for the gateway to authenticate a user when using a signed URL",
-            "source": "internal/http/interceptors/auth/auth.go#L77"
+            "source": "internal/http/interceptors/auth/auth.go#L78"
           },
           {
             "key": "",
             "type": "authcache.Config",
-            "source": "internal/http/interceptors/auth/auth.go#L78",
+            "source": "internal/http/interceptors/auth/auth.go#L79",
             "embeds": "authcache.Config"
           }
         ]

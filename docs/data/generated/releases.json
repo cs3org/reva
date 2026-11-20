@@ -327,5 +327,20 @@
     "version": "3.15.0",
     "date": "2026-10-28",
     "notes": "/docs/changelog/3.15.0/"
+  },
+  {
+    "version": "3.15.1",
+    "date": "2026-11-09",
+    "notes": "/docs/changelog/3.15.1/"
+  },
+  {
+    "version": "3.15.2",
+    "date": "2026-11-12",
+    "notes": "/docs/changelog/3.15.2/"
+  },
+  {
+    "version": "3.15.3",
+    "date": "2026-11-20",
+    "notes": "/docs/changelog/3.15.3/"
   }
 ]

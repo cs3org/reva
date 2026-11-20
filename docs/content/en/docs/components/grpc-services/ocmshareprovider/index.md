@@ -64,29 +64,37 @@
             "source": "internal/grpc/services/ocmshareprovider/ocmshareprovider.go#L81"
           },
           {
-            "key": "offer_webapp",
-            "type": "bool",
-            "default": "false",
-            "description": "Offer the webapp protocol on outbound OCM shares.",
+            "key": "webapps",
+            "type": "[]webapp",
+            "description": "Web applications offered on outbound OCM shares, each with a name and the media types it opens. The webapp protocol is offered only if this list is not empty.",
             "source": "internal/grpc/services/ocmshareprovider/ocmshareprovider.go#L82"
-          },
-          {
-            "key": "webapp_name",
-            "type": "string",
-            "description": "Name advertised for the webapp protocol when offer_webapp is true.",
-            "source": "internal/grpc/services/ocmshareprovider/ocmshareprovider.go#L83"
           },
           {
             "key": "webapp_endpoint",
             "type": "string",
-            "description": "Absolute URL of the webapp opener when offer_webapp is true.",
-            "source": "internal/grpc/services/ocmshareprovider/ocmshareprovider.go#L84"
+            "description": "Absolute URL of the webapp opener. Required when webapps is not empty.",
+            "source": "internal/grpc/services/ocmshareprovider/ocmshareprovider.go#L83"
           },
           {
             "key": "signing_key",
             "type": "string",
             "description": "Path to the PEM file of the Ed25519 private key that signs the shares that this server sends. Use the key of the wellknown ocmprovider.",
-            "source": "internal/grpc/services/ocmshareprovider/ocmshareprovider.go#L85"
+            "source": "internal/grpc/services/ocmshareprovider/ocmshareprovider.go#L84"
+          }
+        ]
+      },
+      {
+        "name": "webapp",
+        "fields": [
+          {
+            "key": "name",
+            "type": "string",
+            "source": "internal/grpc/services/ocmshareprovider/ocmshareprovider.go#L88"
+          },
+          {
+            "key": "media_types",
+            "type": "[]string",
+            "source": "internal/grpc/services/ocmshareprovider/ocmshareprovider.go#L89"
           }
         ]
       }

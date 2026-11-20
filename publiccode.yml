@@ -4,8 +4,8 @@ name: Reva
 url: "https://github.com/cs3org/reva"
 landingURL: "https://reva.link"
 # softwareVersion and releaseDate are updated automatically
-softwareVersion: "3.15.2"
-releaseDate: "2026-11-12"
+softwareVersion: "3.15.3"
+releaseDate: "2026-11-20"
 logo: docs/static/logo.svg
 
 platforms:

@@ -16,7 +16,7 @@
           {
             "key": "",
             "type": "config.Database",
-            "source": "pkg/labels/sql/sql.go#L46",
+            "source": "pkg/labels/sql/sql.go#L47",
             "embeds": "config.Database"
           }
         ]
