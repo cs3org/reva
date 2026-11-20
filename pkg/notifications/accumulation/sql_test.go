@@ -26,8 +26,8 @@ import (
 
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	"github.com/cs3org/reva/v3/pkg/notifications/model"
+	"github.com/glebarez/sqlite"
 	"google.golang.org/protobuf/proto"
-	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
 )
 

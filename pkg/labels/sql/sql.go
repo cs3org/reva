@@ -24,9 +24,9 @@ import (
 	"time"
 
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
+	"github.com/glebarez/sqlite"
 	"github.com/pkg/errors"
 	"gorm.io/driver/mysql"
-	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
 
 	"github.com/cs3org/reva/v3/cmd/revad/pkg/config"
