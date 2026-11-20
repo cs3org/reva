@@ -32,6 +32,7 @@ import (
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/cs3org/reva/v3/cmd/revad/pkg/config"
 	"github.com/cs3org/reva/v3/pkg/appctx"
+	"github.com/cs3org/reva/v3/pkg/errtypes"
 	"github.com/cs3org/reva/v3/pkg/permissions"
 	"github.com/cs3org/reva/v3/pkg/projects"
 	"github.com/cs3org/reva/v3/pkg/projects/manager/registry"
@@ -296,15 +297,37 @@ func (m *ProjectsManager) GetProject(ctx context.Context, name string) (*Project
 	log := appctx.GetLogger(ctx)
 	fetchedProject := &Project{}
 
-	query := m.db.Model(&Project{}).Where("name = ?", name).Where("archived_at is null")
+	query := m.db.Model(&Project{}).Where("name = ?", name).
+		Where("status = ?", projects.ProjectStatusActive)
 	res := query.First(fetchedProject)
 	if res.Error != nil {
 		log.Error().Err(res.Error).Msg("GetStorageSpace: database error")
 
+		if errors.Is(res.Error, gorm.ErrRecordNotFound) {
+			return nil, errtypes.NotFound("project " + name)
+		}
 		return nil, res.Error
 	}
 
 	return fetchedProject, nil
+}
+
+// GetProjectBySpaceID returns the active project space with the given space id,
+// or errtypes.NotFound when there is none. It does not check who the caller is:
+// it is for the reconciliation jobs, whose service user is a member of no project.
+func (m *ProjectsManager) GetProjectBySpaceID(ctx context.Context, spaceID string) (*provider.StorageSpace, error) {
+	var p Project
+	res := m.db.Model(&Project{}).
+		Where("space_id = ?", spaceID).
+		Where("status = ?", projects.ProjectStatusActive).
+		First(&p)
+	if res.Error != nil {
+		if errors.Is(res.Error, gorm.ErrRecordNotFound) {
+			return nil, errtypes.NotFound("project with space id " + spaceID)
+		}
+		return nil, res.Error
+	}
+	return projectToStorageSpace(&p, nil), nil
 }
 
 // To be used only by cernboxcop.
