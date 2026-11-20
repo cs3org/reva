@@ -39,6 +39,7 @@ func initializeDB(root, dbName string) (*sql.DB, error) {
 	if err != nil {
 		return nil, errors.Wrap(err, "localfs: error preparing statement")
 	}
+	defer stmt.Close()
 	_, err = stmt.Exec()
 	if err != nil {
 		return nil, errors.Wrap(err, "localfs: error executing create statement")
@@ -48,6 +49,7 @@ func initializeDB(root, dbName string) (*sql.DB, error) {
 	if err != nil {
 		return nil, errors.Wrap(err, "localfs: error preparing statement")
 	}
+	defer stmt.Close()
 	_, err = stmt.Exec()
 	if err != nil {
 		return nil, errors.Wrap(err, "localfs: error executing create statement")
@@ -57,6 +59,7 @@ func initializeDB(root, dbName string) (*sql.DB, error) {
 	if err != nil {
 		return nil, errors.Wrap(err, "localfs: error preparing statement")
 	}
+	defer stmt.Close()
 	_, err = stmt.Exec()
 	if err != nil {
 		return nil, errors.Wrap(err, "localfs: error executing create statement")
@@ -66,6 +69,7 @@ func initializeDB(root, dbName string) (*sql.DB, error) {
 	if err != nil {
 		return nil, errors.Wrap(err, "localfs: error preparing statement")
 	}
+	defer stmt.Close()
 	_, err = stmt.Exec()
 	if err != nil {
 		return nil, errors.Wrap(err, "localfs: error executing create statement")
@@ -79,6 +83,7 @@ func (fs *localfs) addToRecycledDB(ctx context.Context, key, fileName string) er
 	if err != nil {
 		return errors.Wrap(err, "localfs: error preparing statement")
 	}
+	defer stmt.Close()
 	_, err = stmt.Exec(key, fileName)
 	if err != nil {
 		return errors.Wrap(err, "localfs: error executing insert statement")
@@ -100,6 +105,7 @@ func (fs *localfs) removeFromRecycledDB(ctx context.Context, key string) error {
 	if err != nil {
 		return errors.Wrap(err, "localfs: error preparing statement")
 	}
+	defer stmt.Close()
 	_, err = stmt.Exec(key)
 	if err != nil {
 		return errors.Wrap(err, "localfs: error executing delete statement")
@@ -112,6 +118,7 @@ func (fs *localfs) addToACLDB(ctx context.Context, resource, grantee, role strin
 	if err != nil {
 		return errors.Wrap(err, "localfs: error preparing statement")
 	}
+	defer stmt.Close()
 	_, err = stmt.Exec(resource, grantee, role, role)
 	if err != nil {
 		return errors.Wrap(err, "localfs: error executing insert statement")
@@ -132,6 +139,7 @@ func (fs *localfs) removeFromACLDB(ctx context.Context, resource, grantee string
 	if err != nil {
 		return errors.Wrap(err, "localfs: error preparing statement")
 	}
+	defer stmt.Close()
 	_, err = stmt.Exec(resource, grantee)
 	if err != nil {
 		return errors.Wrap(err, "localfs: error executing delete statement")
@@ -144,6 +152,7 @@ func (fs *localfs) addToFavoritesDB(ctx context.Context, resource, grantee strin
 	if err != nil {
 		return errors.Wrap(err, "localfs: error preparing statement")
 	}
+	defer stmt.Close()
 	_, err = stmt.Exec(resource, grantee)
 	if err != nil {
 		return errors.Wrap(err, "localfs: error executing insert statement")
@@ -156,6 +165,7 @@ func (fs *localfs) removeFromFavoritesDB(ctx context.Context, resource, grantee 
 	if err != nil {
 		return errors.Wrap(err, "localfs: error preparing statement")
 	}
+	defer stmt.Close()
 	_, err = stmt.Exec(resource, grantee)
 	if err != nil {
 		return errors.Wrap(err, "localfs: error executing delete statement")
@@ -168,6 +178,7 @@ func (fs *localfs) addToMetadataDB(ctx context.Context, resource, key, value str
 	if err != nil {
 		return errors.Wrap(err, "localfs: error preparing statement")
 	}
+	defer stmt.Close()
 	_, err = stmt.Exec(resource, key, value, value)
 	if err != nil {
 		return errors.Wrap(err, "localfs: error executing insert statement")
@@ -180,6 +191,7 @@ func (fs *localfs) removeFromMetadataDB(ctx context.Context, resource, key strin
 	if err != nil {
 		return errors.Wrap(err, "localfs: error preparing statement")
 	}
+	defer stmt.Close()
 	_, err = stmt.Exec(resource, key)
 	if err != nil {
 		return errors.Wrap(err, "localfs: error executing delete statement")
@@ -200,6 +212,7 @@ func (fs *localfs) addToReferencesDB(ctx context.Context, resource, target strin
 	if err != nil {
 		return errors.Wrap(err, "localfs: error preparing statement")
 	}
+	defer stmt.Close()
 	_, err = stmt.Exec(resource, target, target)
 	if err != nil {
 		return errors.Wrap(err, "localfs: error executing insert statement")
@@ -221,6 +234,7 @@ func (fs *localfs) copyMD(s string, t string) (err error) {
 	if err != nil {
 		return errors.Wrap(err, "localfs: error preparing statement")
 	}
+	defer stmt.Close()
 	_, err = stmt.Exec(t, s)
 	if err != nil {
 		return errors.Wrap(err, "localfs: error executing delete statement")
@@ -230,6 +244,7 @@ func (fs *localfs) copyMD(s string, t string) (err error) {
 	if err != nil {
 		return errors.Wrap(err, "localfs: error preparing statement")
 	}
+	defer stmt.Close()
 	_, err = stmt.Exec(t, s)
 	if err != nil {
 		return errors.Wrap(err, "localfs: error executing delete statement")
@@ -239,6 +254,7 @@ func (fs *localfs) copyMD(s string, t string) (err error) {
 	if err != nil {
 		return errors.Wrap(err, "localfs: error preparing statement")
 	}
+	defer stmt.Close()
 	_, err = stmt.Exec(t, s)
 	if err != nil {
 		return errors.Wrap(err, "localfs: error executing delete statement")
