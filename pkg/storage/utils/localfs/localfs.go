@@ -29,6 +29,7 @@ import (
 	"path"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	grouppb "github.com/cs3org/go-cs3apis/cs3/identity/group/v1beta1"
@@ -97,6 +98,13 @@ type localfs struct {
 	conf         *Config
 	db           *sql.DB
 	chunkHandler *chunking.ChunkHandler
+
+	// homeCache and vhomeCache memoize the layout template expansion for a user.
+	// The expansion is a pure function of (template, user) and the templates are
+	// static config, so it is computed once per user instead of once per child of
+	// every directory listing. A listing of N entries used to call it ~5N times.
+	homeCache  sync.Map // userKey -> string (GetHome result)
+	vhomeCache sync.Map // userKey -> string (getVirtualHome result)
 }
 
 // NewLocalFS returns a storage.FS interface implementation that controls then
@@ -172,7 +180,26 @@ func (fs *localfs) getVirtualHome(ctx context.Context) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	return templates.WithUser(u, fs.conf.VirtualHomeTemplate), nil
+	if key := userCacheKey(u); key != "" {
+		if v, ok := fs.vhomeCache.Load(key); ok {
+			return v.(string), nil
+		}
+	}
+	vh := templates.WithUser(u, fs.conf.VirtualHomeTemplate)
+	if key := userCacheKey(u); key != "" {
+		fs.vhomeCache.Store(key, vh)
+	}
+	return vh, nil
+}
+
+// userCacheKey builds a stable key for memoizing per-user template expansions.
+// It includes every field templates.WithUser can read (Id, Username, Mail), so
+// the memo is a pure function of its inputs. Empty when the user has no Id.
+func userCacheKey(u *userpb.User) string {
+	if u == nil || u.Id == nil {
+		return ""
+	}
+	return u.Id.Idp + "|" + u.Id.OpaqueId + "|" + u.Username + "|" + u.Mail
 }
 
 func (fs *localfs) wrap(ctx context.Context, p string) string {
@@ -848,7 +875,15 @@ func (fs *localfs) GetHome(ctx context.Context) (string, error) {
 		err = errors.Wrap(err, "local: wrap: no user in ctx and home is enabled")
 		return "", err
 	}
+	if key := userCacheKey(u); key != "" {
+		if v, ok := fs.homeCache.Load(key); ok {
+			return v.(string), nil
+		}
+	}
 	relativeHome := templates.WithUser(u, fs.conf.UserLayout)
+	if key := userCacheKey(u); key != "" {
+		fs.homeCache.Store(key, relativeHome)
+	}
 
 	return relativeHome, nil
 }
