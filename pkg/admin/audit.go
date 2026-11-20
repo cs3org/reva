@@ -47,7 +47,8 @@ type AuditEvent struct {
 }
 
 // Audit emits a structured audit event (audit=true) on the context logger.
-// Denials and failures are logged at error level, successes at info.
+// Denials and failures are logged at error level, successes at info. It reads
+// the reason header itself, because no interceptor runs on the local socket.
 func Audit(ctx context.Context, ev AuditEvent) {
 	log := appctx.GetLogger(ctx)
 	e := log.Info()
@@ -63,6 +64,9 @@ func Audit(ctx context.Context, ev AuditEvent) {
 	}
 	if ev.Kind != "" {
 		e = e.Str("kind", ev.Kind)
+	}
+	if r := Header(ctx, ReasonHeader); r != "" {
+		e = e.Str("reason", r)
 	}
 	for k, v := range ev.Fields {
 		e = e.Str(k, v)

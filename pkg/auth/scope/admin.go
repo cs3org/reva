@@ -20,54 +20,51 @@ package scope
 
 import (
 	"context"
+	"slices"
 	"strings"
 
 	authpb "github.com/cs3org/go-cs3apis/cs3/auth/provider/v1beta1"
 	types "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
 	"github.com/cs3org/reva/v3/pkg/admin/adminpb"
-	"github.com/cs3org/reva/v3/pkg/control/controlpb"
 	"github.com/rs/zerolog"
+	"google.golang.org/protobuf/proto"
 )
 
 // MethodResource identifies a gRPC call by its full method name. The auth
 // interceptor passes it for a server-streaming call, whose request message is
-// not yet available to type-switch on.
+// not yet available, and for every admin method.
 type MethodResource string
 
-// adminScope authorizes only the Admin API's own request types, giving mutual
-// isolation with every other scope: an admin token satisfies nothing else, and
-// the always-true user scope declines admin requests via isAdminResource.
+// adminPackages are the proto packages of the Admin API and the control
+// channel. Every service in them needs the admin scope.
+var adminPackages = []string{"reva.admin.v1beta1", "reva.control.v1beta1"}
+
+// stepUpMethods are the admin methods that a user token reaches.
+var stepUpMethods = []string{
+	"/reva.admin.v1beta1.AdminAPI/RequestAdmin",
+	"/reva.admin.v1beta1.AdminAPI/CheckAdmin",
+}
+
+// adminScope authorizes only the Admin API and the control channel. An admin
+// token satisfies nothing else, and the always-true user scope declines admin
+// calls via isAdminResource.
 func adminScope(_ context.Context, _ *authpb.Scope, resource any, _ *zerolog.Logger) (bool, error) {
 	return isAdminResource(resource), nil
 }
 
 // isAdminResource reports whether resource is an Admin API or control channel
-// request requiring the admin scope. RequestAdminRequest is excluded: it is the
-// step-up door, reachable with a user token.
+// call requiring the admin scope. The auth interceptor passes a MethodResource,
+// because a typed admin RPC can take a CS3 request message, which other scopes
+// accept.
 func isAdminResource(resource any) bool {
 	switch r := resource.(type) {
-	case *adminpb.ImpersonateRequest,
-		*adminpb.GetServerInfoRequest,
-		*adminpb.GetHealthRequest,
-		*adminpb.ListServicesRequest,
-		*adminpb.GetServiceConfigRequest,
-		*adminpb.ListInvocationsRequest,
-		*adminpb.InvokeRequest,
-		*adminpb.InspectJobsRequest,
-		*adminpb.ListJobRunsRequest,
-		*adminpb.GetJobRunRequest,
-		*adminpb.EnqueueJobRequest,
-		*adminpb.TriggerJobRequest,
-		*adminpb.CancelJobRunRequest,
-		*adminpb.CancelPeriodicJobRequest,
-		*adminpb.ForgetJobRequest,
-		*controlpb.ListInvocationsRequest,
-		*controlpb.InvokeRequest:
-		return true
 	case MethodResource:
-		// Streaming methods, identified by name: no request message is
-		// available on the stream yet.
-		return IsAdminMethod(string(r))
+		return IsAdminMethod(string(r)) && !slices.Contains(stepUpMethods, string(r))
+	case *adminpb.RequestAdminRequest, *adminpb.CheckAdminRequest:
+		return false
+	case proto.Message:
+		// A caller that has no method passes the request message.
+		return slices.Contains(adminPackages, string(r.ProtoReflect().Descriptor().ParentFile().Package()))
 	}
 	return false
 }
@@ -76,8 +73,9 @@ func isAdminResource(resource any) bool {
 // the control channel. Callers that must exclude these operational RPCs from
 // per-request accounting (e.g. request-activity tracking) use it too.
 func IsAdminMethod(method string) bool {
-	return strings.HasPrefix(method, "/reva.admin.v1beta1.AdminAPI/") ||
-		strings.HasPrefix(method, "/reva.control.v1beta1.Control/")
+	return slices.ContainsFunc(adminPackages, func(pkg string) bool {
+		return strings.HasPrefix(method, "/"+pkg+".")
+	})
 }
 
 // HasAdminScope reports whether a token's scopes include the admin scope. Such a

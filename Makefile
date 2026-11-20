@@ -129,13 +129,19 @@ reva: ## Build the reva CLI
 
 # Regenerate the reva-owned Admin API (pkg/admin/adminpb) and control channel
 # (pkg/control/controlpb) stubs from their protos. Needs protoc plus protoc-gen-go and
-# protoc-gen-go-grpc on PATH.
+# protoc-gen-go-grpc on PATH, and a cs3apis checkout for the CS3 imports.
+CS3APIS_DIR ?= ../cs3apis
+# The CS3 protos get their Go package from buf, not from go_package, so protoc
+# needs one M option for each of them.
+CS3APIS_GO_OPTS = $(foreach f,$(shell cd $(CS3APIS_DIR) && find cs3 -name '*.proto'),M$(f)=github.com/cs3org/go-cs3apis/$(patsubst %/,%,$(dir $(f))))
+
 .PHONY: protobuf
-protobuf: ## Regenerate the admin and control channel gRPC stubs
-	protoc --proto_path=pkg/admin/proto \
-		--go_out=. --go_opt=module=github.com/cs3org/reva/v3 \
-		--go-grpc_out=. --go-grpc_opt=module=github.com/cs3org/reva/v3 \
-		pkg/admin/proto/admin.proto
+protobuf: ## Regenerate the admin and control channel gRPC stubs (CS3APIS_DIR=<cs3apis checkout>)
+	@test -d $(CS3APIS_DIR)/cs3 || { echo "protobuf: set CS3APIS_DIR to a checkout of github.com/cs3org/cs3apis"; exit 1; }
+	protoc --proto_path=pkg/admin/proto --proto_path=$(CS3APIS_DIR) \
+		--go_out=. --go_opt=module=github.com/cs3org/reva/v3 $(addprefix --go_opt=,$(CS3APIS_GO_OPTS)) \
+		--go-grpc_out=. --go-grpc_opt=module=github.com/cs3org/reva/v3 $(addprefix --go-grpc_opt=,$(CS3APIS_GO_OPTS)) \
+		pkg/admin/proto/*.proto
 	protoc --proto_path=pkg/control/proto \
 		--go_out=. --go_opt=module=github.com/cs3org/reva/v3 \
 		--go-grpc_out=. --go-grpc_opt=module=github.com/cs3org/reva/v3 \

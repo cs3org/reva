@@ -76,7 +76,11 @@ selects a peer:
 - a plain **service name** (`userprovider`) fans out to **every** live instance,
   returning one result per instance;
 - a **node id** (`10.0.0.4:19003/userprovider`, as shown by
-  `reva admin services -o wide/json`) targets **exactly that** instance; and
+  `reva admin services -o wide/json`) targets **exactly that** instance;
+- a **metadata selector** (`storageprovider[mount_id=eoshome-i01,mount_path=/eos/user]`)
+  targets the live instances of the service whose registry metadata has all the
+  pairs. A shared invocation goes to one of them. A storage provider advertises
+  `mount_id` and `mount_path`, a data provider `mount_id`; and
 - a **partial id** widens the scope: an address (`10.0.0.4:19003`) targets every
   instance bound to it, a bare host (`10.0.0.4`) every instance on that machine.
   A bare token that is both a service name and a host resolves as the service.
@@ -203,7 +207,13 @@ mutually isolated from user scopes (see
 - An **admin-scoped token** satisfies Admin API and control requests and
   *nothing else* — the storage/share verifiers do not recognize admin messages.
 - A **user-scoped token** can never satisfy an admin request — the always-true
-  user scope is guarded by `isAdminResource`.
+  user scope is guarded by `isAdminResource`. The machine scope declines admin
+  requests in the same way.
+- The decision is on the **gRPC method**, not on the request message: every
+  method of the `reva.admin.v1beta1` and `reva.control.v1beta1` packages needs
+  the admin scope, except `RequestAdmin` and `CheckAdmin`. A typed admin RPC can
+  take a CS3 request message, which the user and lightweight scopes accept, so
+  the message cannot decide. A new admin service needs no change to the scopes.
 
 Getting an admin token is a deliberate step-up:
 
@@ -221,11 +231,41 @@ Getting an admin token is a deliberate step-up:
   would otherwise reject a valid admin token on every fan-out hop.
 - `Impersonate` mints an ordinary **user-scoped** token for a target user (never
   admin+user), so downstream services apply their normal user checks. It is
-  audited and needs the machine-auth api key configured.
+  audited and needs the machine-auth api key configured. Rules:
+  - The target gets the scopes of its own login: the owner scope for a primary,
+    secondary or service account, the lightweight scope for a lightweight
+    account. Other account types are refused.
+  - The token carries the impersonator in an `actor` scope, which authorizes
+    nothing: the user id of the caller, or `socket:<uid>` on the local-root
+    socket. A scope, not a JWT claim, because the auth cache and the token
+    re-mints (for example the machine scope) keep only the user and the scopes.
+    The request logs, and the audit events, of every call made with the token
+    show `act=<actor>`.
+  - `RequestAdmin` and `Impersonate` refuse a token with an actor, and
+    `CheckAdmin` reports it as not admin. Else an admin who impersonates
+    another admin could step up as that admin, and the audit would lose who did
+    it.
+  - A member of `admin_group` or a service account is refused unless the
+    request sets `allow_privileged`. That is audited on its own line
+    (`impersonate_privileged`).
+  - `ttl_seconds` asks for a shorter lifetime, capped by the lifetime the
+    server would give. The response has `expires_at`. A target that does not
+    exist answers `NotFound`.
 
 Invocations are classified `readonly | mutating | dangerous`; the CLI prompts
 before a `dangerous` one. Every invocation and action emits an audit event via
 [`pkg/admin`](../../../../pkg/admin) (`audit=true` on the context logger).
+
+A client tells why it makes an admin call in the gRPC metadata header
+`x-reva-admin-reason`. `admin.Audit` reads the header of the incoming call and
+writes it as `reason` on the audit line. The text is from the client: the
+server removes control and format characters and cuts it to 512 bytes. The
+admin service sends the header on to the owning service through the control
+channel, so an audit line that an invocation handler writes has the reason
+too. A typed admin RPC that calls a service must do the same with
+`admin.ForwardReason(ctx)`. `Impersonate` also takes a `reason` field. When
+the header is not set, the field is the `reason`. When both are set and they
+are different, the field is in `request_reason`.
 
 ### Local root
 
@@ -248,7 +288,15 @@ processes' control channels included. Two gates apply:
 
 reva sets the socket ownership/mode to match: `0660` owned by `socket_group` (so
 reva must be root or a member of it), else `0600` (only the process owner and
-root). Every local-root request is audited with the OS user and uid.
+root). Every local-root request is audited with the OS user, the uid and the pid
+of the peer. Because the OS user is usually `root`, a client can send the
+`SUDO_USER` of its environment in the header `x-reva-sudo-user`, and the audit
+line has it as `sudo_user`. The client sets this value, so do not trust it: it
+only helps to find the person.
+
+Local root is full admin. A member of `socket_group` can also impersonate any
+user (`Impersonate`) without a Kerberos ticket or a password. Give the group
+only to the persons who may do that.
 
 It is **on by default** (Linux): the server binds a well-known path —
 `/run/reva/admin.sock`, or `$XDG_RUNTIME_DIR/reva/admin.sock` when the former is
@@ -316,7 +364,7 @@ reva admin logs level <selector> [trace|debug|info|warn|error]   # report/set ru
 reva admin trace    <traceid> | -user <username>   # one request/user across the fleet
 reva admin stack    <selector> [-grep P]           # goroutine dumps, e.g. of a hung process
 reva admin jobs     list | active | runs | status <id> | run <job> [k=v] | trigger <job> | cancel <id> | stop <job>
-reva admin impersonate <user>
+reva admin impersonate <user> [--reason R] [--ttl D] [--allow-privileged [-y]]
 
 # Local root: on the box, no login/elevate/flag — the CLI finds the socket. Only
 # if it is absent (or denies you) does it need the network host + elevate above.
@@ -339,13 +387,14 @@ service registry.
 | Request | Answer |
 |---|---|
 | `GET /admin/status` | `{"admin": true\|false}`. Backed by `CheckAdmin`, which mints nothing and is not audited. |
-| `POST /admin/impersonate` `{"user": "...", "reason": "..."}` (reason optional) | `{"token": "..."}`, a user token for the target. |
+| `POST /admin/impersonate` `{"user": "...", "reason": "...", "allow_privileged": false, "ttl_seconds": 0}` (all but user optional) | `{"token": "...", "expires_at": ...}`, a user token for the target. |
 
 `impersonate` runs `RequestAdmin` and `Impersonate` back to back on the
 server, so the admin token never reaches the client: the client holds at most
 a user token. Both steps are audited as usual, with `reason` when one is given. Errors
-are `{"message": "..."}` with 401 (caller not identified), 403 (not an admin),
-404 (no such user), 501 (impersonation not configured) or 503 (no Admin API).
+are `{"message": "..."}` with 401 (caller not identified), 403 (not an admin, a
+refused target, or an impersonated caller), 404 (no such user), 501
+(impersonation not configured) or 503 (no Admin API).
 
 ## Jobs
 
@@ -390,6 +439,53 @@ channel — the admin↔runner transport, never a user-facing surface. Caveats:
 `all-nodes` periodic jobs never touch the store so they have no `runs` history
 but *do* show in `list`/`active`; and `failed` is not terminal — the framework
 retries.
+
+## Typed services
+
+The Admin API has two layers:
+
+- **Invocations** (`Invoke`, `InvokeStream`): any operation that a service
+  exposes in its `invoke.Set`, reached by a selector. The arguments are strings
+  and the result is JSON. They need no proto change, so a service, a driver or a
+  plugin can add one.
+- **Typed services**, in their own proto files of the `reva.admin.v1beta1`
+  package: `AdminAPI` (`admin.proto`), `SpacesAdmin` (`spaces.proto`),
+  `SharesAdmin` (`shares.proto`) and `StorageAdmin` (`storage.proto`), with the
+  shared messages in `types.proto`. A typed RPC is a facade over the invocations
+  of the owning service, like the jobs RPCs: the admin service resolves the
+  instances, runs the invocation over the control channel and decodes the result
+  into its message. The helpers are in [`facade.go`](facade.go): `invokeOne` (one
+  picked instance), `invokeAll` (every instance), `relayStream` (an
+  `InvokeStream` relayed into a typed server stream) and `decode` (protojson into
+  an `adminpb` message).
+
+An operation gets a typed RPC when it is generic and a user cannot do it on the
+user plane: a fleet-wide view (any owner, orphans, every space), an operation on
+someone else's resource (the owner fallback of the CLI), a field that CS3 does
+not carry, an operation that no owner can do (a transfer, a database-only
+removal), operator-only state (routes, space quotas, the space catalogue), or
+an orchestration over many instances (a reload or a cache flush on each one).
+Everything else stays an invocation: deployment-specific operations (for
+example CERN's), and the built-ins.
+
+Rules for a typed RPC:
+
+- A resource message wraps the CS3 message of the same resource, and adds only
+  what CS3 cannot carry, with an optional `map<string, string> extra` for the
+  attributes of a driver or a deployment. It never carries a secret.
+- A list is a server stream.
+- The invocation returns the protojson of the message: `invoke.ProtoResult`.
+- An invocation error has a gRPC code: return `invoke.Error{Code, Message}` or a
+  `status.Error`. The control channel sends the code (`code` in the control and
+  admin results), and the typed RPC answers with it. NotFound must mean that the
+  resource does not exist: the CLI reads it so. A service that is not live is
+  Unavailable.
+- Register the service in `register` ([`services.go`](services.go)), which both
+  the gRPC listener and the local socket use.
+
+The protos import CS3 messages. `make protobuf` needs a checkout of
+[cs3apis](https://github.com/cs3org/cs3apis) in `CS3APIS_DIR` (default
+`../cs3apis`).
 
 ## Adding an invocation to a service (for developers)
 

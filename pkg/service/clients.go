@@ -229,7 +229,7 @@ func (c *clients) pick(ctx context.Context, name string, tried []string) (regist
 	if err != nil {
 		return nil, fmt.Errorf("service registry: resolving %q: %w", name, err)
 	}
-	nodes := filterByMetadata(svc.Nodes(), map[string]string{registry.MetaTransport: registry.TransportGRPC})
+	nodes := FilterByMetadata(svc.Nodes(), map[string]string{registry.MetaTransport: registry.TransportGRPC})
 	untried := without(nodes, tried)
 	// Penalties are weighed among the nodes a selector may pick: an offline or
 	// draining node that escaped them must not hide every penalized one.
