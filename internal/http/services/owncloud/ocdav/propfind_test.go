@@ -28,8 +28,6 @@ import (
 
 	userv1beta1 "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
-	collaboration "github.com/cs3org/go-cs3apis/cs3/sharing/collaboration/v1beta1"
-	link "github.com/cs3org/go-cs3apis/cs3/sharing/link/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	types "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
 	mockgateway "github.com/cs3org/go-cs3apis/mocks/github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
@@ -315,8 +313,10 @@ func TestPropfindDepthOneOnFileReturnsFileTwice(t *testing.T) {
 			gw := mockgateway.NewMockGatewayAPIClient(t)
 			gw.On("Stat", mock.Anything, mock.Anything).Return(&provider.StatResponse{Status: &rpc.Status{Code: rpc.Code_CODE_OK}, Info: file}, nil).Once()
 			gw.On("Stat", mock.Anything, mock.Anything).Return(tt.parentRes, nil).Once()
-			gw.On("ListPublicShares", mock.Anything, mock.Anything).Return(&link.ListPublicSharesResponse{Status: &rpc.Status{Code: rpc.Code_CODE_OK}}, nil)
-			gw.On("ListShares", mock.Anything, mock.Anything).Return(&collaboration.ListSharesResponse{Status: &rpc.Status{Code: rpc.Code_CODE_OK}}, nil)
+			// <d:lockdiscovery/> is the only property requested, so the share
+			// lookups must not happen at all.
+			gw.AssertNotCalled(t, "ListPublicShares", mock.Anything, mock.Anything)
+			gw.AssertNotCalled(t, "ListShares", mock.Anything, mock.Anything)
 			stampGateway(gw)
 
 			body := `<?xml version="1.0"?><d:propfind xmlns:d="DAV:"><d:prop><d:lockdiscovery/></d:prop></d:propfind>`
