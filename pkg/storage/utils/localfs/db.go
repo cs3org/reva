@@ -28,12 +28,30 @@ import (
 	"github.com/pkg/errors"
 )
 
+const (
+	// localfs issues one short query at a time per request against a local
+	// sqlite file. A handful of connections covers concurrent Stat calls;
+	// more would only add lock contention.
+	maxOpenConns = 8
+	maxIdleConns = 8
+)
+
 func initializeDB(root, dbName string) (*sql.DB, error) {
 	dbPath := path.Join(root, dbName)
 	db, err := sql.Open("sqlite3", dbPath)
 	if err != nil {
 		return nil, errors.Wrap(err, "localfs: error opening DB connection")
 	}
+
+	// The pool is capped so that a leaked result set degrades the service
+	// instead of exhausting it. database/sql puts no finalizer on Rows and
+	// only Rows.close releases the connection, so an abandoned result set
+	// holds a connection until the process exits. Without a cap that
+	// accumulates until the process runs out of connections or file
+	// descriptors. Writes here are short and the driver waits up to 5s for a
+	// lock by default, so a small pool is not a throughput limit.
+	db.SetMaxOpenConns(maxOpenConns)
+	db.SetMaxIdleConns(maxIdleConns)
 
 	stmt, err := db.Prepare("CREATE TABLE IF NOT EXISTS recycled_entries (key TEXT PRIMARY KEY, path TEXT)")
 	if err != nil {
