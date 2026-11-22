@@ -38,6 +38,8 @@ const (
 	NotificationContactRemoved        = "CONTACT_REMOVED"
 	NotificationUserRemoved           = "USER_REMOVED"
 	NotificationGroupRemoved          = "GROUP_REMOVED"
+	NotificationServerAdded           = "OCM_SERVER_ADDED"
+	NotificationServerRemoved         = "OCM_SERVER_REMOVED"
 )
 
 // NotificationClass describes the validation result.
@@ -55,8 +57,6 @@ type NotificationFile struct {
 	ProviderID  string   `json:"providerId,omitempty"`
 	Permissions []string `json:"permissions,omitempty"`
 	ShareWith   string   `json:"shareWith,omitempty"`
-	Owner       string   `json:"owner,omitempty"`
-	ShareID     string   `json:"shareId,omitempty"`
 }
 
 // NotificationUser is the user object of recipient notifications.
@@ -120,10 +120,13 @@ type NotificationError struct {
 // Restrict error paths to avoid reflecting payload member names.
 var notificationFields = map[string]bool{
 	"senderDomain": true, "resourceType": true, "shareType": true, "resourceType or shareType": true,
-	"providerId": true, "notification": true, "notification.message": true,
+	"collectionId": true, "collectionSize": true, "notification": true, "notification.message": true,
 	"notification.file": true, "notification.file.providerId": true,
-	"notification.file.permissions": true, "notification.file.owner": true, "notification.file.shareWith": true,
-	"notification.file.shareId": true, "notification.user": true, "notification.user.userId": true,
+	"notification.file.permissions": true, "notification.file.shareWith": true,
+	"notification.collection": true, "notification.collection.owner": true,
+	"notification.collection.shareWith": true, "notification.collection.permissions": true,
+	"notification.federation": true, "notification.federation.federationId": true,
+	"notification.federation.url": true, "notification.user": true, "notification.user.userId": true,
 	"notification.user.targetUserId": true, "notification.group": true, "notification.group.groupId": true,
 }
 
@@ -213,13 +216,6 @@ func decodeNotification(body []byte) (*Notification, error) {
 	if n.ResourceType == "" && n.ShareType == "" {
 		return nil, missingField("resourceType or shareType")
 	}
-	// The deprecated envelope selector cannot replace file.providerId.
-	if raw, ok := members["providerId"]; ok {
-		var s string
-		if isJSONNull(raw) || json.Unmarshal(raw, &s) != nil {
-			return nil, invalidField("providerId")
-		}
-	}
 	if raw, ok := members["notification"]; ok {
 		if err := n.decodePayload(raw); err != nil {
 			return nil, err
@@ -273,6 +269,19 @@ func memberString(obj map[string]json.RawMessage, key, field string, required bo
 	return s, nil
 }
 
+// The schema does not restrict these identifiers, so an empty string is valid.
+func memberText(obj map[string]json.RawMessage, key, field string) error {
+	raw, ok := obj[key]
+	if !ok {
+		return missingField(field)
+	}
+	var s string
+	if isJSONNull(raw) || json.Unmarshal(raw, &s) != nil {
+		return invalidField(field)
+	}
+	return nil
+}
+
 func (n *Notification) hasMember(key string) bool {
 	_, ok := n.members[key]
 	return ok
@@ -306,9 +315,10 @@ func payloadAddress(obj map[string]json.RawMessage, object, key string) (string,
 	return s, nil
 }
 
-func payloadPermissions(file map[string]json.RawMessage, required bool) ([]string, error) {
-	const field = "notification.file.permissions"
-	raw, ok := file["permissions"]
+// An absent list returns nil. A present empty list returns a non-nil empty slice.
+func payloadPermissions(obj map[string]json.RawMessage, object string, required bool) ([]string, error) {
+	field := "notification." + object + ".permissions"
+	raw, ok := obj["permissions"]
 	if !ok {
 		if required {
 			return nil, missingField(field)
@@ -326,7 +336,7 @@ func payloadPermissions(file map[string]json.RawMessage, required bool) ([]strin
 			return nil, invalidField(field)
 		}
 		switch p {
-		case "read", "write", "share":
+		case "read", "create", "update", "delete", "write", "share", "view":
 		default:
 			return nil, invalidField(field)
 		}
@@ -335,11 +345,25 @@ func payloadPermissions(file map[string]json.RawMessage, required bool) ([]strin
 	return perms, nil
 }
 
-func (n *Notification) requireResourceType() error {
-	if n.ResourceType == "" {
+// Share grants are never collections or federation memberships.
+func (n *Notification) requireGrantResourceType() error {
+	switch n.ResourceType {
+	case "":
 		return missingField("resourceType")
+	case "collection", "federation":
+		return invalidField("resourceType")
 	}
 	return nil
+}
+
+func (n *Notification) requireResourceType(want string) error {
+	switch n.ResourceType {
+	case want:
+		return nil
+	case "":
+		return missingField("resourceType")
+	}
+	return invalidField("resourceType")
 }
 
 // forbid rejects a member by presence: null and "" count as present.
@@ -351,7 +375,7 @@ func (n *Notification) forbid(key string) error {
 }
 
 func validateShareState(n *Notification) error {
-	if err := n.requireResourceType(); err != nil {
+	if err := n.requireGrantResourceType(); err != nil {
 		return err
 	}
 	file, err := n.payloadObject("file")
@@ -362,7 +386,7 @@ func validateShareState(n *Notification) error {
 	if f.ProviderID, err = payloadString(file, "file", "providerId"); err != nil {
 		return err
 	}
-	if f.Permissions, err = payloadPermissions(file, false); err != nil {
+	if f.Permissions, err = payloadPermissions(file, "file", false); err != nil {
 		return err
 	}
 	n.File, n.ProviderID = f, f.ProviderID
@@ -370,7 +394,7 @@ func validateShareState(n *Notification) error {
 }
 
 func validateRequestReshare(n *Notification) error {
-	if err := n.requireResourceType(); err != nil {
+	if err := n.requireGrantResourceType(); err != nil {
 		return err
 	}
 	file, err := n.payloadObject("file")
@@ -384,40 +408,71 @@ func validateRequestReshare(n *Notification) error {
 	if f.ShareWith, err = payloadAddress(file, "file", "shareWith"); err != nil {
 		return err
 	}
-	if f.Permissions, err = payloadPermissions(file, false); err != nil {
+	if f.Permissions, err = payloadPermissions(file, "file", false); err != nil {
 		return err
 	}
 	n.File, n.ProviderID = f, f.ProviderID
 	return nil
 }
 
-// REQUEST_SHARE uses shareId instead of the provider's grant identifier.
 func validateRequestShare(n *Notification) error {
-	if err := n.requireResourceType(); err != nil {
+	if err := n.requireResourceType("collection"); err != nil {
+		return err
+	}
+	if n.ShareType == "" {
+		return missingField("shareType")
+	}
+	if err := memberText(n.members, "collectionId", "collectionId"); err != nil {
+		return err
+	}
+	if err := n.forbid("collectionSize"); err != nil {
+		return err
+	}
+	collection, err := n.payloadObject("collection")
+	if err != nil {
+		return err
+	}
+	for _, key := range []string{"owner", "shareWith"} {
+		if _, err := payloadAddress(collection, "collection", key); err != nil {
+			return err
+		}
+	}
+	_, err = payloadPermissions(collection, "collection", true)
+	return err
+}
+
+// A collection decline names the request, not a grant. It ignores notification.file.
+func validateCollectionDeclined(n *Notification) error {
+	if err := n.requireResourceType("collection"); err != nil {
+		return err
+	}
+	if err := memberText(n.members, "collectionId", "collectionId"); err != nil {
+		return err
+	}
+	collection, err := n.payloadObject("collection")
+	if err != nil {
+		return err
+	}
+	_, err = payloadAddress(collection, "collection", "shareWith")
+	return err
+}
+
+func validateServerMembership(n *Notification) error {
+	if err := n.requireResourceType("federation"); err != nil {
 		return err
 	}
 	if err := n.forbid("shareType"); err != nil {
 		return err
 	}
-	file, err := n.payloadObject("file")
+	federation, err := n.payloadObject("federation")
 	if err != nil {
 		return err
 	}
-	f := &NotificationFile{}
-	if f.Owner, err = payloadAddress(file, "file", "owner"); err != nil {
+	if err := memberText(federation, "federationId", "notification.federation.federationId"); err != nil {
 		return err
 	}
-	if f.ShareWith, err = payloadAddress(file, "file", "shareWith"); err != nil {
-		return err
-	}
-	if f.ShareID, err = payloadString(file, "file", "shareId"); err != nil {
-		return err
-	}
-	if f.Permissions, err = payloadPermissions(file, true); err != nil {
-		return err
-	}
-	n.File = f
-	return nil
+	_, err = payloadString(federation, "federation", "url")
+	return err
 }
 
 func validateUserRemoved(n *Notification) error {
@@ -497,7 +552,10 @@ var builtinContracts = map[string]ValidateNotificationFunc{
 	NotificationGroupRemoved:          validateGroupRemoved,
 }
 
+// Valid events of these types are recognized but have no handler.
 var requestContracts = map[string]ValidateNotificationFunc{
 	NotificationRequestShare:   validateRequestShare,
 	NotificationRequestReshare: validateRequestReshare,
+	NotificationServerAdded:    validateServerMembership,
+	NotificationServerRemoved:  validateServerMembership,
 }

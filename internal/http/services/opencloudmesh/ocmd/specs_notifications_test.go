@@ -131,13 +131,41 @@ func TestParseNotificationFields(t *testing.T) {
 		body string
 		file NotificationFile
 	}{
-		{`{"notificationType":"REQUEST_SHARE","senderDomain":"a.example.org","resourceType":"file","notification":{"file":{"owner":"Owner @A.Example.org:0443","shareWith":"Bob @B.Example.org:8443","shareId":"resource @ opaque","permissions":["read"]}}}`, NotificationFile{Owner: "Owner @A.Example.org:0443", ShareWith: "Bob @B.Example.org:8443", ShareID: "resource @ opaque", Permissions: []string{"read"}}},
 		{`{"notificationType":"REQUEST_RESHARE","senderDomain":"a.example.org","resourceType":"file","notification":{"file":{"providerId":"grant @ opaque","shareWith":"Bob @B.Example.org:8443"}}}`, NotificationFile{ProviderID: "grant @ opaque", ShareWith: "Bob @B.Example.org:8443"}},
 	} {
 		n, err := reg.Parse([]byte(tc.body))
 		if code, ok := NotificationErrorCodeOf(err); !ok || code != NotificationErrNotImplemented || !reflect.DeepEqual(n.File, &tc.file) {
 			t.Fatalf("request file %#v: %v", n.File, err)
 		}
+	}
+}
+
+func TestParseNotificationPermissionPresence(t *testing.T) {
+	reg := NewNotificationRegistry()
+	const head = `{"notificationType":"SHARE_CHANGE_PERMISSION","senderDomain":"a.example.org","resourceType":"file","notification":{"file":{"providerId":"42"`
+	n := mustParse(t, reg, head+`}}}`)
+	if n.File.Permissions != nil {
+		t.Fatalf("absent permissions became %#v", n.File.Permissions)
+	}
+	n = mustParse(t, reg, head+`,"permissions":[]}}}`)
+	if n.File.Permissions == nil || len(n.File.Permissions) != 0 {
+		t.Fatalf("empty permissions became %#v", n.File.Permissions)
+	}
+	all := []string{"read", "create", "update", "delete", "write", "share", "view"}
+	n = mustParse(t, reg, head+`,"permissions":["read","create","update","delete","write","share","view"]}}}`)
+	if !reflect.DeepEqual(n.File.Permissions, all) {
+		t.Fatalf("permissions %#v", n.File.Permissions)
+	}
+}
+
+func TestParseCollectionDeclineIsNotAFileGrant(t *testing.T) {
+	reg := NewNotificationRegistry()
+	n, err := reg.Parse([]byte(`{"notificationType":"SHARE_DECLINED","senderDomain":"b.example.org","resourceType":"collection","collectionId":"","notification":{"collection":{"shareWith":"bob@b.example.org"},"file":{"providerId":"grant-1"}}}`))
+	if code, ok := NotificationErrorCodeOf(err); !ok || code != NotificationErrNotImplemented || n.Class != NotificationClassRequest {
+		t.Fatalf("class %s: %v", n.Class, err)
+	}
+	if n.File != nil || n.ProviderID != "" {
+		t.Fatalf("collection decline exposed a file grant: %#v", n)
 	}
 }
 

@@ -79,13 +79,20 @@ func (r *NotificationRegistry) SetHandler(notificationType string, h TypeHandler
 }
 
 // Parse decodes the generic envelope and validates a known type. Valid
-// requests return a not-implemented error; unknown types are not interpreted.
+// events without support return a not-implemented error; unknown types are
+// not interpreted.
 func (r *NotificationRegistry) Parse(body []byte) (*Notification, error) {
 	n, err := decodeNotification(body)
 	if err != nil {
 		return &Notification{Class: NotificationClassMalformed}, err
 	}
-	if validate, ok := requestContracts[n.Type]; ok {
+	validate := requestContracts[n.Type]
+	// Collection scope is decided before the handler lookup so that this decline
+	// never reaches the handler of a resource grant.
+	if n.Type == NotificationShareDeclined && n.ResourceType == "collection" {
+		validate = validateCollectionDeclined
+	}
+	if validate != nil {
 		if err := validate(n); err != nil {
 			n.Class = NotificationClassMalformed
 			return n, err

@@ -357,7 +357,7 @@
  },
  {
   "id": "ENV-029",
-  "purpose": "Permission entries must be read, write or share.",
+  "purpose": "Permission entries must be strings.",
   "body": {
    "notificationType": "SHARE_UNSHARED",
    "senderDomain": "a.example.org",
@@ -377,19 +377,19 @@
  },
  {
   "id": "ENV-030",
-  "purpose": "Share requests use owner, shareWith, shareId and permissions.",
+  "purpose": "Share requests use a collection with owner, shareWith and permissions.",
   "body": {
    "notificationType": "REQUEST_SHARE",
    "senderDomain": "a.example.org",
-   "resourceType": "file",
+   "resourceType": "collection",
+   "shareType": "user",
+   "collectionId": "collection-1",
    "notification": {
-    "file": {
-     "owner": "owner@a.example.org",
-     "shareWith": "recipient@b.example.org",
-     "shareId": "resource-9",
+    "collection": {
+     "owner": "alice@a.example.org",
+     "shareWith": "bob@b.example.org",
      "permissions": [
-      "read",
-      "write"
+      "read"
      ]
     }
    }
@@ -420,30 +420,30 @@
   "body": {
    "notificationType": "REQUEST_SHARE",
    "senderDomain": "a.example.org",
-   "resourceType": "file"
+   "resourceType": "collection",
+   "shareType": "user",
+   "collectionId": "collection-1"
   },
   "handlerCalls": 0,
   "class": "malformed"
  },
  {
   "id": "ENV-033",
-  "purpose": "Share requests forbid shareType.",
+  "purpose": "Share requests require shareType.",
   "body": {
    "notificationType": "REQUEST_SHARE",
    "senderDomain": "a.example.org",
-   "resourceType": "file",
+   "resourceType": "collection",
+   "collectionId": "collection-1",
    "notification": {
-    "file": {
-     "owner": "owner@a.example.org",
-     "shareWith": "recipient@b.example.org",
-     "shareId": "resource-9",
+    "collection": {
+     "owner": "alice@a.example.org",
+     "shareWith": "bob@b.example.org",
      "permissions": [
-      "read",
-      "write"
+      "read"
      ]
     }
-   },
-   "shareType": "user"
+   }
   },
   "handlerCalls": 0,
   "class": "malformed"
@@ -526,7 +526,7 @@
  },
  {
   "id": "ENV-043",
-  "purpose": "A supplied envelope providerId must be a string.",
+  "purpose": "A non-string deprecated envelope providerId is not interpreted.",
   "body": {
    "notificationType": "EXAMPLE_FUTURE",
    "senderDomain": "a.example.org",
@@ -534,7 +534,7 @@
    "providerId": 42
   },
   "handlerCalls": 0,
-  "class": "malformed"
+  "class": "unknown"
  },
  {
   "id": "ENV-050",
@@ -992,11 +992,12 @@
   "body": {
    "notificationType": "REQUEST_SHARE",
    "senderDomain": "a.example.org",
-   "resourceType": "file",
+   "resourceType": "collection",
+   "shareType": "user",
+   "collectionId": "collection-1",
    "notification": {
-    "file": {
+    "collection": {
      "shareWith": "bob@b.example.org",
-     "shareId": "resource-1",
      "permissions": [
       "read"
      ]
@@ -1012,31 +1013,12 @@
   "body": {
    "notificationType": "REQUEST_SHARE",
    "senderDomain": "a.example.org",
-   "resourceType": "file",
+   "resourceType": "collection",
+   "shareType": "user",
+   "collectionId": "collection-1",
    "notification": {
-    "file": {
+    "collection": {
      "owner": "alice@a.example.org",
-     "shareId": "resource-1",
-     "permissions": [
-      "read"
-     ]
-    }
-   }
-  },
-  "handlerCalls": 0,
-  "class": "malformed"
- },
- {
-  "id": "request-share-missing-shareId",
-  "purpose": "Share request requires shareId",
-  "body": {
-   "notificationType": "REQUEST_SHARE",
-   "senderDomain": "a.example.org",
-   "resourceType": "file",
-   "notification": {
-    "file": {
-     "owner": "alice@a.example.org",
-     "shareWith": "bob@b.example.org",
      "permissions": [
       "read"
      ]
@@ -1052,12 +1034,13 @@
   "body": {
    "notificationType": "REQUEST_SHARE",
    "senderDomain": "a.example.org",
-   "resourceType": "file",
+   "resourceType": "collection",
+   "shareType": "user",
+   "collectionId": "collection-1",
    "notification": {
-    "file": {
+    "collection": {
      "owner": "alice@a.example.org",
-     "shareWith": "bob@b.example.org",
-     "shareId": "resource-1"
+     "shareWith": "bob@b.example.org"
     }
    }
   },
@@ -1070,12 +1053,13 @@
   "body": {
    "notificationType": "REQUEST_SHARE",
    "senderDomain": "a.example.org",
-   "resourceType": "file",
+   "resourceType": "collection",
+   "shareType": "user",
+   "collectionId": "collection-1",
    "notification": {
-    "file": {
+    "collection": {
      "owner": null,
      "shareWith": "bob@b.example.org",
-     "shareId": "resource-1",
      "permissions": [
       "read"
      ]
@@ -1091,33 +1075,13 @@
   "body": {
    "notificationType": "REQUEST_SHARE",
    "senderDomain": "a.example.org",
-   "resourceType": "file",
+   "resourceType": "collection",
+   "shareType": "user",
+   "collectionId": "collection-1",
    "notification": {
-    "file": {
+    "collection": {
      "owner": "alice@a.example.org",
      "shareWith": 42,
-     "shareId": "resource-1",
-     "permissions": [
-      "read"
-     ]
-    }
-   }
-  },
-  "handlerCalls": 0,
-  "class": "malformed"
- },
- {
-  "id": "request-share-invalid-shareId",
-  "purpose": "Share request rejects invalid shareId",
-  "body": {
-   "notificationType": "REQUEST_SHARE",
-   "senderDomain": "a.example.org",
-   "resourceType": "file",
-   "notification": {
-    "file": {
-     "owner": "alice@a.example.org",
-     "shareWith": "bob@b.example.org",
-     "shareId": "",
      "permissions": [
       "read"
      ]
@@ -1133,12 +1097,13 @@
   "body": {
    "notificationType": "REQUEST_SHARE",
    "senderDomain": "a.example.org",
-   "resourceType": "file",
+   "resourceType": "collection",
+   "shareType": "user",
+   "collectionId": "collection-1",
    "notification": {
-    "file": {
+    "collection": {
      "owner": "alice@a.example.org",
      "shareWith": "bob@b.example.org",
-     "shareId": "resource-1",
      "permissions": null
     }
    }
@@ -1152,12 +1117,13 @@
   "body": {
    "notificationType": "REQUEST_SHARE",
    "senderDomain": "a.example.org",
-   "resourceType": "file",
+   "resourceType": "collection",
+   "shareType": "user",
+   "collectionId": "collection-1",
    "notification": {
-    "file": {
+    "collection": {
      "owner": "alice@a.example.org",
      "shareWith": "bob@b.example.org",
-     "shareId": "resource-1",
      "permissions": []
     }
    }
@@ -1507,6 +1473,465 @@
    "senderDomain": "a.example.org",
    "resourceType": "file",
    "shareType": null
+  },
+  "handlerCalls": 0,
+  "class": "malformed"
+ },
+ {
+  "id": "request-share-missing-collectionId",
+  "purpose": "Share request requires collectionId",
+  "body": {
+   "notificationType": "REQUEST_SHARE",
+   "senderDomain": "a.example.org",
+   "resourceType": "collection",
+   "shareType": "user",
+   "notification": {
+    "collection": {
+     "owner": "alice@a.example.org",
+     "shareWith": "bob@b.example.org",
+     "permissions": [
+      "read"
+     ]
+    }
+   }
+  },
+  "handlerCalls": 0,
+  "class": "malformed"
+ },
+ {
+  "id": "request-share-null-collectionId",
+  "purpose": "Share request collectionId cannot be null",
+  "body": {
+   "notificationType": "REQUEST_SHARE",
+   "senderDomain": "a.example.org",
+   "resourceType": "collection",
+   "shareType": "user",
+   "notification": {
+    "collection": {
+     "owner": "alice@a.example.org",
+     "shareWith": "bob@b.example.org",
+     "permissions": [
+      "read"
+     ]
+    }
+   },
+   "collectionId": null
+  },
+  "handlerCalls": 0,
+  "class": "malformed"
+ },
+ {
+  "id": "request-share-empty-collectionId",
+  "purpose": "Share request accepts an empty collectionId",
+  "body": {
+   "notificationType": "REQUEST_SHARE",
+   "senderDomain": "a.example.org",
+   "resourceType": "collection",
+   "shareType": "user",
+   "collectionId": "",
+   "notification": {
+    "collection": {
+     "owner": "alice@a.example.org",
+     "shareWith": "bob@b.example.org",
+     "permissions": [
+      "read"
+     ]
+    }
+   }
+  },
+  "handlerCalls": 0,
+  "class": "unsupported"
+ },
+ {
+  "id": "request-share-collection-size",
+  "purpose": "Share request forbids collectionSize",
+  "body": {
+   "notificationType": "REQUEST_SHARE",
+   "senderDomain": "a.example.org",
+   "resourceType": "collection",
+   "shareType": "user",
+   "collectionId": "collection-1",
+   "notification": {
+    "collection": {
+     "owner": "alice@a.example.org",
+     "shareWith": "bob@b.example.org",
+     "permissions": [
+      "read"
+     ]
+    }
+   },
+   "collectionSize": 3
+  },
+  "handlerCalls": 0,
+  "class": "malformed"
+ },
+ {
+  "id": "request-share-retired-file-shape",
+  "purpose": "Share request cannot use the retired file shape",
+  "body": {
+   "notificationType": "REQUEST_SHARE",
+   "senderDomain": "a.example.org",
+   "resourceType": "file",
+   "notification": {
+    "file": {
+     "owner": "alice@a.example.org",
+     "shareWith": "bob@b.example.org",
+     "shareId": "resource-9",
+     "permissions": [
+      "read"
+     ]
+    }
+   }
+  },
+  "handlerCalls": 0,
+  "class": "malformed"
+ },
+ {
+  "id": "collection-decline-valid",
+  "purpose": "Collection decline is valid but unsupported",
+  "body": {
+   "notificationType": "SHARE_DECLINED",
+   "senderDomain": "b.example.org",
+   "resourceType": "collection",
+   "collectionId": "collection-1",
+   "notification": {
+    "collection": {
+     "shareWith": "bob@b.example.org"
+    }
+   }
+  },
+  "handlerCalls": 0,
+  "class": "unsupported"
+ },
+ {
+  "id": "collection-decline-echoed-shareType",
+  "purpose": "Collection decline may echo shareType",
+  "body": {
+   "notificationType": "SHARE_DECLINED",
+   "senderDomain": "b.example.org",
+   "resourceType": "collection",
+   "collectionId": "collection-1",
+   "notification": {
+    "collection": {
+     "shareWith": "bob@b.example.org"
+    }
+   },
+   "shareType": "user"
+  },
+  "handlerCalls": 0,
+  "class": "unsupported"
+ },
+ {
+  "id": "collection-decline-empty-collectionId",
+  "purpose": "Collection decline accepts an empty collectionId",
+  "body": {
+   "notificationType": "SHARE_DECLINED",
+   "senderDomain": "b.example.org",
+   "resourceType": "collection",
+   "collectionId": "",
+   "notification": {
+    "collection": {
+     "shareWith": "bob@b.example.org"
+    }
+   }
+  },
+  "handlerCalls": 0,
+  "class": "unsupported"
+ },
+ {
+  "id": "collection-decline-with-file",
+  "purpose": "An incidental file object cannot route a collection decline to the resource handler",
+  "body": {
+   "notificationType": "SHARE_DECLINED",
+   "senderDomain": "b.example.org",
+   "resourceType": "collection",
+   "collectionId": "collection-1",
+   "notification": {
+    "collection": {
+     "shareWith": "bob@b.example.org"
+    },
+    "file": {
+     "providerId": "grant-1"
+    }
+   }
+  },
+  "handlerCalls": 0,
+  "class": "unsupported"
+ },
+ {
+  "id": "collection-decline-missing-collectionId",
+  "purpose": "Collection decline requires collectionId, even with a file object",
+  "body": {
+   "notificationType": "SHARE_DECLINED",
+   "senderDomain": "b.example.org",
+   "resourceType": "collection",
+   "notification": {
+    "collection": {
+     "shareWith": "bob@b.example.org"
+    },
+    "file": {
+     "providerId": "grant-1"
+    }
+   }
+  },
+  "handlerCalls": 0,
+  "class": "malformed"
+ },
+ {
+  "id": "collection-decline-null-collectionId",
+  "purpose": "Collection decline collectionId cannot be null",
+  "body": {
+   "notificationType": "SHARE_DECLINED",
+   "senderDomain": "b.example.org",
+   "resourceType": "collection",
+   "notification": {
+    "collection": {
+     "shareWith": "bob@b.example.org"
+    }
+   },
+   "collectionId": null
+  },
+  "handlerCalls": 0,
+  "class": "malformed"
+ },
+ {
+  "id": "collection-decline-numeric-collectionId",
+  "purpose": "Collection decline collectionId must be a string",
+  "body": {
+   "notificationType": "SHARE_DECLINED",
+   "senderDomain": "b.example.org",
+   "resourceType": "collection",
+   "collectionId": 7,
+   "notification": {
+    "collection": {
+     "shareWith": "bob@b.example.org"
+    }
+   }
+  },
+  "handlerCalls": 0,
+  "class": "malformed"
+ },
+ {
+  "id": "collection-decline-missing-collection",
+  "purpose": "Collection decline requires its collection object, even with a file object",
+  "body": {
+   "notificationType": "SHARE_DECLINED",
+   "senderDomain": "b.example.org",
+   "resourceType": "collection",
+   "collectionId": "collection-1",
+   "notification": {
+    "file": {
+     "providerId": "grant-1"
+    }
+   }
+  },
+  "handlerCalls": 0,
+  "class": "malformed"
+ },
+ {
+  "id": "collection-decline-invalid-shareWith",
+  "purpose": "Collection decline requires a recipient address",
+  "body": {
+   "notificationType": "SHARE_DECLINED",
+   "senderDomain": "b.example.org",
+   "resourceType": "collection",
+   "collectionId": "collection-1",
+   "notification": {
+    "collection": {
+     "shareWith": "not-an-address"
+    }
+   }
+  },
+  "handlerCalls": 0,
+  "class": "malformed"
+ },
+ {
+  "id": "share-unshared-collection-resource",
+  "purpose": "Resource unshare cannot target a collection",
+  "body": {
+   "notificationType": "SHARE_UNSHARED",
+   "senderDomain": "a.example.org",
+   "resourceType": "collection",
+   "collectionId": "collection-1",
+   "notification": {
+    "file": {
+     "providerId": "grant-1"
+    }
+   }
+  },
+  "handlerCalls": 0,
+  "class": "malformed"
+ },
+ {
+  "id": "share-declined-federation-resource",
+  "purpose": "Resource decline cannot use the federation resource type",
+  "body": {
+   "notificationType": "SHARE_DECLINED",
+   "senderDomain": "a.example.org",
+   "resourceType": "federation",
+   "notification": {
+    "file": {
+     "providerId": "grant-1"
+    }
+   }
+  },
+  "handlerCalls": 0,
+  "class": "malformed"
+ },
+ {
+  "id": "request-reshare-collection-resource",
+  "purpose": "Reshare request cannot target a collection",
+  "body": {
+   "notificationType": "REQUEST_RESHARE",
+   "senderDomain": "a.example.org",
+   "resourceType": "collection",
+   "notification": {
+    "file": {
+     "providerId": "grant-1",
+     "shareWith": "bob@b.example.org"
+    }
+   }
+  },
+  "handlerCalls": 0,
+  "class": "malformed"
+ },
+ {
+  "id": "permissions-schema-vocabulary",
+  "purpose": "All schema permission values are accepted.",
+  "body": {
+   "notificationType": "SHARE_CHANGE_PERMISSION",
+   "senderDomain": "a.example.org",
+   "resourceType": "folder",
+   "notification": {
+    "file": {
+     "providerId": "grant-1",
+     "permissions": [
+      "read",
+      "create",
+      "update",
+      "delete",
+      "write",
+      "share",
+      "view"
+     ]
+    }
+   }
+  },
+  "handlerCalls": 1,
+  "class": "known"
+ },
+ {
+  "id": "server-added-valid",
+  "purpose": "Federation membership is valid but unsupported",
+  "body": {
+   "notificationType": "OCM_SERVER_ADDED",
+   "senderDomain": "a.example.org",
+   "resourceType": "federation",
+   "notification": {
+    "federation": {
+     "federationId": "mesh",
+     "url": "https://b.example.org"
+    }
+   }
+  },
+  "handlerCalls": 0,
+  "class": "unsupported"
+ },
+ {
+  "id": "server-removed-valid",
+  "purpose": "Federation removal is valid but unsupported",
+  "body": {
+   "notificationType": "OCM_SERVER_REMOVED",
+   "senderDomain": "a.example.org",
+   "resourceType": "federation",
+   "notification": {
+    "federation": {
+     "federationId": "mesh",
+     "url": "https://b.example.org"
+    }
+   }
+  },
+  "handlerCalls": 0,
+  "class": "unsupported"
+ },
+ {
+  "id": "server-missing-url",
+  "purpose": "Federation membership requires url",
+  "body": {
+   "notificationType": "OCM_SERVER_ADDED",
+   "senderDomain": "a.example.org",
+   "resourceType": "federation",
+   "notification": {
+    "federation": {
+     "federationId": "mesh"
+    }
+   }
+  },
+  "handlerCalls": 0,
+  "class": "malformed"
+ },
+ {
+  "id": "server-numeric-federationId",
+  "purpose": "Federation membership federationId must be a string",
+  "body": {
+   "notificationType": "OCM_SERVER_ADDED",
+   "senderDomain": "a.example.org",
+   "resourceType": "federation",
+   "notification": {
+    "federation": {
+     "federationId": 7,
+     "url": "https://b.example.org"
+    }
+   }
+  },
+  "handlerCalls": 0,
+  "class": "malformed"
+ },
+ {
+  "id": "server-missing-federation",
+  "purpose": "Federation membership requires its federation object",
+  "body": {
+   "notificationType": "OCM_SERVER_ADDED",
+   "senderDomain": "a.example.org",
+   "resourceType": "federation",
+   "notification": {
+    "future": {}
+   }
+  },
+  "handlerCalls": 0,
+  "class": "malformed"
+ },
+ {
+  "id": "server-with-shareType",
+  "purpose": "Federation membership forbids shareType",
+  "body": {
+   "notificationType": "OCM_SERVER_ADDED",
+   "senderDomain": "a.example.org",
+   "resourceType": "federation",
+   "notification": {
+    "federation": {
+     "federationId": "mesh",
+     "url": "https://b.example.org"
+    }
+   },
+   "shareType": "user"
+  },
+  "handlerCalls": 0,
+  "class": "malformed"
+ },
+ {
+  "id": "server-wrong-resourceType",
+  "purpose": "Federation membership requires resourceType=federation",
+  "body": {
+   "notificationType": "OCM_SERVER_ADDED",
+   "senderDomain": "a.example.org",
+   "resourceType": "file",
+   "notification": {
+    "federation": {
+     "federationId": "mesh",
+     "url": "https://b.example.org"
+    }
+   }
   },
   "handlerCalls": 0,
   "class": "malformed"

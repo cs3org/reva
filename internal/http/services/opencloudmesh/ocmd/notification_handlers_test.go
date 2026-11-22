@@ -69,7 +69,7 @@ func TestRegistryDispatchOutcomes(t *testing.T) {
 		}
 	}
 
-	req, err := r.Parse([]byte(`{"notificationType":"REQUEST_SHARE","senderDomain":"b.example.org","resourceType":"file","notification":{"file":{"owner":"a@a.example.org","shareWith":"b@b.example.org","shareId":"x","permissions":["read"]}}}`))
+	req, err := r.Parse([]byte(`{"notificationType":"REQUEST_SHARE","senderDomain":"b.example.org","resourceType":"collection","shareType":"user","collectionId":"x","notification":{"collection":{"owner":"a@a.example.org","shareWith":"b@b.example.org","permissions":["read"]}}}`))
 	if code, ok := NotificationErrorCodeOf(err); !ok || code != NotificationErrNotImplemented || req.Class != NotificationClassRequest {
 		t.Fatalf("request status %v", err)
 	}
@@ -109,7 +109,7 @@ func TestRegistryRegistrationRules(t *testing.T) {
 	if err := r.SetHandler(NotificationShareAccepted, nil); err == nil {
 		t.Fatal("nil handler accepted")
 	}
-	for _, typ := range []string{NotificationRequestShare, NotificationRequestReshare} {
+	for _, typ := range []string{NotificationRequestShare, NotificationRequestReshare, "OCM_SERVER_ADDED", "OCM_SERVER_REMOVED"} {
 		if err := r.SetHandler(typ, h); err == nil {
 			t.Fatalf("request %q has a handler slot", typ)
 		}
