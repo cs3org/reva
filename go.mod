@@ -57,7 +57,7 @@ require (
 	github.com/thanhpk/randstr v1.0.7
 	github.com/tus/tusd v1.13.0
 	github.com/wk8/go-ordered-map v1.0.0
-	github.com/yaronf/httpsign v0.6.2
+	github.com/yaronf/httpsign v0.6.3
 	go.opencensus.io v0.24.0
 	go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc v0.72.0
 	go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp v0.72.0
