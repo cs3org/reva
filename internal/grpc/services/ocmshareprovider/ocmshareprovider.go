@@ -673,11 +673,6 @@ func (s *service) UpdateReceivedOCMShare(ctx context.Context, req *ocm.UpdateRec
 				Status: status.NewNotFound(ctx, "share does not exist"),
 			}, nil
 		}
-		if errors.Is(err, share.ErrShareWithdrawn) {
-			return &ocm.UpdateReceivedOCMShareResponse{
-				Status: status.NewFailedPrecondition(ctx, err, share.WithdrawnShareMessage),
-			}, nil
-		}
 		return &ocm.UpdateReceivedOCMShareResponse{
 			Status: status.NewStatusFromErrType(ctx, "error updating received share", err),
 		}, nil
@@ -742,10 +737,6 @@ func (s *service) processEmbeddedShare(ctx context.Context, user *userpb.User, r
 		case errors.Is(err, share.ErrShareAlreadyAccepted):
 			return &ocm.UpdateReceivedOCMShareResponse{
 				Status: status.NewFailedPrecondition(ctx, err, "share already accepted"),
-			}, nil
-		case errors.Is(err, share.ErrShareWithdrawn):
-			return &ocm.UpdateReceivedOCMShareResponse{
-				Status: status.NewFailedPrecondition(ctx, err, share.WithdrawnShareMessage),
 			}, nil
 		}
 		return &ocm.UpdateReceivedOCMShareResponse{

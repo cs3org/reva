@@ -37,7 +37,6 @@ import (
 	"github.com/go-sql-driver/mysql"
 	"gorm.io/datatypes"
 	"gorm.io/gorm"
-	"gorm.io/gorm/clause"
 )
 
 // maxTransactionAttempts bounds the retries of a transaction that failed on
@@ -141,7 +140,8 @@ func (p *receivedProjection) equal(q *receivedProjection) bool {
 	}
 	a, b := p.row, q.row
 	if a.ID != b.ID || !equalGrantKey(a.GrantKey, b.GrantKey) || a.RemoteShareID != b.RemoteShareID || a.Name != b.Name ||
-		a.ItemType != b.ItemType || a.ShareWith != b.ShareWith || a.Owner != b.Owner || a.Initiator != b.Initiator ||
+		a.ItemType != b.ItemType || a.ShareWith != b.ShareWith || a.ShareWithIdp != b.ShareWithIdp ||
+		a.ShareWithTenant != b.ShareWithTenant || a.Owner != b.Owner || a.Initiator != b.Initiator ||
 		a.Ctime != b.Ctime || a.Mtime != b.Mtime || !equalNullTime(a.Expiration, b.Expiration) ||
 		a.RecipientType != b.RecipientType || a.State != b.State || a.Alias != b.Alias || a.Hidden != b.Hidden ||
 		a.TransferGeneration != b.TransferGeneration || a.DeletedAt.Valid != b.DeletedAt.Valid ||
@@ -153,7 +153,7 @@ func (p *receivedProjection) equal(q *receivedProjection) bool {
 		if x.ID != y.ID || x.Type != y.Type || x.Uri != y.Uri || x.SharedSecret != y.SharedSecret ||
 			x.Permissions != y.Permissions || x.AccessTypes != y.AccessTypes || !bytes.Equal(x.Payload, y.Payload) ||
 			!bytes.Equal(x.Requirements, y.Requirements) || !bytes.Equal(x.Targets, y.Targets) ||
-			x.AppName != y.AppName || x.AppIconHint != y.AppIconHint || !bytes.Equal(x.MediaTypes, y.MediaTypes) {
+			x.AppIconHint != y.AppIconHint || !bytes.Equal(x.Apps, y.Apps) {
 			return false
 		}
 	}
@@ -240,150 +240,78 @@ func grantOrigin(creator string) (string, bool) {
 	return origin, true
 }
 
-// lockIdentityByKey locks an existing identity, or returns nil if absent.
-// The stored fields must match the key's inputs when they are known.
-func lockIdentityByKey(tx *gorm.DB, key, origin, remoteShareID string) (*model.OcmGrantIdentity, error) {
-	var ident model.OcmGrantIdentity
-	err := forUpdate(tx).Where("grant_key = ?", key).Take(&ident).Error
-	if errors.Is(err, gorm.ErrRecordNotFound) {
-		return nil, nil
+// lockReceivedGrant locks the same projection rows as the local lifecycle
+// writers. Recheck the exact stored identity independently of SQL collation.
+func lockReceivedGrant(tx *gorm.DB, grant *share.GrantWithdrawal) ([]model.OcmReceivedShare, string, error) {
+	if grant == nil {
+		return nil, "", share.ErrInvalidGrantIdentity
 	}
+	origin, err := share.CanonicalGrantOrigin(grant.Origin)
 	if err != nil {
-		return nil, err
+		return nil, "", err
 	}
-	if origin != "" && (ident.Origin != origin || ident.RemoteShareID != remoteShareID) {
-		return nil, share.ErrGrantIdentityMismatch
+	key, err := share.GrantKey(origin, grant.RemoteShareID)
+	if err != nil {
+		return nil, "", err
 	}
-	if want, err := share.GrantKey(ident.Origin, ident.RemoteShareID); err != nil || want != ident.GrantKey {
-		return nil, share.ErrGrantIdentityMismatch
+	switch grant.ResourceType {
+	case ocm.SharedResourceType_SHARE_RESOURCE_TYPE_FILE,
+		ocm.SharedResourceType_SHARE_RESOURCE_TYPE_CONTAINER,
+		ocm.SharedResourceType_SHARE_RESOURCE_TYPE_EMBEDDED:
+	default:
+		return nil, "", share.ErrInvalidGrantIdentity
 	}
-	return &ident, nil
+	recipient := convertFromCS3OCMShareType(grant.RecipientType)
+	if grant.RecipientType != ocm.RecipientType_RECIPIENT_TYPE_INVALID && recipient < 0 {
+		return nil, "", share.ErrInvalidGrantIdentity
+	}
+	var rows []model.OcmReceivedShare
+	if err := forUpdate(tx).Where("grant_key = ?", key).Order("id").Find(&rows).Error; err != nil {
+		return nil, "", err
+	}
+	for _, row := range rows {
+		storedOrigin, ok := grantOrigin(row.Initiator)
+		if !ok || row.GrantKey == nil || *row.GrantKey != key ||
+			storedOrigin != origin || row.RemoteShareID != grant.RemoteShareID || row.ShareWith == "" {
+			return nil, "", share.ErrGrantIdentityMismatch
+		}
+		if row.ItemType != convertFromCS3ResourceType(grant.ResourceType) ||
+			(grant.RecipientType != ocm.RecipientType_RECIPIENT_TYPE_INVALID && row.RecipientType != recipient) {
+			return nil, key, nil
+		}
+	}
+	return rows, key, nil
 }
 
-// ensureIdentity inserts the identity if absent and locks it.
-func ensureIdentity(tx *gorm.DB, origin, remoteShareID string) (*model.OcmGrantIdentity, error) {
-	key, err := share.GrantKey(origin, remoteShareID)
-	if err != nil {
-		return nil, err
-	}
-	if err := tx.Clauses(clause.OnConflict{DoNothing: true}).Create(&model.OcmGrantIdentity{
-		GrantKey:      key,
-		Origin:        origin,
-		RemoteShareID: remoteShareID,
-	}).Error; err != nil {
-		return nil, err
-	}
-	ident, err := lockIdentityByKey(tx, key, origin, remoteShareID)
-	if err != nil {
-		return nil, err
-	}
-	if ident == nil {
-		return nil, share.ErrGrantIdentityMismatch
-	}
-	return ident, nil
-}
-
-// lockGuardedReceived locks and verifies the identity of a received share.
-// Every stored share is bound, so a share without a binding fails closed.
-func lockGuardedReceived(tx *gorm.DB, row *model.OcmReceivedShare) (*model.OcmGrantIdentity, error) {
-	if row.GrantKey == nil || *row.GrantKey == "" {
-		return nil, share.ErrGrantIdentityMismatch
-	}
-	origin, ok := grantOrigin(row.Initiator)
-	if !ok {
-		return nil, share.ErrGrantIdentityMismatch
-	}
-	ident, err := lockIdentityByKey(tx, *row.GrantKey, origin, row.RemoteShareID)
-	if err != nil {
-		return nil, err
-	}
-	if ident == nil {
-		return nil, share.ErrGrantIdentityMismatch
-	}
-	return ident, nil
-}
-
-func withdrawn(ident *model.OcmGrantIdentity) bool {
-	return ident != nil && ident.WithdrawnAt.Valid
-}
-
-// WithdrawReceivedGrant marks a provider grant as withdrawn and retains all
-// its bound received shares as INVALID and hidden, in one transaction.
-func (m *mgr) WithdrawReceivedGrant(ctx context.Context, w *share.GrantWithdrawal) (*share.GrantWithdrawalReceipt, error) {
-	if w == nil {
-		return nil, share.ErrInvalidGrantIdentity
-	}
-	origin, err := share.CanonicalGrantOrigin(w.Origin)
-	if err != nil {
-		return nil, err
-	}
-	key, err := share.GrantKey(origin, w.RemoteShareID)
-	if err != nil {
-		return nil, err
-	}
-	itemType := convertFromCS3ResourceType(w.ResourceType)
-
+// WithdrawReceivedGrant physically deletes the exact projections and their protocols.
+func (m *mgr) WithdrawReceivedGrant(ctx context.Context, grant *share.GrantWithdrawal) (*share.GrantWithdrawalReceipt, error) {
 	var receipt share.GrantWithdrawalReceipt
 	var check commitCheck
-	err = m.transact(ctx, "withdraw_grant", func(tx *gorm.DB) error {
+	err := m.transact(ctx, "withdraw_grant", func(tx *gorm.DB) error {
 		receipt = share.GrantWithdrawalReceipt{}
-		check = commitCheck{grantKey: key}
-		var expected, previous *grantProjection
-		check.observe = func(db *gorm.DB) (share.CommitObservation, error) {
-			return observeGrant(db, key, expected, previous)
-		}
-		ident, err := lockIdentityByKey(tx, key, origin, w.RemoteShareID)
-		if err != nil || ident == nil {
-			// An unknown grant is not recorded: there is nothing to withdraw.
+		check = commitCheck{}
+		rows, key, err := lockReceivedGrant(tx, grant)
+		if err != nil || len(rows) == 0 {
 			return err
 		}
-		var rows []model.OcmReceivedShare
-		if err := forUpdate(tx).Where("grant_key = ?", key).Order("id").Find(&rows).Error; err != nil {
+		ids := make([]uint, 0, len(rows))
+		for _, row := range rows {
+			ids = append(ids, row.ID)
+		}
+		if err := tx.Unscoped().Where("ocm_received_share_id IN ?", ids).Delete(&model.OcmReceivedShareProtocol{}).Error; err != nil {
 			return err
 		}
-		if previous, err = readGrantProjection(tx, key); err != nil {
-			return err
+		result := tx.Unscoped().Where("id IN ?", ids).Delete(&model.OcmReceivedShare{})
+		if result.Error != nil {
+			return result.Error
 		}
-		if len(rows) == 0 {
-			return nil
+		if result.RowsAffected != int64(len(ids)) {
+			return share.ErrShareNotFound
 		}
-		for _, r := range rows {
-			if r.ItemType != itemType {
-				return nil
-			}
-			if w.RecipientType != ocm.RecipientType_RECIPIENT_TYPE_INVALID && r.RecipientType != convertFromCS3OCMShareType(w.RecipientType) {
-				return nil
-			}
-		}
-		if !ident.WithdrawnAt.Valid {
-			now := time.Now()
-			if err := tx.Model(&model.OcmGrantIdentity{}).Where("grant_key = ?", key).
-				Update("withdrawn_at", datatypes.NullTime{V: now, Valid: true}).Error; err != nil {
-				return err
-			}
-			ids := make([]uint, 0, len(rows))
-			for _, r := range rows {
-				ids = append(ids, r.ID)
-			}
-			if err := tx.Model(&model.OcmReceivedShare{}).Where("id IN ?", ids).Updates(map[string]any{
-				"state":  model.OcmShareStateInvalid,
-				"hidden": true,
-				"mtime":  now.Unix(),
-			}).Error; err != nil {
-				return err
-			}
-			receipt.Changed = true
-			if expected, err = readGrantProjection(tx, key); err != nil {
-				return err
-			}
-		}
-		for _, r := range rows {
-			after, err := reloadReceived(tx, r.ID)
-			if err != nil {
-				return err
-			}
-			receipt.Shares = append(receipt.Shares, after)
-		}
+		check = commitCheck{grantKey: key, observe: func(db *gorm.DB) (share.CommitObservation, error) {
+			return observeDeleted(db, ids)
+		}}
+		receipt.Changed = true
 		return nil
 	}, &check)
 	if err != nil {
@@ -392,69 +320,107 @@ func (m *mgr) WithdrawReceivedGrant(ctx context.Context, w *share.GrantWithdrawa
 	return &receipt, nil
 }
 
-// grantProjection is the durable state of a grant: its ledger record and
-// every bound received share.
-type grantProjection struct {
-	ident  model.OcmGrantIdentity
-	shares []*receivedProjection
-}
-
-// readGrantProjection returns nil for an unknown grant.
-func readGrantProjection(tx *gorm.DB, key string) (*grantProjection, error) {
-	var g grantProjection
-	err := tx.Where("grant_key = ?", key).Take(&g.ident).Error
-	if errors.Is(err, gorm.ErrRecordNotFound) {
-		return nil, nil
-	}
+func observeDeleted(db *gorm.DB, ids []uint) (share.CommitObservation, error) {
+	var rows, children int64
+	err := observeTx(db, func(tx *gorm.DB) error {
+		if err := tx.Unscoped().Model(&model.OcmReceivedShare{}).Where("id IN ?", ids).Count(&rows).Error; err != nil {
+			return err
+		}
+		return tx.Unscoped().Model(&model.OcmReceivedShareProtocol{}).Where("ocm_received_share_id IN ?", ids).Count(&children).Error
+	})
 	if err != nil {
-		return nil, err
+		return share.CommitObservedUnread, err
 	}
-	var ids []uint
-	if err := tx.Model(&model.OcmReceivedShare{}).Where("grant_key = ?", key).Order("id").Pluck("id", &ids).Error; err != nil {
-		return nil, err
-	}
-	for _, id := range ids {
-		p, err := readReceivedProjection(tx, id)
-		if err != nil {
-			return nil, err
-		}
-		g.shares = append(g.shares, p)
-	}
-	return &g, nil
-}
-
-func (g *grantProjection) equal(h *grantProjection) bool {
-	if g == nil || h == nil {
-		return g == h
-	}
-	if g.ident.GrantKey != h.ident.GrantKey || g.ident.Origin != h.ident.Origin || g.ident.RemoteShareID != h.ident.RemoteShareID ||
-		!equalNullTime(g.ident.WithdrawnAt, h.ident.WithdrawnAt) || len(g.shares) != len(h.shares) {
-		return false
-	}
-	for i := range g.shares {
-		if !g.shares[i].equal(h.shares[i]) {
-			return false
-		}
-	}
-	return true
-}
-
-// observeGrant reads a grant on a fresh snapshot and compares it with the
-// projections captured by the failed attempt, like observeReceived.
-func observeGrant(db *gorm.DB, key string, expected, previous *grantProjection) (share.CommitObservation, error) {
-	var got *grantProjection
-	if err := observeTx(db, func(tx *gorm.DB) error {
-		var err error
-		got, err = readGrantProjection(tx, key)
-		return err
-	}); err != nil {
-		return "", err
-	}
-	switch {
-	case expected != nil && got.equal(expected):
+	if rows == 0 && children == 0 {
 		return share.CommitObservedRequested, nil
-	case got.equal(previous):
-		return share.CommitObservedPrevious, nil
 	}
 	return share.CommitObservedOther, nil
+}
+
+// UpdateReceivedGrantPermissions replaces only existing protocol permission
+// masks. Nil leaves that protocol unchanged. Mapping wire permissions is
+// outside this storage primitive.
+func (m *mgr) UpdateReceivedGrantPermissions(ctx context.Context, grant *share.GrantWithdrawal, webdav, webapp *model.OcmPermissions) (bool, error) {
+	if webdav == nil && webapp == nil {
+		return false, share.ErrInvalidGrantIdentity
+	}
+	var changed bool
+	var check commitCheck
+	err := m.transact(ctx, "update_received_grant_permissions", func(tx *gorm.DB) error {
+		changed = false
+		check = commitCheck{}
+		rows, key, err := lockReceivedGrant(tx, grant)
+		if err != nil || len(rows) == 0 {
+			return err
+		}
+		expected := make([]*receivedProjection, 0, len(rows))
+		for _, row := range rows {
+			projection, err := readReceivedProjection(tx, row.ID)
+			if err != nil {
+				return err
+			}
+			if projection == nil {
+				return share.ErrShareNotFound
+			}
+			if err := replaceReceivedPermissions(tx, projection, webdav, webapp, &changed); err != nil {
+				return err
+			}
+			expected = append(expected, projection)
+		}
+		if changed {
+			check = commitCheck{grantKey: key, observe: func(db *gorm.DB) (share.CommitObservation, error) {
+				return observePermissionUpdate(db, expected)
+			}}
+		}
+		return nil
+	}, &check)
+	return changed && err == nil, err
+}
+
+func replaceReceivedPermissions(tx *gorm.DB, p *receivedProjection, webdav, webapp *model.OcmPermissions, changed *bool) error {
+	davFound, appFound := webdav == nil, webapp == nil
+	for i := range p.protocols {
+		protocol := &p.protocols[i]
+		var want *model.OcmPermissions
+		switch protocol.Type {
+		case model.WebDAVProtocol:
+			davFound, want = true, webdav
+		case model.WebappProtocol:
+			appFound, want = true, webapp
+		}
+		if want == nil || protocol.Permissions == *want {
+			continue
+		}
+		result := tx.Model(protocol).Update("permissions", *want)
+		if result.Error != nil {
+			return result.Error
+		}
+		if result.RowsAffected != 1 {
+			return share.ErrGrantIdentityMismatch
+		}
+		protocol.Permissions = *want
+		*changed = true
+	}
+	if !davFound || !appFound {
+		return share.ErrGrantIdentityMismatch
+	}
+	return nil
+}
+
+func observePermissionUpdate(db *gorm.DB, expected []*receivedProjection) (share.CommitObservation, error) {
+	result := share.CommitObservedRequested
+	err := observeTx(db, func(tx *gorm.DB) error {
+		for _, want := range expected {
+			got, err := readReceivedProjection(tx, want.row.ID)
+			if err != nil {
+				return err
+			}
+			if !got.equal(want) {
+				result = share.CommitObservedOther
+				break
+			}
+		}
+		return nil
+	})
+	return result, err
 }

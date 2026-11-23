@@ -72,9 +72,6 @@ const (
 	// OcmShareStateTransferring is the state for a share whose embedded
 	// content is currently being transferred to its destination.
 	OcmShareStateTransferring
-	// OcmShareStateInvalid is the state of a share that cannot be used. Only
-	// the grant identity records whether its provider withdrew it.
-	OcmShareStateInvalid
 )
 
 // OcmProtocol is the protocol used by the recipient of an OCM share
@@ -247,35 +244,27 @@ type OcmShareProtocol struct {
 // OcmReceivedShare represents an OCM share received from a remote user.
 type OcmReceivedShare struct {
 	gorm.Model
-	RemoteShareID string             `gorm:"size:255;index:i_ocmrecshare_remoteshareid;not null"`
-	Name          string             `gorm:"size:255;not null"`
-	ItemType      ItemType           `gorm:"size:16;not null"`
-	ShareWith     string             `gorm:"size:255;not null"`
-	Owner         string             `gorm:"index:i_ocmrecshare_owner;size:255;not null"`
-	Initiator     string             `gorm:"index:i_ocmrecshare_initiator;size:255;not null"`
-	Ctime         uint64             `gorm:"not null"`
-	Mtime         uint64             `gorm:"not null"`
-	Expiration    datatypes.NullTime `gorm:"index"`
-	RecipientType OcmShareType       `gorm:"index:i_ocmrecshare_type;not null"`
-	State         OcmShareState      `gorm:"index:i_ocmrecshare_state;not null"`
-	Alias         string             `gorm:"size:64"`
-	Hidden        bool
-	// GrantKey binds the share to its provider grant. Every share is stored
-	// with one and it never changes.
+	RemoteShareID   string             `gorm:"size:255;index:i_ocmrecshare_remoteshareid;not null"`
+	Name            string             `gorm:"size:255;not null"`
+	ItemType        ItemType           `gorm:"size:16;not null"`
+	ShareWith       string             `gorm:"size:255;not null"`
+	ShareWithIdp    string             `gorm:"size:255"`
+	ShareWithTenant string             `gorm:"size:255"`
+	Owner           string             `gorm:"index:i_ocmrecshare_owner;size:255;not null"`
+	Initiator       string             `gorm:"index:i_ocmrecshare_initiator;size:255;not null"`
+	Ctime           uint64             `gorm:"not null"`
+	Mtime           uint64             `gorm:"not null"`
+	Expiration      datatypes.NullTime `gorm:"index"`
+	RecipientType   OcmShareType       `gorm:"index:i_ocmrecshare_type;not null"`
+	State           OcmShareState      `gorm:"index:i_ocmrecshare_state;not null"`
+	Alias           string             `gorm:"size:64"`
+	Hidden          bool
+	// GrantKey indexes the provider identity of the active projection.
+	// Legacy rows can lack the key.
 	GrantKey *string `gorm:"size:64;index:i_ocmrecshare_grantkey"`
 	// TransferGeneration grows on every transfer start and state change, so
 	// that the completion of an older attempt cannot match a later one.
 	TransferGeneration uint64 `gorm:"not null;default:0"`
-}
-
-// OcmGrantIdentity is the durable identity of a provider grant. WithdrawnAt
-// is the only record of a withdrawal; rows are never deleted.
-type OcmGrantIdentity struct {
-	GrantKey      string             `gorm:"column:grant_key;primaryKey;size:64"`
-	Origin        string             `gorm:"size:255;not null"`
-	RemoteShareID string             `gorm:"size:255;not null"`
-	WithdrawnAt   datatypes.NullTime `gorm:"index"`
-	CreatedAt     time.Time
 }
 
 // OcmReceivedShareProtocol represents the protocol used to access an OCM share received from a remote user.

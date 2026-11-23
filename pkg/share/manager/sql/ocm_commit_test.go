@@ -27,14 +27,12 @@ import (
 	"strings"
 	"sync/atomic"
 	"testing"
-	"time"
 
 	ocm "github.com/cs3org/go-cs3apis/cs3/sharing/ocm/v1beta1"
 	"github.com/cs3org/reva/v3/pkg/appctx"
 	"github.com/cs3org/reva/v3/pkg/ocm/share"
 	model "github.com/cs3org/reva/v3/pkg/share/manager/sql/model"
 	"github.com/rs/zerolog"
-	"gorm.io/datatypes"
 	"gorm.io/gorm"
 )
 
@@ -264,27 +262,6 @@ func TestUnacknowledgedCommitsObserveTheExactProjection(t *testing.T) {
 			},
 			generation: true,
 		},
-		{
-			name:  "withdraw",
-			setup: stored,
-			run: func(ctx context.Context, m *mgr, rs *ocm.ReceivedShare, _ string, _ uint64) (bool, error) {
-				r, err := m.WithdrawReceivedGrant(ctx, withdrawal("a.example.org", rs.RemoteShareId))
-				return r != nil, err
-			},
-			done: func(t *testing.T, db *gorm.DB, remote string) bool {
-				key, _ := share.GrantKey("a.example.org", remote)
-				var ident model.OcmGrantIdentity
-				return db.Where("grant_key = ?", key).Take(&ident).Error == nil && ident.WithdrawnAt.Valid
-			},
-			compete: func(t *testing.T, db *gorm.DB, remote string) {
-				key, _ := share.GrantKey("a.example.org", remote)
-				if err := db.Model(&model.OcmGrantIdentity{}).Where("grant_key = ?", key).
-					Update("withdrawn_at", datatypes.NullTime{V: time.Unix(1000, 0), Valid: true}).Error; err != nil {
-					t.Fatal(err)
-				}
-				setRow(t, db, rowOf(t, db, remote), map[string]any{"state": model.OcmShareStateInvalid, "hidden": true, "mtime": 1})
-			},
-		},
 	}
 	cases := []struct {
 		name     string
@@ -363,7 +340,7 @@ func TestUnacknowledgedCommitsObserveTheExactProjection(t *testing.T) {
 						if o.generation && !strings.Contains(logs, `"transfer_generation"`) {
 							t.Fatalf("log lacks the generation: %s", logs)
 						}
-						if o.name != "create" && o.name != "withdraw" && !strings.Contains(logs, `"share_id":`+rs.Id.OpaqueId) {
+						if o.name != "create" && !strings.Contains(logs, `"share_id":`+rs.Id.OpaqueId) {
 							t.Fatalf("log lacks the share ID: %s", logs)
 						}
 						if strings.Contains(logs, "secret-") || strings.Contains(logs, "dav/") || strings.Contains(logs, "marie") {

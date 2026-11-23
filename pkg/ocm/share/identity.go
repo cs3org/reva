@@ -33,14 +33,6 @@ import (
 // identity, in bytes.
 const MaxGrantFieldLength = 255
 
-// WithdrawnShareMessage is the fixed status message of a mutation refused
-// because the provider withdrew the share.
-const WithdrawnShareMessage = "the share was withdrawn by its provider"
-
-// ErrShareWithdrawn is returned when a writer tries to change or recreate a
-// received share whose provider grant was withdrawn.
-var ErrShareWithdrawn = errtypes.Conflict(WithdrawnShareMessage)
-
 // ErrInvalidGrantIdentity is returned for an origin or remote share ID that
 // cannot form a grant identity.
 var ErrInvalidGrantIdentity = errtypes.BadRequest("invalid grant identity")
@@ -72,9 +64,9 @@ func (e *CommitUnknownError) Error() string {
 
 func (e *CommitUnknownError) Is(target error) bool { return target == ErrCommitUnknown }
 
-// ErrGrantIdentityMismatch is returned when a stored identity record does
+// ErrGrantIdentityMismatch is returned when a stored projection does
 // not hold exactly the fields its key was computed from. It fails closed.
-var ErrGrantIdentityMismatch = errtypes.InternalError("grant identity record does not match its key")
+var ErrGrantIdentityMismatch = errtypes.InternalError("grant projection does not match its key")
 
 // CanonicalGrantOrigin validates the host[:port] of the provider that sent a
 // share with the OCM address host grammar and lowercases it. A scheme, path
@@ -117,7 +109,7 @@ func GrantKey(origin, remoteShareID string) (string, error) {
 	return hex.EncodeToString(h.Sum(nil)), nil
 }
 
-// GrantWithdrawal identifies a provider grant to withdraw and the types its
+// GrantWithdrawal identifies an active provider grant and the types its
 // stored shares must match.
 type GrantWithdrawal struct {
 	Origin        string
@@ -127,10 +119,7 @@ type GrantWithdrawal struct {
 	RecipientType ocm.RecipientType
 }
 
-// GrantWithdrawalReceipt is the committed result of a withdrawal.
+// GrantWithdrawalReceipt reports whether the transaction removed a projection.
 type GrantWithdrawalReceipt struct {
-	// Changed is true only for the call that set the withdrawal.
 	Changed bool
-	// Shares are the retained received shares of the grant after the call.
-	Shares []*ocm.ReceivedShare
 }

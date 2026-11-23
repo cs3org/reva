@@ -32,44 +32,6 @@ import (
 	sqlmgr "github.com/cs3org/reva/v3/pkg/share/manager/sql"
 )
 
-func TestStaleCreateOfWithdrawnGrantIsRefused(t *testing.T) {
-	ctx := context.Background()
-	repo, err := sqlmgr.NewOCMShareManager(ctx, map[string]any{
-		"db_engine": "sqlite",
-		"db_name":   filepath.Join(t.TempDir(), "ocm.sqlite"),
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	s := &service{repo: repo}
-	req := func(remote string) *ocmincoming.CreateOCMIncomingShareRequest {
-		return &ocmincoming.CreateOCMIncomingShareRequest{
-			Name:               "doc.txt",
-			ResourceId:         remote,
-			Owner:              &userpb.UserId{OpaqueId: "alice", Idp: "a.example.org"},
-			Sender:             &userpb.UserId{OpaqueId: "alice", Idp: "a.example.org"},
-			ShareWith:          &userpb.UserId{OpaqueId: "marie"},
-			SharedResourceType: ocm.SharedResourceType_SHARE_RESOURCE_TYPE_FILE,
-			RecipientType:      ocm.RecipientType_RECIPIENT_TYPE_USER,
-		}
-	}
-	if res, err := s.CreateOCMIncomingShare(ctx, req("42")); err != nil || res.Status.Code != rpc.Code_CODE_OK {
-		t.Fatalf("create: %v %v", res, err)
-	}
-	if r, err := repo.WithdrawReceivedGrant(ctx, &share.GrantWithdrawal{
-		Origin: "a.example.org", RemoteShareID: "42", ResourceType: ocm.SharedResourceType_SHARE_RESOURCE_TYPE_FILE,
-	}); err != nil || !r.Changed {
-		t.Fatalf("withdraw: %v %v", r, err)
-	}
-	res, err := s.CreateOCMIncomingShare(ctx, req("42"))
-	if err != nil || res.Status.Code != rpc.Code_CODE_FAILED_PRECONDITION || res.Status.Message != share.WithdrawnShareMessage {
-		t.Fatalf("stale create: %v %v", res, err)
-	}
-	if res, err := s.CreateOCMIncomingShare(ctx, req("43")); err != nil || res.Status.Code != rpc.Code_CODE_OK {
-		t.Fatalf("fresh grant: %v %v", res, err)
-	}
-}
-
 func TestUnrepresentableGrantIsInvalidArgument(t *testing.T) {
 	ctx := context.Background()
 	repo, err := sqlmgr.NewOCMShareManager(ctx, map[string]any{

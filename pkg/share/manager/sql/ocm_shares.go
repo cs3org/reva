@@ -71,7 +71,7 @@ func NewOCMShareManager(ctx context.Context, m map[string]any) (share.Repository
 	}
 
 	err = db.AutoMigrate(&model.OcmShare{}, &model.OcmShareProtocol{},
-		&model.OcmGrantIdentity{}, &model.OcmReceivedShare{}, &model.OcmReceivedShareProtocol{})
+		&model.OcmReceivedShare{}, &model.OcmReceivedShareProtocol{})
 	if err != nil {
 		log.Debug().Err(err).Msg("error migrating database")
 		return nil, err
@@ -410,17 +410,16 @@ func (m *mgr) ListShares(ctx context.Context, user *userpb.User, filters []*ocm.
 // GetEmbeddedPayload returns the RO-Crate JSON payload carried by the embedded
 // protocol of the received share, or an empty string if the share has no
 // embedded protocol.
-func (m *mgr) GetEmbeddedPayload(ctx context.Context, user *userpb.User, received *ocm.ReceivedShare) (string, error) {
-	stored, err := m.getReceivedByID(ctx, user, received.GetId())
+func (m *mgr) GetEmbeddedPayload(ctx context.Context, user *userpb.User, share *ocm.ReceivedShare) (string, error) {
+	current, err := m.getReceivedByID(ctx, user, share.GetId())
 	if err != nil {
 		return "", err
 	}
-	pList := stored.GetProtocols()
-	if len(pList) == 0 {
-		return "", share.ErrShareNotFound
-	}
 
-	for _, protocol := range pList {
+	if len(current.Protocols) == 0 {
+		return "", errtypes.NotFound("share not found")
+	}
+	for _, protocol := range current.Protocols {
 		if embedded, ok := protocol.Term.(*ocm.Protocol_EmbeddedOptions); ok {
 			return embedded.EmbeddedOptions.Payload, nil
 		}
@@ -430,7 +429,7 @@ func (m *mgr) GetEmbeddedPayload(ctx context.Context, user *userpb.User, receive
 
 // StoreReceivedShare stores a received share bound to the identity of its
 // provider grant. A share whose grant identity cannot be formed is rejected
-// with ErrInvalidGrantIdentity. A withdrawn grant cannot be recreated.
+// with ErrInvalidGrantIdentity.
 func (m *mgr) StoreReceivedShare(ctx context.Context, s *ocm.ReceivedShare) (*ocm.ReceivedShare, error) {
 	origin, err := share.ReceivedGrantOrigin(s.GetCreator())
 	if err != nil {
@@ -440,30 +439,28 @@ func (m *mgr) StoreReceivedShare(ctx context.Context, s *ocm.ReceivedShare) (*oc
 	if err != nil {
 		return nil, err
 	}
-	shareWith := s.Grantee.GetUserId().GetOpaqueId()
+	grantee := s.GetGrantee().GetUserId()
+	if grantee.GetOpaqueId() == "" {
+		return nil, share.ErrInvalidGrantIdentity
+	}
 	var check commitCheck
 	if err := m.transact(ctx, "store_received_share", func(tx *gorm.DB) error {
 		check = commitCheck{grantKey: key}
-		ident, err := ensureIdentity(tx, origin, s.RemoteShareId)
-		if err != nil {
-			return err
-		}
-		if withdrawn(ident) {
-			return share.ErrShareWithdrawn
-		}
 
 		receivedShare := &model.OcmReceivedShare{
-			GrantKey:      &ident.GrantKey,
-			Name:          s.Name,
-			RemoteShareID: s.RemoteShareId,
-			ItemType:      convertFromCS3ResourceType(s.SharedResourceType),
-			ShareWith:     shareWith,
-			Owner:         formatUserID(s.Owner),
-			Initiator:     s.Creator.GetOpaqueId() + "@" + origin,
-			Ctime:         s.Ctime.Seconds,
-			Mtime:         s.Mtime.Seconds,
-			RecipientType: convertFromCS3OCMShareType(s.RecipientType),
-			State:         convertFromCS3OCMShareState(s.State),
+			GrantKey:        &key,
+			Name:            s.Name,
+			RemoteShareID:   s.RemoteShareId,
+			ItemType:        convertFromCS3ResourceType(s.SharedResourceType),
+			ShareWith:       grantee.GetOpaqueId(),
+			ShareWithIdp:    grantee.GetIdp(),
+			ShareWithTenant: grantee.GetTenantId(),
+			Owner:           formatUserID(s.Owner),
+			Initiator:       s.Creator.GetOpaqueId() + "@" + origin,
+			Ctime:           s.Ctime.Seconds,
+			Mtime:           s.Mtime.Seconds,
+			RecipientType:   convertFromCS3OCMShareType(s.RecipientType),
+			State:           convertFromCS3OCMShareState(s.State),
 		}
 		if s.Expiration != nil {
 			receivedShare.Expiration = datatypes.NullTime{
@@ -514,34 +511,6 @@ func (m *mgr) StoreReceivedShare(ctx context.Context, s *ocm.ReceivedShare) (*oc
 	// The ID is published only with an acknowledged commit.
 	s.Id = &ocm.ShareId{OpaqueId: fmt.Sprintf("%d", check.shareID)}
 	return s, nil
-}
-
-// lockReceivedWithIdentity locks the grant identity of a received share of
-// the user, then the share itself, in that order, and verifies the binding.
-func lockReceivedWithIdentity(tx *gorm.DB, user *userpb.User, id *ocm.ShareId) (*model.OcmReceivedShare, *ocm.ReceivedShare, *model.OcmGrantIdentity, error) {
-	shareID, err := strconv.Atoi(id.GetOpaqueId())
-	if err != nil {
-		return nil, nil, nil, errtypes.BadRequest("invalid share ID")
-	}
-	var advisory model.OcmReceivedShare
-	if err := tx.Where("id = ? AND share_with = ?", shareID, user.Id.OpaqueId).Take(&advisory).Error; err != nil {
-		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return nil, nil, nil, share.ErrShareNotFound
-		}
-		return nil, nil, nil, err
-	}
-	ident, err := lockGuardedReceived(tx, &advisory)
-	if err != nil {
-		return nil, nil, nil, err
-	}
-	row, current, err := lockReceived(tx, user, id)
-	if err != nil {
-		return nil, nil, nil, err
-	}
-	if (row.GrantKey == nil) != (advisory.GrantKey == nil) || (row.GrantKey != nil && *row.GrantKey != *advisory.GrantKey) {
-		return nil, nil, nil, share.ErrGrantIdentityMismatch
-	}
-	return row, current, ident, nil
 }
 
 func storeWebDAVProtocol(tx *gorm.DB, shareID int64, o *ocm.Protocol_WebdavOptions) error {
@@ -635,6 +604,9 @@ func (m *mgr) ListReceivedShares(ctx context.Context, user *userpb.User, filters
 	shares := []*ocm.ReceivedShare{}
 	var ids []any
 	for _, s := range receivedShareModels {
+		if !receivedBy(&s, user.GetId()) {
+			continue
+		}
 		share := convertToCS3OCMReceivedShare(&s, nil)
 		shares = append(shares, share)
 		ids = append(ids, s.ID)
@@ -667,6 +639,13 @@ func (m *mgr) GetReceivedShare(ctx context.Context, user *userpb.User, ref *ocm.
 	return s, err
 }
 
+// receivedBy compares the available local identity independently of SQL collation.
+func receivedBy(row *model.OcmReceivedShare, id *userpb.UserId) bool {
+	return id.GetOpaqueId() != "" && row.ShareWith == id.GetOpaqueId() &&
+		(row.ShareWithIdp == "" || row.ShareWithIdp == id.GetIdp()) &&
+		(row.ShareWithTenant == "" || row.ShareWithTenant == id.GetTenantId())
+}
+
 // lockReceived reads a received share of the user, locked for the rest of
 // the transaction.
 func lockReceived(tx *gorm.DB, user *userpb.User, id *ocm.ShareId) (*model.OcmReceivedShare, *ocm.ReceivedShare, error) {
@@ -681,7 +660,7 @@ func lockReceived(tx *gorm.DB, user *userpb.User, id *ocm.ShareId) (*model.OcmRe
 		}
 		return nil, nil, err
 	}
-	if row.ShareWith != user.Id.OpaqueId {
+	if !receivedBy(&row, user.GetId()) {
 		return nil, nil, share.ErrShareNotFound
 	}
 	p, err := protocolsTx(tx, row.ID)
@@ -722,12 +701,9 @@ func (m *mgr) UpdateReceivedShare(ctx context.Context, user *userpb.User, s *ocm
 	var check commitCheck
 	err = m.transact(ctx, "update_received_share", func(tx *gorm.DB) error {
 		check = commitCheck{}
-		row, before, ident, err := lockReceivedWithIdentity(tx, user, s.Id)
+		row, before, err := lockReceived(tx, user, s.Id)
 		if err != nil {
 			return err
-		}
-		if withdrawn(ident) {
-			return share.ErrShareWithdrawn
 		}
 		previous, err := readReceivedProjection(tx, row.ID)
 		if err != nil {
@@ -797,12 +773,9 @@ func (m *mgr) StartReceivedShareTransfer(ctx context.Context, user *userpb.User,
 	var check commitCheck
 	err = m.transact(ctx, "start_transfer", func(tx *gorm.DB) error {
 		check = commitCheck{}
-		row, _, ident, err := lockReceivedWithIdentity(tx, user, s.Id)
+		row, _, err := lockReceived(tx, user, s.Id)
 		if err != nil {
 			return err
-		}
-		if withdrawn(ident) {
-			return share.ErrShareWithdrawn
 		}
 		switch row.State {
 		case model.OcmShareStateTransferring:
@@ -853,7 +826,7 @@ func (m *mgr) CompleteReceivedShareTransfer(ctx context.Context, user *userpb.Us
 	var check commitCheck
 	err = m.transact(ctx, "complete_transfer", func(tx *gorm.DB) error {
 		check = commitCheck{}
-		row, current, ident, err := lockReceivedWithIdentity(tx, user, id)
+		row, current, err := lockReceived(tx, user, id)
 		if err != nil {
 			return err
 		}
@@ -864,11 +837,6 @@ func (m *mgr) CompleteReceivedShareTransfer(ctx context.Context, user *userpb.Us
 		// A refused or no-op completion expects no change.
 		check = receivedCheck(row, nil, previous)
 		check.generation = generation
-		if withdrawn(ident) {
-			// The withdrawal wins: the attempt completes nothing.
-			receipt = share.ReceivedShareUpdate{Before: current, After: current}
-			return nil
-		}
 		result := tx.Model(&model.OcmReceivedShare{}).
 			Where("id = ? AND share_with = ? AND state = ? AND transfer_generation = ?",
 				shareID, user.Id.OpaqueId, model.OcmShareStateTransferring, generation).
@@ -1353,7 +1321,7 @@ func (m *mgr) getProtocolsByIds(ctx context.Context, ids []any) (map[string][]*o
 }
 
 func (m *mgr) getReceivedByID(ctx context.Context, user *userpb.User, id *ocm.ShareId) (*ocm.ReceivedShare, error) {
-	shareID, err := strconv.Atoi(id.GetOpaqueId())
+	shareID, err := strconv.Atoi(id.OpaqueId)
 
 	if err != nil {
 		return nil, errtypes.BadRequest("invalid share ID")
@@ -1368,7 +1336,7 @@ func (m *mgr) getReceivedByID(ctx context.Context, user *userpb.User, id *ocm.Sh
 		}
 		return nil, err
 	}
-	if receivedShareModel.ShareWith != user.Id.OpaqueId {
+	if !receivedBy(&receivedShareModel, user.GetId()) {
 		return nil, share.ErrShareNotFound
 	}
 	p, err := m.getProtocols(ctx, int(receivedShareModel.ID))

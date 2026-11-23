@@ -910,7 +910,7 @@ func (m *mgr) CompleteReceivedShareTransfer(ctx context.Context, user *userpb.Us
 }
 
 // WithdrawReceivedGrant is not supported: the JSON driver cannot coordinate
-// every writer of the file, so it records no withdrawal.
+// every writer of the file.
 func (m *mgr) WithdrawReceivedGrant(ctx context.Context, w *share.GrantWithdrawal) (*share.GrantWithdrawalReceipt, error) {
 	return nil, errtypes.NotSupported("grant withdrawal is not supported by the json driver")
 }

@@ -30,7 +30,6 @@ import (
 
 	"github.com/cs3org/reva/v3/pkg/ocm/share"
 	model "github.com/cs3org/reva/v3/pkg/share/manager/sql/model"
-	"gorm.io/datatypes"
 	gormmysql "gorm.io/driver/mysql"
 	"gorm.io/gorm"
 )
@@ -99,16 +98,9 @@ func afterFirstSelect(t *testing.T, obs *gorm.DB, write func() error) (wait func
 	}
 }
 
-// changeAtomically renames the share, replaces its protocol URI and, for a
-// grant, withdraws it, all in one transaction.
-func changeAtomically(db *gorm.DB, id uint, key string) error {
+// changeAtomically renames the share and replaces its protocol URI.
+func changeAtomically(db *gorm.DB, id uint) error {
 	return db.Transaction(func(tx *gorm.DB) error {
-		if key != "" {
-			if err := tx.Model(&model.OcmGrantIdentity{}).Where("grant_key = ?", key).
-				Update("withdrawn_at", datatypes.NullTime{V: time.Now().UTC().Truncate(time.Second), Valid: true}).Error; err != nil {
-				return err
-			}
-		}
 		if err := tx.Model(&model.OcmReceivedShare{}).Where("id = ?", id).Update("name", "renamed").Error; err != nil {
 			return err
 		}
@@ -149,9 +141,6 @@ func TestObservationNeverCombinesTwoStates(t *testing.T) {
 				readShare := func(id uint) func(*gorm.DB) (*receivedProjection, error) {
 					return func(db *gorm.DB) (*receivedProjection, error) { return readReceivedProjection(db, id) }
 				}
-				readGrant := func(key string) func(*gorm.DB) (*grantProjection, error) {
-					return func(db *gorm.DB) (*grantProjection, error) { return readGrantProjection(db, key) }
-				}
 
 				t.Run("received", func(t *testing.T) {
 					mustStore(t, m, grantShare(marie, "a.example.org", "r1", file))
@@ -159,7 +148,7 @@ func TestObservationNeverCombinesTwoStates(t *testing.T) {
 					before := mustRead(t, readShare(id), m.db)
 					expected := mixture(before)
 					obs := observer(t, cfg, isolation)
-					wait := afterFirstSelect(t, obs, func() error { return changeAtomically(m.db, id, "") })
+					wait := afterFirstSelect(t, obs, func() error { return changeAtomically(m.db, id) })
 					got, err := observeReceived(obs, id, expected, nil)
 					if werr := wait(); werr != nil {
 						t.Fatal(werr)
@@ -173,30 +162,6 @@ func TestObservationNeverCombinesTwoStates(t *testing.T) {
 					}
 				})
 
-				t.Run("grant", func(t *testing.T) {
-					stored := mustStore(t, m, grantShare(marie, "a.example.org", "r2", file))
-					key := *receivedRow(t, m, stored.Id.OpaqueId).GrantKey
-					id := rowOf(t, m.db, "r2")
-					before := mustRead(t, readGrant(key), m.db)
-					expected := &grantProjection{ident: before.ident}
-					for _, s := range before.shares {
-						expected.shares = append(expected.shares, mixture(s))
-					}
-					expected.shares[0].row.Name = "renamed"
-					obs := observer(t, cfg, isolation)
-					wait := afterFirstSelect(t, obs, func() error { return changeAtomically(m.db, id, key) })
-					got, err := observeGrant(obs, key, expected, nil)
-					if werr := wait(); werr != nil {
-						t.Fatal(werr)
-					}
-					after := mustRead(t, readGrant(key), m.db)
-					if !after.ident.WithdrawnAt.Valid || before.equal(expected) || after.equal(expected) {
-						t.Fatal("the writer did not commit a state different from the mixture")
-					}
-					if err != nil || got != share.CommitObservedOther {
-						t.Fatalf("observed %q %v", got, err)
-					}
-				})
 			})
 		})
 	}
@@ -246,10 +211,9 @@ func TestObservationTransactionFailureIsUnread(t *testing.T) {
 	marie := recipient("marie")
 	forEachDialectConfig(t, func(t *testing.T, cfg map[string]any) {
 		m := openOCMManager(t, cfg)
-		stored := mustStore(t, m, grantShare(marie, "a.example.org", "r1", file))
-		key := *receivedRow(t, m, stored.Id.OpaqueId).GrantKey
+		mustStore(t, m, grantShare(marie, "a.example.org", "r1", file))
 		id := rowOf(t, m.db, "r1")
-		before, err := readGrantProjection(m.db, key)
+		before, err := readReceivedProjection(m.db, id)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -263,10 +227,7 @@ func TestObservationTransactionFailureIsUnread(t *testing.T) {
 			obs.db.Statement.ConnPool = fault
 			checks := []*commitCheck{
 				{shareID: id, observe: func(db *gorm.DB) (share.CommitObservation, error) {
-					return observeReceived(db, id, before.shares[0], before.shares[0])
-				}},
-				{grantKey: key, observe: func(db *gorm.DB) (share.CommitObservation, error) {
-					return observeGrant(db, key, before, before)
+					return observeReceived(db, id, before, before)
 				}},
 			}
 			for _, check := range checks {
@@ -280,7 +241,7 @@ func TestObservationTransactionFailureIsUnread(t *testing.T) {
 				t.Fatalf("%d reads outside the observation", fault.reads.Load())
 			}
 		}
-		after, err := readGrantProjection(m.db, key)
+		after, err := readReceivedProjection(m.db, id)
 		if err != nil || !after.equal(before) {
 			t.Fatalf("a failed observation changed the grant: %v", err)
 		}

@@ -157,7 +157,6 @@ func TestWebappLaunchFailures(t *testing.T) {
 			name: "webdav only",
 			file: "/ocm/share-1",
 			gw: &fakeReceivedGateway{resp: okShareResponse(&ocmpb.ReceivedShare{
-				State:     ocmpb.ShareState_SHARE_STATE_ACCEPTED,
 				Protocols: []*ocmpb.Protocol{webdavProtocol("https://dav.example/dav")},
 			})},
 			client:     &observeClient{token: token},
@@ -168,7 +167,6 @@ func TestWebappLaunchFailures(t *testing.T) {
 			name: "missing protocol option",
 			file: "/ocm/share-1",
 			gw: &fakeReceivedGateway{resp: okShareResponse(&ocmpb.ReceivedShare{
-				State: ocmpb.ShareState_SHARE_STATE_ACCEPTED,
 				Protocols: []*ocmpb.Protocol{{
 					Term: &ocmpb.Protocol_WebappOptions{},
 				}},
@@ -388,7 +386,6 @@ func TestWebappLaunchFailures(t *testing.T) {
 			name: "duplicate webapp",
 			file: "/ocm/share-1",
 			gw: &fakeReceivedGateway{resp: okShareResponse(&ocmpb.ReceivedShare{
-				State: ocmpb.ShareState_SHARE_STATE_ACCEPTED,
 				Protocols: []*ocmpb.Protocol{
 					webappProtocol("https://app.example/one", secret, []string{"must-exchange-token"}),
 					webappProtocol("https://app.example/two", secret, []string{"must-exchange-token"}),

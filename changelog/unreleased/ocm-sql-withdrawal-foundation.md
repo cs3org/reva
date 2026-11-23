@@ -1,5 +1,4 @@
-Enhancement: retain withdrawn OCM grants in SQL
+Enhancement: track active received OCM grants in SQL
 
-Record withdrawals durably and prevent stale requests from restoring access.
-Withdrawn shares remain hidden and cannot be accepted, transferred or opened.
-Received shares are admitted only from a valid sender host.
+Index active received grants by sender host and provider grant ID.
+Delete withdrawn projections and their protocols atomically.

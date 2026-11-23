@@ -145,12 +145,6 @@ func (s *service) CreateOCMIncomingShare(ctx context.Context, req *ocmincoming.C
 				Status: status.NewInvalidArg(ctx, "invalid provider or remote share ID"),
 			}, nil
 		}
-		if errors.Is(err, share.ErrShareWithdrawn) {
-			// A stale or repeated creation of a withdrawn grant.
-			return &ocmincoming.CreateOCMIncomingShareResponse{
-				Status: status.NewFailedPrecondition(ctx, err, share.WithdrawnShareMessage),
-			}, nil
-		}
 		// TODO: identify errors
 		return &ocmincoming.CreateOCMIncomingShareResponse{
 			Status: status.NewInternal(ctx, err, err.Error()),

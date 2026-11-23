@@ -238,11 +238,6 @@ func (d *driver) getWebDAVFromShare(ctx context.Context, shareID *ocmpb.ShareId)
 		}
 		return nil, "", "", errtypes.InternalError(res.Status.Message)
 	}
-	// Every operation and retry reads the share fresh before using cached
-	// credentials. A withdrawn share is a local denial, never retried as a remote 401.
-	if res.Share.GetState() == ocmpb.ShareState_SHARE_STATE_INVALID {
-		return nil, "", "", errtypes.PermissionDenied("received share is no longer available")
-	}
 
 	dav, ok := getWebDAVProtocol(res.Share.Protocols)
 	if !ok {
