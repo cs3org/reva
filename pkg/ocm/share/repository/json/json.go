@@ -362,8 +362,8 @@ func (m *mgr) DeleteShare(ctx context.Context, user *userpb.User, ref *ocm.Share
 	for id, s := range m.model.Shares {
 		if sharesEqual(ref, s) {
 			if utils.UserEqual(user.Id, s.Owner) || utils.UserEqual(user.Id, s.Creator) {
-				rt := m.model.ResourceTypes[id]
-				if !share.SupportedResourceType(rt) {
+				rt, present := m.model.ResourceTypes[id]
+				if present && !share.SupportedResourceType(rt) {
 					return nil, share.ErrInvalidResourceType
 				}
 				removal := &share.ShareRemoval{Share: s, ResourceType: rt}
@@ -429,8 +429,8 @@ func (m *mgr) UpdateShare(ctx context.Context, user *userpb.User, ref *ocm.Share
 	if !utils.UserEqual(user.Id, s.Owner) && !utils.UserEqual(user.Id, s.Creator) {
 		return nil, share.ErrShareNotFound
 	}
-	resourceType := m.model.ResourceTypes[s.Id.OpaqueId]
-	if !share.SupportedResourceType(resourceType) {
+	resourceType, present := m.model.ResourceTypes[s.Id.OpaqueId]
+	if present && !share.SupportedResourceType(resourceType) {
 		return nil, share.ErrInvalidResourceType
 	}
 	before := proto.Clone(s).(*ocm.Share)

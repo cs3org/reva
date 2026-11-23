@@ -239,7 +239,7 @@ func (m *mgr) DeleteShare(ctx context.Context, user *userpb.User, ref *ocm.Share
 			return err
 		}
 		resourceType := convertToCS3SharedResourceType(shareModel.ItemType)
-		if !share.SupportedResourceType(resourceType) {
+		if shareModel.ItemType != "" && !share.SupportedResourceType(resourceType) {
 			return share.ErrInvalidResourceType
 		}
 		am, err := accessMethodsTx(tx, shareModel.Id)
@@ -919,7 +919,7 @@ func (m *mgr) updateShareByID(ctx context.Context, user *userpb.User, id *ocm.Sh
 			}
 			return err
 		}
-		if !share.SupportedResourceType(convertToCS3SharedResourceType(before.ItemType)) {
+		if before.ItemType != "" && !share.SupportedResourceType(convertToCS3SharedResourceType(before.ItemType)) {
 			return share.ErrInvalidResourceType
 		}
 		beforeMethods, err := accessMethodsTx(tx, before.Id)

@@ -20,6 +20,7 @@ package json
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"math"
 	"os"
@@ -33,6 +34,7 @@ import (
 	"github.com/cs3org/reva/v3/pkg/permissions"
 	"github.com/cs3org/reva/v3/pkg/utils"
 	"google.golang.org/genproto/protobuf/field_mask"
+	"google.golang.org/protobuf/proto"
 )
 
 func receivedFixture(t *testing.T, m share.Repository) (*userpb.User, *ocm.ReceivedShare) {
@@ -176,7 +178,7 @@ func TestJSONTransferGenerationExhaustion(t *testing.T) {
 
 // A share without a supported resource type is never stored, and a stored
 // one, e.g. in a hand-edited file, is not changed.
-func TestJSONRefusesShareWithoutSupportedResourceType(t *testing.T) {
+func TestJSONShareResourceTypeAdmissionAndExistingMutations(t *testing.T) {
 	m, cleanup := setup(t)
 	defer cleanup()
 	ctx := context.Background()
@@ -187,17 +189,8 @@ func TestJSONRefusesShareWithoutSupportedResourceType(t *testing.T) {
 		t.Fatalf("stored: %v %v", shares, err)
 	}
 
-	path := filepath.Join(t.TempDir(), "ocm.json")
 	s := testShare("tok", legacyMethods())
 	raw, err := utils.MarshalProtoV1ToJSON(s)
-	if err != nil {
-		t.Fatal(err)
-	}
-	file := `{"shares":{"` + s.Id.OpaqueId + `":` + string(raw) + `},"received_shares":{},"resource_types":{}}`
-	if err := os.WriteFile(path, []byte(file), 0600); err != nil {
-		t.Fatal(err)
-	}
-	m, err = New(ctx, map[string]any{"file": path})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -205,14 +198,62 @@ func TestJSONRefusesShareWithoutSupportedResourceType(t *testing.T) {
 	editor := &ocm.UpdateOCMShareRequest_UpdateField{Field: &ocm.UpdateOCMShareRequest_UpdateField_AccessMethods{
 		AccessMethods: share.NewWebDavAccessMethod(permissions.NewEditorRole().CS3ResourcePermissions(), nil, nil),
 	}}
-	if up, err := m.UpdateShare(ctx, testUser(), ref, editor); !errors.Is(err, share.ErrInvalidResourceType) || up != nil {
-		t.Fatalf("update: %v %v", up, err)
-	}
-	if r, err := m.DeleteShare(ctx, testUser(), ref); !errors.Is(err, share.ErrInvalidResourceType) || r != nil {
-		t.Fatalf("delete: %v %v", r, err)
-	}
-	after, err := os.ReadFile(path)
-	if err != nil || string(after) != file {
-		t.Fatalf("file changed: %s %v", after, err)
+	for _, tc := range []struct{ name, typeEntry string }{
+		{"prior format", ""},
+		{"explicit invalid type", `,"resource_types":{"` + s.Id.OpaqueId + `":0}`},
+		{"unsupported type", `,"resource_types":{"` + s.Id.OpaqueId + `":99}`},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			path := filepath.Join(t.TempDir(), "ocm.json")
+			file := `{"shares":{"` + s.Id.OpaqueId + `":` + string(raw) + `},"received_shares":{}` + tc.typeEntry + `}`
+			if err := os.WriteFile(path, []byte(file), 0600); err != nil {
+				t.Fatal(err)
+			}
+			repo, err := New(ctx, map[string]any{"file": path})
+			if err != nil {
+				t.Fatal(err)
+			}
+			up, updateErr := repo.UpdateShare(ctx, testUser(), ref, editor)
+			after, err := os.ReadFile(path)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if tc.typeEntry == "" {
+				if updateErr != nil || up == nil || !up.WebDAVPermissionsChanged ||
+					up.ResourceType != ocm.SharedResourceType_SHARE_RESOURCE_TYPE_INVALID {
+					t.Errorf("update of prior-format share: %v %v", up, updateErr)
+				}
+				var persisted shareModel
+				if err := json.Unmarshal(after, &persisted); err != nil {
+					t.Fatal(err)
+				}
+				got := persisted.Shares[s.Id.OpaqueId]
+				if got == nil || !proto.Equal(webdavPermissions(got), editor.GetAccessMethods().GetWebdavOptions().GetPermissions()) {
+					t.Errorf("permissions not persisted: %v", got)
+				}
+				if _, present := persisted.ResourceTypes[s.Id.OpaqueId]; present {
+					t.Error("update filled in a resource type")
+				}
+				removed, err := repo.DeleteShare(ctx, testUser(), ref)
+				if err != nil || removed == nil || removed.ResourceType != ocm.SharedResourceType_SHARE_RESOURCE_TYPE_INVALID ||
+					removed.Share.GetId().GetOpaqueId() != s.Id.OpaqueId {
+					t.Errorf("withdrawal of prior-format share: %v %v", removed, err)
+				}
+				if got, err := repo.GetShare(ctx, testUser(), ref); err == nil || got != nil {
+					t.Errorf("withdrawn share remains available: %v %v", got, err)
+				}
+				return
+			}
+			if !errors.Is(updateErr, share.ErrInvalidResourceType) || up != nil {
+				t.Errorf("corrupt update: %v %v", up, updateErr)
+			}
+			if removed, err := repo.DeleteShare(ctx, testUser(), ref); !errors.Is(err, share.ErrInvalidResourceType) || removed != nil {
+				t.Errorf("corrupt delete: %v %v", removed, err)
+			}
+			afterDelete, err := os.ReadFile(path)
+			if err != nil || string(after) != file || string(afterDelete) != file {
+				t.Errorf("corrupt file changed: %v", err)
+			}
+		})
 	}
 }

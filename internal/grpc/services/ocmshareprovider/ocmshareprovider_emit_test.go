@@ -654,18 +654,24 @@ func TestCommittedChangesAreNotifiedWithoutStat(t *testing.T) {
 	}
 }
 
-// A corrupt row without a supported resource type is refused before any
-// change, instead of committing a change that cannot be notified.
-func TestCorruptResourceTypeRefusesMutation(t *testing.T) {
-	for _, itemType := range []string{"", "reference"} {
-		t.Run("item_type="+itemType, func(t *testing.T) {
+func TestOldGrantMutationWithUnavailableResourceType(t *testing.T) {
+	for _, tc := range []struct {
+		name, itemType string
+		code           rpc.Code
+	}{
+		{"prior format", "", rpc.Code_CODE_OK},
+		{"explicit unsupported type", "reference", rpc.Code_CODE_FAILED_PRECONDITION},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
 			e := newEmitEnv(t)
 			sh := e.outgoing(t)
+			gw := &unavailableGateway{}
+			stampGateway(gw)
 			db, err := gorm.Open(sqlite.Open(e.dbPath), &gorm.Config{})
 			if err != nil {
 				t.Fatal(err)
 			}
-			if err := db.Model(&model.OcmShare{}).Where("id = ?", sh.Id.OpaqueId).Update("item_type", itemType).Error; err != nil {
+			if err := db.Model(&model.OcmShare{}).Where("id = ?", sh.Id.OpaqueId).Update("item_type", tc.itemType).Error; err != nil {
 				t.Fatal(err)
 			}
 			ref := &ocm.ShareReference{Spec: &ocm.ShareReference_Id{Id: sh.Id}}
@@ -677,16 +683,29 @@ func TestCorruptResourceTypeRefusesMutation(t *testing.T) {
 			up, err := e.svc.UpdateOCMShare(e.owner, &ocm.UpdateOCMShareRequest{Ref: ref, Field: []*ocm.UpdateOCMShareRequest_UpdateField{{
 				Field: &ocm.UpdateOCMShareRequest_UpdateField_AccessMethods{AccessMethods: share.NewWebDavAccessMethod(permissions.NewEditorRole().CS3ResourcePermissions(), nil, nil)},
 			}}})
-			if err != nil || up.Status.Code != rpc.Code_CODE_FAILED_PRECONDITION {
-				t.Fatalf("update: %v %v", up, err)
+			if err != nil || up.GetStatus().GetCode() != tc.code {
+				t.Errorf("update: %v %v", up, err)
+			}
+			if tc.code == rpc.Code_CODE_OK {
+				got, err := e.repo.GetShare(e.owner, owner, ref)
+				if err != nil || proto.Equal(got, before) || len(webdavPermissionNames(got)) != 2 {
+					t.Errorf("permissions not persisted: %v %v", got, err)
+				}
 			}
 			rm, err := e.svc.RemoveOCMShare(e.owner, &ocm.RemoveOCMShareRequest{Ref: ref})
-			if err != nil || rm.Status.Code != rpc.Code_CODE_FAILED_PRECONDITION {
-				t.Fatalf("remove: %v %v", rm, err)
+			if err != nil || rm.GetStatus().GetCode() != tc.code {
+				t.Errorf("remove: %v %v", rm, err)
 			}
 			got, err := e.repo.GetShare(e.owner, owner, ref)
-			if err != nil || !proto.Equal(got, before) {
-				t.Fatalf("share changed: %v %v", got, err)
+			if tc.code == rpc.Code_CODE_OK {
+				if got != nil || !errors.Is(err, share.ErrShareNotFound) {
+					t.Errorf("withdrawn share remains available: %v %v", got, err)
+				}
+			} else if err != nil || !proto.Equal(got, before) {
+				t.Errorf("corrupt share changed: %v %v", got, err)
+			}
+			if attempts := len(e.svc.notifier.(*syncNotifier).results); attempts != 0 || gw.stats != 0 {
+				t.Errorf("notification attempts %d, Stat calls %d", attempts, gw.stats)
 			}
 			requireNotices(t, e.peer)
 		})

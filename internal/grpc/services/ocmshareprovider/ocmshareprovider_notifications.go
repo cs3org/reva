@@ -92,6 +92,9 @@ func (s *service) notifyUnshared(ctx context.Context, removal *share.ShareRemova
 	}
 	sh := removal.Share
 	rt := resourceTypeName(removal.ResourceType)
+	if rt == "" {
+		return
+	}
 	s.emit(ctx, sh.GetGrantee().GetUserId().GetIdp(), ocmd.ShareStateNotification{
 		Type:         ocmd.NotificationShareUnshared,
 		SenderDomain: s.conf.ProviderDomain,
@@ -109,6 +112,9 @@ func (s *service) notifyPermissionChange(ctx context.Context, update *share.Shar
 	}
 	sh := update.After
 	rt := resourceTypeName(update.ResourceType)
+	if rt == "" {
+		return
+	}
 	var perms []string
 	if update.WebDAVPermissionsChanged {
 		perms = webdavPermissionNames(sh)

@@ -424,9 +424,7 @@ func TestShareReceiptsCarryStoredResourceType(t *testing.T) {
 	})
 }
 
-// A share without a supported resource type is never stored, and a corrupt
-// row is refused before any change; its type is not guessed.
-func TestShareWithoutSupportedResourceTypeIsRefused(t *testing.T) {
+func TestShareResourceTypeAdmissionAndExistingMutations(t *testing.T) {
 	forEachDialect(t, func(t *testing.T, m *mgr) {
 		ctx, owner := ownerContext(t, "einstein")
 		sh := getOcmShare(getOcmAccessMethods("viewer"), getUserOcmShareGrantee("marie"), owner.Id, getResourceId(), "tok-none")
@@ -459,6 +457,32 @@ func TestShareWithoutSupportedResourceTypeIsRefused(t *testing.T) {
 			editor := &ocm.UpdateOCMShareRequest_UpdateField{Field: &ocm.UpdateOCMShareRequest_UpdateField_AccessMethods{
 				AccessMethods: share.NewWebDavAccessMethod(permissions.NewEditorRole().CS3ResourcePermissions(), nil, nil),
 			}}
+			if itemType == "" {
+				ref := idRef(corrupt.Id)
+				up, err := m.UpdateShare(ctx, owner, ref, editor)
+				if err != nil || up == nil || !up.WebDAVPermissionsChanged ||
+					up.ResourceType != ocm.SharedResourceType_SHARE_RESOURCE_TYPE_INVALID {
+					t.Errorf("update of prior-format row: %v %v", up, err)
+				} else {
+					got, err := m.GetShare(ctx, owner, ref)
+					if err != nil || !proto.Equal(webdavPermissions(got.GetAccessMethods()), editor.GetAccessMethods().GetWebdavOptions().GetPermissions()) {
+						t.Errorf("permissions not persisted: %v %v", got, err)
+					}
+					var persisted model.OcmShare
+					if err := m.db.First(&persisted, before.Id).Error; err != nil || persisted.ItemType != "" {
+						t.Errorf("stored type changed: %q %v", persisted.ItemType, err)
+					}
+				}
+				removed, err := m.DeleteShare(ctx, owner, ref)
+				if err != nil || removed == nil || removed.ResourceType != ocm.SharedResourceType_SHARE_RESOURCE_TYPE_INVALID ||
+					removed.Share.GetId().GetOpaqueId() != corrupt.Id.OpaqueId {
+					t.Errorf("withdrawal of prior-format row: %v %v", removed, err)
+				}
+				if _, err := m.GetShare(ctx, owner, ref); !errors.Is(err, share.ErrShareNotFound) {
+					t.Errorf("withdrawn share remains available: %v", err)
+				}
+				continue
+			}
 			if up, err := m.UpdateShare(ctx, owner, idRef(corrupt.Id), editor); !errors.Is(err, share.ErrInvalidResourceType) || up != nil {
 				t.Fatalf("%q update: %v %v", itemType, up, err)
 			}

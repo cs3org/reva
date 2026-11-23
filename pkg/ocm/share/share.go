@@ -89,14 +89,15 @@ type Repository interface {
 // ShareRemoval is the receipt of the deletion of an outgoing share.
 type ShareRemoval struct {
 	Share *ocm.Share
-	// ResourceType is the type stored with the share.
+	// ResourceType is the stored type. INVALID means it was unavailable.
 	ResourceType ocm.SharedResourceType
 }
 
 // ShareUpdate is the receipt of an update of an outgoing share.
 type ShareUpdate struct {
-	Before       *ocm.Share
-	After        *ocm.Share
+	Before *ocm.Share
+	After  *ocm.Share
+	// ResourceType is the stored type. INVALID means it was unavailable.
 	ResourceType ocm.SharedResourceType
 	// WebDAVPermissionsChanged and WebappPermissionsChanged compare the stored
 	// permission values, not the presence of fields in the request.
@@ -127,8 +128,8 @@ type TransferStart struct {
 	Generation uint64
 }
 
-// ErrInvalidResourceType is returned for an outgoing share without a
-// supported resource type: it is never stored, and a stored one is not changed.
+// ErrInvalidResourceType is returned when creating a share without a supported
+// type or when an existing share has an unsupported stored type.
 var ErrInvalidResourceType = errtypes.InternalError("share has no supported resource type")
 
 // SupportedResourceType reports whether an outgoing share can be stored with t.
