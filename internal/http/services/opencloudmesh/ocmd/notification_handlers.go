@@ -86,16 +86,18 @@ func (r *NotificationRegistry) Parse(body []byte) (*Notification, error) {
 	if err != nil {
 		return &Notification{Class: NotificationClassMalformed}, err
 	}
-	validate := requestContracts[n.Type]
+	validate, unsupported := requestContracts[n.Type]
 	// Collection scope is decided before the handler lookup so that this decline
 	// never reaches the handler of a resource grant.
 	if n.Type == NotificationShareDeclined && n.ResourceType == "collection" {
-		validate = validateCollectionDeclined
+		unsupported = true
 	}
-	if validate != nil {
-		if err := validate(n); err != nil {
-			n.Class = NotificationClassMalformed
-			return n, err
+	if unsupported {
+		if validate != nil {
+			if err := validate(n); err != nil {
+				n.Class = NotificationClassMalformed
+				return n, err
+			}
 		}
 		n.Class = NotificationClassRequest
 		return n, &NotificationError{Code: NotificationErrNotImplemented}

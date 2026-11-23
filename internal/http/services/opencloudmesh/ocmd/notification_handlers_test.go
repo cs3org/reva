@@ -69,7 +69,7 @@ func TestRegistryDispatchOutcomes(t *testing.T) {
 		}
 	}
 
-	req, err := r.Parse([]byte(`{"notificationType":"REQUEST_SHARE","senderDomain":"b.example.org","resourceType":"collection","shareType":"user","collectionId":"x","notification":{"collection":{"owner":"a@a.example.org","shareWith":"b@b.example.org","permissions":["read"]}}}`))
+	req, err := r.Parse([]byte(`{"notificationType":"REQUEST_SHARE","senderDomain":"b.example.org","resourceType":"collection"}`))
 	if code, ok := NotificationErrorCodeOf(err); !ok || code != NotificationErrNotImplemented || req.Class != NotificationClassRequest {
 		t.Fatalf("request status %v", err)
 	}

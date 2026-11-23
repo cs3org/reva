@@ -160,12 +160,62 @@ func TestParseNotificationPermissionPresence(t *testing.T) {
 
 func TestParseCollectionDeclineIsNotAFileGrant(t *testing.T) {
 	reg := NewNotificationRegistry()
-	n, err := reg.Parse([]byte(`{"notificationType":"SHARE_DECLINED","senderDomain":"b.example.org","resourceType":"collection","collectionId":"","notification":{"collection":{"shareWith":"bob@b.example.org"},"file":{"providerId":"grant-1"}}}`))
+	h := &recordingHandler{}
+	if err := reg.SetHandler(NotificationShareDeclined, h); err != nil {
+		t.Fatal(err)
+	}
+	n, err := reg.Parse([]byte(`{"notificationType":"SHARE_DECLINED","senderDomain":"b.example.org","resourceType":"collection","notification":{"file":{"providerId":"grant-1"}}}`))
 	if code, ok := NotificationErrorCodeOf(err); !ok || code != NotificationErrNotImplemented || n.Class != NotificationClassRequest {
 		t.Fatalf("class %s: %v", n.Class, err)
 	}
 	if n.File != nil || n.ProviderID != "" {
 		t.Fatalf("collection decline exposed a file grant: %#v", n)
+	}
+	if out, err := reg.Dispatch(context.Background(), n); out != DispatchNotImplemented || err != nil || len(h.seen) != 0 {
+		t.Fatalf("dispatch %s, error %v, handler calls %d", out, err, len(h.seen))
+	}
+}
+
+func TestRegistryRejectsInvalidNotificationFields(t *testing.T) {
+	const grant = `{"notificationType":"SHARE_CHANGE_PERMISSION","senderDomain":"a.example.org","resourceType":"folder","notification":{"file":{"providerId":"%s"}}}`
+	const contact = `{"notificationType":"CONTACT_REMOVED","senderDomain":"a.example.org","shareType":"user","notification":{"user":{"userId":"alice@a.example.org","targetUserId":"%s@b.example.org"}}}`
+	const server = `{"notificationType":"OCM_SERVER_ADDED","senderDomain":"a.example.org","resourceType":"federation","notification":{"federation":{"federationId":"mesh","url":"%s"%s}}}`
+
+	for _, tc := range []struct {
+		name, body, field string
+	}{
+		{"relative federation URL", fmt.Sprintf(server, "/ocm", ""), "notification.federation.url"},
+		{"hostless federation URL", fmt.Sprintf(server, "https://:8443", ""), "notification.federation.url"},
+		{"federation URL scheme", fmt.Sprintf(server, "ftp://b.example.org", ""), "notification.federation.url"},
+		{"federation URL path", fmt.Sprintf(server, "https://b.example.org/ocm", ""), "notification.federation.url"},
+		{"federation URL userinfo", fmt.Sprintf(server, "https://user@b.example.org", ""), "notification.federation.url"},
+		{"federation URL query", fmt.Sprintf(server, "https://b.example.org?", ""), "notification.federation.url"},
+		{"federation URL fragment", fmt.Sprintf(server, "https://b.example.org#", ""), "notification.federation.url"},
+		{"numeric federation name", fmt.Sprintf(server, "https://b.example.org", `,"name":7`), "notification.federation.name"},
+		{"null federation name", fmt.Sprintf(server, "https://b.example.org", `,"name":null`), "notification.federation.name"},
+		{"boolean federation group", fmt.Sprintf(server, "https://b.example.org", `,"mlsGroupId":true`), "notification.federation.mlsGroupId"},
+		{"null federation group", fmt.Sprintf(server, "https://b.example.org", `,"mlsGroupId":null`), "notification.federation.mlsGroupId"},
+		{"unpaired high surrogate in grant", fmt.Sprintf(grant, `\ud800`), "notification.file.providerId"},
+		{"unpaired low surrogate in address", fmt.Sprintf(contact, `\udc00`), "notification.user.targetUserId"},
+		{"interrupted pair in address", fmt.Sprintf(contact, `\ud800x\udc00`), "notification.user.targetUserId"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			reg := NewNotificationRegistry()
+			h := &recordingHandler{}
+			for typ := range builtinContracts {
+				if err := reg.SetHandler(typ, h); err != nil {
+					t.Fatal(err)
+				}
+			}
+			n, parseErr := reg.Parse([]byte(tc.body))
+			outcome, dispatchErr := reg.Dispatch(context.Background(), n)
+			if n.Class != NotificationClassMalformed || NotificationReason(parseErr) != "invalid "+tc.field {
+				t.Errorf("class %s, error %v, want malformed and invalid %s", n.Class, parseErr, tc.field)
+			}
+			if outcome != DispatchIgnored || dispatchErr != nil || len(h.seen) != 0 {
+				t.Errorf("dispatch %s, error %v, handler calls %d", outcome, dispatchErr, len(h.seen))
+			}
+		})
 	}
 }
 
@@ -244,10 +294,20 @@ func TestNotificationRejectsInvalidUTF8(t *testing.T) {
 			t.Fatalf("invalid dispatch %s %v", out, err)
 		}
 	}
-	for _, id := range []string{"\uFFFD", "\u00c9 @ User"} {
-		n := mustParse(t, reg, string(bytes.Replace(base, []byte("MARK"), []byte(id), 1)))
-		if n.User == nil || n.User.UserID != id+"@a.example.org" {
+	for _, id := range []struct{ wire, want string }{
+		{"\uFFFD", "\uFFFD"},
+		{`\ufffd\uD83D\uDE00`, "\uFFFD\U0001f600"},
+		{`\ufffd\\ud800`, "\uFFFD" + `\ud800`},
+		{"\u00c9 @ User", "\u00c9 @ User"},
+	} {
+		n := mustParse(t, reg, string(bytes.Replace(base, []byte("MARK"), []byte(id.wire), 1)))
+		if n.User == nil || n.User.UserID != id.want+"@a.example.org" {
 			t.Fatalf("Unicode identity changed: %#v", n.User)
+		}
+		const grant = `{"notificationType":"SHARE_UNSHARED","senderDomain":"a.example.org","resourceType":"file","notification":{"file":{"providerId":"%s"}}}`
+		n = mustParse(t, reg, fmt.Sprintf(grant, id.wire))
+		if n.File == nil || n.File.ProviderID != id.want || n.ProviderID != id.want {
+			t.Fatalf("Unicode grant ID changed: %#v", n.File)
 		}
 	}
 }
