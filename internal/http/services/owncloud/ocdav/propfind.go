@@ -31,6 +31,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	userv1beta1 "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
@@ -140,41 +141,45 @@ func (s *svc) propfindResponse(ctx context.Context, w http.ResponseWriter, r *ht
 		return
 	}
 
-	var linkshares map[string]struct{}
-	listResp, err := client.ListPublicShares(ctx, &link.ListPublicSharesRequest{
-		Opaque: &types.Opaque{
-			Map: map[string]*types.OpaqueEntry{
-				appctx.ResoucePathCtx: {Decoder: "plain", Value: []byte(parentInfo.Path)},
+	var linkshares, usershares map[string]struct{}
+	var wg sync.WaitGroup
+	wg.Go(func() {
+		listResp, err := client.ListPublicShares(ctx, &link.ListPublicSharesRequest{
+			Opaque: &types.Opaque{
+				Map: map[string]*types.OpaqueEntry{
+					appctx.ResoucePathCtx: {Decoder: "plain", Value: []byte(parentInfo.Path)},
+				},
 			},
-		},
-		Filters: linkFilters,
-	})
-	if err == nil {
+			Filters: linkFilters,
+		})
+		if err != nil {
+			log.Error().Err(err).Msg("propfindResponse: couldn't list public shares")
+			return
+		}
 		linkshares = make(map[string]struct{}, len(listResp.Share))
 		for i := range listResp.Share {
 			linkshares[resourceid.OwnCloudResourceIDWrap(listResp.Share[i].ResourceId)] = struct{}{}
 		}
-	} else {
-		log.Error().Err(err).Msg("propfindResponse: couldn't list public shares")
-	}
-
-	var usershares map[string]struct{}
-	listSharesResp, err := client.ListShares(ctx, &collaboration.ListSharesRequest{
-		Filters: shareFilters,
-		Opaque: &types.Opaque{
-			Map: map[string]*types.OpaqueEntry{
-				appctx.ResoucePathCtx: {Decoder: "plain", Value: []byte(parentInfo.Path)},
-			},
-		},
 	})
-	if err == nil {
+	wg.Go(func() {
+		listSharesResp, err := client.ListShares(ctx, &collaboration.ListSharesRequest{
+			Filters: shareFilters,
+			Opaque: &types.Opaque{
+				Map: map[string]*types.OpaqueEntry{
+					appctx.ResoucePathCtx: {Decoder: "plain", Value: []byte(parentInfo.Path)},
+				},
+			},
+		})
+		if err != nil {
+			log.Error().Err(err).Msg("propfindResponse: couldn't list user shares")
+			return
+		}
 		usershares = make(map[string]struct{}, len(listSharesResp.Shares))
 		for i := range listSharesResp.Shares {
 			usershares[resourceid.OwnCloudResourceIDWrap(listSharesResp.Shares[i].ResourceId)] = struct{}{}
 		}
-	} else {
-		log.Error().Err(err).Msg("propfindResponse: couldn't list user shares")
-	}
+	})
+	wg.Wait()
 
 	propRes, err := s.multistatusResponse(ctx, &pf, resourceInfos, parentInfo, namespace, hrefBase, usershares, linkshares)
 	if err != nil {
