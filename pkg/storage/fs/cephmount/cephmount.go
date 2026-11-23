@@ -1286,9 +1286,12 @@ func (fs *cephmountfs) ListGrants(ctx context.Context, ref *provider.Reference) 
 		var grant *provider.Grant
 		switch entryType {
 		case "user":
-			// Resolve numeric UID back to username
-			userInfo, err := user.LookupId(identifier)
-			if err != nil {
+			// This entry lets the external accounts through the kernel. Their grants are the xattrs above.
+			if identifier == strconv.Itoa(fs.conf.ExternalAccountsUserUID) {
+				continue
+			}
+			userID, err := fs.lookupUserID(ctx, identifier)
+			if _, ok := err.(errtypes.IsNotFound); ok {
 				// Cannot resolve UID to username - skip this entry
 				log.Debug().
 					Str("uid", identifier).
@@ -1296,16 +1299,22 @@ func (fs *cephmountfs) ListGrants(ctx context.Context, ref *provider.Reference) 
 					Msg("cephmount: skipping user ACL entry - cannot resolve UID to username")
 				continue
 			}
+			if err != nil {
+				// A grant left out reads as a grant that is not there.
+				return nil, fs.grantsReadError(ctx, path, fullPath, err)
+			}
 
 			grant = &provider.Grant{
 				Grantee: &provider.Grantee{
 					Type: provider.GranteeType_GRANTEE_TYPE_USER,
-					Id:   &provider.Grantee_UserId{UserId: &userv1beta1.UserId{OpaqueId: userInfo.Username}},
+					Id:   &provider.Grantee_UserId{UserId: userID},
 				},
 				Permissions: perms,
 			}
 
 		case "group":
+			// Not through the gateway like users: the rest group provider reads any claim
+			// other than the group name as a name, thus a gid can match the wrong group.
 			// Resolve numeric GID back to groupname
 			groupInfo, err := user.LookupGroupId(identifier)
 			if err != nil {
