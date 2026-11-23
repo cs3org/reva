@@ -21,6 +21,8 @@ package admin
 import (
 	"context"
 	"encoding/json"
+	"fmt"
+	"slices"
 	"strconv"
 	"strings"
 
@@ -55,16 +57,43 @@ func (s *svc) jobsEndpoints() ([]client.Endpoint, error) {
 // invokeJobsOne runs a single-target jobs invocation on one ready runner. It
 // picks the runner itself, not through the Shared scope, so that a runner that
 // does not advertise the scope yet does not run the call more than once.
-func (s *svc) invokeJobsOne(ctx context.Context, invocation string, args map[string]string) (*adminpb.NodeResult, error) {
+func (s *svc) invokeJobsOne(ctx context.Context, invocation string, args map[string]string, need string, use func(runnerInfoJSON) bool) (*adminpb.NodeResult, error) {
 	eps, err := s.jobsEndpoints()
 	if err != nil {
 		return nil, err
+	}
+	eps = usableRunners(ctx, eps, use)
+	if len(eps) == 0 {
+		return nil, status.Errorf(codes.FailedPrecondition, "admin: jobs %s: no live jobs runner has %s", invocation, need)
 	}
 	res := client.InvokeOne(ctx, client.Pick(ctx, eps), invocation, args)
 	if res.Error != "" {
 		return nil, status.Errorf(codes.Internal, "admin: jobs %s: %s", invocation, res.Error)
 	}
 	return &adminpb.NodeResult{Node: res.Node, ResultJson: res.ResultJSON, Error: res.Error}, nil
+}
+
+// Not every runner can take every call. A runner without a store (e.g. the
+// sssd warmer) runs only all-nodes jobs.
+func usableRunners(ctx context.Context, eps []client.Endpoint, use func(runnerInfoJSON) bool) []client.Endpoint {
+	usable := map[string]bool{}
+	for _, r := range fanOutInvoke(ctx, eps, "inspect", nil) {
+		var info runnerInfoJSON
+		if r.Error == "" && json.Unmarshal([]byte(r.ResultJson), &info) == nil && use(info) {
+			usable[r.Node] = true
+		}
+	}
+	return slices.DeleteFunc(eps, func(ep client.Endpoint) bool { return !usable[ep.Node] })
+}
+
+func hasStore(info runnerInfoJSON) bool { return info.StoreWired }
+
+func runsLeaderJob(job string) func(runnerInfoJSON) bool {
+	return func(info runnerInfoJSON) bool {
+		return info.StoreWired && slices.ContainsFunc(info.Jobs, func(j jobDefJSON) bool {
+			return j.Name == job && j.Kind == "periodic" && j.Scope == "leader"
+		})
+	}
 }
 
 func (s *svc) InspectJobs(ctx context.Context, _ *adminpb.InspectJobsRequest) (*adminpb.InspectJobsResponse, error) {
@@ -121,7 +150,7 @@ func (s *svc) ListJobRuns(ctx context.Context, req *adminpb.ListJobRunsRequest) 
 	if req.Offset > 0 {
 		args["offset"] = strconv.Itoa(int(req.Offset))
 	}
-	res, err := s.invokeJobsOne(ctx, "runs", args)
+	res, err := s.invokeJobsOne(ctx, "runs", args, "a store", hasStore)
 	if err != nil {
 		return nil, err
 	}
@@ -142,7 +171,7 @@ func (s *svc) GetJobRun(ctx context.Context, req *adminpb.GetJobRunRequest) (*ad
 	if req.RunId == "" {
 		return nil, status.Error(codes.InvalidArgument, "admin: run_id is required")
 	}
-	res, err := s.invokeJobsOne(ctx, "status", map[string]string{"run_id": req.RunId})
+	res, err := s.invokeJobsOne(ctx, "status", map[string]string{"run_id": req.RunId}, "a store", hasStore)
 	if err != nil {
 		return nil, err
 	}
@@ -161,7 +190,7 @@ func (s *svc) EnqueueJob(ctx context.Context, req *adminpb.EnqueueJobRequest) (*
 		b, _ := json.Marshal(req.Params)
 		args["params"] = string(b)
 	}
-	res, err := s.invokeJobsOne(ctx, "enqueue", args)
+	res, err := s.invokeJobsOne(ctx, "enqueue", args, "a store", hasStore)
 	if err != nil {
 		return nil, err
 	}
@@ -177,7 +206,7 @@ func (s *svc) TriggerJob(ctx context.Context, req *adminpb.TriggerJobRequest) (*
 	if req.Job == "" {
 		return nil, status.Error(codes.InvalidArgument, "admin: job is required")
 	}
-	if _, err := s.invokeJobsOne(ctx, "trigger", map[string]string{"job": req.Job}); err != nil {
+	if _, err := s.invokeJobsOne(ctx, "trigger", map[string]string{"job": req.Job}, fmt.Sprintf("the leader periodic job %q", req.Job), runsLeaderJob(req.Job)); err != nil {
 		return nil, err
 	}
 	s.auditJob(ctx, "trigger_job", req.Job, nil)
@@ -188,7 +217,7 @@ func (s *svc) CancelJobRun(ctx context.Context, req *adminpb.CancelJobRunRequest
 	if req.RunId == "" {
 		return nil, status.Error(codes.InvalidArgument, "admin: run_id is required")
 	}
-	res, err := s.invokeJobsOne(ctx, "cancel", map[string]string{"run_id": req.RunId})
+	res, err := s.invokeJobsOne(ctx, "cancel", map[string]string{"run_id": req.RunId}, "a store", hasStore)
 	if err != nil {
 		return nil, err
 	}
@@ -200,7 +229,7 @@ func (s *svc) CancelPeriodicJob(ctx context.Context, req *adminpb.CancelPeriodic
 	if req.Job == "" {
 		return nil, status.Error(codes.InvalidArgument, "admin: job is required")
 	}
-	if _, err := s.invokeJobsOne(ctx, "stop", map[string]string{"job": req.Job}); err != nil {
+	if _, err := s.invokeJobsOne(ctx, "stop", map[string]string{"job": req.Job}, fmt.Sprintf("the leader periodic job %q", req.Job), runsLeaderJob(req.Job)); err != nil {
 		return nil, err
 	}
 	s.auditJob(ctx, "cancel_periodic_job", req.Job, nil)
@@ -211,7 +240,7 @@ func (s *svc) ForgetJob(ctx context.Context, req *adminpb.ForgetJobRequest) (*ad
 	if req.Job == "" {
 		return nil, status.Error(codes.InvalidArgument, "admin: job is required")
 	}
-	if _, err := s.invokeJobsOne(ctx, "forget", map[string]string{"job": req.Job}); err != nil {
+	if _, err := s.invokeJobsOne(ctx, "forget", map[string]string{"job": req.Job}, "a store", hasStore); err != nil {
 		return nil, err
 	}
 	s.auditJob(ctx, "forget_job", req.Job, nil)
