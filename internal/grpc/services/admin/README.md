@@ -376,6 +376,9 @@ Two sources of truth, two access patterns:
   is later claimed by whatever worker is free (possibly a different runner), and
   cancels broadcast cluster-wide. They are audited.
 
+  The admin sends these calls only to a runner with a store. `trigger` and
+  `stop` also need a runner that registers the job.
+
   ```
   jobs runs [-job X] [-owner Y] [-state s,...] [-internal] [-n N]
   jobs status <run-id>
