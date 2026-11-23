@@ -1838,44 +1838,66 @@ func (fs *cephmountfs) grantsReadError(ctx context.Context, path, fullPath strin
 func (fs *cephmountfs) resolveGranteeIdentifier(ctx context.Context, grant *provider.Grant) (granteeType, identifier string, err error) {
 	log := appctx.GetLogger(ctx)
 
+	// Not through sssd, which can take tens of seconds for a name that it has not cached.
+	gw, err := service.Gateway(ctx)
+	if err != nil {
+		return "", "", errors.Wrap(err, "cephmount: error getting gateway grpc client")
+	}
+
 	switch grant.Grantee.Type {
 	case provider.GranteeType_GRANTEE_TYPE_USER:
 		userId := grant.Grantee.GetUserId()
 		if userId == nil {
 			return "", "", errors.New("cephmount: user grantee without user ID")
 		}
-		username := userId.OpaqueId
 
-		userInfo, err := user.Lookup(username)
+		res, err := gw.GetUser(ctx, &userv1beta1.GetUserRequest{UserId: userId, SkipFetchingUserGroups: true})
 		if err != nil {
-			return "", "", errors.Errorf("cephmount: user '%s' does not exist in /etc/passwd. "+
-				"All users must be available on the local system. Original error: %v", username, err)
+			return "", "", errors.Wrapf(err, "cephmount: failed to get user '%s'", userId.OpaqueId)
+		}
+		if code := res.GetStatus().GetCode(); code != rpc.Code_CODE_OK {
+			return "", "", errors.Errorf("cephmount: failed to get user '%s': %s: %s", userId.OpaqueId, code, res.GetStatus().GetMessage())
+		}
+		// Zero means that the user has no uid. The ACL entry would then name root.
+		uid := res.GetUser().GetUidNumber()
+		if uid == 0 {
+			return "", "", errors.Errorf("cephmount: user '%s' has no uid", userId.OpaqueId)
+		}
+		if id := res.GetUser().GetId(); id != nil {
+			// Replace a cached NOT_FOUND for this UID, which would hide the new grant from ListGrants.
+			_ = fs.userIDCache.Set(strconv.FormatInt(uid, 10), id)
 		}
 		log.Debug().
-			Str("username", username).
-			Str("uid", userInfo.Uid).
+			Str("username", userId.OpaqueId).
+			Int64("uid", uid).
 			Msg("cephmount: resolved username to UID")
 
-		return "u", userInfo.Uid, nil
+		return "u", strconv.FormatInt(uid, 10), nil
 
 	case provider.GranteeType_GRANTEE_TYPE_GROUP:
 		groupId := grant.Grantee.GetGroupId()
 		if groupId == nil {
 			return "", "", errors.New("cephmount: group grantee without group ID")
 		}
-		groupname := groupId.OpaqueId
 
-		groupInfo, err := user.LookupGroup(groupname)
+		// Without the members: a large e-group takes long to expand.
+		res, err := gw.GetGroup(ctx, &grouppb.GetGroupRequest{GroupId: groupId, SkipFetchingMembers: true})
 		if err != nil {
-			return "", "", errors.Errorf("cephmount: group '%s' does not exist in /etc/group. "+
-				"All groups must be available on the local system. Original error: %v", groupname, err)
+			return "", "", errors.Wrapf(err, "cephmount: failed to get group '%s'", groupId.OpaqueId)
+		}
+		if code := res.GetStatus().GetCode(); code != rpc.Code_CODE_OK {
+			return "", "", errors.Errorf("cephmount: failed to get group '%s': %s: %s", groupId.OpaqueId, code, res.GetStatus().GetMessage())
+		}
+		gid := res.GetGroup().GetGidNumber()
+		if gid == 0 {
+			return "", "", errors.Errorf("cephmount: group '%s' has no gid", groupId.OpaqueId)
 		}
 		log.Debug().
-			Str("groupname", groupname).
-			Str("gid", groupInfo.Gid).
+			Str("groupname", groupId.OpaqueId).
+			Int64("gid", gid).
 			Msg("cephmount: resolved groupname to GID")
 
-		return "g", groupInfo.Gid, nil
+		return "g", strconv.FormatInt(gid, 10), nil
 
 	default:
 		return "", "", errors.New("cephmount: invalid grantee type")
