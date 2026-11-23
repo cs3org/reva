@@ -146,7 +146,9 @@ func (h *notifHandler) authenticate(ctx context.Context, w http.ResponseWriter, 
 		reqres.WriteError(w, r, reqres.APIErrorServerError, "error discovering the sending OCM server", nil)
 		return errors.New("unsupported sender host")
 	}
-	disco, err := h.ocmClient.Discover(ctx, base)
+	// Keep receiver diagnostics independent of peer discovery response metadata.
+	discard := zerolog.Nop()
+	disco, err := h.ocmClient.Discover(appctx.WithLogger(ctx, &discard), base)
 	if err != nil {
 		notificationLog(log.Info(), n).Str("outcome", "rejected").Msg("notification sender discovery failed")
 		reqres.WriteError(w, r, reqres.APIErrorServerError, "error discovering the sending OCM server", nil)

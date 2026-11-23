@@ -26,7 +26,6 @@ import (
 	"io"
 	"net/http"
 	"net/url"
-	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -53,8 +52,14 @@ func (n OutgoingNotification) String() string {
 func (n OutgoingNotification) GoString() string { return n.String() }
 
 type wireNotificationBody struct {
-	Message string            `json:"message,omitempty"`
-	File    *NotificationFile `json:"file,omitempty"`
+	Message string                `json:"message,omitempty"`
+	File    *wireNotificationFile `json:"file,omitempty"`
+}
+
+type wireNotificationFile struct {
+	ProviderID  string    `json:"providerId,omitempty"`
+	Permissions *[]string `json:"permissions,omitempty"`
+	ShareWith   string    `json:"shareWith,omitempty"`
 }
 
 type wireNotification struct {
@@ -78,8 +83,14 @@ func (n *OutgoingNotification) wireBody() ([]byte, error) {
 		ShareType:        n.ShareType,
 		Notification: wireNotificationBody{
 			Message: n.Message,
-			File:    n.File,
 		},
+	}
+	if f := n.File; f != nil {
+		wireFile := &wireNotificationFile{ProviderID: f.ProviderID, ShareWith: f.ShareWith}
+		if f.Permissions != nil {
+			wireFile.Permissions = &f.Permissions
+		}
+		w.Notification.File = wireFile
 	}
 	return json.Marshal(w)
 }
@@ -131,7 +142,7 @@ type ocmNotificationTransport struct {
 var (
 	errInvalidPeer     = errors.New("peer is not an OCM host")
 	errUnsupportedPeer = errors.New("peer host cannot be reached over HTTP as written")
-	errNoSigningKey    = errors.New("peer requires signed notifications but no signing key is configured")
+	errNoSigningKey    = errors.New("no notification signing key is configured")
 	errSigningFailed   = errors.New("notification signing failed")
 )
 
@@ -204,13 +215,11 @@ func parseRetryAfter(v string) time.Duration {
 	return time.Duration(n) * time.Second
 }
 
-// PostNotification signs with the local service key when configured.
-// A peer advertising http-sig receives no unsigned notification POST.
 func (t ocmNotificationTransport) PostNotification(ctx context.Context, peer *notificationPeer, body []byte) (notificationResponse, error) {
 	if peer == nil || peer.Endpoint == "" {
 		return notificationResponse{}, errInvalidPeer
 	}
-	if t.key == nil && slices.Contains(peer.Capabilities, "http-sig") {
+	if t.key == nil {
 		return notificationResponse{}, errNoSigningKey
 	}
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, peer.Endpoint, bytes.NewReader(body))
@@ -219,10 +228,10 @@ func (t ocmNotificationTransport) PostNotification(ctx context.Context, peer *no
 	}
 	req.Header.Set("Content-Type", "application/json")
 	req.ContentLength = int64(len(body))
-	if t.key != nil {
-		if err := t.key.Sign(req, body); err != nil {
-			return notificationResponse{}, errSigningFailed
-		}
+	// Prevent net/http from rewinding the POST body on a reused connection.
+	req.GetBody = nil
+	if err := t.key.Sign(req, body); err != nil {
+		return notificationResponse{}, errSigningFailed
 	}
 	// A 307/308 could disclose the payload to another destination.
 	noRedirect := *t.c.client

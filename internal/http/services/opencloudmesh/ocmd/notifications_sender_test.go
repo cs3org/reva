@@ -166,7 +166,7 @@ func sendWithLogs(t *testing.T, peer *notificationServer, n *OutgoingNotificatio
 	var logs bytes.Buffer
 	logger := zerolog.New(&logs)
 	ctx := appctx.WithLogger(context.Background(), &logger)
-	res := NewClient(5*time.Second, false).NewNotification(ctx, peer.host(), n, nil)
+	res := NewClient(5*time.Second, false).NewNotification(ctx, peer.host(), n, newSigningKey(t))
 	return res, logs.String()
 }
 
@@ -271,6 +271,16 @@ func TestShareStatePayloadFixtures(t *testing.T) {
 			in:   ShareStateNotification{Type: NotificationShareChangePermission, SenderDomain: "provider.example.org", ResourceType: "file", ShareType: "user", ProviderID: "42", Permissions: []string{"write", "read", "read"}},
 			want: `{"notificationType":"SHARE_CHANGE_PERMISSION","senderDomain":"provider.example.org","resourceType":"file","shareType":"user","notification":{"file":{"providerId":"42","permissions":["write","read","read"]}}}`,
 		},
+		{
+			name: "absent permission snapshot",
+			in:   ShareStateNotification{Type: NotificationShareChangePermission, SenderDomain: "provider.example.org", ResourceType: "file", ProviderID: "42"},
+			want: `{"notificationType":"SHARE_CHANGE_PERMISSION","senderDomain":"provider.example.org","resourceType":"file","notification":{"file":{"providerId":"42"}}}`,
+		},
+		{
+			name: "empty permission snapshot",
+			in:   ShareStateNotification{Type: NotificationShareChangePermission, SenderDomain: "provider.example.org", ResourceType: "file", ProviderID: "42", Permissions: []string{}},
+			want: `{"notificationType":"SHARE_CHANGE_PERMISSION","senderDomain":"provider.example.org","resourceType":"file","notification":{"file":{"providerId":"42","permissions":[]}}}`,
+		},
 	}
 	reg := NewNotificationRegistry()
 	for _, tc := range cases {
@@ -301,6 +311,9 @@ func TestShareStatePayloadFixtures(t *testing.T) {
 			parsed, err := reg.Parse(peer.lastBody)
 			if err != nil || parsed.Class != NotificationClassSpec || parsed.ProviderID != tc.in.ProviderID {
 				t.Fatalf("receiver parse %v: %+v", err, parsed)
+			}
+			if !reflect.DeepEqual(parsed.File.Permissions, tc.in.Permissions) {
+				t.Fatalf("receiver permissions %#v, want %#v", parsed.File.Permissions, tc.in.Permissions)
 			}
 		})
 	}
@@ -477,7 +490,8 @@ func TestNewNotificationTimeoutAndCancel(t *testing.T) {
 	raw.hang = true
 	peer := newNotificationServer(t)
 	peer.endpoint = raw.url() + "/ocm"
-	res := NewClient(300*time.Millisecond, false).NewNotification(context.Background(), peer.host(), unsharedNotification(t), nil)
+	key := newSigningKey(t)
+	res := NewClient(300*time.Millisecond, false).NewNotification(context.Background(), peer.host(), unsharedNotification(t), key)
 	if res.Outcome != SendPostFailed || res.Failure != FailureTimeout {
 		t.Fatalf("timeout: %+v", res)
 	}
@@ -496,7 +510,7 @@ func TestNewNotificationTimeoutAndCancel(t *testing.T) {
 		case <-ctx.Done():
 		}
 	}()
-	res = NewClient(5*time.Second, false).NewNotification(ctx, peer.host(), unsharedNotification(t), nil)
+	res = NewClient(5*time.Second, false).NewNotification(ctx, peer.host(), unsharedNotification(t), key)
 	if res.Outcome != SendPostFailed || res.Failure != FailureCanceled {
 		t.Fatalf("cancel: %+v", res)
 	}
@@ -534,7 +548,7 @@ func TestPostNotificationErrorQuotesNoPeerBytes(t *testing.T) {
 	for name, response := range malformedResponses {
 		t.Run(name, func(t *testing.T) {
 			raw := newRawPeer(t, response)
-			tr := ocmNotificationTransport{c: NewClient(5*time.Second, false)}
+			tr := ocmNotificationTransport{c: NewClient(5*time.Second, false), key: newSigningKey(t)}
 			resp, err := tr.PostNotification(context.Background(), &notificationPeer{Endpoint: raw.url() + "/ocm/notifications"}, []byte(`{}`))
 			if err == nil || resp != (notificationResponse{}) {
 				t.Fatalf("response %+v error %v", resp, err)
@@ -605,9 +619,8 @@ func TestNotificationSigningBehavior(t *testing.T) {
 		}
 	})
 
-	t.Run("advertising peer without key sends zero posts", func(t *testing.T) {
+	t.Run("peer without http-sig receives no unsigned post", func(t *testing.T) {
 		peer := newNotificationServer(t)
-		peer.caps = []string{"notifications", "http-sig"}
 		ctx := appctx.WithLogger(context.Background(), &nopLogger)
 		res := NewClient(5*time.Second, false).NewNotification(ctx, peer.host(), unsharedNotification(t), nil)
 		if res.Outcome != SendPostFailed || res.Failure != FailureNoSigningKey || peer.postCount() != 0 {
@@ -621,33 +634,19 @@ func TestNotificationSigningBehavior(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		var gotBody []byte
-		var gotReq *http.Request
-		peer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			switch r.URL.Path {
-			case "/.well-known/ocm":
-				_ = json.NewEncoder(w).Encode(wellknown.OcmDiscoveryData{Enabled: true, Endpoint: "http://" + r.Host, Capabilities: []string{"notifications"}})
-			case "/notifications":
-				gotBody, _ = io.ReadAll(io.LimitReader(r.Body, DefaultResponseLimit))
-				gotReq = r.Clone(r.Context())
-				w.WriteHeader(http.StatusCreated)
-			default:
-				http.NotFound(w, r)
-			}
-		}))
-		t.Cleanup(peer.Close)
+		peer := newNotificationServer(t)
 		ctx := appctx.WithLogger(context.Background(), &nopLogger)
-		res := NewClient(5*time.Second, false).NewNotification(ctx, strings.TrimPrefix(peer.URL, "http://"), unsharedNotification(t), key)
-		if res.Outcome != SendDelivered || gotReq == nil {
-			t.Fatalf("result %+v, request %v", res, gotReq)
+		res := NewClient(5*time.Second, false).NewNotification(ctx, peer.host(), unsharedNotification(t), key)
+		if res.Outcome != SendDelivered || peer.postCount() != 1 || peer.lastRequest == nil {
+			t.Fatalf("result %+v, posts %d", res, peer.postCount())
 		}
 		// Verify the sending service's key against the bytes received on the wire.
-		if err := httpsig.Verify(gotReq, gotBody, "", func() ([]byte, error) { return jwks, nil }); err != nil {
+		if err := httpsig.Verify(peer.lastRequest, peer.lastBody, peer.srv.URL, func() ([]byte, error) { return jwks, nil }); err != nil {
 			t.Fatalf("sent bytes do not verify against the sending key: %v", err)
 		}
 		want := `{"notificationType":"SHARE_UNSHARED","senderDomain":"cernbox.example.org","resourceType":"file","shareType":"user","notification":{"file":{"providerId":"42"}}}`
-		if string(gotBody) != want {
-			t.Fatalf("body %s, want %s", gotBody, want)
+		if string(peer.lastBody) != want {
+			t.Fatalf("body %s, want %s", peer.lastBody, want)
 		}
 	})
 }
@@ -689,7 +688,7 @@ func TestNotificationGuardedTransport(t *testing.T) {
 				return resp, err
 			})
 			t.Cleanup(ocmclient.HTTPTransport(base).CloseIdleConnections)
-			res := c.NewNotification(context.Background(), peer.host(), unsharedNotification(t), nil)
+			res := c.NewNotification(context.Background(), peer.host(), unsharedNotification(t), newSigningKey(t))
 			wantProbes := []string{"/.well-known/ocm"}
 			if tc.legacy || !tc.allowLoopback {
 				wantProbes = append(wantProbes, "/ocm-provider")
@@ -811,10 +810,13 @@ func TestNotificationDiscoveryScheme(t *testing.T) {
 func TestPostNotificationResponseReadLimit(t *testing.T) {
 	body := &io.LimitedReader{R: strings.NewReader(strings.Repeat("x", int(2*DefaultResponseLimit))), N: 2 * DefaultResponseLimit}
 	c := NewClient(time.Second, false)
-	c.client.Transport = roundTripperFunc(func(*http.Request) (*http.Response, error) {
+	c.client.Transport = roundTripperFunc(func(req *http.Request) (*http.Response, error) {
+		if req.GetBody != nil {
+			t.Error("notification POST has a replayable body")
+		}
 		return &http.Response{StatusCode: http.StatusCreated, Header: make(http.Header), Body: io.NopCloser(body)}, nil
 	})
-	tr := ocmNotificationTransport{c: c}
+	tr := ocmNotificationTransport{c: c, key: newSigningKey(t)}
 	resp, err := tr.PostNotification(context.Background(), &notificationPeer{Endpoint: "https://peer.example.org/ocm/notifications"}, []byte(`{}`))
 	res := classifyNotificationResponse(resp)
 	if err != nil || res.Outcome != SendDelivered || res.Status != http.StatusCreated || res.Class != http.StatusCreated {
@@ -851,7 +853,7 @@ func TestNewNotificationLegacySigning(t *testing.T) {
 	if string(peer.lastBody) != want || peer.lastRequest == nil {
 		t.Fatalf("legacy body %s", peer.lastBody)
 	}
-	if err := httpsig.Verify(peer.lastRequest, peer.lastBody, "", func() ([]byte, error) { return jwks, nil }); err != nil {
+	if err := httpsig.Verify(peer.lastRequest, peer.lastBody, peer.srv.URL, func() ([]byte, error) { return jwks, nil }); err != nil {
 		t.Fatal(err)
 	}
 	if !reflect.DeepEqual(peer.requests, []string{"GET /.well-known/ocm", "GET /ocm-provider", "GET /.well-known/ocm", "GET /ocm-provider", "POST /ocm/notifications"}) {
