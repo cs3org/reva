@@ -37,14 +37,17 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/ReneKroon/ttlcache/v2"
 	grouppb "github.com/cs3org/go-cs3apis/cs3/identity/group/v1beta1"
 	userv1beta1 "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
+	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	typepb "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
 	"github.com/cs3org/reva/v3/pkg/appctx"
 	"github.com/cs3org/reva/v3/pkg/errtypes"
 	"github.com/cs3org/reva/v3/pkg/mime"
 	"github.com/cs3org/reva/v3/pkg/permissions"
+	"github.com/cs3org/reva/v3/pkg/service"
 	"github.com/cs3org/reva/v3/pkg/storage"
 	"github.com/cs3org/reva/v3/pkg/storage/fs/registry"
 	"github.com/cs3org/reva/v3/pkg/utils"
@@ -75,6 +78,7 @@ type cephmountfs struct {
 	cephVolumePath  string          // Auto-discovered Ceph volume path (RADOS canonical form)
 	localMountPoint string          // Auto-discovered local mount point (where Ceph is mounted locally), see fstab
 	chrootDir       string          // The local mount point (see fstab), but configurable for unit tests
+	userIDCache     *ttlcache.Cache // uid to user id, see lookupUserID
 }
 
 func init() {
@@ -315,6 +319,12 @@ func New(ctx context.Context, m map[string]any) (storage.FS, error) {
 			Msg("cephmount: sufficient privileges verified for per-user thread isolation")
 	}
 
+	userIDCache := ttlcache.NewCache()
+	// Without this, an owner that is listed often is never looked up again.
+	userIDCache.SkipTTLExtensionOnHit(true)
+	_ = userIDCache.SetTTL(userIDCacheTTL)
+	userIDCache.SetCacheSizeLimit(userIDCacheSize)
+
 	fs := &cephmountfs{
 		conf:            &o,
 		cephAdminConn:   cephAdminConn,
@@ -323,6 +333,7 @@ func New(ctx context.Context, m map[string]any) (storage.FS, error) {
 		cephVolumePath:  discoveredCephVolumePath,
 		localMountPoint: discoveredLocalMountPoint,
 		chrootDir:       chrootDir,
+		userIDCache:     userIDCache,
 	}
 
 	// Don't check for active MDS if we don't have a Ceph volume path
@@ -415,6 +426,49 @@ func (fs *cephmountfs) readArbitraryMetadata(path string, mdKeys []string) map[s
 	return md
 }
 
+const (
+	// An account that is renamed or deleted keeps its old user id for at most this long.
+	userIDCacheTTL  = 12 * time.Hour
+	userIDCacheSize = 1000000
+)
+
+// lookupUserID resolves a uid through the gateway, as the eos driver does. sssd
+// can take tens of seconds for a uid that it has not cached, and a listing looks
+// up the owner of every entry. A uid without an account gives errtypes.NotFound.
+func (fs *cephmountfs) lookupUserID(ctx context.Context, uid string) (*userv1beta1.UserId, error) {
+	if v, err := fs.userIDCache.Get(uid); err == nil {
+		if id := v.(*userv1beta1.UserId); id != nil {
+			return id, nil
+		}
+		return nil, errtypes.NotFound("cephmount: no user with uid " + uid)
+	}
+
+	gw, err := service.Gateway(ctx)
+	if err != nil {
+		return nil, err
+	}
+	res, err := gw.GetUserByClaim(ctx, &userv1beta1.GetUserByClaimRequest{
+		Claim:                  "uid",
+		Value:                  uid,
+		SkipFetchingUserGroups: true,
+	})
+	if err != nil {
+		return nil, err
+	}
+	switch code := res.GetStatus().GetCode(); code {
+	case rpc.Code_CODE_OK:
+		_ = fs.userIDCache.Set(uid, res.GetUser().GetId())
+		return res.GetUser().GetId(), nil
+	case rpc.Code_CODE_NOT_FOUND:
+		// A deleted account can own many files, thus do not ask again for each one.
+		// Other errors are not kept, so that a gateway failure does not hide the owner for hours.
+		_ = fs.userIDCache.Set(uid, (*userv1beta1.UserId)(nil))
+		return nil, errtypes.NotFound("cephmount: no user with uid " + uid)
+	default:
+		return nil, errors.Errorf("cephmount: get user with uid %s: %s: %s", uid, code, res.GetStatus().GetMessage())
+	}
+}
+
 // fileAsResourceInfo converts file info to ResourceInfo
 func (fs *cephmountfs) fileAsResourceInfo(ctx context.Context, path string, info os.FileInfo, mdKeys []string) (*provider.ResourceInfo, error) {
 	var (
@@ -453,12 +507,10 @@ func (fs *cephmountfs) fileAsResourceInfo(ctx context.Context, path string, info
 		OpaqueId: strconv.FormatUint(stat.Ino, 10),
 	}
 
-	// A uid without an account on this node, such as a deleted user, can still
-	// own files. Like the eos driver, leave the owner empty, so the listing works.
-	var owner *userv1beta1.UserId
-	if u, err := user.LookupId(fmt.Sprint(stat.Uid)); err == nil {
-		owner = &userv1beta1.UserId{OpaqueId: u.Username}
-	} else {
+	// A uid without an account, such as a deleted user, can still own files.
+	// Like the eos driver, leave the owner empty, so the listing works.
+	owner, err := fs.lookupUserID(ctx, fmt.Sprint(stat.Uid))
+	if err != nil {
 		appctx.GetLogger(ctx).Debug().Uint32("uid", stat.Uid).Err(err).Msg("cephmount: cannot find the owner, leaving it empty")
 	}
 
