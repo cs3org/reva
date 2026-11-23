@@ -18,6 +18,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -46,6 +47,8 @@ type notificationPolicyTrace struct {
 	sender  string
 }
 
+const policyErrorMarker = "policy-detail-marker"
+
 func (g *notificationPolicyTrace) IsProviderAllowed(_ context.Context, req *ocmprovider.IsProviderAllowedRequest, _ ...grpc.CallOption) (*ocmprovider.IsProviderAllowedResponse, error) {
 	g.record("policy")
 	g.sender = req.Provider.Domain
@@ -54,6 +57,9 @@ func (g *notificationPolicyTrace) IsProviderAllowed(_ context.Context, req *ocmp
 	}
 	if g.missing == "status" {
 		return &ocmprovider.IsProviderAllowedResponse{}, nil
+	}
+	if g.missing == "error" {
+		return nil, errors.New(policyErrorMarker)
 	}
 	code := rpc.Code_CODE_OK
 	if g.deny {
@@ -72,6 +78,7 @@ func TestNotificationsIngressOrder(t *testing.T) {
 		{"denied", "denied", http.StatusUnauthorized, "policy"},
 		{"nil response", "response", http.StatusInternalServerError, "policy"},
 		{"nil status", "status", http.StatusInternalServerError, "policy"},
+		{"policy error", "error", http.StatusInternalServerError, "policy"},
 		{"unsigned", "unsigned", http.StatusUnauthorized, "policy,discovery"},
 		{"signed", "signed", http.StatusCreated, "policy,discovery,jwks,dispatch"},
 	} {
@@ -102,7 +109,7 @@ func TestNotificationsIngressOrder(t *testing.T) {
 			}
 			senderHost = strings.ToLower(sender)
 			policy := &notificationPolicyTrace{record: record, deny: tc.kind == "denied", missing: tc.kind}
-			sv := newNotificationTestService(t, "strict", "", policy)
+			sv := newNotificationTestService(t, "strict", policy)
 			if err := sv.notifications.registry.SetHandler(NotificationShareUnshared, TypeHandlerFunc(func(context.Context, *Notification) error { record("dispatch"); return nil })); err != nil {
 				t.Fatal(err)
 			}
@@ -110,7 +117,7 @@ func TestNotificationsIngressOrder(t *testing.T) {
 			if tc.kind == "malformed" {
 				body = "{"
 			}
-			req := httptest.NewRequest(http.MethodPost, mount+notificationsPath, strings.NewReader(body))
+			req := newNotificationTestRequest(http.MethodPost, notificationTestEndpoint, body)
 			req.Header.Set("Content-Type", "application/json")
 			req.RemoteAddr = fmt.Sprintf("[2001:db8:%x::1]:1000", clientSeq.Add(1))
 			if tc.kind == "signed" || tc.kind == "denied" {
@@ -119,6 +126,9 @@ func TestNotificationsIngressOrder(t *testing.T) {
 				}
 			}
 			rr := httptest.NewRecorder()
+			var logs bytes.Buffer
+			logger := zerolog.New(&logs)
+			req = req.WithContext(appctx.WithLogger(req.Context(), &logger))
 			handlerFor(sv).ServeHTTP(rr, req)
 			mu.Lock()
 			got := strings.Join(events, ",")
@@ -136,12 +146,14 @@ func TestNotificationsIngressOrder(t *testing.T) {
 					t.Fatalf("unexpected dependency response: %s", rr.Body.String())
 				}
 			}
+			if strings.Contains(logs.String()+rr.Body.String(), policyErrorMarker) {
+				t.Fatal("provider policy error detail appeared in the response or logs")
+			}
 		})
 	}
 }
 
 func TestNotificationsSignatureRejectsTampering(t *testing.T) {
-	const endpoint = "https://receiver.example.org:8443"
 	const marker = "untrusted-key-marker"
 	for _, tc := range []struct {
 		name string
@@ -162,21 +174,21 @@ func TestNotificationsSignatureRejectsTampering(t *testing.T) {
 			key := newSigningKey(t)
 			peer := signingServer(t, key)
 			t.Cleanup(peer.Close)
-			sv := newNotificationTestService(t, "strict", endpoint, &notificationsMockGW{})
+			sv := newNotificationTestService(t, "strict", &notificationsMockGW{})
 			handled := &recordingHandler{}
 			if err := sv.notifications.registry.SetHandler(NotificationShareUnshared, handled); err != nil {
 				t.Fatal(err)
 			}
 			body := `{"notificationType":"SHARE_UNSHARED","senderDomain":"` + peer.Listener.Addr().String() + `","resourceType":"file","notification":{"file":{"providerId":"42"}}}`
-			signURL := endpoint + mount + notificationsPath
+			signEndpoint := notificationTestEndpoint
 			method := http.MethodPost
 			if tc.kind == "method" {
 				method = http.MethodGet
 			}
 			if tc.kind == "port" {
-				signURL = "https://receiver.example.org:9443" + mount + notificationsPath
+				signEndpoint = "https://receiver.example.org:9443"
 			}
-			req := httptest.NewRequest(method, signURL, strings.NewReader(body))
+			req := newNotificationTestRequest(method, signEndpoint, body)
 			req.Header.Set("Content-Type", "application/json")
 			signer := key
 			if tc.kind == "key" {
@@ -197,7 +209,9 @@ func TestNotificationsSignatureRejectsTampering(t *testing.T) {
 				t.Fatal(err)
 			}
 			req.Method = http.MethodPost
-			req.Host = "receiver.example.org:8443"
+			if tc.kind != "port" {
+				req.Host = "localhost:9143"
+			}
 			if tc.kind == "length" {
 				req.Header.Del("Content-Length")
 			}
@@ -233,36 +247,29 @@ func TestNotificationsUnimplementedRequestAuthenticatesFirst(t *testing.T) {
 	key := newSigningKey(t)
 	peer := signingServer(t, key)
 	t.Cleanup(peer.Close)
-	sv := newNotificationTestService(t, "strict", "", &notificationsMockGW{})
-	for _, tc := range []struct {
-		typ, payload string
-	}{
-		{NotificationRequestShare, `"owner":"a@a.example.org","shareWith":"b@b.example.org","shareId":"x","permissions":["read"]`},
-		{NotificationRequestReshare, `"providerId":"42","shareWith":"b@b.example.org"`},
-	} {
-		for _, signature := range []string{"unsigned", "valid", "tampered"} {
-			t.Run(tc.typ+"/"+signature, func(t *testing.T) {
-				body := `{"notificationType":"` + tc.typ + `","senderDomain":"` + peer.Listener.Addr().String() + `","resourceType":"file","notification":{"file":{` + tc.payload + `}}}`
-				req := httptest.NewRequest(http.MethodPost, mount+notificationsPath, strings.NewReader(body))
-				req.Header.Set("Content-Type", "application/json")
-				req.RemoteAddr = fmt.Sprintf("[2001:db8:%x::1]:1000", clientSeq.Add(1))
-				if signature != "unsigned" {
-					if err := key.Sign(req, []byte(body)); err != nil {
-						t.Fatal(err)
-					}
+	sv := newNotificationTestService(t, "strict", &notificationsMockGW{})
+	body := `{"notificationType":"REQUEST_RESHARE","senderDomain":"` + peer.Listener.Addr().String() + `","resourceType":"file","notification":{"file":{"providerId":"42","shareWith":"b@b.example.org"}}}`
+	for _, signature := range []string{"unsigned", "valid", "tampered"} {
+		t.Run(signature, func(t *testing.T) {
+			req := newNotificationTestRequest(http.MethodPost, notificationTestEndpoint, body)
+			req.Header.Set("Content-Type", "application/json")
+			req.RemoteAddr = fmt.Sprintf("[2001:db8:%x::1]:1000", clientSeq.Add(1))
+			if signature != "unsigned" {
+				if err := key.Sign(req, []byte(body)); err != nil {
+					t.Fatal(err)
 				}
-				if signature == "tampered" {
-					req.Header.Set("Signature", "invalid-signature")
-				}
-				rr := httptest.NewRecorder()
-				handlerFor(sv).ServeHTTP(rr, req)
-				want, code := http.StatusUnauthorized, reqres.APIErrorUnauthenticated
-				if signature == "valid" {
-					want, code = http.StatusNotImplemented, reqres.APIErrorUnimplemented
-				}
-				checkResponse(t, rr, want, code)
-			})
-		}
+			}
+			if signature == "tampered" {
+				req.Header.Set("Signature", "invalid-signature")
+			}
+			rr := httptest.NewRecorder()
+			handlerFor(sv).ServeHTTP(rr, req)
+			want, code := http.StatusUnauthorized, reqres.APIErrorUnauthenticated
+			if signature == "valid" {
+				want, code = http.StatusNotImplemented, reqres.APIErrorUnimplemented
+			}
+			checkResponse(t, rr, want, code)
+		})
 	}
 }
 
@@ -272,9 +279,9 @@ func TestNotificationDiscoveryDoesNotLogPeerResponse(t *testing.T) {
 		_, _ = w.Write([]byte(marker))
 	}))
 	t.Cleanup(peer.Close)
-	sv := newNotificationTestService(t, "strict", "", &notificationsMockGW{})
+	sv := newNotificationTestService(t, "strict", &notificationsMockGW{})
 	body := `{"notificationType":"SHARE_UNSHARED","senderDomain":"` + peer.Listener.Addr().String() + `","resourceType":"file","notification":{"file":{"providerId":"42"}}}`
-	req := httptest.NewRequest(http.MethodPost, mount+notificationsPath, strings.NewReader(body))
+	req := newNotificationTestRequest(http.MethodPost, notificationTestEndpoint, body)
 	req.Header.Set("Content-Type", "application/json")
 	var logs bytes.Buffer
 	logger := zerolog.New(&logs).Level(zerolog.DebugLevel)
@@ -293,12 +300,12 @@ func TestNotificationDiscoveryUsesNetworkPolicy(t *testing.T) {
 	key := newSigningKey(t)
 	peer := signingServer(t, key)
 	t.Cleanup(peer.Close)
-	sv := newNotificationTestService(t, "strict", "", &notificationsMockGW{})
+	sv := newNotificationTestService(t, "strict", &notificationsMockGW{})
 	body := `{"notificationType":"SHARE_UNSHARED","senderDomain":"` + peer.Listener.Addr().String() + `","resourceType":"file","notification":{"file":{"providerId":"42"}}}`
 	for _, allow := range []bool{false, true} {
 		t.Run(fmt.Sprintf("allowLoopback=%t", allow), func(t *testing.T) {
 			sv.notifications.ocmClient = NewPublicOnlyClientWithConfig(client.TransportConfig{AllowLoopback: allow})
-			req := httptest.NewRequest(http.MethodPost, mount+notificationsPath, strings.NewReader(body))
+			req := newNotificationTestRequest(http.MethodPost, notificationTestEndpoint, body)
 			req.Header.Set("Content-Type", "application/json")
 			req.RemoteAddr = fmt.Sprintf("[2001:db8:%x::1]:1000", clientSeq.Add(1))
 			if err := key.Sign(req, []byte(body)); err != nil {
@@ -308,7 +315,7 @@ func TestNotificationDiscoveryUsesNetworkPolicy(t *testing.T) {
 			handlerFor(sv).ServeHTTP(rr, req)
 			want := http.StatusInternalServerError
 			if allow {
-				want = http.StatusCreated
+				want = http.StatusNotImplemented
 			}
 			if rr.Code != want {
 				t.Fatalf("status %d, want %d: %s", rr.Code, want, rr.Body.String())

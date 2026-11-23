@@ -41,14 +41,16 @@ import (
 	"google.golang.org/grpc"
 )
 
-func newNotificationTestService(t *testing.T, mode, endpoint string, gw gateway.GatewayAPIClient) *svc {
+const notificationTestEndpoint = "https://receiver.example.org:8443"
+
+func newNotificationTestService(t *testing.T, mode string, gw gateway.GatewayAPIClient) *svc {
 	t.Helper()
 	stampGateway(gw)
 	s, err := New(context.Background(), map[string]any{
 		"gatewaysvc":     "localhost:0",
 		"token_managers": map[string]any{"jwt": map[string]any{"secret": "test-only-jwt-secret"}},
 		"http_sig_mode":  mode,
-		"endpoint":       endpoint,
+		"endpoint":       notificationTestEndpoint,
 	})
 	if err != nil {
 		t.Fatalf("ocmd service: %v", err)
@@ -63,7 +65,7 @@ func newNotificationsService(t *testing.T) (*svc, string) {
 	t.Helper()
 	disco := ocmDiscoveryServer(t, "webdav", "file")
 	t.Cleanup(disco.Close)
-	return newNotificationTestService(t, "permissive", "", &notificationsMockGW{}), disco.Listener.Addr().String()
+	return newNotificationTestService(t, "permissive", &notificationsMockGW{}), disco.Listener.Addr().String()
 }
 
 type notificationsMockGW struct {
@@ -83,6 +85,12 @@ func handlerFor(s *svc) http.Handler {
 }
 
 var clientSeq atomic.Uint32
+
+func newNotificationTestRequest(method, endpoint, body string) *http.Request {
+	req := httptest.NewRequest(method, endpoint+mount+notificationsPath, strings.NewReader(body))
+	req.RequestURI = req.URL.RequestURI()
+	return req
+}
 
 func postNotification(t *testing.T, h http.Handler, contentType, body string) (*httptest.ResponseRecorder, string) {
 	t.Helper()
@@ -132,21 +140,21 @@ func TestNotificationsReceiverMatrix(t *testing.T) {
 		name, contentType, body string
 		status, calls           int
 		apiCode                 reqres.APIErrorCode
-		ignoredType             string
+		ignored                 bool
 	}{
-		{"known", "application/json", valid, 201, 1, "", ""},
-		{"charset", "application/json; charset=utf-8", valid, 201, 1, "", ""},
-		{"unknown", "application/json", `{"notificationType":"FUTURE",` + envelope + `}`, 201, 0, "", "FUTURE"},
-		{"padded", "application/json", `{"notificationType":" SHARE_UNSHARED ",` + envelope + `}`, 201, 0, "", " SHARE_UNSHARED "},
-		{"whitespace", "application/json", `{"notificationType":" \t",` + envelope + `}`, 201, 0, "", " \t"},
-		{"known unhandled", "application/json", `{"notificationType":"CONTACT_REMOVED","senderDomain":"` + host + `","shareType":"user","notification":{"user":{"userId":"a@peer.example","targetUserId":"b@local.example"}}}`, 201, 0, "", "CONTACT_REMOVED"},
-		{"malformed JSON", "application/json", `{`, 400, 0, reqres.APIErrorInvalidParameter, ""},
-		{"invalid envelope", "application/json", `{"notificationType":"FUTURE","resourceType":"file"}`, 400, 0, reqres.APIErrorInvalidParameter, ""},
-		{"invalid known payload", "application/json", `{"notificationType":"USER_REMOVED","senderDomain":"` + host + `","shareType":"user","notification":{"user":{"userId":"invalid"}}}`, 400, 0, reqres.APIErrorInvalidParameter, ""},
-		{"invalid request", "application/json", `{"notificationType":"REQUEST_SHARE",` + envelope + `}`, 400, 0, reqres.APIErrorInvalidParameter, ""},
-		{"non JSON", "text/plain", valid, 400, 0, reqres.APIErrorInvalidParameter, ""},
-		{"missing content type", "", valid, 400, 0, reqres.APIErrorInvalidParameter, ""},
-		{"oversized", "application/json", valid + strings.Repeat(" ", maxNotificationBody), 400, 0, reqres.APIErrorInvalidParameter, ""},
+		{"known", "application/json", valid, 201, 1, "", false},
+		{"charset", "application/json; charset=utf-8", valid, 201, 1, "", false},
+		{"unknown", "application/json", `{"notificationType":"FUTURE",` + envelope + `}`, 201, 0, "", true},
+		{"padded", "application/json", `{"notificationType":" SHARE_UNSHARED ",` + envelope + `}`, 201, 0, "", true},
+		{"whitespace", "application/json", `{"notificationType":" \t",` + envelope + `}`, 201, 0, "", true},
+		{"known unhandled", "application/json", `{"notificationType":"CONTACT_REMOVED","senderDomain":"` + host + `","shareType":"user","notification":{"user":{"userId":"a@peer.example","targetUserId":"b@local.example"}}}`, 501, 0, reqres.APIErrorUnimplemented, false},
+		{"malformed JSON", "application/json", `{`, 400, 0, reqres.APIErrorInvalidParameter, false},
+		{"invalid envelope", "application/json", `{"notificationType":"FUTURE","resourceType":"file"}`, 400, 0, reqres.APIErrorInvalidParameter, false},
+		{"invalid known payload", "application/json", `{"notificationType":"USER_REMOVED","senderDomain":"` + host + `","shareType":"user","notification":{"user":{"userId":"invalid"}}}`, 400, 0, reqres.APIErrorInvalidParameter, false},
+		{"invalid request", "application/json", `{"notificationType":"REQUEST_RESHARE",` + envelope + `,"notification":{"file":{"shareWith":"b@peer.example"}}}`, 400, 0, reqres.APIErrorInvalidParameter, false},
+		{"non JSON", "text/plain", valid, 400, 0, reqres.APIErrorInvalidParameter, false},
+		{"missing content type", "", valid, 400, 0, reqres.APIErrorInvalidParameter, false},
+		{"oversized", "application/json", valid + strings.Repeat(" ", maxNotificationBody), 400, 0, reqres.APIErrorInvalidParameter, false},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			before := calls
@@ -155,7 +163,7 @@ func TestNotificationsReceiverMatrix(t *testing.T) {
 			if calls-before != tc.calls {
 				t.Fatalf("handler calls %d, want %d", calls-before, tc.calls)
 			}
-			if tc.ignoredType != "" && (!loggedType(logs, tc.ignoredType) || !strings.Contains(logs, "OCM notification ignored") || strings.Contains(logs, "unknown type")) {
+			if tc.ignored && !strings.Contains(logs, `"outcome":"ignored"`) {
 				t.Fatalf("incorrect ignored diagnostic: %s", logs)
 			}
 		})
@@ -164,7 +172,7 @@ func TestNotificationsReceiverMatrix(t *testing.T) {
 
 func TestNotificationsSuccessResponseBytes(t *testing.T) {
 	s, host := newNotificationsService(t)
-	rr, _ := postNotification(t, handlerFor(s), "application/json", `{"notificationType":"SHARE_UNSHARED","senderDomain":"`+host+`","resourceType":"file","notification":{"file":{"providerId":"42"}}}`)
+	rr, _ := postNotification(t, handlerFor(s), "application/json", `{"notificationType":"FUTURE","senderDomain":"`+host+`","resourceType":"file"}`)
 	if rr.Code != http.StatusCreated || rr.Body.Len() != 0 || rr.Header().Get("Content-Type") != "" {
 		t.Fatalf("status %d body %q content-type %q", rr.Code, rr.Body.String(), rr.Header().Get("Content-Type"))
 	}
@@ -176,9 +184,9 @@ func TestNotificationsLogsWithoutPayload(t *testing.T) {
 		name, typ, payload string
 		status             int
 	}{
-		{"success", "SHARE_ACCEPTED", `,"file":{"providerId":"42"}`, 201},
+		{"unsupported", "SHARE_ACCEPTED", `,"file":{"providerId":"42"}`, 501},
 		{"schema", "SHARE_ACCEPTED", "", 400},
-		{"unknown", "FUTURE", "", 201},
+		{"unknown", "caller-type-marker", "", 201},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			body := `{"notificationType":"` + tc.typ + `","senderDomain":"` + host + `","resourceType":"file","sharedSecret":"secret-marker","notification":{"message":"payload-marker"` + tc.payload + `}}`
@@ -186,7 +194,7 @@ func TestNotificationsLogsWithoutPayload(t *testing.T) {
 			if rr.Code != tc.status {
 				t.Fatalf("status %d, want %d", rr.Code, tc.status)
 			}
-			for _, marker := range []string{"secret-marker", "payload-marker", "has_shared_secret"} {
+			for _, marker := range []string{"secret-marker", "payload-marker", "has_shared_secret", "caller-type-marker"} {
 				if strings.Contains(logs+rr.Body.String(), marker) {
 					t.Fatalf("confidential or retired field in diagnostics: %s %s", rr.Body.String(), logs)
 				}
@@ -204,21 +212,11 @@ func TestNotificationsDefaultHandlersMakeNoEffectCalls(t *testing.T) {
 	h := handlerFor(s)
 	for _, typ := range []string{"SHARE_ACCEPTED", "SHARE_DECLINED", "SHARE_UNSHARED", "SHARE_CHANGE_PERMISSION"} {
 		rr, _ := postNotification(t, h, "application/json", `{"notificationType":"`+typ+`","senderDomain":"`+host+`","resourceType":"file","notification":{"file":{"providerId":"42"}}}`)
-		checkResponse(t, rr, http.StatusCreated, "")
+		checkResponse(t, rr, http.StatusNotImplemented, reqres.APIErrorUnimplemented)
 	}
 	userHost := strings.TrimPrefix(unrelatedPeer.URL, "http://")
 	rr, _ := postNotification(t, h, "application/json", `{"notificationType":"USER_REMOVED","senderDomain":"`+host+`","shareType":"user","notification":{"user":{"userId":"alice@`+userHost+`"}}}`)
-	checkResponse(t, rr, http.StatusCreated, "")
-}
-
-func loggedType(logs, typ string) bool {
-	for _, line := range strings.Split(strings.TrimSpace(logs), "\n") {
-		var m map[string]any
-		if json.Unmarshal([]byte(line), &m) == nil && m["type"] == typ {
-			return true
-		}
-	}
-	return false
+	checkResponse(t, rr, http.StatusNotImplemented, reqres.APIErrorUnimplemented)
 }
 
 func TestNotificationsDiagnosticsCarryNoCallerText(t *testing.T) {
@@ -228,16 +226,17 @@ func TestNotificationsDiagnosticsCarryNoCallerText(t *testing.T) {
 	for _, tc := range []struct {
 		name, extra, payload string
 		status               int
+		apiCode              reqres.APIErrorCode
 	}{
-		{"malformed", `"` + key + `":"` + value + `",`, `"` + key + `":"` + value + `"`, 400},
-		{"opaque envelope string", `"sharedSecret":"` + value + `","` + key + `":42,`, `"file":{"providerId":"42"}`, 201},
-		{"opaque envelope number", `"sharedSecret":42,`, `"file":{"providerId":"42"},"` + key + `":{"value":"` + value + `"}`, 201},
-		{"opaque envelope object", `"sharedSecret":{"value":"` + value + `"},`, `"file":{"providerId":"42"}`, 201},
+		{"malformed", `"` + key + `":"` + value + `",`, `"` + key + `":"` + value + `"`, 400, reqres.APIErrorInvalidParameter},
+		{"opaque envelope string", `"sharedSecret":"` + value + `","` + key + `":42,`, `"file":{"providerId":"42"}`, 501, reqres.APIErrorUnimplemented},
+		{"opaque envelope number", `"sharedSecret":42,`, `"file":{"providerId":"42"},"` + key + `":{"value":"` + value + `"}`, 501, reqres.APIErrorUnimplemented},
+		{"opaque envelope object", `"sharedSecret":{"value":"` + value + `"},`, `"file":{"providerId":"42"}`, 501, reqres.APIErrorUnimplemented},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			body := `{"notificationType":"SHARE_UNSHARED","senderDomain":"` + host + `","resourceType":"file",` + tc.extra + `"notification":{` + tc.payload + `}}`
 			rr, logs := postNotification(t, handlerFor(s), "application/json", body)
-			checkResponse(t, rr, tc.status, reqres.APIErrorInvalidParameter)
+			checkResponse(t, rr, tc.status, tc.apiCode)
 			if strings.Contains(rr.Body.String()+logs, key) || strings.Contains(rr.Body.String()+logs, value) {
 				t.Fatalf("caller text in diagnostics: %s %s", rr.Body.String(), logs)
 			}
@@ -299,7 +298,7 @@ func TestNotificationsSignatureModeMatrix(t *testing.T) {
 		key := newSigningKey(t)
 		peer := signingServer(t, key)
 		t.Cleanup(peer.Close)
-		h := handlerFor(newNotificationTestService(t, "permissive", "", &notificationsMockGW{}))
+		h := handlerFor(newNotificationTestService(t, "permissive", &notificationsMockGW{}))
 		rr, _ := postNotification(t, h, "application/json", body(peer.Listener.Addr().String()))
 		checkResponse(t, rr, http.StatusUnauthorized, reqres.APIErrorUnauthenticated)
 	})
@@ -307,7 +306,7 @@ func TestNotificationsSignatureModeMatrix(t *testing.T) {
 	t.Run("strict unsigned nonadvertiser rejected", func(t *testing.T) {
 		peer := ocmDiscoveryServer(t, "webdav", "file")
 		t.Cleanup(peer.Close)
-		h := handlerFor(newNotificationTestService(t, "strict", "", &notificationsMockGW{}))
+		h := handlerFor(newNotificationTestService(t, "strict", &notificationsMockGW{}))
 		rr, _ := postNotification(t, h, "application/json", body(peer.Listener.Addr().String()))
 		checkResponse(t, rr, http.StatusUnauthorized, reqres.APIErrorUnauthenticated)
 	})
@@ -315,28 +314,25 @@ func TestNotificationsSignatureModeMatrix(t *testing.T) {
 	t.Run("permissive unsigned nonadvertiser accepted", func(t *testing.T) {
 		peer := ocmDiscoveryServer(t, "webdav", "file")
 		t.Cleanup(peer.Close)
-		h := handlerFor(newNotificationTestService(t, "permissive", "", &notificationsMockGW{}))
+		h := handlerFor(newNotificationTestService(t, "permissive", &notificationsMockGW{}))
 		rr, _ := postNotification(t, h, "application/json", body(peer.Listener.Addr().String()))
-		checkResponse(t, rr, http.StatusCreated, "")
+		checkResponse(t, rr, http.StatusNotImplemented, reqres.APIErrorUnimplemented)
 	})
 
 	t.Run("valid signature accepted in strict mode", func(t *testing.T) {
 		key := newSigningKey(t)
 		peer := signingServer(t, key)
 		t.Cleanup(peer.Close)
-		// An empty endpoint makes verification reconstruct the URI from the request.
-		h := handlerFor(newNotificationTestService(t, "strict", "", &notificationsMockGW{}))
+		h := handlerFor(newNotificationTestService(t, "strict", &notificationsMockGW{}))
 		payload := body(peer.Listener.Addr().String())
-		req := httptest.NewRequest(http.MethodPost, mount+notificationsPath, strings.NewReader(payload))
+		req := newNotificationTestRequest(http.MethodPost, notificationTestEndpoint, payload)
 		req.Header.Set("Content-Type", "application/json")
 		if err := key.Sign(req, []byte(payload)); err != nil {
 			t.Fatal(err)
 		}
 		rr := httptest.NewRecorder()
 		h.ServeHTTP(rr, req)
-		if rr.Code != http.StatusCreated {
-			t.Fatalf("signed request: status %d, want 201", rr.Code)
-		}
+		checkResponse(t, rr, http.StatusNotImplemented, reqres.APIErrorUnimplemented)
 	})
 
 	t.Run("tampered body rejected in both modes", func(t *testing.T) {
@@ -345,16 +341,16 @@ func TestNotificationsSignatureModeMatrix(t *testing.T) {
 				key := newSigningKey(t)
 				peer := signingServer(t, key)
 				t.Cleanup(peer.Close)
-				h := handlerFor(newNotificationTestService(t, mode, "", &notificationsMockGW{}))
+				h := handlerFor(newNotificationTestService(t, mode, &notificationsMockGW{}))
 				payload := body(peer.Listener.Addr().String())
-				req := httptest.NewRequest(http.MethodPost, mount+notificationsPath, strings.NewReader(payload))
+				req := newNotificationTestRequest(http.MethodPost, notificationTestEndpoint, payload)
 				req.Header.Set("Content-Type", "application/json")
 				// Sign altered bytes but send the original body.
 				other := strings.Replace(payload, `"42"`, `"43"`, 1)
 				if err := key.Sign(req, []byte(other)); err != nil {
 					t.Fatal(err)
 				}
-				tampered := httptest.NewRequest(http.MethodPost, mount+notificationsPath, strings.NewReader(payload))
+				tampered := newNotificationTestRequest(http.MethodPost, notificationTestEndpoint, payload)
 				tampered.Header = req.Header
 				rr := httptest.NewRecorder()
 				h.ServeHTTP(rr, tampered)
@@ -369,9 +365,9 @@ func TestNotificationsSignatureModeMatrix(t *testing.T) {
 		key := newSigningKey(t)
 		peer := signingServer(t, key)
 		t.Cleanup(peer.Close)
-		h := handlerFor(newNotificationTestService(t, "permissive", "", &notificationsDenyGW{}))
+		h := handlerFor(newNotificationTestService(t, "permissive", &notificationsDenyGW{}))
 		payload := body(peer.Listener.Addr().String())
-		req := httptest.NewRequest(http.MethodPost, mount+notificationsPath, strings.NewReader(payload))
+		req := newNotificationTestRequest(http.MethodPost, notificationTestEndpoint, payload)
 		req.Header.Set("Content-Type", "application/json")
 		if err := key.Sign(req, []byte(payload)); err != nil {
 			t.Fatal(err)
@@ -385,30 +381,30 @@ func TestNotificationsSignatureModeMatrix(t *testing.T) {
 		key := newSigningKey(t)
 		peer := signingServer(t, key)
 		t.Cleanup(peer.Close)
-		h := handlerFor(newNotificationTestService(t, "strict", "", &notificationsMockGW{}))
+		h := handlerFor(newNotificationTestService(t, "strict", &notificationsMockGW{}))
 		payload := `{"notificationType":"EXAMPLE_FUTURE","senderDomain":"` + peer.Listener.Addr().String() + `","resourceType":"file"}`
-		req := httptest.NewRequest(http.MethodPost, mount+notificationsPath, strings.NewReader(payload))
+		req := newNotificationTestRequest(http.MethodPost, notificationTestEndpoint, payload)
+		req.Header.Set("Content-Type", "application/json")
+		unsigned := httptest.NewRecorder()
+		h.ServeHTTP(unsigned, req)
+		checkResponse(t, unsigned, http.StatusUnauthorized, reqres.APIErrorUnauthenticated)
+		req = newNotificationTestRequest(http.MethodPost, notificationTestEndpoint, payload)
 		req.Header.Set("Content-Type", "application/json")
 		if err := key.Sign(req, []byte(payload)); err != nil {
 			t.Fatal(err)
 		}
 		rr := httptest.NewRecorder()
 		h.ServeHTTP(rr, req)
-		if rr.Code != http.StatusCreated {
-			t.Fatalf("valid unknown type: status %d, want bodyless 201", rr.Code)
-		}
-		if rr.Body.Len() != 0 {
-			t.Fatalf("unknown type: body %q", rr.Body.String())
-		}
+		checkResponse(t, rr, http.StatusCreated, "")
 	})
 
 	t.Run("malformed known type stays 400 with a valid signature", func(t *testing.T) {
 		key := newSigningKey(t)
 		peer := signingServer(t, key)
 		t.Cleanup(peer.Close)
-		h := handlerFor(newNotificationTestService(t, "strict", "", &notificationsMockGW{}))
+		h := handlerFor(newNotificationTestService(t, "strict", &notificationsMockGW{}))
 		payload := `{"notificationType":"USER_REMOVED","senderDomain":"` + peer.Listener.Addr().String() + `","shareType":"group","notification":{"user":{"userId":"alice@` + peer.Listener.Addr().String() + `"}}}`
-		req := httptest.NewRequest(http.MethodPost, mount+notificationsPath, strings.NewReader(payload))
+		req := newNotificationTestRequest(http.MethodPost, notificationTestEndpoint, payload)
 		req.Header.Set("Content-Type", "application/json")
 		if err := key.Sign(req, []byte(payload)); err != nil {
 			t.Fatal(err)
@@ -419,7 +415,7 @@ func TestNotificationsSignatureModeMatrix(t *testing.T) {
 	})
 
 	t.Run("undiscoverable sender is a fixed dependency error", func(t *testing.T) {
-		h := handlerFor(newNotificationTestService(t, "permissive", "", &notificationsMockGW{}))
+		h := handlerFor(newNotificationTestService(t, "permissive", &notificationsMockGW{}))
 		rr, _ := postNotification(t, h, "application/json", body("192.0.2.1"))
 		checkResponse(t, rr, http.StatusInternalServerError, reqres.APIErrorServerError)
 		if strings.Contains(rr.Body.String(), "192.0.2.1") {

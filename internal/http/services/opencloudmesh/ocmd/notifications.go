@@ -36,8 +36,6 @@ import (
 
 const maxNotificationBody = 1 << 20
 
-const maxLoggedTypeLength = 64
-
 type notifHandler struct {
 	registry          *NotificationRegistry
 	endpoint          string
@@ -46,24 +44,11 @@ type notifHandler struct {
 	ocmClient         *OCMClient
 }
 
-func (h *notifHandler) init(c *config) error {
+func (h *notifHandler) init(c *config) {
 	h.registry = NewNotificationRegistry()
 	h.endpoint = c.Endpoint
 	h.strictHTTPSig = c.HTTPSigMode == "strict"
 	h.trustForwardedFor = c.TrustForwardedFor
-	for _, t := range []string{
-		NotificationShareAccepted,
-		NotificationShareDeclined,
-		NotificationShareUnshared,
-		NotificationShareChangePermission,
-		NotificationUserRemoved,
-		NotificationGroupRemoved,
-	} {
-		if err := h.registry.SetHandler(t, TypeHandlerFunc(logNotification)); err != nil {
-			return err
-		}
-	}
-	return nil
 }
 
 // Notifications receives OCM notifications and returns an empty 201 on success.
@@ -86,21 +71,19 @@ func (h *notifHandler) Notifications(w http.ResponseWriter, r *http.Request) {
 		reqres.WriteError(w, r, reqres.APIErrorInvalidParameter, reason, nil)
 		return
 	}
-	// Valid unsupported requests must authenticate before returning 501.
+	// A 501 response is also an authenticated receipt.
 	if err := h.authenticate(ctx, w, r, body, n); err != nil {
 		return
 	}
-	if code == NotificationErrNotImplemented {
-		notificationLog(log.Info(), n).Str("outcome", "not_implemented").Msg("OCM notification type not implemented")
-		reqres.WriteError(w, r, reqres.APIErrorUnimplemented, NotificationReason(err), nil)
-		return
-	}
-
 	outcome, err := h.registry.Dispatch(ctx, n)
 	switch {
 	case err != nil:
 		notificationLog(log.Warn(), n).Str("outcome", "failed").Msg("OCM notification handler failed")
 		reqres.WriteError(w, r, reqres.APIErrorServerError, "error handling OCM notification", nil)
+		return
+	case outcome == DispatchNotImplemented || (outcome == DispatchIgnored && n.Class == NotificationClassSpec):
+		notificationLog(log.Info(), n).Str("outcome", string(DispatchNotImplemented)).Msg("OCM notification type not implemented")
+		reqres.WriteError(w, r, reqres.APIErrorUnimplemented, "notification type not implemented", nil)
 		return
 	case outcome == DispatchIgnored:
 		notificationLog(log.Info(), n).Str("outcome", string(outcome)).Msg("OCM notification ignored")
@@ -117,12 +100,12 @@ func (h *notifHandler) authenticate(ctx context.Context, w http.ResponseWriter, 
 	}
 	senderIP, err := utils.GetClientIP(r, h.trustForwardedFor)
 	if err != nil {
-		reqres.WriteError(w, r, reqres.APIErrorServerError, "error retrieving client IP from request", err)
+		reqres.WriteError(w, r, reqres.APIErrorServerError, "error retrieving client IP from request", nil)
 		return err
 	}
 	gatewayClient, err := service.Gateway(ctx)
 	if err != nil {
-		reqres.WriteError(w, r, reqres.APIErrorServerError, "error getting gateway client", err)
+		reqres.WriteError(w, r, reqres.APIErrorServerError, "error getting gateway client", nil)
 		return err
 	}
 	providerAllowedResp, err := gatewayClient.IsProviderAllowed(ctx, &ocmprovider.IsProviderAllowedRequest{
@@ -134,7 +117,7 @@ func (h *notifHandler) authenticate(ctx context.Context, w http.ResponseWriter, 
 		},
 	})
 	if err != nil {
-		reqres.WriteError(w, r, reqres.APIErrorServerError, "error sending a grpc isProviderAllowed request", err)
+		reqres.WriteError(w, r, reqres.APIErrorServerError, "error sending a grpc isProviderAllowed request", nil)
 		return err
 	}
 	if providerAllowedResp == nil || providerAllowedResp.Status == nil {
@@ -179,28 +162,5 @@ func notificationLog(e *zerolog.Event, n *Notification) *zerolog.Event {
 	if n == nil {
 		return e
 	}
-	typ := n.Type
-	if len(typ) > maxLoggedTypeLength {
-		typ = typ[:maxLoggedTypeLength]
-	}
-	return e.Str("type", typ).
-		Str("class", string(n.Class))
-}
-
-func logNotification(ctx context.Context, n *Notification) error {
-	e := notificationLog(appctx.GetLogger(ctx).Info(), n).
-		Str("sender_domain", n.SenderDomain).
-		Str("resource_type", n.ResourceType).
-		Str("share_type", n.ShareType)
-	if n.ProviderID != "" {
-		e = e.Str("provider_id", n.ProviderID)
-	}
-	if n.User != nil {
-		e = e.Str("user_id", n.User.UserID)
-	}
-	if n.Group != nil {
-		e = e.Str("group_id", n.Group.GroupID)
-	}
-	e.Str("outcome", string(DispatchHandled)).Msg("received OCM notification")
-	return nil
+	return e.Str("class", string(n.Class))
 }

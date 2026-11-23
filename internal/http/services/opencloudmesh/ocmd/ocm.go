@@ -150,9 +150,7 @@ func (s *svc) handlersInit(log *zerolog.Logger) error {
 	if err := invitesHandler.init(s.Conf); err != nil {
 		return err
 	}
-	if err := notifHandler.init(s.Conf); err != nil {
-		return err
-	}
+	notifHandler.init(s.Conf)
 	tokenHandler := new(tokenHandler)
 	if err := tokenHandler.init(s.Conf); err != nil {
 		return err
