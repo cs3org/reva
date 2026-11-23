@@ -41,6 +41,7 @@ import (
 	"github.com/cs3org/reva/v3/internal/http/services/opencloudmesh/ocmd"
 	"github.com/cs3org/reva/v3/internal/http/services/wellknown"
 	"github.com/cs3org/reva/v3/pkg/appctx"
+	ocmclient "github.com/cs3org/reva/v3/pkg/ocm/client"
 	"github.com/cs3org/reva/v3/pkg/ocm/httpsig"
 	"github.com/cs3org/reva/v3/pkg/ocm/share"
 	"github.com/cs3org/reva/v3/pkg/permissions"
@@ -61,13 +62,15 @@ type notifyPeer struct {
 	srv     *httptest.Server
 	mu      sync.Mutex
 	bodies  []map[string]any
+	jwks    []byte
+	signed  int
 	status  int
 	noCap   bool
 	payload string
 }
 
-func newNotifyPeer(t *testing.T) *notifyPeer {
-	p := &notifyPeer{status: http.StatusCreated}
+func newNotifyPeer(t *testing.T, jwks []byte) *notifyPeer {
+	p := &notifyPeer{status: http.StatusCreated, jwks: jwks}
 	p.srv = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		p.mu.Lock()
 		defer p.mu.Unlock()
@@ -80,6 +83,9 @@ func newNotifyPeer(t *testing.T) *notifyPeer {
 			_ = json.NewEncoder(w).Encode(wellknown.OcmDiscoveryData{Enabled: true, APIVersion: "1.4.0", Endpoint: p.srv.URL + "/ocm", Capabilities: caps})
 		case "/ocm/notifications":
 			raw, _ := io.ReadAll(r.Body)
+			if err := httpsig.Verify(r, raw, p.srv.URL, func() ([]byte, error) { return p.jwks, nil }); err == nil {
+				p.signed++
+			}
 			var body map[string]any
 			_ = json.Unmarshal(raw, &body)
 			p.bodies = append(p.bodies, body)
@@ -94,10 +100,10 @@ func newNotifyPeer(t *testing.T) *notifyPeer {
 
 func (p *notifyPeer) host() string { return strings.TrimPrefix(p.srv.URL, "http://") }
 
-func (p *notifyPeer) received() []map[string]any {
+func (p *notifyPeer) received() ([]map[string]any, int) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
-	return append([]map[string]any(nil), p.bodies...)
+	return append([]map[string]any(nil), p.bodies...), p.signed
 }
 
 // syncNotifier sends synchronously so that tests observe every attempt.
@@ -180,7 +186,15 @@ func newEmitEnv(t *testing.T) *emitEnv {
 	if err != nil {
 		t.Fatal(err)
 	}
-	peer := newNotifyPeer(t)
+	key, err := httpsig.LoadKey(writeKeyFile(t))
+	if err != nil {
+		t.Fatal(err)
+	}
+	jwks, err := key.JWKS()
+	if err != nil {
+		t.Fatal(err)
+	}
+	peer := newNotifyPeer(t, jwks)
 	xfer := &controlledTransferrer{}
 	env := &emitEnv{
 		svc: &service{
@@ -188,7 +202,10 @@ func newEmitEnv(t *testing.T) *emitEnv {
 			repo:        repo,
 			client:      ocmd.NewClient(2*time.Second, false),
 			transferrer: xfer,
-			notifier:    &syncNotifier{c: ocmd.NewClient(2*time.Second, false)},
+			notifier: &syncNotifier{
+				c:   ocmd.NewPublicOnlyClientWithConfig(ocmclient.TransportConfig{Timeout: 2 * time.Second, AllowLoopback: true}),
+				key: key,
+			},
 		},
 		repo:   repo,
 		peer:   peer,
@@ -232,7 +249,7 @@ func (e *emitEnv) outgoingOfType(t *testing.T, resourceType ocm.SharedResourceTy
 		RecipientType: ocm.RecipientType_RECIPIENT_TYPE_USER,
 		AccessMethods: []*ocm.AccessMethod{
 			share.NewWebDavAccessMethod(permissions.NewViewerRole().CS3ResourcePermissions(), nil, nil),
-			share.NewWebappAccessMethod(permissions.NewViewerRole().CS3ResourcePermissions(), share.DefaultWebappRequirements, "app"),
+			share.NewWebappAccessMethod(permissions.NewViewerRole().CS3ResourcePermissions(), share.DefaultWebappRequirements),
 		},
 	}, resourceType)
 	if err != nil {
@@ -289,9 +306,12 @@ func (e *emitEnv) setState(t *testing.T, id *ocm.ShareId, state ocm.ShareState, 
 
 func requireNotices(t *testing.T, p *notifyPeer, want ...string) []map[string]any {
 	t.Helper()
-	got := p.received()
+	got, signed := p.received()
 	if len(got) != len(want) {
 		t.Fatalf("notices %v, want types %v", got, want)
+	}
+	if signed != len(got) {
+		t.Fatalf("verified %d of %d notices", signed, len(got))
 	}
 	for i, typ := range want {
 		if got[i]["notificationType"] != typ {
@@ -318,8 +338,8 @@ func TestRemoveOCMShareEmitsUnsharedOnce(t *testing.T) {
 	if got["senderDomain"] != "cernbox.example.org" || got["resourceType"] != "file" || fileOf(got)["providerId"] != sh.Id.OpaqueId {
 		t.Fatalf("payload %v", got)
 	}
-	if got["notification"].(map[string]any)["sharedSecret"] != sh.Token {
-		t.Fatal("SHARE_UNSHARED must carry the outgoing token")
+	if raw, _ := json.Marshal(got); bytes.Contains(raw, []byte(sh.Token)) || bytes.Contains(raw, []byte("sharedSecret")) {
+		t.Fatal("SHARE_UNSHARED exposed a share credential")
 	}
 
 	res, _ = e.svc.RemoveOCMShare(e.owner, &ocm.RemoveOCMShareRequest{Ref: ref})
@@ -331,38 +351,83 @@ func TestRemoveOCMShareEmitsUnsharedOnce(t *testing.T) {
 
 type failingRepo struct {
 	share.Repository
+	loseCommitAcknowledgment bool
 }
 
-func (failingRepo) DeleteShare(context.Context, *userpb.User, *ocm.ShareReference) (*share.ShareRemoval, error) {
+var errCommitAcknowledgmentLost = errors.New("commit acknowledgment lost")
+
+func (r failingRepo) DeleteShare(ctx context.Context, user *userpb.User, ref *ocm.ShareReference) (*share.ShareRemoval, error) {
+	if r.loseCommitAcknowledgment {
+		receipt, err := r.Repository.DeleteShare(ctx, user, ref)
+		if err != nil {
+			return nil, err
+		}
+		return receipt, errCommitAcknowledgmentLost
+	}
 	return nil, errors.New("storage unavailable")
 }
 
-func (failingRepo) UpdateShare(context.Context, *userpb.User, *ocm.ShareReference, ...*ocm.UpdateOCMShareRequest_UpdateField) (*share.ShareUpdate, error) {
+func (r failingRepo) UpdateShare(ctx context.Context, user *userpb.User, ref *ocm.ShareReference, fields ...*ocm.UpdateOCMShareRequest_UpdateField) (*share.ShareUpdate, error) {
+	if r.loseCommitAcknowledgment {
+		receipt, err := r.Repository.UpdateShare(ctx, user, ref, fields...)
+		if err != nil {
+			return nil, err
+		}
+		return receipt, errCommitAcknowledgmentLost
+	}
 	return nil, errors.New("storage unavailable")
 }
 
-func (failingRepo) UpdateReceivedShare(context.Context, *userpb.User, *ocm.ReceivedShare, *field_mask.FieldMask) (*share.ReceivedShareUpdate, error) {
+func (r failingRepo) UpdateReceivedShare(ctx context.Context, user *userpb.User, received *ocm.ReceivedShare, mask *field_mask.FieldMask) (*share.ReceivedShareUpdate, error) {
+	if r.loseCommitAcknowledgment {
+		receipt, err := r.Repository.UpdateReceivedShare(ctx, user, received, mask)
+		if err != nil {
+			return nil, err
+		}
+		return receipt, errCommitAcknowledgmentLost
+	}
 	return nil, errors.New("storage unavailable")
 }
 
 func TestStorageFailureEmitsNothing(t *testing.T) {
-	e := newEmitEnv(t)
-	sh := e.outgoing(t)
-	rs := e.received(t, "remote-f", false)
-	e.svc.repo = failingRepo{Repository: e.repo}
-	ref := &ocm.ShareReference{Spec: &ocm.ShareReference_Id{Id: sh.Id}}
-	if res, _ := e.svc.RemoveOCMShare(e.owner, &ocm.RemoveOCMShareRequest{Ref: ref}); res.Status.Code == rpc.Code_CODE_OK {
-		t.Fatal("failed delete reported OK")
+	for _, tc := range []struct {
+		name string
+		lost bool
+	}{{"refused mutation", false}, {"lost commit acknowledgment", true}} {
+		t.Run(tc.name, func(t *testing.T) {
+			e := newEmitEnv(t)
+			sh := e.outgoing(t)
+			rs := e.received(t, "remote-f", false)
+			e.svc.repo = failingRepo{Repository: e.repo, loseCommitAcknowledgment: tc.lost}
+			ref := &ocm.ShareReference{Spec: &ocm.ShareReference_Id{Id: sh.Id}}
+			if res, _ := e.svc.UpdateOCMShare(e.owner, &ocm.UpdateOCMShareRequest{Ref: ref, Field: []*ocm.UpdateOCMShareRequest_UpdateField{{
+				Field: &ocm.UpdateOCMShareRequest_UpdateField_AccessMethods{AccessMethods: share.NewWebDavAccessMethod(permissions.NewEditorRole().CS3ResourcePermissions(), nil, nil)},
+			}}}); res.Status.Code == rpc.Code_CODE_OK {
+				t.Fatal("failed update reported OK")
+			}
+			if res, _ := e.svc.RemoveOCMShare(e.owner, &ocm.RemoveOCMShareRequest{Ref: ref}); res.Status.Code == rpc.Code_CODE_OK {
+				t.Fatal("failed delete reported OK")
+			}
+			if res := e.setState(t, rs.Id, ocm.ShareState_SHARE_STATE_ACCEPTED, ""); res.Status.Code == rpc.Code_CODE_OK {
+				t.Fatal("failed received update reported OK")
+			}
+			if tc.lost {
+				_, err := e.repo.GetShare(e.owner, appctx.ContextMustGetUser(e.owner), ref)
+				if !errors.Is(err, share.ErrShareNotFound) {
+					t.Fatalf("unacknowledged deletion did not commit: %v", err)
+				}
+				stored, err := e.repo.GetReceivedShare(e.recip, appctx.ContextMustGetUser(e.recip),
+					&ocm.ShareReference{Spec: &ocm.ShareReference_Id{Id: rs.Id}})
+				if err != nil || stored.GetState() != ocm.ShareState_SHARE_STATE_ACCEPTED {
+					t.Fatalf("unacknowledged acceptance did not commit: %v", err)
+				}
+			}
+			if attempts := len(e.svc.notifier.(*syncNotifier).results); attempts != 0 {
+				t.Fatalf("%d notification attempts", attempts)
+			}
+			requireNotices(t, e.peer)
+		})
 	}
-	if res, _ := e.svc.UpdateOCMShare(e.owner, &ocm.UpdateOCMShareRequest{Ref: ref, Field: []*ocm.UpdateOCMShareRequest_UpdateField{{
-		Field: &ocm.UpdateOCMShareRequest_UpdateField_AccessMethods{AccessMethods: share.NewWebDavAccessMethod(permissions.NewEditorRole().CS3ResourcePermissions(), nil, nil)},
-	}}}); res.Status.Code == rpc.Code_CODE_OK {
-		t.Fatal("failed update reported OK")
-	}
-	if res := e.setState(t, rs.Id, ocm.ShareState_SHARE_STATE_ACCEPTED, ""); res.Status.Code == rpc.Code_CODE_OK {
-		t.Fatal("failed received update reported OK")
-	}
-	requireNotices(t, e.peer)
 }
 
 func TestUpdateOCMShareEmitsOnlyPermissionChanges(t *testing.T) {
@@ -380,7 +445,11 @@ func TestUpdateOCMShareEmitsOnlyPermissionChanges(t *testing.T) {
 		return &ocm.UpdateOCMShareRequest_UpdateField{Field: &ocm.UpdateOCMShareRequest_UpdateField_AccessMethods{AccessMethods: share.NewWebDavAccessMethod(p, nil, nil)}}
 	}
 	webapp := func(p *providerpb.ResourcePermissions, app string) *ocm.UpdateOCMShareRequest_UpdateField {
-		return &ocm.UpdateOCMShareRequest_UpdateField{Field: &ocm.UpdateOCMShareRequest_UpdateField_AccessMethods{AccessMethods: share.NewWebappAccessMethod(p, nil, app)}}
+		method := share.NewWebappAccessMethod(p, nil)
+		if app != "" {
+			method.GetWebappOptions().AppNames = []string{app}
+		}
+		return &ocm.UpdateOCMShareRequest_UpdateField{Field: &ocm.UpdateOCMShareRequest_UpdateField_AccessMethods{AccessMethods: method}}
 	}
 
 	update()
@@ -402,7 +471,15 @@ func TestUpdateOCMShareEmitsOnlyPermissionChanges(t *testing.T) {
 	}
 	update(webdav(permissions.NewEditorRole().CS3ResourcePermissions()))
 	update(webapp(permissions.NewEditorRole().CS3ResourcePermissions(), ""))
-	requireNotices(t, e.peer, ocmd.NotificationShareChangePermission, ocmd.NotificationShareChangePermission)
+	notices := requireNotices(t, e.peer, ocmd.NotificationShareChangePermission, ocmd.NotificationShareChangePermission)
+	if _, present := fileOf(notices[1])["permissions"]; present {
+		t.Fatal("Webapp-only update must leave the WebDAV permissions snapshot absent")
+	}
+	update(webdav(&providerpb.ResourcePermissions{}))
+	notices = requireNotices(t, e.peer, ocmd.NotificationShareChangePermission, ocmd.NotificationShareChangePermission, ocmd.NotificationShareChangePermission)
+	if empty, ok := fileOf(notices[2])["permissions"].([]any); !ok || len(empty) != 0 {
+		t.Fatalf("cleared WebDAV permissions must send an empty snapshot: %v", fileOf(notices[2]))
+	}
 }
 
 func TestReceivedStateTransitionsEmitOnce(t *testing.T) {
@@ -414,8 +491,8 @@ func TestReceivedStateTransitionsEmitOnce(t *testing.T) {
 	if got["senderDomain"] != "cernbox.example.org" || fileOf(got)["providerId"] != "remote-42" || got["resourceType"] != "file" {
 		t.Fatalf("payload %v", got)
 	}
-	if got["notification"].(map[string]any)["sharedSecret"] != emitSecret {
-		t.Fatal("SHARE_ACCEPTED must carry the received secret")
+	if raw, _ := json.Marshal(got); bytes.Contains(raw, []byte(emitSecret)) || bytes.Contains(raw, []byte("sharedSecret")) {
+		t.Fatal("SHARE_ACCEPTED exposed a share credential")
 	}
 
 	e.setState(t, rs.Id, ocm.ShareState_SHARE_STATE_ACCEPTED, "")

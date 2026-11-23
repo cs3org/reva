@@ -66,26 +66,16 @@ func resourceTypeName(t ocm.SharedResourceType) string {
 	return ""
 }
 
-// receivedSecret is the protocol secret this server received for the share.
-func receivedSecret(rs *ocm.ReceivedShare) string {
-	for _, p := range rs.GetProtocols() {
-		if w, ok := p.Term.(*ocm.Protocol_WebdavOptions); ok && w.WebdavOptions.GetSharedSecret() != "" {
-			return w.WebdavOptions.GetSharedSecret()
-		}
-	}
-	return ""
-}
-
 // webdavPermissionNames maps the stored WebDAV permissions to the OCM
 // permission names used on the wire.
 func webdavPermissionNames(sh *ocm.Share) []string {
 	for _, m := range sh.GetAccessMethods() {
-		if w, ok := m.Term.(*ocm.AccessMethod_WebdavOptions); ok {
-			var perms []string
-			if w.WebdavOptions.GetPermissions().GetInitiateFileDownload() {
+		if snapshot := m.GetWebdavOptions().GetPermissions(); snapshot != nil {
+			perms := []string{}
+			if snapshot.GetInitiateFileDownload() {
 				perms = append(perms, "read")
 			}
-			if w.WebdavOptions.GetPermissions().GetInitiateFileUpload() {
+			if snapshot.GetInitiateFileUpload() {
 				perms = append(perms, "write")
 			}
 			return perms
@@ -108,7 +98,6 @@ func (s *service) notifyUnshared(ctx context.Context, removal *share.ShareRemova
 		ResourceType: rt,
 		ShareType:    "user",
 		ProviderID:   sh.GetId().GetOpaqueId(),
-		SharedSecret: sh.GetToken(),
 	})
 }
 
@@ -159,6 +148,5 @@ func (s *service) notifyReceivedState(ctx context.Context, update *share.Receive
 		ResourceType: resourceTypeName(rs.GetSharedResourceType()),
 		ShareType:    "user",
 		ProviderID:   rs.GetRemoteShareId(),
-		SharedSecret: receivedSecret(rs),
 	})
 }

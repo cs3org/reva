@@ -1241,7 +1241,7 @@ func TestWebappAppNamesSurviveStorageAndUpdate(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got := findWebappAccessMethod(updated.AccessMethods).GetAppNames(); !slices.Equal(got, want) {
+	if got := findWebappAccessMethod(updated.After.AccessMethods).GetAppNames(); !slices.Equal(got, want) {
 		t.Fatalf("app names after permission update = %v, want %v", got, want)
 	}
 }

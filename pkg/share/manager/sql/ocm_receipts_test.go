@@ -21,6 +21,7 @@ package sql
 import (
 	"context"
 	"errors"
+	"slices"
 	"sync"
 	"testing"
 	"time"
@@ -131,12 +132,16 @@ func TestUpdateShareReceiptComparesStoredPermissions(t *testing.T) {
 				AccessMethods: share.NewWebDavAccessMethod(perms, nil, nil),
 			}}
 		}
-		webappTo := func(names []string, app string) *ocm.UpdateOCMShareRequest_UpdateField {
+		webappTo := func(perms *provider.ResourcePermissions, app string) *ocm.UpdateOCMShareRequest_UpdateField {
+			method := share.NewWebappAccessMethod(perms, nil)
+			if app != "" {
+				method.GetWebappOptions().AppNames = []string{app}
+			}
 			return &ocm.UpdateOCMShareRequest_UpdateField{Field: &ocm.UpdateOCMShareRequest_UpdateField_AccessMethods{
-				AccessMethods: share.NewWebappAccessMethod(webappCS3Permissions(names), nil, app),
+				AccessMethods: method,
 			}}
 		}
-		storedWebapp := findWebappAccessMethod(stored.AccessMethods).GetPermissions()
+		storedWebapp := findWebappAccessMethod(stored.AccessMethods)
 
 		cases := []struct {
 			name           string
@@ -147,11 +152,9 @@ func TestUpdateShareReceiptComparesStoredPermissions(t *testing.T) {
 			{"same webdav value", webdavTo("viewer"), false, false},
 			{"webdav changed", webdavTo("editor"), true, false},
 			{"webdav repeated", webdavTo("editor"), false, false},
-			{"webapp app name only", &ocm.UpdateOCMShareRequest_UpdateField{Field: &ocm.UpdateOCMShareRequest_UpdateField_AccessMethods{
-				AccessMethods: share.NewWebappAccessMethod(proto.Clone(storedWebapp).(*provider.ResourcePermissions), nil, "renamed"),
-			}}, false, false},
-			{"webapp flags changed", webappTo([]string{"share"}, ""), false, true},
-			{"webapp flags repeated", webappTo([]string{"share"}, ""), false, false},
+			{"webapp app name only", webappTo(proto.Clone(storedWebapp.GetPermissions()).(*provider.ResourcePermissions), "renamed"), false, false},
+			{"webapp flags changed", webappTo(webappCS3Permissions([]string{"share"}), ""), false, true},
+			{"webapp flags repeated", webappTo(webappCS3Permissions([]string{"share"}), ""), false, false},
 		}
 		for _, tc := range cases {
 			if tc.name == "expiration only" && m.db.Dialector.Name() == "mysql" {
@@ -169,14 +172,15 @@ func TestUpdateShareReceiptComparesStoredPermissions(t *testing.T) {
 				t.Fatalf("%s: receipt webdav=%v webapp=%v", tc.name, u.WebDAVPermissionsChanged, u.WebappPermissionsChanged)
 			}
 		}
-		// Exact webapp flags, app name and requirements are preserved.
+		// Permission updates preserve the stored Webapp descriptor.
 		after, err := m.GetShare(ctx, owner, ref)
 		if err != nil {
 			t.Fatal(err)
 		}
 		wa := findWebappAccessMethod(after.AccessMethods)
-		if !proto.Equal(wa.GetPermissions(), webappCS3Permissions([]string{"share"})) || wa.GetAppName() != "renamed" ||
-			len(wa.GetRequirements()) != len(share.DefaultWebappRequirements) {
+		if !proto.Equal(wa.GetPermissions(), webappCS3Permissions([]string{"share"})) ||
+			!slices.Equal(wa.GetAppNames(), storedWebapp.GetAppNames()) ||
+			!slices.Equal(wa.GetRequirements(), storedWebapp.GetRequirements()) {
 			t.Fatalf("webapp method %v", wa)
 		}
 
@@ -495,7 +499,7 @@ func TestUpdateShareReceiptUnderTypedPermissions(t *testing.T) {
 				extra(perms)
 			}
 			return &ocm.UpdateOCMShareRequest_UpdateField{Field: &ocm.UpdateOCMShareRequest_UpdateField_AccessMethods{
-				AccessMethods: share.NewWebappAccessMethod(perms, nil, ""),
+				AccessMethods: share.NewWebappAccessMethod(perms, nil),
 			}}
 		}
 		webdav := func(perms *provider.ResourcePermissions) *ocm.UpdateOCMShareRequest_UpdateField {

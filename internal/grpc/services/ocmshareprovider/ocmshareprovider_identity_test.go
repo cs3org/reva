@@ -21,6 +21,7 @@ package ocmshareprovider
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"path/filepath"
@@ -35,6 +36,8 @@ import (
 	providerpb "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/cs3org/reva/v3/internal/http/services/opencloudmesh/ocmd"
 	"github.com/cs3org/reva/v3/pkg/appctx"
+	ocmclient "github.com/cs3org/reva/v3/pkg/ocm/client"
+	"github.com/cs3org/reva/v3/pkg/ocm/httpsig"
 	"github.com/cs3org/reva/v3/pkg/ocm/providerdomain"
 	_ "github.com/cs3org/reva/v3/pkg/ocm/share/repository/json"
 )
@@ -47,7 +50,11 @@ func createWith(t *testing.T, providerDomain, userID string, grantee *userpb.Use
 	srv := httptest.NewServer(http.HandlerFunc(peer.handler))
 	t.Cleanup(srv.Close)
 	repo := &capturingRepo{}
-	svc := &service{conf: &config{ProviderDomain: providerDomain, WebDAVEndpoint: testWebDAVRoot}, repo: repo, client: ocmd.NewClient(2*time.Second, true)}
+	key, err := httpsig.LoadKey(writeKeyFile(t))
+	if err != nil {
+		t.Fatal(err)
+	}
+	svc := &service{conf: &config{ProviderDomain: providerDomain, WebDAVEndpoint: testWebDAVRoot}, repo: repo, client: ocmd.NewClient(2*time.Second, true), signingKey: key}
 	stampGateway(&statGateway{info: &providerpb.ResourceInfo{Path: "/files/x", Type: providerpb.ResourceType_RESOURCE_TYPE_FILE,
 		Owner: &userpb.UserId{OpaqueId: userID, Idp: "ignored.example.org"}}})
 	ctx := appctx.ContextSetUser(context.Background(), &userpb.User{Id: &userpb.UserId{OpaqueId: userID, Idp: "ignored.example.org"}})
@@ -118,21 +125,30 @@ func TestCreateOCMShareRefusesInvalidGrantee(t *testing.T) {
 
 // provider_domain is checked and canonicalized before anything is allocated.
 func TestNewChecksProviderDomain(t *testing.T) {
+	keyFile := writeKeyFile(t)
 	drivers := map[string]any{"json": map[string]any{"file": filepath.Join(t.TempDir(), "missing", "ocm.json")}}
 	for _, bad := range []string{"https://b.example.org", "b.example.org/x", "x@b.example.org"} {
-		if _, err := New(context.Background(), map[string]any{"provider_domain": bad, "driver": "json", "drivers": drivers, "gatewaysvc": "localhost:0", "webdav_endpoint": testWebDAVRoot}); err == nil ||
+		if _, err := New(context.Background(), map[string]any{"provider_domain": bad, "driver": "json", "drivers": drivers, "gatewaysvc": "localhost:0", "webdav_endpoint": testWebDAVRoot, "signing_key": keyFile}); err == nil ||
 			err.Error() != "ocmshareprovider: provider_domain is not an OCM host" {
 			t.Fatalf("%q: %v", bad, err)
 		}
 	}
 	good := map[string]any{"json": map[string]any{"file": filepath.Join(t.TempDir(), "ocm.json")}}
-	s, err := New(context.Background(), map[string]any{"provider_domain": "B.Example.ORG:8443", "driver": "json", "drivers": good, "gatewaysvc": "localhost:0", "webdav_endpoint": testWebDAVRoot})
+	s, err := New(context.Background(), map[string]any{"provider_domain": "B.Example.ORG:8443", "driver": "json", "drivers": good, "embedded_driver": testDriverName, "gatewaysvc": "localhost:0", "webdav_endpoint": testWebDAVRoot, "signing_key": keyFile})
 	if err != nil {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { _ = s.Close() })
-	if got := s.(*service).conf.ProviderDomain; got != "b.example.org:8443" {
+	svc := s.(*service)
+	if got := svc.conf.ProviderDomain; got != "b.example.org:8443" {
 		t.Fatalf("provider domain %q", got)
+	}
+	notifier := svc.notifier.(*ocmd.AsyncNotifier)
+	if notifier.Key == nil || notifier.Key != svc.signingKey {
+		t.Fatal("notifier did not receive the service signing key")
+	}
+	if _, err := notifier.Client.Discover(context.Background(), "https://127.0.0.1:1"); !errors.Is(err, ocmclient.ErrPolicyViolation) {
+		t.Fatalf("notification discovery did not enforce the public-only policy: %v", err)
 	}
 }
 

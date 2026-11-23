@@ -286,6 +286,14 @@ func (s *svc) UpdateReceivedOCMShare(ctx context.Context, req *ocm.UpdateReceive
 			},
 		}, nil
 	}
+	if res.GetStatus() == nil {
+		return &ocm.UpdateReceivedOCMShareResponse{
+			Status: status.NewInternal(ctx, nil, "received share update returned no status"),
+		}, nil
+	}
+	if res.GetStatus().GetCode() != rpc.Code_CODE_OK {
+		return res, nil
+	}
 
 	// Only a masked state change accepts the share: other fields of
 	// req.Share, including a stale state, are ignored like in the provider.

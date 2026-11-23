@@ -166,13 +166,14 @@ func New(ctx context.Context, m map[string]any) (rgrpc.Service, error) {
 	}
 
 	ocmcl := ocmd.NewClient(time.Duration(c.ClientTimeout)*time.Second, c.ClientInsecure)
+	notificationClient := ocmd.NewPublicOnlyClient(time.Duration(c.ClientTimeout)*time.Second, c.ClientInsecure)
 	service := &service{
 		conf:        &c,
 		repo:        repo,
 		client:      ocmcl,
 		transferrer: transferrer,
 		signingKey:  key,
-		notifier:    &ocmd.AsyncNotifier{Client: ocmcl, Key: key},
+		notifier:    &ocmd.AsyncNotifier{Client: notificationClient, Key: key},
 	}
 
 	return service, nil

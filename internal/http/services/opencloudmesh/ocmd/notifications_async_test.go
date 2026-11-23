@@ -81,7 +81,7 @@ func wait(t *testing.T, c <-chan struct{}, what string) {
 
 func TestAsyncNotifierCloseCancelsAdmittedSend(t *testing.T) {
 	p := newGatedPeer(t)
-	a := &AsyncNotifier{Client: NewClient(time.Minute, false)}
+	a := &AsyncNotifier{Client: NewClient(time.Minute, false), Key: newSigningKey(t)}
 	a.NewNotification(context.Background(), strings.TrimPrefix(p.srv.URL, "http://"), unsharedNotification(t))
 	wait(t, p.entered, "discovery")
 
@@ -107,7 +107,7 @@ func TestAsyncNotifierCloseCancelsAdmittedSend(t *testing.T) {
 func TestAsyncNotifierOutlivesCallerContext(t *testing.T) {
 	p := newGatedPeer(t)
 	close(p.release)
-	a := &AsyncNotifier{Client: NewClient(time.Minute, false)}
+	a := &AsyncNotifier{Client: NewClient(time.Minute, false), Key: newSigningKey(t)}
 	ctx, cancel := context.WithCancel(context.Background())
 	a.NewNotification(ctx, strings.TrimPrefix(p.srv.URL, "http://"), unsharedNotification(t))
 	cancel()
@@ -122,7 +122,7 @@ func TestAsyncNotifierOutlivesCallerContext(t *testing.T) {
 
 func TestAsyncNotifierCloseRacesAdmission(t *testing.T) {
 	p := newGatedPeer(t)
-	a := &AsyncNotifier{Client: NewClient(time.Minute, false)}
+	a := &AsyncNotifier{Client: NewClient(time.Minute, false), Key: newSigningKey(t)}
 	var wg sync.WaitGroup
 	for i := 0; i < 16; i++ {
 		wg.Add(1)
