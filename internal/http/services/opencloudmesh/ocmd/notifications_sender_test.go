@@ -272,9 +272,9 @@ func TestShareStatePayloadFixtures(t *testing.T) {
 			want: `{"notificationType":"SHARE_CHANGE_PERMISSION","senderDomain":"provider.example.org","resourceType":"file","shareType":"user","notification":{"file":{"providerId":"42","permissions":["write","read","read"]}}}`,
 		},
 		{
-			name: "absent permission snapshot",
-			in:   ShareStateNotification{Type: NotificationShareChangePermission, SenderDomain: "provider.example.org", ResourceType: "file", ProviderID: "42"},
-			want: `{"notificationType":"SHARE_CHANGE_PERMISSION","senderDomain":"provider.example.org","resourceType":"file","notification":{"file":{"providerId":"42"}}}`,
+			name: "absent permission snapshot with nonreserved resource type",
+			in:   ShareStateNotification{Type: NotificationShareChangePermission, SenderDomain: "provider.example.org", ResourceType: "Collection", ProviderID: "42"},
+			want: `{"notificationType":"SHARE_CHANGE_PERMISSION","senderDomain":"provider.example.org","resourceType":"Collection","notification":{"file":{"providerId":"42"}}}`,
 		},
 		{
 			name: "empty permission snapshot",
@@ -328,14 +328,17 @@ func TestShareStateBuildRejectsInvalidPayloads(t *testing.T) {
 		{Type: NotificationShareUnshared, SenderDomain: "a.example.org", ResourceType: "file"},
 		{Type: NotificationShareUnshared, SenderDomain: "a.example.org", ResourceType: "file", ProviderID: "1", Permissions: []string{"read"}},
 		{Type: NotificationShareUnshared, SenderDomain: "https://a.example.org", ResourceType: "file", ProviderID: "1"},
+		{Type: NotificationShareDeclined, SenderDomain: "a.example.org", ResourceType: "collection", ProviderID: "1"},
+		{Type: NotificationShareUnshared, SenderDomain: "a.example.org", ResourceType: "federation", ProviderID: "1"},
+		{Type: NotificationShareChangePermission, SenderDomain: "a.example.org", ResourceType: "file", ProviderID: "1", Permissions: []string{"read", "unknown"}},
 	}
 	good := ShareStateNotification{Type: NotificationShareUnshared, SenderDomain: "a.example.org", ResourceType: "file", ProviderID: "1"}
 	if _, err := good.Build(); err != nil {
 		t.Fatalf("valid payload rejected: %v", err)
 	}
 	for i, s := range bad {
-		if _, err := s.Build(); err == nil {
-			t.Fatalf("case %d accepted", i)
+		if notification, err := s.Build(); err == nil || notification != nil {
+			t.Errorf("case %d accepted", i)
 		}
 	}
 }

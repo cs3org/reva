@@ -115,11 +115,19 @@ func (s ShareStateNotification) Build() (*OutgoingNotification, error) {
 			return nil, errors.New("permissions are only sent with SHARE_CHANGE_PERMISSION")
 		}
 	case NotificationShareChangePermission:
+		for _, permission := range s.Permissions {
+			if !isNotificationPermission(permission) {
+				return nil, errors.New("invalid share-state permission")
+			}
+		}
 	default:
 		return nil, errors.New("not a share-state notification type")
 	}
 	if s.ResourceType == "" || s.ProviderID == "" {
 		return nil, errors.New("incomplete share-state notification")
+	}
+	if isReservedGrantResourceType(s.ResourceType) {
+		return nil, errors.New("invalid share-state resource type")
 	}
 	sender, err := providerdomain.CanonicalOCMHost(s.SenderDomain)
 	if err != nil {
