@@ -35,6 +35,7 @@ import (
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
+	typespb "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
 
 	"github.com/google/uuid"
 	"github.com/pkg/errors"
@@ -1370,7 +1371,19 @@ func (s *service) RestoreRecycleItem(ctx context.Context, req *provider.RestoreR
 		return nil, err
 	}
 	key, itemPath := router.ShiftPath(req.Key)
-	if err := s.storage.RestoreRecycleItem(ctx, ref.GetPath(), key, itemPath, req.RestoreRef); err != nil {
+	_, force := req.GetOpaque().GetMap()[storage.RecycleRestoreForce]
+	if err := s.storage.RestoreRecycleItem(ctx, ref.GetPath(), key, itemPath, req.RestoreRef, force); err != nil {
+		var collisions storage.RecycleCollisions
+		if errors.As(err, &collisions) {
+			if value, jerr := json.Marshal(collisions); jerr == nil {
+				return &provider.RestoreRecycleItemResponse{
+					Status: status.NewAlreadyExists(ctx, err, "recycled items collide with existing items"),
+					Opaque: &typespb.Opaque{Map: map[string]*typespb.OpaqueEntry{
+						storage.RecycleRestoreCollisions: {Decoder: "json", Value: value},
+					}},
+				}, nil
+			}
+		}
 		var st *rpc.Status
 		switch err.(type) {
 		case errtypes.IsNotFound:

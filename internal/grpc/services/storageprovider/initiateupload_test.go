@@ -64,7 +64,7 @@ func (noopFS) RestoreRevision(ctx context.Context, ref *provider.Reference, key 
 func (noopFS) ListRecycle(ctx context.Context, basePath, key, relativePath string, from, to *typepb.Timestamp) ([]*provider.RecycleItem, error) {
 	return nil, errtypes.NotSupported("noop")
 }
-func (noopFS) RestoreRecycleItem(ctx context.Context, basePath, key, relativePath string, restoreRef *provider.Reference) error {
+func (noopFS) RestoreRecycleItem(ctx context.Context, basePath, key, relativePath string, restoreRef *provider.Reference, force bool) error {
 	return errtypes.NotSupported("noop")
 }
 func (noopFS) PurgeRecycleItem(ctx context.Context, basePath, key, relativePath string) error {

@@ -2,9 +2,13 @@ package storageprovider
 
 import (
 	"context"
+	"encoding/json"
+	"slices"
 	"testing"
 
+	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
+	typespb "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
 	"github.com/cs3org/reva/v3/pkg/storage"
 	"github.com/cs3org/reva/v3/pkg/storage/fs/registry"
 )
@@ -99,5 +103,68 @@ func TestGetFSInjectsSpaceDepthRelativeToTheMountPath(t *testing.T) {
 				t.Error("the parsed configuration was mutated")
 			}
 		})
+	}
+}
+
+// restoreFS records the force of RestoreRecycleItem, and returns err.
+type restoreFS struct {
+	noopFS
+	force bool
+	err   error
+}
+
+func (f *restoreFS) RestoreRecycleItem(ctx context.Context, basePath, key, relativePath string, restoreRef *provider.Reference, force bool) error {
+	f.force = force
+	return f.err
+}
+
+func TestRestoreRecycleItemReturnsTheCollisions(t *testing.T) {
+	collisions := storage.RecycleCollisions{{Key: "20261123/docs/report.txt", Path: "docs/report.txt"}}
+	fs := &restoreFS{err: collisions}
+	s := &service{storage: fs, mountPath: "/"}
+
+	res, err := s.RestoreRecycleItem(context.Background(), &provider.RestoreRecycleItemRequest{
+		Ref: &provider.Reference{Path: "/proj"},
+		Key: "20261123/docs",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if fs.force {
+		t.Error("got force, want no force")
+	}
+	if res.GetStatus().GetCode() != rpc.Code_CODE_ALREADY_EXISTS {
+		t.Errorf("got status %v, want %v", res.GetStatus().GetCode(), rpc.Code_CODE_ALREADY_EXISTS)
+	}
+	var got storage.RecycleCollisions
+	if err := json.Unmarshal(res.GetOpaque().GetMap()[storage.RecycleRestoreCollisions].GetValue(), &got); err != nil {
+		t.Fatal(err)
+	}
+	if !slices.Equal(got, collisions) {
+		t.Errorf("got collisions %v, want %v", got, collisions)
+	}
+}
+
+func TestRestoreRecycleItemPassesForce(t *testing.T) {
+	fs := &restoreFS{}
+	s := &service{storage: fs, mountPath: "/"}
+
+	res, err := s.RestoreRecycleItem(context.Background(), &provider.RestoreRecycleItemRequest{
+		Ref: &provider.Reference{Path: "/proj"},
+		Key: "1a2b3c",
+		Opaque: &typespb.Opaque{Map: map[string]*typespb.OpaqueEntry{
+			storage.RecycleRestoreForce: {Decoder: "plain", Value: []byte("true")},
+		}},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if !fs.force {
+		t.Error("got no force, want force")
+	}
+	if res.GetStatus().GetCode() != rpc.Code_CODE_OK {
+		t.Errorf("got status %v, want %v", res.GetStatus().GetCode(), rpc.Code_CODE_OK)
 	}
 }

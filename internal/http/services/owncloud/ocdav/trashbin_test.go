@@ -19,6 +19,7 @@
 package ocdav
 
 import (
+	"encoding/json"
 	"encoding/xml"
 	"net/http"
 	"net/http/httptest"
@@ -226,5 +227,76 @@ func TestSpacesTrashbinRestoresAndPurgesTheWholeKey(t *testing.T) {
 				t.Errorf("got key %q, want %q", got, key)
 			}
 		})
+	}
+}
+
+func TestSpacesTrashbinRestoreReportsCollisions(t *testing.T) {
+	gw := mockgateway.NewMockGatewayAPIClient(t)
+	// The folder is already there: the storage merges into it, and reports what collides.
+	gw.On("Stat", mock.Anything, mock.Anything).Return(&provider.StatResponse{
+		Status: &rpc.Status{Code: rpc.Code_CODE_OK},
+		Info:   &provider.ResourceInfo{Id: &provider.ResourceId{StorageId: "cephmount", OpaqueId: "1"}},
+	}, nil)
+	collisions, _ := json.Marshal(storage.RecycleCollisions{{Key: "20261123/docs/report.txt", Path: "docs/report.txt"}})
+	var got *provider.RestoreRecycleItemRequest
+	gw.On("RestoreRecycleItem", mock.Anything, mock.Anything).Run(func(args mock.Arguments) {
+		got = args.Get(1).(*provider.RestoreRecycleItemRequest)
+	}).Return(&provider.RestoreRecycleItemResponse{
+		Status: &rpc.Status{Code: rpc.Code_CODE_ALREADY_EXISTS},
+		Opaque: &types.Opaque{Map: map[string]*types.OpaqueEntry{
+			storage.RecycleRestoreCollisions: {Decoder: "json", Value: collisions},
+		}},
+	}, nil)
+	stampGateway(gw)
+
+	w := serveSpacesTrashbin(t, MethodMove, "/20261123/docs", "", http.Header{
+		HeaderDestination: {"https://cernbox.example.org/remote.php/dav/spaces/" + trashSpaceID + "/docs"},
+		HeaderOverwrite:   {"F"},
+	})
+
+	if w.Code != http.StatusPreconditionFailed {
+		t.Fatalf("got status %d, want %d; body: %s", w.Code, http.StatusPreconditionFailed, w.Body.String())
+	}
+	if _, force := got.GetOpaque().GetMap()[storage.RecycleRestoreForce]; force {
+		t.Error("got a forced restore, want a normal one")
+	}
+	type collision struct {
+		Key  string `xml:"key"`
+		Path string `xml:"path"`
+	}
+	var body struct {
+		Collisions []collision `xml:"collisions>collision"`
+	}
+	if err := xml.Unmarshal(w.Body.Bytes(), &body); err != nil {
+		t.Fatalf("cannot parse the error: %v; body: %s", err, w.Body.String())
+	}
+	want := []collision{{Key: "20261123/docs/report.txt", Path: "docs/report.txt"}}
+	if !slices.Equal(body.Collisions, want) {
+		t.Errorf("got collisions %+v, want %+v", body.Collisions, want)
+	}
+}
+
+func TestSpacesTrashbinRestoreWithOverwriteForcesIt(t *testing.T) {
+	gw := mockgateway.NewMockGatewayAPIClient(t)
+	gw.On("Stat", mock.Anything, mock.Anything).Return(&provider.StatResponse{
+		Status: &rpc.Status{Code: rpc.Code_CODE_OK},
+		Info:   &provider.ResourceInfo{Id: &provider.ResourceId{StorageId: "cephmount", OpaqueId: "1"}},
+	}, nil)
+	var got *provider.RestoreRecycleItemRequest
+	gw.On("RestoreRecycleItem", mock.Anything, mock.Anything).Run(func(args mock.Arguments) {
+		got = args.Get(1).(*provider.RestoreRecycleItemRequest)
+	}).Return(&provider.RestoreRecycleItemResponse{Status: &rpc.Status{Code: rpc.Code_CODE_OK}}, nil)
+	stampGateway(gw)
+
+	w := serveSpacesTrashbin(t, MethodMove, "/1a2b3c", "", http.Header{
+		HeaderDestination: {"https://cernbox.example.org/remote.php/dav/spaces/" + trashSpaceID + "/docs/report.txt"},
+		HeaderOverwrite:   {"T"},
+	})
+
+	if w.Code != http.StatusNoContent {
+		t.Fatalf("got status %d, want %d; body: %s", w.Code, http.StatusNoContent, w.Body.String())
+	}
+	if _, force := got.GetOpaque().GetMap()[storage.RecycleRestoreForce]; !force {
+		t.Error("got a normal restore, want a forced one")
 	}
 }

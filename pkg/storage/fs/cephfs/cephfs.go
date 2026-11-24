@@ -644,7 +644,7 @@ func (fs *cephfs) ListRecycle(ctx context.Context, basePath, key, relativePath s
 	return nil, errtypes.NotSupported("unimplemented")
 }
 
-func (fs *cephfs) RestoreRecycleItem(ctx context.Context, basePath, key, relativePath string, restoreRef *provider.Reference) error {
+func (fs *cephfs) RestoreRecycleItem(ctx context.Context, basePath, key, relativePath string, restoreRef *provider.Reference, force bool) error {
 	return errtypes.NotSupported("unimplemented")
 }
 

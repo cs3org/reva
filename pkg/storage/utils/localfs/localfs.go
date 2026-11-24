@@ -1440,7 +1440,7 @@ func (fs *localfs) ListRecycle(ctx context.Context, basePath, key, relativePath 
 	return items, nil
 }
 
-func (fs *localfs) RestoreRecycleItem(ctx context.Context, basePath, key, relativePath string, restoreRef *provider.Reference) error {
+func (fs *localfs) RestoreRecycleItem(ctx context.Context, basePath, key, relativePath string, restoreRef *provider.Reference, force bool) error {
 	suffix := path.Ext(key)
 	if len(suffix) == 0 || !strings.HasPrefix(suffix, ".d") {
 		return errors.New("localfs: invalid trash item suffix")
