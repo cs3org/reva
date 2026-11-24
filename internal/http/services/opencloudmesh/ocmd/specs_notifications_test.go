@@ -270,6 +270,7 @@ func TestNotificationErrorsCarryNoValues(t *testing.T) {
 		{`{"notificationType":"leaky-value"`, "malformed notification"},
 		{`{"notificationType":"ACME","senderDomain":"a.example.org","shareType":"user","notification":{"` + key + `":"leaky-value"}}`, "invalid notification"},
 		{`{"notificationType":"ACME","senderDomain":"a.example.org","shareType":"user","notification":{"` + key + `":null}}`, "invalid notification"},
+		{`{"notificationType":"ACME","senderDomain":"a.example.org","shareType":"user","notification":{"` + key + `":null,"message":7}}`, "invalid notification.message"},
 		{`{"notificationType":"SHARE_UNSHARED","senderDomain":"a.example.org","resourceType":"file","notification":{"` + key + `":["leaky-value"],"file":{"providerId":"42"}}}`, "invalid notification"},
 	}
 	for _, tc := range cases {

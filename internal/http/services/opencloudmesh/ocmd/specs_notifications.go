@@ -225,17 +225,15 @@ func (n *Notification) decodePayload(raw json.RawMessage) error {
 	if isJSONNull(raw) || json.Unmarshal(raw, &n.Payload) != nil {
 		return invalidField("notification")
 	}
+	if message, ok := n.Payload["message"]; ok {
+		if isJSONNull(message) || json.Unmarshal(message, &n.Message) != nil {
+			return invalidField("notification.message")
+		}
+	}
 	for key, value := range n.Payload {
-		switch key {
-		case "message":
-			if isJSONNull(value) || json.Unmarshal(value, &n.Message) != nil {
-				return invalidField("notification.message")
-			}
-		default:
-			// The member name is chosen by the sender, so it is not reported.
-			if !isJSONObject(value) {
-				return invalidField("notification")
-			}
+		// The member name is chosen by the sender, so it is not reported.
+		if key != "message" && !isJSONObject(value) {
+			return invalidField("notification")
 		}
 	}
 	return nil
