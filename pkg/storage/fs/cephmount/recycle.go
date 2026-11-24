@@ -36,6 +36,7 @@ import (
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	typepb "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
 	"github.com/cs3org/reva/v3/pkg/errtypes"
+	"github.com/cs3org/reva/v3/pkg/storage"
 	"github.com/pkg/errors"
 	"github.com/pkg/xattr"
 	"golang.org/x/sys/unix"
@@ -231,6 +232,9 @@ func (fs *cephmountfs) ListRecycle(ctx context.Context, basePath, key, relativeP
 				Ref:          &provider.Reference{Path: fs.fromChroot(filepath.Join(parent, withoutSuffix(e.Name(), info)))},
 				Size:         size,
 				DeletionTime: &typepb.Timestamp{Seconds: deleted},
+				Opaque: &typepb.Opaque{Map: map[string]*typepb.OpaqueEntry{
+					storage.RecycleItemBrowsable: {Decoder: "plain", Value: []byte("true")},
+				}},
 			}
 			folders[e.Name()] = f
 			items = append(items, f)

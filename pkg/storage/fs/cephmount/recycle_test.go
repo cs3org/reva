@@ -33,6 +33,7 @@ import (
 	typepb "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
 	"github.com/cs3org/reva/v3/pkg/appctx"
 	"github.com/cs3org/reva/v3/pkg/errtypes"
+	"github.com/cs3org/reva/v3/pkg/storage"
 	"github.com/pkg/xattr"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -249,6 +250,23 @@ func TestListRecycleShowsOriginalNames(t *testing.T) {
 	require.NoError(t, err)
 	require.Len(t, sub, 1)
 	assert.Equal(t, "/proj/a/x.txt", sub[0].Ref.Path)
+}
+
+func TestListRecycleMarksFoldersAsBrowsable(t *testing.T) {
+	fs, ctx, _ := newRecycleTestFS(t, 1)
+	space := filepath.Join(fs.chrootDir, "proj")
+	writeTestFile(t, filepath.Join(space, "a", "x.txt"), "x")
+	writeTestFile(t, filepath.Join(space, "top.txt"), "top")
+	require.NoError(t, fs.Delete(ctx, &provider.Reference{Path: "/proj/a"}))
+	require.NoError(t, fs.Delete(ctx, &provider.Reference{Path: "/proj/top.txt"}))
+
+	items, err := fs.ListRecycle(ctx, "/proj", "", "", nil, nil)
+	require.NoError(t, err)
+	browsable := map[string]bool{}
+	for _, item := range items {
+		_, browsable[item.Ref.Path] = item.GetOpaque().GetMap()[storage.RecycleItemBrowsable]
+	}
+	assert.Equal(t, map[string]bool{"/proj/a": true, "/proj/top.txt": false}, browsable)
 }
 
 func TestListRecycleRefusals(t *testing.T) {
