@@ -63,6 +63,12 @@ func (fs *Eosfs) ListRecycle(ctx context.Context, basePath, key, relativePath st
 	log := appctx.GetLogger(ctx)
 	log.Debug().Str("basePath", basePath).Str("key", key).Str("relativePath", relativePath).Msgf("ListRecycle")
 
+	// The EOS recycle bin is flat, so an item in it cannot be opened.
+	// Without this check, a client that opens a folder gets the whole bin.
+	if key != "" {
+		return nil, errtypes.NotSupported("eosfs: ListRecycle: cannot list the content of a recycled item")
+	}
+
 	u, ok := appctx.ContextGetUser(ctx)
 	if !ok {
 		return nil, errtypes.PermissionDenied("no user found in context for ListRecycle")
