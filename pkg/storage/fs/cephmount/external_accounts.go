@@ -435,11 +435,11 @@ func (fs *cephmountfs) runSetfacl(ctx context.Context, args []string, fullPath s
 	output, err := cmd.CombinedOutput()
 	if err != nil {
 		log.Error().Err(err).Str("path", fullPath).Strs("args", args).Str("output", string(output)).
-			Msg("cephmount: setfacl for the external accounts service user failed")
+			Msg("cephmount: setfacl failed")
 		return errors.Wrapf(err, "cephmount: setfacl failed: %s", string(output))
 	}
 
 	log.Debug().Str("path", fullPath).Strs("args", args).
-		Msg("cephmount: updated the external accounts service user ACL")
+		Msg("cephmount: updated the ACL")
 	return nil
 }

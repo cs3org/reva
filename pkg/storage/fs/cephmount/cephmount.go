@@ -351,27 +351,33 @@ func New(ctx context.Context, m map[string]any) (storage.FS, error) {
 
 // resolveRef converts a provider.Reference to a chroot-relative path
 func (fs *cephmountfs) resolveRef(ctx context.Context, ref *provider.Reference) (string, error) {
+	var path string
 	switch {
 	case ref.ResourceId != nil && ref.ResourceId.OpaqueId != "":
 		externalPath, err := fs.GetPathByID(ctx, ref.ResourceId)
 		if err != nil {
 			return "", err
 		}
-		base := fs.toChroot(externalPath)
+		path = fs.toChroot(externalPath)
 		// Apply the relative path component, if any ("." means the resource
 		// itself, "./sub/file" navigates below it).
 		if rel := strings.TrimPrefix(ref.Path, "."); rel != "" {
-			return filepath.Join(base, rel), nil
+			path = filepath.Join(path, rel)
 		}
-		return base, nil
 	case ref.ResourceId != nil:
 		return "", errors.New("cephmount: invalid resource id")
 	case ref.Path != "":
 		// Absolute path reference: convert to chroot-relative path.
-		return fs.toChroot(ref.Path), nil
+		path = fs.toChroot(ref.Path)
 	default:
 		return "", errors.New("cephmount: invalid reference")
 	}
+
+	// Only the recycle calls may use the bin, and they do not come here.
+	if inRecycle(path) {
+		return "", errtypes.NotFound("cephmount: " + path)
+	}
+	return path, nil
 }
 
 // readArbitraryMetadata reads the file's user.* extended attributes and returns
@@ -728,9 +734,19 @@ func (fs *cephmountfs) Delete(ctx context.Context, ref *provider.Reference) (err
 		return wrappedErr
 	}
 
-	if info.IsDir() {
+	// The recycle bin keeps items per space, thus a space root or a folder above it has no place in it.
+	if fs.conf.EnableRecycle && !fs.insideSpace(path) {
+		err := errtypes.PermissionDenied("cephmount: only items inside a space can be deleted")
+		fs.logOperationError(ctx, "Delete", path, err)
+		return err
+	}
+
+	switch {
+	case fs.conf.EnableRecycle:
+		err = fs.moveToRecycle(ctx, path)
+	case info.IsDir():
 		err = fs.removeAllAsUser(ctx, path)
-	} else {
+	default:
 		err = fs.removeAsUser(ctx, path)
 	}
 
@@ -946,7 +962,8 @@ func (fs *cephmountfs) ListFolder(ctx context.Context, ref *provider.Reference, 
 	}
 
 	for _, entry := range entries {
-		if fs.conf.HiddenDirs[entry.Name()] {
+		// Only at the root, so that a folder of a user with the same name stays visible.
+		if fs.conf.HiddenDirs[entry.Name()] || (path == "." && entry.Name() == recycleDir) {
 			log.Debug().
 				Str("operation", "ListFolder").
 				Str("entry_name", entry.Name()).
@@ -1594,14 +1611,6 @@ func (fs *cephmountfs) EmptyRecycle(ctx context.Context) error {
 
 func (fs *cephmountfs) CreateStorageSpace(ctx context.Context, req *provider.CreateStorageSpaceRequest) (r *provider.CreateStorageSpaceResponse, err error) {
 	return nil, errtypes.NotSupported("unimplemented")
-}
-
-func (fs *cephmountfs) ListRecycle(ctx context.Context, basePath, key, relativePath string, from, to *typepb.Timestamp) ([]*provider.RecycleItem, error) {
-	return nil, errtypes.NotSupported("unimplemented")
-}
-
-func (fs *cephmountfs) RestoreRecycleItem(ctx context.Context, basePath, key, relativePath string, restoreRef *provider.Reference, force bool) error {
-	return errtypes.NotSupported("unimplemented")
 }
 
 func (fs *cephmountfs) PurgeRecycleItem(ctx context.Context, basePath, key, relativePath string) error {
