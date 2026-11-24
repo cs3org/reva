@@ -84,7 +84,8 @@ func decodeOCMJSON(body io.Reader, limit int64, dst any) error {
 
 // OCMClient is the client for an OCM provider.
 type OCMClient struct {
-	client *http.Client
+	client        *http.Client
+	allowLoopback bool
 }
 
 // NewClient returns a new trusted OCMClient that honors HTTP proxy environment variables.
@@ -108,14 +109,16 @@ func NewPublicOnlyClient(timeout time.Duration, insecure bool) *OCMClient {
 // NewClientWithConfig returns a trusted OCMClient using cfg.
 func NewClientWithConfig(cfg client.TransportConfig) *OCMClient {
 	return &OCMClient{
-		client: client.NewTrustedHTTPClient(cfg),
+		client:        client.NewTrustedHTTPClient(cfg),
+		allowLoopback: cfg.AllowLoopback,
 	}
 }
 
 // NewPublicOnlyClientWithConfig returns a public-only OCMClient using cfg.
 func NewPublicOnlyClientWithConfig(cfg client.TransportConfig) *OCMClient {
 	return &OCMClient{
-		client: client.NewPublicOnlyHTTPClient(cfg),
+		client:        client.NewPublicOnlyHTTPClient(cfg),
+		allowLoopback: cfg.AllowLoopback,
 	}
 }
 

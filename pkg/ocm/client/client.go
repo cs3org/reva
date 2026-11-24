@@ -233,7 +233,7 @@ func HTTPTransport(rt http.RoundTripper) *http.Transport {
 }
 
 func (t *publicOnlyTransport) RoundTrip(req *http.Request) (*http.Response, error) {
-	if err := checkRequestScheme(req, t.policy.allowLoopback); err != nil {
+	if err := CheckRequestScheme(req, t.policy.allowLoopback); err != nil {
 		if req != nil && req.Body != nil {
 			_ = req.Body.Close()
 		}
@@ -246,7 +246,9 @@ func (t *publicOnlyTransport) CloseIdleConnections() {
 	t.base.CloseIdleConnections()
 }
 
-func checkRequestScheme(req *http.Request, allowLoopback bool) error {
+// CheckRequestScheme requires HTTPS, with an explicit exception for initial
+// HTTP requests to an unzoned literal loopback address.
+func CheckRequestScheme(req *http.Request, allowLoopback bool) error {
 	if req == nil || req.URL == nil {
 		return fmt.Errorf("%w: missing request URL", ErrPolicyViolation)
 	}
@@ -270,10 +272,10 @@ func checkRequestScheme(req *http.Request, allowLoopback bool) error {
 
 func isLiteralLoopbackHost(host string) bool {
 	ip, err := netip.ParseAddr(host)
-	if err != nil {
+	if err != nil || ip.Zone() != "" {
 		return false
 	}
-	return effectiveAddr(ip).IsLoopback()
+	return ip.Unmap().IsLoopback()
 }
 
 func newPublicOnlyCheckRedirect(policy destinationPolicy) func(*http.Request, []*http.Request) error {

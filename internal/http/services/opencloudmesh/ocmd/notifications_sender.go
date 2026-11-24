@@ -27,9 +27,11 @@ import (
 	"net/http"
 	"net/url"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/cs3org/reva/v3/pkg/appctx"
+	"github.com/cs3org/reva/v3/pkg/ocm/client"
 	"github.com/cs3org/reva/v3/pkg/ocm/httpsig"
 	"github.com/cs3org/reva/v3/pkg/ocm/providerdomain"
 )
@@ -110,7 +112,7 @@ type ShareStateNotification struct {
 func (s ShareStateNotification) Build() (*OutgoingNotification, error) {
 	switch s.Type {
 	case NotificationShareAccepted, NotificationShareDeclined, NotificationShareUnshared:
-		if len(s.Permissions) > 0 {
+		if s.Permissions != nil {
 			return nil, errors.New("permissions are only sent with SHARE_CHANGE_PERMISSION")
 		}
 	case NotificationShareChangePermission:
@@ -192,6 +194,7 @@ func parseRetryAfter(v string) time.Duration {
 	if date, err := http.ParseTime(v); err == nil {
 		return max(time.Until(date).Round(time.Second), 0)
 	}
+	v = strings.TrimLeft(v, "0")
 	if v == "" || len(v) > maxRetryAfterDigits {
 		return 0
 	}
@@ -217,6 +220,9 @@ func (t ocmNotificationTransport) PostNotification(ctx context.Context, peer *no
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, peer.Endpoint, bytes.NewReader(body))
 	if err != nil {
 		return notificationResponse{}, errHTTPRequestFailed
+	}
+	if err := client.CheckRequestScheme(req, t.c.allowLoopback); err != nil {
+		return notificationResponse{}, safeHTTPError(ctx, err)
 	}
 	req.Header.Set("Content-Type", "application/json")
 	req.ContentLength = int64(len(body))
@@ -267,6 +273,6 @@ func (c *OCMClient) NewNotification(ctx context.Context, domain string, n *Outgo
 	if res.Failure != "" {
 		event = event.Str("failure", string(res.Failure))
 	}
-	event.Msg("OCM notification sent")
+	event.Msg("OCM notification delivery outcome")
 	return res
 }

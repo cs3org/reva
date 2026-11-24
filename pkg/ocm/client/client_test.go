@@ -1108,6 +1108,10 @@ func TestPublicOnlySchemePolicy(t *testing.T) {
 		{name: "literal loopback http without opt-in", rawURL: "http://127.0.0.1/"},
 		{name: "literal loopback http opt-in", rawURL: "http://127.0.0.1/", allowLoopback: true, wantAllowed: true},
 		{name: "literal loopback v6 http opt-in", rawURL: "http://[::1]/", allowLoopback: true, wantAllowed: true},
+		{name: "IPv4-mapped loopback http opt-in", rawURL: "http://[::ffff:127.0.0.1]/", allowLoopback: true, wantAllowed: true},
+		{name: "translated loopback rejected", rawURL: "http://[64:ff9b::7f00:1]/", allowLoopback: true},
+		{name: "zoned IPv6 loopback rejected", rawURL: "http://[::1%25lo]/", allowLoopback: true},
+		{name: "zoned IPv4-mapped loopback rejected", rawURL: "http://[::ffff:127.0.0.1%25lo]/", allowLoopback: true},
 		{name: "loopback opt-in does not allow public http", rawURL: "http://93.184.216.34/", allowLoopback: true, wantAllowed: false},
 		{name: "hostname localhost rejected", rawURL: "http://localhost/", allowLoopback: true},
 		{name: "hostname loopback.local rejected", rawURL: "http://loopback.local/", allowLoopback: true},
@@ -1128,15 +1132,15 @@ func TestPublicOnlySchemePolicy(t *testing.T) {
 				prior := mustRequest(t, "https://example.com/")
 				req.Response = &http.Response{StatusCode: http.StatusFound, Request: prior}
 			}
-			err := checkRequestScheme(req, tt.allowLoopback)
+			err := CheckRequestScheme(req, tt.allowLoopback)
 			if tt.wantAllowed {
 				if err != nil {
-					t.Fatalf("checkRequestScheme() error = %v, want nil", err)
+					t.Fatalf("CheckRequestScheme() error = %v, want nil", err)
 				}
 				return
 			}
 			if !errors.Is(err, ErrPolicyViolation) {
-				t.Fatalf("checkRequestScheme() error = %v, want errors.Is ErrPolicyViolation", err)
+				t.Fatalf("CheckRequestScheme() error = %v, want errors.Is ErrPolicyViolation", err)
 			}
 		})
 	}

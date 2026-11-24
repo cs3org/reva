@@ -166,7 +166,8 @@ func sendWithLogs(t *testing.T, peer *notificationServer, n *OutgoingNotificatio
 	var logs bytes.Buffer
 	logger := zerolog.New(&logs)
 	ctx := appctx.WithLogger(context.Background(), &logger)
-	res := NewClient(5*time.Second, false).NewNotification(ctx, peer.host(), n, newSigningKey(t))
+	c := NewClientWithConfig(ocmclient.TransportConfig{Timeout: 5 * time.Second, AllowLoopback: true})
+	res := c.NewNotification(ctx, peer.host(), n, newSigningKey(t))
 	return res, logs.String()
 }
 
@@ -331,6 +332,7 @@ func TestShareStateBuildRejectsInvalidPayloads(t *testing.T) {
 		{Type: NotificationShareUnshared, SenderDomain: "a.example.org", ProviderID: "1"},
 		{Type: NotificationShareUnshared, SenderDomain: "a.example.org", ResourceType: "file"},
 		{Type: NotificationShareUnshared, SenderDomain: "a.example.org", ResourceType: "file", ProviderID: "1", Permissions: []string{"read"}},
+		{Type: NotificationShareUnshared, SenderDomain: "a.example.org", ResourceType: "file", ProviderID: "1", Permissions: []string{}},
 		{Type: NotificationShareUnshared, SenderDomain: "https://a.example.org", ResourceType: "file", ProviderID: "1"},
 		{Type: NotificationShareDeclined, SenderDomain: "a.example.org", ResourceType: "collection", ProviderID: "1"},
 		{Type: NotificationShareUnshared, SenderDomain: "a.example.org", ResourceType: "federation", ProviderID: "1"},
@@ -498,7 +500,8 @@ func TestNewNotificationTimeoutAndCancel(t *testing.T) {
 	peer := newNotificationServer(t)
 	peer.endpoint = raw.url() + "/ocm"
 	key := newSigningKey(t)
-	res := NewClient(300*time.Millisecond, false).NewNotification(context.Background(), peer.host(), unsharedNotification(t), key)
+	c := NewClientWithConfig(ocmclient.TransportConfig{Timeout: 300 * time.Millisecond, AllowLoopback: true})
+	res := c.NewNotification(context.Background(), peer.host(), unsharedNotification(t), key)
 	if res.Outcome != SendPostFailed || res.Failure != FailureTimeout {
 		t.Fatalf("timeout: %+v", res)
 	}
@@ -517,7 +520,8 @@ func TestNewNotificationTimeoutAndCancel(t *testing.T) {
 		case <-ctx.Done():
 		}
 	}()
-	res = NewClient(5*time.Second, false).NewNotification(ctx, peer.host(), unsharedNotification(t), key)
+	c = NewClientWithConfig(ocmclient.TransportConfig{Timeout: 5 * time.Second, AllowLoopback: true})
+	res = c.NewNotification(ctx, peer.host(), unsharedNotification(t), key)
 	if res.Outcome != SendPostFailed || res.Failure != FailureCanceled {
 		t.Fatalf("cancel: %+v", res)
 	}
@@ -529,6 +533,8 @@ func TestNewNotificationTimeoutAndCancel(t *testing.T) {
 func TestParseRetryAfter(t *testing.T) {
 	for v, want := range map[string]time.Duration{
 		"0": 0, "30": 30 * time.Second, "999999999": 999999999 * time.Second,
+		"000000000000": 0, "000000000030": 30 * time.Second,
+		"000999999999": 999999999 * time.Second, "0001000000000": 0, "0000000000x": 0,
 		"": 0, "1000000000": 0, "-1": 0, "+5": 0, "1.5": 0, " 30": 0, "30 ": 0,
 		"Wed, 21 Oct 2026 07:28:00 GMT": 0, senderCanary: 0,
 	} {
@@ -561,7 +567,8 @@ func TestPostNotificationErrorQuotesNoPeerBytes(t *testing.T) {
 	for name, response := range malformedResponses {
 		t.Run(name, func(t *testing.T) {
 			raw := newRawPeer(t, response)
-			tr := ocmNotificationTransport{c: NewClient(5*time.Second, false), key: newSigningKey(t)}
+			c := NewClientWithConfig(ocmclient.TransportConfig{Timeout: 5 * time.Second, AllowLoopback: true})
+			tr := ocmNotificationTransport{c: c, key: newSigningKey(t)}
 			resp, err := tr.PostNotification(context.Background(), &notificationPeer{Endpoint: raw.url() + "/ocm/notifications"}, []byte(`{}`))
 			if err == nil || resp != (notificationResponse{}) {
 				t.Fatalf("response %+v error %v", resp, err)
@@ -618,6 +625,36 @@ func TestNotificationToUnusableHostMakesNoRequest(t *testing.T) {
 }
 
 func TestNotificationSigningBehavior(t *testing.T) {
+	t.Run("advertised plain HTTP is refused before signing or transport", func(t *testing.T) {
+		peer := newNotificationServer(t)
+		peer.endpoint = "http://route.example.org:8080/ocm"
+		c := NewClient(5*time.Second, false)
+		base := c.Transport()
+		posts := 0
+		c.client.Transport = roundTripperFunc(func(r *http.Request) (*http.Response, error) {
+			if r.Method == http.MethodPost {
+				posts++
+				return nil, errors.New("unexpected POST")
+			}
+			return base.RoundTrip(r)
+		})
+		ctx := appctx.WithLogger(context.Background(), &nopLogger)
+		res := c.NewNotification(ctx, peer.host(), unsharedNotification(t), newSigningKey(t))
+		if res.Outcome != SendPostFailed || res.Failure != FailureNetworkPolicy || posts != 0 {
+			t.Fatalf("result %+v, POST attempts %d", res, posts)
+		}
+		tr := ocmNotificationTransport{c: c, key: &httpsig.Key{}}
+		_, err := tr.PostNotification(ctx, &notificationPeer{Endpoint: peer.endpoint + notificationsPath}, []byte(`{}`))
+		if !errors.Is(err, ocmclient.ErrPolicyViolation) || posts != 0 {
+			t.Fatalf("error %v, POST attempts %d", err, posts)
+		}
+		peer.mu.Lock()
+		defer peer.mu.Unlock()
+		if !reflect.DeepEqual(peer.requests, []string{"GET /.well-known/ocm"}) {
+			t.Fatalf("requests %v", peer.requests)
+		}
+	})
+
 	t.Run("signing failure sends zero posts", func(t *testing.T) {
 		var posts atomic.Int32
 		peer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
@@ -625,7 +662,8 @@ func TestNotificationSigningBehavior(t *testing.T) {
 			w.WriteHeader(http.StatusCreated)
 		}))
 		t.Cleanup(peer.Close)
-		transport := ocmNotificationTransport{c: NewClient(5*time.Second, false), key: &httpsig.Key{}}
+		c := NewClientWithConfig(ocmclient.TransportConfig{Timeout: 5 * time.Second, AllowLoopback: true})
+		transport := ocmNotificationTransport{c: c, key: &httpsig.Key{}}
 		_, err := transport.PostNotification(context.Background(), &notificationPeer{Endpoint: peer.URL}, []byte(`{}`))
 		if !errors.Is(err, errSigningFailed) || posts.Load() != 0 {
 			t.Fatalf("signing error %v, posts %d", err, posts.Load())
@@ -641,20 +679,24 @@ func TestNotificationSigningBehavior(t *testing.T) {
 		}
 	})
 
-	t.Run("configured key signs the exact sent bytes", func(t *testing.T) {
+	t.Run("configured key signs the exact bytes sent over HTTPS", func(t *testing.T) {
 		key := newSigningKey(t)
 		jwks, err := key.JWKS()
 		if err != nil {
 			t.Fatal(err)
 		}
 		peer := newNotificationServer(t)
+		route := httptest.NewTLSServer(http.HandlerFunc(peer.serve))
+		t.Cleanup(route.Close)
+		peer.endpoint = route.URL + "/ocm"
+		c := &OCMClient{client: route.Client()}
 		ctx := appctx.WithLogger(context.Background(), &nopLogger)
-		res := NewClient(5*time.Second, false).NewNotification(ctx, peer.host(), unsharedNotification(t), key)
-		if res.Outcome != SendDelivered || peer.postCount() != 1 || peer.lastRequest == nil {
+		res := c.NewNotification(ctx, peer.host(), unsharedNotification(t), key)
+		if res.Outcome != SendDelivered || peer.postCount() != 1 || peer.lastRequest == nil || peer.lastRequest.TLS == nil {
 			t.Fatalf("result %+v, posts %d", res, peer.postCount())
 		}
 		// Verify the sending service's key against the bytes received on the wire.
-		if err := httpsig.Verify(peer.lastRequest, peer.lastBody, peer.srv.URL, func() ([]byte, error) { return jwks, nil }); err != nil {
+		if err := httpsig.Verify(peer.lastRequest, peer.lastBody, route.URL, func() ([]byte, error) { return jwks, nil }); err != nil {
 			t.Fatalf("sent bytes do not verify against the sending key: %v", err)
 		}
 		want := `{"notificationType":"SHARE_UNSHARED","senderDomain":"cernbox.example.org","resourceType":"file","shareType":"user","notification":{"file":{"providerId":"42"}}}`
@@ -845,7 +887,7 @@ func TestNewNotificationLegacySigning(t *testing.T) {
 	peer := newNotificationServer(t)
 	peer.wellKnownOff = true
 	peer.caps = []string{"notifications", "http-sig"}
-	c := NewClient(time.Second, false)
+	c := NewClientWithConfig(ocmclient.TransportConfig{Timeout: time.Second, AllowLoopback: true})
 	ctx := appctx.WithLogger(context.Background(), &nopLogger)
 	res := c.NewNotification(ctx, peer.host(), unsharedNotification(t), nil)
 	if res.Outcome != SendPostFailed || res.Failure != FailureNoSigningKey || peer.postCount() != 0 || peer.legacyHits != 1 {

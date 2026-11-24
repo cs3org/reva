@@ -70,7 +70,7 @@ const (
 	FailureError    SendFailure = "error"
 	// FailureNoSigningKey means required signing prevented a notification POST.
 	FailureNoSigningKey SendFailure = "no_signing_key"
-	// FailureNetworkPolicy means the guarded transport refused the destination.
+	// FailureNetworkPolicy means the request or destination failed network policy.
 	FailureNetworkPolicy SendFailure = "network_policy"
 )
 
