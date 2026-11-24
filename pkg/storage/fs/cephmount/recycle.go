@@ -21,7 +21,6 @@ package cephmount
 import (
 	"cmp"
 	"context"
-	"fmt"
 	iofs "io/fs"
 	"os"
 	"os/exec"
@@ -334,7 +333,9 @@ func withoutSuffix(name string, info os.FileInfo) string {
 // RestoreRecycleItem moves the item of key back to its original path, and
 // ignores restoreRef, as the eos driver does. A folder key restores the folder
 // from each day of its range, newest first. Nothing is overwritten: an item that
-// collides stays in the bin, and the call returns AlreadyExists with these items.
+// collides stays in the bin, and the call returns these items as
+// storage.RecycleCollisions. With force, the item that is in the way is renamed
+// to <name>.<inode> first, as EOS does.
 func (fs *cephmountfs) RestoreRecycleItem(ctx context.Context, basePath, key, relativePath string, restoreRef *provider.Reference, force bool) error {
 	fs.logOperation(ctx, "RestoreRecycleItem", path.Join(basePath, key, relativePath))
 
@@ -350,10 +351,11 @@ func (fs *cephmountfs) RestoreRecycleItem(ctx context.Context, basePath, key, re
 		return errtypes.BadRequest("cephmount: the key " + key + " does not name an item")
 	}
 
-	r := &recycleRestore{}
+	r := &recycleRestore{force: force, spaceRoot: spaceRoot}
 	found := false
 	for _, day := range fs.recycleDays(bin, first, last) {
 		dayDir := filepath.Join(bin, day)
+		r.day, r.dayDir = strings.ReplaceAll(day, "/", ""), dayDir
 		src, info, err := fs.recycleItem(dayDir, rel)
 		if err != nil {
 			return err
@@ -373,13 +375,8 @@ func (fs *cephmountfs) RestoreRecycleItem(ctx context.Context, basePath, key, re
 	if !found {
 		return errtypes.NotFound("cephmount: no item in the recycle bin for " + path.Join(key, relativePath))
 	}
-	if n := len(r.collided); n > 0 {
-		const shown = 10
-		msg := strings.Join(r.collided[:min(n, shown)], ", ")
-		if n > shown {
-			msg += fmt.Sprintf(" and %d more", n-shown)
-		}
-		return errtypes.AlreadyExists("cephmount: not restored, because an item is already there: " + msg)
+	if len(r.collided) > 0 {
+		return r.collided
 	}
 	return nil
 }
@@ -387,8 +384,12 @@ func (fs *cephmountfs) RestoreRecycleItem(ctx context.Context, basePath, key, re
 // recycleRestore keeps what one restore did. An older copy of an item that the
 // same restore put back stays in the bin, and is not a collision.
 type recycleRestore struct {
-	restored []string
-	collided []string
+	force     bool
+	spaceRoot string
+	// The day folder that is restored, for the key of a collision.
+	day, dayDir string
+	restored    []string
+	collided    storage.RecycleCollisions
 }
 
 // restoreEntry is the reverse of recycleEntry. The user does the move, so that
@@ -424,11 +425,37 @@ func (fs *cephmountfs) restoreEntry(ctx context.Context, src string, info os.Fil
 		return fs.mergeFromRecycle(ctx, src, target, r)
 	}
 
-	// The older copies of a path collide with the same item, thus it is reported once.
-	if name := fs.fromChroot(target); !slices.Contains(r.collided, name) && !slices.ContainsFunc(r.restored, func(p string) bool {
+	if slices.ContainsFunc(r.restored, func(p string) bool {
 		return target == p || strings.HasPrefix(target, p+string(filepath.Separator))
 	}) {
-		r.collided = append(r.collided, name)
+		return nil
+	}
+
+	if r.force {
+		// rename(2) replaces an existing file without an error, so check the new name too.
+		aside := target + "." + strconv.FormatUint(existing.Sys().(*syscall.Stat_t).Ino, 10)
+		if _, err := fs.rootFS.Lstat(aside); err == nil {
+			return errtypes.AlreadyExists("cephmount: " + fs.fromChroot(aside) + " already exists")
+		} else if !os.IsNotExist(err) {
+			return err
+		}
+		if err := fs.renameAsUser(ctx, target, aside); err != nil {
+			return err
+		}
+		return fs.restoreEntry(ctx, src, info, target, r)
+	}
+
+	// The older copies of a path collide with the same item, thus it is reported once.
+	rel, err := filepath.Rel(r.spaceRoot, target)
+	if err != nil {
+		return err
+	}
+	if !slices.ContainsFunc(r.collided, func(c storage.RecycleCollision) bool { return c.Path == rel }) {
+		inDay, err := filepath.Rel(r.dayDir, src)
+		if err != nil {
+			return err
+		}
+		r.collided = append(r.collided, storage.RecycleCollision{Key: path.Join(r.day, inDay), Path: rel})
 	}
 	return nil
 }

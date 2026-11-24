@@ -358,8 +358,9 @@ func TestRestoreRecycleItemReportsACollisionOnce(t *testing.T) {
 
 	err := fs.RestoreRecycleItem(ctx, "/proj", "20261010-20261013", "/a", nil, false)
 
-	require.IsType(t, errtypes.AlreadyExists(""), err)
-	assert.Equal(t, 1, strings.Count(err.Error(), "/proj/a/path.txt"), err.Error())
+	var collisions storage.RecycleCollisions
+	require.ErrorAs(t, err, &collisions)
+	assert.Equal(t, storage.RecycleCollisions{{Key: "20261013/a/path.txt", Path: "a/path.txt"}}, collisions, "once, as the newest copy")
 }
 
 func TestRestoreRecycleItemNewestCopyOfTheDayWins(t *testing.T) {
@@ -415,11 +416,35 @@ func TestRestoreRecycleItemDoesNotOverwrite(t *testing.T) {
 	today := time.Now().UTC().Format(recycleKeyDay)
 	err := fs.RestoreRecycleItem(ctx, "/proj", today, "/a", nil, false)
 
-	require.IsType(t, errtypes.AlreadyExists(""), err)
-	assert.Contains(t, err.Error(), "/proj/a/x.txt")
+	var collisions storage.RecycleCollisions
+	require.ErrorAs(t, err, &collisions)
+	assert.Equal(t, storage.RecycleCollisions{{Key: today + "/a/x.txt", Path: "a/x.txt"}}, collisions)
 	assert.Equal(t, "new x", readTestFile(t, filepath.Join(space, "a", "x.txt")))
 	assert.Equal(t, "deleted y", readTestFile(t, filepath.Join(space, "a", "y.txt")))
 	assert.Equal(t, "deleted x", readTestFile(t, filepath.Join(day, "a", "x.txt")), "the collision stays in the bin")
+}
+
+func TestRestoreRecycleItemWithForceKeepsBoth(t *testing.T) {
+	fs, ctx, _ := newRecycleTestFS(t, 1)
+	space := filepath.Join(fs.chrootDir, "proj")
+	writeTestFile(t, filepath.Join(space, "a", "x.txt"), "deleted x")
+	require.NoError(t, fs.Delete(ctx, &provider.Reference{Path: "/proj/a"}))
+	writeTestFile(t, filepath.Join(space, "a", "x.txt"), "new x")
+	info, err := os.Stat(filepath.Join(space, "a", "x.txt"))
+	require.NoError(t, err)
+	inode := strconv.FormatUint(info.Sys().(*syscall.Stat_t).Ino, 10)
+
+	today := time.Now().UTC().Format(recycleKeyDay)
+	var collisions storage.RecycleCollisions
+	require.ErrorAs(t, fs.RestoreRecycleItem(ctx, "/proj", today, "/a", nil, false), &collisions)
+	require.Len(t, collisions, 1)
+
+	// The key of a collision restores that item alone.
+	scope, rel := splitRecycleKey(collisions[0].Key)
+	require.NoError(t, fs.RestoreRecycleItem(ctx, "/proj", scope, rel, nil, true))
+
+	assert.Equal(t, "deleted x", readTestFile(t, filepath.Join(space, "a", "x.txt")))
+	assert.Equal(t, "new x", readTestFile(t, filepath.Join(space, "a", "x.txt."+inode)), "the item that was in the way")
 }
 
 func TestRestoreRecycleItemRefusals(t *testing.T) {
