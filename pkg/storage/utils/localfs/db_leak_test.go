@@ -24,7 +24,7 @@ import (
 	"testing"
 
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
-	sqlite3 "github.com/mattn/go-sqlite3"
+	sqlite "github.com/glebarez/go-sqlite"
 )
 
 // countingDriver wraps the real sqlite driver and counts Prepare against
@@ -111,7 +111,7 @@ func (s *countingStmt) Close() error {
 // TestPreparedStatementsAreClosed drives the localfs DB helpers and asserts
 // that every prepared statement is released.
 func TestPreparedStatementsAreClosed(t *testing.T) {
-	d := &countingDriver{inner: &sqlite3.SQLiteDriver{}}
+	d := &countingDriver{inner: &sqlite.Driver{}}
 	sql.Register("counting-sqlite3", d)
 
 	db, err := sql.Open("counting-sqlite3", path.Join(t.TempDir(), "leak.db"))
@@ -205,7 +205,7 @@ func TestPreparedStatementsAreClosed(t *testing.T) {
 // so a leak here grows with normal browsing traffic just like the statement
 // leak did.
 func TestResultSetsAreClosed(t *testing.T) {
-	d := &countingDriver{inner: &sqlite3.SQLiteDriver{}}
+	d := &countingDriver{inner: &sqlite.Driver{}}
 	sql.Register("counting-sqlite3-rows", d)
 
 	db, err := sql.Open("counting-sqlite3-rows", path.Join(t.TempDir(), "rows.db"))
