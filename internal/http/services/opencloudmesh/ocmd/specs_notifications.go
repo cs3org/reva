@@ -81,9 +81,7 @@ type Notification struct {
 	SenderDomain string
 	ResourceType string
 	ShareType    string
-	// ProviderID is notification.file.providerId.
-	ProviderID string
-	Message    string
+	Message      string
 
 	File  *NotificationFile
 	User  *NotificationUser
@@ -193,7 +191,7 @@ func decodeNotification(body []byte) (*Notification, error) {
 	if !ok || isJSONNull(rawType) {
 		return nil, &NotificationError{Code: NotificationErrMissingType}
 	}
-	if json.Unmarshal(rawType, &n.Type) != nil {
+	if json.Unmarshal(rawType, &n.Type) != nil || strings.ContainsRune(n.Type, utf8.RuneError) && hasUnpairedSurrogate(rawType) {
 		return nil, &NotificationError{Code: NotificationErrMalformed}
 	}
 	if n.Type == "" {
@@ -265,6 +263,10 @@ func memberString(obj map[string]json.RawMessage, key, field string, required bo
 	if isJSONNull(raw) || json.Unmarshal(raw, &s) != nil || s == "" {
 		return "", invalidField(field)
 	}
+	// encoding/json substitutes U+FFFD for an unpaired surrogate escape.
+	if strings.ContainsRune(s, utf8.RuneError) && hasUnpairedSurrogate(raw) {
+		return "", invalidField(field)
+	}
 	return s, nil
 }
 
@@ -298,16 +300,7 @@ func (n *Notification) payloadObject(key string) (map[string]json.RawMessage, er
 }
 
 func payloadString(obj map[string]json.RawMessage, object, key string) (string, error) {
-	field := "notification." + object + "." + key
-	s, err := memberString(obj, key, field, true)
-	if err != nil {
-		return "", err
-	}
-	// encoding/json substitutes U+FFFD for an unpaired surrogate escape.
-	if strings.ContainsRune(s, utf8.RuneError) && hasUnpairedSurrogate(obj[key]) {
-		return "", invalidField(field)
-	}
-	return s, nil
+	return memberString(obj, key, "notification."+object+"."+key, true)
 }
 
 func hasUnpairedSurrogate(raw json.RawMessage) bool {
@@ -414,7 +407,7 @@ func validateShareState(n *Notification) error {
 	if f.Permissions, err = filePermissions(file); err != nil {
 		return err
 	}
-	n.File, n.ProviderID = f, f.ProviderID
+	n.File = f
 	return nil
 }
 
@@ -436,7 +429,7 @@ func validateRequestReshare(n *Notification) error {
 	if f.Permissions, err = filePermissions(file); err != nil {
 		return err
 	}
-	n.File, n.ProviderID = f, f.ProviderID
+	n.File = f
 	return nil
 }
 

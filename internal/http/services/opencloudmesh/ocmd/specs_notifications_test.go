@@ -104,7 +104,7 @@ func TestParseNotificationFields(t *testing.T) {
 	reg := NewNotificationRegistry()
 	n := mustParse(t, reg, `{"notificationType":"SHARE_CHANGE_PERMISSION","senderDomain":"a.example.org","resourceType":"folder","shareType":"user","notification":{"message":"m","file":{"providerId":"42","permissions":["read","write"]}}}`)
 	wantFile := &NotificationFile{ProviderID: "42", Permissions: []string{"read", "write"}}
-	if n.Class != NotificationClassSpec || n.ProviderID != "42" || n.ResourceType != "folder" || n.ShareType != "user" || n.Message != "m" || !reflect.DeepEqual(n.File, wantFile) {
+	if n.Class != NotificationClassSpec || n.ResourceType != "folder" || n.ShareType != "user" || n.Message != "m" || !reflect.DeepEqual(n.File, wantFile) {
 		t.Fatalf("fields %#v file %#v", n, n.File)
 	}
 	n = mustParse(t, reg, `{"notificationType":"USER_REMOVED","senderDomain":"a.example.org","shareType":"user","notification":{"user":{"userId":"Alice @x@a.example.org"}}}`)
@@ -120,7 +120,7 @@ func TestParseNotificationFields(t *testing.T) {
 		t.Fatalf("group %#v", n.Group)
 	}
 	n = mustParse(t, reg, `{"notificationType":"ACME","senderDomain":"A.Example.org:0443","shareType":"user","providerId":"flat"}`)
-	if n.Class != NotificationClassUnknown || n.SenderDomain != "a.example.org:0443" || n.ProviderID != "" {
+	if n.Class != NotificationClassUnknown || n.SenderDomain != "a.example.org:0443" || n.File != nil {
 		t.Fatalf("unknown %#v", n)
 	}
 	n = mustParse(t, reg, `{"notificationType":"\u0085EXT\u2003","senderDomain":"[2001:DB8::1]:8443","shareType":"user"}`)
@@ -168,7 +168,7 @@ func TestParseCollectionDeclineIsNotAFileGrant(t *testing.T) {
 	if code, ok := NotificationErrorCodeOf(err); !ok || code != NotificationErrNotImplemented || n.Class != NotificationClassRequest {
 		t.Fatalf("class %s: %v", n.Class, err)
 	}
-	if n.File != nil || n.ProviderID != "" {
+	if n.File != nil {
 		t.Fatalf("collection decline exposed a file grant: %#v", n)
 	}
 	if out, err := reg.Dispatch(context.Background(), n); out != DispatchNotImplemented || err != nil || len(h.seen) != 0 {
@@ -214,6 +214,44 @@ func TestRegistryRejectsInvalidNotificationFields(t *testing.T) {
 			}
 			if outcome != DispatchIgnored || dispatchErr != nil || len(h.seen) != 0 {
 				t.Errorf("dispatch %s, error %v, handler calls %d", outcome, dispatchErr, len(h.seen))
+			}
+		})
+	}
+}
+
+func TestNotificationEnvelopeTokensAreLossless(t *testing.T) {
+	const unshare = `{"notificationType":"%s","senderDomain":"a.example.org","resourceType":"%s","notification":{"file":{"providerId":"42"}}}`
+	const custom = `{"notificationType":"ACME","senderDomain":"a.example.org","shareType":"%s"}`
+	for _, tc := range []struct {
+		name, body, reason string
+		class              NotificationClass
+		calls              int
+	}{
+		{"replacement in type", fmt.Sprintf(unshare, `ACME\ufffd`, "file"), "", NotificationClassUnknown, 0},
+		{"surrogate in unknown type", fmt.Sprintf(unshare, `ACME\ud800`, "file"), "malformed notification", NotificationClassMalformed, 0},
+		{"surrogate in known type", fmt.Sprintf(unshare, `SHARE_UNSHARED\udc00`, "file"), "malformed notification", NotificationClassMalformed, 0},
+		{"replacement in resourceType", fmt.Sprintf(unshare, "SHARE_UNSHARED", `file\ufffd`), "", NotificationClassSpec, 1},
+		{"surrogate in resourceType", fmt.Sprintf(unshare, "SHARE_UNSHARED", `file\ud800`), "invalid resourceType", NotificationClassMalformed, 0},
+		{"replacement in shareType", fmt.Sprintf(custom, `user\ufffd`), "", NotificationClassUnknown, 0},
+		{"surrogate in shareType", fmt.Sprintf(custom, `user\udc00`), "invalid shareType", NotificationClassMalformed, 0},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			reg := NewNotificationRegistry()
+			h := &recordingHandler{}
+			for typ := range builtinContracts {
+				if err := reg.SetHandler(typ, h); err != nil {
+					t.Fatal(err)
+				}
+			}
+			n, err := reg.Parse([]byte(tc.body))
+			if n.Class != tc.class || (tc.reason == "") != (err == nil) || err != nil && NotificationReason(err) != tc.reason {
+				t.Fatalf("class %s, error %v; want %s %q", n.Class, err, tc.class, tc.reason)
+			}
+			if err == nil && !strings.ContainsRune(n.Type+n.ResourceType+n.ShareType, '\uFFFD') {
+				t.Fatalf("replacement character was not preserved: %q %q %q", n.Type, n.ResourceType, n.ShareType)
+			}
+			if _, err := reg.Dispatch(context.Background(), n); err != nil || len(h.seen) != tc.calls {
+				t.Fatalf("dispatch error %v, handler calls %d, want %d", err, len(h.seen), tc.calls)
 			}
 		})
 	}
@@ -306,7 +344,7 @@ func TestNotificationRejectsInvalidUTF8(t *testing.T) {
 		}
 		const grant = `{"notificationType":"SHARE_UNSHARED","senderDomain":"a.example.org","resourceType":"file","notification":{"file":{"providerId":"%s"}}}`
 		n = mustParse(t, reg, fmt.Sprintf(grant, id.wire))
-		if n.File == nil || n.File.ProviderID != id.want || n.ProviderID != id.want {
+		if n.File == nil || n.File.ProviderID != id.want {
 			t.Fatalf("Unicode grant ID changed: %#v", n.File)
 		}
 	}
