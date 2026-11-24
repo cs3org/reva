@@ -84,6 +84,8 @@ type FileInfo struct {
 	GID        uint64            `json:"gid"`
 	Mode       uint64            `json:"mode"`
 	ParentMode uint64            `json:"parent_mode"` // Files only: EOS checks the mode of the parent folder.
+	ParentUID  uint64            `json:"parent_uid"`
+	ParentGID  uint64            `json:"parent_gid"`
 	TreeSize   uint64            `json:"tree_size"`
 	MTimeSec   uint64            `json:"mtime_sec"`
 	MTimeNanos uint32            `json:"mtime_nanos"`
