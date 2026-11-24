@@ -91,8 +91,8 @@ func TestJSONDeleteAndUpdateShareReceipts(t *testing.T) {
 	}
 
 	removal, err := m.DeleteShare(ctx, u, ref)
-	if err != nil || removal.Share.GetToken() != "tok" || removal.Share.GetGrantee() == nil ||
-		removal.ResourceType != ocm.SharedResourceType_SHARE_RESOURCE_TYPE_CONTAINER {
+	if err != nil || len(removal) != 1 || removal[0].Share.GetToken() != "tok" || removal[0].Share.GetGrantee() == nil ||
+		removal[0].ResourceType != ocm.SharedResourceType_SHARE_RESOURCE_TYPE_CONTAINER {
 		t.Fatalf("delete: %v %v", removal, err)
 	}
 	if r, err := m.DeleteShare(ctx, u, ref); err == nil || r != nil {
@@ -128,6 +128,9 @@ func TestJSONTransferAttemptsPersistAcrossReload(t *testing.T) {
 	}
 	if u, err := reopened.CompleteReceivedShareTransfer(ctx, user, rs.Id, 1, ocm.ShareState_SHARE_STATE_ACCEPTED); err != nil || u.StateChanged() {
 		t.Fatalf("duplicate: %v %v", u, err)
+	}
+	if _, err := reopened.StartReceivedShareTransfer(ctx, user, &ocm.ReceivedShare{Id: rs.Id}, mask("state")); !errors.Is(err, share.ErrShareAlreadyAccepted) {
+		t.Fatalf("start after acceptance: %v", err)
 	}
 
 	reset := &ocm.ReceivedShare{Id: rs.Id, State: ocm.ShareState_SHARE_STATE_PENDING}
@@ -235,8 +238,8 @@ func TestJSONShareResourceTypeAdmissionAndExistingMutations(t *testing.T) {
 					t.Error("update filled in a resource type")
 				}
 				removed, err := repo.DeleteShare(ctx, testUser(), ref)
-				if err != nil || removed == nil || removed.ResourceType != ocm.SharedResourceType_SHARE_RESOURCE_TYPE_INVALID ||
-					removed.Share.GetId().GetOpaqueId() != s.Id.OpaqueId {
+				if err != nil || len(removed) != 1 || removed[0].ResourceType != ocm.SharedResourceType_SHARE_RESOURCE_TYPE_INVALID ||
+					removed[0].Share.GetId().GetOpaqueId() != s.Id.OpaqueId {
 					t.Errorf("withdrawal of prior-format share: %v %v", removed, err)
 				}
 				if got, err := repo.GetShare(ctx, testUser(), ref); err == nil || got != nil {

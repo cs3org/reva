@@ -264,7 +264,14 @@ func (s *svc) UpdateReceivedOCMShare(ctx context.Context, req *ocm.UpdateReceive
 			},
 		}, nil
 	}
-	if getShareRes.Status.Code != rpc.Code_CODE_OK {
+	lookupStatus := getShareRes.GetStatus()
+	if lookupStatus != nil && lookupStatus.GetCode() == rpc.Code_CODE_NOT_FOUND {
+		return &ocm.UpdateReceivedOCMShareResponse{
+			Status: status.NewNotFound(ctx, "received share does not exist"),
+		}, nil
+	}
+	share := getShareRes.GetShare()
+	if lookupStatus == nil || lookupStatus.GetCode() != rpc.Code_CODE_OK || share == nil {
 		log.Error().Msg("gateway: error calling GetReceivedShare")
 		return &ocm.UpdateReceivedOCMShareResponse{
 			Status: &rpc.Status{
@@ -272,11 +279,6 @@ func (s *svc) UpdateReceivedOCMShare(ctx context.Context, req *ocm.UpdateReceive
 			},
 		}, nil
 	}
-	share := getShareRes.Share
-	if share == nil {
-		panic("gateway: error updating a received share: the share is nil")
-	}
-
 	res, err := c.UpdateReceivedOCMShare(ctx, req)
 	if err != nil {
 		log.Err(err).Msg("gateway: error calling UpdateReceivedShare")
@@ -422,11 +424,21 @@ func (s *svc) handleTransfer(ctx context.Context, share *ocm.ReceivedShare, tran
 	if err != nil {
 		return err
 	}
+	if res == nil || res.GetStatus() == nil {
+		return errtypes.InternalError("transfer service returned no status")
+	}
+	if res.GetStatus().GetCode() != rpc.Code_CODE_OK {
+		return status.NewErrtypeFromStatus(res.GetStatus())
+	}
 	log.Info().Msgf("gateway: CreateTransfer: %v", res.TxInfo)
 	return nil
 }
 
 func (s *svc) isTransferShare(share *ocm.ReceivedShare) bool {
+	// The share provider owns the copy when an embedded descriptor is present.
+	if slices.ContainsFunc(share.GetProtocols(), func(p *ocm.Protocol) bool { return p.GetEmbeddedOptions() != nil }) {
+		return false
+	}
 	_, ok := s.getTransferProtocol(share)
 	return ok
 }

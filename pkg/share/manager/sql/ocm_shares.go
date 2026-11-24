@@ -23,6 +23,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"math"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -211,12 +212,14 @@ func forUpdate(tx *gorm.DB) *gorm.DB {
 	return tx
 }
 
-// DeleteShare deletes an outgoing share. The share is read and deleted in one
-// transaction, and its receipt is only returned after the commit.
-func (m *mgr) DeleteShare(ctx context.Context, user *userpb.User, ref *ocm.ShareReference) (*share.ShareRemoval, error) {
-	var removal share.ShareRemoval
+// DeleteShare reads and deletes the matching outgoing shares in one
+// transaction and returns their receipts after commit.
+func (m *mgr) DeleteShare(ctx context.Context, user *userpb.User, ref *ocm.ShareReference) ([]share.ShareRemoval, error) {
+	var removals []share.ShareRemoval
 	err := m.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		q := forUpdate(tx)
+		key := ref.GetKey()
+		var grantee string
 		switch {
 		case ref.GetId() != nil:
 			shareID, err := strconv.Atoi(ref.GetId().OpaqueId)
@@ -224,45 +227,78 @@ func (m *mgr) DeleteShare(ctx context.Context, user *userpb.User, ref *ocm.Share
 				return errtypes.BadRequest("invalid share ID")
 			}
 			q = q.Where("id = ? AND (owner = ? OR initiator = ?)", shareID, user.Id.OpaqueId, user.Id.OpaqueId)
-		case ref.GetKey() != nil:
-			key := ref.GetKey()
+		case key != nil:
+			grantee = formatUserID(key.Grantee.GetUserId())
 			q = q.Where("owner = ? AND instance = ? AND inode = ? AND share_with = ? AND (initiator = ? OR owner = ?)",
-				key.Owner.OpaqueId, key.ResourceId.StorageId, key.ResourceId.OpaqueId, formatUserID(key.Grantee.GetUserId()), user.Id.OpaqueId, user.Id.OpaqueId)
+				key.Owner.OpaqueId, key.ResourceId.StorageId, key.ResourceId.OpaqueId, grantee, user.Id.OpaqueId, user.Id.OpaqueId)
 		default:
 			return errtypes.NotFound(ref.String())
 		}
-		var shareModel model.OcmShare
-		if err := q.First(&shareModel).Error; err != nil {
-			if errors.Is(err, gorm.ErrRecordNotFound) {
-				return share.ErrShareNotFound
+		var matches []model.OcmShare
+		if err := q.Order("id").Find(&matches).Error; err != nil {
+			return err
+		}
+		// MySQL text collation can equate distinct opaque identifiers.
+		caller := user.Id.OpaqueId
+		matches = slices.DeleteFunc(matches, func(row model.OcmShare) bool {
+			if row.Owner != caller && row.Initiator != caller {
+				return true
 			}
-			return err
-		}
-		resourceType := convertToCS3SharedResourceType(shareModel.ItemType)
-		if shareModel.ItemType != "" && !share.SupportedResourceType(resourceType) {
-			return share.ErrInvalidResourceType
-		}
-		am, err := accessMethodsTx(tx, shareModel.Id)
-		if err != nil {
-			return err
-		}
-		result := tx.Where("id = ?", shareModel.Id).Delete(&model.OcmShare{})
-		if result.Error != nil {
-			return result.Error
-		}
-		if result.RowsAffected == 0 {
+			return key != nil && (row.Owner != key.Owner.OpaqueId ||
+				row.Instance != key.ResourceId.StorageId ||
+				row.Inode != key.ResourceId.OpaqueId ||
+				row.ShareWith != grantee)
+		})
+		if len(matches) == 0 {
 			return share.ErrShareNotFound
 		}
-		removal = share.ShareRemoval{
-			Share:        convertToCS3OCMShare(&shareModel, am),
-			ResourceType: resourceType,
+		removals = make([]share.ShareRemoval, len(matches))
+		for i := range matches {
+			row := &matches[i]
+			resourceType := convertToCS3SharedResourceType(row.ItemType)
+			if row.ItemType != "" && !share.SupportedResourceType(resourceType) {
+				return share.ErrInvalidResourceType
+			}
+			methods, err := accessMethodsTx(tx, row.Id)
+			if err != nil {
+				return err
+			}
+			removals[i] = share.ShareRemoval{
+				Share:        convertToCS3OCMShare(row, methods),
+				ResourceType: resourceType,
+			}
+		}
+
+		// The soft-delete timestamp participates in the unique key. Matching
+		// grants need distinct timestamps at MySQL's millisecond precision.
+		first := matches[0]
+		var latest model.OcmShare
+		if err := forUpdate(tx.Unscoped()).Select("deleted_at").
+			Where("instance = ? AND inode = ? AND share_with = ? AND deleted_at IS NOT NULL", first.Instance, first.Inode, first.ShareWith).
+			Order("deleted_at DESC").Limit(1).Find(&latest).Error; err != nil {
+			return err
+		}
+		deletedAt := tx.NowFunc().UTC().Truncate(time.Millisecond)
+		if latest.DeletedAt.Valid && !deletedAt.After(latest.DeletedAt.Time) {
+			deletedAt = latest.DeletedAt.Time.UTC().Truncate(time.Millisecond).Add(time.Millisecond)
+		}
+		for _, row := range matches {
+			del := tx.Session(&gorm.Session{NowFunc: func() time.Time { return deletedAt }})
+			result := del.Where("id = ?", row.Id).Delete(&model.OcmShare{})
+			if result.Error != nil {
+				return result.Error
+			}
+			if result.RowsAffected != 1 {
+				return share.ErrShareNotFound
+			}
+			deletedAt = deletedAt.Add(time.Millisecond)
 		}
 		return nil
 	})
 	if err != nil {
 		return nil, err
 	}
-	return &removal, nil
+	return removals, nil
 }
 
 func (m *mgr) UpdateShare(ctx context.Context, user *userpb.User, ref *ocm.ShareReference, f ...*ocm.UpdateOCMShareRequest_UpdateField) (*share.ShareUpdate, error) {
@@ -648,8 +684,8 @@ func (m *mgr) UpdateReceivedShare(ctx context.Context, user *userpb.User, s *ocm
 	return &receipt, nil
 }
 
-// StartReceivedShareTransfer moves a share that is not transferring to
-// TRANSFERRING and starts a new attempt, in one transaction.
+// StartReceivedShareTransfer moves a share that is neither transferring nor
+// accepted to TRANSFERRING and starts a new attempt, in one transaction.
 func (m *mgr) StartReceivedShareTransfer(ctx context.Context, user *userpb.User, s *ocm.ReceivedShare, fieldMask *field_mask.FieldMask) (*share.TransferStart, error) {
 	transferring := proto.Clone(s).(*ocm.ReceivedShare)
 	transferring.State = ocm.ShareState_SHARE_STATE_TRANSFERRING
@@ -669,8 +705,11 @@ func (m *mgr) StartReceivedShareTransfer(ctx context.Context, user *userpb.User,
 		if err != nil {
 			return err
 		}
-		if row.State == model.OcmShareStateTransferring {
+		switch row.State {
+		case model.OcmShareStateTransferring:
 			return share.ErrTransferInProgress
+		case model.OcmShareStateAccepted:
+			return share.ErrShareAlreadyAccepted
 		}
 		gen, err := nextTransferGeneration(row.TransferGeneration)
 		if err != nil {

@@ -93,6 +93,9 @@ func (s *service) notifyUnshared(ctx context.Context, removal *share.ShareRemova
 	sh := removal.Share
 	rt := resourceTypeName(removal.ResourceType)
 	if rt == "" {
+		// The share was stored before resource types were kept. The local
+		// change still applies, but the peer is not told.
+		appctx.GetLogger(ctx).Warn().Str("type", ocmd.NotificationShareUnshared).Msg("not sending OCM notification: share has no stored resource type")
 		return
 	}
 	s.emit(ctx, sh.GetGrantee().GetUserId().GetIdp(), ocmd.ShareStateNotification{
@@ -113,6 +116,7 @@ func (s *service) notifyPermissionChange(ctx context.Context, update *share.Shar
 	sh := update.After
 	rt := resourceTypeName(update.ResourceType)
 	if rt == "" {
+		appctx.GetLogger(ctx).Warn().Str("type", ocmd.NotificationShareChangePermission).Msg("not sending OCM notification: share has no stored resource type")
 		return
 	}
 	var perms []string

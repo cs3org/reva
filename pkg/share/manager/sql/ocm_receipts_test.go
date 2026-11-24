@@ -22,6 +22,7 @@ import (
 	"context"
 	"errors"
 	"slices"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -36,6 +37,7 @@ import (
 	model "github.com/cs3org/reva/v3/pkg/share/manager/sql/model"
 	"google.golang.org/genproto/protobuf/field_mask"
 	"google.golang.org/protobuf/proto"
+	"gorm.io/gorm"
 )
 
 func ownerContext(t *testing.T, id string) (context.Context, *userpb.User) {
@@ -83,7 +85,10 @@ func TestDeleteShareReceipt(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		got := removal.Share
+		if len(removal) != 1 {
+			t.Fatalf("got %d receipts, want one", len(removal))
+		}
+		got := removal[0].Share
 		if got.GetId().GetOpaqueId() != stored.Id.OpaqueId || got.GetToken() != "tok-1" ||
 			got.GetGrantee().GetUserId().GetOpaqueId() != "marie" || len(got.GetAccessMethods()) != 2 {
 			t.Fatalf("receipt share %v", got)
@@ -99,15 +104,177 @@ func TestDeleteShareReceipt(t *testing.T) {
 	})
 }
 
+func TestDeleteShareByIDExactPrincipal(t *testing.T) {
+	forEachDialect(t, func(t *testing.T, m *mgr) {
+		ctx, owner := ownerContext(t, "einstein")
+		_, initiator := ownerContext(t, "delegate")
+		for _, tc := range []struct {
+			name   string
+			caller *userpb.User
+		}{{"owner", owner}, {"initiator", initiator}} {
+			t.Run(tc.name, func(t *testing.T) {
+				grant := getOcmShare(getOcmAccessMethods("viewer"), getUserOcmShareGrantee("marie"), owner.Id, getResourceId(), tc.name)
+				grant.Creator = initiator.Id
+				stored, err := storeOcmShareWithID(m, ctx, grant)
+				if err != nil {
+					t.Fatal(err)
+				}
+				_, differentCase := ownerContext(t, strings.ToUpper(tc.caller.Id.OpaqueId))
+				if m.db.Dialector.Name() == "mysql" {
+					var candidates int64
+					principal := differentCase.Id.OpaqueId
+					err := m.db.Model(&model.OcmShare{}).
+						Where("id = ? AND (owner = ? OR initiator = ?)", stored.Id.OpaqueId, principal, principal).
+						Count(&candidates).Error
+					if err != nil || candidates != 1 {
+						t.Fatalf("fixture collation matched %d entries, want 1: %v", candidates, err)
+					}
+				}
+				ref := idRef(stored.Id)
+				before, err := m.GetShare(ctx, tc.caller, ref)
+				if err != nil {
+					t.Fatal(err)
+				}
+				if receipts, err := m.DeleteShare(ctx, differentCase, ref); !errors.Is(err, share.ErrShareNotFound) || receipts != nil {
+					t.Fatalf("byte-distinct principal got %d receipts: %v", len(receipts), err)
+				}
+				if current, err := m.GetShare(ctx, tc.caller, ref); err != nil || !proto.Equal(current, before) {
+					t.Fatalf("refused removal changed the stored row: %v", err)
+				}
+				receipts, err := m.DeleteShare(ctx, tc.caller, ref)
+				if err != nil || len(receipts) != 1 || receipts[0].Share.GetId().GetOpaqueId() != stored.Id.OpaqueId {
+					t.Fatalf("exact principal got %d receipts: %v", len(receipts), err)
+				}
+				if _, err := m.GetShare(ctx, tc.caller, ref); !errors.Is(err, share.ErrShareNotFound) {
+					t.Errorf("acknowledged removal left the row active: %v", err)
+				}
+			})
+		}
+	})
+}
+
 func TestDeleteShareByKeyReceipt(t *testing.T) {
 	forEachDialect(t, func(t *testing.T, m *mgr) {
 		ctx, owner := ownerContext(t, "einstein")
+		now := time.Now().UTC().Truncate(time.Millisecond)
+		m.db = m.db.Session(&gorm.Session{NowFunc: func() time.Time { return now }})
+		deleted := storeOutgoing(t, m, ctx, owner, "viewer", "tok-deleted")
+		if _, err := m.DeleteShare(ctx, owner, idRef(deleted.Id)); err != nil {
+			t.Fatal(err)
+		}
 		stored := storeOutgoing(t, m, ctx, owner, "viewer", "tok-k")
-		removal, err := m.DeleteShare(ctx, owner, &ocm.ShareReference{Spec: &ocm.ShareReference_Key{Key: &ocm.ShareKey{
+		duplicate := storeOutgoing(t, m, ctx, owner, "editor", "tok-duplicate")
+		otherCtx, otherOwner := ownerContext(t, "another-owner")
+		survivor := storeOutgoing(t, m, otherCtx, otherOwner, "viewer", "tok-survivor")
+		ref := &ocm.ShareReference{Spec: &ocm.ShareReference_Key{Key: &ocm.ShareKey{
 			Owner: owner.Id, ResourceId: stored.ResourceId, Grantee: stored.Grantee,
-		}}})
-		if err != nil || removal.Share.GetToken() != "tok-k" {
-			t.Fatalf("%v %v", removal, err)
+		}}}
+
+		const callback = "test:abort_second_ocm_delete"
+		abort := errors.New("abort after deleting both rows")
+		deletes := 0
+		if err := m.db.Callback().Delete().After("gorm:delete").Register(callback, func(tx *gorm.DB) {
+			if tx.Error == nil && tx.RowsAffected == 1 {
+				deletes++
+				if deletes == 2 {
+					_ = tx.AddError(abort)
+				}
+			}
+		}); err != nil {
+			t.Fatal(err)
+		}
+		rolledBack, rollbackErr := m.DeleteShare(ctx, owner, ref)
+		if err := m.db.Callback().Delete().Remove(callback); err != nil {
+			t.Fatal(err)
+		}
+		if !errors.Is(rollbackErr, abort) || rolledBack != nil || deletes != 2 {
+			t.Fatalf("rollback returned %d receipts after %d writes: %v", len(rolledBack), deletes, rollbackErr)
+		}
+		for _, want := range []*ocm.Share{stored, duplicate} {
+			if got, err := m.GetShare(ctx, owner, idRef(want.Id)); err != nil || got.GetToken() != want.Token {
+				t.Fatalf("rollback changed share %s: %v", want.GetId().GetOpaqueId(), err)
+			}
+		}
+		removals, err := m.DeleteShare(ctx, owner, ref)
+		if err != nil || len(removals) != 2 {
+			t.Fatalf("got %d receipts: %v", len(removals), err)
+		}
+		for i, want := range []*ocm.Share{stored, duplicate} {
+			got := removals[i].Share
+			if got.GetId().GetOpaqueId() != want.Id.OpaqueId || got.GetToken() != want.Token ||
+				len(got.GetAccessMethods()) != 2 || removals[i].ResourceType != ocm.SharedResourceType_SHARE_RESOURCE_TYPE_FILE {
+				t.Errorf("unexpected receipt for share %s", want.Id.OpaqueId)
+			}
+			if _, err := m.GetShare(ctx, owner, idRef(want.Id)); !errors.Is(err, share.ErrShareNotFound) {
+				t.Errorf("share %s remains available: %v", want.Id.OpaqueId, err)
+			}
+		}
+		if removals, err := m.DeleteShare(ctx, owner, ref); !errors.Is(err, share.ErrShareNotFound) || removals != nil {
+			t.Errorf("repeat returned %d receipts: %v", len(removals), err)
+		}
+		if got, err := m.GetShare(otherCtx, otherOwner, idRef(survivor.Id)); err != nil || got.GetToken() != survivor.Token {
+			t.Errorf("unrelated share changed: %v %v", got, err)
+		}
+	})
+}
+
+func TestDeleteShareByKeyExactIdentity(t *testing.T) {
+	forEachDialect(t, func(t *testing.T, m *mgr) {
+		ctx, caller := ownerContext(t, "delegate")
+		_, owner := ownerContext(t, "einstein")
+		base := getOcmShare(getOcmAccessMethods("viewer"), getUserOcmShareGrantee("marie"), owner.Id, getResourceId(), "exact")
+		base.Creator = caller.Id
+		base.Grantee.GetUserId().Idp = "remote.example.org"
+		exact, err := storeOcmShareWithID(m, ctx, base)
+		if err != nil {
+			t.Fatal(err)
+		}
+		var survivors []*ocm.Share
+		for _, variant := range []struct {
+			name   string
+			change func(*ocm.Share)
+		}{
+			{"owner", func(s *ocm.Share) { s.Owner.OpaqueId = "Einstein" }},
+			{"storage", func(s *ocm.Share) { s.ResourceId.StorageId = strings.ToUpper(s.ResourceId.StorageId) }},
+			{"resource", func(s *ocm.Share) { s.ResourceId.OpaqueId = strings.ToUpper(s.ResourceId.OpaqueId) }},
+			{"grantee", func(s *ocm.Share) { s.Grantee.GetUserId().OpaqueId = "Marie" }},
+			{"initiator", func(s *ocm.Share) { s.Creator.OpaqueId = "Delegate" }},
+		} {
+			other := proto.CloneOf(base)
+			other.Token = variant.name
+			variant.change(other)
+			stored, err := storeOcmShareWithID(m, ctx, other)
+			if err != nil {
+				t.Fatal(err)
+			}
+			survivors = append(survivors, stored)
+		}
+		key := &ocm.ShareKey{Owner: base.Owner, ResourceId: base.ResourceId, Grantee: base.Grantee}
+		if m.db.Dialector.Name() == "mysql" {
+			var candidates int64
+			err := m.db.Model(&model.OcmShare{}).
+				Where("owner = ? AND instance = ? AND inode = ? AND share_with = ? AND (initiator = ? OR owner = ?)",
+					key.Owner.OpaqueId, key.ResourceId.StorageId, key.ResourceId.OpaqueId,
+					formatUserID(key.Grantee.GetUserId()), caller.Id.OpaqueId, caller.Id.OpaqueId).Count(&candidates).Error
+			if err != nil || candidates != int64(1+len(survivors)) {
+				t.Fatalf("fixture collation matched %d entries, want %d: %v", candidates, 1+len(survivors), err)
+			}
+		}
+		ref := &ocm.ShareReference{Spec: &ocm.ShareReference_Key{Key: key}}
+		removed, err := m.DeleteShare(ctx, caller, ref)
+		if err != nil || len(removed) != 1 || removed[0].Share.GetId().GetOpaqueId() != exact.Id.OpaqueId {
+			t.Fatalf("got %d receipts, want only share %s: %v", len(removed), exact.Id.OpaqueId, err)
+		}
+		if _, err := m.GetShare(ctx, caller, idRef(exact.Id)); !errors.Is(err, share.ErrShareNotFound) {
+			t.Errorf("exact match remains active: %v", err)
+		}
+		if removed, err := m.DeleteShare(ctx, caller, ref); !errors.Is(err, share.ErrShareNotFound) || removed != nil {
+			t.Errorf("repeat returned %d receipts: %v", len(removed), err)
+		}
+		for _, want := range survivors {
+			if got, err := m.GetShare(ctx, &userpb.User{Id: want.Owner}, idRef(want.Id)); err != nil || got.GetToken() != want.Token {
+				t.Errorf("nonmatching %s row changed: %v", want.Token, err)
+			}
 		}
 	})
 }
@@ -272,6 +439,12 @@ func TestTransferAttemptLifecycle(t *testing.T) {
 		if u, err := m.CompleteReceivedShareTransfer(ctx, user, rs.Id, start.Generation, ocm.ShareState_SHARE_STATE_ACCEPTED); err != nil || u.StateChanged() {
 			t.Fatalf("duplicate completion: %v %v", u, err)
 		}
+		if _, err := m.StartReceivedShareTransfer(ctx, user, &ocm.ReceivedShare{Id: rs.Id}, stateMask()); !errors.Is(err, share.ErrShareAlreadyAccepted) {
+			t.Fatalf("start after acceptance: %v", err)
+		}
+		if got := receivedGeneration(t, m, rs.Id); got != start.Generation {
+			t.Fatalf("refused start changed the generation to %d", got)
+		}
 
 		// Reset, start a new attempt, then the old callback arrives.
 		reset := &ocm.ReceivedShare{Id: rs.Id, State: ocm.ShareState_SHARE_STATE_PENDING}
@@ -417,7 +590,7 @@ func TestShareReceiptsCarryStoredResourceType(t *testing.T) {
 		removal, err := m.DeleteShare(ctx, owner, &ocm.ShareReference{Spec: &ocm.ShareReference_Key{Key: &ocm.ShareKey{
 			Owner: owner.Id, ResourceId: sh.ResourceId, Grantee: sh.Grantee,
 		}}})
-		if err != nil || removal.ResourceType != ocm.SharedResourceType_SHARE_RESOURCE_TYPE_CONTAINER {
+		if err != nil || len(removal) != 1 || removal[0].ResourceType != ocm.SharedResourceType_SHARE_RESOURCE_TYPE_CONTAINER {
 			t.Fatalf("delete: %v %v", removal, err)
 		}
 
@@ -474,8 +647,8 @@ func TestShareResourceTypeAdmissionAndExistingMutations(t *testing.T) {
 					}
 				}
 				removed, err := m.DeleteShare(ctx, owner, ref)
-				if err != nil || removed == nil || removed.ResourceType != ocm.SharedResourceType_SHARE_RESOURCE_TYPE_INVALID ||
-					removed.Share.GetId().GetOpaqueId() != corrupt.Id.OpaqueId {
+				if err != nil || len(removed) != 1 || removed[0].ResourceType != ocm.SharedResourceType_SHARE_RESOURCE_TYPE_INVALID ||
+					removed[0].Share.GetId().GetOpaqueId() != corrupt.Id.OpaqueId {
 					t.Errorf("withdrawal of prior-format row: %v %v", removed, err)
 				}
 				if _, err := m.GetShare(ctx, owner, ref); !errors.Is(err, share.ErrShareNotFound) {
@@ -564,6 +737,48 @@ func TestUpdateShareReceiptUnderTypedPermissions(t *testing.T) {
 			if got != tc.changed || storedBits(tc.typ) != tc.bits {
 				t.Fatalf("%s: changed=%v bits=%d, want %v %d", tc.name, got, storedBits(tc.typ), tc.changed, tc.bits)
 			}
+		}
+	})
+}
+
+// Two concurrent acceptances on separate connections: one commits and returns
+// the only changed receipt, the other changes nothing.
+func TestConcurrentAcceptanceHasOneWinner(t *testing.T) {
+	forEachDialect(t, func(t *testing.T, m *mgr) {
+		ctx, user := ownerContext(t, "marie")
+		rs := storeReceived(t, m, ctx, user, "remote-w")
+		accept := &ocm.ReceivedShare{Id: rs.Id, State: ocm.ShareState_SHARE_STATE_ACCEPTED}
+
+		type result struct {
+			u   *share.ReceivedShareUpdate
+			err error
+		}
+		results := make(chan result, 2)
+		start := make(chan struct{})
+		for i := 0; i < 2; i++ {
+			go func() {
+				<-start
+				u, err := m.UpdateReceivedShare(ctx, user, accept, stateMask())
+				results <- result{u, err}
+			}()
+		}
+		close(start)
+		winners := 0
+		for i := 0; i < 2; i++ {
+			r := <-results
+			if r.err == nil && r.u.StateChanged() {
+				winners++
+			}
+		}
+		got, err := m.GetReceivedShare(ctx, user, idRef(rs.Id))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if winners != 1 || got.State != ocm.ShareState_SHARE_STATE_ACCEPTED {
+			t.Fatalf("winners %d, state %v", winners, got.State)
+		}
+		if gen := receivedGeneration(t, m, rs.Id); gen != 1 {
+			t.Fatalf("generation %d, want one committed change", gen)
 		}
 	})
 }

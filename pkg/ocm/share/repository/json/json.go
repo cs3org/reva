@@ -351,7 +351,7 @@ func (m *mgr) getByKey(ctx context.Context, key *ocm.ShareKey) (*ocm.Share, erro
 
 // DeleteShare deletes the share and returns it as it was stored. Separate
 // processes writing the same file are not coordinated.
-func (m *mgr) DeleteShare(ctx context.Context, user *userpb.User, ref *ocm.ShareReference) (*share.ShareRemoval, error) {
+func (m *mgr) DeleteShare(ctx context.Context, user *userpb.User, ref *ocm.ShareReference) ([]share.ShareRemoval, error) {
 	m.Lock()
 	defer m.Unlock()
 
@@ -366,13 +366,13 @@ func (m *mgr) DeleteShare(ctx context.Context, user *userpb.User, ref *ocm.Share
 				if present && !share.SupportedResourceType(rt) {
 					return nil, share.ErrInvalidResourceType
 				}
-				removal := &share.ShareRemoval{Share: s, ResourceType: rt}
+				removal := share.ShareRemoval{Share: s, ResourceType: rt}
 				delete(m.model.Shares, id)
 				delete(m.model.ResourceTypes, id)
 				if err := m.save(); err != nil {
 					return nil, err
 				}
-				return removal, nil
+				return []share.ShareRemoval{removal}, nil
 			}
 		}
 	}
@@ -744,8 +744,11 @@ func (m *mgr) StartReceivedShareTransfer(ctx context.Context, user *userpb.User,
 			return nil, errtypes.NotSupported("updating " + mask + " is not supported")
 		}
 	}
-	if rs.State == ocm.ShareState_SHARE_STATE_TRANSFERRING {
+	switch rs.State {
+	case ocm.ShareState_SHARE_STATE_TRANSFERRING:
 		return nil, share.ErrTransferInProgress
+	case ocm.ShareState_SHARE_STATE_ACCEPTED:
+		return nil, share.ErrShareAlreadyAccepted
 	}
 	gen, err := m.bumpGeneration(rs.Id.OpaqueId)
 	if err != nil {

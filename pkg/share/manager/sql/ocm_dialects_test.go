@@ -46,10 +46,13 @@ func mysqlTestTarget(t *testing.T) (mysqlTarget, bool) {
 		return mysqlTarget{}, false
 	}
 	at := strings.LastIndex(raw, "@")
+	if at < 0 {
+		t.Fatalf("%s must be user:password@host:port", mysqlTestEnv)
+	}
 	creds, addr := raw[:at], raw[at+1:]
 	colon := strings.Index(creds, ":")
 	hostPort := strings.LastIndex(addr, ":")
-	if at < 0 || colon < 0 || hostPort < 0 {
+	if colon < 0 || hostPort < 0 {
 		t.Fatalf("%s must be user:password@host:port", mysqlTestEnv)
 	}
 	port, err := strconv.Atoi(addr[hostPort+1:])

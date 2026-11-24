@@ -117,8 +117,9 @@ func withTestDrivers(t *testing.T, name string, repo registry.NewFunc, transfer 
 
 type gatewayResolver struct {
 	revaservice.Clients
-	mu sync.Mutex
-	gw gateway.GatewayAPIClient
+	mu       sync.Mutex
+	gw       gateway.GatewayAPIClient
+	embedded *mountedEmbeddedPeers
 }
 
 func (r *gatewayResolver) Gateway(context.Context) (gateway.GatewayAPIClient, error) {

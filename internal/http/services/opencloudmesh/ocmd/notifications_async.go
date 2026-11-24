@@ -22,9 +22,30 @@ import (
 	"context"
 	"sync"
 
-	"github.com/cs3org/reva/v3/pkg/appctx"
 	"github.com/cs3org/reva/v3/pkg/ocm/httpsig"
+	"github.com/cs3org/reva/v3/pkg/prom/registry"
+	"github.com/prometheus/client_golang/prometheus"
 )
+
+// maxInFlightNotifications limits the attempts that run at the same time, so
+// that a large change to many shares of a slow peer does not keep a goroutine
+// and a connection for each share.
+const maxInFlightNotifications = 64
+
+// FailureSaturated is the failure of a notification that was not sent because
+// too many attempts were running. It is not tried again.
+const FailureSaturated SendFailure = "saturated"
+
+var saturatedNotifications = prometheus.NewCounter(prometheus.CounterOpts{
+	Name: "reva_ocm_notifications_saturated_total",
+	Help: "Number of outgoing OCM notifications dropped because all send slots were in use.",
+})
+
+func init() {
+	registry.Register("ocm_notifications", func(context.Context, map[string]any) ([]prometheus.Collector, error) {
+		return []prometheus.Collector{saturatedNotifications}, nil
+	})
+}
 
 // AsyncNotifier sends notifications in the background, so that a slow peer
 // does not delay the caller. The service that owns it must Close it.
@@ -37,6 +58,7 @@ type AsyncNotifier struct {
 
 	mu       sync.Mutex
 	closed   bool
+	inFlight int
 	lifetime context.Context
 	cancel   context.CancelFunc
 	wg       sync.WaitGroup
@@ -47,19 +69,30 @@ type AsyncNotifier struct {
 // already committed.
 func (a *AsyncNotifier) NewNotification(ctx context.Context, domain string, n *OutgoingNotification) SendResult {
 	a.mu.Lock()
-	defer a.mu.Unlock()
 	if a.closed {
-		appctx.GetLogger(ctx).Warn().Str("type", n.Type).Msg("OCM notification not sent: service is closing")
+		a.mu.Unlock()
 		return SendResult{Outcome: SendPostFailed, Failure: FailureCanceled}
 	}
+	if a.inFlight >= maxInFlightNotifications {
+		a.mu.Unlock()
+		saturatedNotifications.Inc()
+		return SendResult{Outcome: SendPostFailed, Failure: FailureSaturated}
+	}
+	a.inFlight++
 	if a.lifetime == nil {
 		a.lifetime, a.cancel = context.WithCancel(context.Background())
 	}
 	sendCtx, cancel := context.WithCancel(context.WithoutCancel(ctx))
 	stop := context.AfterFunc(a.lifetime, cancel)
 	a.wg.Add(1)
+	a.mu.Unlock()
 	go func() {
 		defer a.wg.Done()
+		defer func() {
+			a.mu.Lock()
+			a.inFlight--
+			a.mu.Unlock()
+		}()
 		defer cancel()
 		defer stop()
 		a.Client.NewNotification(sendCtx, domain, n, a.Key)

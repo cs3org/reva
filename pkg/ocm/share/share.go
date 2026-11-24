@@ -43,9 +43,9 @@ type Repository interface {
 	// GetShare gets the information for a share by the given ref.
 	GetShare(ctx context.Context, user *userpb.User, ref *ocm.ShareReference) (*ocm.Share, error)
 
-	// DeleteShare deletes the share pointed by ref. The receipt carries the
-	// share as it was stored when it was deleted.
-	DeleteShare(ctx context.Context, user *userpb.User, ref *ocm.ShareReference) (*ShareRemoval, error)
+	// DeleteShare deletes the outgoing shares selected by ref and returns one
+	// receipt per committed removal.
+	DeleteShare(ctx context.Context, user *userpb.User, ref *ocm.ShareReference) ([]ShareRemoval, error)
 
 	// UpdateShare updates the mode of the given share. The receipt compares
 	// the stored values before and after the update.
@@ -68,8 +68,8 @@ type Repository interface {
 	// state change invalidates any running embedded transfer attempt.
 	UpdateReceivedShare(ctx context.Context, user *userpb.User, share *ocm.ReceivedShare, fieldMask *field_mask.FieldMask) (*ReceivedShareUpdate, error)
 
-	// StartReceivedShareTransfer atomically moves a share that is not
-	// transferring to TRANSFERRING and starts a new transfer attempt.
+	// StartReceivedShareTransfer atomically moves a share that is neither
+	// transferring nor accepted to TRANSFERRING and starts a new transfer attempt.
 	StartReceivedShareTransfer(ctx context.Context, user *userpb.User, share *ocm.ReceivedShare, fieldMask *field_mask.FieldMask) (*TransferStart, error)
 
 	// CompleteReceivedShareTransfer sets the final state of a transfer
@@ -145,6 +145,10 @@ func SupportedResourceType(t ocm.SharedResourceType) bool {
 
 // ErrTransferInProgress is returned when a transfer is already running.
 var ErrTransferInProgress = errtypes.Conflict("transfer already in progress")
+
+// ErrShareAlreadyAccepted is returned when a transfer starts for a share that
+// is accepted already. Set another state first to copy the share again.
+var ErrShareAlreadyAccepted = errtypes.Conflict("share already accepted")
 
 // ErrTransferGenerationExhausted is returned instead of wrapping the
 // transfer attempt counter.

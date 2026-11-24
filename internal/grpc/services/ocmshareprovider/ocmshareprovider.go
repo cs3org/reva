@@ -489,7 +489,7 @@ func (s *service) CreateOCMShare(ctx context.Context, req *ocm.CreateOCMShareReq
 
 func (s *service) RemoveOCMShare(ctx context.Context, req *ocm.RemoveOCMShareRequest) (*ocm.RemoveOCMShareResponse, error) {
 	user := appctx.ContextMustGetUser(ctx)
-	removal, err := s.repo.DeleteShare(ctx, user, req.Ref)
+	removals, err := s.repo.DeleteShare(ctx, user, req.Ref)
 	if err != nil {
 		switch {
 		case errors.Is(err, share.ErrShareNotFound):
@@ -506,7 +506,9 @@ func (s *service) RemoveOCMShare(ctx context.Context, req *ocm.RemoveOCMShareReq
 		}, nil
 	}
 
-	s.notifyUnshared(ctx, removal)
+	for i := range removals {
+		s.notifyUnshared(ctx, &removals[i])
+	}
 
 	return &ocm.RemoveOCMShareResponse{
 		Status: status.NewOK(ctx),
@@ -628,9 +630,13 @@ func (s *service) UpdateReceivedOCMShare(ctx context.Context, req *ocm.UpdateRec
 	user := appctx.ContextMustGetUser(ctx)
 	// Accepting a share with embedded content holds it in TRANSFERRING until
 	// the copy completes. Only a state the mask asks to change can start it.
+	// The stored grant, not the request, tells if the share is embedded, so
+	// an embedded share never becomes ACCEPTED without a completed copy.
 	if slices.Contains(req.GetUpdateMask().GetPaths(), "state") &&
-		req.Share.State == ocm.ShareState_SHARE_STATE_ACCEPTED && req.Share.Destination != "" {
-		payload, err := s.repo.GetEmbeddedPayload(ctx, user, req.Share)
+		req.Share.State == ocm.ShareState_SHARE_STATE_ACCEPTED {
+		current, err := s.repo.GetReceivedShare(ctx, user, &ocm.ShareReference{
+			Spec: &ocm.ShareReference_Id{Id: req.Share.GetId()},
+		})
 		if err != nil {
 			if errors.Is(err, share.ErrShareNotFound) {
 				return &ocm.UpdateReceivedOCMShareResponse{
@@ -638,11 +644,11 @@ func (s *service) UpdateReceivedOCMShare(ctx context.Context, req *ocm.UpdateRec
 				}, nil
 			}
 			return &ocm.UpdateReceivedOCMShareResponse{
-				Status: status.NewStatusFromErrType(ctx, "error retrieving embedded share payload", err),
+				Status: status.NewStatusFromErrType(ctx, "error getting received share", err),
 			}, nil
 		}
-		if payload != "" {
-			return s.processEmbeddedShare(ctx, user, req, payload)
+		if slices.ContainsFunc(current.GetProtocols(), func(p *ocm.Protocol) bool { return p.GetEmbeddedOptions() != nil }) {
+			return s.processEmbeddedShare(ctx, user, req)
 		}
 	}
 	update, err := s.repo.UpdateReceivedShare(ctx, user, req.Share, req.UpdateMask)
@@ -666,9 +672,36 @@ func (s *service) UpdateReceivedOCMShare(ctx context.Context, req *ocm.UpdateRec
 }
 
 // processEmbeddedShare starts a transfer attempt. The share becomes ACCEPTED
-// once every file arrived, or REJECTED if the transfer failed.
-func (s *service) processEmbeddedShare(ctx context.Context, user *userpb.User, req *ocm.UpdateReceivedOCMShareRequest, payload string) (*ocm.UpdateReceivedOCMShareResponse, error) {
+// once every file arrived, or REJECTED if the transfer failed. Without a
+// destination, a payload or a transferrer, the share stays unchanged.
+func (s *service) processEmbeddedShare(ctx context.Context, user *userpb.User, req *ocm.UpdateReceivedOCMShareRequest) (*ocm.UpdateReceivedOCMShareResponse, error) {
 	recvShare := req.Share
+	if recvShare.Destination == "" {
+		return &ocm.UpdateReceivedOCMShareResponse{
+			Status: status.NewFailedPrecondition(ctx, nil, "embedded share needs a destination"),
+		}, nil
+	}
+	if s.transferrer == nil {
+		return &ocm.UpdateReceivedOCMShareResponse{
+			Status: status.NewFailedPrecondition(ctx, nil, "embedded transfers are not configured"),
+		}, nil
+	}
+	payload, err := s.repo.GetEmbeddedPayload(ctx, user, recvShare)
+	if err != nil {
+		if errors.Is(err, share.ErrShareNotFound) {
+			return &ocm.UpdateReceivedOCMShareResponse{
+				Status: status.NewNotFound(ctx, "share does not exist"),
+			}, nil
+		}
+		return &ocm.UpdateReceivedOCMShareResponse{
+			Status: status.NewStatusFromErrType(ctx, "error retrieving embedded share payload", err),
+		}, nil
+	}
+	if payload == "" {
+		return &ocm.UpdateReceivedOCMShareResponse{
+			Status: status.NewFailedPrecondition(ctx, nil, "embedded share has no payload"),
+		}, nil
+	}
 
 	// The start is atomic, so a second start fails instead of racing on the
 	// same destination.
@@ -682,6 +715,10 @@ func (s *service) processEmbeddedShare(ctx context.Context, user *userpb.User, r
 		case errors.Is(err, share.ErrTransferInProgress):
 			return &ocm.UpdateReceivedOCMShareResponse{
 				Status: status.NewFailedPrecondition(ctx, err, "transfer already in progress"),
+			}, nil
+		case errors.Is(err, share.ErrShareAlreadyAccepted):
+			return &ocm.UpdateReceivedOCMShareResponse{
+				Status: status.NewFailedPrecondition(ctx, err, "share already accepted"),
 			}, nil
 		}
 		return &ocm.UpdateReceivedOCMShareResponse{

@@ -258,11 +258,11 @@ func (e *emitEnv) outgoingOfType(t *testing.T, resourceType ocm.SharedResourceTy
 	return sh
 }
 
-func (e *emitEnv) received(t *testing.T, remoteID string, embedded bool) *ocm.ReceivedShare {
+func (e *emitEnv) received(t *testing.T, remoteID string, embedded bool, accessTypes ...ocm.AccessType) *ocm.ReceivedShare {
 	t.Helper()
 	now := &typespb.Timestamp{Seconds: uint64(time.Now().Unix())}
 	protocols := []*ocm.Protocol{share.NewWebDAVProtocol("https://provider/dav", emitSecret,
-		&ocm.SharePermissions{Permissions: permissions.NewViewerRole().CS3ResourcePermissions()}, nil, nil)}
+		&ocm.SharePermissions{Permissions: permissions.NewViewerRole().CS3ResourcePermissions()}, accessTypes, nil)}
 	rt := ocm.SharedResourceType_SHARE_RESOURCE_TYPE_FILE
 	if embedded {
 		protocols = append(protocols, share.NewEmbeddedProtocol(`{"@graph":[]}`))
@@ -349,6 +349,65 @@ func TestRemoveOCMShareEmitsUnsharedOnce(t *testing.T) {
 	requireNotices(t, e.peer, ocmd.NotificationShareUnshared)
 }
 
+func TestRemoveOCMShareByKeyNotifiesAcknowledgedRemovals(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		lost bool
+	}{{"acknowledged", false}, {"lost commit acknowledgment", true}} {
+		t.Run(tc.name, func(t *testing.T) {
+			e := newEmitEnv(t)
+			first := e.outgoing(t)
+			survivor := e.outgoing(t)
+			duplicate := proto.CloneOf(first)
+			id, err := e.repo.GenerateID(e.owner)
+			if err != nil {
+				t.Fatal(err)
+			}
+			duplicate.Id, duplicate.Token = id, "other-token-"+id.OpaqueId
+			second, err := e.repo.StoreShare(e.owner, duplicate, ocm.SharedResourceType_SHARE_RESOURCE_TYPE_FILE)
+			if err != nil {
+				t.Fatal(err)
+			}
+			key := &ocm.ShareReference{Spec: &ocm.ShareReference_Key{Key: &ocm.ShareKey{
+				Owner: first.Owner, ResourceId: first.ResourceId, Grantee: first.Grantee,
+			}}}
+			wantStatus := rpc.Code_CODE_OK
+			if tc.lost {
+				e.svc.repo = failingRepo{Repository: e.repo, loseCommitAcknowledgment: true}
+				wantStatus = rpc.Code_CODE_INTERNAL
+			}
+			res, err := e.svc.RemoveOCMShare(e.owner, &ocm.RemoveOCMShareRequest{Ref: key})
+			if err != nil || res.GetStatus() == nil || res.GetStatus().GetCode() != wantStatus {
+				t.Fatalf("removal response %v: %v", res.GetStatus(), err)
+			}
+			owner := appctx.ContextMustGetUser(e.owner)
+			for _, removed := range []*ocm.Share{first, second} {
+				ref := &ocm.ShareReference{Spec: &ocm.ShareReference_Id{Id: removed.Id}}
+				if _, err := e.repo.GetShare(e.owner, owner, ref); !errors.Is(err, share.ErrShareNotFound) {
+					t.Errorf("share %s remains available: %v", removed.Id.OpaqueId, err)
+				}
+			}
+			ref := &ocm.ShareReference{Spec: &ocm.ShareReference_Id{Id: survivor.Id}}
+			if got, err := e.repo.GetShare(e.owner, owner, ref); err != nil || got.GetToken() != survivor.Token {
+				t.Errorf("unrelated share changed: %v", err)
+			}
+			if tc.lost {
+				if attempts := len(e.svc.notifier.(*syncNotifier).results); attempts != 0 {
+					t.Errorf("unknown commit made %d notification attempts", attempts)
+				}
+				requireNotices(t, e.peer)
+				return
+			}
+			notices := requireNotices(t, e.peer, ocmd.NotificationShareUnshared, ocmd.NotificationShareUnshared)
+			for i, removed := range []*ocm.Share{first, second} {
+				if got := fileOf(notices[i])["providerId"]; got != removed.Id.OpaqueId || notices[i]["resourceType"] != "file" {
+					t.Errorf("notice %d has provider ID %v and resource type %v", i, got, notices[i]["resourceType"])
+				}
+			}
+		})
+	}
+}
+
 type failingRepo struct {
 	share.Repository
 	loseCommitAcknowledgment bool
@@ -356,7 +415,7 @@ type failingRepo struct {
 
 var errCommitAcknowledgmentLost = errors.New("commit acknowledgment lost")
 
-func (r failingRepo) DeleteShare(ctx context.Context, user *userpb.User, ref *ocm.ShareReference) (*share.ShareRemoval, error) {
+func (r failingRepo) DeleteShare(ctx context.Context, user *userpb.User, ref *ocm.ShareReference) ([]share.ShareRemoval, error) {
 	if r.loseCommitAcknowledgment {
 		receipt, err := r.Repository.DeleteShare(ctx, user, ref)
 		if err != nil {
@@ -589,6 +648,60 @@ func TestEmbeddedTransferEmitsOnlyOnCommittedCompletion(t *testing.T) {
 	requireNotices(t, e.peer, ocmd.NotificationShareAccepted, ocmd.NotificationShareAccepted)
 }
 
+// The ordinary accept route sends no destination. An embedded share only
+// becomes ACCEPTED, and is only announced, when its copy completes.
+func TestEmbeddedAcceptanceNeedsCompletedCopy(t *testing.T) {
+	e := newEmitEnv(t)
+	rs := e.received(t, "remote-n", true)
+	marie := &userpb.User{Id: &userpb.UserId{OpaqueId: "marie"}}
+	state := func() ocm.ShareState {
+		t.Helper()
+		cur, err := e.repo.GetReceivedShare(e.recip, marie, &ocm.ShareReference{Spec: &ocm.ShareReference_Id{Id: rs.Id}})
+		if err != nil {
+			t.Fatal(err)
+		}
+		return cur.State
+	}
+
+	if res := e.setState(t, rs.Id, ocm.ShareState_SHARE_STATE_ACCEPTED, ""); res.Status.Code != rpc.Code_CODE_FAILED_PRECONDITION {
+		t.Fatalf("accept without destination: %v", res.Status)
+	}
+	if s := state(); s != ocm.ShareState_SHARE_STATE_PENDING || len(e.xfer.callbacks) != 0 {
+		t.Fatalf("state %v, %d transfers", s, len(e.xfer.callbacks))
+	}
+	requireNotices(t, e.peer)
+
+	if res := e.setState(t, rs.Id, ocm.ShareState_SHARE_STATE_ACCEPTED, "/home/dest"); res.Status.Code != rpc.Code_CODE_OK {
+		t.Fatalf("accept: %v", res.Status)
+	}
+	if res := e.setState(t, rs.Id, ocm.ShareState_SHARE_STATE_ACCEPTED, ""); res.Status.Code != rpc.Code_CODE_FAILED_PRECONDITION {
+		t.Fatalf("accept without destination during the copy: %v", res.Status)
+	}
+	if s := state(); s != ocm.ShareState_SHARE_STATE_TRANSFERRING {
+		t.Fatalf("state during the copy %v", s)
+	}
+	requireNotices(t, e.peer)
+	e.xfer.callback(0)(nil)
+	requireNotices(t, e.peer, ocmd.NotificationShareAccepted)
+
+	// A repeated acceptance after success starts no second copy.
+	if res := e.setState(t, rs.Id, ocm.ShareState_SHARE_STATE_ACCEPTED, "/home/dest"); res.Status.Code != rpc.Code_CODE_FAILED_PRECONDITION {
+		t.Fatalf("repeated accept: %v", res.Status)
+	}
+	if s := state(); s != ocm.ShareState_SHARE_STATE_ACCEPTED || len(e.xfer.callbacks) != 1 {
+		t.Fatalf("state %v, %d transfers", s, len(e.xfer.callbacks))
+	}
+	requireNotices(t, e.peer, ocmd.NotificationShareAccepted)
+
+	// Without a transferrer the share stays pending.
+	other := e.received(t, "remote-o", true)
+	e.svc.transferrer = nil
+	if res := e.setState(t, other.Id, ocm.ShareState_SHARE_STATE_ACCEPTED, "/home/dest"); res.Status.Code != rpc.Code_CODE_FAILED_PRECONDITION {
+		t.Fatalf("accept without transferrer: %v", res.Status)
+	}
+	requireNotices(t, e.peer, ocmd.NotificationShareAccepted)
+}
+
 func TestSenderFailureKeepsCommittedChange(t *testing.T) {
 	e := newEmitEnv(t)
 	e.peer.status = http.StatusInternalServerError
@@ -708,6 +821,14 @@ func TestOldGrantMutationWithUnavailableResourceType(t *testing.T) {
 				t.Errorf("notification attempts %d, Stat calls %d", attempts, gw.stats)
 			}
 			requireNotices(t, e.peer)
+			if tc.code == rpc.Code_CODE_OK {
+				logs := e.logs.String()
+				for _, typ := range []string{ocmd.NotificationShareChangePermission, ocmd.NotificationShareUnshared} {
+					if !strings.Contains(logs, `"type":"`+typ+`","message":"not sending OCM notification: share has no stored resource type"`) {
+						t.Errorf("no skip reason for %s: %s", typ, logs)
+					}
+				}
+			}
 		})
 	}
 }
