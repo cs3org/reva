@@ -369,7 +369,7 @@ func TestPropfindDepthInfinityIsRefused(t *testing.T) {
 			s.handlePathPropfind(w, r, "")
 		},
 		"trash bin": func(s *svc, w http.ResponseWriter, r *http.Request) {
-			(&TrashbinHandler{}).listTrashbin(w, r, s, user, "/eos/user/a/alice", "", "")
+			(&TrashbinHandler{}).listTrashbin(w, r, s, "/remote.php/dav/trash-bin/alice", "/eos/user/a/alice", "", "")
 		},
 	} {
 		t.Run(name, func(t *testing.T) {

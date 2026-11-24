@@ -231,8 +231,8 @@ func (s *svc) trashbin(base string) http.HandlerFunc {
 	}
 }
 
-// spacesTrashbin serves the trash bin of a space. Its hrefs are reported under
-// /spaces rather than under the trash bin itself.
+// spacesTrashbin serves the trash bin of a space. The base URI stays /spaces,
+// because the destination of a restore is a path under /spaces.
 func (s *svc) spacesTrashbin(base string) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		serveAt(w, r, base, base+"/trash-bin", s.davHandler.TrashbinHandler.HandlerSpaces(s))

@@ -30,6 +30,10 @@ import (
 	typepb "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
 )
 
+// RecycleItemBrowsable is the Opaque key that ListRecycle sets on an item whose content can be listed with its key.
+// Clients must not open an item without it, such as a folder in a flat recycle bin.
+const RecycleItemBrowsable = "browsable"
+
 // FS is the interface to implement access to the storage.
 type FS interface {
 	GetHome(ctx context.Context) (string, error)
