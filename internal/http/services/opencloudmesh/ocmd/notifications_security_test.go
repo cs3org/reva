@@ -61,6 +61,9 @@ func (g *notificationPolicyTrace) IsProviderAllowed(_ context.Context, req *ocmp
 	if g.missing == "error" {
 		return nil, errors.New(policyErrorMarker)
 	}
+	if g.missing == "internal" {
+		return &ocmprovider.IsProviderAllowedResponse{Status: &rpc.Status{Code: rpc.Code_CODE_INTERNAL, Message: policyErrorMarker}}, nil
+	}
 	code := rpc.Code_CODE_OK
 	if g.deny {
 		code = rpc.Code_CODE_PERMISSION_DENIED
@@ -75,7 +78,8 @@ func TestNotificationsIngressOrder(t *testing.T) {
 		sequence   string
 	}{
 		{"malformed", "malformed", http.StatusBadRequest, ""},
-		{"denied", "denied", http.StatusUnauthorized, "policy"},
+		{"denied", "denied", http.StatusForbidden, "policy"},
+		{"policy backend failure", "internal", http.StatusInternalServerError, "policy"},
 		{"nil response", "response", http.StatusInternalServerError, "policy"},
 		{"nil status", "status", http.StatusInternalServerError, "policy"},
 		{"policy error", "error", http.StatusInternalServerError, "policy"},
@@ -145,6 +149,12 @@ func TestNotificationsIngressOrder(t *testing.T) {
 				if err := json.Unmarshal(rr.Body.Bytes(), &apiErr); err != nil || apiErr.Message != "invalid provider policy response" {
 					t.Fatalf("unexpected dependency response: %s", rr.Body.String())
 				}
+			}
+			if tc.kind == "denied" {
+				checkResponse(t, rr, http.StatusForbidden, reqres.APIErrorUntrustedService)
+			}
+			if tc.kind == "internal" {
+				checkResponse(t, rr, http.StatusInternalServerError, reqres.APIErrorServerError)
 			}
 			if strings.Contains(logs.String()+rr.Body.String(), policyErrorMarker) {
 				t.Fatal("provider policy error detail appeared in the response or logs")
@@ -319,6 +329,42 @@ func TestNotificationDiscoveryUsesNetworkPolicy(t *testing.T) {
 			}
 			if rr.Code != want {
 				t.Fatalf("status %d, want %d: %s", rr.Code, want, rr.Body.String())
+			}
+		})
+	}
+}
+
+type discoveryURLRecorder struct {
+	mu   sync.Mutex
+	urls []string
+}
+
+func (d *discoveryURLRecorder) RoundTrip(r *http.Request) (*http.Response, error) {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	d.urls = append(d.urls, r.URL.String())
+	return nil, errors.New("recorded")
+}
+
+func TestNotificationDiscoveryUsesExactSenderHost(t *testing.T) {
+	for _, tc := range []struct{ sender, want string }{
+		{"localhost.example.org", "https://localhost.example.org/.well-known/ocm"},
+		{"127.0.0.1.example.org:8443", "https://127.0.0.1.example.org:8443/.well-known/ocm"},
+		{"[2001:db8::1]:8443", "https://[2001:db8::1]:8443/.well-known/ocm"},
+		{"localhost:8443", "http://localhost:8443/.well-known/ocm"},
+		{"127.0.0.1", "http://127.0.0.1/.well-known/ocm"},
+	} {
+		t.Run(tc.sender, func(t *testing.T) {
+			sv := newNotificationTestService(t, "strict", &notificationsMockGW{})
+			rec := &discoveryURLRecorder{}
+			sv.notifications.ocmClient = &OCMClient{client: &http.Client{Transport: rec}}
+			body := `{"notificationType":"SHARE_UNSHARED","senderDomain":"` + tc.sender + `","resourceType":"file","notification":{"file":{"providerId":"42"}}}`
+			rr, _ := postNotification(t, handlerFor(sv), "application/json", body)
+			checkResponse(t, rr, http.StatusInternalServerError, reqres.APIErrorServerError)
+			rec.mu.Lock()
+			defer rec.mu.Unlock()
+			if len(rec.urls) == 0 || rec.urls[0] != tc.want {
+				t.Fatalf("discovery requests %q, want first %q", rec.urls, tc.want)
 			}
 		})
 	}

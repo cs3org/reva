@@ -374,7 +374,7 @@ func TestNotificationsSignatureModeMatrix(t *testing.T) {
 		}
 		rr := httptest.NewRecorder()
 		h.ServeHTTP(rr, req)
-		checkResponse(t, rr, http.StatusUnauthorized, reqres.APIErrorUnauthenticated)
+		checkResponse(t, rr, http.StatusForbidden, reqres.APIErrorUntrustedService)
 	})
 
 	t.Run("unknown valid type authenticates first", func(t *testing.T) {

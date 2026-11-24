@@ -24,6 +24,9 @@ import (
 	"io"
 	"mime"
 	"net/http"
+	"net/url"
+	"strconv"
+	"strings"
 
 	ocmprovider "github.com/cs3org/go-cs3apis/cs3/ocm/provider/v1beta1"
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
@@ -124,15 +127,29 @@ func (h *notifHandler) authenticate(ctx context.Context, w http.ResponseWriter, 
 		reqres.WriteError(w, r, reqres.APIErrorServerError, "invalid provider policy response", nil)
 		return errors.New("missing provider policy status")
 	}
-	if providerAllowedResp.Status.Code != rpc.Code_CODE_OK {
+	// The provider authorizers report an unknown provider or a wrong sender IP
+	// with these codes. Other codes are a policy backend failure.
+	switch providerAllowedResp.Status.Code {
+	case rpc.Code_CODE_OK:
+	case rpc.Code_CODE_NOT_FOUND, rpc.Code_CODE_PERMISSION_DENIED, rpc.Code_CODE_INVALID_ARGUMENT:
 		notificationLog(log.Info(), n).Str("outcome", "rejected").Msg("notification sender provider not authorized")
-		reqres.WriteError(w, r, reqres.APIErrorUnauthenticated, "provider not authorized", nil)
+		reqres.WriteError(w, r, reqres.APIErrorUntrustedService, "provider not authorized", nil)
 		return errors.New("rejected")
+	default:
+		notificationLog(log.Warn(), n).Str("outcome", "failed").Str("policy_status", providerAllowedResp.Status.Code.String()).Msg("notification sender provider policy unavailable")
+		reqres.WriteError(w, r, reqres.APIErrorServerError, "error checking provider policy", nil)
+		return errors.New("provider policy failed")
+	}
+	base, ok := notificationDiscoveryBase(n.SenderDomain)
+	if !ok {
+		notificationLog(log.Info(), n).Str("outcome", "rejected").Msg("notification sender host cannot be discovered")
+		reqres.WriteError(w, r, reqres.APIErrorServerError, "error discovering the sending OCM server", nil)
+		return errors.New("unsupported sender host")
 	}
 	// Discovery may log peer-supplied response data; this route reports only
 	// fixed categories for untrusted notification senders.
 	discard := zerolog.Nop()
-	disco, err := h.ocmClient.Discover(appctx.WithLogger(ctx, &discard), n.SenderDomain)
+	disco, err := h.ocmClient.Discover(appctx.WithLogger(ctx, &discard), base)
 	if err != nil {
 		notificationLog(log.Info(), n).Str("outcome", "rejected").Msg("notification sender discovery failed")
 		reqres.WriteError(w, r, reqres.APIErrorServerError, "error discovering the sending OCM server", nil)
@@ -144,6 +161,24 @@ func (h *notifHandler) authenticate(ctx context.Context, w http.ResponseWriter, 
 		return err
 	}
 	return nil
+}
+
+// Keep the exact identity: dropping an empty port or decoding escapes
+// could reach a different peer.
+func notificationDiscoveryBase(host string) (string, bool) {
+	u, err := url.Parse("https://" + host)
+	if err != nil || u.Host != host || strings.ContainsAny(u.Hostname(), "%[") || strings.HasSuffix(host, ":") {
+		return "", false
+	}
+	if p := u.Port(); p != "" {
+		if n, err := strconv.Atoi(p); err != nil || n < 1 || n > 65535 {
+			return "", false
+		}
+	}
+	if u.Hostname() == "localhost" || u.Hostname() == "127.0.0.1" {
+		u.Scheme = "http"
+	}
+	return u.String(), true
 }
 
 func readNotificationBody(w http.ResponseWriter, r *http.Request) ([]byte, error) {
