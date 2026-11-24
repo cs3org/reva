@@ -1,6 +1,7 @@
 package nsdump
 
 import (
+	"context"
 	"fmt"
 	"io"
 	"iter"
@@ -30,7 +31,7 @@ func (e *EOSChunkedNSInspect) Setup(config any) error {
 	return fmt.Errorf("requires a config of type %T", EOSChunkedNSInspectConfig{})
 }
 
-func (e *EOSChunkedNSInspect) Dump(rootPath string, maxDepth int) iter.Seq2[NameSpaceEntry, error] {
+func (e *EOSChunkedNSInspect) Dump(ctx context.Context, rootPath string, maxDepth int) iter.Seq2[NameSpaceEntry, error] {
 	return func(yield func(NameSpaceEntry, error) bool) {
 		f, err := os.CreateTemp(e.cfg.TmpDir, "nsdump-*.json")
 		if err != nil {
@@ -42,7 +43,7 @@ func (e *EOSChunkedNSInspect) Dump(rootPath string, maxDepth int) iter.Seq2[Name
 		defer os.Remove(f.Name())
 		defer f.Close()
 
-		cmd := nsInspectCommand(e.cfg.NSInspectConfig, rootPath, maxDepth)
+		cmd := nsInspectCommand(ctx, e.cfg.NSInspectConfig, rootPath, maxDepth)
 		cmd.Stdout = f
 		if err := cmd.Run(); err != nil {
 			yield(NameSpaceEntry{}, errors.Wrap(err, "failed to run eos-ns-inspect"))

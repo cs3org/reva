@@ -66,7 +66,10 @@ func (n *ACLNode) insert(i *ACLNode) bool {
 	if n.MatchesExact(i.Path) {
 		// Two nodes are for the same path, so we need to merge
 		n.ApplyACLs(i.MandatoryACLs, i.AllowedACLs)
-		n.Children = append(n.Children, i.Children...)
+		// also here we insert instead of append, so that n's ACLs are also applied to i's children
+		for _, c := range i.Children {
+			n.insert(c)
+		}
 	} else {
 		// Child
 		// In this case, we should still merge! ACLs are set recursively
@@ -103,7 +106,8 @@ func (n *ACLNode) Matches(p string) bool {
 	if p == n.Path {
 		return true
 	}
-	if p == "/" {
+	// `/` is the parent of every path
+	if n.Path == "/" {
 		return true
 	}
 	return fastHasPrefix(p, n.Path)

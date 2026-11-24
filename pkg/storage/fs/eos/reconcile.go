@@ -47,7 +47,7 @@ func (fs *Eosfs) DumpNamespace(ctx context.Context, p string) iter.Seq2[reconcil
 			return
 		}
 
-		for e, err := range dumper.Dump(p, 0) {
+		for e, err := range dumper.Dump(ctx, p, 0) {
 			if err != nil {
 				yield(reconciliation.NSDumpInfo{}, err)
 				return
@@ -72,14 +72,19 @@ func (fs *Eosfs) ListSpaceRoots(ctx context.Context, root string, depth int) ite
 			yield("", err)
 			return
 		}
-		spaceRoots(dumper.Dump(root, depth), root, depth)(yield)
+		spaceRoots(dumper.Dump(ctx, root, depth), root, depth)(yield)
 	}
 }
 
 // spaceRoots keeps the folders exactly depth levels below root. The scan also
 // gives the folders above them, for example /eos/user/j.
 func spaceRoots(entries iter.Seq2[nsdump.NameSpaceEntry, error], root string, depth int) iter.Seq2[string, error] {
-	want := strings.Count(path.Clean(root), "/") + depth
+	root = path.Clean(root)
+	want := strings.Count(root, "/") + depth
+	// "/" has a slash but no component.
+	if root == "/" {
+		want = depth
+	}
 	return func(yield func(string, error) bool) {
 		for e, err := range entries {
 			if err != nil {

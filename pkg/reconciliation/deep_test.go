@@ -319,7 +319,7 @@ func TestApplyingAWrongPermissionKeepsTheGrantee(t *testing.T) {
 		t.Fatalf("compare: %v", err)
 	}
 	j := &DeepJob{}
-	if err := j.applyChangeSet(ctx, storage, cs); err != nil {
+	if _, err := j.applyChangeSet(ctx, storage, cs); err != nil {
 		t.Fatalf("applyChangeSet: %v", err)
 	}
 
@@ -697,6 +697,40 @@ func TestRunOverTheListedSpaces(t *testing.T) {
 	}
 	if got, want := storages[archived].dump[0].ACLs, []*ACLEntry{adminsEntry()}; !sameEntries(got, want) {
 		t.Errorf("the archived project holds %v, want %v", formatEntries(got), formatEntries(want))
+	}
+}
+
+// refusingStorage is a memoryStorage that refuses every add.
+type refusingStorage struct{ *memoryStorage }
+
+func (refusingStorage) AddNodeACL(context.Context, string, ACLEntry) error {
+	return errors.New("eos: write refused")
+}
+
+// A run over one space gives back a failed apply, together with its report.
+func TestRunSpaceReportsAFailedApply(t *testing.T) {
+	const home = "/eos/user/a/alice"
+	j := &DeepJob{
+		ShareStore: &fakeStore{},
+		Gateway: &spaceRootGateway{
+			fakeGateway: &fakeGateway{uids: testUIDs},
+			spaceTypes:  map[string]spaces.SpaceType{home: spaces.SpaceTypeHome},
+			owner:       "alice",
+		},
+		Project: func(ctx context.Context, spaceID string) (*provider.StorageSpace, error) {
+			return nil, errtypes.NotFound(spaceID)
+		},
+		StorageProviderControlChannel: func(ctx context.Context, storageID string) (ReconcileMethods, error) {
+			return refusingStorage{&memoryStorage{dump: []NSDumpInfo{folderNode(home + "/")}}}, nil
+		},
+	}
+
+	report, err := j.RunSpace(context.Background(), spaces.EncodeSpaceID(home))
+	if err == nil {
+		t.Fatal("RunSpace: no error, want the failed apply")
+	}
+	if report.Spaces != 1 || report.Failed != 1 {
+		t.Errorf("report = %+v, want one space compared and one failure", report)
 	}
 }
 

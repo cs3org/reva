@@ -2,6 +2,7 @@ package nsdump
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"iter"
 )
@@ -18,9 +19,9 @@ func (e *EOSMemoryNSInspect) Setup(config any) error {
 	return fmt.Errorf("requires a config of type %T", NSInspectConfig{})
 }
 
-func (e *EOSMemoryNSInspect) Dump(rootPath string, maxDepth int) iter.Seq2[NameSpaceEntry, error] {
+func (e *EOSMemoryNSInspect) Dump(ctx context.Context, rootPath string, maxDepth int) iter.Seq2[NameSpaceEntry, error] {
 	return func(yield func(NameSpaceEntry, error) bool) {
-		cmd := nsInspectCommand(e.cfg, rootPath, maxDepth)
+		cmd := nsInspectCommand(ctx, e.cfg, rootPath, maxDepth)
 
 		var stdout bytes.Buffer
 		cmd.Stdout = &stdout

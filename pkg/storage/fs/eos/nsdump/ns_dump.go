@@ -1,6 +1,7 @@
 package nsdump
 
 import (
+	"context"
 	"encoding/json"
 	"io"
 	"iter"
@@ -16,8 +17,8 @@ import (
 // big space does not fit in memory, so the caller must not collect them.
 type NSDumpClient interface {
 	// Dump does the work when the caller ranges over the result. A failure
-	// gives one error and ends the sequence.
-	Dump(rootPath string, maxDepth int) iter.Seq2[NameSpaceEntry, error]
+	// gives one error and ends the sequence. A cancel of ctx kills the scan.
+	Dump(ctx context.Context, rootPath string, maxDepth int) iter.Seq2[NameSpaceEntry, error]
 	Setup(config any) error
 }
 
@@ -78,7 +79,7 @@ type NSInspectConfig struct {
 }
 
 // nsInspectCommand builds the scan that the memory and the chunked client run.
-func nsInspectCommand(c NSInspectConfig, rootPath string, maxDepth int) *exec.Cmd {
+func nsInspectCommand(ctx context.Context, c NSInspectConfig, rootPath string, maxDepth int) *exec.Cmd {
 	args := []string{"scan", "--path", rootPath}
 	if maxDepth > 0 {
 		args = append(args, "--maxdepth", strconv.Itoa(maxDepth))
@@ -91,7 +92,7 @@ func nsInspectCommand(c NSInspectConfig, rootPath string, maxDepth int) *exec.Cm
 	if c.IgnoreFiles {
 		args = append(args, "--no-files")
 	}
-	return exec.Command(c.Binary, args...)
+	return exec.CommandContext(ctx, c.Binary, args...)
 }
 
 // parseNSInspect decodes the JSON array that eos-ns-inspect prints one element

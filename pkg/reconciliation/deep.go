@@ -35,6 +35,7 @@ import (
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/cs3org/reva/v3/pkg/appctx"
 	"github.com/cs3org/reva/v3/pkg/errtypes"
+	rstatus "github.com/cs3org/reva/v3/pkg/rgrpc/status"
 	"github.com/cs3org/reva/v3/pkg/rjobs"
 	"github.com/cs3org/reva/v3/pkg/service"
 	"github.com/cs3org/reva/v3/pkg/sharehierarchy"
@@ -320,14 +321,16 @@ func (j *DeepJob) run(ctx context.Context, spaceID string, rep rjobs.Reporter) (
 		done++
 
 		spaceLog := log.With().Str("space", space).Logger()
-		err := j.reconcileSpace(ctx, &spaceLog, &report, gw, uids, allowed, pathACLs, space)
-		if err == nil {
-			continue
-		}
+		failure, err := j.reconcileSpace(ctx, &spaceLog, &report, gw, uids, allowed, pathACLs, space)
 		// one space means nothing else to carry on with, so the failure is the
 		// run's rather than an empty success.
 		if spaceID != "" {
-			return DeepReport{}, err
+			// the space is reconciled every day, so there is no need for automatic retries
+			stopped = rjobs.Permanent(cmp.Or(err, failure))
+			break
+		}
+		if err == nil {
+			continue
 		}
 		report.SkippedSpaces = append(report.SkippedSpaces, space)
 		spaceLog.Error().Err(err).
@@ -351,27 +354,25 @@ func (j *DeepJob) run(ctx context.Context, spaceID string, rep rjobs.Reporter) (
 	return report, stopped
 }
 
-// reconcileSpace compares one space against its shares and applies the
-// differences. The error is the space not being comparable at all; a failure
-// while applying is logged and counted instead, since part of the changes may
-// already be on the storage.
-func (j *DeepJob) reconcileSpace(ctx context.Context, log *zerolog.Logger, report *DeepReport, gw gateway.GatewayAPIClient, uids uidCache, allowed []*ACLEntry, pathACLs []*PathACL, spaceID string) error {
+// if err is set, nothing was written, so the space is skipped.
+// if failure is set, only part of the changes were written, so the space has failed.
+func (j *DeepJob) reconcileSpace(ctx context.Context, log *zerolog.Logger, report *DeepReport, gw gateway.GatewayAPIClient, uids uidCache, allowed []*ACLEntry, pathACLs []*PathACL, spaceID string) (failure, err error) {
 	root, err := spaces.DecodeSpaceID(spaceID)
 	if err != nil {
-		return errors.Wrapf(err, "reconciliation: decoding space %q", spaceID)
+		return nil, errors.Wrapf(err, "reconciliation: decoding space %q", spaceID)
 	}
 
 	statRes, err := gw.Stat(ctx, &provider.StatRequest{Ref: &provider.Reference{Path: root}})
 	if err != nil {
-		return errors.Wrapf(err, "reconciliation: stat of the space root %s", root)
+		return nil, errors.Wrapf(err, "reconciliation: stat of the space root %s", root)
 	}
 	if code := statRes.GetStatus().GetCode(); code != rpcv1beta1.Code_CODE_OK {
-		return errors.Errorf("reconciliation: stat of the space root %s: %s: %s", root, code, statRes.GetStatus().GetMessage())
+		return nil, errors.Errorf("reconciliation: stat of the space root %s: %s: %s", root, code, statRes.GetStatus().GetMessage())
 	}
 
 	controlChannel, err := j.StorageProviderControlChannel(ctx, statRes.GetInfo().GetId().GetStorageId())
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	p := RunParameters{SpaceID: spaceID, SpaceType: spaces.SpaceTypeProject, OptionalACLs: allowed, PathACLs: pathACLs}
@@ -383,12 +384,12 @@ func (j *DeepJob) reconcileSpace(ctx context.Context, log *zerolog.Logger, repor
 			log.Info().
 				Str("event", EventDeepSkipSpace).
 				Msg("reconciliation: the project is not active, space left untouched")
-			return nil
+			return nil, nil
 		}
 		p.SpaceType = spaces.SpaceTypeHome
 		uid, err := uids.uid(ctx, gw, statRes.GetInfo().GetOwner())
 		if err != nil {
-			return err
+			return nil, err
 		}
 		p.MandatoryACLs = append(p.MandatoryACLs, &ACLEntry{
 			Type:        provider.GranteeType_GRANTEE_TYPE_USER,
@@ -396,12 +397,12 @@ func (j *DeepJob) reconcileSpace(ctx context.Context, log *zerolog.Logger, repor
 			Permissions: sharehierarchy.PermRW,
 		})
 	} else if err != nil {
-		return errors.Wrapf(err, "reconciliation: looking up the project of space %q", spaceID)
+		return nil, errors.Wrapf(err, "reconciliation: looking up the project of space %q", spaceID)
 	} else {
 		for _, role := range project.GetRoles() {
 			entries, err := roleToAcls(ctx, gw, uids, role)
 			if err != nil {
-				return err
+				return nil, err
 			}
 			p.MandatoryACLs = append(p.MandatoryACLs, entries...)
 		}
@@ -409,13 +410,13 @@ func (j *DeepJob) reconcileSpace(ctx context.Context, log *zerolog.Logger, repor
 
 	cs, seen, err := j.runAnalysis(ctx, gw, uids, p, controlChannel)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	report.Spaces++
 
 	if j.DryRun || len(cs) == 0 {
 		j.writeJournal(log, report, cs, nil)
-		return nil
+		return nil, nil
 	}
 
 	// It is possible a user has created a share after we started the run.
@@ -424,7 +425,7 @@ func (j *DeepJob) reconcileSpace(ctx context.Context, log *zerolog.Logger, repor
 	// Therefore, we check if there have been any new shares and abort if so.
 	fresh, err := spaceHasFreshShares(ctx, j.ShareStore, spaceID, seen)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	if fresh {
 		report.SkippedSpaces = append(report.SkippedSpaces, spaceID)
@@ -432,13 +433,13 @@ func (j *DeepJob) reconcileSpace(ctx context.Context, log *zerolog.Logger, repor
 			Str("event", EventDeepSkipSpace).
 			Int("changes", len(cs)).
 			Msg("reconciliation: a share was created while the run was comparing, space left untouched")
-		return nil
+		return nil, nil
 	}
 
 	// Analysis happened without errors, so we can apply the changes and write to a journal
-	applyErr := j.applyChangeSet(ctx, controlChannel, cs)
-	j.writeJournal(log, report, cs, applyErr)
-	return nil
+	n, failure := j.applyChangeSet(ctx, controlChannel, cs)
+	j.writeJournal(log, report, cs[:n], failure)
+	return failure, nil
 }
 
 // runAnalysis also returns the ids of the shares it compared, so the caller
@@ -478,9 +479,12 @@ func (j *DeepJob) runAnalysis(ctx context.Context, gw gateway.GatewayAPIClient, 
 		if isExpired(s, now) {
 			continue
 		}
-		sp, ok := getPath(ctx, gw, s.ResourceId)
-		if !ok {
+		sp, err := getPath(ctx, gw, s.ResourceId)
+		if _, ok := err.(errtypes.IsNotFound); ok {
+			// the resource is gone, so it's safe to skip it
 			continue
+		} else if err != nil {
+			return nil, nil, errors.Wrapf(err, "reconciliation: resolving the path of share %q", s.GetId().GetOpaqueId())
 		}
 		e, err := shareToACL(ctx, gw, uids, s)
 		if err != nil {
@@ -535,8 +539,8 @@ func (j *DeepJob) runAnalysis(ctx context.Context, gw gateway.GatewayAPIClient, 
 	return changeSet, seen, nil
 }
 
-func (j *DeepJob) applyChangeSet(ctx context.Context, storage ReconcileMethods, cs ChangeSet) error {
-	for _, c := range cs {
+func (j *DeepJob) applyChangeSet(ctx context.Context, storage ReconcileMethods, cs ChangeSet) (int, error) {
+	for i, c := range cs {
 		var err error
 		switch c.Action {
 		case ActionAdd, ActionUpdate:
@@ -544,14 +548,14 @@ func (j *DeepJob) applyChangeSet(ctx context.Context, storage ReconcileMethods, 
 		case ActionDelete:
 			err = storage.RemoveNodeACL(ctx, c.Path, *c.ACL)
 		default:
-			return errors.Errorf("unknown action %s", c.Action)
+			return i, errors.Errorf("unknown action %s", c.Action)
 		}
 		if err != nil {
-			return errors.Wrapf(err, "failed to %s %s:%s:%s on %s", c.Action, c.ACL.Type, c.ACL.Qualifier, c.ACL.Permissions, c.Path)
+			return i, errors.Wrapf(err, "failed to %s %s:%s:%s on %s", c.Action, c.ACL.Type, c.ACL.Qualifier, c.ACL.Permissions, c.Path)
 		}
 	}
 
-	return nil
+	return len(cs), nil
 }
 
 func (j *DeepJob) writeJournal(log *zerolog.Logger, report *DeepReport, cs ChangeSet, applyErr error) {
@@ -605,17 +609,15 @@ func (j *DeepJob) gateway(ctx context.Context) (gateway.GatewayAPIClient, error)
 	return service.Gateway(ctx)
 }
 
-func getPath(ctx context.Context, gw gateway.GatewayAPIClient, rid *provider.ResourceId) (string, bool) {
-	statRes, err := gw.Stat(ctx, &provider.StatRequest{
-		Ref: &provider.Reference{ResourceId: rid},
-	})
+func getPath(ctx context.Context, gw gateway.GatewayAPIClient, rid *provider.ResourceId) (string, error) {
+	res, err := gw.Stat(ctx, &provider.StatRequest{Ref: &provider.Reference{ResourceId: rid}})
 	if err != nil {
-		return "", false
+		return "", err
 	}
-	if statRes.Status == nil || statRes.Status.Code != rpcv1beta1.Code_CODE_OK {
-		return "", false
+	if res.GetStatus().GetCode() != rpcv1beta1.Code_CODE_OK {
+		return "", rstatus.NewErrtypeFromStatus(res.GetStatus())
 	}
-	return statRes.Info.Path, true
+	return res.GetInfo().GetPath(), nil
 }
 
 func roleToAcls(ctx context.Context, gw gateway.GatewayAPIClient, uids uidCache, role *provider.SpaceRole) ([]*ACLEntry, error) {

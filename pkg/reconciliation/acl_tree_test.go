@@ -119,6 +119,25 @@ func TestRuleAppliesRecursively(t *testing.T) {
 	checkFind(t, tree, "/eos/project/c/cernbox/shared-doc.md", nil, nil)
 }
 
+// A rule on "/" applies to every path.
+func TestRuleOnTheRootIsInherited(t *testing.T) {
+	tree := NewACLTree()
+	tree.Insert(&ACLNode{Path: "/", MandatoryACLs: []*ACLEntry{aliceRead()}})
+	tree.Insert(&ACLNode{Path: "/eos/a", MandatoryACLs: []*ACLEntry{bobRead()}})
+
+	checkFind(t, tree, "/", []*ACLEntry{aliceRead()}, nil)
+	checkFind(t, tree, "/eos/a", []*ACLEntry{aliceRead(), bobRead()}, nil)
+	checkFind(t, tree, "/eos/b", []*ACLEntry{aliceRead()}, nil)
+}
+
+// "/" is above every rule, so it gets none of their ACLs.
+func TestFindOnTheRootIgnoresDescendants(t *testing.T) {
+	tree := NewACLTree()
+	tree.Insert(&ACLNode{Path: "/eos/a", MandatoryACLs: []*ACLEntry{bobRead()}})
+
+	checkFind(t, tree, "/", nil, nil)
+}
+
 // A deeper rule adds its entity to the ones inherited from above.
 func TestDeeperRuleAddsEntity(t *testing.T) {
 	tree := NewACLTree()
@@ -224,6 +243,24 @@ func TestSecondRuleOnAPathWithChildren(t *testing.T) {
 
 	checkFind(t, tree, "/eos/project/c/cernbox", []*ACLEntry{aliceRead(), groupRead()}, nil)
 	checkFind(t, tree, "/eos/project/c/cernbox/sub", []*ACLEntry{aliceRead(), bobRead(), groupRead()}, nil)
+}
+
+// A node that is inserted with children on a path that is already in the tree
+// gives its children the entries from above, and a child merges with the node
+// already on its path.
+func TestInsertedChildrenInheritFromTheExistingNode(t *testing.T) {
+	tree := NewACLTree()
+	tree.Insert(&ACLNode{Path: "/eos/project/c/cernbox", MandatoryACLs: []*ACLEntry{aliceRead()}})
+	tree.Insert(&ACLNode{Path: "/eos/project/c/cernbox/sub", MandatoryACLs: []*ACLEntry{bobRead()}})
+	tree.Insert(&ACLNode{Path: "/eos/project/c/cernbox/sub/c", MandatoryACLs: []*ACLEntry{external()}})
+	tree.Insert(&ACLNode{
+		Path: "/eos/project/c/cernbox/sub",
+		Children: []*ACLNode{
+			{Path: "/eos/project/c/cernbox/sub/c", MandatoryACLs: []*ACLEntry{groupRead()}},
+		},
+	})
+
+	checkFind(t, tree, "/eos/project/c/cernbox/sub/c", []*ACLEntry{aliceRead(), bobRead(), external(), groupRead()}, nil)
 }
 
 // A rule can sit below a path that has no rule of its own.

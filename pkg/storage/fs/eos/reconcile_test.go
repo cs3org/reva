@@ -148,6 +148,17 @@ func TestSpaceRoots(t *testing.T) {
 			},
 			want: []string{"/eos/project/n/name"},
 		},
+		{
+			name: "the root of the namespace",
+			root: "/",
+			entries: []nsdump.NameSpaceEntry{
+				folder("/"),
+				folder("/a/"),
+				folder("/a/b/"),
+				folder("/a/b/c/"),
+			},
+			want: []string{"/a/b"},
+		},
 	}
 
 	for _, tt := range tests {

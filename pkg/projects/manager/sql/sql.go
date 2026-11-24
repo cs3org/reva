@@ -245,23 +245,22 @@ func (m *ProjectsManager) UpdateStorageSpace(ctx context.Context, req *provider.
 		}, errors.New("No field given to update")
 	}
 
+	// Users can only see active projects. Archived projects can also share the name.
+	query := m.db.Model(&Project{}).
+		Where("name = ?", req.StorageSpace.Name).
+		Where("status = ?", projects.ProjectStatusActive)
+
 	var res *gorm.DB
 
 	switch req.Field.Field.(type) {
 	case *provider.UpdateStorageSpaceRequest_UpdateField_Description:
-		res = m.db.Model(&Project{}).
-			Where("name = ?", req.StorageSpace.Name).
-			Update("description", req.Field.GetDescription())
+		res = query.Update("description", req.Field.GetDescription())
 	case *provider.UpdateStorageSpaceRequest_UpdateField_Metadata:
 		switch req.Field.GetMetadata().Type {
 		case provider.SpaceMetadata_TYPE_README:
-			res = m.db.Model(&Project{}).
-				Where("name = ?", req.StorageSpace.Name).
-				Update("readme_path", req.Field.GetMetadata().Id)
+			res = query.Update("readme_path", req.Field.GetMetadata().Id)
 		case provider.SpaceMetadata_TYPE_THUMBNAIL:
-			res = m.db.Model(&Project{}).
-				Where("name = ?", req.StorageSpace.Name).
-				Update("thumbnail_path", req.Field.GetMetadata().Id)
+			res = query.Update("thumbnail_path", req.Field.GetMetadata().Id)
 		}
 	default:
 		return nil, errors.New("Unsupported update type")
@@ -271,10 +270,20 @@ func (m *ProjectsManager) UpdateStorageSpace(ctx context.Context, req *provider.
 		log.Error().Err(res.Error).Msg("UpdateStorageSpace: database error")
 		return nil, res.Error
 	}
+	// MySQL counts only changed rows. A match always changes a row, because gorm also sets updated_at.
+	if res.RowsAffected == 0 {
+		return &provider.UpdateStorageSpaceResponse{
+			Status: &rpcv1beta1.Status{
+				Code:    rpcv1beta1.Code_CODE_NOT_FOUND,
+				Message: "no active project named " + req.StorageSpace.Name,
+			},
+		}, nil
+	}
 
+	// The write is done, so a failed lookup must not turn it into an error.
 	space, err := m.GetStorageSpace(ctx, req.StorageSpace.Name)
 	if err != nil {
-		return nil, err
+		log.Warn().Err(err).Str("project", req.StorageSpace.Name).Msg("UpdateStorageSpace: project updated, but lookup after the update failed")
 	}
 
 	return &provider.UpdateStorageSpaceResponse{
