@@ -24,6 +24,8 @@ import (
 	"net/http"
 	"slices"
 	"time"
+
+	"github.com/cs3org/reva/v3/pkg/ocm/client"
 )
 
 const notificationsCapability = "notifications"
@@ -68,6 +70,8 @@ const (
 	FailureError    SendFailure = "error"
 	// FailureNoSigningKey means required signing prevented a notification POST.
 	FailureNoSigningKey SendFailure = "no_signing_key"
+	// FailureNetworkPolicy means the guarded transport refused the destination.
+	FailureNetworkPolicy SendFailure = "network_policy"
 )
 
 // SendResult describes one attempt. It holds no peer bytes.
@@ -89,6 +93,8 @@ func classifyFailure(err error) SendFailure {
 	switch {
 	case errors.Is(err, errNoSigningKey):
 		return FailureNoSigningKey
+	case errors.Is(err, client.ErrPolicyViolation):
+		return FailureNetworkPolicy
 	case errors.Is(err, context.Canceled):
 		return FailureCanceled
 	case errors.Is(err, context.DeadlineExceeded), errors.As(err, &timeout) && timeout.Timeout():

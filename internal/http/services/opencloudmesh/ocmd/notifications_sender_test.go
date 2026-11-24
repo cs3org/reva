@@ -173,6 +173,8 @@ func sendWithLogs(t *testing.T, peer *notificationServer, n *OutgoingNotificatio
 func TestNewNotificationTransportTable(t *testing.T) {
 	retry := http.Header{}
 	retry.Set("Retry-After", "60")
+	retryDate := http.Header{"Retry-After": []string{time.Now().Add(48 * time.Hour).UTC().Format(http.TimeFormat)}}
+	expiredDate := http.Header{"Retry-After": []string{time.Now().Add(-time.Hour).UTC().Format(http.TimeFormat)}}
 	cases := []struct {
 		name    string
 		setup   func(p *notificationServer)
@@ -195,6 +197,8 @@ func TestNewNotificationTransportTable(t *testing.T) {
 		}, outcome: SendDelivered, class: http.StatusCreated, posts: 1},
 		{name: "401 is not retried", setup: func(p *notificationServer) { p.status = 401 }, outcome: SendRejected, class: http.StatusUnauthorized, posts: 1},
 		{name: "503 with Retry-After is not retried", setup: func(p *notificationServer) { p.status, p.header = 503, retry }, outcome: SendRejected, class: http.StatusServiceUnavailable, posts: 1, retry: time.Minute},
+		{name: "503 with a Retry-After date is bounded", setup: func(p *notificationServer) { p.status, p.header = 503, retryDate }, outcome: SendRejected, class: http.StatusServiceUnavailable, posts: 1, retry: maxRetryAfter},
+		{name: "503 with an expired Retry-After date", setup: func(p *notificationServer) { p.status, p.header = 503, expiredDate }, outcome: SendRejected, class: http.StatusServiceUnavailable, posts: 1},
 		{name: "503 reflecting private data", setup: func(p *notificationServer) {
 			p.status, p.respBody = 503, []byte(senderCanary)
 			p.header = http.Header{"Retry-After": []string{senderCanary}, "X-Echo": []string{senderCanary}}
@@ -309,7 +313,7 @@ func TestShareStatePayloadFixtures(t *testing.T) {
 				t.Fatalf("wire %s, want %s", peer.lastBody, tc.want)
 			}
 			parsed, err := reg.Parse(peer.lastBody)
-			if err != nil || parsed.Class != NotificationClassSpec || parsed.ProviderID != tc.in.ProviderID {
+			if err != nil || parsed.Class != NotificationClassSpec || parsed.File == nil || parsed.File.ProviderID != tc.in.ProviderID {
 				t.Fatalf("receiver parse %v: %+v", err, parsed)
 			}
 			if !reflect.DeepEqual(parsed.File.Permissions, tc.in.Permissions) {
@@ -532,6 +536,12 @@ func TestParseRetryAfter(t *testing.T) {
 			t.Errorf("%q: %s, want %s", v, got, want)
 		}
 	}
+	for _, layout := range []string{http.TimeFormat, time.RFC850, time.ANSIC} {
+		v := time.Now().Add(90 * time.Second).UTC().Format(layout)
+		if got := parseRetryAfter(v); got < 88*time.Second || got > 90*time.Second {
+			t.Errorf("%q: %s, want about 90s", v, got)
+		}
+	}
 }
 
 func TestSafeHTTPErrorKeepsNoCause(t *testing.T) {
@@ -663,11 +673,12 @@ func TestNotificationGuardedTransport(t *testing.T) {
 		posts         int
 		wantPolicy    bool
 		legacy        bool
+		failure       SendFailure
 	}{
 		{name: "explicit loopback fixture exception", allowLoopback: true, outcome: SendDelivered, posts: 1},
 		{name: "guarded legacy fallback", allowLoopback: true, legacy: true, outcome: SendDelivered, posts: 1},
-		{name: "discovery denied by default", outcome: SendDiscoveryFailed, wantPolicy: true},
-		{name: "advertised destination denied", allowLoopback: true, endpoint: "https://192.0.2.1:8443/ocm", outcome: SendPostFailed, wantPolicy: true},
+		{name: "discovery denied by default", outcome: SendDiscoveryFailed, wantPolicy: true, failure: FailureNetworkPolicy},
+		{name: "advertised destination denied", allowLoopback: true, endpoint: "https://192.0.2.1:8443/ocm", outcome: SendPostFailed, wantPolicy: true, failure: FailureNetworkPolicy},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			peer := newNotificationServer(t)
@@ -699,7 +710,7 @@ func TestNotificationGuardedTransport(t *testing.T) {
 			if !reflect.DeepEqual(probes, wantProbes) {
 				t.Fatalf("guarded probes %v, want %v", probes, wantProbes)
 			}
-			if res.Outcome != tc.outcome || peer.postCount() != tc.posts || policy.Load() != tc.wantPolicy {
+			if res.Outcome != tc.outcome || res.Failure != tc.failure || peer.postCount() != tc.posts || policy.Load() != tc.wantPolicy {
 				t.Fatalf("result %+v, posts %d, policy refusal %v", res, peer.postCount(), policy.Load())
 			}
 		})

@@ -27,7 +27,6 @@ import (
 	"net/http"
 	"net/url"
 	"strconv"
-	"strings"
 	"time"
 
 	"github.com/cs3org/reva/v3/pkg/appctx"
@@ -154,24 +153,6 @@ var (
 	errSigningFailed   = errors.New("notification signing failed")
 )
 
-// Keep the exact identity: dropping an empty port or decoding escapes
-// could reach a different peer.
-func notificationDiscoveryBase(host string) (string, bool) {
-	u, err := url.Parse("https://" + host)
-	if err != nil || u.Host != host || strings.ContainsAny(u.Hostname(), "%[") || strings.HasSuffix(host, ":") {
-		return "", false
-	}
-	if p := u.Port(); p != "" {
-		if n, err := strconv.Atoi(p); err != nil || n < 1 || n > 65535 {
-			return "", false
-		}
-	}
-	if u.Hostname() == "localhost" || u.Hostname() == "127.0.0.1" {
-		u.Scheme = "http"
-	}
-	return u.String(), true
-}
-
 // Discovery uses the peer identity; the advertised endpoint only routes delivery.
 func (t ocmNotificationTransport) DiscoverNotificationPeer(ctx context.Context, domain string) (*notificationPeer, error) {
 	host, err := providerdomain.CanonicalOCMHost(domain)
@@ -205,9 +186,12 @@ func (t ocmNotificationTransport) DiscoverNotificationPeer(ctx context.Context, 
 
 const maxRetryAfterDigits = 9
 
-// parseRetryAfter reads a delay-seconds Retry-After. An HTTP date or any
-// other value is ignored.
+// parseRetryAfter reads a delay-seconds or HTTP-date Retry-After. A past date
+// or any other value is ignored.
 func parseRetryAfter(v string) time.Duration {
+	if date, err := http.ParseTime(v); err == nil {
+		return max(time.Until(date).Round(time.Second), 0)
+	}
 	if v == "" || len(v) > maxRetryAfterDigits {
 		return 0
 	}
