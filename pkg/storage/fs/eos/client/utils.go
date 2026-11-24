@@ -25,7 +25,7 @@ import (
 	"strings"
 
 	"github.com/cs3org/reva/v3/pkg/errtypes"
-	"github.com/cs3org/reva/v3/pkg/storage/utils/acl"
+	"github.com/cs3org/reva/v3/pkg/storage/fs/eos/acl"
 )
 
 const (
