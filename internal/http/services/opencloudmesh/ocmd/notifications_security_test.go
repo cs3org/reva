@@ -41,17 +41,17 @@ import (
 
 type notificationPolicyTrace struct {
 	gateway.GatewayAPIClient
-	record  func(string)
-	deny    bool
-	missing string
-	sender  string
+	record   func(string)
+	deny     bool
+	missing  string
+	provider *ocmprovider.ProviderInfo
 }
 
 const policyErrorMarker = "policy-detail-marker"
 
 func (g *notificationPolicyTrace) IsProviderAllowed(_ context.Context, req *ocmprovider.IsProviderAllowedRequest, _ ...grpc.CallOption) (*ocmprovider.IsProviderAllowedResponse, error) {
 	g.record("policy")
-	g.sender = req.Provider.Domain
+	g.provider = req.GetProvider()
 	if g.missing == "response" {
 		return nil, nil
 	}
@@ -68,23 +68,28 @@ func (g *notificationPolicyTrace) IsProviderAllowed(_ context.Context, req *ocmp
 	if g.deny {
 		code = rpc.Code_CODE_PERMISSION_DENIED
 	}
+	if g.missing == "unauthenticated" {
+		code = rpc.Code_CODE_UNAUTHENTICATED
+	}
 	return &ocmprovider.IsProviderAllowedResponse{Status: &rpc.Status{Code: code}}, nil
 }
 
 func TestNotificationsIngressOrder(t *testing.T) {
 	for _, tc := range []struct {
-		name, kind string
-		want       int
-		sequence   string
+		name, kind        string
+		want              int
+		sequence          string
+		trustForwardedFor bool
 	}{
-		{"malformed", "malformed", http.StatusBadRequest, ""},
-		{"denied", "denied", http.StatusForbidden, "policy"},
-		{"policy backend failure", "internal", http.StatusInternalServerError, "policy"},
-		{"nil response", "response", http.StatusInternalServerError, "policy"},
-		{"nil status", "status", http.StatusInternalServerError, "policy"},
-		{"policy error", "error", http.StatusInternalServerError, "policy"},
-		{"unsigned", "unsigned", http.StatusUnauthorized, "policy,discovery"},
-		{"signed", "signed", http.StatusCreated, "policy,discovery,jwks,dispatch"},
+		{"malformed", "malformed", http.StatusBadRequest, "", false},
+		{"denied", "denied", http.StatusForbidden, "policy", false},
+		{"unauthenticated provider with forwarding enabled", "unauthenticated", http.StatusForbidden, "policy", true},
+		{"policy backend failure", "internal", http.StatusInternalServerError, "policy", false},
+		{"nil response", "response", http.StatusInternalServerError, "policy", false},
+		{"nil status", "status", http.StatusInternalServerError, "policy", false},
+		{"policy error", "error", http.StatusInternalServerError, "policy", false},
+		{"unsigned", "unsigned", http.StatusUnauthorized, "policy,discovery", false},
+		{"signed", "signed", http.StatusCreated, "policy,discovery,jwks,dispatch", false},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			var mu sync.Mutex
@@ -114,6 +119,10 @@ func TestNotificationsIngressOrder(t *testing.T) {
 			senderHost = strings.ToLower(sender)
 			policy := &notificationPolicyTrace{record: record, deny: tc.kind == "denied", missing: tc.kind}
 			sv := newNotificationTestService(t, "strict", policy)
+			if tc.trustForwardedFor {
+				sv.Conf.TrustForwardedFor = true
+				sv.notifications.init(sv.Conf)
+			}
 			if err := sv.notifications.registry.SetHandler(NotificationShareUnshared, TypeHandlerFunc(func(context.Context, *Notification) error { record("dispatch"); return nil })); err != nil {
 				t.Fatal(err)
 			}
@@ -123,8 +132,11 @@ func TestNotificationsIngressOrder(t *testing.T) {
 			}
 			req := newNotificationTestRequest(http.MethodPost, notificationTestEndpoint, body)
 			req.Header.Set("Content-Type", "application/json")
-			req.RemoteAddr = fmt.Sprintf("[2001:db8:%x::1]:1000", clientSeq.Add(1))
-			if tc.kind == "signed" || tc.kind == "denied" {
+			remoteIP := fmt.Sprintf("2001:db8:%x::1", clientSeq.Add(1))
+			req.RemoteAddr = "[" + remoteIP + "]:1000"
+			const forwardedIP = "198.51.100.2"
+			req.Header.Set("X-Forwarded-For", "198.51.100.1, "+forwardedIP)
+			if tc.kind == "signed" || tc.want == http.StatusForbidden {
 				if err := key.Sign(req, []byte(body)); err != nil {
 					t.Fatal(err)
 				}
@@ -140,8 +152,18 @@ func TestNotificationsIngressOrder(t *testing.T) {
 			if rr.Code != tc.want || got != tc.sequence {
 				t.Fatalf("status %d, sequence %q; want %d, %q", rr.Code, got, tc.want, tc.sequence)
 			}
-			if tc.kind != "malformed" && policy.sender != senderHost {
-				t.Fatalf("policy sender %q, want %q", policy.sender, senderHost)
+			if tc.kind != "malformed" {
+				wantIP := remoteIP
+				if tc.trustForwardedFor {
+					wantIP = forwardedIP
+				}
+				if got := policy.provider.GetDomain(); got != senderHost {
+					t.Errorf("policy sender %q, want %q", got, senderHost)
+				}
+				services := policy.provider.GetServices()
+				if len(services) != 1 || services[0].GetHost() != wantIP {
+					t.Errorf("policy services %v, want one service with host %q", services, wantIP)
+				}
 			}
 			if tc.kind == "response" || tc.kind == "status" {
 				checkResponse(t, rr, 500, reqres.APIErrorServerError)
@@ -150,7 +172,7 @@ func TestNotificationsIngressOrder(t *testing.T) {
 					t.Fatalf("unexpected dependency response: %s", rr.Body.String())
 				}
 			}
-			if tc.kind == "denied" {
+			if tc.want == http.StatusForbidden {
 				checkResponse(t, rr, http.StatusForbidden, reqres.APIErrorUntrustedService)
 			}
 			if tc.kind == "internal" {

@@ -74,7 +74,7 @@ func (h *notifHandler) Notifications(w http.ResponseWriter, r *http.Request) {
 		reqres.WriteError(w, r, reqres.APIErrorInvalidParameter, reason, nil)
 		return
 	}
-	// A 501 response is also an authenticated receipt.
+	// Check provider policy and signature requirements before dispatch.
 	if err := h.authenticate(ctx, w, r, body, n); err != nil {
 		return
 	}
@@ -131,7 +131,7 @@ func (h *notifHandler) authenticate(ctx context.Context, w http.ResponseWriter, 
 	// with these codes. Other codes are a policy backend failure.
 	switch providerAllowedResp.Status.Code {
 	case rpc.Code_CODE_OK:
-	case rpc.Code_CODE_NOT_FOUND, rpc.Code_CODE_PERMISSION_DENIED, rpc.Code_CODE_INVALID_ARGUMENT:
+	case rpc.Code_CODE_UNAUTHENTICATED, rpc.Code_CODE_NOT_FOUND, rpc.Code_CODE_PERMISSION_DENIED, rpc.Code_CODE_INVALID_ARGUMENT:
 		notificationLog(log.Info(), n).Str("outcome", "rejected").Msg("notification sender provider not authorized")
 		reqres.WriteError(w, r, reqres.APIErrorUntrustedService, "provider not authorized", nil)
 		return errors.New("rejected")
