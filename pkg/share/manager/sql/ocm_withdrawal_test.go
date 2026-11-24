@@ -114,8 +114,14 @@ func TestActiveGrantDeletionRemovesRowsAndProtocols(t *testing.T) {
 		req.Grantee.GetUserId().TenantId = "tenant"
 		alice.Id.Idp, alice.Id.TenantId = "local.example", "tenant"
 		rs := mustStore(t, m, req)
-		duplicate := mustStore(t, m, grantShare(recipient("bob"), "PEER.example:8443", "ExactID", file))
+		duplicateReq := grantShare(recipient("bob"), "PEER.example:8443", "ExactID", file)
+		duplicateReq.Expiration = &typesv1beta1.Timestamp{Seconds: uint64(time.Now().Add(time.Hour).Unix())}
+		duplicate := mustStore(t, m, duplicateReq)
+		expiredReq := grantShare(recipient("expired"), "peer.example:8443", "ExactID", file)
+		expiredReq.Expiration = &typesv1beta1.Timestamp{Seconds: uint64(time.Now().Add(-time.Hour).Unix())}
+		expired := mustStore(t, m, expiredReq)
 		neighbors := []*ocm.ReceivedShare{
+			expired,
 			mustStore(t, m, grantShare(alice, "peer.example:8444", "ExactID", file)),
 			mustStore(t, m, grantShare(alice, "peer.example:8443", "exactid", file)),
 			mustStore(t, m, grantShare(alice, "peer.example:8443", "ExactID ", file)),
@@ -148,7 +154,7 @@ func TestActiveGrantDeletionRemovesRowsAndProtocols(t *testing.T) {
 		selector.RecipientType = ocm.RecipientType_RECIPIENT_TYPE_USER
 		for i := 0; i < 2; i++ {
 			receipt, err := m.WithdrawReceivedGrant(ctx, selector)
-			if err != nil || receipt.Changed != (i == 0) {
+			if err != nil || receipt == nil || receipt.Changed != (i == 0) {
 				t.Fatalf("withdraw attempt %d = %v, %v", i, receipt, err)
 			}
 		}
@@ -270,6 +276,9 @@ func TestActiveGrantCommitUncertaintyReturnsNoReceipt(t *testing.T) {
 		}
 
 		deleter := openOCMManager(t, cfg)
+		expiredReq := grantShare(recipient("expired"), "peer.example", "42", file)
+		expiredReq.Expiration = &typesv1beta1.Timestamp{Seconds: uint64(time.Now().Add(-time.Hour).Unix())}
+		expired := mustStore(t, deleter, expiredReq)
 		deleteFault := &commitFault{apply: true}
 		withCommitFault(t, deleter, deleteFault)
 		deleteFault.armed.Store(true)
@@ -277,6 +286,8 @@ func TestActiveGrantCommitUncertaintyReturnsNoReceipt(t *testing.T) {
 		if receipt != nil || !errors.As(err, &unknown) || unknown.Observed != share.CommitObservedRequested {
 			t.Fatalf("unacknowledged deletion = %v, %v", receipt, err)
 		}
-		assertProjectionCount(t, openOCMManager(t, cfg), rs.Id.OpaqueId, 0)
+		reopened := openOCMManager(t, cfg)
+		assertProjectionCount(t, reopened, rs.Id.OpaqueId, 0)
+		assertProjectionCount(t, reopened, expired.Id.OpaqueId, 1)
 	})
 }

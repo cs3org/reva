@@ -639,11 +639,17 @@ func (m *mgr) GetReceivedShare(ctx context.Context, user *userpb.User, ref *ocm.
 	return s, err
 }
 
-// receivedBy compares the available local identity independently of SQL collation.
+// receivedBy compares the local identity independently of SQL collation. A row
+// with a grant key stores the exact recipient, an empty tenant included. Older
+// rows only have the opaque ID.
 func receivedBy(row *model.OcmReceivedShare, id *userpb.UserId) bool {
-	return id.GetOpaqueId() != "" && row.ShareWith == id.GetOpaqueId() &&
-		(row.ShareWithIdp == "" || row.ShareWithIdp == id.GetIdp()) &&
-		(row.ShareWithTenant == "" || row.ShareWithTenant == id.GetTenantId())
+	if id.GetOpaqueId() == "" || row.ShareWith != id.GetOpaqueId() {
+		return false
+	}
+	if row.GrantKey == nil {
+		return true
+	}
+	return row.ShareWithIdp == id.GetIdp() && row.ShareWithTenant == id.GetTenantId()
 }
 
 // lockReceived reads a received share of the user, locked for the rest of

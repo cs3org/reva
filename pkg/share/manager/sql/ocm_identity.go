@@ -18,8 +18,9 @@
 
 package sql
 
-// Writers lock the grant identity first, then the received rows by ID. On
-// SQLite every transaction takes the write lock when it begins (BEGIN IMMEDIATE).
+// On MySQL, writers lock the rows they change with FOR UPDATE, and the rows
+// of one grant in ID order. On SQLite every transaction takes the write lock
+// when it begins (BEGIN IMMEDIATE).
 
 import (
 	"bytes"
@@ -283,7 +284,7 @@ func lockReceivedGrant(tx *gorm.DB, grant *share.GrantWithdrawal) ([]model.OcmRe
 	return rows, key, nil
 }
 
-// WithdrawReceivedGrant physically deletes the exact projections and their protocols.
+// WithdrawReceivedGrant physically deletes matching unexpired projections and their protocols.
 func (m *mgr) WithdrawReceivedGrant(ctx context.Context, grant *share.GrantWithdrawal) (*share.GrantWithdrawalReceipt, error) {
 	var receipt share.GrantWithdrawalReceipt
 	var check commitCheck
@@ -294,9 +295,16 @@ func (m *mgr) WithdrawReceivedGrant(ctx context.Context, grant *share.GrantWithd
 		if err != nil || len(rows) == 0 {
 			return err
 		}
+		cutoff := time.Now()
 		ids := make([]uint, 0, len(rows))
 		for _, row := range rows {
+			if row.Expiration.Valid && !row.Expiration.V.After(cutoff) {
+				continue
+			}
 			ids = append(ids, row.ID)
+		}
+		if len(ids) == 0 {
+			return nil
 		}
 		if err := tx.Unscoped().Where("ocm_received_share_id IN ?", ids).Delete(&model.OcmReceivedShareProtocol{}).Error; err != nil {
 			return err

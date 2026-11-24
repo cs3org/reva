@@ -261,8 +261,9 @@ func newEmitEnv(t *testing.T) *emitEnv {
 	env.owner = appctx.WithLogger(appctx.ContextSetUser(context.Background(), &userpb.User{
 		Id: &userpb.UserId{OpaqueId: "einstein", Idp: "cernbox.example.org"},
 	}), &logger)
+	// The recipient is the exact identity stored as the received grantee.
 	env.recip = appctx.WithLogger(appctx.ContextSetUser(context.Background(), &userpb.User{
-		Id: &userpb.UserId{OpaqueId: "marie", Idp: "cernbox.example.org"},
+		Id: &userpb.UserId{OpaqueId: "marie"},
 	}), &logger)
 	stampGateway(&statGateway{info: &providerpb.ResourceInfo{Path: "/files/doc.txt", Type: providerpb.ResourceType_RESOURCE_TYPE_FILE}})
 	return env

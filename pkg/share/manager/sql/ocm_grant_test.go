@@ -24,6 +24,7 @@ import (
 	"strings"
 	"testing"
 
+	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	ocm "github.com/cs3org/go-cs3apis/cs3/sharing/ocm/v1beta1"
 	"github.com/cs3org/reva/v3/pkg/ocm/share"
 	model "github.com/cs3org/reva/v3/pkg/share/manager/sql/model"
@@ -131,6 +132,57 @@ func TestNewGrantMustBeRepresentable(t *testing.T) {
 		fresh := mustStore(t, m, grant("a.example.org", "fresh"))
 		if receivedRow(t, m, fresh.Id.OpaqueId).GrantKey == nil {
 			t.Fatal("fresh grant unbound")
+		}
+	})
+}
+
+// A bound projection matches only its exact recipient, an empty tenant
+// included. A row without a grant key still matches on the opaque ID.
+func TestBoundRecipientIsExact(t *testing.T) {
+	forEachDialect(t, func(t *testing.T, m *mgr) {
+		ctx := context.Background()
+		exact := &userpb.User{Id: &userpb.UserId{OpaqueId: "Alice", Idp: "local.example"}}
+		req := grantShare(exact, "peer.example", "bound", file)
+		req.Grantee.GetUserId().Idp = "local.example"
+		bound := mustStore(t, m, req)
+		legacy := mustStore(t, m, grantShare(exact, "peer.example", "legacy", file))
+		if err := m.db.Model(&model.OcmReceivedShare{}).Where("id = ?", legacy.Id.OpaqueId).Update("grant_key", nil).Error; err != nil {
+			t.Fatal(err)
+		}
+		accept := func(rs *ocm.ReceivedShare) *ocm.ReceivedShare {
+			return &ocm.ReceivedShare{Id: rs.Id, State: ocm.ShareState_SHARE_STATE_ACCEPTED}
+		}
+
+		for _, other := range []*userpb.UserId{
+			{OpaqueId: "Alice", Idp: "local.example", TenantId: "tenant"},
+			{OpaqueId: "Alice", Idp: "other.example"},
+			{OpaqueId: "Alice"},
+		} {
+			u := &userpb.User{Id: other}
+			if got, err := m.GetReceivedShare(ctx, u, idRef(bound.Id)); !errors.Is(err, share.ErrShareNotFound) {
+				t.Fatalf("%v read the bound share: %v %v", other, got, err)
+			}
+			if got, err := m.UpdateReceivedShare(ctx, u, accept(bound), stateMask()); !errors.Is(err, share.ErrShareNotFound) {
+				t.Fatalf("%v updated the bound share: %v %v", other, got, err)
+			}
+			list, err := m.ListReceivedShares(ctx, u, nil)
+			if err != nil || len(list) != 1 || list[0].Id.OpaqueId != legacy.Id.OpaqueId {
+				t.Fatalf("%v listed %v %v", other, list, err)
+			}
+		}
+
+		got, err := m.GetReceivedShare(ctx, exact, idRef(bound.Id))
+		if err != nil || got.GetGrantee().GetUserId().GetIdp() != "local.example" || got.GetGrantee().GetUserId().GetTenantId() != "" {
+			t.Fatalf("exact recipient read: %v %v", got, err)
+		}
+		if u, err := m.UpdateReceivedShare(ctx, exact, accept(bound), stateMask()); err != nil || !u.StateChanged() {
+			t.Fatalf("exact recipient update: %v %v", u, err)
+		}
+		if list, err := m.ListReceivedShares(ctx, exact, nil); err != nil || len(list) != 2 {
+			t.Fatalf("exact recipient listed %v %v", list, err)
+		}
+		if u, err := m.UpdateReceivedShare(ctx, &userpb.User{Id: &userpb.UserId{OpaqueId: "Alice", Idp: "other.example"}}, accept(legacy), stateMask()); err != nil || !u.StateChanged() {
+			t.Fatalf("legacy update: %v %v", u, err)
 		}
 	})
 }
