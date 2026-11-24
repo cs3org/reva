@@ -172,7 +172,9 @@ func (fs *Eosfs) RestoreRecycleItem(ctx context.Context, basePath, key, relative
 		}
 	}
 
-	return fs.c.RestoreDeletedEntry(ctx, auth, key)
+	// EOS does not give the original path of key, thus a collision is a plain AlreadyExists: the
+	// client knows that it is the item of the call.
+	return fs.c.RestoreDeletedEntry(ctx, auth, key, force)
 }
 
 func (fs *Eosfs) getRecycleIdAndAuth(ctx context.Context, u *userpb.User, md *provider.ResourceInfo) (recycleid string, auth eosclient.Authorization, err error) {
