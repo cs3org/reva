@@ -26,6 +26,7 @@ import (
 
 	"github.com/cs3org/reva/v3/internal/http/services/opencloudmesh/ocmd"
 	"github.com/cs3org/reva/v3/pkg/ocm/client"
+	"github.com/cs3org/reva/v3/pkg/ocm/httpsig"
 	"github.com/cs3org/reva/v3/pkg/utils/cfg"
 )
 
@@ -111,6 +112,7 @@ func TestAppsInitDefaultTransport(t *testing.T) {
 				"gatewaysvc":         "grpc:0",
 				"mesh_directory_url": "https://dir.example",
 				"provider_domain":    "receiver.example",
+				"signing_key":        writeKeyFile(t),
 			}
 			if tt.setCIDRs {
 				input["allowed_federation_cidrs"] = tt.cidrs
@@ -165,6 +167,7 @@ func TestDecodeOCMClientUseEnvProxy(t *testing.T) {
 				"gatewaysvc":         "grpc:0",
 				"mesh_directory_url": "https://dir.example",
 				"provider_domain":    "receiver.example",
+				"signing_key":        writeKeyFile(t),
 			}
 			if tt.set {
 				input["ocm_client_use_env_proxy"] = tt.value
@@ -199,6 +202,7 @@ func TestAppsInitUseEnvProxyWiring(t *testing.T) {
 			if err := h.init(&config{
 				ProviderDomain:       "receiver.example",
 				OCMClientUseEnvProxy: tt.enabled,
+				SigningKey:           writeKeyFile(t),
 			}); err != nil {
 				t.Fatalf("init: %v", err)
 			}
@@ -218,6 +222,7 @@ func TestAppsInitPropagatesFederationPolicy(t *testing.T) {
 		ProviderDomain:    "receiver.example",
 		OCMClientTimeout:  1,
 		OCMClientInsecure: true,
+		SigningKey:        writeKeyFile(t),
 		AllowedFederationCIDRs: []string{
 			"10.50.0.0/16",
 			"fd42:8c6d:7a10:23::/64",
@@ -281,7 +286,11 @@ func callRetainedExchange(t *testing.T, c *ocmd.OCMClient, endpoint string) erro
 	t.Helper()
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 	t.Cleanup(cancel)
-	_, _, err := c.ExchangeToken(ctx, endpoint, "code", "receiver.example", nil)
+	key, err := httpsig.LoadKey(writeKeyFile(t))
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, _, err = c.ExchangeToken(ctx, endpoint, "code", "receiver.example", key)
 	return err
 }
 
@@ -302,10 +311,11 @@ func assertLaunchDenied(t *testing.T, err error, op string) {
 	}
 }
 
-func scienceMeshServiceConfig(domain string, setDomain bool) map[string]any {
+func scienceMeshServiceConfig(t *testing.T, domain string, setDomain bool) map[string]any {
 	cfg := map[string]any{
 		"gatewaysvc":         "127.0.0.1:19000",
 		"mesh_directory_url": "https://mesh.example.test",
+		"signing_key":        writeKeyFile(t),
 	}
 	if setDomain {
 		cfg["provider_domain"] = domain
@@ -314,19 +324,19 @@ func scienceMeshServiceConfig(domain string, setDomain bool) map[string]any {
 }
 
 func TestAppsServiceNewFailsOnAbsentProviderDomain(t *testing.T) {
-	svc, err := New(context.Background(), scienceMeshServiceConfig("", false))
+	svc, err := New(context.Background(), scienceMeshServiceConfig(t, "", false))
 	if err == nil || svc != nil {
 		t.Fatalf("absent provider_domain: svc=%v err=%v", svc, err)
 	}
 
-	svc, err = New(context.Background(), scienceMeshServiceConfig("", true))
+	svc, err = New(context.Background(), scienceMeshServiceConfig(t, "", true))
 	if err == nil || svc != nil {
 		t.Fatalf("empty provider_domain: svc=%v err=%v", svc, err)
 	}
 }
 
 func TestAppsServiceNewFailsOnInvalidProviderDomain(t *testing.T) {
-	svc, err := New(context.Background(), scienceMeshServiceConfig("https://receiver.example.test", true))
+	svc, err := New(context.Background(), scienceMeshServiceConfig(t, "https://receiver.example.test", true))
 	if err == nil || svc != nil {
 		t.Fatalf("svc=%v err=%v", svc, err)
 	}

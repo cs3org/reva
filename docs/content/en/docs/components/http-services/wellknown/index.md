@@ -39,7 +39,8 @@
           {
             "key": "endpoint",
             "type": "string",
-            "default": "This host's full URL. If it's not configured, it is assumed OCM is not available.",
+            "default": "sharedconf.GetPublicURL()",
+            "description": "This host's full URL. If it's empty, the shared public_url is used. If both are empty, OCM is not available.",
             "source": "internal/http/services/wellknown/ocm.go#L56"
           },
           {
@@ -67,7 +68,7 @@
             "key": "enable_webapp",
             "type": "bool",
             "default": "false",
-            "description": "Advertise webapp receive in discovery only. Distinct from offer_webapp.",
+            "description": "Advertise webapp receive in discovery only. Distinct from webapps.",
             "source": "internal/http/services/wellknown/ocm.go#L60"
           },
           {
@@ -94,14 +95,14 @@
           {
             "key": "signing_key",
             "type": "string",
-            "description": "Path to the PEM file of the Ed25519 private key for OCM HTTP signatures. If it's not configured, no public key is published.",
+            "description": "Path to the PEM file of the Ed25519 private key for OCM HTTP signatures. Its public key is published at /.well-known/jwks.json.",
             "source": "internal/http/services/wellknown/ocm.go#L64"
           },
           {
             "key": "http_sig_mode",
             "type": "string",
             "default": "permissive",
-            "description": "permissive or strict. Strict lists the must-use-http-sig criterion and needs signing_key. Use the same mode in the ocm service.",
+            "description": "permissive or strict. Strict lists the must-use-http-sig criterion. Use the same mode in the ocm service.",
             "source": "internal/http/services/wellknown/ocm.go#L65"
           }
         ]

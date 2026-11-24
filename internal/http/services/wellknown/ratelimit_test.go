@@ -31,6 +31,7 @@ func TestDiscoveryIsRateLimited(t *testing.T) {
 	s, err := New(context.Background(), map[string]any{
 		"unauth_rate_limit":       1,
 		"unauth_rate_limit_burst": 1,
+		"ocmprovider":             map[string]any{"signing_key": writeKeyFile(t)},
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -58,6 +59,7 @@ func TestDiscoveryIsRateLimited(t *testing.T) {
 func TestInvalidTrustedProxyFailsStartup(t *testing.T) {
 	if _, err := New(context.Background(), map[string]any{
 		"trusted_proxy_cidrs": []string{"10.0.0.0/33"},
+		"ocmprovider":         map[string]any{"signing_key": writeKeyFile(t)},
 	}); err == nil {
 		t.Fatal("invalid trusted_proxy_cidrs accepted")
 	}

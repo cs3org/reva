@@ -107,10 +107,13 @@ func initRoutingTree(ctx context.Context, dbUsername, dbPassword, dbHost string,
 		return nil, errors.Wrap(err, "error opening sql connection")
 	}
 
+	defer db.Close()
+
 	results, err := db.Query("SELECT path, mount_id FROM routing")
 	if err != nil {
 		return nil, errors.Wrap(err, "error getting routing table from db")
 	}
+	defer results.Close()
 
 	rs := make(map[string]string)
 
@@ -127,6 +130,10 @@ func initRoutingTree(ctx context.Context, dbUsername, dbPassword, dbHost string,
 		} else {
 			rs[p] = m
 		}
+	}
+
+	if err := results.Err(); err != nil {
+		return nil, errors.Wrap(err, "error iterating routing table rows")
 	}
 
 	if len(missingRules) != 0 {

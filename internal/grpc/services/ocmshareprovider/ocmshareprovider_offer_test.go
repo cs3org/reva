@@ -34,6 +34,7 @@ import (
 	providerpb "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/cs3org/reva/v3/internal/http/services/opencloudmesh/ocmd"
 	"github.com/cs3org/reva/v3/pkg/appctx"
+	"github.com/cs3org/reva/v3/pkg/ocm/httpsig"
 	"github.com/cs3org/reva/v3/pkg/ocm/share"
 	"github.com/rs/zerolog"
 	"google.golang.org/protobuf/proto"
@@ -340,6 +341,10 @@ func TestCreateOCMShareWebappOnlyNoProtocol(t *testing.T) {
 	t.Cleanup(srv.Close)
 
 	repo := &capturingRepo{nextID: "opaque-share"}
+	key, err := httpsig.LoadKey(writeKeyFile(t))
+	if err != nil {
+		t.Fatal(err)
+	}
 	svc := &service{
 		conf: &config{
 			ProviderDomain: "sender.example",
@@ -347,8 +352,9 @@ func TestCreateOCMShareWebappOnlyNoProtocol(t *testing.T) {
 			Webapps:        []webapp{{Name: testAppName, MediaTypes: []string{testMediaType}}},
 			WebAppEndpoint: testOpener,
 		},
-		repo:   repo,
-		client: ocmd.NewClient(2*time.Second, true),
+		repo:       repo,
+		client:     ocmd.NewClient(2*time.Second, true),
+		signingKey: key,
 	}
 	stampGateway(&statGateway{info: &providerpb.ResourceInfo{
 		Path:     "/files/notes.txt",

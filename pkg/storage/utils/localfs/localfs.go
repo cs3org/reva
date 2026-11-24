@@ -504,6 +504,7 @@ func (fs *localfs) retrieveArbitraryMetadata(ctx context.Context, fn string, mdK
 	if err != nil {
 		return nil, errors.Wrap(err, "localfs: error listing metadata")
 	}
+	defer md.Close()
 	var mdKey, mdVal string
 	metadata := map[string]string{}
 
@@ -525,6 +526,9 @@ func (fs *localfs) retrieveArbitraryMetadata(ctx context.Context, fn string, mdK
 		if _, ok := mdKeysMap[mdKey]; returnAllKeys || ok {
 			metadata[mdKey] = mdVal
 		}
+	}
+	if err := md.Err(); err != nil {
+		return nil, errors.Wrap(err, "localfs: error iterating db rows")
 	}
 	return &provider.ArbitraryMetadata{
 		Metadata: metadata,
@@ -591,6 +595,7 @@ func (fs *localfs) ListGrants(ctx context.Context, ref *provider.Reference) ([]*
 	if err != nil {
 		return nil, errors.Wrap(err, "localfs: error listing grants")
 	}
+	defer g.Close()
 	var granteeID, role string
 	var grantList []*provider.Grant
 
@@ -613,6 +618,9 @@ func (fs *localfs) ListGrants(ctx context.Context, ref *provider.Reference) ([]*
 			Grantee:     grantee,
 			Permissions: permissions,
 		})
+	}
+	if err := g.Err(); err != nil {
+		return nil, errors.Wrap(err, "localfs: error iterating db rows")
 	}
 	return grantList, nil
 }
@@ -1289,7 +1297,7 @@ func (fs *localfs) ListRevisions(ctx context.Context, ref *provider.Reference) (
 		// versions resemble v12345678
 		version := mds[i].Name()[1:]
 
-		mtime, err := strconv.Atoi(version)
+		mtime, err := strconv.ParseInt(version, 10, 64)
 		if err != nil {
 			continue
 		}
@@ -1394,7 +1402,7 @@ func (fs *localfs) convertToRecycleItem(ctx context.Context, rp string, md os.Fi
 	}
 
 	trashtime := suffix[2:]
-	ttime, err := strconv.Atoi(trashtime)
+	ttime, err := strconv.ParseInt(trashtime, 10, 64)
 	if err != nil {
 		return nil
 	}

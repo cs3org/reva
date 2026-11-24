@@ -20,7 +20,6 @@ package wellknown
 
 import (
 	"encoding/json"
-	"errors"
 	"fmt"
 	"net/http"
 	"net/url"
@@ -30,6 +29,7 @@ import (
 
 	"github.com/cs3org/reva/v3/pkg/appctx"
 	"github.com/cs3org/reva/v3/pkg/ocm/httpsig"
+	"github.com/cs3org/reva/v3/pkg/sharedconf"
 )
 
 const webappReceiveTargetBlank = "blank"
@@ -53,7 +53,7 @@ const OCMAPIVersion = "1.4.0"
 
 type OcmProviderConfig struct {
 	OCMPrefix          string `docs:"ocm;The prefix URL where the OCM API is served."                                            mapstructure:"ocm_prefix"`
-	Endpoint           string `docs:"This host's full URL. If it's not configured, it is assumed OCM is not available."          mapstructure:"endpoint"`
+	Endpoint           string `docs:";This host's full URL. If it's empty, the shared public_url is used. If both are empty, OCM is not available." mapstructure:"endpoint"`
 	Provider           string `docs:"reva;A friendly name that defines this service."                                            mapstructure:"provider"`
 	WebdavRoot         string `docs:"/remote.php/dav/ocm;The root URL of the WebDAV endpoint to serve OCM shares."               mapstructure:"webdav_root"`
 	InviteAcceptDialog string `docs:"/open-cloud-mesh/accept-invite;The frontend URL where to land when receiving an invitation" mapstructure:"invite_accept_dialog"`
@@ -61,8 +61,8 @@ type OcmProviderConfig struct {
 	EnableEmbedded     bool   `docs:"false;Whether embedded shares are enabled in OCM shares."                                   mapstructure:"enable_embedded"`
 	EnableCodeFlow     bool   `docs:"false;Whether code-flow token exchange is enabled in OCM shares."                           mapstructure:"enable_code_flow"`
 	MFAPolicy          string `docs:"reject;Admission of received webapp must-use-mfa offers: reject or off. Off skips the check; nothing is advertised." mapstructure:"mfa_policy"`
-	SigningKey         string `docs:";Path to the PEM file of the Ed25519 private key for OCM HTTP signatures. If it's not configured, no public key is published." mapstructure:"signing_key"`
-	HTTPSigMode        string `docs:"permissive;permissive or strict. Strict lists the must-use-http-sig criterion and needs signing_key. Use the same mode in the ocm service." mapstructure:"http_sig_mode" validate:"omitempty,oneof=permissive strict"`
+	SigningKey         string `docs:";Path to the PEM file of the Ed25519 private key for OCM HTTP signatures. Its public key is published at /.well-known/jwks.json." mapstructure:"signing_key" validate:"required"`
+	HTTPSigMode        string `docs:"permissive;permissive or strict. Strict lists the must-use-http-sig criterion. Use the same mode in the ocm service." mapstructure:"http_sig_mode" validate:"omitempty,oneof=permissive strict"`
 }
 
 type OcmDiscoveryData struct {
@@ -182,6 +182,9 @@ func usableDiscoveryBase(raw string) bool {
 }
 
 func (c *OcmProviderConfig) ApplyDefaults() {
+	if c.Endpoint == "" {
+		c.Endpoint = sharedconf.GetPublicURL()
+	}
 	if c.OCMPrefix == "" {
 		c.OCMPrefix = "ocm"
 	}
@@ -210,18 +213,12 @@ func (c *OcmProviderConfig) validateMFAPolicy() error {
 }
 
 func (h *wkocmHandler) init(c *OcmProviderConfig) error {
-	// Without a key, discovery does not list http-sig, thus peers would not sign and strict would reject all.
-	if c.HTTPSigMode == "strict" && c.SigningKey == "" {
-		return errors.New("http_sig_mode strict needs signing_key")
+	key, err := httpsig.LoadKey(c.SigningKey)
+	if err != nil {
+		return err
 	}
-	if c.SigningKey != "" {
-		key, err := httpsig.LoadKey(c.SigningKey)
-		if err != nil {
-			return err
-		}
-		if h.jwks, err = key.JWKS(); err != nil {
-			return err
-		}
+	if h.jwks, err = key.JWKS(); err != nil {
+		return err
 	}
 	h.setData(h.buildData(c))
 	return nil
@@ -324,10 +321,8 @@ func (h *wkocmHandler) buildData(c *OcmProviderConfig) *OcmDiscoveryData {
 		d.TokenEndPoint = tokenEndpoint
 		d.Capabilities = append(d.Capabilities, "exchange-token")
 	}
-	if h.jwks != nil {
-		d.JwksURI, _ = url.JoinPath(c.Endpoint, "/.well-known/jwks.json")
-		d.Capabilities = append(d.Capabilities, "http-sig")
-	}
+	d.JwksURI, _ = url.JoinPath(c.Endpoint, "/.well-known/jwks.json")
+	d.Capabilities = append(d.Capabilities, "http-sig")
 	if c.HTTPSigMode == "strict" {
 		d.Criteria = append(d.Criteria, "must-use-http-sig")
 	}

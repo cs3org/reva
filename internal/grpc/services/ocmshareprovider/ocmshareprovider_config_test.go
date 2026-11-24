@@ -43,6 +43,7 @@ func TestOfferWebappConfigDecodeAndDisabledStartup(t *testing.T) {
 		"webapps":         webappsCfg(testPaddedName),
 		"webapp_endpoint": testOpener,
 		"enable_webapp":   false,
+		"signing_key":     writeKeyFile(t),
 	}, &decoded)
 	if err != nil {
 		t.Fatalf("decode enabled offer: %v", err)
@@ -58,6 +59,7 @@ func TestOfferWebappConfigDecodeAndDisabledStartup(t *testing.T) {
 		"provider_domain": "sender.example",
 		"webdav_endpoint": testWebDAVRoot,
 		"enable_webapp":   true,
+		"signing_key":     writeKeyFile(t),
 	}, &defaults)
 	if err != nil {
 		t.Fatalf("decode disabled offer: %v", err)
@@ -74,6 +76,7 @@ func TestOfferWebappConfigDecodeAndDisabledStartup(t *testing.T) {
 		"webdav_endpoint": testWebDAVRoot,
 		"enable_webapp":   true,
 		"webapp_endpoint": "http://[",
+		"signing_key":     writeKeyFile(t),
 	})
 	if err != nil {
 		t.Fatalf("disabled New: %v", err)
@@ -93,6 +96,7 @@ func TestOfferWebappEnabledStartup(t *testing.T) {
 		"webdav_endpoint": testWebDAVRoot,
 		"webapps":         webappsCfg(testPaddedName),
 		"webapp_endpoint": testOpener,
+		"signing_key":     writeKeyFile(t),
 	})
 	if err != nil {
 		t.Fatalf("enabled New: %v", err)

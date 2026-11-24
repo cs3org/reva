@@ -62,7 +62,7 @@ type config struct {
 	OCMClientInsecure bool                      `mapstructure:"ocm_insecure"`
 	GatewaySVC        string                    `mapstructure:"gatewaysvc"                                    validate:"required"`
 	ProviderDomain    string                    `docs:"The same domain registered in the provider authorizer" mapstructure:"provider_domain" validate:"required"`
-	SigningKey        string                    `docs:";Path to the PEM file of the Ed25519 private key that signs the accepted invites that this server sends. Use the key of the wellknown ocmprovider." mapstructure:"signing_key"`
+	SigningKey        string                    `docs:";Path to the PEM file of the Ed25519 private key that signs the accepted invites that this server sends. Use the key of the wellknown ocmprovider." mapstructure:"signing_key" validate:"required"`
 
 	tokenExpiration time.Duration
 }
@@ -114,11 +114,9 @@ func New(ctx context.Context, m map[string]any) (rgrpc.Service, error) {
 		return nil, err
 	}
 
-	var key *httpsig.Key
-	if c.SigningKey != "" {
-		if key, err = httpsig.LoadKey(c.SigningKey); err != nil {
-			return nil, err
-		}
+	key, err := httpsig.LoadKey(c.SigningKey)
+	if err != nil {
+		return nil, err
 	}
 
 	service := &service{

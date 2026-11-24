@@ -30,6 +30,7 @@ import (
 func TestIngressRoutesAreRateLimited(t *testing.T) {
 	s, err := New(context.Background(), map[string]any{
 		"gatewaysvc":              "localhost:19000",
+		"endpoint":                "https://cernbox.example.org",
 		"token_managers":          map[string]any{"jwt": map[string]any{"secret": "test-secret"}},
 		"unauth_rate_limit":       1,
 		"unauth_rate_limit_burst": 1,
@@ -64,6 +65,7 @@ func TestIngressRoutesAreRateLimited(t *testing.T) {
 func TestInvalidTrustedProxyFailsStartup(t *testing.T) {
 	if _, err := New(context.Background(), map[string]any{
 		"gatewaysvc":          "localhost:19000",
+		"endpoint":            "https://cernbox.example.org",
 		"trusted_proxy_cidrs": []string{"10.0.0.0/33"},
 	}); err == nil {
 		t.Fatal("invalid trusted_proxy_cidrs accepted")

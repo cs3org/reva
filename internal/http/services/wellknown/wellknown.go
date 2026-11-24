@@ -88,8 +88,6 @@ func (s *svc) Close() error {
 func (s *svc) Routes(r *router.Router) {
 	r.Group(mount, func(r *router.Router) {
 		r.Get("/ocm", s.ocm.Ocm, router.Unprotected())
-		if s.ocm.jwks != nil {
-			r.Get("/jwks.json", s.ocm.Jwks, router.Unprotected())
-		}
+		r.Get("/jwks.json", s.ocm.Jwks, router.Unprotected())
 	}, s.limiter.Middleware)
 }

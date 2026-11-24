@@ -53,9 +53,10 @@ type config struct {
 	// behind a reverse proxy that sets the header, else peers can spoof it.
 	TrustForwardedFor bool `mapstructure:"trust_forwarded_for"`
 	// Endpoint is the public URL of this server, the same as the endpoint of the
-	// wellknown ocmprovider. Set it to stop the replay of signed requests through a
-	// false Host header. If it is empty, the scheme and host come from the request.
-	Endpoint string `mapstructure:"endpoint" validate:"omitempty,http_url"`
+	// wellknown ocmprovider. Signatures are verified against it, not against the Host
+	// header that the client sets. This stops the replay of signed requests.
+	// If it is empty, the shared public_url is used.
+	Endpoint string `mapstructure:"endpoint" validate:"required,http_url"`
 	// HTTPSigMode is permissive (the default) or strict. Strict rejects every unsigned
 	// request. Permissive rejects an unsigned request only from a server that lists http-sig.
 	HTTPSigMode string `mapstructure:"http_sig_mode" validate:"omitempty,oneof=permissive strict"`
@@ -86,6 +87,9 @@ type config struct {
 
 func (c *config) ApplyDefaults() {
 	c.GatewaySvc = sharedconf.GetGatewaySVC(c.GatewaySvc)
+	if c.Endpoint == "" {
+		c.Endpoint = sharedconf.GetPublicURL()
+	}
 	if c.TokenManager == "" {
 		c.TokenManager = "jwt"
 	}

@@ -149,9 +149,10 @@ func (k *Key) Sign(r *http.Request, body []byte) error {
 }
 
 // Verify checks the OCM signature of r. body is the request body, which r no longer holds.
-// endpoint is the public URL of this server. If it is empty, Verify takes the scheme
-// and the host from r. jwks returns the JWK Set of the signer. Verify calls it only
-// for a signed request, thus an unsigned request does not cause a fetch.
+// endpoint is the public URL of this server. Verify takes the scheme and the host from it,
+// because the client sets Host: a server that got a request signed for its own URL could
+// send it to us with its own Host. jwks returns the JWK Set of the signer. Verify calls it
+// only for a signed request, thus an unsigned request does not cause a fetch.
 func Verify(r *http.Request, body []byte, endpoint string, jwks func() ([]byte, error)) error {
 	sig, err := httpsign.RequestDetailsByTag(r, tag)
 	if errors.Is(err, httpsign.ErrSignatureTagNotFound) {
@@ -211,27 +212,11 @@ func Verify(r *http.Request, body []byte, endpoint string, jwks func() ([]byte, 
 	if err != nil {
 		return err
 	}
-	switch {
-	case endpoint != "":
-		// The client sets Host. Thus a server that got a request signed for its own
-		// URL could send that request to us with its own Host.
-		ep, err := url.Parse(endpoint)
-		if err != nil {
-			return err
-		}
-		target.Scheme, target.Host = ep.Scheme, ep.Host
-	case target.Host == "":
-		target.Host = r.Host
-		// Behind a TLS proxy r.TLS is nil. A false X-Forwarded-Proto changes only
-		// the scheme, thus it cannot make a signature for a different URI valid.
-		target.Scheme = r.Header.Get("X-Forwarded-Proto")
-		if target.Scheme == "" {
-			target.Scheme = "http"
-			if r.TLS != nil {
-				target.Scheme = "https"
-			}
-		}
+	ep, err := url.Parse(endpoint)
+	if err != nil {
+		return err
 	}
+	target.Scheme, target.Host = ep.Scheme, ep.Host
 	req := r.Clone(r.Context())
 	req.URL = target
 	return httpsign.VerifyRequest(sig.Label, *verifier, req)

@@ -66,11 +66,7 @@ var (
 	}
 )
 
-var _ = Describe("ocm share", func() { ocmShareSpecs(false) })
-
-var _ = Describe("ocm share with signed requests", func() { ocmShareSpecs(true) })
-
-func ocmShareSpecs(signed bool) {
+var _ = Describe("ocm share", func() {
 	var (
 		revads   = map[string]*Revad{}
 		wopiStub *httptest.Server
@@ -137,7 +133,7 @@ func ocmShareSpecs(signed bool) {
 			"invite_token_file":      File{Content: "{}"},
 			"localhome_root":         Folder{},
 		}
-		addSigningKeys(signed, resources, variables)
+		addSigningKeys(resources)
 		wopiStub = startWopiStub(variables)
 		revads, err = startRevads(map[string]string{
 			"cernboxgw":          "ocm-server-cernbox-grpc.toml",
@@ -801,7 +797,7 @@ func ocmShareSpecs(signed bool) {
 			})
 		})
 	})
-}
+})
 
 func stat(ctx context.Context, gw gatewaypb.GatewayAPIClient, ref *provider.Reference) (*provider.ResourceInfo, error) {
 	statRes, err := gw.Stat(ctx, &provider.StatRequest{Ref: ref})
