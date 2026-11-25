@@ -440,7 +440,7 @@ func (m *mgr) StoreReceivedShare(ctx context.Context, s *ocm.ReceivedShare) (*oc
 		return nil, err
 	}
 	grantee := s.GetGrantee().GetUserId()
-	if grantee.GetOpaqueId() == "" {
+	if grantee.GetOpaqueId() == "" || grantee.GetIdp() == "" {
 		return nil, share.ErrInvalidGrantIdentity
 	}
 	var check commitCheck

@@ -405,3 +405,36 @@ func TestUnacknowledgedNoOpCompletionIsNotACompletion(t *testing.T) {
 		}
 	})
 }
+
+func TestUnacknowledgedEqualProjectionsObservePrevious(t *testing.T) {
+	forEachDialectConfig(t, func(t *testing.T, cfg map[string]any) {
+		for _, apply := range []bool{false, true} {
+			t.Run(fmt.Sprintf("applied=%t", apply), func(t *testing.T) {
+				m := openOCMManager(t, cfg)
+				rs := mustStore(t, m, grantShare(recipient("marie"), "a.example.org", fmt.Sprint("same-", apply), file))
+				row := receivedRow(t, m, rs.Id.OpaqueId)
+				fault := &commitFault{apply: apply}
+				withCommitFault(t, m, fault)
+				fault.armed.Store(true)
+				var check commitCheck
+				err := m.transact(context.Background(), "test_equal_projections", func(tx *gorm.DB) error {
+					previous, err := readReceivedProjection(tx, row.ID)
+					if err != nil {
+						return err
+					}
+					expected, err := readReceivedProjection(tx, row.ID)
+					if err != nil {
+						return err
+					}
+					check = receivedCheck(&row, expected, previous)
+					return nil
+				}, &check)
+				var unknown *share.CommitUnknownError
+				if !errors.As(err, &unknown) || unknown.Observed != share.CommitObservedPrevious ||
+					fault.commits.Load() != 1 || fault.writes.Load() != 0 {
+					t.Fatalf("same durable projection: %v, commits=%d, recovery writes=%d", err, fault.commits.Load(), fault.writes.Load())
+				}
+			})
+		}
+	})
+}

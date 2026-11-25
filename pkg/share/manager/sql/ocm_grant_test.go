@@ -69,6 +69,13 @@ func TestNewGrantMustBeRepresentable(t *testing.T) {
 				t.Fatalf("%d-byte remote id from %q: %v", len(rs.RemoteShareId), rs.Creator.Idp, err)
 			}
 		}
+		for _, id := range []*userpb.UserId{{Idp: "local.example"}, {OpaqueId: "marie"}} {
+			rs := grant("a.example.org", "incomplete-recipient")
+			rs.Grantee.GetUserId().OpaqueId, rs.Grantee.GetUserId().Idp = id.OpaqueId, id.Idp
+			if stored, err := m.StoreReceivedShare(context.Background(), rs); stored != nil || !errors.Is(err, share.ErrInvalidGrantIdentity) {
+				t.Fatalf("incomplete recipient stored: %v", err)
+			}
+		}
 		if err := m.db.Model(&model.OcmReceivedShare{}).Count(&rows).Error; err != nil {
 			t.Fatal(err)
 		}

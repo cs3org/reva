@@ -18,15 +18,17 @@
 
 package sql
 
-// On MySQL, writers lock the rows they change with FOR UPDATE, and the rows
-// of one grant in ID order. On SQLite every transaction takes the write lock
+// On MySQL, writers lock the rows they change with FOR UPDATE. Grant reads
+// order each candidate set by ID. On SQLite every transaction takes the write lock
 // when it begins (BEGIN IMMEDIATE).
 
 import (
 	"bytes"
+	"cmp"
 	"context"
 	dbsql "database/sql"
 	"errors"
+	"slices"
 	"strings"
 	"time"
 
@@ -193,10 +195,10 @@ func observeReceived(db *gorm.DB, id uint, expected, previous *receivedProjectio
 		return "", err
 	}
 	switch {
-	case expected != nil && got.equal(expected):
-		return share.CommitObservedRequested, nil
 	case got.equal(previous):
 		return share.CommitObservedPrevious, nil
+	case expected != nil && got.equal(expected):
+		return share.CommitObservedRequested, nil
 	}
 	return share.CommitObservedOther, nil
 }
@@ -241,9 +243,16 @@ func grantOrigin(creator string) (string, bool) {
 	return origin, true
 }
 
-// lockReceivedGrant locks the same projection rows as the local lifecycle
-// writers. Recheck the exact stored identity independently of SQL collation.
-func lockReceivedGrant(tx *gorm.DB, grant *share.GrantWithdrawal, onlyUnexpired bool) ([]model.OcmReceivedShare, string, error) {
+type receivedGrantScope uint8
+
+const (
+	keyedGrant receivedGrantScope = iota
+	withdrawalGrant
+)
+
+// lockReceivedGrant locks active grant projections against local lifecycle
+// writers. Only withdrawal can use a historical sender without a grant key.
+func lockReceivedGrant(tx *gorm.DB, grant *share.GrantWithdrawal, scope receivedGrantScope) ([]model.OcmReceivedShare, string, error) {
 	if grant == nil {
 		return nil, "", share.ErrInvalidGrantIdentity
 	}
@@ -270,15 +279,30 @@ func lockReceivedGrant(tx *gorm.DB, grant *share.GrantWithdrawal, onlyUnexpired 
 	if err := forUpdate(tx).Where("grant_key = ?", key).Order("id").Find(&rows).Error; err != nil {
 		return nil, "", err
 	}
+	if scope == withdrawalGrant {
+		// Keep the identity reads separate so SQLite can use their indexes
+		// on a fresh schema without planner statistics.
+		var legacy []model.OcmReceivedShare
+		if err := forUpdate(tx).Where("remote_share_id = ? AND grant_key IS NULL", grant.RemoteShareID).
+			Order("id").Find(&legacy).Error; err != nil {
+			return nil, "", err
+		}
+		rows = append(rows, legacy...)
+		slices.SortFunc(rows, func(a, b model.OcmReceivedShare) int { return cmp.Compare(a.ID, b.ID) })
+	}
 	cutoff := time.Now()
 	selected := rows[:0]
 	for _, row := range rows {
 		storedOrigin, ok := grantOrigin(row.Initiator)
-		if !ok || row.GrantKey == nil || *row.GrantKey != key ||
-			storedOrigin != origin || row.RemoteShareID != grant.RemoteShareID || row.ShareWith == "" {
+		matches := ok && storedOrigin == origin && row.RemoteShareID == grant.RemoteShareID
+		if row.GrantKey == nil && scope == withdrawalGrant {
+			if !matches {
+				continue
+			}
+		} else if !matches || row.GrantKey == nil || *row.GrantKey != key || row.ShareWith == "" {
 			return nil, "", share.ErrGrantIdentityMismatch
 		}
-		if onlyUnexpired && row.Expiration.Valid && !row.Expiration.V.After(cutoff) {
+		if row.Expiration.Valid && !row.Expiration.V.After(cutoff) {
 			continue
 		}
 		if row.ItemType != convertFromCS3ResourceType(grant.ResourceType) ||
@@ -297,7 +321,7 @@ func (m *mgr) WithdrawReceivedGrant(ctx context.Context, grant *share.GrantWithd
 	err := m.transact(ctx, "withdraw_grant", func(tx *gorm.DB) error {
 		receipt = share.GrantWithdrawalReceipt{}
 		check = commitCheck{}
-		rows, key, err := lockReceivedGrant(tx, grant, true)
+		rows, key, err := lockReceivedGrant(tx, grant, withdrawalGrant)
 		if err != nil || len(rows) == 0 {
 			return err
 		}
@@ -356,7 +380,7 @@ func (m *mgr) UpdateReceivedGrantPermissions(ctx context.Context, grant *share.G
 	err := m.transact(ctx, "update_received_grant_permissions", func(tx *gorm.DB) error {
 		changed = false
 		check = commitCheck{}
-		rows, key, err := lockReceivedGrant(tx, grant, false)
+		rows, key, err := lockReceivedGrant(tx, grant, keyedGrant)
 		if err != nil || len(rows) == 0 {
 			return err
 		}

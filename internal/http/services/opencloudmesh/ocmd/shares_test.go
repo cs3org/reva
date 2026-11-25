@@ -991,11 +991,12 @@ func TestCreateShareLegacyWebDAVStatUsesStoredTransport(t *testing.T) {
 		defer srv.Close()
 
 		h := initSharesHandler(t, &config{AllowLoopbackFederation: true})
-		stampGateway(&sharesMockGW{
+		gateway := &sharesMockGW{
 			createResp: &ocmincoming.CreateOCMIncomingShareResponse{
 				Status: &rpc.Status{Code: rpc.Code_CODE_OK},
 			},
-		})
+		}
+		stampGateway(gateway)
 
 		body, err := json.Marshal(map[string]any{
 			"shareWith":    "marie@local.example.org",
@@ -1027,6 +1028,10 @@ func TestCreateShareLegacyWebDAVStatUsesStoredTransport(t *testing.T) {
 
 		if rr.Code != http.StatusCreated {
 			t.Fatalf("CreateShare() status = %d, want %d", rr.Code, http.StatusCreated)
+		}
+		resolved := gateway.created.GetShareWith()
+		if resolved.GetOpaqueId() != "local-recipient" || resolved.GetIdp() != "local.example.org" {
+			t.Fatalf("created share has unexpected recipient: %v", resolved)
 		}
 		if davHits == 0 {
 			t.Fatal("expected the legacy WebDAV Stat probe to reach the server")

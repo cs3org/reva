@@ -142,7 +142,7 @@ func (s *service) CreateOCMIncomingShare(ctx context.Context, req *ocmincoming.C
 	if err != nil {
 		if errors.Is(err, share.ErrInvalidGrantIdentity) {
 			return &ocmincoming.CreateOCMIncomingShareResponse{
-				Status: status.NewInvalidArg(ctx, "invalid provider or remote share ID"),
+				Status: status.NewInvalidArg(ctx, "invalid OCM grant identity"),
 			}, nil
 		}
 		// TODO: identify errors

@@ -45,6 +45,7 @@ func ownerContext(t *testing.T, id string) (context.Context, *userpb.User) {
 	t.Helper()
 	ctx := getUserContext(id)
 	user, _ := appctx.ContextGetUser(ctx)
+	user.Id.Idp = "local.example"
 	return ctx, user
 }
 

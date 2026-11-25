@@ -25,12 +25,12 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
-	"sync"
 	"testing"
 	"time"
 
 	ocm "github.com/cs3org/go-cs3apis/cs3/sharing/ocm/v1beta1"
 	"github.com/mattn/go-sqlite3"
+	"gorm.io/gorm"
 )
 
 func TestOCMDatabaseOptions(t *testing.T) {
@@ -270,67 +270,15 @@ func TestSQLiteCompletionWaitsForCompetingWriter(t *testing.T) {
 				t.Fatal(err)
 			}
 
-			pool.SetMaxOpenConns(1)
-			var busyTimeout int
-			if err := pool.QueryRowContext(ctx, "PRAGMA busy_timeout").Scan(&busyTimeout); err != nil || busyTimeout != 10000 {
-				t.Fatalf("busy timeout = %d ms, err = %v, want 10000", busyTimeout, err)
-			}
-			defer func() {
-				cleanupCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-				defer cancel()
-				if _, err := pool.ExecContext(cleanupCtx, "PRAGMA busy_timeout = 10000"); err != nil {
-					t.Errorf("restore busy timeout during cleanup: %v", err)
-				}
-			}()
-			if _, err := pool.ExecContext(ctx, "PRAGMA busy_timeout = 0"); err != nil {
-				t.Fatal(err)
-			}
-			if err := pool.QueryRowContext(ctx, "PRAGMA busy_timeout").Scan(&busyTimeout); err != nil || busyTimeout != 0 {
-				t.Fatalf("busy timeout = %d ms, err = %v, want 0", busyTimeout, err)
-			}
-
-			other, err := dbsql.Open("sqlite3", path)
-			if err != nil {
-				t.Fatal(err)
-			}
-			defer other.Close()
-			holder, err := other.BeginTx(ctx, nil)
-			if err != nil {
-				t.Fatal(err)
-			}
-			defer holder.Rollback()
-			if _, err := holder.ExecContext(ctx, "UPDATE ocm_received_shares SET mtime = mtime + 1"); err != nil {
-				t.Fatal(err)
-			}
 			accepted := ocm.ShareState_SHARE_STATE_ACCEPTED
-			u, err := m.CompleteReceivedShareTransfer(ctx, user, rs.Id, start.Generation, accepted)
-			if ctx.Err() != nil {
-				t.Fatalf("competing completion exceeded its deadline: %v", ctx.Err())
-			}
-			var sqliteErr sqlite3.Error
-			if u != nil || !errors.As(err, &sqliteErr) || sqliteErr.Code != sqlite3.ErrBusy {
-				t.Fatalf("competing completion: %v %v, want nil receipt and SQLITE_BUSY", u, err)
-			}
-			got, err := m.GetReceivedShare(ctx, user, idRef(rs.Id))
-			if err != nil || got.GetState() != ocm.ShareState_SHARE_STATE_TRANSFERRING || receivedGeneration(t, m, rs.Id) != start.Generation {
-				t.Fatalf("competing completion changed the attempt: %v %v", got, err)
-			}
-			if _, err := pool.ExecContext(ctx, "PRAGMA busy_timeout = 10000"); err != nil {
-				t.Fatal(err)
-			}
-			if err := pool.QueryRowContext(ctx, "PRAGMA busy_timeout").Scan(&busyTimeout); err != nil || busyTimeout != 10000 {
-				t.Fatalf("restored busy timeout = %d ms, err = %v, want 10000", busyTimeout, err)
-			}
-			if err := holder.Commit(); err != nil {
-				t.Fatal(err)
-			}
-			u, err = m.CompleteReceivedShareTransfer(ctx, user, rs.Id, start.Generation, accepted)
-			if err != nil || u == nil || !u.StateChanged() || u.After.GetState() != accepted {
-				t.Fatalf("completion after lock release: %v %v", u, err)
-			}
-			got, err = m.GetReceivedShare(ctx, user, idRef(rs.Id))
-			if err != nil || got.GetState() != accepted {
-				t.Fatalf("read completed attempt: %v %v", got, err)
+			withCompetingSQLiteWrite(t, ctx, m, path, rs.Id.OpaqueId, func() {
+				u, err := m.CompleteReceivedShareTransfer(ctx, user, rs.Id, start.Generation, accepted)
+				if err != nil || !u.StateChanged() || u.After.GetState() != accepted {
+					t.Fatalf("competing completion: %v %v", u, err)
+				}
+			})
+			if got, err := m.GetReceivedShare(ctx, user, idRef(rs.Id)); err != nil || got.GetState() != accepted {
+				t.Fatalf("completion was not persisted: %v, %v", got, err)
 			}
 
 			if _, err := m.UpdateReceivedShare(ctx, user, request, stateMask()); err != nil {
@@ -391,8 +339,67 @@ func TestSQLiteRejectsConflictingOCMOptions(t *testing.T) {
 	}
 }
 
-// A short competing write must delay, not fail, a write of the manager, for
-// every supported form of db_name.
+type sqliteBeginProbe struct {
+	*dbsql.DB
+	onBusy func()
+}
+
+func (p *sqliteBeginProbe) BeginTx(ctx context.Context, opts *dbsql.TxOptions) (gorm.ConnPool, error) {
+	tx, err := p.DB.BeginTx(ctx, opts)
+	var sqliteErr sqlite3.Error
+	if errors.As(err, &sqliteErr) && sqliteErr.Code == sqlite3.ErrBusy {
+		p.onBusy()
+	}
+	if err != nil {
+		return nil, err
+	}
+	return tx, nil
+}
+
+// Release the holder only after SQLite has refused the manager's actual
+// BEGIN IMMEDIATE. The manager must retry and persist its own update.
+func withCompetingSQLiteWrite(t *testing.T, ctx context.Context, m *mgr, path, id string, write func()) {
+	t.Helper()
+	pool, err := m.db.DB()
+	if err != nil {
+		t.Fatal(err)
+	}
+	pool.SetMaxOpenConns(1)
+	if _, err := pool.ExecContext(ctx, "PRAGMA busy_timeout = 0"); err != nil {
+		t.Fatal(err)
+	}
+	other, err := dbsql.Open("sqlite3", path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer other.Close()
+	holder, err := other.BeginTx(ctx, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer holder.Rollback()
+	if _, err := holder.ExecContext(ctx, "UPDATE ocm_received_shares SET name = ? WHERE id = ?", "holder write", id); err != nil {
+		t.Fatal(err)
+	}
+	busy := 0
+	var commitErr error
+	p := &sqliteBeginProbe{DB: pool, onBusy: func() {
+		busy++
+		if busy == 1 {
+			commitErr = holder.Commit()
+		}
+	}}
+	m.db.Statement.ConnPool = p
+	defer func() { m.db.Statement.ConnPool = pool }()
+	write()
+	if busy != 1 || commitErr != nil {
+		t.Fatalf("competing write: %d SQLITE_BUSY results, holder commit: %v", busy, commitErr)
+	}
+	if row := receivedRow(t, m, id); row.Name != "holder write" {
+		t.Fatalf("holder write was not persisted: name %q", row.Name)
+	}
+}
+
 func TestSQLiteWritersWaitForAShortCompetingWrite(t *testing.T) {
 	for name, dsn := range map[string]func(path string) string{
 		"plain path":         func(p string) string { return p },
@@ -401,33 +408,21 @@ func TestSQLiteWritersWaitForAShortCompetingWrite(t *testing.T) {
 		"file URI + options": func(p string) string { return "file:" + p + "?cache=private&mode=rwc" },
 	} {
 		t.Run(name, func(t *testing.T) {
+			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+			defer cancel()
 			path := filepath.Join(t.TempDir(), "ocm.sqlite")
 			m := openOCMManager(t, map[string]any{"db_engine": "sqlite", "db_name": dsn(path)})
-			rs := mustStore(t, m, grantShare(recipient("marie"), "a.example.org", "contended", file))
-
-			other, err := dbsql.Open("sqlite3", path)
-			if err != nil {
-				t.Fatal(err)
-			}
-			defer other.Close()
-			holder, err := other.Begin()
-			if err != nil {
-				t.Fatal(err)
-			}
-			if _, err := holder.Exec("UPDATE ocm_received_shares SET mtime = mtime + 1"); err != nil {
-				t.Fatal(err)
-			}
-			var wg sync.WaitGroup
-			wg.Add(1)
-			go func() {
-				defer wg.Done()
-				time.Sleep(500 * time.Millisecond)
-				_ = holder.Commit()
-			}()
-			u, err := m.UpdateReceivedShare(context.Background(), recipient("marie"), &ocm.ReceivedShare{Id: rs.Id, State: ocm.ShareState_SHARE_STATE_ACCEPTED}, stateMask())
-			wg.Wait()
-			if err != nil || !u.StateChanged() {
-				t.Fatalf("%v %v", u, err)
+			marie := recipient("marie")
+			rs := mustStore(t, m, grantShare(marie, "a.example.org", "contended", file))
+			accepted := ocm.ShareState_SHARE_STATE_ACCEPTED
+			withCompetingSQLiteWrite(t, ctx, m, path, rs.Id.OpaqueId, func() {
+				u, err := m.UpdateReceivedShare(ctx, marie, &ocm.ReceivedShare{Id: rs.Id, State: accepted}, stateMask())
+				if err != nil || !u.StateChanged() || u.After.GetState() != accepted {
+					t.Fatalf("contended update: %v, %v", u, err)
+				}
+			})
+			if got, err := m.GetReceivedShare(ctx, marie, idRef(rs.Id)); err != nil || got.GetState() != accepted {
+				t.Fatalf("update was not persisted: %v, %v", got, err)
 			}
 		})
 	}

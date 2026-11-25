@@ -30,6 +30,7 @@ import (
 
 	"github.com/cs3org/reva/v3/pkg/ocm/share"
 	model "github.com/cs3org/reva/v3/pkg/share/manager/sql/model"
+	"github.com/mattn/go-sqlite3"
 	gormmysql "gorm.io/driver/mysql"
 	"gorm.io/gorm"
 )
@@ -56,46 +57,6 @@ func observer(t *testing.T, cfg map[string]any, isolation string) *gorm.DB {
 		t.Fatalf("observer session isolation %q: %v", got, err)
 	}
 	return db
-}
-
-// afterFirstSelect runs write from another connection once, right after the
-// observer's first SELECT. On MySQL it commits before the next SELECT. On
-// SQLite it cannot commit until the immediate observation ends, so it runs
-// in the background and wait reports its later completion.
-func afterFirstSelect(t *testing.T, obs *gorm.DB, write func() error) (wait func() error) {
-	t.Helper()
-	var fired atomic.Bool
-	done := make(chan error, 1)
-	blocking := obs.Dialector.Name() == "sqlite"
-	if err := obs.Callback().Query().After("gorm:query").Register("test:interleave", func(*gorm.DB) {
-		if !fired.CompareAndSwap(false, true) {
-			return
-		}
-		if !blocking {
-			done <- write()
-			return
-		}
-		go func() { done <- write() }()
-		// Bounded: the writer must still be waiting for the observation.
-		select {
-		case err := <-done:
-			done <- fmt.Errorf("writer finished inside the observation: %v", err)
-		case <-time.After(200 * time.Millisecond):
-		}
-	}); err != nil {
-		t.Fatal(err)
-	}
-	return func() error {
-		if !fired.Load() {
-			return errors.New("observer made no query")
-		}
-		select {
-		case err := <-done:
-			return err
-		case <-time.After(15 * time.Second):
-			return errors.New("writer did not finish")
-		}
-	}
 }
 
 // changeAtomically renames the share and replaces its protocol URI.
@@ -148,17 +109,49 @@ func TestObservationNeverCombinesTwoStates(t *testing.T) {
 					before := mustRead(t, readShare(id), m.db)
 					expected := mixture(before)
 					obs := observer(t, cfg, isolation)
-					wait := afterFirstSelect(t, obs, func() error { return changeAtomically(m.db, id) })
-					got, err := observeReceived(obs, id, expected, nil)
-					if werr := wait(); werr != nil {
-						t.Fatal(werr)
+					ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+					defer cancel()
+					sqlite := cfg["db_engine"] == "sqlite"
+					if sqlite {
+						pool, err := m.db.DB()
+						if err != nil {
+							t.Fatal(err)
+						}
+						pool.SetMaxOpenConns(1)
+						if _, err := pool.ExecContext(ctx, "PRAGMA busy_timeout = 0"); err != nil {
+							t.Fatal(err)
+						}
+					}
+					var attempted bool
+					var writeErr error
+					if err := obs.Callback().Query().After("gorm:query").Register("test:interleave", func(*gorm.DB) {
+						if !attempted {
+							attempted = true
+							writeErr = changeAtomically(m.db.WithContext(ctx), id)
+						}
+					}); err != nil {
+						t.Fatal(err)
+					}
+					got, err := observeReceived(obs.WithContext(ctx), id, expected, before)
+					if !attempted {
+						t.Fatal("observer made no query")
+					}
+					if sqlite {
+						var sqliteErr sqlite3.Error
+						if !errors.As(writeErr, &sqliteErr) || sqliteErr.Code != sqlite3.ErrBusy {
+							t.Fatalf("writer during immediate observation: %v, want SQLITE_BUSY", writeErr)
+						}
+						writeErr = changeAtomically(m.db.WithContext(ctx), id)
+					}
+					if writeErr != nil {
+						t.Fatal(writeErr)
 					}
 					after := mustRead(t, readShare(id), m.db)
 					if after.row.Name != "renamed" || after.protocols[0].Uri != newURI || before.equal(expected) || after.equal(expected) {
 						t.Fatal("the writer did not commit a state different from the mixture")
 					}
-					if err != nil || got != share.CommitObservedOther {
-						t.Fatalf("observed %q %v", got, err)
+					if err != nil || got != share.CommitObservedPrevious {
+						t.Fatalf("observed %q %v, want previous snapshot", got, err)
 					}
 				})
 
