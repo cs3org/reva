@@ -112,7 +112,7 @@ func (fs *cephmountfs) recycleEntry(ctx context.Context, src string, info os.Fil
 	existing, err := fs.rootFS.Lstat(target)
 	switch {
 	case os.IsNotExist(err):
-		return fs.renameAsUser(ctx, src, target)
+		return fs.renameIntoRecycle(ctx, src, target)
 	case err != nil:
 		return err
 	case info.IsDir() && existing.IsDir():
@@ -126,7 +126,37 @@ func (fs *cephmountfs) recycleEntry(ctx context.Context, src string, info os.Fil
 	} else if !os.IsNotExist(err) {
 		return err
 	}
-	return fs.renameAsUser(ctx, src, target)
+	return fs.renameIntoRecycle(ctx, src, target)
+}
+
+// renameIntoRecycle renames src to target as the user. The bin folders are
+// write-only for users, but os.Root opens each folder of a path, which needs read
+// access. O_PATH needs only search access, and RESOLVE_BENEATH keeps both paths
+// inside the mount, as os.Root does.
+func (fs *cephmountfs) renameIntoRecycle(ctx context.Context, src, target string) error {
+	root, err := unix.Open(fs.chrootDir, unix.O_PATH|unix.O_DIRECTORY|unix.O_CLOEXEC, 0)
+	if err != nil {
+		return &os.PathError{Op: "open", Path: fs.chrootDir, Err: err}
+	}
+	defer unix.Close(root)
+
+	return fs.executeOnUserThread(ctx, func() error {
+		how := &unix.OpenHow{Flags: unix.O_PATH | unix.O_DIRECTORY | unix.O_CLOEXEC, Resolve: unix.RESOLVE_BENEATH}
+		srcDir, err := unix.Openat2(root, filepath.Dir(src), how)
+		if err != nil {
+			return &os.PathError{Op: "openat2", Path: filepath.Dir(src), Err: err}
+		}
+		defer unix.Close(srcDir)
+		targetDir, err := unix.Openat2(root, filepath.Dir(target), how)
+		if err != nil {
+			return &os.PathError{Op: "openat2", Path: filepath.Dir(target), Err: err}
+		}
+		defer unix.Close(targetDir)
+		if err := unix.Renameat(srcDir, filepath.Base(src), targetDir, filepath.Base(target)); err != nil {
+			return &os.LinkError{Op: "renameat", Old: src, New: target, Err: err}
+		}
+		return nil
+	})
 }
 
 // mergeIntoRecycle walks only the folders that exist on both sides. Everything
@@ -367,6 +397,9 @@ func (fs *cephmountfs) RestoreRecycleItem(ctx context.Context, basePath, key, re
 
 		target := filepath.Join(spaceRoot, fs.originalPath(dayDir, rel))
 		if err := fs.restoreEntry(ctx, src, info, target, r); err != nil {
+			if _, ok := err.(errtypes.IsPermissionDenied); ok {
+				return err
+			}
 			return errors.Wrap(err, "cephmount: failed to restore "+fs.fromChroot(target))
 		}
 		fs.removeEmptyRecycleDirs(src, dayDir)
@@ -392,13 +425,20 @@ type recycleRestore struct {
 	collided    storage.RecycleCollisions
 }
 
-// restoreEntry is the reverse of recycleEntry. The user does the move, so that
-// the kernel checks the write access to the target, as for a delete. Only root
-// can list the bin, thus root reads it.
+// restoreEntry is the reverse of recycleEntry. Root does the move after a check
+// that the user can write to the target folder, so that any writer of the space
+// can restore an item, whoever deleted or owns it. Only root can list the bin,
+// thus root reads it.
 func (fs *cephmountfs) restoreEntry(ctx context.Context, src string, info os.FileInfo, target string, r *recycleRestore) error {
 	existing, err := fs.rootFS.Lstat(target)
 	switch {
 	case os.IsNotExist(err):
+		if err := fs.createDirectoryAsUser(ctx, filepath.Dir(target), os.FileMode(fs.conf.DirPerms)); err != nil {
+			return err
+		}
+		if err := fs.writableByUser(ctx, filepath.Dir(target)); err != nil {
+			return err
+		}
 		// One move would also restore the older copies of a path, with their suffix.
 		if info.IsDir() && fs.holdsCopies(src) {
 			if err := fs.createDirectoryAsUser(ctx, target, os.FileMode(fs.conf.DirPerms)); err != nil {
@@ -411,10 +451,7 @@ func (fs *cephmountfs) restoreEntry(ctx context.Context, src string, info os.Fil
 		if err := fs.clearGrants(ctx, src); err != nil {
 			return err
 		}
-		if err := fs.createDirectoryAsUser(ctx, filepath.Dir(target), os.FileMode(fs.conf.DirPerms)); err != nil {
-			return err
-		}
-		if err := fs.renameAsUser(ctx, src, target); err != nil {
+		if err := fs.rootFS.Rename(src, target); err != nil {
 			return err
 		}
 		r.restored = append(r.restored, target)
@@ -432,6 +469,9 @@ func (fs *cephmountfs) restoreEntry(ctx context.Context, src string, info os.Fil
 	}
 
 	if r.force {
+		if err := fs.writableByUser(ctx, filepath.Dir(target)); err != nil {
+			return err
+		}
 		// rename(2) replaces an existing file without an error, so check the new name too.
 		aside := target + "." + strconv.FormatUint(existing.Sys().(*syscall.Stat_t).Ino, 10)
 		if _, err := fs.rootFS.Lstat(aside); err == nil {
@@ -439,7 +479,7 @@ func (fs *cephmountfs) restoreEntry(ctx context.Context, src string, info os.Fil
 		} else if !os.IsNotExist(err) {
 			return err
 		}
-		if err := fs.renameAsUser(ctx, target, aside); err != nil {
+		if err := fs.rootFS.Rename(target, aside); err != nil {
 			return err
 		}
 		return fs.restoreEntry(ctx, src, info, target, r)
@@ -480,6 +520,21 @@ func (fs *cephmountfs) holdsCopies(dir string) bool {
 		return nil
 	})
 	return found || err != nil
+}
+
+// writableByUser returns PermissionDenied if the user cannot create and remove
+// items in dir. Root moves the items, thus the kernel does not check the user.
+func (fs *cephmountfs) writableByUser(ctx context.Context, dir string) error {
+	writable, err := fs.executeAsUser(ctx, func() (any, error) {
+		return canAccess(filepath.Join(fs.chrootDir, dir), unix.W_OK|unix.X_OK), nil
+	})
+	if err != nil {
+		return err
+	}
+	if !writable.(bool) {
+		return errtypes.PermissionDenied("cephmount: no write access to " + fs.fromChroot(dir))
+	}
+	return nil
 }
 
 // mergeFromRecycle restores the content of the folder src into the folder target.

@@ -129,6 +129,35 @@ func TestDeleteSpaceRootIsRefused(t *testing.T) {
 	assert.DirExists(t, filepath.Join(fs.chrootDir, "proj"))
 }
 
+func TestRenameIntoRecycleNeedsNoReadAccess(t *testing.T) {
+	fs, ctx, _ := newRecycleTestFS(t, 1)
+	writeTestFile(t, filepath.Join(fs.chrootDir, "proj", "file.txt"), "deleted")
+	day := filepath.Join(fs.chrootDir, recycleDir, "proj", "2026", "11", "25")
+	require.NoError(t, os.MkdirAll(day, 0o755))
+	// The bin folders are write-only for users: they can enter them, but not list them.
+	bin := filepath.Join(fs.chrootDir, recycleDir, "proj")
+	require.NoError(t, os.Chmod(bin, 0o333))
+	t.Cleanup(func() { _ = os.Chmod(bin, 0o755) })
+
+	require.NoError(t, fs.renameIntoRecycle(ctx, "proj/file.txt", ".recycle/proj/2026/11/25/file.txt"))
+
+	require.NoError(t, os.Chmod(bin, 0o755))
+	assert.NoFileExists(t, filepath.Join(fs.chrootDir, "proj", "file.txt"))
+	assert.Equal(t, "deleted", readTestFile(t, filepath.Join(day, "file.txt")))
+}
+
+func TestRenameIntoRecycleStaysInTheMount(t *testing.T) {
+	fs, ctx, _ := newRecycleTestFS(t, 1)
+	outside := t.TempDir()
+	writeTestFile(t, filepath.Join(outside, "file.txt"), "outside")
+	require.NoError(t, os.MkdirAll(filepath.Join(fs.chrootDir, "proj"), 0o755))
+	require.NoError(t, os.Symlink(outside, filepath.Join(fs.chrootDir, "proj", "out")))
+	require.NoError(t, os.MkdirAll(filepath.Join(fs.chrootDir, recycleDir, "proj"), 0o755))
+
+	assert.Error(t, fs.renameIntoRecycle(ctx, "proj/out/file.txt", ".recycle/proj/file.txt"))
+	assert.FileExists(t, filepath.Join(outside, "file.txt"))
+}
+
 func TestRecycleIsNotReachableByPath(t *testing.T) {
 	fs, ctx, day := newRecycleTestFS(t, 1)
 	writeTestFile(t, filepath.Join(fs.chrootDir, "proj", "deleted.txt"), "x")
@@ -457,6 +486,21 @@ func TestRestoreRecycleItemRefusals(t *testing.T) {
 }
 
 // setTestACL skips the test where the file system or the tools have no ACLs.
+func TestRestoreRecycleItemNeedsWriteAccessToTheTarget(t *testing.T) {
+	fs, ctx, day := newRecycleTestFS(t, 1)
+	folder := filepath.Join(fs.chrootDir, "proj", "a")
+	writeTestFile(t, filepath.Join(folder, "x.txt"), "deleted")
+	require.NoError(t, fs.Delete(ctx, &provider.Reference{Path: "/proj/a/x.txt"}))
+	require.NoError(t, os.Chmod(folder, 0o555))
+	t.Cleanup(func() { _ = os.Chmod(folder, 0o755) })
+
+	today := time.Now().UTC().Format(recycleKeyDay)
+	err := fs.RestoreRecycleItem(ctx, "/proj", today, "/a/x.txt", nil, false)
+
+	assert.IsType(t, errtypes.PermissionDenied(""), err)
+	assert.Equal(t, "deleted", readTestFile(t, filepath.Join(day, "a", "x.txt")), "the item stays in the bin")
+}
+
 func setTestACL(t *testing.T, args ...string) {
 	t.Helper()
 	if out, err := exec.Command("setfacl", args...).CombinedOutput(); err != nil {
