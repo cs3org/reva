@@ -70,12 +70,14 @@ func openMySQLDatabase(t *testing.T, target mysqlTarget) map[string]any {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := db.Exec("CREATE DATABASE " + name); err != nil {
+	t.Cleanup(func() { _ = db.Close() })
+	if _, err := db.Exec("CREATE DATABASE " + name + " CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci"); err != nil {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() {
-		_, _ = db.Exec("DROP DATABASE " + name)
-		_ = db.Close()
+		if _, err := db.Exec("DROP DATABASE " + name); err != nil {
+			t.Errorf("drop disposable schema: %v", err)
+		}
 	})
 	return map[string]any{
 		"db_engine":   "mysql",
@@ -113,7 +115,13 @@ func forEachDialect(t *testing.T, fn func(t *testing.T, m *mgr)) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			fn(t, repo.(*mgr))
+			m := repo.(*mgr)
+			pool, err := m.db.DB()
+			if err != nil {
+				t.Fatal(err)
+			}
+			t.Cleanup(func() { _ = pool.Close() })
+			fn(t, m)
 		})
 	}
 }

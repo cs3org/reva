@@ -227,7 +227,7 @@ func TestDeleteShareByKeyExactIdentity(t *testing.T) {
 		_, owner := ownerContext(t, "einstein")
 		base := getOcmShare(getOcmAccessMethods("viewer"), getUserOcmShareGrantee("marie"), owner.Id, getResourceId(), "exact")
 		base.Creator = caller.Id
-		base.Grantee.GetUserId().Idp = "remote.example.org"
+		base.Grantee.GetUserId().Idp = "Remote.Example.ORG"
 		exact, err := storeOcmShareWithID(m, ctx, base)
 		if err != nil {
 			t.Fatal(err)
@@ -252,7 +252,11 @@ func TestDeleteShareByKeyExactIdentity(t *testing.T) {
 			}
 			survivors = append(survivors, stored)
 		}
-		key := &ocm.ShareKey{Owner: base.Owner, ResourceId: base.ResourceId, Grantee: base.Grantee}
+		readback, err := m.GetShare(ctx, caller, idRef(exact.Id))
+		if err != nil || readback.GetGrantee().GetUserId().GetIdp() != "Remote.Example.ORG" {
+			t.Fatalf("readback did not preserve the stored grantee host: %v", err)
+		}
+		key := &ocm.ShareKey{Owner: readback.Owner, ResourceId: readback.ResourceId, Grantee: readback.Grantee}
 		if m.db.Dialector.Name() == "mysql" {
 			var candidates int64
 			err := m.db.Model(&model.OcmShare{}).
@@ -269,6 +273,10 @@ func TestDeleteShareByKeyExactIdentity(t *testing.T) {
 		wrongRef := &ocm.ShareReference{Spec: &ocm.ShareReference_Key{Key: wrong}}
 		if receipt, err := m.UpdateShare(ctx, caller, wrongRef); !errors.Is(err, share.ErrShareNotFound) || receipt != nil {
 			t.Fatalf("byte-distinct key updated a share: %v, %v", receipt, err)
+		}
+		updated, err := m.UpdateShare(ctx, caller, ref)
+		if err != nil || updated.After.GetId().GetOpaqueId() != exact.Id.OpaqueId {
+			t.Fatalf("update by readback key did not target share %s: %v", exact.Id.OpaqueId, err)
 		}
 		removed, err := m.DeleteShare(ctx, caller, ref)
 		if err != nil || len(removed) != 1 || removed[0].Share.GetId().GetOpaqueId() != exact.Id.OpaqueId {
@@ -358,6 +366,24 @@ func TestUpdateShareReceiptComparesStoredPermissions(t *testing.T) {
 			!slices.Equal(wa.GetAppNames(), storedWebapp.GetAppNames()) ||
 			!slices.Equal(wa.GetRequirements(), storedWebapp.GetRequirements()) {
 			t.Fatalf("webapp method %v", wa)
+		}
+
+		// SQL stores permission masks, so an absent permission pointer and an
+		// empty message both represent zero permissions on an existing method.
+		for _, newMethod := range []func(*provider.ResourcePermissions) *ocm.AccessMethod{
+			func(p *provider.ResourcePermissions) *ocm.AccessMethod {
+				return share.NewWebDavAccessMethod(p, nil, nil)
+			},
+			func(p *provider.ResourcePermissions) *ocm.AccessMethod { return share.NewWebappAccessMethod(p, nil) },
+		} {
+			for _, perms := range []*provider.ResourcePermissions{nil, {}} {
+				u, err := m.UpdateShare(ctx, owner, ref, &ocm.UpdateOCMShareRequest_UpdateField{
+					Field: &ocm.UpdateOCMShareRequest_UpdateField_AccessMethods{AccessMethods: newMethod(perms)},
+				})
+				if err != nil || u == nil || u.PermissionsChanged() != (perms == nil) {
+					t.Fatalf("zero permission update changed = %t, err = %v", u.PermissionsChanged(), err)
+				}
+			}
 		}
 
 		// A rejected update returns no receipt.

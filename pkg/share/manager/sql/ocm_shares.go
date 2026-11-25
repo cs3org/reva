@@ -53,13 +53,17 @@ type mgr struct {
 
 func NewOCMShareManager(ctx context.Context, m map[string]any) (share.Repository, error) {
 	log := appctx.GetLogger(ctx)
-	log.Debug().Interface("config", m).Msg("creating OCM share manager")
 	var c Config
 	if err := cfg.Decode(m, &c); err != nil {
 		return nil, err
 	}
 
-	db, err := getDb(c)
+	dbConfig, err := ocmDatabaseConfig(c)
+	if err != nil {
+		return nil, err
+	}
+	log.Debug().Str("engine", c.Engine).Msg("creating OCM share manager")
+	db, err := getDb(dbConfig)
 	if err != nil {
 		log.Debug().Err(err).Msg("error getting db client")
 		return nil, err
