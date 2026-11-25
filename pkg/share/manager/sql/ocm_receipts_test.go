@@ -135,6 +135,9 @@ func TestDeleteShareByIDExactPrincipal(t *testing.T) {
 				if err != nil {
 					t.Fatal(err)
 				}
+				if receipt, err := m.UpdateShare(ctx, differentCase, ref); !errors.Is(err, share.ErrShareNotFound) || receipt != nil {
+					t.Fatalf("byte-distinct principal updated a share: %v, %v", receipt, err)
+				}
 				if receipts, err := m.DeleteShare(ctx, differentCase, ref); !errors.Is(err, share.ErrShareNotFound) || receipts != nil {
 					t.Fatalf("byte-distinct principal got %d receipts: %v", len(receipts), err)
 				}
@@ -261,6 +264,12 @@ func TestDeleteShareByKeyExactIdentity(t *testing.T) {
 			}
 		}
 		ref := &ocm.ShareReference{Spec: &ocm.ShareReference_Key{Key: key}}
+		wrong := proto.CloneOf(key)
+		wrong.Owner.OpaqueId = "eInStEiN"
+		wrongRef := &ocm.ShareReference{Spec: &ocm.ShareReference_Key{Key: wrong}}
+		if receipt, err := m.UpdateShare(ctx, caller, wrongRef); !errors.Is(err, share.ErrShareNotFound) || receipt != nil {
+			t.Fatalf("byte-distinct key updated a share: %v, %v", receipt, err)
+		}
 		removed, err := m.DeleteShare(ctx, caller, ref)
 		if err != nil || len(removed) != 1 || removed[0].Share.GetId().GetOpaqueId() != exact.Id.OpaqueId {
 			t.Fatalf("got %d receipts, want only share %s: %v", len(removed), exact.Id.OpaqueId, err)
@@ -413,18 +422,32 @@ func TestUpdateReceivedShareReceipt(t *testing.T) {
 func TestTransferAttemptLifecycle(t *testing.T) {
 	forEachDialect(t, func(t *testing.T, m *mgr) {
 		ctx, user := ownerContext(t, "marie")
+		_, other := ownerContext(t, "Marie")
 		rs := storeReceived(t, m, ctx, user, "remote-t")
+		request := &ocm.ReceivedShare{Id: rs.Id, State: ocm.ShareState_SHARE_STATE_ACCEPTED}
+		if _, err := m.GetEmbeddedPayload(ctx, other, request); !errors.Is(err, share.ErrShareNotFound) {
+			t.Fatalf("byte-distinct recipient read the share payload: %v", err)
+		}
+		if receipt, err := m.UpdateReceivedShare(ctx, other, request, stateMask()); !errors.Is(err, share.ErrShareNotFound) || receipt != nil {
+			t.Fatalf("byte-distinct recipient updated the share: %v, %v", receipt, err)
+		}
+		if receipt, err := m.StartReceivedShareTransfer(ctx, other, request, stateMask()); !errors.Is(err, share.ErrShareNotFound) || receipt != nil {
+			t.Fatalf("byte-distinct recipient started the transfer: %v, %v", receipt, err)
+		}
 		hide := &ocm.ReceivedShare{Id: rs.Id, Hidden: true}
 		if _, err := m.UpdateReceivedShare(ctx, user, hide, &field_mask.FieldMask{Paths: []string{"hidden"}}); err != nil {
 			t.Fatal(err)
 		}
 
-		start, err := m.StartReceivedShareTransfer(ctx, user, &ocm.ReceivedShare{Id: rs.Id, State: ocm.ShareState_SHARE_STATE_ACCEPTED}, stateMask())
+		start, err := m.StartReceivedShareTransfer(ctx, user, request, stateMask())
 		if err != nil || start.Share.State != ocm.ShareState_SHARE_STATE_TRANSFERRING {
 			t.Fatalf("start: %v %v", start, err)
 		}
 		if _, err := m.StartReceivedShareTransfer(ctx, user, &ocm.ReceivedShare{Id: rs.Id}, stateMask()); !errors.Is(err, share.ErrTransferInProgress) {
 			t.Fatalf("second start: %v", err)
+		}
+		if receipt, err := m.CompleteReceivedShareTransfer(ctx, other, rs.Id, start.Generation, ocm.ShareState_SHARE_STATE_ACCEPTED); !errors.Is(err, share.ErrShareNotFound) || receipt != nil {
+			t.Fatalf("byte-distinct recipient completed the transfer: %v, %v", receipt, err)
 		}
 		if u, err := m.CompleteReceivedShareTransfer(ctx, user, rs.Id, start.Generation+1, ocm.ShareState_SHARE_STATE_ACCEPTED); err != nil || u.StateChanged() {
 			t.Fatalf("wrong generation completed: %v %v", u, err)

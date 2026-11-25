@@ -309,7 +309,7 @@ func TestMountedEmbeddedShareProcessing(t *testing.T) {
 			notices := len(e.svc.notifier.(*syncNotifier).results)
 			peers.datatxResponse = &datatx.CreateTransferResponse{
 				Status: &rpc.Status{Code: rpc.Code_CODE_OK},
-				TxInfo: &datatx.TxInfo{Id: &datatx.TxId{OpaqueId: "unexpected-transfer"}},
+				TxInfo: &datatx.TxInfo{Id: &datatx.TxId{OpaqueId: "unexpected-transfer"}, Status: datatx.Status_STATUS_TRANSFER_NEW},
 			}
 			t.Cleanup(func() { peers.datatxResponse = nil })
 			if code := process(rs.Id, "/dest"); code != http.StatusNotImplemented {
@@ -329,9 +329,14 @@ func TestMountedEmbeddedShareProcessing(t *testing.T) {
 	}{
 		{"scheduled", &datatx.CreateTransferResponse{
 			Status: &rpc.Status{Code: rpc.Code_CODE_OK},
-			TxInfo: &datatx.TxInfo{Id: &datatx.TxId{OpaqueId: "scheduled-transfer"}},
+			TxInfo: &datatx.TxInfo{Id: &datatx.TxId{OpaqueId: "scheduled-transfer"}, Status: datatx.Status_STATUS_TRANSFER_NEW},
 		}, http.StatusAccepted},
 		{"refused", &datatx.CreateTransferResponse{Status: &rpc.Status{Code: rpc.Code_CODE_INTERNAL}}, http.StatusInternalServerError},
+		{"missing transfer ID", &datatx.CreateTransferResponse{Status: &rpc.Status{Code: rpc.Code_CODE_OK}}, http.StatusInternalServerError},
+		{"failed job", &datatx.CreateTransferResponse{
+			Status: &rpc.Status{Code: rpc.Code_CODE_OK},
+			TxInfo: &datatx.TxInfo{Id: &datatx.TxId{OpaqueId: "failed-transfer"}, Status: datatx.Status_STATUS_TRANSFER_FAILED},
+		}, http.StatusInternalServerError},
 		{"missing status", &datatx.CreateTransferResponse{}, http.StatusInternalServerError},
 		{"missing response", nil, http.StatusInternalServerError},
 	} {
@@ -339,12 +344,16 @@ func TestMountedEmbeddedShareProcessing(t *testing.T) {
 			rs := e.received(t, "datatx-"+tc.name, false, ocm.AccessType_ACCESS_TYPE_DATATX)
 			embeddedStarts := len(e.xfer.callbacks)
 			datatxCalls := peers.datatxCalls
+			notices := len(e.svc.notifier.(*syncNotifier).results)
 			peers.datatxResponse = tc.response
 			if code := process(rs.Id, "/dest"); code != tc.wantHTTP {
 				t.Fatalf("HTTP %d, want %d", code, tc.wantHTTP)
 			}
 			if len(e.xfer.callbacks) != embeddedStarts || peers.datatxCalls != datatxCalls+1 {
 				t.Fatalf("embedded starts %d, DATATX calls %d", len(e.xfer.callbacks)-embeddedStarts, peers.datatxCalls-datatxCalls)
+			}
+			if len(e.svc.notifier.(*syncNotifier).results) != notices {
+				t.Fatal("legacy DATATX acceptance attempted a notification")
 			}
 		})
 	}

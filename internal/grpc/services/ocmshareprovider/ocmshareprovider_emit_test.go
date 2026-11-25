@@ -116,6 +116,9 @@ type syncNotifier struct {
 }
 
 func (n *syncNotifier) NewNotification(ctx context.Context, domain string, out *ocmd.OutgoingNotification) ocmd.SendResult {
+	if out.StillCurrent != nil && !out.StillCurrent(ctx) {
+		return ocmd.SendResult{}
+	}
 	res := n.c.NewNotification(ctx, domain, out, n.key)
 	n.mu.Lock()
 	n.results = append(n.results, res)
@@ -198,7 +201,7 @@ func newEmitEnv(t *testing.T) *emitEnv {
 	xfer := &controlledTransferrer{}
 	env := &emitEnv{
 		svc: &service{
-			conf:        &config{ProviderDomain: "cernbox.example.org", WebDAVEndpoint: testWebDAVRoot},
+			conf:        &config{ProviderDomain: "cernbox.example.org", WebDAVEndpoint: testWebDAVRoot, ClientTimeout: 2},
 			repo:        repo,
 			client:      ocmd.NewClient(2*time.Second, false),
 			transferrer: xfer,
@@ -539,6 +542,11 @@ func TestUpdateOCMShareEmitsOnlyPermissionChanges(t *testing.T) {
 	if empty, ok := fileOf(notices[2])["permissions"].([]any); !ok || len(empty) != 0 {
 		t.Fatalf("cleared WebDAV permissions must send an empty snapshot: %v", fileOf(notices[2]))
 	}
+	update(webdav(&providerpb.ResourcePermissions{InitiateFileUpload: true}))
+	notices = requireNotices(t, e.peer, ocmd.NotificationShareChangePermission, ocmd.NotificationShareChangePermission, ocmd.NotificationShareChangePermission, ocmd.NotificationShareChangePermission)
+	if _, present := fileOf(notices[3])["permissions"]; present {
+		t.Fatal("upload-only permissions must leave the snapshot absent")
+	}
 }
 
 func TestReceivedStateTransitionsEmitOnce(t *testing.T) {
@@ -801,7 +809,7 @@ func TestOldGrantMutationWithUnavailableResourceType(t *testing.T) {
 			}
 			if tc.code == rpc.Code_CODE_OK {
 				got, err := e.repo.GetShare(e.owner, owner, ref)
-				if err != nil || proto.Equal(got, before) || len(webdavPermissionNames(got)) != 2 {
+				if err != nil || proto.Equal(got, before) || len(changedWebDAVPermissionNames(got, nil)) != 2 {
 					t.Errorf("permissions not persisted: %v %v", got, err)
 				}
 			}

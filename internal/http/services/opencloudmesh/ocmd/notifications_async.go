@@ -20,6 +20,7 @@ package ocmd
 
 import (
 	"context"
+	"hash/crc32"
 	"sync"
 
 	"github.com/cs3org/reva/v3/pkg/ocm/httpsig"
@@ -62,6 +63,8 @@ type AsyncNotifier struct {
 	lifetime context.Context
 	cancel   context.CancelFunc
 	wg       sync.WaitGroup
+
+	permissionSends [maxInFlightNotifications]sync.Mutex
 }
 
 // NewNotification starts one attempt and returns at once. The attempt keeps
@@ -95,6 +98,17 @@ func (a *AsyncNotifier) NewNotification(ctx context.Context, domain string, n *O
 		}()
 		defer cancel()
 		defer stop()
+		if n != nil && n.File != nil && n.StillCurrent != nil {
+			// Check under the send lock so a delayed update cannot overtake
+			// a newer snapshot for the same grant.
+			bucket := crc32.ChecksumIEEE([]byte(n.File.ProviderID)) % uint32(len(a.permissionSends))
+			mu := &a.permissionSends[bucket]
+			mu.Lock()
+			defer mu.Unlock()
+			if sendCtx.Err() != nil || !n.StillCurrent(sendCtx) {
+				return
+			}
+		}
 		a.Client.NewNotification(sendCtx, domain, n, a.Key)
 	}()
 	return SendResult{}

@@ -23,6 +23,7 @@ import (
 	"context"
 	"crypto/tls"
 	"encoding/json"
+	stderrors "errors"
 	"fmt"
 	"net/http"
 	"net/url"
@@ -374,33 +375,24 @@ func (driver *rclone) startJob(ctx context.Context, transferID string, srcRemote
 	}
 
 	type rcloneAsyncResJSON struct {
-		JobID int64 `json:"jobid"`
+		JobID *int64 `json:"jobid"`
 	}
 	var resData rcloneAsyncResJSON
-	if err = json.NewDecoder(res.Body).Decode(&resData); err != nil {
-		err = errors.Wrap(err, "rclone driver: error decoding response data")
-		job.TransferStatus = datatx.Status_STATUS_TRANSFER_FAILED
-		var e error
-		if e = driver.storage.StoreJob(job); e != nil {
-			e = errors.Wrap(e, err.Error())
+	if err = json.NewDecoder(res.Body).Decode(&resData); err != nil || resData.JobID == nil || *resData.JobID < 0 {
+		if err == nil {
+			err = errors.New("rclone driver: missing or invalid job ID")
+		} else {
+			err = errors.Wrap(err, "rclone driver: error decoding response data")
 		}
+		job.TransferStatus = datatx.Status_STATUS_TRANSFER_FAILED
 		return &datatx.TxInfo{
 			Id:     &datatx.TxId{OpaqueId: txID},
 			Status: job.TransferStatus,
 			Ctime:  cTime,
-		}, e
+		}, stderrors.Join(err, driver.storage.StoreJob(job))
 	}
 
-	job.JobID = resData.JobID
-
-	if err := driver.storage.StoreJob(job); err != nil {
-		err = errors.Wrap(err, "rclone driver: transfer job error")
-		return &datatx.TxInfo{
-			Id:     &datatx.TxId{OpaqueId: txID},
-			Status: datatx.Status_STATUS_INVALID,
-			Ctime:  cTime,
-		}, err
-	}
+	job.JobID = *resData.JobID
 
 	// the initial save when everything went ok
 	if err := driver.storage.StoreJob(job); err != nil {

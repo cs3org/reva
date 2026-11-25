@@ -122,19 +122,22 @@ func (s *service) UnprotectedEndpoints() []string {
 
 func (s *service) CreateTransfer(ctx context.Context, req *datatx.CreateTransferRequest) (*datatx.CreateTransferResponse, error) {
 	txInfo, startTransferErr := s.txManager.CreateTransfer(ctx, req.SrcTargetUri, req.DestTargetUri)
-	log := appctx.GetLogger(ctx)
+	txID := txInfo.GetId().GetOpaqueId()
+	if txID == "" {
+		return &datatx.CreateTransferResponse{
+			Status: status.NewInvalid(ctx, "transfer is missing its ID"),
+		}, startTransferErr
+	}
 
-	// we always save the transfer regardless of start transfer outcome
-	// only then, if starting fails, can we try to restart it
+	// A failed start with a transfer ID can still be retried.
 	userID := appctx.ContextMustGetUser(ctx).GetId()
 	transfer := &txdriver.Transfer{
-		TxID:          txInfo.GetId().OpaqueId,
+		TxID:          txID,
 		SrcTargetURI:  req.SrcTargetUri,
 		DestTargetURI: req.DestTargetUri,
 		ShareID:       req.GetShareId().OpaqueId,
 		UserID:        userID,
 	}
-	log.Debug().Interface("transfer", transfer).Msg("CreateTransfer")
 
 	if err := s.storageDriver.StoreTransfer(transfer); err != nil {
 		err = errors.Wrap(err, "datatx service: error NEW saving transfer share: "+datatx.Status_STATUS_INVALID.String())

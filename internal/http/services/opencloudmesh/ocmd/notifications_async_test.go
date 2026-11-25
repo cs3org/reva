@@ -83,6 +83,55 @@ func wait(t *testing.T, c <-chan struct{}, what string) {
 	}
 }
 
+func TestAsyncNotifierSerializesCurrentPermissionSnapshots(t *testing.T) {
+	p := newGatedPeer(t)
+	client := NewClientWithConfig(ocmclient.TransportConfig{Timeout: 5 * time.Second, AllowLoopback: true})
+	a := &AsyncNotifier{Client: client, Key: newSigningKey(t)}
+	t.Cleanup(func() { _ = a.Close() })
+	host := strings.TrimPrefix(p.srv.URL, "http://")
+	var revision atomic.Int32
+	send := func(rev int32, permissions []string, checked chan struct{}) {
+		t.Helper()
+		n, err := (ShareStateNotification{
+			Type: NotificationShareChangePermission, SenderDomain: "cernbox.example.org",
+			ResourceType: "file", ShareType: "user", ProviderID: "same-grant", Permissions: permissions,
+		}).Build()
+		if err != nil {
+			t.Fatal(err)
+		}
+		n.StillCurrent = func(context.Context) bool {
+			close(checked)
+			return revision.Load() == rev
+		}
+		if result := a.NewNotification(context.Background(), host, n); result != (SendResult{}) {
+			t.Fatalf("send admission: %+v", result)
+		}
+	}
+
+	revision.Store(1)
+	send(1, []string{"read", "write"}, make(chan struct{}))
+	wait(t, p.entered, "first discovery")
+	revision.Store(3)
+	stale, latest := make(chan struct{}), make(chan struct{})
+	send(2, []string{"read"}, stale)
+	send(3, []string{}, latest)
+	select {
+	case <-latest:
+		t.Fatal("the newer snapshot overtook the in-flight send")
+	case <-time.After(50 * time.Millisecond):
+	}
+	close(p.release)
+	wait(t, p.posted, "first POST")
+	wait(t, p.posted, "latest POST")
+	wait(t, stale, "stale snapshot check")
+	if err := a.Close(); err != nil {
+		t.Fatal(err)
+	}
+	if d, n := p.discovers.Load(), p.posts.Load(); d != 2 || n != 2 {
+		t.Fatalf("discovers %d, posts %d", d, n)
+	}
+}
+
 func TestAsyncNotifierCloseCancelsAdmittedSend(t *testing.T) {
 	p := newGatedPeer(t)
 	a := &AsyncNotifier{Client: NewClient(time.Minute, false), Key: newSigningKey(t)}

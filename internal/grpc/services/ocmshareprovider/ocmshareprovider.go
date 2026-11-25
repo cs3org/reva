@@ -604,7 +604,7 @@ func (s *service) UpdateOCMShare(ctx context.Context, req *ocm.UpdateOCMShareReq
 		}, nil
 	}
 
-	s.notifyPermissionChange(ctx, update)
+	s.notifyPermissionChange(ctx, update, req.GetField())
 
 	res := &ocm.UpdateOCMShareResponse{
 		Status: status.NewOK(ctx),
@@ -630,6 +630,7 @@ func (s *service) ListReceivedOCMShares(ctx context.Context, req *ocm.ListReceiv
 
 func (s *service) UpdateReceivedOCMShare(ctx context.Context, req *ocm.UpdateReceivedOCMShareRequest) (*ocm.UpdateReceivedOCMShareResponse, error) {
 	user := appctx.ContextMustGetUser(ctx)
+	transferAcceptance := false
 	// Accepting a share with embedded content holds it in TRANSFERRING until
 	// the copy completes. Only a state the mask asks to change can start it.
 	// The stored grant, not the request, tells if the share is embedded, so
@@ -652,7 +653,8 @@ func (s *service) UpdateReceivedOCMShare(ctx context.Context, req *ocm.UpdateRec
 		if slices.ContainsFunc(current.GetProtocols(), func(p *ocm.Protocol) bool { return p.GetEmbeddedOptions() != nil }) {
 			return s.processEmbeddedShare(ctx, user, req)
 		}
-		if s.conf.DisableDataTxAcceptance && share.DataTransferProtocol(current) != nil {
+		transferAcceptance = share.DataTransferProtocol(current) != nil
+		if s.conf.DisableDataTxAcceptance && transferAcceptance {
 			return &ocm.UpdateReceivedOCMShareResponse{
 				Status: status.NewUnimplemented(ctx, nil, "DATATX share acceptance is disabled"),
 			}, nil
@@ -670,7 +672,10 @@ func (s *service) UpdateReceivedOCMShare(ctx context.Context, req *ocm.UpdateRec
 		}, nil
 	}
 
-	s.notifyReceivedState(ctx, update, true)
+	// Legacy DATATX updates the grant before the scheduler acknowledges a job.
+	if !transferAcceptance {
+		s.notifyReceivedState(ctx, update, true)
+	}
 
 	res := &ocm.UpdateReceivedOCMShareResponse{
 		Status: status.NewOK(ctx),

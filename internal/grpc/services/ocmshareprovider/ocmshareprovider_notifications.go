@@ -20,12 +20,17 @@ package ocmshareprovider
 
 import (
 	"context"
+	"slices"
+	"time"
 
 	ocm "github.com/cs3org/go-cs3apis/cs3/sharing/ocm/v1beta1"
+	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/cs3org/reva/v3/internal/http/services/opencloudmesh/ocmd"
 	"github.com/cs3org/reva/v3/pkg/appctx"
 	"github.com/cs3org/reva/v3/pkg/ocm/providerdomain"
 	"github.com/cs3org/reva/v3/pkg/ocm/share"
+	"github.com/cs3org/reva/v3/pkg/permissions"
+	"google.golang.org/protobuf/proto"
 )
 
 // notifier sends one notification to a peer after a committed change. Its
@@ -51,6 +56,20 @@ func (s *service) emit(ctx context.Context, domain string, b ocmd.ShareStateNoti
 		log.Warn().Str("type", b.Type).Str("error", err.Error()).Msg("not sending OCM notification")
 		return
 	}
+	if b.Permissions != nil {
+		user := appctx.ContextMustGetUser(ctx)
+		ref := &ocm.ShareReference{Spec: &ocm.ShareReference_Id{Id: &ocm.ShareId{OpaqueId: b.ProviderID}}}
+		n.StillCurrent = func(ctx context.Context) bool {
+			ctx, cancel := context.WithTimeout(ctx, time.Duration(s.conf.ClientTimeout)*time.Second)
+			defer cancel()
+			current, err := s.repo.GetShare(ctx, user, ref)
+			if err != nil || current.GetGrantee().GetUserId().GetIdp() != domain {
+				return false
+			}
+			names := changedWebDAVPermissionNames(current, nil)
+			return names != nil && slices.Equal(names, b.Permissions)
+		}
+	}
 	s.notifier.NewNotification(ctx, peer, n)
 }
 
@@ -66,19 +85,46 @@ func resourceTypeName(t ocm.SharedResourceType) string {
 	return ""
 }
 
-// webdavPermissionNames maps the stored WebDAV permissions to the OCM
-// permission names used on the wire.
-func webdavPermissionNames(sh *ocm.Share) []string {
-	for _, m := range sh.GetAccessMethods() {
-		if snapshot := m.GetWebdavOptions().GetPermissions(); snapshot != nil {
-			perms := []string{}
-			if snapshot.GetInitiateFileDownload() {
-				perms = append(perms, "read")
+// projectWebDAVPermissions returns nil when the snapshot cannot be sent.
+func projectWebDAVPermissions(snapshot *provider.ResourcePermissions) []string {
+	if snapshot == nil {
+		return nil
+	}
+	names := share.WebDAVPermissionNames(snapshot, snapshot.GetAddGrant())
+	decoded, err := share.ParseWebDAVPermissions(names)
+	if err != nil || !share.SameWebDAVOperations(snapshot, decoded.GetPermissions()) ||
+		snapshot.GetAddGrant() != decoded.GetReshare() {
+		return nil
+	}
+	if len(names) == 0 && !proto.Equal(snapshot, &provider.ResourcePermissions{}) {
+		return nil
+	}
+	// The canonical native roles use MOVE and a single delete bit. Wire
+	// write represents both deletes and does not carry native MOVE.
+	if snapshot.GetMove() || snapshot.GetDeleteContainer() != decoded.GetPermissions().GetDeleteContainer() {
+		if !proto.Equal(snapshot, permissions.NewEditorRole().CS3ResourcePermissions()) &&
+			!proto.Equal(snapshot, permissions.NewManagerRole().CS3ResourcePermissions()) {
+			return nil
+		}
+	}
+	return names
+}
+
+// changedWebDAVPermissionNames projects the committed snapshot. Checking the
+// last requested WebDAV value first prevents the storage codec from turning
+// an unsupported shape into a permission-changing notice.
+func changedWebDAVPermissionNames(sh *ocm.Share, fields []*ocm.UpdateOCMShareRequest_UpdateField) []string {
+	for _, field := range slices.Backward(fields) {
+		if options := field.GetAccessMethods().GetWebdavOptions(); options != nil {
+			if projectWebDAVPermissions(options.GetPermissions()) == nil {
+				return nil
 			}
-			if snapshot.GetInitiateFileUpload() {
-				perms = append(perms, "write")
-			}
-			return perms
+			break
+		}
+	}
+	for _, method := range sh.GetAccessMethods() {
+		if snapshot := method.GetWebdavOptions().GetPermissions(); snapshot != nil {
+			return projectWebDAVPermissions(snapshot)
 		}
 	}
 	return nil
@@ -109,7 +155,7 @@ func (s *service) notifyUnshared(ctx context.Context, removal *share.ShareRemova
 
 // notifyPermissionChange sends SHARE_CHANGE_PERMISSION when a stored
 // permission value changed.
-func (s *service) notifyPermissionChange(ctx context.Context, update *share.ShareUpdate) {
+func (s *service) notifyPermissionChange(ctx context.Context, update *share.ShareUpdate, fields []*ocm.UpdateOCMShareRequest_UpdateField) {
 	if !update.PermissionsChanged() || update.After == nil {
 		return
 	}
@@ -121,7 +167,7 @@ func (s *service) notifyPermissionChange(ctx context.Context, update *share.Shar
 	}
 	var perms []string
 	if update.WebDAVPermissionsChanged {
-		perms = webdavPermissionNames(sh)
+		perms = changedWebDAVPermissionNames(sh, fields)
 	}
 	s.emit(ctx, sh.GetGrantee().GetUserId().GetIdp(), ocmd.ShareStateNotification{
 		Type:         ocmd.NotificationShareChangePermission,

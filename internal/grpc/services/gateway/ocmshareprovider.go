@@ -431,7 +431,14 @@ func (s *svc) handleTransfer(ctx context.Context, share *ocm.ReceivedShare, tran
 	if res.GetStatus().GetCode() != rpc.Code_CODE_OK {
 		return status.NewErrtypeFromStatus(res.GetStatus())
 	}
-	log.Info().Msgf("gateway: CreateTransfer: %v", res.TxInfo)
+	info := res.GetTxInfo()
+	if info.GetId().GetOpaqueId() == "" {
+		return errtypes.InternalError("transfer service returned no transfer ID")
+	}
+	if info.GetStatus() != datatx.Status_STATUS_TRANSFER_NEW {
+		return errtypes.InternalError("transfer service did not acknowledge a new job")
+	}
+	log.Debug().Msg("gateway: DATATX job scheduled")
 	return nil
 }
 

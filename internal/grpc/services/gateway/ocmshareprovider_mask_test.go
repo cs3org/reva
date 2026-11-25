@@ -79,7 +79,10 @@ type fakeTransfers struct {
 
 func (f *fakeTransfers) CreateTransfer(context.Context, *datatx.CreateTransferRequest, ...grpc.CallOption) (*datatx.CreateTransferResponse, error) {
 	f.creates++
-	return &datatx.CreateTransferResponse{Status: &rpc.Status{Code: rpc.Code_CODE_OK}, TxInfo: &datatx.TxInfo{}}, nil
+	return &datatx.CreateTransferResponse{
+		Status: &rpc.Status{Code: rpc.Code_CODE_OK},
+		TxInfo: &datatx.TxInfo{Id: &datatx.TxId{OpaqueId: "transfer"}, Status: datatx.Status_STATUS_TRANSFER_NEW},
+	}, nil
 }
 
 func pendingTransferShare(state ocm.ShareState) *ocm.ReceivedShare {
