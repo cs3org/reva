@@ -290,8 +290,9 @@ func (s *svc) UpdateReceivedOCMShare(ctx context.Context, req *ocm.UpdateReceive
 		}, nil
 	}
 	if res.GetStatus() == nil {
+		err := errors.New("received share update returned no status")
 		return &ocm.UpdateReceivedOCMShareResponse{
-			Status: status.NewInternal(ctx, nil, "received share update returned no status"),
+			Status: status.NewInternal(ctx, err, err.Error()),
 		}, nil
 	}
 	if res.GetStatus().GetCode() != rpc.Code_CODE_OK {

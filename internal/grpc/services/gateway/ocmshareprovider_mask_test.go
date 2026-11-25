@@ -36,10 +36,11 @@ import (
 
 type fakeOCMShares struct {
 	ocm.OcmAPIClient
-	mu      sync.Mutex
-	current *ocm.ReceivedShare
-	updates int
-	failure *rpc.Status
+	mu            sync.Mutex
+	current       *ocm.ReceivedShare
+	updates       int
+	failure       *rpc.Status
+	missingStatus string
 }
 
 func (f *fakeOCMShares) GetReceivedOCMShare(context.Context, *ocm.GetReceivedOCMShareRequest, ...grpc.CallOption) (*ocm.GetReceivedOCMShareResponse, error) {
@@ -50,6 +51,12 @@ func (f *fakeOCMShares) UpdateReceivedOCMShare(context.Context, *ocm.UpdateRecei
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	f.updates++
+	switch f.missingStatus {
+	case "nil response":
+		return nil, nil
+	case "missing status":
+		return &ocm.UpdateReceivedOCMShareResponse{}, nil
+	}
 	if f.failure != nil {
 		return &ocm.UpdateReceivedOCMShareResponse{Status: f.failure}, nil
 	}
@@ -106,27 +113,30 @@ func pendingTransferShare(state ocm.ShareState) *ocm.ReceivedShare {
 func TestUpdateReceivedOCMShareTransferNeedsMaskedAcceptance(t *testing.T) {
 	ctx := appctx.ContextSetToken(appctx.ContextSetUser(context.Background(), &userpb.User{Id: &userpb.UserId{OpaqueId: "bob"}}), "tok")
 	cases := []struct {
-		name      string
-		folder    string
-		paths     []string
-		requested ocm.ShareState
-		current   ocm.ShareState
-		code      rpc.Code
-		transfers int
-		refused   bool
+		name          string
+		folder        string
+		paths         []string
+		requested     ocm.ShareState
+		current       ocm.ShareState
+		code          rpc.Code
+		transfers     int
+		refused       bool
+		missingStatus string
 	}{
 		{name: "hidden only with stale accepted, unconfigured", paths: []string{"hidden"}, requested: ocm.ShareState_SHARE_STATE_ACCEPTED, current: ocm.ShareState_SHARE_STATE_PENDING, code: rpc.Code_CODE_OK},
 		{name: "hidden only with stale accepted, configured", folder: "/transfers", paths: []string{"hidden"}, requested: ocm.ShareState_SHARE_STATE_ACCEPTED, current: ocm.ShareState_SHARE_STATE_PENDING, code: rpc.Code_CODE_OK},
 		{name: "empty mask with stale accepted", folder: "/transfers", requested: ocm.ShareState_SHARE_STATE_ACCEPTED, current: ocm.ShareState_SHARE_STATE_PENDING, code: rpc.Code_CODE_OK},
 		{name: "masked rejection", folder: "/transfers", paths: []string{"state"}, requested: ocm.ShareState_SHARE_STATE_REJECTED, current: ocm.ShareState_SHARE_STATE_PENDING, code: rpc.Code_CODE_OK},
 		{name: "masked acceptance", folder: "/transfers", paths: []string{"state"}, requested: ocm.ShareState_SHARE_STATE_ACCEPTED, current: ocm.ShareState_SHARE_STATE_PENDING, code: rpc.Code_CODE_OK, transfers: 1},
+		{name: "masked acceptance with nil response", folder: "/transfers", paths: []string{"state"}, requested: ocm.ShareState_SHARE_STATE_ACCEPTED, current: ocm.ShareState_SHARE_STATE_PENDING, code: rpc.Code_CODE_INTERNAL, missingStatus: "nil response"},
+		{name: "masked acceptance with missing status", folder: "/transfers", paths: []string{"state"}, requested: ocm.ShareState_SHARE_STATE_ACCEPTED, current: ocm.ShareState_SHARE_STATE_PENDING, code: rpc.Code_CODE_INTERNAL, missingStatus: "missing status"},
 		{name: "masked acceptance refused by provider", folder: "/transfers", paths: []string{"state"}, requested: ocm.ShareState_SHARE_STATE_ACCEPTED, current: ocm.ShareState_SHARE_STATE_PENDING, code: rpc.Code_CODE_PERMISSION_DENIED, refused: true},
 		{name: "masked acceptance outcome unknown", folder: "/transfers", paths: []string{"state"}, requested: ocm.ShareState_SHARE_STATE_ACCEPTED, current: ocm.ShareState_SHARE_STATE_PENDING, code: rpc.Code_CODE_UNKNOWN, refused: true},
 		{name: "masked acceptance of an accepted share", folder: "/transfers", paths: []string{"state"}, requested: ocm.ShareState_SHARE_STATE_ACCEPTED, current: ocm.ShareState_SHARE_STATE_ACCEPTED, code: rpc.Code_CODE_FAILED_PRECONDITION},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			shares := &fakeOCMShares{current: pendingTransferShare(tc.current)}
+			shares := &fakeOCMShares{current: pendingTransferShare(tc.current), missingStatus: tc.missingStatus}
 			if tc.refused {
 				shares.failure = &rpc.Status{Code: tc.code}
 			}
