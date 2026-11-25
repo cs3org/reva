@@ -26,7 +26,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/bluele/gcache"
+	"github.com/ReneKroon/ttlcache/v2"
 	authpb "github.com/cs3org/go-cs3apis/cs3/auth/provider/v1beta1"
 	gateway "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
@@ -57,7 +57,7 @@ import (
 	tokenmgr "github.com/cs3org/reva/v3/pkg/token/manager/registry"
 )
 
-var userGroupsCache gcache.Cache
+var userGroupsCache *ttlcache.Cache
 
 type config struct {
 	Priority   int    `mapstructure:"priority"`
@@ -124,7 +124,15 @@ func New(m map[string]any) (global.Middleware, error) {
 	conf.GatewaySvc = sharedconf.GetGatewaySVC(conf.GatewaySvc)
 	conf.applyDefaults()
 
-	userGroupsCache = gcache.New(1000000).LFU().Build()
+	// revad calls New once for each HTTP server. Close the cache of the
+	// previous call, because each cache runs a goroutine.
+	if userGroupsCache != nil {
+		_ = userGroupsCache.Close()
+	}
+	userGroupsCache = ttlcache.NewCache()
+	// Without this, the groups of an active user are never fetched again.
+	userGroupsCache.SkipTTLExtensionOnHit(true)
+	userGroupsCache.SetCacheSizeLimit(1000000)
 
 	credChain := map[string]auth.CredentialStrategy{}
 	for i, key := range conf.CredentialChain {
@@ -435,7 +443,7 @@ func ctxWithUserInfo(ctx context.Context, r *http.Request, user *userpb.User, to
 	return ctx
 }
 
-func insertGroupsInUser(ctx context.Context, userGroupsCache gcache.Cache, client gateway.GatewayAPIClient, user *userpb.User) error {
+func insertGroupsInUser(ctx context.Context, userGroupsCache *ttlcache.Cache, client gateway.GatewayAPIClient, user *userpb.User) error {
 	if sharedconf.SkipUserGroupsInToken() {
 		var groups []string
 		if groupsIf, err := userGroupsCache.Get(user.Id.OpaqueId); err == nil {
@@ -446,7 +454,7 @@ func insertGroupsInUser(ctx context.Context, userGroupsCache gcache.Cache, clien
 				return err
 			}
 			groups = groupsRes.Groups
-			_ = userGroupsCache.SetWithExpire(user.Id.OpaqueId, groupsRes.Groups, 3600*time.Second)
+			_ = userGroupsCache.SetWithTTL(user.Id.OpaqueId, groupsRes.Groups, 3600*time.Second)
 		}
 		user.Groups = groups
 	}

@@ -22,7 +22,7 @@ import (
 	"context"
 	"time"
 
-	"github.com/bluele/gcache"
+	"github.com/ReneKroon/ttlcache/v2"
 	authpb "github.com/cs3org/go-cs3apis/cs3/auth/provider/v1beta1"
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	"github.com/mitchellh/mapstructure"
@@ -42,8 +42,8 @@ import (
 	"github.com/cs3org/reva/v3/pkg/utils"
 )
 
-var userGroupsCache gcache.Cache
-var scopeExpansionCache gcache.Cache
+var userGroupsCache *ttlcache.Cache
+var scopeExpansionCache *ttlcache.Cache
 
 type config struct {
 	// TODO(labkode): access a map is more performant as uri as fixed in length
@@ -82,8 +82,19 @@ func newInterceptor(m map[string]any) (*interceptor, error) {
 	}
 	conf.GatewayAddr = sharedconf.GetGatewaySVC(conf.GatewayAddr)
 
-	userGroupsCache = gcache.New(1000000).LFU().Build()
-	scopeExpansionCache = gcache.New(1000000).LFU().Build()
+	// NewUnary and NewStream both come here. Close the caches of the first
+	// call, because each cache runs a goroutine.
+	if userGroupsCache != nil {
+		_ = userGroupsCache.Close()
+		_ = scopeExpansionCache.Close()
+	}
+	// Without SkipTTLExtensionOnHit, an entry that is read often never expires.
+	userGroupsCache = ttlcache.NewCache()
+	userGroupsCache.SkipTTLExtensionOnHit(true)
+	userGroupsCache.SetCacheSizeLimit(1000000)
+	scopeExpansionCache = ttlcache.NewCache()
+	scopeExpansionCache.SkipTTLExtensionOnHit(true)
+	scopeExpansionCache.SetCacheSizeLimit(1000000)
 
 	h, ok := tokenmgr.NewFuncs[conf.TokenManager]
 	if !ok {
@@ -281,7 +292,7 @@ func getUserGroups(ctx context.Context, u *userpb.User) ([]string, error) {
 	if err != nil {
 		return nil, errors.Wrap(err, "gateway: error calling GetUserGroups")
 	}
-	_ = userGroupsCache.SetWithExpire(u.Id.OpaqueId, res.Groups, 3600*time.Second)
+	_ = userGroupsCache.SetWithTTL(u.Id.OpaqueId, res.Groups, 3600*time.Second)
 
 	return res.Groups, nil
 }

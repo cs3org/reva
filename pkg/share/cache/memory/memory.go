@@ -21,7 +21,7 @@ package memory
 import (
 	"time"
 
-	"github.com/bluele/gcache"
+	"github.com/ReneKroon/ttlcache/v2"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/cs3org/reva/v3/pkg/share/cache"
 	"github.com/cs3org/reva/v3/pkg/share/cache/registry"
@@ -39,7 +39,7 @@ type config struct {
 }
 
 type manager[T cache.Cacheable] struct {
-	cache gcache.Cache
+	cache *ttlcache.Cache
 }
 
 func (c *config) ApplyDefaults() {
@@ -54,9 +54,11 @@ func New[T cache.Cacheable](m map[string]any) (cache.GenericCache[T], error) {
 	if err := cfg.Decode(m, &c); err != nil {
 		return nil, err
 	}
-	return &manager[T]{
-		cache: gcache.New(c.CacheSize).LFU().Build(),
-	}, nil
+	entries := ttlcache.NewCache()
+	// Without this, an entry that is read often never expires.
+	entries.SkipTTLExtensionOnHit(true)
+	entries.SetCacheSizeLimit(c.CacheSize)
+	return &manager[T]{cache: entries}, nil
 }
 
 func (m *manager[T]) Get(key string) (T, error) {
@@ -83,5 +85,10 @@ func (m *manager[T]) Set(key string, info T) error {
 }
 
 func (m *manager[T]) SetWithExpire(key string, info T, expiration time.Duration) error {
-	return m.cache.SetWithExpire(key, info, expiration)
+	// ttlcache keeps an entry with no TTL forever. Some callers pass the TTL from
+	// the config without a check, and 0 must not cache.
+	if expiration <= 0 {
+		return nil
+	}
+	return m.cache.SetWithTTL(key, info, expiration)
 }
