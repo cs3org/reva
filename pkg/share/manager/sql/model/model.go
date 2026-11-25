@@ -212,10 +212,10 @@ type ShareState struct {
 // In addition, tokens must be unique.
 // TODO(lopresti) see if we can consolidate Owner and Initiator with UIDOwner and UIDInitiator in ProtoShare
 type OcmShare struct {
-	CreatorIdp      []byte `gorm:"type:varbinary(1020);index:i_ocmshare_directed,priority:1"`
+	CreatorIdp      []byte `gorm:"type:varbinary(1020)"`
 	CreatorUserType int32  `gorm:"not null;default:0"`
 	CreatorTenant   []byte `gorm:"type:varbinary(1020)"`
-	RemoteRecipient []byte `gorm:"type:varbinary(1025);index:i_ocmshare_directed,priority:2"`
+	RemoteRecipient []byte `gorm:"type:varbinary(1025);index:i_ocmshare_remote_recipient"`
 	ProtoShare
 	DeletedAt     gorm.DeletedAt     `gorm:"uniqueIndex:u_ocmshare"` // the composite index also works as regular index here, similarly as in the `Share` struct
 	Inode         string             `gorm:"size:64;not null;uniqueIndex:u_ocmshare;index"`

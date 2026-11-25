@@ -778,6 +778,38 @@ func TestEmbeddedAcceptanceNeedsCompletedCopy(t *testing.T) {
 	requireNotices(t, e.peer, ocmd.NotificationShareAccepted)
 }
 
+func TestDirectedDeclineRefusesServiceCopyUntilCompletion(t *testing.T) {
+	e := newEmitEnv(t)
+	recipient := appctx.ContextMustGetUser(e.recip).Id
+	recipient.Type = userpb.UserType_USER_TYPE_PRIMARY
+	rs := e.received(t, "directed-copy", true)
+	sender := &userpb.UserId{OpaqueId: "alice", Idp: e.peer.host()}
+	actions := e.repo.(share.DirectedShareActions)
+
+	if res := e.setState(t, rs.Id, ocm.ShareState_SHARE_STATE_ACCEPTED, "/home/dest"); res.Status.Code != rpc.Code_CODE_OK {
+		t.Fatalf("start: %v", res.Status)
+	}
+	updates, err := actions.RejectReceivedOCMSharesFromSender(e.recip, recipient, sender)
+	if updates != nil || !errors.Is(err, share.ErrTransferInProgress) {
+		t.Fatalf("directed decline returned %d receipts and %v", len(updates), err)
+	}
+	if res := e.setState(t, rs.Id, ocm.ShareState_SHARE_STATE_ACCEPTED, "/home/dest"); res.Status.Code != rpc.Code_CODE_FAILED_PRECONDITION {
+		t.Fatalf("second start: %v", res.Status)
+	}
+	if len(e.xfer.callbacks) != 1 {
+		t.Fatalf("started %d copies", len(e.xfer.callbacks))
+	}
+	requireNotices(t, e.peer)
+	e.xfer.callback(0)(nil)
+	requireNotices(t, e.peer, ocmd.NotificationShareAccepted)
+
+	updates, err = actions.RejectReceivedOCMSharesFromSender(e.recip, recipient, sender)
+	if err != nil || len(updates) != 1 || updates[0].Before.GetState() != ocm.ShareState_SHARE_STATE_ACCEPTED ||
+		updates[0].After.GetState() != ocm.ShareState_SHARE_STATE_REJECTED {
+		t.Fatalf("directed decline after completion returned %d receipts and %v", len(updates), err)
+	}
+}
+
 func TestSenderFailureKeepsCommittedChange(t *testing.T) {
 	e := newEmitEnv(t)
 	e.peer.status = http.StatusInternalServerError

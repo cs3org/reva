@@ -18,12 +18,8 @@
 
 package sql
 
-// Directed bulk share actions. Each direction captures its exact selection
-// inside one transaction and either commits all of it or returns without an
-// acknowledged receipt. Grants created outside the captured set are later
-// separate shares; no pair-wide authority is recorded here.
-
 import (
+	"cmp"
 	"context"
 	"slices"
 	"time"
@@ -36,6 +32,8 @@ import (
 	model "github.com/cs3org/reva/v3/pkg/share/manager/sql/model"
 	"gorm.io/gorm"
 )
+
+const directedObservationBatchSize = 500
 
 // RemoveOCMSharesForRecipient uses the bound creator identity, including tenant,
 // because a resource owner or a same-opaque principal may be a different user.
@@ -55,16 +53,12 @@ func (m *mgr) RemoveOCMSharesForRecipient(ctx context.Context, creator, recipien
 		q := forUpdate(tx).
 			Where("creator_idp = ? AND remote_recipient = ? AND initiator = ? AND creator_user_type = ? AND creator_tenant = ? AND recipient_type = ?",
 				[]byte(creator.GetIdp()), []byte(recipient.GetOpaqueId()+"@"+remoteHost), creator.GetOpaqueId(), int32(creator.GetType()), []byte(creator.GetTenantId()), model.OcmShareTypeUser).
-			Order("id")
+			Order(outgoingShareOrder)
 		var selected []model.OcmShare
 		if err := q.Find(&selected).Error; err != nil {
 			return err
 		}
-		if len(selected) == 0 {
-			return nil
-		}
-		ids := make([]uint, 0, len(selected))
-		authorized := make([]model.OcmShare, 0, len(selected))
+		authorized := selected[:0]
 		for _, sm := range selected {
 			// MySQL may collate the ordinary initiator column non-binarily.
 			if sm.Initiator != creator.GetOpaqueId() {
@@ -73,23 +67,40 @@ func (m *mgr) RemoveOCMSharesForRecipient(ctx context.Context, creator, recipien
 			if !share.SupportedResourceType(convertToCS3SharedResourceType(sm.ItemType)) {
 				return share.ErrInvalidResourceType
 			}
-			ids = append(ids, sm.Id)
 			authorized = append(authorized, sm)
-			methods, err := accessMethodsTx(tx, sm.Id)
-			if err != nil {
-				return err
-			}
-			receipts = append(receipts, &share.ShareRemoval{Share: convertToCS3OCMShare(&sm, methods), ResourceType: convertToCS3SharedResourceType(sm.ItemType)})
 		}
-		if len(ids) == 0 {
+		if len(authorized) == 0 {
 			return nil
 		}
 		if err := deleteLockedOCMShares(tx, authorized, errtypes.Conflict("selected share changed")); err != nil {
 			return err
 		}
+
+		// Preserve ID order in the receipt after using database order to delete.
+		slices.SortFunc(authorized, func(a, b model.OcmShare) int { return cmp.Compare(a.Id, b.Id) })
+		ids := make([]uint, 0, len(authorized))
+		for i := range authorized {
+			sm := &authorized[i]
+			methods, err := accessMethodsTx(tx, sm.Id)
+			if err != nil {
+				return err
+			}
+			ids = append(ids, sm.Id)
+			receipts = append(receipts, &share.ShareRemoval{Share: convertToCS3OCMShare(sm, methods), ResourceType: convertToCS3SharedResourceType(sm.ItemType)})
+		}
 		check.observe = func(db *gorm.DB) (share.CommitObservation, error) {
 			var active int64
-			if err := db.Model(&model.OcmShare{}).Where("id IN ?", ids).Count(&active).Error; err != nil {
+			err := observeTx(db, func(tx *gorm.DB) error {
+				for chunk := range slices.Chunk(ids, directedObservationBatchSize) {
+					var count int64
+					if err := tx.Model(&model.OcmShare{}).Where("id IN ?", chunk).Count(&count).Error; err != nil {
+						return err
+					}
+					active += count
+				}
+				return nil
+			})
+			if err != nil {
 				return share.CommitObservedUnread, err
 			}
 			if active == 0 {
@@ -128,17 +139,8 @@ func (m *mgr) RejectReceivedOCMSharesFromSender(ctx context.Context, recipient, 
 			Order("id").Find(&selected).Error; err != nil {
 			return err
 		}
-		if len(selected) == 0 {
-			return nil
-		}
-		type stateSnapshot struct {
-			State              model.OcmShareState
-			Hidden             bool
-			TransferGeneration uint64
-		}
-		ids := make([]uint, 0, len(selected))
-		previous := make([]stateSnapshot, 0, len(selected))
-		expected := make([]stateSnapshot, 0, len(selected))
+		authorized := selected[:0]
+		transferring := false
 		for _, row := range selected {
 			if row.Initiator != senderAddress || row.ShareWith != recipient.GetOpaqueId() ||
 				row.ShareWithIdp != recipient.GetIdp() || row.ShareWithTenant != recipient.GetTenantId() {
@@ -152,6 +154,27 @@ func (m *mgr) RejectReceivedOCMSharesFromSender(ctx context.Context, recipient, 
 			if !share.SupportedResourceType(convertToCS3SharedResourceType(row.ItemType)) {
 				return share.ErrInvalidResourceType
 			}
+			authorized = append(authorized, row)
+			transferring = transferring || row.State == model.OcmShareStateTransferring
+		}
+		// Keep the transfer state while the copy runs so a second accept
+		// cannot start another copy.
+		if transferring {
+			return share.ErrTransferInProgress
+		}
+		if len(authorized) == 0 {
+			return nil
+		}
+
+		type stateSnapshot struct {
+			State              model.OcmShareState
+			Hidden             bool
+			TransferGeneration uint64
+		}
+		ids := make([]uint, 0, len(authorized))
+		previous := make([]stateSnapshot, 0, len(authorized))
+		expected := make([]stateSnapshot, 0, len(authorized))
+		for _, row := range authorized {
 			protocols, err := protocolsTx(tx, row.ID)
 			if err != nil {
 				return err
@@ -179,13 +202,21 @@ func (m *mgr) RejectReceivedOCMSharesFromSender(ctx context.Context, recipient, 
 			expected = append(expected, stateSnapshot{applied.row.State, applied.row.Hidden, applied.row.TransferGeneration})
 			receipts = append(receipts, &share.ReceivedShareUpdate{Before: before, After: after})
 		}
-		if len(ids) == 0 {
-			return nil
-		}
 		check.observe = func(db *gorm.DB) (share.CommitObservation, error) {
 			var observed []stateSnapshot
-			err := db.Model(&model.OcmReceivedShare{}).Select("state", "hidden", "transfer_generation").
-				Where("id IN ?", ids).Order("id").Find(&observed).Error
+			err := observeTx(db, func(tx *gorm.DB) error {
+				// The captured IDs are already in ascending order.
+				for chunk := range slices.Chunk(ids, directedObservationBatchSize) {
+					var states []stateSnapshot
+					err := tx.Model(&model.OcmReceivedShare{}).Select("state", "hidden", "transfer_generation").
+						Where("id IN ?", chunk).Order("id").Find(&states).Error
+					if err != nil {
+						return err
+					}
+					observed = append(observed, states...)
+				}
+				return nil
+			})
 			if err != nil {
 				return share.CommitObservedUnread, err
 			}

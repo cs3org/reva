@@ -26,8 +26,10 @@ import (
 
 // DirectedShareActions is the transactional bulk surface of a repository:
 // withdraw exact bound outgoing grants and reject exact bound received grants.
-// Each direction either commits its whole captured selection or reports an
-// error without an acknowledged receipt.
+// Historical grants without a complete binding remain available to ordinary
+// per-share operations. Receipts cover only the eligible captured grants.
+// Each direction commits the whole selection or returns an error without a
+// receipt. A received selection with a transfer in progress is refused.
 type DirectedShareActions interface {
 	RemoveOCMSharesForRecipient(ctx context.Context, creator, recipient *userpb.UserId) ([]*ShareRemoval, error)
 	RejectReceivedOCMSharesFromSender(ctx context.Context, recipient, sender *userpb.UserId) ([]*ReceivedShareUpdate, error)

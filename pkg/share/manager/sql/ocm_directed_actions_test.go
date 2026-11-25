@@ -18,6 +18,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"strings"
 	"testing"
 	"time"
@@ -27,6 +28,7 @@ import (
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/cs3org/reva/v3/pkg/ocm/share"
 	"github.com/cs3org/reva/v3/pkg/share/manager/sql/model"
+	"github.com/mattn/go-sqlite3"
 	"google.golang.org/genproto/protobuf/field_mask"
 	"gorm.io/gorm"
 )
@@ -169,6 +171,9 @@ func TestDirectedActionsRespectExactIdentities(t *testing.T) {
 		tenantNeighbor := incoming(otherTenant, bob, "incoming-other-tenant")
 		caseSender := &userpb.UserId{OpaqueId: "BOB", Idp: bob.Idp, Type: bob.Type}
 		senderNeighbor := incoming(alice, caseSender, "incoming-other-sender")
+		if _, err := m.StartReceivedShareTransfer(ctx, aliceUser, senderNeighbor, stateMask()); err != nil {
+			t.Fatal(err)
+		}
 		portNeighbor := incoming(alice, otherHost, "incoming-other-port")
 		unboundIncoming := incoming(alice, bob, "incoming-unbound")
 		if err := m.db.Model(&model.OcmReceivedShare{}).Where("id = ?", unboundIncoming.Id.OpaqueId).
@@ -178,6 +183,10 @@ func TestDirectedActionsRespectExactIdentities(t *testing.T) {
 		transfer, err := m.StartReceivedShareTransfer(ctx, aliceUser, chosen, stateMask())
 		if err != nil {
 			t.Fatal(err)
+		}
+		completed, err := m.CompleteReceivedShareTransfer(ctx, aliceUser, chosen.Id, transfer.Generation, ocm.ShareState_SHARE_STATE_ACCEPTED)
+		if err != nil || !completed.StateChanged() {
+			t.Fatalf("complete before directed decline: %v %v", completed, err)
 		}
 		declined, err := m.RejectReceivedOCMSharesFromSender(ctx, alice, bob)
 		if err != nil || len(declined) != 1 || !declined[0].StateChanged() {
@@ -201,11 +210,15 @@ func TestDirectedActionsRespectExactIdentities(t *testing.T) {
 		for _, neighbor := range []struct {
 			user  *userpb.UserId
 			share *ocm.ReceivedShare
-		}{{otherTenant, tenantNeighbor}, {alice, portNeighbor}, {alice, senderNeighbor}, {alice, unboundIncoming}} {
+		}{{otherTenant, tenantNeighbor}, {alice, portNeighbor}, {alice, unboundIncoming}} {
 			got, err := m.GetReceivedShare(ctx, &userpb.User{Id: neighbor.user}, idRef(neighbor.share.Id))
 			if err != nil || got.GetState() != ocm.ShareState_SHARE_STATE_PENDING {
 				t.Fatalf("unrelated projection changed: %v %v", got, err)
 			}
+		}
+		got, err = m.GetReceivedShare(ctx, aliceUser, idRef(senderNeighbor.Id))
+		if err != nil || got.GetState() != ocm.ShareState_SHARE_STATE_TRANSFERRING {
+			t.Fatalf("copy belonging to a case-distinct sender changed: %v %v", got, err)
 		}
 		repeated, err := m.RejectReceivedOCMSharesFromSender(ctx, alice, bob)
 		if err != nil || len(repeated) != 0 {
@@ -216,6 +229,179 @@ func TestDirectedActionsRespectExactIdentities(t *testing.T) {
 			t.Fatalf("explicit reaccept: %v", err)
 		}
 	})
+}
+
+func TestDirectedDeclineRefusesLiveTransfer(t *testing.T) {
+	forEachDialect(t, func(t *testing.T, m *mgr) {
+		ctx := context.Background()
+		alice := recipient("alice")
+		bob := &userpb.UserId{OpaqueId: "bob", Idp: "remote.example.org", Type: userpb.UserType_USER_TYPE_FEDERATED}
+		pending := grantShare(alice, bob.Idp, "pending", file)
+		pending.Creator = bob
+		pending = mustStore(t, m, pending)
+		copying := grantShare(alice, bob.Idp, "copying", ocm.SharedResourceType_SHARE_RESOURCE_TYPE_EMBEDDED)
+		copying.Creator = bob
+		copying.Protocols = append(copying.Protocols, share.NewEmbeddedProtocol(`{"@graph":[]}`))
+		copying = mustStore(t, m, copying)
+		transfer, err := m.StartReceivedShareTransfer(ctx, alice, copying, stateMask())
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		updates, err := m.RejectReceivedOCMSharesFromSender(ctx, alice.Id, bob)
+		if updates != nil || !errors.Is(err, share.ErrTransferInProgress) {
+			t.Fatalf("directed decline returned %d receipts and %v", len(updates), err)
+		}
+		if got := receivedRow(t, m, pending.Id.OpaqueId); got.State != model.OcmShareStatePending || got.Hidden {
+			t.Fatalf("pending grant changed: state %v, hidden %t", got.State, got.Hidden)
+		}
+		if got := receivedRow(t, m, copying.Id.OpaqueId); got.State != model.OcmShareStateTransferring ||
+			got.Hidden || got.TransferGeneration != transfer.Generation {
+			t.Fatalf("copy reservation changed: state %v, hidden %t, generation %d", got.State, got.Hidden, got.TransferGeneration)
+		}
+		if _, err := m.StartReceivedShareTransfer(ctx, alice, copying, stateMask()); !errors.Is(err, share.ErrTransferInProgress) {
+			t.Fatalf("second transfer start: %v", err)
+		}
+		completion, err := m.CompleteReceivedShareTransfer(ctx, alice, copying.Id, transfer.Generation, ocm.ShareState_SHARE_STATE_ACCEPTED)
+		if err != nil || !completion.StateChanged() {
+			t.Fatalf("complete original transfer: %v, %v", completion, err)
+		}
+		updates, err = m.RejectReceivedOCMSharesFromSender(ctx, alice.Id, bob)
+		if err != nil || len(updates) != 2 ||
+			updates[0].After.GetId().GetOpaqueId() != pending.Id.OpaqueId ||
+			updates[1].After.GetId().GetOpaqueId() != copying.Id.OpaqueId {
+			t.Fatalf("explicit decline after completion: %v, %v", updates, err)
+		}
+		for _, update := range updates {
+			if !update.StateChanged() || !update.After.GetHidden() || update.After.GetState() != ocm.ShareState_SHARE_STATE_REJECTED {
+				t.Fatalf("invalid decline receipt: %v", update)
+			}
+		}
+	})
+}
+
+func TestDirectedDeclineRefusesCorruptBinding(t *testing.T) {
+	forEachDialect(t, func(t *testing.T, m *mgr) {
+		ctx := context.Background()
+		alice := recipient("alice")
+		bob := &userpb.UserId{OpaqueId: "bob", Idp: "remote.example.org"}
+		for _, id := range []string{"valid", "corrupt"} {
+			rs := grantShare(alice, bob.Idp, id, file)
+			rs.Creator = bob
+			mustStore(t, m, rs)
+		}
+		if err := m.db.Model(&model.OcmReceivedShare{}).Where("remote_share_id = ?", "corrupt").
+			Update("grant_key", strings.Repeat("0", 64)).Error; err != nil {
+			t.Fatal(err)
+		}
+		updates, err := m.RejectReceivedOCMSharesFromSender(ctx, alice.Id, bob)
+		if updates != nil || !errors.Is(err, share.ErrGrantIdentityMismatch) {
+			t.Fatalf("directed decline of corrupt selection: %d receipts, %v", len(updates), err)
+		}
+		var pending int64
+		if err := m.db.Model(&model.OcmReceivedShare{}).Where("state = ? AND hidden = ?", model.OcmShareStatePending, false).
+			Count(&pending).Error; err != nil || pending != 2 {
+			t.Fatalf("pending projections after refusal: %d, %v", pending, err)
+		}
+	})
+}
+
+func TestDirectedBatchesAcrossBindBoundary(t *testing.T) {
+	const limit = 500
+	for _, direction := range []string{"outgoing", "incoming"} {
+		t.Run(direction, func(t *testing.T) {
+			forEachDialect(t, func(t *testing.T, m *mgr) {
+				ctx := context.Background()
+				sqlite := m.db.Dialector.Name() == "sqlite"
+				if !sqlite && direction == "incoming" {
+					t.Skip("SQLite enforces the reduced query limit")
+				}
+				cutoff := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
+				m.db = m.db.Session(&gorm.Session{NowFunc: func() time.Time { return cutoff }})
+				alice := recipient("alice")
+				bob := &userpb.UserId{OpaqueId: "bob", Idp: "remote.example.org", Type: userpb.UserType_USER_TYPE_FEDERATED}
+				for i := range limit + 1 {
+					token := fmt.Sprintf("grant-%d", i)
+					if direction == "incoming" {
+						s := grantShare(alice, bob.Idp, token, file)
+						s.Creator = bob
+						mustStore(t, m, s)
+						continue
+					}
+					grantee := &provider.Grantee{Type: provider.GranteeType_GRANTEE_TYPE_USER, Id: &provider.Grantee_UserId{UserId: bob}}
+					resource := token
+					switch i {
+					case 0:
+						resource = "same-resource"
+					case limit:
+						resource = "same-resource"
+						if !sqlite {
+							resource = "SAME-resource"
+						}
+					}
+					s := getOcmShare(nil, grantee, alice.Id, &provider.ResourceId{StorageId: "storage", OpaqueId: resource}, token)
+					s.RecipientType = ocm.RecipientType_RECIPIENT_TYPE_USER
+					id, err := m.GenerateID(ctx)
+					if err != nil {
+						t.Fatal(err)
+					}
+					s.Id = id
+					if _, err := m.StoreShare(ctx, s, file); err != nil {
+						t.Fatal(err)
+					}
+				}
+				fault := &commitFault{apply: true}
+				withCommitFault(t, m, fault)
+				if sqlite {
+					fault.DB.SetMaxOpenConns(1)
+					conn, err := fault.DB.Conn(ctx)
+					if err != nil {
+						t.Fatal(err)
+					}
+					if err := conn.Raw(func(driverConn any) error {
+						driverConn.(*sqlite3.SQLiteConn).SetLimit(sqlite3.SQLITE_LIMIT_VARIABLE_NUMBER, limit)
+						return nil
+					}); err != nil {
+						t.Fatal(err)
+					}
+					if err := conn.Close(); err != nil {
+						t.Fatal(err)
+					}
+				}
+				fault.armed.Store(true)
+				var err error
+				if direction == "incoming" {
+					receipts, actionErr := m.RejectReceivedOCMSharesFromSender(ctx, alice.Id, bob)
+					err = actionErr
+					if receipts != nil {
+						t.Fatalf("unknown commit returned %d incoming receipts", len(receipts))
+					}
+				} else {
+					receipts, actionErr := m.RemoveOCMSharesForRecipient(ctx, alice.Id, bob)
+					err = actionErr
+					if receipts != nil {
+						t.Fatalf("unknown commit returned %d outgoing receipts", len(receipts))
+					}
+				}
+				var unknown *share.CommitUnknownError
+				if !errors.As(err, &unknown) || unknown.Observed != share.CommitObservedRequested || fault.reads.Load() != 2 {
+					t.Fatalf("got %v after %d observation reads, want requested state after two bounded reads", err, fault.reads.Load())
+				}
+				if direction == "outgoing" {
+					for i, token := range []string{"grant-0", fmt.Sprintf("grant-%d", limit)} {
+						var row model.OcmShare
+						if err := m.db.Unscoped().Where("token = ?", token).Take(&row).Error; err != nil {
+							t.Fatal(err)
+						}
+						wantTime := cutoff.Add(time.Duration(i) * time.Millisecond)
+						if !row.DeletedAt.Valid || !row.DeletedAt.Time.Equal(wantTime) {
+							t.Fatalf("collated tuple %q deleted at %v, want %v", row.Inode, row.DeletedAt, wantTime)
+						}
+					}
+				}
+			})
+		})
+	}
 }
 
 func TestDirectedWithdrawalUnknownCommitObservesCapturedGrant(t *testing.T) {
@@ -357,8 +543,14 @@ func TestOutgoingOptionalBindingPreservesOrdinaryAdmission(t *testing.T) {
 	forEachDialectConfig(t, func(t *testing.T, cfg map[string]any) {
 		ctx := context.Background()
 		m := openOCMManager(t, cfg)
-		creator := &userpb.UserId{OpaqueId: "alice", Idp: strings.Repeat("d", 1020), Type: userpb.UserType_USER_TYPE_PRIMARY}
-		remote := &userpb.UserId{OpaqueId: "bob", Idp: "remote.example.org", Type: userpb.UserType_USER_TYPE_FEDERATED}
+		creator := &userpb.UserId{
+			OpaqueId: "alice", Idp: strings.Repeat("d", 1020),
+			TenantId: strings.Repeat("t", 1020), Type: userpb.UserType_USER_TYPE_PRIMARY,
+		}
+		const host = "remote.example.org"
+		remote := &userpb.UserId{
+			OpaqueId: strings.Repeat("𐍈", 255-1-len(host)), Idp: host, Type: userpb.UserType_USER_TYPE_FEDERATED,
+		}
 		store := func(c, r *userpb.UserId, token string) (*ocm.Share, error) {
 			g := &provider.Grantee{Type: provider.GranteeType_GRANTEE_TYPE_USER, Id: &provider.Grantee_UserId{UserId: r}}
 			s := getOcmShare(getOcmAccessMethods("viewer"), g, c, &provider.ResourceId{StorageId: "storage", OpaqueId: token}, token)
@@ -378,8 +570,16 @@ func TestOutgoingOptionalBindingPreservesOrdinaryAdmission(t *testing.T) {
 		if err != nil || got.GetCreator().GetOpaqueId() != creator.OpaqueId || got.GetGrantee().GetUserId().GetOpaqueId() != remote.OpaqueId {
 			t.Fatalf("identity did not round-trip: %v", err)
 		}
+		var bound model.OcmShare
+		if err := m.db.First(&bound, "id = ?", stored.Id.OpaqueId).Error; err != nil {
+			t.Fatal(err)
+		}
+		if string(bound.CreatorIdp) != creator.Idp || string(bound.CreatorTenant) != creator.TenantId ||
+			string(bound.RemoteRecipient) != remote.OpaqueId+"@"+host {
+			t.Fatal("upper-width binding changed")
+		}
 		for _, field := range []string{"idp", "tenant"} {
-			tooLong := &userpb.UserId{OpaqueId: creator.OpaqueId, Idp: creator.Idp, Type: creator.Type}
+			tooLong := &userpb.UserId{OpaqueId: creator.OpaqueId, Idp: creator.Idp, TenantId: creator.TenantId, Type: creator.Type}
 			if field == "idp" {
 				tooLong.Idp += "x"
 			} else {

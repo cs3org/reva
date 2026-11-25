@@ -14,6 +14,8 @@ import (
 	"context"
 	dbsql "database/sql"
 	"errors"
+	"slices"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -22,6 +24,8 @@ import (
 	ocm "github.com/cs3org/go-cs3apis/cs3/sharing/ocm/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/cs3org/reva/v3/pkg/share/manager/sql/model"
+	"github.com/go-sql-driver/mysql"
+	"github.com/mattn/go-sqlite3"
 	"gorm.io/gorm"
 )
 
@@ -73,7 +77,7 @@ func TestDirectedTransactionConcurrentSelectionAndRetry(t *testing.T) {
 					writer := openOCMManager(t, cfg)
 					alice := &userpb.UserId{OpaqueId: "concurrency-alice-" + direction + "-" + mode, Idp: "directory", Type: userpb.UserType_USER_TYPE_PRIMARY}
 					bob := &userpb.UserId{OpaqueId: "concurrency-bob", Idp: "remote.example.org", Type: userpb.UserType_USER_TYPE_FEDERATED}
-					store := func(manager *mgr, token string) (string, error) {
+					store := func(manager *mgr, token string, id *ocm.ShareId) (string, error) {
 						if direction == "incoming" {
 							s := grantShare(&userpb.User{Id: alice}, bob.Idp, token, file)
 							s.Creator = bob
@@ -86,15 +90,18 @@ func TestDirectedTransactionConcurrentSelectionAndRetry(t *testing.T) {
 						g := &provider.Grantee{Type: provider.GranteeType_GRANTEE_TYPE_USER, Id: &provider.Grantee_UserId{UserId: bob}}
 						s := getOcmShare(getOcmAccessMethods("viewer"), g, alice, &provider.ResourceId{StorageId: "storage", OpaqueId: token}, token)
 						s.RecipientType = ocm.RecipientType_RECIPIENT_TYPE_USER
-						id, err := manager.GenerateID(ctx)
-						if err != nil {
-							return "", err
+						if id == nil {
+							var err error
+							id, err = manager.GenerateID(ctx)
+							if err != nil {
+								return "", err
+							}
 						}
 						s.Id = id
-						_, err = manager.StoreShare(ctx, s, file)
+						_, err := manager.StoreShare(ctx, s, file)
 						return id.OpaqueId, err
 					}
-					original, err := store(m, direction+mode+"original")
+					original, err := store(m, direction+mode+"original", nil)
 					if err != nil {
 						t.Fatal(err)
 					}
@@ -103,7 +110,31 @@ func TestDirectedTransactionConcurrentSelectionAndRetry(t *testing.T) {
 						t.Fatal(err)
 					}
 					gate := &transactionGate{DB: db, mode: mode, reached: make(chan struct{}), release: make(chan struct{})}
+					release := sync.OnceFunc(func() { close(gate.release) })
+					defer release()
 					m.db.Statement.ConnPool = gate
+					var laterID *ocm.ShareId
+					sqlite := cfg["db_engine"] == "sqlite"
+					if mode == "commit" {
+						if direction == "outgoing" {
+							laterID, err = writer.GenerateID(ctx)
+							if err != nil {
+								t.Fatal(err)
+							}
+						}
+						pool, err := writer.db.DB()
+						if err != nil {
+							t.Fatal(err)
+						}
+						pool.SetMaxOpenConns(1)
+						setTimeout := "SET SESSION innodb_lock_wait_timeout = 1"
+						if sqlite {
+							setTimeout = "PRAGMA busy_timeout = 0"
+						}
+						if _, err := pool.ExecContext(ctx, setTimeout); err != nil {
+							t.Fatal(err)
+						}
+					}
 					var injected atomic.Bool
 					if mode == "retry" {
 						callback := func(tx *gorm.DB) {
@@ -147,70 +178,64 @@ func TestDirectedTransactionConcurrentSelectionAndRetry(t *testing.T) {
 					case <-ctx.Done():
 						t.Fatal("transaction did not reach barrier")
 					}
-					type stored struct {
-						id  string
-						err error
-					}
-					added := make(chan stored, 1)
-					started := make(chan struct{})
-					go func() { close(started); id, err := store(writer, direction+mode+"later"); added <- stored{id, err} }()
-					<-started
-					if mode == "retry" {
-						// The first attempt has really rolled back. Make the new
-						// grant durable before the fresh selection starts.
-						select {
-						case s := <-added:
-							added <- s
-							if s.err != nil {
-								close(gate.release)
-								t.Fatal(s.err)
+					token := direction + mode + "later"
+					if mode == "commit" {
+						// The action cannot commit until a real competing write
+						// has been refused by the database.
+						_, lockErr := store(writer, token, laterID)
+						var sqliteErr sqlite3.Error
+						var mysqlErr *mysql.MySQLError
+						if sqlite {
+							if !errors.As(lockErr, &sqliteErr) || sqliteErr.Code != sqlite3.ErrBusy {
+								t.Fatalf("competing store during SQLite transaction: %v, want SQLITE_BUSY", lockErr)
 							}
-						case <-ctx.Done():
-							close(gate.release)
-							t.Fatal("new grant did not commit after rollback")
+						} else if !errors.As(lockErr, &mysqlErr) || mysqlErr.Number != 1205 {
+							t.Fatalf("competing store during InnoDB transaction: %v, want lock wait timeout", lockErr)
 						}
+						t.Logf("competing %s store reported lock contention before commit", direction)
+						release()
 					}
-					close(gate.release)
+					var later string
+					var writerErr error
+					if mode == "retry" {
+						// The first attempt has rolled back. Commit the new
+						// grant before the action can select again.
+						later, writerErr = store(writer, token, nil)
+						release()
+					}
 					var action result
 					select {
 					case action = <-done:
 					case <-ctx.Done():
 						t.Fatal("action did not complete")
 					}
-					var later stored
-					select {
-					case later = <-added:
-					case <-ctx.Done():
-						t.Fatal("new grant did not complete")
+					if mode == "commit" {
+						later, writerErr = store(writer, token, laterID)
 					}
-					if action.err != nil || later.err != nil {
-						t.Fatalf("action: %v, writer: %v", action.err, later.err)
+					if action.err != nil || writerErr != nil {
+						t.Fatalf("action: %v, writer: %v", action.err, writerErr)
 					}
-					want := 1
+					want := []string{original}
 					if mode == "retry" {
-						want = 2
+						want = append(want, later)
 					}
-					if len(action.ids) != want {
-						t.Fatalf("receipts %v; wanted %d", action.ids, want)
-					}
-					has := func(id string) bool {
-						for _, x := range action.ids {
-							if x == id {
-								return true
-							}
-						}
-						return false
-					}
-					if !has(original) || has(later.id) != (mode == "retry") {
-						t.Fatalf("selection %v, original %s, later %s", action.ids, original, later.id)
+					if !slices.Equal(action.ids, want) {
+						t.Fatalf("receipts %v, want %v", action.ids, want)
 					}
 					if direction == "outgoing" {
-						var count int64
-						if err := writer.db.Model(&model.OcmShare{}).Where("id = ?", later.id).Count(&count).Error; err != nil || (count == 1) != (mode == "commit") {
-							t.Fatalf("later live rows %d: %v", count, err)
+						var current []model.OcmShare
+						if err := writer.db.Where("id IN ?", []string{original, later}).Find(&current).Error; err != nil {
+							t.Fatal(err)
+						}
+						if mode == "commit" && (len(current) != 1 || current[0].Token != token) ||
+							mode == "retry" && len(current) != 0 {
+							t.Fatalf("unexpected live grants after %s: %d", mode, len(current))
 						}
 					} else {
-						got, err := writer.GetReceivedShare(ctx, &userpb.User{Id: alice}, idRef(&ocm.ShareId{OpaqueId: later.id}))
+						if first := receivedRow(t, writer, original); first.State != model.OcmShareStateRejected || !first.Hidden {
+							t.Fatal("original incoming grant was not declined")
+						}
+						got, err := writer.GetReceivedShare(ctx, &userpb.User{Id: alice}, idRef(&ocm.ShareId{OpaqueId: later}))
 						if err != nil {
 							t.Fatal(err)
 						}

@@ -19,6 +19,7 @@
 package sql
 
 import (
+	"cmp"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -228,6 +229,9 @@ func forUpdate(tx *gorm.DB) *gorm.DB {
 	return tx
 }
 
+// Outgoing writers read rows in database tuple order to preserve collated equality.
+const outgoingShareOrder = "instance, inode, share_with, id"
+
 func lockOutgoingShares(tx *gorm.DB, user *userpb.User, ref *ocm.ShareReference) ([]model.OcmShare, error) {
 	q := forUpdate(tx)
 	key := ref.GetKey()
@@ -247,7 +251,7 @@ func lockOutgoingShares(tx *gorm.DB, user *userpb.User, ref *ocm.ShareReference)
 		return nil, errtypes.NotFound(ref.String())
 	}
 	var matches []model.OcmShare
-	if err := q.Order("id").Find(&matches).Error; err != nil {
+	if err := q.Order(outgoingShareOrder).Find(&matches).Error; err != nil {
 		return nil, err
 	}
 	// MySQL text collation can equate distinct opaque identifiers.
@@ -276,6 +280,7 @@ func (m *mgr) DeleteShare(ctx context.Context, user *userpb.User, ref *ocm.Share
 		if err != nil {
 			return err
 		}
+		// Exact key matches share the same tuple, so their receipt order is by ID.
 		removals = make([]share.ShareRemoval, len(matches))
 		for i := range matches {
 			row := &matches[i]
@@ -301,24 +306,8 @@ func (m *mgr) DeleteShare(ctx context.Context, user *userpb.User, ref *ocm.Share
 	return removals, nil
 }
 
-// deleteLockedOCMShares soft-deletes only the rows its caller locked and authorized.
+// deleteLockedOCMShares expects authorized rows already locked in outgoingShareOrder.
 func deleteLockedOCMShares(tx *gorm.DB, rows []model.OcmShare, changedErr error) error {
-	if len(rows) > 1 {
-		ids := make([]uint, 0, len(rows))
-		for _, row := range rows {
-			ids = append(ids, row.Id)
-		}
-		// Database ordering keeps collated variants in the same tuple order.
-		var ordered []model.OcmShare
-		if err := forUpdate(tx).Select("id", "instance", "inode", "share_with").
-			Where("id IN ?", ids).Order("instance, inode, share_with, id").Find(&ordered).Error; err != nil {
-			return err
-		}
-		if len(ordered) != len(rows) {
-			return changedErr
-		}
-		rows = ordered
-	}
 	cutoff := tx.NowFunc().UTC().Truncate(time.Millisecond)
 	for _, row := range rows {
 		// The soft-delete timestamp participates in the unique key. Use its
@@ -1102,7 +1091,7 @@ func (m *mgr) UpdateShare(ctx context.Context, user *userpb.User, ref *ocm.Share
 		if err != nil {
 			return err
 		}
-		before := matches[0]
+		before := slices.MinFunc(matches, func(a, b model.OcmShare) int { return cmp.Compare(a.Id, b.Id) })
 		id := &ocm.ShareId{OpaqueId: strconv.FormatUint(uint64(before.Id), 10)}
 		updates, accessMethodUpdates, err := m.queriesUpdatesOnShare(ctx, id, f...)
 		if err != nil {

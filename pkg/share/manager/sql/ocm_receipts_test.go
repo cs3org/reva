@@ -36,6 +36,8 @@ import (
 	"github.com/cs3org/reva/v3/pkg/ocm/share"
 	"github.com/cs3org/reva/v3/pkg/permissions"
 	model "github.com/cs3org/reva/v3/pkg/share/manager/sql/model"
+	"github.com/go-sql-driver/mysql"
+	"github.com/mattn/go-sqlite3"
 	"google.golang.org/genproto/protobuf/field_mask"
 	"google.golang.org/protobuf/proto"
 	"gorm.io/gorm"
@@ -159,8 +161,12 @@ func TestDeleteShareByIDExactPrincipal(t *testing.T) {
 }
 
 func TestDeleteShareByKeyReceipt(t *testing.T) {
-	forEachDialect(t, func(t *testing.T, m *mgr) {
-		ctx, owner := ownerContext(t, "einstein")
+	forEachDialectConfig(t, func(t *testing.T, cfg map[string]any) {
+		m := openOCMManager(t, cfg)
+		writer := openOCMManager(t, cfg)
+		userCtx, owner := ownerContext(t, "einstein")
+		ctx, cancel := context.WithTimeout(userCtx, 10*time.Second)
+		defer cancel()
 		now := time.Now().UTC().Truncate(time.Millisecond)
 		m.db = m.db.Session(&gorm.Session{NowFunc: func() time.Time { return now }})
 		deleted := storeOutgoing(t, m, ctx, owner, "viewer", "tok-deleted")
@@ -168,12 +174,23 @@ func TestDeleteShareByKeyReceipt(t *testing.T) {
 			t.Fatal(err)
 		}
 		stored := storeOutgoing(t, m, ctx, owner, "viewer", "tok-k")
-		duplicate := storeOutgoing(t, m, ctx, owner, "editor", "tok-duplicate")
+		duplicate := storeOutgoing(t, m, ctx, owner, "viewer", "tok-duplicate")
 		otherCtx, otherOwner := ownerContext(t, "another-owner")
 		survivor := storeOutgoing(t, m, otherCtx, otherOwner, "viewer", "tok-survivor")
 		ref := &ocm.ShareReference{Spec: &ocm.ShareReference_Key{Key: &ocm.ShareKey{
 			Owner: owner.Id, ResourceId: stored.ResourceId, Grantee: stored.Grantee,
 		}}}
+
+		editor := share.NewWebDavAccessMethod(permissions.NewEditorRole().CS3ResourcePermissions(), nil, nil)
+		field := &ocm.UpdateOCMShareRequest_UpdateField{Field: &ocm.UpdateOCMShareRequest_UpdateField_AccessMethods{AccessMethods: editor}}
+		update, err := m.UpdateShare(ctx, owner, ref, field)
+		if err != nil || update == nil || update.After.GetId().GetOpaqueId() != stored.Id.OpaqueId || !update.WebDAVPermissionsChanged {
+			t.Fatalf("update did not change the lowest-ID live share: %v %v", update, err)
+		}
+		got, err := m.GetShare(ctx, owner, idRef(duplicate.Id))
+		if err != nil || !proto.Equal(webdavPermissions(got.GetAccessMethods()), webdavPermissions(duplicate.GetAccessMethods())) {
+			t.Fatalf("update also changed the duplicate: %v", err)
+		}
 
 		const callback = "test:abort_second_ocm_delete"
 		abort := errors.New("abort after deleting both rows")
@@ -200,7 +217,52 @@ func TestDeleteShareByKeyReceipt(t *testing.T) {
 				t.Fatalf("rollback changed share %s: %v", want.GetId().GetOpaqueId(), err)
 			}
 		}
-		removals, err := m.DeleteShare(ctx, owner, ref)
+		deletePool, err := m.db.DB()
+		if err != nil {
+			t.Fatal(err)
+		}
+		gate := &transactionGate{DB: deletePool, mode: "commit", reached: make(chan struct{}), release: make(chan struct{})}
+		m.db.Statement.ConnPool = gate
+		writerPool, err := writer.db.DB()
+		if err != nil {
+			t.Fatal(err)
+		}
+		writerPool.SetMaxOpenConns(1)
+		sqlite := cfg["db_engine"] == "sqlite"
+		setTimeout := "SET SESSION innodb_lock_wait_timeout = 1"
+		if sqlite {
+			setTimeout = "PRAGMA busy_timeout = 0"
+		}
+		if _, err := writerPool.ExecContext(ctx, setTimeout); err != nil {
+			t.Fatal(err)
+		}
+		var removals []share.ShareRemoval
+		var deleteErr error
+		done := make(chan struct{})
+		release := sync.OnceFunc(func() { close(gate.release) })
+		go func() {
+			defer close(done)
+			removals, deleteErr = m.DeleteShare(ctx, owner, ref)
+		}()
+		defer func() { release(); <-done }()
+		select {
+		case <-gate.reached:
+		case <-done:
+			t.Fatalf("delete exited before commit: %v", deleteErr)
+		case <-ctx.Done():
+			t.Fatal("delete did not reach commit")
+		}
+		up, lockErr := writer.UpdateShare(ctx, owner, ref, field)
+		var sqliteErr sqlite3.Error
+		var mysqlErr *mysql.MySQLError
+		if up != nil || (sqlite && (!errors.As(lockErr, &sqliteErr) || sqliteErr.Code != sqlite3.ErrBusy)) ||
+			(!sqlite && (!errors.As(lockErr, &mysqlErr) || mysqlErr.Number != 1205)) {
+			t.Fatalf("competing update: %v, %v", up, lockErr)
+		}
+		t.Log("ordinary update encountered database contention during ordinary delete")
+		release()
+		<-done
+		err = deleteErr
 		if err != nil || len(removals) != 2 {
 			t.Fatalf("got %d receipts: %v", len(removals), err)
 		}
@@ -213,6 +275,9 @@ func TestDeleteShareByKeyReceipt(t *testing.T) {
 			if _, err := m.GetShare(ctx, owner, idRef(want.Id)); !errors.Is(err, share.ErrShareNotFound) {
 				t.Errorf("share %s remains available: %v", want.Id.OpaqueId, err)
 			}
+		}
+		if updated, err := writer.UpdateShare(ctx, owner, ref, field); updated != nil || !errors.Is(err, share.ErrShareNotFound) {
+			t.Fatalf("update after delete: %v %v", updated, err)
 		}
 		if removals, err := m.DeleteShare(ctx, owner, ref); !errors.Is(err, share.ErrShareNotFound) || removals != nil {
 			t.Errorf("repeat returned %d receipts: %v", len(removals), err)
