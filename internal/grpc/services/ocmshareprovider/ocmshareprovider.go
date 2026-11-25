@@ -83,6 +83,8 @@ type config struct {
 	Webapps         []webapp                  `docs:";Web applications offered on outbound OCM shares, each with a name and the media types it opens. The webapp protocol is offered only if this list is not empty." mapstructure:"webapps"`
 	WebAppEndpoint  string                    `docs:";Absolute URL of the webapp opener. Required when webapps is not empty." mapstructure:"webapp_endpoint" validate:"required_with=Webapps"`
 	SigningKey      string                    `docs:";Path to the PEM file of the Ed25519 private key that signs the shares that this server sends. Use the key of the wellknown ocmprovider." mapstructure:"signing_key" validate:"required"`
+
+	DisableDataTxAcceptance bool `docs:"false;Refuse acceptance of received shares that require a DATATX job." mapstructure:"disable_datatx_acceptance"`
 }
 
 type webapp struct {
@@ -649,6 +651,11 @@ func (s *service) UpdateReceivedOCMShare(ctx context.Context, req *ocm.UpdateRec
 		}
 		if slices.ContainsFunc(current.GetProtocols(), func(p *ocm.Protocol) bool { return p.GetEmbeddedOptions() != nil }) {
 			return s.processEmbeddedShare(ctx, user, req)
+		}
+		if s.conf.DisableDataTxAcceptance && share.DataTransferProtocol(current) != nil {
+			return &ocm.UpdateReceivedOCMShareResponse{
+				Status: status.NewUnimplemented(ctx, nil, "DATATX share acceptance is disabled"),
+			}, nil
 		}
 	}
 	update, err := s.repo.UpdateReceivedShare(ctx, user, req.Share, req.UpdateMask)

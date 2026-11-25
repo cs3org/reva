@@ -259,6 +259,8 @@ func TestMountedEmbeddedShareProcessing(t *testing.T) {
 	})
 
 	t.Run("mixed grant and refused repeat", func(t *testing.T) {
+		e.svc.conf.DisableDataTxAcceptance = true
+		t.Cleanup(func() { e.svc.conf.DisableDataTxAcceptance = false })
 		rs := e.received(t, "mixed", true, ocm.AccessType_ACCESS_TYPE_DATATX)
 		if code := process(rs.Id, "/dest"); code != http.StatusAccepted {
 			t.Fatalf("HTTP %d, want 202 for scheduling", code)
@@ -279,6 +281,45 @@ func TestMountedEmbeddedShareProcessing(t *testing.T) {
 			t.Fatal("repeat started another transfer")
 		}
 		requireNotices(t, e.peer, ocmd.NotificationShareAccepted)
+	})
+
+	t.Run("DATATX disabled", func(t *testing.T) {
+		e.svc.conf.DisableDataTxAcceptance = true
+		t.Cleanup(func() { e.svc.conf.DisableDataTxAcceptance = false })
+		t.Run("direct", func(t *testing.T) {
+			rs := e.received(t, "datatx-disabled-direct", false, ocm.AccessType_ACCESS_TYPE_DATATX)
+			res, err := e.svc.UpdateReceivedOCMShare(e.recip, &ocm.UpdateReceivedOCMShareRequest{
+				Share:      &ocm.ReceivedShare{Id: rs.Id, State: ocm.ShareState_SHARE_STATE_ACCEPTED, Hidden: true},
+				UpdateMask: &field_mask.FieldMask{Paths: []string{"state", "hidden"}},
+			})
+			if err != nil || res.GetStatus().GetCode() != rpc.Code_CODE_UNIMPLEMENTED {
+				t.Errorf("status %v, error %v, want UNIMPLEMENTED", res.GetStatus(), err)
+			}
+			current, err := e.repo.GetReceivedShare(e.recip, appctx.ContextMustGetUser(e.recip), &ocm.ShareReference{Spec: &ocm.ShareReference_Id{Id: rs.Id}})
+			if err != nil {
+				t.Fatal(err)
+			}
+			if current.GetState() != ocm.ShareState_SHARE_STATE_PENDING || current.GetHidden() {
+				t.Fatalf("refusal changed state or hidden flag: %s, hidden=%t", current.GetState(), current.GetHidden())
+			}
+		})
+		t.Run("mounted", func(t *testing.T) {
+			rs := e.received(t, "datatx-disabled-mounted", false, ocm.AccessType_ACCESS_TYPE_DATATX)
+			starts := peers.datatxCalls
+			notices := len(e.svc.notifier.(*syncNotifier).results)
+			peers.datatxResponse = &datatx.CreateTransferResponse{
+				Status: &rpc.Status{Code: rpc.Code_CODE_OK},
+				TxInfo: &datatx.TxInfo{Id: &datatx.TxId{OpaqueId: "unexpected-transfer"}},
+			}
+			t.Cleanup(func() { peers.datatxResponse = nil })
+			if code := process(rs.Id, "/dest"); code != http.StatusNotImplemented {
+				t.Errorf("HTTP %d, want 501", code)
+			}
+			if peers.datatxCalls != starts || len(e.svc.notifier.(*syncNotifier).results) != notices {
+				t.Error("refused DATATX share reached scheduling or notification")
+			}
+			requireState(t, rs.Id, ocm.ShareState_SHARE_STATE_PENDING)
+		})
 	})
 
 	for _, tc := range []struct {

@@ -34,6 +34,7 @@ import (
 	datatx "github.com/cs3org/go-cs3apis/cs3/tx/v1beta1"
 
 	"github.com/cs3org/reva/v3/pkg/appctx"
+	ocmshare "github.com/cs3org/reva/v3/pkg/ocm/share"
 	"github.com/cs3org/reva/v3/pkg/service"
 	"github.com/cs3org/reva/v3/pkg/utils/resourceid"
 
@@ -365,8 +366,8 @@ func (s *svc) UpdateReceivedOCMShare(ctx context.Context, req *ocm.UpdateReceive
 func (s *svc) handleTransfer(ctx context.Context, share *ocm.ReceivedShare, transferDestinationPath string) error {
 	log := appctx.GetLogger(ctx)
 
-	protocol, ok := s.getTransferProtocol(share)
-	if !ok {
+	protocol := ocmshare.DataTransferProtocol(share)
+	if protocol == nil {
 		return errors.New("gateway: unable to retrieve transfer protocol")
 	}
 	sourceURI := protocol.Uri
@@ -439,8 +440,7 @@ func (s *svc) isTransferShare(share *ocm.ReceivedShare) bool {
 	if slices.ContainsFunc(share.GetProtocols(), func(p *ocm.Protocol) bool { return p.GetEmbeddedOptions() != nil }) {
 		return false
 	}
-	_, ok := s.getTransferProtocol(share)
-	return ok
+	return ocmshare.DataTransferProtocol(share) != nil
 }
 
 func (s *svc) getTransferDestinationPath(ctx context.Context, req *ocm.UpdateReceivedOCMShareRequest) (string, error) {
@@ -479,15 +479,4 @@ func (s *svc) GetReceivedOCMShare(ctx context.Context, req *ocm.GetReceivedOCMSh
 	}
 
 	return res, nil
-}
-
-func (s *svc) getTransferProtocol(share *ocm.ReceivedShare) (*ocm.WebDAVProtocol, bool) {
-	for _, p := range share.Protocols {
-		if d, ok := p.Term.(*ocm.Protocol_WebdavOptions); ok {
-			if slices.Contains(d.WebdavOptions.AccessTypes, ocm.AccessType_ACCESS_TYPE_DATATX) {
-				return d.WebdavOptions, true
-			}
-		}
-	}
-	return nil, false
 }
