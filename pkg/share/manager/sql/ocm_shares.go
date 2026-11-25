@@ -34,6 +34,7 @@ import (
 	typesv1beta1 "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
 	"github.com/cs3org/reva/v3/pkg/appctx"
 	"github.com/cs3org/reva/v3/pkg/errtypes"
+	"github.com/cs3org/reva/v3/pkg/ocm/providerdomain"
 	"github.com/cs3org/reva/v3/pkg/ocm/share"
 	model "github.com/cs3org/reva/v3/pkg/share/manager/sql/model"
 	"github.com/cs3org/reva/v3/pkg/utils/cfg"
@@ -106,8 +107,10 @@ func (m *mgr) StoreShare(ctx context.Context, s *ocm.Share, resourceType ocm.Sha
 		return nil, errtypes.BadRequest("invalid share ID")
 	}
 	id := uint(parsed)
+	creator := s.GetCreator()
+	grantee := s.GetGrantee().GetUserId()
+	host, hostErr := providerdomain.CanonicalOCMHost(grantee.GetIdp())
 	err = m.db.Transaction(func(tx *gorm.DB) error {
-
 		share := &model.OcmShare{
 			Token:         s.Token,
 			Instance:      s.ResourceId.StorageId,
@@ -119,6 +122,15 @@ func (m *mgr) StoreShare(ctx context.Context, s *ocm.Share, resourceType ocm.Sha
 			Ctime:         s.Ctime.Seconds,
 			Mtime:         s.Mtime.Seconds,
 			RecipientType: convertFromCS3OCMShareType(s.RecipientType),
+		}
+		// Optional directed metadata must fit as a complete binding.
+		if creator.GetIdp() != "" && len(creator.GetIdp()) <= 1020 && len(creator.GetTenantId()) <= 1020 &&
+			creator.GetType() != userpb.UserType_USER_TYPE_INVALID && hostErr == nil && grantee.GetOpaqueId() != "" &&
+			len(grantee.GetOpaqueId())+len(host)+1 <= 1025 {
+			share.CreatorIdp = []byte(creator.GetIdp())
+			share.CreatorUserType = int32(creator.GetType())
+			share.CreatorTenant = []byte(creator.GetTenantId())
+			share.RemoteRecipient = []byte(grantee.GetOpaqueId() + "@" + host)
 		}
 		if s.Expiration != nil {
 			share.Expiration = datatypes.NullTime{
@@ -281,36 +293,56 @@ func (m *mgr) DeleteShare(ctx context.Context, user *userpb.User, ref *ocm.Share
 			}
 		}
 
-		// The soft-delete timestamp participates in the unique key. Matching
-		// grants need distinct timestamps at MySQL's millisecond precision.
-		first := matches[0]
-		var latest model.OcmShare
-		if err := forUpdate(tx.Unscoped()).Select("deleted_at").
-			Where("instance = ? AND inode = ? AND share_with = ? AND deleted_at IS NOT NULL", first.Instance, first.Inode, first.ShareWith).
-			Order("deleted_at DESC").Limit(1).Find(&latest).Error; err != nil {
-			return err
-		}
-		deletedAt := tx.NowFunc().UTC().Truncate(time.Millisecond)
-		if latest.DeletedAt.Valid && !deletedAt.After(latest.DeletedAt.Time) {
-			deletedAt = latest.DeletedAt.Time.UTC().Truncate(time.Millisecond).Add(time.Millisecond)
-		}
-		for _, row := range matches {
-			del := tx.Session(&gorm.Session{NowFunc: func() time.Time { return deletedAt }})
-			result := del.Where("id = ?", row.Id).Delete(&model.OcmShare{})
-			if result.Error != nil {
-				return result.Error
-			}
-			if result.RowsAffected != 1 {
-				return share.ErrShareNotFound
-			}
-			deletedAt = deletedAt.Add(time.Millisecond)
-		}
-		return nil
+		return deleteLockedOCMShares(tx, matches, share.ErrShareNotFound)
 	})
 	if err != nil {
 		return nil, err
 	}
 	return removals, nil
+}
+
+// deleteLockedOCMShares soft-deletes only the rows its caller locked and authorized.
+func deleteLockedOCMShares(tx *gorm.DB, rows []model.OcmShare, changedErr error) error {
+	if len(rows) > 1 {
+		ids := make([]uint, 0, len(rows))
+		for _, row := range rows {
+			ids = append(ids, row.Id)
+		}
+		// Database ordering keeps collated variants in the same tuple order.
+		var ordered []model.OcmShare
+		if err := forUpdate(tx).Select("id", "instance", "inode", "share_with").
+			Where("id IN ?", ids).Order("instance, inode, share_with, id").Find(&ordered).Error; err != nil {
+			return err
+		}
+		if len(ordered) != len(rows) {
+			return changedErr
+		}
+		rows = ordered
+	}
+	cutoff := tx.NowFunc().UTC().Truncate(time.Millisecond)
+	for _, row := range rows {
+		// The soft-delete timestamp participates in the unique key. Use its
+		// database equality and millisecond precision to avoid collisions.
+		var latest model.OcmShare
+		if err := forUpdate(tx.Unscoped()).Select("deleted_at").
+			Where("instance = ? AND inode = ? AND share_with = ? AND deleted_at IS NOT NULL", row.Instance, row.Inode, row.ShareWith).
+			Order("deleted_at DESC").Limit(1).Find(&latest).Error; err != nil {
+			return err
+		}
+		deletedAt := cutoff
+		if latest.DeletedAt.Valid && !deletedAt.After(latest.DeletedAt.Time) {
+			deletedAt = latest.DeletedAt.Time.UTC().Truncate(time.Millisecond).Add(time.Millisecond)
+		}
+		del := tx.Session(&gorm.Session{NowFunc: func() time.Time { return deletedAt }})
+		result := del.Where("id = ?", row.Id).Delete(&model.OcmShare{})
+		if result.Error != nil {
+			return result.Error
+		}
+		if result.RowsAffected != 1 {
+			return changedErr
+		}
+	}
+	return nil
 }
 
 func accessMethodsTx(tx *gorm.DB, shareID uint) ([]*ocm.AccessMethod, error) {
@@ -663,6 +695,9 @@ func (m *mgr) GetReceivedShare(ctx context.Context, user *userpb.User, ref *ocm.
 // with a grant key binds IdP and tenant, and a blank IdP also binds user type.
 // Older rows only have the opaque ID.
 func receivedBy(row *model.OcmReceivedShare, id *userpb.UserId) bool {
+	if row.RecipientUserType != 0 && row.RecipientUserType != int32(id.GetType()) {
+		return false
+	}
 	if id.GetOpaqueId() == "" || row.ShareWith != id.GetOpaqueId() {
 		return false
 	}
@@ -738,16 +773,7 @@ func (m *mgr) UpdateReceivedShare(ctx context.Context, user *userpb.User, s *ocm
 		if err != nil {
 			return err
 		}
-		// A fresh copy per attempt, so a retry never reuses a stale value.
-		attempt := maps.Clone(updates)
-		if state, ok := attempt["state"]; ok && state != row.State {
-			gen, err := nextTransferGeneration(row.TransferGeneration)
-			if err != nil {
-				return err
-			}
-			attempt["transfer_generation"] = gen
-		}
-		if err := tx.Model(&model.OcmReceivedShare{}).Where("id = ?", row.ID).Updates(attempt).Error; err != nil {
+		if err := updateReceivedFields(tx, row, updates); err != nil {
 			return err
 		}
 		expected, err := readReceivedProjection(tx, row.ID)
@@ -766,6 +792,19 @@ func (m *mgr) UpdateReceivedShare(ctx context.Context, user *userpb.User, s *ocm
 		return nil, err
 	}
 	return &receipt, nil
+}
+
+func updateReceivedFields(tx *gorm.DB, row *model.OcmReceivedShare, updates map[string]any) error {
+	// A fresh copy per attempt, so a retry never reuses a stale value.
+	attempt := maps.Clone(updates)
+	if state, ok := attempt["state"]; ok && state != row.State {
+		gen, err := nextTransferGeneration(row.TransferGeneration)
+		if err != nil {
+			return err
+		}
+		attempt["transfer_generation"] = gen
+	}
+	return tx.Model(&model.OcmReceivedShare{}).Where("id = ?", row.ID).Updates(attempt).Error
 }
 
 // receivedCheck observes one received share against the projections an

@@ -49,7 +49,7 @@ func grantShare(to *userpb.User, origin, remoteID string, rt ocm.SharedResourceT
 		Name:          "doc",
 		RemoteShareId: remoteID,
 		Grantee: &provider.Grantee{Type: provider.GranteeType_GRANTEE_TYPE_USER, Id: &provider.Grantee_UserId{
-			UserId: &userpb.UserId{OpaqueId: to.Id.OpaqueId, Idp: to.Id.Idp, TenantId: to.Id.TenantId},
+			UserId: &userpb.UserId{OpaqueId: to.Id.OpaqueId, Idp: to.Id.Idp, TenantId: to.Id.TenantId, Type: to.Id.Type},
 		}},
 		// The owner is a different, service-account identity on purpose: it
 		// must never be used as the origin.
