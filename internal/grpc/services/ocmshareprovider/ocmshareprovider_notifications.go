@@ -110,13 +110,12 @@ func projectWebDAVPermissions(snapshot *provider.ResourcePermissions) []string {
 	return names
 }
 
-// changedWebDAVPermissionNames projects the committed snapshot. Checking the
-// last requested WebDAV value first prevents the storage codec from turning
-// an unsupported shape into a permission-changing notice.
 func changedWebDAVPermissionNames(sh *ocm.Share, fields []*ocm.UpdateOCMShareRequest_UpdateField) []string {
+	var requested []string
 	for _, field := range slices.Backward(fields) {
 		if options := field.GetAccessMethods().GetWebdavOptions(); options != nil {
-			if projectWebDAVPermissions(options.GetPermissions()) == nil {
+			requested = projectWebDAVPermissions(options.GetPermissions())
+			if requested == nil {
 				return nil
 			}
 			break
@@ -124,7 +123,12 @@ func changedWebDAVPermissionNames(sh *ocm.Share, fields []*ocm.UpdateOCMShareReq
 	}
 	for _, method := range sh.GetAccessMethods() {
 		if snapshot := method.GetWebdavOptions().GetPermissions(); snapshot != nil {
-			return projectWebDAVPermissions(snapshot)
+			committed := projectWebDAVPermissions(snapshot)
+			// Legacy storage can broaden a granular update to a full role.
+			if requested != nil && !slices.Equal(requested, committed) {
+				return nil
+			}
+			return committed
 		}
 	}
 	return nil

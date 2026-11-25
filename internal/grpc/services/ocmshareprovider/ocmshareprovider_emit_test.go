@@ -549,6 +549,32 @@ func TestUpdateOCMShareEmitsOnlyPermissionChanges(t *testing.T) {
 	}
 }
 
+func TestPermissionNoticeOmitsNormalizedWebDAVRights(t *testing.T) {
+	e := newEmitEnv(t)
+	sh := e.outgoingOfType(t, ocm.SharedResourceType_SHARE_RESOURCE_TYPE_CONTAINER)
+	ref := &ocm.ShareReference{Spec: &ocm.ShareReference_Id{Id: sh.Id}}
+	requested, err := share.ParseWebDAVPermissions([]string{"read", "create", "update"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	res, err := e.svc.UpdateOCMShare(e.owner, &ocm.UpdateOCMShareRequest{Ref: ref, Field: []*ocm.UpdateOCMShareRequest_UpdateField{{
+		Field: &ocm.UpdateOCMShareRequest_UpdateField_AccessMethods{
+			AccessMethods: share.NewWebDavAccessMethod(requested.GetPermissions(), nil, nil),
+		},
+	}}})
+	if err != nil || res.GetStatus().GetCode() != rpc.Code_CODE_OK {
+		t.Fatalf("update: %v %v", res, err)
+	}
+	stored, err := e.repo.GetShare(e.owner, appctx.ContextMustGetUser(e.owner), ref)
+	if err != nil || !stored.GetAccessMethods()[0].GetWebdavOptions().GetPermissions().GetDelete() {
+		t.Fatalf("expected the legacy SQL editor projection: %v %v", stored, err)
+	}
+	notices := requireNotices(t, e.peer, ocmd.NotificationShareChangePermission)
+	if value, present := fileOf(notices[0])["permissions"]; present {
+		t.Fatalf("notice declared permissions broadened by storage: %v", value)
+	}
+}
+
 func TestReceivedStateTransitionsEmitOnce(t *testing.T) {
 	e := newEmitEnv(t)
 	rs := e.received(t, "remote-42", false)
