@@ -124,6 +124,11 @@ func New(m map[string]any) (global.Middleware, error) {
 	conf.GatewaySvc = sharedconf.GetGatewaySVC(conf.GatewaySvc)
 	conf.applyDefaults()
 
+	// revad calls New once for each HTTP server. Close the cache of the
+	// previous call, because each cache runs a goroutine.
+	if userGroupsCache != nil {
+		_ = userGroupsCache.Close()
+	}
 	userGroupsCache = ttlcache.NewCache()
 	// Without this, the groups of an active user are never fetched again.
 	userGroupsCache.SkipTTLExtensionOnHit(true)
