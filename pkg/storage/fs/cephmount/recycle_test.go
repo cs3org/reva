@@ -311,10 +311,28 @@ func TestListRecycleRefusals(t *testing.T) {
 		assert.IsType(t, errtypes.BadRequest(""), err, key)
 	}
 
-	require.NoError(t, os.Chmod(space, 0555))
+	require.NoError(t, os.Chmod(space, 0333))
 	t.Cleanup(func() { _ = os.Chmod(space, 0755) })
 	_, err = fs.ListRecycle(ctx, "/proj", "", "", nil, nil)
-	assert.IsType(t, errtypes.PermissionDenied(""), err, "no write access to the space")
+	assert.IsType(t, errtypes.PermissionDenied(""), err, "no read access to the space")
+}
+
+func TestRecycleReaderCanListButNotRestore(t *testing.T) {
+	fs, ctx, day := newRecycleTestFS(t, 1)
+	space := filepath.Join(fs.chrootDir, "proj")
+	writeTestFile(t, filepath.Join(space, "x.txt"), "deleted")
+	require.NoError(t, fs.Delete(ctx, &provider.Reference{Path: "/proj/x.txt"}))
+	require.NoError(t, os.Chmod(space, 0o555))
+	t.Cleanup(func() { _ = os.Chmod(space, 0o755) })
+
+	items, err := fs.ListRecycle(ctx, "/proj", "", "", nil, nil)
+	require.NoError(t, err)
+	assert.Len(t, items, 1)
+
+	today := time.Now().UTC().Format(recycleKeyDay)
+	err = fs.RestoreRecycleItem(ctx, "/proj", today, "/x.txt", nil, false)
+	assert.IsType(t, errtypes.PermissionDenied(""), err)
+	assert.Equal(t, "deleted", readTestFile(t, filepath.Join(day, "x.txt")), "the item stays in the bin")
 }
 
 func TestListRecycleRootAsTheStorageProviderGivesIt(t *testing.T) {

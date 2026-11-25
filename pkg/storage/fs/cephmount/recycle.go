@@ -182,7 +182,7 @@ func (fs *cephmountfs) mergeIntoRecycle(ctx context.Context, src, target string)
 func (fs *cephmountfs) ListRecycle(ctx context.Context, basePath, key, relativePath string, from, to *typepb.Timestamp) ([]*provider.RecycleItem, error) {
 	fs.logOperation(ctx, "ListRecycle", path.Join(basePath, key, relativePath))
 
-	spaceRoot, bin, err := fs.spaceRecycle(ctx, basePath)
+	spaceRoot, bin, err := fs.spaceRecycle(ctx, basePath, unix.R_OK|unix.X_OK)
 	if err != nil {
 		return nil, err
 	}
@@ -273,8 +273,9 @@ func (fs *cephmountfs) ListRecycle(ctx context.Context, basePath, key, relativeP
 }
 
 // spaceRecycle returns the space root at basePath and its recycle bin. Reva uses
-// the bin as root, thus the user must be able to write to the space.
-func (fs *cephmountfs) spaceRecycle(ctx context.Context, basePath string) (spaceRoot, bin string, err error) {
+// the bin as root, thus the user must have the access of mode to the space: read
+// to list the bin, as on EOS, and write to restore from it.
+func (fs *cephmountfs) spaceRecycle(ctx context.Context, basePath string, mode uint32) (spaceRoot, bin string, err error) {
 	if _, ok := externalUser(ctx); ok {
 		return "", "", errtypes.PermissionDenied("cephmount: external accounts cannot use the recycle bin")
 	}
@@ -288,14 +289,14 @@ func (fs *cephmountfs) spaceRecycle(ctx context.Context, basePath string) (space
 		return "", "", errtypes.BadRequest("cephmount: " + basePath + " is not a space root")
 	}
 
-	writable, err := fs.executeAsUser(ctx, func() (any, error) {
-		return canAccess(filepath.Join(fs.chrootDir, spaceRoot), unix.W_OK|unix.X_OK), nil
+	allowed, err := fs.executeAsUser(ctx, func() (any, error) {
+		return canAccess(filepath.Join(fs.chrootDir, spaceRoot), mode), nil
 	})
 	if err != nil {
 		return "", "", err
 	}
-	if !writable.(bool) {
-		return "", "", errtypes.PermissionDenied("cephmount: no write access to " + basePath)
+	if !allowed.(bool) {
+		return "", "", errtypes.PermissionDenied("cephmount: not enough access to the recycle bin of " + basePath)
 	}
 	return spaceRoot, filepath.Join(recycleDir, spaceRoot), nil
 }
@@ -369,7 +370,7 @@ func withoutSuffix(name string, info os.FileInfo) string {
 func (fs *cephmountfs) RestoreRecycleItem(ctx context.Context, basePath, key, relativePath string, restoreRef *provider.Reference, force bool) error {
 	fs.logOperation(ctx, "RestoreRecycleItem", path.Join(basePath, key, relativePath))
 
-	spaceRoot, bin, err := fs.spaceRecycle(ctx, basePath)
+	spaceRoot, bin, err := fs.spaceRecycle(ctx, basePath, unix.W_OK|unix.X_OK)
 	if err != nil {
 		return err
 	}
