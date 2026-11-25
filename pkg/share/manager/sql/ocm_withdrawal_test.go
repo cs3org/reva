@@ -117,7 +117,7 @@ func TestActiveGrantDeletionRemovesRowsAndProtocols(t *testing.T) {
 		duplicateReq := grantShare(recipient("bob"), "PEER.example:8443", "ExactID", file)
 		duplicateReq.Expiration = &typesv1beta1.Timestamp{Seconds: uint64(time.Now().Add(time.Hour).Unix())}
 		duplicate := mustStore(t, m, duplicateReq)
-		expiredReq := grantShare(recipient("expired"), "peer.example:8443", "ExactID", file)
+		expiredReq := grantShare(recipient("expired"), "peer.example:8443", "ExactID", ocm.SharedResourceType_SHARE_RESOURCE_TYPE_CONTAINER)
 		expiredReq.Expiration = &typesv1beta1.Timestamp{Seconds: uint64(time.Now().Add(-time.Hour).Unix())}
 		expired := mustStore(t, m, expiredReq)
 		neighbors := []*ocm.ReceivedShare{

@@ -243,7 +243,7 @@ func grantOrigin(creator string) (string, bool) {
 
 // lockReceivedGrant locks the same projection rows as the local lifecycle
 // writers. Recheck the exact stored identity independently of SQL collation.
-func lockReceivedGrant(tx *gorm.DB, grant *share.GrantWithdrawal) ([]model.OcmReceivedShare, string, error) {
+func lockReceivedGrant(tx *gorm.DB, grant *share.GrantWithdrawal, onlyUnexpired bool) ([]model.OcmReceivedShare, string, error) {
 	if grant == nil {
 		return nil, "", share.ErrInvalidGrantIdentity
 	}
@@ -270,18 +270,24 @@ func lockReceivedGrant(tx *gorm.DB, grant *share.GrantWithdrawal) ([]model.OcmRe
 	if err := forUpdate(tx).Where("grant_key = ?", key).Order("id").Find(&rows).Error; err != nil {
 		return nil, "", err
 	}
+	cutoff := time.Now()
+	selected := rows[:0]
 	for _, row := range rows {
 		storedOrigin, ok := grantOrigin(row.Initiator)
 		if !ok || row.GrantKey == nil || *row.GrantKey != key ||
 			storedOrigin != origin || row.RemoteShareID != grant.RemoteShareID || row.ShareWith == "" {
 			return nil, "", share.ErrGrantIdentityMismatch
 		}
+		if onlyUnexpired && row.Expiration.Valid && !row.Expiration.V.After(cutoff) {
+			continue
+		}
 		if row.ItemType != convertFromCS3ResourceType(grant.ResourceType) ||
 			(grant.RecipientType != ocm.RecipientType_RECIPIENT_TYPE_INVALID && row.RecipientType != recipient) {
 			return nil, key, nil
 		}
+		selected = append(selected, row)
 	}
-	return rows, key, nil
+	return selected, key, nil
 }
 
 // WithdrawReceivedGrant physically deletes matching unexpired projections and their protocols.
@@ -291,20 +297,13 @@ func (m *mgr) WithdrawReceivedGrant(ctx context.Context, grant *share.GrantWithd
 	err := m.transact(ctx, "withdraw_grant", func(tx *gorm.DB) error {
 		receipt = share.GrantWithdrawalReceipt{}
 		check = commitCheck{}
-		rows, key, err := lockReceivedGrant(tx, grant)
+		rows, key, err := lockReceivedGrant(tx, grant, true)
 		if err != nil || len(rows) == 0 {
 			return err
 		}
-		cutoff := time.Now()
 		ids := make([]uint, 0, len(rows))
 		for _, row := range rows {
-			if row.Expiration.Valid && !row.Expiration.V.After(cutoff) {
-				continue
-			}
 			ids = append(ids, row.ID)
-		}
-		if len(ids) == 0 {
-			return nil
 		}
 		if err := tx.Unscoped().Where("ocm_received_share_id IN ?", ids).Delete(&model.OcmReceivedShareProtocol{}).Error; err != nil {
 			return err
@@ -357,7 +356,7 @@ func (m *mgr) UpdateReceivedGrantPermissions(ctx context.Context, grant *share.G
 	err := m.transact(ctx, "update_received_grant_permissions", func(tx *gorm.DB) error {
 		changed = false
 		check = commitCheck{}
-		rows, key, err := lockReceivedGrant(tx, grant)
+		rows, key, err := lockReceivedGrant(tx, grant, false)
 		if err != nil || len(rows) == 0 {
 			return err
 		}

@@ -183,7 +183,7 @@ func (h *sharesHandler) CreateShare(w http.ResponseWriter, r *http.Request) {
 	w = sw
 	defer func() {
 		if sw.status >= http.StatusBadRequest {
-			log.Info().Int("status", sw.status).Str("remote", r.RemoteAddr).Bytes("payload", body).Msg("OCM /shares request rejected, full payload")
+			log.Info().Int("status", sw.status).Str("remote", r.RemoteAddr).Msg("OCM /shares request rejected")
 		}
 	}()
 	req, err := h.getCreateShareRequest(r)
