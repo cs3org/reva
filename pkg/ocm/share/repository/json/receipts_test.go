@@ -29,6 +29,7 @@ import (
 
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	ocm "github.com/cs3org/go-cs3apis/cs3/sharing/ocm/v1beta1"
+	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	typespb "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
 	"github.com/cs3org/reva/v3/pkg/ocm/share"
 	"github.com/cs3org/reva/v3/pkg/permissions"
@@ -100,6 +101,50 @@ func TestJSONDeleteAndUpdateShareReceipts(t *testing.T) {
 	}
 }
 
+func TestJSONPermissionPresenceInUpdateReceipts(t *testing.T) {
+	for _, webdav := range []bool{true, false} {
+		name := "webapp"
+		if webdav {
+			name = "webdav"
+		}
+		t.Run(name, func(t *testing.T) {
+			m, cleanup := setup(t)
+			defer cleanup()
+			ctx := context.Background()
+			s := testShare("tok", nil)
+			if _, err := m.StoreShare(ctx, s, ocm.SharedResourceType_SHARE_RESOURCE_TYPE_FILE); err != nil {
+				t.Fatal(err)
+			}
+			ref := &ocm.ShareReference{Spec: &ocm.ShareReference_Id{Id: s.Id}}
+			for _, tc := range []struct {
+				name        string
+				permissions *provider.ResourcePermissions
+				changed     bool
+			}{
+				{"absent to nil", nil, false},
+				{"nil to empty", &provider.ResourcePermissions{}, true},
+				{"empty to populated", &provider.ResourcePermissions{GetPath: true}, true},
+				{"populated to nil", nil, true},
+			} {
+				t.Run(tc.name, func(t *testing.T) {
+					method := share.NewWebappAccessMethod(tc.permissions, nil)
+					if webdav {
+						method = share.NewWebDavAccessMethod(tc.permissions, nil, nil)
+					}
+					up, err := m.UpdateShare(ctx, testUser(), ref, &ocm.UpdateOCMShareRequest_UpdateField{
+						Field: &ocm.UpdateOCMShareRequest_UpdateField_AccessMethods{AccessMethods: method},
+					})
+					if err != nil || up == nil ||
+						up.WebDAVPermissionsChanged != (tc.changed && webdav) ||
+						up.WebappPermissionsChanged != (tc.changed && !webdav) {
+						t.Fatalf("update receipt = %v, err = %v, want changed = %t", up, err, tc.changed)
+					}
+				})
+			}
+		})
+	}
+}
+
 func TestJSONTransferAttemptsPersistAcrossReload(t *testing.T) {
 	m, cleanup := setup(t)
 	defer cleanup()
@@ -119,16 +164,25 @@ func TestJSONTransferAttemptsPersistAcrossReload(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if u, err := reopened.CompleteReceivedShareTransfer(ctx, user, rs.Id, 2, ocm.ShareState_SHARE_STATE_ACCEPTED); err != nil || u.StateChanged() {
-		t.Fatalf("wrong generation: %v %v", u, err)
+	checkIgnored := func(generation uint64, requested, want ocm.ShareState, wantGeneration uint64) {
+		t.Helper()
+		u, err := reopened.CompleteReceivedShareTransfer(ctx, user, rs.Id, generation, requested)
+		if err != nil || u == nil || u.Before == nil || u.After == nil || u.StateChanged() ||
+			u.After.GetState() != want || !proto.Equal(u.Before, u.After) ||
+			!proto.Equal(u.After.GetId(), rs.Id) || !proto.Equal(u.After.GetGrantee(), rs.Grantee) ||
+			!proto.Equal(u.After.GetCreator(), rs.Creator) || u.After.GetRemoteShareId() != rs.RemoteShareId {
+			t.Fatalf("ignored completion: %v %v", u, err)
+		}
+		if got := reopened.(*mgr).model.TransferGenerations[rs.Id.OpaqueId]; got != wantGeneration {
+			t.Fatalf("ignored completion changed generation to %d, want %d", got, wantGeneration)
+		}
 	}
+	checkIgnored(2, ocm.ShareState_SHARE_STATE_ACCEPTED, ocm.ShareState_SHARE_STATE_TRANSFERRING, 1)
 	u, err := reopened.CompleteReceivedShareTransfer(ctx, user, rs.Id, 1, ocm.ShareState_SHARE_STATE_ACCEPTED)
 	if err != nil || !u.StateChanged() || u.After.State != ocm.ShareState_SHARE_STATE_ACCEPTED {
 		t.Fatalf("complete: %v %v", u, err)
 	}
-	if u, err := reopened.CompleteReceivedShareTransfer(ctx, user, rs.Id, 1, ocm.ShareState_SHARE_STATE_ACCEPTED); err != nil || u.StateChanged() {
-		t.Fatalf("duplicate: %v %v", u, err)
-	}
+	checkIgnored(1, ocm.ShareState_SHARE_STATE_ACCEPTED, ocm.ShareState_SHARE_STATE_ACCEPTED, 1)
 	if _, err := reopened.StartReceivedShareTransfer(ctx, user, &ocm.ReceivedShare{Id: rs.Id}, mask("state")); !errors.Is(err, share.ErrShareAlreadyAccepted) {
 		t.Fatalf("start after acceptance: %v", err)
 	}
@@ -144,9 +198,7 @@ func TestJSONTransferAttemptsPersistAcrossReload(t *testing.T) {
 	if err != nil || second.Generation <= 1 {
 		t.Fatalf("second attempt: %v %v", second, err)
 	}
-	if u, err := reopened.CompleteReceivedShareTransfer(ctx, user, rs.Id, 1, ocm.ShareState_SHARE_STATE_REJECTED); err != nil || u.StateChanged() {
-		t.Fatalf("stale callback: %v %v", u, err)
-	}
+	checkIgnored(1, ocm.ShareState_SHARE_STATE_REJECTED, ocm.ShareState_SHARE_STATE_TRANSFERRING, second.Generation)
 	stranger := &userpb.User{Id: &userpb.UserId{OpaqueId: "stranger"}}
 	if _, err := reopened.UpdateReceivedShare(ctx, stranger, reset, mask("state")); err == nil {
 		t.Fatal("foreign update accepted")

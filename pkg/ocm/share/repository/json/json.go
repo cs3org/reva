@@ -468,7 +468,10 @@ func (m *mgr) UpdateShare(ctx context.Context, user *userpb.User, ref *ocm.Share
 func webdavPermissions(s *ocm.Share) proto.Message {
 	for _, m := range s.AccessMethods {
 		if w, ok := m.Term.(*ocm.AccessMethod_WebdavOptions); ok {
-			return w.WebdavOptions.GetPermissions()
+			if permissions := w.WebdavOptions.GetPermissions(); permissions != nil {
+				return permissions
+			}
+			return nil
 		}
 	}
 	return nil
@@ -477,7 +480,10 @@ func webdavPermissions(s *ocm.Share) proto.Message {
 func webappPermissions(s *ocm.Share) proto.Message {
 	for _, m := range s.AccessMethods {
 		if w, ok := m.Term.(*ocm.AccessMethod_WebappOptions); ok {
-			return w.WebappOptions.GetPermissions()
+			if permissions := w.WebappOptions.GetPermissions(); permissions != nil {
+				return permissions
+			}
+			return nil
 		}
 	}
 	return nil
