@@ -288,7 +288,7 @@ func checkCacheForNestedResource(ctx context.Context, ref *provider.Reference, r
 	}
 
 	if ok, err := checkIfNestedResource(ctx, ref, resource, user, client, mgr); err == nil && ok {
-		_ = scopeExpansionCache.SetWithExpire(key, nil, scopeCacheExpiration*time.Second)
+		_ = scopeExpansionCache.SetWithTTL(key, nil, scopeCacheExpiration*time.Second)
 		return nil
 	}
 
