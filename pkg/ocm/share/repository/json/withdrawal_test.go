@@ -23,25 +23,48 @@ import (
 	"errors"
 	"testing"
 
+	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	ocm "github.com/cs3org/go-cs3apis/cs3/sharing/ocm/v1beta1"
 	"github.com/cs3org/reva/v3/pkg/errtypes"
 	"github.com/cs3org/reva/v3/pkg/ocm/share"
+	"github.com/cs3org/reva/v3/pkg/permissions"
+	"google.golang.org/protobuf/proto"
 )
 
 // The JSON driver records no withdrawal and changes nothing.
 func TestJSONWithdrawalIsNotSupported(t *testing.T) {
 	m, cleanup := setup(t)
 	defer cleanup()
-	user, rs := receivedFixture(t, m)
-	r, err := m.WithdrawReceivedGrant(context.Background(), &share.GrantWithdrawal{
-		Origin: "provider.example.org", RemoteShareID: rs.RemoteShareId, ResourceType: rs.SharedResourceType,
+	ctx := context.Background()
+	sender := &userpb.UserId{OpaqueId: "alice", Idp: "provider.example.org"}
+	grantee := testGrantee()
+	user := &userpb.User{Id: grantee.GetUserId()}
+	rs, err := m.StoreReceivedShare(ctx, &ocm.ReceivedShare{
+		Name: "doc", RemoteShareId: "remote-1", Creator: sender, Owner: sender, Grantee: grantee,
+		SharedResourceType: ocm.SharedResourceType_SHARE_RESOURCE_TYPE_FILE,
+		RecipientType:      ocm.RecipientType_RECIPIENT_TYPE_USER,
+		State:              ocm.ShareState_SHARE_STATE_PENDING,
+		Protocols: []*ocm.Protocol{share.NewWebDAVProtocol("https://provider.example.org/dav/remote-1", "fixture",
+			&ocm.SharePermissions{Permissions: permissions.NewViewerRole().CS3ResourcePermissions()}, nil, nil)},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	ref := &ocm.ShareReference{Spec: &ocm.ShareReference_Id{Id: rs.Id}}
+	before, err := m.GetReceivedShare(ctx, user, ref)
+	if err != nil || before.GetSharedResourceType() != ocm.SharedResourceType_SHARE_RESOURCE_TYPE_FILE || len(before.GetProtocols()) != 1 {
+		t.Fatalf("invalid withdrawal fixture: %v", err)
+	}
+	r, err := m.WithdrawReceivedGrant(ctx, &share.GrantWithdrawal{
+		Origin: sender.Idp, RemoteShareID: rs.RemoteShareId, ResourceType: ocm.SharedResourceType_SHARE_RESOURCE_TYPE_FILE,
+		RecipientType: ocm.RecipientType_RECIPIENT_TYPE_USER,
 	})
 	var notSupported errtypes.NotSupported
 	if r != nil || !errors.As(err, &notSupported) {
 		t.Fatalf("withdraw: %v %v", r, err)
 	}
-	got, err := m.GetReceivedShare(context.Background(), user, &ocm.ShareReference{Spec: &ocm.ShareReference_Id{Id: rs.Id}})
-	if err != nil || got.State != ocm.ShareState_SHARE_STATE_PENDING || got.Hidden {
-		t.Fatalf("share changed: %v %v", got, err)
+	got, err := m.GetReceivedShare(ctx, user, ref)
+	if err != nil || !proto.Equal(before, got) {
+		t.Fatalf("withdrawal changed the share or its protocols: %v", err)
 	}
 }
