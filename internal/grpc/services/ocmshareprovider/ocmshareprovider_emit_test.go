@@ -21,14 +21,19 @@ package ocmshareprovider
 import (
 	"bytes"
 	"context"
+	"crypto/x509"
 	"encoding/json"
 	"errors"
 	"io"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"path/filepath"
+	"slices"
+	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -42,8 +47,10 @@ import (
 	"github.com/cs3org/reva/v3/internal/http/services/wellknown"
 	"github.com/cs3org/reva/v3/pkg/appctx"
 	ocmclient "github.com/cs3org/reva/v3/pkg/ocm/client"
+	"github.com/cs3org/reva/v3/pkg/ocm/embedded"
 	"github.com/cs3org/reva/v3/pkg/ocm/httpsig"
 	"github.com/cs3org/reva/v3/pkg/ocm/share"
+	jsonrepo "github.com/cs3org/reva/v3/pkg/ocm/share/repository/json"
 	"github.com/cs3org/reva/v3/pkg/permissions"
 	sqlmgr "github.com/cs3org/reva/v3/pkg/share/manager/sql"
 	model "github.com/cs3org/reva/v3/pkg/share/manager/sql/model"
@@ -201,7 +208,7 @@ func newEmitEnv(t *testing.T) *emitEnv {
 	xfer := &controlledTransferrer{}
 	env := &emitEnv{
 		svc: &service{
-			conf:        &config{ProviderDomain: "cernbox.example.org", WebDAVEndpoint: testWebDAVRoot, ClientTimeout: 2},
+			conf:        &config{Driver: "sql", ProviderDomain: "cernbox.example.org", WebDAVEndpoint: testWebDAVRoot, ClientTimeout: 2},
 			repo:        repo,
 			client:      ocmd.NewClient(2*time.Second, false),
 			transferrer: xfer,
@@ -913,5 +920,264 @@ func TestServiceCloseStopsNotifications(t *testing.T) {
 	requireNotices(t, e.peer)
 	if _, err := e.repo.GetShare(e.owner, &userpb.User{Id: &userpb.UserId{OpaqueId: "einstein"}}, &ocm.ShareReference{Spec: &ocm.ShareReference_Id{Id: sh.Id}}); err == nil {
 		t.Fatal("deletion was rolled back")
+	}
+}
+
+type deadlineRepo struct {
+	share.Repository
+	check func(context.Context) (*ocm.Share, error)
+}
+
+func (r deadlineRepo) GetShare(ctx context.Context, _ *userpb.User, _ *ocm.ShareReference) (*ocm.Share, error) {
+	return r.check(ctx)
+}
+
+type notificationFunc func(context.Context, string, *ocmd.OutgoingNotification) ocmd.SendResult
+
+func (f notificationFunc) NewNotification(ctx context.Context, domain string, n *ocmd.OutgoingNotification) ocmd.SendResult {
+	return f(ctx, domain, n)
+}
+
+func TestNotificationFreshnessUsesEffectiveClientTimeout(t *testing.T) {
+	const driver = "notification-timeout-test"
+	var repo deadlineRepo
+	withTestDrivers(t, driver, func(context.Context, map[string]any) (share.Repository, error) {
+		return repo, nil
+	}, func(context.Context, map[string]any) (embedded.Transferrer, error) {
+		return noopTransferrer{}, nil
+	})
+
+	defaultTimeout := ocmclient.DefaultTransportConfig().Timeout
+	for _, tc := range []struct {
+		configured int
+		want       time.Duration
+	}{{-1, defaultTimeout}, {0, defaultTimeout}, {3, 3 * time.Second}} {
+		t.Run(strconv.Itoa(tc.configured), func(t *testing.T) {
+			sh := &ocm.Share{
+				Id:            &ocm.ShareId{OpaqueId: "grant"},
+				Grantee:       &providerpb.Grantee{Id: &providerpb.Grantee_UserId{UserId: &userpb.UserId{Idp: "peer.example.org"}}},
+				AccessMethods: []*ocm.AccessMethod{share.NewWebDavAccessMethod(&providerpb.ResourcePermissions{}, nil, nil)},
+			}
+			var checked bool
+			repo.check = func(ctx context.Context) (*ocm.Share, error) {
+				checked = true
+				deadline, ok := ctx.Deadline()
+				if remaining := time.Until(deadline); !ok || remaining <= tc.want-time.Second || remaining > tc.want {
+					t.Errorf("freshness deadline has %v remaining, want %v", remaining, tc.want)
+				}
+				if err := ctx.Err(); err != nil {
+					return nil, err
+				}
+				return sh, nil
+			}
+			ctx := appctx.ContextSetUser(context.Background(), &userpb.User{Id: &userpb.UserId{OpaqueId: "owner"}})
+			raw, err := New(ctx, map[string]any{
+				"driver": driver, "embedded_driver": driver, "gatewaysvc": "127.0.0.1:9142",
+				"provider_domain": "sender.example", "webdav_endpoint": testWebDAVRoot,
+				"signing_key": writeKeyFile(t), "client_timeout": tc.configured,
+			})
+			if err != nil {
+				t.Fatal(err)
+			}
+			svc := raw.(*service)
+			t.Cleanup(func() { _ = svc.Close() })
+			svc.notifier = notificationFunc(func(ctx context.Context, _ string, n *ocmd.OutgoingNotification) ocmd.SendResult {
+				if n.StillCurrent == nil || !n.StillCurrent(ctx) {
+					t.Error("current snapshot failed freshness check")
+				}
+				return ocmd.SendResult{}
+			})
+			svc.notifyPermissionChange(ctx, &share.ShareUpdate{
+				After: sh, ResourceType: ocm.SharedResourceType_SHARE_RESOURCE_TYPE_FILE, WebDAVPermissionsChanged: true,
+			}, nil)
+			if !checked || time.Duration(svc.conf.ClientTimeout)*time.Second != tc.want {
+				t.Fatalf("timeout = %d seconds, repository read = %t", svc.conf.ClientTimeout, checked)
+			}
+		})
+	}
+}
+
+func TestNewNotificationClientVerifiesTLS(t *testing.T) {
+	const driver = "notification-tls-test"
+	withTestDrivers(t, driver, func(context.Context, map[string]any) (share.Repository, error) {
+		return &capturingRepo{}, nil
+	}, func(context.Context, map[string]any) (embedded.Transferrer, error) {
+		return noopTransferrer{}, nil
+	})
+
+	const peer = "example.com"
+	var posts atomic.Int32
+	server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/.well-known/ocm":
+			_ = json.NewEncoder(w).Encode(wellknown.OcmDiscoveryData{
+				Enabled: true, APIVersion: "1.4.0", Endpoint: "https://" + peer + "/ocm", Capabilities: []string{"notifications"},
+			})
+		case "/ocm/notifications":
+			posts.Add(1)
+			w.WriteHeader(http.StatusCreated)
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	t.Cleanup(server.Close)
+	out, err := (ocmd.ShareStateNotification{
+		Type: ocmd.NotificationShareAccepted, SenderDomain: "sender.example",
+		ResourceType: "file", ShareType: "user", ProviderID: "grant",
+	}).Build()
+	if err != nil {
+		t.Fatal(err)
+	}
+	roots := x509.NewCertPool()
+	roots.AddCert(server.Certificate())
+	for _, tc := range []struct {
+		name    string
+		trusted bool
+		want    ocmd.SendOutcome
+	}{{"untrusted", false, ocmd.SendDiscoveryFailed}, {"trusted", true, ocmd.SendDelivered}} {
+		t.Run(tc.name, func(t *testing.T) {
+			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+			defer cancel()
+			raw, err := New(ctx, map[string]any{
+				"driver": driver, "embedded_driver": driver, "gatewaysvc": "127.0.0.1:9142",
+				"provider_domain": "sender.example", "webdav_endpoint": testWebDAVRoot,
+				"signing_key": writeKeyFile(t), "client_insecure": true,
+			})
+			if err != nil {
+				t.Fatal(err)
+			}
+			svc := raw.(*service)
+			t.Cleanup(func() { _ = svc.Close() })
+			if !ocmclient.HTTPTransport(svc.client.Transport()).TLSClientConfig.InsecureSkipVerify {
+				t.Fatal("ordinary client lost its configured TLS setting")
+			}
+			n := svc.notifier.(*ocmd.AsyncNotifier)
+			tr := ocmclient.HTTPTransport(n.Client.Transport())
+			t.Cleanup(tr.CloseIdleConnections)
+			// Route the fixture hostname directly to the loopback TLS server.
+			tr.DialContext = func(ctx context.Context, network, addr string) (net.Conn, error) {
+				if addr != peer+":443" {
+					return nil, errors.New("unexpected TLS fixture address")
+				}
+				return (&net.Dialer{}).DialContext(ctx, network, server.Listener.Addr().String())
+			}
+			if tc.trusted {
+				tr.TLSClientConfig.RootCAs = roots
+			} else {
+				tr.TLSClientConfig.RootCAs = x509.NewCertPool()
+			}
+			defer posts.Store(0)
+			if got := n.Client.NewNotification(ctx, peer, out, n.Key); got.Outcome != tc.want {
+				t.Fatalf("notification outcome = %v, want %v", got, tc.want)
+			}
+			wantPosts := int32(0)
+			if tc.trusted {
+				wantPosts = 1
+			}
+			if got := posts.Load(); got != wantPosts {
+				t.Fatalf("notification POSTs = %d, want %d", got, wantPosts)
+			}
+		})
+	}
+}
+
+func TestReceivedStateNoticeRechecksCommittedSQLState(t *testing.T) {
+	const (
+		accepted = ocm.ShareState_SHARE_STATE_ACCEPTED
+		declined = ocm.ShareState_SHARE_STATE_REJECTED
+	)
+	for _, tc := range []struct {
+		name   string
+		states []ocm.ShareState
+		remove bool
+		want   []string
+	}{
+		{"accept then decline", []ocm.ShareState{accepted, declined}, false, []string{ocmd.NotificationShareDeclined}},
+		{"decline then accept", []ocm.ShareState{declined, accepted}, false, []string{ocmd.NotificationShareAccepted}},
+		{"repeat acceptance", []ocm.ShareState{accepted, accepted}, false, []string{ocmd.NotificationShareAccepted}},
+		{"return to acceptance", []ocm.ShareState{accepted, declined, accepted}, false, []string{ocmd.NotificationShareAccepted, ocmd.NotificationShareAccepted}},
+		{"deleted before admission", []ocm.ShareState{accepted}, true, nil},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			e := newEmitEnv(t)
+			rs := e.received(t, "delayed-state", false)
+			user := appctx.ContextMustGetUser(e.recip)
+			var receipts []*share.ReceivedShareUpdate
+			for _, state := range tc.states {
+				u, err := e.repo.UpdateReceivedShare(e.recip, user,
+					&ocm.ReceivedShare{Id: rs.Id, State: state}, &field_mask.FieldMask{Paths: []string{"state"}})
+				if err != nil {
+					t.Fatal(err)
+				}
+				receipts = append(receipts, u)
+			}
+			if tc.remove {
+				db, err := gorm.Open(sqlite.Open(e.dbPath), &gorm.Config{})
+				if err != nil {
+					t.Fatal(err)
+				}
+				pool, err := db.DB()
+				if err != nil {
+					t.Fatal(err)
+				}
+				t.Cleanup(func() { _ = pool.Close() })
+				if err := db.Where("id = ?", rs.Id.OpaqueId).Delete(&model.OcmReceivedShare{}).Error; err != nil {
+					t.Fatal(err)
+				}
+			}
+			// Earlier callers resume after the latest change and notice.
+			for _, receipt := range slices.Backward(receipts) {
+				e.svc.notifyReceivedState(e.recip, receipt, true)
+			}
+			requireNotices(t, e.peer, tc.want...)
+
+			current, err := e.repo.GetReceivedShare(e.recip, user, &ocm.ShareReference{Spec: &ocm.ShareReference_Id{Id: rs.Id}})
+			if tc.remove {
+				if !errors.Is(err, share.ErrShareNotFound) || current != nil {
+					t.Fatalf("deleted share read back as present: %v", err)
+				}
+			} else if err != nil || current.GetState() != tc.states[len(tc.states)-1] {
+				t.Fatalf("stored state = %v, err = %v", current.GetState(), err)
+			}
+		})
+	}
+}
+
+func TestJSONReceivedStateNoticeKeepsSingleAttempt(t *testing.T) {
+	e := newEmitEnv(t)
+	rs := e.received(t, "json-state", false)
+	user := appctx.ContextMustGetUser(e.recip)
+	rs.Grantee.GetUserId().Idp = user.Id.Idp
+	repo, err := jsonrepo.New(e.recip, map[string]any{"file": filepath.Join(t.TempDir(), "shares.json")})
+	if err != nil {
+		t.Fatal(err)
+	}
+	e.svc.conf.Driver = "json"
+	e.svc.repo = repo
+	rs, err = repo.StoreReceivedShare(e.recip, rs)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var attempts int
+	delegate := e.svc.notifier
+	e.svc.notifier = notificationFunc(func(ctx context.Context, peer string, n *ocmd.OutgoingNotification) ocmd.SendResult {
+		attempts++
+		if n.StillCurrent != nil {
+			t.Error("JSON state notice added a synchronous repository recheck")
+		}
+		return delegate.NewNotification(ctx, peer, n)
+	})
+	for range 2 {
+		if res := e.setState(t, rs.Id, ocm.ShareState_SHARE_STATE_ACCEPTED, ""); res.GetStatus().GetCode() != rpc.Code_CODE_OK {
+			t.Fatalf("acceptance status = %v", res.GetStatus())
+		}
+	}
+	requireNotices(t, e.peer, ocmd.NotificationShareAccepted)
+	if attempts != 1 {
+		t.Fatalf("notification attempts = %d, want 1", attempts)
+	}
+	current, err := repo.GetReceivedShare(e.recip, user, &ocm.ShareReference{Spec: &ocm.ShareReference_Id{Id: rs.Id}})
+	if err != nil || current.GetState() != ocm.ShareState_SHARE_STATE_ACCEPTED {
+		t.Fatalf("stored state = %v, err = %v", current.GetState(), err)
 	}
 }

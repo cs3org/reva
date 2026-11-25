@@ -21,6 +21,7 @@ package ocmd
 import (
 	"context"
 	"encoding/json"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -132,6 +133,77 @@ func TestAsyncNotifierSerializesCurrentPermissionSnapshots(t *testing.T) {
 	}
 }
 
+func TestAsyncNotifierStateNoticesIsolatePeersWithSameGrantID(t *testing.T) {
+	releaseSlow := make(chan struct{})
+	slowEntered := make(chan struct{}, 1)
+	slowPosted := make(chan struct{}, 1)
+	fastPosted := make(chan struct{}, 1)
+	peer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/.well-known/ocm":
+			route := "/fast"
+			if strings.HasPrefix(r.Host, "127.0.0.1:") {
+				route = "/slow"
+				slowEntered <- struct{}{}
+				select {
+				case <-releaseSlow:
+				case <-r.Context().Done():
+					return
+				}
+			}
+			_ = json.NewEncoder(w).Encode(wellknown.OcmDiscoveryData{
+				Enabled: true, APIVersion: "1.4.0",
+				Endpoint:     "http://" + r.Context().Value(http.LocalAddrContextKey).(net.Addr).String() + route,
+				Capabilities: []string{"notifications"},
+			})
+		case "/slow/notifications":
+			w.WriteHeader(http.StatusCreated)
+			slowPosted <- struct{}{}
+		case "/fast/notifications":
+			w.WriteHeader(http.StatusCreated)
+			fastPosted <- struct{}{}
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	t.Cleanup(peer.Close)
+
+	host := peer.Listener.Addr().String()
+	_, port, err := net.SplitHostPort(host)
+	if err != nil {
+		t.Fatal(err)
+	}
+	otherHost := net.JoinHostPort("localhost", port)
+	client := NewClientWithConfig(ocmclient.TransportConfig{Timeout: time.Minute, AllowLoopback: true})
+	a := &AsyncNotifier{Client: client, Key: newSigningKey(t)}
+	t.Cleanup(func() { _ = a.Close() })
+	send := func(domain string) {
+		t.Helper()
+		n, err := (ShareStateNotification{
+			Type: NotificationShareAccepted, SenderDomain: "cernbox.example.org",
+			ResourceType: "file", ShareType: "user", ProviderID: "same-grant",
+		}).Build()
+		if err != nil {
+			t.Fatal(err)
+		}
+		n.StillCurrent = func(context.Context) bool { return true }
+		if result := a.NewNotification(context.Background(), domain, n); result != (SendResult{}) {
+			t.Fatalf("send admission: %+v", result)
+		}
+	}
+
+	send(host)
+	wait(t, slowEntered, "slow peer discovery")
+	send(otherHost)
+	select {
+	case <-fastPosted:
+	case <-time.After(3 * time.Second):
+		t.Fatal("independent peer did not receive the state notice while slow discovery was held")
+	}
+	close(releaseSlow)
+	wait(t, slowPosted, "slow peer POST")
+}
+
 func TestAsyncNotifierCloseCancelsAdmittedSend(t *testing.T) {
 	p := newGatedPeer(t)
 	a := &AsyncNotifier{Client: NewClient(time.Minute, false), Key: newSigningKey(t)}
@@ -204,6 +276,7 @@ func TestAsyncNotifierBoundsInFlightAttempts(t *testing.T) {
 	host := strings.TrimPrefix(p.srv.URL, "http://")
 	c := NewClientWithConfig(ocmclient.TransportConfig{Timeout: time.Minute, AllowLoopback: true})
 	a := &AsyncNotifier{Client: c, Key: newSigningKey(t)}
+	t.Cleanup(func() { _ = a.Close() })
 	for i := 0; i < maxInFlightNotifications; i++ {
 		if res := a.NewNotification(context.Background(), host, unsharedNotification(t)); res != (SendResult{}) {
 			t.Fatalf("admission %d: %+v", i, res)

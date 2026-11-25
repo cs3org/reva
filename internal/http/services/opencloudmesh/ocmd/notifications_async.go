@@ -24,6 +24,7 @@ import (
 	"sync"
 
 	"github.com/cs3org/reva/v3/pkg/ocm/httpsig"
+	"github.com/cs3org/reva/v3/pkg/ocm/providerdomain"
 	"github.com/cs3org/reva/v3/pkg/prom/registry"
 	"github.com/prometheus/client_golang/prometheus"
 )
@@ -64,7 +65,7 @@ type AsyncNotifier struct {
 	cancel   context.CancelFunc
 	wg       sync.WaitGroup
 
-	permissionSends [maxInFlightNotifications]sync.Mutex
+	snapshotSends [maxInFlightNotifications]sync.Mutex
 }
 
 // NewNotification starts one attempt and returns at once. The attempt keeps
@@ -100,9 +101,11 @@ func (a *AsyncNotifier) NewNotification(ctx context.Context, domain string, n *O
 		defer stop()
 		if n != nil && n.File != nil && n.StillCurrent != nil {
 			// Check under the send lock so a delayed update cannot overtake
-			// a newer snapshot for the same grant.
-			bucket := crc32.ChecksumIEEE([]byte(n.File.ProviderID)) % uint32(len(a.permissionSends))
-			mu := &a.permissionSends[bucket]
+			// a newer snapshot for the same grant at the same peer.
+			peer, _ := providerdomain.CanonicalOCMHost(domain)
+			key := peer + "\x00" + n.File.ProviderID
+			bucket := crc32.ChecksumIEEE([]byte(key)) % uint32(len(a.snapshotSends))
+			mu := &a.snapshotSends[bucket]
 			mu.Lock()
 			defer mu.Unlock()
 			if sendCtx.Err() != nil || !n.StillCurrent(sendCtx) {

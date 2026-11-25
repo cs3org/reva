@@ -45,7 +45,7 @@ type OutgoingNotification struct {
 	Message      string
 	File         *NotificationFile
 
-	// StillCurrent can skip a superseded permission snapshot before delivery.
+	// StillCurrent can skip a superseded share snapshot before delivery.
 	StillCurrent func(context.Context) bool
 }
 

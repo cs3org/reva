@@ -39,6 +39,7 @@ import (
 
 	"github.com/cs3org/reva/v3/pkg/appctx"
 	"github.com/cs3org/reva/v3/pkg/errtypes"
+	ocmclient "github.com/cs3org/reva/v3/pkg/ocm/client"
 	"github.com/cs3org/reva/v3/pkg/ocm/embedded"
 	"github.com/cs3org/reva/v3/pkg/ocm/httpsig"
 	"github.com/cs3org/reva/v3/pkg/ocm/providerdomain"
@@ -108,8 +109,8 @@ func (c *config) ApplyDefaults() {
 	if c.EmbeddedDriver == "" {
 		c.EmbeddedDriver = "webdav"
 	}
-	if c.ClientTimeout == 0 {
-		c.ClientTimeout = 10
+	if c.ClientTimeout <= 0 {
+		c.ClientTimeout = int(ocmclient.DefaultTransportConfig().Timeout / time.Second)
 	}
 
 	c.GatewaySVC = sharedconf.GetGatewaySVC(c.GatewaySVC)
@@ -167,8 +168,9 @@ func New(ctx context.Context, m map[string]any) (rgrpc.Service, error) {
 		return nil, err
 	}
 
-	ocmcl := ocmd.NewClient(time.Duration(c.ClientTimeout)*time.Second, c.ClientInsecure)
-	notificationClient := ocmd.NewPublicOnlyClient(time.Duration(c.ClientTimeout)*time.Second, c.ClientInsecure)
+	timeout := time.Duration(c.ClientTimeout) * time.Second
+	ocmcl := ocmd.NewClient(timeout, c.ClientInsecure)
+	notificationClient := ocmd.NewPublicOnlyClient(timeout, false)
 	service := &service{
 		conf:        &c,
 		repo:        repo,

@@ -40,7 +40,7 @@ type notifier interface {
 }
 
 // emit sends a built share-state notification to domain, if any.
-func (s *service) emit(ctx context.Context, domain string, b ocmd.ShareStateNotification) {
+func (s *service) emit(ctx context.Context, domain string, b ocmd.ShareStateNotification, stillCurrent func(context.Context) bool) {
 	log := appctx.GetLogger(ctx)
 	if s.notifier == nil {
 		return
@@ -56,18 +56,11 @@ func (s *service) emit(ctx context.Context, domain string, b ocmd.ShareStateNoti
 		log.Warn().Str("type", b.Type).Str("error", err.Error()).Msg("not sending OCM notification")
 		return
 	}
-	if b.Permissions != nil {
-		user := appctx.ContextMustGetUser(ctx)
-		ref := &ocm.ShareReference{Spec: &ocm.ShareReference_Id{Id: &ocm.ShareId{OpaqueId: b.ProviderID}}}
+	if stillCurrent != nil {
 		n.StillCurrent = func(ctx context.Context) bool {
 			ctx, cancel := context.WithTimeout(ctx, time.Duration(s.conf.ClientTimeout)*time.Second)
 			defer cancel()
-			current, err := s.repo.GetShare(ctx, user, ref)
-			if err != nil || current.GetGrantee().GetUserId().GetIdp() != domain {
-				return false
-			}
-			names := changedWebDAVPermissionNames(current, nil)
-			return names != nil && slices.Equal(names, b.Permissions)
+			return stillCurrent(ctx)
 		}
 	}
 	s.notifier.NewNotification(ctx, peer, n)
@@ -154,7 +147,7 @@ func (s *service) notifyUnshared(ctx context.Context, removal *share.ShareRemova
 		ResourceType: rt,
 		ShareType:    "user",
 		ProviderID:   sh.GetId().GetOpaqueId(),
-	})
+	}, nil)
 }
 
 // notifyPermissionChange sends SHARE_CHANGE_PERMISSION when a stored
@@ -169,18 +162,31 @@ func (s *service) notifyPermissionChange(ctx context.Context, update *share.Shar
 		appctx.GetLogger(ctx).Warn().Str("type", ocmd.NotificationShareChangePermission).Msg("not sending OCM notification: share has no stored resource type")
 		return
 	}
+	domain := sh.GetGrantee().GetUserId().GetIdp()
 	var perms []string
+	var stillCurrent func(context.Context) bool
 	if update.WebDAVPermissionsChanged {
 		perms = changedWebDAVPermissionNames(sh, fields)
 	}
-	s.emit(ctx, sh.GetGrantee().GetUserId().GetIdp(), ocmd.ShareStateNotification{
+	if perms != nil {
+		ref := &ocm.ShareReference{Spec: &ocm.ShareReference_Id{Id: sh.GetId()}}
+		stillCurrent = func(ctx context.Context) bool {
+			current, err := s.repo.GetShare(ctx, appctx.ContextMustGetUser(ctx), ref)
+			if err != nil || current.GetGrantee().GetUserId().GetIdp() != domain {
+				return false
+			}
+			names := changedWebDAVPermissionNames(current, nil)
+			return names != nil && slices.Equal(names, perms)
+		}
+	}
+	s.emit(ctx, domain, ocmd.ShareStateNotification{
 		Type:         ocmd.NotificationShareChangePermission,
 		SenderDomain: s.conf.ProviderDomain,
 		ResourceType: rt,
 		ShareType:    "user",
 		ProviderID:   sh.GetId().GetOpaqueId(),
 		Permissions:  perms,
-	})
+	}, stillCurrent)
 }
 
 // notifyReceivedState sends SHARE_ACCEPTED or SHARE_DECLINED to the original
@@ -202,11 +208,26 @@ func (s *service) notifyReceivedState(ctx context.Context, update *share.Receive
 	default:
 		return
 	}
+	var stillCurrent func(context.Context) bool
+	// JSON reloads its file under a mutex and can block shutdown even if
+	// the worker's context is canceled.
+	if s.conf.Driver == "sql" {
+		ref := &ocm.ShareReference{Spec: &ocm.ShareReference_Id{Id: rs.GetId()}}
+		stillCurrent = func(ctx context.Context) bool {
+			current, err := s.repo.GetReceivedShare(ctx, appctx.ContextMustGetUser(ctx), ref)
+			return err == nil && current != nil &&
+				proto.Equal(current.GetId(), rs.GetId()) &&
+				proto.Equal(current.GetGrantee(), rs.GetGrantee()) &&
+				proto.Equal(current.GetCreator(), rs.GetCreator()) &&
+				current.GetRemoteShareId() == rs.GetRemoteShareId() &&
+				current.GetState() == rs.GetState()
+		}
+	}
 	s.emit(ctx, rs.GetCreator().GetIdp(), ocmd.ShareStateNotification{
 		Type:         typ,
 		SenderDomain: s.conf.ProviderDomain,
 		ResourceType: resourceTypeName(rs.GetSharedResourceType()),
 		ShareType:    "user",
 		ProviderID:   rs.GetRemoteShareId(),
-	})
+	}, stillCurrent)
 }

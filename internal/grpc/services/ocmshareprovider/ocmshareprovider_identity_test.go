@@ -164,13 +164,13 @@ func TestEmitValidatesThePeerHost(t *testing.T) {
 	notice := ocmd.ShareStateNotification{Type: ocmd.NotificationShareUnshared, SenderDomain: "a.example.org", ResourceType: "file", ProviderID: "1"}
 	for _, bad := range []string{"https://b.example.org", "alice@b.example.org", "b.example.org:bad", ""} {
 		n := &countingNotifier{}
-		(&service{conf: &config{ProviderDomain: "a.example.org"}, notifier: n}).emit(context.Background(), bad, notice)
+		(&service{conf: &config{ProviderDomain: "a.example.org"}, notifier: n}).emit(context.Background(), bad, notice, nil)
 		if len(n.domains) != 0 {
 			t.Fatalf("%q reached the notifier as %v", bad, n.domains)
 		}
 	}
 	n := &countingNotifier{}
-	(&service{conf: &config{ProviderDomain: "a.example.org"}, notifier: n}).emit(context.Background(), "B.example.org:8443", notice)
+	(&service{conf: &config{ProviderDomain: "a.example.org"}, notifier: n}).emit(context.Background(), "B.example.org:8443", notice, nil)
 	if len(n.domains) != 1 || n.domains[0] != "b.example.org:8443" {
 		t.Fatalf("valid target %v", n.domains)
 	}
