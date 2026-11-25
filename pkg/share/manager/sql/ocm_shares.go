@@ -866,9 +866,7 @@ func (m *mgr) CompleteReceivedShareTransfer(ctx context.Context, user *userpb.Us
 		if err != nil {
 			return err
 		}
-		before := proto.Clone(after).(*ocm.ReceivedShare)
-		before.State = ocm.ShareState_SHARE_STATE_TRANSFERRING
-		receipt = share.ReceivedShareUpdate{Before: before, After: after}
+		receipt = share.ReceivedShareUpdate{Before: current, After: after}
 		return nil
 	}, &check)
 	if err != nil {
@@ -1327,7 +1325,7 @@ func (m *mgr) getProtocolsByIds(ctx context.Context, ids []any) (map[string][]*o
 }
 
 func (m *mgr) getReceivedByID(ctx context.Context, user *userpb.User, id *ocm.ShareId) (*ocm.ReceivedShare, error) {
-	shareID, err := strconv.Atoi(id.OpaqueId)
+	shareID, err := strconv.Atoi(id.GetOpaqueId())
 
 	if err != nil {
 		return nil, errtypes.BadRequest("invalid share ID")
