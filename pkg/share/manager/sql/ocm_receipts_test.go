@@ -600,28 +600,75 @@ func TestTransferAttemptLifecycle(t *testing.T) {
 		if err != nil || second.Generation <= start.Generation {
 			t.Fatalf("second attempt: %v %v", second, err)
 		}
-		if u, err := m.CompleteReceivedShareTransfer(ctx, user, rs.Id, start.Generation, ocm.ShareState_SHARE_STATE_REJECTED); err != nil || u == nil || !proto.Equal(u.Before, second.Share) || !proto.Equal(u.After, second.Share) {
+		if u, err := m.CompleteReceivedShareTransfer(ctx, user, rs.Id, start.Generation, ocm.ShareState_SHARE_STATE_REJECTED); err != nil || u == nil ||
+			!proto.Equal(u.Before, second.Share) || !proto.Equal(u.After, second.Share) {
 			t.Fatalf("stale callback completed a newer attempt: %v %v", u, err)
 		}
-		if got := receivedGeneration(t, m, rs.Id); got != second.Generation {
-			t.Fatalf("stale callback changed generation to %d, want %d", got, second.Generation)
-		}
 
-		// An ordinary update that sets TRANSFERRING also invalidates the attempt.
-		if _, err := m.UpdateReceivedShare(ctx, user, reset, stateMask()); err != nil {
-			t.Fatal(err)
+		u, err = m.CompleteReceivedShareTransfer(ctx, user, rs.Id, second.Generation, ocm.ShareState_SHARE_STATE_ACCEPTED)
+		if err != nil || u == nil || !proto.Equal(u.Before, second.Share) || u.After.GetState() != ocm.ShareState_SHARE_STATE_ACCEPTED {
+			t.Fatalf("complete second attempt: %v %v", u, err)
 		}
-		manual := &ocm.ReceivedShare{Id: rs.Id, State: ocm.ShareState_SHARE_STATE_TRANSFERRING}
-		manualUpdate, err := m.UpdateReceivedShare(ctx, user, manual, stateMask())
+		resetReceipt, err := m.UpdateReceivedShare(ctx, user, reset, stateMask())
 		if err != nil {
 			t.Fatal(err)
 		}
-		gen := receivedGeneration(t, m, rs.Id)
-		if u, err := m.CompleteReceivedShareTransfer(ctx, user, rs.Id, second.Generation, ocm.ShareState_SHARE_STATE_ACCEPTED); err != nil || u == nil || !proto.Equal(u.Before, manualUpdate.After) || !proto.Equal(u.After, manualUpdate.After) {
-			t.Fatalf("manual TRANSFERRING revived an old attempt: %v %v", u, err)
+		pending, err := m.GetReceivedShare(ctx, user, idRef(rs.Id))
+		if err != nil || pending.GetState() != ocm.ShareState_SHARE_STATE_PENDING || !proto.Equal(pending, resetReceipt.After) {
+			t.Fatalf("reset readback: %v %v", pending, err)
 		}
-		if got := receivedGeneration(t, m, rs.Id); got != gen {
-			t.Fatalf("manual TRANSFERRING completion changed generation to %d, want %d", got, gen)
+		gen := receivedGeneration(t, m, rs.Id)
+		if u, err := m.CompleteReceivedShareTransfer(ctx, user, rs.Id, second.Generation, ocm.ShareState_SHARE_STATE_ACCEPTED); err != nil || u == nil ||
+			!proto.Equal(u.Before, pending) || !proto.Equal(u.After, pending) {
+			t.Fatalf("stale callback changed the reset share: %v %v", u, err)
+		}
+		if got, err := m.GetReceivedShare(ctx, user, idRef(rs.Id)); err != nil || !proto.Equal(got, pending) || receivedGeneration(t, m, rs.Id) != gen {
+			t.Fatalf("stale callback changed the stored reset: %v %v", got, err)
+		}
+	})
+}
+
+func TestOrdinaryUpdateCannotEnterOrLeaveTransferring(t *testing.T) {
+	forEachDialect(t, func(t *testing.T, m *mgr) {
+		ctx, user := ownerContext(t, "marie")
+		rs := storeReceived(t, m, ctx, user, "manual-transfer")
+		row := receivedRow(t, m, rs.Id.OpaqueId)
+		manual := &ocm.ReceivedShare{Id: rs.Id, State: ocm.ShareState_SHARE_STATE_TRANSFERRING, Hidden: true}
+		both := &field_mask.FieldMask{Paths: []string{"state", "hidden"}}
+		before, err := readReceivedProjection(m.db, row.ID)
+		if err != nil {
+			t.Fatal(err)
+		}
+		var badRequest errtypes.BadRequest
+		if u, err := m.UpdateReceivedShare(ctx, user, manual, both); !errors.As(err, &badRequest) || u != nil {
+			t.Fatalf("ordinary entry receipt %v, error %v", u, err)
+		}
+		if got, err := readReceivedProjection(m.db, row.ID); err != nil || !before.equal(got) {
+			t.Fatalf("refused entry changed the projection: %v", err)
+		}
+
+		// Older writers could leave a TRANSFERRING row without a generation.
+		setRow(t, m.db, row.ID, map[string]any{"state": model.OcmShareStateTransferring})
+		before, err = readReceivedProjection(m.db, row.ID)
+		if err != nil {
+			t.Fatal(err)
+		}
+		reset := &ocm.ReceivedShare{Id: rs.Id, State: ocm.ShareState_SHARE_STATE_PENDING, Hidden: true}
+		if u, err := m.UpdateReceivedShare(ctx, user, reset, both); !errors.Is(err, share.ErrTransferInProgress) || u != nil {
+			t.Fatalf("historical reservation reset receipt %v, error %v", u, err)
+		}
+		if got, err := readReceivedProjection(m.db, row.ID); err != nil || !before.equal(got) {
+			t.Fatalf("refused reset changed the projection: %v", err)
+		}
+		if u, err := m.UpdateReceivedShare(ctx, user, manual, stateMask()); err != nil || u == nil || u.StateChanged() || u.After.GetHidden() {
+			t.Fatalf("same-state receipt %v, error %v", u, err)
+		}
+		if u, err := m.UpdateReceivedShare(ctx, user, reset, &field_mask.FieldMask{Paths: []string{"hidden"}}); err != nil || u == nil ||
+			u.After.GetState() != manual.State || !u.After.GetHidden() {
+			t.Fatalf("hidden-only receipt %v, error %v", u, err)
+		}
+		if got := receivedGeneration(t, m, rs.Id); got != before.row.TransferGeneration {
+			t.Fatalf("same-state or hidden-only update changed generation to %d", got)
 		}
 	})
 }

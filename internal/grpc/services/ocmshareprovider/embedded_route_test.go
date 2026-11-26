@@ -122,10 +122,8 @@ func (r unacknowledgedTransferStart) StartReceivedShareTransfer(ctx context.Cont
 	return receipt, errCommitAcknowledgmentLost
 }
 
-func TestMountedEmbeddedShareProcessing(t *testing.T) {
-	e := newEmitEnv(t)
-	jwtConfig := map[string]any{"secret": "embedded-route-test"}
-	tokenManagers := map[string]map[string]any{"jwt": jwtConfig}
+func mountEmbeddedGateway(t *testing.T, e *emitEnv, tokenManagers map[string]map[string]any) (mountedGateway, *mountedEmbeddedPeers) {
+	t.Helper()
 	gw, err := revagateway.New(e.recip, map[string]any{
 		"data_transfers_folder": "/transfers",
 		"token_managers":        tokenManagers,
@@ -137,7 +135,26 @@ func TestMountedEmbeddedShareProcessing(t *testing.T) {
 	peers := &mountedEmbeddedPeers{provider: e.svc}
 	testGateways.embedded = peers
 	t.Cleanup(func() { testGateways.embedded = nil })
-	stampGateway(mountedGateway{server: gw.(gateway.GatewayAPIServer)})
+	client := mountedGateway{server: gw.(gateway.GatewayAPIServer)}
+	stampGateway(client)
+	return client, peers
+}
+
+func TestMountedEmbeddedShareProcessing(t *testing.T) {
+	e := newEmitEnv(t)
+	jwtConfig := map[string]any{"secret": "embedded-route-test"}
+	tokenManagers := map[string]map[string]any{"jwt": jwtConfig}
+	gw, peers := mountEmbeddedGateway(t, e, tokenManagers)
+	update := func(id *ocm.ShareId, state ocm.ShareState, destination string, want rpc.Code) {
+		t.Helper()
+		res, err := gw.UpdateReceivedOCMShare(e.recip, &ocm.UpdateReceivedOCMShareRequest{
+			Share:      &ocm.ReceivedShare{Id: id, State: state, Destination: destination},
+			UpdateMask: &field_mask.FieldMask{Paths: []string{"state"}},
+		})
+		if err != nil || res.GetStatus() == nil || res.GetStatus().GetCode() != want {
+			t.Fatalf("update to %v: status %v, error %v, want %v", state, res.GetStatus(), err, want)
+		}
+	}
 
 	mesh, err := sciencemesh.New(e.recip, map[string]any{
 		"gatewaysvc": "gateway", "mesh_directory_url": "https://directory.example.org",
@@ -251,6 +268,9 @@ func TestMountedEmbeddedShareProcessing(t *testing.T) {
 		if code := process(rs.Id, "/dest"); code != http.StatusInternalServerError {
 			t.Fatalf("HTTP %d, want 500", code)
 		}
+		requireState(t, rs.Id, ocm.ShareState_SHARE_STATE_TRANSFERRING)
+		update(rs.Id, ocm.ShareState_SHARE_STATE_PENDING, "", rpc.Code_CODE_ABORTED)
+		update(rs.Id, ocm.ShareState_SHARE_STATE_ACCEPTED, "/dest", rpc.Code_CODE_FAILED_PRECONDITION)
 		requireState(t, rs.Id, ocm.ShareState_SHARE_STATE_TRANSFERRING)
 		if len(e.xfer.callbacks) != 0 || peers.datatxCalls != 0 {
 			t.Fatal("transfer started without an acknowledged commit")

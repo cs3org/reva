@@ -743,8 +743,7 @@ func nextTransferGeneration(current uint64) (uint64, error) {
 }
 
 // UpdateReceivedShare applies the masked fields in one transaction and
-// returns the values read before and after. A state change invalidates the
-// running transfer attempt, if any.
+// returns the values read before and after.
 func (m *mgr) UpdateReceivedShare(ctx context.Context, user *userpb.User, s *ocm.ReceivedShare, fieldMask *field_mask.FieldMask) (*share.ReceivedShareUpdate, error) {
 	updates, _, err := m.translateUpdateFieldMask(s, fieldMask)
 	if err != nil {
@@ -757,6 +756,15 @@ func (m *mgr) UpdateReceivedShare(ctx context.Context, user *userpb.User, s *ocm
 		row, before, err := lockReceived(tx, user, s.Id)
 		if err != nil {
 			return err
+		}
+		if state, ok := updates["state"]; ok && state != row.State {
+			// Only the transfer lifecycle can create or release a reservation.
+			if row.State == model.OcmShareStateTransferring {
+				return share.ErrTransferInProgress
+			}
+			if state == model.OcmShareStateTransferring {
+				return errtypes.BadRequest("cannot set transferring state directly")
+			}
 		}
 		previous, err := readReceivedProjection(tx, row.ID)
 		if err != nil {

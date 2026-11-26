@@ -22,13 +22,16 @@ import (
 	"bytes"
 	"context"
 	"crypto/x509"
+	"database/sql"
 	"encoding/json"
 	"errors"
 	"io"
 	"net"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"path/filepath"
+	"reflect"
 	"slices"
 	"strconv"
 	"strings"
@@ -55,10 +58,13 @@ import (
 	"github.com/cs3org/reva/v3/pkg/permissions"
 	sqlmgr "github.com/cs3org/reva/v3/pkg/share/manager/sql"
 	model "github.com/cs3org/reva/v3/pkg/share/manager/sql/model"
+	mysql "github.com/go-sql-driver/mysql"
+	"github.com/google/uuid"
 	"github.com/rs/zerolog"
 	"google.golang.org/genproto/protobuf/field_mask"
 	"google.golang.org/grpc"
 	"google.golang.org/protobuf/proto"
+	gormmysql "gorm.io/driver/mysql"
 	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
 )
@@ -172,6 +178,7 @@ type controlledTransferrer struct {
 	mu        sync.Mutex
 	callbacks []func(error)
 	fail      error
+	park      func(func(error))
 }
 
 func (c *controlledTransferrer) Process(_ context.Context, _ string, _ string, done func(error)) error {
@@ -181,6 +188,10 @@ func (c *controlledTransferrer) Process(_ context.Context, _ string, _ string, d
 		return c.fail
 	}
 	c.callbacks = append(c.callbacks, done)
+	if c.park != nil {
+		go c.park(done)
+		c.park = nil
+	}
 	return nil
 }
 
@@ -223,10 +234,17 @@ type emitEnv struct {
 func newEmitEnv(t *testing.T) *emitEnv {
 	t.Helper()
 	dbPath := filepath.Join(t.TempDir(), "ocm.sqlite")
-	repo, err := sqlmgr.NewOCMShareManager(context.Background(), map[string]any{
+	e := newEmitEnvWithDatabase(t, map[string]any{
 		"db_engine": "sqlite",
 		"db_name":   dbPath,
 	})
+	e.dbPath = dbPath
+	return e
+}
+
+func newEmitEnvWithDatabase(t *testing.T, dbConfig map[string]any) *emitEnv {
+	t.Helper()
+	repo, err := sqlmgr.NewOCMShareManager(context.Background(), dbConfig)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -251,11 +269,10 @@ func newEmitEnv(t *testing.T) *emitEnv {
 				key: key,
 			},
 		},
-		repo:   repo,
-		peer:   peer,
-		xfer:   xfer,
-		logs:   &lockedBuffer{},
-		dbPath: dbPath,
+		repo: repo,
+		peer: peer,
+		xfer: xfer,
+		logs: &lockedBuffer{},
 	}
 	logger := zerolog.New(env.logs)
 	env.owner = appctx.WithLogger(appctx.ContextSetUser(context.Background(), &userpb.User{
@@ -460,6 +477,22 @@ type failingRepo struct {
 
 var errCommitAcknowledgmentLost = errors.New("commit acknowledgment lost")
 
+type unacknowledgedTransferCompletion struct {
+	share.Repository
+	applied bool
+}
+
+func (r unacknowledgedTransferCompletion) CompleteReceivedShareTransfer(ctx context.Context, user *userpb.User, id *ocm.ShareId, generation uint64, state ocm.ShareState) (*share.ReceivedShareUpdate, error) {
+	if r.applied {
+		receipt, err := r.Repository.CompleteReceivedShareTransfer(ctx, user, id, generation, state)
+		if err != nil {
+			return nil, err
+		}
+		return receipt, &share.CommitUnknownError{Observed: share.CommitObservedRequested}
+	}
+	return nil, &share.CommitUnknownError{Observed: share.CommitObservedPrevious}
+}
+
 func (r failingRepo) DeleteShare(ctx context.Context, user *userpb.User, ref *ocm.ShareReference) ([]share.ShareRemoval, error) {
 	if r.loseCommitAcknowledgment {
 		receipt, err := r.Repository.DeleteShare(ctx, user, ref)
@@ -642,7 +675,9 @@ func TestReceivedStateTransitionsEmitOnce(t *testing.T) {
 	e.setState(t, rs.Id, ocm.ShareState_SHARE_STATE_REJECTED, "")
 	requireNotices(t, e.peer, ocmd.NotificationShareAccepted, ocmd.NotificationShareDeclined)
 	e.setState(t, rs.Id, ocm.ShareState_SHARE_STATE_PENDING, "")
-	e.setState(t, rs.Id, ocm.ShareState_SHARE_STATE_TRANSFERRING, "")
+	if res := e.setState(t, rs.Id, ocm.ShareState_SHARE_STATE_TRANSFERRING, ""); res.GetStatus().GetCode() != rpc.Code_CODE_INVALID_ARGUMENT {
+		t.Fatalf("ordinary entry: %v", res.GetStatus())
+	}
 	requireNotices(t, e.peer, ocmd.NotificationShareAccepted, ocmd.NotificationShareDeclined)
 }
 
@@ -779,35 +814,247 @@ func TestEmbeddedAcceptanceNeedsCompletedCopy(t *testing.T) {
 }
 
 func TestDirectedDeclineRefusesServiceCopyUntilCompletion(t *testing.T) {
-	e := newEmitEnv(t)
-	recipient := appctx.ContextMustGetUser(e.recip).Id
-	recipient.Type = userpb.UserType_USER_TYPE_PRIMARY
+	t.Run("sqlite", func(t *testing.T) {
+		e := newEmitEnv(t)
+		checkDirectedDeclineDuringCopy(t, e, sqlite.Open(e.dbPath))
+	})
+	t.Run("mysql", func(t *testing.T) {
+		raw := os.Getenv("REVA_TEST_MYSQL")
+		if raw == "" {
+			t.Skip("disposable MySQL fixture is unavailable")
+		}
+		at := strings.LastIndexByte(raw, '@')
+		if at < 0 {
+			t.Fatal("invalid REVA_TEST_MYSQL address")
+		}
+		host, portText, err := net.SplitHostPort(raw[at+1:])
+		if err != nil {
+			t.Fatal("invalid REVA_TEST_MYSQL host and port")
+		}
+		port, err := strconv.Atoi(portText)
+		user, password, ok := strings.Cut(raw[:at], ":")
+		if err != nil || !ok {
+			t.Fatal("invalid REVA_TEST_MYSQL credentials or port")
+		}
+		target := mysql.NewConfig()
+		target.User, target.Passwd, target.Net, target.Addr = user, password, "tcp", raw[at+1:]
+		admin, err := sql.Open("mysql", target.FormatDSN())
+		if err != nil {
+			t.Fatal(err)
+		}
+		t.Cleanup(func() { _ = admin.Close() })
+		name := "ocm_copy_" + strings.ReplaceAll(uuid.NewString(), "-", "")
+		if _, err := admin.Exec("CREATE DATABASE " + name + " CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci"); err != nil {
+			t.Fatal(err)
+		}
+		t.Cleanup(func() {
+			if _, err := admin.Exec("DROP DATABASE " + name); err != nil {
+				t.Errorf("drop disposable schema: %v", err)
+			}
+		})
+		e := newEmitEnvWithDatabase(t, map[string]any{
+			"db_engine": "mysql", "db_username": user, "db_password": password,
+			"db_host": host, "db_port": port, "db_name": name,
+		})
+		target.DBName, target.ParseTime = name, true
+		checkDirectedDeclineDuringCopy(t, e, gormmysql.Open(target.FormatDSN()))
+	})
+}
+
+func checkDirectedDeclineDuringCopy(t *testing.T, e *emitEnv, dialect gorm.Dialector) {
+	t.Helper()
+	gw, peers := mountEmbeddedGateway(t, e, map[string]map[string]any{"jwt": {"secret": "embedded-route-test"}})
+	db, err := gorm.Open(dialect, &gorm.Config{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	pool, err := db.DB()
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = pool.Close() })
+	type projection struct {
+		row       model.OcmReceivedShare
+		protocols []model.OcmReceivedShareProtocol
+	}
+	snapshot := func(t *testing.T, id *ocm.ShareId) projection {
+		t.Helper()
+		var p projection
+		if err := db.Where("id = ?", id.OpaqueId).Take(&p.row).Error; err != nil {
+			t.Fatal(err)
+		}
+		if err := db.Where("ocm_received_share_id = ?", p.row.ID).Order("id").Find(&p.protocols).Error; err != nil {
+			t.Fatal(err)
+		}
+		return p
+	}
+
+	recipient := appctx.ContextMustGetUser(e.recip)
+	recipient.Id.Type = userpb.UserType_USER_TYPE_PRIMARY
+	other := e.received(t, "directed-first", false)
 	rs := e.received(t, "directed-copy", true)
 	sender := &userpb.UserId{OpaqueId: "alice", Idp: e.peer.host()}
 	actions := e.repo.(share.DirectedShareActions)
-
-	if res := e.setState(t, rs.Id, ocm.ShareState_SHARE_STATE_ACCEPTED, "/home/dest"); res.Status.Code != rpc.Code_CODE_OK {
-		t.Fatalf("start: %v", res.Status)
+	update := func(t *testing.T, id *ocm.ShareId, state ocm.ShareState, hidden bool, want rpc.Code, paths ...string) {
+		t.Helper()
+		res, err := gw.UpdateReceivedOCMShare(e.recip, &ocm.UpdateReceivedOCMShareRequest{
+			Share:      &ocm.ReceivedShare{Id: id, State: state, Destination: "/home/dest", Hidden: hidden},
+			UpdateMask: &field_mask.FieldMask{Paths: paths},
+		})
+		if err != nil || res.GetStatus() == nil || res.GetStatus().GetCode() != want {
+			t.Fatalf("update %v to %v: status %v, error %v, want %v", paths, state, res.GetStatus(), err, want)
+		}
 	}
-	updates, err := actions.RejectReceivedOCMSharesFromSender(e.recip, recipient, sender)
+
+	beforeOther := snapshot(t, other.Id)
+	beforeCopy := snapshot(t, rs.Id)
+	update(t, rs.Id, ocm.ShareState_SHARE_STATE_TRANSFERRING, true, rpc.Code_CODE_INVALID_ARGUMENT, "state", "hidden")
+	if !reflect.DeepEqual(beforeCopy, snapshot(t, rs.Id)) {
+		t.Fatal("refused entry changed the stored projection")
+	}
+
+	started, finished := make(chan struct{}), make(chan struct{})
+	release := make(chan struct{})
+	finish := sync.OnceFunc(func() { close(release) })
+	e.xfer.park = func(done func(error)) {
+		close(started)
+		<-release
+		done(nil)
+		close(finished)
+	}
+	wait := func(ch <-chan struct{}) {
+		t.Helper()
+		select {
+		case <-ch:
+		case <-time.After(5 * time.Second):
+			t.Fatal("timed out waiting for the controlled copy")
+		}
+	}
+	t.Cleanup(func() {
+		finish()
+		if len(e.xfer.callbacks) > 0 {
+			wait(finished)
+		}
+	})
+	update(t, rs.Id, ocm.ShareState_SHARE_STATE_ACCEPTED, false, rpc.Code_CODE_OK, "state")
+	wait(started)
+	beforeCopy = snapshot(t, rs.Id)
+	gen := beforeCopy.row.TransferGeneration
+	if beforeCopy.row.State != model.OcmShareStateTransferring || gen == 0 {
+		t.Fatal("copy started without a reservation")
+	}
+	update(t, rs.Id, ocm.ShareState_SHARE_STATE_PENDING, false, rpc.Code_CODE_ABORTED, "state")
+	update(t, rs.Id, ocm.ShareState_SHARE_STATE_REJECTED, false, rpc.Code_CODE_ABORTED, "state")
+	update(t, rs.Id, ocm.ShareState_SHARE_STATE_REJECTED, true, rpc.Code_CODE_ABORTED, "state", "hidden")
+	if u, err := e.repo.CompleteReceivedShareTransfer(e.recip, recipient, rs.Id, gen+1, ocm.ShareState_SHARE_STATE_ACCEPTED); err != nil ||
+		u == nil || u.After.GetState() != ocm.ShareState_SHARE_STATE_TRANSFERRING || !proto.Equal(u.Before, u.After) {
+		t.Fatalf("wrong-generation completion receipt %v, error %v", u, err)
+	}
+	if !reflect.DeepEqual(beforeCopy, snapshot(t, rs.Id)) || !reflect.DeepEqual(beforeOther, snapshot(t, other.Id)) {
+		t.Fatal("refused state changes altered a stored projection")
+	}
+
+	updates, err := actions.RejectReceivedOCMSharesFromSender(e.recip, recipient.Id, sender)
 	if updates != nil || !errors.Is(err, share.ErrTransferInProgress) {
 		t.Fatalf("directed decline returned %d receipts and %v", len(updates), err)
 	}
-	if res := e.setState(t, rs.Id, ocm.ShareState_SHARE_STATE_ACCEPTED, "/home/dest"); res.Status.Code != rpc.Code_CODE_FAILED_PRECONDITION {
-		t.Fatalf("second start: %v", res.Status)
+	if !reflect.DeepEqual(beforeCopy, snapshot(t, rs.Id)) || !reflect.DeepEqual(beforeOther, snapshot(t, other.Id)) {
+		t.Fatal("refused batch changed a stored projection")
 	}
-	if len(e.xfer.callbacks) != 1 {
-		t.Fatalf("started %d copies", len(e.xfer.callbacks))
+	update(t, rs.Id, ocm.ShareState_SHARE_STATE_ACCEPTED, false, rpc.Code_CODE_FAILED_PRECONDITION, "state")
+	update(t, rs.Id, ocm.ShareState_SHARE_STATE_PENDING, true, rpc.Code_CODE_OK, "hidden")
+	got := snapshot(t, rs.Id)
+	if !got.row.Hidden || got.row.State != model.OcmShareStateTransferring || got.row.TransferGeneration != gen ||
+		!reflect.DeepEqual(beforeCopy.protocols, got.protocols) {
+		t.Fatal("hidden-only update did not preserve the reservation and protocols")
+	}
+	update(t, other.Id, ocm.ShareState_SHARE_STATE_PENDING, true, rpc.Code_CODE_OK, "hidden")
+	if got := snapshot(t, other.Id).row; !got.Hidden || got.State != model.OcmShareStatePending {
+		t.Fatal("unrelated masked update did not apply")
+	}
+	if len(e.xfer.callbacks) != 1 || peers.datatxCalls != 0 || len(e.svc.notifier.(*syncNotifier).results) != 0 {
+		t.Fatal("a refused operation started another copy or attempted a peer notice")
 	}
 	requireNotices(t, e.peer)
+	finish()
+	wait(finished)
+	notices := requireNotices(t, e.peer, ocmd.NotificationShareAccepted)
+	if fileOf(notices[0])["providerId"] != rs.RemoteShareId {
+		t.Fatal("completion announced the wrong grant")
+	}
 	e.xfer.callback(0)(nil)
 	requireNotices(t, e.peer, ocmd.NotificationShareAccepted)
+	if got := snapshot(t, rs.Id).row; got.State != model.OcmShareStateAccepted || got.TransferGeneration != gen || !got.Hidden {
+		t.Fatal("owner completion did not preserve the generation and hidden flag")
+	}
 
-	updates, err = actions.RejectReceivedOCMSharesFromSender(e.recip, recipient, sender)
-	if err != nil || len(updates) != 1 || updates[0].Before.GetState() != ocm.ShareState_SHARE_STATE_ACCEPTED ||
-		updates[0].After.GetState() != ocm.ShareState_SHARE_STATE_REJECTED {
+	updates, err = actions.RejectReceivedOCMSharesFromSender(e.recip, recipient.Id, sender)
+	if err != nil || len(updates) != 2 {
 		t.Fatalf("directed decline after completion returned %d receipts and %v", len(updates), err)
 	}
+	for i, want := range []*ocm.ReceivedShare{other, rs} {
+		u := updates[i]
+		before := []ocm.ShareState{ocm.ShareState_SHARE_STATE_PENDING, ocm.ShareState_SHARE_STATE_ACCEPTED}[i]
+		if !proto.Equal(u.Before.GetId(), want.Id) || !proto.Equal(u.After.GetId(), want.Id) ||
+			u.Before.GetState() != before || u.After.GetState() != ocm.ShareState_SHARE_STATE_REJECTED || !u.After.GetHidden() {
+			t.Fatalf("unexpected decline receipt %d for %s", i, want.Id.OpaqueId)
+		}
+	}
+	update(t, other.Id, ocm.ShareState_SHARE_STATE_ACCEPTED, false, rpc.Code_CODE_OK, "state")
+	update(t, other.Id, ocm.ShareState_SHARE_STATE_PENDING, false, rpc.Code_CODE_OK, "state")
+	if got := snapshot(t, other.Id).row.State; got != model.OcmShareStatePending {
+		t.Fatal("ordinary access reset did not persist")
+	}
+	requireNotices(t, e.peer, ocmd.NotificationShareAccepted, ocmd.NotificationShareAccepted)
+
+	for _, tc := range []struct {
+		name    string
+		applied bool
+		state   model.OcmShareState
+	}{
+		{"unapplied terminal commit", false, model.OcmShareStateTransferring},
+		{"applied terminal commit", true, model.OcmShareStateAccepted},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			rs := e.received(t, tc.name, true)
+			starts := len(e.xfer.callbacks)
+			update(t, rs.Id, ocm.ShareState_SHARE_STATE_ACCEPTED, false, rpc.Code_CODE_OK, "state")
+			reservation := snapshot(t, rs.Id)
+			e.svc.repo = unacknowledgedTransferCompletion{Repository: e.repo, applied: tc.applied}
+			t.Cleanup(func() { e.svc.repo = e.repo })
+			e.xfer.callback(starts)(nil)
+			stored := snapshot(t, rs.Id)
+			if stored.row.State != tc.state || stored.row.TransferGeneration != reservation.row.TransferGeneration ||
+				!reflect.DeepEqual(stored.protocols, reservation.protocols) {
+				t.Fatalf("unknown completion changed the reservation unexpectedly: %v", stored.row.State)
+			}
+			if !tc.applied {
+				update(t, rs.Id, ocm.ShareState_SHARE_STATE_PENDING, true, rpc.Code_CODE_ABORTED, "state", "hidden")
+				if !reflect.DeepEqual(reservation, snapshot(t, rs.Id)) {
+					t.Fatal("unresolved reservation changed")
+				}
+			}
+			update(t, rs.Id, ocm.ShareState_SHARE_STATE_ACCEPTED, false, rpc.Code_CODE_FAILED_PRECONDITION, "state")
+			if len(e.xfer.callbacks) != starts+1 || peers.datatxCalls != 0 || len(e.svc.notifier.(*syncNotifier).results) != 2 {
+				t.Fatal("unknown completion triggered a second dispatch or notice")
+			}
+			requireNotices(t, e.peer, ocmd.NotificationShareAccepted, ocmd.NotificationShareAccepted)
+		})
+	}
+
+	failed := e.received(t, "no dispatch", true)
+	starts := len(e.xfer.callbacks)
+	e.xfer.fail = errors.New("cannot dispatch copy")
+	update(t, failed.Id, ocm.ShareState_SHARE_STATE_ACCEPTED, false, rpc.Code_CODE_INTERNAL, "state")
+	rejected := snapshot(t, failed.Id)
+	if rejected.row.State != model.OcmShareStateRejected || rejected.row.TransferGeneration == 0 || len(e.xfer.callbacks) != starts {
+		t.Fatal("synchronous no-dispatch failure did not complete its reservation")
+	}
+	u, err := e.repo.CompleteReceivedShareTransfer(e.recip, recipient, failed.Id, rejected.row.TransferGeneration, ocm.ShareState_SHARE_STATE_ACCEPTED)
+	if err != nil || u == nil || u.StateChanged() || !reflect.DeepEqual(rejected, snapshot(t, failed.Id)) {
+		t.Fatalf("completed generation changed the failed projection: %v", err)
+	}
+	requireNotices(t, e.peer, ocmd.NotificationShareAccepted, ocmd.NotificationShareAccepted)
 }
 
 func TestSenderFailureKeepsCommittedChange(t *testing.T) {

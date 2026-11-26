@@ -272,16 +272,31 @@ func TestDirectedDeclineRefusesLiveTransfer(t *testing.T) {
 			t.Fatal(err)
 		}
 
+		projection := func(id *ocm.ShareId) *receivedProjection {
+			t.Helper()
+			row := receivedRow(t, m, id.OpaqueId)
+			got, err := readReceivedProjection(m.db, row.ID)
+			if err != nil {
+				t.Fatal(err)
+			}
+			return got
+		}
+		beforePending, beforeCopy := projection(pending.Id), projection(copying.Id)
+		reset := &ocm.ReceivedShare{Id: copying.Id, State: ocm.ShareState_SHARE_STATE_PENDING, Hidden: true}
+		if update, err := m.UpdateReceivedShare(ctx, alice, reset, &field_mask.FieldMask{Paths: []string{"state", "hidden"}}); update != nil ||
+			!errors.Is(err, share.ErrTransferInProgress) {
+			t.Fatalf("ordinary reset receipt %v, error %v", update, err)
+		}
+		if !beforeCopy.equal(projection(copying.Id)) {
+			t.Fatal("refused reset changed the copy projection")
+		}
+
 		updates, err := m.RejectReceivedOCMSharesFromSender(ctx, alice.Id, bob)
 		if updates != nil || !errors.Is(err, share.ErrTransferInProgress) {
 			t.Fatalf("directed decline returned %d receipts and %v", len(updates), err)
 		}
-		if got := receivedRow(t, m, pending.Id.OpaqueId); got.State != model.OcmShareStatePending || got.Hidden {
-			t.Fatalf("pending grant changed: state %v, hidden %t", got.State, got.Hidden)
-		}
-		if got := receivedRow(t, m, copying.Id.OpaqueId); got.State != model.OcmShareStateTransferring ||
-			got.Hidden || got.TransferGeneration != transfer.Generation {
-			t.Fatalf("copy reservation changed: state %v, hidden %t, generation %d", got.State, got.Hidden, got.TransferGeneration)
+		if !beforePending.equal(projection(pending.Id)) || !beforeCopy.equal(projection(copying.Id)) {
+			t.Fatal("refused decline changed a selected projection")
 		}
 		if _, err := m.StartReceivedShareTransfer(ctx, alice, copying, stateMask()); !errors.Is(err, share.ErrTransferInProgress) {
 			t.Fatalf("second transfer start: %v", err)
