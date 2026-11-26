@@ -46,6 +46,7 @@ type commitFault struct {
 	failRead bool         // fail the reads that follow the fault
 	armed    atomic.Bool  // the next commit is faulted
 	faulted  atomic.Bool  // a commit was faulted
+	begins   atomic.Int32 // begin attempts, including when unarmed
 	commits  atomic.Int32 // commits attempted before the fault
 	reads    atomic.Int32 // reads after the fault
 	writes   atomic.Int32 // writes after the fault
@@ -54,6 +55,7 @@ type commitFault struct {
 var errLostAck = errors.New("commit acknowledgment lost")
 
 func (p *commitFault) BeginTx(ctx context.Context, opts *dbsql.TxOptions) (gorm.ConnPool, error) {
+	p.begins.Add(1)
 	tx, err := p.DB.BeginTx(ctx, opts)
 	if err != nil {
 		return nil, err
@@ -302,8 +304,14 @@ func TestUnacknowledgedCommitsObserveTheExactProjection(t *testing.T) {
 					p := &commitFault{}
 					withCommitFault(t, m, p)
 					got, err, _ := run(t, m, rs, remote, gen)
-					if err != nil || !got || !o.done(t, m.db, remote) || p.reads.Load() != 0 {
-						t.Fatalf("receipt=%t err=%v reads=%d", got, err, p.reads.Load())
+					if begins := p.begins.Load(); begins != 1 {
+						t.Fatalf("acknowledged mutation began %d transactions, want 1", begins)
+					}
+					if err != nil || !got {
+						t.Fatalf("receipt=%t err=%v", got, err)
+					}
+					if !o.done(t, m.db, remote) {
+						t.Fatal("acknowledged mutation did not persist the requested state")
 					}
 				})
 				for _, tc := range cases {
