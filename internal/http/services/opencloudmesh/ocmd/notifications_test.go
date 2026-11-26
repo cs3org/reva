@@ -160,6 +160,9 @@ func TestNotificationsReceiverMatrix(t *testing.T) {
 			before := calls
 			rr, logs := postNotification(t, h, tc.contentType, tc.body)
 			checkResponse(t, rr, tc.status, tc.apiCode)
+			if tc.status == http.StatusCreated && rr.Header().Get("Content-Type") != "" {
+				t.Fatalf("201 has content-type %q", rr.Header().Get("Content-Type"))
+			}
 			if calls-before != tc.calls {
 				t.Fatalf("handler calls %d, want %d", calls-before, tc.calls)
 			}
@@ -167,14 +170,6 @@ func TestNotificationsReceiverMatrix(t *testing.T) {
 				t.Fatalf("incorrect ignored diagnostic: %s", logs)
 			}
 		})
-	}
-}
-
-func TestNotificationsSuccessResponseBytes(t *testing.T) {
-	s, host := newNotificationsService(t)
-	rr, _ := postNotification(t, handlerFor(s), "application/json", `{"notificationType":"FUTURE","senderDomain":"`+host+`","resourceType":"file"}`)
-	if rr.Code != http.StatusCreated || rr.Body.Len() != 0 || rr.Header().Get("Content-Type") != "" {
-		t.Fatalf("status %d body %q content-type %q", rr.Code, rr.Body.String(), rr.Header().Get("Content-Type"))
 	}
 }
 
