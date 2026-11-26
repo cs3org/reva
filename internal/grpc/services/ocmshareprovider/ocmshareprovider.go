@@ -662,7 +662,11 @@ func (s *service) UpdateReceivedOCMShare(ctx context.Context, req *ocm.UpdateRec
 			}, nil
 		}
 	}
-	update, err := s.repo.UpdateReceivedShare(ctx, user, req.Share, req.UpdateMask)
+	mutationCtx := ctx
+	if !transferAcceptance {
+		mutationCtx = share.WithStateNotice(ctx)
+	}
+	update, err := s.repo.UpdateReceivedShare(mutationCtx, user, req.Share, req.UpdateMask)
 	if err != nil {
 		if errors.Is(err, share.ErrShareNotFound) {
 			return &ocm.UpdateReceivedOCMShareResponse{
@@ -781,7 +785,11 @@ func (s *service) processEmbeddedShare(ctx context.Context, user *userpb.User, r
 // endTransfer completes one transfer attempt, unless a reset or a newer
 // attempt replaced it. A failed transfer is not the recipient declining.
 func (s *service) endTransfer(ctx context.Context, user *userpb.User, id *ocm.ShareId, generation uint64, state ocm.ShareState) error {
-	update, err := s.repo.CompleteReceivedShareTransfer(ctx, user, id, generation, state)
+	mutationCtx := ctx
+	if state == ocm.ShareState_SHARE_STATE_ACCEPTED {
+		mutationCtx = share.WithStateNotice(ctx)
+	}
+	update, err := s.repo.CompleteReceivedShareTransfer(mutationCtx, user, id, generation, state)
 	if err != nil {
 		return err
 	}

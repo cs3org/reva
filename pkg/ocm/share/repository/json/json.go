@@ -24,12 +24,14 @@ import (
 	"io"
 	"math"
 	"os"
+	"sync/atomic"
 	"time"
 
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	ocm "github.com/cs3org/go-cs3apis/cs3/sharing/ocm/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	typespb "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
+	"github.com/cs3org/reva/v3/pkg/appctx"
 	"github.com/cs3org/reva/v3/pkg/errtypes"
 	"github.com/cs3org/reva/v3/pkg/ocm/share"
 	"github.com/cs3org/reva/v3/pkg/ocm/share/repository/registry"
@@ -208,6 +210,73 @@ type mgr struct {
 	c     *config
 	gate  *semaphore.Weighted
 	model *shareModel
+
+	// Match the async notifier budget, including producers yet to hand off.
+	stateNotices [64]stateNotice
+}
+
+type stateNotice struct {
+	live         *atomic.Bool
+	key          string
+	id           *ocm.ShareId
+	grantee      *provider.Grantee
+	creator      *userpb.UserId
+	remoteID     string
+	resourceType ocm.SharedResourceType
+	state        ocm.ShareState
+	generation   uint64
+}
+
+// Reconcile under the manager gate. A failed file operation gives no usable
+// snapshot, so it retires every outstanding proof.
+func (m *mgr) reconcileStateNotices(acknowledged bool) {
+	for i, notice := range m.stateNotices {
+		if notice.live == nil {
+			continue
+		}
+		if acknowledged && notice.live.Load() {
+			rs := m.model.ReceivedShares[notice.key]
+			if rs != nil && proto.Equal(rs.GetId(), notice.id) &&
+				proto.Equal(rs.GetGrantee(), notice.grantee) && proto.Equal(rs.GetCreator(), notice.creator) &&
+				rs.GetRemoteShareId() == notice.remoteID && rs.GetSharedResourceType() == notice.resourceType &&
+				rs.GetState() == notice.state && m.model.TransferGenerations[notice.id.GetOpaqueId()] == notice.generation {
+				continue
+			}
+		}
+		notice.live.Store(false)
+		m.stateNotices[i] = stateNotice{}
+	}
+}
+
+func (m *mgr) receivedUpdate(ctx context.Context, key string, before, rs *ocm.ReceivedShare) (*share.ReceivedShareUpdate, bool) {
+	update := &share.ReceivedShareUpdate{Before: before, After: proto.CloneOf(rs)}
+	if !share.WantsStateNotice(ctx) || !update.StateChanged() ||
+		(rs.State != ocm.ShareState_SHARE_STATE_ACCEPTED && rs.State != ocm.ShareState_SHARE_STATE_REJECTED) {
+		return update, false
+	}
+	for i, notice := range m.stateNotices {
+		if notice.live != nil && notice.live.Load() {
+			continue
+		}
+		// The slot can be reused while the previous receipt is still held.
+		live := new(atomic.Bool)
+		live.Store(true)
+		m.stateNotices[i] = stateNotice{
+			live:         live,
+			key:          key,
+			id:           proto.CloneOf(rs.GetId()),
+			grantee:      proto.CloneOf(rs.GetGrantee()),
+			creator:      proto.CloneOf(rs.GetCreator()),
+			remoteID:     rs.GetRemoteShareId(),
+			resourceType: rs.GetSharedResourceType(),
+			state:        rs.State,
+			generation:   m.model.TransferGenerations[rs.GetId().GetOpaqueId()],
+		}
+		update.TryStateNotice = func() bool { return live.Swap(false) }
+		return update, false
+	}
+	update.TryStateNotice = func() bool { return false }
+	return update, true
 }
 
 func (m *mgr) Lock() {
@@ -218,7 +287,8 @@ func (m *mgr) Unlock() {
 	m.gate.Release(1)
 }
 
-func (m *mgr) save() error {
+func (m *mgr) save() (err error) {
+	defer func() { m.reconcileStateNotices(err == nil) }()
 	f, err := os.OpenFile(m.c.File, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0644)
 	if err != nil {
 		return errors.Wrap(err, "error opening file "+m.c.File)
@@ -232,7 +302,8 @@ func (m *mgr) save() error {
 	return f.Sync()
 }
 
-func (m *mgr) load() error {
+func (m *mgr) load() (err error) {
+	defer func() { m.reconcileStateNotices(err == nil) }()
 	f, err := os.OpenFile(m.c.File, os.O_RDONLY, 0644)
 	if err != nil {
 		return errors.Wrap(err, "error opening file "+m.c.File)
@@ -713,7 +784,13 @@ func touch(rs *ocm.ReceivedShare) {
 // before and after. A state change invalidates the running transfer attempt.
 func (m *mgr) UpdateReceivedShare(ctx context.Context, user *userpb.User, s *ocm.ReceivedShare, fieldMask *field_mask.FieldMask) (*share.ReceivedShareUpdate, error) {
 	m.Lock()
-	defer m.Unlock()
+	var refused bool
+	defer func() {
+		m.Unlock()
+		if refused {
+			appctx.GetLogger(ctx).Warn().Msg("dropping OCM state notice: proof capacity exhausted")
+		}
+	}()
 
 	if err := m.load(); err != nil {
 		return nil, err
@@ -743,7 +820,8 @@ func (m *mgr) UpdateReceivedShare(ctx context.Context, user *userpb.User, s *ocm
 	if err := m.save(); err != nil {
 		return nil, errors.Wrap(err, "error saving model")
 	}
-	return &share.ReceivedShareUpdate{Before: before, After: proto.Clone(rs).(*ocm.ReceivedShare)}, nil
+	update, refused := m.receivedUpdate(ctx, s.Id.GetOpaqueId(), before, rs)
+	return update, nil
 }
 
 // StartReceivedShareTransfer moves a share that is not transferring to
@@ -786,7 +864,13 @@ func (m *mgr) StartReceivedShareTransfer(ctx context.Context, user *userpb.User,
 // only while the same attempt is still running.
 func (m *mgr) CompleteReceivedShareTransfer(ctx context.Context, user *userpb.User, id *ocm.ShareId, generation uint64, state ocm.ShareState) (*share.ReceivedShareUpdate, error) {
 	m.Lock()
-	defer m.Unlock()
+	var refused bool
+	defer func() {
+		m.Unlock()
+		if refused {
+			appctx.GetLogger(ctx).Warn().Msg("dropping OCM state notice: proof capacity exhausted")
+		}
+	}()
 
 	if err := m.load(); err != nil {
 		return nil, err
@@ -804,7 +888,8 @@ func (m *mgr) CompleteReceivedShareTransfer(ctx context.Context, user *userpb.Us
 	if err := m.save(); err != nil {
 		return nil, errors.Wrap(err, "error saving model")
 	}
-	return &share.ReceivedShareUpdate{Before: before, After: proto.Clone(rs).(*ocm.ReceivedShare)}, nil
+	update, refused := m.receivedUpdate(ctx, id.GetOpaqueId(), before, rs)
+	return update, nil
 }
 
 func (m *mgr) GetEmbeddedPayload(ctx context.Context, user *userpb.User, share *ocm.ReceivedShare) (string, error) {

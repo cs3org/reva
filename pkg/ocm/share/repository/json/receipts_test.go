@@ -24,7 +24,9 @@ import (
 	"errors"
 	"math"
 	"os"
+	"os/exec"
 	"path/filepath"
+	"syscall"
 	"testing"
 	"testing/synctest"
 	"time"
@@ -60,6 +62,288 @@ func receivedFixture(t *testing.T, m share.Repository) (*userpb.User, *ocm.Recei
 }
 
 func mask(paths ...string) *field_mask.FieldMask { return &field_mask.FieldMask{Paths: paths} }
+
+func TestJSONStateNoticeReconcilesAcknowledgedState(t *testing.T) {
+	const (
+		accepted = ocm.ShareState_SHARE_STATE_ACCEPTED
+		declined = ocm.ShareState_SHARE_STATE_REJECTED
+		pending  = ocm.ShareState_SHARE_STATE_PENDING
+	)
+	for _, tc := range []struct {
+		name string
+		live bool
+	}{
+		{"no-op", true}, {"validation error", true}, {"reset", false},
+		{"transfer", false}, {"unrelated ingress", true}, {"unobserved writer", true},
+		{"observed writer", false}, {"new grantee", false}, {"new creator", false},
+		{"different remote ID case", false}, {"different local ID", false},
+		{"deleted row", false}, {"missing file", false}, {"corrupt file", false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			repo, cleanup := setup(t)
+			defer cleanup()
+			m := repo.(*mgr)
+			ctx := t.Context()
+			user, rs := receivedFixture(t, m)
+			ref := &ocm.ShareReference{Spec: &ocm.ShareReference_Id{Id: rs.Id}}
+			update := func(repo share.Repository, ctx context.Context, state ocm.ShareState, paths ...string) (*share.ReceivedShareUpdate, error) {
+				return repo.UpdateReceivedShare(ctx, user, &ocm.ReceivedShare{Id: rs.Id, State: state}, mask(paths...))
+			}
+			proof, err := update(m, share.WithStateNotice(ctx), declined, "state")
+			if err != nil || proof.TryStateNotice == nil {
+				t.Fatalf("decline receipt = %v, err = %v", proof, err)
+			}
+			switch tc.name {
+			case "no-op":
+				receipt, err := update(m, share.WithStateNotice(ctx), declined, "state")
+				if err != nil || receipt.StateChanged() || receipt.TryStateNotice != nil {
+					t.Fatalf("same-state update = %v, err = %v", receipt, err)
+				}
+			case "validation error":
+				if receipt, err := update(m, share.WithStateNotice(ctx), accepted, "state", "invalid"); err == nil || receipt != nil {
+					t.Fatalf("invalid update = %v, err = %v", receipt, err)
+				}
+			case "reset":
+				receipt, err := update(m, share.WithStateNotice(ctx), pending, "state")
+				if err != nil || !receipt.StateChanged() || receipt.TryStateNotice != nil {
+					t.Fatalf("reset = %v, err = %v", receipt, err)
+				}
+			case "transfer":
+				start, err := m.StartReceivedShareTransfer(ctx, user, rs, mask("state"))
+				if err != nil {
+					t.Fatal(err)
+				}
+				stale, err := m.CompleteReceivedShareTransfer(share.WithStateNotice(ctx), user, rs.Id, start.Generation-1, accepted)
+				if err != nil || stale.StateChanged() || stale.TryStateNotice != nil {
+					t.Fatalf("stale completion = %v, err = %v", stale, err)
+				}
+				failed, err := m.CompleteReceivedShareTransfer(ctx, user, rs.Id, start.Generation, declined)
+				if err != nil || !failed.StateChanged() || failed.TryStateNotice != nil {
+					t.Fatalf("failed completion = %v, err = %v", failed, err)
+				}
+				start, err = m.StartReceivedShareTransfer(ctx, user, rs, mask("state"))
+				if err != nil {
+					t.Fatal(err)
+				}
+				completed, err := m.CompleteReceivedShareTransfer(share.WithStateNotice(ctx), user, rs.Id, start.Generation, accepted)
+				if err != nil || completed.TryStateNotice == nil || !completed.TryStateNotice() {
+					t.Fatalf("successful completion = %v, err = %v", completed, err)
+				}
+			case "unrelated ingress", "unobserved writer", "observed writer":
+				other, err := New(ctx, map[string]any{"file": m.c.File})
+				if err != nil {
+					t.Fatal(err)
+				}
+				receivedFixture(t, other)
+				if tc.name != "unrelated ingress" {
+					receipt, err := update(other, ctx, accepted, "state")
+					if err != nil || !receipt.StateChanged() || receipt.TryStateNotice != nil {
+						t.Fatalf("external update = %v, err = %v", receipt, err)
+					}
+				}
+				if tc.name != "unobserved writer" {
+					current, err := m.GetReceivedShare(ctx, user, ref)
+					want := declined
+					if tc.name == "observed writer" {
+						want = accepted
+					}
+					if err != nil || current.GetState() != want {
+						t.Fatalf("issuer read = %v, err = %v", current, err)
+					}
+				}
+			default:
+				original, err := os.ReadFile(m.c.File)
+				if err != nil {
+					t.Fatal(err)
+				}
+				switch tc.name {
+				case "missing file":
+					err = os.Remove(m.c.File)
+				case "corrupt file":
+					err = os.WriteFile(m.c.File, []byte("{"), 0600)
+				default:
+					var model shareModel
+					if err := json.Unmarshal(original, &model); err != nil {
+						t.Fatal(err)
+					}
+					row := model.ReceivedShares[rs.Id.OpaqueId]
+					switch tc.name {
+					case "new grantee":
+						row.Grantee.GetUserId().Idp += ":443"
+					case "new creator":
+						row.Creator.Idp += ":443"
+					case "different remote ID case":
+						row.RemoteShareId = "Remote-1"
+					case "different local ID":
+						row.Id.OpaqueId += "-replaced"
+					case "deleted row":
+						delete(model.ReceivedShares, rs.Id.OpaqueId)
+					}
+					changed, err := json.Marshal(&model)
+					if err != nil {
+						t.Fatal(err)
+					}
+					if err := os.WriteFile(m.c.File, changed, 0600); err != nil {
+						t.Fatal(err)
+					}
+				}
+				if err != nil {
+					t.Fatal(err)
+				}
+				_, err = m.GetReceivedShare(ctx, user, ref)
+				if (tc.name == "missing file" || tc.name == "corrupt file") && err == nil {
+					t.Fatal("invalid file was readable")
+				}
+				if err := os.WriteFile(m.c.File, original, 0600); err != nil {
+					t.Fatal(err)
+				}
+				if _, err := m.GetReceivedShare(ctx, user, ref); err != nil {
+					t.Fatalf("restored row: %v", err)
+				}
+			}
+			if got := proof.TryStateNotice(); got != tc.live {
+				t.Errorf("earlier proof = %t, want %t", got, tc.live)
+			}
+			if proof.TryStateNotice() {
+				t.Error("proof could be used twice")
+			}
+		})
+	}
+}
+
+func TestJSONStateNoticeCapacityKeepsIndependentGrants(t *testing.T) {
+	m, cleanup := setup(t)
+	defer cleanup()
+	ctx := share.WithStateNotice(t.Context())
+	accept := func(user *userpb.User, rs *ocm.ReceivedShare) *share.ReceivedShareUpdate {
+		t.Helper()
+		receipt, err := m.UpdateReceivedShare(ctx, user,
+			&ocm.ReceivedShare{Id: rs.Id, State: ocm.ShareState_SHARE_STATE_ACCEPTED}, mask("state"))
+		if err != nil || !receipt.StateChanged() || receipt.TryStateNotice == nil {
+			t.Fatalf("accept = %v, err = %v", receipt, err)
+		}
+		return receipt
+	}
+	var parked []*share.ReceivedShareUpdate
+	for range 64 {
+		user, rs := receivedFixture(t, m)
+		parked = append(parked, accept(user, rs))
+	}
+	user, rs := receivedFixture(t, m)
+	refused := accept(user, rs)
+	ref := &ocm.ShareReference{Spec: &ocm.ShareReference_Id{Id: rs.Id}}
+	if current, err := m.GetReceivedShare(ctx, user, ref); err != nil || current.GetState() != ocm.ShareState_SHARE_STATE_ACCEPTED {
+		t.Fatalf("refused grant state = %v, err = %v", current.GetState(), err)
+	}
+	if refused.TryStateNotice() || !parked[0].TryStateNotice() {
+		t.Fatal("refused proof was usable or displaced an earlier grant")
+	}
+	next := accept(receivedFixture(t, m))
+	if parked[0].TryStateNotice() || !next.TryStateNotice() || refused.TryStateNotice() {
+		t.Fatal("slot reuse rearmed an old receipt or lost the new one")
+	}
+	for i, proof := range parked[1:] {
+		if !proof.TryStateNotice() {
+			t.Errorf("independent grant %d lost its proof", i+1)
+		}
+	}
+}
+
+func TestJSONStateNoticeRevokedOnUnacknowledgedSave(t *testing.T) {
+	mkfifo, err := exec.LookPath("mkfifo")
+	if err != nil {
+		t.Skip("requires mkfifo to observe bytes before a failing sync")
+	}
+	repo, cleanup := setup(t)
+	defer cleanup()
+	m := repo.(*mgr)
+	ctx := share.WithStateNotice(t.Context())
+	user, rs := receivedFixture(t, m)
+	update := func(state ocm.ShareState) (*share.ReceivedShareUpdate, error) {
+		return m.UpdateReceivedShare(ctx, user, &ocm.ReceivedShare{Id: rs.Id, State: state}, mask("state"))
+	}
+	earlier, err := update(ocm.ShareState_SHARE_STATE_ACCEPTED)
+	if err != nil || earlier.TryStateNotice == nil {
+		t.Fatalf("accepted receipt = %v, err = %v", earlier, err)
+	}
+	path := m.c.File
+	original, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Remove(path); err != nil {
+		t.Fatal(err)
+	}
+	if out, err := exec.Command(mkfifo, path).CombinedOutput(); err != nil {
+		t.Fatalf("create read barrier: %v: %s", err, out)
+	}
+	result := make(chan error, 1)
+	go func() {
+		receipt, err := update(ocm.ShareState_SHARE_STATE_REJECTED)
+		if receipt != nil {
+			t.Error("unacknowledged update returned a receipt")
+		}
+		result <- err
+	}()
+	feed, err := os.OpenFile(path, os.O_WRONLY, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer feed.Close()
+	if err := os.Remove(path); err != nil {
+		t.Fatal(err)
+	}
+	if out, err := exec.Command(mkfifo, path).CombinedOutput(); err != nil {
+		t.Fatalf("create save barrier: %v: %s", err, out)
+	}
+	saved := make(chan []byte, 1)
+	go func() {
+		d, err := os.ReadFile(path)
+		if err != nil {
+			t.Errorf("read attempted save: %v", err)
+		}
+		saved <- d
+	}()
+	if _, err := feed.Write(original); err != nil {
+		t.Fatal(err)
+	}
+	if err := feed.Close(); err != nil {
+		t.Fatal(err)
+	}
+	select {
+	case err := <-result:
+		if !errors.Is(err, syscall.EINVAL) {
+			t.Fatalf("save error = %v, want FIFO sync failure", err)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("save did not finish")
+	}
+	var attempted shareModel
+	select {
+	case d := <-saved:
+		if err := json.Unmarshal(d, &attempted); err != nil {
+			t.Fatal(err)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("save bytes were not observed")
+	}
+	if got := attempted.ReceivedShares[rs.Id.OpaqueId].GetState(); got != ocm.ShareState_SHARE_STATE_REJECTED {
+		t.Fatalf("attempted state = %v", got)
+	}
+	if err := os.Remove(path); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(path, original, 0600); err != nil {
+		t.Fatal(err)
+	}
+	ref := &ocm.ShareReference{Spec: &ocm.ShareReference_Id{Id: rs.Id}}
+	if _, err := m.GetReceivedShare(ctx, user, ref); err != nil {
+		t.Fatal(err)
+	}
+	if earlier.TryStateNotice() {
+		t.Fatal("unacknowledged save left the earlier proof live")
+	}
+}
 
 func TestJSONDeleteAndUpdateShareReceipts(t *testing.T) {
 	m, cleanup := setup(t)

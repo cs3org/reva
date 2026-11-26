@@ -39,22 +39,22 @@ type notifier interface {
 	NewNotification(ctx context.Context, domain string, n *ocmd.OutgoingNotification) ocmd.SendResult
 }
 
-// emit sends a built share-state notification to domain, if any.
-func (s *service) emit(ctx context.Context, domain string, b ocmd.ShareStateNotification, stillCurrent func(context.Context) bool) {
+// emit reports whether the notifier accepted the handoff.
+func (s *service) emit(ctx context.Context, domain string, b ocmd.ShareStateNotification, stillCurrent func(context.Context) bool) bool {
 	log := appctx.GetLogger(ctx)
 	if s.notifier == nil {
-		return
+		return false
 	}
 	// The stored peer host is validated as it is; nothing is stripped from it.
 	peer, err := providerdomain.CanonicalOCMHost(domain)
 	if err != nil {
 		log.Warn().Str("type", b.Type).Msg("not sending OCM notification: invalid peer host")
-		return
+		return false
 	}
 	n, err := b.Build()
 	if err != nil {
 		log.Warn().Str("type", b.Type).Str("error", err.Error()).Msg("not sending OCM notification")
-		return
+		return false
 	}
 	if stillCurrent != nil {
 		n.StillCurrent = func(ctx context.Context) bool {
@@ -64,7 +64,7 @@ func (s *service) emit(ctx context.Context, domain string, b ocmd.ShareStateNoti
 			return ctx.Err() == nil && stillCurrent(ctx) && ctx.Err() == nil && time.Now().Before(deadline)
 		}
 	}
-	s.notifier.NewNotification(ctx, peer, n)
+	return s.notifier.NewNotification(ctx, peer, n) == (ocmd.SendResult{})
 }
 
 func resourceTypeName(t ocm.SharedResourceType) string {
@@ -193,6 +193,14 @@ func (s *service) notifyPermissionChange(ctx context.Context, update *share.Shar
 // notifyReceivedState sends SHARE_ACCEPTED or SHARE_DECLINED to the original
 // sender of the share, never to the owner fallback.
 func (s *service) notifyReceivedState(ctx context.Context, update *share.ReceivedShareUpdate, explicitDecline bool) {
+	var handedOff bool
+	if update != nil && update.TryStateNotice != nil {
+		defer func() {
+			if !handedOff {
+				update.TryStateNotice()
+			}
+		}()
+	}
 	if !update.StateChanged() {
 		return
 	}
@@ -210,8 +218,9 @@ func (s *service) notifyReceivedState(ctx context.Context, update *share.Receive
 		return
 	}
 	var stillCurrent func(context.Context) bool
-	// A JSON reload can block on file I/O even after cancellation.
-	if s.conf.Driver == "sql" {
+	if try := update.TryStateNotice; try != nil {
+		stillCurrent = func(context.Context) bool { return try() }
+	} else if s.conf.Driver == "sql" {
 		ref := &ocm.ShareReference{Spec: &ocm.ShareReference_Id{Id: rs.GetId()}}
 		stillCurrent = func(ctx context.Context) bool {
 			current, err := s.repo.GetReceivedShare(ctx, appctx.ContextMustGetUser(ctx), ref)
@@ -223,7 +232,7 @@ func (s *service) notifyReceivedState(ctx context.Context, update *share.Receive
 				current.GetState() == rs.GetState()
 		}
 	}
-	s.emit(ctx, rs.GetCreator().GetIdp(), ocmd.ShareStateNotification{
+	handedOff = s.emit(ctx, rs.GetCreator().GetIdp(), ocmd.ShareStateNotification{
 		Type:         typ,
 		SenderDomain: s.conf.ProviderDomain,
 		ResourceType: resourceTypeName(rs.GetSharedResourceType()),

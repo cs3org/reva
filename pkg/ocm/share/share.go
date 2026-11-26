@@ -114,6 +114,20 @@ func (u *ShareUpdate) PermissionsChanged() bool {
 type ReceivedShareUpdate struct {
 	Before *ocm.ReceivedShare
 	After  *ocm.ReceivedShare
+	// TryStateNotice consumes the issuer's one-shot proof, if supported.
+	TryStateNotice func() bool `json:"-"`
+}
+
+type stateNoticeKey struct{}
+
+// WithStateNotice requests a proof for a received-state mutation that may notify.
+func WithStateNotice(ctx context.Context) context.Context {
+	return context.WithValue(ctx, stateNoticeKey{}, true)
+}
+
+// WantsStateNotice reports whether the caller requested a notice proof.
+func WantsStateNotice(ctx context.Context) bool {
+	return ctx.Value(stateNoticeKey{}) == true
 }
 
 // StateChanged reports whether the persisted state changed.
