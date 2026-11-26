@@ -455,6 +455,8 @@ func (c *Client) mergeACLsAndAttrsForFiles(ctx context.Context, auth eosclient.A
 		if parentInfo != nil {
 			info.Attrs["sys.mask"] = parentInfo.Attrs["sys.mask"]
 			info.ParentMode = parentInfo.Mode
+			info.ParentUID = parentInfo.UID
+			info.ParentGID = parentInfo.GID
 		}
 	}
 
@@ -1086,6 +1088,8 @@ func (c *Client) parseFind(ctx context.Context, auth eosclient.Authorization, di
 			if parent != nil {
 				fi.Attrs["sys.mask"] = parent.Attrs["sys.mask"]
 				fi.ParentMode = parent.Mode
+				fi.ParentUID = parent.UID
+				fi.ParentGID = parent.GID
 			}
 		}
 	}

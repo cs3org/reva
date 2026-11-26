@@ -445,24 +445,37 @@ func (fs *Eosfs) permissionSet(ctx context.Context, eosFileInfo *eosclient.FileI
 		mergePermissions(&perm, permissions.NewViewerRole().CS3ResourcePermissions())
 	}
 
-	// A world-readable resource can be read by any authenticated user,
-	// independently of the sys.acl. We deliberately only look at the world
-	// read bit: owner access is handled above, group access is expressed
-	// through the sys.acl rather than the unix group bits, and write access
-	// is never granted through the mode bits.
+	// The mode bits give access independently of the sys.acl. Like EOS, we
+	// use only the first class that matches: owner, primary group, world.
+	// The world bits never give write access.
 	// EOS checks access on the mode after it applies sys.mask.
-	// For a file, EOS ignores the mode of the file and checks the parent folder.
+	// For a file, EOS ignores the mode, uid and gid of the file and checks the parent folder.
 	// External users get access only through a share: EOS does not check
 	// their access, because they act as the external account system user.
-	mode := eosFileInfo.Mode
+	mode, uid, gid := eosFileInfo.Mode, eosFileInfo.UID, eosFileInfo.GID
 	if !eosFileInfo.IsDir {
-		mode = eosFileInfo.ParentMode
+		mode, uid, gid = eosFileInfo.ParentMode, eosFileInfo.ParentUID, eosFileInfo.ParentGID
 	}
 	if mask, err := strconv.ParseUint(eosFileInfo.Attrs["sys.mask"], 8, 64); err == nil {
 		mode &= mask
 	}
-	if !utils.IsExternalUser(u) && mode&worldRead != 0 {
-		mergePermissions(&perm, permissions.NewViewerRole().CS3ResourcePermissions())
+	if !utils.IsExternalUser(u) {
+		// A user without a uid or gid has 0, which must not match root.
+		var bits uint64
+		switch {
+		case u.UidNumber != 0 && uint64(u.UidNumber) == uid:
+			bits = mode >> 6 & 0o7
+		case u.GidNumber != 0 && uint64(u.GidNumber) == gid:
+			bits = mode >> 3 & 0o7
+		default:
+			bits = mode & modeRead
+		}
+		if bits&modeRead != 0 {
+			mergePermissions(&perm, permissions.NewViewerRole().CS3ResourcePermissions())
+		}
+		if bits&modeWrite != 0 {
+			mergePermissions(&perm, permissions.NewEditorRole().CS3ResourcePermissions())
+		}
 	}
 
 	if eosFileInfo.SysACL != nil {
@@ -509,8 +522,11 @@ func (fs *Eosfs) permissionSet(ctx context.Context, eosFileInfo *eosclient.FileI
 	return &perm
 }
 
-// worldRead is the world (other) read bit of a unix mode.
-const worldRead = 0o004
+// Read and write bits of one class (owner, group or world) of a unix mode.
+const (
+	modeRead  = 0o4
+	modeWrite = 0o2
+)
 
 func attrForLightweightACL(k, v string) (*acl.Entry, bool) {
 	ok := strings.HasPrefix(k, "sys."+lwShareAttrKey)

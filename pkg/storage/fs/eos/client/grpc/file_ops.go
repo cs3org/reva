@@ -447,6 +447,8 @@ func (c *Client) list(ctx context.Context, auth eosclient.Authorization, dpath s
 			if parent != nil {
 				fi.Attrs["sys.mask"] = parent.Attrs["sys.mask"]
 				fi.ParentMode = parent.Mode
+				fi.ParentUID = parent.UID
+				fi.ParentGID = parent.GID
 			}
 		}
 	}

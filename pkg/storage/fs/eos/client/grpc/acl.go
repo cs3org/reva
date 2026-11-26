@@ -213,6 +213,8 @@ func (c *Client) fixupACLsAndAttrs(ctx context.Context, auth eosclient.Authoriza
 		if parentInfo != nil {
 			info.Attrs["sys.mask"] = parentInfo.Attrs["sys.mask"]
 			info.ParentMode = parentInfo.Mode
+			info.ParentUID = parentInfo.UID
+			info.ParentGID = parentInfo.GID
 		}
 	}
 	return info

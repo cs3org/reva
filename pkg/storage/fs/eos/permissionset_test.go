@@ -112,3 +112,91 @@ func TestPermissionSetLightweightIgnoresWorldRead(t *testing.T) {
 		}
 	}
 }
+
+// Like EOS, only the first class that matches counts: owner, primary group, world.
+// The world bits never give write access.
+func TestPermissionSetModeClasses(t *testing.T) {
+	ctx := appctx.ContextSetUser(context.Background(), &userpb.User{
+		Id:        &userpb.UserId{OpaqueId: "user", Type: userpb.UserType_USER_TYPE_PRIMARY},
+		UidNumber: 1000,
+		GidNumber: 2000,
+	})
+
+	tests := []struct {
+		name      string
+		mode      uint64
+		uid, gid  uint64
+		attrs     map[string]string
+		wantRead  bool
+		wantWrite bool
+	}{
+		{"owner rwx", 0o700, 1000, 3000, nil, true, true},
+		{"owner r-x", 0o500, 1000, 3000, nil, true, false},
+		{"group rwx", 0o070, 3000, 2000, nil, true, true},
+		{"group r-x", 0o050, 3000, 2000, nil, true, false},
+		{"world rwx", 0o007, 3000, 3000, nil, true, false},
+		{"owner bits hide group and world", 0o077, 1000, 2000, nil, false, false},
+		{"group bits hide world", 0o707, 3000, 2000, nil, false, false},
+		{"mask hides group write", 0o770, 3000, 2000, map[string]string{"sys.mask": "750"}, true, false},
+	}
+
+	fs := &Eosfs{}
+	for _, tt := range tests {
+		info := &eosclient.FileInfo{IsDir: true, Mode: tt.mode, UID: tt.uid, GID: tt.gid, Attrs: tt.attrs}
+		got := fs.permissionSet(ctx, info, nil)
+		if got.InitiateFileDownload != tt.wantRead || got.InitiateFileUpload != tt.wantWrite {
+			t.Errorf("%s: read = %v, write = %v, want read = %v, write = %v",
+				tt.name, got.InitiateFileDownload, got.InitiateFileUpload, tt.wantRead, tt.wantWrite)
+		}
+	}
+}
+
+// For a file, EOS compares the user with the uid and gid of the parent folder.
+func TestPermissionSetFileUsesParentOwner(t *testing.T) {
+	ctx := appctx.ContextSetUser(context.Background(), &userpb.User{
+		Id:        &userpb.UserId{OpaqueId: "user", Type: userpb.UserType_USER_TYPE_PRIMARY},
+		UidNumber: 1000,
+		GidNumber: 2000,
+	})
+
+	tests := []struct {
+		name      string
+		uid       uint64
+		parentUID uint64
+		wantRead  bool
+	}{
+		{"file owner in folder of another user", 1000, 3000, false},
+		{"file of another user in own folder", 3000, 1000, true},
+	}
+
+	fs := &Eosfs{}
+	for _, tt := range tests {
+		info := &eosclient.FileInfo{UID: tt.uid, ParentUID: tt.parentUID, ParentGID: 3000, ParentMode: 0o700, Attrs: map[string]string{}}
+		got := fs.permissionSet(ctx, info, nil)
+		if got.InitiateFileDownload != tt.wantRead {
+			t.Errorf("%s: InitiateFileDownload = %v, want %v", tt.name, got.InitiateFileDownload, tt.wantRead)
+		}
+	}
+}
+
+// The result is the union of the mode bits and the sys.acl.
+func TestPermissionSetMergesModeAndACL(t *testing.T) {
+	ctx := appctx.ContextSetUser(context.Background(), &userpb.User{
+		Id:        &userpb.UserId{OpaqueId: "user", Type: userpb.UserType_USER_TYPE_PRIMARY},
+		UidNumber: 1000,
+		GidNumber: 2000,
+	})
+
+	info := &eosclient.FileInfo{
+		IsDir:  true,
+		Mode:   0o050,
+		UID:    3000,
+		GID:    2000,
+		Attrs:  map[string]string{},
+		SysACL: &acl.ACLs{Entries: []*acl.Entry{{Type: acl.TypeUser, Qualifier: "1000", Permissions: "rwx"}}},
+	}
+	got := (&Eosfs{}).permissionSet(ctx, info, nil)
+	if !got.InitiateFileDownload || !got.InitiateFileUpload {
+		t.Errorf("read = %v, write = %v, want both", got.InitiateFileDownload, got.InitiateFileUpload)
+	}
+}
