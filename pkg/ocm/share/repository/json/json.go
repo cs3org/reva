@@ -282,6 +282,7 @@ func (m *mgr) receivedUpdate(ctx context.Context, key string, before, rs *ocm.Re
 				return nil
 			}
 			return &share.StateNotice{
+				// A write by another manager can leave this proof current until the next load.
 				StillCurrent: func() bool { return proof.Load() == noticeClaimed },
 				Release:      func() { proof.Store(noticeRetired) },
 			}
