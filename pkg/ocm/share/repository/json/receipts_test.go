@@ -26,11 +26,14 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+	"testing/synctest"
+	"time"
 
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	ocm "github.com/cs3org/go-cs3apis/cs3/sharing/ocm/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	typespb "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
+	"github.com/cs3org/reva/v3/internal/http/services/opencloudmesh/ocmd"
 	"github.com/cs3org/reva/v3/pkg/ocm/share"
 	"github.com/cs3org/reva/v3/pkg/permissions"
 	"github.com/cs3org/reva/v3/pkg/utils"
@@ -98,6 +101,72 @@ func TestJSONDeleteAndUpdateShareReceipts(t *testing.T) {
 	}
 	if r, err := m.DeleteShare(ctx, u, ref); err == nil || r != nil {
 		t.Fatalf("repeat delete: %v %v", r, err)
+	}
+}
+
+func TestJSONFreshnessWaitDoesNotBlockNotifierClose(t *testing.T) {
+	repo, cleanup := setup(t)
+	defer cleanup()
+	m := repo.(*mgr)
+	sh := testShare("tok", nil)
+	if _, err := m.StoreShare(t.Context(), sh, ocm.SharedResourceType_SHARE_RESOURCE_TYPE_FILE); err != nil {
+		t.Fatal(err)
+	}
+	ref := &ocm.ShareReference{Spec: &ocm.ShareReference_Id{Id: sh.Id}}
+
+	synctest.Test(t, func(t *testing.T) {
+		if err := m.gate.Acquire(t.Context(), 1); err != nil {
+			t.Fatal(err)
+		}
+		defer m.gate.Release(1)
+
+		for _, expiry := range []bool{false, true} {
+			var a ocmd.AsyncNotifier
+			entered := make(chan struct{})
+			read := make(chan error, 1)
+			n, err := (ocmd.ShareStateNotification{
+				Type: ocmd.NotificationShareChangePermission, SenderDomain: "sender.example",
+				ResourceType: "file", ShareType: "user", ProviderID: sh.Id.OpaqueId, Permissions: []string{"read"},
+			}).Build()
+			if err != nil {
+				t.Fatal(err)
+			}
+			n.StillCurrent = func(ctx context.Context) bool {
+				if expiry {
+					var cancel context.CancelFunc
+					ctx, cancel = context.WithTimeout(ctx, time.Second)
+					defer cancel()
+				}
+				close(entered)
+				_, err := m.GetShare(ctx, testUser(), ref)
+				read <- err
+				return false
+			}
+			if result := a.NewNotification(t.Context(), "peer.example", n); result != (ocmd.SendResult{}) {
+				t.Fatalf("send admission: %+v", result)
+			}
+			<-entered
+			synctest.Wait()
+
+			want := context.Canceled
+			if expiry {
+				want = context.DeadlineExceeded
+				if err := <-read; !errors.Is(err, want) {
+					t.Errorf("GetShare with manager held = %v, want %v", err, want)
+				}
+			}
+			if err := a.Close(); err != nil {
+				t.Fatal(err)
+			}
+			if !expiry {
+				if err := <-read; !errors.Is(err, want) {
+					t.Errorf("GetShare with manager held = %v, want %v", err, want)
+				}
+			}
+		}
+	})
+	if got, err := m.GetShare(t.Context(), testUser(), ref); err != nil || !proto.Equal(got, sh) {
+		t.Fatalf("current share = %v, err = %v", got, err)
 	}
 }
 

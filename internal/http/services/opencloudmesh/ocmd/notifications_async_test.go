@@ -28,6 +28,7 @@ import (
 	"sync"
 	"sync/atomic"
 	"testing"
+	"testing/synctest"
 	"time"
 
 	"github.com/cs3org/reva/v3/internal/http/services/wellknown"
@@ -227,6 +228,63 @@ func TestAsyncNotifierCloseCancelsAdmittedSend(t *testing.T) {
 	if p.discovers.Load() != 1 || p.posts.Load() != 0 {
 		t.Fatalf("discovers %d posts %d", p.discovers.Load(), p.posts.Load())
 	}
+}
+
+func TestAsyncNotifierCloseReleasesStripeWaiter(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		var a AsyncNotifier
+		host := "peer.example"
+		held, release, closed := make(chan struct{}), make(chan struct{}), make(chan struct{})
+		defer func() {
+			close(release)
+			_ = a.Close()
+			if a.inFlight != 0 {
+				t.Errorf("active after join = %d", a.inFlight)
+			}
+		}()
+		send := func(check func(context.Context) bool) {
+			t.Helper()
+			n, err := (ShareStateNotification{
+				Type: NotificationShareChangePermission, SenderDomain: "sender.example",
+				ResourceType: "file", ShareType: "user", ProviderID: "same-grant", Permissions: []string{"read"},
+			}).Build()
+			if err != nil {
+				t.Fatal(err)
+			}
+			n.StillCurrent = check
+			if result := a.NewNotification(t.Context(), host, n); result != (SendResult{}) {
+				t.Fatalf("send admission: %+v", result)
+			}
+		}
+		send(func(context.Context) bool {
+			close(held)
+			<-release
+			return true
+		})
+		<-held
+
+		var checked bool
+		send(func(context.Context) bool {
+			checked = true
+			return false
+		})
+		synctest.Wait()
+		before := a.inFlight
+
+		go func() {
+			_ = a.Close()
+			close(closed)
+		}()
+		synctest.Wait()
+		if before != 2 || a.inFlight != 1 || checked {
+			t.Errorf("admitted before Close = %d, active after cancellation = %d, waiter checked = %t", before, a.inFlight, checked)
+		}
+		select {
+		case <-closed:
+			t.Error("Close returned before the holder finished")
+		default:
+		}
+	})
 }
 
 func TestAsyncNotifierOutlivesCallerContext(t *testing.T) {

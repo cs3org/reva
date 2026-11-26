@@ -24,7 +24,6 @@ import (
 	"io"
 	"math"
 	"os"
-	"sync"
 	"time"
 
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
@@ -38,6 +37,7 @@ import (
 	"github.com/cs3org/reva/v3/pkg/utils/cfg"
 	"github.com/google/uuid"
 	"github.com/pkg/errors"
+	"golang.org/x/sync/semaphore"
 	"google.golang.org/genproto/protobuf/field_mask"
 	"google.golang.org/protobuf/proto"
 )
@@ -62,6 +62,7 @@ func New(ctx context.Context, m map[string]any) (share.Repository, error) {
 
 	mgr := &mgr{
 		c:     &c,
+		gate:  semaphore.NewWeighted(1),
 		model: model,
 	}
 
@@ -204,9 +205,17 @@ func (c *config) ApplyDefaults() {
 }
 
 type mgr struct {
-	c          *config
-	sync.Mutex // concurrent access to the file
-	model      *shareModel
+	c     *config
+	gate  *semaphore.Weighted
+	model *shareModel
+}
+
+func (m *mgr) Lock() {
+	m.gate.Acquire(context.Background(), 1)
+}
+
+func (m *mgr) Unlock() {
+	m.gate.Release(1)
 }
 
 func (m *mgr) save() error {
@@ -284,14 +293,19 @@ func (m *mgr) StoreShare(ctx context.Context, ocmshare *ocm.Share, resourceType 
 }
 
 func (m *mgr) GetShare(ctx context.Context, user *userpb.User, ref *ocm.ShareReference) (*ocm.Share, error) {
-	m.Lock()
-	defer m.Unlock()
+	if err := m.gate.Acquire(ctx, 1); err != nil {
+		return nil, err
+	}
+	defer m.gate.Release(1)
 
 	var (
 		s   *ocm.Share
 		err error
 	)
 
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
 	if err := m.load(); err != nil {
 		return nil, err
 	}

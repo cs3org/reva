@@ -66,14 +66,16 @@ const emitSecret = "received-secret-5b2d"
 
 // notifyPeer is a remote OCM server recording received notifications.
 type notifyPeer struct {
-	srv     *httptest.Server
-	mu      sync.Mutex
-	bodies  []map[string]any
-	jwks    []byte
-	signed  int
-	status  int
-	noCap   bool
-	payload string
+	srv       *httptest.Server
+	mu        sync.Mutex
+	bodies    []map[string]any
+	jwks      []byte
+	signed    int
+	status    int
+	noCap     bool
+	payload   string
+	discovers int
+	posted    chan struct{}
 }
 
 func newNotifyPeer(t *testing.T, jwks []byte) *notifyPeer {
@@ -83,6 +85,7 @@ func newNotifyPeer(t *testing.T, jwks []byte) *notifyPeer {
 		defer p.mu.Unlock()
 		switch r.URL.Path {
 		case "/.well-known/ocm":
+			p.discovers++
 			caps := []string{"invites", "notifications"}
 			if p.noCap {
 				caps = []string{"invites"}
@@ -97,6 +100,10 @@ func newNotifyPeer(t *testing.T, jwks []byte) *notifyPeer {
 			_ = json.Unmarshal(raw, &body)
 			p.bodies = append(p.bodies, body)
 			w.WriteHeader(p.status)
+			if p.posted != nil {
+				close(p.posted)
+				p.posted = nil
+			}
 		default:
 			http.NotFound(w, r)
 		}
@@ -992,6 +999,101 @@ func TestNotificationFreshnessUsesEffectiveClientTimeout(t *testing.T) {
 			}, nil)
 			if !checked || time.Duration(svc.conf.ClientTimeout)*time.Second != tc.want {
 				t.Fatalf("timeout = %d seconds, repository read = %t", svc.conf.ClientTimeout, checked)
+			}
+		})
+	}
+}
+
+func TestAsyncJSONPermissionNoticeChecksFreshnessDeadline(t *testing.T) {
+	for _, name := range []string{"current", "expired"} {
+		t.Run(name, func(t *testing.T) {
+			e := newEmitEnv(t)
+			repo, err := jsonrepo.New(t.Context(), map[string]any{"file": filepath.Join(t.TempDir(), "shares.json")})
+			if err != nil {
+				t.Fatal(err)
+			}
+			e.repo = repo
+			e.svc.conf.Driver = "json"
+			e.svc.conf.ClientTimeout = 10
+			if name == "expired" {
+				e.svc.conf.ClientTimeout = 1
+			}
+			sh := e.outgoing(t)
+			ref := &ocm.ShareReference{Spec: &ocm.ShareReference_Id{Id: sh.Id}}
+			owner := appctx.ContextMustGetUser(e.owner)
+			e.svc.repo = deadlineRepo{Repository: repo, check: func(ctx context.Context) (*ocm.Share, error) {
+				current, err := repo.GetShare(ctx, appctx.ContextMustGetUser(ctx), ref)
+				if name == "expired" {
+					<-ctx.Done()
+				}
+				return current, err
+			}}
+
+			sender := e.svc.notifier.(*syncNotifier)
+			a := &ocmd.AsyncNotifier{Client: sender.c, Key: sender.key}
+			t.Cleanup(func() { _ = a.Close() })
+			checked := make(chan bool, 1)
+			e.svc.notifier = notificationFunc(func(ctx context.Context, peer string, n *ocmd.OutgoingNotification) ocmd.SendResult {
+				check := n.StillCurrent
+				n.StillCurrent = func(ctx context.Context) bool {
+					current := check(ctx)
+					checked <- current
+					return current
+				}
+				return a.NewNotification(ctx, peer, n)
+			})
+			posted := make(chan struct{})
+			e.peer.mu.Lock()
+			e.peer.posted = posted
+			e.peer.mu.Unlock()
+
+			empty := &providerpb.ResourcePermissions{}
+			res, err := e.svc.UpdateOCMShare(e.owner, &ocm.UpdateOCMShareRequest{
+				Ref: ref, Field: []*ocm.UpdateOCMShareRequest_UpdateField{{
+					Field: &ocm.UpdateOCMShareRequest_UpdateField_AccessMethods{
+						AccessMethods: share.NewWebDavAccessMethod(empty, nil, nil),
+					},
+				}},
+			})
+			if err != nil || res.GetStatus().GetCode() != rpc.Code_CODE_OK {
+				t.Fatalf("permission update = %v, err = %v", res, err)
+			}
+			current, err := repo.GetShare(t.Context(), owner, ref)
+			if err != nil || !slices.ContainsFunc(current.GetAccessMethods(), func(method *ocm.AccessMethod) bool {
+				return proto.Equal(method.GetWebdavOptions().GetPermissions(), empty)
+			}) {
+				t.Fatalf("committed share = %v, err = %v", current, err)
+			}
+			select {
+			case got := <-checked:
+				if got != (name == "current") {
+					t.Errorf("freshness returned %t for %s read", got, name)
+				}
+			case <-time.After(10 * time.Second):
+				t.Fatal("permission freshness check did not finish")
+			}
+			if name == "current" {
+				select {
+				case <-posted:
+				case <-time.After(10 * time.Second):
+					t.Fatal("current permission notification did not reach the peer")
+				}
+			}
+			if err := a.Close(); err != nil {
+				t.Fatal(err)
+			}
+			if name == "current" {
+				got := requireNotices(t, e.peer, ocmd.NotificationShareChangePermission)[0]
+				if perms, ok := fileOf(got)["permissions"].([]any); !ok || len(perms) != 0 {
+					t.Fatalf("notification permissions = %v, want explicit empty", fileOf(got)["permissions"])
+				}
+			} else {
+				requireNotices(t, e.peer)
+				e.peer.mu.Lock()
+				defer e.peer.mu.Unlock()
+				if e.peer.discovers != 0 {
+					t.Fatalf("expired read started %d discoveries", e.peer.discovers)
+				}
 			}
 		})
 	}

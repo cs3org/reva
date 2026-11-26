@@ -27,6 +27,7 @@ import (
 	"github.com/cs3org/reva/v3/pkg/ocm/providerdomain"
 	"github.com/cs3org/reva/v3/pkg/prom/registry"
 	"github.com/prometheus/client_golang/prometheus"
+	"golang.org/x/sync/semaphore"
 )
 
 // maxInFlightNotifications limits the attempts that run at the same time, so
@@ -65,7 +66,7 @@ type AsyncNotifier struct {
 	cancel   context.CancelFunc
 	wg       sync.WaitGroup
 
-	snapshotSends [maxInFlightNotifications]sync.Mutex
+	snapshotSends [maxInFlightNotifications]*semaphore.Weighted
 }
 
 // NewNotification starts one attempt and returns at once. The attempt keeps
@@ -85,6 +86,9 @@ func (a *AsyncNotifier) NewNotification(ctx context.Context, domain string, n *O
 	a.inFlight++
 	if a.lifetime == nil {
 		a.lifetime, a.cancel = context.WithCancel(context.Background())
+		for i := range a.snapshotSends {
+			a.snapshotSends[i] = semaphore.NewWeighted(1)
+		}
 	}
 	sendCtx, cancel := context.WithCancel(context.WithoutCancel(ctx))
 	stop := context.AfterFunc(a.lifetime, cancel)
@@ -105,12 +109,17 @@ func (a *AsyncNotifier) NewNotification(ctx context.Context, domain string, n *O
 			peer, _ := providerdomain.CanonicalOCMHost(domain)
 			key := peer + "\x00" + n.File.ProviderID
 			bucket := crc32.ChecksumIEEE([]byte(key)) % uint32(len(a.snapshotSends))
-			mu := &a.snapshotSends[bucket]
-			mu.Lock()
-			defer mu.Unlock()
-			if sendCtx.Err() != nil || !n.StillCurrent(sendCtx) {
+			gate := a.snapshotSends[bucket]
+			if err := gate.Acquire(a.lifetime, 1); err != nil {
 				return
 			}
+			defer gate.Release(1)
+			if a.lifetime.Err() != nil || !n.StillCurrent(sendCtx) {
+				return
+			}
+		}
+		if a.lifetime.Err() != nil {
+			return
 		}
 		a.Client.NewNotification(sendCtx, domain, n, a.Key)
 	}()

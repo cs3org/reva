@@ -60,7 +60,8 @@ func (s *service) emit(ctx context.Context, domain string, b ocmd.ShareStateNoti
 		n.StillCurrent = func(ctx context.Context) bool {
 			ctx, cancel := context.WithTimeout(ctx, time.Duration(s.conf.ClientTimeout)*time.Second)
 			defer cancel()
-			return stillCurrent(ctx)
+			deadline, _ := ctx.Deadline()
+			return ctx.Err() == nil && stillCurrent(ctx) && ctx.Err() == nil && time.Now().Before(deadline)
 		}
 	}
 	s.notifier.NewNotification(ctx, peer, n)
@@ -209,8 +210,7 @@ func (s *service) notifyReceivedState(ctx context.Context, update *share.Receive
 		return
 	}
 	var stillCurrent func(context.Context) bool
-	// JSON reloads its file under a mutex and can block shutdown even if
-	// the worker's context is canceled.
+	// A JSON reload can block on file I/O even after cancellation.
 	if s.conf.Driver == "sql" {
 		ref := &ocm.ShareReference{Spec: &ocm.ShareReference_Id{Id: rs.GetId()}}
 		stillCurrent = func(ctx context.Context) bool {
