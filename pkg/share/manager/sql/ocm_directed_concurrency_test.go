@@ -14,6 +14,8 @@ import (
 	"context"
 	dbsql "database/sql"
 	"errors"
+	"fmt"
+	"reflect"
 	"slices"
 	"sync"
 	"sync/atomic"
@@ -133,11 +135,30 @@ func TestDirectedTransactionConcurrentSelectionAndRetry(t *testing.T) {
 						}
 					}
 					var injected atomic.Bool
+					firstWriteFailed := make(chan error, 1)
+					var outgoingBefore model.OcmShare
+					var incomingBefore model.OcmReceivedShare
 					if mode == "retry" {
-						callback := func(tx *gorm.DB) {
-							if injected.CompareAndSwap(false, true) {
-								tx.AddError(errors.New("database is locked: injected retryable failure after mutation"))
+						operation, table := "update", "ocm_received_shares"
+						if direction == "outgoing" {
+							operation, table = "delete", "ocm_shares"
+							if err := writer.db.WithContext(ctx).Where("id = ?", original).Take(&outgoingBefore).Error; err != nil {
+								t.Fatal(err)
 							}
+						} else {
+							incomingBefore = receivedRow(t, writer, original)
+						}
+						callback := func(tx *gorm.DB) {
+							if tx.Statement.Table != table || injected.Load() {
+								return
+							}
+							if tx.Error != nil || tx.RowsAffected != 1 {
+								firstWriteFailed <- fmt.Errorf("first %s on %s affected %d rows (want 1), error %v", operation, table, tx.RowsAffected, tx.Error)
+								tx.Error = errors.New("unexpected first directed write result")
+								return
+							}
+							injected.Store(true)
+							tx.AddError(errors.New("database is locked: injected retryable failure after mutation"))
 						}
 						if direction == "outgoing" {
 							err = m.db.Callback().Delete().After("gorm:delete").Register("test:retry-directed-delete", callback)
@@ -177,19 +198,32 @@ func TestDirectedTransactionConcurrentSelectionAndRetry(t *testing.T) {
 						for range done {
 						}
 					}()
+					var earlyAction *result
+					var rollbackErr error
 					select {
 					case <-gate.reached:
 					case action := <-done:
+						earlyAction = &action
 						select {
-						case err := <-gate.rollbackFailed:
-							t.Fatalf("rollback before retry barrier: %v", err)
+						case rollbackErr = <-gate.rollbackFailed:
 						default:
-							t.Fatalf("action returned before %s barrier: error %v, receipt IDs %v", mode, action.err, action.ids)
 						}
-					case err := <-gate.rollbackFailed:
-						t.Fatalf("rollback before retry barrier: %v", err)
+					case err := <-firstWriteFailed:
+						t.Fatal(err)
+					case rollbackErr = <-gate.rollbackFailed:
 					case <-ctx.Done():
 						t.Fatal("transaction did not reach barrier")
+					}
+					select {
+					case err := <-firstWriteFailed:
+						t.Fatal(err)
+					default:
+					}
+					if rollbackErr != nil {
+						t.Fatalf("rollback before retry barrier: %v", rollbackErr)
+					}
+					if earlyAction != nil {
+						t.Fatalf("action returned before %s barrier: error %v, receipt IDs %v", mode, earlyAction.err, earlyAction.ids)
 					}
 					token := direction + mode + "later"
 					if mode == "commit" {
@@ -233,8 +267,21 @@ func TestDirectedTransactionConcurrentSelectionAndRetry(t *testing.T) {
 					var later string
 					var writerErr error
 					if mode == "retry" {
-						// The first attempt has rolled back. Commit the new
-						// grant before the action can select again.
+						if !injected.Load() {
+							t.Fatal("rollback barrier reached without a successful first directed write")
+						}
+						if direction == "outgoing" {
+							var restored model.OcmShare
+							if err := writer.db.WithContext(ctx).Where("id = ?", original).Take(&restored).Error; err != nil {
+								t.Fatalf("read original outgoing grant after rollback: %v", err)
+							}
+							if !reflect.DeepEqual(restored, outgoingBefore) {
+								t.Fatal("original outgoing grant changed after rollback")
+							}
+						} else if restored := receivedRow(t, writer, original); !reflect.DeepEqual(restored, incomingBefore) {
+							t.Fatal("original incoming grant changed after rollback")
+						}
+						// The new grant must be visible when the action selects again.
 						later, writerErr = store(writer, token, nil)
 						release()
 					}
