@@ -458,15 +458,15 @@ func (fs *cephmountfs) restoreEntry(ctx context.Context, src string, info os.Fil
 			r.restored = append(r.restored, target)
 			return fs.mergeFromRecycle(ctx, src, target, r)
 		}
-		// Before the move, so that a failure cannot leave old access on a restored item.
-		if err := fs.clearGrants(ctx, src); err != nil {
+		// Before the move, so that a failure leaves the item in the bin, with no old access.
+		if err := fs.resetGrants(ctx, src, filepath.Dir(target), info.IsDir()); err != nil {
 			return err
 		}
 		if err := fs.rootFS.Rename(src, target); err != nil {
 			return err
 		}
 		r.restored = append(r.restored, target)
-		return fs.inheritACL(ctx, target, info.IsDir())
+		return nil
 	case err != nil:
 		return err
 	case info.IsDir() && existing.IsDir():
@@ -578,13 +578,37 @@ func (fs *cephmountfs) mergeFromRecycle(ctx context.Context, src, target string,
 	return nil
 }
 
-// clearGrants removes the ACL entries, the external account grants and the lock
-// of path and of all items below it. Old grants must not come back with a
-// restore: the grants of the folder above can have changed since the delete.
-func (fs *cephmountfs) clearGrants(ctx context.Context, path string) error {
+// resetGrants removes the ACL entries, the external account grants and the lock of
+// path and of all items below it, and applies the named entries of the default ACL
+// of the folder parent, as AddGrant applies a grant: to all items, and as default
+// entries to folders. Old grants must not come back with a restore: the grants of
+// the folder above can have changed since the delete. The mode bits stay the ones
+// from before the delete.
+func (fs *cephmountfs) resetGrants(ctx context.Context, path, parent string, isDir bool) error {
 	fullPath := filepath.Join(fs.chrootDir, path)
+	output, err := exec.CommandContext(ctx, "getfacl", "--default", "--omit-header", "--numeric", "--no-effective", filepath.Join(fs.chrootDir, parent)).CombinedOutput()
+	if err != nil {
+		return errors.Wrapf(err, "cephmount: getfacl failed: %s", strings.TrimSpace(string(output)))
+	}
+	var entries []string
+	for line := range strings.Lines(string(output)) {
+		line = strings.TrimSpace(line)
+		kind, rest, _ := strings.Cut(line, ":")
+		if id, _, _ := strings.Cut(rest, ":"); (kind == "user" || kind == "group") && id != "" {
+			entries = append(entries, line)
+		}
+	}
+
+	// One call: a second setfacl right after -b can fail with EINVAL on CephFS.
 	// -P, so that root never changes the ACL of the target of a symlink.
-	if err := fs.runSetfacl(ctx, []string{"-R", "-P", "-b", fullPath}, fullPath); err != nil {
+	args := []string{"-R", "-P", "-b"}
+	if len(entries) > 0 {
+		args = append(args, "-m", strings.Join(entries, ","))
+		if isDir {
+			args = append(args, "-m", "d:"+strings.Join(entries, ",d:"))
+		}
+	}
+	if err := fs.runSetfacl(ctx, append(args, fullPath), fullPath); err != nil {
 		return err
 	}
 	return filepath.WalkDir(fullPath, func(p string, _ iofs.DirEntry, err error) error {
@@ -604,36 +628,6 @@ func (fs *cephmountfs) clearGrants(ctx context.Context, path string) error {
 		}
 		return nil
 	})
-}
-
-// inheritACL applies the named entries of the default ACL of the folder above
-// path, as AddGrant applies a grant: to path and all items below it, and as
-// default entries to folders. The mode bits stay the ones from before the delete.
-func (fs *cephmountfs) inheritACL(ctx context.Context, path string, isDir bool) error {
-	fullPath := filepath.Join(fs.chrootDir, path)
-	parent := filepath.Dir(fullPath)
-	output, err := exec.CommandContext(ctx, "getfacl", "--default", "--omit-header", "--numeric", "--no-effective", parent).CombinedOutput()
-	if err != nil {
-		return errors.Wrapf(err, "cephmount: getfacl failed: %s", strings.TrimSpace(string(output)))
-	}
-
-	var entries []string
-	for line := range strings.Lines(string(output)) {
-		line = strings.TrimSpace(line)
-		kind, rest, _ := strings.Cut(line, ":")
-		if id, _, _ := strings.Cut(rest, ":"); (kind == "user" || kind == "group") && id != "" {
-			entries = append(entries, line)
-		}
-	}
-	if len(entries) == 0 {
-		return nil
-	}
-
-	args := []string{"-R", "-P", "-m", strings.Join(entries, ",")}
-	if isDir {
-		args = append(args, "-m", "d:"+strings.Join(entries, ",d:"))
-	}
-	return fs.runSetfacl(ctx, append(args, fullPath), fullPath)
 }
 
 // recycleItem returns the item rel in a day folder, with no info if it is not
