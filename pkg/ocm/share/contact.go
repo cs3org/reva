@@ -24,12 +24,12 @@ import (
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 )
 
-// DirectedShareActions is the transactional bulk surface of a repository:
-// withdraw exact bound outgoing grants and reject exact bound received grants.
+// DirectedShareActions withdraws or rejects exact bound grants for an
+// authenticated local creator or recipient.
 // Historical grants without a complete binding remain available to ordinary
-// per-share operations. Receipts cover only the eligible captured grants.
-// Each direction commits the whole selection or returns an error without a
-// receipt. A received selection with a transfer in progress is refused.
+// per-share operations. Each direction changes its eligible selection atomically
+// and returns receipts only after commit acknowledgment. CommitUnknownError
+// leaves the outcome unknown. A received selection with a transfer in progress is refused.
 type DirectedShareActions interface {
 	RemoveOCMSharesForRecipient(ctx context.Context, creator, recipient *userpb.UserId) ([]*ShareRemoval, error)
 	RejectReceivedOCMSharesFromSender(ctx context.Context, recipient, sender *userpb.UserId) ([]*ReceivedShareUpdate, error)

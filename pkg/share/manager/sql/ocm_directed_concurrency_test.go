@@ -33,10 +33,11 @@ import (
 // It is confined to the action's pool; the other manager uses a separate pool.
 type transactionGate struct {
 	*dbsql.DB
-	mode    string
-	reached chan struct{}
-	release chan struct{}
-	fired   atomic.Bool
+	mode           string
+	reached        chan struct{}
+	release        chan struct{}
+	rollbackFailed chan error
+	fired          atomic.Bool
 }
 type gatedTx struct {
 	*dbsql.Tx
@@ -60,6 +61,10 @@ func (t *gatedTx) Commit() error {
 func (t *gatedTx) Rollback() error {
 	err := t.Tx.Rollback()
 	if t.gate.mode == "retry" && t.gate.fired.CompareAndSwap(false, true) {
+		if err != nil {
+			t.gate.rollbackFailed <- err
+			return err
+		}
 		close(t.gate.reached)
 		<-t.gate.release
 	}
@@ -105,33 +110,25 @@ func TestDirectedTransactionConcurrentSelectionAndRetry(t *testing.T) {
 					if err != nil {
 						t.Fatal(err)
 					}
+					sqlite := cfg["db_engine"] == "sqlite"
+					if mode == "commit" && !sqlite {
+						// InnoDB gap locks protect the captured selection at this isolation.
+						m.db = observer(t, cfg, "REPEATABLE-READ")
+						t.Log("MySQL action pool session isolation: REPEATABLE-READ")
+					}
 					db, err := m.db.DB()
 					if err != nil {
 						t.Fatal(err)
 					}
-					gate := &transactionGate{DB: db, mode: mode, reached: make(chan struct{}), release: make(chan struct{})}
+					gate := &transactionGate{
+						DB: db, mode: mode, reached: make(chan struct{}), release: make(chan struct{}), rollbackFailed: make(chan error, 1),
+					}
 					release := sync.OnceFunc(func() { close(gate.release) })
-					defer release()
 					m.db.Statement.ConnPool = gate
 					var laterID *ocm.ShareId
-					sqlite := cfg["db_engine"] == "sqlite"
-					if mode == "commit" {
-						if direction == "outgoing" {
-							laterID, err = writer.GenerateID(ctx)
-							if err != nil {
-								t.Fatal(err)
-							}
-						}
-						pool, err := writer.db.DB()
+					if mode == "commit" && direction == "outgoing" {
+						laterID, err = writer.GenerateID(ctx)
 						if err != nil {
-							t.Fatal(err)
-						}
-						pool.SetMaxOpenConns(1)
-						setTimeout := "SET SESSION innodb_lock_wait_timeout = 1"
-						if sqlite {
-							setTimeout = "PRAGMA busy_timeout = 0"
-						}
-						if _, err := pool.ExecContext(ctx, setTimeout); err != nil {
 							t.Fatal(err)
 						}
 					}
@@ -157,6 +154,7 @@ func TestDirectedTransactionConcurrentSelectionAndRetry(t *testing.T) {
 					}
 					done := make(chan result, 1)
 					go func() {
+						defer close(done)
 						var out result
 						if direction == "outgoing" {
 							receipts, err := m.RemoveOCMSharesForRecipient(ctx, alice, bob)
@@ -173,8 +171,23 @@ func TestDirectedTransactionConcurrentSelectionAndRetry(t *testing.T) {
 						}
 						done <- out
 					}()
+					defer func() {
+						release()
+						cancel()
+						for range done {
+						}
+					}()
 					select {
 					case <-gate.reached:
+					case action := <-done:
+						select {
+						case err := <-gate.rollbackFailed:
+							t.Fatalf("rollback before retry barrier: %v", err)
+						default:
+							t.Fatalf("action returned before %s barrier: error %v, receipt IDs %v", mode, action.err, action.ids)
+						}
+					case err := <-gate.rollbackFailed:
+						t.Fatalf("rollback before retry barrier: %v", err)
 					case <-ctx.Done():
 						t.Fatal("transaction did not reach barrier")
 					}
@@ -182,7 +195,29 @@ func TestDirectedTransactionConcurrentSelectionAndRetry(t *testing.T) {
 					if mode == "commit" {
 						// The action cannot commit until a real competing write
 						// has been refused by the database.
-						_, lockErr := store(writer, token, laterID)
+						var lockErr error
+						if err := writer.db.WithContext(ctx).Connection(func(db *gorm.DB) error {
+							setTimeout := "SET SESSION innodb_lock_wait_timeout = 1"
+							readTimeout, want := "SELECT @@SESSION.innodb_lock_wait_timeout", 1
+							if sqlite {
+								setTimeout = "PRAGMA busy_timeout = 0"
+								readTimeout, want = "PRAGMA busy_timeout", 0
+							}
+							if err := db.Exec(setTimeout).Error; err != nil {
+								return err
+							}
+							var got int
+							if err := db.Raw(readTimeout).Row().Scan(&got); err != nil {
+								return err
+							}
+							if got != want {
+								t.Fatalf("writer session lock wait timeout %d, want %d", got, want)
+							}
+							_, lockErr = store(&mgr{c: writer.c, db: db}, token, laterID)
+							return nil
+						}); err != nil {
+							t.Fatalf("configure competing writer session: %v", err)
+						}
 						var sqliteErr sqlite3.Error
 						var mysqlErr *mysql.MySQLError
 						if sqlite {
@@ -192,7 +227,7 @@ func TestDirectedTransactionConcurrentSelectionAndRetry(t *testing.T) {
 						} else if !errors.As(lockErr, &mysqlErr) || mysqlErr.Number != 1205 {
 							t.Fatalf("competing store during InnoDB transaction: %v, want lock wait timeout", lockErr)
 						}
-						t.Logf("competing %s store reported lock contention before commit", direction)
+						t.Logf("competing %s store before commit: %v", direction, lockErr)
 						release()
 					}
 					var later string
@@ -209,9 +244,6 @@ func TestDirectedTransactionConcurrentSelectionAndRetry(t *testing.T) {
 					case <-ctx.Done():
 						t.Fatal("action did not complete")
 					}
-					if mode == "commit" {
-						later, writerErr = store(writer, token, laterID)
-					}
 					if action.err != nil || writerErr != nil {
 						t.Fatalf("action: %v, writer: %v", action.err, writerErr)
 					}
@@ -221,6 +253,12 @@ func TestDirectedTransactionConcurrentSelectionAndRetry(t *testing.T) {
 					}
 					if !slices.Equal(action.ids, want) {
 						t.Fatalf("receipts %v, want %v", action.ids, want)
+					}
+					if mode == "commit" {
+						later, writerErr = store(writer, token, laterID)
+						if writerErr != nil {
+							t.Fatalf("competing store after acknowledged commit: %v", writerErr)
+						}
 					}
 					if direction == "outgoing" {
 						var current []model.OcmShare
@@ -243,8 +281,8 @@ func TestDirectedTransactionConcurrentSelectionAndRetry(t *testing.T) {
 						if mode == "retry" {
 							expected = ocm.ShareState_SHARE_STATE_REJECTED
 						}
-						if got.State != expected {
-							t.Fatalf("later state %v, expected %v", got.State, expected)
+						if got.State != expected || got.Hidden != (mode == "retry") {
+							t.Fatalf("later grant state %v, hidden %t, want state %v, hidden %t", got.State, got.Hidden, expected, mode == "retry")
 						}
 					}
 				})

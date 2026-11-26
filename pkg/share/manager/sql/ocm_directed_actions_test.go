@@ -26,10 +26,12 @@ import (
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	ocm "github.com/cs3org/go-cs3apis/cs3/sharing/ocm/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
+	"github.com/cs3org/reva/v3/pkg/errtypes"
 	"github.com/cs3org/reva/v3/pkg/ocm/share"
 	"github.com/cs3org/reva/v3/pkg/share/manager/sql/model"
 	"github.com/mattn/go-sqlite3"
 	"google.golang.org/genproto/protobuf/field_mask"
+	"google.golang.org/protobuf/proto"
 	"gorm.io/gorm"
 )
 
@@ -166,6 +168,28 @@ func TestDirectedActionsRespectExactIdentities(t *testing.T) {
 		initial, err := m.GetReceivedShare(ctx, aliceUser, idRef(chosen.Id))
 		if err != nil || initial.GetRemoteShareId() != "001.0" || initial.GetGrantee().GetUserId().GetOpaqueId() != "00012" {
 			t.Fatalf("numeric-looking identities changed on read: %v %v", initial, err)
+		}
+		blank := &userpb.User{Id: &userpb.UserId{OpaqueId: alice.OpaqueId, TenantId: alice.TenantId, Type: alice.Type}}
+		blankGrant := grantShare(blank, bob.Idp, "incoming-blank-idp", file)
+		blankGrant.Creator = bob
+		stored, err := m.StoreReceivedShareForResolvedRecipient(ctx, blankGrant, blank.Id)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if receivedRow(t, m, stored.Id.OpaqueId).GrantKey == nil {
+			t.Fatal("resolved blank-IdP grant has no key")
+		}
+		before, err := m.GetReceivedShare(ctx, blank, idRef(stored.Id))
+		if err != nil || before.GetState() != ocm.ShareState_SHARE_STATE_PENDING || before.GetHidden() {
+			t.Fatalf("ordinary read of resolved blank-IdP grant: %v, %v", before, err)
+		}
+		var badRequest errtypes.BadRequest
+		if receipts, err := m.RejectReceivedOCMSharesFromSender(ctx, blank.Id, bob); !errors.As(err, &badRequest) || receipts != nil {
+			t.Fatalf("directed decline for blank IdP returned receipts %v, error %v", receipts, err)
+		}
+		after, err := m.GetReceivedShare(ctx, blank, idRef(stored.Id))
+		if err != nil || !proto.Equal(before, after) {
+			t.Fatalf("refused decline changed resolved blank-IdP grant: %v, %v", after, err)
 		}
 		other := incoming(otherDirectory, bob, "incoming-two")
 		tenantNeighbor := incoming(otherTenant, bob, "incoming-other-tenant")
@@ -660,7 +684,7 @@ func TestDirectedWithdrawalRejectsInvalidSelectionAtomically(t *testing.T) {
 		if err := m.db.Model(&model.OcmShare{}).Where("id = ?", ids[1].OpaqueId).Update("item_type", "invalid").Error; err != nil {
 			t.Fatal(err)
 		}
-		if receipts, err := m.RemoveOCMSharesForRecipient(ctx, alice, bob); err == nil || receipts != nil {
+		if receipts, err := m.RemoveOCMSharesForRecipient(ctx, alice, bob); !errors.Is(err, share.ErrInvalidResourceType) || receipts != nil {
 			t.Fatalf("invalid selection returned receipts %v, error %v", receipts, err)
 		}
 		var remaining int64
