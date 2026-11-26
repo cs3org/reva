@@ -559,6 +559,16 @@ func TestTransferAttemptLifecycle(t *testing.T) {
 		if got := receivedGeneration(t, m, rs.Id); got != start.Generation {
 			t.Fatalf("wrong generation completion changed generation to %d, want %d", got, start.Generation)
 		}
+		attemptOf := func() *string {
+			var row model.OcmReceivedShare
+			if err := m.db.Where("id = ?", rs.Id.OpaqueId).Take(&row).Error; err != nil {
+				t.Fatal(err)
+			}
+			return row.TransferAttempt
+		}
+		if attemptOf() == nil {
+			t.Fatal("running attempt has no attempt ID")
+		}
 		const beforeMtime = 946684800
 		if err := m.db.Model(&model.OcmReceivedShare{}).Where("id = ?", rs.Id.OpaqueId).
 			Update("mtime", beforeMtime).Error; err != nil {
@@ -577,6 +587,9 @@ func TestTransferAttemptLifecycle(t *testing.T) {
 		}
 		if !u.After.Hidden || len(u.After.Protocols) != len(rs.Protocols) {
 			t.Fatalf("completion changed hidden/protocols: %v", u.After)
+		}
+		if a := attemptOf(); a != nil {
+			t.Fatalf("finished transfer kept attempt ID %s", *a)
 		}
 		if duplicate, err := m.CompleteReceivedShareTransfer(ctx, user, rs.Id, start.Generation, ocm.ShareState_SHARE_STATE_ACCEPTED); err != nil || duplicate == nil || !proto.Equal(duplicate.Before, u.After) || !proto.Equal(duplicate.After, u.After) {
 			t.Fatalf("duplicate completion: %v %v", duplicate, err)
@@ -603,6 +616,9 @@ func TestTransferAttemptLifecycle(t *testing.T) {
 		if u, err := m.CompleteReceivedShareTransfer(ctx, user, rs.Id, start.Generation, ocm.ShareState_SHARE_STATE_REJECTED); err != nil || u == nil ||
 			!proto.Equal(u.Before, second.Share) || !proto.Equal(u.After, second.Share) {
 			t.Fatalf("stale callback completed a newer attempt: %v %v", u, err)
+		}
+		if attemptOf() == nil {
+			t.Fatal("stale callback cleared the attempt ID of a newer attempt")
 		}
 
 		u, err = m.CompleteReceivedShareTransfer(ctx, user, rs.Id, second.Generation, ocm.ShareState_SHARE_STATE_ACCEPTED)

@@ -270,6 +270,9 @@ type OcmReceivedShare struct {
 	// TransferGeneration grows on every transfer start and state change, so
 	// that the completion of an older attempt cannot match a later one.
 	TransferGeneration uint64 `gorm:"not null;default:0"`
+	// TransferAttempt identifies the start that set TRANSFERRING, so that
+	// only that start can release it. Older rows have none.
+	TransferAttempt *string `gorm:"size:36"`
 }
 
 // OcmReceivedShareProtocol represents the protocol used to access an OCM share received from a remote user.

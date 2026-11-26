@@ -39,6 +39,7 @@ import (
 	"github.com/cs3org/reva/v3/pkg/ocm/share"
 	model "github.com/cs3org/reva/v3/pkg/share/manager/sql/model"
 	"github.com/cs3org/reva/v3/pkg/utils/cfg"
+	"github.com/google/uuid"
 	"github.com/pkg/errors"
 	"google.golang.org/genproto/protobuf/field_mask"
 	"google.golang.org/protobuf/proto"
@@ -836,6 +837,8 @@ func (m *mgr) StartReceivedShareTransfer(ctx context.Context, user *userpb.User,
 	}
 	var receipt share.TransferStart
 	var check commitCheck
+	attemptID := uuid.NewString()
+	var prior model.OcmShareState
 	err = m.transact(ctx, "start_transfer", func(tx *gorm.DB) error {
 		check = commitCheck{}
 		row, _, err := lockReceived(tx, user, s.Id)
@@ -856,8 +859,10 @@ func (m *mgr) StartReceivedShareTransfer(ctx context.Context, user *userpb.User,
 		if err != nil {
 			return err
 		}
+		prior = row.State
 		attempt := maps.Clone(updates)
 		attempt["transfer_generation"] = gen
+		attempt["transfer_attempt"] = attemptID
 		if err := tx.Model(&model.OcmReceivedShare{}).Where("id = ?", row.ID).Updates(attempt).Error; err != nil {
 			return err
 		}
@@ -874,14 +879,37 @@ func (m *mgr) StartReceivedShareTransfer(ctx context.Context, user *userpb.User,
 		receipt = share.TransferStart{Share: after, Generation: gen}
 		return nil
 	}, &check)
+	var unknown *share.CommitUnknownError
+	if errors.As(err, &unknown) {
+		m.releaseUnstartedTransfer(ctx, user, check.shareID, check.generation, attemptID, prior)
+	}
 	if err != nil {
 		return nil, err
 	}
 	return &receipt, nil
 }
 
-// CompleteReceivedShareTransfer writes the final state and mtime only, and
-// only while the same attempt is still running.
+// The start returned no receipt, so this attempt never reached the copy driver.
+func (m *mgr) releaseUnstartedTransfer(ctx context.Context, user *userpb.User, id uint, gen uint64, attemptID string, prior model.OcmShareState) {
+	if id == 0 || gen == 0 {
+		return
+	}
+	rctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), recoveryTimeout)
+	defer cancel()
+	res := m.db.WithContext(rctx).Model(&model.OcmReceivedShare{}).
+		Where("id = ? AND share_with = ? AND state = ? AND transfer_generation = ? AND transfer_attempt = ?",
+			id, user.Id.OpaqueId, model.OcmShareStateTransferring, gen, attemptID).
+		UpdateColumns(map[string]any{"state": prior, "transfer_attempt": nil})
+	e := appctx.GetLogger(ctx).Warn().Uint("share_id", id).Uint64("transfer_generation", gen)
+	if res.Error != nil {
+		e.Msg("could not confirm transfer reservation release")
+		return
+	}
+	e.Int64("released", res.RowsAffected).Msg("unacknowledged transfer start checked for release")
+}
+
+// CompleteReceivedShareTransfer writes the final state and mtime and clears
+// the attempt ID, only while the same attempt is still running.
 func (m *mgr) CompleteReceivedShareTransfer(ctx context.Context, user *userpb.User, id *ocm.ShareId, generation uint64, state ocm.ShareState) (*share.ReceivedShareUpdate, error) {
 	shareID, err := strconv.Atoi(id.GetOpaqueId())
 	if err != nil {
@@ -906,8 +934,9 @@ func (m *mgr) CompleteReceivedShareTransfer(ctx context.Context, user *userpb.Us
 			Where("id = ? AND share_with = ? AND state = ? AND transfer_generation = ?",
 				shareID, user.Id.OpaqueId, model.OcmShareStateTransferring, generation).
 			Updates(map[string]any{
-				"state": convertFromCS3OCMShareState(state),
-				"mtime": time.Now().Unix(),
+				"state":            convertFromCS3OCMShareState(state),
+				"mtime":            time.Now().Unix(),
+				"transfer_attempt": nil,
 			})
 		if result.Error != nil {
 			return result.Error
