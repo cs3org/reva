@@ -142,7 +142,7 @@ func (p *receivedProjection) equal(q *receivedProjection) bool {
 		return p == q
 	}
 	a, b := p.row, q.row
-	if a.ID != b.ID || !equalGrantKey(a.GrantKey, b.GrantKey) || a.RemoteShareID != b.RemoteShareID || a.Name != b.Name ||
+	if a.ID != b.ID || a.RecipientUserType != b.RecipientUserType || !equalGrantKey(a.GrantKey, b.GrantKey) || a.RemoteShareID != b.RemoteShareID || a.Name != b.Name ||
 		a.ItemType != b.ItemType || a.ShareWith != b.ShareWith || a.ShareWithIdp != b.ShareWithIdp ||
 		a.ShareWithTenant != b.ShareWithTenant || a.Owner != b.Owner || a.Initiator != b.Initiator ||
 		a.Ctime != b.Ctime || a.Mtime != b.Mtime || !equalNullTime(a.Expiration, b.Expiration) ||

@@ -243,6 +243,7 @@ type OcmShareProtocol struct {
 
 // OcmReceivedShare represents an OCM share received from a remote user.
 type OcmReceivedShare struct {
+	RecipientUserType int32 `gorm:"not null;default:0"`
 	gorm.Model
 	RemoteShareID   string             `gorm:"size:255;index:i_ocmrecshare_remoteshareid;not null"`
 	Name            string             `gorm:"size:255;not null"`

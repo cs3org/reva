@@ -20,21 +20,26 @@ package userprovider
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"slices"
 	"sort"
 
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
+	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	"github.com/cs3org/reva/v3/pkg/appctx"
 	"github.com/cs3org/reva/v3/pkg/errtypes"
 	"github.com/cs3org/reva/v3/pkg/plugin"
 	"github.com/cs3org/reva/v3/pkg/rgrpc"
 	"github.com/cs3org/reva/v3/pkg/rgrpc/status"
+	"github.com/cs3org/reva/v3/pkg/trace"
 	"github.com/cs3org/reva/v3/pkg/user"
 	"github.com/cs3org/reva/v3/pkg/user/manager/registry"
 	"github.com/cs3org/reva/v3/pkg/utils"
 	"github.com/cs3org/reva/v3/pkg/utils/cfg"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/codes"
+	grpcstatus "google.golang.org/grpc/status"
 )
 
 func init() {
@@ -121,6 +126,10 @@ func (s *service) GetUserByClaim(ctx context.Context, req *userpb.GetUserByClaim
 	user, err := s.usermgr.GetUserByClaim(ctx, req.Claim, req.Value, req.SkipFetchingUserGroups)
 	if err != nil {
 		res := &userpb.GetUserByClaimResponse{}
+		if req.Claim == "userid" {
+			res.Status = useridLookupStatus(ctx, err)
+			return res, nil
+		}
 		switch err.(type) {
 		case errtypes.NotFound:
 			res.Status = status.NewNotFound(ctx, fmt.Sprintf("user not found %s %s", req.Claim, req.Value))
@@ -137,6 +146,48 @@ func (s *service) GetUserByClaim(ctx context.Context, req *userpb.GetUserByClaim
 		User:   user,
 	}
 	return res, nil
+}
+
+func useridLookupStatus(ctx context.Context, err error) *rpc.Status {
+	// Match NewStatusFromErrType without formatting or logging the source error.
+	code := rpc.Code_CODE_INTERNAL
+	switch err.(type) {
+	case errtypes.IsNotFound:
+		code = rpc.Code_CODE_NOT_FOUND
+	case errtypes.IsInvalidCredentials, errtypes.IsUserRequired:
+		code = rpc.Code_CODE_UNAUTHENTICATED
+	case errtypes.IsPermissionDenied:
+		code = rpc.Code_CODE_PERMISSION_DENIED
+	case errtypes.IsNotSupported:
+		code = rpc.Code_CODE_UNIMPLEMENTED
+	case errtypes.IsBadRequest:
+		code = rpc.Code_CODE_INVALID_ARGUMENT
+	case errtypes.IsAlreadyExists:
+		code = rpc.Code_CODE_ALREADY_EXISTS
+	case errtypes.IsConflict:
+		code = rpc.Code_CODE_ABORTED
+	case errtypes.IsInsufficientStorage:
+		code = rpc.Code_CODE_INSUFFICIENT_STORAGE
+	default:
+		for cause := err; cause != nil && code == rpc.Code_CODE_INTERNAL; cause = errors.Unwrap(cause) {
+			var grpcErr interface{ GRPCStatus() *grpcstatus.Status }
+			if !errors.As(cause, &grpcErr) {
+				break
+			}
+			switch grpcErr.GRPCStatus().Code() {
+			case codes.NotFound:
+				code = rpc.Code_CODE_NOT_FOUND
+			case codes.Unauthenticated:
+				code = rpc.Code_CODE_UNAUTHENTICATED
+			case codes.PermissionDenied:
+				code = rpc.Code_CODE_PERMISSION_DENIED
+			}
+		}
+	}
+	const reason = "userid lookup failed"
+	log := appctx.GetLogger(ctx)
+	log.Warn().Str("code", code.String()).Msg(reason)
+	return &rpc.Status{Code: code, Message: reason, Trace: trace.Get(ctx)}
 }
 
 func (s *service) FindUsers(ctx context.Context, req *userpb.FindUsersRequest) (*userpb.FindUsersResponse, error) {

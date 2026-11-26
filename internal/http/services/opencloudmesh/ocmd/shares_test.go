@@ -137,7 +137,7 @@ func initSharesHandler(t *testing.T, c *config) *sharesHandler {
 
 // --- tests ---
 
-func TestCreateShareReturnsServerErrorForNonOKCreateStatus(t *testing.T) {
+func TestCreateShareStatusMapping(t *testing.T) {
 	// Start a local OCM discovery server so the discovery succeeds.
 	disco := ocmDiscoveryServer(t, "webdav", "file")
 	defer disco.Close()
@@ -146,14 +146,6 @@ func TestCreateShareReturnsServerErrorForNonOKCreateStatus(t *testing.T) {
 	// so that the discovery calls it instead of the real internet.
 	senderAddr := disco.Listener.Addr().String() // e.g. "127.0.0.1:54321"
 
-	stampGateway(&sharesMockGW{
-		createResp: &ocmincoming.CreateOCMIncomingShareResponse{
-			Status: &rpc.Status{
-				Code:    rpc.Code_CODE_INTERNAL,
-				Message: "store failed",
-			},
-		},
-	})
 	h := initSharesHandler(t, &config{AllowLoopbackFederation: true})
 
 	body, _ := json.Marshal(map[string]any{
@@ -173,15 +165,30 @@ func TestCreateShareReturnsServerErrorForNonOKCreateStatus(t *testing.T) {
 		},
 	})
 
-	req := httptest.NewRequest(http.MethodPost, "/ocm/shares", bytes.NewReader(body))
-	req.Header.Set("Content-Type", "application/json")
-	req.RemoteAddr = "192.0.2.15:12345"
-
-	rr := httptest.NewRecorder()
-	h.CreateShare(rr, req)
-
-	if rr.Code != http.StatusInternalServerError {
-		t.Fatalf("CreateShare() status = %d, want %d", rr.Code, http.StatusInternalServerError)
+	for _, tc := range []struct {
+		name    string
+		status  rpc.Code
+		message string
+		want    int
+	}{
+		{"internal", rpc.Code_CODE_INTERNAL, "store failed", http.StatusInternalServerError},
+		{"recipient proof", rpc.Code_CODE_FAILED_PRECONDITION, "local recipient identity could not be verified", http.StatusInternalServerError},
+		{"unrelated precondition", rpc.Code_CODE_FAILED_PRECONDITION, "unrelated store precondition", http.StatusInternalServerError},
+		{"malformed grant", rpc.Code_CODE_INVALID_ARGUMENT, "invalid OCM grant identity", http.StatusBadRequest},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			stampGateway(&sharesMockGW{createResp: &ocmincoming.CreateOCMIncomingShareResponse{
+				Status: &rpc.Status{Code: tc.status, Message: tc.message},
+			}})
+			req := httptest.NewRequest(http.MethodPost, "/ocm/shares", bytes.NewReader(body))
+			req.Header.Set("Content-Type", "application/json")
+			req.RemoteAddr = "192.0.2.15:12345"
+			rr := httptest.NewRecorder()
+			h.CreateShare(rr, req)
+			if rr.Code != tc.want || strings.Contains(rr.Body.String(), tc.message) {
+				t.Fatalf("CreateShare() status = %d, want %d, body = %s", rr.Code, tc.want, rr.Body)
+			}
+		})
 	}
 }
 

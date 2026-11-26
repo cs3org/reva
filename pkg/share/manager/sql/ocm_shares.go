@@ -431,6 +431,18 @@ func (m *mgr) GetEmbeddedPayload(ctx context.Context, user *userpb.User, share *
 // provider grant. A share whose grant identity cannot be formed is rejected
 // with ErrInvalidGrantIdentity.
 func (m *mgr) StoreReceivedShare(ctx context.Context, s *ocm.ReceivedShare) (*ocm.ReceivedShare, error) {
+	return m.storeReceivedShare(ctx, s, nil)
+}
+
+// StoreReceivedShareForResolvedRecipient requires the caller to verify the local directory identity.
+func (m *mgr) StoreReceivedShareForResolvedRecipient(ctx context.Context, s *ocm.ReceivedShare, resolvedID *userpb.UserId) (*ocm.ReceivedShare, error) {
+	if resolvedID.GetOpaqueId() == "" {
+		return nil, share.ErrInvalidGrantIdentity
+	}
+	return m.storeReceivedShare(ctx, s, resolvedID)
+}
+
+func (m *mgr) storeReceivedShare(ctx context.Context, s *ocm.ReceivedShare, resolvedID *userpb.UserId) (*ocm.ReceivedShare, error) {
 	origin, err := share.ReceivedGrantOrigin(s.GetCreator())
 	if err != nil {
 		return nil, share.ErrInvalidGrantIdentity
@@ -440,27 +452,35 @@ func (m *mgr) StoreReceivedShare(ctx context.Context, s *ocm.ReceivedShare) (*oc
 		return nil, err
 	}
 	grantee := s.GetGrantee().GetUserId()
-	if grantee.GetOpaqueId() == "" || grantee.GetIdp() == "" {
+	if grantee.GetOpaqueId() == "" || (resolvedID == nil && grantee.GetIdp() == "") {
 		return nil, share.ErrInvalidGrantIdentity
+	}
+	if resolvedID != nil {
+		if resolvedID.GetOpaqueId() != grantee.GetOpaqueId() || resolvedID.GetIdp() != grantee.GetIdp() ||
+			resolvedID.GetTenantId() != grantee.GetTenantId() || resolvedID.GetType() != grantee.GetType() {
+			return nil, share.ErrInvalidGrantIdentity
+		}
+		grantee = resolvedID
 	}
 	var check commitCheck
 	if err := m.transact(ctx, "store_received_share", func(tx *gorm.DB) error {
 		check = commitCheck{grantKey: key}
 
 		receivedShare := &model.OcmReceivedShare{
-			GrantKey:        &key,
-			Name:            s.Name,
-			RemoteShareID:   s.RemoteShareId,
-			ItemType:        convertFromCS3ResourceType(s.SharedResourceType),
-			ShareWith:       grantee.GetOpaqueId(),
-			ShareWithIdp:    grantee.GetIdp(),
-			ShareWithTenant: grantee.GetTenantId(),
-			Owner:           formatUserID(s.Owner),
-			Initiator:       s.Creator.GetOpaqueId() + "@" + origin,
-			Ctime:           s.Ctime.Seconds,
-			Mtime:           s.Mtime.Seconds,
-			RecipientType:   convertFromCS3OCMShareType(s.RecipientType),
-			State:           convertFromCS3OCMShareState(s.State),
+			GrantKey:          &key,
+			Name:              s.Name,
+			RemoteShareID:     s.RemoteShareId,
+			ItemType:          convertFromCS3ResourceType(s.SharedResourceType),
+			ShareWith:         grantee.GetOpaqueId(),
+			ShareWithIdp:      grantee.GetIdp(),
+			ShareWithTenant:   grantee.GetTenantId(),
+			RecipientUserType: int32(grantee.GetType()),
+			Owner:             formatUserID(s.Owner),
+			Initiator:         s.Creator.GetOpaqueId() + "@" + origin,
+			Ctime:             s.Ctime.Seconds,
+			Mtime:             s.Mtime.Seconds,
+			RecipientType:     convertFromCS3OCMShareType(s.RecipientType),
+			State:             convertFromCS3OCMShareState(s.State),
 		}
 		if s.Expiration != nil {
 			receivedShare.Expiration = datatypes.NullTime{
@@ -640,14 +660,17 @@ func (m *mgr) GetReceivedShare(ctx context.Context, user *userpb.User, ref *ocm.
 }
 
 // receivedBy compares the local identity independently of SQL collation. A row
-// with a grant key stores the exact recipient, an empty tenant included. Older
-// rows only have the opaque ID.
+// with a grant key binds IdP and tenant, and a blank IdP also binds user type.
+// Older rows only have the opaque ID.
 func receivedBy(row *model.OcmReceivedShare, id *userpb.UserId) bool {
 	if id.GetOpaqueId() == "" || row.ShareWith != id.GetOpaqueId() {
 		return false
 	}
 	if row.GrantKey == nil {
 		return true
+	}
+	if row.ShareWithIdp == "" && row.RecipientUserType != int32(id.GetType()) {
+		return false
 	}
 	return row.ShareWithIdp == id.GetIdp() && row.ShareWithTenant == id.GetTenantId()
 }

@@ -28,6 +28,7 @@ import (
 	ocm "github.com/cs3org/go-cs3apis/cs3/sharing/ocm/v1beta1"
 	"github.com/cs3org/reva/v3/pkg/ocm/share"
 	model "github.com/cs3org/reva/v3/pkg/share/manager/sql/model"
+	"google.golang.org/protobuf/proto"
 )
 
 func TestNewGrantMustBeRepresentable(t *testing.T) {
@@ -139,6 +140,109 @@ func TestNewGrantMustBeRepresentable(t *testing.T) {
 		fresh := mustStore(t, m, grant("a.example.org", "fresh"))
 		if receivedRow(t, m, fresh.Id.OpaqueId).GrantKey == nil {
 			t.Fatal("fresh grant unbound")
+		}
+	})
+}
+
+func TestResolvedBlankRecipientIsExactlyBound(t *testing.T) {
+	forEachDialectConfig(t, func(t *testing.T, cfg map[string]any) {
+		ctx := context.Background()
+		m := openOCMManager(t, cfg)
+		ordinary := &userpb.User{Id: &userpb.UserId{OpaqueId: "marie", Idp: "local.example"}}
+		oldKeyed := mustStore(t, m, grantShare(ordinary, "peer.example", "old-keyed", file))
+		historical := mustStore(t, m, grantShare(ordinary, "peer.example", "historical", file))
+		if err := m.db.Model(&model.OcmReceivedShare{}).Where("id = ?", historical.Id.OpaqueId).Update("grant_key", nil).Error; err != nil {
+			t.Fatal(err)
+		}
+		if err := m.db.Exec("ALTER TABLE ocm_received_shares DROP COLUMN recipient_user_type").Error; err != nil {
+			t.Fatal(err)
+		}
+		m = openOCMManager(t, cfg)
+		blank := &userpb.User{Id: &userpb.UserId{OpaqueId: "marie"}}
+		primary := &userpb.User{Id: &userpb.UserId{OpaqueId: "marie", Type: userpb.UserType_USER_TYPE_PRIMARY}}
+		nonblankPrimary := &userpb.User{Id: &userpb.UserId{OpaqueId: "marie", Idp: "local.example", Type: primary.Id.Type}}
+		for _, tc := range []struct {
+			s  *ocm.ReceivedShare
+			as *userpb.User
+		}{{historical, primary}, {oldKeyed, nonblankPrimary}} {
+			got, err := m.GetReceivedShare(ctx, tc.as, idRef(tc.s.Id))
+			if err != nil || got.GetGrantee().GetUserId().GetType() != 0 || len(got.GetProtocols()) != 1 {
+				t.Fatalf("upgraded historical share: %v, %v", got, err)
+			}
+		}
+
+		req := grantShare(blank, "peer.example", "verified-zero", file)
+		for _, proof := range []*userpb.UserId{nil, {}, primary.Id, ordinary.Id, {OpaqueId: "marie", TenantId: "other"}, {OpaqueId: "other"}} {
+			got, err := m.StoreReceivedShareForResolvedRecipient(ctx, req, proof)
+			if got != nil || !errors.Is(err, share.ErrInvalidGrantIdentity) {
+				t.Fatalf("unmatched proof: %v, %v", got, err)
+			}
+		}
+		if got, err := m.StoreReceivedShare(ctx, req); got != nil || !errors.Is(err, share.ErrInvalidGrantIdentity) {
+			t.Fatalf("unproven recipient: %v, %v", got, err)
+		}
+		stored, err := m.StoreReceivedShareForResolvedRecipient(ctx, req, blank.Id)
+		if err != nil {
+			t.Fatal(err)
+		}
+		row := receivedRow(t, m, stored.Id.OpaqueId)
+		if row.GrantKey == nil || row.ShareWithIdp != "" || row.ShareWithTenant != "" || row.RecipientUserType != 0 {
+			t.Fatalf("type-zero binding: %+v", row)
+		}
+		ref := idRef(stored.Id)
+		update := &ocm.ReceivedShare{Id: stored.Id, State: ocm.ShareState_SHARE_STATE_ACCEPTED}
+		if _, err := m.GetReceivedShare(ctx, primary, ref); !errors.Is(err, share.ErrShareNotFound) {
+			t.Fatalf("different type read: %v", err)
+		}
+		if _, err := m.UpdateReceivedShare(ctx, primary, update, stateMask()); !errors.Is(err, share.ErrShareNotFound) {
+			t.Fatalf("different type update: %v", err)
+		}
+		list, err := m.ListReceivedShares(ctx, primary, nil)
+		if err != nil || len(list) != 1 || list[0].GetId().GetOpaqueId() != historical.GetId().GetOpaqueId() {
+			t.Fatalf("different type list: %v, %v", list, err)
+		}
+		if u, err := m.UpdateReceivedShare(ctx, blank, update, stateMask()); err != nil || !u.StateChanged() {
+			t.Fatalf("exact type-zero update: %v, %v", u, err)
+		}
+		got, err := m.GetReceivedShare(ctx, blank, ref)
+		if err != nil || !proto.Equal(got.GetGrantee().GetUserId(), blank.Id) || got.GetState() != update.State {
+			t.Fatalf("exact type-zero readback: %v, %v", got, err)
+		}
+
+		req = grantShare(primary, "peer.example", "verified-primary", file)
+		req.Grantee.GetUserId().Type = primary.Id.Type
+		stored, err = m.StoreReceivedShareForResolvedRecipient(ctx, req, primary.Id)
+		if err != nil {
+			t.Fatal(err)
+		}
+		got, err = m.GetReceivedShare(ctx, primary, idRef(stored.Id))
+		if err != nil || !proto.Equal(got.GetGrantee().GetUserId(), primary.Id) {
+			t.Fatalf("exact primary readback: %v, %v", got, err)
+		}
+	})
+}
+
+func TestReceivedCommitObservationChecksRecipientType(t *testing.T) {
+	forEachDialectConfig(t, func(t *testing.T, cfg map[string]any) {
+		ctx := context.Background()
+		m := openOCMManager(t, cfg)
+		observer := other(t, cfg)
+		recipient := &userpb.User{Id: &userpb.UserId{OpaqueId: "marie", Type: userpb.UserType_USER_TYPE_PRIMARY}}
+		fault := &commitFault{apply: true, between: func() {
+			id := rowOf(t, observer, "type-observation")
+			if id == 0 {
+				t.Fatal("committed row missing")
+			}
+			setRow(t, observer, id, map[string]any{"recipient_user_type": 0})
+		}}
+		withCommitFault(t, m, fault)
+		fault.armed.Store(true)
+		req := grantShare(recipient, "peer.example", "type-observation", file)
+		req.Grantee.GetUserId().Type = recipient.Id.Type
+		got, err := m.StoreReceivedShareForResolvedRecipient(ctx, req, recipient.Id)
+		var unknown *share.CommitUnknownError
+		if got != nil || !errors.As(err, &unknown) || unknown.Observed != share.CommitObservedOther {
+			t.Fatalf("observed different type after lost acknowledgment: %v, %v", got, err)
 		}
 	})
 }

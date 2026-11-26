@@ -98,16 +98,41 @@ func (m *manager) GetUser(ctx context.Context, uid *userpb.UserId, skipFetchingG
 }
 
 func (m *manager) GetUserByClaim(ctx context.Context, claim, value string, skipFetchingGroups bool) (*userpb.User, error) {
-	for _, u := range m.users {
-		if userClaim, err := extractClaim(u, claim); err == nil && value == userClaim {
-			user := proto.Clone(u).(*userpb.User)
-			if skipFetchingGroups {
-				user.Groups = nil
-			}
-			return user, nil
+	match := -1
+	for i, u := range m.users {
+		userClaim, err := extractClaim(u, claim)
+		if err != nil || value != userClaim {
+			continue
+		}
+		if match >= 0 {
+			return nil, errtypes.Conflict("ambiguous userid")
+		}
+		match = i
+		if claim != "userid" {
+			break
 		}
 	}
-	return nil, errtypes.NotFound(value)
+	if match < 0 {
+		return nil, errtypes.NotFound(value)
+	}
+	u := m.users[match]
+	if claim == "userid" && u.GetId().GetIdp() == "" {
+		// GetUser accepts either lookup key for a blank IdP.
+		for i, other := range m.users {
+			if i == match {
+				continue
+			}
+			id, name := other.GetId().GetOpaqueId(), other.GetUsername()
+			if value == id || value == name || (u.Username != "" && (u.Username == id || u.Username == name)) {
+				return nil, errtypes.Conflict("ambiguous userid")
+			}
+		}
+	}
+	user := proto.Clone(u).(*userpb.User)
+	if skipFetchingGroups {
+		user.Groups = nil
+	}
+	return user, nil
 }
 
 func extractClaim(u *userpb.User, claim string) (string, error) {
@@ -119,6 +144,10 @@ func extractClaim(u *userpb.User, claim string) (string, error) {
 	case "uid":
 		if u.UidNumber != 0 {
 			return strconv.FormatInt(u.UidNumber, 10), nil
+		}
+	case "userid":
+		if id := u.GetId().GetOpaqueId(); id != "" {
+			return id, nil
 		}
 	}
 	return "", errors.New("json: invalid field")
