@@ -364,16 +364,6 @@ func TestOutgoingNotificationFormsOmitPayload(t *testing.T) {
 	}
 }
 
-func TestNewNotificationNilAndUnreachable(t *testing.T) {
-	c := NewClient(time.Second, false)
-	if res := c.NewNotification(context.Background(), "127.0.0.1:1", nil, nil); res.Outcome != SendPostFailed {
-		t.Fatalf("nil: %+v", res)
-	}
-	if res := c.NewNotification(context.Background(), "127.0.0.1:1", unsharedNotification(t), nil); res.Outcome != SendDiscoveryFailed {
-		t.Fatalf("unreachable: %+v", res)
-	}
-}
-
 // rawPeer answers every request on a real TCP connection with fixed bytes,
 // which can be a status line or header that net/http fails to parse.
 type rawPeer struct {
@@ -621,6 +611,12 @@ func TestNotificationToUnusableHostMakesNoRequest(t *testing.T) {
 		if res.Outcome != SendDiscoveryFailed || res.Failure != FailureError || rt.n.Load() != 0 {
 			t.Fatalf("%q: %+v requests %d", domain, res, rt.n.Load())
 		}
+	}
+	c := NewClient(time.Second, false)
+	rt := &countingTransport{}
+	c.client.Transport = rt
+	if res := c.NewNotification(context.Background(), "peer.example.org", nil, nil); res.Outcome != SendPostFailed || res.Failure != FailureError || rt.n.Load() != 0 {
+		t.Fatalf("nil notification: %+v requests %d", res, rt.n.Load())
 	}
 }
 
