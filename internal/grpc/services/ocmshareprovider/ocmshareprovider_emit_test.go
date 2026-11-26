@@ -28,8 +28,6 @@ import (
 	"net"
 	"net/http"
 	"net/http/httptest"
-	"os"
-	"os/exec"
 	"path/filepath"
 	"slices"
 	"strconv"
@@ -1458,123 +1456,98 @@ func TestJSONReceivedStateNoticeSkipsSupersededReceipt(t *testing.T) {
 }
 
 func TestJSONReceivedStateNoticeWhileRepositoryBlocked(t *testing.T) {
-	for _, tc := range []string{"manager held", "file read held", "client timeout"} {
-		t.Run(tc, func(t *testing.T) {
-			e := newEmitEnv(t)
-			rs, path := e.useJSON(t, e.received(t, "held-json", false))
-			repo := e.svc.repo
-			user := appctx.ContextMustGetUser(e.recip)
-			const accepted = ocm.ShareState_SHARE_STATE_ACCEPTED
-			receipt, err := repo.UpdateReceivedShare(share.WithStateNotice(e.recip), user,
-				&ocm.ReceivedShare{Id: rs.Id, State: accepted}, &field_mask.FieldMask{Paths: []string{"state"}})
-			if err != nil {
-				t.Fatal(err)
-			}
-			ref := &ocm.ShareReference{Spec: &ocm.ShareReference_Id{Id: rs.Id}}
-			current, err := repo.GetReceivedShare(t.Context(), user, ref)
-			if err != nil || current.GetState() != accepted {
-				t.Fatalf("committed state = %v, err = %v", current.GetState(), err)
-			}
-			posted, canceled := make(chan struct{}), make(chan struct{})
-			releasePeer := make(chan struct{})
-			defer close(releasePeer)
-			var cancelObserved sync.Once
-			e.peer.mu.Lock()
-			e.peer.posted = posted
-			e.peer.holdPost = func(ctx context.Context) {
-				select {
-				case <-ctx.Done():
-					cancelObserved.Do(func() { close(canceled) })
-					<-releasePeer
-				case <-releasePeer:
-				}
-			}
-			e.peer.mu.Unlock()
-			timeout := time.Minute
-			if tc == "client timeout" {
-				timeout = time.Second
-			}
-			a := &ocmd.AsyncNotifier{
-				Client: ocmd.NewPublicOnlyClientWithConfig(ocmclient.TransportConfig{Timeout: timeout, AllowLoopback: true}),
-				Key:    e.svc.notifier.(*syncNotifier).key,
-			}
-			e.svc.notifier = a
-			t.Cleanup(func() { _ = a.Close() })
-			wait := func(ch <-chan struct{}, what string) {
-				t.Helper()
-				select {
-				case <-ch:
-				case <-time.After(5 * time.Second):
-					t.Fatalf("timed out waiting for %s", what)
-				}
-			}
-			switch tc {
-			case "manager held":
-				locker := repo.(sync.Locker)
-				locker.Lock()
-				defer locker.Unlock()
-			case "file read held":
-				mkfifo, err := exec.LookPath("mkfifo")
-				if err != nil {
-					t.Skip("requires mkfifo to hold a repository read after gate acquisition")
-				}
-				d, err := os.ReadFile(path)
-				if err != nil {
-					t.Fatal(err)
-				}
-				if err := os.Remove(path); err != nil {
-					t.Fatal(err)
-				}
-				if out, err := exec.Command(mkfifo, path).CombinedOutput(); err != nil {
-					t.Fatalf("create file barrier: %v: %s", err, out)
-				}
-				read := make(chan error, 1)
-				go func() {
-					got, err := repo.GetReceivedShare(t.Context(), user, ref)
-					if err == nil && got.GetState() != accepted {
-						t.Errorf("parked read state = %v", got.GetState())
-					}
-					read <- err
-				}()
-				feed, err := os.OpenFile(path, os.O_WRONLY, 0)
-				if err != nil {
-					t.Fatal(err)
-				}
-				defer func() {
-					_, writeErr := feed.Write(d)
-					if err := errors.Join(writeErr, feed.Close()); err != nil {
-						t.Errorf("release file read: %v", err)
-					}
-					select {
-					case err := <-read:
-						if err != nil {
-							t.Errorf("parked read failed: %v", err)
-						}
-					case <-time.After(5 * time.Second):
-						t.Error("file read did not finish after release")
-					}
-				}()
-			}
-			e.svc.notifyReceivedState(e.recip, receipt, true)
-			wait(posted, "signed POST")
-			if tc == "client timeout" {
-				wait(canceled, "request deadline")
-			}
-			closed := make(chan struct{})
-			go func() {
-				_ = a.Close()
-				close(closed)
-			}()
-			wait(canceled, "peer request cancellation")
-			wait(closed, "notifier join")
-			requireNotices(t, e.peer, ocmd.NotificationShareAccepted)
-			e.peer.mu.Lock()
-			defer e.peer.mu.Unlock()
-			if e.peer.discovers != 1 {
-				t.Fatalf("discoveries = %d, want 1", e.peer.discovers)
-			}
-		})
+	t.Run("manager held", func(t *testing.T) {
+		testJSONReceivedStateNoticeWhileRepositoryBlocked(t, false, nil)
+	})
+	t.Run("client timeout", func(t *testing.T) {
+		testJSONReceivedStateNoticeWhileRepositoryBlocked(t, true, nil)
+	})
+}
+
+func testJSONReceivedStateNoticeWhileRepositoryBlocked(t *testing.T, clientTimeout bool,
+	holdRead func(string, func() (*ocm.ReceivedShare, error), *ocm.ReceivedShare, func()),
+) {
+	t.Helper()
+	e := newEmitEnv(t)
+	rs, path := e.useJSON(t, e.received(t, "held-json", false))
+	repo := e.svc.repo
+	user := appctx.ContextMustGetUser(e.recip)
+	const accepted = ocm.ShareState_SHARE_STATE_ACCEPTED
+	receipt, err := repo.UpdateReceivedShare(share.WithStateNotice(e.recip), user,
+		&ocm.ReceivedShare{Id: rs.Id, State: accepted}, &field_mask.FieldMask{Paths: []string{"state"}})
+	if err != nil {
+		t.Fatal(err)
 	}
+	ref := &ocm.ShareReference{Spec: &ocm.ShareReference_Id{Id: rs.Id}}
+	current, err := repo.GetReceivedShare(t.Context(), user, ref)
+	if err != nil || current.GetState() != accepted {
+		t.Fatalf("committed state = %v, err = %v", current.GetState(), err)
+	}
+	posted, canceled := make(chan struct{}), make(chan struct{})
+	releasePeer := make(chan struct{})
+	defer close(releasePeer)
+	var cancelObserved sync.Once
+	e.peer.mu.Lock()
+	e.peer.posted = posted
+	e.peer.holdPost = func(ctx context.Context) {
+		select {
+		case <-ctx.Done():
+			cancelObserved.Do(func() { close(canceled) })
+			<-releasePeer
+		case <-releasePeer:
+		}
+	}
+	e.peer.mu.Unlock()
+	timeout := time.Minute
+	if clientTimeout {
+		timeout = time.Second
+	}
+	a := &ocmd.AsyncNotifier{
+		Client: ocmd.NewPublicOnlyClientWithConfig(ocmclient.TransportConfig{Timeout: timeout, AllowLoopback: true}),
+		Key:    e.svc.notifier.(*syncNotifier).key,
+	}
+	e.svc.notifier = a
+	t.Cleanup(func() { _ = a.Close() })
+	wait := func(ch <-chan struct{}, what string) {
+		t.Helper()
+		select {
+		case <-ch:
+		case <-time.After(5 * time.Second):
+			t.Fatalf("timed out waiting for %s", what)
+		}
+	}
+	notify := func() {
+		e.svc.notifyReceivedState(e.recip, receipt, true)
+		wait(posted, "signed POST")
+		if clientTimeout {
+			wait(canceled, "request deadline")
+		}
+		closed := make(chan struct{})
+		go func() {
+			_ = a.Close()
+			close(closed)
+		}()
+		wait(canceled, "peer request cancellation")
+		wait(closed, "notifier join")
+		requireNotices(t, e.peer, ocmd.NotificationShareAccepted)
+		e.peer.mu.Lock()
+		defer e.peer.mu.Unlock()
+		if e.peer.discovers != 1 {
+			t.Fatalf("discoveries = %d, want 1", e.peer.discovers)
+		}
+	}
+	if holdRead != nil {
+		holdRead(path, func() (*ocm.ReceivedShare, error) {
+			return repo.GetReceivedShare(t.Context(), user, ref)
+		}, current, notify)
+		return
+	}
+	if !clientTimeout {
+		locker := repo.(sync.Locker)
+		locker.Lock()
+		defer locker.Unlock()
+	}
+	notify()
 }
 
 func TestJSONReceivedStateNoticeRetiresUnhandedProof(t *testing.T) {

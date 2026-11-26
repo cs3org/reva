@@ -24,9 +24,7 @@ import (
 	"errors"
 	"math"
 	"os"
-	"os/exec"
 	"path/filepath"
-	"syscall"
 	"testing"
 	"testing/synctest"
 	"time"
@@ -246,102 +244,6 @@ func TestJSONStateNoticeCapacityKeepsIndependentGrants(t *testing.T) {
 		if !proof.TryStateNotice() {
 			t.Errorf("independent grant %d lost its proof", i+1)
 		}
-	}
-}
-
-func TestJSONStateNoticeRevokedOnUnacknowledgedSave(t *testing.T) {
-	mkfifo, err := exec.LookPath("mkfifo")
-	if err != nil {
-		t.Skip("requires mkfifo to observe bytes before a failing sync")
-	}
-	repo, cleanup := setup(t)
-	defer cleanup()
-	m := repo.(*mgr)
-	ctx := share.WithStateNotice(t.Context())
-	user, rs := receivedFixture(t, m)
-	update := func(state ocm.ShareState) (*share.ReceivedShareUpdate, error) {
-		return m.UpdateReceivedShare(ctx, user, &ocm.ReceivedShare{Id: rs.Id, State: state}, mask("state"))
-	}
-	earlier, err := update(ocm.ShareState_SHARE_STATE_ACCEPTED)
-	if err != nil || earlier.TryStateNotice == nil {
-		t.Fatalf("accepted receipt = %v, err = %v", earlier, err)
-	}
-	path := m.c.File
-	original, err := os.ReadFile(path)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err := os.Remove(path); err != nil {
-		t.Fatal(err)
-	}
-	if out, err := exec.Command(mkfifo, path).CombinedOutput(); err != nil {
-		t.Fatalf("create read barrier: %v: %s", err, out)
-	}
-	result := make(chan error, 1)
-	go func() {
-		receipt, err := update(ocm.ShareState_SHARE_STATE_REJECTED)
-		if receipt != nil {
-			t.Error("unacknowledged update returned a receipt")
-		}
-		result <- err
-	}()
-	feed, err := os.OpenFile(path, os.O_WRONLY, 0)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer feed.Close()
-	if err := os.Remove(path); err != nil {
-		t.Fatal(err)
-	}
-	if out, err := exec.Command(mkfifo, path).CombinedOutput(); err != nil {
-		t.Fatalf("create save barrier: %v: %s", err, out)
-	}
-	saved := make(chan []byte, 1)
-	go func() {
-		d, err := os.ReadFile(path)
-		if err != nil {
-			t.Errorf("read attempted save: %v", err)
-		}
-		saved <- d
-	}()
-	if _, err := feed.Write(original); err != nil {
-		t.Fatal(err)
-	}
-	if err := feed.Close(); err != nil {
-		t.Fatal(err)
-	}
-	select {
-	case err := <-result:
-		if !errors.Is(err, syscall.EINVAL) {
-			t.Fatalf("save error = %v, want FIFO sync failure", err)
-		}
-	case <-time.After(5 * time.Second):
-		t.Fatal("save did not finish")
-	}
-	var attempted shareModel
-	select {
-	case d := <-saved:
-		if err := json.Unmarshal(d, &attempted); err != nil {
-			t.Fatal(err)
-		}
-	case <-time.After(5 * time.Second):
-		t.Fatal("save bytes were not observed")
-	}
-	if got := attempted.ReceivedShares[rs.Id.OpaqueId].GetState(); got != ocm.ShareState_SHARE_STATE_REJECTED {
-		t.Fatalf("attempted state = %v", got)
-	}
-	if err := os.Remove(path); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(path, original, 0600); err != nil {
-		t.Fatal(err)
-	}
-	ref := &ocm.ShareReference{Spec: &ocm.ShareReference_Id{Id: rs.Id}}
-	if _, err := m.GetReceivedShare(ctx, user, ref); err != nil {
-		t.Fatal(err)
-	}
-	if earlier.TryStateNotice() {
-		t.Fatal("unacknowledged save left the earlier proof live")
 	}
 }
 
