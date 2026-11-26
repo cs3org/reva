@@ -21,6 +21,7 @@ package cephmount
 import (
 	"cmp"
 	"context"
+	"fmt"
 	iofs "io/fs"
 	"os"
 	"os/exec"
@@ -473,8 +474,10 @@ func (fs *cephmountfs) restoreEntry(ctx context.Context, src string, info os.Fil
 		if err := fs.writableByUser(ctx, filepath.Dir(target)); err != nil {
 			return err
 		}
+		// In hex, as EOS does. The decimal inode is the collision suffix of the bin, which
+		// would remove it when this item is deleted and restored again.
+		aside := fmt.Sprintf("%s.%016x", target, existing.Sys().(*syscall.Stat_t).Ino)
 		// rename(2) replaces an existing file without an error, so check the new name too.
-		aside := target + "." + strconv.FormatUint(existing.Sys().(*syscall.Stat_t).Ino, 10)
 		if _, err := fs.rootFS.Lstat(aside); err == nil {
 			return errtypes.AlreadyExists("cephmount: " + fs.fromChroot(aside) + " already exists")
 		} else if !os.IsNotExist(err) {

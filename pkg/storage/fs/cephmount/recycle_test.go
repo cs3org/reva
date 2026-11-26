@@ -20,6 +20,7 @@ package cephmount
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -479,7 +480,7 @@ func TestRestoreRecycleItemWithForceKeepsBoth(t *testing.T) {
 	writeTestFile(t, filepath.Join(space, "a", "x.txt"), "new x")
 	info, err := os.Stat(filepath.Join(space, "a", "x.txt"))
 	require.NoError(t, err)
-	inode := strconv.FormatUint(info.Sys().(*syscall.Stat_t).Ino, 10)
+	aside := fmt.Sprintf("x.txt.%016x", info.Sys().(*syscall.Stat_t).Ino)
 
 	today := time.Now().UTC().Format(recycleKeyDay)
 	var collisions storage.RecycleCollisions
@@ -491,7 +492,34 @@ func TestRestoreRecycleItemWithForceKeepsBoth(t *testing.T) {
 	require.NoError(t, fs.RestoreRecycleItem(ctx, "/proj", scope, rel, nil, true))
 
 	assert.Equal(t, "deleted x", readTestFile(t, filepath.Join(space, "a", "x.txt")))
-	assert.Equal(t, "new x", readTestFile(t, filepath.Join(space, "a", "x.txt."+inode)), "the item that was in the way")
+	assert.Equal(t, "new x", readTestFile(t, filepath.Join(space, "a", aside)), "the item that was in the way")
+}
+
+func TestRestoreRecycleItemKeepsTheNameOfAnItemMovedAside(t *testing.T) {
+	fs, ctx, _ := newRecycleTestFS(t, 1)
+	space := filepath.Join(fs.chrootDir, "proj")
+	writeTestFile(t, filepath.Join(space, "x.txt"), "deleted x")
+	require.NoError(t, fs.Delete(ctx, &provider.Reference{Path: "/proj/x.txt"}))
+	writeTestFile(t, filepath.Join(space, "x.txt"), "new x")
+
+	today := time.Now().UTC().Format(recycleKeyDay)
+	require.NoError(t, fs.RestoreRecycleItem(ctx, "/proj", today, "/x.txt", nil, true))
+	entries, err := os.ReadDir(space)
+	require.NoError(t, err)
+	require.Len(t, entries, 2)
+	aside := entries[0].Name()
+	if aside == "x.txt" {
+		aside = entries[1].Name()
+	}
+	require.NoError(t, fs.Delete(ctx, &provider.Reference{Path: "/proj/" + aside}))
+
+	items, err := fs.ListRecycle(ctx, "/proj", "", "", nil, nil)
+	require.NoError(t, err)
+	require.Len(t, items, 1)
+	assert.Equal(t, "/proj/"+aside, items[0].Ref.Path, "deleted under the name it had")
+	scope, rel := splitRecycleKey(items[0].Key)
+	require.NoError(t, fs.RestoreRecycleItem(ctx, "/proj", scope, rel, nil, false))
+	assert.Equal(t, "new x", readTestFile(t, filepath.Join(space, aside)))
 }
 
 func TestRestoreRecycleItemRefusals(t *testing.T) {
