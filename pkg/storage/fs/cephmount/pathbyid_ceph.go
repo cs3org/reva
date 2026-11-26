@@ -226,7 +226,7 @@ func (fs *cephmountfs) GetPathByID(ctx context.Context, id *provider.ResourceId)
 	}
 
 	// A deleted item keeps its inode, thus its id now leads into the recycle bin.
-	if inRecycle(fs.toChroot(userRelativePath)) {
+	if fs.inRecycle(fs.toChroot(userRelativePath)) {
 		return "", errtypes.NotFound("cephmount: resource " + id.OpaqueId)
 	}
 

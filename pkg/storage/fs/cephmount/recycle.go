@@ -53,13 +53,22 @@ const (
 	recycleKeyDay = "20060102"
 )
 
-// inRecycle reports whether a chroot-relative path is in the recycle bin.
-func inRecycle(chrootPath string) bool {
-	first, _, _ := strings.Cut(chrootPath, string(filepath.Separator))
-	return first == recycleDir
+// recycleBin returns the recycle bin of a space: <parent>/.recycle/<space> for the
+// space <parent>/<space>. The bin is next to the space, because Samba exports each
+// parent folder on its own bind mount, and rename(2) cannot move between mounts.
+func recycleBin(spaceRoot string) string {
+	return filepath.Join(filepath.Dir(spaceRoot), recycleDir, filepath.Base(spaceRoot))
 }
 
-// moveToRecycle moves path to .recycle/<space root>/YYYY/MM/DD/<path in the space>.
+// inRecycle reports whether a chroot-relative path is in a recycle bin, which is
+// one level above the space roots.
+func (fs *cephmountfs) inRecycle(chrootPath string) bool {
+	parts := strings.Split(chrootPath, string(filepath.Separator))
+	level := max(fs.conf.SpaceDepth-1, 0)
+	return len(parts) > level && parts[level] == recycleDir
+}
+
+// moveToRecycle moves path to the recycle bin of its space, in YYYY/MM/DD/<path in the space>.
 // The date is in UTC, so that Reva and the Samba VFS plugin use the same day folder.
 func (fs *cephmountfs) moveToRecycle(ctx context.Context, path string) error {
 	spaceRoot := "."
@@ -70,7 +79,7 @@ func (fs *cephmountfs) moveToRecycle(ctx context.Context, path string) error {
 	if err != nil {
 		return err
 	}
-	target := filepath.Join(recycleDir, spaceRoot, time.Now().UTC().Format(recycleDayDirs), rel)
+	target := filepath.Join(recycleBin(spaceRoot), time.Now().UTC().Format(recycleDayDirs), rel)
 	if err := fs.createRecycleDirs(filepath.Dir(target)); err != nil {
 		return errors.Wrap(err, "cephmount: failed to create the recycle bin folders")
 	}
@@ -286,7 +295,7 @@ func (fs *cephmountfs) spaceRecycle(ctx context.Context, basePath string, mode u
 	if spaceRoot != "." {
 		depth = len(strings.Split(spaceRoot, string(filepath.Separator)))
 	}
-	if depth != fs.conf.SpaceDepth || inRecycle(spaceRoot) {
+	if depth != fs.conf.SpaceDepth || fs.inRecycle(spaceRoot) {
 		return "", "", errtypes.BadRequest("cephmount: " + basePath + " is not a space root")
 	}
 
@@ -299,7 +308,7 @@ func (fs *cephmountfs) spaceRecycle(ctx context.Context, basePath string, mode u
 	if !allowed.(bool) {
 		return "", "", errtypes.PermissionDenied("cephmount: not enough access to the recycle bin of " + basePath)
 	}
-	return spaceRoot, filepath.Join(recycleDir, spaceRoot), nil
+	return spaceRoot, recycleBin(spaceRoot), nil
 }
 
 // parseRecycleKey splits a key into its first and last day, and the path in the day folders.

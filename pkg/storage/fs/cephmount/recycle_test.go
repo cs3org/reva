@@ -200,6 +200,30 @@ func TestListFolderHidesRecycleAtRoot(t *testing.T) {
 	assert.Equal(t, recycleDir, sub[0].Name)
 }
 
+func TestRecycleBinIsNextToTheSpaces(t *testing.T) {
+	fs, ctx, _ := newRecycleTestFS(t, 2)
+	writeTestFile(t, filepath.Join(fs.chrootDir, "c", "proj", "x.txt"), "deleted")
+	require.NoError(t, fs.Delete(ctx, &provider.Reference{Path: "/c/proj/x.txt"}))
+
+	day := filepath.Join(fs.chrootDir, "c", recycleDir, "proj", time.Now().UTC().Format(recycleDayDirs))
+	assert.Equal(t, "deleted", readTestFile(t, filepath.Join(day, "x.txt")))
+
+	letter, err := fs.ListFolder(ctx, &provider.Reference{Path: "/c"}, nil)
+	require.NoError(t, err)
+	require.Len(t, letter, 1)
+	assert.Equal(t, "proj", letter[0].Name)
+	_, err = fs.ListFolder(ctx, &provider.Reference{Path: "/c/" + recycleDir}, nil)
+	assert.Error(t, err)
+
+	items, err := fs.ListRecycle(ctx, "/c/proj", "", "", nil, nil)
+	require.NoError(t, err)
+	require.Len(t, items, 1)
+	assert.Equal(t, "/c/proj/x.txt", items[0].Ref.Path)
+	today := time.Now().UTC().Format(recycleKeyDay)
+	require.NoError(t, fs.RestoreRecycleItem(ctx, "/c/proj", today, "/x.txt", nil, false))
+	assert.Equal(t, "deleted", readTestFile(t, filepath.Join(fs.chrootDir, "c", "proj", "x.txt")))
+}
+
 func recycleTimestamp(year int, month time.Month, day int) *typepb.Timestamp {
 	return &typepb.Timestamp{Seconds: uint64(time.Date(year, month, day, 12, 0, 0, 0, time.UTC).Unix())}
 }

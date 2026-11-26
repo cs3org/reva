@@ -374,7 +374,7 @@ func (fs *cephmountfs) resolveRef(ctx context.Context, ref *provider.Reference) 
 	}
 
 	// Only the recycle calls may use the bin, and they do not come here.
-	if inRecycle(path) {
+	if fs.inRecycle(path) {
 		return "", errtypes.NotFound("cephmount: " + path)
 	}
 	return path, nil
@@ -962,8 +962,8 @@ func (fs *cephmountfs) ListFolder(ctx context.Context, ref *provider.Reference, 
 	}
 
 	for _, entry := range entries {
-		// Only at the root, so that a folder of a user with the same name stays visible.
-		if fs.conf.HiddenDirs[entry.Name()] || (path == "." && entry.Name() == recycleDir) {
+		// Only at the level of the bins, so that a folder of a user with the same name stays visible.
+		if fs.conf.HiddenDirs[entry.Name()] || fs.inRecycle(filepath.Join(path, entry.Name())) {
 			log.Debug().
 				Str("operation", "ListFolder").
 				Str("entry_name", entry.Name()).
