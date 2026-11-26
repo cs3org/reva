@@ -30,6 +30,7 @@ import (
 	"github.com/cs3org/reva/v3/pkg/ocm/providerdomain"
 	"github.com/cs3org/reva/v3/pkg/ocm/share"
 	model "github.com/cs3org/reva/v3/pkg/share/manager/sql/model"
+	"google.golang.org/protobuf/proto"
 	"gorm.io/gorm"
 )
 
@@ -132,10 +133,11 @@ func (m *mgr) RejectReceivedOCMSharesFromSender(ctx context.Context, recipient, 
 		check = commitCheck{}
 		var selected []model.OcmReceivedShare
 		senderAddress := sender.GetOpaqueId() + "@" + senderHost
+		activeStates := []model.OcmShareState{model.OcmShareStatePending, model.OcmShareStateAccepted, model.OcmShareStateTransferring}
 		if err := forUpdate(tx).
 			Where("initiator = ? AND share_with = ? AND share_with_idp = ? AND share_with_tenant = ? AND recipient_user_type = ? AND recipient_type = ?",
 				senderAddress, recipient.GetOpaqueId(), recipient.GetIdp(), recipient.GetTenantId(), int32(recipient.GetType()), model.OcmShareTypeUser).
-			Where("state IN ?", []model.OcmShareState{model.OcmShareStatePending, model.OcmShareStateAccepted, model.OcmShareStateTransferring}).
+			Where("(state IN ? OR grant_key IS NOT NULL)", activeStates).
 			Order("id").Find(&selected).Error; err != nil {
 			return err
 		}
@@ -147,12 +149,19 @@ func (m *mgr) RejectReceivedOCMSharesFromSender(ctx context.Context, recipient, 
 				// The inherited text columns may match under a looser collation.
 				continue
 			}
+			active := slices.Contains(activeStates, row.State)
 			key, err := share.GrantKey(senderHost, row.RemoteShareID)
 			if err != nil || row.GrantKey == nil || *row.GrantKey != key {
-				return share.ErrGrantIdentityMismatch
+				if active {
+					return share.ErrGrantIdentityMismatch
+				}
+				continue
 			}
 			if !share.SupportedResourceType(convertToCS3SharedResourceType(row.ItemType)) {
-				return share.ErrInvalidResourceType
+				if active {
+					return share.ErrInvalidResourceType
+				}
+				continue
 			}
 			authorized = append(authorized, row)
 			transferring = transferring || row.State == model.OcmShareStateTransferring
@@ -162,7 +171,26 @@ func (m *mgr) RejectReceivedOCMSharesFromSender(ctx context.Context, recipient, 
 		if transferring {
 			return share.ErrTransferInProgress
 		}
-		if len(authorized) == 0 {
+		type eligibleProjection struct {
+			row    model.OcmReceivedShare
+			before *ocm.ReceivedShare
+		}
+		var eligible []eligibleProjection
+		for _, row := range authorized {
+			protocols, err := protocolsTx(tx, row.ID)
+			if err != nil {
+				return err
+			}
+			before := convertToCS3OCMReceivedShare(&row, protocols)
+			// Ordinary state changes do not fence the scheduler.
+			if share.DataTransferProtocol(before) != nil {
+				return share.ErrDataTransferStateUnavailable
+			}
+			if slices.Contains(activeStates, row.State) {
+				eligible = append(eligible, eligibleProjection{row: row, before: before})
+			}
+		}
+		if len(eligible) == 0 {
 			return nil
 		}
 
@@ -171,36 +199,33 @@ func (m *mgr) RejectReceivedOCMSharesFromSender(ctx context.Context, recipient, 
 			Hidden             bool
 			TransferGeneration uint64
 		}
-		ids := make([]uint, 0, len(authorized))
-		previous := make([]stateSnapshot, 0, len(authorized))
-		expected := make([]stateSnapshot, 0, len(authorized))
-		for _, row := range authorized {
-			protocols, err := protocolsTx(tx, row.ID)
-			if err != nil {
-				return err
-			}
-			before := convertToCS3OCMReceivedShare(&row, protocols)
+		ids := make([]uint, 0, len(eligible))
+		previous := make([]stateSnapshot, 0, len(eligible))
+		expected := make([]stateSnapshot, 0, len(eligible))
+		for _, projection := range eligible {
+			row := projection.row
 			previous = append(previous, stateSnapshot{row.State, row.Hidden, row.TransferGeneration})
 			if err := updateReceivedFields(tx, &row, map[string]any{
 				"state": model.OcmShareStateRejected, "hidden": true, "mtime": time.Now().Unix(),
 			}); err != nil {
 				return err
 			}
-			applied, err := readReceivedProjection(tx, row.ID)
-			if err != nil {
-				return err
+			var applied model.OcmReceivedShare
+			result := tx.Find(&applied, row.ID)
+			if result.Error != nil {
+				return result.Error
 			}
-			if applied == nil {
+			if result.RowsAffected == 0 {
 				return share.ErrShareNotFound
 			}
-			var appliedProtocols []*ocm.Protocol
-			for i := range applied.protocols {
-				appliedProtocols = append(appliedProtocols, convertToCS3Protocol(&applied.protocols[i]))
+			protocols := slices.Clone(projection.before.Protocols)
+			for i, protocol := range protocols {
+				protocols[i] = proto.CloneOf(protocol)
 			}
-			after := convertToCS3OCMReceivedShare(&applied.row, appliedProtocols)
+			after := convertToCS3OCMReceivedShare(&applied, protocols)
 			ids = append(ids, row.ID)
-			expected = append(expected, stateSnapshot{applied.row.State, applied.row.Hidden, applied.row.TransferGeneration})
-			receipts = append(receipts, &share.ReceivedShareUpdate{Before: before, After: after})
+			expected = append(expected, stateSnapshot{applied.State, applied.Hidden, applied.TransferGeneration})
+			receipts = append(receipts, &share.ReceivedShareUpdate{Before: projection.before, After: after})
 		}
 		check.observe = func(db *gorm.DB) (share.CommitObservation, error) {
 			var observed []stateSnapshot

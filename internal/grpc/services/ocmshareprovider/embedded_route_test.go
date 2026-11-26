@@ -20,11 +20,21 @@ package ocmshareprovider
 
 import (
 	"context"
+	"database/sql"
 	"errors"
+	"fmt"
+	"io"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"os"
+	"path/filepath"
+	"strconv"
+	"strings"
+	"sync"
 	"testing"
+	"time"
 
 	gateway "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
@@ -32,6 +42,7 @@ import (
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	ocm "github.com/cs3org/go-cs3apis/cs3/sharing/ocm/v1beta1"
 	datatx "github.com/cs3org/go-cs3apis/cs3/tx/v1beta1"
+	txservice "github.com/cs3org/reva/v3/internal/grpc/services/datatx"
 	revagateway "github.com/cs3org/reva/v3/internal/grpc/services/gateway"
 	httpauth "github.com/cs3org/reva/v3/internal/http/interceptors/auth"
 	_ "github.com/cs3org/reva/v3/internal/http/interceptors/auth/credential/strategy/bearer"
@@ -41,12 +52,19 @@ import (
 	"github.com/cs3org/reva/v3/internal/http/services/sciencemesh"
 	"github.com/cs3org/reva/v3/pkg/appctx"
 	"github.com/cs3org/reva/v3/pkg/auth/scope"
+	txdriver "github.com/cs3org/reva/v3/pkg/datatx"
+	txregistry "github.com/cs3org/reva/v3/pkg/datatx/manager/registry"
+	txjson "github.com/cs3org/reva/v3/pkg/datatx/repository/json"
+	"github.com/cs3org/reva/v3/pkg/errtypes"
 	"github.com/cs3org/reva/v3/pkg/ocm/share"
 	"github.com/cs3org/reva/v3/pkg/rhttp/router"
 	_ "github.com/cs3org/reva/v3/pkg/share/cache/memory"
 	"github.com/cs3org/reva/v3/pkg/token/manager/jwt"
+	"github.com/go-sql-driver/mysql"
+	"github.com/google/uuid"
 	"google.golang.org/genproto/protobuf/field_mask"
 	"google.golang.org/grpc"
+	"google.golang.org/protobuf/proto"
 )
 
 type mountedGateway struct {
@@ -65,6 +83,8 @@ type mountedEmbeddedPeers struct {
 	provider       *service
 	datatxCalls    int
 	datatxResponse *datatx.CreateTransferResponse
+	datatxServer   datatx.TxAPIServer
+	webdavURL      string
 	updateCalls    int
 	lookupOverride bool
 	lookupResult   *ocm.GetReceivedOCMShareResponse
@@ -96,17 +116,24 @@ func (p *mountedEmbeddedPeers) UpdateReceivedOCMShare(ctx context.Context, req *
 }
 
 func (p *mountedEmbeddedPeers) GetInfoByDomain(context.Context, *ocmprovider.GetInfoByDomainRequest, ...grpc.CallOption) (*ocmprovider.GetInfoByDomainResponse, error) {
+	host, endpoint := "dest.example.org", "https://dest.example.org/dav"
+	if p.webdavURL != "" {
+		host, endpoint = p.webdavURL, p.webdavURL+"/dav"
+	}
 	return &ocmprovider.GetInfoByDomainResponse{
 		Status: &rpc.Status{Code: rpc.Code_CODE_OK},
 		ProviderInfo: &ocmprovider.ProviderInfo{Services: []*ocmprovider.Service{{
-			Host:     "dest.example.org",
-			Endpoint: &ocmprovider.ServiceEndpoint{Type: &ocmprovider.ServiceType{Name: "webdav"}, Path: "https://dest.example.org/dav"},
+			Host:     host,
+			Endpoint: &ocmprovider.ServiceEndpoint{Type: &ocmprovider.ServiceType{Name: "webdav"}, Path: endpoint},
 		}}},
 	}, nil
 }
 
-func (p *mountedEmbeddedPeers) CreateTransfer(context.Context, *datatx.CreateTransferRequest, ...grpc.CallOption) (*datatx.CreateTransferResponse, error) {
+func (p *mountedEmbeddedPeers) CreateTransfer(ctx context.Context, req *datatx.CreateTransferRequest, _ ...grpc.CallOption) (*datatx.CreateTransferResponse, error) {
 	p.datatxCalls++
+	if p.datatxServer != nil {
+		return p.datatxServer.CreateTransfer(ctx, req)
+	}
 	return p.datatxResponse, nil
 }
 
@@ -138,6 +165,288 @@ func mountEmbeddedGateway(t *testing.T, e *emitEnv, tokenManagers map[string]map
 	client := mountedGateway{server: gw.(gateway.GatewayAPIServer)}
 	stampGateway(client)
 	return client, peers
+}
+
+type loopbackCopyDriver struct {
+	client                   *http.Client
+	starts, cancels, retries int
+	done                     chan struct{}
+	err                      error
+}
+
+const loopbackCopyID = "loopback-copy"
+
+func (d *loopbackCopyDriver) CreateTransfer(_ context.Context, source, destination string) (*datatx.TxInfo, error) {
+	d.starts++
+	if d.starts != 1 {
+		return nil, errors.New("unexpected second copy")
+	}
+	go func() {
+		defer close(d.done)
+		d.err = d.copy(source, destination)
+	}()
+	return &datatx.TxInfo{Id: &datatx.TxId{OpaqueId: loopbackCopyID}, Status: datatx.Status_STATUS_TRANSFER_NEW}, nil
+}
+
+func (d *loopbackCopyDriver) copy(source, destination string) error {
+	resp, err := d.client.Get(source)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("copy source returned %s", resp.Status)
+	}
+	target, err := url.Parse(destination)
+	if err != nil {
+		return err
+	}
+	target.Path, target.RawQuery = target.Query().Get("name"), ""
+	req, err := http.NewRequest(http.MethodPut, target.String(), resp.Body)
+	if err != nil {
+		return err
+	}
+	out, err := d.client.Do(req)
+	if err != nil {
+		return err
+	}
+	defer out.Body.Close()
+	if out.StatusCode != http.StatusCreated {
+		return fmt.Errorf("copy destination returned %s", out.Status)
+	}
+	return nil
+}
+
+func (d *loopbackCopyDriver) GetTransferStatus(_ context.Context, id string) (*datatx.TxInfo, error) {
+	if id != loopbackCopyID || d.starts == 0 {
+		return nil, errors.New("unknown copy")
+	}
+	info := &datatx.TxInfo{Id: &datatx.TxId{OpaqueId: id}, Status: datatx.Status_STATUS_TRANSFER_IN_PROGRESS}
+	select {
+	case <-d.done:
+		info.Status = datatx.Status_STATUS_TRANSFER_COMPLETE
+		if d.err != nil {
+			info.Status = datatx.Status_STATUS_TRANSFER_FAILED
+			return info, d.err
+		}
+	default:
+	}
+	return info, nil
+}
+
+func (d *loopbackCopyDriver) CancelTransfer(context.Context, string) (*datatx.TxInfo, error) {
+	d.cancels++
+	return &datatx.TxInfo{}, errors.New("unexpected copy cancellation")
+}
+
+func (d *loopbackCopyDriver) RetryTransfer(context.Context, string) (*datatx.TxInfo, error) {
+	d.retries++
+	return &datatx.TxInfo{}, errors.New("unexpected copy retry")
+}
+
+func TestMountedDirectedDeclineRefusesLiveDATATX(t *testing.T) {
+	t.Run("sqlite", func(t *testing.T) { checkMountedLiveDATATX(t, newEmitEnv(t)) })
+	t.Run("mysql", func(t *testing.T) {
+		raw := os.Getenv("REVA_TEST_MYSQL")
+		if raw == "" {
+			t.Skip("disposable MySQL fixture is unavailable")
+		}
+		auth, addr, ok := strings.Cut(raw, "@")
+		if !ok {
+			t.Fatal("invalid REVA_TEST_MYSQL target")
+		}
+		dsn, err := mysql.ParseDSN(auth + "@tcp(" + addr + ")/")
+		if err != nil {
+			t.Fatal("invalid MySQL DSN")
+		}
+		host, portText, err := net.SplitHostPort(dsn.Addr)
+		if err != nil {
+			t.Fatal("invalid MySQL host and port")
+		}
+		port, err := strconv.Atoi(portText)
+		if err != nil {
+			t.Fatal("invalid MySQL port")
+		}
+		admin, err := sql.Open("mysql", dsn.FormatDSN())
+		if err != nil {
+			t.Fatal(err)
+		}
+		t.Cleanup(func() { _ = admin.Close() })
+		name := "ocm_datatx_" + strings.ReplaceAll(uuid.NewString(), "-", "")
+		if _, err := admin.Exec("CREATE DATABASE " + name + " CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci"); err != nil {
+			t.Fatal(err)
+		}
+		t.Cleanup(func() {
+			if _, err := admin.Exec("DROP DATABASE " + name); err != nil {
+				t.Errorf("drop disposable schema: %v", err)
+			}
+		})
+		checkMountedLiveDATATX(t, newEmitEnvWithDatabase(t, map[string]any{
+			"db_engine": "mysql", "db_host": host, "db_port": port, "db_name": name,
+			"db_username": dsn.User, "db_password": dsn.Passwd,
+		}))
+	})
+}
+
+func checkMountedLiveDATATX(t *testing.T, e *emitEnv) {
+	t.Helper()
+	const payload = "live DATATX copy"
+	destFile := filepath.Join(t.TempDir(), "doc.txt")
+	entered, release := make(chan struct{}), make(chan struct{})
+	finish := sync.OnceFunc(func() { close(release) })
+	mux := http.NewServeMux()
+	mux.HandleFunc("GET /source", func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = io.WriteString(w, payload)
+	})
+	mux.HandleFunc("PUT /dav/transfers/doc.txt", func(w http.ResponseWriter, req *http.Request) {
+		data, err := io.ReadAll(req.Body)
+		if err != nil || string(data) != payload {
+			w.WriteHeader(http.StatusBadRequest)
+			return
+		}
+		close(entered)
+		select {
+		case <-release:
+		case <-req.Context().Done():
+			return
+		}
+		if err := os.WriteFile(destFile, data, 0600); err != nil {
+			w.WriteHeader(http.StatusInternalServerError)
+			return
+		}
+		w.WriteHeader(http.StatusCreated)
+	})
+	peer := httptest.NewServer(mux)
+	t.Cleanup(peer.Close)
+	client := peer.Client()
+	client.Timeout = 20 * time.Second
+	driver := &loopbackCopyDriver{client: client, done: make(chan struct{})}
+	wait := func(done <-chan struct{}) {
+		t.Helper()
+		select {
+		case <-done:
+		case <-time.After(5 * time.Second):
+			t.Fatal("copy did not reach the expected data step")
+		}
+	}
+	t.Cleanup(func() {
+		finish()
+		if driver.starts > 0 {
+			wait(driver.done)
+		}
+	})
+
+	const driverName = "directed-decline-loopback"
+	txregistry.Register(driverName, func(context.Context, map[string]any) (txdriver.Manager, error) { return driver, nil })
+	t.Cleanup(func() { delete(txregistry.NewFuncs, driverName) })
+	repoConfig := map[string]any{"file": filepath.Join(t.TempDir(), "transfers.json")}
+	tx, err := txservice.New(e.recip, map[string]any{
+		"txdriver": driverName, "storagedriver": "json",
+		"storagedrivers": map[string]map[string]any{"json": repoConfig},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = tx.Close() })
+	txAPI := tx.(datatx.TxAPIServer)
+	gw, peers := mountEmbeddedGateway(t, e, map[string]map[string]any{"jwt": {"secret": "datatx-route-test"}})
+	peers.datatxServer, peers.webdavURL = txAPI, peer.URL
+	const actorToken = "test-copy-token"
+	e.recip = appctx.ContextSetToken(e.recip, actorToken)
+	recipient := appctx.ContextMustGetUser(e.recip)
+	recipient.Id.Type, recipient.Id.TenantId = userpb.UserType_USER_TYPE_PRIMARY, "test-tenant"
+	sibling := e.received(t, "legacy-first", false, ocm.AccessType_ACCESS_TYPE_REMOTE)
+	legacy := proto.CloneOf(sibling)
+	legacy.Id, legacy.RemoteShareId = nil, "legacy-live"
+	legacy.Protocols[0].GetWebdavOptions().Uri = peer.URL + "/source"
+	legacy.Protocols[0].GetWebdavOptions().AccessTypes = []ocm.AccessType{ocm.AccessType_ACCESS_TYPE_REMOTE, ocm.AccessType_ACCESS_TYPE_DATATX}
+	legacy, err = e.repo.StoreReceivedShare(e.recip, legacy)
+	if err != nil {
+		t.Fatal(err)
+	}
+	update := func(state ocm.ShareState, want rpc.Code) {
+		t.Helper()
+		res, err := gw.UpdateReceivedOCMShare(e.recip, &ocm.UpdateReceivedOCMShareRequest{
+			Share: &ocm.ReceivedShare{Id: legacy.Id, State: state}, UpdateMask: &field_mask.FieldMask{Paths: []string{"state"}},
+		})
+		if err != nil || res.GetStatus().GetCode() != want {
+			t.Fatalf("update to %v: status %v, error %v, want %v", state, res.GetStatus(), err, want)
+		}
+	}
+	read := func(id *ocm.ShareId) *ocm.ReceivedShare {
+		t.Helper()
+		rs, err := e.repo.GetReceivedShare(e.recip, recipient, &ocm.ShareReference{Spec: &ocm.ShareReference_Id{Id: id}})
+		if err != nil {
+			t.Fatal(err)
+		}
+		return rs
+	}
+	checkJob := func(want datatx.Status) {
+		t.Helper()
+		repo, err := txjson.New(e.recip, repoConfig)
+		if err != nil {
+			t.Fatal(err)
+		}
+		correlation, err := repo.GetTransfer(loopbackCopyID)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if correlation.TxID != loopbackCopyID || correlation.ShareID != legacy.Id.OpaqueId ||
+			!proto.Equal(correlation.UserID, recipient.Id) || correlation.SrcTargetURI != peer.URL+"/source" ||
+			correlation.DestTargetURI != "http://"+actorToken+"@"+strings.TrimPrefix(peer.URL, "http://")+"?name=/dav/transfers/doc.txt" {
+			t.Fatal("persisted job correlation differs from the scheduled share and actor")
+		}
+		response, err := txAPI.GetTransferStatus(e.recip, &datatx.GetTransferStatusRequest{TxId: &datatx.TxId{OpaqueId: loopbackCopyID}})
+		info := response.GetTxInfo()
+		if err != nil || response.GetStatus().GetCode() != rpc.Code_CODE_OK ||
+			info.GetId().GetOpaqueId() != loopbackCopyID || !proto.Equal(info.GetShareId(), legacy.Id) || info.GetStatus() != want {
+			t.Fatalf("copy status %v, error %v, want %s for the original attempt", response, err, want)
+		}
+		if peers.datatxCalls != 1 || driver.starts != 1 || driver.cancels != 0 || driver.retries != 0 {
+			t.Fatalf("unexpected scheduling actions: dispatch=%d start=%d cancel=%d retry=%d", peers.datatxCalls, driver.starts, driver.cancels, driver.retries)
+		}
+	}
+
+	siblingBefore := read(sibling.Id)
+	update(ocm.ShareState_SHARE_STATE_ACCEPTED, rpc.Code_CODE_OK)
+	wait(entered)
+	actions := e.repo.(share.DirectedShareActions)
+	refuse := func(state ocm.ShareState) {
+		t.Helper()
+		before := read(legacy.Id)
+		if before.State != state {
+			t.Fatalf("durable state %s, want %s", before.State, state)
+		}
+		checkJob(datatx.Status_STATUS_TRANSFER_IN_PROGRESS)
+		updates, err := actions.RejectReceivedOCMSharesFromSender(e.recip, recipient.Id, legacy.Creator)
+		var conflict errtypes.Conflict
+		if updates != nil || !errors.Is(err, share.ErrDataTransferStateUnavailable) || !errors.As(err, &conflict) {
+			t.Fatalf("directed action returned %d receipts and %v", len(updates), err)
+		}
+		if !proto.Equal(before, read(legacy.Id)) || !proto.Equal(siblingBefore, read(sibling.Id)) {
+			t.Fatal("refused action changed a durable projection")
+		}
+		if _, err := os.Stat(destFile); !errors.Is(err, os.ErrNotExist) {
+			t.Fatalf("copy destination before release: %v", err)
+		}
+		checkJob(datatx.Status_STATUS_TRANSFER_IN_PROGRESS)
+		requireNotices(t, e.peer)
+	}
+	refuse(ocm.ShareState_SHARE_STATE_ACCEPTED)
+	e.svc.conf.DisableDataTxAcceptance = true
+	refuse(ocm.ShareState_SHARE_STATE_ACCEPTED)
+	update(ocm.ShareState_SHARE_STATE_PENDING, rpc.Code_CODE_OK)
+	update(ocm.ShareState_SHARE_STATE_ACCEPTED, rpc.Code_CODE_UNIMPLEMENTED)
+	refuse(ocm.ShareState_SHARE_STATE_PENDING)
+	e.svc.conf.DisableDataTxAcceptance = false
+	refuse(ocm.ShareState_SHARE_STATE_PENDING)
+
+	finish()
+	wait(driver.done)
+	checkJob(datatx.Status_STATUS_TRANSFER_COMPLETE)
+	if data, err := os.ReadFile(destFile); err != nil || string(data) != payload {
+		t.Fatalf("destination contains %q, error %v", data, err)
+	}
 }
 
 func TestMountedEmbeddedShareProcessing(t *testing.T) {

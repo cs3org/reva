@@ -345,6 +345,157 @@ func TestDirectedDeclineRefusesCorruptBinding(t *testing.T) {
 	})
 }
 
+func TestDirectedDeclineRefusesStoredDataTransfer(t *testing.T) {
+	forEachDialect(t, func(t *testing.T, m *mgr) {
+		ctx := context.Background()
+		alice := recipient("alice")
+		alice.Id.TenantId = "Tenant"
+		bob := &userpb.UserId{OpaqueId: "bob", Idp: "remote.example.org:8443"}
+		other := &userpb.UserId{OpaqueId: "BOB", Idp: bob.Idp}
+		remote := ocm.AccessType_ACCESS_TYPE_REMOTE
+		datatx := ocm.AccessType_ACCESS_TYPE_DATATX
+		store := func(sender *userpb.UserId, id string, access ...ocm.AccessType) *ocm.ReceivedShare {
+			t.Helper()
+			rs := grantShare(alice, sender.Idp, id, file)
+			rs.Creator = sender
+			rs.Protocols[0].GetWebdavOptions().AccessTypes = access
+			return rs
+		}
+		projection := func(id *ocm.ShareId) *receivedProjection {
+			t.Helper()
+			row := receivedRow(t, m, id.OpaqueId)
+			got, err := readReceivedProjection(m.db, row.ID)
+			if err != nil || got == nil {
+				t.Fatalf("read projection %s: %v", id.OpaqueId, err)
+			}
+			return got
+		}
+		setState := func(id *ocm.ShareId, state ocm.ShareState) {
+			t.Helper()
+			rs := &ocm.ReceivedShare{Id: id, State: state}
+			if update, err := m.UpdateReceivedShare(ctx, alice, rs, stateMask()); err != nil || update == nil || update.After.GetState() != state {
+				t.Fatalf("ordinary update to %s: %v, %v", state, update, err)
+			}
+		}
+		withdraw := func(rs *ocm.ReceivedShare) {
+			t.Helper()
+			receipt, err := m.WithdrawReceivedGrant(ctx, &share.GrantWithdrawal{
+				Origin: bob.Idp, RemoteShareID: rs.RemoteShareId, ResourceType: rs.SharedResourceType,
+			})
+			if err != nil || receipt == nil || !receipt.Changed {
+				t.Fatalf("withdraw %s: %v, %v", rs.Id.OpaqueId, receipt, err)
+			}
+		}
+
+		sibling := mustStore(t, m, store(bob, "sibling", remote))
+		legacy := mustStore(t, m, store(bob, "legacy", datatx))
+		writes := 0
+		const callback = "test:track-directed-updates"
+		if err := m.db.Callback().Update().Before("gorm:update").Register(callback, func(tx *gorm.DB) {
+			if tx.Statement.Schema != nil && tx.Statement.Schema.Name == "OcmReceivedShare" {
+				writes++
+			}
+		}); err != nil {
+			t.Fatal(err)
+		}
+		t.Cleanup(func() { _ = m.db.Callback().Update().Remove(callback) })
+		refuse := func(t *testing.T, target *ocm.ShareId) {
+			t.Helper()
+			beforeSibling, beforeTarget := projection(sibling.Id), projection(target)
+			beforeWrites := writes
+			updates, err := m.RejectReceivedOCMSharesFromSender(ctx, alice.Id, bob)
+			if updates != nil || !errors.Is(err, share.ErrDataTransferStateUnavailable) {
+				t.Fatalf("directed decline returned %d receipts and %v", len(updates), err)
+			}
+			if writes != beforeWrites || !beforeSibling.equal(projection(sibling.Id)) || !beforeTarget.equal(projection(target)) {
+				t.Fatal("refused decline attempted a write or changed a projection")
+			}
+		}
+		setState(legacy.Id, ocm.ShareState_SHARE_STATE_ACCEPTED)
+		t.Run("accepted", func(t *testing.T) { refuse(t, legacy.Id) })
+		setState(legacy.Id, ocm.ShareState_SHARE_STATE_PENDING)
+		t.Run("reset and repeated decline", func(t *testing.T) {
+			refuse(t, legacy.Id)
+			refuse(t, legacy.Id)
+		})
+		setState(legacy.Id, ocm.ShareState_SHARE_STATE_REJECTED)
+		t.Run("rejected", func(t *testing.T) { refuse(t, legacy.Id) })
+
+		historical := mustStore(t, m, store(bob, "historical", datatx))
+		setState(historical.Id, ocm.ShareState_SHARE_STATE_REJECTED)
+		if err := m.db.Model(&model.OcmReceivedShare{}).Where("id = ?", historical.Id.OpaqueId).
+			Update("grant_key", nil).Error; err != nil {
+			t.Fatal(err)
+		}
+		historicalBefore := projection(historical.Id)
+
+		// The later cases supply the sole bound DATATX projection for the pair.
+		for _, tc := range []struct {
+			name     string
+			embedded bool
+			state    model.OcmShareState
+		}{
+			{name: "remote plus DATATX in invalid state", state: model.OcmShareState(99)},
+			{name: "embedded plus DATATX", embedded: true, state: model.OcmShareStatePending},
+		} {
+			withdraw(legacy)
+			rs := store(bob, tc.name, remote, datatx)
+			if tc.embedded {
+				rs.SharedResourceType = ocm.SharedResourceType_SHARE_RESOURCE_TYPE_EMBEDDED
+				rs.Protocols = append(rs.Protocols, share.NewEmbeddedProtocol(`{"@graph":[]}`))
+			}
+			legacy = mustStore(t, m, rs)
+			if err := m.db.Model(&model.OcmReceivedShare{}).Where("id = ?", legacy.Id.OpaqueId).Update("state", tc.state).Error; err != nil {
+				t.Fatal(err)
+			}
+			t.Run(tc.name, func(t *testing.T) { refuse(t, legacy.Id) })
+		}
+
+		t.Run("disjoint exact pair", func(t *testing.T) {
+			legacyBefore := projection(legacy.Id)
+			ordinary := mustStore(t, m, store(other, "remote", remote))
+			webapp := store(other, "webapp")
+			webapp.Protocols = []*ocm.Protocol{share.NewWebappProtocol("https://remote.example.org/apps", "secret", nil, nil, nil, "", nil)}
+			webapp = mustStore(t, m, webapp)
+			setState(ordinary.Id, ocm.ShareState_SHARE_STATE_ACCEPTED)
+			inactive := mustStore(t, m, store(other, "inactive", remote))
+			setState(inactive.Id, ocm.ShareState_SHARE_STATE_REJECTED)
+			inactiveBefore := projection(inactive.Id)
+			updates, err := m.RejectReceivedOCMSharesFromSender(ctx, alice.Id, other)
+			if err != nil || len(updates) != 2 {
+				t.Fatalf("ordinary decline returned %d receipts and %v", len(updates), err)
+			}
+			for i, rs := range []*ocm.ReceivedShare{ordinary, webapp} {
+				after := updates[i].After
+				row := projection(rs.Id).row
+				if !proto.Equal(after.Id, rs.Id) || !updates[i].StateChanged() || !after.Hidden ||
+					after.State != ocm.ShareState_SHARE_STATE_REJECTED || !row.Hidden || row.State != model.OcmShareStateRejected {
+					t.Fatalf("unexpected decline for %s", rs.Id.OpaqueId)
+				}
+			}
+			beforeProtocol := updates[0].Before.Protocols[0].GetWebdavOptions()
+			afterProtocol := updates[0].After.Protocols[0].GetWebdavOptions()
+			beforeProtocol.Uri = "https://changed.example.org"
+			if afterProtocol.Uri != ordinary.Protocols[0].GetWebdavOptions().Uri {
+				t.Fatal("editing the before receipt changed the after protocol")
+			}
+			updates, err = m.RejectReceivedOCMSharesFromSender(ctx, alice.Id, other)
+			if updates != nil || err != nil {
+				t.Fatalf("empty decline returned %d receipts and %v", len(updates), err)
+			}
+			if !legacyBefore.equal(projection(legacy.Id)) || !inactiveBefore.equal(projection(inactive.Id)) {
+				t.Fatal("decline touched a disjoint or inactive row")
+			}
+		})
+		withdraw(legacy)
+		updates, err := m.RejectReceivedOCMSharesFromSender(ctx, alice.Id, bob)
+		if err != nil || len(updates) != 1 || !proto.Equal(updates[0].After.Id, sibling.Id) ||
+			!historicalBefore.equal(projection(historical.Id)) {
+			t.Fatalf("incomplete binding affected decline: %d receipts, %v", len(updates), err)
+		}
+	})
+}
+
 func TestDirectedBatchesAcrossBindBoundary(t *testing.T) {
 	const limit = 500
 	for _, direction := range []string{"outgoing", "incoming"} {
