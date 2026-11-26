@@ -69,6 +69,7 @@ func TestSendNotificationTransitions(t *testing.T) {
 		{name: "capability missing", tr: &fakeNotificationTransport{peer: advertising("invites", "exchange-token")}, outcome: SendCapabilityMissing},
 		{name: "capability without endpoint", tr: &fakeNotificationTransport{peer: &notificationPeer{Capabilities: []string{"notifications"}}}, outcome: SendCapabilityMissing},
 		{name: "post failure", tr: &fakeNotificationTransport{peer: advertising("notifications"), postErr: errors.New("reset")}, outcome: SendPostFailed, failure: FailureError, posts: 1},
+		{name: "superseded", tr: &fakeNotificationTransport{peer: advertising("notifications"), postErr: errSuperseded}, outcome: SendSuperseded, posts: 1},
 		{name: "post canceled", tr: &fakeNotificationTransport{peer: advertising("notifications"), postErr: fmt.Errorf("post: %w", context.Canceled)}, outcome: SendPostFailed, failure: FailureCanceled, posts: 1},
 		{name: "post deadline", tr: &fakeNotificationTransport{peer: advertising("notifications"), postErr: fmt.Errorf("post: %w", context.DeadlineExceeded)}, outcome: SendPostFailed, failure: FailureTimeout, posts: 1},
 		{name: "post net timeout", tr: &fakeNotificationTransport{peer: advertising("notifications"), postErr: &net.OpError{Op: "read", Err: timeoutError{}}}, outcome: SendPostFailed, failure: FailureTimeout, posts: 1},

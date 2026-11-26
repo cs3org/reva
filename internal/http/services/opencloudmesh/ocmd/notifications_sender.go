@@ -34,6 +34,7 @@ import (
 	"github.com/cs3org/reva/v3/pkg/ocm/client"
 	"github.com/cs3org/reva/v3/pkg/ocm/httpsig"
 	"github.com/cs3org/reva/v3/pkg/ocm/providerdomain"
+	"github.com/cs3org/reva/v3/pkg/ocm/share"
 )
 
 // OutgoingNotification omits payload values from generic formatting and JSON.
@@ -47,6 +48,8 @@ type OutgoingNotification struct {
 
 	// StillCurrent can skip a superseded share snapshot before delivery.
 	StillCurrent func(context.Context) bool
+
+	StateNotice *share.StateNotice
 }
 
 func (n OutgoingNotification) String() string {
@@ -109,6 +112,8 @@ type ShareStateNotification struct {
 	// ID when we are the provider, the received remote ID otherwise.
 	ProviderID  string
 	Permissions []string
+
+	StateNotice *share.StateNotice `json:"-"`
 }
 
 // Build validates the share-state payload and returns the notification.
@@ -143,12 +148,14 @@ func (s ShareStateNotification) Build() (*OutgoingNotification, error) {
 		ResourceType: s.ResourceType,
 		ShareType:    s.ShareType,
 		File:         &NotificationFile{ProviderID: s.ProviderID, Permissions: s.Permissions},
+		StateNotice:  s.StateNotice,
 	}, nil
 }
 
 type ocmNotificationTransport struct {
-	c   *OCMClient
-	key *httpsig.Key
+	c           *OCMClient
+	key         *httpsig.Key
+	stateNotice *share.StateNotice
 }
 
 var (
@@ -156,6 +163,7 @@ var (
 	errUnsupportedPeer = errors.New("peer host cannot be reached over HTTP as written")
 	errNoSigningKey    = errors.New("no notification signing key is configured")
 	errSigningFailed   = errors.New("notification signing failed")
+	errSuperseded      = errors.New("state notice superseded")
 )
 
 // Discovery uses the peer identity; the advertised endpoint only routes delivery.
@@ -237,6 +245,10 @@ func (t ocmNotificationTransport) PostNotification(ctx context.Context, peer *no
 	// A 307/308 could disclose the payload to another destination.
 	noRedirect := *t.c.client
 	noRedirect.CheckRedirect = func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }
+	// The issuer can retire the proof while peer discovery is in progress.
+	if t.stateNotice != nil && !t.stateNotice.StillCurrent() {
+		return notificationResponse{}, errSuperseded
+	}
 	resp, err := noRedirect.Do(req)
 	if err != nil {
 		return notificationResponse{}, safeHTTPError(ctx, err)
@@ -258,7 +270,7 @@ func (c *OCMClient) NewNotification(ctx context.Context, domain string, n *Outgo
 	if err != nil {
 		return SendResult{Outcome: SendPostFailed, Failure: FailureError}
 	}
-	res := sendNotification(ctx, ocmNotificationTransport{c: c, key: key}, domain, body)
+	res := sendNotification(ctx, ocmNotificationTransport{c: c, key: key, stateNotice: n.StateNotice}, domain, body)
 	event := log.Info()
 	if res.Outcome != SendDelivered {
 		event = log.Warn()

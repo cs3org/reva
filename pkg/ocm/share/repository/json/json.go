@@ -215,8 +215,14 @@ type mgr struct {
 	stateNotices [64]stateNotice
 }
 
+const (
+	noticeUnclaimed uint32 = iota
+	noticeClaimed
+	noticeRetired
+)
+
 type stateNotice struct {
-	live         *atomic.Bool
+	proof        *atomic.Uint32
 	key          string
 	id           *ocm.ShareId
 	grantee      *provider.Grantee
@@ -231,10 +237,10 @@ type stateNotice struct {
 // snapshot, so it retires every outstanding proof.
 func (m *mgr) reconcileStateNotices(acknowledged bool) {
 	for i, notice := range m.stateNotices {
-		if notice.live == nil {
+		if notice.proof == nil {
 			continue
 		}
-		if acknowledged && notice.live.Load() {
+		if acknowledged && notice.proof.Load() != noticeRetired {
 			rs := m.model.ReceivedShares[notice.key]
 			if rs != nil && proto.Equal(rs.GetId(), notice.id) &&
 				proto.Equal(rs.GetGrantee(), notice.grantee) && proto.Equal(rs.GetCreator(), notice.creator) &&
@@ -243,7 +249,7 @@ func (m *mgr) reconcileStateNotices(acknowledged bool) {
 				continue
 			}
 		}
-		notice.live.Store(false)
+		notice.proof.Store(noticeRetired)
 		m.stateNotices[i] = stateNotice{}
 	}
 }
@@ -255,14 +261,13 @@ func (m *mgr) receivedUpdate(ctx context.Context, key string, before, rs *ocm.Re
 		return update, false
 	}
 	for i, notice := range m.stateNotices {
-		if notice.live != nil && notice.live.Load() {
+		if notice.proof != nil && notice.proof.Load() != noticeRetired {
 			continue
 		}
 		// The slot can be reused while the previous receipt is still held.
-		live := new(atomic.Bool)
-		live.Store(true)
+		proof := new(atomic.Uint32)
 		m.stateNotices[i] = stateNotice{
-			live:         live,
+			proof:        proof,
 			key:          key,
 			id:           proto.CloneOf(rs.GetId()),
 			grantee:      proto.CloneOf(rs.GetGrantee()),
@@ -272,10 +277,18 @@ func (m *mgr) receivedUpdate(ctx context.Context, key string, before, rs *ocm.Re
 			state:        rs.State,
 			generation:   m.model.TransferGenerations[rs.GetId().GetOpaqueId()],
 		}
-		update.TryStateNotice = func() bool { return live.Swap(false) }
+		update.ClaimStateNotice = func() *share.StateNotice {
+			if !proof.CompareAndSwap(noticeUnclaimed, noticeClaimed) {
+				return nil
+			}
+			return &share.StateNotice{
+				StillCurrent: func() bool { return proof.Load() == noticeClaimed },
+				Release:      func() { proof.Store(noticeRetired) },
+			}
+		}
 		return update, false
 	}
-	update.TryStateNotice = func() bool { return false }
+	update.ClaimStateNotice = func() *share.StateNotice { return nil }
 	return update, true
 }
 

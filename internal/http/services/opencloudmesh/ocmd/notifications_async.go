@@ -71,7 +71,7 @@ type AsyncNotifier struct {
 
 // NewNotification starts one attempt and returns at once. The attempt keeps
 // the values of ctx, but only Close cancels it: the change it reports is
-// already committed.
+// already committed. Successful admission owns the state proof.
 func (a *AsyncNotifier) NewNotification(ctx context.Context, domain string, n *OutgoingNotification) SendResult {
 	a.mu.Lock()
 	if a.closed {
@@ -103,7 +103,10 @@ func (a *AsyncNotifier) NewNotification(ctx context.Context, domain string, n *O
 		}()
 		defer cancel()
 		defer stop()
-		if n != nil && n.File != nil && n.StillCurrent != nil {
+		if n != nil && n.StateNotice != nil {
+			defer n.StateNotice.Release()
+		}
+		if n != nil && n.File != nil && (n.StillCurrent != nil || n.StateNotice != nil) {
 			// Check under the send lock so a delayed update cannot overtake
 			// a newer snapshot for the same grant at the same peer.
 			peer, _ := providerdomain.CanonicalOCMHost(domain)
@@ -114,7 +117,9 @@ func (a *AsyncNotifier) NewNotification(ctx context.Context, domain string, n *O
 				return
 			}
 			defer gate.Release(1)
-			if a.lifetime.Err() != nil || !n.StillCurrent(sendCtx) {
+			if a.lifetime.Err() != nil ||
+				(n.StateNotice != nil && !n.StateNotice.StillCurrent()) ||
+				(n.StillCurrent != nil && !n.StillCurrent(sendCtx)) {
 				return
 			}
 		}

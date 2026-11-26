@@ -34,7 +34,7 @@ import (
 )
 
 // notifier sends one notification to a peer after a committed change. Its
-// result never undoes the change.
+// result never undoes the change. Successful admission owns the state proof.
 type notifier interface {
 	NewNotification(ctx context.Context, domain string, n *ocmd.OutgoingNotification) ocmd.SendResult
 }
@@ -194,10 +194,15 @@ func (s *service) notifyPermissionChange(ctx context.Context, update *share.Shar
 // sender of the share, never to the owner fallback.
 func (s *service) notifyReceivedState(ctx context.Context, update *share.ReceivedShareUpdate, explicitDecline bool) {
 	var handedOff bool
-	if update != nil && update.TryStateNotice != nil {
+	var proof *share.StateNotice
+	if update != nil && update.ClaimStateNotice != nil {
+		proof = update.ClaimStateNotice()
+		if proof == nil {
+			return
+		}
 		defer func() {
 			if !handedOff {
-				update.TryStateNotice()
+				proof.Release()
 			}
 		}()
 	}
@@ -218,9 +223,7 @@ func (s *service) notifyReceivedState(ctx context.Context, update *share.Receive
 		return
 	}
 	var stillCurrent func(context.Context) bool
-	if try := update.TryStateNotice; try != nil {
-		stillCurrent = func(context.Context) bool { return try() }
-	} else if s.conf.Driver == "sql" {
+	if proof == nil && s.conf.Driver == "sql" {
 		ref := &ocm.ShareReference{Spec: &ocm.ShareReference_Id{Id: rs.GetId()}}
 		stillCurrent = func(ctx context.Context) bool {
 			current, err := s.repo.GetReceivedShare(ctx, appctx.ContextMustGetUser(ctx), ref)
@@ -238,5 +241,6 @@ func (s *service) notifyReceivedState(ctx context.Context, update *share.Receive
 		ResourceType: resourceTypeName(rs.GetSharedResourceType()),
 		ShareType:    "user",
 		ProviderID:   rs.GetRemoteShareId(),
+		StateNotice:  proof,
 	}, stillCurrent)
 }

@@ -31,6 +31,7 @@ import (
 	ocm "github.com/cs3org/go-cs3apis/cs3/sharing/ocm/v1beta1"
 	"github.com/cs3org/reva/v3/pkg/ocm/share"
 	"golang.org/x/sys/unix"
+	"google.golang.org/protobuf/proto"
 )
 
 func TestJSONStateNoticeRevokedOnUnacknowledgedSave(t *testing.T) {
@@ -39,18 +40,41 @@ func TestJSONStateNoticeRevokedOnUnacknowledgedSave(t *testing.T) {
 	m := repo.(*mgr)
 	ctx := share.WithStateNotice(t.Context())
 	user, rs := receivedFixture(t, m)
+	_, sibling := receivedFixture(t, m)
 	update := func(state ocm.ShareState) (*share.ReceivedShareUpdate, error) {
 		return m.UpdateReceivedShare(ctx, user, &ocm.ReceivedShare{Id: rs.Id, State: state}, mask("state"))
 	}
 	const accepted, rejected = ocm.ShareState_SHARE_STATE_ACCEPTED, ocm.ShareState_SHARE_STATE_REJECTED
+	siblingReceipt, err := m.UpdateReceivedShare(ctx, user, &ocm.ReceivedShare{Id: sibling.Id, State: accepted}, mask("state"))
+	if err != nil || siblingReceipt.ClaimStateNotice == nil {
+		t.Fatalf("accepted sibling receipt = %v, err = %v", siblingReceipt, err)
+	}
+	siblingProof := siblingReceipt.ClaimStateNotice()
+	if siblingProof == nil || !siblingProof.StillCurrent() {
+		t.Fatal("sibling receipt did not grant a live proof")
+	}
+	defer siblingProof.Release()
 	earlier, err := update(accepted)
-	if err != nil || earlier.TryStateNotice == nil {
+	if err != nil || earlier.ClaimStateNotice == nil {
 		t.Fatalf("accepted receipt = %v, err = %v", earlier, err)
 	}
+	targetProof := earlier.ClaimStateNotice()
+	if targetProof == nil || !targetProof.StillCurrent() || !siblingProof.StillCurrent() {
+		t.Fatal("acknowledged target update did not preserve both proofs")
+	}
+	defer targetProof.Release()
 	path := m.c.File
 	original, err := os.ReadFile(path)
 	if err != nil {
 		t.Fatal(err)
+	}
+	var baseline shareModel
+	if err := json.Unmarshal(original, &baseline); err != nil {
+		t.Fatal(err)
+	}
+	siblingID := sibling.Id.OpaqueId
+	if !proto.Equal(baseline.ReceivedShares[siblingID], siblingReceipt.After) {
+		t.Fatal("original snapshot is missing the accepted sibling")
 	}
 	backup, readFIFO, saveFIFO := path+".original", path+".read", path+".save"
 	for _, fifo := range []string{readFIFO, saveFIFO} {
@@ -215,11 +239,19 @@ func TestJSONStateNoticeRevokedOnUnacknowledgedSave(t *testing.T) {
 		if got := attempted.ReceivedShares[rs.Id.OpaqueId].GetState(); got != rejected {
 			t.Fatalf("attempted state = %v, want %v", got, rejected)
 		}
+		if !proto.Equal(attempted.ReceivedShares[siblingID], baseline.ReceivedShares[siblingID]) ||
+			attempted.TransferGenerations[siblingID] != baseline.TransferGenerations[siblingID] {
+			t.Fatal("attempted save changed the sibling row or generation")
+		}
 		if !errors.Is(result.err, unix.EINVAL) {
 			t.Fatalf("save error = %v, want FIFO sync failure", result.err)
 		}
 		if result.receipt != nil {
 			t.Fatal("unacknowledged update returned a receipt")
+		}
+		if targetProof.StillCurrent() || siblingProof.StillCurrent() {
+			t.Errorf("failed sync before restore left target current = %t, sibling current = %t",
+				targetProof.StillCurrent(), siblingProof.StillCurrent())
 		}
 	}()
 
@@ -231,7 +263,7 @@ func TestJSONStateNoticeRevokedOnUnacknowledgedSave(t *testing.T) {
 	if err != nil || current.GetState() != accepted {
 		t.Fatalf("restored state = %v, err = %v, want %v", current.GetState(), err, accepted)
 	}
-	if earlier.TryStateNotice() {
-		t.Fatal("unacknowledged save left the earlier proof live")
+	if targetProof.StillCurrent() || siblingProof.StillCurrent() {
+		t.Fatal("restoring the snapshot revived a retired proof")
 	}
 }

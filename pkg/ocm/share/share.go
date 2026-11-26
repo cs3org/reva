@@ -114,8 +114,15 @@ func (u *ShareUpdate) PermissionsChanged() bool {
 type ReceivedShareUpdate struct {
 	Before *ocm.ReceivedShare
 	After  *ocm.ReceivedShare
-	// TryStateNotice consumes the issuer's one-shot proof, if supported.
-	TryStateNotice func() bool `json:"-"`
+	// ClaimStateNotice is nil when the issuer does not provide proofs. A
+	// nil result means this receipt cannot authorize a notice.
+	ClaimStateNotice func() *StateNotice `json:"-"`
+}
+
+// StateNotice belongs to one claimant. The issuer can retire it at any time.
+type StateNotice struct {
+	StillCurrent func() bool
+	Release      func()
 }
 
 type stateNoticeKey struct{}

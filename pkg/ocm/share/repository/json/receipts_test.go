@@ -75,6 +75,7 @@ func TestJSONStateNoticeReconcilesAcknowledgedState(t *testing.T) {
 		{"transfer", false}, {"unrelated ingress", true}, {"unobserved writer", true},
 		{"observed writer", false}, {"new grantee", false}, {"new creator", false},
 		{"different remote ID case", false}, {"different local ID", false},
+		{"generation only", false}, {"identical snapshot", true},
 		{"deleted row", false}, {"missing file", false}, {"corrupt file", false},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
@@ -87,14 +88,19 @@ func TestJSONStateNoticeReconcilesAcknowledgedState(t *testing.T) {
 			update := func(repo share.Repository, ctx context.Context, state ocm.ShareState, paths ...string) (*share.ReceivedShareUpdate, error) {
 				return repo.UpdateReceivedShare(ctx, user, &ocm.ReceivedShare{Id: rs.Id, State: state}, mask(paths...))
 			}
-			proof, err := update(m, share.WithStateNotice(ctx), declined, "state")
-			if err != nil || proof.TryStateNotice == nil {
-				t.Fatalf("decline receipt = %v, err = %v", proof, err)
+			receipt, err := update(m, share.WithStateNotice(ctx), declined, "state")
+			if err != nil || receipt.ClaimStateNotice == nil {
+				t.Fatalf("decline receipt = %v, err = %v", receipt, err)
 			}
+			proof := receipt.ClaimStateNotice()
+			if proof == nil || !proof.StillCurrent() || receipt.ClaimStateNotice() != nil {
+				t.Fatal("receipt did not grant one live claim")
+			}
+			defer proof.Release()
 			switch tc.name {
 			case "no-op":
 				receipt, err := update(m, share.WithStateNotice(ctx), declined, "state")
-				if err != nil || receipt.StateChanged() || receipt.TryStateNotice != nil {
+				if err != nil || receipt.StateChanged() || receipt.ClaimStateNotice != nil {
 					t.Fatalf("same-state update = %v, err = %v", receipt, err)
 				}
 			case "validation error":
@@ -103,7 +109,7 @@ func TestJSONStateNoticeReconcilesAcknowledgedState(t *testing.T) {
 				}
 			case "reset":
 				receipt, err := update(m, share.WithStateNotice(ctx), pending, "state")
-				if err != nil || !receipt.StateChanged() || receipt.TryStateNotice != nil {
+				if err != nil || !receipt.StateChanged() || receipt.ClaimStateNotice != nil {
 					t.Fatalf("reset = %v, err = %v", receipt, err)
 				}
 			case "transfer":
@@ -112,11 +118,11 @@ func TestJSONStateNoticeReconcilesAcknowledgedState(t *testing.T) {
 					t.Fatal(err)
 				}
 				stale, err := m.CompleteReceivedShareTransfer(share.WithStateNotice(ctx), user, rs.Id, start.Generation-1, accepted)
-				if err != nil || stale.StateChanged() || stale.TryStateNotice != nil {
+				if err != nil || stale.StateChanged() || stale.ClaimStateNotice != nil {
 					t.Fatalf("stale completion = %v, err = %v", stale, err)
 				}
 				failed, err := m.CompleteReceivedShareTransfer(ctx, user, rs.Id, start.Generation, declined)
-				if err != nil || !failed.StateChanged() || failed.TryStateNotice != nil {
+				if err != nil || !failed.StateChanged() || failed.ClaimStateNotice != nil {
 					t.Fatalf("failed completion = %v, err = %v", failed, err)
 				}
 				start, err = m.StartReceivedShareTransfer(ctx, user, rs, mask("state"))
@@ -124,9 +130,14 @@ func TestJSONStateNoticeReconcilesAcknowledgedState(t *testing.T) {
 					t.Fatal(err)
 				}
 				completed, err := m.CompleteReceivedShareTransfer(share.WithStateNotice(ctx), user, rs.Id, start.Generation, accepted)
-				if err != nil || completed.TryStateNotice == nil || !completed.TryStateNotice() {
+				if err != nil || completed.ClaimStateNotice == nil {
 					t.Fatalf("successful completion = %v, err = %v", completed, err)
 				}
+				completion := completed.ClaimStateNotice()
+				if completion == nil || !completion.StillCurrent() {
+					t.Fatal("successful completion did not grant a live proof")
+				}
+				completion.Release()
 			case "unrelated ingress", "unobserved writer", "observed writer":
 				other, err := New(ctx, map[string]any{"file": m.c.File})
 				if err != nil {
@@ -135,7 +146,7 @@ func TestJSONStateNoticeReconcilesAcknowledgedState(t *testing.T) {
 				receivedFixture(t, other)
 				if tc.name != "unrelated ingress" {
 					receipt, err := update(other, ctx, accepted, "state")
-					if err != nil || !receipt.StateChanged() || receipt.TryStateNotice != nil {
+					if err != nil || !receipt.StateChanged() || receipt.ClaimStateNotice != nil {
 						t.Fatalf("external update = %v, err = %v", receipt, err)
 					}
 				}
@@ -174,12 +185,31 @@ func TestJSONStateNoticeReconcilesAcknowledgedState(t *testing.T) {
 						row.RemoteShareId = "Remote-1"
 					case "different local ID":
 						row.Id.OpaqueId += "-replaced"
+					case "generation only":
+						model.TransferGenerations[rs.Id.OpaqueId]++
 					case "deleted row":
 						delete(model.ReceivedShares, rs.Id.OpaqueId)
 					}
 					changed, err := json.Marshal(&model)
 					if err != nil {
 						t.Fatal(err)
+					}
+					if tc.name == "generation only" || tc.name == "identical snapshot" {
+						var persisted shareModel
+						if err := json.Unmarshal(changed, &persisted); err != nil {
+							t.Fatal(err)
+						}
+						id := rs.Id.OpaqueId
+						if !proto.Equal(persisted.ReceivedShares[id], receipt.After) {
+							t.Fatal("snapshot changed the stored row")
+						}
+						wantGeneration := m.model.TransferGenerations[id]
+						if tc.name == "generation only" {
+							wantGeneration++
+						}
+						if persisted.TransferGenerations[id] != wantGeneration {
+							t.Fatalf("persisted generation = %d, want %d", persisted.TransferGenerations[id], wantGeneration)
+						}
 					}
 					if err := os.WriteFile(m.c.File, changed, 0600); err != nil {
 						t.Fatal(err)
@@ -188,7 +218,15 @@ func TestJSONStateNoticeReconcilesAcknowledgedState(t *testing.T) {
 				if err != nil {
 					t.Fatal(err)
 				}
-				_, err = m.GetReceivedShare(ctx, user, ref)
+				current, err := m.GetReceivedShare(ctx, user, ref)
+				if tc.name == "generation only" || tc.name == "identical snapshot" {
+					if err != nil || !proto.Equal(current, receipt.After) {
+						t.Fatalf("issuer did not read unchanged row: %v, err = %v", current, err)
+					}
+					if got := proof.StillCurrent(); got != tc.live {
+						t.Errorf("%s left proof current = %t, want %t", tc.name, got, tc.live)
+					}
+				}
 				if (tc.name == "missing file" || tc.name == "corrupt file") && err == nil {
 					t.Fatal("invalid file was readable")
 				}
@@ -199,11 +237,13 @@ func TestJSONStateNoticeReconcilesAcknowledgedState(t *testing.T) {
 					t.Fatalf("restored row: %v", err)
 				}
 			}
-			if got := proof.TryStateNotice(); got != tc.live {
+			if got := proof.StillCurrent(); got != tc.live {
 				t.Errorf("earlier proof = %t, want %t", got, tc.live)
 			}
-			if proof.TryStateNotice() {
-				t.Error("proof could be used twice")
+			proof.Release()
+			proof.Release()
+			if proof.StillCurrent() || receipt.ClaimStateNotice() != nil {
+				t.Error("released proof was still usable")
 			}
 		})
 	}
@@ -217,15 +257,20 @@ func TestJSONStateNoticeCapacityKeepsIndependentGrants(t *testing.T) {
 		t.Helper()
 		receipt, err := m.UpdateReceivedShare(ctx, user,
 			&ocm.ReceivedShare{Id: rs.Id, State: ocm.ShareState_SHARE_STATE_ACCEPTED}, mask("state"))
-		if err != nil || !receipt.StateChanged() || receipt.TryStateNotice == nil {
+		if err != nil || !receipt.StateChanged() || receipt.ClaimStateNotice == nil {
 			t.Fatalf("accept = %v, err = %v", receipt, err)
 		}
 		return receipt
 	}
-	var parked []*share.ReceivedShareUpdate
+	var parked []*share.StateNotice
 	for range 64 {
 		user, rs := receivedFixture(t, m)
-		parked = append(parked, accept(user, rs))
+		proof := accept(user, rs).ClaimStateNotice()
+		if proof == nil || !proof.StillCurrent() {
+			t.Fatalf("grant %d was refused before capacity", len(parked))
+		}
+		defer proof.Release()
+		parked = append(parked, proof)
 	}
 	user, rs := receivedFixture(t, m)
 	refused := accept(user, rs)
@@ -233,15 +278,18 @@ func TestJSONStateNoticeCapacityKeepsIndependentGrants(t *testing.T) {
 	if current, err := m.GetReceivedShare(ctx, user, ref); err != nil || current.GetState() != ocm.ShareState_SHARE_STATE_ACCEPTED {
 		t.Fatalf("refused grant state = %v, err = %v", current.GetState(), err)
 	}
-	if refused.TryStateNotice() || !parked[0].TryStateNotice() {
+	if refused.ClaimStateNotice() != nil || !parked[0].StillCurrent() {
 		t.Fatal("refused proof was usable or displaced an earlier grant")
 	}
-	next := accept(receivedFixture(t, m))
-	if parked[0].TryStateNotice() || !next.TryStateNotice() || refused.TryStateNotice() {
+	parked[0].Release()
+	next := accept(receivedFixture(t, m)).ClaimStateNotice()
+	parked[0].Release()
+	if parked[0].StillCurrent() || next == nil || !next.StillCurrent() || refused.ClaimStateNotice() != nil {
 		t.Fatal("slot reuse rearmed an old receipt or lost the new one")
 	}
+	defer next.Release()
 	for i, proof := range parked[1:] {
-		if !proof.TryStateNotice() {
+		if !proof.StillCurrent() {
 			t.Errorf("independent grant %d lost its proof", i+1)
 		}
 	}

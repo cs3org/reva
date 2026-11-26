@@ -21,6 +21,7 @@ package ocmd
 import (
 	"context"
 	"encoding/json"
+	"hash/crc32"
 	"net"
 	"net/http"
 	"net/http/httptest"
@@ -34,6 +35,7 @@ import (
 	"github.com/cs3org/reva/v3/internal/http/services/wellknown"
 	"github.com/cs3org/reva/v3/pkg/appctx"
 	ocmclient "github.com/cs3org/reva/v3/pkg/ocm/client"
+	"github.com/cs3org/reva/v3/pkg/ocm/share"
 	"github.com/prometheus/client_golang/prometheus/testutil"
 	"github.com/rs/zerolog"
 )
@@ -136,6 +138,8 @@ func TestAsyncNotifierSerializesCurrentPermissionSnapshots(t *testing.T) {
 
 func TestAsyncNotifierStateNoticesIsolatePeersWithSameGrantID(t *testing.T) {
 	releaseSlow := make(chan struct{})
+	unblock := sync.OnceFunc(func() { close(releaseSlow) })
+	defer unblock()
 	slowEntered := make(chan struct{}, 1)
 	slowPosted := make(chan struct{}, 1)
 	fastPosted := make(chan struct{}, 1)
@@ -175,6 +179,18 @@ func TestAsyncNotifierStateNoticesIsolatePeersWithSameGrantID(t *testing.T) {
 		t.Fatal(err)
 	}
 	otherHost := net.JoinHostPort("localhost", port)
+	grantID := "same-grant"
+	for range 32 {
+		first := crc32.ChecksumIEEE([]byte(host+"\x00"+grantID)) % maxInFlightNotifications
+		second := crc32.ChecksumIEEE([]byte(otherHost+"\x00"+grantID)) % maxInFlightNotifications
+		if first != second {
+			break
+		}
+		grantID += "x"
+	}
+	if len(grantID) == len("same-grant")+32 {
+		t.Fatal("peer fixtures could not be assigned different send stripes")
+	}
 	client := NewClientWithConfig(ocmclient.TransportConfig{Timeout: time.Minute, AllowLoopback: true})
 	a := &AsyncNotifier{Client: client, Key: newSigningKey(t)}
 	t.Cleanup(func() { _ = a.Close() })
@@ -182,12 +198,12 @@ func TestAsyncNotifierStateNoticesIsolatePeersWithSameGrantID(t *testing.T) {
 		t.Helper()
 		n, err := (ShareStateNotification{
 			Type: NotificationShareAccepted, SenderDomain: "cernbox.example.org",
-			ResourceType: "file", ShareType: "user", ProviderID: "same-grant",
+			ResourceType: "file", ShareType: "user", ProviderID: grantID,
 		}).Build()
 		if err != nil {
 			t.Fatal(err)
 		}
-		n.StillCurrent = func(context.Context) bool { return true }
+		n.StateNotice = &share.StateNotice{StillCurrent: func() bool { return true }, Release: func() {}}
 		if result := a.NewNotification(context.Background(), domain, n); result != (SendResult{}) {
 			t.Fatalf("send admission: %+v", result)
 		}
@@ -201,7 +217,7 @@ func TestAsyncNotifierStateNoticesIsolatePeersWithSameGrantID(t *testing.T) {
 	case <-time.After(3 * time.Second):
 		t.Fatal("independent peer did not receive the state notice while slow discovery was held")
 	}
-	close(releaseSlow)
+	unblock()
 	wait(t, slowPosted, "slow peer POST")
 }
 

@@ -59,6 +59,7 @@ const (
 	SendDiscoveryFailed   SendOutcome = "discovery_failed"
 	SendPostFailed        SendOutcome = "post_failed"
 	SendRejected          SendOutcome = "rejected"
+	SendSuperseded        SendOutcome = "superseded"
 )
 
 // SendFailure is the fixed category of a failed discovery or POST.
@@ -129,6 +130,9 @@ func sendNotification(ctx context.Context, t notificationTransport, domain strin
 		return SendResult{Outcome: SendCapabilityMissing}
 	}
 	resp, err := t.PostNotification(ctx, peer, body)
+	if errors.Is(err, errSuperseded) {
+		return SendResult{Outcome: SendSuperseded}
+	}
 	if err != nil {
 		return SendResult{Outcome: SendPostFailed, Failure: classifyFailure(err)}
 	}
