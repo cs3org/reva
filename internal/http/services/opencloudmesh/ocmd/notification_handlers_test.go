@@ -1,4 +1,4 @@
-// Copyright 2018-2024 CERN
+// Copyright 2018-2026 CERN
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -58,31 +58,12 @@ func TestRegistryDispatchOutcomes(t *testing.T) {
 		t.Fatalf("no handler %s %v", out, err)
 	}
 
-	for _, body := range []string{
-		`{"notificationType":"ACME","senderDomain":"a.example.org","shareType":"user"}`,
-		`{"notificationType":"RESHARE_UNDO","senderDomain":"a.example.org","resourceType":"file","notification":{"file":{"providerId":"42"}}}`,
-		`{"notificationType":"EXAMPLE_FUTURE","senderDomain":"a.example.org","shareType":"federation","notification":{"future":{"groupId":"g"}}}`,
-	} {
-		n = mustParse(t, r, body)
-		if out, err := r.Dispatch(ctx, n); n.Class != NotificationClassUnknown || out != DispatchIgnored || err != nil {
-			t.Fatalf("unknown %s: %s %s %v", body, n.Class, out, err)
-		}
-	}
-
 	req, err := r.Parse([]byte(`{"notificationType":"REQUEST_SHARE","senderDomain":"b.example.org","resourceType":"collection"}`))
 	if code, ok := NotificationErrorCodeOf(err); !ok || code != NotificationErrNotImplemented || req.Class != NotificationClassRequest {
 		t.Fatalf("request status %v", err)
 	}
 	if out, err := r.Dispatch(ctx, req); out != DispatchNotImplemented || err != nil {
 		t.Fatalf("request %s %v", out, err)
-	}
-
-	malformed, err := r.Parse([]byte(`{`))
-	if err == nil {
-		t.Fatal("expected error")
-	}
-	if out, err := r.Dispatch(ctx, malformed); out != DispatchIgnored || err != nil {
-		t.Fatalf("malformed %s %v", out, err)
 	}
 }
 

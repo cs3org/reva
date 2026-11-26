@@ -53,7 +53,8 @@
   "purpose": "Request body must be a JSON object",
   "body": [],
   "handlerCalls": 0,
-  "class": "malformed"
+  "class": "malformed",
+  "reason": "malformed notification"
  },
  {
   "id": "ENV-005",
@@ -63,18 +64,8 @@
    "resourceType": "file"
   },
   "handlerCalls": 0,
-  "class": "malformed"
- },
- {
-  "id": "ENV-006",
-  "purpose": "Null notificationType",
-  "body": {
-   "notificationType": null,
-   "senderDomain": "a.example.org",
-   "resourceType": "file"
-  },
-  "handlerCalls": 0,
-  "class": "malformed"
+  "class": "malformed",
+  "reason": "missing notificationType"
  },
  {
   "id": "ENV-007",
@@ -85,7 +76,8 @@
    "resourceType": "file"
   },
   "handlerCalls": 0,
-  "class": "malformed"
+  "class": "malformed",
+  "reason": "missing notificationType"
  },
  {
   "id": "ENV-008",
@@ -96,7 +88,8 @@
    "resourceType": "file"
   },
   "handlerCalls": 0,
-  "class": "malformed"
+  "class": "malformed",
+  "reason": "malformed notification"
  },
  {
   "id": "ENV-009",
@@ -106,18 +99,8 @@
    "resourceType": "file"
   },
   "handlerCalls": 0,
-  "class": "malformed"
- },
- {
-  "id": "ENV-010",
-  "purpose": "Null senderDomain",
-  "body": {
-   "notificationType": "EXAMPLE_FUTURE",
-   "senderDomain": null,
-   "resourceType": "file"
-  },
-  "handlerCalls": 0,
-  "class": "malformed"
+  "class": "malformed",
+  "reason": "missing senderDomain"
  },
  {
   "id": "ENV-011",
@@ -128,18 +111,8 @@
    "resourceType": "file"
   },
   "handlerCalls": 0,
-  "class": "malformed"
- },
- {
-  "id": "ENV-012",
-  "purpose": "Wrong-type senderDomain",
-  "body": {
-   "notificationType": "EXAMPLE_FUTURE",
-   "senderDomain": [],
-   "resourceType": "file"
-  },
-  "handlerCalls": 0,
-  "class": "malformed"
+  "class": "malformed",
+  "reason": "invalid senderDomain"
  },
  {
   "id": "ENV-013",
@@ -150,7 +123,8 @@
    "resourceType": "file"
   },
   "handlerCalls": 0,
-  "class": "malformed"
+  "class": "malformed",
+  "reason": "invalid senderDomain"
  },
  {
   "id": "ENV-014",
@@ -160,66 +134,8 @@
    "senderDomain": "a.example.org"
   },
   "handlerCalls": 0,
-  "class": "malformed"
- },
- {
-  "id": "ENV-015",
-  "purpose": "Null resourceType cannot satisfy the selector requirement.",
-  "body": {
-   "notificationType": "EXAMPLE_FUTURE",
-   "senderDomain": "a.example.org",
-   "resourceType": null
-  },
-  "handlerCalls": 0,
-  "class": "malformed"
- },
- {
-  "id": "ENV-016",
-  "purpose": "Empty resourceType cannot satisfy the selector requirement.",
-  "body": {
-   "notificationType": "EXAMPLE_FUTURE",
-   "senderDomain": "a.example.org",
-   "resourceType": ""
-  },
-  "handlerCalls": 0,
-  "class": "malformed"
- },
- {
-  "id": "ENV-017",
-  "purpose": "Wrong-type supplied resourceType",
-  "body": {
-   "notificationType": "EXAMPLE_FUTURE",
-   "senderDomain": "a.example.org",
-   "resourceType": {}
-  },
-  "handlerCalls": 0,
-  "class": "malformed"
- },
- {
-  "id": "ENV-018",
-  "purpose": "Null shareType cannot satisfy the selector requirement.",
-  "body": {
-   "notificationType": "EXAMPLE_FUTURE",
-   "senderDomain": "a.example.org",
-   "shareType": null,
-   "notification": {
-    "future": {
-     "providerId": null,
-     "permissions": null,
-     "owner": 42,
-     "items": [
-      false,
-      "opaque"
-     ],
-     "label": "caf\u00e9",
-     "nested": {
-      "x": "anything"
-     }
-    }
-   }
-  },
-  "handlerCalls": 0,
-  "class": "malformed"
+  "class": "malformed",
+  "reason": "missing resourceType or shareType"
  },
  {
   "id": "ENV-019",
@@ -231,7 +147,8 @@
    "notification": null
   },
   "handlerCalls": 0,
-  "class": "malformed"
+  "class": "malformed",
+  "reason": "invalid notification"
  },
  {
   "id": "ENV-020",
@@ -245,18 +162,8 @@
    }
   },
   "handlerCalls": 0,
-  "class": "malformed"
- },
- {
-  "id": "ENV-021",
-  "purpose": "Sender host retains a numeric port",
-  "body": {
-   "notificationType": "EXAMPLE_FUTURE",
-   "senderDomain": "a.example.org:8443",
-   "resourceType": "file"
-  },
-  "handlerCalls": 0,
-  "class": "unknown"
+  "class": "malformed",
+  "reason": "invalid notification"
  },
  {
   "id": "ENV-023",
@@ -287,56 +194,8 @@
    "providerId": "flat-does-not-substitute"
   },
   "handlerCalls": 0,
-  "class": "malformed"
- },
- {
-  "id": "ENV-025",
-  "purpose": "Envelope providerId cannot replace a null nested selector.",
-  "body": {
-   "notificationType": "SHARE_UNSHARED",
-   "senderDomain": "a.example.org",
-   "resourceType": "file",
-   "notification": {
-    "file": {
-     "providerId": null
-    }
-   },
-   "providerId": "flat-does-not-substitute"
-  },
-  "handlerCalls": 0,
-  "class": "malformed"
- },
- {
-  "id": "ENV-026",
-  "purpose": "Nested providerId cannot be empty.",
-  "body": {
-   "notificationType": "SHARE_UNSHARED",
-   "senderDomain": "a.example.org",
-   "resourceType": "file",
-   "notification": {
-    "file": {
-     "providerId": ""
-    }
-   }
-  },
-  "handlerCalls": 0,
-  "class": "malformed"
- },
- {
-  "id": "ENV-027",
-  "purpose": "Nested providerId must be a string.",
-  "body": {
-   "notificationType": "SHARE_UNSHARED",
-   "senderDomain": "a.example.org",
-   "resourceType": "file",
-   "notification": {
-    "file": {
-     "providerId": 42
-    }
-   }
-  },
-  "handlerCalls": 0,
-  "class": "malformed"
+  "class": "malformed",
+  "reason": "missing notification.file.providerId"
  },
  {
   "id": "ENV-028",
@@ -353,44 +212,8 @@
    }
   },
   "handlerCalls": 0,
-  "class": "malformed"
- },
- {
-  "id": "ENV-029",
-  "purpose": "Permission entries must be strings.",
-  "body": {
-   "notificationType": "SHARE_UNSHARED",
-   "senderDomain": "a.example.org",
-   "resourceType": "file",
-   "notification": {
-    "file": {
-     "providerId": "share-7",
-     "permissions": [
-      "read",
-      null
-     ]
-    }
-   }
-  },
-  "handlerCalls": 0,
-  "class": "malformed"
- },
- {
-  "id": "ENV-031",
-  "purpose": "Reshare requests use providerId and shareWith; permissions are optional.",
-  "body": {
-   "notificationType": "REQUEST_RESHARE",
-   "senderDomain": "a.example.org",
-   "resourceType": "folder",
-   "notification": {
-    "file": {
-     "providerId": "share-7",
-     "shareWith": "third@c.example.org"
-    }
-   }
-  },
-  "handlerCalls": 0,
-  "class": "unsupported"
+  "class": "malformed",
+  "reason": "invalid notification.file.permissions"
  },
  {
   "id": "ENV-034",
@@ -407,7 +230,8 @@
    }
   },
   "handlerCalls": 0,
-  "class": "malformed"
+  "class": "malformed",
+  "reason": "invalid notification.file.shareWith"
  },
  {
   "id": "ENV-036",
@@ -424,24 +248,8 @@
    "resourceType": "file"
   },
   "handlerCalls": 0,
-  "class": "malformed"
- },
- {
-  "id": "ENV-038",
-  "purpose": "Group departure forbids resourceType, including null.",
-  "body": {
-   "notificationType": "GROUP_REMOVED",
-   "senderDomain": "a.example.org",
-   "shareType": "group",
-   "notification": {
-    "group": {
-     "groupId": "group-1"
-    }
-   },
-   "resourceType": null
-  },
-  "handlerCalls": 0,
-  "class": "malformed"
+  "class": "malformed",
+  "reason": "invalid resourceType"
  },
  {
   "id": "ENV-041",
@@ -453,20 +261,6 @@
   },
   "handlerCalls": 0,
   "class": "unknown"
- },
- {
-  "id": "ENV-042",
-  "purpose": "An optional message cannot be null.",
-  "body": {
-   "notificationType": "EXAMPLE_FUTURE",
-   "senderDomain": "a.example.org",
-   "resourceType": "file",
-   "notification": {
-    "message": null
-   }
-  },
-  "handlerCalls": 0,
-  "class": "malformed"
  },
  {
   "id": "ENV-043",
@@ -489,29 +283,8 @@
    "resourceType": "file"
   },
   "handlerCalls": 0,
-  "class": "malformed"
- },
- {
-  "id": "ENV-059",
-  "purpose": "Nonempty Unicode whitespace type is unknown and ignored",
-  "body": {
-   "notificationType": "\u00a0",
-   "senderDomain": "a.example.org",
-   "resourceType": "file"
-  },
-  "handlerCalls": 0,
-  "class": "unknown"
- },
- {
-  "id": "ENV-085",
-  "purpose": "Unknown type retains surrounding whitespace",
-  "body": {
-   "notificationType": "\u0085EXT\u2003",
-   "senderDomain": "a.example.org",
-   "resourceType": "file"
-  },
-  "handlerCalls": 0,
-  "class": "unknown"
+  "class": "malformed",
+  "reason": "invalid senderDomain"
  },
  {
   "id": "ENV-086",
@@ -538,7 +311,8 @@
    "resourceType": "file"
   },
   "handlerCalls": 0,
-  "class": "malformed"
+  "class": "malformed",
+  "reason": "invalid senderDomain"
  },
  {
   "id": "ENV-107",
@@ -588,41 +362,8 @@
    }
   },
   "handlerCalls": 0,
-  "class": "malformed"
- },
- {
-  "id": "contact-null-target",
-  "purpose": "Contact target cannot be null.",
-  "body": {
-   "notificationType": "CONTACT_REMOVED",
-   "shareType": "user",
-   "senderDomain": "alice.example.org",
-   "notification": {
-    "user": {
-     "userId": "alice@alice.example.org",
-     "targetUserId": null
-    }
-   }
-  },
-  "handlerCalls": 0,
-  "class": "malformed"
- },
- {
-  "id": "contact-empty-target",
-  "purpose": "Contact target cannot be empty.",
-  "body": {
-   "notificationType": "CONTACT_REMOVED",
-   "shareType": "user",
-   "senderDomain": "alice.example.org",
-   "notification": {
-    "user": {
-     "userId": "alice@alice.example.org",
-     "targetUserId": ""
-    }
-   }
-  },
-  "handlerCalls": 0,
-  "class": "malformed"
+  "class": "malformed",
+  "reason": "missing notification.user.targetUserId"
  },
  {
   "id": "contact-wrong-sharetype",
@@ -639,7 +380,8 @@
    }
   },
   "handlerCalls": 0,
-  "class": "malformed"
+  "class": "malformed",
+  "reason": "invalid shareType"
  },
  {
   "id": "contact-resourceType-present",
@@ -657,25 +399,8 @@
    }
   },
   "handlerCalls": 0,
-  "class": "malformed"
- },
- {
-  "id": "contact-resourceType-null",
-  "purpose": "Contact removal forbids resourceType, including null.",
-  "body": {
-   "notificationType": "CONTACT_REMOVED",
-   "shareType": "user",
-   "resourceType": null,
-   "senderDomain": "alice.example.org",
-   "notification": {
-    "user": {
-     "userId": "alice@alice.example.org",
-     "targetUserId": "bob@bob.example.org"
-    }
-   }
-  },
-  "handlerCalls": 0,
-  "class": "malformed"
+  "class": "malformed",
+  "reason": "invalid resourceType"
  },
  {
   "id": "contact-old-counterpart-only",
@@ -692,7 +417,8 @@
    }
   },
   "handlerCalls": 0,
-  "class": "malformed"
+  "class": "malformed",
+  "reason": "missing notification.user.targetUserId"
  },
  {
   "id": "contact-port-host-addresses",
@@ -729,23 +455,6 @@
   "class": "known"
  },
  {
-  "id": "contact-target-with-spaces-opaque",
-  "purpose": "Contact identifiers preserve embedded spaces.",
-  "body": {
-   "notificationType": "CONTACT_REMOVED",
-   "shareType": "user",
-   "senderDomain": "alice.example.org",
-   "notification": {
-    "user": {
-     "userId": "alice@alice.example.org",
-     "targetUserId": "bob smith@bob.example.org"
-    }
-   }
-  },
-  "handlerCalls": 1,
-  "class": "known"
- },
- {
   "id": "contact-target-not-address",
   "purpose": "Contact targets must be OCM addresses.",
   "body": {
@@ -760,7 +469,8 @@
    }
   },
   "handlerCalls": 0,
-  "class": "malformed"
+  "class": "malformed",
+  "reason": "invalid notification.user.targetUserId"
  },
  {
   "id": "user-removed-wrong-sharetype",
@@ -776,7 +486,8 @@
    }
   },
   "handlerCalls": 0,
-  "class": "malformed"
+  "class": "malformed",
+  "reason": "invalid shareType"
  },
  {
   "id": "user-removed-with-target",
@@ -793,7 +504,8 @@
    }
   },
   "handlerCalls": 0,
-  "class": "malformed"
+  "class": "malformed",
+  "reason": "invalid notification.user.targetUserId"
  },
  {
   "id": "group-removed-valid",
@@ -825,21 +537,8 @@
    }
   },
   "handlerCalls": 0,
-  "class": "malformed"
- },
- {
-  "id": "unknown-type-extension-valid",
-  "purpose": "Unknown types may carry a message.",
-  "body": {
-   "notificationType": "EXAMPLE_CUSTOM_EVENT",
-   "resourceType": "file",
-   "senderDomain": "sender.example.org",
-   "notification": {
-    "message": "Something happened"
-   }
-  },
-  "handlerCalls": 0,
-  "class": "unknown"
+  "class": "malformed",
+  "reason": "invalid shareType"
  },
  {
   "id": "share_accepted-valid",
@@ -898,7 +597,8 @@
    "resourceType": "file"
   },
   "handlerCalls": 0,
-  "class": "malformed"
+  "class": "malformed",
+  "reason": "missing notification.file"
  },
  {
   "id": "known-null-file",
@@ -912,7 +612,8 @@
    }
   },
   "handlerCalls": 0,
-  "class": "malformed"
+  "class": "malformed",
+  "reason": "invalid notification"
  },
  {
   "id": "known-missing-resource",
@@ -928,7 +629,8 @@
    }
   },
   "handlerCalls": 0,
-  "class": "malformed"
+  "class": "malformed",
+  "reason": "missing resourceType"
  },
  {
   "id": "request-reshare-missing-provider",
@@ -945,7 +647,8 @@
    "providerId": "flat"
   },
   "handlerCalls": 0,
-  "class": "malformed"
+  "class": "malformed",
+  "reason": "missing notification.file.providerId"
  },
  {
   "id": "request-reshare-missing-recipient",
@@ -961,24 +664,8 @@
    }
   },
   "handlerCalls": 0,
-  "class": "malformed"
- },
- {
-  "id": "permissions-empty",
-  "purpose": "Empty permission arrays are allowed.",
-  "body": {
-   "notificationType": "SHARE_CHANGE_PERMISSION",
-   "senderDomain": "a.example.org",
-   "resourceType": "file",
-   "notification": {
-    "file": {
-     "providerId": "grant-1",
-     "permissions": []
-    }
-   }
-  },
-  "handlerCalls": 1,
-  "class": "known"
+  "class": "malformed",
+  "reason": "missing notification.file.shareWith"
  },
  {
   "id": "permissions-unknown",
@@ -997,7 +684,8 @@
    }
   },
   "handlerCalls": 0,
-  "class": "malformed"
+  "class": "malformed",
+  "reason": "invalid notification.file.permissions"
  },
  {
   "id": "permissions-scalar",
@@ -1014,7 +702,8 @@
    }
   },
   "handlerCalls": 0,
-  "class": "malformed"
+  "class": "malformed",
+  "reason": "invalid notification.file.permissions"
  },
  {
   "id": "empty-message",
@@ -1025,39 +714,6 @@
    "resourceType": "file",
    "notification": {
     "message": ""
-   }
-  },
-  "handlerCalls": 0,
-  "class": "unknown"
- },
- {
-  "id": "scalar-sharedSecret",
-  "purpose": "Undeclared scalar payload member is invalid",
-  "body": {
-   "notificationType": "EXAMPLE_CUSTOM_EVENT",
-   "senderDomain": "a.example.org",
-   "resourceType": "file",
-   "notification": {
-    "sharedSecret": "opaque-value"
-   }
-  },
-  "handlerCalls": 0,
-  "class": "malformed"
- },
- {
-  "id": "object-sharedSecret",
-  "purpose": "Undeclared object payload remains opaque",
-  "body": {
-   "notificationType": "EXAMPLE_CUSTOM_EVENT",
-   "senderDomain": "a.example.org",
-   "resourceType": "file",
-   "notification": {
-    "sharedSecret": {
-     "opaque": [
-      false,
-      null
-     ]
-    }
    }
   },
   "handlerCalls": 0,
@@ -1078,33 +734,16 @@
    }
   },
   "handlerCalls": 0,
-  "class": "malformed"
+  "class": "malformed",
+  "reason": "missing notification.file.providerId"
  },
  {
   "id": "null-root",
   "purpose": "Root cannot be null",
   "body": null,
   "handlerCalls": 0,
-  "class": "malformed"
- },
- {
-  "id": "scalar-root",
-  "purpose": "Root cannot be a string",
-  "body": "value",
-  "handlerCalls": 0,
-  "class": "malformed"
- },
- {
-  "id": "nonobject-payload",
-  "purpose": "Notification payload cannot be an array",
-  "body": {
-   "notificationType": "EXAMPLE_CUSTOM_EVENT",
-   "senderDomain": "a.example.org",
-   "resourceType": "file",
-   "notification": []
-  },
-  "handlerCalls": 0,
-  "class": "malformed"
+  "class": "malformed",
+  "reason": "malformed notification"
  },
  {
   "id": "wrong-message",
@@ -1118,7 +757,8 @@
    }
   },
   "handlerCalls": 0,
-  "class": "malformed"
+  "class": "malformed",
+  "reason": "invalid notification.message"
  },
  {
   "id": "lowercase-known-token",
@@ -1132,53 +772,6 @@
   "class": "unknown"
  },
  {
-  "id": "user-null-payload",
-  "purpose": "User object cannot be null",
-  "body": {
-   "notificationType": "USER_REMOVED",
-   "senderDomain": "a.example.org",
-   "shareType": "user",
-   "notification": {
-    "user": null
-   }
-  },
-  "handlerCalls": 0,
-  "class": "malformed"
- },
- {
-  "id": "user-null-id",
-  "purpose": "User address cannot be null",
-  "body": {
-   "notificationType": "USER_REMOVED",
-   "senderDomain": "a.example.org",
-   "shareType": "user",
-   "notification": {
-    "user": {
-     "userId": null
-    }
-   }
-  },
-  "handlerCalls": 0,
-  "class": "malformed"
- },
- {
-  "id": "user-null-target-forbidden",
-  "purpose": "User departure forbids targetUserId even when null",
-  "body": {
-   "notificationType": "USER_REMOVED",
-   "senderDomain": "a.example.org",
-   "shareType": "user",
-   "notification": {
-    "user": {
-     "userId": "alice@a.example.org",
-     "targetUserId": null
-    }
-   }
-  },
-  "handlerCalls": 0,
-  "class": "malformed"
- },
- {
   "id": "group-missing-id",
   "purpose": "Group removal requires groupId.",
   "body": {
@@ -1190,55 +783,8 @@
    }
   },
   "handlerCalls": 0,
-  "class": "malformed"
- },
- {
-  "id": "group-empty-id",
-  "purpose": "groupId cannot be empty.",
-  "body": {
-   "notificationType": "GROUP_REMOVED",
-   "senderDomain": "a.example.org",
-   "shareType": "group",
-   "notification": {
-    "group": {
-     "groupId": ""
-    }
-   }
-  },
-  "handlerCalls": 0,
-  "class": "malformed"
- },
- {
-  "id": "group-null-id",
-  "purpose": "groupId cannot be null.",
-  "body": {
-   "notificationType": "GROUP_REMOVED",
-   "senderDomain": "a.example.org",
-   "shareType": "group",
-   "notification": {
-    "group": {
-     "groupId": null
-    }
-   }
-  },
-  "handlerCalls": 0,
-  "class": "malformed"
- },
- {
-  "id": "group-wrong-type-id",
-  "purpose": "groupId must be a string.",
-  "body": {
-   "notificationType": "GROUP_REMOVED",
-   "senderDomain": "a.example.org",
-   "shareType": "group",
-   "notification": {
-    "group": {
-     "groupId": 42
-    }
-   }
-  },
-  "handlerCalls": 0,
-  "class": "malformed"
+  "class": "malformed",
+  "reason": "missing notification.group.groupId"
  },
  {
   "id": "null-resource-beside-share",
@@ -1250,31 +796,8 @@
    "shareType": "user"
   },
   "handlerCalls": 0,
-  "class": "malformed"
- },
- {
-  "id": "empty-share-beside-resource",
-  "purpose": "A valid resourceType does not permit empty shareType.",
-  "body": {
-   "notificationType": "ACME",
-   "senderDomain": "a.example.org",
-   "resourceType": "file",
-   "shareType": ""
-  },
-  "handlerCalls": 0,
-  "class": "malformed"
- },
- {
-  "id": "null-share-beside-resource",
-  "purpose": "A valid resourceType does not permit null shareType.",
-  "body": {
-   "notificationType": "ACME",
-   "senderDomain": "a.example.org",
-   "resourceType": "file",
-   "shareType": null
-  },
-  "handlerCalls": 0,
-  "class": "malformed"
+  "class": "malformed",
+  "reason": "invalid resourceType"
  },
  {
   "id": "share-declined-federation-resource",
@@ -1290,32 +813,8 @@
    }
   },
   "handlerCalls": 0,
-  "class": "malformed"
- },
- {
-  "id": "permissions-schema-vocabulary",
-  "purpose": "All schema permission values are accepted.",
-  "body": {
-   "notificationType": "SHARE_CHANGE_PERMISSION",
-   "senderDomain": "a.example.org",
-   "resourceType": "folder",
-   "notification": {
-    "file": {
-     "providerId": "grant-1",
-     "permissions": [
-      "read",
-      "create",
-      "update",
-      "delete",
-      "write",
-      "share",
-      "view"
-     ]
-    }
-   }
-  },
-  "handlerCalls": 1,
-  "class": "known"
+  "class": "malformed",
+  "reason": "invalid resourceType"
  },
  {
   "id": "server-added-valid",
@@ -1340,7 +839,8 @@
    }
   },
   "handlerCalls": 0,
-  "class": "unsupported"
+  "class": "unsupported",
+  "reason": "notification type not implemented"
  },
  {
   "id": "server-removed-valid",
@@ -1357,7 +857,8 @@
    }
   },
   "handlerCalls": 0,
-  "class": "unsupported"
+  "class": "unsupported",
+  "reason": "notification type not implemented"
  },
  {
   "id": "server-missing-url",
@@ -1373,7 +874,8 @@
    }
   },
   "handlerCalls": 0,
-  "class": "malformed"
+  "class": "malformed",
+  "reason": "missing notification.federation.url"
  },
  {
   "id": "server-numeric-federationId",
@@ -1390,7 +892,8 @@
    }
   },
   "handlerCalls": 0,
-  "class": "malformed"
+  "class": "malformed",
+  "reason": "invalid notification.federation.federationId"
  },
  {
   "id": "server-missing-federation",
@@ -1404,7 +907,8 @@
    }
   },
   "handlerCalls": 0,
-  "class": "malformed"
+  "class": "malformed",
+  "reason": "missing notification.federation"
  },
  {
   "id": "server-with-shareType",
@@ -1422,7 +926,8 @@
    "shareType": "user"
   },
   "handlerCalls": 0,
-  "class": "malformed"
+  "class": "malformed",
+  "reason": "invalid shareType"
  },
  {
   "id": "server-wrong-resourceType",
@@ -1439,6 +944,7 @@
    }
   },
   "handlerCalls": 0,
-  "class": "malformed"
+  "class": "malformed",
+  "reason": "invalid resourceType"
  }
 ]

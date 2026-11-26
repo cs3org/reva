@@ -1,4 +1,4 @@
-// Copyright 2018-2024 CERN
+// Copyright 2018-2026 CERN
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -25,6 +25,8 @@ import (
 	"net/url"
 	"strconv"
 	"strings"
+	"unicode"
+	"unicode/utf16"
 	"unicode/utf8"
 
 	"github.com/cs3org/reva/v3/pkg/ocm/providerdomain"
@@ -109,29 +111,10 @@ const (
 )
 
 // NotificationError is a contract error. Its text holds fixed tokens and
-// field paths only, never received values.
+// validator field paths, never received values or member names.
 type NotificationError struct {
 	Code  NotificationErrorCode
-	Field string
-}
-
-// Restrict error paths to avoid reflecting payload member names.
-var notificationFields = map[string]bool{
-	"senderDomain": true, "resourceType": true, "shareType": true, "resourceType or shareType": true,
-	"notification": true, "notification.message": true,
-	"notification.file": true, "notification.file.providerId": true,
-	"notification.file.permissions": true, "notification.file.shareWith": true,
-	"notification.federation": true, "notification.federation.federationId": true,
-	"notification.federation.name": true, "notification.federation.mlsGroupId": true,
-	"notification.federation.url": true, "notification.user": true, "notification.user.userId": true,
-	"notification.user.targetUserId": true, "notification.group": true, "notification.group.groupId": true,
-}
-
-func (e *NotificationError) field() string {
-	if notificationFields[e.Field] {
-		return e.Field
-	}
-	return "notification"
+	field string
 }
 
 func (e *NotificationError) Error() string {
@@ -141,9 +124,9 @@ func (e *NotificationError) Error() string {
 	case NotificationErrMissingType:
 		return "missing notificationType"
 	case NotificationErrMissingField:
-		return "missing " + e.field()
+		return "missing " + e.field
 	case NotificationErrInvalidField:
-		return "invalid " + e.field()
+		return "invalid " + e.field
 	case NotificationErrNotImplemented:
 		return "notification type not implemented"
 	default:
@@ -152,11 +135,11 @@ func (e *NotificationError) Error() string {
 }
 
 func missingField(field string) error {
-	return &NotificationError{Code: NotificationErrMissingField, Field: field}
+	return &NotificationError{Code: NotificationErrMissingField, field: field}
 }
 
 func invalidField(field string) error {
-	return &NotificationError{Code: NotificationErrInvalidField, Field: field}
+	return &NotificationError{Code: NotificationErrInvalidField, field: field}
 }
 
 // NotificationReason returns safe text without wrapped error details.
@@ -191,7 +174,7 @@ func decodeNotification(body []byte) (*Notification, error) {
 	if !ok || isJSONNull(rawType) {
 		return nil, &NotificationError{Code: NotificationErrMissingType}
 	}
-	if json.Unmarshal(rawType, &n.Type) != nil || strings.ContainsRune(n.Type, utf8.RuneError) && hasUnpairedSurrogate(rawType) {
+	if json.Unmarshal(rawType, &n.Type) != nil || hasLoneSurrogate(rawType, n.Type) {
 		return nil, &NotificationError{Code: NotificationErrMalformed}
 	}
 	if n.Type == "" {
@@ -258,11 +241,7 @@ func memberString(obj map[string]json.RawMessage, key, field string, required bo
 		return "", nil
 	}
 	var s string
-	if isJSONNull(raw) || json.Unmarshal(raw, &s) != nil || s == "" {
-		return "", invalidField(field)
-	}
-	// encoding/json substitutes U+FFFD for an unpaired surrogate escape.
-	if strings.ContainsRune(s, utf8.RuneError) && hasUnpairedSurrogate(raw) {
+	if isJSONNull(raw) || json.Unmarshal(raw, &s) != nil || s == "" || hasLoneSurrogate(raw, s) {
 		return "", invalidField(field)
 	}
 	return s, nil
@@ -301,30 +280,29 @@ func payloadString(obj map[string]json.RawMessage, object, key string) (string, 
 	return memberString(obj, key, "notification."+object+"."+key, true)
 }
 
-func hasUnpairedSurrogate(raw json.RawMessage) bool {
-	for i := 0; i < len(raw); i++ {
-		if raw[i] != '\\' {
-			continue
-		}
-		i++
-		if raw[i] != 'u' {
-			continue
-		}
-		// The JSON decoder already checked escape syntax and hex digits.
-		unit, _ := strconv.ParseUint(string(raw[i+1:i+5]), 16, 16)
-		i += 4
+// encoding/json decodes a lone surrogate escape such as \ud800 to U+FFFD, so
+// two different identifiers could become one string. raw must be the valid
+// JSON string that decoded came from.
+func hasLoneSurrogate(raw []byte, decoded string) bool {
+	if !strings.ContainsRune(decoded, utf8.RuneError) {
+		return false
+	}
+	// The decoder already checked the escape syntax and the hex digits.
+	unit := func(i int) rune {
+		v, _ := strconv.ParseUint(string(raw[i+2:i+6]), 16, 16)
+		return rune(v)
+	}
+	for i := 0; i+6 <= len(raw); i++ {
 		switch {
-		case unit >= 0xd800 && unit <= 0xdbff:
-			tail := raw[i+1:]
-			if len(tail) < 6 || !bytes.HasPrefix(tail, []byte(`\u`)) {
-				return true
-			}
-			low, _ := strconv.ParseUint(string(tail[2:6]), 16, 16)
-			if low < 0xdc00 || low > 0xdfff {
-				return true
-			}
-			i += 6
-		case unit >= 0xdc00 && unit <= 0xdfff:
+		case raw[i] != '\\':
+		case raw[i+1] != 'u':
+			i++ // skip the escaped byte, which can be a backslash
+		case !utf16.IsSurrogate(unit(i)):
+			i += 5
+		case i+12 <= len(raw) && raw[i+6] == '\\' && raw[i+7] == 'u' &&
+			utf16.DecodeRune(unit(i), unit(i+6)) != unicode.ReplacementChar:
+			i += 11
+		default:
 			return true
 		}
 	}
