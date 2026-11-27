@@ -139,7 +139,8 @@ type collector struct {
 	mu         sync.Mutex
 	cached     []prometheus.Metric
 	logMetrics []prometheus.Metric
-	logsSince  int64 // unix start of the collector
+	logsSince  int64 // unix start of the previous log counts refresh
+	clock      func() time.Time
 	logProcs   map[logProcess]*logProcessState
 	logTotals  map[logSeries]uint64
 	errors     map[string]float64 // per service, cumulative refresh errors

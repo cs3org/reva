@@ -116,22 +116,23 @@ type logProcessState struct {
 	seen   time.Time
 }
 
-// logProcessTTL is how long a process that stopped answering is remembered,
-// so that a node back from an outage is not counted twice.
+// logProcessTTL is how long a process that stopped answering is remembered.
 const logProcessTTL = 24 * time.Hour
 
 // refreshLogCounts adds to each series what its processes logged since the
 // previous refresh. The series only grow: a process that misses a refresh, or
-// restarts, leaves what it already contributed. A process already running
-// when the collector started counts from its first answer, so a restart of
-// the collector does not count the fleet's history again.
+// restarts, leaves what it already contributed. A process first seen counts
+// in full only if it started since the previous refresh; otherwise its first
+// answer is the baseline. So neither a restart of the collector nor a process
+// back after being forgotten counts its history again; at worst the messages
+// of a process that started but missed its first refresh are not counted.
 func (c *collector) refreshLogCounts(ctx context.Context) {
+	now := c.now()
 	all, err := c.fleet.InvokeLogCounts(ctx)
 	if err != nil {
 		appctx.GetLogger(ctx).Warn().Err(err).Msg("prom stats: cannot read the fleet log counts")
 		return
 	}
-	now := time.Now()
 
 	c.mu.Lock()
 	defer c.mu.Unlock()
@@ -171,6 +172,7 @@ func (c *collector) refreshLogCounts(ctx context.Context) {
 			delete(c.logProcs, p)
 		}
 	}
+	c.logsSince = now.Unix()
 
 	desc := prometheus.NewDesc(c.namespace+"_fleet_log_messages_total",
 		"Log messages at warn level or above of the fleet's revad processes, summed per host and config file name.",
@@ -180,6 +182,13 @@ func (c *collector) refreshLogCounts(ctx context.Context) {
 		metrics = append(metrics, prometheus.MustNewConstMetric(desc, prometheus.CounterValue, float64(n), s.service, s.host, s.level))
 	}
 	c.logMetrics = metrics
+}
+
+func (c *collector) now() time.Time {
+	if c.clock != nil {
+		return c.clock()
+	}
+	return time.Now()
 }
 
 // splitNode splits a node id "host:port/service".

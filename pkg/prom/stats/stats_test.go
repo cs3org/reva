@@ -27,6 +27,7 @@ import (
 	"slices"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/cs3org/reva/v3/pkg/invoke/client"
 	"github.com/cs3org/reva/v3/pkg/stats"
@@ -329,11 +330,12 @@ func TestNonPositiveIntervalsRejected(t *testing.T) {
 	}
 }
 
-// fleetWarn refreshes the log counts with the given answers and returns the
-// warn series of the gateway on 10.0.0.4.
-func fleetWarn(t *testing.T, c *collector, answers ...logCounts) float64 {
+// fleetWarn refreshes the log counts at the given unix time with the given
+// answers and returns the warn series of the gateway on 10.0.0.4.
+func fleetWarn(t *testing.T, c *collector, now int64, answers ...logCounts) float64 {
 	t.Helper()
 	c.fleet = fakeFleet{logCounts: answers}
+	c.clock = func() time.Time { return time.Unix(now, 0) }
 	c.refreshLogCounts(context.Background())
 	return gather(t, c)["cernbox_fleet_log_messages_total{host=10.0.0.4,level=warn,service=gateway}"]
 }
@@ -348,17 +350,18 @@ func gwAnswer(pid int, start int64, warn uint64) logCounts {
 func TestFleetLogCountsStayMonotonic(t *testing.T) {
 	c := &collector{namespace: "cernbox", attrFile: "/nonexistent", errors: map[string]float64{}}
 	steps := []struct {
+		now     int64
 		answers []logCounts
 		want    float64
 	}{
-		{[]logCounts{gwAnswer(7, 100, 100), gwAnswer(8, 100, 50)}, 150},
-		{[]logCounts{gwAnswer(8, 100, 50)}, 150},                        // 7 missed the refresh
-		{[]logCounts{gwAnswer(7, 100, 100), gwAnswer(8, 100, 50)}, 150}, // and is back
-		{[]logCounts{gwAnswer(7, 100, 110), gwAnswer(8, 100, 50)}, 160},
-		{[]logCounts{gwAnswer(9, 200, 2), gwAnswer(8, 100, 51)}, 163}, // 7 restarted as 9
+		{1000, []logCounts{gwAnswer(7, 100, 100), gwAnswer(8, 100, 50)}, 150},
+		{1060, []logCounts{gwAnswer(8, 100, 50)}, 150},                        // 7 missed the refresh
+		{1120, []logCounts{gwAnswer(7, 100, 100), gwAnswer(8, 100, 50)}, 150}, // and is back
+		{1180, []logCounts{gwAnswer(7, 100, 110), gwAnswer(8, 100, 50)}, 160},
+		{1240, []logCounts{gwAnswer(9, 1200, 2), gwAnswer(8, 100, 51)}, 163}, // 7 restarted as 9
 	}
 	for i, s := range steps {
-		if got := fleetWarn(t, c, s.answers...); got != s.want {
+		if got := fleetWarn(t, c, s.now, s.answers...); got != s.want {
 			t.Fatalf("step %d: warn = %v, want %v", i, got, s.want)
 		}
 	}
@@ -368,14 +371,30 @@ func TestFleetLogCountsStayMonotonic(t *testing.T) {
 // does not count again the history of the processes already running.
 func TestFleetLogCountsOlderProcessesStartAtZero(t *testing.T) {
 	c := &collector{namespace: "cernbox", attrFile: "/nonexistent", errors: map[string]float64{}, logsSince: 150}
-	if got := fleetWarn(t, c, gwAnswer(7, 100, 100)); got != 0 {
+	if got := fleetWarn(t, c, 200, gwAnswer(7, 100, 100)); got != 0 {
 		t.Fatalf("first refresh: warn = %v, want 0", got)
 	}
-	if got := fleetWarn(t, c, gwAnswer(7, 100, 105)); got != 5 {
+	if got := fleetWarn(t, c, 260, gwAnswer(7, 100, 105)); got != 5 {
 		t.Fatalf("second refresh: warn = %v, want 5", got)
 	}
-	// A process started after the collector counts from its own start.
-	if got := fleetWarn(t, c, gwAnswer(7, 100, 105), gwAnswer(9, 200, 3)); got != 8 {
+	// A process started since the previous refresh counts from its own start.
+	if got := fleetWarn(t, c, 320, gwAnswer(7, 100, 105), gwAnswer(9, 300, 3)); got != 8 {
 		t.Fatalf("third refresh: warn = %v, want 8", got)
+	}
+}
+
+// TestFleetLogCountsAfterTTL checks a process forgotten after a long outage
+// does not count its history again when it comes back.
+func TestFleetLogCountsAfterTTL(t *testing.T) {
+	c := &collector{namespace: "cernbox", attrFile: "/nonexistent", errors: map[string]float64{}}
+	if got := fleetWarn(t, c, 1000, gwAnswer(7, 500, 100)); got != 100 {
+		t.Fatalf("first refresh: warn = %v, want 100", got)
+	}
+	later := int64(1000 + 25*3600) // past the TTL: 7 is forgotten
+	if got := fleetWarn(t, c, later, gwAnswer(8, 600, 0)); got != 100 {
+		t.Fatalf("during the outage: warn = %v, want 100", got)
+	}
+	if got := fleetWarn(t, c, later+60, gwAnswer(7, 500, 100), gwAnswer(8, 600, 0)); got != 100 {
+		t.Fatalf("after the outage: warn = %v, want 100", got)
 	}
 }
