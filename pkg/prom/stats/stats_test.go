@@ -269,3 +269,26 @@ func TestCounterSuffixAndSelfMetrics(t *testing.T) {
 		t.Errorf("refresh timestamp missing: %v", got)
 	}
 }
+
+func TestNewWithoutStatsSectionIsDisabled(t *testing.T) {
+	cols, err := New(context.Background(), map[string]any{
+		"logs": map[string]any{"namespace": "revad"},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(cols) != 0 {
+		t.Fatalf("expected no collector without a stats section, got %d", len(cols))
+	}
+}
+
+func TestNewWithStatsSectionIsEnabled(t *testing.T) {
+	ctx := t.Context()
+	cols, err := New(ctx, map[string]any{"stats": map[string]any{}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(cols) != 1 {
+		t.Fatalf("expected the stats collector with a stats section, got %d", len(cols))
+	}
+}

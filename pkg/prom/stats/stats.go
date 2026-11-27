@@ -73,8 +73,13 @@ type config struct {
 // DefaultOwnerAttributesFile is the conventional owner-attributes path.
 const DefaultOwnerAttributesFile = "/etc/revad/owner-attributes.json"
 
-// New builds the collector and starts its refresh loop.
+// New builds the collector and starts its refresh loop. The collector is
+// opt-in: without a stats section in the prometheus service config it is
+// not started, so a revad can serve /metrics without querying the fleet.
 func New(ctx context.Context, m map[string]any) ([]prometheus.Collector, error) {
+	if _, ok := m["stats"]; !ok {
+		return nil, nil
+	}
 	var c config
 	if err := cfg.Decode(m, &c); err != nil {
 		return nil, err
