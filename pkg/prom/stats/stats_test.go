@@ -315,3 +315,67 @@ func TestFleetLogCounts(t *testing.T) {
 		t.Errorf("got %d log series, want 12: %v", n, got)
 	}
 }
+
+func TestNonPositiveIntervalsRejected(t *testing.T) {
+	for _, key := range []string{"refresh_interval", "log_counts_interval"} {
+		for _, v := range []string{"0s", "-1m"} {
+			ctx, cancel := context.WithCancel(context.Background())
+			_, err := New(ctx, map[string]any{"stats": map[string]any{key: v}})
+			cancel()
+			if err == nil {
+				t.Errorf("%s = %s: want a config error", key, v)
+			}
+		}
+	}
+}
+
+// fleetWarn refreshes the log counts with the given answers and returns the
+// warn series of the gateway on 10.0.0.4.
+func fleetWarn(t *testing.T, c *collector, answers ...logCounts) float64 {
+	t.Helper()
+	c.fleet = fakeFleet{logCounts: answers}
+	c.refreshLogCounts(context.Background())
+	return gather(t, c)["cernbox_fleet_log_messages_total{host=10.0.0.4,level=warn,service=gateway}"]
+}
+
+func gwAnswer(pid int, start int64, warn uint64) logCounts {
+	return logCounts{Node: fmt.Sprintf("10.0.0.4:%d/gateway", 9000+pid), PID: pid, Start: start,
+		Config: "/etc/revad/revad-gateway.toml", Counts: map[string]uint64{"warn": warn}}
+}
+
+// TestFleetLogCountsStayMonotonic checks that the series sharing processes
+// never go down when a process misses a refresh or restarts.
+func TestFleetLogCountsStayMonotonic(t *testing.T) {
+	c := &collector{namespace: "cernbox", attrFile: "/nonexistent", errors: map[string]float64{}}
+	steps := []struct {
+		answers []logCounts
+		want    float64
+	}{
+		{[]logCounts{gwAnswer(7, 100, 100), gwAnswer(8, 100, 50)}, 150},
+		{[]logCounts{gwAnswer(8, 100, 50)}, 150},                        // 7 missed the refresh
+		{[]logCounts{gwAnswer(7, 100, 100), gwAnswer(8, 100, 50)}, 150}, // and is back
+		{[]logCounts{gwAnswer(7, 100, 110), gwAnswer(8, 100, 50)}, 160},
+		{[]logCounts{gwAnswer(9, 200, 2), gwAnswer(8, 100, 51)}, 163}, // 7 restarted as 9
+	}
+	for i, s := range steps {
+		if got := fleetWarn(t, c, s.answers...); got != s.want {
+			t.Fatalf("step %d: warn = %v, want %v", i, got, s.want)
+		}
+	}
+}
+
+// TestFleetLogCountsOlderProcessesStartAtZero checks a restarted collector
+// does not count again the history of the processes already running.
+func TestFleetLogCountsOlderProcessesStartAtZero(t *testing.T) {
+	c := &collector{namespace: "cernbox", attrFile: "/nonexistent", errors: map[string]float64{}, logsSince: 150}
+	if got := fleetWarn(t, c, gwAnswer(7, 100, 100)); got != 0 {
+		t.Fatalf("first refresh: warn = %v, want 0", got)
+	}
+	if got := fleetWarn(t, c, gwAnswer(7, 100, 105)); got != 5 {
+		t.Fatalf("second refresh: warn = %v, want 5", got)
+	}
+	// A process started after the collector counts from its own start.
+	if got := fleetWarn(t, c, gwAnswer(7, 100, 105), gwAnswer(9, 200, 3)); got != 8 {
+		t.Fatalf("third refresh: warn = %v, want 8", got)
+	}
+}

@@ -21,7 +21,7 @@ package stats
 import (
 	"context"
 	"encoding/json"
-	"fmt"
+	"maps"
 	"path"
 	"strings"
 	"time"
@@ -98,40 +98,88 @@ func (c *collector) runLogCounts(ctx context.Context, interval time.Duration) {
 	}
 }
 
+// logProcess is one revad process of the fleet.
+type logProcess struct {
+	host  string
+	pid   int
+	start int64
+}
+
+// logSeries is one exported series: the processes of a host sharing a config
+// file name are summed into it.
+type logSeries struct{ service, host, level string }
+
+// logProcessState is what a process last reported.
+type logProcessState struct {
+	name   string
+	counts map[string]uint64
+	seen   time.Time
+}
+
+// logProcessTTL is how long a process that stopped answering is remembered,
+// so that a node back from an outage is not counted twice.
+const logProcessTTL = 24 * time.Hour
+
+// refreshLogCounts adds to each series what its processes logged since the
+// previous refresh. The series only grow: a process that misses a refresh, or
+// restarts, leaves what it already contributed. A process already running
+// when the collector started counts from its first answer, so a restart of
+// the collector does not count the fleet's history again.
 func (c *collector) refreshLogCounts(ctx context.Context) {
 	all, err := c.fleet.InvokeLogCounts(ctx)
 	if err != nil {
 		appctx.GetLogger(ctx).Warn().Err(err).Msg("prom stats: cannot read the fleet log counts")
 		return
 	}
-	desc := prometheus.NewDesc(c.namespace+"_fleet_log_messages_total",
-		"Log messages at warn level or above, per revad process of the fleet.",
-		[]string{"service", "host", "level"}, nil)
-
-	type process struct{ host, pid, start string }
-	type series struct{ service, host, level string }
-	seen := map[process]bool{}
-	sums := map[series]uint64{}
-	for _, lc := range all {
-		host, svc := splitNode(lc.Node)
-		p := process{host, fmt.Sprint(lc.PID), fmt.Sprint(lc.Start)}
-		if seen[p] {
-			continue
-		}
-		seen[p] = true
-		name := processName(lc.Config, svc)
-		for lvl, n := range lc.Counts {
-			sums[series{name, host, lvl}] += n
-		}
-	}
-	metrics := make([]prometheus.Metric, 0, len(sums))
-	for s, n := range sums {
-		metrics = append(metrics, prometheus.MustNewConstMetric(desc, prometheus.CounterValue, float64(n), s.service, s.host, s.level))
-	}
+	now := time.Now()
 
 	c.mu.Lock()
+	defer c.mu.Unlock()
+	if c.logProcs == nil {
+		c.logProcs = map[logProcess]*logProcessState{}
+		c.logTotals = map[logSeries]uint64{}
+	}
+	done := map[logProcess]bool{}
+	for _, lc := range all {
+		host, svc := splitNode(lc.Node)
+		p := logProcess{host, lc.PID, lc.Start}
+		if done[p] { // one answer per service of the process
+			continue
+		}
+		done[p] = true
+		st, known := c.logProcs[p]
+		if !known {
+			st = &logProcessState{name: processName(lc.Config, svc), counts: map[string]uint64{}}
+			if lc.Start < c.logsSince {
+				maps.Copy(st.counts, lc.Counts)
+			}
+			c.logProcs[p] = st
+		}
+		st.seen = now
+		for lvl, n := range lc.Counts {
+			k := logSeries{st.name, host, lvl}
+			if prev := st.counts[lvl]; n > prev {
+				c.logTotals[k] += n - prev
+			} else if _, ok := c.logTotals[k]; !ok {
+				c.logTotals[k] = 0
+			}
+			st.counts[lvl] = max(st.counts[lvl], n)
+		}
+	}
+	for p, st := range c.logProcs {
+		if now.Sub(st.seen) > logProcessTTL {
+			delete(c.logProcs, p)
+		}
+	}
+
+	desc := prometheus.NewDesc(c.namespace+"_fleet_log_messages_total",
+		"Log messages at warn level or above of the fleet's revad processes, summed per host and config file name.",
+		[]string{"service", "host", "level"}, nil)
+	metrics := make([]prometheus.Metric, 0, len(c.logTotals))
+	for s, n := range c.logTotals {
+		metrics = append(metrics, prometheus.MustNewConstMetric(desc, prometheus.CounterValue, float64(n), s.service, s.host, s.level))
+	}
 	c.logMetrics = metrics
-	c.mu.Unlock()
 }
 
 // splitNode splits a node id "host:port/service".
