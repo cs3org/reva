@@ -51,3 +51,20 @@ func TestUnprotectedIncludesTokenPath(t *testing.T) {
 		t.Fatalf("expected %q exactly once in unprotected routes, got %d in %v", tokenPath, count, paths)
 	}
 }
+
+func TestUnprotectedIncludesNotificationsPath(t *testing.T) {
+	s := &svc{}
+	r := router.New()
+	s.Routes(r)
+	paths := r.Unprotected()
+
+	count := 0
+	for _, p := range paths {
+		if p == "/ocm/notifications" {
+			count++
+		}
+	}
+	if count != 1 {
+		t.Fatalf("expected /ocm/notifications exactly once in unprotected routes, got %d in %v", count, paths)
+	}
+}
