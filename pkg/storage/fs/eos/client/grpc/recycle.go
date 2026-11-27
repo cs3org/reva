@@ -3,6 +3,7 @@ package eosgrpc
 import (
 	"context"
 	"fmt"
+	"syscall"
 	"time"
 
 	erpc "github.com/cern-eos/go-eosgrpc"
@@ -91,7 +92,7 @@ func (c *Client) ListDeletedEntries(ctx context.Context, auth eosclient.Authoriz
 }
 
 // RestoreDeletedEntry restores a deleted entry.
-func (c *Client) RestoreDeletedEntry(ctx context.Context, auth eosclient.Authorization, key string) error {
+func (c *Client) RestoreDeletedEntry(ctx context.Context, auth eosclient.Authorization, key string, force bool) error {
 	log := appctx.GetLogger(ctx)
 	log.Info().Str("func", "RestoreDeletedEntries").Str("uid,gid", auth.Role.UID+","+auth.Role.GID).Str("key", key).Msg("")
 
@@ -105,7 +106,8 @@ func (c *Client) RestoreDeletedEntry(ctx context.Context, auth eosclient.Authori
 		Recycle: &erpc.RecycleProto{
 			Subcmd: &erpc.RecycleProto_Restore{
 				Restore: &erpc.RecycleProto_RestoreProto{
-					Key: key,
+					Key:           key,
+					ForceOrigName: force,
 				},
 			},
 		},
@@ -121,6 +123,13 @@ func (c *Client) RestoreDeletedEntry(ctx context.Context, auth eosclient.Authori
 
 	if resp == nil {
 		return errtypes.InternalError(fmt.Sprintf("nil response for uid: '%s' key: '%s'", auth.Role.UID, key))
+	}
+
+	// EOS gives the result of a recycle command in the recycle response, not in the error.
+	if code := resp.GetRecycle().GetCode(); code == int64(syscall.EEXIST) {
+		return errtypes.AlreadyExists("eosclient: an item is already at the original path of " + key)
+	} else if code != 0 {
+		return errtypes.InternalError(fmt.Sprintf("eosclient: cannot restore %s: %s (code: %d)", key, resp.GetRecycle().GetMsg(), code))
 	}
 
 	if resp.GetError() != nil {

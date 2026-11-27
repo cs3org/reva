@@ -63,6 +63,12 @@ func (fs *Eosfs) ListRecycle(ctx context.Context, basePath, key, relativePath st
 	log := appctx.GetLogger(ctx)
 	log.Debug().Str("basePath", basePath).Str("key", key).Str("relativePath", relativePath).Msgf("ListRecycle")
 
+	// The EOS recycle bin is flat, so an item in it cannot be opened.
+	// Without this check, a client that opens a folder gets the whole bin.
+	if key != "" {
+		return nil, errtypes.NotSupported("eosfs: ListRecycle: cannot list the content of a recycled item")
+	}
+
 	u, ok := appctx.ContextGetUser(ctx)
 	if !ok {
 		return nil, errtypes.PermissionDenied("no user found in context for ListRecycle")
@@ -166,7 +172,9 @@ func (fs *Eosfs) RestoreRecycleItem(ctx context.Context, basePath, key, relative
 		}
 	}
 
-	return fs.c.RestoreDeletedEntry(ctx, auth, key)
+	// EOS does not give the original path of key, thus a collision is a plain AlreadyExists: the
+	// client knows that it is the item of the call.
+	return fs.c.RestoreDeletedEntry(ctx, auth, key, force)
 }
 
 func (fs *Eosfs) getRecycleIdAndAuth(ctx context.Context, u *userpb.User, md *provider.ResourceInfo) (recycleid string, auth eosclient.Authorization, err error) {

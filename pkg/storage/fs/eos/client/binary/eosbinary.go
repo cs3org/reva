@@ -838,9 +838,16 @@ func (c *Client) ListDeletedEntries(ctx context.Context, auth eosclient.Authoriz
 }
 
 // RestoreDeletedEntry restores a deleted entry.
-func (c *Client) RestoreDeletedEntry(ctx context.Context, auth eosclient.Authorization, key string) error {
+func (c *Client) RestoreDeletedEntry(ctx context.Context, auth eosclient.Authorization, key string, force bool) error {
 	args := []string{"recycle", "restore", key}
+	if force {
+		args = []string{"recycle", "restore", "-f", key}
+	}
 	_, _, err := c.executeEOS(ctx, args, auth)
+	var exErr *exec.ExitError
+	if errors.As(err, &exErr) && exErr.ExitCode() == 17 { // EEXIST
+		return errtypes.AlreadyExists("eosclient: an item is already at the original path of " + key)
+	}
 	return err
 }
 
