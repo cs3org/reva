@@ -1552,3 +1552,72 @@ func TestShallowExpiredAncestorDoesNotShadow(t *testing.T) {
 		t.Errorf("writes = %+v, want only the child", grants.writes)
 	}
 }
+
+// With more than one batch, the run reports the batches done, and the progress
+// inside the batch goes to the details.
+func TestShallowProgressCountsBatches(t *testing.T) {
+	store := &fakeStore{shares: []storedShare{
+		shared(130, "space-a", "inode-130", "jdoe", false, ocsRead),
+		shared(131, "space-b", "inode-131", "jdoe", false, ocsRead),
+	}}
+	gw := &fakeGateway{
+		users: map[string]bool{"jdoe": true},
+		paths: map[string]string{
+			"eosuser/inode-130": "/eos/project/a/one",
+			"eosuser/inode-131": "/eos/project/b/one",
+		},
+	}
+	grants := &fakeGrants{grants: map[string][]*provider.Grant{
+		"eosuser/inode-130": {grant(provider.GranteeType_GRANTEE_TYPE_USER, "jdoe", ocsRead)},
+		"eosuser/inode-131": {grant(provider.GranteeType_GRANTEE_TYPE_USER, "jdoe", ocsRead)},
+	}}
+
+	var log progressLog
+	job := shallowJob(store, gw, grants)
+	job.SpacesPerBatch = 1
+	if _, err := job.run(context.Background(), "", &log); err != nil {
+		t.Fatalf("run: %v", err)
+	}
+
+	for _, p := range log {
+		if p.Unit != "batches" || p.Total != 2 {
+			t.Fatalf("progress = %+v, want it in batches out of 2", p)
+		}
+	}
+	resolve := slices.IndexFunc(log, func(p rjobs.Progress) bool { return p.Phase == "resolve" })
+	if resolve < 0 {
+		t.Fatalf("no resolve progress: %+v", log)
+	}
+	if p := log[resolve]; p.Done != 0 || p.Details["batch_unit"] != "shares" || p.Details["batch_total"] != 1 {
+		t.Errorf("resolve progress = %+v, want 0 batches done and 1 share in the batch", p)
+	}
+	if p := log[len(log)-1]; p.Done != 2 {
+		t.Errorf("last progress = %+v, want 2/2 batches", p)
+	}
+}
+
+// A run on one space is one batch, so it reports the counts of that batch.
+func TestShallowProgressOfOneSpace(t *testing.T) {
+	store := &fakeStore{shares: []storedShare{
+		shared(132, "space-a", "inode-132", "jdoe", false, ocsRead),
+	}}
+	gw := &fakeGateway{
+		users: map[string]bool{"jdoe": true},
+		paths: map[string]string{"eosuser/inode-132": "/eos/project/a/one"},
+	}
+	grants := &fakeGrants{grants: map[string][]*provider.Grant{
+		"eosuser/inode-132": {grant(provider.GranteeType_GRANTEE_TYPE_USER, "jdoe", ocsRead)},
+	}}
+
+	var log progressLog
+	job := shallowJob(store, gw, grants)
+	job.SpacesPerBatch = 50
+	if _, err := job.run(context.Background(), "space-a", &log); err != nil {
+		t.Fatalf("run: %v", err)
+	}
+	for _, p := range log {
+		if p.Unit == "batches" {
+			t.Fatalf("progress = %+v, want no batches for one space", p)
+		}
+	}
+}
