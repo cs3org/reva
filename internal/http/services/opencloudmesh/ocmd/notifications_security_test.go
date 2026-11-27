@@ -326,6 +326,9 @@ func TestNotificationDiscoveryDoesNotLogPeerResponse(t *testing.T) {
 	if strings.Contains(logs.String(), marker) || strings.Contains(rr.Body.String(), marker) {
 		t.Fatal("discovery response appeared in the notification logs or response")
 	}
+	if strings.Contains(logs.String(), "malformed OCM discovery response") {
+		t.Fatal("shared discovery diagnostics appeared in notification logs")
+	}
 }
 
 func TestNotificationDiscoveryUsesNetworkPolicy(t *testing.T) {

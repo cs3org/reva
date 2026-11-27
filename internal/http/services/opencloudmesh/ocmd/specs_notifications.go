@@ -334,12 +334,7 @@ func filePermissions(file map[string]json.RawMessage) ([]string, error) {
 	perms := make([]string, 0, len(elems))
 	for _, e := range elems {
 		var p string
-		if isJSONNull(e) || json.Unmarshal(e, &p) != nil {
-			return nil, invalidField(field)
-		}
-		switch p {
-		case "read", "create", "update", "delete", "write", "share", "view":
-		default:
+		if isJSONNull(e) || json.Unmarshal(e, &p) != nil || !isNotificationPermission(p) {
 			return nil, invalidField(field)
 		}
 		perms = append(perms, p)
@@ -347,12 +342,24 @@ func filePermissions(file map[string]json.RawMessage) ([]string, error) {
 	return perms, nil
 }
 
+func isNotificationPermission(permission string) bool {
+	switch permission {
+	case "read", "create", "update", "delete", "write", "share", "view":
+		return true
+	}
+	return false
+}
+
 // Share grants are never collections or federation memberships.
+func isReservedGrantResourceType(resourceType string) bool {
+	return resourceType == "collection" || resourceType == "federation"
+}
+
 func (n *Notification) requireGrantResourceType() error {
-	switch n.ResourceType {
-	case "":
+	if n.ResourceType == "" {
 		return missingField("resourceType")
-	case "collection", "federation":
+	}
+	if isReservedGrantResourceType(n.ResourceType) {
 		return invalidField("resourceType")
 	}
 	return nil

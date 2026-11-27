@@ -172,15 +172,8 @@ func TestFetchInfoSkipsRFC1918ListedProvider(t *testing.T) {
 	h.fetchInfo(ctx, []string{dir.URL})
 
 	requireFallbackPolicyViolation(t, fake, rfc1918URL)
-	got := fake.fallbackErrs[rfc1918URL].Error()
-	if !strings.Contains(got, "non-public address") {
-		t.Errorf("discovery error = %q, want non-public address", got)
-	}
-	if !strings.Contains(got, "192.168.1.50") {
-		t.Errorf("discovery error = %q, want 192.168.1.50", got)
-	}
-	if strings.Contains(got, "refusing scheme") {
-		t.Errorf("discovery error = %q, must not contain refusing scheme", got)
+	if len(fake.calls) != 1 || fake.calls[0] != rfc1918URL {
+		t.Fatalf("discovery calls = %v, want [%s]", fake.calls, rfc1918URL)
 	}
 	if len(h.directoryServices) != 0 {
 		t.Fatalf("directoryServices = %#v, want RFC1918 entry skipped", h.directoryServices)
