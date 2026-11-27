@@ -25,5 +25,6 @@ import (
 	_ "github.com/cs3org/reva/v3/internal/serverless/services/notifications"
 	_ "github.com/cs3org/reva/v3/internal/serverless/services/plugins"
 	_ "github.com/cs3org/reva/v3/internal/serverless/services/reconciliation"
+	_ "github.com/cs3org/reva/v3/internal/serverless/services/reminders"
 	// Add your own service here.
 )
