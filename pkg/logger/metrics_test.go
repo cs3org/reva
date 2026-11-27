@@ -70,3 +70,23 @@ func TestLogMessagesCounterHonoursLevel(t *testing.T) {
 		t.Error("warn filtered by SetLevel was counted")
 	}
 }
+
+func TestMessageCounts(t *testing.T) {
+	l := New(WithWriter(io.Discard, JSONMode))
+	c0 := MessageCounts()
+	l.Error().Msg("e")
+	l.Warn().Msg("w")
+	l.Info().Msg("i")
+	c1 := MessageCounts()
+	if c1["error"]-c0["error"] != 1 || c1["warn"]-c0["warn"] != 1 {
+		t.Fatalf("got %v then %v, want warn and error +1", c0, c1)
+	}
+	if _, ok := c1["info"]; ok {
+		t.Fatal("info must not be reported")
+	}
+	for _, lvl := range []string{"warn", "error", "fatal", "panic"} {
+		if _, ok := c1[lvl]; !ok {
+			t.Errorf("level %q missing from %v", lvl, c1)
+		}
+	}
+}

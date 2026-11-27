@@ -67,6 +67,9 @@ type config struct {
 		// OwnerAttributes are the attribute keys that become labels. Empty
 		// means all the keys found in the file.
 		OwnerAttributes []string `mapstructure:"owner_attributes"`
+		// LogCountsInterval is how often the fleet's log counts are read
+		// (default 1m): they are cheap, and hourly panels need them fresh.
+		LogCountsInterval string `mapstructure:"log_counts_interval"`
 	} `mapstructure:"stats"`
 }
 
@@ -79,13 +82,13 @@ func New(ctx context.Context, m map[string]any) ([]prometheus.Collector, error) 
 	if err := cfg.Decode(m, &c); err != nil {
 		return nil, err
 	}
-	interval := 5 * time.Minute
-	if c.Stats.RefreshInterval != "" {
-		d, err := time.ParseDuration(c.Stats.RefreshInterval)
-		if err != nil {
-			return nil, fmt.Errorf("prom stats: refresh_interval: %w", err)
-		}
-		interval = d
+	interval, err := parseInterval("refresh_interval", c.Stats.RefreshInterval, 5*time.Minute)
+	if err != nil {
+		return nil, err
+	}
+	logInterval, err := parseInterval("log_counts_interval", c.Stats.LogCountsInterval, time.Minute)
+	if err != nil {
+		return nil, err
 	}
 	namespace := c.Stats.Namespace
 	if namespace == "" {
@@ -103,9 +106,26 @@ func New(ctx context.Context, m map[string]any) ([]prometheus.Collector, error) 
 		attrKeys:  c.Stats.OwnerAttributes,
 		fleet:     adminFleet{},
 		errors:    map[string]float64{},
+		logsSince: time.Now().Unix(),
 	}
 	go col.run(ctx, interval)
+	go col.runLogCounts(ctx, logInterval)
 	return []prometheus.Collector{col}, nil
+}
+
+// parseInterval parses a positive duration, def when empty.
+func parseInterval(key, v string, def time.Duration) (time.Duration, error) {
+	if v == "" {
+		return def, nil
+	}
+	d, err := time.ParseDuration(v)
+	if err != nil {
+		return 0, fmt.Errorf("prom stats: %s: %w", key, err)
+	}
+	if d <= 0 {
+		return 0, fmt.Errorf("prom stats: %s: must be positive, got %s", key, v)
+	}
+	return d, nil
 }
 
 // collector caches the fleet's statistics as const metrics.
@@ -116,10 +136,15 @@ type collector struct {
 	attrKeys  []string
 	fleet     fleet
 
-	mu      sync.Mutex
-	cached  []prometheus.Metric
-	errors  map[string]float64 // per service, cumulative refresh errors
-	refresh map[string]refreshInfo
+	mu         sync.Mutex
+	cached     []prometheus.Metric
+	logMetrics []prometheus.Metric
+	logsSince  int64 // unix start of the previous log counts refresh
+	clock      func() time.Time
+	logProcs   map[logProcess]*logProcessState
+	logTotals  map[logSeries]uint64
+	errors     map[string]float64 // per service, cumulative refresh errors
+	refresh    map[string]refreshInfo
 }
 
 type refreshInfo struct {
@@ -135,6 +160,9 @@ func (c *collector) Collect(ch chan<- prometheus.Metric) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	for _, m := range c.cached {
+		ch <- m
+	}
+	for _, m := range c.logMetrics {
 		ch <- m
 	}
 	for _, m := range c.selfMetricsLocked() {

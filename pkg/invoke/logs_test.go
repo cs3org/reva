@@ -119,11 +119,11 @@ func TestDefaultsRegistry(t *testing.T) {
 	RegisterInstance(id, "svc-y", nil, nil, nil)
 
 	specs, ok := Invocations(id)
-	if !ok || len(specs) < 7 || specs[0].Name != ActivityInvocation || specs[1].Name != ConfigInvocation ||
-		specs[2].Name != LogsInvocation || specs[3].Name != LogLevelInvocation ||
-		specs[4].Name != RotationInvocation || specs[5].Name != StackInvocation ||
-		specs[6].Name != VersionInvocation {
-		t.Fatalf("expected [activity, config, logs, loglevel, rotation, stack, version] leading the catalog, got %+v", specs)
+	if !ok || len(specs) < 8 || specs[0].Name != ActivityInvocation || specs[1].Name != ConfigInvocation ||
+		specs[2].Name != LogsInvocation || specs[3].Name != LogCountsInvocation ||
+		specs[4].Name != LogLevelInvocation || specs[5].Name != RotationInvocation ||
+		specs[6].Name != StackInvocation || specs[7].Name != VersionInvocation {
+		t.Fatalf("expected [activity, config, logs, logcounts, loglevel, rotation, stack, version] leading the catalog, got %+v", specs)
 	}
 
 	stack, err := Invoke(context.Background(), id, StackInvocation, nil)

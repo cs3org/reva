@@ -38,6 +38,8 @@ type fleet interface {
 	// InvokeStats runs the stats invocation on a service and returns the
 	// payloads that its instances streamed.
 	InvokeStats(ctx context.Context, service string) ([]*stats.Payload, error)
+	// InvokeLogCounts returns the log counts of every instance of the fleet.
+	InvokeLogCounts(ctx context.Context) ([]logCounts, error)
 }
 
 // adminFleet is the production fleet, reached through the Admin API as
