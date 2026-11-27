@@ -7,4 +7,4 @@ through the Admin API every few minutes. Sites that relied on the
 implicit default must add an (even empty) stats section to keep the
 stats metrics.
 
-https://github.com/cs3org/reva/pull/TBD
+https://github.com/cs3org/reva/pull/6063
