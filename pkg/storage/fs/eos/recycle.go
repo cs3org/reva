@@ -128,7 +128,7 @@ func (fs *Eosfs) ListRecycle(ctx context.Context, basePath, key, relativePath st
 	return recycleEntries, nil
 }
 
-func (fs *Eosfs) RestoreRecycleItem(ctx context.Context, basePath, key, relativePath string, restoreRef *provider.Reference) error {
+func (fs *Eosfs) RestoreRecycleItem(ctx context.Context, basePath, key, relativePath string, restoreRef *provider.Reference, force bool) error {
 	var auth eosclient.Authorization
 	var err error
 

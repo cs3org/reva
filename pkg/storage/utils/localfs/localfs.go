@@ -29,6 +29,7 @@ import (
 	"path"
 	"strconv"
 	"strings"
+	"syscall"
 	"time"
 
 	grouppb "github.com/cs3org/go-cs3apis/cs3/identity/group/v1beta1"
@@ -1440,7 +1441,7 @@ func (fs *localfs) ListRecycle(ctx context.Context, basePath, key, relativePath 
 	return items, nil
 }
 
-func (fs *localfs) RestoreRecycleItem(ctx context.Context, basePath, key, relativePath string, restoreRef *provider.Reference) error {
+func (fs *localfs) RestoreRecycleItem(ctx context.Context, basePath, key, relativePath string, restoreRef *provider.Reference, force bool) error {
 	suffix := path.Ext(key)
 	if len(suffix) == 0 || !strings.HasPrefix(suffix, ".d") {
 		return errors.New("localfs: invalid trash item suffix")
@@ -1461,16 +1462,24 @@ func (fs *localfs) RestoreRecycleItem(ctx context.Context, basePath, key, relati
 		localRestorePath = fs.wrap(ctx, filePath)
 	}
 
-	if _, err = os.Stat(localRestorePath); err == nil {
-		return errors.New("localfs: can't restore - file already exists at original path")
-	}
-
 	rp := fs.wrapRecycleBin(ctx, key)
 	if _, err = os.Stat(rp); err != nil {
 		if os.IsNotExist(err) {
 			return errtypes.NotFound(key)
 		}
 		return errors.Wrap(err, "localfs: error stating "+rp)
+	}
+
+	if info, err := os.Lstat(localRestorePath); err == nil {
+		// As on EOS, the collision is the item of the call, thus it is not in the error.
+		if !force {
+			return errtypes.AlreadyExists("localfs: an item already exists at the original path")
+		}
+		// As EOS does, the item in the way keeps its inode in hex as suffix.
+		aside := fmt.Sprintf("%s.%016x", localRestorePath, info.Sys().(*syscall.Stat_t).Ino)
+		if err := os.Rename(localRestorePath, aside); err != nil {
+			return errors.Wrap(err, "localfs: could not move the existing item aside")
+		}
 	}
 
 	if err := os.Rename(rp, localRestorePath); err != nil {

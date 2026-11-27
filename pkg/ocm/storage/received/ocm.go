@@ -671,7 +671,7 @@ func (d *driver) ListRecycle(ctx context.Context, basePath, key, relativePath st
 	return nil, errtypes.NotSupported("operation not supported")
 }
 
-func (d *driver) RestoreRecycleItem(ctx context.Context, basePath, key, relativePath string, restoreRef *provider.Reference) error {
+func (d *driver) RestoreRecycleItem(ctx context.Context, basePath, key, relativePath string, restoreRef *provider.Reference, force bool) error {
 	return errtypes.NotSupported("operation not supported")
 }
 

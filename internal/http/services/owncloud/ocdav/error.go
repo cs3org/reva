@@ -61,6 +61,8 @@ type exception struct {
 	code    code
 	message string
 	header  string
+	// innerXML adds elements to the error, such as the items that a restore did not put back.
+	innerXML []byte
 }
 
 // Marshal just calls the xml marshaller for a given exception.
@@ -72,6 +74,7 @@ func Marshal(e exception, errorCode string) ([]byte, error) {
 		Message:   e.message,
 		Header:    e.header,
 		ErrorCode: errorCode,
+		InnerXML:  e.innerXML,
 	})
 	if err != nil {
 		return []byte(""), err

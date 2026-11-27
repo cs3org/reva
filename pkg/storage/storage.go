@@ -34,6 +34,31 @@ import (
 // Clients must not open an item without it, such as a folder in a flat recycle bin.
 const RecycleItemBrowsable = "browsable"
 
+// RecycleRestoreForce is the Opaque key of a RestoreRecycleItem request that sets force.
+// RecycleRestoreCollisions is the Opaque key of the response with the RecycleCollisions, as JSON.
+const (
+	RecycleRestoreForce      = "force"
+	RecycleRestoreCollisions = "collisions"
+)
+
+// RecycleCollision is an item that RestoreRecycleItem left in the recycle bin, because another item is at its
+// original path. Key restores this item alone. Path is its original path, relative to the basePath of the call.
+type RecycleCollision struct {
+	Key  string `json:"key"`
+	Path string `json:"path"`
+}
+
+// RecycleCollisions is the error of RestoreRecycleItem without force when items collide. With force, the driver
+// renames each item that is in the way to <name>.<inode>, and restores the recycled item, as EOS does.
+type RecycleCollisions []RecycleCollision
+
+func (c RecycleCollisions) Error() string {
+	return fmt.Sprintf("%d recycled items collide with existing items", len(c))
+}
+
+// IsAlreadyExists implements errtypes.IsAlreadyExists.
+func (RecycleCollisions) IsAlreadyExists() {}
+
 // FS is the interface to implement access to the storage.
 type FS interface {
 	GetHome(ctx context.Context) (string, error)
@@ -51,7 +76,7 @@ type FS interface {
 	DownloadRevision(ctx context.Context, ref *provider.Reference, key string) (io.ReadCloser, error)
 	RestoreRevision(ctx context.Context, ref *provider.Reference, key string) error
 	ListRecycle(ctx context.Context, basePath, key, relativePath string, from, to *typepb.Timestamp) ([]*provider.RecycleItem, error)
-	RestoreRecycleItem(ctx context.Context, basePath, key, relativePath string, restoreRef *provider.Reference) error
+	RestoreRecycleItem(ctx context.Context, basePath, key, relativePath string, restoreRef *provider.Reference, force bool) error
 	PurgeRecycleItem(ctx context.Context, basePath, key, relativePath string) error
 	EmptyRecycle(ctx context.Context) error
 	GetPathByID(ctx context.Context, id *provider.ResourceId) (string, error)

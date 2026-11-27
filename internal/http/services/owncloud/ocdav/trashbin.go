@@ -20,6 +20,7 @@ package ocdav
 
 import (
 	"context"
+	"encoding/json"
 	"encoding/xml"
 	"fmt"
 	"net/http"
@@ -32,6 +33,8 @@ import (
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
+	typespb "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
+	"github.com/rs/zerolog"
 	gstatus "google.golang.org/grpc/status"
 
 	"github.com/cs3org/reva/v3/internal/http/services/owncloud/ocgraph"
@@ -574,31 +577,6 @@ func (h *TrashbinHandler) restore(w http.ResponseWriter, r *http.Request, s *svc
 	successCode := http.StatusCreated // 201 if new resource was created, see https://tools.ietf.org/html/rfc4918#section-9.9.4
 	if dstStatRes.Status.Code == rpc.Code_CODE_OK {
 		successCode = http.StatusNoContent // 204 if target already existed, see https://tools.ietf.org/html/rfc4918#section-9.9.4
-
-		if overwrite != "T" {
-			sublog.Warn().Str("overwrite", overwrite).Msg("dst already exists")
-			w.WriteHeader(http.StatusPreconditionFailed) // 412, see https://tools.ietf.org/html/rfc4918#section-9.9.4
-			b, err := Marshal(exception{
-				code:    SabredavPreconditionFailed,
-				message: "The destination node already exists, and the overwrite header is set to false",
-				header:  HeaderOverwrite,
-			}, "")
-			HandleWebdavError(&sublog, w, b, err)
-			return
-		}
-		// delete existing tree
-		delReq := &provider.DeleteRequest{Ref: dstRef}
-		delRes, err := client.Delete(ctx, delReq)
-		if err != nil {
-			sublog.Error().Err(err).Msg("error sending grpc delete request")
-			w.WriteHeader(ocgraph.GrpcCodeToHTTPStatus(gstatus.Code(err)))
-			return
-		}
-
-		if delRes.Status.Code != rpc.Code_CODE_OK && delRes.Status.Code != rpc.Code_CODE_NOT_FOUND {
-			HandleErrorStatus(&sublog, w, delRes.Status)
-			return
-		}
 	}
 
 	req := &provider.RestoreRecycleItemRequest{
@@ -611,6 +589,12 @@ func (h *TrashbinHandler) restore(w http.ResponseWriter, r *http.Request, s *svc
 		},
 		Key:        path.Join(key, itemPath),
 		RestoreRef: &provider.Reference{Path: dst},
+	}
+	// A restore never overwrites: with force, the storage renames the items that are in the way.
+	if overwrite == "T" {
+		req.Opaque = &typespb.Opaque{Map: map[string]*typespb.OpaqueEntry{
+			storage.RecycleRestoreForce: {Decoder: "plain", Value: []byte("true")},
+		}}
 	}
 
 	res, err := client.RestoreRecycleItem(ctx, req)
@@ -628,6 +612,10 @@ func (h *TrashbinHandler) restore(w http.ResponseWriter, r *http.Request, s *svc
 				message: "Permission denied to restore",
 			}, "")
 			HandleWebdavError(&sublog, w, b, err)
+		}
+		if res.Status.Code == rpc.Code_CODE_ALREADY_EXISTS {
+			writeRestoreCollisions(w, &sublog, res)
+			return
 		}
 		HandleErrorStatus(&sublog, w, res.Status)
 		return
@@ -651,6 +639,42 @@ func (h *TrashbinHandler) restore(w http.ResponseWriter, r *http.Request, s *svc
 	w.Header().Set(HeaderOCETag, info.Etag)
 
 	w.WriteHeader(successCode)
+}
+
+// writeRestoreCollisions answers 412 with the items that the restore did not put back, so that the client can
+// restore each of them again with force. A storage that does not report them gives an empty list.
+func writeRestoreCollisions(w http.ResponseWriter, log *zerolog.Logger, res *provider.RestoreRecycleItemResponse) {
+	var collisions storage.RecycleCollisions
+	if e, ok := res.GetOpaque().GetMap()[storage.RecycleRestoreCollisions]; ok {
+		if err := json.Unmarshal(e.Value, &collisions); err != nil {
+			log.Error().Err(err).Msg("error decoding the restore collisions")
+		}
+	}
+	type collisionXML struct {
+		Key  string `xml:"oc:key"`
+		Path string `xml:"oc:path"`
+	}
+	list := struct {
+		XMLName    xml.Name       `xml:"oc:collisions"`
+		Xmlnsoc    string         `xml:"xmlns:oc,attr"`
+		Collisions []collisionXML `xml:"oc:collision"`
+	}{Xmlnsoc: _nsOwncloud}
+	for _, c := range collisions {
+		list.Collisions = append(list.Collisions, collisionXML{Key: c.Key, Path: c.Path})
+	}
+	inner, err := xml.Marshal(list)
+	if err != nil {
+		log.Error().Err(err).Msg("error encoding the restore collisions")
+	}
+
+	w.WriteHeader(http.StatusPreconditionFailed)
+	b, err := Marshal(exception{
+		code:     SabredavPreconditionFailed,
+		message:  "An item is already at the original path, and the overwrite header is set to false",
+		header:   HeaderOverwrite,
+		innerXML: inner,
+	}, "")
+	HandleWebdavError(log, w, b, err)
 }
 
 // delete has only a key.
