@@ -27,3 +27,7 @@ const (
 )
 
 func (t SpaceType) AsString() string { return string(t) }
+
+// OpaqueIncomplete is the opaque key of a listing that leaves out some items,
+// because their storage did not answer in time.
+const OpaqueIncomplete = "incomplete"

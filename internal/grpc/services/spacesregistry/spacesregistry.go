@@ -30,6 +30,7 @@ import (
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	rpcv1beta1 "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
+	typesv1beta1 "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
 	cachereg "github.com/cs3org/reva/v3/pkg/share/cache/registry"
 
 	"github.com/cs3org/reva/v3/pkg/admin"
@@ -171,14 +172,22 @@ func (s *service) ListStorageSpaces(ctx context.Context, req *provider.ListStora
 	}
 
 	sp := []*provider.StorageSpace{}
+	incomplete := false
 	for _, spaceType := range types {
-		found, err := s.listSpacesByType(ctx, req.Filters, user, spaceType)
+		found, foundIncomplete, err := s.listSpacesByType(ctx, req.Filters, user, spaceType)
 		sp = append(sp, found...)
+		incomplete = incomplete || foundIncomplete
 		if err != nil {
 			return &provider.ListStorageSpacesResponse{Status: status.NewStatusFromErrType(ctx, "error listing storage spaces", err), StorageSpaces: sp}, nil
 		}
 	}
-	return &provider.ListStorageSpacesResponse{Status: status.NewOK(ctx), StorageSpaces: sp}, nil
+	res := &provider.ListStorageSpacesResponse{Status: status.NewOK(ctx), StorageSpaces: sp}
+	if incomplete {
+		res.Opaque = &typesv1beta1.Opaque{Map: map[string]*typesv1beta1.OpaqueEntry{
+			spaces.OpaqueIncomplete: {Decoder: "plain", Value: []byte("true")},
+		}}
+	}
+	return res, nil
 }
 
 // spaceByID returns the space with the given ID, or no space. The ID holds the
@@ -209,60 +218,63 @@ func (s *service) spaceByID(ctx context.Context, user *userpb.User, filters []*p
 	}
 
 	// The catalogue matches the ID itself, with or without the storage ID.
-	return s.listProjects(ctx, filters)
+	sp, _, err := s.listProjects(ctx, filters)
+	return sp, err
 }
 
 // listSpacesByType lists the spaces of the given type that the user can see.
-func (s *service) listSpacesByType(ctx context.Context, filters []*provider.ListStorageSpacesRequest_Filter, user *userpb.User, spaceType spaces.SpaceType) ([]*provider.StorageSpace, error) {
+// incomplete is true when some spaces are left out, because their storage did not answer in time.
+func (s *service) listSpacesByType(ctx context.Context, filters []*provider.ListStorageSpacesRequest_Filter, user *userpb.User, spaceType spaces.SpaceType) ([]*provider.StorageSpace, bool, error) {
 	switch spaceType {
 	case spaces.SpaceTypeHome:
 		home, err := s.userSpace(ctx, user)
 		if err != nil || home == nil {
-			return nil, err
+			return nil, false, err
 		}
-		return []*provider.StorageSpace{home}, nil
+		return []*provider.StorageSpace{home}, false, nil
 	case spaces.SpaceTypeProject:
-		sp, err := s.listProjects(ctx, filters)
+		sp, incomplete, err := s.listProjects(ctx, filters)
 		if err != nil {
-			return nil, err
+			return nil, false, err
 		}
 
 		// For now, we also return public spaces when you query for projects
 		// as the front-end will filter these
-		publicSpaces, err := s.getAllPublicSpaces(ctx)
+		publicSpaces, publicIncomplete, err := s.getAllPublicSpaces(ctx)
 		if err != nil {
 			log.Error().Err(err).Msgf("Failed to get public spaces in call to listSpacesByType with type project")
-			return sp, err
+			return sp, incomplete, err
 		}
-		return append(sp, publicSpaces...), nil
+		return append(sp, publicSpaces...), incomplete || publicIncomplete, nil
 	case spaces.SpaceTypePublic:
 		return s.getAllPublicSpaces(ctx)
 	}
-	return nil, nil
+	return nil, false, nil
 }
 
 // listProjects returns the active projects that match the filters and that the user can see.
-func (s *service) listProjects(ctx context.Context, filters []*provider.ListStorageSpacesRequest_Filter) ([]*provider.StorageSpace, error) {
+func (s *service) listProjects(ctx context.Context, filters []*provider.ListStorageSpacesRequest_Filter) ([]*provider.StorageSpace, bool, error) {
 	resp, err := s.projects.ListStorageSpaces(ctx, &provider.ListStorageSpacesRequest{
 		Filters: filters,
 	}, projects.ProjectStatusActive)
 	if err != nil {
-		return nil, err
+		return nil, false, err
 	}
 	if resp.Status.Code != rpcv1beta1.Code_CODE_OK {
-		return nil, fmt.Errorf("%s: %s", resp.Status.Code.String(), resp.Status.Message)
+		return nil, false, fmt.Errorf("%s: %s", resp.Status.Code.String(), resp.Status.Message)
 	}
-	return s.decorateProjects(ctx, resp.StorageSpaces)
+	sp, incomplete := s.decorateProjects(ctx, resp.StorageSpaces)
+	return sp, incomplete, nil
 }
 
 // decorateProjects adds quota and mtime to each project.
 // If it fails to decorate a project, it is skipped.
-func (s *service) decorateProjects(ctx context.Context, projects []*provider.StorageSpace) ([]*provider.StorageSpace, error) {
+// incomplete is true when a project is skipped because its storage did not answer in time.
+func (s *service) decorateProjects(ctx context.Context, projects []*provider.StorageSpace) (filtered []*provider.StorageSpace, incomplete bool) {
 	log := appctx.GetLogger(ctx)
 	var (
-		filtered []*provider.StorageSpace
-		mu       sync.Mutex
-		wg       sync.WaitGroup
+		mu sync.Mutex
+		wg sync.WaitGroup
 	)
 	for _, proj := range projects {
 		wg.Add(1)
@@ -273,6 +285,11 @@ func (s *service) decorateProjects(ctx context.Context, projects []*provider.Sto
 			log.Debug().Msgf("timeout %f", s.timeoutSkipSpaces.Seconds())
 			if err := s.decorateProject(timeout, proj); err != nil {
 				log.Warn().Err(err).Msgf("Failed to decorate project %s, skipping it", proj.Name)
+				if timeout.Err() != nil {
+					mu.Lock()
+					incomplete = true
+					mu.Unlock()
+				}
 				return
 			}
 			mu.Lock()
@@ -281,7 +298,7 @@ func (s *service) decorateProjects(ctx context.Context, projects []*provider.Sto
 		}(proj)
 	}
 	wg.Wait()
-	return filtered, nil
+	return filtered, incomplete
 }
 
 // projectQuota returns the quota of the project at path, as seen by its owner.
@@ -441,18 +458,24 @@ func (s *service) userSpace(ctx context.Context, user *userpb.User) (*provider.S
 	}, nil
 }
 
-func (s *service) getAllPublicSpaces(ctx context.Context) ([]*provider.StorageSpace, error) {
-	publicSpaces := make([]*provider.StorageSpace, 0)
+// getAllPublicSpaces returns the public spaces whose root can be stat'ed.
+// incomplete is true when a public space is left out, because its storage did not answer in time.
+func (s *service) getAllPublicSpaces(ctx context.Context) (publicSpaces []*provider.StorageSpace, incomplete bool, err error) {
+	ctx, cancel := context.WithTimeout(ctx, s.timeoutSkipSpaces)
+	defer cancel()
+	publicSpaces = make([]*provider.StorageSpace, 0)
 	for spaceName, content := range s.c.PublicSpaces {
 		space, err := s.publicSpace(ctx, spaceName, content)
 		if err != nil {
-			return nil, err
+			return nil, false, err
 		}
 		if space != nil {
 			publicSpaces = append(publicSpaces, space)
+		} else if ctx.Err() != nil {
+			incomplete = true
 		}
 	}
-	return publicSpaces, nil
+	return publicSpaces, incomplete, nil
 }
 
 // getPublicSpaceAt returns the public space at path, or nil when there is none

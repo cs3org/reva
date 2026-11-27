@@ -20,7 +20,10 @@ package spacesregistry
 
 import (
 	"context"
+	"slices"
+	"strings"
 	"testing"
+	"time"
 
 	gateway "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
@@ -57,10 +60,13 @@ func (g *statGateway) GetQuota(context.Context, *gateway.GetQuotaRequest, ...grp
 	return &provider.GetQuotaResponse{Status: &rpcv1beta1.Status{Code: rpcv1beta1.Code_CODE_OK}}, nil
 }
 
+// testClients is installed one time for all tests, because revaservice.SetGlobal keeps the first clients.
 type testClients struct {
 	revaservice.Clients
-	gw *statGateway
+	gw gateway.GatewayAPIClient
 }
+
+var clients = &testClients{}
 
 func (c *testClients) Gateway(context.Context) (gateway.GatewayAPIClient, error) {
 	return c.gw, nil
@@ -83,7 +89,6 @@ func TestListStorageSpacesByIDStatsOnlyTheSpaceOfTheID(t *testing.T) {
 	rootInfo := func(storageID, path string) *provider.ResourceInfo {
 		return &provider.ResourceInfo{Id: &provider.ResourceId{StorageId: storageID, SpaceId: spaces.EncodeSpaceID(path)}, Path: path}
 	}
-	clients := &testClients{}
 	revaservice.SetGlobal(clients)
 
 	for name, tc := range map[string]struct {
@@ -110,10 +115,11 @@ func TestListStorageSpacesByIDStatsOnlyTheSpaceOfTheID(t *testing.T) {
 	} {
 		t.Run(name, func(t *testing.T) {
 			// The user cannot stat /eos/atlas, so its stat is never cached.
-			clients.gw = &statGateway{infos: map[string]*provider.ResourceInfo{
+			gw := &statGateway{infos: map[string]*provider.ResourceInfo{
 				home:       rootInfo("eoshome", home),
 				"/eos/ams": rootInfo("eosams", "/eos/ams"),
 			}}
+			clients.gw = gw
 			riCache, err := memory.New[*provider.ResourceInfo](nil)
 			require.NoError(t, err)
 			s := &service{
@@ -134,7 +140,136 @@ func TestListStorageSpacesByIDStatsOnlyTheSpaceOfTheID(t *testing.T) {
 			require.NoError(t, err)
 			require.Equal(t, rpcv1beta1.Code_CODE_OK, res.Status.Code)
 			assert.Len(t, res.StorageSpaces, tc.wantSpaces)
-			assert.ElementsMatch(t, tc.wantStats, clients.gw.stats)
+			assert.ElementsMatch(t, tc.wantStats, gw.stats)
+		})
+	}
+}
+
+// downGateway knows the alive paths. A request on a path that is down waits for
+// the end of the context, like a request on an EOS instance that is down.
+type downGateway struct {
+	gateway.GatewayAPIClient
+
+	alive, down []string
+}
+
+func (g *downGateway) wait(ctx context.Context, path string) error {
+	if slices.ContainsFunc(g.down, func(d string) bool { return strings.HasPrefix(path, d) }) {
+		<-ctx.Done()
+		return ctx.Err()
+	}
+	return nil
+}
+
+func (g *downGateway) Stat(ctx context.Context, req *provider.StatRequest, _ ...grpc.CallOption) (*provider.StatResponse, error) {
+	if err := g.wait(ctx, req.Ref.GetPath()); err != nil {
+		return nil, err
+	}
+	if !slices.Contains(g.alive, req.Ref.GetPath()) {
+		return &provider.StatResponse{Status: &rpcv1beta1.Status{Code: rpcv1beta1.Code_CODE_NOT_FOUND}}, nil
+	}
+	info := &provider.ResourceInfo{Id: &provider.ResourceId{StorageId: "eos", SpaceId: spaces.EncodeSpaceID(req.Ref.GetPath())}, Path: req.Ref.GetPath()}
+	return &provider.StatResponse{Status: &rpcv1beta1.Status{Code: rpcv1beta1.Code_CODE_OK}, Info: info}, nil
+}
+
+func (g *downGateway) GetQuota(ctx context.Context, req *gateway.GetQuotaRequest, _ ...grpc.CallOption) (*provider.GetQuotaResponse, error) {
+	if err := g.wait(ctx, req.Ref.GetPath()); err != nil {
+		return nil, err
+	}
+	return &provider.GetQuotaResponse{Status: &rpcv1beta1.Status{Code: rpcv1beta1.Code_CODE_OK}}, nil
+}
+
+// someProjects finds the projects at the given paths.
+type someProjects struct {
+	projects.Catalogue
+
+	paths []string
+}
+
+func (p someProjects) ListStorageSpaces(context.Context, *provider.ListStorageSpacesRequest, projects.ProjectStatus) (*provider.ListStorageSpacesResponse, error) {
+	var sp []*provider.StorageSpace
+	for _, path := range p.paths {
+		sp = append(sp, &provider.StorageSpace{Name: path, SpaceType: spaces.SpaceTypeProject.AsString(), RootInfo: &provider.ResourceInfo{Path: path}})
+	}
+	return &provider.ListStorageSpacesResponse{Status: &rpcv1beta1.Status{Code: rpcv1beta1.Code_CODE_OK}, StorageSpaces: sp}, nil
+}
+
+func TestListProjectsWithStorageDown(t *testing.T) {
+	user := &userpb.User{Id: &userpb.UserId{OpaqueId: "prefectt", Type: userpb.UserType_USER_TYPE_PRIMARY}, Username: "prefectt"}
+	ctx := appctx.ContextSetUser(context.Background(), user)
+
+	const (
+		alive   = "/eos/project/a/alive"
+		down    = "/eos/project/d/down"
+		missing = "/eos/project/m/missing"
+	)
+	for name, tc := range map[string]struct {
+		projects       []string
+		down           []string
+		want           []string
+		wantIncomplete bool
+	}{
+		"a project on a storage that is down is left out": {
+			projects:       []string{alive, down},
+			down:           []string{down},
+			want:           []string{alive, "ams", "atlas"},
+			wantIncomplete: true,
+		},
+		"a public space on a storage that is down is left out": {
+			projects:       []string{alive},
+			down:           []string{"/eos/atlas"},
+			want:           []string{alive, "ams"},
+			wantIncomplete: true,
+		},
+		"a project without a root does not make the list incomplete": {
+			projects: []string{alive, missing},
+			want:     []string{alive, "ams", "atlas"},
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			revaservice.SetGlobal(clients)
+			clients.gw = &downGateway{alive: []string{alive, down, "/eos/ams", "/eos/atlas"}, down: tc.down}
+			riCache, err := memory.New[*provider.ResourceInfo](nil)
+			require.NoError(t, err)
+			s := &service{
+				c: &config{
+					PublicSpaces: map[string]map[string]string{
+						"atlas": {"path": "/eos/atlas"},
+						"ams":   {"path": "/eos/ams"},
+					},
+				},
+				projects:          someProjects{paths: tc.projects},
+				resourceInfoCache: riCache,
+				timeoutSkipSpaces: 100 * time.Millisecond,
+			}
+
+			type result struct {
+				res *provider.ListStorageSpacesResponse
+				err error
+			}
+			done := make(chan result, 1)
+			go func() {
+				res, err := s.ListStorageSpaces(ctx, &provider.ListStorageSpacesRequest{
+					Filters: spaces.ListStorageSpaceFilter{}.BySpaceType(spaces.SpaceTypeProject).List(),
+				})
+				done <- result{res, err}
+			}()
+			var r result
+			select {
+			case r = <-done:
+			case <-time.After(5 * time.Second):
+				t.Fatal("ListStorageSpaces does not return while a storage is down")
+			}
+
+			require.NoError(t, r.err)
+			require.Equal(t, rpcv1beta1.Code_CODE_OK, r.res.Status.Code)
+			var names []string
+			for _, sp := range r.res.StorageSpaces {
+				names = append(names, sp.Name)
+			}
+			assert.ElementsMatch(t, tc.want, names)
+			_, incomplete := r.res.GetOpaque().GetMap()[spaces.OpaqueIncomplete]
+			assert.Equal(t, tc.wantIncomplete, incomplete)
 		})
 	}
 }

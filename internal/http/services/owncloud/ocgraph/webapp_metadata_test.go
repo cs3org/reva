@@ -44,7 +44,7 @@ func TestGetSharedWithMeEmptyValue(t *testing.T) {
 	}
 
 	var want bytes.Buffer
-	if err := encodeSharedWithMe(&want, []any{}); err != nil {
+	if err := encodeSharedWithMe(&want, []any{}, false); err != nil {
 		t.Fatal(err)
 	}
 	if !bytes.Equal(rec.Body.Bytes(), want.Bytes()) {

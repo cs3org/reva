@@ -24,6 +24,7 @@ import (
 	"path"
 	"slices"
 	"strings"
+	"sync/atomic"
 	"time"
 
 	"github.com/alitto/pond/v2"
@@ -38,6 +39,7 @@ import (
 	"github.com/cs3org/reva/v3/pkg/service"
 	revashare "github.com/cs3org/reva/v3/pkg/share"
 	"github.com/cs3org/reva/v3/pkg/sharehierarchy"
+	"github.com/cs3org/reva/v3/pkg/spaces"
 	"github.com/cs3org/reva/v3/pkg/utils"
 	"github.com/cs3org/reva/v3/pkg/utils/resourceid"
 
@@ -560,6 +562,12 @@ func (s *svc) ListExistingReceivedShares(ctx context.Context, req *collaboration
 		}, nil
 	}
 
+	// One deadline for all the stats: with a deadline for each stat, the pool
+	// would wait for each batch of shares on a storage that is down.
+	statCtx, cancel := context.WithTimeout(ctx, s.shareResolutionTimeout)
+	defer cancel()
+	var incomplete atomic.Bool
+
 	sharesCh := make(chan *gateway.ReceivedShareResourceInfo, len(rshares.Shares))
 	pool := pond.NewPool(50)
 	for _, rs := range rshares.Shares {
@@ -573,16 +581,20 @@ func (s *svc) ListExistingReceivedShares(ctx context.Context, req *collaboration
 			if res, err := s.resourceInfoCache.Get(key); err == nil && res != nil {
 				resourceInfo = res
 			} else {
-				stat, err := s.Stat(ctx, &provider.StatRequest{
+				stat, err := s.Stat(statCtx, &provider.StatRequest{
 					Ref: &provider.Reference{
 						ResourceId: rs.Share.ResourceId,
 					},
 				})
-				if err != nil {
-					return err
+				if err == nil && stat.Status.Code != rpc.Code_CODE_OK {
+					err = status.NewErrtypeFromStatus(stat.Status)
 				}
-				if stat.Status.Code != rpc.Code_CODE_OK {
-					return status.NewErrtypeFromStatus(stat.Status)
+				if err != nil {
+					if statCtx.Err() != nil {
+						appctx.GetLogger(ctx).Warn().Err(err).Str("share_id", rs.Share.GetId().GetOpaqueId()).Msg("gateway: received share not resolved in time, it is left out")
+						incomplete.Store(true)
+					}
+					return err
 				}
 				resourceInfo = stat.Info
 				if s.resourceInfoCacheTTL > 0 {
@@ -617,10 +629,16 @@ func (s *svc) ListExistingReceivedShares(ctx context.Context, req *collaboration
 		}, err
 	}
 
-	return &gateway.ListExistingReceivedSharesResponse{
+	res := &gateway.ListExistingReceivedSharesResponse{
 		ShareInfos: sris,
 		Status:     status.NewOK(ctx),
-	}, nil
+	}
+	if incomplete.Load() {
+		res.Opaque = &typesv1beta1.Opaque{Map: map[string]*typesv1beta1.OpaqueEntry{
+			spaces.OpaqueIncomplete: {Decoder: "plain", Value: []byte("true")},
+		}}
+	}
+	return res, nil
 }
 
 func (s *svc) GetReceivedShare(ctx context.Context, req *collaboration.GetReceivedShareRequest) (*collaboration.GetReceivedShareResponse, error) {
