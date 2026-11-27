@@ -72,6 +72,9 @@ type config struct {
 	// LightweightHomeLayout is the path of the folder shared with a lightweight
 	// account as its home on login. Empty disables lightweight homes.
 	LightweightHomeLayout string `mapstructure:"lightweight_home_layout"`
+	// ShareResolutionTimeout is the time in seconds to stat all the received
+	// shares of a user. The shares that are not resolved in time are left out.
+	ShareResolutionTimeout int `mapstructure:"share_resolution_timeout"`
 }
 
 // sets defaults.
@@ -107,6 +110,10 @@ func (c *config) ApplyDefaults() {
 	if c.SpaceInfoCacheTTL == 0 {
 		c.SpaceInfoCacheTTL = 3600
 	}
+
+	if c.ShareResolutionTimeout == 0 {
+		c.ShareResolutionTimeout = 3
+	}
 }
 
 type svc struct {
@@ -123,7 +130,8 @@ type svc struct {
 	// publicURL is the shared public_url, used to fill the url of public links.
 	publicURL string
 	// Drains the NATS connection on service close
-	closeEventBackend func() error
+	closeEventBackend      func() error
+	shareResolutionTimeout time.Duration
 }
 
 // New creates a new gateway svc that acts as a proxy for any grpc operation.
@@ -176,6 +184,7 @@ func New(ctx context.Context, m map[string]any) (rgrpc.Service, error) {
 	}
 	s.spaceInfoCache = sicache
 	s.spaceInfoCacheTTL = time.Second * time.Duration(c.SpaceInfoCacheTTL)
+	s.shareResolutionTimeout = time.Second * time.Duration(c.ShareResolutionTimeout)
 
 	return s, nil
 }

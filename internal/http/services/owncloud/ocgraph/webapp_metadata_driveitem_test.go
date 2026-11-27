@@ -92,7 +92,7 @@ func TestReceivedShareDriveItemAbsenceMatchesDriveItem(t *testing.T) {
 
 	t.Run("empty collection", func(t *testing.T) {
 		var got bytes.Buffer
-		if err := encodeSharedWithMe(&got, []any{}); err != nil {
+		if err := encodeSharedWithMe(&got, []any{}, false); err != nil {
 			t.Fatal(err)
 		}
 		var env struct {
@@ -210,7 +210,7 @@ func TestSharedWithMeContractFixtures(t *testing.T) {
 			}
 
 			var buf bytes.Buffer
-			if err := encodeSharedWithMe(&buf, []any{newReceivedShareDriveItem(item, tt.meta)}); err != nil {
+			if err := encodeSharedWithMe(&buf, []any{newReceivedShareDriveItem(item, tt.meta)}, false); err != nil {
 				t.Fatal(err)
 			}
 			assertSharedWithMeEnvelopeEqual(t, buf.Bytes(), tt.wantFixture)

@@ -34,9 +34,11 @@ import (
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	collaboration "github.com/cs3org/go-cs3apis/cs3/sharing/collaboration/v1beta1"
 	ocm "github.com/cs3org/go-cs3apis/cs3/sharing/ocm/v1beta1"
+	types "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
 	"google.golang.org/grpc"
 
 	"github.com/cs3org/reva/v3/pkg/appctx"
+	"github.com/cs3org/reva/v3/pkg/spaces"
 )
 
 func TestGetSharedWithMeEncodesReceivedWebappMetadata(t *testing.T) {
@@ -71,7 +73,7 @@ func TestGetSharedWithMeEncodesReceivedWebappMetadata(t *testing.T) {
 		t.Fatal(err)
 	}
 	var want bytes.Buffer
-	if err := encodeSharedWithMe(&want, []any{item}); err != nil {
+	if err := encodeSharedWithMe(&want, []any{item}, false); err != nil {
 		t.Fatal(err)
 	}
 	if !bytes.Equal(rec.Body.Bytes(), want.Bytes()) {
@@ -124,7 +126,7 @@ func TestGetSharedWithMeOCMEnabledOmitsNilWebapp(t *testing.T) {
 	if err := encodeSharedWithMe(&want, []any{
 		local,
 		newReceivedShareDriveItem(received, nil),
-	}); err != nil {
+	}, false); err != nil {
 		t.Fatal(err)
 	}
 	if !bytes.Equal(rec.Body.Bytes(), want.Bytes()) {
@@ -196,7 +198,7 @@ func TestGetSharedWithMeExposesPersistedWebappName(t *testing.T) {
 		t.Fatalf("adapter metadata = %+v", meta)
 	}
 	var want bytes.Buffer
-	if err := encodeSharedWithMe(&want, []any{newReceivedShareDriveItem(drive, meta)}); err != nil {
+	if err := encodeSharedWithMe(&want, []any{newReceivedShareDriveItem(drive, meta)}, false); err != nil {
 		t.Fatal(err)
 	}
 	if !bytes.Equal(body, want.Bytes()) {
@@ -222,7 +224,7 @@ func TestGetSharedWithMeWebDAVOnlyOmitsWebapp(t *testing.T) {
 		t.Fatal(err)
 	}
 	var want bytes.Buffer
-	if err := encodeSharedWithMe(&want, []any{newReceivedShareDriveItem(drive, nil)}); err != nil {
+	if err := encodeSharedWithMe(&want, []any{newReceivedShareDriveItem(drive, nil)}, false); err != nil {
 		t.Fatal(err)
 	}
 	if !bytes.Equal(body, want.Bytes()) {
@@ -321,7 +323,7 @@ func TestReceivedWebappMetadataMissingRemoteItemPropagates(t *testing.T) {
 	err = encodeSharedWithMe(&buf, []any{
 		newReceivedShareDriveItem(webdavOnlyDriveItem(), nil),
 		newReceivedShareDriveItem(drive, meta),
-	})
+	}, false)
 	if err == nil {
 		t.Fatal("expected error")
 	}
@@ -467,6 +469,7 @@ type receivedSharesGateway struct {
 	shares    []*gateway.ReceivedShareResourceInfo
 	ocmShares []*ocm.ReceivedShare
 	user      *userpb.User
+	opaque    *types.Opaque
 }
 
 func (g *receivedSharesGateway) ListExistingReceivedShares(
@@ -477,6 +480,7 @@ func (g *receivedSharesGateway) ListExistingReceivedShares(
 	return &gateway.ListExistingReceivedSharesResponse{
 		Status:     &rpc.Status{Code: rpc.Code_CODE_OK},
 		ShareInfos: g.shares,
+		Opaque:     g.opaque,
 	}, nil
 }
 
@@ -580,4 +584,49 @@ func remoteItemID(t *testing.T, item []byte) string {
 		t.Fatal(err)
 	}
 	return id
+}
+
+func TestSharedWithMeReportsUnavailableShares(t *testing.T) {
+	incomplete := &types.Opaque{Map: map[string]*types.OpaqueEntry{
+		spaces.OpaqueIncomplete: {Decoder: "plain", Value: []byte("true")},
+	}}
+	for _, tc := range []struct {
+		name      string
+		opaque    *types.Opaque
+		wantError bool
+	}{
+		{name: "all shares available"},
+		{name: "some shares unavailable", opaque: incomplete, wantError: true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			stampGateway(&receivedSharesGateway{
+				shares: []*gateway.ReceivedShareResourceInfo{receivedShareInfo()},
+				user:   &userpb.User{Id: &userpb.UserId{OpaqueId: "creator"}},
+				opaque: tc.opaque,
+			})
+			s := &svc{c: &config{WebBase: "https://example.test/files/spaces"}}
+
+			ctx := appctx.ContextSetUser(context.Background(), &userpb.User{Id: &userpb.UserId{OpaqueId: "me"}})
+			req := httptest.NewRequest(http.MethodGet, "/me/drive/sharedWithMe", nil).WithContext(ctx)
+			rec := httptest.NewRecorder()
+			s.getSharedWithMe(rec, req)
+			if rec.Code != http.StatusOK {
+				t.Fatalf("status = %d, body %s", rec.Code, rec.Body.String())
+			}
+
+			var body struct {
+				Value []json.RawMessage `json:"value"`
+				Error *string           `json:"error"`
+			}
+			if err := json.Unmarshal(rec.Body.Bytes(), &body); err != nil {
+				t.Fatal(err)
+			}
+			if len(body.Value) != 1 {
+				t.Errorf("got %d shares, want 1: %s", len(body.Value), rec.Body.String())
+			}
+			if tc.wantError != (body.Error != nil) {
+				t.Errorf("error field present = %v, want %v: %s", body.Error != nil, tc.wantError, rec.Body.String())
+			}
+		})
+	}
 }

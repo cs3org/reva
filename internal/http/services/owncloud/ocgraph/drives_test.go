@@ -40,6 +40,7 @@ import (
 
 	"github.com/cs3org/reva/v3/pkg/appctx"
 	"github.com/cs3org/reva/v3/pkg/labels"
+	"github.com/cs3org/reva/v3/pkg/spaces"
 )
 
 type labelsGateway struct {
@@ -50,6 +51,8 @@ type labelsGateway struct {
 	// labels is keyed on <storage_id>!<opaque_id>.
 	labels map[string][]string
 	err    error
+	// spacesOpaque is the opaque of the ListStorageSpaces response.
+	spacesOpaque *types.Opaque
 }
 
 func (g *labelsGateway) ListStorageSpaces(
@@ -60,6 +63,7 @@ func (g *labelsGateway) ListStorageSpaces(
 	return &provider.ListStorageSpacesResponse{
 		Status:        &rpc.Status{Code: rpc.Code_CODE_OK},
 		StorageSpaces: g.spaces,
+		Opaque:        g.spacesOpaque,
 	}, nil
 }
 
@@ -232,6 +236,64 @@ func TestListProjectsReportsLabels(t *testing.T) {
 		}
 		if !slices.Equal(*d.Root.Labels, want[d.Name]) {
 			t.Errorf("drive %s: labels = %v, want %v", d.Name, *d.Root.Labels, want[d.Name])
+		}
+	}
+}
+
+func TestListDrivesReportsUnavailableDrives(t *testing.T) {
+	incomplete := &types.Opaque{Map: map[string]*types.OpaqueEntry{
+		spaces.OpaqueIncomplete: {Decoder: "plain", Value: []byte("true")},
+	}}
+	project := &provider.StorageSpace{
+		Id:        &provider.StorageSpaceId{OpaqueId: "eos$proj"},
+		Name:      "proj",
+		SpaceType: "project",
+		RootInfo:  &provider.ResourceInfo{Path: "/eos/project/proj", PermissionSet: &provider.ResourcePermissions{Stat: true}},
+	}
+
+	for _, driveType := range []string{"mountpoint", "project"} {
+		for _, tc := range []struct {
+			name      string
+			opaque    *types.Opaque
+			wantError bool
+		}{
+			{name: "all drives available"},
+			{name: "some drives unavailable", opaque: incomplete, wantError: true},
+		} {
+			t.Run(driveType+": "+tc.name, func(t *testing.T) {
+				stampGateway(&labelsGateway{
+					receivedSharesGateway: receivedSharesGateway{
+						shares: []*gateway.ReceivedShareResourceInfo{receivedShareInfo()},
+						opaque: tc.opaque,
+					},
+					spaces:       []*provider.StorageSpace{project},
+					spacesOpaque: tc.opaque,
+				})
+				s := &svc{c: &config{}}
+
+				ctx := appctx.ContextSetUser(context.Background(), &userpb.User{Id: &userpb.UserId{OpaqueId: "me"}})
+				query := url.Values{"$filter": {"driveType eq '" + driveType + "'"}}
+				req := httptest.NewRequest(http.MethodGet, "/me/drives?"+query.Encode(), nil).WithContext(ctx)
+				rec := httptest.NewRecorder()
+				s.listMySpaces(rec, req)
+				if rec.Code != http.StatusOK {
+					t.Fatalf("status = %d, body %s", rec.Code, rec.Body.String())
+				}
+
+				var body struct {
+					Value []json.RawMessage `json:"value"`
+					Error *string           `json:"error"`
+				}
+				if err := json.Unmarshal(rec.Body.Bytes(), &body); err != nil {
+					t.Fatal(err)
+				}
+				if len(body.Value) != 1 {
+					t.Errorf("got %d drives, want 1: %s", len(body.Value), rec.Body.String())
+				}
+				if tc.wantError != (body.Error != nil) {
+					t.Errorf("error field present = %v, want %v: %s", body.Error != nil, tc.wantError, rec.Body.String())
+				}
+			})
 		}
 	}
 }

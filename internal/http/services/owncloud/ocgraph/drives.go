@@ -70,9 +70,12 @@ func (s *svc) listMySpaces(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var spaces []*LabeledDrive
+	var (
+		drives     []*LabeledDrive
+		incomplete bool
+	)
 	if isMountpointRequest(odataReq) {
-		spaces, err = s.getDrivesForShares(ctx, gw)
+		drives, incomplete, err = s.getDrivesForShares(ctx, gw)
 		if err != nil {
 			log.Error().Err(err).Msg("error getting share spaces")
 			handleError(ctx, err, w)
@@ -99,9 +102,10 @@ func (s *svc) listMySpaces(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
+		_, incomplete = res.GetOpaque().GetMap()[spaces.OpaqueIncomplete]
 		labelsByRoot := resourceLabels(ctx, gw, list.Map(res.StorageSpaces, (*provider.StorageSpace).GetRoot))
 		me := appctx.ContextMustGetUser(ctx)
-		spaces = list.Map(res.StorageSpaces, func(space *provider.StorageSpace) *LabeledDrive {
+		drives = list.Map(res.StorageSpaces, func(space *provider.StorageSpace) *LabeledDrive {
 			drive := s.cs3StorageSpaceToDrive(ctx, me, space)
 			return &LabeledDrive{
 				Drive: *drive,
@@ -110,9 +114,11 @@ func (s *svc) listMySpaces(w http.ResponseWriter, r *http.Request) {
 		})
 	}
 
-	if err := json.NewEncoder(w).Encode(map[string]any{
-		"value": spaces,
-	}); err != nil {
+	body := map[string]any{"value": drives}
+	if incomplete {
+		body["error"] = "some drives are not available at the moment"
+	}
+	if err := json.NewEncoder(w).Encode(body); err != nil {
 		log.Error().Err(err).Msg("error marshalling spaces as json")
 		handleError(ctx, err, w)
 		return
@@ -217,14 +223,17 @@ func resourceLabels(ctx context.Context, gw gateway.GatewayAPIClient, ids []*pro
 	return labelsByID
 }
 
-func (s *svc) getDrivesForShares(ctx context.Context, gw gateway.GatewayAPIClient) ([]*LabeledDrive, error) {
+// getDrivesForShares returns a drive for each received share.
+// incomplete is true when some shares are left out, because their storage did not answer in time.
+func (s *svc) getDrivesForShares(ctx context.Context, gw gateway.GatewayAPIClient) ([]*LabeledDrive, bool, error) {
 	res, err := gw.ListExistingReceivedShares(ctx, &collaborationv1beta1.ListReceivedSharesRequest{})
 	if err != nil {
-		return nil, err
+		return nil, false, err
 	}
 	if res.Status.Code != rpcv1beta1.Code_CODE_OK {
-		return nil, errors.New(res.Status.Message)
+		return nil, false, errors.New(res.Status.Message)
 	}
+	_, incomplete := res.GetOpaque().GetMap()[spaces.OpaqueIncomplete]
 
 	labelsByID := resourceLabels(ctx, gw, list.Map(res.ShareInfos, func(share *gateway.ReceivedShareResourceInfo) *provider.ResourceId {
 		return share.ResourceInfo.GetId()
@@ -237,7 +246,7 @@ func (s *svc) getDrivesForShares(ctx context.Context, gw gateway.GatewayAPIClien
 			Root:  &LabeledDriveItem{DriveItem: *drive.Root, Labels: labelsByID[share.ResourceInfo.GetId()]},
 		})
 	}
-	return spacesRes, nil
+	return spacesRes, incomplete, nil
 }
 
 func libregraphShareID(shareID *collaborationv1beta1.ShareId) string {

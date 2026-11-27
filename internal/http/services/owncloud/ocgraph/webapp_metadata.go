@@ -35,10 +35,14 @@ type receivedShareDriveItem struct {
 	webapp *ocm.WebappProtocol
 }
 
-func encodeSharedWithMe(w io.Writer, shares []any) error {
-	return json.NewEncoder(w).Encode(map[string]any{
-		"value": shares,
-	})
+// encodeSharedWithMe writes the shares. incomplete tells the client that some
+// shares are left out, because their storage did not answer in time.
+func encodeSharedWithMe(w io.Writer, shares []any, incomplete bool) error {
+	body := map[string]any{"value": shares}
+	if incomplete {
+		body["error"] = "some shares are not available at the moment"
+	}
+	return json.NewEncoder(w).Encode(body)
 }
 
 func newReceivedShareDriveItem(item *libregraph.DriveItem, webapp *ocm.WebappProtocol) receivedShareDriveItem {

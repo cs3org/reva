@@ -144,7 +144,8 @@ func (s *svc) getSharedWithMe(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	if err := encodeSharedWithMe(w, shares); err != nil {
+	_, incomplete := recvSharesResp.GetOpaque().GetMap()[spaces.OpaqueIncomplete]
+	if err := encodeSharedWithMe(w, shares, incomplete); err != nil {
 		log.Error().Err(err).Msg("error marshalling shares as json")
 		handleError(ctx, err, w)
 		return
