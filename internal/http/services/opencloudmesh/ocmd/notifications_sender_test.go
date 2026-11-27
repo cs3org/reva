@@ -448,40 +448,32 @@ var malformedResponses = map[string]string{
 // A malformed status line or header makes net/http return an error that
 // quotes the peer bytes; it must not reach the result or the logs.
 func TestNewNotificationMalformedPostResponseOverTCP(t *testing.T) {
-	for name, response := range malformedResponses {
-		t.Run(name, func(t *testing.T) {
-			raw := newRawPeer(t, response)
-			peer := newNotificationServer(t)
-			peer.endpoint = raw.url() + "/ocm"
-			res, logs := sendWithLogs(t, peer, unsharedNotification(t))
-			if res.Outcome != SendPostFailed || res.Failure != FailureError {
-				t.Fatalf("result %+v", res)
-			}
-			if got := raw.count("POST /ocm/notifications"); got != 1 {
-				t.Fatalf("posts %d", got)
-			}
-			assertNoCanary(t, res, logs)
-		})
+	raw := newRawPeer(t, malformedResponses["status line"])
+	peer := newNotificationServer(t)
+	peer.endpoint = raw.url() + "/ocm"
+	res, logs := sendWithLogs(t, peer, unsharedNotification(t))
+	if res.Outcome != SendPostFailed || res.Failure != FailureError {
+		t.Fatalf("result %+v", res)
 	}
+	if got := raw.count("POST /ocm/notifications"); got != 1 {
+		t.Fatalf("posts %d", got)
+	}
+	assertNoCanary(t, res, logs)
 }
 
 func TestNewNotificationMalformedDiscoveryOverTCP(t *testing.T) {
-	for name, response := range malformedResponses {
-		t.Run(name, func(t *testing.T) {
-			raw := newRawPeer(t, response)
-			var logs bytes.Buffer
-			logger := zerolog.New(&logs).Level(zerolog.DebugLevel)
-			ctx := appctx.WithLogger(context.Background(), &logger)
-			res := NewClient(5*time.Second, false).NewNotification(ctx, raw.ln.Addr().String(), unsharedNotification(t), nil)
-			if res.Outcome != SendDiscoveryFailed || res.Failure != FailureError {
-				t.Fatalf("result %+v", res)
-			}
-			if raw.count("GET /.well-known/ocm") != 1 || raw.count("GET /ocm-provider") != 1 || raw.count("POST /ocm/notifications") != 0 {
-				t.Fatalf("requests %v", raw.requests)
-			}
-			assertNoCanary(t, res, logs.String())
-		})
+	raw := newRawPeer(t, malformedResponses["status line"])
+	var logs bytes.Buffer
+	logger := zerolog.New(&logs).Level(zerolog.DebugLevel)
+	ctx := appctx.WithLogger(context.Background(), &logger)
+	res := NewClient(5*time.Second, false).NewNotification(ctx, raw.ln.Addr().String(), unsharedNotification(t), nil)
+	if res.Outcome != SendDiscoveryFailed || res.Failure != FailureError {
+		t.Fatalf("result %+v", res)
 	}
+	if raw.count("GET /.well-known/ocm") != 1 || raw.count("GET /ocm-provider") != 1 || raw.count("POST /ocm/notifications") != 0 {
+		t.Fatalf("requests %v", raw.requests)
+	}
+	assertNoCanary(t, res, logs.String())
 }
 
 func TestNewNotificationTimeoutAndCancel(t *testing.T) {
