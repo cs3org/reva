@@ -7,4 +7,4 @@ collector reads it across the fleet (every `log_counts_interval`, default
 one series per process named after its config file, so the services need no
 `/metrics` endpoint of their own.
 
-https://github.com/cs3org/reva/pull/TBD
+https://github.com/cs3org/reva/pull/6062
