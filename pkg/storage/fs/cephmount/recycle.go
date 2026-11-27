@@ -138,9 +138,14 @@ func (fs *cephmountfs) createRecycleDirs(bin, dir string) error {
 // src gets the suffix .<inode>.
 func (fs *cephmountfs) recycleEntry(ctx context.Context, src string, info os.FileInfo, target string) error {
 	existing, err := fs.rootFS.Lstat(target)
+	if os.IsNotExist(err) {
+		if err = fs.renameIntoRecycle(ctx, src, target); !errors.Is(err, unix.EEXIST) {
+			return err
+		}
+		// A second round if another delete put the same path in the bin meanwhile.
+		existing, err = fs.rootFS.Lstat(target)
+	}
 	switch {
-	case os.IsNotExist(err):
-		return fs.renameIntoRecycle(ctx, src, target)
 	case err != nil:
 		return err
 	case info.IsDir() && existing.IsDir():
@@ -182,7 +187,12 @@ func (fs *cephmountfs) renameIntoRecycle(ctx context.Context, src, target string
 			return &os.PathError{Op: "openat2", Path: filepath.Dir(target), Err: err}
 		}
 		defer unix.Close(targetDir)
-		if err := unix.Renameat(srcDir, filepath.Base(src), targetDir, filepath.Base(target)); err != nil {
+		err = unix.Renameat2(srcDir, filepath.Base(src), targetDir, filepath.Base(target), unix.RENAME_NOREPLACE)
+		if err == unix.EINVAL {
+			// Not all file systems support RENAME_NOREPLACE. The caller checked that target is free.
+			err = unix.Renameat(srcDir, filepath.Base(src), targetDir, filepath.Base(target))
+		}
+		if err != nil {
 			return &os.LinkError{Op: "renameat", Old: src, New: target, Err: err}
 		}
 		return nil
