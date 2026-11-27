@@ -78,3 +78,13 @@ func (countHook) Run(_ *zerolog.Event, lvl zerolog.Level, _ string) {
 		n.Add(1)
 	}
 }
+
+// MessageCounts returns the process's counts of emitted log messages at
+// warn level or above, by level name.
+func MessageCounts() map[string]uint64 {
+	out := make(map[string]uint64, len(logMessages))
+	for lvl, n := range logMessages {
+		out[lvl.String()] = n.Load()
+	}
+	return out
+}

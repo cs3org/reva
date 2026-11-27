@@ -67,6 +67,9 @@ type config struct {
 		// OwnerAttributes are the attribute keys that become labels. Empty
 		// means all the keys found in the file.
 		OwnerAttributes []string `mapstructure:"owner_attributes"`
+		// LogCountsInterval is how often the fleet's log counts are read
+		// (default 1m): they are cheap, and hourly panels need them fresh.
+		LogCountsInterval string `mapstructure:"log_counts_interval"`
 	} `mapstructure:"stats"`
 }
 
@@ -87,6 +90,14 @@ func New(ctx context.Context, m map[string]any) ([]prometheus.Collector, error) 
 		}
 		interval = d
 	}
+	logInterval := time.Minute
+	if c.Stats.LogCountsInterval != "" {
+		d, err := time.ParseDuration(c.Stats.LogCountsInterval)
+		if err != nil {
+			return nil, fmt.Errorf("prom stats: log_counts_interval: %w", err)
+		}
+		logInterval = d
+	}
 	namespace := c.Stats.Namespace
 	if namespace == "" {
 		namespace = "reva"
@@ -105,6 +116,7 @@ func New(ctx context.Context, m map[string]any) ([]prometheus.Collector, error) 
 		errors:    map[string]float64{},
 	}
 	go col.run(ctx, interval)
+	go col.runLogCounts(ctx, logInterval)
 	return []prometheus.Collector{col}, nil
 }
 
@@ -116,10 +128,11 @@ type collector struct {
 	attrKeys  []string
 	fleet     fleet
 
-	mu      sync.Mutex
-	cached  []prometheus.Metric
-	errors  map[string]float64 // per service, cumulative refresh errors
-	refresh map[string]refreshInfo
+	mu         sync.Mutex
+	cached     []prometheus.Metric
+	logMetrics []prometheus.Metric
+	errors     map[string]float64 // per service, cumulative refresh errors
+	refresh    map[string]refreshInfo
 }
 
 type refreshInfo struct {
@@ -135,6 +148,9 @@ func (c *collector) Collect(ch chan<- prometheus.Metric) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	for _, m := range c.cached {
+		ch <- m
+	}
+	for _, m := range c.logMetrics {
 		ch <- m
 	}
 	for _, m := range c.selfMetricsLocked() {

@@ -37,8 +37,13 @@ import (
 // fakeFleet serves canned payloads per endpoint node id. Like the Admin
 // API, it answers a service with the payloads of all its listed instances.
 type fakeFleet struct {
-	targets  map[string][]client.Endpoint
-	payloads map[string]*stats.Payload
+	targets   map[string][]client.Endpoint
+	payloads  map[string]*stats.Payload
+	logCounts []logCounts
+}
+
+func (f fakeFleet) InvokeLogCounts(context.Context) ([]logCounts, error) {
+	return f.logCounts, nil
 }
 
 func (f fakeFleet) StatsServices(context.Context) ([]string, error) {
@@ -267,5 +272,46 @@ func TestCounterSuffixAndSelfMetrics(t *testing.T) {
 	}
 	if !found {
 		t.Errorf("refresh timestamp missing: %v", got)
+	}
+}
+
+// TestFleetLogCounts checks the log counts of the fleet become one counter
+// per process, named by its config file, however many services it runs.
+func TestFleetLogCounts(t *testing.T) {
+	gw := map[string]uint64{"warn": 3, "error": 1, "fatal": 0, "panic": 0}
+	f := fakeFleet{logCounts: []logCounts{
+		// One process running two services answers once per service.
+		{Node: "10.0.0.4:9142/gateway", PID: 7, Start: 100, Config: "/etc/revad/revad-gateway.toml", Counts: gw},
+		{Node: "10.0.0.4:9142/authregistry", PID: 7, Start: 100, Config: "/etc/revad/revad-gateway.toml", Counts: gw},
+		{Node: "10.0.0.5:16000/storageprovider", PID: 9, Start: 100, Config: "/etc/revad/revad-homes-i00.toml",
+			Counts: map[string]uint64{"warn": 5, "error": 2, "fatal": 0, "panic": 0}},
+		// Without a config file the process is named after its service.
+		{Node: "10.0.0.6:9156/authprovider", PID: 11, Start: 100,
+			Counts: map[string]uint64{"warn": 0, "error": 4, "fatal": 0, "panic": 0}},
+	}}
+	c := &collector{namespace: "cernbox", attrFile: "/nonexistent", fleet: f, errors: map[string]float64{}}
+	c.refreshLogCounts(context.Background())
+
+	got := gather(t, c)
+	want := map[string]float64{
+		"cernbox_fleet_log_messages_total{host=10.0.0.4,level=warn,service=gateway}":       3,
+		"cernbox_fleet_log_messages_total{host=10.0.0.4,level=error,service=gateway}":      1,
+		"cernbox_fleet_log_messages_total{host=10.0.0.5,level=warn,service=homes-i00}":     5,
+		"cernbox_fleet_log_messages_total{host=10.0.0.5,level=error,service=homes-i00}":    2,
+		"cernbox_fleet_log_messages_total{host=10.0.0.6,level=error,service=authprovider}": 4,
+	}
+	for k, v := range want {
+		if got[k] != v {
+			t.Errorf("%s = %v, want %v", k, got[k], v)
+		}
+	}
+	n := 0
+	for k := range got {
+		if strings.HasPrefix(k, "cernbox_fleet_log_messages_total{") {
+			n++
+		}
+	}
+	if n != 12 { // three processes, four levels each
+		t.Errorf("got %d log series, want 12: %v", n, got)
 	}
 }
