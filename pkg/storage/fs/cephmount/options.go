@@ -57,6 +57,11 @@ type Options struct {
 	// not be set in the driver configuration.
 	SpaceDepth int `mapstructure:"space_depth"`
 
+	// EnableRecycle makes Delete move items to the recycle bin next to their space,
+	// <parent>/.recycle/<space> for the space <parent>/<space>, instead of removing
+	// them. The Samba VFS plugin uses the same layout.
+	EnableRecycle bool `mapstructure:"enable_recycle"`
+
 	// Simplified Ceph configuration - just paste the fstab entry
 	FstabEntry string `mapstructure:"fstabentry"` // Complete fstab line for Ceph mount
 	RootDir    string `mapstructure:"root_dir"`   // Root directory for the Ceph mount

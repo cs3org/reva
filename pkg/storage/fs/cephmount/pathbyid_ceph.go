@@ -225,6 +225,11 @@ func (fs *cephmountfs) GetPathByID(ctx context.Context, id *provider.ResourceId)
 		return "", err
 	}
 
+	// A deleted item keeps its inode, thus its id now leads into the recycle bin.
+	if fs.inRecycle(fs.toChroot(userRelativePath)) {
+		return "", errtypes.NotFound("cephmount: resource " + id.OpaqueId)
+	}
+
 	// An external account may only learn the path of something shared with it,
 	// otherwise any inode could be turned into a path by guessing.
 	if err := fs.authorizeExternal(ctx, fs.toChroot(userRelativePath), "GetPathByID", canGetPath); err != nil {

@@ -256,9 +256,11 @@ func (fs *cephmountfs) permissionsAsUser(ctx context.Context, path string, isDir
 	return result.(*provider.ResourcePermissions), nil
 }
 
-// canAccess checks with the fsuid, groups and ACLs of the calling thread; without faccessat2 (kernel < 5.8) root passes every check
+// canAccess checks with the fsuid, groups and ACLs of the calling thread. Faccessat
+// would fall back to a check as root without faccessat2 (kernel < 5.8), thus every
+// check fails there instead.
 func canAccess(path string, mode uint32) bool {
-	return unix.Faccessat(unix.AT_FDCWD, path, mode, unix.AT_EACCESS) == nil
+	return unix.Faccessat2(unix.AT_FDCWD, path, mode, unix.AT_EACCESS) == nil
 }
 
 // setXattrAsUser sets an extended attribute on the user's thread with correct UID
