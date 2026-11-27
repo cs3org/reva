@@ -652,7 +652,7 @@ func (m *mgr) queriesUpdatesOnShare(ctx context.Context, id *ocm.ShareId, f ...*
 			if updates == nil {
 				updates = make(map[string]any)
 			}
-			updates["expiration"] = u.Expiration.Seconds
+			updates["expiration"] = time.Unix(int64(u.Expiration.Seconds), 0)
 		case *ocm.UpdateOCMShareRequest_UpdateField_AccessMethods:
 			switch t := u.AccessMethods.Term.(type) {
 			case *ocm.AccessMethod_WebdavOptions:
