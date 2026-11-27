@@ -33,6 +33,7 @@ import (
 	collaboration "github.com/cs3org/go-cs3apis/cs3/sharing/collaboration/v1beta1"
 	link "github.com/cs3org/go-cs3apis/cs3/sharing/link/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
+	"github.com/cs3org/reva/v3/pkg/rjobs"
 	"google.golang.org/grpc"
 )
 
@@ -854,5 +855,62 @@ func TestOrphanReadsEverythingWithoutABatchSize(t *testing.T) {
 	want := [][]string{nil}
 	if !slices.EqualFunc(listed, want, slices.Equal) {
 		t.Errorf("listings = %v, want one listing with no space narrowing it", listed)
+	}
+}
+
+type progressLog []rjobs.Progress
+
+func (l *progressLog) Report(p rjobs.Progress) { *l = append(*l, p) }
+
+// With more than one batch, the items listed so far are not all the items, so
+// the run reports the batches done instead.
+func TestOrphanProgressCountsBatches(t *testing.T) {
+	store := &fakeStore{shares: []storedShare{
+		share(80, "eosuser", "inode-80", "jdoe", false, false),
+		share(81, "eosuser", "inode-81", "jdoe", false, false),
+	}}
+	store.shares[0].share.ResourceId.SpaceId = "space-a"
+	store.shares[1].share.ResourceId.SpaceId = "space-b"
+	gw := &fakeGateway{
+		resources: map[string]bool{"eosuser/inode-80": true, "eosuser/inode-81": true},
+		users:     map[string]bool{"jdoe": true},
+	}
+
+	var log progressLog
+	job := &OrphanJob{Shares: store, Gateway: gw, SpacesPerBatch: 1}
+	if _, err := job.run(context.Background(), &log); err != nil {
+		t.Fatalf("run: %v", err)
+	}
+
+	first := slices.IndexFunc(log, func(p rjobs.Progress) bool { return p.Unit == "batches" })
+	if first < 0 {
+		t.Fatalf("no progress in batches: %+v", log)
+	}
+	if p := log[first]; p.Done != 0 || p.Total != 2 || p.Details["batch_total"] != 1 {
+		t.Errorf("first progress = %+v, want 0/2 batches with 1 item in the batch", p)
+	}
+	if p := log[len(log)-1]; p.Unit != "batches" || p.Done != 2 || p.Total != 2 {
+		t.Errorf("last progress = %+v, want 2/2 batches", p)
+	}
+}
+
+// Without batching, every item is listed at once, so the run reports items.
+func TestOrphanProgressCountsItemsInOneBatch(t *testing.T) {
+	store := &fakeStore{shares: []storedShare{
+		share(82, "eosuser", "inode-82", "jdoe", false, false),
+		share(83, "eosuser", "inode-83", "jdoe", false, false),
+	}}
+	gw := &fakeGateway{
+		resources: map[string]bool{"eosuser/inode-82": true, "eosuser/inode-83": true},
+		users:     map[string]bool{"jdoe": true},
+	}
+
+	var log progressLog
+	job := &OrphanJob{Shares: store, Gateway: gw}
+	if _, err := job.run(context.Background(), &log); err != nil {
+		t.Fatalf("run: %v", err)
+	}
+	if p := log[len(log)-1]; p.Unit != "items" || p.Done != 2 || p.Total != 2 {
+		t.Errorf("last progress = %+v, want 2/2 items", p)
 	}
 }

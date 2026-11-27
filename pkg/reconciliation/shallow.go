@@ -244,6 +244,7 @@ type ShallowReport struct {
 	DryRun bool
 	// current batch out of the total number of batches for the progress report
 	batch, totalNrOfBatches int
+	batchesDone             int
 }
 
 // Run reconciles every non-orphan, non-expired share against the storage. A per-share lookup
@@ -334,6 +335,7 @@ func (j *ShallowJob) run(ctx context.Context, spaceID string, rep rjobs.Reporter
 		report.batch = i + 1
 
 		err := j.reconcileSpaces(ctx, log, rep, &report, gw, grantees, batch)
+		report.batchesDone = i + 1
 		if err == nil {
 			continue
 		}
@@ -350,6 +352,10 @@ func (j *ShallowJob) run(ctx context.Context, spaceID string, rep rjobs.Reporter
 				Bool("dry_run", j.DryRun).
 				Msg("reconciliation: shares could not be listed, space left untouched")
 		}
+	}
+	// the next batch reports the one before it done, but the last has no next.
+	if report.totalNrOfBatches > 1 {
+		report.progress(rep, "apply", 0, 0, "")
 	}
 
 	log.Info().
@@ -375,7 +381,7 @@ func (j *ShallowJob) run(ctx context.Context, spaceID string, rep rjobs.Reporter
 //
 // The error is the shares of the batch not being listable at all.
 func (j *ShallowJob) reconcileSpaces(ctx context.Context, log *zerolog.Logger, rep rjobs.Reporter, report *ShallowReport, gw gateway.GatewayAPIClient, grantees map[string]*provider.Grantee, spaceIDs []string) error {
-	rep.Report(rjobs.Progress{Phase: "list"})
+	report.progress(rep, "list", 0, 0, "")
 	shares, err := j.ShareStore.ListShares(ctx, spaceFilters(spaceIDs))
 	if err != nil {
 		return errors.Wrapf(err, "reconciliation: listing the shares of %d space(s)", len(spaceIDs))
@@ -560,7 +566,7 @@ func (j *ShallowJob) reconcileSpaces(ctx context.Context, log *zerolog.Logger, r
 
 // progress reports the run in phase, with the totals so far.
 func (r *ShallowReport) progress(rep rjobs.Reporter, phase string, done, total int, unit string) {
-	rep.Report(rjobs.Progress{Phase: phase, Done: int64(done), Total: int64(total), Unit: unit, Details: rjobs.Params{
+	p := rjobs.Progress{Phase: phase, Done: int64(done), Total: int64(total), Unit: unit, Details: rjobs.Params{
 		"checked":        r.Checked,
 		"expired":        r.Expired,
 		"covered":        r.Covered,
@@ -572,7 +578,13 @@ func (r *ShallowReport) progress(rep rjobs.Reporter, phase string, done, total i
 		"failed":         r.Failed,
 		"batch":          r.batch,
 		"batches":        r.totalNrOfBatches,
-	}})
+	}}
+	// with more than one batch, the counts of one batch say little about the run.
+	if r.totalNrOfBatches > 1 {
+		p.Done, p.Total, p.Unit = int64(r.batchesDone), int64(r.totalNrOfBatches), "batches"
+		p.Details["batch_done"], p.Details["batch_total"], p.Details["batch_unit"] = done, total, unit
+	}
+	rep.Report(p)
 }
 
 // plannedGrant is one grant a run decided on, held until the space it belongs

@@ -165,6 +165,8 @@ type OrphanReport struct {
 	Orphaned []OrphanedItem
 	// DryRun reports whether the run was a simulation.
 	DryRun bool
+	// the batches done out of all the batches, for the progress report
+	batchesDone, batches int
 }
 
 // Run scans both stores and orphans the items whose resource or recipient is
@@ -226,7 +228,7 @@ func (j *OrphanJob) run(ctx context.Context, rep rjobs.Reporter) (OrphanReport, 
 	}
 	start.Msg("reconciliation: run started")
 
-	report := OrphanReport{RunID: runID, DryRun: j.DryRun}
+	report := OrphanReport{RunID: runID, DryRun: j.DryRun, batches: len(batches)}
 	// the total grows as each batch is listed, since a batch is only counted
 	// when it is listed.
 	listed := 0
@@ -242,13 +244,14 @@ func (j *OrphanJob) run(ctx context.Context, rep rjobs.Reporter) (OrphanReport, 
 		}
 		listed += len(entries)
 
-		for _, e := range entries {
-			report.progress(rep, listed)
+		for i, e := range entries {
+			report.progress(rep, i, len(entries), listed)
 			j.check(ctx, log, &report, gw, e)
 		}
+		report.batchesDone++
 	}
 
-	report.progress(rep, listed)
+	report.progress(rep, 0, 0, listed)
 	log.Info().
 		Str("event", EventOrphanEnd).
 		Bool("dry_run", j.DryRun).
@@ -403,12 +406,19 @@ func (j *OrphanJob) entries(ctx context.Context, spaceIDs []string) ([]entry, er
 }
 
 // progress reports the items checked so far, with the totals of the report.
-func (r *OrphanReport) progress(rep rjobs.Reporter, total int) {
-	rep.Report(rjobs.Progress{Phase: "check", Done: int64(r.Checked), Total: int64(total), Unit: "items", Details: rjobs.Params{
+func (r *OrphanReport) progress(rep rjobs.Reporter, batchDone, batchTotal, listed int) {
+	p := rjobs.Progress{Phase: "check", Done: int64(r.Checked), Total: int64(listed), Unit: "items", Details: rjobs.Params{
 		"orphaned": len(r.Orphaned),
 		"skipped":  r.Skipped,
 		"failed":   r.Failed,
-	}})
+	}}
+	// with more than one batch, the items listed so far are not all the items.
+	if r.batches > 1 {
+		p.Done, p.Total, p.Unit = int64(r.batchesDone), int64(r.batches), "batches"
+		p.Details["checked"] = r.Checked
+		p.Details["batch_done"], p.Details["batch_total"], p.Details["batch_unit"] = batchDone, batchTotal, "items"
+	}
+	rep.Report(p)
 }
 
 // gateway returns the client the run checks existence with: the injected one
