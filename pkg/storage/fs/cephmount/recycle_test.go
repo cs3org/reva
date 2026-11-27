@@ -637,3 +637,21 @@ func TestRecycleDoesNotFollowSymlinks(t *testing.T) {
 	assert.FileExists(t, secret)
 	assert.Contains(t, testACL(t, secret), "user:65533:rwx")
 }
+
+func TestDeleteDoesNotFollowSymlinksInTheRecycleBin(t *testing.T) {
+	fs, ctx, day := newRecycleTestFS(t, 1)
+	other := filepath.Join(fs.chrootDir, "other")
+	require.NoError(t, os.Mkdir(other, 0755))
+	live := filepath.Join(fs.chrootDir, "proj", "docs", "sub", "x.txt")
+	writeTestFile(t, live, "deleted")
+
+	// A deleted symlink that leads from the bin to another space.
+	require.NoError(t, os.MkdirAll(day, 0755))
+	up, err := filepath.Rel(day, fs.chrootDir)
+	require.NoError(t, err)
+	require.NoError(t, os.Symlink(filepath.Join(up, "other"), filepath.Join(day, "docs")))
+
+	assert.Error(t, fs.Delete(ctx, &provider.Reference{Path: "/proj/docs/sub/x.txt"}))
+	assert.FileExists(t, live)
+	assert.NoDirExists(t, filepath.Join(other, "sub"))
+}

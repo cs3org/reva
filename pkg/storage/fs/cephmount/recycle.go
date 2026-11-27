@@ -79,8 +79,9 @@ func (fs *cephmountfs) moveToRecycle(ctx context.Context, path string) error {
 	if err != nil {
 		return err
 	}
-	target := filepath.Join(recycleBin(spaceRoot), time.Now().UTC().Format(recycleDayDirs), rel)
-	if err := fs.createRecycleDirs(filepath.Dir(target)); err != nil {
+	bin := recycleBin(spaceRoot)
+	target := filepath.Join(bin, time.Now().UTC().Format(recycleDayDirs), rel)
+	if err := fs.createRecycleDirs(bin, filepath.Dir(target)); err != nil {
 		return errors.Wrap(err, "cephmount: failed to create the recycle bin folders")
 	}
 
@@ -92,24 +93,41 @@ func (fs *cephmountfs) moveToRecycle(ctx context.Context, path string) error {
 	return fs.recycleEntry(ctx, path, info, target)
 }
 
-// createRecycleDirs creates the missing folders as root, so that a user who
-// deletes an item first does not own a folder that others delete into.
-func (fs *cephmountfs) createRecycleDirs(dir string) error {
-	if _, err := fs.rootFS.Stat(dir); err == nil {
-		return nil
+// createRecycleDirs creates the missing folders of dir, a folder in bin, as root,
+// so that a user who deletes an item first does not own a folder that others
+// delete into. No symlink is followed: users put symlinks in the bin by deleting
+// them, and root must not create folders where they point.
+func (fs *cephmountfs) createRecycleDirs(bin, dir string) error {
+	p := filepath.Dir(filepath.Dir(bin))
+	rel, err := filepath.Rel(p, dir)
+	if err != nil {
+		return err
 	}
-	p := ""
-	for part := range strings.SplitSeq(dir, string(filepath.Separator)) {
+	for i, part := range strings.Split(rel, string(filepath.Separator)) {
 		p = filepath.Join(p, part)
-		if err := fs.rootFS.Mkdir(p, recycleDirPerms); err != nil {
-			if os.IsExist(err) {
+		info, err := fs.rootFS.Lstat(p)
+		if os.IsNotExist(err) {
+			err = fs.rootFS.Mkdir(p, recycleDirPerms)
+			if err == nil {
+				// Mkdir applies the umask, which removes the write bit for others.
+				if err := fs.rootFS.Chmod(p, recycleDirPerms); err != nil {
+					return err
+				}
 				continue
 			}
+			if os.IsExist(err) {
+				info, err = fs.rootFS.Lstat(p)
+			}
+		}
+		if err != nil {
 			return err
 		}
-		// Mkdir applies the umask, which removes the write bit for others.
-		if err := fs.rootFS.Chmod(p, recycleDirPerms); err != nil {
-			return err
+		if !info.IsDir() {
+			return errors.New("cephmount: " + p + " in the recycle bin is not a folder")
+		}
+		// The bin and the bin of the space must not be a user's folder. Reva runs as root.
+		if i < 2 && info.Sys().(*syscall.Stat_t).Uid != uint32(os.Geteuid()) {
+			return errors.New("cephmount: " + p + " is not owned by root")
 		}
 	}
 	return nil
@@ -142,7 +160,8 @@ func (fs *cephmountfs) recycleEntry(ctx context.Context, src string, info os.Fil
 // renameIntoRecycle renames src to target as the user. The bin folders are
 // write-only for users, but os.Root opens each folder of a path, which needs read
 // access. O_PATH needs only search access, and RESOLVE_BENEATH keeps both paths
-// inside the mount, as os.Root does.
+// inside the mount, as os.Root does. The path to target has no symlinks, as
+// createRecycleDirs checked.
 func (fs *cephmountfs) renameIntoRecycle(ctx context.Context, src, target string) error {
 	root, err := unix.Open(fs.chrootDir, unix.O_PATH|unix.O_DIRECTORY|unix.O_CLOEXEC, 0)
 	if err != nil {
@@ -157,6 +176,7 @@ func (fs *cephmountfs) renameIntoRecycle(ctx context.Context, src, target string
 			return &os.PathError{Op: "openat2", Path: filepath.Dir(src), Err: err}
 		}
 		defer unix.Close(srcDir)
+		how.Resolve |= unix.RESOLVE_NO_SYMLINKS
 		targetDir, err := unix.Openat2(root, filepath.Dir(target), how)
 		if err != nil {
 			return &os.PathError{Op: "openat2", Path: filepath.Dir(target), Err: err}
