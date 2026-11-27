@@ -38,9 +38,9 @@ import (
 	"github.com/cs3org/reva/v3/pkg/rserverless"
 	"github.com/cs3org/reva/v3/pkg/sharedconf"
 	"github.com/cs3org/reva/v3/pkg/utils/cfg"
+	"github.com/glebarez/sqlite"
 	"github.com/rs/zerolog"
 	"gorm.io/driver/mysql"
-	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
 )
 
