@@ -469,31 +469,32 @@ func (r *Runner) enqueueUnique(ctx context.Context, run Run) (RunID, error) {
 // an extra run, not a reschedule. It respects the job's single-flight guard, so
 // it is rejected with an error if a run of the job is already in flight. Like
 // Enqueue it is in-process; on-demand and all-nodes jobs cannot be triggered.
-func (r *Runner) TriggerNow(ctx context.Context, job string) error {
+func (r *Runner) TriggerNow(ctx context.Context, job string) (RunID, error) {
 	if r.store == nil {
-		return errors.New("rjobs: cannot trigger, no store configured")
+		return "", errors.New("rjobs: cannot trigger, no store configured")
 	}
 	if !r.isLeaderJob(job) {
-		return errors.Errorf("rjobs: %q is not a registered leader periodic job", job)
+		return "", errors.Errorf("rjobs: %q is not a registered leader periodic job", job)
 	}
 
 	acquired, err := r.store.TryMarkScheduledRunning(ctx, job)
 	if err != nil {
-		return err
+		return "", err
 	}
 	if !acquired {
-		return errors.Errorf("rjobs: a run of %q is already in flight", job)
+		return "", errors.Errorf("rjobs: a run of %q is already in flight", job)
 	}
 
-	if _, err := r.store.Enqueue(ctx, Run{Job: job}); err != nil {
+	id, err := r.store.Enqueue(ctx, Run{Job: job})
+	if err != nil {
 		// release the gate we just took so the job is not stuck marked-running.
 		if cerr := r.store.ClearScheduledRunning(ctx, job); cerr != nil {
 			r.log.Error().Err(cerr).Str("job", job).Msg("rjobs: releasing schedule mark after a failed trigger errored")
 		}
-		return errors.Wrap(err, "rjobs: enqueuing triggered run failed")
+		return "", errors.Wrap(err, "rjobs: enqueuing triggered run failed")
 	}
-	r.log.Info().Str("job", job).Msg("rjobs: triggered an immediate run")
-	return nil
+	r.log.Info().Str("job", job).Str("run", string(id)).Msg("rjobs: triggered an immediate run")
+	return id, nil
 }
 
 // Status returns the current status of a previously enqueued run. It returns
@@ -855,6 +856,8 @@ func (r *Runner) execRun(ctx context.Context, run Run) {
 	if errors.Is(err, errSkippedOverlap) {
 		skippedOverlap = true
 		log.Debug().Msg("rjobs: run skipped, previous run still in flight")
+		// the run was already recorded as running.
+		r.recordStatus(ctx, run, StateCancelled, nil, err, h.started, log)
 		if cerr := r.store.Complete(ctx, run.ID); cerr != nil {
 			log.Error().Err(cerr).Msg("rjobs: completing skipped run errored")
 		}
@@ -900,13 +903,12 @@ func (r *Runner) execRun(ctx context.Context, run Run) {
 }
 
 // cancelRequested reports whether a cancellation has been requested for run. It
-// reads the durable cancel intent kept in the status store. Periodic runs are
-// not status-tracked, so this is always false for them; their cancellation is
-// driven separately through the schedule store.
+// reads the durable cancel intent kept in the status store. The cancellation of
+// a periodic run is driven separately through the schedule store.
 func (r *Runner) cancelRequested(ctx context.Context, run Run) bool {
 	if _, ok := r.lookupPeriodic(run.Job); ok {
-		// Periodic runs are not status-tracked; their cancel intent lives in the
-		// schedule store, keyed by job name.
+		// The cancel intent of a periodic run lives in the schedule store, keyed
+		// by job name.
 		req, err := r.store.ScheduledCancelRequested(ctx, run.Job)
 		if err != nil {
 			return false
@@ -986,9 +988,6 @@ func (r *Runner) startHeartbeat(ctx context.Context, run Run, h *runHandle, log 
 // scheduler, not the per-run status store.
 func (r *Runner) recordStatus(ctx context.Context, run Run, state State, result Params, runErr error, started time.Time, log zerolog.Logger) {
 	if r.status == nil {
-		return
-	}
-	if _, ok := r.lookupPeriodic(run.Job); ok {
 		return
 	}
 

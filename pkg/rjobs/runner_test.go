@@ -523,7 +523,7 @@ func TestTriggerNow(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if err := r.TriggerNow(context.Background(), "test.cleanup"); err != nil {
+	if _, err := r.TriggerNow(context.Background(), "test.cleanup"); err != nil {
 		t.Fatal(err)
 	}
 	if len(store.enqueued) != 1 || store.enqueued[0] != "test.cleanup" {
@@ -533,7 +533,7 @@ func TestTriggerNow(t *testing.T) {
 	// With a run already in flight the gate is not acquired: trigger is rejected
 	// and enqueues nothing.
 	store.acquire = false
-	if err := r.TriggerNow(context.Background(), "test.cleanup"); err == nil {
+	if _, err := r.TriggerNow(context.Background(), "test.cleanup"); err == nil {
 		t.Error("expected an error triggering a job already in flight")
 	}
 	if len(store.enqueued) != 1 {
@@ -541,7 +541,7 @@ func TestTriggerNow(t *testing.T) {
 	}
 
 	// On-demand and unregistered jobs cannot be triggered.
-	if err := r.TriggerNow(context.Background(), "nope"); err == nil {
+	if _, err := r.TriggerNow(context.Background(), "nope"); err == nil {
 		t.Error("expected an error triggering an unregistered job")
 	}
 }
@@ -797,6 +797,51 @@ func TestPeriodicProgress(t *testing.T) {
 	got, _ := status.Get(context.Background(), "run-1")
 	if got.Progress == nil || got.Progress.Phase != "scan" || got.Progress.Done != 5 {
 		t.Fatalf("periodic progress not recorded: %+v", got.Progress)
+	}
+}
+
+// A periodic run gets no queued row when it is enqueued, so the runner must
+// create its status itself, or `jobs status` cannot find it.
+func TestPeriodicRunHasStatus(t *testing.T) {
+	resetRegistry()
+	if err := RegisterPeriodic(Periodic{
+		Name: "test.periodic", Schedule: "@every 1h", Scope: ScopeLeader,
+		RunWithProgress: func(_ context.Context, r Reporter) error {
+			r.Report(Progress{Phase: "check", Done: 7, Total: 10})
+			return nil
+		},
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	status := newFakeStatus()
+	store := &periodicStore{run: Run{ID: "run-1", Job: "test.periodic", Attempt: 1}}
+
+	r, err := NewRunner(context.Background(), Options{Workers: 1, Store: store, Status: status, ProgressInterval: time.Hour})
+	if err != nil {
+		t.Fatal(err)
+	}
+	r.Start()
+	defer r.Stop(context.Background())
+
+	deadline := time.After(2 * time.Second)
+	for !store.completed.Load() {
+		select {
+		case <-deadline:
+			t.Fatal("run did not complete")
+		case <-time.After(5 * time.Millisecond):
+		}
+	}
+
+	got, err := status.Get(context.Background(), "run-1")
+	if err != nil {
+		t.Fatalf("periodic run has no status: %v", err)
+	}
+	if got.State != StateSucceeded || got.Job != "test.periodic" {
+		t.Errorf("status = %+v, want a succeeded run of test.periodic", got)
+	}
+	if got.Progress == nil || got.Progress.Done != 7 {
+		t.Errorf("progress not recorded: %+v", got.Progress)
 	}
 }
 

@@ -150,10 +150,11 @@ func (s *svc) buildInvokeSet() *invoke.Set {
 			if err != nil {
 				return nil, err
 			}
-			if err := r.TriggerNow(ctx, a.Job); err != nil {
+			id, err := r.TriggerNow(ctx, a.Job)
+			if err != nil {
 				return nil, err
 			}
-			return invoke.Result{"triggered": a.Job}, nil
+			return invoke.Result{"triggered": a.Job, "run_id": string(id)}, nil
 		}))
 
 	set.Add("cancel", "Cancel a run by id; returns its updated status.").
