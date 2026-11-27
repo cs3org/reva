@@ -319,6 +319,7 @@ message TriggerJobRequest {
 }
 
 message TriggerJobResponse {
+  string run_id = 1;
 }
 
 message CancelJobRunRequest {

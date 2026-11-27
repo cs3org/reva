@@ -283,8 +283,7 @@ func jobsLogs(ctx context.Context, client adminpb.AdminAPIClient, args []string,
 }
 
 // stopWhenRunEnds cancels a follow when the run succeeds or is cancelled. A
-// failed run is retried, so the follow continues. Periodic runs have no
-// status, so for them the follow continues until interrupted.
+// failed run is retried, so the follow continues.
 func stopWhenRunEnds(ctx context.Context, cancel context.CancelFunc, client adminpb.AdminAPIClient, id string) {
 	ticker := time.NewTicker(2 * time.Second)
 	defer ticker.Stop()
@@ -335,7 +334,12 @@ func jobsSimple(ctx context.Context, client adminpb.AdminAPIClient, op string, a
 	var err error
 	switch op {
 	case "trigger":
-		_, err = client.TriggerJob(ctx, &adminpb.TriggerJobRequest{Job: args[0]})
+		resp, err := client.TriggerJob(ctx, &adminpb.TriggerJobRequest{Job: args[0]})
+		if err != nil {
+			return adminErr(err)
+		}
+		fmt.Printf("triggered run %s\n", resp.RunId)
+		return nil
 	case "forget":
 		_, err = client.ForgetJob(ctx, &adminpb.ForgetJobRequest{Job: args[0]})
 	default:

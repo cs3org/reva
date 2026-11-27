@@ -206,11 +206,16 @@ func (s *svc) TriggerJob(ctx context.Context, req *adminpb.TriggerJobRequest) (*
 	if req.Job == "" {
 		return nil, status.Error(codes.InvalidArgument, "admin: job is required")
 	}
-	if _, err := s.invokeJobsOne(ctx, "trigger", map[string]string{"job": req.Job}, fmt.Sprintf("the leader periodic job %q", req.Job), runsLeaderJob(req.Job)); err != nil {
+	res, err := s.invokeJobsOne(ctx, "trigger", map[string]string{"job": req.Job}, fmt.Sprintf("the leader periodic job %q", req.Job), runsLeaderJob(req.Job))
+	if err != nil {
 		return nil, err
 	}
 	s.auditJob(ctx, "trigger_job", req.Job, nil)
-	return &adminpb.TriggerJobResponse{}, nil
+	var p struct {
+		RunID string `json:"run_id"`
+	}
+	_ = json.Unmarshal([]byte(res.ResultJson), &p)
+	return &adminpb.TriggerJobResponse{RunId: p.RunID}, nil
 }
 
 func (s *svc) CancelJobRun(ctx context.Context, req *adminpb.CancelJobRunRequest) (*adminpb.JobRun, error) {
