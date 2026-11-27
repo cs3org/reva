@@ -283,8 +283,10 @@ func TestNewWithoutStatsSectionIsDisabled(t *testing.T) {
 }
 
 func TestNewWithStatsSectionIsEnabled(t *testing.T) {
-	ctx := t.Context()
-	cols, err := New(ctx, map[string]any{"stats": map[string]any{}})
+	// cancelled up front: the refresh loop gives up after its first attempt
+	ctx, cancel := context.WithCancel(t.Context())
+	cancel()
+	cols, err := New(ctx, map[string]any{"Stats": map[string]any{}})
 	if err != nil {
 		t.Fatal(err)
 	}

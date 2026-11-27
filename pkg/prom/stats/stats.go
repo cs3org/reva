@@ -17,7 +17,8 @@
 // or submit itself to any jurisdiction.
 
 // Package stats is the prometheus collector turning the fleet's service
-// statistics into metrics. It needs no configuration: through the Admin
+// statistics into metrics. It is opt-in: it starts only when the prometheus
+// service config has a stats section (which may be empty). Through the Admin
 // API it finds the services advertising a "stats" invocation and invokes
 // them on a background refresh loop, and it serves the cached results — a
 // scrape never triggers an invocation.
@@ -40,6 +41,7 @@ import (
 	"os"
 	"slices"
 	"sort"
+	"strings"
 	"sync"
 	"time"
 
@@ -77,7 +79,8 @@ const DefaultOwnerAttributesFile = "/etc/revad/owner-attributes.json"
 // opt-in: without a stats section in the prometheus service config it is
 // not started, so a revad can serve /metrics without querying the fleet.
 func New(ctx context.Context, m map[string]any) ([]prometheus.Collector, error) {
-	if _, ok := m["stats"]; !ok {
+	if !hasStatsSection(m) {
+		appctx.GetLogger(ctx).Debug().Msg("prom stats: no stats section, collector not started")
 		return nil, nil
 	}
 	var c config
@@ -111,6 +114,16 @@ func New(ctx context.Context, m map[string]any) ([]prometheus.Collector, error) 
 	}
 	go col.run(ctx, interval)
 	return []prometheus.Collector{col}, nil
+}
+
+// hasStatsSection matches the key case-insensitively, as cfg.Decode does.
+func hasStatsSection(m map[string]any) bool {
+	for k := range m {
+		if strings.EqualFold(k, "stats") {
+			return true
+		}
+	}
+	return false
 }
 
 // collector caches the fleet's statistics as const metrics.
