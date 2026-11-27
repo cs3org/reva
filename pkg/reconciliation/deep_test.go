@@ -35,6 +35,7 @@ import (
 	collaboration "github.com/cs3org/go-cs3apis/cs3/sharing/collaboration/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/cs3org/reva/v3/pkg/errtypes"
+	"github.com/cs3org/reva/v3/pkg/rjobs"
 	"github.com/cs3org/reva/v3/pkg/sharehierarchy"
 	"github.com/cs3org/reva/v3/pkg/spaces"
 	"google.golang.org/grpc"
@@ -189,8 +190,6 @@ func checkChanges(t *testing.T, got, want ChangeSet) {
 // The whole comparison, over a namespace that holds one of every case.
 func TestCompareAgainstNamespace(t *testing.T) {
 	want := ChangeSet{
-		// the file below the share carries no entry at all
-		{Path: nsTodo, Action: ActionAdd, ACL: aliceEntry()},
 		// the deeper share is not on the folder it was made on
 		{Path: nsInner, Action: ActionAdd, ACL: bobEntry()},
 		// a file whose name starts with the name of the shared folder is not
@@ -319,7 +318,7 @@ func TestApplyingAWrongPermissionKeepsTheGrantee(t *testing.T) {
 		t.Fatalf("compare: %v", err)
 	}
 	j := &DeepJob{}
-	if _, err := j.applyChangeSet(ctx, storage, cs); err != nil {
+	if _, err := j.applyChangeSet(ctx, storage, cs, nil); err != nil {
 		t.Fatalf("applyChangeSet: %v", err)
 	}
 
@@ -522,8 +521,6 @@ func TestRunAnalysis(t *testing.T) {
 	}
 
 	want := ChangeSet{
-		// the file below the share holds no entry
-		{Path: nsTodo, Action: ActionAdd, ACL: aliceEntry()},
 		// no share backs this entry, and nothing allows it either
 		{Path: nsExternal, Action: ActionDelete, ACL: externalEntry()},
 		// the deeper share is not on the folder it was made on
@@ -534,9 +531,8 @@ func TestRunAnalysis(t *testing.T) {
 		// the right user with the wrong permissions
 		{Path: nsWrongPerms, Action: ActionUpdate, ACL: carolEntry()},
 		// two shares on one folder: the group entry is there, the second one
-		// is missing on the folder and on the file below it
+		// is missing on the folder
 		{Path: nsTeam, Action: ActionAdd, ACL: frankEntry()},
-		{Path: nsTeamReport, Action: ActionAdd, ACL: frankEntry()},
 		{Path: nsTeamReport, Action: ActionDelete, ACL: malloryEntry()},
 		// the share of this subtree points at a resource that is gone, so the
 		// entry stands on nothing
@@ -570,7 +566,6 @@ func TestRunAnalysisPathACLs(t *testing.T) {
 			dump:      []NSDumpInfo{folderNode(nsRoot), folderNode(www), fileNode(wwwIndex), folderNode(other)},
 			want: ChangeSet{
 				{Path: www, Action: ActionAdd, ACL: wwweos},
-				{Path: wwwIndex, Action: ActionAdd, ACL: wwweos},
 			},
 		},
 		{
@@ -731,6 +726,213 @@ func TestRunSpaceReportsAFailedApply(t *testing.T) {
 	}
 	if report.Spaces != 1 || report.Failed != 1 {
 		t.Errorf("report = %+v, want one space compared and one failure", report)
+	}
+}
+
+type progressRecorder []rjobs.Progress
+
+func (r *progressRecorder) Report(p rjobs.Progress) { *r = append(*r, p) }
+
+// A space that could not be compared is not done, so a run over one such space
+// does not report 1/1.
+func TestRunSpaceProgressOfASkippedSpace(t *testing.T) {
+	const home = "/eos/user/a/alice"
+	j := &DeepJob{
+		ShareStore: &fakeStore{},
+		Gateway: &spaceRootGateway{
+			fakeGateway: &fakeGateway{uids: testUIDs},
+			spaceTypes:  map[string]spaces.SpaceType{home: spaces.SpaceTypeHome},
+			owner:       "alice",
+		},
+		Project: func(ctx context.Context, spaceID string) (*provider.StorageSpace, error) {
+			return nil, errtypes.NotFound(spaceID)
+		},
+		StorageProviderControlChannel: func(ctx context.Context, storageID string) (ReconcileMethods, error) {
+			return &failingDumper{err: errors.New("no method \"reconciliation.dump\"")}, nil
+		},
+	}
+
+	var rec progressRecorder
+	report, err := j.run(context.Background(), spaces.EncodeSpaceID(home), &rec)
+	if err == nil {
+		t.Fatal("run: no error, want the dump error")
+	}
+	if len(report.SkippedSpaces) != 1 {
+		t.Errorf("skipped spaces = %v, want the one space", report.SkippedSpaces)
+	}
+	if p := rec[len(rec)-1]; p.Done != 0 || p.Total != 1 || p.Details["skipped_spaces"] != 1 {
+		t.Errorf("last progress = %+v, want 0/1 spaces with one skipped", p)
+	}
+}
+
+// EOS gives a file the access of its folder, so a file must only hold a share
+// of the file itself. The entries of the folder may be on it.
+func TestCompareFileExpectsOnlyItsOwnShare(t *testing.T) {
+	const own = testSpaceRoot + "/shared/own.md"
+	tree := testTree()
+	tree.Insert(&ACLNode{Path: own, MandatoryACLs: []*ACLEntry{bobEntry()}})
+	dump := []NSDumpInfo{
+		fileNode(testSpaceRoot + "/shared/plain.md"),
+		fileNode(testSpaceRoot+"/shared/copy.md", aliceEntry()),
+		fileNode(own),
+	}
+
+	got, err := compare(tree, (&memoryStorage{dump: dump}).DumpNamespace(context.Background(), testSpaceRoot))
+	if err != nil {
+		t.Fatalf("compare: %v", err)
+	}
+	want := ChangeSet{{Path: own, Action: ActionAdd, ACL: bobEntry()}}
+	if !sameChanges(got, want) {
+		t.Errorf("changes = %s\nwant = %s", formatChanges(got), formatChanges(want))
+	}
+}
+
+// The roles of a project give access through the folders, so a version folder
+// does not need their entries. It may hold them, and it still needs the share
+// of its file.
+func TestCompareVersionFolderWithoutRoles(t *testing.T) {
+	const versions = testSpaceRoot + "/shared/.sys.v#.notes.md/"
+	tests := []struct {
+		name string
+		acls []*ACLEntry
+		want ChangeSet
+	}{
+		{
+			name: "the roles are not added",
+			acls: []*ACLEntry{aliceEntry()},
+		},
+		{
+			name: "the roles stay",
+			acls: []*ACLEntry{aliceEntry(), adminsEntry()},
+		},
+		{
+			name: "the share of the file is still added",
+			want: ChangeSet{{Path: versions, Action: ActionAdd, ACL: aliceEntry()}},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			tree := testTree()
+			tree.RoleACLs = []*ACLEntry{adminsEntry()}
+			tree.Insert(&ACLNode{Path: testSpaceRoot, MandatoryACLs: tree.RoleACLs})
+			node := folderNode(versions, tt.acls...)
+			node.ExpectedACLPath = nsNotes
+
+			got, err := compare(tree, (&memoryStorage{dump: []NSDumpInfo{node}}).DumpNamespace(context.Background(), testSpaceRoot))
+			if err != nil {
+				t.Fatalf("compare: %v", err)
+			}
+			if !sameChanges(got, tt.want) {
+				t.Errorf("changes = %s\nwant = %s", formatChanges(got), formatChanges(tt.want))
+			}
+		})
+	}
+}
+
+// A version folder must not hold the mandatory entries of a path rule.
+func TestCompareVersionFolderWithoutPathACLs(t *testing.T) {
+	const (
+		index    = testSpaceRoot + "/www/index.html"
+		versions = testSpaceRoot + "/www/.sys.v#.index.html/"
+	)
+	wwweos := userEntry("wwweos", sharehierarchy.PermRead)
+	tests := []struct {
+		name string
+		acls []*ACLEntry
+		want ChangeSet
+	}{
+		{name: "the entry is not added"},
+		{
+			name: "the entry is removed",
+			acls: []*ACLEntry{wwweos},
+			want: ChangeSet{{Path: versions, Action: ActionDelete, ACL: wwweos}},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			tree := testTree()
+			tree.PathACLs = []*ACLEntry{wwweos}
+			tree.Insert(&ACLNode{Path: testSpaceRoot + "/www", MandatoryACLs: tree.PathACLs})
+			node := folderNode(versions, tt.acls...)
+			node.ExpectedACLPath = index
+
+			got, err := compare(tree, (&memoryStorage{dump: []NSDumpInfo{node}}).DumpNamespace(context.Background(), testSpaceRoot))
+			if err != nil {
+				t.Fatalf("compare: %v", err)
+			}
+			if !sameChanges(got, tt.want) {
+				t.Errorf("changes = %s\nwant = %s", formatChanges(got), formatChanges(tt.want))
+			}
+		})
+	}
+}
+
+// homeJob compares the home of alice with dump, in dry run.
+func homeJob(dump []NSDumpInfo) *DeepJob {
+	const home = "/eos/user/a/alice"
+	return &DeepJob{
+		DryRun:     true,
+		ShareStore: &fakeStore{},
+		Gateway: &spaceRootGateway{
+			fakeGateway: &fakeGateway{uids: testUIDs},
+			spaceTypes:  map[string]spaces.SpaceType{home: spaces.SpaceTypeHome},
+			owner:       "alice",
+		},
+		ListSpaces: func(ctx context.Context) iter.Seq2[string, error] {
+			return func(yield func(string, error) bool) { yield(spaces.EncodeSpaceID(home), nil) }
+		},
+		Project: func(ctx context.Context, spaceID string) (*provider.StorageSpace, error) {
+			return nil, errtypes.NotFound(spaceID)
+		},
+		StorageProviderControlChannel: func(ctx context.Context, storageID string) (ReconcileMethods, error) {
+			return &memoryStorage{dump: dump}, nil
+		},
+	}
+}
+
+func aliceDump() []NSDumpInfo {
+	dump := []NSDumpInfo{folderNode("/eos/user/a/alice/", userEntry("alice", sharehierarchy.PermRW))}
+	for i := range 10000 {
+		dump = append(dump, fileNode(fmt.Sprintf("/eos/user/a/alice/f%d", i)))
+	}
+	return dump
+}
+
+// A run over one space shows the steps of that space, and 1/1 at the end.
+func TestRunSpaceProgressShowsTheSteps(t *testing.T) {
+	var rec progressRecorder
+	if _, err := homeJob(aliceDump()).run(context.Background(), spaces.EncodeSpaceID("/eos/user/a/alice"), &rec); err != nil {
+		t.Fatalf("run: %v", err)
+	}
+
+	var phases []string
+	for _, p := range rec {
+		phases = append(phases, fmt.Sprintf("%s %d/%d %s", p.Phase, p.Done, p.Total, p.Unit))
+	}
+	want := []string{"reconcile 0/1 spaces", "dump 0/0 nodes", "compare 10000/0 nodes", "reconcile 1/1 spaces"}
+	if !slices.Equal(phases, want) {
+		t.Errorf("progress = %q, want %q", phases, want)
+	}
+}
+
+// A run over all spaces counts the spaces, and has the step of the current
+// space in the details.
+func TestRunProgressHasTheStepInTheDetails(t *testing.T) {
+	var rec progressRecorder
+	if _, err := homeJob(aliceDump()).run(context.Background(), "", &rec); err != nil {
+		t.Fatalf("run: %v", err)
+	}
+
+	i := slices.IndexFunc(rec, func(p rjobs.Progress) bool { return p.Details["space_phase"] == "compare" })
+	if i < 0 {
+		t.Fatalf("progress = %+v, want one with the compare step in the details", rec)
+	}
+	p := rec[i]
+	if p.Phase != "reconcile" || p.Unit != "spaces" || p.Total != 0 ||
+		p.Details["space"] != spaces.EncodeSpaceID("/eos/user/a/alice") || p.Details["space_done"] != 10000 || p.Details["space_unit"] != "nodes" {
+		t.Errorf("progress = %+v, want 0 spaces done with alice at 10000 nodes", p)
 	}
 }
 

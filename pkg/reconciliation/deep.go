@@ -102,6 +102,8 @@ type RunParameters struct {
 	OptionalACLs  []*ACLEntry
 	MandatoryACLs []*ACLEntry
 	PathACLs      []*PathACL
+	// Progress reports the step the space is in. It can be nil.
+	Progress func(phase string, done, total int, unit string)
 }
 
 type ShareWithPath struct {
@@ -307,7 +309,23 @@ func (j *DeepJob) run(ctx context.Context, spaceID string, rep rjobs.Reporter) (
 
 	report := DeepReport{RunID: runID, SpaceID: spaceID, DryRun: j.DryRun}
 	// the total is not known before the listing ends, so the progress has none.
-	var done int
+	// a space that could not be compared is seen, but not done.
+	var seen, done, total int
+	var current string
+	if spaceID != "" {
+		total = 1
+	}
+	// one space takes hours, so the progress of its steps is the main line.
+	// Over all spaces, the step of the current space is in the details.
+	step := func(phase string, d, t int, unit string) {
+		if spaceID != "" {
+			rep.Report(rjobs.Progress{Phase: phase, Done: int64(d), Total: int64(t), Unit: unit, Details: report.details()})
+			return
+		}
+		details := report.details()
+		details["space"], details["space_phase"], details["space_done"], details["space_total"], details["space_unit"] = current, phase, d, t, unit
+		rep.Report(rjobs.Progress{Phase: "reconcile", Done: int64(done), Unit: "spaces", Details: details})
+	}
 	var stopped error
 	for space, err := range spaceIDs {
 		if err != nil {
@@ -317,11 +335,17 @@ func (j *DeepJob) run(ctx context.Context, spaceID string, rep rjobs.Reporter) (
 		if stopped = ctx.Err(); stopped != nil {
 			break
 		}
-		report.progress(rep, done, 0)
-		done++
+		report.progress(rep, done, total)
+		seen++
+		current = space
 
 		spaceLog := log.With().Str("space", space).Logger()
-		failure, err := j.reconcileSpace(ctx, &spaceLog, &report, gw, uids, allowed, pathACLs, space)
+		failure, err := j.reconcileSpace(ctx, &spaceLog, &report, gw, uids, allowed, pathACLs, space, step)
+		if err == nil {
+			done++
+		} else {
+			report.SkippedSpaces = append(report.SkippedSpaces, space)
+		}
 		// one space means nothing else to carry on with, so the failure is the
 		// run's rather than an empty success.
 		if spaceID != "" {
@@ -332,15 +356,18 @@ func (j *DeepJob) run(ctx context.Context, spaceID string, rep rjobs.Reporter) (
 		if err == nil {
 			continue
 		}
-		report.SkippedSpaces = append(report.SkippedSpaces, space)
 		spaceLog.Error().Err(err).
 			Str("event", EventDeepSkipSpace).
 			Bool("dry_run", j.DryRun).
 			Msg("reconciliation: space could not be compared, left untouched")
 	}
-	report.progress(rep, done, done)
+	report.progress(rep, done, seen)
 
-	log.Info().
+	end, msg := log.Info(), "reconciliation: run finished"
+	if stopped != nil {
+		end, msg = log.Error().Err(stopped), "reconciliation: run aborted"
+	}
+	end.
 		Str("event", EventDeepEnd).
 		Bool("dry_run", j.DryRun).
 		Int("spaces", report.Spaces).
@@ -349,14 +376,14 @@ func (j *DeepJob) run(ctx context.Context, spaceID string, rep rjobs.Reporter) (
 		Int("deleted", report.Deleted).
 		Int("skipped_spaces", len(report.SkippedSpaces)).
 		Int("failed", report.Failed).
-		Msg("reconciliation: run finished")
+		Msg(msg)
 
 	return report, stopped
 }
 
 // if err is set, nothing was written, so the space is skipped.
 // if failure is set, only part of the changes were written, so the space has failed.
-func (j *DeepJob) reconcileSpace(ctx context.Context, log *zerolog.Logger, report *DeepReport, gw gateway.GatewayAPIClient, uids uidCache, allowed []*ACLEntry, pathACLs []*PathACL, spaceID string) (failure, err error) {
+func (j *DeepJob) reconcileSpace(ctx context.Context, log *zerolog.Logger, report *DeepReport, gw gateway.GatewayAPIClient, uids uidCache, allowed []*ACLEntry, pathACLs []*PathACL, spaceID string, step func(phase string, done, total int, unit string)) (failure, err error) {
 	root, err := spaces.DecodeSpaceID(spaceID)
 	if err != nil {
 		return nil, errors.Wrapf(err, "reconciliation: decoding space %q", spaceID)
@@ -375,7 +402,7 @@ func (j *DeepJob) reconcileSpace(ctx context.Context, log *zerolog.Logger, repor
 		return nil, err
 	}
 
-	p := RunParameters{SpaceID: spaceID, SpaceType: spaces.SpaceTypeProject, OptionalACLs: allowed, PathACLs: pathACLs}
+	p := RunParameters{SpaceID: spaceID, SpaceType: spaces.SpaceTypeProject, OptionalACLs: allowed, PathACLs: pathACLs, Progress: step}
 	project, err := j.Project(ctx, spaceID)
 	if _, ok := err.(errtypes.IsNotFound); ok {
 		// the catalogue holds the active projects only. Reconciled as a home, an
@@ -437,7 +464,7 @@ func (j *DeepJob) reconcileSpace(ctx context.Context, log *zerolog.Logger, repor
 	}
 
 	// Analysis happened without errors, so we can apply the changes and write to a journal
-	n, failure := j.applyChangeSet(ctx, controlChannel, cs)
+	n, failure := j.applyChangeSet(ctx, controlChannel, cs, step)
 	j.writeJournal(log, report, cs[:n], failure)
 	return failure, nil
 }
@@ -448,6 +475,10 @@ func (j *DeepJob) runAnalysis(ctx context.Context, gw gateway.GatewayAPIClient, 
 	path, err := spaces.DecodeSpaceID(p.SpaceID)
 	if err != nil {
 		return nil, nil, err
+	}
+	step := p.Progress
+	if step == nil {
+		step = func(string, int, int, string) {}
 	}
 
 	// First, construct a tree which contains the "ideal" state
@@ -472,7 +503,8 @@ func (j *DeepJob) runAnalysis(ctx context.Context, gw gateway.GatewayAPIClient, 
 	seen := make(map[string]struct{}, len(shares))
 	now := time.Now()
 	var sharesWithPaths = make([]*ShareWithPath, 0, len(shares))
-	for _, s := range shares {
+	for i, s := range shares {
+		step("shares", i, len(shares), "shares")
 		seen[s.GetId().GetOpaqueId()] = struct{}{}
 		// an expired share has no entry, as in the gateway: the expired job
 		// removes it, and we must not put it back.
@@ -507,6 +539,9 @@ func (j *DeepJob) runAnalysis(ctx context.Context, gw gateway.GatewayAPIClient, 
 	// Finally, construct the tree. The space root goes first: its entries are
 	// set recursively, so every node of the space needs them.
 	tree := NewACLTree()
+	if p.SpaceType == spaces.SpaceTypeProject {
+		tree.RoleACLs = p.MandatoryACLs
+	}
 	tree.Insert(&ACLNode{
 		Path:          path,
 		MandatoryACLs: p.MandatoryACLs,
@@ -521,6 +556,7 @@ func (j *DeepJob) runAnalysis(ctx context.Context, gw gateway.GatewayAPIClient, 
 			MandatoryACLs: r.MandatoryACLs,
 			AllowedACLs:   r.AllowedACLs,
 		})
+		tree.PathACLs = append(tree.PathACLs, r.MandatoryACLs...)
 	}
 	for _, s := range sharesWithPaths {
 		tree.Insert(s.toTreeNode())
@@ -531,7 +567,22 @@ func (j *DeepJob) runAnalysis(ctx context.Context, gw gateway.GatewayAPIClient, 
 	// We start by taking a dump of the namespace, and then we
 	// parse this entry-by-entry
 	// Now we do the diff and get the resulting ChangeSet
-	changeSet, err := compare(tree, storage.DumpNamespace(ctx, path))
+	// the provider sends the first node only when the scan has ended, so the
+	// dump step has no count. The scan gives no total either.
+	step("dump", 0, 0, "nodes")
+	dump := storage.DumpNamespace(ctx, path)
+	counted := func(yield func(NSDumpInfo, error) bool) {
+		var n int
+		for e, err := range dump {
+			if n++; n%10000 == 0 {
+				step("compare", n, 0, "nodes")
+			}
+			if !yield(e, err) {
+				return
+			}
+		}
+	}
+	changeSet, err := compare(tree, counted)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -539,8 +590,11 @@ func (j *DeepJob) runAnalysis(ctx context.Context, gw gateway.GatewayAPIClient, 
 	return changeSet, seen, nil
 }
 
-func (j *DeepJob) applyChangeSet(ctx context.Context, storage ReconcileMethods, cs ChangeSet) (int, error) {
+func (j *DeepJob) applyChangeSet(ctx context.Context, storage ReconcileMethods, cs ChangeSet, step func(phase string, done, total int, unit string)) (int, error) {
 	for i, c := range cs {
+		if step != nil {
+			step("apply", i, len(cs), "changes")
+		}
 		var err error
 		switch c.Action {
 		case ActionAdd, ActionUpdate:
@@ -591,13 +645,17 @@ func (j *DeepJob) writeJournal(log *zerolog.Logger, report *DeepReport, cs Chang
 
 // progress reports the run, with the totals so far.
 func (r *DeepReport) progress(rep rjobs.Reporter, done, total int) {
-	rep.Report(rjobs.Progress{Phase: "reconcile", Done: int64(done), Total: int64(total), Unit: "spaces", Details: rjobs.Params{
+	rep.Report(rjobs.Progress{Phase: "reconcile", Done: int64(done), Total: int64(total), Unit: "spaces", Details: r.details()})
+}
+
+func (r *DeepReport) details() rjobs.Params {
+	return rjobs.Params{
 		"added":          r.Added,
 		"updated":        r.Updated,
 		"deleted":        r.Deleted,
 		"skipped_spaces": len(r.SkippedSpaces),
 		"failed":         r.Failed,
-	}})
+	}
 }
 
 // gateway returns the injected client when set, otherwise the one the service
@@ -652,13 +710,35 @@ func compare(tree *ACLTree, entries iter.Seq2[NSDumpInfo, error]) (ChangeSet, er
 }
 
 func compareEntry(tree *ACLTree, entry NSDumpInfo) ChangeSet {
-	m, o, ok := tree.Find(cmp.Or(entry.ExpectedACLPath, entry.Path))
+	p := cmp.Or(entry.ExpectedACLPath, entry.Path)
+	m, o, ok := tree.Find(p)
 	if !ok {
 		return nil
 	}
 
-	return calculateChangeSet(m, o, entry.ACLs, entry.Path)
+	if entry.Type == provider.ResourceType_RESOURCE_TYPE_FILE {
+		// EOS gives a file the access of its folder, so the entries of the
+		// folder are not on the file. Only a share of the file itself must be.
+		fm, fo, _ := tree.Find(path.Dir(path.Clean(p)))
+		var own []*ACLEntry
+		for _, e := range m {
+			if !aclSetContains(fm, e) {
+				own = append(own, e)
+			}
+		}
+		m, o = own, slices.Concat(o, fm, fo)
+	} else if entry.ExpectedACLPath != "" && len(tree.RoleACLs)+len(tree.PathACLs) > 0 {
+		var need []*ACLEntry
+		for _, e := range m {
+			if !aclSetContains(tree.RoleACLs, e) && !aclSetContains(tree.PathACLs, e) {
+				need = append(need, e)
+			}
+		}
+		o = slices.DeleteFunc(slices.Concat(o, tree.RoleACLs), func(e *ACLEntry) bool { return aclSetContains(tree.PathACLs, e) })
+		m = need
+	}
 
+	return calculateChangeSet(m, o, entry.ACLs, entry.Path)
 }
 
 func calculateChangeSet(mandatory, optional, actual []*ACLEntry, p string) ChangeSet {

@@ -25,7 +25,7 @@ func (e *EOSMemoryNSInspect) Dump(ctx context.Context, rootPath string, maxDepth
 
 		var stdout bytes.Buffer
 		cmd.Stdout = &stdout
-		if err := cmd.Run(); err != nil {
+		if err := runNSInspect(cmd); err != nil {
 			yield(NameSpaceEntry{}, err)
 			return
 		}

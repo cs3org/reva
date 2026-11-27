@@ -24,6 +24,12 @@ import (
 // BenchmarkInsert/1365_nodes/deepest_first   505674 µs  84681 KB  1427558 allocs
 type ACLTree struct {
 	SpaceType spaces.SpaceType
+	// RoleACLs are the entries of the roles of a project. A version folder
+	// does not need them, but may hold them.
+	RoleACLs []*ACLEntry
+	// PathACLs are the mandatory entries of the path rules. A version folder
+	// must not hold them.
+	PathACLs []*ACLEntry
 	ACLNode
 }
 

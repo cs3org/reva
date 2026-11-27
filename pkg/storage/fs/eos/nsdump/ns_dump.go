@@ -1,6 +1,7 @@
 package nsdump
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"io"
@@ -93,6 +94,25 @@ func nsInspectCommand(ctx context.Context, c NSInspectConfig, rootPath string, m
 		args = append(args, "--no-files")
 	}
 	return exec.CommandContext(ctx, c.Binary, args...)
+}
+
+// runNSInspect runs the scan. The exit status alone does not tell why a scan
+// failed, so the error also has the end of stderr.
+func runNSInspect(cmd *exec.Cmd) error {
+	var stderr bytes.Buffer
+	cmd.Stderr = &stderr
+	err := cmd.Run()
+	if err == nil {
+		return nil
+	}
+	msg := strings.TrimSpace(stderr.String())
+	if msg == "" {
+		return errors.Wrap(err, "failed to run eos-ns-inspect")
+	}
+	if len(msg) > 1024 {
+		msg = "..." + msg[len(msg)-1024:]
+	}
+	return errors.Wrapf(err, "failed to run eos-ns-inspect: %s", msg)
 }
 
 // parseNSInspect decodes the JSON array that eos-ns-inspect prints one element

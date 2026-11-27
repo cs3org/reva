@@ -45,8 +45,8 @@ func (e *EOSChunkedNSInspect) Dump(ctx context.Context, rootPath string, maxDept
 
 		cmd := nsInspectCommand(ctx, e.cfg.NSInspectConfig, rootPath, maxDepth)
 		cmd.Stdout = f
-		if err := cmd.Run(); err != nil {
-			yield(NameSpaceEntry{}, errors.Wrap(err, "failed to run eos-ns-inspect"))
+		if err := runNSInspect(cmd); err != nil {
+			yield(NameSpaceEntry{}, err)
 			return
 		}
 
