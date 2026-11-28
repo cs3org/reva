@@ -21,6 +21,7 @@ package sql
 import (
 	"errors"
 	"net/url"
+	"strconv"
 	"strings"
 )
 
@@ -40,11 +41,20 @@ func ocmDatabaseConfig(c Config) (Config, error) {
 		// The driver treats a leading question mark as a literal filename.
 		dsn = "file:" + url.PathEscape(dsn)
 	}
+	var tail string
 	if strings.HasPrefix(dsn, "file:") {
-		dsn, _, _ = strings.Cut(dsn, "#")
+		// SQLite stops at '#'. The Go driver reads options after the
+		// first '?' to the end of the name.
+		var fragment string
+		dsn, fragment, _ = strings.Cut(dsn, "#")
+		sep := "?"
+		if strings.Contains(dsn, "?") {
+			sep = "&"
+		}
+		_, tail, _ = strings.Cut(fragment, sep)
 	}
 	path, rawQuery, _ := strings.Cut(dsn, "?")
-	q, err := url.ParseQuery(rawQuery)
+	q, err := url.ParseQuery(rawQuery + "&" + tail)
 	if err != nil {
 		return c, errors.New("sqlite db_name has invalid options")
 	}
@@ -56,13 +66,21 @@ func ocmDatabaseConfig(c Config) (Config, error) {
 	}
 	for _, option := range [][2]string{{"_busy_timeout", "10000"}, {"_txlock", "immediate"}, {"_timeout", "10000"}} {
 		for _, value := range q[option[0]] {
-			if !strings.EqualFold(value, option[1]) {
+			valid := strings.EqualFold(value, option[1])
+			if option[0] != "_txlock" {
+				timeout, err := strconv.ParseInt(value, 10, 64)
+				valid = err == nil && timeout == 10000
+			}
+			if !valid {
 				return c, errors.New("sqlite option " + option[0] + " must be " + option[1] + " for the OCM share manager")
 			}
 		}
 		if option[0] != "_timeout" && !q.Has(option[0]) {
 			options = append(options, option[0]+"="+option[1])
 		}
+	}
+	if tail != "" {
+		options = append(options, "#", tail)
 	}
 	c.DBName = path + "?" + strings.Join(options, "&")
 	return c, nil

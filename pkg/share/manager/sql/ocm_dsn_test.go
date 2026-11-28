@@ -41,9 +41,12 @@ func TestOCMDatabaseOptions(t *testing.T) {
 		{"sqlite", "ocm.sqlite", "ocm.sqlite" + required},
 		{"sqlite", "ocm#share.sqlite?cache=private", "ocm#share.sqlite?cache=private&_busy_timeout=10000&_txlock=immediate"},
 		{"sqlite", "file:ocm%23share.sqlite?mode=rwc&_txlock=IMMEDIATE#ignored", "file:ocm%23share.sqlite?mode=rwc&_txlock=IMMEDIATE&_busy_timeout=10000"},
-		{"sqlite", "file:ocm.sqlite#ignored?mode=ro", "file:ocm.sqlite" + required},
+		{"sqlite", "file:ocm.sqlite#ignored?mode=ro", "file:ocm.sqlite" + required + "&#&mode=ro"},
 		{"sqlite", "ocm.sqlite?_busy_timeout=10000&_timeout=10000", "ocm.sqlite?_busy_timeout=10000&_timeout=10000&_txlock=immediate"},
 		{"sqlite", "file:ocm.sqlite?mode=rwc&modeof=mode%20source&other=a%2fb+%20&other=&%5Ftxlock=IMMEDIATE#fragment", "file:ocm.sqlite?mode=rwc&modeof=mode%20source&other=a%2fb+%20&other=&%5Ftxlock=IMMEDIATE&_busy_timeout=10000"},
+		{"sqlite", "file:x#old?_foreign_keys=on", "file:x" + required + "&#&_foreign_keys=on"},
+		{"sqlite", "file:x?mode=rwc#x&_fk=on", "file:x?mode=rwc&_busy_timeout=10000&_txlock=immediate&#&_fk=on"},
+		{"sqlite", "file:x?_fk=off#x&_fk=on", "file:x?_fk=off&_busy_timeout=10000&_txlock=immediate&#&_fk=on"},
 		{"mysql", "ocm?x=1", "ocm?x=1"},
 	} {
 		t.Run(tc.input, func(t *testing.T) {
@@ -185,6 +188,48 @@ func TestSQLiteOCMOpenOptions(t *testing.T) {
 	}
 }
 
+func TestSQLiteOCMFragmentAndTimeoutOptions(t *testing.T) {
+	for _, tc := range []struct {
+		dsn         string
+		foreignKeys bool
+	}{
+		{"file:p#old?_foreign_keys=on", true},
+		{"file:p#x?mode=ro&_fk=on", true},
+		{"p?_busy_timeout=010000", false},
+		{"p?_timeout=010000", false},
+	} {
+		t.Run(tc.dsn, func(t *testing.T) {
+			t.Chdir(t.TempDir())
+			ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
+			defer cancel()
+			repo, err := NewOCMShareManager(ctx, map[string]any{"db_engine": "sqlite", "db_name": tc.dsn})
+			if err != nil {
+				t.Fatal(err)
+			}
+			pool, err := repo.(*mgr).db.DB()
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer pool.Close()
+			conn, err := pool.Conn(ctx)
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer conn.Close()
+			if tc.foreignKeys {
+				var foreignKeys int
+				if err := conn.QueryRowContext(ctx, "PRAGMA foreign_keys").Scan(&foreignKeys); err != nil || foreignKeys != 1 {
+					t.Fatalf("foreign keys = %d, err = %v, want 1", foreignKeys, err)
+				}
+			}
+			var busyTimeout int
+			if err := conn.QueryRowContext(ctx, "PRAGMA busy_timeout").Scan(&busyTimeout); err != nil || busyTimeout != 10000 {
+				t.Fatalf("busy timeout = %d ms, err = %v", busyTimeout, err)
+			}
+		})
+	}
+}
+
 func TestSQLiteCompletionWaitsForCompetingWriter(t *testing.T) {
 	cases := []struct {
 		name     string
@@ -224,6 +269,25 @@ func TestSQLiteCompletionWaitsForCompetingWriter(t *testing.T) {
 				t.Fatal(err)
 			}
 
+			pool.SetMaxOpenConns(1)
+			var busyTimeout int
+			if err := pool.QueryRowContext(ctx, "PRAGMA busy_timeout").Scan(&busyTimeout); err != nil || busyTimeout != 10000 {
+				t.Fatalf("busy timeout = %d ms, err = %v, want 10000", busyTimeout, err)
+			}
+			defer func() {
+				cleanupCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+				defer cancel()
+				if _, err := pool.ExecContext(cleanupCtx, "PRAGMA busy_timeout = 10000"); err != nil {
+					t.Errorf("restore busy timeout during cleanup: %v", err)
+				}
+			}()
+			if _, err := pool.ExecContext(ctx, "PRAGMA busy_timeout = 0"); err != nil {
+				t.Fatal(err)
+			}
+			if err := pool.QueryRowContext(ctx, "PRAGMA busy_timeout").Scan(&busyTimeout); err != nil || busyTimeout != 0 {
+				t.Fatalf("busy timeout = %d ms, err = %v, want 0", busyTimeout, err)
+			}
+
 			other, err := dbsql.Open("sqlite3", path)
 			if err != nil {
 				t.Fatal(err)
@@ -237,18 +301,35 @@ func TestSQLiteCompletionWaitsForCompetingWriter(t *testing.T) {
 			if _, err := holder.ExecContext(ctx, "UPDATE ocm_received_shares SET mtime = mtime + 1"); err != nil {
 				t.Fatal(err)
 			}
-			released := make(chan error, 1)
-			go func() {
-				time.Sleep(150 * time.Millisecond)
-				released <- holder.Commit()
-			}()
 			accepted := ocm.ShareState_SHARE_STATE_ACCEPTED
 			u, err := m.CompleteReceivedShareTransfer(ctx, user, rs.Id, start.Generation, accepted)
-			if releaseErr := <-released; releaseErr != nil {
-				t.Fatal(releaseErr)
+			if ctx.Err() != nil {
+				t.Fatalf("competing completion exceeded its deadline: %v", ctx.Err())
 			}
-			if err != nil || !u.StateChanged() || u.After.GetState() != accepted {
-				t.Fatalf("competing completion: %v %v", u, err)
+			var sqliteErr sqlite3.Error
+			if u != nil || !errors.As(err, &sqliteErr) || sqliteErr.Code != sqlite3.ErrBusy {
+				t.Fatalf("competing completion: %v %v, want nil receipt and SQLITE_BUSY", u, err)
+			}
+			got, err := m.GetReceivedShare(ctx, user, idRef(rs.Id))
+			if err != nil || got.GetState() != ocm.ShareState_SHARE_STATE_TRANSFERRING || receivedGeneration(t, m, rs.Id) != start.Generation {
+				t.Fatalf("competing completion changed the attempt: %v %v", got, err)
+			}
+			if _, err := pool.ExecContext(ctx, "PRAGMA busy_timeout = 10000"); err != nil {
+				t.Fatal(err)
+			}
+			if err := pool.QueryRowContext(ctx, "PRAGMA busy_timeout").Scan(&busyTimeout); err != nil || busyTimeout != 10000 {
+				t.Fatalf("restored busy timeout = %d ms, err = %v, want 10000", busyTimeout, err)
+			}
+			if err := holder.Commit(); err != nil {
+				t.Fatal(err)
+			}
+			u, err = m.CompleteReceivedShareTransfer(ctx, user, rs.Id, start.Generation, accepted)
+			if err != nil || u == nil || !u.StateChanged() || u.After.GetState() != accepted {
+				t.Fatalf("completion after lock release: %v %v", u, err)
+			}
+			got, err = m.GetReceivedShare(ctx, user, idRef(rs.Id))
+			if err != nil || got.GetState() != accepted {
+				t.Fatalf("read completed attempt: %v %v", got, err)
 			}
 
 			if _, err := m.UpdateReceivedShare(ctx, user, request, stateMask()); err != nil {
@@ -276,16 +357,31 @@ func TestSQLiteRejectsConflictingOCMOptions(t *testing.T) {
 		"_txlock=immediate&_txlock=exclusive",
 		"_busy_timeout=10000&_busy_timeout=5",
 		"_timeout=10000&_timeout=1",
+		"_timeout=",
+		"_busy_timeout=99999999999999999999",
+		"_busy_timeout=0x2710",
+		"_busy_timeout=10000&_timeout=010001",
+		"#?_busy_timeout=5",
 		"a=%zz",
 		"a=1;b=2",
 	} {
 		t.Run(raw, func(t *testing.T) {
-			path := filepath.Join(t.TempDir(), "ocm.sqlite")
-			_, err := NewOCMShareManager(context.Background(), map[string]any{
-				"db_engine": "sqlite", "db_name": path + "?" + raw,
+			t.Chdir(t.TempDir())
+			const path = "ocm.sqlite"
+			dsn := path + "?" + raw
+			if strings.HasPrefix(raw, "#") {
+				dsn = "file:" + path + raw
+			}
+			ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
+			defer cancel()
+			repo, err := NewOCMShareManager(ctx, map[string]any{
+				"db_engine": "sqlite", "db_name": dsn,
 			})
 			if err == nil {
-				t.Fatal("conflicting or malformed SQLite options were accepted")
+				if pool, err := repo.(*mgr).db.DB(); err == nil {
+					_ = pool.Close()
+				}
+				t.Error("conflicting or malformed SQLite options were accepted")
 			}
 			if _, statErr := os.Stat(path); !os.IsNotExist(statErr) {
 				t.Fatalf("configuration should be rejected before opening the database: %v", statErr)
