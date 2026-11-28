@@ -156,6 +156,7 @@ type ocmNotificationTransport struct {
 	c           *OCMClient
 	key         *httpsig.Key
 	stateNotice *share.StateNotice
+	current     func(context.Context) bool
 }
 
 var (
@@ -239,6 +240,19 @@ func (t ocmNotificationTransport) PostNotification(ctx context.Context, peer *no
 	req.ContentLength = int64(len(body))
 	// Prevent net/http from rewinding the POST body on a reused connection.
 	req.GetBody = nil
+	// The share can change while discovery runs. Check it again before signing.
+	if t.current != nil {
+		if err := ctx.Err(); err != nil {
+			return notificationResponse{}, err
+		}
+		current := t.current(ctx)
+		if err := ctx.Err(); err != nil {
+			return notificationResponse{}, err
+		}
+		if !current {
+			return notificationResponse{}, errSuperseded
+		}
+	}
 	if err := t.key.Sign(req, body); err != nil {
 		return notificationResponse{}, errSigningFailed
 	}
@@ -270,7 +284,7 @@ func (c *OCMClient) NewNotification(ctx context.Context, domain string, n *Outgo
 	if err != nil {
 		return SendResult{Outcome: SendPostFailed, Failure: FailureError}
 	}
-	res := sendNotification(ctx, ocmNotificationTransport{c: c, key: key, stateNotice: n.StateNotice}, domain, body)
+	res := sendNotification(ctx, ocmNotificationTransport{c: c, key: key, stateNotice: n.StateNotice, current: n.StillCurrent}, domain, body)
 	event := log.Info()
 	if res.Outcome != SendDelivered {
 		event = log.Warn()

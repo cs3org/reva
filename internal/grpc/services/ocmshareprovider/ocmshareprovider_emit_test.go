@@ -1059,7 +1059,7 @@ func TestAsyncJSONPermissionNoticeChecksFreshnessDeadline(t *testing.T) {
 			sender := e.svc.notifier.(*syncNotifier)
 			a := &ocmd.AsyncNotifier{Client: sender.c, Key: sender.key}
 			t.Cleanup(func() { _ = a.Close() })
-			checked := make(chan bool, 1)
+			checked := make(chan bool, 2)
 			e.svc.notifier = notificationFunc(func(ctx context.Context, peer string, n *ocmd.OutgoingNotification) ocmd.SendResult {
 				check := n.StillCurrent
 				n.StillCurrent = func(ctx context.Context) bool {
@@ -1811,6 +1811,146 @@ func TestJSONReceivedStateNoticeRechecksAroundDiscovery(t *testing.T) {
 				n := requireNotices(t, e.peer, ocmd.NotificationShareAccepted)[0]
 				if fileOf(n)["providerId"] != rs.RemoteShareId {
 					t.Fatalf("provider ID = %q, want %q", fileOf(n)["providerId"], rs.RemoteShareId)
+				}
+			}
+		})
+	}
+}
+
+func TestReceivedStateNoticeRechecksSQLAroundDiscovery(t *testing.T) {
+	const (
+		accepted = ocm.ShareState_SHARE_STATE_ACCEPTED
+		pending  = ocm.ShareState_SHARE_STATE_PENDING
+		declined = ocm.ShareState_SHARE_STATE_REJECTED
+	)
+	for _, tc := range []struct {
+		name, notice string
+		state        ocm.ShareState
+		discoveries  int
+	}{
+		{"reset during discovery", "", pending, 1},
+		{"unchanged", ocmd.NotificationShareAccepted, accepted, 1},
+		{"decline during discovery", ocmd.NotificationShareDeclined, declined, 2},
+		{"permissions replaced during discovery", ocmd.NotificationShareChangePermission, accepted, 2},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			e := newEmitEnv(t)
+			sender := e.svc.notifier.(*syncNotifier)
+			rs := e.received(t, "Exact-Case:sql-discovery", false)
+			providerID := rs.RemoteShareId
+			update := func(first bool) (rpc.Code, error) {
+				ctx, cancel := context.WithTimeout(e.recip, 5*time.Second)
+				defer cancel()
+				state := tc.state
+				if first {
+					state = accepted
+				}
+				res, err := e.svc.UpdateReceivedOCMShare(ctx, &ocm.UpdateReceivedOCMShareRequest{
+					Share:      &ocm.ReceivedShare{Id: rs.Id, State: state},
+					UpdateMask: &field_mask.FieldMask{Paths: []string{"state"}},
+				})
+				return res.GetStatus().GetCode(), err
+			}
+			if tc.notice == ocmd.NotificationShareChangePermission {
+				sh := e.outgoing(t)
+				providerID = sh.Id.OpaqueId
+				update = func(first bool) (rpc.Code, error) {
+					ctx, cancel := context.WithTimeout(e.owner, 5*time.Second)
+					defer cancel()
+					p := &providerpb.ResourcePermissions{}
+					if first {
+						p = permissions.NewEditorRole().CS3ResourcePermissions()
+					}
+					res, err := e.svc.UpdateOCMShare(ctx, &ocm.UpdateOCMShareRequest{
+						Ref: &ocm.ShareReference{Spec: &ocm.ShareReference_Id{Id: sh.Id}},
+						Field: []*ocm.UpdateOCMShareRequest_UpdateField{{
+							Field: &ocm.UpdateOCMShareRequest_UpdateField_AccessMethods{
+								AccessMethods: share.NewWebDavAccessMethod(p, nil, nil),
+							},
+						}},
+					})
+					return res.GetStatus().GetCode(), err
+				}
+			}
+
+			entered, resume, done := make(chan struct{}), make(chan struct{}), make(chan struct{})
+			unblock := sync.OnceFunc(func() { close(resume) })
+			t.Cleanup(func() {
+				unblock()
+				select {
+				case <-done:
+				case <-time.After(5 * time.Second):
+					t.Error("timed out joining first provider update in cleanup")
+				}
+			})
+			e.peer.mu.Lock()
+			e.peer.holdDiscovery = func(ctx context.Context) {
+				close(entered)
+				select {
+				case <-resume:
+				case <-ctx.Done():
+				}
+			}
+			e.peer.mu.Unlock()
+
+			var firstStatus rpc.Code
+			var firstErr error
+			go func() {
+				defer close(done)
+				firstStatus, firstErr = update(true)
+			}()
+			select {
+			case <-entered:
+			case <-time.After(5 * time.Second):
+				t.Fatal("first update did not reach discovery")
+			}
+			e.peer.mu.Lock()
+			e.peer.holdDiscovery = nil
+			e.peer.mu.Unlock()
+
+			if tc.notice != ocmd.NotificationShareAccepted {
+				if code, err := update(false); err != nil || code != rpc.Code_CODE_OK {
+					t.Fatalf("second update = %s, err = %v", code, err)
+				}
+			}
+			unblock()
+			select {
+			case <-done:
+			case <-time.After(5 * time.Second):
+				t.Fatal("first provider update did not finish")
+			}
+			if firstErr != nil || firstStatus != rpc.Code_CODE_OK {
+				t.Fatalf("first update = %s, err = %v", firstStatus, firstErr)
+			}
+
+			delivered := ocmd.SendResult{Outcome: ocmd.SendDelivered, Status: http.StatusCreated, Class: http.StatusCreated}
+			superseded := ocmd.SendResult{Outcome: ocmd.SendSuperseded}
+			want := []ocmd.SendResult{superseded}
+			if tc.notice == ocmd.NotificationShareAccepted {
+				want = []ocmd.SendResult{delivered}
+			} else if tc.notice != "" {
+				want = []ocmd.SendResult{delivered, superseded}
+			}
+			if !slices.Equal(sender.results, want) {
+				t.Errorf("send results = %+v, want %+v", sender.results, want)
+			}
+			e.peer.mu.Lock()
+			discoveries := e.peer.discovers
+			e.peer.mu.Unlock()
+			if discoveries != tc.discoveries {
+				t.Errorf("discoveries = %d, want %d", discoveries, tc.discoveries)
+			}
+			if tc.notice == "" {
+				requireNotices(t, e.peer)
+				return
+			}
+			file := fileOf(requireNotices(t, e.peer, tc.notice)[0])
+			if file["providerId"] != providerID {
+				t.Errorf("provider ID = %q, want %q", file["providerId"], providerID)
+			}
+			if tc.notice == ocmd.NotificationShareChangePermission {
+				if perms, ok := file["permissions"].([]any); !ok || len(perms) != 0 {
+					t.Errorf("permissions = %v, want explicit empty", file["permissions"])
 				}
 			}
 		})

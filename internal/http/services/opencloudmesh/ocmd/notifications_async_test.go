@@ -93,8 +93,7 @@ func TestAsyncNotifierSerializesCurrentPermissionSnapshots(t *testing.T) {
 	a := &AsyncNotifier{Client: client, Key: newSigningKey(t)}
 	t.Cleanup(func() { _ = a.Close() })
 	host := strings.TrimPrefix(p.srv.URL, "http://")
-	var revision atomic.Int32
-	send := func(rev int32, permissions []string, checked chan struct{}) {
+	send := func(current bool, permissions []string, checked chan struct{}) {
 		t.Helper()
 		n, err := (ShareStateNotification{
 			Type: NotificationShareChangePermission, SenderDomain: "cernbox.example.org",
@@ -103,22 +102,21 @@ func TestAsyncNotifierSerializesCurrentPermissionSnapshots(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
+		signal := sync.OnceFunc(func() { close(checked) })
 		n.StillCurrent = func(context.Context) bool {
-			close(checked)
-			return revision.Load() == rev
+			signal()
+			return current
 		}
 		if result := a.NewNotification(context.Background(), host, n); result != (SendResult{}) {
 			t.Fatalf("send admission: %+v", result)
 		}
 	}
 
-	revision.Store(1)
-	send(1, []string{"read", "write"}, make(chan struct{}))
+	send(true, []string{"read", "write"}, make(chan struct{}))
 	wait(t, p.entered, "first discovery")
-	revision.Store(3)
 	stale, latest := make(chan struct{}), make(chan struct{})
-	send(2, []string{"read"}, stale)
-	send(3, []string{}, latest)
+	send(false, []string{"read"}, stale)
+	send(true, []string{}, latest)
 	select {
 	case <-latest:
 		t.Fatal("the newer snapshot overtook the in-flight send")
@@ -128,9 +126,12 @@ func TestAsyncNotifierSerializesCurrentPermissionSnapshots(t *testing.T) {
 	wait(t, p.posted, "first POST")
 	wait(t, p.posted, "latest POST")
 	wait(t, stale, "stale snapshot check")
-	if err := a.Close(); err != nil {
-		t.Fatal(err)
-	}
+	joined := make(chan struct{})
+	go func() {
+		a.wg.Wait()
+		close(joined)
+	}()
+	wait(t, joined, "notification workers")
 	if d, n := p.discovers.Load(), p.posts.Load(); d != 2 || n != 2 {
 		t.Fatalf("discovers %d, posts %d", d, n)
 	}
