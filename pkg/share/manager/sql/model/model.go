@@ -212,6 +212,10 @@ type ShareState struct {
 // In addition, tokens must be unique.
 // TODO(lopresti) see if we can consolidate Owner and Initiator with UIDOwner and UIDInitiator in ProtoShare
 type OcmShare struct {
+	CreatorIdp      []byte `gorm:"type:varbinary(1020)"`
+	CreatorUserType int32  `gorm:"not null;default:0"`
+	CreatorTenant   []byte `gorm:"type:varbinary(1020)"`
+	RemoteRecipient []byte `gorm:"type:varbinary(1025);index:i_ocmshare_remote_recipient"`
 	ProtoShare
 	DeletedAt     gorm.DeletedAt     `gorm:"uniqueIndex:u_ocmshare"` // the composite index also works as regular index here, similarly as in the `Share` struct
 	Inode         string             `gorm:"size:64;not null;uniqueIndex:u_ocmshare;index"`
@@ -266,6 +270,9 @@ type OcmReceivedShare struct {
 	// TransferGeneration grows on every transfer start and state change, so
 	// that the completion of an older attempt cannot match a later one.
 	TransferGeneration uint64 `gorm:"not null;default:0"`
+	// TransferAttempt identifies the start that set TRANSFERRING, so that
+	// only that start can release it. Older rows have none.
+	TransferAttempt *string `gorm:"size:36"`
 }
 
 // OcmReceivedShareProtocol represents the protocol used to access an OCM share received from a remote user.

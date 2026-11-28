@@ -36,6 +36,8 @@ import (
 	"github.com/cs3org/reva/v3/pkg/ocm/share"
 	"github.com/cs3org/reva/v3/pkg/permissions"
 	model "github.com/cs3org/reva/v3/pkg/share/manager/sql/model"
+	"github.com/go-sql-driver/mysql"
+	"github.com/mattn/go-sqlite3"
 	"google.golang.org/genproto/protobuf/field_mask"
 	"google.golang.org/protobuf/proto"
 	"gorm.io/gorm"
@@ -159,8 +161,12 @@ func TestDeleteShareByIDExactPrincipal(t *testing.T) {
 }
 
 func TestDeleteShareByKeyReceipt(t *testing.T) {
-	forEachDialect(t, func(t *testing.T, m *mgr) {
-		ctx, owner := ownerContext(t, "einstein")
+	forEachDialectConfig(t, func(t *testing.T, cfg map[string]any) {
+		m := openOCMManager(t, cfg)
+		writer := openOCMManager(t, cfg)
+		userCtx, owner := ownerContext(t, "einstein")
+		ctx, cancel := context.WithTimeout(userCtx, 10*time.Second)
+		defer cancel()
 		now := time.Now().UTC().Truncate(time.Millisecond)
 		m.db = m.db.Session(&gorm.Session{NowFunc: func() time.Time { return now }})
 		deleted := storeOutgoing(t, m, ctx, owner, "viewer", "tok-deleted")
@@ -168,12 +174,23 @@ func TestDeleteShareByKeyReceipt(t *testing.T) {
 			t.Fatal(err)
 		}
 		stored := storeOutgoing(t, m, ctx, owner, "viewer", "tok-k")
-		duplicate := storeOutgoing(t, m, ctx, owner, "editor", "tok-duplicate")
+		duplicate := storeOutgoing(t, m, ctx, owner, "viewer", "tok-duplicate")
 		otherCtx, otherOwner := ownerContext(t, "another-owner")
 		survivor := storeOutgoing(t, m, otherCtx, otherOwner, "viewer", "tok-survivor")
 		ref := &ocm.ShareReference{Spec: &ocm.ShareReference_Key{Key: &ocm.ShareKey{
 			Owner: owner.Id, ResourceId: stored.ResourceId, Grantee: stored.Grantee,
 		}}}
+
+		editor := share.NewWebDavAccessMethod(permissions.NewEditorRole().CS3ResourcePermissions(), nil, nil)
+		field := &ocm.UpdateOCMShareRequest_UpdateField{Field: &ocm.UpdateOCMShareRequest_UpdateField_AccessMethods{AccessMethods: editor}}
+		update, err := m.UpdateShare(ctx, owner, ref, field)
+		if err != nil || update == nil || update.After.GetId().GetOpaqueId() != stored.Id.OpaqueId || !update.WebDAVPermissionsChanged {
+			t.Fatalf("update did not change the lowest-ID live share: %v %v", update, err)
+		}
+		got, err := m.GetShare(ctx, owner, idRef(duplicate.Id))
+		if err != nil || !proto.Equal(webdavPermissions(got.GetAccessMethods()), webdavPermissions(duplicate.GetAccessMethods())) {
+			t.Fatalf("update also changed the duplicate: %v", err)
+		}
 
 		const callback = "test:abort_second_ocm_delete"
 		abort := errors.New("abort after deleting both rows")
@@ -200,7 +217,52 @@ func TestDeleteShareByKeyReceipt(t *testing.T) {
 				t.Fatalf("rollback changed share %s: %v", want.GetId().GetOpaqueId(), err)
 			}
 		}
-		removals, err := m.DeleteShare(ctx, owner, ref)
+		deletePool, err := m.db.DB()
+		if err != nil {
+			t.Fatal(err)
+		}
+		gate := &transactionGate{DB: deletePool, mode: "commit", reached: make(chan struct{}), release: make(chan struct{})}
+		m.db.Statement.ConnPool = gate
+		writerPool, err := writer.db.DB()
+		if err != nil {
+			t.Fatal(err)
+		}
+		writerPool.SetMaxOpenConns(1)
+		sqlite := cfg["db_engine"] == "sqlite"
+		setTimeout := "SET SESSION innodb_lock_wait_timeout = 1"
+		if sqlite {
+			setTimeout = "PRAGMA busy_timeout = 0"
+		}
+		if _, err := writerPool.ExecContext(ctx, setTimeout); err != nil {
+			t.Fatal(err)
+		}
+		var removals []share.ShareRemoval
+		var deleteErr error
+		done := make(chan struct{})
+		release := sync.OnceFunc(func() { close(gate.release) })
+		go func() {
+			defer close(done)
+			removals, deleteErr = m.DeleteShare(ctx, owner, ref)
+		}()
+		defer func() { release(); <-done }()
+		select {
+		case <-gate.reached:
+		case <-done:
+			t.Fatalf("delete exited before commit: %v", deleteErr)
+		case <-ctx.Done():
+			t.Fatal("delete did not reach commit")
+		}
+		up, lockErr := writer.UpdateShare(ctx, owner, ref, field)
+		var sqliteErr sqlite3.Error
+		var mysqlErr *mysql.MySQLError
+		if up != nil || (sqlite && (!errors.As(lockErr, &sqliteErr) || sqliteErr.Code != sqlite3.ErrBusy)) ||
+			(!sqlite && (!errors.As(lockErr, &mysqlErr) || mysqlErr.Number != 1205)) {
+			t.Fatalf("competing update: %v, %v", up, lockErr)
+		}
+		t.Log("ordinary update encountered database contention during ordinary delete")
+		release()
+		<-done
+		err = deleteErr
 		if err != nil || len(removals) != 2 {
 			t.Fatalf("got %d receipts: %v", len(removals), err)
 		}
@@ -213,6 +275,9 @@ func TestDeleteShareByKeyReceipt(t *testing.T) {
 			if _, err := m.GetShare(ctx, owner, idRef(want.Id)); !errors.Is(err, share.ErrShareNotFound) {
 				t.Errorf("share %s remains available: %v", want.Id.OpaqueId, err)
 			}
+		}
+		if updated, err := writer.UpdateShare(ctx, owner, ref, field); updated != nil || !errors.Is(err, share.ErrShareNotFound) {
+			t.Fatalf("update after delete: %v %v", updated, err)
 		}
 		if removals, err := m.DeleteShare(ctx, owner, ref); !errors.Is(err, share.ErrShareNotFound) || removals != nil {
 			t.Errorf("repeat returned %d receipts: %v", len(removals), err)
@@ -494,6 +559,16 @@ func TestTransferAttemptLifecycle(t *testing.T) {
 		if got := receivedGeneration(t, m, rs.Id); got != start.Generation {
 			t.Fatalf("wrong generation completion changed generation to %d, want %d", got, start.Generation)
 		}
+		attemptOf := func() *string {
+			var row model.OcmReceivedShare
+			if err := m.db.Where("id = ?", rs.Id.OpaqueId).Take(&row).Error; err != nil {
+				t.Fatal(err)
+			}
+			return row.TransferAttempt
+		}
+		if attemptOf() == nil {
+			t.Fatal("running attempt has no attempt ID")
+		}
 		const beforeMtime = 946684800
 		if err := m.db.Model(&model.OcmReceivedShare{}).Where("id = ?", rs.Id.OpaqueId).
 			Update("mtime", beforeMtime).Error; err != nil {
@@ -512,6 +587,9 @@ func TestTransferAttemptLifecycle(t *testing.T) {
 		}
 		if !u.After.Hidden || len(u.After.Protocols) != len(rs.Protocols) {
 			t.Fatalf("completion changed hidden/protocols: %v", u.After)
+		}
+		if a := attemptOf(); a != nil {
+			t.Fatalf("finished transfer kept attempt ID %s", *a)
 		}
 		if duplicate, err := m.CompleteReceivedShareTransfer(ctx, user, rs.Id, start.Generation, ocm.ShareState_SHARE_STATE_ACCEPTED); err != nil || duplicate == nil || !proto.Equal(duplicate.Before, u.After) || !proto.Equal(duplicate.After, u.After) {
 			t.Fatalf("duplicate completion: %v %v", duplicate, err)
@@ -535,28 +613,78 @@ func TestTransferAttemptLifecycle(t *testing.T) {
 		if err != nil || second.Generation <= start.Generation {
 			t.Fatalf("second attempt: %v %v", second, err)
 		}
-		if u, err := m.CompleteReceivedShareTransfer(ctx, user, rs.Id, start.Generation, ocm.ShareState_SHARE_STATE_REJECTED); err != nil || u == nil || !proto.Equal(u.Before, second.Share) || !proto.Equal(u.After, second.Share) {
+		if u, err := m.CompleteReceivedShareTransfer(ctx, user, rs.Id, start.Generation, ocm.ShareState_SHARE_STATE_REJECTED); err != nil || u == nil ||
+			!proto.Equal(u.Before, second.Share) || !proto.Equal(u.After, second.Share) {
 			t.Fatalf("stale callback completed a newer attempt: %v %v", u, err)
 		}
-		if got := receivedGeneration(t, m, rs.Id); got != second.Generation {
-			t.Fatalf("stale callback changed generation to %d, want %d", got, second.Generation)
+		if attemptOf() == nil {
+			t.Fatal("stale callback cleared the attempt ID of a newer attempt")
 		}
 
-		// An ordinary update that sets TRANSFERRING also invalidates the attempt.
-		if _, err := m.UpdateReceivedShare(ctx, user, reset, stateMask()); err != nil {
-			t.Fatal(err)
+		u, err = m.CompleteReceivedShareTransfer(ctx, user, rs.Id, second.Generation, ocm.ShareState_SHARE_STATE_ACCEPTED)
+		if err != nil || u == nil || !proto.Equal(u.Before, second.Share) || u.After.GetState() != ocm.ShareState_SHARE_STATE_ACCEPTED {
+			t.Fatalf("complete second attempt: %v %v", u, err)
 		}
-		manual := &ocm.ReceivedShare{Id: rs.Id, State: ocm.ShareState_SHARE_STATE_TRANSFERRING}
-		manualUpdate, err := m.UpdateReceivedShare(ctx, user, manual, stateMask())
+		resetReceipt, err := m.UpdateReceivedShare(ctx, user, reset, stateMask())
 		if err != nil {
 			t.Fatal(err)
 		}
-		gen := receivedGeneration(t, m, rs.Id)
-		if u, err := m.CompleteReceivedShareTransfer(ctx, user, rs.Id, second.Generation, ocm.ShareState_SHARE_STATE_ACCEPTED); err != nil || u == nil || !proto.Equal(u.Before, manualUpdate.After) || !proto.Equal(u.After, manualUpdate.After) {
-			t.Fatalf("manual TRANSFERRING revived an old attempt: %v %v", u, err)
+		pending, err := m.GetReceivedShare(ctx, user, idRef(rs.Id))
+		if err != nil || pending.GetState() != ocm.ShareState_SHARE_STATE_PENDING || !proto.Equal(pending, resetReceipt.After) {
+			t.Fatalf("reset readback: %v %v", pending, err)
 		}
-		if got := receivedGeneration(t, m, rs.Id); got != gen {
-			t.Fatalf("manual TRANSFERRING completion changed generation to %d, want %d", got, gen)
+		gen := receivedGeneration(t, m, rs.Id)
+		if u, err := m.CompleteReceivedShareTransfer(ctx, user, rs.Id, second.Generation, ocm.ShareState_SHARE_STATE_ACCEPTED); err != nil || u == nil ||
+			!proto.Equal(u.Before, pending) || !proto.Equal(u.After, pending) {
+			t.Fatalf("stale callback changed the reset share: %v %v", u, err)
+		}
+		if got, err := m.GetReceivedShare(ctx, user, idRef(rs.Id)); err != nil || !proto.Equal(got, pending) || receivedGeneration(t, m, rs.Id) != gen {
+			t.Fatalf("stale callback changed the stored reset: %v %v", got, err)
+		}
+	})
+}
+
+func TestOrdinaryUpdateCannotEnterOrLeaveTransferring(t *testing.T) {
+	forEachDialect(t, func(t *testing.T, m *mgr) {
+		ctx, user := ownerContext(t, "marie")
+		rs := storeReceived(t, m, ctx, user, "manual-transfer")
+		row := receivedRow(t, m, rs.Id.OpaqueId)
+		manual := &ocm.ReceivedShare{Id: rs.Id, State: ocm.ShareState_SHARE_STATE_TRANSFERRING, Hidden: true}
+		both := &field_mask.FieldMask{Paths: []string{"state", "hidden"}}
+		before, err := readReceivedProjection(m.db, row.ID)
+		if err != nil {
+			t.Fatal(err)
+		}
+		var badRequest errtypes.BadRequest
+		if u, err := m.UpdateReceivedShare(ctx, user, manual, both); !errors.As(err, &badRequest) || u != nil {
+			t.Fatalf("ordinary entry receipt %v, error %v", u, err)
+		}
+		if got, err := readReceivedProjection(m.db, row.ID); err != nil || !before.equal(got) {
+			t.Fatalf("refused entry changed the projection: %v", err)
+		}
+
+		// Older writers could leave a TRANSFERRING row without a generation.
+		setRow(t, m.db, row.ID, map[string]any{"state": model.OcmShareStateTransferring})
+		before, err = readReceivedProjection(m.db, row.ID)
+		if err != nil {
+			t.Fatal(err)
+		}
+		reset := &ocm.ReceivedShare{Id: rs.Id, State: ocm.ShareState_SHARE_STATE_PENDING, Hidden: true}
+		if u, err := m.UpdateReceivedShare(ctx, user, reset, both); !errors.Is(err, share.ErrTransferInProgress) || u != nil {
+			t.Fatalf("historical reservation reset receipt %v, error %v", u, err)
+		}
+		if got, err := readReceivedProjection(m.db, row.ID); err != nil || !before.equal(got) {
+			t.Fatalf("refused reset changed the projection: %v", err)
+		}
+		if u, err := m.UpdateReceivedShare(ctx, user, manual, stateMask()); err != nil || u == nil || u.StateChanged() || u.After.GetHidden() {
+			t.Fatalf("same-state receipt %v, error %v", u, err)
+		}
+		if u, err := m.UpdateReceivedShare(ctx, user, reset, &field_mask.FieldMask{Paths: []string{"hidden"}}); err != nil || u == nil ||
+			u.After.GetState() != manual.State || !u.After.GetHidden() {
+			t.Fatalf("hidden-only receipt %v, error %v", u, err)
+		}
+		if got := receivedGeneration(t, m, rs.Id); got != before.row.TransferGeneration {
+			t.Fatalf("same-state or hidden-only update changed generation to %d", got)
 		}
 	})
 }

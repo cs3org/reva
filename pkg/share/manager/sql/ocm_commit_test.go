@@ -197,6 +197,8 @@ func TestUnacknowledgedCommitsObserveTheExactProjection(t *testing.T) {
 		compete func(t *testing.T, db *gorm.DB, remote string)
 		// generation is logged with an unknown outcome.
 		generation bool
+		// release is one write after the fault that undoes an applied start.
+		release bool
 	}
 	stored := func(t *testing.T, m *mgr, remote string) (*ocm.ReceivedShare, uint64) {
 		return mustStore(t, m, grantShare(marie, "a.example.org", remote, file)), 0
@@ -243,6 +245,7 @@ func TestUnacknowledgedCommitsObserveTheExactProjection(t *testing.T) {
 				setRow(t, db, rowOf(t, db, remote), map[string]any{"state": model.OcmShareStateTransferring, "transfer_generation": 1, "mtime": 1})
 			},
 			generation: true,
+			release:    true,
 		},
 		{
 			name: "complete transfer",
@@ -333,8 +336,12 @@ func TestUnacknowledgedCommitsObserveTheExactProjection(t *testing.T) {
 						if got || !errors.As(err, &unknown) || !errors.Is(err, share.ErrCommitUnknown) || unknown.Observed != tc.observed {
 							t.Fatalf("receipt=%t err=%v", got, err)
 						}
-						if p.commits.Load() != 1 || p.writes.Load() != 0 {
-							t.Fatalf("after an unacknowledged commit: commits %d, writes %d", p.commits.Load(), p.writes.Load())
+						wantWrites := int32(0)
+						if o.release {
+							wantWrites = 1
+						}
+						if p.commits.Load() != 1 || p.writes.Load() != wantWrites {
+							t.Fatalf("after an unacknowledged commit: commits %d, writes %d, want 1 and %d", p.commits.Load(), p.writes.Load(), wantWrites)
 						}
 						if p.reads.Load() == 0 {
 							t.Fatal("no reconciliation read")
@@ -355,10 +362,124 @@ func TestUnacknowledgedCommitsObserveTheExactProjection(t *testing.T) {
 							t.Fatalf("log holds share data: %s", logs)
 						}
 						p.failRead = false
-						if o.done(t, other(t, cfg), remote) != tc.durable {
-							t.Fatalf("durable change %t, want %t", !tc.durable, tc.durable)
+						// A start whose own commit applied is released; a competing one is not.
+						durable := tc.durable && !(o.release && tc.apply)
+						if o.done(t, other(t, cfg), remote) != durable {
+							t.Fatalf("durable change %t, want %t", !durable, durable)
 						}
 					})
+				}
+			})
+		})
+	}
+}
+
+// A start without a commit acknowledgment returns no receipt, so no transfer
+// runs for it. Only a reservation that still holds its own attempt is released.
+func TestUnacknowledgedStartReleasesOnlyItsOwnReservation(t *testing.T) {
+	marie := recipient("marie")
+	foreign := "foreign-attempt"
+	for _, tc := range []struct {
+		name        string
+		apply       bool
+		between     func(t *testing.T, db *gorm.DB, id uint, cancel context.CancelFunc)
+		failRelease bool
+		observed    share.CommitObservation
+		released    bool
+		attempt     *string // the attempt a held reservation keeps, if not its own
+		alias       string
+		prior       model.OcmShareState
+	}{
+		{name: "applied", apply: true, observed: share.CommitObservedRequested, released: true, prior: model.OcmShareStateRejected},
+		{name: "applied then unrelated field changed", apply: true, between: func(t *testing.T, db *gorm.DB, id uint, _ context.CancelFunc) {
+			setRow(t, db, id, map[string]any{"alias": "kept"})
+		}, observed: share.CommitObservedOther, released: true, alias: "kept"},
+		{name: "applied then caller canceled", apply: true, between: func(_ *testing.T, _ *gorm.DB, _ uint, cancel context.CancelFunc) {
+			cancel()
+		}, observed: share.CommitObservedRequested, released: true},
+		{name: "applied then no attempt", apply: true, between: func(t *testing.T, db *gorm.DB, id uint, _ context.CancelFunc) {
+			if err := db.Model(&model.OcmReceivedShare{}).Where("id = ?", id).Update("transfer_attempt", nil).Error; err != nil {
+				t.Fatal(err)
+			}
+		}, observed: share.CommitObservedOther},
+		{name: "competing start with the same generation", between: func(t *testing.T, db *gorm.DB, id uint, _ context.CancelFunc) {
+			setRow(t, db, id, map[string]any{"state": model.OcmShareStateTransferring, "transfer_generation": 1, "transfer_attempt": foreign})
+		}, observed: share.CommitObservedOther, attempt: &foreign},
+		{name: "release fails", apply: true, failRelease: true, observed: share.CommitObservedRequested},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			forEachDialectConfig(t, func(t *testing.T, cfg map[string]any) {
+				m := openOCMManager(t, cfg)
+				remote := strings.ReplaceAll("release-"+tc.name, " ", "-")
+				rs := mustStore(t, m, grantShare(marie, "a.example.org", remote, file))
+				id := rowOf(t, m.db, remote)
+				if tc.prior != model.OcmShareStatePending {
+					setRow(t, m.db, id, map[string]any{"state": tc.prior})
+				}
+				var before model.OcmReceivedShare
+				if err := m.db.Where("id = ?", id).Take(&before).Error; err != nil {
+					t.Fatal(err)
+				}
+				ctx, cancel := context.WithCancel(context.Background())
+				defer cancel()
+				p := &commitFault{apply: tc.apply}
+				if tc.between != nil {
+					p.between = func() { tc.between(t, other(t, cfg), id, cancel) }
+				}
+				withCommitFault(t, m, p)
+				if tc.failRelease {
+					if err := m.db.Callback().Update().Before("gorm:update").Register("test:fail-release", func(tx *gorm.DB) {
+						if p.faulted.Load() {
+							_ = tx.AddError(errors.New("release write failed"))
+						}
+					}); err != nil {
+						t.Fatal(err)
+					}
+				}
+				p.armed.Store(true)
+				got, err := m.StartReceivedShareTransfer(ctx, marie, &ocm.ReceivedShare{Id: rs.Id}, stateMask())
+				var unknown *share.CommitUnknownError
+				if got != nil || !errors.As(err, &unknown) || !errors.Is(err, share.ErrCommitUnknown) || unknown.Observed != tc.observed {
+					t.Fatalf("receipt %v, error %v, want commit unknown (%s)", got, err, tc.observed)
+				}
+				// One start commit, never repeated, and at most one release statement.
+				wantWrites := int32(1)
+				if tc.failRelease {
+					wantWrites = 0
+				}
+				if p.commits.Load() != 1 || p.writes.Load() != wantWrites {
+					t.Fatalf("commits %d, writes %d, want 1 and %d", p.commits.Load(), p.writes.Load(), wantWrites)
+				}
+
+				var row model.OcmReceivedShare
+				if err := other(t, cfg).Where("id = ?", id).Take(&row).Error; err != nil {
+					t.Fatal(err)
+				}
+				if row.TransferGeneration != 1 || row.Alias != tc.alias {
+					t.Fatalf("generation %d, alias %q, want 1 and %q", row.TransferGeneration, row.Alias, tc.alias)
+				}
+				if tc.released {
+					if row.State != before.State || row.State != tc.prior || row.TransferAttempt != nil {
+						t.Fatalf("released row state %v attempt %v, want %v and none", row.State, row.TransferAttempt, before.State)
+					}
+					next, err := m.StartReceivedShareTransfer(context.Background(), marie, &ocm.ReceivedShare{Id: rs.Id}, stateMask())
+					if err != nil || next.Generation != 2 {
+						t.Fatalf("next start %v %v, want generation 2", next, err)
+					}
+					return
+				}
+				switch {
+				case row.State != model.OcmShareStateTransferring:
+					t.Fatalf("held row state %v", row.State)
+				case tc.attempt != nil && (row.TransferAttempt == nil || *row.TransferAttempt != *tc.attempt):
+					t.Fatalf("held row attempt %v, want %s", row.TransferAttempt, *tc.attempt)
+				case tc.attempt == nil && tc.failRelease && row.TransferAttempt == nil:
+					t.Fatal("held row lost its own attempt")
+				case tc.attempt == nil && !tc.failRelease && row.TransferAttempt != nil:
+					t.Fatalf("tokenless held row has attempt %s", *row.TransferAttempt)
+				}
+				if _, err := m.StartReceivedShareTransfer(context.Background(), marie, &ocm.ReceivedShare{Id: rs.Id}, stateMask()); !errors.Is(err, share.ErrTransferInProgress) {
+					t.Fatalf("held reservation admitted another start: %v", err)
 				}
 			})
 		})
