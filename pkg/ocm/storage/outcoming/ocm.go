@@ -684,6 +684,8 @@ func (d *driver) SetLock(ctx context.Context, ref *provider.Reference, lock *pro
 			return err
 		case lockRes.Status.Code == rpcv1beta1.Code_CODE_NOT_FOUND:
 			return errtypes.NotFound(ref.String())
+		case lockRes.Status.Code == rpcv1beta1.Code_CODE_UNIMPLEMENTED:
+			return errtypes.NotSupported(lockRes.Status.Message)
 		case lockRes.Status.Code == rpcv1beta1.Code_CODE_FAILED_PRECONDITION:
 			return errtypes.BadRequest(lockRes.Status.Message)
 		case lockRes.Status.Code != rpcv1beta1.Code_CODE_OK:
@@ -711,6 +713,8 @@ func (d *driver) GetLock(ctx context.Context, ref *provider.Reference) (*provide
 			return err
 		case lockRes.Status.Code == rpcv1beta1.Code_CODE_NOT_FOUND:
 			return errtypes.NotFound(ref.String())
+		case lockRes.Status.Code == rpcv1beta1.Code_CODE_UNIMPLEMENTED:
+			return errtypes.NotSupported(lockRes.Status.Message)
 		case lockRes.Status.Code != rpcv1beta1.Code_CODE_OK:
 			return errtypes.InternalError(lockRes.Status.Message)
 		}
@@ -744,6 +748,8 @@ func (d *driver) RefreshLock(ctx context.Context, ref *provider.Reference, lock 
 			return err
 		case lockRes.Status.Code == rpcv1beta1.Code_CODE_NOT_FOUND:
 			return errtypes.NotFound(ref.String())
+		case lockRes.Status.Code == rpcv1beta1.Code_CODE_UNIMPLEMENTED:
+			return errtypes.NotSupported(lockRes.Status.Message)
 		case lockRes.Status.Code == rpcv1beta1.Code_CODE_FAILED_PRECONDITION:
 			return errtypes.BadRequest(lockRes.Status.Message)
 		case lockRes.Status.Code != rpcv1beta1.Code_CODE_OK:
@@ -773,6 +779,8 @@ func (d *driver) Unlock(ctx context.Context, ref *provider.Reference, lock *prov
 			return err
 		case lockRes.Status.Code == rpcv1beta1.Code_CODE_NOT_FOUND:
 			return errtypes.NotFound(ref.String())
+		case lockRes.Status.Code == rpcv1beta1.Code_CODE_UNIMPLEMENTED:
+			return errtypes.NotSupported(lockRes.Status.Message)
 		case lockRes.Status.Code == rpcv1beta1.Code_CODE_FAILED_PRECONDITION:
 			return errtypes.BadRequest(lockRes.Status.Message)
 		case lockRes.Status.Code != rpcv1beta1.Code_CODE_OK:
