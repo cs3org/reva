@@ -21,8 +21,10 @@ package sciencemesh
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
 
+	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	ocm "github.com/cs3org/go-cs3apis/cs3/sharing/ocm/v1beta1"
 	storageprovider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/cs3org/reva/v3/internal/http/services/owncloud/ocgraph"
@@ -87,7 +89,7 @@ func (h *embeddedHandler) ProcessEmbeddedShare(w http.ResponseWriter, r *http.Re
 		return
 	}
 
-	_, err = gatewayClient.UpdateReceivedOCMShare(ctx, &req)
+	res, err := gatewayClient.UpdateReceivedOCMShare(ctx, &req)
 
 	if err != nil {
 		log.Error().Err(err).Msg("error accepting embedded share")
@@ -95,6 +97,33 @@ func (h *embeddedHandler) ProcessEmbeddedShare(w http.ResponseWriter, r *http.Re
 		return
 	}
 
+	st := res.GetStatus()
+	if st == nil {
+		reqres.WriteError(w, r, reqres.APIErrorServerError, "embedded share update returned no status", nil)
+		return
+	}
+	if st.Code != rpc.Code_CODE_OK {
+		code := reqres.APIErrorServerError
+		switch st.Code {
+		case rpc.Code_CODE_INVALID_ARGUMENT, rpc.Code_CODE_FAILED_PRECONDITION:
+			code = reqres.APIErrorInvalidParameter
+		case rpc.Code_CODE_NOT_FOUND:
+			code = reqres.APIErrorNotFound
+		case rpc.Code_CODE_UNAUTHENTICATED:
+			code = reqres.APIErrorUnauthenticated
+		case rpc.Code_CODE_PERMISSION_DENIED:
+			code = reqres.APIErrorUntrustedService
+		case rpc.Code_CODE_UNIMPLEMENTED:
+			code = reqres.APIErrorUnimplemented
+		}
+		reqres.WriteError(w, r, code, "error updating embedded share", fmt.Errorf("CS3 status %s", st.Code))
+		return
+	}
+
+	if process == "true" {
+		w.WriteHeader(http.StatusAccepted)
+		return
+	}
 	w.WriteHeader(http.StatusOK)
 }
 

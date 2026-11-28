@@ -34,6 +34,7 @@ import (
 	datatx "github.com/cs3org/go-cs3apis/cs3/tx/v1beta1"
 
 	"github.com/cs3org/reva/v3/pkg/appctx"
+	ocmshare "github.com/cs3org/reva/v3/pkg/ocm/share"
 	"github.com/cs3org/reva/v3/pkg/service"
 	"github.com/cs3org/reva/v3/pkg/utils/resourceid"
 
@@ -264,7 +265,14 @@ func (s *svc) UpdateReceivedOCMShare(ctx context.Context, req *ocm.UpdateReceive
 			},
 		}, nil
 	}
-	if getShareRes.Status.Code != rpc.Code_CODE_OK {
+	lookupStatus := getShareRes.GetStatus()
+	if lookupStatus != nil && lookupStatus.GetCode() == rpc.Code_CODE_NOT_FOUND {
+		return &ocm.UpdateReceivedOCMShareResponse{
+			Status: status.NewNotFound(ctx, "received share does not exist"),
+		}, nil
+	}
+	share := getShareRes.GetShare()
+	if lookupStatus == nil || lookupStatus.GetCode() != rpc.Code_CODE_OK || share == nil {
 		log.Error().Msg("gateway: error calling GetReceivedShare")
 		return &ocm.UpdateReceivedOCMShareResponse{
 			Status: &rpc.Status{
@@ -272,11 +280,6 @@ func (s *svc) UpdateReceivedOCMShare(ctx context.Context, req *ocm.UpdateReceive
 			},
 		}, nil
 	}
-	share := getShareRes.Share
-	if share == nil {
-		panic("gateway: error updating a received share: the share is nil")
-	}
-
 	res, err := c.UpdateReceivedOCMShare(ctx, req)
 	if err != nil {
 		log.Err(err).Msg("gateway: error calling UpdateReceivedShare")
@@ -286,13 +289,26 @@ func (s *svc) UpdateReceivedOCMShare(ctx context.Context, req *ocm.UpdateReceive
 			},
 		}, nil
 	}
+	if res.GetStatus() == nil {
+		err := errors.New("received share update returned no status")
+		return &ocm.UpdateReceivedOCMShareResponse{
+			Status: status.NewInternal(ctx, err, err.Error()),
+		}, nil
+	}
+	if res.GetStatus().GetCode() != rpc.Code_CODE_OK {
+		return res, nil
+	}
 
-	for i := range req.UpdateMask.Paths {
-		switch req.UpdateMask.Paths[i] {
+	// Only a masked state change accepts the share: other fields of
+	// req.Share, including a stale state, are ignored like in the provider.
+	acceptRequested := false
+	for _, p := range req.GetUpdateMask().GetPaths() {
+		switch p {
 		case "state":
 			switch req.GetShare().GetState() {
 			case ocm.ShareState_SHARE_STATE_ACCEPTED:
-				// for a transfer this is handled elsewhere
+				// for a transfer this is handled below
+				acceptRequested = true
 			case ocm.ShareState_SHARE_STATE_PENDING:
 				// currently no consequences
 			case ocm.ShareState_SHARE_STATE_REJECTED:
@@ -310,11 +326,11 @@ func (s *svc) UpdateReceivedOCMShare(ctx context.Context, req *ocm.UpdateReceive
 				Status: status.NewUnimplemented(ctx, err, "error updating received share"),
 			}, nil
 		default:
-			return nil, errtypes.NotSupported("updating " + req.UpdateMask.Paths[i] + " is not supported")
+			return nil, errtypes.NotSupported("updating " + p + " is not supported")
 		}
 	}
 	// handle transfer in case it has not already been accepted
-	if s.isTransferShare(share) && req.GetShare().State == ocm.ShareState_SHARE_STATE_ACCEPTED {
+	if acceptRequested && s.isTransferShare(share) {
 		if share.State == ocm.ShareState_SHARE_STATE_ACCEPTED {
 			log.Err(err).Msg("gateway: error calling UpdateReceivedShare, share already accepted.")
 			return &ocm.UpdateReceivedOCMShareResponse{
@@ -351,8 +367,8 @@ func (s *svc) UpdateReceivedOCMShare(ctx context.Context, req *ocm.UpdateReceive
 func (s *svc) handleTransfer(ctx context.Context, share *ocm.ReceivedShare, transferDestinationPath string) error {
 	log := appctx.GetLogger(ctx)
 
-	protocol, ok := s.getTransferProtocol(share)
-	if !ok {
+	protocol := ocmshare.DataTransferProtocol(share)
+	if protocol == nil {
 		return errors.New("gateway: unable to retrieve transfer protocol")
 	}
 	sourceURI := protocol.Uri
@@ -410,13 +426,29 @@ func (s *svc) handleTransfer(ctx context.Context, share *ocm.ReceivedShare, tran
 	if err != nil {
 		return err
 	}
-	log.Info().Msgf("gateway: CreateTransfer: %v", res.TxInfo)
+	if res == nil || res.GetStatus() == nil {
+		return errtypes.InternalError("transfer service returned no status")
+	}
+	if res.GetStatus().GetCode() != rpc.Code_CODE_OK {
+		return status.NewErrtypeFromStatus(res.GetStatus())
+	}
+	info := res.GetTxInfo()
+	if info.GetId().GetOpaqueId() == "" {
+		return errtypes.InternalError("transfer service returned no transfer ID")
+	}
+	if info.GetStatus() != datatx.Status_STATUS_TRANSFER_NEW {
+		return errtypes.InternalError("transfer service did not acknowledge a new job")
+	}
+	log.Debug().Msg("gateway: DATATX job scheduled")
 	return nil
 }
 
 func (s *svc) isTransferShare(share *ocm.ReceivedShare) bool {
-	_, ok := s.getTransferProtocol(share)
-	return ok
+	// The share provider owns the copy when an embedded descriptor is present.
+	if slices.ContainsFunc(share.GetProtocols(), func(p *ocm.Protocol) bool { return p.GetEmbeddedOptions() != nil }) {
+		return false
+	}
+	return ocmshare.DataTransferProtocol(share) != nil
 }
 
 func (s *svc) getTransferDestinationPath(ctx context.Context, req *ocm.UpdateReceivedOCMShareRequest) (string, error) {
@@ -455,15 +487,4 @@ func (s *svc) GetReceivedOCMShare(ctx context.Context, req *ocm.GetReceivedOCMSh
 	}
 
 	return res, nil
-}
-
-func (s *svc) getTransferProtocol(share *ocm.ReceivedShare) (*ocm.WebDAVProtocol, bool) {
-	for _, p := range share.Protocols {
-		if d, ok := p.Term.(*ocm.Protocol_WebdavOptions); ok {
-			if slices.Contains(d.WebdavOptions.AccessTypes, ocm.AccessType_ACCESS_TYPE_DATATX) {
-				return d.WebdavOptions, true
-			}
-		}
-	}
-	return nil, false
 }

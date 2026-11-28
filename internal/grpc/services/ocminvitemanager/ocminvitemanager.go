@@ -519,8 +519,15 @@ func (s *service) DeleteAcceptedUser(ctx context.Context, req *invitepb.DeleteAc
 			Status: status.NewStatusFromErrType(ctx, "error deleting remote users", err),
 		}, nil
 	}
+	s.contactRemoved(ctx, user.Id, req.RemoteUserId)
 
 	return &invitepb.DeleteAcceptedUserResponse{
 		Status: status.NewOK(ctx),
 	}, nil
 }
+
+// contactRemoved is the seam after a contact was removed locally. It
+// deliberately sends nothing and no contact-removal capability is
+// advertised: notifying the peer needs an exact pair-scoped contract, and
+// the legacy USER_REMOVED notification must not be used for it.
+func (s *service) contactRemoved(context.Context, *userpb.UserId, *userpb.UserId) {}

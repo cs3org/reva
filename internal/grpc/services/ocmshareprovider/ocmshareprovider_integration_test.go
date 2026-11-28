@@ -147,6 +147,9 @@ func TestNewWiresCreateOCMShare(t *testing.T) {
 	if repo.storeN != 1 || repo.stored == nil {
 		t.Fatalf("store count = %d, stored set = %t, want 1 and set", repo.storeN, repo.stored != nil)
 	}
+	if repo.storedType != ocm.SharedResourceType_SHARE_RESOURCE_TYPE_FILE {
+		t.Fatalf("stored resource type = %v, want FILE", repo.storedType)
+	}
 	if countWebappStored(repo.stored.AccessMethods) != 1 {
 		t.Fatalf("stored webapp count = %d, want 1", countWebappStored(repo.stored.AccessMethods))
 	}

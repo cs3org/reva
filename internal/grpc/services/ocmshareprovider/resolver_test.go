@@ -117,8 +117,9 @@ func withTestDrivers(t *testing.T, name string, repo registry.NewFunc, transfer 
 
 type gatewayResolver struct {
 	revaservice.Clients
-	mu sync.Mutex
-	gw gateway.GatewayAPIClient
+	mu       sync.Mutex
+	gw       gateway.GatewayAPIClient
+	embedded *mountedEmbeddedPeers
 }
 
 func (r *gatewayResolver) Gateway(context.Context) (gateway.GatewayAPIClient, error) {
@@ -156,8 +157,10 @@ type capturingRepo struct {
 	mu     sync.Mutex
 	nextID string
 	stored *ocm.Share
-	storeN int
-	idN    int
+	// storedType is the resource type passed to StoreShare.
+	storedType ocm.SharedResourceType
+	storeN     int
+	idN        int
 }
 
 func (r *capturingRepo) GetShare(context.Context, *userpb.User, *ocm.ShareReference) (*ocm.Share, error) {
@@ -175,11 +178,12 @@ func (r *capturingRepo) GenerateID(context.Context) (*ocm.ShareId, error) {
 	return &ocm.ShareId{OpaqueId: id}, nil
 }
 
-func (r *capturingRepo) StoreShare(_ context.Context, s *ocm.Share) (*ocm.Share, error) {
+func (r *capturingRepo) StoreShare(_ context.Context, s *ocm.Share, resourceType ocm.SharedResourceType) (*ocm.Share, error) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	r.storeN++
 	r.stored = s
+	r.storedType = resourceType
 	return s, nil
 }
 
@@ -196,11 +200,21 @@ type remotePeer struct {
 	drop   bool
 	body   []byte
 	posts  int
+	discos int
+}
+
+func (p *remotePeer) discoveries() int {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	return p.discos
 }
 
 func (p *remotePeer) handler(w http.ResponseWriter, r *http.Request) {
 	switch {
 	case r.URL.Path == "/.well-known/ocm":
+		p.mu.Lock()
+		p.discos++
+		p.mu.Unlock()
 		w.Header().Set("Content-Type", "application/json")
 		_, _ = w.Write(p.disco)
 	case strings.HasSuffix(r.URL.Path, "/shares"):

@@ -23,6 +23,7 @@ package ocmshareprovider
 
 import (
 	"context"
+	"io"
 	"net/url"
 	"path/filepath"
 	"slices"
@@ -38,8 +39,10 @@ import (
 
 	"github.com/cs3org/reva/v3/pkg/appctx"
 	"github.com/cs3org/reva/v3/pkg/errtypes"
+	ocmclient "github.com/cs3org/reva/v3/pkg/ocm/client"
 	"github.com/cs3org/reva/v3/pkg/ocm/embedded"
 	"github.com/cs3org/reva/v3/pkg/ocm/httpsig"
+	"github.com/cs3org/reva/v3/pkg/ocm/providerdomain"
 	"github.com/cs3org/reva/v3/pkg/ocm/share"
 	"github.com/cs3org/reva/v3/pkg/ocm/share/repository/registry"
 	"github.com/cs3org/reva/v3/pkg/plugin"
@@ -51,7 +54,6 @@ import (
 	"github.com/cs3org/reva/v3/pkg/utils"
 	"github.com/cs3org/reva/v3/pkg/utils/cfg"
 	"github.com/pkg/errors"
-	"google.golang.org/genproto/protobuf/field_mask"
 	"google.golang.org/grpc"
 )
 
@@ -82,6 +84,8 @@ type config struct {
 	Webapps         []webapp                  `docs:";Web applications offered on outbound OCM shares, each with a name and the media types it opens. The webapp protocol is offered only if this list is not empty." mapstructure:"webapps"`
 	WebAppEndpoint  string                    `docs:";Absolute URL of the webapp opener. Required when webapps is not empty." mapstructure:"webapp_endpoint" validate:"required_with=Webapps"`
 	SigningKey      string                    `docs:";Path to the PEM file of the Ed25519 private key that signs the shares that this server sends. Use the key of the wellknown ocmprovider." mapstructure:"signing_key" validate:"required"`
+
+	DisableDataTxAcceptance bool `docs:"false;Refuse acceptance of received shares that require a DATATX job." mapstructure:"disable_datatx_acceptance"`
 }
 
 type webapp struct {
@@ -95,6 +99,7 @@ type service struct {
 	client      *ocmd.OCMClient
 	transferrer embedded.Transferrer
 	signingKey  *httpsig.Key
+	notifier    notifier
 }
 
 func (c *config) ApplyDefaults() {
@@ -104,8 +109,8 @@ func (c *config) ApplyDefaults() {
 	if c.EmbeddedDriver == "" {
 		c.EmbeddedDriver = "webdav"
 	}
-	if c.ClientTimeout == 0 {
-		c.ClientTimeout = 10
+	if c.ClientTimeout <= 0 {
+		c.ClientTimeout = int(ocmclient.DefaultTransportConfig().Timeout / time.Second)
 	}
 
 	c.GatewaySVC = sharedconf.GetGatewaySVC(c.GatewaySVC)
@@ -140,6 +145,13 @@ func New(ctx context.Context, m map[string]any) (rgrpc.Service, error) {
 	if decodeErr != nil {
 		return nil, decodeErr
 	}
+	// provider_domain is the identity of this server in every share and
+	// notice, so it is checked before anything is allocated.
+	providerDomain, err := providerdomain.CanonicalOCMHost(c.ProviderDomain)
+	if err != nil {
+		return nil, errors.New("ocmshareprovider: provider_domain is not an OCM host")
+	}
+	c.ProviderDomain = providerDomain
 
 	repo, err := getShareRepository(ctx, &c)
 	if err != nil {
@@ -156,32 +168,30 @@ func New(ctx context.Context, m map[string]any) (rgrpc.Service, error) {
 		return nil, err
 	}
 
-	ocmcl := ocmd.NewClient(time.Duration(c.ClientTimeout)*time.Second, c.ClientInsecure)
+	timeout := time.Duration(c.ClientTimeout) * time.Second
+	ocmcl := ocmd.NewClient(timeout, c.ClientInsecure)
+	notificationClient := ocmd.NewPublicOnlyClient(timeout, false)
 	service := &service{
 		conf:        &c,
 		repo:        repo,
 		client:      ocmcl,
 		transferrer: transferrer,
 		signingKey:  key,
+		notifier:    &ocmd.AsyncNotifier{Client: notificationClient, Key: key},
 	}
 
 	return service, nil
 }
 
 func (s *service) Close() error {
+	if c, ok := s.notifier.(io.Closer); ok {
+		return c.Close()
+	}
 	return nil
 }
 
 func (s *service) UnprotectedEndpoints() []string {
 	return []string{"/cs3.sharing.ocm.v1beta1.OcmAPI/GetOCMShareByToken"}
-}
-
-func formatOCMUser(u *userpb.UserId) string {
-	// Delegate to the shared OCM Address formatter so recipient, owner and
-	// sender ids are always spec-conformant "<opaque-id>@<host>" strings and
-	// never the malformed "id@host@host" form produced when a non-conformant
-	// peer's qualified userID was stored verbatim.
-	return ocmd.FormatOCMUser(u)
 }
 
 func getResourceType(info *providerpb.ResourceInfo) string {
@@ -192,6 +202,16 @@ func getResourceType(info *providerpb.ResourceInfo) string {
 		return "folder"
 	}
 	return "unknown"
+}
+
+func sharedResourceType(info *providerpb.ResourceInfo) ocm.SharedResourceType {
+	switch info.Type {
+	case providerpb.ResourceType_RESOURCE_TYPE_FILE:
+		return ocm.SharedResourceType_SHARE_RESOURCE_TYPE_FILE
+	case providerpb.ResourceType_RESOURCE_TYPE_CONTAINER:
+		return ocm.SharedResourceType_SHARE_RESOURCE_TYPE_CONTAINER
+	}
+	return ocm.SharedResourceType_SHARE_RESOURCE_TYPE_INVALID
 }
 
 func (s *service) webdavURL(share *ocm.Share) string {
@@ -273,6 +293,22 @@ func (s *service) CreateOCMShare(ctx context.Context, req *ocm.CreateOCMShareReq
 	}
 
 	info := statRes.Info
+	// The type is stored with the share for its later notifications, so a
+	// share without one is never created, remotely or locally.
+	resourceType := sharedResourceType(info)
+	if !share.SupportedResourceType(resourceType) {
+		return &ocm.CreateOCMShareResponse{
+			Status: status.NewInvalidArg(ctx, "unsupported resource type"),
+		}, nil
+	}
+	// The grantee host is validated as received, before any peer is contacted.
+	grantee := req.GetGrantee().GetUserId()
+	granteeHost, err := providerdomain.CanonicalOCMHost(grantee.GetIdp())
+	if err != nil || grantee.GetOpaqueId() == "" {
+		return &ocm.CreateOCMShareResponse{
+			Status: status.NewInvalidArg(ctx, "invalid grantee"),
+		}, nil
+	}
 	user := appctx.ContextMustGetUser(ctx)
 	// lightweight homes are owned by service accounts that may not resolve to a user with the current user provider
 	owner := info.Owner
@@ -400,18 +436,15 @@ func (s *service) CreateOCMShare(ctx context.Context, req *ocm.CreateOCMShareReq
 	}
 
 	// prepare the request to be sent to the remote OCM server
+	// Opaque IDs are sent as they are, even with an @ or a host suffix:
+	// the receiver splits each address at its last @.
 	newShareReq := &ocmd.NewShareRequest{
-		ShareWith:  formatOCMUser(req.Grantee.GetUserId()),
+		ShareWith:  grantee.GetOpaqueId() + "@" + granteeHost,
 		Name:       ocmshare.Name,
 		ProviderID: ocmshare.Id.OpaqueId,
-		Owner: formatOCMUser(&userpb.UserId{
-			OpaqueId: owner.OpaqueId,
-			Idp:      s.conf.ProviderDomain, // FIXME: this is not generally true in case of resharing
-		}),
-		Sender: formatOCMUser(&userpb.UserId{
-			OpaqueId: user.Id.OpaqueId,
-			Idp:      s.conf.ProviderDomain,
-		}),
+		// FIXME: the owner host is not generally this server in case of resharing
+		Owner:             owner.OpaqueId + "@" + s.conf.ProviderDomain,
+		Sender:            user.Id.OpaqueId + "@" + s.conf.ProviderDomain,
 		SenderDisplayName: user.DisplayName,
 		ShareType:         "user",
 		ResourceType:      resType,
@@ -440,7 +473,7 @@ func (s *service) CreateOCMShare(ctx context.Context, req *ocm.CreateOCMShareReq
 		}
 	}
 
-	stored, err := s.repo.StoreShare(ctx, ocmshare)
+	stored, err := s.repo.StoreShare(ctx, ocmshare, resourceType)
 	if err != nil {
 		// the remote server has already accepted the share, so a failure here
 		// leaves a dangling share on the remote end
@@ -459,18 +492,26 @@ func (s *service) CreateOCMShare(ctx context.Context, req *ocm.CreateOCMShareReq
 }
 
 func (s *service) RemoveOCMShare(ctx context.Context, req *ocm.RemoveOCMShareRequest) (*ocm.RemoveOCMShareResponse, error) {
-	// TODO (gdelmont): notify the remote provider using the /notification ocm endpoint
-	// https://cs3org.github.io/OCM-API/docs.html?branch=develop&repo=OCM-API&user=cs3org#/paths/~1notifications/post
 	user := appctx.ContextMustGetUser(ctx)
-	if err := s.repo.DeleteShare(ctx, user, req.Ref); err != nil {
-		if errors.Is(err, share.ErrShareNotFound) {
+	removals, err := s.repo.DeleteShare(ctx, user, req.Ref)
+	if err != nil {
+		switch {
+		case errors.Is(err, share.ErrShareNotFound):
 			return &ocm.RemoveOCMShareResponse{
 				Status: status.NewNotFound(ctx, "share does not exist"),
+			}, nil
+		case errors.Is(err, share.ErrInvalidResourceType):
+			return &ocm.RemoveOCMShareResponse{
+				Status: status.NewFailedPrecondition(ctx, err, "share has no supported resource type"),
 			}, nil
 		}
 		return &ocm.RemoveOCMShareResponse{
 			Status: status.NewStatusFromErrType(ctx, "error removing share", err),
 		}, nil
+	}
+
+	for i := range removals {
+		s.notifyUnshared(ctx, &removals[i])
 	}
 
 	return &ocm.RemoveOCMShareResponse{
@@ -548,17 +589,24 @@ func (s *service) UpdateOCMShare(ctx context.Context, req *ocm.UpdateOCMShareReq
 			Status: status.NewOK(ctx),
 		}, nil
 	}
-	_, err := s.repo.UpdateShare(ctx, user, req.Ref, req.Field...)
+	update, err := s.repo.UpdateShare(ctx, user, req.Ref, req.Field...)
 	if err != nil {
-		if errors.Is(err, share.ErrShareNotFound) {
+		switch {
+		case errors.Is(err, share.ErrShareNotFound):
 			return &ocm.UpdateOCMShareResponse{
 				Status: status.NewNotFound(ctx, "share does not exist"),
+			}, nil
+		case errors.Is(err, share.ErrInvalidResourceType):
+			return &ocm.UpdateOCMShareResponse{
+				Status: status.NewFailedPrecondition(ctx, err, "share has no supported resource type"),
 			}, nil
 		}
 		return &ocm.UpdateOCMShareResponse{
 			Status: status.NewStatusFromErrType(ctx, "error updating share", err),
 		}, nil
 	}
+
+	s.notifyPermissionChange(ctx, update, req.GetField())
 
 	res := &ocm.UpdateOCMShareResponse{
 		Status: status.NewOK(ctx),
@@ -584,13 +632,16 @@ func (s *service) ListReceivedOCMShares(ctx context.Context, req *ocm.ListReceiv
 
 func (s *service) UpdateReceivedOCMShare(ctx context.Context, req *ocm.UpdateReceivedOCMShareRequest) (*ocm.UpdateReceivedOCMShareResponse, error) {
 	user := appctx.ContextMustGetUser(ctx)
-	// Accepting a share that carries embedded content triggers a background
-	// transfer of that content. Rather than jumping straight to ACCEPTED, the
-	// share is held in the TRANSFERRING state while the copy runs and only
-	// flipped to ACCEPTED once it completes, so the state progresses
-	// pending -> transferring -> accepted.
-	if req.Share.State == ocm.ShareState_SHARE_STATE_ACCEPTED && req.Share.Destination != "" {
-		payload, err := s.repo.GetEmbeddedPayload(ctx, user, req.Share)
+	transferAcceptance := false
+	// Accepting a share with embedded content holds it in TRANSFERRING until
+	// the copy completes. Only a state the mask asks to change can start it.
+	// The stored grant, not the request, tells if the share is embedded, so
+	// an embedded share never becomes ACCEPTED without a completed copy.
+	if slices.Contains(req.GetUpdateMask().GetPaths(), "state") &&
+		req.Share.State == ocm.ShareState_SHARE_STATE_ACCEPTED {
+		current, err := s.repo.GetReceivedShare(ctx, user, &ocm.ShareReference{
+			Spec: &ocm.ShareReference_Id{Id: req.Share.GetId()},
+		})
 		if err != nil {
 			if errors.Is(err, share.ErrShareNotFound) {
 				return &ocm.UpdateReceivedOCMShareResponse{
@@ -598,14 +649,24 @@ func (s *service) UpdateReceivedOCMShare(ctx context.Context, req *ocm.UpdateRec
 				}, nil
 			}
 			return &ocm.UpdateReceivedOCMShareResponse{
-				Status: status.NewStatusFromErrType(ctx, "error retrieving embedded share payload", err),
+				Status: status.NewStatusFromErrType(ctx, "error getting received share", err),
 			}, nil
 		}
-		if payload != "" {
-			return s.processEmbeddedShare(ctx, user, req, payload)
+		if slices.ContainsFunc(current.GetProtocols(), func(p *ocm.Protocol) bool { return p.GetEmbeddedOptions() != nil }) {
+			return s.processEmbeddedShare(ctx, user, req)
+		}
+		transferAcceptance = share.DataTransferProtocol(current) != nil
+		if s.conf.DisableDataTxAcceptance && transferAcceptance {
+			return &ocm.UpdateReceivedOCMShareResponse{
+				Status: status.NewUnimplemented(ctx, nil, "DATATX share acceptance is disabled"),
+			}, nil
 		}
 	}
-	_, err := s.repo.UpdateReceivedShare(ctx, user, req.Share, req.UpdateMask)
+	mutationCtx := ctx
+	if !transferAcceptance {
+		mutationCtx = share.WithStateNotice(ctx)
+	}
+	update, err := s.repo.UpdateReceivedShare(mutationCtx, user, req.Share, req.UpdateMask)
 	if err != nil {
 		if errors.Is(err, share.ErrShareNotFound) {
 			return &ocm.UpdateReceivedOCMShareResponse{
@@ -615,6 +676,11 @@ func (s *service) UpdateReceivedOCMShare(ctx context.Context, req *ocm.UpdateRec
 		return &ocm.UpdateReceivedOCMShareResponse{
 			Status: status.NewStatusFromErrType(ctx, "error updating received share", err),
 		}, nil
+	}
+
+	// Legacy DATATX updates the grant before the scheduler acknowledges a job.
+	if !transferAcceptance {
+		s.notifyReceivedState(ctx, update, true)
 	}
 
 	res := &ocm.UpdateReceivedOCMShareResponse{
@@ -623,18 +689,22 @@ func (s *service) UpdateReceivedOCMShare(ctx context.Context, req *ocm.UpdateRec
 	return res, nil
 }
 
-// processEmbeddedShare marks the received share as TRANSFERRING, kicks off the
-// background transfer of the embedded content and arranges for the share to
-// become ACCEPTED once every file arrived, or REJECTED if the transfer failed.
-func (s *service) processEmbeddedShare(ctx context.Context, user *userpb.User, req *ocm.UpdateReceivedOCMShareRequest, payload string) (*ocm.UpdateReceivedOCMShareResponse, error) {
+// processEmbeddedShare starts a transfer attempt. The share becomes ACCEPTED
+// once every file arrived, or REJECTED if the transfer failed. Without a
+// destination, a payload or a transferrer, the share stays unchanged.
+func (s *service) processEmbeddedShare(ctx context.Context, user *userpb.User, req *ocm.UpdateReceivedOCMShareRequest) (*ocm.UpdateReceivedOCMShareResponse, error) {
 	recvShare := req.Share
-	mask := req.UpdateMask
-
-	// Refuse to start a second transfer if one is already in progress for this
-	// share, otherwise concurrent copies would race on the same destination.
-	current, err := s.repo.GetReceivedShare(ctx, user, &ocm.ShareReference{
-		Spec: &ocm.ShareReference_Id{Id: recvShare.Id},
-	})
+	if recvShare.Destination == "" {
+		return &ocm.UpdateReceivedOCMShareResponse{
+			Status: status.NewFailedPrecondition(ctx, nil, "embedded share needs a destination"),
+		}, nil
+	}
+	if s.transferrer == nil {
+		return &ocm.UpdateReceivedOCMShareResponse{
+			Status: status.NewFailedPrecondition(ctx, nil, "embedded transfers are not configured"),
+		}, nil
+	}
+	payload, err := s.repo.GetEmbeddedPayload(ctx, user, recvShare)
 	if err != nil {
 		if errors.Is(err, share.ErrShareNotFound) {
 			return &ocm.UpdateReceivedOCMShareResponse{
@@ -642,28 +712,39 @@ func (s *service) processEmbeddedShare(ctx context.Context, user *userpb.User, r
 			}, nil
 		}
 		return &ocm.UpdateReceivedOCMShareResponse{
-			Status: status.NewStatusFromErrType(ctx, "error getting received share", err),
+			Status: status.NewStatusFromErrType(ctx, "error retrieving embedded share payload", err),
 		}, nil
 	}
-	if current.State == ocm.ShareState_SHARE_STATE_TRANSFERRING {
+	if payload == "" {
 		return &ocm.UpdateReceivedOCMShareResponse{
-			Status: status.NewFailedPrecondition(ctx, errors.New("transfer already in progress"), "transfer already in progress"),
+			Status: status.NewFailedPrecondition(ctx, nil, "embedded share has no payload"),
 		}, nil
 	}
 
-	// Persist TRANSFERRING before the copy starts so the recipient can observe
-	// the in-progress state.
-	recvShare.State = ocm.ShareState_SHARE_STATE_TRANSFERRING
-	if _, err := s.repo.UpdateReceivedShare(ctx, user, recvShare, mask); err != nil {
-		if errors.Is(err, share.ErrShareNotFound) {
+	// The start is atomic, so a second start fails instead of racing on the
+	// same destination.
+	start, err := s.repo.StartReceivedShareTransfer(ctx, user, recvShare, req.UpdateMask)
+	if err != nil {
+		switch {
+		case errors.Is(err, share.ErrShareNotFound):
 			return &ocm.UpdateReceivedOCMShareResponse{
 				Status: status.NewNotFound(ctx, "share does not exist"),
+			}, nil
+		case errors.Is(err, share.ErrTransferInProgress):
+			return &ocm.UpdateReceivedOCMShareResponse{
+				Status: status.NewFailedPrecondition(ctx, err, "transfer already in progress"),
+			}, nil
+		case errors.Is(err, share.ErrShareAlreadyAccepted):
+			return &ocm.UpdateReceivedOCMShareResponse{
+				Status: status.NewFailedPrecondition(ctx, err, "share already accepted"),
 			}, nil
 		}
 		return &ocm.UpdateReceivedOCMShareResponse{
 			Status: status.NewStatusFromErrType(ctx, "error updating received share", err),
 		}, nil
 	}
+	id := start.Share.GetId()
+	generation := start.Generation
 
 	// The transfer outlives this request, so detach the context from its
 	// cancellation while keeping its values (user, auth token, logger).
@@ -681,14 +762,14 @@ func (s *service) processEmbeddedShare(ctx context.Context, user *userpb.User, r
 			log.Error().Err(transferErr).Msg("embedded transfer failed, rejecting share")
 			state = ocm.ShareState_SHARE_STATE_REJECTED
 		}
-		if err := s.endTransfer(detached, user, recvShare, mask, state); err != nil {
+		if err := s.endTransfer(detached, user, id, generation, state); err != nil {
 			log.Error().Err(err).Msg("error updating received share after embedded transfer")
 		}
 	}
 
 	if err := s.transferrer.Process(ctx, payload, recvShare.Destination, onComplete); err != nil {
 		// The transfer never started, so don't leave the share behind as transferring.
-		if err := s.endTransfer(ctx, user, recvShare, mask, ocm.ShareState_SHARE_STATE_REJECTED); err != nil {
+		if err := s.endTransfer(ctx, user, id, generation, ocm.ShareState_SHARE_STATE_REJECTED); err != nil {
 			appctx.GetLogger(ctx).Error().Err(err).Msg("error rejecting received share")
 		}
 		return &ocm.UpdateReceivedOCMShareResponse{
@@ -701,26 +782,25 @@ func (s *service) processEmbeddedShare(ctx context.Context, user *userpb.User, r
 	}, nil
 }
 
-// endTransfer moves the share to state, unless it is no longer transferring:
-// the recipient may have reset it while the transfer was running, and that
-// takes precedence over a result arriving afterwards.
-func (s *service) endTransfer(ctx context.Context, user *userpb.User, recvShare *ocm.ReceivedShare, mask *field_mask.FieldMask, state ocm.ShareState) error {
-	current, err := s.repo.GetReceivedShare(ctx, user, &ocm.ShareReference{
-		Spec: &ocm.ShareReference_Id{Id: recvShare.Id},
-	})
+// endTransfer completes one transfer attempt, unless a reset or a newer
+// attempt replaced it. A failed transfer is not the recipient declining.
+func (s *service) endTransfer(ctx context.Context, user *userpb.User, id *ocm.ShareId, generation uint64, state ocm.ShareState) error {
+	mutationCtx := ctx
+	if state == ocm.ShareState_SHARE_STATE_ACCEPTED {
+		mutationCtx = share.WithStateNotice(ctx)
+	}
+	update, err := s.repo.CompleteReceivedShareTransfer(mutationCtx, user, id, generation, state)
 	if err != nil {
 		return err
 	}
-	if current.State != ocm.ShareState_SHARE_STATE_TRANSFERRING {
+	if !update.StateChanged() {
 		appctx.GetLogger(ctx).Info().
-			Str("state", current.State.String()).
-			Msg("share is no longer transferring, leaving its state untouched")
+			Str("state", update.After.GetState().String()).
+			Msg("transfer attempt is no longer current, leaving the share untouched")
 		return nil
 	}
-
-	recvShare.State = state
-	_, err = s.repo.UpdateReceivedShare(ctx, user, recvShare, mask)
-	return err
+	s.notifyReceivedState(ctx, update, false)
+	return nil
 }
 
 func (s *service) GetReceivedOCMShare(ctx context.Context, req *ocm.GetReceivedOCMShareRequest) (*ocm.GetReceivedOCMShareResponse, error) {

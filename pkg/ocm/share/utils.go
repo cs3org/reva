@@ -19,6 +19,8 @@
 package share
 
 import (
+	"slices"
+
 	authpb "github.com/cs3org/go-cs3apis/cs3/auth/provider/v1beta1"
 	ocm "github.com/cs3org/go-cs3apis/cs3/sharing/ocm/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
@@ -126,4 +128,14 @@ func NewWebappAccessMethod(perms *provider.ResourcePermissions, reqs []string) *
 			},
 		},
 	}
+}
+
+// DataTransferProtocol returns the negotiated WebDAV transfer source.
+func DataTransferProtocol(received *ocm.ReceivedShare) *ocm.WebDAVProtocol {
+	for _, protocol := range received.GetProtocols() {
+		if webdav := protocol.GetWebdavOptions(); slices.Contains(webdav.GetAccessTypes(), ocm.AccessType_ACCESS_TYPE_DATATX) {
+			return webdav
+		}
+	}
+	return nil
 }

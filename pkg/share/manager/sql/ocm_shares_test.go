@@ -78,7 +78,7 @@ func storeOcmShareWithID(mgr share.Repository, ctx context.Context, s *ocm.Share
 		return nil, err
 	}
 	s.Id = id
-	return mgr.StoreShare(ctx, s)
+	return mgr.StoreShare(ctx, s, ocm.SharedResourceType_SHARE_RESOURCE_TYPE_FILE)
 }
 
 func getWebDavProtocol(uri string, sharedsecret string, perms *ocm.SharePermissions, role string) *ocm.Protocol {
@@ -303,7 +303,7 @@ func TestStoreOCMShareWithPregeneratedID(t *testing.T) {
 	ocmshare := getOcmShare(accessMethods, grantee, user.Id, getResourceId(), "sometoken")
 	ocmshare.Id = id
 
-	stored, err := mgr.StoreShare(userctx, ocmshare)
+	stored, err := mgr.StoreShare(userctx, ocmshare, ocm.SharedResourceType_SHARE_RESOURCE_TYPE_FILE)
 	if err != nil {
 		t.Error(err)
 		t.FailNow()
@@ -572,7 +572,7 @@ func TestDeleteOCMShare(t *testing.T) {
 		},
 	}
 
-	err = mgr.DeleteShare(userctx, user, &ref)
+	_, err = mgr.DeleteShare(userctx, user, &ref)
 	if err != nil {
 		t.Error(err)
 		t.FailNow()
@@ -618,7 +618,7 @@ func TestUpdateOCMShare(t *testing.T) {
 		t.FailNow()
 	}
 
-	if updatedShare.Expiration.Seconds <= share.Expiration.Seconds {
+	if updatedShare.After.Expiration.Seconds <= share.Expiration.Seconds {
 		t.Error("Expected expiration to be updated to a later time")
 		t.FailNow()
 	}
@@ -1049,7 +1049,7 @@ func TestUpdateWebappPermissionsRoundTrip(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	got := findWebappAccessMethod(updated.AccessMethods)
+	got := findWebappAccessMethod(updated.After.AccessMethods)
 	if got == nil {
 		t.Fatal("expected webapp access method")
 	}
@@ -1241,7 +1241,7 @@ func TestWebappAppNamesSurviveStorageAndUpdate(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got := findWebappAccessMethod(updated.AccessMethods).GetAppNames(); !slices.Equal(got, want) {
+	if got := findWebappAccessMethod(updated.After.AccessMethods).GetAppNames(); !slices.Equal(got, want) {
 		t.Fatalf("app names after permission update = %v, want %v", got, want)
 	}
 }

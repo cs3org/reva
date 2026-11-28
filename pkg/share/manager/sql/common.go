@@ -21,6 +21,8 @@ const (
 )
 
 type Config struct {
+	// With SQLite, the OCM manager requires _txlock=immediate and a 10000 ms
+	// busy timeout. It sets defaults and rejects conflicting db_name options.
 	config.Database      `mapstructure:",squash"`
 	GatewaySvc           string `mapstructure:"gatewaysvc"`
 	LinkPasswordHashCost int    `mapstructure:"password_hash_cost"`
