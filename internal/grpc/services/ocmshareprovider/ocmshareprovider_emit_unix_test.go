@@ -130,13 +130,15 @@ func TestJSONReceivedStateNoticeWhileFileReadHeld(t *testing.T) {
 			if err != nil {
 				t.Fatalf("close held-read FIFO writer: %v", err)
 			}
+			drain, stop := context.WithTimeout(t.Context(), 5*time.Second)
+			defer stop()
 			select {
 			case result := <-done:
 				joined = true
 				if result.err != nil || !proto.Equal(result.share, accepted) {
 					t.Fatalf("released read = %v, err = %v, want %v", result.share, result.err, accepted)
 				}
-			case <-deadline.Done():
+			case <-drain.Done():
 				t.Fatal("repository read did not finish after release")
 			}
 		})

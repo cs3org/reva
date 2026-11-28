@@ -475,8 +475,11 @@ func TestTransferAttemptLifecycle(t *testing.T) {
 		if receipt, err := m.CompleteReceivedShareTransfer(ctx, other, rs.Id, start.Generation, ocm.ShareState_SHARE_STATE_ACCEPTED); !errors.Is(err, share.ErrShareNotFound) || receipt != nil {
 			t.Fatalf("byte-distinct recipient completed the transfer: %v, %v", receipt, err)
 		}
-		if u, err := m.CompleteReceivedShareTransfer(ctx, user, rs.Id, start.Generation+1, ocm.ShareState_SHARE_STATE_ACCEPTED); err != nil || u.StateChanged() {
+		if u, err := m.CompleteReceivedShareTransfer(ctx, user, rs.Id, start.Generation+1, ocm.ShareState_SHARE_STATE_ACCEPTED); err != nil || u == nil || !proto.Equal(u.Before, start.Share) || !proto.Equal(u.After, start.Share) {
 			t.Fatalf("wrong generation completed: %v %v", u, err)
+		}
+		if got := receivedGeneration(t, m, rs.Id); got != start.Generation {
+			t.Fatalf("wrong generation completion changed generation to %d, want %d", got, start.Generation)
 		}
 		u, err := m.CompleteReceivedShareTransfer(ctx, user, rs.Id, start.Generation, ocm.ShareState_SHARE_STATE_ACCEPTED)
 		if err != nil || !u.StateChanged() || u.After.State != ocm.ShareState_SHARE_STATE_ACCEPTED {
@@ -485,8 +488,11 @@ func TestTransferAttemptLifecycle(t *testing.T) {
 		if !u.After.Hidden || len(u.After.Protocols) != len(rs.Protocols) {
 			t.Fatalf("completion changed hidden/protocols: %v", u.After)
 		}
-		if u, err := m.CompleteReceivedShareTransfer(ctx, user, rs.Id, start.Generation, ocm.ShareState_SHARE_STATE_ACCEPTED); err != nil || u.StateChanged() {
-			t.Fatalf("duplicate completion: %v %v", u, err)
+		if duplicate, err := m.CompleteReceivedShareTransfer(ctx, user, rs.Id, start.Generation, ocm.ShareState_SHARE_STATE_ACCEPTED); err != nil || duplicate == nil || !proto.Equal(duplicate.Before, u.After) || !proto.Equal(duplicate.After, u.After) {
+			t.Fatalf("duplicate completion: %v %v", duplicate, err)
+		}
+		if got := receivedGeneration(t, m, rs.Id); got != start.Generation {
+			t.Fatalf("duplicate completion changed generation to %d, want %d", got, start.Generation)
 		}
 		if _, err := m.StartReceivedShareTransfer(ctx, user, &ocm.ReceivedShare{Id: rs.Id}, stateMask()); !errors.Is(err, share.ErrShareAlreadyAccepted) {
 			t.Fatalf("start after acceptance: %v", err)
@@ -504,8 +510,11 @@ func TestTransferAttemptLifecycle(t *testing.T) {
 		if err != nil || second.Generation <= start.Generation {
 			t.Fatalf("second attempt: %v %v", second, err)
 		}
-		if u, err := m.CompleteReceivedShareTransfer(ctx, user, rs.Id, start.Generation, ocm.ShareState_SHARE_STATE_REJECTED); err != nil || u.StateChanged() {
+		if u, err := m.CompleteReceivedShareTransfer(ctx, user, rs.Id, start.Generation, ocm.ShareState_SHARE_STATE_REJECTED); err != nil || u == nil || !proto.Equal(u.Before, second.Share) || !proto.Equal(u.After, second.Share) {
 			t.Fatalf("stale callback completed a newer attempt: %v %v", u, err)
+		}
+		if got := receivedGeneration(t, m, rs.Id); got != second.Generation {
+			t.Fatalf("stale callback changed generation to %d, want %d", got, second.Generation)
 		}
 
 		// An ordinary update that sets TRANSFERRING also invalidates the attempt.
@@ -513,11 +522,16 @@ func TestTransferAttemptLifecycle(t *testing.T) {
 			t.Fatal(err)
 		}
 		manual := &ocm.ReceivedShare{Id: rs.Id, State: ocm.ShareState_SHARE_STATE_TRANSFERRING}
-		if _, err := m.UpdateReceivedShare(ctx, user, manual, stateMask()); err != nil {
+		manualUpdate, err := m.UpdateReceivedShare(ctx, user, manual, stateMask())
+		if err != nil {
 			t.Fatal(err)
 		}
-		if u, err := m.CompleteReceivedShareTransfer(ctx, user, rs.Id, second.Generation, ocm.ShareState_SHARE_STATE_ACCEPTED); err != nil || u.StateChanged() {
+		gen := receivedGeneration(t, m, rs.Id)
+		if u, err := m.CompleteReceivedShareTransfer(ctx, user, rs.Id, second.Generation, ocm.ShareState_SHARE_STATE_ACCEPTED); err != nil || u == nil || !proto.Equal(u.Before, manualUpdate.After) || !proto.Equal(u.After, manualUpdate.After) {
 			t.Fatalf("manual TRANSFERRING revived an old attempt: %v %v", u, err)
+		}
+		if got := receivedGeneration(t, m, rs.Id); got != gen {
+			t.Fatalf("manual TRANSFERRING completion changed generation to %d, want %d", got, gen)
 		}
 	})
 }

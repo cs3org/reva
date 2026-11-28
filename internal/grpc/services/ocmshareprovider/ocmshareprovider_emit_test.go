@@ -939,13 +939,29 @@ func TestUnmaskedAcceptanceStartsNoTransfer(t *testing.T) {
 
 func TestServiceCloseStopsNotifications(t *testing.T) {
 	e := newEmitEnv(t)
-	e.svc.notifier = &ocmd.AsyncNotifier{Client: ocmd.NewClient(2*time.Second, false)}
+	sender := e.svc.notifier.(*syncNotifier)
+	a := &ocmd.AsyncNotifier{Client: sender.c, Key: sender.key}
+	e.svc.notifier = a
+	t.Cleanup(func() { _ = a.Close() })
 	sh := e.outgoing(t)
+	notice, err := (ocmd.ShareStateNotification{
+		Type:         ocmd.NotificationShareUnshared,
+		SenderDomain: e.svc.conf.ProviderDomain,
+		ResourceType: "file",
+		ShareType:    "user",
+		ProviderID:   sh.Id.OpaqueId,
+	}).Build()
+	if err != nil {
+		t.Fatal(err)
+	}
 	if err := e.svc.Close(); err != nil {
 		t.Fatal(err)
 	}
 	if err := e.svc.Close(); err != nil {
 		t.Fatal(err)
+	}
+	if got, want := a.NewNotification(e.owner, e.peer.host(), notice), (ocmd.SendResult{Outcome: ocmd.SendPostFailed, Failure: ocmd.FailureCanceled}); got != want {
+		t.Fatalf("post-close admission = %+v, want %+v", got, want)
 	}
 	res, err := e.svc.RemoveOCMShare(e.owner, &ocm.RemoveOCMShareRequest{Ref: &ocm.ShareReference{Spec: &ocm.ShareReference_Id{Id: sh.Id}}})
 	if err != nil || res.Status.Code != rpc.Code_CODE_OK {
