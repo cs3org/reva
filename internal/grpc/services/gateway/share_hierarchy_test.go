@@ -544,7 +544,13 @@ func (s *fakeCollaborationServer) UpdateReceivedShare(_ context.Context, req *co
 	if _, ok := s.shares[id]; !ok {
 		return &collaboration.UpdateReceivedShareResponse{Status: &rpc.Status{Code: rpc.Code_CODE_NOT_FOUND}}, nil
 	}
-	s.states[id] = req.GetShare().GetState()
+	// Like the share managers, the state changes only when the update mask asks for
+	// it; a mask that names another field leaves the state alone.
+	for _, p := range req.GetUpdateMask().GetPaths() {
+		if p == "state" {
+			s.states[id] = req.GetShare().GetState()
+		}
+	}
 	return &collaboration.UpdateReceivedShareResponse{Status: okStatus()}, nil
 }
 

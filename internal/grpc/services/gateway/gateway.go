@@ -22,6 +22,7 @@ import (
 	"context"
 	"fmt"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/ReneKroon/ttlcache/v2"
@@ -124,7 +125,12 @@ type svc struct {
 	publicURL string
 	// Drains the NATS connection on service close
 	closeEventBackend func() error
+	// receivedShareLocks serialises the state and grant changes of a received share.
+	receivedShareLocks [shareLockStripes]sync.Mutex
 }
+
+// shareLockStripes is the number of locks that serialise received share updates.
+const shareLockStripes = 64
 
 // New creates a new gateway svc that acts as a proxy for any grpc operation.
 // The gateway is responsible for high-level controls: rate-limiting, coordination between svcs

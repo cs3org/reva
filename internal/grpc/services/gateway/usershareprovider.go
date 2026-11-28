@@ -21,6 +21,7 @@ package gateway
 import (
 	"context"
 	"fmt"
+	"hash/fnv"
 	"path"
 	"slices"
 	"strings"
@@ -654,6 +655,16 @@ func (s *svc) GetReceivedShare(ctx context.Context, req *collaboration.GetReceiv
 // one they rejected earlier has to get it back. Both calls change the ACL of the
 // owner's resource, and a storage provider only lets the owner change it, so the
 // gateway makes them as the owner of the share rather than as the recipient.
+// When updating a received share:
+// if the update contains update for displayName:
+//  1. if received share is mounted: we also do a rename in the storage
+//  2. if received share is not mounted: we only rename in user share provider.
+//
+// A share carries its storage grant from the moment it is created, so a
+// recipient who rejects it has to lose that grant, and a recipient who accepts
+// one they rejected earlier has to get it back. Both calls change the ACL of the
+// owner's resource, and a storage provider only lets the owner change it, so the
+// gateway makes them as the owner of the share rather than as the recipient.
 func (s *svc) UpdateReceivedShare(ctx context.Context, req *collaboration.UpdateReceivedShareRequest) (*collaboration.UpdateReceivedShareResponse, error) {
 	log := appctx.GetLogger(ctx)
 
@@ -685,64 +696,85 @@ func (s *svc) UpdateReceivedShare(ctx context.Context, req *collaboration.Update
 		}, nil
 	}
 
-	updateState := req.GetShare().GetState()
-	managesGrant := s.c.CommitShareToStorageGrant &&
-		(updateState == collaboration.ShareState_SHARE_STATE_ACCEPTED ||
-			updateState == collaboration.ShareState_SHARE_STATE_REJECTED)
-
-	var share *collaboration.Share
-	var previousState collaboration.ShareState
-	if managesGrant {
-		share, previousState, err = s.getReceivedShare(ctx, c, req.GetShare().GetShare().GetId().GetOpaqueId())
-		if err != nil {
-			log.Err(err).Msg("gateway: error reading the received share")
-			return &collaboration.UpdateReceivedShareResponse{
-				Status: status.NewStatusFromErrType(ctx, "error reading the received share", err),
-			}, nil
-		}
-		// A share that is already rejected has no grant left to revoke.
-		if updateState == collaboration.ShareState_SHARE_STATE_REJECTED {
-			managesGrant = previousState != collaboration.ShareState_SHARE_STATE_REJECTED
-		}
+	if !s.c.CommitShareToStorageGrant {
+		return s.forwardReceivedShareUpdate(ctx, c, req)
 	}
 
-	// The revoke happens before the share provider hears about the rejection, so a
-	// failure leaves the share accepted instead of rejected but still reachable.
-	var rollbackGrant func() *rpc.Status
-	if managesGrant && updateState == collaboration.ShareState_SHARE_STATE_REJECTED {
-		revokeStatus, err := s.changeStoredGrant(ctx, share, false)
-		if err != nil {
-			return nil, errors.Wrap(err, "gateway: error removing the grant of the received share from storage")
-		}
-		if revokeStatus.Code != rpc.Code_CODE_OK {
-			return &collaboration.UpdateReceivedShareResponse{Status: revokeStatus}, nil
-		}
-		rollbackGrant = func() *rpc.Status {
-			restoreStatus, err := s.changeStoredGrant(ctx, share, true)
-			if err != nil {
-				return status.NewInternal(ctx, err, "error re-applying the grant of the received share")
-			}
-			return restoreStatus
-		}
+	id := req.GetShare().GetShare().GetId().GetOpaqueId()
+	// The grant follows the state the provider stores, and two updates of the same
+	// share would otherwise interleave, so the whole update holds the share's lock.
+	unlock := s.lockShare(id)
+	defer unlock()
+
+	share, previousState, err := s.getReceivedShare(ctx, c, id)
+	if err != nil {
+		log.Err(err).Str("share_id", id).Msg("gateway: error reading the received share")
+		return &collaboration.UpdateReceivedShareResponse{
+			Status: status.NewStatusFromErrType(ctx, "error reading the received share", err),
+		}, nil
 	}
 
-	rollback := func(stage string) {
-		if rollbackGrant == nil {
-			return
-		}
-		if rollbackStatus := rollbackGrant(); rollbackStatus.Code != rpc.Code_CODE_OK {
-			log.Error().
-				Str("share_id", req.GetShare().GetShare().GetId().GetOpaqueId()).
-				Str("rollback_status", rollbackStatus.String()).
-				Str("stage", stage).
-				Msg("failed to roll back the grant of the received share")
-		}
+	res, err := s.forwardReceivedShareUpdate(ctx, c, req)
+	if err != nil {
+		return nil, err
 	}
+	if res.GetStatus().GetCode() != rpc.Code_CODE_OK {
+		return res, nil
+	}
+
+	// The update mask may leave the state alone, and a manager may store the state
+	// it sees fit, so the grant is reconciled with the state that was stored
+	// instead of the state that was requested.
+	_, state, err := s.getReceivedShare(ctx, c, id)
+	if err != nil {
+		log.Err(err).Str("share_id", id).Msg("gateway: error reading the received share after the update")
+		return res, nil
+	}
+	if state == previousState {
+		return res, nil
+	}
+
+	ownerCtx, err := s.impersonateUser(ctx, share.GetOwner())
+	if err != nil {
+		s.rollBackReceivedShareState(ctx, c, req, previousState)
+		return nil, err
+	}
+
+	var grantStatus *rpc.Status
+	switch state {
+	case collaboration.ShareState_SHARE_STATE_REJECTED:
+		grantStatus, err = s.revokeGrant(ownerCtx, c, share)
+	case collaboration.ShareState_SHARE_STATE_ACCEPTED:
+		grantStatus, err = s.applyGrantWithHierarchy(ownerCtx, c, share)
+	default:
+		return res, nil
+	}
+	if err != nil || grantStatus.GetCode() != rpc.Code_CODE_OK {
+		log.Err(err).
+			Str("share_id", id).
+			Str("state", state.String()).
+			Str("grant_status", grantStatus.String()).
+			Msg("gateway: error changing the grant of the received share")
+		// A share must not end up rejected while its grant is still active, nor
+		// accepted without the access the grant carries, so the state goes back to
+		// the one the grant still matches.
+		s.rollBackReceivedShareState(ctx, c, req, previousState)
+		if grantStatus != nil {
+			return &collaboration.UpdateReceivedShareResponse{Status: grantStatus}, nil
+		}
+		return nil, err
+	}
+
+	return res, nil
+}
+
+// forwardReceivedShareUpdate hands the update to the share provider.
+func (s *svc) forwardReceivedShareUpdate(ctx context.Context, c collaboration.CollaborationAPIClient, req *collaboration.UpdateReceivedShareRequest) (*collaboration.UpdateReceivedShareResponse, error) {
+	log := appctx.GetLogger(ctx)
 
 	res, err := c.UpdateReceivedShare(ctx, req)
 	if err != nil {
 		log.Err(err).Msg("gateway: error calling UpdateReceivedShare")
-		rollback("share update error")
 		return &collaboration.UpdateReceivedShareResponse{
 			Status: &rpc.Status{
 				Code: rpc.Code_CODE_INTERNAL,
@@ -750,31 +782,21 @@ func (s *svc) UpdateReceivedShare(ctx context.Context, req *collaboration.Update
 		}, nil
 	}
 	if res == nil || res.Status == nil {
-		rollback("invalid share update response")
 		return &collaboration.UpdateReceivedShareResponse{
 			Status: status.NewInternal(ctx, errors.New("share provider returned no status"), "invalid response updating received share"),
 		}, nil
 	}
-	if res.Status.Code != rpc.Code_CODE_OK {
-		rollback("share update rejection")
-		return res, nil
-	}
-
-	// The grant is applied after the share provider took the new state, so a
-	// failure here leaves the share without a reachable path rather than
-	// reachable without a share.
-	if managesGrant && updateState == collaboration.ShareState_SHARE_STATE_ACCEPTED {
-		grantStatus, err := s.changeStoredGrant(ctx, share, true)
-		if err != nil {
-			return nil, errors.Wrap(err, "gateway: error committing the grant of the received share to storage")
-		}
-		if grantStatus.Code != rpc.Code_CODE_OK {
-			s.rollBackReceivedShareState(ctx, c, req, previousState)
-			return &collaboration.UpdateReceivedShareResponse{Status: grantStatus}, nil
-		}
-	}
-
 	return res, nil
+}
+
+// lockShare serialises the updates of one received share. Stripes keep the lock
+// set bounded instead of keeping one mutex per share.
+func (s *svc) lockShare(id string) func() {
+	hash := fnv.New32a()
+	_, _ = hash.Write([]byte(id))
+	lock := &s.receivedShareLocks[hash.Sum32()%shareLockStripes]
+	lock.Lock()
+	return lock.Unlock
 }
 
 // getReceivedShare reads a received share back so the gateway knows the resource,
@@ -798,22 +820,40 @@ func (s *svc) getReceivedShare(ctx context.Context, c collaboration.Collaboratio
 
 // changeStoredGrant applies or revokes the storage grant a received share
 // carries, as the owner of the share.
-func (s *svc) changeStoredGrant(ctx context.Context, share *collaboration.Share, apply bool) (*rpc.Status, error) {
-	if share.GetResourceId() == nil || share.GetGrantee() == nil {
-		return status.NewOK(ctx), nil
-	}
-	perms := share.GetPermissions().GetPermissions()
-	if apply && grants.PermissionsEqual(perms, &provider.ResourcePermissions{}) {
-		return status.NewOK(ctx), nil
-	}
-	ownerCtx, err := s.impersonateUser(ctx, share.GetOwner())
+// applyGrantWithHierarchy applies the grant of an accepted share and then re-applies
+// the grants of the shares below it that keep higher permissions, the way
+// CreateShare does: a grant applied on a container also overwrites the grants of
+// its descendants in drivers such as EOS.
+func (s *svc) applyGrantWithHierarchy(ctx context.Context, c collaboration.CollaborationAPIClient, share *collaboration.Share) (*rpc.Status, error) {
+	log := appctx.GetLogger(ctx)
+	id := share.GetId().GetOpaqueId()
+
+	var children []*collaboration.Share
+	existing, err := s.listSharesForGranteeInSpace(ctx, c, share.GetResourceId().GetSpaceId(), share.GetGrantee())
 	if err != nil {
-		return nil, err
+		return status.NewStatusFromErrType(ctx, "error listing shares for hierarchy reapply", err), nil
 	}
-	if apply {
-		return s.addGrant(ownerCtx, share.GetResourceId(), share.GetGrantee(), perms)
+	// The listing skips expired shares, but the accepted share has to be present to
+	// resolve its path.
+	existing = append(filterOutShare(existing, id), share)
+	path, err := s.getPathForResourceId(ctx, share.GetResourceId())
+	if err != nil {
+		log.Warn().Err(err).Str("share_id", id).Msg("sharehierarchy: cannot resolve path of the accepted share, not re-applying child grants")
+	} else {
+		checker := &sharehierarchy.Checker{GetPath: s.getPathForResourceId}
+		result, err := checker.CheckGrantConsistency(ctx, path, share.GetPermissions().GetPermissions(), existing)
+		if err != nil {
+			log.Warn().Err(err).Str("share_id", id).Msg("sharehierarchy: hierarchy inconsistent on accept, not re-applying child grants")
+		} else {
+			children = sharehierarchy.Shares(result.ToReapply)
+		}
 	}
-	return s.removeGrant(ownerCtx, share.GetResourceId(), share.GetGrantee(), perms)
+
+	grantStatus, err := s.applyGrant(ctx, share.GetResourceId(), share.GetGrantee(), share.GetPermissions().GetPermissions())
+	if err != nil || grantStatus.GetCode() != rpc.Code_CODE_OK {
+		return grantStatus, err
+	}
+	return s.reapplyChildGrants(ctx, children)
 }
 
 // impersonateUser returns a context that acts as the given user. Storage
