@@ -34,7 +34,11 @@ import (
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	typesv1beta1 "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
 
+	"google.golang.org/grpc/metadata"
+	"google.golang.org/protobuf/proto"
+
 	"github.com/cs3org/reva/v3/pkg/appctx"
+	"github.com/cs3org/reva/v3/pkg/auth/scope"
 	"github.com/cs3org/reva/v3/pkg/service"
 	revashare "github.com/cs3org/reva/v3/pkg/share"
 	"github.com/cs3org/reva/v3/pkg/sharehierarchy"
@@ -644,6 +648,12 @@ func (s *svc) GetReceivedShare(ctx context.Context, req *collaboration.GetReceiv
 // if the update contains update for displayName:
 //  1. if received share is mounted: we also do a rename in the storage
 //  2. if received share is not mounted: we only rename in user share provider.
+//
+// A share carries its storage grant from the moment it is created, so a
+// recipient who rejects it has to lose that grant, and a recipient who accepts
+// one they rejected earlier has to get it back. Both calls change the ACL of the
+// owner's resource, and a storage provider only lets the owner change it, so the
+// gateway makes them as the owner of the share rather than as the recipient.
 func (s *svc) UpdateReceivedShare(ctx context.Context, req *collaboration.UpdateReceivedShareRequest) (*collaboration.UpdateReceivedShareResponse, error) {
 	log := appctx.GetLogger(ctx)
 
@@ -675,17 +685,195 @@ func (s *svc) UpdateReceivedShare(ctx context.Context, req *collaboration.Update
 		}, nil
 	}
 
+	updateState := req.GetShare().GetState()
+	managesGrant := s.c.CommitShareToStorageGrant &&
+		(updateState == collaboration.ShareState_SHARE_STATE_ACCEPTED ||
+			updateState == collaboration.ShareState_SHARE_STATE_REJECTED)
+
+	var share *collaboration.Share
+	var previousState collaboration.ShareState
+	if managesGrant {
+		share, previousState, err = s.getReceivedShare(ctx, c, req.GetShare().GetShare().GetId().GetOpaqueId())
+		if err != nil {
+			log.Err(err).Msg("gateway: error reading the received share")
+			return &collaboration.UpdateReceivedShareResponse{
+				Status: status.NewStatusFromErrType(ctx, "error reading the received share", err),
+			}, nil
+		}
+		// A share that is already rejected has no grant left to revoke.
+		if updateState == collaboration.ShareState_SHARE_STATE_REJECTED {
+			managesGrant = previousState != collaboration.ShareState_SHARE_STATE_REJECTED
+		}
+	}
+
+	// The revoke happens before the share provider hears about the rejection, so a
+	// failure leaves the share accepted instead of rejected but still reachable.
+	var rollbackGrant func() *rpc.Status
+	if managesGrant && updateState == collaboration.ShareState_SHARE_STATE_REJECTED {
+		revokeStatus, err := s.changeStoredGrant(ctx, share, false)
+		if err != nil {
+			return nil, errors.Wrap(err, "gateway: error removing the grant of the received share from storage")
+		}
+		if revokeStatus.Code != rpc.Code_CODE_OK {
+			return &collaboration.UpdateReceivedShareResponse{Status: revokeStatus}, nil
+		}
+		rollbackGrant = func() *rpc.Status {
+			restoreStatus, err := s.changeStoredGrant(ctx, share, true)
+			if err != nil {
+				return status.NewInternal(ctx, err, "error re-applying the grant of the received share")
+			}
+			return restoreStatus
+		}
+	}
+
+	rollback := func(stage string) {
+		if rollbackGrant == nil {
+			return
+		}
+		if rollbackStatus := rollbackGrant(); rollbackStatus.Code != rpc.Code_CODE_OK {
+			log.Error().
+				Str("share_id", req.GetShare().GetShare().GetId().GetOpaqueId()).
+				Str("rollback_status", rollbackStatus.String()).
+				Str("stage", stage).
+				Msg("failed to roll back the grant of the received share")
+		}
+	}
+
 	res, err := c.UpdateReceivedShare(ctx, req)
 	if err != nil {
 		log.Err(err).Msg("gateway: error calling UpdateReceivedShare")
+		rollback("share update error")
 		return &collaboration.UpdateReceivedShareResponse{
 			Status: &rpc.Status{
 				Code: rpc.Code_CODE_INTERNAL,
 			},
 		}, nil
 	}
+	if res == nil || res.Status == nil {
+		rollback("invalid share update response")
+		return &collaboration.UpdateReceivedShareResponse{
+			Status: status.NewInternal(ctx, errors.New("share provider returned no status"), "invalid response updating received share"),
+		}, nil
+	}
+	if res.Status.Code != rpc.Code_CODE_OK {
+		rollback("share update rejection")
+		return res, nil
+	}
+
+	// The grant is applied after the share provider took the new state, so a
+	// failure here leaves the share without a reachable path rather than
+	// reachable without a share.
+	if managesGrant && updateState == collaboration.ShareState_SHARE_STATE_ACCEPTED {
+		grantStatus, err := s.changeStoredGrant(ctx, share, true)
+		if err != nil {
+			return nil, errors.Wrap(err, "gateway: error committing the grant of the received share to storage")
+		}
+		if grantStatus.Code != rpc.Code_CODE_OK {
+			s.rollBackReceivedShareState(ctx, c, req, previousState)
+			return &collaboration.UpdateReceivedShareResponse{Status: grantStatus}, nil
+		}
+	}
 
 	return res, nil
+}
+
+// getReceivedShare reads a received share back so the gateway knows the resource,
+// the grantee and the permissions of the grant it carries, and the owner it has
+// to act as.
+func (s *svc) getReceivedShare(ctx context.Context, c collaboration.CollaborationAPIClient, id string) (*collaboration.Share, collaboration.ShareState, error) {
+	res, err := c.ListReceivedShares(ctx, &collaboration.ListReceivedSharesRequest{})
+	if err != nil {
+		return nil, 0, errors.Wrap(err, "gateway: error calling ListReceivedShares")
+	}
+	if res.Status.Code != rpc.Code_CODE_OK {
+		return nil, 0, status.NewErrtypeFromStatus(res.Status)
+	}
+	for _, received := range res.Shares {
+		if received.GetShare().GetId().GetOpaqueId() == id {
+			return received.GetShare(), received.GetState(), nil
+		}
+	}
+	return nil, 0, errtypes.NotFound(id)
+}
+
+// changeStoredGrant applies or revokes the storage grant a received share
+// carries, as the owner of the share.
+func (s *svc) changeStoredGrant(ctx context.Context, share *collaboration.Share, apply bool) (*rpc.Status, error) {
+	if share.GetResourceId() == nil || share.GetGrantee() == nil {
+		return status.NewOK(ctx), nil
+	}
+	perms := share.GetPermissions().GetPermissions()
+	if apply && grants.PermissionsEqual(perms, &provider.ResourcePermissions{}) {
+		return status.NewOK(ctx), nil
+	}
+	ownerCtx, err := s.impersonateUser(ctx, share.GetOwner())
+	if err != nil {
+		return nil, err
+	}
+	if apply {
+		return s.addGrant(ownerCtx, share.GetResourceId(), share.GetGrantee(), perms)
+	}
+	return s.removeGrant(ownerCtx, share.GetResourceId(), share.GetGrantee(), perms)
+}
+
+// impersonateUser returns a context that acts as the given user. Storage
+// providers authorise access per user and only let the owner of a resource change
+// its ACL, while accepting and rejecting a received share is driven by the
+// recipient, so those flows have to speak to the storage as the share owner.
+func (s *svc) impersonateUser(ctx context.Context, id *userpb.UserId) (context.Context, error) {
+	// Without an identity or a token manager there is nothing to act with, so the
+	// caller's context is kept.
+	if id.GetOpaqueId() == "" || s.tokenmgr == nil {
+		return ctx, nil
+	}
+	actingUser := &userpb.User{Id: id}
+	// Share records store only the username, so resolve the full user: storage
+	// providers need the username to locate the user's home.
+	if res, err := s.GetUser(ctx, &userpb.GetUserRequest{UserId: id}); err == nil &&
+		res.GetStatus().GetCode() == rpc.Code_CODE_OK && res.GetUser().GetId().GetOpaqueId() != "" {
+		actingUser = res.GetUser()
+	}
+	scopes, err := scope.AddOwnerScope(nil)
+	if err != nil {
+		return ctx, errors.Wrap(err, "gateway: error building the impersonated user scope")
+	}
+	tkn, err := s.tokenmgr.MintToken(ctx, actingUser, scopes)
+	if err != nil {
+		return ctx, errors.Wrap(err, "gateway: error minting a token for the impersonated user")
+	}
+	userCtx := appctx.ContextSetUser(ctx, actingUser)
+	userCtx = appctx.ContextSetToken(userCtx, tkn)
+	// Replace the caller's token instead of appending to it: services read the
+	// first value of the header, so an appended token would be ignored.
+	md, ok := metadata.FromOutgoingContext(userCtx)
+	if !ok {
+		md = metadata.MD{}
+	}
+	md = md.Copy()
+	md.Set(appctx.TokenHeader, tkn)
+	return metadata.NewOutgoingContext(userCtx, md), nil
+}
+
+// rollBackReceivedShareState puts a received share back into the state it had
+// before its grant could not be committed.
+func (s *svc) rollBackReceivedShareState(ctx context.Context, c collaboration.CollaborationAPIClient, req *collaboration.UpdateReceivedShareRequest, state collaboration.ShareState) {
+	log := appctx.GetLogger(ctx)
+	id := req.GetShare().GetShare().GetId().GetOpaqueId()
+
+	rollbackReq := proto.Clone(req).(*collaboration.UpdateReceivedShareRequest)
+	rollbackReq.Share.State = state
+	res, err := c.UpdateReceivedShare(ctx, rollbackReq)
+	if err != nil {
+		log.Err(err).
+			Str("share_id", id).
+			Msg("failed to roll back the share state after the grant could not be committed")
+		return
+	}
+	if res == nil || res.GetStatus().GetCode() != rpc.Code_CODE_OK {
+		log.Error().
+			Str("share_id", id).
+			Msg("share state rollback returned a failure status after the grant could not be committed")
+	}
 }
 
 // ---------------------------------------------------------------------------

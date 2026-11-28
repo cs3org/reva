@@ -49,6 +49,7 @@ const (
 	shareHierarchySpaceID   = "space"
 	userAOpaqueID           = "user-a"
 	groupOpaqueID           = "group-a"
+	shareOwnerOpaqueID      = "user-owner"
 
 	parentPath     = "/Share hierarchy/Parent"
 	childPath      = "/Share hierarchy/Parent/Child"
@@ -489,12 +490,14 @@ type fakeCollaborationServer struct {
 	mu     sync.Mutex
 	nextID int
 	shares map[string]*collaboration.Share
+	states map[string]collaboration.ShareState
 }
 
 func newFakeCollaborationServer() *fakeCollaborationServer {
 	return &fakeCollaborationServer{
 		nextID: 1,
 		shares: map[string]*collaboration.Share{},
+		states: map[string]collaboration.ShareState{},
 	}
 }
 
@@ -508,10 +511,52 @@ func (s *fakeCollaborationServer) CreateShare(_ context.Context, req *collaborat
 		Id:          &collaboration.ShareId{OpaqueId: id},
 		ResourceId:  req.ResourceInfo.Id,
 		Grantee:     req.Grant.Grantee,
+		Owner:       &userpb.UserId{OpaqueId: shareOwnerOpaqueID, Type: userpb.UserType_USER_TYPE_PRIMARY},
 		Permissions: &collaboration.SharePermissions{Permissions: req.Grant.Permissions.Permissions},
 	}).(*collaboration.Share)
 	s.shares[id] = share
 	return &collaboration.CreateShareResponse{Status: okStatus(), Share: proto.Clone(share).(*collaboration.Share)}, nil
+}
+
+func (s *fakeCollaborationServer) ListReceivedShares(_ context.Context, _ *collaboration.ListReceivedSharesRequest, _ ...grpc.CallOption) (*collaboration.ListReceivedSharesResponse, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	received := make([]*collaboration.ReceivedShare, 0, len(s.shares))
+	for id, share := range s.shares {
+		state, ok := s.states[id]
+		if !ok {
+			state = collaboration.ShareState_SHARE_STATE_PENDING
+		}
+		received = append(received, &collaboration.ReceivedShare{
+			Share: proto.Clone(share).(*collaboration.Share),
+			State: state,
+		})
+	}
+	return &collaboration.ListReceivedSharesResponse{Status: okStatus(), Shares: received}, nil
+}
+
+func (s *fakeCollaborationServer) UpdateReceivedShare(_ context.Context, req *collaboration.UpdateReceivedShareRequest, _ ...grpc.CallOption) (*collaboration.UpdateReceivedShareResponse, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	id := req.GetShare().GetShare().GetId().GetOpaqueId()
+	if _, ok := s.shares[id]; !ok {
+		return &collaboration.UpdateReceivedShareResponse{Status: &rpc.Status{Code: rpc.Code_CODE_NOT_FOUND}}, nil
+	}
+	s.states[id] = req.GetShare().GetState()
+	return &collaboration.UpdateReceivedShareResponse{Status: okStatus()}, nil
+}
+
+func (s *fakeCollaborationServer) stateOf(id string) collaboration.ShareState {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	state, ok := s.states[id]
+	if !ok {
+		return collaboration.ShareState_SHARE_STATE_PENDING
+	}
+	return state
 }
 
 func (s *fakeCollaborationServer) RemoveShare(_ context.Context, req *collaboration.RemoveShareRequest, _ ...grpc.CallOption) (*collaboration.RemoveShareResponse, error) {
@@ -644,6 +689,9 @@ type fakeStorageProviderServer struct {
 
 	mu     sync.Mutex
 	grants map[string]map[string]*provider.ResourcePermissions
+	// failGrants makes the provider refuse every grant change, like a provider that
+	// only lets the owner change the ACL of a resource.
+	failGrants bool
 }
 
 func newFakeStorageProviderServer() *fakeStorageProviderServer {
@@ -653,6 +701,9 @@ func newFakeStorageProviderServer() *fakeStorageProviderServer {
 }
 
 func (s *fakeStorageProviderServer) AddGrant(_ context.Context, req *provider.AddGrantRequest, _ ...grpc.CallOption) (*provider.AddGrantResponse, error) {
+	if s.grantsRefused() {
+		return &provider.AddGrantResponse{Status: &rpc.Status{Code: rpc.Code_CODE_PERMISSION_DENIED}}, nil
+	}
 	s.setGrant(req.Ref.GetResourceId().OpaqueId, req.Grant.Grantee, req.Grant.Permissions)
 	return &provider.AddGrantResponse{Status: okStatus()}, nil
 }
@@ -663,6 +714,10 @@ func (s *fakeStorageProviderServer) UpdateGrant(_ context.Context, req *provider
 }
 
 func (s *fakeStorageProviderServer) RemoveGrant(_ context.Context, req *provider.RemoveGrantRequest, _ ...grpc.CallOption) (*provider.RemoveGrantResponse, error) {
+	if s.grantsRefused() {
+		return &provider.RemoveGrantResponse{Status: &rpc.Status{Code: rpc.Code_CODE_PERMISSION_DENIED}}, nil
+	}
+
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
@@ -691,6 +746,13 @@ func (s *fakeStorageProviderServer) GetPath(_ context.Context, req *provider.Get
 		Status: okStatus(),
 		Path:   pathForOpaqueID(req.ResourceId.OpaqueId),
 	}, nil
+}
+
+func (s *fakeStorageProviderServer) grantsRefused() bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	return s.failGrants
 }
 
 func (s *fakeStorageProviderServer) setGrant(opaqueID string, grantee *provider.Grantee, perms *provider.ResourcePermissions) {
