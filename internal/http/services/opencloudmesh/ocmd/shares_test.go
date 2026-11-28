@@ -42,6 +42,7 @@ import (
 	invitepb "github.com/cs3org/go-cs3apis/cs3/ocm/invite/v1beta1"
 	ocmprovider "github.com/cs3org/go-cs3apis/cs3/ocm/provider/v1beta1"
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
+	"github.com/cs3org/reva/v3/internal/http/services/reqres"
 	"github.com/cs3org/reva/v3/internal/http/services/wellknown"
 	"github.com/cs3org/reva/v3/pkg/appctx"
 	"github.com/cs3org/reva/v3/pkg/errtypes"
@@ -136,7 +137,7 @@ func initSharesHandler(t *testing.T, c *config) *sharesHandler {
 
 // --- tests ---
 
-func TestCreateShareReturnsServerErrorForNonOKCreateStatus(t *testing.T) {
+func TestCreateShareStatusMapping(t *testing.T) {
 	// Start a local OCM discovery server so the discovery succeeds.
 	disco := ocmDiscoveryServer(t, "webdav", "file")
 	defer disco.Close()
@@ -145,14 +146,6 @@ func TestCreateShareReturnsServerErrorForNonOKCreateStatus(t *testing.T) {
 	// so that the discovery calls it instead of the real internet.
 	senderAddr := disco.Listener.Addr().String() // e.g. "127.0.0.1:54321"
 
-	stampGateway(&sharesMockGW{
-		createResp: &ocmincoming.CreateOCMIncomingShareResponse{
-			Status: &rpc.Status{
-				Code:    rpc.Code_CODE_INTERNAL,
-				Message: "store failed",
-			},
-		},
-	})
 	h := initSharesHandler(t, &config{AllowLoopbackFederation: true})
 
 	body, _ := json.Marshal(map[string]any{
@@ -172,15 +165,30 @@ func TestCreateShareReturnsServerErrorForNonOKCreateStatus(t *testing.T) {
 		},
 	})
 
-	req := httptest.NewRequest(http.MethodPost, "/ocm/shares", bytes.NewReader(body))
-	req.Header.Set("Content-Type", "application/json")
-	req.RemoteAddr = "192.0.2.15:12345"
-
-	rr := httptest.NewRecorder()
-	h.CreateShare(rr, req)
-
-	if rr.Code != http.StatusInternalServerError {
-		t.Fatalf("CreateShare() status = %d, want %d", rr.Code, http.StatusInternalServerError)
+	for _, tc := range []struct {
+		name    string
+		status  rpc.Code
+		message string
+		want    int
+	}{
+		{"internal", rpc.Code_CODE_INTERNAL, "store failed", http.StatusInternalServerError},
+		{"recipient proof", rpc.Code_CODE_FAILED_PRECONDITION, "local recipient identity could not be verified", http.StatusInternalServerError},
+		{"unrelated precondition", rpc.Code_CODE_FAILED_PRECONDITION, "unrelated store precondition", http.StatusInternalServerError},
+		{"malformed grant", rpc.Code_CODE_INVALID_ARGUMENT, "invalid OCM grant identity", http.StatusBadRequest},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			stampGateway(&sharesMockGW{createResp: &ocmincoming.CreateOCMIncomingShareResponse{
+				Status: &rpc.Status{Code: tc.status, Message: tc.message},
+			}})
+			req := httptest.NewRequest(http.MethodPost, "/ocm/shares", bytes.NewReader(body))
+			req.Header.Set("Content-Type", "application/json")
+			req.RemoteAddr = "192.0.2.15:12345"
+			rr := httptest.NewRecorder()
+			h.CreateShare(rr, req)
+			if rr.Code != tc.want || strings.Contains(rr.Body.String(), tc.message) {
+				t.Fatalf("CreateShare() status = %d, want %d, body = %s", rr.Code, tc.want, rr.Body)
+			}
+		})
 	}
 }
 
@@ -213,69 +221,26 @@ func TestMatchesAutoAccept(t *testing.T) {
 	}
 }
 
-func TestParseOCMUser(t *testing.T) {
-	tests := []struct {
-		name       string
-		addr       string
-		wantOpaque string
-		wantIdp    string
-		wantErr    bool
-	}{
-		{
-			name:       "spec-conformant bare id",
-			addr:       "marie@cernbox2.docker",
-			wantOpaque: "marie",
-			wantIdp:    "cernbox2.docker",
-		},
-		{
-			name:       "oCIS doubled recipient host collapses (shareWith)",
-			addr:       "cbcbcbcb-2222@cernbox2.docker@cernbox2.docker",
-			wantOpaque: "cbcbcbcb-2222",
-			wantIdp:    "cernbox2.docker",
-		},
-		{
-			name:       "oCIS doubled remote host collapses (sender/owner)",
-			addr:       "4c510ada-1234@ocis1.docker@ocis1.docker",
-			wantOpaque: "4c510ada-1234",
-			wantIdp:    "ocis1.docker",
-		},
-		{
-			name:       "OpenCloud doubled remote host with scheme collapses (sender/owner)",
-			addr:       "b1f74ec4-5678@https://opencloud1.docker@opencloud1.docker",
-			wantOpaque: "b1f74ec4-5678",
-			wantIdp:    "opencloud1.docker",
-		},
-		{
-			name:       "single scheme-qualified host is stripped to bare id",
-			addr:       "b1f74ec4-5678@https://opencloud1.docker",
-			wantOpaque: "b1f74ec4-5678",
-			wantIdp:    "opencloud1.docker",
-		},
-		{
-			name:    "address without provider is rejected",
-			addr:    "no-at-sign",
-			wantErr: true,
-		},
+// Incoming addresses are parsed strictly at the last @: the opaque ID keeps
+// every byte and a scheme or other invalid host is refused, never stripped.
+func TestOCMUserIsStrict(t *testing.T) {
+	for _, tc := range []struct{ addr, opaque, idp string }{
+		{"marie@cernbox2.docker", "marie", "cernbox2.docker"},
+		{"opaque@extra@a.example.org", "opaque@extra", "a.example.org"},
+		{"alice@a.example.org@a.example.org", "alice@a.example.org", "a.example.org"},
+		{" id @A.Example.org:8443", " id ", "a.example.org:8443"},
+		{"bob@[2001:db8::1]:8443", "bob", "[2001:db8::1]:8443"},
+	} {
+		got, err := ocmUser(tc.addr)
+		if err != nil || got.OpaqueId != tc.opaque || got.Idp != tc.idp || got.Type != userpb.UserType_USER_TYPE_FEDERATED {
+			t.Fatalf("%q: %v %v", tc.addr, got, err)
+		}
 	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			got, err := parseOCMUser(tt.addr)
-			if tt.wantErr {
-				if err == nil {
-					t.Fatalf("parseOCMUser(%q) expected error, got nil", tt.addr)
-				}
-				return
-			}
-			if err != nil {
-				t.Fatalf("parseOCMUser(%q) unexpected error: %v", tt.addr, err)
-			}
-			if got.OpaqueId != tt.wantOpaque {
-				t.Errorf("parseOCMUser(%q) OpaqueId = %q, want %q", tt.addr, got.OpaqueId, tt.wantOpaque)
-			}
-			if got.Idp != tt.wantIdp {
-				t.Errorf("parseOCMUser(%q) Idp = %q, want %q", tt.addr, got.Idp, tt.wantIdp)
-			}
-		})
+	for _, addr := range []string{"no-at-sign", "@a.example.org", "alice@https://a.example.org",
+		"b1f74ec4-5678@https://opencloud1.docker", "alice@a.example.org:bad", "alice@a.example.org/x", "alice@"} {
+		if got, err := ocmUser(addr); err == nil {
+			t.Fatalf("%q accepted as %v", addr, got)
+		}
 	}
 }
 
@@ -1033,11 +998,12 @@ func TestCreateShareLegacyWebDAVStatUsesStoredTransport(t *testing.T) {
 		defer srv.Close()
 
 		h := initSharesHandler(t, &config{AllowLoopbackFederation: true})
-		stampGateway(&sharesMockGW{
+		gateway := &sharesMockGW{
 			createResp: &ocmincoming.CreateOCMIncomingShareResponse{
 				Status: &rpc.Status{Code: rpc.Code_CODE_OK},
 			},
-		})
+		}
+		stampGateway(gateway)
 
 		body, err := json.Marshal(map[string]any{
 			"shareWith":    "marie@local.example.org",
@@ -1069,6 +1035,10 @@ func TestCreateShareLegacyWebDAVStatUsesStoredTransport(t *testing.T) {
 
 		if rr.Code != http.StatusCreated {
 			t.Fatalf("CreateShare() status = %d, want %d", rr.Code, http.StatusCreated)
+		}
+		resolved := gateway.created.GetShareWith()
+		if resolved.GetOpaqueId() != "local-recipient" || resolved.GetIdp() != "local.example.org" {
+			t.Fatalf("created share has unexpected recipient: %v", resolved)
 		}
 		if davHits == 0 {
 			t.Fatal("expected the legacy WebDAV Stat probe to reach the server")
@@ -1321,5 +1291,48 @@ func TestCreateShareRejectsUnsignedFromSigningServer(t *testing.T) {
 
 	if rr.Code != http.StatusUnauthorized {
 		t.Fatalf("CreateShare() status = %d, want %d", rr.Code, http.StatusUnauthorized)
+	}
+}
+
+// A malformed address is refused by the routed handler before the gateway,
+// so no policy call, lookup or repository write sees a rewritten identity.
+func TestRoutedCreateShareRefusesMalformedAddresses(t *testing.T) {
+	gw := &sharesMockGW{}
+	stampGateway(gw)
+	h := initSharesHandler(t, &config{AllowLoopbackFederation: true})
+	valid := "alice@a.example.org"
+	for _, tc := range []struct{ field, sender, owner, shareWith, message string }{
+		{"sender", "alice@https://a.example.org", valid, "marie@local.example.org", "error with remote sender"},
+		{"sender", "alice@evil.example@a.example.org/x", valid, "marie@local.example.org", "error with remote sender"},
+		{"sender", "alice@a.example.org:x8443", valid, "marie@local.example.org", "error with remote sender"},
+		{"owner", valid, "alice@http://a.example.org", "marie@local.example.org", "error with remote owner"},
+		{"shareWith", valid, valid, "marie@local example.org", "error with shareWith user"},
+	} {
+		body, _ := json.Marshal(map[string]any{
+			"shareWith":    tc.shareWith,
+			"name":         "test.txt",
+			"providerId":   "provider-id",
+			"owner":        tc.owner,
+			"sender":       tc.sender,
+			"shareType":    "user",
+			"resourceType": "file",
+			"protocol": map[string]any{"webdav": map[string]any{
+				"sharedSecret": "secret",
+				"permissions":  []string{"read"},
+				"uri":          "https://a.example.org/remote.php/dav/ocm/x",
+			}},
+		})
+		req := httptest.NewRequest(http.MethodPost, sharesPath, bytes.NewReader(body))
+		req.Header.Set("Content-Type", "application/json")
+		req.RemoteAddr = fmt.Sprintf("[2001:db8:%x::1]:1000", clientSeq.Add(1))
+		rr := httptest.NewRecorder()
+		h.CreateShare(rr, req)
+		var apiErr reqres.APIError
+		if rr.Code != http.StatusBadRequest || json.Unmarshal(rr.Body.Bytes(), &apiErr) != nil || apiErr.Message != tc.message {
+			t.Fatalf("%s %q: %d %s", tc.field, tc.sender, rr.Code, rr.Body.String())
+		}
+	}
+	if gatewayCalls() != 0 || gw.createCalls != 0 {
+		t.Fatalf("gateway resolved %d times, create called %d times", gatewayCalls(), gw.createCalls)
 	}
 }

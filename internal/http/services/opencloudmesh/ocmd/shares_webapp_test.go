@@ -540,7 +540,7 @@ func TestCreateShareWebappTokenEndpoint(t *testing.T) {
 	})
 }
 
-func TestCreateShareParserErrorLogsPayload(t *testing.T) {
+func TestCreateShareParserErrorOmitsPayload(t *testing.T) {
 	const secret = "super-secret-share-token"
 	h := webappReceiveHandler(t, []string{"blank"})
 	var logs bytes.Buffer
@@ -563,8 +563,8 @@ func TestCreateShareParserErrorLogsPayload(t *testing.T) {
 	if strings.Contains(rr.Body.String(), secret) {
 		t.Fatalf("secret leaked in response %s", rr.Body.String())
 	}
-	if !strings.Contains(logs.String(), secret) {
-		t.Fatalf("rejected payload missing from logs %s", logs.String())
+	if strings.Contains(logs.String(), secret) {
+		t.Fatal("secret leaked in rejection log")
 	}
 }
 

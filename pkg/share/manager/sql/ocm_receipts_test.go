@@ -32,6 +32,7 @@ import (
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	typesv1beta1 "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
 	"github.com/cs3org/reva/v3/pkg/appctx"
+	"github.com/cs3org/reva/v3/pkg/errtypes"
 	"github.com/cs3org/reva/v3/pkg/ocm/share"
 	"github.com/cs3org/reva/v3/pkg/permissions"
 	model "github.com/cs3org/reva/v3/pkg/share/manager/sql/model"
@@ -44,6 +45,7 @@ func ownerContext(t *testing.T, id string) (context.Context, *userpb.User) {
 	t.Helper()
 	ctx := getUserContext(id)
 	user, _ := appctx.ContextGetUser(ctx)
+	user.Id.Idp = "local.example"
 	return ctx, user
 }
 
@@ -445,6 +447,17 @@ func TestUpdateReceivedShareReceipt(t *testing.T) {
 	})
 }
 
+func TestGetEmbeddedPayloadRequiresShareID(t *testing.T) {
+	forEachDialect(t, func(t *testing.T, m *mgr) {
+		ctx, user := ownerContext(t, "marie")
+		payload, err := m.GetEmbeddedPayload(ctx, user, &ocm.ReceivedShare{})
+		var badRequest errtypes.BadRequest
+		if payload != "" || !errors.As(err, &badRequest) {
+			t.Fatalf("missing share ID returned %q, %v", payload, err)
+		}
+	})
+}
+
 func TestTransferAttemptLifecycle(t *testing.T) {
 	forEachDialect(t, func(t *testing.T, m *mgr) {
 		ctx, user := ownerContext(t, "marie")
@@ -481,9 +494,21 @@ func TestTransferAttemptLifecycle(t *testing.T) {
 		if got := receivedGeneration(t, m, rs.Id); got != start.Generation {
 			t.Fatalf("wrong generation completion changed generation to %d, want %d", got, start.Generation)
 		}
+		const beforeMtime = 946684800
+		if err := m.db.Model(&model.OcmReceivedShare{}).Where("id = ?", rs.Id.OpaqueId).
+			Update("mtime", beforeMtime).Error; err != nil {
+			t.Fatal(err)
+		}
 		u, err := m.CompleteReceivedShareTransfer(ctx, user, rs.Id, start.Generation, ocm.ShareState_SHARE_STATE_ACCEPTED)
 		if err != nil || !u.StateChanged() || u.After.State != ocm.ShareState_SHARE_STATE_ACCEPTED {
 			t.Fatalf("complete: %v %v", u, err)
+		}
+		if u.Before.GetMtime().GetSeconds() != beforeMtime || u.After.GetMtime().GetSeconds() == beforeMtime {
+			t.Fatalf("completion timestamps: before %v, after %v", u.Before.GetMtime(), u.After.GetMtime())
+		}
+		stored, err := m.GetReceivedShare(ctx, user, idRef(rs.Id))
+		if err != nil || !proto.Equal(stored.GetMtime(), u.After.GetMtime()) {
+			t.Fatalf("completion did not return the stored mtime: %v %v", stored.GetMtime(), err)
 		}
 		if !u.After.Hidden || len(u.After.Protocols) != len(rs.Protocols) {
 			t.Fatalf("completion changed hidden/protocols: %v", u.After)

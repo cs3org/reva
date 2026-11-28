@@ -243,20 +243,26 @@ type OcmShareProtocol struct {
 
 // OcmReceivedShare represents an OCM share received from a remote user.
 type OcmReceivedShare struct {
+	RecipientUserType int32 `gorm:"not null;default:0"`
 	gorm.Model
-	RemoteShareID string             `gorm:"index:i_ocmrecshare_remoteshareid;not null"`
-	Name          string             `gorm:"size:255;not null"`
-	ItemType      ItemType           `gorm:"size:16;not null"`
-	ShareWith     string             `gorm:"size:255;not null"`
-	Owner         string             `gorm:"index:i_ocmrecshare_owner;size:255;not null"`
-	Initiator     string             `gorm:"index:i_ocmrecshare_initiator;size:255;not null"`
-	Ctime         uint64             `gorm:"not null"`
-	Mtime         uint64             `gorm:"not null"`
-	Expiration    datatypes.NullTime `gorm:"index"`
-	RecipientType OcmShareType       `gorm:"index:i_ocmrecshare_type;not null"`
-	State         OcmShareState      `gorm:"index:i_ocmrecshare_state;not null"`
-	Alias         string             `gorm:"size:64"`
-	Hidden        bool
+	RemoteShareID   string             `gorm:"size:255;index:i_ocmrecshare_remoteshareid;not null"`
+	Name            string             `gorm:"size:255;not null"`
+	ItemType        ItemType           `gorm:"size:16;not null"`
+	ShareWith       string             `gorm:"size:255;not null"`
+	ShareWithIdp    string             `gorm:"size:255"`
+	ShareWithTenant string             `gorm:"size:255"`
+	Owner           string             `gorm:"index:i_ocmrecshare_owner;size:255;not null"`
+	Initiator       string             `gorm:"index:i_ocmrecshare_initiator;size:255;not null"`
+	Ctime           uint64             `gorm:"not null"`
+	Mtime           uint64             `gorm:"not null"`
+	Expiration      datatypes.NullTime `gorm:"index"`
+	RecipientType   OcmShareType       `gorm:"index:i_ocmrecshare_type;not null"`
+	State           OcmShareState      `gorm:"index:i_ocmrecshare_state;not null"`
+	Alias           string             `gorm:"size:64"`
+	Hidden          bool
+	// GrantKey indexes the provider identity of the active projection.
+	// Legacy rows can lack the key.
+	GrantKey *string `gorm:"size:64;index:i_ocmrecshare_grantkey"`
 	// TransferGeneration grows on every transfer start and state change, so
 	// that the completion of an older attempt cannot match a later one.
 	TransferGeneration uint64 `gorm:"not null;default:0"`

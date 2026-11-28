@@ -76,6 +76,10 @@ type Repository interface {
 	// attempt, only while that attempt is still running.
 	CompleteReceivedShareTransfer(ctx context.Context, user *userpb.User, id *ocm.ShareId, generation uint64, state ocm.ShareState) (*ReceivedShareUpdate, error)
 
+	// WithdrawReceivedGrant removes projections of the exact active grant and
+	// their protocols. Drivers without atomic deletion return NotSupported.
+	WithdrawReceivedGrant(ctx context.Context, w *GrantWithdrawal) (*GrantWithdrawalReceipt, error)
+
 	// GetEmbeddedPayload returns the RO-Crate JSON payload carried by the embedded
 	// protocol of a received share, or an empty string if the share carries no
 	// embedded protocol. It is used to drive the background transfer of embedded

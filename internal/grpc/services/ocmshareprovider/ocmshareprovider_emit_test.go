@@ -261,6 +261,7 @@ func newEmitEnv(t *testing.T) *emitEnv {
 	env.owner = appctx.WithLogger(appctx.ContextSetUser(context.Background(), &userpb.User{
 		Id: &userpb.UserId{OpaqueId: "einstein", Idp: "cernbox.example.org"},
 	}), &logger)
+	// The recipient is the exact identity stored as the received grantee.
 	env.recip = appctx.WithLogger(appctx.ContextSetUser(context.Background(), &userpb.User{
 		Id: &userpb.UserId{OpaqueId: "marie", Idp: "cernbox.example.org"},
 	}), &logger)
@@ -317,7 +318,7 @@ func (e *emitEnv) received(t *testing.T, remoteID string, embedded bool, accessT
 		RemoteShareId: remoteID,
 		Name:          "doc.txt",
 		Grantee: &providerpb.Grantee{Type: providerpb.GranteeType_GRANTEE_TYPE_USER, Id: &providerpb.Grantee_UserId{
-			UserId: &userpb.UserId{OpaqueId: "marie"},
+			UserId: appctx.ContextMustGetUser(e.recip).Id,
 		}},
 		// The owner fallback differs from the original sender.
 		Owner:              &userpb.UserId{OpaqueId: "service-account", Idp: "elsewhere.example.org"},
@@ -660,7 +661,7 @@ func TestConcurrentAcceptEmitsAtMostOnce(t *testing.T) {
 		}()
 	}
 	wg.Wait()
-	cur, err := e.repo.GetReceivedShare(e.recip, &userpb.User{Id: &userpb.UserId{OpaqueId: "marie"}}, &ocm.ShareReference{Spec: &ocm.ShareReference_Id{Id: rs.Id}})
+	cur, err := e.repo.GetReceivedShare(e.recip, appctx.ContextMustGetUser(e.recip), &ocm.ShareReference{Spec: &ocm.ShareReference_Id{Id: rs.Id}})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -697,7 +698,7 @@ func TestEmbeddedTransferEmitsOnlyOnCommittedCompletion(t *testing.T) {
 	e.setState(t, rs.Id, ocm.ShareState_SHARE_STATE_ACCEPTED, "/home/dest")
 	e.xfer.callback(1)(errors.New("copy failed"))
 	requireNotices(t, e.peer, ocmd.NotificationShareAccepted)
-	cur, _ := e.repo.GetReceivedShare(e.recip, &userpb.User{Id: &userpb.UserId{OpaqueId: "marie"}}, &ocm.ShareReference{Spec: &ocm.ShareReference_Id{Id: rs.Id}})
+	cur, _ := e.repo.GetReceivedShare(e.recip, appctx.ContextMustGetUser(e.recip), &ocm.ShareReference{Spec: &ocm.ShareReference_Id{Id: rs.Id}})
 	if cur.State != ocm.ShareState_SHARE_STATE_REJECTED {
 		t.Fatalf("state %v", cur.State)
 	}
@@ -706,7 +707,7 @@ func TestEmbeddedTransferEmitsOnlyOnCommittedCompletion(t *testing.T) {
 	e.setState(t, rs.Id, ocm.ShareState_SHARE_STATE_PENDING, "")
 	e.setState(t, rs.Id, ocm.ShareState_SHARE_STATE_ACCEPTED, "/home/dest")
 	e.xfer.callback(1)(nil)
-	cur, _ = e.repo.GetReceivedShare(e.recip, &userpb.User{Id: &userpb.UserId{OpaqueId: "marie"}}, &ocm.ShareReference{Spec: &ocm.ShareReference_Id{Id: rs.Id}})
+	cur, _ = e.repo.GetReceivedShare(e.recip, appctx.ContextMustGetUser(e.recip), &ocm.ShareReference{Spec: &ocm.ShareReference_Id{Id: rs.Id}})
 	if cur.State != ocm.ShareState_SHARE_STATE_TRANSFERRING {
 		t.Fatalf("old callback completed the new attempt: %v", cur.State)
 	}
@@ -728,7 +729,7 @@ func TestEmbeddedTransferEmitsOnlyOnCommittedCompletion(t *testing.T) {
 func TestEmbeddedAcceptanceNeedsCompletedCopy(t *testing.T) {
 	e := newEmitEnv(t)
 	rs := e.received(t, "remote-n", true)
-	marie := &userpb.User{Id: &userpb.UserId{OpaqueId: "marie"}}
+	marie := appctx.ContextMustGetUser(e.recip)
 	state := func() ocm.ShareState {
 		t.Helper()
 		cur, err := e.repo.GetReceivedShare(e.recip, marie, &ocm.ShareReference{Spec: &ocm.ShareReference_Id{Id: rs.Id}})
@@ -920,7 +921,7 @@ func TestUnmaskedAcceptanceStartsNoTransfer(t *testing.T) {
 			t.Fatalf("mask %v: %v %v", paths, res, err)
 		}
 	}
-	cur, err := e.repo.GetReceivedShare(e.recip, &userpb.User{Id: &userpb.UserId{OpaqueId: "marie"}}, &ocm.ShareReference{Spec: &ocm.ShareReference_Id{Id: rs.Id}})
+	cur, err := e.repo.GetReceivedShare(e.recip, appctx.ContextMustGetUser(e.recip), &ocm.ShareReference{Spec: &ocm.ShareReference_Id{Id: rs.Id}})
 	if err != nil || cur.State != ocm.ShareState_SHARE_STATE_PENDING || !cur.Hidden {
 		t.Fatalf("share %v %v", cur, err)
 	}

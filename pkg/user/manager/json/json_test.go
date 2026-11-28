@@ -148,3 +148,45 @@ func TestUserManager(t *testing.T) {
 		t.Fatalf("user differ: expected=%v got=%v", "einstein", resUser[0].Username)
 	}
 }
+
+func TestUserIDClaimRequiresUniqueCanonicalIdentity(t *testing.T) {
+	account := &userpb.User{
+		Id:       &userpb.UserId{OpaqueId: "Account-ID", TenantId: "tenant", Type: userpb.UserType_USER_TYPE_PRIMARY},
+		Username: "login",
+		Groups:   []string{"group"},
+	}
+	m := &manager{users: []*userpb.User{account, {Id: &userpb.UserId{OpaqueId: "account-id"}, Username: "other"}}}
+	got, err := m.GetUserByClaim(ctx, "userid", "Account-ID", true)
+	if err != nil || !proto.Equal(got.GetId(), account.Id) || len(got.GetGroups()) != 0 || len(account.Groups) != 1 {
+		t.Fatalf("exact claim with skipped groups: %v, %v", got, err)
+	}
+	for _, value := range []string{"login", "ACCOUNT-ID", ""} {
+		got, err := m.GetUserByClaim(ctx, "userid", value, false)
+		if _, ok := err.(errtypes.NotFound); !ok || got != nil {
+			t.Fatalf("noncanonical claim %q: %v, %v", value, got, err)
+		}
+	}
+
+	for _, tc := range []struct {
+		name  string
+		other *userpb.User
+	}{
+		{"identical record", account},
+		{"canonical ID across IdPs", &userpb.User{Id: &userpb.UserId{OpaqueId: "Account-ID", Idp: "other"}}},
+		{"opaque ID is another username", &userpb.User{Username: "Account-ID"}},
+		{"username is another opaque ID", &userpb.User{Id: &userpb.UserId{OpaqueId: "login"}}},
+		{"duplicate username", &userpb.User{Username: "login"}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			m := &manager{users: []*userpb.User{account, tc.other}}
+			got, err := m.GetUserByClaim(ctx, "userid", "Account-ID", false)
+			if _, ok := err.(errtypes.Conflict); !ok || got != nil {
+				t.Fatalf("ambiguous userid: %v, %v", got, err)
+			}
+			got, err = m.GetUser(ctx, &userpb.UserId{OpaqueId: "Account-ID"}, false)
+			if err != nil || !proto.Equal(got, account) {
+				t.Fatalf("ordinary GetUser: %v, %v", got, err)
+			}
+		})
+	}
+}

@@ -136,6 +136,9 @@ func convertToCS3OCMReceivedShare(s *model.OcmReceivedShare, p []*ocm.Protocol) 
 			Id: &provider.Grantee_UserId{
 				UserId: &userpb.UserId{
 					OpaqueId: s.ShareWith,
+					Idp:      s.ShareWithIdp,
+					TenantId: s.ShareWithTenant,
+					Type:     userpb.UserType(s.RecipientUserType),
 				},
 			},
 		},

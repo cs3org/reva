@@ -117,6 +117,7 @@ func getProtocols(ocsPermissions permissions.OcsPermissions, resource_type strin
 }
 
 func getOCMReceivedShare(user *userpb.User, grantee *provider.Grantee, resource_type string, role string, received_share_id string) *ocm.ReceivedShare {
+	grantee.GetUserId().Idp = user.Id.Idp
 
 	receivedShare := &ocm.ReceivedShare{
 
@@ -124,7 +125,7 @@ func getOCMReceivedShare(user *userpb.User, grantee *provider.Grantee, resource_
 		RemoteShareId: received_share_id,
 		Grantee:       grantee,
 		Owner:         user.Id,
-		Creator:       user.Id,
+		Creator:       &userpb.UserId{OpaqueId: user.Id.OpaqueId, Idp: "provider.example.org"},
 		Ctime: &typesv1beta1.Timestamp{
 			Seconds: uint64(time.Now().Unix()),
 		},
@@ -205,6 +206,7 @@ func getOcmAccessMethodsWithCodeFlow(role string) []*ocm.AccessMethod {
 }
 
 func getOCMReceivedShareWithCodeFlow(user *userpb.User, grantee *provider.Grantee, receivedShareID string) *ocm.ReceivedShare {
+	grantee.GetUserId().Idp = user.Id.Idp
 	perms := &ocm.SharePermissions{
 		Permissions: permissions.NewViewerRole().CS3ResourcePermissions(),
 	}
@@ -216,7 +218,7 @@ func getOCMReceivedShareWithCodeFlow(user *userpb.User, grantee *provider.Grante
 		RemoteShareId: receivedShareID,
 		Grantee:       grantee,
 		Owner:         user.Id,
-		Creator:       user.Id,
+		Creator:       &userpb.UserId{OpaqueId: user.Id.OpaqueId, Idp: "provider.example.org"},
 		Ctime:         &typesv1beta1.Timestamp{Seconds: uint64(time.Now().Unix())},
 		Mtime:         &typesv1beta1.Timestamp{Seconds: uint64(time.Now().Unix())},
 		Expiration:    &typesv1beta1.Timestamp{Seconds: uint64(time.Now().Add(24 * time.Hour).Unix())},
@@ -490,8 +492,7 @@ func TestStoreReceivedOCMShare(t *testing.T) {
 	mgr, err, teardown := setupSuiteOcmShares(t)
 	defer teardown(t)
 
-	userctx := getUserContext("sharee1")
-	user, _ := appctx.ContextGetUser(userctx)
+	userctx, user := ownerContext(t, "sharee1")
 	grantee := getUserOcmShareGrantee("sharee1")
 
 	receivedShare := getOCMReceivedShare(user, grantee, "file", "viewer", "someremoteshareid")
@@ -521,8 +522,7 @@ func TestListOCMSharesReceived(t *testing.T) {
 	mgr, err, teardown := setupSuiteOcmShares(t)
 	defer teardown(t)
 
-	userctx := getUserContext("sharee1")
-	user, _ := appctx.ContextGetUser(userctx)
+	userctx, user := ownerContext(t, "sharee1")
 	grantee := getUserOcmShareGrantee("sharee1")
 
 	receivedShare1 := getOCMReceivedShare(user, grantee, "file", "viewer", "someremoteshareid")
@@ -705,8 +705,7 @@ func TestReceivedShareRoundTripsRequirementsAndAccessTypes(t *testing.T) {
 	mgr, err, teardown := setupSuiteOcmShares(t)
 	defer teardown(t)
 
-	userctx := getUserContext("sharee1")
-	user, _ := appctx.ContextGetUser(userctx)
+	userctx, user := ownerContext(t, "sharee1")
 	grantee := getUserOcmShareGrantee("sharee1")
 
 	receivedShare := getOCMReceivedShareWithCodeFlow(user, grantee, "remote-cf-1")
@@ -962,14 +961,15 @@ func TestWebappPermissionsRoundTrip(t *testing.T) {
 				)
 			}
 
-			recvCtx := getUserContext("sharee1")
-			recvUser, _ := appctx.ContextGetUser(recvCtx)
+			recvCtx, recvUser := ownerContext(t, "sharee1")
+			receivedGrantee := getUserOcmShareGrantee("sharee1")
+			receivedGrantee.GetUserId().Idp = recvUser.Id.Idp
 			received := &ocm.ReceivedShare{
 				Name:          "receivedshare",
 				RemoteShareId: "remote-webapp-" + tc.name,
-				Grantee:       getUserOcmShareGrantee("sharee1"),
+				Grantee:       receivedGrantee,
 				Owner:         recvUser.Id,
-				Creator:       recvUser.Id,
+				Creator:       &userpb.UserId{OpaqueId: recvUser.Id.OpaqueId, Idp: "provider.example.org"},
 				Ctime:         &typesv1beta1.Timestamp{Seconds: uint64(time.Now().Unix())},
 				Mtime:         &typesv1beta1.Timestamp{Seconds: uint64(time.Now().Unix())},
 				ShareType:     ocm.ShareType_SHARE_TYPE_USER,
@@ -1105,14 +1105,15 @@ func TestWebDAVViewOnlyPermissionsStayOCSDerived(t *testing.T) {
 		t.Fatalf("sent webdav permissions = %v, want empty", gotSent.GetPermissions())
 	}
 
-	recvCtx := getUserContext("sharee1")
-	recvUser, _ := appctx.ContextGetUser(recvCtx)
+	recvCtx, recvUser := ownerContext(t, "sharee1")
+	receivedGrantee := getUserOcmShareGrantee("sharee1")
+	receivedGrantee.GetUserId().Idp = recvUser.Id.Idp
 	received := &ocm.ReceivedShare{
 		Name:          "receivedshare",
 		RemoteShareId: "remote-webdav-view-only",
-		Grantee:       getUserOcmShareGrantee("sharee1"),
+		Grantee:       receivedGrantee,
 		Owner:         recvUser.Id,
-		Creator:       recvUser.Id,
+		Creator:       &userpb.UserId{OpaqueId: recvUser.Id.OpaqueId, Idp: "provider.example.org"},
 		Ctime:         &typesv1beta1.Timestamp{Seconds: uint64(time.Now().Unix())},
 		Mtime:         &typesv1beta1.Timestamp{Seconds: uint64(time.Now().Unix())},
 		ShareType:     ocm.ShareType_SHARE_TYPE_USER,
@@ -1150,8 +1151,7 @@ func TestUpdateReceivedOCMShareHidden(t *testing.T) {
 	mgr, err, teardown := setupSuiteOcmShares(t)
 	defer teardown(t)
 
-	userctx := getUserContext("sharee1")
-	user, _ := appctx.ContextGetUser(userctx)
+	userctx, user := ownerContext(t, "sharee1")
 	grantee := getUserOcmShareGrantee("sharee1")
 
 	stored, err := mgr.StoreReceivedShare(userctx, getOCMReceivedShare(user, grantee, "file", "viewer", "remoteshareid-hidden"))

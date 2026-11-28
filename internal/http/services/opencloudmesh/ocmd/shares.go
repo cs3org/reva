@@ -48,6 +48,7 @@ import (
 	"github.com/cs3org/reva/v3/internal/http/services/wellknown"
 	"github.com/cs3org/reva/v3/pkg/appctx"
 	"github.com/cs3org/reva/v3/pkg/ocm/client"
+	"github.com/cs3org/reva/v3/pkg/ocm/providerdomain"
 	"github.com/cs3org/reva/v3/pkg/service"
 	"github.com/cs3org/reva/v3/pkg/utils"
 	"github.com/go-playground/validator/v10"
@@ -182,7 +183,7 @@ func (h *sharesHandler) CreateShare(w http.ResponseWriter, r *http.Request) {
 	w = sw
 	defer func() {
 		if sw.status >= http.StatusBadRequest {
-			log.Info().Int("status", sw.status).Str("remote", r.RemoteAddr).Bytes("payload", body).Msg("OCM /shares request rejected, full payload")
+			log.Info().Int("status", sw.status).Str("remote", r.RemoteAddr).Msg("OCM /shares request rejected")
 		}
 	}()
 	req, err := h.getCreateShareRequest(r)
@@ -196,14 +197,21 @@ func (h *sharesHandler) CreateShare(w http.ResponseWriter, r *http.Request) {
 		Str("resource_type", req.ResourceType).
 		Msg("OCM /shares request received")
 
-	sender, err := parseOCMUser(req.Sender)
+	// All three addresses are parsed as received, before the provider policy
+	// or any lookup, so that nothing removes a scheme or part of an ID first.
+	sender, err := ocmUser(req.Sender)
 	if err != nil {
 		reqres.WriteError(w, r, reqres.APIErrorInvalidParameter, "error with remote sender", err)
 		return
 	}
-	owner, err := parseOCMUser(req.Owner)
+	owner, err := ocmUser(req.Owner)
 	if err != nil {
 		reqres.WriteError(w, r, reqres.APIErrorInvalidParameter, "error with remote owner", err)
+		return
+	}
+	shareWith, err := ocmUser(req.ShareWith)
+	if err != nil {
+		reqres.WriteError(w, r, reqres.APIErrorInvalidParameter, "error with shareWith user", err)
 		return
 	}
 
@@ -237,12 +245,6 @@ func (h *sharesHandler) CreateShare(w http.ResponseWriter, r *http.Request) {
 	}
 	if providerAllowedResp.Status.Code != rpc.Code_CODE_OK {
 		reqres.WriteError(w, r, reqres.APIErrorUnauthenticated, "provider not authorized", errors.New(providerAllowedResp.Status.Message))
-		return
-	}
-
-	shareWith, err := parseOCMUser(req.ShareWith)
-	if err != nil {
-		reqres.WriteError(w, r, reqres.APIErrorInvalidParameter, "error with shareWith user", err)
 		return
 	}
 
@@ -324,6 +326,10 @@ func (h *sharesHandler) CreateShare(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if createShareResp.Status.Code == rpc.Code_CODE_INVALID_ARGUMENT {
+		reqres.WriteError(w, r, reqres.APIErrorInvalidParameter, "invalid providerId or sender", nil)
+		return
+	}
 	if createShareResp.Status.Code != rpc.Code_CODE_OK {
 		// TODO: define errors in the cs3apis
 		reqres.WriteError(w, r, reqres.APIErrorServerError, "could not create ocm share", errors.New(createShareResp.Status.Message))
@@ -420,30 +426,14 @@ func (h *sharesHandler) impersonate(ctx context.Context, user *userpb.User) (con
 	return userCtx, nil
 }
 
-// parseOCMUser parses an OCM address "<id>@<provider>" from an incoming share
-// request and cleans up the opaque id before we try to resolve it.
-//
-// We are the receiving side here. The remote server sends us three addresses:
-// shareWith is the recipient on our side, while sender and owner are the person
-// on the remote side who is sharing. The spec says the id part should be the bare
-// user id, with the host kept separate. Some peers do not follow that: oCIS tacks
-// the host onto the id ("id@host") and OpenCloud tacks on the host with a scheme
-// ("id@https://host"), and by the time it reaches us it is doubled up as
-// "id@host@host".
-//
-// GetUserIdFromOCMAddress only peels off the final "@host", so the id we get back
-// still has a leftover host glued to it. That leftover then makes the lookup miss:
-// for shareWith we cannot find the local recipient, and for sender/owner we cannot
-// match the remote user we already stored when the invitation was accepted (we
-// store that one bare). NormalizeRemoteUserID trims the leftover host, but only
-// when it matches the provider we just parsed, so a well-formed id is left alone.
-func parseOCMUser(addr string) (*userpb.UserId, error) {
-	u, err := GetUserIdFromOCMAddress(addr)
+// ocmUser parses a complete OCM address strictly: the opaque ID is kept byte
+// for byte, including any @, and the host is validated and lowercased.
+func ocmUser(addr string) (*userpb.UserId, error) {
+	id, host, err := providerdomain.ParseOCMAddress(addr)
 	if err != nil {
 		return nil, err
 	}
-	u.OpaqueId = NormalizeRemoteUserID(u.OpaqueId, u.Idp)
-	return u, nil
+	return &userpb.UserId{OpaqueId: id, Idp: host, Type: userpb.UserType_USER_TYPE_FEDERATED}, nil
 }
 
 func (h *sharesHandler) getCreateShareRequest(r *http.Request) (*NewShareRequest, error) {

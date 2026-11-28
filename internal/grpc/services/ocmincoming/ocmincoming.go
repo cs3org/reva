@@ -22,10 +22,13 @@ package ocmincoming
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"time"
 
+	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	ocmincoming "github.com/cs3org/go-cs3apis/cs3/ocm/incoming/v1beta1"
+	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	ocm "github.com/cs3org/go-cs3apis/cs3/sharing/ocm/v1beta1"
 	providerpb "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	typesv1beta1 "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
@@ -35,6 +38,7 @@ import (
 	"github.com/cs3org/reva/v3/pkg/plugin"
 	"github.com/cs3org/reva/v3/pkg/rgrpc"
 	"github.com/cs3org/reva/v3/pkg/rgrpc/status"
+	revaservice "github.com/cs3org/reva/v3/pkg/service"
 	"github.com/cs3org/reva/v3/pkg/utils"
 	"github.com/cs3org/reva/v3/pkg/utils/cfg"
 	"google.golang.org/grpc"
@@ -52,11 +56,17 @@ func init() {
 type config struct {
 	Driver  string                    `mapstructure:"driver"`
 	Drivers map[string]map[string]any `mapstructure:"drivers"`
+	// AllowVerifiedEmptyRecipientIdp requires a qualified local directory and authentication source.
+	AllowVerifiedEmptyRecipientIdp bool `mapstructure:"allow_verified_empty_recipient_idp"`
 }
 
 type service struct {
-	conf *config
+	conf config
 	repo share.Repository
+}
+
+type resolvedRecipientStore interface {
+	StoreReceivedShareForResolvedRecipient(context.Context, *ocm.ReceivedShare, *userpb.UserId) (*ocm.ReceivedShare, error)
 }
 
 func (c *config) ApplyDefaults() {
@@ -89,7 +99,7 @@ func New(ctx context.Context, m map[string]any) (rgrpc.Service, error) {
 	}
 
 	service := &service{
-		conf: &c,
+		conf: c,
 		repo: repo,
 	}
 
@@ -109,12 +119,18 @@ func (s *service) CreateOCMIncomingShare(ctx context.Context, req *ocmincoming.C
 	if req.RecipientType != ocm.RecipientType_RECIPIENT_TYPE_USER {
 		return nil, errtypes.NotSupported("share type not supported")
 	}
+	origin, err := share.ReceivedGrantOrigin(req.GetSender())
+	if err != nil {
+		return &ocmincoming.CreateOCMIncomingShareResponse{
+			Status: status.NewInvalidArg(ctx, "invalid provider or remote share ID"),
+		}, nil
+	}
 
 	now := &typesv1beta1.Timestamp{
 		Seconds: uint64(time.Now().Unix()),
 	}
 
-	share, err := s.repo.StoreReceivedShare(ctx, &ocm.ReceivedShare{
+	received := &ocm.ReceivedShare{
 		RemoteShareId: req.ResourceId,
 		Name:          req.Name,
 		Grantee: &providerpb.Grantee{
@@ -132,8 +148,27 @@ func (s *service) CreateOCMIncomingShare(ctx context.Context, req *ocmincoming.C
 		Mtime:              now,
 		Expiration:         req.Expiration,
 		State:              ocm.ShareState_SHARE_STATE_PENDING,
-	})
+	}
+	var stored *ocm.ReceivedShare
+	recipient := req.GetShareWith()
+	if repo, ok := s.repo.(resolvedRecipientStore); ok && s.conf.AllowVerifiedEmptyRecipientIdp && recipient.GetIdp() == "" && recipient.GetOpaqueId() != "" {
+		if _, err := share.GrantKey(origin, req.GetResourceId()); err != nil {
+			return &ocmincoming.CreateOCMIncomingShareResponse{Status: status.NewInvalidArg(ctx, "invalid OCM grant identity")}, nil
+		}
+		resolved, failure := resolveRecipient(ctx, recipient)
+		if failure != nil {
+			return &ocmincoming.CreateOCMIncomingShareResponse{Status: failure}, nil
+		}
+		stored, err = repo.StoreReceivedShareForResolvedRecipient(ctx, received, resolved)
+	} else {
+		stored, err = s.repo.StoreReceivedShare(ctx, received)
+	}
 	if err != nil {
+		if errors.Is(err, share.ErrInvalidGrantIdentity) {
+			return &ocmincoming.CreateOCMIncomingShareResponse{
+				Status: status.NewInvalidArg(ctx, "invalid OCM grant identity"),
+			}, nil
+		}
 		// TODO: identify errors
 		return &ocmincoming.CreateOCMIncomingShareResponse{
 			Status: status.NewInternal(ctx, err, err.Error()),
@@ -142,9 +177,39 @@ func (s *service) CreateOCMIncomingShare(ctx context.Context, req *ocmincoming.C
 
 	return &ocmincoming.CreateOCMIncomingShareResponse{
 		Status:  status.NewOK(ctx),
-		Id:      share.Id.OpaqueId,
-		Created: share.Ctime,
+		Id:      stored.Id.OpaqueId,
+		Created: stored.Ctime,
 	}, nil
+}
+
+func resolveRecipient(ctx context.Context, recipient *userpb.UserId) (*userpb.UserId, *rpc.Status) {
+	lookupCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
+	defer cancel()
+
+	const unavailable = "local recipient directory lookup failed"
+	const unverified = "local recipient identity could not be verified"
+	directory, err := revaservice.UserProvider(lookupCtx)
+	if err != nil {
+		return nil, status.NewInternal(ctx, errors.New(unavailable), unavailable)
+	}
+	res, err := directory.GetUserByClaim(lookupCtx, &userpb.GetUserByClaimRequest{
+		Claim: "userid", Value: recipient.GetOpaqueId(), SkipFetchingUserGroups: true,
+	})
+	if err != nil || res.GetStatus() == nil {
+		return nil, status.NewInternal(ctx, errors.New(unavailable), unavailable)
+	}
+	switch res.GetStatus().GetCode() {
+	case rpc.Code_CODE_OK:
+		id := res.GetUser().GetId()
+		if id.GetOpaqueId() == recipient.GetOpaqueId() && id.GetIdp() == recipient.GetIdp() &&
+			id.GetTenantId() == recipient.GetTenantId() && id.GetType() == recipient.GetType() {
+			return id, nil
+		}
+	case rpc.Code_CODE_NOT_FOUND, rpc.Code_CODE_ABORTED, rpc.Code_CODE_UNIMPLEMENTED:
+	default:
+		return nil, status.NewInternal(ctx, errors.New(unavailable), unavailable)
+	}
+	return nil, status.NewFailedPrecondition(ctx, nil, unverified)
 }
 
 func (s *service) UpdateOCMIncomingShare(ctx context.Context, req *ocmincoming.UpdateOCMIncomingShareRequest) (*ocmincoming.UpdateOCMIncomingShareResponse, error) {
