@@ -22,6 +22,7 @@ import (
 	"context"
 	"database/sql"
 	"path"
+	"strings"
 
 	// Provides sqlite drivers.
 	_ "github.com/mattn/go-sqlite3"
@@ -107,8 +108,45 @@ func (fs *localfs) removeFromRecycledDB(ctx context.Context, key string) error {
 	return nil
 }
 
+// aclIdentity returns the part of an ACL grantee key that identifies the
+// grantee, i.e. the key without the idp. The key is
+// "<type>:<opaque>:<user type>@<idp>" for users and "<type>::<opaque>@<idp>" for
+// groups, and both the opaque id and the idp may contain "@" and ":", so the
+// separator is the first "@" of the last field, not the last "@" of the key.
+func aclIdentity(grantee string) string {
+	parts := strings.SplitN(grantee, ":", 3)
+	if len(parts) < 3 {
+		return grantee
+	}
+	at := strings.Index(parts[2], "@")
+	if at < 0 {
+		return grantee
+	}
+	return parts[0] + ":" + parts[1] + ":" + parts[2][:at]
+}
+
 func (fs *localfs) addToACLDB(ctx context.Context, resource, grantee, role string) error {
-	stmt, err := fs.db.Prepare("INSERT INTO user_interaction (resource, grantee, role) VALUES (?, ?, ?) ON CONFLICT(resource, grantee) DO UPDATE SET role=?")
+	// A grant written with one idp must not coexist with the same grant written
+	// without one, so clear the role on any row for the same identity first. Both
+	// statements run in one transaction: a failure between them would otherwise
+	// leave the other grant of the identity revoked.
+	prefix := aclIdentity(grantee) + "@"
+	tx, err := fs.db.Begin()
+	if err != nil {
+		return errors.Wrap(err, "localfs: error starting transaction")
+	}
+	defer func() { _ = tx.Rollback() }()
+
+	if _, err := tx.Exec(
+		"UPDATE user_interaction SET role='' WHERE resource=? AND grantee<>? AND substr(grantee, 1, length(?))=?",
+		resource, grantee, prefix, prefix,
+	); err != nil {
+		return errors.Wrap(err, "localfs: error clearing duplicate ACL entries")
+	}
+
+	// length() counts characters while len() counts bytes, so the prefix is
+	// compared by its character count to keep non-ASCII user names working.
+	stmt, err := tx.Prepare("INSERT INTO user_interaction (resource, grantee, role) VALUES (?, ?, ?) ON CONFLICT(resource, grantee) DO UPDATE SET role=?")
 	if err != nil {
 		return errors.Wrap(err, "localfs: error preparing statement")
 	}
@@ -116,7 +154,7 @@ func (fs *localfs) addToACLDB(ctx context.Context, resource, grantee, role strin
 	if err != nil {
 		return errors.Wrap(err, "localfs: error executing insert statement")
 	}
-	return nil
+	return tx.Commit()
 }
 
 func (fs *localfs) getACLs(ctx context.Context, resource string) (*sql.Rows, error) {
@@ -128,11 +166,12 @@ func (fs *localfs) getACLs(ctx context.Context, resource string) (*sql.Rows, err
 }
 
 func (fs *localfs) removeFromACLDB(ctx context.Context, resource, grantee string) error {
-	stmt, err := fs.db.Prepare("UPDATE user_interaction SET role='' WHERE resource=? AND grantee=?")
+	prefix := aclIdentity(grantee) + "@"
+	stmt, err := fs.db.Prepare("UPDATE user_interaction SET role='' WHERE resource=? AND (grantee=? OR substr(grantee, 1, length(?))=?)")
 	if err != nil {
 		return errors.Wrap(err, "localfs: error preparing statement")
 	}
-	_, err = stmt.Exec(resource, grantee)
+	_, err = stmt.Exec(resource, grantee, prefix, prefix)
 	if err != nil {
 		return errors.Wrap(err, "localfs: error executing delete statement")
 	}

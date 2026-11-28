@@ -549,6 +549,25 @@ func (fs *localfs) DenyGrant(ctx context.Context, ref *provider.Reference, g *pr
 	return errtypes.NotSupported("localfs: deny grant not supported")
 }
 
+// aclGrantee renders a grantee the way it is stored in the ACL table. Adding and
+// removing must agree on this format, otherwise a revoke updates no row and the
+// grantee keeps the access the grant carried.
+func aclGrantee(g *provider.Grantee) (string, error) {
+	granteeType, err := grants.GetACLType(g.GetType())
+	if err != nil {
+		return "", errors.Wrap(err, "localfs: error getting grantee type")
+	}
+	switch granteeType {
+	case acl.TypeUser:
+		id := g.GetUserId()
+		return fmt.Sprintf("%s:%s:%s@%s", granteeType, id.GetOpaqueId(), utils.UserTypeToString(id.GetType()), id.GetIdp()), nil
+	case acl.TypeGroup:
+		id := g.GetGroupId()
+		return fmt.Sprintf("%s::%s@%s", granteeType, id.GetOpaqueId(), id.GetIdp()), nil
+	}
+	return "", errtypes.PermissionDenied("localfs: unsupported grantee type")
+}
+
 func (fs *localfs) AddGrant(ctx context.Context, ref *provider.Reference, g *provider.Grant) error {
 	fn, err := fs.resolve(ctx, ref)
 	if err != nil {
@@ -561,15 +580,9 @@ func (fs *localfs) AddGrant(ctx context.Context, ref *provider.Reference, g *pro
 		return errors.Wrap(err, "localfs: unknown set permissions")
 	}
 
-	granteeType, err := grants.GetACLType(g.Grantee.Type)
+	grantee, err := aclGrantee(g.Grantee)
 	if err != nil {
-		return errors.Wrap(err, "localfs: error getting grantee type")
-	}
-	var grantee string
-	if granteeType == acl.TypeUser {
-		grantee = fmt.Sprintf("%s:%s:%s@%s", granteeType, g.Grantee.GetUserId().OpaqueId, utils.UserTypeToString(g.Grantee.GetUserId().Type), g.Grantee.GetUserId().Idp)
-	} else if granteeType == acl.TypeGroup {
-		grantee = fmt.Sprintf("%s::%s@%s", granteeType, g.Grantee.GetGroupId().OpaqueId, g.Grantee.GetGroupId().Idp)
+		return err
 	}
 
 	err = fs.addToACLDB(ctx, fn, grantee, role)
@@ -599,11 +612,19 @@ func (fs *localfs) ListGrants(ctx context.Context, ref *provider.Reference) ([]*
 		if err != nil {
 			return nil, errors.Wrap(err, "localfs: error scanning db rows")
 		}
-		grantSplit := strings.Split(granteeID, ":")
+		// The key is "<type>:<opaque>:<user type>@<idp>". The idp is a URL and
+		// carries colons, so only the first two separators may split the key.
+		grantSplit := strings.SplitN(granteeID, ":", 3)
+		if len(grantSplit) < 3 {
+			continue
+		}
+		parts := strings.SplitN(grantSplit[2], "@", 2)
+		if len(parts) < 2 {
+			parts = append(parts, "")
+		}
 		grantee := &provider.Grantee{Type: grants.GetGranteeType(grantSplit[0])}
-		parts := strings.Split(grantSplit[2], "@")
 		if grantSplit[0] == acl.TypeUser {
-			grantee.Id = &provider.Grantee_UserId{UserId: &userpb.UserId{OpaqueId: parts[0], Idp: parts[1], Type: utils.UserTypeMap(grantSplit[1])}}
+			grantee.Id = &provider.Grantee_UserId{UserId: &userpb.UserId{OpaqueId: grantSplit[1], Idp: parts[1], Type: utils.UserTypeMap(parts[0])}}
 		} else if grantSplit[0] == acl.TypeGroup {
 			grantee.Id = &provider.Grantee_GroupId{GroupId: &grouppb.GroupId{OpaqueId: parts[0], Idp: parts[1]}}
 		}
@@ -624,15 +645,9 @@ func (fs *localfs) RemoveGrant(ctx context.Context, ref *provider.Reference, g *
 	}
 	fn = fs.wrap(ctx, fn)
 
-	granteeType, err := grants.GetACLType(g.Grantee.Type)
+	grantee, err := aclGrantee(g.Grantee)
 	if err != nil {
-		return errors.Wrap(err, "localfs: error getting grantee type")
-	}
-	var grantee string
-	if granteeType == acl.TypeUser {
-		grantee = fmt.Sprintf("%s:%s@%s", granteeType, g.Grantee.GetUserId().OpaqueId, g.Grantee.GetUserId().Idp)
-	} else if granteeType == acl.TypeGroup {
-		grantee = fmt.Sprintf("%s:%s@%s", granteeType, g.Grantee.GetGroupId().OpaqueId, g.Grantee.GetGroupId().Idp)
+		return err
 	}
 
 	err = fs.removeFromACLDB(ctx, fn, grantee)
